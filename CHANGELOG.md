@@ -5,6 +5,14 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.1.0] — Unreleased
+
+**The v7.x fast-follows** — completing the loop-closure work v7.0 deliberately scoped down. *In-progress branch work; sections accumulate per round.*
+
+### Added
+
+- **The CLI orchestrator joins the loop** (`#task-bridge`): v7.0 closed the learning loop only for the MCP path; the standalone `paradigm` CLI orchestrator emitted no tasks and completed via an in-memory marker. A new `core/task-bridge.ts` adapter mints an epic + per-stage task DAG at run start and calls `completeTask` as stages finish — which triggers settlement and the `chainLive` learning chain exactly as the MCP path does. Wired into both the solo and multi-stage orchestration paths; every bridge call is best-effort, so a task-write failure never alters the CLI run. Reuses the low-level `task-loader` primitives via the established relative-import precedent (not the MCP-coupled `emitTaskDag`).
+
 ## [7.0.0] — 2026-06-13
 
 **Close the loop.** A two-slice self-audit (the task system, then the orchestration engine that runs every other audit) proved with file:line evidence that Paradigm *records that it was asked to do the right thing but does not verify it did* — the classifier misroutes silently, the best agents aren't routable, the learning loop's broken state is byte-identical to its healthy state, enforcement checks invocation not work, and the Captain owns nothing. v7 makes the framework's own value proposition **true instead of asserted**, via one keystone: a persisted, symbol-bound, claimant-owned task DAG that orchestration emits, completion feeds back as learning, and Cid captains. It is **not** a project-management product (decision **TD-2026-06-13-718**; design in `docs/specs/v7-close-the-loop.md`).

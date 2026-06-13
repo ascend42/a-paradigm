@@ -39,6 +39,13 @@ import {
   IterationRoundResult,
 } from './iteration-types.js';
 import { appendIterationRevision, generateRevisionId } from './iteration-revision-log.js';
+import {
+  bridgeRunStart,
+  bridgeStageProgress,
+  bridgeStageComplete,
+  type BridgeStage,
+  type BridgeHandle,
+} from './task-bridge.js';
 
 // ============================================================================
 // Types
@@ -305,7 +312,7 @@ export class Orchestrator {
       }
 
       if (mode === 'solo') {
-        const soloResult = await this.runSoloMode(task, options);
+        const soloResult = await this.runSoloMode(task, options, orchestrationId);
         result.agentsSpawned = 1;
         result.agentResults = [soloResult];
         result.success = soloResult.success;
@@ -314,7 +321,7 @@ export class Orchestrator {
           result.totalCost = calculateCost(result.totalTokens, options.orchestratorModel || 'opus');
         }
       } else {
-        const facetedResult = await this.runFacetedMode(task, options);
+        const facetedResult = await this.runFacetedMode(task, options, orchestrationId);
         result.agentsSpawned = facetedResult.results.length;
         result.agentResults = facetedResult.results;
         result.totalTokens = facetedResult.totalTokens;
@@ -449,7 +456,8 @@ export class Orchestrator {
 
   private async runSoloMode(
     task: string,
-    options: OrchestrationOptions
+    options: OrchestrationOptions,
+    orchestrationId?: string
   ): Promise<SpawnResult> {
     // In solo mode, spawn a single "generalist" agent
     const manifest = loadAgentsManifest(this.rootDir);
@@ -457,6 +465,16 @@ export class Orchestrator {
     // Use architect as the solo agent, or fallback to first available
     const agentName = manifest?.team.default_agent || 'architect';
     const model = options.orchestratorModel || 'opus';
+
+    // Task-bridge (#task-bridge): emit a one-stage epic so a solo CLI run still
+    // settles + fires the learning chain. Best-effort — never breaks the run.
+    let bridge: BridgeHandle | undefined;
+    if (orchestrationId) {
+      bridge = await bridgeRunStart(this.rootDir, orchestrationId, task, [
+        { agent: agentName, stage: 0, subtask: task, dependsOn: [] },
+      ]);
+    }
+    const soloTaskId = bridge?.stageTaskIds.get(agentName);
 
     const spawnerOptions: SpawnerOptions = {
       model,
@@ -472,12 +490,15 @@ export class Orchestrator {
     if (options.onAgentStart) {
       options.onAgentStart('solo', task, model);
     }
+    await bridgeStageProgress(this.rootDir, soloTaskId);
 
     const result = await this.spawner.spawn(agentName, task, spawnerOptions);
 
     if (options.onAgentComplete) {
       options.onAgentComplete('solo', result, model);
     }
+    // Completing the only stage child settles the epic (→ learning chain).
+    await bridgeStageComplete(this.rootDir, soloTaskId, result.success ? 'success' : 'failure');
 
     return result;
   }
@@ -488,7 +509,8 @@ export class Orchestrator {
 
   private async runFacetedMode(
     task: string,
-    options: OrchestrationOptions
+    options: OrchestrationOptions,
+    orchestrationId?: string
   ): Promise<{
     success: boolean;
     results: SpawnResult[];
@@ -538,6 +560,25 @@ export class Orchestrator {
     // Analyze task to determine agent sequence with parallel stages
     const agentPlan = this.planAgentSequence(task, manifest.agents);
     const stages = this.groupByStage(agentPlan);
+
+    // Task-bridge (#task-bridge): emit the orchestration task DAG (epic + one
+    // child per stage-agent) so a faceted CLI run settles + fires the learning
+    // chain when its last stage child completes. Best-effort — a bridge failure
+    // returns an empty handle and never breaks orchestration.
+    let bridge: BridgeHandle | undefined;
+    if (orchestrationId) {
+      const bridgeStages: BridgeStage[] = agentPlan.map(p => ({
+        agent: p.agent,
+        stage: p.stage,
+        subtask: p.subtask,
+        dependsOn: p.dependsOn,
+      }));
+      bridge = await bridgeRunStart(this.rootDir, orchestrationId, task, bridgeStages);
+    }
+    // Agents whose stage task we've already terminal-stamped — so the
+    // finalizer can shelve any that never ran (early break on failure).
+    const bridgeStamped = new Set<string>();
+
     const results: SpawnResult[] = [];
     let totalTokens: TokenUsage = { input: 0, output: 0, total: 0 };
     let totalCost = 0;
@@ -631,6 +672,8 @@ export class Orchestrator {
         if (options.onAgentStart) {
           options.onAgentStart(step.agent, step.subtask, model);
         }
+        // Flip this stage's task → in-progress (best-effort).
+        await bridgeStageProgress(this.rootDir, bridge?.stageTaskIds.get(step.agent));
 
         // Spawn agent
         const result = await this.spawner.spawn(step.agent, taskWithContext, spawnerOptions);
@@ -638,6 +681,14 @@ export class Orchestrator {
         if (options.onAgentComplete) {
           options.onAgentComplete(step.agent, result, model);
         }
+        // Terminal-stamp this stage's task — when the last child settles, the
+        // epic settles and the learning chain fires (best-effort).
+        await bridgeStageComplete(
+          this.rootDir,
+          bridge?.stageTaskIds.get(step.agent),
+          result.success ? 'success' : 'failure',
+        );
+        bridgeStamped.add(step.agent);
 
         return { step, result, model };
       });
@@ -704,6 +755,15 @@ export class Orchestrator {
                   const filtered = stageValue.filter(s => s.agent !== 'builder');
                   stages.set(stageKey, filtered);
                 }
+                // The single 'builder' stage task is replaced by the parallel
+                // builders, so it will never spawn through the normal path.
+                // Terminal-stamp it here so its epic can still settle.
+                await bridgeStageComplete(
+                  this.rootDir,
+                  bridge?.stageTaskIds.get('builder'),
+                  parallelResult.success ? 'success' : 'failure',
+                );
+                bridgeStamped.add('builder');
               }
             }
           }
@@ -757,6 +817,18 @@ export class Orchestrator {
           content: '[iteration] reviewer produced no parseable iteration-verdict — re-review loop not triggered.',
           timestamp: new Date().toISOString(),
         });
+      }
+    }
+
+    // Task-bridge finalizer (#task-bridge): any stage task that never ran (early
+    // break on a failed required agent, or a declined checkpoint) is still
+    // non-terminal and would block epic settlement. Shelve those leftovers so the
+    // epic's sibling-set becomes wholly terminal and the learning chain fires
+    // even on a partial/failed run. Best-effort — never throws.
+    if (bridge) {
+      for (const [agent, taskId] of bridge.stageTaskIds) {
+        if (bridgeStamped.has(agent)) continue;
+        await bridgeStageComplete(this.rootDir, taskId, 'failure');
       }
     }
 

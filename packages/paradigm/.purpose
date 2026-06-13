@@ -334,11 +334,11 @@ features:
   sweep-command:
     description: Entropy detection and cleanup — 9 checks for orphaned symbols, stale purpose, phantom gates, dead signals, broken flows, lore rot, tag orphans, aspect drift, coverage decay. Auto-fix by default.
     type: command
+    signals:
+      - '!sweep-completed'
     components:
       - '#sweep-handler'
       - '#entropy-checker'
-    signals:
-      - '!sweep-completed'
   pipeline-command:
     description: Spec pipeline — structured feature workflow with 5 stages (specify, plan, task, implement, validate) and configurable gate modes (auto, manual, sentinel). 4 built-in templates.
     type: command
@@ -565,6 +565,10 @@ components:
     description: Individual check functions for each entropy category (orphaned, stale, phantom, dead, broken, lore-rot, tag-orphan, semantic-drift, coverage-decay)
     type: utility
     file: src/commands/sweep/index.ts
+  task-bridge:
+    description: v7.1 — closes the learning loop for the standalone CLI orchestrator path (v7.0 scoped loop-closure to MCP-world only). A thin adapter that reuses the low-level task-loader primitives (createTask/updateTask/completeTask) rather than the MCP-coupled emitTaskDag. bridgeRunStart mints an epic (in-progress, external_ref orchestration) + one child task per CLI stage (parentTaskId=epic, stage, claimant archetype, dependsOn); bridgeStageProgress flips a stage to in-progress; bridgeStageComplete calls completeTask → which triggers settlement (and the chainLive learning chain) via the task-loader updateTask hook, exactly as the MCP path. Wired into orchestrator.ts solo + DAG paths; every call best-effort (a bridge write failure never breaks the CLI run). Imports paradigm-mcp via the established relative-path precedent (core/habits/evaluator.ts).
+    file: src/core/task-bridge.ts
+    type: adapter
 signals:
   init-success:
     description: Paradigm initialized successfully
@@ -588,6 +592,50 @@ signals:
     description: Multi-agent orchestration completed
   sweep-completed:
     description: Entropy sweep completed with results summary
+aspects:
+  ~provider-cascade:
+    description: Agent providers are tried in priority order (claude > claude-code-teams > claude-code > cursor-cli > claude-cli > manual) until one is available; manual is always the ultimate fallback
+    tags:
+      - providers
+      - cascade
+    anchors:
+      - src/core/provider-registry.ts:38-38
+    applies-to:
+      - '#provider-registry'
+      - '#agent-spawner'
+  ~budget-enforced:
+    description: All orchestrations enforce token and cost budgets at global (default 500K tokens, $5 USD) and per-agent levels; exceeding triggers budget-exceeded signal and halts agent
+    tags:
+      - budget
+      - limits
+    anchors:
+      - src/core/budget-tracker.ts:89-163
+      - src/core/budget-tracker.ts:319-323
+    applies-to:
+      - '#budget-tracker'
+      - '#orchestrator'
+  ~ide-adapter-pattern:
+    description: IDE instruction files are generated from shared base helpers in a fixed section ordering; each adapter overrides detection and generation methods for its target IDE
+    tags:
+      - ide-adapters
+      - generation
+    anchors:
+      - src/core/ide-adapters/base.ts:12-19
+    applies-to:
+      - '#ide-adapters'
+  ~audit-required:
+    description: All orchestrations MUST emit audit events recording agent spawning, budget usage, and result merging
+    tags:
+      - audit
+      - compliance
+      - logging
+    anchors:
+      - src/core/audit-logger.ts:1-433
+      - src/core/agent-spawner.ts:274-288
+    applies-to:
+      - '#audit-logger'
+      - '#agent-spawner'
+      - '#orchestrator'
 flows:
   ide-sync-flow:
     description: Sync .paradigm/ configuration to IDE-specific instruction files
@@ -618,50 +666,3 @@ flows:
         action: Collect results and handle handoffs between agents
       - component: '#audit-logger'
         action: Log orchestration execution and costs
-
-aspects:
-  ~provider-cascade:
-    description: Agent providers are tried in priority order (claude > claude-code-teams > claude-code > cursor-cli > claude-cli > manual) until one is available; manual is always the ultimate fallback
-    category: decision
-    severity: high
-    tags: [providers, cascade]
-    anchors:
-      - src/core/provider-registry.ts:38-38
-    applies-to:
-      - "#provider-registry"
-      - "#agent-spawner"
-
-  ~budget-enforced:
-    description: All orchestrations enforce token and cost budgets at global (default 500K tokens, $5 USD) and per-agent levels; exceeding triggers budget-exceeded signal and halts agent
-    category: constraint
-    severity: high
-    tags: [budget, limits]
-    anchors:
-      - src/core/budget-tracker.ts:89-163
-      - src/core/budget-tracker.ts:319-323
-    applies-to:
-      - "#budget-tracker"
-      - "#orchestrator"
-
-  ~ide-adapter-pattern:
-    description: IDE instruction files are generated from shared base helpers in a fixed section ordering; each adapter overrides detection and generation methods for its target IDE
-    category: decision
-    severity: medium
-    tags: [ide-adapters, generation]
-    anchors:
-      - src/core/ide-adapters/base.ts:12-19
-    applies-to:
-      - "#ide-adapters"
-
-  ~audit-required:
-    description: All orchestrations MUST emit audit events recording agent spawning, budget usage, and result merging
-    category: compliance
-    severity: high
-    tags: [audit, compliance, logging]
-    anchors:
-      - src/core/audit-logger.ts:1-433
-      - src/core/agent-spawner.ts:274-288
-    applies-to:
-      - "#audit-logger"
-      - "#agent-spawner"
-      - "#orchestrator"

@@ -1,0 +1,35 @@
+id: L-2026-06-13-ascend-212408-001
+type: milestone
+timestamp: '2026-06-13T21:24:08.215Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'v7.1 round 1: CLI orchestrator joins the loop (task-bridge)'
+summary: 'First v7.x fast-follow: the standalone CLI orchestrator now closes the learning loop too (v7.0 scoped it to MCP-world). New #task-bridge adapter (packages/paradigm/src/core/task-bridge.ts) mints an epic + per-stage task DAG at run start and calls completeTask as stages finish, triggering settlement + the chainLive chain exactly as the MCP path. Wired into both the solo and DAG orchestration paths; best-effort isolation. Reuses task-loader primitives via the established relative-import precedent (core/habits/evaluator.ts), not the MCP-coupled emitTaskDag. Build clean; CLI 387→396, MCP unchanged 373.'
+symbols_touched:
+  - '#task-bridge'
+  - '#orchestrator'
+  - '#task-settlement'
+symbols_created:
+  - '#task-bridge'
+learnings:
+  - The cross-package import (CLI core → paradigm-mcp utils) was the make-or-break feasibility question; confirmed it works via the established relative-path precedent (core/habits/evaluator.ts:11) + tsup noExternal bundling. Verified before committing a builder, avoiding a wasted round.
+  - 'Loop-closure for a new execution path is cheap once settlement exists: the bridge only has to create epic+child tasks and call completeTask on them; the settlement hook inside updateTask does the rest. The primitive (settlement-on-terminal-with-parent) generalizes across execution worlds.'
+verification:
+  status: pass
+  details:
+    paradigm-cli: 396 pass
+    paradigm-mcp: 373 pass
+    build: pass
+tags:
+  - v7.1
+  - fast-follow
+  - build
+  - task-bridge
+  - milestone
+confidence: 0.85
+git_context:
+  ref: ccd5ffbe6daf4f6de3e1e472870de960c7c3ef04
+  branch: v7.1-fast-follows
+  dirty: true
