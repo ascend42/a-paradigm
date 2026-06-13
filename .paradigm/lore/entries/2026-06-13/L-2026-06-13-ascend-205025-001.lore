@@ -1,0 +1,44 @@
+id: L-2026-06-13-ascend-205025-001
+type: milestone
+timestamp: '2026-06-13T20:50:25.124Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: v7.0 "Close the Loop" — keystone built end-to-end in one session
+summary: 'Single session, audit → shipped: a mega-audit spree surfaced v7, designed the keystone, adversarially reviewed it (caught 3 false claims pre-build), then built the entire v7.0 keystone across 7 rounds on branch v7-close-the-loop — Spine, Front Door, emission, settlement/learning, Cid''s captain board, symbol self-documentation, and a Paradigm University course (PARA 801). All rounds tested, lore''d, changelog''d, committed, and pushed. The framework''s ''self-improving'' claim is now falsifiable instead of asserted.'
+symbols_touched:
+  - '#task-loader'
+  - '#task-settlement'
+  - '#agent-relay'
+  - '#captain-board'
+  - '#orchestrator'
+  - '#nomination-engine'
+  - '#notebook-loader'
+  - '#university-content'
+learnings:
+  - 'The whole v7 validated its own thesis in microcosm: the adversarial-review step caught that the keystone''s learning-wiring claims were false against the code (fabricated confidence_before, CLI orchestrator doesn''t share completeTask, circular JPS) BEFORE any code shipped. Cross-check before commit is the practice v7 institutionalizes, and it paid off on v7 itself.'
+  - 'Per-round rigor held across 7 rounds: every round built + full-suite-green + lore + changelog + commit + push. paradigm-mcp grew 313→373 tests, all green; CLI 387. Discipline over a marathon beats a heroic untested dump.'
+  - 'Builders repeatedly cut off mid-report on large orchestration.ts edits (~90k tokens) — the work landed but the final summary truncated. Mitigation: verify state directly (git diff + build + test) rather than trusting the agent''s report; prefer new-file-heavy scoping over giant single-file edits to dodge the limit.'
+verification:
+  status: pass
+  details:
+    paradigm-mcp: 373 pass
+    paradigm-cli: 387 pass
+    university: 47 pass
+    build: pass
+tags:
+  - v7
+  - milestone
+  - close-the-loop
+  - arc:v7
+linked_lore:
+  - L-2026-06-13-ascend-183238-001
+linked_tasks:
+  - T-2026-06-13-006
+  - T-2026-06-13-007
+confidence: 0.85
+git_context:
+  ref: 05b5a4056c0075d6a821148e26b8623db92d74c3
+  branch: v7-close-the-loop
+  dirty: true
