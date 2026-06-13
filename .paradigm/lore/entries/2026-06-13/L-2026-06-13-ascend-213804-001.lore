@@ -1,0 +1,36 @@
+id: L-2026-06-13-ascend-213804-001
+type: milestone
+timestamp: '2026-06-13T21:38:04.994Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'v7.1 round 2: token estimates become learned (calibration)'
+summary: 'Second v7.x fast-follow: AGENT_TOKEN_ESTIMATES is now self-improving. The CLI orchestrator captures each agent''s actual token usage per (archetype, taskType) to .paradigm/events/estimate-actuals.jsonl (best-effort); a new `paradigm calibrate` command aggregates robust p10/p90 bands (n>=8 floor) into .paradigm/learned/token-estimates.json; and the orchestration planner now prefers the learned table (loadLearnedTokenTable), falling back to the constant as a cold-start prior. The estimate shown is computed from what the crew actually spent. Build clean; mcp 373→378, cli 396→409.'
+symbols_touched:
+  - '#calibration'
+  - '#orchestrator'
+  - '#task-bridge'
+symbols_created:
+  - '#calibration'
+learnings:
+  - The calibration capture only needs ACTUALS (the learned band is p10/p90 of actual tokens); the estimate side stays MCP-side where the constant lives. Dropping estTokens from the captured record avoided exporting AGENT_TOKEN_ESTIMATES across the package boundary — simpler than the spec's original {estTokens, actualTokens} record.
+  - Keyed by (archetype, taskType), not archetype alone — a builder on a bugfix and a builder on a feature spend differently, so the learned band is per-family. n>=8 floor prevents premature learning from thin samples; the constant remains the cold-start prior per cell until the crew has spent enough to learn it.
+verification:
+  status: pass
+  details:
+    paradigm-mcp: 378 pass
+    paradigm-cli: 409 pass
+    build: pass
+tags:
+  - v7.1
+  - fast-follow
+  - build
+  - calibration
+  - self-improving
+  - milestone
+confidence: 0.85
+git_context:
+  ref: a548b3aeb23c586adc309e417706d0a43f300072
+  branch: v7.1-fast-follows
+  dirty: true

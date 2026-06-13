@@ -12,6 +12,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 
 - **The CLI orchestrator joins the loop** (`#task-bridge`): v7.0 closed the learning loop only for the MCP path; the standalone `paradigm` CLI orchestrator emitted no tasks and completed via an in-memory marker. A new `core/task-bridge.ts` adapter mints an epic + per-stage task DAG at run start and calls `completeTask` as stages finish — which triggers settlement and the `chainLive` learning chain exactly as the MCP path does. Wired into both the solo and multi-stage orchestration paths; every bridge call is best-effort, so a task-write failure never alters the CLI run. Reuses the low-level `task-loader` primitives via the established relative-import precedent (not the MCP-coupled `emitTaskDag`).
+- **Token estimates become learned, not hardcoded** (`#calibration`): the literal "self-improving" payoff v7.0 deferred. The CLI orchestrator now captures each agent's *actual* token usage per `(archetype, taskType)` to `.paradigm/events/estimate-actuals.jsonl` (best-effort, never alters a run). A new **`paradigm calibrate`** command aggregates these into `.paradigm/learned/token-estimates.json` (robust p10/p90 bands, only for groups with ≥8 samples), and the orchestration planner now **prefers the learned table**, falling back to the hardcoded `AGENT_TOKEN_ESTIMATES` only as a cold-start prior. The estimate the planner shows you is now computed from what the crew actually spent.
 
 ## [7.0.0] — 2026-06-13
 

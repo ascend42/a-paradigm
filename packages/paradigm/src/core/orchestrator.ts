@@ -46,6 +46,7 @@ import {
   type BridgeStage,
   type BridgeHandle,
 } from './task-bridge.js';
+import { recordEstimateActual } from './calibration.js';
 
 // ============================================================================
 // Types
@@ -497,6 +498,16 @@ export class Orchestrator {
     if (options.onAgentComplete) {
       options.onAgentComplete('solo', result, model);
     }
+    // Calibration capture (#calibration): record the solo agent's ACTUAL token
+    // spend keyed by (archetype, taskType). Best-effort — never alters the run.
+    if (result.relay) {
+      recordEstimateActual(this.rootDir, {
+        archetype: agentName,
+        taskType: classifyTask(task).type,
+        actualTokens: result.relay.metrics.tokens_used,
+        parentTaskId: bridge?.epicTaskId,
+      });
+    }
     // Completing the only stage child settles the epic (→ learning chain).
     await bridgeStageComplete(this.rootDir, soloTaskId, result.success ? 'success' : 'failure');
 
@@ -537,6 +548,10 @@ export class Orchestrator {
         totalCost: 0,
       };
     }
+
+    // Task classification family — keys the calibration capture (#calibration)
+    // alongside each agent's archetype.
+    const facetedTaskType = classifyTask(task).type;
 
     // Auto-ripple for refactoring tasks
     let rippleContext = '';
@@ -706,6 +721,16 @@ export class Orchestrator {
           totalTokens.output += result.relay.metrics.tokens_used.output;
           totalTokens.total += result.relay.metrics.tokens_used.total;
           totalCost += calculateCost(result.relay.metrics.tokens_used, model);
+
+          // Calibration capture (#calibration): record this agent's ACTUAL token
+          // spend keyed by (archetype, taskType) so `paradigm calibrate` can
+          // learn the planner's estimate table. Best-effort — never alters the run.
+          recordEstimateActual(this.rootDir, {
+            archetype: step.agent,
+            taskType: facetedTaskType,
+            actualTokens: result.relay.metrics.tokens_used,
+            parentTaskId: bridge?.epicTaskId,
+          });
 
           // Store handoff context for dependent agents
           const context = result.relay.handoff?.context ||

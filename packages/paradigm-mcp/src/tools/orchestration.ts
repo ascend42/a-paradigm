@@ -300,6 +300,11 @@ function resolveModelForAgent(agentName: string, rootDir: string, agentDef?: { d
   return DEFAULT_TIER_MODELS[tier] || 'sonnet';
 }
 
+// Cold-start prior (#calibration, v7.1). The planner prefers the LEARNED table
+// (.paradigm/learned/token-estimates.json, written by `paradigm calibrate` from
+// captured actuals); this constant is the fallback for any (archetype, taskType)
+// cell the crew hasn't spent enough runs in yet (n < 8). It is no longer the
+// source of truth — only the seed.
 const AGENT_TOKEN_ESTIMATES: Record<string, { min: number; max: number }> = {
   architect: { min: 5000, max: 20000 },
   ftux: { min: 4000, max: 18000 },
@@ -309,6 +314,50 @@ const AGENT_TOKEN_ESTIMATES: Record<string, { min: number; max: number }> = {
   tester: { min: 5000, max: 20000 },
   cartographer: { min: 1000, max: 5000 },
 };
+
+/** A learned band cell, mirroring the calibrate command's output shape. */
+interface LearnedBand { min: number; max: number; n: number }
+/** archetype → taskType → band, as written to token-estimates.json. */
+type LearnedTokenTable = Record<string, Record<string, LearnedBand>>;
+
+/**
+ * Load the learned token-estimate table (#calibration, v7.1). Best-effort: a
+ * missing or malformed file returns `{}` so the planner falls back cleanly to
+ * the `AGENT_TOKEN_ESTIMATES` cold-start constant. Never throws.
+ */
+export function loadLearnedTokenTable(rootDir: string): LearnedTokenTable {
+  try {
+    const filePath = path.join(rootDir, '.paradigm', 'learned', 'token-estimates.json');
+    if (!fs.existsSync(filePath)) return {};
+    const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'));
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    return parsed as LearnedTokenTable;
+  } catch (err) {
+    log.component('#calibration').warn('learned token table load failed; using constant prior', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return {};
+  }
+}
+
+/**
+ * Resolve a single agent's token band: LEARNED cell ([archetype][taskType]) if
+ * present, else the `AGENT_TOKEN_ESTIMATES` cold-start constant, else a generic
+ * default. `taskType` is the classification family (e.g. 'feature').
+ */
+function resolveAgentEstimate(
+  learned: LearnedTokenTable,
+  agentName: string,
+  taskType: string | undefined,
+): { min: number; max: number } {
+  if (taskType) {
+    const cell = learned[agentName]?.[taskType];
+    if (cell && typeof cell.min === 'number' && typeof cell.max === 'number') {
+      return { min: cell.min, max: cell.max };
+    }
+  }
+  return AGENT_TOKEN_ESTIMATES[agentName] || { min: 5000, max: 20000 };
+}
 
 // ============================================================================
 // Role Prompts
@@ -2228,11 +2277,16 @@ function planAgentSequence(
     documentorAdded = true;
   }
 
-  // Estimate tokens
+  // Estimate tokens (#calibration, v7.1) — learned-first, constant as cold-start
+  // fallback. The learned table is keyed by (archetype, taskType); `taskType` is
+  // the classification family. Behavior is identical to v7.0 when no learned
+  // table exists (loader returns {} → every agent uses the constant).
+  const learnedTable = loadLearnedTokenTable(rootDir || '.');
+  const taskType = classification?.type;
   let minTokens = 0;
   let maxTokens = 0;
   for (const agent of plannedAgents) {
-    const estimate = AGENT_TOKEN_ESTIMATES[agent.name] || { min: 5000, max: 20000 };
+    const estimate = resolveAgentEstimate(learnedTable, agent.name, taskType);
     minTokens += estimate.min;
     maxTokens += estimate.max;
   }

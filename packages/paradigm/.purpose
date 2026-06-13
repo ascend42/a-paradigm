@@ -569,6 +569,14 @@ components:
     description: v7.1 — closes the learning loop for the standalone CLI orchestrator path (v7.0 scoped loop-closure to MCP-world only). A thin adapter that reuses the low-level task-loader primitives (createTask/updateTask/completeTask) rather than the MCP-coupled emitTaskDag. bridgeRunStart mints an epic (in-progress, external_ref orchestration) + one child task per CLI stage (parentTaskId=epic, stage, claimant archetype, dependsOn); bridgeStageProgress flips a stage to in-progress; bridgeStageComplete calls completeTask → which triggers settlement (and the chainLive learning chain) via the task-loader updateTask hook, exactly as the MCP path. Wired into orchestrator.ts solo + DAG paths; every call best-effort (a bridge write failure never breaks the CLI run). Imports paradigm-mcp via the established relative-path precedent (core/habits/evaluator.ts).
     file: src/core/task-bridge.ts
     type: adapter
+  calibration:
+    description: v7.1 — the CAPTURE half of the self-improving estimate loop (the "self-improving" payoff v7.0 deferred; v7.0 shipped AGENT_TOKEN_ESTIMATES only as a constant). recordEstimateActual(rootDir, {archetype, taskType, actualTokens, parentTaskId?, ts?}) appends one JSONL line per agent-step to .paradigm/events/estimate-actuals.jsonl. Wired into orchestrator.ts at both per-agent actual sites — faceted (result.relay.metrics.tokens_used, keyed by step.agent + classifyTask(task).type) and solo (agentName + classifyTask(task).type). The estimate itself is NOT recorded (the learned table is actuals-only → no cross-package coupling to the MCP constant). Capture is best-effort — a write failure is logged and swallowed, never alters the run. Aggregated by `paradigm calibrate` into .paradigm/learned/token-estimates.json, which the MCP planner reads learned-first.
+    file: src/core/calibration.ts
+    type: utility
+  calibrate-command:
+    description: v7.1 — `paradigm calibrate` aggregation command (the analysis half). Reads .paradigm/events/estimate-actuals.jsonl, groups by (archetype, taskType), and for each group with n>=8 samples computes a robust band (min=p10(total), max=p90(total)) → writes .paradigm/learned/token-estimates.json as { archetype: { taskType: {min,max,n} } }. Groups under the 8-sample floor are NOT written (still use the constant cold-start prior). Reports learned vs. below-floor groups via cli-output helpers (header/kv/success/dim/warn). aggregateActuals + percentile are exported pure functions for testing.
+    file: src/commands/calibrate.ts
+    type: command
 signals:
   init-success:
     description: Paradigm initialized successfully
