@@ -25,9 +25,13 @@ import type { AgentProfile, AgentAttention } from '../types/agents.js';
 import { emitEvent, scoreEventForAgent } from './event-stream.js';
 import { loadDataPolicy, canObservePath } from './data-policy-loader.js';
 import { loadAllAgentProfiles, loadAgentProfile, saveAgentProfile, isAgentActive } from './agent-loader.js';
+import { loadJournalEntries } from './journal-loader.js';
+import { addNotebookEntry, normalizeConcept, notebookPrior } from './notebook-loader.js';
+import { log } from './mcp-logger.js';
 
 const EVENTS_DIR = '.paradigm/events';
 const NOMINATIONS_FILE = 'nominations.jsonl';
+const PROMOTION_DECISIONS_FILE = 'promotion-decisions.jsonl';
 const DEBATES_FILE = 'debates.jsonl';
 const MAX_NOMINATIONS = 500;
 const MAX_DEBATES = 200;
@@ -273,6 +277,46 @@ function persistDebates(rootDir: string, debates: Debate[]): void {
     pruneStaleEntries(filePath, debateTtlDays * 24 * 60 * 60 * 1000);
   } catch {
     // Non-fatal
+  }
+}
+
+/**
+ * One recorded promotion decision — the instrument output (v7.1 r4).
+ *
+ * Captures what a hypothetical belief-delta gate WOULD have seen at the moment
+ * a promotion decision was made, alongside the actual (unchanged) absolute gate
+ * verdict. Stored append-only at .paradigm/events/promotion-decisions.jsonl so
+ * the delta bands can be calibrated from a real histogram later. This is an
+ * INSTRUMENT only — nothing reads it back to decide promotions.
+ */
+interface PromotionDecision {
+  ts: string;
+  agent: string;
+  concepts: string[];
+  before: number;
+  after: number;
+  delta: number;
+  promoted: boolean;
+  priorFound: boolean;
+  gate: string;
+}
+
+/**
+ * Best-effort append of a single promotion-decision row. A logging failure here
+ * must NEVER break promotion, so all I/O is wrapped and swallowed.
+ */
+function appendPromotionDecision(rootDir: string, row: PromotionDecision): void {
+  try {
+    const dir = path.join(rootDir, EVENTS_DIR);
+    fs.mkdirSync(dir, { recursive: true });
+    const filePath = path.join(dir, PROMOTION_DECISIONS_FILE);
+    fs.appendFileSync(filePath, JSON.stringify(row) + '\n', 'utf8');
+    pruneFile(filePath, MAX_NOMINATIONS);
+  } catch (err) {
+    log.component('#promotion-decisions').warn('failed to record promotion decision', {
+      agent: row.agent,
+      error: err instanceof Error ? err.message : String(err),
+    });
   }
 }
 
@@ -909,20 +953,6 @@ export function autoPromoteJournalEntries(
   rootDir: string,
   agentId: string
 ): { promoted: number; entries: Array<{ journalId: string; notebookId: string }> } {
-  let loadJournalEntries: (agentId: string, filter: Record<string, unknown>) => Array<Record<string, unknown>>;
-  let addNotebookEntry: (agentId: string, entry: Record<string, unknown>, scope: string, rootDir?: string) => { entry: { id: string } };
-  let normalizeConcept: (s: string) => string;
-
-  try {
-    const journalMod = require('./journal-loader.js');
-    const notebookMod = require('./notebook-loader.js');
-    loadJournalEntries = journalMod.loadJournalEntries;
-    addNotebookEntry = notebookMod.addNotebookEntry;
-    normalizeConcept = notebookMod.normalizeConcept;
-  } catch {
-    return { promoted: 0, entries: [] };
-  }
-
   // Load both pattern_discovered and human_feedback entries for promotion
   const patternEntries = loadJournalEntries(agentId, { trigger: 'pattern_discovered', limit: 100 });
   const feedbackEntries = loadJournalEntries(agentId, { trigger: 'human_feedback', limit: 100 });
@@ -939,8 +969,45 @@ export function autoPromoteJournalEntries(
   const promoted: Array<{ journalId: string; notebookId: string }> = [];
 
   for (const entry of journal) {
-    // Skip already-promoted or low-confidence entries
+    // Skip already-promoted entries — no instrument row, no decision to record.
     if (entry.promoted_to_notebook) continue;
+
+    // Derive concepts exactly the way the promotion writer does, so the prior
+    // we measure is keyed on the same axis the entry would be stored under.
+    const concepts = (entry.tags || [entry.pattern?.id || 'learned-pattern'])
+      .map(normalizeConcept)
+      .filter(Boolean);
+
+    // ── INSTRUMENT (v7.1 r4): measure the belief delta, do NOT gate on it ──
+    // We record what a future delta-gate WOULD have seen, alongside the
+    // UNCHANGED absolute gate below. This collects real {before, after, delta,
+    // promoted} data so the bands can be set from a histogram later. The
+    // promote/skip decision is still the byte-identical absolute rule.
+    const after = entry.confidence_after ?? 0;
+    const wouldPromote = after >= 0.8; // mirrors the gate below; recorded, not enforced (NOT the `promoted` accumulator at :969)
+    let before = 0.5;
+    let priorFound = false;
+    try {
+      const prior = notebookPrior(agentId, concepts, rootDir);
+      before = prior.value;
+      priorFound = prior.found;
+    } catch {
+      // Prior lookup is best-effort instrumentation; default to 0.5 on failure.
+    }
+    appendPromotionDecision(rootDir, {
+      ts: new Date().toISOString(),
+      agent: agentId,
+      concepts,
+      before,
+      after,
+      delta: after - before,
+      promoted: wouldPromote,
+      priorFound,
+      gate: 'absolute-0.8',
+    });
+
+    // ── GATE (UNCHANGED): absolute confidence_after < 0.8 → skip ──
+    // Do NOT replace with the delta — this is the deferred, unfalsifiable gate.
     if ((entry.confidence_after ?? 0) < 0.8) continue;
 
     try {
@@ -949,13 +1016,20 @@ export function autoPromoteJournalEntries(
         {
           context: entry.pattern?.applies_when || entry.insight.slice(0, 80),
           snippet: entry.pattern?.correct_approach || entry.insight,
+          // Persist the real, verdict-derived confidence onto the notebook entry.
+          // Before this fix the open loop never set confidence → any future prior
+          // read would be garbage. No ratchet: a re-promote overwrites with the
+          // newest confidence_after (latest measurement wins).
+          confidence: entry.confidence_after ?? 0.5,
           // Normalize promoted concepts so postflight tags (e.g. `symbol:payment-form`)
           // are retrievable by the bare query slug (`payment-form`). See T-001.
           // (addNotebookEntry also normalizes, but normalize here for an explicit,
           // testable contract on the writer side.)
-          concepts: (entry.tags || [entry.pattern?.id || 'learned-pattern'])
-            .map(normalizeConcept)
-            .filter(Boolean),
+          concepts,
+          // Carry the journal entry's tags through. addNotebookEntry's
+          // classifyNotebookScope spreads `tags`, so an undefined here would
+          // throw — pass an explicit array (the journal tags, else empty).
+          tags: entry.tags ?? [],
           provenance: {
             source: 'lore',
             loreEntryId: entry.id,
@@ -996,7 +1070,9 @@ export function autoPromoteJournalEntries(
       } catch {
         // Marking promoted is non-fatal
       }
-    } catch {
+    } catch (e) {
+      // eslint-disable-next-line no-console
+      console.error('PROMOTE_THREW', (e as Error).message);
       // Skip individual promotion failures
     }
   }

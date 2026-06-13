@@ -2472,6 +2472,16 @@ ambientCmd
     await ambientPostflightCommand({});
   });
 
+// paradigm calibrate — rebuild the learned token-estimate table from captured actuals
+program
+  .command('calibrate')
+  .description('Rebuild the learned token-estimate table from captured per-agent actuals (.paradigm/events/estimate-actuals.jsonl → .paradigm/learned/token-estimates.json). The MCP planner reads this learned-first, with the hardcoded constant as a cold-start fallback.')
+  .option('--project <path>', 'Project root (defaults to cwd)')
+  .action(async (options) => {
+    const { calibrateCommand } = await import('./commands/calibrate.js');
+    await calibrateCommand(options);
+  });
+
 // paradigm notebook <command> — Agent notebook management
 const notebookCmd = program
   .command('notebook')
