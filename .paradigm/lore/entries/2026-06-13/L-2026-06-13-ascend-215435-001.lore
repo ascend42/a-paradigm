@@ -1,0 +1,33 @@
+id: L-2026-06-13-ascend-215435-001
+type: milestone
+timestamp: '2026-06-13T21:54:35.674Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'v7.1 round 3: Symphony/peer path joins the loop (status flow-back)'
+summary: 'Third v7.x fast-follow: the Symphony/peer (Cursor, cross-machine) path now closes the loop too — the consumer side the v7.0 emission round deferred. paradigm_symphony_poll''s new applyTaskStatusFlowBack maps delivered progress/task-complete/task-failed notes (carrying metadata.task.taskId) to local updateTask/completeTask/shelveTask, so a peer reporting completion triggers settlement + the chainLive chain. Best-effort, local-only, per-note isolation; absent-task is a clean no-op (parked multi-machine case). New !symphony-status-flowback signal. Build clean; mcp 378→385, cli 409 unchanged.'
+symbols_touched:
+  - '#symphony'
+  - '#task-settlement'
+  - '!symphony-status-flowback'
+learnings:
+  - 'All three execution worlds now close the loop through the SAME primitive: settlement-on-terminal-with-parent inside updateTask. MCP emits+drives directly, the CLI drives via task-bridge, and Symphony/peer drives via poll-time flow-back. No path re-implements settlement — each just creates/advances tasks and the loader hook does the rest. The keystone generalized cleanly across all three.'
+  - Symphony consumption is agent-driven (poll), not a daemon — so the flow-back hooks the poll handler, acting only on notes delivered that poll. Local-only + absent-task-no-op keeps it correct without touching the parked multi-machine merge-heal.
+verification:
+  status: pass
+  details:
+    paradigm-mcp: 385 pass
+    paradigm-cli: 409 pass
+    build: pass
+tags:
+  - v7.1
+  - fast-follow
+  - build
+  - symphony
+  - milestone
+confidence: 0.85
+git_context:
+  ref: 1bbccf32fd1ab6c90736f77ece0e2cb25df79dfd
+  branch: v7.1-fast-follows
+  dirty: true

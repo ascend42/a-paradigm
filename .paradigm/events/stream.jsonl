@@ -950,3 +950,8 @@
 {"id":"ev-1781385848368-8548","timestamp":"2026-06-13T21:24:08.368Z","type":"work-completed","source":"mcp-tool-call","tool":"paradigm_lore_record","symbols":["#task-bridge","#orchestrator","#task-settlement"],"context":"Lore recorded: v7.1 round 1: CLI orchestrator joins the loop (task-bridge)"}
 {"id":"ev-1781386651125-3979","timestamp":"2026-06-13T21:37:31.125Z","type":"work-completed","source":"mcp-tool-call","tool":"paradigm_reindex","context":"Index rebuilt"}
 {"id":"ev-1781386685125-9869","timestamp":"2026-06-13T21:38:05.125Z","type":"work-completed","source":"mcp-tool-call","tool":"paradigm_lore_record","symbols":["#calibration","#orchestrator","#task-bridge"],"context":"Lore recorded: v7.1 round 2: token estimates become learned (calibration)"}
+{"id":"ev-1781387675815-9112","timestamp":"2026-06-13T21:54:35.815Z","type":"work-completed","source":"mcp-tool-call","tool":"paradigm_lore_record","symbols":["#symphony","#task-settlement","!symphony-status-flowback"],"context":"Lore recorded: v7.1 round 3: Symphony/peer path joins the loop (status flow-back)"}
+{"id":"ev-1781387676244-7565","timestamp":"2026-06-13T21:54:36.244Z","type":"work-completed","source":"mcp-tool-call","tool":"paradigm_reindex","context":"Index rebuilt"}
+{"id":"ev-1781387901409-0590","timestamp":"2026-06-13T21:58:21.409Z","type":"work-completed","source":"mcp-tool-call","tool":"paradigm_reindex","context":"Index rebuilt"}
+{"id":"ev-1781387991328-6339","timestamp":"2026-06-13T21:59:51.328Z","type":"work-completed","source":"mcp-tool-call","tool":"paradigm_reindex","context":"Index rebuilt"}
+{"id":"ev-1781388151180-5806","timestamp":"2026-06-13T22:02:31.180Z","type":"work-completed","source":"mcp-tool-call","tool":"paradigm_reindex","context":"Index rebuilt"}

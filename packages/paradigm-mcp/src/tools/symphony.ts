@@ -11,6 +11,7 @@
  */
 
 import type { ProjectContext } from '../utils/index-loader.js';
+import { log } from '../utils/mcp-logger.js';
 import {
   readInbox,
   acknowledgeMessages,
@@ -240,6 +241,90 @@ export function getSymphonyToolsList() {
 }
 
 /**
+ * v7.1 Symphony peer status flow-back watcher.
+ *
+ * For each inbound note carrying a task-protocol terminal/progress intent AND a
+ * `metadata.task.taskId`, map it onto a LOCAL `updateTask` so loop-closure
+ * extends to the Symphony/peer path. Settlement fires automatically inside
+ * `updateTask` when a parented local task reaches terminal.
+ *
+ * Contract guarantees:
+ * - Best-effort + local-only: a referenced task missing from the local store is
+ *   a silent no-op (`updateTask` returns false; never throws).
+ * - Idempotent-friendly: a second `task-complete` on an already-`done` task is a
+ *   safe no-op — `updateTask` skips the transition check when the target status
+ *   equals the current status, and `assertTransition` rejection returns false
+ *   (logged at warn, never surfaced as an error).
+ * - Never breaks poll: the entire pass is wrapped in try/catch. Per-note failures
+ *   are isolated so one bad note cannot abort processing of the rest.
+ */
+export async function applyTaskStatusFlowBack(
+  messages: SymphonyMessage[],
+  rootDir: string
+): Promise<void> {
+  const FLOW_BACK_STATUS: Record<string, 'in-progress' | 'done' | 'shelved'> = {
+    'progress': 'in-progress',
+    'task-complete': 'done',
+    'task-failed': 'shelved',
+  };
+
+  try {
+    const { updateTask, completeTask, shelveTask } = await import('../utils/task-loader.js');
+
+    for (const message of messages) {
+      const targetStatus = FLOW_BACK_STATUS[message.intent as string];
+      if (!targetStatus) continue;
+
+      const taskId = message.metadata?.task?.taskId;
+      if (!taskId) continue;
+
+      try {
+        let ok = false;
+        if (targetStatus === 'done') {
+          // completeTask → updateTask({ status: 'done' }); a repeat on an
+          // already-done task is a safe no-op write (status === current status,
+          // transition check skipped). Returns false only if the task is absent.
+          ok = await completeTask(rootDir, taskId);
+        } else if (targetStatus === 'shelved') {
+          // Record the peer's failure as a crash_reason note alongside the shelve.
+          ok = await shelveTask(rootDir, taskId);
+          if (ok) {
+            const reason = message.content?.text
+              ? `peer task-failed: ${message.content.text.slice(0, 200)}`
+              : 'peer reported task-failed';
+            await updateTask(rootDir, taskId, { crash_reason: reason });
+          }
+        } else {
+          ok = await updateTask(rootDir, taskId, { status: targetStatus });
+        }
+
+        if (ok) {
+          log.signal('!symphony-status-flowback').info('Applied peer status flow-back to local task', {
+            taskId, intent: message.intent, status: targetStatus,
+          });
+        } else {
+          // Local no-op: task absent (parked multi-machine case) or illegal
+          // transition (e.g. a second terminal). Informational, never an error.
+          log.signal('!symphony-status-flowback').debug('Flow-back no-op (task absent or terminal already)', {
+            taskId, intent: message.intent, status: targetStatus,
+          });
+        }
+      } catch (err) {
+        log.signal('!symphony-status-flowback').warn('Per-note flow-back failed (non-fatal)', {
+          taskId, intent: message.intent,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+  } catch (err) {
+    // The entire pass is best-effort. A failure here MUST NOT affect poll output.
+    log.signal('!symphony-status-flowback').warn('Status flow-back pass failed (non-fatal)', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+}
+
+/**
  * Handle symphony tool calls
  */
 export async function handleSymphonyTool(
@@ -291,6 +376,21 @@ export async function handleSymphonyTool(
 
       // Garbage collect old messages
       garbageCollect(identity.id);
+
+      // v7.1 status flow-back: close the loop on the Symphony/peer (Cursor,
+      // cross-machine) path. The orchestration emission round stamps each
+      // stage's DAG task-id into the assignment-note's `metadata.task.taskId`.
+      // When a peer reports back via a task-protocol note (progress /
+      // task-complete / task-failed), map that note onto a LOCAL `updateTask`
+      // so settlement (already built into updateTask) fires for parented tasks.
+      //
+      // Best-effort + local-only: a task this machine doesn't have is a silent
+      // no-op (the parked multi-machine case). A flow-back failure must NEVER
+      // break the poll — the whole pass is wrapped in try/catch and poll's
+      // return value/behavior is unchanged.
+      if (messages.length > 0) {
+        await applyTaskStatusFlowBack(messages, ctx.rootDir);
+      }
 
       // Check for pending file requests directed at us
       const pendingRequests = listFileRequests('pending');
