@@ -1,0 +1,34 @@
+id: L-2026-06-13-ascend-192921-001
+type: milestone
+timestamp: '2026-06-13T19:29:21.368Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'v7 build round 3: orchestration emits the task DAG'
+summary: 'Sub-phase 2 shipped: orchestration execute-mode now emits the topo-sorted handoff DAG it used to discard, as a persisted epic + per-stage child tasks (parentTaskId/stage/dependsOn/claimant). Agent prompts carry their taskId with update/done instructions so status flows back. The dead parseFilePlan regex parsers are deleted; planBuilderStages consumes typed AgentRelay.filePlan. Symphony peer status-flow-back watcher deferred to fast-follow (MCP-world scope). Build clean, paradigm-mcp suite 337→347.'
+symbols_touched:
+  - '#orchestrator'
+  - '#task-loader'
+  - '#agent-relay'
+learnings:
+  - 'Orchestration ↔ tasks is now connected: the DAG that was computed-then-discarded (and frozen as status:pending in an unread log) is persisted as a real claimant-owned task graph. This is the durable spine the learning loop (§2) and Cid''s board (§3) hang off — built next.'
+  - 'Emission is wrapped to degrade gracefully: a task-write failure logs and continues rather than breaking the orchestration response (emittedTasks empty ⟹ emission failed, host still drives via MCP).'
+verification:
+  status: pass
+  details:
+    paradigm-mcp: 347 pass
+    build: pass
+tags:
+  - v7
+  - build
+  - emission
+  - orchestration
+  - milestone
+linked_tasks:
+  - T-2026-06-13-006
+confidence: 0.85
+git_context:
+  ref: 4e5bf2f5f75464f079ef18a30712ce72c0f5bf41
+  branch: v7-close-the-loop
+  dirty: true

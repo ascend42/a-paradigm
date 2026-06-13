@@ -14,6 +14,8 @@ import type { ProjectContext } from '../utils/index-loader.js';
 import { trackToolCall } from './context.js';
 import { loadProjectRoster, isAgentActive } from '../utils/agent-loader.js';
 import { handleCaptainTool } from './captain.js';
+import { log } from '../utils/mcp-logger.js';
+import type { AgentRelay } from '../utils/agent-relay.js';
 
 // Import task classification and cost estimation (via dynamic import to avoid circular deps)
 type TaskClassification = {
@@ -164,6 +166,12 @@ interface AgentPromptResult {
   mode?: 'single' | 'react';
   /** PAN integration: max iterations for ReAct mode (default: 10) */
   maxIters?: number;
+  /**
+   * v7 Spine (sub-phase 2): the DAG task-id this agent owns, stamped by
+   * emitTaskDag in execute mode. The agent flips its status (in-progress→done)
+   * via paradigm_task_update / paradigm_task_done. Absent in plan/quick mode.
+   */
+  taskId?: string;
 }
 
 // ============================================================================
@@ -1236,6 +1244,27 @@ async function handleOrchestrateInline(
   // Log to orchestrations directory
   logOrchestration(ctx.rootDir, orchestrationId, task, plan);
 
+  // v7 Spine (sub-phase 2): emit the computed handoff DAG as persisted tasks.
+  // Execute mode ONLY — plan/quick handlers return earlier and never reach here,
+  // so they emit nothing. Emission is non-fatal (degrades to an empty map).
+  const { epicTaskId, agentTaskIds } = await emitTaskDag(ctx.rootDir, orchestrationId, task, plan);
+
+  // Stamp each agent's emitted task-id onto its prompt result + prompt text so
+  // the spawned agent can flip status (in-progress on start, done at finish).
+  for (const stage of stagePrompts) {
+    for (const agent of stage.agents) {
+      const taskId = agentTaskIds.get(agent.agent);
+      if (!taskId) continue;
+      agent.taskId = taskId;
+      agent.prompt +=
+        `\n\n## Task tracking (v7 DAG)\n` +
+        `Your DAG task-id is \`${taskId}\`. On start, call ` +
+        `\`paradigm_task_update({ id: "${taskId}", status: "in-progress" })\`; ` +
+        `when finished, call \`paradigm_task_done({ id: "${taskId}" })\` ` +
+        `(or \`paradigm_task_update\` → done) so the orchestration loop can settle.`;
+    }
+  }
+
   // Log agent contributions to session work log
   try {
     const { appendSessionWorkEntry } = await import('../utils/session-work-log.js');
@@ -1316,7 +1345,13 @@ async function handleOrchestrateInline(
           intent: 'task' as any,
           text: `[Maestro] Stage ${stage.stage}: Assigned to ${agent.attribution || agent.agent} — ${agent.taskDescription || task}`,
           symbols,
-          metadata: { task: { stage: stage.stage, canRunParallel: stage.canRunParallel } } as any,
+          // Stamp the DAG task-id into the assignment-note metadata so the
+          // deferred Symphony status-flow-back watcher (Part D / spec §2.1, the
+          // Cursor/peer path) can map an inbound `task-complete`/`task-failed`
+          // note's `metadata.task.taskId` back onto `updateTask`. The note
+          // PRODUCER side ships now; the inbound CONSUMER loop is net-new
+          // infrastructure deferred to fast-follow (see report).
+          metadata: { task: { stage: stage.stage, canRunParallel: stage.canRunParallel, ...(agent.taskId ? { taskId: agent.taskId } : {}) } } as any,
         });
         symphony.routeMessage(note);
       }
@@ -1336,6 +1371,22 @@ async function handleOrchestrateInline(
     symbols,
     totalAgents: plan.estimatedAgents,
     ...(activeNominations.length > 0 ? { activeNominations } : {}),
+
+    // v7 Spine (sub-phase 2): the persisted task DAG this run emitted. Lets the
+    // caller confirm the DAG landed and gives each stage-agent its task-id to
+    // drive (paradigm_task_update/_done). Empty `emittedTasks` ⟹ emission
+    // degraded (non-fatal) — the run still proceeds.
+    ...(epicTaskId ? {
+      emittedTasks: {
+        epicTaskId,
+        stageTasks: stagePrompts.flatMap(stage =>
+          stage.agents
+            .filter(a => a.taskId)
+            .map(a => ({ stage: stage.stage, agent: a.agent, taskId: a.taskId! }))
+        ),
+      },
+    } : {}),
+
     stages: stagePrompts,
 
     // IDE-agnostic execution instructions
@@ -2800,6 +2851,100 @@ function loadAgentsManifest(rootDir: string): AgentManifest | null {
   }
 }
 
+/**
+ * v7 Spine (sub-phase 2) — emit the computed handoff DAG as persisted tasks.
+ *
+ * Execute mode only. Creates one epic task (the orchestration root) plus one
+ * child task per stage-agent, wired with `parentTaskId`/`stage`/`dependsOn` so
+ * the in-memory topo-sorted plan survives as a claimant-owned task graph that
+ * Cid can captain and the learning loop can settle.
+ *
+ * `dependsOn` (agent names, from the handoff graph) is resolved to upstream
+ * task-ids by creating tasks in stage order and accumulating an
+ * agent-name → task-id map. Returns that map so the caller can stamp each
+ * agent's prompt with its task-id.
+ *
+ * Non-fatal: any write failure degrades to an empty map (orchestration result
+ * is never blocked by task-emission). The epic id is returned separately so the
+ * caller can surface it even when a child write later fails.
+ */
+export async function emitTaskDag(
+  rootDir: string,
+  orchestrationId: string,
+  task: string,
+  plan: OrchestrationPlan,
+): Promise<{ epicTaskId?: string; agentTaskIds: Map<string, string> }> {
+  const agentTaskIds = new Map<string, string>();
+  let epicTaskId: string | undefined;
+
+  try {
+    const { createTask, updateTask } = await import('../utils/task-loader.js');
+
+    // 1. Epic task — the orchestration root. No parentTaskId; in-progress.
+    epicTaskId = await createTask(rootDir, {
+      blurb: task,
+      priority: 'medium',
+      tags: ['orchestration', 'epic'],
+      claimant: { kind: 'archetype', ref: 'orchestrator' },
+      external_ref: { kind: 'orchestration', ref: orchestrationId },
+    });
+    // createTask always lands at 'open'; promote the epic to in-progress
+    // (open→in-progress is a legal transition; failure is non-fatal).
+    try {
+      await updateTask(rootDir, epicTaskId, { status: 'in-progress' });
+    } catch (err) {
+      log.flow('$dag-emission').warn('Epic promote to in-progress failed', {
+        orchestrationId, epicTaskId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+
+    // 2. Child task per stage-agent, in topo (stage) order so upstream
+    //    agents are emitted before the stages that depend on them.
+    for (const stage of plan.stages) {
+      for (const agentStep of stage.agents) {
+        try {
+          // Resolve handoff edges (upstream agent names) → emitted task-ids.
+          const dependsOn = (agentStep.dependsOn || [])
+            .map(name => agentTaskIds.get(name))
+            .filter((id): id is string => typeof id === 'string');
+
+          const childId = await createTask(rootDir, {
+            blurb: agentStep.task,
+            priority: 'medium',
+            tags: ['orchestration'],
+            claimant: { kind: 'archetype', ref: agentStep.name },
+            parentTaskId: epicTaskId,
+            stage: stage.stage,
+            ...(dependsOn.length > 0 ? { dependsOn } : {}),
+            external_ref: { kind: 'orchestration', ref: orchestrationId },
+          });
+          // status stays 'open' (v7.0 has no 'claimed') — not-yet-started.
+          agentTaskIds.set(agentStep.name, childId);
+        } catch (err) {
+          // A single child write failure must not abort the rest of the DAG.
+          log.flow('$dag-emission').warn('Stage-agent task emission failed', {
+            orchestrationId, agent: agentStep.name, stage: stage.stage,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+    }
+
+    log.flow('$dag-emission').info('Emitted orchestration task DAG', {
+      orchestrationId, epicTaskId, stageAgents: agentTaskIds.size,
+    });
+  } catch (err) {
+    // Whole-emission failure (e.g. epic write threw) — degrade gracefully.
+    log.flow('$dag-emission').warn('Task DAG emission failed; orchestration continues', {
+      orchestrationId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  return { epicTaskId, agentTaskIds };
+}
+
 function logOrchestration(
   rootDir: string,
   orchestrationId: string,
@@ -2838,124 +2983,37 @@ function logOrchestration(
 // ============================================================================
 
 /**
- * Parse file plan from architect's relay output (YAML content)
- */
-function parseFilePlan(yamlContent: string): FilePlanGroup[] | undefined {
-  const filePlan: FilePlanGroup[] = [];
-
-  // Look for filePlan section
-  const filePlanMatch = yamlContent.match(/filePlan:\s*\n([\s\S]*?)(?=\n[a-z_]+:|$)/);
-  if (!filePlanMatch) {
-    return undefined;
-  }
-
-  const filePlanContent = filePlanMatch[1];
-  const lines = filePlanContent.split('\n');
-
-  let currentGroup: FilePlanGroup | null = null;
-  let inFiles = false;
-  let currentFile: Partial<FileAssignment> = {};
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-
-    // Skip comments and empty lines
-    if (!trimmed || trimmed.startsWith('#')) continue;
-
-    // New group starts with "- group:"
-    if (trimmed.startsWith('- group:')) {
-      if (currentGroup) {
-        // Save last file from previous group
-        if (currentFile.path) {
-          currentGroup.files.push({
-            path: currentFile.path,
-            description: currentFile.description || '',
-          });
-          currentFile = {};
-        }
-        filePlan.push(currentGroup);
-      }
-      currentGroup = {
-        group: trimmed.split(':')[1].trim(),
-        subPhase: 0,
-        files: [],
-      };
-      inFiles = false;
-      continue;
-    }
-
-    if (!currentGroup) continue;
-
-    // Parse subPhase
-    if (trimmed.startsWith('subPhase:')) {
-      currentGroup.subPhase = parseInt(trimmed.split(':')[1].trim(), 10) || 0;
-      continue;
-    }
-
-    // Start of files array
-    if (trimmed === 'files:') {
-      inFiles = true;
-      continue;
-    }
-
-    if (inFiles) {
-      // New file entry starts with "- path:"
-      if (trimmed.startsWith('- path:')) {
-        // Save previous file if exists
-        if (currentFile.path) {
-          currentGroup.files.push({
-            path: currentFile.path,
-            description: currentFile.description || '',
-          });
-        }
-        currentFile = {
-          path: trimmed.split(':').slice(1).join(':').trim().replace(/^["']|["']$/g, ''),
-        };
-        continue;
-      }
-
-      // Description for current file
-      if (trimmed.startsWith('description:')) {
-        currentFile.description = trimmed.split(':').slice(1).join(':').trim().replace(/^["']|["']$/g, '');
-        continue;
-      }
-    }
-  }
-
-  // Don't forget the last file and group
-  if (currentFile.path && currentGroup) {
-    currentGroup.files.push({
-      path: currentFile.path,
-      description: currentFile.description || '',
-    });
-  }
-  if (currentGroup) {
-    filePlan.push(currentGroup);
-  }
-
-  return filePlan.length > 0 ? filePlan : undefined;
-}
-
-/**
- * Parse file plan from full response text (looks for yaml block)
- */
-function parseFilePlanFromResponse(response: string): FilePlanGroup[] | undefined {
-  const yamlMatch = response.match(/```yaml\s*\n# Agent Relay\n([\s\S]*?)```/);
-  if (!yamlMatch) {
-    return undefined;
-  }
-  return parseFilePlan(yamlMatch[1]);
-}
-
-/**
- * Plan builder stages from architect's file plan
+ * v7 Spine (sub-phase 2): adapt a typed `AgentRelay.filePlan` (`string[]` of
+ * planned file paths) into the `FilePlanGroup[]` shape `planBuilderStages`
+ * consumes. The legacy free-text regex parsers (`parseFilePlan` /
+ * `parseFilePlanFromResponse`) are deleted — `filePlan` is now a typed field on
+ * `AgentRelay`, so there is nothing to scrape out of prose.
  *
- * Takes the file plan and creates BuilderStage[] where:
+ * The typed contract is a flat path list (no sub-phase/group metadata), so the
+ * whole plan lands as a single sub-phase-0 group. Sub-phase grouping returns if
+ * `AgentRelay.filePlan` ever gains structure.
+ */
+function relayFilePlanToGroups(relay: AgentRelay | undefined): FilePlanGroup[] | undefined {
+  const paths = relay?.filePlan;
+  if (!paths || paths.length === 0) return undefined;
+  return [{
+    group: 'all',
+    subPhase: 0,
+    files: paths.map(p => ({ path: p, description: '' })),
+  }];
+}
+
+/**
+ * Plan builder stages from a parsed agent relay's typed `filePlan`.
+ *
+ * Consumes `AgentRelay.filePlan` directly (via {@link relayFilePlanToGroups}) —
+ * the dead regex parsers are gone. Builder stages are produced where:
  * - Sub-phases execute sequentially
  * - Builders within a sub-phase execute in parallel
  * - Each builder gets narrowed context (only assigned files + available files)
  */
-function planBuilderStages(filePlan: FilePlanGroup[] | undefined): ParallelBuilderPlan {
+export function planBuilderStages(relay: AgentRelay | undefined): ParallelBuilderPlan {
+  const filePlan = relayFilePlanToGroups(relay);
   // Fallback: single builder (current behavior)
   if (!filePlan || filePlan.length === 0) {
     return {
