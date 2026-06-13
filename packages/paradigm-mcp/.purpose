@@ -1,1413 +1,1268 @@
 version: 2.0.0
-# Paradigm MCP Server
-
 description: |
   MCP (Model Context Protocol) server for Paradigm. Exposes symbols, gates, flows,
   and analysis tools to AI assistants like Claude. Technology agnostic - works
   with any language or framework.
-
-# ============================================
-# Components (#)
-# ============================================
-
-#MCPServer:
-  description: Main MCP server entry point using @modelcontextprotocol/sdk
-  type: service
-  tags: [feature]
-  anchors:
-    - src/index.ts:1-100
-  components:
-    - "#ResourceHandlers"
-    - "#ToolHandlers"
-    - "#IndexLoader"
-
-#ResourceHandlers:
-  description: MCP resource handlers for paradigm:// URIs
-  type: service
-  tags: [feature, mcp]
-  anchors:
-    - src/resources/index.ts:1-200
-  signals:
-    - !resource-read
-
-#ToolHandlers:
-  description: MCP tool handlers for paradigm_* actions
-  type: service
-  tags: [feature, mcp]
-  aspects: ["~mcp-tool-handler"]
-  anchors:
-    - src/tools/index.ts:1-100
-  flows:
-    - $mcp-request-flow
-  components:
-    - "#CoreTools"
-    - "#WisdomTools"
-    - "#HistoryTools"
-    - "#NavigateTools"
-    - "#SentinelTools"
-    - "#TagsTools"
-    - "#ReindexTools"
-    - "#GlobalStore"
-    - "#PurposePortalTools"
-    - "#OrchestrationTools"
-    - "#AspectGraphTools"
-    - "#WorkspaceLoader"
-    - "#LoreTools"
-    - "#HabitsTools"
-    - "#GraduationTools"
-    - "#GraphTools"
-    - "#ConductorTools"
-    - "#SymphonyTools"
-    - "#UniversityTools"
-
-#GraduationTools:
-  description: "Automation tier graduation tools (graduate_check, graduate_status) — data-driven migration from habits to hooks"
-  type: tool
-  tags: [mcp, graduation, automation]
-  anchors:
-    - src/tools/graduation.ts:1
-    - src/utils/graduation-engine.ts:1
-    - src/utils/graduation-store.ts:1
-    - src/utils/graduation-types.ts:1
-
-#SymphonyTools:
-  description: "The Score: agent-to-agent messaging tools (poll, send, status, thread, file requests) with Sentinel event bridge"
-  type: tool
-  tags: [mcp, symphony]
-  anchors:
-    - src/tools/symphony.ts:1-757
-
-#PurposePortalTools:
-  description: Purpose file and portal.yaml management tools (init, add, remove, rename, validate). Validation includes clarification marker scanning.
-  type: tool
-  tags: [mcp]
-  anchors:
-    - src/tools/purpose-portal.ts:1-1350
-
-#OrchestrationTools:
-  description: Inline multi-agent orchestration tools with three modes (quick/plan/execute). Quick mode runs advocate (Jinx) + reviewer for fast pre-check. Builder prompt includes Fresh Context Principle; reviewer prompt uses two-stage review with minimum 3 findings. Advocate role prompt defines devil's advocate with pre-mortem methodology.
-  type: tool
-  tags: [mcp, team]
-  anchors:
-    - src/tools/orchestration.ts:1-2507
-
-#CoreTools:
-  description: Core symbol tools (search, ripple, related, status, gates_for_route) with TTL caching for search and status
-  type: tool
-  tags: [mcp]
-  anchors:
-    - src/tools/index.ts:100-800
-  signals:
-    - !tool-invoked
-  components:
-    - "#ToolCache"
-
-#WisdomTools:
-  description: Team wisdom tools (context, record, expert, promote) with global+local merge
-  type: tool
-  tags: [mcp]
-  anchors:
-    - src/tools/wisdom.ts:1-500
-  signals:
-    - "!wisdom-promoted"
-  components:
-    - "#GlobalStore"
-
-#HistoryTools:
-  description: Implementation history tools (context, record, validate, fragility)
-  type: tool
-  tags: [mcp]
-  anchors:
-    - src/tools/history.ts:1-294
-
-#NavigateTools:
-  description: Codebase navigation tools (find, explore, context) with TTL caching. Writes .paradigm/.nav-called sentinel file after a successful navigate call to signal first-use to hooks.
-  type: tool
-  tags: [mcp]
-  anchors:
-    - src/tools/navigate.ts:1-261
-  components:
-    - "#ToolCache"
-
-#SentinelTools:
-  description: Incident triage tools (triage, show, resolve, patterns, stats)
-  type: tool
-  tags: [mcp]
-  anchors:
-    - src/tools/sentinel.ts:1-400
-
-#TagsTools:
-  description: Tag bank tools for v2 symbol classification
-  type: tool
-  tags: [mcp, v2]
-  anchors:
-    - src/tools/tags.ts:1-400
-  signals:
-    - !tag-suggested
-
-#ReindexTools:
-  description: Reindex tool that rebuilds scan-index.json, navigator.yaml, flow-index.json, and aspect-graph.db from .purpose files. Runs 11 pipeline steps including integrity checks, component anchor validation, purpose health scoring, and cross-file validation. Clears ToolCache on success.
-  type: tool
-  tags: [mcp]
-  anchors:
-    - src/tools/reindex.ts:1-475
-  signals:
-    - !index-rebuilt
-  components:
-    - "#ToolCache"
-    - "#AspectGraph"
-
-#GraphTools:
-  description: Graph Generate MCP tool — produces GraphState JSON for the Symbol Graph UI from scan-index data with auto-positioned nodes and group layout
-  type: tool
-  tags: [mcp, visualization]
-  anchors:
-    - src/tools/graph.ts:1-300
-
-#ConductorTools:
-  description: Conductor session management — auto-registers on MCP startup, manual register/unregister/list tools, process exit cleanup
-  type: tool
-  tags: [mcp, conductor, auto-registration]
-  anchors:
-    - src/tools/conductor.ts:1-200
-    - src/utils/conductor-loader.ts:1-238
-
-#LoreTools:
-  description: "Lore MCP tools: search, record, get, update, delete, timeline, assess, calibration. Includes confidence scoring (0-1) on recording, human assessment verdicts (correct/partial/incorrect), delta computation, and calibration statistics with groupBy and low-N insights."
-  type: tool
-  tags: [mcp, lore, calibration]
-  anchors:
-    - src/tools/lore.ts:1-800
-    - src/utils/lore-loader.ts:1-720
-
-#HabitsTools:
-  description: Habits CRUD MCP tools (list, check, status, add, edit, remove) and habits loader with 5-step merge, individual .habit file support, and validation
-  type: tool
-  tags: [mcp, habits]
-  anchors:
-    - src/tools/habits.ts:1-500
-    - src/utils/habits-loader.ts:1-400
-
-#AspectGraphTools:
-  description: 7 MCP tools for the Aspect Graph system — search, get, graph, heatmap, suggest, drift, confirm. paradigm_aspect_suggest_scan marks all suggestions with inferred:true. paradigm_aspect_graph BFS edge output includes origin and inferred fields.
-  type: tool
-  tags: [mcp, aspect-graph]
-  anchors:
-    - src/tools/aspect-graph.ts:1-550
-  components:
-    - "#AspectGraph"
-    - "#AspectSearch"
-    - "#AspectSuggest"
-
-#AspectSearch:
-  description: Three-tier search engine (learned→FTS5→fuzzy) with query normalization and learning loop
-  tags: [feature, aspect-graph]
-  anchors:
-    - src/utils/aspect-search.ts:1-615
-
-#AspectLoreBridge:
-  description: Links aspects to lore decision records via lore_links table. Infers edges between aspects sharing lore.
-  type: utility
-  tags: [feature, aspect-graph]
-  anchors:
-    - src/utils/aspect-lore-bridge.ts:1-434
-
-#AspectSuggest:
-  description: Heuristic auto-suggestion engine — scans source files for undocumented aspects using 8 regex pattern detectors
-  tags: [feature, aspect-graph]
-  anchors:
-    - src/utils/aspect-suggest.ts:1-350
-
-#ContextTools:
-  description: Context monitoring, session persistence, and handoff tools with global store integration
-  type: tool
-  tags: [mcp]
-  aspects: ["~global-persistence"]
-  anchors:
-    - src/tools/context.ts:1-500
-  signals:
-    - "!handoff-persisted"
-    - "!handoff-delivered"
-  flows:
-    - $handoff-roundtrip
-  components:
-    - "#GlobalStore"
-
-#GlobalStore:
-  description: Global brain utility (~/.paradigm/) for session persistence and cross-project wisdom
-  type: store
-  tags: [feature, persistence]
-  aspects: ["~global-persistence"]
-  anchors:
-    - src/utils/global-store.ts:1-260
-  signals:
-    - "!handoff-persisted"
-    - "!wisdom-promoted"
-
-#SessionTracker:
-  description: Session tracking with dual-write breadcrumbs (local + global)
-  type: utility
-  tags: [persistence]
-  aspects: ["~global-persistence"]
-  anchors:
-    - src/utils/session-tracker.ts:1-520
-  components:
-    - "#GlobalStore"
-
-#WisdomLoader:
-  description: Wisdom loader with global+local merge and scope tagging
-  type: loader
-  tags: [persistence]
-  anchors:
-    - src/utils/wisdom-loader.ts:1-360
-  components:
-    - "#GlobalStore"
-
-#IndexLoader:
-  description: Loads project symbol index using premise-core aggregator
-  type: loader
-  tags: [integration]
-  anchors:
-    - src/utils/index-loader.ts:1-150
-  signals:
-    - !context-loaded
-    - !context-error
-
-#ToolCache:
-  description: TTL-based cache for MCP tool results to avoid redundant recomputation within short windows
-  type: utility
-  tags: [performance]
-  anchors:
-    - src/utils/tool-cache.ts:1-69
-
-#IntegrityChecker:
-  description: Central utility for Paradigm symbol integrity validation — broken references, duplicate symbols, orphaned symbols, missing anchors, anchor out-of-bounds, component anchor validation, and purpose file health scoring
-  type: utility
-  tags: [quality, validation]
-  anchors:
-    - src/utils/integrity-checker.ts:1-400
-  components:
-    - "#ReindexTools"
-    - "#IndexLoader"
-
-#WorkspaceLoader:
-  description: Multi-project workspace support. Loads .paradigm-workspace files, reads sibling scan-index.json, filters by exports, provides cross-project search/ripple helpers.
-  type: loader
-  tags: [feature, workspace]
-  anchors:
-    - src/utils/workspace-loader.ts:1-430
-  components:
-    - "#IndexLoader"
-
-#AspectGraph:
-  description: SQLite graph engine for the Aspect Graph system (v3.5). Provides materialization from SymbolEntry[], weighted BFS ripple traversal, heatmap tracking, and drift detection for code anchors. Database stored at .paradigm/aspect-graph.db.
-  tags: [feature, aspect-graph, sqlite]
-  anchors:
-    - src/utils/aspect-graph.ts:1-821
-  components:
-    - "#IndexLoader"
-
-#UniversityTools:
-  description: MCP tool handlers for university content — search, create, update, quiz, submit, onboard, validate, diplomas. Supports category/track filtering, extracurricular content tracks, and the v6.0 pack selector. Search surfaces truncation meta (total/returned); create/update only rebuild the project index when the write target is the project pack; onboard sources the display name from the selected pack's manifest.
-  type: service
-  tags: [feature, university, mcp]
-  anchors:
-    - src/tools/university.ts:1-831
-  components:
-    - "#UniversityLoader"
-
-#UniversityLoader:
-  description: Reads/writes per-project and pack-scoped university content (notes, policies, quizzes, paths, diplomas). Supports category-based organization, extracurricular track filtering, and onboarding sequence generation. Onboarding is section-aware for packs that DECLARE sections in pack.yaml (packDeclaresSections + loadPackConfig pack-scope the config); otherwise it keeps the category-based core/extracurricular partition byte-identical. Content-base probing (resolveContentBase) prefers the base that contains content. searchContentWithMeta exposes pre-slice totals for truncation reporting.
-  type: loader
-  tags: [feature, university]
-  anchors:
-    - src/utils/university-loader.ts:1-1442
-    - src/types/university.ts:1-210
-
-#TaskLoader:
-  description: "CRUD for the .paradigm/tasks/ store. v7 Spine: claimant-owned task DAG (parentTaskId/dependsOn/stage), 4-state status machine (open|in-progress|done|shelved) enforced by assertTransition inside updateTask (stamps started_at on entering in-progress), 'active' meta-filter (open ∪ in-progress), normalizeTask read-side shim healing legacy session_link → external_ref, and a roots-aware index (counts all 4 statuses + DAG roots). All v7 fields optional → old YAML loads unchanged. settledAt is field-only (write-logic deferred to §2 learning wiring)."
-  type: loader
-  tags: [feature, tasks]
-  anchors:
-    - src/utils/task-loader.ts:1-420
-    - src/tools/tasks.ts:1-220
-
-#AgentRelay:
-  description: "Typed agent handoff contract (v7 Spine §1). RelayArtifact/RelayDecision/AgentRelay structures + parseAgentRelay() reading a fenced ```json/```yaml relay block. Response half of the orchestration request/response pair; filePlan is a typed field that replaces the legacy parseFilePlan* regex (regex removal deferred to sub-phase 2)."
-  type: utility
-  tags: [feature, tasks, orchestration]
-  anchors:
-    - src/utils/agent-relay.ts:1-160
-
-# ============================================
-# Flows ($)
-# ============================================
-
-$mcp-startup:
-  description: Server initialization and context loading
-  steps:
-    - "Parse command line args"
-    - "#IndexLoader"          # Load symbol index
-    - "!context-loaded"
-    - "#MCPServer"            # Start MCP server
-    - "Connect to transport"
-
-$tool-execution:
-  description: Handle incoming MCP tool call
-  steps:
-    - "Receive CallToolRequest"
-    - "Route to handler"
-    - "#ToolHandlers"         # Execute tool
-    - "!tool-invoked"
-    - "Return result"
-
-$resource-fetch:
-  description: Handle incoming MCP resource request
-  steps:
-    - "Receive ReadResourceRequest"
-    - "#ResourceHandlers"     # Fetch resource
-    - "!resource-read"
-    - "Return content"
-
-$tag-suggestion:
-  description: AI suggests new tag for human review
-  tags: [v2]
-  steps:
-    - "AI calls paradigm_tags_suggest"
-    - "#TagsTools"            # Validate and add to suggested
-    - "!tag-suggested"
-    - "Human reviews in Sentinel UI"
-
-$mcp-request-flow:
-  description: Handle an incoming MCP request from stdio through to response
-  steps:
-    - "Receive request via stdio transport"
-    - "#MCPServer"            # Parse JSON-RPC request
-    - "#IndexLoader"          # Ensure project context is loaded
-    - "Route to tool or resource handler"
-    - "#ToolHandlers"         # Dispatch to appropriate handler
-    - "#ContextTools"         # Track token usage
-    - "Return formatted response"
-  signals:
-    - "!tool-invoked"
-    - "!resource-read"
-
-$handoff-roundtrip:
-  description: Session handoff persistence and recovery cycle
-  steps:
-    - "Agent calls paradigm_handoff_prepare"
-    - "#ContextTools"          # Build handoff payload
-    - "#GlobalStore"           # Write to ~/.paradigm/sessions/{hash}/pending-handoffs/
-    - "!handoff-persisted"
-    - "New session starts"
-    - "Agent calls paradigm_session_recover"
-    - "#GlobalStore"           # Read pending handoffs
-    - "!handoff-delivered"     # Mark handoffs as delivered
-    - "Return full handoff context to agent"
-
-$wisdom-promotion:
-  description: Promote project-local wisdom to global scope
-  steps:
-    - "Agent calls paradigm_wisdom_promote"
-    - "#WisdomTools"           # Validate and find local item
-    - "#GlobalStore"           # Write to ~/.paradigm/wisdom/
-    - "!wisdom-promoted"
-    - "#WisdomLoader"          # Invalidate cache for merged refresh
-
-# ============================================
-# Signals (!)
-# ============================================
-
-!context-loaded:
-  description: Project context successfully loaded from disk
-  tags: [audit]
-  payload:
-    projectName: string
-    symbolCount: number
-    timestamp: ISO8601
-
-!context-error:
-  description: Failed to load project context
-  tags: [error]
-  payload:
-    error: string
-    path: string
-
-!tool-invoked:
-  description: MCP tool was called by AI assistant
-  tags: [audit]
-  payload:
-    tool: string
-    args: object
-    tokenCount: number
-
-!resource-read:
-  description: MCP resource was fetched by AI assistant
-  tags: [audit]
-  payload:
-    uri: string
-    tokenCount: number
-
-!tag-suggested:
-  description: AI suggested a new tag for human review
-  tags: [v2, audit]
-  payload:
-    tag: string
-    reason: string
-    exampleSymbols: string[]
-
-!index-rebuilt:
-  description: Static index files (scan-index.json, navigator.yaml, flow-index.json) were rebuilt
-  tags: [audit]
-  payload:
-    filesWritten: string[]
-    symbolCount: number
-
-!handoff-persisted:
-  description: Handoff payload written to global store for next session recovery
-  tags: [audit, persistence]
-  payload:
-    handoffId: string
-    projectHash: string
-    summary: string
-
-!handoff-delivered:
-  description: Pending handoff recovered by a new session and marked as delivered
-  tags: [audit, persistence]
-  payload:
-    handoffId: string
-    recoveredBy: string
-
-!wisdom-promoted:
-  description: Project-local antipattern or decision promoted to global scope
-  tags: [audit, persistence]
-  payload:
-    type: string
-    id: string
-    promotedFrom: string
-
-# ============================================
-# Aspects (~)
-# ============================================
-
-~token-tracking:
-  description: All tool responses must track token usage for context management
-  tags: [compliance]
-  anchors:
-    - src/tools/context.ts:20-22
-    - src/tools/index.ts:270-275
-  applies-to:
-    - "#CoreTools"
-    - "#WisdomTools"
-    - "#HistoryTools"
-    - "#NavigateTools"
-    - "#ContextTools"
-    - "#SentinelTools"
-    - "#TagsTools"
-    - "#ReindexTools"
-  enforcement: |
-    Every tool handler must call trackToolCall(text.length, name) before
-    returning to enable context monitoring and handoff recommendations.
-
-~v2-symbol-types:
-  description: All symbol type enums use v2 types only
-  tags: [compliance, v2]
-  anchors:
-    - src/tools/index.ts:110-115
-  applies-to:
-    - "#CoreTools"
-  enforcement: |
-    paradigm_search type enum: ['component', 'flow', 'gate', 'signal', 'aspect']
-    paradigm_status counts: #components, $flows, ^gates, !signals, ~aspects
-
-~global-persistence:
-  description: Session and wisdom data dual-written to both local project and global ~/.paradigm/ directories
-  tags: [persistence, resilience]
-  anchors:
-    - src/utils/session-tracker.ts:195-222
-    - src/utils/global-store.ts:37-74
-    - src/tools/context.ts:275-280
-  applies-to:
-    - "#GlobalStore"
-    - "#SessionTracker"
-    - "#ContextTools"
-    - "#WisdomLoader"
-  enforcement: |
-    Breadcrumbs must be written to both .paradigm/session-breadcrumbs.json (local)
-    and ~/.paradigm/sessions/{hash}/breadcrumbs.json (global). Handoffs persist to
-    ~/.paradigm/sessions/{hash}/pending-handoffs/. Recovery prefers global path,
-    falls back to local. All global writes are best-effort (silent failure).
-
-# ────────────────────────────────────────────
-# Tool Cache & TTL Configuration
-# ────────────────────────────────────────────
-
-~tool-cache-ttl-30s:
-  description: Shared ToolCache singleton uses a 30-second TTL for all cached MCP tool results
-  category: configuration
-  severity: medium
-  tags: [performance, caching]
-  anchors:
-    - src/utils/tool-cache.ts:17-17
-    - src/utils/tool-cache.ts:68-69
-  applies-to:
-    - "#ToolCache"
-    - "#CoreTools"
-    - "#NavigateTools"
-  enforcement: |
-    The ToolCache constructor defaults to 30_000ms. The shared singleton
-    `toolCache` is instantiated with 30_000ms. All getOrCompute calls
-    return cached data if the entry is younger than this TTL.
-
-~tool-cache-clear-on-reindex:
-  description: The tool cache is fully cleared after every successful reindex to prevent stale data
-  category: rule
-  severity: high
-  tags: [caching, data-integrity]
-  anchors:
-    - src/tools/reindex.ts:97-98
-  applies-to:
-    - "#ReindexTools"
-    - "#ToolCache"
-  enforcement: |
-    handleReindexTool calls toolCache.clear() after rebuildStaticFiles
-    succeeds and reloadContext completes. This ensures no stale search
-    or status results survive an index rebuild.
-
-~index-cache-ttl-30s:
-  description: ProjectContext index cache uses a 30-second TTL before considering re-aggregation
-  category: configuration
-  severity: medium
-  tags: [performance, caching]
-  anchors:
-    - src/utils/index-loader.ts:23-23
-    - src/utils/index-loader.ts:97-100
-  applies-to:
-    - "#IndexLoader"
-  enforcement: |
-    INDEX_CACHE_TTL_MS = 30 * 1000. isContextStale() returns true when
-    the context is older than this TTL. ensureFreshIndex() re-aggregates
-    if the index is empty or the cache has expired.
-
-~wisdom-cache-ttl-30s:
-  description: Wisdom context cache uses a 30-second TTL with invalidation on write
-  category: configuration
-  severity: medium
-  tags: [performance, caching]
-  anchors:
-    - src/utils/wisdom-loader.ts:25-25
-    - src/utils/wisdom-loader.ts:56-58
-    - src/utils/wisdom-loader.ts:178-181
-  applies-to:
-    - "#WisdomLoader"
-  enforcement: |
-    WISDOM_CACHE_TTL_MS = 30 * 1000. Cache is keyed by absolute root dir.
-    invalidateWisdomCache() is called after recording antipatterns or
-    decisions to ensure the next query gets fresh merged data.
-
-~flow-cache-ttl-30s:
-  description: Flow index cache uses a 30-second TTL matching other caches
-  category: configuration
-  severity: low
-  tags: [performance, caching]
-  anchors:
-    - src/utils/flow-loader.ts:14-15
-  applies-to:
-    - "#CoreTools"
-  enforcement: |
-    FLOW_CACHE_TTL_MS = 30 * 1000. Flow index is loaded from
-    .paradigm/flow-index.json and cached per root directory.
-
-~fixtures-cache-ttl-60s:
-  description: Fixtures cache uses a 60-second TTL (longer than other caches because fixtures change less frequently)
-  category: configuration
-  severity: low
-  tags: [performance, caching]
-  anchors:
-    - src/utils/fixtures-loader.ts:14-15
-  enforcement: |
-    FIXTURES_CACHE_TTL_MS = 60 * 1000. This is intentionally 2x the
-    standard 30s TTL because test fixtures are modified less frequently
-    than symbols or wisdom.
-
-# ────────────────────────────────────────────
-# Session Tracking Rules
-# ────────────────────────────────────────────
-
-~max-breadcrumbs-50:
-  description: Session breadcrumb history is capped at 50 entries (FIFO eviction)
-  category: constraint
-  severity: medium
-  tags: [persistence, memory]
-  anchors:
-    - src/utils/session-tracker.ts:134-134
-    - src/utils/session-tracker.ts:197-199
-  applies-to:
-    - "#SessionTracker"
-  enforcement: |
-    MAX_BREADCRUMBS = 50. When adding a breadcrumb, if the array
-    exceeds 50 entries the oldest are sliced off (FIFO). This bounds
-    memory usage and file size for persisted breadcrumbs.
-
-~checkpoint-max-age-7d:
-  description: Session checkpoints older than 7 days are discarded on load
-  category: configuration
-  severity: medium
-  tags: [persistence, recovery]
-  anchors:
-    - src/utils/session-tracker.ts:142-143
-    - src/utils/session-tracker.ts:352-355
-  applies-to:
-    - "#SessionTracker"
-  enforcement: |
-    CHECKPOINT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000 (604800000ms).
-    loadCheckpoint() returns null for any checkpoint whose timestamp
-    is older than 7 days. This prevents stale recovery data from
-    confusing new sessions.
-
-~default-model-sonnet:
-  description: Session tracker defaults to claude-sonnet-4 for cost calculations
-  category: decision
-  severity: low
-  tags: [pricing, session]
-  anchors:
-    - src/utils/session-tracker.ts:170-170
-  applies-to:
-    - "#SessionTracker"
-  enforcement: |
-    createNewSession() sets model to 'claude-sonnet-4' by default.
-    The model can be changed via setModel() which triggers cost
-    recalculation.
-
-~token-estimation-3.5-chars:
-  description: Token count is estimated at 1 token per 3.5 characters (ceil division)
-  category: decision
-  severity: medium
-  tags: [pricing, estimation]
-  anchors:
-    - src/utils/session-tracker.ts:465-468
-  applies-to:
-    - "#SessionTracker"
-  enforcement: |
-    estimateTokens() uses Math.ceil(len / 3.5). This is an approximation
-    that slightly overestimates to provide conservative cost tracking.
-
-~model-pricing-table:
-  description: Three Claude models with fixed per-1M-token pricing for cost estimation
-  category: configuration
-  severity: medium
-  tags: [pricing]
-  anchors:
-    - src/utils/session-tracker.ts:19-23
-  applies-to:
-    - "#SessionTracker"
-  enforcement: |
-    MODEL_PRICING defines three models: claude-opus-4 ($15/$75),
-    claude-sonnet-4 ($3/$15), claude-haiku-3.5 ($0.80/$4.00).
-    All costs are per 1M tokens (input/output). Updating these
-    values requires a code change.
-
-~handoff-threshold-levels:
-  description: Four handoff recommendation thresholds at 50%, 70%, 85%, and below 50%
-  category: rule
-  severity: high
-  tags: [session, handoff]
-  anchors:
-    - src/utils/session-tracker.ts:646-658
-  applies-to:
-    - "#SessionTracker"
-    - "#ContextTools"
-  enforcement: |
-    getHandoffRecommendation() uses context usage percentage thresholds:
-    >=85% = handoff-urgent, >=70% = handoff-recommended,
-    >=50% = consider-handoff, <50% = continue. The MCP token overhead
-    multiplier is 4x (mcpTokens * 4) to account for conversation context.
-
-~handoff-signal-thresholds:
-  description: Additional handoff signals fire at 50 calls, 30 min duration, and 500KB data volume
-  category: configuration
-  severity: low
-  tags: [session, handoff]
-  anchors:
-    - src/utils/session-tracker.ts:665-673
-  applies-to:
-    - "#SessionTracker"
-  enforcement: |
-    Additional signals are emitted when: totalCalls > 50 (high interactions),
-    durationMin > 30 (long session), totalBytes > 500000 (large data volume).
-    These are advisory signals appended to the handoff recommendation.
-
-~auto-recovery-once-per-session:
-  description: Auto-recovery fires only once per MCP session to avoid duplicate preambles
-  category: invariant
-  severity: high
-  tags: [session, recovery]
-  anchors:
-    - src/utils/session-tracker.ts:423-432
-    - src/tools/index.ts:276-281
-  applies-to:
-    - "#SessionTracker"
-    - "#ToolHandlers"
-  enforcement: |
-    hasRecoveredThisSession() and markRecovered() use a boolean flag
-    (_recovered) on the SessionTracker singleton. The dispatch layer
-    in tools/index.ts checks this flag on the first tool call and
-    prepends recovery preamble + plugin update notice only once.
-
-~context-window-default-200k:
-  description: Default context window size for handoff calculations is 200,000 tokens
-  category: configuration
-  severity: low
-  tags: [session]
-  anchors:
-    - src/utils/session-tracker.ts:629-629
-    - src/tools/context.ts:313-313
-  applies-to:
-    - "#SessionTracker"
-    - "#ContextTools"
-  enforcement: |
-    getHandoffRecommendation defaults contextWindowSize to 200000.
-    The context check tool also defaults to 200000 if not provided
-    by the caller.
-
-# ────────────────────────────────────────────
-# Global Store Rules
-# ────────────────────────────────────────────
-
-~project-hash-sha256-12char:
-  description: Project identity uses a 12-character truncated SHA-256 hash of the absolute root path
-  category: decision
-  severity: high
-  tags: [persistence, identity]
-  anchors:
-    - src/utils/global-store.ts:52-55
-  applies-to:
-    - "#GlobalStore"
-  enforcement: |
-    getProjectHash() computes SHA-256 of the resolved absolute path,
-    then truncates to 12 hex characters. This is used as the session
-    directory name under ~/.paradigm/sessions/{hash}/. Changing the
-    hash length would orphan existing session data.
-
-~handoff-oldest-first-delivery:
-  description: Pending handoffs are delivered in chronological order (oldest first)
-  category: rule
-  severity: medium
-  tags: [persistence, handoff]
-  anchors:
-    - src/utils/global-store.ts:144-146
-  applies-to:
-    - "#GlobalStore"
-  enforcement: |
-    loadPendingHandoffs() sorts by timestamp ascending so the oldest
-    handoff is delivered first. Only handoffs with status 'pending'
-    are returned; delivered ones remain on disk but are filtered out.
-
-# ────────────────────────────────────────────
-# Wisdom Merge Strategy
-# ────────────────────────────────────────────
-
-~wisdom-local-wins-on-conflict:
-  description: When merging global and local wisdom, local (project) entries win on duplicate ID
-  category: rule
-  severity: high
-  tags: [persistence, wisdom]
-  anchors:
-    - src/utils/wisdom-loader.ts:104-127
-  applies-to:
-    - "#WisdomLoader"
-  enforcement: |
-    loadWisdomContextFresh() merges antipatterns and decisions by ID.
-    Local entries are added first; global entries with the same ID are
-    skipped. For preferences, local by_symbol entries take priority
-    and global entries are merged only for symbols not in local.
-    Each merged item gets a 'scope' tag ('project' or 'global').
-
-# ────────────────────────────────────────────
-# Aspect Graph Configuration
-# ────────────────────────────────────────────
-
-~ripple-bfs-max-depth-5:
-  description: Recursive ripple traversal has a maximum depth of 5 hops and minimum weight of 0.1
-  category: constraint
-  severity: medium
-  tags: [aspect-graph, traversal]
-  anchors:
-    - src/utils/aspect-graph.ts:472-473
-  applies-to:
-    - "#AspectGraph"
-  enforcement: |
-    recursiveRipple() defaults maxDepth=5 and minWeight=0.1. Traversal
-    stops when depth exceeds maxDepth, accumulated weight drops below
-    minWeight, or the queue is exhausted. These defaults bound the
-    search space for large graphs.
-
-~ripple-bfs-queue-limit-1000:
-  description: BFS ripple traversal is bounded to 1000 results to prevent unbounded expansion
-  category: constraint
-  severity: high
-  tags: [aspect-graph, performance]
-  anchors:
-    - src/utils/aspect-graph.ts:477-477
-    - src/utils/aspect-graph.ts:489-489
-  applies-to:
-    - "#AspectGraph"
-  enforcement: |
-    QUEUE_LIMIT = 1000. The BFS loop terminates when results.length
-    reaches this limit, even if the queue is not empty. This prevents
-    runaway traversals in densely connected graphs.
-
-~inferred-edge-weight-0.5:
-  description: Edges inferred from appliesTo references have weight 0.5 (half of explicit edges)
-  category: configuration
-  severity: medium
-  tags: [aspect-graph, edges]
-  anchors:
-    - src/utils/aspect-graph.ts:322-326
-  applies-to:
-    - "#AspectGraph"
-  enforcement: |
-    materializeAspects() creates edges from appliesTo with weight=0.5
-    and origin='inferred'. Explicit edges from data.edges default to
-    weight=1.0 and origin='explicit'. This weight differential ensures
-    explicit relationships rank higher in traversals.
-
-~index-reference-weight-0.5:
-  description: Symbol index references (references/referencedBy) use implicit weight 0.5 during ripple traversal
-  category: configuration
-  severity: medium
-  tags: [aspect-graph, traversal]
-  anchors:
-    - src/utils/aspect-graph.ts:548-548
-    - src/utils/aspect-graph.ts:563-563
-  applies-to:
-    - "#AspectGraph"
-  enforcement: |
-    During recursiveRipple(), following symbol index references
-    (both references and referencedBy) multiplies the current weight
-    by 0.5. This makes index-derived paths weaker than explicit
-    graph edges, prioritizing declared relationships.
-
-~aspect-category-inference:
-  description: Aspect category is inferred from description keywords when not explicitly set
-  category: rule
-  severity: low
-  tags: [aspect-graph, heuristics]
-  anchors:
-    - src/utils/aspect-graph.ts:781-792
-  applies-to:
-    - "#AspectGraph"
-  enforcement: |
-    inferCategory() priority: explicit data.category > description keywords > default 'rule'.
-    Keywords: must/require/always => rule, decided/chose => decision,
-    limit/cannot => constraint, set to/configured/value => configuration.
-
-~aspect-severity-inference:
-  description: Aspect severity is inferred from tags when not explicitly set (security/compliance tags => high)
-  category: rule
-  severity: low
-  tags: [aspect-graph, heuristics]
-  anchors:
-    - src/utils/aspect-graph.ts:799-808
-  applies-to:
-    - "#AspectGraph"
-  enforcement: |
-    inferSeverity() priority: explicit data.severity > tag heuristic > default 'medium'.
-    Tag 'critical' => critical, tags 'security' or 'compliance' => high.
-
-~drift-detection-sha256:
-  description: Anchor drift is detected by comparing SHA-256 hashes of file content at anchor line ranges
-  category: decision
-  severity: high
-  tags: [aspect-graph, data-integrity]
-  anchors:
-    - src/utils/aspect-graph.ts:653-720
-    - src/utils/aspect-graph.ts:754-774
-  applies-to:
-    - "#AspectGraph"
-  enforcement: |
-    checkDrift() reads the file at each anchor's line range, computes
-    SHA-256 of the slice, and compares to stored content_hash. Drifted
-    anchors get their drifted flag set to 1 in the database. Missing
-    files are reported as drifted with exists=false.
-
-~fts5-graceful-degradation:
-  description: FTS5 full-text search is optional — the system degrades gracefully if sql.js lacks FTS5 support
-  category: decision
-  severity: medium
-  tags: [aspect-graph, sqlite, resilience]
-  anchors:
-    - src/utils/aspect-graph.ts:193-198
-    - src/utils/aspect-search.ts:114-124
-  applies-to:
-    - "#AspectGraph"
-    - "#AspectSearch"
-  enforcement: |
-    openAspectGraph() wraps FTS5 table creation in try/catch. hasFts5()
-    checks for the table before attempting FTS queries. If FTS5 is
-    unavailable, searchAspects() skips tier 2 and falls through to
-    tier 3 fuzzy search.
-
-# ────────────────────────────────────────────
-# Aspect Search Configuration
-# ────────────────────────────────────────────
-
-~search-decay-factor-0.95:
-  description: Non-selected search mappings decay by factor 0.95 on each confirmation
-  category: configuration
-  severity: medium
-  tags: [aspect-graph, search, learning]
-  anchors:
-    - src/utils/aspect-search.ts:30-30
-    - src/utils/aspect-search.ts:534-543
-  applies-to:
-    - "#AspectSearch"
-  enforcement: |
-    DECAY_FACTOR = 0.95. When confirmSearch() reinforces a query-to-aspect
-    mapping (weight += 1.0), all competing mappings for the same normalized
-    query have their weight multiplied by 0.95. This causes unselected
-    alternatives to gradually fade while preserving near-recent relevance.
-
-~search-fuzzy-threshold-0.3:
-  description: Tier-3 fuzzy search results require a minimum score of 0.3 to be included
-  category: configuration
-  severity: low
-  tags: [aspect-graph, search]
-  anchors:
-    - src/utils/aspect-search.ts:33-33
-    - src/utils/aspect-search.ts:412-412
-  applies-to:
-    - "#AspectSearch"
-  enforcement: |
-    FUZZY_SCORE_THRESHOLD = 0.3. Fuzzy scores are computed as
-    1/(1+levenshtein_distance) averaged across query tokens. Only
-    candidates exceeding 0.3 are included in tier-3 results.
-
-~search-default-limit-10:
-  description: Aspect search returns at most 10 results by default
-  category: configuration
-  severity: low
-  tags: [aspect-graph, search]
-  anchors:
-    - src/utils/aspect-search.ts:36-36
-    - src/utils/aspect-search.ts:160-160
-  applies-to:
-    - "#AspectSearch"
-  enforcement: |
-    DEFAULT_LIMIT = 10. Each tier's results are sliced to this limit
-    before returning. Callers can override via options.limit.
-
-~search-three-tier-fallthrough:
-  description: Search uses a three-tier strategy — learned mappings, then FTS5, then fuzzy — stopping at the first tier with results
-  category: rule
-  severity: high
-  tags: [aspect-graph, search]
-  anchors:
-    - src/utils/aspect-search.ts:151-184
-  applies-to:
-    - "#AspectSearch"
-  enforcement: |
-    searchAspects() tries tiers in order: tier 1 (learned mappings from
-    search_weights), tier 2 (FTS5 full-text if available), tier 3
-    (Levenshtein fuzzy). Each tier returns immediately if it finds
-    results, preventing lower tiers from running unnecessarily.
-
-~search-query-normalization:
-  description: Search queries are normalized by lowercasing, removing stop words, and sorting tokens alphabetically
-  category: rule
-  severity: medium
-  tags: [aspect-graph, search]
-  anchors:
-    - src/utils/aspect-search.ts:21-27
-    - src/utils/aspect-search.ts:95-103
-  applies-to:
-    - "#AspectSearch"
-  enforcement: |
-    normalizeQuery() lowercases, splits on whitespace, removes 34 stop
-    words (the, a, an, is, how, does, etc.), sorts remaining tokens
-    alphabetically, and joins with space. This ensures "how does pricing
-    work" and "pricing work how does" produce the same normalized form.
-
-# ────────────────────────────────────────────
-# Aspect Suggestion Rules
-# ────────────────────────────────────────────
-
-~suggest-skip-test-files:
-  description: Aspect auto-suggestion skips test files entirely (7 path segment patterns + filename patterns)
-  category: rule
-  severity: medium
-  tags: [aspect-graph, suggestions]
-  anchors:
-    - src/utils/aspect-suggest.ts:28-56
-    - src/utils/aspect-suggest.ts:538-539
-  applies-to:
-    - "#AspectSuggest"
-  enforcement: |
-    isTestFile() checks for 7 directory segments (test, tests, spec,
-    specs, __tests__, __mocks__, __fixtures__) and filename suffixes
-    (.test.*, .spec.*, _test.*). suggestAspects() returns [] immediately
-    for test files.
-
-~suggest-8-pattern-detectors:
-  description: Aspect suggestion uses 8 ordered regex pattern detectors with confidence-based priority
-  category: rule
-  severity: medium
-  tags: [aspect-graph, suggestions]
-  anchors:
-    - src/utils/aspect-suggest.ts:501-510
-    - src/utils/aspect-suggest.ts:512-517
-  applies-to:
-    - "#AspectSuggest"
-  enforcement: |
-    DETECTORS array has 8 entries in priority order: rateLimits,
-    timeValues, environmentChecks, featureFlags, hardcodedStrings,
-    magicNumbers, regexPatterns, conditionalLogic. When multiple
-    detectors match the same line, the highest confidence wins
-    (high=3, medium=2, low=1). On tie, first detector wins.
-
-# ────────────────────────────────────────────
-# Lore Bridge Configuration
-# ────────────────────────────────────────────
-
-~lore-inferred-edge-weight-0.3:
-  description: Edges inferred from shared lore entries use weight 0.3 and origin 'learned'
-  category: configuration
-  severity: low
-  tags: [aspect-graph, lore]
-  anchors:
-    - src/utils/aspect-lore-bridge.ts:278-279
-  applies-to:
-    - "#AspectLoreBridge"
-  enforcement: |
-    inferLoreEdges() creates 'related-to' edges with weight=0.3 and
-    origin='learned'. This is lower than inferred appliesTo edges (0.5)
-    and explicit edges (1.0), reflecting that lore-based connections
-    are the weakest evidence of relationship.
-
-~lore-link-materialization-idempotent:
-  description: Lore link materialization is idempotent — clears all existing links before rebuilding
-  category: invariant
-  severity: high
-  tags: [aspect-graph, lore, data-integrity]
-  anchors:
-    - src/utils/aspect-lore-bridge.ts:55-57
-  applies-to:
-    - "#AspectLoreBridge"
-  enforcement: |
-    materializeLoreLinks() runs DELETE FROM lore_links before rebuilding.
-    This ensures repeated calls produce the same result and prevents
-    stale links from accumulating.
-
-# ────────────────────────────────────────────
-# Orchestration Configuration
-# ────────────────────────────────────────────
-
-~quick-check-escalation:
-  description: Quick-check mode auto-escalates to full orchestration when 2+ escalation signals fire (security, high complexity, 4+ symbols, critical nominations)
-  category: rule
-  severity: critical
-  tags: [orchestration, enforcement]
-  anchors:
-    - src/tools/orchestration.ts:1060-1100
-  applies-to:
-    - "#OrchestrationTools"
-  enforcement: |
-    Quick-check escalation is conservative: security-adjacent tasks always
-    escalate, as do critical agent nominations. Two or more signals
-    trigger escalation even if individually non-critical. This ensures
-    quick-check doesn't greenlight tasks that need full team review.
-
-~advocate-role-prompt:
-  description: Advocate (Jinx) role prompt — devil's advocate with pre-mortem methodology, assumption-breaking, and edge case surfacing
-  category: rule
-  severity: medium
-  tags: [orchestration, advocate]
-  anchors:
-    - src/tools/orchestration.ts:462-490
-  applies-to:
-    - "#OrchestrationTools"
-  enforcement: |
-    The advocate role prompt defines Jinx's behavior: stress-test assumptions,
-    surface edge cases, challenge happy-path thinking, run mental pre-mortems.
-    Produces risks/assumptions/edge-cases/questions and a verdict (GREENLIGHT
-    or ESCALATE). Does NOT write code or block without justification.
-
-~magnitude-based-orchestration:
-  description: Stop hook Check 13 uses magnitude scoring (files + cross-package + security-adjacent + symbols) instead of raw file count
-  category: rule
-  severity: critical
-  tags: [orchestration, enforcement]
-  anchors:
-    - ../paradigm/src/commands/hooks/scripts/paradigm-common.sh:745-820
-  applies-to:
-    - "#OrchestrationTools"
-  enforcement: |
-    Magnitude score = source files (1pt each) + cross-package changes (2pts if 2+
-    packages) + security-adjacent files (2pts each for portal.yaml, auth, gate,
-    security, token, session files) + symbol files (1pt if 2+ .purpose changed).
-    Score compared against configurable threshold (default 3). This replaces the
-    simple SOURCE_COUNT >= threshold check.
-
-~agent-default-model-assignments:
-  description: Default model assignments — advocate/architect/security=opus, reviewer=sonnet, builder/tester/documentor=haiku
-  category: configuration
-  severity: medium
-  tags: [orchestration]
-  anchors:
-    - src/tools/orchestration.ts:156-162
-  applies-to:
-    - "#OrchestrationTools"
-  enforcement: |
-    DEFAULT_MODELS maps agent roles to model tiers: architect and
-    security use opus (highest capability), reviewer uses sonnet
-    (balanced), builder and tester use haiku (cost-efficient).
-    These can be overridden via agents.yaml defaultModel field.
-
-~agent-token-estimates:
-  description: Per-agent token usage estimates for cost preview (builder is the largest at 10K-50K)
-  category: configuration
-  severity: medium
-  tags: [orchestration, pricing]
-  anchors:
-    - src/tools/orchestration.ts:164-170
-  applies-to:
-    - "#OrchestrationTools"
-  enforcement: |
-    AGENT_TOKEN_ESTIMATES defines min/max ranges: architect 5K-20K,
-    security 3K-15K, reviewer 2K-10K, builder 10K-50K, tester 5K-20K.
-    Used by plan mode to estimate total orchestration cost.
-
-~orchestration-cost-pricing:
-  description: Orchestration cost preview uses its own pricing table (opus $15/$75, sonnet $3/$15, haiku $0.25/$1.25)
-  category: configuration
-  severity: medium
-  tags: [orchestration, pricing]
-  anchors:
-    - src/tools/orchestration.ts:1073-1077
-  applies-to:
-    - "#OrchestrationTools"
-  enforcement: |
-    MODEL_PRICING in orchestration.ts defines per-1M-token costs:
-    opus (15/75), sonnet (3/15), haiku (0.25/1.25). Note that haiku
-    pricing differs from session-tracker.ts (0.80/4.00) because
-    orchestration uses the cheaper haiku tier for cost estimates.
-
-~builder-fresh-context-principle:
-  description: Builder agents must never carry assumptions from previous tasks — each runs in a clean context
-  category: rule
-  severity: critical
-  tags: [orchestration, builder]
-  anchors:
-    - src/tools/orchestration.ts:218-224
-  applies-to:
-    - "#OrchestrationTools"
-  enforcement: |
-    The builder role prompt explicitly states the Fresh Context Principle:
-    "Each builder task runs in a separate, clean context. NEVER carry
-    assumptions from previous tasks." This prevents subtle bugs from
-    stale mental models across parallel builder invocations.
-
-~reviewer-two-stage-protocol:
-  description: Reviewer must pass spec compliance (stage 1) before code quality review (stage 2) with minimum 3 findings
-  category: rule
-  severity: critical
-  tags: [orchestration, review]
-  anchors:
-    - src/tools/orchestration.ts:249-287
-  applies-to:
-    - "#OrchestrationTools"
-  enforcement: |
-    The reviewer role prompt defines a two-stage protocol: Stage 1 checks
-    spec compliance (.purpose, ^gates, $flows, !signals, ~aspects).
-    Stage 1 must pass before Stage 2 (code quality). Every review must
-    produce at least 3 categorized findings (blocking/improvement/note).
-    "No looks good with zero findings."
-
-# ────────────────────────────────────────────
-# Tool Dispatch Rules
-# ────────────────────────────────────────────
-
-~tool-dispatch-prefix-routing:
-  description: Tool dispatch uses name prefix matching — each tool family is routed by its paradigm_ prefix
-  category: rule
-  severity: high
-  tags: [mcp, dispatch]
-  anchors:
-    - src/tools/index.ts:286-1044
-  applies-to:
-    - "#ToolHandlers"
-  enforcement: |
-    The dispatch switch handles 5 core tools by exact name, then falls
-    through to prefix-based routing: paradigm_wisdom_ => wisdom,
-    paradigm_history_ => history, paradigm_context_/paradigm_session_ =>
-    context, paradigm_sentinel_ => sentinel, etc. Unknown tools throw
-    an error. Context tools skip trackToolCall to avoid recursion.
-
-~context-tools-skip-tracking:
-  description: Context tools (paradigm_context_*, paradigm_session_*) do not call trackToolCall to avoid infinite recursion
-  category: invariant
-  severity: critical
-  tags: [mcp, session]
-  anchors:
-    - src/tools/index.ts:912-919
-  applies-to:
-    - "#ToolHandlers"
-    - "#ContextTools"
-  enforcement: |
-    The dispatch handler for context tools has a comment: "Don't track
-    context tools to avoid recursion." trackToolCall is intentionally
-    omitted because these tools read from the same session tracker
-    they would be writing to.
-
-~recovery-preamble-first-response:
-  description: Recovery preamble and plugin update notice are prepended to the first tool response only
-  category: rule
-  severity: medium
-  tags: [mcp, recovery]
-  anchors:
-    - src/tools/index.ts:1050-1057
-  applies-to:
-    - "#ToolHandlers"
-  enforcement: |
-    After the tool result IIFE completes, if recoveryPreamble or
-    updateNotice is non-null, they are prepended to the first content
-    item's text. This only fires once per session (guarded by
-    hasRecoveredThisSession).
-
-# ────────────────────────────────────────────
-# Search & Matching Configuration
-# ────────────────────────────────────────────
-
-~fuzzy-search-max-distance-3:
-  description: Fuzzy symbol search uses a maximum Levenshtein distance of 3 and returns at most 5 results
-  category: configuration
-  severity: low
-  tags: [search]
-  anchors:
-    - src/tools/fuzzy-match.ts:45-45
-    - src/tools/index.ts:309-309
-  applies-to:
-    - "#CoreTools"
-  enforcement: |
-    findFuzzyMatches defaults to maxDistance=3, maxResults=5.
-    paradigm_search calls it with these defaults when exact search
-    returns no results and fuzzy=true. Partial string containment
-    is treated as distance=1.
-
-~route-similarity-threshold-0.6:
-  description: Gate suggestions require a minimum route similarity score of 0.6 to match portal.yaml patterns
-  category: configuration
-  severity: medium
-  tags: [gates, portal]
-  anchors:
-    - src/tools/index.ts:691-691
-    - src/tools/index.ts:700-700
-  applies-to:
-    - "#CoreTools"
-  enforcement: |
-    paradigm_gates_for_route considers portal.yaml routes with
-    similarity >= 0.6. Similarity >= 0.8 yields 'high' confidence;
-    0.6-0.8 yields 'medium'. The similarity function uses segment-level
-    comparison with bonuses for parameter matches and structure match.
-
-~ripple-depth-clamp-1-to-5:
-  description: Ripple analysis depth is clamped to the range 1-5 (user cannot request depth 0 or >5)
-  category: constraint
-  severity: medium
-  tags: [search, safety]
-  anchors:
-    - src/tools/index.ts:425-425
-  applies-to:
-    - "#CoreTools"
-  enforcement: |
-    paradigm_ripple computes maxDepth as Math.min(Math.max(depth || 2, 1), 5).
-    Default is 2. This prevents unbounded traversal (>5 levels) and
-    ensures at least 1 level of analysis.
-
-# ────────────────────────────────────────────
-# Reindex Pipeline
-# ────────────────────────────────────────────
-
-~reindex-11-stage-pipeline:
-  description: Reindex rebuilds artifacts in 11 steps — scan-index.json, navigator.yaml, flow-index.json, aspect-graph.db, lore links, persona index, protocol index, integrity check, component anchors, purpose health, cross-file validation
-  category: rule
-  severity: high
-  tags: [reindex, pipeline]
-  anchors:
-    - src/tools/reindex.ts:128-222
-  applies-to:
-    - "#ReindexTools"
-  enforcement: |
-    rebuildStaticFiles() executes 5 stages: (1) aggregate symbols from
-    .purpose files, (2) generate and write scan-index.json, (3) generate
-    and write navigator.yaml, (4) generate and write flow-index.json,
-    (5) build aspect-graph.db with materializeAspects + materializeLoreLinks +
-    inferLoreEdges. Stage 5 failure is non-fatal.
-
-~aspect-graph-build-non-fatal:
-  description: Aspect graph build failure during reindex is non-fatal — it is caught and silently skipped
-  category: decision
-  severity: medium
-  tags: [reindex, resilience]
-  anchors:
-    - src/tools/reindex.ts:184-206
-  applies-to:
-    - "#ReindexTools"
-    - "#AspectGraph"
-  enforcement: |
-    The aspect graph build block (openAspectGraph, materializeAspects,
-    materializeLoreLinks, inferLoreEdges, closeAspectGraph) is wrapped
-    in try/catch with an empty catch. Failure does not block the rest
-    of the reindex pipeline.
-
-# ────────────────────────────────────────────
-# MCP Server Configuration
-# ────────────────────────────────────────────
-
-~stdio-transport-only:
-  description: The MCP server uses stdio transport exclusively (no HTTP, no WebSocket)
-  category: decision
-  severity: high
-  tags: [mcp, transport]
-  anchors:
-    - src/index.ts:100-101
-  applies-to:
-    - "#MCPServer"
-  enforcement: |
-    main() creates a StdioServerTransport and connects it to the server.
-    There is no alternative transport configuration. The server reads
-    JSON-RPC from stdin and writes to stdout.
-
-~background-reindex-on-mutation:
-  description: Purpose/portal mutations trigger a non-blocking background reindex to keep static files in sync
-  category: rule
-  severity: medium
-  tags: [mcp, reindex]
-  anchors:
-    - src/index.ts:52-58
-  applies-to:
-    - "#MCPServer"
-    - "#PurposePortalTools"
-  enforcement: |
-    reloadContext() calls loadProjectContext then fires
-    rebuildStaticFiles in background via .catch(). Errors are logged
-    to stderr but do not fail the mutation. This is called by
-    purpose-portal tools after every successful write.
-
-# ────────────────────────────────────────────
-# Resource URI Rules
-# ────────────────────────────────────────────
-
-~resource-uri-paradigm-scheme:
-  description: All MCP resources must use the paradigm:// URI scheme — unknown schemes throw an error
-  category: invariant
-  severity: high
-  tags: [mcp, resources]
-  anchors:
-    - src/resources/index.ts:112-114
-  applies-to:
-    - "#ResourceHandlers"
-  enforcement: |
-    The ReadResourceRequest handler checks uri.startsWith('paradigm://')
-    and throws "Unknown URI scheme" for non-matching URIs. The path
-    after paradigm:// is used to route to the appropriate handler.
+components:
+  MCPServer:
+    description: Main MCP server entry point using @modelcontextprotocol/sdk
+    type: service
+    anchors:
+      - src/index.ts:1-100
+    tags:
+      - feature
+    components:
+      - '#ResourceHandlers'
+      - '#ToolHandlers'
+      - '#IndexLoader'
+  ResourceHandlers:
+    description: MCP resource handlers for paradigm:// URIs
+    type: service
+    anchors:
+      - src/resources/index.ts:1-200
+    tags:
+      - feature
+      - mcp
+    signals:
+      - '!resource-read'
+  ToolHandlers:
+    description: MCP tool handlers for paradigm_* actions
+    type: service
+    anchors:
+      - src/tools/index.ts:1-100
+    tags:
+      - feature
+      - mcp
+    aspects:
+      - ~mcp-tool-handler
+    flows:
+      - $mcp-request-flow
+    components:
+      - '#CoreTools'
+      - '#WisdomTools'
+      - '#HistoryTools'
+      - '#NavigateTools'
+      - '#SentinelTools'
+      - '#TagsTools'
+      - '#ReindexTools'
+      - '#GlobalStore'
+      - '#PurposePortalTools'
+      - '#OrchestrationTools'
+      - '#AspectGraphTools'
+      - '#WorkspaceLoader'
+      - '#LoreTools'
+      - '#HabitsTools'
+      - '#GraduationTools'
+      - '#GraphTools'
+      - '#ConductorTools'
+      - '#SymphonyTools'
+      - '#UniversityTools'
+  GraduationTools:
+    description: Automation tier graduation tools (graduate_check, graduate_status) — data-driven migration from habits to hooks
+    type: tool
+    anchors:
+      - src/tools/graduation.ts:1
+      - src/utils/graduation-engine.ts:1
+      - src/utils/graduation-store.ts:1
+      - src/utils/graduation-types.ts:1
+    tags:
+      - mcp
+      - graduation
+      - automation
+  SymphonyTools:
+    description: 'The Score: agent-to-agent messaging tools (poll, send, status, thread, file requests) with Sentinel event bridge'
+    type: tool
+    anchors:
+      - src/tools/symphony.ts:1-757
+    tags:
+      - mcp
+      - symphony
+  PurposePortalTools:
+    description: Purpose file and portal.yaml management tools (init, add, remove, rename, validate). Validation includes clarification marker scanning.
+    type: tool
+    anchors:
+      - src/tools/purpose-portal.ts:1-1350
+    tags:
+      - mcp
+  OrchestrationTools:
+    description: Inline multi-agent orchestration tools with three modes (quick/plan/execute). Quick mode runs advocate (Jinx) + reviewer for fast pre-check. Builder prompt includes Fresh Context Principle; reviewer prompt uses two-stage review with minimum 3 findings. Advocate role prompt defines devil's advocate with pre-mortem methodology.
+    type: tool
+    anchors:
+      - src/tools/orchestration.ts:1-2507
+    tags:
+      - mcp
+      - team
+  CoreTools:
+    description: Core symbol tools (search, ripple, related, status, gates_for_route) with TTL caching for search and status
+    type: tool
+    anchors:
+      - src/tools/index.ts:100-800
+    tags:
+      - mcp
+    signals:
+      - '!tool-invoked'
+    components:
+      - '#ToolCache'
+  WisdomTools:
+    description: Team wisdom tools (context, record, expert, promote) with global+local merge
+    type: tool
+    anchors:
+      - src/tools/wisdom.ts:1-500
+    tags:
+      - mcp
+    signals:
+      - '!wisdom-promoted'
+    components:
+      - '#GlobalStore'
+  HistoryTools:
+    description: Implementation history tools (context, record, validate, fragility)
+    type: tool
+    anchors:
+      - src/tools/history.ts:1-294
+    tags:
+      - mcp
+  NavigateTools:
+    description: Codebase navigation tools (find, explore, context) with TTL caching. Writes .paradigm/.nav-called sentinel file after a successful navigate call to signal first-use to hooks.
+    type: tool
+    anchors:
+      - src/tools/navigate.ts:1-261
+    tags:
+      - mcp
+    components:
+      - '#ToolCache'
+  SentinelTools:
+    description: Incident triage tools (triage, show, resolve, patterns, stats)
+    type: tool
+    anchors:
+      - src/tools/sentinel.ts:1-400
+    tags:
+      - mcp
+  TagsTools:
+    description: Tag bank tools for v2 symbol classification
+    type: tool
+    anchors:
+      - src/tools/tags.ts:1-400
+    tags:
+      - mcp
+      - v2
+    signals:
+      - '!tag-suggested'
+  ReindexTools:
+    description: Reindex tool that rebuilds scan-index.json, navigator.yaml, flow-index.json, and aspect-graph.db from .purpose files. Runs 11 pipeline steps including integrity checks, component anchor validation, purpose health scoring, and cross-file validation. Clears ToolCache on success.
+    type: tool
+    anchors:
+      - src/tools/reindex.ts:1-475
+    tags:
+      - mcp
+    signals:
+      - '!index-rebuilt'
+    components:
+      - '#ToolCache'
+      - '#AspectGraph'
+  GraphTools:
+    description: Graph Generate MCP tool — produces GraphState JSON for the Symbol Graph UI from scan-index data with auto-positioned nodes and group layout
+    type: tool
+    anchors:
+      - src/tools/graph.ts:1-300
+    tags:
+      - mcp
+      - visualization
+  ConductorTools:
+    description: Conductor session management — auto-registers on MCP startup, manual register/unregister/list tools, process exit cleanup
+    type: tool
+    anchors:
+      - src/tools/conductor.ts:1-200
+      - src/utils/conductor-loader.ts:1-238
+    tags:
+      - mcp
+      - conductor
+      - auto-registration
+  LoreTools:
+    description: 'Lore MCP tools: search, record, get, update, delete, timeline, assess, calibration. Includes confidence scoring (0-1) on recording, human assessment verdicts (correct/partial/incorrect), delta computation, and calibration statistics with groupBy and low-N insights.'
+    type: tool
+    anchors:
+      - src/tools/lore.ts:1-800
+      - src/utils/lore-loader.ts:1-720
+    tags:
+      - mcp
+      - lore
+      - calibration
+  HabitsTools:
+    description: Habits CRUD MCP tools (list, check, status, add, edit, remove) and habits loader with 5-step merge, individual .habit file support, and validation
+    type: tool
+    anchors:
+      - src/tools/habits.ts:1-500
+      - src/utils/habits-loader.ts:1-400
+    tags:
+      - mcp
+      - habits
+  AspectGraphTools:
+    description: 7 MCP tools for the Aspect Graph system — search, get, graph, heatmap, suggest, drift, confirm. paradigm_aspect_suggest_scan marks all suggestions with inferred:true. paradigm_aspect_graph BFS edge output includes origin and inferred fields.
+    type: tool
+    anchors:
+      - src/tools/aspect-graph.ts:1-550
+    tags:
+      - mcp
+      - aspect-graph
+    components:
+      - '#AspectGraph'
+      - '#AspectSearch'
+      - '#AspectSuggest'
+  AspectSearch:
+    description: Three-tier search engine (learned→FTS5→fuzzy) with query normalization and learning loop
+    anchors:
+      - src/utils/aspect-search.ts:1-615
+    tags:
+      - feature
+      - aspect-graph
+  AspectLoreBridge:
+    description: Links aspects to lore decision records via lore_links table. Infers edges between aspects sharing lore.
+    type: utility
+    anchors:
+      - src/utils/aspect-lore-bridge.ts:1-434
+    tags:
+      - feature
+      - aspect-graph
+  AspectSuggest:
+    description: Heuristic auto-suggestion engine — scans source files for undocumented aspects using 8 regex pattern detectors
+    anchors:
+      - src/utils/aspect-suggest.ts:1-350
+    tags:
+      - feature
+      - aspect-graph
+  ContextTools:
+    description: Context monitoring, session persistence, and handoff tools with global store integration
+    type: tool
+    anchors:
+      - src/tools/context.ts:1-500
+    tags:
+      - mcp
+    aspects:
+      - ~global-persistence
+    flows:
+      - $handoff-roundtrip
+    signals:
+      - '!handoff-persisted'
+      - '!handoff-delivered'
+    components:
+      - '#GlobalStore'
+  GlobalStore:
+    description: Global brain utility (~/.paradigm/) for session persistence and cross-project wisdom
+    type: store
+    anchors:
+      - src/utils/global-store.ts:1-260
+    tags:
+      - feature
+      - persistence
+    aspects:
+      - ~global-persistence
+    signals:
+      - '!handoff-persisted'
+      - '!wisdom-promoted'
+  SessionTracker:
+    description: Session tracking with dual-write breadcrumbs (local + global)
+    type: utility
+    anchors:
+      - src/utils/session-tracker.ts:1-520
+    tags:
+      - persistence
+    aspects:
+      - ~global-persistence
+    components:
+      - '#GlobalStore'
+  WisdomLoader:
+    description: Wisdom loader with global+local merge and scope tagging
+    type: loader
+    anchors:
+      - src/utils/wisdom-loader.ts:1-360
+    tags:
+      - persistence
+    components:
+      - '#GlobalStore'
+  IndexLoader:
+    description: Loads project symbol index using premise-core aggregator
+    type: loader
+    anchors:
+      - src/utils/index-loader.ts:1-150
+    tags:
+      - integration
+    signals:
+      - '!context-loaded'
+      - '!context-error'
+  ToolCache:
+    description: TTL-based cache for MCP tool results to avoid redundant recomputation within short windows
+    type: utility
+    anchors:
+      - src/utils/tool-cache.ts:1-69
+    tags:
+      - performance
+  IntegrityChecker:
+    description: Central utility for Paradigm symbol integrity validation — broken references, duplicate symbols, orphaned symbols, missing anchors, anchor out-of-bounds, component anchor validation, and purpose file health scoring
+    type: utility
+    anchors:
+      - src/utils/integrity-checker.ts:1-400
+    tags:
+      - quality
+      - validation
+    components:
+      - '#ReindexTools'
+      - '#IndexLoader'
+  WorkspaceLoader:
+    description: Multi-project workspace support. Loads .paradigm-workspace files, reads sibling scan-index.json, filters by exports, provides cross-project search/ripple helpers.
+    type: loader
+    anchors:
+      - src/utils/workspace-loader.ts:1-430
+    tags:
+      - feature
+      - workspace
+    components:
+      - '#IndexLoader'
+  AspectGraph:
+    description: SQLite graph engine for the Aspect Graph system (v3.5). Provides materialization from SymbolEntry[], weighted BFS ripple traversal, heatmap tracking, and drift detection for code anchors. Database stored at .paradigm/aspect-graph.db.
+    anchors:
+      - src/utils/aspect-graph.ts:1-821
+    tags:
+      - feature
+      - aspect-graph
+      - sqlite
+    components:
+      - '#IndexLoader'
+  UniversityTools:
+    description: MCP tool handlers for university content — search, create, update, quiz, submit, onboard, validate, diplomas. Supports category/track filtering, extracurricular content tracks, and the v6.0 pack selector. Search surfaces truncation meta (total/returned); create/update only rebuild the project index when the write target is the project pack; onboard sources the display name from the selected pack's manifest.
+    type: service
+    anchors:
+      - src/tools/university.ts:1-831
+    tags:
+      - feature
+      - university
+      - mcp
+    components:
+      - '#UniversityLoader'
+  UniversityLoader:
+    description: Reads/writes per-project and pack-scoped university content (notes, policies, quizzes, paths, diplomas). Supports category-based organization, extracurricular track filtering, and onboarding sequence generation. Onboarding is section-aware for packs that DECLARE sections in pack.yaml (packDeclaresSections + loadPackConfig pack-scope the config); otherwise it keeps the category-based core/extracurricular partition byte-identical. Content-base probing (resolveContentBase) prefers the base that contains content. searchContentWithMeta exposes pre-slice totals for truncation reporting.
+    type: loader
+    anchors:
+      - src/utils/university-loader.ts:1-1442
+      - src/types/university.ts:1-210
+    tags:
+      - feature
+      - university
+  task-settlement:
+    description: 'v7 §2 learning-loop closure. settleParentIfComplete settles a parent task when every sibling reaches terminal (done/shelved/crashed), running the wired chain recordWorkLog → runPostflightLearning → autoPromoteJournalEntries with each stage wrapped, then stamping settledAt. Idempotent; orphan tasks self-settle; a reaper crashes abandoned in-progress tasks (stale window). Emits a falsifiable chainLive record to .paradigm/events/settlement-liveness.jsonl (surfaced by paradigm doctor). Triggered from inside task-loader updateTask on any terminal transition. Writes only settledAt/crash markers — never live status (the Cid↔Loid boundary: Loid owns past tense).'
+    type: util
+    file: src/utils/task-settlement.ts
+  task-loader:
+    description: 'CRUD for the .paradigm/tasks/ store. v7 Spine: claimant-owned task DAG (parentTaskId/dependsOn/stage), 4-state status machine (open|in-progress|done|shelved) enforced by assertTransition inside updateTask (stamps started_at on entering in-progress), ''active'' meta-filter (open ∪ in-progress), normalizeTask read-side shim healing legacy session_link → external_ref, and a roots-aware index (counts all 4 statuses + DAG roots). All v7 fields optional → old YAML loads unchanged. settledAt is field-only (write-logic deferred to §2 learning wiring).'
+    type: loader
+    anchors:
+      - src/utils/task-loader.ts:1-420
+      - src/tools/tasks.ts:1-220
+    tags:
+      - feature
+      - tasks
+  agent-relay:
+    description: Typed agent handoff contract (v7 Spine §1). RelayArtifact/RelayDecision/AgentRelay structures + parseAgentRelay() reading a fenced ```json/```yaml relay block. Response half of the orchestration request/response pair; filePlan is a typed field that replaces the legacy parseFilePlan* regex (regex removal deferred to sub-phase 2).
+    type: utility
+    anchors:
+      - src/utils/agent-relay.ts:1-160
+    tags:
+      - feature
+      - tasks
+      - orchestration
+signals:
+  context-loaded:
+    description: Project context successfully loaded from disk
+  context-error:
+    description: Failed to load project context
+  tool-invoked:
+    description: MCP tool was called by AI assistant
+  resource-read:
+    description: MCP resource was fetched by AI assistant
+  tag-suggested:
+    description: AI suggested a new tag for human review
+  index-rebuilt:
+    description: Static index files (scan-index.json, navigator.yaml, flow-index.json) were rebuilt
+  handoff-persisted:
+    description: Handoff payload written to global store for next session recovery
+  handoff-delivered:
+    description: Pending handoff recovered by a new session and marked as delivered
+  wisdom-promoted:
+    description: Project-local antipattern or decision promoted to global scope
+aspects:
+  token-tracking:
+    description: All tool responses must track token usage for context management
+    tags:
+      - compliance
+    anchors:
+      - src/tools/context.ts:20-22
+      - src/tools/index.ts:270-275
+    applies-to:
+      - '#CoreTools'
+      - '#WisdomTools'
+      - '#HistoryTools'
+      - '#NavigateTools'
+      - '#ContextTools'
+      - '#SentinelTools'
+      - '#TagsTools'
+      - '#ReindexTools'
+    enforcement: |
+      Every tool handler must call trackToolCall(text.length, name) before
+      returning to enable context monitoring and handoff recommendations.
+  v2-symbol-types:
+    description: All symbol type enums use v2 types only
+    tags:
+      - compliance
+      - v2
+    anchors:
+      - src/tools/index.ts:110-115
+    applies-to:
+      - '#CoreTools'
+    enforcement: |
+      paradigm_search type enum: ['component', 'flow', 'gate', 'signal', 'aspect']
+      paradigm_status counts: #components, $flows, ^gates, !signals, ~aspects
+  global-persistence:
+    description: Session and wisdom data dual-written to both local project and global ~/.paradigm/ directories
+    tags:
+      - persistence
+      - resilience
+    anchors:
+      - src/utils/session-tracker.ts:195-222
+      - src/utils/global-store.ts:37-74
+      - src/tools/context.ts:275-280
+    applies-to:
+      - '#GlobalStore'
+      - '#SessionTracker'
+      - '#ContextTools'
+      - '#WisdomLoader'
+    enforcement: |
+      Breadcrumbs must be written to both .paradigm/session-breadcrumbs.json (local)
+      and ~/.paradigm/sessions/{hash}/breadcrumbs.json (global). Handoffs persist to
+      ~/.paradigm/sessions/{hash}/pending-handoffs/. Recovery prefers global path,
+      falls back to local. All global writes are best-effort (silent failure).
+  tool-cache-ttl-30s:
+    description: Shared ToolCache singleton uses a 30-second TTL for all cached MCP tool results
+    tags:
+      - performance
+      - caching
+    anchors:
+      - src/utils/tool-cache.ts:17-17
+      - src/utils/tool-cache.ts:68-69
+    applies-to:
+      - '#ToolCache'
+      - '#CoreTools'
+      - '#NavigateTools'
+    enforcement: |
+      The ToolCache constructor defaults to 30_000ms. The shared singleton
+      `toolCache` is instantiated with 30_000ms. All getOrCompute calls
+      return cached data if the entry is younger than this TTL.
+  tool-cache-clear-on-reindex:
+    description: The tool cache is fully cleared after every successful reindex to prevent stale data
+    tags:
+      - caching
+      - data-integrity
+    anchors:
+      - src/tools/reindex.ts:97-98
+    applies-to:
+      - '#ReindexTools'
+      - '#ToolCache'
+    enforcement: |
+      handleReindexTool calls toolCache.clear() after rebuildStaticFiles
+      succeeds and reloadContext completes. This ensures no stale search
+      or status results survive an index rebuild.
+  index-cache-ttl-30s:
+    description: ProjectContext index cache uses a 30-second TTL before considering re-aggregation
+    tags:
+      - performance
+      - caching
+    anchors:
+      - src/utils/index-loader.ts:23-23
+      - src/utils/index-loader.ts:97-100
+    applies-to:
+      - '#IndexLoader'
+    enforcement: |
+      INDEX_CACHE_TTL_MS = 30 * 1000. isContextStale() returns true when
+      the context is older than this TTL. ensureFreshIndex() re-aggregates
+      if the index is empty or the cache has expired.
+  wisdom-cache-ttl-30s:
+    description: Wisdom context cache uses a 30-second TTL with invalidation on write
+    tags:
+      - performance
+      - caching
+    anchors:
+      - src/utils/wisdom-loader.ts:25-25
+      - src/utils/wisdom-loader.ts:56-58
+      - src/utils/wisdom-loader.ts:178-181
+    applies-to:
+      - '#WisdomLoader'
+    enforcement: |
+      WISDOM_CACHE_TTL_MS = 30 * 1000. Cache is keyed by absolute root dir.
+      invalidateWisdomCache() is called after recording antipatterns or
+      decisions to ensure the next query gets fresh merged data.
+  flow-cache-ttl-30s:
+    description: Flow index cache uses a 30-second TTL matching other caches
+    tags:
+      - performance
+      - caching
+    anchors:
+      - src/utils/flow-loader.ts:14-15
+    applies-to:
+      - '#CoreTools'
+    enforcement: |
+      FLOW_CACHE_TTL_MS = 30 * 1000. Flow index is loaded from
+      .paradigm/flow-index.json and cached per root directory.
+  fixtures-cache-ttl-60s:
+    description: Fixtures cache uses a 60-second TTL (longer than other caches because fixtures change less frequently)
+    tags:
+      - performance
+      - caching
+    anchors:
+      - src/utils/fixtures-loader.ts:14-15
+    enforcement: |
+      FIXTURES_CACHE_TTL_MS = 60 * 1000. This is intentionally 2x the
+      standard 30s TTL because test fixtures are modified less frequently
+      than symbols or wisdom.
+  max-breadcrumbs-50:
+    description: Session breadcrumb history is capped at 50 entries (FIFO eviction)
+    tags:
+      - persistence
+      - memory
+    anchors:
+      - src/utils/session-tracker.ts:134-134
+      - src/utils/session-tracker.ts:197-199
+    applies-to:
+      - '#SessionTracker'
+    enforcement: |
+      MAX_BREADCRUMBS = 50. When adding a breadcrumb, if the array
+      exceeds 50 entries the oldest are sliced off (FIFO). This bounds
+      memory usage and file size for persisted breadcrumbs.
+  checkpoint-max-age-7d:
+    description: Session checkpoints older than 7 days are discarded on load
+    tags:
+      - persistence
+      - recovery
+    anchors:
+      - src/utils/session-tracker.ts:142-143
+      - src/utils/session-tracker.ts:352-355
+    applies-to:
+      - '#SessionTracker'
+    enforcement: |
+      CHECKPOINT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000 (604800000ms).
+      loadCheckpoint() returns null for any checkpoint whose timestamp
+      is older than 7 days. This prevents stale recovery data from
+      confusing new sessions.
+  default-model-sonnet:
+    description: Session tracker defaults to claude-sonnet-4 for cost calculations
+    tags:
+      - pricing
+      - session
+    anchors:
+      - src/utils/session-tracker.ts:170-170
+    applies-to:
+      - '#SessionTracker'
+    enforcement: |
+      createNewSession() sets model to 'claude-sonnet-4' by default.
+      The model can be changed via setModel() which triggers cost
+      recalculation.
+  token-estimation-3.5-chars:
+    description: Token count is estimated at 1 token per 3.5 characters (ceil division)
+    tags:
+      - pricing
+      - estimation
+    anchors:
+      - src/utils/session-tracker.ts:465-468
+    applies-to:
+      - '#SessionTracker'
+    enforcement: |
+      estimateTokens() uses Math.ceil(len / 3.5). This is an approximation
+      that slightly overestimates to provide conservative cost tracking.
+  model-pricing-table:
+    description: Three Claude models with fixed per-1M-token pricing for cost estimation
+    tags:
+      - pricing
+    anchors:
+      - src/utils/session-tracker.ts:19-23
+    applies-to:
+      - '#SessionTracker'
+    enforcement: |
+      MODEL_PRICING defines three models: claude-opus-4 ($15/$75),
+      claude-sonnet-4 ($3/$15), claude-haiku-3.5 ($0.80/$4.00).
+      All costs are per 1M tokens (input/output). Updating these
+      values requires a code change.
+  handoff-threshold-levels:
+    description: Four handoff recommendation thresholds at 50%, 70%, 85%, and below 50%
+    tags:
+      - session
+      - handoff
+    anchors:
+      - src/utils/session-tracker.ts:646-658
+    applies-to:
+      - '#SessionTracker'
+      - '#ContextTools'
+    enforcement: |
+      getHandoffRecommendation() uses context usage percentage thresholds:
+      >=85% = handoff-urgent, >=70% = handoff-recommended,
+      >=50% = consider-handoff, <50% = continue. The MCP token overhead
+      multiplier is 4x (mcpTokens * 4) to account for conversation context.
+  handoff-signal-thresholds:
+    description: Additional handoff signals fire at 50 calls, 30 min duration, and 500KB data volume
+    tags:
+      - session
+      - handoff
+    anchors:
+      - src/utils/session-tracker.ts:665-673
+    applies-to:
+      - '#SessionTracker'
+    enforcement: |
+      Additional signals are emitted when: totalCalls > 50 (high interactions),
+      durationMin > 30 (long session), totalBytes > 500000 (large data volume).
+      These are advisory signals appended to the handoff recommendation.
+  auto-recovery-once-per-session:
+    description: Auto-recovery fires only once per MCP session to avoid duplicate preambles
+    tags:
+      - session
+      - recovery
+    anchors:
+      - src/utils/session-tracker.ts:423-432
+      - src/tools/index.ts:276-281
+    applies-to:
+      - '#SessionTracker'
+      - '#ToolHandlers'
+    enforcement: |
+      hasRecoveredThisSession() and markRecovered() use a boolean flag
+      (_recovered) on the SessionTracker singleton. The dispatch layer
+      in tools/index.ts checks this flag on the first tool call and
+      prepends recovery preamble + plugin update notice only once.
+  context-window-default-200k:
+    description: Default context window size for handoff calculations is 200,000 tokens
+    tags:
+      - session
+    anchors:
+      - src/utils/session-tracker.ts:629-629
+      - src/tools/context.ts:313-313
+    applies-to:
+      - '#SessionTracker'
+      - '#ContextTools'
+    enforcement: |
+      getHandoffRecommendation defaults contextWindowSize to 200000.
+      The context check tool also defaults to 200000 if not provided
+      by the caller.
+  project-hash-sha256-12char:
+    description: Project identity uses a 12-character truncated SHA-256 hash of the absolute root path
+    tags:
+      - persistence
+      - identity
+    anchors:
+      - src/utils/global-store.ts:52-55
+    applies-to:
+      - '#GlobalStore'
+    enforcement: |
+      getProjectHash() computes SHA-256 of the resolved absolute path,
+      then truncates to 12 hex characters. This is used as the session
+      directory name under ~/.paradigm/sessions/{hash}/. Changing the
+      hash length would orphan existing session data.
+  handoff-oldest-first-delivery:
+    description: Pending handoffs are delivered in chronological order (oldest first)
+    tags:
+      - persistence
+      - handoff
+    anchors:
+      - src/utils/global-store.ts:144-146
+    applies-to:
+      - '#GlobalStore'
+    enforcement: |
+      loadPendingHandoffs() sorts by timestamp ascending so the oldest
+      handoff is delivered first. Only handoffs with status 'pending'
+      are returned; delivered ones remain on disk but are filtered out.
+  wisdom-local-wins-on-conflict:
+    description: When merging global and local wisdom, local (project) entries win on duplicate ID
+    tags:
+      - persistence
+      - wisdom
+    anchors:
+      - src/utils/wisdom-loader.ts:104-127
+    applies-to:
+      - '#WisdomLoader'
+    enforcement: |
+      loadWisdomContextFresh() merges antipatterns and decisions by ID.
+      Local entries are added first; global entries with the same ID are
+      skipped. For preferences, local by_symbol entries take priority
+      and global entries are merged only for symbols not in local.
+      Each merged item gets a 'scope' tag ('project' or 'global').
+  ripple-bfs-max-depth-5:
+    description: Recursive ripple traversal has a maximum depth of 5 hops and minimum weight of 0.1
+    tags:
+      - aspect-graph
+      - traversal
+    anchors:
+      - src/utils/aspect-graph.ts:472-473
+    applies-to:
+      - '#AspectGraph'
+    enforcement: |
+      recursiveRipple() defaults maxDepth=5 and minWeight=0.1. Traversal
+      stops when depth exceeds maxDepth, accumulated weight drops below
+      minWeight, or the queue is exhausted. These defaults bound the
+      search space for large graphs.
+  ripple-bfs-queue-limit-1000:
+    description: BFS ripple traversal is bounded to 1000 results to prevent unbounded expansion
+    tags:
+      - aspect-graph
+      - performance
+    anchors:
+      - src/utils/aspect-graph.ts:477-477
+      - src/utils/aspect-graph.ts:489-489
+    applies-to:
+      - '#AspectGraph'
+    enforcement: |
+      QUEUE_LIMIT = 1000. The BFS loop terminates when results.length
+      reaches this limit, even if the queue is not empty. This prevents
+      runaway traversals in densely connected graphs.
+  inferred-edge-weight-0.5:
+    description: Edges inferred from appliesTo references have weight 0.5 (half of explicit edges)
+    tags:
+      - aspect-graph
+      - edges
+    anchors:
+      - src/utils/aspect-graph.ts:322-326
+    applies-to:
+      - '#AspectGraph'
+    enforcement: |
+      materializeAspects() creates edges from appliesTo with weight=0.5
+      and origin='inferred'. Explicit edges from data.edges default to
+      weight=1.0 and origin='explicit'. This weight differential ensures
+      explicit relationships rank higher in traversals.
+  index-reference-weight-0.5:
+    description: Symbol index references (references/referencedBy) use implicit weight 0.5 during ripple traversal
+    tags:
+      - aspect-graph
+      - traversal
+    anchors:
+      - src/utils/aspect-graph.ts:548-548
+      - src/utils/aspect-graph.ts:563-563
+    applies-to:
+      - '#AspectGraph'
+    enforcement: |
+      During recursiveRipple(), following symbol index references
+      (both references and referencedBy) multiplies the current weight
+      by 0.5. This makes index-derived paths weaker than explicit
+      graph edges, prioritizing declared relationships.
+  aspect-category-inference:
+    description: Aspect category is inferred from description keywords when not explicitly set
+    tags:
+      - aspect-graph
+      - heuristics
+    anchors:
+      - src/utils/aspect-graph.ts:781-792
+    applies-to:
+      - '#AspectGraph'
+    enforcement: |
+      inferCategory() priority: explicit data.category > description keywords > default 'rule'.
+      Keywords: must/require/always => rule, decided/chose => decision,
+      limit/cannot => constraint, set to/configured/value => configuration.
+  aspect-severity-inference:
+    description: Aspect severity is inferred from tags when not explicitly set (security/compliance tags => high)
+    tags:
+      - aspect-graph
+      - heuristics
+    anchors:
+      - src/utils/aspect-graph.ts:799-808
+    applies-to:
+      - '#AspectGraph'
+    enforcement: |
+      inferSeverity() priority: explicit data.severity > tag heuristic > default 'medium'.
+      Tag 'critical' => critical, tags 'security' or 'compliance' => high.
+  drift-detection-sha256:
+    description: Anchor drift is detected by comparing SHA-256 hashes of file content at anchor line ranges
+    tags:
+      - aspect-graph
+      - data-integrity
+    anchors:
+      - src/utils/aspect-graph.ts:653-720
+      - src/utils/aspect-graph.ts:754-774
+    applies-to:
+      - '#AspectGraph'
+    enforcement: |
+      checkDrift() reads the file at each anchor's line range, computes
+      SHA-256 of the slice, and compares to stored content_hash. Drifted
+      anchors get their drifted flag set to 1 in the database. Missing
+      files are reported as drifted with exists=false.
+  fts5-graceful-degradation:
+    description: FTS5 full-text search is optional — the system degrades gracefully if sql.js lacks FTS5 support
+    tags:
+      - aspect-graph
+      - sqlite
+      - resilience
+    anchors:
+      - src/utils/aspect-graph.ts:193-198
+      - src/utils/aspect-search.ts:114-124
+    applies-to:
+      - '#AspectGraph'
+      - '#AspectSearch'
+    enforcement: |
+      openAspectGraph() wraps FTS5 table creation in try/catch. hasFts5()
+      checks for the table before attempting FTS queries. If FTS5 is
+      unavailable, searchAspects() skips tier 2 and falls through to
+      tier 3 fuzzy search.
+  search-decay-factor-0.95:
+    description: Non-selected search mappings decay by factor 0.95 on each confirmation
+    tags:
+      - aspect-graph
+      - search
+      - learning
+    anchors:
+      - src/utils/aspect-search.ts:30-30
+      - src/utils/aspect-search.ts:534-543
+    applies-to:
+      - '#AspectSearch'
+    enforcement: |
+      DECAY_FACTOR = 0.95. When confirmSearch() reinforces a query-to-aspect
+      mapping (weight += 1.0), all competing mappings for the same normalized
+      query have their weight multiplied by 0.95. This causes unselected
+      alternatives to gradually fade while preserving near-recent relevance.
+  search-fuzzy-threshold-0.3:
+    description: Tier-3 fuzzy search results require a minimum score of 0.3 to be included
+    tags:
+      - aspect-graph
+      - search
+    anchors:
+      - src/utils/aspect-search.ts:33-33
+      - src/utils/aspect-search.ts:412-412
+    applies-to:
+      - '#AspectSearch'
+    enforcement: |
+      FUZZY_SCORE_THRESHOLD = 0.3. Fuzzy scores are computed as
+      1/(1+levenshtein_distance) averaged across query tokens. Only
+      candidates exceeding 0.3 are included in tier-3 results.
+  search-default-limit-10:
+    description: Aspect search returns at most 10 results by default
+    tags:
+      - aspect-graph
+      - search
+    anchors:
+      - src/utils/aspect-search.ts:36-36
+      - src/utils/aspect-search.ts:160-160
+    applies-to:
+      - '#AspectSearch'
+    enforcement: |
+      DEFAULT_LIMIT = 10. Each tier's results are sliced to this limit
+      before returning. Callers can override via options.limit.
+  search-three-tier-fallthrough:
+    description: Search uses a three-tier strategy — learned mappings, then FTS5, then fuzzy — stopping at the first tier with results
+    tags:
+      - aspect-graph
+      - search
+    anchors:
+      - src/utils/aspect-search.ts:151-184
+    applies-to:
+      - '#AspectSearch'
+    enforcement: |
+      searchAspects() tries tiers in order: tier 1 (learned mappings from
+      search_weights), tier 2 (FTS5 full-text if available), tier 3
+      (Levenshtein fuzzy). Each tier returns immediately if it finds
+      results, preventing lower tiers from running unnecessarily.
+  search-query-normalization:
+    description: Search queries are normalized by lowercasing, removing stop words, and sorting tokens alphabetically
+    tags:
+      - aspect-graph
+      - search
+    anchors:
+      - src/utils/aspect-search.ts:21-27
+      - src/utils/aspect-search.ts:95-103
+    applies-to:
+      - '#AspectSearch'
+    enforcement: |
+      normalizeQuery() lowercases, splits on whitespace, removes 34 stop
+      words (the, a, an, is, how, does, etc.), sorts remaining tokens
+      alphabetically, and joins with space. This ensures "how does pricing
+      work" and "pricing work how does" produce the same normalized form.
+  suggest-skip-test-files:
+    description: Aspect auto-suggestion skips test files entirely (7 path segment patterns + filename patterns)
+    tags:
+      - aspect-graph
+      - suggestions
+    anchors:
+      - src/utils/aspect-suggest.ts:28-56
+      - src/utils/aspect-suggest.ts:538-539
+    applies-to:
+      - '#AspectSuggest'
+    enforcement: |
+      isTestFile() checks for 7 directory segments (test, tests, spec,
+      specs, __tests__, __mocks__, __fixtures__) and filename suffixes
+      (.test.*, .spec.*, _test.*). suggestAspects() returns [] immediately
+      for test files.
+  suggest-8-pattern-detectors:
+    description: Aspect suggestion uses 8 ordered regex pattern detectors with confidence-based priority
+    tags:
+      - aspect-graph
+      - suggestions
+    anchors:
+      - src/utils/aspect-suggest.ts:501-510
+      - src/utils/aspect-suggest.ts:512-517
+    applies-to:
+      - '#AspectSuggest'
+    enforcement: |
+      DETECTORS array has 8 entries in priority order: rateLimits,
+      timeValues, environmentChecks, featureFlags, hardcodedStrings,
+      magicNumbers, regexPatterns, conditionalLogic. When multiple
+      detectors match the same line, the highest confidence wins
+      (high=3, medium=2, low=1). On tie, first detector wins.
+  lore-inferred-edge-weight-0.3:
+    description: Edges inferred from shared lore entries use weight 0.3 and origin 'learned'
+    tags:
+      - aspect-graph
+      - lore
+    anchors:
+      - src/utils/aspect-lore-bridge.ts:278-279
+    applies-to:
+      - '#AspectLoreBridge'
+    enforcement: |
+      inferLoreEdges() creates 'related-to' edges with weight=0.3 and
+      origin='learned'. This is lower than inferred appliesTo edges (0.5)
+      and explicit edges (1.0), reflecting that lore-based connections
+      are the weakest evidence of relationship.
+  lore-link-materialization-idempotent:
+    description: Lore link materialization is idempotent — clears all existing links before rebuilding
+    tags:
+      - aspect-graph
+      - lore
+      - data-integrity
+    anchors:
+      - src/utils/aspect-lore-bridge.ts:55-57
+    applies-to:
+      - '#AspectLoreBridge'
+    enforcement: |
+      materializeLoreLinks() runs DELETE FROM lore_links before rebuilding.
+      This ensures repeated calls produce the same result and prevents
+      stale links from accumulating.
+  quick-check-escalation:
+    description: Quick-check mode auto-escalates to full orchestration when 2+ escalation signals fire (security, high complexity, 4+ symbols, critical nominations)
+    tags:
+      - orchestration
+      - enforcement
+    anchors:
+      - src/tools/orchestration.ts:1060-1100
+    applies-to:
+      - '#OrchestrationTools'
+    enforcement: |
+      Quick-check escalation is conservative: security-adjacent tasks always
+      escalate, as do critical agent nominations. Two or more signals
+      trigger escalation even if individually non-critical. This ensures
+      quick-check doesn't greenlight tasks that need full team review.
+  advocate-role-prompt:
+    description: Advocate (Jinx) role prompt — devil's advocate with pre-mortem methodology, assumption-breaking, and edge case surfacing
+    tags:
+      - orchestration
+      - advocate
+    anchors:
+      - src/tools/orchestration.ts:462-490
+    applies-to:
+      - '#OrchestrationTools'
+    enforcement: |
+      The advocate role prompt defines Jinx's behavior: stress-test assumptions,
+      surface edge cases, challenge happy-path thinking, run mental pre-mortems.
+      Produces risks/assumptions/edge-cases/questions and a verdict (GREENLIGHT
+      or ESCALATE). Does NOT write code or block without justification.
+  magnitude-based-orchestration:
+    description: Stop hook Check 13 uses magnitude scoring (files + cross-package + security-adjacent + symbols) instead of raw file count
+    tags:
+      - orchestration
+      - enforcement
+    anchors:
+      - ../paradigm/src/commands/hooks/scripts/paradigm-common.sh:745-820
+    applies-to:
+      - '#OrchestrationTools'
+    enforcement: |
+      Magnitude score = source files (1pt each) + cross-package changes (2pts if 2+
+      packages) + security-adjacent files (2pts each for portal.yaml, auth, gate,
+      security, token, session files) + symbol files (1pt if 2+ .purpose changed).
+      Score compared against configurable threshold (default 3). This replaces the
+      simple SOURCE_COUNT >= threshold check.
+  agent-default-model-assignments:
+    description: Default model assignments — advocate/architect/security=opus, reviewer=sonnet, builder/tester/documentor=haiku
+    tags:
+      - orchestration
+    anchors:
+      - src/tools/orchestration.ts:156-162
+    applies-to:
+      - '#OrchestrationTools'
+    enforcement: |
+      DEFAULT_MODELS maps agent roles to model tiers: architect and
+      security use opus (highest capability), reviewer uses sonnet
+      (balanced), builder and tester use haiku (cost-efficient).
+      These can be overridden via agents.yaml defaultModel field.
+  agent-token-estimates:
+    description: Per-agent token usage estimates for cost preview (builder is the largest at 10K-50K)
+    tags:
+      - orchestration
+      - pricing
+    anchors:
+      - src/tools/orchestration.ts:164-170
+    applies-to:
+      - '#OrchestrationTools'
+    enforcement: |
+      AGENT_TOKEN_ESTIMATES defines min/max ranges: architect 5K-20K,
+      security 3K-15K, reviewer 2K-10K, builder 10K-50K, tester 5K-20K.
+      Used by plan mode to estimate total orchestration cost.
+  orchestration-cost-pricing:
+    description: Orchestration cost preview uses its own pricing table (opus $15/$75, sonnet $3/$15, haiku $0.25/$1.25)
+    tags:
+      - orchestration
+      - pricing
+    anchors:
+      - src/tools/orchestration.ts:1073-1077
+    applies-to:
+      - '#OrchestrationTools'
+    enforcement: |
+      MODEL_PRICING in orchestration.ts defines per-1M-token costs:
+      opus (15/75), sonnet (3/15), haiku (0.25/1.25). Note that haiku
+      pricing differs from session-tracker.ts (0.80/4.00) because
+      orchestration uses the cheaper haiku tier for cost estimates.
+  builder-fresh-context-principle:
+    description: Builder agents must never carry assumptions from previous tasks — each runs in a clean context
+    tags:
+      - orchestration
+      - builder
+    anchors:
+      - src/tools/orchestration.ts:218-224
+    applies-to:
+      - '#OrchestrationTools'
+    enforcement: |
+      The builder role prompt explicitly states the Fresh Context Principle:
+      "Each builder task runs in a separate, clean context. NEVER carry
+      assumptions from previous tasks." This prevents subtle bugs from
+      stale mental models across parallel builder invocations.
+  reviewer-two-stage-protocol:
+    description: Reviewer must pass spec compliance (stage 1) before code quality review (stage 2) with minimum 3 findings
+    tags:
+      - orchestration
+      - review
+    anchors:
+      - src/tools/orchestration.ts:249-287
+    applies-to:
+      - '#OrchestrationTools'
+    enforcement: |
+      The reviewer role prompt defines a two-stage protocol: Stage 1 checks
+      spec compliance (.purpose, ^gates, $flows, !signals, ~aspects).
+      Stage 1 must pass before Stage 2 (code quality). Every review must
+      produce at least 3 categorized findings (blocking/improvement/note).
+      "No looks good with zero findings."
+  tool-dispatch-prefix-routing:
+    description: Tool dispatch uses name prefix matching — each tool family is routed by its paradigm_ prefix
+    tags:
+      - mcp
+      - dispatch
+    anchors:
+      - src/tools/index.ts:286-1044
+    applies-to:
+      - '#ToolHandlers'
+    enforcement: |
+      The dispatch switch handles 5 core tools by exact name, then falls
+      through to prefix-based routing: paradigm_wisdom_ => wisdom,
+      paradigm_history_ => history, paradigm_context_/paradigm_session_ =>
+      context, paradigm_sentinel_ => sentinel, etc. Unknown tools throw
+      an error. Context tools skip trackToolCall to avoid recursion.
+  context-tools-skip-tracking:
+    description: Context tools (paradigm_context_*, paradigm_session_*) do not call trackToolCall to avoid infinite recursion
+    tags:
+      - mcp
+      - session
+    anchors:
+      - src/tools/index.ts:912-919
+    applies-to:
+      - '#ToolHandlers'
+      - '#ContextTools'
+    enforcement: |
+      The dispatch handler for context tools has a comment: "Don't track
+      context tools to avoid recursion." trackToolCall is intentionally
+      omitted because these tools read from the same session tracker
+      they would be writing to.
+  recovery-preamble-first-response:
+    description: Recovery preamble and plugin update notice are prepended to the first tool response only
+    tags:
+      - mcp
+      - recovery
+    anchors:
+      - src/tools/index.ts:1050-1057
+    applies-to:
+      - '#ToolHandlers'
+    enforcement: |
+      After the tool result IIFE completes, if recoveryPreamble or
+      updateNotice is non-null, they are prepended to the first content
+      item's text. This only fires once per session (guarded by
+      hasRecoveredThisSession).
+  fuzzy-search-max-distance-3:
+    description: Fuzzy symbol search uses a maximum Levenshtein distance of 3 and returns at most 5 results
+    tags:
+      - search
+    anchors:
+      - src/tools/fuzzy-match.ts:45-45
+      - src/tools/index.ts:309-309
+    applies-to:
+      - '#CoreTools'
+    enforcement: |
+      findFuzzyMatches defaults to maxDistance=3, maxResults=5.
+      paradigm_search calls it with these defaults when exact search
+      returns no results and fuzzy=true. Partial string containment
+      is treated as distance=1.
+  route-similarity-threshold-0.6:
+    description: Gate suggestions require a minimum route similarity score of 0.6 to match portal.yaml patterns
+    tags:
+      - gates
+      - portal
+    anchors:
+      - src/tools/index.ts:691-691
+      - src/tools/index.ts:700-700
+    applies-to:
+      - '#CoreTools'
+    enforcement: |
+      paradigm_gates_for_route considers portal.yaml routes with
+      similarity >= 0.6. Similarity >= 0.8 yields 'high' confidence;
+      0.6-0.8 yields 'medium'. The similarity function uses segment-level
+      comparison with bonuses for parameter matches and structure match.
+  ripple-depth-clamp-1-to-5:
+    description: Ripple analysis depth is clamped to the range 1-5 (user cannot request depth 0 or >5)
+    tags:
+      - search
+      - safety
+    anchors:
+      - src/tools/index.ts:425-425
+    applies-to:
+      - '#CoreTools'
+    enforcement: |
+      paradigm_ripple computes maxDepth as Math.min(Math.max(depth || 2, 1), 5).
+      Default is 2. This prevents unbounded traversal (>5 levels) and
+      ensures at least 1 level of analysis.
+  reindex-11-stage-pipeline:
+    description: Reindex rebuilds artifacts in 11 steps — scan-index.json, navigator.yaml, flow-index.json, aspect-graph.db, lore links, persona index, protocol index, integrity check, component anchors, purpose health, cross-file validation
+    tags:
+      - reindex
+      - pipeline
+    anchors:
+      - src/tools/reindex.ts:128-222
+    applies-to:
+      - '#ReindexTools'
+    enforcement: |
+      rebuildStaticFiles() executes 5 stages: (1) aggregate symbols from
+      .purpose files, (2) generate and write scan-index.json, (3) generate
+      and write navigator.yaml, (4) generate and write flow-index.json,
+      (5) build aspect-graph.db with materializeAspects + materializeLoreLinks +
+      inferLoreEdges. Stage 5 failure is non-fatal.
+  aspect-graph-build-non-fatal:
+    description: Aspect graph build failure during reindex is non-fatal — it is caught and silently skipped
+    tags:
+      - reindex
+      - resilience
+    anchors:
+      - src/tools/reindex.ts:184-206
+    applies-to:
+      - '#ReindexTools'
+      - '#AspectGraph'
+    enforcement: |
+      The aspect graph build block (openAspectGraph, materializeAspects,
+      materializeLoreLinks, inferLoreEdges, closeAspectGraph) is wrapped
+      in try/catch with an empty catch. Failure does not block the rest
+      of the reindex pipeline.
+  stdio-transport-only:
+    description: The MCP server uses stdio transport exclusively (no HTTP, no WebSocket)
+    tags:
+      - mcp
+      - transport
+    anchors:
+      - src/index.ts:100-101
+    applies-to:
+      - '#MCPServer'
+    enforcement: |
+      main() creates a StdioServerTransport and connects it to the server.
+      There is no alternative transport configuration. The server reads
+      JSON-RPC from stdin and writes to stdout.
+  background-reindex-on-mutation:
+    description: Purpose/portal mutations trigger a non-blocking background reindex to keep static files in sync
+    tags:
+      - mcp
+      - reindex
+    anchors:
+      - src/index.ts:52-58
+    applies-to:
+      - '#MCPServer'
+      - '#PurposePortalTools'
+    enforcement: |
+      reloadContext() calls loadProjectContext then fires
+      rebuildStaticFiles in background via .catch(). Errors are logged
+      to stderr but do not fail the mutation. This is called by
+      purpose-portal tools after every successful write.
+  resource-uri-paradigm-scheme:
+    description: All MCP resources must use the paradigm:// URI scheme — unknown schemes throw an error
+    tags:
+      - mcp
+      - resources
+    anchors:
+      - src/resources/index.ts:112-114
+    applies-to:
+      - '#ResourceHandlers'
+    enforcement: |
+      The ReadResourceRequest handler checks uri.startsWith('paradigm://')
+      and throws "Unknown URI scheme" for non-matching URIs. The path
+      after paradigm:// is used to route to the appropriate handler.
+flows:
+  mcp-startup:
+    description: Server initialization and context loading
+    steps:
+      - Parse command line args
+      - '#IndexLoader'
+      - '!context-loaded'
+      - '#MCPServer'
+      - Connect to transport
+  tool-execution:
+    description: Handle incoming MCP tool call
+    steps:
+      - Receive CallToolRequest
+      - Route to handler
+      - '#ToolHandlers'
+      - '!tool-invoked'
+      - Return result
+  resource-fetch:
+    description: Handle incoming MCP resource request
+    steps:
+      - Receive ReadResourceRequest
+      - '#ResourceHandlers'
+      - '!resource-read'
+      - Return content
+  tag-suggestion:
+    description: AI suggests new tag for human review
+    steps:
+      - AI calls paradigm_tags_suggest
+      - '#TagsTools'
+      - '!tag-suggested'
+      - Human reviews in Sentinel UI
+  mcp-request-flow:
+    description: Handle an incoming MCP request from stdio through to response
+    signals:
+      - '!tool-invoked'
+      - '!resource-read'
+    steps:
+      - Receive request via stdio transport
+      - '#MCPServer'
+      - '#IndexLoader'
+      - Route to tool or resource handler
+      - '#ToolHandlers'
+      - '#ContextTools'
+      - Return formatted response
+  handoff-roundtrip:
+    description: Session handoff persistence and recovery cycle
+    steps:
+      - Agent calls paradigm_handoff_prepare
+      - '#ContextTools'
+      - '#GlobalStore'
+      - '!handoff-persisted'
+      - New session starts
+      - Agent calls paradigm_session_recover
+      - '#GlobalStore'
+      - '!handoff-delivered'
+      - Return full handoff context to agent
+  wisdom-promotion:
+    description: Promote project-local wisdom to global scope
+    steps:
+      - Agent calls paradigm_wisdom_promote
+      - '#WisdomTools'
+      - '#GlobalStore'
+      - '!wisdom-promoted'
+      - '#WisdomLoader'

@@ -253,8 +253,12 @@ components:
     file: packages/paradigm-mcp/src/tools/arch.ts
   arch-tools:
     description: MCP tool group for symbol architecture inspection — paradigm_arch_status and paradigm_arch_diagram. Backed by arch-loader; used by the Atlas cartographer agent to surface project structure.
-    file: packages/paradigm-mcp/src/tools/arch.ts
+    type: tool-group
     components:
       - '#paradigm-arch-status'
       - '#paradigm-arch-diagram'
-    type: tool-group
+    file: packages/paradigm-mcp/src/tools/arch.ts
+  captain-board:
+    description: v7 §3 — paradigm_captain_board, Cid's owned run-DAG artifact (read|claim|advance). read assembles the live orchestration DAG from non-terminal epic tasks + their stage children (ordered by stage/dependsOn) plus ripple-ranked unclaimed open tasks; claim writes a task claimant keeping status open (human/peer override archetype); advance records a Cid-owned blocked_on reason. Session-open proposes claimants (a real per-session mutation, replacing the anonymous task dump); session-close debrief reads the settlement-liveness probe and self-heals (runs postflight itself, advise-not-guard). Resolves the audit's inert-Captain finding.
+    file: src/tools/captain.ts
+    type: tool
