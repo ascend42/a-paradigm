@@ -41,6 +41,7 @@ import {
   addNotebookEntry,
   incrementApplied,
   promoteFromLore,
+  normalizeConcept,
 } from './notebook-loader.js';
 
 import type { NotebookEntry } from '../types/notebooks.js';
@@ -789,5 +790,153 @@ describe('promoteFromLore', () => {
     const result = await promoteFromLore('test-agent', LORE_ID, projectDir, 'project');
 
     expect(result!.entry.concepts).toEqual([]);
+  });
+});
+
+// ────────────────────────────────────────────────────────
+// normalizeConcept — T-001 concept normalization
+// ────────────────────────────────────────────────────────
+
+describe('normalizeConcept (T-001)', () => {
+  it('strips a leading "symbol:" structured-tag prefix', () => {
+    expect(normalizeConcept('symbol:payment-form')).toBe('payment-form');
+  });
+
+  it('strips the "symbol:" prefix case-insensitively', () => {
+    expect(normalizeConcept('Symbol:Payment-Form')).toBe('payment-form');
+  });
+
+  it('strips a leading Paradigm sigil (#)', () => {
+    expect(normalizeConcept('#payment-form')).toBe('payment-form');
+  });
+
+  it('strips each Paradigm sigil variant', () => {
+    expect(normalizeConcept('$login-flow')).toBe('login-flow');
+    expect(normalizeConcept('^authenticated')).toBe('authenticated');
+    expect(normalizeConcept('!login-success')).toBe('login-success');
+    expect(normalizeConcept('~audit-required')).toBe('audit-required');
+    expect(normalizeConcept('@checkout')).toBe('checkout');
+    expect(normalizeConcept('&integration')).toBe('integration');
+    expect(normalizeConcept('%state')).toBe('state');
+    expect(normalizeConcept('?idea')).toBe('idea');
+  });
+
+  it('strips "symbol:" then the sigil (both, in order)', () => {
+    expect(normalizeConcept('symbol:#payment-form')).toBe('payment-form');
+  });
+
+  it('lowercases mixed-case input', () => {
+    expect(normalizeConcept('Payment-Form')).toBe('payment-form');
+  });
+
+  it('trims surrounding whitespace', () => {
+    expect(normalizeConcept('  payment-form  ')).toBe('payment-form');
+  });
+
+  it('returns empty string for empty input', () => {
+    expect(normalizeConcept('')).toBe('');
+  });
+
+  it('leaves a bare slug untouched (idempotent)', () => {
+    expect(normalizeConcept('payment-form')).toBe('payment-form');
+    expect(normalizeConcept(normalizeConcept('#payment-form'))).toBe('payment-form');
+  });
+});
+
+// ────────────────────────────────────────────────────────
+// Concept normalization round-trip — T-001 integration proof
+// (the bug: a structured concept stored as `symbol:payment-form`
+//  could never be retrieved by its bare query slug `payment-form`)
+// ────────────────────────────────────────────────────────
+
+describe('notebook concept round-trip (T-001 integration)', () => {
+  it('retrieves an entry stored with concept "symbol:payment-form" via query "payment-form"', () => {
+    addNotebookEntry(
+      'test-agent',
+      {
+        context: 'Promoted postflight pattern',
+        snippet: 'normalize concepts on store and query',
+        provenance: { source: 'lore' },
+        confidence: 0.8,
+        concepts: ['symbol:payment-form'],
+        tags: ['promoted'],
+      },
+      'project',
+      projectDir,
+    );
+
+    const result = loadNotebookEntries('test-agent', projectDir, {
+      concepts: ['payment-form'],
+    });
+
+    // Previously returned 0 — the T-001 regression.
+    expect(result).toHaveLength(1);
+    expect(result[0].context).toBe('Promoted postflight pattern');
+  });
+
+  it('also retrieves the same entry via a sigil-prefixed query "#payment-form"', () => {
+    addNotebookEntry(
+      'test-agent',
+      {
+        context: 'Promoted postflight pattern',
+        snippet: 'normalize concepts on store and query',
+        provenance: { source: 'lore' },
+        confidence: 0.8,
+        concepts: ['symbol:payment-form'],
+        tags: ['promoted'],
+      },
+      'project',
+      projectDir,
+    );
+
+    const result = loadNotebookEntries('test-agent', projectDir, {
+      concepts: ['#payment-form'],
+    });
+
+    expect(result).toHaveLength(1);
+    expect(result[0].context).toBe('Promoted postflight pattern');
+  });
+
+  it('normalizes concepts on store (de-duped, lowercased, sigil-stripped)', () => {
+    const { entry } = addNotebookEntry(
+      'test-agent',
+      {
+        context: 'Stored normalization',
+        snippet: 'check stored shape',
+        provenance: { source: 'manual' },
+        confidence: 0.8,
+        // Mixed sigils + dup that normalize to the same slug, plus an empty.
+        concepts: ['#Payment-Form', 'symbol:payment-form', ''],
+        tags: [],
+      },
+      'project',
+      projectDir,
+    );
+
+    // Empties dropped, duplicates collapsed, all lowercased + sigil-stripped.
+    expect(entry.concepts).toEqual(['payment-form']);
+  });
+
+  it('matches a bare stored concept against a sigil-prefixed query (normalize on both sides)', () => {
+    addNotebookEntry(
+      'test-agent',
+      {
+        context: 'Bare stored concept',
+        snippet: 'query side normalization',
+        provenance: { source: 'manual' },
+        confidence: 0.8,
+        concepts: ['payment-form'],
+        tags: [],
+      },
+      'project',
+      projectDir,
+    );
+
+    const result = loadNotebookEntries('test-agent', projectDir, {
+      concepts: ['symbol:Payment-Form'],
+    });
+
+    expect(result).toHaveLength(1);
+    expect(result[0].context).toBe('Bare stored concept');
   });
 });

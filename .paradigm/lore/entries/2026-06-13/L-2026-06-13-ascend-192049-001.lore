@@ -1,0 +1,42 @@
+id: L-2026-06-13-ascend-192049-001
+type: milestone
+timestamp: '2026-06-13T19:20:49.598Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'v7 build rounds 1-2: Spine + Front Door shipped'
+summary: 'Built and tested the first two v7 ''close the loop'' rounds on branch v7-close-the-loop. Round 1 (Spine): claimant-owned task DAG schema + loader + typed AgentRelay, with the task system''s first-ever tests. Round 2 (Front Door): honest confidence-scored classifier (poison-pill removed), full-roster routability via agent-matcher-primary, and the notebook concept-key normalization fix. Both rounds build clean; paradigm-mcp suite 313→337, CLI 387 — all green.'
+symbols_touched:
+  - '#task-loader'
+  - '#agent-relay'
+  - '#orchestrator'
+  - '#notebook-loader'
+  - '#nomination-engine'
+learnings:
+  - Adversarial review of our own design caught 3 false keystone claims before any code — the dogfood worked; confidence_before was fabricated, the CLI orchestrator doesn't share completeTask, and JPS was circular. Loid's rev.2 corrected all three.
+  - The classifier poison-pill (analysis vetoed by incidental bug-language) is now fixed with intent-verb anchoring + read-only-analyst families that never route to a fixer roster; locked with the exact misroute-from-this-session as a regression test.
+verification:
+  status: pass
+  details:
+    paradigm-mcp: 337 pass
+    paradigm-cli: 387 pass
+    build: pass
+tags:
+  - v7
+  - build
+  - spine
+  - front-door
+  - milestone
+linked_lore:
+  - L-2026-06-13-ascend-183238-001
+linked_tasks:
+  - T-2026-06-13-001
+  - T-2026-06-13-002
+  - T-2026-06-13-003
+  - T-2026-06-13-006
+confidence: 0.9
+git_context:
+  ref: 3ea1a224de2ae926ca4708f9339ebdd393891366
+  branch: v7-close-the-loop
+  dirty: true

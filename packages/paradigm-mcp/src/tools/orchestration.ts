@@ -18,6 +18,12 @@ import { handleCaptainTool } from './captain.js';
 // Import task classification and cost estimation (via dynamic import to avoid circular deps)
 type TaskClassification = {
   type: string;
+  /** Confidence in `type` on a 0–1 scale (highest-scoring family / total signal). */
+  confidence: number;
+  /** Runner-up family, if any — surfaced so a misroute is correctable. */
+  alternativeType?: string;
+  /** One-line hint for overriding the classification with an explicit roster. */
+  overrideHint: string;
   complexity: string;
   recommendedAgents: string[];
   securityRequired: boolean;
@@ -1013,6 +1019,9 @@ async function handleOrchestrateInline(
       mode: 'plan',
       classification: {
         type: classification.type,
+        confidence: classification.confidence,
+        ...(classification.alternativeType ? { alternativeType: classification.alternativeType } : {}),
+        overrideHint: classification.overrideHint,
         complexity: classification.complexity,
         securityRequired: classification.securityRequired,
         costMultiplier: classification.costMultiplier,
@@ -1318,6 +1327,12 @@ async function handleOrchestrateInline(
     orchestrationId,
     task,
     mode: 'execute',
+    classification: {
+      type: classification.type,
+      confidence: classification.confidence,
+      ...(classification.alternativeType ? { alternativeType: classification.alternativeType } : {}),
+      overrideHint: classification.overrideHint,
+    },
     symbols,
     totalAgents: plan.estimatedAgents,
     ...(activeNominations.length > 0 ? { activeNominations } : {}),
@@ -1578,6 +1593,9 @@ async function handleQuickCheck(
     verdict,
     classification: {
       type: classification.type,
+      confidence: classification.confidence,
+      ...(classification.alternativeType ? { alternativeType: classification.alternativeType } : {}),
+      overrideHint: classification.overrideHint,
       complexity: classification.complexity,
       securityRequired: classification.securityRequired,
     },
@@ -1944,7 +1962,44 @@ function planAgentSequence(
         });
       }
     }
+  } else if (classification && classification.type !== 'feature' && classification.type !== 'unknown') {
+    // ── Authoritative-classification path (T-002) ──
+    // `classification.type` is the single source of truth for the roster. The
+    // old divergent inline keyword classifier is demoted to a fallback (the
+    // `else` branch below) used only for `feature`/unknown tasks. This keeps a
+    // read-only-analyst task (audit/analysis/design/research) from being routed
+    // to a builder/security-as-fixer roster by stray bug-language.
+    const recommended = classification.recommendedAgents.length > 0
+      ? classification.recommendedAgents
+      : ['architect'];
+
+    const taskVerbs: Record<string, string> = {
+      architect: isReadOnlyFamily(classification.type) ? 'Analyze' : 'Design',
+      security: isReadOnlyFamily(classification.type) ? 'Assess security of' : 'Review security of',
+      builder: 'Implement',
+      tester: 'Test',
+      reviewer: 'Review',
+    };
+
+    let currentStage = 0;
+    let previousAgent: string | null = null;
+    for (const agentName of recommended) {
+      if (!agents[agentName]) continue;
+      const dependsOn = previousAgent ? [previousAgent] : [];
+      const verb = taskVerbs[agentName] || 'Process';
+      const isRequired = agentName === 'architect' || agentName === 'builder';
+      plannedAgents.push({
+        name: agentName,
+        task: `${verb}: ${task}`,
+        required: isRequired,
+        stage: currentStage,
+        dependsOn,
+      });
+      previousAgent = agentName;
+      currentStage++;
+    }
   } else {
+    // ── Fallback keyword classifier (feature/unknown tasks only) ──
     // Analyze task to determine agent sequence
     const hasDesign = taskLower.includes('design') || taskLower.includes('architect') ||
                       taskLower.includes('plan') || taskLower.includes('spec');
@@ -2101,8 +2156,10 @@ function planAgentSequence(
   // Add documentor as the final stage unless the task is analysis-only or
   // there are no builder/tester agents (no code changes expected)
   const hasCodeAgents = plannedAgents.some(a => a.name === 'builder' || a.name === 'tester');
-  const isAnalysis = classification?.type === 'analysis';
-  const skipDocumentor = isAnalysis || !hasCodeAgents;
+  // Read-only-analyst families (analysis/audit/design/research/documentation)
+  // make no code changes → no documentor pass. See T-002.
+  const isReadOnly = classification ? isReadOnlyFamily(classification.type) : false;
+  const skipDocumentor = isReadOnly || !hasCodeAgents;
 
   let documentorAdded = false;
   if (!skipDocumentor) {
@@ -2335,45 +2392,140 @@ const SECURITY_KEYWORDS = [
   'session', 'cookie', 'csrf', 'xss', 'injection', 'sanitize',
 ];
 
+/** Keywords that indicate a read-only audit (assess existing code, no changes) */
+const AUDIT_KEYWORDS = [
+  'audit', 'self-audit', 'inspect', 'examine', 'survey', 'inventory',
+  'find issues', 'identify problems', 'identify gaps', 'gap analysis',
+  'health check', 'sanity check', 'post-mortem', 'postmortem',
+];
+
+/** Keywords that indicate a design/architecture task (planning, not building) */
+const DESIGN_KEYWORDS = [
+  'design', 'architect', 'architecture', 'spec', 'specify', 'specification',
+  'blueprint', 'plan', 'propose', 'proposal', 'rfc', 'schema design',
+  'api design', 'data model',
+];
+
+/** Keywords that indicate a research/investigation task (gather knowledge) */
+const RESEARCH_KEYWORDS = [
+  'research', 'investigate', 'explore', 'study', 'discover', 'spike',
+  'prototype', 'feasibility', 'survey the', 'literature', 'prior art',
+  'options for', 'approaches to',
+];
+
 /**
- * Local task classification for MCP tool
+ * Read-only analyst families. Tasks classified here must NOT be routed to
+ * build/fixer rosters (builder/security-as-fixer) even when their text
+ * mentions fix/error/broken. The whole point of the family is "look, don't
+ * touch." See T-002 (the poison-pill veto removal).
  */
-function classifyTaskLocal(task: string): TaskClassification {
+const READ_ONLY_FAMILIES = new Set(['analysis', 'audit', 'design', 'research', 'documentation']);
+
+/**
+ * Leading intent verbs that hard-gate against build rosters. If a task opens
+ * with one of these (e.g. "audit the broken orchestration engine"), it is an
+ * analyst task regardless of how many bugfix keywords appear downstream.
+ * Maps the anchoring verb → the family it anchors to.
+ */
+const INTENT_VERB_ANCHORS: Array<{ pattern: RegExp; family: string }> = [
+  { pattern: /^(please\s+)?(audit|self-audit)\b/, family: 'audit' },
+  { pattern: /^(please\s+)?(analy[sz]e|assess|evaluate|examine|inspect|review)\b/, family: 'analysis' },
+  { pattern: /^(please\s+)?(design|architect|spec|specify|plan|propose)\b/, family: 'design' },
+  { pattern: /^(please\s+)?(research|investigate|explore|study)\b/, family: 'research' },
+  { pattern: /^(please\s+)?(document|write\s+docs)\b/, family: 'documentation' },
+];
+
+/**
+ * Per-family keyword weights. Higher weight = a single hit carries more signal.
+ * Read-only-analyst families are weighted slightly higher than bugfix so that a
+ * genuine analyst task isn't out-voted by incidental bug-language in the blurb.
+ */
+const FAMILY_WEIGHTS: Record<string, number> = {
+  audit: 1.3,
+  analysis: 1.1,
+  design: 1.2,
+  research: 1.2,
+  documentation: 1.1,
+  bugfix: 1.0,
+  refactor: 1.0,
+};
+
+/**
+ * Local task classification for the MCP tool.
+ *
+ * Confidence-scored (replaces the old positional keyword ladder + poison-pill
+ * veto, T-002): each family scores keyword-hit-count × weight; the leading
+ * intent verb hard-gates against build rosters. Read-only-analyst families
+ * (analysis/audit/design/research/documentation) never route to a fixer roster.
+ * Returns `type`, a 0–1 `confidence`, the runner-up `alternativeType`, and an
+ * `overrideHint` so a misroute is visible and correctable.
+ */
+export function classifyTaskLocal(task: string): TaskClassification {
   const taskLower = task.toLowerCase();
   const symbols = extractSymbols(task);
 
-  // Check keywords
   const matchesKeywords = (keywords: string[]) =>
     keywords.filter(k => taskLower.includes(k.toLowerCase()));
 
-  const analysisMatches = matchesKeywords(ANALYSIS_KEYWORDS);
-  const documentationMatches = matchesKeywords(DOCUMENTATION_KEYWORDS);
-  const bugfixMatches = matchesKeywords(BUGFIX_KEYWORDS);
-  const refactorMatches = matchesKeywords(REFACTOR_KEYWORDS);
+  const familyMatches: Record<string, string[]> = {
+    audit: matchesKeywords(AUDIT_KEYWORDS),
+    analysis: matchesKeywords(ANALYSIS_KEYWORDS),
+    design: matchesKeywords(DESIGN_KEYWORDS),
+    research: matchesKeywords(RESEARCH_KEYWORDS),
+    documentation: matchesKeywords(DOCUMENTATION_KEYWORDS),
+    bugfix: matchesKeywords(BUGFIX_KEYWORDS),
+    refactor: matchesKeywords(REFACTOR_KEYWORDS),
+  };
   const securityMatches = matchesKeywords(SECURITY_KEYWORDS);
 
-  // Determine type
-  let type: string;
-  let matchedKeywords: string[];
-
-  if (analysisMatches.length > 0 && bugfixMatches.length === 0 && refactorMatches.length === 0) {
-    type = 'analysis';
-    matchedKeywords = analysisMatches;
-  } else if (documentationMatches.length > 0 && bugfixMatches.length === 0) {
-    type = 'documentation';
-    matchedKeywords = documentationMatches;
-  } else if (bugfixMatches.length > 0) {
-    type = 'bugfix';
-    matchedKeywords = bugfixMatches;
-  } else if (refactorMatches.length > 0) {
-    type = 'refactor';
-    matchedKeywords = refactorMatches;
-  } else {
-    type = 'feature';
-    matchedKeywords = [];
+  // Score each family: hit-count × weight.
+  const scores: Record<string, number> = {};
+  for (const [family, matches] of Object.entries(familyMatches)) {
+    scores[family] = matches.length * (FAMILY_WEIGHTS[family] ?? 1.0);
   }
 
-  // Determine complexity
+  // Intent-verb anchoring: a leading audit/analyze/design/research/document verb
+  // hard-gates the task into a read-only family regardless of downstream
+  // bug-language. This is the poison-pill cure — analyst tasks that mention
+  // "broken/fails/error" no longer fall through to a fixer roster.
+  let anchoredFamily: string | undefined;
+  for (const { pattern, family } of INTENT_VERB_ANCHORS) {
+    if (pattern.test(taskLower)) {
+      anchoredFamily = family;
+      // Give the anchored family a decisive boost so it wins scoring.
+      scores[family] = (scores[family] ?? 0) + 5;
+      break;
+    }
+  }
+
+  // Pick the top family by score.
+  const ranked = Object.entries(scores)
+    .filter(([, s]) => s > 0)
+    .sort((a, b) => b[1] - a[1]);
+
+  let type: string;
+  let alternativeType: string | undefined;
+  let topScore = 0;
+  let totalSignal = 0;
+
+  if (ranked.length === 0) {
+    type = 'feature';
+  } else {
+    type = ranked[0][0];
+    topScore = ranked[0][1];
+    alternativeType = ranked[1]?.[0];
+    totalSignal = ranked.reduce((sum, [, s]) => sum + s, 0);
+  }
+
+  // Confidence: share of total keyword signal won by the top family. An anchored
+  // verb floors confidence at 0.7 (strong intent signal even with sparse keywords).
+  let confidence = totalSignal > 0 ? topScore / totalSignal : 0.4;
+  if (anchoredFamily) confidence = Math.max(confidence, 0.7);
+  confidence = Math.round(confidence * 100) / 100;
+
+  const matchedKeywords = familyMatches[type] || [];
+
+  // Complexity
   let complexity: string = 'medium';
   const wordCount = task.split(/\s+/).length;
   if (symbols.length >= 5 || wordCount >= 100) complexity = 'high';
@@ -2382,9 +2534,13 @@ function classifyTaskLocal(task: string): TaskClassification {
   // Security check
   const securityRequired = securityMatches.length > 0 || symbols.some(s => s.startsWith('^'));
 
-  // Recommended agents based on type
+  // Recommended agents per family. Read-only-analyst families map to analyst
+  // rosters (no builder, no security-as-fixer).
   const agentMapping: Record<string, string[]> = {
+    audit: ['architect'],
     analysis: ['architect'],
+    design: ['architect'],
+    research: ['architect'],
     documentation: ['architect'],
     bugfix: ['security', 'builder'],
     refactor: ['architect', 'builder'],
@@ -2392,15 +2548,26 @@ function classifyTaskLocal(task: string): TaskClassification {
   };
 
   const costMultiplierMapping: Record<string, { min: number; max: number }> = {
+    audit: { min: 0.3, max: 0.5 },
     analysis: { min: 0.3, max: 0.5 },
+    design: { min: 0.4, max: 0.7 },
+    research: { min: 0.3, max: 0.6 },
     documentation: { min: 0.25, max: 0.45 },
     bugfix: { min: 0.5, max: 0.8 },
     refactor: { min: 0.6, max: 0.85 },
     feature: { min: 0.8, max: 1.2 },
   };
 
+  const overrideHint =
+    `classified ${type} (${confidence.toFixed(2)})` +
+    (alternativeType ? `; alt ${alternativeType}` : '') +
+    `; override with agents:[...] if misrouted`;
+
   return {
     type,
+    confidence,
+    ...(alternativeType ? { alternativeType } : {}),
+    overrideHint,
     complexity,
     recommendedAgents: agentMapping[type] || ['architect', 'builder'],
     securityRequired,
@@ -2408,6 +2575,11 @@ function classifyTaskLocal(task: string): TaskClassification {
     matchedKeywords,
     symbols,
   };
+}
+
+/** Whether a classified family is a read-only analyst family (never a fixer roster). */
+function isReadOnlyFamily(type: string): boolean {
+  return READ_ONLY_FAMILIES.has(type);
 }
 
 // ============================================================================

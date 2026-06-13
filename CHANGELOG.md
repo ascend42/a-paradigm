@@ -5,6 +5,21 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.0.0] — Unreleased
+
+**Close the loop.** A two-slice self-audit (the task system, then the orchestration engine that runs every other audit) proved with file:line evidence that Paradigm *records that it was asked to do the right thing but does not verify it did* — the classifier misroutes silently, the best agents aren't routable, the learning loop's broken state is byte-identical to its healthy state, enforcement checks invocation not work, and the Captain owns nothing. v7 makes the framework's own value proposition **true instead of asserted**, via one keystone: a persisted, symbol-bound, claimant-owned task DAG that orchestration emits, completion feeds back as learning, and Cid captains. It is **not** a project-management product (decision **TD-2026-06-13-718**; design in `docs/specs/v7-close-the-loop.md`). *In-progress branch work — sections accumulate per round.*
+
+### Added
+
+- **The Spine — claimant-owned task DAG** (`#task-loader`): the `Task` schema gains a `claimant: { kind: 'archetype'|'human'|'peer', ref }` tagged union (not a flat assignee string), an `in-progress` status (v7.0 ships 4 states; `claimed`/`blocked` are fast-follow), DAG edges (`parentTaskId`/`dependsOn`/`stage`), `started_at`/`settledAt`, and a typed `external_ref` (the orphan `session_link` is lazily healed into it). Storage stays git-native YAML — no SQLite — via edge-list-in-node. A one-function `assertTransition` state machine, a `normalizeTask` load-shim, NaN-guarded sort, an `'active'` meta-filter, and a roots-aware index round it out. **The task system gains its first tests** (the audit found zero) — 23 unit tests.
+- **Typed agent handoff** (`#agent-relay`): a new `AgentRelay` contract (`artifacts`/`decisions`/`handoffTo`/`filePlan`) + `parseAgentRelay`, replacing the free-text prose handoff between orchestration stages (consumption wiring lands in a later round).
+- **Honest classification** (`#orchestrator`): the keyword classifier is rebuilt as confidence-scored with intent-verb anchoring. The "bugfix poison-pill" is gone (an audit of a *broken* system no longer routes to `[security, builder]`); new `audit`/`design`/`research` families map to **read-only analyst rosters that never route to a fixer**; every mode response now surfaces `{type, confidence, alternativeType, overrideHint}` so a misroute is visible and correctable. The second divergent inline classifier is collapsed — `classification.type` is authoritative.
+- **Full-roster routability** (`#orchestrator`): the trigger-based `agent-matcher` becomes the primary roster/suggestion source so previously-unroutable specialists (`product`/North, `forge`/Loid, `researcher`/Scout, `dx`/Helix) can actually be assembled by auto-orchestration, not only by hand.
+
+### Fixed
+
+- **Notebook retrieval could never match its own writes** (`#notebook-loader`, `#nomination-engine`): promoted entries stored concepts like `symbol:payment-form` while queries arrived as bare slugs (`payment-form`), so `relevantEntries` was structurally always 0 — the entire notebook-grounding layer silently returned nothing. A shared `normalizeConcept` (strips `symbol:` prefix + Paradigm sigils, lowercases) now normalizes on **both** store and query sides. (Framework-bug T-2026-06-13-001.)
+
 ## [6.8.0] — 2026-06-10
 
 **Pillar 0: invocation reliability.** The most common field failure isn't that the agent team works badly — it's that the main agent never invokes it. CLAUDE.md mandates and memory notes are instructions, and instructions leak; hooks are deterministic. This release graduates team-invocation from the instruction tier to the hook tier, advisory-first: measure the funnel before gating it (team-ratified: Arky's mechanism ladder, Loid's telemetry + anti-distortion amendments).

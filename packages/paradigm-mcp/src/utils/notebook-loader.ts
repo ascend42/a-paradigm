@@ -24,6 +24,31 @@ const NOTEBOOK_PREFIX = 'nb-';
 const NOTEBOOK_EXT = '.yaml';
 
 // ────────────────────────────────────────────────────────
+// Concept Normalization
+// ────────────────────────────────────────────────────────
+
+/**
+ * Normalize a concept key so writes and reads compare on the same axis.
+ *
+ * Postflight promotion can tag entries with structured concepts like
+ * `symbol:payment-form` or `#payment-form`, while query concepts arrive as
+ * bare slugs (`payment-form`). Without normalization a promoted entry can
+ * never be retrieved by its own query slug (the T-001 bug).
+ *
+ * Strips a leading `symbol:` prefix, any leading Paradigm sigil (#$^!~@&%?),
+ * lowercases, and trims.
+ */
+export function normalizeConcept(s: string): string {
+  if (!s) return '';
+  let out = s.trim();
+  // Strip a leading "symbol:" structured-tag prefix (case-insensitive)
+  out = out.replace(/^symbol:/i, '');
+  // Strip a single leading Paradigm sigil
+  out = out.replace(/^[#$^!~@&%?]/, '');
+  return out.trim().toLowerCase();
+}
+
+// ────────────────────────────────────────────────────────
 // Read Operations
 // ────────────────────────────────────────────────────────
 
@@ -49,9 +74,11 @@ export function loadNotebookEntries(
 
   // Apply filters
   if (filter?.concepts && filter.concepts.length > 0) {
-    const conceptSet = new Set(filter.concepts.map(c => c.toLowerCase()));
+    // Normalize on BOTH sides so structured concepts (`symbol:payment-form`,
+    // `#payment-form`) match bare query slugs (`payment-form`). See T-001.
+    const conceptSet = new Set(filter.concepts.map(normalizeConcept));
     result = result.filter(e =>
-      e.concepts.some(c => conceptSet.has(c.toLowerCase()))
+      e.concepts.some(c => conceptSet.has(normalizeConcept(c)))
     );
   }
 
@@ -179,8 +206,15 @@ export function addNotebookEntry(
     tags: entry.tags,
   });
 
+  // Normalize concepts on store so retrieval (which also normalizes) can match.
+  // Drops empties and de-dupes while preserving order. See T-001.
+  const normalizedConcepts = Array.from(
+    new Set((entry.concepts || []).map(normalizeConcept).filter(Boolean))
+  );
+
   const fullEntry: NotebookEntry = {
     ...entry,
+    concepts: normalizedConcepts,
     id,
     scope: resolvedScope,
     publishable: entry.publishable ?? true,
