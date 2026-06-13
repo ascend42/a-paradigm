@@ -5,9 +5,11 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [7.0.0] — Unreleased
+## [7.0.0] — 2026-06-13
 
-**Close the loop.** A two-slice self-audit (the task system, then the orchestration engine that runs every other audit) proved with file:line evidence that Paradigm *records that it was asked to do the right thing but does not verify it did* — the classifier misroutes silently, the best agents aren't routable, the learning loop's broken state is byte-identical to its healthy state, enforcement checks invocation not work, and the Captain owns nothing. v7 makes the framework's own value proposition **true instead of asserted**, via one keystone: a persisted, symbol-bound, claimant-owned task DAG that orchestration emits, completion feeds back as learning, and Cid captains. It is **not** a project-management product (decision **TD-2026-06-13-718**; design in `docs/specs/v7-close-the-loop.md`). *In-progress branch work — sections accumulate per round.*
+**Close the loop.** A two-slice self-audit (the task system, then the orchestration engine that runs every other audit) proved with file:line evidence that Paradigm *records that it was asked to do the right thing but does not verify it did* — the classifier misroutes silently, the best agents aren't routable, the learning loop's broken state is byte-identical to its healthy state, enforcement checks invocation not work, and the Captain owns nothing. v7 makes the framework's own value proposition **true instead of asserted**, via one keystone: a persisted, symbol-bound, claimant-owned task DAG that orchestration emits, completion feeds back as learning, and Cid captains. It is **not** a project-management product (decision **TD-2026-06-13-718**; design in `docs/specs/v7-close-the-loop.md`).
+
+v7.0 scopes loop-closure to the MCP path; deferred to v7.x: the CLI orchestrator `task-bridge`, a real pre-task confidence prior + belief-delta promotion, the Symphony peer status-flow-back watcher, multi-machine/multi-human teams, and the calibration learned-table.
 
 ### Added
 

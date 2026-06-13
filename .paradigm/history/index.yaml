@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-06-13T20:50:00.457Z'
+generated: '2026-06-13T20:50:36.867Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -19002,11 +19002,30 @@ by_symbol:
       agent: []
   '#university-core':
     symbol: '#university-core'
-    total_changes: 2
-    last_modified: '2026-06-01T04:08:06Z'
+    total_changes: 3
+    last_modified: '2026-06-13T20:50:35Z'
     stability_score: 1
     fragility: low
     recent:
+      - id: h0415
+        ts: '2026-06-13T20:50:35Z'
+        type: implement
+        symbols:
+          - '#university-core'
+        author:
+          type: human
+          id: ascend
+        commit: 55e1a1b4f459715ea52fb8a30ec68f62eec134cf
+        intent: feature
+        files:
+          - .paradigm/events/debates.jsonl
+          - .paradigm/events/nominations.jsonl
+          - .paradigm/events/stream.jsonl
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/lore/entries/2026-06-13/L-2026-06-13-ascend-205025-001.lore
+          - .paradigm/lore/timeline.yaml
+        description: 'chore(#university-core): record v7.0 capstone lore + close self-documentation tasks'
       - id: h0403
         ts: '2026-06-01T04:08:06Z'
         type: implement
