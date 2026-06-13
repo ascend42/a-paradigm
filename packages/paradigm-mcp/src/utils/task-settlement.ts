@@ -25,6 +25,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { log } from './mcp-logger.js';
 import { loadTask, loadTasks, type Task, type TaskStatus } from './task-loader.js';
+import { recordOrchestrationCompletion } from './orchestration-marker.js';
 
 const LIVENESS_FILE = '.paradigm/events/settlement-liveness.jsonl';
 
@@ -294,6 +295,7 @@ async function runSettlementChain(
       });
     }
   } finally {
+    const live = chainLive(stages);
     const record: LivenessRecord = {
       ts: new Date().toISOString(),
       parentTaskId,
@@ -301,9 +303,19 @@ async function runSettlementChain(
       stages,
       journalsWritten,
       promoted,
-      chainLive: chainLive(stages),
+      chainLive: live,
     };
     appendLiveness(rootDir, record);
+
+    // Enforcement marker (T-005): a settlement whose learning chain ran
+    // end-to-end (chainLive) is the PRIMARY v7-native "real work completed"
+    // signal. Only then do we satisfy the Stop-hook orchestration gate. A
+    // mid-chain throw (chainLive===false) deliberately writes no marker — no
+    // real cross-check occurred. `verdicts` = count of non-skipped 'ok' stages.
+    if (live) {
+      const verdicts = Object.values(stages).filter(s => s === 'ok').length;
+      recordOrchestrationCompletion(rootDir, { verdicts, source: 'settlement' });
+    }
 
     // Calibration capture (Part F) — write-only, gated on cheapness. See note in
     // the build report: deferred wholesale in v7.0 (no cheap actuals projection).

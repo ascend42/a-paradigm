@@ -1,0 +1,63 @@
+id: TD-2026-06-13-768
+timestamp: '2026-06-13T23:46:41.191Z'
+title: 'Task-management expansion: local-first CLI + GitHub one-way push behind a thin agnostic-ready seam'
+decision: >-
+  Expand task management in two phases on top of the v7 substrate. PHASE 1 (highest value, unanimous): a local-first
+  `paradigm task` CLI (add/ls/start/done/show/shelve/edit) — a pure facilitation skin over the existing task-loader;
+  nail `task add` (variadic blurb, prints id, `@last`-chainable), stamp a `human` claimant, view-only `--board` reusing
+  assembleCaptainBoard, deprecate the competing `thread todo` split, wire `done`→completeTask so the loop closes from
+  the terminal. PHASE 2 ("GitHub out of the gate"): one-way push (task→GitHub Issue) behind a DELIBERATELY THIN,
+  agnostic-READY provider seam that earns itself with GitHub alone (Arky: ~5-method SyncProvider, `pull`/two-way
+  structurally absent; `external_ref` generalizes kind→provider via the existing heal mechanism); GitHub impl via `gh`
+  (no OAuth/server); the symbol-aware wedge (`done` runs ripple locally; the post-commit `Symbols:` trailer → issue
+  comment via a Node subcommand the shell hook delegates to). FULLY-LOCAL is canonical and structural: YAML in
+  .paradigm/tasks/ is the source of truth, sync is a purely additive opt-in overlay, the core never imports provider
+  code, every provider call is best-effort and failure-isolated (mirrors the settlement seam). GATED (build only when a
+  real external asker appears): GitLab/Jira concrete impls, two-way sync, inbound close→settle, anything needing a
+  server. Loid's claimant-projection safety rules baked in: outbound human→assignee,
+  archetype/peer→unassigned+typed-marker-label; inbound can ONLY write claimant{kind:human} (structurally cannot forge
+  archetype — the guard against re-flattening); external-provenance settlements carry a settledVia tag and are excluded
+  from agent calibration (inbound close→settle deferred precisely because it would poison calibration).
+rationale: >-
+  Matt's tenets: as agnostic as possible (teams may want GitLab/Jira/other), GitHub working out of the gate, AND
+  fully-local management. A 5-lens team panel (Nora/ftux, North/product, Arky/architect, Jinx/advocate, Loid/forge)
+  converged: the CLI is the real near-term win (no human CLI exists today — the #1 personal-use blocker); GitHub sync is
+  a one-way PROJECTION that carries the substrate outward without diluting it, but only if it stays one-way (two-way =
+  Jinx's 'forever-tax'). Jinx's YAGNI verdict (zero providers, zero external users, Jira isn't even a CLI) is honored by
+  keeping the seam thin + GitHub-only-implemented + GitLab/Jira gated per the v7 real-demand gate — agnostic-READY, not
+  a speculative plugin framework. Reconciles Matt's agnostic ask with the YAGNI caution. Sequenced AFTER T-005
+  (enforcement honesty fix) per Matt.
+participants:
+  - id: matt
+    role: human
+    stance: proposed
+  - id: ftux
+    role: agent
+    stance: supported
+  - id: product
+    role: agent
+    stance: supported
+  - id: architect
+    role: agent
+    stance: supported
+  - id: forge
+    role: agent
+    stance: supported
+  - id: advocate
+    role: agent
+    stance: dissented
+symbols_affected:
+  - '#task-loader'
+  - '#task-cli'
+  - '#sync-provider'
+  - '#github-provider'
+  - '#external-ref'
+status: active
+tags:
+  - task-management
+  - cli
+  - github-sync
+  - provider-agnostic
+  - local-first
+  - v7.2
+  - strategy

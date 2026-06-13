@@ -5,6 +5,14 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.2.0] — Unreleased
+
+**Enforcement made true + task management for humans.** *In-progress branch work; sections accumulate per round.*
+
+### Fixed
+
+- **Enforcement verifies *completion*, not *invocation*** (`#orchestration-marker`): the `.paradigm/.orchestrated` marker that satisfies the Stop-hook orchestration-required gate was written on `orchestrate_inline` tool *entry* for **every mode** — so a single `mode=quick` ping checked the box before any agent ran. The framework's "enforcement verifies the work happened" claim was provably false in code. Removed the entry-write; the marker is now written **only by real completion signals** (a `chainLive` settlement, or a captain debrief with real agent verdicts — captured *before* any synthetic fallback so an empty session can't satisfy it). The `mode=quick` tool description no longer claims it "satisfies enforcement." Enforcement now rides the same completion signal as the learning-loop liveness probe: a real run that settled and cross-checked. (Completes the unshipped third leg of v7's "Teeth.")
+
 ## [7.1.0] — 2026-06-13
 
 **The v7.x fast-follows** — completing the loop-closure work v7.0 deliberately scoped down. All three execution worlds (MCP, CLI, Symphony/peer) now close the learning loop through the same settlement primitive; token estimates become learned from actuals; and the notebook learning loop's silent open-loop bug is fixed. The belief-delta promotion *gate* was deliberately deferred after adversarial review found it unfalsifiable — v7.1 ships its measurable prerequisites instead.

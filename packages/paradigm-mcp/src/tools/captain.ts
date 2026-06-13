@@ -22,6 +22,7 @@ import { handleRippleTool } from './ripple.js';
 import { handleWisdomTool } from './wisdom.js';
 import { handleProtocolsTool } from './protocols.js';
 import { handleLoreTool } from './lore.js';
+import { recordOrchestrationCompletion } from '../utils/orchestration-marker.js';
 import type { ToolDefinition } from '../utils/tool-registry.js';
 import type {
   ContextBrief,
@@ -819,6 +820,11 @@ async function handleCaptainDebrief(
     // Session log parsing is non-fatal
   }
 
+  // Real agent verdicts parsed from the session log (BEFORE the synthetic
+  // fallback below). Only these count toward the enforcement marker — a
+  // fabricated 'session' fallback contribution is not a real cross-check.
+  const realVerdicts = sessionInsights.agentContributions.length;
+
   // Fallback: if no contributions were parsed, create one from the session summary
   if (sessionInsights.agentContributions.length === 0) {
     sessionInsights.agentContributions.push({
@@ -827,6 +833,15 @@ async function handleCaptainDebrief(
       symbolsTouched: newSymbols.slice(0, 10),
       patternsObserved: [],
     });
+  }
+
+  // Enforcement marker (T-005): a debrief that recorded REAL agent verdicts
+  // (parsed contributions > 0) is a completion signal for orchestration that
+  // produced verdicts without a full task-DAG settlement. Satisfy the Stop-hook
+  // gate here. A debrief with no real contributions (only the synthetic
+  // fallback) writes nothing — no real cross-check occurred.
+  if (realVerdicts > 0) {
+    recordOrchestrationCompletion(ctx.rootDir, { verdicts: realVerdicts, source: 'debrief' });
   }
 
   // ── Assemble debrief report ───────────────────────────
