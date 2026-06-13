@@ -5,9 +5,9 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [7.1.0] — Unreleased
+## [7.1.0] — 2026-06-13
 
-**The v7.x fast-follows** — completing the loop-closure work v7.0 deliberately scoped down. *In-progress branch work; sections accumulate per round.*
+**The v7.x fast-follows** — completing the loop-closure work v7.0 deliberately scoped down. All three execution worlds (MCP, CLI, Symphony/peer) now close the learning loop through the same settlement primitive; token estimates become learned from actuals; and the notebook learning loop's silent open-loop bug is fixed. The belief-delta promotion *gate* was deliberately deferred after adversarial review found it unfalsifiable — v7.1 ships its measurable prerequisites instead.
 
 ### Added
 
