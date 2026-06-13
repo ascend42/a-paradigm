@@ -720,20 +720,79 @@ export async function buildRecoveryPreamble(rootDir: string): Promise<string | n
     }
   }
 
-  // Surface open tasks
+  // ── Cid (captain) board read — v7 §3 ────────────────────
+  // Replaces the anonymous static open-task dump. Cid: reaps dead in-progress
+  // tasks, reads the live board, surfaces top-N unclaimed (ripple-ranked), and
+  // PROPOSES claimants by writing `claimant` back (status stays 'open'). That
+  // write is the durable per-session proof the Captain acted. Falls back to the
+  // old anonymous list if the board read fails — must never break recovery.
   try {
-    const { loadTasks } = await import('../utils/task-loader.js');
-    const openTasks = await loadTasks(rootDir, { status: 'open', limit: 5 });
-    if (openTasks.length > 0) {
+    // 1. Reaper first — dead in-progress tasks must not show as live.
+    try {
+      const { reapStaleInProgress } = await import('../utils/task-settlement.js');
+      await reapStaleInProgress(rootDir);
+    } catch {
+      // Reaper is best-effort; continue to the board read regardless.
+    }
+
+    const { assembleCaptainBoard, proposeClaimantFor } = await import('./captain.js');
+    // No ProjectContext here (recovery preamble is index-light): ripple is
+    // skipped, unclaimed ranks by priority/recency. proposeClaimants writes the
+    // proposal candidate onto each unclaimed entry.
+    const board = await assembleCaptainBoard(rootDir, { proposeClaimants: true });
+
+    const topN = board.unclaimed.slice(0, 5);
+    if (board.summary.open > 0 || board.summary.inFlight > 0 || board.summary.runs > 0) {
       lines.push('');
-      lines.push('Open tasks:');
-      for (const task of openTasks) {
-        const tags = task.tags.length > 0 ? ` [${task.tags.join(', ')}]` : '';
-        lines.push(`  [${task.priority}] ${task.id}: ${task.blurb}${tags}`);
+      lines.push(
+        `Cid (captain): ${board.summary.open} open, ${board.summary.inFlight} in-flight` +
+        (board.summary.runs > 0 ? `, ${board.summary.runs} active run(s)` : '') +
+        `, ${board.summary.unclaimed} unclaimed`,
+      );
+
+      // 3. Propose claimants for the top unclaimed — the real per-session mutation.
+      const { updateTask, loadTask } = await import('../utils/task-loader.js');
+      for (const u of topN) {
+        const tags = u.tags.length > 0 ? ` [${u.tags.join(', ')}]` : '';
+        let proposed = u.proposedClaimant;
+        if (!proposed) {
+          // assembleCaptainBoard already proposed, but defensively re-derive.
+          const t = await loadTask(rootDir, u.taskId);
+          if (t) proposed = await proposeClaimantFor(t, rootDir);
+        }
+        if (proposed) {
+          try {
+            // Only write if still unclaimed (don't clobber a human/peer claim).
+            const fresh = await loadTask(rootDir, u.taskId);
+            if (fresh && !fresh.claimant && fresh.status === 'open') {
+              await updateTask(rootDir, u.taskId, { claimant: proposed });
+            }
+          } catch {
+            // Claimant write is best-effort.
+          }
+          lines.push(`  [${u.priority}] ${u.taskId}: ${u.blurb}${tags} → proposed ${proposed.ref}`);
+        } else {
+          lines.push(`  [${u.priority}] ${u.taskId}: ${u.blurb}${tags}`);
+        }
       }
     }
   } catch {
-    // Tasks not initialized yet — skip
+    // Board read failed — fall back to the legacy anonymous open-task list so
+    // session recovery never breaks.
+    try {
+      const { loadTasks } = await import('../utils/task-loader.js');
+      const openTasks = await loadTasks(rootDir, { status: 'open', limit: 5 });
+      if (openTasks.length > 0) {
+        lines.push('');
+        lines.push('Open tasks:');
+        for (const task of openTasks) {
+          const tags = task.tags.length > 0 ? ` [${task.tags.join(', ')}]` : '';
+          lines.push(`  [${task.priority}] ${task.id}: ${task.blurb}${tags}`);
+        }
+      }
+    } catch {
+      // Tasks not initialized yet — skip.
+    }
   }
 
   // Surface recent lore entries with arc tags (assessment arcs unified into lore)

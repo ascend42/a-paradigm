@@ -1,0 +1,54 @@
+id: Q-para-801-orchestration-emits-dag
+title: 'PARA 801: Closing the Loop — Lesson 2: Orchestration Emits the DAG'
+description: 'Quiz for lesson: Orchestration Emits the DAG'
+author: paradigm
+created: '2026-06-13'
+updated: '2026-06-13'
+tags:
+  - course
+  - para-801
+symbols: []
+difficulty: intermediate
+passThreshold: 0.7
+category: paradigm-core
+questions:
+  - id: q1
+    question: Before v7, what happened to the handoff graph that orchestration computed for a multi-agent run?
+    choices:
+      A: It was persisted as tasks and tracked to completion
+      B: 'It was computed and then discarded — only a frozen `status: pending` blob was logged, which nothing ever advanced'
+      C: It was written to portal.yaml
+      D: It was emailed to the user for approval
+      E: It was stored as a SQLite graph
+    correct: B
+    explanation: 'The orchestration audit found the handoff graph computed (around `orchestration.ts:1780-1830`) and then dropped, with only a frozen `logOrchestration` `status: pending` blob recorded and never advanced. This was the orchestration-to-task disconnect v7 fixes — orchestration now emits the graph as real tasks via `emitTaskDag()`.'
+  - id: q2
+    question: What does `emitTaskDag()` persist, and in which orchestration mode?
+    choices:
+      A: One flat task per run, in every mode
+      B: One epic task (claimant orchestrator, external_ref orchestration) plus one child per stage-agent (parentTaskId, stage, dependsOn, archetype claimant) — in execute mode only
+      C: A child task per file edited, in plan mode
+      D: Nothing — it only logs to the console
+      E: A full SQLite snapshot in quick mode
+    correct: B
+    explanation: 'In `execute` mode only (plan and quick emit nothing), `emitTaskDag()` persists one epic task — the orchestration root with `claimant: orchestrator` and `external_ref: { kind: orchestration }` — plus one child task per stage-agent carrying parentTaskId, stage, dependsOn, and a `{ kind: archetype }` claimant. Emission degrades gracefully if a write fails; it never gates the work.'
+  - id: q3
+    question: In v7.0, how does a stage task's status flow back as the agent works, and what is the scope caveat?
+    choices:
+      A: A background daemon polls the filesystem; all execution paths are covered equally
+      B: Each spawned agent's prompt carries its taskId with instructions to flip in-progress/done via paradigm_task_update; v7.0 scopes loop-closure to the MCP path, with Symphony and CLI flow-back as fast-follows
+      C: The orchestrator marks everything done at the end regardless of agent output
+      D: Status never flows back; the DAG is write-once
+      E: Status flows back only through Git hooks
+    correct: B
+    explanation: 'v7 threads each agent''s taskId into its prompt with instructions to flip in-progress on start and done on finish via paradigm_task_update. v7.0 honestly scopes loop-closure to the dominant MCP (Claude-Code-agent) path; the Symphony/Cursor watcher and the standalone CLI orchestrate binary''s task-bridge are stated as fast-follows rather than claimed as covered.'
+  - id: q4
+    question: What did the typed `AgentRelay` contract replace, and what was deleted as a result?
+    choices:
+      A: It replaced portal.yaml; the gates were deleted
+      B: It replaced free-text prose handoffs between stages; the hand-rolled regex parsers (parseFilePlan / parseFilePlanFromResponse) were deleted, and planBuilderStages now consumes the typed filePlan field directly
+      C: It replaced the task loader; the YAML store was deleted
+      D: It replaced SQLite; the database was deleted
+      E: Nothing was deleted — AgentRelay is purely additive logging
+    correct: B
+    explanation: 'AgentRelay is a typed completion contract (artifacts, decisions, handoffTo, filePlan, blockedOn). It replaces the free-text prose handoff and lets v7 delete the brittle regex parsers that used to scrape structure out of that prose — planBuilderStages now reads the typed `filePlan` field directly. TaskPayload (assignment) and AgentRelay (completion) are the request/response halves, bound by `relay.taskId + status → updateTask`.'

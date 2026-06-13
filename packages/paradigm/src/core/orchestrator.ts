@@ -24,6 +24,7 @@ import {
   classifyTask,
   getRecommendedModel,
 } from './task-classifier.js';
+import { suggestAgentsForTask } from './agent-matcher.js';
 import {
   runPreflight,
   runPostflight,
@@ -1154,6 +1155,47 @@ export class Orchestrator {
           model: getRecommendedModel('tester', classification),
         });
       }
+    }
+
+    // ── Matcher-primary roster reachability (T-003) ──
+    // The static keyword/classification path above only ever reaches the core
+    // five archetypes (architect/security/builder/reviewer/tester). Any other
+    // INSTALLED agent (product/North, forge/Loid, researcher/Scout, dx/Helix,
+    // …) was unreachable by the auto-router. Use agent-matcher as the primary
+    // suggestion source against the full installed roster: append any matched
+    // agent not already in the plan as an optional final-stage contributor so
+    // auto-orchestration can assemble its best team without a hand-authored
+    // brief. Non-breaking: this widens the plan, it never removes a core stage.
+    try {
+      const suggestions = suggestAgentsForTask(task, agents);
+      const alreadyPlanned = new Set(plan.map(p => p.agent));
+      // Reserve documentor for the dedicated post-pass; never auto-add here.
+      const reserved = new Set(['documentor']);
+      const maxStage = plan.length > 0 ? Math.max(...plan.map(p => p.stage)) : -1;
+      const suggestionStage = maxStage + 1;
+      const dependsOnPlan = plan.map(p => p.agent);
+
+      for (const s of suggestions) {
+        if (alreadyPlanned.has(s.name)) continue;
+        if (reserved.has(s.name)) continue;
+        if (!agents[s.name]) continue; // only route INSTALLED agents
+        // Only route reasonably-confident matches so a single stray keyword
+        // doesn't drag the whole roster in.
+        if (s.confidence === 'low') continue;
+
+        const def = agents[s.name] as { focus?: string; defaultModel?: AgentModel } | undefined;
+        plan.push({
+          agent: s.name,
+          subtask: `Contribute (${def?.focus ?? 'specialist'}): ${task}`,
+          required: false,
+          stage: suggestionStage,
+          dependsOn: dependsOnPlan,
+          model: def?.defaultModel ?? 'sonnet',
+        });
+        alreadyPlanned.add(s.name);
+      }
+    } catch {
+      // Matcher augmentation is non-fatal — the static plan still stands.
     }
 
     // Sort by stage for sequential stage execution

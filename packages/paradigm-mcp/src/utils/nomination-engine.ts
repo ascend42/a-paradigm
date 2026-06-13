@@ -911,12 +911,14 @@ export function autoPromoteJournalEntries(
 ): { promoted: number; entries: Array<{ journalId: string; notebookId: string }> } {
   let loadJournalEntries: (agentId: string, filter: Record<string, unknown>) => Array<Record<string, unknown>>;
   let addNotebookEntry: (agentId: string, entry: Record<string, unknown>, scope: string, rootDir?: string) => { entry: { id: string } };
+  let normalizeConcept: (s: string) => string;
 
   try {
     const journalMod = require('./journal-loader.js');
     const notebookMod = require('./notebook-loader.js');
     loadJournalEntries = journalMod.loadJournalEntries;
     addNotebookEntry = notebookMod.addNotebookEntry;
+    normalizeConcept = notebookMod.normalizeConcept;
   } catch {
     return { promoted: 0, entries: [] };
   }
@@ -947,7 +949,13 @@ export function autoPromoteJournalEntries(
         {
           context: entry.pattern?.applies_when || entry.insight.slice(0, 80),
           snippet: entry.pattern?.correct_approach || entry.insight,
-          concepts: entry.tags || [entry.pattern?.id || 'learned-pattern'],
+          // Normalize promoted concepts so postflight tags (e.g. `symbol:payment-form`)
+          // are retrievable by the bare query slug (`payment-form`). See T-001.
+          // (addNotebookEntry also normalizes, but normalize here for an explicit,
+          // testable contract on the writer side.)
+          concepts: (entry.tags || [entry.pattern?.id || 'learned-pattern'])
+            .map(normalizeConcept)
+            .filter(Boolean),
           provenance: {
             source: 'lore',
             loreEntryId: entry.id,

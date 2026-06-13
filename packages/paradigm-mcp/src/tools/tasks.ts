@@ -4,6 +4,7 @@
 
 import type { ProjectContext } from '../utils/index-loader.js';
 import { loadTasks, loadTask, createTask, updateTask, completeTask, shelveTask } from '../utils/task-loader.js';
+import type { Claimant, ExternalRef } from '../utils/task-loader.js';
 
 // ── Tool definitions ──────────────────────────────────────
 
@@ -19,6 +20,26 @@ export function getTasksToolsList() {
           priority: { type: 'string', enum: ['high', 'medium', 'low'], description: 'Priority level (default: medium)' },
           tags: { type: 'array', items: { type: 'string' }, description: 'Tags — symbols (#component), freeform labels, etc.' },
           related_lore: { type: 'array', items: { type: 'string' }, description: 'Linked lore entry IDs' },
+          claimant: {
+            type: 'object',
+            description: 'Owner of this task (v7 DAG). kind: archetype|human|peer; ref: role id / git user / agentId',
+            properties: {
+              kind: { type: 'string', enum: ['archetype', 'human', 'peer'] },
+              ref: { type: 'string' },
+            },
+          },
+          parentTaskId: { type: 'string', description: 'Parent task id (v7 DAG edge)' },
+          dependsOn: { type: 'array', items: { type: 'string' }, description: 'Task ids this task depends on (v7 DAG edges)' },
+          stage: { type: 'number', description: 'Orchestration stage index (v7 DAG)' },
+          external_ref: {
+            type: 'object',
+            description: 'External anchor (renamed from session_link). kind: github|session|symphony|orchestration|url',
+            properties: {
+              kind: { type: 'string', enum: ['github', 'session', 'symphony', 'orchestration', 'url'] },
+              ref: { type: 'string' },
+            },
+          },
+          session_link: { type: 'string', description: '(Deprecated — use external_ref) Legacy external anchor; aliased to external_ref' },
         },
         required: ['blurb'],
       },
@@ -30,7 +51,7 @@ export function getTasksToolsList() {
       inputSchema: {
         type: 'object',
         properties: {
-          status: { type: 'string', enum: ['open', 'done', 'shelved', 'all'], description: 'Filter by status (default: open)' },
+          status: { type: 'string', enum: ['open', 'in-progress', 'done', 'shelved', 'active', 'all'], description: "Filter by status (default: open). 'active' = open ∪ in-progress" },
           priority: { type: 'string', enum: ['high', 'medium', 'low'], description: 'Filter by priority' },
           tag: { type: 'string', description: 'Filter by tag (symbol or freeform)' },
           limit: { type: 'number', description: 'Maximum results (default: 20)' },
@@ -47,10 +68,30 @@ export function getTasksToolsList() {
           id: { type: 'string', description: 'Task ID (e.g., "T-2026-02-26-001")' },
           blurb: { type: 'string', description: 'New description' },
           priority: { type: 'string', enum: ['high', 'medium', 'low'] },
-          status: { type: 'string', enum: ['open', 'done', 'shelved'] },
+          status: { type: 'string', enum: ['open', 'in-progress', 'done', 'shelved'] },
           tags: { type: 'array', items: { type: 'string' }, description: 'Replace tags' },
           related_lore: { type: 'array', items: { type: 'string' }, description: 'Related lore entry IDs (includes former assessment entries)' },
           related_assessments: { type: 'array', items: { type: 'string' }, description: '(Deprecated — use related_lore) Alias for related_lore' },
+          claimant: {
+            type: 'object',
+            description: 'Owner of this task (v7 DAG). kind: archetype|human|peer; ref: role id / git user / agentId',
+            properties: {
+              kind: { type: 'string', enum: ['archetype', 'human', 'peer'] },
+              ref: { type: 'string' },
+            },
+          },
+          parentTaskId: { type: 'string', description: 'Parent task id (v7 DAG edge)' },
+          dependsOn: { type: 'array', items: { type: 'string' }, description: 'Task ids this task depends on (v7 DAG edges)' },
+          stage: { type: 'number', description: 'Orchestration stage index (v7 DAG)' },
+          external_ref: {
+            type: 'object',
+            description: 'External anchor (renamed from session_link). kind: github|session|symphony|orchestration|url',
+            properties: {
+              kind: { type: 'string', enum: ['github', 'session', 'symphony', 'orchestration', 'url'] },
+              ref: { type: 'string' },
+            },
+          },
+          session_link: { type: 'string', description: '(Deprecated — use external_ref) Legacy external anchor; aliased to external_ref' },
         },
         required: ['id'],
       },
@@ -97,6 +138,13 @@ export async function handleTasksTool(
         priority: args.priority as string | undefined,
         tags: args.tags as string[] | undefined,
         related_lore: args.related_lore as string[] | undefined,
+        claimant: args.claimant as Claimant | undefined,
+        parentTaskId: args.parentTaskId as string | undefined,
+        dependsOn: args.dependsOn as string[] | undefined,
+        stage: args.stage as number | undefined,
+        // Accept legacy session_link; createTask/normalizeTask alias it to external_ref.
+        external_ref: args.external_ref as ExternalRef | undefined,
+        session_link: args.session_link as string | undefined,
       });
 
       const task = await loadTask(ctx.rootDir, id);
@@ -133,6 +181,18 @@ export async function handleTasksTool(
       if (args.tags !== undefined) partial.tags = args.tags;
       if (args.related_lore !== undefined) partial.related_lore = args.related_lore;
       if (args.related_assessments !== undefined) partial.related_assessments = args.related_assessments;
+      if (args.claimant !== undefined) partial.claimant = args.claimant;
+      if (args.parentTaskId !== undefined) partial.parentTaskId = args.parentTaskId;
+      if (args.dependsOn !== undefined) partial.dependsOn = args.dependsOn;
+      if (args.stage !== undefined) partial.stage = args.stage;
+      if (args.external_ref !== undefined) partial.external_ref = args.external_ref;
+      // Legacy session_link → external_ref alias (infer kind, parity with normalizeTask).
+      if (args.session_link !== undefined && args.external_ref === undefined) {
+        const ref = args.session_link as string;
+        const lower = ref.toLowerCase();
+        const kind: ExternalRef['kind'] = lower.includes('github') ? 'github' : lower.includes('session') ? 'session' : 'url';
+        partial.external_ref = { kind, ref };
+      }
 
       const ok = await updateTask(ctx.rootDir, id, partial as Partial<import('../utils/task-loader.js').Task>);
       if (!ok) {

@@ -15,6 +15,7 @@ import * as path from 'path';
 import type { ProjectContext } from '../utils/index-loader.js';
 import { searchSymbols, getSymbolsByType, getAllSymbols } from '@a-company/premise-core';
 import { loadArchMap } from '../utils/arch-loader.js';
+import { log } from '../utils/mcp-logger.js';
 import { trackToolCall } from './context.js';
 import { handleNavigateTool } from './navigate.js';
 import { handleRippleTool } from './ripple.js';
@@ -31,7 +32,13 @@ import type {
   SessionInsightsAgentContribution,
   CidSessionMarker,
   CidBriefedMarker,
+  CaptainBoard,
+  BoardRun,
+  BoardNode,
+  BoardUnclaimed,
+  RunStatus,
 } from '../types/captain.js';
+import type { Task, Claimant } from '../utils/task-loader.js';
 
 // ────────────────────────────────────────────────────────
 // Tool Definitions
@@ -99,6 +106,38 @@ export function getCaptainToolsList(): ToolDefinition[] {
       },
       annotations: { readOnlyHint: false, destructiveHint: false },
     },
+    {
+      name: 'paradigm_captain_board',
+      description:
+        "Cid's owned run-DAG board (#captain-board). action='read' (default, read-only) assembles the live orchestration DAG — each run's epic + ordered stage-children with status/claimant/dependsOn, plus ripple-ranked unclaimed open tasks and a summary. action='claim' writes a task's claimant (status stays open; human/peer claims override an archetype proposal). action='advance' records a blocked_on reason without changing status (orchestration owns in-progress/done). ~300 tokens.",
+      inputSchema: {
+        type: 'object',
+        properties: {
+          action: {
+            type: 'string',
+            enum: ['read', 'claim', 'advance'],
+            description: "Board action. Default 'read'.",
+          },
+          taskId: {
+            type: 'string',
+            description: 'Target task id (required for claim/advance).',
+          },
+          claimant: {
+            type: 'object',
+            description: "For claim: the new owner { kind: 'archetype'|'human'|'peer', ref }.",
+            properties: {
+              kind: { type: 'string', enum: ['archetype', 'human', 'peer'] },
+              ref: { type: 'string' },
+            },
+          },
+          blockedOn: {
+            type: 'string',
+            description: 'For advance: the blocking reason recorded on the task.',
+          },
+        },
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false },
+    },
   ];
 }
 
@@ -116,6 +155,9 @@ export async function handleCaptainTool(
   }
   if (name === 'paradigm_captain_debrief') {
     return handleCaptainDebrief(args, ctx);
+  }
+  if (name === 'paradigm_captain_board') {
+    return handleCaptainBoard(args, ctx);
   }
   return { handled: false, text: '' };
 }
@@ -631,7 +673,58 @@ async function handleCaptainDebrief(
     // Lore recording is non-fatal
   }
 
+  // ── Step 4b: Postflight liveness check + self-heal (v7 §3) ──
+  // Did the learning chain actually run for this session? Read the liveness probe
+  // (.paradigm/events/settlement-liveness.jsonl). If postflight did NOT run, Cid
+  // SELF-HEALS by running it himself, then clears the stop hook normally. If the
+  // self-heal throws, Cid proposes an ADVISE block (never guard) — a learning-loop
+  // gap must not deadlock the human. Hard refuse stays reserved for correctness
+  // gates (missing .purpose), which the stop hook still enforces separately.
+  const postflight: {
+    ranThisSession: boolean;
+    selfHealed: boolean;
+    selfHealError?: string;
+    blockProposed: boolean;
+  } = { ranThisSession: false, selfHealed: false, blockProposed: false };
+
+  postflight.ranThisSession = sessionPostflightRan(paradigmDir);
+
+  if (!postflight.ranThisSession) {
+    try {
+      const { runPostflightLearning } = await import('./ambient.js');
+      await runPostflightLearning(ctx.rootDir, { claimant: 'navigation' });
+      postflight.selfHealed = true;
+      log.flow('$captain-board').info('Cid self-healed postflight (no prior liveness record)', {
+        orchestrationId,
+      });
+    } catch (err) {
+      postflight.selfHealError = err instanceof Error ? err.message : String(err);
+      log.flow('$captain-board').warn('Cid postflight self-heal threw — proposing advise block', {
+        orchestrationId, error: postflight.selfHealError,
+      });
+      try {
+        const { handleProposeBlockTool } = await import('./propose-block.js');
+        await handleProposeBlockTool(
+          'paradigm_propose_block',
+          {
+            claimant: 'navigation',
+            severity: 'advise', // NEVER guard — learning-loop gap must not deadlock the human.
+            reason: `Postflight learning did not run and Cid's self-heal failed: ${postflight.selfHealError}`,
+            unblock_hint: 'Run `paradigm_ambient_learn_postflight` manually, or inspect .paradigm/events/settlement-liveness.jsonl for the severed stage.',
+          },
+          ctx,
+        );
+        postflight.blockProposed = true;
+      } catch {
+        // Even the advise-block proposal is best-effort.
+      }
+    }
+  }
+
   // ── Step 5: Write .cid-briefed marker ───────────────
+  // Always clears the stop hook (learning-loop liveness is advise-only, not a
+  // hard gate). The unconditional write is preserved by design — Part C adds the
+  // self-heal BEFORE the clear, it does NOT turn the clear into a hard refuse.
   let stopHookCleared = false;
   try {
     const marker: CidBriefedMarker = {
@@ -747,6 +840,7 @@ async function handleCaptainDebrief(
       delta: scoreAfter - scoreBefore,
     },
     stopHookCleared,
+    postflight,
     sessionInsights,
   };
 
@@ -765,6 +859,405 @@ async function handleCaptainDebrief(
   const text = reportJson + '\n' + learningHandoff;
   trackToolCall(text.length, 'paradigm_captain_debrief');
   return { handled: true, text };
+}
+
+// ────────────────────────────────────────────────────────
+// Postflight liveness check (v7 §3 — Cid session-close self-heal)
+// ────────────────────────────────────────────────────────
+
+const LIVENESS_REL = path.join('events', 'settlement-liveness.jsonl');
+/** Window for "this session ran postflight" — recent settlements only. */
+const POSTFLIGHT_WINDOW_MS = 6 * 60 * 60 * 1000; // 6h
+
+/**
+ * Did the learning chain's postflight stage actually run for this session?
+ * Reads `.paradigm/events/settlement-liveness.jsonl` (written by §2 settlement)
+ * and returns true iff a recent record shows `runPostflightLearning === 'ok'`.
+ *
+ * A severed chain (postflight commented out / threw) writes a record with the
+ * stage as `threw`/`skipped` → `chainLive:false` → this returns false → Cid
+ * self-heals. No file at all (no settlement happened) also returns false.
+ */
+function sessionPostflightRan(paradigmDir: string): boolean {
+  const filePath = path.join(paradigmDir, LIVENESS_REL);
+  if (!fs.existsSync(filePath)) return false;
+  try {
+    const content = fs.readFileSync(filePath, 'utf8');
+    const lines = content.split('\n').filter(l => l.trim().length > 0);
+    const cutoff = Date.now() - POSTFLIGHT_WINDOW_MS;
+    // Scan recent records (last 50) for a live postflight stage.
+    for (const line of lines.slice(-50)) {
+      try {
+        const rec = JSON.parse(line) as {
+          ts?: string;
+          stages?: { runPostflightLearning?: string };
+        };
+        const ts = rec.ts ? new Date(rec.ts).getTime() : NaN;
+        if (Number.isNaN(ts) || ts < cutoff) continue;
+        if (rec.stages?.runPostflightLearning === 'ok') return true;
+      } catch {
+        // Malformed line — skip.
+      }
+    }
+  } catch {
+    // Read failure → treat as "did not run" so Cid self-heals rather than
+    // silently skipping the loop.
+    return false;
+  }
+  return false;
+}
+
+// ────────────────────────────────────────────────────────
+// Captain Board Handler (#captain-board — v7 §3)
+// ────────────────────────────────────────────────────────
+
+/**
+ * Cid's owned read+write artifact over the live orchestration task-DAG.
+ *
+ * RECONCILIATION with the shipped emission/settlement model: the **epic task**
+ * (`external_ref.kind==='orchestration'`) IS the run-record — it replaced the
+ * frozen `logOrchestration` blob. Settlement (Loid) stamps `settledAt` on the
+ * epic when its children finish. So "un-freeze the run-record" = read/advance the
+ * epic task, not the old log file. `read` derives `runStatus` from the epic's
+ * `settledAt` + child statuses; it never writes `settledAt` (Loid's field).
+ *
+ * Ownership boundary (enforced here): Cid WRITES `claimant` (claim) and a
+ * `blocked_on` reason (advance). Cid NEVER writes `settledAt`, `status`
+ * transitions orchestration owns, or `blurb`/`priority`/`tags`.
+ */
+async function handleCaptainBoard(
+  args: Record<string, unknown>,
+  ctx: ProjectContext,
+): Promise<{ handled: boolean; text: string }> {
+  const action = (args.action as 'read' | 'claim' | 'advance' | undefined) || 'read';
+
+  if (action === 'claim') {
+    return handleBoardClaim(args, ctx);
+  }
+  if (action === 'advance') {
+    return handleBoardAdvance(args, ctx);
+  }
+
+  // ── read (readOnly) ──
+  const board = await assembleCaptainBoard(ctx.rootDir, {}, ctx);
+  const text = JSON.stringify(board, null, 2);
+  trackToolCall(text.length, 'paradigm_captain_board');
+  return { handled: true, text };
+}
+
+/**
+ * Derive a run's live status from the epic + its children. `settledAt` (Loid's
+ * retrospective stamp) is the authoritative "settled" signal; otherwise we read
+ * the children's live statuses.
+ */
+function deriveRunStatus(epic: Task, children: Task[]): RunStatus {
+  if (epic.settledAt) {
+    // A crash-settle is distinguishable via the epic/child crash markers.
+    if (epic.crashed_at || children.some(c => c.crashed_at)) return 'crashed';
+    return 'settled';
+  }
+  if (children.length === 0) return 'pending';
+  const anyInFlight = children.some(c => c.status === 'in-progress')
+    || epic.status === 'in-progress';
+  return anyInFlight ? 'in-progress' : 'pending';
+}
+
+/** Order children by stage, then by dependsOn depth (roots first), then id. */
+function orderNodes(children: Task[]): Task[] {
+  return [...children].sort((a, b) => {
+    const sa = a.stage ?? 0;
+    const sb = b.stage ?? 0;
+    if (sa !== sb) return sa - sb;
+    const da = (a.dependsOn?.length ?? 0);
+    const db = (b.dependsOn?.length ?? 0);
+    if (da !== db) return da - db;
+    return a.id.localeCompare(b.id);
+  });
+}
+
+/**
+ * Cheap inline fragile-symbol detection: ripple each symbol referenced by the
+ * task (tags + blurb) and collect the high-impact ones. Merged onto the node
+ * (adversarial cut: NOT a separate coverageGaps/inFlightSymbols block). Bounded
+ * to keep the board cheap.
+ */
+async function fragileSymbolsFor(task: Task, ctx: ProjectContext): Promise<string[]> {
+  const symbols = symbolsFromTask(task).slice(0, 3);
+  const fragile: string[] = [];
+  for (const sym of symbols) {
+    try {
+      const rippleResponse = await handleRippleTool(
+        'paradigm_ripple',
+        { symbol: sym, depth: 1, response_format: 'concise' },
+        ctx,
+      );
+      if (rippleResponse.handled) {
+        const rd = JSON.parse(rippleResponse.text);
+        if (rd.impact === 'high' && !fragile.includes(sym)) fragile.push(sym);
+      }
+    } catch {
+      // Ripple is non-fatal per symbol.
+    }
+  }
+  return fragile;
+}
+
+const SYMBOL_RE = /[#$^!~][a-z][a-z0-9-]*/gi;
+
+/** Symbols referenced by a task — from explicit tags and from the blurb prose. */
+function symbolsFromTask(task: Task): string[] {
+  const out = new Set<string>();
+  for (const t of task.tags || []) {
+    if (/^[#$^!~]/.test(t)) out.add(t);
+  }
+  const fromBlurb = task.blurb?.match(SYMBOL_RE) || [];
+  for (const s of fromBlurb) out.add(s);
+  return Array.from(out);
+}
+
+/**
+ * Ripple-rank an unclaimed task: sum the downstream blast-radius of its symbols.
+ * Reuses the same ripple machinery the brief uses (captain.ts ripple loop). A
+ * task with no symbols ranks at 0 (priority breaks ties in the sort).
+ */
+async function rippleScoreFor(task: Task, ctx: ProjectContext): Promise<{ score: number; fragile: string[] }> {
+  const symbols = symbolsFromTask(task).slice(0, 3);
+  let score = 0;
+  const fragile: string[] = [];
+  for (const sym of symbols) {
+    try {
+      const rippleResponse = await handleRippleTool(
+        'paradigm_ripple',
+        { symbol: sym, depth: 2, response_format: 'concise' },
+        ctx,
+      );
+      if (rippleResponse.handled) {
+        const rd = JSON.parse(rippleResponse.text);
+        const direct = rd.analysis?.directlyAffected?.length ?? 0;
+        const indirect = rd.analysis?.indirectlyAffected?.length ?? 0;
+        score += direct * 2 + indirect;
+        if (rd.impact === 'high' && !fragile.includes(sym)) fragile.push(sym);
+      }
+    } catch {
+      // Ripple is non-fatal per symbol.
+    }
+  }
+  return { score, fragile };
+}
+
+const PRIORITY_RANK: Record<string, number> = { high: 0, medium: 1, low: 2 };
+
+/**
+ * Assemble the live run-DAG board. Pure read — assembles runs from non-terminal
+ * epics + their children, plus ripple-ranked unclaimed open tasks and a summary.
+ *
+ * @param proposeClaimants when true (session-open), attach a `proposedClaimant`
+ *   to each unclaimed task by matching its tags/symbols → archetype. (The actual
+ *   write-back happens in session-open, not here — `read` stays read-only.)
+ */
+export async function assembleCaptainBoard(
+  rootDir: string,
+  opts: { proposeClaimants?: boolean } = {},
+  ctxOverride?: ProjectContext,
+): Promise<CaptainBoard> {
+  const ctx = ctxOverride;
+  const { loadTasks } = await import('../utils/task-loader.js');
+
+  let all: Task[] = [];
+  try {
+    all = await loadTasks(rootDir, { status: 'all', limit: 9999 });
+  } catch (err) {
+    log.flow('$captain-board').warn('Board task load failed', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  // ── Runs: non-terminal epics (orchestration external_ref, no parentTaskId) ──
+  const epics = all.filter(t =>
+    t.external_ref?.kind === 'orchestration' &&
+    !t.parentTaskId &&
+    !t.settledAt, // non-terminal runs only
+  );
+
+  const runs: BoardRun[] = [];
+  for (const epic of epics) {
+    const children = orderNodes(all.filter(t => t.parentTaskId === epic.id));
+    const nodes: BoardNode[] = [];
+    for (const child of children) {
+      const fragile = ctx ? await fragileSymbolsFor(child, ctx) : [];
+      nodes.push({
+        taskId: child.id,
+        blurb: child.blurb,
+        stage: child.stage,
+        status: child.status,
+        claimant: child.claimant,
+        dependsOn: child.dependsOn || [],
+        fragileSymbols: fragile,
+      });
+    }
+    runs.push({
+      epicTaskId: epic.id,
+      blurb: epic.blurb,
+      runStatus: deriveRunStatus(epic, children),
+      settledAt: epic.settledAt,
+      nodes,
+    });
+  }
+
+  // ── Unclaimed: open tasks with no claimant, ripple-ranked ──
+  const unclaimedTasks = all.filter(t => t.status === 'open' && !t.claimant);
+
+  const unclaimed: BoardUnclaimed[] = [];
+  for (const task of unclaimedTasks) {
+    const { score, fragile } = ctx
+      ? await rippleScoreFor(task, ctx)
+      : { score: 0, fragile: [] };
+    let proposedClaimant: Claimant | undefined;
+    if (opts.proposeClaimants) {
+      proposedClaimant = await proposeClaimantFor(task, rootDir);
+    }
+    unclaimed.push({
+      taskId: task.id,
+      blurb: task.blurb,
+      priority: task.priority,
+      tags: task.tags || [],
+      rippleScore: score,
+      fragileSymbols: fragile,
+      proposedClaimant,
+    });
+  }
+
+  // Rank: ripple desc, then priority asc, then recency (id) desc.
+  unclaimed.sort((a, b) => {
+    if (b.rippleScore !== a.rippleScore) return b.rippleScore - a.rippleScore;
+    const pr = (PRIORITY_RANK[a.priority] ?? 1) - (PRIORITY_RANK[b.priority] ?? 1);
+    if (pr !== 0) return pr;
+    return b.taskId.localeCompare(a.taskId);
+  });
+
+  const inFlight = all.filter(t => t.status === 'in-progress').length;
+  const open = all.filter(t => t.status === 'open').length;
+
+  return {
+    runs,
+    unclaimed,
+    summary: {
+      runs: runs.length,
+      open,
+      inFlight,
+      unclaimed: unclaimed.length,
+    },
+  };
+}
+
+/**
+ * Propose an archetype claimant for an unclaimed task by reusing the
+ * orchestrator's own agent-matcher (`suggestAgentsForTask`) against the task's
+ * blurb + tags. Returns the top-confidence archetype, or undefined if no match.
+ */
+export async function proposeClaimantFor(task: Task, rootDir: string): Promise<Claimant | undefined> {
+  try {
+    const { suggestAgentsForTask, loadAgentsManifest } = await import('./orchestration.js');
+    const manifest = loadAgentsManifest(rootDir);
+    if (!manifest?.agents) return undefined;
+    // Match against blurb + symbol-bearing tags (gives the matcher both keyword
+    // and symbol signal).
+    const matchText = [task.blurb, ...(task.tags || [])].join(' ');
+    const suggestions = suggestAgentsForTask(matchText, manifest.agents);
+    if (suggestions.length === 0) return undefined;
+    return { kind: 'archetype', ref: suggestions[0].name };
+  } catch {
+    return undefined;
+  }
+}
+
+/**
+ * `claim` — write a task's claimant (status stays 'open'). A human/peer claim
+ * overrides any prior archetype proposal; an archetype (Cid) claim does NOT
+ * override a human/peer claim (Cid can't re-grab a human-claimed task).
+ */
+async function handleBoardClaim(
+  args: Record<string, unknown>,
+  ctx: ProjectContext,
+): Promise<{ handled: boolean; text: string }> {
+  const taskId = args.taskId as string | undefined;
+  const claimantArg = args.claimant as Claimant | undefined;
+  if (!taskId || !claimantArg?.kind || !claimantArg?.ref) {
+    return {
+      handled: true,
+      text: JSON.stringify({ ok: false, error: 'claim requires taskId and claimant {kind, ref}' }),
+    };
+  }
+
+  const { loadTask, updateTask } = await import('../utils/task-loader.js');
+  const task = await loadTask(ctx.rootDir, taskId);
+  if (!task) {
+    return { handled: true, text: JSON.stringify({ ok: false, error: `task not found: ${taskId}` }) };
+  }
+
+  // Override guard: an archetype proposal may not displace a human/peer claim.
+  const existing = task.claimant;
+  if (existing && existing.kind !== 'archetype' && claimantArg.kind === 'archetype') {
+    log.flow('$captain-board').info('Claim rejected: archetype cannot override human/peer claim', {
+      taskId, existing: existing.kind, proposed: claimantArg.kind,
+    });
+    return {
+      handled: true,
+      text: JSON.stringify({
+        ok: false,
+        error: `task ${taskId} is claimed by ${existing.kind}:${existing.ref}; archetype proposal cannot override`,
+        claimant: existing,
+      }),
+    };
+  }
+
+  // status stays 'open' — claimant present + open = "proposed/assigned, not started".
+  const ok = await updateTask(ctx.rootDir, taskId, { claimant: claimantArg });
+  log.flow('$captain-board').info('Captain claim written', { taskId, claimant: claimantArg, ok });
+  return {
+    handled: true,
+    text: JSON.stringify({ ok, taskId, claimant: claimantArg, status: 'open' }),
+  };
+}
+
+/**
+ * `advance` — v7.0 has NO `blocked` status (4 states only), so this records a
+ * `blocked_on` reason on the task and leaves `status` untouched. Orchestration —
+ * not Cid — owns the in-progress/done transitions. (If `blocked` lands as a real
+ * status in fast-follow, advance gains the `→blocked` transition; for v7.0 it is
+ * a reason-stamp only.)
+ */
+async function handleBoardAdvance(
+  args: Record<string, unknown>,
+  ctx: ProjectContext,
+): Promise<{ handled: boolean; text: string }> {
+  const taskId = args.taskId as string | undefined;
+  const blockedOn = args.blockedOn as string | undefined;
+  if (!taskId || !blockedOn) {
+    return {
+      handled: true,
+      text: JSON.stringify({
+        ok: false,
+        error: "advance requires taskId and blockedOn (v7.0 has no 'blocked' status — advance records a reason only)",
+      }),
+    };
+  }
+
+  const { loadTask, updateTask } = await import('../utils/task-loader.js');
+  const task = await loadTask(ctx.rootDir, taskId);
+  if (!task) {
+    return { handled: true, text: JSON.stringify({ ok: false, error: `task not found: ${taskId}` }) };
+  }
+
+  // blocked_on is a Cid-owned reason field; status is left as-is.
+  const ok = await updateTask(ctx.rootDir, taskId, { blocked_on: blockedOn });
+  log.flow('$captain-board').info('Captain advance: blocked_on recorded (status unchanged)', {
+    taskId, blockedOn, status: task.status, ok,
+  });
+  return {
+    handled: true,
+    text: JSON.stringify({ ok, taskId, blocked_on: blockedOn, status: task.status }),
+  };
 }
 
 // ────────────────────────────────────────────────────────

@@ -14,10 +14,18 @@ import type { ProjectContext } from '../utils/index-loader.js';
 import { trackToolCall } from './context.js';
 import { loadProjectRoster, isAgentActive } from '../utils/agent-loader.js';
 import { handleCaptainTool } from './captain.js';
+import { log } from '../utils/mcp-logger.js';
+import type { AgentRelay } from '../utils/agent-relay.js';
 
 // Import task classification and cost estimation (via dynamic import to avoid circular deps)
 type TaskClassification = {
   type: string;
+  /** Confidence in `type` on a 0–1 scale (highest-scoring family / total signal). */
+  confidence: number;
+  /** Runner-up family, if any — surfaced so a misroute is correctable. */
+  alternativeType?: string;
+  /** One-line hint for overriding the classification with an explicit roster. */
+  overrideHint: string;
   complexity: string;
   recommendedAgents: string[];
   securityRequired: boolean;
@@ -41,7 +49,7 @@ type CostPreview = {
 // Types
 // ============================================================================
 
-interface AgentManifest {
+export interface AgentManifest {
   version: string;
   team: {
     name: string;
@@ -158,6 +166,12 @@ interface AgentPromptResult {
   mode?: 'single' | 'react';
   /** PAN integration: max iterations for ReAct mode (default: 10) */
   maxIters?: number;
+  /**
+   * v7 Spine (sub-phase 2): the DAG task-id this agent owns, stamped by
+   * emitTaskDag in execute mode. The agent flips its status (in-progress→done)
+   * via paradigm_task_update / paradigm_task_done. Absent in plan/quick mode.
+   */
+  taskId?: string;
 }
 
 // ============================================================================
@@ -1013,6 +1027,9 @@ async function handleOrchestrateInline(
       mode: 'plan',
       classification: {
         type: classification.type,
+        confidence: classification.confidence,
+        ...(classification.alternativeType ? { alternativeType: classification.alternativeType } : {}),
+        overrideHint: classification.overrideHint,
         complexity: classification.complexity,
         securityRequired: classification.securityRequired,
         costMultiplier: classification.costMultiplier,
@@ -1227,6 +1244,27 @@ async function handleOrchestrateInline(
   // Log to orchestrations directory
   logOrchestration(ctx.rootDir, orchestrationId, task, plan);
 
+  // v7 Spine (sub-phase 2): emit the computed handoff DAG as persisted tasks.
+  // Execute mode ONLY — plan/quick handlers return earlier and never reach here,
+  // so they emit nothing. Emission is non-fatal (degrades to an empty map).
+  const { epicTaskId, agentTaskIds } = await emitTaskDag(ctx.rootDir, orchestrationId, task, plan);
+
+  // Stamp each agent's emitted task-id onto its prompt result + prompt text so
+  // the spawned agent can flip status (in-progress on start, done at finish).
+  for (const stage of stagePrompts) {
+    for (const agent of stage.agents) {
+      const taskId = agentTaskIds.get(agent.agent);
+      if (!taskId) continue;
+      agent.taskId = taskId;
+      agent.prompt +=
+        `\n\n## Task tracking (v7 DAG)\n` +
+        `Your DAG task-id is \`${taskId}\`. On start, call ` +
+        `\`paradigm_task_update({ id: "${taskId}", status: "in-progress" })\`; ` +
+        `when finished, call \`paradigm_task_done({ id: "${taskId}" })\` ` +
+        `(or \`paradigm_task_update\` → done) so the orchestration loop can settle.`;
+    }
+  }
+
   // Log agent contributions to session work log
   try {
     const { appendSessionWorkEntry } = await import('../utils/session-work-log.js');
@@ -1307,7 +1345,13 @@ async function handleOrchestrateInline(
           intent: 'task' as any,
           text: `[Maestro] Stage ${stage.stage}: Assigned to ${agent.attribution || agent.agent} — ${agent.taskDescription || task}`,
           symbols,
-          metadata: { task: { stage: stage.stage, canRunParallel: stage.canRunParallel } } as any,
+          // Stamp the DAG task-id into the assignment-note metadata so the
+          // deferred Symphony status-flow-back watcher (Part D / spec §2.1, the
+          // Cursor/peer path) can map an inbound `task-complete`/`task-failed`
+          // note's `metadata.task.taskId` back onto `updateTask`. The note
+          // PRODUCER side ships now; the inbound CONSUMER loop is net-new
+          // infrastructure deferred to fast-follow (see report).
+          metadata: { task: { stage: stage.stage, canRunParallel: stage.canRunParallel, ...(agent.taskId ? { taskId: agent.taskId } : {}) } } as any,
         });
         symphony.routeMessage(note);
       }
@@ -1318,9 +1362,31 @@ async function handleOrchestrateInline(
     orchestrationId,
     task,
     mode: 'execute',
+    classification: {
+      type: classification.type,
+      confidence: classification.confidence,
+      ...(classification.alternativeType ? { alternativeType: classification.alternativeType } : {}),
+      overrideHint: classification.overrideHint,
+    },
     symbols,
     totalAgents: plan.estimatedAgents,
     ...(activeNominations.length > 0 ? { activeNominations } : {}),
+
+    // v7 Spine (sub-phase 2): the persisted task DAG this run emitted. Lets the
+    // caller confirm the DAG landed and gives each stage-agent its task-id to
+    // drive (paradigm_task_update/_done). Empty `emittedTasks` ⟹ emission
+    // degraded (non-fatal) — the run still proceeds.
+    ...(epicTaskId ? {
+      emittedTasks: {
+        epicTaskId,
+        stageTasks: stagePrompts.flatMap(stage =>
+          stage.agents
+            .filter(a => a.taskId)
+            .map(a => ({ stage: stage.stage, agent: a.agent, taskId: a.taskId! }))
+        ),
+      },
+    } : {}),
+
     stages: stagePrompts,
 
     // IDE-agnostic execution instructions
@@ -1578,6 +1644,9 @@ async function handleQuickCheck(
     verdict,
     classification: {
       type: classification.type,
+      confidence: classification.confidence,
+      ...(classification.alternativeType ? { alternativeType: classification.alternativeType } : {}),
+      overrideHint: classification.overrideHint,
       complexity: classification.complexity,
       securityRequired: classification.securityRequired,
     },
@@ -1944,7 +2013,44 @@ function planAgentSequence(
         });
       }
     }
+  } else if (classification && classification.type !== 'feature' && classification.type !== 'unknown') {
+    // ── Authoritative-classification path (T-002) ──
+    // `classification.type` is the single source of truth for the roster. The
+    // old divergent inline keyword classifier is demoted to a fallback (the
+    // `else` branch below) used only for `feature`/unknown tasks. This keeps a
+    // read-only-analyst task (audit/analysis/design/research) from being routed
+    // to a builder/security-as-fixer roster by stray bug-language.
+    const recommended = classification.recommendedAgents.length > 0
+      ? classification.recommendedAgents
+      : ['architect'];
+
+    const taskVerbs: Record<string, string> = {
+      architect: isReadOnlyFamily(classification.type) ? 'Analyze' : 'Design',
+      security: isReadOnlyFamily(classification.type) ? 'Assess security of' : 'Review security of',
+      builder: 'Implement',
+      tester: 'Test',
+      reviewer: 'Review',
+    };
+
+    let currentStage = 0;
+    let previousAgent: string | null = null;
+    for (const agentName of recommended) {
+      if (!agents[agentName]) continue;
+      const dependsOn = previousAgent ? [previousAgent] : [];
+      const verb = taskVerbs[agentName] || 'Process';
+      const isRequired = agentName === 'architect' || agentName === 'builder';
+      plannedAgents.push({
+        name: agentName,
+        task: `${verb}: ${task}`,
+        required: isRequired,
+        stage: currentStage,
+        dependsOn,
+      });
+      previousAgent = agentName;
+      currentStage++;
+    }
   } else {
+    // ── Fallback keyword classifier (feature/unknown tasks only) ──
     // Analyze task to determine agent sequence
     const hasDesign = taskLower.includes('design') || taskLower.includes('architect') ||
                       taskLower.includes('plan') || taskLower.includes('spec');
@@ -2101,8 +2207,10 @@ function planAgentSequence(
   // Add documentor as the final stage unless the task is analysis-only or
   // there are no builder/tester agents (no code changes expected)
   const hasCodeAgents = plannedAgents.some(a => a.name === 'builder' || a.name === 'tester');
-  const isAnalysis = classification?.type === 'analysis';
-  const skipDocumentor = isAnalysis || !hasCodeAgents;
+  // Read-only-analyst families (analysis/audit/design/research/documentation)
+  // make no code changes → no documentor pass. See T-002.
+  const isReadOnly = classification ? isReadOnlyFamily(classification.type) : false;
+  const skipDocumentor = isReadOnly || !hasCodeAgents;
 
   let documentorAdded = false;
   if (!skipDocumentor) {
@@ -2335,45 +2443,140 @@ const SECURITY_KEYWORDS = [
   'session', 'cookie', 'csrf', 'xss', 'injection', 'sanitize',
 ];
 
+/** Keywords that indicate a read-only audit (assess existing code, no changes) */
+const AUDIT_KEYWORDS = [
+  'audit', 'self-audit', 'inspect', 'examine', 'survey', 'inventory',
+  'find issues', 'identify problems', 'identify gaps', 'gap analysis',
+  'health check', 'sanity check', 'post-mortem', 'postmortem',
+];
+
+/** Keywords that indicate a design/architecture task (planning, not building) */
+const DESIGN_KEYWORDS = [
+  'design', 'architect', 'architecture', 'spec', 'specify', 'specification',
+  'blueprint', 'plan', 'propose', 'proposal', 'rfc', 'schema design',
+  'api design', 'data model',
+];
+
+/** Keywords that indicate a research/investigation task (gather knowledge) */
+const RESEARCH_KEYWORDS = [
+  'research', 'investigate', 'explore', 'study', 'discover', 'spike',
+  'prototype', 'feasibility', 'survey the', 'literature', 'prior art',
+  'options for', 'approaches to',
+];
+
 /**
- * Local task classification for MCP tool
+ * Read-only analyst families. Tasks classified here must NOT be routed to
+ * build/fixer rosters (builder/security-as-fixer) even when their text
+ * mentions fix/error/broken. The whole point of the family is "look, don't
+ * touch." See T-002 (the poison-pill veto removal).
  */
-function classifyTaskLocal(task: string): TaskClassification {
+const READ_ONLY_FAMILIES = new Set(['analysis', 'audit', 'design', 'research', 'documentation']);
+
+/**
+ * Leading intent verbs that hard-gate against build rosters. If a task opens
+ * with one of these (e.g. "audit the broken orchestration engine"), it is an
+ * analyst task regardless of how many bugfix keywords appear downstream.
+ * Maps the anchoring verb → the family it anchors to.
+ */
+const INTENT_VERB_ANCHORS: Array<{ pattern: RegExp; family: string }> = [
+  { pattern: /^(please\s+)?(audit|self-audit)\b/, family: 'audit' },
+  { pattern: /^(please\s+)?(analy[sz]e|assess|evaluate|examine|inspect|review)\b/, family: 'analysis' },
+  { pattern: /^(please\s+)?(design|architect|spec|specify|plan|propose)\b/, family: 'design' },
+  { pattern: /^(please\s+)?(research|investigate|explore|study)\b/, family: 'research' },
+  { pattern: /^(please\s+)?(document|write\s+docs)\b/, family: 'documentation' },
+];
+
+/**
+ * Per-family keyword weights. Higher weight = a single hit carries more signal.
+ * Read-only-analyst families are weighted slightly higher than bugfix so that a
+ * genuine analyst task isn't out-voted by incidental bug-language in the blurb.
+ */
+const FAMILY_WEIGHTS: Record<string, number> = {
+  audit: 1.3,
+  analysis: 1.1,
+  design: 1.2,
+  research: 1.2,
+  documentation: 1.1,
+  bugfix: 1.0,
+  refactor: 1.0,
+};
+
+/**
+ * Local task classification for the MCP tool.
+ *
+ * Confidence-scored (replaces the old positional keyword ladder + poison-pill
+ * veto, T-002): each family scores keyword-hit-count × weight; the leading
+ * intent verb hard-gates against build rosters. Read-only-analyst families
+ * (analysis/audit/design/research/documentation) never route to a fixer roster.
+ * Returns `type`, a 0–1 `confidence`, the runner-up `alternativeType`, and an
+ * `overrideHint` so a misroute is visible and correctable.
+ */
+export function classifyTaskLocal(task: string): TaskClassification {
   const taskLower = task.toLowerCase();
   const symbols = extractSymbols(task);
 
-  // Check keywords
   const matchesKeywords = (keywords: string[]) =>
     keywords.filter(k => taskLower.includes(k.toLowerCase()));
 
-  const analysisMatches = matchesKeywords(ANALYSIS_KEYWORDS);
-  const documentationMatches = matchesKeywords(DOCUMENTATION_KEYWORDS);
-  const bugfixMatches = matchesKeywords(BUGFIX_KEYWORDS);
-  const refactorMatches = matchesKeywords(REFACTOR_KEYWORDS);
+  const familyMatches: Record<string, string[]> = {
+    audit: matchesKeywords(AUDIT_KEYWORDS),
+    analysis: matchesKeywords(ANALYSIS_KEYWORDS),
+    design: matchesKeywords(DESIGN_KEYWORDS),
+    research: matchesKeywords(RESEARCH_KEYWORDS),
+    documentation: matchesKeywords(DOCUMENTATION_KEYWORDS),
+    bugfix: matchesKeywords(BUGFIX_KEYWORDS),
+    refactor: matchesKeywords(REFACTOR_KEYWORDS),
+  };
   const securityMatches = matchesKeywords(SECURITY_KEYWORDS);
 
-  // Determine type
-  let type: string;
-  let matchedKeywords: string[];
-
-  if (analysisMatches.length > 0 && bugfixMatches.length === 0 && refactorMatches.length === 0) {
-    type = 'analysis';
-    matchedKeywords = analysisMatches;
-  } else if (documentationMatches.length > 0 && bugfixMatches.length === 0) {
-    type = 'documentation';
-    matchedKeywords = documentationMatches;
-  } else if (bugfixMatches.length > 0) {
-    type = 'bugfix';
-    matchedKeywords = bugfixMatches;
-  } else if (refactorMatches.length > 0) {
-    type = 'refactor';
-    matchedKeywords = refactorMatches;
-  } else {
-    type = 'feature';
-    matchedKeywords = [];
+  // Score each family: hit-count × weight.
+  const scores: Record<string, number> = {};
+  for (const [family, matches] of Object.entries(familyMatches)) {
+    scores[family] = matches.length * (FAMILY_WEIGHTS[family] ?? 1.0);
   }
 
-  // Determine complexity
+  // Intent-verb anchoring: a leading audit/analyze/design/research/document verb
+  // hard-gates the task into a read-only family regardless of downstream
+  // bug-language. This is the poison-pill cure — analyst tasks that mention
+  // "broken/fails/error" no longer fall through to a fixer roster.
+  let anchoredFamily: string | undefined;
+  for (const { pattern, family } of INTENT_VERB_ANCHORS) {
+    if (pattern.test(taskLower)) {
+      anchoredFamily = family;
+      // Give the anchored family a decisive boost so it wins scoring.
+      scores[family] = (scores[family] ?? 0) + 5;
+      break;
+    }
+  }
+
+  // Pick the top family by score.
+  const ranked = Object.entries(scores)
+    .filter(([, s]) => s > 0)
+    .sort((a, b) => b[1] - a[1]);
+
+  let type: string;
+  let alternativeType: string | undefined;
+  let topScore = 0;
+  let totalSignal = 0;
+
+  if (ranked.length === 0) {
+    type = 'feature';
+  } else {
+    type = ranked[0][0];
+    topScore = ranked[0][1];
+    alternativeType = ranked[1]?.[0];
+    totalSignal = ranked.reduce((sum, [, s]) => sum + s, 0);
+  }
+
+  // Confidence: share of total keyword signal won by the top family. An anchored
+  // verb floors confidence at 0.7 (strong intent signal even with sparse keywords).
+  let confidence = totalSignal > 0 ? topScore / totalSignal : 0.4;
+  if (anchoredFamily) confidence = Math.max(confidence, 0.7);
+  confidence = Math.round(confidence * 100) / 100;
+
+  const matchedKeywords = familyMatches[type] || [];
+
+  // Complexity
   let complexity: string = 'medium';
   const wordCount = task.split(/\s+/).length;
   if (symbols.length >= 5 || wordCount >= 100) complexity = 'high';
@@ -2382,9 +2585,13 @@ function classifyTaskLocal(task: string): TaskClassification {
   // Security check
   const securityRequired = securityMatches.length > 0 || symbols.some(s => s.startsWith('^'));
 
-  // Recommended agents based on type
+  // Recommended agents per family. Read-only-analyst families map to analyst
+  // rosters (no builder, no security-as-fixer).
   const agentMapping: Record<string, string[]> = {
+    audit: ['architect'],
     analysis: ['architect'],
+    design: ['architect'],
+    research: ['architect'],
     documentation: ['architect'],
     bugfix: ['security', 'builder'],
     refactor: ['architect', 'builder'],
@@ -2392,15 +2599,26 @@ function classifyTaskLocal(task: string): TaskClassification {
   };
 
   const costMultiplierMapping: Record<string, { min: number; max: number }> = {
+    audit: { min: 0.3, max: 0.5 },
     analysis: { min: 0.3, max: 0.5 },
+    design: { min: 0.4, max: 0.7 },
+    research: { min: 0.3, max: 0.6 },
     documentation: { min: 0.25, max: 0.45 },
     bugfix: { min: 0.5, max: 0.8 },
     refactor: { min: 0.6, max: 0.85 },
     feature: { min: 0.8, max: 1.2 },
   };
 
+  const overrideHint =
+    `classified ${type} (${confidence.toFixed(2)})` +
+    (alternativeType ? `; alt ${alternativeType}` : '') +
+    `; override with agents:[...] if misrouted`;
+
   return {
     type,
+    confidence,
+    ...(alternativeType ? { alternativeType } : {}),
+    overrideHint,
     complexity,
     recommendedAgents: agentMapping[type] || ['architect', 'builder'],
     securityRequired,
@@ -2408,6 +2626,11 @@ function classifyTaskLocal(task: string): TaskClassification {
     matchedKeywords,
     symbols,
   };
+}
+
+/** Whether a classified family is a read-only analyst family (never a fixer roster). */
+function isReadOnlyFamily(type: string): boolean {
+  return READ_ONLY_FAMILIES.has(type);
 }
 
 // ============================================================================
@@ -2489,7 +2712,7 @@ function generateCostPreviewLocal(
 // Agent Suggestion
 // ============================================================================
 
-interface AgentSuggestion {
+export interface AgentSuggestion {
   name: string;
   reason: string;
   confidence: 'high' | 'medium' | 'low';
@@ -2497,9 +2720,13 @@ interface AgentSuggestion {
 }
 
 /**
- * Suggest agents for a task based on triggers in agents.yaml
+ * Suggest agents for a task based on triggers in agents.yaml.
+ *
+ * Exported so Cid's captain board (`paradigm_captain_board`, session-open) can
+ * reuse the same archetype-matcher when proposing claimants for unclaimed tasks —
+ * one matcher, both the orchestrator's plan and Cid's claimant proposals.
  */
-function suggestAgentsForTask(
+export function suggestAgentsForTask(
   task: string,
   agents: Record<string, AgentDefinition>
 ): AgentSuggestion[] {
@@ -2613,7 +2840,7 @@ function suggestAgentsForTask(
   return suggestions.sort((a, b) => scoreMap[b.confidence] - scoreMap[a.confidence]);
 }
 
-function loadAgentsManifest(rootDir: string): AgentManifest | null {
+export function loadAgentsManifest(rootDir: string): AgentManifest | null {
   const manifestPath = path.join(rootDir, '.paradigm', 'agents.yaml');
 
   if (!fs.existsSync(manifestPath)) {
@@ -2626,6 +2853,100 @@ function loadAgentsManifest(rootDir: string): AgentManifest | null {
   } catch {
     return null;
   }
+}
+
+/**
+ * v7 Spine (sub-phase 2) — emit the computed handoff DAG as persisted tasks.
+ *
+ * Execute mode only. Creates one epic task (the orchestration root) plus one
+ * child task per stage-agent, wired with `parentTaskId`/`stage`/`dependsOn` so
+ * the in-memory topo-sorted plan survives as a claimant-owned task graph that
+ * Cid can captain and the learning loop can settle.
+ *
+ * `dependsOn` (agent names, from the handoff graph) is resolved to upstream
+ * task-ids by creating tasks in stage order and accumulating an
+ * agent-name → task-id map. Returns that map so the caller can stamp each
+ * agent's prompt with its task-id.
+ *
+ * Non-fatal: any write failure degrades to an empty map (orchestration result
+ * is never blocked by task-emission). The epic id is returned separately so the
+ * caller can surface it even when a child write later fails.
+ */
+export async function emitTaskDag(
+  rootDir: string,
+  orchestrationId: string,
+  task: string,
+  plan: OrchestrationPlan,
+): Promise<{ epicTaskId?: string; agentTaskIds: Map<string, string> }> {
+  const agentTaskIds = new Map<string, string>();
+  let epicTaskId: string | undefined;
+
+  try {
+    const { createTask, updateTask } = await import('../utils/task-loader.js');
+
+    // 1. Epic task — the orchestration root. No parentTaskId; in-progress.
+    epicTaskId = await createTask(rootDir, {
+      blurb: task,
+      priority: 'medium',
+      tags: ['orchestration', 'epic'],
+      claimant: { kind: 'archetype', ref: 'orchestrator' },
+      external_ref: { kind: 'orchestration', ref: orchestrationId },
+    });
+    // createTask always lands at 'open'; promote the epic to in-progress
+    // (open→in-progress is a legal transition; failure is non-fatal).
+    try {
+      await updateTask(rootDir, epicTaskId, { status: 'in-progress' });
+    } catch (err) {
+      log.flow('$dag-emission').warn('Epic promote to in-progress failed', {
+        orchestrationId, epicTaskId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+
+    // 2. Child task per stage-agent, in topo (stage) order so upstream
+    //    agents are emitted before the stages that depend on them.
+    for (const stage of plan.stages) {
+      for (const agentStep of stage.agents) {
+        try {
+          // Resolve handoff edges (upstream agent names) → emitted task-ids.
+          const dependsOn = (agentStep.dependsOn || [])
+            .map(name => agentTaskIds.get(name))
+            .filter((id): id is string => typeof id === 'string');
+
+          const childId = await createTask(rootDir, {
+            blurb: agentStep.task,
+            priority: 'medium',
+            tags: ['orchestration'],
+            claimant: { kind: 'archetype', ref: agentStep.name },
+            parentTaskId: epicTaskId,
+            stage: stage.stage,
+            ...(dependsOn.length > 0 ? { dependsOn } : {}),
+            external_ref: { kind: 'orchestration', ref: orchestrationId },
+          });
+          // status stays 'open' (v7.0 has no 'claimed') — not-yet-started.
+          agentTaskIds.set(agentStep.name, childId);
+        } catch (err) {
+          // A single child write failure must not abort the rest of the DAG.
+          log.flow('$dag-emission').warn('Stage-agent task emission failed', {
+            orchestrationId, agent: agentStep.name, stage: stage.stage,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+    }
+
+    log.flow('$dag-emission').info('Emitted orchestration task DAG', {
+      orchestrationId, epicTaskId, stageAgents: agentTaskIds.size,
+    });
+  } catch (err) {
+    // Whole-emission failure (e.g. epic write threw) — degrade gracefully.
+    log.flow('$dag-emission').warn('Task DAG emission failed; orchestration continues', {
+      orchestrationId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
+
+  return { epicTaskId, agentTaskIds };
 }
 
 function logOrchestration(
@@ -2666,124 +2987,37 @@ function logOrchestration(
 // ============================================================================
 
 /**
- * Parse file plan from architect's relay output (YAML content)
- */
-function parseFilePlan(yamlContent: string): FilePlanGroup[] | undefined {
-  const filePlan: FilePlanGroup[] = [];
-
-  // Look for filePlan section
-  const filePlanMatch = yamlContent.match(/filePlan:\s*\n([\s\S]*?)(?=\n[a-z_]+:|$)/);
-  if (!filePlanMatch) {
-    return undefined;
-  }
-
-  const filePlanContent = filePlanMatch[1];
-  const lines = filePlanContent.split('\n');
-
-  let currentGroup: FilePlanGroup | null = null;
-  let inFiles = false;
-  let currentFile: Partial<FileAssignment> = {};
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-
-    // Skip comments and empty lines
-    if (!trimmed || trimmed.startsWith('#')) continue;
-
-    // New group starts with "- group:"
-    if (trimmed.startsWith('- group:')) {
-      if (currentGroup) {
-        // Save last file from previous group
-        if (currentFile.path) {
-          currentGroup.files.push({
-            path: currentFile.path,
-            description: currentFile.description || '',
-          });
-          currentFile = {};
-        }
-        filePlan.push(currentGroup);
-      }
-      currentGroup = {
-        group: trimmed.split(':')[1].trim(),
-        subPhase: 0,
-        files: [],
-      };
-      inFiles = false;
-      continue;
-    }
-
-    if (!currentGroup) continue;
-
-    // Parse subPhase
-    if (trimmed.startsWith('subPhase:')) {
-      currentGroup.subPhase = parseInt(trimmed.split(':')[1].trim(), 10) || 0;
-      continue;
-    }
-
-    // Start of files array
-    if (trimmed === 'files:') {
-      inFiles = true;
-      continue;
-    }
-
-    if (inFiles) {
-      // New file entry starts with "- path:"
-      if (trimmed.startsWith('- path:')) {
-        // Save previous file if exists
-        if (currentFile.path) {
-          currentGroup.files.push({
-            path: currentFile.path,
-            description: currentFile.description || '',
-          });
-        }
-        currentFile = {
-          path: trimmed.split(':').slice(1).join(':').trim().replace(/^["']|["']$/g, ''),
-        };
-        continue;
-      }
-
-      // Description for current file
-      if (trimmed.startsWith('description:')) {
-        currentFile.description = trimmed.split(':').slice(1).join(':').trim().replace(/^["']|["']$/g, '');
-        continue;
-      }
-    }
-  }
-
-  // Don't forget the last file and group
-  if (currentFile.path && currentGroup) {
-    currentGroup.files.push({
-      path: currentFile.path,
-      description: currentFile.description || '',
-    });
-  }
-  if (currentGroup) {
-    filePlan.push(currentGroup);
-  }
-
-  return filePlan.length > 0 ? filePlan : undefined;
-}
-
-/**
- * Parse file plan from full response text (looks for yaml block)
- */
-function parseFilePlanFromResponse(response: string): FilePlanGroup[] | undefined {
-  const yamlMatch = response.match(/```yaml\s*\n# Agent Relay\n([\s\S]*?)```/);
-  if (!yamlMatch) {
-    return undefined;
-  }
-  return parseFilePlan(yamlMatch[1]);
-}
-
-/**
- * Plan builder stages from architect's file plan
+ * v7 Spine (sub-phase 2): adapt a typed `AgentRelay.filePlan` (`string[]` of
+ * planned file paths) into the `FilePlanGroup[]` shape `planBuilderStages`
+ * consumes. The legacy free-text regex parsers (`parseFilePlan` /
+ * `parseFilePlanFromResponse`) are deleted — `filePlan` is now a typed field on
+ * `AgentRelay`, so there is nothing to scrape out of prose.
  *
- * Takes the file plan and creates BuilderStage[] where:
+ * The typed contract is a flat path list (no sub-phase/group metadata), so the
+ * whole plan lands as a single sub-phase-0 group. Sub-phase grouping returns if
+ * `AgentRelay.filePlan` ever gains structure.
+ */
+function relayFilePlanToGroups(relay: AgentRelay | undefined): FilePlanGroup[] | undefined {
+  const paths = relay?.filePlan;
+  if (!paths || paths.length === 0) return undefined;
+  return [{
+    group: 'all',
+    subPhase: 0,
+    files: paths.map(p => ({ path: p, description: '' })),
+  }];
+}
+
+/**
+ * Plan builder stages from a parsed agent relay's typed `filePlan`.
+ *
+ * Consumes `AgentRelay.filePlan` directly (via {@link relayFilePlanToGroups}) —
+ * the dead regex parsers are gone. Builder stages are produced where:
  * - Sub-phases execute sequentially
  * - Builders within a sub-phase execute in parallel
  * - Each builder gets narrowed context (only assigned files + available files)
  */
-function planBuilderStages(filePlan: FilePlanGroup[] | undefined): ParallelBuilderPlan {
+export function planBuilderStages(relay: AgentRelay | undefined): ParallelBuilderPlan {
+  const filePlan = relayFilePlanToGroups(relay);
   // Fallback: single builder (current behavior)
   if (!filePlan || filePlan.length === 0) {
     return {

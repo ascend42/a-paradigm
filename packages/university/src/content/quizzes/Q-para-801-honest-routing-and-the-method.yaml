@@ -1,0 +1,54 @@
+id: Q-para-801-honest-routing-and-the-method
+title: 'PARA 801: Closing the Loop — Lesson 6: Honest Routing & the Dogfood Method'
+description: 'Quiz for lesson: Honest Routing & the Dogfood Method'
+author: paradigm
+created: '2026-06-13'
+updated: '2026-06-13'
+tags:
+  - course
+  - para-801
+symbols: []
+difficulty: intermediate
+passThreshold: 0.7
+category: paradigm-core
+questions:
+  - id: q1
+    question: 'What was the "bugfix poison-pill" the v7 classifier rebuild removed?'
+    choices:
+      A: A bug that crashed orchestration on the word "fix"
+      B: An audit of a *broken* system used to route to [security, builder] — the word "broken" silently summoned a fixer; new audit/design/research families now map to read-only analyst rosters that never route to a fixer
+      C: A poisoned npm dependency
+      D: A SQL injection in the classifier
+      E: A hardcoded agent that always won
+    correct: B
+    explanation: 'The keyword classifier conflated *analyzing* a broken system with *fixing* it: an audit request containing "broken" routed to [security, builder], silently summoning an implementer. v7 rebuilt the classifier as confidence-scored with intent-verb anchoring, and new audit/design/research families map to read-only analyst rosters that never route to a fixer. Asking for analysis no longer triggers implementation.'
+  - id: q2
+    question: 'Besides fixing classification, what did v7 change about which agents auto-orchestration can reach?'
+    choices:
+      A: It removed all specialist agents to simplify routing
+      B: The trigger-based agent-matcher becomes the primary roster source, so previously-unroutable specialists (product/North, forge/Loid, researcher/Scout, dx/Helix) can now be assembled automatically — not only by a human naming them
+      C: It made every agent require manual selection
+      D: It limited orchestration to exactly three agents
+      E: Nothing — routability was already complete
+    correct: B
+    explanation: 'An audit finding was that the best agents were not routable by auto-orchestration. v7 makes the trigger-based agent-matcher the primary roster/suggestion source, so specialists like product (North), forge (Loid), researcher (Scout), and dx (Helix) can be assembled automatically. A team you cannot reach is a team you do not have.'
+  - id: q3
+    question: 'The v7 "dogfood method" had two stages. What were they, and what discipline anchored the first?'
+    choices:
+      A: Brainstorm then vote; anchored by consensus
+      B: A two-slice self-audit anchored by file-and-line evidence (not vibes), followed by an adversarial review that tried to break the design against the real code before it was built
+      C: Write code then test; anchored by coverage percentage
+      D: Survey users then ship; anchored by NPS
+      E: Design then document; anchored by word count
+    correct: B
+    explanation: 'Stage 1 was a two-slice self-audit (task system, then the orchestration engine) disciplined by file-and-line evidence — "the loop is broken" is a vibe; "task_done feeds nothing, here is the dead joint" is a finding. Stage 2 was an adversarial review whose job was to *break* the design against the real code before building it — treating even the team''s own spec as a hypothesis, not a fact.'
+  - id: q4
+    question: 'The adversarial review caught three keystone claims as false or circular. Which trio is correct?'
+    choices:
+      A: Missing tests, slow loader, and a typo in portal.yaml
+      B: The belief-delta gate ran on hardcoded confidence numbers; "both worlds flow through completeTask" was false (the CLI orchestrator emits no tasks); and the JPS metric was circular
+      C: The DAG used SQLite, the reaper never fired, and Cid hard-blocked sessions
+      D: The classifier was too slow, agents were unroutable, and notebooks were empty
+      E: There were no false claims; all three were confirmed correct
+    correct: B
+    explanation: 'The adversarial pass caught three keystone wiring claims false-or-circular against the real code: (1) the belief-delta gate ran on hardcoded branch-literal confidence numbers; (2) "both worlds flow through completeTask" was false — the CLI orchestrator emits no tasks, so scope was honestly narrowed to the MCP path; (3) JPS was circular — clean work and a dead chain both read zero. Each flipped a "ship it" into a "revise first." The generalizable lesson: a claim, even your own, is a hypothesis until something has tried to break it.'

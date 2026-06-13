@@ -1,0 +1,54 @@
+id: Q-para-801-cid-becomes-real
+title: 'PARA 801: Closing the Loop — Lesson 5: Cid the Captain Becomes Real'
+description: 'Quiz for lesson: Cid the Captain Becomes Real'
+author: paradigm
+created: '2026-06-13'
+updated: '2026-06-13'
+tags:
+  - course
+  - para-801
+symbols: []
+difficulty: intermediate
+passThreshold: 0.7
+category: paradigm-core
+questions:
+  - id: q1
+    question: What durable artifact does paradigm_captain_board give Cid, and what are its actions?
+    choices:
+      A: A read-only console log; no actions
+      B: The live run-DAG (epic tasks with stage children ordered by dependsOn, plus ripple-ranked unclaimed) with actions read | claim | advance — Cid's and only Cid's write path for claimant, live status, and runStatus
+      C: A portal.yaml editor; actions add-gate | remove-gate
+      D: 'A notebook of past learnings; action: promote'
+      E: A SQLite dashboard with no write path
+    correct: B
+    explanation: 'paradigm_captain_board gives Cid an owned read+write artifact. `read` assembles the live run-DAG — epics with stage children ordered by dependsOn, plus ripple-ranked unclaimed — exactly what the Conductor task-dashboard renders. `claim` and `advance` are Cid''s and only Cid''s write path for claimant, live status transitions, and run-record runStatus. The audit''s "the Captain owns nothing" finding is resolved by giving him a board to write.'
+  - id: q2
+    question: At session-open, what does Cid now do that constitutes a real per-session mutation (replacing the old anonymous task dump)?
+    choices:
+      A: Nothing — session-open is still a static dump
+      B: He runs the reaper, reads the board, ranks unclaimed by ripple-risk, and proposes claimants by *writing* claimant and advancing open→claimed; that write is the durable proof the Captain did something (human/peer claims override his proposals)
+      C: He deletes all open tasks
+      D: He emails the roster to the user
+      E: He rebuilds the SQLite index
+    correct: B
+    explanation: 'Session-open replaces the anonymous static task dump with a Cid-attributed board read: he runs the reaper, ranks unclaimed tasks by ripple-risk, surfaces the top few, and proposes claimants by writing `claimant` and advancing open→claimed. That write is the durable proof the Captain acted this session. Human or peer claims override an archetype proposal, and a failed board read falls back safely to the plain list.'
+  - id: q3
+    question: 'At session-close, the learning chain didn''t run. What does Cid do — and what does he deliberately NOT do?'
+    choices:
+      A: He hard-blocks the session with a guard block until the human fixes the loop
+      B: He self-heals by running postflight himself rather than blocking; if self-heal throws he proposes only an `advise` block — never `guard`, because a learning-loop gap must not deadlock a human (hard refuse is reserved for correctness gates like a missing .purpose)
+      C: He silently ignores it and writes .cid-briefed unconditionally as before
+      D: He benches Loid
+      E: He deletes the settlement records
+    correct: B
+    explanation: 'An early design had Cid refuse to finish the session if postflight hadn''t run — the adversarial review flagged this as a user-facing deadlock (blocking a human over a *learning* step inverts priorities). The fix: Cid reads the chainLive probe, self-heals by running postflight himself, and if self-heal itself throws he proposes only an `advise` block (severity advise, never guard). Hard refuse stays reserved for correctness gates, never learning-loop liveness.'
+  - id: q4
+    question: The Cid↔Loid boundary is summarized in terms of tense. Which mapping is correct?
+    choices:
+      A: Cid writes settledAt and notebooks; Loid writes live status and claimant
+      B: Cid writes the present tense (live status, claimant, DAG edges at emission, runStatus); Loid writes the past tense (settledAt and the learning stores); they never co-write a field
+      C: Both write status; neither writes settledAt
+      D: Cid and Loid both write settledAt for redundancy
+      E: Loid writes everything; Cid is read-only
+    correct: B
+    explanation: 'Tense is the mnemonic: Cid writes the present tense — live `status` transitions (up to but not including the work-completer''s done), `claimant`, DAG edges at emission, and run-record runStatus (what is happening now). Loid writes the past tense — `settledAt` and the learning stores (what we learned from what already happened). They never co-write a field, and the dependency points one way: status → settlement → learning.'
