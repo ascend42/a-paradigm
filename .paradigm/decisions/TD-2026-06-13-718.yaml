@@ -1,0 +1,58 @@
+id: TD-2026-06-13-718
+timestamp: '2026-06-13T18:32:01.943Z'
+title: 'v7 thesis: "Close the loop" — make Paradigm''s checks true, not build a PM tool'
+decision: >-
+  v7 is reframed from "expand the task system into a PM product" to "close the orchestration/learning loop so Paradigm's
+  own checks and balances actually prove true." Three pillars: (1) THE SPINE — a persisted, symbol-bound, claimant-owned
+  task DAG that orchestration emits and Cid captains, where task_done feeds the learning loop; (2) THE FRONT DOOR —
+  honest classification + every rostered agent routable + fail-visible-not-silent, so any user gets the right team
+  without expert driving; (3) THE TEETH — enforcement verifies work HAPPENED (real run with verdicts) not that a tool
+  was pinged, plus a falsifiable learning-liveness metric. Stays free and in-framework; the cloud-SaaS @a-company/pm +
+  billing + two-way GitHub sync tier is parked behind a real-external-demand gate. Generic PM chrome (due dates,
+  sprints, SLAs, time tracking, notifications) is RESIST/bloat. The task slice and orchestration slice resolve to ONE
+  keystone: the persisted claimant-owned task DAG closes the learning loop, connects orchestration↔tasks, and gives Cid
+  his durable artifact simultaneously.
+rationale: >-
+  A 5-lens self-audit (Arky/architect, North/product, Loid/forge, Cid/captain, Jinx/advocate) proved with file:line
+  evidence that the system "records that it was asked to do the right thing but does not verify it did": classifier is a
+  keyword ladder with a bugfix poison-pill (orchestration.ts:2341-2374) that misroutes analysis→build (reproduced live
+  this session); the richest agents (North/Loid/Scout/Helix) aren't in the routable enum (orchestration.ts:843);
+  task_done feeds nothing and debrief→postflight is advisory prose, making "self-improving" unfalsifiable (broken state
+  byte-identical to healthy); enforcement is 1 real / 1 bypassable / 6 theater, with the .orchestrated marker written on
+  tool ENTRY before any work (orchestration.ts:901). Matt wants the complete fix and the free-but-priceless framing.
+  Making the value prop TRUE (not asserted) is a genuine major version; building a Linear competitor is the scope-creep
+  trap both North and Jinx flagged.
+participants:
+  - id: matt
+    role: human
+    stance: proposed
+  - id: architect
+    role: agent
+    stance: supported
+  - id: product
+    role: agent
+    stance: supported
+  - id: forge
+    role: agent
+    stance: supported
+  - id: cid
+    role: agent
+    stance: supported
+  - id: advocate
+    role: agent
+    stance: supported
+symbols_affected:
+  - '#orchestrator'
+  - '#task-loader'
+  - '#captain'
+  - '#nomination-engine'
+  - '#notebook-loader'
+  - '#cid'
+status: active
+tags:
+  - v7
+  - orchestration
+  - learning-loop
+  - task-system
+  - strategy
+  - audit

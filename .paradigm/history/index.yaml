@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-06-09T23:24:50.662Z'
+generated: '2026-06-10T18:35:40.232Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -1792,11 +1792,64 @@ by_symbol:
       agent: []
   '#paradigm-hooks':
     symbol: '#paradigm-hooks'
-    total_changes: 2
-    last_modified: '2026-03-17T23:44:15Z'
+    total_changes: 3
+    last_modified: '2026-06-10T18:35:38Z'
     stability_score: 1
     fragility: low
     recent:
+      - &ref_270
+        id: h0407
+        ts: '2026-06-10T18:35:38Z'
+        type: implement
+        symbols:
+          - '!compliance-violation'
+          - '!team-funnel'
+          - '#paradigm-hooks'
+          - '#paradigm-solo-cli'
+          - '#team-funnel'
+        author:
+          type: human
+          id: ascend
+        commit: 0848b4ca6ec4a1bb596f1398b50222894fdeba22
+        intent: feature
+        files:
+          - .paradigm/decisions/TD-2026-06-10-101.yaml
+          - .paradigm/flow-index.json
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/lore/entries/2026-06-10/L-2026-06-10-ascend-183449-001.lore
+          - .paradigm/lore/timeline.yaml
+          - .paradigm/navigator.yaml
+          - .paradigm/scan-index.json
+          - CHANGELOG.md
+          - packages/paradigm-mcp/package.json
+          - packages/paradigm-mcp/src/tools/orchestration.ts
+          - packages/paradigm/package.json
+          - packages/paradigm/scripts/generate-hooks.mjs
+          - packages/paradigm/src/commands/.purpose
+          - packages/paradigm/src/commands/doctor/index.ts
+          - packages/paradigm/src/commands/hooks/.purpose
+          - packages/paradigm/src/commands/hooks/generated-hooks.ts
+          - packages/paradigm/src/commands/hooks/index.ts
+          - packages/paradigm/src/commands/hooks/scripts/claude-code-prompt-gate.sh
+          - packages/paradigm/src/commands/hooks/scripts/claude-code-stop.sh
+          - packages/paradigm/src/commands/hooks/scripts/claude-code-team-gate.sh
+          - packages/paradigm/src/commands/hooks/scripts/cursor-stop.sh
+          - packages/paradigm/src/commands/hooks/scripts/paradigm-common.sh
+          - packages/paradigm/src/commands/solo.ts
+          - packages/paradigm/src/core/.purpose
+          - packages/paradigm/src/core/team-funnel.test.ts
+          - packages/paradigm/src/core/team-funnel.ts
+          - packages/paradigm/src/index.ts
+          - plugins/paradigm-cursor/scripts/paradigm-common.sh
+          - plugins/paradigm-cursor/scripts/paradigm-stop.sh
+          - plugins/paradigm/.claude-plugin/plugin.json
+          - plugins/paradigm/hooks/hooks.json
+          - plugins/paradigm/scripts/paradigm-common.sh
+          - plugins/paradigm/scripts/paradigm-prompt-gate.sh
+          - plugins/paradigm/scripts/paradigm-stop.sh
+          - plugins/paradigm/scripts/paradigm-team-gate.sh
+        description: 'feat(#team-funnel): Pillar 0 invocation-reliability advisory tier (v6.8.0)'
       - &ref_16
         id: h0198
         ts: '2026-03-17T23:44:15Z'
@@ -18904,6 +18957,54 @@ by_symbol:
     fragility: low
     recent:
       - *ref_269
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '!compliance-violation':
+    symbol: '!compliance-violation'
+    total_changes: 1
+    last_modified: '2026-06-10T18:35:38Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_270
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '!team-funnel':
+    symbol: '!team-funnel'
+    total_changes: 1
+    last_modified: '2026-06-10T18:35:38Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_270
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#paradigm-solo-cli':
+    symbol: '#paradigm-solo-cli'
+    total_changes: 1
+    last_modified: '2026-06-10T18:35:38Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_270
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#team-funnel':
+    symbol: '#team-funnel'
+    total_changes: 1
+    last_modified: '2026-06-10T18:35:38Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_270
     contributors:
       human:
         - ascend

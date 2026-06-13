@@ -324,6 +324,21 @@ description: |
     - src/utils/university-loader.ts:1-1442
     - src/types/university.ts:1-210
 
+#TaskLoader:
+  description: "CRUD for the .paradigm/tasks/ store. v7 Spine: claimant-owned task DAG (parentTaskId/dependsOn/stage), 4-state status machine (open|in-progress|done|shelved) enforced by assertTransition inside updateTask (stamps started_at on entering in-progress), 'active' meta-filter (open ∪ in-progress), normalizeTask read-side shim healing legacy session_link → external_ref, and a roots-aware index (counts all 4 statuses + DAG roots). All v7 fields optional → old YAML loads unchanged. settledAt is field-only (write-logic deferred to §2 learning wiring)."
+  type: loader
+  tags: [feature, tasks]
+  anchors:
+    - src/utils/task-loader.ts:1-420
+    - src/tools/tasks.ts:1-220
+
+#AgentRelay:
+  description: "Typed agent handoff contract (v7 Spine §1). RelayArtifact/RelayDecision/AgentRelay structures + parseAgentRelay() reading a fenced ```json/```yaml relay block. Response half of the orchestration request/response pair; filePlan is a typed field that replaces the legacy parseFilePlan* regex (regex removal deferred to sub-phase 2)."
+  type: utility
+  tags: [feature, tasks, orchestration]
+  anchors:
+    - src/utils/agent-relay.ts:1-160
+
 # ============================================
 # Flows ($)
 # ============================================

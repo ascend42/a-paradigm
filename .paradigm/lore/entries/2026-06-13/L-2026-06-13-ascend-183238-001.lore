@@ -1,0 +1,48 @@
+id: L-2026-06-13-ascend-183238-001
+type: insight
+timestamp: '2026-06-13T18:32:38.042Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Orchestration + task-system self-audit → v7 "close the loop" thesis
+summary: Two back-to-back 5-lens team audits (task system, then the orchestration engine itself) proved with file:line evidence that Paradigm "records that it was asked to do the right thing but does not verify it did." The findings from both slices converged on one keystone — a persisted, claimant-owned task DAG — and reframed v7 from "build a PM tool" to "close the orchestration/learning loop so the framework's own checks actually prove true."
+symbols_touched:
+  - '#orchestrator'
+  - '#task-loader'
+  - '#captain'
+  - '#cid'
+  - '#nomination-engine'
+  - '#notebook-loader'
+learnings:
+  - 'Classifier (orchestration.ts:2341-2374) is a substring keyword ladder with a ''bugfix poison-pill'': any task containing fix/error/broken/fails is vetoed from ''analysis'' and routed to bugfix→[security,builder]. Reproduced live: this analysis session was misclassified as bugfix.'
+  - The team's richest agents (North/product, Loid/forge, Scout/researcher, Helix/dx) are NOT in the paradigm_agent_prompt routable enum (orchestration.ts:843) — auto-orchestration structurally cannot assemble its best team.
+  - 'The learning loop is open at two joints in BOTH execution worlds (MCP persona-adoption vs CLI real-spawn): task_done feeds nothing, and debrief→postflight is advisory prose not a wired call. Postflight runs 2>/dev/null & and processes zero entries without manual nomination engagement — broken state is byte-identical to healthy state, making ''self-improving'' unfalsifiable.'
+  - 'Enforcement scorecard: 1 REAL (Stop hook .purpose/portal), 1 BYPASSABLE (orchestration-required, default warn), 6 THEATER. The .orchestrated marker that ''satisfies enforcement'' is written on tool ENTRY (orchestration.ts:901) before any agent runs — a single mode=quick ping checks the box. Enforcement verifies invocation, not work.'
+  - Cid is inert because he owns no durable artifact; brief/debrief are read-only passes over other agents' files. The orchestration DAG is computed, persisted as status:pending, and never updated or read again. Salvageable ONLY by giving him the live task board (claimant + DAG progress + ripple-ranked briefing), else bench honestly.
+  - 'Framework-bug: notebook concept keys stored as ''symbol:x'' but queried as bare slug ''x'' — exact-equality match fails, relevantEntries is structurally always 0. Filed T-2026-06-13-001.'
+  - 'The task-system audit and orchestration audit found the same hole from two sides: a persisted claimant-owned task DAG closes the learning loop, connects orchestration↔tasks, and gives Cid his artifact — one keystone, four problems.'
+tags:
+  - audit
+  - v7
+  - orchestration
+  - learning-loop
+  - task-system
+  - self-audit
+body: |-
+  Session 2026-06-13. Matt opened a "mega audit" spree aiming to surface a v7. Slice 1 = the task system; slice 2 = the orchestration engine (chosen because it's the meta-system running all other audits, and Matt flagged "I never see Cid do anything" + "do our own checks actually prove true").
+
+  Method: overrode the auto-orchestrator (which misclassified both analysis tasks as bugfix and proposed build rosters) and hand-assembled 5-lens analysis panels — Arky(architect), North(product), Loid(forge), Cid(captain self-audit), Jinx(advocate). All findings file:line-grounded and cross-confirmed.
+
+  v7 thesis (decision TD-2026-06-13-718): "Close the loop." Three pillars — THE SPINE (persisted claimant-owned task DAG, orchestration emits it, Cid captains it, task_done feeds learning), THE FRONT DOOR (honest classification + all agents routable + fail-visible), THE TEETH (enforcement verifies completion not invocation + falsifiable learning-liveness metric). Free and in-framework; cloud-SaaS/billing/two-way-GitHub-sync parked behind real-external-demand gate; generic PM chrome (due dates/sprints/SLAs/time-tracking) is bloat.
+
+  Matt's durable preference confirmed: wants the complete fix, not the 80/20. Chose "capture, then design the keystone." Next: full design pass on the keystone (task DAG schema with claimant union, orchestration emission, Cid's paradigm_captain_board, typed AgentRelay handoff, task_done→postflight wiring), then adversarial review, then build.
+linked_lore:
+  - L-2026-06-13-ascend-183201-517
+linked_tasks:
+  - T-2026-06-13-001
+confidence: 0.9
+git_context:
+  ref: 0848b4ca6ec4a1bb596f1398b50222894fdeba22
+  branch: main
+  dirty: true
