@@ -2946,7 +2946,7 @@ export async function emitTaskDag(
       priority: 'medium',
       tags: ['orchestration', 'epic'],
       claimant: { kind: 'archetype', ref: 'orchestrator' },
-      external_ref: { kind: 'orchestration', ref: orchestrationId },
+      external_ref: { provider: 'orchestration', ref: orchestrationId },
     });
     // createTask always lands at 'open'; promote the epic to in-progress
     // (open→in-progress is a legal transition; failure is non-fatal).
@@ -2977,7 +2977,7 @@ export async function emitTaskDag(
             parentTaskId: epicTaskId,
             stage: stage.stage,
             ...(dependsOn.length > 0 ? { dependsOn } : {}),
-            external_ref: { kind: 'orchestration', ref: orchestrationId },
+            external_ref: { provider: 'orchestration', ref: orchestrationId },
           });
           // status stays 'open' (v7.0 has no 'claimed') — not-yet-started.
           agentTaskIds.set(agentStep.name, childId);

@@ -94,7 +94,7 @@ export async function bridgeRunStart(
       priority: 'medium',
       tags: ['orchestration', 'epic'],
       claimant: { kind: 'archetype', ref: 'orchestrator' },
-      external_ref: { kind: 'orchestration', ref: orchestrationId },
+      external_ref: { provider: 'orchestration', ref: orchestrationId },
     });
     // createTask always lands at 'open'; promote the epic to in-progress
     // (open→in-progress is a legal transition; failure is non-fatal).
@@ -126,7 +126,7 @@ export async function bridgeRunStart(
           parentTaskId: epicTaskId,
           stage: s.stage,
           ...(dependsOn.length > 0 ? { dependsOn } : {}),
-          external_ref: { kind: 'orchestration', ref: orchestrationId },
+          external_ref: { provider: 'orchestration', ref: orchestrationId },
         });
         // status stays 'open' (not-yet-started); progressed/completed later.
         stageTaskIds.set(s.agent, childId);

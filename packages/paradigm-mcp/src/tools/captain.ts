@@ -930,7 +930,7 @@ function sessionPostflightRan(paradigmDir: string): boolean {
  * Cid's owned read+write artifact over the live orchestration task-DAG.
  *
  * RECONCILIATION with the shipped emission/settlement model: the **epic task**
- * (`external_ref.kind==='orchestration'`) IS the run-record — it replaced the
+ * (`external_ref.provider==='orchestration'`) IS the run-record — it replaced the
  * frozen `logOrchestration` blob. Settlement (Loid) stamps `settledAt` on the
  * epic when its children finish. So "un-freeze the run-record" = read/advance the
  * epic task, not the old log file. `read` derives `runStatus` from the epic's
@@ -1089,7 +1089,7 @@ export async function assembleCaptainBoard(
 
   // ── Runs: non-terminal epics (orchestration external_ref, no parentTaskId) ──
   const epics = all.filter(t =>
-    t.external_ref?.kind === 'orchestration' &&
+    t.external_ref?.provider === 'orchestration' &&
     !t.parentTaskId &&
     !t.settledAt, // non-terminal runs only
   );

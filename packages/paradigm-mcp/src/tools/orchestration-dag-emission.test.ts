@@ -81,7 +81,7 @@ describe('emitTaskDag — epic + stage children', () => {
     expect(epic!.status).toBe('in-progress');
     expect(epic!.parentTaskId).toBeUndefined();
     expect(epic!.claimant).toEqual({ kind: 'archetype', ref: 'orchestrator' });
-    expect(epic!.external_ref).toEqual({ kind: 'orchestration', ref: 'orch-abc' });
+    expect(epic!.external_ref).toEqual({ provider: 'orchestration', ref: 'orch-abc' });
   });
 
   it('children carry parentTaskId=epic, the right stage index, archetype claimant, and status open', async () => {
@@ -94,7 +94,7 @@ describe('emitTaskDag — epic + stage children', () => {
     expect(builder!.stage).toBe(1);
     expect(builder!.status).toBe('open'); // v7.0 has no 'claimed'
     expect(builder!.claimant).toEqual({ kind: 'archetype', ref: 'builder' });
-    expect(builder!.external_ref).toEqual({ kind: 'orchestration', ref: 'orch-abc' });
+    expect(builder!.external_ref).toEqual({ provider: 'orchestration', ref: 'orch-abc' });
   });
 
   it('resolves dependsOn (agent-name edges) to upstream emitted task-ids', async () => {

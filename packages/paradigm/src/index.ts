@@ -876,6 +876,29 @@ taskCmd
     await taskEditCommand(ref, options);
   });
 
+taskCmd
+  .command('link <ref> <url-or-id>')
+  .description('Record an external reference on a task (local-only, no network). Provider inferred from the URL or set via --provider.')
+  .option('--provider <id>', 'Provider id (default: inferred — github | url)')
+  .option('--project <path>', 'Project root (default cwd)')
+  .option('--json', 'Output machine-readable JSON')
+  .action(async (ref, urlOrId, options) => {
+    const { taskLinkCommand } = await import('./commands/task/index.js');
+    await taskLinkCommand(ref, urlOrId, options);
+  });
+
+taskCmd
+  .command('push <ref>')
+  .description('Push a task to its configured sync provider (one-way). Local-first: no/unavailable provider leaves the task untouched.')
+  .option('--provider <id>', 'Provider id (default: from .paradigm/config.yaml sync block)')
+  .option('--repo <owner/repo>', 'Target repo (overrides config; github only)')
+  .option('--project <path>', 'Project root (default cwd)')
+  .option('--json', 'Output machine-readable JSON')
+  .action(async (ref, options) => {
+    const { taskPushCommand } = await import('./commands/task/index.js');
+    await taskPushCommand(ref, options);
+  });
+
 // paradigm sweep
 program
   .command('sweep')

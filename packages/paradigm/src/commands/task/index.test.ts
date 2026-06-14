@@ -28,6 +28,8 @@ import {
   taskLsCommand,
   taskDoneCommand,
   taskStartCommand,
+  taskLinkCommand,
+  taskPushCommand,
 } from './index.js';
 
 let root: string;
@@ -41,6 +43,15 @@ afterEach(() => {
   fs.rmSync(root, { recursive: true, force: true });
   vi.restoreAllMocks();
 });
+
+/** Write a .paradigm/config.yaml with the given object (for the sync block). */
+function writeConfig(rootDir: string, cfg: Record<string, unknown>): void {
+  const dir = path.join(rootDir, '.paradigm');
+  fs.mkdirSync(dir, { recursive: true });
+  // Minimal YAML — flat enough that a hand-rolled dump is safe here.
+  const yamlMod = require('js-yaml') as typeof import('js-yaml');
+  fs.writeFileSync(path.join(dir, 'config.yaml'), yamlMod.dump({ version: '2.0.0', ...cfg }));
+}
 
 /** Capture stdout writes during fn. */
 async function capture(fn: () => Promise<void>): Promise<string> {
@@ -207,5 +218,109 @@ describe('illegal transitions surface as error + exit (no throw)', () => {
     await expect(taskStartCommand(id, { project: root })).rejects.toThrow('__exit__');
     expect(exitSpy).toHaveBeenCalledWith(1);
     expect(errSpy).toHaveBeenCalled();
+  });
+});
+
+// ── Phase 2a: task link (pure local, no network) ──────────
+
+describe('taskLinkCommand', () => {
+  it('writes external_ref locally with an inferred github provider', async () => {
+    const id = await createTask(root, { blurb: 'link me', claimant: HUMAN() });
+    await capture(() => taskLinkCommand(id, 'https://github.com/a/b/issues/3', { project: root }));
+
+    const task = await loadTask(root, id);
+    expect(task?.external_ref?.provider).toBe('github');
+    expect(task?.external_ref?.ref).toBe('https://github.com/a/b/issues/3');
+    expect(task?.external_ref?.url).toBe('https://github.com/a/b/issues/3');
+  });
+
+  it('honors an explicit --provider override', async () => {
+    const id = await createTask(root, { blurb: 'manual provider', claimant: HUMAN() });
+    await capture(() => taskLinkCommand(id, 'JIRA-123', { project: root, provider: 'jira' }));
+
+    const task = await loadTask(root, id);
+    expect(task?.external_ref?.provider).toBe('jira');
+    expect(task?.external_ref?.ref).toBe('JIRA-123');
+    // non-url ref → no url field
+    expect(task?.external_ref?.url).toBeUndefined();
+  });
+});
+
+// ── Phase 2a: task push (local-first, opt-in) ─────────────
+
+describe('taskPushCommand', () => {
+  it('no provider configured → clean no-op, task left untouched', async () => {
+    const id = await createTask(root, { blurb: 'unsynced', claimant: HUMAN() });
+    const out = await capture(() => taskPushCommand(id, { project: root }));
+
+    expect(out).toMatch(/No sync provider configured/i);
+    const task = await loadTask(root, id);
+    expect(task?.external_ref).toBeUndefined();
+  });
+
+  it('provider unavailable → no-op, task untouched', async () => {
+    const id = await createTask(root, { blurb: 'gh not authed', claimant: HUMAN() });
+    // Force a github resolution but stub isAvailable=false by writing config with
+    // no gh — relies on the registry's github provider returning false when gh
+    // is absent in the sandbox. We assert the task is left local-only.
+    writeConfig(root, { sync: { provider: 'github' } });
+
+    const out = await capture(async () => {
+      // Patch the resolved provider to report unavailable deterministically.
+      const reg = await import('../../../../paradigm-mcp/src/sync/registry.js');
+      await import('../../../../paradigm-mcp/src/sync/providers/github.js');
+      const real = reg.getProvider('github')!;
+      vi.spyOn(real, 'isAvailable').mockResolvedValue(false);
+      // Re-register so taskPush resolves our spied instance.
+      reg.registerProvider('github', () => real);
+      await taskPushCommand(id, { project: root });
+    });
+
+    expect(out).toMatch(/not available/i);
+    const task = await loadTask(root, id);
+    expect(task?.external_ref).toBeUndefined();
+  });
+
+  it('provider available → records the returned external_ref', async () => {
+    const id = await createTask(root, { blurb: 'sync me', claimant: { kind: 'archetype', ref: 'builder' } });
+    writeConfig(root, { sync: { provider: 'github' } });
+
+    const errSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    await capture(async () => {
+      const reg = await import('../../../../paradigm-mcp/src/sync/registry.js');
+      await import('../../../../paradigm-mcp/src/sync/providers/github.js');
+      const real = reg.getProvider('github')!;
+      vi.spyOn(real, 'isAvailable').mockResolvedValue(true);
+      vi.spyOn(real, 'push').mockResolvedValue({ ref: 'a/b#9', url: 'https://github.com/a/b/issues/9' });
+      reg.registerProvider('github', () => real);
+      await taskPushCommand(id, { project: root });
+    });
+    errSpy.mockRestore();
+
+    const task = await loadTask(root, id);
+    expect(task?.external_ref?.provider).toBe('github');
+    expect(task?.external_ref?.ref).toBe('a/b#9');
+    expect(task?.external_ref?.url).toBe('https://github.com/a/b/issues/9');
+    expect(task?.external_ref?.syncedAt).toBeTruthy();
+  });
+
+  it('provider throws on push → local task left intact (best-effort)', async () => {
+    const id = await createTask(root, { blurb: 'push explodes', claimant: HUMAN() });
+    writeConfig(root, { sync: { provider: 'github' } });
+
+    const errSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    await capture(async () => {
+      const reg = await import('../../../../paradigm-mcp/src/sync/registry.js');
+      await import('../../../../paradigm-mcp/src/sync/providers/github.js');
+      const real = reg.getProvider('github')!;
+      vi.spyOn(real, 'isAvailable').mockResolvedValue(true);
+      vi.spyOn(real, 'push').mockRejectedValue(new Error('gh blew up'));
+      reg.registerProvider('github', () => real);
+      await taskPushCommand(id, { project: root });
+    });
+    errSpy.mockRestore();
+
+    const task = await loadTask(root, id);
+    expect(task?.external_ref).toBeUndefined(); // untouched
   });
 });

@@ -1,8 +1,9 @@
 version: 2.0.0
 description: |
-  Human-facing `paradigm task` CLI (Phase 1 of the task-management expansion,
-  TD-2026-06-13-768). LOCAL-ONLY: a thin facilitation skin over the existing
-  task store (paradigm-mcp's task-loader). No GitHub / sync — that is Phase 2.
+  Human-facing `paradigm task` CLI (task-management expansion,
+  TD-2026-06-13-768). A thin facilitation skin over the existing task store
+  (paradigm-mcp's task-loader). LOCAL-FIRST: every command works with ZERO
+  provider; sync is a purely additive opt-in overlay (Phase 2a).
 
   The CLI calls the task-loader functions directly (relative-import precedent),
   NOT the MCP handleTasksTool dispatcher. The ONE field the CLI adds on top of
@@ -15,9 +16,17 @@ description: |
   learning loop), show, shelve, edit. Refs resolve via resolveRef: @last / full
   id / short numeric suffix / fuzzy blurb — ambiguity lists candidates and exits
   non-zero, never guesses.
+
+  Phase 2a (TD-2026-06-13-768) adds the OPT-IN sync overlay: `link` (pure local
+  write of an external_ref — no network) and `push` (resolve a SyncProvider from
+  the .paradigm/config.yaml `sync:` block or --provider, then push one-way and
+  record the returned anchor). LOCAL-FIRST: a missing/unavailable/failing
+  provider prints a hint and leaves the task UNTOUCHED. Provider impl lives in
+  paradigm-mcp/src/sync (#sync-provider, #github-provider); the CLI imports the
+  github module only for its self-registration side-effect.
 components:
   task-cli:
-    description: Human-facing task capture/triage CLI over the task-loader store (add/ls/start/done/show/shelve/edit + resolveRef)
+    description: Human-facing task capture/triage CLI over the task-loader store (add/ls/start/done/show/shelve/edit/link/push + resolveRef)
     type: handler
     file: index.ts
     tags: [feature, task-management, cli]

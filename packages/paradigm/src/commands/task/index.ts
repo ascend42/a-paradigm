@@ -502,7 +502,10 @@ export async function taskShowCommand(ref: string, options: CommonOptions): Prom
   if (task.dependsOn && task.dependsOn.length > 0) kv('depends', task.dependsOn.join(', '));
   if (task.blocked_on) kv('blocked_on', task.blocked_on);
   if (task.related_lore && task.related_lore.length > 0) kv('lore', task.related_lore.join(', '));
-  if (task.external_ref) kv('external', `${task.external_ref.kind}:${task.external_ref.ref}`);
+  if (task.external_ref) {
+    const ext = task.external_ref;
+    kv('external', `${ext.provider}:${ext.ref}${ext.url ? ` (${ext.url})` : ''}`);
+  }
 }
 
 // ── task edit ─────────────────────────────────────────────
@@ -564,4 +567,150 @@ export async function taskEditCommand(ref: string, options: EditOptions): Promis
   if (options.json) { json({ id: task.id, changed }); return; }
   success(`${shortId(task.id)}  edited`);
   for (const c of changed) dim(`  ${c}`);
+}
+
+// ── sync: link / push (Phase 2a — TD-2026-06-13-768) ──────────
+//
+// LOCAL-FIRST overlay. `link` is a pure local write (no network). `push`
+// resolves a provider from config/--provider; with no/unavailable provider it
+// prints a hint and leaves the task UNTOUCHED. A provider failure is best-effort
+// and never corrupts the local task.
+
+interface LinkOptions extends CommonOptions {
+  provider?: string;
+}
+
+/**
+ * Infer the provider id from a url/ref when `--provider` is not given. Only
+ * github is recognized at Phase 2a; anything else falls back to a generic 'url'
+ * anchor (a valid inert external_ref with no registered provider).
+ */
+function inferProvider(urlOrRef: string): string {
+  const lower = urlOrRef.toLowerCase();
+  if (lower.includes('github.com') || /^[^/\s]+\/[^/#\s]+#\d+$/.test(urlOrRef)) return 'github';
+  if (lower.startsWith('http://') || lower.startsWith('https://')) return 'url';
+  return 'url';
+}
+
+/** `task link <ref> <url-or-id>` — record an external_ref locally. No network. */
+export async function taskLinkCommand(ref: string, urlOrId: string, options: LinkOptions): Promise<void> {
+  const rootDir = resolveRoot(options);
+  const task = await resolveOrExit(ref, rootDir);
+
+  const provider = options.provider || inferProvider(urlOrId);
+  const isUrl = /^https?:\/\//i.test(urlOrId);
+  const external_ref = {
+    provider,
+    ref: urlOrId,
+    ...(isUrl ? { url: urlOrId } : {}),
+  };
+
+  const ok = await updateTask(rootDir, task.id, { external_ref });
+  if (!ok) {
+    error(`Link rejected for ${shortId(task.id)} (task not found).`);
+    process.exit(1);
+  }
+
+  if (options.json) { json({ id: task.id, external_ref }); return; }
+  success(`${shortId(task.id)}  linked`);
+  dim(`${provider}: ${urlOrId}`);
+}
+
+interface PushOptions extends CommonOptions {
+  provider?: string;
+  repo?: string;
+}
+
+/**
+ * Read the optional `sync:` block from .paradigm/config.yaml. Absent ⇒
+ * local-only. Shape: `sync: { provider: github, github: { repo: owner/repo } }`.
+ * A missing/malformed config is swallowed (returns {}) — config is opt-in.
+ */
+function readSyncConfig(rootDir: string): { provider?: string; repo?: string } {
+  try {
+    const fs = require('fs') as typeof import('fs');
+    const yaml = require('js-yaml') as typeof import('js-yaml');
+    const cfgPath = path.join(rootDir, '.paradigm', 'config.yaml');
+    if (!fs.existsSync(cfgPath)) return {};
+    const cfg = yaml.load(fs.readFileSync(cfgPath, 'utf8')) as { sync?: { provider?: string; github?: { repo?: string } } } | undefined;
+    const sync = cfg?.sync;
+    if (!sync) return {};
+    return { provider: sync.provider, repo: sync.github?.repo };
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * `task push <ref> [--repo owner/repo]` — create an external item for a task and
+ * record the returned anchor. Local-first: no/unavailable provider ⇒ a clear
+ * hint and the task is left untouched. A provider throw never corrupts local.
+ */
+export async function taskPushCommand(ref: string, options: PushOptions): Promise<void> {
+  const rootDir = resolveRoot(options);
+  const task = await resolveOrExit(ref, rootDir);
+
+  const cfg = readSyncConfig(rootDir);
+  const providerId = options.provider || cfg.provider;
+
+  if (!providerId) {
+    warn('No sync provider configured — task left local-only.');
+    dim('Add a `sync:` block to .paradigm/config.yaml (e.g. provider: github, github: { repo: owner/repo }) or pass --provider.');
+    return;
+  }
+
+  // Resolve via the registry. Import the github provider module for its
+  // self-registration side-effect (the CLI may opt into a concrete provider;
+  // the core task-loader never does).
+  const { getProvider } = await import('../../../../paradigm-mcp/src/sync/registry.js');
+  if (providerId === 'github') {
+    await import('../../../../paradigm-mcp/src/sync/providers/github.js');
+  }
+  const provider = getProvider(providerId);
+
+  if (!provider) {
+    warn(`No provider registered for "${providerId}" — task left local-only.`);
+    dim('Known provider at this phase: github.');
+    return;
+  }
+
+  // Honor --repo / config repo by re-instantiating github with the repo set.
+  let effectiveProvider = provider;
+  const repo = options.repo || cfg.repo;
+  if (providerId === 'github' && repo) {
+    const { GithubProvider } = await import('../../../../paradigm-mcp/src/sync/providers/github.js');
+    effectiveProvider = new GithubProvider({ repo });
+  }
+
+  let available = false;
+  try {
+    available = await effectiveProvider.isAvailable();
+  } catch {
+    available = false;
+  }
+  if (!available) {
+    warn(`${providerId} is not available — task left local-only.`);
+    if (providerId === 'github') dim('Authenticate with `gh auth login`, then retry.');
+    return;
+  }
+
+  try {
+    const result = await effectiveProvider.push(task);
+    const external_ref = {
+      provider: providerId,
+      ref: result.ref,
+      ...(result.url ? { url: result.url } : {}),
+      syncedAt: new Date().toISOString(),
+    };
+    await updateTask(rootDir, task.id, { external_ref });
+
+    if (options.json) { json({ id: task.id, external_ref }); return; }
+    success(`${shortId(task.id)}  pushed → ${result.ref}`);
+    if (result.url) dim(result.url);
+  } catch (err) {
+    // Best-effort: a provider failure NEVER corrupts the local task.
+    error(`Push to ${providerId} failed — task left untouched locally.`);
+    dim(err instanceof Error ? err.message : String(err));
+    process.exitCode = 1;
+  }
 }
