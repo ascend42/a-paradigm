@@ -24,6 +24,7 @@ import { createGitRouter } from './routes/git.js';
 import { createAmbientRouter } from './routes/ambient.js';
 import { createTeamRouter } from './routes/team.js';
 import { createTasksRouter } from './routes/tasks.js';
+import { createTasksWriteRouter } from './routes/tasks-write.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -232,6 +233,10 @@ export async function startPlatformServer(options: PlatformServerOptions): Promi
 
   // Mount Tasks routes (always available — the v7 claimant DAG, read-only over HTTP)
   app.use('/api/tasks', createTasksRouter(options.projectDir));
+
+  // Mount Tasks WRITE routes (enforced action verbs — claim/start/done/block;
+  // each proxies the same updateTask state-machine path the CLI/MCP use).
+  app.use('/api/tasks', createTasksWriteRouter(options.projectDir, wsContext));
 
   // Mount Sentinel routes if section is enabled
   if (sections.has('sentinel')) {

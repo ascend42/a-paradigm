@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo } from 'react';
 import { useTasksStore, type Task, type TaskClaimant } from '../store/tasksStore';
 import { TaskCard } from './TaskCard';
+import { TaskActions } from './TaskActions';
 import { AGENT_COLORS, claimantColor, nodeToTask, unclaimedToTask } from '../utils/board';
 
 // InboxView — the AGENT FACE.
@@ -219,6 +220,7 @@ export function InboxView() {
             <div className="inbox__hero">
               <div className="inbox__hero-label">Next up</div>
               <TaskCard task={hero} elevated />
+              <TaskActions task={hero} />
               <DependsChain hero={hero} pool={pool} />
             </div>
           )}

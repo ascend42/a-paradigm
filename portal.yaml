@@ -413,6 +413,25 @@ routes:
     - ^local-only
     - ^read-only
 
+  # Tasks WRITE verbs — each PROXIES the enforced updateTask state-machine path
+  # (assertTransition + settlement fire identically to the CLI/MCP). Not the
+  # read router; write-capable, local-only.
+  POST /api/tasks/:id/claim:
+    - ^local-only
+    - ^write-capable
+  POST /api/tasks/:id/start:
+    - ^local-only
+    - ^write-capable
+  POST /api/tasks/:id/done:
+    - ^local-only
+    - ^write-capable
+  POST /api/tasks/:id/block:
+    - ^local-only
+    - ^write-capable
+  POST /api/tasks/:id/unblock:
+    - ^local-only
+    - ^write-capable
+
   # ── WebSocket ───────────────────────────────────────────────────────
   WS /ws:
     - ^local-only

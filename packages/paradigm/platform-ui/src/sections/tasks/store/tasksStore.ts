@@ -165,6 +165,11 @@ interface TasksState {
   // Detail panel state (Round D)
   selectedTaskId: string | null;
 
+  // Action state (Round E — enforced write verbs).
+  // `actionError` holds the last write-verb failure message (e.g. a 409
+  // "cannot displace" from claim). Transient: cleared on the next action.
+  actionError: string | null;
+
   // Lane mode (persisted)
   laneMode: LaneMode;
 
@@ -190,6 +195,16 @@ interface TasksState {
   // Detail actions (Round D)
   openDetail: (id: string) => void;
   closeDetail: () => void;
+
+  // Write verbs (Round E — the ONLY mutations in this UI). Each POSTs the
+  // enforced task-action endpoint, then refreshes board/list (+inbox if a
+  // claimant is focused) so every view reflects the new state machine state.
+  claimTask: (id: string, ref: string, kind?: string, force?: boolean) => Promise<void>;
+  startTask: (id: string) => Promise<void>;
+  doneTask: (id: string) => Promise<void>;
+  blockTask: (id: string, reason: string) => Promise<void>;
+  unblockTask: (id: string) => Promise<void>;
+  clearActionError: () => void;
 }
 
 let tasksController: AbortController | null = null;
@@ -217,6 +232,7 @@ export const useTasksStore = create<TasksState>((set, get) => ({
   inboxError: null,
 
   selectedTaskId: null,
+  actionError: null,
 
   laneMode: loadLaneMode(),
 
@@ -367,4 +383,69 @@ export const useTasksStore = create<TasksState>((set, get) => ({
   // ── Detail panel (Round D) ───────────────────────────
   openDetail: (id) => set({ selectedTaskId: id }),
   closeDetail: () => set({ selectedTaskId: null }),
+
+  // ── Write verbs (Round E) ────────────────────────────
+  clearActionError: () => set({ actionError: null }),
+
+  claimTask: async (id, ref, kind, force) => {
+    await runAction(set, get, `/api/tasks/${id}/claim`, {
+      ref,
+      ...(kind ? { kind } : {}),
+      ...(force ? { force } : {}),
+    });
+  },
+  startTask: async (id) => {
+    await runAction(set, get, `/api/tasks/${id}/start`);
+  },
+  doneTask: async (id) => {
+    await runAction(set, get, `/api/tasks/${id}/done`);
+  },
+  blockTask: async (id, reason) => {
+    await runAction(set, get, `/api/tasks/${id}/block`, { reason });
+  },
+  unblockTask: async (id) => {
+    await runAction(set, get, `/api/tasks/${id}/unblock`);
+  },
 }));
+
+// runAction — shared POST→refresh helper for the five enforced write verbs.
+// Clears any prior actionError up front; on a non-2xx reads the JSON error
+// (falling back to a status string) into actionError; on success re-runs the
+// affected fetchers so board/list/inbox all reflect the new state.
+async function runAction(
+  set: (partial: Partial<TasksState>) => void,
+  get: () => TasksState,
+  url: string,
+  body?: Record<string, unknown>
+): Promise<void> {
+  set({ actionError: null });
+  try {
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: body ? { 'Content-Type': 'application/json' } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    if (!res.ok) {
+      let msg = `HTTP ${res.status}`;
+      try {
+        const data = await res.json();
+        if (data && typeof data.error === 'string') {
+          msg = data.claimant?.ref
+            ? `${data.error} (held by ${data.claimant.ref})`
+            : data.error;
+        }
+      } catch {
+        /* non-JSON body — keep the status string */
+      }
+      set({ actionError: msg });
+      return;
+    }
+    // Success — refresh every view that could reflect this task.
+    const { fetchBoard, fetchTasks, fetchInbox, inboxClaimant } = get();
+    const refreshes: Promise<void>[] = [fetchBoard(), fetchTasks()];
+    if (inboxClaimant) refreshes.push(fetchInbox(inboxClaimant.kind, inboxClaimant.ref));
+    await Promise.all(refreshes);
+  } catch (err) {
+    set({ actionError: err instanceof Error ? err.message : 'action failed' });
+  }
+}

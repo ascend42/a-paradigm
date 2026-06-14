@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useTasksStore, type Task } from '../store/tasksStore';
 import { nodeToTask, unclaimedToTask, deriveSymbols } from '../utils/board';
 import { tokenBandToPoints } from '../utils/storyPoints';
+import { TaskActions } from './TaskActions';
 
 // TaskDetailPanel — a right-slide panel cloning lore's .detail-overlay /
 // .detail-panel. Opened by clicking any TaskCard (store.openDetail(id)). Shows
@@ -82,6 +83,15 @@ export function TaskDetailPanel() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedId]);
 
+  // After a write verb the store refreshes board/list/inbox pools. Re-seed the
+  // panel's local task from the refreshed pool so the status-aware action row
+  // updates (e.g. open→in-progress hides [Start]) without a manual refetch.
+  useEffect(() => {
+    if (!selectedId) return;
+    const fresh = pool.get(selectedId);
+    if (fresh) setTask((prev) => ({ ...(prev ?? {}), ...(fresh as TaskExtra) }));
+  }, [pool, selectedId]);
+
   if (!selectedId || !task) return null;
 
   const deps = task.dependsOn ?? [];
@@ -110,6 +120,10 @@ export function TaskDetailPanel() {
             </div>
           </div>
           <button className="detail-close" onClick={closeDetail}>{'✕'}</button>
+        </div>
+
+        <div className="tdp__actions">
+          <TaskActions task={task} />
         </div>
 
         <div className="detail-body">

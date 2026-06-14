@@ -1,0 +1,49 @@
+id: L-2026-06-14-ascend-161024-001
+type: milestone
+timestamp: '2026-06-14T16:10:24.276Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Renaissance — enforced agent write verbs (the agent face goes first-class)
+summary: 'Built the team review''s top agent-experience item (Matt approved ''the safe way''): the Inbox + detail panel can now claim/start/done/block/unblock tasks. A new write router exposes POST /api/tasks/:id/{verb} where each verb PROXIES the same updateTask state-machine path the CLI/MCP use — so assertTransition + settlement fire identically; no enforcement bypass, no raw DAG mutation. The claim verb carries the captain''s human/peer-not-displaceable guard (→409), illegal transitions 409, and a successful settle broadcasts a live agent:annotate badge on the board. Status-aware verbs (no verb that would 409 is shown); ''Claim to me'' resolves via /whoami. Declared ^write-capable in portal.yaml (vs the read router''s ^read-only). Smoke-tested live: enforcement + claim-guard both hold. Build green, CLI 441 / MCP 445.'
+symbols_touched:
+  - '#tasks-section'
+  - '#task-loader'
+  - '#platform-server'
+files_created:
+  - packages/paradigm/src/platform-server/routes/tasks-write.ts
+  - packages/paradigm/platform-ui/src/sections/tasks/components/TaskActions.tsx
+files_modified:
+  - packages/paradigm/src/platform-server/index.ts
+  - packages/paradigm/platform-ui/src/sections/tasks/store/tasksStore.ts
+  - packages/paradigm/platform-ui/src/sections/tasks/components/InboxView.tsx
+  - packages/paradigm/platform-ui/src/sections/tasks/components/TaskDetailPanel.tsx
+  - packages/paradigm/platform-ui/src/sections/tasks/styles/tasks.css
+  - portal.yaml
+  - CHANGELOG.md
+learnings:
+  - 'The ''safe way'' to add web writes without bypassing enforcement: a thin write router whose every verb calls the SAME enforced writer (updateTask) the CLI/MCP use, rather than touching storage directly. assertTransition + the settlement chain fire for free because the chokepoint is preserved. A browser POST becomes ''just another caller'', not a new write path.'
+  - Keeping the write router SEPARATE from the read router (tasks.ts stays ^read-only; tasks-write.ts is ^write-capable) keeps the portal contract honest per-route and makes the read/write boundary legible in one file each.
+  - The settlement WS annotation belongs at the WRITE-ENDPOINT (platform process has wsContext.broadcast), not in task-settlement.ts (MCP process, no platform WS) — emit live board feedback where the HTTP write lands, not deep in the learning chain.
+verification:
+  status: pass
+  details:
+    build: green
+    cli_tests: 441 passed
+    mcp_tests: 445 passed
+    portal: Valid (105 routes; ^write-capable gates)
+    smoke: 'live: done→start 409, archetype-claim-on-human 409, open→start 200 w/ started_at; T-016 reset after'
+tags:
+  - suite-renaissance
+  - arc:renaissance
+  - tasks-section
+  - agent-experience
+  - enforcement
+linked_lore:
+  - L-2026-06-14-ascend-154404-001
+confidence: 0.9
+git_context:
+  ref: 1776ca3de181066e08e9e37d815889803fb932e7
+  branch: renaissance/tasks-suite
+  dirty: true

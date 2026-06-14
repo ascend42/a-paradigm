@@ -1283,3 +1283,160 @@
   color: var(--p-text-muted);
   font-style: italic;
 }
+
+/* ── Task action row (Round E — enforced write verbs) ──────────────────── */
+/* The only mutating controls in the Tasks UI. Rendered by TaskActions inside
+   the Inbox hero and the detail panel header. Status-aware: see TaskActions. */
+
+.task-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.task-actions__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.task-action {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--p-border);
+  background: var(--p-bg-card);
+  color: var(--p-text-secondary);
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.task-action:hover:not(:disabled) {
+  background: var(--p-bg-hover);
+  border-color: var(--p-border-active);
+  color: var(--p-text-primary);
+}
+
+.task-action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.task-action--start {
+  border-color: color-mix(in srgb, var(--p-accent-blue) 40%, var(--p-border));
+  color: var(--p-accent-blue);
+}
+
+.task-action--start:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--p-accent-blue) 14%, transparent);
+  border-color: var(--p-accent-blue);
+  color: var(--p-accent-blue);
+}
+
+.task-action--claim {
+  border-color: color-mix(in srgb, var(--p-accent-purple) 40%, var(--p-border));
+  color: var(--p-accent-purple);
+}
+
+.task-action--claim:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--p-accent-purple) 14%, transparent);
+  border-color: var(--p-accent-purple);
+  color: var(--p-accent-purple);
+}
+
+.task-action--done {
+  border-color: color-mix(in srgb, var(--p-accent-green) 40%, var(--p-border));
+  color: var(--p-accent-green);
+}
+
+.task-action--done:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--p-accent-green) 14%, transparent);
+  border-color: var(--p-accent-green);
+  color: var(--p-accent-green);
+}
+
+.task-action--block {
+  border-color: color-mix(in srgb, var(--p-accent-orange) 40%, var(--p-border));
+  color: var(--p-accent-orange);
+}
+
+.task-action--block:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--p-accent-orange) 14%, transparent);
+  border-color: var(--p-accent-orange);
+  color: var(--p-accent-orange);
+}
+
+.task-action--unblock {
+  border-color: color-mix(in srgb, var(--p-accent-green) 40%, var(--p-border));
+  color: var(--p-accent-green);
+}
+
+.task-action--unblock:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--p-accent-green) 14%, transparent);
+  border-color: var(--p-accent-green);
+  color: var(--p-accent-green);
+}
+
+.task-actions__blocked {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--p-accent-red) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--p-accent-red) 30%, var(--p-border));
+}
+
+.task-actions__blocked-glyph {
+  font-size: 13px;
+}
+
+.task-actions__blocked-reason {
+  flex: 1;
+  font-size: 12px;
+  color: var(--p-accent-red);
+  word-break: break-word;
+}
+
+.task-actions__error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--p-accent-red) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--p-accent-red) 30%, var(--p-border));
+}
+
+.task-actions__error-msg {
+  flex: 1;
+  font-size: 12px;
+  color: var(--p-accent-red);
+  word-break: break-word;
+}
+
+.task-actions__error-dismiss {
+  background: transparent;
+  border: none;
+  color: var(--p-accent-red);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  padding: 2px 4px;
+}
+
+.task-actions__error-dismiss:hover {
+  color: var(--p-text-primary);
+}
+
+/* Detail-panel placement: sit the action row between header and body. */
+.tdp__actions {
+  padding: 0 var(--p-space-lg, 16px) 4px;
+}
+
+.tdp__actions .task-actions {
+  margin-top: 0;
+}
