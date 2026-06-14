@@ -5,6 +5,20 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] — Paradigm Suite renaissance
+
+The surfaces catch up to the substrate. A six-lens team audit (decision TD-2026-06-14-853) found the renaissance is a *substrate-to-surface gap*, not fragmentation: the unified Suite shell already exists (`paradigm serve` → one React/Vite SPA, 11 sections), but it was frozen for two months while the v7 task DAG / learned calibration / learning loop shipped — and zero surfaces render them. Direction: **web-primary** (Conductor benched, vscode frozen), Tasks as the spearhead with **story-points = learned calibration estimates** as the headline. Frame: subtractive-then-additive.
+
+### Fixed
+
+- **The build hole** (`#serve`): `build:platform-ui` was orphaned from the main `build` chain, so `paradigm serve` shipped a 2-month-stale committed SPA (frozen 2026-04-22). Wired `build:platform-ui` into the `build` script — a clean build now regenerates the platform-ui dist. Without this, any Suite work would have shipped invisibly.
+- **`paradigm serve` crashed on boot** (`#serve`): the canvas routes registered the Express-4 bare-wildcard pattern `/files/*`, invalid under Express 5 / path-to-regexp v8 — the server threw `PathError` before listening. Resolved by removing the canvas section (below); `serve` now boots clean.
+- **Port collision is no longer fatal** (`#serve`): when `--port` is not pinned, `serve` auto-increments through up to 10 sequential ports instead of erroring on `EADDRINUSE`. An explicit `--port` still fails fast.
+
+### Removed
+
+- **Canvas section deleted** (`#canvas`): the Craft.js design-editor section (~26 UI files + backend route + ~234-line CRUD API) was confirmed dead chrome — stub CSS serializer ("coming in Sprint 1"), zero `.canvas` files anywhere, empty symbols map, no substrate linkage, frozen since March. It was also the source of the boot crash above. Removed the section, route, nav/command/shortcut entries, and `.purpose` coverage. The graph section's own (unrelated) canvas is untouched.
+
 ## [7.2.0] — 2026-06-13
 
 **Enforcement made true + task management for humans.** Two arcs: v7's "Teeth" are completed (enforcement now verifies that work *happened*, not just that a tool was pinged), and the task system gets a human-facing CLI plus provider-agnostic external sync (GitHub out of the gate, fully local-first).

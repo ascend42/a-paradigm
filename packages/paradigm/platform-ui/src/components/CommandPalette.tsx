@@ -12,7 +12,6 @@ const SECTION_ICONS: Record<string, string> = {
   overview: '\u25C9',
   lore: '\u25C6',
   graph: '\u25CE',
-  canvas: '\u25A6',
   git: '\u238B',
   sentinel: '\u25C8',
   university: '\u25A3',
@@ -26,12 +25,11 @@ const SECTION_SHORTCUT: Record<string, string> = {
   overview: '1',
   lore: '2',
   graph: '3',
-  canvas: '4',
-  git: '5',
-  sentinel: '6',
-  university: '7',
-  symphony: '8',
-  docs: '9',
+  git: '4',
+  sentinel: '5',
+  university: '6',
+  symphony: '7',
+  docs: '8',
 };
 
 export function CommandPalette() {

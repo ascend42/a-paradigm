@@ -22,8 +22,3 @@ components:
     type: router
     tags: [feature, ambient]
     signals: ["!ambient:event", "!ambient:nomination"]
-  CanvasRouter:
-    description: /api/canvas/* — 4 endpoints for *.canvas file discovery (glob), read (YAML→JSON), write (JSON→YAML), and delete
-    type: router
-    tags: [feature, canvas]
-    signals: [!canvas-file-saved, !canvas-file-created]

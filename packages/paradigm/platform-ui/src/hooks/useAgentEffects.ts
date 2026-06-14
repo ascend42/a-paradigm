@@ -64,7 +64,7 @@ export function useAgentEffects() {
       const detail = (e as CustomEvent).detail;
       if (!detail) return;
 
-      const validSections: SectionId[] = ['overview', 'lore', 'graph', 'canvas', 'git', 'sentinel', 'university', 'symphony', 'docs', 'ambient', 'team'];
+      const validSections: SectionId[] = ['overview', 'lore', 'graph', 'git', 'sentinel', 'university', 'symphony', 'docs', 'ambient', 'team'];
       if (detail.section && validSections.includes(detail.section)) {
         setActiveSection(detail.section);
       }

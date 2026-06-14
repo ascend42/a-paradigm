@@ -1,0 +1,63 @@
+id: TD-2026-06-14-853
+timestamp: '2026-06-14T04:47:02.524Z'
+title: 'Paradigm Suite renaissance: web-primary, Tasks spearhead, subtractive-then-additive'
+decision: >-
+  The renaissance is a substrate-to-surface gap, not a fragmentation problem. The unified web shell already exists
+  (platform-ui served by `paradigm serve`, port 3850, 11 lazy sections). Decisions: (1) WEB PRIMARY — platform-ui is THE
+  Suite; Conductor benched (OS-integration orthogonal, no WKWebView bridge now); vscode frozen. (2) Tasks is the only
+  spearhead — the sole surface rendering the v7 substrate. (3) Story-points = LEARNED calibration estimates is the
+  explicit HEADLINE feature. (4) First Tasks cut INCLUDES two-way gated GitHub sync. (5) DELETE canvas (stub serializer,
+  zero .canvas files, no substrate linkage), lore-ui + graph-ui (verbatim duplicate standalone SPAs); FOLD sentinel/ui +
+  university/ui into existing sections. (6) Frame subtractive-then-additive: we already had a Suite, cut the cruft,
+  added the missing screen. Must-fix-first: build:platform-ui is orphaned from the main build chain so serve ships a
+  2-month-stale SPA. Sequence: fix build hole → claimant query primitive → routes/tasks.ts + HTTP captain-board → Tasks
+  section → agent read layer → subtract → split WS firehose.
+rationale: >-
+  Six-lens team audit (North/product, Mika/designer, Loid/agent-XP, Helix/dx, Topo/cartographer, Jinx/adversary)
+  converged 5-of-6 on web-primary, all verified against the real tree. The moat is the falsifiable learning loop +
+  claimant DAG; unifying app shells does not deepen it, rendering the substrate does. Tasks is the only screen where the
+  differentiated substrate (learned calibration, claimant swim lanes, the DAG agents execute) becomes visible. Matt
+  confirmed all four scope calls.
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+  - id: north
+    role: agent
+    stance: supported
+  - id: mika
+    role: agent
+    stance: supported
+  - id: loid
+    role: agent
+    stance: supported
+  - id: helix
+    role: agent
+    stance: dissented
+  - id: topo
+    role: agent
+    stance: supported
+  - id: jinx
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: Unify Conductor + web into one shell / Conductor as native shell over web views
+    rejected_because: >-
+      Net-new WKWebView bridge (Conductor reaches substrate via its own stdio MCP, zero shared UI code); months of work
+      that buys nothing for the moat. Helix's dissent noted.
+  - option: Pure-web, delete Conductor
+    rejected_because: Throws away ~23k LOC of irreplaceable OS integration (overlay/gaze/terminal) the web cannot replicate.
+  - option: Greenfield 'unify the surfaces' renaissance
+    rejected_because: >-
+      The shell already exists and works; the real gap is that zero surfaces render the v7 substrate.
+      Subtractive-then-additive is the honest scope.
+  - option: Defer canvas instead of deleting
+    rejected_because: >-
+      Stub serializer, zero .canvas files, empty symbols map, no substrate linkage — defer-to-someday is the trap; Matt
+      confirmed delete.
+status: active
+tags:
+  - suite-renaissance
+  - architecture
+  - tasks-section
+  - arc:renaissance
