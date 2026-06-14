@@ -294,6 +294,28 @@ async function runSettlementChain(
         parentTaskId, error: err instanceof Error ? err.message : String(err),
       });
     }
+
+    // ── Adjacent: aggregate-on-settle (#calibration, governance T-011) ──
+    // Fold the actuals captured during this run into the learned token table so
+    // story-points stay current WITHOUT a manual `paradigm calibrate`. This
+    // closes the calibration half of the loop the same moment the learning half
+    // settles. Best-effort, idempotent, never breaks settlement. Not a tracked
+    // liveness stage — the probe asserts the learning chain; this is adjacent.
+    try {
+      const { rebuildLearnedTable } = await import('./calibration-aggregate.js');
+      const res = rebuildLearnedTable(rootDir);
+      if (res) {
+        log.component('#calibration').info('Calibration refreshed on settle', {
+          parentTaskId,
+          samplesRead: res.samplesRead,
+          learnedCells: res.groups.filter(g => g.learned).length,
+        });
+      }
+    } catch (err) {
+      log.component('#calibration').warn('Aggregate-on-settle failed (non-fatal)', {
+        parentTaskId, error: err instanceof Error ? err.message : String(err),
+      });
+    }
   } finally {
     const live = chainLive(stages);
     const record: LivenessRecord = {
