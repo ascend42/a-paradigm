@@ -5,9 +5,9 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [7.2.0] — Unreleased
+## [7.2.0] — 2026-06-13
 
-**Enforcement made true + task management for humans.** *In-progress branch work; sections accumulate per round.*
+**Enforcement made true + task management for humans.** Two arcs: v7's "Teeth" are completed (enforcement now verifies that work *happened*, not just that a tool was pinged), and the task system gets a human-facing CLI plus provider-agnostic external sync (GitHub out of the gate, fully local-first).
 
 ### Added
 
