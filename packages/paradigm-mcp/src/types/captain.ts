@@ -204,4 +204,10 @@ export interface CaptainBoard {
    * when the graph is sound. Surfaced as a board warning; never blocks.
    */
   integrity?: import('../utils/task-loader.js').DagViolation[];
+  /**
+   * Settlement-debt (Loid-owned, detect-only — TD-2026-06-14-467): runs whose
+   * children are ALL terminal but the epic never stamped `settledAt` — the
+   * learning loop never closed on them. Loid detects; Cid owns any graph fix.
+   */
+  settlementDebt?: Array<{ epicTaskId: string; blurb: string; reason: string }>;
 }

@@ -1184,6 +1184,12 @@ export async function assembleCaptainBoard(
   const { validateTaskDag } = await import('../utils/task-loader.js');
   const integrity = validateTaskDag(all);
 
+  // Settlement-debt (Loid-owned, detect-only): a run whose children are ALL
+  // terminal but the epic never settled — the learning loop never closed on it.
+  const settlementDebt = runs
+    .filter(r => !r.settledAt && r.nodes.length > 0 && r.nodes.every(n => n.status === 'done' || n.status === 'shelved'))
+    .map(r => ({ epicTaskId: r.epicTaskId, blurb: r.blurb, reason: 'all children terminal but run never settled' }));
+
   return {
     runs,
     unclaimed,
@@ -1196,6 +1202,7 @@ export async function assembleCaptainBoard(
       loose: loose.length,
     },
     integrity: integrity.length > 0 ? integrity : undefined,
+    settlementDebt: settlementDebt.length > 0 ? settlementDebt : undefined,
   };
 }
 
