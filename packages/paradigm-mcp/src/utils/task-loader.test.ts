@@ -286,6 +286,46 @@ describe('validateTaskDag', () => {
 });
 
 // ────────────────────────────────────────────────────────
+// blocked_on auto-clear (T-008, Cid present-tense)
+// ────────────────────────────────────────────────────────
+
+describe('blocked_on auto-clear on dependency settle', () => {
+  it('clears blocked_on once all of a dependent\'s deps go terminal', async () => {
+    // B depends on A and is blocked. Completing A (its only dep) should clear B.
+    const a = await createTask(root, { blurb: 'dep A' });
+    const b = await createTask(root, { blurb: 'task B', dependsOn: [a] });
+    await updateTask(root, b, { blocked_on: 'waiting on A' });
+    expect((await loadTask(root, b))?.blocked_on).toBe('waiting on A');
+
+    await completeTask(root, a);
+
+    expect((await loadTask(root, b))?.blocked_on).toBeUndefined();
+  });
+
+  it('does NOT clear while another dep is still open', async () => {
+    // C depends on A and B; only A finishes → C stays blocked.
+    const a = await createTask(root, { blurb: 'dep A' });
+    const b = await createTask(root, { blurb: 'dep B' });
+    const c = await createTask(root, { blurb: 'task C', dependsOn: [a, b] });
+    await updateTask(root, c, { blocked_on: 'waiting on A and B' });
+
+    await completeTask(root, a); // B still open
+
+    expect((await loadTask(root, c))?.blocked_on).toBe('waiting on A and B');
+  });
+
+  it('does NOT clear a blocked_on with no structural dep edge to the finished task', async () => {
+    const a = await createTask(root, { blurb: 'unrelated A' });
+    const d = await createTask(root, { blurb: 'task D blocked for a non-dep reason' });
+    await updateTask(root, d, { blocked_on: 'waiting on design review' });
+
+    await completeTask(root, a);
+
+    expect((await loadTask(root, d))?.blocked_on).toBe('waiting on design review');
+  });
+});
+
+// ────────────────────────────────────────────────────────
 // assertTransition
 // ────────────────────────────────────────────────────────
 

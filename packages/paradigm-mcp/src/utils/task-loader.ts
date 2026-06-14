@@ -548,6 +548,38 @@ export async function updateTask(rootDir: string, taskId: string, partial: Parti
     }
   }
 
+  // T-008 (Cid present-tense, TD-2026-06-14-467): blocked_on AUTO-CLEAR. When
+  // THIS task goes terminal, any task that was blocked AND depends on it may now
+  // be unblocked — clear blocked_on on a dependent once ALL of its dependsOn are
+  // terminal. Conservative: only clears when there's a real structural dep edge
+  // to the just-finished task (a blocked_on set for a non-dependency reason is
+  // left for a human/Cid to clear). Gated on the terminal transition so it can't
+  // recurse (clearing a dependent leaves its status non-terminal). Best-effort.
+  if (isTerminalStatus(updated.status)) {
+    try {
+      const peers = await loadTasks(rootDir, { status: 'all', limit: 9999 });
+      const byId = new Map(peers.map(p => [p.id, p]));
+      for (const dep of peers) {
+        if (!dep.blocked_on) continue;
+        if (!dep.dependsOn?.includes(updated.id)) continue;
+        const allDepsTerminal = (dep.dependsOn ?? []).every(d => {
+          const t = byId.get(d);
+          return t != null && isTerminalStatus(t.status);
+        });
+        if (allDepsTerminal) {
+          await updateTask(rootDir, dep.id, { blocked_on: undefined });
+          log.component('#task-loader').info('Auto-cleared blocked_on (all deps terminal)', {
+            taskId: dep.id, resolvedBy: updated.id,
+          });
+        }
+      }
+    } catch (err) {
+      log.component('#task-loader').warn('blocked_on auto-clear failed (non-fatal)', {
+        taskId, error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
   return true;
 }
 
