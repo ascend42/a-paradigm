@@ -9,6 +9,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 **Enforcement made true + task management for humans.** *In-progress branch work; sections accumulate per round.*
 
+### Added
+
+- **A human-facing `paradigm task` CLI** (`#task-cli`): tasks were agent/MCP-only — a human couldn't capture or triage one without invoking an AI agent (the #1 personal-use blocker from the task-system audit). Now there's `task add/ls/start/done/show/shelve/edit`, a thin local-only skin over the existing store (no new schema). Highlights: **2-second capture** (`task add fix the parser` — variadic, no quotes, prints the id first), human-friendly refs (`@last`, short suffix `004`, fuzzy blurb match — never guesses on a destructive op), a grouped **triage view** (`task ls` = active by default, priority-ranked, `(you)` vs agent ownership, blocked markers, `--board` for the full run-DAG via the captain board), and `task done` closes the learning loop **from the terminal**. CLI-created tasks stamp a `human` claimant. The competing `thread todo` store is deprecated in favor of `task add` (with an explicit `--from-thread` import). Fully local — zero external dependency.
+
 ### Fixed
 
 - **Enforcement verifies *completion*, not *invocation*** (`#orchestration-marker`): the `.paradigm/.orchestrated` marker that satisfies the Stop-hook orchestration-required gate was written on `orchestrate_inline` tool *entry* for **every mode** — so a single `mode=quick` ping checked the box before any agent ran. The framework's "enforcement verifies the work happened" claim was provably false in code. Removed the entry-write; the marker is now written **only by real completion signals** (a `chainLive` settlement, or a captain debrief with real agent verdicts — captured *before* any synthetic fallback so an empty session can't satisfy it). The `mode=quick` tool description no longer claims it "satisfies enforcement." Enforcement now rides the same completion signal as the learning-loop liveness probe: a real run that settled and cross-checked. (Completes the unshipped third leg of v7's "Teeth.")

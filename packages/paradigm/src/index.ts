@@ -787,6 +787,95 @@ program
     await reviewCommand(options);
   });
 
+// paradigm task <subcommand> — human-facing task CLI (#task-cli, local-only)
+const taskCmd = program
+  .command('task')
+  .description('Capture and triage tasks from the terminal (local-only facilitation skin over the task store)');
+
+taskCmd
+  .command('add [blurb...]')
+  .description('Add a task (no quotes needed). Prints the new id on the first line.')
+  .option('-p, --priority <pri>', 'Priority: high | medium | low (default medium)')
+  .option('-t, --tag <tag>', 'Tag (repeatable)', (v: string, acc: string[]) => { acc.push(v); return acc; }, [] as string[])
+  .option('--start', 'Create then move straight to in-progress')
+  .option('--from-thread', 'Import thread.md loose ends as tasks (explicit, never auto-clears)')
+  .option('--project <path>', 'Project root (default cwd)')
+  .option('--json', 'Output machine-readable JSON')
+  .action(async (blurb, options) => {
+    const { taskAddCommand } = await import('./commands/task/index.js');
+    await taskAddCommand(blurb || [], options);
+  });
+
+taskCmd
+  .command('ls [status]')
+  .description('List tasks: active (default) | open | done | shelved | all')
+  .option('-p, --priority <pri>', 'Filter by priority')
+  .option('-t, --tag <tag>', 'Filter by tag')
+  .option('-n, --limit <n>', 'Max rows (default 20)')
+  .option('--mine', 'Only tasks claimed by you')
+  .option('--board', 'Rich run-DAG board (reuses the captain board)')
+  .option('--project <path>', 'Project root (default cwd)')
+  .option('--json', 'Output machine-readable JSON')
+  .action(async (status, options) => {
+    const { taskLsCommand } = await import('./commands/task/index.js');
+    await taskLsCommand(status, options);
+  });
+
+taskCmd
+  .command('start <ref>')
+  .description('Move a task to in-progress (ref: @last | full id | 004 | fuzzy blurb)')
+  .option('--project <path>', 'Project root (default cwd)')
+  .option('--json', 'Output machine-readable JSON')
+  .action(async (ref, options) => {
+    const { taskStartCommand } = await import('./commands/task/index.js');
+    await taskStartCommand(ref, options);
+  });
+
+taskCmd
+  .command('done <ref>')
+  .description('Complete a task (closes the learning loop)')
+  .option('--project <path>', 'Project root (default cwd)')
+  .option('--json', 'Output machine-readable JSON')
+  .action(async (ref, options) => {
+    const { taskDoneCommand } = await import('./commands/task/index.js');
+    await taskDoneCommand(ref, options);
+  });
+
+taskCmd
+  .command('show <ref>')
+  .description('Show a task in full')
+  .option('--project <path>', 'Project root (default cwd)')
+  .option('--json', 'Output machine-readable JSON')
+  .action(async (ref, options) => {
+    const { taskShowCommand } = await import('./commands/task/index.js');
+    await taskShowCommand(ref, options);
+  });
+
+taskCmd
+  .command('shelve <ref>')
+  .description('Shelve a task')
+  .option('--project <path>', 'Project root (default cwd)')
+  .option('--json', 'Output machine-readable JSON')
+  .action(async (ref, options) => {
+    const { taskShelveCommand } = await import('./commands/task/index.js');
+    await taskShelveCommand(ref, options);
+  });
+
+taskCmd
+  .command('edit <ref>')
+  .description('Edit a task: blurb, priority, tags, or reopen')
+  .option('-b, --blurb <text>', 'Replace the blurb')
+  .option('-p, --priority <pri>', 'Replace the priority')
+  .option('-t, --tag <tag>', 'Replace tags (repeatable)', (v: string, acc: string[]) => { acc.push(v); return acc; }, [] as string[])
+  .option('--add-tag <tag>', 'Add a tag (repeatable)', (v: string, acc: string[]) => { acc.push(v); return acc; }, [] as string[])
+  .option('--reopen', 'Reopen a terminal task (→ open)')
+  .option('--project <path>', 'Project root (default cwd)')
+  .option('--json', 'Output machine-readable JSON')
+  .action(async (ref, options) => {
+    const { taskEditCommand } = await import('./commands/task/index.js');
+    await taskEditCommand(ref, options);
+  });
+
 // paradigm sweep
 program
   .command('sweep')

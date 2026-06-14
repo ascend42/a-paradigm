@@ -142,7 +142,7 @@ export function normalizeTask(raw: Task): Task {
 
 // ── ID generation ─────────────────────────────────────────
 
-function generateTaskId(rootDir: string, dateStr: string): string {
+export function generateTaskId(rootDir: string, dateStr: string): string {
   const datePath = path.join(rootDir, TASKS_ROOT, ENTRIES_DIR, dateStr);
 
   if (!fs.existsSync(datePath)) {

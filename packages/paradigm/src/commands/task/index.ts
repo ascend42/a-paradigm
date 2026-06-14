@@ -1,0 +1,567 @@
+/**
+ * paradigm task — human-facing task CLI (#task-cli)
+ *
+ * Phase 1 of the task-management expansion (TD-2026-06-13-768). LOCAL-ONLY:
+ * a thin facilitation skin over the existing task store (paradigm-mcp's
+ * task-loader). No GitHub / sync (that's Phase 2).
+ *
+ * Architecture: calls the task-loader functions directly via the relative-import
+ * precedent (see core/habits/evaluator.ts). The ONE field the CLI adds on top of
+ * the store is `claimant: {kind:'human', ref:<git user.email>}` — it powers the
+ * `you` column and `--mine`. Everything else is store behavior, unchanged.
+ *
+ * Output goes through cli-output.ts helpers per CLAUDE.md (never raw console.log).
+ */
+
+import { execSync } from 'child_process';
+import * as os from 'os';
+import * as path from 'path';
+
+import {
+  createTask,
+  loadTasks,
+  loadTask,
+  updateTask,
+  completeTask,
+  shelveTask,
+  assertTransition,
+  type Task,
+  type Claimant,
+  type TaskFilterStatus,
+} from '../../../../paradigm-mcp/src/utils/task-loader.js';
+
+import { out, success, warn, error, dim, header, kv, json } from '../../utils/cli-output.js';
+
+// ── shared option/helper surface ──────────────────────────
+
+interface CommonOptions {
+  project?: string;
+  json?: boolean;
+}
+
+function resolveRoot(options: CommonOptions): string {
+  return options.project ? path.resolve(options.project) : process.cwd();
+}
+
+/**
+ * The current human's claimant ref — git `user.email`, falling back to the OS
+ * username. Stamped on CLI-created tasks and used to render `you` / filter `--mine`.
+ */
+export function currentHumanRef(): string {
+  try {
+    const email = execSync('git config user.email', { encoding: 'utf-8', timeout: 3000 }).trim();
+    if (email) return email;
+  } catch {
+    // git not available / not configured
+  }
+  try {
+    const username = os.userInfo().username;
+    if (username) return username;
+  } catch {
+    // userInfo can fail in sandboxed environments
+  }
+  return 'unknown';
+}
+
+function humanClaimant(): Claimant {
+  return { kind: 'human', ref: currentHumanRef() };
+}
+
+/** The short numeric handle (`004`) used as the visible task reference. */
+function shortId(id: string): string {
+  const m = id.match(/-(\d+)$/);
+  return m ? m[1] : id;
+}
+
+const ACTIVE: TaskFilterStatus = 'active';
+
+function isTerminal(t: Task): boolean {
+  return t.status === 'done' || t.status === 'shelved';
+}
+
+/**
+ * Render a task's claimant for the `you` column:
+ *   - human whose ref == current git user → `you`
+ *   - other human → the ref
+ *   - archetype → the role id (the ref IS the role, e.g. "builder")
+ *   - peer → the agentId (ref)
+ */
+function renderClaimant(t: Task, me: string): string {
+  if (!t.claimant) return '';
+  const { kind, ref } = t.claimant;
+  if (kind === 'human') return ref === me ? 'you' : ref;
+  return ref;
+}
+
+/** A task is blocked if any dependency is non-terminal, or `blocked_on` is set. */
+function isBlocked(t: Task, byId: Map<string, Task>): boolean {
+  if (t.blocked_on) return true;
+  for (const dep of t.dependsOn || []) {
+    const d = byId.get(dep);
+    if (d && !isTerminal(d)) return true;
+  }
+  return false;
+}
+
+function priorityGlyph(t: Task): string {
+  if (t.status === 'in-progress') return '▸';
+  if (t.priority === 'low') return '○';
+  return '●';
+}
+
+function metaSuffix(t: Task): string {
+  const tags = (t.tags || []).join(', ');
+  const inner = tags ? `${t.priority} · ${tags}` : t.priority;
+  return `[${inner}]`;
+}
+
+// ── resolveRef ────────────────────────────────────────────
+
+export interface ResolveResult {
+  task?: Task;
+  /** Set when resolution failed or was ambiguous. The caller prints + exits. */
+  errorMessage?: string;
+  /** Candidate lines to list on an ambiguous match. */
+  candidates?: string[];
+}
+
+/**
+ * Human-friendly id resolution, shared by every mutating command.
+ *
+ * Order:
+ *   1. `@last`     → most-recent task created by the current human claimant
+ *   2. full id     → `T-YYYY-MM-DD-NNN`
+ *   3. short suffix → `001` / `4` → the unique ACTIVE task whose id ends `-NNN`
+ *                     (ambiguous across dates → list candidates, never guess)
+ *   4. fuzzy        → case-insensitive substring over ACTIVE blurbs
+ *                     (one → use; many → list; none → error)
+ *
+ * Never throws; never guesses on ambiguity.
+ */
+export async function resolveRef(ref: string, rootDir: string): Promise<ResolveResult> {
+  const all = await loadTasks(rootDir, { status: 'all', limit: 9999 });
+
+  // 1. @last — most-recent task created by the current human.
+  if (ref === '@last') {
+    const me = currentHumanRef();
+    const mine = all
+      .filter(t => t.claimant?.kind === 'human' && t.claimant.ref === me)
+      .sort((a, b) => (b.created || '').localeCompare(a.created || ''));
+    if (mine.length === 0) {
+      return { errorMessage: 'No tasks created by you yet — `@last` has nothing to resolve.' };
+    }
+    return { task: mine[0] };
+  }
+
+  // 2. Full id.
+  if (/^T-\d{4}-\d{2}-\d{2}-\d+$/.test(ref)) {
+    const exact = all.find(t => t.id === ref);
+    if (exact) return { task: exact };
+    return { errorMessage: `No task with id ${ref}.` };
+  }
+
+  const active = all.filter(t => t.status === 'open' || t.status === 'in-progress');
+
+  // 3. Short numeric suffix → unique ACTIVE task ending in -NNN.
+  if (/^\d+$/.test(ref)) {
+    const n = parseInt(ref, 10);
+    const matches = active.filter(t => {
+      const m = t.id.match(/-(\d+)$/);
+      return m && parseInt(m[1], 10) === n;
+    });
+    if (matches.length === 1) return { task: matches[0] };
+    if (matches.length > 1) {
+      return {
+        errorMessage: `Suffix "${ref}" is ambiguous across dates — use a full id:`,
+        candidates: matches.map(t => `  ${t.id}  ${t.blurb}`),
+      };
+    }
+    // fall through to fuzzy (a bare number could also be a blurb substring)
+  }
+
+  // 4. Fuzzy: case-insensitive substring over ACTIVE blurbs.
+  const needle = ref.toLowerCase();
+  const fuzzy = active.filter(t => t.blurb.toLowerCase().includes(needle));
+  if (fuzzy.length === 1) return { task: fuzzy[0] };
+  if (fuzzy.length > 1) {
+    return {
+      errorMessage: `"${ref}" matches ${fuzzy.length} active tasks — be more specific:`,
+      candidates: fuzzy.map(t => `  ${shortId(t.id)}  ${t.blurb}`),
+    };
+  }
+  return { errorMessage: `No active task matches "${ref}".` };
+}
+
+/** Resolve-or-exit: prints the error/candidates and exits non-zero on failure. */
+async function resolveOrExit(ref: string, rootDir: string): Promise<Task> {
+  const res = await resolveRef(ref, rootDir);
+  if (!res.task) {
+    error(res.errorMessage || `Could not resolve "${ref}".`);
+    for (const c of res.candidates || []) out(c);
+    process.exit(1);
+  }
+  return res.task;
+}
+
+// ── task add ──────────────────────────────────────────────
+
+interface AddOptions extends CommonOptions {
+  priority?: string;
+  tag?: string[];
+  start?: boolean;
+  fromThread?: boolean;
+}
+
+export async function taskAddCommand(blurbParts: string[], options: AddOptions): Promise<void> {
+  const rootDir = resolveRoot(options);
+
+  if (options.fromThread) {
+    await addFromThread(rootDir, options);
+    return;
+  }
+
+  const blurb = blurbParts.join(' ').trim();
+  if (!blurb) {
+    error('Nothing to add — provide a blurb: `paradigm task add fix the parser`');
+    process.exit(1);
+  }
+
+  const priority = normalizePriority(options.priority);
+  const tags = options.tag || [];
+
+  const id = await createTask(rootDir, {
+    blurb,
+    priority,
+    tags,
+    claimant: humanClaimant(),
+  });
+
+  if (options.start) {
+    await updateTask(rootDir, id, { status: 'in-progress' });
+  }
+
+  if (options.json) {
+    json({ id });
+    return;
+  }
+
+  // First line is the greppable id.
+  success(`${id}  added`);
+  dim(`${blurb}  ${metaSuffix({ blurb, priority, tags, status: 'open' } as Task)}`);
+  if (options.start) dim('→ in-progress');
+}
+
+function normalizePriority(p?: string): 'high' | 'medium' | 'low' {
+  if (p === 'high' || p === 'low') return p;
+  return 'medium';
+}
+
+/**
+ * `task add --from-thread` — drain thread looseEnds into real tasks. EXPLICIT
+ * and human-driven: we print the loose ends, create one task per line (claimant
+ * human, tag `from-thread`), and never auto-clear thread.md (auto-absorb = spam).
+ */
+async function addFromThread(rootDir: string, options: AddOptions): Promise<void> {
+  const fs = await import('fs');
+  const { parseThread } = await import('../thread.js');
+
+  const threadPath = path.join(rootDir, '.paradigm', 'thread.md');
+  if (!fs.existsSync(threadPath)) {
+    warn('No thread.md found — nothing to import.');
+    return;
+  }
+  const data = parseThread(fs.readFileSync(threadPath, 'utf8'));
+  const ends = data.looseEnds || [];
+  if (ends.length === 0) {
+    out('No loose ends in thread.md.');
+    return;
+  }
+
+  const created: { id: string; blurb: string }[] = [];
+  for (const line of ends) {
+    const id = await createTask(rootDir, {
+      blurb: line,
+      priority: 'medium',
+      tags: ['from-thread'],
+      claimant: humanClaimant(),
+    });
+    created.push({ id, blurb: line });
+  }
+
+  if (options.json) {
+    json({ created: created.map(c => c.id) });
+    return;
+  }
+
+  header(`Imported ${created.length} loose end${created.length === 1 ? '' : 's'} as tasks`);
+  for (const c of created) {
+    success(`${c.id}  ${c.blurb}`);
+  }
+  dim('Thread.md was NOT cleared. Run `paradigm thread clear` once you have verified these.');
+}
+
+// ── task ls ───────────────────────────────────────────────
+
+interface LsOptions extends CommonOptions {
+  priority?: string;
+  tag?: string;
+  limit?: string;
+  mine?: boolean;
+  board?: boolean;
+}
+
+const LS_STATUS_MAP: Record<string, TaskFilterStatus> = {
+  active: 'active',
+  open: 'open',
+  done: 'done',
+  shelved: 'shelved',
+  all: 'all',
+};
+
+export async function taskLsCommand(statusArg: string | undefined, options: LsOptions): Promise<void> {
+  const rootDir = resolveRoot(options);
+
+  if (options.board) {
+    await renderBoard(rootDir, options);
+    return;
+  }
+
+  const status = LS_STATUS_MAP[statusArg || 'active'];
+  if (!status) {
+    error(`Unknown status "${statusArg}" — use active | open | done | shelved | all.`);
+    process.exit(1);
+  }
+
+  const limit = options.limit ? parseInt(options.limit, 10) : 20;
+  const me = currentHumanRef();
+
+  let tasks = await loadTasks(rootDir, {
+    status,
+    priority: options.priority as Task['priority'] | undefined,
+    tag: options.tag,
+    limit: 9999,
+  });
+
+  if (options.mine) {
+    tasks = tasks.filter(t => t.claimant?.kind === 'human' && t.claimant.ref === me);
+  }
+
+  // byId map for blocked detection (over the full active set, pre-limit).
+  const byId = new Map<string, Task>();
+  const allForDeps = await loadTasks(rootDir, { status: 'all', limit: 9999 });
+  for (const t of allForDeps) byId.set(t.id, t);
+
+  tasks = tasks.slice(0, limit);
+
+  if (options.json) {
+    json(tasks);
+    return;
+  }
+
+  if (tasks.length === 0) {
+    dim('No tasks.');
+    return;
+  }
+
+  // Default (active) view groups by status: IN PROGRESS then OPEN.
+  if (status === 'active') {
+    const inProgress = tasks.filter(t => t.status === 'in-progress');
+    const open = tasks.filter(t => t.status === 'open');
+    if (inProgress.length > 0) {
+      header('IN PROGRESS');
+      for (const t of inProgress) out(renderRow(t, me, byId));
+    }
+    if (open.length > 0) {
+      header('OPEN');
+      for (const t of open) out(renderRow(t, me, byId));
+    }
+    return;
+  }
+
+  header(status.toUpperCase());
+  for (const t of tasks) out(renderRow(t, me, byId));
+}
+
+function renderRow(t: Task, me: string, byId: Map<string, Task>): string {
+  const glyph = priorityGlyph(t);
+  const handle = shortId(t.id).padStart(3, ' ');
+  const claim = renderClaimant(t, me);
+  const claimCol = claim ? `  (${claim})` : '';
+  const blocked = isBlocked(t, byId) ? '  ⛔ blocked' : '';
+  return `  ${glyph} ${handle}  ${t.blurb}${claimCol}  ${metaSuffix(t)}${blocked}`;
+}
+
+/**
+ * `--board` → the rich run-DAG view. Reuse assembleCaptainBoard rather than
+ * re-deriving the DAG. Plain `ls` stays cheap (no symbol-graph load).
+ */
+async function renderBoard(rootDir: string, options: LsOptions): Promise<void> {
+  const { assembleCaptainBoard } = await import('../../../../paradigm-mcp/src/tools/captain.js');
+  const board = await assembleCaptainBoard(rootDir, { proposeClaimants: true });
+
+  if (options.json) {
+    json(board);
+    return;
+  }
+
+  const me = currentHumanRef();
+
+  header(`BOARD — ${board.summary.runs} run(s), ${board.summary.open} open, ${board.summary.inFlight} in flight, ${board.summary.unclaimed} unclaimed`);
+
+  for (const run of board.runs) {
+    header(`▶ ${run.blurb}  [${run.runStatus}]`);
+    for (const node of run.nodes) {
+      const stage = node.stage !== undefined ? `s${node.stage} ` : '';
+      const claim = node.claimant ? `  (${node.claimant.kind === 'human' && node.claimant.ref === me ? 'you' : node.claimant.ref})` : '';
+      const fragile = node.fragileSymbols.length > 0 ? `  ⚠ ${node.fragileSymbols.join(', ')}` : '';
+      out(`  ${stage}${shortId(node.taskId)}  ${node.blurb}  [${node.status}]${claim}${fragile}`);
+    }
+  }
+
+  if (board.unclaimed.length > 0) {
+    header('UNCLAIMED');
+    for (const u of board.unclaimed) {
+      const proposed = u.proposedClaimant ? `  → ${u.proposedClaimant.ref}?` : '';
+      out(`  ${shortId(u.taskId)}  ${u.blurb}  [${u.priority}]${proposed}`);
+    }
+  }
+}
+
+// ── task start / done / shelve ────────────────────────────
+
+export async function taskStartCommand(ref: string, options: CommonOptions): Promise<void> {
+  const rootDir = resolveRoot(options);
+  const task = await resolveOrExit(ref, rootDir);
+
+  if (!assertTransition(task.status, 'in-progress')) {
+    error(`Cannot start ${shortId(task.id)} — it is ${task.status}.`);
+    process.exit(1);
+  }
+
+  await updateTask(rootDir, task.id, { status: 'in-progress' });
+  if (options.json) { json({ id: task.id, status: 'in-progress' }); return; }
+  success(`${shortId(task.id)}  → in-progress`);
+  dim(task.blurb);
+}
+
+export async function taskDoneCommand(ref: string, options: CommonOptions): Promise<void> {
+  const rootDir = resolveRoot(options);
+  const task = await resolveOrExit(ref, rootDir);
+
+  if (!assertTransition(task.status, 'done')) {
+    error(`Cannot complete ${shortId(task.id)} — it is ${task.status}.`);
+    process.exit(1);
+  }
+
+  // completeTask closes the learning loop from the terminal (settlement fires
+  // inside updateTask when the task has a parent).
+  await completeTask(rootDir, task.id);
+
+  if (options.json) { json({ id: task.id, status: 'done' }); return; }
+  success(`${shortId(task.id)}  ✓ done`);
+  dim(task.blurb);
+  if (task.related_lore && task.related_lore.length > 0) {
+    dim(`lore: ${task.related_lore.join(', ')}`);
+  }
+}
+
+export async function taskShelveCommand(ref: string, options: CommonOptions): Promise<void> {
+  const rootDir = resolveRoot(options);
+  const task = await resolveOrExit(ref, rootDir);
+
+  if (!assertTransition(task.status, 'shelved')) {
+    error(`Cannot shelve ${shortId(task.id)} — it is ${task.status}.`);
+    process.exit(1);
+  }
+
+  await shelveTask(rootDir, task.id);
+  if (options.json) { json({ id: task.id, status: 'shelved' }); return; }
+  success(`${shortId(task.id)}  shelved`);
+  dim(task.blurb);
+}
+
+// ── task show ─────────────────────────────────────────────
+
+export async function taskShowCommand(ref: string, options: CommonOptions): Promise<void> {
+  const rootDir = resolveRoot(options);
+  const task = await resolveOrExit(ref, rootDir);
+
+  if (options.json) { json(task); return; }
+
+  header(task.id);
+  kv('blurb', task.blurb);
+  kv('status', task.status);
+  kv('priority', task.priority);
+  if (task.tags && task.tags.length > 0) kv('tags', task.tags.join(', '));
+  if (task.claimant) kv('claimant', `${task.claimant.kind}:${task.claimant.ref}`);
+  kv('created', task.created);
+  if (task.started_at) kv('started', task.started_at);
+  if (task.completed) kv('completed', task.completed);
+  if (task.shelved) kv('shelved', task.shelved);
+  if (task.parentTaskId) kv('parent', task.parentTaskId);
+  if (task.dependsOn && task.dependsOn.length > 0) kv('depends', task.dependsOn.join(', '));
+  if (task.blocked_on) kv('blocked_on', task.blocked_on);
+  if (task.related_lore && task.related_lore.length > 0) kv('lore', task.related_lore.join(', '));
+  if (task.external_ref) kv('external', `${task.external_ref.kind}:${task.external_ref.ref}`);
+}
+
+// ── task edit ─────────────────────────────────────────────
+
+interface EditOptions extends CommonOptions {
+  blurb?: string;
+  priority?: string;
+  tag?: string[];
+  addTag?: string[];
+  reopen?: boolean;
+}
+
+export async function taskEditCommand(ref: string, options: EditOptions): Promise<void> {
+  const rootDir = resolveRoot(options);
+  const task = await resolveOrExit(ref, rootDir);
+
+  const partial: Partial<Task> = {};
+  const changed: string[] = [];
+
+  if (options.blurb !== undefined) {
+    partial.blurb = options.blurb;
+    changed.push(`blurb → "${options.blurb}"`);
+  }
+  if (options.priority !== undefined) {
+    partial.priority = normalizePriority(options.priority);
+    changed.push(`priority → ${partial.priority}`);
+  }
+  if (options.tag !== undefined) {
+    // -t/--tag replaces tags wholesale.
+    partial.tags = options.tag;
+    changed.push(`tags → [${partial.tags.join(', ')}]`);
+  }
+  if (options.addTag !== undefined && options.addTag.length > 0) {
+    const base = partial.tags ?? task.tags ?? [];
+    const merged = Array.from(new Set([...base, ...options.addTag]));
+    partial.tags = merged;
+    changed.push(`+tags [${options.addTag.join(', ')}]`);
+  }
+  if (options.reopen) {
+    if (!assertTransition(task.status, 'open')) {
+      error(`Cannot reopen ${shortId(task.id)} — it is ${task.status}.`);
+      process.exit(1);
+    }
+    partial.status = 'open';
+    changed.push('status → open');
+  }
+
+  if (changed.length === 0) {
+    warn('Nothing to edit — pass -b/-p/-t/--add-tag/--reopen.');
+    return;
+  }
+
+  const ok = await updateTask(rootDir, task.id, partial);
+  if (!ok) {
+    error(`Edit rejected for ${shortId(task.id)} (illegal transition or task not found).`);
+    process.exit(1);
+  }
+
+  if (options.json) { json({ id: task.id, changed }); return; }
+  success(`${shortId(task.id)}  edited`);
+  for (const c of changed) dim(`  ${c}`);
+}

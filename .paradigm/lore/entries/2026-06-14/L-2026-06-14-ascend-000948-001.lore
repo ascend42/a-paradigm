@@ -1,0 +1,38 @@
+id: L-2026-06-14-ascend-000948-001
+type: milestone
+timestamp: '2026-06-14T00:09:48.084Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'v7.2 Phase 1: the human-facing `paradigm task` CLI'
+summary: 'Shipped the human-facing task CLI — the #1 gap from the very first audit of the day (tasks were agent/MCP-only; a human couldn''t capture/triage without an agent). New packages/paradigm/src/commands/task/ wraps the existing task-loader directly (relative-import precedent, not the MCP dispatcher). 7 subcommands; nailed the 2-second capture (variadic add, id-first, human claimant stamp), resolveRef (@last/suffix/fuzzy, never guesses), the grouped active-by-default triage view with (you) ownership + --board reusing assembleCaptainBoard, and done→completeTask closing the loop from the terminal. Deprecated the competing thread-todo store. Fully local. Dogfooded live (filed the Phase 2 task through it). Build green; mcp 403, cli 425 (+16 task tests).'
+symbols_touched:
+  - '#task-cli'
+  - '#task-loader'
+  - '#captain-board'
+symbols_created:
+  - '#task-cli'
+learnings:
+  - 'The whole CLI was a pure facilitation skin — the store already exposed every primitive (createTask/loadTasks/updateTask/completeTask/shelveTask). The blocker was never the store, only the absence of a non-AI front door. Confirms Nora''s audit: ship the skin, don''t touch the schema.'
+  - The CLI adds exactly ONE field (human claimant {kind:'human', ref:git-email}) and zero schema concepts; that one field powers the (you) ownership column and --mine. Everything DAG/orchestration stays agent-owned and view-only (--board) for humans — humans don't hand-build the DAG.
+verification:
+  status: pass
+  details:
+    paradigm-mcp: 403 pass
+    paradigm-cli: 425 pass
+    build: pass
+    smoke: live paradigm task add/ls confirmed
+tags:
+  - v7.2
+  - task-cli
+  - facilitation
+  - local-first
+  - milestone
+linked_tasks:
+  - T-2026-06-14-001
+confidence: 0.9
+git_context:
+  ref: 0a73ea31252878d68f0259abd8ffe094de7fccf8
+  branch: v7.2-teeth-and-tasks
+  dirty: true

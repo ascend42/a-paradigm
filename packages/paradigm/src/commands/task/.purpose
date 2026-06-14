@@ -1,0 +1,23 @@
+version: 2.0.0
+description: |
+  Human-facing `paradigm task` CLI (Phase 1 of the task-management expansion,
+  TD-2026-06-13-768). LOCAL-ONLY: a thin facilitation skin over the existing
+  task store (paradigm-mcp's task-loader). No GitHub / sync — that is Phase 2.
+
+  The CLI calls the task-loader functions directly (relative-import precedent),
+  NOT the MCP handleTasksTool dispatcher. The ONE field the CLI adds on top of
+  the store is `claimant: {kind:'human', ref:<git user.email>}`, stamped on
+  every CLI-created task — it powers the `you` column and `--mine`. All output
+  goes through cli-output.ts helpers.
+
+  Commands: add (2-second variadic capture, prints id first), ls (active-default
+  triage view, --board reuses assembleCaptainBoard), start, done (closes the
+  learning loop), show, shelve, edit. Refs resolve via resolveRef: @last / full
+  id / short numeric suffix / fuzzy blurb — ambiguity lists candidates and exits
+  non-zero, never guesses.
+components:
+  task-cli:
+    description: Human-facing task capture/triage CLI over the task-loader store (add/ls/start/done/show/shelve/edit + resolveRef)
+    type: handler
+    file: index.ts
+    tags: [feature, task-management, cli]
