@@ -1,0 +1,41 @@
+id: L-2026-06-14-ascend-170014-001
+type: milestone
+timestamp: '2026-06-14T17:00:14.400Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Renaissance — full-forest captain board (governance T-009)
+summary: 'Fixed a real visibility gap caught while populating the board: the captain board was run-centric (orchestration epics + children + ripple-ranked unclaimed), so claimed STANDALONE tasks — like the governance backlog claimed to cid/forge/compliance — were invisible on the board (in neither runs nor unclaimed). The swim-lanes literally couldn''t show claimed work. Added a `loose` category to assembleCaptainBoard (non-terminal roots that aren''t a run or unclaimed = claimed standalone + in-progress unclaimed standalone), enriched with estimate+taskType, rendered as claimant lanes by BoardView. Verified live: loose now shows forge:4/cid:4/compliance:1/human:2. This is Cid''s ''see the whole forest'' protocol made real. Build green, CLI 441 / MCP 445.'
+symbols_touched:
+  - '#captain-board'
+  - '#tasks-section'
+files_modified:
+  - packages/paradigm-mcp/src/types/captain.ts
+  - packages/paradigm-mcp/src/tools/captain.ts
+  - packages/paradigm/src/platform-server/routes/tasks.ts
+  - packages/paradigm/platform-ui/src/sections/tasks/components/BoardView.tsx
+  - packages/paradigm/platform-ui/src/sections/tasks/store/tasksStore.ts
+  - CHANGELOG.md
+learnings:
+  - 'The ''board populated'' claim from the prior round was FALSE in a way only direct verification caught: I checked claimant distribution via the LIST endpoint, but BoardView renders from the BOARD endpoint, which excluded claimed-standalone tasks entirely. Verify the EXACT data path the UI consumes, not an adjacent endpoint that happens to have the data.'
+  - 'The run-centric board model (epics + children + unclaimed) had a silent third category it never represented: claimed roots with no orchestration parent. The governance protocol (''see the whole forest'') predicted exactly this gap before the code did — the notebook protocol was a real spec, not a platitude.'
+verification:
+  status: pass
+  details:
+    build: green
+    cli_tests: 441 passed
+    mcp_tests: 445 passed
+    smoke: board loose:11 (forge:4/cid:4/compliance:1/human:2), each w/ estimate+taskType
+tags:
+  - suite-renaissance
+  - arc:renaissance
+  - captain-board
+  - task-governance
+linked_lore:
+  - L-2026-06-14-ascend-161024-001
+confidence: 0.93
+git_context:
+  ref: 1f7358dca3eae965058f6010b2d2b46346eda99a
+  branch: renaissance/tasks-suite
+  dirty: true

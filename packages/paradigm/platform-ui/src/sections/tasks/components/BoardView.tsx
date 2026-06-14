@@ -59,6 +59,9 @@ export function BoardView() {
       for (const run of board.runs) {
         for (const node of run.nodes) runCards.push(nodeToTask(node));
       }
+      // Full-forest tail: claimed standalone tasks (TD-2026-06-14-467). Same node
+      // shape as run nodes → they lane-group by claimant alongside run children.
+      for (const node of board.loose ?? []) runCards.push(nodeToTask(node));
       for (const u of board.unclaimed) unclaimedCards.push(unclaimedToTask(u));
     }
     return { runCards, unclaimedCards };

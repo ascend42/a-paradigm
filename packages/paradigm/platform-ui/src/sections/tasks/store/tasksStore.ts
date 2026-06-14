@@ -90,11 +90,14 @@ export interface BoardSummary {
   open: number;
   inFlight: number;
   unclaimed: number;
+  loose?: number;
 }
 
 export interface BoardData {
   runs: BoardRun[];
   unclaimed: BoardUnclaimed[];
+  /** Full-forest tail — claimed standalone tasks not in a run or unclaimed. */
+  loose?: BoardNode[];
   summary: BoardSummary;
 }
 
@@ -292,7 +295,8 @@ export const useTasksStore = create<TasksState>((set, get) => ({
         board: {
           runs: data.runs || [],
           unclaimed: data.unclaimed || [],
-          summary: data.summary || { runs: 0, open: 0, inFlight: 0, unclaimed: 0 },
+          loose: data.loose || [],
+          summary: data.summary || { runs: 0, open: 0, inFlight: 0, unclaimed: 0, loose: 0 },
         },
         boardLoading: false,
       });

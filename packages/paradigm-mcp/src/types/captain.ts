@@ -183,11 +183,21 @@ export interface BoardUnclaimed {
 export interface CaptainBoard {
   runs: BoardRun[];
   unclaimed: BoardUnclaimed[];
+  /**
+   * Full-forest tail (TD-2026-06-14-467, Cid's "see the whole forest" protocol):
+   * non-terminal root tasks that are NOT orchestration epics and NOT in the
+   * ripple-ranked `unclaimed` pile — i.e. CLAIMED standalone tasks (and
+   * in-progress unclaimed standalone tasks). Before this, a human/CLI-claimed
+   * task with no orchestration parent was invisible on the board. Rendered as
+   * claimant lanes by the Tasks board.
+   */
+  loose: BoardNode[];
   summary: {
     runs: number;
     open: number;
     inFlight: number;
     unclaimed: number;
+    loose: number;
   };
   /**
    * DAG integrity violations (Cid-owned, advise-only — TD-2026-06-14-467). Empty

@@ -106,6 +106,10 @@ export function createTasksRouter(projectDir: string): Router {
         (u as Record<string, unknown>).estimate = estimateForTask(learned, { blurb: u.blurb }, hint);
         (u as Record<string, unknown>).taskType = classifyTaskLocal(u.blurb).type;
       }
+      for (const node of board.loose ?? []) {
+        (node as Record<string, unknown>).estimate = estimateForTask(learned, { blurb: node.blurb, claimant: node.claimant });
+        (node as Record<string, unknown>).taskType = classifyTaskLocal(node.blurb).type;
+      }
 
       res.json(board);
     } catch (err) {
