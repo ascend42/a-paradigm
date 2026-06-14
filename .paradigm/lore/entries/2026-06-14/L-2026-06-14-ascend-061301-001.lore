@@ -1,0 +1,39 @@
+id: L-2026-06-14-ascend-061301-001
+type: milestone
+timestamp: '2026-06-14T06:13:01.036Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Renaissance subtract round — deleted duplicate lore-ui + graph-ui (135MB)
+summary: 'The subtractive half of subtractive-then-additive. Deleted the lore-ui and graph-ui standalone Vite SPAs (~135MB) — verbatim older twins of the lore/graph sections already inside the Platform. Removed their orphaned build scripts + files-array dist entries. Repointed the bare `paradigm lore` and `paradigm graph` launchers to `paradigm serve` with the matching section (one UI entry point, UX preserved). Kept the lore-server/graph-server route handlers (the Platform sections use them) and graph.ts (graph generate needs graphGenerateCommand). Build + CLI 441 green; smoke-tested all three repointed paths live. Deferred: folding standalone sentinel/ui + university/ui (needs parity check).'
+symbols_touched:
+  - '#serve'
+files_modified:
+  - packages/paradigm/src/index.ts
+  - packages/paradigm/package.json
+  - CHANGELOG.md
+learnings:
+  - commands/graph.ts exports BOTH the retiring serve action (graphCommand) AND the live graphGenerateCommand — so 'delete the launcher' meant repoint the bare action + keep the file, not delete it. Always check what else a to-be-deleted module exports before rm.
+  - 'Repointing the old per-section launchers (paradigm lore/graph) to `paradigm serve --sections X` is gentler than deleting them outright: it removes the duplicate UI STACK (the real goal, 135MB) while preserving muscle memory, and leaves exactly one UI implementation. Better than the audit''s literal ''delete the launchers''.'
+  - The standalone SPAs (lore-ui/graph-ui) are distinct from the route-handler dirs (src/lore-server/src/graph-server) the Platform sections consume — deleting the former while keeping the latter is the safe cut. Name the keep/delete seam explicitly before rm -r.
+verification:
+  status: pass
+  details:
+    build: green
+    cli_tests: 441 passed
+    smoke: paradigm lore→{sections:[lore]}, paradigm graph→{sections:[graph]}, graph generate works
+    freed: ~135MB
+tags:
+  - suite-renaissance
+  - arc:renaissance
+  - subtractive
+  - serve
+  - cleanup
+linked_lore:
+  - L-2026-06-14-ascend-060229-001
+confidence: 0.95
+git_context:
+  ref: a91b04bb4d356d23b2e9a45e651dc21a5334d11b
+  branch: renaissance/tasks-suite
+  dirty: true

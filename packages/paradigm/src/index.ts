@@ -1829,13 +1829,16 @@ loreCmd
     await loreTimelineCommand(options);
   });
 
-// Default lore action: launch timeline UI
+// Bare `paradigm lore` → the unified Platform on the lore section. The
+// standalone lore-ui was retired in the Suite renaissance; `paradigm serve`
+// is the one UI entry point. (lore subcommands — list/timeline/record/… — are
+// unaffected.)
 loreCmd
-  .option('-p, --port <port>', 'Port to run on', '3840')
+  .option('-p, --port <port>', 'Port to run on', '3850')
   .option('--no-open', "Don't open browser automatically")
   .action(async (options) => {
-    const { loreServeCommand } = await import('./commands/lore/serve.js');
-    await loreServeCommand(undefined, options);
+    const { serveCommand } = await import('./commands/serve.js');
+    await serveCommand({ port: options.port, open: options.open, sections: 'lore' });
   });
 
 // paradigm serve — unified Platform server
@@ -1851,15 +1854,18 @@ program
   });
 
 // paradigm graph — interactive symbol graph (with subcommands)
+// Bare `paradigm graph` → the unified Platform on the graph section. The
+// standalone graph-ui was retired in the Suite renaissance; `paradigm serve` is
+// the one UI entry point. (`graph generate` is unaffected.)
 const graphCmd = program
   .command('graph')
   .description('Interactive symbol relationship graph')
   .argument('[path]', 'Project directory', undefined)
-  .option('-p, --port <port>', 'Port to run on', '3841')
+  .option('-p, --port <port>', 'Port to run on', '3850')
   .option('--no-open', "Don't open browser automatically")
-  .action(async (path, options) => {
-    const { graphCommand } = await import('./commands/graph.js');
-    await graphCommand(path, options);
+  .action(async (_path, options) => {
+    const { serveCommand } = await import('./commands/serve.js');
+    await serveCommand({ port: options.port, open: options.open, sections: 'graph' });
   });
 
 graphCmd

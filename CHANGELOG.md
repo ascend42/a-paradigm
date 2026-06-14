@@ -26,6 +26,7 @@ The surfaces catch up to the substrate. A six-lens team audit (decision TD-2026-
 
 ### Removed
 
+- **The duplicate `lore-ui` + `graph-ui` standalone SPAs, deleted** (`#serve`, ~135 MB): two whole Vite apps that were verbatim older twins of the `lore` and `graph` sections already living inside the Platform. Removed the packages, their orphaned `build:lore-ui`/`build:graph-ui` scripts, and their `lore-ui/dist`/`graph-ui/dist` entries in `files`. The bare `paradigm lore` and `paradigm graph` launchers are **repointed to `paradigm serve`** with the matching section (one UI entry point, muscle memory preserved); their subcommands (`lore list`, `graph generate`, …) and the `src/lore-server`/`src/graph-server` route handlers the Platform sections use are untouched. (Folding standalone `sentinel/ui` + `university/ui` into their existing sections is deferred — needs a parity check.)
 - **Canvas section deleted** (`#canvas`): the Craft.js design-editor section (~26 UI files + backend route + ~234-line CRUD API) was confirmed dead chrome — stub CSS serializer ("coming in Sprint 1"), zero `.canvas` files anywhere, empty symbols map, no substrate linkage, frozen since March. It was also the source of the boot crash above. Removed the section, route, nav/command/shortcut entries, and `.purpose` coverage. The graph section's own (unrelated) canvas is untouched.
 
 ## [7.2.0] — 2026-06-13
