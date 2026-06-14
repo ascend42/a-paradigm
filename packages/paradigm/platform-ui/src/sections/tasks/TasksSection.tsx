@@ -2,6 +2,9 @@ import React, { useEffect } from 'react';
 import { useTasksStore, type TaskView } from './store/tasksStore';
 import { usePlatformStore } from '../../store/platformStore';
 import { ListView } from './components/ListView';
+import { BoardView } from './components/BoardView';
+import { CalibrationStrip } from './components/CalibrationStrip';
+import { FilterBar } from './components/FilterBar';
 import './styles/tasks.css';
 
 const VIEWS: { mode: TaskView; label: string }[] = [
@@ -22,21 +25,31 @@ function ComingNext({ label }: { label: string }) {
 export default function TasksSection() {
   const view = useTasksStore((s) => s.view);
   const setView = useTasksStore((s) => s.setView);
-  const tasks = useTasksStore((s) => s.tasks);
+  const board = useTasksStore((s) => s.board);
   const fetchTasks = useTasksStore((s) => s.fetchTasks);
+  const fetchBoard = useTasksStore((s) => s.fetchBoard);
+  const fetchCalibration = useTasksStore((s) => s.fetchCalibration);
 
   useEffect(() => {
     fetchTasks();
+    fetchBoard();
+    fetchCalibration();
     const interval = setInterval(() => {
       if (usePlatformStore.getState().activeSection === 'tasks') {
         fetchTasks();
+        fetchBoard();
+        fetchCalibration();
       }
     }, 10000);
     return () => clearInterval(interval);
   }, []);
 
-  const openCount = tasks.filter((t) => t.status === 'open').length;
-  const inFlightCount = tasks.filter((t) => t.status === 'in-progress').length;
+  // Board summary leads the header stat when available; else fall back to list.
+  const tasks = useTasksStore((s) => s.tasks);
+  const openCount = board?.summary.open ?? tasks.filter((t) => t.status === 'open').length;
+  const inFlightCount =
+    board?.summary.inFlight ?? tasks.filter((t) => t.status === 'in-progress').length;
+  const unclaimedCount = board?.summary.unclaimed ?? 0;
 
   return (
     <div className="tasks">
@@ -44,7 +57,7 @@ export default function TasksSection() {
         <div>
           <span className="tasks__title">Tasks</span>
           <span className="tasks__stat">
-            {openCount} open &middot; {inFlightCount} in-flight
+            {openCount} open &middot; {inFlightCount} in-flight &middot; {unclaimedCount} unclaimed
           </span>
         </div>
         <div className="view-switcher">
@@ -60,9 +73,16 @@ export default function TasksSection() {
         </div>
       </div>
 
-      <main className="tasks__main">
+      {view === 'board' && (
+        <div className="tasks__board-controls">
+          <CalibrationStrip />
+          <FilterBar />
+        </div>
+      )}
+
+      <main className={`tasks__main ${view === 'board' ? 'tasks__main--board' : ''}`}>
         {view === 'list' && <ListView />}
-        {view === 'board' && <ComingNext label="Board" />}
+        {view === 'board' && <BoardView />}
         {view === 'inbox' && <ComingNext label="Inbox" />}
       </main>
     </div>

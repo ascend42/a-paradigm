@@ -1,7 +1,7 @@
 version: 2.0.0
 components:
   TasksSection:
-    description: Tasks section shell in Platform UI — header band (title + live "{n} open · {n} in-flight" stat) and a Board|List|Inbox ViewSwitcher. Defaults to List; Board/Inbox render "coming next" placeholders this round. 10s section-guarded poll for fetchTasks.
+    description: Tasks section shell in Platform UI — header band (title + live "{n} open · {n} in-flight · {n} unclaimed" stat off board.summary) and a Board|List|Inbox ViewSwitcher. Defaults to Board; renders the CalibrationStrip + FilterBar above the BoardView (Board tab only), the ListView for List, and an Inbox placeholder. 10s section-guarded poll drives fetchTasks + fetchBoard + fetchCalibration.
     type: view
     tags: [feature, tasks, platform]
   ListView:
@@ -17,10 +17,38 @@ components:
     type: component
     tags: [feature, tasks, platform, moat]
   tasksStore:
-    description: Zustand store mirroring loreStore's idiom — state {tasks, loading, error, view}, fetchTasks() reads GET /api/tasks?status=active&limit=100 with an AbortController per fetch, setView(). Board/Inbox fetches are stubs this round.
+    description: Zustand store mirroring loreStore's idiom. List state {tasks, loading, error, view} (intact from Round B) plus Round C board state {board, boardLoading, boardError} via fetchBoard() (GET /api/tasks/board), calibration state {calibration, calibrationLoading} via fetchCalibration() (GET /api/tasks/calibration), laneMode('claimant'|'state'|'symbol') persisted to localStorage, filter {status,priority,search} + calibrationFilter {archetype,taskType} with setters. Each fetch has its own AbortController. Default view is now 'board'.
     type: state
     tags: [feature, tasks, platform, state]
   storyPoints:
     description: Pure helper tokenBandToPoints({min,max}) → Fibonacci story point (1/2/3/5/8/13/21) by mapping the band midpoint through tunable token thresholds (POINT_THRESHOLDS), to be re-fit against real actuals later.
     type: util
     tags: [feature, tasks, platform, calibration]
+  board-utils:
+    description: Board helpers — AGENT_COLORS (verbatim from TeamSection) + claimantColor(), deriveSymbols()/firstSymbol() (tags + blurb-parsed #symbols, the board fragileSymbols fallback), nodeToTask()/unclaimedToTask() normalizers so TaskCard renders board nodes verbatim, sortCards() (in-progress first then priority-desc), matchesFilter(), sumPoints() (lane story-point total).
+    type: util
+    tags: [feature, tasks, platform, board]
+  BoardView:
+    description: Horizontally-scrollable row of SwimLanes off /api/tasks/board. laneMode='claimant' (default) = one lane per claimant.ref + trailing Unclaimed lane (board.unclaimed) + collapsed Done lane; 'state' = open/in-progress/done/shelved kanban; 'symbol' = grouped by each card's first derived symbol. Honors store status/priority/search + calibrationFilter (archetype×taskType).
+    type: view
+    tags: [feature, tasks, platform, board]
+  SwimLane:
+    description: Single vertical board lane — colored header (label + presence dot + card count + SUMMED story points) using AGENT_COLORS, a scrollable column of TaskCards sorted in-progress-first then priority-desc, collapsible via chevron with per-lane localStorage persistence.
+    type: component
+    tags: [feature, tasks, platform, board]
+  LaneModeToggle:
+    description: Segmented pill (Claimant | State | Symbol/Flow) that sets store.laneMode.
+    type: component
+    tags: [feature, tasks, platform, board]
+  FilterBar:
+    description: Tasks filter bar lifted from lore's pattern — status dropdown, priority dropdown, search-blurb input wired to store filter state, plus a clearable active-filter chip surfacing the calibrationFilter (archetype×taskType) when set.
+    type: component
+    tags: [feature, tasks, platform]
+  CalibrationStrip:
+    description: Default-ON collapsible hero strip ABOVE the board (not a tab) off /api/tasks/calibration. Leads with a coverage StatCard ("{pct}% calibrated cells · {graduated} of {total} graduated") + a "learning in progress" badge on full cold-start, then the CellGrid. Collapse state persisted to localStorage.
+    type: component
+    tags: [feature, tasks, platform, moat]
+  CellGrid:
+    description: Calibration matrix — archetype rows × taskType columns. Learned cells render solid + agent-color tint + a ● dot + compact band ("3–13" n24); prior cells render dimmed/italic/dashed with a "░" mark (intentional cold-start). Clicking a cell toggles the store calibrationFilter that BoardView honors and FilterBar surfaces as a chip.
+    type: component
+    tags: [feature, tasks, platform, moat]

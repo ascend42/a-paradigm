@@ -268,3 +268,419 @@
   color: var(--p-text-muted);
   width: fit-content;
 }
+
+/* ════════════════════════════════════════════════════
+   ROUND C — Board, SwimLanes, Filter, Calibration Strip
+   --p-* tokens only.
+   ════════════════════════════════════════════════════ */
+
+/* The board main relaxes the centered max-width list layout so lanes can
+   stretch full-bleed and scroll horizontally. */
+.tasks__main--board {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+/* Strip + filter sit between the header and the scrolling board. */
+.tasks__board-controls {
+  border-bottom: 1px solid var(--p-border);
+}
+
+/* ── View switcher (shared idiom) ──────────────────── */
+.view-switcher {
+  display: flex;
+  gap: 2px;
+  background: var(--p-bg-primary);
+  border: 1px solid var(--p-border);
+  border-radius: 6px;
+  padding: 2px;
+}
+
+.view-tab {
+  padding: 4px 12px;
+  border: none;
+  background: none;
+  color: var(--p-text-secondary);
+  font-size: 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.view-tab:hover {
+  color: var(--p-text-primary);
+}
+
+.view-tab.active {
+  background: var(--p-bg-card);
+  color: var(--p-text-primary);
+}
+
+/* ── Board ─────────────────────────────────────────── */
+.board {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.board__toolbar {
+  padding: 10px 16px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  border-bottom: 1px solid var(--p-border);
+}
+
+.board__lanes {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 12px;
+  padding: 16px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  align-items: stretch;
+}
+
+/* ── Lane mode toggle (segmented pill) ─────────────── */
+.lane-mode-toggle {
+  display: inline-flex;
+  gap: 2px;
+  background: var(--p-bg-primary);
+  border: 1px solid var(--p-border);
+  border-radius: 14px;
+  padding: 2px;
+}
+
+.lane-mode-pill {
+  padding: 4px 12px;
+  border: none;
+  background: none;
+  color: var(--p-text-secondary);
+  font-size: 11px;
+  border-radius: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.lane-mode-pill:hover {
+  color: var(--p-text-primary);
+}
+
+.lane-mode-pill.active {
+  background: var(--p-bg-card);
+  color: var(--p-text-primary);
+  box-shadow: inset 0 0 0 1px var(--p-border-active);
+}
+
+/* ── SwimLane ──────────────────────────────────────── */
+.swim-lane {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  width: 300px;
+  min-width: 300px;
+  max-height: 100%;
+  background: var(--p-bg-panel);
+  border: 1px solid var(--p-border);
+  border-top: 3px solid var(--lane-color, var(--p-border));
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.swim-lane--collapsed {
+  width: 220px;
+  min-width: 220px;
+}
+
+.swim-lane__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  cursor: pointer;
+  user-select: none;
+  background: color-mix(in srgb, var(--lane-color, var(--p-border)) 8%, transparent);
+  border-bottom: 1px solid var(--p-border);
+}
+
+.swim-lane__chevron {
+  border: none;
+  background: none;
+  color: var(--p-text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0;
+  width: 14px;
+  text-align: center;
+}
+
+.swim-lane__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--p-text-muted);
+  flex: 0 0 auto;
+}
+
+.swim-lane__dot.is-present {
+  background: var(--lane-color, var(--p-accent-green));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--lane-color, var(--p-accent-green)) 30%, transparent);
+}
+
+.swim-lane__label {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--lane-color, var(--p-text-primary));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.swim-lane__count {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--p-text-primary);
+  background: var(--p-bg-tertiary);
+  border-radius: 10px;
+  padding: 1px 7px;
+  min-width: 18px;
+  text-align: center;
+}
+
+.swim-lane__points {
+  font-size: 10px;
+  color: var(--p-text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.swim-lane__cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.swim-lane__empty {
+  color: var(--p-text-muted);
+  font-size: 11px;
+  text-align: center;
+  padding: 24px 8px;
+  font-style: italic;
+}
+
+/* ── Tasks filter bar (extends shared .filter-bar) ─── */
+.tasks-filter-bar {
+  padding: 10px 16px;
+}
+
+.calib-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px 3px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  background: color-mix(in srgb, var(--p-accent-purple) 16%, transparent);
+  color: var(--p-accent-purple);
+  border: 1px solid color-mix(in srgb, var(--p-accent-purple) 35%, transparent);
+}
+
+.calib-chip__label {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.calib-chip__clear {
+  border: none;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+  opacity: 0.8;
+}
+
+.calib-chip__clear:hover {
+  opacity: 1;
+}
+
+/* ── Calibration Strip (hero) ──────────────────────── */
+.calib-strip {
+  border-bottom: 1px solid var(--p-border);
+  background: var(--p-bg-panel);
+}
+
+.calib-strip__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.calib-strip__chevron {
+  border: none;
+  background: none;
+  color: var(--p-text-secondary);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0;
+  width: 14px;
+}
+
+.calib-strip__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--p-text-primary);
+}
+
+.calib-strip__stat {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.calib-strip__pct {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--p-accent-green);
+  font-variant-numeric: tabular-nums;
+}
+
+.calib-strip--cold .calib-strip__pct {
+  color: var(--p-text-secondary);
+}
+
+.calib-strip__stat-label {
+  font-size: 11px;
+  color: var(--p-text-secondary);
+}
+
+.calib-strip__badge {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+  border-radius: 10px;
+  color: var(--p-accent-amber);
+  background: color-mix(in srgb, var(--p-accent-amber) 14%, transparent);
+  border: 1px dashed color-mix(in srgb, var(--p-accent-amber) 40%, transparent);
+}
+
+.calib-strip__body {
+  padding: 0 16px 14px;
+}
+
+/* ── Cell Grid ─────────────────────────────────────── */
+.cell-grid__scroll {
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.cell-grid {
+  border-collapse: separate;
+  border-spacing: 4px;
+  font-size: 11px;
+}
+
+.cell-grid__corner {
+  background: none;
+}
+
+.cell-grid__col-head {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--p-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  text-align: center;
+  padding: 2px 6px;
+  white-space: nowrap;
+}
+
+.cell-grid__row-head {
+  font-size: 11px;
+  font-weight: 600;
+  text-align: right;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
+.cell-grid__cell {
+  border-radius: 5px;
+  padding: 4px 8px;
+  text-align: center;
+  cursor: pointer;
+  border: 1px solid var(--p-border);
+  background: var(--p-bg-tertiary);
+  transition: all 0.12s;
+  min-width: 54px;
+}
+
+.cell-grid__cell--empty {
+  color: var(--p-text-muted);
+  cursor: default;
+  background: none;
+  border-color: transparent;
+}
+
+.cell-grid__cell.is-learned {
+  background: color-mix(in srgb, var(--cell-color, var(--p-accent-green)) 16%, var(--p-bg-tertiary));
+  border-color: color-mix(in srgb, var(--cell-color, var(--p-accent-green)) 40%, var(--p-border));
+  color: var(--p-text-primary);
+}
+
+.cell-grid__cell.is-prior {
+  opacity: 0.5;
+  font-style: italic;
+  border-style: dashed;
+  color: var(--p-text-muted);
+}
+
+.cell-grid__cell:hover {
+  border-color: var(--p-border-active);
+}
+
+.cell-grid__cell.is-active {
+  box-shadow: 0 0 0 2px var(--p-border-active);
+}
+
+.cell-grid__band {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.cell-grid__learned-dot {
+  color: var(--p-accent-green);
+  font-size: 8px;
+}
+
+.cell-grid__n {
+  font-size: 9px;
+  color: var(--p-text-secondary);
+}
+
+.cell-grid__prior {
+  font-size: 13px;
+  letter-spacing: 0.1em;
+}
+
+.cell-grid__loading {
+  font-size: 12px;
+  color: var(--p-text-muted);
+  padding: 16px 0;
+  font-style: italic;
+}
