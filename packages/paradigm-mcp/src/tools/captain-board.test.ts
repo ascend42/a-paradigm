@@ -88,7 +88,7 @@ describe('A. captain_board read — DAG assembly', () => {
   it('settled epic (settledAt present) is excluded from active runs', async () => {
     const epicId = await createTask(root, {
       blurb: 'epic',
-      external_ref: { kind: 'orchestration', ref: 'orch-settled' },
+      external_ref: { provider: 'orchestration', ref: 'orch-settled' },
       claimant: { kind: 'archetype', ref: 'orchestrator' },
     });
     // Loid's stamp (simulated): settledAt present → run is terminal, not surfaced.

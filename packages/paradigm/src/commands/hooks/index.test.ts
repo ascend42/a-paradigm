@@ -166,6 +166,21 @@ describe('hooksInstallCommand - Git', () => {
     expect(content).toContain('paradigm');
   });
 
+  it('post-commit delegates to the provider-agnostic sync-commit command (Phase 2b)', async () => {
+    const { hooksInstallCommand } = await importHooks();
+    await hooksInstallCommand({ postCommit: true, force: true });
+
+    const hookPath = path.join(rootDir, '.git', 'hooks', 'post-commit');
+    const content = fs.readFileSync(hookPath, 'utf8');
+    // The delegation line: best-effort, redirected, '|| true', uses MSG_SYMBOLS.
+    expect(content).toContain('task sync-commit --hash "$COMMIT_HASH" --symbols "$MSG_SYMBOLS"');
+    expect(content).toContain('>/dev/null 2>&1 || true');
+    // It must NEVER name a provider (provider-agnostic).
+    expect(content).not.toContain('gh ');
+    // Version marker bumped so `hooks install --force` re-emits.
+    expect(content).toContain('paradigm-hook-version: 2');
+  });
+
   it('preserves existing git hooks (no overwrite)', async () => {
     // Create an existing hook
     const hookPath = path.join(rootDir, '.git', 'hooks', 'post-commit');

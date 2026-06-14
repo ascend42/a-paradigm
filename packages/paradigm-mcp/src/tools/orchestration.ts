@@ -848,7 +848,7 @@ export function getOrchestrationToolsList() {
       description: `REQUIRED before implementing features. Start with mode="quick" for fast pre-check, or mode="plan" for full orchestration planning.
 
 Plans and coordinates multi-agent task execution within the same session.
-- mode: "quick" - Lightweight pre-implementation check (~3-4k tokens). Jinx (advocate) stress-tests assumptions, reviewer checks feasibility. Returns greenlight or escalates to full orchestration. Satisfies enforcement.
+- mode: "quick" - Lightweight pre-implementation check (~3-4k tokens). Jinx (advocate) stress-tests assumptions, reviewer checks feasibility. Returns greenlight or escalates to full orchestration. NOTE: quick is a pre-check only — it does NOT satisfy orchestration-required enforcement. Enforcement is satisfied by a COMPLETED run (verdicts > 0 — a settled task DAG or a debrief with real agent verdicts) or by declaring \`paradigm solo\`.
 - mode: "plan" - See suggested agents, estimated tokens, and get orchestration plan
 - mode: "execute" - Get full prompts and execution strategy for any IDE
 
@@ -860,7 +860,7 @@ After getting prompts, launch agents using the Task tool. Stages marked canRunPa
 The active mode is set via \`orchestration.default_mode\` in agents.yaml (defaults to "faceted").
 
 When to use this tool:
-- mode="quick": Before any implementation — fast sanity check that satisfies orchestration-required enforcement
+- mode="quick": Before any implementation — fast sanity check (does NOT satisfy enforcement; a completed run with verdicts>0 or \`paradigm solo\` does)
 - mode="plan": Task affects 3+ files, involves security, or mentions multiple symbols
 - mode="execute": Ready to implement, need full agent prompts
 
@@ -961,11 +961,13 @@ async function handleOrchestrateInline(
   const mode = (args.mode as string) || 'execute';
   const agentOverride = args.agents as string[] | undefined;
 
-  // Write orchestration marker for stop hook enforcement
-  try {
-    const markerPath = path.join(ctx.rootDir, '.paradigm', '.orchestrated');
-    fs.writeFileSync(markerPath, new Date().toISOString(), 'utf8');
-  } catch { /* best-effort */ }
+  // NOTE: the `.paradigm/.orchestrated` enforcement marker is intentionally NOT
+  // written here. Writing it on tool ENTRY (for every mode, including `quick`)
+  // satisfied the Stop-hook gate before any agent ran — verifying invocation,
+  // not work (T-005). The marker is now written only from a real completion
+  // signal: a settlement whose learning chain ran end-to-end (task-settlement.ts)
+  // or a debrief that recorded real agent verdicts (captain.ts), both via
+  // recordOrchestrationCompletion in utils/orchestration-marker.ts.
 
   // Team-funnel telemetry: record that orchestration actually ran (Pillar 0 —
   // the invocation-rate metric counts these against bypasses/solo declarations)
@@ -2944,7 +2946,7 @@ export async function emitTaskDag(
       priority: 'medium',
       tags: ['orchestration', 'epic'],
       claimant: { kind: 'archetype', ref: 'orchestrator' },
-      external_ref: { kind: 'orchestration', ref: orchestrationId },
+      external_ref: { provider: 'orchestration', ref: orchestrationId },
     });
     // createTask always lands at 'open'; promote the epic to in-progress
     // (open→in-progress is a legal transition; failure is non-fatal).
@@ -2975,7 +2977,7 @@ export async function emitTaskDag(
             parentTaskId: epicTaskId,
             stage: stage.stage,
             ...(dependsOn.length > 0 ? { dependsOn } : {}),
-            external_ref: { kind: 'orchestration', ref: orchestrationId },
+            external_ref: { provider: 'orchestration', ref: orchestrationId },
           });
           // status stays 'open' (v7.0 has no 'claimed') — not-yet-started.
           agentTaskIds.set(agentStep.name, childId);

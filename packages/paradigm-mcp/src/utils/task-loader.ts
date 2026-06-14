@@ -35,11 +35,26 @@ export interface Claimant {
   ref: string;
 }
 
-/** External anchors for a task (renamed from the orphan `session_link`). */
+/**
+ * Known provider/anchor kinds. Retained as a NAMED string-literal helper only —
+ * `external_ref.provider` is a free `string` (Phase 2a, TD-2026-06-13-768) so
+ * the schema is provider-agnostic-READY. 'github' is the only kind with a
+ * registered SyncProvider; the rest remain valid inert anchors with no provider.
+ */
 export type ExternalRefKind = 'github' | 'session' | 'symphony' | 'orchestration' | 'url';
+
+/**
+ * External anchor for a task (Phase 2a: generalized from the closed
+ * `{ kind, ref }` to a provider-agnostic shape). `provider` is a free string:
+ * a registered SyncProvider id ('github') OR an inert anchor kind
+ * ('session'/'symphony'/'orchestration'/'url') with no provider. `url` and
+ * `syncedAt` are populated by a provider `push`/link; absent for local anchors.
+ */
 export interface ExternalRef {
-  kind: ExternalRefKind;
+  provider: string;
   ref: string;
+  url?: string;
+  syncedAt?: string;
 }
 
 /**
@@ -122,27 +137,37 @@ export interface TaskIndex {
 // ── Normalization (read-side lazy-healing shim) ───────────
 
 /**
- * Heal legacy YAML on load: if `session_link` is present and `external_ref` is
- * not, infer the ref kind and rewrite. Mutates and returns the same object.
- * Files heal lazily — the rewritten value persists on the next `updateTask`.
+ * Heal legacy YAML on load (mutates and returns the same object; files heal
+ * lazily — the rewritten value persists on the next `updateTask`):
+ *
+ *   1. `session_link` → `external_ref` (orphan-field rename, v7 Spine).
+ *   2. `external_ref.kind` → `external_ref.provider` (Phase 2a generalization,
+ *      TD-2026-06-13-768). 1:1 value carry-over ('github'→'github', etc.);
+ *      `kind` is deleted. Old YAML loads unchanged and heals on next write.
  */
 export function normalizeTask(raw: Task): Task {
   if (raw && raw.session_link && !raw.external_ref) {
     const ref = raw.session_link;
     const lower = ref.toLowerCase();
-    let kind: ExternalRefKind;
-    if (lower.includes('github')) kind = 'github';
-    else if (lower.includes('session')) kind = 'session';
-    else kind = 'url';
-    raw.external_ref = { kind, ref };
+    let provider: string;
+    if (lower.includes('github')) provider = 'github';
+    else if (lower.includes('session')) provider = 'session';
+    else provider = 'url';
+    raw.external_ref = { provider, ref };
     delete raw.session_link;
+  }
+  // Phase 2a: heal the closed `kind` discriminator into the agnostic `provider`.
+  const ext = raw?.external_ref as (ExternalRef & { kind?: string }) | undefined;
+  if (ext && ext.kind !== undefined && ext.provider === undefined) {
+    ext.provider = ext.kind;
+    delete ext.kind;
   }
   return raw;
 }
 
 // ── ID generation ─────────────────────────────────────────
 
-function generateTaskId(rootDir: string, dateStr: string): string {
+export function generateTaskId(rootDir: string, dateStr: string): string {
   const datePath = path.join(rootDir, TASKS_ROOT, ENTRIES_DIR, dateStr);
 
   if (!fs.existsSync(datePath)) {

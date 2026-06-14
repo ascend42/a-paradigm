@@ -22,7 +22,7 @@ export interface ThreadEntry {
   files?: string[];
 }
 
-interface ThreadData {
+export interface ThreadData {
   lastSession?: string;
   trail: ThreadEntry[];
   looseEnds: string[];
@@ -70,7 +70,7 @@ function getThreadTrailMax(): number {
 /**
  * Parse existing thread.md file
  */
-function parseThread(content: string): ThreadData {
+export function parseThread(content: string): ThreadData {
   const data: ThreadData = {
     trail: [],
     looseEnds: [],
@@ -301,6 +301,17 @@ export async function threadTodoCommand(task: string, targetPath?: string, optio
     looseEnds: [],
     breadcrumbs: [],
   };
+
+  // Deprecation notice: thread.md looseEnds are a confusing second task store.
+  // The first-class place for tasks is now `paradigm task add`. `thread` is
+  // session-handoff narrative only.
+  if (!options.quiet) {
+    console.log(chalk.yellow(
+      '\n⚠ `paradigm thread todo` is deprecated. Use `paradigm task add` instead —\n' +
+      '  thread is now session-handoff narrative only. (Import existing loose ends\n' +
+      '  with `paradigm task add --from-thread`.)\n',
+    ));
+  }
 
   if (fs.existsSync(threadPath)) {
     const content = fs.readFileSync(threadPath, 'utf8');

@@ -204,35 +204,56 @@ describe('normalizeTask', () => {
     created: '2026-06-10T00:00:00.000Z',
   });
 
-  it('infers github kind from a github session_link', () => {
+  it('infers github provider from a github session_link', () => {
     const t = normalizeTask({ ...base(), session_link: 'https://github.com/x/y/pull/1' });
-    expect(t.external_ref).toEqual({ kind: 'github', ref: 'https://github.com/x/y/pull/1' });
+    expect(t.external_ref).toEqual({ provider: 'github', ref: 'https://github.com/x/y/pull/1' });
     expect(t.session_link).toBeUndefined();
   });
 
-  it('infers session kind', () => {
+  it('infers session provider', () => {
     const t = normalizeTask({ ...base(), session_link: 'session-abc-123' });
-    expect(t.external_ref?.kind).toBe('session');
+    expect(t.external_ref?.provider).toBe('session');
   });
 
-  it('falls back to url kind', () => {
+  it('falls back to url provider', () => {
     const t = normalizeTask({ ...base(), session_link: 'some-other-anchor' });
-    expect(t.external_ref?.kind).toBe('url');
+    expect(t.external_ref?.provider).toBe('url');
   });
 
-  it('is a no-op when external_ref already present', () => {
-    const existing = { kind: 'symphony' as const, ref: 'agent-7' };
+  it('is a no-op when external_ref already present (provider shape)', () => {
+    const existing = { provider: 'symphony', ref: 'agent-7' };
     const t = normalizeTask({ ...base(), session_link: 'github.com/x', external_ref: existing });
     expect(t.external_ref).toBe(existing);
     // session_link is left intact (only deleted when it actually heals).
     expect(t.session_link).toBe('github.com/x');
   });
 
-  it('heals on load via loadTask', async () => {
+  it('heals legacy external_ref.kind → external_ref.provider (1:1 value carry-over)', () => {
+    // Old YAML carried the closed `{ kind, ref }` shape.
+    const t = normalizeTask({ ...base(), external_ref: { kind: 'github', ref: 'a/b#3' } } as any);
+    expect(t.external_ref?.provider).toBe('github');
+    expect((t.external_ref as any)?.kind).toBeUndefined();
+    expect(t.external_ref?.ref).toBe('a/b#3');
+  });
+
+  it('does not overwrite provider when both kind and provider present', () => {
+    const t = normalizeTask({ ...base(), external_ref: { kind: 'url', provider: 'github', ref: 'r' } } as any);
+    expect(t.external_ref?.provider).toBe('github');
+    expect((t.external_ref as any)?.kind).toBe('url'); // untouched — provider already set
+  });
+
+  it('heals session_link on load via loadTask (provider shape)', async () => {
     writeRaw({ id: 'T-2026-06-10-009', created: '2026-06-10T00:00:00.000Z', blurb: 'legacy', priority: 'low', status: 'open', tags: [], session_link: 'https://github.com/a/b' });
     const loaded = await loadTask(root, 'T-2026-06-10-009');
-    expect(loaded?.external_ref?.kind).toBe('github');
+    expect(loaded?.external_ref?.provider).toBe('github');
     expect(loaded?.session_link).toBeUndefined();
+  });
+
+  it('heals legacy external_ref.kind on load via loadTask', async () => {
+    writeRaw({ id: 'T-2026-06-10-010', created: '2026-06-10T00:00:00.000Z', blurb: 'legacy ext', priority: 'low', status: 'open', tags: [], external_ref: { kind: 'orchestration', ref: 'run-9' } } as any);
+    const loaded = await loadTask(root, 'T-2026-06-10-010');
+    expect(loaded?.external_ref?.provider).toBe('orchestration');
+    expect((loaded?.external_ref as any)?.kind).toBeUndefined();
   });
 });
 
@@ -283,7 +304,7 @@ describe('round-trip create → in-progress → done', () => {
   });
 
   it('records DAG edges (parentTaskId / dependsOn) and roots excludes children', async () => {
-    const epic = await createTask(root, { blurb: 'epic', external_ref: { kind: 'orchestration', ref: 'run-1' } });
+    const epic = await createTask(root, { blurb: 'epic', external_ref: { provider: 'orchestration', ref: 'run-1' } });
     const child = await createTask(root, {
       blurb: 'stage 1',
       parentTaskId: epic,

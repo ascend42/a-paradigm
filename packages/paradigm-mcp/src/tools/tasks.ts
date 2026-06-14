@@ -33,10 +33,12 @@ export function getTasksToolsList() {
           stage: { type: 'number', description: 'Orchestration stage index (v7 DAG)' },
           external_ref: {
             type: 'object',
-            description: 'External anchor (renamed from session_link). kind: github|session|symphony|orchestration|url',
+            description: 'External anchor (provider-agnostic). provider: a free string — known: github (synced), session|symphony|orchestration|url (inert anchors). url/syncedAt populated by a provider push/link.',
             properties: {
-              kind: { type: 'string', enum: ['github', 'session', 'symphony', 'orchestration', 'url'] },
+              provider: { type: 'string', description: 'Provider/anchor id. Known: github (the only synced provider), session, symphony, orchestration, url.' },
               ref: { type: 'string' },
+              url: { type: 'string' },
+              syncedAt: { type: 'string' },
             },
           },
           session_link: { type: 'string', description: '(Deprecated — use external_ref) Legacy external anchor; aliased to external_ref' },
@@ -85,10 +87,12 @@ export function getTasksToolsList() {
           stage: { type: 'number', description: 'Orchestration stage index (v7 DAG)' },
           external_ref: {
             type: 'object',
-            description: 'External anchor (renamed from session_link). kind: github|session|symphony|orchestration|url',
+            description: 'External anchor (provider-agnostic). provider: a free string — known: github (synced), session|symphony|orchestration|url (inert anchors). url/syncedAt populated by a provider push/link.',
             properties: {
-              kind: { type: 'string', enum: ['github', 'session', 'symphony', 'orchestration', 'url'] },
+              provider: { type: 'string', description: 'Provider/anchor id. Known: github (the only synced provider), session, symphony, orchestration, url.' },
               ref: { type: 'string' },
+              url: { type: 'string' },
+              syncedAt: { type: 'string' },
             },
           },
           session_link: { type: 'string', description: '(Deprecated — use external_ref) Legacy external anchor; aliased to external_ref' },
@@ -186,12 +190,12 @@ export async function handleTasksTool(
       if (args.dependsOn !== undefined) partial.dependsOn = args.dependsOn;
       if (args.stage !== undefined) partial.stage = args.stage;
       if (args.external_ref !== undefined) partial.external_ref = args.external_ref;
-      // Legacy session_link → external_ref alias (infer kind, parity with normalizeTask).
+      // Legacy session_link → external_ref alias (infer provider, parity with normalizeTask).
       if (args.session_link !== undefined && args.external_ref === undefined) {
         const ref = args.session_link as string;
         const lower = ref.toLowerCase();
-        const kind: ExternalRef['kind'] = lower.includes('github') ? 'github' : lower.includes('session') ? 'session' : 'url';
-        partial.external_ref = { kind, ref };
+        const provider = lower.includes('github') ? 'github' : lower.includes('session') ? 'session' : 'url';
+        partial.external_ref = { provider, ref };
       }
 
       const ok = await updateTask(ctx.rootDir, id, partial as Partial<import('../utils/task-loader.js').Task>);

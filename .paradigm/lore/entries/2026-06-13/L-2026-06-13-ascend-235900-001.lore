@@ -1,0 +1,36 @@
+id: L-2026-06-13-ascend-235900-001
+type: milestone
+timestamp: '2026-06-13T23:59:00.621Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'v7.2 T-005: enforcement verifies completion, not invocation (Teeth complete)'
+summary: 'Shipped the unshipped third leg of v7''s ''Teeth.'' The .orchestrated enforcement marker was written on orchestrate_inline tool ENTRY for every mode — so a single mode=quick ping satisfied the Stop-hook orchestration-required gate before any work ran. Removed the entry-write; the marker is now written ONLY by real completion signals via a new recordOrchestrationCompletion helper: a chainLive settlement (task-settlement.ts) or a captain debrief with real agent verdicts (captain.ts, captured before the synthetic fallback). Reworded the tool description (quick no longer ''satisfies enforcement''). Enforcement now verifies completion (verdicts>0), not invocation — the framework''s central claim is finally true in code. Build clean; mcp 397→403, cli 409.'
+symbols_touched:
+  - '#orchestration-marker'
+  - '#orchestrator'
+  - '#task-settlement'
+  - '#captain'
+symbols_created:
+  - '#orchestration-marker'
+learnings:
+  - 'The v7 settlement chainLive signal turned out to be exactly the ''real cross-check occurred'' primitive T-005 needed — enforcement satisfaction now rides the same completion signal as learning-loop liveness. The Teeth and the loop closure share one source of truth: a chainLive settlement means real work happened AND was cross-checked.'
+  - 'Kit caught a subtle correctness point: capture realVerdicts BEFORE the debrief appends its synthetic ''session'' fallback contribution, so a fabricated/empty session can''t satisfy enforcement via the debrief path. The honesty fix would have had a back-door otherwise.'
+verification:
+  status: pass
+  details:
+    paradigm-mcp: 403 pass
+    paradigm-cli: 409 pass
+    build: pass
+tags:
+  - v7.2
+  - enforcement
+  - teeth
+  - honesty-fix
+  - milestone
+confidence: 0.85
+git_context:
+  ref: a8ca2e0d3c2f6ccccc946741ebc40734f8ccb858
+  branch: v7.2-teeth-and-tasks
+  dirty: true

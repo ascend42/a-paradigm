@@ -787,6 +787,130 @@ program
     await reviewCommand(options);
   });
 
+// paradigm task <subcommand> — human-facing task CLI (#task-cli, local-only)
+const taskCmd = program
+  .command('task')
+  .description('Capture and triage tasks from the terminal (local-only facilitation skin over the task store)');
+
+taskCmd
+  .command('add [blurb...]')
+  .description('Add a task (no quotes needed). Prints the new id on the first line.')
+  .option('-p, --priority <pri>', 'Priority: high | medium | low (default medium)')
+  .option('-t, --tag <tag>', 'Tag (repeatable)', (v: string, acc: string[]) => { acc.push(v); return acc; }, [] as string[])
+  .option('--start', 'Create then move straight to in-progress')
+  .option('--from-thread', 'Import thread.md loose ends as tasks (explicit, never auto-clears)')
+  .option('--project <path>', 'Project root (default cwd)')
+  .option('--json', 'Output machine-readable JSON')
+  .action(async (blurb, options) => {
+    const { taskAddCommand } = await import('./commands/task/index.js');
+    await taskAddCommand(blurb || [], options);
+  });
+
+taskCmd
+  .command('ls [status]')
+  .description('List tasks: active (default) | open | done | shelved | all')
+  .option('-p, --priority <pri>', 'Filter by priority')
+  .option('-t, --tag <tag>', 'Filter by tag')
+  .option('-n, --limit <n>', 'Max rows (default 20)')
+  .option('--mine', 'Only tasks claimed by you')
+  .option('--board', 'Rich run-DAG board (reuses the captain board)')
+  .option('--project <path>', 'Project root (default cwd)')
+  .option('--json', 'Output machine-readable JSON')
+  .action(async (status, options) => {
+    const { taskLsCommand } = await import('./commands/task/index.js');
+    await taskLsCommand(status, options);
+  });
+
+taskCmd
+  .command('start <ref>')
+  .description('Move a task to in-progress (ref: @last | full id | 004 | fuzzy blurb)')
+  .option('--project <path>', 'Project root (default cwd)')
+  .option('--json', 'Output machine-readable JSON')
+  .action(async (ref, options) => {
+    const { taskStartCommand } = await import('./commands/task/index.js');
+    await taskStartCommand(ref, options);
+  });
+
+taskCmd
+  .command('done <ref>')
+  .description('Complete a task (closes the learning loop). Symbol-tagged tasks print a best-effort ripple blast radius.')
+  .option('--no-ripple', 'Skip the ripple blast-radius summary for symbol-tagged tasks')
+  .option('--project <path>', 'Project root (default cwd)')
+  .option('--json', 'Output machine-readable JSON')
+  .action(async (ref, options) => {
+    const { taskDoneCommand } = await import('./commands/task/index.js');
+    await taskDoneCommand(ref, options);
+  });
+
+taskCmd
+  .command('show <ref>')
+  .description('Show a task in full')
+  .option('--project <path>', 'Project root (default cwd)')
+  .option('--json', 'Output machine-readable JSON')
+  .action(async (ref, options) => {
+    const { taskShowCommand } = await import('./commands/task/index.js');
+    await taskShowCommand(ref, options);
+  });
+
+taskCmd
+  .command('shelve <ref>')
+  .description('Shelve a task')
+  .option('--project <path>', 'Project root (default cwd)')
+  .option('--json', 'Output machine-readable JSON')
+  .action(async (ref, options) => {
+    const { taskShelveCommand } = await import('./commands/task/index.js');
+    await taskShelveCommand(ref, options);
+  });
+
+taskCmd
+  .command('edit <ref>')
+  .description('Edit a task: blurb, priority, tags, or reopen')
+  .option('-b, --blurb <text>', 'Replace the blurb')
+  .option('-p, --priority <pri>', 'Replace the priority')
+  .option('-t, --tag <tag>', 'Replace tags (repeatable)', (v: string, acc: string[]) => { acc.push(v); return acc; }, [] as string[])
+  .option('--add-tag <tag>', 'Add a tag (repeatable)', (v: string, acc: string[]) => { acc.push(v); return acc; }, [] as string[])
+  .option('--reopen', 'Reopen a terminal task (→ open)')
+  .option('--project <path>', 'Project root (default cwd)')
+  .option('--json', 'Output machine-readable JSON')
+  .action(async (ref, options) => {
+    const { taskEditCommand } = await import('./commands/task/index.js');
+    await taskEditCommand(ref, options);
+  });
+
+taskCmd
+  .command('link <ref> <url-or-id>')
+  .description('Record an external reference on a task (local-only, no network). Provider inferred from the URL or set via --provider.')
+  .option('--provider <id>', 'Provider id (default: inferred — github | url)')
+  .option('--project <path>', 'Project root (default cwd)')
+  .option('--json', 'Output machine-readable JSON')
+  .action(async (ref, urlOrId, options) => {
+    const { taskLinkCommand } = await import('./commands/task/index.js');
+    await taskLinkCommand(ref, urlOrId, options);
+  });
+
+taskCmd
+  .command('push <ref>')
+  .description('Push a task to its configured sync provider (one-way). Local-first: no/unavailable provider leaves the task untouched.')
+  .option('--provider <id>', 'Provider id (default: from .paradigm/config.yaml sync block)')
+  .option('--repo <owner/repo>', 'Target repo (overrides config; github only)')
+  .option('--project <path>', 'Project root (default cwd)')
+  .option('--json', 'Output machine-readable JSON')
+  .action(async (ref, options) => {
+    const { taskPushCommand } = await import('./commands/task/index.js');
+    await taskPushCommand(ref, options);
+  });
+
+taskCmd
+  .command('sync-commit')
+  .description('Post-commit delegate: comment on linked external items whose tasks touch the committed symbols (provider-agnostic, entirely best-effort). Invoked by the post-commit hook.')
+  .option('--hash <sha>', 'The committed sha (full or short)')
+  .option('--symbols <csv>', 'The commit Symbols: trailer value (comma-separated)')
+  .option('--project <path>', 'Project root (default cwd)')
+  .action(async (options) => {
+    const { taskSyncCommitCommand } = await import('./commands/task/index.js');
+    await taskSyncCommitCommand(options);
+  });
+
 // paradigm sweep
 program
   .command('sweep')

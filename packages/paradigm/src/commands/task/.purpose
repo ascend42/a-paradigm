@@ -1,0 +1,47 @@
+version: 2.0.0
+description: |
+  Human-facing `paradigm task` CLI (task-management expansion,
+  TD-2026-06-13-768). A thin facilitation skin over the existing task store
+  (paradigm-mcp's task-loader). LOCAL-FIRST: every command works with ZERO
+  provider; sync is a purely additive opt-in overlay (Phase 2a).
+
+  The CLI calls the task-loader functions directly (relative-import precedent),
+  NOT the MCP handleTasksTool dispatcher. The ONE field the CLI adds on top of
+  the store is `claimant: {kind:'human', ref:<git user.email>}`, stamped on
+  every CLI-created task — it powers the `you` column and `--mine`. All output
+  goes through cli-output.ts helpers.
+
+  Commands: add (2-second variadic capture, prints id first), ls (active-default
+  triage view, --board reuses assembleCaptainBoard), start, done (closes the
+  learning loop), show, shelve, edit. Refs resolve via resolveRef: @last / full
+  id / short numeric suffix / fuzzy blurb — ambiguity lists candidates and exits
+  non-zero, never guesses.
+
+  Phase 2a (TD-2026-06-13-768) adds the OPT-IN sync overlay: `link` (pure local
+  write of an external_ref — no network) and `push` (resolve a SyncProvider from
+  the .paradigm/config.yaml `sync:` block or --provider, then push one-way and
+  record the returned anchor). LOCAL-FIRST: a missing/unavailable/failing
+  provider prints a hint and leaves the task UNTOUCHED. Provider impl lives in
+  paradigm-mcp/src/sync (#sync-provider, #github-provider); the CLI imports the
+  github module only for its self-registration side-effect.
+
+  Phase 2b (TD-2026-06-13-768) adds two symbol-aware, best-effort wedges:
+    (a) `done` runs RIPPLE over a closed task's symbol tags (#/$/^/!/~) and
+        prints a terse "↯ touches: …" blast radius (direct dependents) reusing
+        premise-core aggregation. Best-effort: no symbols / no index / any throw
+        ⇒ the close still completes cleanly. Skippable via `--no-ripple`.
+    (b) `sync-commit --hash --symbols` — the post-commit delegate. For each
+        local task whose symbol tags intersect the commit's `Symbols:` trailer
+        AND that has a comment-capable, registered linked provider, it drops a
+        one-line "Commit <sha>: touched <symbols>" comment — PROVIDER-AGNOSTIC
+        (resolved from external_ref.provider via the registry). ENTIRELY
+        best-effort: no match / no provider / un-authed / any throw ⇒ silent
+        exit 0. The post-commit hook (POST_COMMIT_HOOK in commands/hooks/index.ts)
+        delegates to it with a redirected `|| true` line so a commit is NEVER
+        slowed or blocked, and never names a provider.
+components:
+  task-cli:
+    description: Human-facing task capture/triage CLI over the task-loader store (add/ls/start/done/show/shelve/edit/link/push/sync-commit + resolveRef). done runs best-effort ripple; sync-commit is the provider-agnostic post-commit comment delegate.
+    type: handler
+    file: index.ts
+    tags: [feature, task-management, cli]

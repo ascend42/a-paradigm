@@ -79,7 +79,7 @@ describe('bridgeRunStart — epic + stage children', () => {
     expect(epic!.status).toBe('in-progress');
     expect(epic!.parentTaskId).toBeUndefined();
     expect(epic!.claimant).toEqual({ kind: 'archetype', ref: 'orchestrator' });
-    expect(epic!.external_ref).toEqual({ kind: 'orchestration', ref: 'orch-cli-1' });
+    expect(epic!.external_ref).toEqual({ provider: 'orchestration', ref: 'orch-cli-1' });
   });
 
   it('children carry parentTaskId=epic, the right stage, archetype claimant, status open', async () => {
@@ -95,7 +95,7 @@ describe('bridgeRunStart — epic + stage children', () => {
     expect(builder!.stage).toBe(1);
     expect(builder!.status).toBe('open');
     expect(builder!.claimant).toEqual({ kind: 'archetype', ref: 'builder' });
-    expect(builder!.external_ref).toEqual({ kind: 'orchestration', ref: 'orch-cli-1' });
+    expect(builder!.external_ref).toEqual({ provider: 'orchestration', ref: 'orch-cli-1' });
   });
 
   it('resolves dependsOn (agent-name edges) to upstream emitted task-ids', async () => {

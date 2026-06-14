@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-06-13T22:34:59.148Z'
+generated: '2026-06-14T04:14:49.288Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -1155,12 +1155,42 @@ by_symbol:
       agent: []
   '#orchestrator':
     symbol: '#orchestrator'
-    total_changes: 10
-    last_modified: '2026-06-13T21:38:15Z'
+    total_changes: 11
+    last_modified: '2026-06-13T23:59:24Z'
     stability_score: 1
     fragility: low
     recent:
-      - &ref_279
+      - &ref_274
+        id: h0421
+        ts: '2026-06-13T23:59:24Z'
+        type: implement
+        symbols:
+          - '#captain'
+          - '#orchestration-marker'
+          - '#orchestrator'
+          - '#task-settlement'
+        author:
+          type: human
+          id: ascend
+        commit: 0a73ea31252878d68f0259abd8ffe094de7fccf8
+        intent: fix
+        files:
+          - .paradigm/decisions/TD-2026-06-13-768.yaml
+          - .paradigm/events/debates.jsonl
+          - .paradigm/events/nominations.jsonl
+          - .paradigm/events/stream.jsonl
+          - .paradigm/lore/entries/2026-06-13/L-2026-06-13-ascend-234641-136.lore
+          - .paradigm/lore/entries/2026-06-13/L-2026-06-13-ascend-235900-001.lore
+          - .paradigm/lore/timeline.yaml
+          - CHANGELOG.md
+          - packages/paradigm-mcp/src/tools/captain.ts
+          - packages/paradigm-mcp/src/tools/orchestration.ts
+          - packages/paradigm-mcp/src/utils/.purpose
+          - packages/paradigm-mcp/src/utils/orchestration-marker.ts
+          - packages/paradigm-mcp/src/utils/task-settlement.ts
+          - packages/paradigm-mcp/tests/orchestration-marker.test.ts
+        description: 'fix(#orchestration-marker): T-005 — enforcement verifies completion, not invocation'
+      - &ref_280
         id: h0418
         ts: '2026-06-13T21:38:15Z'
         type: implement
@@ -1234,7 +1264,7 @@ by_symbol:
           - packages/paradigm/src/core/task-bridge.test.ts
           - packages/paradigm/src/core/task-bridge.ts
         description: 'feat(#task-bridge): v7.1 — CLI orchestrator joins the learning loop'
-      - &ref_273
+      - &ref_272
         id: h0416
         ts: '2026-06-13T21:00:26Z'
         type: implement
@@ -1289,31 +1319,6 @@ by_symbol:
           - packages/paradigm-mcp/src/utils/task-settlement.ts
           - packages/paradigm/src/commands/doctor/index.ts
         description: 'feat(#task-settlement): v7 §2 — the learning loop closes (settlement + falsifiable liveness)'
-      - &ref_270
-        id: h0410
-        ts: '2026-06-13T19:29:31Z'
-        type: implement
-        symbols:
-          - '#agent-relay'
-          - '#orchestrator'
-          - '#task-loader'
-        author:
-          type: human
-          id: ascend
-        commit: 1f21b837a5bc0add2f2f16850778d14d0c9b0792
-        intent: feature
-        files:
-          - .paradigm/events/debates.jsonl
-          - .paradigm/events/nominations.jsonl
-          - .paradigm/events/stream.jsonl
-          - .paradigm/history/index.yaml
-          - .paradigm/history/log.jsonl
-          - .paradigm/lore/entries/2026-06-13/L-2026-06-13-ascend-192921-001.lore
-          - .paradigm/lore/timeline.yaml
-          - CHANGELOG.md
-          - packages/paradigm-mcp/src/tools/orchestration-dag-emission.test.ts
-          - packages/paradigm-mcp/src/tools/orchestration.ts
-        description: 'feat(#orchestrator): v7 sub-phase 2 — orchestration emits the persisted task DAG'
     contributors:
       human:
         - ascend
@@ -1836,7 +1841,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_272
+      - &ref_271
         id: h0407
         ts: '2026-06-10T18:35:38Z'
         type: implement
@@ -1993,7 +1998,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_271
+      - &ref_270
         id: h0406
         ts: '2026-06-09T23:24:45Z'
         type: implement
@@ -19211,9 +19216,32 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_270
-      - &ref_274
-        id: h0408
+      - &ref_273
+        id: h0410
+        ts: '2026-06-13T19:29:31Z'
+        type: implement
+        symbols:
+          - '#agent-relay'
+          - '#orchestrator'
+          - '#task-loader'
+        author:
+          type: human
+          id: ascend
+        commit: 1f21b837a5bc0add2f2f16850778d14d0c9b0792
+        intent: feature
+        files:
+          - .paradigm/events/debates.jsonl
+          - .paradigm/events/nominations.jsonl
+          - .paradigm/events/stream.jsonl
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/lore/entries/2026-06-13/L-2026-06-13-ascend-192921-001.lore
+          - .paradigm/lore/timeline.yaml
+          - CHANGELOG.md
+          - packages/paradigm-mcp/src/tools/orchestration-dag-emission.test.ts
+          - packages/paradigm-mcp/src/tools/orchestration.ts
+        description: 'feat(#orchestrator): v7 sub-phase 2 — orchestration emits the persisted task DAG'
+      - id: h0408
         ts: '2026-06-13T19:05:47Z'
         type: implement
         symbols:
@@ -19276,7 +19304,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_271
+      - *ref_270
     contributors:
       human:
         - ascend
@@ -19288,7 +19316,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_272
+      - *ref_271
     contributors:
       human:
         - ascend
@@ -19300,7 +19328,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_272
+      - *ref_271
     contributors:
       human:
         - ascend
@@ -19312,7 +19340,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_272
+      - *ref_271
     contributors:
       human:
         - ascend
@@ -19324,37 +19352,107 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_272
+      - *ref_271
     contributors:
       human:
         - ascend
       agent: []
   '#task-loader':
     symbol: '#task-loader'
-    total_changes: 4
-    last_modified: '2026-06-13T21:00:26Z'
+    total_changes: 6
+    last_modified: '2026-06-14T00:27:16Z'
     stability_score: 1
     fragility: low
     recent:
-      - *ref_273
+      - &ref_281
+        id: h0423
+        ts: '2026-06-14T00:27:16Z'
+        type: implement
+        symbols:
+          - '#github-provider'
+          - '#sync-provider'
+          - '#task-cli'
+          - '#task-loader'
+        author:
+          type: human
+          id: ascend
+        commit: 639087a1d1b00ee383c9a46b8007b9e0b463f6f5
+        intent: feature
+        files:
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - packages/paradigm-mcp/src/sync/.purpose
+          - packages/paradigm-mcp/src/sync/claimant-projection.ts
+          - packages/paradigm-mcp/src/sync/provider.ts
+          - packages/paradigm-mcp/src/sync/providers/github.test.ts
+          - packages/paradigm-mcp/src/sync/providers/github.ts
+          - packages/paradigm-mcp/src/sync/registry.test.ts
+          - packages/paradigm-mcp/src/sync/registry.ts
+          - packages/paradigm-mcp/src/tools/captain-board.test.ts
+          - packages/paradigm-mcp/src/tools/captain.ts
+          - packages/paradigm-mcp/src/tools/orchestration-dag-emission.test.ts
+          - packages/paradigm-mcp/src/tools/orchestration.ts
+          - packages/paradigm-mcp/src/tools/tasks.ts
+          - packages/paradigm-mcp/src/utils/task-loader.test.ts
+          - packages/paradigm-mcp/src/utils/task-loader.ts
+          - packages/paradigm/src/commands/task/.purpose
+          - packages/paradigm/src/commands/task/index.test.ts
+          - packages/paradigm/src/commands/task/index.ts
+          - packages/paradigm/src/core/task-bridge.test.ts
+          - packages/paradigm/src/core/task-bridge.ts
+          - packages/paradigm/src/index.ts
+        description: 'feat(#sync-provider): v7.2 Phase 2a — provider-agnostic sync foundation + GitHub push'
+      - &ref_278
+        id: h0422
+        ts: '2026-06-14T00:10:05Z'
+        type: implement
+        symbols:
+          - '#captain-board'
+          - '#task-cli'
+          - '#task-loader'
+        author:
+          type: human
+          id: ascend
+        commit: 06de447a8fe2626adf35f8b93fb4fcb3f38ff091
+        intent: feature
+        files:
+          - .paradigm/events/debates.jsonl
+          - .paradigm/events/nominations.jsonl
+          - .paradigm/events/stream.jsonl
+          - .paradigm/flow-index.json
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/lore/entries/2026-06-14/L-2026-06-14-ascend-000948-001.lore
+          - .paradigm/lore/timeline.yaml
+          - .paradigm/navigator.yaml
+          - .paradigm/scan-index.json
+          - CHANGELOG.md
+          - packages/paradigm-mcp/src/utils/task-loader.ts
+          - packages/paradigm/src/commands/task/.purpose
+          - packages/paradigm/src/commands/task/index.test.ts
+          - packages/paradigm/src/commands/task/index.ts
+          - packages/paradigm/src/commands/thread.ts
+          - packages/paradigm/src/index.ts
+        description: 'feat(#task-cli): v7.2 Phase 1 — human-facing `paradigm task` CLI'
+      - *ref_272
       - *ref_150
-      - *ref_270
-      - *ref_274
+      - *ref_273
     contributors:
       human:
         - ascend
       agent: []
   '#task-settlement':
     symbol: '#task-settlement'
-    total_changes: 5
-    last_modified: '2026-06-13T22:03:16Z'
+    total_changes: 6
+    last_modified: '2026-06-13T23:59:24Z'
     stability_score: 1
     fragility: low
     recent:
+      - *ref_274
       - *ref_275
       - *ref_276
-      - *ref_273
-      - &ref_278
+      - *ref_272
+      - &ref_279
         id: h0413
         ts: '2026-06-13T20:25:13Z'
         type: implement
@@ -19383,18 +19481,18 @@ by_symbol:
           - packages/paradigm-mcp/src/tools/.purpose
           - packages/paradigm/src/platform-server/routes/.purpose
         description: 'docs(#task-settlement): v7 self-documentation — register new symbols + fix broken .purpose'
-      - *ref_150
     contributors:
       human:
         - ascend
       agent: []
   '#captain':
     symbol: '#captain'
-    total_changes: 1
-    last_modified: '2026-06-13T20:20:34Z'
+    total_changes: 2
+    last_modified: '2026-06-13T23:59:24Z'
     stability_score: 1
     fragility: low
     recent:
+      - *ref_274
       - *ref_277
     contributors:
       human:
@@ -19402,13 +19500,14 @@ by_symbol:
       agent: []
   '#captain-board':
     symbol: '#captain-board'
-    total_changes: 3
-    last_modified: '2026-06-13T21:00:26Z'
+    total_changes: 4
+    last_modified: '2026-06-14T00:10:05Z'
     stability_score: 1
     fragility: low
     recent:
-      - *ref_273
       - *ref_278
+      - *ref_272
+      - *ref_279
       - *ref_277
     contributors:
       human:
@@ -19433,7 +19532,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_279
+      - *ref_280
       - *ref_276
     contributors:
       human:
@@ -19446,7 +19545,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_279
+      - *ref_280
     contributors:
       human:
         - ascend
@@ -19459,6 +19558,112 @@ by_symbol:
     fragility: low
     recent:
       - *ref_275
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#orchestration-marker':
+    symbol: '#orchestration-marker'
+    total_changes: 1
+    last_modified: '2026-06-13T23:59:24Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_274
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#task-cli':
+    symbol: '#task-cli'
+    total_changes: 3
+    last_modified: '2026-06-14T00:38:03Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_282
+        id: h0424
+        ts: '2026-06-14T00:38:03Z'
+        type: implement
+        symbols:
+          - '#post-commit-hook'
+          - '#sync-provider'
+          - '#task-cli'
+        author:
+          type: human
+          id: ascend
+        commit: 38aff058228f3087c532f6905d9221fa93b76560
+        intent: feature
+        files:
+          - .paradigm/events/debates.jsonl
+          - .paradigm/events/nominations.jsonl
+          - .paradigm/events/stream.jsonl
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/lore/entries/2026-06-14/L-2026-06-14-ascend-003748-001.lore
+          - .paradigm/lore/timeline.yaml
+          - CHANGELOG.md
+          - packages/paradigm/src/commands/hooks/index.test.ts
+          - packages/paradigm/src/commands/hooks/index.ts
+          - packages/paradigm/src/commands/task/.purpose
+          - packages/paradigm/src/commands/task/index.test.ts
+          - packages/paradigm/src/commands/task/index.ts
+          - packages/paradigm/src/index.ts
+        description: 'feat(#task-cli): v7.2 Phase 2b — the symbol-aware sync wedge (ripple + trailer→comment)'
+      - *ref_281
+      - *ref_278
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#github-provider':
+    symbol: '#github-provider'
+    total_changes: 2
+    last_modified: '2026-06-14T04:14:48Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - id: h0425
+        ts: '2026-06-14T04:14:48Z'
+        type: implement
+        symbols:
+          - '#github-provider'
+        author:
+          type: human
+          id: ascend
+        commit: 8fafc3395191b88dd773f854e5d39cf793cceae8
+        intent: fix
+        files:
+          - .paradigm/history/index.yaml
+          - packages/paradigm-mcp/src/sync/providers/github.test.ts
+          - packages/paradigm-mcp/src/sync/providers/github.ts
+        description: 'fix(#github-provider): assignee @me (not raw email) + drop fragile tags-as-labels'
+      - *ref_281
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#sync-provider':
+    symbol: '#sync-provider'
+    total_changes: 2
+    last_modified: '2026-06-14T00:38:03Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_282
+      - *ref_281
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#post-commit-hook':
+    symbol: '#post-commit-hook'
+    total_changes: 1
+    last_modified: '2026-06-14T00:38:03Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_282
     contributors:
       human:
         - ascend

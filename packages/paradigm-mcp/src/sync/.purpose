@@ -1,0 +1,32 @@
+version: 2.0.0
+description: |
+  Provider-agnostic task sync seam (Phase 2a, TD-2026-06-13-768). The THIN,
+  agnostic-READY / GitHub-only-IMPLEMENTED foundation for pushing local tasks
+  out to an external tracker.
+
+  HARD TENETS: fully-local-first (sync is a purely additive opt-in overlay; the
+  core task-loader NEVER imports a concrete provider — only the SyncProvider
+  interface type + a registry lookup; a missing/failed/un-authed provider never
+  degrades local CRUD). ONE-WAY (outbound) only — `pull()` is STRUCTURALLY
+  ABSENT from the interface (two-way is gated to a later phase, cannot be
+  half-built). `link` is NOT a provider method — linking is a pure local write
+  (updateTask with external_ref); providers create items, the loader records
+  links.
+
+  provider.ts defines SyncProvider / ProviderCapabilities / PushResult /
+  ExternalRef. registry.ts is an id→factory map (getProvider→undefined ⇒
+  local-only). claimant-projection.ts is Loid's outbound rule (human→assignee;
+  archetype/peer→unassigned + typed marker label, never falsely assigned to a
+  human). providers/github.ts is the only implemented provider: `gh` CLI
+  shell-out, auth via `gh auth status`, self-registers on module load.
+components:
+  sync-provider:
+    description: Provider-agnostic outbound task-sync seam — SyncProvider interface, id→factory registry, and Loid's claimant projection (no pull/two-way)
+    type: service
+    file: provider.ts
+    tags: [feature, task-management, sync]
+  github-provider:
+    description: GitHub SyncProvider — gh-CLI shell-out for issue create/comment/close, auth via `gh auth status`, claimant-projection label encoding; self-registers on load
+    type: service
+    file: providers/github.ts
+    tags: [feature, task-management, sync, github]
