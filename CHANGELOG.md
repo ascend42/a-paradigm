@@ -9,6 +9,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 The surfaces catch up to the substrate. A six-lens team audit (decision TD-2026-06-14-853) found the renaissance is a *substrate-to-surface gap*, not fragmentation: the unified Suite shell already exists (`paradigm serve` → one React/Vite SPA, 11 sections), but it was frozen for two months while the v7 task DAG / learned calibration / learning loop shipped — and zero surfaces render them. Direction: **web-primary** (Conductor benched, vscode frozen), Tasks as the spearhead with **story-points = learned calibration estimates** as the headline. Frame: subtractive-then-additive.
 
+### Added
+
+- **The v7 claimant task DAG is web-reachable** (`#tasks`): a new read-only `/api/tasks/*` route — `/` (list, with `status`/`priority`/`tag`/`claimant` filters), `/board` (the captain run-DAG, lifting `assembleCaptainBoard` onto HTTP for the first time — it was MCP/CLI-only), `/inbox?kind=&ref=` (a claimant's active tasks), and `/:id`. Owns no storage; task mutation stays on the CLI/MCP write path with its state-machine enforcement. `tasks` is now an always-on Platform section. This is the data spine the Tasks UI renders.
+- **Claimant query primitive** (`#task-loader`): `TaskFilter` gained a `claimant` field (match by `ref`, narrow by `kind`) and a `tasksForClaimant()` convenience (active-by-default, generous limit) in `paradigm-mcp`. The `Task` already carried `claimant`, but nothing could query on it — the prerequisite for both the agent claimant-inbox and the human swim-lanes. +5 loader tests.
+
 ### Fixed
 
 - **The build hole** (`#serve`): `build:platform-ui` was orphaned from the main `build` chain, so `paradigm serve` shipped a 2-month-stale committed SPA (frozen 2026-04-22). Wired `build:platform-ui` into the `build` script — a clean build now regenerates the platform-ui dist. Without this, any Suite work would have shipped invisibly.

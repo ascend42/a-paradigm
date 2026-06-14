@@ -23,6 +23,7 @@ import { createOverviewHandler } from './routes/overview.js';
 import { createGitRouter } from './routes/git.js';
 import { createAmbientRouter } from './routes/ambient.js';
 import { createTeamRouter } from './routes/team.js';
+import { createTasksRouter } from './routes/tasks.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -75,7 +76,7 @@ function isPackageAvailable(packageName: string): boolean {
  * Resolve the set of enabled sections based on config and available packages
  */
 function resolveSections(options: PlatformServerOptions): Set<string> {
-  const always = ['overview', 'lore', 'graph', 'git', 'ambient', 'team'];
+  const always = ['overview', 'tasks', 'lore', 'graph', 'git', 'ambient', 'team'];
   const requested = options.sections ?? [...always, 'sentinel', 'university', 'symphony', 'docs'];
 
   const enabled = new Set<string>();
@@ -228,6 +229,9 @@ export async function startPlatformServer(options: PlatformServerOptions): Promi
 
   // Mount team routes (always available — Maestro orchestration display)
   app.use('/api/team', createTeamRouter(options.projectDir));
+
+  // Mount Tasks routes (always available — the v7 claimant DAG, read-only over HTTP)
+  app.use('/api/tasks', createTasksRouter(options.projectDir));
 
   // Mount Sentinel routes if section is enabled
   if (sections.has('sentinel')) {

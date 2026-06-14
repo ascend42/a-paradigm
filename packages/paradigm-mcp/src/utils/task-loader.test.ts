@@ -23,6 +23,7 @@ import {
   shelveTask,
   loadTask,
   loadTasks,
+  tasksForClaimant,
   rebuildTaskIndex,
   assertTransition,
   normalizeTask,
@@ -159,6 +160,62 @@ describe('applyFilter (via loadTasks)', () => {
     const open = await loadTasks(root, { status: 'open', limit: 99 });
     // It loads (not skipped) and participates in sort without throwing.
     expect(open.find(t => t.id === 'T-2026-06-10-099')).toBeTruthy();
+  });
+});
+
+// ────────────────────────────────────────────────────────
+// claimant filter + tasksForClaimant (renaissance step 1)
+// ────────────────────────────────────────────────────────
+
+describe('claimant filter + tasksForClaimant', () => {
+  beforeEach(() => {
+    const day = '2026-06-12';
+    const mk = (
+      n: string,
+      status: TaskStatus,
+      claimant: Task['claimant'],
+    ): Task => ({
+      id: `T-${day}-${n}`,
+      blurb: `task ${n}`,
+      priority: 'medium',
+      status,
+      tags: [],
+      created: `${day}T0${n}:00:00.000Z`,
+      claimant,
+    });
+    // forge appears as BOTH an archetype and a human ref — kind must disambiguate.
+    writeRaw(mk('1', 'open', { kind: 'archetype', ref: 'builder' }));
+    writeRaw(mk('2', 'in-progress', { kind: 'archetype', ref: 'builder' }));
+    writeRaw(mk('3', 'open', { kind: 'archetype', ref: 'forge' }));
+    writeRaw(mk('4', 'open', { kind: 'human', ref: 'forge' }));
+    writeRaw(mk('5', 'done', { kind: 'archetype', ref: 'builder' }));
+    writeRaw(mk('6', 'open', undefined)); // unclaimed — never matches
+  });
+
+  it('filters by claimant ref (across kinds when kind omitted)', async () => {
+    const forge = await loadTasks(root, { status: 'all', claimant: { ref: 'forge' }, limit: 99 });
+    expect(forge.map(t => t.id).sort()).toEqual(['T-2026-06-12-3', 'T-2026-06-12-4']);
+  });
+
+  it('narrows by kind when given (refs collide across kinds)', async () => {
+    const humanForge = await loadTasks(root, { status: 'all', claimant: { kind: 'human', ref: 'forge' }, limit: 99 });
+    expect(humanForge.map(t => t.id)).toEqual(['T-2026-06-12-4']);
+  });
+
+  it('never matches unclaimed tasks', async () => {
+    const all = await loadTasks(root, { status: 'all', claimant: { ref: 'nobody' }, limit: 99 });
+    expect(all).toEqual([]);
+  });
+
+  it('tasksForClaimant defaults to active (excludes the done task)', async () => {
+    const inbox = await tasksForClaimant(root, { kind: 'archetype', ref: 'builder' });
+    // tasks 1 (open) + 2 (in-progress); task 5 (done) excluded by the active default.
+    expect(inbox.map(t => t.id).sort()).toEqual(['T-2026-06-12-1', 'T-2026-06-12-2']);
+  });
+
+  it('tasksForClaimant honors an explicit status override', async () => {
+    const all = await tasksForClaimant(root, { kind: 'archetype', ref: 'builder' }, { status: 'all' });
+    expect(all.map(t => t.id).sort()).toEqual(['T-2026-06-12-1', 'T-2026-06-12-2', 'T-2026-06-12-5']);
   });
 });
 

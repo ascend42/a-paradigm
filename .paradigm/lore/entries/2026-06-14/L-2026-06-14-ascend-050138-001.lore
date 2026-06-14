@@ -1,0 +1,45 @@
+id: L-2026-06-14-ascend-050138-001
+type: milestone
+timestamp: '2026-06-14T05:01:38.423Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Renaissance Steps 1–2 — the v7 task DAG goes web-reachable
+summary: 'Built the data layer the Tasks UI will render. Step 1: added a claimant filter to TaskFilter + a tasksForClaimant() convenience in paradigm-mcp''s task-loader (the Task carried claimant but nothing could query on it) — the prerequisite for both the agent inbox and human swim-lanes, +5 tests. Step 2: a new read-only /api/tasks/* route (list w/ filters, /board lifting assembleCaptainBoard onto HTTP for the first time, /inbox per-claimant, /:id) + tasks as an always-on section. Smoke-tested live against the real store: board shows 13 open/11 unclaimed, human inbox returns 2 tasks, 400/404 guards correct. MCP 430 / CLI 441 green.'
+symbols_touched:
+  - '#tasks'
+  - '#task-loader'
+  - '#platform-server'
+  - '#captain-board'
+files_created:
+  - packages/paradigm/src/platform-server/routes/tasks.ts
+files_modified:
+  - packages/paradigm-mcp/src/utils/task-loader.ts
+  - packages/paradigm-mcp/src/utils/task-loader.test.ts
+  - packages/paradigm/src/platform-server/index.ts
+  - packages/paradigm/src/platform-server/routes/.purpose
+  - CHANGELOG.md
+learnings:
+  - The captain board (assembleCaptainBoard) was MCP/CLI-only — lifting it onto an HTTP route is what makes the v7 run-DAG visible to any web surface for the first time. Called without a ProjectContext it skips ripple scoring and stays fast (scores 0); the route trades ripple-rank for latency, which is right for a list render.
+  - Cross-package imports from platform-server into paradigm-mcp use the proven '../../../../paradigm-mcp/src/...' relative path (mirrors symphony.ts/docs.ts) and tsup bundles them into the CLI dist — no separate build wiring needed.
+  - The claimant filter needed kind-narrowing because refs collide across kinds (a human and an archetype can both be reffed 'forge') — ref-only match would cross-contaminate the agent inbox with human tasks.
+verification:
+  status: pass
+  details:
+    mcp_tests: 430 passed
+    cli_tests: 441 passed / 3 skipped
+    smoke: 'live serve: /api/tasks, /board (13 open/11 unclaimed), /inbox (human=2), 400+404 guards all correct'
+tags:
+  - suite-renaissance
+  - arc:renaissance
+  - tasks
+  - data-layer
+  - additive
+linked_lore:
+  - L-2026-06-14-ascend-045537-001
+confidence: 0.95
+git_context:
+  ref: 0cf59eabc6bba5aaf471ba61621f46d247a6cc29
+  branch: renaissance/tasks-suite
+  dirty: true

@@ -120,6 +120,14 @@ export interface TaskFilter {
   priority?: 'high' | 'medium' | 'low';
   tag?: string;
   limit?: number;
+  /**
+   * Filter to tasks owned by a claimant (the data prerequisite for the agent
+   * claimant-inbox and human swim-lanes — the Task carries `claimant`, but the
+   * filter could not key on it). Matches by `ref`; if `kind` is also given it
+   * narrows further (refs can collide across kinds — e.g. a human and an
+   * archetype both reffed "forge"). Exact-match, no normalization.
+   */
+  claimant?: { kind?: ClaimantKind; ref: string };
 }
 
 export interface TaskIndex {
@@ -247,6 +255,14 @@ function applyFilter(tasks: Task[], filter: TaskFilter): Task[] {
   if (filter.tag) {
     result = result.filter(t => t.tags.includes(filter.tag!));
   }
+  if (filter.claimant) {
+    const { kind, ref } = filter.claimant;
+    result = result.filter(t =>
+      t.claimant != null &&
+      t.claimant.ref === ref &&
+      (kind === undefined || t.claimant.kind === kind),
+    );
+  }
 
   result.sort((a, b) => {
     const priDiff = (PRIORITY_ORDER[a.priority] ?? 1) - (PRIORITY_ORDER[b.priority] ?? 1);
@@ -289,6 +305,25 @@ export async function loadTasks(rootDir: string, filter?: TaskFilter): Promise<T
   }
 
   return applyFilter(tasks, effectiveFilter);
+}
+
+/**
+ * The claimant's inbox: every task owned by a claimant, priority-ranked. The
+ * convenience over `loadTasks({ claimant })` is inbox-appropriate defaults —
+ * `active` (open ∪ in-progress, excluding done/shelved) and a generous limit,
+ * versus loadTasks' top-20 `open`-only. The data spine for both the agent
+ * claimant-inbox and the human swim-lanes (renaissance step 1).
+ */
+export async function tasksForClaimant(
+  rootDir: string,
+  claimant: { kind?: ClaimantKind; ref: string },
+  opts?: { status?: TaskFilterStatus; limit?: number },
+): Promise<Task[]> {
+  return loadTasks(rootDir, {
+    claimant,
+    status: opts?.status ?? 'active',
+    limit: opts?.limit ?? 200,
+  });
 }
 
 export async function loadTask(rootDir: string, taskId: string): Promise<Task | null> {
