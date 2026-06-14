@@ -210,4 +210,11 @@ export interface CaptainBoard {
    * learning loop never closed on them. Loid detects; Cid owns any graph fix.
    */
   settlementDebt?: Array<{ epicTaskId: string; blurb: string; reason: string }>;
+  /**
+   * Stale archetype claims (Cid-owned, advise-only — TD-2026-06-14-467):
+   * archetype-claimed tasks still `open` (never started) past the staleness
+   * window. Candidates to release back to unclaimed. Human/peer claims are
+   * sticky and never appear here. Cid surfaces; release is a deliberate act.
+   */
+  staleClaims?: Array<{ taskId: string; blurb: string; claimant: Claimant; ageDays: number }>;
 }

@@ -1190,6 +1190,17 @@ export async function assembleCaptainBoard(
     .filter(r => !r.settledAt && r.nodes.length > 0 && r.nodes.every(n => n.status === 'done' || n.status === 'shelved'))
     .map(r => ({ epicTaskId: r.epicTaskId, blurb: r.blurb, reason: 'all children terminal but run never settled' }));
 
+  // Stale archetype claims (Cid-owned, advise-only): an archetype-claimed task
+  // still `open` (never started) past the staleness window is a candidate to
+  // release back to unclaimed. Human/peer claims are sticky — never flagged.
+  const STALE_CLAIM_DAYS = 7;
+  const nowMs = Date.now();
+  const staleClaims = all
+    .filter(t => t.status === 'open' && t.claimant?.kind === 'archetype' && !t.started_at)
+    .map(t => ({ task: t, ageDays: Math.floor((nowMs - new Date(t.created).getTime()) / 86_400_000) }))
+    .filter(({ ageDays }) => Number.isFinite(ageDays) && ageDays >= STALE_CLAIM_DAYS)
+    .map(({ task, ageDays }) => ({ taskId: task.id, blurb: task.blurb, claimant: task.claimant!, ageDays }));
+
   return {
     runs,
     unclaimed,
@@ -1203,6 +1214,7 @@ export async function assembleCaptainBoard(
     },
     integrity: integrity.length > 0 ? integrity : undefined,
     settlementDebt: settlementDebt.length > 0 ? settlementDebt : undefined,
+    staleClaims: staleClaims.length > 0 ? staleClaims : undefined,
   };
 }
 
