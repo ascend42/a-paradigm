@@ -237,6 +237,7 @@ function validateBashSyntax(scriptContent: string, scriptName: string): string |
 const POST_COMMIT_HOOK = `#!/bin/sh
 # Paradigm post-commit hook - captures history from commits
 # Installed by: paradigm hooks install
+# paradigm-hook-version: 2   (v2 adds the provider-agnostic sync-commit delegate)
 
 # Get the commit message and hash
 COMMIT_HASH=$(git rev-parse HEAD)
@@ -278,6 +279,14 @@ if [ -n "$MSG_SYMBOLS" ]; then
   fi
   # Deduplicate
   SYMBOLS=$(echo "$SYMBOLS" | tr ',' '\\n' | sort -u | tr '\\n' ',' | sed 's/,$//')
+fi
+
+# Provider-agnostic sync delegate (Phase 2b). A touched symbol drops a comment
+# on any linked external item. ENTIRELY best-effort: redirected + '|| true' so a
+# commit is NEVER slowed-to-notice or blocked. The hook NEVER names a provider —
+# sync-commit resolves it abstractly from the task's external_ref via the registry.
+if [ -n "$MSG_SYMBOLS" ]; then
+  npx paradigm task sync-commit --hash "$COMMIT_HASH" --symbols "$MSG_SYMBOLS" >/dev/null 2>&1 || true
 fi
 
 # Determine intent from commit message

@@ -444,7 +444,11 @@ export async function taskStartCommand(ref: string, options: CommonOptions): Pro
   dim(task.blurb);
 }
 
-export async function taskDoneCommand(ref: string, options: CommonOptions): Promise<void> {
+interface DoneOptions extends CommonOptions {
+  ripple?: boolean;
+}
+
+export async function taskDoneCommand(ref: string, options: DoneOptions): Promise<void> {
   const rootDir = resolveRoot(options);
   const task = await resolveOrExit(ref, rootDir);
 
@@ -457,11 +461,58 @@ export async function taskDoneCommand(ref: string, options: CommonOptions): Prom
   // inside updateTask when the task has a parent).
   await completeTask(rootDir, task.id);
 
-  if (options.json) { json({ id: task.id, status: 'done' }); return; }
+  // Best-effort ripple over any symbol tags (#component / #flow / …). Closing a
+  // symbol-bound task surfaces what else just got fragile. Commander defaults
+  // boolean options to true; `--no-ripple` flips it false. Ripple NEVER blocks
+  // or fails the close.
+  let rippleSummary: string[] = [];
+  if (options.ripple !== false) {
+    rippleSummary = await rippleForTask(task, rootDir);
+  }
+
+  if (options.json) {
+    json({ id: task.id, status: 'done', ...(rippleSummary.length ? { ripple: rippleSummary } : {}) });
+    return;
+  }
   success(`${shortId(task.id)}  ✓ done`);
   dim(task.blurb);
+  if (rippleSummary.length > 0) {
+    dim(`↯ touches: ${rippleSummary.join(', ')}`);
+  }
   if (task.related_lore && task.related_lore.length > 0) {
     dim(`lore: ${task.related_lore.join(', ')}`);
+  }
+}
+
+/**
+ * Best-effort blast-radius for a closed task's symbol tags. Reuses the same
+ * premise-core aggregation the `paradigm ripple` command uses — but stays terse
+ * (a flat de-duped list of directly-dependent symbols), and NEVER throws: a
+ * failure (no symbols, no index, aggregation error) returns []. The `done`
+ * always completes cleanly regardless.
+ *
+ * "Symbol tags" are tags that look like symbols (start with #/$/^/!/~). Most
+ * tasks tag a `#component`; we ripple each and union the direct dependents.
+ */
+async function rippleForTask(task: Task, rootDir: string): Promise<string[]> {
+  const symbolTags = (task.tags || []).filter(t => /^[#$^!~]/.test(t));
+  if (symbolTags.length === 0) return [];
+
+  try {
+    const { aggregateFromDirectory, buildSymbolIndex, getSymbol } = await import('@a-company/premise-core');
+    const result = await aggregateFromDirectory(rootDir);
+    const index = buildSymbolIndex(result);
+
+    const touched = new Set<string>();
+    for (const sym of symbolTags) {
+      const entry = getSymbol(index, sym);
+      if (!entry) continue;
+      for (const dep of entry.referencedBy || []) touched.add(dep);
+    }
+    return Array.from(touched).sort();
+  } catch {
+    // Best-effort: any failure ⇒ no ripple line, done still succeeds.
+    return [];
   }
 }
 
@@ -713,4 +764,83 @@ export async function taskPushCommand(ref: string, options: PushOptions): Promis
     dim(err instanceof Error ? err.message : String(err));
     process.exitCode = 1;
   }
+}
+
+// ── task sync-commit (Phase 2b — TD-2026-06-13-768) ───────────
+//
+// Driven by the post-commit hook: when a commit's `Symbols:` trailer touches a
+// symbol bound to a linked external item, drop a one-line "touched" comment on
+// that item — PROVIDER-AGNOSTICALLY (the hook never names a provider; it calls
+// this command, which resolves the provider from the registry by the linked
+// task's `external_ref.provider`).
+//
+// HARD TENET: ENTIRELY best-effort. A commit is sacred. No linked task, no
+// registered/comment-capable provider, un-authed, or ANY throw ⇒ silent
+// success. This command MUST exit 0 always and NEVER print to stderr/block.
+
+interface SyncCommitOptions extends CommonOptions {
+  hash?: string;
+  symbols?: string;
+}
+
+/** Split a `Symbols:` trailer CSV into a clean set (drops empties/whitespace). */
+function parseSymbolCsv(csv: string | undefined): Set<string> {
+  const out = new Set<string>();
+  for (const raw of (csv || '').split(',')) {
+    const s = raw.trim();
+    if (s) out.add(s);
+  }
+  return out;
+}
+
+/**
+ * `task sync-commit --hash <sha> --symbols <csv>` — comment on every linked,
+ * comment-capable external item whose task's symbol tags intersect the touched
+ * symbols. Best-effort end to end: it swallows everything and always resolves.
+ */
+export async function taskSyncCommitCommand(options: SyncCommitOptions): Promise<void> {
+  try {
+    const rootDir = resolveRoot(options);
+    const touched = parseSymbolCsv(options.symbols);
+    if (touched.size === 0) return; // nothing to match against — clean no-op
+
+    const all = await loadTasks(rootDir, { status: 'all', limit: 9999 });
+
+    // Candidate tasks: have a symbol tag intersecting the trailer AND a linked
+    // external_ref. We resolve providers lazily and only for providers we see.
+    const candidates = all.filter(t => {
+      if (!t.external_ref?.provider) return false;
+      return (t.tags || []).some(tag => touched.has(tag));
+    });
+    if (candidates.length === 0) return;
+
+    const { getProvider } = await import('../../../../paradigm-mcp/src/sync/registry.js');
+
+    // Opt into concrete providers we encounter (registry self-registration is a
+    // module side-effect; the core never imports concrete providers). github is
+    // the only implemented provider at this phase.
+    const providersSeen = new Set(candidates.map(t => t.external_ref!.provider));
+    if (providersSeen.has('github')) {
+      await import('../../../../paradigm-mcp/src/sync/providers/github.js');
+    }
+
+    const shortSha = (options.hash || '').slice(0, 7) || '(unknown)';
+    const symbolList = Array.from(touched).join(', ');
+    const message = `Commit ${shortSha}: touched ${symbolList}`;
+
+    for (const task of candidates) {
+      const ref = task.external_ref!;
+      try {
+        const provider = getProvider(ref.provider);
+        if (!provider) continue; // unregistered ⇒ local-only, skip silently
+        if (!provider.capabilities().comment) continue; // not comment-capable
+        await provider.comment(ref, message);
+      } catch {
+        // One item's failure never affects the others or the exit code.
+      }
+    }
+  } catch {
+    // Absolute best-effort: ANY failure ⇒ silent success.
+  }
+  // Always succeeds. No output: the hook redirects, and a commit is sacred.
 }

@@ -1,0 +1,41 @@
+id: L-2026-06-14-ascend-003748-001
+type: milestone
+timestamp: '2026-06-14T00:37:48.614Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'v7.2 Phase 2: provider-agnostic GitHub one-way sync + the symbol-aware wedge'
+summary: 'Shipped GitHub out of the gate behind a thin agnostic-ready SyncProvider seam (decision TD-2026-06-13-768), per Matt''s agnostic + github-first + fully-local tenets. 2a: external_ref generalized {kind}→{provider} (healed on read), SyncProvider interface (no pull — two-way structurally absent) + registry + GitHub impl via gh (no OAuth/server) + claimant-projection (human→assignee, archetype/peer→unassigned+marker-label) + task link/push. 2b: the symbol-aware wedge — task done runs ripple (best-effort), and the post-commit Symbols: trailer → issue comment via a provider-agnostic best-effort task sync-commit delegate. Fully local-first: core never imports providers; no provider ⇒ clean no-op. Build clean; mcp 425, cli 441.'
+symbols_touched:
+  - '#sync-provider'
+  - '#github-provider'
+  - '#task-loader'
+  - '#task-cli'
+  - '#post-commit-hook'
+symbols_created:
+  - '#sync-provider'
+  - '#github-provider'
+learnings:
+  - 'The agnostic-ready-but-GitHub-only-implemented shape reconciled Matt''s ''agnostic'' ask with Jinx''s YAGNI: a 5-method interface that earns itself with GitHub alone, pull/two-way structurally ABSENT (can''t be half-built), GitLab/Jira gated. Agnostic POLICY (claimant projection, the registry) is built; agnostic IMPLEMENTATIONS are not. That''s the honest middle.'
+  - Builder caught that the post-commit hook is NOT generator-managed — it's an inline template literal in hooks/index.ts, absent from generated-hooks.ts. The brief's 'edit scripts/ + regenerate' assumption was wrong; verifying the actual source (and testing the INSTALLED hook in a scratch repo) found the truth. Don't trust a hook-source assumption; check where the string actually lives.
+  - external_ref {kind}→{provider} migration rippled into task-bridge tests (stale {kind:'orchestration'} assertions) — the impl produced the healed {provider} shape correctly; only the test expectations were stale. The normalizeTask heal makes the migration safe by-construction; tests just needed the new shape.
+verification:
+  status: pass
+  details:
+    paradigm-mcp: 425 pass
+    paradigm-cli: 441 pass
+    build: pass
+    smoke: task push no-provider clean no-op confirmed
+tags:
+  - v7.2
+  - github-sync
+  - provider-agnostic
+  - local-first
+  - symbol-aware
+  - milestone
+confidence: 0.85
+git_context:
+  ref: 639087a1d1b00ee383c9a46b8007b9e0b463f6f5
+  branch: v7.2-teeth-and-tasks
+  dirty: true

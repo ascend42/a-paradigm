@@ -833,7 +833,8 @@ taskCmd
 
 taskCmd
   .command('done <ref>')
-  .description('Complete a task (closes the learning loop)')
+  .description('Complete a task (closes the learning loop). Symbol-tagged tasks print a best-effort ripple blast radius.')
+  .option('--no-ripple', 'Skip the ripple blast-radius summary for symbol-tagged tasks')
   .option('--project <path>', 'Project root (default cwd)')
   .option('--json', 'Output machine-readable JSON')
   .action(async (ref, options) => {
@@ -897,6 +898,17 @@ taskCmd
   .action(async (ref, options) => {
     const { taskPushCommand } = await import('./commands/task/index.js');
     await taskPushCommand(ref, options);
+  });
+
+taskCmd
+  .command('sync-commit')
+  .description('Post-commit delegate: comment on linked external items whose tasks touch the committed symbols (provider-agnostic, entirely best-effort). Invoked by the post-commit hook.')
+  .option('--hash <sha>', 'The committed sha (full or short)')
+  .option('--symbols <csv>', 'The commit Symbols: trailer value (comma-separated)')
+  .option('--project <path>', 'Project root (default cwd)')
+  .action(async (options) => {
+    const { taskSyncCommitCommand } = await import('./commands/task/index.js');
+    await taskSyncCommitCommand(options);
   });
 
 // paradigm sweep

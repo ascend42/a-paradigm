@@ -200,6 +200,172 @@ describe('taskDoneCommand', () => {
     expect(task?.status).toBe('done');
     expect(task?.completed).toBeTruthy();
   });
+
+  it('a symbol-tagged task still completes cleanly (ripple is best-effort)', async () => {
+    const id = await createTask(root, {
+      blurb: 'touches the parser',
+      tags: ['#parser'],
+      claimant: HUMAN(),
+    });
+    // No symbol index in this temp dir ⇒ ripple finds nothing and no-ops, but
+    // the close MUST still succeed.
+    await capture(() => taskDoneCommand(id, { project: root }));
+    const task = await loadTask(root, id);
+    expect(task?.status).toBe('done');
+  });
+
+  it('runs ripple and prints the blast radius for symbol-tagged tasks', async () => {
+    const id = await createTask(root, {
+      blurb: 'edit the gateway',
+      tags: ['#gateway'],
+      claimant: HUMAN(),
+    });
+    // Mock premise-core so ripple deterministically reports a dependent.
+    vi.doMock('@a-company/premise-core', () => ({
+      aggregateFromDirectory: async () => ({}),
+      buildSymbolIndex: () => ({}),
+      getSymbol: (_idx: unknown, sym: string) =>
+        sym === '#gateway' ? { symbol: '#gateway', referencedBy: ['#router', '#auth'] } : undefined,
+    }));
+    vi.resetModules();
+    const mod = await import('./index.js');
+    const out = await capture(() => mod.taskDoneCommand(id, { project: root }));
+    vi.doUnmock('@a-company/premise-core');
+    vi.resetModules();
+
+    expect(out).toContain('↯ touches:');
+    expect(out).toContain('#router');
+    expect(out).toContain('#auth');
+    const task = await loadTask(root, id);
+    expect(task?.status).toBe('done');
+  });
+
+  it('--no-ripple skips the blast radius (ripple:false)', async () => {
+    const id = await createTask(root, {
+      blurb: 'edit the gateway quietly',
+      tags: ['#gateway'],
+      claimant: HUMAN(),
+    });
+    vi.doMock('@a-company/premise-core', () => ({
+      aggregateFromDirectory: async () => ({}),
+      buildSymbolIndex: () => ({}),
+      getSymbol: () => ({ symbol: '#gateway', referencedBy: ['#router'] }),
+    }));
+    vi.resetModules();
+    const mod = await import('./index.js');
+    const out = await capture(() => mod.taskDoneCommand(id, { project: root, ripple: false }));
+    vi.doUnmock('@a-company/premise-core');
+    vi.resetModules();
+
+    expect(out).not.toContain('↯ touches:');
+    const task = await loadTask(root, id);
+    expect(task?.status).toBe('done');
+  });
+
+  it('a non-symbol-tagged task prints no ripple line', async () => {
+    const id = await createTask(root, { blurb: 'plain task', tags: ['chore'], claimant: HUMAN() });
+    const out = await capture(() => taskDoneCommand(id, { project: root }));
+    expect(out).not.toContain('↯ touches:');
+  });
+});
+
+// ── task sync-commit (Phase 2b) ───────────────────────────
+
+describe('taskSyncCommitCommand', () => {
+  async function withRegistry(fn: (reg: typeof import('../../../../paradigm-mcp/src/sync/registry.js')) => Promise<void>): Promise<void> {
+    const errSpy = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+    await capture(async () => {
+      const reg = await import('../../../../paradigm-mcp/src/sync/registry.js');
+      await import('../../../../paradigm-mcp/src/sync/providers/github.js');
+      await fn(reg);
+    });
+    errSpy.mockRestore();
+  }
+
+  it('comments only on tasks whose symbols match AND have a comment-capable linked provider', async () => {
+    const { taskSyncCommitCommand } = await import('./index.js');
+
+    // matching + linked github → should comment
+    const a = await createTask(root, { blurb: 'gateway work', tags: ['#gateway'], claimant: HUMAN() });
+    // matching symbol but NO external_ref → skip
+    const b = await createTask(root, { blurb: 'gateway local', tags: ['#gateway'], claimant: HUMAN() });
+    // linked but symbol does NOT match → skip
+    const c = await createTask(root, { blurb: 'parser work', tags: ['#parser'], claimant: HUMAN() });
+
+    const { updateTask } = await import('../../../../paradigm-mcp/src/utils/task-loader.js');
+    await updateTask(root, a, { external_ref: { provider: 'github', ref: 'a/b#1' } });
+    await updateTask(root, c, { external_ref: { provider: 'github', ref: 'a/b#2' } });
+    void b;
+
+    const comment = vi.fn().mockResolvedValue(undefined);
+    await withRegistry(async (reg) => {
+      const real = reg.getProvider('github')!;
+      vi.spyOn(real, 'comment').mockImplementation(comment);
+      reg.registerProvider('github', () => real);
+      await taskSyncCommitCommand({ project: root, hash: 'abcdef1234567', symbols: '#gateway,#widget' });
+    });
+
+    expect(comment).toHaveBeenCalledTimes(1);
+    const [ref, message] = comment.mock.calls[0];
+    expect(ref.ref).toBe('a/b#1');
+    expect(message).toContain('abcdef1'); // short sha
+    expect(message).toContain('#gateway');
+  });
+
+  it('clean no-op when no task matches the symbols', async () => {
+    const { taskSyncCommitCommand } = await import('./index.js');
+    const a = await createTask(root, { blurb: 'linked', tags: ['#gateway'], claimant: HUMAN() });
+    const { updateTask } = await import('../../../../paradigm-mcp/src/utils/task-loader.js');
+    await updateTask(root, a, { external_ref: { provider: 'github', ref: 'a/b#1' } });
+
+    const comment = vi.fn().mockResolvedValue(undefined);
+    await withRegistry(async (reg) => {
+      const real = reg.getProvider('github')!;
+      vi.spyOn(real, 'comment').mockImplementation(comment);
+      reg.registerProvider('github', () => real);
+      await taskSyncCommitCommand({ project: root, hash: 'deadbeef', symbols: '#nothing-here' });
+    });
+    expect(comment).not.toHaveBeenCalled();
+  });
+
+  it('skips tasks linked to an unregistered (non-comment-capable) provider', async () => {
+    const { taskSyncCommitCommand } = await import('./index.js');
+    const a = await createTask(root, { blurb: 'jira-linked', tags: ['#gateway'], claimant: HUMAN() });
+    const { updateTask } = await import('../../../../paradigm-mcp/src/utils/task-loader.js');
+    // 'url' / 'jira' have no registered provider ⇒ getProvider returns undefined.
+    await updateTask(root, a, { external_ref: { provider: 'jira', ref: 'JIRA-9' } });
+
+    // No throw, no output — just resolves.
+    await expect(
+      (async () => taskSyncCommitCommand({ project: root, hash: 'cafe1234', symbols: '#gateway' }))()
+    ).resolves.toBeUndefined();
+  });
+
+  it('empty/missing symbols → clean no-op', async () => {
+    const { taskSyncCommitCommand } = await import('./index.js');
+    await expect(
+      (async () => taskSyncCommitCommand({ project: root }))()
+    ).resolves.toBeUndefined();
+    await expect(
+      (async () => taskSyncCommitCommand({ project: root, symbols: '' }))()
+    ).resolves.toBeUndefined();
+  });
+
+  it('a provider throw is swallowed (best-effort, still resolves)', async () => {
+    const { taskSyncCommitCommand } = await import('./index.js');
+    const a = await createTask(root, { blurb: 'boom', tags: ['#gateway'], claimant: HUMAN() });
+    const { updateTask } = await import('../../../../paradigm-mcp/src/utils/task-loader.js');
+    await updateTask(root, a, { external_ref: { provider: 'github', ref: 'a/b#1' } });
+
+    await withRegistry(async (reg) => {
+      const real = reg.getProvider('github')!;
+      vi.spyOn(real, 'comment').mockRejectedValue(new Error('gh exploded'));
+      reg.registerProvider('github', () => real);
+      await expect(
+        taskSyncCommitCommand({ project: root, hash: 'abc1234', symbols: '#gateway' })
+      ).resolves.toBeUndefined();
+    });
+  });
 });
 
 // ── illegal transition → error, not throw ─────────────────
