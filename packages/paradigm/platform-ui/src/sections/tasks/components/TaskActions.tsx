@@ -81,7 +81,7 @@ export function TaskActions({ task }: { task: Task }) {
         <div className="task-actions__blocked">
           <span className="task-actions__blocked-glyph">⛔</span>
           <span className="task-actions__blocked-reason">
-            {task.blocked_on!.join(' · ')}
+            {task.blocked_on}
           </span>
           <button
             className="task-action task-action--unblock"

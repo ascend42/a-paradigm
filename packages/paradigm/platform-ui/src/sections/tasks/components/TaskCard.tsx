@@ -114,6 +114,18 @@ export function TaskCard({ task, elevated }: { task: Task; elevated?: boolean })
           </span>
         )}
 
+        {/* Cid's suggested owner for an unclaimed task — a hint, in the
+            suggested claimant's color, distinct from an actual claim. */}
+        {!task.claimant && task.proposedClaimant && (
+          <span
+            className="task-proposed-claimant"
+            style={{ color: claimantColor(task.proposedClaimant.ref) }}
+            title={`suggested owner — ${task.proposedClaimant.kind} · ${task.proposedClaimant.ref}`}
+          >
+            → {task.proposedClaimant.ref}
+          </span>
+        )}
+
         {isGithub && task.external_ref && (
           <span className="task-github">
             {'⬢'} {task.external_ref.ref}

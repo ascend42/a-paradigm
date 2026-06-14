@@ -34,9 +34,12 @@ export interface Task {
   tags: string[];
   created: string;
   claimant?: TaskClaimant;
+  // Cid's SUGGESTED owner for an unclaimed task — distinct from an actual
+  // claim. Surfaced as a "→ ref" hint on unclaimed cards/lanes.
+  proposedClaimant?: TaskClaimant;
   dependsOn?: string[];
   started_at?: string;
-  blocked_on?: string[];
+  blocked_on?: string;
   external_ref?: TaskExternalRef;
   estimate: TaskEstimate;
   // The calibration band's task type (feature|bugfix|refactor|design|analysis|
@@ -168,6 +171,11 @@ interface TasksState {
   // Detail panel state (Round D)
   selectedTaskId: string | null;
 
+  // Cross-run dependency resolution cache (FIX C). Keyed by task id. A value of
+  // `null` means a genuine 404 (resolve to "unknown"); a Task means resolved.
+  // Absence means not-yet-fetched.
+  depCache: Record<string, Task | null>;
+
   // Action state (Round E — enforced write verbs).
   // `actionError` holds the last write-verb failure message (e.g. a 409
   // "cannot displace" from claim). Transient: cleared on the next action.
@@ -199,6 +207,10 @@ interface TasksState {
   openDetail: (id: string) => void;
   closeDetail: () => void;
 
+  // Lazily resolve a single task by id for cross-run dependency rendering
+  // (FIX C). Dedups in-flight + cached fetches; caches null on a 404.
+  resolveDep: (id: string) => Promise<void>;
+
   // Write verbs (Round E — the ONLY mutations in this UI). Each POSTs the
   // enforced task-action endpoint, then refreshes board/list (+inbox if a
   // claimant is focused) so every view reflects the new state machine state.
@@ -214,6 +226,8 @@ let tasksController: AbortController | null = null;
 let boardController: AbortController | null = null;
 let calibrationController: AbortController | null = null;
 let inboxController: AbortController | null = null;
+// In-flight dependency resolves (FIX C) — dedups concurrent GET /api/tasks/:id.
+const depInFlight = new Set<string>();
 
 export const useTasksStore = create<TasksState>((set, get) => ({
   tasks: [],
@@ -236,6 +250,7 @@ export const useTasksStore = create<TasksState>((set, get) => ({
 
   selectedTaskId: null,
   actionError: null,
+  depCache: {},
 
   laneMode: loadLaneMode(),
 
@@ -387,6 +402,35 @@ export const useTasksStore = create<TasksState>((set, get) => ({
   // ── Detail panel (Round D) ───────────────────────────
   openDetail: (id) => set({ selectedTaskId: id }),
   closeDetail: () => set({ selectedTaskId: null }),
+
+  // ── Cross-run dependency resolution (FIX C) ──────────
+  // Fetch a single task by id when a dependency isn't in the loaded board/inbox
+  // pool. Dedups: skips ids already cached (incl. cached-null 404s) or in flight.
+  // Caches the resolved Task, or null on a genuine 404, so deps render "unknown"
+  // only after a fetch truly fails.
+  resolveDep: async (id) => {
+    if (!id) return;
+    if (id in get().depCache) return; // already resolved or known-404
+    if (depInFlight.has(id)) return; // dedup concurrent fetches
+    depInFlight.add(id);
+    try {
+      const res = await fetch(`/api/tasks/${encodeURIComponent(id)}`);
+      if (res.status === 404) {
+        set((s) => ({ depCache: { ...s.depCache, [id]: null } }));
+        return;
+      }
+      if (!res.ok) return; // transient — leave uncached so a later pass retries
+      const data = await res.json();
+      const task = (data && data.task ? data.task : data) as Task;
+      if (task && task.id) {
+        set((s) => ({ depCache: { ...s.depCache, [id]: task } }));
+      }
+    } catch {
+      /* network error — leave uncached for a retry */
+    } finally {
+      depInFlight.delete(id);
+    }
+  },
 
   // ── Write verbs (Round E) ────────────────────────────
   clearActionError: () => set({ actionError: null }),

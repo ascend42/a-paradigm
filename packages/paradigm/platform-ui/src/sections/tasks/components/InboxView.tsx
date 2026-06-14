@@ -68,11 +68,25 @@ function pickHero(tasks: Task[]): Task | null {
   return candidates[0] ?? null;
 }
 
-// DependsChain — best-effort: resolve each dependsOn id to a state if it appears
-// among the loaded inbox/board tasks; otherwise just show its id. The hero sits
-// in the middle: deps → ●this → next.
+// DependsChain — resolve each dependsOn id to a state. First try the loaded
+// inbox/board pool; for cross-run ids not in the pool, lazily fetch via
+// GET /api/tasks/:id (store-cached + deduped) so they stop rendering "unknown".
+// "unknown" now means only a genuine 404. The hero sits in the middle:
+// deps → ●this → next.
 function DependsChain({ hero, pool }: { hero: Task; pool: Map<string, Task> }) {
   const deps = hero.dependsOn ?? [];
+  const depCache = useTasksStore((s) => s.depCache);
+  const resolveDep = useTasksStore((s) => s.resolveDep);
+
+  // Lazily fetch any dep id missing from the local pool. resolveDep self-dedups
+  // (cached + in-flight), so this is safe to fire on every render.
+  useEffect(() => {
+    for (const id of deps) {
+      if (!pool.has(id)) resolveDep(id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [deps, pool, depCache]);
+
   if (deps.length === 0) return null;
 
   const dot = (state: Task['status'] | 'unknown', filled: boolean) =>
@@ -81,13 +95,22 @@ function DependsChain({ hero, pool }: { hero: Task; pool: Map<string, Task> }) {
   return (
     <div className="depends-chain" title="dependency chain">
       {deps.map((id, i) => {
-        const dep = pool.get(id);
+        // Pool first; then the cross-run fetch cache. A cached `null` is a real
+        // 404 → "unknown"; absence means still resolving (show id, not unknown).
+        const cached = id in depCache ? depCache[id] : undefined;
+        const dep = pool.get(id) ?? cached ?? undefined;
+        const failed = cached === null && !pool.has(id);
+        const state: Task['status'] | 'unknown' = dep ? dep.status : failed ? 'unknown' : 'open';
         const done = dep?.status === 'done';
+        const label = dep ? shortId(dep.id) : shortId(id);
         return (
           <React.Fragment key={id}>
             {i > 0 && <span className="depends-chain__arrow">→</span>}
-            <span className={dot(dep?.status ?? 'unknown', done)} />
-            <span className="depends-chain__id">{shortId(id)}</span>
+            <span
+              className={dot(failed ? 'unknown' : state, done)}
+              title={dep ? dep.blurb : failed ? 'not found' : 'resolving…'}
+            />
+            <span className="depends-chain__id">{label}</span>
             <span className="depends-chain__arrow">→</span>
           </React.Fragment>
         );
@@ -138,6 +161,7 @@ export function InboxView() {
     for (const t of inboxTasks) m.set(t.id, t);
     if (board) {
       for (const run of board.runs) for (const n of run.nodes) m.set(n.taskId, nodeToTask(n));
+      for (const n of board.loose ?? []) m.set(n.taskId, nodeToTask(n));
       for (const u of board.unclaimed) m.set(u.taskId, unclaimedToTask(u));
     }
     return m;

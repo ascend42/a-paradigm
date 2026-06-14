@@ -120,7 +120,9 @@ export function unclaimedToTask(u: BoardUnclaimed): Task {
     status: 'open',
     tags: u.tags || [],
     created: '',
-    claimant: u.proposedClaimant,
+    // Unclaimed → no actual claimant. Cid's suggested owner rides along as
+    // `proposedClaimant` so the card can hint it without reading as a real claim.
+    proposedClaimant: u.proposedClaimant,
     estimate: u.estimate,
     taskType: u.taskType,
   };
@@ -140,7 +142,7 @@ export function matchesFilter(task: Task, filter: TaskFilter): boolean {
   if (filter.priority && task.priority !== filter.priority) return false;
   if (filter.search) {
     const q = filter.search.toLowerCase();
-    const hay = `${task.blurb} ${task.tags.join(' ')} ${task.claimant?.ref ?? ''}`.toLowerCase();
+    const hay = `${task.blurb} ${task.tags.join(' ')} ${task.claimant?.ref ?? ''} ${task.proposedClaimant?.ref ?? ''}`.toLowerCase();
     if (!hay.includes(q)) return false;
   }
   return true;

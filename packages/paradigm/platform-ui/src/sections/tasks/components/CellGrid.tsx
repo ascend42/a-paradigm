@@ -5,10 +5,15 @@ import { claimantColor } from '../utils/board';
 // CellGrid — archetype rows × taskType columns.
 //
 // Each cell: solid + agent-color tint + a small ● when source==='learned';
-// dimmed + italic + a "░" mark when source==='prior'. Bands render compactly
-// ("3–13" with a tiny "n24"), or just "░" for a prior cold-start cell.
+// PRIOR cells encode progress-to-graduation: a cell graduates at n>=8, so its
+// fill/opacity ramps by min(n,8)/8 and it shows a "{n}/8" tick — cells with
+// accumulating actuals (n=5) read as visibly closer to learning than empty ones
+// (n=0). The grid answers "where is the team about to learn something."
 // Clicking a cell sets the store calibrationFilter (archetype × taskType),
 // which BoardView honors and FilterBar surfaces as a clearable chip.
+
+// A cell graduates from prior→learned once it has this many sampled actuals.
+const GRADUATION_N = 8;
 
 function formatTokens(n: number): string {
   if (n >= 1000) {
@@ -46,12 +51,28 @@ function Cell({
     return <td className="cell-grid__cell cell-grid__cell--empty">·</td>;
   }
 
+  // PRIOR progress ramp: how close this cell is to graduating (0 → 1).
+  const progress = Math.min(cell.n, GRADUATION_N) / GRADUATION_N;
+
+  // Ramp the prior cell's fill + opacity by progress so accumulating actuals
+  // look visibly closer to graduating. Tint toward the archetype color as it
+  // approaches graduation. Base opacity 0.35 keeps an n=0 cell faintly present.
+  const priorStyle = !learned
+    ? ({
+        ['--cell-color' as string]: color,
+        ['--cell-progress' as string]: String(progress),
+        opacity: 0.35 + progress * 0.45,
+      } as React.CSSProperties)
+    : undefined;
+
   return (
     <td
       className={`cell-grid__cell ${learned ? 'is-learned' : 'is-prior'} ${active ? 'is-active' : ''}`}
-      style={learned ? ({ ['--cell-color' as string]: color } as React.CSSProperties) : undefined}
+      style={learned ? ({ ['--cell-color' as string]: color } as React.CSSProperties) : priorStyle}
       onClick={onClick}
-      title={`${archetype} × ${taskType} — ${cell.source} (n${cell.n})`}
+      title={`${archetype} × ${taskType} — ${cell.source} (n${cell.n}${
+        learned ? '' : ` / ${GRADUATION_N} to graduate`
+      })`}
     >
       {learned ? (
         <span className="cell-grid__band">
@@ -60,7 +81,16 @@ function Cell({
           <span className="cell-grid__n">n{cell.n}</span>
         </span>
       ) : (
-        <span className="cell-grid__prior">░</span>
+        <span className="cell-grid__prior">
+          <span
+            className="cell-grid__prior-ramp"
+            aria-hidden="true"
+            style={{ width: `${Math.round(progress * 100)}%` }}
+          />
+          <span className="cell-grid__prior-tick">
+            {cell.n}/{GRADUATION_N}
+          </span>
+        </span>
       )}
     </td>
   );

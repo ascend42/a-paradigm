@@ -139,13 +139,17 @@ export function BoardView() {
         cards,
       }));
 
-    // Trailing Unclaimed lane (board.unclaimed)
-    claimantLanes.push({
-      key: 'claimant:__unclaimed__',
-      label: 'Unclaimed',
-      color: 'var(--p-accent-orange)',
-      cards: unclaimedFiltered,
-    });
+    // Trailing Unclaimed lane (board.unclaimed) — only when populated. An empty
+    // orange "alert" lane reads as a problem where there's just no backlog, so a
+    // 0-card unclaimed lane is hidden rather than shown empty.
+    if (unclaimedFiltered.length > 0) {
+      claimantLanes.push({
+        key: 'claimant:__unclaimed__',
+        label: 'Unclaimed',
+        color: 'var(--p-accent-orange)',
+        cards: unclaimedFiltered,
+      });
+    }
 
     // Collapsed Done lane
     claimantLanes.push({
