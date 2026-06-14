@@ -12,6 +12,7 @@ const SECTION_ICONS: Record<string, string> = {
   docs: '☰',
   ambient: '◌',
   team: '◫',
+  tasks: '▤',
   meetings: '●',
 };
 

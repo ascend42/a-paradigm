@@ -1,0 +1,270 @@
+/* Tasks Section — clones .lore-card patterns, --p-* tokens only */
+
+.tasks {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* Header band (mirrors LoreSection header) */
+.tasks__header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--p-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tasks__title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--p-text-primary);
+}
+
+.tasks__stat {
+  font-size: 12px;
+  color: var(--p-text-muted);
+  margin-left: 10px;
+}
+
+.tasks__main {
+  flex: 1;
+  overflow: auto;
+  padding: 16px;
+  padding-bottom: 32px;
+}
+
+.tasks__list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.tasks__empty {
+  color: var(--p-text-muted);
+  font-size: 13px;
+  text-align: center;
+  padding: 48px 20px;
+}
+
+.tasks__placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 100%;
+  color: var(--p-text-muted);
+}
+
+.tasks__placeholder-title {
+  font-size: 18px;
+  color: var(--p-text-secondary);
+}
+
+.tasks__placeholder-sub {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.7;
+}
+
+/* ── Task Card (clone of .lore-card) ───────────────── */
+.task-card {
+  background: var(--p-bg-card);
+  border: 1px solid var(--p-border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  transition: all 0.15s;
+  width: 100%;
+}
+
+.task-card:hover {
+  border-color: var(--p-border-active);
+  background: var(--p-bg-hover);
+}
+
+.task-card__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.task-card__title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--p-text-primary);
+  margin-bottom: 10px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.task-card__footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  font-size: 11px;
+}
+
+.task-card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+/* ── Chips (priority + status) ─────────────────────── */
+.task-chip {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.task-chip--prio-high {
+  background: color-mix(in srgb, var(--p-accent-red) 15%, transparent);
+  color: var(--p-accent-red);
+}
+.task-chip--prio-medium {
+  background: color-mix(in srgb, var(--p-accent-orange) 15%, transparent);
+  color: var(--p-accent-orange);
+}
+.task-chip--prio-low {
+  background: color-mix(in srgb, var(--p-text-secondary) 15%, transparent);
+  color: var(--p-text-secondary);
+}
+
+.task-chip--status-open {
+  background: color-mix(in srgb, var(--p-accent-blue) 15%, transparent);
+  color: var(--p-accent-blue);
+}
+.task-chip--status-in-progress {
+  background: color-mix(in srgb, var(--p-accent-purple) 15%, transparent);
+  color: var(--p-accent-purple);
+}
+.task-chip--status-done {
+  background: color-mix(in srgb, var(--p-accent-green) 15%, transparent);
+  color: var(--p-accent-green);
+}
+.task-chip--status-shelved {
+  background: color-mix(in srgb, var(--p-text-muted) 18%, transparent);
+  color: var(--p-text-muted);
+}
+
+/* ── Claimant + GitHub ─────────────────────────────── */
+.task-claimant {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.task-github {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--p-text-secondary);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 11px;
+}
+
+/* ── Tags (symbol / fragile row) ───────────────────── */
+.task-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  background: color-mix(in srgb, var(--p-symbol-component) 12%, transparent);
+  color: var(--p-symbol-component);
+}
+
+.task-tag--fragile {
+  background: color-mix(in srgb, var(--p-accent-red) 15%, transparent);
+  color: var(--p-accent-red);
+}
+
+/* ── Calibration Block — THE MOAT ──────────────────── */
+.task-calibration {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--p-bg-primary) 60%, transparent);
+  border: 1px solid var(--p-border);
+}
+
+.task-calibration__points {
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--p-text-primary);
+  font-variant-numeric: tabular-nums;
+  min-width: 36px;
+  text-align: center;
+}
+
+.task-calibration__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.task-calibration__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--p-accent-green) 16%, transparent);
+  color: var(--p-accent-green);
+  width: fit-content;
+}
+
+.task-calibration__n {
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+.task-calibration__band {
+  font-size: 12px;
+  color: var(--p-text-secondary);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+/* Learned: full opacity + green accent edge */
+.task-calibration.learned {
+  border-color: color-mix(in srgb, var(--p-accent-green) 35%, var(--p-border));
+}
+.task-calibration.learned .task-calibration__points {
+  color: var(--p-accent-green);
+}
+
+/* Prior: cold-start guess — intentionally dimmed, not broken */
+.task-calibration.prior {
+  opacity: 0.6;
+  border-style: dashed;
+}
+
+.task-calibration__prior-label {
+  font-size: 11px;
+  font-style: italic;
+  color: var(--p-text-muted);
+  width: fit-content;
+}

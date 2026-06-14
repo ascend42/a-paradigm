@@ -1,0 +1,26 @@
+version: 2.0.0
+components:
+  TasksSection:
+    description: Tasks section shell in Platform UI — header band (title + live "{n} open · {n} in-flight" stat) and a Board|List|Inbox ViewSwitcher. Defaults to List; Board/Inbox render "coming next" placeholders this round. 10s section-guarded poll for fetchTasks.
+    type: view
+    tags: [feature, tasks, platform]
+  ListView:
+    description: Priority-ranked vertical list of TaskCards (high → low) sourced from tasksStore. Handles loading/error/empty states.
+    type: view
+    tags: [feature, tasks, platform]
+  TaskCard:
+    description: Card cloning the lore-card structure — priority + status chips, line-clamped title, the prominent CalibrationBlock, a claimant chip colored via the shared AGENT_COLORS map, a fragile/symbol tag row, and a GitHub badge when external_ref.provider is github.
+    type: component
+    tags: [feature, tasks, platform]
+  CalibrationBlock:
+    description: The calibration moat made visible. Largest non-title element on every card — big Fibonacci story-point number with a green LEARNED badge (◆ + n{count}) for learned estimates, or a dimmed italic ~prior~ label for cold-start guesses, plus the raw token band. Learned vs prior contrast is the headline.
+    type: component
+    tags: [feature, tasks, platform, moat]
+  tasksStore:
+    description: Zustand store mirroring loreStore's idiom — state {tasks, loading, error, view}, fetchTasks() reads GET /api/tasks?status=active&limit=100 with an AbortController per fetch, setView(). Board/Inbox fetches are stubs this round.
+    type: state
+    tags: [feature, tasks, platform, state]
+  storyPoints:
+    description: Pure helper tokenBandToPoints({min,max}) → Fibonacci story point (1/2/3/5/8/13/21) by mapping the band midpoint through tunable token thresholds (POINT_THRESHOLDS), to be re-fit against real actuals later.
+    type: util
+    tags: [feature, tasks, platform, calibration]
