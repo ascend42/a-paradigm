@@ -79,14 +79,16 @@ export class GithubProvider implements SyncProvider {
     const body = this.renderBody(task);
 
     const projection = projectClaimant(task.claimant);
-    const labels = [...task.tags, ...projection.labels];
 
     const args = ['issue', 'create', '--title', task.blurb, '--body', body];
     if (repo) args.push('--repo', repo);
-    for (const label of labels) args.push('--label', label);
-    // Archetype/peer tasks go up UNASSIGNED + a marker label (never falsely
-    // assigned to a human); only a human claimant yields an --assignee.
-    if (projection.assignee) args.push('--assignee', projection.assignee);
+    // Assignee: a human-claimed task assigns to the authenticated pusher via
+    // `@me` — GitHub assignees are logins, NOT emails (claimant.ref is an email),
+    // and `task push` is run by the task's owner. Archetype/peer tasks stay
+    // UNASSIGNED. Tags + claimant ride in the issue body (renderBody); arbitrary
+    // tags-as-labels are deferred — `gh issue create` rejects labels that don't
+    // already exist in the repo — until two-way round-trip needs the marker labels.
+    if (projection.assignee) args.push('--assignee', '@me');
 
     const stdout = this.run(args).trim();
     const url = stdout.split('\n').map(l => l.trim()).find(l => /github\.com\//.test(l));

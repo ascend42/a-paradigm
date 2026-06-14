@@ -46,23 +46,25 @@ describe('GithubProvider.push', () => {
     expect(body).toContain('T-2026-06-13-042');
   });
 
-  it('human claimant → --assignee, no agent marker label', () => {
+  it('human claimant → --assignee @me (never a raw email), no labels', () => {
     return (async () => {
       const run = vi.fn().mockReturnValue(ISSUE_URL);
       const provider = new GithubProvider({ repo: 'acme/widgets', run });
       await provider.push(baseTask({ claimant: { kind: 'human', ref: 'matt@x.com' } }));
 
       const args = run.mock.calls[0][0] as string[];
+      // GitHub assignees are logins, not emails: a human-claimed task assigns to
+      // the authenticated pusher via @me — never the raw claimant email.
       expect(args).toContain('--assignee');
-      expect(args[args.indexOf('--assignee') + 1]).toBe('matt@x.com');
-      // tags become labels; no paradigm:agent marker for a human
-      const labels = args.filter((_, i) => args[i - 1] === '--label');
-      expect(labels).toEqual(['#parser', 'bug']);
-      expect(labels.some(l => l.startsWith('paradigm:agent/'))).toBe(false);
+      expect(args[args.indexOf('--assignee') + 1]).toBe('@me');
+      expect(args).not.toContain('matt@x.com');
+      // v7.2 carries tags/claimant in the body, NOT as labels (gh rejects labels
+      // that don't already exist in the repo).
+      expect(args).not.toContain('--label');
     })();
   });
 
-  it('archetype claimant → UNASSIGNED + paradigm:agent/<ref> marker label', async () => {
+  it('archetype claimant → UNASSIGNED, no labels (claimant rides in the body)', async () => {
     const run = vi.fn().mockReturnValue(ISSUE_URL);
     const provider = new GithubProvider({ repo: 'acme/widgets', run });
 
@@ -71,14 +73,12 @@ describe('GithubProvider.push', () => {
     const args = run.mock.calls[0][0] as string[];
     // never falsely assigned to a human
     expect(args).not.toContain('--assignee');
-    const labels = args.filter((_, i) => args[i - 1] === '--label');
-    expect(labels).toContain('paradigm:agent/builder');
-    // the task's own tags ride along too
-    expect(labels).toContain('#parser');
-    expect(labels).toContain('bug');
+    expect(args).not.toContain('--label');
+    const body = args[args.indexOf('--body') + 1];
+    expect(body).toContain('archetype:builder');
   });
 
-  it('peer claimant → UNASSIGNED + paradigm:peer/<ref> marker label', async () => {
+  it('peer claimant → UNASSIGNED, no labels', async () => {
     const run = vi.fn().mockReturnValue(ISSUE_URL);
     const provider = new GithubProvider({ repo: 'acme/widgets', run });
 
@@ -86,8 +86,9 @@ describe('GithubProvider.push', () => {
 
     const args = run.mock.calls[0][0] as string[];
     expect(args).not.toContain('--assignee');
-    const labels = args.filter((_, i) => args[i - 1] === '--label');
-    expect(labels).toContain('paradigm:peer/agent-7');
+    expect(args).not.toContain('--label');
+    const body = args[args.indexOf('--body') + 1];
+    expect(body).toContain('peer:agent-7');
   });
 
   it('throws (does not fabricate) when gh returns no parseable issue URL', async () => {
