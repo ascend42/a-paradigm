@@ -17,7 +17,12 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 
-import { loadLearnedTokenTable } from './orchestration.js';
+import {
+  loadLearnedTokenTable,
+  resolveAgentEstimate,
+  estimateForTask,
+  assembleCalibrationGrid,
+} from './orchestration.js';
 
 let root: string;
 
@@ -78,5 +83,86 @@ describe('loadLearnedTokenTable', () => {
     // A cell the table doesn't have is simply absent → planner uses the constant.
     expect(table.builder.analysis).toBeUndefined();
     expect(table.tester).toBeUndefined();
+  });
+});
+
+// ────────────────────────────────────────────────────────
+// resolveAgentEstimate — widened to {min,max,n,source} (renaissance)
+// ────────────────────────────────────────────────────────
+
+describe('resolveAgentEstimate (n + source provenance)', () => {
+  const LEARNED_TABLE = {
+    builder: { feature: { min: 12000, max: 42000, n: 12 } },
+  };
+
+  it('a graduated cell → source:learned, with its sample count n', () => {
+    const est = resolveAgentEstimate(LEARNED_TABLE, 'builder', 'feature');
+    expect(est).toEqual({ min: 12000, max: 42000, n: 12, source: 'learned' });
+  });
+
+  it('an unlearned cell → cold-start prior (source:prior, n:0)', () => {
+    const est = resolveAgentEstimate(LEARNED_TABLE, 'builder', 'refactor');
+    expect(est.source).toBe('prior');
+    expect(est.n).toBe(0);
+    // builder's cold-start constant.
+    expect(est.min).toBe(10000);
+    expect(est.max).toBe(50000);
+  });
+
+  it('an unknown archetype → generic prior, never throws', () => {
+    const est = resolveAgentEstimate({}, 'nobody', 'feature');
+    expect(est).toEqual({ min: 5000, max: 20000, n: 0, source: 'prior' });
+  });
+});
+
+// ────────────────────────────────────────────────────────
+// estimateForTask — per-task estimate the Tasks UI renders
+// ────────────────────────────────────────────────────────
+
+describe('estimateForTask', () => {
+  const table = { builder: { feature: { min: 12000, max: 42000, n: 12 } } };
+
+  it('an archetype claimant resolves its learned cell', () => {
+    const est = estimateForTask(table, { blurb: 'add a feature for users', claimant: { kind: 'archetype', ref: 'builder' } });
+    expect(est.source).toBe('learned');
+    expect(est.n).toBe(12);
+  });
+
+  it('a human claimant falls back to the archetype hint (else builder)', () => {
+    const est = estimateForTask(table, { blurb: 'add a feature', claimant: { kind: 'human', ref: 'matt@x.com' } }, 'builder');
+    // hint=builder, blurb classifies feature → the learned builder×feature cell.
+    expect(est.source).toBe('learned');
+  });
+
+  it('defaults to the builder archetype when unclaimed and no hint', () => {
+    const est = estimateForTask(table, { blurb: 'add a feature' });
+    expect(est.source).toBe('learned'); // builder×feature is learned
+  });
+});
+
+// ────────────────────────────────────────────────────────
+// assembleCalibrationGrid — the hero-strip grid
+// ────────────────────────────────────────────────────────
+
+describe('assembleCalibrationGrid', () => {
+  it('cold-start (no learned file) → a full all-prior grid, 0% coverage', () => {
+    const grid = assembleCalibrationGrid(root);
+    expect(grid.archetypes).toContain('builder');
+    expect(grid.taskTypes).toContain('feature');
+    expect(grid.coverage.graduated).toBe(0);
+    expect(grid.coverage.total).toBe(grid.archetypes.length * grid.taskTypes.length);
+    expect(grid.coverage.pct).toBe(0);
+    expect(grid.cells.builder.feature.source).toBe('prior');
+  });
+
+  it('counts graduated (learned) cells toward coverage', () => {
+    writeLearned(root, JSON.stringify({
+      builder: { feature: { min: 12000, max: 42000, n: 12 }, bugfix: { min: 8000, max: 20000, n: 9 } },
+    }));
+    const grid = assembleCalibrationGrid(root);
+    expect(grid.coverage.graduated).toBe(2);
+    expect(grid.cells.builder.feature.source).toBe('learned');
+    expect(grid.cells.builder.feature.n).toBe(12);
+    expect(grid.coverage.pct).toBeGreaterThan(0);
   });
 });

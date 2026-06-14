@@ -12,7 +12,12 @@
  *   /              — filtered task list (status, priority, tag, claimant, limit)
  *   /board         — the captain run-DAG board (lifts assembleCaptainBoard onto HTTP)
  *   /inbox         — a claimant's inbox (?kind=&ref=) via tasksForClaimant
+ *   /calibration   — the archetype×taskType learned-estimate grid (hero strip)
  *   /:id           — a single task by id
+ *
+ * `/` and `/board` attach a computed `estimate:{min,max,n,source}` per task —
+ * the learned-calibration story-point the UI renders. Read-only: the estimate is
+ * derived at read time from the learned token table, never persisted here.
  */
 
 import { Router, type Request, type Response } from 'express';
@@ -59,7 +64,14 @@ export function createTasksRouter(projectDir: string): Router {
       }
 
       const tasks = await loadTasks(projectDir, filter);
-      res.json({ tasks, count: tasks.length, filter });
+
+      // Attach the learned-calibration estimate per task (the story-point the UI
+      // renders). Load the table ONCE for the whole list.
+      const { loadLearnedTokenTable, estimateForTask } = await import('../../../../paradigm-mcp/src/tools/orchestration.js');
+      const learned = loadLearnedTokenTable(projectDir);
+      const withEstimates = tasks.map(t => ({ ...t, estimate: estimateForTask(learned, t) }));
+
+      res.json({ tasks: withEstimates, count: withEstimates.length, filter });
     } catch (err) {
       res.status(500).json({ error: 'Failed to load tasks', detail: String(err) });
     }
@@ -73,9 +85,35 @@ export function createTasksRouter(projectDir: string): Router {
     try {
       const { assembleCaptainBoard } = await import('../../../../paradigm-mcp/src/tools/captain.js');
       const board = await assembleCaptainBoard(projectDir, { proposeClaimants: true });
+
+      // Attach estimates: run nodes by their own claimant, unclaimed cards by
+      // their proposedClaimant (the archetype that WOULD pick them up).
+      const { loadLearnedTokenTable, estimateForTask } = await import('../../../../paradigm-mcp/src/tools/orchestration.js');
+      const learned = loadLearnedTokenTable(projectDir);
+      for (const run of board.runs ?? []) {
+        for (const node of run.nodes ?? []) {
+          (node as Record<string, unknown>).estimate = estimateForTask(learned, { blurb: node.blurb, claimant: node.claimant });
+        }
+      }
+      for (const u of board.unclaimed ?? []) {
+        const hint = u.proposedClaimant?.kind === 'archetype' ? u.proposedClaimant.ref : undefined;
+        (u as Record<string, unknown>).estimate = estimateForTask(learned, { blurb: u.blurb }, hint);
+      }
+
       res.json(board);
     } catch (err) {
       res.status(500).json({ error: 'Failed to assemble board', detail: String(err) });
+    }
+  });
+
+  // GET /calibration — the archetype×taskType learned-estimate grid + coverage
+  // for the hero strip. Renders fully even cold-start (all-prior grid).
+  router.get('/calibration', async (_req: Request, res: Response) => {
+    try {
+      const { assembleCalibrationGrid } = await import('../../../../paradigm-mcp/src/tools/orchestration.js');
+      res.json(assembleCalibrationGrid(projectDir));
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to assemble calibration grid', detail: String(err) });
     }
   });
 

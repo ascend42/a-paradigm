@@ -23,6 +23,6 @@ components:
     tags: [feature, ambient]
     signals: ["!ambient:event", "!ambient:nomination"]
   TasksRouter:
-    description: /api/tasks/* — read-only HTTP over the v7 claimant task DAG (list w/ status/priority/tag/claimant filters, /board captain run-DAG, /inbox per-claimant, /:id). Owns no storage; mutation stays on the CLI/MCP write path.
+    description: /api/tasks/* — read-only HTTP over the v7 claimant task DAG (list w/ status/priority/tag/claimant filters, /board captain run-DAG, /inbox per-claimant, /calibration archetype×taskType grid, /:id). / and /board attach a computed estimate{min,max,n,source} per task (the learned-calibration story-point). Owns no storage; mutation stays on the CLI/MCP write path.
     type: router
-    tags: [feature, tasks]
+    tags: [feature, tasks, calibration]
