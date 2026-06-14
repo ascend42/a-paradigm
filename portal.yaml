@@ -391,6 +391,28 @@ routes:
     - ^local-only
     - ^read-only
 
+  # ── Tasks (claimant-owned task store + captain board) ───────────────
+  # All read-only: the platform-server tasks router exposes no mutating
+  # endpoints. Two-way GitHub sync runs through the CLI, not this server.
+  GET /api/tasks:
+    - ^local-only
+    - ^read-only
+  GET /api/tasks/board:
+    - ^local-only
+    - ^read-only
+  GET /api/tasks/calibration:
+    - ^local-only
+    - ^read-only
+  GET /api/tasks/whoami:
+    - ^local-only
+    - ^read-only
+  GET /api/tasks/inbox:
+    - ^local-only
+    - ^read-only
+  GET /api/tasks/:id:
+    - ^local-only
+    - ^read-only
+
   # ── WebSocket ───────────────────────────────────────────────────────
   WS /ws:
     - ^local-only

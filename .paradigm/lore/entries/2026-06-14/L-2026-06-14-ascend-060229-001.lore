@@ -1,0 +1,53 @@
+id: L-2026-06-14-ascend-060229-001
+type: milestone
+timestamp: '2026-06-14T06:02:29.946Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Renaissance Round D — Inbox/agent face, live agents, GitHub strip, detail panel (Tasks first cut complete)
+summary: 'Completed the Tasks section''s first cut. Built the Inbox tab (the agent face: claimant pill-row driven by a new /api/tasks/whoami, single-claimant focused column with rolled-up calibration, NEXT-ACTIONABLE hero, dependsOn ribbon, inbox-zero states), live agent-effect wiring (cards register by derived symbols + useTaskAgentEffect → highlight/annotate land on cards), a GitHubSyncStrip footer (affordance-only Pull copies the CLI command — read router never mutates), and a right-slide TaskDetailPanel on card click. Tasks routes declared read-only in portal.yaml matching existing platform routes. Caught a transient inbox=0 during verification that didn''t reproduce (race with a prior serve process release; unit tests + 3 live queries confirm the correct active-filter behavior). Build green, CLI 441.'
+symbols_touched:
+  - '#tasks-section'
+  - '#tasks'
+  - '#calibration'
+  - '#platform-server'
+files_created:
+  - packages/paradigm/platform-ui/src/sections/tasks/components/InboxView.tsx
+  - packages/paradigm/platform-ui/src/sections/tasks/components/GitHubSyncStrip.tsx
+  - packages/paradigm/platform-ui/src/sections/tasks/components/TaskDetailPanel.tsx
+  - packages/paradigm/platform-ui/src/sections/tasks/utils/useTaskAgentEffect.ts
+files_modified:
+  - packages/paradigm/src/platform-server/routes/tasks.ts
+  - packages/paradigm/platform-ui/src/sections/tasks/store/tasksStore.ts
+  - packages/paradigm/platform-ui/src/sections/tasks/TasksSection.tsx
+  - packages/paradigm/platform-ui/src/sections/tasks/components/TaskCard.tsx
+  - packages/paradigm/platform-ui/src/sections/tasks/styles/tasks.css
+  - packages/paradigm/platform-ui/src/sections/tasks/.purpose
+  - portal.yaml
+  - CHANGELOG.md
+learnings:
+  - 'The builder''s final report TRUNCATED at ~92k tokens (the known large-edit failure mode) — verifying state directly (build + file-existence + wiring greps + live endpoint smoke + portal validate) recovered full confidence without the report. This is the reusable mitigation: never depend on a big builder''s self-report; check the artifacts.'
+  - 'A transient inbox=0 appeared once during verification right after a build, then never reproduced across 3 clean queries — almost certainly hitting the server in the window where a prior test''s serve process was still releasing. The lesson: when a flaky result can''t reproduce AND the unit test covers the logic, trust the test + repeated clean runs over the one-off.'
+  - 'Agent-effect highlights match by SYMBOL not taskId, so the Tasks cards had to register by derived symbols (tags + blurb-parsed #symbols) to be drivable by an agent — the same seam lore/graph use. The live-agent ''theater'' only works because cards expose their symbols to the shared agentStore.'
+verification:
+  status: pass
+  details:
+    build: green
+    cli_tests: 441 passed
+    portal: Valid (gates ^local-only/^read-only declared, matches /api/lore pattern)
+    smoke: whoami + inbox + list all correct; wiring confirmed (InboxView/GitHubSyncStrip/TaskDetailPanel mounted, TaskCard onClick, useTaskAgentEffect)
+tags:
+  - suite-renaissance
+  - arc:renaissance
+  - tasks-section
+  - inbox
+  - agent-experience
+  - github-sync
+linked_lore:
+  - L-2026-06-14-ascend-054326-001
+confidence: 0.9
+git_context:
+  ref: 9ddd4be53b0996f6c0bd2a993ddba0b3725c6959
+  branch: renaissance/tasks-suite
+  dirty: true

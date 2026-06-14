@@ -5,6 +5,9 @@ import { ListView } from './components/ListView';
 import { BoardView } from './components/BoardView';
 import { CalibrationStrip } from './components/CalibrationStrip';
 import { FilterBar } from './components/FilterBar';
+import { InboxView } from './components/InboxView';
+import { GitHubSyncStrip } from './components/GitHubSyncStrip';
+import { TaskDetailPanel } from './components/TaskDetailPanel';
 import './styles/tasks.css';
 
 const VIEWS: { mode: TaskView; label: string }[] = [
@@ -13,15 +16,6 @@ const VIEWS: { mode: TaskView; label: string }[] = [
   { mode: 'inbox', label: 'Inbox' },
 ];
 
-function ComingNext({ label }: { label: string }) {
-  return (
-    <div className="tasks__placeholder">
-      <span className="tasks__placeholder-title">{label}</span>
-      <span className="tasks__placeholder-sub">coming next</span>
-    </div>
-  );
-}
-
 export default function TasksSection() {
   const view = useTasksStore((s) => s.view);
   const setView = useTasksStore((s) => s.setView);
@@ -29,11 +23,13 @@ export default function TasksSection() {
   const fetchTasks = useTasksStore((s) => s.fetchTasks);
   const fetchBoard = useTasksStore((s) => s.fetchBoard);
   const fetchCalibration = useTasksStore((s) => s.fetchCalibration);
+  const fetchWhoami = useTasksStore((s) => s.fetchWhoami);
 
   useEffect(() => {
     fetchTasks();
     fetchBoard();
     fetchCalibration();
+    fetchWhoami();
     const interval = setInterval(() => {
       if (usePlatformStore.getState().activeSection === 'tasks') {
         fetchTasks();
@@ -83,8 +79,12 @@ export default function TasksSection() {
       <main className={`tasks__main ${view === 'board' ? 'tasks__main--board' : ''}`}>
         {view === 'list' && <ListView />}
         {view === 'board' && <BoardView />}
-        {view === 'inbox' && <ComingNext label="Inbox" />}
+        {view === 'inbox' && <InboxView />}
       </main>
+
+      {view === 'board' && <GitHubSyncStrip />}
+
+      <TaskDetailPanel />
     </div>
   );
 }

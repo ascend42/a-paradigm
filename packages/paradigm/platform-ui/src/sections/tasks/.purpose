@@ -9,7 +9,7 @@ components:
     type: view
     tags: [feature, tasks, platform]
   TaskCard:
-    description: Card cloning the lore-card structure — priority + status chips, line-clamped title, the prominent CalibrationBlock, a claimant chip colored via the shared AGENT_COLORS map, a fragile/symbol tag row, and a GitHub badge when external_ref.provider is github.
+    description: Card cloning the lore-card structure — priority + status chips, line-clamped title, the prominent CalibrationBlock, a claimant chip colored via the shared AGENT_COLORS map, a fragile/symbol tag row, and a GitHub badge when external_ref.provider is github. Round D — clickable (onClick → store.openDetail(id), keyboard-accessible), an optional elevated `hero` variant for the Inbox, and live agent-effect registration via useTaskAgentEffect (symbol-matched pulse/color/label + badge stamps; keyed by taskId so the 10s poll re-render doesn't detach the highlight).
     type: component
     tags: [feature, tasks, platform]
   CalibrationBlock:
@@ -17,7 +17,7 @@ components:
     type: component
     tags: [feature, tasks, platform, moat]
   tasksStore:
-    description: Zustand store mirroring loreStore's idiom. List state {tasks, loading, error, view} (intact from Round B) plus Round C board state {board, boardLoading, boardError} via fetchBoard() (GET /api/tasks/board), calibration state {calibration, calibrationLoading} via fetchCalibration() (GET /api/tasks/calibration), laneMode('claimant'|'state'|'symbol') persisted to localStorage, filter {status,priority,search} + calibrationFilter {archetype,taskType} with setters. Each fetch has its own AbortController. Default view is now 'board'.
+    description: Zustand store mirroring loreStore's idiom. List state {tasks, loading, error, view} (intact from Round B) plus Round C board state {board, boardLoading, boardError} via fetchBoard() (GET /api/tasks/board), calibration state {calibration, calibrationLoading} via fetchCalibration() (GET /api/tasks/calibration), laneMode('claimant'|'state'|'symbol') persisted to localStorage, filter {status,priority,search} + calibrationFilter {archetype,taskType} with setters. Round D adds inbox state {whoami (cached human claimant), inboxClaimant, inboxTasks, inboxLoading, inboxError} via fetchWhoami() (GET /api/tasks/whoami, cached) + fetchInbox(kind, ref) (GET /api/tasks/inbox?kind=&ref=) + setInboxClaimant(), and detail state {selectedTaskId} via openDetail(id)/closeDetail(). Each fetch has its own AbortController. Default view is 'board'.
     type: state
     tags: [feature, tasks, platform, state]
   storyPoints:
@@ -52,3 +52,19 @@ components:
     description: Calibration matrix — archetype rows × taskType columns. Learned cells render solid + agent-color tint + a ● dot + compact band ("3–13" n24); prior cells render dimmed/italic/dashed with a "░" mark (intentional cold-start). Clicking a cell toggles the store calibrationFilter that BoardView honors and FilterBar surfaces as a chip.
     type: component
     tags: [feature, tasks, platform, moat]
+  InboxView:
+    description: The Inbox tab — the AGENT FACE. A claimant pill-row (a "Me" pill resolved via /api/tasks/whoami + one AGENT_COLORS-tinted pill per distinct board claimant) selects whose inbox to focus via fetchInbox(kind, ref). The focused column shows a rolled-up calibration header ("calibration {pct}% · n={total}", share of source==='learned'), a NEXT-ACTIONABLE hero card (highest-priority in-progress-or-open, not blocked) elevated on top, a DependsChain ribbon under the hero (●done → ●this → ○next, best-effort state resolution from the board/inbox pool), then the rest as a queued list of TaskCards. Cold-start default landing is the human's ("Me") inbox; empty claimants render "inbox zero".
+    type: view
+    tags: [feature, tasks, platform, inbox]
+  GitHubSyncStrip:
+    description: Persistent Board-tab footer. Aggregates external_ref state across visible board tasks — synced (provider==='github' && url), push-pending (github && no url), drifted (future state, 0 for now). "Pull from GitHub" is AFFORDANCE-ONLY — opens a popover that shows + clipboard-copies the `paradigm task sync` CLI command with a note that two-way sync runs via the CLI today. Calls no mutating endpoint (the read router has none).
+    type: component
+    tags: [feature, tasks, platform, github]
+  TaskDetailPanel:
+    description: Right-slide detail panel cloning lore's .detail-overlay/.detail-panel. Opened by clicking any TaskCard (store.openDetail(id)); fetches GET /api/tasks/:id (seeded instantly from the already-loaded board/inbox/list pool). Shows full blurb, the dependsOn DAG (ids + resolved states), the estimate breakdown (token band + LEARNED/prior provenance + n), fragileSymbols/tags chips, a GitHub section (ref + link when url present), and related_lore ids. Closes on backdrop click / Esc.
+    type: component
+    tags: [feature, tasks, platform]
+  useTaskAgentEffect:
+    description: Hook consuming the shared agentStore the SAME way the platform's agent-effect protocol works — matched by SYMBOL (not taskId). A card registers its derived symbols (board.deriveSymbols) and intersects them against agentStore.highlights[].symbols (pulse + color + label) and agentStore.annotations of type 'badge' (symbol-targeted badge stamps). Mute clears agentStore, so a muted session yields no card effects for free.
+    type: util
+    tags: [feature, tasks, platform, agent-effects]

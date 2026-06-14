@@ -117,6 +117,17 @@ export function createTasksRouter(projectDir: string): Router {
     }
   });
 
+  // GET /whoami — the current human's claimant identity (git user.email-based),
+  // so the Inbox "Me" lens can resolve its ref without browser-side git access.
+  router.get('/whoami', async (_req: Request, res: Response) => {
+    try {
+      const { currentHumanRef } = await import('../../commands/task/index.js');
+      res.json({ kind: 'human', ref: currentHumanRef() });
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to resolve identity', detail: String(err) });
+    }
+  });
+
   // GET /inbox?kind=&ref= — a claimant's inbox (active tasks they own). `ref` is
   // required; `kind` narrows when refs collide across kinds. Defaults to active.
   router.get('/inbox', async (req: Request, res: Response) => {

@@ -149,6 +149,16 @@ interface TasksState {
   calibration: CalibrationData | null;
   calibrationLoading: boolean;
 
+  // Inbox state (Round D — the agent face)
+  whoami: TaskClaimant | null;
+  inboxClaimant: TaskClaimant | null;
+  inboxTasks: Task[];
+  inboxLoading: boolean;
+  inboxError: string | null;
+
+  // Detail panel state (Round D)
+  selectedTaskId: string | null;
+
   // Lane mode (persisted)
   laneMode: LaneMode;
 
@@ -165,13 +175,23 @@ interface TasksState {
   fetchTasks: () => Promise<void>;
   fetchBoard: () => Promise<void>;
   fetchCalibration: () => Promise<void>;
+
+  // Inbox actions (Round D)
+  fetchWhoami: () => Promise<TaskClaimant | null>;
+  fetchInbox: (kind: string, ref: string) => Promise<void>;
+  setInboxClaimant: (claimant: TaskClaimant) => void;
+
+  // Detail actions (Round D)
+  openDetail: (id: string) => void;
+  closeDetail: () => void;
 }
 
 let tasksController: AbortController | null = null;
 let boardController: AbortController | null = null;
 let calibrationController: AbortController | null = null;
+let inboxController: AbortController | null = null;
 
-export const useTasksStore = create<TasksState>((set) => ({
+export const useTasksStore = create<TasksState>((set, get) => ({
   tasks: [],
   loading: false,
   error: null,
@@ -183,6 +203,14 @@ export const useTasksStore = create<TasksState>((set) => ({
 
   calibration: null,
   calibrationLoading: false,
+
+  whoami: null,
+  inboxClaimant: null,
+  inboxTasks: [],
+  inboxLoading: false,
+  inboxError: null,
+
+  selectedTaskId: null,
 
   laneMode: loadLaneMode(),
 
@@ -278,4 +306,59 @@ export const useTasksStore = create<TasksState>((set) => ({
       set({ calibrationLoading: false });
     }
   },
+
+  // ── Inbox (Round D) ──────────────────────────────────
+  // whoami resolves the human's claimant ref (git user.email-based). Cached so
+  // the "Me" pill resolves without re-hitting the endpoint on every render.
+  fetchWhoami: async () => {
+    const cached = get().whoami;
+    if (cached) return cached;
+    try {
+      const res = await fetch('/api/tasks/whoami');
+      if (!res.ok) return null;
+      const data = (await res.json()) as TaskClaimant;
+      const claimant: TaskClaimant = {
+        kind: data.kind || 'human',
+        ref: data.ref || '',
+      };
+      set({ whoami: claimant });
+      return claimant;
+    } catch {
+      return null;
+    }
+  },
+
+  fetchInbox: async (kind, ref) => {
+    inboxController?.abort();
+    inboxController = new AbortController();
+    const { signal } = inboxController;
+    set({ inboxLoading: true, inboxError: null, inboxClaimant: { kind, ref } });
+    try {
+      const qs = new URLSearchParams({ kind, ref });
+      const res = await fetch(`/api/tasks/inbox?${qs.toString()}`, { signal });
+      if (!res.ok) {
+        set({ inboxLoading: false, inboxError: `HTTP ${res.status}`, inboxTasks: [] });
+        return;
+      }
+      const data = await res.json();
+      set({
+        inboxTasks: (data.tasks || []) as Task[],
+        inboxClaimant: data.claimant || { kind, ref },
+        inboxLoading: false,
+      });
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') return;
+      set({
+        inboxLoading: false,
+        inboxError: err instanceof Error ? err.message : 'fetch failed',
+        inboxTasks: [],
+      });
+    }
+  },
+
+  setInboxClaimant: (claimant) => set({ inboxClaimant: claimant }),
+
+  // ── Detail panel (Round D) ───────────────────────────
+  openDetail: (id) => set({ selectedTaskId: id }),
+  closeDetail: () => set({ selectedTaskId: null }),
 }));

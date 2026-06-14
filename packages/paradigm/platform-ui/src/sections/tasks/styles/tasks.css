@@ -684,3 +684,556 @@
   padding: 16px 0;
   font-style: italic;
 }
+
+/* ─── Round D: Inbox (the agent face) ──────────────────────────────── */
+
+.inbox {
+  max-width: 760px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.inbox__pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-bottom: 4px;
+}
+
+.inbox-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--p-border);
+  background: var(--p-bg-card);
+  color: var(--p-text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.inbox-pill:hover {
+  border-color: var(--p-border-active);
+  color: var(--p-text-primary);
+}
+
+.inbox-pill.active {
+  border-color: var(--pill-color, var(--p-accent-blue));
+  color: var(--p-text-primary);
+  box-shadow: inset 0 0 0 1px var(--pill-color, var(--p-accent-blue));
+}
+
+.inbox-pill__glyph {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.inbox-pill--me {
+  font-weight: 600;
+}
+
+.inbox__column {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.inbox__calib-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border: 1px solid var(--p-border);
+  border-radius: 8px;
+  background: var(--p-bg-card);
+}
+
+.inbox__calib-who {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--p-text-primary);
+}
+
+.inbox__calib-stat {
+  font-size: 12px;
+  color: var(--p-text-muted);
+}
+
+.inbox__calib-stat strong {
+  color: var(--p-accent-green);
+}
+
+.inbox__hero {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.inbox__hero-label,
+.inbox__queue-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--p-text-muted);
+}
+
+.inbox__queue {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.inbox__zero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 48px 20px;
+  color: var(--p-text-muted);
+  border: 1px dashed var(--p-border);
+  border-radius: 8px;
+}
+
+.inbox__zero-glyph {
+  font-size: 28px;
+  color: var(--p-accent-green);
+}
+
+.inbox__zero-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--p-text-secondary);
+}
+
+.inbox__zero-sub {
+  font-size: 12px;
+}
+
+/* DependsChain ribbon under the hero */
+.depends-chain {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--p-bg-hover);
+  font-size: 11px;
+  color: var(--p-text-muted);
+}
+
+.depends-chain__arrow {
+  color: var(--p-text-muted);
+  opacity: 0.6;
+}
+
+.depends-chain__dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid var(--p-text-muted);
+  display: inline-block;
+}
+
+.depends-chain__dot.is-filled {
+  background: currentColor;
+}
+
+.depends-chain__dot--done {
+  border-color: var(--p-accent-green);
+  color: var(--p-accent-green);
+  background: var(--p-accent-green);
+}
+
+.depends-chain__dot--in-progress {
+  border-color: var(--p-accent-purple);
+  color: var(--p-accent-purple);
+}
+
+.depends-chain__dot--this {
+  border-color: var(--p-accent-blue);
+  color: var(--p-accent-blue);
+  background: var(--p-accent-blue);
+}
+
+.depends-chain__id {
+  font-family: var(--p-font-mono, monospace);
+}
+
+.depends-chain__id--this {
+  color: var(--p-accent-blue);
+  font-weight: 600;
+}
+
+/* Hero card elevation */
+.task-card--hero {
+  border-color: var(--p-accent-blue);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
+}
+
+/* ─── Round D: live agent effects on cards ─────────────────────────── */
+
+.task-card {
+  cursor: pointer;
+  position: relative;
+}
+
+.task-card--agent {
+  border-color: var(--agent-color, var(--p-accent-blue));
+  box-shadow: inset 0 0 0 1px var(--agent-color, var(--p-accent-blue));
+}
+
+.task-card--agent-pulse {
+  animation: task-agent-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes task-agent-pulse {
+  0%,
+  100% {
+    box-shadow: inset 0 0 0 1px var(--agent-color, var(--p-accent-blue));
+  }
+  50% {
+    box-shadow: inset 0 0 0 1px var(--agent-color, var(--p-accent-blue)),
+      0 0 10px var(--agent-color, var(--p-accent-blue));
+  }
+}
+
+.task-card__agent-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--agent-color, var(--p-accent-blue));
+  margin-bottom: 6px;
+}
+
+.task-card__agent-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.task-agent-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--p-bg-hover);
+  color: var(--p-text-secondary);
+  border: 1px solid var(--p-border);
+}
+
+.task-agent-badge--warning {
+  color: var(--p-symbol-signal);
+  border-color: var(--p-symbol-signal);
+}
+
+.task-agent-badge--error {
+  color: var(--p-symbol-gate);
+  border-color: var(--p-symbol-gate);
+}
+
+.task-agent-badge--success {
+  color: var(--p-symbol-flow);
+  border-color: var(--p-symbol-flow);
+}
+
+/* ─── Round D: GitHub sync strip (Board footer) ────────────────────── */
+
+.sync-strip {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  border-top: 1px solid var(--p-border);
+  background: var(--p-bg-panel);
+  font-size: 12px;
+}
+
+.sync-strip__counts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--p-text-muted);
+}
+
+.sync-strip__provider {
+  font-weight: 600;
+  color: var(--p-text-secondary);
+}
+
+.sync-strip__sep {
+  opacity: 0.4;
+}
+
+.sync-strip__stat--synced {
+  color: var(--p-accent-green);
+}
+
+.sync-strip__stat--drifted {
+  color: var(--p-accent-orange);
+}
+
+.sync-strip__stat--pending {
+  color: var(--p-text-secondary);
+}
+
+.sync-strip__action {
+  position: relative;
+}
+
+.sync-strip__pull {
+  padding: 5px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--p-border);
+  background: var(--p-bg-card);
+  color: var(--p-text-primary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.sync-strip__pull:hover {
+  border-color: var(--p-border-active);
+  background: var(--p-bg-hover);
+}
+
+.sync-strip__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+}
+
+.sync-strip__popover {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  z-index: 100;
+  width: 320px;
+  padding: 14px;
+  border-radius: 8px;
+  border: 1px solid var(--p-border);
+  background: var(--p-bg-panel);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+}
+
+.sync-strip__popover-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--p-text-primary);
+  margin-bottom: 6px;
+}
+
+.sync-strip__popover-note {
+  font-size: 11px;
+  color: var(--p-text-muted);
+  line-height: 1.5;
+  margin: 0 0 10px;
+}
+
+.sync-strip__cmd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--p-bg-hover);
+  border: 1px solid var(--p-border);
+}
+
+.sync-strip__cmd code {
+  flex: 1;
+  font-family: var(--p-font-mono, monospace);
+  font-size: 12px;
+  color: var(--p-text-primary);
+}
+
+.sync-strip__copy {
+  padding: 3px 10px;
+  border-radius: 5px;
+  border: 1px solid var(--p-border);
+  background: var(--p-bg-card);
+  color: var(--p-text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.sync-strip__copy:hover {
+  color: var(--p-text-primary);
+  border-color: var(--p-border-active);
+}
+
+/* ─── Round D: TaskDetailPanel (right-slide, clones lore) ───────────── */
+
+.tdp .tdp__id-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tdp__id {
+  font-family: var(--p-font-mono, monospace);
+  font-size: 11px;
+  color: var(--p-text-muted);
+}
+
+.tdp__blurb {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--p-text-primary);
+  white-space: pre-wrap;
+}
+
+.tdp-estimate {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--p-border);
+  background: var(--p-bg-card);
+}
+
+.tdp-estimate__points {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--p-text-primary);
+}
+
+.tdp-estimate.prior .tdp-estimate__points {
+  opacity: 0.6;
+}
+
+.tdp-estimate__band {
+  font-size: 12px;
+  color: var(--p-text-muted);
+}
+
+.tdp-estimate__prov {
+  font-size: 11px;
+  margin-left: auto;
+}
+
+.tdp-estimate__prov--learned {
+  color: var(--p-accent-green);
+  font-weight: 600;
+}
+
+.tdp-estimate__prov--prior {
+  color: var(--p-text-muted);
+  font-style: italic;
+}
+
+.tdp-deps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tdp-dep {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tdp-dep__state {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--p-border);
+  color: var(--p-text-muted);
+}
+
+.tdp-dep__state--done {
+  color: var(--p-accent-green);
+  border-color: var(--p-accent-green);
+}
+
+.tdp-dep__state--in-progress {
+  color: var(--p-accent-purple);
+  border-color: var(--p-accent-purple);
+}
+
+.tdp-dep__state--open {
+  color: var(--p-accent-blue);
+  border-color: var(--p-accent-blue);
+}
+
+.tdp-dep__id {
+  font-family: var(--p-font-mono, monospace);
+  font-size: 12px;
+  color: var(--p-text-secondary);
+}
+
+.tdp-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tdp-chip {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--p-bg-hover);
+  color: var(--p-text-secondary);
+  border: 1px solid var(--p-border);
+}
+
+.tdp-chip--symbol {
+  color: var(--p-symbol-component);
+  border-color: var(--p-symbol-component);
+}
+
+.tdp-chip--fragile {
+  color: var(--p-accent-red);
+  border-color: var(--p-accent-red);
+}
+
+.tdp-chip--lore {
+  font-family: var(--p-font-mono, monospace);
+}
+
+.tdp-github {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tdp-github__ref {
+  font-size: 13px;
+  color: var(--p-text-primary);
+}
+
+.tdp-github__link {
+  font-size: 12px;
+  color: var(--p-accent-blue);
+  text-decoration: none;
+}
+
+.tdp-github__link:hover {
+  text-decoration: underline;
+}
+
+.tdp-github__pending {
+  font-size: 11px;
+  color: var(--p-text-muted);
+  font-style: italic;
+}
+
+.tdp__loading {
+  font-size: 11px;
+  color: var(--p-text-muted);
+  font-style: italic;
+}
