@@ -1,0 +1,38 @@
+id: L-2026-06-14-ascend-042312-001
+type: milestone
+timestamp: '2026-06-14T04:23:12.978Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: v7.2.0 capstone — enforcement honesty + human task management + live-tested GitHub sync
+summary: 'Third release of the day''s arc. v7.2.0 completes v7''s ''Teeth'' (T-005: enforcement verifies completion not invocation — a mode=quick ping can no longer fake the orchestration gate) and gives the task system a human face: the paradigm task CLI (capture/triage from the terminal, the #1 gap from the day''s first audit) plus provider-agnostic external sync (GitHub out of the gate via gh, thin agnostic-ready seam, fully local-first). Live-tested the GitHub push against ascend42/a-paradigm BEFORE merge — which caught a real bug (human-claimant→assignee sent the git email; GitHub needs a login) and a latent one (tags-as-labels abort when the label doesn''t exist); both fixed (assignee @me, tags in the body), then verified: 3 tasks pushed clean to issues #15/#16/#17, all linked back. The local-first isolation held throughout (failed push never corrupted the local task). Ideated the next-session PARAMOUNT direction: a Platform ''Tasks'' section UI (lists/filters, story-points=learned-calibration, swim lanes, GitHub polling, agent-tailored inbox).'
+symbols_touched:
+  - '#orchestration-marker'
+  - '#task-cli'
+  - '#sync-provider'
+  - '#github-provider'
+  - '#task-loader'
+learnings:
+  - 'Testing the GitHub sync against the REAL repo before merge paid off immediately: it caught that the human-claimant assignee projection used the git email (GitHub needs a login) and that gh issue create aborts on non-existent labels. A pure unit test with mocked gh would NOT have caught the assignee bug (the mock accepted anything). Live integration testing against the actual external system is irreplaceable for sync code.'
+  - 'gh issue create is NOT atomic across title+assignee: the pre-fix attempt created issue #14 and THEN failed on the bad assignee, orphaning a GitHub issue with no local link. Robust design = create issue → write external_ref back → THEN best-effort assign (a failed assign keeps the link). Filed as a follow-up.'
+  - 'The day''s three releases (v7.0/v7.1/v7.2) all followed the same loop: team analysis → adversarial review → build → verify → ship. The discipline caught false claims (v7.0 design, v7.1 belief-delta gate) and a live sync bug (v7.2) before any shipped — the framework holding itself to the standard it sells.'
+verification:
+  status: pass
+  details:
+    paradigm-mcp: 425 pass
+    paradigm-cli: 441 pass
+    github-sync: 'live-verified issues #15/#16/#17 linked'
+tags:
+  - v7.2
+  - release
+  - enforcement
+  - task-cli
+  - github-sync
+  - milestone
+  - arc:v7
+confidence: 0.9
+git_context:
+  ref: 8fafc3395191b88dd773f854e5d39cf793cceae8
+  branch: v7.2-teeth-and-tasks
+  dirty: true

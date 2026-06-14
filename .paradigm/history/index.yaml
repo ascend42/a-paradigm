@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-06-14T00:59:01.574Z'
+generated: '2026-06-14T04:14:49.288Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -19618,11 +19618,26 @@ by_symbol:
       agent: []
   '#github-provider':
     symbol: '#github-provider'
-    total_changes: 1
-    last_modified: '2026-06-14T00:27:16Z'
+    total_changes: 2
+    last_modified: '2026-06-14T04:14:48Z'
     stability_score: 1
     fragility: low
     recent:
+      - id: h0425
+        ts: '2026-06-14T04:14:48Z'
+        type: implement
+        symbols:
+          - '#github-provider'
+        author:
+          type: human
+          id: ascend
+        commit: 8fafc3395191b88dd773f854e5d39cf793cceae8
+        intent: fix
+        files:
+          - .paradigm/history/index.yaml
+          - packages/paradigm-mcp/src/sync/providers/github.test.ts
+          - packages/paradigm-mcp/src/sync/providers/github.ts
+        description: 'fix(#github-provider): assignee @me (not raw email) + drop fragile tags-as-labels'
       - *ref_281
     contributors:
       human:
