@@ -344,6 +344,103 @@ export async function loadTask(rootDir: string, taskId: string): Promise<Task | 
   return tasks.find(t => t.id === taskId) || null;
 }
 
+// ── DAG integrity (Cid-owned, advise-only) ────────────────
+
+/**
+ * A structural defect in the task graph. `assertTransition` validates STATUS but
+ * nothing validates the GRAPH — a cyclic/dangling subtree never settles and the
+ * learning loop never closes on it. Cid surfaces these at board-assemble as
+ * advise-only warnings (TD-2026-06-14-467); they never auto-edit or hard-block.
+ */
+export interface DagViolation {
+  kind: 'self-parent' | 'dangling-parent' | 'dangling-dependency' | 'cycle';
+  taskId: string;
+  /** The offending reference (parent id, dep id) or the cycle path, for the message. */
+  detail: string;
+}
+
+/**
+ * Validate the task DAG for structural defects: self-parent, dangling
+ * parentTaskId / dependsOn (a ref pointing at a task that doesn't exist in the
+ * set), and cycles (following parentTaskId AND dependsOn edges). Pure read —
+ * returns the violation list, never mutates. Cycle detection is an iterative DFS
+ * with a recursion stack; each distinct cycle is reported once against its
+ * entry node.
+ */
+export function validateTaskDag(tasks: Task[]): DagViolation[] {
+  const violations: DagViolation[] = [];
+  const byId = new Map<string, Task>();
+  for (const t of tasks) if (t.id) byId.set(t.id, t);
+
+  // ── Self-parent + dangling refs ──
+  for (const t of tasks) {
+    if (!t.id) continue;
+    if (t.parentTaskId === t.id) {
+      violations.push({ kind: 'self-parent', taskId: t.id, detail: t.id });
+    } else if (t.parentTaskId && !byId.has(t.parentTaskId)) {
+      violations.push({ kind: 'dangling-parent', taskId: t.id, detail: t.parentTaskId });
+    }
+    for (const dep of t.dependsOn ?? []) {
+      if (dep === t.id) {
+        violations.push({ kind: 'self-parent', taskId: t.id, detail: `dependsOn:${dep}` });
+      } else if (!byId.has(dep)) {
+        violations.push({ kind: 'dangling-dependency', taskId: t.id, detail: dep });
+      }
+    }
+  }
+
+  // ── Cycle detection over parentTaskId ∪ dependsOn edges (DFS, color marks) ──
+  const WHITE = 0, GRAY = 1, BLACK = 2;
+  const color = new Map<string, number>();
+  for (const id of byId.keys()) color.set(id, WHITE);
+
+  const edgesOf = (t: Task): string[] => {
+    const out: string[] = [];
+    if (t.parentTaskId && t.parentTaskId !== t.id && byId.has(t.parentTaskId)) out.push(t.parentTaskId);
+    for (const dep of t.dependsOn ?? []) if (dep !== t.id && byId.has(dep)) out.push(dep);
+    return out;
+  };
+
+  const reported = new Set<string>();
+  for (const startId of byId.keys()) {
+    if (color.get(startId) !== WHITE) continue;
+    // Iterative DFS carrying the active path so a back-edge yields the cycle.
+    const stack: Array<{ id: string; path: string[] }> = [{ id: startId, path: [startId] }];
+    const onStack = new Set<string>();
+    while (stack.length) {
+      const top = stack[stack.length - 1];
+      if (color.get(top.id) === WHITE) {
+        color.set(top.id, GRAY);
+        onStack.add(top.id);
+      }
+      let descended = false;
+      for (const next of edgesOf(byId.get(top.id)!)) {
+        if (color.get(next) === GRAY) {
+          // Back-edge → cycle. Report once per cycle (keyed by its sorted members).
+          const cycleStart = top.path.indexOf(next);
+          const cyclePath = cycleStart >= 0 ? top.path.slice(cycleStart).concat(next) : [top.id, next];
+          const key = [...cyclePath].sort().join('|');
+          if (!reported.has(key)) {
+            reported.add(key);
+            violations.push({ kind: 'cycle', taskId: next, detail: cyclePath.join(' → ') });
+          }
+        } else if (color.get(next) === WHITE) {
+          stack.push({ id: next, path: [...top.path, next] });
+          descended = true;
+          break;
+        }
+      }
+      if (!descended) {
+        color.set(top.id, BLACK);
+        onStack.delete(top.id);
+        stack.pop();
+      }
+    }
+  }
+
+  return violations;
+}
+
 // ── Write operations ──────────────────────────────────────
 
 export async function createTask(

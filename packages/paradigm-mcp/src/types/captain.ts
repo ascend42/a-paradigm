@@ -189,4 +189,9 @@ export interface CaptainBoard {
     inFlight: number;
     unclaimed: number;
   };
+  /**
+   * DAG integrity violations (Cid-owned, advise-only — TD-2026-06-14-467). Empty
+   * when the graph is sound. Surfaced as a board warning; never blocks.
+   */
+  integrity?: import('../utils/task-loader.js').DagViolation[];
 }

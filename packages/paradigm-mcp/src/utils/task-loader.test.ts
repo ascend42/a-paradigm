@@ -24,6 +24,7 @@ import {
   loadTask,
   loadTasks,
   tasksForClaimant,
+  validateTaskDag,
   rebuildTaskIndex,
   assertTransition,
   normalizeTask,
@@ -216,6 +217,71 @@ describe('claimant filter + tasksForClaimant', () => {
   it('tasksForClaimant honors an explicit status override', async () => {
     const all = await tasksForClaimant(root, { kind: 'archetype', ref: 'builder' }, { status: 'all' });
     expect(all.map(t => t.id).sort()).toEqual(['T-2026-06-12-1', 'T-2026-06-12-2', 'T-2026-06-12-5']);
+  });
+});
+
+// ────────────────────────────────────────────────────────
+// validateTaskDag (Cid-owned DAG integrity, advise-only)
+// ────────────────────────────────────────────────────────
+
+describe('validateTaskDag', () => {
+  const mk = (id: string, extra: Partial<Task> = {}): Task => ({
+    id,
+    blurb: id,
+    priority: 'medium',
+    status: 'open',
+    tags: [],
+    created: '2026-06-12T00:00:00.000Z',
+    ...extra,
+  });
+
+  it('a sound DAG has no violations', () => {
+    const tasks = [mk('A'), mk('B', { parentTaskId: 'A' }), mk('C', { parentTaskId: 'A', dependsOn: ['B'] })];
+    expect(validateTaskDag(tasks)).toEqual([]);
+  });
+
+  it('flags a self-parent', () => {
+    const v = validateTaskDag([mk('A', { parentTaskId: 'A' })]);
+    expect(v).toHaveLength(1);
+    expect(v[0].kind).toBe('self-parent');
+    expect(v[0].taskId).toBe('A');
+  });
+
+  it('flags a dangling parentTaskId', () => {
+    const v = validateTaskDag([mk('A', { parentTaskId: 'GHOST' })]);
+    expect(v.find(x => x.kind === 'dangling-parent' && x.detail === 'GHOST')).toBeTruthy();
+  });
+
+  it('flags a dangling dependsOn', () => {
+    const v = validateTaskDag([mk('A', { dependsOn: ['GHOST'] })]);
+    expect(v.find(x => x.kind === 'dangling-dependency' && x.detail === 'GHOST')).toBeTruthy();
+  });
+
+  it('detects a dependsOn cycle (A→B→A) once', () => {
+    const tasks = [mk('A', { dependsOn: ['B'] }), mk('B', { dependsOn: ['A'] })];
+    const cycles = validateTaskDag(tasks).filter(v => v.kind === 'cycle');
+    expect(cycles).toHaveLength(1);
+  });
+
+  it('detects a longer cycle (A→B→C→A)', () => {
+    const tasks = [
+      mk('A', { dependsOn: ['B'] }),
+      mk('B', { dependsOn: ['C'] }),
+      mk('C', { dependsOn: ['A'] }),
+    ];
+    const cycles = validateTaskDag(tasks).filter(v => v.kind === 'cycle');
+    expect(cycles).toHaveLength(1);
+    expect(cycles[0].detail).toContain('→');
+  });
+
+  it('does not false-positive on a diamond (A→B, A→C, B→D, C→D)', () => {
+    const tasks = [
+      mk('A'),
+      mk('B', { dependsOn: ['A'] }),
+      mk('C', { dependsOn: ['A'] }),
+      mk('D', { dependsOn: ['B', 'C'] }),
+    ];
+    expect(validateTaskDag(tasks).filter(v => v.kind === 'cycle')).toEqual([]);
   });
 });
 

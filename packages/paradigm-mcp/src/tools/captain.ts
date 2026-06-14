@@ -1153,6 +1153,11 @@ export async function assembleCaptainBoard(
   const inFlight = all.filter(t => t.status === 'in-progress').length;
   const open = all.filter(t => t.status === 'open').length;
 
+  // DAG integrity (Cid-owned, advise-only): validate the full graph and surface
+  // any structural defects on the board. Never mutates, never blocks.
+  const { validateTaskDag } = await import('../utils/task-loader.js');
+  const integrity = validateTaskDag(all);
+
   return {
     runs,
     unclaimed,
@@ -1162,6 +1167,7 @@ export async function assembleCaptainBoard(
       inFlight,
       unclaimed: unclaimed.length,
     },
+    integrity: integrity.length > 0 ? integrity : undefined,
   };
 }
 
