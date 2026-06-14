@@ -1,0 +1,61 @@
+id: TD-2026-06-14-467
+timestamp: '2026-06-14T06:28:45.234Z'
+title: 'Task-structure governance: no new agent — protocols into Cid/Loid/Rune global notebooks'
+decision: >-
+  Task-structure governance is distributed across the EXISTING roster via global-notebook protocols, NOT a new dedicated
+  PM/task agent. Ownership by tense: CID (captain) owns PRESENT-tense — the board, claimant writes + override guard, DAG
+  integrity (advise-only), blocked_on clearing, archetype claim-expiry (run window), full-forest view, stale-open
+  surfacing. LOID/forge (intelligence officer) owns PAST-tense — settlement, auto-aggregating calibration
+  (aggregate-on-settle), claimant-accuracy guard, archival (90-day retention) + calibration recency window (90 days),
+  priority-aging as a DERIVED signal that surfaces starvation separately (never re-sorts, never overwrites stated
+  priority). RUNE/compliance owns symbol-tag hygiene on task nodes. The human (Matt) stays demand source:
+  create/triage/state-priority, release sticky human/peer claims, reconcile GitHub drift. The firewall heuristic (in
+  BOTH Cid's and Loid's notebooks): "new task-governance need? ask present-or-past tense, route to the existing owner."
+  DAG-coherence violations are advise-only (no hard-block). Future trigger: revisit a coordinator micro-agent ONLY IF
+  two-way GitHub sync (pull) AND multi-machine peer teams both land. 10 protocols recorded to global notebooks; 13
+  governance gaps filed as owner-claimed backlog tasks.
+rationale: >-
+  Three-lens team analysis (Loid, Cid, agent-architect) converged, grounded in code. The v7 ownership seam is already
+  drawn (task-settlement.ts:10-12): Cid writes present-tense fields, Loid writes settledAt past-tense, they never
+  co-write. Every governance gap is a missing OPERATION on a graph the existing owners already touch, not a missing
+  PERSON. A dedicated PM-agent hangs off nothing and would steal ops from Cid's board + Loid's learning chain — the
+  chrome Paradigm forbids. The Tasks section is read-only, introducing no new owner. Global-notebook scope makes the
+  protocols compound across every project.
+participants:
+  - id: ascend
+    role: human
+    stance: supported
+  - id: forge
+    role: agent
+    stance: proposed
+  - id: cid
+    role: agent
+    stance: supported
+  - id: architect
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: A new dedicated PM/task-governor agent
+    rejected_because: >-
+      Hangs off no symbol/agent/lore substrate (chrome by Paradigm's own rule); would steal ops from Cid
+      (assembleCaptainBoard) and Loid (settlement chain) who already own the structure. All three lenses rejected it.
+  - option: Leave governance implicit (no protocols)
+    rejected_because: >-
+      13 real gaps have NO owner today (DAG cycle validation, blocked_on clearing, calibration aggregation, archival,
+      priority-aging) — implicit ownership left them unaddressed.
+  - option: Coordinator micro-agent now
+    rejected_because: >-
+      Premature — justified only once two-way GitHub sync AND multi-machine peer teams both land (drift reconciliation +
+      peer-claim arbitration). Accepted as a future trigger, not now.
+symbols_affected:
+  - '#task-loader'
+  - '#captain-board'
+  - '#task-settlement'
+  - '#calibration'
+status: active
+tags:
+  - task-governance
+  - agents
+  - suite-renaissance
+  - arc:renaissance
+  - notebooks

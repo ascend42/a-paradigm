@@ -1,0 +1,22 @@
+id: L-2026-06-14-ascend-063112-001
+type: insight
+timestamp: '2026-06-14T06:31:12.343Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Governance-by-tense: present→Cid, past→Loid (the firewall against PM-bureaucracy)'
+summary: 'Reusable method from settling task-structure governance (TD-2026-06-14-467): when asked ''do we need a new agent?'', map who already WRITES each operation in code, then name the unowned gaps. Every gap turned out to be an operation, not a role, so they distributed onto existing owners by TENSE — present-tense task fields (claimant, blocked_on, DAG shape) to Cid the captain; past-tense (settledAt, calibration, archival) to Loid the learning officer; they never co-write a field. That single heuristic, recorded in both their global notebooks, is the firewall that makes ''no new PM agent'' self-enforcing. Global-notebook scope is the right home for cross-project agent BEHAVIORS vs project lore for project facts.'
+symbols_touched:
+  - '#captain-board'
+  - '#task-settlement'
+tags:
+  - task-governance
+  - agents
+  - method
+  - arc:renaissance
+confidence: 0.9
+git_context:
+  ref: a6c860c95d8c2422a1805afa0b325f9f4c6989ac
+  branch: renaissance/tasks-suite
+  dirty: true
