@@ -1,0 +1,41 @@
+id: L-2026-06-14-ascend-172217-001
+type: milestone
+timestamp: '2026-06-14T17:22:17.548Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Renaissance — Loid past-tense governance (settlement-debt T-012 + claimant-accuracy T-013)
+summary: 'Implemented Loid''s two settlement-domain protocols. T-012: the captain board now flags settlement-debt (runs whose children are all terminal but the epic never settled — a closed-loop blindspot), detect-only, Cid owns the fix. T-013: settlement re-attributes learning to the dominant child archetype when the parent is a generic ''orchestrator'' claimant, so journal/work-log promotion credits the agent that actually did the work, not a generic bucket. Both preserve the one-way settlement arrow (settledAt only, never status). MCP 453 / CLI 441 green.'
+symbols_touched:
+  - '#captain-board'
+  - '#task-settlement'
+  - '#calibration'
+files_modified:
+  - packages/paradigm-mcp/src/types/captain.ts
+  - packages/paradigm-mcp/src/tools/captain.ts
+  - packages/paradigm-mcp/src/utils/task-settlement.ts
+  - CHANGELOG.md
+learnings:
+  - 'The settlement-debt case is structurally impossible IF settleParentIfComplete always fires — so detecting it surfaces a real bug (a settlement that should have happened but didn''t), not just a hygiene nicety. A detect-only board field is the right shape: it makes the anomaly visible without a risky auto-repair.'
+  - Calibration actuals are captured PER-AGENT during the run (recordEstimateActual), so T-013's re-attribution protects the LEARNING loop (work-log/journal promotion to the right notebook), not calibration bands directly — worth being precise about which loop a 'claimant accuracy' fix actually guards.
+verification:
+  status: pass
+  details:
+    mcp_tests: 453 passed
+    cli_tests: 441 passed
+    captain_board: 13 passed
+    settlement: 11 passed
+tags:
+  - suite-renaissance
+  - arc:renaissance
+  - task-governance
+  - task-settlement
+  - learning-loop
+linked_lore:
+  - L-2026-06-14-ascend-171544-001
+confidence: 0.9
+git_context:
+  ref: 164d64709f7823a37745f1b8e4d9a847094c8c19
+  branch: renaissance/tasks-suite
+  dirty: true

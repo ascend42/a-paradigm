@@ -244,7 +244,27 @@ async function runSettlementChain(
   let journalsWritten = 0;
   let promoted = 0;
 
-  const claimantRef = parent?.claimant?.ref ?? 'orchestrator';
+  // T-013 (Loid past-tense, TD-2026-06-14-467): claimant-accuracy guard. The
+  // learning this settlement promotes must attribute to the agent that actually
+  // did the work. An epic is typically claimed by a generic 'orchestrator' (or
+  // unclaimed), so settling under it would credit the wrong notebook. When the
+  // parent's claimant is absent or the generic orchestrator, re-attribute to the
+  // DOMINANT child archetype (the one that owns the most child tasks).
+  let claimantRef = parent?.claimant?.ref;
+  if (!claimantRef || claimantRef === 'orchestrator') {
+    try {
+      const { loadTasks } = await import('./task-loader.js');
+      const children = (await loadTasks(rootDir, { status: 'all', limit: 9999 }))
+        .filter(t => t.parentTaskId === parentTaskId && t.claimant?.kind === 'archetype');
+      const counts = new Map<string, number>();
+      for (const c of children) counts.set(c.claimant!.ref, (counts.get(c.claimant!.ref) ?? 0) + 1);
+      const dominant = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
+      if (dominant) claimantRef = dominant[0];
+    } catch {
+      /* fall through to the orchestrator default */
+    }
+  }
+  claimantRef = claimantRef ?? 'orchestrator';
 
   try {
     // ── Stage 1: recordWorkLog (work-log-loader) ──
