@@ -321,16 +321,35 @@ interface LearnedBand { min: number; max: number; n: number }
 type LearnedTokenTable = Record<string, Record<string, LearnedBand>>;
 
 /**
+ * mtime-keyed cache for the learned token table. The Tasks web surface reads
+ * this table 3x per 10s poll (list + board + calibration grid) per open tab —
+ * an uncached readFileSync+JSON.parse each time, on the server event loop. The
+ * cache returns the parsed table while the file's mtime is unchanged and
+ * transparently reloads on any write (e.g. `paradigm calibrate`). Keyed by path
+ * so multi-project servers don't collide.
+ */
+let _learnedTableCache: { path: string; mtimeMs: number; table: LearnedTokenTable } | null = null;
+
+/**
  * Load the learned token-estimate table (#calibration, v7.1). Best-effort: a
  * missing or malformed file returns `{}` so the planner falls back cleanly to
- * the `AGENT_TOKEN_ESTIMATES` cold-start constant. Never throws.
+ * the `AGENT_TOKEN_ESTIMATES` cold-start constant. Never throws. mtime-cached.
  */
 export function loadLearnedTokenTable(rootDir: string): LearnedTokenTable {
   try {
     const filePath = path.join(rootDir, '.paradigm', 'learned', 'token-estimates.json');
-    if (!fs.existsSync(filePath)) return {};
+    let stat: fs.Stats;
+    try {
+      stat = fs.statSync(filePath);
+    } catch {
+      return {}; // missing file → cold-start constant
+    }
+    if (_learnedTableCache && _learnedTableCache.path === filePath && _learnedTableCache.mtimeMs === stat.mtimeMs) {
+      return _learnedTableCache.table;
+    }
     const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'));
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    _learnedTableCache = { path: filePath, mtimeMs: stat.mtimeMs, table: parsed as LearnedTokenTable };
     return parsed as LearnedTokenTable;
   } catch (err) {
     log.component('#calibration').warn('learned token table load failed; using constant prior', {

@@ -62,6 +62,12 @@ export function CalibrationStrip() {
 
       {!collapsed && (
         <div className="calib-strip__body">
+          {coldStart && (
+            <p className="calib-strip__cta">
+              Run <code>paradigm calibrate</code> after orchestration runs to graduate
+              cells from estimates to learned bands.
+            </p>
+          )}
           <CellGrid />
         </div>
       )}

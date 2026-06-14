@@ -98,7 +98,11 @@ export function TaskCard({ task, elevated }: { task: Task; elevated?: boolean })
 
       <div className="task-card__title">{task.blurb}</div>
 
-      <CalibrationBlock estimate={task.estimate} />
+      <CalibrationBlock
+        estimate={task.estimate}
+        claimant={task.claimant}
+        taskType={task.taskType}
+      />
 
       <div className="task-card__footer">
         {task.claimant && (

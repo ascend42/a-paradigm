@@ -5,6 +5,7 @@ import { LaneModeToggle } from './LaneModeToggle';
 import {
   AGENT_COLORS,
   claimantColor,
+  claimantArchetype,
   nodeToTask,
   unclaimedToTask,
   firstSymbol,
@@ -32,10 +33,12 @@ const STATE_LANES: { status: TaskStatus; label: string; color: string }[] = [
   { status: 'shelved', label: 'Shelved', color: 'var(--p-text-muted)' },
 ];
 
-// Map an archetype-ish ref to a calibration archetype key (lowercased ref).
+// Map a task's claimant to its calibration archetype key. Claimant refs are
+// archetype IDs (cid/forge/compliance); the calibration grid is keyed by role
+// words, so resolve through claimantArchetype().
 function archetypeOf(task: Task): string | null {
   if (!task.claimant) return null;
-  if (task.claimant.kind === 'archetype') return task.claimant.ref.toLowerCase();
+  if (task.claimant.kind === 'archetype') return claimantArchetype(task.claimant.ref);
   return null;
 }
 
@@ -66,11 +69,13 @@ export function BoardView() {
     return (task: Task): boolean => {
       if (!matchesFilter(task, filter)) return false;
       if (calibrationFilter) {
+        // Claimant archetype must match the clicked cell's row.
         const arch = archetypeOf(task);
         if (arch !== calibrationFilter.archetype) return false;
-        // taskType match: a tag equal to the taskType, else allow if untyped
-        const tags = (task.tags || []).map((t) => t.toLowerCase());
-        if (!tags.includes(calibrationFilter.taskType.toLowerCase())) return false;
+        // taskType is now a real field on the task — match it directly to the
+        // clicked cell's column.
+        if ((task.taskType || '').toLowerCase() !== calibrationFilter.taskType.toLowerCase())
+          return false;
       }
       return true;
     };
@@ -165,7 +170,11 @@ export function BoardView() {
       )}
 
       {board && totalVisible === 0 && (
-        <p className="tasks__empty">No tasks match the current filters</p>
+        <p className="tasks__empty">
+          {calibrationFilter
+            ? `No ${calibrationFilter.taskType} tasks claimed by ${calibrationFilter.archetype} yet`
+            : 'No tasks match the current filters'}
+        </p>
       )}
 
       {board && (

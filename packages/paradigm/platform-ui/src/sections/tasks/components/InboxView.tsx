@@ -191,7 +191,12 @@ export function InboxView() {
               {claimantGlyph(inboxClaimant.kind)} {inboxClaimant.ref}
             </span>
             <span className="inbox__calib-stat">
-              calibration <strong>{pct}%</strong> &middot; n={total}
+              {/* Learned bands are keyed by ARCHETYPE — a human claimant has no
+                  learned cell, so a calibration % there is a category error.
+                  Suppress it (show "—") for humans; keep it for archetypes. */}
+              calibration{' '}
+              <strong>{inboxClaimant.kind === 'human' ? '—' : `${pct}%`}</strong>{' '}
+              &middot; n={total}
             </span>
           </div>
 

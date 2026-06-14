@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generatedAt": "2026-06-14T06:01:51.132Z",
+  "generatedAt": "2026-06-14T15:35:41.643Z",
   "flows": {
     "$event-ingestion": {
       "id": "$event-ingestion",
@@ -28,6 +28,43 @@
         }
       ],
       "definedIn": "packages/sentinel-web/.purpose"
+    },
+    "$plsat-exam-flow": {
+      "id": "$plsat-exam-flow",
+      "description": "Full PLSAT exam lifecycle from intro through certification",
+      "steps": [
+        {
+          "id": "step-1",
+          "action": "Display intro, rules, and name input",
+          "symbol": "#plsat-view"
+        },
+        {
+          "id": "step-2",
+          "action": "Start 90-minute countdown",
+          "symbol": "#plsat-timer"
+        },
+        {
+          "id": "step-3",
+          "action": "Present 99 shuffled questions (with passage blocks for grouped questions)",
+          "symbol": "#question-card"
+        },
+        {
+          "id": "step-4",
+          "action": "Calculate score on submit or time-up",
+          "symbol": "#plsat-view"
+        },
+        {
+          "id": "step-5",
+          "action": "Persist certificate to LocalStorage",
+          "symbol": "#plsat-store"
+        },
+        {
+          "id": "step-6",
+          "action": "Display printable certificate if passed",
+          "symbol": "#certificate-view"
+        }
+      ],
+      "definedIn": "packages/university/.purpose"
     },
     "$ide-sync-flow": {
       "id": "$ide-sync-flow",
@@ -87,43 +124,6 @@
         }
       ],
       "definedIn": "packages/paradigm/src/core/.purpose"
-    },
-    "$plsat-exam-flow": {
-      "id": "$plsat-exam-flow",
-      "description": "Full PLSAT exam lifecycle from intro through certification",
-      "steps": [
-        {
-          "id": "step-1",
-          "action": "Display intro, rules, and name input",
-          "symbol": "#plsat-view"
-        },
-        {
-          "id": "step-2",
-          "action": "Start 90-minute countdown",
-          "symbol": "#plsat-timer"
-        },
-        {
-          "id": "step-3",
-          "action": "Present 99 shuffled questions (with passage blocks for grouped questions)",
-          "symbol": "#question-card"
-        },
-        {
-          "id": "step-4",
-          "action": "Calculate score on submit or time-up",
-          "symbol": "#plsat-view"
-        },
-        {
-          "id": "step-5",
-          "action": "Persist certificate to LocalStorage",
-          "symbol": "#plsat-store"
-        },
-        {
-          "id": "step-6",
-          "action": "Display printable certificate if passed",
-          "symbol": "#certificate-view"
-        }
-      ],
-      "definedIn": "packages/university/.purpose"
     },
     "$purpose-parsing": {
       "id": "$purpose-parsing",
@@ -229,6 +229,21 @@
     "#ring-buffer": [
       "$event-ingestion"
     ],
+    "#plsat-view": [
+      "$plsat-exam-flow"
+    ],
+    "#plsat-timer": [
+      "$plsat-exam-flow"
+    ],
+    "#question-card": [
+      "$plsat-exam-flow"
+    ],
+    "#plsat-store": [
+      "$plsat-exam-flow"
+    ],
+    "#certificate-view": [
+      "$plsat-exam-flow"
+    ],
     "#detection-engine": [
       "$ide-sync-flow"
     ],
@@ -255,21 +270,6 @@
     ],
     "#audit-logger": [
       "$agent-orchestration-flow"
-    ],
-    "#plsat-view": [
-      "$plsat-exam-flow"
-    ],
-    "#plsat-timer": [
-      "$plsat-exam-flow"
-    ],
-    "#question-card": [
-      "$plsat-exam-flow"
-    ],
-    "#plsat-store": [
-      "$plsat-exam-flow"
-    ],
-    "#certificate-view": [
-      "$plsat-exam-flow"
     ],
     "#yaml-parser": [
       "$purpose-parsing",

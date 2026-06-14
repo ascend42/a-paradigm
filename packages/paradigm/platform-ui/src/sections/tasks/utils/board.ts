@@ -12,12 +12,30 @@ import { tokenBandToPoints } from './storyPoints';
 // Reused VERBATIM from TeamSection so a claimant's lane color matches their
 // Team color across the platform. Deterministic by archetype role; falls back
 // to a hashed hue for unknown refs.
+//
+// NOTE: TeamSection keys AGENT_COLORS by the agent's *role* word
+// (architect/builder/…) and also calls agentColor(agent.id) — so id and role
+// both flow through the same lookup. Claimant refs on the task board, however,
+// are archetype IDS (cid/forge/compliance + human emails), which are NOT role
+// words and would otherwise fall through to a hashed hue. CLAIMANT_ALIAS below
+// resolves a claimant ref to the role word Team colors by, so a claimant's lane
+// color === their Team color.
 export const AGENT_COLORS: Record<string, string> = {
   architect: 'var(--p-accent-purple)',
   builder: 'var(--p-accent-blue)',
   tester: 'var(--p-accent-green)',
   reviewer: 'var(--p-accent-orange)',
   security: 'var(--p-accent-red)',
+};
+
+// Claimant ref → the AGENT_COLORS key (role/archetype word) Team colors by.
+// cid = Cid (captain/navigation), forge = Loid (intelligence/forge),
+// compliance = Rune (compliance). Role words map to themselves so existing
+// role-keyed refs keep working.
+const CLAIMANT_ALIAS: Record<string, string> = {
+  cid: 'architect',
+  forge: 'builder',
+  compliance: 'security',
 };
 
 export function hashCode(s: string): number {
@@ -29,8 +47,28 @@ export function hashCode(s: string): number {
   return hash;
 }
 
+// Widened hashed fallback: jitter S and L (not just H) so unknown refs stay
+// mutually distinct, and bias the hue away from the reserved accent band
+// (~210–360 covers the blue/purple/red/orange accents) so a hashed lane never
+// reads as a named-agent color.
+function hashedColor(ref: string): string {
+  const h = Math.abs(hashCode(ref));
+  const hue = h % 360;
+  const sat = 45 + (h % 25); // 45–70%
+  const light = 42 + (Math.floor(h / 360) % 18); // 42–60%
+  return `hsl(${hue}, ${sat}%, ${light}%)`;
+}
+
 export function claimantColor(ref: string): string {
-  return AGENT_COLORS[ref] || `hsl(${Math.abs(hashCode(ref)) % 360}, 60%, 50%)`;
+  const key = CLAIMANT_ALIAS[ref.toLowerCase()] ?? ref;
+  return AGENT_COLORS[key] || hashedColor(ref);
+}
+
+// Resolve a claimant ref to the calibration-grid archetype key. The grid is
+// keyed by role words (builder/architect/…); claimant refs are archetype IDs
+// (cid/forge/compliance). Lets a card map back to its calibration cell.
+export function claimantArchetype(ref: string): string {
+  return CLAIMANT_ALIAS[ref.toLowerCase()] ?? ref.toLowerCase();
 }
 
 const PRIORITY_RANK: Record<TaskPriority, number> = { high: 0, medium: 1, low: 2 };
@@ -70,6 +108,7 @@ export function nodeToTask(node: BoardNode): Task {
     claimant: node.claimant,
     dependsOn: node.dependsOn,
     estimate: node.estimate,
+    taskType: node.taskType,
   };
 }
 
@@ -83,6 +122,7 @@ export function unclaimedToTask(u: BoardUnclaimed): Task {
     created: '',
     claimant: u.proposedClaimant,
     estimate: u.estimate,
+    taskType: u.taskType,
   };
 }
 

@@ -13,11 +13,11 @@ components:
     type: component
     tags: [feature, tasks, platform]
   CalibrationBlock:
-    description: The calibration moat made visible. Largest non-title element on every card — big Fibonacci story-point number with a green LEARNED badge (◆ + n{count}) for learned estimates, or a dimmed italic ~prior~ label for cold-start guesses, plus the raw token band. Learned vs prior contrast is the headline.
+    description: The calibration moat made visible. SIZE tracks confidence — learned estimates lead with a big (32px) green Fibonacci story-point + a green LEARNED badge (◆ + n{count}); prior cold-start guesses LEAD with the dimmed italic ~prior~ label and demote the number to a recessed ~17px secondary value so a guess never out-shouts a learned band. Both render the raw token band plus a small muted cell caption (claimant-archetype × taskType, e.g. "builder×feature") mapping the estimate back to the calibration grid.
     type: component
     tags: [feature, tasks, platform, moat]
   tasksStore:
-    description: Zustand store mirroring loreStore's idiom. List state {tasks, loading, error, view} (intact from Round B) plus Round C board state {board, boardLoading, boardError} via fetchBoard() (GET /api/tasks/board), calibration state {calibration, calibrationLoading} via fetchCalibration() (GET /api/tasks/calibration), laneMode('claimant'|'state'|'symbol') persisted to localStorage, filter {status,priority,search} + calibrationFilter {archetype,taskType} with setters. Round D adds inbox state {whoami (cached human claimant), inboxClaimant, inboxTasks, inboxLoading, inboxError} via fetchWhoami() (GET /api/tasks/whoami, cached) + fetchInbox(kind, ref) (GET /api/tasks/inbox?kind=&ref=) + setInboxClaimant(), and detail state {selectedTaskId} via openDetail(id)/closeDetail(). Each fetch has its own AbortController. Default view is 'board'.
+    description: Zustand store mirroring loreStore's idiom. Task/BoardNode/BoardUnclaimed now carry an optional taskType (feature|bugfix|refactor|… — the calibration band's task type, paired with the claimant archetype to name the producing cell). List state {tasks, loading, error, view} (intact from Round B) plus Round C board state {board, boardLoading, boardError} via fetchBoard() (GET /api/tasks/board), calibration state {calibration, calibrationLoading} via fetchCalibration() (GET /api/tasks/calibration), laneMode('claimant'|'state'|'symbol') persisted to localStorage, filter {status,priority,search} + calibrationFilter {archetype,taskType} with setters. Round D adds inbox state {whoami (cached human claimant), inboxClaimant, inboxTasks, inboxLoading, inboxError} via fetchWhoami() (GET /api/tasks/whoami, cached) + fetchInbox(kind, ref) (GET /api/tasks/inbox?kind=&ref=) + setInboxClaimant(), and detail state {selectedTaskId} via openDetail(id)/closeDetail(). Each fetch has its own AbortController. Default view is 'board'.
     type: state
     tags: [feature, tasks, platform, state]
   storyPoints:
@@ -25,11 +25,11 @@ components:
     type: util
     tags: [feature, tasks, platform, calibration]
   board-utils:
-    description: Board helpers — AGENT_COLORS (verbatim from TeamSection) + claimantColor(), deriveSymbols()/firstSymbol() (tags + blurb-parsed #symbols, the board fragileSymbols fallback), nodeToTask()/unclaimedToTask() normalizers so TaskCard renders board nodes verbatim, sortCards() (in-progress first then priority-desc), matchesFilter(), sumPoints() (lane story-point total).
+    description: Board helpers — AGENT_COLORS (verbatim from TeamSection) + claimantColor() which resolves a claimant ref to its Team color via a CLAIMANT_ALIAS map (cid→architect, forge→builder, compliance→security; role words map to themselves) so a claimant's lane color === their Team color, with a widened hashed-fallback (S/L jitter) keeping unknown refs mutually distinct; claimantArchetype() exposes the same ref→archetype resolution for calibration-cell matching. Plus deriveSymbols()/firstSymbol() (tags + blurb-parsed #symbols, the board fragileSymbols fallback), nodeToTask()/unclaimedToTask() normalizers (now carrying taskType) so TaskCard renders board nodes verbatim, sortCards() (in-progress first then priority-desc), matchesFilter(), sumPoints() (lane story-point total).
     type: util
     tags: [feature, tasks, platform, board]
   BoardView:
-    description: Horizontally-scrollable row of SwimLanes off /api/tasks/board. laneMode='claimant' (default) = one lane per claimant.ref + trailing Unclaimed lane (board.unclaimed) + collapsed Done lane; 'state' = open/in-progress/done/shelved kanban; 'symbol' = grouped by each card's first derived symbol. Honors store status/priority/search + calibrationFilter (archetype×taskType).
+    description: Horizontally-scrollable row of SwimLanes off /api/tasks/board. laneMode='claimant' (default) = one lane per claimant.ref + trailing Unclaimed lane (board.unclaimed) + collapsed Done lane; 'state' = open/in-progress/done/shelved kanban; 'symbol' = grouped by each card's first derived symbol. Honors store status/priority/search + calibrationFilter — the cell filter matches the task's real taskType field against the cell column and the claimant's resolved archetype (claimantArchetype) against the cell row; a 0-match cell click shows a specific "No {taskType} tasks claimed by {archetype} yet" empty state.
     type: view
     tags: [feature, tasks, platform, board]
   SwimLane:
@@ -45,7 +45,7 @@ components:
     type: component
     tags: [feature, tasks, platform]
   CalibrationStrip:
-    description: Default-ON collapsible hero strip ABOVE the board (not a tab) off /api/tasks/calibration. Leads with a coverage StatCard ("{pct}% calibrated cells · {graduated} of {total} graduated") + a "learning in progress" badge on full cold-start, then the CellGrid. Collapse state persisted to localStorage.
+    description: Default-ON collapsible hero strip ABOVE the board (not a tab) off /api/tasks/calibration. Leads with a coverage StatCard ("{pct}% calibrated cells · {graduated} of {total} graduated") + a "learning in progress" badge on full cold-start, then the CellGrid. On cold-start the body also leads with a CTA naming the command that produces calibration ("Run `paradigm calibrate` after orchestration runs to graduate cells…") so the strip reads as a path out of cold-start. Collapse state persisted to localStorage.
     type: component
     tags: [feature, tasks, platform, moat]
   CellGrid:
@@ -53,11 +53,11 @@ components:
     type: component
     tags: [feature, tasks, platform, moat]
   InboxView:
-    description: The Inbox tab — the AGENT FACE. A claimant pill-row (a "Me" pill resolved via /api/tasks/whoami + one AGENT_COLORS-tinted pill per distinct board claimant) selects whose inbox to focus via fetchInbox(kind, ref). The focused column shows a rolled-up calibration header ("calibration {pct}% · n={total}", share of source==='learned'), a NEXT-ACTIONABLE hero card (highest-priority in-progress-or-open, not blocked) elevated on top, a DependsChain ribbon under the hero (●done → ●this → ○next, best-effort state resolution from the board/inbox pool), then the rest as a queued list of TaskCards. Cold-start default landing is the human's ("Me") inbox; empty claimants render "inbox zero".
+    description: The Inbox tab — the AGENT FACE. A claimant pill-row (a "Me" pill resolved via /api/tasks/whoami + one AGENT_COLORS-tinted pill per distinct board claimant) selects whose inbox to focus via fetchInbox(kind, ref). The focused column shows a rolled-up calibration header ("calibration {pct}% · n={total}", share of source==='learned') — suppressed to "—" for human claimants, whose learned bands are archetype-keyed so a % would be a category error, a NEXT-ACTIONABLE hero card (highest-priority in-progress-or-open, not blocked) elevated on top, a DependsChain ribbon under the hero (●done → ●this → ○next, best-effort state resolution from the board/inbox pool), then the rest as a queued list of TaskCards. Cold-start default landing is the human's ("Me") inbox; empty claimants render "inbox zero".
     type: view
     tags: [feature, tasks, platform, inbox]
   GitHubSyncStrip:
-    description: Persistent Board-tab footer. Aggregates external_ref state across visible board tasks — synced (provider==='github' && url), push-pending (github && no url), drifted (future state, 0 for now). "Pull from GitHub" is AFFORDANCE-ONLY — opens a popover that shows + clipboard-copies the `paradigm task sync` CLI command with a note that two-way sync runs via the CLI today. Calls no mutating endpoint (the read router has none).
+    description: Persistent Board-tab footer. Aggregates external_ref state across visible board tasks — synced (provider==='github' && url) and push-pending (github && no url), both derived from real external_ref state (the always-0 "drifted" placeholder was dropped as less honest than its absence). "Sync via CLI ↗" is AFFORDANCE-ONLY — opens a popover that shows + clipboard-copies the `paradigm task sync` CLI command with a note that two-way sync runs via the CLI today. Calls no mutating endpoint (the read router has none).
     type: component
     tags: [feature, tasks, platform, github]
   TaskDetailPanel:

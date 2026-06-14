@@ -77,6 +77,14 @@ export interface Task {
   dependsOn?: string[];
   stage?: number;
 
+  /**
+   * Classification family (feature|bugfix|refactor|design|…) derived from the
+   * blurb. NOT persisted to the YAML store — attached at read time by the web
+   * route so the calibration grid (archetype×taskType) can map a cell back to
+   * the board. The column key for this task's learned estimate.
+   */
+  taskType?: string;
+
   // ── Lifecycle stamps ──
   started_at?: string; // stamped on entering 'in-progress'
   completed?: string;

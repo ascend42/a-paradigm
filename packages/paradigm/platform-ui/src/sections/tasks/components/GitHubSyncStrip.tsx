@@ -7,17 +7,19 @@ import { nodeToTask, unclaimedToTask } from '../utils/board';
 // Aggregates external_ref state across the visible board tasks:
 //   synced       = provider==='github' && url present
 //   push-pending = provider==='github' && no url
-//   drifted      = future state; 0 for now (placeholder so the shape is honest)
 //
-// "Pull from GitHub" is AFFORDANCE-ONLY — the read router has no mutating
-// endpoint. It opens a popover that shows + copies the `paradigm task sync` CLI
-// command. Two-way sync runs via the CLI today.
+// Both counts derive from real external_ref state. (A "drifted" count was
+// dropped — there's no drift signal in the read router today, so an always-0
+// stat beside real ones was less honest than its absence.)
+//
+// "Sync via CLI" is AFFORDANCE-ONLY — the read router has no mutating endpoint.
+// It opens a popover that shows + copies the `paradigm task sync` CLI command.
+// Two-way sync runs via the CLI today.
 
 const SYNC_CMD = 'paradigm task sync';
 
 interface SyncCounts {
   synced: number;
-  drifted: number;
   pushPending: number;
 }
 
@@ -30,7 +32,7 @@ function countSync(tasks: Task[]): SyncCounts {
       else pushPending += 1;
     }
   }
-  return { synced, drifted: 0, pushPending };
+  return { synced, pushPending };
 }
 
 export function GitHubSyncStrip() {
@@ -65,10 +67,6 @@ export function GitHubSyncStrip() {
           {counts.synced} synced
         </span>
         <span className="sync-strip__sep">·</span>
-        <span className="sync-strip__stat sync-strip__stat--drifted">
-          {counts.drifted} drifted
-        </span>
-        <span className="sync-strip__sep">·</span>
         <span className="sync-strip__stat sync-strip__stat--pending">
           {counts.pushPending} push-pending
         </span>
@@ -76,7 +74,7 @@ export function GitHubSyncStrip() {
 
       <div className="sync-strip__action">
         <button className="sync-strip__pull" onClick={() => setOpen((v) => !v)}>
-          Pull from GitHub
+          Sync via CLI ↗
         </button>
 
         {open && (

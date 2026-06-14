@@ -39,6 +39,10 @@ export interface Task {
   blocked_on?: string[];
   external_ref?: TaskExternalRef;
   estimate: TaskEstimate;
+  // The calibration band's task type (feature|bugfix|refactor|design|analysis|
+  // research|documentation|audit). Pairs with the claimant archetype to name the
+  // calibration cell that produced `estimate`.
+  taskType?: string;
 }
 
 export type TaskView = 'board' | 'list' | 'inbox';
@@ -56,6 +60,7 @@ export interface BoardNode {
   dependsOn?: string[];
   fragileSymbols?: string[];
   estimate: TaskEstimate;
+  taskType?: string;
   // Fields not always present on a board node but useful for the card:
   priority?: TaskPriority;
   tags?: string[];
@@ -77,6 +82,7 @@ export interface BoardUnclaimed {
   fragileSymbols?: string[];
   proposedClaimant?: TaskClaimant;
   estimate: TaskEstimate;
+  taskType?: string;
 }
 
 export interface BoardSummary {

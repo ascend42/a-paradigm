@@ -256,17 +256,49 @@
   color: var(--p-accent-green);
 }
 
-/* Prior: cold-start guess — intentionally dimmed, not broken */
+/* Prior: cold-start guess — intentionally dimmed, not broken. Label leads,
+   number is recessed so SIZE tracks confidence. */
 .task-calibration.prior {
   opacity: 0.6;
   border-style: dashed;
 }
 
+.task-calibration__meta--prior {
+  gap: 2px;
+}
+
 .task-calibration__prior-label {
   font-size: 11px;
   font-style: italic;
+  font-weight: 600;
+  letter-spacing: 0.04em;
   color: var(--p-text-muted);
   width: fit-content;
+}
+
+/* Prior row: the demoted number sits next to its band, both recessed. */
+.task-calibration__prior-row {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+/* Prior number — shrunk from the learned 32px to a secondary 17px and muted,
+   so a cold-start guess never out-shouts the trustworthy learned bands. */
+.task-calibration__points--prior {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--p-text-secondary);
+  min-width: 0;
+  text-align: left;
+}
+
+/* FIX 3 — the calibration cell this estimate came from (archetype × taskType),
+   small + muted so a user can map the number back to the grid. */
+.task-calibration__cell {
+  font-size: 10px;
+  color: var(--p-text-muted);
+  font-family: 'SF Mono', 'Fira Code', monospace;
 }
 
 /* ════════════════════════════════════════════════════
@@ -579,6 +611,24 @@
 
 .calib-strip__body {
   padding: 0 16px 14px;
+}
+
+/* Cold-start CTA — names the command that produces calibration, so the strip
+   reads as a path out of cold-start, not a passive state. */
+.calib-strip__cta {
+  margin: 0 0 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--p-text-secondary);
+}
+
+.calib-strip__cta code {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: var(--p-accent-amber);
+  background: color-mix(in srgb, var(--p-accent-amber) 12%, transparent);
 }
 
 /* ── Cell Grid ─────────────────────────────────────── */
@@ -972,10 +1022,6 @@
 
 .sync-strip__stat--synced {
   color: var(--p-accent-green);
-}
-
-.sync-strip__stat--drifted {
-  color: var(--p-accent-orange);
 }
 
 .sync-strip__stat--pending {
