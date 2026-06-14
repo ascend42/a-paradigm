@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { useTasksStore, type Task, type TaskStatus } from '../store/tasksStore';
 import { SwimLane } from './SwimLane';
 import { LaneModeToggle } from './LaneModeToggle';
+import { BoardHealth } from './BoardHealth';
 import {
   AGENT_COLORS,
   claimantColor,
@@ -170,6 +171,9 @@ export function BoardView() {
       <div className="board__toolbar">
         <LaneModeToggle />
       </div>
+
+      {/* Advisory governance banner — self-hides when the board is healthy. */}
+      <BoardHealth />
 
       {loading && !board && <p className="tasks__empty">Loading board…</p>}
       {error && !board && (

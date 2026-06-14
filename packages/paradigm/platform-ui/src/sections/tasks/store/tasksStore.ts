@@ -96,12 +96,43 @@ export interface BoardSummary {
   loose?: number;
 }
 
+// ── Board health (Cid/Loid governance detections) ────
+// Three advisory (never-blocking) signals the backend attaches to the board.
+// All optional + absent when empty — a healthy board carries none of them, so
+// BoardHealth self-hides entirely.
+
+/** DAG structural defect — advise-only. */
+export interface BoardIntegrityViolation {
+  kind: 'self-parent' | 'dangling-parent' | 'dangling-dependency' | 'cycle';
+  taskId: string;
+  detail: string;
+}
+
+/** A run whose children all settled but whose epic never did. */
+export interface BoardSettlementDebt {
+  epicTaskId: string;
+  blurb: string;
+  reason: string;
+}
+
+/** An archetype-claimed open task past the 7-day staleness threshold. */
+export interface BoardStaleClaim {
+  taskId: string;
+  blurb: string;
+  claimant: TaskClaimant;
+  ageDays: number;
+}
+
 export interface BoardData {
   runs: BoardRun[];
   unclaimed: BoardUnclaimed[];
   /** Full-forest tail — claimed standalone tasks not in a run or unclaimed. */
   loose?: BoardNode[];
   summary: BoardSummary;
+  // ── Cid/Loid governance detections (advisory; absent when empty) ──
+  integrity?: BoardIntegrityViolation[];
+  settlementDebt?: BoardSettlementDebt[];
+  staleClaims?: BoardStaleClaim[];
 }
 
 // ── Calibration API shapes (GET /api/tasks/calibration) ──
@@ -312,6 +343,11 @@ export const useTasksStore = create<TasksState>((set, get) => ({
           unclaimed: data.unclaimed || [],
           loose: data.loose || [],
           summary: data.summary || { runs: 0, open: 0, inFlight: 0, unclaimed: 0, loose: 0 },
+          // Governance detections — pass through verbatim. Left undefined when the
+          // backend omits them (healthy board) so BoardHealth self-hides.
+          integrity: data.integrity,
+          settlementDebt: data.settlementDebt,
+          staleClaims: data.staleClaims,
         },
         boardLoading: false,
       });
