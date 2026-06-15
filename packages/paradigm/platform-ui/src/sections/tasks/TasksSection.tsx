@@ -40,6 +40,26 @@ export default function TasksSection() {
     return () => clearInterval(interval);
   }, []);
 
+  // Poll-driven live refresh — the central WS hub (useAgentEffects) forwards
+  // tasks:* server broadcasts as a `tasks-ws` CustomEvent. The background poll
+  // (and the manual Sync endpoint) emit tasks:synced / tasks:sync-conflict when
+  // a linked issue moved; refresh the board so applied changes appear live
+  // without the user clicking Sync.
+  useEffect(() => {
+    function onTasksWs(e: Event) {
+      const msg = (e as CustomEvent).detail;
+      if (!msg) return;
+      if (msg.type === 'tasks:synced' || msg.type === 'tasks:sync-conflict') {
+        fetchBoard();
+        fetchTasks();
+        const { inboxClaimant, fetchInbox } = useTasksStore.getState();
+        if (inboxClaimant) fetchInbox(inboxClaimant.kind, inboxClaimant.ref);
+      }
+    }
+    window.addEventListener('tasks-ws', onTasksWs);
+    return () => window.removeEventListener('tasks-ws', onTasksWs);
+  }, [fetchBoard, fetchTasks]);
+
   // Board summary leads the header stat when available; else fall back to list.
   const tasks = useTasksStore((s) => s.tasks);
   const openCount = board?.summary.open ?? tasks.filter((t) => t.status === 'open').length;

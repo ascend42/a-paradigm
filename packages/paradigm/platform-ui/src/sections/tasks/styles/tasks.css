@@ -1093,21 +1093,127 @@
 
 .sync-strip__action {
   position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 
-.sync-strip__pull {
-  padding: 5px 12px;
+/* PRIMARY — the real two-way Sync button. */
+.sync-strip__sync {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 14px;
   border-radius: 6px;
-  border: 1px solid var(--p-border);
+  border: 1px solid var(--p-border-active);
   background: var(--p-bg-card);
   color: var(--p-text-primary);
   font-size: 12px;
+  font-weight: 600;
   cursor: pointer;
   transition: all 0.15s;
 }
 
-.sync-strip__pull:hover {
-  border-color: var(--p-border-active);
+.sync-strip__sync:hover:not(:disabled) {
+  border-color: var(--p-accent-blue);
+  background: var(--p-bg-hover);
+}
+
+.sync-strip__sync:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.sync-strip__spinner {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 2px solid var(--p-border);
+  border-top-color: var(--p-accent-blue);
+  animation: sync-strip-spin 0.7s linear infinite;
+}
+
+@keyframes sync-strip-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* SECONDARY — copyable CLI fallback for users without the server. */
+.sync-strip__cli-toggle {
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--p-text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.sync-strip__cli-toggle:hover {
+  color: var(--p-text-secondary);
+  border-color: var(--p-border);
+}
+
+/* Transient inline result of the last sync. */
+.sync-strip__result {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 4px;
+  padding-left: 8px;
+  border-left: 1px solid var(--p-border);
+  font-size: 12px;
+}
+
+.sync-strip__result--ok {
+  color: var(--p-accent-green);
+}
+
+.sync-strip__result--quiet {
+  color: var(--p-text-muted);
+}
+
+/* Conflict — amber, never error-red. Local won; a human should look. */
+.sync-strip__result--conflict {
+  color: var(--p-accent-amber);
+}
+
+/* Offline — calm hint, never a red failure. */
+.sync-strip__result--offline {
+  color: var(--p-text-muted);
+}
+
+.sync-strip__result--offline code {
+  font-family: var(--p-font-mono, monospace);
+  font-size: 11px;
+  color: var(--p-text-secondary);
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--p-bg-hover);
+}
+
+.sync-strip__conflict-ids {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+
+.sync-strip__conflict-id {
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--p-accent-amber);
+  background: transparent;
+  color: var(--p-accent-amber);
+  font-family: var(--p-font-mono, monospace);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.sync-strip__conflict-id:hover {
   background: var(--p-bg-hover);
 }
 

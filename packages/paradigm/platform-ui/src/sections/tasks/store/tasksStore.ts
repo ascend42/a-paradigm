@@ -135,6 +135,45 @@ export interface BoardData {
   staleClaims?: BoardStaleClaim[];
 }
 
+// ── GitHub two-way sync (POST /api/tasks/sync) ───────
+// The server pulls each linked GitHub issue and reconciles it back through the
+// enforced state machine. The client sends no task/remote state — at most a
+// list of ids to scope the sync (omit = sync all linked tasks).
+
+export type SyncVerdictStatus =
+  | 'synced'
+  | 'agree'
+  | 'conflict'
+  | 'offline'
+  | 'remote-error'
+  | 'unlinked'
+  | 'no-pull';
+
+export interface SyncVerdict {
+  taskId: string;
+  status: SyncVerdictStatus;
+  targetStatus?: TaskStatus;
+  drift: string[];
+}
+
+export interface SyncSummary {
+  synced: number;
+  conflict: number;
+  agree: number;
+  skipped: number;
+}
+
+export interface SyncResult {
+  summary: SyncSummary;
+  verdicts: SyncVerdict[];
+  // Derived client-side: true when no verdict reached the remote (gh not authed
+  // / no server) — every verdict is offline or skipped. Surfaced as a calm hint,
+  // never a red failure.
+  offline: boolean;
+  // Conflicted task ids (local won, a human should look) — for clickable list.
+  conflictIds: string[];
+}
+
 // ── Calibration API shapes (GET /api/tasks/calibration) ──
 export interface CalibrationCell {
   min: number;
@@ -212,6 +251,12 @@ interface TasksState {
   // "cannot displace" from claim). Transient: cleared on the next action.
   actionError: string | null;
 
+  // GitHub two-way sync state (the real Sync button). `syncing` drives the
+  // strip's spinner/disabled state; `lastSyncSummary` is the transient inline
+  // result the strip renders after a sync.
+  syncing: boolean;
+  lastSyncSummary: SyncResult | null;
+
   // Lane mode (persisted)
   laneMode: LaneMode;
 
@@ -251,6 +296,14 @@ interface TasksState {
   blockTask: (id: string, reason: string) => Promise<void>;
   unblockTask: (id: string) => Promise<void>;
   clearActionError: () => void;
+
+  // GitHub two-way sync (Round F). POSTs /api/tasks/sync (no client state —
+  // server pulls+reconciles each linked issue through the enforced state
+  // machine), returns the summary, and on success re-runs fetchBoard/fetchTasks
+  // (+inbox if focused) so applied changes show immediately. `ids` scopes the
+  // sync; omit to sync all linked tasks.
+  syncGitHub: (ids?: string[]) => Promise<SyncResult | null>;
+  clearSyncSummary: () => void;
 }
 
 let tasksController: AbortController | null = null;
@@ -282,6 +335,9 @@ export const useTasksStore = create<TasksState>((set, get) => ({
   selectedTaskId: null,
   actionError: null,
   depCache: {},
+
+  syncing: false,
+  lastSyncSummary: null,
 
   laneMode: loadLaneMode(),
 
@@ -489,6 +545,78 @@ export const useTasksStore = create<TasksState>((set, get) => ({
   },
   unblockTask: async (id) => {
     await runAction(set, get, `/api/tasks/${id}/unblock`);
+  },
+
+  // ── GitHub two-way sync (Round F) ────────────────────
+  clearSyncSummary: () => set({ lastSyncSummary: null }),
+
+  syncGitHub: async (ids) => {
+    if (get().syncing) return get().lastSyncSummary;
+    set({ syncing: true });
+    try {
+      const body = ids && ids.length ? { ids } : {};
+      const res = await fetch('/api/tasks/sync', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        // Treat a server-level failure as "GitHub not available" — calm, not red.
+        const result: SyncResult = {
+          summary: { synced: 0, conflict: 0, agree: 0, skipped: 0 },
+          verdicts: [],
+          offline: true,
+          conflictIds: [],
+        };
+        set({ syncing: false, lastSyncSummary: result });
+        return result;
+      }
+      const data = (await res.json()) as {
+        summary?: Partial<SyncSummary>;
+        verdicts?: SyncVerdict[];
+      };
+      const summary: SyncSummary = {
+        synced: data.summary?.synced ?? 0,
+        conflict: data.summary?.conflict ?? 0,
+        agree: data.summary?.agree ?? 0,
+        skipped: data.summary?.skipped ?? 0,
+      };
+      const verdicts = data.verdicts ?? [];
+      // Offline when nothing reached the remote — every verdict is offline or
+      // skipped (gh not authed / no linked work that could be pulled).
+      const reached = verdicts.some(
+        (v) => v.status !== 'offline' && v.status !== 'skipped'
+      );
+      const offline = verdicts.length > 0 && !reached;
+      const conflictIds = verdicts
+        .filter((v) => v.status === 'conflict')
+        .map((v) => v.taskId);
+
+      const result: SyncResult = { summary, verdicts, offline, conflictIds };
+      set({ syncing: false, lastSyncSummary: result });
+
+      // Refresh every view that could reflect an applied change. Only worth the
+      // round-trips when the server actually moved or reconciled something.
+      if (summary.synced > 0 || summary.conflict > 0 || summary.agree > 0) {
+        const { fetchBoard, fetchTasks, fetchInbox, inboxClaimant } = get();
+        const refreshes: Promise<void>[] = [fetchBoard(), fetchTasks()];
+        if (inboxClaimant) {
+          refreshes.push(fetchInbox(inboxClaimant.kind, inboxClaimant.ref));
+        }
+        await Promise.all(refreshes);
+      }
+      return result;
+    } catch {
+      // Network error (no server / fetch failed) — calm offline hint, not red.
+      const result: SyncResult = {
+        summary: { synced: 0, conflict: 0, agree: 0, skipped: 0 },
+        verdicts: [],
+        offline: true,
+        conflictIds: [],
+      };
+      set({ syncing: false, lastSyncSummary: result });
+      return result;
+    }
   },
 }));
 

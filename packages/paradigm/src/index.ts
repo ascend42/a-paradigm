@@ -863,6 +863,16 @@ taskCmd
   });
 
 taskCmd
+  .command('sync [ref]')
+  .description('Two-way GitHub sync: reconcile linked issue(s) back into the task store (no ref = all linked)')
+  .option('--project <path>', 'Project root (default cwd)')
+  .option('--json', 'Output machine-readable JSON')
+  .action(async (ref, options) => {
+    const { taskSyncCommand } = await import('./commands/task/index.js');
+    await taskSyncCommand(ref, options);
+  });
+
+taskCmd
   .command('edit <ref>')
   .description('Edit a task: blurb, priority, tags, or reopen')
   .option('-b, --blurb <text>', 'Replace the blurb')
