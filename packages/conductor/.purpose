@@ -1313,7 +1313,7 @@ signals:
     - Sources/Conductor/Models/ConversationMessage.swift:1
 
 #claude-stream-session:
-  description: "@MainActor ObservableObject owning ONE headless claude process speaking stream-json over stdin/stdout. Decodes the NDJSON OFF the main thread via a Sendable LineFramer in the readabilityHandler, then hops to @MainActor to project events into the conversation model. Buffers the first turn until system/init; keeps stdin open between turns."
+  description: "@MainActor ObservableObject owning ONE headless claude process speaking stream-json over stdin/stdout. Decodes the NDJSON OFF the main thread via a Sendable LineFramer in the readabilityHandler, then hops to @MainActor to project events into the conversation model. Buffers the first turn until system/init; keeps stdin open between turns. Traces every applied event type (system/assistant/user/result/unknown) and surfaces claude stderr to ConductorLog so stalls/errors are visible. A silence watchdog settles the UI out of .running if a result is missed (caret off, status idle), and applyResult flips status to idle + records cumulative total_cost_usd and authoritative end-of-turn usage."
   type: service
   tags: [revival, atrium, process, concurrency]
   anchors:
@@ -1328,7 +1328,7 @@ signals:
     - Sources/Conductor/UI/AtriumTheme.swift:1
 
 #atrium-thread:
-  description: Custom SwiftUI thread surface — scrolling conversation pinned to bottom, agent turns with blinking amber caret + collapsible tool chips, right-aligned user capsules, reply composer (disabled mid-turn), and a model·session·tokens·cost footer. Hosted in AtriumSpikeWindow (single-owner of its ClaudeStreamSession), launched from the menu bar.
+  description: Custom SwiftUI thread surface — scrolling conversation pinned to bottom, agent turns with blinking amber caret + collapsible tool chips, right-aligned user capsules, reply composer (ALWAYS editable/focusable — never hard-disabled by session status; Send gated only on live-session + non-empty draft, so a stuck-running turn can never lock the founder out; mid-turn sends queue on claude stdin), and a model·session·tokens·cost footer. Hosted in AtriumSpikeWindow (single-owner of its ClaudeStreamSession), launched from the menu bar.
   type: view
   tags: [revival, atrium, ui, thread]
   anchors:

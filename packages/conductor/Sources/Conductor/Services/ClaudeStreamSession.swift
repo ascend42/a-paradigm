@@ -45,6 +45,14 @@ final class ClaudeStreamSession: ObservableObject {
     /// Index of the agent message currently being streamed, if any.
     private var currentAgentIndex: Int?
 
+    /// Safety-net watchdog. If we are `.running` and stop receiving any events
+    /// for `watchdogQuiet` seconds, we assume a `result` was missed and settle
+    /// the UI (stop the caret, flip to .idle) so the founder is never left
+    /// staring at a permanently "running" thread. The PRIMARY unblock is the
+    /// composer being un-disablable; this is correctness for the footer/caret.
+    private var watchdog: Task<Void, Never>?
+    private let watchdogQuiet: UInt64 = 12 // seconds of silence → settle
+
     init(projectPath: String) {
         self.projectPath = projectPath
     }
@@ -99,9 +107,18 @@ final class ClaudeStreamSession: ObservableObject {
             self.ingest(data)
         }
 
-        // Drain stderr so the pipe never fills and blocks the child.
+        // Drain stderr so the pipe never fills and blocks the child — AND surface
+        // it. Previously this discarded stderr (`_ = handle.availableData`), which
+        // hid claude hangs/errors entirely. We now log it so a silent stall is
+        // visible in ConductorLog. @Sendable closure: no @Published state touched.
         stderr.fileHandleForReading.readabilityHandler = { handle in
-            _ = handle.availableData
+            let data = handle.availableData
+            guard !data.isEmpty else { return }
+            let text = String(decoding: data, as: UTF8.self)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !text.isEmpty else { return }
+            ConductorLog.signal("agent-stderr")
+                .debug("claude stderr: \(text)")
         }
 
         proc.terminationHandler = { [weak self] proc in
@@ -135,6 +152,7 @@ final class ClaudeStreamSession: ObservableObject {
 
     /// Tear down: terminate the process, close stdin, detach handlers.
     func shutdown() {
+        cancelWatchdog()
         stdoutPipe?.fileHandleForReading.readabilityHandler = nil
         stderrPipe?.fileHandleForReading.readabilityHandler = nil
         if let proc = process, proc.isRunning {
@@ -210,19 +228,71 @@ final class ClaudeStreamSession: ObservableObject {
 
     private func apply(_ events: [StreamEvent]) {
         for event in events {
+            // Per-event-type trace — this is how we diagnose a missed `result`.
+            // If logs show assistant events but no `result`, the event never
+            // reached stdout; if they show `unknown(type: "result")`, decode
+            // diverged from the wire shape.
             switch event {
             case .system(let sys):
+                ConductorLog.flow("claude-turn-exchange")
+                    .debug("apply event=system subtype-init session=\(sys.sessionId ?? "?")")
                 applySystemInit(sys)
             case .assistant(let asst):
+                ConductorLog.flow("claude-turn-exchange")
+                    .debug("apply event=assistant blocks=\(asst.message.content.count) out=\(asst.message.usage?.outputTokens ?? -1)")
                 applyAssistant(asst)
             case .user(let user):
+                ConductorLog.flow("claude-turn-exchange")
+                    .debug("apply event=user blocks=\(user.message.content.count)")
                 applyToolResults(user)
             case .result(let result):
+                ConductorLog.flow("claude-turn-exchange")
+                    .debug("apply event=result subtype=\(result.subtype ?? "?") cost=\(result.totalCostUsd ?? -1) out=\(result.usage?.outputTokens ?? -1)")
                 applyResult(result)
-            case .unknown:
-                break // tolerated
+            case .unknown(let type):
+                // Tolerated, but TRACE it — a `result` showing up here would mean
+                // a decode divergence (the exact failure class for this bug).
+                ConductorLog.flow("claude-turn-exchange")
+                    .debug("apply event=unknown type=\(type) (ignored)")
             }
         }
+
+        // Re-arm the watchdog after each applied batch while a turn is in flight.
+        // A `result` cancels it (in applyResult via settle path); silence trips it.
+        if status == .running {
+            armWatchdog()
+        }
+    }
+
+    /// (Re)start the silence watchdog. Cancels any prior timer; if no further
+    /// events arrive within `watchdogQuiet` seconds while still `.running`, settle.
+    private func armWatchdog() {
+        watchdog?.cancel()
+        watchdog = Task { @MainActor [weak self] in
+            guard let self else { return }
+            try? await Task.sleep(nanoseconds: self.watchdogQuiet * 1_000_000_000)
+            guard !Task.isCancelled else { return }
+            self.settleStalledTurn()
+        }
+    }
+
+    private func cancelWatchdog() {
+        watchdog?.cancel()
+        watchdog = nil
+    }
+
+    /// Safety-net settle: a turn went quiet without a `result`. Stop the caret and
+    /// flip out of `.running` so the UI doesn't hang. We do NOT fabricate cost —
+    /// only the visible "running forever" state is corrected.
+    private func settleStalledTurn() {
+        guard status == .running else { return }
+        if let index = currentAgentIndex, messages.indices.contains(index) {
+            messages[index].isStreaming = false
+        }
+        currentAgentIndex = nil
+        status = .idle
+        ConductorLog.signal("agent-turn-complete")
+            .info("watchdog — turn went quiet \(self.watchdogQuiet)s with no result; settling to idle")
     }
 
     private func applySystemInit(_ sys: SystemInit) {
@@ -297,21 +367,32 @@ final class ClaudeStreamSession: ObservableObject {
     }
 
     private func applyResult(_ result: ResultEvent) {
+        ConductorLog.signal("agent-turn-complete")
+            .info("applyResult ENTER — subtype \(result.subtype ?? "?") cost \(result.totalCostUsd ?? -1) isError \(result.isError ?? false) usage.out \(result.usage?.outputTokens ?? -1)")
+
         if let sid = result.sessionId { sessionId = sid }
+        // total_cost_usd is the cumulative session cost, so a straight assign is
+        // correct (not additive). Footer reads totalCostUsd directly.
         if let cost = result.totalCostUsd { totalCostUsd = cost }
+        // The result carries the authoritative end-of-turn usage. Prefer it over
+        // any stray early-assistant usage so the footer shows real totals.
         if let usage = result.usage { lastUsage = usage }
 
         if let index = currentAgentIndex, messages.indices.contains(index) {
             messages[index].isStreaming = false
         }
         currentAgentIndex = nil
+        cancelWatchdog()
+        // The turn is settled — leave .running. This is the assignment whose
+        // absence (in the stuck-running run) kept the composer's old guard locked.
         status = .idle
 
         ConductorLog.signal("agent-turn-complete")
-            .info("result — cost \(result.totalCostUsd ?? 0) isError \(result.isError ?? false)")
+            .info("applyResult DONE — status now idle, totalCost \(self.totalCostUsd ?? -1)")
     }
 
     private func handleTermination(exitCode: Int32) {
+        cancelWatchdog()
         if let index = currentAgentIndex, messages.indices.contains(index) {
             messages[index].isStreaming = false
         }
