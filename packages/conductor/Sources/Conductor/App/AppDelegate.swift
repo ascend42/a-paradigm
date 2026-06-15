@@ -11,6 +11,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private var conductorPanel: ConductorPanel?
     private var containerWindow: ContainerWindow?
+    /// ATRIUM keystone spike window (single-owner of its ClaudeStreamSession).
+    private var atriumSpikeWindow: AtriumSpikeWindow?
     /// Container mode — launched via `paradigm conductor --container`
     @AppStorage("useContainerMode") var useContainerMode: Bool = false
     private let permissionsManager = PermissionsManager()
@@ -302,6 +304,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(permItem)
 
         menu.addItem(.separator())
+        let atriumItem = NSMenuItem(title: "Open ATRIUM Spike…", action: #selector(openAtriumSpike), keyEquivalent: "")
+        menu.addItem(atriumItem)
+
+        menu.addItem(.separator())
         let containerItem = NSMenuItem(title: "Switch to Container Mode", action: #selector(switchToContainer), keyEquivalent: "")
         menu.addItem(containerItem)
         let sidebarItem = NSMenuItem(title: "Switch to Sidebar Mode", action: #selector(switchToSidebar), keyEquivalent: "")
@@ -504,6 +510,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func showPermissions() {
         launchPanel(showOnboarding: true, permissionStatus: permissionsManager.checkAll())
+    }
+
+    /// Open (or focus) the ATRIUM keystone spike window.
+    @objc private func openAtriumSpike() {
+        if atriumSpikeWindow == nil {
+            atriumSpikeWindow = AtriumSpikeWindow()
+        }
+        NSApp.activate()
+        atriumSpikeWindow?.makeKeyAndOrderFront(nil)
     }
 
     @objc private func switchToContainer() {

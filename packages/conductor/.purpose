@@ -833,6 +833,13 @@ context:
 # ============================================
 
 flows:
+  claude-turn-exchange:
+    description: "ATRIUM round-trip — compose reply → encode user turn to stdin → claude streams NDJSON → LineFramer frames lines off-main → decode StreamEvent → @MainActor projects into conversation model → render text + tool chips + cost"
+    steps:
+      - "#atrium-thread"
+      - "#claude-stream-session"
+      - "#stream-event"
+      - "#conversation-model"
   voice-to-dispatch:
     description: Mic to WhisperKit to Buffer to Edit to Enrich to Dispatch
     steps:
@@ -1075,6 +1082,9 @@ gates:
 # ============================================
 
 signals:
+  agent-turn-complete:
+    description: A claude stream-json result event arrived — the agent turn is finished, cost/usage captured, status returned to idle
+    emitters: ["#claude-stream-session"]
   buffer-dispatched:
     description: Text buffer sent to a targeted CC window
   instance-detected:
@@ -1284,6 +1294,50 @@ signals:
   tags: [ui, maestro, roster, agents]
   anchors:
     - Sources/Conductor/UI/Views/AgentRosterView.swift:1
+
+# --- Conductor Revival Phase 0: ATRIUM keystone spike ---
+
+#stream-event:
+  description: Typed Decodable model of the claude --output-format stream-json NDJSON event stream (system/init, assistant, user/tool_result, result) — unknown shapes degrade to .unknown rather than throwing. JSONValue absorbs arbitrary tool_use input and heterogeneous tool_result content.
+  type: model
+  tags: [revival, atrium, stream-json, decode]
+  anchors:
+    - Sources/Conductor/Models/Stream/StreamEvent.swift:1
+    - Sources/Conductor/Models/Stream/JSONValue.swift:1
+
+#conversation-model:
+  description: Observable projection of the stream-json event sequence into renderable ConversationMessage values (agent/user/system authors) with ToolCall chips (running/succeeded/failed) — decouples the UI from the wire format.
+  type: model
+  tags: [revival, atrium, conversation]
+  anchors:
+    - Sources/Conductor/Models/ConversationMessage.swift:1
+
+#claude-stream-session:
+  description: "@MainActor ObservableObject owning ONE headless claude process speaking stream-json over stdin/stdout. Decodes the NDJSON OFF the main thread via a Sendable LineFramer in the readabilityHandler, then hops to @MainActor to project events into the conversation model. Buffers the first turn until system/init; keeps stdin open between turns."
+  type: service
+  tags: [revival, atrium, process, concurrency]
+  anchors:
+    - Sources/Conductor/Services/ClaudeStreamSession.swift:1
+    - Sources/Conductor/Services/LineFramer.swift:1
+
+#atrium-theme:
+  description: Deep mono visual token system for the ATRIUM thread (void/surface/sunken surfaces, ink, amber/user/tool/running/blocked accents, monospaced body/chip/footer fonts) plus a Color(hex:) initializer.
+  type: theme
+  tags: [revival, atrium, ui, theme]
+  anchors:
+    - Sources/Conductor/UI/AtriumTheme.swift:1
+
+#atrium-thread:
+  description: Custom SwiftUI thread surface — scrolling conversation pinned to bottom, agent turns with blinking amber caret + collapsible tool chips, right-aligned user capsules, reply composer (disabled mid-turn), and a model·session·tokens·cost footer. Hosted in AtriumSpikeWindow (single-owner of its ClaudeStreamSession), launched from the menu bar.
+  type: view
+  tags: [revival, atrium, ui, thread]
+  anchors:
+    - Sources/Conductor/UI/Views/Atrium/AtriumThreadView.swift:1
+    - Sources/Conductor/UI/Views/Atrium/AtriumMessageView.swift:1
+    - Sources/Conductor/UI/Views/Atrium/AtriumToolChip.swift:1
+    - Sources/Conductor/UI/Views/Atrium/AtriumComposer.swift:1
+    - Sources/Conductor/UI/Views/Atrium/AtriumFooter.swift:1
+    - Sources/Conductor/App/AtriumSpikeWindow.swift:1
 
 tags:
   - conductor
