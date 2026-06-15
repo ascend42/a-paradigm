@@ -155,7 +155,15 @@ export function createTasksRouter(projectDir: string): Router {
 
       const { tasksForClaimant } = await import('../../../../paradigm-mcp/src/utils/task-loader.js');
       const tasks = await tasksForClaimant(projectDir, { kind, ref }, { status });
-      res.json({ claimant: { kind, ref }, tasks, count: tasks.length });
+
+      // Attach estimate + taskType (same as / and /board) so the cards the inbox
+      // renders carry the calibration story-point — without it the UI crashes
+      // reading estimate.min.
+      const { loadLearnedTokenTable, estimateForTask, classifyTaskLocal } = await import('../../../../paradigm-mcp/src/tools/orchestration.js');
+      const learned = loadLearnedTokenTable(projectDir);
+      const withEstimates = tasks.map(t => ({ ...t, estimate: estimateForTask(learned, t), taskType: classifyTaskLocal(t.blurb).type }));
+
+      res.json({ claimant: { kind, ref }, tasks: withEstimates, count: withEstimates.length });
     } catch (err) {
       res.status(500).json({ error: 'Failed to load inbox', detail: String(err) });
     }
@@ -170,7 +178,11 @@ export function createTasksRouter(projectDir: string): Router {
         res.status(404).json({ error: `Task "${req.params.id}" not found` });
         return;
       }
-      res.json(task);
+      // Attach estimate + taskType so the detail panel / resolved deps render
+      // the calibration story-point consistently with the list/board.
+      const { loadLearnedTokenTable, estimateForTask, classifyTaskLocal } = await import('../../../../paradigm-mcp/src/tools/orchestration.js');
+      const learned = loadLearnedTokenTable(projectDir);
+      res.json({ ...task, estimate: estimateForTask(learned, task), taskType: classifyTaskLocal(task.blurb).type });
     } catch (err) {
       res.status(500).json({ error: 'Failed to load task', detail: String(err) });
     }

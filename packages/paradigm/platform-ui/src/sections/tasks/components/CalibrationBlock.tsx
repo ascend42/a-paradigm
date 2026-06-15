@@ -42,10 +42,21 @@ export function CalibrationBlock({
   claimant,
   taskType,
 }: {
-  estimate: TaskEstimate;
+  estimate?: TaskEstimate;
   claimant?: TaskClaimant;
   taskType?: string;
 }) {
+  // Defensive: a task without an attached estimate renders a neutral placeholder
+  // rather than crashing the whole section (was the cause of "reading 'min'").
+  if (!estimate || typeof estimate.min !== 'number') {
+    return (
+      <div className="task-calibration prior">
+        <div className="task-calibration__meta task-calibration__meta--prior">
+          <span className="task-calibration__prior-label">no estimate</span>
+        </div>
+      </div>
+    );
+  }
   const points = tokenBandToPoints(estimate);
   const learned = estimate.source === 'learned';
   const caption = cellCaption(claimant, taskType);

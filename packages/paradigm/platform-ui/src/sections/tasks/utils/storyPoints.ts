@@ -32,7 +32,10 @@ export const MAX_POINTS = 21;
  * Map a token band to a Fibonacci story point (1/2/3/5/8/13/21).
  * Pure: same input always yields the same point.
  */
-export function tokenBandToPoints(band: TokenBand): number {
+export function tokenBandToPoints(band: TokenBand | undefined | null): number {
+  // Defensive: a task fetched from a route that doesn't attach an estimate
+  // would otherwise crash here (band.min on undefined). Return 0 = "no estimate".
+  if (!band || typeof band.min !== 'number' || typeof band.max !== 'number') return 0;
   const midpoint = (band.min + band.max) / 2;
   for (const { maxTokens, points } of POINT_THRESHOLDS) {
     if (midpoint < maxTokens) return points;
