@@ -238,6 +238,39 @@ export async function startPlatformServer(options: PlatformServerOptions): Promi
   // each proxies the same updateTask state-machine path the CLI/MCP use).
   app.use('/api/tasks', createTasksWriteRouter(options.projectDir, wsContext));
 
+  // Background two-way GitHub sync poll. Every SYNC_POLL_MS, pull linked issues
+  // and reconcile inbound through the SAME enforced writers (a poll never
+  // bypasses the state machine), broadcasting `tasks:synced` when anything
+  // changed so the board reflects GitHub without a manual sync. Self-skips when
+  // no task is github-linked or gh is unavailable; non-overlapping; dies with
+  // the process. Disable with PARADIGM_SYNC_POLL=off.
+  if (process.env.PARADIGM_SYNC_POLL !== 'off') {
+    const SYNC_POLL_MS = Math.max(30_000, parseInt(process.env.PARADIGM_SYNC_POLL_MS || '120000', 10) || 120_000);
+    let polling = false;
+    const timer = setInterval(async () => {
+      if (polling) return;
+      polling = true;
+      try {
+        const { syncAllLinked } = await import('../../../paradigm-mcp/src/sync/sync-layer.js');
+        const verdicts = await syncAllLinked(options.projectDir);
+        const changed = verdicts.filter(v => v.status === 'synced');
+        const conflicts = verdicts.filter(v => v.status === 'conflict');
+        if (changed.length > 0) {
+          wsContext.broadcast({ type: 'tasks:synced', count: changed.length, ids: changed.map(v => v.taskId), source: 'poll' });
+          log.component('platform-server').info('GitHub sync poll applied changes', { changed: changed.length });
+        }
+        if (conflicts.length > 0) {
+          wsContext.broadcast({ type: 'tasks:sync-conflict', count: conflicts.length, ids: conflicts.map(v => v.taskId) });
+        }
+      } catch {
+        /* best-effort — a poll failure never disrupts the server */
+      } finally {
+        polling = false;
+      }
+    }, SYNC_POLL_MS);
+    timer.unref?.();
+  }
+
   // Mount Sentinel routes if section is enabled
   if (sections.has('sentinel')) {
     try {

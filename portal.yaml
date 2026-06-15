@@ -431,6 +431,11 @@ routes:
   POST /api/tasks/:id/unblock:
     - ^local-only
     - ^write-capable
+  # Inbound two-way GitHub sync — pulls remote state, applies through the same
+  # enforced writers. No client-supplied remote state.
+  POST /api/tasks/sync:
+    - ^local-only
+    - ^write-capable
 
   # ── WebSocket ───────────────────────────────────────────────────────
   WS /ws:
