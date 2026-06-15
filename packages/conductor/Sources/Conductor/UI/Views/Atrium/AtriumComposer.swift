@@ -7,6 +7,10 @@ import SwiftUI
 struct AtriumComposer: View {
     @ObservedObject var session: ClaudeStreamSession
     @State private var draft = ""
+    /// Keyboard focus for the reply field. Auto-focused on appear and after each
+    /// turn completes so an LSUIElement (accessory) app's programmatic window
+    /// routes typing into the field without an extra click.
+    @FocusState private var fieldFocused: Bool
 
     private var isBusy: Bool { session.status == .running || session.status == .starting }
 
@@ -25,7 +29,13 @@ struct AtriumComposer: View {
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 8))
                 .disabled(isBusy)
+                .focused($fieldFocused)
                 .onSubmit(submit)
+                .onAppear { focusAfterDelay() }
+                .onChange(of: isBusy) { _, busy in
+                    // When the agent finishes a turn, return focus to the field.
+                    if !busy { focusAfterDelay() }
+                }
 
             Button(action: submit) {
                 Text("Send")
@@ -48,5 +58,14 @@ struct AtriumComposer: View {
         guard !text.isEmpty, !isBusy else { return }
         session.send(text: text)
         draft = ""
+    }
+
+    /// Move keyboard focus to the field on the next runloop tick. A bare
+    /// `fieldFocused = true` inside onAppear races the window becoming key in an
+    /// accessory app, so it is nudged after a short delay.
+    private func focusAfterDelay() {
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
+            fieldFocused = true
+        }
     }
 }

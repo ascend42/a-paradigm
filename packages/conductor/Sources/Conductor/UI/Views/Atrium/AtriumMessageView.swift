@@ -25,7 +25,7 @@ struct AtriumMessageView: View {
         VStack(alignment: .leading, spacing: 8) {
             if !message.text.isEmpty || message.isStreaming {
                 HStack(alignment: .bottom, spacing: 0) {
-                    Text(message.text)
+                    Text(Self.markdown(message.text))
                         .font(AtriumTheme.bodyFont)
                         .foregroundColor(AtriumTheme.ink)
                         .textSelection(.enabled)
@@ -65,6 +65,27 @@ struct AtriumMessageView: View {
                 )
                 .clipShape(RoundedRectangle(cornerRadius: 12))
         }
+    }
+
+    // MARK: - Markdown
+
+    /// Render agent text as inline markdown (bold, italics, code spans, links)
+    /// while preserving the original line breaks. Code spans are recolored to the
+    /// ATRIUM amber accent; the body already uses a monospaced font so spans read
+    /// as inline code. Falls back to plain text if parsing fails.
+    static func markdown(_ raw: String) -> AttributedString {
+        let options = AttributedString.MarkdownParsingOptions(
+            allowsExtendedAttributes: true,
+            interpretedSyntax: .inlineOnlyPreservingWhitespace
+        )
+        guard var attributed = try? AttributedString(markdown: raw, options: options) else {
+            return AttributedString(raw)
+        }
+        // Tint inline code spans with the amber accent for visual contrast.
+        for run in attributed.runs where run.inlinePresentationIntent?.contains(.code) == true {
+            attributed[run.range].foregroundColor = AtriumTheme.amber
+        }
+        return attributed
     }
 
     // MARK: - System

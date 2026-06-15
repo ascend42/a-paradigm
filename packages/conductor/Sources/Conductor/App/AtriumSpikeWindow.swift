@@ -13,6 +13,11 @@ final class AtriumSpikeWindow: NSWindow {
     /// The single owned stream session for this window.
     let session: ClaudeStreamSession
 
+    /// Invoked after the window closes and its session is shut down, so the owner
+    /// can drop its reference and a reopen builds a fresh window + session
+    /// (avoids reusing a window whose claude process has already terminated).
+    var onClose: (() -> Void)?
+
     /// Hardcoded project path for the spike — the conductor repo itself.
     private static let spikeProjectPath = "/Users/ascend/Documents/GitHub/a-paradigm"
 
@@ -42,6 +47,7 @@ final class AtriumSpikeWindow: NSWindow {
 
         configure()
         contentView = NSHostingView(rootView: AtriumThreadView(session: session))
+        initialFirstResponder = contentView
 
         // Kick off the live round-trip. The session buffers this until system/init.
         session.start(initialPrompt: Self.initialPrompt)
@@ -62,6 +68,13 @@ final class AtriumSpikeWindow: NSWindow {
         isReleasedWhenClosed = false
         delegate = self
     }
+
+    // An LSUIElement (accessory) app's programmatically-created window can be
+    // treated as non-key by AppKit — especially with a transparent titlebar +
+    // .fullSizeContentView. Forcing these true guarantees the window accepts key
+    // status so the SwiftUI TextField can become first responder and take input.
+    override var canBecomeKey: Bool { true }
+    override var canBecomeMain: Bool { true }
 }
 
 // MARK: - NSWindowDelegate
@@ -70,5 +83,6 @@ extension AtriumSpikeWindow: NSWindowDelegate {
     func windowWillClose(_ notification: Notification) {
         session.shutdown()
         ConductorLog.component("atrium-thread").info("ATRIUM spike window closing — session shut down")
+        onClose?()
     }
 }

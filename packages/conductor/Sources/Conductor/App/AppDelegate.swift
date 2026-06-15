@@ -520,10 +520,18 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Non-private so the SwiftUI `.commands` menu item in ConductorApp can call it.
     @objc func openAtriumSpike() {
         if atriumSpikeWindow == nil {
-            atriumSpikeWindow = AtriumSpikeWindow()
+            let window = AtriumSpikeWindow()
+            // Drop the reference when the window closes so a reopen spawns a
+            // fresh session rather than reusing one whose claude process is dead.
+            window.onClose = { [weak self] in self?.atriumSpikeWindow = nil }
+            atriumSpikeWindow = window
         }
-        NSApp.activate()
+        // Accessory (LSUIElement) apps need ignoringOtherApps to actually come
+        // to the foreground; without it the window never becomes key and the
+        // reply field cannot receive keyboard focus.
+        NSApp.activate(ignoringOtherApps: true)
         atriumSpikeWindow?.makeKeyAndOrderFront(nil)
+        atriumSpikeWindow?.makeKey()
     }
 
     @objc private func switchToContainer() {

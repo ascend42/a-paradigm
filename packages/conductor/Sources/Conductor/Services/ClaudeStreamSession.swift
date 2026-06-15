@@ -263,7 +263,13 @@ final class ClaudeStreamSession: ObservableObject {
                 if messages[index].text.isEmpty {
                     messages[index].text = text
                 } else {
-                    messages[index].text += text
+                    // Distinct assistant text blocks (separate content blocks or
+                    // separate assistant events) must not run together. Insert a
+                    // paragraph break unless the accumulated text already ends
+                    // with whitespace/newline.
+                    let existing = messages[index].text
+                    let needsBreak = !(existing.hasSuffix("\n") || existing.hasSuffix(" "))
+                    messages[index].text += (needsBreak ? "\n\n" : "") + text
                 }
             case .toolUse(let id, let name, let input):
                 let summary = input.firstScalarSummary ?? input.asDisplayString
