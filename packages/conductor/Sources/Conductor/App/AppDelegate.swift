@@ -517,7 +517,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     /// Open (or focus) the ATRIUM keystone spike window.
-    @objc private func openAtriumSpike() {
+    /// Non-private so the SwiftUI `.commands` menu item in ConductorApp can call it.
+    @objc func openAtriumSpike() {
         if atriumSpikeWindow == nil {
             atriumSpikeWindow = AtriumSpikeWindow()
         }
