@@ -23,7 +23,8 @@ import { createOverviewHandler } from './routes/overview.js';
 import { createGitRouter } from './routes/git.js';
 import { createAmbientRouter } from './routes/ambient.js';
 import { createTeamRouter } from './routes/team.js';
-import { createCanvasRouter } from './routes/canvas.js';
+import { createTasksRouter } from './routes/tasks.js';
+import { createTasksWriteRouter } from './routes/tasks-write.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -76,7 +77,7 @@ function isPackageAvailable(packageName: string): boolean {
  * Resolve the set of enabled sections based on config and available packages
  */
 function resolveSections(options: PlatformServerOptions): Set<string> {
-  const always = ['overview', 'lore', 'graph', 'canvas', 'git', 'ambient', 'team'];
+  const always = ['overview', 'tasks', 'lore', 'graph', 'git', 'ambient', 'team'];
   const requested = options.sections ?? [...always, 'sentinel', 'university', 'symphony', 'docs'];
 
   const enabled = new Set<string>();
@@ -140,9 +141,6 @@ export function createPlatformApp(options: PlatformServerOptions): Express {
 
   // === Overview aggregation ===
   app.get('/api/platform/overview', createOverviewHandler(options.projectDir));
-
-  // === Canvas design editor ===
-  app.use('/api/canvas', createCanvasRouter(options.projectDir));
 
   // === Git management ===
   app.use('/api/git', createGitRouter(options.projectDir));
@@ -232,6 +230,46 @@ export async function startPlatformServer(options: PlatformServerOptions): Promi
 
   // Mount team routes (always available — Maestro orchestration display)
   app.use('/api/team', createTeamRouter(options.projectDir));
+
+  // Mount Tasks routes (always available — the v7 claimant DAG, read-only over HTTP)
+  app.use('/api/tasks', createTasksRouter(options.projectDir));
+
+  // Mount Tasks WRITE routes (enforced action verbs — claim/start/done/block;
+  // each proxies the same updateTask state-machine path the CLI/MCP use).
+  app.use('/api/tasks', createTasksWriteRouter(options.projectDir, wsContext));
+
+  // Background two-way GitHub sync poll. Every SYNC_POLL_MS, pull linked issues
+  // and reconcile inbound through the SAME enforced writers (a poll never
+  // bypasses the state machine), broadcasting `tasks:synced` when anything
+  // changed so the board reflects GitHub without a manual sync. Self-skips when
+  // no task is github-linked or gh is unavailable; non-overlapping; dies with
+  // the process. Disable with PARADIGM_SYNC_POLL=off.
+  if (process.env.PARADIGM_SYNC_POLL !== 'off') {
+    const SYNC_POLL_MS = Math.max(30_000, parseInt(process.env.PARADIGM_SYNC_POLL_MS || '120000', 10) || 120_000);
+    let polling = false;
+    const timer = setInterval(async () => {
+      if (polling) return;
+      polling = true;
+      try {
+        const { syncAllLinked } = await import('../../../paradigm-mcp/src/sync/sync-layer.js');
+        const verdicts = await syncAllLinked(options.projectDir);
+        const changed = verdicts.filter(v => v.status === 'synced');
+        const conflicts = verdicts.filter(v => v.status === 'conflict');
+        if (changed.length > 0) {
+          wsContext.broadcast({ type: 'tasks:synced', count: changed.length, ids: changed.map(v => v.taskId), source: 'poll' });
+          log.component('platform-server').info('GitHub sync poll applied changes', { changed: changed.length });
+        }
+        if (conflicts.length > 0) {
+          wsContext.broadcast({ type: 'tasks:sync-conflict', count: conflicts.length, ids: conflicts.map(v => v.taskId) });
+        }
+      } catch {
+        /* best-effort — a poll failure never disrupts the server */
+      } finally {
+        polling = false;
+      }
+    }, SYNC_POLL_MS);
+    timer.unref?.();
+  }
 
   // Mount Sentinel routes if section is enabled
   if (sections.has('sentinel')) {

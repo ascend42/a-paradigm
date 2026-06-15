@@ -1,0 +1,51 @@
+id: L-2026-06-15-ascend-020635-001
+type: milestone
+timestamp: '2026-06-15T02:06:35.742Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Two-way GitHub sync — COMPLETE (CLI + web + background poll, end-to-end)
+summary: 'Finished the true two-way GitHub sync Matt asked for. Outbound: CLI verbs (start/done/shelve/edit --reopen) + web write verbs (claim/start/done/block/unblock) project transitions to the linked issue (close/reopen/label) best-effort. Inbound: `paradigm task sync`, POST /api/tasks/sync, and a 120s background poll in `paradigm serve` all reconcile linked issues back through the SAME enforced writers (a pull never bypasses assertTransition). The web GitHub strip is now a real Sync button (summary + clickable conflicts + calm offline hint) and the board live-refreshes off the tasks:synced WS broadcast. The full visceral loop works: drag→Done closes the issue; a teammate closing/reopening the issue moves the card through the enforced state machine. Local stays canonical; conflicts surface, never force. Build green CLI 441 / MCP 468.'
+symbols_touched:
+  - '#task-sync'
+  - '#task-cli'
+  - '#github-provider'
+  - '#serve'
+  - '#tasks-section'
+files_modified:
+  - packages/paradigm/src/commands/task/index.ts
+  - packages/paradigm/src/index.ts
+  - packages/paradigm/src/platform-server/routes/tasks-write.ts
+  - packages/paradigm/src/platform-server/index.ts
+  - packages/paradigm/platform-ui/src/sections/tasks/components/GitHubSyncStrip.tsx
+  - packages/paradigm/platform-ui/src/sections/tasks/store/tasksStore.ts
+  - packages/paradigm/platform-ui/src/sections/tasks/TasksSection.tsx
+  - packages/paradigm/platform-ui/src/hooks/useAgentEffects.ts
+  - portal.yaml
+  - CHANGELOG.md
+learnings:
+  - The whole two-way feature stayed safe because EVERY mutation — outbound projection, inbound reconcile, CLI, web, poll — routes through one enforced seam (updateTask/completeTask/shelveTask). Five trigger surfaces, one write path. The reconcile brain is pure and the sync-layer is the only writer, so 'a pull can't bypass enforcement' is provable, not asserted.
+  - Outbound projection is fire-and-forget at the call sites that ALREADY own the enforced write (CLI verbs + web router), never inside updateTask — keeping the loader pure (no provider import) and avoiding firing on the recursive blocked_on auto-clear write. The local write commits first; gh is best-effort after.
+  - The background poll lives in the platform server (the one long-running process), unref'd + non-overlapping + env-disablable — a poll belongs in serve, not the loader or a standing daemon, and only runs while the UI is up.
+verification:
+  status: pass
+  details:
+    cli_tests: 441 passed
+    mcp_tests: 468 passed
+    smoke: task sync clean message; POST /api/tasks/sync returns summary; web build green
+    note: live gh round-trip not exercised here (no gh-linked tasks in this repo); logic unit-tested
+tags:
+  - suite-renaissance
+  - arc:renaissance
+  - github-sync
+  - two-way
+  - task-sync
+  - complete
+linked_lore:
+  - L-2026-06-15-ascend-015351-001
+confidence: 0.88
+git_context:
+  ref: a0c187772a79c64875ac7a7c23872ce74f499f63
+  branch: renaissance/tasks-suite
+  dirty: true

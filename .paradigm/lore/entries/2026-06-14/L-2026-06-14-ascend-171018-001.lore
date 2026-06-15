@@ -1,0 +1,45 @@
+id: L-2026-06-14-ascend-171018-001
+type: milestone
+timestamp: '2026-06-14T17:10:18.546Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Renaissance — review polish batch 2 + a latent blocked_on crash fix
+summary: 'Executed 4 more team-review UI refinements: collapsed calibration strip shows a glanceable summary + force-expands cold-start (moat never hidden); CellGrid prior cells ramp by n/8 progress-to-graduation (cold grid becomes a live map); proposedClaimant surfaced as a distinct ''→ owner'' hint on unclaimed cards + empty unclaimed lane hidden; cross-run dependsOn ids resolve via /:id (deduped/cached) so deps stop rendering ''unknown''. Caught + fixed a latent runtime crash the builder introduced: blocked_on (a backend reason STRING) was mistyped as string[] and .join()-ed, which throws whenever a blocked task renders. Build green, CLI 441. Board loose-tasks verified working (a stale leftover serve briefly returned loose:0 — lesson: kill all serves before smoke-testing).'
+symbols_touched:
+  - '#tasks-section'
+  - '#calibration'
+files_modified:
+  - packages/paradigm/platform-ui/src/sections/tasks/components/CalibrationStrip.tsx
+  - packages/paradigm/platform-ui/src/sections/tasks/components/CellGrid.tsx
+  - packages/paradigm/platform-ui/src/sections/tasks/components/BoardView.tsx
+  - packages/paradigm/platform-ui/src/sections/tasks/components/TaskCard.tsx
+  - packages/paradigm/platform-ui/src/sections/tasks/components/TaskActions.tsx
+  - packages/paradigm/platform-ui/src/sections/tasks/components/InboxView.tsx
+  - packages/paradigm/platform-ui/src/sections/tasks/store/tasksStore.ts
+  - packages/paradigm/platform-ui/src/sections/tasks/utils/board.ts
+  - CHANGELOG.md
+learnings:
+  - A delegated builder typed a field from the rendering it wanted (blocked_on as string[] to .join) rather than from the backend truth (a reason string) — TS accepted it (fetch data is any), build passed, but it's a runtime crash on the first blocked task. When reviewing builder output, grep the field's BACKEND type and the UI's usage; a build-passing type can still be a lie about the data.
+  - Stale background serve processes cause phantom smoke-test results (loose:0 when it's really 10). Always pkill -f 'paradigm serve' before a fresh smoke test — a leftover process on a different port served the old dist.
+verification:
+  status: pass
+  details:
+    build: green
+    cli_tests: 441 passed
+    smoke: board loose:10 (forge:4/cid:3/compliance:1/human:2), calibration cells carry n
+    fixed: blocked_on .join crash
+tags:
+  - suite-renaissance
+  - arc:renaissance
+  - tasks-section
+  - team-review
+  - bugfix
+linked_lore:
+  - L-2026-06-14-ascend-170014-001
+confidence: 0.9
+git_context:
+  ref: 6f3047c6245c896df0b627c300da12967636b546
+  branch: renaissance/tasks-suite
+  dirty: true

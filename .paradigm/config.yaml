@@ -1,6 +1,12 @@
 version: '1.0'
 project: a-paradigm
 discipline: monorepo
+# Two-way GitHub sync (Phase 2b). `task push` creates/links issues; `task sync`
+# + the platform poll reconcile them back through the enforced state machine.
+sync:
+  provider: github
+  github:
+    repo: ascend42/a-paradigm
 agent-guidelines:
   overview: |
     This project uses Paradigm for structured AI-assisted development.

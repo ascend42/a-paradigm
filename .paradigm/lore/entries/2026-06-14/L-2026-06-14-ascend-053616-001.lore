@@ -1,0 +1,30 @@
+id: L-2026-06-14-ascend-053616-001
+type: milestone
+timestamp: '2026-06-14T05:36:16.986Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Tasks section renders live — visual confirmation (Round B)
+summary: Matt ran `paradigm serve` and visually confirmed the new ▤ Tasks section loads and renders ("definitely runs and shows things"). This closes the one verification gap from Round B that couldn't be checked from the terminal — the section shell, ViewSwitcher, List view, and TaskCards with CalibrationBlocks render in the real browser. The renaissance spearhead is now a visible, working surface. Greenlit to continue to Round C (board view + swim lanes + calibration hero strip).
+symbols_touched:
+  - '#tasks-section'
+  - '#serve'
+verification:
+  status: pass
+  details:
+    visual: Matt confirmed live render via paradigm serve
+    build: clean
+    cli_tests: 441 passed
+tags:
+  - suite-renaissance
+  - arc:renaissance
+  - tasks-section
+  - visual-confirmation
+linked_lore:
+  - L-2026-06-14-ascend-052304-001
+confidence: 0.97
+git_context:
+  ref: 08a68973c12a96afeabc486809bcdab210c61f5e
+  branch: renaissance/tasks-suite
+  dirty: true

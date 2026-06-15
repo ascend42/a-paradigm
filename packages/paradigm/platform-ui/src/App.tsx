@@ -15,7 +15,6 @@ import './styles/command-palette.css';
 
 const LoreSection = lazy(() => import('./sections/lore/LoreSection'));
 const GraphSection = lazy(() => import('./sections/graph/GraphSection'));
-const CanvasSection = lazy(() => import('./sections/canvas/CanvasSection'));
 const GitSection = lazy(() => import('./sections/git/GitSection'));
 const SentinelSection = lazy(() => import('./sections/sentinel/SentinelSection'));
 const SymphonySection = lazy(() => import('./sections/symphony/SymphonySection'));
@@ -23,6 +22,7 @@ const DocsSection = lazy(() => import('./sections/docs/DocsSection'));
 const AmbientSection = lazy(() => import('./sections/ambient/AmbientSection'));
 const TeamSection = lazy(() => import('./sections/team/TeamSection'));
 const UniversitySection = lazy(() => import('./sections/university/UniversitySection'));
+const TasksSection = lazy(() => import('./sections/tasks/TasksSection'));
 
 function SectionFallback() {
   return (
@@ -60,7 +60,7 @@ export default function App() {
     // Handle browser back/forward
     const handlePopState = () => {
       const path = window.location.pathname.slice(1) || 'overview';
-      const validSections = ['overview', 'lore', 'graph', 'canvas', 'git', 'sentinel', 'university', 'symphony', 'docs', 'ambient', 'team'];
+      const validSections = ['overview', 'lore', 'graph', 'git', 'sentinel', 'university', 'symphony', 'docs', 'ambient', 'team', 'tasks'];
       if (validSections.includes(path)) {
         usePlatformStore.getState().setActiveSection(path as any);
       }
@@ -83,7 +83,6 @@ export default function App() {
             {activeSection === 'overview' && <ErrorBoundary sectionName="Overview"><OverviewSection /></ErrorBoundary>}
             {activeSection === 'lore' && <ErrorBoundary sectionName="Lore"><LoreSection /></ErrorBoundary>}
             {activeSection === 'graph' && <ErrorBoundary sectionName="Graph"><GraphSection /></ErrorBoundary>}
-            {activeSection === 'canvas' && <ErrorBoundary sectionName="Canvas"><CanvasSection /></ErrorBoundary>}
             {activeSection === 'git' && <ErrorBoundary sectionName="Git"><GitSection /></ErrorBoundary>}
             {activeSection === 'sentinel' && <ErrorBoundary sectionName="Sentinel"><SentinelSection /></ErrorBoundary>}
             {activeSection === 'university' && <ErrorBoundary sectionName="University"><UniversitySection /></ErrorBoundary>}
@@ -91,6 +90,7 @@ export default function App() {
             {activeSection === 'docs' && <ErrorBoundary sectionName="Docs"><DocsSection /></ErrorBoundary>}
             {activeSection === 'ambient' && <ErrorBoundary sectionName="Ambient"><AmbientSection /></ErrorBoundary>}
             {activeSection === 'team' && <ErrorBoundary sectionName="Team"><TeamSection /></ErrorBoundary>}
+            {activeSection === 'tasks' && <ErrorBoundary sectionName="Tasks"><TasksSection /></ErrorBoundary>}
           </Suspense>
         </div>
       </div>

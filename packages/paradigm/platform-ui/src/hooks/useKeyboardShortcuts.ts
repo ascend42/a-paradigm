@@ -14,12 +14,11 @@ const SECTION_BY_INDEX: Record<string, SectionId> = {
   '1': 'overview',
   '2': 'lore',
   '3': 'graph',
-  '4': 'canvas',
-  '5': 'git',
-  '6': 'sentinel',
-  '7': 'university',
-  '8': 'symphony',
-  '9': 'docs',
+  '4': 'git',
+  '5': 'sentinel',
+  '6': 'university',
+  '7': 'symphony',
+  '8': 'docs',
 };
 
 function isTypingTarget(el: Element | null): boolean {

@@ -1,0 +1,37 @@
+id: L-2026-06-14-ascend-043023-001
+type: milestone
+timestamp: '2026-06-14T04:30:23.083Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: CHECKPOINT 2026-06-14 — three releases shipped; Paradigm Suite renaissance begins
+summary: 'Session checkpoint / context-clear handoff. One day, three published releases from a single ''mega audit'' spree: v7.0 ''Close the Loop'' (the keystone — claimant-owned task DAG, settlement closes the learning loop, falsifiable liveness, Cid becomes a real captain), v7.1 ''fast-follows'' (CLI/Symphony loop-closure, learned token calibration, notebook open-loop fix), v7.2 ''enforcement honesty + task management for humans'' (T-005 enforcement verifies completion not invocation, the paradigm task CLI, provider-agnostic GitHub one-way sync live-tested against the real repo). Every risky call went through team analysis + adversarial review, which caught false claims (v7.0 design, v7.1 belief-delta gate) and a live sync bug (v7.2 assignee) BEFORE they shipped. NEXT ARC = the Paradigm Suite renaissance: the substrate is deep, the surfaces (Platform web, Conductor native, separate Sentinel/University UIs, VS Code ext) are fragmented — unify into one locally-launchable suite, spearheaded by the Tasks UI. See memory: project_paradigm_suite_renaissance + project_platform_tasks_section. Opening move next session: audit the surfaces first.'
+symbols_touched:
+  - '#task-cli'
+  - '#sync-provider'
+  - '#orchestration-marker'
+  - '#task-settlement'
+  - '#captain-board'
+learnings:
+  - 'The day''s whole method was: audit (team panel) → design → adversarial review → build → verify-state-directly → ship-per-round (build+lore+changelog+commit+push) → cut release → live-test-before-merge. It produced 3 releases without a regression and caught 3 would-be-false claims. This is the reusable loop for the next arc.'
+  - Builders repeatedly truncated their final report on large multi-file edits (~90-110k tokens); the mitigation that worked every time was to verify state DIRECTLY (git diff + build + full test suite + a live smoke test) rather than trust the agent's report. Split big builds into new-file-heavy sub-rounds to dodge the limit.
+  - Live integration testing against the REAL external system (the actual GitHub repo) caught a sync bug a mocked unit test could not (the mock accepted the bad email assignee). For surface/integration work in the renaissance, test against the real thing before merge.
+verification:
+  status: pass
+  details:
+    published: paradigm@7.2.0 live
+    main: 0b0b082f at 7.2.0
+    suites: mcp 425 / cli 441 / univ 47
+tags:
+  - checkpoint
+  - handoff
+  - v7
+  - arc:v7
+  - suite-renaissance
+  - milestone
+confidence: 0.95
+git_context:
+  ref: 0b0b082f286f8a3262216f39686d14b83e076b39
+  branch: main
+  dirty: false

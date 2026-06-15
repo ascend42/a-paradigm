@@ -1,0 +1,39 @@
+id: L-2026-06-14-ascend-152811-001
+type: milestone
+timestamp: '2026-06-14T15:28:11.221Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Renaissance — DAG integrity validator (first governance-backlog item, T-007)
+summary: 'Built the first task-governance backlog item: validateTaskDag() in task-loader, the graph integrity check nothing owned before (assertTransition validated status, never the graph). Detects self-parent, dangling parentTaskId/dependsOn, and cycles via iterative DFS over parent ∪ dependsOn edges (each cycle once, diamonds safe). Cid surfaces violations on the captain board as an advise-only integrity[] field — never auto-edits, never blocks, per the governance decision. +7 tests; MCP 445 / CLI 441 green; board smoke-tested (integrity absent = sound graph). Done while a team review of the shipped Tasks section runs in the background.'
+symbols_touched:
+  - '#task-loader'
+  - '#captain-board'
+files_modified:
+  - packages/paradigm-mcp/src/utils/task-loader.ts
+  - packages/paradigm-mcp/src/types/captain.ts
+  - packages/paradigm-mcp/src/tools/captain.ts
+  - packages/paradigm-mcp/src/utils/task-loader.test.ts
+  - CHANGELOG.md
+learnings:
+  - 'Wiring T-011 (aggregate-on-settle) revealed an architecture snag worth flagging: the calibrate AGGREGATION lives in the CLI package while settlement lives in MCP, and MCP can''t import from CLI — which is exactly WHY aggregation never ran automatically. T-011 needs an extraction refactor first (move aggregation MCP-ward). Pivoted to T-007 (self-contained) instead.'
+  - 'The DAG validator follows the governance ownership cleanly: it LIVES in task-loader (the framework chokepoint) but Cid INVOKES it at board-assemble — the present-tense owner surfaces present-tense structural defects, advise-only. Ownership = who invokes + surfaces, not just where the code sits.'
+verification:
+  status: pass
+  details:
+    mcp_tests: 445 passed (+7)
+    cli_tests: 441 passed
+    smoke: board serves, integrity absent (sound graph)
+tags:
+  - suite-renaissance
+  - arc:renaissance
+  - task-governance
+  - dag-integrity
+linked_lore:
+  - L-2026-06-14-ascend-063112-001
+confidence: 0.93
+git_context:
+  ref: b22e2e5dc88e7b239c6beb7c7266838fc8ee4796
+  branch: renaissance/tasks-suite
+  dirty: true

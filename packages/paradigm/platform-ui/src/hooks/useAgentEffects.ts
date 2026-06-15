@@ -35,6 +35,12 @@ export function useAgentEffects() {
           if (msg.type?.startsWith('symphony:')) {
             window.dispatchEvent(new CustomEvent('symphony-ws', { detail: msg }));
           }
+          // Forward tasks:* messages (tasks:synced / tasks:sync-conflict from the
+          // background poll OR the manual Sync endpoint) so the Tasks section can
+          // live-refresh the board without a user click.
+          if (msg.type?.startsWith('tasks:')) {
+            window.dispatchEvent(new CustomEvent('tasks-ws', { detail: msg }));
+          }
         } catch {
           // Ignore malformed
         }
@@ -64,7 +70,7 @@ export function useAgentEffects() {
       const detail = (e as CustomEvent).detail;
       if (!detail) return;
 
-      const validSections: SectionId[] = ['overview', 'lore', 'graph', 'canvas', 'git', 'sentinel', 'university', 'symphony', 'docs', 'ambient', 'team'];
+      const validSections: SectionId[] = ['overview', 'lore', 'graph', 'git', 'sentinel', 'university', 'symphony', 'docs', 'ambient', 'team'];
       if (detail.section && validSections.includes(detail.section)) {
         setActiveSection(detail.section);
       }

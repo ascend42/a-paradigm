@@ -77,6 +77,14 @@ export interface Task {
   dependsOn?: string[];
   stage?: number;
 
+  /**
+   * Classification family (feature|bugfix|refactor|design|…) derived from the
+   * blurb. NOT persisted to the YAML store — attached at read time by the web
+   * route so the calibration grid (archetype×taskType) can map a cell back to
+   * the board. The column key for this task's learned estimate.
+   */
+  taskType?: string;
+
   // ── Lifecycle stamps ──
   started_at?: string; // stamped on entering 'in-progress'
   completed?: string;
@@ -120,6 +128,14 @@ export interface TaskFilter {
   priority?: 'high' | 'medium' | 'low';
   tag?: string;
   limit?: number;
+  /**
+   * Filter to tasks owned by a claimant (the data prerequisite for the agent
+   * claimant-inbox and human swim-lanes — the Task carries `claimant`, but the
+   * filter could not key on it). Matches by `ref`; if `kind` is also given it
+   * narrows further (refs can collide across kinds — e.g. a human and an
+   * archetype both reffed "forge"). Exact-match, no normalization.
+   */
+  claimant?: { kind?: ClaimantKind; ref: string };
 }
 
 export interface TaskIndex {
@@ -188,11 +204,18 @@ export function generateTaskId(rootDir: string, dateStr: string): string {
 // ── Status state-machine ──────────────────────────────────
 
 /**
- * v7.0 (4-state) transition table:
+ * Transition table:
  *   open        → in-progress | done | shelved
  *   in-progress → done | open | shelved
  *   shelved     → open
- *   done        → (terminal)
+ *   done        → open   (REOPEN — added for symmetric two-way GitHub sync)
+ *
+ * `done` is no longer strictly terminal: a `done → open` REOPEN is legal so a
+ * GitHub issue reopened by a teammate can drive the local task back to open
+ * (and so a mistakenly-completed task can be reopened). Reopening clears the
+ * settlement/completion stamps (see `updateTask`) so the learning loop can
+ * re-settle on the next completion. `done → in-progress`/`shelved` stay illegal
+ * (reopen lands in `open`, then follows the normal machine).
  *
  * Returns true if the transition is legal. A no-op (from === to) is legal.
  */
@@ -202,7 +225,7 @@ export function assertTransition(from: TaskStatus, to: TaskStatus): boolean {
     'open': ['in-progress', 'done', 'shelved'],
     'in-progress': ['done', 'open', 'shelved'],
     'shelved': ['open'],
-    'done': [],
+    'done': ['open'],
   };
   return (allowed[from] ?? []).includes(to);
 }
@@ -246,6 +269,14 @@ function applyFilter(tasks: Task[], filter: TaskFilter): Task[] {
   }
   if (filter.tag) {
     result = result.filter(t => t.tags.includes(filter.tag!));
+  }
+  if (filter.claimant) {
+    const { kind, ref } = filter.claimant;
+    result = result.filter(t =>
+      t.claimant != null &&
+      t.claimant.ref === ref &&
+      (kind === undefined || t.claimant.kind === kind),
+    );
   }
 
   result.sort((a, b) => {
@@ -291,6 +322,25 @@ export async function loadTasks(rootDir: string, filter?: TaskFilter): Promise<T
   return applyFilter(tasks, effectiveFilter);
 }
 
+/**
+ * The claimant's inbox: every task owned by a claimant, priority-ranked. The
+ * convenience over `loadTasks({ claimant })` is inbox-appropriate defaults —
+ * `active` (open ∪ in-progress, excluding done/shelved) and a generous limit,
+ * versus loadTasks' top-20 `open`-only. The data spine for both the agent
+ * claimant-inbox and the human swim-lanes (renaissance step 1).
+ */
+export async function tasksForClaimant(
+  rootDir: string,
+  claimant: { kind?: ClaimantKind; ref: string },
+  opts?: { status?: TaskFilterStatus; limit?: number },
+): Promise<Task[]> {
+  return loadTasks(rootDir, {
+    claimant,
+    status: opts?.status ?? 'active',
+    limit: opts?.limit ?? 200,
+  });
+}
+
 export async function loadTask(rootDir: string, taskId: string): Promise<Task | null> {
   const dateMatch = taskId.match(/^T-(\d{4}-\d{2}-\d{2})-/);
   if (dateMatch) {
@@ -307,6 +357,103 @@ export async function loadTask(rootDir: string, taskId: string): Promise<Task | 
   // Fallback scan
   const tasks = await loadTasks(rootDir, { status: 'all', limit: 9999 });
   return tasks.find(t => t.id === taskId) || null;
+}
+
+// ── DAG integrity (Cid-owned, advise-only) ────────────────
+
+/**
+ * A structural defect in the task graph. `assertTransition` validates STATUS but
+ * nothing validates the GRAPH — a cyclic/dangling subtree never settles and the
+ * learning loop never closes on it. Cid surfaces these at board-assemble as
+ * advise-only warnings (TD-2026-06-14-467); they never auto-edit or hard-block.
+ */
+export interface DagViolation {
+  kind: 'self-parent' | 'dangling-parent' | 'dangling-dependency' | 'cycle';
+  taskId: string;
+  /** The offending reference (parent id, dep id) or the cycle path, for the message. */
+  detail: string;
+}
+
+/**
+ * Validate the task DAG for structural defects: self-parent, dangling
+ * parentTaskId / dependsOn (a ref pointing at a task that doesn't exist in the
+ * set), and cycles (following parentTaskId AND dependsOn edges). Pure read —
+ * returns the violation list, never mutates. Cycle detection is an iterative DFS
+ * with a recursion stack; each distinct cycle is reported once against its
+ * entry node.
+ */
+export function validateTaskDag(tasks: Task[]): DagViolation[] {
+  const violations: DagViolation[] = [];
+  const byId = new Map<string, Task>();
+  for (const t of tasks) if (t.id) byId.set(t.id, t);
+
+  // ── Self-parent + dangling refs ──
+  for (const t of tasks) {
+    if (!t.id) continue;
+    if (t.parentTaskId === t.id) {
+      violations.push({ kind: 'self-parent', taskId: t.id, detail: t.id });
+    } else if (t.parentTaskId && !byId.has(t.parentTaskId)) {
+      violations.push({ kind: 'dangling-parent', taskId: t.id, detail: t.parentTaskId });
+    }
+    for (const dep of t.dependsOn ?? []) {
+      if (dep === t.id) {
+        violations.push({ kind: 'self-parent', taskId: t.id, detail: `dependsOn:${dep}` });
+      } else if (!byId.has(dep)) {
+        violations.push({ kind: 'dangling-dependency', taskId: t.id, detail: dep });
+      }
+    }
+  }
+
+  // ── Cycle detection over parentTaskId ∪ dependsOn edges (DFS, color marks) ──
+  const WHITE = 0, GRAY = 1, BLACK = 2;
+  const color = new Map<string, number>();
+  for (const id of byId.keys()) color.set(id, WHITE);
+
+  const edgesOf = (t: Task): string[] => {
+    const out: string[] = [];
+    if (t.parentTaskId && t.parentTaskId !== t.id && byId.has(t.parentTaskId)) out.push(t.parentTaskId);
+    for (const dep of t.dependsOn ?? []) if (dep !== t.id && byId.has(dep)) out.push(dep);
+    return out;
+  };
+
+  const reported = new Set<string>();
+  for (const startId of byId.keys()) {
+    if (color.get(startId) !== WHITE) continue;
+    // Iterative DFS carrying the active path so a back-edge yields the cycle.
+    const stack: Array<{ id: string; path: string[] }> = [{ id: startId, path: [startId] }];
+    const onStack = new Set<string>();
+    while (stack.length) {
+      const top = stack[stack.length - 1];
+      if (color.get(top.id) === WHITE) {
+        color.set(top.id, GRAY);
+        onStack.add(top.id);
+      }
+      let descended = false;
+      for (const next of edgesOf(byId.get(top.id)!)) {
+        if (color.get(next) === GRAY) {
+          // Back-edge → cycle. Report once per cycle (keyed by its sorted members).
+          const cycleStart = top.path.indexOf(next);
+          const cyclePath = cycleStart >= 0 ? top.path.slice(cycleStart).concat(next) : [top.id, next];
+          const key = [...cyclePath].sort().join('|');
+          if (!reported.has(key)) {
+            reported.add(key);
+            violations.push({ kind: 'cycle', taskId: next, detail: cyclePath.join(' → ') });
+          }
+        } else if (color.get(next) === WHITE) {
+          stack.push({ id: next, path: [...top.path, next] });
+          descended = true;
+          break;
+        }
+      }
+      if (!descended) {
+        color.set(top.id, BLACK);
+        onStack.delete(top.id);
+        stack.pop();
+      }
+    }
+  }
+
+  return violations;
 }
 
 // ── Write operations ──────────────────────────────────────
@@ -380,6 +527,16 @@ export async function updateTask(rootDir: string, taskId: string, partial: Parti
     if (safePartial.status === 'in-progress' && !task.started_at && safePartial.started_at === undefined) {
       safePartial.started_at = new Date().toISOString();
     }
+    // REOPEN (done → open): a re-opened task is active again, so clear the
+    // terminal/settlement stamps it carried — `completed`, the learning
+    // `settledAt`, and any reaper crash markers — so the learning loop can
+    // re-settle cleanly the next time it completes. (Symmetric two-way sync.)
+    if (task.status === 'done' && safePartial.status === 'open') {
+      safePartial.completed = undefined;
+      safePartial.settledAt = undefined;
+      safePartial.crashed_at = undefined;
+      safePartial.crash_reason = undefined;
+    }
   }
 
   const updated: Task = { ...task, ...safePartial };
@@ -404,6 +561,38 @@ export async function updateTask(rootDir: string, taskId: string, partial: Parti
       log.component('#task-loader').warn('Settlement after updateTask failed (non-fatal)', {
         taskId, parentTaskId: updated.parentTaskId,
         error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+
+  // T-008 (Cid present-tense, TD-2026-06-14-467): blocked_on AUTO-CLEAR. When
+  // THIS task goes terminal, any task that was blocked AND depends on it may now
+  // be unblocked — clear blocked_on on a dependent once ALL of its dependsOn are
+  // terminal. Conservative: only clears when there's a real structural dep edge
+  // to the just-finished task (a blocked_on set for a non-dependency reason is
+  // left for a human/Cid to clear). Gated on the terminal transition so it can't
+  // recurse (clearing a dependent leaves its status non-terminal). Best-effort.
+  if (isTerminalStatus(updated.status)) {
+    try {
+      const peers = await loadTasks(rootDir, { status: 'all', limit: 9999 });
+      const byId = new Map(peers.map(p => [p.id, p]));
+      for (const dep of peers) {
+        if (!dep.blocked_on) continue;
+        if (!dep.dependsOn?.includes(updated.id)) continue;
+        const allDepsTerminal = (dep.dependsOn ?? []).every(d => {
+          const t = byId.get(d);
+          return t != null && isTerminalStatus(t.status);
+        });
+        if (allDepsTerminal) {
+          await updateTask(rootDir, dep.id, { blocked_on: undefined });
+          log.component('#task-loader').info('Auto-cleared blocked_on (all deps terminal)', {
+            taskId: dep.id, resolvedBy: updated.id,
+          });
+        }
+      }
+    } catch (err) {
+      log.component('#task-loader').warn('blocked_on auto-clear failed (non-fatal)', {
+        taskId, error: err instanceof Error ? err.message : String(err),
       });
     }
   }

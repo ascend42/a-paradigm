@@ -1,0 +1,117 @@
+import React, { useEffect } from 'react';
+import { useTasksStore, type TaskView } from './store/tasksStore';
+import { usePlatformStore } from '../../store/platformStore';
+import { ListView } from './components/ListView';
+import { BoardView } from './components/BoardView';
+import { BoardTabs } from './components/BoardTabs';
+import { CalibrationStrip } from './components/CalibrationStrip';
+import { FilterBar } from './components/FilterBar';
+import { InboxView } from './components/InboxView';
+import { GitHubSyncStrip } from './components/GitHubSyncStrip';
+import { TaskDetailPanel } from './components/TaskDetailPanel';
+import './styles/tasks.css';
+
+const VIEWS: { mode: TaskView; label: string }[] = [
+  { mode: 'board', label: 'Board' },
+  { mode: 'list', label: 'List' },
+  { mode: 'inbox', label: 'Inbox' },
+];
+
+export default function TasksSection() {
+  const view = useTasksStore((s) => s.view);
+  const setView = useTasksStore((s) => s.setView);
+  const boardTab = useTasksStore((s) => s.boardTab);
+  const board = useTasksStore((s) => s.board);
+  const fetchTasks = useTasksStore((s) => s.fetchTasks);
+  const fetchBoard = useTasksStore((s) => s.fetchBoard);
+  const fetchCalibration = useTasksStore((s) => s.fetchCalibration);
+  const fetchWhoami = useTasksStore((s) => s.fetchWhoami);
+
+  useEffect(() => {
+    fetchTasks();
+    fetchBoard();
+    fetchCalibration();
+    fetchWhoami();
+    const interval = setInterval(() => {
+      if (usePlatformStore.getState().activeSection === 'tasks') {
+        fetchTasks();
+        fetchBoard();
+        fetchCalibration();
+      }
+    }, 10000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Poll-driven live refresh — the central WS hub (useAgentEffects) forwards
+  // tasks:* server broadcasts as a `tasks-ws` CustomEvent. The background poll
+  // (and the manual Sync endpoint) emit tasks:synced / tasks:sync-conflict when
+  // a linked issue moved; refresh the board so applied changes appear live
+  // without the user clicking Sync.
+  useEffect(() => {
+    function onTasksWs(e: Event) {
+      const msg = (e as CustomEvent).detail;
+      if (!msg) return;
+      if (msg.type === 'tasks:synced' || msg.type === 'tasks:sync-conflict') {
+        fetchBoard();
+        fetchTasks();
+        const { inboxClaimant, fetchInbox } = useTasksStore.getState();
+        if (inboxClaimant) fetchInbox(inboxClaimant.kind, inboxClaimant.ref);
+      }
+    }
+    window.addEventListener('tasks-ws', onTasksWs);
+    return () => window.removeEventListener('tasks-ws', onTasksWs);
+  }, [fetchBoard, fetchTasks]);
+
+  // Board summary leads the header stat when available; else fall back to list.
+  const tasks = useTasksStore((s) => s.tasks);
+  const openCount = board?.summary.open ?? tasks.filter((t) => t.status === 'open').length;
+  const inFlightCount =
+    board?.summary.inFlight ?? tasks.filter((t) => t.status === 'in-progress').length;
+  const unclaimedCount = board?.summary.unclaimed ?? 0;
+
+  return (
+    <div className="tasks">
+      <div className="tasks__header">
+        <div>
+          <span className="tasks__title">Tasks</span>
+          <span className="tasks__stat">
+            {openCount} open &middot; {inFlightCount} in-flight &middot; {unclaimedCount} unclaimed
+          </span>
+        </div>
+        <div className="view-switcher">
+          {VIEWS.map((v) => (
+            <button
+              key={v.mode}
+              className={`view-tab ${view === v.mode ? 'active' : ''}`}
+              onClick={() => setView(v.mode)}
+            >
+              {v.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {view === 'board' && (
+        <div className="tasks__board-tabs">
+          <BoardTabs />
+        </div>
+      )}
+
+      {/* FilterBar only on the lane sub-tabs — hidden on the Calibration tab. */}
+      {view === 'board' && boardTab !== 'calibration' && <FilterBar />}
+
+      <main className={`tasks__main ${view === 'board' ? 'tasks__main--board' : ''}`}>
+        {view === 'list' && <ListView />}
+        {view === 'board' && boardTab === 'calibration' && (
+          <CalibrationStrip variant="tab" />
+        )}
+        {view === 'board' && boardTab !== 'calibration' && <BoardView />}
+        {view === 'inbox' && <InboxView />}
+      </main>
+
+      {view === 'board' && <GitHubSyncStrip />}
+
+      <TaskDetailPanel />
+    </div>
+  );
+}

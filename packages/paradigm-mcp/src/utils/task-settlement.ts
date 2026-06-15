@@ -244,7 +244,27 @@ async function runSettlementChain(
   let journalsWritten = 0;
   let promoted = 0;
 
-  const claimantRef = parent?.claimant?.ref ?? 'orchestrator';
+  // T-013 (Loid past-tense, TD-2026-06-14-467): claimant-accuracy guard. The
+  // learning this settlement promotes must attribute to the agent that actually
+  // did the work. An epic is typically claimed by a generic 'orchestrator' (or
+  // unclaimed), so settling under it would credit the wrong notebook. When the
+  // parent's claimant is absent or the generic orchestrator, re-attribute to the
+  // DOMINANT child archetype (the one that owns the most child tasks).
+  let claimantRef = parent?.claimant?.ref;
+  if (!claimantRef || claimantRef === 'orchestrator') {
+    try {
+      const { loadTasks } = await import('./task-loader.js');
+      const children = (await loadTasks(rootDir, { status: 'all', limit: 9999 }))
+        .filter(t => t.parentTaskId === parentTaskId && t.claimant?.kind === 'archetype');
+      const counts = new Map<string, number>();
+      for (const c of children) counts.set(c.claimant!.ref, (counts.get(c.claimant!.ref) ?? 0) + 1);
+      const dominant = [...counts.entries()].sort((a, b) => b[1] - a[1])[0];
+      if (dominant) claimantRef = dominant[0];
+    } catch {
+      /* fall through to the orchestrator default */
+    }
+  }
+  claimantRef = claimantRef ?? 'orchestrator';
 
   try {
     // ── Stage 1: recordWorkLog (work-log-loader) ──
@@ -291,6 +311,28 @@ async function runSettlementChain(
     } catch (err) {
       stages.autoPromoteJournalEntries = 'threw';
       log.component('#task-settlement').warn('Settlement stage threw: autoPromoteJournalEntries', {
+        parentTaskId, error: err instanceof Error ? err.message : String(err),
+      });
+    }
+
+    // ── Adjacent: aggregate-on-settle (#calibration, governance T-011) ──
+    // Fold the actuals captured during this run into the learned token table so
+    // story-points stay current WITHOUT a manual `paradigm calibrate`. This
+    // closes the calibration half of the loop the same moment the learning half
+    // settles. Best-effort, idempotent, never breaks settlement. Not a tracked
+    // liveness stage — the probe asserts the learning chain; this is adjacent.
+    try {
+      const { rebuildLearnedTable } = await import('./calibration-aggregate.js');
+      const res = rebuildLearnedTable(rootDir);
+      if (res) {
+        log.component('#calibration').info('Calibration refreshed on settle', {
+          parentTaskId,
+          samplesRead: res.samplesRead,
+          learnedCells: res.groups.filter(g => g.learned).length,
+        });
+      }
+    } catch (err) {
+      log.component('#calibration').warn('Aggregate-on-settle failed (non-fatal)', {
         parentTaskId, error: err instanceof Error ? err.message : String(err),
       });
     }

@@ -2,7 +2,7 @@ version: 2.0.0
 description: WebSocket infrastructure for agent-driven UI — attaches to platform HTTP server, broadcasts agent commands, receives user activity
 components:
   PlatformWebSocket:
-    description: WebSocket server with client tracking, broadcast, and reconnect handling
+    description: WebSocket server with per-client channel subscriptions — broadcast() is channel-routed (channel = the segment before ':' in a message type; a client sends {type:'subscribe',channels:[...]} to narrow, default = all channels for backward compat), plus client tracking and reconnect handling
     type: service
     tags: [feature, agent-ui, server]
   AgentPresenceManager:

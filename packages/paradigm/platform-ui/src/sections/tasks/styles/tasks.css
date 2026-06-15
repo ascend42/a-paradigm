@@ -1,0 +1,1758 @@
+/* Tasks Section — clones .lore-card patterns, --p-* tokens only */
+
+.tasks {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+/* Header band (mirrors LoreSection header) */
+.tasks__header {
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--p-border);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.tasks__title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--p-text-primary);
+}
+
+.tasks__stat {
+  font-size: 12px;
+  color: var(--p-text-muted);
+  margin-left: 10px;
+}
+
+.tasks__main {
+  flex: 1;
+  min-height: 0; /* let the flex chain resolve height down to scrollable children */
+  overflow: auto;
+  padding: 16px;
+  padding-bottom: 32px;
+}
+
+.tasks__list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.tasks__empty {
+  color: var(--p-text-muted);
+  font-size: 13px;
+  text-align: center;
+  padding: 48px 20px;
+}
+
+.tasks__placeholder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 100%;
+  color: var(--p-text-muted);
+}
+
+.tasks__placeholder-title {
+  font-size: 18px;
+  color: var(--p-text-secondary);
+}
+
+.tasks__placeholder-sub {
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  opacity: 0.7;
+}
+
+/* ── Task Card (clone of .lore-card) ───────────────── */
+.task-card {
+  background: var(--p-bg-card);
+  border: 1px solid var(--p-border);
+  border-radius: 8px;
+  padding: 12px 16px;
+  transition: all 0.15s;
+  width: 100%;
+}
+
+.task-card:hover {
+  border-color: var(--p-border-active);
+  background: var(--p-bg-hover);
+}
+
+.task-card__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.task-card__title {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--p-text-primary);
+  margin-bottom: 10px;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.task-card__footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  font-size: 11px;
+}
+
+.task-card__tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 8px;
+}
+
+/* ── Chips (priority + status) ─────────────────────── */
+.task-chip {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding: 2px 6px;
+  border-radius: 3px;
+}
+
+.task-chip--prio-high {
+  background: color-mix(in srgb, var(--p-accent-red) 15%, transparent);
+  color: var(--p-accent-red);
+}
+.task-chip--prio-medium {
+  background: color-mix(in srgb, var(--p-accent-orange) 15%, transparent);
+  color: var(--p-accent-orange);
+}
+.task-chip--prio-low {
+  background: color-mix(in srgb, var(--p-text-secondary) 15%, transparent);
+  color: var(--p-text-secondary);
+}
+
+.task-chip--status-open {
+  background: color-mix(in srgb, var(--p-accent-blue) 15%, transparent);
+  color: var(--p-accent-blue);
+}
+.task-chip--status-in-progress {
+  background: color-mix(in srgb, var(--p-accent-purple) 15%, transparent);
+  color: var(--p-accent-purple);
+}
+.task-chip--status-done {
+  background: color-mix(in srgb, var(--p-accent-green) 15%, transparent);
+  color: var(--p-accent-green);
+}
+.task-chip--status-shelved {
+  background: color-mix(in srgb, var(--p-text-muted) 18%, transparent);
+  color: var(--p-text-muted);
+}
+
+/* ── Claimant + GitHub ─────────────────────────────── */
+.task-claimant {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: color-mix(in srgb, currentColor 12%, transparent);
+}
+
+.task-github {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--p-text-secondary);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 11px;
+}
+
+/* Proposed (suggested) owner hint on an unclaimed card — subtler than a real
+   claim: no filled background, dashed underline, in the suggested agent color. */
+.task-proposed-claimant {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px dashed color-mix(in srgb, currentColor 45%, transparent);
+  background: color-mix(in srgb, currentColor 7%, transparent);
+}
+
+/* ── Tags (symbol / fragile row) ───────────────────── */
+.task-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  background: color-mix(in srgb, var(--p-symbol-component) 12%, transparent);
+  color: var(--p-symbol-component);
+}
+
+.task-tag--fragile {
+  background: color-mix(in srgb, var(--p-accent-red) 15%, transparent);
+  color: var(--p-accent-red);
+}
+
+/* ── Calibration Block — THE MOAT ──────────────────── */
+.task-calibration {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--p-bg-primary) 60%, transparent);
+  border: 1px solid var(--p-border);
+}
+
+.task-calibration__points {
+  font-size: 32px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--p-text-primary);
+  font-variant-numeric: tabular-nums;
+  min-width: 36px;
+  text-align: center;
+}
+
+.task-calibration__meta {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.task-calibration__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 2px 7px;
+  border-radius: 4px;
+  background: color-mix(in srgb, var(--p-accent-green) 16%, transparent);
+  color: var(--p-accent-green);
+  width: fit-content;
+}
+
+.task-calibration__n {
+  font-weight: 600;
+  opacity: 0.85;
+}
+
+.task-calibration__band {
+  font-size: 12px;
+  color: var(--p-text-secondary);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+/* Learned: full opacity + green accent edge */
+.task-calibration.learned {
+  border-color: color-mix(in srgb, var(--p-accent-green) 35%, var(--p-border));
+}
+.task-calibration.learned .task-calibration__points {
+  color: var(--p-accent-green);
+}
+
+/* Prior: cold-start guess — intentionally dimmed, not broken. Label leads,
+   number is recessed so SIZE tracks confidence. */
+.task-calibration.prior {
+  opacity: 0.6;
+  border-style: dashed;
+}
+
+.task-calibration__meta--prior {
+  gap: 2px;
+}
+
+.task-calibration__prior-label {
+  font-size: 11px;
+  font-style: italic;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--p-text-muted);
+  width: fit-content;
+}
+
+/* Prior row: the demoted number sits next to its band, both recessed. */
+.task-calibration__prior-row {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+/* Prior number — shrunk from the learned 32px to a secondary 17px and muted,
+   so a cold-start guess never out-shouts the trustworthy learned bands. */
+.task-calibration__points--prior {
+  font-size: 17px;
+  font-weight: 600;
+  color: var(--p-text-secondary);
+  min-width: 0;
+  text-align: left;
+}
+
+/* FIX 3 — the calibration cell this estimate came from (archetype × taskType),
+   small + muted so a user can map the number back to the grid. */
+.task-calibration__cell {
+  font-size: 10px;
+  color: var(--p-text-muted);
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+/* ════════════════════════════════════════════════════
+   ROUND C — Board, SwimLanes, Filter, Calibration Strip
+   --p-* tokens only.
+   ════════════════════════════════════════════════════ */
+
+/* The board main relaxes the centered max-width list layout so lanes can
+   stretch full-bleed and scroll horizontally. */
+.tasks__main--board {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0; /* board fills the remaining viewport; lanes scroll internally */
+  overflow: hidden;
+}
+
+/* Board sub-tab bar — a fixed-height row between the section header and the
+   board area. The board/lanes (or the Calibration grid) fill the rest. */
+.tasks__board-tabs {
+  flex: 0 0 auto;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--p-border);
+}
+
+.board-tabs {
+  display: inline-flex;
+}
+
+/* ── View switcher (shared idiom) ──────────────────── */
+.view-switcher {
+  display: flex;
+  gap: 2px;
+  background: var(--p-bg-primary);
+  border: 1px solid var(--p-border);
+  border-radius: 6px;
+  padding: 2px;
+}
+
+.view-tab {
+  padding: 4px 12px;
+  border: none;
+  background: none;
+  color: var(--p-text-secondary);
+  font-size: 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.view-tab:hover {
+  color: var(--p-text-primary);
+}
+
+.view-tab.active {
+  background: var(--p-bg-card);
+  color: var(--p-text-primary);
+}
+
+/* ── Board ─────────────────────────────────────────── */
+.board {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+.board__lanes {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: 12px;
+  padding: 16px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  align-items: stretch;
+}
+
+/* ── SwimLane ──────────────────────────────────────── */
+.swim-lane {
+  display: flex;
+  flex-direction: column;
+  flex: 0 0 auto;
+  width: 300px;
+  min-width: 300px;
+  max-height: 100%;
+  background: var(--p-bg-panel);
+  border: 1px solid var(--p-border);
+  border-top: 3px solid var(--lane-color, var(--p-border));
+  border-radius: 8px;
+  overflow: hidden;
+}
+
+.swim-lane--collapsed {
+  width: 220px;
+  min-width: 220px;
+}
+
+.swim-lane__header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  cursor: pointer;
+  user-select: none;
+  background: color-mix(in srgb, var(--lane-color, var(--p-border)) 8%, transparent);
+  border-bottom: 1px solid var(--p-border);
+}
+
+.swim-lane__chevron {
+  border: none;
+  background: none;
+  color: var(--p-text-secondary);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0;
+  width: 14px;
+  text-align: center;
+}
+
+.swim-lane__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--p-text-muted);
+  flex: 0 0 auto;
+}
+
+.swim-lane__dot.is-present {
+  background: var(--lane-color, var(--p-accent-green));
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--lane-color, var(--p-accent-green)) 30%, transparent);
+}
+
+.swim-lane__label {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--lane-color, var(--p-text-primary));
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.swim-lane__count {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--p-text-primary);
+  background: var(--p-bg-tertiary);
+  border-radius: 10px;
+  padding: 1px 7px;
+  min-width: 18px;
+  text-align: center;
+}
+
+.swim-lane__points {
+  font-size: 10px;
+  color: var(--p-text-secondary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.swim-lane__cards {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.swim-lane__empty {
+  color: var(--p-text-muted);
+  font-size: 11px;
+  text-align: center;
+  padding: 24px 8px;
+  font-style: italic;
+}
+
+/* ── Tasks filter bar (extends shared .filter-bar) ─── */
+/* Sits as a fixed-height row between the board sub-tabs and the scrolling
+   lanes (lane sub-tabs only — hidden on the Calibration tab). */
+.tasks-filter-bar {
+  flex: 0 0 auto;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--p-border);
+}
+
+.calib-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px 3px 10px;
+  border-radius: 12px;
+  font-size: 11px;
+  background: color-mix(in srgb, var(--p-accent-purple) 16%, transparent);
+  color: var(--p-accent-purple);
+  border: 1px solid color-mix(in srgb, var(--p-accent-purple) 35%, transparent);
+}
+
+.calib-chip__label {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+
+.calib-chip__clear {
+  border: none;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+  padding: 0 2px;
+  opacity: 0.8;
+}
+
+.calib-chip__clear:hover {
+  opacity: 1;
+}
+
+/* ── Calibration Strip (hero) ──────────────────────── */
+.calib-strip {
+  border-bottom: 1px solid var(--p-border);
+  background: var(--p-bg-panel);
+}
+
+.calib-strip__header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.calib-strip__chevron {
+  border: none;
+  background: none;
+  color: var(--p-text-secondary);
+  font-size: 14px;
+  cursor: pointer;
+  padding: 0;
+  width: 14px;
+}
+
+.calib-strip__title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--p-text-primary);
+}
+
+.calib-strip__stat {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.calib-strip__pct {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--p-accent-green);
+  font-variant-numeric: tabular-nums;
+}
+
+.calib-strip--cold .calib-strip__pct {
+  color: var(--p-text-secondary);
+}
+
+.calib-strip__stat-label {
+  font-size: 11px;
+  color: var(--p-text-secondary);
+}
+
+/* Collapsed-state one-line summary — the moat stays glanceable even collapsed. */
+.calib-strip__summary {
+  font-size: 12px;
+  color: var(--p-text-secondary);
+}
+
+.calib-strip__summary-pct {
+  font-weight: 700;
+  color: var(--p-accent-green);
+  font-variant-numeric: tabular-nums;
+}
+
+.calib-strip--cold .calib-strip__summary-pct {
+  color: var(--p-text-secondary);
+}
+
+.calib-strip__badge {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 8px;
+  border-radius: 10px;
+  color: var(--p-accent-amber);
+  background: color-mix(in srgb, var(--p-accent-amber) 14%, transparent);
+  border: 1px dashed color-mix(in srgb, var(--p-accent-amber) 40%, transparent);
+}
+
+.calib-strip__body {
+  padding: 0 16px 14px;
+}
+
+/* Cold-start CTA — names the command that produces calibration, so the strip
+   reads as a path out of cold-start, not a passive state. */
+.calib-strip__cta {
+  margin: 0 0 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--p-text-secondary);
+}
+
+.calib-strip__cta code {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 4px;
+  color: var(--p-accent-amber);
+  background: color-mix(in srgb, var(--p-accent-amber) 12%, transparent);
+}
+
+/* ── Calibration tab (full-area variant) ───────────── */
+/* Fills the board main; coverage header is fixed-height, the grid scrolls. */
+.calib-tab {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  padding: 16px;
+  gap: 12px;
+}
+
+.calib-tab__header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.calib-tab__stat {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.calib-tab__pct {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--p-accent-green);
+  font-variant-numeric: tabular-nums;
+}
+
+.calib-tab--cold .calib-tab__pct {
+  color: var(--p-text-secondary);
+}
+
+.calib-tab__stat-label {
+  font-size: 12px;
+  color: var(--p-text-secondary);
+}
+
+.calib-tab .calib-strip__cta {
+  flex: 0 0 auto;
+}
+
+/* The grid fills the rest of the tab and scrolls within when tall. */
+.calib-tab__grid {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+/* ── Cell Grid ─────────────────────────────────────── */
+.cell-grid__scroll {
+  overflow-x: auto;
+  padding-bottom: 4px;
+}
+
+.cell-grid {
+  border-collapse: separate;
+  border-spacing: 4px;
+  font-size: 11px;
+}
+
+.cell-grid__corner {
+  background: none;
+}
+
+.cell-grid__col-head {
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--p-text-secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  text-align: center;
+  padding: 2px 6px;
+  white-space: nowrap;
+}
+
+.cell-grid__row-head {
+  font-size: 11px;
+  font-weight: 600;
+  text-align: right;
+  padding: 2px 8px;
+  white-space: nowrap;
+}
+
+.cell-grid__cell {
+  border-radius: 5px;
+  padding: 4px 8px;
+  text-align: center;
+  cursor: pointer;
+  border: 1px solid var(--p-border);
+  background: var(--p-bg-tertiary);
+  transition: all 0.12s;
+  min-width: 54px;
+}
+
+.cell-grid__cell--empty {
+  color: var(--p-text-muted);
+  cursor: default;
+  background: none;
+  border-color: transparent;
+}
+
+.cell-grid__cell.is-learned {
+  background: color-mix(in srgb, var(--cell-color, var(--p-accent-green)) 16%, var(--p-bg-tertiary));
+  border-color: color-mix(in srgb, var(--cell-color, var(--p-accent-green)) 40%, var(--p-border));
+  color: var(--p-text-primary);
+}
+
+.cell-grid__cell.is-prior {
+  /* opacity is set inline per-cell (ramps with progress-to-graduation) */
+  font-style: italic;
+  border-style: dashed;
+  color: var(--p-text-muted);
+  /* Tint the border toward the archetype color as the cell nears graduation. */
+  border-color: color-mix(
+    in srgb,
+    var(--cell-color, var(--p-border)) calc(var(--cell-progress, 0) * 50%),
+    var(--p-border)
+  );
+}
+
+.cell-grid__cell:hover {
+  border-color: var(--p-border-active);
+}
+
+.cell-grid__cell.is-active {
+  box-shadow: 0 0 0 2px var(--p-border-active);
+}
+
+.cell-grid__band {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.cell-grid__learned-dot {
+  color: var(--p-accent-green);
+  font-size: 8px;
+}
+
+.cell-grid__n {
+  font-size: 9px;
+  color: var(--p-text-secondary);
+}
+
+/* Prior cell — a progress-to-graduation ramp, not a dead "░". A background
+   fill (width = progress) grows toward the archetype color as actuals
+   accumulate; a "{n}/8" tick reads the count directly. */
+.cell-grid__prior {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 40px;
+  font-style: normal;
+}
+
+.cell-grid__prior-ramp {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--cell-color, var(--p-accent-green)) 30%, transparent);
+  pointer-events: none;
+  transition: width 0.2s ease;
+}
+
+.cell-grid__prior-tick {
+  position: relative;
+  z-index: 1;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  font-style: normal;
+  letter-spacing: 0;
+  color: var(--p-text-secondary);
+}
+
+.cell-grid__loading {
+  font-size: 12px;
+  color: var(--p-text-muted);
+  padding: 16px 0;
+  font-style: italic;
+}
+
+/* ─── Round D: Inbox (the agent face) ──────────────────────────────── */
+
+.inbox {
+  max-width: 760px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.inbox__pill-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding-bottom: 4px;
+}
+
+.inbox-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--p-border);
+  background: var(--p-bg-card);
+  color: var(--p-text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.inbox-pill:hover {
+  border-color: var(--p-border-active);
+  color: var(--p-text-primary);
+}
+
+.inbox-pill.active {
+  border-color: var(--pill-color, var(--p-accent-blue));
+  color: var(--p-text-primary);
+  box-shadow: inset 0 0 0 1px var(--pill-color, var(--p-accent-blue));
+}
+
+.inbox-pill__glyph {
+  font-size: 12px;
+  line-height: 1;
+}
+
+.inbox-pill--me {
+  font-weight: 600;
+}
+
+.inbox__column {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.inbox__calib-header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 10px 14px;
+  border: 1px solid var(--p-border);
+  border-radius: 8px;
+  background: var(--p-bg-card);
+}
+
+.inbox__calib-who {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--p-text-primary);
+}
+
+.inbox__calib-stat {
+  font-size: 12px;
+  color: var(--p-text-muted);
+}
+
+.inbox__calib-stat strong {
+  color: var(--p-accent-green);
+}
+
+.inbox__hero {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.inbox__hero-label,
+.inbox__queue-label {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--p-text-muted);
+}
+
+.inbox__queue {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.inbox__zero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 48px 20px;
+  color: var(--p-text-muted);
+  border: 1px dashed var(--p-border);
+  border-radius: 8px;
+}
+
+.inbox__zero-glyph {
+  font-size: 28px;
+  color: var(--p-accent-green);
+}
+
+.inbox__zero-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--p-text-secondary);
+}
+
+.inbox__zero-sub {
+  font-size: 12px;
+}
+
+/* DependsChain ribbon under the hero */
+.depends-chain {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 5px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: var(--p-bg-hover);
+  font-size: 11px;
+  color: var(--p-text-muted);
+}
+
+.depends-chain__arrow {
+  color: var(--p-text-muted);
+  opacity: 0.6;
+}
+
+.depends-chain__dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  border: 1.5px solid var(--p-text-muted);
+  display: inline-block;
+}
+
+.depends-chain__dot.is-filled {
+  background: currentColor;
+}
+
+.depends-chain__dot--done {
+  border-color: var(--p-accent-green);
+  color: var(--p-accent-green);
+  background: var(--p-accent-green);
+}
+
+.depends-chain__dot--in-progress {
+  border-color: var(--p-accent-purple);
+  color: var(--p-accent-purple);
+}
+
+.depends-chain__dot--this {
+  border-color: var(--p-accent-blue);
+  color: var(--p-accent-blue);
+  background: var(--p-accent-blue);
+}
+
+.depends-chain__id {
+  font-family: var(--p-font-mono, monospace);
+}
+
+.depends-chain__id--this {
+  color: var(--p-accent-blue);
+  font-weight: 600;
+}
+
+/* Hero card elevation */
+.task-card--hero {
+  border-color: var(--p-accent-blue);
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
+}
+
+/* ─── Round D: live agent effects on cards ─────────────────────────── */
+
+.task-card {
+  cursor: pointer;
+  position: relative;
+}
+
+.task-card--agent {
+  border-color: var(--agent-color, var(--p-accent-blue));
+  box-shadow: inset 0 0 0 1px var(--agent-color, var(--p-accent-blue));
+}
+
+.task-card--agent-pulse {
+  animation: task-agent-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes task-agent-pulse {
+  0%,
+  100% {
+    box-shadow: inset 0 0 0 1px var(--agent-color, var(--p-accent-blue));
+  }
+  50% {
+    box-shadow: inset 0 0 0 1px var(--agent-color, var(--p-accent-blue)),
+      0 0 10px var(--agent-color, var(--p-accent-blue));
+  }
+}
+
+.task-card__agent-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--agent-color, var(--p-accent-blue));
+  margin-bottom: 6px;
+}
+
+.task-card__agent-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 6px;
+}
+
+.task-agent-badge {
+  font-size: 10px;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: var(--p-bg-hover);
+  color: var(--p-text-secondary);
+  border: 1px solid var(--p-border);
+}
+
+.task-agent-badge--warning {
+  color: var(--p-symbol-signal);
+  border-color: var(--p-symbol-signal);
+}
+
+.task-agent-badge--error {
+  color: var(--p-symbol-gate);
+  border-color: var(--p-symbol-gate);
+}
+
+.task-agent-badge--success {
+  color: var(--p-symbol-flow);
+  border-color: var(--p-symbol-flow);
+}
+
+/* ─── Round D: GitHub sync strip (Board footer) ────────────────────── */
+
+.sync-strip {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 16px;
+  border-top: 1px solid var(--p-border);
+  background: var(--p-bg-panel);
+  font-size: 12px;
+}
+
+.sync-strip__counts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--p-text-muted);
+}
+
+.sync-strip__provider {
+  font-weight: 600;
+  color: var(--p-text-secondary);
+}
+
+.sync-strip__sep {
+  opacity: 0.4;
+}
+
+.sync-strip__stat--synced {
+  color: var(--p-accent-green);
+}
+
+.sync-strip__stat--pending {
+  color: var(--p-text-secondary);
+}
+
+.sync-strip__action {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* PRIMARY — the real two-way Sync button. */
+.sync-strip__sync {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 14px;
+  border-radius: 6px;
+  border: 1px solid var(--p-border-active);
+  background: var(--p-bg-card);
+  color: var(--p-text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.sync-strip__sync:hover:not(:disabled) {
+  border-color: var(--p-accent-blue);
+  background: var(--p-bg-hover);
+}
+
+.sync-strip__sync:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+.sync-strip__spinner {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 2px solid var(--p-border);
+  border-top-color: var(--p-accent-blue);
+  animation: sync-strip-spin 0.7s linear infinite;
+}
+
+@keyframes sync-strip-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* SECONDARY — copyable CLI fallback for users without the server. */
+.sync-strip__cli-toggle {
+  padding: 5px 10px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--p-text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.sync-strip__cli-toggle:hover {
+  color: var(--p-text-secondary);
+  border-color: var(--p-border);
+}
+
+/* Transient inline result of the last sync. */
+.sync-strip__result {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 4px;
+  padding-left: 8px;
+  border-left: 1px solid var(--p-border);
+  font-size: 12px;
+}
+
+.sync-strip__result--ok {
+  color: var(--p-accent-green);
+}
+
+.sync-strip__result--quiet {
+  color: var(--p-text-muted);
+}
+
+/* Conflict — amber, never error-red. Local won; a human should look. */
+.sync-strip__result--conflict {
+  color: var(--p-accent-amber);
+}
+
+/* Offline — calm hint, never a red failure. */
+.sync-strip__result--offline {
+  color: var(--p-text-muted);
+}
+
+.sync-strip__result--offline code {
+  font-family: var(--p-font-mono, monospace);
+  font-size: 11px;
+  color: var(--p-text-secondary);
+  padding: 1px 5px;
+  border-radius: 4px;
+  background: var(--p-bg-hover);
+}
+
+.sync-strip__conflict-ids {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 2px;
+}
+
+.sync-strip__conflict-id {
+  padding: 1px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--p-accent-amber);
+  background: transparent;
+  color: var(--p-accent-amber);
+  font-family: var(--p-font-mono, monospace);
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.sync-strip__conflict-id:hover {
+  background: var(--p-bg-hover);
+}
+
+.sync-strip__backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+}
+
+.sync-strip__popover {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  z-index: 100;
+  width: 320px;
+  padding: 14px;
+  border-radius: 8px;
+  border: 1px solid var(--p-border);
+  background: var(--p-bg-panel);
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.25);
+}
+
+.sync-strip__popover-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--p-text-primary);
+  margin-bottom: 6px;
+}
+
+.sync-strip__popover-note {
+  font-size: 11px;
+  color: var(--p-text-muted);
+  line-height: 1.5;
+  margin: 0 0 10px;
+}
+
+.sync-strip__cmd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  background: var(--p-bg-hover);
+  border: 1px solid var(--p-border);
+}
+
+.sync-strip__cmd code {
+  flex: 1;
+  font-family: var(--p-font-mono, monospace);
+  font-size: 12px;
+  color: var(--p-text-primary);
+}
+
+.sync-strip__copy {
+  padding: 3px 10px;
+  border-radius: 5px;
+  border: 1px solid var(--p-border);
+  background: var(--p-bg-card);
+  color: var(--p-text-secondary);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.sync-strip__copy:hover {
+  color: var(--p-text-primary);
+  border-color: var(--p-border-active);
+}
+
+/* ─── Round D: TaskDetailPanel (right-slide, clones lore) ───────────── */
+
+.tdp .tdp__id-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tdp__id {
+  font-family: var(--p-font-mono, monospace);
+  font-size: 11px;
+  color: var(--p-text-muted);
+}
+
+.tdp__blurb {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--p-text-primary);
+  white-space: pre-wrap;
+}
+
+.tdp-estimate {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--p-border);
+  background: var(--p-bg-card);
+}
+
+.tdp-estimate__points {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--p-text-primary);
+}
+
+.tdp-estimate.prior .tdp-estimate__points {
+  opacity: 0.6;
+}
+
+.tdp-estimate__band {
+  font-size: 12px;
+  color: var(--p-text-muted);
+}
+
+.tdp-estimate__prov {
+  font-size: 11px;
+  margin-left: auto;
+}
+
+.tdp-estimate__prov--learned {
+  color: var(--p-accent-green);
+  font-weight: 600;
+}
+
+.tdp-estimate__prov--prior {
+  color: var(--p-text-muted);
+  font-style: italic;
+}
+
+.tdp-deps {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tdp-dep {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tdp-dep__state {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid var(--p-border);
+  color: var(--p-text-muted);
+}
+
+.tdp-dep__state--done {
+  color: var(--p-accent-green);
+  border-color: var(--p-accent-green);
+}
+
+.tdp-dep__state--in-progress {
+  color: var(--p-accent-purple);
+  border-color: var(--p-accent-purple);
+}
+
+.tdp-dep__state--open {
+  color: var(--p-accent-blue);
+  border-color: var(--p-accent-blue);
+}
+
+.tdp-dep__id {
+  font-family: var(--p-font-mono, monospace);
+  font-size: 12px;
+  color: var(--p-text-secondary);
+}
+
+.tdp-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tdp-chip {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--p-bg-hover);
+  color: var(--p-text-secondary);
+  border: 1px solid var(--p-border);
+}
+
+.tdp-chip--symbol {
+  color: var(--p-symbol-component);
+  border-color: var(--p-symbol-component);
+}
+
+.tdp-chip--fragile {
+  color: var(--p-accent-red);
+  border-color: var(--p-accent-red);
+}
+
+.tdp-chip--lore {
+  font-family: var(--p-font-mono, monospace);
+}
+
+.tdp-github {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.tdp-github__ref {
+  font-size: 13px;
+  color: var(--p-text-primary);
+}
+
+.tdp-github__link {
+  font-size: 12px;
+  color: var(--p-accent-blue);
+  text-decoration: none;
+}
+
+.tdp-github__link:hover {
+  text-decoration: underline;
+}
+
+.tdp-github__pending {
+  font-size: 11px;
+  color: var(--p-text-muted);
+  font-style: italic;
+}
+
+.tdp__loading {
+  font-size: 11px;
+  color: var(--p-text-muted);
+  font-style: italic;
+}
+
+/* ── Task action row (Round E — enforced write verbs) ──────────────────── */
+/* The only mutating controls in the Tasks UI. Rendered by TaskActions inside
+   the Inbox hero and the detail panel header. Status-aware: see TaskActions. */
+
+.task-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.task-actions__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.task-action {
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  padding: 6px 12px;
+  border-radius: 6px;
+  border: 1px solid var(--p-border);
+  background: var(--p-bg-card);
+  color: var(--p-text-secondary);
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease, color 0.12s ease;
+}
+
+.task-action:hover:not(:disabled) {
+  background: var(--p-bg-hover);
+  border-color: var(--p-border-active);
+  color: var(--p-text-primary);
+}
+
+.task-action:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.task-action--start {
+  border-color: color-mix(in srgb, var(--p-accent-blue) 40%, var(--p-border));
+  color: var(--p-accent-blue);
+}
+
+.task-action--start:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--p-accent-blue) 14%, transparent);
+  border-color: var(--p-accent-blue);
+  color: var(--p-accent-blue);
+}
+
+.task-action--claim {
+  border-color: color-mix(in srgb, var(--p-accent-purple) 40%, var(--p-border));
+  color: var(--p-accent-purple);
+}
+
+.task-action--claim:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--p-accent-purple) 14%, transparent);
+  border-color: var(--p-accent-purple);
+  color: var(--p-accent-purple);
+}
+
+.task-action--done {
+  border-color: color-mix(in srgb, var(--p-accent-green) 40%, var(--p-border));
+  color: var(--p-accent-green);
+}
+
+.task-action--done:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--p-accent-green) 14%, transparent);
+  border-color: var(--p-accent-green);
+  color: var(--p-accent-green);
+}
+
+.task-action--block {
+  border-color: color-mix(in srgb, var(--p-accent-orange) 40%, var(--p-border));
+  color: var(--p-accent-orange);
+}
+
+.task-action--block:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--p-accent-orange) 14%, transparent);
+  border-color: var(--p-accent-orange);
+  color: var(--p-accent-orange);
+}
+
+.task-action--unblock {
+  border-color: color-mix(in srgb, var(--p-accent-green) 40%, var(--p-border));
+  color: var(--p-accent-green);
+}
+
+.task-action--unblock:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--p-accent-green) 14%, transparent);
+  border-color: var(--p-accent-green);
+  color: var(--p-accent-green);
+}
+
+.task-actions__blocked {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--p-accent-red) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--p-accent-red) 30%, var(--p-border));
+}
+
+.task-actions__blocked-glyph {
+  font-size: 13px;
+}
+
+.task-actions__blocked-reason {
+  flex: 1;
+  font-size: 12px;
+  color: var(--p-accent-red);
+  word-break: break-word;
+}
+
+.task-actions__error {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 6px;
+  background: color-mix(in srgb, var(--p-accent-red) 12%, transparent);
+  border: 1px solid color-mix(in srgb, var(--p-accent-red) 30%, var(--p-border));
+}
+
+.task-actions__error-msg {
+  flex: 1;
+  font-size: 12px;
+  color: var(--p-accent-red);
+  word-break: break-word;
+}
+
+.task-actions__error-dismiss {
+  background: transparent;
+  border: none;
+  color: var(--p-accent-red);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  padding: 2px 4px;
+}
+
+.task-actions__error-dismiss:hover {
+  color: var(--p-text-primary);
+}
+
+/* Detail-panel placement: sit the action row between header and body. */
+.tdp__actions {
+  padding: 0 var(--p-space-lg, 16px) 4px;
+}
+
+.tdp__actions .task-actions {
+  margin-top: 0;
+}
+
+/* ── Board Health (Cid/Loid governance advisories) ─────
+   Amber, never error-red — these are "worth a look", never blocking. The
+   component self-hides when the board is healthy, so there's no empty state. */
+.board-health {
+  margin: 0 0 12px;
+  border-radius: 8px;
+  border: 1px solid color-mix(in srgb, var(--p-accent-amber) 35%, transparent);
+  background: color-mix(in srgb, var(--p-accent-amber) 8%, transparent);
+  overflow: hidden;
+}
+
+.board-health__bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.board-health__bar:hover {
+  background: color-mix(in srgb, var(--p-accent-amber) 12%, transparent);
+}
+
+.board-health__chevron {
+  color: var(--p-accent-amber);
+  font-size: 13px;
+  width: 12px;
+  text-align: center;
+  flex: none;
+}
+
+.board-health__icon {
+  color: var(--p-accent-amber);
+  font-size: 13px;
+  flex: none;
+}
+
+.board-health__title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--p-accent-amber);
+  flex: none;
+}
+
+.board-health__summary {
+  font-size: 12px;
+  color: var(--p-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.board-health__detail {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 4px 12px 12px;
+  border-top: 1px solid color-mix(in srgb, var(--p-accent-amber) 20%, transparent);
+}
+
+.board-health__group {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.board-health__group-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--p-accent-amber);
+  margin: 6px 0 2px;
+}
+
+.board-health__row {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  border-radius: 5px;
+  padding: 4px 6px;
+  font: inherit;
+  cursor: pointer;
+}
+
+.board-health__row:not(:disabled):hover {
+  background: color-mix(in srgb, var(--p-accent-amber) 12%, transparent);
+}
+
+.board-health__row:disabled {
+  cursor: default;
+}
+
+.board-health__kind {
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 11px;
+  color: var(--p-accent-amber);
+  flex: none;
+}
+
+.board-health__row-blurb {
+  font-size: 12px;
+  color: var(--p-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex: none;
+  max-width: 50%;
+}
+
+.board-health__row-detail {
+  font-size: 12px;
+  color: var(--p-text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

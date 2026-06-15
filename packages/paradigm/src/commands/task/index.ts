@@ -14,8 +14,10 @@
  */
 
 import { execSync } from 'child_process';
+import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import * as yaml from 'js-yaml';
 
 import {
   createTask,
@@ -429,6 +431,20 @@ async function renderBoard(rootDir: string, options: LsOptions): Promise<void> {
 
 // ── task start / done / shelve ────────────────────────────
 
+/**
+ * Best-effort OUTBOUND GitHub projection of a CLI transition (two-way sync,
+ * Phase 2b). Linked tasks only; no provider/offline ⇒ silent no-op. Never throws
+ * — the canonical local write already happened.
+ */
+async function fireSyncCli(rootDir: string, taskId: string, event: 'start' | 'done' | 'shelved' | 'reopen', reason?: string): Promise<void> {
+  try {
+    const { projectTransition } = await import('../../../../paradigm-mcp/src/sync/sync-layer.js');
+    await projectTransition(rootDir, taskId, event, { reason });
+  } catch {
+    /* best-effort */
+  }
+}
+
 export async function taskStartCommand(ref: string, options: CommonOptions): Promise<void> {
   const rootDir = resolveRoot(options);
   const task = await resolveOrExit(ref, rootDir);
@@ -439,6 +455,7 @@ export async function taskStartCommand(ref: string, options: CommonOptions): Pro
   }
 
   await updateTask(rootDir, task.id, { status: 'in-progress' });
+  await fireSyncCli(rootDir, task.id, 'start');
   if (options.json) { json({ id: task.id, status: 'in-progress' }); return; }
   success(`${shortId(task.id)}  → in-progress`);
   dim(task.blurb);
@@ -460,6 +477,8 @@ export async function taskDoneCommand(ref: string, options: DoneOptions): Promis
   // completeTask closes the learning loop from the terminal (settlement fires
   // inside updateTask when the task has a parent).
   await completeTask(rootDir, task.id);
+  // Outbound: a done task closes its linked GitHub issue (completed).
+  await fireSyncCli(rootDir, task.id, 'done');
 
   // Best-effort ripple over any symbol tags (#component / #flow / …). Closing a
   // symbol-bound task surfaces what else just got fragile. Commander defaults
@@ -526,9 +545,46 @@ export async function taskShelveCommand(ref: string, options: CommonOptions): Pr
   }
 
   await shelveTask(rootDir, task.id);
+  await fireSyncCli(rootDir, task.id, 'shelved');
   if (options.json) { json({ id: task.id, status: 'shelved' }); return; }
   success(`${shortId(task.id)}  shelved`);
   dim(task.blurb);
+}
+
+// ── task sync (Phase 2b two-way) ──────────────────────────
+
+interface SyncOptions extends CommonOptions {}
+
+/**
+ * `task sync [<ref>]` — INBOUND two-way pull. Reconciles linked GitHub issues
+ * back into the local store through the enforced writers (a pull never bypasses
+ * the state machine). No ref = sweep all linked tasks. Prints a per-task verdict.
+ */
+export async function taskSyncCommand(ref: string | undefined, options: SyncOptions): Promise<void> {
+  const rootDir = resolveRoot(options);
+  const { syncTask, syncAllLinked } = await import('../../../../paradigm-mcp/src/sync/sync-layer.js');
+
+  const verdicts = ref
+    ? [await syncTask(rootDir, (await resolveOrExit(ref, rootDir)).id)]
+    : await syncAllLinked(rootDir);
+
+  if (options.json) { json({ verdicts }); return; }
+
+  if (verdicts.length === 0) {
+    dim('No GitHub-linked tasks to sync.');
+    return;
+  }
+  const synced = verdicts.filter(v => v.status === 'synced');
+  const conflicts = verdicts.filter(v => v.status === 'conflict');
+  for (const v of synced) success(`${shortId(v.taskId)}  synced${v.targetStatus ? ` → ${v.targetStatus}` : ''}`);
+  for (const v of conflicts) {
+    warn(`${shortId(v.taskId)}  conflict (local wins)`);
+    for (const d of v.drift) dim(`  ${d}`);
+  }
+  const skipped = verdicts.filter(v => ['offline', 'remote-error', 'unlinked', 'no-pull'].includes(v.status));
+  if (skipped.some(v => v.status === 'offline')) dim('GitHub unavailable for some tasks — `gh auth login` to enable.');
+  out('');
+  dim(`${synced.length} synced · ${conflicts.length} conflict · ${verdicts.filter(v => v.status === 'agree').length} unchanged · ${skipped.length} skipped`);
 }
 
 // ── task show ─────────────────────────────────────────────
@@ -615,6 +671,9 @@ export async function taskEditCommand(ref: string, options: EditOptions): Promis
     process.exit(1);
   }
 
+  // Outbound: a reopen (→ open) reopens the linked GitHub issue (symmetric sync).
+  if (options.reopen) await fireSyncCli(rootDir, task.id, 'reopen');
+
   if (options.json) { json({ id: task.id, changed }); return; }
   success(`${shortId(task.id)}  edited`);
   for (const c of changed) dim(`  ${c}`);
@@ -679,8 +738,6 @@ interface PushOptions extends CommonOptions {
  */
 function readSyncConfig(rootDir: string): { provider?: string; repo?: string } {
   try {
-    const fs = require('fs') as typeof import('fs');
-    const yaml = require('js-yaml') as typeof import('js-yaml');
     const cfgPath = path.join(rootDir, '.paradigm', 'config.yaml');
     if (!fs.existsSync(cfgPath)) return {};
     const cfg = yaml.load(fs.readFileSync(cfgPath, 'utf8')) as { sync?: { provider?: string; github?: { repo?: string } } } | undefined;

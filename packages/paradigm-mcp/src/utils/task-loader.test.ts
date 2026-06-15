@@ -23,6 +23,8 @@ import {
   shelveTask,
   loadTask,
   loadTasks,
+  tasksForClaimant,
+  validateTaskDag,
   rebuildTaskIndex,
   assertTransition,
   normalizeTask,
@@ -163,6 +165,167 @@ describe('applyFilter (via loadTasks)', () => {
 });
 
 // ────────────────────────────────────────────────────────
+// claimant filter + tasksForClaimant (renaissance step 1)
+// ────────────────────────────────────────────────────────
+
+describe('claimant filter + tasksForClaimant', () => {
+  beforeEach(() => {
+    const day = '2026-06-12';
+    const mk = (
+      n: string,
+      status: TaskStatus,
+      claimant: Task['claimant'],
+    ): Task => ({
+      id: `T-${day}-${n}`,
+      blurb: `task ${n}`,
+      priority: 'medium',
+      status,
+      tags: [],
+      created: `${day}T0${n}:00:00.000Z`,
+      claimant,
+    });
+    // forge appears as BOTH an archetype and a human ref — kind must disambiguate.
+    writeRaw(mk('1', 'open', { kind: 'archetype', ref: 'builder' }));
+    writeRaw(mk('2', 'in-progress', { kind: 'archetype', ref: 'builder' }));
+    writeRaw(mk('3', 'open', { kind: 'archetype', ref: 'forge' }));
+    writeRaw(mk('4', 'open', { kind: 'human', ref: 'forge' }));
+    writeRaw(mk('5', 'done', { kind: 'archetype', ref: 'builder' }));
+    writeRaw(mk('6', 'open', undefined)); // unclaimed — never matches
+  });
+
+  it('filters by claimant ref (across kinds when kind omitted)', async () => {
+    const forge = await loadTasks(root, { status: 'all', claimant: { ref: 'forge' }, limit: 99 });
+    expect(forge.map(t => t.id).sort()).toEqual(['T-2026-06-12-3', 'T-2026-06-12-4']);
+  });
+
+  it('narrows by kind when given (refs collide across kinds)', async () => {
+    const humanForge = await loadTasks(root, { status: 'all', claimant: { kind: 'human', ref: 'forge' }, limit: 99 });
+    expect(humanForge.map(t => t.id)).toEqual(['T-2026-06-12-4']);
+  });
+
+  it('never matches unclaimed tasks', async () => {
+    const all = await loadTasks(root, { status: 'all', claimant: { ref: 'nobody' }, limit: 99 });
+    expect(all).toEqual([]);
+  });
+
+  it('tasksForClaimant defaults to active (excludes the done task)', async () => {
+    const inbox = await tasksForClaimant(root, { kind: 'archetype', ref: 'builder' });
+    // tasks 1 (open) + 2 (in-progress); task 5 (done) excluded by the active default.
+    expect(inbox.map(t => t.id).sort()).toEqual(['T-2026-06-12-1', 'T-2026-06-12-2']);
+  });
+
+  it('tasksForClaimant honors an explicit status override', async () => {
+    const all = await tasksForClaimant(root, { kind: 'archetype', ref: 'builder' }, { status: 'all' });
+    expect(all.map(t => t.id).sort()).toEqual(['T-2026-06-12-1', 'T-2026-06-12-2', 'T-2026-06-12-5']);
+  });
+});
+
+// ────────────────────────────────────────────────────────
+// validateTaskDag (Cid-owned DAG integrity, advise-only)
+// ────────────────────────────────────────────────────────
+
+describe('validateTaskDag', () => {
+  const mk = (id: string, extra: Partial<Task> = {}): Task => ({
+    id,
+    blurb: id,
+    priority: 'medium',
+    status: 'open',
+    tags: [],
+    created: '2026-06-12T00:00:00.000Z',
+    ...extra,
+  });
+
+  it('a sound DAG has no violations', () => {
+    const tasks = [mk('A'), mk('B', { parentTaskId: 'A' }), mk('C', { parentTaskId: 'A', dependsOn: ['B'] })];
+    expect(validateTaskDag(tasks)).toEqual([]);
+  });
+
+  it('flags a self-parent', () => {
+    const v = validateTaskDag([mk('A', { parentTaskId: 'A' })]);
+    expect(v).toHaveLength(1);
+    expect(v[0].kind).toBe('self-parent');
+    expect(v[0].taskId).toBe('A');
+  });
+
+  it('flags a dangling parentTaskId', () => {
+    const v = validateTaskDag([mk('A', { parentTaskId: 'GHOST' })]);
+    expect(v.find(x => x.kind === 'dangling-parent' && x.detail === 'GHOST')).toBeTruthy();
+  });
+
+  it('flags a dangling dependsOn', () => {
+    const v = validateTaskDag([mk('A', { dependsOn: ['GHOST'] })]);
+    expect(v.find(x => x.kind === 'dangling-dependency' && x.detail === 'GHOST')).toBeTruthy();
+  });
+
+  it('detects a dependsOn cycle (A→B→A) once', () => {
+    const tasks = [mk('A', { dependsOn: ['B'] }), mk('B', { dependsOn: ['A'] })];
+    const cycles = validateTaskDag(tasks).filter(v => v.kind === 'cycle');
+    expect(cycles).toHaveLength(1);
+  });
+
+  it('detects a longer cycle (A→B→C→A)', () => {
+    const tasks = [
+      mk('A', { dependsOn: ['B'] }),
+      mk('B', { dependsOn: ['C'] }),
+      mk('C', { dependsOn: ['A'] }),
+    ];
+    const cycles = validateTaskDag(tasks).filter(v => v.kind === 'cycle');
+    expect(cycles).toHaveLength(1);
+    expect(cycles[0].detail).toContain('→');
+  });
+
+  it('does not false-positive on a diamond (A→B, A→C, B→D, C→D)', () => {
+    const tasks = [
+      mk('A'),
+      mk('B', { dependsOn: ['A'] }),
+      mk('C', { dependsOn: ['A'] }),
+      mk('D', { dependsOn: ['B', 'C'] }),
+    ];
+    expect(validateTaskDag(tasks).filter(v => v.kind === 'cycle')).toEqual([]);
+  });
+});
+
+// ────────────────────────────────────────────────────────
+// blocked_on auto-clear (T-008, Cid present-tense)
+// ────────────────────────────────────────────────────────
+
+describe('blocked_on auto-clear on dependency settle', () => {
+  it('clears blocked_on once all of a dependent\'s deps go terminal', async () => {
+    // B depends on A and is blocked. Completing A (its only dep) should clear B.
+    const a = await createTask(root, { blurb: 'dep A' });
+    const b = await createTask(root, { blurb: 'task B', dependsOn: [a] });
+    await updateTask(root, b, { blocked_on: 'waiting on A' });
+    expect((await loadTask(root, b))?.blocked_on).toBe('waiting on A');
+
+    await completeTask(root, a);
+
+    expect((await loadTask(root, b))?.blocked_on).toBeUndefined();
+  });
+
+  it('does NOT clear while another dep is still open', async () => {
+    // C depends on A and B; only A finishes → C stays blocked.
+    const a = await createTask(root, { blurb: 'dep A' });
+    const b = await createTask(root, { blurb: 'dep B' });
+    const c = await createTask(root, { blurb: 'task C', dependsOn: [a, b] });
+    await updateTask(root, c, { blocked_on: 'waiting on A and B' });
+
+    await completeTask(root, a); // B still open
+
+    expect((await loadTask(root, c))?.blocked_on).toBe('waiting on A and B');
+  });
+
+  it('does NOT clear a blocked_on with no structural dep edge to the finished task', async () => {
+    const a = await createTask(root, { blurb: 'unrelated A' });
+    const d = await createTask(root, { blurb: 'task D blocked for a non-dep reason' });
+    await updateTask(root, d, { blocked_on: 'waiting on design review' });
+
+    await completeTask(root, a);
+
+    expect((await loadTask(root, d))?.blocked_on).toBe('waiting on design review');
+  });
+});
+
+// ────────────────────────────────────────────────────────
 // assertTransition
 // ────────────────────────────────────────────────────────
 
@@ -182,9 +345,12 @@ describe('assertTransition', () => {
     expect(assertTransition('done', 'done')).toBe(true);
   });
 
+  it('allows done → open (REOPEN — symmetric two-way sync)', () => {
+    expect(assertTransition('done', 'open')).toBe(true);
+  });
+
   it('rejects illegal transitions', () => {
-    expect(assertTransition('done', 'open')).toBe(false); // done is terminal
-    expect(assertTransition('done', 'in-progress')).toBe(false);
+    expect(assertTransition('done', 'in-progress')).toBe(false); // reopen lands in open first
     expect(assertTransition('shelved', 'done')).toBe(false); // must reopen first
     expect(assertTransition('shelved', 'in-progress')).toBe(false);
   });
@@ -294,13 +460,19 @@ describe('round-trip create → in-progress → done', () => {
     expect(idx.total).toBe(1);
   });
 
-  it('rejects an illegal transition (done → open) with the not-found failure shape', async () => {
-    const id = await createTask(root, { blurb: 'terminal' });
+  it('reopens a done task (done → open) and clears the completion/settlement stamps', async () => {
+    const id = await createTask(root, { blurb: 'reopenable' });
     await completeTask(root, id);
-    // done → open is illegal; updateTask returns false (same as not-found).
-    expect(await updateTask(root, id, { status: 'open' })).toBe(false);
-    const task = await loadTask(root, id);
-    expect(task?.status).toBe('done'); // unchanged
+    let task = await loadTask(root, id);
+    expect(task?.status).toBe('done');
+    expect(task?.completed).toBeTruthy();
+
+    // done → open is now a legal REOPEN (symmetric two-way sync).
+    expect(await updateTask(root, id, { status: 'open' })).toBe(true);
+    task = await loadTask(root, id);
+    expect(task?.status).toBe('open');
+    expect(task?.completed).toBeUndefined(); // stamps cleared so it can re-settle
+    expect(task?.settledAt).toBeUndefined();
   });
 
   it('records DAG edges (parentTaskId / dependsOn) and roots excludes children', async () => {

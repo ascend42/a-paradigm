@@ -1,0 +1,145 @@
+version: 2.0.0
+components:
+  TasksSection:
+    description: >-
+      Tasks section shell in Platform UI — header band (title + live
+      "{n} open · {n} in-flight · {n} unclaimed" stat off board.summary) and a
+      Board|List|Inbox ViewSwitcher. Defaults to Board. The Board renders a
+      four-tab sub-tab bar (BoardTabs: State | Claimant | Symbol/Flow |
+      Calibration, State default). The three lane tabs render the FilterBar +
+      BoardView (grouped by boardTab) with the lanes filling full viewport
+      height; the Calibration tab renders the full-area calibration grid
+      (CalibrationStrip variant='tab') with NO FilterBar and NO lanes. List
+      renders the ListView; Inbox the InboxView. 10s section-guarded poll drives
+      fetchTasks + fetchBoard + fetchCalibration. Also subscribes to the
+      `tasks-ws` CustomEvent (forwarded from the central WS hub useAgentEffects,
+      which relays tasks:* server broadcasts) — on tasks:synced /
+      tasks:sync-conflict it refreshes fetchBoard()+fetchTasks()(+inbox) so
+      poll-driven reconciliations appear live without a user click.
+    type: view
+    tags: [feature, tasks, platform]
+  ListView:
+    description: Priority-ranked vertical list of TaskCards (high → low) sourced from tasksStore. Handles loading/error/empty states.
+    type: view
+    tags: [feature, tasks, platform]
+  TaskCard:
+    description: Card cloning the lore-card structure — priority + status chips, line-clamped title, the prominent CalibrationBlock, a claimant chip colored via the shared AGENT_COLORS map, a fragile/symbol tag row, and a GitHub badge when external_ref.provider is github. When a card has no actual claimant but carries a proposedClaimant (Cid's suggested owner on unclaimed tasks), it renders a subtle dashed "→ {ref}" hint in that claimant's color — distinct from a real claim chip. Round D — clickable (onClick → store.openDetail(id), keyboard-accessible), an optional elevated `hero` variant for the Inbox, and live agent-effect registration via useTaskAgentEffect (symbol-matched pulse/color/label + badge stamps; keyed by taskId so the 10s poll re-render doesn't detach the highlight).
+    type: component
+    tags: [feature, tasks, platform]
+  CalibrationBlock:
+    description: The calibration moat made visible. SIZE tracks confidence — learned estimates lead with a big (32px) green Fibonacci story-point + a green LEARNED badge (◆ + n{count}); prior cold-start guesses LEAD with the dimmed italic ~prior~ label and demote the number to a recessed ~17px secondary value so a guess never out-shouts a learned band. Both render the raw token band plus a small muted cell caption (claimant-archetype × taskType, e.g. "builder×feature") mapping the estimate back to the calibration grid.
+    type: component
+    tags: [feature, tasks, platform, moat]
+  tasksStore:
+    description: >-
+      Zustand store for the Tasks section (mirrors loreStore). Holds list, board,
+      calibration, inbox, detail, filter, boardTab and dep-cache state, each fetch
+      with its own AbortController; default view is board. boardTab is the Board's
+      sub-tab ('state' default | 'claimant' | 'symbol' | 'calibration'), persisted
+      to localStorage key paradigm.tasks.boardTab with graceful migration from the
+      legacy paradigm.tasks.laneMode key; setBoardTab updates it. BoardView derives
+      its laneMode from boardTab for the three lane tabs. Read fetches hit the
+      /api/tasks read routes; Task/BoardNode/BoardUnclaimed carry the computed
+      estimate + taskType. The UI's ONLY write verbs live here — claimTask,
+      startTask, doneTask, blockTask, unblockTask all POST the enforced
+      /api/tasks/:id action endpoints (which proxy the updateTask state machine),
+      and syncGitHub posts /api/tasks/sync for two-way reconcile; each refreshes
+      board/list/inbox on success and surfaces a transient actionError/sync
+      summary. BoardData also carries the three optional Cid/Loid governance
+      detections (integrity, settlementDebt, staleClaims) passed through to
+      BoardHealth.
+    type: state
+    tags: [feature, tasks, platform, state]
+  TaskActions:
+    description: Shared status-aware write-verb row rendered by both the InboxView hero and the TaskDetailPanel header — the single mutation surface in the Tasks UI. Respects the v7 task state machine so it never offers a verb that would 409 — open → [Start] + [Claim to me] (shown only when unclaimed or already held by the viewer; passes the human ref from /whoami, kind:'human') + [Done] + [Block]; in-progress → [Done] + [Block]; done/shelved are terminal (no verbs); blocked_on set → a reason banner + [Unblock] (orthogonal to status). Block opens a window.prompt for the reason. Wires each button to the matching tasksStore action and renders store.actionError as a dismissable inline error (e.g. the 409 "cannot displace a human/peer claim"). Buttons disable while an action is in flight.
+    type: component
+    tags: [feature, tasks, platform, actions]
+  storyPoints:
+    description: Pure helper tokenBandToPoints({min,max}) → Fibonacci story point (1/2/3/5/8/13/21) by mapping the band midpoint through tunable token thresholds (POINT_THRESHOLDS), to be re-fit against real actuals later.
+    type: util
+    tags: [feature, tasks, platform, calibration]
+  board-utils:
+    description: Board helpers — AGENT_COLORS (verbatim from TeamSection) + claimantColor() which resolves a claimant ref to its Team color via a CLAIMANT_ALIAS map (cid→architect, forge→builder, compliance→security; role words map to themselves) so a claimant's lane color === their Team color, with a widened hashed-fallback (S/L jitter) keeping unknown refs mutually distinct; claimantArchetype() exposes the same ref→archetype resolution for calibration-cell matching. Plus deriveSymbols()/firstSymbol() (tags + blurb-parsed #symbols, the board fragileSymbols fallback), nodeToTask()/unclaimedToTask() normalizers (now carrying taskType) so TaskCard renders board nodes verbatim, sortCards() (in-progress first then priority-desc), matchesFilter(), sumPoints() (lane story-point total).
+    type: util
+    tags: [feature, tasks, platform, board]
+  BoardView:
+    description: >-
+      Horizontally-scrollable row of SwimLanes off /api/tasks/board, filling full
+      viewport height (each lane's card column scrolls internally). The lane mode
+      is derived from the active board sub-tab (boardTab): laneMode='state' (the
+      default tab) = open/in-progress/done/shelved kanban; 'claimant' = one lane
+      per claimant.ref + trailing Unclaimed lane (hidden entirely when 0 cards) +
+      collapsed Done lane; 'symbol' = grouped by each card's first derived symbol.
+      Honors store status/priority/search + calibrationFilter — the cell filter
+      matches the task's real taskType field against the cell column and the
+      claimant's resolved archetype against the cell row; a 0-match cell click
+      shows a specific "No {taskType} tasks claimed by {archetype} yet" empty
+      state. Renders the BoardHealth advisory banner above the lanes — it
+      self-hides when the board carries no governance detections. The lane sub-tab
+      bar lives in TasksSection (BoardTabs), not here.
+    type: view
+    tags: [feature, tasks, platform, board]
+  BoardHealth:
+    description: >-
+      Compact collapsible ADVISORY banner at the top of BoardView surfacing the
+      three Cid/Loid governance detections the backend attaches to the board —
+      integrity (DAG defects: self-parent / dangling / cycle), settlementDebt
+      (children all terminal but the epic never settled), and staleClaims
+      (archetype-claimed open tasks past 7 days). Amber, never error-red, never
+      blocking. Self-hides entirely when the board is healthy. Collapsed by
+      default to a count summary (persisted to localStorage); expanded it lists
+      each detection grouped by kind, and clicking a row with a taskId opens that
+      task's detail panel.
+    type: component
+    tags: [feature, tasks, platform, board, governance]
+  SwimLane:
+    description: Single vertical board lane — colored header (label + presence dot + card count + SUMMED story points) using AGENT_COLORS, a scrollable column of TaskCards sorted in-progress-first then priority-desc, collapsible via chevron with per-lane localStorage persistence.
+    type: component
+    tags: [feature, tasks, platform, board]
+  BoardTabs:
+    description: >-
+      The Board's sub-tab bar — four tabs in order State | Claimant | Symbol/Flow
+      | Calibration (State is the default), styled with the shared segmented
+      .view-tab idiom. Active tab = store.boardTab; clicking sets boardTab via
+      setBoardTab. Replaces the old LaneModeToggle pill.
+    type: component
+    tags: [feature, tasks, platform, board]
+  FilterBar:
+    description: Tasks filter bar lifted from lore's pattern — status dropdown, priority dropdown, search-blurb input wired to store filter state, plus a clearable active-filter chip surfacing the calibrationFilter (archetype×taskType) when set.
+    type: component
+    tags: [feature, tasks, platform]
+  CalibrationStrip:
+    description: >-
+      The calibration moat surface off /api/tasks/calibration, with two rendering
+      modes via a variant prop. variant='tab' (the Calibration sub-tab, current
+      usage): a coverage header ("{pct}% calibrated cells · {graduated} of {total}
+      graduated") + the full CellGrid filling the available height (scrolls when
+      tall), with no collapse chrome; on cold-start it shows a "learning in
+      progress" badge + the "Run `paradigm calibrate`…" CTA. Clicking a cell sets
+      the calibrationFilter AND switches boardTab to 'state' so the filtered lanes
+      show. variant='strip' (legacy) is the default-ON collapsible hero strip
+      above the board — coverage StatCard + CellGrid, collapse persisted to
+      localStorage with a glanceable collapsed summary, force-expanded on full
+      cold-start so the differentiated artifact never starts hidden.
+    type: component
+    tags: [feature, tasks, platform, moat]
+  CellGrid:
+    description: Calibration matrix — archetype rows × taskType columns. Learned cells render solid + agent-color tint + a ● dot + compact band ("3–13" n24); PRIOR cells encode progress-to-graduation (a cell graduates at n>=8) as a live ramp — fill width + cell opacity + border tint ramp by min(n,8)/8 toward the archetype color, and an in-cell "{n}/8" tick reads the sample count directly, so a cell accumulating actuals (n=5) looks visibly closer to graduating than an empty one (n=0). The grid answers "where is the team about to learn something," not just "nothing yet." Clicking a cell toggles the store calibrationFilter that BoardView honors and FilterBar surfaces as a chip; an optional onCellSelect callback fires when a cell is selected (used by the Calibration tab to switch back to the State lanes).
+    type: component
+    tags: [feature, tasks, platform, moat]
+  InboxView:
+    description: The Inbox tab — the AGENT FACE. A claimant pill-row (a "Me" pill resolved via /api/tasks/whoami + one AGENT_COLORS-tinted pill per distinct board claimant) selects whose inbox to focus via fetchInbox(kind, ref). The focused column shows a rolled-up calibration header ("calibration {pct}% · n={total}", share of source==='learned') — suppressed to "—" for human claimants, whose learned bands are archetype-keyed so a % would be a category error, a NEXT-ACTIONABLE hero card (highest-priority in-progress-or-open, not blocked) elevated on top, a DependsChain ribbon under the hero (●done → ●this → ○next) that resolves each dependsOn id first from the loaded board/inbox pool (now incl. board.loose) and, for cross-run ids not in that pool, lazily via store.resolveDep → GET /api/tasks/:id (deduped + cached in store.depCache; a cached null = a genuine 404) so deps render "unknown" only after a fetch truly fails rather than for any out-of-pool id, then the rest as a queued list of TaskCards. Cold-start default landing is the human's ("Me") inbox; empty claimants render "inbox zero". Round E renders a TaskActions row directly under the hero card so the valid write verbs (start/claim/done/block) act from the agent face.
+    type: view
+    tags: [feature, tasks, platform, inbox]
+  GitHubSyncStrip:
+    description: Persistent Board-tab footer. Aggregates external_ref state across visible board tasks — synced (provider==='github' && url) and push-pending (github && no url), both derived from real external_ref state (the always-0 "drifted" placeholder was dropped as less honest than its absence). The PRIMARY action is now a REAL two-way Sync button (Round F) — on click it calls store.syncGitHub() → POST /api/tasks/sync (no client body; the server pulls each linked GitHub issue and reconciles it back through the enforced state machine, 100% server-side) and disables with a spinner ("Syncing…") while in flight. On return it renders a transient inline summary off store.lastSyncSummary in one of three tones — success ("✓ Synced N · M unchanged" in green; a quiet "Up to date" on a 0-change result); CONFLICT (amber --p-accent-amber, never error-red — conflict means local won and a human should look — with the conflicted task ids as clickable chips → store.openDetail(id)); OFFLINE (calm "GitHub not available — `gh auth login` to enable sync" hint when every verdict is offline/skipped or the request failed, NOT a red failure). After a sync that applied changes the store re-runs fetchBoard()+fetchTasks()(+fetchInbox if a claimant is focused) so changes show immediately. A small "via CLI" SECONDARY affordance remains — opens a popover that clipboard-copies `paradigm task sync` as a fallback for users without the server. The client never sends task/remote state.
+    type: component
+    tags: [feature, tasks, platform, github]
+  TaskDetailPanel:
+    description: Right-slide detail panel cloning lore's .detail-overlay/.detail-panel. Opened by clicking any TaskCard (store.openDetail(id)); fetches GET /api/tasks/:id (seeded instantly from the already-loaded board/inbox/list pool). Shows full blurb, the dependsOn DAG (ids + resolved states), the estimate breakdown (token band + LEARNED/prior provenance + n), fragileSymbols/tags chips, a GitHub section (ref + link when url present), and related_lore ids. Round E renders a TaskActions row in the header area so the write verbs work from any view (board/list click → detail → act); the panel re-seeds its local task from the refreshed store pool after a verb so the status-aware action row updates without a manual refetch. Closes on backdrop click / Esc.
+    type: component
+    tags: [feature, tasks, platform]
+  useTaskAgentEffect:
+    description: Hook consuming the shared agentStore the SAME way the platform's agent-effect protocol works — matched by SYMBOL (not taskId). A card registers its derived symbols (board.deriveSymbols) and intersects them against agentStore.highlights[].symbols (pulse + color + label) and agentStore.annotations of type 'badge' (symbol-targeted badge stamps). Mute clears agentStore, so a muted session yields no card effects for free.
+    type: util
+    tags: [feature, tasks, platform, agent-effects]

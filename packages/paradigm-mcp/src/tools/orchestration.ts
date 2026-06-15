@@ -321,16 +321,35 @@ interface LearnedBand { min: number; max: number; n: number }
 type LearnedTokenTable = Record<string, Record<string, LearnedBand>>;
 
 /**
+ * mtime-keyed cache for the learned token table. The Tasks web surface reads
+ * this table 3x per 10s poll (list + board + calibration grid) per open tab —
+ * an uncached readFileSync+JSON.parse each time, on the server event loop. The
+ * cache returns the parsed table while the file's mtime is unchanged and
+ * transparently reloads on any write (e.g. `paradigm calibrate`). Keyed by path
+ * so multi-project servers don't collide.
+ */
+let _learnedTableCache: { path: string; mtimeMs: number; table: LearnedTokenTable } | null = null;
+
+/**
  * Load the learned token-estimate table (#calibration, v7.1). Best-effort: a
  * missing or malformed file returns `{}` so the planner falls back cleanly to
- * the `AGENT_TOKEN_ESTIMATES` cold-start constant. Never throws.
+ * the `AGENT_TOKEN_ESTIMATES` cold-start constant. Never throws. mtime-cached.
  */
 export function loadLearnedTokenTable(rootDir: string): LearnedTokenTable {
   try {
     const filePath = path.join(rootDir, '.paradigm', 'learned', 'token-estimates.json');
-    if (!fs.existsSync(filePath)) return {};
+    let stat: fs.Stats;
+    try {
+      stat = fs.statSync(filePath);
+    } catch {
+      return {}; // missing file → cold-start constant
+    }
+    if (_learnedTableCache && _learnedTableCache.path === filePath && _learnedTableCache.mtimeMs === stat.mtimeMs) {
+      return _learnedTableCache.table;
+    }
     const parsed = JSON.parse(fs.readFileSync(filePath, 'utf8'));
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) return {};
+    _learnedTableCache = { path: filePath, mtimeMs: stat.mtimeMs, table: parsed as LearnedTokenTable };
     return parsed as LearnedTokenTable;
   } catch (err) {
     log.component('#calibration').warn('learned token table load failed; using constant prior', {
@@ -341,22 +360,116 @@ export function loadLearnedTokenTable(rootDir: string): LearnedTokenTable {
 }
 
 /**
+ * A resolved token estimate, carrying the provenance the planner historically
+ * discarded. `source: 'learned'` means the band came from a graduated
+ * [archetype][taskType] cell (n ≥ MIN_SAMPLES at calibrate time); `'prior'`
+ * means the cold-start constant. `n` is the cell's sample count (0 for a prior).
+ * The Tasks UI keys its LEARNED-vs-~prior~ headline off `source` + `n`.
+ */
+export interface TaskEstimate {
+  min: number;
+  max: number;
+  n: number;
+  source: 'learned' | 'prior';
+}
+
+/**
  * Resolve a single agent's token band: LEARNED cell ([archetype][taskType]) if
  * present, else the `AGENT_TOKEN_ESTIMATES` cold-start constant, else a generic
  * default. `taskType` is the classification family (e.g. 'feature').
+ *
+ * Widened (renaissance) to surface `n` + `source` — the data was always in the
+ * `LearnedBand` cell, the planner just dropped it. `{min,max}` callers are
+ * unaffected (the extra fields are additive).
  */
-function resolveAgentEstimate(
+export function resolveAgentEstimate(
   learned: LearnedTokenTable,
   agentName: string,
   taskType: string | undefined,
-): { min: number; max: number } {
+): TaskEstimate {
   if (taskType) {
     const cell = learned[agentName]?.[taskType];
     if (cell && typeof cell.min === 'number' && typeof cell.max === 'number') {
-      return { min: cell.min, max: cell.max };
+      return { min: cell.min, max: cell.max, n: typeof cell.n === 'number' ? cell.n : 0, source: 'learned' };
     }
   }
-  return AGENT_TOKEN_ESTIMATES[agentName] || { min: 5000, max: 20000 };
+  const prior = AGENT_TOKEN_ESTIMATES[agentName] || { min: 5000, max: 20000 };
+  return { min: prior.min, max: prior.max, n: 0, source: 'prior' };
+}
+
+/**
+ * The per-task estimate the Tasks UI renders. Resolves the responsible archetype
+ * (an archetype claimant → its ref; otherwise the `archetypeHint`, e.g. the
+ * board's `proposedClaimant`, else 'builder' as the generic default), classifies
+ * the blurb into a taskType family, and looks up the band. Takes the pre-loaded
+ * `learned` table so a route attaching estimates to N tasks reads the file once.
+ */
+export function estimateForTask(
+  learned: LearnedTokenTable,
+  task: { blurb: string; claimant?: { kind: string; ref: string } },
+  archetypeHint?: string,
+): TaskEstimate {
+  const archetype = task.claimant?.kind === 'archetype'
+    ? task.claimant.ref
+    : (archetypeHint || 'builder');
+  const taskType = classifyTaskLocal(task.blurb).type;
+  return resolveAgentEstimate(learned, archetype, taskType);
+}
+
+/**
+ * The standard taskType families the classifier emits — the columns of the
+ * calibration grid. (Mirrors FAMILY_WEIGHTS + the 'feature' default family.)
+ */
+export const TASK_TYPE_FAMILIES = [
+  'feature', 'bugfix', 'refactor', 'design', 'analysis', 'research', 'documentation', 'audit',
+] as const;
+
+/** The archetype×taskType calibration grid backing the Tasks hero strip. */
+export interface CalibrationGrid {
+  /** Row keys — known archetypes ∪ any present in the learned table. */
+  archetypes: string[];
+  /** Column keys — the standard families ∪ any present in the learned table. */
+  taskTypes: string[];
+  /** cells[archetype][taskType] = the resolved band, learned or cold-start prior. */
+  cells: Record<string, Record<string, TaskEstimate>>;
+  /** A learned (graduated) cell carries real actuals; coverage = learned / total. */
+  coverage: { graduated: number; total: number; pct: number };
+}
+
+/**
+ * Assemble the full archetype×taskType grid for the Tasks calibration strip.
+ * Every cell resolves to a band — `source:'learned'` where the crew has
+ * graduated that cell (the calibrate writer only persists cells at n≥8, so a
+ * learned cell IS a graduated one), else the cold-start prior. Renders fully
+ * even before any calibration has run (all-prior grid = the cold-start state).
+ */
+export function assembleCalibrationGrid(rootDir: string): CalibrationGrid {
+  const learned = loadLearnedTokenTable(rootDir);
+  const archetypes = Array.from(
+    new Set([...Object.keys(AGENT_TOKEN_ESTIMATES), ...Object.keys(learned)]),
+  ).sort();
+  const taskTypes = Array.from(
+    new Set([...TASK_TYPE_FAMILIES, ...Object.values(learned).flatMap(r => Object.keys(r))]),
+  ).sort();
+
+  const cells: Record<string, Record<string, TaskEstimate>> = {};
+  let graduated = 0;
+  let total = 0;
+  for (const archetype of archetypes) {
+    cells[archetype] = {};
+    for (const taskType of taskTypes) {
+      const est = resolveAgentEstimate(learned, archetype, taskType);
+      cells[archetype][taskType] = est;
+      total++;
+      if (est.source === 'learned') graduated++;
+    }
+  }
+  return {
+    archetypes,
+    taskTypes,
+    cells,
+    coverage: { graduated, total, pct: total ? Math.round((graduated / total) * 100) : 0 },
+  };
 }
 
 // ============================================================================

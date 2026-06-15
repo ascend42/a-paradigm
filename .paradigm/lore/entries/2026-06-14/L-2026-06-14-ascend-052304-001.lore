@@ -1,0 +1,42 @@
+id: L-2026-06-14-ascend-052304-001
+type: milestone
+timestamp: '2026-06-14T05:23:04.343Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Renaissance Round A — the calibration moat, made renderable
+summary: 'Built the server data layer for the Tasks section''s headline (story-points = learned calibration). The key find: resolveAgentEstimate ALWAYS had n + learned/prior provenance in its LearnedBand cells — it just threw them away, returning bare {min,max}. Widened it to {min,max,n,source} (additive), added estimateForTask() and assembleCalibrationGrid(); wired /api/tasks + /board to attach a per-task estimate and added /api/tasks/calibration. Proven via unit tests (cold-start all-prior grid + a seeded learned table → source:learned with n). MCP 438 / CLI 441 green.'
+symbols_touched:
+  - '#calibration'
+  - '#tasks'
+  - '#platform-server'
+files_modified:
+  - packages/paradigm-mcp/src/tools/orchestration.ts
+  - packages/paradigm-mcp/src/tools/calibration-loader.test.ts
+  - packages/paradigm/src/platform-server/routes/tasks.ts
+  - packages/paradigm/src/platform-server/routes/.purpose
+  - CHANGELOG.md
+learnings:
+  - The moat feature's data was already fully present — the calibrate writer persists LearnedBand{min,max,n} with MIN_SAMPLES=8 as the graduation bar, and the learned table only ever contains graduated cells. resolveAgentEstimate just discarded n+source. The 'big data-wiring' the design feared was a 4-line widening, not a writer change. Verify the actual data shape before scoping a dependency as expensive.
+  - This project has never run `paradigm calibrate`, so every estimate is source:prior (cold-start). The UI MUST render the all-prior state honestly (dimmed ~prior~) — that IS the correct first-run experience, and it's what proves the LEARNED path will light up as actuals accumulate. Tested both states in unit tests since live data can't show the learned path here.
+  - estimateForTask takes the PRE-LOADED learned table (not a rootDir) so a route attaching estimates to N tasks reads token-estimates.json once, not N times.
+verification:
+  status: pass
+  details:
+    mcp_tests: 438 passed (+8)
+    cli_tests: 441 passed
+    smoke: 'live: /api/tasks estimate attached, /calibration 7×8 grid 0/56 graduated (honest cold-start), /board nodes+unclaimed estimated'
+tags:
+  - suite-renaissance
+  - arc:renaissance
+  - calibration
+  - tasks
+  - data-layer
+linked_lore:
+  - L-2026-06-14-ascend-050138-001
+confidence: 0.95
+git_context:
+  ref: c63d5c7bdf29456c17616345cda10423f223bcb1
+  branch: renaissance/tasks-suite
+  dirty: true

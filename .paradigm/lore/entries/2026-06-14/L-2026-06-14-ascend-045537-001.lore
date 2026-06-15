@@ -1,0 +1,47 @@
+id: L-2026-06-14-ascend-045537-001
+type: milestone
+timestamp: '2026-06-14T04:55:37.240Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Renaissance Step 0 — fixed serve (build hole + boot crash) by deleting canvas
+summary: First build round of the Paradigm Suite renaissance. Wired the orphaned build:platform-ui into the main build chain (serve was shipping a 2-month-stale dist), added port auto-increment, and discovered serve also crashed on boot from canvas's Express-4 `/files/*` wildcard routes (invalid under Express 5). Since canvas was already team-decided for deletion (TD-2026-06-14-853), brought that cut forward — deleting it fixed the boot crash. serve now boots clean (canvas absent from sections), 441/441 tests pass.
+symbols_touched:
+  - '#serve'
+  - '#canvas'
+  - '#platform-server'
+files_modified:
+  - packages/paradigm/package.json
+  - packages/paradigm/src/commands/serve.ts
+  - packages/paradigm/src/platform-server/index.ts
+  - packages/paradigm/platform-ui/src/App.tsx
+  - packages/paradigm/platform-ui/src/components/SidebarNav.tsx
+  - packages/paradigm/platform-ui/src/components/CommandPalette.tsx
+  - packages/paradigm/platform-ui/src/hooks/useAgentEffects.ts
+  - packages/paradigm/platform-ui/src/store/platformStore.ts
+  - packages/paradigm/platform-ui/src/hooks/useKeyboardShortcuts.ts
+  - CHANGELOG.md
+learnings:
+  - The build hole was only half the broken-serve story — fixing the stale-dist build wiring exposed a SECOND latent bug (canvas's `/files/*` Express-4 wildcard crashed serve on boot under Express 5). A live smoke test (boot serve, curl health) caught it; a build-passing check alone would not have. Always boot the actual server, not just build it.
+  - 'Subtractive-then-additive paid off immediately: the surface the audit marked for deletion (canvas) was the exact thing blocking the launcher. Cutting dead chrome unblocked the spearhead rather than competing with it.'
+  - Canvas was the audit's clearest 'delete not defer' call and it held up — stub serializer, zero .canvas files, no substrate linkage, AND actively harmful (boot crash). Defer-to-someday would have left serve broken.
+verification:
+  status: pass
+  details:
+    build: pass (platform-ui dist regenerates fresh)
+    tests: 441 passed / 3 skipped
+    smoke: serve boots, /api/platform/health ok, canvas absent from sections
+tags:
+  - suite-renaissance
+  - arc:renaissance
+  - serve
+  - canvas-removal
+  - subtractive
+linked_lore:
+  - L-2026-06-14-ascend-044702-250
+confidence: 0.95
+git_context:
+  ref: 0b0b082f286f8a3262216f39686d14b83e076b39
+  branch: renaissance/tasks-suite
+  dirty: true

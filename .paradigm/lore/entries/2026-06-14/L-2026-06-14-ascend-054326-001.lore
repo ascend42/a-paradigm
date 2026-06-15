@@ -1,0 +1,51 @@
+id: L-2026-06-14-ascend-054326-001
+type: milestone
+timestamp: '2026-06-14T05:43:26.023Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Renaissance Round C — the board, swim lanes, and calibration hero strip
+summary: 'Built the Crew Board spine + the moat-proof hero strip. The Board view (now default) renders people swim-lanes — one lane per claimant, colored to match their Team identity, header showing name·count·summed-points — plus Unclaimed/Done lanes, a LaneModeToggle (Claimant|State|Symbol, persisted), and a status/priority/search FilterBar. Above sits a default-on collapsible CalibrationStrip with an archetype×taskType CellGrid (graduated cells solid in agent-color, cold-start dimmed to ░) + a coverage StatCard. Cold-start renders honestly: all-░ grid with a ''learning in progress'' badge, all-Unclaimed board, both styled to look intentional. TaskCard+CalibrationBlock reused verbatim via normalizers. Build green, chunk 4.7→16.5kB, CLI 441.'
+symbols_touched:
+  - '#tasks-section'
+  - '#tasks'
+  - '#calibration'
+files_created:
+  - packages/paradigm/platform-ui/src/sections/tasks/utils/board.ts
+  - packages/paradigm/platform-ui/src/sections/tasks/components/SwimLane.tsx
+  - packages/paradigm/platform-ui/src/sections/tasks/components/LaneModeToggle.tsx
+  - packages/paradigm/platform-ui/src/sections/tasks/components/BoardView.tsx
+  - packages/paradigm/platform-ui/src/sections/tasks/components/FilterBar.tsx
+  - packages/paradigm/platform-ui/src/sections/tasks/components/CalibrationStrip.tsx
+  - packages/paradigm/platform-ui/src/sections/tasks/components/CellGrid.tsx
+files_modified:
+  - packages/paradigm/platform-ui/src/sections/tasks/store/tasksStore.ts
+  - packages/paradigm/platform-ui/src/sections/tasks/TasksSection.tsx
+  - packages/paradigm/platform-ui/src/sections/tasks/styles/tasks.css
+  - packages/paradigm/platform-ui/src/sections/tasks/.purpose
+  - CHANGELOG.md
+learnings:
+  - Reusing TaskCard+CalibrationBlock on the board via small normalizer functions (nodeToTask/unclaimedToTask) kept the card render identical across List and Board — one card definition, two data shapes. The right seam was the data, not the component.
+  - 'Known thin spot: the calibration cell→board-filter click filters to empty in cold-start because board nodes carry no taskType tag to match a cell''s column. Honest given the API shape; the grid''s primary value is moat-proof, not the click-filter. Revisit when task records carry a type tag.'
+  - 'Cold-start UI must be DESIGNED, not defaulted: the all-prior grid gets a ''learning in progress'' badge + dashed styling and the all-Unclaimed board is deliberate — so a brand-new project doesn''t look like the feature is broken.'
+verification:
+  status: pass
+  details:
+    build: green (vite 311 modules, TasksSection chunk 16.5kB)
+    cli_tests: 441 passed
+    visual: pending Matt's eyes on the board
+tags:
+  - suite-renaissance
+  - arc:renaissance
+  - tasks-section
+  - board
+  - calibration
+  - swim-lanes
+linked_lore:
+  - L-2026-06-14-ascend-053616-001
+confidence: 0.92
+git_context:
+  ref: 08a68973c12a96afeabc486809bcdab210c61f5e
+  branch: renaissance/tasks-suite
+  dirty: true

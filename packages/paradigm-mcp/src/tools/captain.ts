@@ -1153,15 +1153,68 @@ export async function assembleCaptainBoard(
   const inFlight = all.filter(t => t.status === 'in-progress').length;
   const open = all.filter(t => t.status === 'open').length;
 
+  // ── Full forest: non-terminal ROOT tasks not already shown as a run or in the
+  // unclaimed pile (TD-2026-06-14-467 — "see the whole forest"). These are the
+  // claimed standalone tasks (+ in-progress unclaimed standalone) that the
+  // run-centric board used to hide. `epicIds` lets us exclude epics already
+  // surfaced as runs; children (parentTaskId set) belong to their run, not here.
+  const epicIds = new Set(epics.map(e => e.id));
+  const inUnclaimed = new Set(unclaimedTasks.map(t => t.id));
+  const loose: BoardNode[] = [];
+  for (const t of all) {
+    if (!t.id) continue;
+    if (t.status === 'done' || t.status === 'shelved') continue; // terminal
+    if (t.parentTaskId) continue;       // belongs to a run
+    if (epicIds.has(t.id)) continue;    // already a run
+    if (inUnclaimed.has(t.id)) continue; // already in the unclaimed pile
+    const fragile = ctx ? await fragileSymbolsFor(t, ctx) : [];
+    loose.push({
+      taskId: t.id,
+      blurb: t.blurb,
+      stage: t.stage,
+      status: t.status,
+      claimant: t.claimant,
+      dependsOn: t.dependsOn || [],
+      fragileSymbols: fragile,
+    });
+  }
+
+  // DAG integrity (Cid-owned, advise-only): validate the full graph and surface
+  // any structural defects on the board. Never mutates, never blocks.
+  const { validateTaskDag } = await import('../utils/task-loader.js');
+  const integrity = validateTaskDag(all);
+
+  // Settlement-debt (Loid-owned, detect-only): a run whose children are ALL
+  // terminal but the epic never settled — the learning loop never closed on it.
+  const settlementDebt = runs
+    .filter(r => !r.settledAt && r.nodes.length > 0 && r.nodes.every(n => n.status === 'done' || n.status === 'shelved'))
+    .map(r => ({ epicTaskId: r.epicTaskId, blurb: r.blurb, reason: 'all children terminal but run never settled' }));
+
+  // Stale archetype claims (Cid-owned, advise-only): an archetype-claimed task
+  // still `open` (never started) past the staleness window is a candidate to
+  // release back to unclaimed. Human/peer claims are sticky — never flagged.
+  const STALE_CLAIM_DAYS = 7;
+  const nowMs = Date.now();
+  const staleClaims = all
+    .filter(t => t.status === 'open' && t.claimant?.kind === 'archetype' && !t.started_at)
+    .map(t => ({ task: t, ageDays: Math.floor((nowMs - new Date(t.created).getTime()) / 86_400_000) }))
+    .filter(({ ageDays }) => Number.isFinite(ageDays) && ageDays >= STALE_CLAIM_DAYS)
+    .map(({ task, ageDays }) => ({ taskId: task.id, blurb: task.blurb, claimant: task.claimant!, ageDays }));
+
   return {
     runs,
     unclaimed,
+    loose,
     summary: {
       runs: runs.length,
       open,
       inFlight,
       unclaimed: unclaimed.length,
+      loose: loose.length,
     },
+    integrity: integrity.length > 0 ? integrity : undefined,
+    settlementDebt: settlementDebt.length > 0 ? settlementDebt : undefined,
+    staleClaims: staleClaims.length > 0 ? staleClaims : undefined,
   };
 }
 

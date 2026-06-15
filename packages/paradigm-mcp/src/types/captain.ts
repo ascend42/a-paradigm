@@ -183,10 +183,38 @@ export interface BoardUnclaimed {
 export interface CaptainBoard {
   runs: BoardRun[];
   unclaimed: BoardUnclaimed[];
+  /**
+   * Full-forest tail (TD-2026-06-14-467, Cid's "see the whole forest" protocol):
+   * non-terminal root tasks that are NOT orchestration epics and NOT in the
+   * ripple-ranked `unclaimed` pile — i.e. CLAIMED standalone tasks (and
+   * in-progress unclaimed standalone tasks). Before this, a human/CLI-claimed
+   * task with no orchestration parent was invisible on the board. Rendered as
+   * claimant lanes by the Tasks board.
+   */
+  loose: BoardNode[];
   summary: {
     runs: number;
     open: number;
     inFlight: number;
     unclaimed: number;
+    loose: number;
   };
+  /**
+   * DAG integrity violations (Cid-owned, advise-only — TD-2026-06-14-467). Empty
+   * when the graph is sound. Surfaced as a board warning; never blocks.
+   */
+  integrity?: import('../utils/task-loader.js').DagViolation[];
+  /**
+   * Settlement-debt (Loid-owned, detect-only — TD-2026-06-14-467): runs whose
+   * children are ALL terminal but the epic never stamped `settledAt` — the
+   * learning loop never closed on them. Loid detects; Cid owns any graph fix.
+   */
+  settlementDebt?: Array<{ epicTaskId: string; blurb: string; reason: string }>;
+  /**
+   * Stale archetype claims (Cid-owned, advise-only — TD-2026-06-14-467):
+   * archetype-claimed tasks still `open` (never started) past the staleness
+   * window. Candidates to release back to unclaimed. Human/peer claims are
+   * sticky and never appear here. Cid surfaces; release is a deliberate act.
+   */
+  staleClaims?: Array<{ taskId: string; blurb: string; claimant: Claimant; ageDays: number }>;
 }

@@ -22,8 +22,11 @@ components:
     type: router
     tags: [feature, ambient]
     signals: ["!ambient:event", "!ambient:nomination"]
-  CanvasRouter:
-    description: /api/canvas/* — 4 endpoints for *.canvas file discovery (glob), read (YAML→JSON), write (JSON→YAML), and delete
+  TasksRouter:
+    description: /api/tasks/* — read-only HTTP over the v7 claimant task DAG (list w/ status/priority/tag/claimant filters, /board captain run-DAG, /inbox per-claimant, /calibration archetype×taskType grid, /:id). / and /board attach a computed estimate{min,max,n,source} + taskType per task (the learned-calibration story-point). Owns no storage; mutation stays on the write router.
     type: router
-    tags: [feature, canvas]
-    signals: [!canvas-file-saved, !canvas-file-created]
+    tags: [feature, tasks, calibration]
+  TasksWriteRouter:
+    description: /api/tasks/* WRITE verbs — POST /:id/{claim,start,done,block,unblock} each PROXY the enforced updateTask state machine (no bypass), plus POST /sync (inbound two-way GitHub reconcile through the same writers). Verbs fire a best-effort outbound GitHub projection; a done settle broadcasts a live agent:annotate. portal.yaml ^write-capable.
+    type: router
+    tags: [feature, tasks, task-sync, enforcement]

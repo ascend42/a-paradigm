@@ -1,0 +1,48 @@
+id: L-2026-06-14-ascend-154404-001
+type: milestone
+timestamp: '2026-06-14T15:44:04.487Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Renaissance Round E — executed the team-review top picks on the Tasks section
+summary: 'Ran a 6-lens team review of the shipped Tasks section, then executed its top-ranked fixes autonomously (Matt remote). Backend: plumbed taskType end-to-end (/api/tasks + /board attach the classified family) so the moat''s cell→board filter works; mtime-cached loadLearnedTokenTable (killed 3 disk reads/10s/tab); claimed the governance backlog onto its owners (cid/forge/compliance) so the swim-lanes populate. UI batch (delegated): confidence now drives type scale (learned=big green, prior=small+label-led), card names the archetype×taskType cell, claimant lanes resolve to Team colors, cold-start strip names `paradigm calibrate`, GitHub strip relabeled honest (no fake Pull, no always-0 drifted), human inboxes drop the bogus calibration %. Build green, CLI 441. Filed T-017 for the claimant-vs-calibration-archetype model mismatch (the CLAIMANT_ALIAS is loose).'
+symbols_touched:
+  - '#tasks-section'
+  - '#calibration'
+  - '#task-loader'
+files_modified:
+  - packages/paradigm-mcp/src/tools/orchestration.ts
+  - packages/paradigm-mcp/src/utils/task-loader.ts
+  - packages/paradigm/src/platform-server/routes/tasks.ts
+  - packages/paradigm/platform-ui/src/sections/tasks/components/BoardView.tsx
+  - packages/paradigm/platform-ui/src/sections/tasks/components/CalibrationBlock.tsx
+  - packages/paradigm/platform-ui/src/sections/tasks/components/CalibrationStrip.tsx
+  - packages/paradigm/platform-ui/src/sections/tasks/components/GitHubSyncStrip.tsx
+  - packages/paradigm/platform-ui/src/sections/tasks/components/InboxView.tsx
+  - packages/paradigm/platform-ui/src/sections/tasks/utils/board.ts
+  - CHANGELOG.md
+learnings:
+  - Reviewing our OWN shipped work with a fresh 6-lens panel caught a guaranteed dead-end (the calibration cell→board filter matched a tag that board nodes never carry) that the build-and-smoke-test pass missed — the interaction was wired but semantically empty. Adversarial self-review catches 'wired but wrong', not just 'broken'.
+  - 'The single highest-impact fix (taskType plumbing) was tiny (S) because the classification ALREADY happened inside estimateForTask — the data existed, the route just discarded it. Pattern repeats: the moat''s missing pieces keep being ''computed-then-dropped'', not ''not-computed''.'
+  - 'Populating the board by claiming the governance backlog onto its real owners (not fake fixture data) killed two birds: the swim-lanes now demonstrate themselves AND the governance decision''s ownership becomes concrete in the task store.'
+verification:
+  status: pass
+  details:
+    build: green
+    cli_tests: 441 passed
+    smoke: taskType attached (feature/analysis), board claimant distribution forge:4/cid:4/compliance:1/human:2/unclaimed:11
+    visual: pending Matt's eyes (color identity + type scale)
+tags:
+  - suite-renaissance
+  - arc:renaissance
+  - tasks-section
+  - team-review
+  - calibration
+linked_lore:
+  - L-2026-06-14-ascend-152811-001
+confidence: 0.9
+git_context:
+  ref: e55d68a067560924e301dc76119955b694610a16
+  branch: renaissance/tasks-suite
+  dirty: true

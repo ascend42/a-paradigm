@@ -1,0 +1,41 @@
+id: L-2026-06-14-ascend-171544-001
+type: milestone
+timestamp: '2026-06-14T17:15:44.124Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Renaissance — aggregate-on-settle closes the calibration loop (T-011)
+summary: 'The highest-value governance item: the learned calibration table self-updates now. The aggregation (actuals → archetype×taskType p10/p90 bands at n≥8) was CLI-only (commands/calibrate.ts), so the moat''s learned story-points only refreshed on a manual `paradigm calibrate`. Extracted the pure logic into a shared paradigm-mcp util (calibration-aggregate.ts) so the settlement chain — which lives in MCP and couldn''t import the CLI — can call it. runSettlementChain now folds rebuildLearnedTable in as a best-effort adjacent step (not a tracked liveness stage; the probe still asserts the 3 learning stages). calibrate.ts re-exports the moved symbols (tests stay green) and uses the one shared write path. +5 tests proving the learned-graduation path end-to-end on disk. MCP 450 / CLI 441 green.'
+symbols_touched:
+  - '#calibration'
+  - '#task-settlement'
+files_created:
+  - packages/paradigm-mcp/src/utils/calibration-aggregate.ts
+  - packages/paradigm-mcp/src/utils/calibration-aggregate.test.ts
+files_modified:
+  - packages/paradigm/src/commands/calibrate.ts
+  - packages/paradigm-mcp/src/utils/task-settlement.ts
+  - CHANGELOG.md
+learnings:
+  - 'The package boundary WAS the bug: aggregation in the CLI + settlement in MCP + the no-CLI-import rule = the loop physically could not close automatically. The fix is always ''extract the shared logic to the package both callers can reach'', not ''duplicate it''. Re-exporting from the original location keeps every existing import + test green during the move.'
+  - Adding aggregate-on-settle as an ADJACENT best-effort step (not a tracked liveness stage) keeps the settlement-liveness probe's contract intact — the probe asserts the LEARNING chain is live; calibration refresh rides alongside without becoming something a reviewer-severed-stage test would scream about.
+verification:
+  status: pass
+  details:
+    mcp_tests: 450 passed (+5)
+    cli_tests: 441 passed (calibrate.test green via re-exports)
+    proof: 'rebuildLearnedTable: 8 samples → graduated cell written to token-estimates.json on disk'
+tags:
+  - suite-renaissance
+  - arc:renaissance
+  - calibration
+  - task-governance
+  - learning-loop
+linked_lore:
+  - L-2026-06-14-ascend-171018-001
+confidence: 0.92
+git_context:
+  ref: 15e018c969fe1d0781058ce45ad6a780a87500a7
+  branch: renaissance/tasks-suite
+  dirty: true

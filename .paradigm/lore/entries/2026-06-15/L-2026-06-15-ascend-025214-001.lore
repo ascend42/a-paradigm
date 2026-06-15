@@ -1,0 +1,38 @@
+id: L-2026-06-15-ascend-025214-001
+type: milestone
+timestamp: '2026-06-15T02:52:14.769Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Two-way GitHub sync — VERIFIED LIVE against the real repo (T-004 / issue #18)'
+summary: 'Dogfooded the two-way GitHub sync end-to-end against ascend42/a-paradigm by pushing the next-work backlog as real issues (#18-#25) and walking the loop on the live-verify task itself (T-2026-06-15-004 / issue #18). PROVEN LIVE: outbound (task done → issue closed), inbound symmetric reopen (gh issue reopen → task sync → task done→open — Matt''s chosen behavior), inbound close (gh close → task sync → task done). The live test caught + fixed 2 real bugs that all unit tests missed: (1) gh issue edit/close reject owner/repo#N as the positional arg with --repo (needed the bare number — added issueSelector); (2) readSyncConfig used require() in the ESM bundle → silently ignored the config (switched to imports). This is the v7.2-era lesson reconfirmed: live integration testing against the REAL external system catches what mocked unit tests cannot.'
+symbols_touched:
+  - '#task-sync'
+  - '#github-provider'
+  - '#task-cli'
+learnings:
+  - 'Two real bugs survived a full unit-test suite (468 green) and were ONLY caught by a live gh round-trip: the gh-arg-format bug (owner/repo#N vs bare number) and the ESM require() config-read bug. Mocked-run tests asserted the arg VECTOR but not that real gh ACCEPTS it; and the config reader''s require() works under the test runner but not the shipped ESM bundle. For any external-system integration, a live round-trip is non-optional before claiming it works.'
+  - 'The dogfood doubled as backlog capture: pushing the actual next-work tasks (renaissance completion + governance tail) as GitHub issues #19-#25 is both the test corpus AND the real roadmap on the repo — testing with real intent beats throwaway fixtures.'
+  - 'Symmetric reopen (Matt''s call) verified clean live: done→open cleared the settlement stamps and the task re-settled on the next close, with no orphaned half-settled state.'
+verification:
+  status: pass
+  details:
+    live: 'outbound close + inbound reopen + inbound close all verified against issue #18'
+    mcp_tests: '468'
+    cli_tests: '441'
+    issues_created: '#18-#25 on ascend42/a-paradigm'
+tags:
+  - suite-renaissance
+  - arc:renaissance
+  - github-sync
+  - two-way
+  - live-verified
+  - dogfood
+linked_lore:
+  - L-2026-06-15-ascend-020635-001
+confidence: 0.95
+git_context:
+  ref: 61e15f784e9b265b28bbd179c6ccd3510f81ce58
+  branch: renaissance/tasks-suite
+  dirty: true
