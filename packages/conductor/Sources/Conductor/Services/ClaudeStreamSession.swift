@@ -116,6 +116,16 @@ final class ClaudeStreamSession: ObservableObject {
             status = .running
             ConductorLog.flow("claude-turn-exchange")
                 .info("ClaudeStreamSession started @ \(self.projectPath) (PID \(proc.processIdentifier))")
+
+            // Send the first turn IMMEDIATELY. In `--input-format stream-json`
+            // mode, claude does not emit `system/init` until it receives input,
+            // so gating the first turn on init would deadlock (waiting on each
+            // other forever). stdin is writable as soon as the process is up.
+            if let prompt = pendingInitialPrompt {
+                pendingInitialPrompt = nil
+                messages.append(ConversationMessage(author: .user, text: prompt))
+                writeTurn(prompt)
+            }
         } catch {
             status = .error
             ConductorLog.signal("agent-error")
@@ -221,7 +231,9 @@ final class ClaudeStreamSession: ObservableObject {
         ConductorLog.signal("agent-turn-complete")
             .info("system/init — session \(sys.sessionId ?? "?") model \(sys.model ?? "?")")
 
-        // Flush the buffered first turn now that the session is live.
+        // First turn is now sent immediately on spawn (see start()), so there is
+        // nothing to flush here. Kept as a safety net in case a turn was queued
+        // before the process was live.
         if let prompt = pendingInitialPrompt {
             pendingInitialPrompt = nil
             messages.append(ConversationMessage(author: .user, text: prompt))
@@ -307,10 +319,13 @@ final class ClaudeStreamSession: ObservableObject {
     // MARK: - Claude path resolution (mirrors AgentProcessManager)
 
     private static func findClaudePath() -> String {
+        let home = FileManager.default.homeDirectoryForCurrentUser.path
         let candidates = [
+            "\(home)/.local/bin/claude",   // npm-free installer default (most common)
             "/usr/local/bin/claude",
-            "\(FileManager.default.homeDirectoryForCurrentUser.path)/.npm/bin/claude",
-            "\(FileManager.default.homeDirectoryForCurrentUser.path)/.claude/local/claude",
+            "/opt/homebrew/bin/claude",    // Apple-silicon Homebrew
+            "\(home)/.npm/bin/claude",
+            "\(home)/.claude/local/claude",
         ]
         for path in candidates where FileManager.default.isExecutableFile(atPath: path) {
             return path
