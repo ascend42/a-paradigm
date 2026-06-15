@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-06-15T17:07:17.776Z'
+generated: '2026-06-15T17:22:53.912Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -19888,8 +19888,7 @@ by_symbol:
     recent:
       - *ref_279
       - *ref_280
-      - &ref_294
-        id: h0438
+      - id: h0438
         ts: '2026-06-14T17:10:28Z'
         type: implement
         symbols:
@@ -20201,7 +20200,7 @@ by_symbol:
           - packages/paradigm/src/platform-server/ws/index.ts
         description: 'feat(#serve): split the WS firehose into channels (T-001, closes #19)'
       - *ref_285
-      - &ref_295
+      - &ref_294
         id: h0446
         ts: '2026-06-15T01:58:54Z'
         type: implement
@@ -20366,11 +20365,34 @@ by_symbol:
       agent: []
   '#tasks-section':
     symbol: '#tasks-section'
-    total_changes: 11
-    last_modified: '2026-06-15T17:07:16Z'
+    total_changes: 12
+    last_modified: '2026-06-15T17:22:52Z'
     stability_score: 1
     fragility: low
     recent:
+      - id: h0452
+        ts: '2026-06-15T17:22:52Z'
+        type: implement
+        symbols:
+          - '#tasks-section'
+        author:
+          type: human
+          id: ascend
+        commit: 79894f4c06fb41aef1821e2138f7c9876fe327c8
+        intent: feature
+        files:
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - packages/paradigm/platform-ui/src/sections/tasks/.purpose
+          - packages/paradigm/platform-ui/src/sections/tasks/TasksSection.tsx
+          - packages/paradigm/platform-ui/src/sections/tasks/components/BoardTabs.tsx
+          - packages/paradigm/platform-ui/src/sections/tasks/components/BoardView.tsx
+          - packages/paradigm/platform-ui/src/sections/tasks/components/CalibrationStrip.tsx
+          - packages/paradigm/platform-ui/src/sections/tasks/components/CellGrid.tsx
+          - packages/paradigm/platform-ui/src/sections/tasks/components/LaneModeToggle.tsx
+          - packages/paradigm/platform-ui/src/sections/tasks/store/tasksStore.ts
+          - packages/paradigm/platform-ui/src/sections/tasks/styles/tasks.css
+        description: 'feat(#tasks-section): refactor Board into tabs — lanes get full height, calibration its own tab'
       - id: h0451
         ts: '2026-06-15T17:07:16Z'
         type: implement
@@ -20409,7 +20431,6 @@ by_symbol:
         description: 'fix(#tasks-section): attach estimate on /inbox + /:id; defensive CalibrationBlock'
       - *ref_285
       - *ref_293
-      - *ref_294
     contributors:
       human:
         - ascend
@@ -20423,7 +20444,7 @@ by_symbol:
     recent:
       - *ref_284
       - *ref_285
-      - *ref_295
+      - *ref_294
       - *ref_286
     contributors:
       human:

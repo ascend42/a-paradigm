@@ -5,7 +5,7 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] — Paradigm Suite renaissance
+## [7.3.0] — 2026-06-15 — Paradigm Suite renaissance
 
 The surfaces catch up to the substrate. A six-lens team audit (decision TD-2026-06-14-853) found the renaissance is a *substrate-to-surface gap*, not fragmentation: the unified Suite shell already exists (`paradigm serve` → one React/Vite SPA, 11 sections), but it was frozen for two months while the v7 task DAG / learned calibration / learning loop shipped — and zero surfaces render them. Direction: **web-primary** (Conductor benched, vscode frozen), Tasks as the spearhead with **story-points = learned calibration estimates** as the headline. Frame: subtractive-then-additive.
 

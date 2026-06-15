@@ -209,18 +209,16 @@ export interface CalibrationFilter {
 }
 
 const BOARD_TAB_KEY = 'paradigm.tasks.boardTab';
-const LEGACY_LANE_MODE_KEY = 'paradigm.tasks.laneMode';
 
 function loadBoardTab(): BoardTab {
   try {
     const v = localStorage.getItem(BOARD_TAB_KEY);
     if (v === 'state' || v === 'claimant' || v === 'symbol' || v === 'calibration') return v;
-    // Graceful migration from the old laneMode key (no 'calibration' value there).
-    const legacy = localStorage.getItem(LEGACY_LANE_MODE_KEY);
-    if (legacy === 'claimant' || legacy === 'state' || legacy === 'symbol') return legacy;
   } catch {
     /* localStorage unavailable */
   }
+  // STATE is the default for everyone — we intentionally do NOT inherit the
+  // legacy laneMode key (which could land an existing user on Claimant).
   return 'state';
 }
 
