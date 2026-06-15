@@ -340,6 +340,44 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         appMenuItem.submenu = appMenu
         mainMenu.addItem(appMenuItem)
 
+        // Edit menu — STANDARD first-responder selectors.
+        // Without this menu, macOS has no Edit-menu key equivalents to route
+        // ⌘C/⌘V/⌘X/⌘A/⌘Z to the focused text field, so clipboard + undo are dead
+        // in any window (incl. the programmatic ATRIUM NSWindow). These items use
+        // the standard responder-chain selectors (cut:/copy:/paste:/selectAll:/
+        // undoManager) so they work in ANY first-responder text view automatically.
+        let editMenuItem = NSMenuItem()
+        let editMenu = NSMenu(title: "Edit")
+
+        let undoItem = NSMenuItem(title: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+        undoItem.keyEquivalentModifierMask = .command
+        editMenu.addItem(undoItem)
+
+        let redoItem = NSMenuItem(title: "Redo", action: Selector(("redo:")), keyEquivalent: "z")
+        redoItem.keyEquivalentModifierMask = [.command, .shift]
+        editMenu.addItem(redoItem)
+
+        editMenu.addItem(.separator())
+
+        let cutItem = NSMenuItem(title: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        cutItem.keyEquivalentModifierMask = .command
+        editMenu.addItem(cutItem)
+
+        let copyItem = NSMenuItem(title: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        copyItem.keyEquivalentModifierMask = .command
+        editMenu.addItem(copyItem)
+
+        let pasteItem = NSMenuItem(title: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        pasteItem.keyEquivalentModifierMask = .command
+        editMenu.addItem(pasteItem)
+
+        let selectAllItem = NSMenuItem(title: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        selectAllItem.keyEquivalentModifierMask = .command
+        editMenu.addItem(selectAllItem)
+
+        editMenuItem.submenu = editMenu
+        mainMenu.addItem(editMenuItem)
+
         // View menu (font size + sidebar)
         let viewMenuItem = NSMenuItem()
         let viewMenu = NSMenu(title: "View")

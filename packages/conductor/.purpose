@@ -1339,6 +1339,22 @@ signals:
     - Sources/Conductor/UI/Views/Atrium/AtriumFooter.swift:1
     - Sources/Conductor/App/AtriumSpikeWindow.swift:1
 
+#atrium-attachment:
+  description: Removable file-attachment chip for the ATRIUM composer — file-type SF Symbol + middle-truncated filename + ✕ remove, styled to the ATRIUM palette (surfaceRaised bg, tool-violet icon, mono ink filename). Files dragged onto the composer (.onDrop of .fileURL) become chips in a row above the field; on send the absolute paths are appended to the outgoing claude -p turn as a trailing "Attached files:" block so the agent can Read them, while the visible draft stays clean.
+  type: view
+  tags: [atrium, ui, composer, attachments, dragdrop]
+  anchors:
+    - Sources/Conductor/UI/Views/Atrium/AtriumAttachmentChip.swift:1
+    - Sources/Conductor/UI/Views/Atrium/AtriumComposer.swift:1
+
+#atrium-voice:
+  description: Keyword-driven voice dictation loop for the ATRIUM composer, modeled on a-aloud's reply-window loop. REUSES WhisperVoiceProvider (WhisperKit CoreML STT + AVCaptureSession mic) — no new STT dependency. State machine off→armed→composing→sending→armed driven by forgiving word-boundary-anchored keyword grammar (normalize, last-occurrence match, multi-word phrases). Defaults wake="respond", send="send it", cancel="scratch that"/"never mind". Live transcript streams into the composer draft via callbacks (composer owns the draft so the founder can still edit/clip). Mic affordance in the composer reflects state with the ATRIUM palette (amber when composing).
+  type: controller
+  tags: [atrium, voice, whisper, dictation, statemachine]
+  anchors:
+    - Sources/Conductor/UI/Views/Atrium/AtriumVoiceController.swift:1
+    - Sources/Conductor/UI/Views/Atrium/AtriumComposer.swift:1
+
 tags:
   - conductor
   - macos
