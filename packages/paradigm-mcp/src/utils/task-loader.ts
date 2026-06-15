@@ -204,11 +204,18 @@ export function generateTaskId(rootDir: string, dateStr: string): string {
 // ── Status state-machine ──────────────────────────────────
 
 /**
- * v7.0 (4-state) transition table:
+ * Transition table:
  *   open        → in-progress | done | shelved
  *   in-progress → done | open | shelved
  *   shelved     → open
- *   done        → (terminal)
+ *   done        → open   (REOPEN — added for symmetric two-way GitHub sync)
+ *
+ * `done` is no longer strictly terminal: a `done → open` REOPEN is legal so a
+ * GitHub issue reopened by a teammate can drive the local task back to open
+ * (and so a mistakenly-completed task can be reopened). Reopening clears the
+ * settlement/completion stamps (see `updateTask`) so the learning loop can
+ * re-settle on the next completion. `done → in-progress`/`shelved` stay illegal
+ * (reopen lands in `open`, then follows the normal machine).
  *
  * Returns true if the transition is legal. A no-op (from === to) is legal.
  */
@@ -218,7 +225,7 @@ export function assertTransition(from: TaskStatus, to: TaskStatus): boolean {
     'open': ['in-progress', 'done', 'shelved'],
     'in-progress': ['done', 'open', 'shelved'],
     'shelved': ['open'],
-    'done': [],
+    'done': ['open'],
   };
   return (allowed[from] ?? []).includes(to);
 }
@@ -519,6 +526,16 @@ export async function updateTask(rootDir: string, taskId: string, partial: Parti
     // Stamp started_at when entering in-progress for the first time.
     if (safePartial.status === 'in-progress' && !task.started_at && safePartial.started_at === undefined) {
       safePartial.started_at = new Date().toISOString();
+    }
+    // REOPEN (done → open): a re-opened task is active again, so clear the
+    // terminal/settlement stamps it carried — `completed`, the learning
+    // `settledAt`, and any reaper crash markers — so the learning loop can
+    // re-settle cleanly the next time it completes. (Symmetric two-way sync.)
+    if (task.status === 'done' && safePartial.status === 'open') {
+      safePartial.completed = undefined;
+      safePartial.settledAt = undefined;
+      safePartial.crashed_at = undefined;
+      safePartial.crash_reason = undefined;
     }
   }
 

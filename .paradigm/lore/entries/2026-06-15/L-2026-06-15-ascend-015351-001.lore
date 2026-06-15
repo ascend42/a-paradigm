@@ -1,0 +1,48 @@
+id: L-2026-06-15-ascend-015351-001
+type: milestone
+timestamp: '2026-06-15T01:53:51.662Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Two-way GitHub sync — the enforced foundation (state machine + reconcile brain + sync-layer)
+summary: 'Built the foundation for true two-way GitHub sync (Matt''s ask; he chose symmetric reopen + background poll over the conservative recommendations). This round = the enforced backend core. (1) Made done→open a legal REOPEN in the v7 state machine — reopening clears completion/settlement stamps so the learning loop re-settles. (2) Extended SyncProvider with pull()/reopen()/edit() + a provider-agnostic RemoteState (structured fields only, no free-text body → no injection); github flips to pull:true via gh issue view --json. (3) A PURE reconcile() brain: local canonical, applies only legal transitions, surfaces illegal as conflict, symmetric reopen on remote-open+local-done. (4) A sync-layer that applies plans ONLY through updateTask/completeTask/shelveTask (a pull can''t bypass enforcement) + projectTransition for outbound. +20 tests. MCP 468 / CLI 441 green. Next: wire outbound push into CLI+web verbs, POST /api/tasks/sync, CLI task sync, background poll, web strip button.'
+symbols_touched:
+  - '#task-sync'
+  - '#github-provider'
+  - '#task-loader'
+  - '#sync-provider'
+files_created:
+  - packages/paradigm-mcp/src/sync/reconcile.ts
+  - packages/paradigm-mcp/src/sync/reconcile.test.ts
+  - packages/paradigm-mcp/src/sync/sync-layer.ts
+files_modified:
+  - packages/paradigm-mcp/src/utils/task-loader.ts
+  - packages/paradigm-mcp/src/utils/task-loader.test.ts
+  - packages/paradigm-mcp/src/sync/provider.ts
+  - packages/paradigm-mcp/src/sync/providers/github.ts
+  - packages/paradigm-mcp/src/sync/providers/github.test.ts
+  - CHANGELOG.md
+learnings:
+  - 'The whole two-way design hinges on ONE invariant: a pull NEVER writes raw — it produces a plan that''s applied through the same updateTask/completeTask/shelveTask the CLI/web use, so assertTransition + settlement fire identically. The reconcile() brain is deliberately PURE (no fs/gh) so the enforcement boundary is a single, testable seam.'
+  - 'Matt chose symmetric reopen, which required relaxing the v7 ''done is terminal'' invariant (done→open now legal). The safe way to relax it: clear completed/settledAt/crash stamps on reopen so the learning loop can re-settle, rather than leaving a half-settled task. This is a real state-machine semantics change beyond GitHub — documented as such.'
+  - RemoteState reads ONLY structured gh --json fields (state/stateReason/labels/assignees), never the issue body/title-into-fields — that's the injection guard baked into the type, not a runtime check.
+verification:
+  status: pass
+  details:
+    mcp_tests: 468 passed (+20)
+    cli_tests: 441 passed
+    scope: foundation only — not yet wired to any caller
+tags:
+  - suite-renaissance
+  - arc:renaissance
+  - github-sync
+  - two-way
+  - task-sync
+linked_lore:
+  - L-2026-06-14-ascend-172217-001
+confidence: 0.9
+git_context:
+  ref: 763d7ff2d2fb4a237eabb896d0f982fe1a0b4df3
+  branch: renaissance/tasks-suite
+  dirty: true

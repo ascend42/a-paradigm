@@ -16,7 +16,7 @@ import { execFileSync } from 'child_process';
 
 import type { Task } from '../../utils/task-loader.js';
 import { log } from '../../utils/mcp-logger.js';
-import type { ExternalRef, ProviderCapabilities, PushResult, SyncProvider } from '../provider.js';
+import type { ExternalRef, ProviderCapabilities, PushResult, RemoteState, SyncProvider } from '../provider.js';
 import { registerProvider } from '../registry.js';
 import { projectClaimant } from '../claimant-projection.js';
 
@@ -61,7 +61,7 @@ export class GithubProvider implements SyncProvider {
   }
 
   capabilities(): ProviderCapabilities {
-    return { push: true, comment: true, pull: false, close: true };
+    return { push: true, comment: true, pull: true, close: true };
   }
 
   async isAvailable(): Promise<boolean> {
@@ -112,12 +112,60 @@ export class GithubProvider implements SyncProvider {
     log.component('#github-provider').info('Commented on GitHub issue', { ref: ref.ref });
   }
 
-  async close(ref: ExternalRef): Promise<void> {
+  async close(ref: ExternalRef, reason: 'completed' | 'not-planned' = 'completed'): Promise<void> {
     const repo = repoFromRef(ref.ref) ?? this.repo;
-    const args = ['issue', 'close', ref.ref];
+    const args = ['issue', 'close', ref.ref, '--reason', reason];
     if (repo) args.push('--repo', repo);
     this.run(args);
-    log.component('#github-provider').info('Closed GitHub issue', { ref: ref.ref });
+    log.component('#github-provider').info('Closed GitHub issue', { ref: ref.ref, reason });
+  }
+
+  async reopen(ref: ExternalRef): Promise<void> {
+    const repo = repoFromRef(ref.ref) ?? this.repo;
+    const args = ['issue', 'reopen', ref.ref];
+    if (repo) args.push('--repo', repo);
+    this.run(args);
+    log.component('#github-provider').info('Reopened GitHub issue', { ref: ref.ref });
+  }
+
+  /** Add/remove labels and set an assignee. Each gh edit is best-effort. */
+  async edit(ref: ExternalRef, change: { addLabels?: string[]; removeLabels?: string[]; addAssignee?: string }): Promise<void> {
+    const repo = repoFromRef(ref.ref) ?? this.repo;
+    const args = ['issue', 'edit', ref.ref];
+    for (const l of change.addLabels ?? []) args.push('--add-label', l);
+    for (const l of change.removeLabels ?? []) args.push('--remove-label', l);
+    if (change.addAssignee) args.push('--add-assignee', change.addAssignee);
+    if (args.length === 3) return; // nothing to change
+    if (repo) args.push('--repo', repo);
+    this.run(args);
+  }
+
+  /**
+   * Read the issue's reconcilable state via `gh issue view --json` (structured
+   * fields only — never the free-text body). Throw-safe at the call site.
+   */
+  async pull(ref: ExternalRef): Promise<RemoteState> {
+    const repo = repoFromRef(ref.ref) ?? this.repo;
+    const args = ['issue', 'view', ref.ref, '--json', 'state,stateReason,assignees,labels,title,url'];
+    if (repo) args.push('--repo', repo);
+    const raw = this.run(args);
+    const j = JSON.parse(raw) as {
+      state?: string; stateReason?: string;
+      assignees?: Array<{ login?: string }>; labels?: Array<{ name?: string }>;
+      title?: string; url?: string;
+    };
+    const status: RemoteState['status'] = (j.state || '').toUpperCase() === 'CLOSED' ? 'closed' : 'open';
+    const sr = (j.stateReason || '').toUpperCase();
+    const closedReason: RemoteState['closedReason'] | undefined =
+      status === 'closed' ? (sr === 'NOT_PLANNED' ? 'not-planned' : 'completed') : undefined;
+    return {
+      status,
+      closedReason,
+      assignees: (j.assignees ?? []).map(a => a.login).filter((l): l is string => !!l),
+      labels: (j.labels ?? []).map(l => l.name).filter((n): n is string => !!n),
+      title: j.title,
+      url: j.url,
+    };
   }
 
   /** Prefer a repo embedded in the task's existing anchor, else the config default. */
@@ -143,7 +191,7 @@ export class GithubProvider implements SyncProvider {
     lines.push(`Priority: ${task.priority}`);
     if (task.tags.length > 0) lines.push(`Tags: ${task.tags.join(', ')}`);
     lines.push('');
-    lines.push('— Pushed one-way by Paradigm sync (Phase 2a). Edits here do not flow back.');
+    lines.push('— Synced by Paradigm (two-way). Closing/reopening this issue flows back to the task on the next `paradigm task sync`.');
     return lines.join('\n');
   }
 }

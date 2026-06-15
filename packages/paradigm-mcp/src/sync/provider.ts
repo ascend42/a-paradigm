@@ -34,7 +34,7 @@ import type { ExternalRef } from '../utils/task-loader.js';
 export interface ProviderCapabilities {
   push: boolean;
   comment: boolean;
-  /** Always false at Phase 2a — two-way/pull is gated. */
+  /** Phase 2b: two-way is ungated — a provider with `pull:true` implements `pull()`. */
   pull: boolean;
   close: boolean;
 }
@@ -44,6 +44,27 @@ export interface PushResult {
   /** Provider-native ref, e.g. `owner/repo#123`. */
   ref: string;
   /** Canonical URL of the created item, if the provider returns one. */
+  url?: string;
+}
+
+/**
+ * Provider-agnostic snapshot of an external item's reconcilable state (Phase 2b
+ * two-way sync). Deliberately GitHub-free vocabulary — the gh-JSON mapping stays
+ * inside the provider. Only STRUCTURED fields (no free-text body) so a pull can
+ * never inject content into an enforced task field.
+ */
+export interface RemoteState {
+  /** Open vs closed on the remote. */
+  status: 'open' | 'closed';
+  /** Why it closed — distinguishes a `done` (completed) from a `shelved` (not-planned). */
+  closedReason?: 'completed' | 'not-planned';
+  /** Assignee login(s). Advisory-only inbound (a bare login can't reconstruct claimant.kind). */
+  assignees: string[];
+  /** Labels present (e.g. 'in progress', 'blocked', 'paradigm:agent/<x>'). */
+  labels: string[];
+  /** Display title — surfaced for drift messaging only, never written to a task. */
+  title?: string;
+  /** Canonical URL. */
   url?: string;
 }
 
@@ -76,4 +97,16 @@ export interface SyncProvider {
 
   /** Close/resolve an external item. Optional — gated by `capabilities().close`. */
   close?(ref: ExternalRef): Promise<void>;
+
+  /** Reopen a closed external item. Optional — gated by `capabilities().close`. */
+  reopen?(ref: ExternalRef): Promise<void>;
+
+  /** Edit structured fields (labels, assignees) on an external item. Optional. */
+  edit?(ref: ExternalRef, change: { addLabels?: string[]; removeLabels?: string[]; addAssignee?: string }): Promise<void>;
+
+  /**
+   * Read the external item's reconcilable state (Phase 2b two-way). Optional —
+   * gated by `capabilities().pull`. Best-effort/throw-safe like `isAvailable`.
+   */
+  pull?(ref: ExternalRef): Promise<RemoteState>;
 }

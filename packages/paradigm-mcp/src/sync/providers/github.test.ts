@@ -134,9 +134,45 @@ describe('GithubProvider.comment / close', () => {
 });
 
 describe('GithubProvider.capabilities', () => {
-  it('declares one-way: push/comment/close true, pull false', () => {
+  it('declares two-way (Phase 2b): push/comment/close/pull all true', () => {
     expect(new GithubProvider().capabilities()).toEqual({
-      push: true, comment: true, pull: false, close: true,
+      push: true, comment: true, pull: true, close: true,
     });
+  });
+});
+
+describe('GithubProvider two-way (Phase 2b)', () => {
+  it('close passes the reason (default completed)', async () => {
+    const run = vi.fn().mockReturnValue('');
+    await new GithubProvider({ run }).close!({ provider: 'github', ref: 'acme/widgets#7' });
+    expect(run.mock.calls[0][0]).toEqual(['issue', 'close', 'acme/widgets#7', '--reason', 'completed', '--repo', 'acme/widgets']);
+  });
+
+  it('reopen shells gh issue reopen', async () => {
+    const run = vi.fn().mockReturnValue('');
+    await new GithubProvider({ run }).reopen!({ provider: 'github', ref: 'acme/widgets#7' });
+    expect(run.mock.calls[0][0].slice(0, 3)).toEqual(['issue', 'reopen', 'acme/widgets#7']);
+  });
+
+  it('edit adds/removes labels via structured args', async () => {
+    const run = vi.fn().mockReturnValue('');
+    await new GithubProvider({ run }).edit!({ provider: 'github', ref: 'acme/widgets#7' }, { addLabels: ['blocked'], removeLabels: ['in progress'] });
+    const args = run.mock.calls[0][0] as string[];
+    expect(args).toContain('--add-label');
+    expect(args).toContain('blocked');
+    expect(args).toContain('--remove-label');
+    expect(args).toContain('in progress');
+  });
+
+  it('pull maps gh --json state/stateReason/labels into RemoteState', async () => {
+    const run = vi.fn().mockReturnValue(JSON.stringify({
+      state: 'CLOSED', stateReason: 'COMPLETED',
+      assignees: [{ login: 'octocat' }], labels: [{ name: 'blocked' }], title: 'x', url: 'u',
+    }));
+    const remote = await new GithubProvider({ run }).pull!({ provider: 'github', ref: 'acme/widgets#7' });
+    expect(remote.status).toBe('closed');
+    expect(remote.closedReason).toBe('completed');
+    expect(remote.assignees).toEqual(['octocat']);
+    expect(remote.labels).toEqual(['blocked']);
   });
 });

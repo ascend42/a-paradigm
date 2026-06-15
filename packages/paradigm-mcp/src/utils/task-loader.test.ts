@@ -345,9 +345,12 @@ describe('assertTransition', () => {
     expect(assertTransition('done', 'done')).toBe(true);
   });
 
+  it('allows done → open (REOPEN — symmetric two-way sync)', () => {
+    expect(assertTransition('done', 'open')).toBe(true);
+  });
+
   it('rejects illegal transitions', () => {
-    expect(assertTransition('done', 'open')).toBe(false); // done is terminal
-    expect(assertTransition('done', 'in-progress')).toBe(false);
+    expect(assertTransition('done', 'in-progress')).toBe(false); // reopen lands in open first
     expect(assertTransition('shelved', 'done')).toBe(false); // must reopen first
     expect(assertTransition('shelved', 'in-progress')).toBe(false);
   });
@@ -457,13 +460,19 @@ describe('round-trip create → in-progress → done', () => {
     expect(idx.total).toBe(1);
   });
 
-  it('rejects an illegal transition (done → open) with the not-found failure shape', async () => {
-    const id = await createTask(root, { blurb: 'terminal' });
+  it('reopens a done task (done → open) and clears the completion/settlement stamps', async () => {
+    const id = await createTask(root, { blurb: 'reopenable' });
     await completeTask(root, id);
-    // done → open is illegal; updateTask returns false (same as not-found).
-    expect(await updateTask(root, id, { status: 'open' })).toBe(false);
-    const task = await loadTask(root, id);
-    expect(task?.status).toBe('done'); // unchanged
+    let task = await loadTask(root, id);
+    expect(task?.status).toBe('done');
+    expect(task?.completed).toBeTruthy();
+
+    // done → open is now a legal REOPEN (symmetric two-way sync).
+    expect(await updateTask(root, id, { status: 'open' })).toBe(true);
+    task = await loadTask(root, id);
+    expect(task?.status).toBe('open');
+    expect(task?.completed).toBeUndefined(); // stamps cleared so it can re-settle
+    expect(task?.settledAt).toBeUndefined();
   });
 
   it('records DAG edges (parentTaskId / dependsOn) and roots excludes children', async () => {
