@@ -48,6 +48,17 @@ function refFromUrl(url: string): string | undefined {
   return m ? `${m[1]}#${m[2]}` : undefined;
 }
 
+/**
+ * The issue selector `gh` accepts alongside `--repo`: the bare NUMBER. `gh issue
+ * edit/close/view` reject `owner/repo#N` as the positional arg ("invalid issue
+ * format") — so extract the number from `owner/repo#N` (or a URL); fall back to
+ * the raw ref (a full URL is also accepted).
+ */
+function issueSelector(ref: string): string {
+  const m = ref.match(/#(\d+)$/) || ref.match(/\/issues\/(\d+)/);
+  return m ? m[1] : ref;
+}
+
 export class GithubProvider implements SyncProvider {
   readonly id = 'github';
   private readonly repo?: string;
@@ -106,7 +117,7 @@ export class GithubProvider implements SyncProvider {
 
   async comment(ref: ExternalRef, message: string): Promise<void> {
     const repo = repoFromRef(ref.ref) ?? this.repo;
-    const args = ['issue', 'comment', ref.ref, '--body', message];
+    const args = ['issue', 'comment', issueSelector(ref.ref), '--body', message];
     if (repo) args.push('--repo', repo);
     this.run(args);
     log.component('#github-provider').info('Commented on GitHub issue', { ref: ref.ref });
@@ -114,7 +125,7 @@ export class GithubProvider implements SyncProvider {
 
   async close(ref: ExternalRef, reason: 'completed' | 'not-planned' = 'completed'): Promise<void> {
     const repo = repoFromRef(ref.ref) ?? this.repo;
-    const args = ['issue', 'close', ref.ref, '--reason', reason];
+    const args = ['issue', 'close', issueSelector(ref.ref), '--reason', reason];
     if (repo) args.push('--repo', repo);
     this.run(args);
     log.component('#github-provider').info('Closed GitHub issue', { ref: ref.ref, reason });
@@ -122,7 +133,7 @@ export class GithubProvider implements SyncProvider {
 
   async reopen(ref: ExternalRef): Promise<void> {
     const repo = repoFromRef(ref.ref) ?? this.repo;
-    const args = ['issue', 'reopen', ref.ref];
+    const args = ['issue', 'reopen', issueSelector(ref.ref)];
     if (repo) args.push('--repo', repo);
     this.run(args);
     log.component('#github-provider').info('Reopened GitHub issue', { ref: ref.ref });
@@ -131,7 +142,7 @@ export class GithubProvider implements SyncProvider {
   /** Add/remove labels and set an assignee. Each gh edit is best-effort. */
   async edit(ref: ExternalRef, change: { addLabels?: string[]; removeLabels?: string[]; addAssignee?: string }): Promise<void> {
     const repo = repoFromRef(ref.ref) ?? this.repo;
-    const args = ['issue', 'edit', ref.ref];
+    const args = ['issue', 'edit', issueSelector(ref.ref)];
     for (const l of change.addLabels ?? []) args.push('--add-label', l);
     for (const l of change.removeLabels ?? []) args.push('--remove-label', l);
     if (change.addAssignee) args.push('--add-assignee', change.addAssignee);
@@ -146,7 +157,7 @@ export class GithubProvider implements SyncProvider {
    */
   async pull(ref: ExternalRef): Promise<RemoteState> {
     const repo = repoFromRef(ref.ref) ?? this.repo;
-    const args = ['issue', 'view', ref.ref, '--json', 'state,stateReason,assignees,labels,title,url'];
+    const args = ['issue', 'view', issueSelector(ref.ref), '--json', 'state,stateReason,assignees,labels,title,url'];
     if (repo) args.push('--repo', repo);
     const raw = this.run(args);
     const j = JSON.parse(raw) as {

@@ -14,8 +14,10 @@
  */
 
 import { execSync } from 'child_process';
+import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import * as yaml from 'js-yaml';
 
 import {
   createTask,
@@ -736,8 +738,6 @@ interface PushOptions extends CommonOptions {
  */
 function readSyncConfig(rootDir: string): { provider?: string; repo?: string } {
   try {
-    const fs = require('fs') as typeof import('fs');
-    const yaml = require('js-yaml') as typeof import('js-yaml');
     const cfgPath = path.join(rootDir, '.paradigm', 'config.yaml');
     if (!fs.existsSync(cfgPath)) return {};
     const cfg = yaml.load(fs.readFileSync(cfgPath, 'utf8')) as { sync?: { provider?: string; github?: { repo?: string } } } | undefined;

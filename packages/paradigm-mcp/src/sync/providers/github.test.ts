@@ -119,7 +119,7 @@ describe('GithubProvider.comment / close', () => {
     const provider = new GithubProvider({ run });
     await provider.comment({ provider: 'github', ref: 'acme/widgets#7' }, 'hello');
     const args = run.mock.calls[0][0] as string[];
-    expect(args.slice(0, 3)).toEqual(['issue', 'comment', 'acme/widgets#7']);
+    expect(args.slice(0, 3)).toEqual(['issue', 'comment', '7']);
     expect(args[args.indexOf('--body') + 1]).toBe('hello');
     expect(args[args.indexOf('--repo') + 1]).toBe('acme/widgets');
   });
@@ -129,7 +129,7 @@ describe('GithubProvider.comment / close', () => {
     const provider = new GithubProvider({ run });
     await provider.close!({ provider: 'github', ref: 'acme/widgets#7' });
     const args = run.mock.calls[0][0] as string[];
-    expect(args.slice(0, 3)).toEqual(['issue', 'close', 'acme/widgets#7']);
+    expect(args.slice(0, 3)).toEqual(['issue', 'close', '7']);
   });
 });
 
@@ -145,13 +145,13 @@ describe('GithubProvider two-way (Phase 2b)', () => {
   it('close passes the reason (default completed)', async () => {
     const run = vi.fn().mockReturnValue('');
     await new GithubProvider({ run }).close!({ provider: 'github', ref: 'acme/widgets#7' });
-    expect(run.mock.calls[0][0]).toEqual(['issue', 'close', 'acme/widgets#7', '--reason', 'completed', '--repo', 'acme/widgets']);
+    expect(run.mock.calls[0][0]).toEqual(['issue', 'close', '7', '--reason', 'completed', '--repo', 'acme/widgets']);
   });
 
   it('reopen shells gh issue reopen', async () => {
     const run = vi.fn().mockReturnValue('');
     await new GithubProvider({ run }).reopen!({ provider: 'github', ref: 'acme/widgets#7' });
-    expect(run.mock.calls[0][0].slice(0, 3)).toEqual(['issue', 'reopen', 'acme/widgets#7']);
+    expect(run.mock.calls[0][0].slice(0, 3)).toEqual(['issue', 'reopen', '7']);
   });
 
   it('edit adds/removes labels via structured args', async () => {
