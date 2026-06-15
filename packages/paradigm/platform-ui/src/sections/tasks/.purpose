@@ -1,7 +1,21 @@
 version: 2.0.0
 components:
   TasksSection:
-    description: Tasks section shell in Platform UI — header band (title + live "{n} open · {n} in-flight · {n} unclaimed" stat off board.summary) and a Board|List|Inbox ViewSwitcher. Defaults to Board; renders the CalibrationStrip + FilterBar above the BoardView (Board tab only), the ListView for List, and an Inbox placeholder. 10s section-guarded poll drives fetchTasks + fetchBoard + fetchCalibration. Also subscribes to the `tasks-ws` CustomEvent (forwarded from the central WS hub useAgentEffects, which relays tasks:* server broadcasts) — on tasks:synced / tasks:sync-conflict (emitted by the background GitHub poll OR the manual Sync endpoint) it refreshes fetchBoard()+fetchTasks()(+inbox) so poll-driven reconciliations appear live without a user click.
+    description: >-
+      Tasks section shell in Platform UI — header band (title + live
+      "{n} open · {n} in-flight · {n} unclaimed" stat off board.summary) and a
+      Board|List|Inbox ViewSwitcher. Defaults to Board. The Board renders a
+      four-tab sub-tab bar (BoardTabs: State | Claimant | Symbol/Flow |
+      Calibration, State default). The three lane tabs render the FilterBar +
+      BoardView (grouped by boardTab) with the lanes filling full viewport
+      height; the Calibration tab renders the full-area calibration grid
+      (CalibrationStrip variant='tab') with NO FilterBar and NO lanes. List
+      renders the ListView; Inbox the InboxView. 10s section-guarded poll drives
+      fetchTasks + fetchBoard + fetchCalibration. Also subscribes to the
+      `tasks-ws` CustomEvent (forwarded from the central WS hub useAgentEffects,
+      which relays tasks:* server broadcasts) — on tasks:synced /
+      tasks:sync-conflict it refreshes fetchBoard()+fetchTasks()(+inbox) so
+      poll-driven reconciliations appear live without a user click.
     type: view
     tags: [feature, tasks, platform]
   ListView:
@@ -19,8 +33,12 @@ components:
   tasksStore:
     description: >-
       Zustand store for the Tasks section (mirrors loreStore). Holds list, board,
-      calibration, inbox, detail, filter, laneMode and dep-cache state, each fetch
-      with its own AbortController; default view is board. Read fetches hit the
+      calibration, inbox, detail, filter, boardTab and dep-cache state, each fetch
+      with its own AbortController; default view is board. boardTab is the Board's
+      sub-tab ('state' default | 'claimant' | 'symbol' | 'calibration'), persisted
+      to localStorage key paradigm.tasks.boardTab with graceful migration from the
+      legacy paradigm.tasks.laneMode key; setBoardTab updates it. BoardView derives
+      its laneMode from boardTab for the three lane tabs. Read fetches hit the
       /api/tasks read routes; Task/BoardNode/BoardUnclaimed carry the computed
       estimate + taskType. The UI's ONLY write verbs live here — claimTask,
       startTask, doneTask, blockTask, unblockTask all POST the enforced
@@ -45,7 +63,20 @@ components:
     type: util
     tags: [feature, tasks, platform, board]
   BoardView:
-    description: Horizontally-scrollable row of SwimLanes off /api/tasks/board. laneMode='claimant' (default) = one lane per claimant.ref + trailing Unclaimed lane (board.unclaimed, hidden entirely when 0 cards so an empty orange "alert" lane never reads as a problem where there's just no backlog) + collapsed Done lane; 'state' = open/in-progress/done/shelved kanban; 'symbol' = grouped by each card's first derived symbol. Honors store status/priority/search + calibrationFilter — the cell filter matches the task's real taskType field against the cell column and the claimant's resolved archetype (claimantArchetype) against the cell row; a 0-match cell click shows a specific "No {taskType} tasks claimed by {archetype} yet" empty state. Renders the BoardHealth advisory banner at the top (below the toolbar, above the lanes) — it self-hides when the board carries no governance detections.
+    description: >-
+      Horizontally-scrollable row of SwimLanes off /api/tasks/board, filling full
+      viewport height (each lane's card column scrolls internally). The lane mode
+      is derived from the active board sub-tab (boardTab): laneMode='state' (the
+      default tab) = open/in-progress/done/shelved kanban; 'claimant' = one lane
+      per claimant.ref + trailing Unclaimed lane (hidden entirely when 0 cards) +
+      collapsed Done lane; 'symbol' = grouped by each card's first derived symbol.
+      Honors store status/priority/search + calibrationFilter — the cell filter
+      matches the task's real taskType field against the cell column and the
+      claimant's resolved archetype against the cell row; a 0-match cell click
+      shows a specific "No {taskType} tasks claimed by {archetype} yet" empty
+      state. Renders the BoardHealth advisory banner above the lanes — it
+      self-hides when the board carries no governance detections. The lane sub-tab
+      bar lives in TasksSection (BoardTabs), not here.
     type: view
     tags: [feature, tasks, platform, board]
   BoardHealth:
@@ -65,8 +96,12 @@ components:
     description: Single vertical board lane — colored header (label + presence dot + card count + SUMMED story points) using AGENT_COLORS, a scrollable column of TaskCards sorted in-progress-first then priority-desc, collapsible via chevron with per-lane localStorage persistence.
     type: component
     tags: [feature, tasks, platform, board]
-  LaneModeToggle:
-    description: Segmented pill (Claimant | State | Symbol/Flow) that sets store.laneMode.
+  BoardTabs:
+    description: >-
+      The Board's sub-tab bar — four tabs in order State | Claimant | Symbol/Flow
+      | Calibration (State is the default), styled with the shared segmented
+      .view-tab idiom. Active tab = store.boardTab; clicking sets boardTab via
+      setBoardTab. Replaces the old LaneModeToggle pill.
     type: component
     tags: [feature, tasks, platform, board]
   FilterBar:
@@ -74,11 +109,22 @@ components:
     type: component
     tags: [feature, tasks, platform]
   CalibrationStrip:
-    description: Default-ON collapsible hero strip ABOVE the board (not a tab) off /api/tasks/calibration. Leads with a coverage StatCard ("{pct}% calibrated cells · {graduated} of {total} graduated") + a "learning in progress" badge on full cold-start, then the CellGrid. On cold-start the body also leads with a CTA naming the command that produces calibration ("Run `paradigm calibrate` after orchestration runs to graduate cells…") so the strip reads as a path out of cold-start. Collapse state persisted to localStorage — but when COLLAPSED the header still shows a one-line summary ("{pct}% · {graduated}/{total} cells learned") so the moat stays glanceable for returning users, and on full cold-start (graduated===0) the strip force-expands regardless of stored collapse state so the differentiated artifact never starts hidden on an uncalibrated project.
+    description: >-
+      The calibration moat surface off /api/tasks/calibration, with two rendering
+      modes via a variant prop. variant='tab' (the Calibration sub-tab, current
+      usage): a coverage header ("{pct}% calibrated cells · {graduated} of {total}
+      graduated") + the full CellGrid filling the available height (scrolls when
+      tall), with no collapse chrome; on cold-start it shows a "learning in
+      progress" badge + the "Run `paradigm calibrate`…" CTA. Clicking a cell sets
+      the calibrationFilter AND switches boardTab to 'state' so the filtered lanes
+      show. variant='strip' (legacy) is the default-ON collapsible hero strip
+      above the board — coverage StatCard + CellGrid, collapse persisted to
+      localStorage with a glanceable collapsed summary, force-expanded on full
+      cold-start so the differentiated artifact never starts hidden.
     type: component
     tags: [feature, tasks, platform, moat]
   CellGrid:
-    description: Calibration matrix — archetype rows × taskType columns. Learned cells render solid + agent-color tint + a ● dot + compact band ("3–13" n24); PRIOR cells encode progress-to-graduation (a cell graduates at n>=8) as a live ramp — fill width + cell opacity + border tint ramp by min(n,8)/8 toward the archetype color, and an in-cell "{n}/8" tick reads the sample count directly, so a cell accumulating actuals (n=5) looks visibly closer to graduating than an empty one (n=0). The grid answers "where is the team about to learn something," not just "nothing yet." Clicking a cell toggles the store calibrationFilter that BoardView honors and FilterBar surfaces as a chip.
+    description: Calibration matrix — archetype rows × taskType columns. Learned cells render solid + agent-color tint + a ● dot + compact band ("3–13" n24); PRIOR cells encode progress-to-graduation (a cell graduates at n>=8) as a live ramp — fill width + cell opacity + border tint ramp by min(n,8)/8 toward the archetype color, and an in-cell "{n}/8" tick reads the sample count directly, so a cell accumulating actuals (n=5) looks visibly closer to graduating than an empty one (n=0). The grid answers "where is the team about to learn something," not just "nothing yet." Clicking a cell toggles the store calibrationFilter that BoardView honors and FilterBar surfaces as a chip; an optional onCellSelect callback fires when a cell is selected (used by the Calibration tab to switch back to the State lanes).
     type: component
     tags: [feature, tasks, platform, moat]
   InboxView:

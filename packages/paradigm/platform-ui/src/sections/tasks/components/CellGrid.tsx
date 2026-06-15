@@ -27,10 +27,12 @@ function Cell({
   archetype,
   taskType,
   cell,
+  onSelect,
 }: {
   archetype: string;
   taskType: string;
   cell: CalibrationCell | undefined;
+  onSelect?: () => void;
 }) {
   const calibrationFilter = useTasksStore((s) => s.calibrationFilter);
   const setCalibrationFilter = useTasksStore((s) => s.setCalibrationFilter);
@@ -43,8 +45,14 @@ function Cell({
   const color = claimantColor(archetype);
 
   const onClick = () => {
-    if (active) setCalibrationFilter(null);
-    else setCalibrationFilter({ archetype, taskType });
+    if (active) {
+      setCalibrationFilter(null);
+    } else {
+      setCalibrationFilter({ archetype, taskType });
+      // From the Calibration tab, picking a cell should drop the user back onto
+      // the filtered lanes (State tab) so the result of the filter is visible.
+      onSelect?.();
+    }
   };
 
   if (!cell) {
@@ -96,7 +104,7 @@ function Cell({
   );
 }
 
-export function CellGrid() {
+export function CellGrid({ onCellSelect }: { onCellSelect?: () => void } = {}) {
   const calibration = useTasksStore((s) => s.calibration);
 
   if (!calibration) {
@@ -141,6 +149,7 @@ export function CellGrid() {
                   archetype={arch}
                   taskType={tt}
                   cell={cells[arch]?.[tt]}
+                  onSelect={onCellSelect}
                 />
               ))}
             </tr>

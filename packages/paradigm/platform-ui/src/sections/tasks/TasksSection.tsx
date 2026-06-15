@@ -3,6 +3,7 @@ import { useTasksStore, type TaskView } from './store/tasksStore';
 import { usePlatformStore } from '../../store/platformStore';
 import { ListView } from './components/ListView';
 import { BoardView } from './components/BoardView';
+import { BoardTabs } from './components/BoardTabs';
 import { CalibrationStrip } from './components/CalibrationStrip';
 import { FilterBar } from './components/FilterBar';
 import { InboxView } from './components/InboxView';
@@ -19,6 +20,7 @@ const VIEWS: { mode: TaskView; label: string }[] = [
 export default function TasksSection() {
   const view = useTasksStore((s) => s.view);
   const setView = useTasksStore((s) => s.setView);
+  const boardTab = useTasksStore((s) => s.boardTab);
   const board = useTasksStore((s) => s.board);
   const fetchTasks = useTasksStore((s) => s.fetchTasks);
   const fetchBoard = useTasksStore((s) => s.fetchBoard);
@@ -90,15 +92,20 @@ export default function TasksSection() {
       </div>
 
       {view === 'board' && (
-        <div className="tasks__board-controls">
-          <CalibrationStrip />
-          <FilterBar />
+        <div className="tasks__board-tabs">
+          <BoardTabs />
         </div>
       )}
 
+      {/* FilterBar only on the lane sub-tabs — hidden on the Calibration tab. */}
+      {view === 'board' && boardTab !== 'calibration' && <FilterBar />}
+
       <main className={`tasks__main ${view === 'board' ? 'tasks__main--board' : ''}`}>
         {view === 'list' && <ListView />}
-        {view === 'board' && <BoardView />}
+        {view === 'board' && boardTab === 'calibration' && (
+          <CalibrationStrip variant="tab" />
+        )}
+        {view === 'board' && boardTab !== 'calibration' && <BoardView />}
         {view === 'inbox' && <InboxView />}
       </main>
 

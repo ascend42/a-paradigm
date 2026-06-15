@@ -190,7 +190,12 @@ export interface CalibrationData {
 }
 
 // ── Lanes + filters ──────────────────────────────────
+// laneMode = how BoardView groups its lanes. boardTab is the Board's sub-tab
+// (the lane modes + a dedicated Calibration tab). When boardTab is one of the
+// lane modes BoardView derives laneMode = boardTab; Calibration replaces the
+// lanes entirely with the calibration grid.
 export type LaneMode = 'claimant' | 'state' | 'symbol';
+export type BoardTab = 'state' | 'claimant' | 'symbol' | 'calibration';
 
 export interface TaskFilter {
   status?: TaskStatus | '';
@@ -203,16 +208,20 @@ export interface CalibrationFilter {
   taskType: string;
 }
 
-const LANE_MODE_KEY = 'paradigm.tasks.laneMode';
+const BOARD_TAB_KEY = 'paradigm.tasks.boardTab';
+const LEGACY_LANE_MODE_KEY = 'paradigm.tasks.laneMode';
 
-function loadLaneMode(): LaneMode {
+function loadBoardTab(): BoardTab {
   try {
-    const v = localStorage.getItem(LANE_MODE_KEY);
-    if (v === 'claimant' || v === 'state' || v === 'symbol') return v;
+    const v = localStorage.getItem(BOARD_TAB_KEY);
+    if (v === 'state' || v === 'claimant' || v === 'symbol' || v === 'calibration') return v;
+    // Graceful migration from the old laneMode key (no 'calibration' value there).
+    const legacy = localStorage.getItem(LEGACY_LANE_MODE_KEY);
+    if (legacy === 'claimant' || legacy === 'state' || legacy === 'symbol') return legacy;
   } catch {
     /* localStorage unavailable */
   }
-  return 'claimant';
+  return 'state';
 }
 
 interface TasksState {
@@ -257,15 +266,15 @@ interface TasksState {
   syncing: boolean;
   lastSyncSummary: SyncResult | null;
 
-  // Lane mode (persisted)
-  laneMode: LaneMode;
+  // Board sub-tab (persisted) — drives lane grouping + the Calibration tab.
+  boardTab: BoardTab;
 
   // Filters
   filter: TaskFilter;
   calibrationFilter: CalibrationFilter | null;
 
   setView: (view: TaskView) => void;
-  setLaneMode: (mode: LaneMode) => void;
+  setBoardTab: (tab: BoardTab) => void;
   setFilter: (patch: Partial<TaskFilter>) => void;
   clearFilters: () => void;
   setCalibrationFilter: (f: CalibrationFilter | null) => void;
@@ -339,20 +348,20 @@ export const useTasksStore = create<TasksState>((set, get) => ({
   syncing: false,
   lastSyncSummary: null,
 
-  laneMode: loadLaneMode(),
+  boardTab: loadBoardTab(),
 
   filter: { status: '', priority: '', search: '' },
   calibrationFilter: null,
 
   setView: (view) => set({ view }),
 
-  setLaneMode: (mode) => {
+  setBoardTab: (tab) => {
     try {
-      localStorage.setItem(LANE_MODE_KEY, mode);
+      localStorage.setItem(BOARD_TAB_KEY, tab);
     } catch {
       /* ignore */
     }
-    set({ laneMode: mode });
+    set({ boardTab: tab });
   },
 
   setFilter: (patch) => set((s) => ({ filter: { ...s.filter, ...patch } })),

@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-06-15T03:39:56.275Z'
+generated: '2026-06-15T17:07:17.776Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -19823,8 +19823,7 @@ by_symbol:
         description: 'feat(#captain-board): stale archetype-claim surfacing (T-010)'
       - *ref_275
       - *ref_276
-      - &ref_295
-        id: h0437
+      - id: h0437
         ts: '2026-06-14T17:00:28Z'
         type: implement
         symbols:
@@ -20202,7 +20201,7 @@ by_symbol:
           - packages/paradigm/src/platform-server/ws/index.ts
         description: 'feat(#serve): split the WS firehose into channels (T-001, closes #19)'
       - *ref_285
-      - &ref_296
+      - &ref_295
         id: h0446
         ts: '2026-06-15T01:58:54Z'
         type: implement
@@ -20367,11 +20366,31 @@ by_symbol:
       agent: []
   '#tasks-section':
     symbol: '#tasks-section'
-    total_changes: 10
-    last_modified: '2026-06-15T03:39:55Z'
+    total_changes: 11
+    last_modified: '2026-06-15T17:07:16Z'
     stability_score: 1
     fragility: low
     recent:
+      - id: h0451
+        ts: '2026-06-15T17:07:16Z'
+        type: implement
+        symbols:
+          - '#tasks-section'
+        author:
+          type: human
+          id: ascend
+        commit: 54c93298d8b0ada22c20770921e6daa5d79e023c
+        intent: fix
+        files:
+          - .paradigm/.solo-declared
+          - .paradigm/events/team-funnel.jsonl
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - packages/paradigm/.paradigm/.team-prompted
+          - packages/paradigm/.paradigm/events/compliance-history.jsonl
+          - packages/paradigm/.paradigm/events/team-funnel.jsonl
+          - packages/paradigm/platform-ui/src/sections/tasks/styles/tasks.css
+        description: 'fix(#tasks-section): full-height swim-lane board (min-height:0 flex chain)'
       - id: h0450
         ts: '2026-06-15T03:39:55Z'
         type: implement
@@ -20391,7 +20410,6 @@ by_symbol:
       - *ref_285
       - *ref_293
       - *ref_294
-      - *ref_295
     contributors:
       human:
         - ascend
@@ -20405,7 +20423,7 @@ by_symbol:
     recent:
       - *ref_284
       - *ref_285
-      - *ref_296
+      - *ref_295
       - *ref_286
     contributors:
       human:

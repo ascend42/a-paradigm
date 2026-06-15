@@ -1,7 +1,6 @@
 import React, { useMemo } from 'react';
-import { useTasksStore, type Task, type TaskStatus } from '../store/tasksStore';
+import { useTasksStore, type LaneMode, type Task, type TaskStatus } from '../store/tasksStore';
 import { SwimLane } from './SwimLane';
-import { LaneModeToggle } from './LaneModeToggle';
 import { BoardHealth } from './BoardHealth';
 import {
   AGENT_COLORS,
@@ -14,9 +13,10 @@ import {
 } from '../utils/board';
 
 // BoardView — a horizontally-scrollable row of SwimLanes built from
-// /api/tasks/board. Three lane modes (claimant / state / symbol) regroup the
-// SAME underlying card set. Store filters (status/priority/search +
-// calibration cell) are applied to the cards shown in every mode.
+// /api/tasks/board. Three lane modes (state / claimant / symbol) regroup the
+// SAME underlying card set; the mode is derived from the active board sub-tab.
+// Store filters (status/priority/search + calibration cell) are applied to the
+// cards shown in every mode.
 
 interface Lane {
   key: string;
@@ -47,7 +47,11 @@ export function BoardView() {
   const board = useTasksStore((s) => s.board);
   const loading = useTasksStore((s) => s.boardLoading);
   const error = useTasksStore((s) => s.boardError);
-  const laneMode = useTasksStore((s) => s.laneMode);
+  // BoardView only renders under the lane sub-tabs (state/claimant/symbol); the
+  // Calibration tab is rendered separately by TasksSection. Derive the lane mode
+  // from boardTab, defaulting to 'state' if (defensively) boardTab is calibration.
+  const boardTab = useTasksStore((s) => s.boardTab);
+  const laneMode: LaneMode = boardTab === 'calibration' ? 'state' : boardTab;
   const filter = useTasksStore((s) => s.filter);
   const calibrationFilter = useTasksStore((s) => s.calibrationFilter);
 
@@ -168,10 +172,6 @@ export function BoardView() {
 
   return (
     <div className="board">
-      <div className="board__toolbar">
-        <LaneModeToggle />
-      </div>
-
       {/* Advisory governance banner — self-hides when the board is healthy. */}
       <BoardHealth />
 

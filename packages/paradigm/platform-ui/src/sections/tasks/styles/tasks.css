@@ -330,9 +330,16 @@
   overflow: hidden;
 }
 
-/* Strip + filter sit between the header and the scrolling board. */
-.tasks__board-controls {
+/* Board sub-tab bar — a fixed-height row between the section header and the
+   board area. The board/lanes (or the Calibration grid) fill the rest. */
+.tasks__board-tabs {
+  flex: 0 0 auto;
+  padding: 10px 16px;
   border-bottom: 1px solid var(--p-border);
+}
+
+.board-tabs {
+  display: inline-flex;
 }
 
 /* ── View switcher (shared idiom) ──────────────────── */
@@ -373,14 +380,6 @@
   min-height: 0;
 }
 
-.board__toolbar {
-  padding: 10px 16px;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  border-bottom: 1px solid var(--p-border);
-}
-
 .board__lanes {
   flex: 1;
   min-height: 0;
@@ -390,38 +389,6 @@
   overflow-x: auto;
   overflow-y: hidden;
   align-items: stretch;
-}
-
-/* ── Lane mode toggle (segmented pill) ─────────────── */
-.lane-mode-toggle {
-  display: inline-flex;
-  gap: 2px;
-  background: var(--p-bg-primary);
-  border: 1px solid var(--p-border);
-  border-radius: 14px;
-  padding: 2px;
-}
-
-.lane-mode-pill {
-  padding: 4px 12px;
-  border: none;
-  background: none;
-  color: var(--p-text-secondary);
-  font-size: 11px;
-  border-radius: 12px;
-  cursor: pointer;
-  transition: all 0.15s;
-  white-space: nowrap;
-}
-
-.lane-mode-pill:hover {
-  color: var(--p-text-primary);
-}
-
-.lane-mode-pill.active {
-  background: var(--p-bg-card);
-  color: var(--p-text-primary);
-  box-shadow: inset 0 0 0 1px var(--p-border-active);
 }
 
 /* ── SwimLane ──────────────────────────────────────── */
@@ -525,8 +492,12 @@
 }
 
 /* ── Tasks filter bar (extends shared .filter-bar) ─── */
+/* Sits as a fixed-height row between the board sub-tabs and the scrolling
+   lanes (lane sub-tabs only — hidden on the Calibration tab). */
 .tasks-filter-bar {
+  flex: 0 0 auto;
   padding: 10px 16px;
+  border-bottom: 1px solid var(--p-border);
 }
 
 .calib-chip {
@@ -660,6 +631,58 @@
   border-radius: 4px;
   color: var(--p-accent-amber);
   background: color-mix(in srgb, var(--p-accent-amber) 12%, transparent);
+}
+
+/* ── Calibration tab (full-area variant) ───────────── */
+/* Fills the board main; coverage header is fixed-height, the grid scrolls. */
+.calib-tab {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  height: 100%;
+  padding: 16px;
+  gap: 12px;
+}
+
+.calib-tab__header {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.calib-tab__stat {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+}
+
+.calib-tab__pct {
+  font-size: 22px;
+  font-weight: 700;
+  color: var(--p-accent-green);
+  font-variant-numeric: tabular-nums;
+}
+
+.calib-tab--cold .calib-tab__pct {
+  color: var(--p-text-secondary);
+}
+
+.calib-tab__stat-label {
+  font-size: 12px;
+  color: var(--p-text-secondary);
+}
+
+.calib-tab .calib-strip__cta {
+  flex: 0 0 auto;
+}
+
+/* The grid fills the rest of the tab and scrolls within when tall. */
+.calib-tab__grid {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
 }
 
 /* ── Cell Grid ─────────────────────────────────────── */
