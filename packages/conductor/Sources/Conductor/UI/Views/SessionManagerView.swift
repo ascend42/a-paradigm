@@ -76,7 +76,7 @@ struct SessionManagerView: View {
                         }
                     }
                 }
-                .frame(maxHeight: 400)
+                .frame(maxHeight: .infinity)
             }
         }
         .sheet(isPresented: $showLaunchSheet) {

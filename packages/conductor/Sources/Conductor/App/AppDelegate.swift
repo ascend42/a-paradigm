@@ -332,6 +332,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let appMenu = NSMenu()
         appMenu.addItem(withTitle: "About Conductor", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
         appMenu.addItem(.separator())
+        let atriumMainItem = NSMenuItem(title: "Open ATRIUM Spike…", action: #selector(openAtriumSpike), keyEquivalent: "a")
+        atriumMainItem.keyEquivalentModifierMask = [.command, .shift]
+        appMenu.addItem(atriumMainItem)
+        appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Quit Conductor", action: #selector(quitApp), keyEquivalent: "q")
         appMenuItem.submenu = appMenu
         mainMenu.addItem(appMenuItem)
