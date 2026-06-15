@@ -275,3 +275,8 @@ components:
     description: Symbol architecture loader — reads and resolves project symbol graph for arch tools. Provides structured access to component hierarchy, flows, gates, and signals for the Atlas cartographer agent.
     file: packages/paradigm-mcp/src/utils/arch-loader.ts
     type: loader
+  calibration-aggregate:
+    description: 'Calibration aggregation (#calibration, T-011) — the MCP-side learned-table rebuild that both `paradigm calibrate` and the settlement chain call (aggregate-on-settle). aggregateActuals(lines) groups estimate-actuals by (archetype, taskType) into p10/p90 bands at n>=8; rebuildLearnedTable(rootDir) reads the actuals and writes token-estimates.json (best-effort, idempotent). Extracted from the CLI so the MCP settlement chain can close the calibration loop without importing the CLI package.'
+    file: packages/paradigm-mcp/src/utils/calibration-aggregate.ts
+    type: utility
+    tags: [feature, calibration, learning-loop]

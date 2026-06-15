@@ -1,32 +1,45 @@
 version: 2.0.0
 description: |
-  Provider-agnostic task sync seam (Phase 2a, TD-2026-06-13-768). The THIN,
-  agnostic-READY / GitHub-only-IMPLEMENTED foundation for pushing local tasks
-  out to an external tracker.
+  Provider-agnostic task sync seam. TWO-WAY as of Phase 2b: local tasks project
+  OUT to an external tracker AND remote changes reconcile BACK — but only
+  through the enforced task state machine.
 
   HARD TENETS: fully-local-first (sync is a purely additive opt-in overlay; the
   core task-loader NEVER imports a concrete provider — only the SyncProvider
   interface type + a registry lookup; a missing/failed/un-authed provider never
-  degrades local CRUD). ONE-WAY (outbound) only — `pull()` is STRUCTURALLY
-  ABSENT from the interface (two-way is gated to a later phase, cannot be
-  half-built). `link` is NOT a provider method — linking is a pure local write
-  (updateTask with external_ref); providers create items, the loader records
-  links.
+  degrades local CRUD). The local YAML store is CANONICAL — on conflict, local
+  wins; a remote change applies ONLY when the implied transition is legal
+  (assertTransition), else it surfaces as a conflict, never forced. A pull
+  NEVER writes raw: reconcile() produces a pure plan, sync-layer applies it
+  exclusively via updateTask/completeTask/shelveTask, so enforcement + settlement
+  fire identically. `link` is NOT a provider method — linking is a pure local
+  write (updateTask with external_ref).
 
   provider.ts defines SyncProvider / ProviderCapabilities / PushResult /
-  ExternalRef. registry.ts is an id→factory map (getProvider→undefined ⇒
-  local-only). claimant-projection.ts is Loid's outbound rule (human→assignee;
-  archetype/peer→unassigned + typed marker label, never falsely assigned to a
-  human). providers/github.ts is the only implemented provider: `gh` CLI
-  shell-out, auth via `gh auth status`, self-registers on module load.
+  RemoteState / ExternalRef (pull/reopen/edit are optional, gated by
+  capabilities). registry.ts is an id→factory map. claimant-projection.ts is
+  Loid's outbound rule (human→assignee; archetype/peer→unassigned + marker
+  label). providers/github.ts is the only implemented provider (two-way via
+  `gh` CLI). reconcile.ts is the pure inbound brain. sync-layer.ts is the
+  executor (outbound projectTransition + inbound apply-through-enforced-writers).
 components:
   sync-provider:
-    description: Provider-agnostic outbound task-sync seam — SyncProvider interface, id→factory registry, and Loid's claimant projection (no pull/two-way)
+    description: Provider-agnostic two-way task-sync seam — SyncProvider interface (push/comment/close/reopen/edit/pull), RemoteState, id→factory registry, Loid's claimant projection
     type: service
     file: provider.ts
     tags: [feature, task-management, sync]
   github-provider:
-    description: GitHub SyncProvider — gh-CLI shell-out for issue create/comment/close, auth via `gh auth status`, claimant-projection label encoding; self-registers on load
+    description: GitHub SyncProvider (two-way) — gh-CLI shell-out for issue create/comment/close/reopen/edit + pull via `gh issue view --json`; auth via `gh auth status`; self-registers on load
     type: service
     file: providers/github.ts
     tags: [feature, task-management, sync, github]
+  task-reconcile:
+    description: Pure inbound reconcile brain — compares a local task vs RemoteState and emits a plan (agree/apply/conflict); local canonical, only legal transitions apply, symmetric reopen on remote-open+local-done. No fs/network.
+    type: utility
+    file: reconcile.ts
+    tags: [feature, task-management, sync, task-sync]
+  sync-layer:
+    description: Two-way sync executor — projectTransition (best-effort outbound push of a transition) + syncTask/syncAllLinked (inbound pull→reconcile→apply ONLY through the enforced updateTask/completeTask/shelveTask writers)
+    type: service
+    file: sync-layer.ts
+    tags: [feature, task-management, sync, task-sync]

@@ -17,7 +17,19 @@ components:
     type: component
     tags: [feature, tasks, platform, moat]
   tasksStore:
-    description: Zustand store mirroring loreStore's idiom. Task/BoardNode/BoardUnclaimed now carry an optional taskType (feature|bugfix|refactor|… — the calibration band's task type, paired with the claimant archetype to name the producing cell). List state {tasks, loading, error, view} (intact from Round B) plus Round C board state {board, boardLoading, boardError} via fetchBoard() (GET /api/tasks/board), calibration state {calibration, calibrationLoading} via fetchCalibration() (GET /api/tasks/calibration), laneMode('claimant'|'state'|'symbol') persisted to localStorage, filter {status,priority,search} + calibrationFilter {archetype,taskType} with setters. Round D adds inbox state {whoami (cached human claimant), inboxClaimant, inboxTasks, inboxLoading, inboxError} via fetchWhoami() (GET /api/tasks/whoami, cached) + fetchInbox(kind, ref) (GET /api/tasks/inbox?kind=&ref=) + setInboxClaimant(), and detail state {selectedTaskId} via openDetail(id)/closeDetail(). depCache (id → Task|null) + resolveDep(id) lazily fetch a single task by id (GET /api/tasks/:id) for cross-run DependsChain resolution, deduping cached + in-flight fetches and caching null on a 404. unclaimedToTask now maps the board's proposedClaimant onto the task's proposedClaimant field (NOT claimant — unclaimed means no real claim) so the card can hint Cid's suggested owner distinctly; matchesFilter() search also covers proposedClaimant.ref. Each fetch has its own AbortController. Default view is 'board'. Round E adds the ONLY write verbs in the UI — claimTask(id, ref, kind?, force?), startTask(id), doneTask(id), blockTask(id, reason), unblockTask(id) — each POSTing the enforced /api/tasks/:id/{claim,start,done,block,unblock} endpoint (which proxy the updateTask v7 state machine) via a shared runAction() helper that, on !res.ok, reads the JSON error into transient actionError (a 409 surfaces "{error} (held by {claimant.ref})"; cleared on the next action via clearActionError()), and on success re-runs fetchBoard()+fetchTasks()+(if inboxClaimant set)fetchInbox() so board/list/inbox all reflect the new state. Round F adds GitHub two-way sync — syncGitHub(ids?) POSTs /api/tasks/sync (no task/remote state sent; the server pulls each linked issue and reconciles it through the enforced state machine), with {syncing, lastSyncSummary} state (SyncResult: summary {synced,conflict,agree,skipped} + verdicts[] + derived offline (every verdict offline/skipped) + conflictIds[]); on a change-bearing result it re-runs fetchBoard()+fetchTasks()(+inbox) so applied moves show immediately, clearSyncSummary() dismisses the transient strip result. BoardData also carries three OPTIONAL Cid/Loid governance detections passed through verbatim by fetchBoard (absent/undefined when the board is healthy) — integrity (BoardIntegrityViolation[]: kind self-parent|dangling-parent|dangling-dependency|cycle + taskId + detail), settlementDebt (BoardSettlementDebt[]: epicTaskId + blurb + reason), and staleClaims (BoardStaleClaim[]: taskId + blurb + claimant(TaskClaimant) + ageDays) — consumed by BoardHealth.
+    description: >-
+      Zustand store for the Tasks section (mirrors loreStore). Holds list, board,
+      calibration, inbox, detail, filter, laneMode and dep-cache state, each fetch
+      with its own AbortController; default view is board. Read fetches hit the
+      /api/tasks read routes; Task/BoardNode/BoardUnclaimed carry the computed
+      estimate + taskType. The UI's ONLY write verbs live here — claimTask,
+      startTask, doneTask, blockTask, unblockTask all POST the enforced
+      /api/tasks/:id action endpoints (which proxy the updateTask state machine),
+      and syncGitHub posts /api/tasks/sync for two-way reconcile; each refreshes
+      board/list/inbox on success and surfaces a transient actionError/sync
+      summary. BoardData also carries the three optional Cid/Loid governance
+      detections (integrity, settlementDebt, staleClaims) passed through to
+      BoardHealth.
     type: state
     tags: [feature, tasks, platform, state]
   TaskActions:
@@ -37,7 +49,16 @@ components:
     type: view
     tags: [feature, tasks, platform, board]
   BoardHealth:
-    description: Compact, collapsible ADVISORY banner rendered at the top of BoardView (below the toolbar, above the lanes) that surfaces the three Cid/Loid governance detections the backend attaches to /api/tasks/board — integrity (DAG structural defects self-parent/dangling-parent/dangling-dependency/cycle), settlementDebt (runs whose children all settled but the epic never did), and staleClaims (archetype-claimed open tasks past 7 days). Tone is advisory not alarming — amber (--p-accent-amber), never error-red; never blocking. Self-hides completely (renders nothing) when all three are empty/absent so a healthy board shows no empty banner. Collapsed by default to a single summary bar ("⚠ Board health: {n} DAG issues · {n} settlement-debt · {n} stale claims", zero-count categories omitted); collapse state persisted to localStorage (paradigm.tasks.boardHealth.collapsed). Expanded it lists each violation grouped by kind — integrity rows show "{kind}: {detail}", settlement-debt rows show "{blurb} — {reason}", stale-claim rows show "{blurb} — claimed by {ref}, {ageDays}d". Clicking any row with a taskId opens that task's detail panel via store.openDetail(taskId).
+    description: >-
+      Compact collapsible ADVISORY banner at the top of BoardView surfacing the
+      three Cid/Loid governance detections the backend attaches to the board —
+      integrity (DAG defects: self-parent / dangling / cycle), settlementDebt
+      (children all terminal but the epic never settled), and staleClaims
+      (archetype-claimed open tasks past 7 days). Amber, never error-red, never
+      blocking. Self-hides entirely when the board is healthy. Collapsed by
+      default to a count summary (persisted to localStorage); expanded it lists
+      each detection grouped by kind, and clicking a row with a taskId opens that
+      task's detail panel.
     type: component
     tags: [feature, tasks, platform, board, governance]
   SwimLane:

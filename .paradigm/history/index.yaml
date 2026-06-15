@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-06-15T02:57:48.044Z'
+generated: '2026-06-15T03:04:54.392Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -20181,11 +20181,26 @@ by_symbol:
       agent: []
   '#serve':
     symbol: '#serve'
-    total_changes: 4
-    last_modified: '2026-06-15T02:06:51Z'
+    total_changes: 5
+    last_modified: '2026-06-15T03:01:25Z'
     stability_score: 1
     fragility: low
     recent:
+      - id: h0449
+        ts: '2026-06-15T03:01:25Z'
+        type: implement
+        symbols:
+          - '#serve'
+        author:
+          type: human
+          id: ascend
+        commit: d138cf450c43e54341cc6f0c02051cc9997083a5
+        intent: feature
+        files:
+          - .paradigm/history/index.yaml
+          - CHANGELOG.md
+          - packages/paradigm/src/platform-server/ws/index.ts
+        description: 'feat(#serve): split the WS firehose into channels (T-001, closes #19)'
       - *ref_285
       - &ref_296
         id: h0446

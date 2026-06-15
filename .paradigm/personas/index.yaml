@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-06-13T22:02:31.182Z'
+generated: '2026-06-15T03:19:58.893Z'
 personas: {}
 chains: {}
 gate_coverage: {}
@@ -98,4 +98,16 @@ uncovered_routes:
   - GET /api/plsat/:version
   - POST /api/plsat/diploma
   - GET /api/reference
+  - GET /api/tasks
+  - GET /api/tasks/board
+  - GET /api/tasks/calibration
+  - GET /api/tasks/whoami
+  - GET /api/tasks/inbox
+  - GET /api/tasks/:id
+  - POST /api/tasks/:id/claim
+  - POST /api/tasks/:id/start
+  - POST /api/tasks/:id/done
+  - POST /api/tasks/:id/block
+  - POST /api/tasks/:id/unblock
+  - POST /api/tasks/sync
   - WS /ws
