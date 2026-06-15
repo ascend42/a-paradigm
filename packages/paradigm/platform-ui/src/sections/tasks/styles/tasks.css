@@ -29,6 +29,7 @@
 
 .tasks__main {
   flex: 1;
+  min-height: 0; /* let the flex chain resolve height down to scrollable children */
   overflow: auto;
   padding: 16px;
   padding-bottom: 32px;
@@ -325,6 +326,7 @@
   padding: 0;
   display: flex;
   flex-direction: column;
+  min-height: 0; /* board fills the remaining viewport; lanes scroll internally */
   overflow: hidden;
 }
 

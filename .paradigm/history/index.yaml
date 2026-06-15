@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-06-15T03:32:57.993Z'
+generated: '2026-06-15T03:39:56.275Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -20367,16 +20367,31 @@ by_symbol:
       agent: []
   '#tasks-section':
     symbol: '#tasks-section'
-    total_changes: 9
-    last_modified: '2026-06-15T02:06:51Z'
+    total_changes: 10
+    last_modified: '2026-06-15T03:39:55Z'
     stability_score: 1
     fragility: low
     recent:
+      - id: h0450
+        ts: '2026-06-15T03:39:55Z'
+        type: implement
+        symbols:
+          - '#tasks-section'
+        author:
+          type: human
+          id: ascend
+        commit: 3b40fe8408a130681b1fea9f811c624e5b6a0ea5
+        intent: fix
+        files:
+          - .paradigm/history/index.yaml
+          - packages/paradigm/platform-ui/src/sections/tasks/components/CalibrationBlock.tsx
+          - packages/paradigm/platform-ui/src/sections/tasks/utils/storyPoints.ts
+          - packages/paradigm/src/platform-server/routes/tasks.ts
+        description: 'fix(#tasks-section): attach estimate on /inbox + /:id; defensive CalibrationBlock'
       - *ref_285
       - *ref_293
       - *ref_294
       - *ref_295
-      - *ref_272
     contributors:
       human:
         - ascend
