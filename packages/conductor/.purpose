@@ -1348,12 +1348,21 @@ signals:
     - Sources/Conductor/UI/Views/Atrium/AtriumComposer.swift:1
 
 #atrium-voice:
-  description: Keyword-driven voice dictation loop for the ATRIUM composer, modeled on a-aloud's reply-window loop. REUSES WhisperVoiceProvider (WhisperKit CoreML STT + AVCaptureSession mic) — no new STT dependency. State machine off→armed→composing→sending→armed driven by forgiving word-boundary-anchored keyword grammar (normalize, last-occurrence match, multi-word phrases). Defaults wake="respond", send="send it", cancel="scratch that"/"never mind". Live transcript streams into the composer draft via callbacks (composer owns the draft so the founder can still edit/clip). Mic affordance in the composer reflects state with the ATRIUM palette (amber when composing).
+  description: Keyword-driven voice dictation loop for the ATRIUM composer, modeled on a-aloud's reply-window loop. REUSES WhisperVoiceProvider (WhisperKit CoreML STT + AVCaptureSession mic) — no new STT dependency. Mic-button path AUTHORIZES FIRST — checks AVCaptureDevice.authorizationStatus(for:.audio), on .notDetermined awaits requestAccess (fires the TCC prompt; Info.plist has NSMicrophoneUsageDescription), on .denied/.restricted surfaces a `blocked` state whose next click opens System Settings › Privacy › Microphone — THEN loads the WhisperKit model (`loading` state) and starts continuous capture. State machine off→requesting→loading→armed→composing→sending→armed (+blocked) driven by forgiving word-boundary-anchored keyword grammar (normalize, last-occurrence match, multi-word phrases). Defaults wake="respond", send="send it", cancel="scratch that"/"never mind". Live transcript streams into the composer's NSTextView via the #atrium-textview handle. Heavy ConductorLog.component("atrium-voice") on every step (button click, auth status, requestAccess result, model load, capture start, state transitions, keyword matches) for screenless diagnosis.
   type: controller
-  tags: [atrium, voice, whisper, dictation, statemachine]
+  tags: [atrium, voice, whisper, dictation, statemachine, permissions]
   anchors:
     - Sources/Conductor/UI/Views/Atrium/AtriumVoiceController.swift:1
     - Sources/Conductor/UI/Views/Atrium/AtriumComposer.swift:1
+
+#atrium-textview:
+  description: Custom NSViewRepresentable (AtriumTextView) wrapping an NSTextView subclass (AtriumNSTextView) in an NSScrollView — the ATRIUM composer's reply input. REPLACES the SwiftUI TextField that failed at runtime inside the manually-created AtriumSpikeWindow (NSHostingView in a bare NSWindow on an LSUIElement accessory app), where clipboard (⌘C/V/X) and .onKeyPress(.return) did not route. Clipboard/undo handled directly in performKeyEquivalent(with:) (menu-independent guarantee); Return-vs-Shift+Return handled by overriding insertNewline(_:) (plain Return → onSubmit callback, no newline; Shift+Return → real newline). Multiline, grows to ~6 lines then scrolls. ATRIUM styling (surface bg, ink text, monospaced 13, amber insertion point + selection). Two-way bound to the composer's draft via a Coordinator (textDidChange → binding); imperative AtriumTextViewHandle exposes appendText/clear/focus for the voice dictation path. A standard Edit menu is also registered via .commands in ConductorApp.swift as belt-and-suspenders.
+  type: view
+  tags: [atrium, ui, composer, nstextview, appkit, clipboard, multiline]
+  anchors:
+    - Sources/Conductor/UI/Views/Atrium/AtriumTextView.swift:1
+    - Sources/Conductor/UI/Views/Atrium/AtriumComposer.swift:1
+    - Sources/Conductor/App/ConductorApp.swift:1
 
 tags:
   - conductor

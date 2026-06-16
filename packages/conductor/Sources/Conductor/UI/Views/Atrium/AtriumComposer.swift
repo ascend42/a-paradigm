@@ -30,10 +30,9 @@ struct AtriumComposer: View {
     /// Keyword-driven voice dictation controller (Feature D).
     @StateObject private var voice = AtriumVoiceController()
 
-    /// Keyboard focus for the reply field. Auto-focused on appear and after each
-    /// turn completes so an LSUIElement (accessory) app's programmatic window
-    /// routes typing into the field without an extra click.
-    @FocusState private var fieldFocused: Bool
+    /// Imperative handle to the NSTextView so the voice controller can stream
+    /// dictation in and clear after send, and so we can force focus.
+    @StateObject private var textHandle = AtriumTextViewHandle()
 
     /// Cap the visual growth of the multiline field (~6 lines) before scrolling.
     private let maxVisibleLines = 6
@@ -101,35 +100,30 @@ struct AtriumComposer: View {
         }
     }
 
+    /// Per-line height estimate (monospaced 13pt + line spacing) for sizing the
+    /// NSTextView container between one line and the ~6-line cap.
+    private var lineHeight: CGFloat { 18 }
+    private var fieldMinHeight: CGFloat { lineHeight + 16 }          // 1 line + insets
+    private var fieldMaxHeight: CGFloat { lineHeight * CGFloat(maxVisibleLines) + 16 }
+
     private var composerField: some View {
-        // TextField with `.vertical` axis is multiline on macOS 14. lineLimit
-        // gives the grow-to-cap-then-scroll behavior. .onKeyPress(.return)
-        // distinguishes Shift+Return (newline) from Return (submit).
-        TextField("Reply…", text: $draft, axis: .vertical)
-            .textFieldStyle(.plain)
-            .lineLimit(1...maxVisibleLines)
-            .font(AtriumTheme.bodyFont)
-            .foregroundColor(AtriumTheme.ink)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(AtriumTheme.surface)
-            .overlay(
-                RoundedRectangle(cornerRadius: 8)
-                    .stroke(AtriumTheme.hairline, lineWidth: 1)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: 8))
-            // NOTE: intentionally NOT .disabled(isBusy). The field stays editable
-            // at all times so a stuck/slow turn can never lock the founder out.
-            .focused($fieldFocused)
-            .onKeyPress(.return) {
-                // Shift+Return → allow the newline to be inserted by the field.
-                if NSEvent.modifierFlags.contains(.shift) {
-                    return .ignored
-                }
-                // Plain Return → submit.
-                submit()
-                return .handled
-            }
+        // Custom NSTextView (#atrium-textview). Replaces the SwiftUI TextField that
+        // failed at runtime in the manually-created ATRIUM NSWindow: clipboard and
+        // Return/Shift+Return are now handled inside the NSTextView itself, with no
+        // dependence on the app menu or SwiftUI key routing.
+        AtriumTextView(
+            text: $draft,
+            maxVisibleLines: maxVisibleLines,
+            onSubmit: { submit() },
+            handle: textHandle
+        )
+        .frame(minHeight: fieldMinHeight, maxHeight: fieldMaxHeight)
+        .background(AtriumTheme.surface)
+        .overlay(
+            RoundedRectangle(cornerRadius: 8)
+                .stroke(AtriumTheme.hairline, lineWidth: 1)
+        )
+        .clipShape(RoundedRectangle(cornerRadius: 8))
     }
 
     private var sendButton: some View {
@@ -167,6 +161,9 @@ struct AtriumComposer: View {
     private var voiceSymbol: String {
         switch voice.state {
         case .off: return "mic.slash"
+        case .requesting: return "mic.badge.plus"
+        case .loading: return "mic.badge.xmark"  // transient; replaced by hourglass-like state
+        case .blocked: return "mic.slash.circle"
         case .armed: return "mic"
         case .composing: return "waveform"
         case .sending: return "paperplane.fill"
@@ -176,6 +173,9 @@ struct AtriumComposer: View {
     private var voiceTint: Color {
         switch voice.state {
         case .off: return AtriumTheme.inkMuted
+        case .requesting: return AtriumTheme.user
+        case .loading: return AtriumTheme.tool
+        case .blocked: return AtriumTheme.blocked
         case .armed: return AtriumTheme.user
         case .composing: return AtriumTheme.amber
         case .sending: return AtriumTheme.running
@@ -185,6 +185,9 @@ struct AtriumComposer: View {
     private var voiceHelp: String {
         switch voice.state {
         case .off: return "Click to listen. Say \"\(AtriumVoiceController.wakeKeyword)\" to start dictating."
+        case .requesting: return "Requesting microphone access…"
+        case .loading: return "Loading speech model…"
+        case .blocked: return "Microphone access denied. Click to open System Settings › Privacy › Microphone."
         case .armed: return "Listening… say \"\(AtriumVoiceController.wakeKeyword)\" to dictate."
         case .composing: return "Dictating. Say \"\(AtriumVoiceController.sendKeyword)\" to send, \"scratch that\" to clear."
         case .sending: return "Sending…"
@@ -194,16 +197,16 @@ struct AtriumComposer: View {
     // MARK: - Voice wiring
 
     private func wireVoice() {
+        // Stream dictation straight into the NSTextView via the imperative handle.
+        // The text view's delegate writes back into `draft`, so the binding stays
+        // in sync without us double-appending.
         voice.onDraftAppend = { fragment in
-            let trimmed = fragment.trimmingCharacters(in: .whitespacesAndNewlines)
-            guard !trimmed.isEmpty else { return }
-            if draft.isEmpty {
-                draft = trimmed
-            } else {
-                draft += " " + trimmed
-            }
+            textHandle.appendText(fragment)
         }
-        voice.onDraftClear = { draft = "" }
+        voice.onDraftClear = {
+            textHandle.clear()
+            draft = ""
+        }
         voice.onSubmit = { submit() }
     }
 
@@ -237,6 +240,9 @@ struct AtriumComposer: View {
         let outgoing = composeOutgoingTurn(visibleText: text)
         session.send(text: outgoing)
 
+        // Clear via the handle so the live NSTextView empties too (its delegate
+        // also resets `draft`); belt-and-suspenders reset the SwiftUI state.
+        textHandle.clear()
         draft = ""
         attachments = []
         // Keep focus so the founder can keep typing immediately.
@@ -255,12 +261,13 @@ struct AtriumComposer: View {
 
     // MARK: - Focus
 
-    /// Move keyboard focus to the field on the next runloop tick. A bare
-    /// `fieldFocused = true` inside onAppear races the window becoming key in an
-    /// accessory app, so it is nudged after a short delay.
+    /// Move keyboard focus to the field on the next runloop tick. The NSTextView
+    /// makes itself first responder (and forces its window key) via the handle —
+    /// nudged after a short delay because an LSUIElement accessory app's
+    /// programmatic window can race the field becoming focusable on appear.
     private func focusAfterDelay() {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.08) {
-            fieldFocused = true
+            textHandle.focus()
         }
     }
 }
