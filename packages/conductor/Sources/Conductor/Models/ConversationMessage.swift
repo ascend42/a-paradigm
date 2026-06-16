@@ -37,18 +37,26 @@ struct ConversationMessage: Identifiable, Sendable {
     var text: String
     var toolCalls: [ToolCall]
     var isStreaming: Bool
+    /// A host→agent CONTROL message that must NOT be rendered in the thread
+    /// (#atrium-shells, FIX 3). Used for the suppressed KillShell fallback when
+    /// host-side lsof finds no PID. The turn is still written to claude's stdin so
+    /// the agent acts on it, but AtriumThreadView filters it out of the visible
+    /// conversation so it never clutters the thread.
+    var isControl: Bool
 
     init(
         id: UUID = UUID(),
         author: MessageAuthor,
         text: String = "",
         toolCalls: [ToolCall] = [],
-        isStreaming: Bool = false
+        isStreaming: Bool = false,
+        isControl: Bool = false
     ) {
         self.id = id
         self.author = author
         self.text = text
         self.toolCalls = toolCalls
         self.isStreaming = isStreaming
+        self.isControl = isControl
     }
 }

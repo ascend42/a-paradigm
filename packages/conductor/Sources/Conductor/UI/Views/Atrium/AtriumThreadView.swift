@@ -15,7 +15,9 @@ struct AtriumThreadView: View {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 18) {
-                        ForEach(session.messages) { message in
+                        // Control messages (suppressed host→agent KillShell fallback,
+                        // #atrium-shells FIX 3) are excluded from the rendered thread.
+                        ForEach(session.messages.filter { !$0.isControl }) { message in
                             AtriumMessageView(message: message)
                                 .id(message.id)
                         }

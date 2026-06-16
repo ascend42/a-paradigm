@@ -117,6 +117,14 @@ struct SystemTaskEvent: Decodable, Sendable {
     let command: String?
     /// Best-effort latest output snippet if present.
     let output: String?
+    /// Best-effort output FILE path if present (task_notification carries
+    /// output_file; verified shape — #atrium-shells FIX 3).
+    let outputFile: String?
+    /// Best-effort tool_use_id — lets us correlate a task_started back to the Bash
+    /// tool_use that spawned it (and thus its command text).
+    let toolUseId: String?
+    /// Best-effort human description (task_started carries `description`).
+    let description: String?
     /// The complete decoded object — logged at debug so we can refine the shape.
     let raw: JSONValue
 
@@ -145,10 +153,13 @@ struct SystemTaskEvent: Decodable, Sendable {
             }
             return nil
         }
-        id = probe(["id", "task_id", "shell_id", "taskId", "shellId", "bash_id"])
+        id = probe(["task_id", "id", "shell_id", "taskId", "shellId", "bash_id"])
         status = probe(["status", "state"])
         command = probe(["command", "cmd"])
         output = probe(["output", "stdout", "result", "text", "last_output"])
+        outputFile = probe(["output_file", "outputFile", "output_path"])
+        toolUseId = probe(["tool_use_id", "toolUseId"])
+        description = probe(["description", "summary", "desc"])
     }
 
     /// The top-level object plus any nested "task"/"data" objects, so probes find
@@ -156,7 +167,9 @@ struct SystemTaskEvent: Decodable, Sendable {
     private static func candidateObjects(_ value: JSONValue) -> [[String: JSONValue]] {
         guard case .object(let obj) = value else { return [] }
         var out: [[String: JSONValue]] = [obj]
-        for nestedKey in ["task", "data", "payload"] {
+        // `patch` carries task_updated mutations ({status, end_time}); include it
+        // so the status probe finds nested status (#atrium-shells FIX 3).
+        for nestedKey in ["task", "data", "payload", "patch"] {
             if case .object(let nested)? = obj[nestedKey] {
                 out.append(nested)
             }

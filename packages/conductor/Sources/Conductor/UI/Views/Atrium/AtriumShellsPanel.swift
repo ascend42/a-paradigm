@@ -56,6 +56,8 @@ struct AtriumShellsButton: View {
 /// The popover body listing tracked shells.
 struct AtriumShellsPanel: View {
     @ObservedObject var session: ClaudeStreamSession
+    /// Shell ids whose output detail is expanded (host-side Inspect, FIX 3).
+    @State private var expanded: Set<String> = []
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -129,21 +131,44 @@ struct AtriumShellsPanel: View {
                 Spacer()
             }
 
+            let isExpanded = expanded.contains(shell.id)
             if let output = shell.lastOutput, !output.isEmpty {
-                Text(output)
-                    .font(AtriumTheme.footerFont)
-                    .foregroundColor(AtriumTheme.inkMuted)
-                    .lineLimit(3)
-                    .truncationMode(.tail)
-                    .padding(6)
-                    .frame(maxWidth: .infinity, alignment: .leading)
+                if isExpanded {
+                    // Host-side Inspect detail (FIX 3): the full .output contents,
+                    // scrollable, read directly from disk — no agent round-trip.
+                    ScrollView {
+                        Text(output)
+                            .font(AtriumTheme.footerFont)
+                            .foregroundColor(AtriumTheme.ink)
+                            .textSelection(.enabled)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(6)
+                    }
+                    .frame(maxHeight: 200)
                     .background(AtriumTheme.sunken)
                     .clipShape(RoundedRectangle(cornerRadius: 5))
+                } else {
+                    Text(output)
+                        .font(AtriumTheme.footerFont)
+                        .foregroundColor(AtriumTheme.inkMuted)
+                        .lineLimit(3)
+                        .truncationMode(.tail)
+                        .padding(6)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .background(AtriumTheme.sunken)
+                        .clipShape(RoundedRectangle(cornerRadius: 5))
+                }
             }
 
             HStack(spacing: 8) {
-                actionButton("Inspect", tint: AtriumTheme.user) {
+                actionButton(isExpanded ? "Hide" : "Inspect", tint: AtriumTheme.user) {
+                    // Read the .output file host-side, then expand the detail.
                     session.inspectShell(id: shell.id)
+                    if isExpanded {
+                        expanded.remove(shell.id)
+                    } else {
+                        expanded.insert(shell.id)
+                    }
                 }
                 actionButton("Kill", tint: AtriumTheme.blocked) {
                     session.killShell(id: shell.id)
@@ -163,6 +188,7 @@ struct AtriumShellsPanel: View {
             switch status {
             case .running: return ("running", AtriumTheme.running)
             case .finished: return ("finished", AtriumTheme.inkMuted)
+            case .stopped: return ("stopped", AtriumTheme.inkMuted)
             case .killed: return ("killed", AtriumTheme.blocked)
             }
         }()

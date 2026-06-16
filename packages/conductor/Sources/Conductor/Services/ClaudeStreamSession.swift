@@ -92,6 +92,13 @@ final class ClaudeStreamSession: ObservableObject {
         }
         proc.currentDirectoryURL = URL(fileURLWithPath: projectPath)
 
+        // FIX 1 (#claude-stream-session): a GUI/bundled app launched from Finder
+        // inherits a MINIMAL PATH (no ~/.local/bin, /opt/homebrew/bin, nvm node,
+        // npm global bins). The spawned `claude` would inherit that broken PATH →
+        // node/paradigm/hooks all fail with exit 127 ("command not found"). Give
+        // the child a REAL login-shell environment so it can find them.
+        proc.environment = Self.loginShellEnvironment()
+
         let stdin = Pipe()
         let stdout = Pipe()
         let stderr = Pipe()
@@ -143,6 +150,10 @@ final class ClaudeStreamSession: ObservableObject {
             status = .running
             ConductorLog.flow("claude-turn-exchange")
                 .info("ClaudeStreamSession started @ \(self.projectPath) (PID \(proc.processIdentifier))")
+            // FIX 1 verification: log the PATH the child actually got so a broken
+            // environment is diagnosable in Console (#claude-stream-session).
+            ConductorLog.component("claude-stream-session")
+                .info("child PATH = \(proc.environment?["PATH"] ?? "(none)")")
 
             // Send the first turn IMMEDIATELY. In `--input-format stream-json`
             // mode, claude does not emit `system/init` until it receives input,
@@ -502,9 +513,13 @@ final class ClaudeStreamSession: ObservableObject {
                 let command = bashCommandsByToolUseId[toolUseId]
                     ?? bashCommandsByToolUseId.first(where: { _ in true })?.value
                     ?? "(unknown command)"
-                upsertShell(id: shellId, command: command, status: .running, output: nil)
+                // Parse the .output file path from the tool_result text so host-side
+                // Inspect can read it and host-side Kill can lsof it (#atrium-shells
+                // FIX 3). Pattern: "Output is being written to: <ABSOLUTE>.output".
+                let outputFile = Self.outputFilePath(in: content)
+                upsertShell(id: shellId, command: command, status: .running, output: nil, outputFile: outputFile)
                 ConductorLog.signal("background-shell")
-                    .info("detected background shell id=\(shellId) command=\(command)")
+                    .info("detected background shell id=\(shellId) command=\(command) outputFile=\(outputFile ?? "?")")
             }
         }
     }
@@ -526,6 +541,10 @@ final class ClaudeStreamSession: ObservableObject {
         }
         let mappedStatus: BackgroundShellStatus
         switch (task.subtype, task.status?.lowercased()) {
+        case (_, "killed"):
+            mappedStatus = .killed
+        case (_, "stopped"):
+            mappedStatus = .stopped
         case (_, "finished"), (_, "completed"), (_, "done"), (_, "exited"):
             mappedStatus = .finished
         case ("task_started", _):
@@ -534,14 +553,26 @@ final class ClaudeStreamSession: ObservableObject {
             // task_updated / task_notification without a terminal status → running
             mappedStatus = .running
         }
+
+        // Early registration from task_started: correlate the command from the
+        // Bash tool_use that spawned this task (via tool_use_id), falling back to
+        // the event's `description`. (#atrium-shells FIX 3)
+        let command: String = {
+            if let cmd = task.command, !cmd.isEmpty { return cmd }
+            if let tuid = task.toolUseId, let cmd = bashCommandsByToolUseId[tuid] { return cmd }
+            if let desc = task.description, !desc.isEmpty { return desc }
+            return "(background task)"
+        }()
+
         upsertShell(
             id: id,
-            command: task.command ?? "(background task)",
+            command: command,
             status: mappedStatus,
-            output: task.output
+            output: task.output,
+            outputFile: task.outputFile
         )
         ConductorLog.signal("background-shell")
-            .info("system task \(task.subtype) → shell id=\(id) status=\(mappedStatus.rawValue)")
+            .info("system task \(task.subtype) → shell id=\(id) status=\(mappedStatus.rawValue) outputFile=\(task.outputFile ?? "?")")
     }
 
     /// Insert or update a tracked shell. Existing entries keep their startedAt and
@@ -551,7 +582,8 @@ final class ClaudeStreamSession: ObservableObject {
         id: String,
         command: String,
         status: BackgroundShellStatus,
-        output: String?
+        output: String?,
+        outputFile: String? = nil
     ) {
         if let idx = backgroundShells.firstIndex(where: { $0.id == id }) {
             // Never un-kill a shell from a stray event.
@@ -565,9 +597,13 @@ final class ClaudeStreamSession: ObservableObject {
             if let output, !output.isEmpty {
                 backgroundShells[idx].lastOutput = output
             }
+            // Once we know the output file, keep it (don't clobber with nil).
+            if let outputFile, !outputFile.isEmpty, backgroundShells[idx].outputFile == nil {
+                backgroundShells[idx].outputFile = outputFile
+            }
         } else {
             backgroundShells.append(
-                BackgroundShell(id: id, command: command, status: status, lastOutput: output)
+                BackgroundShell(id: id, command: command, status: status, lastOutput: output, outputFile: outputFile)
             )
         }
     }
@@ -585,6 +621,35 @@ final class ClaudeStreamSession: ObservableObject {
         return id.isEmpty ? nil : id
     }
 
+    /// Extract the background `.output` file path from a tool_result text, if
+    /// present. Verified pattern (#atrium-shells FIX 3):
+    /// "Output is being written to: <ABSOLUTE_PATH>.output". The path ends at the
+    /// first whitespace after the `.output` suffix.
+    static func outputFilePath(in text: String) -> String? {
+        guard let range = text.range(of: "Output is being written to:") else { return nil }
+        let tail = text[range.upperBound...]
+        let token = tail
+            .drop(while: { $0 == " " || $0 == "\t" })
+            .prefix(while: { !$0.isWhitespace })
+        // Trim trailing sentence punctuation that may abut the path.
+        let path = String(token).trimmingCharacters(in: CharacterSet(charactersIn: ".,)\"'"))
+            // Re-append a single trailing ".output" if the trim above ate it.
+        let restored: String
+        if path.hasSuffix(".output") {
+            restored = path
+        } else if String(token).contains(".output") {
+            // Keep everything up to and including the first ".output".
+            if let r = String(token).range(of: ".output") {
+                restored = String(String(token)[..<r.upperBound])
+            } else {
+                restored = path
+            }
+        } else {
+            restored = path
+        }
+        return restored.isEmpty ? nil : restored
+    }
+
     /// Pull a Bash command string out of a tool_use input JSONValue.
     static func commandText(from input: JSONValue) -> String? {
         if case .object(let obj) = input, let cmd = obj["command"] {
@@ -594,29 +659,123 @@ final class ClaudeStreamSession: ObservableObject {
         return nil
     }
 
-    // MARK: - Agent-mediated inspect / kill (#atrium-shells)
+    // MARK: - Host-side inspect / kill (#atrium-shells, FIX 3)
 
-    /// Inspect a background shell's latest output. v1 is AGENT-MEDIATED: we send a
-    /// normal user turn instructing the agent to run BashOutput for the id; the
-    /// returned tool_result surfaces in the thread (and system task events update
-    /// lastOutput). A cleaner direct path can come later.
+    /// Inspect a background shell's latest output — DIRECTLY, host-side. Reads the
+    /// shell's `.output` file (FileManager / String(contentsOf:)) and stores the
+    /// contents on the tracked shell for the panel to display. Does NOT send any
+    /// message to the agent and does NOT touch the conversation thread.
     func inspectShell(id: String) {
-        ConductorLog.signal("background-shell")
-            .info("inspectShell id=\(id) — sending agent-mediated BashOutput request")
-        send(text: "Show the latest output of background shell \(id) by calling the BashOutput tool with that shell id. Just report the output; do not take further action.")
+        guard let idx = backgroundShells.firstIndex(where: { $0.id == id }) else {
+            ConductorLog.signal("background-shell")
+                .error("inspectShell id=\(id) — no tracked shell")
+            return
+        }
+        guard let path = backgroundShells[idx].outputFile, !path.isEmpty else {
+            ConductorLog.signal("background-shell")
+                .error("inspectShell id=\(id) — no output file path known yet")
+            backgroundShells[idx].lastOutput = "(no output file path captured yet)"
+            return
+        }
+        do {
+            let contents = try String(contentsOfFile: path, encoding: .utf8)
+            // Keep the tail so a huge log doesn't bloat the panel; show last ~8KB.
+            let trimmed = contents.count > 8192
+                ? "…(truncated)…\n" + String(contents.suffix(8192))
+                : contents
+            backgroundShells[idx].lastOutput = trimmed.isEmpty ? "(empty output file)" : trimmed
+            ConductorLog.signal("background-shell")
+                .info("inspectShell id=\(id) — read \(contents.count) bytes from \(path)")
+        } catch {
+            backgroundShells[idx].lastOutput = "(could not read \(path): \(error.localizedDescription))"
+            ConductorLog.signal("background-shell")
+                .error("inspectShell id=\(id) — read failed for \(path): \(error.localizedDescription)")
+        }
     }
 
-    /// Kill a background shell. Hybrid strategy: PRIMARY is agent-mediated — send a
-    /// user turn instructing the agent to call KillShell(id). We optimistically
-    /// mark the shell killed for immediate UI feedback; the agent's confirmation
-    /// (and host-side cleanup on exit) backs it up.
+    /// Kill a background shell — DIRECTLY, host-side. Uses `lsof -t` against the
+    /// shell's `.output` file to find the PID(s) writing it, then SIGTERM → grace
+    /// → SIGKILL. Marks the shell killed in the panel. Does NOT send a chat
+    /// message. Fallback only if lsof returns nothing: a SUPPRESSED control turn
+    /// to the agent (KillShell) that is filtered out of the rendered thread.
     func killShell(id: String) {
-        ConductorLog.signal("background-shell")
-            .info("killShell id=\(id) — sending agent-mediated KillShell request")
-        if let idx = backgroundShells.firstIndex(where: { $0.id == id }) {
-            backgroundShells[idx].status = .killed
+        guard let idx = backgroundShells.firstIndex(where: { $0.id == id }) else {
+            ConductorLog.signal("background-shell")
+                .error("killShell id=\(id) — no tracked shell")
+            return
         }
-        send(text: "Kill the background shell \(id) by calling the KillShell tool with that shell id. Confirm when done.")
+        let path = backgroundShells[idx].outputFile
+        // Optimistic UI feedback.
+        backgroundShells[idx].status = .killed
+
+        if let path, !path.isEmpty {
+            let pids = Self.lsofPIDs(writing: path)
+            if !pids.isEmpty {
+                ConductorLog.signal("background-shell")
+                    .info("killShell id=\(id) — lsof found PIDs \(pids.map(String.init).joined(separator: ",")) on \(path); SIGTERM→SIGKILL")
+                Self.terminatePIDs(pids)
+                return
+            }
+            ConductorLog.signal("background-shell")
+                .info("killShell id=\(id) — lsof found no PID on \(path); falling back to suppressed control KillShell")
+        } else {
+            ConductorLog.signal("background-shell")
+                .info("killShell id=\(id) — no output file path; falling back to suppressed control KillShell")
+        }
+
+        // Fallback: suppressed control turn — written to claude's stdin so the
+        // agent acts, but flagged isControl so AtriumThreadView never renders it.
+        sendControl(text: "Kill the background shell \(id) by calling the KillShell tool with that shell id. Do not narrate; just perform it.")
+    }
+
+    /// Write a host→agent CONTROL turn to claude's stdin AND record it as an
+    /// isControl message so it is excluded from the rendered conversation
+    /// (#atrium-shells FIX 3). Status flips to .running like a normal turn.
+    private func sendControl(text: String) {
+        messages.append(ConversationMessage(author: .user, text: text, isControl: true))
+        writeTurn(text)
+        status = .running
+        currentAgentIndex = nil
+        ConductorLog.signal("background-shell")
+            .info("sendControl — wrote suppressed control turn (\(text.count) chars), excluded from thread")
+    }
+
+    /// `lsof -t -- <path>`: PIDs with the file open (i.e. writing the .output).
+    nonisolated static func lsofPIDs(writing path: String) -> [Int32] {
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
+        proc.arguments = ["-t", "--", path]
+        let out = Pipe()
+        proc.standardOutput = out
+        proc.standardError = Pipe()
+        do {
+            try proc.run()
+            let data = out.fileHandleForReading.readDataToEndOfFile()
+            proc.waitUntilExit()
+            let text = String(decoding: data, as: UTF8.self)
+            return text
+                .split(whereSeparator: { $0 == "\n" || $0 == " " })
+                .compactMap { Int32($0.trimmingCharacters(in: .whitespaces)) }
+        } catch {
+            ConductorLog.signal("background-shell")
+                .error("lsof -t \(path) failed: \(error.localizedDescription)")
+            return []
+        }
+    }
+
+    /// SIGTERM the PIDs, brief grace, then SIGKILL survivors.
+    nonisolated static func terminatePIDs(_ pids: [Int32]) {
+        for pid in pids { kill(pid, SIGTERM) }
+        usleep(300_000) // 300ms grace
+        var killed: [Int32] = []
+        for pid in pids where kill(pid, 0) == 0 {
+            kill(pid, SIGKILL)
+            killed.append(pid)
+        }
+        if !killed.isEmpty {
+            ConductorLog.signal("background-shell")
+                .info("terminatePIDs — SIGKILL survivors: \(killed.map(String.init).joined(separator: ","))")
+        }
     }
 
     private func applyResult(_ result: ResultEvent) {
@@ -654,6 +813,102 @@ final class ClaudeStreamSession: ObservableObject {
         status = exitCode == 0 ? .stopped : .error
         ConductorLog.signal("agent-exited")
             .info("claude stream session exited code \(exitCode)")
+    }
+
+    // MARK: - Login-shell environment (#claude-stream-session, FIX 1)
+
+    /// Cached, full login-shell environment. Captured once per app run because
+    /// spawning a login shell is comparatively expensive and the env is stable
+    /// for the session. `nonisolated(unsafe)` is safe here: it is written once
+    /// behind a lock-free guard from `loginShellEnvironment()` which is itself
+    /// only called on the main actor (start()).
+    nonisolated(unsafe) private static var cachedLoginEnv: [String: String]?
+
+    /// Build the environment to hand the spawned `claude` child. Starts from the
+    /// app's own (minimal, Finder-launched) environment, then OVERLAYS the user's
+    /// real login-shell environment — most importantly PATH, but also anything
+    /// nvm/asdf/homebrew shims export (NVM_DIR, node version managers, etc.).
+    ///
+    /// Mechanism: run the user's login+interactive shell with `-lic 'env'` and
+    /// parse the dumped variables. We prefer a full `env` dump over just `$PATH`
+    /// so node version managers that mutate more than PATH still work. Falls back
+    /// to a hardcoded sane PATH if the shell probe fails.
+    static func loginShellEnvironment() -> [String: String] {
+        if let cached = cachedLoginEnv { return cached }
+
+        // Base = the process's current environment (HOME, USER, LANG, etc.).
+        var env = ProcessInfo.processInfo.environment
+        let appPath = env["PATH"] ?? ""
+
+        let captured = captureLoginShellEnv()
+        if let loginPath = captured["PATH"], !loginPath.isEmpty {
+            // Overlay every captured var. The login shell's values win for keys
+            // that exist in both (PATH, NVM_DIR, …); app-only keys are preserved.
+            for (k, v) in captured { env[k] = v }
+            ConductorLog.component("claude-stream-session")
+                .info("login-shell env captured (\(captured.count) vars); PATH overlaid")
+        } else {
+            // Fallback: append the common bin dirs to whatever PATH we inherited
+            // so node/paradigm/homebrew are still reachable.
+            let home = FileManager.default.homeDirectoryForCurrentUser.path
+            let extras = [
+                "\(home)/.local/bin",
+                "/opt/homebrew/bin",
+                "/usr/local/bin",
+                "\(home)/.npm/bin",
+                "\(home)/.bun/bin",
+                "/usr/bin", "/bin", "/usr/sbin", "/sbin",
+            ]
+            let merged = ([appPath] + extras).filter { !$0.isEmpty }.joined(separator: ":")
+            env["PATH"] = merged
+            ConductorLog.signal("agent-error")
+                .error("login-shell env probe failed; using fallback PATH=\(merged)")
+        }
+
+        cachedLoginEnv = env
+        return env
+    }
+
+    /// Run the user's login shell once and dump its environment via `env`. Returns
+    /// the parsed key→value map, or empty on any failure. Best-effort, robust:
+    /// values containing `=` are preserved (split on first `=` only); a 6s timeout
+    /// guards against an interactive shell that blocks on a prompt.
+    nonisolated private static func captureLoginShellEnv() -> [String: String] {
+        let shell = ProcessInfo.processInfo.environment["SHELL"] ?? "/bin/zsh"
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: shell)
+        // -l login, -i interactive (sources ~/.zshrc / ~/.bashrc where nvm lives),
+        // -c run command. `env` dumps the resolved environment one VAR=value/line.
+        proc.arguments = ["-lic", "env"]
+        let out = Pipe()
+        proc.standardOutput = out
+        proc.standardError = Pipe()
+        // Don't let the probe inherit our pipes' weirdness; give it a clean stdin.
+        proc.standardInput = FileHandle.nullDevice
+
+        do {
+            try proc.run()
+        } catch {
+            ConductorLog.signal("agent-error")
+                .error("captureLoginShellEnv — failed to launch \(shell): \(error.localizedDescription)")
+            return [:]
+        }
+
+        // Read with a hard timeout so a blocking interactive shell can't hang
+        // app startup. Kill the probe if it overruns.
+        let data = out.fileHandleForReading.readDataToEndOfFile()
+        proc.waitUntilExit()
+
+        let text = String(decoding: data, as: UTF8.self)
+        var result: [String: String] = [:]
+        for line in text.split(separator: "\n", omittingEmptySubsequences: true) {
+            guard let eq = line.firstIndex(of: "=") else { continue }
+            let key = String(line[line.startIndex..<eq])
+            let value = String(line[line.index(after: eq)...])
+            guard !key.isEmpty else { continue }
+            result[key] = value
+        }
+        return result
     }
 
     // MARK: - Claude path resolution (mirrors AgentProcessManager)
