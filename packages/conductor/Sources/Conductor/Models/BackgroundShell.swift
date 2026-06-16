@@ -9,19 +9,45 @@
 import Foundation
 
 /// Lifecycle state of a tracked background shell.
+///
+/// Terminal-status mapping (#atrium-shells): a `task_updated`/`task_notification`
+/// event carries a status string. ANY non-"running" terminal value MUST move the
+/// shell out of `.running` — the panel must never keep showing "running" once a
+/// terminal task event has arrived. Observed status strings and their mapping:
+///   - "running"                                  → .running  (stay running)
+///   - "completed" / "success" / "done" /
+///     "finished" / "exited"                      → .finished
+///   - "stopped"                                  → .stopped
+///   - "killed"                                   → .killed
+///   - "failed" / "error"                         → .failed
+/// NOTE (Claude Code 2.1.x): a background task that is killed via the agent's
+/// TaskStop tool reports terminal status "failed" (exit 144 / SIGURG underneath),
+/// NOT "killed". `.failed` therefore covers the founder-clicked-Kill case and
+/// renders as an error tone in the panel.
 enum BackgroundShellStatus: String, Sendable {
     case running
     case finished
     /// The command exited on its own (task_updated/notification status "stopped").
     case stopped
     case killed
+    /// The command ended in a terminal error/failure state (status "failed" or
+    /// "error"). Also the observed terminal status when a background task is
+    /// stopped via the agent's TaskStop tool in Claude Code 2.1.x.
+    case failed
+}
+
+extension BackgroundShellStatus {
+    /// True once the shell has reached a terminal lifecycle state — i.e. anything
+    /// other than `.running`. Used so the panel never shows "running" after a
+    /// terminal task event arrives.
+    var isTerminal: Bool { self != .running }
 }
 
 /// One background shell spawned by the agent, tracked from the event stream.
 struct BackgroundShell: Identifiable, Sendable {
     /// The shell id (e.g. "bu2e52p2v") extracted from the tool_result text or a
     /// system task event (task_id). This is the identity used for correlation and
-    /// the suppressed-control fallback KillShell.
+    /// the suppressed-control TaskStop turn (the Claude Code 2.1.x kill tool).
     let id: String
     /// The command that was backgrounded (correlated from the matching Bash
     /// tool_use input.command when available).

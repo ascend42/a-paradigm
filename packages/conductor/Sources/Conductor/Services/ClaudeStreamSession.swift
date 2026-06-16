@@ -620,18 +620,35 @@ final class ClaudeStreamSession: ObservableObject {
             // primary detector. Nothing else to do.
             return
         }
+        // Map EVERY terminal status, not just killed/stopped. Any non-"running"
+        // terminal value moves the shell out of .running so the panel can never
+        // keep showing "running" after a terminal task event arrives
+        // (#atrium-shells FIX 1). NOTE (Claude Code 2.1.x): a TaskStop'd background
+        // task reports terminal status "failed", so .failed covers the
+        // founder-clicked-Kill case.
         let mappedStatus: BackgroundShellStatus
         switch (task.subtype, task.status?.lowercased()) {
         case (_, "killed"):
             mappedStatus = .killed
         case (_, "stopped"):
             mappedStatus = .stopped
-        case (_, "finished"), (_, "completed"), (_, "done"), (_, "exited"):
+        case (_, "failed"), (_, "error"):
+            mappedStatus = .failed
+        case (_, "finished"), (_, "completed"), (_, "success"), (_, "done"), (_, "exited"):
             mappedStatus = .finished
+        case (_, "running"):
+            mappedStatus = .running
         case ("task_started", _):
             mappedStatus = .running
+        case (_, .some(let raw)) where !raw.isEmpty:
+            // An unrecognized NON-EMPTY status on a task event is treated as a
+            // terminal failure rather than left "running" — the panel must never
+            // lie about a still-running shell. Log so we can extend the map.
+            ConductorLog.signal("background-shell")
+                .info("system task \(task.subtype) carries unrecognized status \"\(raw)\" — treating as terminal .failed")
+            mappedStatus = .failed
         default:
-            // task_updated / task_notification without a terminal status → running
+            // task_updated / task_notification with NO status at all → keep running
             mappedStatus = .running
         }
 
@@ -667,9 +684,19 @@ final class ClaudeStreamSession: ObservableObject {
         outputFile: String? = nil
     ) {
         if let idx = backgroundShells.firstIndex(where: { $0.id == id }) {
-            // Never un-kill a shell from a stray event.
-            if backgroundShells[idx].status != .killed {
+            // Never regress a shell out of a TERMINAL state from a stray event
+            // (e.g. a late "running" task_notification after a kill). Once a shell
+            // is killed/stopped/finished/failed it stays terminal; only transitions
+            // FROM .running are honored (#atrium-shells FIX 1).
+            let old = backgroundShells[idx].status
+            if !old.isTerminal, old != status {
                 backgroundShells[idx].status = status
+                ConductorLog.signal("background-shell")
+                    .info("shell \(id) status \(old.rawValue)→\(status.rawValue)")
+            } else if old.isTerminal, status.isTerminal, old != status {
+                // Two terminal events disagreeing (rare): keep the first, note it.
+                ConductorLog.signal("background-shell")
+                    .debug("shell \(id) already terminal \(old.rawValue); ignoring later terminal \(status.rawValue)")
             }
             let isPlaceholder = command == "(unknown command)" || command == "(background task)"
             if !isPlaceholder, backgroundShells[idx].command.hasPrefix("(") {
@@ -783,47 +810,43 @@ final class ClaudeStreamSession: ObservableObject {
     /// shell "killed" while the real process kept running (the agent later observed
     /// exit 144 / SIGURG on the wrong target). The panel LIED about the state.
     ///
-    /// PRIMARY (authoritative): send a SUPPRESSED control turn instructing the
-    /// agent to call its `KillShell` tool with this shell id. The agent owns the
-    /// real task→PID mapping, so it kills the correct process. The turn is flagged
+    /// AUTHORITATIVE (and sole) path: send a SUPPRESSED control turn instructing
+    /// the agent to call its `TaskStop` tool with this shell id. The agent owns the
+    /// real task→PID mapping, so it stops the correct process. The turn is flagged
     /// `isControl` so AtriumThreadView never renders it — invisible to the founder.
     ///
-    /// STATUS HONESTY: we do NOT optimistically mark `.killed` (that was the lie).
-    /// We mark `.killing` is not a state; instead we leave the status as-is and let
-    /// the REAL task_updated/task_notification (patch.status → killed/stopped) or
-    /// the KillShell tool_result flip it via applySystemTask/applyToolResults. The
-    /// panel then reflects the true process state.
+    /// WHY TaskStop, NOT "KillShell" (#atrium-shells FIX 2): in Claude Code 2.1.x
+    /// the background-task kill tool is named **TaskStop** — there is no "KillShell"
+    /// tool. The old phrasing forced the agent to ToolSearch for "KillShell", which
+    /// resolved (eventually) to TaskStop — a wasteful detour. We now name TaskStop
+    /// directly. A TaskStop'd task reports terminal status "failed" (exit 144 /
+    /// SIGURG underneath), which applySystemTask now maps to .failed.
     ///
-    /// SECONDARY (best-effort only): if we have an output file, fire a host SIGTERM
-    /// via lsof as a backstop — but it is NO LONGER authoritative and never sets
-    /// the visible status on its own.
+    /// WHY NO lsof BACKSTOP (#atrium-shells FIX 3): the previous secondary fired a
+    /// host SIGTERM on the lsof'd PID of the .output file. That RACED the agent's
+    /// TaskStop (the task was already dead → "No task found") and SIGTERM'd the
+    /// wrong target (the file-writer wrapper), producing the alarming exit 144 /
+    /// SIGURG. Removed entirely. We rely solely on the authoritative TaskStop
+    /// control turn + correct terminal status mapping. (Orphan cleanup on app exit
+    /// is a SEPARATE, legitimate path — see shutdown()'s reapDescendants.)
+    ///
+    /// STATUS HONESTY: we do NOT optimistically mark a terminal state here. We let
+    /// the REAL task_updated/task_notification (status → failed/killed/stopped) flip
+    /// it via applySystemTask. The panel then reflects the true process state.
     func killShell(id: String) {
-        guard let idx = backgroundShells.firstIndex(where: { $0.id == id }) else {
+        guard backgroundShells.contains(where: { $0.id == id }) else {
             ConductorLog.signal("background-shell")
                 .error("killShell id=\(id) — no tracked shell")
             return
         }
-        let path = backgroundShells[idx].outputFile
         transcript.logKill(shellId: id) // #session-transcript
 
-        // PRIMARY: authoritative suppressed KillShell control turn (hidden, so
-        // verbosity is fine — keep it tight). Status is NOT flipped here; the
-        // task_* events / KillShell tool_result carry the REAL status.
+        // Authoritative suppressed TaskStop control turn (hidden, so it never
+        // reaches the rendered thread). Status is NOT flipped here; the subsequent
+        // task_* events carry the REAL terminal status (typically "failed").
         ConductorLog.signal("background-shell")
-            .info("killShell id=\(id) — sending authoritative suppressed KillShell control turn; awaiting task_* / tool_result to reflect real status")
-        sendControl(text: "Call the KillShell tool with shell_id \(id) to terminate that background shell. Do not do anything else.")
-
-        // SECONDARY (best-effort backstop, non-authoritative): a host SIGTERM via
-        // lsof. Does NOT SIGKILL and does NOT set the panel status — that was the
-        // wrong-PID bug. Purely opportunistic cleanup if it happens to match.
-        if let path, !path.isEmpty {
-            let pids = Self.lsofPIDs(writing: path)
-            if !pids.isEmpty {
-                ConductorLog.signal("background-shell")
-                    .info("killShell id=\(id) — best-effort host SIGTERM (non-authoritative) to lsof PIDs \(pids.map(String.init).joined(separator: ",")) on \(path)")
-                for pid in pids { kill(pid, SIGTERM) }
-            }
-        }
+            .info("killShell id=\(id) — sending authoritative suppressed TaskStop control turn; awaiting task_* to reflect real status")
+        sendControl(text: "Use the TaskStop tool to stop the background task with ID \(id). Do nothing else.")
     }
 
     /// Write a host→agent CONTROL turn to claude's stdin AND record it as an
@@ -838,43 +861,13 @@ final class ClaudeStreamSession: ObservableObject {
             .info("sendControl — wrote suppressed control turn (\(text.count) chars), excluded from thread")
     }
 
-    /// `lsof -t -- <path>`: PIDs with the file open (i.e. writing the .output).
-    nonisolated static func lsofPIDs(writing path: String) -> [Int32] {
-        let proc = Process()
-        proc.executableURL = URL(fileURLWithPath: "/usr/sbin/lsof")
-        proc.arguments = ["-t", "--", path]
-        let out = Pipe()
-        proc.standardOutput = out
-        proc.standardError = Pipe()
-        do {
-            try proc.run()
-            let data = out.fileHandleForReading.readDataToEndOfFile()
-            proc.waitUntilExit()
-            let text = String(decoding: data, as: UTF8.self)
-            return text
-                .split(whereSeparator: { $0 == "\n" || $0 == " " })
-                .compactMap { Int32($0.trimmingCharacters(in: .whitespaces)) }
-        } catch {
-            ConductorLog.signal("background-shell")
-                .error("lsof -t \(path) failed: \(error.localizedDescription)")
-            return []
-        }
-    }
-
-    /// SIGTERM the PIDs, brief grace, then SIGKILL survivors.
-    nonisolated static func terminatePIDs(_ pids: [Int32]) {
-        for pid in pids { kill(pid, SIGTERM) }
-        usleep(300_000) // 300ms grace
-        var killed: [Int32] = []
-        for pid in pids where kill(pid, 0) == 0 {
-            kill(pid, SIGKILL)
-            killed.append(pid)
-        }
-        if !killed.isEmpty {
-            ConductorLog.signal("background-shell")
-                .info("terminatePIDs — SIGKILL survivors: \(killed.map(String.init).joined(separator: ","))")
-        }
-    }
+    // NOTE (#atrium-shells FIX 3): the lsof-based host-SIGTERM backstop
+    // (`lsofPIDs(writing:)` + `terminatePIDs(_:)`) was REMOVED. It raced the
+    // agent's authoritative TaskStop and SIGTERM'd the wrong target (the .output
+    // file-writer wrapper), producing the alarming exit 144 / SIGURG. The agent's
+    // TaskStop control turn is now the sole kill path. Orphan cleanup on app exit
+    // remains in shutdown() via reapDescendants — a separate, legitimate path that
+    // walks the process tree, NOT lsof on an output file.
 
     private func applyResult(_ result: ResultEvent) {
         transcript.logResult(subtype: result.subtype, totalCostUsd: result.totalCostUsd, usage: result.usage) // #session-transcript

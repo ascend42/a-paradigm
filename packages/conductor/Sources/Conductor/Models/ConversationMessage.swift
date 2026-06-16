@@ -38,10 +38,10 @@ struct ConversationMessage: Identifiable, Sendable {
     var toolCalls: [ToolCall]
     var isStreaming: Bool
     /// A host→agent CONTROL message that must NOT be rendered in the thread
-    /// (#atrium-shells, FIX 3). Used for the suppressed KillShell fallback when
-    /// host-side lsof finds no PID. The turn is still written to claude's stdin so
-    /// the agent acts on it, but AtriumThreadView filters it out of the visible
-    /// conversation so it never clutters the thread.
+    /// (#atrium-shells). Used for the suppressed, authoritative TaskStop turn that
+    /// kills a background shell (the Claude Code 2.1.x kill tool). The turn is still
+    /// written to claude's stdin so the agent acts on it, but AtriumThreadView
+    /// filters it out of the visible conversation so it never clutters the thread.
     var isControl: Bool
 
     init(

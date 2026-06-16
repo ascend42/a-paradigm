@@ -49,6 +49,13 @@ final class SessionTranscript: @unchecked Sendable {
     /// then stay silent (never spam, never crash).
     private var failed = false
 
+    /// The last session_id we wrote a `session_id` meta + "linked" index row for.
+    /// Claude Code emits a `system` line (carrying the session_id) on every turn,
+    /// so without this guard we'd write a duplicate meta + index row per result.
+    /// We write the pair ONCE — on first observation and again only if the id
+    /// actually changes (#session-transcript). Touched only on `queue`.
+    private var lastLoggedSessionId: String?
+
     // MARK: - Init
 
     /// Build a transcript for a session. Computes the file path immediately from a
@@ -91,20 +98,31 @@ final class SessionTranscript: @unchecked Sendable {
 
     /// The real claude session_id (and model) arriving in system/init. Records a
     /// meta line in the file AND an index row so an inspector can map id↔file.
+    ///
+    /// IDEMPOTENT (#session-transcript FIX 4): Claude Code re-emits a `system` line
+    /// carrying the session_id on every turn/result. We dedup on the serial queue
+    /// and write the meta + "linked" index row ONLY when the id is first seen or
+    /// actually changes — never once per result. Lightweight: a single string
+    /// compare guards the pair.
     func logSessionId(sessionId: String, model: String?) {
-        write([
-            "dir": "meta",
-            "kind": "session_id",
-            "sessionId": .string(sessionId),
-            "model": .string(model ?? ""),
-        ])
-        appendIndex([
-            "startupId": .string(startupId),
-            "file": .string(fileURL.lastPathComponent),
-            "sessionId": .string(sessionId),
-            "model": .string(model ?? ""),
-            "linked": .string(isoNow()),
-        ])
+        queue.async { [weak self] in
+            guard let self, !self.failed else { return }
+            guard self.lastLoggedSessionId != sessionId else { return }
+            self.lastLoggedSessionId = sessionId
+            self.writeLocked([
+                "dir": "meta",
+                "kind": "session_id",
+                "sessionId": .string(sessionId),
+                "model": .string(model ?? ""),
+            ])
+            self.appendIndexLocked([
+                "startupId": .string(self.startupId),
+                "file": .string(self.fileURL.lastPathComponent),
+                "sessionId": .string(sessionId),
+                "model": .string(model ?? ""),
+                "linked": .string(self.isoNow()),
+            ])
+        }
     }
 
     // MARK: in — host → claude
@@ -246,12 +264,19 @@ final class SessionTranscript: @unchecked Sendable {
         // the encoding on the serial queue so the main actor returns instantly.
         queue.async { [weak self] in
             guard let self else { return }
-            guard !self.failed else { return }
-            var obj = fields
-            obj["ts"] = .int(tsMillis)
-            guard let line = Self.encodeLine(obj) else { return }
-            self.appendLine(line, to: self.fileURL, openingHandle: true)
+            self.writeLocked(fields, tsMillis: tsMillis)
         }
+    }
+
+    /// MUST already be running on `queue`. Encodes + appends one line. Lets a
+    /// caller that is itself on the queue (e.g. the deduped logSessionId) write
+    /// without a second async hop that would reorder lines.
+    private func writeLocked(_ fields: [String: JSONEncodableValue], tsMillis: Int? = nil) {
+        guard !failed else { return }
+        var obj = fields
+        obj["ts"] = .int(tsMillis ?? Int((Date().timeIntervalSince1970 * 1000).rounded()))
+        guard let line = Self.encodeLine(obj) else { return }
+        appendLine(line, to: fileURL, openingHandle: true)
     }
 
     /// Append one already-serialized line to a target URL. When `openingHandle`
@@ -285,12 +310,18 @@ final class SessionTranscript: @unchecked Sendable {
     /// Append an index row on the serial queue (own fresh handle each time).
     private func appendIndex(_ fields: [String: JSONEncodableValue]) {
         queue.async { [weak self] in
-            guard let self, !self.failed else { return }
-            var obj = fields
-            obj["ts"] = .int(Int((Date().timeIntervalSince1970 * 1000).rounded()))
-            guard let line = Self.encodeLine(obj) else { return }
-            self.appendLine(line, to: self.indexURL, openingHandle: false)
+            guard let self else { return }
+            self.appendIndexLocked(fields)
         }
+    }
+
+    /// MUST already be running on `queue`. Index counterpart of `writeLocked`.
+    private func appendIndexLocked(_ fields: [String: JSONEncodableValue]) {
+        guard !failed else { return }
+        var obj = fields
+        obj["ts"] = .int(Int((Date().timeIntervalSince1970 * 1000).rounded()))
+        guard let line = Self.encodeLine(obj) else { return }
+        appendLine(line, to: indexURL, openingHandle: false)
     }
 
     /// Open (creating the dir + file if needed) a FileHandle positioned at EOF.

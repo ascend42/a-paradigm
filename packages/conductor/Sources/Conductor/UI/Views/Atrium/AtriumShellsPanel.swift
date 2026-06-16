@@ -2,9 +2,11 @@
 // The background-shell inspector surfaced in the ATRIUM window. A small header
 // button shows a live count ("⛭ N shells") and opens a popover listing each
 // shell the agent spawned: command (mono, truncated), id, status, startedAt, and
-// [Inspect] / [Kill] actions. Inspect and Kill are agent-mediated (v1): they ask
-// the owned ClaudeStreamSession to send a BashOutput / KillShell turn. Empty
-// state when there are no shells. ATRIUM palette throughout.
+// [Inspect] / [Kill] actions. Inspect reads the .output file host-side; Kill is
+// agent-mediated — it asks the owned ClaudeStreamSession to send a suppressed
+// TaskStop control turn (the Claude Code 2.1.x kill tool). Status badges render
+// every terminal state (finished/stopped/killed/failed) so a killed shell never
+// reads as "running". Empty state when there are no shells. ATRIUM palette throughout.
 
 import SwiftUI
 
@@ -173,8 +175,8 @@ struct AtriumShellsPanel: View {
                 actionButton("Kill", tint: AtriumTheme.blocked) {
                     session.killShell(id: shell.id)
                 }
-                .disabled(shell.status == .killed)
-                .opacity(shell.status == .killed ? 0.4 : 1)
+                .disabled(shell.status.isTerminal)
+                .opacity(shell.status.isTerminal ? 0.4 : 1)
                 Spacer()
             }
         }
@@ -190,6 +192,9 @@ struct AtriumShellsPanel: View {
             case .finished: return ("finished", AtriumTheme.inkMuted)
             case .stopped: return ("stopped", AtriumTheme.inkMuted)
             case .killed: return ("killed", AtriumTheme.blocked)
+            // Error tone (coral/blocked) — also the state a TaskStop'd shell lands
+            // in under Claude Code 2.1.x (terminal status "failed").
+            case .failed: return ("failed", AtriumTheme.blocked)
             }
         }()
         return Text(text)

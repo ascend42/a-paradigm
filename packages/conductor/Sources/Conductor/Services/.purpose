@@ -27,7 +27,7 @@ context:
     - SessionTranscript.swift:1
 
 #atrium-shells:
-  description: Tracks background shells the agent spawned, parsed from tool_result text and system task events; host-side inspect (read .output file) and authoritative kill (suppressed KillShell control turn)
+  description: Tracks background shells the agent spawned, parsed from tool_result text and system task events; status maps ALL terminal task statuses (running/finished/stopped/killed/failed) so the panel never shows "running" after a terminal event; host-side inspect (read .output file) and authoritative kill (suppressed TaskStop control turn — the Claude Code 2.1.x tool, NOT KillShell; a TaskStop'd task reports terminal status "failed"). No lsof backstop (removed: raced TaskStop, wrong target, exit 144/SIGURG)
   type: model
   tags: [conductor, atrium, background-shell]
   anchors:
