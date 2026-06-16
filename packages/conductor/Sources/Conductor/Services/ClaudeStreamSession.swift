@@ -33,6 +33,27 @@ final class ClaudeStreamSession: ObservableObject {
     /// <id>") and/or system task events; the founder can inspect and kill them.
     @Published private(set) var backgroundShells: [BackgroundShell] = []
 
+    /// Sub-agents the model spawned via the Agent/Task tool — THE CHORUS
+    /// (#sub-agent / #atrium-chorus). Populated from the Agent tool_use (carrying
+    /// `description` + `subagent_type`) correlated to the subsequent task_started by
+    /// temporal adjacency, then driven by task_progress/task_updated. These are the
+    /// SAME task_* events the shells panel EXCLUDES (#atrium-shells sub-agent
+    /// filter) — they are routed HERE instead of dropped. Bash shells stay separate.
+    @Published private(set) var subAgents: [SubAgent] = []
+
+    /// FIFO queue of Agent/Task tool_use ids awaiting their task_started, with the
+    /// description + subagent_type pulled from the tool_use input. The CLI
+    /// stream-json carries NO parent_tool_use_id (verified), so we correlate a
+    /// sub-agent task to its spawning Agent tool_use by temporal adjacency: the
+    /// task_started fires within ~30ms of the Agent tool_use, before the next one.
+    /// When a sub-agent task_started arrives we pop the oldest pending Agent here.
+    private var pendingAgentSpawns: [(toolUseId: String, description: String, subagentType: String?)] = []
+
+    /// Task ids we positively identified as Agent/Task SUB-AGENTS (vs background
+    /// bash). Sticky like excludedTaskIds: once a task is routed to the chorus it
+    /// stays a sub-agent on later signal-less task_progress/task_updated events.
+    private var subAgentTaskIds: Set<String> = []
+
     /// Maps a Bash tool_use id → its command, so when the matching tool_result
     /// arrives carrying a background ID we can correlate the command text.
     /// Pruned opportunistically (capped) so it can't grow unbounded.
@@ -593,6 +614,22 @@ final class ClaudeStreamSession: ObservableObject {
                         bashCommandsByToolUseId.removeAll()
                     }
                 }
+                // CHORUS (#sub-agent): an Agent/Task tool_use SPAWNS a sub-agent.
+                // The input carries the sub-agent's description + subagent_type. The
+                // CLI stream-json carries NO parent_tool_use_id, so enqueue this
+                // spawn and correlate it to the next sub-agent task_started by
+                // temporal adjacency (applySystemTask pops the oldest pending).
+                if name == "Agent" || name == "Task" {
+                    let desc = input.subAgentDescription ?? summary
+                    let type = input.subAgentType
+                    pendingAgentSpawns.append((toolUseId: id, description: desc, subagentType: type))
+                    // Cap so a runaway can't grow it unbounded.
+                    if pendingAgentSpawns.count > 64 {
+                        pendingAgentSpawns.removeFirst(pendingAgentSpawns.count - 64)
+                    }
+                    ConductorLog.signal("sub-agent")
+                        .info("CHORUS — Agent tool_use \(id) spawned sub-agent type=\(type ?? "?") desc=\(desc.prefix(60))")
+                }
             case .thinking, .toolResult, .other:
                 break // thinking is intentionally not rendered
             }
@@ -660,6 +697,13 @@ final class ClaudeStreamSession: ObservableObject {
         // tool_use_id) usually arrives on task_started and may be absent on later
         // task_progress/task_updated/task_notification events.
         let alreadyTracked = backgroundShells.contains(where: { $0.id == id })
+        // CHORUS routing (#sub-agent): if this task is already a tracked sub-agent
+        // (or was previously identified as one), it belongs to the chorus, NOT the
+        // shells panel — update it there and return.
+        if subAgentTaskIds.contains(id) {
+            applySubAgentTask(task, id: id)
+            return
+        }
         if !alreadyTracked {
             // Sticky exclusion: once an id is identified as a sub-agent, stay excluded
             // even on later signal-less events for the same id.
@@ -671,6 +715,27 @@ final class ClaudeStreamSession: ObservableObject {
             let originatingTool: String? = task.toolUseId.flatMap { toolNamesByToolUseId[$0] }
             let isLocalBashType = (task.taskType?.lowercased() == "local_bash")
             let isBashOrigin = (originatingTool == "Bash")
+            let isAgentOrigin = (originatingTool == "Agent" || originatingTool == "Task")
+
+            // SUB-AGENT DETECTION (#sub-agent), in priority order:
+            //   1. Explicit Agent/Task origin (a future CLI that stamps tool_use_id /
+            //      parent_tool_use_id on task events — lights up automatically).
+            //   2. TEMPORAL ADJACENCY: a task_started with NO bash signal, while an
+            //      Agent tool_use is pending its task. Verified: the CLI's task_started
+            //      carries only `taskId` (no tool_use_id, no task_type), so this FIFO
+            //      pop is the PRIMARY correlation in practice. We only consume a pending
+            //      spawn on task_started (the birth event), never on a later progress
+            //      event for an unknown id.
+            let isBirth = (task.subtype == "task_started")
+            if isAgentOrigin || (isBirth && !isBashOrigin && !isLocalBashType && !pendingAgentSpawns.isEmpty) {
+                subAgentTaskIds.insert(id)
+                if subAgentTaskIds.count > 400 { subAgentTaskIds.removeAll() }
+                ConductorLog.signal("sub-agent")
+                    .info("CHORUS — routing sub-agent task \(id) (origin=\(originatingTool ?? "temporal-adjacency"))")
+                applySubAgentTask(task, id: id)
+                return
+            }
+
             // ADMIT only when a signal POSITIVELY says bash. Absent BOTH signals we
             // stay conservative and admit (the tool_result "Command running in
             // background" path is the other detector and only ever fires for real
@@ -740,6 +805,93 @@ final class ClaudeStreamSession: ObservableObject {
         )
         ConductorLog.signal("background-shell")
             .info("system task \(task.subtype) → shell id=\(id) status=\(mappedStatus.rawValue) type=\(task.taskType ?? "?") outputFile=\(task.outputFile ?? "?")")
+    }
+
+    // MARK: - Sub-agent (THE CHORUS) tracking (#sub-agent / #atrium-chorus)
+
+    /// Project a sub-agent task event into the @Published subAgents chorus. On the
+    /// birth event (task_started) we pop the oldest pending Agent tool_use to recover
+    /// the description + subagent_type (temporal-adjacency correlation — the CLI
+    /// carries no parent link). task_progress appends a sparkline heartbeat tick;
+    /// terminal task_updated/task_notification statuses freeze the sub-agent.
+    private func applySubAgentTask(_ task: SystemTaskEvent, id: String) {
+        let mapped = Self.mapSubAgentStatus(subtype: task.subtype, status: task.status)
+        let activity = task.output ?? task.description
+
+        if let idx = subAgents.firstIndex(where: { $0.id == id }) {
+            // Existing voice — update in place. Never regress out of a terminal state
+            // from a stray late event.
+            let old = subAgents[idx].status
+            if !old.isTerminal {
+                if mapped.isTerminal, subAgents[idx].endedAt == nil {
+                    subAgents[idx].endedAt = Date()
+                }
+                if old != mapped {
+                    subAgents[idx].status = mapped
+                    ConductorLog.signal("sub-agent")
+                        .info("CHORUS — sub-agent \(id) \(old.rawValue)→\(mapped.rawValue)")
+                }
+            }
+            if task.subtype == "task_progress" {
+                subAgents[idx].progressTicks.append(Date())
+                if subAgents[idx].progressTicks.count > SubAgent.maxProgressTicks {
+                    subAgents[idx].progressTicks.removeFirst(
+                        subAgents[idx].progressTicks.count - SubAgent.maxProgressTicks
+                    )
+                }
+            }
+            if let activity, !activity.isEmpty { subAgents[idx].lastActivity = activity }
+        } else {
+            // Birth — correlate to the oldest pending Agent spawn (FIFO temporal
+            // adjacency). If none is pending (rare ordering), register with a
+            // placeholder description so the voice still appears.
+            let spawn = pendingAgentSpawns.isEmpty ? nil : pendingAgentSpawns.removeFirst()
+            let sub = SubAgent(
+                id: id,
+                description: spawn?.description ?? task.description ?? "Sub-agent",
+                subagentType: spawn?.subagentType,
+                status: mapped,
+                endedAt: mapped.isTerminal ? Date() : nil,
+                lastActivity: activity,
+                progressTicks: task.subtype == "task_progress" ? [Date()] : [],
+                originatingToolUseId: spawn?.toolUseId
+            )
+            subAgents.append(sub)
+            ConductorLog.signal("sub-agent")
+                .info("CHORUS — sub-agent BORN \(id) type=\(sub.subagentType ?? "?") status=\(mapped.rawValue) desc=\(sub.description.prefix(60))")
+        }
+    }
+
+    /// Map a sub-agent task event to a SubAgentStatus. task_progress is ALWAYS a
+    /// non-terminal heartbeat. Terminal statuses on task_updated/task_notification:
+    /// killed→killed, stopped→stopped, failed/error→failed, completed/etc→completed.
+    /// (Claude Code 2.1.x: a TaskStop'd sub-agent reports "stopped" or "failed";
+    /// both are terminal and read as quiet/inkMuted or coral respectively.)
+    private static func mapSubAgentStatus(subtype: String, status: String?) -> SubAgentStatus {
+        if subtype == "task_progress" { return .running }
+        switch status?.lowercased() {
+        case "killed": return .killed
+        case "stopped": return .stopped
+        case "failed", "error": return .failed
+        case "finished", "completed", "success", "done", "exited": return .completed
+        default: return .running
+        }
+    }
+
+    /// Stop a running sub-agent (THE CHORUS Stop control). Like killShell, the
+    /// AUTHORITATIVE path is a SUPPRESSED isControl turn instructing the agent to
+    /// call TaskStop with this task id — the agent owns the real task→PID mapping.
+    /// Status is NOT optimistically flipped; the real task_updated/task_notification
+    /// drives the chorus status so the rail never lies (#sub-agent).
+    func stopSubAgent(id: String) {
+        guard subAgents.contains(where: { $0.id == id }) else {
+            ConductorLog.signal("sub-agent")
+                .error("stopSubAgent id=\(id) — no tracked sub-agent")
+            return
+        }
+        ConductorLog.signal("sub-agent")
+            .info("stopSubAgent id=\(id) — sending authoritative suppressed TaskStop control turn; awaiting task_* for real status")
+        sendControl(text: "Use the TaskStop tool to stop the background task with ID \(id). Do nothing else.")
     }
 
     /// Insert or update a tracked shell. Existing entries keep their startedAt and

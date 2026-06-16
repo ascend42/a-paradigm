@@ -66,6 +66,36 @@ enum ContentBlock: Decodable, Sendable {
     }
 }
 
+// MARK: - Agent (sub-agent) tool_use input extraction (#sub-agent)
+
+extension JSONValue {
+    /// Pull the sub-agent `description` from an `Agent`/`Task` tool_use input. The
+    /// CHORUS row LEADS with this prose label. Probes the common key spellings.
+    var subAgentDescription: String? {
+        guard case .object(let obj) = self else { return nil }
+        for key in ["description", "prompt", "task", "blurb"] {
+            if let v = obj[key] {
+                let s = v.asDisplayString
+                if !s.isEmpty { return s }
+            }
+        }
+        return nil
+    }
+
+    /// Pull the `subagent_type` (archetype) from an `Agent`/`Task` tool_use input —
+    /// rendered mono/muted as the row subtitle.
+    var subAgentType: String? {
+        guard case .object(let obj) = self else { return nil }
+        for key in ["subagent_type", "subagentType", "agent_type", "type"] {
+            if let v = obj[key] {
+                let s = v.asDisplayString
+                if !s.isEmpty { return s }
+            }
+        }
+        return nil
+    }
+}
+
 /// A Claude API message (assistant or user) carried inside a stream event.
 struct APIMessage: Decodable, Sendable {
     let id: String?
@@ -125,6 +155,15 @@ struct SystemTaskEvent: Decodable, Sendable {
     /// for distinguishing real background bash shells from Agent/Task sub-agents:
     /// both emit identical task_* events, so we must look at the originating tool.
     let toolUseId: String?
+    /// Best-effort parent_tool_use_id — the attribution that WOULD link a
+    /// sub-agent's events (and its interleaved tool calls) back to the spawning
+    /// Agent tool_use, enabling full nested drill-in (#sub-agent / #atrium-chorus).
+    /// VERIFIED ABSENT in the current Claude Code CLI stream-json (captured
+    /// transcripts show task_* carries only `taskId`); we probe for it anyway so a
+    /// future CLI that stamps it lights up nested transcript automatically. Until
+    /// then the CHORUS correlates Agent tool_use → task by temporal adjacency and
+    /// drill-in is the limited v1 (description + type + last-activity + status).
+    let parentToolUseId: String?
     /// Best-effort task TYPE — Claude Code tags background bash with
     /// task_type "local_bash"; Agent/Task sub-agents report a DIFFERENT type. This
     /// (alongside the originating-tool name) is how we filter sub-agents out of the
@@ -166,6 +205,8 @@ struct SystemTaskEvent: Decodable, Sendable {
         output = probe(["output", "stdout", "result", "text", "last_output"])
         outputFile = probe(["output_file", "outputFile", "output_path"])
         toolUseId = probe(["tool_use_id", "toolUseId"])
+        // parent_tool_use_id (#sub-agent): probed for forward-compat — see field doc.
+        parentToolUseId = probe(["parent_tool_use_id", "parentToolUseId"])
         // task_type discriminates background bash ("local_bash") from Agent/Task
         // sub-agents (a DIFFERENT type) — both emit identical task_* events, so this
         // is the primary signal for filtering sub-agents out of the shells panel

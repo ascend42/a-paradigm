@@ -29,8 +29,11 @@ final class AtriumSpikeWindow: NSWindow {
         self.session = ClaudeStreamSession(projectPath: Self.spikeProjectPath)
 
         let screenFrame = NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 1440, height: 900)
-        let width: CGFloat = 720
-        let height: CGFloat = 720
+        // Larger default so the conversation + CHORUS rail (push layout, ~300pt)
+        // both have room — built toward the full-screen Conductor, not the old
+        // tiny floating window. Clamp to the visible screen so it always fits.
+        let width: CGFloat = min(1100, screenFrame.width - 80)
+        let height: CGFloat = min(780, screenFrame.height - 80)
         let frame = NSRect(
             x: screenFrame.midX - width / 2,
             y: screenFrame.midY - height / 2,
@@ -39,6 +42,9 @@ final class AtriumSpikeWindow: NSWindow {
         )
 
         super.init(
+            // Resizable + miniaturizable + full-size content so the window can be
+            // dragged to any size, zoomed (green button), and taken full-screen
+            // (collectionBehavior below) on the way to the full-screen Conductor.
             contentRect: frame,
             styleMask: [.titled, .closable, .resizable, .miniaturizable, .fullSizeContentView],
             backing: .buffered,
@@ -64,8 +70,14 @@ final class AtriumSpikeWindow: NSWindow {
         isOpaque = true
         backgroundColor = NSColor(srgbRed: 0x0B / 255, green: 0x0E / 255, blue: 0x14 / 255, alpha: 1.0)
         hasShadow = true
-        minSize = NSSize(width: 480, height: 480)
+        minSize = NSSize(width: 560, height: 480)
         isReleasedWhenClosed = false
+        // Allow native full-screen (the green zoom button → full-screen) so the
+        // conversation + CHORUS rail can fill the display. .fullScreenPrimary makes
+        // this window full-screen-capable even though the app is an LSUIElement
+        // accessory; .managed keeps it in the Spaces/window cycle.
+        collectionBehavior.insert(.fullScreenPrimary)
+        collectionBehavior.insert(.managed)
         delegate = self
     }
 
