@@ -92,6 +92,32 @@ indirect enum JSONValue: Decodable, Sendable {
         }
     }
 
+    /// Compact JSON-ish string of this value — used to LOG raw payloads whose
+    /// shape we are still refining (e.g. system task events). Not a strict
+    /// round-trip serializer; good enough for Console diagnosis.
+    var jsonString: String {
+        switch self {
+        case .string(let s):
+            let escaped = s
+                .replacingOccurrences(of: "\\", with: "\\\\")
+                .replacingOccurrences(of: "\"", with: "\\\"")
+                .replacingOccurrences(of: "\n", with: "\\n")
+            return "\"\(escaped)\""
+        case .number(let n):
+            if n.rounded() == n, abs(n) < 1e15 { return String(Int(n)) }
+            return String(n)
+        case .bool(let b):
+            return b ? "true" : "false"
+        case .null:
+            return "null"
+        case .array(let arr):
+            return "[" + arr.map { $0.jsonString }.joined(separator: ",") + "]"
+        case .object(let obj):
+            let pairs = obj.map { "\"\($0.key)\":\($0.value.jsonString)" }
+            return "{" + pairs.joined(separator: ",") + "}"
+        }
+    }
+
     /// First scalar value found, scanning common keys then any value.
     /// Used to summarize a tool_use input (prefer command/file_path/pattern/path).
     var firstScalarSummary: String? {

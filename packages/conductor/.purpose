@@ -1298,12 +1298,31 @@ signals:
 # --- Conductor Revival Phase 0: ATRIUM keystone spike ---
 
 #stream-event:
-  description: Typed Decodable model of the claude --output-format stream-json NDJSON event stream (system/init, assistant, user/tool_result, result) — unknown shapes degrade to .unknown rather than throwing. JSONValue absorbs arbitrary tool_use input and heterogeneous tool_result content.
+  description: Typed Decodable model of the claude --output-format stream-json NDJSON event stream (system/init, system task_started/task_updated/task_notification, assistant, user/tool_result, result) — unknown shapes degrade to .unknown rather than throwing. System events route by subtype — task_* subtypes decode into SystemTaskEvent (background-shell lifecycle), all others into SystemInit. SystemTaskEvent decodes DEFENSIVELY (probes id/status/command/output across flat + nested objects) and keeps the full raw JSONValue (logged at debug) while the wire shape is refined. JSONValue absorbs arbitrary tool_use input and heterogeneous tool_result content and can re-serialize to a compact jsonString for logging.
   type: model
-  tags: [revival, atrium, stream-json, decode]
+  tags: [revival, atrium, stream-json, decode, background-shells]
   anchors:
     - Sources/Conductor/Models/Stream/StreamEvent.swift:1
     - Sources/Conductor/Models/Stream/JSONValue.swift:1
+
+#atrium-stop:
+  description: "Stop control for the ATRIUM composer (#atrium-thread). Visible/enabled ONLY while the agent is mid-turn (status .running/.starting), coral/blocked-tinted stop.fill glyph beside Send. On click calls ClaudeStreamSession.interrupt(), which writes a single {\"type\":\"interrupt\"} NDJSON line to the SAME claude stdin (does NOT close stdin) — VERIFIED to halt the current turn while KEEPING the session alive; a subsequent user turn is answered normally on the same session. interrupt() stops the in-flight agent message caret immediately; status settles to .idle via the terminal result event (applyResult), with the silence watchdog as backstop. The composer stays fully usable, so the founder can type and send a new turn right after stopping. Logged under !claude-interrupt."
+  type: view
+  tags: [atrium, ui, composer, interrupt, stop]
+  anchors:
+    - Sources/Conductor/UI/Views/Atrium/AtriumComposer.swift:1
+    - Sources/Conductor/Services/ClaudeStreamSession.swift:1
+
+#atrium-shells:
+  description: "Background-shell inspector for the ATRIUM window. Background shells are commands the agent ran with run_in_background; Claude Code does NOT kill them on session exit (they orphan to PID 1), so the host tracks and reaps them. DETECTION: ClaudeStreamSession parses tool_result text 'Command running in background with ID: <id>' (correlating the command from the matching Bash tool_use id recorded in applyAssistant) AND/OR the system task_started/task_updated/task_notification events; results upsert into @Published backgroundShells [BackgroundShell {id, command, startedAt, status running/finished/killed, lastOutput}]. UI: a right-aligned header button in AtriumThreadView shows a live count/'N live' and opens a popover (AtriumShellsPanel) listing each shell — command (mono, middle-truncated), id, status badge, startedAt, lastOutput snippet, and [Inspect]/[Kill] actions; empty state when none. INSPECT (v1, agent-mediated): sends a user turn asking the agent to call BashOutput(id); the returned tool_result surfaces in the thread. KILL (v1, hybrid): optimistically marks status=killed for instant feedback AND sends a user turn asking the agent to call KillShell(id). EXIT CLEANUP: shutdown() best-effort reaps the claude process tree BEFORE terminating claude — collectDescendants via pgrep -P, SIGTERM then SIGKILL survivors after a 300ms grace — preventing the orphan leak. Heavy ConductorLog under !background-shell (detection, raw task payloads, inspect/kill, reap). FOLLOW-UP: direct (non-agent-mediated) live-output polling."
+  type: feature
+  tags: [atrium, ui, background-shells, process, cleanup]
+  anchors:
+    - Sources/Conductor/Models/BackgroundShell.swift:1
+    - Sources/Conductor/UI/Views/Atrium/AtriumShellsPanel.swift:1
+    - Sources/Conductor/UI/Views/Atrium/AtriumThreadView.swift:1
+    - Sources/Conductor/Services/ClaudeStreamSession.swift:1
+    - Sources/Conductor/Models/Stream/StreamEvent.swift:1
 
 #conversation-model:
   description: Observable projection of the stream-json event sequence into renderable ConversationMessage values (agent/user/system authors) with ToolCall chips (running/succeeded/failed) — decouples the UI from the wire format.
@@ -1313,7 +1332,7 @@ signals:
     - Sources/Conductor/Models/ConversationMessage.swift:1
 
 #claude-stream-session:
-  description: "@MainActor ObservableObject owning ONE headless claude process speaking stream-json over stdin/stdout. Decodes the NDJSON OFF the main thread via a Sendable LineFramer in the readabilityHandler, then hops to @MainActor to project events into the conversation model. Buffers the first turn until system/init; keeps stdin open between turns. Traces every applied event type (system/assistant/user/result/unknown) and surfaces claude stderr to ConductorLog so stalls/errors are visible. A silence watchdog settles the UI out of .running if a result is missed (caret off, status idle), and applyResult flips status to idle + records cumulative total_cost_usd and authoritative end-of-turn usage."
+  description: "@MainActor ObservableObject owning ONE headless claude process speaking stream-json over stdin/stdout. Decodes the NDJSON OFF the main thread via a Sendable LineFramer in the readabilityHandler, then hops to @MainActor to project events into the conversation model. Buffers the first turn until system/init; keeps stdin open between turns. Traces every applied event type (system/systemTask/assistant/user/result/unknown) and surfaces claude stderr to ConductorLog so stalls/errors are visible. A silence watchdog settles the UI out of .running if a result is missed (caret off, status idle), and applyResult flips status to idle + records cumulative total_cost_usd and authoritative end-of-turn usage. interrupt() (#atrium-stop) writes a single {\"type\":\"interrupt\"} line to the SAME stdin to halt the active turn while keeping the session alive. Tracks background shells (#atrium-shells) in @Published backgroundShells by parsing tool_result 'Command running in background with ID: <id>' (command correlated from the Bash tool_use id) and system task events; inspectShell/killShell send agent-mediated BashOutput/KillShell turns; shutdown() reaps the claude process tree (pgrep -P → SIGTERM/SIGKILL) before terminating claude to prevent orphan-to-PID-1 leaks."
   type: service
   tags: [revival, atrium, process, concurrency]
   anchors:
@@ -1328,7 +1347,7 @@ signals:
     - Sources/Conductor/UI/AtriumTheme.swift:1
 
 #atrium-thread:
-  description: Custom SwiftUI thread surface — scrolling conversation pinned to bottom, agent turns with blinking amber caret + collapsible tool chips, right-aligned user capsules, reply composer (ALWAYS editable/focusable — never hard-disabled by session status; Send gated only on live-session + non-empty draft, so a stuck-running turn can never lock the founder out; mid-turn sends queue on claude stdin), and a model·session·tokens·cost footer. Hosted in AtriumSpikeWindow (single-owner of its ClaudeStreamSession), launched from the menu bar.
+  description: Custom SwiftUI thread surface — a thin top header carrying the background-shell inspector affordance (#atrium-shells), a scrolling conversation pinned to bottom, agent turns with blinking amber caret + collapsible tool chips, right-aligned user capsules, reply composer (ALWAYS editable/focusable — never hard-disabled by session status; Send gated only on live-session + non-empty draft, so a stuck-running turn can never lock the founder out; mid-turn sends queue on claude stdin; a coral Stop button (#atrium-stop) appears beside Send while the agent is mid-turn), and a model·session·tokens·cost footer. Hosted in AtriumSpikeWindow (single-owner of its ClaudeStreamSession), launched from the menu bar.
   type: view
   tags: [revival, atrium, ui, thread]
   anchors:

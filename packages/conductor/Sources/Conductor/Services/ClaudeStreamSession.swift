@@ -28,6 +28,16 @@ final class ClaudeStreamSession: ObservableObject {
     @Published private(set) var lastUsage: Usage?
     @Published private(set) var model: String?
 
+    /// Background shells the agent spawned during this session (#atrium-shells).
+    /// Populated from tool_result text ("Command running in background with ID:
+    /// <id>") and/or system task events; the founder can inspect and kill them.
+    @Published private(set) var backgroundShells: [BackgroundShell] = []
+
+    /// Maps a Bash tool_use id → its command, so when the matching tool_result
+    /// arrives carrying a background ID we can correlate the command text.
+    /// Pruned opportunistically (capped) so it can't grow unbounded.
+    private var bashCommandsByToolUseId: [String: String] = [:]
+
     // MARK: - Process
 
     private let projectPath: String
@@ -150,11 +160,21 @@ final class ClaudeStreamSession: ObservableObject {
         }
     }
 
-    /// Tear down: terminate the process, close stdin, detach handlers.
+    /// Tear down: best-effort reap orphan background shells, terminate the
+    /// process, close stdin, detach handlers.
     func shutdown() {
         cancelWatchdog()
         stdoutPipe?.fileHandleForReading.readabilityHandler = nil
         stderrPipe?.fileHandleForReading.readabilityHandler = nil
+
+        // Claude Code does NOT kill background shells on session exit — they
+        // orphan to PID 1. Best-effort: walk the process tree from the claude PID
+        // and reap descendants BEFORE we terminate claude (after which ppids are
+        // reparented to 1 and the tree is lost). (#atrium-shells)
+        if let proc = process, proc.isRunning {
+            Self.reapDescendants(of: proc.processIdentifier)
+        }
+
         if let proc = process, proc.isRunning {
             proc.terminate()
         }
@@ -162,6 +182,69 @@ final class ClaudeStreamSession: ObservableObject {
         status = .stopped
         ConductorLog.signal("agent-stopped")
             .info("ClaudeStreamSession shut down")
+    }
+
+    /// Walk the process tree rooted at `rootPID` and reap every descendant:
+    /// SIGTERM first, then SIGKILL the survivors after a short grace. This
+    /// prevents the documented orphan-to-PID-1 leak of background shells. Uses
+    /// `pgrep -P` to enumerate children (no host enumeration API exists for the
+    /// stream's shells, so we go by the OS process tree). Logs what it killed.
+    nonisolated static func reapDescendants(of rootPID: Int32) {
+        let descendants = collectDescendants(of: rootPID)
+        guard !descendants.isEmpty else {
+            ConductorLog.signal("background-shell")
+                .info("reapDescendants — no descendants of PID \(rootPID) to reap")
+            return
+        }
+        ConductorLog.signal("background-shell")
+            .info("reapDescendants — SIGTERM \(descendants.count) descendant(s) of PID \(rootPID): \(descendants.map(String.init).joined(separator: ","))")
+        for pid in descendants { kill(pid, SIGTERM) }
+
+        // Short grace, then SIGKILL any survivors.
+        usleep(300_000) // 300ms
+        var killed: [Int32] = []
+        for pid in descendants where kill(pid, 0) == 0 {
+            kill(pid, SIGKILL)
+            killed.append(pid)
+        }
+        if !killed.isEmpty {
+            ConductorLog.signal("background-shell")
+                .info("reapDescendants — SIGKILL survivors: \(killed.map(String.init).joined(separator: ","))")
+        }
+    }
+
+    /// Depth-first collection of all descendant PIDs of `rootPID` via `pgrep -P`.
+    nonisolated private static func collectDescendants(of rootPID: Int32) -> [Int32] {
+        var result: [Int32] = []
+        let children = pgrepChildren(of: rootPID)
+        for child in children {
+            result.append(child)
+            result.append(contentsOf: collectDescendants(of: child))
+        }
+        return result
+    }
+
+    /// Direct children of `pid` via `/usr/bin/pgrep -P <pid>`.
+    nonisolated private static func pgrepChildren(of pid: Int32) -> [Int32] {
+        let proc = Process()
+        proc.executableURL = URL(fileURLWithPath: "/usr/bin/pgrep")
+        proc.arguments = ["-P", String(pid)]
+        let out = Pipe()
+        proc.standardOutput = out
+        proc.standardError = Pipe()
+        do {
+            try proc.run()
+            let data = out.fileHandleForReading.readDataToEndOfFile()
+            proc.waitUntilExit()
+            let text = String(decoding: data, as: UTF8.self)
+            return text
+                .split(whereSeparator: { $0 == "\n" || $0 == " " })
+                .compactMap { Int32($0.trimmingCharacters(in: .whitespaces)) }
+        } catch {
+            ConductorLog.signal("background-shell")
+                .error("pgrep -P \(pid) failed: \(error.localizedDescription)")
+            return []
+        }
     }
 
     // MARK: - Outbound turn ($claude-turn-exchange)
@@ -205,6 +288,40 @@ final class ClaudeStreamSession: ObservableObject {
             .info("Sent user turn (\(text.count) chars)")
     }
 
+    // MARK: - Interrupt the active turn (#atrium-stop)
+
+    /// Stop the turn currently in flight WITHOUT killing the session. Verified
+    /// mechanism: writing a single `{"type":"interrupt"}` NDJSON line to claude's
+    /// stdin halts the current turn and keeps the session alive — a subsequent
+    /// user turn is answered normally on the SAME session. We reuse the stdin
+    /// write path and DO NOT close stdin. After interrupt, claude emits a
+    /// terminal `result` event which settles status via applyResult; the
+    /// existing watchdog remains the backstop if that result is ever missed.
+    func interrupt() {
+        guard status == .running else {
+            ConductorLog.signal("claude-interrupt")
+                .debug("interrupt() ignored — status is \(self.status.rawValue), not running")
+            return
+        }
+        guard let stdin = stdinPipe else {
+            ConductorLog.signal("claude-interrupt")
+                .error("interrupt() — no stdin pipe; cannot interrupt")
+            return
+        }
+        // Single-line control message on the SAME stdin (do NOT close it).
+        let line = "{\"type\":\"interrupt\"}\n"
+        stdin.fileHandleForWriting.write(Data(line.utf8))
+
+        // Stop the caret on the in-flight agent message immediately for instant
+        // feedback. Status is left as-is; the incoming terminal `result` flips it
+        // to .idle (applyResult), with the watchdog as backstop.
+        if let index = currentAgentIndex, messages.indices.contains(index) {
+            messages[index].isStreaming = false
+        }
+        ConductorLog.signal("claude-interrupt")
+            .info("interrupt sent — wrote {\"type\":\"interrupt\"} to stdin; session kept alive, awaiting terminal result")
+    }
+
     // MARK: - Off-main ingest
 
     /// Feed raw stdout bytes to the framer (off main), then hop to main to apply.
@@ -237,6 +354,10 @@ final class ClaudeStreamSession: ObservableObject {
                 ConductorLog.flow("claude-turn-exchange")
                     .debug("apply event=system subtype-init session=\(sys.sessionId ?? "?")")
                 applySystemInit(sys)
+            case .systemTask(let task):
+                ConductorLog.flow("claude-turn-exchange")
+                    .debug("apply event=system subtype=\(task.subtype)")
+                applySystemTask(task)
             case .assistant(let asst):
                 ConductorLog.flow("claude-turn-exchange")
                     .debug("apply event=assistant blocks=\(asst.message.content.count) out=\(asst.message.usage?.outputTokens ?? -1)")
@@ -346,6 +467,16 @@ final class ClaudeStreamSession: ObservableObject {
                 messages[index].toolCalls.append(
                     ToolCall(id: id, name: name, inputSummary: summary, state: .running, resultSummary: nil)
                 )
+                // Remember Bash commands by tool_use id so we can correlate the
+                // command text if this Bash gets backgrounded (#atrium-shells).
+                if name == "Bash" {
+                    let cmd = Self.commandText(from: input) ?? summary
+                    bashCommandsByToolUseId[id] = cmd
+                    // Cap the map so a long session can't grow it unbounded.
+                    if bashCommandsByToolUseId.count > 200 {
+                        bashCommandsByToolUseId.removeAll()
+                    }
+                }
             case .thinking, .toolResult, .other:
                 break // thinking is intentionally not rendered
             }
@@ -363,7 +494,129 @@ final class ClaudeStreamSession: ObservableObject {
                     break
                 }
             }
+            // Background-shell detection (#atrium-shells): a backgrounded command
+            // returns a tool_result whose TEXT contains
+            // "Command running in background with ID: <id>". Correlate the command
+            // from the matching Bash tool_use id we recorded earlier.
+            if let shellId = Self.backgroundShellId(in: content) {
+                let command = bashCommandsByToolUseId[toolUseId]
+                    ?? bashCommandsByToolUseId.first(where: { _ in true })?.value
+                    ?? "(unknown command)"
+                upsertShell(id: shellId, command: command, status: .running, output: nil)
+                ConductorLog.signal("background-shell")
+                    .info("detected background shell id=\(shellId) command=\(command)")
+            }
         }
+    }
+
+    // MARK: - Background-shell tracking helpers (#atrium-shells)
+
+    /// React to a system task event (task_started/updated/notification). The
+    /// exact payload shape is being refined, so we LOG the full raw JSON at debug
+    /// and best-effort update tracked shells from any id/status/command/output we
+    /// could probe.
+    private func applySystemTask(_ task: SystemTaskEvent) {
+        ConductorLog.signal("background-shell")
+            .debug("system task \(task.subtype) raw=\(task.raw.jsonString)")
+
+        guard let id = task.id, !id.isEmpty else {
+            // No id we could extract — keep tolerant; the tool_result path is the
+            // primary detector. Nothing else to do.
+            return
+        }
+        let mappedStatus: BackgroundShellStatus
+        switch (task.subtype, task.status?.lowercased()) {
+        case (_, "finished"), (_, "completed"), (_, "done"), (_, "exited"):
+            mappedStatus = .finished
+        case ("task_started", _):
+            mappedStatus = .running
+        default:
+            // task_updated / task_notification without a terminal status → running
+            mappedStatus = .running
+        }
+        upsertShell(
+            id: id,
+            command: task.command ?? "(background task)",
+            status: mappedStatus,
+            output: task.output
+        )
+        ConductorLog.signal("background-shell")
+            .info("system task \(task.subtype) → shell id=\(id) status=\(mappedStatus.rawValue)")
+    }
+
+    /// Insert or update a tracked shell. Existing entries keep their startedAt and
+    /// a real command (don't overwrite a known command with a placeholder); status
+    /// never regresses out of `killed`.
+    private func upsertShell(
+        id: String,
+        command: String,
+        status: BackgroundShellStatus,
+        output: String?
+    ) {
+        if let idx = backgroundShells.firstIndex(where: { $0.id == id }) {
+            // Never un-kill a shell from a stray event.
+            if backgroundShells[idx].status != .killed {
+                backgroundShells[idx].status = status
+            }
+            let isPlaceholder = command == "(unknown command)" || command == "(background task)"
+            if !isPlaceholder, backgroundShells[idx].command.hasPrefix("(") {
+                backgroundShells[idx].command = command
+            }
+            if let output, !output.isEmpty {
+                backgroundShells[idx].lastOutput = output
+            }
+        } else {
+            backgroundShells.append(
+                BackgroundShell(id: id, command: command, status: status, lastOutput: output)
+            )
+        }
+    }
+
+    /// Extract the background shell id from a tool_result text, if present.
+    /// Pattern: "Command running in background with ID: <id>".
+    static func backgroundShellId(in text: String) -> String? {
+        guard let range = text.range(of: "background with ID:") else { return nil }
+        let tail = text[range.upperBound...]
+        // The id is the first whitespace-delimited token after the marker.
+        let token = tail
+            .drop(while: { $0 == " " || $0 == "\t" })
+            .prefix(while: { !$0.isWhitespace })
+        let id = String(token).trimmingCharacters(in: CharacterSet(charactersIn: ".,)\"'"))
+        return id.isEmpty ? nil : id
+    }
+
+    /// Pull a Bash command string out of a tool_use input JSONValue.
+    static func commandText(from input: JSONValue) -> String? {
+        if case .object(let obj) = input, let cmd = obj["command"] {
+            let s = cmd.asDisplayString
+            return s.isEmpty ? nil : s
+        }
+        return nil
+    }
+
+    // MARK: - Agent-mediated inspect / kill (#atrium-shells)
+
+    /// Inspect a background shell's latest output. v1 is AGENT-MEDIATED: we send a
+    /// normal user turn instructing the agent to run BashOutput for the id; the
+    /// returned tool_result surfaces in the thread (and system task events update
+    /// lastOutput). A cleaner direct path can come later.
+    func inspectShell(id: String) {
+        ConductorLog.signal("background-shell")
+            .info("inspectShell id=\(id) — sending agent-mediated BashOutput request")
+        send(text: "Show the latest output of background shell \(id) by calling the BashOutput tool with that shell id. Just report the output; do not take further action.")
+    }
+
+    /// Kill a background shell. Hybrid strategy: PRIMARY is agent-mediated — send a
+    /// user turn instructing the agent to call KillShell(id). We optimistically
+    /// mark the shell killed for immediate UI feedback; the agent's confirmation
+    /// (and host-side cleanup on exit) backs it up.
+    func killShell(id: String) {
+        ConductorLog.signal("background-shell")
+            .info("killShell id=\(id) — sending agent-mediated KillShell request")
+        if let idx = backgroundShells.firstIndex(where: { $0.id == id }) {
+            backgroundShells[idx].status = .killed
+        }
+        send(text: "Kill the background shell \(id) by calling the KillShell tool with that shell id. Confirm when done.")
     }
 
     private func applyResult(_ result: ResultEvent) {

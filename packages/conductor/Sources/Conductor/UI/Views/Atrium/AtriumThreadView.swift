@@ -10,6 +10,8 @@ struct AtriumThreadView: View {
 
     var body: some View {
         VStack(spacing: 0) {
+            header
+            Divider().overlay(AtriumTheme.hairline)
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 18) {
@@ -39,6 +41,18 @@ struct AtriumThreadView: View {
             AtriumFooter(session: session)
         }
         .background(AtriumTheme.void)
+    }
+
+    /// Thin top bar carrying the background-shell inspector affordance
+    /// (#atrium-shells), right-aligned so the conversation stays the focus.
+    private var header: some View {
+        HStack(spacing: 8) {
+            Spacer()
+            AtriumShellsButton(session: session)
+        }
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(AtriumTheme.sunken)
     }
 
     private static let bottomAnchor = "atrium-bottom-anchor"

@@ -71,6 +71,7 @@ struct AtriumComposer: View {
             HStack(alignment: .bottom, spacing: 8) {
                 voiceButton
                 composerField
+                if isBusy { stopButton }
                 sendButton
             }
         }
@@ -144,6 +145,27 @@ struct AtriumComposer: View {
         }
         .buttonStyle(.plain)
         .disabled(!canSend)
+    }
+
+    /// Stop control (#atrium-stop). Visible/enabled ONLY while the agent is
+    /// mid-turn (isBusy). On click, interrupts the active turn over claude's
+    /// stdin while KEEPING the session alive — the composer stays usable so the
+    /// founder can immediately type and send a new turn. Coral/blocked tint.
+    private var stopButton: some View {
+        Button(action: { session.interrupt() }) {
+            Image(systemName: "stop.fill")
+                .font(.system(size: 13, weight: .bold))
+                .foregroundColor(AtriumTheme.blocked)
+                .frame(width: 36, height: 38)
+                .background(AtriumTheme.surfaceRaised)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 8)
+                        .stroke(AtriumTheme.blocked, lineWidth: 1)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: 8))
+        }
+        .buttonStyle(.plain)
+        .help("Stop the current turn (keeps the session alive — you can send a new turn right after).")
     }
 
     // Voice mic affordance (Feature D). Color reflects state: amber when active.

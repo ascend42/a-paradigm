@@ -101,6 +101,70 @@ struct SystemInit: Decodable, Sendable {
     }
 }
 
+/// `{"type":"system","subtype":"task_started"|"task_updated"|"task_notification",...}`
+/// — background-shell lifecycle events (#atrium-shells). The exact payload shape
+/// is not fully pinned down, so we decode DEFENSIVELY: capture the subtype and a
+/// handful of likely scalar fields (id/status/command/output), and ALSO keep the
+/// full raw JSON via JSONValue so we can refine later. Tolerant — any missing key
+/// is just nil.
+struct SystemTaskEvent: Decodable, Sendable {
+    let subtype: String
+    /// Best-effort shell id (probed across several likely keys).
+    let id: String?
+    /// Best-effort status string (running/finished/etc.) if present.
+    let status: String?
+    /// Best-effort command text if present.
+    let command: String?
+    /// Best-effort latest output snippet if present.
+    let output: String?
+    /// The complete decoded object — logged at debug so we can refine the shape.
+    let raw: JSONValue
+
+    enum CodingKeys: String, CodingKey {
+        case subtype
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        subtype = (try? container.decode(String.self, forKey: .subtype)) ?? "task_unknown"
+
+        // Capture the whole object so nothing is lost while the shape is unknown.
+        let whole = (try? JSONValue(from: decoder)) ?? .null
+        raw = whole
+
+        // Probe common keys defensively across the object (and a nested "task"
+        // object, in case the payload nests under one).
+        func probe(_ keys: [String]) -> String? {
+            for obj in SystemTaskEvent.candidateObjects(whole) {
+                for key in keys {
+                    if let v = obj[key] {
+                        let s = v.asDisplayString
+                        if !s.isEmpty { return s }
+                    }
+                }
+            }
+            return nil
+        }
+        id = probe(["id", "task_id", "shell_id", "taskId", "shellId", "bash_id"])
+        status = probe(["status", "state"])
+        command = probe(["command", "cmd"])
+        output = probe(["output", "stdout", "result", "text", "last_output"])
+    }
+
+    /// The top-level object plus any nested "task"/"data" objects, so probes find
+    /// fields whether flat or nested.
+    private static func candidateObjects(_ value: JSONValue) -> [[String: JSONValue]] {
+        guard case .object(let obj) = value else { return [] }
+        var out: [[String: JSONValue]] = [obj]
+        for nestedKey in ["task", "data", "payload"] {
+            if case .object(let nested)? = obj[nestedKey] {
+                out.append(nested)
+            }
+        }
+        return out
+    }
+}
+
 /// `{"type":"assistant","message":{...},"session_id":...}`
 struct AssistantMessage: Decodable, Sendable {
     let message: APIMessage
@@ -139,21 +203,31 @@ struct ResultEvent: Decodable, Sendable {
 /// A single decoded line from the stream-json NDJSON output.
 enum StreamEvent: Decodable, Sendable {
     case system(SystemInit)
+    /// Background-shell lifecycle system events (#atrium-shells):
+    /// subtype task_started/task_updated/task_notification.
+    case systemTask(SystemTaskEvent)
     case assistant(AssistantMessage)
     case user(UserMessage)
     case result(ResultEvent)
     case unknown(type: String)
 
-    private enum TypeKey: String, CodingKey { case type }
+    private enum TypeKey: String, CodingKey { case type, subtype }
 
     init(from decoder: Decoder) throws {
         let typeContainer = try decoder.container(keyedBy: TypeKey.self)
         let type = (try? typeContainer.decode(String.self, forKey: .type)) ?? "unknown"
+        let subtype = (try? typeContainer.decode(String.self, forKey: .subtype))
 
         switch type {
         case "system":
-            // Tolerate subtypes other than init — they still decode into SystemInit fields.
-            self = .system(try SystemInit(from: decoder))
+            // Route by subtype: task_* events carry background-shell info; all
+            // other system events (init, and any unknown subtype) decode into
+            // SystemInit fields as before.
+            if let subtype, subtype.hasPrefix("task_") {
+                self = .systemTask(try SystemTaskEvent(from: decoder))
+            } else {
+                self = .system(try SystemInit(from: decoder))
+            }
         case "assistant":
             self = .assistant(try AssistantMessage(from: decoder))
         case "user":
