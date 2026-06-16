@@ -194,6 +194,45 @@ struct UserMessage: Decodable, Sendable {
     let message: APIMessage
 }
 
+/// `{"type":"control_response","response":{"subtype":"success","request_id":"..."}}`
+/// — the stream-json CONTROL protocol's reply to a `control_request`. We send a
+/// `{"subtype":"interrupt"}` control_request to halt the active turn (#atrium-stop,
+/// VERIFIED mechanism); claude replies with this control_response carrying our
+/// request_id, which confirms the interrupt landed. Decoded defensively: the
+/// fields live under a nested `response` object, but we also probe the top level
+/// in case the shape flattens.
+struct ControlResponseEvent: Decodable, Sendable {
+    /// "success" | "error" (best-effort).
+    let subtype: String?
+    /// The request_id of the control_request this responds to — matched against
+    /// our pending interrupt id to confirm the interrupt was honored.
+    let requestId: String?
+    /// Best-effort error text when subtype == "error".
+    let error: String?
+
+    enum CodingKeys: String, CodingKey {
+        case response
+        case subtype
+        case requestId = "request_id"
+        case error
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        // Preferred shape: fields nested under "response".
+        if let nested = try? container.nestedContainer(keyedBy: CodingKeys.self, forKey: .response) {
+            subtype = try? nested.decode(String.self, forKey: .subtype)
+            requestId = try? nested.decode(String.self, forKey: .requestId)
+            error = try? nested.decode(String.self, forKey: .error)
+        } else {
+            // Fallback: flattened shape at the top level.
+            subtype = try? container.decode(String.self, forKey: .subtype)
+            requestId = try? container.decode(String.self, forKey: .requestId)
+            error = try? container.decode(String.self, forKey: .error)
+        }
+    }
+}
+
 /// `{"type":"result","subtype":"success","result":"...","total_cost_usd":...}`
 struct ResultEvent: Decodable, Sendable {
     let subtype: String?
@@ -222,6 +261,8 @@ enum StreamEvent: Decodable, Sendable {
     case assistant(AssistantMessage)
     case user(UserMessage)
     case result(ResultEvent)
+    /// Reply to a control_request (#atrium-stop): confirms an interrupt landed.
+    case controlResponse(ControlResponseEvent)
     case unknown(type: String)
 
     private enum TypeKey: String, CodingKey { case type, subtype }
@@ -247,6 +288,8 @@ enum StreamEvent: Decodable, Sendable {
             self = .user(try UserMessage(from: decoder))
         case "result":
             self = .result(try ResultEvent(from: decoder))
+        case "control_response":
+            self = .controlResponse(try ControlResponseEvent(from: decoder))
         default:
             self = .unknown(type: type)
         }

@@ -63,6 +63,16 @@ final class ClaudeStreamSession: ObservableObject {
     private var watchdog: Task<Void, Never>?
     private let watchdogQuiet: UInt64 = 12 // seconds of silence → settle
 
+    /// The request_id of an interrupt control_request we've sent and are awaiting
+    /// confirmation for (#atrium-stop). Set in interrupt(); cleared when the
+    /// matching control_response success arrives, or when the turn settles.
+    private var pendingInterruptRequestId: String?
+    /// True between sending an interrupt and the turn's terminal `result`. Used so
+    /// the terminal `result` (which arrives as subtype `error_during_execution`
+    /// after an interrupt) settles cleanly to .idle instead of rendering a scary
+    /// error to the founder.
+    private var interruptInFlight = false
+
     init(projectPath: String) {
         self.projectPath = projectPath
     }
@@ -301,13 +311,24 @@ final class ClaudeStreamSession: ObservableObject {
 
     // MARK: - Interrupt the active turn (#atrium-stop)
 
-    /// Stop the turn currently in flight WITHOUT killing the session. Verified
-    /// mechanism: writing a single `{"type":"interrupt"}` NDJSON line to claude's
-    /// stdin halts the current turn and keeps the session alive — a subsequent
-    /// user turn is answered normally on the SAME session. We reuse the stdin
-    /// write path and DO NOT close stdin. After interrupt, claude emits a
-    /// terminal `result` event which settles status via applyResult; the
-    /// existing watchdog remains the backstop if that result is ever missed.
+    /// Stop the turn currently in flight WITHOUT killing the session.
+    ///
+    /// VERIFIED mechanism — the stream-json CONTROL protocol (NOT the bare
+    /// `{"type":"interrupt"}` line, which is empirically IGNORED: a "count to 600"
+    /// turn ran to completion despite it). The correct, proven shape is a
+    /// control_request with a unique request_id:
+    ///
+    ///   stdin  →  {"type":"control_request","request_id":"<uuid>","request":{"subtype":"interrupt"}}\n
+    ///   stdout ←  {"type":"control_response","response":{"subtype":"success","request_id":"<uuid>"}}
+    ///   stdout ←  {"type":"result","subtype":"error_during_execution",...}   (terminal)
+    ///
+    /// (Proven: with the control_request a "count to 600" turn stopped at 124 and
+    /// emitted control_response success; the bare form counted all the way to 600.)
+    ///
+    /// We DO NOT close stdin — the process stays alive and accepts the next user
+    /// turn normally. The terminal `result` (subtype error_during_execution after
+    /// an interrupt) settles status to .idle via applyResult; the control_response
+    /// confirms the interrupt landed; the watchdog remains the backstop.
     func interrupt() {
         guard status == .running else {
             ConductorLog.signal("claude-interrupt")
@@ -319,18 +340,43 @@ final class ClaudeStreamSession: ObservableObject {
                 .error("interrupt() — no stdin pipe; cannot interrupt")
             return
         }
-        // Single-line control message on the SAME stdin (do NOT close it).
-        let line = "{\"type\":\"interrupt\"}\n"
+
+        // Unique request_id so we can match the control_response confirmation.
+        let requestId = UUID().uuidString
+        pendingInterruptRequestId = requestId
+        interruptInFlight = true
+
+        // Build the control_request JSON deterministically (key order is
+        // irrelevant to the protocol; this avoids encoder ambiguity).
+        let line = "{\"type\":\"control_request\",\"request_id\":\"\(requestId)\",\"request\":{\"subtype\":\"interrupt\"}}\n"
         stdin.fileHandleForWriting.write(Data(line.utf8))
 
         // Stop the caret on the in-flight agent message immediately for instant
-        // feedback. Status is left as-is; the incoming terminal `result` flips it
-        // to .idle (applyResult), with the watchdog as backstop.
+        // feedback. Status is left .running; the terminal `result` flips it to
+        // .idle (applyResult), with the watchdog as backstop.
         if let index = currentAgentIndex, messages.indices.contains(index) {
             messages[index].isStreaming = false
         }
         ConductorLog.signal("claude-interrupt")
-            .info("interrupt sent — wrote {\"type\":\"interrupt\"} to stdin; session kept alive, awaiting terminal result")
+            .info("interrupt control_request sent id=\(requestId); session kept alive, awaiting control_response + terminal result")
+    }
+
+    /// Handle a control_response (#atrium-stop). When it matches our pending
+    /// interrupt request_id and reports success, the interrupt is confirmed
+    /// landed. We do NOT settle status here — the terminal `result` does that —
+    /// but we log the confirmation so a missed interrupt is diagnosable.
+    private func applyControlResponse(_ resp: ControlResponseEvent) {
+        let matches = resp.requestId != nil && resp.requestId == pendingInterruptRequestId
+        if matches, (resp.subtype ?? "").lowercased() == "success" {
+            ConductorLog.signal("claude-interrupt")
+                .info("interrupt CONFIRMED — control_response success for id=\(resp.requestId ?? "?")")
+        } else if matches {
+            ConductorLog.signal("claude-interrupt")
+                .error("interrupt control_response NON-success for id=\(resp.requestId ?? "?") subtype=\(resp.subtype ?? "?") error=\(resp.error ?? "?")")
+        } else {
+            ConductorLog.signal("claude-interrupt")
+                .debug("control_response (unmatched) subtype=\(resp.subtype ?? "?") id=\(resp.requestId ?? "?")")
+        }
     }
 
     // MARK: - Off-main ingest
@@ -381,6 +427,10 @@ final class ClaudeStreamSession: ObservableObject {
                 ConductorLog.flow("claude-turn-exchange")
                     .debug("apply event=result subtype=\(result.subtype ?? "?") cost=\(result.totalCostUsd ?? -1) out=\(result.usage?.outputTokens ?? -1)")
                 applyResult(result)
+            case .controlResponse(let resp):
+                ConductorLog.flow("claude-turn-exchange")
+                    .debug("apply event=control_response subtype=\(resp.subtype ?? "?") id=\(resp.requestId ?? "?")")
+                applyControlResponse(resp)
             case .unknown(let type):
                 // Tolerated, but TRACE it — a `result` showing up here would mean
                 // a decode divergence (the exact failure class for this bug).
@@ -422,6 +472,8 @@ final class ClaudeStreamSession: ObservableObject {
             messages[index].isStreaming = false
         }
         currentAgentIndex = nil
+        interruptInFlight = false
+        pendingInterruptRequestId = nil
         status = .idle
         ConductorLog.signal("agent-turn-complete")
             .info("watchdog — turn went quiet \(self.watchdogQuiet)s with no result; settling to idle")
@@ -693,11 +745,29 @@ final class ClaudeStreamSession: ObservableObject {
         }
     }
 
-    /// Kill a background shell — DIRECTLY, host-side. Uses `lsof -t` against the
-    /// shell's `.output` file to find the PID(s) writing it, then SIGTERM → grace
-    /// → SIGKILL. Marks the shell killed in the panel. Does NOT send a chat
-    /// message. Fallback only if lsof returns nothing: a SUPPRESSED control turn
-    /// to the agent (KillShell) that is filtered out of the rendered thread.
+    /// Kill a background shell — via the AUTHORITATIVE agent path (#atrium-shells
+    /// FIX B).
+    ///
+    /// WHY NOT lsof: the previous primary used `lsof -t <output_file>` to find the
+    /// PID writing the .output file and SIGTERM'd it. That targets the FILE-WRITER
+    /// WRAPPER, not the actual backgrounded command — clicking Kill marked the
+    /// shell "killed" while the real process kept running (the agent later observed
+    /// exit 144 / SIGURG on the wrong target). The panel LIED about the state.
+    ///
+    /// PRIMARY (authoritative): send a SUPPRESSED control turn instructing the
+    /// agent to call its `KillShell` tool with this shell id. The agent owns the
+    /// real task→PID mapping, so it kills the correct process. The turn is flagged
+    /// `isControl` so AtriumThreadView never renders it — invisible to the founder.
+    ///
+    /// STATUS HONESTY: we do NOT optimistically mark `.killed` (that was the lie).
+    /// We mark `.killing` is not a state; instead we leave the status as-is and let
+    /// the REAL task_updated/task_notification (patch.status → killed/stopped) or
+    /// the KillShell tool_result flip it via applySystemTask/applyToolResults. The
+    /// panel then reflects the true process state.
+    ///
+    /// SECONDARY (best-effort only): if we have an output file, fire a host SIGTERM
+    /// via lsof as a backstop — but it is NO LONGER authoritative and never sets
+    /// the visible status on its own.
     func killShell(id: String) {
         guard let idx = backgroundShells.firstIndex(where: { $0.id == id }) else {
             ConductorLog.signal("background-shell")
@@ -705,27 +775,25 @@ final class ClaudeStreamSession: ObservableObject {
             return
         }
         let path = backgroundShells[idx].outputFile
-        // Optimistic UI feedback.
-        backgroundShells[idx].status = .killed
 
+        // PRIMARY: authoritative suppressed KillShell control turn (hidden, so
+        // verbosity is fine — keep it tight). Status is NOT flipped here; the
+        // task_* events / KillShell tool_result carry the REAL status.
+        ConductorLog.signal("background-shell")
+            .info("killShell id=\(id) — sending authoritative suppressed KillShell control turn; awaiting task_* / tool_result to reflect real status")
+        sendControl(text: "Call the KillShell tool with shell_id \(id) to terminate that background shell. Do not do anything else.")
+
+        // SECONDARY (best-effort backstop, non-authoritative): a host SIGTERM via
+        // lsof. Does NOT SIGKILL and does NOT set the panel status — that was the
+        // wrong-PID bug. Purely opportunistic cleanup if it happens to match.
         if let path, !path.isEmpty {
             let pids = Self.lsofPIDs(writing: path)
             if !pids.isEmpty {
                 ConductorLog.signal("background-shell")
-                    .info("killShell id=\(id) — lsof found PIDs \(pids.map(String.init).joined(separator: ",")) on \(path); SIGTERM→SIGKILL")
-                Self.terminatePIDs(pids)
-                return
+                    .info("killShell id=\(id) — best-effort host SIGTERM (non-authoritative) to lsof PIDs \(pids.map(String.init).joined(separator: ",")) on \(path)")
+                for pid in pids { kill(pid, SIGTERM) }
             }
-            ConductorLog.signal("background-shell")
-                .info("killShell id=\(id) — lsof found no PID on \(path); falling back to suppressed control KillShell")
-        } else {
-            ConductorLog.signal("background-shell")
-                .info("killShell id=\(id) — no output file path; falling back to suppressed control KillShell")
         }
-
-        // Fallback: suppressed control turn — written to claude's stdin so the
-        // agent acts, but flagged isControl so AtriumThreadView never renders it.
-        sendControl(text: "Kill the background shell \(id) by calling the KillShell tool with that shell id. Do not narrate; just perform it.")
     }
 
     /// Write a host→agent CONTROL turn to claude's stdin AND record it as an
@@ -795,12 +863,23 @@ final class ClaudeStreamSession: ObservableObject {
         }
         currentAgentIndex = nil
         cancelWatchdog()
-        // The turn is settled — leave .running. This is the assignment whose
-        // absence (in the stuck-running run) kept the composer's old guard locked.
+
+        // An interrupt-initiated stop arrives as a terminal `result` with subtype
+        // `error_during_execution` (#atrium-stop, VERIFIED). That is the EXPECTED
+        // outcome of the Stop button — treat it as a normal "stopped", NOT a scary
+        // error. Any other result also settles cleanly to .idle.
+        let wasInterrupt = interruptInFlight
+        interruptInFlight = false
+        pendingInterruptRequestId = nil
         status = .idle
 
-        ConductorLog.signal("agent-turn-complete")
-            .info("applyResult DONE — status now idle, totalCost \(self.totalCostUsd ?? -1)")
+        if wasInterrupt {
+            ConductorLog.signal("agent-turn-complete")
+                .info("applyResult — interrupt-initiated stop settled cleanly (subtype \(result.subtype ?? "?")); status now idle, ready for next turn")
+        } else {
+            ConductorLog.signal("agent-turn-complete")
+                .info("applyResult DONE — status now idle, totalCost \(self.totalCostUsd ?? -1)")
+        }
     }
 
     private func handleTermination(exitCode: Int32) {
@@ -809,6 +888,8 @@ final class ClaudeStreamSession: ObservableObject {
             messages[index].isStreaming = false
         }
         currentAgentIndex = nil
+        interruptInFlight = false
+        pendingInterruptRequestId = nil
         if status == .stopped { return } // already shut down deliberately
         status = exitCode == 0 ? .stopped : .error
         ConductorLog.signal("agent-exited")
