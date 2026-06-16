@@ -30,6 +30,12 @@ struct AtriumComposer: View {
     /// Keyword-driven voice dictation controller (Feature D).
     @StateObject private var voice = AtriumVoiceController()
 
+    // Persisted voice keywords (configured in Settings › Input). Read here only
+    // so the mic tooltip reflects the user's current words; the controller reads
+    // the same defaults at arm time.
+    @AppStorage(AtriumVoiceController.DefaultsKey.wake) private var wakeKeyword: String = AtriumVoiceController.wakeKeyword
+    @AppStorage(AtriumVoiceController.DefaultsKey.send) private var sendKeyword: String = AtriumVoiceController.sendKeyword
+
     /// Imperative handle to the NSTextView so the voice controller can stream
     /// dictation in and clear after send, and so we can force focus.
     @StateObject private var textHandle = AtriumTextViewHandle()
@@ -183,13 +189,18 @@ struct AtriumComposer: View {
     }
 
     private var voiceHelp: String {
+        // Reflect the user's configured keywords (fall back to defaults if blank).
+        let wake = wakeKeyword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? AtriumVoiceController.wakeKeyword : wakeKeyword
+        let send = sendKeyword.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            ? AtriumVoiceController.sendKeyword : sendKeyword
         switch voice.state {
-        case .off: return "Click to listen. Say \"\(AtriumVoiceController.wakeKeyword)\" to start dictating."
+        case .off: return "Click to listen. Say \"\(wake)\" to start dictating."
         case .requesting: return "Requesting microphone access…"
         case .loading: return "Loading speech model…"
         case .blocked: return "Microphone access denied. Click to open System Settings › Privacy › Microphone."
-        case .armed: return "Listening… say \"\(AtriumVoiceController.wakeKeyword)\" to dictate."
-        case .composing: return "Dictating. Say \"\(AtriumVoiceController.sendKeyword)\" to send, \"scratch that\" to clear."
+        case .armed: return "Listening… say \"\(wake)\" to dictate."
+        case .composing: return "Dictating. Say \"\(send)\" to send, a cancel phrase to clear."
         case .sending: return "Sending…"
         }
     }

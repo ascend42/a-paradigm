@@ -58,14 +58,62 @@ enum AtriumVoiceState: Equatable {
 @MainActor
 final class AtriumVoiceController: ObservableObject {
 
-    // MARK: - Keyword Defaults (constants now; settings UI later)
+    // MARK: - Keyword Defaults + Persistence
+    //
+    // The keywords are user-configurable in Settings › Input › "Voice Composer
+    // (ATRIUM)". They persist in UserDefaults under the keys below and are READ
+    // fresh each time the mic is armed (`loadAndArm`), so a change in Settings
+    // takes effect on the next arm. The static constants remain as the seed
+    // defaults; the UI seeds @AppStorage with these same literals.
 
-    /// Wake keyword: transitions armed → composing.
+    /// Wake keyword: transitions armed → composing. (default)
     static let wakeKeyword = "respond"
-    /// Send phrase: transitions composing → sending → armed.
+    /// Send phrase: transitions composing → sending → armed. (default)
     static let sendKeyword = "send it"
-    /// Cancel phrases: clear the draft and return to armed.
+    /// Cancel phrases: clear the draft and return to armed. (defaults)
     static let cancelKeywords = ["scratch that", "never mind", "nevermind"]
+
+    /// UserDefaults keys (shared with SettingsPanelView's @AppStorage).
+    enum DefaultsKey {
+        static let wake = "atriumWakeKeyword"
+        static let send = "atriumSendKeyword"
+        /// Comma-separated list of cancel phrases.
+        static let cancel = "atriumCancelKeywords"
+    }
+
+    /// Default cancel phrases joined for the @AppStorage seed string.
+    static var cancelKeywordsDefault: String { cancelKeywords.joined(separator: ", ") }
+
+    // MARK: - Active keywords (snapshotted at arm time)
+
+    /// Wake keyword in force for the current listening session. Re-read from
+    /// UserDefaults at each `loadAndArm`; falls back to the static default.
+    private var activeWakeKeyword: String = AtriumVoiceController.wakeKeyword
+    /// Send phrase in force for the current listening session.
+    private var activeSendKeyword: String = AtriumVoiceController.sendKeyword
+    /// Cancel phrases in force for the current listening session.
+    private var activeCancelKeywords: [String] = AtriumVoiceController.cancelKeywords
+
+    /// Read persisted keyword settings (or fall back to defaults). Called once
+    /// per arm so Settings changes take effect on the next arm.
+    private func refreshKeywordsFromDefaults() {
+        let d = UserDefaults.standard
+
+        let wake = (d.string(forKey: DefaultsKey.wake) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        activeWakeKeyword = wake.isEmpty ? Self.wakeKeyword : wake
+
+        let send = (d.string(forKey: DefaultsKey.send) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        activeSendKeyword = send.isEmpty ? Self.sendKeyword : send
+
+        let cancelRaw = d.string(forKey: DefaultsKey.cancel) ?? ""
+        let parsed = cancelRaw
+            .split(separator: ",")
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        activeCancelKeywords = parsed.isEmpty ? Self.cancelKeywords : parsed
+
+        log.info("Keywords loaded — wake: '\(self.activeWakeKeyword)', send: '\(self.activeSendKeyword)', cancel: \(self.activeCancelKeywords)")
+    }
 
     // MARK: - Published State
 
@@ -151,6 +199,8 @@ final class AtriumVoiceController: ObservableObject {
     /// transcription loop, then enter `armed`.
     private func loadAndArm() async {
         state = .loading
+        // Snapshot the user's configured keywords for this listening session.
+        refreshKeywordsFromDefaults()
         log.info("Authorized — starting voice provider + loading model")
 
         do {
@@ -168,7 +218,7 @@ final class AtriumVoiceController: ObservableObject {
         provider.startContinuous()
         log.info("Continuous transcription started — entering armed")
         state = .armed
-        log.info("Voice armed — listening for wake keyword '\(Self.wakeKeyword)'")
+        log.info("Voice armed — listening for wake keyword '\(self.activeWakeKeyword)'")
 
         listenTask = Task { [weak self] in
             guard let self else { return }
@@ -213,9 +263,9 @@ final class AtriumVoiceController: ObservableObject {
         case .armed:
             // Only listen for the wake keyword. Everything before it is discarded;
             // anything after it begins the dictation.
-            if let after = Self.textAfterKeyword(text, keyword: Self.wakeKeyword) {
+            if let after = Self.textAfterKeyword(text, keyword: activeWakeKeyword) {
                 state = .composing
-                log.info("Wake keyword '\(Self.wakeKeyword)' heard — composing")
+                log.info("Wake keyword '\(self.activeWakeKeyword)' heard — composing")
                 if !after.isEmpty {
                     onDraftAppend?(after)
                 }
@@ -223,7 +273,7 @@ final class AtriumVoiceController: ObservableObject {
 
         case .composing:
             // Cancel phrases take priority — clear and re-arm.
-            if Self.containsKeyword(text, anyOf: Self.cancelKeywords) {
+            if Self.containsKeyword(text, anyOf: activeCancelKeywords) {
                 onDraftClear?()
                 state = .armed
                 log.info("Cancel phrase heard — draft cleared, re-armed")
@@ -231,12 +281,12 @@ final class AtriumVoiceController: ObservableObject {
             }
 
             // Send phrase — submit everything before it, then re-arm.
-            if let before = Self.textBeforeKeyword(text, keyword: Self.sendKeyword) {
+            if let before = Self.textBeforeKeyword(text, keyword: activeSendKeyword) {
                 if !before.isEmpty {
                     onDraftAppend?(before)
                 }
                 state = .sending
-                log.info("Send phrase '\(Self.sendKeyword)' heard — submitting")
+                log.info("Send phrase '\(self.activeSendKeyword)' heard — submitting")
                 onSubmit?()
                 // Brief settle, then return to armed for the next turn.
                 state = .armed
@@ -245,7 +295,7 @@ final class AtriumVoiceController: ObservableObject {
 
             // Plain dictation — append to the draft. Strip a stray leading wake
             // keyword if WhisperKit re-emitted it in the same chunk.
-            let cleaned = Self.stripLeadingKeyword(text, keyword: Self.wakeKeyword)
+            let cleaned = Self.stripLeadingKeyword(text, keyword: activeWakeKeyword)
             if !cleaned.isEmpty {
                 log.debug("Dictation appended: \"\(cleaned.prefix(60))\"")
                 onDraftAppend?(cleaned)
