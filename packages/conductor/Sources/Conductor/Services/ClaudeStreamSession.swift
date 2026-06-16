@@ -49,6 +49,12 @@ final class ClaudeStreamSession: ObservableObject {
     /// Off-main line framer (Sendable) shared with the readabilityHandler.
     private let framer = LineFramer()
 
+    /// Append-only JSONL transcript of this session's full stream I/O, written to
+    /// ~/.paradigm/conductor/atrium/ so an external inspector can Read it and
+    /// diagnose runtime behavior without screenshots/Console (#session-transcript).
+    /// Best-effort + non-blocking (own serial queue); never crashes the session.
+    private let transcript = SessionTranscript()
+
     /// Initial prompt buffered until `system/init` is observed (safe first turn).
     private var pendingInitialPrompt: String?
 
@@ -138,12 +144,14 @@ final class ClaudeStreamSession: ObservableObject {
         // it. Previously this discarded stderr (`_ = handle.availableData`), which
         // hid claude hangs/errors entirely. We now log it so a silent stall is
         // visible in ConductorLog. @Sendable closure: no @Published state touched.
+        let transcript = self.transcript // Sendable; capture for the @Sendable closure.
         stderr.fileHandleForReading.readabilityHandler = { handle in
             let data = handle.availableData
             guard !data.isEmpty else { return }
             let text = String(decoding: data, as: UTF8.self)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             guard !text.isEmpty else { return }
+            transcript.logStderr(text) // #session-transcript
             ConductorLog.signal("agent-stderr")
                 .debug("claude stderr: \(text)")
         }
@@ -158,8 +166,15 @@ final class ClaudeStreamSession: ObservableObject {
         do {
             try proc.run()
             status = .running
+            // Transcript: session_start meta + index row (#session-transcript).
+            transcript.logSessionStart(
+                projectPath: projectPath,
+                claudePath: claudePath,
+                resolvedPATH: proc.environment?["PATH"] ?? "",
+                pid: proc.processIdentifier
+            )
             ConductorLog.flow("claude-turn-exchange")
-                .info("ClaudeStreamSession started @ \(self.projectPath) (PID \(proc.processIdentifier))")
+                .info("ClaudeStreamSession started @ \(self.projectPath) (PID \(proc.processIdentifier)) transcript=\(self.transcript.fileURL.path)")
             // FIX 1 verification: log the PATH the child actually got so a broken
             // environment is diagnosable in Console (#claude-stream-session).
             ConductorLog.component("claude-stream-session")
@@ -201,6 +216,7 @@ final class ClaudeStreamSession: ObservableObject {
         }
         try? stdinPipe?.fileHandleForWriting.close()
         status = .stopped
+        transcript.logSessionEnd(reason: "shutdown", exitCode: nil) // #session-transcript
         ConductorLog.signal("agent-stopped")
             .info("ClaudeStreamSession shut down")
     }
@@ -296,7 +312,7 @@ final class ClaudeStreamSession: ObservableObject {
         currentAgentIndex = nil
     }
 
-    private func writeTurn(_ text: String) {
+    private func writeTurn(_ text: String, isControl: Bool = false) {
         guard let stdin = stdinPipe else { return }
         let turn = OutboundUserTurn(
             message: .init(content: [.init(text: text)])
@@ -305,6 +321,7 @@ final class ClaudeStreamSession: ObservableObject {
         guard var data = try? encoder.encode(turn) else { return }
         data.append(0x0A) // newline-terminate the NDJSON line
         stdin.fileHandleForWriting.write(data)
+        transcript.logUserTurn(text: text, isControl: isControl) // #session-transcript
         ConductorLog.flow("claude-turn-exchange")
             .info("Sent user turn (\(text.count) chars)")
     }
@@ -350,6 +367,7 @@ final class ClaudeStreamSession: ObservableObject {
         // irrelevant to the protocol; this avoids encoder ambiguity).
         let line = "{\"type\":\"control_request\",\"request_id\":\"\(requestId)\",\"request\":{\"subtype\":\"interrupt\"}}\n"
         stdin.fileHandleForWriting.write(Data(line.utf8))
+        transcript.logInterrupt(requestId: requestId) // #session-transcript
 
         // Stop the caret on the in-flight agent message immediately for instant
         // feedback. Status is left .running; the terminal `result` flips it to
@@ -366,6 +384,7 @@ final class ClaudeStreamSession: ObservableObject {
     /// landed. We do NOT settle status here — the terminal `result` does that —
     /// but we log the confirmation so a missed interrupt is diagnosable.
     private func applyControlResponse(_ resp: ControlResponseEvent) {
+        transcript.logControlResponse(subtype: resp.subtype, requestId: resp.requestId) // #session-transcript
         let matches = resp.requestId != nil && resp.requestId == pendingInterruptRequestId
         if matches, (resp.subtype ?? "").lowercased() == "success" {
             ConductorLog.signal("claude-interrupt")
@@ -434,6 +453,7 @@ final class ClaudeStreamSession: ObservableObject {
             case .unknown(let type):
                 // Tolerated, but TRACE it — a `result` showing up here would mean
                 // a decode divergence (the exact failure class for this bug).
+                transcript.logUnknown(rawType: type) // #session-transcript
                 ConductorLog.flow("claude-turn-exchange")
                     .debug("apply event=unknown type=\(type) (ignored)")
             }
@@ -482,6 +502,11 @@ final class ClaudeStreamSession: ObservableObject {
     private func applySystemInit(_ sys: SystemInit) {
         if let sid = sys.sessionId { sessionId = sid }
         if let m = sys.model { model = m }
+        // Record the REAL claude session_id into the transcript + index now that
+        // it's known (the file was named with a startup id) (#session-transcript).
+        if let sid = sys.sessionId {
+            transcript.logSessionId(sessionId: sid, model: sys.model)
+        }
         ConductorLog.signal("agent-turn-complete")
             .info("system/init — session \(sys.sessionId ?? "?") model \(sys.model ?? "?")")
 
@@ -514,6 +539,7 @@ final class ClaudeStreamSession: ObservableObject {
         for block in asst.message.content {
             switch block {
             case .text(let text):
+                transcript.logAssistantText(text) // #session-transcript
                 if messages[index].text.isEmpty {
                     messages[index].text = text
                 } else {
@@ -527,6 +553,7 @@ final class ClaudeStreamSession: ObservableObject {
                 }
             case .toolUse(let id, let name, let input):
                 let summary = input.firstScalarSummary ?? input.asDisplayString
+                transcript.logToolUse(name: name, inputSummary: summary) // #session-transcript
                 messages[index].toolCalls.append(
                     ToolCall(id: id, name: name, inputSummary: summary, state: .running, resultSummary: nil)
                 )
@@ -549,6 +576,7 @@ final class ClaudeStreamSession: ObservableObject {
     private func applyToolResults(_ user: UserMessage) {
         for block in user.message.content {
             guard case .toolResult(let toolUseId, let content, let isError) = block else { continue }
+            transcript.logToolResult(toolUseId: toolUseId, content: content, isError: isError) // #session-transcript
             // Match the tool_use id across all messages.
             for mi in messages.indices {
                 if let ci = messages[mi].toolCalls.firstIndex(where: { $0.id == toolUseId }) {
@@ -583,6 +611,7 @@ final class ClaudeStreamSession: ObservableObject {
     /// and best-effort update tracked shells from any id/status/command/output we
     /// could probe.
     private func applySystemTask(_ task: SystemTaskEvent) {
+        transcript.logSystemTask(subtype: task.subtype, taskId: task.id, status: task.status) // #session-transcript
         ConductorLog.signal("background-shell")
             .debug("system task \(task.subtype) raw=\(task.raw.jsonString)")
 
@@ -775,6 +804,7 @@ final class ClaudeStreamSession: ObservableObject {
             return
         }
         let path = backgroundShells[idx].outputFile
+        transcript.logKill(shellId: id) // #session-transcript
 
         // PRIMARY: authoritative suppressed KillShell control turn (hidden, so
         // verbosity is fine — keep it tight). Status is NOT flipped here; the
@@ -801,7 +831,7 @@ final class ClaudeStreamSession: ObservableObject {
     /// (#atrium-shells FIX 3). Status flips to .running like a normal turn.
     private func sendControl(text: String) {
         messages.append(ConversationMessage(author: .user, text: text, isControl: true))
-        writeTurn(text)
+        writeTurn(text, isControl: true)
         status = .running
         currentAgentIndex = nil
         ConductorLog.signal("background-shell")
@@ -847,6 +877,7 @@ final class ClaudeStreamSession: ObservableObject {
     }
 
     private func applyResult(_ result: ResultEvent) {
+        transcript.logResult(subtype: result.subtype, totalCostUsd: result.totalCostUsd, usage: result.usage) // #session-transcript
         ConductorLog.signal("agent-turn-complete")
             .info("applyResult ENTER — subtype \(result.subtype ?? "?") cost \(result.totalCostUsd ?? -1) isError \(result.isError ?? false) usage.out \(result.usage?.outputTokens ?? -1)")
 
@@ -892,6 +923,7 @@ final class ClaudeStreamSession: ObservableObject {
         pendingInterruptRequestId = nil
         if status == .stopped { return } // already shut down deliberately
         status = exitCode == 0 ? .stopped : .error
+        transcript.logSessionEnd(reason: "terminated", exitCode: exitCode) // #session-transcript
         ConductorLog.signal("agent-exited")
             .info("claude stream session exited code \(exitCode)")
     }

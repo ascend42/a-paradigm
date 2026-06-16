@@ -1,0 +1,115 @@
+purpose: Conductor session services — headless claude stream sessions, agent process management, background-shell tracking, and persistent session transcripts
+version: 1.0.0
+description: "Services that own the runtime of ATRIUM `claude` sessions: spawning the headless stream-json process, decoding the NDJSON event stream off the main thread, tracking background shells, interrupting/killing turns, and persisting the full stream I/O to an inspectable JSONL transcript under ~/.paradigm so external tooling can diagnose runtime behavior without screenshots/Console."
+context:
+  - One ClaudeStreamSession owns one `claude -p --output-format stream-json --input-format stream-json` process
+  - Stream decode runs off-main via a Sendable LineFramer; state mutates only on @MainActor in apply()
+  - Background shells orphan to PID 1 on session exit — host must track + reap (#atrium-shells)
+  - Interrupt uses the stream-json control_request protocol, NOT a bare interrupt line (#atrium-stop)
+  - Transcripts persist to ~/.paradigm/conductor/atrium/ — the founder-directive substrate, not trapped in-app
+
+# ============================================
+# Components (#)
+# ============================================
+
+#claude-stream-session:
+  description: Owns one headless claude stream-json process; spawns, writes turns/control_requests, decodes stdout events off-main, projects into an observable conversation model
+  type: service
+  tags: [conductor, atrium, claude, stream-json, session]
+  anchors:
+    - ClaudeStreamSession.swift:1
+
+#session-transcript:
+  description: Append-only JSONL writer persisting a session's full stream I/O (meta/in/out lines) to ~/.paradigm/conductor/atrium/ + a discovery index, on a private serial queue, best-effort and non-blocking, so an external inspector can Read it and diagnose runtime behavior
+  type: utility
+  tags: [conductor, atrium, transcript, jsonl, observability, shared, desktop]
+  anchors:
+    - SessionTranscript.swift:1
+
+#atrium-shells:
+  description: Tracks background shells the agent spawned, parsed from tool_result text and system task events; host-side inspect (read .output file) and authoritative kill (suppressed KillShell control turn)
+  type: model
+  tags: [conductor, atrium, background-shell]
+  anchors:
+    - ClaudeStreamSession.swift:31
+    - ../Models/BackgroundShell.swift:1
+
+#agent-process-manager:
+  description: Spawns and manages non-stream agent processes (mirrors the stream session's spawn/path-resolution mechanics)
+  type: service
+  tags: [conductor, agent, process]
+  anchors:
+    - AgentProcessManager.swift:1
+
+#agent-health-monitor:
+  description: Monitors agent process health and liveness
+  type: service
+  tags: [conductor, agent, health]
+  anchors:
+    - AgentHealthMonitor.swift:1
+
+#line-framer:
+  description: Off-main Sendable NDJSON line framer that buffers partial reads and emits complete decoded StreamEvents
+  type: utility
+  tags: [conductor, stream-json, framer, sendable]
+  anchors:
+    - LineFramer.swift:1
+
+#checkpoint-reader:
+  description: Reads Paradigm session checkpoints for Conductor display
+  type: utility
+  tags: [conductor, checkpoint]
+  anchors:
+    - CheckpointReader.swift:1
+
+# ============================================
+# Flows ($)
+# ============================================
+
+flows:
+  $claude-turn-exchange:
+    description: "User turn → stdin NDJSON → claude → stdout NDJSON events → LineFramer → apply() projects to conversation + transcript"
+    steps:
+      - "#claude-stream-session"
+      - "#line-framer"
+      - "#session-transcript"
+  $session-transcript-write:
+    description: "Boundary call (start/turn/interrupt/kill/decoded event/stderr/shutdown) → SessionTranscript.log* → serial queue → append JSONL line to ~/.paradigm/conductor/atrium/<file>.jsonl (+ index row)"
+    steps:
+      - "#claude-stream-session"
+      - "#session-transcript"
+
+# ============================================
+# Signals (!)
+# ============================================
+
+signals:
+  "!session-transcript-started":
+    description: A session_start meta line + index row were written when the claude process spawned
+    emitters: ["#session-transcript"]
+  "!session-transcript-session-id":
+    description: The real claude session_id (from system/init) was recorded to the transcript + index
+    emitters: ["#session-transcript"]
+
+# ============================================
+# Aspects (~)
+# ============================================
+
+~non-blocking-io:
+  description: All transcript disk writes run on a private serial DispatchQueue so the main actor and off-main stream decode are never blocked; write failures are swallowed (never crash the session over logging)
+  anchors:
+    - SessionTranscript.swift:1
+
+~paradigm-substrate:
+  description: Session signals land in the ~/.paradigm/ substrate (transcript + index under conductor/atrium/) rather than being trapped inside the app, so external tooling can inspect them
+  anchors:
+    - SessionTranscript.swift:1
+
+tags:
+  - conductor
+  - atrium
+  - claude
+  - stream-json
+  - transcript
+  - observability
+  - background-shell
