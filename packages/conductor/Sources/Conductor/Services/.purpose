@@ -1,5 +1,5 @@
-purpose: Conductor session services — headless claude stream sessions, agent process management, background-shell tracking, and persistent session transcripts
-version: 1.0.0
+purpose: Conductor session services — headless claude stream sessions, the BRIDGE session fleet, agent process management, background-shell tracking, and persistent session transcripts
+version: 1.1.0
 description: "Services that own the runtime of ATRIUM `claude` sessions: spawning the headless stream-json process, decoding the NDJSON event stream off the main thread, tracking background shells, interrupting/killing turns, and persisting the full stream I/O to an inspectable JSONL transcript under ~/.paradigm so external tooling can diagnose runtime behavior without screenshots/Console."
 context:
   - One ClaudeStreamSession owns one `claude -p --output-format stream-json --input-format stream-json` process
@@ -33,6 +33,20 @@ context:
   anchors:
     - ClaudeStreamSession.swift:31
     - ../Models/BackgroundShell.swift:1
+
+#fleet-store:
+  description: "THE BRIDGE session fleet (#cockpit-view) — @MainActor ObservableObject owning N insertion-ordered, fully isolated ClaudeStreamSessions + the active session id. spawn(projectPath:initialPrompt:) constructs+starts+appends+activates ($fleet-spawn); setActive(id|index)/moveActive(by:) switch which session the cockpit renders while every other keeps streaming in the background ($fleet-switch); close(id) shuts one down with active fallback; shutdownAll() tears the fleet down on window-close/app-terminate. Soft cap 6 (warn past 4). Composition over shared state — never introduces shared mutable session state (~session-isolation)."
+  type: service
+  tags: [conductor, cockpit, bridge, fleet, session]
+  anchors:
+    - FleetStore.swift:1
+
+#session-derived-status:
+  description: "Derives a whole-session BRIDGE status (running/idle/blocked/awaitingYou/done) from ClaudeStreamSession's existing @Published state ONLY (no new mutable state, ~session-isolation). awaitingYou (the SACRED amber) v1 heuristic: any subAgent .needsHuman, OR session idle + last rendered message is the agent's + NOT the active session. Hosts TemperatureLaw — the shared color/glyph source the spine and the CHORUS rail both read so teal/amber/coral/muted agree."
+  type: model
+  tags: [conductor, cockpit, bridge, temperature-law]
+  anchors:
+    - ../Models/SessionDerivedStatus.swift:1
 
 #agent-process-manager:
   description: Spawns and manages non-stream agent processes (mirrors the stream session's spawn/path-resolution mechanics)
@@ -78,6 +92,15 @@ flows:
     steps:
       - "#claude-stream-session"
       - "#session-transcript"
+  $fleet-spawn:
+    description: "THE BRIDGE spawn — FleetStore.spawn(projectPath:initialPrompt:) constructs + starts a ClaudeStreamSession, appends it insertion-ordered, sets it active"
+    steps:
+      - "#fleet-store"
+      - "#claude-stream-session"
+  $fleet-switch:
+    description: "THE BRIDGE switch — FleetStore.setActive changes only which session the cockpit renders; every other session keeps streaming untouched (instance-bound ingest, ~session-isolation)"
+    steps:
+      - "#fleet-store"
 
 # ============================================
 # Signals (!)
@@ -90,6 +113,9 @@ signals:
   "!session-transcript-session-id":
     description: The real claude session_id (from system/init) was recorded to the transcript + index
     emitters: ["#session-transcript"]
+  "!session-needs-you":
+    description: "Reserved v2 — a session is blocked awaiting the human (would float it into THE BRIDGE's NEEDS YOU amber group). v1 derives awaitingYou heuristically (#session-derived-status); ClaudeStreamSession.noteNeedsHuman() is the reserved no-op wiring hook."
+    emitters: ["#claude-stream-session"]
 
 # ============================================
 # Aspects (~)
@@ -105,6 +131,12 @@ signals:
   anchors:
     - SessionTranscript.swift:1
 
+~session-isolation:
+  description: "Each ClaudeStreamSession is fully self-contained (own Process/Pipes/off-main LineFramer/SessionTranscript/@Published state); the FleetStore composes N of them and never introduces shared mutable session state. Background (non-active) sessions keep streaming into their OWN state because ingest is instance-bound. The cockpit's center `.id(active.id)` rotates VIEW identity only — session objects are never recreated."
+  anchors:
+    - ClaudeStreamSession.swift:1
+    - FleetStore.swift:1
+
 tags:
   - conductor
   - atrium
@@ -113,3 +145,7 @@ tags:
   - transcript
   - observability
   - background-shell
+  - cockpit
+  - bridge
+  - fleet
+  - session-isolation

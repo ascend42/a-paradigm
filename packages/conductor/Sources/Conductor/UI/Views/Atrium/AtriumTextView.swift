@@ -4,7 +4,7 @@
 //
 // WHY THIS EXISTS (founder-unblock, runtime failures):
 //   The previous SwiftUI `TextField(axis:.vertical)` approach FAILED AT RUNTIME
-//   inside the manually-created `AtriumSpikeWindow` (an NSHostingView in a bare
+//   inside the manually-created cockpit window (an NSHostingView in a bare
 //   NSWindow on an LSUIElement accessory app):
 //     • Copy/paste/cut (⌘C/⌘V/⌘X) did nothing — the standard clipboard selectors
 //       are delivered through the app's Edit menu / responder chain, which does

@@ -25,12 +25,12 @@ struct ConductorApp: App {
             )
         }
         // SwiftUI owns the menu bar in an `App` scene, overriding any NSApp.mainMenu
-        // the AppDelegate sets. So the ATRIUM spike command must be registered here
+        // the AppDelegate sets. So THE BRIDGE cockpit command must be registered here
         // via `.commands` to actually appear in the menu bar (Conductor → …, ⌘⇧A).
         .commands {
             CommandGroup(after: .appInfo) {
-                Button("Open ATRIUM Spike…") {
-                    appDelegate.openAtriumSpike()
+                Button("Open Conductor Cockpit…") {
+                    appDelegate.openCockpit()
                 }
                 .keyboardShortcut("a", modifiers: [.command, .shift])
             }

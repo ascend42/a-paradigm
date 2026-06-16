@@ -19,13 +19,15 @@ import SwiftUI
 // MARK: - Chorus state colors (temperature law)
 
 extension SubAgentStatus {
-    /// The temperature color for this state (THE CHORUS law).
+    /// The temperature color for this state (THE CHORUS law). Reads from the SHARED
+    /// TemperatureLaw (SessionDerivedStatus.swift) so the chorus and the session
+    /// spine always agree on what teal/amber/coral/muted mean.
     var chorusColor: Color {
         switch self {
-        case .running: return AtriumTheme.running     // teal — autonomous, no attention
-        case .completed, .killed, .stopped: return AtriumTheme.inkMuted // settled, quiet
-        case .failed: return AtriumTheme.blocked       // coral
-        case .needsHuman: return AtriumTheme.amber     // the ONLY amber state
+        case .running: return TemperatureLaw.working   // teal — autonomous, no attention
+        case .completed, .killed, .stopped: return TemperatureLaw.settled // settled, quiet
+        case .failed: return TemperatureLaw.error      // coral
+        case .needsHuman: return TemperatureLaw.attention // the ONLY amber state
         }
     }
 

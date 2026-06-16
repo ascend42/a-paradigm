@@ -11,8 +11,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private var conductorPanel: ConductorPanel?
     private var containerWindow: ContainerWindow?
-    /// ATRIUM keystone spike window (single-owner of its ClaudeStreamSession).
-    private var atriumSpikeWindow: AtriumSpikeWindow?
+    /// THE BRIDGE cockpit window (#conductor-cockpit-window). Holds a fleet of
+    /// sessions; the window renders the injected fleetStore but does not own it.
+    private var conductorCockpitWindow: ConductorCockpitWindow?
     /// Container mode — launched via `paradigm conductor --container`
     @AppStorage("useContainerMode") var useContainerMode: Bool = false
     private let permissionsManager = PermissionsManager()
@@ -25,6 +26,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let workspaceManager = WorkspaceManager()
     let buffer = BufferEngine()
     let projectStore = ProjectStore()
+    /// THE BRIDGE session fleet (#fleet-store). Single-owner here so it survives
+    /// cockpit window close/reopen; shut down in applicationWillTerminate.
+    let fleetStore = FleetStore()
     let agentProcessManager = AgentProcessManager()
     let agentGroupStore = AgentGroupStore()
     let symphonyMonitor = SymphonyMonitor()
@@ -277,6 +281,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         orchestrator.stop()
         agentProcessManager.cleanup()
         workspaceManager.cleanup()
+        fleetStore.shutdownAll()
         conductorPanel?.close()
     }
 
@@ -304,8 +309,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(permItem)
 
         menu.addItem(.separator())
-        let atriumItem = NSMenuItem(title: "Open ATRIUM Spike…", action: #selector(openAtriumSpike), keyEquivalent: "")
-        menu.addItem(atriumItem)
+        let cockpitItem = NSMenuItem(title: "Open Conductor Cockpit…", action: #selector(openCockpit), keyEquivalent: "")
+        menu.addItem(cockpitItem)
 
         menu.addItem(.separator())
         let containerItem = NSMenuItem(title: "Switch to Container Mode", action: #selector(switchToContainer), keyEquivalent: "")
@@ -332,9 +337,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let appMenu = NSMenu()
         appMenu.addItem(withTitle: "About Conductor", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
         appMenu.addItem(.separator())
-        let atriumMainItem = NSMenuItem(title: "Open ATRIUM Spike…", action: #selector(openAtriumSpike), keyEquivalent: "a")
-        atriumMainItem.keyEquivalentModifierMask = [.command, .shift]
-        appMenu.addItem(atriumMainItem)
+        let cockpitMainItem = NSMenuItem(title: "Open Conductor Cockpit…", action: #selector(openCockpit), keyEquivalent: "a")
+        cockpitMainItem.keyEquivalentModifierMask = [.command, .shift]
+        appMenu.addItem(cockpitMainItem)
         appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Quit Conductor", action: #selector(quitApp), keyEquivalent: "q")
         appMenuItem.submenu = appMenu
@@ -554,22 +559,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         launchPanel(showOnboarding: true, permissionStatus: permissionsManager.checkAll())
     }
 
-    /// Open (or focus) the ATRIUM keystone spike window.
+    /// Open (or focus) THE BRIDGE cockpit window (#conductor-cockpit-window).
     /// Non-private so the SwiftUI `.commands` menu item in ConductorApp can call it.
-    @objc func openAtriumSpike() {
-        if atriumSpikeWindow == nil {
-            let window = AtriumSpikeWindow()
-            // Drop the reference when the window closes so a reopen spawns a
-            // fresh session rather than reusing one whose claude process is dead.
-            window.onClose = { [weak self] in self?.atriumSpikeWindow = nil }
-            atriumSpikeWindow = window
+    /// Injects the single-owner fleetStore + projectStore; the window renders them
+    /// but does not own the fleet (so a window reopen keeps the running sessions).
+    @objc func openCockpit() {
+        if conductorCockpitWindow == nil {
+            let window = ConductorCockpitWindow(
+                fleetStore: fleetStore,
+                projectStore: projectStore
+            )
+            // Drop the reference when the window closes so a reopen builds fresh.
+            window.onClose = { [weak self] in self?.conductorCockpitWindow = nil }
+            conductorCockpitWindow = window
         }
         // Accessory (LSUIElement) apps need ignoringOtherApps to actually come
         // to the foreground; without it the window never becomes key and the
         // reply field cannot receive keyboard focus.
         NSApp.activate(ignoringOtherApps: true)
-        atriumSpikeWindow?.makeKeyAndOrderFront(nil)
-        atriumSpikeWindow?.makeKey()
+        conductorCockpitWindow?.makeKeyAndOrderFront(nil)
+        conductorCockpitWindow?.makeKey()
     }
 
     @objc private func switchToContainer() {

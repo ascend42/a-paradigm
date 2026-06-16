@@ -17,7 +17,15 @@
 import Foundation
 
 @MainActor
-final class ClaudeStreamSession: ObservableObject {
+final class ClaudeStreamSession: ObservableObject, Identifiable {
+
+    // MARK: - Identity (#fleet-store / #cockpit-view)
+
+    /// Stable per-session identity. The FleetStore keys sessions by this, the
+    /// cockpit's center `.id(active.id)` is load-bearing on it (clean per-session
+    /// UI state on switch), and ⌘1–9 routing selects by it. ADDITIVE — does not
+    /// touch any stream/ingest/process machinery (~session-isolation).
+    let id = UUID()
 
     // MARK: - Published state
 
@@ -42,6 +50,12 @@ final class ClaudeStreamSession: ObservableObject {
     /// SAME task_* events the shells panel EXCLUDES (#atrium-shells sub-agent
     /// filter) — they are routed HERE instead of dropped. Bash shells stay separate.
     @Published private(set) var subAgents: [SubAgent] = []
+
+    /// When the session last applied a decoded event batch (#fleet-store /
+    /// #session-row). Bumped in apply() so the spine can show a per-session
+    /// "activity" micro-signal (age) and auto-collapse idle sessions. ADDITIVE —
+    /// purely observational; never gates the stream machinery (~session-isolation).
+    @Published private(set) var lastEventAt: Date = Date()
 
     /// Known Agent/Task tool_use ids → the description/subagent_type/prompt pulled
     /// from the tool_use input, kept ONLY as a FALLBACK for an old CLI whose
@@ -80,7 +94,16 @@ final class ClaudeStreamSession: ObservableObject {
 
     // MARK: - Process
 
-    private let projectPath: String
+    /// The project this session runs in. Exposed (was private) so the cockpit
+    /// spine can label the row by project and the spawn sheet can re-add recents
+    /// (#fleet-spine / #session-row). Read-only to callers.
+    let projectPath: String
+
+    /// Last path component of `projectPath` — the human label the spine row LEADS
+    /// with ("a-paradigm" for /Users/…/a-paradigm). Prose over the full path.
+    var projectName: String {
+        URL(fileURLWithPath: projectPath).lastPathComponent
+    }
     private var process: Process?
     private var stdinPipe: Pipe?
     private var stdoutPipe: Pipe?
@@ -460,6 +483,9 @@ final class ClaudeStreamSession: ObservableObject {
     // MARK: - Main-actor projection
 
     private func apply(_ events: [StreamEvent]) {
+        // Activity stamp for the cockpit spine (#session-row). ADDITIVE —
+        // observational only; does not affect ingest/decode (~session-isolation).
+        if !events.isEmpty { lastEventAt = Date() }
         for event in events {
             // Per-event-type trace — this is how we diagnose a missed `result`.
             // If logs show assistant events but no `result`, the event never
@@ -1266,6 +1292,20 @@ final class ClaudeStreamSession: ObservableObject {
             result[key] = value
         }
         return result
+    }
+
+    // MARK: - Reserved: !session-needs-you (v2)
+
+    /// No-op hook reserved for v2 (#session-row / !session-needs-you). When the
+    /// stream gains a first-class "this session is blocked awaiting the human"
+    /// signal (e.g. a permission prompt or an explicit needs-human task), this is
+    /// where we will flip a published flag the spine reads to page the founder
+    /// back via the amber NEEDS YOU group. v1 derives awaitingYou heuristically in
+    /// SessionDerivedStatus from existing @Published state; this hook exists so the
+    /// v2 wiring lands ADDITIVELY without re-touching the stream machinery.
+    func noteNeedsHuman() {
+        ConductorLog.signal("session-needs-you")
+            .debug("noteNeedsHuman() — reserved v2 hook; v1 derives awaitingYou heuristically")
     }
 
     // MARK: - Claude path resolution (mirrors AgentProcessManager)
