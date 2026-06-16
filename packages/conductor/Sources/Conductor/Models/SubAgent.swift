@@ -81,10 +81,20 @@ struct SubAgent: Identifiable, Sendable {
     /// capped so a long run can't grow it unbounded. Each tick records the moment a
     /// progress beat arrived; the sparkline renders the cadence (bursty vs steady).
     var progressTicks: [Date]
-    /// The originating `Agent` tool_use id we correlated this sub-agent to (by
-    /// temporal adjacency, since the stream carries no explicit parent link). Drives
-    /// the inline fan-out block grouping. nil if correlation failed.
+    /// The originating `Agent`/`Task` tool_use id this sub-agent is correlated to —
+    /// DETERMINISTICALLY, via the `tool_use_id` carried on the task_started event
+    /// (NOT temporal adjacency). Drives the inline fan-out block grouping/placement.
+    /// nil only on an old CLI that omits tool_use_id.
     var originatingToolUseId: String?
+    /// The full sub-agent prompt (from task_started `prompt`). Shown in drill-in.
+    var prompt: String?
+    /// Total tokens the sub-agent consumed (task_notification `usage.total_tokens`).
+    /// Populated on the terminal notification — drives the "✓ 12.2k tok · 1.4s" row.
+    var totalTokens: Int?
+    /// Number of tool uses the sub-agent made (task_notification `usage.tool_uses`).
+    var toolUses: Int?
+    /// Wall-clock duration in ms (task_notification `usage.duration_ms`).
+    var durationMs: Int?
 
     init(
         id: String,
@@ -95,7 +105,11 @@ struct SubAgent: Identifiable, Sendable {
         endedAt: Date? = nil,
         lastActivity: String? = nil,
         progressTicks: [Date] = [],
-        originatingToolUseId: String? = nil
+        originatingToolUseId: String? = nil,
+        prompt: String? = nil,
+        totalTokens: Int? = nil,
+        toolUses: Int? = nil,
+        durationMs: Int? = nil
     ) {
         self.id = id
         self.description = description
@@ -106,6 +120,10 @@ struct SubAgent: Identifiable, Sendable {
         self.lastActivity = lastActivity
         self.progressTicks = progressTicks
         self.originatingToolUseId = originatingToolUseId
+        self.prompt = prompt
+        self.totalTokens = totalTokens
+        self.toolUses = toolUses
+        self.durationMs = durationMs
     }
 
     /// Elapsed wall-clock for the row's right-aligned mono timer. Live sub-agents
@@ -114,6 +132,33 @@ struct SubAgent: Identifiable, Sendable {
     func elapsed(now: Date) -> TimeInterval {
         let end = endedAt ?? now
         return max(0, end.timeIntervalSince(startedAt))
+    }
+
+    /// Compact usage summary for the settled row / drill-in, from the terminal
+    /// task_notification — e.g. "12.2k tok · 1.4s" or "12179 tok". nil until the
+    /// notification's usage block arrives. Real data, glanceable.
+    var usageSummary: String? {
+        var parts: [String] = []
+        if let t = totalTokens { parts.append("\(Self.compactTokens(t)) tok") }
+        if let d = durationMs { parts.append(Self.compactDuration(d)) }
+        return parts.isEmpty ? nil : parts.joined(separator: " · ")
+    }
+
+    /// "12.2k" / "980" — compact token count.
+    static func compactTokens(_ n: Int) -> String {
+        if n >= 1000 {
+            let k = Double(n) / 1000.0
+            return String(format: "%.1fk", k)
+        }
+        return String(n)
+    }
+
+    /// "1.4s" / "850ms" — compact duration from milliseconds.
+    static func compactDuration(_ ms: Int) -> String {
+        if ms >= 1000 {
+            return String(format: "%.1fs", Double(ms) / 1000.0)
+        }
+        return "\(ms)ms"
     }
 
     /// Cap on retained progress ticks — enough to draw a meaningful sparkline

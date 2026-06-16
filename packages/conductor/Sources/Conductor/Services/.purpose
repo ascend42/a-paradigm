@@ -13,7 +13,7 @@ context:
 # ============================================
 
 #claude-stream-session:
-  description: "Owns one headless claude stream-json process; spawns, writes turns/control_requests, decodes stdout events off-main, projects into an observable conversation model. Tracks background bash shells (#atrium-shells) AND sub-agents (#sub-agent — THE CHORUS) as SEPARATE @Published lists: a task_* event that the shells filter identifies as an Agent/Task sub-agent (by originating tool, or by temporal adjacency to a pending Agent tool_use) is ROUTED to subAgents via applySubAgentTask instead of dropped; stopSubAgent sends a suppressed TaskStop control turn."
+  description: "Owns one headless claude stream-json process; spawns, writes turns/control_requests, decodes stdout events off-main, projects into an observable conversation model. Tracks background bash shells (#atrium-shells) AND sub-agents (#sub-agent — THE CHORUS) as SEPARATE @Published lists: a task_* event typed as a sub-agent (task_type == 'local_agent', or — fallback when task_type is absent — the originating Agent/Task tool via tool_use_id) is ROUTED to subAgents via applySubAgentTask instead of dropped; SubAgents are populated DIRECTLY from the rich task_started fields (description/subagent_type/prompt) and correlated to the spawning Agent tool_use by tool_use_id (DETERMINISTIC — temporal-adjacency FIFO retired), with usage (total_tokens/tool_uses/duration_ms) captured from the terminal task_notification; stopSubAgent sends a suppressed TaskStop control turn."
   type: service
   tags: [conductor, atrium, claude, stream-json, session]
   anchors:

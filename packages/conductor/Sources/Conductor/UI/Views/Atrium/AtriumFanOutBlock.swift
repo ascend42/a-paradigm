@@ -22,6 +22,13 @@ struct AtriumFanOutBlock: View {
     private var liveCount: Int { subAgents.filter { $0.status.isLive }.count }
     private var allSettled: Bool { liveCount == 0 && !subAgents.isEmpty }
 
+    /// Sum of reported token usage across the fan-out (nil until any sub-agent's
+    /// task_notification has landed).
+    private var aggregateTokens: Int? {
+        let tokens = subAgents.compactMap(\.totalTokens)
+        return tokens.isEmpty ? nil : tokens.reduce(0, +)
+    }
+
     /// Total span from the earliest start to the latest end (or now if still live).
     private var totalElapsed: TimeInterval {
         guard let first = subAgents.map(\.startedAt).min() else { return 0 }
@@ -81,6 +88,13 @@ struct AtriumFanOutBlock: View {
                 Text(AtriumChorusRow.elapsedString(totalElapsed))
                     .font(AtriumTheme.footerFont)
                     .foregroundColor(AtriumTheme.inkMuted)
+                // Aggregate real token spend across the fan-out, once any sub-agent
+                // has reported usage (task_notification) (#sub-agent).
+                if let tokens = aggregateTokens {
+                    Text("· \(SubAgent.compactTokens(tokens)) tok")
+                        .font(AtriumTheme.footerFont)
+                        .foregroundColor(AtriumTheme.inkMuted)
+                }
                 Spacer()
                 Text(isOpen ? "▾ collapse" : "▸ expand")
                     .font(AtriumTheme.footerFont)

@@ -92,6 +92,17 @@ indirect enum JSONValue: Decodable, Sendable {
         }
     }
 
+    /// Best-effort integer extraction — `.number` is truncated to Int, a numeric
+    /// `.string` is parsed. Used for usage metrics (total_tokens, tool_uses,
+    /// duration_ms) on task_notification events (#sub-agent).
+    var asInt: Int? {
+        switch self {
+        case .number(let n): return Int(n)
+        case .string(let s): return Int(s) ?? Double(s).map { Int($0) }
+        default: return nil
+        }
+    }
+
     /// Compact JSON-ish string of this value — used to LOG raw payloads whose
     /// shape we are still refining (e.g. system task events). Not a strict
     /// round-trip serializer; good enough for Console diagnosis.

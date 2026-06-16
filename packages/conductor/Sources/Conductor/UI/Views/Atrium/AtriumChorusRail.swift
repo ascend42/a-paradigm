@@ -225,16 +225,23 @@ struct AtriumChorusRow: View {
                     .foregroundColor(AtriumTheme.inkMuted)
                     .padding(.top, 1)
             }
-            // Heartbeat sparkline (running) or settled status label.
+            // Heartbeat sparkline (running) or settled status label + usage.
             HStack(spacing: 6) {
                 if sub.status == .running {
                     Sparkline(ticks: sub.progressTicks, now: now, color: sub.status.chorusColor)
                         .frame(height: 12)
                         .frame(maxWidth: .infinity, alignment: .leading)
                 } else {
+                    // Settled: glyph-tinted status + real usage when present
+                    // ("done · 12.2k tok · 1.4s"). Usage from task_notification.
                     Text(sub.status.label)
                         .font(AtriumTheme.footerFont)
                         .foregroundColor(sub.status.chorusColor)
+                    if let usage = sub.usageSummary {
+                        Text("· \(usage)")
+                            .font(AtriumTheme.footerFont)
+                            .foregroundColor(AtriumTheme.inkMuted)
+                    }
                     Spacer()
                 }
             }
@@ -252,6 +259,30 @@ struct AtriumChorusRow: View {
             detailRow("type", sub.subagentType ?? "—")
             detailRow("status", sub.status.label, tint: sub.status.chorusColor)
             detailRow("elapsed", Self.elapsedString(sub.elapsed(now: now)))
+            // Real usage from the terminal task_notification (#sub-agent).
+            if let tokens = sub.totalTokens {
+                detailRow("tokens", SubAgent.compactTokens(tokens))
+            }
+            if let tools = sub.toolUses {
+                detailRow("tool uses", "\(tools)")
+            }
+            if let ms = sub.durationMs {
+                detailRow("duration", SubAgent.compactDuration(ms))
+            }
+            if let prompt = sub.prompt, !prompt.isEmpty {
+                Text("prompt")
+                    .font(AtriumTheme.footerFont)
+                    .foregroundColor(AtriumTheme.inkMuted)
+                Text(prompt)
+                    .font(AtriumTheme.footerFont)
+                    .foregroundColor(AtriumTheme.ink)
+                    .lineLimit(6)
+                    .textSelection(.enabled)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(6)
+                    .background(AtriumTheme.sunken)
+                    .clipShape(RoundedRectangle(cornerRadius: 5))
+            }
             if let activity = sub.lastActivity, !activity.isEmpty {
                 Text("last activity")
                     .font(AtriumTheme.footerFont)

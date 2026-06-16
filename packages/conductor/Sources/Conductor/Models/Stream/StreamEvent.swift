@@ -94,6 +94,18 @@ extension JSONValue {
         }
         return nil
     }
+
+    /// Pull the sub-agent `prompt` from an `Agent`/`Task` tool_use input — the full
+    /// instruction text. Fallback only; the task_started event carries `prompt`
+    /// directly (#sub-agent).
+    var subAgentPrompt: String? {
+        guard case .object(let obj) = self else { return nil }
+        if let v = obj["prompt"] {
+            let s = v.asDisplayString
+            if !s.isEmpty { return s }
+        }
+        return nil
+    }
 }
 
 /// A Claude API message (assistant or user) carried inside a stream event.
@@ -132,45 +144,69 @@ struct SystemInit: Decodable, Sendable {
 }
 
 /// `{"type":"system","subtype":"task_started"|"task_updated"|"task_notification",...}`
-/// — background-shell lifecycle events (#atrium-shells). The exact payload shape
-/// is not fully pinned down, so we decode DEFENSIVELY: capture the subtype and a
-/// handful of likely scalar fields (id/status/command/output), and ALSO keep the
-/// full raw JSON via JSONValue so we can refine later. Tolerant — any missing key
-/// is just nil.
+/// — task lifecycle events (#atrium-shells background bash AND #sub-agent CHORUS).
+///
+/// RAW SHAPE (VERIFIED against a live CLI capture, 2026-06 — supersedes the earlier
+/// "lossy transcript" conclusion that task_* carried only taskId). The events are
+/// RICH and self-attributing:
+///   task_started: { task_id, tool_use_id, description, subagent_type, task_type,
+///                   prompt, session_id }
+///   task_updated: { task_id, patch: { status, end_time } }
+///   task_notification: { task_id, tool_use_id, status, output_file, summary,
+///                        usage: { total_tokens, tool_uses, duration_ms } }
+///
+/// Two DETERMINISTIC discriminators carried on the wire:
+///   - `task_type`: "local_agent" → an Agent/Task CHORUS sub-agent; "local_bash" →
+///     a background bash shell (shells panel). This is the PRIMARY typing signal —
+///     no more tool-name/FIFO heuristics for typing.
+///   - `tool_use_id`: ties the task to the EXACT originating Agent/Task/Bash
+///     tool_use — DETERMINISTIC correlation (retires the temporal-adjacency FIFO).
+/// We still keep the full raw JSONValue (logged) and the originating-tool fallback
+/// for older CLIs that omit task_type.
 struct SystemTaskEvent: Decodable, Sendable {
     let subtype: String
-    /// Best-effort shell id (probed across several likely keys).
+    /// Task id (probed across likely keys; `task_id` is the verified spelling).
     let id: String?
-    /// Best-effort status string (running/finished/etc.) if present.
+    /// Status string. On task_updated it lives under `patch.status`; on
+    /// task_notification it is top-level. "completed" is a TERMINAL SUCCESS.
     let status: String?
     /// Best-effort command text if present.
     let command: String?
     /// Best-effort latest output snippet if present.
     let output: String?
-    /// Best-effort output FILE path if present (task_notification carries
-    /// output_file; verified shape — #atrium-shells FIX 3).
+    /// Output FILE path (task_notification carries `output_file`).
     let outputFile: String?
-    /// Best-effort tool_use_id — lets us correlate a task_started back to the
-    /// tool_use that spawned it (and thus its tool NAME + command text). CRITICAL
-    /// for distinguishing real background bash shells from Agent/Task sub-agents:
-    /// both emit identical task_* events, so we must look at the originating tool.
+    /// tool_use_id — the DETERMINISTIC link from a task back to the exact tool_use
+    /// (Agent/Task/Bash) that spawned it (#sub-agent / #atrium-shells). VERIFIED
+    /// PRESENT on task_started + task_notification. This is how we correlate a
+    /// sub-agent to its spawning Agent tool_use for inline fan-out grouping —
+    /// replacing the temporal-adjacency FIFO entirely.
     let toolUseId: String?
-    /// Best-effort parent_tool_use_id — the attribution that WOULD link a
-    /// sub-agent's events (and its interleaved tool calls) back to the spawning
-    /// Agent tool_use, enabling full nested drill-in (#sub-agent / #atrium-chorus).
-    /// VERIFIED ABSENT in the current Claude Code CLI stream-json (captured
-    /// transcripts show task_* carries only `taskId`); we probe for it anyway so a
-    /// future CLI that stamps it lights up nested transcript automatically. Until
-    /// then the CHORUS correlates Agent tool_use → task by temporal adjacency and
-    /// drill-in is the limited v1 (description + type + last-activity + status).
+    /// parent_tool_use_id — probed for forward-compat (a future CLI may stamp it on
+    /// interleaved sub-agent tool calls for full nested drill-in). The OPERATIVE
+    /// correlation field is `toolUseId`, which IS present; parentToolUseId is a
+    /// bonus probe only.
     let parentToolUseId: String?
-    /// Best-effort task TYPE — Claude Code tags background bash with
-    /// task_type "local_bash"; Agent/Task sub-agents report a DIFFERENT type. This
-    /// (alongside the originating-tool name) is how we filter sub-agents out of the
-    /// Background Shells panel (#atrium-shells — sub-agent filter).
+    /// task TYPE — the DETERMINISTIC typing discriminator. "local_agent" → CHORUS
+    /// sub-agent; "local_bash" → background bash shell. Both subsystems key on this
+    /// first (#sub-agent / #atrium-shells); the originating-tool name is a fallback
+    /// only when task_type is absent (older CLI).
     let taskType: String?
-    /// Best-effort human description (task_started carries `description`).
+    /// Human description of the task (task_started carries `description`).
     let description: String?
+    /// subagent_type / archetype (task_started carries `subagent_type`, e.g.
+    /// "general-purpose", "Explore"). Populates the SubAgent directly — no longer
+    /// looked up via the Agent tool_use.
+    let subagentType: String?
+    /// The full sub-agent prompt (task_started carries `prompt`). Populates the
+    /// SubAgent directly for drill-in.
+    let prompt: String?
+    /// Total tokens the sub-agent consumed (task_notification `usage.total_tokens`).
+    let totalTokens: Int?
+    /// Number of tool uses (task_notification `usage.tool_uses`).
+    let toolUses: Int?
+    /// Wall-clock duration in ms (task_notification `usage.duration_ms`).
+    let durationMs: Int?
     /// The complete decoded object — logged at debug so we can refine the shape.
     let raw: JSONValue
 
@@ -182,12 +218,11 @@ struct SystemTaskEvent: Decodable, Sendable {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         subtype = (try? container.decode(String.self, forKey: .subtype)) ?? "task_unknown"
 
-        // Capture the whole object so nothing is lost while the shape is unknown.
+        // Capture the whole object so nothing is lost.
         let whole = (try? JSONValue(from: decoder)) ?? .null
         raw = whole
 
-        // Probe common keys defensively across the object (and a nested "task"
-        // object, in case the payload nests under one).
+        // Probe common keys across the object (+ nested patch/usage/task objects).
         func probe(_ keys: [String]) -> String? {
             for obj in SystemTaskEvent.candidateObjects(whole) {
                 for key in keys {
@@ -195,6 +230,15 @@ struct SystemTaskEvent: Decodable, Sendable {
                         let s = v.asDisplayString
                         if !s.isEmpty { return s }
                     }
+                }
+            }
+            return nil
+        }
+        // Integer probe (usage block: total_tokens, tool_uses, duration_ms).
+        func probeInt(_ keys: [String]) -> Int? {
+            for obj in SystemTaskEvent.candidateObjects(whole) {
+                for key in keys {
+                    if let v = obj[key], let n = v.asInt { return n }
                 }
             }
             return nil
@@ -207,24 +251,30 @@ struct SystemTaskEvent: Decodable, Sendable {
         toolUseId = probe(["tool_use_id", "toolUseId"])
         // parent_tool_use_id (#sub-agent): probed for forward-compat — see field doc.
         parentToolUseId = probe(["parent_tool_use_id", "parentToolUseId"])
-        // task_type discriminates background bash ("local_bash") from Agent/Task
-        // sub-agents (a DIFFERENT type) — both emit identical task_* events, so this
-        // is the primary signal for filtering sub-agents out of the shells panel
-        // (#atrium-shells — sub-agent filter). Probe specific key spellings only —
-        // deliberately NOT bare "type" (the top-level object's "type" is always
-        // "system", which would falsely match).
+        // task_type — the DETERMINISTIC typing discriminator (local_agent/local_bash).
+        // Probe specific key spellings only — deliberately NOT bare "type" (the
+        // top-level "type" is always "system", which would falsely match).
         taskType = probe(["task_type", "taskType", "task_kind", "kind"])
+        // description is verified on task_started; summary is the task_notification
+        // counterpart. Keep both reachable via the same field.
         description = probe(["description", "summary", "desc"])
+        subagentType = probe(["subagent_type", "subagentType", "agent_type"])
+        prompt = probe(["prompt"])
+        // usage.{total_tokens, tool_uses, duration_ms} (task_notification) — the
+        // `usage` object is included in candidateObjects so these resolve nested.
+        totalTokens = probeInt(["total_tokens", "totalTokens"])
+        toolUses = probeInt(["tool_uses", "toolUses"])
+        durationMs = probeInt(["duration_ms", "durationMs"])
     }
 
-    /// The top-level object plus any nested "task"/"data" objects, so probes find
-    /// fields whether flat or nested.
+    /// The top-level object plus any nested objects, so probes find fields whether
+    /// flat or nested. `patch` carries task_updated mutations ({status, end_time});
+    /// `usage` carries task_notification metrics ({total_tokens, tool_uses,
+    /// duration_ms}).
     private static func candidateObjects(_ value: JSONValue) -> [[String: JSONValue]] {
         guard case .object(let obj) = value else { return [] }
         var out: [[String: JSONValue]] = [obj]
-        // `patch` carries task_updated mutations ({status, end_time}); include it
-        // so the status probe finds nested status (#atrium-shells FIX 3).
-        for nestedKey in ["task", "data", "payload", "patch"] {
+        for nestedKey in ["task", "data", "payload", "patch", "usage"] {
             if case .object(let nested)? = obj[nestedKey] {
                 out.append(nested)
             }

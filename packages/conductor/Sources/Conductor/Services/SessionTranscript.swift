@@ -206,14 +206,34 @@ final class SessionTranscript: @unchecked Sendable {
         ])
     }
 
-    func logSystemTask(subtype: String, taskId: String?, status: String?) {
-        write([
+    /// Log a system task lifecycle event. EXTENDED (#sub-agent) to capture the
+    /// fields that the earlier LOSSY logging dropped — tool_use_id + task_type (the
+    /// deterministic correlation + typing signals) and the usage block
+    /// (total_tokens / tool_uses / duration_ms) — so future debugging isn't blind to
+    /// what the wire actually carries. Optional usage fields are omitted when absent.
+    func logSystemTask(
+        subtype: String,
+        taskId: String?,
+        status: String?,
+        toolUseId: String? = nil,
+        taskType: String? = nil,
+        totalTokens: Int? = nil,
+        toolUses: Int? = nil,
+        durationMs: Int? = nil
+    ) {
+        var entry: [String: JSONEncodableValue] = [
             "dir": "out",
             "kind": "system_task",
             "subtype": .string(subtype),
             "taskId": .string(taskId ?? ""),
             "status": .string(status ?? ""),
-        ])
+            "toolUseId": .string(toolUseId ?? ""),
+            "taskType": .string(taskType ?? ""),
+        ]
+        if let totalTokens { entry["totalTokens"] = .int(totalTokens) }
+        if let toolUses { entry["toolUses"] = .int(toolUses) }
+        if let durationMs { entry["durationMs"] = .int(durationMs) }
+        write(entry)
     }
 
     func logUnknown(rawType: String) {

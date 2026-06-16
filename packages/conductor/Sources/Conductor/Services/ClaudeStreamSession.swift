@@ -34,20 +34,22 @@ final class ClaudeStreamSession: ObservableObject {
     @Published private(set) var backgroundShells: [BackgroundShell] = []
 
     /// Sub-agents the model spawned via the Agent/Task tool — THE CHORUS
-    /// (#sub-agent / #atrium-chorus). Populated from the Agent tool_use (carrying
-    /// `description` + `subagent_type`) correlated to the subsequent task_started by
-    /// temporal adjacency, then driven by task_progress/task_updated. These are the
+    /// (#sub-agent / #atrium-chorus). Populated DIRECTLY from the task_started event
+    /// fields (description + subagent_type + prompt — all VERIFIED present on the
+    /// wire), typed by `task_type == "local_agent"`, and correlated to the spawning
+    /// Agent tool_use by the `tool_use_id` the event carries (DETERMINISTIC — no
+    /// FIFO). Driven by task_progress/task_updated/task_notification. These are the
     /// SAME task_* events the shells panel EXCLUDES (#atrium-shells sub-agent
     /// filter) — they are routed HERE instead of dropped. Bash shells stay separate.
     @Published private(set) var subAgents: [SubAgent] = []
 
-    /// FIFO queue of Agent/Task tool_use ids awaiting their task_started, with the
-    /// description + subagent_type pulled from the tool_use input. The CLI
-    /// stream-json carries NO parent_tool_use_id (verified), so we correlate a
-    /// sub-agent task to its spawning Agent tool_use by temporal adjacency: the
-    /// task_started fires within ~30ms of the Agent tool_use, before the next one.
-    /// When a sub-agent task_started arrives we pop the oldest pending Agent here.
-    private var pendingAgentSpawns: [(toolUseId: String, description: String, subagentType: String?)] = []
+    /// Known Agent/Task tool_use ids → the description/subagent_type/prompt pulled
+    /// from the tool_use input, kept ONLY as a FALLBACK for an old CLI whose
+    /// task_started omits those fields. The CURRENT CLI carries description +
+    /// subagent_type + prompt + tool_use_id ON the task_started itself, so the
+    /// SubAgent is populated directly from the event and correlated by tool_use_id —
+    /// the temporal-adjacency FIFO is RETIRED. Capped so it can't grow unbounded.
+    private var agentSpawnsByToolUseId: [String: (description: String, subagentType: String?, prompt: String?)] = [:]
 
     /// Task ids we positively identified as Agent/Task SUB-AGENTS (vs background
     /// bash). Sticky like excludedTaskIds: once a task is routed to the chorus it
@@ -615,17 +617,19 @@ final class ClaudeStreamSession: ObservableObject {
                     }
                 }
                 // CHORUS (#sub-agent): an Agent/Task tool_use SPAWNS a sub-agent.
-                // The input carries the sub-agent's description + subagent_type. The
-                // CLI stream-json carries NO parent_tool_use_id, so enqueue this
-                // spawn and correlate it to the next sub-agent task_started by
-                // temporal adjacency (applySystemTask pops the oldest pending).
+                // The task_started that follows carries its OWN tool_use_id (this id)
+                // + description + subagent_type + prompt, so correlation is
+                // DETERMINISTIC (by tool_use_id) and the SubAgent is populated from
+                // the event. We still cache the tool_use input here as a FALLBACK for
+                // an old CLI whose task_started omits those fields. No FIFO queue.
                 if name == "Agent" || name == "Task" {
                     let desc = input.subAgentDescription ?? summary
                     let type = input.subAgentType
-                    pendingAgentSpawns.append((toolUseId: id, description: desc, subagentType: type))
+                    let prompt = input.subAgentPrompt
+                    agentSpawnsByToolUseId[id] = (description: desc, subagentType: type, prompt: prompt)
                     // Cap so a runaway can't grow it unbounded.
-                    if pendingAgentSpawns.count > 64 {
-                        pendingAgentSpawns.removeFirst(pendingAgentSpawns.count - 64)
+                    if agentSpawnsByToolUseId.count > 64 {
+                        agentSpawnsByToolUseId.removeAll()
                     }
                     ConductorLog.signal("sub-agent")
                         .info("CHORUS — Agent tool_use \(id) spawned sub-agent type=\(type ?? "?") desc=\(desc.prefix(60))")
@@ -674,7 +678,16 @@ final class ClaudeStreamSession: ObservableObject {
     /// and best-effort update tracked shells from any id/status/command/output we
     /// could probe.
     private func applySystemTask(_ task: SystemTaskEvent) {
-        transcript.logSystemTask(subtype: task.subtype, taskId: task.id, status: task.status) // #session-transcript
+        transcript.logSystemTask(
+            subtype: task.subtype,
+            taskId: task.id,
+            status: task.status,
+            toolUseId: task.toolUseId,
+            taskType: task.taskType,
+            totalTokens: task.totalTokens,
+            toolUses: task.toolUses,
+            durationMs: task.durationMs
+        ) // #session-transcript
         ConductorLog.signal("background-shell")
             .debug("system task \(task.subtype) raw=\(task.raw.jsonString)")
 
@@ -684,18 +697,15 @@ final class ClaudeStreamSession: ObservableObject {
             return
         }
 
-        // SUB-AGENT FILTER (#atrium-shells — sub-agent filter).
+        // TYPING (#atrium-shells / #sub-agent) — DETERMINISTIC, task_type-first.
         // Claude Code task_* events cover TWO distinct things that emit identical
-        // shapes: real background bash shells (task_type "local_bash") AND Agent/Task
-        // sub-agents spawned for parallel work. ONLY real bash shells belong in this
-        // panel. Decide via two signals:
-        //   1. task_type == "local_bash"  → a real background bash shell.
-        //   2. originating tool_use name (traced via tool_use_id) == "Bash" → a real
-        //      background bash shell. An "Agent"/"Task" origin → sub-agent, EXCLUDE.
-        // If we ALREADY track this id (it passed the gate on an earlier event), we
-        // continue updating it regardless — the discriminating signal (task_type /
-        // tool_use_id) usually arrives on task_started and may be absent on later
-        // task_progress/task_updated/task_notification events.
+        // shapes. They are typed authoritatively by `task_type` (VERIFIED on the
+        // wire, task_started):
+        //   - task_type == "local_agent"  → an Agent/Task CHORUS sub-agent.
+        //   - task_type == "local_bash"   → a real background bash shell.
+        // The originating tool name (traced via tool_use_id) is a FALLBACK ONLY,
+        // used when task_type is absent (older CLI). The temporal-adjacency FIFO is
+        // RETIRED — typing no longer depends on event ordering.
         let alreadyTracked = backgroundShells.contains(where: { $0.id == id })
         // CHORUS routing (#sub-agent): if this task is already a tracked sub-agent
         // (or was previously identified as one), it belongs to the chorus, NOT the
@@ -713,35 +723,30 @@ final class ClaudeStreamSession: ObservableObject {
                 return
             }
             let originatingTool: String? = task.toolUseId.flatMap { toolNamesByToolUseId[$0] }
-            let isLocalBashType = (task.taskType?.lowercased() == "local_bash")
+            let normalizedType = task.taskType?.lowercased()
+            let isLocalBashType = (normalizedType == "local_bash")
+            let isLocalAgentType = (normalizedType == "local_agent")
             let isBashOrigin = (originatingTool == "Bash")
             let isAgentOrigin = (originatingTool == "Agent" || originatingTool == "Task")
 
-            // SUB-AGENT DETECTION (#sub-agent), in priority order:
-            //   1. Explicit Agent/Task origin (a future CLI that stamps tool_use_id /
-            //      parent_tool_use_id on task events — lights up automatically).
-            //   2. TEMPORAL ADJACENCY: a task_started with NO bash signal, while an
-            //      Agent tool_use is pending its task. Verified: the CLI's task_started
-            //      carries only `taskId` (no tool_use_id, no task_type), so this FIFO
-            //      pop is the PRIMARY correlation in practice. We only consume a pending
-            //      spawn on task_started (the birth event), never on a later progress
-            //      event for an unknown id.
-            let isBirth = (task.subtype == "task_started")
-            if isAgentOrigin || (isBirth && !isBashOrigin && !isLocalBashType && !pendingAgentSpawns.isEmpty) {
+            // SUB-AGENT DETECTION (#sub-agent), DETERMINISTIC priority order:
+            //   1. task_type == "local_agent" — authoritative wire signal.
+            //   2. FALLBACK: Agent/Task originating tool name (task_type absent).
+            if isLocalAgentType || (normalizedType == nil && isAgentOrigin) {
                 subAgentTaskIds.insert(id)
                 if subAgentTaskIds.count > 400 { subAgentTaskIds.removeAll() }
                 ConductorLog.signal("sub-agent")
-                    .info("CHORUS — routing sub-agent task \(id) (origin=\(originatingTool ?? "temporal-adjacency"))")
+                    .info("CHORUS — routing sub-agent task \(id) (task_type=\(task.taskType ?? "nil") origin=\(originatingTool ?? "?"))")
                 applySubAgentTask(task, id: id)
                 return
             }
 
-            // ADMIT only when a signal POSITIVELY says bash. Absent BOTH signals we
-            // stay conservative and admit (the tool_result "Command running in
-            // background" path is the other detector and only ever fires for real
-            // bash). But if ANY signal is present and contradicts (origin tool that
-            // isn't Bash, or task_type that isn't local_bash), EXCLUDE — and remember
-            // the verdict so signal-less follow-up events don't re-admit it.
+            // ADMIT to shells only when a signal POSITIVELY says bash. Absent BOTH
+            // signals we stay conservative and admit (the tool_result "Command
+            // running in background" path is the other detector and only ever fires
+            // for real bash). If ANY signal contradicts (task_type that isn't
+            // local_bash, or origin tool that isn't Bash), EXCLUDE — and remember the
+            // verdict so signal-less follow-up events don't re-admit it.
             let hasSignal = (task.taskType != nil) || (originatingTool != nil)
             let admit = isLocalBashType || isBashOrigin || !hasSignal
             if !admit {
@@ -809,13 +814,16 @@ final class ClaudeStreamSession: ObservableObject {
 
     // MARK: - Sub-agent (THE CHORUS) tracking (#sub-agent / #atrium-chorus)
 
-    /// Project a sub-agent task event into the @Published subAgents chorus. On the
-    /// birth event (task_started) we pop the oldest pending Agent tool_use to recover
-    /// the description + subagent_type (temporal-adjacency correlation — the CLI
-    /// carries no parent link). task_progress appends a sparkline heartbeat tick;
+    /// Project a sub-agent task event into the @Published subAgents chorus. The
+    /// SubAgent is populated DIRECTLY from the task event fields (description +
+    /// subagent_type + prompt on task_started) and correlated to its spawning Agent
+    /// tool_use by `tool_use_id` (DETERMINISTIC — no FIFO). task_progress appends a
+    /// sparkline heartbeat tick; the terminal task_notification carries usage
+    /// (total_tokens, tool_uses, duration_ms) which we capture for the row/drill-in;
     /// terminal task_updated/task_notification statuses freeze the sub-agent.
     private func applySubAgentTask(_ task: SystemTaskEvent, id: String) {
         let mapped = Self.mapSubAgentStatus(subtype: task.subtype, status: task.status)
+        // `description` already absorbs the task_notification `summary` (same probe).
         let activity = task.output ?? task.description
 
         if let idx = subAgents.firstIndex(where: { $0.id == id }) {
@@ -841,25 +849,47 @@ final class ClaudeStreamSession: ObservableObject {
                 }
             }
             if let activity, !activity.isEmpty { subAgents[idx].lastActivity = activity }
+            // task_notification carries the terminal usage block — capture it.
+            applyUsage(task, to: idx)
         } else {
-            // Birth — correlate to the oldest pending Agent spawn (FIFO temporal
-            // adjacency). If none is pending (rare ordering), register with a
-            // placeholder description so the voice still appears.
-            let spawn = pendingAgentSpawns.isEmpty ? nil : pendingAgentSpawns.removeFirst()
+            // Birth — populate DIRECTLY from the event. tool_use_id deterministically
+            // correlates to the spawning Agent tool_use; description/subagent_type/
+            // prompt are on the event itself. The cached tool_use input is a fallback
+            // for an old CLI whose task_started omits those fields.
+            let fallback = task.toolUseId.flatMap { agentSpawnsByToolUseId[$0] }
+            let description = task.description ?? fallback?.description ?? "Sub-agent"
+            let subagentType = task.subagentType ?? fallback?.subagentType
+            let prompt = task.prompt ?? fallback?.prompt
+            // If this birth IS the terminal notification (rare ordering), usage is
+            // populated from the same event; otherwise nil until the notification.
             let sub = SubAgent(
                 id: id,
-                description: spawn?.description ?? task.description ?? "Sub-agent",
-                subagentType: spawn?.subagentType,
+                description: description,
+                subagentType: subagentType,
                 status: mapped,
                 endedAt: mapped.isTerminal ? Date() : nil,
                 lastActivity: activity,
                 progressTicks: task.subtype == "task_progress" ? [Date()] : [],
-                originatingToolUseId: spawn?.toolUseId
+                originatingToolUseId: task.toolUseId,
+                prompt: prompt,
+                totalTokens: task.totalTokens,
+                toolUses: task.toolUses,
+                durationMs: task.durationMs
             )
             subAgents.append(sub)
             ConductorLog.signal("sub-agent")
-                .info("CHORUS — sub-agent BORN \(id) type=\(sub.subagentType ?? "?") status=\(mapped.rawValue) desc=\(sub.description.prefix(60))")
+                .info("CHORUS — sub-agent BORN \(id) type=\(sub.subagentType ?? "?") status=\(mapped.rawValue) tuid=\(task.toolUseId ?? "?") desc=\(sub.description.prefix(60))")
         }
+    }
+
+    /// Capture the terminal usage block (total_tokens, tool_uses, duration_ms) from a
+    /// task_notification onto a tracked sub-agent. Only sets fields that are present;
+    /// never clobbers an existing value with nil (#sub-agent).
+    private func applyUsage(_ task: SystemTaskEvent, to idx: Int) {
+        if let t = task.totalTokens { subAgents[idx].totalTokens = t }
+        if let u = task.toolUses { subAgents[idx].toolUses = u }
+        if let d = task.durationMs { subAgents[idx].durationMs = d }
+        if task.prompt != nil, subAgents[idx].prompt == nil { subAgents[idx].prompt = task.prompt }
     }
 
     /// Map a sub-agent task event to a SubAgentStatus. task_progress is ALWAYS a
