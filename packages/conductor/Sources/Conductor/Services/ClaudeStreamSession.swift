@@ -38,6 +38,23 @@ final class ClaudeStreamSession: ObservableObject {
     /// Pruned opportunistically (capped) so it can't grow unbounded.
     private var bashCommandsByToolUseId: [String: String] = [:]
 
+    /// Maps EVERY tool_use id → its tool NAME (Bash, Agent, Task, Read, …), so a
+    /// `task_started` (which carries the originating tool_use_id) can be traced back
+    /// to the tool that spawned it. CRITICAL for the sub-agent filter
+    /// (#atrium-shells): background bash and Agent/Task sub-agents emit IDENTICAL
+    /// task_* events, so the only way to tell them apart by origin is the spawning
+    /// tool's name. Pruned opportunistically (capped) so it can't grow unbounded.
+    private var toolNamesByToolUseId: [String: String] = [:]
+
+    /// Task ids we positively identified as NON-bash (Agent/Task sub-agents) and
+    /// excluded from the shells panel (#atrium-shells — sub-agent filter). A
+    /// sub-agent's discriminating signal (task_type/tool_use_id) usually arrives on
+    /// task_started; its later task_progress/task_updated/task_notification events
+    /// often LACK it, so we must remember the verdict — otherwise a signal-less
+    /// follow-up event would fall through the "no signal → admit" default and wrongly
+    /// register the sub-agent. Capped so it can't grow unbounded.
+    private var excludedTaskIds: Set<String> = []
+
     // MARK: - Process
 
     private let projectPath: String
@@ -557,6 +574,15 @@ final class ClaudeStreamSession: ObservableObject {
                 messages[index].toolCalls.append(
                     ToolCall(id: id, name: name, inputSummary: summary, state: .running, resultSummary: nil)
                 )
+                // Record EVERY tool_use id → its tool name so a later task_started
+                // (carrying this tool_use_id) can be traced back to the originating
+                // tool. This is how we distinguish a real background Bash shell from
+                // an Agent/Task sub-agent — both emit identical task_* events
+                // (#atrium-shells — sub-agent filter).
+                toolNamesByToolUseId[id] = name
+                if toolNamesByToolUseId.count > 400 {
+                    toolNamesByToolUseId.removeAll()
+                }
                 // Remember Bash commands by tool_use id so we can correlate the
                 // command text if this Bash gets backgrounded (#atrium-shells).
                 if name == "Bash" {
@@ -620,36 +646,79 @@ final class ClaudeStreamSession: ObservableObject {
             // primary detector. Nothing else to do.
             return
         }
-        // Map EVERY terminal status, not just killed/stopped. Any non-"running"
-        // terminal value moves the shell out of .running so the panel can never
-        // keep showing "running" after a terminal task event arrives
-        // (#atrium-shells FIX 1). NOTE (Claude Code 2.1.x): a TaskStop'd background
-        // task reports terminal status "failed", so .failed covers the
-        // founder-clicked-Kill case.
+
+        // SUB-AGENT FILTER (#atrium-shells — sub-agent filter).
+        // Claude Code task_* events cover TWO distinct things that emit identical
+        // shapes: real background bash shells (task_type "local_bash") AND Agent/Task
+        // sub-agents spawned for parallel work. ONLY real bash shells belong in this
+        // panel. Decide via two signals:
+        //   1. task_type == "local_bash"  → a real background bash shell.
+        //   2. originating tool_use name (traced via tool_use_id) == "Bash" → a real
+        //      background bash shell. An "Agent"/"Task" origin → sub-agent, EXCLUDE.
+        // If we ALREADY track this id (it passed the gate on an earlier event), we
+        // continue updating it regardless — the discriminating signal (task_type /
+        // tool_use_id) usually arrives on task_started and may be absent on later
+        // task_progress/task_updated/task_notification events.
+        let alreadyTracked = backgroundShells.contains(where: { $0.id == id })
+        if !alreadyTracked {
+            // Sticky exclusion: once an id is identified as a sub-agent, stay excluded
+            // even on later signal-less events for the same id.
+            if excludedTaskIds.contains(id) {
+                ConductorLog.signal("background-shell")
+                    .debug("ignoring non-bash task \(id) (previously excluded) subtype=\(task.subtype)")
+                return
+            }
+            let originatingTool: String? = task.toolUseId.flatMap { toolNamesByToolUseId[$0] }
+            let isLocalBashType = (task.taskType?.lowercased() == "local_bash")
+            let isBashOrigin = (originatingTool == "Bash")
+            // ADMIT only when a signal POSITIVELY says bash. Absent BOTH signals we
+            // stay conservative and admit (the tool_result "Command running in
+            // background" path is the other detector and only ever fires for real
+            // bash). But if ANY signal is present and contradicts (origin tool that
+            // isn't Bash, or task_type that isn't local_bash), EXCLUDE — and remember
+            // the verdict so signal-less follow-up events don't re-admit it.
+            let hasSignal = (task.taskType != nil) || (originatingTool != nil)
+            let admit = isLocalBashType || isBashOrigin || !hasSignal
+            if !admit {
+                excludedTaskIds.insert(id)
+                if excludedTaskIds.count > 400 { excludedTaskIds.removeAll() }
+                ConductorLog.signal("background-shell")
+                    .debug("ignoring non-bash task \(id) type=\(task.taskType ?? "?") tool=\(originatingTool ?? "?") subtype=\(task.subtype)")
+                return
+            }
+        }
+
+        // STATUS MAPPING (#atrium-shells FIX 1, refined for task_progress).
+        // task_progress is a NON-TERMINAL running update (the transcript showed 26 of
+        // them per sub-agent) — it must NEVER be treated as terminal. Only EXPLICIT
+        // terminal statuses move a shell out of .running. Everything else — including
+        // task_progress, empty/absent status, and any progress-ish value — stays
+        // .running. NOTE (Claude Code 2.1.x): a TaskStop'd background task reports
+        // terminal status "failed", so .failed covers the founder-clicked-Kill case.
         let mappedStatus: BackgroundShellStatus
-        switch (task.subtype, task.status?.lowercased()) {
-        case (_, "killed"):
-            mappedStatus = .killed
-        case (_, "stopped"):
-            mappedStatus = .stopped
-        case (_, "failed"), (_, "error"):
-            mappedStatus = .failed
-        case (_, "finished"), (_, "completed"), (_, "success"), (_, "done"), (_, "exited"):
-            mappedStatus = .finished
-        case (_, "running"):
+        if task.subtype == "task_progress" {
+            // Explicitly non-terminal: a running progress heartbeat. Never terminal,
+            // regardless of any status field it may or may not carry.
             mappedStatus = .running
-        case ("task_started", _):
-            mappedStatus = .running
-        case (_, .some(let raw)) where !raw.isEmpty:
-            // An unrecognized NON-EMPTY status on a task event is treated as a
-            // terminal failure rather than left "running" — the panel must never
-            // lie about a still-running shell. Log so we can extend the map.
-            ConductorLog.signal("background-shell")
-                .info("system task \(task.subtype) carries unrecognized status \"\(raw)\" — treating as terminal .failed")
-            mappedStatus = .failed
-        default:
-            // task_updated / task_notification with NO status at all → keep running
-            mappedStatus = .running
+        } else {
+            switch task.status?.lowercased() {
+            case "killed":
+                mappedStatus = .killed
+            case "stopped":
+                mappedStatus = .stopped
+            case "failed", "error":
+                mappedStatus = .failed
+            case "finished", "completed", "success", "done", "exited":
+                mappedStatus = .finished
+            default:
+                // running / empty / absent / progress-ish / any OTHER value →
+                // still running. We deliberately DO NOT treat an unrecognized
+                // non-empty status as terminal anymore: only the EXPLICIT terminal
+                // statuses above are terminal. This prevents progress updates (and
+                // any future non-terminal status string) from falsely flipping a
+                // live shell to .failed.
+                mappedStatus = .running
+            }
         }
 
         // Early registration from task_started: correlate the command from the
@@ -670,7 +739,7 @@ final class ClaudeStreamSession: ObservableObject {
             outputFile: task.outputFile
         )
         ConductorLog.signal("background-shell")
-            .info("system task \(task.subtype) → shell id=\(id) status=\(mappedStatus.rawValue) outputFile=\(task.outputFile ?? "?")")
+            .info("system task \(task.subtype) → shell id=\(id) status=\(mappedStatus.rawValue) type=\(task.taskType ?? "?") outputFile=\(task.outputFile ?? "?")")
     }
 
     /// Insert or update a tracked shell. Existing entries keep their startedAt and

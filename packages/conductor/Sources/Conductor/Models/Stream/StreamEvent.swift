@@ -120,9 +120,16 @@ struct SystemTaskEvent: Decodable, Sendable {
     /// Best-effort output FILE path if present (task_notification carries
     /// output_file; verified shape — #atrium-shells FIX 3).
     let outputFile: String?
-    /// Best-effort tool_use_id — lets us correlate a task_started back to the Bash
-    /// tool_use that spawned it (and thus its command text).
+    /// Best-effort tool_use_id — lets us correlate a task_started back to the
+    /// tool_use that spawned it (and thus its tool NAME + command text). CRITICAL
+    /// for distinguishing real background bash shells from Agent/Task sub-agents:
+    /// both emit identical task_* events, so we must look at the originating tool.
     let toolUseId: String?
+    /// Best-effort task TYPE — Claude Code tags background bash with
+    /// task_type "local_bash"; Agent/Task sub-agents report a DIFFERENT type. This
+    /// (alongside the originating-tool name) is how we filter sub-agents out of the
+    /// Background Shells panel (#atrium-shells — sub-agent filter).
+    let taskType: String?
     /// Best-effort human description (task_started carries `description`).
     let description: String?
     /// The complete decoded object — logged at debug so we can refine the shape.
@@ -159,6 +166,13 @@ struct SystemTaskEvent: Decodable, Sendable {
         output = probe(["output", "stdout", "result", "text", "last_output"])
         outputFile = probe(["output_file", "outputFile", "output_path"])
         toolUseId = probe(["tool_use_id", "toolUseId"])
+        // task_type discriminates background bash ("local_bash") from Agent/Task
+        // sub-agents (a DIFFERENT type) — both emit identical task_* events, so this
+        // is the primary signal for filtering sub-agents out of the shells panel
+        // (#atrium-shells — sub-agent filter). Probe specific key spellings only —
+        // deliberately NOT bare "type" (the top-level object's "type" is always
+        // "system", which would falsely match).
+        taskType = probe(["task_type", "taskType", "task_kind", "kind"])
         description = probe(["description", "summary", "desc"])
     }
 
