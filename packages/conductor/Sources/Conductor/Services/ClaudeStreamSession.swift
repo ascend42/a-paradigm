@@ -161,6 +161,10 @@ final class ClaudeStreamSession: ObservableObject, Identifiable {
             "--input-format", "stream-json",
             "--verbose",
             "--dangerously-skip-permissions",
+            // BRIDGE conventions (#session-prompt / $decision-exchange): inject
+            // Scholar's concision + host-rendered-blocks contract. --append (NOT
+            // --system-prompt) PRESERVES the default tools the cockpit depends on.
+            "--append-system-prompt", SessionPrompt.bridgeConventions,
         ]
         if claudePath == "/usr/bin/env" {
             proc.executableURL = URL(fileURLWithPath: "/usr/bin/env")
@@ -664,6 +668,86 @@ final class ClaudeStreamSession: ObservableObject, Identifiable {
                 break // thinking is intentionally not rendered
             }
         }
+
+        // BRIDGE blocks ($decision-exchange): re-parse the accumulated text for
+        // host-rendered fenced blocks and merge into .decisions/.visuals. The
+        // residual prose (blocks stripped) replaces the rendered text. PRESERVE any
+        // settled .answer across re-parses (a later streaming chunk must not wipe a
+        // chosen answer), and page the founder when a NEW unanswered decision lands.
+        parseBridgeBlocks(at: index)
+    }
+
+    // MARK: - BRIDGE host-rendered blocks ($decision-exchange / #fenced-block-parser)
+
+    /// Parse messages[index].text for ```conductor-decision / ```conductor-visual /
+    /// ```mermaid / ```svg blocks, strip them from the rendered text, and merge the
+    /// typed results onto the message — preserving any settled DecisionAnswer.
+    private func parseBridgeBlocks(at index: Int) {
+        guard messages.indices.contains(index) else { return }
+        let result = FencedBlockParser.parse(messages[index].text)
+
+        // Preserve answers: carry a prior answer forward onto the same-id decision.
+        let priorAnswers: [String: DecisionAnswer] = Dictionary(
+            uniqueKeysWithValues: messages[index].decisions.compactMap { d in
+                d.answer.map { (d.id, $0) }
+            }
+        )
+        var merged = result.decisions
+        var newUnanswered = false
+        for idx in merged.indices {
+            if let prior = priorAnswers[merged[idx].id] {
+                merged[idx].answer = prior
+            } else {
+                newUnanswered = true
+            }
+        }
+
+        // Only rewrite text/decisions/visuals when the parser actually consumed a
+        // block (residual differs OR typed results exist) — avoids churn on plain
+        // turns and avoids stomping the raw text when nothing was fenced.
+        let hadBlocks = !result.decisions.isEmpty || !result.visuals.isEmpty
+        if hadBlocks {
+            messages[index].text = result.residualText
+            messages[index].decisions = merged
+            messages[index].visuals = result.visuals
+            ConductorLog.flow("decision-exchange")
+                .info("Parsed BRIDGE blocks — \(merged.count) decision(s), \(result.visuals.count) visual(s)")
+        }
+
+        // Page the founder when a brand-new unanswered decision appears (!session-needs-you).
+        if newUnanswered, merged.contains(where: { $0.isPending }) {
+            noteNeedsHuman()
+        }
+    }
+
+    /// True when ANY message carries an unanswered decision — the human must act.
+    /// Drives SessionDerivedStatus.awaitingYou even for the ACTIVE session.
+    var hasPendingDecision: Bool {
+        messages.contains { msg in msg.decisions.contains { $0.isPending } }
+    }
+
+    /// Answer a host-rendered decision ($decision-exchange). Sets the settled
+    /// DecisionAnswer (preserved across re-parses), composes a human-readable user
+    /// turn from the chosen option(s)/other text, and sends it via the existing
+    /// send(text:) path. Clears the awaitingYou state by settling the decision.
+    func answerDecision(messageId: UUID, decisionId: String, optionIds: [String], otherText: String?) {
+        guard let mIdx = messages.firstIndex(where: { $0.id == messageId }),
+              let dIdx = messages[mIdx].decisions.firstIndex(where: { $0.id == decisionId })
+        else {
+            ConductorLog.flow("decision-exchange")
+                .error("answerDecision — decision \(decisionId) not found on message")
+            return
+        }
+        let decision = messages[mIdx].decisions[dIdx]
+        guard decision.isPending else { return } // idempotent; ignore re-answer
+
+        let answer = DecisionAnswer(chosenOptionIds: optionIds, otherText: otherText, answeredAt: Date())
+        messages[mIdx].decisions[dIdx].answer = answer
+
+        let reply = decision.composeReply(optionIds: optionIds, otherText: otherText)
+        ConductorLog.flow("decision-exchange")
+            .info("Answered decision \(decisionId) → sending user turn (\(reply.count) chars)")
+        send(text: reply)
     }
 
     private func applyToolResults(_ user: UserMessage) {

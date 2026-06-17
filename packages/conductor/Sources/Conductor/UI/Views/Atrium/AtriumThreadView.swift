@@ -18,6 +18,11 @@ struct AtriumThreadView: View {
     /// Pin state for the CHORUS rail — keeps it open when no sub-agents are live.
     @State private var chorusPinned = false
 
+    /// The AgentVisual currently open in the LIGHTBOX (#atrium-visual-canvas), if
+    /// any. The lightbox shares the right zone with the chorus and renders OVER it
+    /// (chorus stays mounted underneath; PUSH-consistent layout).
+    @State private var openVisual: AgentVisual?
+
     /// The rail is visible when a sub-agent is live OR the founder pinned it open
     /// (and there is at least one sub-agent to show when pinned).
     private var chorusVisible: Bool {
@@ -25,18 +30,38 @@ struct AtriumThreadView: View {
         return anyLive || (chorusPinned && !session.subAgents.isEmpty)
     }
 
+    /// The right zone is occupied when EITHER the lightbox is open OR the chorus is
+    /// visible. A single switch/container drives the PUSH (Mika: lightbox over chorus).
+    private var rightZoneVisible: Bool { openVisual != nil || chorusVisible }
+
     var body: some View {
         HStack(spacing: 0) {
             conversationColumn
-            // PUSH layout: the rail occupies real width when visible (the column
-            // above narrows to fit), sliding in/out over 220ms. No overlay.
-            if chorusVisible {
-                AtriumChorusRail(session: session, pinned: $chorusPinned)
+            // PUSH layout: the right zone occupies real width when visible (the
+            // column narrows to fit), sliding in/out over 220ms. No overlay on the
+            // conversation. Within the zone, the LIGHTBOX renders OVER the chorus.
+            if rightZoneVisible {
+                rightZone
                     .transition(.move(edge: .trailing))
             }
         }
-        .animation(.easeInOut(duration: 0.22), value: chorusVisible)
+        .animation(.easeInOut(duration: 0.22), value: rightZoneVisible)
         .background(AtriumTheme.void)
+    }
+
+    /// The shared right zone: the CHORUS rail, with the LIGHTBOX layered on top when
+    /// a visual is open (chorus stays mounted underneath per Mika).
+    private var rightZone: some View {
+        ZStack(alignment: .trailing) {
+            if chorusVisible {
+                AtriumChorusRail(session: session, pinned: $chorusPinned)
+            }
+            if let visual = openVisual {
+                AtriumVisualCanvas(visual: visual, onClose: { openVisual = nil })
+                    .transition(.opacity)
+            }
+        }
+        .animation(.easeInOut(duration: 0.15), value: openVisual?.id)
     }
 
     /// The conversation column: header, scrolling thread (+ inline fan-out block),
@@ -51,8 +76,19 @@ struct AtriumThreadView: View {
                         // Control messages (suppressed host→agent TaskStop turn,
                         // #atrium-shells) are excluded from the rendered thread.
                         ForEach(session.messages.filter { !$0.isControl }) { message in
-                            AtriumMessageView(message: message)
-                                .id(message.id)
+                            AtriumMessageView(
+                                message: message,
+                                onAnswerDecision: { decisionId, optionIds, otherText in
+                                    session.answerDecision(
+                                        messageId: message.id,
+                                        decisionId: decisionId,
+                                        optionIds: optionIds,
+                                        otherText: otherText
+                                    )
+                                },
+                                onOpenVisual: { openVisual = $0 }
+                            )
+                            .id(message.id)
                         }
                         // INLINE FAN-OUT block (#atrium-chorus) — born in the
                         // conversation when sub-agents are spawned; settles to a

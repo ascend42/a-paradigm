@@ -43,6 +43,14 @@ struct ConversationMessage: Identifiable, Sendable {
     /// written to claude's stdin so the agent acts on it, but AtriumThreadView
     /// filters it out of the visible conversation so it never clutters the thread.
     var isControl: Bool
+    /// Host-rendered branching CHOICES parsed from ```conductor-decision fenced
+    /// blocks in this turn's text (#agent-decision / #fenced-block-parser). ADDITIVE,
+    /// defaults []. Re-parse PRESERVES any settled .answer ($decision-exchange).
+    var decisions: [AgentDecision]
+    /// Host-rendered DIAGRAMS/COMPARISONS parsed from ```conductor-visual / ```mermaid
+    /// fenced blocks (#agent-visual). ADDITIVE, defaults []. Rendered as a ▸ launcher
+    /// chip; clicking opens the LIGHTBOX (#atrium-visual-canvas) — never auto-opens.
+    var visuals: [AgentVisual]
 
     init(
         id: UUID = UUID(),
@@ -50,7 +58,9 @@ struct ConversationMessage: Identifiable, Sendable {
         text: String = "",
         toolCalls: [ToolCall] = [],
         isStreaming: Bool = false,
-        isControl: Bool = false
+        isControl: Bool = false,
+        decisions: [AgentDecision] = [],
+        visuals: [AgentVisual] = []
     ) {
         self.id = id
         self.author = author
@@ -58,5 +68,7 @@ struct ConversationMessage: Identifiable, Sendable {
         self.toolCalls = toolCalls
         self.isStreaming = isStreaming
         self.isControl = isControl
+        self.decisions = decisions
+        self.visuals = visuals
     }
 }

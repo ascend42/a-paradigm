@@ -7,6 +7,10 @@ import SwiftUI
 
 struct AtriumMessageView: View {
     let message: ConversationMessage
+    /// Answer a host-rendered decision ($decision-exchange): (decisionId, optionIds, otherText?).
+    var onAnswerDecision: (String, [String], String?) -> Void = { _, _, _ in }
+    /// Open a host-rendered visual in the LIGHTBOX (#atrium-visual-canvas).
+    var onOpenVisual: (AgentVisual) -> Void = { _ in }
 
     var body: some View {
         switch message.author {
@@ -40,6 +44,52 @@ struct AtriumMessageView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     ForEach(message.toolCalls) { call in
                         AtriumToolChip(call: call)
+                    }
+                }
+            }
+
+            // Host-rendered DECISION cards ($decision-exchange / #atrium-decision-card).
+            if !message.decisions.isEmpty {
+                VStack(alignment: .leading, spacing: 8) {
+                    ForEach(message.decisions) { decision in
+                        AtriumDecisionCard(
+                            decision: decision,
+                            onAnswer: { optionIds, otherText in
+                                onAnswerDecision(decision.id, optionIds, otherText)
+                            },
+                            onViewVisual: { vid in
+                                if let v = message.visuals.first(where: { $0.id == vid }) {
+                                    onOpenVisual(v)
+                                }
+                            }
+                        )
+                    }
+                }
+            }
+
+            // Host-rendered VISUAL launcher chips (#agent-visual). Click → LIGHTBOX;
+            // never auto-opens. A visual referenced by a decision option (▸ view) is
+            // still listed here as a standalone affordance.
+            if !message.visuals.isEmpty {
+                VStack(alignment: .leading, spacing: 4) {
+                    ForEach(message.visuals) { visual in
+                        Button { onOpenVisual(visual) } label: {
+                            HStack(spacing: 6) {
+                                Text("▸").foregroundColor(AtriumTheme.tool)
+                                Text(visual.chipLabel).foregroundColor(AtriumTheme.ink)
+                                Text(visual.kind.rawValue)
+                                    .foregroundColor(AtriumTheme.inkMuted)
+                            }
+                            .font(AtriumTheme.chipFont)
+                            .padding(.horizontal, 10).padding(.vertical, 5)
+                            .background(AtriumTheme.surfaceRaised)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 6)
+                                    .stroke(AtriumTheme.tool.opacity(0.3), lineWidth: 1)
+                            )
+                            .clipShape(RoundedRectangle(cornerRadius: 6))
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
             }

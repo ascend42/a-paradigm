@@ -111,6 +111,11 @@ extension ClaudeStreamSession {
         // blocked = the session errored. coral "watch".
         if status == .error { return .blocked }
 
+        // PENDING DECISION ($decision-exchange) — checked FIRST and applies EVEN to
+        // the active session you are looking at: a host-rendered conductor-decision
+        // awaiting your pick is the truest "the human is needed" signal. SACRED amber.
+        if hasPendingDecision { return .awaitingYou }
+
         // awaitingYou (AMBER) — v1 heuristic. SACRED amber, only when the human is
         // genuinely needed:
         //   (a) any tracked sub-agent is in .needsHuman, OR
