@@ -23,6 +23,8 @@ struct AtriumDecisionCard: View {
     @State private var showOther = false
     /// Local override so an answered card can be re-expanded to change the pick.
     @State private var forceExpanded = false
+    /// Observe the user font scale so the card re-renders live on ⌘= / ⌘-.
+    @AppStorage(AtriumFontScale.key) private var fontScale: Double = AtriumFontScale.defaultValue
 
     private var isAnswered: Bool { decision.answer != nil && !forceExpanded }
 
@@ -119,8 +121,10 @@ struct AtriumDecisionCard: View {
                         }
                     }
                     if let desc = option.description, !desc.isEmpty {
+                        // The description is the worst offender for tiny text — read
+                        // it at the mono baseline (was micro/footer).
                         Text(desc)
-                            .font(AtriumTheme.footerFont)
+                            .font(AtriumTheme.monoFont)
                             .foregroundColor(AtriumTheme.inkMuted)
                             .fixedSize(horizontal: false, vertical: true)
                     }

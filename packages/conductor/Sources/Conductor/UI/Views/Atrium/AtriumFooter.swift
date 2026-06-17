@@ -5,6 +5,8 @@ import SwiftUI
 
 struct AtriumFooter: View {
     @ObservedObject var session: ClaudeStreamSession
+    /// Observe the user font scale so the footer re-renders live on ⌘= / ⌘-.
+    @AppStorage(AtriumFontScale.key) private var fontScale: Double = AtriumFontScale.defaultValue
 
     var body: some View {
         HStack(spacing: 10) {

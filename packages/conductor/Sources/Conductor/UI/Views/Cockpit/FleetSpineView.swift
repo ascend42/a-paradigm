@@ -22,6 +22,8 @@ struct FleetSpineView: View {
 
     /// Manual collapse state for the IDLE group (auto-collapsed past 1 by default).
     @State private var idleCollapsed = true
+    /// Observe the user font scale so the spine re-renders live on ⌘= / ⌘-.
+    @AppStorage(AtriumFontScale.key) private var fontScale: Double = AtriumFontScale.defaultValue
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -56,7 +58,7 @@ struct FleetSpineView: View {
         let needs = store.needsYouCount
         return VStack(alignment: .leading, spacing: 3) {
             Text("THE BRIDGE")
-                .font(.system(size: 11, weight: .bold, design: .monospaced))
+                .font(.system(size: AtriumTheme.scaled(AtriumTheme.Size.label), weight: .bold, design: .monospaced))
                 .foregroundColor(AtriumTheme.ink)
                 .tracking(1.5)
             HStack(spacing: 6) {
@@ -165,7 +167,7 @@ struct FleetSpineView: View {
     private func groupHeaderBody(_ title: String, count: Int, tint: Color, chevron: String?) -> some View {
         HStack(spacing: 6) {
             Text(title)
-                .font(.system(size: 9, weight: .bold, design: .monospaced))
+                .font(.system(size: AtriumTheme.scaled(AtriumTheme.Size.micro), weight: .bold, design: .monospaced))
                 .foregroundColor(tint)
                 .tracking(1.0)
             Text("\(count)")
@@ -174,7 +176,7 @@ struct FleetSpineView: View {
             Spacer()
             if let chevron {
                 Image(systemName: chevron)
-                    .font(.system(size: 8, weight: .semibold))
+                    .font(.system(size: AtriumTheme.scaled(8), weight: .semibold))
                     .foregroundColor(AtriumTheme.inkMuted)
             }
         }
@@ -200,7 +202,7 @@ struct FleetSpineView: View {
         Button(action: onNewSession) {
             HStack(spacing: 7) {
                 Image(systemName: "plus")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(.system(size: AtriumTheme.scaled(AtriumTheme.Size.label), weight: .semibold))
                 Text("new session")
                     .font(AtriumTheme.chipFont)
                 Spacer()
@@ -238,6 +240,8 @@ struct SessionRow: View {
     let onClose: () -> Void
 
     @State private var hovering = false
+    /// Observe the user font scale so the row re-renders live on ⌘= / ⌘-.
+    @AppStorage(AtriumFontScale.key) private var fontScale: Double = AtriumFontScale.defaultValue
 
     private var status: SessionDerivedStatus {
         session.derivedStatus(isActiveSession: isActive)
@@ -281,14 +285,14 @@ struct SessionRow: View {
                 // Prose: projectName leads (+ branch when we have one — v2).
                 HStack(spacing: 6) {
                     Text(session.projectName)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(AtriumTheme.prose())
                         .foregroundColor(AtriumTheme.ink)
                         .lineLimit(1)
                     Spacer(minLength: 4)
                     if hovering || isActive {
                         Button(action: onClose) {
                             Image(systemName: "xmark")
-                                .font(.system(size: 8, weight: .bold))
+                                .font(.system(size: AtriumTheme.scaled(8), weight: .bold))
                                 .foregroundColor(AtriumTheme.inkMuted)
                         }
                         .buttonStyle(.plain)
@@ -347,7 +351,7 @@ struct SessionRow: View {
         case .idle, .blocked, .done:
             // Still — coral/idle/done do NOT animate at rest.
             Text(status.glyph)
-                .font(.system(size: 11, weight: .bold))
+                .font(AtriumTheme.glyphFont())
                 .foregroundColor(status.temperatureColor)
         }
     }
@@ -407,7 +411,7 @@ private struct BreathingGlyph: View {
         let t = now.timeIntervalSinceReferenceDate
         let phase = (sin(t / period * .pi * 2) + 1) / 2
         Text(glyph)
-            .font(.system(size: 11, weight: .bold))
+            .font(AtriumTheme.glyphFont())
             .foregroundColor(color)
             .opacity(0.55 + 0.45 * phase)
     }
@@ -424,7 +428,7 @@ private struct PulsingGlyph: View {
         let t = now.timeIntervalSinceReferenceDate
         let phase = (sin(t / period * .pi * 2) + 1) / 2
         Text(glyph)
-            .font(.system(size: 11, weight: .bold))
+            .font(AtriumTheme.glyphFont())
             .foregroundColor(color)
             .opacity(0.7 + 0.3 * phase)
             .shadow(color: color.opacity(0.4 + 0.4 * phase), radius: 3 + 3 * phase)

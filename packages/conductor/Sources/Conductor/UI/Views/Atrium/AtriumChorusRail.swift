@@ -67,6 +67,8 @@ struct AtriumChorusRail: View {
     @Binding var pinned: Bool
     /// Currently drilled-in sub-agent id, if any (expands IN PLACE).
     @State private var drilledIn: String?
+    /// Observe the user font scale so rows re-render live on ⌘= / ⌘-.
+    @AppStorage(AtriumFontScale.key) private var fontScale: Double = AtriumFontScale.defaultValue
 
     /// Fixed rail width — generous for the full-screen target.
     static let width: CGFloat = 300
@@ -123,7 +125,7 @@ struct AtriumChorusRail: View {
             // Pin control — keeps the rail open when idle.
             Button(action: { pinned.toggle() }) {
                 Image(systemName: pinned ? "pin.fill" : "pin")
-                    .font(.system(size: 11, weight: .medium))
+                    .font(AtriumTheme.glyphFont(weight: .medium))
                     .foregroundColor(pinned ? AtriumTheme.user : AtriumTheme.inkMuted)
             }
             .buttonStyle(.plain)
@@ -170,6 +172,8 @@ struct AtriumChorusRow: View {
     let isDrilledIn: Bool
     let onToggleDrill: () -> Void
     let onStop: () -> Void
+    /// Observe the user font scale so the row re-renders live on ⌘= / ⌘-.
+    @AppStorage(AtriumFontScale.key) private var fontScale: Double = AtriumFontScale.defaultValue
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -203,14 +207,14 @@ struct AtriumChorusRow: View {
         VStack(alignment: .leading, spacing: 5) {
             HStack(alignment: .top, spacing: 7) {
                 Text(sub.status.glyph)
-                    .font(.system(size: 11, weight: .bold))
+                    .font(AtriumTheme.glyphFont())
                     .foregroundColor(sub.status.chorusColor)
                     .frame(width: 12)
                     .padding(.top, 1)
                 VStack(alignment: .leading, spacing: 2) {
                     // DESCRIPTION leads — prose, ink, system font (Inter-ish).
                     Text(sub.description)
-                        .font(.system(size: 12, weight: .medium))
+                        .font(AtriumTheme.prose())
                         .foregroundColor(AtriumTheme.ink)
                         .lineLimit(2)
                         .multilineTextAlignment(.leading)

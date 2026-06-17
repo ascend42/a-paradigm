@@ -11,6 +11,8 @@ struct AtriumMessageView: View {
     var onAnswerDecision: (String, [String], String?) -> Void = { _, _, _ in }
     /// Open a host-rendered visual in the LIGHTBOX (#atrium-visual-canvas).
     var onOpenVisual: (AgentVisual) -> Void = { _ in }
+    /// Observe the user font scale so prose re-renders live on ⌘= / ⌘-.
+    @AppStorage(AtriumFontScale.key) private var fontScale: Double = AtriumFontScale.defaultValue
 
     var body: some View {
         switch message.author {

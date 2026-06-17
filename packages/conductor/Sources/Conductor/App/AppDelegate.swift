@@ -422,16 +422,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.mainMenu = mainMenu
     }
 
+    /// ⌘= — grow text. Nudges BOTH the terminal buffer font AND the ATRIUM/cockpit
+    /// font scale (#atrium-theme), so the founder can zoom the cockpit decision
+    /// cards / spine / chorus live regardless of which surface has focus. Each
+    /// multiplier only affects its own surface, so driving both is harmless.
     @objc private func handleZoomIn() {
         terminalSessionManager.increaseFontSize()
+        AtriumFontScale.increase()
     }
 
+    /// ⌘- — shrink text. Symmetric to handleZoomIn.
     @objc private func handleZoomOut() {
         terminalSessionManager.decreaseFontSize()
+        AtriumFontScale.decrease()
     }
 
     /// Global keyboard shortcut monitor — fires before any view's keyDown.
-    /// Handles Cmd+=/- for font sizing even when SwiftTerm has focus.
+    /// Handles Cmd+=/- for font sizing even when SwiftTerm has focus. Drives the
+    /// terminal buffer font AND the ATRIUM/cockpit font scale together.
     private func setupGlobalShortcuts() {
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self, event.modifierFlags.contains(.command) else { return event }
@@ -440,9 +448,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             switch chars {
             case "=", "+":
                 self.terminalSessionManager.increaseFontSize()
+                AtriumFontScale.increase()
                 return nil
             case "-":
                 self.terminalSessionManager.decreaseFontSize()
+                AtriumFontScale.decrease()
                 return nil
             default:
                 return event
@@ -504,8 +514,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Launch the container workspace window.
     private func launchContainer() {
         let container = ContainerWindow()
-        container.onZoomIn = { [weak self] in self?.terminalSessionManager.increaseFontSize() }
-        container.onZoomOut = { [weak self] in self?.terminalSessionManager.decreaseFontSize() }
+        container.onZoomIn = { [weak self] in
+            self?.terminalSessionManager.increaseFontSize()
+            AtriumFontScale.increase()
+        }
+        container.onZoomOut = { [weak self] in
+            self?.terminalSessionManager.decreaseFontSize()
+            AtriumFontScale.decrease()
+        }
         let env = ConductorEnvironment(
             orchestrator: orchestrator,
             workspaceManager: workspaceManager,
