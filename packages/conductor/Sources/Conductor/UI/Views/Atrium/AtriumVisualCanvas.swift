@@ -2,8 +2,9 @@
 // THE LIGHTBOX. A right slide-out that hosts a single AgentVisual at a time. It
 // lives in the SAME right zone as the CHORUS rail and is PUSH-consistent with it
 // (the conversation column narrows; the chorus stays mounted UNDER the lightbox).
-// Switches on kind: flow → MermaidWebView; comparison → native SwiftUI table
-// (ATRIUM styling). v2 kinds (wireframe, diff) show a "coming in v2" placeholder.
+// Switches on kind: flow → MermaidWebView; comparison → native SwiftUI table;
+// graph → native SwiftUI Canvas ego-graph (AtriumGraphView). All ATRIUM styling.
+// v2 kinds (wireframe, diff) show a "coming in v2" placeholder.
 
 import SwiftUI
 
@@ -24,7 +25,7 @@ struct AtriumVisualCanvas: View {
 
     private var header: some View {
         HStack(spacing: 8) {
-            Text(visual.kind == .comparison ? "▤" : "◇")
+            Text(headerGlyph)
                 .font(AtriumTheme.chipFont)
                 .foregroundColor(AtriumTheme.tool)
             Text(visual.chipLabel)
@@ -45,6 +46,15 @@ struct AtriumVisualCanvas: View {
         .background(AtriumTheme.sunken)
     }
 
+    /// Per-kind header glyph. ◇ flow, ▤ comparison, ❖ graph.
+    private var headerGlyph: String {
+        switch visual.kind {
+        case .comparison: return "▤"
+        case .graph: return "❖"
+        default: return "◇"
+        }
+    }
+
     @ViewBuilder
     private var content: some View {
         switch visual.kind {
@@ -58,6 +68,13 @@ struct AtriumVisualCanvas: View {
         case .comparison:
             if let table = visual.comparison {
                 ComparisonTableView(table: table)
+            } else {
+                rawDump
+            }
+        case .graph:
+            if let graph = visual.graph {
+                AtriumGraphView(payload: graph)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 rawDump
             }

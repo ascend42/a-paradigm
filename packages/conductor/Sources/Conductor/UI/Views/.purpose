@@ -9,7 +9,7 @@ components:
     file: packages/conductor/Sources/Conductor/Models/AgentDecision.swift
     type: model
   agent-visual:
-    description: "Model for a host-rendered DIAGRAM or COMPARISON ($decision-exchange), parsed from a conductor-visual envelope or a bare mermaid/svg fence (#fenced-block-parser). kind flow|comparison render in v1 (LIGHTBOX); wireframe|diff are decode-tolerant v2 placeholders. Rendered as a ▸ launcher chip — never auto-opens."
+    description: "Model for a host-rendered DIAGRAM, COMPARISON or GRAPH ($decision-exchange), parsed from a conductor-visual envelope or a bare mermaid/svg fence (#fenced-block-parser). kind flow|comparison|graph render in v1 (LIGHTBOX); graph carries a GraphPayload (root/nodes/edges/truncated/freshness) drawn by #atrium-graph-view; wireframe|diff are decode-tolerant v2 placeholders. Rendered as a ▸ launcher chip — never auto-opens."
     file: packages/conductor/Sources/Conductor/Models/AgentVisual.swift
     type: model
   atrium-decision-card:
@@ -17,8 +17,12 @@ components:
     file: packages/conductor/Sources/Conductor/UI/Views/Atrium/AtriumDecisionCard.swift
     type: view
   atrium-visual-canvas:
-    description: "THE LIGHTBOX — a 380pt right slide-out hosting one #agent-visual. Shares the right zone with the CHORUS rail and renders OVER it (chorus stays mounted; PUSH-consistent layout, conversation column narrows). Switches on kind: flow → MermaidWebView (sandboxed offline WKWebView, vendored mermaid.min.js, NO network, ATRIUM-recolored); comparison → native SwiftUI table (ATRIUM styling); wireframe/diff → v2 placeholder."
+    description: "THE LIGHTBOX — a 380pt right slide-out hosting one #agent-visual. Shares the right zone with the CHORUS rail and renders OVER it (chorus stays mounted; PUSH-consistent layout, conversation column narrows). Switches on kind: flow → MermaidWebView (sandboxed offline WKWebView, vendored mermaid.min.js, NO network, ATRIUM-recolored); comparison → native SwiftUI table (ATRIUM styling); graph → #atrium-graph-view (❖ header glyph); wireframe/diff → v2 placeholder."
     file: packages/conductor/Sources/Conductor/UI/Views/Atrium/AtriumVisualCanvas.swift
+    type: view
+  atrium-graph-view:
+    description: "Native SwiftUI Canvas render of a bounded symbol ego-graph (#agent-visual kind == .graph) inside THE LIGHTBOX. STATIC closed-form RING layout: root (focus) at center with a soft halo, other nodes evenly on a ring (angle 2π·i/count, radius shrunk to fit 380pt). Edges draw under nodes as center→ring lines. Node shapes encode GraphSymbolKind via Mika's accent mapping (component→ink rounded rect, flow→user stadium, gate→amber diamond, signal→teal circle, aspect→violet dashed). Labels = symbol id, scaled off atriumFontScale. Footer shows +N-more (truncated) + stale-index. NO force sim, drag, zoom, or hover in this cut."
+    file: packages/conductor/Sources/Conductor/UI/Views/Atrium/AtriumGraphView.swift
     type: view
   mermaid-web-view:
     description: "Sandboxed WKWebView that renders a mermaid diagram OFFLINE from a vendored mermaid.min.js (Resources/, loaded via #conductor-resources to dodge the SwiftTerm Bundle.module collision). nil baseURL, navigation blocked except the in-memory load, ATRIUM dark theme. Degrades to a source dump if the script is missing from the bundle."

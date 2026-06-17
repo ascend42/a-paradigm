@@ -17,7 +17,7 @@
 //
 // Recognized languages:
 //   conductor-decision → AgentDecision
-//   conductor-visual   → AgentVisual (envelope: kind flow|comparison|wireframe|diff)
+//   conductor-visual   → AgentVisual (envelope: kind flow|comparison|graph|wireframe|diff)
 //   mermaid            → AgentVisual(kind: .flow) (bare, no envelope)
 //   svg                → AgentVisual(kind: .flow stub) — kept raw; v1 does not render
 //   anything else      → left untouched in residual text (normal code block)
@@ -164,13 +164,13 @@ enum FencedBlockParser {
             // Bare mermaid → a flow visual with the body as source.
             let id = "mermaid-\(ordinal)"
             visuals.append(AgentVisual(id: id, kind: .flow, title: nil,
-                                       mermaid: body, comparison: nil, raw: body))
+                                       mermaid: body, comparison: nil, graph: nil, raw: body))
         case "svg":
             // v1 does not render svg; capture raw so v2 can. Reuse .flow kind slot
             // but keep mermaid nil so the canvas falls through to raw.
             let id = "svg-\(ordinal)"
             visuals.append(AgentVisual(id: id, kind: .flow, title: nil,
-                                       mermaid: nil, comparison: nil, raw: body))
+                                       mermaid: nil, comparison: nil, graph: nil, raw: body))
         default:
             break
         }
@@ -217,16 +217,60 @@ enum FencedBlockParser {
             let mermaid = (payload?["mermaid"] as? String) ?? (obj["mermaid"] as? String)
             guard let mermaid, !mermaid.isEmpty else { return nil }
             return AgentVisual(id: id, kind: .flow, title: title,
-                               mermaid: mermaid, comparison: nil, raw: body)
+                               mermaid: mermaid, comparison: nil, graph: nil, raw: body)
         case .comparison:
             guard let comparison = decodeComparison(payload) else { return nil }
             return AgentVisual(id: id, kind: .comparison, title: title,
-                               mermaid: nil, comparison: comparison, raw: body)
+                               mermaid: nil, comparison: comparison, graph: nil, raw: body)
+        case .graph:
+            guard let graph = decodeGraph(payload) else { return nil }
+            return AgentVisual(id: id, kind: .graph, title: title,
+                               mermaid: nil, comparison: nil, graph: graph, raw: body)
         case .wireframe, .diff:
             // v2 kinds — decode-tolerant, kept raw; canvas shows a v2 placeholder.
             return AgentVisual(id: id, kind: kind, title: title,
-                               mermaid: nil, comparison: nil, raw: body)
+                               mermaid: nil, comparison: nil, graph: nil, raw: body)
         }
+    }
+
+    /// Decode a `.graph` payload (the real `paradigm graph slice --as-lightbox`
+    /// envelope). Mirrors the `.flow` guard: nil if there are no nodes. Tolerant —
+    /// missing/unknown node.kind/edge.kind fall back via GraphSymbolKind/GraphEdgeKind.
+    private static func decodeGraph(_ payload: [String: Any]?) -> GraphPayload? {
+        guard let payload else { return nil }
+        let root = (payload["root"] as? String) ?? ""
+
+        var nodes: [GraphNode] = []
+        if let rawNodes = payload["nodes"] as? [[String: Any]] {
+            for rn in rawNodes {
+                guard let nid = (rn["id"] as? String), !nid.isEmpty else { continue }
+                let kind = GraphSymbolKind.decode(kindString: rn["kind"] as? String, id: nid)
+                let label = (rn["label"] as? String).flatMap { $0.isEmpty ? nil : $0 } ?? nid
+                let path = (rn["path"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                nodes.append(GraphNode(id: nid, kind: kind, label: label, path: path))
+            }
+        }
+        // Mirror the .flow guard — an empty graph has nothing to render.
+        guard !nodes.isEmpty else { return nil }
+
+        var edges: [GraphEdge] = []
+        if let rawEdges = payload["edges"] as? [[String: Any]] {
+            for re in rawEdges {
+                guard let source = (re["source"] as? String), !source.isEmpty,
+                      let target = (re["target"] as? String), !target.isEmpty
+                else { continue }
+                edges.append(GraphEdge(source: source, target: target,
+                                       kind: GraphEdgeKind.decode(re["kind"] as? String)))
+            }
+        }
+
+        let truncated = (payload["truncated"] as? Bool) ?? false
+        let freshness = payload["freshness"] as? [String: Any]
+        let generatedAt = (freshness?["generatedAt"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+        let stale = (freshness?["stale"] as? Bool) ?? false
+
+        return GraphPayload(root: root, nodes: nodes, edges: edges,
+                            truncated: truncated, generatedAt: generatedAt, stale: stale)
     }
 
     private static func decodeComparison(_ payload: [String: Any]?) -> ComparisonTable? {

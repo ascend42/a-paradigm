@@ -115,6 +115,84 @@ final class FencedBlockParserTests: XCTestCase {
         XCTAssertEqual(r.visuals.first?.comparison?.rows.first?.cells, ["1", "2"])
     }
 
+    // MARK: - Graph envelope (the real `paradigm graph slice --as-lightbox` shape)
+
+    func testConductorVisualGraphEnvelope() {
+        // The authoritative envelope shape Phase-1 `graph slice --as-lightbox` emits.
+        let text = """
+        ```conductor-visual
+        {"id":"graph-atrium-decision-card","kind":"graph","title":"Graph slice: #atrium-decision-card","payload":{"root":"#atrium-decision-card","freshness":{"generatedAt":"2026-06-17T22:18:42.232Z","stale":false},"nodes":[{"id":"#atrium-decision-card","kind":"component","label":"Atrium Decision Card","path":"/abs/.purpose"},{"id":"#agent-decision","kind":"component","label":"Agent Decision","path":"/abs/.purpose"},{"id":"$decision-exchange","kind":"flow","label":"Decision Exchange"},{"id":"^authenticated","kind":"gate","label":"Authenticated"},{"id":"!decision-answered","kind":"signal","label":"Decision Answered"},{"id":"~audit-required","kind":"aspect","label":"Audit Required"}],"edges":[{"source":"#atrium-decision-card","target":"#agent-decision","kind":"uses"},{"source":"#atrium-decision-card","target":"$decision-exchange","kind":"in-flow"},{"source":"#atrium-decision-card","target":"^authenticated","kind":"gated-by"},{"source":"#atrium-decision-card","target":"!decision-answered","kind":"used-by"}],"truncated":false}}
+        ```
+        """
+        let r = FencedBlockParser.parse(text)
+        XCTAssertEqual(r.visuals.count, 1)
+        let v = r.visuals.first
+        XCTAssertEqual(v?.kind, .graph)
+        XCTAssertEqual(v?.id, "graph-atrium-decision-card")
+        XCTAssertEqual(v?.title, "Graph slice: #atrium-decision-card")
+
+        let g = v?.graph
+        XCTAssertNotNil(g)
+        XCTAssertEqual(g?.root, "#atrium-decision-card")
+        XCTAssertEqual(g?.nodes.count, 6)
+        XCTAssertEqual(g?.edges.count, 4)
+        XCTAssertEqual(g?.truncated, false)
+        XCTAssertEqual(g?.generatedAt, "2026-06-17T22:18:42.232Z")
+        XCTAssertEqual(g?.stale, false)
+
+        // Node kinds decode from the explicit `kind` string.
+        XCTAssertEqual(g?.nodes.first(where: { $0.id == "$decision-exchange" })?.kind, .flow)
+        XCTAssertEqual(g?.nodes.first(where: { $0.id == "^authenticated" })?.kind, .gate)
+        XCTAssertEqual(g?.nodes.first(where: { $0.id == "!decision-answered" })?.kind, .signal)
+        XCTAssertEqual(g?.nodes.first(where: { $0.id == "~audit-required" })?.kind, .aspect)
+        XCTAssertEqual(g?.nodes.first(where: { $0.id == "#agent-decision" })?.kind, .component)
+        // Path retained when present.
+        XCTAssertEqual(g?.nodes.first(where: { $0.id == "#agent-decision" })?.path, "/abs/.purpose")
+
+        // Edge kinds decode (hyphenated forms tolerated).
+        XCTAssertEqual(g?.edges.first(where: { $0.target == "$decision-exchange" })?.kind, .inFlow)
+        XCTAssertEqual(g?.edges.first(where: { $0.target == "^authenticated" })?.kind, .gatedBy)
+        XCTAssertEqual(g?.edges.first(where: { $0.target == "!decision-answered" })?.kind, .usedBy)
+
+        XCTAssertTrue(v?.isRenderable == true)
+        // Block stripped from residual.
+        XCTAssertFalse(r.residualText.contains("conductor-visual"))
+    }
+
+    func testGraphKindFallsBackToIdPrefixWhenKindMissing() {
+        // No explicit node.kind → decode from the symbol-id prefix.
+        let text = """
+        ```conductor-visual
+        {"id":"g","kind":"graph","payload":{"root":"#root","nodes":[{"id":"#root","label":"R"},{"id":"$f"},{"id":"^g"},{"id":"!s"},{"id":"~a"},{"id":"$$nested"}]}}
+        ```
+        """
+        let r = FencedBlockParser.parse(text)
+        let g = r.visuals.first?.graph
+        XCTAssertNotNil(g)
+        XCTAssertEqual(g?.nodes.first(where: { $0.id == "#root" })?.kind, .component)
+        XCTAssertEqual(g?.nodes.first(where: { $0.id == "$f" })?.kind, .flow)
+        XCTAssertEqual(g?.nodes.first(where: { $0.id == "^g" })?.kind, .gate)
+        XCTAssertEqual(g?.nodes.first(where: { $0.id == "!s" })?.kind, .signal)
+        XCTAssertEqual(g?.nodes.first(where: { $0.id == "~a" })?.kind, .aspect)
+        // `$$` double-prefix still resolves to flow.
+        XCTAssertEqual(g?.nodes.first(where: { $0.id == "$$nested" })?.kind, .flow)
+        // label falls back to id when absent.
+        XCTAssertEqual(g?.nodes.first(where: { $0.id == "$f" })?.label, "$f")
+    }
+
+    func testGraphWithNoNodesIsDropped() {
+        // Mirror the .flow guard: empty nodes → no visual.
+        let text = """
+        ```conductor-visual
+        {"id":"g","kind":"graph","payload":{"root":"#x","nodes":[],"edges":[]}}
+        ```
+        After.
+        """
+        let r = FencedBlockParser.parse(text)
+        XCTAssertTrue(r.visuals.isEmpty, "empty nodes → dropped, no crash")
+        XCTAssertTrue(r.residualText.contains("After."))
+    }
+
     // MARK: - Non-host code blocks left untouched
 
     func testNonHostCodeBlockPreservedInResidual() {
