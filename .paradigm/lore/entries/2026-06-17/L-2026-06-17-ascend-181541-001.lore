@@ -1,0 +1,55 @@
+id: L-2026-06-17-ascend-181541-001
+type: insight
+timestamp: '2026-06-17T18:15:41.881Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Symbol-graph as DEFAULT cockpit discourse substrate — exploration (render-by-projection)
+summary: 'Founder''s keystone ask for the Conductor wave: make the Paradigm symbol graph the DEFAULT substrate of agent↔human discourse — agents query the live graph and render a real slice in THE LIGHTBOX + decision cards, grounded in the project''s actual architecture, not improvised mermaid. Six-lens team exploration (Arky/Mika/Loid/Scholar/Cid/Swift) converged: it coheres on every axis and is mostly wiring, not new architecture. The keystone (Arky): RENDER-BY-PROJECTION, not render-by-generation — the agent projects a slice of a graph it actually queried, so grounding and rendering become the same act and improvised-mermaid drift is structurally eliminated. Understand-first; not built yet.'
+symbols_touched:
+  - '#fenced-block-parser'
+  - '#agent-visual'
+  - '#agent-decision'
+  - '#atrium-visual-canvas'
+  - '#atrium-decision-card'
+  - '#session-prompt'
+  - '#claude-stream-session'
+symbols_created:
+  - '#graph-slice-projector'
+  - $graph-grounded-decision
+decisions:
+  - id: TD-graph-substrate-001
+    decision: 'The fenced-block envelope is the universal rendering contract; Conductor stays a DUMB renderer that switches on visual kind. The net-new piece is a single PROJECTOR (graph slice -> conductor-visual envelope), not a new pipeline. CLI `paradigm ripple #x --as-lightbox` is the spike seam; the durable default seam is an MCP tool returning a ready-to-render block (agents already call ripple/related, so grounding becomes a side-effect of analysis they already do).'
+    rationale: 'Both halves already exist independently: cockpit renders mermaid/comparison from blocks; graph tooling produces typed nodes/edges from the real index. Only the slice->envelope projection is missing. Rejecting option (c) Conductor-renders-graph-itself: would fork the index source-of-truth and break the dumb-renderer contract.'
+  - id: TD-graph-substrate-002
+    decision: 'Graph slice is a FIRST-CLASS NATIVE VisualKind (.graph), rendered natively in AtriumVisualCanvas via SwiftUI Canvas + closed-form radial layout (NOT through MermaidWebView). Bounded by default: radius-1 ego-graph, degree cap ~8, focus+halo on the subject, blast-radius amber WASH for ripple. Nodes/edges styled by symbol type (#/$/^/!/~).'
+    rationale: A webview is a dead render — the keystone needs interactivity, hover-binding, and symbol-typed styling, none of which survive string->SVG. At radius-1 (~15 nodes) native Canvas is sub-ms and far cheaper than spinning a WKWebView. Mermaid is the fast fake; native .graph is the real thing.
+  - id: TD-graph-substrate-003
+    decision: 'DEFAULT is split into authoring-default vs opening-default. The grounded graph slice is ALWAYS attached + grounded on symbol-bearing turns (authoring-default = the founder''s keystone). The LIGHTBOX still does NOT auto-open (invite via the ▸ chip), EXCEPT one gated auto-open at the first pending decision per conversation. CHORUS rail stays mounted underneath. Prompt carries a two-gate discriminator (SUBJECT gate: is this about real architecture + RENDER gate: is it lossy as a line) so it never draws a graph for trivial turns.'
+    rationale: Reconciles founder's 'graph by default' with Mika's 'invite-don't-impose / never trade live-agent visibility for a diagram'. The single gated auto-open serves the held-breath moment when the human's job IS to weigh symbol impact.
+  - id: TD-graph-substrate-004
+    decision: 'Decision envelope gains symbols[] (and options gain affectedSymbols[]). Loid''s learning gate: a decision earns a learning row IFF grounded in >=1 real symbol AND the human DIVERGED from the agent''s recommendation (overrode the ★ or used Other). Agreements increment a denominator only; ungrounded decisions write nothing. Falsifiability instrument: decision-divergence.jsonl + reopen-after-settle rate as the stale-graph watchdog. Compound priors keyed by symbol, built on divergences only. Keep separate from the (archetype,taskType) token-cost grid.'
+    rationale: Honors 'promote what moved belief, silence is signal' and avoids the unfalsifiable-success-theater + journal-flood + tautological-prior traps the team has hit before. A grounded-but-stale slice is byte-identical to a healthy one in the UI; reopen-rate is the cheapest honest discriminator and is already in the data model.
+learnings:
+  - 'Render-by-projection, not render-by-generation: give the agent a SELECTOR (resolve symbol against the index) + a PROJECTOR (slice -> envelope); once the projector exists, the agent cannot render an architecture visual without having queried the real graph, structurally eliminating improvised-mermaid drift.'
+  - 'Query layer is selection-ready, not render-ready: ripple/related/flows_affected/aspect_graph resolve real symbols and do BFS, but NONE emit a renderable symbol-graph envelope — the only mermaid emitter (arch_diagram) reads arch.yaml tiers, not the symbol graph. Reuse ripple''s BFS over scan-index.related[] with symbolMap as resolver.'
+  - 'scan-index.json determinism wart is real and observable NOW: ~2721 insertions / 2194 deletions of pure reorder churn between reindexes of substantively unchanged project (insertion-ordered, not sorted serialization). Projector MUST sort nodes/edges by id + stamp freshness; the write-time fix is a separate framework-bug.'
+  - Native SwiftUI graph is cheap at radius-1/degree-8 via Canvas + closed-form ring layout (focus at center, neighbors at angle 2pi*i/n) — no force-directed simulation needed. Cross-view hover-binding (option row -> graph nodes light up) is clean by lifting a hoveredSymbols Set to AtriumThreadView, mirroring the existing openVisual state pattern; keep it OUT of the Equatable AgentVisual or hover thrashes lightbox identity.
+  - 'Smallest on-screen proof: add .graph VisualKind + GraphPayload + decodeGraph in FencedBlockParser + one AtriumGraphView (static, no hover) — renders a real bounded symbol-typed ego-graph from a conductor-visual envelope with no risk to the streaming/merge path.'
+tags:
+  - conductor
+  - the-bridge
+  - lightbox
+  - symbol-graph
+  - render-by-projection
+  - exploration
+  - design-converged
+linked_lore:
+  - L-2026-06-17-ascend-073855-001
+  - L-2026-06-17-ascend-043232-001
+confidence: 0.82
+git_context:
+  ref: 1a3b17c1d447322357c8dd7fdd6ab1dd22d2a581
+  branch: conductor-revival-phase0
+  dirty: true

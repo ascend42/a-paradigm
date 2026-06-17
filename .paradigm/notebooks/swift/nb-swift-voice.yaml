@@ -1,0 +1,38 @@
+context: >-
+  Wiring a keyword-driven voice dictation loop into a SwiftUI composer on macOS, reusing an existing WhisperKit
+  continuous-transcription provider. Pattern: a-aloud-style reply-window state machine where a wake word starts
+  dictation and a send phrase submits.
+snippet: >-
+  Controller (@MainActor ObservableObject) owns a WhisperVoiceProvider; state off→armed→composing→sending→armed. arm():
+  try await provider.start(); provider.startContinuous(); for await r in provider.transcriptionStream { handle(r.text)
+  }. The controller NEVER owns the draft — it pushes via callbacks (onDraftAppend/onDraftClear/onSubmit) so the SwiftUI
+  view stays source of truth and the user can edit mid-dictation.
+
+  Forgiving keyword grammar (don't use raw contains): normalize(lowercase + punctuation→space + collapse), tokenize to
+  words, match keyword as a whole-word subsequence anchored on word boundaries (so "respond" won't fire inside
+  "responsible"), support multi-word phrases ("send it"), and prefer the LAST occurrence.
+  textAfterKeyword/textBeforeKeyword split the chunk for wake vs send. Whisper continuous mode re-emits chunks, so also
+  stripLeadingKeyword each composing chunk.
+provenance:
+  source: manual
+  createdBy: swift
+confidence: 0.75
+concepts:
+  - voice
+  - whisperkit
+  - dictation
+  - statemachine
+  - keyword-grammar
+  - swiftui
+  - macos
+tags:
+  - desktop
+  - swift
+  - voice
+  - shared
+id: nb-swift-voice
+scope: project-specific
+publishable: true
+appliedCount: 0
+created: '2026-06-15T23:50:37.546Z'
+updated: '2026-06-15T23:50:37.546Z'

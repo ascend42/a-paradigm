@@ -1,0 +1,34 @@
+id: L-2026-06-15-ascend-233910-001
+type: insight
+timestamp: '2026-06-15T23:39:10.110Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Conductor external dependency — claude -p / Agent SDK pricing in flux (watch-item)
+summary: 'Anthropic emailed (2026-06-15) that the previously-announced change moving Claude Agent SDK / `claude -p` / third-party-apps-built-on-the-SDK OFF subscription rate limits and onto a dedicated monthly credit is NOT happening today — they''re reworking the plan "to better support how users build with Claude subscriptions." This is DIRECTLY tied to the Conductor revival: `claude -p` is Conductor''s engine, so its metering model is the product''s economic substrate. Favorable-for-now (the rework targets exactly our use case: building on subscriptions), but a live dependency to monitor in case we must pivot the cost/messaging model.'
+symbols_touched:
+  - '#claude-stream-session'
+  - '#conductor'
+learnings:
+  - 'Today, Conductor''s fleet of `claude -p` sessions draws from the user''s SUBSCRIPTION rate limits, not a separate credit — confirmed by the `rate_limit_event` in our own stream-json output (rateLimitType: five_hour). N concurrent ATRIUM sessions share that rolling window.'
+  - The deferred change would have split claude -p / Agent SDK usage to a dedicated monthly credit. Anthropic delayed it and is reworking to better support subscription-based building — favorable for Conductor (we ARE that use case).
+  - 'Design implication: stay billing-model-agnostic. Don''t hard-architect around either model. Keep per-session cost visible (ATRIUM footer already shows $cost/turn). Assume usage may move between ''subscription rate limit'' and ''metered credit''.'
+  - 'Pivot triggers to watch: (a) claude -p usage moved to a separate paid credit (changes cost story + ''runs on your subscription'' messaging); (b) rate-limit tightening that makes multi-session fleets impractical on a subscription; (c) Agent SDK becoming the required/cheaper path vs spawning the CLI.'
+tags:
+  - conductor
+  - external-dependency
+  - pricing
+  - claude-code-stream
+  - watch-item
+body: |-
+  Source: Anthropic email to users (screenshot shared 2026-06-15). Quote: "In May, we sent you an email announcing that starting today, the Claude Agent SDK, claude -p, and third-party apps built on the Agent SDK would stop drawing from subscription rate limits and move to a dedicated monthly credit. We're writing to let you know that we're not making this change today. We're working to update the plan to better support how users build with Claude subscriptions."
+
+  Why it's load-bearing for the arc: Conductor spawns `claude -p` (CLI + stream-json) as its engine (the spike's ClaudeStreamSession). The metering of `claude -p` determines (1) whether running a fleet is economical on a subscription, (2) how we message Conductor ("runs on your Claude subscription" vs "metered"), (3) whether to prefer the Agent SDK path over spawning the CLI later. Revisit when Anthropic publishes the updated plan; re-check the claude-api skill / docs for the current model before any pricing-dependent decision or external messaging.
+linked_lore:
+  - L-2026-06-15-ascend-215150-001
+confidence: 0.85
+git_context:
+  ref: 1a2e2441f2d75f6af74104740b23111b9f2093bd
+  branch: conductor-revival-phase0
+  dirty: true

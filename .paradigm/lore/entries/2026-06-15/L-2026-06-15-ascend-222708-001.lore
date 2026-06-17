@@ -1,0 +1,72 @@
+id: L-2026-06-15-ascend-222708-001
+type: milestone
+timestamp: '2026-06-15T22:27:08.097Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Conductor revival Phase 0 — ATRIUM keystone spike built + release-verified
+summary: Phase 0 of the Conductor revival is implemented and builds clean in release. Conductor now spawns a headless `claude -p` over stream-json (bidirectional), decodes the NDJSON event stream off-main into typed Swift, projects it into an observable conversation model, and renders it in a custom ATRIUM SwiftUI thread (custom UI, not terminal-scraping) launchable from the menu bar. Mechanism was empirically proven first (one-shot + tool-event + bidirectional-stdin tests against the real CLI). 12 files created, 2 modified; swift build -c release → Build complete, exit 0. Live visual round-trip pending founder launch (GUI).
+symbols_touched:
+  - '#claude-stream-session'
+  - '#stream-event'
+  - '#conversation-model'
+  - '#atrium-thread'
+  - '#atrium-theme'
+  - '#conductor-app'
+  - $claude-turn-exchange
+  - '!agent-turn-complete'
+symbols_created:
+  - '#claude-stream-session'
+  - '#stream-event'
+  - '#conversation-model'
+  - '#atrium-thread'
+  - '#atrium-theme'
+  - $claude-turn-exchange
+  - '!agent-turn-complete'
+files_created:
+  - packages/conductor/Sources/Conductor/Models/Stream/JSONValue.swift
+  - packages/conductor/Sources/Conductor/Models/Stream/StreamEvent.swift
+  - packages/conductor/Sources/Conductor/Models/ConversationMessage.swift
+  - packages/conductor/Sources/Conductor/UI/AtriumTheme.swift
+  - packages/conductor/Sources/Conductor/Services/LineFramer.swift
+  - packages/conductor/Sources/Conductor/Services/ClaudeStreamSession.swift
+  - packages/conductor/Sources/Conductor/UI/Views/Atrium/AtriumThreadView.swift
+  - packages/conductor/Sources/Conductor/UI/Views/Atrium/AtriumMessageView.swift
+  - packages/conductor/Sources/Conductor/UI/Views/Atrium/AtriumToolChip.swift
+  - packages/conductor/Sources/Conductor/UI/Views/Atrium/AtriumComposer.swift
+  - packages/conductor/Sources/Conductor/UI/Views/Atrium/AtriumFooter.swift
+  - packages/conductor/Sources/Conductor/App/AtriumSpikeWindow.swift
+files_modified:
+  - packages/conductor/Sources/Conductor/App/AppDelegate.swift
+  - packages/conductor/.purpose
+learnings:
+  - 'Confirmed claude -p stream-json event shapes empirically: system/init carries session_id (resume handle); assistant.message.content is heterogeneous blocks (text / thinking / tool_use{id,name,input}); tool RESULTS arrive as a separate type:user event with a tool_result block keyed by tool_use_id; result event carries total_cost_usd + usage. Bidirectional stdin works: write {type:user,message:{role:user,content:[{type:text,text}]}}\n, keep stdin open, same session_id continues.'
+  - 'Two Swift-6 risks were the real implementation hazards: (1) readabilityHandler is @Sendable/off-main — must NOT touch @Published; pattern is nonisolated ingest → Sendable LineFramer → Task{@MainActor} apply. (2) LineFramer must accumulate Data (not String), split on 0x0A, retain trailing partial fragment, skip undecodable lines, flush on EOF. Both handled.'
+  - Conductor already had AgentProcessManager (headless claude spawn, raw stdout lines) — the spike built ClaudeStreamSession BESIDE it (structured stream-json) rather than mutating the working Symphony spawn path.
+verification:
+  status: partial
+  details:
+    swift_build_release: pass
+    binary_linked: pass
+    live_gui_roundtrip: untested — needs founder launch (no display in build shell)
+tags:
+  - conductor
+  - phase-0
+  - spike
+  - atrium
+  - claude-code-stream
+  - built
+body: |-
+  Spike scope (deliberately narrow, single-owner): hardcoded to the a-paradigm repo path + a fixed opening prompt, launched from an AppDelegate menu item "Open ATRIUM Spike…" into a standalone 720x720 window. Uses --dangerously-skip-permissions to avoid permission round-trips (Phase 1 must revisit). Renders: user turns (cool-blue right lane), agent turns (ink, amber streaming caret), tool_use as collapsible violet chips that resolve running→✓/✕, footer with model·session_id·tokens·$cost. thinking blocks skipped; unknown event types tolerated.
+
+  Verify (founder, GUI): cd packages/conductor && swift build -c release && launch Conductor → menu bar → "Open ATRIUM Spike…". Expect the auto-sent opening turn to stream in with a tool chip (dir listing) resolving, then reply via the composer to continue the same session.
+
+  Next (Phase 1): parameterize projectPath/role, resume via captured session_id, render thinking + token-level partial streaming (include-partial-messages), real permission round-trip (drop skip-permissions), integrate into the spine/workspace rather than a standalone window. Builder agentId a8865cf5f8de8d43e; architect a5b9392cd39e64448; Mika (ATRIUM) a9816c3a468257205.
+linked_lore:
+  - L-2026-06-15-ascend-215150-001
+confidence: 0.8
+git_context:
+  ref: 5a9f1e5d5fa9b7bfbdae62bb4afcdcb1c0d50678
+  branch: main
+  dirty: true

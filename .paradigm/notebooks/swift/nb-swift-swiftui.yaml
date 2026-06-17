@@ -1,0 +1,37 @@
+context: >-
+  Building SwiftUI views with control-flow partitioning, animated status glyphs, and a shared color law across two
+  surfaces in Conductor's ATRIUM/BRIDGE.
+snippet: >-
+  SwiftUI gotchas hit building THE BRIDGE spine: (1) A `for`/`switch` partition CANNOT live inside a @ViewBuilder body
+  ("closure containing control flow statement cannot be used with result builder 'ViewBuilder'"). Extract it to a plain
+  Swift helper returning a tuple, then consume the tuple in the builder. (2) Rest-animation without state churn: drive
+  opacity/glow from a single `TimelineView(.periodic(by:1))` shared clock using `sin(now.timeIntervalSinceReferenceDate
+  / period * 2π)` — no @State, all rows tick in lockstep. Only animate the states that mean "act" (working breathe /
+  awaitingYou pulse); leave idle/error/done static. (3) Factor the temperature palette into one enum (TemperatureLaw)
+  that BOTH SubAgentStatus.chorusColor and SessionDerivedStatus.temperatureColor read, so the spine and CHORUS never
+  disagree on what teal/amber/coral mean. (4) Preserve LSUIElement key-window fixes verbatim when generalizing an
+  NSWindow subclass: canBecomeKey/canBecomeMain=true, collectionBehavior .fullScreenPrimary/.managed,
+  initialFirstResponder=contentView — else the composer TextField can't take focus.
+provenance:
+  source: manual
+  createdBy: swift
+confidence: 0.85
+concepts:
+  - swiftui
+  - viewbuilder
+  - timelineview
+  - animation
+  - nswindow
+  - lsuielement
+  - conductor
+  - atrium
+tags:
+  - shared
+  - conductor
+  - swiftui
+scope: project
+id: nb-swift-swiftui
+publishable: true
+appliedCount: 0
+created: '2026-06-16T21:08:14.009Z'
+updated: '2026-06-16T21:08:14.009Z'

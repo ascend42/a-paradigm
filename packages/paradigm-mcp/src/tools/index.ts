@@ -299,7 +299,11 @@ function buildRegistry(rootDir: string, reloadContext?: () => Promise<void>): To
       tier: 'feature',
       getToolsList: getGraphToolsList,
       handleTool: wrap(handleGraphTool),
-      detect: (rootDir: string) => fs.existsSync(path.join(rootDir, '.paradigm', 'aspect-graph.db')),
+      // Active when EITHER the aspect-graph db (graph_generate) OR the scan-index
+      // (graph_slice — the #graph-slice-projector seam) is present.
+      detect: (rootDir: string) =>
+        fs.existsSync(path.join(rootDir, '.paradigm', 'aspect-graph.db')) ||
+        fs.existsSync(path.join(rootDir, '.paradigm', 'scan-index.json')),
     },
     {
       key: 'arch',

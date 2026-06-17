@@ -1,0 +1,52 @@
+context: >-
+  SwiftUI macOS 14 app where ⌘C/⌘V/⌘X/⌘A/⌘Z don't work in TextFields, especially in programmatic NSWindows from an
+  LSUIElement/accessory app. Root cause: the app sets a custom NSApp.mainMenu with no Edit menu, so macOS has no
+  standard Edit-menu key equivalents to route clipboard/undo to the first responder.
+snippet: >-
+  Add a standard Edit NSMenu with first-responder selectors — works in ANY window incl. programmatic NSWindows:
+
+  let editMenu = NSMenu(title: "Edit")
+
+  // undo:/redo: are dynamic; resolve at runtime via Selector(())
+
+  editMenu.addItem(NSMenuItem(title:"Undo", action: Selector(("undo:")), keyEquivalent:"z"))
+
+  let redo = NSMenuItem(title:"Redo", action: Selector(("redo:")), keyEquivalent:"z");
+  redo.keyEquivalentModifierMask=[.command,.shift]
+
+  editMenu.addItem(.separator())
+
+  editMenu.addItem(NSMenuItem(title:"Cut", action:#selector(NSText.cut(_:)), keyEquivalent:"x"))
+
+  editMenu.addItem(NSMenuItem(title:"Copy", action:#selector(NSText.copy(_:)), keyEquivalent:"c"))
+
+  editMenu.addItem(NSMenuItem(title:"Paste", action:#selector(NSText.paste(_:)), keyEquivalent:"v"))
+
+  editMenu.addItem(NSMenuItem(title:"Select All", action:#selector(NSText.selectAll(_:)), keyEquivalent:"a"))
+
+  // (set .keyEquivalentModifierMask=.command on each)
+
+  Selectors with nil/standard targets route through the responder chain to whatever text view is first responder. No
+  per-window wiring needed.
+provenance:
+  source: manual
+  createdBy: swift
+confidence: 0.85
+concepts:
+  - macos
+  - appkit
+  - nsmenu
+  - clipboard
+  - responder-chain
+  - edit-menu
+tags:
+  - desktop
+  - swift
+  - appkit
+  - swiftui
+id: nb-swift-macos
+scope: project-specific
+publishable: true
+appliedCount: 0
+created: '2026-06-15T23:50:23.685Z'
+updated: '2026-06-15T23:50:23.685Z'

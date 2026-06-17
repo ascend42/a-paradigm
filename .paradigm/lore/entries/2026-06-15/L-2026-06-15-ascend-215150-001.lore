@@ -1,0 +1,65 @@
+id: L-2026-06-15-ascend-215150-001
+type: milestone
+timestamp: '2026-06-15T21:51:50.789Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Conductor revival — phased build plan
+summary: 'The build plan for the Conductor revival arc: six phases turning the locked thesis (hybrid macOS desktop app = custom conversation UI over Claude Code''s structured headless stream + native control actions + on-call page/reply container) into sequenced work. Phase 0 is the smallest validating spike (one session, stream-json, custom render in-app); each later phase ships an independently useful slice. Synthesized from the two-round team analysis; planning round, not yet implementing.'
+symbols_touched:
+  - '#conductor'
+  - '#symphony'
+decisions:
+  - id: TD-conductor-plan-001
+    decision: 'Phase the arc by riskiest-and-most-valuable-first: prove the structured-stream conversation mechanism in-app (Phase 0) before building the fleet spine, the on-call paging, or the hybrid web integration.'
+    rationale: Jinx's smallest-validating-step discipline + the stream mechanism is the keystone the whole arc rests on; validate it on the real Swift target before investing in surface.
+  - id: TD-conductor-plan-002
+    decision: Each phase ships an independently useful slice (single-session conv UI → fleet spine → page-back → hybrid panes → learning loop). No big-bang.
+    rationale: Honors web-primary, avoids re-fragmentation, lets the founder feel friction-relief early (the conversation UI + spine kill the terminal-sprawl pain in Phases 1-2).
+tags:
+  - conductor
+  - build-plan
+  - arc-planning
+  - claude-code-stream
+body: |-
+  ## Conductor Revival — Phased Build Plan
+  (Plan to build. Linked understand-phase: L-2026-06-15-ascend-214832-001. Feasibility GREEN.)
+
+  ### Thesis
+  Conductor = hybrid macOS desktop app: custom conversation UI over Claude Code's structured headless stream (`claude -p --output-format stream-json --input-format stream-json`), native control actions preserved, container for the presence/page/reply on-call contract. Voice = a-aloud as a swappable client.
+
+  ### Phase 0 — Keystone spike (smallest validating step)
+  PROVE: spawn one `claude -p` with stream-json in+out from Swift; render the conversation (assistant deltas, tool_use, tool_result) in a minimal custom SwiftUI view; complete one full round-trip incl. a follow-up turn over stdin. Surfaces the real gotchas (stdout buffering/ordering, process lifecycle, cleanup) on the actual target. Gate: if the stream renders cleanly and a reply lands, GO.
+
+  ### Phase 1 — Single-session conversation surface (the friction-killer)
+  Full one-session custom chat UI replacing AX terminal-scraping: streaming text, tool calls rendered live, inline permission approve/deny (route via `--permission-prompt-tool` to a Conductor MCP tool), interrupt/cancel, reply composer, per-session cwd + `--allowedTools`/`--permission-mode`. This alone removes the conversation pain for one session.
+
+  ### Phase 2 — Fleet spine (kills terminal-window sprawl)
+  N concurrent sessions: session-spine sidebar (row per CC session, grouped by project/archetype, folders/pin/archive), single-active-center, background sessions keep running. Run-supervision abstraction with PARALLEL sessions (lift Odysseus's Semaphore(1)); replay-buffer + disk-backed status (survive window close / app restart); spawn/attach/detach + `--session-id`/`--resume`.
+
+  ### Phase 3 — Background-run + page-back (on-call contract)
+  Backgrounded session completes/blocks/asks → pages you: add UserNotifications.framework (Conductor has only in-app banners today), row badge, jump-to. Wire to the settled presence/page/reply contract + soft-blocks (paradigm_propose_block) + Symphony as transport. Presence model (at_keyboard/afk/dnd/offline) gates pages. a-aloud voice = client of the same page/reply bus.
+
+  ### Phase 4 — Hybrid web-pane integration + fleet monitor
+  WKWebView host + JS↔Swift bridge protocol (Arky designs); reuse platform-ui section panes (Tasks/Lore/Graph/Team) inside Conductor rather than native-rebuilding them; fleet monitor grid fed by captain_board + ambient_health + .paradigm/remediations. Native control plane wraps web content. Honors web-primary.
+
+  ### Phase 5 — Learning loop + identity
+  Route ALL run outcomes, page/reply traces, human-interventions to ~/.paradigm/ event substrate (TaskRun-shape schema → events/*.jsonl, decision store, notebooks, calibration table). Fleet identity by archetype×project (run = live leaf). Human-intervention-on-stuck-session = teacher-escalation → distilled calibration signal. Infra-death-vs-agent-failure hygiene so calibration isn't poisoned.
+
+  ### Cross-cutting constraints
+  - Do NOT native-rebuild web Platform sections (Phase 4 reuses them).
+  - ALL signals → ~/.paradigm/ substrate, never a Conductor-local store (Odysseus's scattered-store fragmentation is the cautionary tale).
+  - Codesign + notarize for distribution (build-conductor.sh signs+hardens but doesn't notarize/staple yet).
+  - Symphony = transport for send-to/broadcast/agent-reply.
+  - Scale gotchas to design for: token quota, per-process stdout buffering, zombie cleanup on crash, background-bash killed ~5s post-session.
+
+  ### Open design decisions owned by planning/Arky
+  native↔web bridge protocol; run abstraction (process-per-session confirmed) + parallel supervision model; exact page-trigger set (soft-blocks only vs + liveness/idle + Symphony direct); spine default grouping (project vs archetype×project — inherit Tasks-section swim-lane grammar).
+linked_lore:
+  - L-2026-06-15-ascend-214832-001
+confidence: 0.8
+git_context:
+  ref: 5a9f1e5d5fa9b7bfbdae62bb4afcdcb1c0d50678
+  branch: main
+  dirty: true

@@ -1,0 +1,59 @@
+id: L-2026-06-15-ascend-214832-001
+type: milestone
+timestamp: '2026-06-15T21:48:32.094Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Conductor revival arc — understand-and-correlate phase complete; thesis locked
+summary: 'Two-round team analysis (a-aloud voice-comms correlation + PewDiePie''s Odysseus interface study) to scope the Conductor revival arc. Landed a sharp, founder-validated thesis: Conductor becomes a hybrid macOS desktop app whose heart is a CUSTOM conversation UI over Claude Code sessions driven by the structured headless stream (claude -p stream-json), replacing today''s Accessibility terminal-scraping, while preserving native control actions and serving as the container for the settled presence/page/reply on-call contract. Feasibility of the headless-stream foundation verified GREEN against Claude Code docs.'
+symbols_touched:
+  - '#conductor'
+  - '#symphony'
+decisions:
+  - id: TD-conductor-arc-001
+    decision: 'Conductor revival = hybrid desktop app: native control plane (AX-drive-CC, menu-bar presence, hotkeys, mic, system notifications) + custom conversation UI; reuse web Platform where sensible, do NOT native-rebuild every section.'
+    rationale: Swift + North converged on hybrid; honors the 1-day-old web-primary decision (TD-2026-06-14-853) and keeps Conductor's AX moat a pure web-shell would discard.
+  - id: TD-conductor-arc-002
+    decision: Converse with Claude Code via the structured headless stream (claude -p --output-format stream-json --input-format stream-json), rendering a custom chat UI + custom handling — NOT terminal-scraping via Accessibility.
+    rationale: 'Founder confirmed this is exactly the target. Feasibility verified GREEN: bidirectional stream-json, multi-session via --session-id/--resume, headless permission control + tool observation, native Swift embedding by spawning CLI + piping JSON. Recommended mechanism = CLI+stream-json over SDK sidecar for a Swift app.'
+  - id: TD-conductor-arc-003
+    decision: Steal Odysseus's INTERACTION patterns (session spine, background-run + page-back notification, run replay-buffer, disk-backed status, supervisor loop), NOT its architecture/code. Leave all content verticals (email/calendar/cookbook/docs).
+    rationale: Odysseus is Python/Flask + vanilla-JS; not portable to TS/Swift. Its 'desktop app' is a bash launcher and it does NOT host Claude Code (CC calls into it). Value is the comms UX + run substrate patterns, right-sized to the terminal-sprawl friction.
+  - id: TD-conductor-arc-004
+    decision: Voice stays one swappable client (a-aloud) of a shared presence/page/reply contract; the invention is presence-gated push + agent-initiated page/reply, not voice. Human consults are high-value calibration signal and must write to ~/.paradigm/ substrate.
+    rationale: Settled with founder earlier in arc; Loid's learning-loop constraint + the a-aloud broker correlation.
+learnings:
+  - Odysseus does NOT host/manage Claude Code instances — the arrow is inverted (CC reaches into Odysseus via scope-gated /api/codex/* + a skill bundle). Founder never believed otherwise; he wanted Odysseus's agent-communication INTERFACE, not its (nonexistent) hosting.
+  - Founder's actual friction = the conversation experience with CC sessions inside Conductor today (mediated by AX terminal-scraping) is bad. Cure = a real structured-stream conversation UI.
+  - 'Claude Code headless feasibility GREEN: claude -p with stream-json in+out gives bidirectional structured conversation; --session-id/--resume for N concurrent independent processes; --allowedTools/--permission-mode + --permission-prompt-tool for programmatic approval; tool_use events emitted before execution. Gotchas at scale: token quota, stdout buffering/ordering per-process, zombie cleanup on app crash, background-bash terminated ~5s after session ends.'
+  - a-aloud's broker and Symphony relay are the same WS-hub shape pointed at different endpoints (human vs peer-agents); unify only thin contracts (waiting/resume primitive, presence vocabulary, four-verb MCP surface, intent taxonomy), NOT transport/auth/identity/content-policy.
+  - The conductor-symphony-fixes.md 5 fixes are already SHIPPED (v5.27.0); Conductor is more voice-ready than assumed (WhisperKit/CoreML STT, AVCaptureSession, mic TCC solved) but lacks UserNotifications + TTS + a WKWebView host.
+tags:
+  - conductor
+  - arc-planning
+  - understand-phase
+  - claude-code-stream
+  - a-aloud
+  - odysseus
+body: |-
+  ## The arc, in one line
+  Conductor becomes the hybrid macOS desktop app that is the unified window for the Claude Code fleet: a custom conversation UI (structured headless stream, not terminal-scraping) + native control actions + the container for the settled presence/page/reply on-call contract.
+
+  ## How we got here (understand-and-correlate, two rounds)
+  Round 1 — correlated a-aloud's voice-comms broker (sibling repo, gitignored docs .voice-comms-architecture.md + .comms-redesign-spec.md) with Paradigm's Symphony relay. Founder forks settled: demand is real ("I live in this loop"), revive Conductor, voice = one swappable client.
+
+  Round 2 — team dug into PewDiePie's Odysseus (/tmp/odysseus, a self-hosted AI workspace). Unanimous correction: Odysseus does not host Claude Code; its 'desktop app' is a bash launcher opening chrome --app. Founder clarified: he loved the agent-COMMUNICATION interface, and his real friction is the conversation experience with CC sessions in Conductor today. Target locked: structured headless stream + custom chat UI + custom handling, preserving the actions he's used to.
+
+  Feasibility gate — claude-code-guide verified against docs: structured headless stream + custom UI + full action control + N concurrent sessions embedded in a macOS app is feasible TODAY. Recommended mechanism: spawn `claude` CLI with stream-json over pipes (lighter than a Node/Python SDK sidecar for a Swift app).
+
+  ## Panel (agentIds for continuation)
+  architect a0ccb00b60e31f95d; swift a6510cdb24c63e6ff; North a491b6fc3a00d62a6; Loid abf2d684f3a37c08c; Jinx a18fe7023c5df7592; claude-code-guide ac11a08c123007142. (Round-1 panel: architect a76fa5412b79ee712, swift a4b3726631546cf44, North ac18b7e36a80db460, Loid ae683732ad04e5c35, Jinx a0a4c8334fe5a0f55.)
+
+  ## Next phase
+  PLANNING (not yet started) — turn these understandings into a phased plan. Open design seams for planning: the native↔web bridge protocol (Arky owns); run abstraction + parallel-session supervision lifting Odysseus's Semaphore(1); fleet identity by archetype×project; routing all run/consult signals to ~/.paradigm/ substrate.
+confidence: 0.85
+git_context:
+  ref: 5a9f1e5d5fa9b7bfbdae62bb4afcdcb1c0d50678
+  branch: main
+  dirty: true

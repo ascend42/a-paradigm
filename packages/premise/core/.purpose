@@ -41,6 +41,23 @@ components:
     description: '#reference-tracker: Tracks references between symbols'
   graph-builder:
     description: '#graph-builder: Builds relationship graph'
+  graph-slice-projector:
+    description: >-
+      #graph-slice-projector: Projects a BOUNDED, deterministic slice of the
+      symbol graph centered on one symbol (src/graph-slice.ts). Shared by the
+      `paradigm graph slice` CLI + `paradigm_graph_slice` MCP tool. Sources
+      neighbors from a LIVE SymbolIndex (aggregateFromDirectory + buildSymbolIndex
+      — the SAME live-parse pipeline `paradigm ripple` uses), NOT the stale
+      scan-index/flow-index, so flow membership (e.g. #cockpit-view → $$fleet-switch)
+      always surfaces. Unioned edges: getReferencesFrom → uses/gated-by/in-flow,
+      getReferencesTo → used-by, flow membership → in-flow, flow co-members (flow
+      mode) → uses. BFS to radius (1, max 3), DEGREE_CAP 8 with +N-more collapse,
+      deterministic sort, fail-loud did-you-mean. Freshness is the live-parse
+      timestamp, stale always false (sidesteps the scan-index determinism wart).
+    tags:
+      - graph
+      - projection
+      - visualization
 states:
   index: {}
 signals:

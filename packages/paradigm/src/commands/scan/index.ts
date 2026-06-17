@@ -395,8 +395,29 @@ export function parseFlowSteps(steps: unknown[] | undefined): FlowStep[] {
 
   const result: FlowStep[] = [];
 
+  // A symbol token: prefix (#$^!~) + bare name, optionally double-prefixed ($$).
+  const SYMBOL_TOKEN = /^[#$^!~]{1,2}[A-Za-z0-9][\w-]*$/;
+
   for (let index = 0; index < steps.length; index++) {
     const step = steps[index];
+
+    // Bare-string step form: `- "#cockpit-view"` (the form Swift/conductor
+    // .purpose files use). Without this branch these steps are silently dropped
+    // and the whole flow never reaches flow-index.json — which is precisely why
+    // $$fleet-switch (steps: [#session-row, #fleet-store, #cockpit-view]) and
+    // every other string-step flow went missing from the graph slice.
+    if (typeof step === 'string') {
+      const token = step.trim();
+      if (!token) continue;
+      const isSymbol = SYMBOL_TOKEN.test(token);
+      result.push({
+        id: `step-${index + 1}`,
+        action: token,
+        symbol: isSymbol ? token : undefined,
+      });
+      continue;
+    }
+
     if (typeof step === 'object' && step !== null) {
       const s = step as Record<string, unknown>;
       const action = (s.action as string) || (s.description as string) || (s.component as string) || '';

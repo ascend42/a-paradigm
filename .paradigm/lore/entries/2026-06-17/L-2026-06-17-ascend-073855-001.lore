@@ -1,0 +1,54 @@
+id: L-2026-06-17-ascend-073855-001
+type: milestone
+timestamp: '2026-06-17T07:38:55.797Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: CHECKPOINT — Decisions + THE LIGHTBOX shipped; restart point
+summary: 'Session restart checkpoint. The "decisions + visual proposed-changes" MVP is built + bundled on branch conductor-revival-phase0 (latest commit 1a3b17c1). On top of THE BRIDGE (full-screen fleet cockpit), Conductor now: injects a per-session concision system prompt (--append-system-prompt), parses host-rendered fenced blocks, renders agent DECISIONS as inline cards (select/type/chat; amber→teal on commit; drives the first-class needs-you amber), and renders VISUALS in THE LIGHTBOX (a canvas drawer over the CHORUS rail: mermaid flows offline + comparison tables). Cockpit fonts are now larger + ⌘=/⌘- adjustable. Matt is restarting to keep working on this feature wave.'
+symbols_touched:
+  - '#cockpit-view'
+  - '#atrium-decision-card'
+  - '#atrium-visual-canvas'
+  - '#fenced-block-parser'
+  - '#session-prompt'
+  - '#agent-decision'
+  - '#agent-visual'
+  - '#mermaid-web-view'
+  - '#claude-stream-session'
+  - '#session-derived-status'
+  - '#atrium-thread'
+  - '#session-transcript'
+tags:
+  - conductor
+  - the-bridge
+  - decisions
+  - lightbox
+  - checkpoint
+  - restart-point
+body: |-
+  RESTART HERE. Branch conductor-revival-phase0 (commits → 1a3b17c1; history → h0472; NOT merged — Matt merges/publishes himself). Launch: open packages/conductor/build/Conductor.app, ⌘⇧A. ⌘=/⌘- adjusts cockpit font.
+
+  SHIPPED THIS WAVE (on top of THE BRIDGE fleet cockpit): the two-pronged "reduce the walls of text" feature —
+  1. CONCISION: per-session system prompt via --append-system-prompt (Scholar's bridgeConventions: lead-with-answer, one-rec, ~6 lines then stop-or-block, caveats exempt). SessionPrompt.swift.
+  2. DECISIONS: FencedBlockParser (streaming-safe, emit only on closing fence) extracts ```conductor-decision; AtriumDecisionCard renders inline (radio/checkbox/Other, composer never locks); pick → amber→teal → "✓ you chose X"; answer = normal text turn via send(). Pending decision → noteNeedsHuman() → derivedStatus.awaitingYou (FIRST-CLASS needs-you amber, pages even active session).
+  3. VISUALS / THE LIGHTBOX: ```conductor-visual + ```mermaid + ```svg; AtriumVisualCanvas right slide-out OVER the still-mounted CHORUS rail; flow→MermaidWebView (sandboxed, VENDORED OFFLINE mermaid.min.js in Conductor_Conductor.bundle), comparison→native table; ▸ launcher (no auto-open).
+  4. Larger + ⌘=/⌘--adjustable cockpit type scale (@AppStorage atriumFontScale).
+
+  VERIFIED FACTS (don't re-derive): AskUserQuestion surfaces as a clean tool_use but is unanswerable headless (auto-dismisses) → use the fenced-block convention; --append-system-prompt (NOT --system-prompt, which strips default tools). Plus prior facts (control_request interrupt, TaskStop, task_type local_agent/local_bash + tool_use_id correlation, macOS LSUIElement/TCC/PATH/NSTextView gotchas) — see L-2026-06-16-ascend-091000-001.
+
+  DISCIPLINE: Swift ecosystem agent owns ALL Conductor Swift. Debug via ~/.paradigm/conductor/atrium transcripts (READ them). Run the bundled .app. NO blockquotes (global rule). Be concise (we're literally building the cure for walls of text).
+
+  ON RESTART: Matt is testing + will keep working on THIS feature wave. Likely next: polish (decision-card feel, LIGHTBOX+CHORUS side-by-side option) or the v2 backlog.
+
+  OPEN v2 / backlog: wireframe + diff visual kinds; hover-option↔diagram highlight binding (Mika nicety); animations; raw-svg render; LIGHTBOX+CHORUS side-by-side (today LIGHTBOX overlays); cockpit history/log viewer over the atrium transcripts (T-2026-06-17-001). Pre-existing: merge conductor-revival-phase0; the on-call v2 (UserNotifications/voice page-back, session persistence via --resume).
+linked_lore:
+  - L-2026-06-17-ascend-043232-001
+  - L-2026-06-17-ascend-004231-001
+  - L-2026-06-15-ascend-215150-001
+confidence: 0.85
+git_context:
+  ref: 1a3b17c1d447322357c8dd7fdd6ab1dd22d2a581
+  branch: conductor-revival-phase0
+  dirty: true
