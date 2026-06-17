@@ -11,6 +11,9 @@ struct AtriumMessageView: View {
     var onAnswerDecision: (String, [String], String?) -> Void = { _, _, _ in }
     /// Open a host-rendered visual in the LIGHTBOX (#atrium-visual-canvas).
     var onOpenVisual: (AgentVisual) -> Void = { _ in }
+    /// Hovering a decision option row lights up its affectedSymbols in the LIGHTBOX
+    /// graph (empty set = hover-out, back to rest). READ-ONLY; never commits.
+    var onHoverSymbols: (Set<String>) -> Void = { _ in }
     /// Observe the user font scale so prose re-renders live on ⌘= / ⌘-.
     @AppStorage(AtriumFontScale.key) private var fontScale: Double = AtriumFontScale.defaultValue
 
@@ -63,7 +66,8 @@ struct AtriumMessageView: View {
                                 if let v = message.visuals.first(where: { $0.id == vid }) {
                                     onOpenVisual(v)
                                 }
-                            }
+                            },
+                            onHoverSymbols: onHoverSymbols
                         )
                     }
                 }

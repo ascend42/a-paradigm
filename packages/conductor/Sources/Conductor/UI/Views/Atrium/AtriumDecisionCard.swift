@@ -17,6 +17,10 @@ struct AtriumDecisionCard: View {
     let onAnswer: ([String], String?) -> Void
     /// Open a linked visual in the LIGHTBOX by id.
     let onViewVisual: (String) -> Void
+    /// Hovering an option row lights up its affectedSymbols in the LIGHTBOX graph
+    /// (empty = rest). READ-ONLY — never changes selection or commits. Defaulted so
+    /// existing call sites / previews compile unchanged.
+    var onHoverSymbols: (Set<String>) -> Void = { _ in }
 
     @State private var selected: Set<String> = []
     @State private var otherText: String = ""
@@ -137,6 +141,12 @@ struct AtriumDecisionCard: View {
             .clipShape(RoundedRectangle(cornerRadius: 6))
         }
         .buttonStyle(.plain)
+        // Hover lights up this option's symbols in the LIGHTBOX graph; hover-out
+        // (empty set) eases the graph back to rest. Runs on the main actor; never
+        // touches selection or commit — clicking the row is still the only commit path.
+        .onHover { hovering in
+            onHoverSymbols(hovering ? Set(option.affectedSymbols) : [])
+        }
     }
 
     private var otherAffordance: some View {

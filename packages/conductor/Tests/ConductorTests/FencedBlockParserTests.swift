@@ -40,6 +40,37 @@ final class FencedBlockParserTests: XCTestCase {
         XCTAssertFalse(r.residualText.contains("conductor-decision"))
     }
 
+    func testDecisionSymbolGroundingDecodes() {
+        // A decision envelope carrying a top-level "symbols" array and per-option
+        // "affectedSymbols" — the graph-grounding fields (Phase-2b). Tolerant decode.
+        let text = """
+        Pick one:
+        ```conductor-decision
+        {"id":"g","question":"Where?","symbols":["#payment-form","$checkout-flow"],"options":[{"id":"a","label":"A","affectedSymbols":["#payment-form","!payment-method-added"]},{"id":"b","label":"B","affectedSymbols":["$checkout-flow"]}],"multiSelect":false,"allowOther":false}
+        ```
+        """
+        let r = FencedBlockParser.parse(text)
+        XCTAssertEqual(r.decisions.count, 1)
+        let d = r.decisions.first
+        XCTAssertEqual(d?.symbols, ["#payment-form", "$checkout-flow"])
+        XCTAssertEqual(d?.options.first(where: { $0.id == "a" })?.affectedSymbols,
+                       ["#payment-form", "!payment-method-added"])
+        XCTAssertEqual(d?.options.first(where: { $0.id == "b" })?.affectedSymbols,
+                       ["$checkout-flow"])
+    }
+
+    func testDecisionWithoutSymbolFieldsDefaultsEmpty() {
+        // Schema-tolerant: a decision with no symbols/affectedSymbols decodes with [].
+        let text = """
+        ```conductor-decision
+        {"id":"x","question":"Pick","options":[{"id":"a","label":"A"}]}
+        ```
+        """
+        let r = FencedBlockParser.parse(text)
+        XCTAssertEqual(r.decisions.first?.symbols, [])
+        XCTAssertEqual(r.decisions.first?.options.first?.affectedSymbols, [])
+    }
+
     // MARK: - Malformed JSON tolerance
 
     func testMalformedDecisionJSONDoesNotThrowAndDropsBlock() {

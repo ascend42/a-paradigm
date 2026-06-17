@@ -1,0 +1,47 @@
+id: L-2026-06-17-ascend-231003-001
+type: milestone
+timestamp: '2026-06-17T23:10:03.027Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Phase 2a SHIPPED — native .graph LIGHTBOX kind renders real symbol-graph slices
+summary: 'The cockpit now consumes the Phase-1 projector. A conductor-visual `graph` envelope renders as a NATIVE SwiftUI ego-graph in THE LIGHTBOX (AtriumGraphView: Canvas + closed-form ring layout, nodes colored/shaped by symbol kind per Mika''s mapping, root-centered with halo, atriumFontScale-aware) — grounded in the real symbol graph, not improvised mermaid. Static first cut (on-screen proof, no interactivity). FencedBlockParser.decodeGraph decodes the REAL projector envelope shape {root, freshness, nodes[id,kind,label], edges[source,target,kind], truncated}; AgentVisual gains case graph + GraphPayload/GraphNode/GraphEdge (Sendable+Equatable, tolerant decoders). swift build -c release clean (no Sendable/actor warnings in new code); 13 FencedBlockParserTests pass (3 new); Conductor.app build 699 bundled + installed. Commit d256fa93 (h0474). This is exactly Mika''s stated sign-off artifact (radius-1 @380px legibility).'
+symbols_touched:
+  - '#atrium-graph-view'
+  - '#agent-visual'
+  - '#fenced-block-parser'
+  - '#atrium-visual-canvas'
+symbols_created:
+  - '#atrium-graph-view'
+files_created:
+  - packages/conductor/Sources/Conductor/UI/Views/Atrium/AtriumGraphView.swift
+files_modified:
+  - packages/conductor/Sources/Conductor/Models/AgentVisual.swift
+  - packages/conductor/Sources/Conductor/Services/FencedBlockParser.swift
+  - packages/conductor/Sources/Conductor/UI/Views/Atrium/AtriumVisualCanvas.swift
+verification:
+  status: pass
+  details:
+    build: swift build -c release clean
+    tests: 13/13 FencedBlockParserTests (3 new)
+    bundle: Conductor.app build 699 installed
+    preview: compiles
+tags:
+  - conductor-arc
+  - the-bridge
+  - lightbox
+  - '#atrium-graph-view'
+  - phase-2
+  - swift
+  - shipped
+linked_lore:
+  - L-2026-06-17-ascend-181541-001
+  - L-2026-06-17-ascend-222305-001
+linked_tasks:
+  - T-2026-06-17-007
+confidence: 0.85
+git_context:
+  ref: d256fa93577867fd93a8626ca8d2f84250e3ec06
+  branch: conductor-revival-phase0
+  dirty: true

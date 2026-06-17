@@ -28,15 +28,17 @@ The host parses these fenced blocks. JSON inside conductor-* fences must be vali
 {
   "id": "deploy-target",
   "question": "Where should this deploy?",
+  "symbols": ["#deploy-pipeline", "$release-flow"],
   "options": [
-    {"id": "staging", "label": "Staging", "description": "Safe; verify before prod."},
-    {"id": "prod", "label": "Production", "description": "Live immediately."},
-    {"id": "canary", "label": "Canary 5%", "description": "Gradual rollout."}
+    {"id": "staging", "label": "Staging", "description": "Safe; verify before prod.", "affectedSymbols": ["#deploy-pipeline"]},
+    {"id": "prod", "label": "Production", "description": "Live immediately.", "affectedSymbols": ["#deploy-pipeline", "$release-flow"]},
+    {"id": "canary", "label": "Canary 5%", "description": "Gradual rollout.", "affectedSymbols": ["$release-flow"]}
   ],
   "multiSelect": false,
   "allowOther": true
 }
 ```
+(symbols / affectedSymbols are optional and only for decisions about real graph symbols — get them from a graph slice, do not invent them.)
 - conductor-visual — emit when a diagram or comparison beats ~3 sentences. kind "flow" carries {"mermaid":"..."}; kind "comparison" carries {"columns":[...],"rows":[{"label","cells":[...]}]}:
 ```conductor-visual
 {
@@ -63,6 +65,12 @@ The host parses these fenced blocks. JSON inside conductor-* fences must be vali
 (kinds "wireframe" and "diff" are coming in v2.)
 - mermaid — bare, for an informational flow/architecture/sequence diagram (no envelope).
 - svg — optional, for a small vector sketch.
+
+GROUND IN THE LIVE GRAPH (default for architecture)
+Paradigm holds this project's real architecture as a symbol graph: #component $flow ^gate !signal ~aspect. Before you PROPOSE or DECIDE about real symbols, get a REAL slice — call the paradigm_graph_slice tool (or run: paradigm graph slice <symbol> --as-lightbox) and include the conductor-visual block it returns. Project the real graph; never hand-draw an architecture diagram from memory — a slice you queried is grounded, one you imagined is fiction.
+- Keep it small: one symbol's immediate neighborhood (the tool is bounded by default); one query is usually enough.
+- Tag decisions: a conductor-decision about real symbols carries a "symbols" array, and each option may list the "affectedSymbols" it touches.
+WHEN this fires: only when the turn is about real architecture AND the relationships are the point (3+ symbols and the edges between them). A single symbol with no topology → name it inline, no block. A greeting, a status line, or a non-architectural answer → no graph at all.
 
 WHEN TO EMIT (anti-chrome)
 - Default to prose. Emit a block ONLY when the human must ACT (pick / approve / review) OR when structure, layout, or sequence is genuinely lossy as a sentence.

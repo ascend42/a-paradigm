@@ -23,6 +23,13 @@ struct AtriumThreadView: View {
     /// (chorus stays mounted underneath; PUSH-consistent layout).
     @State private var openVisual: AgentVisual?
 
+    /// Symbols currently hovered on a decision option row — drives the LIGHTBOX
+    /// graph "spotlight the set, dim the room" highlight (#atrium-graph-view).
+    /// Kept SEPARATE from the Equatable AgentVisual so hover only redraws the Canvas;
+    /// folding it into the visual would re-identify the LIGHTBOX on every hover.
+    /// READ-ONLY: hover never changes selection or commits anything.
+    @State private var hoveredSymbols: Set<String> = []
+
     /// The rail is visible when a sub-agent is live OR the founder pinned it open
     /// (and there is at least one sub-agent to show when pinned).
     private var chorusVisible: Bool {
@@ -57,8 +64,12 @@ struct AtriumThreadView: View {
                 AtriumChorusRail(session: session, pinned: $chorusPinned)
             }
             if let visual = openVisual {
-                AtriumVisualCanvas(visual: visual, onClose: { openVisual = nil })
-                    .transition(.opacity)
+                AtriumVisualCanvas(
+                    visual: visual,
+                    highlightedSymbols: hoveredSymbols,
+                    onClose: { openVisual = nil }
+                )
+                .transition(.opacity)
             }
         }
         .animation(.easeInOut(duration: 0.15), value: openVisual?.id)
@@ -86,7 +97,8 @@ struct AtriumThreadView: View {
                                         otherText: otherText
                                     )
                                 },
-                                onOpenVisual: { openVisual = $0 }
+                                onOpenVisual: { openVisual = $0 },
+                                onHoverSymbols: { hoveredSymbols = $0 }
                             )
                             .id(message.id)
                         }

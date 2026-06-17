@@ -77,14 +77,14 @@ context:
     - CheckpointReader.swift:1
 
 #fenced-block-parser:
-  description: "Pure host-side parser scanning accumulated assistant TEXT for fenced blocks (```<lang>); projects host-rendered ones (conductor-decision → AgentDecision, conductor-visual envelope + bare mermaid/svg → AgentVisual) and returns residual prose with those spans stripped. Emits a block ONLY when its CLOSING fence is present (open fence still streaming → left as raw residual, render nothing); stable identity by explicit JSON id else (lang,ordinal); tolerates malformed JSON when the closing fence is present (degrades the block, never throws). The READER half of Scholar's contract (#session-prompt is the writer half)."
+  description: "Pure host-side parser scanning accumulated assistant TEXT for fenced blocks (```<lang>); projects host-rendered ones (conductor-decision → AgentDecision, conductor-visual envelope + bare mermaid/svg → AgentVisual) and returns residual prose with those spans stripped. Emits a block ONLY when its CLOSING fence is present (open fence still streaming → left as raw residual, render nothing); stable identity by explicit JSON id else (lang,ordinal); tolerates malformed JSON when the closing fence is present (degrades the block, never throws). Decodes the graph-grounding fields schema-tolerantly: a decision's top-level `symbols` array and each option's `affectedSymbols` array (both default []). The READER half of Scholar's contract (#session-prompt is the writer half)."
   type: service
   tags: [conductor, atrium, bridge, parser, desktop]
   anchors:
     - FencedBlockParser.swift:1
 
 #session-prompt:
-  description: "Scholar's canonical per-session system prompt (concision + host-rendered-block conventions) injected via --append-system-prompt (NOT --system-prompt — append PRESERVES the default tools the cockpit depends on). Instructs the agent to emit conductor-decision / conductor-visual / mermaid / svg fenced blocks in its assistant TEXT, which the host parses (#fenced-block-parser) and renders. The CONTRACT both sides agree on for $decision-exchange."
+  description: "Scholar's canonical per-session system prompt (concision + host-rendered-block conventions) injected via --append-system-prompt (NOT --system-prompt — append PRESERVES the default tools the cockpit depends on). Instructs the agent to emit conductor-decision / conductor-visual / mermaid / svg fenced blocks in its assistant TEXT, which the host parses (#fenced-block-parser) and renders. Carries the GROUND IN THE LIVE GRAPH convention (default for architecture): before proposing/deciding about real symbols, query a REAL slice via paradigm_graph_slice and include the conductor-visual block it returns — never hand-draw an architecture diagram; tag decisions with a `symbols` array + per-option `affectedSymbols`. The CONTRACT both sides agree on for $decision-exchange."
   type: utility
   tags: [conductor, atrium, bridge, prompt, shared]
   anchors:

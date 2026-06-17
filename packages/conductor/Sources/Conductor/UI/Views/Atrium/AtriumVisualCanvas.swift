@@ -10,6 +10,11 @@ import SwiftUI
 
 struct AtriumVisualCanvas: View {
     let visual: AgentVisual
+    /// Symbols to spotlight in a .graph visual (driven by decision-option hover).
+    /// Plain value, NOT folded into `visual` — hover must only redraw the Canvas,
+    /// not re-identify the LIGHTBOX. Empty = render at rest. Defaulted so non-hover
+    /// call sites compile unchanged.
+    var highlightedSymbols: Set<String> = []
     let onClose: () -> Void
 
     var body: some View {
@@ -73,7 +78,7 @@ struct AtriumVisualCanvas: View {
             }
         case .graph:
             if let graph = visual.graph {
-                AtriumGraphView(payload: graph)
+                AtriumGraphView(payload: graph, highlightedSymbols: highlightedSymbols)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
             } else {
                 rawDump

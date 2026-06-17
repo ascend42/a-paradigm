@@ -17,13 +17,18 @@ struct DecisionOption: Identifiable, Sendable, Equatable {
     let recommended: Bool
     /// Linked visual id (▸ "view") — opens the LIGHTBOX for that AgentVisual.
     let visualId: String?
+    /// The real graph symbols (#component $flow ^gate !signal ~aspect) this option
+    /// touches. Drives the hover-to-spotlight binding (option row → light up its
+    /// symbols in the LIGHTBOX graph). Schema-tolerant — defaults to [].
+    let affectedSymbols: [String]
 
-    init(id: String, label: String, description: String? = nil, recommended: Bool = false, visualId: String? = nil) {
+    init(id: String, label: String, description: String? = nil, recommended: Bool = false, visualId: String? = nil, affectedSymbols: [String] = []) {
         self.id = id
         self.label = label
         self.description = description
         self.recommended = recommended
         self.visualId = visualId
+        self.affectedSymbols = affectedSymbols
     }
 }
 
@@ -50,8 +55,22 @@ struct AgentDecision: Identifiable, Sendable, Equatable {
     let options: [DecisionOption]
     let multiSelect: Bool
     let allowOther: Bool
+    /// The real graph symbols this whole decision is about (#component $flow ^gate
+    /// !signal ~aspect). The agent tags a decision so the host can ground it in the
+    /// live graph. Schema-tolerant — defaults to [].
+    let symbols: [String]
     /// nil = pending (awaiting the human); non-nil = settled.
     var answer: DecisionAnswer?
+
+    init(id: String, question: String, options: [DecisionOption], multiSelect: Bool, allowOther: Bool, symbols: [String] = [], answer: DecisionAnswer? = nil) {
+        self.id = id
+        self.question = question
+        self.options = options
+        self.multiSelect = multiSelect
+        self.allowOther = allowOther
+        self.symbols = symbols
+        self.answer = answer
+    }
 
     var isPending: Bool { answer == nil }
 

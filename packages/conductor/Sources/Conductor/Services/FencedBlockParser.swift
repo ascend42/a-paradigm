@@ -195,13 +195,17 @@ enum FencedBlockParser {
                 let desc = (ro["description"] as? String).flatMap { $0.isEmpty ? nil : $0 }
                 let recommended = (ro["recommended"] as? Bool) ?? false
                 let visualId = (ro["visualId"] as? String).flatMap { $0.isEmpty ? nil : $0 }
+                let affectedSymbols = (ro["affectedSymbols"] as? [String]) ?? []
                 options.append(DecisionOption(id: oid, label: label, description: desc,
-                                              recommended: recommended, visualId: visualId))
+                                              recommended: recommended, visualId: visualId,
+                                              affectedSymbols: affectedSymbols))
             }
         }
         guard !options.isEmpty else { return nil }
+        let symbols = (obj["symbols"] as? [String]) ?? []
         return AgentDecision(id: id, question: question, options: options,
-                             multiSelect: multiSelect, allowOther: allowOther, answer: nil)
+                             multiSelect: multiSelect, allowOther: allowOther,
+                             symbols: symbols, answer: nil)
     }
 
     private static func decodeVisualEnvelope(_ body: String, ordinal: Int) -> AgentVisual? {
