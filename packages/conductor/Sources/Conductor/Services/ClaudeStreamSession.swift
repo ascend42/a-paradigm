@@ -118,6 +118,26 @@ final class ClaudeStreamSession: ObservableObject, Identifiable {
     /// Best-effort + non-blocking (own serial queue); never crashes the session.
     private let transcript = SessionTranscript()
 
+    /// Append-only JSONL LEARNING INSTRUMENT for $decision-exchange divergence,
+    /// written to ~/.paradigm/conductor/decisions/ in the cockpit's OWN write-domain
+    /// (#decision-divergence-journal). Created LAZILY on the first GROUNDED decision
+    /// so a session that never grounds one writes no file. Best-effort + non-blocking
+    /// (own serial queue); never blocks the decision UI. INSTRUMENT-FIRST — the
+    /// journal-promotion CONSUMER is a deferred follow-up.
+    private var divergenceJournal: DecisionDivergenceJournal?
+
+    /// Stable id for the divergence journal filename: the real claude session_id if
+    /// known, else the transcript's startup id (which is always assigned).
+    private var divergenceSessionId: String { sessionId ?? transcript.startupId }
+
+    /// Lazily build (once) the divergence journal for this session.
+    private func ensureDivergenceJournal() -> DecisionDivergenceJournal {
+        if let j = divergenceJournal { return j }
+        let j = DecisionDivergenceJournal(sessionId: divergenceSessionId)
+        divergenceJournal = j
+        return j
+    }
+
     /// Initial prompt buffered until `system/init` is observed (safe first turn).
     private var pendingInitialPrompt: String?
 
@@ -744,10 +764,73 @@ final class ClaudeStreamSession: ObservableObject, Identifiable {
         let answer = DecisionAnswer(chosenOptionIds: optionIds, otherText: otherText, answeredAt: Date())
         messages[mIdx].decisions[dIdx].answer = answer
 
+        // LEARNING INSTRUMENT (#decision-divergence-journal): a settled decision is a
+        // learning SIGNAL only when GROUNDED (its `symbols` are non-empty). Ungrounded
+        // decisions write NOTHING — they have nowhere to compound (Loid's honesty
+        // gate). Grounded decisions write an `event:"answer"` row whether or not the
+        // human diverged (agreements are the divergence-rate DENOMINATOR).
+        recordDivergence(decision: decision, event: .answer, optionIds: optionIds, otherText: otherText)
+
         let reply = decision.composeReply(optionIds: optionIds, otherText: otherText)
         ConductorLog.flow("decision-exchange")
             .info("Answered decision \(decisionId) → sending user turn (\(reply.count) chars)")
         send(text: reply)
+    }
+
+    /// Reopen-after-settle (#decision-divergence-journal): the human used the decision
+    /// card's change/reopen affordance on an ALREADY-SETTLED decision. This is the
+    /// stale-graph WATCHDOG — if a grounded, previously-settled decision is reopened
+    /// we write a separate `event:"reopen"` row carrying the last-known answer. The
+    /// card itself re-expands locally (forceExpanded); this only emits the signal.
+    /// No-op when the decision is unsettled or ungrounded.
+    func reopenDecision(messageId: UUID, decisionId: String) {
+        guard let mIdx = messages.firstIndex(where: { $0.id == messageId }),
+              let dIdx = messages[mIdx].decisions.firstIndex(where: { $0.id == decisionId })
+        else { return }
+        let decision = messages[mIdx].decisions[dIdx]
+        guard let answer = decision.answer else { return } // only a SETTLED decision can be reopened
+        recordDivergence(
+            decision: decision,
+            event: .reopen,
+            optionIds: answer.chosenOptionIds,
+            otherText: answer.otherText
+        )
+        ConductorLog.flow("decision-exchange")
+            .info("Reopened settled decision \(decisionId) → divergence watchdog row")
+    }
+
+    /// Which `event` row to emit for a divergence-journal write.
+    private enum DivergenceEvent { case answer, reopen }
+
+    /// Shared producer for the divergence journal. Applies LOID'S GATE: writes ONLY
+    /// when the decision is GROUNDED (symbols non-empty); computes `diverged` via the
+    /// pure helper. Best-effort — the journal swallows any IO failure off the main
+    /// actor and never blocks the decision UI.
+    private func recordDivergence(decision: AgentDecision, event: DivergenceEvent, optionIds: [String], otherText: String?) {
+        guard !decision.symbols.isEmpty else { return } // ungrounded → nothing to compound
+        let recommendedId = decision.options.first(where: { $0.recommended })?.id
+        let usedOther = (otherText?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false)
+        let diverged = DecisionDivergenceJournal.decisionDiverged(
+            recommendedId: recommendedId,
+            chosenIds: optionIds,
+            usedOther: usedOther
+        )
+        let journal = ensureDivergenceJournal()
+        let sid = divergenceSessionId
+        switch event {
+        case .answer:
+            journal.recordAnswer(
+                sessionId: sid, decisionId: decision.id, symbols: decision.symbols,
+                recommendedOptionId: recommendedId, chosenOptionIds: optionIds,
+                otherText: otherText, diverged: diverged
+            )
+        case .reopen:
+            journal.recordReopen(
+                sessionId: sid, decisionId: decision.id, symbols: decision.symbols,
+                recommendedOptionId: recommendedId, chosenOptionIds: optionIds,
+                otherText: otherText, diverged: diverged
+            )
+        }
     }
 
     private func applyToolResults(_ user: UserMessage) {

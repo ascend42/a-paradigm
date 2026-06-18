@@ -9,6 +9,9 @@ struct AtriumMessageView: View {
     let message: ConversationMessage
     /// Answer a host-rendered decision ($decision-exchange): (decisionId, optionIds, otherText?).
     var onAnswerDecision: (String, [String], String?) -> Void = { _, _, _ in }
+    /// Reopen an already-settled decision: (decisionId). Fires the divergence
+    /// watchdog (#decision-divergence-journal).
+    var onReopenDecision: (String) -> Void = { _ in }
     /// Open a host-rendered visual in the LIGHTBOX (#atrium-visual-canvas).
     var onOpenVisual: (AgentVisual) -> Void = { _ in }
     /// Hovering a decision option row lights up its affectedSymbols in the LIGHTBOX
@@ -67,6 +70,7 @@ struct AtriumMessageView: View {
                                     onOpenVisual(v)
                                 }
                             },
+                            onReopen: { onReopenDecision(decision.id) },
                             onHoverSymbols: onHoverSymbols
                         )
                     }

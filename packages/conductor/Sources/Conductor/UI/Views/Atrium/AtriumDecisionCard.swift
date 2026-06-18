@@ -17,6 +17,11 @@ struct AtriumDecisionCard: View {
     let onAnswer: ([String], String?) -> Void
     /// Open a linked visual in the LIGHTBOX by id.
     let onViewVisual: (String) -> Void
+    /// The human reopened an already-SETTLED decision via the "change" affordance —
+    /// fires the divergence watchdog (#decision-divergence-journal). UI-only besides
+    /// this signal: the card re-expands locally (forceExpanded). Defaulted so existing
+    /// call sites / previews compile unchanged.
+    var onReopen: () -> Void = {}
     /// Hovering an option row lights up its affectedSymbols in the LIGHTBOX graph
     /// (empty = rest). READ-ONLY — never changes selection or commits. Defaulted so
     /// existing call sites / previews compile unchanged.
@@ -181,7 +186,10 @@ struct AtriumDecisionCard: View {
                 .foregroundColor(AtriumTheme.inkMuted)
                 .lineLimit(2)
             Spacer()
-            Button { forceExpanded = true } label: {
+            Button {
+                forceExpanded = true
+                onReopen() // divergence watchdog (#decision-divergence-journal)
+            } label: {
                 Text("change")
                     .font(AtriumTheme.footerFont)
                     .foregroundColor(AtriumTheme.user)

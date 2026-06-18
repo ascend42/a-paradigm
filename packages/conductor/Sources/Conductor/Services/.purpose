@@ -26,6 +26,14 @@ context:
   anchors:
     - SessionTranscript.swift:1
 
+#decision-divergence-journal:
+  description: "Append-only JSONL LEARNING INSTRUMENT that closes the cockpit's SEALED $decision-exchange loop (Loid's instrument design, L-2026-06-17-ascend-181541-001). Writes per-session divergence rows to ~/.paradigm/conductor/decisions/<sessionId>.jsonl in the cockpit's OWN write-domain (NOT framework-owned .paradigm/events/), mirroring #session-transcript's serial-queue, best-effort, non-blocking discipline. LOID'S GATE: a decision is a learning SIGNAL only when GROUNDED (its `symbols` array is non-empty); ungrounded decisions write NOTHING (the honesty gate). Grounded AGREEMENTS write diverged:false (the divergence-rate denominator); grounded DIVERGENCES (Other/free-text used, OR chosen set != the single recommended id) write diverged:true. A reopen-after-settle writes a separate event:\"reopen\" row (stale-graph watchdog). Pure helper decisionDiverged(recommendedId:chosenIds:usedOther:) is unit-tested. INSTRUMENT-FIRST — the journal-promotion CONSUMER (rows → agent notebooks via the gate) is a DEFERRED follow-up."
+  type: utility
+  tags: [conductor, atrium, decision, divergence, jsonl, learning, observability, desktop]
+  anchors:
+    - DecisionDivergenceJournal.swift:1
+    - ClaudeStreamSession.swift:733
+
 #atrium-shells:
   description: Tracks background shells the agent spawned, parsed from tool_result text and system task events; status maps ALL terminal task statuses (running/finished/stopped/killed/failed) so the panel never shows "running" after a terminal event; host-side inspect (read .output file) and authoritative kill (suppressed TaskStop control turn — the Claude Code 2.1.x tool, NOT KillShell; a TaskStop'd task reports terminal status "failed"). No lsof backstop (removed: raced TaskStop, wrong target, exit 144/SIGURG)
   type: model

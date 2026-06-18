@@ -97,6 +97,9 @@ struct AtriumThreadView: View {
                                         otherText: otherText
                                     )
                                 },
+                                onReopenDecision: { decisionId in
+                                    session.reopenDecision(messageId: message.id, decisionId: decisionId)
+                                },
                                 onOpenVisual: { openVisual = $0 },
                                 onHoverSymbols: { hoveredSymbols = $0 }
                             )

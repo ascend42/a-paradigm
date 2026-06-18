@@ -371,8 +371,10 @@ final class SessionTranscript: @unchecked Sendable {
     // MARK: - Encoding
 
     /// Encode a flat dictionary of encodable values to a single-line JSON string.
-    /// Sorted keys for stable, diffable output.
-    private static func encodeLine(_ fields: [String: JSONEncodableValue]) -> String? {
+    /// Sorted keys for stable, diffable output. Shared with sibling cockpit-domain
+    /// writers (e.g. #decision-divergence-journal) so the JSON token logic stays in
+    /// one place.
+    static func encodeLine(_ fields: [String: JSONEncodableValue]) -> String? {
         var parts: [String] = []
         for key in fields.keys.sorted() {
             guard let v = fields[key] else { continue }
@@ -449,6 +451,7 @@ enum JSONEncodableValue: ExpressibleByStringLiteral, ExpressibleByIntegerLiteral
     case int(Int)
     case double(Double)
     case bool(Bool)
+    case stringArray([String])
     case null
 
     init(stringLiteral value: String) { self = .string(value) }
@@ -469,6 +472,8 @@ enum JSONEncodableValue: ExpressibleByStringLiteral, ExpressibleByIntegerLiteral
             if d.rounded() == d, abs(d) < 1e15 { return String(format: "%.4f", d) }
             return String(d)
         case .bool(let b): return b ? "true" : "false"
+        case .stringArray(let arr):
+            return "[" + arr.map { SessionTranscript.jsonString($0) }.joined(separator: ",") + "]"
         case .null: return "null"
         }
     }
