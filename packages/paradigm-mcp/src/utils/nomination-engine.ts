@@ -27,6 +27,7 @@ import { loadDataPolicy, canObservePath } from './data-policy-loader.js';
 import { loadAllAgentProfiles, loadAgentProfile, saveAgentProfile, isAgentActive } from './agent-loader.js';
 import { loadJournalEntries } from './journal-loader.js';
 import { addNotebookEntry, normalizeConcept, notebookPrior } from './notebook-loader.js';
+import { appendClassroomCertification } from './field-failures.js';
 import { log } from './mcp-logger.js';
 
 const EVENTS_DIR = '.paradigm/events';
@@ -1041,6 +1042,22 @@ export function autoPromoteJournalEntries(
       );
 
       promoted.push({ journalId: entry.id, notebookId: nbEntry.id });
+
+      // The Classroom (TD-2026-06-19-007): a gated promotion writes a `pending`
+      // certification. The fail-side reducer LATER-BINDS this row to `overturned`
+      // when an attributed break lands on nbEntry.id. The `outcome` column is the
+      // falsifier — a cert is meaningless until the field tests it.
+      try {
+        appendClassroomCertification(rootDir, {
+          ts: new Date().toISOString(),
+          agent: agentId,
+          entryId: nbEntry.id,
+          concepts,
+          confidenceAtCert: entry.confidence_after ?? 0.5,
+          certifiedBy: 'gate',
+          outcome: 'pending',
+        });
+      } catch { /* non-fatal — certification is an instrument, never blocks promotion */ }
 
       // Mark the journal entry as promoted (update in-place via YAML rewrite)
       try {

@@ -14,6 +14,7 @@ import * as path from 'path';
 import type { ProjectContext } from '../utils/index-loader.js';
 import { loadNominations, loadDebates, engageNomination, resolveDebate, adjustAttentionFromFeedback, getNominationStats, getNeverlandMetrics, loadSurfacingConfig, applySurfacingRules, autoPromoteJournalEntries, processPendingEvents } from '../utils/nomination-engine.js';
 import { queryEvents } from '../utils/event-stream.js';
+import { runFieldFailureReducer } from '../utils/field-failure-reducer.js';
 import { buildProfileEnrichment, loadAgentProfile, loadAllAgentProfiles } from '../utils/agent-loader.js';
 import { loadDecisions } from '../utils/decision-loader.js';
 import { loadJournalEntries, recordJournalEntry } from '../utils/journal-loader.js';
@@ -536,6 +537,11 @@ interface PostflightResult {
     insight: string;
     symbols?: string[];
   }>;
+  /**
+   * The Classroom (TD-2026-06-19-007): fail-side reducer counts — field breaks
+   * attributed back to notebook entries, entries revised down, certs overturned.
+   */
+  fieldFailures?: { failuresRecorded: number; entriesRevised: number; certsOverturned: number };
 }
 
 /**
@@ -566,6 +572,13 @@ export async function runPostflightLearning(
   // Also read session log for contribution context (ephemeral, enrichment only)
   const allEntries = readSessionWorkLog(rootDir);
 
+  // The Classroom: turn the fail-side loop. It reads its OWN inputs (session-log
+  // verdicts joined to notebook-refs by orchestrationId), so it must run even
+  // when there are no durable pending verdicts to journal/promote.
+  const fieldFailures = dryRun
+    ? { failuresRecorded: 0, entriesRevised: 0, certsOverturned: 0 }
+    : runFieldFailureReducer(rootDir);
+
   if (verdictEntries.length === 0 && revisionEntries.length === 0) {
     return {
       sessionEntries: allEntries.length,
@@ -576,6 +589,7 @@ export async function runPostflightLearning(
       promotedByAgent: {},
       dryRun,
       details: [],
+      fieldFailures,
     };
   }
 
@@ -764,6 +778,7 @@ export async function runPostflightLearning(
     promotedByAgent,
     dryRun,
     details,
+    fieldFailures,
   };
 }
 

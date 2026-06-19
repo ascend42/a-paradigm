@@ -369,6 +369,9 @@ export function incrementApplied(
         const entry = yaml.load(content) as NotebookEntry;
         if (entry) {
           entry.appliedCount = (entry.appliedCount || 0) + 1;
+          // The Classroom: stamp the application receipt timestamp so the future
+          // decay pass can tell a recently-used entry from a silent one.
+          entry.lastAppliedAt = new Date().toISOString();
           entry.updated = new Date().toISOString();
           fs.writeFileSync(filePath, yaml.dump(entry, {
             lineWidth: 120,
@@ -379,6 +382,76 @@ export function incrementApplied(
         }
       } catch { /* skip */ }
     }
+  }
+
+  return false;
+}
+
+/**
+ * The Classroom (TD-2026-06-19-007) — the fail side of the learning loop.
+ *
+ * Records that an entry, after being applied, BROKE in the field: bumps
+ * `appliedAndBrokeCount` and revises `confidence` DOWN. Uses the SAME latest-wins
+ * entry-update path `incrementApplied` uses — there is NO ratchet and no second
+ * store of truth; the YAML file is rewritten in place.
+ *
+ * MVP penalty is a FLAT decrement, clamped at ≥ 0. The principled form is
+ * severity-weighted / Bayesian on the applied↔broke ratio (decision §4) — this is
+ * the seam: replace `MVP_PENALTY` with `f(failure.severity, appliedCount, appliedAndBrokeCount)`.
+ *
+ * Seeds `refinement` ("X except Y") on first break so Phase 2's refinement engine
+ * has somewhere to grow; the base is the entry's existing snippet/context.
+ *
+ * @returns true if an entry was found and revised, false otherwise.
+ */
+const MVP_PENALTY = 0.15;
+
+export function reviseDown(
+  agentName: string,
+  entryId: string,
+  failure: { failureId: string; signal: string; detail: string; severity?: string },
+  rootDir: string
+): boolean {
+  const projectDir = path.join(rootDir, PROJECT_NOTEBOOKS_DIR, agentName);
+  const globalDir = path.join(GLOBAL_NOTEBOOKS_DIR, agentName);
+
+  for (const dir of [projectDir, globalDir]) {
+    const filePath = path.join(dir, `${entryId}${NOTEBOOK_EXT}`);
+    if (!fs.existsSync(filePath)) continue;
+    try {
+      const content = fs.readFileSync(filePath, 'utf-8');
+      const entry = yaml.load(content) as NotebookEntry;
+      if (!entry) continue;
+
+      // Fail-side mirror of appliedCount.
+      entry.appliedAndBrokeCount = (entry.appliedAndBrokeCount || 0) + 1;
+
+      // Latest-wins confidence revision (no ratchet). FLAT for the MVP; the
+      // severity-weighted/Bayesian form plugs in here (decision §4).
+      const current = typeof entry.confidence === 'number' ? entry.confidence : DEFAULT_PRIOR;
+      entry.confidence = Math.max(0, current - MVP_PENALTY);
+
+      // Seed/append the refinement structure ("base EXCEPT when→then"). MVP only
+      // records the failure as an exception; Phase 2 rewrites the base.
+      const now = new Date().toISOString();
+      const base = entry.refinement?.base ?? (entry.context || entry.snippet || '').slice(0, 200);
+      const exceptions = entry.refinement?.exceptions ?? [];
+      exceptions.push({
+        when: failure.signal,
+        then: failure.detail.slice(0, 200),
+        sourceFailureId: failure.failureId,
+      });
+      entry.refinement = { base, exceptions, revisedAt: now };
+      entry.lineageType = 'refine';
+      entry.updated = now;
+
+      fs.writeFileSync(filePath, yaml.dump(entry, {
+        lineWidth: 120,
+        noRefs: true,
+        sortKeys: false,
+      }), 'utf-8');
+      return true;
+    } catch { /* skip */ }
   }
 
   return false;

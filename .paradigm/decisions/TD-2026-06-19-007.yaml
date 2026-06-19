@@ -1,0 +1,83 @@
+id: TD-2026-06-19-007
+timestamp: '2026-06-19T05:36:42.721Z'
+title: 'Agent learning model: provisional-by-default + field-driven failure/reinforcement loop ("The Classroom")'
+decision: >-
+  Adopt a new agent-learning model — "The Classroom" — across Paradigm, with the FAILURE→REINFORCEMENT flow as its
+  engine (not the entry exam). SPINE: (1) Two skills: gated /paradigm:class (the ONLY certifier; teacher + peers) and
+  autonomous /paradigm:study-hall (STAGES candidates, never certifies). (2) Learnings are PROVISIONAL by default —
+  entry-confidence is deprioritized; the field is the real exam. (3) The exam is NOT a quiz (PLSAT/recall rejected): it
+  is peer REFUTATION (an assessor must author a breaking test-case scenario — "no scenario, no assessment") + human
+  sign-off on real WORK quality + human eval of findings. (4) THE FLOW: enter cheap → break in the field → the break
+  BECOMES a test-case scenario (the field discovers the blind spots same-family peers cannot) → revise-as-REFINEMENT ("X
+  except Y", not just decrement) → propagate to peers/global → measured by REPEAT-FAILURE-RATE (team stronger = the same
+  learning does not break twice). Unused learnings DECAY (silence is signal). (5) Loid + Cid adapt the PROCESS
+  (second-order) only on OUTCOME signals (human-override-on-certified, field-survival) — never on process proxies
+  (peer-pass-rate is a SUSPECT metric); anti-thrash = persisted ≥2-term trend, recommend-through-gated-path never
+  auto-write; Loid's own adaptation is excluded from the prior she reads next run. (6) Falsifiability is MANDATORY (the
+  hypothesis was unfalsifiable as worded): a ground-truth metric OUTSIDE the loop (human-rework / repeat-failure rate);
+  a standing POISON-PILL control (planted known-wrongs; peer-catch-rate = the honesty meter); a falsification clause
+  with NO "they didn't adapt" scapegoat (frozen-Loid control); a DE-ANESTHETIZED human gate (show dissent + scenarios,
+  not "3 concurred"; cap findings/review; check the causal claim). ARTIFACTS: per-agent .syllabus (Cid), a scenario bank
+  (field-failures + poison-pills), classroom-certifications.jsonl (Loid's instrument, shape of
+  promotion-decisions.jsonl), NotebookProvenance + "external" + source-set with trust tiers + re-ratification. SCOPE:
+  also update Paradigm University with this new agent-learning handling (agent-facing + human docs), and assess
+  nevr.land impact (the field-feedback/reinforcement history IS calibration → strengthens the non-portable-calibration
+  moat). HARD UNBUILT CRITICAL PATH (Loid-owned): ATTRIBUTION (cite-learning-on-apply → an applied-and-broke counter)
+  and DOWN-REVISION (the open T-2026-06-13-012 gate).
+rationale: >-
+  Reached over a multi-round team discussion (Loid, Cid, Scholar, Nora, Jinx). Founder's key reframe: all learnings are
+  provisional and get broken in the field, so certification was never a truth-gate — the system's real value is how it
+  recovers when a learning breaks. This dissolves the over-engineered entry exam and makes downward revision the engine.
+  Jinx's kill shot (same-model-family peers certify their shared blind spots as "verified", worse than unvetted) is
+  answered structurally by the flow: field failures become the very scenarios peers couldn't generate, so the cohort's
+  knowledge boundary expands exactly where reality breaks it. The unfalsifiability of "leads to greater outcomes as long
+  as Loid and Cid adapt" is corrected by the mandatory falsifiability conditions (outside-the-loop metric + poison-pill
+  + no-scapegoat clause + de-anesthetized gate). Mostly reuse of existing substrate (notebook/promotion loop,
+  decision-divergence instrument, protocol machinery, paradigm shift, University), not new infrastructure.
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+  - id: forge
+    role: agent
+    stance: supported
+  - id: cid
+    role: agent
+    stance: supported
+  - id: scholar
+    role: agent
+    stance: supported
+  - id: nora
+    role: agent
+    stance: supported
+  - id: advocate
+    role: agent
+    stance: dissented
+alternatives_considered:
+  - option: PLSAT-style quiz as the agent exam
+    rejected_because: >-
+      agents pass recall trivially (content in context); self-authored quiz = self-assessment theater; wrong audience
+      (human credentialing)
+  - option: High-confidence certification gate at entry
+    rejected_because: >-
+      all learnings are provisional and break in the field; front-loaded verification over-weights the entry; the
+      recovery flow is what matters
+  - option: Let autonomous study-hall write notebooks directly
+    rejected_because: >-
+      self-study + self-certify is the journal-flood / self-rated-confidence trap; autonomous must STAGE only, gated
+      class is the sole certifier
+  - option: Trust the hypothesis as worded ('greater outcomes as long as Loid/Cid adapt')
+    rejected_because: >-
+      unfalsifiable — the 'as long as they adapt' clause absorbs all failure; requires outside-the-loop metric +
+      poison-pill + no-scapegoat falsification clause
+status: active
+tags:
+  - classroom
+  - agent-learning
+  - failure-reinforcement
+  - learning-loop
+  - university
+  - nevrland
+  - loid
+  - cid
+  - decision

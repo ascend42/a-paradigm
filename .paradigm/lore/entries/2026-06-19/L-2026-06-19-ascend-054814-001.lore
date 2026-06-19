@@ -1,0 +1,34 @@
+id: L-2026-06-19-ascend-054814-001
+type: milestone
+timestamp: '2026-06-19T05:48:14.318Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: The Classroom — architecture locked (Loid + Cid design briefs → spec)
+summary: 'Crossed from discussion into architecture for the Classroom agent-learning model (decision TD-2026-06-19-007). Loid designed the learning-loop core (failure→reinforcement flow) and Cid designed the artifacts/skill surface; combined into docs/specs/classroom.md. KEYSTONE DE-RISK: attribution is HALF-BUILT — the apply-side already exists (notebook-refs.jsonl records injected entries; incrementApplied bumps appliedCount, orchestration.ts:1284-1298); the only gap is the fail-side reducer + making orchestrationId the required join key (application-receipt ↔ break ↔ outcome). Down-revision solved via the existing latest-wins/no-ratchet path + an anti-gaming guard (can''t attribute a break to an entry never loaded). Mostly REUSE: protocol machinery backs .syllabus; the jsonl-instrument shape backs classroom-certifications.jsonl + field-failures.jsonl; one additive provenance change (''external''). MVP turns the full loop once on the cheapest signal (reviewer/human verdicts). University + nevr.land updates sequenced after the MVP proves the model. 8 open questions captured in the spec (orchestrationId provenance + peer-assessor selection are load-bearing).'
+symbols_touched:
+  - '#nomination-engine'
+  - '#notebook-loader'
+  - '#orchestrator'
+  - '#decision-divergence-journal'
+  - '#protocol-loader'
+files_created:
+  - docs/specs/classroom.md
+tags:
+  - classroom
+  - agent-learning
+  - architecture
+  - failure-reinforcement
+  - spec
+  - loid
+  - cid
+linked_lore:
+  - L-2026-06-19-ascend-053642-110
+linked_tasks:
+  - T-2026-06-19-001
+confidence: 0.8
+git_context:
+  ref: ba53f2ccef6b1a99b374cb307923e0993db82b65
+  branch: main
+  dirty: true
