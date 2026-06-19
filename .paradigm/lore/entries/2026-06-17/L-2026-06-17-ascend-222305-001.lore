@@ -1,0 +1,53 @@
+id: L-2026-06-17-ascend-222305-001
+type: milestone
+timestamp: '2026-06-17T22:23:05.690Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Phase 1 SHIPPED — graph-slice projector (render-by-projection) standalone primitive
+summary: 'Built + verified + reviewed Phase 1 of the symbol-graph-as-discourse-substrate arc: a standalone `paradigm graph slice <symbol>` CLI command + paradigm_graph_slice MCP tool that project a bounded, deterministic slice of the REAL symbol graph and emit it as a renderable mermaid block (renders today) or a conductor-visual `graph` envelope (Phase-2 cockpit target). Shared projector lives in @a-company/premise-core (graph-slice.ts). Key correctness fix during the build: first cut sourced edges from scan-index `related[]` + the stale flow-index.json (only 7 flows, missing all conductor flows) and rendered major components BARE; re-based onto the LIVE parse (aggregateFromDirectory + buildSymbolIndex + getReferencesTo/getReferencesFrom + flow membership) — the exact path the ripple CLI uses — so #cockpit-view now correctly shows its $fleet-switch flow edge + real dependents. Reviewer APPROVED (0 blockers); 18 tests green; all three packages build. Render-by-projection keystone proven on screen.'
+symbols_touched:
+  - '#graph-slice-projector'
+  - '#fenced-block-parser'
+  - '#agent-visual'
+symbols_created:
+  - '#graph-slice-projector'
+files_created:
+  - packages/premise/core/src/graph-slice.ts
+  - packages/premise/core/src/graph-slice.test.ts
+  - packages/paradigm/src/commands/graph-slice.ts
+files_modified:
+  - packages/premise/core/src/index.ts
+  - packages/paradigm/src/index.ts
+  - packages/paradigm-mcp/src/tools/graph.ts
+  - packages/paradigm-mcp/src/tools/index.ts
+learnings:
+  - The authoritative rich edge source is the LIVE parse (aggregateFromDirectory + buildSymbolIndex + getReferencesTo/getReferencesFrom + findFlowMembership) used by the ripple CLI — NOT scan-index.json `related[]` (only 32% of components have any) and NOT flow-index.json (stale; held only 7 flows, missing every conductor flow). Anything needing rich grounded graph edges should re-use ripple's live-index path, not the serialized indices.
+  - 'Sourcing from the live parse sidesteps the scan-index.json determinism wart entirely: the projector sorts its own topology (nodes by id, edges by source+target+kind) so output is byte-identical across runs; freshness.generatedAt is an intentionally-live timestamp (stale=false), the only inter-run variance.'
+  - 'Perf note: aggregateFromDirectory re-parses the whole project per call (the cost ripple already pays) — fine for a CLI invocation, but the MCP/cockpit default-on-every-turn path will want a cached index later.'
+verification:
+  status: pass
+  details:
+    build: pass (premise-core, paradigm-mcp, paradigm)
+    tests: pass (18/18 graph-slice)
+    review: approved-0-blockers
+    real-output: pass (#cockpit-view shows $fleet-switch in-flow edge; did-you-mean fail-loud; deterministic topology)
+tags:
+  - conductor-arc
+  - '#graph-slice-projector'
+  - render-by-projection
+  - phase-1
+  - standalone
+  - cli
+  - mcp
+  - shipped
+linked_lore:
+  - L-2026-06-17-ascend-181541-001
+linked_tasks:
+  - T-2026-06-17-006
+confidence: 0.88
+git_context:
+  ref: 1a3b17c1d447322357c8dd7fdd6ab1dd22d2a581
+  branch: conductor-revival-phase0
+  dirty: true

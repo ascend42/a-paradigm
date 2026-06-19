@@ -5,6 +5,20 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.4.0] — 2026-06-18 — The symbol graph becomes visible (experimental)
+
+An experimental wave. The npm-facing change is small and sharp; the bulk is the **Conductor native-app revival** (macOS, not an npm artifact) merged in from the long-lived `conductor-revival-phase0` branch. Shipped behind the *experimental* label — the surfaces are real, built, and tested, but young.
+
+### Added
+
+- **Render-by-projection — `paradigm graph slice`** (`#graph-slice-projector`, experimental): a new CLI command + `paradigm_graph_slice` MCP tool that project a **bounded, deterministic slice of the project's REAL symbol graph** (`#component`/`$flow`/`^gate`/`!signal`/`~aspect`) and emit it as a `mermaid` block (renders anywhere) or a `conductor-visual` envelope. `paradigm graph slice <symbol> [--radius N] [--mode ego|ripple|flow] [--format mermaid|envelope|json] [--as-lightbox]`. Sourced from the **live parse** (aggregate → `buildSymbolIndex` → references + flow membership — the same path `ripple` uses), so it never renders a stale or improvised graph: grounding and rendering become one act, and improvised-mermaid drift is structurally impossible. Bounded (radius 1 / max 3, degree cap 8 + `truncated`), deterministic topology (nodes/edges sorted), fail-loud did-you-mean. Shared projector lives in `@a-company/premise-core`. +18 tests.
+- **`#scan` ingests bare-string flow steps**: `parseFlowSteps` now captures the `- "#symbol"` step form (used by Swift/Conductor `.purpose` files) that was silently dropped — the reason some flows never reached `flow-index.json`.
+
+### Experimental — Conductor (native macOS app; built via `packages/conductor/build-conductor.sh`, not published to npm)
+
+- The whole **ATRIUM / THE BRIDGE cockpit revival** merged in: a full-screen N-session fleet cockpit (spine │ ATRIUM conversation │ CHORUS sub-agent rail), real `claude -p` stream sessions with a native composer / voice keywords / interrupt-stop / background-shell inspect-kill, inspectable per-session transcripts, inline decision cards, and **THE LIGHTBOX** visual canvas (offline mermaid + comparison tables).
+- **The symbol graph as default discourse substrate** (this wave's headline): Conductor agents now ground proposals and decisions in the real symbol graph and render **native graph slices** in THE LIGHTBOX *by default* (no improvised mermaid) — consuming the `paradigm graph slice` projector above. Hover a decision option to **spotlight its symbols** in the graph while the rest dim. Decisions carry `symbols[]` / per-option `affectedSymbols[]`. A **falsifiable decision-divergence learning instrument** (Loid's gate: a grounded decision logs a learning signal only when you override the recommendation; agreements are the denominator; reopen-after-settle is the stale-graph watchdog) writes to `~/.paradigm/conductor/decisions/*.jsonl` — producer only; the notebook consumer is a tracked follow-up.
+
 ## [7.3.0] — 2026-06-15 — Paradigm Suite renaissance
 
 The surfaces catch up to the substrate. A six-lens team audit (decision TD-2026-06-14-853) found the renaissance is a *substrate-to-surface gap*, not fragmentation: the unified Suite shell already exists (`paradigm serve` → one React/Vite SPA, 11 sections), but it was frozen for two months while the v7 task DAG / learned calibration / learning loop shipped — and zero surfaces render them. Direction: **web-primary** (Conductor benched, vscode frozen), Tasks as the spearhead with **story-points = learned calibration estimates** as the headline. Frame: subtractive-then-additive.

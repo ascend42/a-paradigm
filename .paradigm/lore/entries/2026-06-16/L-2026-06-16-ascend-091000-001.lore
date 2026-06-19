@@ -1,0 +1,51 @@
+id: L-2026-06-16-ascend-091000-001
+type: milestone
+timestamp: '2026-06-16T09:10:00.810Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Conductor Phase 0+ build session — ATRIUM shipped end-to-end
+summary: 'Marathon build session on the Conductor revival. Shipped, on branch conductor-revival-phase0: the ATRIUM keystone spike (custom SwiftUI conversation UI over claude -p stream-json) plus a full real composer (clipboard via NSTextView, multiline, drag-in file chips, voice keyword loop + settings), Stop/interrupt, background-bash shell inspect/kill, the login-shell PATH fix, inspectable per-session transcripts under ~/.paradigm, and THE CHORUS (sub-agent display: inline fan-out block + pinnable push-out right rail), plus a resizable/full-screen-capable window. All Swift work owned/authored by the Swift ecosystem agent (after an early protocol miss). Each step verified via swift build -c release + the bundled Conductor.app; runtime bugs diagnosed by reading the session transcripts (the debug loop is now closed).'
+symbols_touched:
+  - '#conductor'
+  - '#atrium-thread'
+  - '#atrium-textview'
+  - '#atrium-voice'
+  - '#atrium-attachment'
+  - '#atrium-stop'
+  - '#atrium-shells'
+  - '#atrium-chorus'
+  - '#sub-agent'
+  - '#claude-stream-session'
+  - '#stream-event'
+  - '#session-transcript'
+  - '#conductor-app'
+learnings:
+  - 'VERIFIED claude -p stream-json protocol (empirically): bidirectional turns via {type:user,message:{role:user,content:[{type:text,text}]}} on stdin (keep stdin open). INTERRUPT = {type:control_request,request_id,request:{subtype:interrupt}} → control_response success → result subtype error_during_execution (the bare {type:interrupt} is IGNORED). Background work emits system task_* events (task_started/task_progress/task_updated/task_notification).'
+  - 'Sub-agent vs bash task events are self-attributing: task_started carries tool_use_id (links to the spawning Agent/Bash tool_use), task_type (local_agent vs local_bash), description, subagent_type, prompt; task_notification carries usage{total_tokens,tool_uses,duration_ms}. Type by task_type, correlate by tool_use_id — NEVER FIFO. Kill a background task via the TaskStop tool (NOT KillShell; that name is stale). Killed tasks report status failed/exit-144; completed report ''completed''. Background shell output is a readable file at the path in the tool_result (''Output is being written to: <path>.output'').'
+  - 'macOS gotchas (Conductor is LSUIElement): (1) SwiftUI @main App owns the menu bar — add menu items via .commands, not AppKit NSMenu. (2) TCC mic prompt only fires from a real bundled .app (build-conductor.sh), never the bare .build/release binary. (3) A GUI/bundle-launched app has a minimal PATH — spawn child claude with a login-shell-captured env ($SHELL -lic env) or node/paradigm/hooks fail exit 127. (4) Clipboard + Enter/Shift+Enter need a native NSTextView (performKeyEquivalent + insertNewline), not a SwiftUI TextField in a manual NSWindow. (5) full-screen on accessory app needs collectionBehavior .fullScreenPrimary.'
+  - 'Process meta-fix: ATRIUM logs every session''s full stream I/O to inspectable JSONL transcripts at ~/.paradigm/conductor/atrium/ + index.jsonl. This closed the debug loop — runtime bugs (stuck status, kill mislabel, sub-agents-as-shells) were diagnosed by READING the transcript instead of screenshots. Lesson: keep transcript logging non-lossy (an early lossy log misled a diagnosis).'
+tags:
+  - conductor
+  - atrium
+  - phase-0
+  - build-session
+  - claude-code-stream
+  - swift
+body: |-
+  Branch: conductor-revival-phase0 (commits 2c7732e0 → 175aa5d2; post-commit history h0453–h0469). Not merged; Matt publishes/merges himself.
+
+  Shipped surfaces (all ATRIUM, Swift-owned): keystone stream round-trip; composer (NSTextView clipboard+multiline, file-drop chips, voice wake/send keyword loop "respond"/"send it" + Settings›Input keyword config, reusing WhisperKit/AudioCapture); Stop (control_request interrupt); background-bash shell panel (inspect = read .output file; kill = TaskStop; exit-reap on shutdown); login-shell PATH env; per-session transcripts; THE CHORUS (sub-agent inline fan-out block + pinnable push-out right rail, deterministic tool_use_id correlation + task_type typing + usage/duration); resizable/full-screen window (1100x780 default).
+
+  Design language: "ATRIUM" (Mika) — calm dark cockpit; Atrium Amber reserved for human-attention; prose-over-mechanics; CHORUS = sub-agents as parallel voices (seed of a future FLEET view). Founder reframe: the REAL Conductor is a full-screen Claude-desktop-app experience; the floating spike is temporary.
+
+  Open / v2: full nested sub-agent transcript drill-in (needs parent_tool_use_id on interleaved inner tool calls — absent so far); needs-human (amber) detection + retry; voice 'no words typed' still needs a live wake-word test or transcript check; interrupt-mid-Bash-tool live-confirm. Panel agentIds across the session are in the commit trail. Phase 1+ per the build plan (L-2026-06-15-215150-001).
+linked_lore:
+  - L-2026-06-15-ascend-215150-001
+  - L-2026-06-15-ascend-222708-001
+confidence: 0.85
+git_context:
+  ref: 175aa5d2726961d6cfff423e2cb9c1573a720971
+  branch: conductor-revival-phase0
+  dirty: true

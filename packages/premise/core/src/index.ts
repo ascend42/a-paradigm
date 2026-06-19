@@ -87,3 +87,22 @@ export type {
 // Aspect-anchor existence check
 export { checkAspectAnchors } from './aspect-anchors.js';
 export type { AspectAnchorIssue } from './aspect-anchors.js';
+
+// Graph-slice projector — #graph-slice-projector
+export {
+  loadLiveGraph,
+  projectGraphSlice,
+  graphSliceFromRoot,
+  sliceToMermaid,
+} from './graph-slice.js';
+export type {
+  GraphSlice,
+  GraphSliceNode,
+  GraphSliceEdge,
+  GraphSliceFreshness,
+  ProjectGraphSliceOptions,
+  LiveGraph,
+  SliceNodeKind,
+  SliceEdgeKind,
+  SliceMode,
+} from './graph-slice.js';

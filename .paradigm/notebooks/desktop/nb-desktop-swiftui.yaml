@@ -1,0 +1,38 @@
+context: >-
+  When ATRIUM/cockpit (or any SwiftUI surface) text is too small / needs to be user-adjustable, and fonts are scattered
+  as inline .system(size:) magic numbers per view.
+snippet: >-
+  Centralize a font SCALE in the theme enum, not per-view magic numbers. AtriumTheme: baseline `enum Size {
+  body/mono/label/micro }` + a live multiplier `static var fontScale` read from UserDefaults(AtriumFontScale.key,
+  default 1.0, clamp 0.8–1.6), and `static func scaled(_:)` → font helpers become computed `static var`
+  (bodyFont/monoFont/chipFont/footerFont) + `prose()`/`glyphFont()` for system-font rows. KEY GOTCHA: computed
+  static-var fonts read UserDefaults but SwiftUI won't auto-invalidate — each view that uses them must hold
+  `@AppStorage(AtriumFontScale.key) private var fontScale` so its body re-evaluates (and re-reads the new scaled font)
+  when the value changes. Private sub-structs (animated glyphs) inherit re-render from their parent row's observer, so
+  they don't each need one. Wire the EXISTING ⌘=/⌘- (AppDelegate handleZoomIn/Out + the NSEvent local monitor +
+  container onZoomIn/Out) to call AtriumFontScale.increase()/decrease() alongside terminal font — driving both is
+  harmless since each multiplier only affects its own surface. Replace inline `.system(size: 12, weight: .medium)` with
+  `AtriumTheme.prose()`, glyphs with `AtriumTheme.glyphFont()`, and `.system(size: 11, …, design: .monospaced)` with
+  `.system(size: AtriumTheme.scaled(AtriumTheme.Size.label), …)`.
+provenance:
+  source: manual
+  createdBy: desktop
+confidence: 0.85
+concepts:
+  - swiftui
+  - font-scale
+  - appstorage
+  - conductor
+  - atrium
+  - accessibility
+  - theme
+tags:
+  - swift
+  - ui
+  - pattern
+id: nb-desktop-swiftui
+scope: project-specific
+publishable: true
+appliedCount: 0
+created: '2026-06-17T07:16:26.397Z'
+updated: '2026-06-17T07:16:26.397Z'

@@ -24,7 +24,12 @@ let package = Package(
             ],
             path: "Sources/Conductor",
             resources: [
-                .copy("../../Resources")
+                .copy("../../Resources"),
+                // VENDORED OFFLINE mermaid.min.js for the LIGHTBOX (#atrium-visual-canvas /
+                // #mermaid-web-view). Declared as an IN-TARGET resource so SwiftPM reliably
+                // emits the Conductor_Conductor.bundle that build-conductor.sh copies into
+                // the .app (a ../../Resources folder-copy alone did NOT emit the bundle).
+                .copy("Resources/mermaid.min.js"),
             ]
         ),
         .testTarget(

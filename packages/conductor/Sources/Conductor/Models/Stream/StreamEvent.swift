@@ -1,0 +1,402 @@
+// StreamEvent.swift — #stream-event
+// Typed decode of the `claude --output-format stream-json` NDJSON event stream.
+// Every line is one complete JSON object; unknown shapes degrade to .unknown
+// rather than throwing, so the stream never breaks on a new event type.
+
+import Foundation
+
+/// Token usage attached to assistant/result events.
+struct Usage: Decodable, Sendable {
+    let inputTokens: Int?
+    let outputTokens: Int?
+    let cacheReadInputTokens: Int?
+    let cacheCreationInputTokens: Int?
+
+    enum CodingKeys: String, CodingKey {
+        case inputTokens = "input_tokens"
+        case outputTokens = "output_tokens"
+        case cacheReadInputTokens = "cache_read_input_tokens"
+        case cacheCreationInputTokens = "cache_creation_input_tokens"
+    }
+}
+
+/// A single content block within an API message. Discriminated by "type".
+enum ContentBlock: Decodable, Sendable {
+    case text(String)
+    case thinking
+    case toolUse(id: String, name: String, input: JSONValue)
+    case toolResult(toolUseId: String, content: String, isError: Bool)
+    case other(type: String)
+
+    enum CodingKeys: String, CodingKey {
+        case type
+        case text
+        case id
+        case name
+        case input
+        case toolUseId = "tool_use_id"
+        case content
+        case isError = "is_error"
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        let type = (try? container.decode(String.self, forKey: .type)) ?? "unknown"
+
+        switch type {
+        case "text":
+            let text = (try? container.decode(String.self, forKey: .text)) ?? ""
+            self = .text(text)
+        case "thinking":
+            self = .thinking
+        case "tool_use":
+            let id = (try? container.decode(String.self, forKey: .id)) ?? ""
+            let name = (try? container.decode(String.self, forKey: .name)) ?? "tool"
+            let input = (try? container.decode(JSONValue.self, forKey: .input)) ?? .null
+            self = .toolUse(id: id, name: name, input: input)
+        case "tool_result":
+            let toolUseId = (try? container.decode(String.self, forKey: .toolUseId)) ?? ""
+            // content can be a String OR an array — decode as JSONValue and flatten.
+            let raw = (try? container.decode(JSONValue.self, forKey: .content)) ?? .null
+            let isError = (try? container.decode(Bool.self, forKey: .isError)) ?? false
+            self = .toolResult(toolUseId: toolUseId, content: raw.asDisplayString, isError: isError)
+        default:
+            self = .other(type: type)
+        }
+    }
+}
+
+// MARK: - Agent (sub-agent) tool_use input extraction (#sub-agent)
+
+extension JSONValue {
+    /// Pull the sub-agent `description` from an `Agent`/`Task` tool_use input. The
+    /// CHORUS row LEADS with this prose label. Probes the common key spellings.
+    var subAgentDescription: String? {
+        guard case .object(let obj) = self else { return nil }
+        for key in ["description", "prompt", "task", "blurb"] {
+            if let v = obj[key] {
+                let s = v.asDisplayString
+                if !s.isEmpty { return s }
+            }
+        }
+        return nil
+    }
+
+    /// Pull the `subagent_type` (archetype) from an `Agent`/`Task` tool_use input —
+    /// rendered mono/muted as the row subtitle.
+    var subAgentType: String? {
+        guard case .object(let obj) = self else { return nil }
+        for key in ["subagent_type", "subagentType", "agent_type", "type"] {
+            if let v = obj[key] {
+                let s = v.asDisplayString
+                if !s.isEmpty { return s }
+            }
+        }
+        return nil
+    }
+
+    /// Pull the sub-agent `prompt` from an `Agent`/`Task` tool_use input — the full
+    /// instruction text. Fallback only; the task_started event carries `prompt`
+    /// directly (#sub-agent).
+    var subAgentPrompt: String? {
+        guard case .object(let obj) = self else { return nil }
+        if let v = obj["prompt"] {
+            let s = v.asDisplayString
+            if !s.isEmpty { return s }
+        }
+        return nil
+    }
+}
+
+/// A Claude API message (assistant or user) carried inside a stream event.
+struct APIMessage: Decodable, Sendable {
+    let id: String?
+    let role: String?
+    let content: [ContentBlock]
+    let usage: Usage?
+
+    enum CodingKeys: String, CodingKey {
+        case id, role, content, usage
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try? container.decode(String.self, forKey: .id)
+        role = try? container.decode(String.self, forKey: .role)
+        content = (try? container.decode([ContentBlock].self, forKey: .content)) ?? []
+        usage = try? container.decode(Usage.self, forKey: .usage)
+    }
+}
+
+/// `{"type":"system","subtype":"init",...}`
+struct SystemInit: Decodable, Sendable {
+    let sessionId: String?
+    let model: String?
+    let tools: [String]?
+    let permissionMode: String?
+
+    enum CodingKeys: String, CodingKey {
+        case sessionId = "session_id"
+        case model
+        case tools
+        case permissionMode
+    }
+}
+
+/// `{"type":"system","subtype":"task_started"|"task_updated"|"task_notification",...}`
+/// — task lifecycle events (#atrium-shells background bash AND #sub-agent CHORUS).
+///
+/// RAW SHAPE (VERIFIED against a live CLI capture, 2026-06 — supersedes the earlier
+/// "lossy transcript" conclusion that task_* carried only taskId). The events are
+/// RICH and self-attributing:
+///   task_started: { task_id, tool_use_id, description, subagent_type, task_type,
+///                   prompt, session_id }
+///   task_updated: { task_id, patch: { status, end_time } }
+///   task_notification: { task_id, tool_use_id, status, output_file, summary,
+///                        usage: { total_tokens, tool_uses, duration_ms } }
+///
+/// Two DETERMINISTIC discriminators carried on the wire:
+///   - `task_type`: "local_agent" → an Agent/Task CHORUS sub-agent; "local_bash" →
+///     a background bash shell (shells panel). This is the PRIMARY typing signal —
+///     no more tool-name/FIFO heuristics for typing.
+///   - `tool_use_id`: ties the task to the EXACT originating Agent/Task/Bash
+///     tool_use — DETERMINISTIC correlation (retires the temporal-adjacency FIFO).
+/// We still keep the full raw JSONValue (logged) and the originating-tool fallback
+/// for older CLIs that omit task_type.
+struct SystemTaskEvent: Decodable, Sendable {
+    let subtype: String
+    /// Task id (probed across likely keys; `task_id` is the verified spelling).
+    let id: String?
+    /// Status string. On task_updated it lives under `patch.status`; on
+    /// task_notification it is top-level. "completed" is a TERMINAL SUCCESS.
+    let status: String?
+    /// Best-effort command text if present.
+    let command: String?
+    /// Best-effort latest output snippet if present.
+    let output: String?
+    /// Output FILE path (task_notification carries `output_file`).
+    let outputFile: String?
+    /// tool_use_id — the DETERMINISTIC link from a task back to the exact tool_use
+    /// (Agent/Task/Bash) that spawned it (#sub-agent / #atrium-shells). VERIFIED
+    /// PRESENT on task_started + task_notification. This is how we correlate a
+    /// sub-agent to its spawning Agent tool_use for inline fan-out grouping —
+    /// replacing the temporal-adjacency FIFO entirely.
+    let toolUseId: String?
+    /// parent_tool_use_id — probed for forward-compat (a future CLI may stamp it on
+    /// interleaved sub-agent tool calls for full nested drill-in). The OPERATIVE
+    /// correlation field is `toolUseId`, which IS present; parentToolUseId is a
+    /// bonus probe only.
+    let parentToolUseId: String?
+    /// task TYPE — the DETERMINISTIC typing discriminator. "local_agent" → CHORUS
+    /// sub-agent; "local_bash" → background bash shell. Both subsystems key on this
+    /// first (#sub-agent / #atrium-shells); the originating-tool name is a fallback
+    /// only when task_type is absent (older CLI).
+    let taskType: String?
+    /// Human description of the task (task_started carries `description`).
+    let description: String?
+    /// subagent_type / archetype (task_started carries `subagent_type`, e.g.
+    /// "general-purpose", "Explore"). Populates the SubAgent directly — no longer
+    /// looked up via the Agent tool_use.
+    let subagentType: String?
+    /// The full sub-agent prompt (task_started carries `prompt`). Populates the
+    /// SubAgent directly for drill-in.
+    let prompt: String?
+    /// Total tokens the sub-agent consumed (task_notification `usage.total_tokens`).
+    let totalTokens: Int?
+    /// Number of tool uses (task_notification `usage.tool_uses`).
+    let toolUses: Int?
+    /// Wall-clock duration in ms (task_notification `usage.duration_ms`).
+    let durationMs: Int?
+    /// The complete decoded object — logged at debug so we can refine the shape.
+    let raw: JSONValue
+
+    enum CodingKeys: String, CodingKey {
+        case subtype
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        subtype = (try? container.decode(String.self, forKey: .subtype)) ?? "task_unknown"
+
+        // Capture the whole object so nothing is lost.
+        let whole = (try? JSONValue(from: decoder)) ?? .null
+        raw = whole
+
+        // Probe common keys across the object (+ nested patch/usage/task objects).
+        func probe(_ keys: [String]) -> String? {
+            for obj in SystemTaskEvent.candidateObjects(whole) {
+                for key in keys {
+                    if let v = obj[key] {
+                        let s = v.asDisplayString
+                        if !s.isEmpty { return s }
+                    }
+                }
+            }
+            return nil
+        }
+        // Integer probe (usage block: total_tokens, tool_uses, duration_ms).
+        func probeInt(_ keys: [String]) -> Int? {
+            for obj in SystemTaskEvent.candidateObjects(whole) {
+                for key in keys {
+                    if let v = obj[key], let n = v.asInt { return n }
+                }
+            }
+            return nil
+        }
+        id = probe(["task_id", "id", "shell_id", "taskId", "shellId", "bash_id"])
+        status = probe(["status", "state"])
+        command = probe(["command", "cmd"])
+        output = probe(["output", "stdout", "result", "text", "last_output"])
+        outputFile = probe(["output_file", "outputFile", "output_path"])
+        toolUseId = probe(["tool_use_id", "toolUseId"])
+        // parent_tool_use_id (#sub-agent): probed for forward-compat — see field doc.
+        parentToolUseId = probe(["parent_tool_use_id", "parentToolUseId"])
+        // task_type — the DETERMINISTIC typing discriminator (local_agent/local_bash).
+        // Probe specific key spellings only — deliberately NOT bare "type" (the
+        // top-level "type" is always "system", which would falsely match).
+        taskType = probe(["task_type", "taskType", "task_kind", "kind"])
+        // description is verified on task_started; summary is the task_notification
+        // counterpart. Keep both reachable via the same field.
+        description = probe(["description", "summary", "desc"])
+        subagentType = probe(["subagent_type", "subagentType", "agent_type"])
+        prompt = probe(["prompt"])
+        // usage.{total_tokens, tool_uses, duration_ms} (task_notification) — the
+        // `usage` object is included in candidateObjects so these resolve nested.
+        totalTokens = probeInt(["total_tokens", "totalTokens"])
+        toolUses = probeInt(["tool_uses", "toolUses"])
+        durationMs = probeInt(["duration_ms", "durationMs"])
+    }
+
+    /// The top-level object plus any nested objects, so probes find fields whether
+    /// flat or nested. `patch` carries task_updated mutations ({status, end_time});
+    /// `usage` carries task_notification metrics ({total_tokens, tool_uses,
+    /// duration_ms}).
+    private static func candidateObjects(_ value: JSONValue) -> [[String: JSONValue]] {
+        guard case .object(let obj) = value else { return [] }
+        var out: [[String: JSONValue]] = [obj]
+        for nestedKey in ["task", "data", "payload", "patch", "usage"] {
+            if case .object(let nested)? = obj[nestedKey] {
+                out.append(nested)
+            }
+        }
+        return out
+    }
+}
+
+/// `{"type":"assistant","message":{...},"session_id":...}`
+struct AssistantMessage: Decodable, Sendable {
+    let message: APIMessage
+    let sessionId: String?
+
+    enum CodingKeys: String, CodingKey {
+        case message
+        case sessionId = "session_id"
+    }
+}
+
+/// `{"type":"user","message":{...}}` — carries tool_result blocks.
+struct UserMessage: Decodable, Sendable {
+    let message: APIMessage
+}
+
+/// `{"type":"control_response","response":{"subtype":"success","request_id":"..."}}`
+/// — the stream-json CONTROL protocol's reply to a `control_request`. We send a
+/// `{"subtype":"interrupt"}` control_request to halt the active turn (#atrium-stop,
+/// VERIFIED mechanism); claude replies with this control_response carrying our
+/// request_id, which confirms the interrupt landed. Decoded defensively: the
+/// fields live under a nested `response` object, but we also probe the top level
+/// in case the shape flattens.
+struct ControlResponseEvent: Decodable, Sendable {
+    /// "success" | "error" (best-effort).
+    let subtype: String?
+    /// The request_id of the control_request this responds to — matched against
+    /// our pending interrupt id to confirm the interrupt was honored.
+    let requestId: String?
+    /// Best-effort error text when subtype == "error".
+    let error: String?
+
+    enum CodingKeys: String, CodingKey {
+        case response
+        case subtype
+        case requestId = "request_id"
+        case error
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        // Preferred shape: fields nested under "response".
+        if let nested = try? container.nestedContainer(keyedBy: CodingKeys.self, forKey: .response) {
+            subtype = try? nested.decode(String.self, forKey: .subtype)
+            requestId = try? nested.decode(String.self, forKey: .requestId)
+            error = try? nested.decode(String.self, forKey: .error)
+        } else {
+            // Fallback: flattened shape at the top level.
+            subtype = try? container.decode(String.self, forKey: .subtype)
+            requestId = try? container.decode(String.self, forKey: .requestId)
+            error = try? container.decode(String.self, forKey: .error)
+        }
+    }
+}
+
+/// `{"type":"result","subtype":"success","result":"...","total_cost_usd":...}`
+struct ResultEvent: Decodable, Sendable {
+    let subtype: String?
+    let result: String?
+    let totalCostUsd: Double?
+    let sessionId: String?
+    let usage: Usage?
+    let isError: Bool?
+
+    enum CodingKeys: String, CodingKey {
+        case subtype
+        case result
+        case totalCostUsd = "total_cost_usd"
+        case sessionId = "session_id"
+        case usage
+        case isError = "is_error"
+    }
+}
+
+/// A single decoded line from the stream-json NDJSON output.
+enum StreamEvent: Decodable, Sendable {
+    case system(SystemInit)
+    /// Background-shell lifecycle system events (#atrium-shells):
+    /// subtype task_started/task_updated/task_notification.
+    case systemTask(SystemTaskEvent)
+    case assistant(AssistantMessage)
+    case user(UserMessage)
+    case result(ResultEvent)
+    /// Reply to a control_request (#atrium-stop): confirms an interrupt landed.
+    case controlResponse(ControlResponseEvent)
+    case unknown(type: String)
+
+    private enum TypeKey: String, CodingKey { case type, subtype }
+
+    init(from decoder: Decoder) throws {
+        let typeContainer = try decoder.container(keyedBy: TypeKey.self)
+        let type = (try? typeContainer.decode(String.self, forKey: .type)) ?? "unknown"
+        let subtype = (try? typeContainer.decode(String.self, forKey: .subtype))
+
+        switch type {
+        case "system":
+            // Route by subtype: task_* events carry background-shell info; all
+            // other system events (init, and any unknown subtype) decode into
+            // SystemInit fields as before.
+            if let subtype, subtype.hasPrefix("task_") {
+                self = .systemTask(try SystemTaskEvent(from: decoder))
+            } else {
+                self = .system(try SystemInit(from: decoder))
+            }
+        case "assistant":
+            self = .assistant(try AssistantMessage(from: decoder))
+        case "user":
+            self = .user(try UserMessage(from: decoder))
+        case "result":
+            self = .result(try ResultEvent(from: decoder))
+        case "control_response":
+            self = .controlResponse(try ControlResponseEvent(from: decoder))
+        default:
+            self = .unknown(type: type)
+        }
+    }
+}

@@ -16,6 +16,14 @@ struct SettingsPanelView: View {
     @AppStorage("gestureConfirmationEnabled") private var gestureConfirmationEnabled: Bool = false
     @AppStorage("pollingInterval") private var pollingInterval: Double = 2.0
 
+    // ATRIUM voice-composer keywords (read by AtriumVoiceController at arm time).
+    @AppStorage(AtriumVoiceController.DefaultsKey.wake)
+    private var atriumWakeKeyword: String = AtriumVoiceController.wakeKeyword
+    @AppStorage(AtriumVoiceController.DefaultsKey.send)
+    private var atriumSendKeyword: String = AtriumVoiceController.sendKeyword
+    @AppStorage(AtriumVoiceController.DefaultsKey.cancel)
+    private var atriumCancelKeywords: String = AtriumVoiceController.cancelKeywordsDefault
+
     var workspaceManager: WorkspaceManager?
     var actionRegistry: ActionRegistry?
     var voiceCommandRegistry: VoiceCommandRegistry?
@@ -128,6 +136,33 @@ struct SettingsPanelView: View {
                     Text("Continuous").tag("continuous")
                     Text("Eyebrow Trigger").tag("eyebrowTrigger")
                 }
+            }
+
+            Section("Voice Composer (ATRIUM)") {
+                HStack {
+                    Text("Wake keyword")
+                    Spacer()
+                    TextField(AtriumVoiceController.wakeKeyword, text: $atriumWakeKeyword)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 180)
+                }
+                HStack {
+                    Text("Send keyword")
+                    Spacer()
+                    TextField(AtriumVoiceController.sendKeyword, text: $atriumSendKeyword)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 180)
+                }
+                HStack(alignment: .top) {
+                    Text("Cancel phrases")
+                    Spacer()
+                    TextField(AtriumVoiceController.cancelKeywordsDefault, text: $atriumCancelKeywords)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 180)
+                }
+                Text("In the ATRIUM reply box, click the mic and say the wake keyword to start dictating, the send keyword to submit, or any cancel phrase (comma-separated) to clear. Blank fields fall back to defaults. Changes apply the next time you arm the mic.")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
             }
 
             Section("Eyebrow Control") {

@@ -1,0 +1,41 @@
+id: L-2026-06-15-ascend-175503-001
+type: milestone
+timestamp: '2026-06-15T17:55:03.853Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: CHECKPOINT 2026-06-15 — v7.3.0 renaissance SHIPPED; next arc = Conductor Symphony × a-aloud exploration
+summary: 'Context-clear handoff. The Paradigm Suite renaissance is DONE and MERGED to main as v7.3.0 (PR #26, commit 5a9f1e5d; admin-merged past the review gate). Matt publishes npm himself (npm publish in packages/paradigm + packages/paradigm-mcp; plugin updates via the merge). What shipped: serve repaired (build hole + Express-5 boot crash + canvas/lore-ui/graph-ui deleted, −135MB, one UI entry point); the v7 claimant task DAG made web-reachable; a full Tasks section (State-default tabbed board: State|Claimant|Symbol/Flow|Calibration-as-own-tab, full-height swim-lanes, learned-calibration story-points, agent Inbox, enforced write verbs, board-health banner); the calibration loop closes itself (aggregate-on-settle); task governance settled by tense (no new agent — Cid/Loid/Rune notebook protocols, TD-2026-06-14-467); and TRUE TWO-WAY GitHub sync (symmetric reopen + background poll), LIVE-VERIFIED against the repo (caught 2 real bugs). Dogfood loop proven + in use: `paradigm task done <id>` closes the linked GitHub issue. Hygiene done: stale v7.2 test issues #14-17 closed. NEXT ARC (Matt''s new direction, do NOT start yet): the Conductor Symphony — a ''particularly ugly but necessary'' thing he''s wanted to return to — intrinsically tied to an exploration of features + utilization he did on the GitHub/a-aloud project, which has a RECENT GITIGNORED DOCUMENT he wants the TEAM to dig into, then make key understandings + correlations of where he''s headed with this next wave of planning. Opening move next session: locate + read the a-aloud gitignored doc, team-analyze it, correlate with Conductor Symphony.'
+symbols_touched:
+  - '#tasks-section'
+  - '#task-sync'
+  - '#github-provider'
+  - '#serve'
+  - '#captain-board'
+  - '#calibration'
+learnings:
+  - 'The whole renaissance (Tasks spearhead + two-way GitHub sync + governance + UI) shipped as v7.3.0 via the same loop that worked all session: audit/design → build per-round → verify state DIRECTLY (build + tests + LIVE smoke against the real system) → ship-per-round (lore+changelog+commit+push) → PR → dogfood. Live integration testing against the real GitHub repo caught 2 bugs (gh arg format owner/repo#N vs bare number; ESM require() in readSyncConfig) that 468 green unit tests missed — for any external-system integration, a live round-trip before claiming done is non-optional.'
+  - The Tasks board lives in the GITIGNORED local task store (.paradigm/tasks/), while the GitHub issues are the SHARED durable record — so the two-way sync's `task done → issue closes` IS the right cleanup/dogfood mechanism, not a workaround. When asked to 'close tasks', closing them propagates to GitHub automatically.
+  - A malformed .purpose (e.g. unquoted colon-space in a long description) is SILENTLY SKIPPED by the indexer, so its whole directory's symbols vanish from the index — fixing the Tasks .purpose YAML restored the spearhead's coverage. Use block scalars (>-) for long descriptions. This recurred this session (it's the open T-...-011 index-integrity papercut), reinforcing that the purpose-writer should auto-quote.
+verification:
+  status: pass
+  details:
+    merged: 'PR #26 → main @ 5a9f1e5d, v7.3.0'
+    suites: CLI 441 / MCP 468
+    published: NOT yet — Matt publishes npm manually
+    backlog: 'GitHub issues #20-25 (next-work) + #27-29 (pre-existing cleanup) queued'
+tags:
+  - checkpoint
+  - handoff
+  - v7.3
+  - arc:renaissance
+  - suite-renaissance
+  - milestone
+  - next-arc:conductor-symphony
+  - a-aloud
+confidence: 0.95
+git_context:
+  ref: 5a9f1e5d5fa9b7bfbdae62bb4afcdcb1c0d50678
+  branch: main
+  dirty: false

@@ -1,0 +1,183 @@
+purpose: Conductor session services — headless claude stream sessions, the BRIDGE session fleet, agent process management, background-shell tracking, and persistent session transcripts
+version: 1.1.0
+description: "Services that own the runtime of ATRIUM `claude` sessions: spawning the headless stream-json process, decoding the NDJSON event stream off the main thread, tracking background shells, interrupting/killing turns, and persisting the full stream I/O to an inspectable JSONL transcript under ~/.paradigm so external tooling can diagnose runtime behavior without screenshots/Console."
+context:
+  - One ClaudeStreamSession owns one `claude -p --output-format stream-json --input-format stream-json` process
+  - Stream decode runs off-main via a Sendable LineFramer; state mutates only on @MainActor in apply()
+  - Background shells orphan to PID 1 on session exit — host must track + reap (#atrium-shells)
+  - Interrupt uses the stream-json control_request protocol, NOT a bare interrupt line (#atrium-stop)
+  - Transcripts persist to ~/.paradigm/conductor/atrium/ — the founder-directive substrate, not trapped in-app
+
+# ============================================
+# Components (#)
+# ============================================
+
+#claude-stream-session:
+  description: "Owns one headless claude stream-json process; spawns, writes turns/control_requests, decodes stdout events off-main, projects into an observable conversation model. Tracks background bash shells (#atrium-shells) AND sub-agents (#sub-agent — THE CHORUS) as SEPARATE @Published lists: a task_* event typed as a sub-agent (task_type == 'local_agent', or — fallback when task_type is absent — the originating Agent/Task tool via tool_use_id) is ROUTED to subAgents via applySubAgentTask instead of dropped; SubAgents are populated DIRECTLY from the rich task_started fields (description/subagent_type/prompt) and correlated to the spawning Agent tool_use by tool_use_id (DETERMINISTIC — temporal-adjacency FIFO retired), with usage (total_tokens/tool_uses/duration_ms) captured from the terminal task_notification; stopSubAgent sends a suppressed TaskStop control turn."
+  type: service
+  tags: [conductor, atrium, claude, stream-json, session]
+  anchors:
+    - ClaudeStreamSession.swift:1
+
+#session-transcript:
+  description: Append-only JSONL writer persisting a session's full stream I/O (meta/in/out lines) to ~/.paradigm/conductor/atrium/ + a discovery index, on a private serial queue, best-effort and non-blocking, so an external inspector can Read it and diagnose runtime behavior
+  type: utility
+  tags: [conductor, atrium, transcript, jsonl, observability, shared, desktop]
+  anchors:
+    - SessionTranscript.swift:1
+
+#decision-divergence-journal:
+  description: "Append-only JSONL LEARNING INSTRUMENT that closes the cockpit's SEALED $decision-exchange loop (Loid's instrument design, L-2026-06-17-ascend-181541-001). Writes per-session divergence rows to ~/.paradigm/conductor/decisions/<sessionId>.jsonl in the cockpit's OWN write-domain (NOT framework-owned .paradigm/events/), mirroring #session-transcript's serial-queue, best-effort, non-blocking discipline. LOID'S GATE: a decision is a learning SIGNAL only when GROUNDED (its `symbols` array is non-empty); ungrounded decisions write NOTHING (the honesty gate). Grounded AGREEMENTS write diverged:false (the divergence-rate denominator); grounded DIVERGENCES (Other/free-text used, OR chosen set != the single recommended id) write diverged:true. A reopen-after-settle writes a separate event:\"reopen\" row (stale-graph watchdog). Pure helper decisionDiverged(recommendedId:chosenIds:usedOther:) is unit-tested. INSTRUMENT-FIRST — the journal-promotion CONSUMER (rows → agent notebooks via the gate) is a DEFERRED follow-up."
+  type: utility
+  tags: [conductor, atrium, decision, divergence, jsonl, learning, observability, desktop]
+  anchors:
+    - DecisionDivergenceJournal.swift:1
+    - ClaudeStreamSession.swift:733
+
+#atrium-shells:
+  description: Tracks background shells the agent spawned, parsed from tool_result text and system task events; status maps ALL terminal task statuses (running/finished/stopped/killed/failed) so the panel never shows "running" after a terminal event; host-side inspect (read .output file) and authoritative kill (suppressed TaskStop control turn — the Claude Code 2.1.x tool, NOT KillShell; a TaskStop'd task reports terminal status "failed"). No lsof backstop (removed: raced TaskStop, wrong target, exit 144/SIGURG)
+  type: model
+  tags: [conductor, atrium, background-shell]
+  anchors:
+    - ClaudeStreamSession.swift:31
+    - ../Models/BackgroundShell.swift:1
+
+#fleet-store:
+  description: "THE BRIDGE session fleet (#cockpit-view) — @MainActor ObservableObject owning N insertion-ordered, fully isolated ClaudeStreamSessions + the active session id. spawn(projectPath:initialPrompt:) constructs+starts+appends+activates ($fleet-spawn); setActive(id|index)/moveActive(by:) switch which session the cockpit renders while every other keeps streaming in the background ($fleet-switch); close(id) shuts one down with active fallback; shutdownAll() tears the fleet down on window-close/app-terminate. Soft cap 6 (warn past 4). Composition over shared state — never introduces shared mutable session state (~session-isolation)."
+  type: service
+  tags: [conductor, cockpit, bridge, fleet, session]
+  anchors:
+    - FleetStore.swift:1
+
+#session-derived-status:
+  description: "Derives a whole-session BRIDGE status (running/idle/blocked/awaitingYou/done) from ClaudeStreamSession's existing @Published state ONLY (no new mutable state, ~session-isolation). awaitingYou (the SACRED amber) v1 heuristic: any subAgent .needsHuman, OR session idle + last rendered message is the agent's + NOT the active session. Hosts TemperatureLaw — the shared color/glyph source the spine and the CHORUS rail both read so teal/amber/coral/muted agree."
+  type: model
+  tags: [conductor, cockpit, bridge, temperature-law]
+  anchors:
+    - ../Models/SessionDerivedStatus.swift:1
+
+#agent-process-manager:
+  description: Spawns and manages non-stream agent processes (mirrors the stream session's spawn/path-resolution mechanics)
+  type: service
+  tags: [conductor, agent, process]
+  anchors:
+    - AgentProcessManager.swift:1
+
+#agent-health-monitor:
+  description: Monitors agent process health and liveness
+  type: service
+  tags: [conductor, agent, health]
+  anchors:
+    - AgentHealthMonitor.swift:1
+
+#line-framer:
+  description: Off-main Sendable NDJSON line framer that buffers partial reads and emits complete decoded StreamEvents
+  type: utility
+  tags: [conductor, stream-json, framer, sendable]
+  anchors:
+    - LineFramer.swift:1
+
+#checkpoint-reader:
+  description: Reads Paradigm session checkpoints for Conductor display
+  type: utility
+  tags: [conductor, checkpoint]
+  anchors:
+    - CheckpointReader.swift:1
+
+#fenced-block-parser:
+  description: "Pure host-side parser scanning accumulated assistant TEXT for fenced blocks (```<lang>); projects host-rendered ones (conductor-decision → AgentDecision, conductor-visual envelope + bare mermaid/svg → AgentVisual) and returns residual prose with those spans stripped. Emits a block ONLY when its CLOSING fence is present (open fence still streaming → left as raw residual, render nothing); stable identity by explicit JSON id else (lang,ordinal); tolerates malformed JSON when the closing fence is present (degrades the block, never throws). Decodes the graph-grounding fields schema-tolerantly: a decision's top-level `symbols` array and each option's `affectedSymbols` array (both default []). The READER half of Scholar's contract (#session-prompt is the writer half)."
+  type: service
+  tags: [conductor, atrium, bridge, parser, desktop]
+  anchors:
+    - FencedBlockParser.swift:1
+
+#session-prompt:
+  description: "Scholar's canonical per-session system prompt (concision + host-rendered-block conventions) injected via --append-system-prompt (NOT --system-prompt — append PRESERVES the default tools the cockpit depends on). Instructs the agent to emit conductor-decision / conductor-visual / mermaid / svg fenced blocks in its assistant TEXT, which the host parses (#fenced-block-parser) and renders. Carries the GROUND IN THE LIVE GRAPH convention (default for architecture): before proposing/deciding about real symbols, query a REAL slice via paradigm_graph_slice and include the conductor-visual block it returns — never hand-draw an architecture diagram; tag decisions with a `symbols` array + per-option `affectedSymbols`. The CONTRACT both sides agree on for $decision-exchange."
+  type: utility
+  tags: [conductor, atrium, bridge, prompt, shared]
+  anchors:
+    - SessionPrompt.swift:1
+
+# ============================================
+# Flows ($)
+# ============================================
+
+flows:
+  $claude-turn-exchange:
+    description: "User turn → stdin NDJSON → claude → stdout NDJSON events → LineFramer → apply() projects to conversation + transcript"
+    steps:
+      - "#claude-stream-session"
+      - "#line-framer"
+      - "#session-transcript"
+  $session-transcript-write:
+    description: "Boundary call (start/turn/interrupt/kill/decoded event/stderr/shutdown) → SessionTranscript.log* → serial queue → append JSONL line to ~/.paradigm/conductor/atrium/<file>.jsonl (+ index row)"
+    steps:
+      - "#claude-stream-session"
+      - "#session-transcript"
+  $fleet-spawn:
+    description: "THE BRIDGE spawn — FleetStore.spawn(projectPath:initialPrompt:) constructs + starts a ClaudeStreamSession, appends it insertion-ordered, sets it active"
+    steps:
+      - "#fleet-store"
+      - "#claude-stream-session"
+  $fleet-switch:
+    description: "THE BRIDGE switch — FleetStore.setActive changes only which session the cockpit renders; every other session keeps streaming untouched (instance-bound ingest, ~session-isolation)"
+    steps:
+      - "#fleet-store"
+  $decision-exchange:
+    description: "Agent offers a branching CHOICE → emits a ```conductor-decision fenced block in assistant TEXT (per #session-prompt) → host parses it (#fenced-block-parser) after text accumulation → renders an AtriumDecisionCard (pending = amber, !session-needs-you fires) → human picks → answerDecision composes a human-readable user turn and sends it via $claude-turn-exchange → re-parse PRESERVES the settled answer (card settles teal). Visuals follow the same parse path → ▸ launcher chip → LIGHTBOX (#atrium-visual-canvas)."
+    steps:
+      - "#session-prompt"
+      - "#fenced-block-parser"
+      - "#agent-decision"
+      - "#atrium-decision-card"
+      - "#claude-stream-session"
+      - "#agent-visual"
+      - "#atrium-visual-canvas"
+
+# ============================================
+# Signals (!)
+# ============================================
+
+signals:
+  "!session-transcript-started":
+    description: A session_start meta line + index row were written when the claude process spawned
+    emitters: ["#session-transcript"]
+  "!session-transcript-session-id":
+    description: The real claude session_id (from system/init) was recorded to the transcript + index
+    emitters: ["#session-transcript"]
+  "!session-needs-you":
+    description: "A session needs the human. NOW WIRED via $decision-exchange: when a NEW unanswered conductor-decision is parsed onto a turn (#fenced-block-parser), ClaudeStreamSession.noteNeedsHuman() fires and hasPendingDecision flips the session to awaitingYou (#session-derived-status) — checked FIRST and applying EVEN to the active session, floating it into THE BRIDGE's NEEDS YOU amber group. Answering the decision clears it. v1 still ALSO derives awaitingYou heuristically for non-decision idle turns."
+    emitters: ["#claude-stream-session", "#fenced-block-parser"]
+
+# ============================================
+# Aspects (~)
+# ============================================
+
+~non-blocking-io:
+  description: All transcript disk writes run on a private serial DispatchQueue so the main actor and off-main stream decode are never blocked; write failures are swallowed (never crash the session over logging)
+  anchors:
+    - SessionTranscript.swift:1
+
+~paradigm-substrate:
+  description: Session signals land in the ~/.paradigm/ substrate (transcript + index under conductor/atrium/) rather than being trapped inside the app, so external tooling can inspect them
+  anchors:
+    - SessionTranscript.swift:1
+
+~session-isolation:
+  description: "Each ClaudeStreamSession is fully self-contained (own Process/Pipes/off-main LineFramer/SessionTranscript/@Published state); the FleetStore composes N of them and never introduces shared mutable session state. Background (non-active) sessions keep streaming into their OWN state because ingest is instance-bound. The cockpit's center `.id(active.id)` rotates VIEW identity only — session objects are never recreated."
+  anchors:
+    - ClaudeStreamSession.swift:1
+    - FleetStore.swift:1
+
+tags:
+  - conductor
+  - atrium
+  - claude
+  - stream-json
+  - transcript
+  - observability
+  - background-shell
+  - cockpit
+  - bridge
+  - fleet
+  - session-isolation

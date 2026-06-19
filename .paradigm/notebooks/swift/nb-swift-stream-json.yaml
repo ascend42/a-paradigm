@@ -1,0 +1,39 @@
+context: >-
+  Decoding the `claude --output-format stream-json` NDJSON event stream in Swift, and debugging a "stuck on running,
+  $0.0000" symptom where the terminal `result` event seems missing. Shared knowledge (wire-format, not
+  platform-specific).
+snippet: >-
+  Real `claude` stream-json event sequence (verified 2026-06): system/init → rate_limit_event → assistant(s) → result.
+  Two NON-result event types appear that you must tolerate or skip: `rate_limit_event` and (in stream mode) extra
+  subtypes. The `result` event's `usage` object carries EXTRA keys vs assistant usage: `server_tool_use`,
+  `cache_creation` (nested), `iterations` (array), `service_tier`, `inference_geo`, `speed` — plus `modelUsage`,
+  `api_error_status`, `terminal_reason`, `uuid` at top level. Make Usage/ResultEvent Decodable with explicit CodingKeys
+  + all-optional fields (synthesized init uses decodeIfPresent → never throws on extra/missing). `total_cost_usd` is the
+  CUMULATIVE session cost (assign, don't sum). The result DOES arrive while stdin is held open (~1.7s) — it is NOT
+  withheld until EOF — so a missed result is an app-side apply/threading bug, not the protocol. DEBUG TIP: log every
+  applied event type in your switch and surface child stderr (don't `_ = handle.availableData` it away) — a stuck turn
+  with no visible stderr is how this hides.
+provenance:
+  source: manual
+  createdBy: swift
+confidence: 0.9
+concepts:
+  - stream-json
+  - claude-headless
+  - ndjson
+  - codable
+  - result-event
+  - usage
+  - total-cost-usd
+  - rate-limit-event
+tags:
+  - shared
+  - atrium
+  - conductor
+  - wire-format
+id: nb-swift-stream-json
+scope: generalizable
+publishable: true
+appliedCount: 0
+created: '2026-06-15T23:35:06.628Z'
+updated: '2026-06-15T23:35:06.628Z'

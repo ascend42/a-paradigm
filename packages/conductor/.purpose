@@ -501,7 +501,7 @@ context:
     - Sources/Conductor/UI/Views/MainOverlayView.swift:1
 
 #settings-panel:
-  description: "Preferences: hotkeys, gestures, enrichment, gaze overlay toggle, recalibrate button, setup wizard trigger — fully wired with workspace, bindings, voice command tabs"
+  description: "Preferences: hotkeys, gestures, enrichment, gaze overlay toggle, recalibrate button, setup wizard trigger — fully wired with workspace, bindings, voice command tabs. Input tab includes a 'Voice Composer (ATRIUM)' section editing the #atrium-voice wake/send/cancel keywords (persisted to UserDefaults atriumWakeKeyword/atriumSendKeyword/atriumCancelKeywords via @AppStorage)."
   type: view
   tags: [ui, settings, preferences]
   anchors:
@@ -833,6 +833,13 @@ context:
 # ============================================
 
 flows:
+  claude-turn-exchange:
+    description: "ATRIUM round-trip — compose reply → encode user turn to stdin → claude streams NDJSON → LineFramer frames lines off-main → decode StreamEvent → @MainActor projects into conversation model → render text + tool chips + cost"
+    steps:
+      - "#atrium-thread"
+      - "#claude-stream-session"
+      - "#stream-event"
+      - "#conversation-model"
   voice-to-dispatch:
     description: Mic to WhisperKit to Buffer to Edit to Enrich to Dispatch
     steps:
@@ -1075,6 +1082,9 @@ gates:
 # ============================================
 
 signals:
+  agent-turn-complete:
+    description: A claude stream-json result event arrived — the agent turn is finished, cost/usage captured, status returned to idle
+    emitters: ["#claude-stream-session"]
   buffer-dispatched:
     description: Text buffer sent to a targeted CC window
   instance-detected:
@@ -1284,6 +1294,112 @@ signals:
   tags: [ui, maestro, roster, agents]
   anchors:
     - Sources/Conductor/UI/Views/AgentRosterView.swift:1
+
+# --- Conductor Revival Phase 0: ATRIUM keystone spike ---
+
+#stream-event:
+  description: Typed Decodable model of the claude --output-format stream-json NDJSON event stream (system/init, system task_started/task_progress/task_updated/task_notification, assistant, user/tool_result, result) — unknown shapes degrade to .unknown rather than throwing. System events route by subtype — task_* subtypes decode into SystemTaskEvent (task lifecycle), all others into SystemInit. SystemTaskEvent decodes the RICH (VERIFIED via live CLI raw capture, 2026-06) task fields — probes id/status/command/output/output_file/tool_use_id/parent_tool_use_id/task_type/description/subagent_type/prompt + the usage block (total_tokens/tool_uses/duration_ms) across flat + nested objects (patch carries task_updated {status,end_time}; usage carries task_notification metrics) — and keeps the full raw JSONValue (logged at debug). CRITICAL — task_* events cover BOTH background bash shells (task_type "local_bash") AND Agent/Task sub-agents (task_type "local_agent"); they emit identical shapes, so task_type is the DETERMINISTIC typing discriminator and tool_use_id is the DETERMINISTIC correlation key consumers use to split bash shells (#atrium-shells) from the sub-agent CHORUS (#sub-agent / #atrium-chorus). The earlier "lossy transcript" conclusion (task_* carries only taskId → correlate by temporal adjacency) was WRONG: it was based on lossy SystemTaskEvent logging; the raw events carry tool_use_id + task_type + description + subagent_type + prompt + usage. parent_tool_use_id is still probed for forward-compat (interleaved sub-agent tool-call attribution) but the OPERATIVE correlation field tool_use_id IS present. JSONValue.subAgentDescription/.subAgentType/.subAgentPrompt extract those fields from the Agent tool_use input as a FALLBACK only; JSONValue.asInt extracts usage integers. JSONValue absorbs arbitrary tool_use input and heterogeneous tool_result content and can re-serialize to a compact jsonString for logging.
+  type: model
+  tags: [revival, atrium, stream-json, decode, background-shells]
+  anchors:
+    - Sources/Conductor/Models/Stream/StreamEvent.swift:1
+    - Sources/Conductor/Models/Stream/JSONValue.swift:1
+
+#atrium-stop:
+  description: "Stop control for the ATRIUM composer (#atrium-thread). Visible/enabled ONLY while the agent is mid-turn (status .running/.starting), coral/blocked-tinted stop.fill glyph beside Send. On click calls ClaudeStreamSession.interrupt(), which writes the stream-json CONTROL protocol line {\"type\":\"control_request\",\"request_id\":\"<uuid>\",\"request\":{\"subtype\":\"interrupt\"}} to the SAME claude stdin (does NOT close stdin). VERIFIED: the bare {\"type\":\"interrupt\"} line is IGNORED (a count-to-600 turn ran to completion); the control_request form halts the active turn (count stopped at 124) and emits {\"type\":\"control_response\",\"response\":{\"subtype\":\"success\",\"request_id\":\"<same>\"}} confirming it landed, then the turn ends with a terminal result subtype error_during_execution. The session stays alive; the next user turn is answered normally. interrupt() stops the in-flight caret immediately and tracks the pending request_id; applyControlResponse logs confirmation; applyResult settles status to .idle and treats the interrupt-initiated error_during_execution as a normal 'stopped' (NOT a scary error), with the silence watchdog as backstop. Logged under !claude-interrupt (e.g. 'interrupt control_request sent id=…', 'interrupt CONFIRMED — control_response success')."
+  type: view
+  tags: [atrium, ui, composer, interrupt, stop]
+  anchors:
+    - Sources/Conductor/UI/Views/Atrium/AtriumComposer.swift:1
+    - Sources/Conductor/Services/ClaudeStreamSession.swift:1
+
+#atrium-shells:
+  description: "Background-shell inspector for the ATRIUM window. Background shells are commands the agent ran with run_in_background; Claude Code does NOT kill them on session exit (they orphan to PID 1), so the host tracks and reaps them. DETECTION: ClaudeStreamSession parses tool_result text 'Command running in background with ID: <id>' AND 'Output is being written to: <ABSOLUTE>.output' (correlating the command from the matching Bash tool_use id recorded in applyAssistant) AND/OR the system task_started/task_progress/task_updated/task_notification events (task_started gives early registration via task_id + tool_use_id correlation + description; task_updated carries patch.status); results upsert into @Published backgroundShells [BackgroundShell {id, command, startedAt, status running/finished/stopped/killed/failed, lastOutput, outputFile}]. SUB-AGENT FILTER (DETERMINISTIC, task_type-first): task_* events are emitted by BOTH background bash shells (task_type 'local_bash') AND Agent/Task sub-agents (task_type 'local_agent') with identical shapes — only REAL bash shells belong in this panel. On task_started for an untracked id, applySystemTask types by task_type: 'local_agent' routes to the CHORUS (#sub-agent), 'local_bash' admits to this panel; the originating tool_use name (traced via tool_use_id → toolNamesByToolUseId, recorded for EVERY tool_use in applyAssistant) is a FALLBACK only when task_type is absent (older CLI). A present-but-contradicting signal (task_type != local_bash, or fallback tool == 'Agent'/'Task') EXCLUDES the task (logged: 'ignoring non-bash task <id> type=<…> tool=<…>'). The temporal-adjacency FIFO is RETIRED. task_progress is a NON-TERMINAL running heartbeat (the model emits many per task) and is NEVER treated as terminal; only EXPLICIT terminal statuses (killed/stopped/failed/error/finished/completed/success/done/exited) move a shell out of .running — every other value (including empty/absent and progress-ish strings) stays running (the old 'unrecognized non-empty status → failed' rule was removed so progress can't falsely fail a live shell). There are NO pid files (verified) — only the .output file. UI: a right-aligned header button in AtriumThreadView shows a live count/'N live' and opens a popover (AtriumShellsPanel) listing each shell — command (mono, middle-truncated), id, status badge, startedAt, output, and [Inspect]/[Kill] actions; empty state when none. INSPECT (FIX 3, host-side): reads the shell's .output file directly via String(contentsOfFile:), stores it on the shell, and expands the row to a scrollable detail — NO message sent to the agent, NO thread mutation. KILL (FIX B, authoritative): the PRIMARY path is now a SUPPRESSED control turn (ConversationMessage.isControl 'Call the KillShell tool with shell_id <id>…') written to claude's stdin but EXCLUDED from the rendered thread by AtriumThreadView's filter — the agent owns the real task→PID mapping so it kills the CORRECT process. Status is NOT optimistically flipped (the old lsof-on-.output primary killed the file-writer wrapper, the WRONG PID, and LIED 'killed' while the real process lived → later exit 144/SIGURG); instead the real task_updated/task_notification patch.status (→killed/stopped) or the KillShell tool_result drives the panel status so it never lies. A non-authoritative best-effort host SIGTERM via `lsof -t -- <output_file>` remains only as a backstop and never sets the visible status. EXIT CLEANUP: shutdown() best-effort reaps the claude process tree BEFORE terminating claude — collectDescendants via pgrep -P, SIGTERM then SIGKILL survivors after a 300ms grace — preventing the orphan leak. Heavy ConductorLog under !background-shell (detection, raw task payloads, inspect/kill, lsof PIDs, reap)."
+  type: feature
+  tags: [atrium, ui, background-shells, process, cleanup]
+  anchors:
+    - Sources/Conductor/Models/BackgroundShell.swift:1
+    - Sources/Conductor/UI/Views/Atrium/AtriumShellsPanel.swift:1
+    - Sources/Conductor/UI/Views/Atrium/AtriumThreadView.swift:1
+    - Sources/Conductor/Services/ClaudeStreamSession.swift:1
+    - Sources/Conductor/Models/Stream/StreamEvent.swift:1
+
+#conversation-model:
+  description: Observable projection of the stream-json event sequence into renderable ConversationMessage values (agent/user/system authors) with ToolCall chips (running/succeeded/failed) and an isControl flag for suppressed host→agent control turns (the authoritative KillShell control turn, #atrium-shells FIX B) that are written to claude's stdin but excluded from the rendered thread — decouples the UI from the wire format.
+  type: model
+  tags: [revival, atrium, conversation]
+  anchors:
+    - Sources/Conductor/Models/ConversationMessage.swift:1
+
+#claude-stream-session:
+  description: "@MainActor ObservableObject owning ONE headless claude process speaking stream-json over stdin/stdout. SPAWN ENVIRONMENT (FIX 1): because Conductor is a Finder-launched GUI/bundled app, it inherits a MINIMAL PATH; the spawned claude would fail to find node/paradigm/hooks (exit 127). loginShellEnvironment() runs the user's login+interactive shell (`$SHELL -lic env`, cached once) and overlays its full environment (PATH + nvm/asdf/homebrew exports) onto the child's environment, with a hardcoded-PATH fallback if the probe fails; the resolved child PATH is logged at startup under #claude-stream-session. Decodes the NDJSON OFF the main thread via a Sendable LineFramer in the readabilityHandler, then hops to @MainActor to project events into the conversation model. Buffers the first turn until system/init; keeps stdin open between turns. Traces every applied event type (system/systemTask/assistant/user/result/unknown) and surfaces claude stderr to ConductorLog so stalls/errors are visible. A silence watchdog settles the UI out of .running if a result is missed (caret off, status idle), and applyResult flips status to idle + records cumulative total_cost_usd and authoritative end-of-turn usage. interrupt() (#atrium-stop) writes the stream-json CONTROL protocol line {\"type\":\"control_request\",\"request_id\":\"<uuid>\",\"request\":{\"subtype\":\"interrupt\"}} to the SAME stdin (NOT closed) to halt the active turn while keeping the session alive — the bare {\"type\":\"interrupt\"} form is VERIFIED IGNORED. Decodes control_response (applyControlResponse confirms the matching request_id) and settles the interrupt-initiated terminal result (subtype error_during_execution) cleanly as a normal stop, logging under !claude-interrupt. Tracks background shells (#atrium-shells) in @Published backgroundShells by parsing tool_result 'Command running in background with ID: <id>' + 'Output is being written to: <path>' (command correlated from the Bash tool_use id) and system task events; inspectShell reads the .output file host-side; killShell (FIX B) uses the AUTHORITATIVE path — a SUPPRESSED isControl KillShell control turn so the agent kills the correct PID via its task→PID mapping (the old lsof-on-output-file primary targeted the file-writer wrapper, killed the wrong PID, and LIED 'killed' while the process lived) — status is NOT optimistically flipped; the real task_updated/task_notification (patch.status) or KillShell tool_result drives the panel; a non-authoritative best-effort host SIGTERM via lsof remains only as a backstop. shutdown() reaps the claude process tree (pgrep -P → SIGTERM/SIGKILL) before terminating claude to prevent orphan-to-PID-1 leaks."
+  type: service
+  tags: [revival, atrium, process, concurrency]
+  anchors:
+    - Sources/Conductor/Services/ClaudeStreamSession.swift:1
+    - Sources/Conductor/Services/LineFramer.swift:1
+
+#atrium-theme:
+  description: Deep mono visual token system for the ATRIUM thread (void/surface/sunken surfaces, ink, amber/user/tool/running/blocked accents, monospaced body/chip/footer fonts) plus a Color(hex:) initializer.
+  type: theme
+  tags: [revival, atrium, ui, theme]
+  anchors:
+    - Sources/Conductor/UI/AtriumTheme.swift:1
+
+#atrium-thread:
+  description: "Custom SwiftUI thread surface — a thin top header carrying the background-shell inspector affordance (#atrium-shells), a scrolling conversation pinned to bottom, agent turns with blinking amber caret + collapsible tool chips, right-aligned user capsules, reply composer (ALWAYS editable/focusable — never hard-disabled by session status; Send gated only on live-session + non-empty draft, so a stuck-running turn can never lock the founder out; mid-turn sends queue on claude stdin; a coral Stop button (#atrium-stop) appears beside Send while the agent is mid-turn), and a model·session·tokens·cost footer. THE CHORUS (#atrium-chorus): the body is an HStack of a conversation COLUMN + the right-side CHORUS RAIL using a PUSH layout — when ≥1 sub-agent is live (or the rail is pinned) the column narrows to make room and the rail slides in over 220ms ease (no overlay); it slides away when all sub-agents idle. The conversation column also renders the INLINE FAN-OUT block (#atrium-chorus) after the messages when subAgents is non-empty. Hosted in AtriumSpikeWindow (single-owner of its ClaudeStreamSession), launched from the menu bar — the window is resizable/zoomable/full-screen-capable (collectionBehavior .fullScreenPrimary) with a larger 1100x780 default, built toward the full-screen Conductor."
+  type: view
+  tags: [revival, atrium, ui, thread]
+  anchors:
+    - Sources/Conductor/UI/Views/Atrium/AtriumThreadView.swift:1
+    - Sources/Conductor/UI/Views/Atrium/AtriumMessageView.swift:1
+    - Sources/Conductor/UI/Views/Atrium/AtriumToolChip.swift:1
+    - Sources/Conductor/UI/Views/Atrium/AtriumComposer.swift:1
+    - Sources/Conductor/UI/Views/Atrium/AtriumFooter.swift:1
+    - Sources/Conductor/App/AtriumSpikeWindow.swift:1
+
+#atrium-chorus:
+  description: "THE CHORUS — sub-agents (#sub-agent) rendered as a chorus of parallel voices, across TWO surfaces over the same @Published subAgents data. SURFACE 1, the INLINE FAN-OUT block (AtriumFanOutBlock): born in the conversation when the model fans out, lists the spawned voices grouped, settles to a one-line summary ('✓ N sub-agents · 2m14s · ▸ expand') when all idle, and lives in history. SURFACE 2, the CHORUS RAIL (AtriumChorusRail): a right-side panel that AUTO-APPEARS while ≥1 sub-agent is live, SLIDES AWAY when all idle, and is PINNABLE (a pin control keeps it open when idle); the conversation column narrows to make room (PUSH layout, 220ms ease, no overlay). ROW ANATOMY (AtriumChorusRow, shared by both surfaces) — prose over mechanics: [state glyph] + TASK DESCRIPTION (system font, ink, leads) + subagent_type (mono, inkMuted, subtitle) + heartbeat SPARKLINE (Canvas, driven by real task_progress ticks) + elapsed (mono, right, ticking via a shared TimelineView clock). TEMPERATURE LAW (founder-baked): running = teal #4ED7A0 (autonomous work needs NO attention — never amber), completed/killed/stopped = inkMuted, failed = coral #FF6B6B, amber #F2B765 ONLY for needsHuman (a sub-agent blocked on the founder; v2 — not yet detected); blue #7CC4FF left-edge = drill/selection focus. SETTLED ROW + DRILL-IN: a settled row shows the status label plus real usage from the terminal task_notification ('done · 12.2k tok · 1.4s'); the inline fan-out summary aggregates tokens across the voices. Clicking a rail row expands it IN PLACE — drill-in shows description + subagent_type + status + elapsed + tokens/tool-uses/duration + the sub-agent prompt + live last-activity. Full nested per-tool transcript is still v2 (interleaved sub-agent tool calls don't yet carry parent_tool_use_id) and is NOT faked. STOP: a rail row's Stop sends a suppressed isControl TaskStop turn (reuses #atrium-shells sendControl); status reflects the real task_updated/notification, not optimistic."
+  type: view
+  tags: [atrium, ui, chorus, sub-agents, rail, fanout]
+  anchors:
+    - Sources/Conductor/UI/Views/Atrium/AtriumChorusRail.swift:1
+    - Sources/Conductor/UI/Views/Atrium/AtriumFanOutBlock.swift:1
+    - Sources/Conductor/UI/Views/Atrium/AtriumThreadView.swift:1
+
+#sub-agent:
+  description: "Observable record of a sub-agent the model spawned via the Agent/Task tool for parallel work (THE CHORUS, #atrium-chorus). SubAgent {id (taskId), description, subagentType, status (running/completed/stopped/killed/failed/needsHuman), startedAt, endedAt, lastActivity, progressTicks (sparkline heartbeats), originatingToolUseId, prompt, totalTokens, toolUses, durationMs; usageSummary computed → '12.2k tok · 1.4s'}. TYPING + CORRELATION ARE DETERMINISTIC (corrected 2026-06 from the earlier wrong temporal-adjacency conclusion): task_* events carry task_type ('local_agent' → sub-agent; 'local_bash' → bash shell) AND tool_use_id (ties the task to the EXACT spawning Agent tool_use) — the temporal-adjacency FIFO is RETIRED. POPULATION (ClaudeStreamSession @Published subAgents): an Agent/Task tool_use in applyAssistant caches description/subagent_type/prompt in agentSpawnsByToolUseId keyed by tool_use_id (FALLBACK only). applySystemTask routes a task to the chorus instead of the shells panel (#atrium-shells) when task_type == 'local_agent' (or, on an old CLI with no task_type, the originating tool is Agent/Task). applySubAgentTask populates the SubAgent DIRECTLY from the task_started fields (description + subagent_type + prompt — all on the event), sets originatingToolUseId from the event's tool_use_id, appends a sparkline tick per task_progress, updates lastActivity, captures usage (total_tokens/tool_uses/duration_ms) from the terminal task_notification via applyUsage, and freezes the sub-agent (endedAt) on terminal task_updated/notification. STATUS: 'completed' maps to .completed → muted ✓ (terminal SUCCESS, distinct from .killed/.stopped/.failed). parent_tool_use_id is still probed for forward-compat (interleaved sub-agent tool-call attribution → full nested drill-in, v2). subAgentTaskIds is sticky so signal-less follow-up events stay routed to the chorus. stopSubAgent sends a suppressed isControl TaskStop turn (authoritative; real status drives the UI). Bash shells (#atrium-shells) stay a SEPARATE list."
+  type: model
+  tags: [atrium, chorus, sub-agents, stream-json, model]
+  anchors:
+    - Sources/Conductor/Models/SubAgent.swift:1
+    - Sources/Conductor/Services/ClaudeStreamSession.swift:1
+    - Sources/Conductor/Models/Stream/StreamEvent.swift:1
+
+#atrium-attachment:
+  description: Removable file-attachment chip for the ATRIUM composer — file-type SF Symbol + middle-truncated filename + ✕ remove, styled to the ATRIUM palette (surfaceRaised bg, tool-violet icon, mono ink filename). Files dragged onto the composer (.onDrop of .fileURL) become chips in a row above the field; on send the absolute paths are appended to the outgoing claude -p turn as a trailing "Attached files:" block so the agent can Read them, while the visible draft stays clean.
+  type: view
+  tags: [atrium, ui, composer, attachments, dragdrop]
+  anchors:
+    - Sources/Conductor/UI/Views/Atrium/AtriumAttachmentChip.swift:1
+    - Sources/Conductor/UI/Views/Atrium/AtriumComposer.swift:1
+
+#atrium-voice:
+  description: Keyword-driven voice dictation loop for the ATRIUM composer, modeled on a-aloud's reply-window loop. REUSES WhisperVoiceProvider (WhisperKit CoreML STT + AVCaptureSession mic) — no new STT dependency. Mic-button path AUTHORIZES FIRST — checks AVCaptureDevice.authorizationStatus(for:.audio), on .notDetermined awaits requestAccess (fires the TCC prompt; Info.plist has NSMicrophoneUsageDescription), on .denied/.restricted surfaces a `blocked` state whose next click opens System Settings › Privacy › Microphone — THEN loads the WhisperKit model (`loading` state) and starts continuous capture. State machine off→requesting→loading→armed→composing→sending→armed (+blocked) driven by forgiving word-boundary-anchored keyword grammar (normalize, last-occurrence match, multi-word phrases). Keywords are USER-CONFIGURABLE in Settings › Input › "Voice Composer (ATRIUM)" and persist in UserDefaults (atriumWakeKeyword / atriumSendKeyword / atriumCancelKeywords — cancel is a comma-separated list); they are re-read fresh at each arm (loadAndArm → refreshKeywordsFromDefaults) so a Settings change takes effect on the next arm. Defaults (seeds + fallbacks) wake="respond", send="send it", cancel="scratch that, never mind, nevermind". Uses its OWN WhisperVoiceProvider instance — fully decoupled from the orchestrator's global `voiceEnabled` pref, so the explicit mic-button action starts regardless of that setting. Live transcript streams into the composer's NSTextView via the #atrium-textview handle. Heavy ConductorLog.component("atrium-voice") on every step (button click, auth status, requestAccess result, model load, capture start, state transitions, keyword matches) for screenless diagnosis.
+  type: controller
+  tags: [atrium, voice, whisper, dictation, statemachine, permissions]
+  anchors:
+    - Sources/Conductor/UI/Views/Atrium/AtriumVoiceController.swift:1
+    - Sources/Conductor/UI/Views/Atrium/AtriumComposer.swift:1
+
+#atrium-textview:
+  description: Custom NSViewRepresentable (AtriumTextView) wrapping an NSTextView subclass (AtriumNSTextView) in an NSScrollView — the ATRIUM composer's reply input. REPLACES the SwiftUI TextField that failed at runtime inside the manually-created AtriumSpikeWindow (NSHostingView in a bare NSWindow on an LSUIElement accessory app), where clipboard (⌘C/V/X) and .onKeyPress(.return) did not route. Clipboard/undo handled directly in performKeyEquivalent(with:) (menu-independent guarantee); Return-vs-Shift+Return handled by overriding insertNewline(_:) (plain Return → onSubmit callback, no newline; Shift+Return → real newline). Multiline, grows to ~6 lines then scrolls. ATRIUM styling (surface bg, ink text, monospaced 13, amber insertion point + selection). Two-way bound to the composer's draft via a Coordinator (textDidChange → binding); imperative AtriumTextViewHandle exposes appendText/clear/focus for the voice dictation path. A standard Edit menu is also registered via .commands in ConductorApp.swift as belt-and-suspenders.
+  type: view
+  tags: [atrium, ui, composer, nstextview, appkit, clipboard, multiline]
+  anchors:
+    - Sources/Conductor/UI/Views/Atrium/AtriumTextView.swift:1
+    - Sources/Conductor/UI/Views/Atrium/AtriumComposer.swift:1
+    - Sources/Conductor/App/ConductorApp.swift:1
 
 tags:
   - conductor

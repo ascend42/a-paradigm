@@ -11,6 +11,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
     private var conductorPanel: ConductorPanel?
     private var containerWindow: ContainerWindow?
+    /// THE BRIDGE cockpit window (#conductor-cockpit-window). Holds a fleet of
+    /// sessions; the window renders the injected fleetStore but does not own it.
+    private var conductorCockpitWindow: ConductorCockpitWindow?
     /// Container mode — launched via `paradigm conductor --container`
     @AppStorage("useContainerMode") var useContainerMode: Bool = false
     private let permissionsManager = PermissionsManager()
@@ -23,6 +26,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     let workspaceManager = WorkspaceManager()
     let buffer = BufferEngine()
     let projectStore = ProjectStore()
+    /// THE BRIDGE session fleet (#fleet-store). Single-owner here so it survives
+    /// cockpit window close/reopen; shut down in applicationWillTerminate.
+    let fleetStore = FleetStore()
     let agentProcessManager = AgentProcessManager()
     let agentGroupStore = AgentGroupStore()
     let symphonyMonitor = SymphonyMonitor()
@@ -275,6 +281,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         orchestrator.stop()
         agentProcessManager.cleanup()
         workspaceManager.cleanup()
+        fleetStore.shutdownAll()
         conductorPanel?.close()
     }
 
@@ -302,6 +309,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         menu.addItem(permItem)
 
         menu.addItem(.separator())
+        let cockpitItem = NSMenuItem(title: "Open Conductor Cockpit…", action: #selector(openCockpit), keyEquivalent: "")
+        menu.addItem(cockpitItem)
+
+        menu.addItem(.separator())
         let containerItem = NSMenuItem(title: "Switch to Container Mode", action: #selector(switchToContainer), keyEquivalent: "")
         menu.addItem(containerItem)
         let sidebarItem = NSMenuItem(title: "Switch to Sidebar Mode", action: #selector(switchToSidebar), keyEquivalent: "")
@@ -326,9 +337,51 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let appMenu = NSMenu()
         appMenu.addItem(withTitle: "About Conductor", action: #selector(NSApplication.orderFrontStandardAboutPanel(_:)), keyEquivalent: "")
         appMenu.addItem(.separator())
+        let cockpitMainItem = NSMenuItem(title: "Open Conductor Cockpit…", action: #selector(openCockpit), keyEquivalent: "a")
+        cockpitMainItem.keyEquivalentModifierMask = [.command, .shift]
+        appMenu.addItem(cockpitMainItem)
+        appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Quit Conductor", action: #selector(quitApp), keyEquivalent: "q")
         appMenuItem.submenu = appMenu
         mainMenu.addItem(appMenuItem)
+
+        // Edit menu — STANDARD first-responder selectors.
+        // Without this menu, macOS has no Edit-menu key equivalents to route
+        // ⌘C/⌘V/⌘X/⌘A/⌘Z to the focused text field, so clipboard + undo are dead
+        // in any window (incl. the programmatic ATRIUM NSWindow). These items use
+        // the standard responder-chain selectors (cut:/copy:/paste:/selectAll:/
+        // undoManager) so they work in ANY first-responder text view automatically.
+        let editMenuItem = NSMenuItem()
+        let editMenu = NSMenu(title: "Edit")
+
+        let undoItem = NSMenuItem(title: "Undo", action: Selector(("undo:")), keyEquivalent: "z")
+        undoItem.keyEquivalentModifierMask = .command
+        editMenu.addItem(undoItem)
+
+        let redoItem = NSMenuItem(title: "Redo", action: Selector(("redo:")), keyEquivalent: "z")
+        redoItem.keyEquivalentModifierMask = [.command, .shift]
+        editMenu.addItem(redoItem)
+
+        editMenu.addItem(.separator())
+
+        let cutItem = NSMenuItem(title: "Cut", action: #selector(NSText.cut(_:)), keyEquivalent: "x")
+        cutItem.keyEquivalentModifierMask = .command
+        editMenu.addItem(cutItem)
+
+        let copyItem = NSMenuItem(title: "Copy", action: #selector(NSText.copy(_:)), keyEquivalent: "c")
+        copyItem.keyEquivalentModifierMask = .command
+        editMenu.addItem(copyItem)
+
+        let pasteItem = NSMenuItem(title: "Paste", action: #selector(NSText.paste(_:)), keyEquivalent: "v")
+        pasteItem.keyEquivalentModifierMask = .command
+        editMenu.addItem(pasteItem)
+
+        let selectAllItem = NSMenuItem(title: "Select All", action: #selector(NSText.selectAll(_:)), keyEquivalent: "a")
+        selectAllItem.keyEquivalentModifierMask = .command
+        editMenu.addItem(selectAllItem)
+
+        editMenuItem.submenu = editMenu
+        mainMenu.addItem(editMenuItem)
 
         // View menu (font size + sidebar)
         let viewMenuItem = NSMenuItem()
@@ -369,16 +422,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         NSApp.mainMenu = mainMenu
     }
 
+    /// ⌘= — grow text. Nudges BOTH the terminal buffer font AND the ATRIUM/cockpit
+    /// font scale (#atrium-theme), so the founder can zoom the cockpit decision
+    /// cards / spine / chorus live regardless of which surface has focus. Each
+    /// multiplier only affects its own surface, so driving both is harmless.
     @objc private func handleZoomIn() {
         terminalSessionManager.increaseFontSize()
+        AtriumFontScale.increase()
     }
 
+    /// ⌘- — shrink text. Symmetric to handleZoomIn.
     @objc private func handleZoomOut() {
         terminalSessionManager.decreaseFontSize()
+        AtriumFontScale.decrease()
     }
 
     /// Global keyboard shortcut monitor — fires before any view's keyDown.
-    /// Handles Cmd+=/- for font sizing even when SwiftTerm has focus.
+    /// Handles Cmd+=/- for font sizing even when SwiftTerm has focus. Drives the
+    /// terminal buffer font AND the ATRIUM/cockpit font scale together.
     private func setupGlobalShortcuts() {
         NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
             guard let self, event.modifierFlags.contains(.command) else { return event }
@@ -387,9 +448,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             switch chars {
             case "=", "+":
                 self.terminalSessionManager.increaseFontSize()
+                AtriumFontScale.increase()
                 return nil
             case "-":
                 self.terminalSessionManager.decreaseFontSize()
+                AtriumFontScale.decrease()
                 return nil
             default:
                 return event
@@ -451,8 +514,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     /// Launch the container workspace window.
     private func launchContainer() {
         let container = ContainerWindow()
-        container.onZoomIn = { [weak self] in self?.terminalSessionManager.increaseFontSize() }
-        container.onZoomOut = { [weak self] in self?.terminalSessionManager.decreaseFontSize() }
+        container.onZoomIn = { [weak self] in
+            self?.terminalSessionManager.increaseFontSize()
+            AtriumFontScale.increase()
+        }
+        container.onZoomOut = { [weak self] in
+            self?.terminalSessionManager.decreaseFontSize()
+            AtriumFontScale.decrease()
+        }
         let env = ConductorEnvironment(
             orchestrator: orchestrator,
             workspaceManager: workspaceManager,
@@ -504,6 +573,28 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     @objc private func showPermissions() {
         launchPanel(showOnboarding: true, permissionStatus: permissionsManager.checkAll())
+    }
+
+    /// Open (or focus) THE BRIDGE cockpit window (#conductor-cockpit-window).
+    /// Non-private so the SwiftUI `.commands` menu item in ConductorApp can call it.
+    /// Injects the single-owner fleetStore + projectStore; the window renders them
+    /// but does not own the fleet (so a window reopen keeps the running sessions).
+    @objc func openCockpit() {
+        if conductorCockpitWindow == nil {
+            let window = ConductorCockpitWindow(
+                fleetStore: fleetStore,
+                projectStore: projectStore
+            )
+            // Drop the reference when the window closes so a reopen builds fresh.
+            window.onClose = { [weak self] in self?.conductorCockpitWindow = nil }
+            conductorCockpitWindow = window
+        }
+        // Accessory (LSUIElement) apps need ignoringOtherApps to actually come
+        // to the foreground; without it the window never becomes key and the
+        // reply field cannot receive keyboard focus.
+        NSApp.activate(ignoringOtherApps: true)
+        conductorCockpitWindow?.makeKeyAndOrderFront(nil)
+        conductorCockpitWindow?.makeKey()
     }
 
     @objc private func switchToContainer() {

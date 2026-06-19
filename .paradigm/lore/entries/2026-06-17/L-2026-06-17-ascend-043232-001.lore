@@ -1,0 +1,53 @@
+id: L-2026-06-17-ascend-043232-001
+type: insight
+timestamp: '2026-06-17T04:32:32.917Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Decisions + Visual proposed-changes — design locked (THE LIGHTBOX)
+summary: 'Founder-approved design for the next Conductor feature: a two-pronged answer to "reduce the walls of text" — (1) DECISIONS (agent offers options → human selects/types/chats, rendered as inline cards that drive the first-class needs-you amber) and (2) VISUAL proposed-changes ("THE LIGHTBOX", a canvas drawer that slides over the CHORUS rail; mermaid flows + comparison tables in v1). Verified mechanism: agent emits custom fenced blocks (mermaid/svg/conductor-decision/conductor-visual) + a per-session concision system prompt via --append-system-prompt; native AskUserQuestion surfaces cleanly but is unanswerable headless, so we use the fenced-block convention; answer = a normal text turn. MVP locked; building now.'
+symbols_touched:
+  - '#claude-stream-session'
+  - '#conversation-model'
+  - '#atrium-thread'
+  - '#session-derived-status'
+symbols_created:
+  - '#fenced-block-parser'
+  - '#agent-decision'
+  - '#agent-visual'
+  - '#atrium-decision-card'
+  - '#atrium-visual-canvas'
+  - '#session-prompt'
+  - $decision-exchange
+decisions:
+  - id: TD-bridge-dec-001
+    decision: Decisions + visuals ride on host-defined FENCED-BLOCK conventions (conductor-decision/conductor-visual/mermaid/svg) + a per-session concision system prompt via --append-system-prompt; do NOT depend on native AskUserQuestion.
+    rationale: Empirically AskUserQuestion surfaces as a clean tool_use but auto-dismisses/is unanswerable headless. Fenced blocks ride verified text in/out, give host control, answer = normal text turn via existing send().
+  - id: TD-bridge-dec-002
+    decision: MVP = concision prompt + option-card decisions (amber→teal on commit, drives first-class needs-you) + mermaid flow + comparison table. Defer wireframes, A/B/C/D layout, diffs, animations.
+    rationale: 'North: ~90% of agent→human moments with least rendering surface. Mermaid WebView is the v1 spike; cards+comparison ship even if it slips.'
+  - id: TD-bridge-dec-003
+    decision: Visuals live in THE LIGHTBOX — a canvas drawer sliding OVER the CHORUS rail (Chorus stays live underneath), invite-don't-impose; decisions are inline turns-that-ask-back, composer never locks.
+    rationale: 'Mika: never trade live-agent visibility for a diagram; never re-create walls-of-text inline. Amber→teal on commit = the signature held-breath→exhale reserved for deciding.'
+learnings:
+  - 'AskUserQuestion headless: surfaces as a clean tool_use {questions:[{question,header,multiSelect,options:[{label,description}]}]} but auto-dismisses before a host can answer (''the prompt was dismissed''). Use a host-defined fenced-block decision convention; answer = normal text user turn.'
+  - System-prompt injection for spawned claude -p = --append-system-prompt (NOT --system-prompt, which replaces the default and strips the agentic tools the cockpit reads). Per-process, invisible to the repo.
+  - The real 'reduce walls of text' lever is PROMPTING (lead-with-answer, one-rec, ~6 lines then stop-or-block, caveats exempt) + structured renderable blocks. Block is canonical; prose must not contradict it.
+  - 'Streaming-safe fenced-block parsing: parse the ACCUMULATED message text (applyAssistant accumulates), emit a block only on its CLOSING fence; tolerate malformed (degrade to code block); stable identity by id/ordinal; preserve a chosen answer across re-parse.'
+tags:
+  - conductor
+  - the-bridge
+  - decisions
+  - lightbox
+  - reduce-walls-of-text
+  - design-locked
+body: 'Two-pronged founder ask: (1) handle decisions (options→select/type/chat), (2) render visual proposed-changes to kill walls of text. Approved "in theory"; founder noted the meta-payoff: once built, plans render to him as diagrams+concise text. Designs: Arky (architecture: --append-system-prompt, FencedBlockParser, ConversationMessage.decisions/visuals, answerDecision reuses send(), pending-decision→noteNeedsHuman()→awaitingYou amber, MermaidWebView sandboxed+vendored-offline; file plan phases 0-4). Mika (THE LIGHTBOX slide-out over CHORUS; decision = amber-rail turn with stacked cards, ★ lean, ▸ look-closer; amber→teal on commit→collapse to ''✓ you chose B''; hover-option-highlights-diagram; diff teal/inkMuted; one amber per conversation). North (prose-by-default heuristic; taxonomy cards/mermaid/diff/wireframe/prose; concision contract; risk = brevity eating nuance → caveats exempt, confidence line, block canonical). Scholar authored the canonical --append-system-prompt copy (bridgeConventions: concision + block conventions + when-relevant gate). OWNERSHIP: Scholar owns the prompt copy; Swift owns the Swift; Mika sign-off on card+canvas; Loid loops decision answers + block counts as calibration signals.'
+linked_lore:
+  - L-2026-06-17-ascend-004231-001
+  - L-2026-06-15-ascend-215150-001
+confidence: 0.85
+git_context:
+  ref: 21c4041c27cdfc4070f27127604827669a02d7b1
+  branch: conductor-revival-phase0
+  dirty: true

@@ -53,3 +53,4 @@
 {"timestamp":"2026-05-30T00:57:31.111Z","type":"notebook-reference","agentId":"builder","notebookEntryIds":["nb-acl-mn4wi3vi","nb-build-mn53ww33","nb-conductor-mn53x3e1","nb-mcp-tools-mn53wzsn"]}
 {"timestamp":"2026-05-30T00:57:31.114Z","type":"notebook-reference","agentId":"reviewer","notebookEntryIds":["nb-acl-mn4wi3wd","nb-compliance-mn53xbhx","nb-compliance-check-001","nb-cross-package-mn53xf98"]}
 {"timestamp":"2026-05-30T00:57:31.116Z","type":"notebook-reference","agentId":"documentor","notebookEntryIds":["nb-purpose-files-mn6b4o3w","nb-purpose-files-mn53y3j4","nb-specs-mn53y8bq"]}
+{"timestamp":"2026-06-17T17:17:59.960Z","type":"notebook-reference","agentId":"architect","notebookEntryIds":["nb-flow-design-001"]}

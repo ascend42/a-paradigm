@@ -1,0 +1,29 @@
+id: L-2026-06-15-ascend-220518-001
+type: insight
+timestamp: '2026-06-15T22:05:18.236Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: CL4R1T4S study — prompt-technique findings + guardrails
+summary: 'One-off team research into elder-plinius/CL4R1T4S (leaked production system prompts from ~25 AI products). Verdict: the "Fable boosts complete output" claim is a category error ("Fable" is a filename — ANTHROPIC/CLAUDE-FABLE-5.md — whose line-12 marketing copy was misread as a capability lever; the file is ~90% constraints and possibly partly synthetic). A prompt elicits latent capability, it cannot add it. BUT a real, bounded, adoptable upside exists: the agentic-persistence cluster from the coding-agent prompts. Adopt TECHNIQUE not TEXT — repo is AGPL-3.0, contains third-party proprietary text, and ships a live prompt-injection.'
+symbols_touched:
+  - '#agent-prompts'
+  - '#orchestration'
+learnings:
+  - '''Fable boost'' = misread of marketing copy inside ANTHROPIC/CLAUDE-FABLE-5.md (line 12 ''sits above Claude Opus''); the file is constraints (refusals/child-safety/copyright), not a completeness amplifier, and references unverifiable products (likely partly synthetic). A prompt elicits, never adds, capability.'
+  - 'Real adoptable upside = agentic-persistence cluster from coding-agent prompts: (1) explicit done-condition scoped to current intent ''do not yield until fully fulfilled'' (Factory DROID, Cursor), (2) mandatory self-verification before claiming done ''verify you edited ALL relevant locations'' (Devin <think>), (3) consult-source-before-acting / no-speculation (Factory; also Fable''s one real quality lever), (4) plan-before-act + todo checklist (Manus), (5) worked output-format exemplar (Codex). Incremental-compounding, not a step-change.'
+  - 'Paradigm has a BETTER completeness target than the source prompts: bind the done-gate to the enumerable paradigm_ripple impact set + .purpose coverage (a checkable predicate) where DROID only has prose. Adoption targets: Completion Gate in OUTPUT_FORMAT_INSTRUCTIONS + no-speculation/pre-handoff-verify in BUILDER/REVIEWER/SECURITY prompts (packages/paradigm/src/core/agent-prompts.ts); no-premature-edit reinforcement in orchestration.'
+  - 'GUARDRAILS: repo is AGPL-3.0 (viral) + contains other companies'' proprietary prompt text + ships a live prompt-injection in its README. Adopt the IDEA in our own words, NEVER paste text into any prompt/notebook/.purpose. Naive ''never stop'' fights the Stop-hook/soft-blocks — scope persistence to ''current claimed task'' so agents yield at a guard. Validate via A/B test before declaring a win.'
+tags:
+  - prompt-engineering
+  - research
+  - cl4r1t4s
+  - agent-prompts
+  - do-not-copy-text
+body: 'Team panel agentIds for continuation — Loid aed1f552c95551dd7 (technique mine + adoption map), architect aeb2675440d83d900 (mechanism vs myth), Jinx a0326c17b801ad2e1 (provenance/license/injection/opportunity-cost). Clone was /tmp/CL4R1T4S (ephemeral, AGPL-3.0). Follow-up tracked as a deferred task (after the Conductor arc): bounded adoption of the persistence+verify+consult cluster, reworded into Paradigm''s voice, A/B tested, technique-not-text.'
+confidence: 0.85
+git_context:
+  ref: 5a9f1e5d5fa9b7bfbdae62bb4afcdcb1c0d50678
+  branch: main
+  dirty: true

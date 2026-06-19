@@ -1,0 +1,45 @@
+id: L-2026-06-17-ascend-004231-001
+type: milestone
+timestamp: '2026-06-17T00:42:31.845Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: CHECKPOINT — THE BRIDGE shipped; restart point for next wave
+summary: 'Session restart checkpoint. THE BRIDGE — the full-screen N-session fleet cockpit — is built and bundled on branch conductor-revival-phase0 (commit 21c4041c). This completes the Conductor revival''s core picture: fleet spine (left) + active ATRIUM conversation (center) + CHORUS sub-agent rail (right), with calm-by-default temperature law and a non-focus-stealing page-back. Matt is restarting the session to test the whole thing, then diving into ANOTHER major feature regarding this new view/interaction (to be described next session).'
+symbols_touched:
+  - '#cockpit-view'
+  - '#fleet-store'
+  - '#fleet-spine'
+  - '#session-row'
+  - '#session-spawn-sheet'
+  - '#session-derived-status'
+  - '#conductor-cockpit-window'
+  - '#atrium-thread'
+  - '#atrium-chorus'
+  - '#claude-stream-session'
+  - '#session-transcript'
+tags:
+  - conductor
+  - the-bridge
+  - fleet-cockpit
+  - checkpoint
+  - restart-point
+body: |-
+  RESTART HERE. Branch: conductor-revival-phase0 (commits through 21c4041c / history h0470). Not merged; Matt publishes/merges himself.
+
+  WHAT'S BUILT (this session, all Swift-owned): ATRIUM keystone (claude -p stream-json conversation in custom UI) → full composer (NSTextView clipboard+multiline, file-drop chips, voice keyword loop "respond"/"send it" + Settings keyword config) → Stop (control_request interrupt) → background-bash shell inspect/kill (TaskStop) → login-shell PATH fix → inspectable per-session transcripts (~/.paradigm/conductor/atrium/*.jsonl) → THE CHORUS (sub-agent display, deterministic via tool_use_id + task_type) → THE BRIDGE (full-screen fleet cockpit: FleetStore owns N sessions; spine|ATRIUM|CHORUS; derived status + temperature law + page-back; spawn/switch/close; ConductorCockpitWindow; AtriumSpikeWindow retired). Launch: open packages/conductor/build/Conductor.app, ⌘⇧A.
+
+  ON RESTART: (1) read this + the build plan [[L-2026-06-15-ascend-215150-001]] + the prior session checkpoint [[L-2026-06-16-ascend-091000-001]] (has the VERIFIED claude -p protocol facts: control_request interrupt, TaskStop, task_type local_agent/local_bash, tool_use_id correlation, the macOS LSUIElement/TCC/PATH gotchas) + arc memory project_conductor_symphony_aaloud_arc. (2) Matt is TESTING THE BRIDGE — expect reactions/changes. (3) Then Matt has ANOTHER MAJOR FEATURE re: this new view/interaction — let him describe it. 
+
+  DISCIPLINE: Swift ecosystem agent owns ALL Conductor Swift implementation (protocol-enforced this session). Debug runtime via the ~/.paradigm/conductor/atrium transcripts (READ them, don't screenshot-guess). Run the BUNDLED .app (not the bare binary) for mic/TCC + true behavior. NO Markdown blockquotes in output (global rule).
+
+  OPEN v2 ITEMS: full nested sub-agent transcript drill-in (needs parent_tool_use_id on inner tool calls); needs-human (amber) as a first-class stream signal (currently heuristic; noteNeedsHuman() hook reserved); UserNotifications/voice page-back; git branch in session row; voice "no words typed" live-verify; per-session composer-draft persistence; session persistence across app restart (claude --resume); interrupt-mid-Bash-tool live-confirm. Pre-existing pending: merge conductor-revival-phase0.
+linked_lore:
+  - L-2026-06-16-ascend-091000-001
+  - L-2026-06-15-ascend-215150-001
+confidence: 0.85
+git_context:
+  ref: 21c4041c27cdfc4070f27127604827669a02d7b1
+  branch: conductor-revival-phase0
+  dirty: true

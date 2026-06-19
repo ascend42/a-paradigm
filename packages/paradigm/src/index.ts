@@ -1879,6 +1879,19 @@ const graphCmd = program
   });
 
 graphCmd
+  .command('slice <symbol>')
+  .description('Project a bounded slice of the symbol graph (mermaid / conductor-visual / json)')
+  .argument('[path]', 'Project directory', undefined)
+  .option('-r, --radius <n>', 'Neighbor hops to include (default 1, max 3)', '1')
+  .option('-m, --mode <mode>', 'Projection mode: ego | ripple | flow', 'ego')
+  .option('--format <format>', 'Output format: mermaid | envelope | json')
+  .option('--as-lightbox', 'Emit a conductor-visual fenced block (alias for --format envelope)')
+  .action(async (symbol, path, options) => {
+    const { graphSliceCommand } = await import('./commands/graph-slice.js');
+    await graphSliceCommand(symbol, path, options);
+  });
+
+graphCmd
   .command('generate')
   .description('Generate a named graph file in .paradigm/graphs/')
   .argument('<name>', 'Graph name (used as filename: {name}.graph.json)')

@@ -1,0 +1,85 @@
+purpose: THE BRIDGE — the full-screen fleet cockpit; a 3-zone shell (status-grouped session spine | active session's ATRIUM | CHORUS-inside-center) over N fully isolated ClaudeStreamSessions
+version: 1.0.0
+description: "THE BRIDGE is Conductor's full-screen fleet cockpit. It composes N per-session-isolated ClaudeStreamSessions (each owns its own Process/Pipes/off-main LineFramer/SessionTranscript/@Published state) into a calm command surface whose loudness scales ONLY with how much the human is needed. Left spine groups sessions by derived status (NEEDS YOU / WORKING / IDLE); the center cross-fades (120ms, in place) to the active session's ATRIUM thread with the CHORUS rail hosted INSIDE it (the cockpit does NOT fork AtriumThreadView). amber is SACRED — only an awaitingYou session pages, via the spine, never stealing focus or auto-switching."
+context:
+  - Composition over shared state — FleetStore holds the sessions; sessions never share mutable state (~session-isolation)
+  - The `.id(active.id)` on the center is LOAD-BEARING — clean per-session UI state on switch; the session objects are never recreated
+  - The CHORUS rail STAYS inside the center (AtriumThreadView's push-out rail) — not lifted to a cockpit zone
+  - Temperature law shared with the CHORUS via TemperatureLaw (Models/SessionDerivedStatus.swift): teal=working, amber=awaitingYou (only), coral=error, muted=idle/done
+  - Only WORKING (4s breathe) + NEEDS YOU (3s pulse + faint wash + glow) animate at rest; idle/error/done are still
+
+# ============================================
+# Components (#)
+# ============================================
+
+#cockpit-view:
+  description: "THE BRIDGE root — HSplitView { FleetSpineView | center }. Center renders the active session's AtriumThreadView with `.id(active.id)` (load-bearing), 120ms cross-fade in place on switch, else the calm FleetEmptyState. Hosts ⌘1–9 / ⌘↑↓ / ⌘N fleet shortcuts and the spawn sheet."
+  type: view
+  tags: [conductor, cockpit, bridge, fleet]
+  anchors:
+    - CockpitView.swift:1
+
+#fleet-spine:
+  description: "Left spine — a bridge bar ('N sessions · M needs you', amber when M>0, 'all calm' when M==0) over a status-grouped session list: NEEDS YOU (always first, not collapsible, hidden when empty), WORKING, IDLE (auto-collapse past 1). Density tiers compact WORKING/IDLE rows past 6/9 sessions; NEEDS YOU rows never compact. `+ new session` at bottom."
+  type: view
+  tags: [conductor, cockpit, bridge, spine]
+  anchors:
+    - FleetSpineView.swift:1
+
+#session-row:
+  description: "One session in the spine (mirrors AtriumChorusRow): status glyph (animated for running/awaitingYou) · prose projectName · mono model·age subtitle · one-line italic last-activity preview · status·~tokens micro-signal. Active row = blue left-edge + surfaceRaised fill; awaitingYou keeps an amber edge + faint pulsing wash. Hover/active reveals a close affordance."
+  type: view
+  tags: [conductor, cockpit, bridge, session-row]
+  anchors:
+    - FleetSpineView.swift:1
+
+#session-spawn-sheet:
+  description: "Sheet over the dimmed cockpit — ProjectStore.sorted recents + an NSOpenPanel 'Browse…' folder picker + an optional opening-prompt field. On confirm: store.spawn(projectPath:initialPrompt:) and projectStore.addOrUpdate(...). Warns past the FleetStore soft cap; past-cap spawns are forced on the founder's confirm."
+  type: view
+  tags: [conductor, cockpit, bridge, spawn]
+  anchors:
+    - SessionSpawnSheet.swift:1
+
+# ============================================
+# Flows ($)
+# ============================================
+
+flows:
+  $fleet-spawn:
+    description: "Spawn sheet pick (recent or Browse…) → store.spawn(projectPath:initialPrompt:) constructs + starts a ClaudeStreamSession, appends it insertion-ordered, sets active; projectStore.addOrUpdate records the recent"
+    steps:
+      - "#session-spawn-sheet"
+      - "#fleet-store"
+      - "#claude-stream-session"
+  $fleet-switch:
+    description: "Spine row select / ⌘1–9 / ⌘↑↓ → store.setActive(id) changes only what the center renders; every other session keeps streaming untouched in the background (instance-bound ingest)"
+    steps:
+      - "#session-row"
+      - "#fleet-store"
+      - "#cockpit-view"
+
+# ============================================
+# Signals (!)
+# ============================================
+
+signals:
+  "!session-needs-you":
+    description: "Reserved v2 signal — a session is blocked awaiting the human. v1 derives awaitingYou heuristically (SessionDerivedStatus); ClaudeStreamSession.noteNeedsHuman() is the reserved no-op hook for the v2 wiring."
+    emitters: ["#claude-stream-session"]
+
+# ============================================
+# Aspects (~)
+# ============================================
+
+~session-isolation:
+  description: "Each ClaudeStreamSession is fully self-contained (own Process/Pipes/off-main LineFramer/SessionTranscript/@Published state); the FleetStore composes them and never introduces shared mutable session state. Background (non-active) sessions keep streaming into their own state because ingest is instance-bound."
+  anchors:
+    - ../../../Services/FleetStore.swift:1
+    - ../../../Services/ClaudeStreamSession.swift:1
+
+tags:
+  - conductor
+  - cockpit
+  - bridge
+  - fleet
+  - session-isolation

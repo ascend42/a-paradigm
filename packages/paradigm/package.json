@@ -1,6 +1,6 @@
 {
   "name": "@a-company/paradigm",
-  "version": "7.3.0",
+  "version": "7.4.0",
   "description": "Unified CLI for Paradigm developer tools",
   "type": "module",
   "main": "./dist/index.js",
@@ -31,6 +31,7 @@
   },
   "dependencies": {
     "@a-company/portal-core": "*",
+    "@a-company/premise-core": "*",
     "@a-company/registry-client": "^0.1.0",
     "@a-company/university-core": "*",
     "@modelcontextprotocol/sdk": "^1.0.0",

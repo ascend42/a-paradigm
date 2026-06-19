@@ -7,8 +7,10 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { graphSliceFromRoot, type SliceMode } from '@a-company/premise-core';
 import type { ProjectContext } from '../utils/index-loader.js';
 import { trackToolCall } from './context.js';
+import { log } from '../utils/mcp-logger.js';
 
 const GRAPHS_DIR = '.paradigm/graphs';
 
@@ -143,6 +145,32 @@ export function getGraphToolsList() {
         destructiveHint: false,
       },
     },
+    {
+      name: 'paradigm_graph_slice',
+      description:
+        'Project a BOUNDED slice of the real symbol graph centered on one symbol. Returns deterministic, sorted {root, freshness, nodes, edges, truncated} JSON ready to render (cockpit lightbox / mermaid). Resolves the symbol via the index; on a miss returns didYouMean candidates and renders nothing (fail loud). Use to visualize a symbol\'s neighborhood. ~200 tokens.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          symbol: {
+            type: 'string',
+            description: 'Symbol to center the slice on (e.g. "#cockpit-view", "$checkout", "^authenticated").',
+          },
+          radius: {
+            type: 'number',
+            description: 'Neighbor hops to include (default 1, max 3).',
+          },
+          mode: {
+            type: 'string',
+            enum: ['ego', 'ripple', 'flow'],
+            description: 'Projection mode (default "ego").',
+          },
+        },
+        required: ['symbol'],
+      },
+      annotations: { readOnlyHint: true, destructiveHint: false },
+      aliases: ['graph slice', 'symbol neighborhood', 'ego graph', 'project graph'],
+    },
   ];
 }
 
@@ -155,6 +183,10 @@ export async function handleGraphTool(
   args: Record<string, unknown>,
   ctx: ProjectContext,
 ): Promise<{ handled: boolean; text: string }> {
+  if (name === 'paradigm_graph_slice') {
+    return await handleGraphSlice(args, ctx);
+  }
+
   if (name !== 'paradigm_graph_generate') {
     return { handled: false, text: '' };
   }
@@ -193,6 +225,49 @@ export async function handleGraphTool(
   } catch (err) {
     const text = JSON.stringify({ error: (err as Error).message }, null, 2);
     trackToolCall(text.length, name);
+    return { handled: true, text };
+  }
+}
+
+// ============================================================================
+// Graph Slice — #graph-slice-projector seam (delegates to premise-core)
+// ============================================================================
+
+async function handleGraphSlice(
+  args: Record<string, unknown>,
+  ctx: ProjectContext,
+): Promise<{ handled: boolean; text: string }> {
+  const symbol = args.symbol as string;
+  const radius = typeof args.radius === 'number' ? (args.radius as number) : undefined;
+  const mode = (args.mode as SliceMode | undefined) ?? 'ego';
+
+  if (!symbol) {
+    const text = JSON.stringify({ error: 'symbol is required' }, null, 2);
+    trackToolCall(text.length, 'paradigm_graph_slice');
+    return { handled: true, text };
+  }
+
+  try {
+    const slice = await graphSliceFromRoot(ctx.rootDir, { symbol, radius, mode });
+    log.component('#graph-slice-projector').info('projected graph slice', {
+      symbol,
+      radius: radius ?? 1,
+      mode,
+      nodes: slice.nodes.length,
+      edges: slice.edges.length,
+      truncated: slice.truncated,
+      resolved: !slice.didYouMean,
+    });
+    const text = JSON.stringify(slice, null, 2);
+    trackToolCall(text.length, 'paradigm_graph_slice');
+    return { handled: true, text };
+  } catch (err) {
+    log.component('#graph-slice-projector').warn('graph slice failed', {
+      symbol,
+      error: (err as Error).message,
+    });
+    const text = JSON.stringify({ error: (err as Error).message, symbol }, null, 2);
+    trackToolCall(text.length, 'paradigm_graph_slice');
     return { handled: true, text };
   }
 }
