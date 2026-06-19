@@ -118,6 +118,62 @@ describe('doctorCommand', () => {
     expect(allOutput).not.toMatch(/specs\/probe\.md.*not found/i);
   });
 
+  it('classroom health: renders calmly with no certification data', async () => {
+    // No .paradigm/events/classroom-certifications.jsonl → must not throw and
+    // must show the calm "no certifications yet" line, never an error.
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const { rootDir, cleanup: c } = createTempProject({
+      withSpecs: true,
+      withDocs: true,
+      withPurpose: true,
+      withScanIndex: true,
+    });
+    cleanup = c;
+    await doctorCommand({ rootDir });
+    const allOutput =
+      consoleSpy.mock.calls.map((a) => a.join(' ')).join('\n') +
+      '\n' +
+      writeSpy.mock.calls.map((a) => String(a[0])).join('');
+    expect(allOutput).toContain('Classroom / learning health');
+    expect(allOutput).toMatch(/No certifications yet/i);
+  });
+
+  it('classroom health: shows the repeat-failure-rate with an overturned cert', async () => {
+    const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const writeSpy = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+    const { rootDir, cleanup: c } = createTempProject({
+      withSpecs: true,
+      withDocs: true,
+      withPurpose: true,
+      withScanIndex: true,
+    });
+    cleanup = c;
+    const eventsDir = path.join(rootDir, '.paradigm', 'events');
+    fs.mkdirSync(eventsDir, { recursive: true });
+    // 1 overturned + 1 survived = 2 resolved → rate 0.5 (not above the 0.5
+    // warn threshold, and resolved < floor of 3, so no WARN — but the block
+    // and rate must render without throwing).
+    fs.writeFileSync(
+      path.join(eventsDir, 'classroom-certifications.jsonl'),
+      [
+        JSON.stringify({ agent: 'builder', entryId: 'e1', outcome: 'overturned' }),
+        JSON.stringify({ agent: 'builder', entryId: 'e2', outcome: 'survived' }),
+      ].join('\n') + '\n',
+      'utf8',
+    );
+    await doctorCommand({ rootDir });
+    const allOutput =
+      consoleSpy.mock.calls.map((a) => a.join(' ')).join('\n') +
+      '\n' +
+      writeSpy.mock.calls.map((a) => String(a[0])).join('');
+    expect(allOutput).toContain('Classroom / learning health');
+    expect(allOutput).toContain('repeat-failure-rate');
+    expect(allOutput).toMatch(/0\.5/);
+    // The healthy "loop is correcting" advisory fires on the overturned cert.
+    expect(allOutput).toMatch(/loop is correcting/i);
+  });
+
   it('quiet mode suppresses doctor console output', async () => {
     const consoleSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     const { rootDir, cleanup: c } = createTempProject();

@@ -30,10 +30,15 @@ import {
   loadScenariosForAgent,
   type ScenarioProbe,
 } from '../utils/scenario-loader.js';
+import { readFieldFailures } from '../utils/field-failures.js';
+// The repeat-failure-rate rollup is the ONE canonical formula in premise-core
+// (TD-2026-06-19-007) — shared with `paradigm doctor` so the metric never
+// drifts between the MCP tool and the CLI. The cert WRITER stays in
+// field-failures.ts; only the read + rollup is shared.
 import {
-  readFieldFailures,
   readClassroomCertifications,
-} from '../utils/field-failures.js';
+  computeRepeatFailureRate,
+} from '@a-company/premise-core';
 
 export function getClassroomToolsList() {
   return [
@@ -270,6 +275,12 @@ export async function handleClassroomTool(
       const failures = readFieldFailures(ctx.rootDir);
       const certs = readClassroomCertifications(ctx.rootDir);
 
+      // The repeat-failure-rate is computed by premise-core's canonical rollup
+      // (shared with `paradigm doctor`). We map its per-agent { resolved,
+      // overturned, rate } onto this tool's stable output shape (which also
+      // reports pending/survived counts + field-failures).
+      const rollup = computeRepeatFailureRate(certs);
+
       // Per-agent rollup.
       const agents = new Set<string>();
       for (const f of failures) agents.add(f.agent);
@@ -283,13 +294,8 @@ export async function handleClassroomTool(
         const overturned = agentCerts.filter(c => c.outcome === 'overturned').length;
         const survived = agentCerts.filter(c => c.outcome === 'survived').length;
         const pending = agentCerts.filter(c => c.outcome === 'pending').length;
-        const resolved = overturned + survived;
-        // repeat-failure-rate: overturned certs over resolved certs (team is
-        // stronger ⇔ the same learning doesn't break twice). Undefined until
-        // at least one cert resolves.
-        const repeatFailureRate = resolved > 0
-          ? Number((overturned / resolved).toFixed(3))
-          : null;
+        // Canonical rate from premise-core (null until ≥1 cert resolves).
+        const repeatFailureRate = rollup.perAgent[agent]?.rate ?? null;
         perAgent[agent] = {
           fieldFailures: agentFailures.length,
           certifications: { total: agentCerts.length, pending, survived, overturned },

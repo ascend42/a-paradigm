@@ -106,3 +106,16 @@ export type {
   SliceEdgeKind,
   SliceMode,
 } from './graph-slice.js';
+
+// Classroom metrics — #classroom-metrics (the canonical repeat-failure-rate)
+export {
+  readClassroomCertifications,
+  readFieldFailures,
+  computeRepeatFailureRate,
+} from './classroom-metrics.js';
+export type {
+  ClassroomCertRow,
+  FieldFailureRow,
+  AgentRepeatFailure,
+  RepeatFailureRate,
+} from './classroom-metrics.js';
