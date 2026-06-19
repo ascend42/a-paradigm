@@ -1,0 +1,58 @@
+id: L-2026-06-18-ascend-000837-001
+type: milestone
+timestamp: '2026-06-18T00:08:37.041Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: ARC SHIPPED — symbol graph as DEFAULT cockpit discourse substrate (Phases 1 + 2a–d)
+summary: 'The founder''s keystone arc is feature-complete on branch conductor-revival-phase0 (commits 3d858e0b → cabcc486, history → h0476; Conductor.app build 701). Agents now ground proposals/decisions in the project''s REAL symbol graph and render them visually BY DEFAULT — render-by-projection, not improvised mermaid. Shipped: Phase 1 — standalone `paradigm graph slice` CLI + paradigm_graph_slice MCP projector (live-parse sourced, deterministic, fail-loud); Phase 2a — native .graph LIGHTBOX kind (SwiftUI Canvas ego-graph); 2b+2c — decision symbol-grounding + the default-graph prompt (Scholar) + hover spotlight (option row → light its symbols); 2d — Loid''s falsifiable decision-divergence instrument (~/.paradigm/conductor/decisions/*.jsonl). Manual-test checklist at .paradigm/research/graph-substrate-manual-test-checklist.md. One deferred follow-up: the learning CONSUMER (rows → notebooks + doctor metric, T-2026-06-18-001).'
+symbols_touched:
+  - '#graph-slice-projector'
+  - '#atrium-graph-view'
+  - '#session-prompt'
+  - '#agent-decision'
+  - '#fenced-block-parser'
+  - '#atrium-visual-canvas'
+  - '#atrium-decision-card'
+  - '#claude-stream-session'
+  - '#decision-divergence-journal'
+  - '#agent-visual'
+tags:
+  - conductor-arc
+  - the-bridge
+  - lightbox
+  - symbol-graph
+  - render-by-projection
+  - arc-shipped
+  - checkpoint
+  - restart-point
+body: |-
+  RESTART HERE for this arc. Branch conductor-revival-phase0, NOT merged (Matt merges/publishes himself). Launch /Applications/Conductor.app (build 701), ⌘⇧A.
+
+  WHAT SHIPPED (the founder's "agents utilize the symbol graph by default, visually"):
+  - Phase 1 (3d858e0b): #graph-slice-projector in @a-company/premise-core. `paradigm graph slice <symbol> [--radius N] [--mode ego|ripple|flow] [--format mermaid|envelope|json] [--as-lightbox]` + paradigm_graph_slice MCP tool. Sources edges from the LIVE parse (aggregateFromDirectory+buildSymbolIndex+getReferencesTo/From+flow membership — the ripple path), NOT the stale serialized indices. Deterministic topology, freshness stamp, fail-loud did-you-mean. 18 tests.
+  - Phase 2a (d256fa93): native .graph VisualKind — AtriumGraphView (Canvas + ring layout, symbol-typed nodes, focus halo). FencedBlockParser.decodeGraph decodes the real envelope.
+  - Phase 2b+2c (5689fb70): AgentDecision.symbols[] + DecisionOption.affectedSymbols[]; SessionPrompt "GROUND IN THE LIVE GRAPH" default-graph convention (render-by-projection, two-gate discriminator); hover an option row → spotlight its symbols / dim the rest (hoveredSymbols lifted to AtriumThreadView, kept OUT of Equatable AgentVisual).
+  - Phase 2d (cabcc486): #decision-divergence-journal — Loid's falsifiable instrument. Grounded+diverged decisions (and agreements as denominator, + reopen watchdog) → ~/.paradigm/conductor/decisions/<session>.jsonl. PRODUCER only.
+
+  NEXT / OPEN:
+  - Manual test pass: .paradigm/research/graph-substrate-manual-test-checklist.md (Matt's list; nothing checked yet).
+  - Deferred: T-2026-06-18-001 — learning CONSUMER (divergence rows → symbol-keyed notebook priors + paradigm doctor divergence/liveness metric; build on divergences only; keep separate from the token-cost grid).
+  - Index-integrity debts surfaced: T-2026-06-13-011 (scan-index non-deterministic serialization; .purpose ': ' YAML breakage) + T-2026-06-17-008 (conductor flows missing from flow-index.json — context-field schema errors). Projector unaffected (live parse); other index consumers are not.
+  - Pre-existing: merge conductor-revival-phase0; version bump + CHANGELOG release entry deferred to merge time (branch convention — Conductor commits don't bump).
+
+  DISCIPLINE: Swift ecosystem agent owns ALL Conductor Swift; debug via ~/.paradigm/conductor/atrium transcripts; run the bundled .app; no blockquotes; be concise.
+linked_lore:
+  - L-2026-06-17-ascend-181541-001
+  - L-2026-06-17-ascend-222305-001
+  - L-2026-06-17-ascend-231003-001
+linked_tasks:
+  - T-2026-06-17-006
+  - T-2026-06-17-007
+  - T-2026-06-18-001
+confidence: 0.86
+git_context:
+  ref: cabcc486533d41c30aacd5ffa299e96312daa2fb
+  branch: conductor-revival-phase0
+  dirty: true
