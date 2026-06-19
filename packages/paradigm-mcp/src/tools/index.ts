@@ -47,6 +47,7 @@ import { getAspectGraphToolsList, handleAspectGraphTool } from './aspect-graph.j
 import { getTasksToolsList, handleTasksTool } from './tasks.js';
 import { getPersonaToolsList, handlePersonaTool } from './personas.js';
 import { getProtocolsToolsList, handleProtocolsTool } from './protocols.js';
+import { getClassroomToolsList, handleClassroomTool } from './classroom.js';
 import { getGraphToolsList, handleGraphTool } from './graph.js';
 import { getPipelineToolsList, handlePipelineTool } from './pipeline.js';
 import { getConductorToolsList, handleConductorTool } from './conductor.js';
@@ -244,6 +245,12 @@ function buildRegistry(rootDir: string, reloadContext?: () => Promise<void>): To
       tier: 'feature',
       getToolsList: getProtocolsToolsList,
       handleTool: wrap(handleProtocolsTool),
+    },
+    {
+      key: 'classroom',
+      tier: 'feature',
+      getToolsList: getClassroomToolsList,
+      handleTool: wrap(handleClassroomTool),
     },
     {
       key: 'symphony',

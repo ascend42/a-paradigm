@@ -31,6 +31,10 @@ import {
   type FieldFailureRow,
   type FieldFailureSignal,
 } from './field-failures.js';
+import {
+  recordScenarioFromFailureSync,
+  scenarioIdForFailure,
+} from './scenario-loader.js';
 import type { SessionWorkEntry, NotebookReferenceEntry } from './session-work-log.js';
 
 /**
@@ -46,6 +50,11 @@ export interface FieldFailureReducerResult {
   entriesRevised: number;
   /** Number of certifications flipped pending → overturned. */
   certsOverturned: number;
+  /**
+   * Number of scenario-bank rows created from breaks this pass (origin:
+   * field-failure). The field generates the probe a same-family peer could not.
+   */
+  scenariosCreated: number;
 }
 
 /**
@@ -80,6 +89,7 @@ export function runFieldFailureReducer(
     failuresRecorded: 0,
     entriesRevised: 0,
     certsOverturned: 0,
+    scenariosCreated: 0,
   };
 
   let verdicts: SessionWorkEntry[];
@@ -169,6 +179,22 @@ export function runFieldFailureReducer(
         // 3. back-bind the cert: pending → overturned.
         const flipped = overturnCertification(rootDir, entryId, failureId);
         if (flipped) result.certsOverturned++;
+
+        // 4. SCENARIO: the break becomes a reusable breaking test-case probe
+        //    (origin: field-failure). This is the structural answer to the
+        //    same-family-blindspot kill shot — the field, not a same-lens peer,
+        //    generates the probe. Dedupe on origin_ref (the failure id) so a
+        //    second postflight pass over the same break does NOT spam the bank.
+        const scenarioId = scenarioIdForFailure(failureId);
+        const created = recordScenarioFromFailureSync(rootDir, {
+          id: scenarioId,
+          scenario: detail,
+          probes: [{ agent, learning_ref: entryId, claim: detail }],
+          origin: 'field-failure',
+          origin_ref: failureId,
+          expected: { must: 'survive' },
+        });
+        if (created) result.scenariosCreated++;
       }
     }
   }
@@ -178,6 +204,7 @@ export function runFieldFailureReducer(
       failuresRecorded: result.failuresRecorded,
       entriesRevised: result.entriesRevised,
       certsOverturned: result.certsOverturned,
+      scenariosCreated: result.scenariosCreated,
     });
   }
 

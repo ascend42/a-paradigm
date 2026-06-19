@@ -57,6 +57,7 @@ components:
       - '#ConductorTools'
       - '#SymphonyTools'
       - '#UniversityTools'
+      - '#ClassroomTools'
   GraduationTools:
     description: Automation tier graduation tools (graduate_check, graduate_status) — data-driven migration from habits to hooks
     type: tool
@@ -208,6 +209,47 @@ components:
       - '#AspectGraph'
       - '#AspectSearch'
       - '#AspectSuggest'
+  ClassroomTools:
+    description: 'The Classroom MCP tools (TD-2026-06-19-007) — the curriculum-artifact surface the gated class + study-hall skills drive. paradigm_syllabus_record/list/get (per-agent .syllabus, gate-zero status), paradigm_scenario_record/list (the breaking-test-case bank), paradigm_classroom_status (per-agent field-failures + certifications + repeat-failure-rate; the rollup the doctor metric reuses). Handlers delegate to the syllabus + scenario loaders and the wave-1 field-failures ledger.'
+    type: tool
+    anchors:
+      - src/tools/classroom.ts:1-330
+    tags:
+      - mcp
+      - classroom
+      - learning-loop
+    components:
+      - '#SyllabusLoader'
+      - '#ScenarioLoader'
+      - '#FieldFailureReducer'
+  SyllabusLoader:
+    description: 'Per-agent .syllabus artifact loader (The Classroom). Mirrors the protocol-loader machinery: recordSyllabus (write + version bump), loadLatestSyllabus/loadSyllabi, validateSyllabus (recomputes status current/stale/broken/expired — broken on a dangling source ref, stale when a referenced notebook is newer than last_ratified, expired past term_ttl_days), rebuildSyllabusIndex with a health rollup. validateSyllabus is the gate-zero instrument hooked into paradigm_reindex.'
+    type: util
+    anchors:
+      - src/utils/syllabus-loader.ts:1-360
+    tags:
+      - classroom
+      - curriculum
+      - gate-zero
+  ScenarioLoader:
+    description: 'Scenario-bank artifact loader (The Classroom). The "no scenario, no assessment" substrate: recordScenario (create-if-absent), loadScenarios/loadScenariosForAgent (filter by probe agent), appendScenarioOutcome (history + repeat_failures bump on a broke), rebuildScenarioIndex (active/retired/byOrigin rollup, hooked into reindex), and recordScenarioFromFailureSync — the sync seam the field-failure reducer uses to convert a break into a field-failure-origin scenario (dedupe on origin_ref).'
+    type: util
+    anchors:
+      - src/utils/scenario-loader.ts:1-310
+    tags:
+      - classroom
+      - curriculum
+      - scenario-bank
+  FieldFailureReducer:
+    description: 'The Classroom fail-side reducer (wave 1, extended wave 2a). At postflight joins reviewer/human verdicts back to notebook application receipts by orchestrationId; for each real join writes a field-failures.jsonl row, revises the entry down, back-binds the pending certification to overturned, and (wave 2a) converts the break into a field-failure-origin scenario in the bank — the field generates the probe a same-family peer structurally could not.'
+    type: util
+    anchors:
+      - src/utils/field-failure-reducer.ts:1-210
+      - src/utils/field-failures.ts:1-214
+    tags:
+      - classroom
+      - learning-loop
+      - attribution
   AspectSearch:
     description: Three-tier search engine (learned→FTS5→fuzzy) with query normalization and learning loop
     anchors:

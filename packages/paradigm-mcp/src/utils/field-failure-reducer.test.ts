@@ -43,6 +43,7 @@ vi.mock('os', async (importOriginal) => {
 
 // Imported AFTER the os mock so GLOBAL_NOTEBOOKS_DIR resolves into the mock-home.
 import { runFieldFailureReducer } from './field-failure-reducer.js';
+import { loadScenarios } from './scenario-loader.js';
 import {
   readFieldFailures,
   readClassroomCertifications,
@@ -164,6 +165,7 @@ describe('runFieldFailureReducer — the loop turns (acceptance)', () => {
       failuresRecorded: 1,
       entriesRevised: 1,
       certsOverturned: 1,
+      scenariosCreated: 1,
     });
 
     // (a) a field-failures.jsonl row attributing this entry under this orchestration.
@@ -292,10 +294,61 @@ describe('runFieldFailureReducer — only real breaks count', () => {
       failuresRecorded: 0,
       entriesRevised: 0,
       certsOverturned: 0,
+      scenariosCreated: 0,
     });
     expect(readFieldFailures(projectDir)).toHaveLength(0);
     expect(readProjectNotebook(ENTRY_ID).appliedAndBrokeCount).toBeUndefined();
     const cert = readClassroomCertifications(projectDir).find(c => c.entryId === ENTRY_ID);
     expect(cert?.outcome).toBe('pending');
+  });
+});
+
+// ────────────────────────────────────────────────────────
+// 5. FIELD-FAILURE → SCENARIO CONVERTER — the field generates the probe
+// ────────────────────────────────────────────────────────
+
+describe('runFieldFailureReducer — field-failure → scenario converter', () => {
+  it('creates exactly ONE field-failure scenario, with the right origin + origin_ref', () => {
+    writeProjectNotebook(makeEntry({ appliedCount: 1, confidence: START_CONFIDENCE }));
+    appendClassroomCertification(projectDir, pendingCert());
+    recordNotebookReference(projectDir, AGENT, [ENTRY_ID], ORCH_ID);
+    appendSessionWorkEntry(projectDir, makeVerdict({ verdict: 'dismissed' }));
+
+    const result = runFieldFailureReducer(projectDir);
+    expect(result.scenariosCreated).toBe(1);
+
+    return loadScenarios(projectDir).then(scenarios => {
+      expect(scenarios).toHaveLength(1);
+      const sc = scenarios[0];
+      expect(sc.origin).toBe('field-failure');
+      // origin_ref points at the failure id (makeFailureId).
+      expect(sc.origin_ref).toBe(makeFailureId(ORCH_ID, ENTRY_ID));
+      // probe is derived from the attributed entry's agent + id.
+      expect(sc.probes).toHaveLength(1);
+      expect(sc.probes[0].agent).toBe(AGENT);
+      expect(sc.probes[0].learning_ref).toBe(ENTRY_ID);
+      // expected.must defaults to survive.
+      expect(sc.expected.must).toBe('survive');
+      expect(sc.status).toBe('active');
+    });
+  });
+
+  it('does NOT duplicate the scenario on a second pass over the same break', () => {
+    writeProjectNotebook(makeEntry({ confidence: START_CONFIDENCE }));
+    appendClassroomCertification(projectDir, pendingCert());
+    recordNotebookReference(projectDir, AGENT, [ENTRY_ID], ORCH_ID);
+    appendSessionWorkEntry(projectDir, makeVerdict({ verdict: 'dismissed' }));
+
+    const first = runFieldFailureReducer(projectDir);
+    expect(first.scenariosCreated).toBe(1);
+
+    // Second pass: dedupe guard (the failure ledger already records the break,
+    // AND the scenario already exists on origin_ref) → no new scenario.
+    const second = runFieldFailureReducer(projectDir);
+    expect(second.scenariosCreated).toBe(0);
+
+    return loadScenarios(projectDir).then(scenarios => {
+      expect(scenarios).toHaveLength(1);
+    });
   });
 });
