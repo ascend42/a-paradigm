@@ -18,6 +18,8 @@ import { openAspectGraph, materializeAspects, closeAspectGraph } from '../utils/
 import { materializeLoreLinks, inferLoreEdges } from '../utils/aspect-lore-bridge.js';
 import { rebuildPersonaIndex } from '../utils/personas-loader.js';
 import { rebuildProtocolIndex } from '../utils/protocol-loader.js';
+import { rebuildSyllabusIndex } from '../utils/syllabus-loader.js';
+import { rebuildScenarioIndex } from '../utils/scenario-loader.js';
 import { rebuildUniversityIndex } from '../utils/university-loader.js';
 import {
   ConsistencyTracker,
@@ -132,6 +134,11 @@ export async function handleReindexTool(
       filesWritten: result.filesWritten.length,
       ...(result.aspectGraphStats ? { aspects: result.aspectGraphStats.aspects, loreLinks: result.aspectGraphStats.loreLinks } : {}),
       ...(result.protocolHealth ? { protocols: result.protocolHealth.total, staleProtocols: result.protocolHealth.stale } : {}),
+      ...(result.syllabusHealth ? {
+        syllabi: result.syllabusHealth.total,
+        syllabiNeedingRatification: result.syllabusHealth.stale + result.syllabusHealth.broken + result.syllabusHealth.expired,
+      } : {}),
+      ...(result.scenarioHealth ? { scenarios: result.scenarioHealth.total } : {}),
       ...(issues > 0 ? { issues } : {}),
     };
 
@@ -171,6 +178,20 @@ export interface RebuildResult {
     current: number;
     stale: number;
     broken: number;
+  };
+  /** The Classroom (TD-2026-06-19-007): syllabus gate-zero health rollup. */
+  syllabusHealth?: {
+    total: number;
+    current: number;
+    stale: number;
+    broken: number;
+    expired: number;
+  };
+  /** The Classroom: scenario-bank rollup. */
+  scenarioHealth?: {
+    total: number;
+    active: number;
+    retired: number;
   };
   componentTypeBreakdown?: Record<string, number>;
   universityStats?: { totalContent: number; diplomaCount: number };
@@ -296,6 +317,35 @@ export async function rebuildStaticFiles(
     // Protocol index build is non-fatal
   }
 
+  // 7b. The Classroom: rebuild syllabus + scenario indexes (gate-zero). Mirrors
+  //     the protocol validation pass — validateSyllabus recomputes each status so
+  //     a stale/broken/expired syllabus is detectable on the next study-hall run.
+  let syllabusHealth: RebuildResult['syllabusHealth'];
+  try {
+    const syllabusIndex = await rebuildSyllabusIndex(rootDir);
+    if (syllabusIndex.health.total > 0) {
+      syllabusHealth = syllabusIndex.health;
+      filesWritten.push('.paradigm/curriculum/index.yaml');
+    }
+  } catch {
+    // Syllabus index build is non-fatal
+  }
+
+  let scenarioHealth: RebuildResult['scenarioHealth'];
+  try {
+    const scenarioIndex = await rebuildScenarioIndex(rootDir);
+    if (scenarioIndex.health.total > 0) {
+      scenarioHealth = {
+        total: scenarioIndex.health.total,
+        active: scenarioIndex.health.active,
+        retired: scenarioIndex.health.retired,
+      };
+      filesWritten.push('.paradigm/curriculum/scenarios/index.yaml');
+    }
+  } catch {
+    // Scenario index build is non-fatal
+  }
+
   // 8. Rebuild university index (non-fatal)
   let universityStats: RebuildResult['universityStats'];
   try {
@@ -410,6 +460,8 @@ export async function rebuildStaticFiles(
     aspectGraphStats,
     personaCount,
     protocolHealth,
+    ...(syllabusHealth ? { syllabusHealth } : {}),
+    ...(scenarioHealth ? { scenarioHealth } : {}),
     consistency,
     ...(Object.keys(componentTypeBreakdown).length > 0 ? { componentTypeBreakdown } : {}),
     ...(universityStats ? { universityStats } : {}),

@@ -12,6 +12,11 @@ import chalk from 'chalk';
 import { log } from '../../utils/logger.js';
 import { parseParadigmConfig } from '../../core/paradigm-config.js';
 import { detectIDE, getAdapter } from '../../core/ide-adapters/index.js';
+import { out, success, warn, dim, header, kv } from '../../utils/cli-output.js';
+import {
+  readClassroomCertifications,
+  computeRepeatFailureRate,
+} from '@a-company/premise-core';
 
 interface CheckResult {
   name: string;
@@ -852,6 +857,60 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
   }
 
   // ──────────────────────────────────────────────────────────────────────
+  // Classroom / learning health (TD-2026-06-19-007)
+  //
+  // The "is the team getting stronger?" scoreboard. Computed by premise-core's
+  // ONE canonical rollup — the SAME code the paradigm_classroom_status MCP tool
+  // uses, so the doctor metric can never drift from the tool. Degrades calmly
+  // to a "no certifications yet" line; never errors on absent/corrupt data.
+  //
+  // Rendered as its own block (below), but we push a CheckResult here for the
+  // WARN case so a high/rising repeat-failure-rate counts toward exit health.
+  // ──────────────────────────────────────────────────────────────────────
+  const classroom = (() => {
+    try {
+      const certs = readClassroomCertifications(cwd);
+      const rollup = computeRepeatFailureRate(certs);
+      const resolvedTotal = Object.values(rollup.perAgent).reduce(
+        (n, a) => n + a.resolved,
+        0,
+      );
+      const overturnedTotal = Object.values(rollup.perAgent).reduce(
+        (n, a) => n + a.overturned,
+        0,
+      );
+      return {
+        present: certs.length > 0,
+        certCount: certs.length,
+        rollup,
+        resolvedTotal,
+        overturnedTotal,
+      };
+    } catch {
+      // Advisory metric — a read failure must never break doctor.
+      return null;
+    }
+  })();
+
+  // Thresholds (MVP): warn if the global rate is high once enough certs have
+  // resolved to be meaningful. Floor avoids screaming over a single unlucky cert.
+  const REPEAT_FAILURE_WARN_THRESHOLD = 0.5;
+  const REPEAT_FAILURE_RESOLVED_FLOOR = 3;
+  if (
+    classroom &&
+    classroom.rollup.overall !== null &&
+    classroom.resolvedTotal >= REPEAT_FAILURE_RESOLVED_FLOOR &&
+    classroom.rollup.overall > REPEAT_FAILURE_WARN_THRESHOLD
+  ) {
+    results.push({
+      name: 'Repeat-failure-rate',
+      status: 'warn',
+      message: `High: ${classroom.rollup.overall} of resolved certs were overturned (${classroom.overturnedTotal}/${classroom.resolvedTotal})`,
+      fix: 'Learnings are breaking repeatedly — review refinements via /paradigm:class review',
+    });
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
   // Display core results
   // ──────────────────────────────────────────────────────────────────────
 
@@ -898,6 +957,56 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
 
       if (result.fix) {
         console.log(chalk.gray(`    └─ Fix: ${result.fix}`));
+      }
+    }
+  }
+
+  // ──────────────────────────────────────────────────────────────────────
+  // Classroom / learning health — detailed block (cli-output helpers)
+  //
+  // Rendered only when classroom data could be read. The WARN line (high rate)
+  // is already counted via the CheckResult above; this block is the human view
+  // of the rollup — global rate, per-agent rates, and a healthy advisory when
+  // a learning has been overturned (the loop is CORRECTING, which is good).
+  // ──────────────────────────────────────────────────────────────────────
+  if (!quiet && classroom) {
+    header('Classroom / learning health');
+    if (!classroom.present) {
+      dim('  No certifications yet — the learning loop has not turned. This is normal for a fresh project.');
+    } else {
+      const { overall } = classroom.rollup;
+      const rateLabel = overall === null
+        ? 'n/a (no certs resolved yet)'
+        : String(overall);
+      kv('repeat-failure-rate (global)', rateLabel);
+      kv('resolved / overturned', `${classroom.resolvedTotal} / ${classroom.overturnedTotal}`);
+
+      // Per-agent split — only agents with at least one resolved cert.
+      const agents = Object.keys(classroom.rollup.perAgent).sort();
+      if (agents.length > 0) {
+        out('  ' + chalk.dim('per-agent:'));
+        for (const agent of agents) {
+          const a = classroom.rollup.perAgent[agent];
+          const rate = a.rate === null ? 'n/a' : String(a.rate);
+          out(`    ${chalk.dim(agent + ':')} rate ${rate} (${a.overturned}/${a.resolved} overturned)`);
+        }
+      }
+
+      // Healthy advisory: an overturned cert means the field caught a learning
+      // and the loop is correcting — NOT a red flag on its own.
+      if (classroom.overturnedTotal > 0) {
+        dim(`  ${classroom.overturnedTotal} learning${classroom.overturnedTotal > 1 ? 's were' : ' was'} overturned by the field — the loop is correcting (healthy).`);
+      }
+
+      // High-rate WARN echoes the CheckResult so the block is self-contained.
+      if (
+        overall !== null &&
+        classroom.resolvedTotal >= 3 &&
+        overall > 0.5
+      ) {
+        warn(`  Repeat-failure-rate is high (${overall} > 0.5) — learnings are breaking repeatedly. Review refinements via /paradigm:class review.`);
+      } else if (overall !== null) {
+        success('  Repeat-failure-rate within healthy range.');
       }
     }
   }

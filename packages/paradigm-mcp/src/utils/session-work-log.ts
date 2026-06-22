@@ -35,6 +35,13 @@ export interface SessionWorkEntry {
   nominationId?: string;
   verdict?: 'accepted' | 'dismissed' | 'revised' | 'deferred';
   reason?: string;
+  /**
+   * The Classroom (TD-2026-06-19-007): the orchestration this verdict pertains to.
+   * The fail-side reducer joins `dismissed`/`revised` verdicts back to the notebook
+   * application receipts (notebook-refs.jsonl) BY this key to learn which entries
+   * to revise down. Optional/additive — pre-Classroom verdicts simply don't join.
+   */
+  orchestrationId?: string;
   revisionDelta?: string;
   /**
    * v7 §2.0: REAL post-task confidence (0–1) emitted by the agent/reviewer.

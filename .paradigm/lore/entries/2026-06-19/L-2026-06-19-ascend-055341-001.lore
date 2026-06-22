@@ -1,0 +1,30 @@
+id: L-2026-06-19-ascend-055341-001
+type: milestone
+timestamp: '2026-06-19T05:53:41.467Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Classroom MVP — build kickoff on branch classroom-mvp
+summary: 'Started building the Classroom MVP (T-2026-06-19-002) on branch classroom-mvp off main (v7.4.0). Verified the load-bearing technical risk: a stable orchestrationId IS minted at orchestration.ts:1406 (used for logOrchestration/emitTaskDag/symphony thread) — it''s just not threaded to the recordNotebookReference call sites (orchestration.ts:1285 and :1943, the latter doesn''t pass it at all); session-work-log.ts:84/503/519 already accept it as optional. So the attribution join key exists; threading it is the keystone plumbing, as the spec predicted. Proceeding with the recommended defaults on the two open calls: peer-assessment needs ≥1 different-lens assessor + Jinx as standing adversary; gate-zero advisory-first. Building in waves — wave 1 = the learning-loop CORE (Loid''s domain, paradigm-mcp): data-model + orchestrationId thread + field-failures reducer + reviseDown + classroom-certifications. Wave 2 (Cid) = .syllabus + scenario bank + the two skills + doctor metric.'
+symbols_touched:
+  - '#nomination-engine'
+  - '#notebook-loader'
+  - '#orchestrator'
+  - '#session-work-log'
+tags:
+  - classroom
+  - agent-learning
+  - mvp
+  - build-kickoff
+  - loid
+linked_lore:
+  - L-2026-06-19-ascend-054814-001
+  - L-2026-06-19-ascend-053642-110
+linked_tasks:
+  - T-2026-06-19-002
+confidence: 0.8
+git_context:
+  ref: ba53f2ccef6b1a99b374cb307923e0993db82b65
+  branch: classroom-mvp
+  dirty: true

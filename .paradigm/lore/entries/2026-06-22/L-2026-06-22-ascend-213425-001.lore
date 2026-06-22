@@ -1,0 +1,46 @@
+id: L-2026-06-22-ascend-213425-001
+type: milestone
+timestamp: '2026-06-22T21:34:25.234Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Classroom non-visual engine COMPLETE — v7.5.0, PR to main
+summary: 'The non-visual Classroom engine is complete on branch classroom-mvp and prepped as v7.5.0 (commits f55b25e6→aba1b895). Final wave added the PAYOFF: refinement capture (''X except Y'' — a broken learning accretes a structural exception, corrective prose deferred to the gated /paradigm:class refine step) + the decay pass (#classroom-decay) which is load-bearing for honesty — without a survived-flip path resolved==overturned and repeat-failure-rate was structurally pinned at 1.0; now a mix yields a real ratio (proven: 1 overturned + 3 survived = 0.25). 500 paradigm-mcp tests + 8 premise-core metric tests green. Versions bumped (paradigm/paradigm-mcp 7.5.0, premise-core 3.8.0, plugin 7.5.0), CHANGELOG [7.5.0] written, all 3 packages build clean. Remaining work tracked as GitHub issues #30 (visual Suite academy section — the next major arm), #31 (Phase 3 falsifiability hardening), #32 (prove skills + live term + open spec calls), #33 (University content), #34 (nevr.land impact). Team stops here at the visual aspect per founder direction; opening PR to main, then founder shifts to a different thing entirely.'
+symbols_touched:
+  - '#field-failure-reducer'
+  - '#notebook-loader'
+  - '#classroom-decay'
+  - '#classroom-metrics'
+  - '#classroom-tools'
+  - '#syllabus-loader'
+  - '#scenario-loader'
+  - '#classroom'
+  - '#nomination-engine'
+verification:
+  status: pass
+  details:
+    builds: premise-core + paradigm-mcp + paradigm clean
+    tests: 500 paradigm-mcp + 8 metric green
+    metric-honesty: proven (0.25 case)
+    decay-wired: imported + called at ambient.ts:594
+tags:
+  - classroom
+  - agent-learning
+  - v7.5.0
+  - failure-reinforcement
+  - refinement
+  - decay
+  - release
+  - pr-to-main
+linked_lore:
+  - L-2026-06-19-ascend-230425-001
+  - L-2026-06-19-ascend-053642-110
+linked_tasks:
+  - T-2026-06-19-001
+  - T-2026-06-19-002
+confidence: 0.85
+git_context:
+  ref: aba1b895e389e7470d368a1a8e19f4232342c8a4
+  branch: classroom-mvp
+  dirty: true

@@ -5,6 +5,28 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.5.0] — 2026-06-22 — The Classroom: agents that learn from failure (experimental)
+
+The biggest change to how agents learn since the notebook itself — shipped **experimental** (the engine is built and tested; the skills are drafts and it hasn't run a full term yet). A new model: **learnings are provisional by default**, and the engine is the *failure → reinforcement* loop, not an entry exam. A certified learning that breaks in the real work is attributed back to the exact entry that caused it, revised down, and corrected — so the team gets *stronger over time*, measurably. Decision `TD-2026-06-19-007`; spec `docs/specs/classroom.md`.
+
+### Added (non-visual engine — the visual Suite "academy" section is tracked as #30)
+
+- **The failure→reinforcement loop** (`#field-failure-reducer`, `#notebook-loader`): the keystone. The orchestrator already records *which notebook entries it injects into which agent* (`appliedCount`); we threaded a stable `orchestrationId` to make that an attribution **join key**. At postflight a reducer joins field-failure signals (a reviewer/human `dismissed`/`revised` verdict) back to the entry that was applied, writes `.paradigm/events/field-failures.jsonl`, bumps `appliedAndBrokeCount`, and **revises the entry's confidence down** (via the existing latest-wins path — the long-open down-revision gate, now real). Guards: a break can't be blamed on an entry that was never loaded (no anti-grief), and one revision per `(entry, orchestration)` (durable dedupe, seeded from the ledger).
+- **Refinement — "X except Y"** (`#notebook-loader`): a broken learning doesn't just lose confidence, it **accretes an exception** (`{when, then, sourceFailureId}`) — the counterexample becomes part of the rule. The reducer captures the exception *material* mechanically; the corrective prose is authored at the gated `/paradigm:class refine` step (no LLM in the reducer, by design).
+- **The decay pass** (`#classroom-decay`): a pending certification that survives a window with no break flips to `survived`; long-unused entries gently decay (silence is signal; no deletion). This is what makes the **repeat-failure-rate honest** — before it, "resolved" meant "overturned" only and the rate was structurally pinned at 1.0; now a mix of survived + overturned yields a real ratio.
+- **Certifications + the scoreboard** (`#classroom-metrics`): every promotion writes a `pending` `classroom-certifications.jsonl` row that the field later flips to `survived` or `overturned`. `paradigm doctor` gains a **Classroom / learning health** section showing the per-agent and global **repeat-failure-rate** (team stronger ⇔ the same learning doesn't break twice) — computed in one canonical place in `@a-company/premise-core`, shared with the `paradigm_classroom_status` tool so the number can't drift.
+- **Curriculum artifacts** (`#syllabus-loader`, `#scenario-loader`): a per-agent `.syllabus` (under `.paradigm/curriculum/`, reusing the protocol machinery — with `current|stale|broken|expired` gate-zero staleness), and a **scenario bank** — where every field failure becomes a reusable test-case scenario, so the next assessment can probe the blind spot that the field (not the same-family peers) discovered. Plus `paradigm_syllabus_*` / `paradigm_scenario_*` / `paradigm_classroom_status` MCP tools.
+- **The two skills** (drafts, pending UX review — #32): `/paradigm:class` (the **gated** term — the only certifier; peer-refutation with "no scenario, no assessment", a de-anesthetized review gate that shows dissent first) and `/paradigm:study-hall` (the **autonomous** half — follows the approved curriculum, drills the scenario bank, **stages** candidates, and can never certify or write a notebook).
+- **`#scan` ingests bare-string flow steps** — `parseFlowSteps` now captures the `- "#symbol"` step form, fixing flows that silently never reached `flow-index.json`.
+
+### Provenance
+
+- `NotebookProvenance` gains `source: 'external'` + a `trust` tier + `sourceSet`, so a learning scraped from a source is distinguishable from one earned in the field (additive, backward-compatible).
+
+### Tracked (not in this release)
+
+The visual Suite **academy** section (#30 — roster, protocol browser, local+global notebook vetting, the game-y enact-change UI), Phase 3 falsifiability hardening (#31 — poison-pill control + peer-catch-rate + doctor alarms), proving the skills with a live term (#32), Paradigm University content (#33), and the nevr.land registry impact (#34).
+
 ## [7.4.0] — 2026-06-18 — The symbol graph becomes visible (experimental)
 
 An experimental wave. The npm-facing change is small and sharp; the bulk is the **Conductor native-app revival** (macOS, not an npm artifact) merged in from the long-lived `conductor-revival-phase0` branch. Shipped behind the *experimental* label — the surfaces are real, built, and tested, but young.

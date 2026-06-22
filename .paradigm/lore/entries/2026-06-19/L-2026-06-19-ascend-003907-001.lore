@@ -1,0 +1,32 @@
+id: L-2026-06-19-ascend-003907-001
+type: milestone
+timestamp: '2026-06-19T00:39:07.734Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: MERGED to main as v7.4.0 (experimental) — Conductor revival + symbol-graph substrate
+summary: 'conductor-revival-phase0 (24 commits) merged into main as v7.4.0, framed experimental. Merge commit ba53f2cc; release prep e4e8372c. Brings the entire Conductor native-app revival (ATRIUM → THE BRIDGE fleet cockpit → CHORUS → LIGHTBOX → decisions) plus the symbol-graph-as-default-discourse-substrate arc (Phases 1 + 2a–d) and the render-by-projection `paradigm graph slice` CLI + paradigm_graph_slice MCP. Version bumps: paradigm + paradigm-mcp → 7.4.0, premise-core → 3.7.0, plugin.json → 7.4.0; CHANGELOG [7.4.0] authored (npm-facing graph-slice projector as headline; Conductor native app summarized as experimental, not an npm artifact). All three npm packages build green on main; CLI smoke-tested (#cockpit-view renders its real $fleet-switch edge). NOT YET PUSHED — held for Matt''s go (push to origin/main is the outward/irreversible step; Matt publishes npm himself).'
+symbols_touched:
+  - '#graph-slice-projector'
+  - '#atrium-graph-view'
+  - '#session-prompt'
+  - '#decision-divergence-journal'
+  - '#cockpit-view'
+commit: ba53f2cc
+tags:
+  - release
+  - v7.4.0
+  - experimental
+  - conductor-arc
+  - merge
+  - main
+  - checkpoint
+linked_lore:
+  - L-2026-06-18-ascend-000837-001
+  - L-2026-06-17-ascend-181541-001
+confidence: 0.85
+git_context:
+  ref: ba53f2ccef6b1a99b374cb307923e0993db82b65
+  branch: main
+  dirty: false

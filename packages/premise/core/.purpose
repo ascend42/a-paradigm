@@ -58,6 +58,23 @@ components:
       - graph
       - projection
       - visualization
+  classroom-metrics:
+    description: >-
+      #classroom-metrics: The ONE canonical repeat-failure-rate rollup for the
+      Classroom (TD-2026-06-19-007), src/classroom-metrics.ts. Both the
+      paradigm_classroom_status MCP tool and `paradigm doctor` consume it (the
+      CLI does NOT depend on paradigm-mcp; both depend on premise-core), so the
+      formula lives here ONCE to avoid drift. computeRepeatFailureRate(certs) →
+      overall + per-agent { resolved, overturned, rate } where rate =
+      overturned/resolved (3dp), null until a cert resolves (survived|overturned;
+      pending excluded). readClassroomCertifications/readFieldFailures read
+      .paradigm/events/*.jsonl tolerantly (skip corrupt lines, never throw),
+      mirroring graph-slice's .paradigm file access. The cert WRITER stays in
+      paradigm-mcp/utils/field-failures.ts — only the read+rollup is shared.
+    tags:
+      - classroom
+      - metrics
+      - learning-loop
 states:
   index: {}
 signals:

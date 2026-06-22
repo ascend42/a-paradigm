@@ -26,6 +26,32 @@ export interface NotebookEntry {
   provenance: NotebookProvenance;
   /** Number of times this entry has been applied in orchestration */
   appliedCount: number;
+  /**
+   * The Classroom (TD-2026-06-19-007): number of times this entry was applied
+   * AND the work it informed subsequently broke in the field (a `dismissed`/
+   * `revised` verdict joined back by orchestrationId). Mirror of {@link appliedCount}
+   * on the fail side. The repeat-failure-rate metric reads this. Default 0.
+   */
+  appliedAndBrokeCount?: number;
+  /**
+   * The Classroom: ISO timestamp of the most recent application receipt
+   * (notebook-refs join). Drives the future decay pass — silence is signal.
+   */
+  lastAppliedAt?: string;
+  /**
+   * The Classroom: a field break is recorded as a REFINEMENT ("X except Y"),
+   * not a raw decrement. The base claim survives; an exception is appended,
+   * each traced to the failure that generated it. Phase 2 grows the engine;
+   * MVP only seeds the structure when reviseDown fires.
+   */
+  refinement?: {
+    /** The original claim, preserved verbatim. */
+    base: string;
+    /** Exceptions accrued from field breaks: "base EXCEPT when→then". */
+    exceptions: { when: string; then: string; sourceFailureId: string }[];
+    /** ISO timestamp of the latest revision. */
+    revisedAt: string;
+  };
   /** Confidence score 0.0-1.0 */
   confidence: number;
   /** Concept tags for retrieval (e.g., ["auth", "middleware", "jwt"]) */
@@ -60,8 +86,9 @@ export interface NotebookEntry {
    * - 'derive': derived from the parent with modifications
    * - 'capture': captures a new observation related to the parent
    * - 'promote': promoted from a lower-confidence form of the parent
+   * - 'refine': revised as "X except Y" after a field break (The Classroom)
    */
-  lineageType?: 'fix' | 'derive' | 'capture' | 'promote';
+  lineageType?: 'fix' | 'derive' | 'capture' | 'promote' | 'refine';
 }
 
 /**
@@ -80,12 +107,29 @@ export function prepareForPublish(entry: NotebookEntry): Omit<NotebookEntry, 'pa
 }
 
 export interface NotebookProvenance {
-  /** Source type */
-  source: 'lore' | 'manual' | 'transfer';
+  /**
+   * Source type.
+   * - 'external': The Classroom — a study-hall candidate staged from drilling the
+   *   curriculum. NOT promoted; must be hard-excluded from prompt context until a
+   *   gated class certifies it.
+   */
+  source: 'lore' | 'manual' | 'transfer' | 'external';
   /** Linked lore entry ID if promoted from lore */
   loreEntryId?: string;
   /** Project where first created */
   originProject?: string;
   /** Agent who created it */
   createdBy?: string;
+  /**
+   * The Classroom: trust tier of this entry.
+   * - 'certified': promoted through the gated class.
+   * - 'provisional': staged/in-loop, the default for live entries.
+   * - 'external': un-promoted study-hall candidate (context-excluded).
+   */
+  trust?: 'certified' | 'provisional' | 'external';
+  /**
+   * The Classroom: the set of source refs (notebook ids, scenario ids, external
+   * refs) this entry was distilled from. Informational; feeds syllabus lineage.
+   */
+  sourceSet?: string[];
 }

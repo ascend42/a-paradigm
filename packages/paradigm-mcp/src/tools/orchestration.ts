@@ -1226,6 +1226,14 @@ async function handleOrchestrateInline(
   }
 
   // Execute mode: return full prompts for each stage
+  // Mint the orchestration ID up-front. The Classroom (TD-2026-06-19-007) makes
+  // orchestrationId the attribution join key: every notebook application receipt
+  // (recordNotebookReference, below) must carry it so the fail-side reducer can
+  // join a field break back to the exact entries that informed it. The id used to
+  // be minted at line ~1406 — AFTER the notebook loop ran — leaving every receipt
+  // keyless. Mint it here, once, and thread it through both sinks.
+  const orchestrationId = `orch-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
+
   // Load .agent profiles with full ambient context for enrichment (non-fatal)
   let agentProfiles: Map<string, { enrichment: string; nickname?: string; description?: string }> = new Map();
   try {
@@ -1285,7 +1293,10 @@ async function handleOrchestrateInline(
                   recordNotebookReference(
                     ctx.rootDir,
                     agentStep.name,
-                    sorted.map(e => e.id)
+                    sorted.map(e => e.id),
+                    // The Classroom: stamp the join key so a later field break can
+                    // be attributed to exactly these entries (orchestration.ts mint).
+                    orchestrationId
                   );
                 } catch { /* non-fatal */ }
 
@@ -1402,8 +1413,8 @@ async function handleOrchestrateInline(
     });
   }
 
-  // Generate orchestration ID for tracking
-  const orchestrationId = `orch-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
+  // orchestrationId minted up-front (before the notebook loop) so application
+  // receipts carry the attribution join key — see The Classroom note above.
 
   // Log to orchestrations directory
   logOrchestration(ctx.rootDir, orchestrationId, task, plan);
@@ -1864,6 +1875,12 @@ async function handleAgentPrompt(
   const task = args.task as string;
   const handoffContext = args.handoffContext as string | undefined;
   const previousAgent = args.previousAgent as string | undefined;
+  // The Classroom (TD-2026-06-19-007): the attribution join key. Prefer a
+  // caller-supplied id (so a single-agent prompt issued inside a larger
+  // orchestration shares its key); otherwise mint a fresh one so the notebook
+  // application receipt is never written keyless.
+  const orchestrationId = (args.orchestrationId as string | undefined)
+    ?? `orch-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
 
   // Load agents manifest
   const manifest = loadAgentsManifest(ctx.rootDir);
@@ -1940,7 +1957,8 @@ async function handleAgentPrompt(
           // Record which notebook entries were injected (non-blocking, pure data collection)
           try {
             const { recordNotebookReference } = await import('../utils/session-work-log.js');
-            recordNotebookReference(ctx.rootDir, agentName, sorted.map(e => e.id));
+            // The Classroom: carry the join key (previously omitted here).
+            recordNotebookReference(ctx.rootDir, agentName, sorted.map(e => e.id), orchestrationId);
           } catch { /* non-fatal */ }
         }
       } catch { /* notebook loading is non-fatal */ }

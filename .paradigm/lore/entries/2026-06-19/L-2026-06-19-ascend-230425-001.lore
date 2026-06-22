@@ -1,0 +1,45 @@
+id: L-2026-06-19-ascend-230425-001
+type: milestone
+timestamp: '2026-06-19T23:04:25.057Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Classroom MVP wave 2 complete — loop + artifacts + metric + skill drafts (branch green)
+summary: 'Built the Classroom MVP as far as is safe autonomously, on branch classroom-mvp (4 commits: f55b25e6 wave1, b6adbc72 wave2a, e73d4ab6 wave2b, dacfab97 wave2c). The model is functionally end-to-end: (wave 1) the failure→reinforcement loop turns — a field break is attributed via orchestrationId, the learning is revised down, its cert overturned; (2a) the .syllabus artifact + scenario bank + field-failure→scenario converter + 6 MCP tools (paradigm_syllabus_*/scenario_*/classroom_status); (2b) repeat-failure-rate computed in ONE canonical place (premise-core/classroom-metrics.ts), surfaced in paradigm doctor; (2c) DRAFT skills /paradigm:class (gated certifier) + /paradigm:study-hall (autonomous stager), tool-verified, marked pending founder UX review. Verification caught real bugs each wave (missing reducer import that would''ve made the loop never run in prod; per-invocation dedupe defect) — green build was never trusted as proof. Final state: all 3 packages build; paradigm-mcp 489 tests + premise-core 42 tests green; reindex clean (1245 symbols, 0 lossy). NOT pushed (feature branch; Matt''s call to merge). Deferred per spec: the refinement engine (''X except Y'' Phase 2), more break signals + cross-domain read, decay pass, poison-pill standing control + peer-catch-rate (Phase 3), then University content (T-2026-06-19-003) + nevr.land (T-2026-06-19-004).'
+symbols_touched:
+  - '#nomination-engine'
+  - '#notebook-loader'
+  - '#orchestrator'
+  - '#classroom-tools'
+  - '#syllabus-loader'
+  - '#scenario-loader'
+  - '#field-failure-reducer'
+  - '#classroom-metrics'
+  - '#classroom'
+verification:
+  status: pass
+  details:
+    builds: premise-core + paradigm-mcp + paradigm clean
+    tests: 489 (paradigm-mcp) + 42 (premise-core) green
+    reindex: 1245 symbols, 0 lossy
+    live: paradigm doctor renders the classroom section
+tags:
+  - classroom
+  - agent-learning
+  - mvp
+  - wave-2
+  - failure-reinforcement
+  - branch-classroom-mvp
+  - checkpoint
+  - restart-point
+linked_lore:
+  - L-2026-06-19-ascend-071819-001
+  - L-2026-06-19-ascend-053642-110
+linked_tasks:
+  - T-2026-06-19-002
+confidence: 0.85
+git_context:
+  ref: dacfab977f814742611ec3459c91a8a525cd1c84
+  branch: classroom-mvp
+  dirty: true

@@ -1,0 +1,51 @@
+id: L-2026-06-19-ascend-071819-001
+type: milestone
+timestamp: '2026-06-19T07:18:19.547Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Classroom MVP wave 1 SHIPPED — the failure→reinforcement loop turns
+summary: 'Wave 1 of the Classroom MVP is built + verified + committed (f55b25e6, branch classroom-mvp). The learning-loop core works end-to-end: a certified learning that breaks in the field (reviewer/human dismissed/revised verdict) is attributed back via the orchestrationId join to the entry that caused it, its appliedAndBrokeCount is bumped, confidence is revised DOWN (latest-wins/no-ratchet), and its classroom-certification flips pending→overturned. Guards proven: anti-grief (can''t blame an entry never loaded) + durable dedupe (one revision per entryId+orchestrationId, seeded from the field-failures ledger). The reducer runs at ambient postflight in production (import bug caught + fixed: ambient.ts:579 called runFieldFailureReducer with no import → would have thrown at runtime so the loop never turned; now imported). The tester found + fixed a per-invocation dedupe defect (penalty compounded across passes). 90 tests green. New: field-failures.ts (jsonl writers), field-failure-reducer.ts; changed: notebooks.ts (appliedAndBrokeCount/refinement/provenance ''external''), notebook-loader.ts (reviseDown), orchestration.ts (orchestrationId threading), nomination-engine.ts (cert at promotion), ambient.ts (postflight wiring). Wave 2 next: .syllabus + scenario bank + the two skills + doctor repeat-failure-rate metric.'
+symbols_touched:
+  - '#nomination-engine'
+  - '#notebook-loader'
+  - '#orchestrator'
+  - '#session-work-log'
+symbols_created:
+  - '#field-failure-reducer'
+  - '#classroom-certifications'
+files_created:
+  - packages/paradigm-mcp/src/utils/field-failures.ts
+  - packages/paradigm-mcp/src/utils/field-failure-reducer.ts
+  - packages/paradigm-mcp/src/utils/field-failure-reducer.test.ts
+files_modified:
+  - packages/paradigm-mcp/src/types/notebooks.ts
+  - packages/paradigm-mcp/src/utils/notebook-loader.ts
+  - packages/paradigm-mcp/src/tools/orchestration.ts
+  - packages/paradigm-mcp/src/utils/nomination-engine.ts
+  - packages/paradigm-mcp/src/tools/ambient.ts
+commit: f55b25e6
+verification:
+  status: pass
+  details:
+    build: paradigm-mcp clean
+    tests: 90 green incl. end-to-end loop + guards
+    bugs-fixed: missing reducer import (runtime ReferenceError) + per-invocation dedupe defect
+tags:
+  - classroom
+  - agent-learning
+  - mvp
+  - wave-1
+  - failure-reinforcement
+  - shipped
+linked_lore:
+  - L-2026-06-19-ascend-055341-001
+  - L-2026-06-19-ascend-053642-110
+linked_tasks:
+  - T-2026-06-19-002
+confidence: 0.85
+git_context:
+  ref: f55b25e62dc0b8ec4b0c41ad1e733eb32829d621
+  branch: classroom-mvp
+  dirty: true
