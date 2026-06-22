@@ -73,8 +73,16 @@ export interface ClassroomCertRow {
   outcome: 'pending' | 'survived' | 'overturned';
   /** Set when later-bound to `overturned`. */
   overturnedByFailureId?: string;
-  /** ISO timestamp of the later-binding. */
+  /** ISO timestamp of the later-binding (overturn). */
   boundAt?: string;
+  /**
+   * The Classroom decay pass (TD-2026-06-19-007): set when a `pending` cert ages
+   * past the survival window WITHOUT any attributed break — the field survived it.
+   * This is what makes `resolved` (survived + overturned) a real denominator:
+   * without survival flips, resolved == overturned and repeat-failure-rate is a
+   * structural 1.0 (a lie).
+   */
+  survivedAt?: string;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -205,6 +213,56 @@ export function overturnCertification(
     return flipped;
   } catch (err) {
     log.component('#classroom-certifications').warn('failed to overturn certification', {
+      entryId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return false;
+  }
+}
+
+/**
+ * Decay-pass later-bind: flip the FIRST matching `pending` cert for `entryId` to
+ * `survived` (the field ran the survival window without breaking it). Mirrors
+ * {@link overturnCertification}: idempotent (a row already resolved — survived OR
+ * overturned — is left untouched, so overturn always wins and re-runs never
+ * double-flip), rewrites the file in place.
+ *
+ * @returns true if a pending row was flipped to survived, false if none matched.
+ */
+export function surviveCertification(
+  rootDir: string,
+  entryId: string
+): boolean {
+  try {
+    const filePath = path.join(rootDir, EVENTS_DIR, CLASSROOM_CERTS_FILE);
+    if (!fs.existsSync(filePath)) return false;
+    const lines = fs.readFileSync(filePath, 'utf8').trim().split('\n').filter(l => l.trim());
+    let flipped = false;
+    const updated = lines.map(line => {
+      if (flipped) return line;
+      try {
+        const row = JSON.parse(line) as ClassroomCertRow;
+        // Only a still-pending cert flips. An overturned row stays overturned
+        // (overturn wins); an already-survived row is left untouched (idempotent).
+        if (row.entryId === entryId && row.outcome === 'pending') {
+          flipped = true;
+          return JSON.stringify({
+            ...row,
+            outcome: 'survived',
+            survivedAt: new Date().toISOString(),
+          } satisfies ClassroomCertRow);
+        }
+        return line;
+      } catch {
+        return line;
+      }
+    });
+    if (flipped) {
+      fs.writeFileSync(filePath, updated.join('\n') + '\n', 'utf8');
+    }
+    return flipped;
+  } catch (err) {
+    log.component('#classroom-certifications').warn('failed to survive certification', {
       entryId,
       error: err instanceof Error ? err.message : String(err),
     });

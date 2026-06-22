@@ -51,14 +51,34 @@ components:
       - permissions
       - security
   notebook-loader:
-    description: CRUD for agent notebook entries — load/save, search, promote from lore, increment applied count
+    description: 'CRUD for agent notebook entries — load/save, search, promote from lore, increment applied count. The Classroom (TD-2026-06-19-007): reviseDown is the fail-side mutation (bumps appliedAndBrokeCount, lowers confidence, captures the "X except Y" refinement exception mechanically — prose authored at gated /paradigm:class refine, dedup by sourceFailureId); listAllAgentNotebookEntries + decayUnusedEntry are the decay-pass enumerate/mutate seams.'
     type: loader
     tags:
       - feature
       - notebooks
       - agent-identity
+      - classroom
     components:
       - '#soft-provenance'
+  classroom-decay:
+    description: 'The Classroom decay pass (TD-2026-06-19-007, Phase 2) — load-bearing for the metric, not cleanup. Flips pending certs aged past the SURVIVAL_WINDOW (14d) with no attributed break to outcome:survived (makes repeat-failure-rate''s resolved denominator real instead of a structural 1.0); gently decays confidence of entries idle past IDLE_WINDOW (30d) with low appliedCount (silence is signal; never deletes). runDecayPass is best-effort/idempotent, wired into ambient postflight right after runFieldFailureReducer.'
+    type: service
+    anchors:
+      - decay.ts:1-200
+    tags:
+      - feature
+      - classroom
+      - learning-loop
+  classroom-fail-side:
+    description: 'The Classroom fail-side event writers + reducer (TD-2026-06-19-007). field-failures.ts: append-only field-failures.jsonl + classroom-certifications.jsonl; overturnCertification (pending→overturned) and surviveCertification (pending→survived, decay-pass writer) — both idempotent, overturn wins. field-failure-reducer.ts: joins reviewer verdicts to notebook-refs by orchestrationId, revises down, back-binds certs, seeds field-failure scenarios.'
+    type: service
+    anchors:
+      - field-failures.ts:1-290
+      - field-failure-reducer.ts:1-213
+    tags:
+      - feature
+      - classroom
+      - learning-loop
   tool-registry:
     description: Tiered tool registration system — core/feature/advanced tiers with auto-detection
     type: loader

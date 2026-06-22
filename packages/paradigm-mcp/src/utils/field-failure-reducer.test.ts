@@ -352,3 +352,57 @@ describe('runFieldFailureReducer — field-failure → scenario converter', () =
     });
   });
 });
+
+// ────────────────────────────────────────────────────────
+// 6. REFINEMENT CAPTURE — "X except Y" structural record (Phase 2)
+// ────────────────────────────────────────────────────────
+
+describe('runFieldFailureReducer — refinement capture (X except Y)', () => {
+  it('appends exactly ONE exception (when/then/sourceFailureId) and sets lineageType refine', () => {
+    writeProjectNotebook(makeEntry({ confidence: START_CONFIDENCE }));
+    appendClassroomCertification(projectDir, pendingCert());
+    recordNotebookReference(projectDir, AGENT, [ENTRY_ID], ORCH_ID);
+    appendSessionWorkEntry(
+      projectDir,
+      makeVerdict({ verdict: 'dismissed', reason: 'the auth pattern leaked a token in the error path' }),
+    );
+
+    runFieldFailureReducer(projectDir);
+
+    const entry = readProjectNotebook(ENTRY_ID);
+    // lineageType flips to 'refine'.
+    expect(entry.lineageType).toBe('refine');
+    // refinement.base ("the X") is the original claim — seeded once.
+    expect(entry.refinement).toBeTruthy();
+    expect(entry.refinement!.base.length).toBeGreaterThan(0);
+    expect(entry.refinement!.revisedAt).toBeTruthy();
+    // exactly one exception, traced to the break.
+    expect(entry.refinement!.exceptions).toHaveLength(1);
+    const ex = entry.refinement!.exceptions[0];
+    // when = the break CONTEXT (the verdict reason / detail), not the bare signal.
+    expect(ex.when).toContain('leaked a token');
+    // then = a stub — the prose corrective is authored at the gated class review.
+    expect(ex.then).toContain('gated class review');
+    // sourceFailureId ties the exception to the originating field-failure.
+    expect(ex.sourceFailureId).toBe(makeFailureId(ORCH_ID, ENTRY_ID));
+  });
+
+  it('does NOT duplicate the exception on a second pass over the same break', () => {
+    writeProjectNotebook(makeEntry({ confidence: START_CONFIDENCE }));
+    appendClassroomCertification(projectDir, pendingCert());
+    recordNotebookReference(projectDir, AGENT, [ENTRY_ID], ORCH_ID);
+    appendSessionWorkEntry(projectDir, makeVerdict({ verdict: 'dismissed' }));
+
+    runFieldFailureReducer(projectDir);
+    const afterFirst = readProjectNotebook(ENTRY_ID);
+    expect(afterFirst.refinement!.exceptions).toHaveLength(1);
+
+    // Second pass on the same break must not append a duplicate exception.
+    runFieldFailureReducer(projectDir);
+    const afterSecond = readProjectNotebook(ENTRY_ID);
+    expect(afterSecond.refinement!.exceptions).toHaveLength(1);
+    expect(afterSecond.refinement!.exceptions[0].sourceFailureId).toBe(
+      makeFailureId(ORCH_ID, ENTRY_ID),
+    );
+  });
+});

@@ -399,12 +399,29 @@ export function incrementApplied(
  * severity-weighted / Bayesian on the applied↔broke ratio (decision §4) — this is
  * the seam: replace `MVP_PENALTY` with `f(failure.severity, appliedCount, appliedAndBrokeCount)`.
  *
- * Seeds `refinement` ("X except Y") on first break so Phase 2's refinement engine
- * has somewhere to grow; the base is the entry's existing snippet/context.
+ * REFINEMENT CAPTURE ("X except Y") — Phase 2 (TD-2026-06-19-007):
+ * On an attributed break this records a STRUCTURED exception, not a prose rewrite.
+ *   - `refinement.base` ("the X") is seeded ONCE from the entry's snippet/context.
+ *   - an exception `{when, then, sourceFailureId}` is appended where:
+ *       when = the break CONTEXT (the field-failure detail — what actually broke),
+ *       then = the corrective. The scenario bank's `expected` is only a
+ *              `{must: survive|reject}` flag and carries NO corrective prose, so
+ *              the `then` is a clear STUB. The PROSE rewrite of the corrective is
+ *              authored at the gated `/paradigm:class review` `refine` verdict
+ *              (the skill, where an LLM + the human gate live) — the reducer is
+ *              mechanical only and runs NO model. That division is intentional
+ *              per the spec ("refine rewrites X except Y" is a gated arm).
+ *   - DEDUPE: an exception is appended at most ONCE per `sourceFailureId`,
+ *     mirroring the reducer's one-revision-per-(entryId, orchestrationId) guard.
+ *     This is defense-in-depth: even if the reducer's durable guard is bypassed,
+ *     the exception list never accrues a duplicate for the same break.
  *
  * @returns true if an entry was found and revised, false otherwise.
  */
 const MVP_PENALTY = 0.15;
+
+/** Sentinel `then` corrective — the prose is authored at the gated class review. */
+const REFINE_THEN_STUB = 'needs authoring in gated class review (/paradigm:class refine)';
 
 export function reviseDown(
   agentName: string,
@@ -431,16 +448,25 @@ export function reviseDown(
       const current = typeof entry.confidence === 'number' ? entry.confidence : DEFAULT_PRIOR;
       entry.confidence = Math.max(0, current - MVP_PENALTY);
 
-      // Seed/append the refinement structure ("base EXCEPT when→then"). MVP only
-      // records the failure as an exception; Phase 2 rewrites the base.
+      // REFINEMENT CAPTURE ("base EXCEPT when→then"). The reducer captures the
+      // structural exception MECHANICALLY (no model); the corrective PROSE is
+      // authored at the gated /paradigm:class refine verdict — hence the stub.
       const now = new Date().toISOString();
+      // base ("the X") is the entry's original claim — set ONCE, never rewritten here.
       const base = entry.refinement?.base ?? (entry.context || entry.snippet || '').slice(0, 200);
       const exceptions = entry.refinement?.exceptions ?? [];
-      exceptions.push({
-        when: failure.signal,
-        then: failure.detail.slice(0, 200),
-        sourceFailureId: failure.failureId,
-      });
+      // DEDUPE: skip if this exact break already produced an exception (mirrors
+      // the reducer's one-revision-per-(entryId, orchestrationId) guard).
+      const alreadyCaptured = exceptions.some(ex => ex.sourceFailureId === failure.failureId);
+      if (!alreadyCaptured) {
+        exceptions.push({
+          // when = the break CONTEXT (what actually broke), not the bare signal.
+          when: (failure.detail || failure.signal).slice(0, 200),
+          // then = corrective; authored later at the gated review (no prose here).
+          then: REFINE_THEN_STUB,
+          sourceFailureId: failure.failureId,
+        });
+      }
       entry.refinement = { base, exceptions, revisedAt: now };
       entry.lineageType = 'refine';
       entry.updated = now;
@@ -455,4 +481,94 @@ export function reviseDown(
   }
 
   return false;
+}
+
+/**
+ * A located notebook entry plus where on disk it lives — the unit the decay pass
+ * iterates. `scope` records which store the file was read from so a writer can
+ * round-trip it in place.
+ */
+export interface LocatedNotebookEntry {
+  entry: NotebookEntry;
+  agentId: string;
+  filePath: string;
+  scope: 'project' | 'global';
+}
+
+/**
+ * The Classroom decay pass (TD-2026-06-19-007): enumerate EVERY notebook entry
+ * across every agent, in both project and global scope. Best-effort — an
+ * unreadable dir or file is skipped, never thrown. Project and global entries
+ * with the same id are BOTH returned (the decay pass mutates files in place, so
+ * it must see each physical file; this differs from {@link loadNotebookEntries}
+ * which dedupes by id for context loading).
+ */
+export function listAllAgentNotebookEntries(rootDir: string): LocatedNotebookEntry[] {
+  const located: LocatedNotebookEntry[] = [];
+
+  const scan = (base: string, scope: 'project' | 'global') => {
+    if (!fs.existsSync(base)) return;
+    let agentDirs: string[];
+    try {
+      agentDirs = fs.readdirSync(base, { withFileTypes: true })
+        .filter(d => d.isDirectory())
+        .map(d => d.name);
+    } catch { return; }
+
+    for (const agentId of agentDirs) {
+      const dir = path.join(base, agentId);
+      let files: string[];
+      try {
+        files = fs.readdirSync(dir).filter(
+          f => f.startsWith(NOTEBOOK_PREFIX) && f.endsWith(NOTEBOOK_EXT),
+        );
+      } catch { continue; }
+
+      for (const file of files) {
+        const filePath = path.join(dir, file);
+        try {
+          const entry = yaml.load(fs.readFileSync(filePath, 'utf-8')) as NotebookEntry;
+          if (entry?.id) located.push({ entry, agentId, filePath, scope });
+        } catch { /* skip invalid */ }
+      }
+    }
+  };
+
+  scan(GLOBAL_NOTEBOOKS_DIR, 'global');
+  scan(path.join(rootDir, PROJECT_NOTEBOOKS_DIR), 'project');
+  return located;
+}
+
+/**
+ * The Classroom decay pass (TD-2026-06-19-007) — UNUSED-ENTRY DECAY. "Silence is
+ * signal": an entry that has not been applied in a long time, and was barely
+ * applied to begin with, gently loses a little confidence. CONSERVATIVE by
+ * design — never deletes, decrements by a small clamped amount, and writes
+ * through the SAME latest-wins YAML path `incrementApplied`/`reviseDown` use.
+ *
+ * @param located the file to decay (from {@link listAllAgentNotebookEntries}).
+ * @param decrement how much confidence to shed (clamped at ≥ 0).
+ * @returns true if the file was written (confidence actually changed), else false.
+ */
+export function decayUnusedEntry(
+  located: LocatedNotebookEntry,
+  decrement: number,
+): boolean {
+  const { entry, filePath } = located;
+  const current = typeof entry.confidence === 'number' ? entry.confidence : DEFAULT_PRIOR;
+  const next = Math.max(0, current - decrement);
+  if (next === current) return false; // already at floor — nothing to write
+
+  try {
+    entry.confidence = next;
+    entry.updated = new Date().toISOString();
+    fs.writeFileSync(filePath, yaml.dump(entry, {
+      lineWidth: 120,
+      noRefs: true,
+      sortKeys: false,
+    }), 'utf-8');
+    return true;
+  } catch {
+    return false;
+  }
 }

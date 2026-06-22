@@ -1,0 +1,26 @@
+id: L-2026-06-20-ascend-002137-001
+type: insight
+timestamp: '2026-06-20T00:21:37.645Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Classroom skill dry-run review — kickoff (shaping the class/study-hall gate UX)
+summary: 'Starting a founder-led DRY-RUN review of the two DRAFT Classroom skills (/paradigm:class gated + /paradigm:study-hall autonomous, committed dacfab97 on branch classroom-mvp). Method: Claude performs each skill as if running it, rendering the exact surfaces the founder would see at each decision point (especially the de-anesthetized class review gate — dissent-first, breaking scenarios, the one causal question), using this session''s own real learnings as the staged candidates (e.g. builder: ''a green tsup build is not proof — esbuild bundles a call to an unimported function, which throws at runtime; verify imports at every wired call site'' — the literal ambient.ts:579 bug; and ''dedupe guards must be durable, seeded from the persisted ledger, not per-invocation''). Founder reacts inline; Claude reshapes the SKILL.md drafts live. This lore marks the BEFORE state so we can see where the review lands the gate design.'
+symbols_touched:
+  - '#classroom'
+tags:
+  - classroom
+  - skill-review
+  - dry-run
+  - gate-ux
+  - before-state
+linked_lore:
+  - L-2026-06-19-ascend-230425-001
+linked_tasks:
+  - T-2026-06-19-002
+confidence: 0.8
+git_context:
+  ref: bc133d17b332569dfcf18fbcd0bcfc144b7c823c
+  branch: classroom-mvp
+  dirty: false
