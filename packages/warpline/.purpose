@@ -355,3 +355,59 @@ flows:
         action: "predict(ΔA, ΔB) → autoClean / knots / dangling → CLEAN vs DECISIONS verdict"
       - component: "#weave"
         action: "Optionally (--vs-git) run the full #oracle read-only for the meaning-vs-bytes divergence"
+
+aspects:
+  ~read-only:
+    description: >-
+      THE PHASE-1 SAFETY INVARIANT — Warpline NEVER mutates the user's git
+      HEAD/index/worktree. Every git read happens through a detached, throwaway
+      worktree torn down in a finally; the ONLY disk Warpline writes is under
+      .warpline/ (the content-addressed store + the oracle.jsonl ledger). Lifting a
+      ref, or the WORKTREE pseudo-ref, only READS files — the code-lens included.
+    category: invariant
+    severity: critical
+    tags: [safety, read-only, git, phase-1]
+    applies-to:
+      - "#git-exec"
+      - "#absorb"
+      - "#lift-code-units"
+      - "#ts-lens"
+      - "#warp-store"
+      - "#oracle"
+      - "#weave"
+
+  ~determinism:
+    description: >-
+      THE THESIS — absorbing the same ref twice is byte-identical (stateId + every
+      per-symbol contentId + repo-relative filePath), so diff(absorb(HEAD),
+      absorb(HEAD)) is provably ZERO and two machines on the same source agree. No
+      timestamps/paths/positions/prose/embeddings enter the hashed byte stream;
+      every set is sorted+deduped; strict canonical JSON; sorted file enumeration;
+      deterministic synthetic code-unit ids; the TS compiler is exact-pinned and
+      stamped into the code essence tag (essence:v1:ts<exact>) so a different
+      compiler is a different content-address namespace, never a silent collision.
+    category: invariant
+    severity: critical
+    tags: [thesis, determinism, hashing, reproducibility]
+    applies-to:
+      - "#essence-hash"
+      - "#canonical-json"
+      - "#code-essence"
+      - "#ts-lens"
+      - "#warp-state"
+      - "#absorb"
+
+  ~meaning-coverage:
+    description: >-
+      THE TD-806 HONESTY METRIC — Warpline reports WHERE it has meaning versus
+      where it degrades to opaque bytes (the 3-tier fidelity model). A code-unit the
+      TS lens cannot soundly lift (unresolved refs, unsupported forms) is flagged
+      reducedFidelity — never silently empty; coverage is surfaced, not assumed.
+      Honest about its own blind spots so the meaning layer's thickness is legible.
+    category: rule
+    severity: medium
+    tags: [honesty, fidelity-tiers, td-806, coverage]
+    applies-to:
+      - "#lift-code-units"
+      - "#ts-lens"
+      - "#code-lens"
