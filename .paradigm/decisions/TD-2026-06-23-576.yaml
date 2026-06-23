@@ -1,0 +1,62 @@
+id: TD-2026-06-23-576
+timestamp: '2026-06-23T22:44:52.088Z'
+title: Warpline web GUI = a Platform section; MVP = the Oracle Divergence Viewer; render-only-real-data discipline
+decision: >-
+  The Warpline web GUI ships as a new SECTION in the existing Platform server (`paradigm serve`), not a standalone app.
+  The MVP is the Oracle Divergence Viewer — the meaning-vs-bytes split screen showing git CLEAN vs Warpline DIVERGENT
+  with the broken call rendered (the divergeMeaningOnly cell). Architecture: a thin read-only `/api/warpline` router
+  calling the already-exported engine fns (oracle/absorb/forecast/semanticDiff) in-process + an oracle.jsonl ledger
+  reader (WS live-repaint) + reuse of the graphSliceFromRoot projector for blast-radius/Tapestry rendering; read-only is
+  structural (no reachable write path). Concurrency semaphore + per-stateId WarpState cache mitigate temp-worktree
+  contention. Surface roadmap (cut-line is bright): #1 Oracle viewer · #2 semantic-diff (rename=empty delta) · #3 weave
+  forecast — all render data the engine produces NOW; #4 Tapestry · #5 Bridge/Lightbox — DEFERRED (need the write path +
+  Classroom trust ledger; never build chrome over absent data). Visual language extends the existing vision-page brand
+  (Fraunces/JetBrains Mono, warp-amber/weft-teal/seam-violet); the full WARP graph is rejected as home (force-directed
+  hairball contradicts the determinism thesis). Spec: docs/specs/warpline-gui.md.
+rationale: >-
+  Three independent lenses (Arky/architecture, North/product, Mika/design) converged on all of the above. A Platform
+  section honors the Suite renaissance's unify-don't-fragment mandate and reuses the chassis + the shipped
+  render-by-projection substrate. The Oracle viewer is the only MVP candidate whose payload is a SCORED disagreement
+  with git's own live output ("we ran your tool and it shipped a break") — a correctness argument a skeptic can't shrug
+  off, and it's backed by the already-passing code-level divergence proof. The render-only-real-data cut-line repeats
+  the renaissance lesson (don't freeze surfaces over absent substrate): the Tapestry/Bridge depend on SCRUTINY =
+  fragility×(1−trust), which is Classroom-gated and not yet built.
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+  - id: architect
+    role: agent
+    stance: supported
+  - id: product
+    role: agent
+    stance: supported
+  - id: designer
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: Standalone Warpline web app
+    rejected_because: >-
+      Re-fragments the surfaces the Suite renaissance exists to unify; the Platform chassis + section pattern + WS bus +
+      render-by-projection projector are all reusable.
+  - option: Lead with the Tapestry (woven history) or the full WARP graph
+    rejected_because: >-
+      Tapestry needs the write path + Classroom field outcomes (not yet real) → chrome over absent data; the full graph
+      is a force-directed hairball whose non-deterministic layout contradicts Warpline's determinism thesis.
+  - option: Lead with the semantic-diff viewer
+    rejected_because: >-
+      Noise-reduction is a comfort/preference argument a skeptic can shrug off; the Oracle's
+      scored-disagreement-with-git is a correctness argument. Lead with correctness, follow with comfort (#2).
+symbols_affected:
+  - '#warpline'
+  - '#platform-server'
+  - '#warpline-oracle'
+  - '#weave'
+status: active
+tags:
+  - warpline
+  - gui
+  - platform
+  - oracle-viewer
+  - render-by-projection
+  - plan
