@@ -1,0 +1,32 @@
+id: L-2026-06-23-ascend-145542-001
+type: milestone
+timestamp: '2026-06-23T14:55:42.481Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Loom engine — build kickoff: the Convergence/Divergence Oracle (Phase 1)'
+summary: 'Began actually building Loom on branch loom-engine (off main). Phase-1 discipline (per TD-2026-06-23-398 roadmap + Jinx''s accepted proof): build the CONVERGENCE/DIVERGENCE ORACLE first — read-only on git (zero data-loss risk), runs on THIS repo''s real branches immediately, and forces building the real primitives (WARP store, ABSORB, the Justification, the meaning-diff) along the way. If meaning carries merge-information bytes can''t, the Oracle proves it with data; if not, we learn cheaply. WARP v0 granularity = the Paradigm symbol graph made content-addressed (reuse premise-core aggregateFromDirectory + buildSymbolIndex + the related[] edges as ABSORB; ripple for blast-radius). The Oracle: ABSORB two branches + their merge-base → meaning-deltas per branch → predict merge outcome (clean / knot / dangling) → run git''s actual merge → score convergence to a jsonl. The load-bearing hard part flagged 3x by the panel: the identity ''essence'' hash — hash the STRUCTURED contract (kind + normalized contract + edges-by-target-hash), NEVER embeddings, deterministic, rename-free. Architecture pass underway: Arky (engine + object model + Oracle flow + packages/loom layout), Cid (the essence hash + the SemDelta commute/knot/dangle algebra + determinism/cycle/aliasing handling).'
+symbols_touched:
+  - '#loom'
+  - '#graph-slice-projector'
+symbols_created:
+  - '#warp'
+  - '#absorb'
+  - '#justification'
+  - '#loom-oracle'
+tags:
+  - loom
+  - git-successor
+  - build-kickoff
+  - oracle
+  - warp
+  - phase-1
+linked_lore:
+  - L-2026-06-22-ascend-224840-001
+  - L-2026-06-23-ascend-014721-124
+confidence: 0.75
+git_context:
+  ref: 15805d22da0a58ed024581510c87a08ae353fac4
+  branch: loom-engine
+  dirty: true
