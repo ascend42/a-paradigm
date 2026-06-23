@@ -580,7 +580,7 @@
       <p class="eyebrow reveal in-view">WARPLINE · A successor to Git</p>
       <h1 class="hero-h1" id="hero-h1">Version control for meaning,&nbsp;not&nbsp;bytes.</h1>
       <p class="hero-deck reveal d1">The first version control that knows who changed what, why,&nbsp;and what&nbsp;it&nbsp;cost.</p>
-      <p class="hero-sub reveal d2">Lineage Of Ontological Meaning. Experimental, and being woven&nbsp;now.</p>
+      <p class="hero-sub reveal d2">Now it reads your actual&nbsp;code. Warpline lifts every function into meaning — so a rename costs&nbsp;nothing, and a call into a deleted one can't&nbsp;hide. Experimental, and being woven&nbsp;now.</p>
       <div class="cta-row reveal d3">
         <a href="#problem" class="btn-primary">Read the thesis</a>
         <a href="#inversion" class="btn-ghost">See it weave &darr;</a>
@@ -802,6 +802,7 @@ callsites flagged:
       </div>
       <p class="banner">The hash moves iff the meaning&nbsp;moves.</p>
     </div>
+    <p class="sec-deck reveal" style="margin-top:44px"><strong style="font-family:var(--display);font-style:italic;color:var(--weft-soft)">Down to the function.</strong> Warpline doesn't stop at components — it lifts every TypeScript function, method, and class into the same&nbsp;WARP. A function's identity is its structure and written types, never its name or its&nbsp;formatting. Rename <code>getUser</code>&nbsp;→&nbsp;<code>fetchUser</code>, move it to another file, reformat it: same essence, zero&nbsp;delta. Change what it <em class="emph">does</em> — one operator, one missing <code>await</code> — and the essence&nbsp;moves. Code becomes meaning the same way symbols do, and the two share one&nbsp;fabric.</p>
   </div>
 </section>
 
@@ -889,6 +890,22 @@ callsites flagged:
 
       <div style="margin-top:20px;text-align:center">
         <span class="chip weft" style="font-size:12.5px;padding:7px 14px">N non-intersecting branches → one weave, zero human merge labor</span>
+      </div>
+    </div>
+
+    <!-- the code-level divergence proof — real, backed by a passing test -->
+    <div class="reveal" style="margin-top:32px">
+      <div class="card" style="border-color:rgba(124,111,240,0.4);box-shadow:0 0 30px rgba(124,111,240,0.1)">
+        <p class="lbl" style="color:var(--seam)">⬡ The divergence proof · real code · run on this&nbsp;repo</p>
+        <div style="font-family:var(--mono);font-size:13px;line-height:1.95;color:var(--linen-200)">
+          <div>Two branches touch one <span style="color:var(--linen-400)">.ts</span>&nbsp;file.</div>
+          <div>Branch <span style="color:var(--warp)">A</span> renames <span style="text-decoration:line-through;color:var(--linen-400)">getUser</span>&nbsp;→&nbsp;<span style="color:var(--warp)">fetchUser</span> &amp; deletes the old&nbsp;name.</div>
+          <div>Branch <span style="color:var(--weft)">B</span> adds a new call to <span style="color:var(--weft)">getUser()</span>.</div>
+          <div style="margin-top:14px">git merge-tree:&nbsp;&nbsp;<span style="color:#34D8A0;font-weight:600">CLEAN&nbsp;✓</span>&nbsp;&nbsp;— 0 conflicts. It would&nbsp;ship.</div>
+          <div>warpline oracle:&nbsp;<span style="color:var(--seam);font-weight:600">DIVERGENT</span>&nbsp;— a call into a function that no longer&nbsp;exists.</div>
+        </div>
+        <p style="font-size:13.5px;color:var(--linen-200);margin:16px 0 0;font-style:italic">git merged the bytes. Warpline saw the break in the&nbsp;meaning.</p>
+        <p style="font-family:var(--mono);font-size:12px;color:var(--seam);margin:8px 0 0">verdict: DIVERGENT&nbsp;·&nbsp;divergeMeaningOnly:&nbsp;1</p>
       </div>
     </div>
   </div>
