@@ -15,6 +15,7 @@
 
 import { loadLiveGraph } from '@a-company/premise-core';
 import { buildWarpState, type WarpState } from './warp/warp-state.js';
+import { liftCodeUnits, injectCodeUnits } from './lens/lift-code-units.js';
 import {
   worktreeAdd,
   worktreeRemove,
@@ -38,6 +39,10 @@ export async function absorb(ref: string, opts: AbsorbOptions = {}): Promise<War
 
   if (ref === WORKTREE_REF) {
     const graph = await loadLiveGraph(cwd);
+    // Lift TS/TSX code-units (read-only) and inject them as synthetic nodes in
+    // the SAME universe BEFORE essences are computed (spec §2). The lens only
+    // reads `cwd`; the read-only invariant is preserved.
+    injectCodeUnits(graph.index, await liftCodeUnits(cwd));
     // root = cwd: store WarpObject.filePath repo-relative so the rename-detector
     // in sem-delta never fires on a path-prefix difference between absorbs.
     return buildWarpState(graph.index, { ref: WORKTREE_REF, treeSha: null, rootDir: cwd });
@@ -47,6 +52,10 @@ export async function absorb(ref: string, opts: AbsorbOptions = {}): Promise<War
   const tmp = await worktreeAdd(ref, { cwd });
   try {
     const graph = await loadLiveGraph(tmp);
+    // Lift code-units from the throwaway worktree (read-only) and inject them as
+    // synthetic nodes BEFORE essence computation (spec §2). The lens only reads
+    // `tmp`; the user's HEAD/index/worktree are never touched.
+    injectCodeUnits(graph.index, await liftCodeUnits(tmp));
     // root = the temp worktree: strip the (per-absorb, nondeterministic) temp-dir
     // prefix so two absorbs of the same ref yield byte-identical, repo-relative
     // filePaths. The temp-dir prefix is provenance noise, never a "move".

@@ -2,7 +2,7 @@
   "$meta": {
     "version": "1.0.0",
     "project": "a-paradigm",
-    "generatedAt": "2026-06-23T21:34:44.706Z",
+    "generatedAt": "2026-06-23T21:59:34.644Z",
     "paradigmVersion": "0.1.0",
     "sources": {
       "purposeFiles": 77,
@@ -11,7 +11,7 @@
     },
     "componentTypes": {
       "command": 107,
-      "module": 17,
+      "module": 18,
       "cli": 1,
       "loader": 24,
       "service": 87,
@@ -25,9 +25,12 @@
       "tool": 43,
       "tool-group": 10,
       "util": 7,
-      "manager": 6,
-      "engine": 12,
       "detector": 11,
+      "engine": 12,
+      "handler": 26,
+      "installer": 1,
+      "adapter": 1,
+      "manager": 6,
       "provider": 7,
       "router": 8,
       "filter": 3,
@@ -35,9 +38,6 @@
       "feature": 1,
       "theme": 1,
       "controller": 1,
-      "handler": 26,
-      "installer": 1,
-      "adapter": 1,
       "test": 8,
       "state": 2,
       "types": 10,
@@ -1186,7 +1186,7 @@
       "symbol": "#essence-hash",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
-      "description": "The load-bearing wall — essence(symbol) -> contentId. Hashes the Canonical Normal Form ⟨kind, normalized contract, edgeBag⟩, Merkle by TARGET essence (so rename is free), excludes name/path/prose/timestamps. Tarjan SCC for cycles; stable-id fold for generic-contract aliasing. contentId = \"essence:v0:\" + sha256(canonical).",
+      "description": "The load-bearing wall — essence(symbol) -> contentId. Hashes the Canonical Normal Form ⟨kind, normalized contract, edgeBag⟩, Merkle by TARGET essence (so rename is free), excludes name/path/prose/timestamps. Tarjan SCC for cycles; stable-id fold for generic-contract aliasing. .purpose contentId = \"essence:v0:\" + sha256(canonical). STAGE 3a: a code-unit branch in localCNF (detected by componentType==='code-unit') replaces the sorted edgeBag with the CCNF body and SUBSTITUTES each positional f:N token INLINE with the essence of codeLocalTargets[N]'s edge (via the SAME edgeEssence resolver, so intra-SCC targets become @scc-internal and a cross-symbol rename frees the chain); extern/builtin free:name tokens stay untouched; edgeBag is []. The version tag is read off entry.data.essenceTag (default ESSENCE_VERSION) so a code-unit contentId is \"essence:v1:ts<exact>:\"+sha256(canonical) and SCC members carry the same tag — mixed v0/v1 graphs interoperate because Merkle substitutes the target's full TAGGED string. essence-hash never imports the lens; the tag travels on the node.",
       "visualTags": [],
       "related": [
         "#canonical-json",
@@ -1298,17 +1298,33 @@
       ],
       "componentType": "module"
     },
+    "lift-code-units": {
+      "id": "lift-code-units",
+      "name": "Lift Code Units",
+      "symbol": "#lift-code-units",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
+      "description": "The absorb-side bridge (stage 3a, spec §9 sub-phase 2 / §4.1). liftCodeUnits(rootDir) runs every REGISTERED lens over a read-only worktree root and collects the union of CodeUnits (re-sorted by symbol for deterministic injection order). injectCodeUnits(index, units) turns each CodeUnit into a synthetic SymbolEntry (kind 'component' + componentType 'code-unit'; DETERMINISTIC id = sha256('code:'+symbol), NOT a uuid; source 'premise'; references = the distinct LOCAL targets in first-appearance order so liftEdges yields code->localTarget edges into buildEssenceGraph.adj and Tarjan detects code cycles) and splices it into the live SymbolIndex (entries + byType + bySource) BEFORE computeEssences runs — same universe, never a parallel graph. The identity-bearing payload travels on entry.data: codeEssence (body with positional f:idx slots), codeLocalTargets (the ordered distinct local target symbols the f:N slots substitute against), and essenceTag = \"v1:ts\"+TS_LENS_VERSION (the compiler-pinned version namespace §5.2, so essence-hash never imports the lens — the tag travels with the node).",
+      "visualTags": [],
+      "related": [
+        "#code-lens",
+        "#lens-registry",
+        "#ts-lens"
+      ],
+      "componentType": "module"
+    },
     "absorb": {
       "id": "absorb",
       "name": "Absorb",
       "symbol": "#absorb",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
-      "description": "absorb(gitRef) -> WarpState. Spins a detached temp worktree, loadLiveGraph on it, lifts every symbol, builds the WarpState, removes the worktree in a finally. The literal WORKTREE ref absorbs the live cwd uncommitted state. DETERMINISM INVARIANT: absorbing the same ref twice is byte-identical (stateId + every per-symbol contentId + repo-relative filePath), so diff(absorb(HEAD), absorb(HEAD)) is provably ZERO. Rests on (a) the absorb root being passed to buildWarpState for repo-relative filePaths, and (b) deterministic .purpose/portal file-discovery order in premise-core's aggregator (duplicate-symbol resolution + Merkle essences are stable across parses regardless of filesystem order or temp-dir prefix).",
+      "description": "absorb(gitRef) -> WarpState. Spins a detached temp worktree, loadLiveGraph on it, lifts every symbol, builds the WarpState, removes the worktree in a finally. The literal WORKTREE ref absorbs the live cwd uncommitted state. STAGE 3a: after loadLiveGraph and before buildWarpState (both the ref and WORKTREE paths), liftCodeUnits + injectCodeUnits splice TS/TSX code-units into the index as synthetic nodes so code essences flow through the same WARP. The lens only READS the worktree/cwd — the read-only invariant holds. DETERMINISM INVARIANT: absorbing the same ref twice is byte-identical (stateId + every per-symbol contentId + repo-relative filePath), so diff(absorb(HEAD), absorb(HEAD)) is provably ZERO. Rests on (a) the absorb root being passed to buildWarpState for repo-relative filePaths, (b) deterministic .purpose/portal file-discovery order in premise-core's aggregator, and (c) the lens's sorted file enumeration + deterministic synthetic ids (duplicate-symbol resolution + Merkle essences are stable across parses regardless of filesystem order or temp-dir prefix).",
       "visualTags": [],
       "related": [
         "#git-exec",
-        "#warp-state"
+        "#warp-state",
+        "#lift-code-units"
       ],
       "componentType": "module"
     },
@@ -1687,6 +1703,28 @@
       "related": [],
       "componentType": "config"
     },
+    "sentinel-web-client": {
+      "id": "sentinel-web-client",
+      "name": "Sentinel Web Client",
+      "symbol": "#sentinel-web-client",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel-web/.purpose",
+      "description": "Browser SDK for emitting events to Sentinel via HTTP",
+      "visualTags": [],
+      "related": [],
+      "componentType": "service"
+    },
+    "ring-buffer": {
+      "id": "ring-buffer",
+      "name": "Ring Buffer",
+      "symbol": "#ring-buffer",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel-web/.purpose",
+      "description": "Fixed-size circular buffer for event batching with backpressure",
+      "visualTags": [],
+      "related": [],
+      "componentType": "utility"
+    },
     "SiteApp": {
       "id": "SiteApp",
       "name": "SiteApp",
@@ -1945,28 +1983,6 @@
       "related": [],
       "componentType": "view"
     },
-    "sentinel-web-client": {
-      "id": "sentinel-web-client",
-      "name": "Sentinel Web Client",
-      "symbol": "#sentinel-web-client",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel-web/.purpose",
-      "description": "Browser SDK for emitting events to Sentinel via HTTP",
-      "visualTags": [],
-      "related": [],
-      "componentType": "service"
-    },
-    "ring-buffer": {
-      "id": "ring-buffer",
-      "name": "Ring Buffer",
-      "symbol": "#ring-buffer",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel-web/.purpose",
-      "description": "Fixed-size circular buffer for event batching with backpressure",
-      "visualTags": [],
-      "related": [],
-      "componentType": "utility"
-    },
     "SentinelRustClient": {
       "id": "SentinelRustClient",
       "name": "SentinelRustClient",
@@ -1994,108 +2010,6 @@
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel-rs/.purpose",
       "description": "tracing_subscriber Layer that intercepts Rust tracing events and forwards them to Sentinel as structured log entries",
-      "visualTags": [],
-      "related": []
-    },
-    "paradigm-runtime": {
-      "id": "paradigm-runtime",
-      "name": "Paradigm Runtime",
-      "symbol": "#paradigm-runtime",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/runtime/.purpose",
-      "description": "Main barrel export — runtime API types, version fingerprinting",
-      "visualTags": [],
-      "related": []
-    },
-    "graph-schema": {
-      "id": "graph-schema",
-      "name": "Graph Schema",
-      "symbol": "#graph-schema",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/runtime/.purpose",
-      "description": "Graph schema type definitions — entities, relationships, pattern engines, memory",
-      "visualTags": [
-        "chart"
-      ],
-      "related": []
-    },
-    "schema-validation": {
-      "id": "schema-validation",
-      "name": "Schema Validation",
-      "symbol": "#schema-validation",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/runtime/.purpose",
-      "description": "Validates graph schemas for structural correctness (duplicate entities, broken refs)",
-      "visualTags": [],
-      "related": []
-    },
-    "runtime-api-types": {
-      "id": "runtime-api-types",
-      "name": "Runtime Api Types",
-      "symbol": "#runtime-api-types",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/runtime/.purpose",
-      "description": "Runtime API v1 operation types — query, write, traverse, computed",
-      "visualTags": [],
-      "related": []
-    },
-    "migration-engine": {
-      "id": "migration-engine",
-      "name": "Migration Engine",
-      "symbol": "#migration-engine",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/runtime/.purpose",
-      "description": "Forward-only migration engine — transforms GraphSchema in memory",
-      "visualTags": [],
-      "related": []
-    },
-    "migration-diff": {
-      "id": "migration-diff",
-      "name": "Migration Diff",
-      "symbol": "#migration-diff",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/runtime/.purpose",
-      "description": "Schema diff generator — compares two schemas, produces SchemaDiff with safety classification",
-      "visualTags": [],
-      "related": []
-    },
-    "migration-history": {
-      "id": "migration-history",
-      "name": "Migration History",
-      "symbol": "#migration-history",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/runtime/.purpose",
-      "description": "Migration history tracking — records applied migrations, finds pending",
-      "visualTags": [],
-      "related": []
-    },
-    "version-fingerprint": {
-      "id": "version-fingerprint",
-      "name": "Version Fingerprint",
-      "symbol": "#version-fingerprint",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/runtime/.purpose",
-      "description": "Version fingerprinting — tracks compatibility across runtime, logger, sentinel, schema",
-      "visualTags": [],
-      "related": []
-    },
-    "logger-reexport": {
-      "id": "logger-reexport",
-      "name": "Logger Reexport",
-      "symbol": "#logger-reexport",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/runtime/.purpose",
-      "description": "Shielding re-export of @a-company/paradigm-logger",
-      "visualTags": [],
-      "related": []
-    },
-    "telemetry-reexport": {
-      "id": "telemetry-reexport",
-      "name": "Telemetry Reexport",
-      "symbol": "#telemetry-reexport",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/runtime/.purpose",
-      "description": "Shielding re-export of @a-company/sentinel transport",
       "visualTags": [],
       "related": []
     },
@@ -2344,6 +2258,108 @@
         "!note-received-live"
       ],
       "componentType": "schema"
+    },
+    "paradigm-runtime": {
+      "id": "paradigm-runtime",
+      "name": "Paradigm Runtime",
+      "symbol": "#paradigm-runtime",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/runtime/.purpose",
+      "description": "Main barrel export — runtime API types, version fingerprinting",
+      "visualTags": [],
+      "related": []
+    },
+    "graph-schema": {
+      "id": "graph-schema",
+      "name": "Graph Schema",
+      "symbol": "#graph-schema",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/runtime/.purpose",
+      "description": "Graph schema type definitions — entities, relationships, pattern engines, memory",
+      "visualTags": [
+        "chart"
+      ],
+      "related": []
+    },
+    "schema-validation": {
+      "id": "schema-validation",
+      "name": "Schema Validation",
+      "symbol": "#schema-validation",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/runtime/.purpose",
+      "description": "Validates graph schemas for structural correctness (duplicate entities, broken refs)",
+      "visualTags": [],
+      "related": []
+    },
+    "runtime-api-types": {
+      "id": "runtime-api-types",
+      "name": "Runtime Api Types",
+      "symbol": "#runtime-api-types",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/runtime/.purpose",
+      "description": "Runtime API v1 operation types — query, write, traverse, computed",
+      "visualTags": [],
+      "related": []
+    },
+    "migration-engine": {
+      "id": "migration-engine",
+      "name": "Migration Engine",
+      "symbol": "#migration-engine",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/runtime/.purpose",
+      "description": "Forward-only migration engine — transforms GraphSchema in memory",
+      "visualTags": [],
+      "related": []
+    },
+    "migration-diff": {
+      "id": "migration-diff",
+      "name": "Migration Diff",
+      "symbol": "#migration-diff",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/runtime/.purpose",
+      "description": "Schema diff generator — compares two schemas, produces SchemaDiff with safety classification",
+      "visualTags": [],
+      "related": []
+    },
+    "migration-history": {
+      "id": "migration-history",
+      "name": "Migration History",
+      "symbol": "#migration-history",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/runtime/.purpose",
+      "description": "Migration history tracking — records applied migrations, finds pending",
+      "visualTags": [],
+      "related": []
+    },
+    "version-fingerprint": {
+      "id": "version-fingerprint",
+      "name": "Version Fingerprint",
+      "symbol": "#version-fingerprint",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/runtime/.purpose",
+      "description": "Version fingerprinting — tracks compatibility across runtime, logger, sentinel, schema",
+      "visualTags": [],
+      "related": []
+    },
+    "logger-reexport": {
+      "id": "logger-reexport",
+      "name": "Logger Reexport",
+      "symbol": "#logger-reexport",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/runtime/.purpose",
+      "description": "Shielding re-export of @a-company/paradigm-logger",
+      "visualTags": [],
+      "related": []
+    },
+    "telemetry-reexport": {
+      "id": "telemetry-reexport",
+      "name": "Telemetry Reexport",
+      "symbol": "#telemetry-reexport",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/runtime/.purpose",
+      "description": "Shielding re-export of @a-company/sentinel transport",
+      "visualTags": [],
+      "related": []
     },
     "extension-entry": {
       "id": "extension-entry",
@@ -3085,6 +3101,827 @@
       "description": "Operation timing utility for measuring and logging execution duration",
       "visualTags": [],
       "related": []
+    },
+    "migration-detector": {
+      "id": "migration-detector",
+      "name": "Migration Detector",
+      "symbol": "#migration-detector",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Detects project state by reading migrate.yaml, config.yaml, and filesystem to determine pending migrations",
+      "visualTags": [],
+      "related": [],
+      "componentType": "detector"
+    },
+    "migration-runner": {
+      "id": "migration-runner",
+      "name": "Migration Runner",
+      "symbol": "#migration-runner",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Executes migrations sequentially, records results to migrate.yaml state",
+      "visualTags": [],
+      "related": [],
+      "componentType": "engine"
+    },
+    "migration-registry": {
+      "id": "migration-registry",
+      "name": "Migration Registry",
+      "symbol": "#migration-registry",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Ordered array of 19 self-contained migration steps covering legacy, directory, config, template, and hook migrations",
+      "visualTags": [],
+      "related": [],
+      "componentType": "config"
+    },
+    "init-handler": {
+      "id": "init-handler",
+      "name": "Init Handler",
+      "symbol": "#init-handler",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Handles paradigm init command logic",
+      "visualTags": [],
+      "related": [],
+      "componentType": "handler"
+    },
+    "template-copier": {
+      "id": "template-copier",
+      "name": "Template Copier",
+      "symbol": "#template-copier",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Copies templates to project .paradigm/",
+      "visualTags": [],
+      "related": [],
+      "componentType": "utility"
+    },
+    "detection-engine": {
+      "id": "detection-engine",
+      "name": "Detection Engine",
+      "symbol": "#detection-engine",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Detects existing IDE files and project type",
+      "visualTags": [],
+      "related": [],
+      "componentType": "detector"
+    },
+    "sync-handler": {
+      "id": "sync-handler",
+      "name": "Sync Handler",
+      "symbol": "#sync-handler",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Handles paradigm sync command logic",
+      "visualTags": [],
+      "related": [],
+      "componentType": "handler"
+    },
+    "sync-llms-handler": {
+      "id": "sync-llms-handler",
+      "name": "Sync Llms Handler",
+      "symbol": "#sync-llms-handler",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Generates llms.txt from .paradigm config, navigator.yaml, flows.yaml, and portal.yaml",
+      "visualTags": [],
+      "related": [],
+      "componentType": "service"
+    },
+    "ide-adapters": {
+      "id": "ide-adapters",
+      "name": "Ide Adapters",
+      "symbol": "#ide-adapters",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Adapter implementations for each IDE (Cursor, Copilot, Windsurf, Claude)",
+      "visualTags": [],
+      "related": []
+    },
+    "lint-handler": {
+      "id": "lint-handler",
+      "name": "Lint Handler",
+      "symbol": "#lint-handler",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Handles paradigm lint command",
+      "visualTags": [],
+      "related": [],
+      "componentType": "handler"
+    },
+    "yaml-fixer": {
+      "id": "yaml-fixer",
+      "name": "Yaml Fixer",
+      "symbol": "#yaml-fixer",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Auto-fixes YAML issues (quotes symbols, converts markdown)",
+      "visualTags": [],
+      "related": [],
+      "componentType": "utility"
+    },
+    "schema-validator": {
+      "id": "schema-validator",
+      "name": "Schema Validator",
+      "symbol": "#schema-validator",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Validates .purpose files against schema",
+      "visualTags": [],
+      "related": [],
+      "componentType": "utility"
+    },
+    "cost-handler": {
+      "id": "cost-handler",
+      "name": "Cost Handler",
+      "symbol": "#cost-handler",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Handles paradigm cost command",
+      "visualTags": [],
+      "related": [],
+      "componentType": "handler"
+    },
+    "token-estimator": {
+      "id": "token-estimator",
+      "name": "Token Estimator",
+      "symbol": "#token-estimator",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Estimates token counts for context files",
+      "visualTags": [],
+      "related": [],
+      "componentType": "utility"
+    },
+    "scan-handler": {
+      "id": "scan-handler",
+      "name": "Scan Handler",
+      "symbol": "#scan-handler",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Handles paradigm scan command",
+      "visualTags": [],
+      "related": [],
+      "componentType": "handler"
+    },
+    "auto-scan-handler": {
+      "id": "auto-scan-handler",
+      "name": "Auto Scan Handler",
+      "symbol": "#auto-scan-handler",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Handles paradigm scan --auto command",
+      "visualTags": [],
+      "related": [],
+      "componentType": "handler"
+    },
+    "navigator-generator": {
+      "id": "navigator-generator",
+      "name": "Navigator Generator",
+      "symbol": "#navigator-generator",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Generates navigator.yaml for AI exploration",
+      "visualTags": [
+        "nav"
+      ],
+      "related": [],
+      "componentType": "service"
+    },
+    "component-detector": {
+      "id": "component-detector",
+      "name": "Component Detector",
+      "symbol": "#component-detector",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Detects React/Vue/Angular components",
+      "visualTags": [],
+      "related": [],
+      "componentType": "detector"
+    },
+    "route-detector": {
+      "id": "route-detector",
+      "name": "Route Detector",
+      "symbol": "#route-detector",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Detects routes (Express, Next.js, React Router)",
+      "visualTags": [],
+      "related": [],
+      "componentType": "detector"
+    },
+    "auth-detector": {
+      "id": "auth-detector",
+      "name": "Auth Detector",
+      "symbol": "#auth-detector",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Detects auth middleware and gates",
+      "visualTags": [],
+      "related": [],
+      "componentType": "detector"
+    },
+    "signal-detector": {
+      "id": "signal-detector",
+      "name": "Signal Detector",
+      "symbol": "#signal-detector",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Detects events, errors, toast notifications",
+      "visualTags": [],
+      "related": [],
+      "componentType": "detector"
+    },
+    "team-loader": {
+      "id": "team-loader",
+      "name": "Team Loader",
+      "symbol": "#team-loader",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Loads agents.yaml and team-state.yaml",
+      "visualTags": [
+        "spinner"
+      ],
+      "related": [],
+      "componentType": "loader"
+    },
+    "manifest-generator": {
+      "id": "manifest-generator",
+      "name": "Manifest Generator",
+      "symbol": "#manifest-generator",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Generates default agents.yaml",
+      "visualTags": [],
+      "related": [],
+      "componentType": "config"
+    },
+    "agent-spawner": {
+      "id": "agent-spawner",
+      "name": "Agent Spawner",
+      "symbol": "#agent-spawner",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose",
+      "description": "Spawn individual agents with task, context, and budget constraints. Includes completion confirmation — validates relay output before accepting success status.",
+      "visualTags": [],
+      "related": [
+        "~provider-cascade",
+        "~completion-confirmation"
+      ],
+      "componentType": "service"
+    },
+    "orchestrator": {
+      "id": "orchestrator",
+      "name": "Orchestrator",
+      "symbol": "#orchestrator",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose",
+      "description": "Multi-agent task conductor supporting solo and faceted modes, plus the stateless iteration-loop primitive (re-review / iterate-with-same-role)",
+      "visualTags": [],
+      "related": [
+        "~budget-enforced",
+        "$agent-orchestration-flow"
+      ],
+      "componentType": "engine"
+    },
+    "context-builder": {
+      "id": "context-builder",
+      "name": "Context Builder",
+      "symbol": "#context-builder",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose",
+      "description": "Build AI context from symbols, files, and role-specific includes/excludes",
+      "visualTags": [],
+      "related": [],
+      "componentType": "service"
+    },
+    "provider-registry": {
+      "id": "provider-registry",
+      "name": "Provider Registry",
+      "symbol": "#provider-registry",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose",
+      "description": "Registry for agent providers with priority cascade and availability checking",
+      "visualTags": [],
+      "related": [
+        "~provider-cascade"
+      ],
+      "componentType": "store"
+    },
+    "budget-tracker": {
+      "id": "budget-tracker",
+      "name": "Budget Tracker",
+      "symbol": "#budget-tracker",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose",
+      "description": "Track token and cost budgets during orchestration execution",
+      "visualTags": [],
+      "related": [
+        "~budget-enforced"
+      ],
+      "componentType": "engine"
+    },
+    "audit-logger": {
+      "id": "audit-logger",
+      "name": "Audit Logger",
+      "symbol": "#audit-logger",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose",
+      "description": "Log orchestration execution details and costs to .paradigm/orchestrations/",
+      "visualTags": [],
+      "related": [],
+      "componentType": "service"
+    },
+    "model-configurator": {
+      "id": "model-configurator",
+      "name": "Model Configurator",
+      "symbol": "#model-configurator",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Interactive prompts for configuring agent model assignments",
+      "visualTags": [],
+      "related": [],
+      "componentType": "config"
+    },
+    "model-discovery": {
+      "id": "model-discovery",
+      "name": "Model Discovery",
+      "symbol": "#model-discovery",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose",
+      "description": "Discover available LLM models from APIs, remote manifest, and presets",
+      "visualTags": [],
+      "related": [],
+      "componentType": "service"
+    },
+    "agent-classifier": {
+      "id": "agent-classifier",
+      "name": "Agent Classifier",
+      "symbol": "#agent-classifier",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Classifies tasks and suggests appropriate agents",
+      "visualTags": [],
+      "related": [],
+      "componentType": "service"
+    },
+    "mcp-setup-handler": {
+      "id": "mcp-setup-handler",
+      "name": "Mcp Setup Handler",
+      "symbol": "#mcp-setup-handler",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Handles MCP setup commands",
+      "visualTags": [],
+      "related": [],
+      "componentType": "config"
+    },
+    "client-detector": {
+      "id": "client-detector",
+      "name": "Client Detector",
+      "symbol": "#client-detector",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Detects installed AI clients (Cursor, Claude Desktop, Continue, Cline)",
+      "visualTags": [],
+      "related": [],
+      "componentType": "detector"
+    },
+    "config-generator": {
+      "id": "config-generator",
+      "name": "Config Generator",
+      "symbol": "#config-generator",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Generates MCP config for each client",
+      "visualTags": [],
+      "related": [],
+      "componentType": "service"
+    },
+    "status-handler": {
+      "id": "status-handler",
+      "name": "Status Handler",
+      "symbol": "#status-handler",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Handles paradigm status command",
+      "visualTags": [],
+      "related": [],
+      "componentType": "handler"
+    },
+    "symbol-counter": {
+      "id": "symbol-counter",
+      "name": "Symbol Counter",
+      "symbol": "#symbol-counter",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Counts symbols by type",
+      "visualTags": [],
+      "related": [],
+      "componentType": "utility"
+    },
+    "beacon-handler": {
+      "id": "beacon-handler",
+      "name": "Beacon Handler",
+      "symbol": "#beacon-handler",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Generates beacon.md content",
+      "visualTags": [],
+      "related": [],
+      "componentType": "handler"
+    },
+    "constellation-handler": {
+      "id": "constellation-handler",
+      "name": "Constellation Handler",
+      "symbol": "#constellation-handler",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Builds constellation graph",
+      "visualTags": [],
+      "related": [],
+      "componentType": "handler"
+    },
+    "graph-builder": {
+      "id": "graph-builder",
+      "name": "Graph Builder",
+      "symbol": "#graph-builder",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
+      "description": "#graph-builder: Builds relationship graph",
+      "visualTags": [
+        "chart"
+      ],
+      "related": []
+    },
+    "ripple-handler": {
+      "id": "ripple-handler",
+      "name": "Ripple Handler",
+      "symbol": "#ripple-handler",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Performs ripple analysis",
+      "visualTags": [],
+      "related": [],
+      "componentType": "handler"
+    },
+    "impact-analyzer": {
+      "id": "impact-analyzer",
+      "name": "Impact Analyzer",
+      "symbol": "#impact-analyzer",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Analyzes upstream/downstream impact",
+      "visualTags": [],
+      "related": [],
+      "componentType": "utility"
+    },
+    "echo-handler": {
+      "id": "echo-handler",
+      "name": "Echo Handler",
+      "symbol": "#echo-handler",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Handles echo lookups",
+      "visualTags": [],
+      "related": [],
+      "componentType": "handler"
+    },
+    "error-mapper": {
+      "id": "error-mapper",
+      "name": "Error Mapper",
+      "symbol": "#error-mapper",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Maps error codes to symbols",
+      "visualTags": [],
+      "related": [],
+      "componentType": "utility"
+    },
+    "probe-handler": {
+      "id": "probe-handler",
+      "name": "Probe Handler",
+      "symbol": "#probe-handler",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Handles probe command",
+      "visualTags": [],
+      "related": [],
+      "componentType": "handler"
+    },
+    "image-processor": {
+      "id": "image-processor",
+      "name": "Image Processor",
+      "symbol": "#image-processor",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Processes screenshot input",
+      "visualTags": [
+        "image"
+      ],
+      "related": [],
+      "componentType": "utility"
+    },
+    "doctor-handler": {
+      "id": "doctor-handler",
+      "name": "Doctor Handler",
+      "symbol": "#doctor-handler",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/doctor/.purpose",
+      "description": "Core health checks for .paradigm directory, config, specs, docs, IDE files, portal, flows, lore, hooks, and habits. v6.0.4 added 'info' status for non-blocking metric surfacing (renderer only — Wave 3 wires the aspect-coverage line item that consumes it).",
+      "visualTags": [],
+      "related": [
+        "#gap-narrator"
+      ],
+      "componentType": "handler"
+    },
+    "health-checker": {
+      "id": "health-checker",
+      "name": "Health Checker",
+      "symbol": "#health-checker",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Validates project setup",
+      "visualTags": [],
+      "related": [],
+      "componentType": "utility"
+    },
+    "config-schema-validator": {
+      "id": "config-schema-validator",
+      "name": "Config Schema Validator",
+      "symbol": "#config-schema-validator",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Zod-based schema validation for .paradigm/config.yaml — validates known fields, warns on unrecognized keys",
+      "visualTags": [],
+      "related": [],
+      "componentType": "utility"
+    },
+    "integrity-checker": {
+      "id": "integrity-checker",
+      "name": "Integrity Checker",
+      "symbol": "#integrity-checker",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "CLI integrity check implementation — broken references, duplicate symbols, orphaned symbols, missing anchors",
+      "visualTags": [],
+      "related": [],
+      "componentType": "utility"
+    },
+    "thread-handler": {
+      "id": "thread-handler",
+      "name": "Thread Handler",
+      "symbol": "#thread-handler",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Manages thread.md operations",
+      "visualTags": [],
+      "related": [],
+      "componentType": "handler"
+    },
+    "session-storage": {
+      "id": "session-storage",
+      "name": "Session Storage",
+      "symbol": "#session-storage",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Stores session state in thread.md",
+      "visualTags": [],
+      "related": [],
+      "componentType": "utility"
+    },
+    "wisdom-handler": {
+      "id": "wisdom-handler",
+      "name": "Wisdom Handler",
+      "symbol": "#wisdom-handler",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Manages team preferences, antipatterns, decisions, and expertise",
+      "visualTags": [],
+      "related": [],
+      "componentType": "handler"
+    },
+    "history-handler": {
+      "id": "history-handler",
+      "name": "History Handler",
+      "symbol": "#history-handler",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Manages implementation log, validation, and fragility",
+      "visualTags": [],
+      "related": [],
+      "componentType": "handler"
+    },
+    "hooks-handler": {
+      "id": "hooks-handler",
+      "name": "Hooks Handler",
+      "symbol": "#hooks-handler",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Manages git hooks for automatic history capture",
+      "visualTags": [],
+      "related": [],
+      "componentType": "handler"
+    },
+    "claude-code-hooks-installer": {
+      "id": "claude-code-hooks-installer",
+      "name": "Claude Code Hooks Installer",
+      "symbol": "#claude-code-hooks-installer",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Installs Claude Code Stop and PreToolUse hooks for paradigm file enforcement and auto-reindex. Includes paradigm-navigate-remind.sh PreToolUse hook (Glob|Grep matcher) that fires once per session to prompt navigate-first behaviour.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "installer"
+    },
+    "sentinel-launcher": {
+      "id": "sentinel-launcher",
+      "name": "Sentinel Launcher",
+      "symbol": "#sentinel-launcher",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Launches the Sentinel codebase intelligence UI",
+      "visualTags": [],
+      "related": [],
+      "componentType": "service"
+    },
+    "university-launcher": {
+      "id": "university-launcher",
+      "name": "University Launcher",
+      "symbol": "#university-launcher",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Launches the Paradigm University learning platform",
+      "visualTags": [],
+      "related": [],
+      "componentType": "service"
+    },
+    "triage-handler": {
+      "id": "triage-handler",
+      "name": "Triage Handler",
+      "symbol": "#triage-handler",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Handles Sentinel CLI triage commands",
+      "visualTags": [],
+      "related": [],
+      "componentType": "handler"
+    },
+    "purpose-validator": {
+      "id": "purpose-validator",
+      "name": "Purpose Validator",
+      "symbol": "#purpose-validator",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Validates purpose files against schema",
+      "visualTags": [],
+      "related": [],
+      "componentType": "service"
+    },
+    "purpose-aggregator": {
+      "id": "purpose-aggregator",
+      "name": "Purpose Aggregator",
+      "symbol": "#purpose-aggregator",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Aggregates and displays purpose context",
+      "visualTags": [],
+      "related": [],
+      "componentType": "service"
+    },
+    "premise-aggregator": {
+      "id": "premise-aggregator",
+      "name": "Premise Aggregator",
+      "symbol": "#premise-aggregator",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Aggregates all premise sources",
+      "visualTags": [],
+      "related": [],
+      "componentType": "service"
+    },
+    "premise-snapshotter": {
+      "id": "premise-snapshotter",
+      "name": "Premise Snapshotter",
+      "symbol": "#premise-snapshotter",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Creates timeline snapshots of premise state",
+      "visualTags": [],
+      "related": [],
+      "componentType": "service"
+    },
+    "portal-validator": {
+      "id": "portal-validator",
+      "name": "Portal Validator",
+      "symbol": "#portal-validator",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Validates portal.yaml configuration",
+      "visualTags": [],
+      "related": [],
+      "componentType": "service"
+    },
+    "portal-checker": {
+      "id": "portal-checker",
+      "name": "Portal Checker",
+      "symbol": "#portal-checker",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Checks portal.yaml compliance",
+      "visualTags": [],
+      "related": [],
+      "componentType": "service"
+    },
+    "portal-tester": {
+      "id": "portal-tester",
+      "name": "Portal Tester",
+      "symbol": "#portal-tester",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Generates and runs gate tests",
+      "visualTags": [],
+      "related": [],
+      "componentType": "service"
+    },
+    "portal-viewer": {
+      "id": "portal-viewer",
+      "name": "Portal Viewer",
+      "symbol": "#portal-viewer",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Real-time portal visualization dashboard",
+      "visualTags": [],
+      "related": [],
+      "componentType": "service"
+    },
+    "global-clean-handler": {
+      "id": "global-clean-handler",
+      "name": "Global Clean Handler",
+      "symbol": "#global-clean-handler",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Scans and removes old files from ~/.paradigm/ subdirectories with configurable age threshold",
+      "visualTags": [],
+      "related": [],
+      "componentType": "service"
+    },
+    "sweep-handler": {
+      "id": "sweep-handler",
+      "name": "Sweep Handler",
+      "symbol": "#sweep-handler",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/sweep/.purpose",
+      "description": "Main sweep command with 9 entropy checks, report formatting, and auto-fix",
+      "visualTags": [],
+      "related": [],
+      "componentType": "handler"
+    },
+    "entropy-checker": {
+      "id": "entropy-checker",
+      "name": "Entropy Checker",
+      "symbol": "#entropy-checker",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Individual check functions for each entropy category (orphaned, stale, phantom, dead, broken, lore-rot, tag-orphan, semantic-drift, coverage-decay)",
+      "visualTags": [],
+      "related": [],
+      "componentType": "utility"
+    },
+    "task-bridge": {
+      "id": "task-bridge",
+      "name": "Task Bridge",
+      "symbol": "#task-bridge",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "v7.1 — closes the learning loop for the standalone CLI orchestrator path (v7.0 scoped loop-closure to MCP-world only). A thin adapter that reuses the low-level task-loader primitives (createTask/updateTask/completeTask) rather than the MCP-coupled emitTaskDag. bridgeRunStart mints an epic (in-progress, external_ref orchestration) + one child task per CLI stage (parentTaskId=epic, stage, claimant archetype, dependsOn); bridgeStageProgress flips a stage to in-progress; bridgeStageComplete calls completeTask → which triggers settlement (and the chainLive learning chain) via the task-loader updateTask hook, exactly as the MCP path. Wired into orchestrator.ts solo + DAG paths; every call best-effort (a bridge write failure never breaks the CLI run). Imports paradigm-mcp via the established relative-path precedent (core/habits/evaluator.ts).",
+      "visualTags": [],
+      "related": [],
+      "componentType": "adapter"
+    },
+    "calibration": {
+      "id": "calibration",
+      "name": "Calibration",
+      "symbol": "#calibration",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "v7.1 — the CAPTURE half of the self-improving estimate loop (the \"self-improving\" payoff v7.0 deferred; v7.0 shipped AGENT_TOKEN_ESTIMATES only as a constant). recordEstimateActual(rootDir, {archetype, taskType, actualTokens, parentTaskId?, ts?}) appends one JSONL line per agent-step to .paradigm/events/estimate-actuals.jsonl. Wired into orchestrator.ts at both per-agent actual sites — faceted (result.relay.metrics.tokens_used, keyed by step.agent + classifyTask(task).type) and solo (agentName + classifyTask(task).type). The estimate itself is NOT recorded (the learned table is actuals-only → no cross-package coupling to the MCP constant). Capture is best-effort — a write failure is logged and swallowed, never alters the run. Aggregated by `paradigm calibrate` into .paradigm/learned/token-estimates.json, which the MCP planner reads learned-first.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "utility"
+    },
+    "calibrate-command": {
+      "id": "calibrate-command",
+      "name": "Calibrate Command",
+      "symbol": "#calibrate-command",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "v7.1 — `paradigm calibrate` aggregation command (the analysis half). Reads .paradigm/events/estimate-actuals.jsonl, groups by (archetype, taskType), and for each group with n>=8 samples computes a robust band (min=p10 of total, max=p90 of total) and writes .paradigm/learned/token-estimates.json as a nested archetype→taskType→band map of {min,max,n}. Groups under the 8-sample floor are NOT written (still use the constant cold-start prior). Reports learned vs. below-floor groups via cli-output helpers (header/kv/success/dim/warn). aggregateActuals + percentile are exported pure functions for testing.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "command"
     },
     "conductor-app": {
       "id": "conductor-app",
@@ -4512,827 +5349,6 @@
       "related": [],
       "componentType": "view"
     },
-    "migration-detector": {
-      "id": "migration-detector",
-      "name": "Migration Detector",
-      "symbol": "#migration-detector",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Detects project state by reading migrate.yaml, config.yaml, and filesystem to determine pending migrations",
-      "visualTags": [],
-      "related": [],
-      "componentType": "detector"
-    },
-    "migration-runner": {
-      "id": "migration-runner",
-      "name": "Migration Runner",
-      "symbol": "#migration-runner",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Executes migrations sequentially, records results to migrate.yaml state",
-      "visualTags": [],
-      "related": [],
-      "componentType": "engine"
-    },
-    "migration-registry": {
-      "id": "migration-registry",
-      "name": "Migration Registry",
-      "symbol": "#migration-registry",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Ordered array of 19 self-contained migration steps covering legacy, directory, config, template, and hook migrations",
-      "visualTags": [],
-      "related": [],
-      "componentType": "config"
-    },
-    "init-handler": {
-      "id": "init-handler",
-      "name": "Init Handler",
-      "symbol": "#init-handler",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Handles paradigm init command logic",
-      "visualTags": [],
-      "related": [],
-      "componentType": "handler"
-    },
-    "template-copier": {
-      "id": "template-copier",
-      "name": "Template Copier",
-      "symbol": "#template-copier",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Copies templates to project .paradigm/",
-      "visualTags": [],
-      "related": [],
-      "componentType": "utility"
-    },
-    "detection-engine": {
-      "id": "detection-engine",
-      "name": "Detection Engine",
-      "symbol": "#detection-engine",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Detects existing IDE files and project type",
-      "visualTags": [],
-      "related": [],
-      "componentType": "detector"
-    },
-    "sync-handler": {
-      "id": "sync-handler",
-      "name": "Sync Handler",
-      "symbol": "#sync-handler",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Handles paradigm sync command logic",
-      "visualTags": [],
-      "related": [],
-      "componentType": "handler"
-    },
-    "sync-llms-handler": {
-      "id": "sync-llms-handler",
-      "name": "Sync Llms Handler",
-      "symbol": "#sync-llms-handler",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Generates llms.txt from .paradigm config, navigator.yaml, flows.yaml, and portal.yaml",
-      "visualTags": [],
-      "related": [],
-      "componentType": "service"
-    },
-    "ide-adapters": {
-      "id": "ide-adapters",
-      "name": "Ide Adapters",
-      "symbol": "#ide-adapters",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Adapter implementations for each IDE (Cursor, Copilot, Windsurf, Claude)",
-      "visualTags": [],
-      "related": []
-    },
-    "lint-handler": {
-      "id": "lint-handler",
-      "name": "Lint Handler",
-      "symbol": "#lint-handler",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Handles paradigm lint command",
-      "visualTags": [],
-      "related": [],
-      "componentType": "handler"
-    },
-    "yaml-fixer": {
-      "id": "yaml-fixer",
-      "name": "Yaml Fixer",
-      "symbol": "#yaml-fixer",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Auto-fixes YAML issues (quotes symbols, converts markdown)",
-      "visualTags": [],
-      "related": [],
-      "componentType": "utility"
-    },
-    "schema-validator": {
-      "id": "schema-validator",
-      "name": "Schema Validator",
-      "symbol": "#schema-validator",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Validates .purpose files against schema",
-      "visualTags": [],
-      "related": [],
-      "componentType": "utility"
-    },
-    "cost-handler": {
-      "id": "cost-handler",
-      "name": "Cost Handler",
-      "symbol": "#cost-handler",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Handles paradigm cost command",
-      "visualTags": [],
-      "related": [],
-      "componentType": "handler"
-    },
-    "token-estimator": {
-      "id": "token-estimator",
-      "name": "Token Estimator",
-      "symbol": "#token-estimator",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Estimates token counts for context files",
-      "visualTags": [],
-      "related": [],
-      "componentType": "utility"
-    },
-    "scan-handler": {
-      "id": "scan-handler",
-      "name": "Scan Handler",
-      "symbol": "#scan-handler",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Handles paradigm scan command",
-      "visualTags": [],
-      "related": [],
-      "componentType": "handler"
-    },
-    "auto-scan-handler": {
-      "id": "auto-scan-handler",
-      "name": "Auto Scan Handler",
-      "symbol": "#auto-scan-handler",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Handles paradigm scan --auto command",
-      "visualTags": [],
-      "related": [],
-      "componentType": "handler"
-    },
-    "navigator-generator": {
-      "id": "navigator-generator",
-      "name": "Navigator Generator",
-      "symbol": "#navigator-generator",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Generates navigator.yaml for AI exploration",
-      "visualTags": [
-        "nav"
-      ],
-      "related": [],
-      "componentType": "service"
-    },
-    "component-detector": {
-      "id": "component-detector",
-      "name": "Component Detector",
-      "symbol": "#component-detector",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Detects React/Vue/Angular components",
-      "visualTags": [],
-      "related": [],
-      "componentType": "detector"
-    },
-    "route-detector": {
-      "id": "route-detector",
-      "name": "Route Detector",
-      "symbol": "#route-detector",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Detects routes (Express, Next.js, React Router)",
-      "visualTags": [],
-      "related": [],
-      "componentType": "detector"
-    },
-    "auth-detector": {
-      "id": "auth-detector",
-      "name": "Auth Detector",
-      "symbol": "#auth-detector",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Detects auth middleware and gates",
-      "visualTags": [],
-      "related": [],
-      "componentType": "detector"
-    },
-    "signal-detector": {
-      "id": "signal-detector",
-      "name": "Signal Detector",
-      "symbol": "#signal-detector",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Detects events, errors, toast notifications",
-      "visualTags": [],
-      "related": [],
-      "componentType": "detector"
-    },
-    "team-loader": {
-      "id": "team-loader",
-      "name": "Team Loader",
-      "symbol": "#team-loader",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Loads agents.yaml and team-state.yaml",
-      "visualTags": [
-        "spinner"
-      ],
-      "related": [],
-      "componentType": "loader"
-    },
-    "manifest-generator": {
-      "id": "manifest-generator",
-      "name": "Manifest Generator",
-      "symbol": "#manifest-generator",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Generates default agents.yaml",
-      "visualTags": [],
-      "related": [],
-      "componentType": "config"
-    },
-    "agent-spawner": {
-      "id": "agent-spawner",
-      "name": "Agent Spawner",
-      "symbol": "#agent-spawner",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose",
-      "description": "Spawn individual agents with task, context, and budget constraints. Includes completion confirmation — validates relay output before accepting success status.",
-      "visualTags": [],
-      "related": [
-        "~provider-cascade",
-        "~completion-confirmation"
-      ],
-      "componentType": "service"
-    },
-    "orchestrator": {
-      "id": "orchestrator",
-      "name": "Orchestrator",
-      "symbol": "#orchestrator",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose",
-      "description": "Multi-agent task conductor supporting solo and faceted modes, plus the stateless iteration-loop primitive (re-review / iterate-with-same-role)",
-      "visualTags": [],
-      "related": [
-        "~budget-enforced",
-        "$agent-orchestration-flow"
-      ],
-      "componentType": "engine"
-    },
-    "context-builder": {
-      "id": "context-builder",
-      "name": "Context Builder",
-      "symbol": "#context-builder",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose",
-      "description": "Build AI context from symbols, files, and role-specific includes/excludes",
-      "visualTags": [],
-      "related": [],
-      "componentType": "service"
-    },
-    "provider-registry": {
-      "id": "provider-registry",
-      "name": "Provider Registry",
-      "symbol": "#provider-registry",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose",
-      "description": "Registry for agent providers with priority cascade and availability checking",
-      "visualTags": [],
-      "related": [
-        "~provider-cascade"
-      ],
-      "componentType": "store"
-    },
-    "budget-tracker": {
-      "id": "budget-tracker",
-      "name": "Budget Tracker",
-      "symbol": "#budget-tracker",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose",
-      "description": "Track token and cost budgets during orchestration execution",
-      "visualTags": [],
-      "related": [
-        "~budget-enforced"
-      ],
-      "componentType": "engine"
-    },
-    "audit-logger": {
-      "id": "audit-logger",
-      "name": "Audit Logger",
-      "symbol": "#audit-logger",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose",
-      "description": "Log orchestration execution details and costs to .paradigm/orchestrations/",
-      "visualTags": [],
-      "related": [],
-      "componentType": "service"
-    },
-    "model-configurator": {
-      "id": "model-configurator",
-      "name": "Model Configurator",
-      "symbol": "#model-configurator",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Interactive prompts for configuring agent model assignments",
-      "visualTags": [],
-      "related": [],
-      "componentType": "config"
-    },
-    "model-discovery": {
-      "id": "model-discovery",
-      "name": "Model Discovery",
-      "symbol": "#model-discovery",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose",
-      "description": "Discover available LLM models from APIs, remote manifest, and presets",
-      "visualTags": [],
-      "related": [],
-      "componentType": "service"
-    },
-    "agent-classifier": {
-      "id": "agent-classifier",
-      "name": "Agent Classifier",
-      "symbol": "#agent-classifier",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Classifies tasks and suggests appropriate agents",
-      "visualTags": [],
-      "related": [],
-      "componentType": "service"
-    },
-    "mcp-setup-handler": {
-      "id": "mcp-setup-handler",
-      "name": "Mcp Setup Handler",
-      "symbol": "#mcp-setup-handler",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Handles MCP setup commands",
-      "visualTags": [],
-      "related": [],
-      "componentType": "config"
-    },
-    "client-detector": {
-      "id": "client-detector",
-      "name": "Client Detector",
-      "symbol": "#client-detector",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Detects installed AI clients (Cursor, Claude Desktop, Continue, Cline)",
-      "visualTags": [],
-      "related": [],
-      "componentType": "detector"
-    },
-    "config-generator": {
-      "id": "config-generator",
-      "name": "Config Generator",
-      "symbol": "#config-generator",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Generates MCP config for each client",
-      "visualTags": [],
-      "related": [],
-      "componentType": "service"
-    },
-    "status-handler": {
-      "id": "status-handler",
-      "name": "Status Handler",
-      "symbol": "#status-handler",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Handles paradigm status command",
-      "visualTags": [],
-      "related": [],
-      "componentType": "handler"
-    },
-    "symbol-counter": {
-      "id": "symbol-counter",
-      "name": "Symbol Counter",
-      "symbol": "#symbol-counter",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Counts symbols by type",
-      "visualTags": [],
-      "related": [],
-      "componentType": "utility"
-    },
-    "beacon-handler": {
-      "id": "beacon-handler",
-      "name": "Beacon Handler",
-      "symbol": "#beacon-handler",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Generates beacon.md content",
-      "visualTags": [],
-      "related": [],
-      "componentType": "handler"
-    },
-    "constellation-handler": {
-      "id": "constellation-handler",
-      "name": "Constellation Handler",
-      "symbol": "#constellation-handler",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Builds constellation graph",
-      "visualTags": [],
-      "related": [],
-      "componentType": "handler"
-    },
-    "graph-builder": {
-      "id": "graph-builder",
-      "name": "Graph Builder",
-      "symbol": "#graph-builder",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
-      "description": "#graph-builder: Builds relationship graph",
-      "visualTags": [
-        "chart"
-      ],
-      "related": []
-    },
-    "ripple-handler": {
-      "id": "ripple-handler",
-      "name": "Ripple Handler",
-      "symbol": "#ripple-handler",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Performs ripple analysis",
-      "visualTags": [],
-      "related": [],
-      "componentType": "handler"
-    },
-    "impact-analyzer": {
-      "id": "impact-analyzer",
-      "name": "Impact Analyzer",
-      "symbol": "#impact-analyzer",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Analyzes upstream/downstream impact",
-      "visualTags": [],
-      "related": [],
-      "componentType": "utility"
-    },
-    "echo-handler": {
-      "id": "echo-handler",
-      "name": "Echo Handler",
-      "symbol": "#echo-handler",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Handles echo lookups",
-      "visualTags": [],
-      "related": [],
-      "componentType": "handler"
-    },
-    "error-mapper": {
-      "id": "error-mapper",
-      "name": "Error Mapper",
-      "symbol": "#error-mapper",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Maps error codes to symbols",
-      "visualTags": [],
-      "related": [],
-      "componentType": "utility"
-    },
-    "probe-handler": {
-      "id": "probe-handler",
-      "name": "Probe Handler",
-      "symbol": "#probe-handler",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Handles probe command",
-      "visualTags": [],
-      "related": [],
-      "componentType": "handler"
-    },
-    "image-processor": {
-      "id": "image-processor",
-      "name": "Image Processor",
-      "symbol": "#image-processor",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Processes screenshot input",
-      "visualTags": [
-        "image"
-      ],
-      "related": [],
-      "componentType": "utility"
-    },
-    "doctor-handler": {
-      "id": "doctor-handler",
-      "name": "Doctor Handler",
-      "symbol": "#doctor-handler",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/doctor/.purpose",
-      "description": "Core health checks for .paradigm directory, config, specs, docs, IDE files, portal, flows, lore, hooks, and habits. v6.0.4 added 'info' status for non-blocking metric surfacing (renderer only — Wave 3 wires the aspect-coverage line item that consumes it).",
-      "visualTags": [],
-      "related": [
-        "#gap-narrator"
-      ],
-      "componentType": "handler"
-    },
-    "health-checker": {
-      "id": "health-checker",
-      "name": "Health Checker",
-      "symbol": "#health-checker",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Validates project setup",
-      "visualTags": [],
-      "related": [],
-      "componentType": "utility"
-    },
-    "config-schema-validator": {
-      "id": "config-schema-validator",
-      "name": "Config Schema Validator",
-      "symbol": "#config-schema-validator",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Zod-based schema validation for .paradigm/config.yaml — validates known fields, warns on unrecognized keys",
-      "visualTags": [],
-      "related": [],
-      "componentType": "utility"
-    },
-    "integrity-checker": {
-      "id": "integrity-checker",
-      "name": "Integrity Checker",
-      "symbol": "#integrity-checker",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "CLI integrity check implementation — broken references, duplicate symbols, orphaned symbols, missing anchors",
-      "visualTags": [],
-      "related": [],
-      "componentType": "utility"
-    },
-    "thread-handler": {
-      "id": "thread-handler",
-      "name": "Thread Handler",
-      "symbol": "#thread-handler",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Manages thread.md operations",
-      "visualTags": [],
-      "related": [],
-      "componentType": "handler"
-    },
-    "session-storage": {
-      "id": "session-storage",
-      "name": "Session Storage",
-      "symbol": "#session-storage",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Stores session state in thread.md",
-      "visualTags": [],
-      "related": [],
-      "componentType": "utility"
-    },
-    "wisdom-handler": {
-      "id": "wisdom-handler",
-      "name": "Wisdom Handler",
-      "symbol": "#wisdom-handler",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Manages team preferences, antipatterns, decisions, and expertise",
-      "visualTags": [],
-      "related": [],
-      "componentType": "handler"
-    },
-    "history-handler": {
-      "id": "history-handler",
-      "name": "History Handler",
-      "symbol": "#history-handler",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Manages implementation log, validation, and fragility",
-      "visualTags": [],
-      "related": [],
-      "componentType": "handler"
-    },
-    "hooks-handler": {
-      "id": "hooks-handler",
-      "name": "Hooks Handler",
-      "symbol": "#hooks-handler",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Manages git hooks for automatic history capture",
-      "visualTags": [],
-      "related": [],
-      "componentType": "handler"
-    },
-    "claude-code-hooks-installer": {
-      "id": "claude-code-hooks-installer",
-      "name": "Claude Code Hooks Installer",
-      "symbol": "#claude-code-hooks-installer",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Installs Claude Code Stop and PreToolUse hooks for paradigm file enforcement and auto-reindex. Includes paradigm-navigate-remind.sh PreToolUse hook (Glob|Grep matcher) that fires once per session to prompt navigate-first behaviour.",
-      "visualTags": [],
-      "related": [],
-      "componentType": "installer"
-    },
-    "sentinel-launcher": {
-      "id": "sentinel-launcher",
-      "name": "Sentinel Launcher",
-      "symbol": "#sentinel-launcher",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Launches the Sentinel codebase intelligence UI",
-      "visualTags": [],
-      "related": [],
-      "componentType": "service"
-    },
-    "university-launcher": {
-      "id": "university-launcher",
-      "name": "University Launcher",
-      "symbol": "#university-launcher",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Launches the Paradigm University learning platform",
-      "visualTags": [],
-      "related": [],
-      "componentType": "service"
-    },
-    "triage-handler": {
-      "id": "triage-handler",
-      "name": "Triage Handler",
-      "symbol": "#triage-handler",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Handles Sentinel CLI triage commands",
-      "visualTags": [],
-      "related": [],
-      "componentType": "handler"
-    },
-    "purpose-validator": {
-      "id": "purpose-validator",
-      "name": "Purpose Validator",
-      "symbol": "#purpose-validator",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Validates purpose files against schema",
-      "visualTags": [],
-      "related": [],
-      "componentType": "service"
-    },
-    "purpose-aggregator": {
-      "id": "purpose-aggregator",
-      "name": "Purpose Aggregator",
-      "symbol": "#purpose-aggregator",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Aggregates and displays purpose context",
-      "visualTags": [],
-      "related": [],
-      "componentType": "service"
-    },
-    "premise-aggregator": {
-      "id": "premise-aggregator",
-      "name": "Premise Aggregator",
-      "symbol": "#premise-aggregator",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Aggregates all premise sources",
-      "visualTags": [],
-      "related": [],
-      "componentType": "service"
-    },
-    "premise-snapshotter": {
-      "id": "premise-snapshotter",
-      "name": "Premise Snapshotter",
-      "symbol": "#premise-snapshotter",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Creates timeline snapshots of premise state",
-      "visualTags": [],
-      "related": [],
-      "componentType": "service"
-    },
-    "portal-validator": {
-      "id": "portal-validator",
-      "name": "Portal Validator",
-      "symbol": "#portal-validator",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Validates portal.yaml configuration",
-      "visualTags": [],
-      "related": [],
-      "componentType": "service"
-    },
-    "portal-checker": {
-      "id": "portal-checker",
-      "name": "Portal Checker",
-      "symbol": "#portal-checker",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Checks portal.yaml compliance",
-      "visualTags": [],
-      "related": [],
-      "componentType": "service"
-    },
-    "portal-tester": {
-      "id": "portal-tester",
-      "name": "Portal Tester",
-      "symbol": "#portal-tester",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Generates and runs gate tests",
-      "visualTags": [],
-      "related": [],
-      "componentType": "service"
-    },
-    "portal-viewer": {
-      "id": "portal-viewer",
-      "name": "Portal Viewer",
-      "symbol": "#portal-viewer",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Real-time portal visualization dashboard",
-      "visualTags": [],
-      "related": [],
-      "componentType": "service"
-    },
-    "global-clean-handler": {
-      "id": "global-clean-handler",
-      "name": "Global Clean Handler",
-      "symbol": "#global-clean-handler",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Scans and removes old files from ~/.paradigm/ subdirectories with configurable age threshold",
-      "visualTags": [],
-      "related": [],
-      "componentType": "service"
-    },
-    "sweep-handler": {
-      "id": "sweep-handler",
-      "name": "Sweep Handler",
-      "symbol": "#sweep-handler",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/sweep/.purpose",
-      "description": "Main sweep command with 9 entropy checks, report formatting, and auto-fix",
-      "visualTags": [],
-      "related": [],
-      "componentType": "handler"
-    },
-    "entropy-checker": {
-      "id": "entropy-checker",
-      "name": "Entropy Checker",
-      "symbol": "#entropy-checker",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Individual check functions for each entropy category (orphaned, stale, phantom, dead, broken, lore-rot, tag-orphan, semantic-drift, coverage-decay)",
-      "visualTags": [],
-      "related": [],
-      "componentType": "utility"
-    },
-    "task-bridge": {
-      "id": "task-bridge",
-      "name": "Task Bridge",
-      "symbol": "#task-bridge",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "v7.1 — closes the learning loop for the standalone CLI orchestrator path (v7.0 scoped loop-closure to MCP-world only). A thin adapter that reuses the low-level task-loader primitives (createTask/updateTask/completeTask) rather than the MCP-coupled emitTaskDag. bridgeRunStart mints an epic (in-progress, external_ref orchestration) + one child task per CLI stage (parentTaskId=epic, stage, claimant archetype, dependsOn); bridgeStageProgress flips a stage to in-progress; bridgeStageComplete calls completeTask → which triggers settlement (and the chainLive learning chain) via the task-loader updateTask hook, exactly as the MCP path. Wired into orchestrator.ts solo + DAG paths; every call best-effort (a bridge write failure never breaks the CLI run). Imports paradigm-mcp via the established relative-path precedent (core/habits/evaluator.ts).",
-      "visualTags": [],
-      "related": [],
-      "componentType": "adapter"
-    },
-    "calibration": {
-      "id": "calibration",
-      "name": "Calibration",
-      "symbol": "#calibration",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "v7.1 — the CAPTURE half of the self-improving estimate loop (the \"self-improving\" payoff v7.0 deferred; v7.0 shipped AGENT_TOKEN_ESTIMATES only as a constant). recordEstimateActual(rootDir, {archetype, taskType, actualTokens, parentTaskId?, ts?}) appends one JSONL line per agent-step to .paradigm/events/estimate-actuals.jsonl. Wired into orchestrator.ts at both per-agent actual sites — faceted (result.relay.metrics.tokens_used, keyed by step.agent + classifyTask(task).type) and solo (agentName + classifyTask(task).type). The estimate itself is NOT recorded (the learned table is actuals-only → no cross-package coupling to the MCP constant). Capture is best-effort — a write failure is logged and swallowed, never alters the run. Aggregated by `paradigm calibrate` into .paradigm/learned/token-estimates.json, which the MCP planner reads learned-first.",
-      "visualTags": [],
-      "related": [],
-      "componentType": "utility"
-    },
-    "calibrate-command": {
-      "id": "calibrate-command",
-      "name": "Calibrate Command",
-      "symbol": "#calibrate-command",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "v7.1 — `paradigm calibrate` aggregation command (the analysis half). Reads .paradigm/events/estimate-actuals.jsonl, groups by (archetype, taskType), and for each group with n>=8 samples computes a robust band (min=p10 of total, max=p90 of total) and writes .paradigm/learned/token-estimates.json as a nested archetype→taskType→band map of {min,max,n}. Groups under the 8-sample floor are NOT written (still use the constant cold-start prior). Reports learned vs. below-floor groups via cli-output helpers (header/kv/success/dim/warn). aggregateActuals + percentile are exported pure functions for testing.",
-      "visualTags": [],
-      "related": [],
-      "componentType": "command"
-    },
     "guides": {
       "id": "guides",
       "name": "Guides",
@@ -5673,6 +5689,175 @@
       ],
       "related": [],
       "componentType": "view"
+    },
+    "App": {
+      "id": "App",
+      "name": "App",
+      "symbol": "#App",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
+      "description": "Root application component managing layout modes and theme",
+      "visualTags": [],
+      "related": [
+        "#Toolbar",
+        "#CanvasView",
+        "#GridView",
+        "#ListView",
+        "#PropertiesPanel"
+      ]
+    },
+    "Toolbar": {
+      "id": "Toolbar",
+      "name": "Toolbar",
+      "symbol": "#Toolbar",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
+      "description": "Top navigation with layout controls, filters, and theme toggle",
+      "visualTags": [],
+      "related": [
+        "#LayoutToggle",
+        "#TypeFilters",
+        "#ZoomControls"
+      ]
+    },
+    "LayoutToggle": {
+      "id": "LayoutToggle",
+      "name": "LayoutToggle",
+      "symbol": "#LayoutToggle",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
+      "description": "Buttons to switch between canvas, grid, and list views",
+      "visualTags": [],
+      "related": []
+    },
+    "TypeFilters": {
+      "id": "TypeFilters",
+      "name": "TypeFilters",
+      "symbol": "#TypeFilters",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
+      "description": "Toggle visibility of symbol types (#, $, ^, !, ~)",
+      "visualTags": [],
+      "related": []
+    },
+    "Canvas": {
+      "id": "Canvas",
+      "name": "Canvas",
+      "symbol": "#Canvas",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
+      "description": "Infinite pan/zoom canvas for draggable symbol nodes",
+      "visualTags": [],
+      "related": [
+        "!node-moved",
+        "!node-selected"
+      ]
+    },
+    "NodeRenderer": {
+      "id": "NodeRenderer",
+      "name": "NodeRenderer",
+      "symbol": "#NodeRenderer",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
+      "description": "Renders individual symbol nodes with type-specific styling",
+      "visualTags": [],
+      "related": []
+    },
+    "ConnectionRenderer": {
+      "id": "ConnectionRenderer",
+      "name": "ConnectionRenderer",
+      "symbol": "#ConnectionRenderer",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
+      "description": "Renders reference arrows between connected nodes",
+      "visualTags": [],
+      "related": []
+    },
+    "GridCard": {
+      "id": "GridCard",
+      "name": "GridCard",
+      "symbol": "#GridCard",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
+      "description": "Card component for grid view symbol display",
+      "visualTags": [
+        "card",
+        "grid"
+      ],
+      "related": []
+    },
+    "ListRow": {
+      "id": "ListRow",
+      "name": "ListRow",
+      "symbol": "#ListRow",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
+      "description": "Table row component for list view symbol display",
+      "visualTags": [
+        "list"
+      ],
+      "related": []
+    },
+    "Autocomplete": {
+      "id": "Autocomplete",
+      "name": "Autocomplete",
+      "symbol": "#Autocomplete",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
+      "description": "Dropdown for symbol search and selection",
+      "visualTags": [],
+      "related": []
+    },
+    "ConversationView": {
+      "id": "ConversationView",
+      "name": "ConversationView",
+      "symbol": "#ConversationView",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
+      "description": "Interactive tree view of Symphony agent conversations — ThreadList sidebar with ConversationPanel showing NoteBubbles, intent badges, and real-time WebSocket updates",
+      "visualTags": [],
+      "related": [
+        "!note-received-live",
+        "#IntentBadge",
+        "#ParticipantBadge",
+        "#NoteBubble",
+        "#ThreadCard",
+        "#DecisionSummary"
+      ],
+      "componentType": "view"
+    },
+    "CanvasStore": {
+      "id": "CanvasStore",
+      "name": "CanvasStore",
+      "symbol": "#CanvasStore",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
+      "description": "Zustand store for canvas viewport (pan, zoom)",
+      "visualTags": [],
+      "related": []
+    },
+    "ThemeStore": {
+      "id": "ThemeStore",
+      "name": "ThemeStore",
+      "symbol": "#ThemeStore",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
+      "description": "Zustand store for UI theme (spectrum, focus, deep)",
+      "visualTags": [],
+      "related": []
+    },
+    "ConversationStore": {
+      "id": "ConversationStore",
+      "name": "ConversationStore",
+      "symbol": "#ConversationStore",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
+      "description": "Zustand store for Symphony conversation threads and notes — fetches from event API, supports real-time WebSocket updates, extracts decisions",
+      "visualTags": [],
+      "related": [
+        "!note-received-live"
+      ],
+      "componentType": "state"
     },
     "purpose-parser": {
       "id": "purpose-parser",
@@ -6071,175 +6256,6 @@
       "visualTags": [],
       "related": [],
       "componentType": "utility"
-    },
-    "App": {
-      "id": "App",
-      "name": "App",
-      "symbol": "#App",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
-      "description": "Root application component managing layout modes and theme",
-      "visualTags": [],
-      "related": [
-        "#Toolbar",
-        "#CanvasView",
-        "#GridView",
-        "#ListView",
-        "#PropertiesPanel"
-      ]
-    },
-    "Toolbar": {
-      "id": "Toolbar",
-      "name": "Toolbar",
-      "symbol": "#Toolbar",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
-      "description": "Top navigation with layout controls, filters, and theme toggle",
-      "visualTags": [],
-      "related": [
-        "#LayoutToggle",
-        "#TypeFilters",
-        "#ZoomControls"
-      ]
-    },
-    "LayoutToggle": {
-      "id": "LayoutToggle",
-      "name": "LayoutToggle",
-      "symbol": "#LayoutToggle",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
-      "description": "Buttons to switch between canvas, grid, and list views",
-      "visualTags": [],
-      "related": []
-    },
-    "TypeFilters": {
-      "id": "TypeFilters",
-      "name": "TypeFilters",
-      "symbol": "#TypeFilters",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
-      "description": "Toggle visibility of symbol types (#, $, ^, !, ~)",
-      "visualTags": [],
-      "related": []
-    },
-    "Canvas": {
-      "id": "Canvas",
-      "name": "Canvas",
-      "symbol": "#Canvas",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
-      "description": "Infinite pan/zoom canvas for draggable symbol nodes",
-      "visualTags": [],
-      "related": [
-        "!node-moved",
-        "!node-selected"
-      ]
-    },
-    "NodeRenderer": {
-      "id": "NodeRenderer",
-      "name": "NodeRenderer",
-      "symbol": "#NodeRenderer",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
-      "description": "Renders individual symbol nodes with type-specific styling",
-      "visualTags": [],
-      "related": []
-    },
-    "ConnectionRenderer": {
-      "id": "ConnectionRenderer",
-      "name": "ConnectionRenderer",
-      "symbol": "#ConnectionRenderer",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
-      "description": "Renders reference arrows between connected nodes",
-      "visualTags": [],
-      "related": []
-    },
-    "GridCard": {
-      "id": "GridCard",
-      "name": "GridCard",
-      "symbol": "#GridCard",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
-      "description": "Card component for grid view symbol display",
-      "visualTags": [
-        "card",
-        "grid"
-      ],
-      "related": []
-    },
-    "ListRow": {
-      "id": "ListRow",
-      "name": "ListRow",
-      "symbol": "#ListRow",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
-      "description": "Table row component for list view symbol display",
-      "visualTags": [
-        "list"
-      ],
-      "related": []
-    },
-    "Autocomplete": {
-      "id": "Autocomplete",
-      "name": "Autocomplete",
-      "symbol": "#Autocomplete",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
-      "description": "Dropdown for symbol search and selection",
-      "visualTags": [],
-      "related": []
-    },
-    "ConversationView": {
-      "id": "ConversationView",
-      "name": "ConversationView",
-      "symbol": "#ConversationView",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
-      "description": "Interactive tree view of Symphony agent conversations — ThreadList sidebar with ConversationPanel showing NoteBubbles, intent badges, and real-time WebSocket updates",
-      "visualTags": [],
-      "related": [
-        "!note-received-live",
-        "#IntentBadge",
-        "#ParticipantBadge",
-        "#NoteBubble",
-        "#ThreadCard",
-        "#DecisionSummary"
-      ],
-      "componentType": "view"
-    },
-    "CanvasStore": {
-      "id": "CanvasStore",
-      "name": "CanvasStore",
-      "symbol": "#CanvasStore",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
-      "description": "Zustand store for canvas viewport (pan, zoom)",
-      "visualTags": [],
-      "related": []
-    },
-    "ThemeStore": {
-      "id": "ThemeStore",
-      "name": "ThemeStore",
-      "symbol": "#ThemeStore",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
-      "description": "Zustand store for UI theme (spectrum, focus, deep)",
-      "visualTags": [],
-      "related": []
-    },
-    "ConversationStore": {
-      "id": "ConversationStore",
-      "name": "ConversationStore",
-      "symbol": "#ConversationStore",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
-      "description": "Zustand store for Symphony conversation threads and notes — fetches from event API, supports real-time WebSocket updates, extracts decisions",
-      "visualTags": [],
-      "related": [
-        "!note-received-live"
-      ],
-      "componentType": "state"
     },
     "portal-writer-tests": {
       "id": "portal-writer-tests",
@@ -6761,50 +6777,6 @@
       "visualTags": [],
       "related": [],
       "componentType": "types"
-    },
-    "sync-provider": {
-      "id": "sync-provider",
-      "name": "Sync Provider",
-      "symbol": "#sync-provider",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/sync/.purpose",
-      "description": "Provider-agnostic two-way task-sync seam — SyncProvider interface (push/comment/close/reopen/edit/pull), RemoteState, id→factory registry, Loid's claimant projection",
-      "visualTags": [],
-      "related": [],
-      "componentType": "service"
-    },
-    "github-provider": {
-      "id": "github-provider",
-      "name": "Github Provider",
-      "symbol": "#github-provider",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/sync/.purpose",
-      "description": "GitHub SyncProvider (two-way) — gh-CLI shell-out for issue create/comment/close/reopen/edit + pull via `gh issue view --json`; auth via `gh auth status`; self-registers on load",
-      "visualTags": [],
-      "related": [],
-      "componentType": "service"
-    },
-    "task-reconcile": {
-      "id": "task-reconcile",
-      "name": "Task Reconcile",
-      "symbol": "#task-reconcile",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/sync/.purpose",
-      "description": "Pure inbound reconcile brain — compares a local task vs RemoteState and emits a plan (agree/apply/conflict); local canonical, only legal transitions apply, symmetric reopen on remote-open+local-done. No fs/network.",
-      "visualTags": [],
-      "related": [],
-      "componentType": "utility"
-    },
-    "sync-layer": {
-      "id": "sync-layer",
-      "name": "Sync Layer",
-      "symbol": "#sync-layer",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/sync/.purpose",
-      "description": "Two-way sync executor — projectTransition (best-effort outbound push of a transition) + syncTask/syncAllLinked (inbound pull→reconcile→apply ONLY through the enforced updateTask/completeTask/shelveTask writers)",
-      "visualTags": [],
-      "related": [],
-      "componentType": "service"
     },
     "ResourceIndex": {
       "id": "ResourceIndex",
@@ -7718,6 +7690,50 @@
       ],
       "componentType": "utility"
     },
+    "sync-provider": {
+      "id": "sync-provider",
+      "name": "Sync Provider",
+      "symbol": "#sync-provider",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/sync/.purpose",
+      "description": "Provider-agnostic two-way task-sync seam — SyncProvider interface (push/comment/close/reopen/edit/pull), RemoteState, id→factory registry, Loid's claimant projection",
+      "visualTags": [],
+      "related": [],
+      "componentType": "service"
+    },
+    "github-provider": {
+      "id": "github-provider",
+      "name": "Github Provider",
+      "symbol": "#github-provider",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/sync/.purpose",
+      "description": "GitHub SyncProvider (two-way) — gh-CLI shell-out for issue create/comment/close/reopen/edit + pull via `gh issue view --json`; auth via `gh auth status`; self-registers on load",
+      "visualTags": [],
+      "related": [],
+      "componentType": "service"
+    },
+    "task-reconcile": {
+      "id": "task-reconcile",
+      "name": "Task Reconcile",
+      "symbol": "#task-reconcile",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/sync/.purpose",
+      "description": "Pure inbound reconcile brain — compares a local task vs RemoteState and emits a plan (agree/apply/conflict); local canonical, only legal transitions apply, symmetric reopen on remote-open+local-done. No fs/network.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "utility"
+    },
+    "sync-layer": {
+      "id": "sync-layer",
+      "name": "Sync Layer",
+      "symbol": "#sync-layer",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/sync/.purpose",
+      "description": "Two-way sync executor — projectTransition (best-effort outbound push of a transition) + syncTask/syncAllLinked (inbound pull→reconcile→apply ONLY through the enforced updateTask/completeTask/shelveTask writers)",
+      "visualTags": [],
+      "related": [],
+      "componentType": "service"
+    },
     "PlatformServer": {
       "id": "PlatformServer",
       "name": "PlatformServer",
@@ -8161,6 +8177,36 @@
       ],
       "componentType": "command"
     },
+    "paths": {
+      "id": "paths",
+      "name": "Paths",
+      "symbol": "#paths",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/src/content/paths/.purpose",
+      "description": "TODO: describe this component",
+      "visualTags": [],
+      "related": []
+    },
+    "quizzes": {
+      "id": "quizzes",
+      "name": "Quizzes",
+      "symbol": "#quizzes",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/src/content/quizzes/.purpose",
+      "description": "TODO: describe this component",
+      "visualTags": [],
+      "related": []
+    },
+    "notes": {
+      "id": "notes",
+      "name": "Notes",
+      "symbol": "#notes",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/src/content/notes/.purpose",
+      "description": "TODO: describe this component",
+      "visualTags": [],
+      "related": []
+    },
     "SymbolPage": {
       "id": "SymbolPage",
       "name": "SymbolPage",
@@ -8217,49 +8263,6 @@
       "visualTags": [],
       "related": [],
       "componentType": "view"
-    },
-    "paths": {
-      "id": "paths",
-      "name": "Paths",
-      "symbol": "#paths",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/src/content/paths/.purpose",
-      "description": "TODO: describe this component",
-      "visualTags": [],
-      "related": []
-    },
-    "quizzes": {
-      "id": "quizzes",
-      "name": "Quizzes",
-      "symbol": "#quizzes",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/src/content/quizzes/.purpose",
-      "description": "TODO: describe this component",
-      "visualTags": [],
-      "related": []
-    },
-    "notes": {
-      "id": "notes",
-      "name": "Notes",
-      "symbol": "#notes",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university/src/content/notes/.purpose",
-      "description": "TODO: describe this component",
-      "visualTags": [],
-      "related": []
-    },
-    "grid-preset": {
-      "id": "grid-preset",
-      "name": "Grid Preset",
-      "symbol": "#grid-preset",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/Sources/Conductor/Workspace/.purpose",
-      "description": "Composable NxM grid layout presets (1x1, 1x2, 2x1, 2x2, 3x1, 3x2) for terminal cell arrangement in Conductor container mode.",
-      "visualTags": [
-        "grid"
-      ],
-      "related": [],
-      "componentType": "model"
     },
     "OverviewHandler": {
       "id": "OverviewHandler",
@@ -9140,103 +9143,18 @@
       "related": [],
       "componentType": "command"
     },
-    "help-view": {
-      "id": "help-view",
-      "name": "Help View",
-      "symbol": "#help-view",
+    "grid-preset": {
+      "id": "grid-preset",
+      "name": "Grid Preset",
+      "symbol": "#grid-preset",
       "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/Sources/Conductor/UI/Views/.purpose",
-      "description": "In-app help system with 9-section guide covering Conductor capabilities, menus, shortcuts, and known limitations. Accessible via ? button.",
-      "visualTags": [],
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/Sources/Conductor/Workspace/.purpose",
+      "description": "Composable NxM grid layout presets (1x1, 1x2, 2x1, 2x2, 3x1, 3x2) for terminal cell arrangement in Conductor container mode.",
+      "visualTags": [
+        "grid"
+      ],
       "related": [],
-      "componentType": "view"
-    },
-    "agent-decision": {
-      "id": "agent-decision",
-      "name": "Agent Decision",
-      "symbol": "#agent-decision",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/Sources/Conductor/UI/Views/.purpose",
-      "description": "Model for a host-rendered branching CHOICE the agent offers the human ($decision-exchange), parsed from a conductor-decision fenced block (#fenced-block-parser). Carries question + 2-5 DecisionOptions (label/description/★recommended/▸visualId/affectedSymbols) + multiSelect/allowOther + an optional top-level `symbols` array (the real graph symbols the decision is about) + an optional settled DecisionAnswer. symbols/affectedSymbols default [] (schema-tolerant) and drive the hover-to-spotlight binding into the LIGHTBOX graph. composeReply() builds the human-readable user turn. Lives on ConversationMessage (additive).",
-      "visualTags": [],
-      "related": [
-        "$decision-exchange",
-        "#fenced-block-parser"
-      ],
       "componentType": "model"
-    },
-    "agent-visual": {
-      "id": "agent-visual",
-      "name": "Agent Visual",
-      "symbol": "#agent-visual",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/Sources/Conductor/UI/Views/.purpose",
-      "description": "Model for a host-rendered DIAGRAM, COMPARISON or GRAPH ($decision-exchange), parsed from a conductor-visual envelope or a bare mermaid/svg fence (#fenced-block-parser). kind flow|comparison|graph render in v1 (LIGHTBOX); graph carries a GraphPayload (root/nodes/edges/truncated/freshness) drawn by #atrium-graph-view; wireframe|diff are decode-tolerant v2 placeholders. Rendered as a ▸ launcher chip — never auto-opens.",
-      "visualTags": [],
-      "related": [
-        "$decision-exchange",
-        "#fenced-block-parser",
-        "#atrium-graph-view"
-      ],
-      "componentType": "model"
-    },
-    "atrium-decision-card": {
-      "id": "atrium-decision-card",
-      "name": "Atrium Decision Card",
-      "symbol": "#atrium-decision-card",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/Sources/Conductor/UI/Views/.purpose",
-      "description": "Inline card rendering an #agent-decision in the ATRIUM thread. PENDING = question + stacked radio/checkbox option cards + Other… field (when allowOther) + escape affordances, AMBER leading rail (Mika's temperature law); on pick calls onAnswer → ClaudeStreamSession.answerDecision. ANSWERED = collapsed teal ✓ you chose <label> with a change/reopen affordance. ★ marks a recommended lean; ▸ view opens a linked visual in the LIGHTBOX. Hovering an option row fires onHoverSymbols(option.affectedSymbols) (empty on hover-out) → spotlights those symbols in the LIGHTBOX graph (#atrium-graph-view); READ-ONLY — clicking is still the only commit path.",
-      "visualTags": [
-        "card"
-      ],
-      "related": [
-        "#agent-decision",
-        "#atrium-graph-view"
-      ],
-      "componentType": "view"
-    },
-    "atrium-visual-canvas": {
-      "id": "atrium-visual-canvas",
-      "name": "Atrium Visual Canvas",
-      "symbol": "#atrium-visual-canvas",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/Sources/Conductor/UI/Views/.purpose",
-      "description": "THE LIGHTBOX — a 380pt right slide-out hosting one #agent-visual. Shares the right zone with the CHORUS rail and renders OVER it (chorus stays mounted; PUSH-consistent layout, conversation column narrows). Switches on kind: flow → MermaidWebView (sandboxed offline WKWebView, vendored mermaid.min.js, NO network, ATRIUM-recolored); comparison → native SwiftUI table (ATRIUM styling); graph → #atrium-graph-view (❖ header glyph); wireframe/diff → v2 placeholder. Takes a plain `highlightedSymbols: Set<String>` (NOT folded into the Equatable #agent-visual) and forwards it to #atrium-graph-view for the decision-option hover spotlight — kept separate so hover only redraws the Canvas, never re-identifies the LIGHTBOX.",
-      "visualTags": [],
-      "related": [
-        "#agent-visual",
-        "#atrium-graph-view"
-      ],
-      "componentType": "view"
-    },
-    "atrium-graph-view": {
-      "id": "atrium-graph-view",
-      "name": "Atrium Graph View",
-      "symbol": "#atrium-graph-view",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/Sources/Conductor/UI/Views/.purpose",
-      "description": "Native SwiftUI Canvas render of a bounded symbol ego-graph (#agent-visual kind == .graph) inside THE LIGHTBOX. STATIC closed-form RING layout: root (focus) at center with a soft halo, other nodes evenly on a ring (angle 2π·i/count, radius shrunk to fit 380pt). Edges draw under nodes as center→ring lines. Node shapes encode GraphSymbolKind via Mika's accent mapping (component→ink rounded rect, flow→user stadium, gate→amber diamond, signal→teal circle, aspect→violet dashed). Labels = symbol id, scaled off atriumFontScale. Footer shows +N-more (truncated) + stale-index. HOVER SPOTLIGHT (Phase-2c): a plain `highlightedSymbols: Set<String>` (driven by decision-option hover) lights matching nodes at full saturation + a brighter amber ring and DIMS all others to ~40% (edges between two lit nodes draw amber); an animated dimPhase eases the room dim in/out over ~150ms on hover-in/out. READ-ONLY — never selects/commits; an empty set renders at rest. NO force sim, drag, or zoom.",
-      "visualTags": [
-        "chart"
-      ],
-      "related": [
-        "#agent-visual"
-      ],
-      "componentType": "view"
-    },
-    "mermaid-web-view": {
-      "id": "mermaid-web-view",
-      "name": "Mermaid Web View",
-      "symbol": "#mermaid-web-view",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/Sources/Conductor/UI/Views/.purpose",
-      "description": "Sandboxed WKWebView that renders a mermaid diagram OFFLINE from a vendored mermaid.min.js (Resources/, loaded via #conductor-resources to dodge the SwiftTerm Bundle.module collision). nil baseURL, navigation blocked except the in-memory load, ATRIUM dark theme. Degrades to a source dump if the script is missing from the bundle.",
-      "visualTags": [],
-      "related": [
-        "#conductor-resources"
-      ],
-      "componentType": "view"
     },
     "TasksSection": {
       "id": "TasksSection",
@@ -9455,6 +9373,104 @@
       "related": [],
       "componentType": "view"
     },
+    "help-view": {
+      "id": "help-view",
+      "name": "Help View",
+      "symbol": "#help-view",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/Sources/Conductor/UI/Views/.purpose",
+      "description": "In-app help system with 9-section guide covering Conductor capabilities, menus, shortcuts, and known limitations. Accessible via ? button.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "view"
+    },
+    "agent-decision": {
+      "id": "agent-decision",
+      "name": "Agent Decision",
+      "symbol": "#agent-decision",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/Sources/Conductor/UI/Views/.purpose",
+      "description": "Model for a host-rendered branching CHOICE the agent offers the human ($decision-exchange), parsed from a conductor-decision fenced block (#fenced-block-parser). Carries question + 2-5 DecisionOptions (label/description/★recommended/▸visualId/affectedSymbols) + multiSelect/allowOther + an optional top-level `symbols` array (the real graph symbols the decision is about) + an optional settled DecisionAnswer. symbols/affectedSymbols default [] (schema-tolerant) and drive the hover-to-spotlight binding into the LIGHTBOX graph. composeReply() builds the human-readable user turn. Lives on ConversationMessage (additive).",
+      "visualTags": [],
+      "related": [
+        "$decision-exchange",
+        "#fenced-block-parser"
+      ],
+      "componentType": "model"
+    },
+    "agent-visual": {
+      "id": "agent-visual",
+      "name": "Agent Visual",
+      "symbol": "#agent-visual",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/Sources/Conductor/UI/Views/.purpose",
+      "description": "Model for a host-rendered DIAGRAM, COMPARISON or GRAPH ($decision-exchange), parsed from a conductor-visual envelope or a bare mermaid/svg fence (#fenced-block-parser). kind flow|comparison|graph render in v1 (LIGHTBOX); graph carries a GraphPayload (root/nodes/edges/truncated/freshness) drawn by #atrium-graph-view; wireframe|diff are decode-tolerant v2 placeholders. Rendered as a ▸ launcher chip — never auto-opens.",
+      "visualTags": [],
+      "related": [
+        "$decision-exchange",
+        "#fenced-block-parser",
+        "#atrium-graph-view"
+      ],
+      "componentType": "model"
+    },
+    "atrium-decision-card": {
+      "id": "atrium-decision-card",
+      "name": "Atrium Decision Card",
+      "symbol": "#atrium-decision-card",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/Sources/Conductor/UI/Views/.purpose",
+      "description": "Inline card rendering an #agent-decision in the ATRIUM thread. PENDING = question + stacked radio/checkbox option cards + Other… field (when allowOther) + escape affordances, AMBER leading rail (Mika's temperature law); on pick calls onAnswer → ClaudeStreamSession.answerDecision. ANSWERED = collapsed teal ✓ you chose <label> with a change/reopen affordance. ★ marks a recommended lean; ▸ view opens a linked visual in the LIGHTBOX. Hovering an option row fires onHoverSymbols(option.affectedSymbols) (empty on hover-out) → spotlights those symbols in the LIGHTBOX graph (#atrium-graph-view); READ-ONLY — clicking is still the only commit path.",
+      "visualTags": [
+        "card"
+      ],
+      "related": [
+        "#agent-decision",
+        "#atrium-graph-view"
+      ],
+      "componentType": "view"
+    },
+    "atrium-visual-canvas": {
+      "id": "atrium-visual-canvas",
+      "name": "Atrium Visual Canvas",
+      "symbol": "#atrium-visual-canvas",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/Sources/Conductor/UI/Views/.purpose",
+      "description": "THE LIGHTBOX — a 380pt right slide-out hosting one #agent-visual. Shares the right zone with the CHORUS rail and renders OVER it (chorus stays mounted; PUSH-consistent layout, conversation column narrows). Switches on kind: flow → MermaidWebView (sandboxed offline WKWebView, vendored mermaid.min.js, NO network, ATRIUM-recolored); comparison → native SwiftUI table (ATRIUM styling); graph → #atrium-graph-view (❖ header glyph); wireframe/diff → v2 placeholder. Takes a plain `highlightedSymbols: Set<String>` (NOT folded into the Equatable #agent-visual) and forwards it to #atrium-graph-view for the decision-option hover spotlight — kept separate so hover only redraws the Canvas, never re-identifies the LIGHTBOX.",
+      "visualTags": [],
+      "related": [
+        "#agent-visual",
+        "#atrium-graph-view"
+      ],
+      "componentType": "view"
+    },
+    "atrium-graph-view": {
+      "id": "atrium-graph-view",
+      "name": "Atrium Graph View",
+      "symbol": "#atrium-graph-view",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/Sources/Conductor/UI/Views/.purpose",
+      "description": "Native SwiftUI Canvas render of a bounded symbol ego-graph (#agent-visual kind == .graph) inside THE LIGHTBOX. STATIC closed-form RING layout: root (focus) at center with a soft halo, other nodes evenly on a ring (angle 2π·i/count, radius shrunk to fit 380pt). Edges draw under nodes as center→ring lines. Node shapes encode GraphSymbolKind via Mika's accent mapping (component→ink rounded rect, flow→user stadium, gate→amber diamond, signal→teal circle, aspect→violet dashed). Labels = symbol id, scaled off atriumFontScale. Footer shows +N-more (truncated) + stale-index. HOVER SPOTLIGHT (Phase-2c): a plain `highlightedSymbols: Set<String>` (driven by decision-option hover) lights matching nodes at full saturation + a brighter amber ring and DIMS all others to ~40% (edges between two lit nodes draw amber); an animated dimPhase eases the room dim in/out over ~150ms on hover-in/out. READ-ONLY — never selects/commits; an empty set renders at rest. NO force sim, drag, or zoom.",
+      "visualTags": [
+        "chart"
+      ],
+      "related": [
+        "#agent-visual"
+      ],
+      "componentType": "view"
+    },
+    "mermaid-web-view": {
+      "id": "mermaid-web-view",
+      "name": "Mermaid Web View",
+      "symbol": "#mermaid-web-view",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/Sources/Conductor/UI/Views/.purpose",
+      "description": "Sandboxed WKWebView that renders a mermaid diagram OFFLINE from a vendored mermaid.min.js (Resources/, loaded via #conductor-resources to dodge the SwiftTerm Bundle.module collision). nil baseURL, navigation blocked except the in-memory load, ATRIUM dark theme. Degrades to a source dump if the script is missing from the bundle.",
+      "visualTags": [],
+      "related": [
+        "#conductor-resources"
+      ],
+      "componentType": "view"
+    },
     "cockpit-view": {
       "id": "cockpit-view",
       "name": "Cockpit View",
@@ -9596,54 +9612,6 @@
       ],
       "related": [
         "#EventsView"
-      ]
-    },
-    "vision-gaze-provider.": {
-      "id": "vision-gaze-provider.",
-      "name": "Vision Gaze Provider.",
-      "symbol": "#vision-gaze-provider.",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/.purpose",
-      "description": "Referenced from #mediapipe-gaze-provider",
-      "visualTags": [],
-      "related": [
-        "#mediapipe-gaze-provider"
-      ]
-    },
-    "claude-stream-session.": {
-      "id": "claude-stream-session.",
-      "name": "Claude Stream Session.",
-      "symbol": "#claude-stream-session.",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/.purpose",
-      "description": "Referenced from #claude-stream-session",
-      "visualTags": [],
-      "related": [
-        "#claude-stream-session"
-      ]
-    },
-    "FF6B6B": {
-      "id": "FF6B6B",
-      "name": "FF6B6B",
-      "symbol": "#FF6B6B",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/.purpose",
-      "description": "Referenced from #atrium-chorus",
-      "visualTags": [],
-      "related": [
-        "#atrium-chorus"
-      ]
-    },
-    "F2B765": {
-      "id": "F2B765",
-      "name": "F2B765",
-      "symbol": "#F2B765",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/.purpose",
-      "description": "Referenced from #atrium-chorus",
-      "visualTags": [],
-      "related": [
-        "#atrium-chorus"
       ]
     },
     "upgrade-handler": {
@@ -9792,52 +9760,52 @@
         "#tutorial-command"
       ]
     },
-    "index.loaded": {
-      "id": "index.loaded",
-      "name": "Index.loaded",
-      "symbol": "#index.loaded",
+    "vision-gaze-provider.": {
+      "id": "vision-gaze-provider.",
+      "name": "Vision Gaze Provider.",
+      "symbol": "#vision-gaze-provider.",
       "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
-      "description": "Referenced from #symbol-indexing",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/.purpose",
+      "description": "Referenced from #mediapipe-gaze-provider",
       "visualTags": [],
       "related": [
-        "#symbol-indexing"
+        "#mediapipe-gaze-provider"
       ]
     },
-    "index.count": {
-      "id": "index.count",
-      "name": "Index.count",
-      "symbol": "#index.count",
+    "claude-stream-session.": {
+      "id": "claude-stream-session.",
+      "name": "Claude Stream Session.",
+      "symbol": "#claude-stream-session.",
       "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
-      "description": "Referenced from #symbol-indexing",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/.purpose",
+      "description": "Referenced from #claude-stream-session",
       "visualTags": [],
       "related": [
-        "#symbol-indexing"
+        "#claude-stream-session"
       ]
     },
-    "session.active": {
-      "id": "session.active",
-      "name": "Session.active",
-      "symbol": "#session.active",
+    "FF6B6B": {
+      "id": "FF6B6B",
+      "name": "FF6B6B",
+      "symbol": "#FF6B6B",
       "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/viewer/.purpose",
-      "description": "Referenced from #session-management",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/.purpose",
+      "description": "Referenced from #atrium-chorus",
       "visualTags": [],
       "related": [
-        "#session-management"
+        "#atrium-chorus"
       ]
     },
-    "session.entity": {
-      "id": "session.entity",
-      "name": "Session.entity",
-      "symbol": "#session.entity",
+    "F2B765": {
+      "id": "F2B765",
+      "name": "F2B765",
+      "symbol": "#F2B765",
       "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/viewer/.purpose",
-      "description": "Referenced from #session-management",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/.purpose",
+      "description": "Referenced from #atrium-chorus",
       "visualTags": [],
       "related": [
-        "#session-management"
+        "#atrium-chorus"
       ]
     },
     "ZoomControls": {
@@ -9916,6 +9884,54 @@
       "visualTags": [],
       "related": [
         "#ConversationView"
+      ]
+    },
+    "index.loaded": {
+      "id": "index.loaded",
+      "name": "Index.loaded",
+      "symbol": "#index.loaded",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
+      "description": "Referenced from #symbol-indexing",
+      "visualTags": [],
+      "related": [
+        "#symbol-indexing"
+      ]
+    },
+    "index.count": {
+      "id": "index.count",
+      "name": "Index.count",
+      "symbol": "#index.count",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
+      "description": "Referenced from #symbol-indexing",
+      "visualTags": [],
+      "related": [
+        "#symbol-indexing"
+      ]
+    },
+    "session.active": {
+      "id": "session.active",
+      "name": "Session.active",
+      "symbol": "#session.active",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/viewer/.purpose",
+      "description": "Referenced from #session-management",
+      "visualTags": [],
+      "related": [
+        "#session-management"
+      ]
+    },
+    "session.entity": {
+      "id": "session.entity",
+      "name": "Session.entity",
+      "symbol": "#session.entity",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/viewer/.purpose",
+      "description": "Referenced from #session-management",
+      "visualTags": [],
+      "related": [
+        "#session-management"
       ]
     },
     "fenced-block-parser": {
@@ -10008,6 +10024,39 @@
         }
       ]
     },
+    "absorb-flow": {
+      "id": "absorb-flow",
+      "name": "Absorb Flow",
+      "symbol": "$absorb-flow",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
+      "description": "One ref -> a WarpState of MEANING (stage 3a). Materialize a read-only worktree, live-parse it, lift+inject TS/TSX code-units as synthetic nodes in the SAME universe, then compute whole-state essences and stamp every object. The lens only reads the worktree — the Phase-1 read-only invariant holds.",
+      "steps": [
+        {
+          "id": "absorb-flow-step-0",
+          "name": "git worktree add --detach the ref into a temp dir (read-only)",
+          "target": "#git-exec",
+          "order": 0
+        },
+        {
+          "id": "absorb-flow-step-1",
+          "name": "liftCodeUnits(worktree) then injectCodeUnits(index, units) — synthetic code-unit nodes spliced in BEFORE essence computation",
+          "target": "#lift-code-units",
+          "order": 1
+        },
+        {
+          "id": "absorb-flow-step-2",
+          "name": "computeEssences over the merged .purpose+code universe (code-units take the v1:ts<exact> tag, .purpose stays v0)",
+          "target": "#essence-hash",
+          "order": 2
+        },
+        {
+          "id": "absorb-flow-step-3",
+          "name": "buildWarpState stamps each object's contentId and derives the stateId; remove the worktree in a finally",
+          "target": "#warp-state",
+          "order": 3
+        }
+      ]
+    },
     "weave-forecast": {
       "id": "weave-forecast",
       "name": "Weave Forecast",
@@ -10089,6 +10138,39 @@
           "name": "Display printable certificate if passed",
           "target": "#certificate-view",
           "order": 5
+        }
+      ]
+    },
+    "event-ingestion": {
+      "id": "event-ingestion",
+      "name": "Event Ingestion",
+      "symbol": "$event-ingestion",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel-web/.purpose",
+      "description": "emit() → buffer → periodic flush → POST /api/events",
+      "steps": [
+        {
+          "id": "event-ingestion-step-0",
+          "name": "emit() call from application code",
+          "target": "#sentinel-web-client",
+          "order": 0
+        },
+        {
+          "id": "event-ingestion-step-1",
+          "name": "push event into circular buffer",
+          "target": "#ring-buffer",
+          "order": 1
+        },
+        {
+          "id": "event-ingestion-step-2",
+          "name": "setInterval flush to server",
+          "target": "#sentinel-web-client",
+          "order": 2
+        },
+        {
+          "id": "event-ingestion-step-3",
+          "name": "POST /api/events",
+          "target": "#sentinel-web-client",
+          "order": 3
         }
       ]
     },
@@ -10201,73 +10283,6 @@
           "id": "$university-flow-step-6",
           "name": "Step 7",
           "order": 6
-        }
-      ]
-    },
-    "event-ingestion": {
-      "id": "event-ingestion",
-      "name": "Event Ingestion",
-      "symbol": "$event-ingestion",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel-web/.purpose",
-      "description": "emit() → buffer → periodic flush → POST /api/events",
-      "steps": [
-        {
-          "id": "event-ingestion-step-0",
-          "name": "emit() call from application code",
-          "target": "#sentinel-web-client",
-          "order": 0
-        },
-        {
-          "id": "event-ingestion-step-1",
-          "name": "push event into circular buffer",
-          "target": "#ring-buffer",
-          "order": 1
-        },
-        {
-          "id": "event-ingestion-step-2",
-          "name": "setInterval flush to server",
-          "target": "#sentinel-web-client",
-          "order": 2
-        },
-        {
-          "id": "event-ingestion-step-3",
-          "name": "POST /api/events",
-          "target": "#sentinel-web-client",
-          "order": 3
-        }
-      ]
-    },
-    "$schema-migration": {
-      "id": "$schema-migration",
-      "name": "$schema Migration",
-      "symbol": "$$schema-migration",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/runtime/.purpose",
-      "description": "Schema migration flow — diff schemas, generate migration, validate, apply",
-      "steps": [
-        {
-          "id": "$schema-migration-step-0",
-          "name": "Step 1",
-          "order": 0
-        },
-        {
-          "id": "$schema-migration-step-1",
-          "name": "Step 2",
-          "order": 1
-        },
-        {
-          "id": "$schema-migration-step-2",
-          "name": "Step 3",
-          "order": 2
-        },
-        {
-          "id": "$schema-migration-step-3",
-          "name": "Step 4",
-          "order": 3
-        },
-        {
-          "id": "$schema-migration-step-4",
-          "name": "Step 5",
-          "order": 4
         }
       ]
     },
@@ -10399,6 +10414,40 @@
           "id": "symphony-conversation-step-3",
           "name": "Step 4",
           "order": 3
+        }
+      ]
+    },
+    "$schema-migration": {
+      "id": "$schema-migration",
+      "name": "$schema Migration",
+      "symbol": "$$schema-migration",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/runtime/.purpose",
+      "description": "Schema migration flow — diff schemas, generate migration, validate, apply",
+      "steps": [
+        {
+          "id": "$schema-migration-step-0",
+          "name": "Step 1",
+          "order": 0
+        },
+        {
+          "id": "$schema-migration-step-1",
+          "name": "Step 2",
+          "order": 1
+        },
+        {
+          "id": "$schema-migration-step-2",
+          "name": "Step 3",
+          "order": 2
+        },
+        {
+          "id": "$schema-migration-step-3",
+          "name": "Step 4",
+          "order": 3
+        },
+        {
+          "id": "$schema-migration-step-4",
+          "name": "Step 5",
+          "order": 4
         }
       ]
     },
@@ -10656,6 +10705,78 @@
         {
           "id": "wisdom-promotion-step-4",
           "name": "Step 5",
+          "order": 4
+        }
+      ]
+    },
+    "ide-sync-flow": {
+      "id": "ide-sync-flow",
+      "name": "Ide Sync Flow",
+      "symbol": "$ide-sync-flow",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/ide-adapters/.purpose",
+      "description": "Sync .paradigm/ to IDE instruction files",
+      "steps": [
+        {
+          "id": "ide-sync-flow-step-0",
+          "name": "Detect target IDE from project files",
+          "target": "#adapter-registry",
+          "order": 0
+        },
+        {
+          "id": "ide-sync-flow-step-1",
+          "name": "Load config, specs, and docs",
+          "target": "#adapter-base",
+          "order": 1
+        },
+        {
+          "id": "ide-sync-flow-step-2",
+          "name": "Generate IDE-specific output files",
+          "target": "#cursor-adapter",
+          "order": 2
+        },
+        {
+          "id": "ide-sync-flow-step-3",
+          "name": "Write files to appropriate locations",
+          "target": "#adapter-registry",
+          "order": 3
+        }
+      ]
+    },
+    "agent-orchestration-flow": {
+      "id": "agent-orchestration-flow",
+      "name": "Agent Orchestration Flow",
+      "symbol": "$agent-orchestration-flow",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose",
+      "description": "Orchestrate a multi-agent task from classification through execution",
+      "steps": [
+        {
+          "id": "agent-orchestration-flow-step-0",
+          "name": "Classify task complexity and match agent team",
+          "target": "#task-classifier",
+          "order": 0
+        },
+        {
+          "id": "agent-orchestration-flow-step-1",
+          "name": "Check token/cost budget availability",
+          "target": "#budget-tracker",
+          "order": 1
+        },
+        {
+          "id": "agent-orchestration-flow-step-2",
+          "name": "Spawn agents in parallel where possible",
+          "target": "#agent-spawner",
+          "order": 2
+        },
+        {
+          "id": "agent-orchestration-flow-step-3",
+          "name": "Collect results and handle handoffs",
+          "target": "#orchestrator",
+          "order": 3
+        },
+        {
+          "id": "agent-orchestration-flow-step-4",
+          "name": "Log execution and costs",
+          "target": "#audit-logger",
           "order": 4
         }
       ]
@@ -11457,78 +11578,6 @@
         }
       ]
     },
-    "ide-sync-flow": {
-      "id": "ide-sync-flow",
-      "name": "Ide Sync Flow",
-      "symbol": "$ide-sync-flow",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/ide-adapters/.purpose",
-      "description": "Sync .paradigm/ to IDE instruction files",
-      "steps": [
-        {
-          "id": "ide-sync-flow-step-0",
-          "name": "Detect target IDE from project files",
-          "target": "#adapter-registry",
-          "order": 0
-        },
-        {
-          "id": "ide-sync-flow-step-1",
-          "name": "Load config, specs, and docs",
-          "target": "#adapter-base",
-          "order": 1
-        },
-        {
-          "id": "ide-sync-flow-step-2",
-          "name": "Generate IDE-specific output files",
-          "target": "#cursor-adapter",
-          "order": 2
-        },
-        {
-          "id": "ide-sync-flow-step-3",
-          "name": "Write files to appropriate locations",
-          "target": "#adapter-registry",
-          "order": 3
-        }
-      ]
-    },
-    "agent-orchestration-flow": {
-      "id": "agent-orchestration-flow",
-      "name": "Agent Orchestration Flow",
-      "symbol": "$agent-orchestration-flow",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose",
-      "description": "Orchestrate a multi-agent task from classification through execution",
-      "steps": [
-        {
-          "id": "agent-orchestration-flow-step-0",
-          "name": "Classify task complexity and match agent team",
-          "target": "#task-classifier",
-          "order": 0
-        },
-        {
-          "id": "agent-orchestration-flow-step-1",
-          "name": "Check token/cost budget availability",
-          "target": "#budget-tracker",
-          "order": 1
-        },
-        {
-          "id": "agent-orchestration-flow-step-2",
-          "name": "Spawn agents in parallel where possible",
-          "target": "#agent-spawner",
-          "order": 2
-        },
-        {
-          "id": "agent-orchestration-flow-step-3",
-          "name": "Collect results and handle handoffs",
-          "target": "#orchestrator",
-          "order": 3
-        },
-        {
-          "id": "agent-orchestration-flow-step-4",
-          "name": "Log execution and costs",
-          "target": "#audit-logger",
-          "order": 4
-        }
-      ]
-    },
     "(marketing)-philosophy-page": {
       "id": "(marketing)-philosophy-page",
       "name": "(marketing) Philosophy Page",
@@ -11568,6 +11617,98 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/site/src/.purpose",
       "description": "Page route: /learn",
       "steps": []
+    },
+    "load-symbols": {
+      "id": "load-symbols",
+      "name": "Load Symbols",
+      "symbol": "$load-symbols",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
+      "description": "Fetch symbols from API and populate canvas",
+      "steps": [
+        {
+          "id": "load-symbols-step-0",
+          "name": "Step 1",
+          "order": 0
+        },
+        {
+          "id": "load-symbols-step-1",
+          "name": "Step 2",
+          "order": 1
+        },
+        {
+          "id": "load-symbols-step-2",
+          "name": "Step 3",
+          "order": 2
+        },
+        {
+          "id": "load-symbols-step-3",
+          "name": "Step 4",
+          "order": 3
+        }
+      ]
+    },
+    "edit-symbol": {
+      "id": "edit-symbol",
+      "name": "Edit Symbol",
+      "symbol": "$edit-symbol",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
+      "description": "Edit symbol properties via Properties Panel",
+      "steps": [
+        {
+          "id": "edit-symbol-step-0",
+          "name": "Step 1",
+          "order": 0
+        },
+        {
+          "id": "edit-symbol-step-1",
+          "name": "Step 2",
+          "order": 1
+        },
+        {
+          "id": "edit-symbol-step-2",
+          "name": "Step 3",
+          "order": 2
+        },
+        {
+          "id": "edit-symbol-step-3",
+          "name": "Step 4",
+          "order": 3
+        },
+        {
+          "id": "edit-symbol-step-4",
+          "name": "Step 5",
+          "order": 4
+        }
+      ]
+    },
+    "filter-symbols": {
+      "id": "filter-symbols",
+      "name": "Filter Symbols",
+      "symbol": "$filter-symbols",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
+      "description": "Filter visible symbols by type or tag",
+      "steps": [
+        {
+          "id": "filter-symbols-step-0",
+          "name": "Step 1",
+          "order": 0
+        },
+        {
+          "id": "filter-symbols-step-1",
+          "name": "Step 2",
+          "order": 1
+        },
+        {
+          "id": "filter-symbols-step-2",
+          "name": "Step 3",
+          "order": 2
+        },
+        {
+          "id": "filter-symbols-step-3",
+          "name": "Step 4",
+          "order": 3
+        }
+      ]
     },
     "purpose-parsing": {
       "id": "purpose-parsing",
@@ -11683,98 +11824,6 @@
           "name": "Report issues and compliance status",
           "target": "#validator",
           "order": 4
-        }
-      ]
-    },
-    "load-symbols": {
-      "id": "load-symbols",
-      "name": "Load Symbols",
-      "symbol": "$load-symbols",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
-      "description": "Fetch symbols from API and populate canvas",
-      "steps": [
-        {
-          "id": "load-symbols-step-0",
-          "name": "Step 1",
-          "order": 0
-        },
-        {
-          "id": "load-symbols-step-1",
-          "name": "Step 2",
-          "order": 1
-        },
-        {
-          "id": "load-symbols-step-2",
-          "name": "Step 3",
-          "order": 2
-        },
-        {
-          "id": "load-symbols-step-3",
-          "name": "Step 4",
-          "order": 3
-        }
-      ]
-    },
-    "edit-symbol": {
-      "id": "edit-symbol",
-      "name": "Edit Symbol",
-      "symbol": "$edit-symbol",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
-      "description": "Edit symbol properties via Properties Panel",
-      "steps": [
-        {
-          "id": "edit-symbol-step-0",
-          "name": "Step 1",
-          "order": 0
-        },
-        {
-          "id": "edit-symbol-step-1",
-          "name": "Step 2",
-          "order": 1
-        },
-        {
-          "id": "edit-symbol-step-2",
-          "name": "Step 3",
-          "order": 2
-        },
-        {
-          "id": "edit-symbol-step-3",
-          "name": "Step 4",
-          "order": 3
-        },
-        {
-          "id": "edit-symbol-step-4",
-          "name": "Step 5",
-          "order": 4
-        }
-      ]
-    },
-    "filter-symbols": {
-      "id": "filter-symbols",
-      "name": "Filter Symbols",
-      "symbol": "$filter-symbols",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
-      "description": "Filter visible symbols by type or tag",
-      "steps": [
-        {
-          "id": "filter-symbols-step-0",
-          "name": "Step 1",
-          "order": 0
-        },
-        {
-          "id": "filter-symbols-step-1",
-          "name": "Step 2",
-          "order": 1
-        },
-        {
-          "id": "filter-symbols-step-2",
-          "name": "Step 3",
-          "order": 2
-        },
-        {
-          "id": "filter-symbols-step-3",
-          "name": "Step 4",
-          "order": 3
         }
       ]
     },
@@ -12033,14 +12082,6 @@
         }
       ]
     },
-    "SHELL": {
-      "id": "SHELL",
-      "name": "SHELL",
-      "symbol": "$SHELL",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/.purpose",
-      "description": "Referenced from #claude-stream-session",
-      "steps": []
-    },
     "shift-flow": {
       "id": "shift-flow",
       "name": "Shift Flow",
@@ -12071,6 +12112,14 @@
       "symbol": "$orchestration-flow",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
       "description": "Referenced from #team-orchestrate-command",
+      "steps": []
+    },
+    "SHELL": {
+      "id": "SHELL",
+      "name": "SHELL",
+      "symbol": "$SHELL",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/.purpose",
+      "description": "Referenced from #claude-stream-session",
       "steps": []
     },
     "fleet-switch": {
@@ -12305,24 +12354,6 @@
         "#quiz-view"
       ]
     },
-    "!course-completed": {
-      "id": "!course-completed",
-      "name": "!course Completed",
-      "symbol": "!!course-completed",
-      "category": "signals",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/site/.purpose",
-      "description": "Emitted when a user completes all lessons in a course",
-      "related": []
-    },
-    "!plsat-passed": {
-      "id": "!plsat-passed",
-      "name": "!plsat Passed",
-      "symbol": "!!plsat-passed",
-      "category": "signals",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/site/.purpose",
-      "description": "Emitted when a user passes the PLSAT certification exam",
-      "related": []
-    },
     "events-flushed": {
       "id": "events-flushed",
       "name": "Events Flushed",
@@ -12344,6 +12375,24 @@
       "related": [
         "#ring-buffer"
       ]
+    },
+    "!course-completed": {
+      "id": "!course-completed",
+      "name": "!course Completed",
+      "symbol": "!!course-completed",
+      "category": "signals",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/site/.purpose",
+      "description": "Emitted when a user completes all lessons in a course",
+      "related": []
+    },
+    "!plsat-passed": {
+      "id": "!plsat-passed",
+      "name": "!plsat Passed",
+      "symbol": "!!plsat-passed",
+      "category": "signals",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/site/.purpose",
+      "description": "Emitted when a user passes the PLSAT certification exam",
+      "related": []
     },
     "incident-recorded": {
       "id": "incident-recorded",
@@ -12487,6 +12536,105 @@
       "category": "signals",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
       "description": "A structured log entry was written",
+      "related": []
+    },
+    "init-success": {
+      "id": "init-success",
+      "name": "Init Success",
+      "symbol": "!init-success",
+      "category": "signals",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Paradigm initialized successfully",
+      "related": []
+    },
+    "init-skipped": {
+      "id": "init-skipped",
+      "name": "Init Skipped",
+      "symbol": "!init-skipped",
+      "category": "signals",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Paradigm init skipped (already exists)",
+      "related": []
+    },
+    "lint-error": {
+      "id": "lint-error",
+      "name": "Lint Error",
+      "symbol": "!lint-error",
+      "category": "signals",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Lint found validation errors",
+      "related": []
+    },
+    "lint-fixed": {
+      "id": "lint-fixed",
+      "name": "Lint Fixed",
+      "symbol": "!lint-fixed",
+      "category": "signals",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Lint auto-fixed issues",
+      "related": []
+    },
+    "mcp-configured": {
+      "id": "mcp-configured",
+      "name": "Mcp Configured",
+      "symbol": "!mcp-configured",
+      "category": "signals",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "MCP server configured for client",
+      "related": []
+    },
+    "agent-spawned": {
+      "id": "agent-spawned",
+      "name": "Agent Spawned",
+      "symbol": "!agent-spawned",
+      "category": "signals",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose",
+      "description": "Individual agent spawned via provider",
+      "related": []
+    },
+    "agent-completed": {
+      "id": "agent-completed",
+      "name": "Agent Completed",
+      "symbol": "!agent-completed",
+      "category": "signals",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "AI agent completed task",
+      "related": []
+    },
+    "agent-failed": {
+      "id": "agent-failed",
+      "name": "Agent Failed",
+      "symbol": "!agent-failed",
+      "category": "signals",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "AI agent failed task",
+      "related": []
+    },
+    "orchestration-started": {
+      "id": "orchestration-started",
+      "name": "Orchestration Started",
+      "symbol": "!orchestration-started",
+      "category": "signals",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose",
+      "description": "Multi-agent orchestration has begun",
+      "related": []
+    },
+    "orchestration-completed": {
+      "id": "orchestration-completed",
+      "name": "Orchestration Completed",
+      "symbol": "!orchestration-completed",
+      "category": "signals",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose",
+      "description": "Multi-agent orchestration finished successfully",
+      "related": []
+    },
+    "sweep-completed": {
+      "id": "sweep-completed",
+      "name": "Sweep Completed",
+      "symbol": "!sweep-completed",
+      "category": "signals",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Entropy sweep completed with results summary",
       "related": []
     },
     "agent-turn-complete": {
@@ -12943,103 +13091,40 @@
         "#task-store"
       ]
     },
-    "init-success": {
-      "id": "init-success",
-      "name": "Init Success",
-      "symbol": "!init-success",
+    "node-selected": {
+      "id": "node-selected",
+      "name": "Node Selected",
+      "symbol": "!node-selected",
       "category": "signals",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Paradigm initialized successfully",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
+      "description": "User clicked on a symbol node",
       "related": []
     },
-    "init-skipped": {
-      "id": "init-skipped",
-      "name": "Init Skipped",
-      "symbol": "!init-skipped",
+    "node-moved": {
+      "id": "node-moved",
+      "name": "Node Moved",
+      "symbol": "!node-moved",
       "category": "signals",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Paradigm init skipped (already exists)",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
+      "description": "User dragged a node to new position",
       "related": []
     },
-    "lint-error": {
-      "id": "lint-error",
-      "name": "Lint Error",
-      "symbol": "!lint-error",
+    "filters-changed": {
+      "id": "filters-changed",
+      "name": "Filters Changed",
+      "symbol": "!filters-changed",
       "category": "signals",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Lint found validation errors",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
+      "description": "User toggled type or tag filters",
       "related": []
     },
-    "lint-fixed": {
-      "id": "lint-fixed",
-      "name": "Lint Fixed",
-      "symbol": "!lint-fixed",
+    "symbol-updated": {
+      "id": "symbol-updated",
+      "name": "Symbol Updated",
+      "symbol": "!symbol-updated",
       "category": "signals",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Lint auto-fixed issues",
-      "related": []
-    },
-    "mcp-configured": {
-      "id": "mcp-configured",
-      "name": "Mcp Configured",
-      "symbol": "!mcp-configured",
-      "category": "signals",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "MCP server configured for client",
-      "related": []
-    },
-    "agent-spawned": {
-      "id": "agent-spawned",
-      "name": "Agent Spawned",
-      "symbol": "!agent-spawned",
-      "category": "signals",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose",
-      "description": "Individual agent spawned via provider",
-      "related": []
-    },
-    "agent-completed": {
-      "id": "agent-completed",
-      "name": "Agent Completed",
-      "symbol": "!agent-completed",
-      "category": "signals",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "AI agent completed task",
-      "related": []
-    },
-    "agent-failed": {
-      "id": "agent-failed",
-      "name": "Agent Failed",
-      "symbol": "!agent-failed",
-      "category": "signals",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "AI agent failed task",
-      "related": []
-    },
-    "orchestration-started": {
-      "id": "orchestration-started",
-      "name": "Orchestration Started",
-      "symbol": "!orchestration-started",
-      "category": "signals",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose",
-      "description": "Multi-agent orchestration has begun",
-      "related": []
-    },
-    "orchestration-completed": {
-      "id": "orchestration-completed",
-      "name": "Orchestration Completed",
-      "symbol": "!orchestration-completed",
-      "category": "signals",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose",
-      "description": "Multi-agent orchestration finished successfully",
-      "related": []
-    },
-    "sweep-completed": {
-      "id": "sweep-completed",
-      "name": "Sweep Completed",
-      "symbol": "!sweep-completed",
-      "category": "signals",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Entropy sweep completed with results summary",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
+      "description": "Symbol properties were edited and saved",
       "related": []
     },
     "parse-success": {
@@ -13130,42 +13215,6 @@
       "category": "signals",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/sdk/.purpose",
       "description": "!gate-denied: Gate check failed, access denied",
-      "related": []
-    },
-    "node-selected": {
-      "id": "node-selected",
-      "name": "Node Selected",
-      "symbol": "!node-selected",
-      "category": "signals",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
-      "description": "User clicked on a symbol node",
-      "related": []
-    },
-    "node-moved": {
-      "id": "node-moved",
-      "name": "Node Moved",
-      "symbol": "!node-moved",
-      "category": "signals",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
-      "description": "User dragged a node to new position",
-      "related": []
-    },
-    "filters-changed": {
-      "id": "filters-changed",
-      "name": "Filters Changed",
-      "symbol": "!filters-changed",
-      "category": "signals",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
-      "description": "User toggled type or tag filters",
-      "related": []
-    },
-    "symbol-updated": {
-      "id": "symbol-updated",
-      "name": "Symbol Updated",
-      "symbol": "!symbol-updated",
-      "category": "signals",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
-      "description": "Symbol properties were edited and saved",
       "related": []
     },
     "budget-exceeded": {
@@ -15104,6 +15153,54 @@
         "#symbol-logger"
       ]
     },
+    "~provider-cascade": {
+      "id": "~provider-cascade",
+      "name": "~provider Cascade",
+      "symbol": "~~provider-cascade",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Agent providers are tried in priority order (claude > claude-code-teams > claude-code > cursor-cli > claude-cli > manual) until one is available; manual is always the ultimate fallback",
+      "related": [
+        "#provider-registry",
+        "#agent-spawner"
+      ]
+    },
+    "~budget-enforced": {
+      "id": "~budget-enforced",
+      "name": "~budget Enforced",
+      "symbol": "~~budget-enforced",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "All orchestrations enforce token and cost budgets at global (default 500K tokens, $5 USD) and per-agent levels; exceeding triggers budget-exceeded signal and halts agent",
+      "related": [
+        "#budget-tracker",
+        "#orchestrator"
+      ]
+    },
+    "~ide-adapter-pattern": {
+      "id": "~ide-adapter-pattern",
+      "name": "~ide Adapter Pattern",
+      "symbol": "~~ide-adapter-pattern",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "IDE instruction files are generated from shared base helpers in a fixed section ordering; each adapter overrides detection and generation methods for its target IDE",
+      "related": [
+        "#ide-adapters"
+      ]
+    },
+    "~audit-required": {
+      "id": "~audit-required",
+      "name": "~audit Required",
+      "symbol": "~~audit-required",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "All orchestrations MUST emit audit events recording agent spawning, budget usage, and result merging",
+      "related": [
+        "#audit-logger",
+        "#agent-spawner",
+        "#orchestrator"
+      ]
+    },
     "local-only": {
       "id": "local-only",
       "name": "Local Only",
@@ -15185,52 +15282,30 @@
       "description": "Path traversal checks + trust deny-lists block dangerous file access (.env, .key, .pem, credentials, secrets)",
       "related": []
     },
-    "~provider-cascade": {
-      "id": "~provider-cascade",
-      "name": "~provider Cascade",
-      "symbol": "~~provider-cascade",
+    "v2-symbols-only": {
+      "id": "v2-symbols-only",
+      "name": "V2 Symbols Only",
+      "symbol": "~v2-symbols-only",
       "category": "aspects",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Agent providers are tried in priority order (claude > claude-code-teams > claude-code > cursor-cli > claude-cli > manual) until one is available; manual is always the ultimate fallback",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
+      "description": "UI only renders v2 symbol types (#, $, ^, !, ~)",
       "related": [
-        "#provider-registry",
-        "#agent-spawner"
+        "#NodesStore",
+        "#NodeRenderer"
       ]
     },
-    "~budget-enforced": {
-      "id": "~budget-enforced",
-      "name": "~budget Enforced",
-      "symbol": "~~budget-enforced",
+    "responsive-layout": {
+      "id": "responsive-layout",
+      "name": "Responsive Layout",
+      "symbol": "~responsive-layout",
       "category": "aspects",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "All orchestrations enforce token and cost budgets at global (default 500K tokens, $5 USD) and per-agent levels; exceeding triggers budget-exceeded signal and halts agent",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
+      "description": "UI adapts to viewport size for all layout modes",
       "related": [
-        "#budget-tracker",
-        "#orchestrator"
-      ]
-    },
-    "~ide-adapter-pattern": {
-      "id": "~ide-adapter-pattern",
-      "name": "~ide Adapter Pattern",
-      "symbol": "~~ide-adapter-pattern",
-      "category": "aspects",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "IDE instruction files are generated from shared base helpers in a fixed section ordering; each adapter overrides detection and generation methods for its target IDE",
-      "related": [
-        "#ide-adapters"
-      ]
-    },
-    "~audit-required": {
-      "id": "~audit-required",
-      "name": "~audit Required",
-      "symbol": "~~audit-required",
-      "category": "aspects",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "All orchestrations MUST emit audit events recording agent spawning, budget usage, and result merging",
-      "related": [
-        "#audit-logger",
-        "#agent-spawner",
-        "#orchestrator"
+        "#App",
+        "#Canvas",
+        "#GridView",
+        "#ListView"
       ]
     },
     "~purpose-schema-passthrough": {
@@ -15517,32 +15592,6 @@
       "description": "Key expressions using == instead of === emit a warning suggesting strict equality",
       "related": [
         "#validator"
-      ]
-    },
-    "v2-symbols-only": {
-      "id": "v2-symbols-only",
-      "name": "V2 Symbols Only",
-      "symbol": "~v2-symbols-only",
-      "category": "aspects",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
-      "description": "UI only renders v2 symbol types (#, $, ^, !, ~)",
-      "related": [
-        "#NodesStore",
-        "#NodeRenderer"
-      ]
-    },
-    "responsive-layout": {
-      "id": "responsive-layout",
-      "name": "Responsive Layout",
-      "symbol": "~responsive-layout",
-      "category": "aspects",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
-      "description": "UI adapts to viewport size for all layout modes",
-      "related": [
-        "#App",
-        "#Canvas",
-        "#GridView",
-        "#ListView"
       ]
     },
     "~solo-vs-faceted-modes": {
@@ -16385,6 +16434,10 @@
       "category": "components",
       "id": "lens-registry"
     },
+    "#lift-code-units": {
+      "category": "components",
+      "id": "lift-code-units"
+    },
     "#absorb": {
       "category": "components",
       "id": "absorb"
@@ -16513,6 +16566,14 @@
       "category": "components",
       "id": "academia-theme"
     },
+    "#sentinel-web-client": {
+      "category": "components",
+      "id": "sentinel-web-client"
+    },
+    "#ring-buffer": {
+      "category": "components",
+      "id": "ring-buffer"
+    },
     "#SiteApp": {
       "category": "components",
       "id": "SiteApp"
@@ -16601,14 +16662,6 @@
       "category": "components",
       "id": "PlsatPage"
     },
-    "#sentinel-web-client": {
-      "category": "components",
-      "id": "sentinel-web-client"
-    },
-    "#ring-buffer": {
-      "category": "components",
-      "id": "ring-buffer"
-    },
     "#SentinelRustClient": {
       "category": "components",
       "id": "SentinelRustClient"
@@ -16620,46 +16673,6 @@
     "#SentinelTracingLayer": {
       "category": "components",
       "id": "SentinelTracingLayer"
-    },
-    "#paradigm-runtime": {
-      "category": "components",
-      "id": "paradigm-runtime"
-    },
-    "#graph-schema": {
-      "category": "components",
-      "id": "graph-schema"
-    },
-    "#schema-validation": {
-      "category": "components",
-      "id": "schema-validation"
-    },
-    "#runtime-api-types": {
-      "category": "components",
-      "id": "runtime-api-types"
-    },
-    "#migration-engine": {
-      "category": "components",
-      "id": "migration-engine"
-    },
-    "#migration-diff": {
-      "category": "components",
-      "id": "migration-diff"
-    },
-    "#migration-history": {
-      "category": "components",
-      "id": "migration-history"
-    },
-    "#version-fingerprint": {
-      "category": "components",
-      "id": "version-fingerprint"
-    },
-    "#logger-reexport": {
-      "category": "components",
-      "id": "logger-reexport"
-    },
-    "#telemetry-reexport": {
-      "category": "components",
-      "id": "telemetry-reexport"
     },
     "#IncidentStorage": {
       "category": "components",
@@ -16744,6 +16757,46 @@
     "#SymphonySchema": {
       "category": "components",
       "id": "SymphonySchema"
+    },
+    "#paradigm-runtime": {
+      "category": "components",
+      "id": "paradigm-runtime"
+    },
+    "#graph-schema": {
+      "category": "components",
+      "id": "graph-schema"
+    },
+    "#schema-validation": {
+      "category": "components",
+      "id": "schema-validation"
+    },
+    "#runtime-api-types": {
+      "category": "components",
+      "id": "runtime-api-types"
+    },
+    "#migration-engine": {
+      "category": "components",
+      "id": "migration-engine"
+    },
+    "#migration-diff": {
+      "category": "components",
+      "id": "migration-diff"
+    },
+    "#migration-history": {
+      "category": "components",
+      "id": "migration-history"
+    },
+    "#version-fingerprint": {
+      "category": "components",
+      "id": "version-fingerprint"
+    },
+    "#logger-reexport": {
+      "category": "components",
+      "id": "logger-reexport"
+    },
+    "#telemetry-reexport": {
+      "category": "components",
+      "id": "telemetry-reexport"
     },
     "#extension-entry": {
       "category": "components",
@@ -16976,6 +17029,298 @@
     "#duration-tracker": {
       "category": "components",
       "id": "duration-tracker"
+    },
+    "#migration-detector": {
+      "category": "components",
+      "id": "migration-detector"
+    },
+    "#migration-runner": {
+      "category": "components",
+      "id": "migration-runner"
+    },
+    "#migration-registry": {
+      "category": "components",
+      "id": "migration-registry"
+    },
+    "#init-handler": {
+      "category": "components",
+      "id": "init-handler"
+    },
+    "#template-copier": {
+      "category": "components",
+      "id": "template-copier"
+    },
+    "#detection-engine": {
+      "category": "components",
+      "id": "detection-engine"
+    },
+    "#sync-handler": {
+      "category": "components",
+      "id": "sync-handler"
+    },
+    "#sync-llms-handler": {
+      "category": "components",
+      "id": "sync-llms-handler"
+    },
+    "#ide-adapters": {
+      "category": "components",
+      "id": "ide-adapters"
+    },
+    "#lint-handler": {
+      "category": "components",
+      "id": "lint-handler"
+    },
+    "#yaml-fixer": {
+      "category": "components",
+      "id": "yaml-fixer"
+    },
+    "#schema-validator": {
+      "category": "components",
+      "id": "schema-validator"
+    },
+    "#cost-handler": {
+      "category": "components",
+      "id": "cost-handler"
+    },
+    "#token-estimator": {
+      "category": "components",
+      "id": "token-estimator"
+    },
+    "#scan-handler": {
+      "category": "components",
+      "id": "scan-handler"
+    },
+    "#auto-scan-handler": {
+      "category": "components",
+      "id": "auto-scan-handler"
+    },
+    "#navigator-generator": {
+      "category": "components",
+      "id": "navigator-generator"
+    },
+    "#component-detector": {
+      "category": "components",
+      "id": "component-detector"
+    },
+    "#route-detector": {
+      "category": "components",
+      "id": "route-detector"
+    },
+    "#auth-detector": {
+      "category": "components",
+      "id": "auth-detector"
+    },
+    "#signal-detector": {
+      "category": "components",
+      "id": "signal-detector"
+    },
+    "#team-loader": {
+      "category": "components",
+      "id": "team-loader"
+    },
+    "#manifest-generator": {
+      "category": "components",
+      "id": "manifest-generator"
+    },
+    "#agent-spawner": {
+      "category": "components",
+      "id": "agent-spawner"
+    },
+    "#orchestrator": {
+      "category": "components",
+      "id": "orchestrator"
+    },
+    "#context-builder": {
+      "category": "components",
+      "id": "context-builder"
+    },
+    "#provider-registry": {
+      "category": "components",
+      "id": "provider-registry"
+    },
+    "#budget-tracker": {
+      "category": "components",
+      "id": "budget-tracker"
+    },
+    "#audit-logger": {
+      "category": "components",
+      "id": "audit-logger"
+    },
+    "#model-configurator": {
+      "category": "components",
+      "id": "model-configurator"
+    },
+    "#model-discovery": {
+      "category": "components",
+      "id": "model-discovery"
+    },
+    "#agent-classifier": {
+      "category": "components",
+      "id": "agent-classifier"
+    },
+    "#mcp-setup-handler": {
+      "category": "components",
+      "id": "mcp-setup-handler"
+    },
+    "#client-detector": {
+      "category": "components",
+      "id": "client-detector"
+    },
+    "#config-generator": {
+      "category": "components",
+      "id": "config-generator"
+    },
+    "#status-handler": {
+      "category": "components",
+      "id": "status-handler"
+    },
+    "#symbol-counter": {
+      "category": "components",
+      "id": "symbol-counter"
+    },
+    "#beacon-handler": {
+      "category": "components",
+      "id": "beacon-handler"
+    },
+    "#constellation-handler": {
+      "category": "components",
+      "id": "constellation-handler"
+    },
+    "#graph-builder": {
+      "category": "components",
+      "id": "graph-builder"
+    },
+    "#ripple-handler": {
+      "category": "components",
+      "id": "ripple-handler"
+    },
+    "#impact-analyzer": {
+      "category": "components",
+      "id": "impact-analyzer"
+    },
+    "#echo-handler": {
+      "category": "components",
+      "id": "echo-handler"
+    },
+    "#error-mapper": {
+      "category": "components",
+      "id": "error-mapper"
+    },
+    "#probe-handler": {
+      "category": "components",
+      "id": "probe-handler"
+    },
+    "#image-processor": {
+      "category": "components",
+      "id": "image-processor"
+    },
+    "#doctor-handler": {
+      "category": "components",
+      "id": "doctor-handler"
+    },
+    "#health-checker": {
+      "category": "components",
+      "id": "health-checker"
+    },
+    "#config-schema-validator": {
+      "category": "components",
+      "id": "config-schema-validator"
+    },
+    "#integrity-checker": {
+      "category": "components",
+      "id": "integrity-checker"
+    },
+    "#thread-handler": {
+      "category": "components",
+      "id": "thread-handler"
+    },
+    "#session-storage": {
+      "category": "components",
+      "id": "session-storage"
+    },
+    "#wisdom-handler": {
+      "category": "components",
+      "id": "wisdom-handler"
+    },
+    "#history-handler": {
+      "category": "components",
+      "id": "history-handler"
+    },
+    "#hooks-handler": {
+      "category": "components",
+      "id": "hooks-handler"
+    },
+    "#claude-code-hooks-installer": {
+      "category": "components",
+      "id": "claude-code-hooks-installer"
+    },
+    "#sentinel-launcher": {
+      "category": "components",
+      "id": "sentinel-launcher"
+    },
+    "#university-launcher": {
+      "category": "components",
+      "id": "university-launcher"
+    },
+    "#triage-handler": {
+      "category": "components",
+      "id": "triage-handler"
+    },
+    "#purpose-validator": {
+      "category": "components",
+      "id": "purpose-validator"
+    },
+    "#purpose-aggregator": {
+      "category": "components",
+      "id": "purpose-aggregator"
+    },
+    "#premise-aggregator": {
+      "category": "components",
+      "id": "premise-aggregator"
+    },
+    "#premise-snapshotter": {
+      "category": "components",
+      "id": "premise-snapshotter"
+    },
+    "#portal-validator": {
+      "category": "components",
+      "id": "portal-validator"
+    },
+    "#portal-checker": {
+      "category": "components",
+      "id": "portal-checker"
+    },
+    "#portal-tester": {
+      "category": "components",
+      "id": "portal-tester"
+    },
+    "#portal-viewer": {
+      "category": "components",
+      "id": "portal-viewer"
+    },
+    "#global-clean-handler": {
+      "category": "components",
+      "id": "global-clean-handler"
+    },
+    "#sweep-handler": {
+      "category": "components",
+      "id": "sweep-handler"
+    },
+    "#entropy-checker": {
+      "category": "components",
+      "id": "entropy-checker"
+    },
+    "#task-bridge": {
+      "category": "components",
+      "id": "task-bridge"
+    },
+    "#calibration": {
+      "category": "components",
+      "id": "calibration"
+    },
+    "#calibrate-command": {
+      "category": "components",
+      "id": "calibrate-command"
     },
     "#conductor-app": {
       "category": "components",
@@ -17441,298 +17786,6 @@
       "category": "components",
       "id": "atrium-textview"
     },
-    "#migration-detector": {
-      "category": "components",
-      "id": "migration-detector"
-    },
-    "#migration-runner": {
-      "category": "components",
-      "id": "migration-runner"
-    },
-    "#migration-registry": {
-      "category": "components",
-      "id": "migration-registry"
-    },
-    "#init-handler": {
-      "category": "components",
-      "id": "init-handler"
-    },
-    "#template-copier": {
-      "category": "components",
-      "id": "template-copier"
-    },
-    "#detection-engine": {
-      "category": "components",
-      "id": "detection-engine"
-    },
-    "#sync-handler": {
-      "category": "components",
-      "id": "sync-handler"
-    },
-    "#sync-llms-handler": {
-      "category": "components",
-      "id": "sync-llms-handler"
-    },
-    "#ide-adapters": {
-      "category": "components",
-      "id": "ide-adapters"
-    },
-    "#lint-handler": {
-      "category": "components",
-      "id": "lint-handler"
-    },
-    "#yaml-fixer": {
-      "category": "components",
-      "id": "yaml-fixer"
-    },
-    "#schema-validator": {
-      "category": "components",
-      "id": "schema-validator"
-    },
-    "#cost-handler": {
-      "category": "components",
-      "id": "cost-handler"
-    },
-    "#token-estimator": {
-      "category": "components",
-      "id": "token-estimator"
-    },
-    "#scan-handler": {
-      "category": "components",
-      "id": "scan-handler"
-    },
-    "#auto-scan-handler": {
-      "category": "components",
-      "id": "auto-scan-handler"
-    },
-    "#navigator-generator": {
-      "category": "components",
-      "id": "navigator-generator"
-    },
-    "#component-detector": {
-      "category": "components",
-      "id": "component-detector"
-    },
-    "#route-detector": {
-      "category": "components",
-      "id": "route-detector"
-    },
-    "#auth-detector": {
-      "category": "components",
-      "id": "auth-detector"
-    },
-    "#signal-detector": {
-      "category": "components",
-      "id": "signal-detector"
-    },
-    "#team-loader": {
-      "category": "components",
-      "id": "team-loader"
-    },
-    "#manifest-generator": {
-      "category": "components",
-      "id": "manifest-generator"
-    },
-    "#agent-spawner": {
-      "category": "components",
-      "id": "agent-spawner"
-    },
-    "#orchestrator": {
-      "category": "components",
-      "id": "orchestrator"
-    },
-    "#context-builder": {
-      "category": "components",
-      "id": "context-builder"
-    },
-    "#provider-registry": {
-      "category": "components",
-      "id": "provider-registry"
-    },
-    "#budget-tracker": {
-      "category": "components",
-      "id": "budget-tracker"
-    },
-    "#audit-logger": {
-      "category": "components",
-      "id": "audit-logger"
-    },
-    "#model-configurator": {
-      "category": "components",
-      "id": "model-configurator"
-    },
-    "#model-discovery": {
-      "category": "components",
-      "id": "model-discovery"
-    },
-    "#agent-classifier": {
-      "category": "components",
-      "id": "agent-classifier"
-    },
-    "#mcp-setup-handler": {
-      "category": "components",
-      "id": "mcp-setup-handler"
-    },
-    "#client-detector": {
-      "category": "components",
-      "id": "client-detector"
-    },
-    "#config-generator": {
-      "category": "components",
-      "id": "config-generator"
-    },
-    "#status-handler": {
-      "category": "components",
-      "id": "status-handler"
-    },
-    "#symbol-counter": {
-      "category": "components",
-      "id": "symbol-counter"
-    },
-    "#beacon-handler": {
-      "category": "components",
-      "id": "beacon-handler"
-    },
-    "#constellation-handler": {
-      "category": "components",
-      "id": "constellation-handler"
-    },
-    "#graph-builder": {
-      "category": "components",
-      "id": "graph-builder"
-    },
-    "#ripple-handler": {
-      "category": "components",
-      "id": "ripple-handler"
-    },
-    "#impact-analyzer": {
-      "category": "components",
-      "id": "impact-analyzer"
-    },
-    "#echo-handler": {
-      "category": "components",
-      "id": "echo-handler"
-    },
-    "#error-mapper": {
-      "category": "components",
-      "id": "error-mapper"
-    },
-    "#probe-handler": {
-      "category": "components",
-      "id": "probe-handler"
-    },
-    "#image-processor": {
-      "category": "components",
-      "id": "image-processor"
-    },
-    "#doctor-handler": {
-      "category": "components",
-      "id": "doctor-handler"
-    },
-    "#health-checker": {
-      "category": "components",
-      "id": "health-checker"
-    },
-    "#config-schema-validator": {
-      "category": "components",
-      "id": "config-schema-validator"
-    },
-    "#integrity-checker": {
-      "category": "components",
-      "id": "integrity-checker"
-    },
-    "#thread-handler": {
-      "category": "components",
-      "id": "thread-handler"
-    },
-    "#session-storage": {
-      "category": "components",
-      "id": "session-storage"
-    },
-    "#wisdom-handler": {
-      "category": "components",
-      "id": "wisdom-handler"
-    },
-    "#history-handler": {
-      "category": "components",
-      "id": "history-handler"
-    },
-    "#hooks-handler": {
-      "category": "components",
-      "id": "hooks-handler"
-    },
-    "#claude-code-hooks-installer": {
-      "category": "components",
-      "id": "claude-code-hooks-installer"
-    },
-    "#sentinel-launcher": {
-      "category": "components",
-      "id": "sentinel-launcher"
-    },
-    "#university-launcher": {
-      "category": "components",
-      "id": "university-launcher"
-    },
-    "#triage-handler": {
-      "category": "components",
-      "id": "triage-handler"
-    },
-    "#purpose-validator": {
-      "category": "components",
-      "id": "purpose-validator"
-    },
-    "#purpose-aggregator": {
-      "category": "components",
-      "id": "purpose-aggregator"
-    },
-    "#premise-aggregator": {
-      "category": "components",
-      "id": "premise-aggregator"
-    },
-    "#premise-snapshotter": {
-      "category": "components",
-      "id": "premise-snapshotter"
-    },
-    "#portal-validator": {
-      "category": "components",
-      "id": "portal-validator"
-    },
-    "#portal-checker": {
-      "category": "components",
-      "id": "portal-checker"
-    },
-    "#portal-tester": {
-      "category": "components",
-      "id": "portal-tester"
-    },
-    "#portal-viewer": {
-      "category": "components",
-      "id": "portal-viewer"
-    },
-    "#global-clean-handler": {
-      "category": "components",
-      "id": "global-clean-handler"
-    },
-    "#sweep-handler": {
-      "category": "components",
-      "id": "sweep-handler"
-    },
-    "#entropy-checker": {
-      "category": "components",
-      "id": "entropy-checker"
-    },
-    "#task-bridge": {
-      "category": "components",
-      "id": "task-bridge"
-    },
-    "#calibration": {
-      "category": "components",
-      "id": "calibration"
-    },
-    "#calibrate-command": {
-      "category": "components",
-      "id": "calibrate-command"
-    },
     "#guides": {
       "category": "components",
       "id": "guides"
@@ -17852,6 +17905,62 @@
     "#symbol-badge": {
       "category": "components",
       "id": "symbol-badge"
+    },
+    "#App": {
+      "category": "components",
+      "id": "App"
+    },
+    "#Toolbar": {
+      "category": "components",
+      "id": "Toolbar"
+    },
+    "#LayoutToggle": {
+      "category": "components",
+      "id": "LayoutToggle"
+    },
+    "#TypeFilters": {
+      "category": "components",
+      "id": "TypeFilters"
+    },
+    "#Canvas": {
+      "category": "components",
+      "id": "Canvas"
+    },
+    "#NodeRenderer": {
+      "category": "components",
+      "id": "NodeRenderer"
+    },
+    "#ConnectionRenderer": {
+      "category": "components",
+      "id": "ConnectionRenderer"
+    },
+    "#GridCard": {
+      "category": "components",
+      "id": "GridCard"
+    },
+    "#ListRow": {
+      "category": "components",
+      "id": "ListRow"
+    },
+    "#Autocomplete": {
+      "category": "components",
+      "id": "Autocomplete"
+    },
+    "#ConversationView": {
+      "category": "components",
+      "id": "ConversationView"
+    },
+    "#CanvasStore": {
+      "category": "components",
+      "id": "CanvasStore"
+    },
+    "#ThemeStore": {
+      "category": "components",
+      "id": "ThemeStore"
+    },
+    "#ConversationStore": {
+      "category": "components",
+      "id": "ConversationStore"
     },
     "#purpose-parser": {
       "category": "components",
@@ -17996,62 +18105,6 @@
     "#classify-yaml-error": {
       "category": "components",
       "id": "classify-yaml-error"
-    },
-    "#App": {
-      "category": "components",
-      "id": "App"
-    },
-    "#Toolbar": {
-      "category": "components",
-      "id": "Toolbar"
-    },
-    "#LayoutToggle": {
-      "category": "components",
-      "id": "LayoutToggle"
-    },
-    "#TypeFilters": {
-      "category": "components",
-      "id": "TypeFilters"
-    },
-    "#Canvas": {
-      "category": "components",
-      "id": "Canvas"
-    },
-    "#NodeRenderer": {
-      "category": "components",
-      "id": "NodeRenderer"
-    },
-    "#ConnectionRenderer": {
-      "category": "components",
-      "id": "ConnectionRenderer"
-    },
-    "#GridCard": {
-      "category": "components",
-      "id": "GridCard"
-    },
-    "#ListRow": {
-      "category": "components",
-      "id": "ListRow"
-    },
-    "#Autocomplete": {
-      "category": "components",
-      "id": "Autocomplete"
-    },
-    "#ConversationView": {
-      "category": "components",
-      "id": "ConversationView"
-    },
-    "#CanvasStore": {
-      "category": "components",
-      "id": "CanvasStore"
-    },
-    "#ThemeStore": {
-      "category": "components",
-      "id": "ThemeStore"
-    },
-    "#ConversationStore": {
-      "category": "components",
-      "id": "ConversationStore"
     },
     "#portal-writer-tests": {
       "category": "components",
@@ -18224,22 +18277,6 @@
     "#PackTypes": {
       "category": "components",
       "id": "PackTypes"
-    },
-    "#sync-provider": {
-      "category": "components",
-      "id": "sync-provider"
-    },
-    "#github-provider": {
-      "category": "components",
-      "id": "github-provider"
-    },
-    "#task-reconcile": {
-      "category": "components",
-      "id": "task-reconcile"
-    },
-    "#sync-layer": {
-      "category": "components",
-      "id": "sync-layer"
     },
     "#ResourceIndex": {
       "category": "components",
@@ -18537,6 +18574,22 @@
       "category": "components",
       "id": "calibration-aggregate"
     },
+    "#sync-provider": {
+      "category": "components",
+      "id": "sync-provider"
+    },
+    "#github-provider": {
+      "category": "components",
+      "id": "github-provider"
+    },
+    "#task-reconcile": {
+      "category": "components",
+      "id": "task-reconcile"
+    },
+    "#sync-layer": {
+      "category": "components",
+      "id": "sync-layer"
+    },
     "#PlatformServer": {
       "category": "components",
       "id": "PlatformServer"
@@ -18693,6 +18746,18 @@
       "category": "components",
       "id": "paradigm-solo-cli"
     },
+    "#paths": {
+      "category": "components",
+      "id": "paths"
+    },
+    "#quizzes": {
+      "category": "components",
+      "id": "quizzes"
+    },
+    "#notes": {
+      "category": "components",
+      "id": "notes"
+    },
     "#SymbolPage": {
       "category": "components",
       "id": "SymbolPage"
@@ -18712,22 +18777,6 @@
     "#ContentPage": {
       "category": "components",
       "id": "ContentPage"
-    },
-    "#paths": {
-      "category": "components",
-      "id": "paths"
-    },
-    "#quizzes": {
-      "category": "components",
-      "id": "quizzes"
-    },
-    "#notes": {
-      "category": "components",
-      "id": "notes"
-    },
-    "#grid-preset": {
-      "category": "components",
-      "id": "grid-preset"
     },
     "#OverviewHandler": {
       "category": "components",
@@ -19033,33 +19082,9 @@
       "category": "components",
       "id": "#docs-scaffold"
     },
-    "#help-view": {
+    "#grid-preset": {
       "category": "components",
-      "id": "help-view"
-    },
-    "#agent-decision": {
-      "category": "components",
-      "id": "agent-decision"
-    },
-    "#agent-visual": {
-      "category": "components",
-      "id": "agent-visual"
-    },
-    "#atrium-decision-card": {
-      "category": "components",
-      "id": "atrium-decision-card"
-    },
-    "#atrium-visual-canvas": {
-      "category": "components",
-      "id": "atrium-visual-canvas"
-    },
-    "#atrium-graph-view": {
-      "category": "components",
-      "id": "atrium-graph-view"
-    },
-    "#mermaid-web-view": {
-      "category": "components",
-      "id": "mermaid-web-view"
+      "id": "grid-preset"
     },
     "#TasksSection": {
       "category": "components",
@@ -19136,6 +19161,34 @@
     "#DocsSection": {
       "category": "components",
       "id": "DocsSection"
+    },
+    "#help-view": {
+      "category": "components",
+      "id": "help-view"
+    },
+    "#agent-decision": {
+      "category": "components",
+      "id": "agent-decision"
+    },
+    "#agent-visual": {
+      "category": "components",
+      "id": "agent-visual"
+    },
+    "#atrium-decision-card": {
+      "category": "components",
+      "id": "atrium-decision-card"
+    },
+    "#atrium-visual-canvas": {
+      "category": "components",
+      "id": "atrium-visual-canvas"
+    },
+    "#atrium-graph-view": {
+      "category": "components",
+      "id": "atrium-graph-view"
+    },
+    "#mermaid-web-view": {
+      "category": "components",
+      "id": "mermaid-web-view"
     },
     "#cockpit-view": {
       "category": "components",
@@ -19217,6 +19270,10 @@
       "category": "flows",
       "id": "oracle-run"
     },
+    "$absorb-flow": {
+      "category": "flows",
+      "id": "absorb-flow"
+    },
     "$weave-forecast": {
       "category": "flows",
       "id": "weave-forecast"
@@ -19224,6 +19281,10 @@
     "$$plsat-exam-flow": {
       "category": "flows",
       "id": "$plsat-exam-flow"
+    },
+    "$event-ingestion": {
+      "category": "flows",
+      "id": "event-ingestion"
     },
     "$$homepage-experience": {
       "category": "flows",
@@ -19236,14 +19297,6 @@
     "$$university-flow": {
       "category": "flows",
       "id": "$university-flow"
-    },
-    "$event-ingestion": {
-      "category": "flows",
-      "id": "event-ingestion"
-    },
-    "$$schema-migration": {
-      "category": "flows",
-      "id": "$schema-migration"
     },
     "$incident-triage": {
       "category": "flows",
@@ -19260,6 +19313,10 @@
     "$symphony-conversation": {
       "category": "flows",
       "id": "symphony-conversation"
+    },
+    "$$schema-migration": {
+      "category": "flows",
+      "id": "$schema-migration"
     },
     "$mcp-startup": {
       "category": "flows",
@@ -19288,6 +19345,14 @@
     "$wisdom-promotion": {
       "category": "flows",
       "id": "wisdom-promotion"
+    },
+    "$ide-sync-flow": {
+      "category": "flows",
+      "id": "ide-sync-flow"
+    },
+    "$agent-orchestration-flow": {
+      "category": "flows",
+      "id": "agent-orchestration-flow"
     },
     "$claude-turn-exchange": {
       "category": "flows",
@@ -19397,14 +19462,6 @@
       "category": "flows",
       "id": "$sentinel-investigation"
     },
-    "$ide-sync-flow": {
-      "category": "flows",
-      "id": "ide-sync-flow"
-    },
-    "$agent-orchestration-flow": {
-      "category": "flows",
-      "id": "agent-orchestration-flow"
-    },
     "$(marketing)-philosophy-page": {
       "category": "flows",
       "id": "(marketing)-philosophy-page"
@@ -19425,18 +19482,6 @@
       "category": "flows",
       "id": "learn-page"
     },
-    "$purpose-parsing": {
-      "category": "flows",
-      "id": "purpose-parsing"
-    },
-    "$symbol-aggregation": {
-      "category": "flows",
-      "id": "symbol-aggregation"
-    },
-    "$portal-validation-flow": {
-      "category": "flows",
-      "id": "portal-validation-flow"
-    },
     "$load-symbols": {
       "category": "flows",
       "id": "load-symbols"
@@ -19448,6 +19493,18 @@
     "$filter-symbols": {
       "category": "flows",
       "id": "filter-symbols"
+    },
+    "$purpose-parsing": {
+      "category": "flows",
+      "id": "purpose-parsing"
+    },
+    "$symbol-aggregation": {
+      "category": "flows",
+      "id": "symbol-aggregation"
+    },
+    "$portal-validation-flow": {
+      "category": "flows",
+      "id": "portal-validation-flow"
     },
     "$$platform-serve": {
       "category": "flows",
@@ -19501,14 +19558,6 @@
       "category": "signals",
       "id": "!quiz-completed"
     },
-    "!!course-completed": {
-      "category": "signals",
-      "id": "!course-completed"
-    },
-    "!!plsat-passed": {
-      "category": "signals",
-      "id": "!plsat-passed"
-    },
     "!events-flushed": {
       "category": "signals",
       "id": "events-flushed"
@@ -19516,6 +19565,14 @@
     "!events-dropped": {
       "category": "signals",
       "id": "events-dropped"
+    },
+    "!!course-completed": {
+      "category": "signals",
+      "id": "!course-completed"
+    },
+    "!!plsat-passed": {
+      "category": "signals",
+      "id": "!plsat-passed"
     },
     "!incident-recorded": {
       "category": "signals",
@@ -19580,6 +19637,50 @@
     "!log-emitted": {
       "category": "signals",
       "id": "log-emitted"
+    },
+    "!init-success": {
+      "category": "signals",
+      "id": "init-success"
+    },
+    "!init-skipped": {
+      "category": "signals",
+      "id": "init-skipped"
+    },
+    "!lint-error": {
+      "category": "signals",
+      "id": "lint-error"
+    },
+    "!lint-fixed": {
+      "category": "signals",
+      "id": "lint-fixed"
+    },
+    "!mcp-configured": {
+      "category": "signals",
+      "id": "mcp-configured"
+    },
+    "!agent-spawned": {
+      "category": "signals",
+      "id": "agent-spawned"
+    },
+    "!agent-completed": {
+      "category": "signals",
+      "id": "agent-completed"
+    },
+    "!agent-failed": {
+      "category": "signals",
+      "id": "agent-failed"
+    },
+    "!orchestration-started": {
+      "category": "signals",
+      "id": "orchestration-started"
+    },
+    "!orchestration-completed": {
+      "category": "signals",
+      "id": "orchestration-completed"
+    },
+    "!sweep-completed": {
+      "category": "signals",
+      "id": "sweep-completed"
     },
     "!agent-turn-complete": {
       "category": "signals",
@@ -19753,49 +19854,21 @@
       "category": "signals",
       "id": "!tasks-archived"
     },
-    "!init-success": {
+    "!node-selected": {
       "category": "signals",
-      "id": "init-success"
+      "id": "node-selected"
     },
-    "!init-skipped": {
+    "!node-moved": {
       "category": "signals",
-      "id": "init-skipped"
+      "id": "node-moved"
     },
-    "!lint-error": {
+    "!filters-changed": {
       "category": "signals",
-      "id": "lint-error"
+      "id": "filters-changed"
     },
-    "!lint-fixed": {
+    "!symbol-updated": {
       "category": "signals",
-      "id": "lint-fixed"
-    },
-    "!mcp-configured": {
-      "category": "signals",
-      "id": "mcp-configured"
-    },
-    "!agent-spawned": {
-      "category": "signals",
-      "id": "agent-spawned"
-    },
-    "!agent-completed": {
-      "category": "signals",
-      "id": "agent-completed"
-    },
-    "!agent-failed": {
-      "category": "signals",
-      "id": "agent-failed"
-    },
-    "!orchestration-started": {
-      "category": "signals",
-      "id": "orchestration-started"
-    },
-    "!orchestration-completed": {
-      "category": "signals",
-      "id": "orchestration-completed"
-    },
-    "!sweep-completed": {
-      "category": "signals",
-      "id": "sweep-completed"
+      "id": "symbol-updated"
     },
     "!parse-success": {
       "category": "signals",
@@ -19836,22 +19909,6 @@
     "!gate-denied": {
       "category": "signals",
       "id": "gate-denied"
-    },
-    "!node-selected": {
-      "category": "signals",
-      "id": "node-selected"
-    },
-    "!node-moved": {
-      "category": "signals",
-      "id": "node-moved"
-    },
-    "!filters-changed": {
-      "category": "signals",
-      "id": "filters-changed"
-    },
-    "!symbol-updated": {
-      "category": "signals",
-      "id": "symbol-updated"
     },
     "!budget-exceeded": {
       "category": "signals",
@@ -20485,6 +20542,22 @@
       "category": "aspects",
       "id": "~symbol-filter-env-var"
     },
+    "~~provider-cascade": {
+      "category": "aspects",
+      "id": "~provider-cascade"
+    },
+    "~~budget-enforced": {
+      "category": "aspects",
+      "id": "~budget-enforced"
+    },
+    "~~ide-adapter-pattern": {
+      "category": "aspects",
+      "id": "~ide-adapter-pattern"
+    },
+    "~~audit-required": {
+      "category": "aspects",
+      "id": "~audit-required"
+    },
     "~local-only": {
       "category": "aspects",
       "id": "local-only"
@@ -20521,21 +20594,13 @@
       "category": "aspects",
       "id": "file-safety"
     },
-    "~~provider-cascade": {
+    "~v2-symbols-only": {
       "category": "aspects",
-      "id": "~provider-cascade"
+      "id": "v2-symbols-only"
     },
-    "~~budget-enforced": {
+    "~responsive-layout": {
       "category": "aspects",
-      "id": "~budget-enforced"
-    },
-    "~~ide-adapter-pattern": {
-      "category": "aspects",
-      "id": "~ide-adapter-pattern"
-    },
-    "~~audit-required": {
-      "category": "aspects",
-      "id": "~audit-required"
+      "id": "responsive-layout"
     },
     "~~purpose-schema-passthrough": {
       "category": "aspects",
@@ -20640,14 +20705,6 @@
     "~~strict-equality-warning": {
       "category": "aspects",
       "id": "~strict-equality-warning"
-    },
-    "~v2-symbols-only": {
-      "category": "aspects",
-      "id": "v2-symbols-only"
-    },
-    "~responsive-layout": {
-      "category": "aspects",
-      "id": "responsive-layout"
     },
     "~~solo-vs-faceted-modes": {
       "category": "aspects",
@@ -20813,38 +20870,6 @@
       "category": "aspects",
       "id": "correlation-tracked"
     },
-    "#vision-gaze-provider.": {
-      "category": "components",
-      "id": "vision-gaze-provider."
-    },
-    "!claude-interrupt": {
-      "category": "signals",
-      "id": "claude-interrupt"
-    },
-    "!background-shell": {
-      "category": "signals",
-      "id": "background-shell"
-    },
-    "$SHELL": {
-      "category": "flows",
-      "id": "SHELL"
-    },
-    "#claude-stream-session.": {
-      "category": "components",
-      "id": "claude-stream-session."
-    },
-    "!claude-interrupt.": {
-      "category": "signals",
-      "id": "claude-interrupt."
-    },
-    "#FF6B6B": {
-      "category": "components",
-      "id": "FF6B6B"
-    },
-    "#F2B765": {
-      "category": "components",
-      "id": "F2B765"
-    },
     "$shift-flow": {
       "category": "flows",
       "id": "shift-flow"
@@ -20909,6 +20934,62 @@
       "category": "components",
       "id": "tutorial-handler"
     },
+    "#vision-gaze-provider.": {
+      "category": "components",
+      "id": "vision-gaze-provider."
+    },
+    "!claude-interrupt": {
+      "category": "signals",
+      "id": "claude-interrupt"
+    },
+    "!background-shell": {
+      "category": "signals",
+      "id": "background-shell"
+    },
+    "$SHELL": {
+      "category": "flows",
+      "id": "SHELL"
+    },
+    "#claude-stream-session.": {
+      "category": "components",
+      "id": "claude-stream-session."
+    },
+    "!claude-interrupt.": {
+      "category": "signals",
+      "id": "claude-interrupt."
+    },
+    "#FF6B6B": {
+      "category": "components",
+      "id": "FF6B6B"
+    },
+    "#F2B765": {
+      "category": "components",
+      "id": "F2B765"
+    },
+    "#ZoomControls": {
+      "category": "components",
+      "id": "ZoomControls"
+    },
+    "#IntentBadge": {
+      "category": "components",
+      "id": "IntentBadge"
+    },
+    "#ParticipantBadge": {
+      "category": "components",
+      "id": "ParticipantBadge"
+    },
+    "#NoteBubble": {
+      "category": "components",
+      "id": "NoteBubble"
+    },
+    "#ThreadCard": {
+      "category": "components",
+      "id": "ThreadCard"
+    },
+    "#DecisionSummary": {
+      "category": "components",
+      "id": "DecisionSummary"
+    },
     "~yaml-config-loading": {
       "category": "aspects",
       "id": "yaml-config-loading"
@@ -20940,30 +21021,6 @@
     "#session.entity": {
       "category": "components",
       "id": "session.entity"
-    },
-    "#ZoomControls": {
-      "category": "components",
-      "id": "ZoomControls"
-    },
-    "#IntentBadge": {
-      "category": "components",
-      "id": "IntentBadge"
-    },
-    "#ParticipantBadge": {
-      "category": "components",
-      "id": "ParticipantBadge"
-    },
-    "#NoteBubble": {
-      "category": "components",
-      "id": "NoteBubble"
-    },
-    "#ThreadCard": {
-      "category": "components",
-      "id": "ThreadCard"
-    },
-    "#DecisionSummary": {
-      "category": "components",
-      "id": "DecisionSummary"
     },
     "!symphony-status-flowback": {
       "category": "signals",
@@ -21049,6 +21106,10 @@
       "category": "signals",
       "id": "override-event"
     },
+    "~prior": {
+      "category": "aspects",
+      "id": "prior"
+    },
     "$decision-exchange": {
       "category": "flows",
       "id": "decision-exchange"
@@ -21064,10 +21125,6 @@
     "#conductor-resources": {
       "category": "components",
       "id": "conductor-resources"
-    },
-    "~prior": {
-      "category": "aspects",
-      "id": "prior"
     },
     "~tokens": {
       "category": "aspects",

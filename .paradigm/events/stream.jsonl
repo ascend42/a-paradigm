@@ -1032,3 +1032,4 @@
 {"id":"ev-1782243826832-5558","timestamp":"2026-06-23T19:43:46.832Z","type":"work-completed","source":"mcp-tool-call","tool":"paradigm_reindex","context":"Index rebuilt"}
 {"id":"ev-1782243842099-5337","timestamp":"2026-06-23T19:44:02.099Z","type":"decision-made","source":"mcp-tool-call","tool":"paradigm_decision_record","symbols":[],"context":"Decision: Framework renamed: Loom → Warpline (brand collision with Atlassian Loom; textile theme kept)"}
 {"id":"ev-1782250484792-4961","timestamp":"2026-06-23T21:34:44.792Z","type":"work-completed","source":"mcp-tool-call","tool":"paradigm_reindex","context":"Index rebuilt"}
+{"id":"ev-1782251974726-0294","timestamp":"2026-06-23T21:59:34.726Z","type":"work-completed","source":"mcp-tool-call","tool":"paradigm_reindex","context":"Index rebuilt"}

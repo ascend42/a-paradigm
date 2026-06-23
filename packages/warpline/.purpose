@@ -27,8 +27,18 @@ components:
       The load-bearing wall — essence(symbol) -> contentId. Hashes the Canonical
       Normal Form ⟨kind, normalized contract, edgeBag⟩, Merkle by TARGET essence
       (so rename is free), excludes name/path/prose/timestamps. Tarjan SCC for
-      cycles; stable-id fold for generic-contract aliasing. contentId =
-      "essence:v0:" + sha256(canonical).
+      cycles; stable-id fold for generic-contract aliasing. .purpose contentId =
+      "essence:v0:" + sha256(canonical). STAGE 3a: a code-unit branch in localCNF
+      (detected by componentType==='code-unit') replaces the sorted edgeBag with
+      the CCNF body and SUBSTITUTES each positional f:N token INLINE with the
+      essence of codeLocalTargets[N]'s edge (via the SAME edgeEssence resolver, so
+      intra-SCC targets become @scc-internal and a cross-symbol rename frees the
+      chain); extern/builtin free:name tokens stay untouched; edgeBag is []. The
+      version tag is read off entry.data.essenceTag (default ESSENCE_VERSION) so a
+      code-unit contentId is "essence:v1:ts<exact>:"+sha256(canonical) and SCC
+      members carry the same tag — mixed v0/v1 graphs interoperate because Merkle
+      substitutes the target's full TAGGED string. essence-hash never imports the
+      lens; the tag travels on the node.
     type: module
     components:
       - "#canonical-json"
@@ -152,22 +162,51 @@ components:
       - "#code-lens"
       - "#ts-lens"
 
+  lift-code-units:
+    description: >-
+      The absorb-side bridge (stage 3a, spec §9 sub-phase 2 / §4.1).
+      liftCodeUnits(rootDir) runs every REGISTERED lens over a read-only worktree
+      root and collects the union of CodeUnits (re-sorted by symbol for
+      deterministic injection order). injectCodeUnits(index, units) turns each
+      CodeUnit into a synthetic SymbolEntry (kind 'component' + componentType
+      'code-unit'; DETERMINISTIC id = sha256('code:'+symbol), NOT a uuid; source
+      'premise'; references = the distinct LOCAL targets in first-appearance order
+      so liftEdges yields code->localTarget edges into buildEssenceGraph.adj and
+      Tarjan detects code cycles) and splices it into the live SymbolIndex
+      (entries + byType + bySource) BEFORE computeEssences runs — same universe,
+      never a parallel graph. The identity-bearing payload travels on entry.data:
+      codeEssence (body with positional f:idx slots), codeLocalTargets (the
+      ordered distinct local target symbols the f:N slots substitute against), and
+      essenceTag = "v1:ts"+TS_LENS_VERSION (the compiler-pinned version namespace
+      §5.2, so essence-hash never imports the lens — the tag travels with the node).
+    type: module
+    components:
+      - "#code-lens"
+      - "#lens-registry"
+      - "#ts-lens"
+
   absorb:
     description: >-
       absorb(gitRef) -> WarpState. Spins a detached temp worktree, loadLiveGraph
       on it, lifts every symbol, builds the WarpState, removes the worktree in a
       finally. The literal WORKTREE ref absorbs the live cwd uncommitted state.
+      STAGE 3a: after loadLiveGraph and before buildWarpState (both the ref and
+      WORKTREE paths), liftCodeUnits + injectCodeUnits splice TS/TSX code-units
+      into the index as synthetic nodes so code essences flow through the same
+      WARP. The lens only READS the worktree/cwd — the read-only invariant holds.
       DETERMINISM INVARIANT: absorbing the same ref twice is byte-identical
       (stateId + every per-symbol contentId + repo-relative filePath), so
       diff(absorb(HEAD), absorb(HEAD)) is provably ZERO. Rests on (a) the absorb
-      root being passed to buildWarpState for repo-relative filePaths, and (b)
+      root being passed to buildWarpState for repo-relative filePaths, (b)
       deterministic .purpose/portal file-discovery order in premise-core's
-      aggregator (duplicate-symbol resolution + Merkle essences are stable across
-      parses regardless of filesystem order or temp-dir prefix).
+      aggregator, and (c) the lens's sorted file enumeration + deterministic
+      synthetic ids (duplicate-symbol resolution + Merkle essences are stable
+      across parses regardless of filesystem order or temp-dir prefix).
     type: module
     components:
       - "#git-exec"
       - "#warp-state"
+      - "#lift-code-units"
 
   sem-delta:
     description: >-
@@ -270,6 +309,22 @@ flows:
         action: "git merge-tree --write-tree A B (read-only) for the real conflict set"
       - component: "#oracle"
         action: "Score the confusion matrix and append the OracleRecord to .warpline/oracle.jsonl"
+
+  absorb-flow:
+    description: >-
+      One ref -> a WarpState of MEANING (stage 3a). Materialize a read-only
+      worktree, live-parse it, lift+inject TS/TSX code-units as synthetic nodes in
+      the SAME universe, then compute whole-state essences and stamp every object.
+      The lens only reads the worktree — the Phase-1 read-only invariant holds.
+    steps:
+      - component: "#git-exec"
+        action: "git worktree add --detach the ref into a temp dir (read-only)"
+      - component: "#lift-code-units"
+        action: "liftCodeUnits(worktree) then injectCodeUnits(index, units) — synthetic code-unit nodes spliced in BEFORE essence computation"
+      - component: "#essence-hash"
+        action: "computeEssences over the merged .purpose+code universe (code-units take the v1:ts<exact> tag, .purpose stays v0)"
+      - component: "#warp-state"
+        action: "buildWarpState stamps each object's contentId and derives the stateId; remove the worktree in a finally"
 
   weave-forecast:
     description: >-

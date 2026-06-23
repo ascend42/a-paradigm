@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generatedAt": "2026-06-23T21:34:44.720Z",
+  "generatedAt": "2026-06-23T21:59:34.658Z",
   "flows": {
     "$oracle-run": {
       "id": "$oracle-run",
@@ -40,6 +40,33 @@
           "id": "step-7",
           "action": "Score the confusion matrix and append the OracleRecord to .warpline/oracle.jsonl",
           "symbol": "#oracle"
+        }
+      ],
+      "definedIn": "packages/warpline/.purpose"
+    },
+    "$absorb-flow": {
+      "id": "$absorb-flow",
+      "description": "One ref -> a WarpState of MEANING (stage 3a). Materialize a read-only worktree, live-parse it, lift+inject TS/TSX code-units as synthetic nodes in the SAME universe, then compute whole-state essences and stamp every object. The lens only reads the worktree — the Phase-1 read-only invariant holds.",
+      "steps": [
+        {
+          "id": "step-1",
+          "action": "git worktree add --detach the ref into a temp dir (read-only)",
+          "symbol": "#git-exec"
+        },
+        {
+          "id": "step-2",
+          "action": "liftCodeUnits(worktree) then injectCodeUnits(index, units) — synthetic code-unit nodes spliced in BEFORE essence computation",
+          "symbol": "#lift-code-units"
+        },
+        {
+          "id": "step-3",
+          "action": "computeEssences over the merged .purpose+code universe (code-units take the v1:ts<exact> tag, .purpose stays v0)",
+          "symbol": "#essence-hash"
+        },
+        {
+          "id": "step-4",
+          "action": "buildWarpState stamps each object's contentId and derives the stateId; remove the worktree in a finally",
+          "symbol": "#warp-state"
         }
       ],
       "definedIn": "packages/warpline/.purpose"
@@ -299,6 +326,7 @@
   "symbolToFlows": {
     "#git-exec": [
       "$oracle-run",
+      "$absorb-flow",
       "$weave-forecast"
     ],
     "#absorb": [
@@ -318,6 +346,15 @@
     ],
     "#oracle": [
       "$oracle-run"
+    ],
+    "#lift-code-units": [
+      "$absorb-flow"
+    ],
+    "#essence-hash": [
+      "$absorb-flow"
+    ],
+    "#warp-state": [
+      "$absorb-flow"
     ],
     "#weave": [
       "$weave-forecast"

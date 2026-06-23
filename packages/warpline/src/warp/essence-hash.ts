@@ -50,9 +50,31 @@ import { liftEdges, type WarpEdge } from './warp-object.js';
 
 export const ESSENCE_VERSION = 'v0';
 const SCC_INTERNAL = '@scc-internal';
+const CODE_UNIT_TYPE = 'code-unit';
 
 function sha256(s: string): string {
   return createHash('sha256').update(s, 'utf8').digest('hex');
+}
+
+/** Is this entry a synthetic code-unit (lifted by a code-lens, spec §2)? */
+function isCodeUnit(entry: SymbolEntry): boolean {
+  return entry.componentType === CODE_UNIT_TYPE;
+}
+
+/**
+ * The essence VERSION-TAG for an entry. `.purpose` symbols stay `v0`; code-units
+ * carry the compiler-pinned tag the lens stamped onto `entry.data.essenceTag`
+ * (`v1:ts<exact>`, spec §5.2). The tag is read off `data` so `essence-hash.ts`
+ * never imports the lens — the tag travels WITH the node. Mixed graphs work
+ * because a Merkle edge substitutes the target's full TAGGED contentId string.
+ */
+function essenceTagOf(entry: SymbolEntry): string {
+  if (isCodeUnit(entry)) {
+    const data = (entry.data ?? {}) as Record<string, unknown>;
+    const tag = data.essenceTag;
+    if (typeof tag === 'string' && tag.length > 0) return tag;
+  }
+  return ESSENCE_VERSION;
 }
 
 // ────────────────────────────────────────────────────────
@@ -273,6 +295,42 @@ export function computeEssences(index: SymbolIndex, symbols: string[]): EssenceR
   ): CanonicalValue => {
     const entry = graph.entryOf.get(sym)!;
     const edges = graph.edgesOf.get(sym) ?? [];
+
+    // ── Code-unit branch (spec §4.1) ────────────────────────────────────────
+    // A code-unit's identity is its BODY with local refs substituted INLINE,
+    // positionally — NOT a sorted edge-set. The body's `f:N` token is the N-th
+    // LOCAL reference (first-appearance order); we replace it with the essence
+    // of `codeLocalTargets[N]`'s edge — which resolves via the SAME `edgeEssence`
+    // resolver the rest of the algorithm passes in (so intra-SCC targets become
+    // `@scc-internal` automatically, and cross-rename frees the chain). extern/
+    // builtin/unresolved refs are already `free:name` tokens in the body string
+    // and are left untouched. The edgeBag is empty (refs are inline in the body).
+    if (isCodeUnit(entry)) {
+      const data = (entry.data ?? {}) as Record<string, unknown>;
+      const rawTargets = data.codeLocalTargets;
+      const localTargets = Array.isArray(rawTargets)
+        ? rawTargets.filter((t): t is string => typeof t === 'string')
+        : [];
+      // target symbol → its resolved edge essence (via the shared resolver).
+      const targetEssence = new Map<string, string>();
+      for (const e of edges) {
+        if (!targetEssence.has(e.to)) targetEssence.set(e.to, edgeEssence(e));
+      }
+      const body = String(data.codeEssence ?? '').replace(/\bf:(\d+)\b/g, (_m, n: string) => {
+        const idx = Number(n);
+        const target = localTargets[idx];
+        if (target === undefined) return `f:${n}`; // alignment gap — leave as-is
+        const ess = targetEssence.get(target);
+        return ess !== undefined ? ess : `essence:${ESSENCE_VERSION}:extern:${sha256(target)}`;
+      });
+      return {
+        kind: entry.type,
+        contract: normalizedContract(entry),
+        body,
+        edgeBag: [],
+      };
+    }
+
     const edgeBag = edges
       .map((e) => ({ edgeKind: e.kind, targetEssence: edgeEssence(e) }))
       // sort+dedupe the bag by (edgeKind, targetEssence)
@@ -332,7 +390,8 @@ export function computeEssences(index: SymbolIndex, symbols: string[]): EssenceR
         : `essence:${ESSENCE_VERSION}:extern:${sha256(e.to)}`,
     );
     computing.delete(sym);
-    const id = `essence:${ESSENCE_VERSION}:${sha256(canonicalSerialize(cnf))}`;
+    const tag = essenceTagOf(graph.entryOf.get(sym)!);
+    const id = `essence:${tag}:${sha256(canonicalSerialize(cnf))}`;
     contentIds.set(sym, id);
     return id;
   };
@@ -353,7 +412,10 @@ export function computeEssences(index: SymbolIndex, symbols: string[]): EssenceR
     const unitSerialized = canonicalSerialize(memberCNFs.map((m) => m.cnf as CanonicalValue));
     const sccHash = sha256(unitSerialized);
     memberCNFs.forEach((m, ordinal) => {
-      contentIds.set(m.sym, `essence:${ESSENCE_VERSION}:scc:${sccHash}:${ordinal}`);
+      // Per-member version tag: a code-level SCC carries `v1:ts...`, a `.purpose`
+      // SCC stays `v0`. (A mixed SCC can't form — code→component edges are one-way.)
+      const tag = essenceTagOf(graph.entryOf.get(m.sym)!);
+      contentIds.set(m.sym, `essence:${tag}:scc:${sccHash}:${ordinal}`);
     });
   };
 
