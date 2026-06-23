@@ -1,44 +1,7 @@
 {
   "version": "1.0",
-  "generatedAt": "2026-06-23T19:43:46.752Z",
+  "generatedAt": "2026-06-23T21:34:44.720Z",
   "flows": {
-    "$plsat-exam-flow": {
-      "id": "$plsat-exam-flow",
-      "description": "Full PLSAT exam lifecycle from intro through certification",
-      "steps": [
-        {
-          "id": "step-1",
-          "action": "Display intro, rules, and name input",
-          "symbol": "#plsat-view"
-        },
-        {
-          "id": "step-2",
-          "action": "Start 90-minute countdown",
-          "symbol": "#plsat-timer"
-        },
-        {
-          "id": "step-3",
-          "action": "Present 99 shuffled questions (with passage blocks for grouped questions)",
-          "symbol": "#question-card"
-        },
-        {
-          "id": "step-4",
-          "action": "Calculate score on submit or time-up",
-          "symbol": "#plsat-view"
-        },
-        {
-          "id": "step-5",
-          "action": "Persist certificate to LocalStorage",
-          "symbol": "#plsat-store"
-        },
-        {
-          "id": "step-6",
-          "action": "Display printable certificate if passed",
-          "symbol": "#certificate-view"
-        }
-      ],
-      "definedIn": "packages/university/.purpose"
-    },
     "$oracle-run": {
       "id": "$oracle-run",
       "description": "The end-to-end Oracle flow: merge-base, absorb base/A/B, diff each side, synthesize justifications, predict the merge from meaning, run git's real merge read-only, score the confusion matrix, append the OracleRecord.",
@@ -112,6 +75,43 @@
         }
       ],
       "definedIn": "packages/warpline/.purpose"
+    },
+    "$plsat-exam-flow": {
+      "id": "$plsat-exam-flow",
+      "description": "Full PLSAT exam lifecycle from intro through certification",
+      "steps": [
+        {
+          "id": "step-1",
+          "action": "Display intro, rules, and name input",
+          "symbol": "#plsat-view"
+        },
+        {
+          "id": "step-2",
+          "action": "Start 90-minute countdown",
+          "symbol": "#plsat-timer"
+        },
+        {
+          "id": "step-3",
+          "action": "Present 99 shuffled questions (with passage blocks for grouped questions)",
+          "symbol": "#question-card"
+        },
+        {
+          "id": "step-4",
+          "action": "Calculate score on submit or time-up",
+          "symbol": "#plsat-view"
+        },
+        {
+          "id": "step-5",
+          "action": "Persist certificate to LocalStorage",
+          "symbol": "#plsat-store"
+        },
+        {
+          "id": "step-6",
+          "action": "Display printable certificate if passed",
+          "symbol": "#certificate-view"
+        }
+      ],
+      "definedIn": "packages/university/.purpose"
     },
     "$event-ingestion": {
       "id": "$event-ingestion",
@@ -297,21 +297,6 @@
     }
   },
   "symbolToFlows": {
-    "#plsat-view": [
-      "$plsat-exam-flow"
-    ],
-    "#plsat-timer": [
-      "$plsat-exam-flow"
-    ],
-    "#question-card": [
-      "$plsat-exam-flow"
-    ],
-    "#plsat-store": [
-      "$plsat-exam-flow"
-    ],
-    "#certificate-view": [
-      "$plsat-exam-flow"
-    ],
     "#git-exec": [
       "$oracle-run",
       "$weave-forecast"
@@ -336,6 +321,21 @@
     ],
     "#weave": [
       "$weave-forecast"
+    ],
+    "#plsat-view": [
+      "$plsat-exam-flow"
+    ],
+    "#plsat-timer": [
+      "$plsat-exam-flow"
+    ],
+    "#question-card": [
+      "$plsat-exam-flow"
+    ],
+    "#plsat-store": [
+      "$plsat-exam-flow"
+    ],
+    "#certificate-view": [
+      "$plsat-exam-flow"
     ],
     "#sentinel-web-client": [
       "$event-ingestion"

@@ -94,7 +94,63 @@ components:
       @ts-nocheck/eslint-disable) hashed, free prose dropped. An optional
       freeRefClassifier strips free names to positional f:{idx} edge tokens (default
       emits free:{name}, keeping stage 1 self-contained and spike-equivalent).
+      Stage 2 adds codeCNFDetailed(node,opts) -> {cnf, freeRefs[]}: the SAME
+      first-appearance ordering drives both the body's f:{idx} tokens and the
+      freeRefs index, so freeRefs[idx] (name + a representative ts.Identifier node)
+      aligns 1:1 with the f:idx token. codeCNF now delegates to it and returns .cnf
+      (the stage-1 signature is unchanged). This positional alignment is the input
+      the lens hands the checker for §4 resolution; call order is meaning, so a
+      sorted edge-set would be wrong.
     type: module
+
+  code-symbol:
+    description: >-
+      Pure string builders for a code-unit's WARP key and structural stable key
+      (spec §2). codeSymbol(relPath, qualifiedName) -> "#code:"+relPath+"::"+
+      qualifiedName (the SymbolIndex key); codeStableKey(relPath, structuralPath)
+      -> relPath+"::"+structuralPath where structuralPath is the (scopeKind#ordinal)
+      chain (e.g. class#0/method#2). Both are LABELS — provenance + rename
+      tiebreakers — NEVER hashed; pure functions of their inputs (no I/O), so
+      trivially deterministic across machines.
+    type: module
+
+  ts-lens:
+    description: >-
+      The TS/TSX code-lens (stage 2, spec §4/§5) — the checker-dependent half.
+      TsLens.lift(rootDir) enumerates .ts/.tsx files (sorted, .d.ts excluded),
+      builds ONE ts.Program over them against a FIXED, HARDCODED compiler-options
+      baseline (ESNext target/module, Bundler resolution, strict, skipLibCheck,
+      noEmit, allowJs:false — NEVER a discovered tsconfig, §5.2), and lifts each
+      code-unit (FunctionDeclaration, arrow/fn-expr const, class + its method/ctor/
+      getter/setter/field members; default-export -> qualifiedName 'default';
+      overload sets -> the implementation signature, bodiless overloads skipped).
+      Per unit it computes codeEssence via codeCNFDetailed and resolves each free
+      VALUE ref to one of four §4 classes, ALIGNED to the body's f:idx slots: (a)
+      module-local lifted code-unit -> 'local' edge (edgeKind calls/reads) carrying
+      the target #code: symbol (body emits f:idx); (b) imported name -> 'extern' id
+      extern:<specifier-as-written>#<exportName> derived from the SYNTACTIC import
+      statement, NOT checker module resolution (§5.3 — deterministic with no
+      node_modules); (c) builtin/global -> 'builtin' name; (d) unresolved -> set
+      reducedFidelity. Checker is used for identity resolution ONLY (getSymbolAtLocation
+      + getAliasedSymbol), never inferred types (§5.1). lift() returns CodeUnit[]
+      sorted by symbol (determinism). Exports TS_LENS_VERSION (the exact pinned ts
+      version) for stage 3 to stamp into the essence tag.
+    type: module
+    components:
+      - "#code-essence"
+      - "#code-symbol"
+      - "#code-lens"
+
+  lens-registry:
+    description: >-
+      The code-lens registry (spec §9). lensFor(ext) -> CodeLens | undefined maps a
+      file extension (incl. leading dot) to the responsible lens; v1 registers only
+      TsLens (.ts/.tsx). The single seam future per-language lenses plug into without
+      touching the lift/absorb path.
+    type: module
+    components:
+      - "#code-lens"
+      - "#ts-lens"
 
   absorb:
     description: >-

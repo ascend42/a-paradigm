@@ -337,30 +337,83 @@ export interface CodeCNFOptions {
   freeRefClassifier?: (name: string) => 'edge' | 'token';
 }
 
+/**
+ * One free VALUE-namespace reference the body carries, in the SAME positional
+ * order the CCNF uses for `f:{idx}` tokens (first-appearance of each distinct
+ * free name). `freeRefs[idx]` aligns with the `f:idx` token in the body; `node`
+ * is a representative occurrence the lens can hand to the checker for identity
+ * resolution (§4). Stage 3 substitutes the resolved essence inline at the
+ * positional slot, so this ORDER is meaning — a sorted edge-set would be wrong.
+ */
+export interface FreeRef {
+  /** The free identifier name as written (a LABEL — the lens resolves it). */
+  name: string;
+  /** A representative occurrence of the free identifier (for checker resolution). */
+  node: ts.Identifier;
+}
+
+/** The CCNF string plus its positionally-aligned free VALUE references (§4). */
+export interface CodeCNFDetailed {
+  /** The Code Canonical Normal Form token string (`codeCNF`'s output). */
+  cnf: string;
+  /** Free value-namespace refs, indexed to match the body's `f:idx` slots. */
+  freeRefs: FreeRef[];
+}
+
 function op(kind: ts.SyntaxKind): string {
   return ts.tokenToString(kind) ?? ts.SyntaxKind[kind];
 }
 
 /**
  * Produce the CCNF token string for one declaration `node`.
+ *
+ * Thin wrapper over {@link codeCNFDetailed} — returns just the `.cnf`. The
+ * stage-1 contract (`codeCNF(node, opts): string`) is unchanged; the detailed
+ * form layers the positional free-ref list the lens needs for §4 resolution.
  */
 export function codeCNF(node: ts.Node, opts: CodeCNFOptions = {}): string {
+  return codeCNFDetailed(node, opts).cnf;
+}
+
+/**
+ * Produce the CCNF token string AND the positionally-aligned free VALUE
+ * references the body carries (§4 frontier-closing input).
+ *
+ * The single canonical ordering — first-appearance of each DISTINCT free
+ * value-namespace name — drives BOTH the `f:{idx}` tokens emitted into the body
+ * AND the index into `freeRefs`. So `freeRefs[idx]` is exactly the name behind
+ * the `f:idx` token: the lens resolves `freeRefs[idx].node` via the checker and
+ * substitutes the resolved target at that positional slot. ALL distinct free
+ * names take a slot (a `'token'`-classified name still occupies its
+ * first-appearance index and appears in `freeRefs`), but only `'edge'`-classified
+ * names are emitted positionally as `f:idx`; `'token'` names are emitted by name
+ * as `free:{name}` (stage-1-equivalent), and the lens consults `freeRefs` to map
+ * them to extern/builtin/unresolved references at their own index.
+ */
+export function codeCNFDetailed(node: ts.Node, opts: CodeCNFOptions = {}): CodeCNFDetailed {
   const { scopeOf } = buildScopeModel(node);
   const classifier = opts.freeRefClassifier;
 
-  // Positional free-ref indexing: first distinct free NAME → 0,1,2...
+  // Positional free-ref indexing: first distinct free NAME → 0,1,2... This ONE
+  // counter is shared by `f:{idx}` tokens AND the `freeRefs` array so they stay
+  // perfectly aligned (the lens relies on `freeRefs[idx]` ↔ `f:idx`).
   const freeIndex = new Map<string, number>();
-  const freeRefToken = (name: string): string => {
-    const cls = classifier ? classifier(name) : 'token';
-    if (cls === 'edge') {
-      let idx = freeIndex.get(name);
-      if (idx === undefined) {
-        idx = freeIndex.size;
-        freeIndex.set(name, idx);
-      }
-      return `f:${idx}`;
+  const freeRefs: FreeRef[] = [];
+  const indexOfFree = (id: ts.Identifier): number => {
+    const name = id.text;
+    let idx = freeIndex.get(name);
+    if (idx === undefined) {
+      idx = freeRefs.length;
+      freeIndex.set(name, idx);
+      freeRefs.push({ name, node: id });
     }
-    return `free:${name}`;
+    return idx;
+  };
+  const freeRefToken = (id: ts.Identifier): string => {
+    const idx = indexOfFree(id);
+    const cls = classifier ? classifier(id.text) : 'token';
+    if (cls === 'edge') return `f:${idx}`;
+    return `free:${id.text}`;
   };
 
   // Identifier serialization: resolve against the scope it sits in.
@@ -385,7 +438,7 @@ export function codeCNF(node: ts.Node, opts: CodeCNFOptions = {}): string {
     // Free in the VALUE namespace → classifier-driven. A free TYPE name is a
     // written-annotation token and is kept by name (it is identity-bearing
     // structure, not a local rename target). A free label can't occur.
-    if (ns === 'value') return freeRefToken(id.text);
+    if (ns === 'value') return freeRefToken(id);
     if (ns === 'type') return `type:${id.text}`;
     return `label:${id.text}`;
   };
@@ -819,5 +872,5 @@ export function codeCNF(node: ts.Node, opts: CodeCNFOptions = {}): string {
   // or other declaration goes through the generic serializer (don't crash).
   const directives = collectDirectiveComments(node);
   const core = isFunctionLike(node) ? serializeFunctionLike(node) : serialize(node);
-  return core + directives;
+  return { cnf: core + directives, freeRefs };
 }

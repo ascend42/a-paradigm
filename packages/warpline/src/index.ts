@@ -60,6 +60,24 @@ export {
   type SemDiffReport,
 } from './weave.js';
 
+// Code-lens — AST-level code meaning (the TS/TSX lens, stage 2)
+export {
+  codeCNF,
+  codeCNFDetailed,
+  type CodeCNFOptions,
+  type CodeCNFDetailed,
+  type FreeRef,
+} from './lens/ts-essence.js';
+export {
+  type CodeLens,
+  type CodeUnit,
+  type CodeRef,
+  type CodeEdgeKind,
+} from './lens/code-lens.js';
+export { codeSymbol, codeStableKey } from './lens/code-symbol.js';
+export { TsLens, TS_LENS_VERSION } from './lens/ts-lens.js';
+export { lensFor, allLenses } from './lens/registry.js';
+
 // git-exec (read-only primitives)
 export {
   mergeBase,

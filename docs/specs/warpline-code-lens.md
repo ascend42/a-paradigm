@@ -88,6 +88,20 @@ cross-symbol rename is the empty delta, transitively.
 - **edgeKind** widens to `calls` / `reads` / `types` by syntactic role (additive — the edgeBag sort is kind-agnostic).
 - **SCC / mutual recursion / import cycles:** reuse Tarjan + `hashSCC` verbatim; case-(a) targets populate `adj`; (b)/(c)/(d) are fixed-string leaves (never SCC nodes), exactly as the current extern-leaf path. **TEST a real code-level cycle** — denser than `.purpose`, never exercised before.
 
+### 4.1 The f:idx ↔ local-reference alignment contract (stage-2 → stage-3, soundness-critical)
+`ts-lens` (stage 2, BUILT) emits per code-unit: a `codeEssence` body where each resolved
+**local** free reference is a positional `f:idx` token (builtins/externs/unresolved stay
+`free:name`), plus `references: CodeRef[]` (all four kinds — local/extern/builtin/unresolved —
+in first-appearance order). The `f:idx` counter increments **only for local refs**. Therefore
+**stage 3 must substitute `f:idx` → essence(target) using `references.filter(r => r.kind ===
+'local')[idx]`** (the idx-th LOCAL reference, first-appearance order), INLINE at the body slot.
+Substituting against the unfiltered array — or collapsing to an unordered/sorted edge-set —
+reintroduces the call-order false-EQUAL (`helper(); other();` vs `other(); helper();` MUST
+DIFFER). Call order is meaning: the body keeps the positional slot; the edgeBag-as-set model
+`.purpose` uses does NOT carry over for code bodies. (Stage-2 open notes: a module-local
+non-function binding currently classifies as `builtin`/`free:name` — honest v1 ceiling, frontier
+not closed for non-function locals; and `liftUnit` calls the CNF twice — both deferred to later.)
+
 ## 5. THE DETERMINISM DECISIONS (the load-bearing section; Cid + Jinx converged)
 
 ### 5.1 Checker for IDENTITY RESOLUTION ONLY — never inferred types
