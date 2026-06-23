@@ -1,0 +1,51 @@
+id: TD-2026-06-23-806
+timestamp: '2026-06-23T18:08:26.755Z'
+title: >-
+  Loom GAP-1 settled: 3-tier fidelity model — meaning where meaning exists, durable byte-blobs everywhere else, coverage
+  as an honesty metric
+decision: >-
+  Settle GAP-1 (what is the source of truth for a file with no Paradigm symbol). Loom uses a 3-TIER FIDELITY MODEL: (T1)
+  MEANING — files a lens can lift to the symbol graph (v0: .purpose symbols; v1 prize: AST-level meaning for real code)
+  → full WARP, structural identity, semantic diff/weave. (T2) STRUCTURED — parseable config/data (YAML/JSON/TOML) where
+  a structural lens exists → structural meaning; else falls to T3. (T3) OPAQUE BLOB — prose, images, binaries,
+  generated/vendored, anything no lens lifts → content-addressed, DURABLE byte-blobs (a git-grade CAS underneath);
+  versioned and never silently lost, but byte-diffed/byte-merged, never claimed to be 'meaning'. So the answer to 'truth
+  for a file with no meaning' is: THE BYTES ARE, and Loom is honest that it's byte-versioning them. MEANING-COVERAGE is
+  a first-class, reported metric (directly answering Jinx's '>40% in the escape hatch = it's a sidecar' guard): Loom's
+  value scales with how much of a repo IS meaning, and it states the ratio plainly rather than pretending. v0 ships T1
+  (.purpose) + T3 (everything else as blobs) — which is why `loom diff` currently shows 0 deltas on a .ts-only commit
+  (honest: those .ts files aren't yet lifted to meaning). The v1 PRIZE is T1 AST-level code-meaning (the Unison-grade
+  lift for hosted polyglot languages) — the hard absorb-soundness/round-trip work, and the single biggest lever for
+  Loom's value. This is NOT a blocker: Loom is useful at partial coverage (the meaning fraction gets semantic
+  merge/identity; the opaque fraction behaves like git), and coverage rises as lenses mature.
+rationale: >-
+  GAP-1 was the one founder-level hole flagged in the flows convergence. The principled resolution (already latent in
+  Arky's fidelity-tiered-lenses + meaning-coverage design and Jinx's escape-hatch warning): don't pretend every byte is
+  meaning, and don't lose bytes that aren't. Bytes stay durable for the opaque tier; meaning is primary only where
+  meaning exists; coverage is measured and disclosed. This lets Loom proceed honestly at v0 (.purpose granularity) and
+  names the v1 prize (AST code-meaning) without blocking on it.
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+  - id: architect
+    role: agent
+    stance: supported
+  - id: advocate
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: Lift ALL files to a 'text-meaning' essence (everything is meaning)
+    rejected_because: >-
+      non-code/non-structured bytes have no deterministic structural essence; forcing it reintroduces the
+      embedding-in-the-hash trap and non-determinism
+  - option: Only version symbol-bearing files; ignore the rest
+    rejected_because: loses real files (config/prose/assets) — unacceptable for a git replacement; the opaque tier must be durable
+status: active
+tags:
+  - loom
+  - gap-1
+  - fidelity-tiers
+  - meaning-coverage
+  - non-symbol-files
+  - settled
