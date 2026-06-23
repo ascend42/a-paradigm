@@ -83,7 +83,9 @@ components:
       The SemDelta and diff(base, branch), keyed by stableKey (SymbolEntry.id, so
       rename survives). contentId-equal short-circuits to no-delta; a pure
       rename/move is the EMPTY delta. Classifies changed contract slots and edge
-      add/remove.
+      add/remove. A symbol-born delta carries an edgesAdded-only changeset (ALL of
+      the born object's outgoing edges) so a new symbol's outgoing edges feed the
+      dangle pass the same way a gained edge does (born-consumer → retired-target).
     type: module
 
   predict:

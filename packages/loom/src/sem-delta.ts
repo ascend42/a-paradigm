@@ -89,11 +89,19 @@ export function diff(base: WarpState, branch: WarpState): SemDeltaSet {
     const h = branchByKey.get(key);
 
     if (!b && h) {
+      // A born symbol's OUTGOING edges must be visible to the dangle pass the
+      // same way a gained edge is. We attach an edgesAdded-only changeset (all
+      // of the born object's edges, in the same {kind, targetSymbol} shape the
+      // contract-changed path uses) so predict.addedEdges() can harvest them.
+      // Only edgesAdded is populated — born symbols don't gain/lose other slots
+      // relative to a (non-existent) base, and the knot pass treats born-vs-born
+      // via essence, never via this changeset, so no phantom knots are created.
       deltas.set(key, {
         kind: 'symbol-born',
         stableKey: key,
         symbol: h.symbol,
         essenceAfter: h.contentId,
+        changeset: bornChangeset(h),
       });
       continue;
     }
@@ -152,6 +160,31 @@ function setDiff(before: string[], after: string[]): { added: string[]; removed:
   return {
     added: after.filter((x) => !bs.has(x)).sort(),
     removed: before.filter((x) => !as.has(x)).sort(),
+  };
+}
+
+/**
+ * Changeset for a born symbol: every outgoing edge counts as edgesAdded (there
+ * is no base, so all edges are new). Same {kind, targetSymbol} shape the
+ * contract-changed path emits. All other slots are empty — born symbols are
+ * surfaced for the dangle pass only, not for slot-level knot detection (which
+ * compares born-vs-born by essence, never by this changeset).
+ */
+function bornChangeset(h: WarpObject): ContractChangeset {
+  return {
+    gatesAdded: [],
+    gatesRemoved: [],
+    signalsAdded: [],
+    signalsRemoved: [],
+    aspectsAdded: [],
+    aspectsRemoved: [],
+    statesAdded: [],
+    statesRemoved: [],
+    componentTypeChanged: false,
+    kindChanged: false,
+    edgesAdded: h.edges.map((e) => ({ kind: e.kind, targetSymbol: e.to })),
+    edgesRemoved: [],
+    stepsChanged: false,
   };
 }
 
