@@ -1,0 +1,413 @@
+version: "2.0"
+description: >-
+  The Warpline Engine — Phase 1: the Convergence/Divergence Oracle. A read-only tool
+  that lifts two git branches to a content-addressed store of MEANING (the
+  Paradigm symbol graph), predicts the merge from meaning (clean / knot /
+  dangling), runs git's actual merge read-only, and scores where meaning and
+  bytes agreed or diverged — appending a row to .warpline/oracle.jsonl. Never touches
+  HEAD/index/worktree.
+
+components:
+  git-exec:
+    description: >-
+      Thin, READ-ONLY wrappers over git (merge-base, rev-parse, worktree
+      add/remove, merge-tree with a throwaway-worktree fallback for git <2.38).
+      Every mutation happens in a detached temp worktree torn down in a finally;
+      the user's HEAD/index/worktree are never touched.
+    type: module
+
+  canonical-json:
+    description: >-
+      Strict, dependency-free canonical serializer (sorted keys, NFC strings, no
+      whitespace ambiguity) that produces the byte stream the essence hash digests.
+    type: module
+
+  essence-hash:
+    description: >-
+      The load-bearing wall — essence(symbol) -> contentId. Hashes the Canonical
+      Normal Form ⟨kind, normalized contract, edgeBag⟩, Merkle by TARGET essence
+      (so rename is free), excludes name/path/prose/timestamps. Tarjan SCC for
+      cycles; stable-id fold for generic-contract aliasing. .purpose contentId =
+      "essence:v0:" + sha256(canonical). STAGE 3a: a code-unit branch in localCNF
+      (detected by componentType==='code-unit') replaces the sorted edgeBag with
+      the CCNF body and SUBSTITUTES each positional f:N token INLINE with the
+      essence of codeLocalTargets[N]'s edge (via the SAME edgeEssence resolver, so
+      intra-SCC targets become @scc-internal and a cross-symbol rename frees the
+      chain); extern/builtin free:name tokens stay untouched; edgeBag is []. The
+      version tag is read off entry.data.essenceTag (default ESSENCE_VERSION) so a
+      code-unit contentId is "essence:v1:ts<exact>:"+sha256(canonical) and SCC
+      members carry the same tag — mixed v0/v1 graphs interoperate because Merkle
+      substitutes the target's full TAGGED string. essence-hash never imports the
+      lens; the tag travels on the node.
+    type: module
+    components:
+      - "#canonical-json"
+      - "#warp-object"
+
+  warp-object:
+    description: >-
+      A WarpObject — a SymbolEntry stripped of labels and reduced to ⟨kind,
+      contract, sorted outgoing edges, contentId⟩. liftEdges derives outgoing,
+      typed, deduped, sorted edges from the live SymbolIndex (the single edge
+      source the essence hash agrees on).
+    type: module
+
+  warp-state:
+    description: >-
+      A WarpState — the whole symbol graph of one ref lifted to MEANING. stateId =
+      sha256 over the sorted contentIds; treeSha/absorbedAt are provenance, not
+      identity. WarpObject.filePath is normalized REPO-RELATIVE to the absorb root
+      (temp-worktree or cwd, with macOS /private↔/var alias handling) so a
+      path-prefix difference never masquerades as a rename.
+    type: module
+    components:
+      - "#warp-object"
+      - "#essence-hash"
+
+  warp-store:
+    description: >-
+      Minimal content-addressed store (in-mem primary, .warpline/ disk debug cache)
+      and the .warpline/oracle.jsonl ledger appender. The ONLY thing Warpline writes to
+      disk is under .warpline/.
+    type: module
+
+  code-lens:
+    description: >-
+      The TS code-lens interface surface (spec §2 / warpline-code-lens.md). Types
+      ONLY (stage 1): CodeUnit — a SymbolEntry-shaped synthetic node keyed
+      #code:<rel-path>::<qualified-name>, carrying the identity-bearing
+      codeEssence (CCNF) body slot, resolved free-reference edges, and a visible
+      reducedFidelity marker — and the CodeLens registry contract (extensions +
+      lift()). Declares no behavior; pins the shape the lift machinery (ts-lens,
+      stage 2) is built against. componentType 'code-unit' lets code-units flow
+      through the EXISTING WARP (essence-hash/sem-delta/predict/oracle) as nodes
+      in the same universe, never a parallel graph.
+    type: module
+
+  code-essence:
+    description: >-
+      The pure-syntactic Code Canonical Normal Form (CCNF) producer — codeCNF(node)
+      -> canonical token string for one declaration. The SYNTACTIC HALF of the
+      lens: structure + WRITTEN annotations only, NO ts.Program/checker. Hardens
+      the AST-absorb spike: (1) scope-correct alpha-normalization honoring JS
+      hoisting (var/fn-decl -> nearest function scope; let/const/class -> block;
+      params/type-params -> unit scope; catch var -> catch scope) with bindings as
+      (depth, ordinal) coordinates and shadowing-correct use resolution, replacing
+      the spike's unsound flat first-declaration-order map; (2) separate b:/t:/L:
+      namespaces (the spike ignored type-params, so f<T> vs f<U> falsely DIFFERed);
+      (3) the false-EQUAL guard (§3.2) — async/generator*/static/readonly/abstract/
+      get-set/optional?/default-presence/rest.../definite!/optional-chain?./nullish??
+      each produce a DISTINCT cnf; (4) literal normalization (§3.3) — integers
+      (hex/oct/bin) -> exact decimal, bigint -> decimal+n, non-integer numerics ->
+      raw source lexeme NOT an IEEE-754 round-trip (0.1 != 1e-1 by design),
+      strings/templates NFC; (5) directive comments (@ts-ignore/@ts-expect-error/
+      @ts-nocheck/eslint-disable) hashed, free prose dropped. An optional
+      freeRefClassifier strips free names to positional f:{idx} edge tokens (default
+      emits free:{name}, keeping stage 1 self-contained and spike-equivalent).
+      Stage 2 adds codeCNFDetailed(node,opts) -> {cnf, freeRefs[]}: the SAME
+      first-appearance ordering drives both the body's f:{idx} tokens and the
+      freeRefs index, so freeRefs[idx] (name + a representative ts.Identifier node)
+      aligns 1:1 with the f:idx token. codeCNF now delegates to it and returns .cnf
+      (the stage-1 signature is unchanged). This positional alignment is the input
+      the lens hands the checker for §4 resolution; call order is meaning, so a
+      sorted edge-set would be wrong.
+    type: module
+
+  code-symbol:
+    description: >-
+      Pure string builders for a code-unit's WARP key and structural stable key
+      (spec §2). codeSymbol(relPath, qualifiedName) -> "#code:"+relPath+"::"+
+      qualifiedName (the SymbolIndex key); codeStableKey(relPath, structuralPath)
+      -> relPath+"::"+structuralPath where structuralPath is the (scopeKind#ordinal)
+      chain (e.g. class#0/method#2). Both are LABELS — provenance + rename
+      tiebreakers — NEVER hashed; pure functions of their inputs (no I/O), so
+      trivially deterministic across machines.
+    type: module
+
+  ts-lens:
+    description: >-
+      The TS/TSX code-lens (stage 2, spec §4/§5) — the checker-dependent half.
+      TsLens.lift(rootDir) enumerates .ts/.tsx files (sorted, .d.ts excluded),
+      builds ONE ts.Program over them against a FIXED, HARDCODED compiler-options
+      baseline (ESNext target/module, Bundler resolution, strict, skipLibCheck,
+      noEmit, allowJs:false — NEVER a discovered tsconfig, §5.2), and lifts each
+      code-unit (FunctionDeclaration, arrow/fn-expr const, class + its method/ctor/
+      getter/setter/field members; default-export -> qualifiedName 'default';
+      overload sets -> the implementation signature, bodiless overloads skipped).
+      Per unit it computes codeEssence via codeCNFDetailed and resolves each free
+      VALUE ref to one of four §4 classes, ALIGNED to the body's f:idx slots: (a)
+      module-local lifted code-unit -> 'local' edge (edgeKind calls/reads) carrying
+      the target #code: symbol (body emits f:idx); (b) imported name -> 'extern' id
+      extern:<specifier-as-written>#<exportName> derived from the SYNTACTIC import
+      statement, NOT checker module resolution (§5.3 — deterministic with no
+      node_modules); (c) builtin/global -> 'builtin' name; (d) unresolved -> set
+      reducedFidelity. Checker is used for identity resolution ONLY (getSymbolAtLocation
+      + getAliasedSymbol), never inferred types (§5.1). lift() returns CodeUnit[]
+      sorted by symbol (determinism). Exports TS_LENS_VERSION (the exact pinned ts
+      version) for stage 3 to stamp into the essence tag.
+    type: module
+    components:
+      - "#code-essence"
+      - "#code-symbol"
+      - "#code-lens"
+
+  lens-registry:
+    description: >-
+      The code-lens registry (spec §9). lensFor(ext) -> CodeLens | undefined maps a
+      file extension (incl. leading dot) to the responsible lens; v1 registers only
+      TsLens (.ts/.tsx). The single seam future per-language lenses plug into without
+      touching the lift/absorb path.
+    type: module
+    components:
+      - "#code-lens"
+      - "#ts-lens"
+
+  lift-code-units:
+    description: >-
+      The absorb-side bridge (stage 3a, spec §9 sub-phase 2 / §4.1).
+      liftCodeUnits(rootDir) runs every REGISTERED lens over a read-only worktree
+      root and collects the union of CodeUnits (re-sorted by symbol for
+      deterministic injection order). injectCodeUnits(index, units) turns each
+      CodeUnit into a synthetic SymbolEntry (kind 'component' + componentType
+      'code-unit'; DETERMINISTIC id = sha256('code:'+symbol), NOT a uuid; source
+      'premise'; references = the distinct LOCAL targets in first-appearance order
+      so liftEdges yields code->localTarget edges into buildEssenceGraph.adj and
+      Tarjan detects code cycles) and splices it into the live SymbolIndex
+      (entries + byType + bySource) BEFORE computeEssences runs — same universe,
+      never a parallel graph. The identity-bearing payload travels on entry.data:
+      codeEssence (body with positional f:idx slots), codeLocalTargets (the
+      ordered distinct local target symbols the f:N slots substitute against), and
+      essenceTag = "v1:ts"+TS_LENS_VERSION (the compiler-pinned version namespace
+      §5.2, so essence-hash never imports the lens — the tag travels with the node).
+    type: module
+    components:
+      - "#code-lens"
+      - "#lens-registry"
+      - "#ts-lens"
+
+  absorb:
+    description: >-
+      absorb(gitRef) -> WarpState. Spins a detached temp worktree, loadLiveGraph
+      on it, lifts every symbol, builds the WarpState, removes the worktree in a
+      finally. The literal WORKTREE ref absorbs the live cwd uncommitted state.
+      STAGE 3a: after loadLiveGraph and before buildWarpState (both the ref and
+      WORKTREE paths), liftCodeUnits + injectCodeUnits splice TS/TSX code-units
+      into the index as synthetic nodes so code essences flow through the same
+      WARP. The lens only READS the worktree/cwd — the read-only invariant holds.
+      DETERMINISM INVARIANT: absorbing the same ref twice is byte-identical
+      (stateId + every per-symbol contentId + repo-relative filePath), so
+      diff(absorb(HEAD), absorb(HEAD)) is provably ZERO. Rests on (a) the absorb
+      root being passed to buildWarpState for repo-relative filePaths, (b)
+      deterministic .purpose/portal file-discovery order in premise-core's
+      aggregator, and (c) the lens's sorted file enumeration + deterministic
+      synthetic ids (duplicate-symbol resolution + Merkle essences are stable
+      across parses regardless of filesystem order or temp-dir prefix).
+    type: module
+    components:
+      - "#git-exec"
+      - "#warp-state"
+      - "#lift-code-units"
+
+  sem-delta:
+    description: >-
+      The SemDelta and diff(base, branch), keyed by stableKey (SymbolEntry.id, so
+      rename survives). contentId-equal short-circuits to no-delta; a pure
+      rename/move is the EMPTY delta. Classifies changed contract slots and edge
+      add/remove. A symbol-born delta carries an edgesAdded-only changeset (ALL of
+      the born object's outgoing edges) so a new symbol's outgoing edges feed the
+      dangle pass the same way a gained edge does (born-consumer → retired-target).
+      STAGE 3b: ContractChangeset gains a bodyChanged flag → a 'body' slot in
+      changedSlotsOf. classify sets bodyChanged when either side is a code-unit:
+      classify runs ONLY when contentIds already differ, and a code-unit's identity
+      IS its body (incl. inline-substituted local refs), so a differing code-unit
+      contentId means the body moved. 'body' is the body-INTERNAL analog of 'steps'
+      (a literal/operator change with no call change fires 'body' but not 'edges'; a
+      call add/remove still fires 'edges' via the existing path — both correct). This
+      closes the TD-806 "0 deltas on a .ts-only change" gap.
+    type: module
+
+  predict:
+    description: >-
+      predict(ΔA, ΔB) -> {autoClean, knots[], dangling[]}. The commute / knot /
+      dangle decision procedure. Dangle wins precedence so the score is a true
+      partition; same-key identical-essence is convergent (autoClean). STAGE 3b:
+      'body' joins the scalar-conflict-slot list (componentType|kind|steps|body) so
+      two branches that edit the SAME code-unit's body to DIFFERENT essences are a
+      KNOT with conflictingSlots ['body'] (git may auto-merge textually-distant
+      edits Warpline flags at function granularity); a call to a code-unit the other
+      branch retired surfaces as a DANGLE via the unchanged edge pass.
+    type: module
+    components:
+      - "#sem-delta"
+
+  justification:
+    description: >-
+      The v0 Justification — actor/intent from the branch tip's git log,
+      computedRipple via getReferencesTo over changed symbols, danglingRefs, and a
+      reserved signature field (unsigned:sha256 stub).
+    type: module
+    components:
+      - "#sem-delta"
+      - "#git-exec"
+
+  oracle:
+    description: >-
+      oracle(branchA, branchB) — merge-base → absorb base/A/B → diff → predict →
+      git merge-tree reality (read-only) → score the confusion matrix
+      (agreeClean/agreeConflict/divergeGitOnly/divergeMeaningOnly/score/verdict) →
+      append an OracleRecord to .warpline/oracle.jsonl. The two divergence cells are
+      the experimental result. Conflict paths map to symbols at .purpose-dir level.
+    type: module
+    components:
+      - "#absorb"
+      - "#sem-delta"
+      - "#predict"
+      - "#justification"
+      - "#warp-store"
+      - "#git-exec"
+
+  weave:
+    description: >-
+      The pre-merge MEANING forecast + the semantic-diff report — READ-ONLY and,
+      unlike #oracle, never writes .warpline/. forecast(A, B) reuses the Oracle
+      pipeline up through predict() (mergeBase → absorb base/A/B → diff → predict)
+      and surfaces it as pre-merge UX: a CLEAN-vs-DECISIONS verdict, autoClean
+      count, knots (symbol + contending sides), dangling (from→target, retiredBy).
+      An optional vsGit flag also runs the full Oracle (git merge-tree) read-only
+      for the meaning-vs-bytes divergence comparison. semanticDiff(refA, refB)
+      groups the SemDeltas (born / retired / contract-changed-with-slots /
+      renamed-noop) so the "rename/move is the EMPTY delta" property is visible on
+      real refs. The `weave` WRITE verb is RESERVED, not implemented in Phase 1.
+    type: module
+    components:
+      - "#absorb"
+      - "#sem-delta"
+      - "#predict"
+      - "#oracle"
+      - "#git-exec"
+
+  warpline-cli:
+    description: >-
+      The warpline command line (commander). `warpline oracle <a> <b> [--json]`,
+      `warpline absorb <ref> [--json]`, `warpline weave --preview <a> <b> [--vs-git]
+      [--json]` (the pre-merge forecast; the bare `weave` write verb is reserved
+      and refuses with a read-only notice), and `warpline diff [refA] [refB] [--json]`
+      (semantic diff; no args = WORKTREE vs HEAD, one arg = ref vs HEAD, two args
+      = refA vs refB). The only module allowed to write stdout; library code stays
+      quiet.
+    type: cli
+    components:
+      - "#oracle"
+      - "#absorb"
+      - "#weave"
+
+flows:
+  oracle-run:
+    description: >-
+      The end-to-end Oracle flow: merge-base, absorb base/A/B, diff each side,
+      synthesize justifications, predict the merge from meaning, run git's real
+      merge read-only, score the confusion matrix, append the OracleRecord.
+    steps:
+      - component: "#git-exec"
+        action: "Resolve merge-base(A, B)"
+      - component: "#absorb"
+        action: "Lift base, A, B to WarpStates (detached temp worktrees)"
+      - component: "#sem-delta"
+        action: "diff(base, A) and diff(base, B)"
+      - component: "#justification"
+        action: "Synthesize justA / justB from git log + ripple"
+      - component: "#predict"
+        action: "predict(ΔA, ΔB) → autoClean / knots / dangling"
+      - component: "#git-exec"
+        action: "git merge-tree --write-tree A B (read-only) for the real conflict set"
+      - component: "#oracle"
+        action: "Score the confusion matrix and append the OracleRecord to .warpline/oracle.jsonl"
+
+  absorb-flow:
+    description: >-
+      One ref -> a WarpState of MEANING (stage 3a). Materialize a read-only
+      worktree, live-parse it, lift+inject TS/TSX code-units as synthetic nodes in
+      the SAME universe, then compute whole-state essences and stamp every object.
+      The lens only reads the worktree — the Phase-1 read-only invariant holds.
+    steps:
+      - component: "#git-exec"
+        action: "git worktree add --detach the ref into a temp dir (read-only)"
+      - component: "#lift-code-units"
+        action: "liftCodeUnits(worktree) then injectCodeUnits(index, units) — synthetic code-unit nodes spliced in BEFORE essence computation"
+      - component: "#essence-hash"
+        action: "computeEssences over the merged .purpose+code universe (code-units take the v1:ts<exact> tag, .purpose stays v0)"
+      - component: "#warp-state"
+        action: "buildWarpState stamps each object's contentId and derives the stateId; remove the worktree in a finally"
+
+  weave-forecast:
+    description: >-
+      The pre-merge MEANING forecast (read-only, ephemeral — no ledger write).
+      Reuses the Oracle pipeline up through predict() only; git is consulted just
+      when --vs-git is requested.
+    steps:
+      - component: "#git-exec"
+        action: "Resolve merge-base(A, B)"
+      - component: "#absorb"
+        action: "Lift base, A, B to WarpStates (detached temp worktrees)"
+      - component: "#sem-delta"
+        action: "diff(base, A) and diff(base, B)"
+      - component: "#predict"
+        action: "predict(ΔA, ΔB) → autoClean / knots / dangling → CLEAN vs DECISIONS verdict"
+      - component: "#weave"
+        action: "Optionally (--vs-git) run the full #oracle read-only for the meaning-vs-bytes divergence"
+
+aspects:
+  ~read-only:
+    description: >-
+      THE PHASE-1 SAFETY INVARIANT — Warpline NEVER mutates the user's git
+      HEAD/index/worktree. Every git read happens through a detached, throwaway
+      worktree torn down in a finally; the ONLY disk Warpline writes is under
+      .warpline/ (the content-addressed store + the oracle.jsonl ledger). Lifting a
+      ref, or the WORKTREE pseudo-ref, only READS files — the code-lens included.
+    category: invariant
+    severity: critical
+    tags: [safety, read-only, git, phase-1]
+    applies-to:
+      - "#git-exec"
+      - "#absorb"
+      - "#lift-code-units"
+      - "#ts-lens"
+      - "#warp-store"
+      - "#oracle"
+      - "#weave"
+
+  ~determinism:
+    description: >-
+      THE THESIS — absorbing the same ref twice is byte-identical (stateId + every
+      per-symbol contentId + repo-relative filePath), so diff(absorb(HEAD),
+      absorb(HEAD)) is provably ZERO and two machines on the same source agree. No
+      timestamps/paths/positions/prose/embeddings enter the hashed byte stream;
+      every set is sorted+deduped; strict canonical JSON; sorted file enumeration;
+      deterministic synthetic code-unit ids; the TS compiler is exact-pinned and
+      stamped into the code essence tag (essence:v1:ts<exact>) so a different
+      compiler is a different content-address namespace, never a silent collision.
+    category: invariant
+    severity: critical
+    tags: [thesis, determinism, hashing, reproducibility]
+    applies-to:
+      - "#essence-hash"
+      - "#canonical-json"
+      - "#code-essence"
+      - "#ts-lens"
+      - "#warp-state"
+      - "#absorb"
+
+  ~meaning-coverage:
+    description: >-
+      THE TD-806 HONESTY METRIC — Warpline reports WHERE it has meaning versus
+      where it degrades to opaque bytes (the 3-tier fidelity model). A code-unit the
+      TS lens cannot soundly lift (unresolved refs, unsupported forms) is flagged
+      reducedFidelity — never silently empty; coverage is surfaced, not assumed.
+      Honest about its own blind spots so the meaning layer's thickness is legible.
+    category: rule
+    severity: medium
+    tags: [honesty, fidelity-tiers, td-806, coverage]
+    applies-to:
+      - "#lift-code-units"
+      - "#ts-lens"
+      - "#code-lens"

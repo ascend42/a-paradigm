@@ -188,5 +188,7 @@ $RECYCLE.BIN/
 # Generated read-through of that pack (private)
 /ai-literacy-review.md
 
-# Loom engine runtime output (content-addressed WARP cache + oracle log)
+# Warpline engine runtime output (content-addressed WARP cache + oracle log)
+.warpline/
+# (legacy Loom runtime dir, kept ignored for back-compat)
 .loom/

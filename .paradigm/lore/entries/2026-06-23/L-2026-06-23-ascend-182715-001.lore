@@ -1,0 +1,61 @@
+id: L-2026-06-23-ascend-182715-001
+type: milestone
+timestamp: '2026-06-23T18:27:15.333Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Loom — fork RESOLVED: A (AST code-meaning) de-risked by spike; loom-engine merged to main (experimental)'
+summary: 'Continued the Loom arc from checkpoint. A 4-lens team panel (Arky/architect, Loid/intelligence, Aegis/security, North/product) split 3–B/1–A on the next fork but converged on one crux — A''s feasibility. Founder chose to spike A first. The read-only AST-absorb soundness spike PASSED: 10/10 per-function essence properties hold (determinism, local-rename/format/comment/paren invariance + correct sensitivity to operator/literal/control-flow/type/arg-order), file-level reorder invariance holds, and the one frontier (cross-symbol rename) is closed by the SAME Merkle-by-target rule essence-hash already implements for .purpose edges + a TS-checker resolver. Verdict: A is BOUNDED ENGINEERING not open research → committed to A (TD-2026-06-23-688). loom-engine (+5) merged to main as experimental (all 33 loom tests pass post-merge, incl. the divergence proof); loom-presentation held on-branch; University course deferred. This supersedes restart anchor L-2026-06-23-ascend-180858-001.'
+symbols_touched:
+  - '#loom'
+  - '#absorb'
+  - '#essence-hash'
+  - '#loom-oracle'
+  - '#sem-delta'
+  - '#weave'
+decisions:
+  - id: TD-2026-06-23-688
+    decision: Next Loom push = A (AST code-meaning) as an additive TS code-lens; B deferred; loom-engine merged to main experimental
+    rationale: Spike refuted the determinism risk and confirmed A is bounded engineering reusing shipped machinery; A removes the .purpose-only asterisk and gives B's trust gate honest inputs
+verification:
+  status: pass
+  details:
+    loom_tests_on_main: 33/33 pass incl. divergence-proof
+    spike_properties: 10/10 + reorder-invariance
+    build: loom build success
+tags:
+  - loom
+  - ast-absorb
+  - the-prize
+  - fork-resolved
+  - state-of-arc
+  - restart-anchor
+  - spike
+body: |-
+  STATE OF THE ARC (new restart anchor):
+
+  WHERE THINGS ARE:
+  - main now CONTAINS the proven read-only Loom engine (packages/loom, @a-company/loom) as EXPERIMENTAL (merge commit e005f459; package only, NO CLI promotion; NOT pushed to origin). 33 tests pass on main incl. divergence-proof.
+  - branch loom-presentation (+3) still UNMERGED (vision page docs/loom/index.html) — held until its claims are verified not to overstate an unshipped write path (Aegis).
+  - branch loom-ast-spike (off main): the spike artifacts — .paradigm/research/loom-ast-absorb-spike.md (findings) + .paradigm/research/loom-ast-absorb-spike.ts (reproducible prototype: `npx tsx .paradigm/research/loom-ast-absorb-spike.ts`).
+
+  THE DECISION (TD-2026-06-23-688): next push = (A) AST-level code meaning, scoped as an ADDITIVE TS code-lens behind the existing essence/diff/predict/oracle contract. B (write path) deferred — unblocked, and every B-voter agreed A makes the meaning layer thick enough to give B's trust gate (scrutiny=fragility×(1−trust)) honest inputs. A does not block B; B does not block A.
+
+  WHAT A v1 NEEDS (from the spike's 'build shape'): TS-checker name resolution (createProgram + getSymbolAtLocation) to classify free refs (module-local→hash by essence; imported→stable external id; builtin); Merkle traversal over the code-symbol dep graph + Tarjan SCC (reuse essence-hash.ts's existing SCC); coverage beyond top-level fns (classes/methods, arrow consts, exports, closures) mapped under GAP-1 (TD-806) fidelity tiers; a per-language lens interface (TS first). Honest ceiling: syntactic-structural identity modulo names/format/independent-order — NOT semantic equivalence (Unison-consistent).
+
+  NEXT CONCRETE STEP (pending founder go): scope/spec the A v1 with the team (Arky leads the lens design; Cid owns the essence/diff contract A extends). Then build TS-lens → close the cross-symbol-rename frontier → prove loom diff is non-zero on a real .ts-only commit.
+
+  DISCIPLINE (unchanged): determinism IS the thesis (spike confirms the structural lift preserves it); read-only Phase-1 invariant; always run/verify; build with the team; track lore.
+linked_lore:
+  - L-2026-06-23-ascend-180858-001
+  - L-2026-06-23-ascend-182624-211
+linked_commits:
+  - e005f459
+  - 75b6e20a
+  - 9e29fb29
+confidence: 0.85
+git_context:
+  ref: 75b6e20aa70d90fa986f45a3fe411f21df94af2c
+  branch: loom-ast-spike
+  dirty: true
