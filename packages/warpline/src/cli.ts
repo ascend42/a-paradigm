@@ -226,6 +226,7 @@ function appendSlotDetail(lines: string[], cs: ContractChangeset): void {
   if (cs.componentTypeChanged) lines.push('      componentType: changed');
   if (cs.kindChanged) lines.push('      kind: changed (retype)');
   if (cs.stepsChanged) lines.push('      steps: changed');
+  if (cs.bodyChanged) lines.push('      body: changed');
   const edgeAdd = cs.edgesAdded.map((e) => `+${e.kind}→${e.targetSymbol}`);
   const edgeRem = cs.edgesRemoved.map((e) => `-${e.kind}→${e.targetSymbol}`);
   if (edgeAdd.length || edgeRem.length) {

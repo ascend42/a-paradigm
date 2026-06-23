@@ -213,7 +213,12 @@ function conflictingSlots(a: SemDelta, b: SemDelta): string[] {
   // (componentType/kind/steps) differs.
   const conflicting: string[] = [];
   for (const slot of shared) {
-    if (slot === 'componentType' || slot === 'kind' || slot === 'steps') {
+    // Scalar slots: a single value, so both sides reaching here (different
+    // essences, same slot) means they wrote DIFFERENT values → conflict. `body`
+    // is scalar (a code-unit's whole body essence) — two divergent body edits to
+    // the SAME code-unit are a KNOT even where git auto-merges textually-distant
+    // edits at function granularity.
+    if (slot === 'componentType' || slot === 'kind' || slot === 'steps' || slot === 'body') {
       conflicting.push(slot);
       continue;
     }

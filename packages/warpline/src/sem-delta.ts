@@ -42,6 +42,15 @@ export interface ContractChangeset {
   edgesAdded: Array<{ kind: string; targetSymbol: string }>;
   edgesRemoved: Array<{ kind: string; targetSymbol: string }>;
   stepsChanged: boolean;
+  /**
+   * A code-unit's BODY moved (incl. inline-substituted local refs). `classify`
+   * runs ONLY when contentIds already differ, and for a code-unit the identity
+   * IS its body, so a differing contentId on a code-unit means the body moved.
+   * This is the body-INTERNAL analog of `steps` (a literal/operator change with
+   * no CALL change fires `'body'` but not `'edges'`; a call add/remove fires
+   * `'edges'` via the existing path — both firing is correct).
+   */
+  bodyChanged: boolean;
 }
 
 export interface SemDelta {
@@ -185,6 +194,9 @@ function bornChangeset(h: WarpObject): ContractChangeset {
     edgesAdded: h.edges.map((e) => ({ kind: e.kind, targetSymbol: e.to })),
     edgesRemoved: [],
     stepsChanged: false,
+    // Born is handled via essence/edgesAdded (the dangle pass harvests edges),
+    // never via slots — keep consistent with the other false slots.
+    bodyChanged: false,
   };
 }
 
@@ -222,6 +234,11 @@ function classify(b: WarpObject, h: WarpObject): ContractChangeset {
     edgesAdded,
     edgesRemoved,
     stepsChanged: stepsBefore !== stepsAfter,
+    // `classify` runs only when contentIds already differ (see `diff`). For a
+    // code-unit the identity IS its body (incl. inline-substituted local refs),
+    // so a differing contentId on either side that is a code-unit means the
+    // body/inline-refs moved.
+    bodyChanged: b.componentType === 'code-unit' || h.componentType === 'code-unit',
   };
 }
 
@@ -236,5 +253,6 @@ export function changedSlotsOf(cs: ContractChangeset): string[] {
   if (cs.kindChanged) slots.push('kind');
   if (cs.edgesAdded.length || cs.edgesRemoved.length) slots.push('edges');
   if (cs.stepsChanged) slots.push('steps');
+  if (cs.bodyChanged) slots.push('body');
   return slots.sort();
 }

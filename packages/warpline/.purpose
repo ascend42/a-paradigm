@@ -216,13 +216,26 @@ components:
       add/remove. A symbol-born delta carries an edgesAdded-only changeset (ALL of
       the born object's outgoing edges) so a new symbol's outgoing edges feed the
       dangle pass the same way a gained edge does (born-consumer → retired-target).
+      STAGE 3b: ContractChangeset gains a bodyChanged flag → a 'body' slot in
+      changedSlotsOf. classify sets bodyChanged when either side is a code-unit:
+      classify runs ONLY when contentIds already differ, and a code-unit's identity
+      IS its body (incl. inline-substituted local refs), so a differing code-unit
+      contentId means the body moved. 'body' is the body-INTERNAL analog of 'steps'
+      (a literal/operator change with no call change fires 'body' but not 'edges'; a
+      call add/remove still fires 'edges' via the existing path — both correct). This
+      closes the TD-806 "0 deltas on a .ts-only change" gap.
     type: module
 
   predict:
     description: >-
       predict(ΔA, ΔB) -> {autoClean, knots[], dangling[]}. The commute / knot /
       dangle decision procedure. Dangle wins precedence so the score is a true
-      partition; same-key identical-essence is convergent (autoClean).
+      partition; same-key identical-essence is convergent (autoClean). STAGE 3b:
+      'body' joins the scalar-conflict-slot list (componentType|kind|steps|body) so
+      two branches that edit the SAME code-unit's body to DIFFERENT essences are a
+      KNOT with conflictingSlots ['body'] (git may auto-merge textually-distant
+      edits Warpline flags at function granularity); a call to a code-unit the other
+      branch retired surfaces as a DANGLE via the unchanged edge pass.
     type: module
     components:
       - "#sem-delta"

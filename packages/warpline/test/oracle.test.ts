@@ -57,6 +57,7 @@ describe('predict — the algebra (synthetic fixtures)', () => {
         edgesAdded: [],
         edgesRemoved: [],
         stepsChanged: false,
+        bodyChanged: false,
         ...cs,
       },
     };
