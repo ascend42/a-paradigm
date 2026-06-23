@@ -61,6 +61,41 @@ components:
       disk is under .loom/.
     type: module
 
+  code-lens:
+    description: >-
+      The TS code-lens interface surface (spec §2 / loom-code-lens.md). Types
+      ONLY (stage 1): CodeUnit — a SymbolEntry-shaped synthetic node keyed
+      #code:<rel-path>::<qualified-name>, carrying the identity-bearing
+      codeEssence (CCNF) body slot, resolved free-reference edges, and a visible
+      reducedFidelity marker — and the CodeLens registry contract (extensions +
+      lift()). Declares no behavior; pins the shape the lift machinery (ts-lens,
+      stage 2) is built against. componentType 'code-unit' lets code-units flow
+      through the EXISTING WARP (essence-hash/sem-delta/predict/oracle) as nodes
+      in the same universe, never a parallel graph.
+    type: module
+
+  code-essence:
+    description: >-
+      The pure-syntactic Code Canonical Normal Form (CCNF) producer — codeCNF(node)
+      -> canonical token string for one declaration. The SYNTACTIC HALF of the
+      lens: structure + WRITTEN annotations only, NO ts.Program/checker. Hardens
+      the AST-absorb spike: (1) scope-correct alpha-normalization honoring JS
+      hoisting (var/fn-decl -> nearest function scope; let/const/class -> block;
+      params/type-params -> unit scope; catch var -> catch scope) with bindings as
+      (depth, ordinal) coordinates and shadowing-correct use resolution, replacing
+      the spike's unsound flat first-declaration-order map; (2) separate b:/t:/L:
+      namespaces (the spike ignored type-params, so f<T> vs f<U> falsely DIFFERed);
+      (3) the false-EQUAL guard (§3.2) — async/generator*/static/readonly/abstract/
+      get-set/optional?/default-presence/rest.../definite!/optional-chain?./nullish??
+      each produce a DISTINCT cnf; (4) literal normalization (§3.3) — integers
+      (hex/oct/bin) -> exact decimal, bigint -> decimal+n, non-integer numerics ->
+      raw source lexeme NOT an IEEE-754 round-trip (0.1 != 1e-1 by design),
+      strings/templates NFC; (5) directive comments (@ts-ignore/@ts-expect-error/
+      @ts-nocheck/eslint-disable) hashed, free prose dropped. An optional
+      freeRefClassifier strips free names to positional f:{idx} edge tokens (default
+      emits free:{name}, keeping stage 1 self-contained and spike-equivalent).
+    type: module
+
   absorb:
     description: >-
       absorb(gitRef) -> WarpState. Spins a detached temp worktree, loadLiveGraph

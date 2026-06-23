@@ -1,0 +1,11 @@
+{
+  "timestamp": "2026-06-23T18:26:39.660Z",
+  "sessionId": "orch-mqqyrbhj-jviy",
+  "touchedFiles": [
+    "packages/loom (merged to main)",
+    ".paradigm/research/loom-ast-absorb-spike.md",
+    ".paradigm/research/loom-ast-absorb-spike.ts",
+    ".paradigm/decisions/TD-2026-06-23-688.yaml"
+  ],
+  "coverageScore": 1
+}
