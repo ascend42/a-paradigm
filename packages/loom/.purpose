@@ -123,15 +123,40 @@ components:
       - "#warp-store"
       - "#git-exec"
 
+  weave:
+    description: >-
+      The pre-merge MEANING forecast + the semantic-diff report — READ-ONLY and,
+      unlike #oracle, never writes .loom/. forecast(A, B) reuses the Oracle
+      pipeline up through predict() (mergeBase → absorb base/A/B → diff → predict)
+      and surfaces it as pre-merge UX: a CLEAN-vs-DECISIONS verdict, autoClean
+      count, knots (symbol + contending sides), dangling (from→target, retiredBy).
+      An optional vsGit flag also runs the full Oracle (git merge-tree) read-only
+      for the meaning-vs-bytes divergence comparison. semanticDiff(refA, refB)
+      groups the SemDeltas (born / retired / contract-changed-with-slots /
+      renamed-noop) so the "rename/move is the EMPTY delta" property is visible on
+      real refs. The `weave` WRITE verb is RESERVED, not implemented in Phase 1.
+    type: module
+    components:
+      - "#absorb"
+      - "#sem-delta"
+      - "#predict"
+      - "#oracle"
+      - "#git-exec"
+
   loom-cli:
     description: >-
-      The loom command line (commander). `loom oracle <a> <b> [--json]` and
-      `loom absorb <ref> [--json]`. The only module allowed to write stdout;
-      library code stays quiet.
+      The loom command line (commander). `loom oracle <a> <b> [--json]`,
+      `loom absorb <ref> [--json]`, `loom weave --preview <a> <b> [--vs-git]
+      [--json]` (the pre-merge forecast; the bare `weave` write verb is reserved
+      and refuses with a read-only notice), and `loom diff [refA] [refB] [--json]`
+      (semantic diff; no args = WORKTREE vs HEAD, one arg = ref vs HEAD, two args
+      = refA vs refB). The only module allowed to write stdout; library code stays
+      quiet.
     type: cli
     components:
       - "#oracle"
       - "#absorb"
+      - "#weave"
 
 flows:
   oracle-run:
@@ -154,3 +179,20 @@ flows:
         action: "git merge-tree --write-tree A B (read-only) for the real conflict set"
       - component: "#oracle"
         action: "Score the confusion matrix and append the OracleRecord to .loom/oracle.jsonl"
+
+  weave-forecast:
+    description: >-
+      The pre-merge MEANING forecast (read-only, ephemeral — no ledger write).
+      Reuses the Oracle pipeline up through predict() only; git is consulted just
+      when --vs-git is requested.
+    steps:
+      - component: "#git-exec"
+        action: "Resolve merge-base(A, B)"
+      - component: "#absorb"
+        action: "Lift base, A, B to WarpStates (detached temp worktrees)"
+      - component: "#sem-delta"
+        action: "diff(base, A) and diff(base, B)"
+      - component: "#predict"
+        action: "predict(ΔA, ΔB) → autoClean / knots / dangling → CLEAN vs DECISIONS verdict"
+      - component: "#weave"
+        action: "Optionally (--vs-git) run the full #oracle read-only for the meaning-vs-bytes divergence"

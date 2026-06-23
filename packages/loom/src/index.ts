@@ -51,6 +51,15 @@ export { justify, type Justification, type JustifyOptions } from './justificatio
 // Oracle
 export { oracle, type OracleRecord, type OracleOptions } from './oracle.js';
 
+// Weave — the pre-merge MEANING forecast + the semantic-diff report (read-only)
+export {
+  forecast,
+  semanticDiff,
+  type Forecast,
+  type ForecastOptions,
+  type SemDiffReport,
+} from './weave.js';
+
 // git-exec (read-only primitives)
 export {
   mergeBase,
