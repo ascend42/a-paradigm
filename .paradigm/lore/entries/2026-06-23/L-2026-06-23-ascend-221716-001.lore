@@ -1,0 +1,53 @@
+id: L-2026-06-23-ascend-221716-001
+type: milestone
+timestamp: '2026-06-23T22:17:16.420Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Warpline A v1 code-lens FUNCTIONALLY COMPLETE — versions real TS code as meaning (+ Loom→Warpline rename)
+summary: 'The v1 prize is delivered: Warpline (renamed from Loom this session, TD-2026-06-23-285) now lifts real TypeScript CODE into the WARP as meaning, not just .purpose symbols — closing the TD-806 "0 deltas on a .ts-only change" gap. Built in 3 verified stages on branch warpline-ast-spike: (1) ts-essence (pure-syntactic Code Canonical Normal Form — scope-correct alpha-normalization, false-EQUAL modifier guard, type-param namespace, literal normalization); (2) ts-lens (one ts.Program over a FIXED compiler baseline, checker for identity-resolution-ONLY, free refs classified local/extern/builtin/unresolved, extern ids from syntactic import specifiers — node_modules-free; TS exact-pinned 5.9.3); (3a) essence-hash code-unit branch (body with f:idx substituted INLINE via the shared edgeEssence resolver → SCC + Merkle-by-target free; per-node version tag essence:v1:ts5.9.3:) + injectCodeUnits + absorb wired read-only; (3b) sem-delta bodyChanged/''body'' slot + predict ''body'' scalar-conflict-slot. The whole pipeline (lift→essence→diff→predict) sees code. Determinism — the thesis — holds: byte-identical stateId across two real-code absorbs (151 code-units from this package); Jinx''s checker-determinism kill-shot refuted for the pinned-compiler model. Falsifiable gates all green (frontier EQUAL = cross-symbol rename closes; call-order DIFFER = the §4.1 inline-positional payoff; code-level KNOT + DANGLE; local-rename = zero-delta). Suite 92/92. REMAINING CAPSTONE: the code-level oracle divergeMeaningOnly fixture (git-clean-but-Warpline-catches-it on CODE — the definitive demo). Branches/page still named loom (loom-presentation) — retheme later. Pending: trademark sweep on Warpline.'
+symbols_touched:
+  - '#warpline'
+  - '#code-lens'
+  - '#ts-lens'
+  - '#code-essence'
+  - '#essence-hash'
+  - '#absorb'
+  - '#sem-delta'
+  - '#predict'
+  - '#lift-code-units'
+verification:
+  status: pass
+  details:
+    suite: 92/92 green
+    real_code_absorb: 151 code-units, v1 tags
+    determinism: byte-identical stateId x2 on real code
+    gates: frontier EQUAL, call-order DIFFER, SCC, KNOT, DANGLE, zero-delta-rename
+tags:
+  - warpline
+  - code-lens
+  - ast-absorb
+  - the-prize
+  - a-v1
+  - milestone
+  - determinism
+body: |-
+  DESIGN CRUX (worth remembering): the spec's original "code-unit body is just another contract slot, ~6 lines" was UNSOUND — it loses call order (helper();other(); would false-EQUAL other();helper();). The fix (spec §4.1): the body carries positional f:idx tokens; stage 3 substitutes f:idx → essence(references.filter(kind==='local')[idx]) INLINE at the body slot, reusing the SAME edgeEssence resolver computeEssences already passes (so intra-SCC → @scc-internal and Merkle-by-target rename-closure come for free). This is the load-bearing subtlety; the call-order-DIFFER test is its falsifiable guard. Found by reasoning through the design before building, not after.
+
+  PROCESS: each stage built by a TS-capable builder against a precise spec, then independently verified by re-running + reading the load-bearing code + adversarial CLI checks (the real `warpline absorb` on this repo: 151 code-units, v1 tags, byte-identical stateId twice). "A green build is not proof" held — the verification was real, not assumed.
+
+  COMMITS this arc-session: e005f459 (merge engine→main experimental) · 75b6e20a (spike) · a3667841 (spec) · 30758261 (stage 1) · abbda54f (Loom→Warpline rename) · 0b1be782 (stage 2) · eebf1a6a (stage 3a) · df6a87e8 (stage 3b). All on warpline-ast-spike (off main); main has only the read-only Phase-1 engine (experimental). NOT pushed.
+linked_tasks:
+  - T-2026-06-23-007
+linked_commits:
+  - df6a87e8
+  - eebf1a6a
+  - 0b1be782
+  - '30758261'
+  - abbda54f
+confidence: 0.85
+git_context:
+  ref: df6a87e84f6c0b5bb7c82bbe6b40c1ee99f5d915
+  branch: warpline-ast-spike
+  dirty: true
