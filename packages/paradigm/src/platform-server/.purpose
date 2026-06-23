@@ -37,6 +37,7 @@ flows:
       - Mount agent command route (/api/platform/agent-command)
       - Serve platform-ui static files
       - SPA fallback for client-side routing
+      - Mount warpline routes (/api/warpline/*) if warpline section enabled (read-only Oracle)
       - Mount sentinel bridge (/api/sentinel/*) if sentinel section enabled
       - Mount symphony routes (/api/symphony/*) if symphony section enabled
   $agent-command:

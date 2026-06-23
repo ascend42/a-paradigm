@@ -78,7 +78,7 @@ function isPackageAvailable(packageName: string): boolean {
  */
 function resolveSections(options: PlatformServerOptions): Set<string> {
   const always = ['overview', 'tasks', 'lore', 'graph', 'git', 'ambient', 'team'];
-  const requested = options.sections ?? [...always, 'sentinel', 'university', 'symphony', 'docs'];
+  const requested = options.sections ?? [...always, 'sentinel', 'university', 'symphony', 'docs', 'warpline'];
 
   const enabled = new Set<string>();
   for (const section of requested) {
@@ -87,7 +87,15 @@ function resolveSections(options: PlatformServerOptions): Set<string> {
       continue;
     }
     // Auto-detect optional sections
-    if (section === 'sentinel') {
+    if (section === 'warpline') {
+      // The Warpline engine ships as a hard workspace dependency of the CLI and
+      // is bundled into the dist (the router imports it in-process), so it is
+      // always present — always-enable, like `university`. If the engine import
+      // ever fails at mount time, the router mount in startPlatformServer is
+      // try/caught and the section simply won't respond. Read-only Oracle/
+      // forecast/diff over HTTP.
+      enabled.add(section);
+    } else if (section === 'sentinel') {
       // Check if sentinel server routes exist (bundled in same dist)
       const sentinelRoutesPath = path.join(options.projectDir, '.paradigm');
       if (fs.existsSync(sentinelRoutesPath)) {
@@ -269,6 +277,19 @@ export async function startPlatformServer(options: PlatformServerOptions): Promi
       }
     }, SYNC_POLL_MS);
     timer.unref?.();
+  }
+
+  // Mount Warpline routes if section is enabled (read-only Oracle/forecast/diff
+  // over HTTP — no reachable write path; passes wsContext for the ledger watch
+  // → !oracle-record-appended broadcast).
+  if (sections.has('warpline')) {
+    try {
+      const { createWarplineRouter } = await import('./routes/warpline.js');
+      app.use('/api/warpline', createWarplineRouter(options.projectDir, wsContext));
+      log.component('platform-server').success('Warpline routes mounted');
+    } catch (err) {
+      log.component('platform-server').warn('Warpline routes failed to mount');
+    }
   }
 
   // Mount Sentinel routes if section is enabled

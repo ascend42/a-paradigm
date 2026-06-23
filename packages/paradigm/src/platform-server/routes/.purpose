@@ -30,3 +30,8 @@ components:
     description: /api/tasks/* WRITE verbs — POST /:id/{claim,start,done,block,unblock} each PROXY the enforced updateTask state machine (no bypass), plus POST /sync (inbound two-way GitHub reconcile through the same writers). Verbs fire a best-effort outbound GitHub projection; a done settle broadcasts a live agent:annotate. portal.yaml ^write-capable.
     type: router
     tags: [feature, tasks, task-sync, enforcement]
+  WarplineRouter:
+    description: /api/warpline/* — READ-ONLY HTTP over the @a-company/warpline engine (the Convergence/Divergence Oracle), imported in-process (never shells the CLI). GET /ledger (reads .warpline/oracle.jsonl, version-guarded on schemaVersion, newest-first), GET /refs (local branches + HEAD), POST /forecast (ephemeral meaning forecast, no ledger write), POST /oracle (full Oracle, appends ledger), POST /diff (semantic diff), GET /absorb/:ref (serialized WarpState). An in-process concurrency semaphore (cap 2) guards every absorb-spawning handler; a per-ref WarpState cache reuses deterministic absorbs. fs.watch the ledger → !oracle-record-appended over the WS bus. NO reachable write/weave path — read-only is structural.
+    type: router
+    tags: [feature, warpline, oracle, read-only]
+    signals: ["!oracle-record-appended"]
