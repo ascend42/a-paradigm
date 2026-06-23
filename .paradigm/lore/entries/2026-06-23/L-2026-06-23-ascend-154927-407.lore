@@ -1,0 +1,12 @@
+id: L-2026-06-23-ascend-154927-407
+type: insight
+timestamp: '2026-06-23T15:49:27.684Z'
+author: ascend
+title: Decision TD-2026-06-23-181 recorded
+summary: Companion lore entry for decision record TD-2026-06-23-181. See .paradigm/decisions/TD-2026-06-23-181.yaml.
+symbols_touched: []
+references:
+  decision_id: TD-2026-06-23-181
+tags:
+  - companion-lore
+  - decision-reference
