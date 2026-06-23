@@ -74,7 +74,7 @@ export function buildWarpState(index: SymbolIndex, opts: BuildWarpStateOptions):
 
 /**
  * Reduce a filePath to be relative to rootDir (so temp-worktree prefixes don't
- * masquerade as moves). Falls back to stripping a `loom-wt-XXXX/tree/` segment
+ * masquerade as moves). Falls back to stripping a `warpline-wt-XXXX/tree/` segment
  * for absorbs whose rootDir wasn't supplied.
  */
 function relativizePath(filePath: string, rootDir?: string): string {
@@ -90,7 +90,7 @@ function relativizePath(filePath: string, rootDir?: string): string {
       if (p.startsWith(candidate + '/')) return p.slice(candidate.length + 1);
     }
   }
-  const m = p.match(/loom-wt-[^/]+\/tree\/(.*)$/);
+  const m = p.match(/warpline-wt-[^/]+\/tree\/(.*)$/);
   if (m) return m[1];
   return p;
 }

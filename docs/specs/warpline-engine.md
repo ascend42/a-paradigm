@@ -1,11 +1,11 @@
-# Loom Engine — Phase 1: the Convergence/Divergence Oracle (build spec)
+# Warpline Engine — Phase 1: the Convergence/Divergence Oracle (build spec)
 
-> Decision: TD-2026-06-23-398 (Loom is a git replacement; WARP is truth) · roadmap Phase 1 = VALIDATE.
+> Decision: TD-2026-06-23-398 (Warpline is a git replacement; WARP is truth) · roadmap Phase 1 = VALIDATE.
 > Architecture: Arky (engine/Oracle) + Cid (essence hash + delta algebra). Kickoff lore L-2026-06-23-ascend-145542-001.
-> Status: spec locked, building. Branch `loom-engine`. Package `packages/loom` (`@a-company/loom`).
+> Status: spec locked, building. Branch `loom-engine`. Package `packages/warpline` (`@a-company/warpline`).
 
 ## Goal
-A **read-only** tool that, given two real git branches, lifts each to a content-addressed store of MEANING (the symbol graph), predicts the merge from meaning (clean / knot / dangling), runs git's *actual* merge read-only, and **scores where meaning and bytes agreed or diverged** — appending a row to `.loom/oracle.jsonl`. Zero data-loss risk (never touches HEAD/index/worktree). Runs on THIS repo immediately. If a single real branch-pair yields a `git-clean-but-meaning-knot` or `git-conflict-but-meaning-clean`, the core thesis ("meaning carries merge-information bytes can't") is proven with data.
+A **read-only** tool that, given two real git branches, lifts each to a content-addressed store of MEANING (the symbol graph), predicts the merge from meaning (clean / knot / dangling), runs git's *actual* merge read-only, and **scores where meaning and bytes agreed or diverged** — appending a row to `.warpline/oracle.jsonl`. Zero data-loss risk (never touches HEAD/index/worktree). Runs on THIS repo immediately. If a single real branch-pair yields a `git-clean-but-meaning-knot` or `git-conflict-but-meaning-clean`, the core thesis ("meaning carries merge-information bytes can't") is proven with data.
 
 WARP v0 granularity = the Paradigm symbol graph (reuse premise-core extraction). No sub-symbol/AST fidelity in Phase 1.
 
@@ -22,7 +22,7 @@ WarpObject { symbol, kind, contract, componentType?, parentSymbol?, tags[](sorte
 WarpEdge   { to, kind: 'uses'|'used-by'|'in-flow'|'gated-by' }   // reuse SliceEdgeKind / edgeKindForTarget
 WarpState  { ref, treeSha, objects: Map<symbol,WarpObject>, stateId, absorbedAt }
 ```
-`stateId` = hash of sorted `contentId`s. `treeSha`/`absorbedAt` are provenance, not identity. Drop `filePath`/`position`/line/array-order on lift — that dropping IS the thesis. Store: content-addressed JSON under `.loom/warp/objects/<contentId>.json` + `.loom/states/<stateId>.json` (in-mem primary; disk is a debug cache). No GC/packing/refs in v0.
+`stateId` = hash of sorted `contentId`s. `treeSha`/`absorbedAt` are provenance, not identity. Drop `filePath`/`position`/line/array-order on lift — that dropping IS the thesis. Store: content-addressed JSON under `.warpline/warp/objects/<contentId>.json` + `.warpline/states/<stateId>.json` (in-mem primary; disk is a debug cache). No GC/packing/refs in v0.
 
 ## The essence hash — `essence(symbol) -> contentId` (Cid; the load-bearing wall)
 **Rule: the hash moves IFF the meaning moves.** Rename/move → same contentId; change contract/edges → new contentId.
@@ -58,24 +58,24 @@ Keyed by `stableKey` = `SymbolEntry.id` (survives rename), payloads carry essenc
 `{schemaVersion:1, actor (git author of branch tip), intent (tip commit subject), base:{ref,stateId}, branch:{ref,stateId}, semanticDelta: SemDelta[], computedRipple:{touchedSymbols, blastRadius (union getReferencesTo over changed), danglingRefs}, signature: "unsigned:"+sha256(canonical)}`. Real signing deferred; schema reserves the field.
 
 ## The Oracle — `oracle(branchA, branchB)`
-1. `mergeBase = git merge-base A B`. 2. ABSORB base, A, B. 3. `ΔA=diff(base,A)`, `ΔB=diff(base,B)`; synthesize justA/justB. 4. `predict(ΔA,ΔB)` → {autoClean, knots, dangling}. 5. GIT REALITY read-only: `git merge-tree --write-tree A B` → conflicted paths (fallback: throwaway worktree + `git merge --no-commit --no-ff` for git <2.38); map conflict paths → symbols via dir of the `.purpose`. 6. SCORE the confusion matrix per touched symbol: `meaningKnot∧gitConflict`→agreeConflict; `clean∧clean`→agreeClean; `meaningClean∧gitConflict`→**divergeGitOnly** ★ (text noise); `meaningKnot∧gitClean`→**divergeMeaningOnly** ★ (THE headline — git merged bytes but meaning is contradictory). 7. append `OracleRecord` to `.loom/oracle.jsonl`; print summary.
+1. `mergeBase = git merge-base A B`. 2. ABSORB base, A, B. 3. `ΔA=diff(base,A)`, `ΔB=diff(base,B)`; synthesize justA/justB. 4. `predict(ΔA,ΔB)` → {autoClean, knots, dangling}. 5. GIT REALITY read-only: `git merge-tree --write-tree A B` → conflicted paths (fallback: throwaway worktree + `git merge --no-commit --no-ff` for git <2.38); map conflict paths → symbols via dir of the `.purpose`. 6. SCORE the confusion matrix per touched symbol: `meaningKnot∧gitConflict`→agreeConflict; `clean∧clean`→agreeClean; `meaningClean∧gitConflict`→**divergeGitOnly** ★ (text noise); `meaningKnot∧gitClean`→**divergeMeaningOnly** ★ (THE headline — git merged bytes but meaning is contradictory). 7. append `OracleRecord` to `.warpline/oracle.jsonl`; print summary.
 
 `OracleRecord { schemaVersion, ts, repo, branchA, branchB, mergeBase, stateIds:{base,A,B}, prediction:{autoClean[],knots[],dangling[]}, gitReality:{conflicted, conflictSymbols[], conflictPaths[]}, convergence:{agreeClean[], agreeConflict[], divergeGitOnly[], divergeMeaningOnly[], score (|agree|/|agree∪diverge|), verdict: CONVERGENT|DIVERGENT}, justifications:{A,B} }`. The two ★ cells are first-class fields — they are the experimental result.
 
 ## CLI (v0)
-`loom oracle <branchA> <branchB> [--json]` (summary + jsonl row). `loom absorb <ref> [--json]` (dump a WarpState — proves ABSORB alone). commander-based, thin output, no blockquotes.
+`warpline oracle <branchA> <branchB> [--json]` (summary + jsonl row). `warpline absorb <ref> [--json]` (dump a WarpState — proves ABSORB alone). commander-based, thin output, no blockquotes.
 
 ## Package layout (mirror premise-core)
-`packages/loom/{package.json (name @a-company/loom, dep @a-company/premise-core:"*", bin loom→dist/cli.js), tsup.config.ts, tsconfig.json (extends ../../tsconfig.base.json), vitest.config.ts, src/{index.ts, warp/{warp-object,warp-state,store,essence-hash}.ts, git/git-exec.ts, absorb.ts, sem-delta.ts, predict.ts, justification.ts, oracle.ts, cli.ts}, test/{absorb,oracle,essence}.test.ts}}`. Add to root workspaces.
+`packages/warpline/{package.json (name @a-company/warpline, dep @a-company/premise-core:"*", bin warpline→dist/cli.js), tsup.config.ts, tsconfig.json (extends ../../tsconfig.base.json), vitest.config.ts, src/{index.ts, warp/{warp-object,warp-state,store,essence-hash}.ts, git/git-exec.ts, absorb.ts, sem-delta.ts, predict.ts, justification.ts, oracle.ts, cli.ts}, test/{absorb,oracle,essence}.test.ts}}`. Add to root workspaces.
 
 ## MVP build order
 1. `git-exec.ts` (merge-base, rev-parse, worktree add/remove, merge-tree + fallback).
 2. `essence-hash.ts` (sha256 over canonical-sorted serialization, version-tagged; SCC + aliasing handling) + `warp-object.ts`/`warp-state.ts`.
-3. `absorb.ts` (loadLiveGraph on a temp worktree) → first runnable: `loom absorb main`.
+3. `absorb.ts` (loadLiveGraph on a temp worktree) → first runnable: `warpline absorb main`.
 4. `sem-delta.ts` (`diff`).
 5. `predict.ts` (commute/knot/dangle algebra).
 6. `justification.ts`, `oracle.ts`, `cli.ts`.
-7. RUN `loom oracle main loom-engine` on THIS repo → verdict + jsonl row.
+7. RUN `warpline oracle main loom-engine` on THIS repo → verdict + jsonl row.
 
 Tests: `essence` (rename→identical contentId; contract change→different; determinism across two runs byte-identical), `absorb` (two refs; identical meaning→identical stateId; zero-delta on identical), `oracle` (runs on two real branches, produces a verdict; ideally construct a fixture that yields a `divergeMeaningOnly`).
 

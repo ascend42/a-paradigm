@@ -1,9 +1,9 @@
 /**
  * #warp-store — minimal content-addressed store for WARP objects + states.
  *
- * In-memory map is the primary store; disk under `.loom/` is a debug cache. No
- * GC / packing / refs in v0. The ONLY thing Loom ever writes to disk is under
- * `.loom/` — never the user's tracked files, HEAD, index, or worktree.
+ * In-memory map is the primary store; disk under `.warpline/` is a debug cache. No
+ * GC / packing / refs in v0. The ONLY thing Warpline ever writes to disk is under
+ * `.warpline/` — never the user's tracked files, HEAD, index, or worktree.
  *
  * Library code: no console output.
  */
@@ -16,11 +16,11 @@ import type { WarpState } from './warp-state.js';
 export class WarpStore {
   private objects = new Map<string, WarpObject>();
   private states = new Map<string, WarpState>();
-  private readonly loomDir: string;
+  private readonly warplineDir: string;
   private readonly diskCache: boolean;
 
   constructor(rootDir: string, opts: { diskCache?: boolean } = {}) {
-    this.loomDir = path.join(rootDir, '.loom');
+    this.warplineDir = path.join(rootDir, '.warpline');
     this.diskCache = opts.diskCache ?? true;
   }
 
@@ -50,16 +50,16 @@ export class WarpStore {
     return this.states.get(stateId);
   }
 
-  /** Append a JSONL row to `.loom/<file>` (the oracle ledger). */
+  /** Append a JSONL row to `.warpline/<file>` (the oracle ledger). */
   appendJsonl(file: string, row: unknown): void {
-    const full = path.join(this.loomDir, file);
+    const full = path.join(this.warplineDir, file);
     fs.mkdirSync(path.dirname(full), { recursive: true });
     fs.appendFileSync(full, JSON.stringify(row) + '\n', 'utf8');
   }
 
   private writeJson(rel: string, value: unknown): void {
     try {
-      const full = path.join(this.loomDir, rel);
+      const full = path.join(this.warplineDir, rel);
       fs.mkdirSync(path.dirname(full), { recursive: true });
       fs.writeFileSync(full, JSON.stringify(value), 'utf8');
     } catch {

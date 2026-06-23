@@ -14,7 +14,7 @@
  *        clean  ∧ gitClean    → agreeClean
  *        clean  ∧ gitConflict → divergeGitOnly      ★ (text noise)
  *        knot   ∧ gitClean    → divergeMeaningOnly   ★ (THE headline)
- *   7. append OracleRecord to .loom/oracle.jsonl; return it.
+ *   7. append OracleRecord to .warpline/oracle.jsonl; return it.
  *
  * READ-ONLY forever in Phase 1. The two ★ cells are the experimental result.
  *
@@ -68,7 +68,7 @@ export interface OracleRecord {
 }
 
 export interface OracleOptions extends GitOptions {
-  /** suppress the .loom/oracle.jsonl append (tests) */
+  /** suppress the .warpline/oracle.jsonl append (tests) */
   noWrite?: boolean;
 }
 
@@ -216,8 +216,8 @@ function symbolsInDirs(states: WarpState[], conflictDirs: Set<string>, repo: str
  */
 function relDir(filePath: string, repo: string): string {
   let p = filePath.replace(/\\/g, '/');
-  // strip a leading worktree tmp prefix: .../loom-wt-XXXX/tree/<rel>
-  const m = p.match(/loom-wt-[^/]+\/tree\/(.*)$/);
+  // strip a leading worktree tmp prefix: .../warpline-wt-XXXX/tree/<rel>
+  const m = p.match(/warpline-wt-[^/]+\/tree\/(.*)$/);
   if (m) {
     p = m[1];
   } else if (repo && p.startsWith(repo + '/')) {

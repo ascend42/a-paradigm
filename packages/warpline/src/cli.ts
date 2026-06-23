@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 /**
- * #loom-cli — the Loom command line. Thin output; no blockquotes.
+ * #warpline-cli — the Warpline command line. Thin output; no blockquotes.
  *
- *   loom oracle <branchA> <branchB> [--json]   run the Convergence/Divergence Oracle
- *   loom absorb <ref> [--json]                 lift a ref to a WarpState and dump it
- *   loom weave --preview <A> <B> [--json]      THE PRE-MERGE FORECAST (meaning)
- *   loom diff [refA] [refB] [--json]           SEMANTIC diff between two refs
+ *   warpline oracle <branchA> <branchB> [--json]   run the Convergence/Divergence Oracle
+ *   warpline absorb <ref> [--json]                 lift a ref to a WarpState and dump it
+ *   warpline weave --preview <A> <B> [--json]      THE PRE-MERGE FORECAST (meaning)
+ *   warpline diff [refA] [refB] [--json]           SEMANTIC diff between two refs
  *
  * This is the ONLY file allowed to write to stdout — library code stays quiet.
  */
@@ -27,8 +27,8 @@ import type { WarpState } from './warp/warp-state.js';
 const program = new Command();
 
 program
-  .name('loom')
-  .description('The Loom Engine — the Convergence/Divergence Oracle (read-only).')
+  .name('warpline')
+  .description('The Warpline Engine — the Convergence/Divergence Oracle (read-only).')
   .version('0.1.0');
 
 program
@@ -87,7 +87,7 @@ program
           // Phase 1 is read-only. Reserve the verb, refuse the write.
           process.stdout.write(
             'weave (write) is not yet implemented — Phase 1 is read-only.\n' +
-              'Use `loom weave --preview <A> <B>` to forecast the merge from meaning.\n',
+              'Use `warpline weave --preview <A> <B>` to forecast the merge from meaning.\n',
           );
           process.exit(2);
         }
@@ -274,7 +274,7 @@ function printOracleSummary(record: OracleRecord): void {
   lines.push(`  score               ${c.score}`);
   lines.push(`  VERDICT             ${c.verdict}`);
   lines.push('');
-  lines.push('appended → .loom/oracle.jsonl');
+  lines.push('appended → .warpline/oracle.jsonl');
   process.stdout.write(lines.join('\n') + '\n');
 }
 
@@ -290,7 +290,7 @@ function pad(s: string, n: number): string {
 
 function fail(err: unknown): never {
   const msg = err instanceof Error ? err.message : String(err);
-  process.stderr.write(`loom: ${msg}\n`);
+  process.stderr.write(`warpline: ${msg}\n`);
   process.exit(1);
 }
 

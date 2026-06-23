@@ -1,5 +1,5 @@
 /**
- * @a-company/loom — the Loom Engine.
+ * @a-company/warpline — the Warpline Engine.
  *
  * Phase 1: the Convergence/Divergence Oracle. A READ-ONLY tool that lifts two
  * git branches to a content-addressed store of MEANING (the symbol graph),

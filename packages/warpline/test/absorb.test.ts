@@ -35,7 +35,7 @@ describe('absorb', () => {
     expect(d.renames.length).toBe(0);
   });
 
-  // The load-bearing determinism invariant (Loom Oracle): absorbing the SAME ref
+  // The load-bearing determinism invariant (Warpline Oracle): absorbing the SAME ref
   // twice must be byte-identical at every level — stateId, object set, and every
   // per-symbol contentId — so diff(absorb(HEAD), absorb(HEAD)) is provably ZERO.
   // This guards the file-discovery-order + filePath-normalization fixes that

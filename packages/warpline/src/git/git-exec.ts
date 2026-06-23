@@ -1,7 +1,7 @@
 /**
  * #git-exec — thin, READ-ONLY wrappers over git.
  *
- * The Loom Engine NEVER mutates the user's HEAD, index, or worktree. Every
+ * The Warpline Engine NEVER mutates the user's HEAD, index, or worktree. Every
  * mutation in this file happens inside a throwaway, detached `git worktree`
  * created in the OS temp dir and torn down in a `finally`. The user's primary
  * worktree is never touched.
@@ -80,7 +80,7 @@ export async function commitAuthor(ref: string, opts: GitOptions = {}): Promise<
  * a `finally`). Never points at the user's worktree.
  */
 export async function worktreeAdd(ref: string, opts: GitOptions = {}): Promise<string> {
-  const base = await fs.mkdtemp(path.join(os.tmpdir(), 'loom-wt-'));
+  const base = await fs.mkdtemp(path.join(os.tmpdir(), 'warpline-wt-'));
   // `git worktree add` wants the leaf dir to NOT exist yet.
   const tmp = path.join(base, 'tree');
   await git(['worktree', 'add', '--detach', '--quiet', tmp, ref], opts);

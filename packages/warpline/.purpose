@@ -1,10 +1,10 @@
 version: "2.0"
 description: >-
-  The Loom Engine — Phase 1: the Convergence/Divergence Oracle. A read-only tool
+  The Warpline Engine — Phase 1: the Convergence/Divergence Oracle. A read-only tool
   that lifts two git branches to a content-addressed store of MEANING (the
   Paradigm symbol graph), predicts the merge from meaning (clean / knot /
   dangling), runs git's actual merge read-only, and scores where meaning and
-  bytes agreed or diverged — appending a row to .loom/oracle.jsonl. Never touches
+  bytes agreed or diverged — appending a row to .warpline/oracle.jsonl. Never touches
   HEAD/index/worktree.
 
 components:
@@ -56,14 +56,14 @@ components:
 
   warp-store:
     description: >-
-      Minimal content-addressed store (in-mem primary, .loom/ disk debug cache)
-      and the .loom/oracle.jsonl ledger appender. The ONLY thing Loom writes to
-      disk is under .loom/.
+      Minimal content-addressed store (in-mem primary, .warpline/ disk debug cache)
+      and the .warpline/oracle.jsonl ledger appender. The ONLY thing Warpline writes to
+      disk is under .warpline/.
     type: module
 
   code-lens:
     description: >-
-      The TS code-lens interface surface (spec §2 / loom-code-lens.md). Types
+      The TS code-lens interface surface (spec §2 / warpline-code-lens.md). Types
       ONLY (stage 1): CodeUnit — a SymbolEntry-shaped synthetic node keyed
       #code:<rel-path>::<qualified-name>, carrying the identity-bearing
       codeEssence (CCNF) body slot, resolved free-reference edges, and a visible
@@ -147,7 +147,7 @@ components:
       oracle(branchA, branchB) — merge-base → absorb base/A/B → diff → predict →
       git merge-tree reality (read-only) → score the confusion matrix
       (agreeClean/agreeConflict/divergeGitOnly/divergeMeaningOnly/score/verdict) →
-      append an OracleRecord to .loom/oracle.jsonl. The two divergence cells are
+      append an OracleRecord to .warpline/oracle.jsonl. The two divergence cells are
       the experimental result. Conflict paths map to symbols at .purpose-dir level.
     type: module
     components:
@@ -161,7 +161,7 @@ components:
   weave:
     description: >-
       The pre-merge MEANING forecast + the semantic-diff report — READ-ONLY and,
-      unlike #oracle, never writes .loom/. forecast(A, B) reuses the Oracle
+      unlike #oracle, never writes .warpline/. forecast(A, B) reuses the Oracle
       pipeline up through predict() (mergeBase → absorb base/A/B → diff → predict)
       and surfaces it as pre-merge UX: a CLEAN-vs-DECISIONS verdict, autoClean
       count, knots (symbol + contending sides), dangling (from→target, retiredBy).
@@ -178,12 +178,12 @@ components:
       - "#oracle"
       - "#git-exec"
 
-  loom-cli:
+  warpline-cli:
     description: >-
-      The loom command line (commander). `loom oracle <a> <b> [--json]`,
-      `loom absorb <ref> [--json]`, `loom weave --preview <a> <b> [--vs-git]
+      The warpline command line (commander). `warpline oracle <a> <b> [--json]`,
+      `warpline absorb <ref> [--json]`, `warpline weave --preview <a> <b> [--vs-git]
       [--json]` (the pre-merge forecast; the bare `weave` write verb is reserved
-      and refuses with a read-only notice), and `loom diff [refA] [refB] [--json]`
+      and refuses with a read-only notice), and `warpline diff [refA] [refB] [--json]`
       (semantic diff; no args = WORKTREE vs HEAD, one arg = ref vs HEAD, two args
       = refA vs refB). The only module allowed to write stdout; library code stays
       quiet.
@@ -213,7 +213,7 @@ flows:
       - component: "#git-exec"
         action: "git merge-tree --write-tree A B (read-only) for the real conflict set"
       - component: "#oracle"
-        action: "Score the confusion matrix and append the OracleRecord to .loom/oracle.jsonl"
+        action: "Score the confusion matrix and append the OracleRecord to .warpline/oracle.jsonl"
 
   weave-forecast:
     description: >-

@@ -1,8 +1,8 @@
 /**
- * divergence-proof.test — THE DIVERGENCE PROOF for the Loom Oracle.
+ * divergence-proof.test — THE DIVERGENCE PROOF for the Warpline Oracle.
  *
  * The whole Phase-1 Oracle exists to run ONE experiment and exhibit ONE result
- * with data: a real branch-pair where GIT MERGES CLEAN but LOOM CATCHES A BREAK
+ * with data: a real branch-pair where GIT MERGES CLEAN but WARPLINE CATCHES A BREAK
  * git is structurally blind to. This file builds that branch-pair inside a
  * throwaway git repo (mkdtemp + git init — the user's repo/HEAD/index are NEVER
  * touched) and asserts the falsifiable claim on the REAL OracleRecord.
@@ -15,7 +15,7 @@
  * But the merged MEANING is broken: a live edge → #alpha, which A retired ⇒ a
  * DANGLING reference. Only meaning carries that merge-information; bytes can't.
  *
- * INVARIANT under test: git clean AND Loom flags a dangle/knot (divergeMeaningOnly).
+ * INVARIANT under test: git clean AND Warpline flags a dangle/knot (divergeMeaningOnly).
  *
  * Two scenarios:
  *  1. DANGLE-VIA-EXISTING-CONSUMER (the working proof, asserted GREEN): an
@@ -47,8 +47,8 @@ class FixtureRepo {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
     const repo = new FixtureRepo(dir);
     await repo.git('init', '-q', '-b', 'base');
-    await repo.git('config', 'user.email', 'proof@loom.test');
-    await repo.git('config', 'user.name', 'Loom Proof');
+    await repo.git('config', 'user.email', 'proof@warpline.test');
+    await repo.git('config', 'user.name', 'Warpline Proof');
     await repo.git('config', 'commit.gpgsign', 'false');
     return repo;
   }
@@ -112,7 +112,7 @@ components:
     related: ["#alpha"]
 `;
 
-describe('THE DIVERGENCE PROOF — git merges clean, Loom catches the meaning-break', () => {
+describe('THE DIVERGENCE PROOF — git merges clean, Warpline catches the meaning-break', () => {
   // ────────────────────────────────────────────────────────────────────────
   // Scenario 1 — DANGLE via an EXISTING consumer gaining the edge.
   // This is the working proof of the core thesis, asserted GREEN.
@@ -122,7 +122,7 @@ describe('THE DIVERGENCE PROOF — git merges clean, Loom catches the meaning-br
     let record: OracleRecord;
 
     beforeAll(async () => {
-      repo = await FixtureRepo.create('loom-proof-dangle-');
+      repo = await FixtureRepo.create('warpline-proof-dangle-');
       // BASE: #alpha + #beta→#alpha + #gamma (exists, no edge yet).
       await repo.purpose('alpha', alphaDefined);
       await repo.purpose('beta', betaRefsAlpha);
@@ -154,7 +154,7 @@ describe('THE DIVERGENCE PROOF — git merges clean, Loom catches the meaning-br
       expect(record.gitReality.conflictSymbols).toEqual([]);
     });
 
-    it('2. LOOM CATCHES THE BREAK — prediction.dangling is non-empty (#gamma → #alpha)', () => {
+    it('2. WARPLINE CATCHES THE BREAK — prediction.dangling is non-empty (#gamma → #alpha)', () => {
       expect(record.prediction.dangling.length).toBeGreaterThan(0);
       const d = record.prediction.dangling[0];
       expect(d.fromSymbol).toBe('#gamma');
@@ -196,7 +196,7 @@ describe('THE DIVERGENCE PROOF — git merges clean, Loom catches the meaning-br
     let record: OracleRecord;
 
     beforeAll(async () => {
-      repo = await FixtureRepo.create('loom-proof-born-');
+      repo = await FixtureRepo.create('warpline-proof-born-');
       // BASE: #alpha + #beta→#alpha (no #gamma yet).
       await repo.purpose('alpha', alphaDefined);
       await repo.purpose('beta', betaRefsAlpha);
@@ -234,7 +234,7 @@ describe('THE DIVERGENCE PROOF — git merges clean, Loom catches the meaning-br
     // deltas), so the born-#gamma → retired-#alpha dangle is detected exactly the
     // same way the existing-consumer scenario is. This asserts the SAME divergence
     // Scenario 1 gets.
-    it('LOOM CATCHES THE BREAK — born-#gamma → retired-#alpha dangle flagged (#gamma → #alpha, retiredBy A)', () => {
+    it('WARPLINE CATCHES THE BREAK — born-#gamma → retired-#alpha dangle flagged (#gamma → #alpha, retiredBy A)', () => {
       expect(record.prediction.dangling.length).toBeGreaterThan(0);
       const d = record.prediction.dangling.find((x) => x.fromSymbol === '#gamma');
       expect(d).toBeDefined();
@@ -262,7 +262,7 @@ describe('THE DIVERGENCE PROOF — git merges clean, Loom catches the meaning-br
     let record: OracleRecord;
 
     beforeAll(async () => {
-      repo = await FixtureRepo.create('loom-proof-convergent-');
+      repo = await FixtureRepo.create('warpline-proof-convergent-');
       // BASE: #alpha + #beta (no cross-edges that anyone will break).
       await repo.purpose('alpha', alphaDefined);
       await repo.purpose('beta', gammaStandalone.replace(/gamma/g, 'beta'));

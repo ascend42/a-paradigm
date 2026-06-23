@@ -1,7 +1,7 @@
 {
-  "name": "@a-company/loom",
+  "name": "@a-company/warpline",
   "version": "0.1.0",
-  "description": "The Loom Engine — the Convergence/Divergence Oracle. Lifts git branches to a content-addressed store of MEANING and scores where meaning and bytes agree or diverge.",
+  "description": "The Warpline Engine — the Convergence/Divergence Oracle. Lifts git branches to a content-addressed store of MEANING and scores where meaning and bytes agree or diverge.",
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -12,7 +12,7 @@
     }
   },
   "bin": {
-    "loom": "dist/cli.js"
+    "warpline": "dist/cli.js"
   },
   "files": [
     "dist"
@@ -43,7 +43,7 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/ascend42/a-paradigm.git",
-    "directory": "packages/loom"
+    "directory": "packages/warpline"
   },
   "bugs": {
     "url": "https://github.com/ascend42/a-paradigm/issues"
@@ -51,7 +51,7 @@
   "homepage": "https://github.com/ascend42/a-paradigm#readme",
   "keywords": [
     "paradigm",
-    "loom",
+    "warpline",
     "merge",
     "oracle",
     "symbol-graph",

@@ -1,10 +1,10 @@
-# Loom AST-Absorb Soundness Spike — findings
+# Warpline AST-Absorb Soundness Spike — findings
 
 > Decision gate: the team fork (A AST-code-meaning vs B write-path) hinged on ONE
 > untested unknown — North's flip condition: *"if sound, deterministic AST→meaning is
 > not achievable in bounded effort, take B."* This spike answers it with data.
-> Read-only prototype (reproducible): `.paradigm/research/loom-ast-absorb-spike.ts`
-> — run `npx tsx .paradigm/research/loom-ast-absorb-spike.ts` (tsx, TS 5.9.3).
+> Read-only prototype (reproducible): `.paradigm/research/warpline-ast-absorb-spike.ts`
+> — run `npx tsx .paradigm/research/warpline-ast-absorb-spike.ts` (tsx, TS 5.9.3).
 > Date: 2026-06-23. Branch `loom-ast-spike` (off main, post loom-engine merge).
 
 ## Question
@@ -46,7 +46,7 @@ A **cross-symbol rename** (`helper`→`assist`, consistently at definition and c
 moved the caller's essence (`33a0b7be…` → `1e6eaa08…`). This is the ONLY soundness gap,
 and its cause is exact: free references are hashed **by NAME** in v0. The fix is **hash
 free references by TARGET ESSENCE** — *the identical Merkle-by-target-essence rule the
-built `packages/loom/src/warp/essence-hash.ts` already applies to `.purpose` edges*
+built `packages/warpline/src/warp/essence-hash.ts` already applies to `.purpose` edges*
 (`⟨edgeKind, essence(target)⟩`), including its Tarjan-SCC handling for mutual recursion.
 
 ## Verdict: A is BOUNDED ENGINEERING, not open research

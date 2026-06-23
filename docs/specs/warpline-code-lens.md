@@ -1,29 +1,29 @@
-# Loom "A v1" — the TS Code-Lens (AST-level code meaning) — build spec
+# Warpline "A v1" — the TS Code-Lens (AST-level code meaning) — build spec
 
 > Decision: TD-2026-06-23-688 (fork resolved to A; AST code-meaning is bounded engineering).
-> Grounded by the AST-absorb spike (`.paradigm/research/loom-ast-absorb-spike.{md,ts}`).
+> Grounded by the AST-absorb spike (`.paradigm/research/warpline-ast-absorb-spike.{md,ts}`).
 > Team convergence: Arky (model + composition), Cid (essence algorithm), Jinx (the
-> determinism kill-shots + the false-EQUAL hazard). Companion to `docs/specs/loom-engine.md`.
-> Status: design converged, pre-build. Branch `loom-ast-spike` → builds on `packages/loom`.
+> determinism kill-shots + the false-EQUAL hazard). Companion to `docs/specs/warpline-engine.md`.
+> Status: design converged, pre-build. Branch `loom-ast-spike` → builds on `packages/warpline`.
 > Read-only invariant (Phase-1) is preserved: the lens only ever reads a throwaway worktree.
 
 ## Goal
 Lift real TS **code-units** (functions, methods, classes, arrow-consts, accessors) into the
-existing WARP, so `loom diff`/`oracle` see meaning in code, not only in `.purpose` symbols —
+existing WARP, so `warpline diff`/`oracle` see meaning in code, not only in `.purpose` symbols —
 directly fixing the "0 deltas on a `.ts`-only commit" gap. A v1 is **additive behind the
 locked essence/diff/predict/oracle contract**: code essences flow through `sem-delta`,
 `predict`, and `oracle` with a ~6-line touch plus one new contract slot. No algebra changes.
 
 ## The honest determinism promise (read first — it bounds everything)
-The thesis is "byte-identical contentIds across runs/machines" (`loom-engine.md:41`). For
+The thesis is "byte-identical contentIds across runs/machines" (`warpline-engine.md:41`). For
 code that promise is **conditional and must be stated as such**: *byte-identical across
-machines running Loom's pinned compiler on the same source tree.* The spike's 10/10 were the
+machines running Warpline's pinned compiler on the same source tree.* The spike's 10/10 were the
 **purely-syntactic** half (it never instantiated a `Program`/checker). Everything that
 reaches for the checker imports environment-dependence; the three rules in §5 are what make
 the conditional promise true. Do not let "10/10" launder the unproven half.
 
 ## 1. Reuse (what we stand on)
-- `computeEssences` / `buildEssenceGraph` / `tarjanSCCs` / `hashSCC` — `packages/loom/src/warp/essence-hash.ts`. These key everything on `symbol: string` + lifted edges and are **blind to `source`/`componentType`** — verified. Reuse verbatim; code-units are just more nodes.
+- `computeEssences` / `buildEssenceGraph` / `tarjanSCCs` / `hashSCC` — `packages/warpline/src/warp/essence-hash.ts`. These key everything on `symbol: string` + lifted edges and are **blind to `source`/`componentType`** — verified. Reuse verbatim; code-units are just more nodes.
 - `canonicalSerialize` — `warp/canonical.ts` (NFC, sorted keys, no-undefined). The CCNF emits a `CanonicalValue` straight into it; no new serializer.
 - `absorb.ts` — already materializes a detached read-only worktree and calls `loadLiveGraph` → `buildWarpState`. The lens slots in between.
 - `sem-delta.ts` / `predict.ts` / `oracle.ts` — the diff/commute/knot/dangle algebra. Consumed unchanged except the one `body` slot (§6).
@@ -32,7 +32,7 @@ the conditional promise true. Do not let "10/10" launder the unproven half.
 Do NOT build a parallel WARP. The lens emits objects shaped like `SymbolEntry`, injected into
 the live `SymbolIndex` **before** `computeEssences` runs.
 - **kind** = `component`; **componentType** = `code-unit` (new, identity-bearing value — a code-unit "becoming" a `.purpose` component is correctly a kind change). No `SymbolType` enum widening.
-- **symbol (the key)** = `#code:<rel-path>::<qualified-name>` (e.g. `#code:packages/loom/src/predict.ts::isKnot`, `#code:.../checkout.ts::Checkout.submit`). The path/qname is a **LABEL** (provenance + rename tiebreaker), never hashed.
+- **symbol (the key)** = `#code:<rel-path>::<qualified-name>` (e.g. `#code:packages/warpline/src/predict.ts::isKnot`, `#code:.../checkout.ts::Checkout.submit`). The path/qname is a **LABEL** (provenance + rename tiebreaker), never hashed.
 - **stableKey** = `<rel-path>::<structural-path>` where structural-path = chain of `(scopeKind, ordinal-among-siblings)` (e.g. `class#0/method#2`). Label, not hashed; path-fragile under cross-file move — recovered via essence-equality matching (same contentId, different stableKey ⇒ a move = the empty delta), exactly as `.purpose` rename recovery already works.
 - **contract** gains ONE identity-bearing slot: `codeEssence` (the CCNF, §3).
 - **edges** = the resolved free-reference graph (§4), emitted as `entry.references`.
@@ -103,7 +103,7 @@ an equivalent inferred one produce different essences — correct under "written
 stated meaning"; we do not chase inferred-type parity.
 
 ### 5.2 Pin + stamp the compiler (Jinx KS1 — confirmed: TS is caret-pinned `^5.0.0`/`^5.3.3`/`^5.7.0` today)
-`@a-company/loom` MUST pin TypeScript to an **exact** version (no caret), and the essence
+`@a-company/warpline` MUST pin TypeScript to an **exact** version (no caret), and the essence
 version tag MUST embed it: `contentId = "essence:v1:ts<exact>:" + sha256(ccnf)`. A different
 compiler ⇒ an explicitly different namespace, never a silent collision. The lens builds the
 Program against a **fixed synthesized compiler-options baseline** (do not trust a discovered
@@ -124,7 +124,7 @@ in `diff` without destabilizing content-addresses. (Open: T-loom-a-extern-id.)
 ## 6. Composition — the load-bearing requirement (Arky; ~6 lines + one slot)
 - `essence-hash.ts`: ONE line in `normalizedContract` (`codeEssence: str(...)`, gated on `componentType==='code-unit'`) + add `!data.codeEssence` to the `isGenericContract` predicate (a non-empty body is rich content). No traversal/SCC change.
 - `sem-delta.ts`: the ONE genuine new concept — add `bodyChanged`/`'body'` to `ContractChangeset`/`changedSlotsOf` (a body-internal change differs in `codeEssence` but no enumerated slot moved → today it would be an empty-slot delta). `'body'` is the analog of the existing `'steps'` slot. ~4 lines. **NOT** a new `SemDeltaKind`.
-- `predict.ts`: add `'body'` to the scalar-conflict-slot list → two divergent body edits to the same function = a **KNOT** (a new, sharper `divergeMeaningOnly`: git may auto-merge textually-distant edits Loom flags at function granularity). One line. Edge-add to a deleted code-unit = **DANGLE** via the existing pass, unchanged.
+- `predict.ts`: add `'body'` to the scalar-conflict-slot list → two divergent body edits to the same function = a **KNOT** (a new, sharper `divergeMeaningOnly`: git may auto-merge textually-distant edits Warpline flags at function granularity). One line. Edge-add to a deleted code-unit = **DANGLE** via the existing pass, unchanged.
 - `oracle.ts`: unchanged; code knots/dangles populate the existing cells. Path→symbol mapping optionally sharpens to code-units' files (deferrable).
 
 ## 7. MUST-SOLVE-IN-V1 correctness list (Jinx — these are requirements, not deferrals)
@@ -147,10 +147,10 @@ computed-keys, JSDoc `@deprecated`-as-contract. Coverage ratio reported plainly.
 ## 9. File plan + MVP build order (Arky)
 **Sub-phase 0 (types):** `src/lens/code-lens.ts` (`CodeUnit`,`CodeLens`,registry sig), `src/lens/code-symbol.ts` (`codeSymbol`/`codeStableKey`), premise-core `SourceType += 'code'`.
 **Sub-phase 1 (lens + essence-data):** `src/lens/ts-essence.ts` (productionized spike core: CCNF + scope-correct alpha-norm + modifier guard), `src/lens/ts-lens.ts` (`createProgram` → walk decls → checker resolution → `CodeUnit[]`), `src/lens/registry.ts`; the 2-line `essence-hash.ts` touch.
-**Sub-phase 2 (absorb + delta):** `src/lens/lift-code-units.ts` (+`injectCodeUnits`), wire into `absorb.ts` (both ref + WORKTREE paths), the `body` slot in `sem-delta.ts`/`predict.ts`, `packages/loom/.purpose` (#code-lens, #code-essence, $absorb-flow step). **Exact-pin TS in package.json.**
+**Sub-phase 2 (absorb + delta):** `src/lens/lift-code-units.ts` (+`injectCodeUnits`), wire into `absorb.ts` (both ref + WORKTREE paths), the `body` slot in `sem-delta.ts`/`predict.ts`, `packages/warpline/.purpose` (#code-lens, #code-essence, $absorb-flow step). **Exact-pin TS in package.json.**
 **Sub-phase 3 (tests, §10).**
 
-Runnable checkpoints: (2) `ts-essence` 10/10 green → (3) `ts-lens` frontier test EQUAL → (4) `loom absorb main` shows `#code:` objects → (5) `loom diff` non-zero on a `.ts`-only commit → (6) `loom oracle` produces a code-level `divergeMeaningOnly` fixture.
+Runnable checkpoints: (2) `ts-essence` 10/10 green → (3) `ts-lens` frontier test EQUAL → (4) `warpline absorb main` shows `#code:` objects → (5) `warpline diff` non-zero on a `.ts`-only commit → (6) `warpline oracle` produces a code-level `divergeMeaningOnly` fixture.
 
 ## 10. Test plan
 - **Spike's 10 properties as regression** (through the REAL pipeline contentId, not the spike's standalone hash) + file-level reorder-invariance + the closed frontier (cross-symbol rename EQUAL).
@@ -162,7 +162,7 @@ Runnable checkpoints: (2) `ts-essence` 10/10 green → (3) `ts-lens` frontier te
 ## 11. v1 scope ceiling (sell honestly)
 Structural identity modulo names/format/independent-order — **NOT** semantic equivalence
 (`a+b`≠`b+a`; a refactor is a delta; only *rename* is the empty delta). TS/TSX only. Read-only
-(no weave — that's the B-arc). Cross-machine determinism is conditional on Loom's pinned
+(no weave — that's the B-arc). Cross-machine determinism is conditional on Warpline's pinned
 compiler + same source tree. Annotation-as-token (no type resolution/inference). One-way
 code-unit→component edge. No cross-file move detection (essence-recovered). Full `createProgram`
 per absorb (no incremental cache — correctness/determinism first).
@@ -170,4 +170,4 @@ per absorb (no incremental cache — correctness/determinism first).
 ## 12. Open questions
 - T-loom-a-extern-id: the deferred lockfile-fed `dependency-version` delta class (§5.3).
 - T-loom-a-program: confirm the fixed synthesized compiler-options baseline vs per-file program cost on a large repo.
-- Coverage target: what meaning-coverage % on THIS repo's `packages/loom` counts as "A v1 proven"?
+- Coverage target: what meaning-coverage % on THIS repo's `packages/warpline` counts as "A v1 proven"?

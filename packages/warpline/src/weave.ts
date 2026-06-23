@@ -20,7 +20,7 @@
  *
  * Both functions are READ-ONLY: absorb spins throwaway detached worktrees and
  * tears them down; HEAD/index/worktree are never touched, and unlike `oracle`
- * neither writes to .loom/.
+ * neither writes to .warpline/.
  *
  * Library code: no console output (the CLI prints).
  */
@@ -63,7 +63,7 @@ export interface ForecastOptions extends GitOptions {
  * Default is the pure meaning forecast (fast, no git merge). With `vsGit` it
  * additionally runs the full Oracle and surfaces the git-reality divergence.
  *
- * READ-ONLY and EPHEMERAL: never writes .loom/oracle.jsonl (only `oracle` logs).
+ * READ-ONLY and EPHEMERAL: never writes .warpline/oracle.jsonl (only `oracle` logs).
  */
 export async function forecast(
   branchA: string,
@@ -136,7 +136,7 @@ export interface SemDiffReport {
 
 /**
  * SEMANTIC diff between two refs. absorb both → diff() → group the SemDeltas.
- * READ-ONLY; never writes .loom/. Defaults are resolved by the CLI:
+ * READ-ONLY; never writes .warpline/. Defaults are resolved by the CLI:
  *   no args = WORKTREE vs HEAD; one arg = ref vs HEAD; two args = refA vs refB.
  */
 export async function semanticDiff(

@@ -31,8 +31,8 @@ class FixtureRepo {
     const dir = await fs.mkdtemp(path.join(os.tmpdir(), prefix));
     const repo = new FixtureRepo(dir);
     await repo.git('init', '-q', '-b', 'base');
-    await repo.git('config', 'user.email', 'proof@loom.test');
-    await repo.git('config', 'user.name', 'Loom Proof');
+    await repo.git('config', 'user.email', 'proof@warpline.test');
+    await repo.git('config', 'user.name', 'Warpline Proof');
     await repo.git('config', 'commit.gpgsign', 'false');
     return repo;
   }
@@ -93,7 +93,7 @@ describe('weave --preview — THE PRE-MERGE FORECAST (meaning-side)', () => {
     let f: Awaited<ReturnType<typeof forecast>>;
 
     beforeAll(async () => {
-      repo = await FixtureRepo.create('loom-weave-dangle-');
+      repo = await FixtureRepo.create('warpline-weave-dangle-');
       await repo.purpose('alpha', alphaDefined);
       await repo.purpose('beta', betaRefsAlpha);
       await repo.commitAll('base: #alpha + #beta->#alpha');
@@ -135,7 +135,7 @@ describe('weave --preview — THE PRE-MERGE FORECAST (meaning-side)', () => {
     let f: Awaited<ReturnType<typeof forecast>>;
 
     beforeAll(async () => {
-      repo = await FixtureRepo.create('loom-weave-clean-');
+      repo = await FixtureRepo.create('warpline-weave-clean-');
       await repo.purpose('alpha', alphaDefined);
       await repo.commitAll('base: #alpha');
 
@@ -175,18 +175,18 @@ components:
   });
 });
 
-describe('loom diff — SEMANTIC diff between two refs (rename is the empty delta)', () => {
+describe('warpline diff — SEMANTIC diff between two refs (rename is the empty delta)', () => {
   // ── MOVE/RENAME fixture: alpha/.purpose → moved/.purpose. The symbol #alpha
   //    keeps its stableKey (SymbolEntry.id = purpose-component-alpha) and its
   //    essence (which excludes filePath), so the move is the EMPTY delta — git
-  //    shows a rename, Loom shows ZERO semantic weight. This is the literal
+  //    shows a rename, Warpline shows ZERO semantic weight. This is the literal
   //    "rename/move is the empty delta" property, made visible on real refs. ──
   describe('a moved/renamed symbol (same essence, new path) → renamed-noop, NOT a contract change', () => {
     let repo: FixtureRepo;
     let report: Awaited<ReturnType<typeof semanticDiff>>;
 
     beforeAll(async () => {
-      repo = await FixtureRepo.create('loom-diff-rename-');
+      repo = await FixtureRepo.create('warpline-diff-rename-');
       // refA tip: #alpha defined at alpha/.purpose.
       await repo.purpose('alpha', alphaDefined);
       await repo.commitAll('refA: #alpha at alpha/.purpose');
@@ -226,7 +226,7 @@ describe('loom diff — SEMANTIC diff between two refs (rename is the empty delt
     let report: Awaited<ReturnType<typeof semanticDiff>>;
 
     beforeAll(async () => {
-      repo = await FixtureRepo.create('loom-diff-contract-');
+      repo = await FixtureRepo.create('warpline-diff-contract-');
       await repo.purpose('alpha', alphaDefined);
       await repo.commitAll('refA: #alpha (no gates)');
       const refA = await repo.git('rev-parse', 'HEAD');

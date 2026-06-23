@@ -1,7 +1,7 @@
 /**
- * LOOM AST-ABSORB SOUNDNESS SPIKE
+ * WARPLINE AST-ABSORB SOUNDNESS SPIKE
  * Question: can TS code be lifted to a DETERMINISTIC, meaning-preserving essence
- * in BOUNDED effort? Mirrors packages/loom essence-hash (canonical normal form,
+ * in BOUNDED effort? Mirrors packages/warpline essence-hash (canonical normal form,
  * names/positions stripped, Merkle-by-target). This is a throwaway prototype whose
  * only job is to produce DATA on four properties + locate where it gets hard.
  *
@@ -121,7 +121,7 @@ const cases: Case[] = [
 ];
 
 console.log("=".repeat(72));
-console.log("LOOM AST-ABSORB SOUNDNESS SPIKE — per-function essence properties");
+console.log("WARPLINE AST-ABSORB SOUNDNESS SPIKE — per-function essence properties");
 console.log("=".repeat(72));
 let pass = 0;
 for (const c of cases) {
@@ -153,4 +153,4 @@ console.log(`  caller essence before: ${eBefore}`);
 console.log(`  caller essence after : ${eAfter}`);
 console.log(`  ${eBefore === eAfter ? "✅ EQUAL (rename was free)" : "⚠️  DIFFER — free-ref-by-NAME moved the essence on a pure rename"}`);
 console.log(`     → THIS is the deferred hard part: free references must hash BY TARGET ESSENCE,`);
-console.log(`       not by name — exactly what packages/loom essence-hash already does for .purpose edges.`);
+console.log(`       not by name — exactly what packages/warpline essence-hash already does for .purpose edges.`);
