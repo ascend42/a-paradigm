@@ -354,7 +354,10 @@ async function findPurposeFiles(rootDir) {
   return files.sort((a, b) => {
     const depthA = a.split(path.sep).length;
     const depthB = b.split(path.sep).length;
-    return depthA - depthB;
+    if (depthA !== depthB) return depthA - depthB;
+    const relA = path.relative(absoluteRoot, a);
+    const relB = path.relative(absoluteRoot, b);
+    return relA < relB ? -1 : relA > relB ? 1 : 0;
   });
 }
 async function collectPurposeChain(targetPath) {

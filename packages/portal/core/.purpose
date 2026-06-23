@@ -98,12 +98,12 @@ aspects:
       - "#yaml-parser"
 
   ~portal-glob-ignore-patterns:
-    description: "findGateFiles ignores node_modules, dist, and .git directories"
+    description: "findGateFiles ignores node_modules, dist, and .git directories, then sorts results by REPO-RELATIVE path (stable string compare) so portal/gate aggregation order is deterministic across machines and temp-worktree checkouts — load-bearing for the Loom Oracle's determinism (scan-index nondeterminism, T-2026-06-13-011)."
     category: configuration
     severity: low
-    tags: [discovery, glob]
+    tags: [discovery, glob, determinism]
     anchors:
-      - src/parser.ts:284-288
+      - src/parser.ts:292-310
     applies-to:
       - "#yaml-parser"
 

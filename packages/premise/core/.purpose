@@ -30,7 +30,7 @@ features:
       - '#graph-builder'
 components:
   aggregator:
-    description: '#aggregator: Main aggregation logic — includes duplicate symbol detection (reports symbols defined in 2+ files via AggregationResult.duplicateSymbols)'
+    description: '#aggregator: Main aggregation logic — includes duplicate symbol detection (reports symbols defined in 2+ files via AggregationResult.duplicateSymbols). DETERMINISM: the extract* helpers are last-write-wins keyed by symbol name, so the .purpose/portal discovery order decides which DUPLICATE wins. Discovery is sorted by repo-relative path (purpose-core findPurposeFiles depth-then-relpath; portal-core findGateFiles relpath) so resolution + downstream Merkle essences are stable across parses — load-bearing for the Loom Oracle (scan-index nondeterminism, T-2026-06-13-011).'
   source-loader:
     description: '#source-loader: Loads symbols from .purpose and portal.yaml'
   symbol-index:

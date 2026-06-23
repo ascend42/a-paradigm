@@ -1,0 +1,47 @@
+id: TD-2026-06-23-398
+timestamp: '2026-06-23T01:47:21.634Z'
+title: Loom is a true git REPLACEMENT — WARP is the source of truth; git is demoted to I/O (import/export), not foundation
+decision: >-
+  CLARIFY/SHARPEN TD-2026-06-22-013 and TD-loom-003: Loom is a REPLACEMENT for git, not a companion. The END-STATE
+  architecture is WARP-as-source-of-truth (the WARP meaning store IS the repository; bytes are a projection via WEAVE).
+  Git is demoted to two NON-foundational roles only: (1) BACKFILL/IMPORT — ingest an existing git repo's history into
+  the WARP (the same ABSORB run over history); (2) optional EGRESS/EXPORT — `loom export --git` weaves a conventional
+  git repo for the outside world (CI, GitHub, non-Loom teammates) as an OUTPUT FORMAT, not a dependency. Git is where
+  you COME FROM and optionally PUBLISH TO — never where truth lives. DUAL-WRITE is reframed: it is a DEVELOPMENT-TIME
+  VALIDATION SCAFFOLD (run WARP alongside git during the build, the live Convergence/Divergence Oracle scores WARP's
+  predictions against git's actual merges to earn confidence) — a test harness that FALLS AWAY once WARP is trusted, NOT
+  a permanent architecture and NOT git-as-permanent-truth. Consequence accepted: a true replacement means we own WEAVE
+  (meaning->bytes) + the round-trip soundness law absorb(weave(W))≡W from early on — we cannot lean on git as the
+  durable byte-truth forever. This is the hard seam Jinx flagged, and the founder has explicitly chosen to solve it
+  properly (TD-loom-002: quality over speed). ACTION: fix the presentation page section 9 framing which currently reads
+  'ships beside git, not instead of it' / 'git stays the truth' — that is the companion framing the founder rejects;
+  reframe git as backfill-source + export-format, with the Oracle/dual-write shown as a dev validation harness, not a
+  permanent shadow.
+rationale: >-
+  Founder correction: 'I don't want to make something to accompany git, I want to make a git replacement.' The
+  dual-write decision (TD-2026-06-22-013) over-indexed on git-as-durable-truth as a de-risking move and the presentation
+  propagated it into permanent companion-framing. The destination was always replacement (TD-loom-003); this restores
+  WARP-as-truth as the end state while preserving dual-write's genuine value as a development validation harness (the
+  live Oracle) rather than a permanent crutch. It accepts the harder build (WEAVE + round-trip soundness) consistent
+  with the founder's quality-over-speed call.
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+alternatives_considered:
+  - option: Keep git as permanent durable source-of-truth, WARP as a forever-shadow (companion)
+    rejected_because: >-
+      founder explicitly wants a REPLACEMENT, not an accompaniment; companion-framing was a de-risk scaffold mistaken
+      for architecture
+  - option: Drop dual-write entirely and go WARP-only from day one
+    rejected_because: >-
+      dual-write still has real value as a development validation harness (the live Oracle proving WARP against git's
+      reality); keep it as scaffolding, not as the product's foundation
+status: active
+tags:
+  - loom
+  - git-successor
+  - replacement
+  - warp
+  - architecture
+  - clarification

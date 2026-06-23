@@ -1,0 +1,27 @@
+id: L-2026-06-22-ascend-231627-001
+type: milestone
+timestamp: '2026-06-22T23:16:27.392Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Loom presentation page built — Mika's brand + architecture-heads' info design → single-page showcase
+summary: 'Built the Loom marketing/presentation webpage (docs/loom/index.html, branch loom-presentation, commit 7f895bbb). Mika''s design team owned marketing strategy + brand system (ink-indigo base, warp-amber/weft-teal threads, violet only at the decision moment, never red; Fraunces/Inter/JetBrains Mono; calm woven motion) + layout + the signature scroll-flip ''Inversion'' moment. Architecture heads (Arky+Cid) owned the information design: a 10-section narrative spine that delays the warp/weft metaphor to the close (so a skeptic doesn''t dismiss it as marketing) and 8 precise diagrams (the Inversion, the Justification atom vs git commit, free-rename via identical hash chip, merge-as-weaving with a decision knot, the closed accountability loop = the peak, custody chain, a FAIR git/Unison/Loom comparison, dual-write + the live Oracle as the honest frame). Self-contained single HTML (only Google Fonts external), full prefers-reduced-motion + <720px static-poster fallbacks, hand-bound &nbsp; orphan rule. Verified: JS valid, no red, self-contained. Second-pass candidates: literal per-line code-redraw in the Inversion; wide/narrow breakpoint eyeball on the dense diagrams; placeholder footer/CTA URLs. Selling the vision before building the tech.'
+symbols_touched:
+  - '#loom'
+files_created:
+  - docs/loom/index.html
+tags:
+  - loom
+  - presentation
+  - marketing
+  - design
+  - mika
+  - showcase
+linked_lore:
+  - L-2026-06-22-ascend-224840-001
+confidence: 0.8
+git_context:
+  ref: 7f895bbb2f334c9aa89e8bd537e12a8f21812a89
+  branch: loom-presentation
+  dirty: true

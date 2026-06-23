@@ -1,16 +1,11 @@
 id: architect
 project: a-paradigm
 lastSession:
-  date: '2026-06-17T17:18:02.132Z'
-  sessionId: orch-mqic3yiz-ca35
-  summary: '[architect (architect)]: architect: Design: EXPLORATION (understand-first, do NOT buil...'
+  date: '2026-06-23T18:14:29.649Z'
+  sessionId: orch-mqqyrbhj-jviy
+  summary: '[architect (architect)]: architect: Design: LOOM ARC — decide the next fork (a strateg...'
   symbolsTouched:
-    - '#component'
-    - $flow
-    - ^gate
-    - '!signal'
-    - ~aspect
-    - '#x'
+    - ~80
 pendingWork: []
 recentPatterns: []
-sessionsOnProject: 24
+sessionsOnProject: 25

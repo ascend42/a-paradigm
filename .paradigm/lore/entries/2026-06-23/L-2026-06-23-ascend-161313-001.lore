@@ -1,0 +1,41 @@
+id: L-2026-06-23-ascend-161313-001
+type: milestone
+timestamp: '2026-06-23T16:13:13.028Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Loom thesis PROVEN with data — the Oracle catches a break git is blind to
+summary: 'The Convergence/Divergence Oracle now demonstrates the core Loom thesis with a durable, falsifiable test (commit 053a7cf9, branch loom-engine): two branches touch DIFFERENT files (git merges clean, zero textual conflict) but the merged MEANING is broken — branch A retires symbol #alpha while branch B references it from a different file → a DANGLING reference. Output: `git: CLEAN · Loom: divergeMeaningOnly ["#gamma"], DIVERGENT, dangling #gamma→#alpha (retiredBy A)`. This discharges the proof obligation Jinx set: meaning carries merge-information bytes can''t, on real git branches, read-only, zero risk. A positive control (disjoint symbols → both clean, CONVERGENT score 1) confirms the Oracle doesn''t cry wolf. The tester also found+pinned a real defect honestly (it.fails, not fudged): a symbol BORN already carrying the dangling edge was missed (symbol-born deltas had no changeset, so predict.addedEdges couldn''t see their outgoing edges); fixed in #sem-delta (born deltas now carry an edgesAdded changeset) with the reader + knot/commute paths untouched. Both dangle scenarios green; loom 26/26 tests; HEAD-HEAD still 0/0/0 CONVERGENT (no phantom deltas). Also filed: T-2026-06-23-002 (extensive Loom University course, founder ask) + the flows convergence (TD-2026-06-23-181). NEXT build: loom weave --preview (the Oracle surfaced as pre-merge UX) and the cheapest engine-backed verbs (diff/move/lifeline); then GAP-1 (non-symbol files) needs a founder call; the weave/write path is Classroom-coupled (one trust ledger).'
+symbols_touched:
+  - '#loom'
+  - '#loom-oracle'
+  - '#sem-delta'
+  - '#predict'
+  - '#absorb'
+commit: 053a7cf9
+verification:
+  status: pass
+  details:
+    proof: git-clean + Loom-dangle (divergeMeaningOnly), both dangle scenarios green
+    tests: loom 26/26, no it.fails
+    control: disjoint-symbols CONVERGENT score 1
+    determinism: oracle HEAD HEAD 0/0/0 stable
+tags:
+  - loom
+  - git-successor
+  - oracle
+  - thesis-proven
+  - divergence
+  - phase-1
+  - shipped
+linked_lore:
+  - L-2026-06-23-ascend-153935-001
+  - L-2026-06-23-ascend-145542-001
+linked_tasks:
+  - T-2026-06-23-002
+confidence: 0.86
+git_context:
+  ref: 053a7cf9c20517d2afe2c5fcea86bacc304723fd
+  branch: loom-engine
+  dirty: true

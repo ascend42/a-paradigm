@@ -1,0 +1,53 @@
+id: L-2026-06-23-ascend-153935-001
+type: milestone
+timestamp: '2026-06-23T15:39:35.189Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Loom Oracle MVP RUNS — Phase 1 engine built, deterministic, read-only on git
+summary: 'First real Loom code shipped on branch loom-engine (commit b0725cc8): the Convergence/Divergence Oracle runs end-to-end. @a-company/loom reuses premise-core extraction to ABSORB two git branches into a content-addressed store of MEANING (essence-hash: Merkle over the structured .purpose contract + edges-by-target-essence, never prose/name/path/embeddings; Tarjan SCC for cycles; stable-id disambiguator for generic contracts), diff them (typed SemDeltas; rename = the empty delta), predict the merge (commute/knot/dangle algebra), run git''s actual merge read-only (git merge-tree, never touches HEAD/index/worktree), and score the confusion matrix (agreeClean/agreeConflict + the two falsifiable cells divergeGitOnly ★ and divergeMeaningOnly ★) → .loom/oracle.jsonl. Verified: premise-core 42 + loom 18 tests green; `loom oracle HEAD HEAD` = 0 knots/0 dangling/CONVERGENT, stable across runs; git untouched. THE BUG THE ORACLE CAUGHT ON ITSELF: absorbing a ref twice produced ~26 phantom deltas because the repo has DUPLICATE symbol names across packages (e.g. #yaml-parser defined in BOTH packages/portal/core and packages/purpose/core) whose winner flipped with filesystem order — the known scan-index nondeterminism (T-2026-06-13-011), now caught red-handed by Loom''s own determinism requirement. Fixed Loom-side (deterministic dup-resolution + repo-relative paths); determinism is now a tested invariant (byte-identical stateId + every contentId across two absorbs). NEXT: a fixture branch-pair that exhibits a real divergence (git merges bytes clean but meaning is a knot) — the data that proves ''meaning carries merge-information bytes can''t''.'
+symbols_touched:
+  - '#loom'
+  - '#essence-hash'
+  - '#absorb'
+  - '#sem-delta'
+  - '#predict'
+  - '#loom-oracle'
+symbols_created:
+  - '#essence-hash'
+  - '#absorb'
+  - '#sem-delta'
+  - '#predict'
+  - '#loom-oracle'
+files_created:
+  - packages/loom/src/warp/essence-hash.ts
+  - packages/loom/src/absorb.ts
+  - packages/loom/src/sem-delta.ts
+  - packages/loom/src/predict.ts
+  - packages/loom/src/oracle.ts
+  - packages/loom/src/cli.ts
+  - docs/specs/loom-engine.md
+commit: b0725cc8
+verification:
+  status: pass
+  details:
+    builds: premise-core + loom clean
+    tests: premise-core 42 + loom 18 green incl. byte-identical determinism invariant
+    live: loom oracle HEAD HEAD = 0/0/0 CONVERGENT, stable 3x
+    git-safety: read-only, HEAD/index/worktree untouched
+tags:
+  - loom
+  - git-successor
+  - oracle
+  - warp
+  - phase-1
+  - shipped
+  - determinism
+linked_lore:
+  - L-2026-06-23-ascend-145542-001
+confidence: 0.83
+git_context:
+  ref: b0725cc830f6d57cac631d35124f5438bb97f64f
+  branch: loom-engine
+  dirty: true

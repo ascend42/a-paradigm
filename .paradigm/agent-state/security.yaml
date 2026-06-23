@@ -1,10 +1,11 @@
 id: security
 project: a-paradigm
 lastSession:
-  date: '2026-05-18T19:50:38.711Z'
-  sessionId: orch-mpbmcnsk-ws0p
-  summary: '[Aegis (security)]: security: Process: Plan v6.5.0 University Sections feature. ...'
-  symbolsTouched: []
+  date: '2026-06-23T18:14:29.648Z'
+  sessionId: orch-mqqyrbhj-jviy
+  summary: '[Aegis (security)]: security: Process: LOOM ARC — decide the next fork (a strate...'
+  symbolsTouched:
+    - ~80
 pendingWork: []
 recentPatterns: []
-sessionsOnProject: 4
+sessionsOnProject: 5

@@ -1,0 +1,46 @@
+id: L-2026-06-22-ascend-224453-001
+type: insight
+timestamp: '2026-06-22T22:44:53.265Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: '"Loom" — a successor to Git, Paradigm-native, for the agent×human future (exploration kickoff)'
+summary: 'Kickoff of a WILD exploration: a REPLACEMENT for Git built on Paradigm fundamentals — meaning-primary (the symbol/meaning graph is the source of truth; bytes are a projection, a la render-by-projection), STRUCTURAL identity (content-addressed semantic units, rename/move-free), ACCOUNTABILITY-native (humans+agents as trusted actors whose track record weights how their changes are reviewed/merged — the Classroom feeds VCS trust), with merge/consolidation done over the meaning graph + ripple, not text lines. Provisional codename: Loom (branches=threads, merge=weaving, history=fabric). Five founder-ratified calls anchor the design. NOT building — convening a creative team panel to invent the organs.'
+symbols_touched:
+  - '#symbol-graph'
+  - '#lore'
+  - '#ripple'
+  - '#classroom'
+  - '#graph-slice-projector'
+symbols_created:
+  - '#loom'
+decisions:
+  - id: TD-loom-001
+    decision: Adoption is a NON-GOAL. Optimize for output-efficiency, space-cost minimalism, and organization. The killer use case = one person (and a team) working many features on many branches in parallel, with Paradigm-backed merge/consolidation.
+    rationale: Founder explicitly does not care about ecosystem adoption; cares about a more efficient, minimalist, organized system for real parallel output.
+  - id: TD-loom-002
+    decision: Solve the hard problems (code-is-text, merge-of-intent, integrity) with the BEST solutions; speed is not the goal — quality and function are.
+    rationale: 'Founder: take all the time needed; quality over speed.'
+  - id: TD-loom-003
+    decision: It is a REPLACEMENT for Git (not a layer), but BACKFILLABLE from an existing Git repo (an import path that ingests git history → Loom's meaning-primary store).
+    rationale: Clean successor, but a smooth on-ramp from the existing world.
+  - id: TD-loom-004
+    decision: Aim to invent a BRAND-NEW category, not to out-Unison Unison. The category-defining axis is ACCOUNTABILITY-native version control for a mixed human-agent workforce.
+    rationale: Semantic VCS has prior art (Unison/Pijul/Dolt); the novel, uniquely-Paradigm axis is trust/accountability + the Classroom track-record weighting review/merge.
+  - id: TD-loom-005
+    decision: Identity MUST be structural (content-addressed semantic units; identity derives from structure/meaning, not from a path or a name).
+    rationale: Founder ratified; enables free rename/move, no name-merge conflicts, verifiable identity.
+tags:
+  - loom
+  - git-successor
+  - version-control
+  - exploration
+  - agent-human-future
+  - meaning-primary
+  - accountability-native
+confidence: 0.7
+git_context:
+  ref: 15805d22da0a58ed024581510c87a08ae353fac4
+  branch: main
+  dirty: false

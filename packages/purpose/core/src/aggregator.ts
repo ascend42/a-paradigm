@@ -156,11 +156,26 @@ export async function findPurposeFiles(rootDir: string): Promise<string[]> {
     ignore: ['**/node_modules/**', '**/dist/**', '**/.git/**'],
   });
 
-  // Sort by depth (shallowest first for proper aggregation)
+  // Sort by depth (shallowest first for proper aggregation), then break ties by
+  // the REPO-RELATIVE path with a stable string compare.
+  //
+  // Depth alone is NOT a total order: files at the same depth fall back to
+  // glob/filesystem order, which varies across machines and across temp-worktree
+  // checkouts of the same commit. That nondeterminism flips which DUPLICATE
+  // symbol wins last-write-wins in the extract* helpers, and (because the Loom
+  // Oracle's essence is Merkle-by-target) cascades into phantom semantic deltas
+  // — i.e. diff(absorb(HEAD), absorb(HEAD)) != 0. Sorting on the repo-relative
+  // path (the absoluteRoot prefix is stripped so two different temp-dir prefixes
+  // sort identically) makes duplicate-symbol resolution + all downstream Merkle
+  // essences deterministic. See Loom Oracle / scan-index nondeterminism
+  // (paradigm task T-2026-06-13-011).
   return files.sort((a, b) => {
     const depthA = a.split(path.sep).length;
     const depthB = b.split(path.sep).length;
-    return depthA - depthB;
+    if (depthA !== depthB) return depthA - depthB;
+    const relA = path.relative(absoluteRoot, a);
+    const relB = path.relative(absoluteRoot, b);
+    return relA < relB ? -1 : relA > relB ? 1 : 0;
   });
 }
 

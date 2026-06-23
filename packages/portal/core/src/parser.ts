@@ -298,5 +298,14 @@ export async function findGateFiles(rootDir: string): Promise<string[]> {
     ignore: ['**/node_modules/**', '**/dist/**', '**/.git/**'],
   });
 
-  return files;
+  // Deterministic order so portal/gate aggregation (and any duplicate-symbol
+  // resolution downstream) is stable across parses, regardless of filesystem
+  // glob order or absolute temp-dir prefix. Sort key is repo-relative so two
+  // different temp-worktree absolute prefixes sort identically — see Loom
+  // Oracle / scan-index nondeterminism (paradigm task T-2026-06-13-011).
+  return files.sort((a, b) => {
+    const relA = path.relative(absoluteRoot, a);
+    const relB = path.relative(absoluteRoot, b);
+    return relA < relB ? -1 : relA > relB ? 1 : 0;
+  });
 }

@@ -83,12 +83,12 @@ aspects:
       - "#zod-schemas"
 
   ~purpose-file-depth-sort:
-    description: ".purpose files are sorted by directory depth (shallowest first) for correct parent-to-child aggregation"
+    description: ".purpose files are sorted by directory depth (shallowest first) for correct parent-to-child aggregation, with ties broken by REPO-RELATIVE path (stable string compare). Depth alone is not a total order — same-depth files fell back to glob/filesystem order, which varies across machines and temp-worktree checkouts and flipped duplicate-symbol last-write-wins resolution, cascading into the Loom Oracle's phantom semantic deltas. Repo-relative tiebreak (root prefix stripped) makes resolution + downstream Merkle essences deterministic. See scan-index nondeterminism (T-2026-06-13-011)."
     category: rule
     severity: high
-    tags: [aggregation, ordering]
+    tags: [aggregation, ordering, determinism]
     anchors:
-      - src/aggregator.ts:120-126
+      - src/aggregator.ts:150-186
     applies-to:
       - "#aggregator"
 

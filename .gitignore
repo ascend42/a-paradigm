@@ -187,3 +187,6 @@ $RECYCLE.BIN/
 .paradigm/university/ai-literacy/
 # Generated read-through of that pack (private)
 /ai-literacy-review.md
+
+# Loom engine runtime output (content-addressed WARP cache + oracle log)
+.loom/

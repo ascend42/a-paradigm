@@ -1,0 +1,198 @@
+version: "2.0"
+description: >-
+  The Loom Engine — Phase 1: the Convergence/Divergence Oracle. A read-only tool
+  that lifts two git branches to a content-addressed store of MEANING (the
+  Paradigm symbol graph), predicts the merge from meaning (clean / knot /
+  dangling), runs git's actual merge read-only, and scores where meaning and
+  bytes agreed or diverged — appending a row to .loom/oracle.jsonl. Never touches
+  HEAD/index/worktree.
+
+components:
+  git-exec:
+    description: >-
+      Thin, READ-ONLY wrappers over git (merge-base, rev-parse, worktree
+      add/remove, merge-tree with a throwaway-worktree fallback for git <2.38).
+      Every mutation happens in a detached temp worktree torn down in a finally;
+      the user's HEAD/index/worktree are never touched.
+    type: module
+
+  canonical-json:
+    description: >-
+      Strict, dependency-free canonical serializer (sorted keys, NFC strings, no
+      whitespace ambiguity) that produces the byte stream the essence hash digests.
+    type: module
+
+  essence-hash:
+    description: >-
+      The load-bearing wall — essence(symbol) -> contentId. Hashes the Canonical
+      Normal Form ⟨kind, normalized contract, edgeBag⟩, Merkle by TARGET essence
+      (so rename is free), excludes name/path/prose/timestamps. Tarjan SCC for
+      cycles; stable-id fold for generic-contract aliasing. contentId =
+      "essence:v0:" + sha256(canonical).
+    type: module
+    components:
+      - "#canonical-json"
+      - "#warp-object"
+
+  warp-object:
+    description: >-
+      A WarpObject — a SymbolEntry stripped of labels and reduced to ⟨kind,
+      contract, sorted outgoing edges, contentId⟩. liftEdges derives outgoing,
+      typed, deduped, sorted edges from the live SymbolIndex (the single edge
+      source the essence hash agrees on).
+    type: module
+
+  warp-state:
+    description: >-
+      A WarpState — the whole symbol graph of one ref lifted to MEANING. stateId =
+      sha256 over the sorted contentIds; treeSha/absorbedAt are provenance, not
+      identity. WarpObject.filePath is normalized REPO-RELATIVE to the absorb root
+      (temp-worktree or cwd, with macOS /private↔/var alias handling) so a
+      path-prefix difference never masquerades as a rename.
+    type: module
+    components:
+      - "#warp-object"
+      - "#essence-hash"
+
+  warp-store:
+    description: >-
+      Minimal content-addressed store (in-mem primary, .loom/ disk debug cache)
+      and the .loom/oracle.jsonl ledger appender. The ONLY thing Loom writes to
+      disk is under .loom/.
+    type: module
+
+  absorb:
+    description: >-
+      absorb(gitRef) -> WarpState. Spins a detached temp worktree, loadLiveGraph
+      on it, lifts every symbol, builds the WarpState, removes the worktree in a
+      finally. The literal WORKTREE ref absorbs the live cwd uncommitted state.
+      DETERMINISM INVARIANT: absorbing the same ref twice is byte-identical
+      (stateId + every per-symbol contentId + repo-relative filePath), so
+      diff(absorb(HEAD), absorb(HEAD)) is provably ZERO. Rests on (a) the absorb
+      root being passed to buildWarpState for repo-relative filePaths, and (b)
+      deterministic .purpose/portal file-discovery order in premise-core's
+      aggregator (duplicate-symbol resolution + Merkle essences are stable across
+      parses regardless of filesystem order or temp-dir prefix).
+    type: module
+    components:
+      - "#git-exec"
+      - "#warp-state"
+
+  sem-delta:
+    description: >-
+      The SemDelta and diff(base, branch), keyed by stableKey (SymbolEntry.id, so
+      rename survives). contentId-equal short-circuits to no-delta; a pure
+      rename/move is the EMPTY delta. Classifies changed contract slots and edge
+      add/remove. A symbol-born delta carries an edgesAdded-only changeset (ALL of
+      the born object's outgoing edges) so a new symbol's outgoing edges feed the
+      dangle pass the same way a gained edge does (born-consumer → retired-target).
+    type: module
+
+  predict:
+    description: >-
+      predict(ΔA, ΔB) -> {autoClean, knots[], dangling[]}. The commute / knot /
+      dangle decision procedure. Dangle wins precedence so the score is a true
+      partition; same-key identical-essence is convergent (autoClean).
+    type: module
+    components:
+      - "#sem-delta"
+
+  justification:
+    description: >-
+      The v0 Justification — actor/intent from the branch tip's git log,
+      computedRipple via getReferencesTo over changed symbols, danglingRefs, and a
+      reserved signature field (unsigned:sha256 stub).
+    type: module
+    components:
+      - "#sem-delta"
+      - "#git-exec"
+
+  oracle:
+    description: >-
+      oracle(branchA, branchB) — merge-base → absorb base/A/B → diff → predict →
+      git merge-tree reality (read-only) → score the confusion matrix
+      (agreeClean/agreeConflict/divergeGitOnly/divergeMeaningOnly/score/verdict) →
+      append an OracleRecord to .loom/oracle.jsonl. The two divergence cells are
+      the experimental result. Conflict paths map to symbols at .purpose-dir level.
+    type: module
+    components:
+      - "#absorb"
+      - "#sem-delta"
+      - "#predict"
+      - "#justification"
+      - "#warp-store"
+      - "#git-exec"
+
+  weave:
+    description: >-
+      The pre-merge MEANING forecast + the semantic-diff report — READ-ONLY and,
+      unlike #oracle, never writes .loom/. forecast(A, B) reuses the Oracle
+      pipeline up through predict() (mergeBase → absorb base/A/B → diff → predict)
+      and surfaces it as pre-merge UX: a CLEAN-vs-DECISIONS verdict, autoClean
+      count, knots (symbol + contending sides), dangling (from→target, retiredBy).
+      An optional vsGit flag also runs the full Oracle (git merge-tree) read-only
+      for the meaning-vs-bytes divergence comparison. semanticDiff(refA, refB)
+      groups the SemDeltas (born / retired / contract-changed-with-slots /
+      renamed-noop) so the "rename/move is the EMPTY delta" property is visible on
+      real refs. The `weave` WRITE verb is RESERVED, not implemented in Phase 1.
+    type: module
+    components:
+      - "#absorb"
+      - "#sem-delta"
+      - "#predict"
+      - "#oracle"
+      - "#git-exec"
+
+  loom-cli:
+    description: >-
+      The loom command line (commander). `loom oracle <a> <b> [--json]`,
+      `loom absorb <ref> [--json]`, `loom weave --preview <a> <b> [--vs-git]
+      [--json]` (the pre-merge forecast; the bare `weave` write verb is reserved
+      and refuses with a read-only notice), and `loom diff [refA] [refB] [--json]`
+      (semantic diff; no args = WORKTREE vs HEAD, one arg = ref vs HEAD, two args
+      = refA vs refB). The only module allowed to write stdout; library code stays
+      quiet.
+    type: cli
+    components:
+      - "#oracle"
+      - "#absorb"
+      - "#weave"
+
+flows:
+  oracle-run:
+    description: >-
+      The end-to-end Oracle flow: merge-base, absorb base/A/B, diff each side,
+      synthesize justifications, predict the merge from meaning, run git's real
+      merge read-only, score the confusion matrix, append the OracleRecord.
+    steps:
+      - component: "#git-exec"
+        action: "Resolve merge-base(A, B)"
+      - component: "#absorb"
+        action: "Lift base, A, B to WarpStates (detached temp worktrees)"
+      - component: "#sem-delta"
+        action: "diff(base, A) and diff(base, B)"
+      - component: "#justification"
+        action: "Synthesize justA / justB from git log + ripple"
+      - component: "#predict"
+        action: "predict(ΔA, ΔB) → autoClean / knots / dangling"
+      - component: "#git-exec"
+        action: "git merge-tree --write-tree A B (read-only) for the real conflict set"
+      - component: "#oracle"
+        action: "Score the confusion matrix and append the OracleRecord to .loom/oracle.jsonl"
+
+  weave-forecast:
+    description: >-
+      The pre-merge MEANING forecast (read-only, ephemeral — no ledger write).
+      Reuses the Oracle pipeline up through predict() only; git is consulted just
+      when --vs-git is requested.
+    steps:
+      - component: "#git-exec"
+        action: "Resolve merge-base(A, B)"
+      - component: "#absorb"
+        action: "Lift base, A, B to WarpStates (detached temp worktrees)"
+      - component: "#sem-delta"
+        action: "diff(base, A) and diff(base, B)"
+      - component: "#predict"
+        action: "predict(ΔA, ΔB) → autoClean / knots / dangling → CLEAN vs DECISIONS verdict"
+      - component: "#weave"
+        action: "Optionally (--vs-git) run the full #oracle read-only for the meaning-vs-bytes divergence"
