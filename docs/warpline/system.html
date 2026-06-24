@@ -27,6 +27,10 @@
     --warp-soft: #F2C078;
     --weft: #2DD4BF;
     --weft-soft: #5EEAD4;
+    /* --seam is the divergence anchor; on ink it is only 4.52–4.98 (AA-normal
+       floor is 4.5 — ~0.02 of margin at the smallest use). Any change to --seam
+       or to ink-800/850/900 MUST re-run the WCAG contrast calc, and --seam text
+       must never drop below 16px. (T-2026-06-24-007) */
     --seam: #7C6FF0;
 
     /* the GUI's two extra tokens */
@@ -412,7 +416,8 @@
   .wire-diff-row .nm { font-family: var(--mono); font-size: 12px; }
   .wire-diff-row .strike { text-decoration: line-through; color: var(--cut); }
   .wire-bigzero { font-family: var(--display); font-size: 40px; color: var(--weft); line-height: 1; }
-  .wire-churn { font-family: var(--mono); font-size: 11px; color: var(--cut); }
+  /* informational text → --linen-400 (5.08:1 AA); --cut (2.6:1) is decoration-only */
+  .wire-churn { font-family: var(--mono); font-size: 11px; color: var(--linen-400); }
   /* forecast wireframe */
   .wire-bars { display: grid; gap: 7px; }
   .wire-bar { display: grid; grid-template-columns: 64px 1fr auto; align-items: center; gap: 8px; font-family: var(--mono); font-size: 10px; color: var(--linen-400); }
@@ -671,7 +676,7 @@
         <div class="step">
           <p class="s-n">STEP 2</p>
           <h4>Two trusted oracles contradict</h4>
-          <p>Left = git: <span class="chip clean">CLEAN ✓</span> — <code style="color:var(--cut)">git merge-tree</code> finds 0 conflicts; it would ship. Right = Warpline: <span class="chip seam">DIVERGENT</span>.</p>
+          <p>Left = git: <span class="chip clean">CLEAN ✓</span> — <code style="color:var(--linen-400)">git merge-tree</code> finds 0 conflicts; it would ship. Right = Warpline: <span class="chip seam">DIVERGENT</span>.</p>
           <span class="surface-tag">↳ MeaningVsBytesSplit · the seam pulses</span>
         </div>
         <div class="step">
@@ -933,7 +938,7 @@
           <tr><td><span class="klass transformed">T</span></td><td class="git">mv (rename / move)</td><td class="warpline">warpline move <span style="color:var(--linen-400)">— the ZERO-DIFF rename = the empty delta</span></td><td class="gui">Semantic-diff viewer (∅)</td></tr>
           <tr><td><span class="klass maps">M</span></td><td class="git">status</td><td class="warpline">warpline status</td><td class="gui none">—</td></tr>
           <tr><td><span class="klass maps">M</span></td><td class="git">revert</td><td class="warpline">warpline revert <span style="color:var(--linen-400)">(forward inverse PICK)</span></td><td class="gui none">—</td></tr>
-          <tr><td><span class="klass maps">M</span></td><td class="git">stash</td><td class="warpline">warpline shelf <span style="color:var(--cut)">(GAP-2)</span></td><td class="gui none">—</td></tr>
+          <tr><td><span class="klass maps">M</span></td><td class="git">stash</td><td class="warpline">warpline shelf <span style="color:var(--linen-400)">(GAP-2)</span></td><td class="gui none">—</td></tr>
 
           <!-- HISTORY -->
           <tr class="group-head"><td colspan="4">History</td></tr>
@@ -967,7 +972,7 @@
           <!-- INTEROP -->
           <tr class="group-head"><td colspan="4">Interop · git as onramp &amp; exit</td></tr>
           <tr><td><span class="klass new">N</span></td><td class="git">import history</td><td class="warpline"><span class="nbuilt">● import --git</span> <span style="color:var(--linen-400)">(via absorb · backfill)</span></td><td class="gui none">—</td></tr>
-          <tr><td><span class="klass new">N</span></td><td class="git">export to git</td><td class="warpline">warpline export --git <span style="color:var(--cut)">(GAP-7 · round-trip unproven)</span></td><td class="gui none">—</td></tr>
+          <tr><td><span class="klass new">N</span></td><td class="git">export to git</td><td class="warpline">warpline export --git <span style="color:var(--linen-400)">(GAP-7 · round-trip unproven)</span></td><td class="gui none">—</td></tr>
         </tbody>
       </table>
     </div>
