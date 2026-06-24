@@ -1,0 +1,1028 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>WARPLINE — The System</title>
+<meta name="description" content="The Warpline System — a visual map of the whole source-control system: how git, ABSORB, the WARP, the engine, the CLI, and the GUI connect, and how a user moves through them." />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+<style>
+  /* ============================ TOKENS (verbatim from docs/warpline/index.html) ============================ */
+  :root {
+    --ink-900: #0B0D14;
+    --ink-850: #0F1220;
+    --ink-800: #141829;
+    --ink-700: #1C2138;
+    --ink-600: #2A3050;
+
+    --linen-50: #F4F1EA;
+    --linen-200: #CFCABE;
+    --linen-400: #8B8A82;
+
+    --warp: #E9A23B;
+    --warp-soft: #F2C078;
+    --weft: #2DD4BF;
+    --weft-soft: #5EEAD4;
+    --seam: #7C6FF0;
+
+    /* the GUI's two extra tokens */
+    --clean: #34D8A0;  /* git's CLEAN chip ONLY — the unreliable narrator's confident green */
+    --cut: #5E5C54;    /* the severed / loose thread end */
+
+    --weave-grad: linear-gradient(135deg, #E9A23B 0%, #2DD4BF 100%);
+
+    --maxw: 1180px;
+    --textw: 820px;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --pad-sec: clamp(80px, 11vh, 140px);
+
+    --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    --display: "Fraunces", Georgia, serif;
+    --ui: "Inter", system-ui, -apple-system, sans-serif;
+  }
+
+  /* ============================ RESET / BASE (from index.html) ============================ */
+  *, *::before, *::after { box-sizing: border-box; }
+  html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body {
+    margin: 0;
+    background: var(--ink-900);
+    color: var(--linen-200);
+    font-family: var(--ui);
+    font-size: 17px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overflow-x: hidden;
+  }
+  img, svg { display: block; max-width: 100%; }
+  a { color: inherit; text-decoration: none; }
+  ::selection { background: rgba(233, 162, 59, 0.25); color: var(--linen-50); }
+
+  /* ============================ TYPE (from index.html) ============================ */
+  h1, h2, h3 {
+    font-family: var(--display);
+    color: var(--linen-50);
+    text-wrap: balance;
+    font-weight: 460;
+    margin: 0;
+  }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 13px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--linen-400);
+    margin: 0 0 22px;
+  }
+  .emph { font-style: italic; color: var(--warp-soft); }
+  .emph-weft { font-style: italic; color: var(--weft-soft); }
+  .emph-seam { font-style: italic; color: var(--seam); }
+
+  /* ============================ LAYOUT (from index.html) ============================ */
+  .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 clamp(20px, 5vw, 48px); }
+  .section { position: relative; padding: var(--pad-sec) 0; }
+  .section--bleed { background: var(--ink-850); }
+  .section--bleed-deep { background: var(--ink-900); }
+  .lede { max-width: var(--textw); }
+  .muted { color: var(--linen-400); }
+
+  /* faint warp grid skeleton (from index.html) */
+  .warpgrid {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    background-image: repeating-linear-gradient(
+      to right,
+      var(--ink-700) 0, var(--ink-700) 1px,
+      transparent 1px, transparent 72px
+    );
+    opacity: 0.06;
+    transition: opacity 1.1s var(--ease);
+    z-index: 0;
+  }
+  .section.in-view .warpgrid { opacity: 0.1; }
+  .section--bleed.in-view .warpgrid { opacity: 0.13; }
+  .section > .wrap { position: relative; z-index: 1; }
+
+  /* ============================ NAV (from index.html) ============================ */
+  nav.topnav {
+    position: fixed; top: 0; left: 0; right: 0; height: 64px; z-index: 100;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 clamp(20px, 5vw, 48px);
+    transition: background 0.4s var(--ease), border-color 0.4s var(--ease);
+    border-bottom: 1px solid transparent;
+  }
+  nav.topnav.scrolled {
+    background: rgba(11, 13, 20, 0.8);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--ink-700);
+  }
+  .wordmark {
+    font-family: var(--display);
+    font-size: 22px; font-weight: 500; color: var(--linen-50);
+    letter-spacing: -0.01em; position: relative; padding-bottom: 4px;
+  }
+  .wordmark .tag {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em;
+    color: var(--linen-400); margin-left: 10px; vertical-align: middle;
+  }
+  .wordmark::after {
+    content: ""; position: absolute; left: 0; bottom: 0; height: 2px;
+    width: 72px; background: var(--warp); border-radius: 2px;
+  }
+  .navlinks { display: flex; align-items: center; gap: clamp(14px, 2.5vw, 28px); }
+  .navlinks a.quiet {
+    font-family: var(--mono); font-size: 12.5px; color: var(--linen-400);
+    letter-spacing: 0.04em; transition: color 0.3s var(--ease);
+  }
+  .navlinks a.quiet:hover { color: var(--linen-200); }
+  .ghost-btn {
+    font-family: var(--ui); font-size: 13.5px; font-weight: 500;
+    color: var(--linen-50);
+    border: 1px solid var(--ink-600); border-radius: 999px;
+    padding: 9px 18px; transition: border-color 0.3s var(--ease), transform 0.3s var(--ease);
+  }
+  .ghost-btn:hover { border-color: var(--warp); transform: translateY(-1px); }
+  @media (max-width: 860px) { .navlinks a.quiet { display: none; } }
+
+  /* ============================ HERO ============================ */
+  .hero {
+    position: relative; min-height: 78vh;
+    display: flex; align-items: center;
+    padding: 132px 0 80px; overflow: hidden;
+  }
+  .hero .wrap { position: relative; z-index: 2; }
+  .hero-inner { max-width: 940px; }
+  h1.hero-h1 {
+    font-size: clamp(40px, 6vw, 78px);
+    line-height: 1.03; letter-spacing: -0.015em; font-weight: 460;
+    margin: 0 0 26px;
+  }
+  .hero-deck {
+    font-family: var(--display); font-size: clamp(19px, 2.4vw, 28px);
+    line-height: 1.34; color: var(--linen-200); font-weight: 360;
+    max-width: 740px; margin: 0 0 22px; text-wrap: balance;
+  }
+  .hero-sub {
+    font-size: 16px; color: var(--linen-400); max-width: 600px; margin: 0 0 8px;
+  }
+  .hero-legend {
+    display: flex; flex-wrap: wrap; gap: 18px; margin-top: 36px;
+    font-family: var(--mono); font-size: 12px; color: var(--linen-400);
+  }
+  .hero-legend span { display: inline-flex; align-items: center; gap: 7px; }
+  .hero-legend i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+
+  /* ============================ HEADINGS / DECKS (from index.html) ============================ */
+  .sec-title { font-size: clamp(30px, 3.6vw, 50px); line-height: 1.07; letter-spacing: -0.01em; margin: 0 0 24px; }
+  .sec-deck { font-size: clamp(17px, 1.9vw, 20px); color: var(--linen-200); max-width: var(--textw); }
+
+  /* ============================ REVEALS (from index.html) ============================ */
+  .reveal {
+    opacity: 0; transform: translateY(16px);
+    transition: opacity 0.7s var(--ease), transform 0.7s var(--ease);
+    will-change: opacity, transform;
+  }
+  .reveal.in-view { opacity: 1; transform: none; }
+  .reveal.d1 { transition-delay: 0.06s; }
+  .reveal.d2 { transition-delay: 0.13s; }
+  .reveal.d3 { transition-delay: 0.2s; }
+  .reveal.d4 { transition-delay: 0.27s; }
+
+  /* ============================ CARDS (from index.html) ============================ */
+  .card {
+    background: var(--ink-800); border: 1px solid var(--ink-700);
+    border-radius: 15px; padding: clamp(18px, 2.6vw, 28px);
+    transition: border-color 0.4s var(--ease), transform 0.4s var(--ease);
+  }
+  .card .lbl {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--linen-400); margin: 0 0 10px;
+  }
+  .chip {
+    display: inline-block; font-family: var(--mono); font-size: 11.5px;
+    padding: 3px 9px; border-radius: 6px; background: var(--ink-700);
+    color: var(--linen-200); letter-spacing: 0.02em;
+  }
+  .chip.hash { color: var(--warp-soft); border: 1px solid rgba(233,162,59,0.3); }
+  .chip.weft { color: var(--weft); border: 1px solid rgba(45,212,191,0.3); }
+  .chip.clean { color: var(--clean); border: 1px solid rgba(52,216,160,0.35); }
+  .chip.seam { color: var(--seam); border: 1px solid rgba(124,111,240,0.4); }
+
+  /* glow helpers (from index.html) */
+  .glow-amber { filter: drop-shadow(0 0 5px rgba(233,162,59,0.7)); }
+  .glow-weft { filter: drop-shadow(0 0 5px rgba(45,212,191,0.7)); }
+  .glow-seam { filter: drop-shadow(0 0 6px rgba(124,111,240,0.8)); }
+  text.svg-lbl { font-family: var(--mono); font-size: 11px; fill: var(--linen-400); }
+  text.svg-lbl-lit { font-family: var(--mono); font-size: 11px; fill: var(--linen-200); }
+
+  /* ============================ 1 · THE SYSTEM MAP — layered stack ============================ */
+  .stack { margin-top: 52px; display: grid; gap: 16px; position: relative; }
+  .layer {
+    border: 1px solid var(--ink-700); border-radius: 16px;
+    background: var(--ink-800); padding: clamp(18px, 2.4vw, 26px);
+    display: grid; grid-template-columns: minmax(150px, 0.28fr) 1fr; gap: clamp(16px, 3vw, 36px);
+    align-items: center; position: relative;
+    transition: border-color 0.4s var(--ease), transform 0.4s var(--ease);
+  }
+  .layer:hover { transform: translateY(-2px); }
+  .layer .layer-head { display: flex; flex-direction: column; gap: 6px; }
+  .layer .layer-tag {
+    font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--linen-400);
+  }
+  .layer .layer-name {
+    font-family: var(--display); font-size: clamp(20px, 2.4vw, 28px);
+    color: var(--linen-50); font-weight: 460; line-height: 1.1;
+  }
+  .layer .layer-body { font-size: 14px; color: var(--linen-400); }
+  .layer .layer-body strong { color: var(--linen-200); font-weight: 600; }
+  .layer.is-git { border-color: rgba(139,138,130,0.4); }
+  .layer.is-git .layer-name { color: var(--linen-200); }
+  .layer.is-warp { border-color: rgba(233,162,59,0.4); box-shadow: 0 0 32px rgba(233,162,59,0.07); }
+  .layer.is-warp .layer-name { color: var(--warp); }
+  .layer.is-engine { border-color: rgba(45,212,191,0.32); }
+  .layer.is-engine .layer-name { color: var(--weft); }
+  .layer.is-surface .layer-name { color: var(--linen-50); }
+  .flow-down {
+    display: flex; align-items: center; justify-content: center; gap: 12px;
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.05em;
+    color: var(--linen-400);
+  }
+  .flow-down .arrow { color: var(--warp); font-size: 15px; }
+  .flow-down.up .arrow { color: var(--weft); }
+  .layer-pills { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 4px; }
+  .pill {
+    font-family: var(--mono); font-size: 11.5px; padding: 4px 10px;
+    border-radius: 7px; border: 1px solid var(--ink-700); background: var(--ink-850);
+    color: var(--linen-200);
+  }
+  .pill.warp { color: var(--warp-soft); border-color: rgba(233,162,59,0.28); }
+  .pill.weft { color: var(--weft); border-color: rgba(45,212,191,0.28); }
+  .pill.built { color: var(--clean); border-color: rgba(52,216,160,0.3); }
+  .pill.built::before { content: "● "; }
+  .ro-note {
+    margin-top: 30px; text-align: center; font-family: var(--mono);
+    font-size: 12px; color: var(--linen-400); letter-spacing: 0.04em;
+  }
+  .ro-note b { color: var(--weft); }
+  @media (max-width: 720px) {
+    .layer { grid-template-columns: 1fr; gap: 14px; }
+  }
+
+  /* ============================ 2 · USER FLOWS ============================ */
+  .flow-block { margin-top: 44px; border-radius: 18px; border: 1px solid var(--ink-700); background: var(--ink-800); overflow: hidden; }
+  .flow-block + .flow-block { margin-top: 30px; }
+  .flow-bar {
+    display: flex; align-items: baseline; gap: 16px; flex-wrap: wrap;
+    padding: 20px clamp(20px, 3vw, 30px); border-bottom: 1px solid var(--ink-700);
+    background: var(--ink-850);
+  }
+  .flow-num {
+    font-family: var(--mono); font-size: 13px; color: var(--ink-900);
+    background: var(--warp); border-radius: 8px; padding: 4px 11px; font-weight: 600;
+    flex: none;
+  }
+  .flow-block.is-divergence .flow-num { background: var(--seam); color: var(--linen-50); }
+  .flow-title { font-family: var(--display); font-size: clamp(20px, 2.2vw, 26px); color: var(--linen-50); font-weight: 460; }
+  .flow-who { font-family: var(--mono); font-size: 11.5px; color: var(--linen-400); letter-spacing: 0.04em; margin-left: auto; }
+  .steps {
+    display: grid; grid-template-columns: repeat(4, 1fr); gap: 0;
+    padding: clamp(18px, 2.4vw, 28px);
+  }
+  .steps.three { grid-template-columns: repeat(3, 1fr); }
+  .step { position: relative; padding: 4px 22px 4px 0; }
+  .step:not(:last-child)::after {
+    content: "→"; position: absolute; right: 6px; top: 30px;
+    font-family: var(--mono); color: var(--warp); font-size: 18px; opacity: 0.7;
+  }
+  .step .s-n {
+    font-family: var(--mono); font-size: 11px; color: var(--linen-400);
+    letter-spacing: 0.06em; margin-bottom: 9px;
+  }
+  .step h4 { font-family: var(--ui); font-size: 15.5px; color: var(--linen-50); font-weight: 600; margin: 0 0 8px; }
+  .step p { font-size: 13px; color: var(--linen-400); margin: 0 0 10px; }
+  .step code {
+    font-family: var(--mono); font-size: 12px; color: var(--warp-soft);
+    background: var(--ink-850); border: 1px solid var(--ink-700);
+    border-radius: 6px; padding: 3px 8px; display: inline-block; word-break: break-word;
+  }
+  .step .surface-tag {
+    font-family: var(--mono); font-size: 10.5px; color: var(--weft);
+    letter-spacing: 0.04em; margin-top: 8px; display: block;
+  }
+  .flow-block.is-divergence .step:not(:last-child)::after { color: var(--seam); }
+  .flow-foot {
+    padding: 16px clamp(20px, 3vw, 30px); border-top: 1px solid var(--ink-700);
+    font-family: var(--display); font-style: italic; font-size: 15px; color: var(--linen-200);
+  }
+  .flow-block.is-divergence .flow-foot { color: var(--linen-50); }
+  .flow-block.is-divergence .flow-foot em { color: var(--seam); font-style: normal; }
+  @media (max-width: 920px) {
+    .steps, .steps.three { grid-template-columns: 1fr 1fr; gap: 8px 18px; }
+    .step:not(:last-child)::after { display: none; }
+  }
+  @media (max-width: 560px) {
+    .steps, .steps.three { grid-template-columns: 1fr; }
+  }
+
+  /* OracleRecord shape inset (flow 2) */
+  .record-inset {
+    margin: 0 clamp(20px, 3vw, 28px) clamp(20px, 2.4vw, 28px);
+    border: 1px solid rgba(124,111,240,0.3); border-radius: 12px;
+    background: var(--ink-850); padding: 18px 20px;
+  }
+  .record-inset .lbl { color: var(--seam); }
+  pre.code {
+    font-family: var(--mono); font-size: 12.5px; line-height: 1.75;
+    color: var(--linen-200); margin: 0; white-space: pre-wrap; word-break: break-word;
+  }
+  pre.code .k { color: var(--linen-400); }
+  pre.code .warpv { color: var(--warp-soft); }
+  pre.code .weftv { color: var(--weft); }
+  pre.code .seamv { color: var(--seam); }
+  pre.code .cleanv { color: var(--clean); }
+
+  /* handoff diagram (flow 3) */
+  .handoff {
+    margin: 0 clamp(20px, 3vw, 28px) clamp(20px, 2.4vw, 28px);
+    padding: 18px; border: 1px dashed var(--ink-600); border-radius: 12px;
+  }
+
+  /* ============================ 3 · SURFACE GALLERY ============================ */
+  .gallery { margin-top: 48px; display: grid; grid-template-columns: repeat(2, 1fr); gap: 22px; }
+  @media (max-width: 860px) { .gallery { grid-template-columns: 1fr; } }
+  .surface {
+    border: 1px solid var(--ink-700); border-radius: 16px;
+    background: var(--ink-800); overflow: hidden; display: flex; flex-direction: column;
+    transition: border-color 0.4s var(--ease), transform 0.4s var(--ease);
+  }
+  .surface:hover { transform: translateY(-2px); border-color: var(--ink-600); }
+  .surface.built:hover { border-color: var(--clean); }
+  .surface-head { padding: 20px clamp(18px, 2.4vw, 24px) 14px; }
+  .surface-status {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.06em;
+    text-transform: uppercase; margin-bottom: 9px; display: inline-block;
+  }
+  .surface.built .surface-status { color: var(--clean); }
+  .surface.deferred .surface-status { color: var(--seam); }
+  .surface h3 { font-family: var(--display); font-size: 22px; color: var(--linen-50); font-weight: 460; margin: 0 0 8px; }
+  .surface .purpose { font-size: 14px; color: var(--linen-400); margin: 0; }
+  .surface .purpose code { font-family: var(--mono); font-size: 12.5px; color: var(--warp-soft); }
+  .wire {
+    margin: 6px clamp(18px, 2.4vw, 24px) clamp(18px, 2.4vw, 24px);
+    border: 1px solid var(--ink-700); border-radius: 12px; background: var(--ink-850);
+    padding: 14px; min-height: 168px; position: relative;
+  }
+  .surface.deferred .wire { opacity: 0.62; }
+  .surface.deferred .wire::after {
+    content: "deferred — needs the write path + Classroom";
+    position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    text-align: center; font-family: var(--mono); font-size: 11px; color: var(--seam);
+    letter-spacing: 0.04em; background: rgba(15,18,32,0.55); border-radius: 11px; padding: 12px;
+  }
+  /* generic wireframe primitives */
+  .wbox { border: 1px solid var(--ink-600); border-radius: 6px; background: var(--ink-800); }
+  .wlabel { font-family: var(--mono); font-size: 10px; color: var(--linen-400); letter-spacing: 0.04em; }
+  /* Oracle wireframe — meaning vs bytes split */
+  .wire-split { display: grid; grid-template-columns: 1fr 2px 1fr; gap: 0; height: 78px; margin-bottom: 12px; }
+  .wire-split .side { padding: 9px 11px; border: 1px solid var(--ink-600); border-radius: 6px; }
+  .wire-split .side.bytes { font-family: var(--mono); }
+  .wire-split .side.meaning { font-family: var(--display); }
+  .wire-split .seam-bar { background: var(--seam); box-shadow: 0 0 8px rgba(124,111,240,0.7); border-radius: 2px; }
+  .wire-split .side .sh { font-size: 10px; color: var(--linen-400); margin-bottom: 8px; font-family: var(--mono); letter-spacing: 0.05em; }
+  .wire-2x2 { display: grid; grid-template-columns: 1fr 1fr; gap: 5px; }
+  .wire-2x2 .cell {
+    border: 1px solid var(--ink-700); border-radius: 5px; background: var(--ink-800);
+    padding: 7px 8px; font-family: var(--mono); font-size: 10px; color: var(--linen-400);
+  }
+  .wire-2x2 .cell .cn { font-size: 15px; color: var(--linen-200); display: block; }
+  .wire-2x2 .cell.star { border-color: var(--seam); box-shadow: inset 0 0 14px rgba(124,111,240,0.18); }
+  .wire-2x2 .cell.star .cn { color: var(--seam); }
+  .wire-2x2 .cell.amber { border-color: rgba(233,162,59,0.3); }
+  .wire-2x2 .cell.amber .cn { color: var(--warp); }
+  /* diff wireframe — empty delta */
+  .wire-diff-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; }
+  .wire-diff-row .nm { font-family: var(--mono); font-size: 12px; }
+  .wire-diff-row .strike { text-decoration: line-through; color: var(--cut); }
+  .wire-bigzero { font-family: var(--display); font-size: 40px; color: var(--weft); line-height: 1; }
+  .wire-churn { font-family: var(--mono); font-size: 11px; color: var(--cut); }
+  /* forecast wireframe */
+  .wire-bars { display: grid; gap: 7px; }
+  .wire-bar { display: grid; grid-template-columns: 64px 1fr auto; align-items: center; gap: 8px; font-family: var(--mono); font-size: 10px; color: var(--linen-400); }
+  .wire-bar .track { height: 8px; border-radius: 4px; background: var(--ink-700); overflow: hidden; }
+  .wire-bar .fill { height: 100%; border-radius: 4px; }
+  .wire-bar .fill.clean { background: var(--weft); }
+  .wire-bar .fill.knot { background: var(--seam); }
+  .wire-bar .fill.dangle { background: var(--cut); }
+  /* deferred placeholder skeletons */
+  .wire-skel { display: grid; gap: 8px; }
+  .wire-skel .row { height: 12px; border-radius: 4px; background: var(--ink-700); }
+  .wire-skel .row.w70 { width: 70%; } .wire-skel .row.w50 { width: 50%; } .wire-skel .row.w85 { width: 85%; }
+
+  /* ============================ 4 · CLI ↔ GUI MAP TABLE ============================ */
+  .map-controls { margin-top: 40px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .legend-key { display: flex; flex-wrap: wrap; gap: 14px; font-family: var(--mono); font-size: 11.5px; color: var(--linen-400); }
+  .legend-key span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend-key i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  .cmp-scroll { margin-top: 22px; overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 14px; border: 1px solid var(--ink-700); }
+  table.cmp { width: 100%; border-collapse: collapse; min-width: 820px; font-size: 13.5px; }
+  table.cmp th, table.cmp td {
+    text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--ink-700);
+    vertical-align: top;
+  }
+  table.cmp thead th {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--linen-50); background: var(--ink-850);
+    position: sticky; top: 0;
+  }
+  table.cmp thead th.warpline-col { color: var(--warp); }
+  table.cmp thead th.gui-col { color: var(--weft); }
+  table.cmp td.git { color: var(--linen-400); font-family: var(--mono); font-size: 12.5px; }
+  table.cmp td.warpline { color: var(--linen-200); font-family: var(--mono); font-size: 12.5px; }
+  table.cmp td.warpline .nbuilt { color: var(--clean); }
+  table.cmp td.gui { color: var(--weft); font-size: 12.5px; }
+  table.cmp td.gui.none { color: var(--linen-400); font-style: italic; }
+  table.cmp tr.group-head td {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--linen-400); background: var(--ink-850);
+    padding-top: 16px;
+  }
+  .klass {
+    font-family: var(--mono); font-size: 10.5px; padding: 2px 8px; border-radius: 999px;
+    letter-spacing: 0.03em; white-space: nowrap; display: inline-block;
+  }
+  .klass.maps { color: var(--clean); border: 1px solid rgba(52,216,160,0.35); }
+  .klass.transformed { color: var(--warp-soft); border: 1px solid rgba(233,162,59,0.35); }
+  .klass.new { color: var(--weft); border: 1px solid rgba(45,212,191,0.35); }
+  .klass.obsolete { color: var(--cut); border: 1px solid rgba(94,92,84,0.6); }
+  .map-foot { font-size: 13px; color: var(--linen-400); margin-top: 20px; max-width: var(--textw); font-style: italic; }
+
+  /* ============================ FOOTER (from index.html) ============================ */
+  footer {
+    position: relative; padding: 72px 0 56px;
+    border-top: 1px solid var(--ink-700);
+    background: linear-gradient(to bottom, var(--ink-850), #000);
+  }
+  .foot-inner { display: flex; flex-wrap: wrap; gap: 24px; align-items: center; justify-content: space-between; position: relative; z-index: 1; }
+  .foot-links { display: flex; gap: 22px; flex-wrap: wrap; }
+  .foot-links a { font-family: var(--mono); font-size: 12.5px; color: var(--linen-400); transition: color 0.3s var(--ease); }
+  .foot-links a:hover { color: var(--warp); }
+  .foot-tag { font-family: var(--mono); font-size: 12px; color: var(--linen-400); letter-spacing: 0.04em; }
+  .foot-grid {
+    position: absolute; inset: 0; pointer-events: none;
+    background-image: repeating-linear-gradient(to right, var(--ink-700) 0, var(--ink-700) 1px, transparent 1px, transparent 72px);
+    -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,0.5), transparent);
+    mask-image: linear-gradient(to bottom, rgba(0,0,0,0.5), transparent);
+    opacity: 0.08;
+  }
+
+  /* ============================ MOBILE / REDUCED MOTION (from index.html) ============================ */
+  @media (max-width: 720px) {
+    body { font-size: 16px; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation: none !important;
+      transition-duration: 0.001ms !important;
+    }
+    .reveal { opacity: 1; transform: none; transition: opacity 0.3s ease !important; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============================ NAV ============================ -->
+<nav class="topnav" id="topnav" aria-label="Primary">
+  <a href="#top" class="wordmark" aria-label="WARPLINE home">WARPLINE<span class="tag">· the system</span></a>
+  <div class="navlinks">
+    <a href="#map" class="quiet">The map</a>
+    <a href="#flows" class="quiet">User flows</a>
+    <a href="#gallery" class="quiet">Surfaces</a>
+    <a href="#cli-gui" class="quiet">CLI ↔ GUI</a>
+    <a href="index.html" class="ghost-btn">The vision &rarr;</a>
+  </div>
+</nav>
+
+<!-- ============================ HERO ============================ -->
+<header class="hero section" id="top">
+  <div class="warpgrid"></div>
+  <div class="wrap">
+    <div class="hero-inner">
+      <p class="eyebrow reveal in-view">Warpline · the system map &amp; user flows</p>
+      <h1 class="hero-h1">How the whole thing connects — and how you move through&nbsp;it.</h1>
+      <p class="hero-deck reveal d1">One read-only spine today: git flows up through <span class="emph">ABSORB</span> into the <span class="emph">WARP</span>, the engine reads meaning, and two surfaces show you what bytes can't&nbsp;say.</p>
+      <p class="hero-sub reveal d2">This is the UX / system map — distinct from the vision page. Where the architecture diagram answers <em>what is it</em>, this answers <em>where do I stand and what do I press</em>. Everything drawn here is Phase&nbsp;1: read-only over real&nbsp;git.</p>
+      <div class="hero-legend reveal d3">
+        <span><i style="background:var(--warp)"></i> warp · meaning &amp; identity</span>
+        <span><i style="background:var(--weft)"></i> weft · branches &amp; flow up</span>
+        <span><i style="background:var(--clean)"></i> built / git's CLEAN</span>
+        <span><i style="background:var(--seam)"></i> seam · divergence, git-blind</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ============================ 1 · THE SYSTEM MAP ============================ -->
+<section class="section section--bleed" id="map">
+  <div class="warpgrid"></div>
+  <div class="wrap">
+    <p class="eyebrow reveal">01 · The system map</p>
+    <h2 class="sec-title reveal d1">Five layers. Data flows up; nothing flows&nbsp;back.</h2>
+    <p class="sec-deck reveal d2">
+      Git is the floor, not the foundation. Your real branches are <em class="emph-weft">absorbed</em> into the
+      WARP — a content-addressed store of meaning — which the engine reads to <em class="emph">diff</em>,
+      <em class="emph">predict</em>, and run the <em class="emph">oracle</em>. Two surfaces sit on top: the CLI and
+      the GUI. In Phase&nbsp;1 every arrow points up: read-only, by construction.
+    </p>
+
+    <div class="stack reveal d3" aria-label="The Warpline layered architecture, data flowing upward from git to the surfaces">
+      <!-- L1: git -->
+      <div class="layer is-git">
+        <div class="layer-head">
+          <span class="layer-tag">Layer 1 · the floor</span>
+          <span class="layer-name">git</span>
+        </div>
+        <div class="layer-body">
+          Real branches, real commits, real <code style="font-family:var(--mono);font-size:12px;color:var(--linen-200)">merge-tree</code>. Warpline never touches HEAD, the index, or the worktree — it reads refs through a throwaway worktree.
+          <div class="layer-pills">
+            <span class="pill">branchA</span><span class="pill">branchB</span><span class="pill">merge-base</span><span class="pill">git merge-tree (the reality check)</span>
+          </div>
+        </div>
+      </div>
+      <div class="flow-down up"><span class="arrow">↑</span> ABSORB &nbsp;·&nbsp; <code style="font-family:var(--mono);font-size:11px;color:var(--linen-400)">absorb(gitRef) → WarpState</code> &nbsp;·&nbsp; lossless lift, drops name/path/position</div>
+
+      <!-- L2: WARP -->
+      <div class="layer is-warp">
+        <div class="layer-head">
+          <span class="layer-tag">Layer 2 · the truth</span>
+          <span class="layer-name">the WARP</span>
+        </div>
+        <div class="layer-body">
+          A content-addressed store of <strong>meaning</strong>. Each symbol is lifted to a <strong>WarpObject</strong> whose <strong>essence-hash</strong> moves <em>iff</em> the meaning moves — so a rename is the empty delta. A <strong>WarpState</strong> = the whole graph at a ref, keyed by <code style="font-family:var(--mono);font-size:12px;color:var(--warp-soft)">stateId</code>.
+          <div class="layer-pills">
+            <span class="pill warp">WarpObject · kind+contract+edges</span><span class="pill warp">contentId = essence:v0:sha256</span><span class="pill warp">WarpState · stateId</span>
+          </div>
+        </div>
+      </div>
+      <div class="flow-down up"><span class="arrow">↑</span> the engine reads the WARP &nbsp;·&nbsp; never the bytes</div>
+
+      <!-- L3: engine -->
+      <div class="layer is-engine">
+        <div class="layer-head">
+          <span class="layer-tag">Layer 3 · the engine</span>
+          <span class="layer-name">diff · predict · oracle</span>
+        </div>
+        <div class="layer-body">
+          <strong>diff(base, branch)</strong> → a SemDelta (born / retired / contract-changed / edge-Δ / the empty rename). <strong>predict(ΔA, ΔB)</strong> → {autoClean, <em class="emph-seam">knots</em>, <em class="emph-seam">dangling</em>}. <strong>oracle(A, B)</strong> compares meaning's prediction against git's <em>actual</em> merge and scores the confusion matrix → a <strong>verdict</strong>.
+          <div class="layer-pills">
+            <span class="pill weft">SemDelta</span><span class="pill weft">predict → knots / dangling</span><span class="pill weft">oracle → CONVERGENT / DIVERGENT</span><span class="pill weft">Justification (actor · intent · ripple)</span>
+          </div>
+        </div>
+      </div>
+      <div class="flow-down up"><span class="arrow">↑</span> appends an <code style="font-family:var(--mono);font-size:11px;color:var(--linen-400)">OracleRecord</code> → <code style="font-family:var(--mono);font-size:11px;color:var(--linen-400)">.warpline/oracle.jsonl</code></div>
+
+      <!-- L4: surfaces -->
+      <div class="layer is-surface">
+        <div class="layer-head">
+          <span class="layer-tag">Layer 4 · the surfaces</span>
+          <span class="layer-name">CLI &amp; the GUI</span>
+        </div>
+        <div class="layer-body">
+          The <strong>CLI</strong> (<code style="font-family:var(--mono);font-size:12px;color:var(--warp-soft)">warpline oracle</code> / <code style="font-family:var(--mono);font-size:12px;color:var(--warp-soft)">absorb</code>) writes the ledger. The <strong>GUI</strong> — a section in the Platform (<code style="font-family:var(--mono);font-size:12px;color:var(--warp-soft)">paradigm serve</code>) — reads that same ledger, runs compute-only endpoints in-process, and repaints live over a WS bus. No reachable write path.
+          <div class="layer-pills">
+            <span class="pill built">warpline oracle / absorb (CLI)</span><span class="pill built">Oracle Divergence Viewer (GUI)</span><span class="pill weft">/api/warpline · forecast · diff · ledger</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <p class="ro-note reveal">Phase&nbsp;1 is <b>read-only forever</b> — the GUI's <code style="font-family:var(--mono);font-size:11px;color:var(--linen-200)">weave</code> verb exits&nbsp;2; the router can never construct it. Read-only is <b>structural</b>, not policed.</p>
+  </div>
+</section>
+
+<!-- ============================ 2 · THE USER FLOWS ============================ -->
+<section class="section section--bleed-deep" id="flows">
+  <div class="warpgrid"></div>
+  <div class="wrap">
+    <p class="eyebrow reveal">02 · The user flows</p>
+    <h2 class="sec-title reveal d1">Three journeys you can run on this repo&nbsp;today.</h2>
+    <p class="sec-deck reveal d2">
+      Each is a numbered step-flow grounded in the real commands and the real <code style="font-family:var(--mono);font-size:13px;color:var(--warp-soft)">OracleRecord</code>
+      shape. No write path is involved — these are reads, forecasts, and scored comparisons.
+    </p>
+
+    <!-- FLOW 1 — review a merge before landing -->
+    <div class="flow-block reveal d3">
+      <div class="flow-bar">
+        <span class="flow-num">01</span>
+        <span class="flow-title">Review a merge before landing</span>
+        <span class="flow-who">surface: GUI · weave-forecast · ephemeral</span>
+      </div>
+      <div class="steps">
+        <div class="step">
+          <p class="s-n">STEP 1</p>
+          <h4>Pick two branches</h4>
+          <p>In the ledger rail's RefPicker, choose <em>branchA</em> and <em>branchB</em> from <code>GET /refs</code>. Run stays disabled until they differ.</p>
+          <span class="surface-tag">↳ OracleLedgerRail · RefPicker</span>
+        </div>
+        <div class="step">
+          <p class="s-n">STEP 2</p>
+          <h4>Forecast the weave</h4>
+          <p>Press <strong>Preview</strong>. Posts <code>/forecast {vsGit:true}</code> — fast, ephemeral, no ledger row. The engine predicts from meaning only.</p>
+          <span class="surface-tag">↳ POST /api/warpline/forecast</span>
+        </div>
+        <div class="step">
+          <p class="s-n">STEP 3</p>
+          <h4>Inspect knots &amp; dangles</h4>
+          <p>Read <code>prediction.{autoClean, knots, dangling}</code>: how many symbols auto-weave, which symbols <em class="emph-seam">knot</em>, any <em class="emph-seam">dangling</em> references.</p>
+          <span class="surface-tag">↳ DivergencePanel · KnotRender / DangleRender</span>
+        </div>
+        <div class="step">
+          <p class="s-n">STEP 4</p>
+          <h4>Decide</h4>
+          <p>Merge-day becomes a forecast you read first. Land the clean ones; route the knots to a human before they ever hit the worktree.</p>
+          <span class="surface-tag">↳ read-only — you decide, the tool doesn't</span>
+        </div>
+      </div>
+      <div class="flow-foot">A forecast, not a surprise — you see the weave before you commit to it.</div>
+    </div>
+
+    <!-- FLOW 2 — catch a divergence (the seam moment) -->
+    <div class="flow-block is-divergence reveal">
+      <div class="flow-bar">
+        <span class="flow-num">02</span>
+        <span class="flow-title">Catch a divergence — git CLEAN, Warpline DIVERGENT</span>
+        <span class="flow-who">surface: the Oracle · the headline moment</span>
+      </div>
+      <div class="steps three">
+        <div class="step">
+          <p class="s-n">STEP 1</p>
+          <h4>Run the oracle</h4>
+          <p>Two branches touch one <code style="color:var(--linen-400)">.ts</code> file. A renames <code>getUser→fetchUser</code>; B adds a call to <code>getUser()</code>. Run it.</p>
+          <span class="surface-tag">↳ warpline oracle A B &nbsp;·&nbsp; POST /oracle</span>
+        </div>
+        <div class="step">
+          <p class="s-n">STEP 2</p>
+          <h4>Two trusted oracles contradict</h4>
+          <p>Left = git: <span class="chip clean">CLEAN ✓</span> — <code style="color:var(--cut)">git merge-tree</code> finds 0 conflicts; it would ship. Right = Warpline: <span class="chip seam">DIVERGENT</span>.</p>
+          <span class="surface-tag">↳ MeaningVsBytesSplit · the seam pulses</span>
+        </div>
+        <div class="step">
+          <p class="s-n">STEP 3</p>
+          <h4>The dangling call</h4>
+          <p>The <em class="emph-seam">divergeMeaningOnly</em> cell glows: a call into a function that no longer exists. Click it → the real broken symbol.</p>
+          <span class="surface-tag">↳ ConfusionMatrix ★ · DangleRender</span>
+        </div>
+      </div>
+      <div class="record-inset">
+        <p class="lbl">⬡ The OracleRecord this writes · the experimental result · .warpline/oracle.jsonl</p>
+<pre class="code"><span class="k">{</span>
+  <span class="k">ts:</span> <span class="warpv">"2026-06-23T…"</span>, <span class="k">branchA:</span> <span class="warpv">"feat/rename"</span>, <span class="k">branchB:</span> <span class="warpv">"feat/new-call"</span>,
+  <span class="k">prediction: {</span> <span class="k">autoClean:</span> [<span class="k">…</span>], <span class="k">knots:</span> [], <span class="seamv">dangling: [{ fromSymbol, edgeKind:"uses", danglingTargetSymbol:"getUser", retiredBy:"A" }]</span> <span class="k">},</span>
+  <span class="k">gitReality: {</span> <span class="cleanv">conflicted: false</span>, <span class="k">conflictSymbols: [], conflictPaths: []</span> <span class="k">},</span>
+  <span class="k">convergence: {</span> <span class="k">agreeClean:[…], divergeGitOnly:[],</span> <span class="seamv">divergeMeaningOnly: ["getUser"]</span>, <span class="k">score, verdict:</span> <span class="seamv">"DIVERGENT"</span> <span class="k">},</span>
+  <span class="k">justifications: {</span> <span class="k">A:{actor, intent}, B:{actor, intent}</span> <span class="k">}</span>
+<span class="k">}</span></pre>
+      </div>
+      <div class="flow-foot">git merged the bytes. <em>Warpline saw the break in the meaning</em> — the one cell allowed to glow.</div>
+    </div>
+
+    <!-- FLOW 3 — CLI ↔ GUI handoff -->
+    <div class="flow-block reveal">
+      <div class="flow-bar">
+        <span class="flow-num">03</span>
+        <span class="flow-title">The CLI ↔ GUI handoff — run in the terminal, watch it land in the ledger</span>
+        <span class="flow-who">surface: CLI → ledger → GUI, live</span>
+      </div>
+      <div class="steps three">
+        <div class="step">
+          <p class="s-n">STEP 1</p>
+          <h4>Run the CLI</h4>
+          <p>From a terminal: <code>warpline oracle main feat/x</code>. The engine absorbs both refs, predicts, runs git's real merge, scores.</p>
+          <span class="surface-tag">↳ same engine fns the GUI imports in-process</span>
+        </div>
+        <div class="step">
+          <p class="s-n">STEP 2</p>
+          <h4>It appends one row</h4>
+          <p>A single <code>OracleRecord</code> is appended to <code style="color:var(--linen-400)">.warpline/oracle.jsonl</code> — the append-only ledger both surfaces read.</p>
+          <span class="surface-tag">↳ the ledger is the shared substrate</span>
+        </div>
+        <div class="step">
+          <p class="s-n">STEP 3</p>
+          <h4>The GUI repaints live</h4>
+          <p>The Platform <code>fs.watch</code>es the ledger → fires <code style="color:var(--weft)">warpline:oracle-record-appended</code> over the WS bus. The rail prepends the row — no poll, no refresh.</p>
+          <span class="surface-tag">↳ OracleLedgerRail · WS live repaint</span>
+        </div>
+      </div>
+      <div class="handoff">
+        <svg viewBox="0 0 1000 130" role="img" aria-label="The CLI writes one OracleRecord to the ledger; the GUI file-watches the ledger and repaints live over a websocket">
+          <defs>
+            <marker id="h-arr-w" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--warp)"/></marker>
+            <marker id="h-arr-t" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="var(--weft)"/></marker>
+          </defs>
+          <!-- CLI -->
+          <g transform="translate(120,65)">
+            <rect x="-78" y="-30" width="156" height="60" rx="10" fill="var(--ink-850)" stroke="var(--ink-600)" stroke-width="1.4"/>
+            <text x="0" y="-4" text-anchor="middle" font-family="var(--mono)" font-size="12" fill="var(--linen-50)">$ warpline oracle</text>
+            <text x="0" y="14" text-anchor="middle" font-family="var(--mono)" font-size="11" fill="var(--linen-400)">the CLI</text>
+          </g>
+          <path d="M200,55 C290,40 340,40 418,52" fill="none" stroke="var(--warp)" stroke-width="2" marker-end="url(#h-arr-w)"/>
+          <text x="310" y="34" text-anchor="middle" class="svg-lbl-lit" fill="var(--warp-soft)">append one OracleRecord</text>
+          <!-- ledger -->
+          <g transform="translate(500,65)">
+            <rect x="-78" y="-30" width="156" height="60" rx="10" fill="var(--ink-800)" stroke="var(--warp)" stroke-width="1.6"/>
+            <text x="0" y="-4" text-anchor="middle" font-family="var(--mono)" font-size="11" fill="var(--warp-soft)">oracle.jsonl</text>
+            <text x="0" y="14" text-anchor="middle" font-family="var(--mono)" font-size="10" fill="var(--linen-400)">append-only ledger</text>
+          </g>
+          <path d="M582,52 C660,40 710,40 800,55" fill="none" stroke="var(--weft)" stroke-width="2" marker-end="url(#h-arr-t)"/>
+          <text x="690" y="34" text-anchor="middle" class="svg-lbl-lit" fill="var(--weft)">fs.watch → WS broadcast</text>
+          <!-- GUI -->
+          <g transform="translate(880,65)">
+            <rect x="-78" y="-30" width="156" height="60" rx="10" fill="var(--ink-850)" stroke="var(--weft)" stroke-width="1.4"/>
+            <text x="0" y="-4" text-anchor="middle" font-family="var(--mono)" font-size="11" fill="var(--weft)">the GUI ledger</text>
+            <text x="0" y="14" text-anchor="middle" font-family="var(--mono)" font-size="10" fill="var(--linen-400)">repaints live</text>
+          </g>
+          <text x="500" y="116" text-anchor="middle" class="svg-lbl" fill="var(--linen-400)">one ledger · one engine · two surfaces — the GUI imports the engine fns in-process, never shells the CLI</text>
+        </svg>
+      </div>
+      <div class="flow-foot">The terminal and the screen are two windows onto one ledger — run anywhere, see it everywhere.</div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 3 · THE SURFACE GALLERY ============================ -->
+<section class="section section--bleed" id="gallery">
+  <div class="warpgrid"></div>
+  <div class="wrap">
+    <p class="eyebrow reveal">03 · The surface gallery</p>
+    <h2 class="sec-title reveal d1">Every GUI surface, and what each one is&nbsp;for.</h2>
+    <p class="sec-deck reveal d2">
+      Three surfaces render real data today; three more wait on the write path. The cut-line is bright on
+      purpose — Warpline renders only what it can show truthfully. Wireframes below are sketches, not live&nbsp;data.
+    </p>
+
+    <div class="gallery reveal d3">
+      <!-- Oracle Divergence Viewer -->
+      <article class="surface built">
+        <div class="surface-head">
+          <span class="surface-status">● built · the MVP</span>
+          <h3>Oracle Divergence Viewer</h3>
+          <p class="purpose">The whole page where <em>git sees bytes, Warpline sees meaning</em>. A hard meaning-vs-bytes split, the literal 2×2, the knot/dangle render. <code>OracleDivergenceViewer.tsx</code></p>
+        </div>
+        <div class="wire" aria-label="Wireframe: a vertical meaning-vs-bytes split above a 2-by-2 confusion matrix">
+          <div class="wire-split">
+            <div class="side bytes">
+              <div class="sh">git · bytes</div>
+              <span class="chip clean" style="font-size:10px">CLEAN ✓</span>
+            </div>
+            <div class="seam-bar" aria-hidden="true"></div>
+            <div class="side meaning">
+              <div class="sh">Warpline · meaning</div>
+              <span class="chip seam" style="font-size:10px">DIVERGENT</span>
+            </div>
+          </div>
+          <div class="wire-2x2">
+            <div class="cell"><span class="cn">7</span>agree clean</div>
+            <div class="cell amber"><span class="cn">0</span>git-only (noise)</div>
+            <div class="cell star"><span class="cn">1</span>meaning-only ★</div>
+            <div class="cell"><span class="cn">0</span>agree conflict</div>
+          </div>
+        </div>
+      </article>
+
+      <!-- Semantic-diff viewer -->
+      <article class="surface built">
+        <div class="surface-head">
+          <span class="surface-status">● built · the daily driver</span>
+          <h3>Semantic-diff viewer</h3>
+          <p class="purpose">The comfort hook: a rename or move is the <em>empty delta</em> — zero noise — while a real body change is a real delta. <code>warpline diff</code></p>
+        </div>
+        <div class="wire" aria-label="Wireframe: a rename shows the same contentId both sides and an empty delta, against git's churn count">
+          <div class="wire-diff-row">
+            <span class="nm strike">getUser</span>
+            <span class="wlabel">→</span>
+            <span class="nm" style="color:var(--weft)">fetchUser</span>
+          </div>
+          <div class="wire-diff-row" style="border-top:1px solid var(--ink-700)">
+            <span class="wlabel">essence</span>
+            <span class="chip hash" style="font-size:10px">#a1f0</span>
+            <span class="wlabel">→</span>
+            <span class="chip hash" style="font-size:10px">#a1f0</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:16px;margin-top:8px">
+            <div><span class="wire-bigzero">∅</span></div>
+            <div>
+              <div class="wlabel" style="color:var(--weft)">semantic delta: 0</div>
+              <div class="wire-churn">git would show: 142 lines moved</div>
+            </div>
+          </div>
+        </div>
+      </article>
+
+      <!-- Weave forecast -->
+      <article class="surface built">
+        <div class="surface-head">
+          <span class="surface-status">● built · the workflow</span>
+          <h3>Weave forecast</h3>
+          <p class="purpose">Pre-merge clean-vs-knots with zero checkout — how many auto-clean, which knots, any dangling refs, the lowest-knot order. <code>warpline weave --preview</code></p>
+        </div>
+        <div class="wire" aria-label="Wireframe: horizontal bars forecasting how many symbols auto-clean versus knot versus dangle">
+          <div class="wire-bars">
+            <div class="wire-bar"><span>auto-clean</span><span class="track"><span class="fill clean" style="width:78%"></span></span><span style="color:var(--weft)">14</span></div>
+            <div class="wire-bar"><span>knots</span><span class="track"><span class="fill knot" style="width:14%"></span></span><span style="color:var(--seam)">2</span></div>
+            <div class="wire-bar"><span>dangling</span><span class="track"><span class="fill dangle" style="width:8%"></span></span><span style="color:var(--cut)">1</span></div>
+          </div>
+          <div class="wlabel" style="margin-top:12px;color:var(--linen-200)">suggested order: weave the 14, surface the 3 to a human</div>
+          <div class="wlabel" style="margin-top:6px">ephemeral · /forecast · no ledger row</div>
+        </div>
+      </article>
+
+      <!-- The Tapestry (deferred) -->
+      <article class="surface deferred">
+        <div class="surface-head">
+          <span class="surface-status">◇ deferred · retention</span>
+          <h3>The Tapestry</h3>
+          <p class="purpose">Woven history: warp symbol-lanes crossed by branch wefts, WeaveRecords graded by field outcome. Needs the write path + Classroom actuals.</p>
+        </div>
+        <div class="wire" aria-label="Wireframe placeholder for the deferred Tapestry">
+          <div class="wire-skel">
+            <div class="row w85"></div><div class="row w70"></div><div class="row"></div><div class="row w50"></div><div class="row w70"></div>
+          </div>
+        </div>
+      </article>
+
+      <!-- The Bridge (deferred) -->
+      <article class="surface deferred">
+        <div class="surface-head">
+          <span class="surface-status">◇ deferred · team</span>
+          <h3>The Bridge</h3>
+          <p class="purpose">Scrutiny-heat over N parallel branches (SCRUTINY = fragility × (1 − trust)). Needs the trust ledger + endorsement primitive.</p>
+        </div>
+        <div class="wire" aria-label="Wireframe placeholder for the deferred Bridge">
+          <div class="wire-skel">
+            <div class="row"></div><div class="row w70"></div><div class="row w85"></div><div class="row w50"></div><div class="row w70"></div>
+          </div>
+        </div>
+      </article>
+
+      <!-- The Lightbox (deferred) -->
+      <article class="surface deferred">
+        <div class="surface-head">
+          <span class="surface-status">◇ deferred · team</span>
+          <h3>The Lightbox</h3>
+          <p class="purpose">Knot decision cards — render-by-projection of the real blast radius — feeding a permanent Decision. Needs the write path + Classroom.</p>
+        </div>
+        <div class="wire" aria-label="Wireframe placeholder for the deferred Lightbox">
+          <div class="wire-skel">
+            <div class="row w70"></div><div class="row"></div><div class="row w50"></div><div class="row w85"></div><div class="row w70"></div>
+          </div>
+        </div>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 4 · THE CLI ↔ GUI MAP ============================ -->
+<section class="section section--bleed-deep" id="cli-gui">
+  <div class="warpgrid"></div>
+  <div class="wrap">
+    <p class="eyebrow reveal">04 · The CLI ↔ GUI map</p>
+    <h2 class="sec-title reveal d1">Every git flow → its Warpline command → where it&nbsp;surfaces.</h2>
+    <p class="sec-deck reveal d2">
+      The full flow map from <code style="font-family:var(--mono);font-size:13px;color:var(--warp-soft)">warpline-flows.md §1</code>, classified.
+      Most git verbs <em class="emph-weft">map cleanly</em>; some are <em class="emph">transformed</em> by versioning meaning;
+      a few are <em class="emph-weft">new</em> (git never had them); and some go <em>obsolete</em> when bytes stop being the unit.
+    </p>
+
+    <div class="map-controls reveal d3">
+      <div class="legend-key">
+        <span><span class="klass maps">MAPS CLEANLY</span></span>
+        <span><span class="klass transformed">TRANSFORMED</span></span>
+        <span><span class="klass new">NEW IN WARPLINE</span></span>
+        <span><span class="klass obsolete">OBSOLETE</span></span>
+        <span style="margin-left:8px"><span class="nbuilt" style="color:var(--clean);font-family:var(--mono)">● built</span></span>
+      </div>
+    </div>
+
+    <div class="cmp-scroll reveal d3">
+      <table class="cmp">
+        <thead>
+          <tr>
+            <th style="width:40px">Class</th>
+            <th>git flow</th>
+            <th class="warpline-col">Warpline command</th>
+            <th class="gui-col">GUI surface</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- LOCAL EVERYDAY -->
+          <tr class="group-head"><td colspan="4">Local · everyday</td></tr>
+          <tr><td><span class="klass maps">M</span></td><td class="git">init</td><td class="warpline">warpline init</td><td class="gui none">—</td></tr>
+          <tr><td><span class="klass obsolete">O</span></td><td class="git">add / staging</td><td class="warpline">— (you stage <em>meaning</em>; the pending semantic-delta IS the stage)</td><td class="gui none">—</td></tr>
+          <tr><td><span class="klass transformed">T</span></td><td class="git">commit</td><td class="warpline">warpline pick <span style="color:var(--linen-400)">(seals a Justification)</span></td><td class="gui none">—</td></tr>
+          <tr><td><span class="klass maps">M</span></td><td class="git">branch / switch</td><td class="warpline">warpline branch · warpline switch (+ PROJECT)</td><td class="gui none">—</td></tr>
+          <tr><td><span class="klass transformed">T</span></td><td class="git">merge</td><td class="warpline">warpline weave</td><td class="gui">Oracle Divergence Viewer · Weave forecast</td></tr>
+          <tr><td><span class="klass obsolete">O</span></td><td class="git">rebase</td><td class="warpline">mostly OBSOLETE · replay-onto survives → warpline replay --onto</td><td class="gui none">—</td></tr>
+          <tr><td><span class="klass transformed">T</span></td><td class="git">mv (rename / move)</td><td class="warpline">warpline move <span style="color:var(--linen-400)">— the ZERO-DIFF rename = the empty delta</span></td><td class="gui">Semantic-diff viewer (∅)</td></tr>
+          <tr><td><span class="klass maps">M</span></td><td class="git">status</td><td class="warpline">warpline status</td><td class="gui none">—</td></tr>
+          <tr><td><span class="klass maps">M</span></td><td class="git">revert</td><td class="warpline">warpline revert <span style="color:var(--linen-400)">(forward inverse PICK)</span></td><td class="gui none">—</td></tr>
+          <tr><td><span class="klass maps">M</span></td><td class="git">stash</td><td class="warpline">warpline shelf <span style="color:var(--cut)">(GAP-2)</span></td><td class="gui none">—</td></tr>
+
+          <!-- HISTORY -->
+          <tr class="group-head"><td colspan="4">History</td></tr>
+          <tr><td><span class="klass maps">M</span></td><td class="git">log</td><td class="warpline">warpline tapestry</td><td class="gui">The Tapestry <span style="color:var(--seam)">(deferred)</span></td></tr>
+          <tr><td><span class="klass transformed">T</span></td><td class="git">diff</td><td class="warpline">warpline diff <span style="color:var(--linen-400)">(semantic)</span></td><td class="gui">Semantic-diff viewer</td></tr>
+          <tr><td><span class="klass transformed">T</span></td><td class="git">blame</td><td class="warpline">warpline lifeline <span style="color:var(--linen-400)">(meaning-attribution, survives renames)</span></td><td class="gui none">—</td></tr>
+          <tr><td><span class="klass new">N</span></td><td class="git">— (no equivalent)</td><td class="warpline"><span class="nbuilt">● absorb</span> <span style="color:var(--linen-400)">(lift a ref → WarpState)</span></td><td class="gui">backs every viewer (in-process)</td></tr>
+
+          <!-- COLLABORATE -->
+          <tr class="group-head"><td colspan="4">Collaborate · remote</td></tr>
+          <tr><td><span class="klass maps">M</span></td><td class="git">fetch</td><td class="warpline">warpline gather <span style="color:var(--linen-400)">(transfer ≠ admission)</span></td><td class="gui none">—</td></tr>
+          <tr><td><span class="klass maps">M</span></td><td class="git">pull</td><td class="warpline">warpline draw <span style="color:var(--linen-400)">(gather + weave)</span></td><td class="gui none">—</td></tr>
+          <tr><td><span class="klass transformed">T</span></td><td class="git">push</td><td class="warpline">warpline offer <span style="color:var(--linen-400)">(proposes meaning; can't force)</span></td><td class="gui none">—</td></tr>
+          <tr><td><span class="klass maps">M</span></td><td class="git">fork</td><td class="warpline">warpline diverge</td><td class="gui none">—</td></tr>
+
+          <!-- THE SOCIAL / REVIEW LAYER -->
+          <tr class="group-head"><td colspan="4">Review &amp; approval · the layer git exiled to GitHub (all NEW)</td></tr>
+          <tr><td><span class="klass new">N</span></td><td class="git">— (no equivalent)</td><td class="warpline"><span class="nbuilt">● oracle</span> <span style="color:var(--linen-400)">(predicted vs git's real merge, scored)</span></td><td class="gui">Oracle Divergence Viewer</td></tr>
+          <tr><td><span class="klass new">N</span></td><td class="git">PR</td><td class="warpline">warpline offer / propose <span style="color:var(--linen-400)">(THE OFFER · the Justification)</span></td><td class="gui">The Lightbox <span style="color:var(--seam)">(deferred)</span></td></tr>
+          <tr><td><span class="klass new">N</span></td><td class="git">code-review</td><td class="warpline">warpline review / scrutiny <span style="color:var(--linen-400)">(attention by expected loss)</span></td><td class="gui">The Bridge <span style="color:var(--seam)">(deferred)</span></td></tr>
+          <tr><td><span class="klass new">N</span></td><td class="git">approve</td><td class="warpline">warpline endorse <span style="color:var(--linen-400)">(trust-weighted)</span></td><td class="gui">The Lightbox <span style="color:var(--seam)">(deferred)</span></td></tr>
+          <tr><td><span class="klass new">N</span></td><td class="git">CODEOWNERS</td><td class="warpline">warpline owners <span style="color:var(--linen-400)">(computed domain-trust, not a file)</span></td><td class="gui none">—</td></tr>
+          <tr><td><span class="klass new">N</span></td><td class="git">— (no equivalent)</td><td class="warpline">warpline consolidate <span style="color:var(--linen-400)">(N branches at once — the killer)</span></td><td class="gui">The Bridge <span style="color:var(--seam)">(deferred)</span></td></tr>
+
+          <!-- PLUMBING / OBSOLETE -->
+          <tr class="group-head"><td colspan="4">Plumbing — and what bytes leave behind</td></tr>
+          <tr><td><span class="klass obsolete">O</span></td><td class="git">git-LFS</td><td class="warpline">OBSOLETE <span style="color:var(--linen-400)">(meaning never put bytes in history; binaries are blob attachments)</span></td><td class="gui none">—</td></tr>
+          <tr><td><span class="klass obsolete">O</span></td><td class="git">.gitattributes</td><td class="warpline">OBSOLETE <span style="color:var(--linen-400)">(EOL / merge-drivers are byte concerns; meaning has no line endings)</span></td><td class="gui none">—</td></tr>
+          <tr><td><span class="klass transformed">T</span></td><td class="git">.gitignore</td><td class="warpline">warpline ignore <span style="color:var(--linen-400)">(shrinks: files with no symbols were never meaning)</span></td><td class="gui none">—</td></tr>
+
+          <!-- INTEROP -->
+          <tr class="group-head"><td colspan="4">Interop · git as onramp &amp; exit</td></tr>
+          <tr><td><span class="klass new">N</span></td><td class="git">import history</td><td class="warpline"><span class="nbuilt">● import --git</span> <span style="color:var(--linen-400)">(via absorb · backfill)</span></td><td class="gui none">—</td></tr>
+          <tr><td><span class="klass new">N</span></td><td class="git">export to git</td><td class="warpline">warpline export --git <span style="color:var(--cut)">(GAP-7 · round-trip unproven)</span></td><td class="gui none">—</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="map-foot reveal">
+      Only <span style="color:var(--clean)">oracle</span>, <span style="color:var(--clean)">absorb</span>, and <span style="color:var(--clean)">import --git</span> (via absorb) are built today — the Phase-1 read-only spine. The
+      weave / write path is ~80% latent in the Oracle (it already emits knots, dangling, computed ripple, and the
+      Justification); the review layer waits on the Classroom trust ledger.
+    </p>
+  </div>
+</section>
+
+<!-- ============================ FOOTER ============================ -->
+<footer>
+  <div class="foot-grid" aria-hidden="true"></div>
+  <div class="wrap foot-inner">
+    <div>
+      <div class="wordmark" style="font-size:20px">WARPLINE</div>
+      <p class="foot-tag" style="margin-top:8px">The system map · version control for meaning, not bytes</p>
+    </div>
+    <div class="foot-links">
+      <a href="index.html">The vision &rarr;</a>
+      <a href="#map">The map</a>
+      <a href="#flows">User flows</a>
+      <a href="#gallery">Surfaces</a>
+      <a href="#cli-gui">CLI ↔ GUI</a>
+    </div>
+  </div>
+  <p class="wrap" style="margin-top:36px;font-family:var(--mono);font-size:11.5px;color:var(--linen-400);position:relative;z-index:1">
+    Phase&nbsp;1 · read-only over real git · the seam-violet is reserved for the divergence the bytes can't&nbsp;see.
+  </p>
+</footer>
+
+<script>
+  // nav scrolled state + reveal-on-scroll + section in-view (mirrors index.html behavior, dependency-free)
+  (function () {
+    var nav = document.getElementById('topnav');
+    function onScroll() {
+      if (window.scrollY > 24) nav.classList.add('scrolled');
+      else nav.classList.remove('scrolled');
+    }
+    window.addEventListener('scroll', onScroll, { passive: true });
+    onScroll();
+
+    if (!('IntersectionObserver' in window)) {
+      document.querySelectorAll('.reveal, .section').forEach(function (el) { el.classList.add('in-view'); });
+      return;
+    }
+    var io = new IntersectionObserver(function (entries) {
+      entries.forEach(function (e) {
+        if (e.isIntersecting) { e.target.classList.add('in-view'); io.unobserve(e.target); }
+      });
+    }, { threshold: 0.12, rootMargin: '0px 0px -8% 0px' });
+    document.querySelectorAll('.reveal, .section').forEach(function (el) { io.observe(el); });
+  })();
+</script>
+
+</body>
+</html>
