@@ -233,7 +233,10 @@ function relDir(filePath: string, repo: string): string {
  * The partition is over the UNION of meaning-touched symbols and git-conflict
  * symbols, keyed by readable symbol name.
  */
-function score(
+// Exported for unit testing the confusion-matrix partition directly (the git×meaning
+// 2×2). Every cell — incl. agreeConflict and divergeGitOnly — must be positively
+// exercised, not just asserted empty. (T-2026-06-24-006)
+export function score(
   prediction: Prediction,
   conflictSymbols: string[],
   states: WarpState[],

@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { oracle } from '../src/oracle.js';
+import { oracle, score } from '../src/oracle.js';
 import { predict } from '../src/predict.js';
 import type { SemDelta, SemDeltaSet } from '../src/sem-delta.js';
 
@@ -31,6 +31,57 @@ describe('oracle — real branches', () => {
     // score is |agree| / |agree ∪ diverge| in [0,1].
     expect(c.score).toBeGreaterThanOrEqual(0);
     expect(c.score).toBeLessThanOrEqual(1);
+  });
+});
+
+describe('score — confusion-matrix partition (every cell positively exercised)', () => {
+  // Before this, agreeConflict was never positively asserted and divergeGitOnly was
+  // only ever asserted toEqual([]) — so a regression that mislabeled a real git
+  // conflict as meaning-only, or folded agreeConflict into agreeClean, passed the
+  // whole suite. These tests feed score() synthetic inputs that land ONE symbol in
+  // each git×meaning quadrant. (T-2026-06-24-006)
+  it('classifies all four quadrants, incl. agreeConflict and divergeGitOnly', () => {
+    const prediction = {
+      autoClean: ['kc'], // resolved to '#clean' via states below
+      knots: [
+        { stableKey: 'kb', symbol: '#both', conflictingSlots: ['x'] },
+        { stableKey: 'km', symbol: '#meaningOnly', conflictingSlots: ['y'] },
+      ],
+      dangling: [],
+    };
+    const conflictSymbols = ['#both', '#gitOnly']; // git-conflicted symbol names
+    // states only feed the autoClean stableKey → symbol-name resolution.
+    const states = [{ objects: new Map([['kc', { stableKey: 'kc', symbol: '#clean' }]]) }] as any;
+
+    const c = score(prediction, conflictSymbols, states);
+
+    // The two previously-uncovered cells:
+    expect(c.agreeConflict).toEqual(['#both']);     // meaning ∧ git
+    expect(c.divergeGitOnly).toEqual(['#gitOnly']); // git ∧ ¬meaning
+    // The well-covered cells, re-pinned so the partition is complete:
+    expect(c.divergeMeaningOnly).toEqual(['#meaningOnly']); // meaning ∧ ¬git
+    expect(c.agreeClean).toEqual(['#clean']);               // ¬meaning ∧ ¬git
+    // No symbol double-counted.
+    const all = [...c.agreeClean, ...c.agreeConflict, ...c.divergeGitOnly, ...c.divergeMeaningOnly];
+    expect(new Set(all).size).toBe(all.length);
+    // A populated DIVERGE cell ⇒ DIVERGENT.
+    expect(c.verdict).toBe('DIVERGENT');
+  });
+
+  it('a git conflict that is ALSO a meaning knot is agreeConflict (agreement), NOT a divergence', () => {
+    // The mislabel guard: dropping the m∧g check would misfile this symbol into
+    // divergeMeaningOnly or divergeGitOnly and flip the verdict to DIVERGENT.
+    const prediction = {
+      autoClean: [],
+      knots: [{ stableKey: 'k1', symbol: '#shared', conflictingSlots: ['gate'] }],
+      dangling: [],
+    };
+    const c = score(prediction, ['#shared'], [] as any);
+    expect(c.agreeConflict).toEqual(['#shared']);
+    expect(c.divergeMeaningOnly).toEqual([]);
+    expect(c.divergeGitOnly).toEqual([]);
+    // git and meaning AGREE there's a conflict ⇒ the oracle is CONVERGENT.
+    expect(c.verdict).toBe('CONVERGENT');
   });
 });
 
