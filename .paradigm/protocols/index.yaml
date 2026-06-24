@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-06-23T23:26:53.965Z'
+generated: '2026-06-24T19:03:40.948Z'
 protocols:
   - id: P-add-agent-provider
     name: Add an agent provider

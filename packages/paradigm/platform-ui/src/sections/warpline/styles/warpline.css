@@ -1,0 +1,364 @@
+/*
+ * Warpline — the Oracle Divergence Viewer. Mika's locked visual language:
+ * meaning vs bytes on a hard split, the seam, the literal 2×2, the knot + dangle.
+ *
+ * Scoped tokens live on .warpline (the platform-ui tokens.css has none of these).
+ * DISCIPLINE: --seam violet appears ONLY where git is blind — the ★ cell, the
+ * 1px seam, the DIVERGENT verdict, the knot glyph + dangle void. Never decorative.
+ */
+
+.warpline {
+  /* meaning-vs-bytes brand tokens (from the vision page) */
+  --warp: #e9a23b;   /* branch A intent thread (amber) */
+  --weft: #2dd4bf;   /* branch B intent thread (teal) */
+  --seam: #7c6ff0;   /* the seam, DIVERGENT, the ★ cell, knot/void — git is blind here */
+  --seam-ring: #7c6ff0;
+  --clean: #34d8a0;  /* git's CLEAN chip ONLY (the unreliable narrator's confident green) */
+  --cut: #5e5c54;    /* the severed/loose thread end */
+
+  --warp-serif: 'Fraunces', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+  --warp-mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', Menlo, Consolas, monospace;
+
+  display: flex;
+  height: 100%;
+  color: var(--p-text-primary);
+  overflow: hidden;
+}
+
+/* ── Left rail ─────────────────────────────────────────────────────────────── */
+
+.warpline__rail {
+  width: 300px;
+  min-width: 300px;
+  border-right: 1px solid var(--p-border);
+  background: var(--p-bg-panel);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.wl-refpicker {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--p-border);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.wl-refpicker__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wl-refpicker__row select {
+  flex: 1;
+  min-width: 0;
+  background: var(--p-bg-tertiary);
+  color: var(--p-text-primary);
+  border: 1px solid var(--p-border);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 12px;
+  font-family: var(--warp-mono);
+}
+
+.wl-refpicker__weave {
+  text-align: center;
+  font-family: var(--warp-serif);
+  font-size: 12px;
+  color: var(--p-text-secondary);
+}
+
+.wl-refpicker__actions {
+  display: flex;
+  gap: 8px;
+}
+
+.wl-btn {
+  flex: 1;
+  border: 1px solid var(--p-border);
+  background: var(--p-bg-tertiary);
+  color: var(--p-text-primary);
+  border-radius: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  cursor: pointer;
+}
+.wl-btn:hover:not(:disabled) { border-color: var(--p-border-active); }
+.wl-btn:disabled { opacity: 0.5; cursor: default; }
+.wl-btn--run { border-color: var(--seam); color: var(--seam); }
+
+.wl-rail__list {
+  flex: 1;
+  overflow-y: auto;
+}
+
+.wl-rail__row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--p-border);
+  cursor: pointer;
+  font-size: 12px;
+}
+.wl-rail__row:hover { background: var(--p-bg-hover); }
+.wl-rail__row--active { background: var(--p-bg-tertiary); border-left: 2px solid var(--seam); }
+
+.wl-rail__dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: transparent;
+}
+.wl-rail__dot--divergent { background: var(--seam); }
+
+.wl-rail__branches { font-family: var(--warp-mono); flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wl-rail__verdict { font-family: var(--warp-serif); font-size: 11px; }
+.wl-rail__verdict--divergent { color: var(--seam); }
+.wl-rail__verdict--convergent { color: var(--weft); }
+.wl-rail__ts { color: var(--p-text-muted); font-size: 10px; }
+
+.wl-rail__empty { padding: 24px 16px; color: var(--p-text-muted); font-size: 12px; line-height: 1.6; }
+
+/* ── Viewer (right) ────────────────────────────────────────────────────────── */
+
+.warpline__viewer {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  position: relative;
+}
+
+.wl-runheader {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  padding: 18px 24px 12px;
+  border-bottom: 1px solid var(--p-border);
+  flex-wrap: wrap;
+}
+.wl-runheader__weave {
+  font-family: var(--warp-serif);
+  font-size: 20px;
+}
+.wl-runheader__a { color: var(--warp); }
+.wl-runheader__b { color: var(--weft); }
+.wl-runheader__verb { color: var(--p-text-secondary); margin: 0 6px; }
+.wl-runheader__meta { font-family: var(--warp-mono); font-size: 11px; color: var(--p-text-muted); }
+
+/* ── The hero: MeaningVsBytesSplit ─────────────────────────────────────────── */
+
+.wl-split {
+  display: grid;
+  grid-template-columns: 1fr 1px 1fr;
+  min-height: 200px;
+}
+
+.wl-split__side { padding: 24px 28px; }
+.wl-split__side--bytes { font-family: var(--warp-mono); color: var(--p-text-secondary); }
+.wl-split__side--meaning { font-family: var(--warp-serif); }
+
+.wl-split__title { font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--p-text-muted); margin-bottom: 14px; }
+
+.wl-chip {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid currentColor;
+}
+.wl-chip--clean { color: var(--clean); }
+.wl-chip--conflict { color: var(--p-accent-orange); }
+.wl-chip--divergent { color: var(--seam); }
+.wl-chip--weave-clean { color: var(--weft); }
+
+.wl-split__tally { margin-top: 14px; font-family: var(--warp-mono); font-size: 12px; color: var(--p-text-secondary); }
+.wl-split__tally b { color: var(--seam); }
+
+/* The seam — a 1px violet thread. Pulses ONLY on headline divergence. */
+.wl-seam {
+  background: var(--seam);
+  width: 1px;
+  opacity: 0.25; /* calm/static default */
+}
+.wl-seam--divergence { opacity: 1; }
+.wl-seam--both-caught { opacity: 0.45; }
+
+@media (prefers-reduced-motion: no-preference) {
+  .wl-seam--divergence {
+    animation: wl-seam-pulse 2.4s ease-in-out infinite;
+  }
+}
+/* reduce-motion: solid + static glow (no animation) */
+.wl-seam--divergence {
+  box-shadow: 0 0 8px 1px var(--seam);
+}
+@keyframes wl-seam-pulse {
+  0%, 100% { box-shadow: 0 0 4px 0 var(--seam); opacity: 0.6; }
+  50% { box-shadow: 0 0 14px 2px var(--seam); opacity: 1; }
+}
+
+/* ── Confusion matrix (literal 2×2) ────────────────────────────────────────── */
+
+.wl-matrix-wrap { padding: 24px; border-top: 1px solid var(--p-border); }
+.wl-matrix-title { font-family: var(--warp-serif); font-size: 14px; margin-bottom: 12px; }
+
+.wl-matrix {
+  display: grid;
+  grid-template-columns: auto 1fr 1fr;
+  grid-template-rows: auto 1fr 1fr;
+  gap: 6px;
+  max-width: 520px;
+}
+.wl-matrix__axis { font-size: 10px; color: var(--p-text-muted); display: flex; align-items: center; justify-content: center; text-transform: uppercase; letter-spacing: 0.06em; }
+.wl-matrix__corner { }
+
+.wl-cell {
+  border: 1px solid var(--p-border);
+  border-radius: 8px;
+  padding: 14px;
+  cursor: pointer;
+  background: var(--p-bg-tertiary);
+  text-align: left;
+  color: var(--p-text-primary);
+}
+.wl-cell:hover { border-color: var(--p-border-active); }
+.wl-cell__count { font-family: var(--warp-mono); font-size: 26px; font-weight: 700; line-height: 1; }
+.wl-cell__label { font-size: 11px; color: var(--p-text-muted); margin-top: 6px; }
+.wl-cell--gitonly .wl-cell__count { color: var(--p-accent-orange); }
+/* the ★ cell — the only cell allowed to glow. STATIC box-shadow, never animated. */
+.wl-cell--star {
+  border-color: var(--seam);
+}
+.wl-cell--star.wl-cell--lit {
+  border-color: var(--seam);
+  box-shadow: 0 0 12px 0 var(--seam);
+}
+.wl-cell--star.wl-cell--lit .wl-cell__count { color: var(--seam); }
+
+.wl-cell__symbols {
+  margin-top: 10px;
+  font-family: var(--warp-mono);
+  font-size: 11px;
+  color: var(--p-text-secondary);
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+/* ── Verdict card ──────────────────────────────────────────────────────────── */
+
+.wl-verdict {
+  margin: 0 24px 24px;
+  border: 1px solid var(--p-border);
+  border-radius: 10px;
+  padding: 16px 20px;
+}
+.wl-verdict__head { display: flex; align-items: baseline; gap: 14px; }
+.wl-verdict__label { font-family: var(--warp-serif); font-size: 22px; }
+.wl-verdict__label--divergent { color: var(--seam); }
+.wl-verdict__label--convergent { color: var(--weft); }
+.wl-verdict__counts { font-family: var(--warp-mono); font-size: 12px; color: var(--p-text-secondary); }
+.wl-verdict__consequence { margin-top: 10px; font-family: var(--warp-serif); font-size: 14px; color: var(--p-text-primary); }
+.wl-verdict__consequence b { color: var(--seam); }
+
+/* ── Divergence panel: knots + dangles ─────────────────────────────────────── */
+
+.wl-divpanel { padding: 0 24px 32px; }
+.wl-divpanel__title { font-family: var(--warp-serif); font-size: 14px; margin-bottom: 12px; }
+.wl-divpanel__empty {
+  font-family: var(--warp-serif);
+  font-size: 15px;
+  color: var(--p-text-secondary);
+  padding: 28px;
+  text-align: center;
+}
+
+.wl-render {
+  border: 1px solid var(--p-border);
+  border-radius: 10px;
+  padding: 16px 18px;
+  margin-bottom: 12px;
+  cursor: pointer;
+  background: var(--p-bg-card);
+}
+.wl-render:hover { border-color: var(--p-border-active); }
+
+/* KNOT — two threads (A amber, B teal) cinching into a knot glyph. */
+.wl-knot__threads { position: relative; height: 44px; margin-bottom: 10px; }
+.wl-knot__thread { position: absolute; top: 21px; height: 1.5px; width: 44%; }
+.wl-knot__thread--a { left: 0; background: var(--warp); transform-origin: right center; }
+.wl-knot__thread--b { right: 0; background: var(--weft); transform-origin: left center; }
+.wl-knot__glyph {
+  position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  width: 14px; height: 14px; border-radius: 50%;
+  background: var(--seam); box-shadow: 0 0 8px 0 var(--seam);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .wl-knot__thread--a { animation: wl-cinch-a 600ms ease-out 1 forwards; }
+  .wl-knot__thread--b { animation: wl-cinch-b 600ms ease-out 1 forwards; }
+}
+/* reduce-motion: already cinched (the rotated end-state, no animation) */
+.wl-knot__thread--a { transform: rotate(14deg); }
+.wl-knot__thread--b { transform: rotate(-14deg); }
+@keyframes wl-cinch-a { from { transform: rotate(0deg); } to { transform: rotate(14deg); } }
+@keyframes wl-cinch-b { from { transform: rotate(0deg); } to { transform: rotate(-14deg); } }
+
+.wl-knot__intents { display: flex; justify-content: space-between; font-size: 11px; margin-bottom: 8px; }
+.wl-knot__intent--a { color: var(--warp); }
+.wl-knot__intent--b { color: var(--weft); }
+.wl-knot__symbol { font-family: var(--warp-mono); font-size: 13px; font-weight: 600; }
+.wl-slot { display: inline-block; font-family: var(--warp-mono); font-size: 11px; padding: 2px 7px; border-radius: 5px; background: var(--p-bg-tertiary); border: 1px solid var(--p-border); margin: 4px 4px 0 0; }
+.wl-slot--body { border-color: var(--seam); color: var(--seam); }
+
+/* DANGLE — a severed thread, loose end frays, drifting into a violet-ringed void. */
+.wl-dangle__span { position: relative; height: 48px; margin-bottom: 10px; }
+.wl-dangle__live { position: absolute; left: 0; top: 23px; height: 1.5px; width: 46%; background: var(--warp); }
+.wl-dangle__loose { position: absolute; left: 46%; top: 23px; height: 1.5px; width: 14%; background: var(--cut); transform-origin: left center; }
+.wl-dangle__void {
+  position: absolute; right: 0; top: 8px;
+  width: 34px; height: 34px; border-radius: 50%;
+  border: 1.5px dashed var(--seam-ring);
+}
+.wl-dangle__edgekind { position: absolute; left: 8px; top: 2px; font-family: var(--warp-mono); font-size: 10px; color: var(--p-text-muted); }
+@media (prefers-reduced-motion: no-preference) {
+  .wl-dangle__loose { animation: wl-drift 2s ease-in-out 1 forwards; }
+}
+/* reduce-motion: already hanging (the drooped end-state, no animation) */
+.wl-dangle__loose { transform: rotate(28deg); }
+@keyframes wl-drift { 0% { transform: rotate(0deg); } 100% { transform: rotate(28deg); } }
+
+.wl-dangle__label { font-size: 12px; }
+.wl-dangle__target { font-family: var(--warp-mono); color: var(--seam); }
+
+/* ── Drill-down slide-over ─────────────────────────────────────────────────── */
+
+.wl-drill__backdrop {
+  position: absolute; inset: 0; background: rgba(0,0,0,0.4);
+  display: flex; justify-content: flex-end; z-index: 20;
+}
+.wl-drill {
+  width: 420px; max-width: 90%; height: 100%;
+  background: var(--p-bg-panel); border-left: 1px solid var(--seam);
+  padding: 24px; overflow-y: auto;
+}
+.wl-drill__close { float: right; background: none; border: none; color: var(--p-text-muted); font-size: 18px; cursor: pointer; }
+.wl-drill__title { font-family: var(--warp-serif); font-size: 18px; margin-bottom: 16px; }
+.wl-drill__row { margin-bottom: 14px; }
+.wl-drill__k { font-size: 11px; color: var(--p-text-muted); text-transform: uppercase; letter-spacing: 0.05em; }
+.wl-drill__v { font-family: var(--warp-mono); font-size: 13px; margin-top: 3px; word-break: break-all; }
+.wl-drill__v--a { color: var(--warp); }
+.wl-drill__v--b { color: var(--weft); }
+.wl-drill__v--seam { color: var(--seam); }
+
+/* ── header / empty ────────────────────────────────────────────────────────── */
+
+.wl-empty-viewer {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  height: 100%; gap: 12px; color: var(--p-text-muted);
+}
+.wl-empty-viewer__h { font-family: var(--warp-serif); font-size: 18px; color: var(--p-text-secondary); }
