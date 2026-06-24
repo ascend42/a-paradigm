@@ -1,7 +1,130 @@
 {
   "version": "1.0",
-  "generatedAt": "2026-06-24T19:03:40.859Z",
+  "generatedAt": "2026-06-24T20:52:19.127Z",
   "flows": {
+    "$ide-sync-flow": {
+      "id": "$ide-sync-flow",
+      "description": "Sync .paradigm/ to IDE instruction files",
+      "steps": [
+        {
+          "id": "step-1",
+          "action": "Detect target IDE from project files",
+          "symbol": "#adapter-registry"
+        },
+        {
+          "id": "step-2",
+          "action": "Load config, specs, and docs",
+          "symbol": "#adapter-base"
+        },
+        {
+          "id": "step-3",
+          "action": "Generate IDE-specific output files",
+          "symbol": "#cursor-adapter"
+        },
+        {
+          "id": "step-4",
+          "action": "Write files to appropriate locations",
+          "symbol": "#adapter-registry"
+        }
+      ],
+      "definedIn": "packages/paradigm/src/core/ide-adapters/.purpose"
+    },
+    "$agent-orchestration-flow": {
+      "id": "$agent-orchestration-flow",
+      "description": "Orchestrate a multi-agent task from classification through execution",
+      "steps": [
+        {
+          "id": "step-1",
+          "action": "Classify task complexity and match agent team",
+          "symbol": "#task-classifier"
+        },
+        {
+          "id": "step-2",
+          "action": "Check token/cost budget availability",
+          "symbol": "#budget-tracker"
+        },
+        {
+          "id": "step-3",
+          "action": "Spawn agents in parallel where possible",
+          "symbol": "#agent-spawner"
+        },
+        {
+          "id": "step-4",
+          "action": "Collect results and handle handoffs",
+          "symbol": "#orchestrator"
+        },
+        {
+          "id": "step-5",
+          "action": "Log execution and costs",
+          "symbol": "#audit-logger"
+        }
+      ],
+      "definedIn": "packages/paradigm/src/core/.purpose"
+    },
+    "$event-ingestion": {
+      "id": "$event-ingestion",
+      "description": "emit() → buffer → periodic flush → POST /api/events",
+      "steps": [
+        {
+          "id": "step-1",
+          "action": "emit() call from application code",
+          "symbol": "#sentinel-web-client"
+        },
+        {
+          "id": "step-2",
+          "action": "push event into circular buffer",
+          "symbol": "#ring-buffer"
+        },
+        {
+          "id": "step-3",
+          "action": "setInterval flush to server",
+          "symbol": "#sentinel-web-client"
+        },
+        {
+          "id": "step-4",
+          "action": "POST /api/events",
+          "symbol": "#sentinel-web-client"
+        }
+      ],
+      "definedIn": "packages/sentinel-web/.purpose"
+    },
+    "$plsat-exam-flow": {
+      "id": "$plsat-exam-flow",
+      "description": "Full PLSAT exam lifecycle from intro through certification",
+      "steps": [
+        {
+          "id": "step-1",
+          "action": "Display intro, rules, and name input",
+          "symbol": "#plsat-view"
+        },
+        {
+          "id": "step-2",
+          "action": "Start 90-minute countdown",
+          "symbol": "#plsat-timer"
+        },
+        {
+          "id": "step-3",
+          "action": "Present 99 shuffled questions (with passage blocks for grouped questions)",
+          "symbol": "#question-card"
+        },
+        {
+          "id": "step-4",
+          "action": "Calculate score on submit or time-up",
+          "symbol": "#plsat-view"
+        },
+        {
+          "id": "step-5",
+          "action": "Persist certificate to LocalStorage",
+          "symbol": "#plsat-store"
+        },
+        {
+          "id": "step-6",
+          "action": "Display printable certificate if passed",
+          "symbol": "#certificate-view"
+        }
+      ],
+      "definedIn": "packages/university/.purpose"
+    },
     "$oracle-run": {
       "id": "$oracle-run",
       "description": "The end-to-end Oracle flow: merge-base, absorb base/A/B, diff each side, synthesize justifications, predict the merge from meaning, run git's real merge read-only, score the confusion matrix, append the OracleRecord.",
@@ -103,155 +226,37 @@
       ],
       "definedIn": "packages/warpline/.purpose"
     },
-    "$plsat-exam-flow": {
-      "id": "$plsat-exam-flow",
-      "description": "Full PLSAT exam lifecycle from intro through certification",
+    "$portal-validation-flow": {
+      "id": "$portal-validation-flow",
+      "description": "Validate portal.yaml gate configuration and route compliance",
       "steps": [
         {
           "id": "step-1",
-          "action": "Display intro, rules, and name input",
-          "symbol": "#plsat-view"
-        },
-        {
-          "id": "step-2",
-          "action": "Start 90-minute countdown",
-          "symbol": "#plsat-timer"
-        },
-        {
-          "id": "step-3",
-          "action": "Present 99 shuffled questions (with passage blocks for grouped questions)",
-          "symbol": "#question-card"
-        },
-        {
-          "id": "step-4",
-          "action": "Calculate score on submit or time-up",
-          "symbol": "#plsat-view"
-        },
-        {
-          "id": "step-5",
-          "action": "Persist certificate to LocalStorage",
-          "symbol": "#plsat-store"
-        },
-        {
-          "id": "step-6",
-          "action": "Display printable certificate if passed",
-          "symbol": "#certificate-view"
-        }
-      ],
-      "definedIn": "packages/university/.purpose"
-    },
-    "$event-ingestion": {
-      "id": "$event-ingestion",
-      "description": "emit() → buffer → periodic flush → POST /api/events",
-      "steps": [
-        {
-          "id": "step-1",
-          "action": "emit() call from application code",
-          "symbol": "#sentinel-web-client"
-        },
-        {
-          "id": "step-2",
-          "action": "push event into circular buffer",
-          "symbol": "#ring-buffer"
-        },
-        {
-          "id": "step-3",
-          "action": "setInterval flush to server",
-          "symbol": "#sentinel-web-client"
-        },
-        {
-          "id": "step-4",
-          "action": "POST /api/events",
-          "symbol": "#sentinel-web-client"
-        }
-      ],
-      "definedIn": "packages/sentinel-web/.purpose"
-    },
-    "$ide-sync-flow": {
-      "id": "$ide-sync-flow",
-      "description": "Sync .paradigm/ to IDE instruction files",
-      "steps": [
-        {
-          "id": "step-1",
-          "action": "Detect target IDE from project files",
-          "symbol": "#adapter-registry"
-        },
-        {
-          "id": "step-2",
-          "action": "Load config, specs, and docs",
-          "symbol": "#adapter-base"
-        },
-        {
-          "id": "step-3",
-          "action": "Generate IDE-specific output files",
-          "symbol": "#cursor-adapter"
-        },
-        {
-          "id": "step-4",
-          "action": "Write files to appropriate locations",
-          "symbol": "#adapter-registry"
-        }
-      ],
-      "definedIn": "packages/paradigm/src/core/ide-adapters/.purpose"
-    },
-    "$agent-orchestration-flow": {
-      "id": "$agent-orchestration-flow",
-      "description": "Orchestrate a multi-agent task from classification through execution",
-      "steps": [
-        {
-          "id": "step-1",
-          "action": "Classify task complexity and match agent team",
-          "symbol": "#task-classifier"
-        },
-        {
-          "id": "step-2",
-          "action": "Check token/cost budget availability",
-          "symbol": "#budget-tracker"
-        },
-        {
-          "id": "step-3",
-          "action": "Spawn agents in parallel where possible",
-          "symbol": "#agent-spawner"
-        },
-        {
-          "id": "step-4",
-          "action": "Collect results and handle handoffs",
-          "symbol": "#orchestrator"
-        },
-        {
-          "id": "step-5",
-          "action": "Log execution and costs",
-          "symbol": "#audit-logger"
-        }
-      ],
-      "definedIn": "packages/paradigm/src/core/.purpose"
-    },
-    "$purpose-parsing": {
-      "id": "$purpose-parsing",
-      "description": "Parse a .purpose file from raw YAML into validated structured data",
-      "steps": [
-        {
-          "id": "step-1",
-          "action": "Read YAML file and parse with js-yaml",
+          "action": "Find and parse portal.yaml via glob",
           "symbol": "#yaml-parser"
         },
         {
           "id": "step-2",
-          "action": "Validate parsed data against PurposeFileSchema",
-          "symbol": "#zod-schemas"
+          "action": "Validate gate definitions against Zod schemas",
+          "symbol": "#gate-schemas"
         },
         {
           "id": "step-3",
-          "action": "Extract components, gates, signals, flows, aspects from validated data",
-          "symbol": "#symbol-extractor"
+          "action": "Check for circular dependencies in gate requires",
+          "symbol": "#topology-checker"
         },
         {
           "id": "step-4",
-          "action": "Return structured PurposeFile or validation errors",
+          "action": "Validate routes reference declared gates",
+          "symbol": "#validator"
+        },
+        {
+          "id": "step-5",
+          "action": "Report issues and compliance status",
           "symbol": "#validator"
         }
       ],
-      "definedIn": "packages/purpose/core/.purpose"
+      "definedIn": "packages/portal/core/.purpose"
     },
     "$symbol-aggregation": {
       "id": "$symbol-aggregation",
@@ -290,40 +295,83 @@
       ],
       "definedIn": "packages/premise/core/.purpose"
     },
-    "$portal-validation-flow": {
-      "id": "$portal-validation-flow",
-      "description": "Validate portal.yaml gate configuration and route compliance",
+    "$purpose-parsing": {
+      "id": "$purpose-parsing",
+      "description": "Parse a .purpose file from raw YAML into validated structured data",
       "steps": [
         {
           "id": "step-1",
-          "action": "Find and parse portal.yaml via glob",
+          "action": "Read YAML file and parse with js-yaml",
           "symbol": "#yaml-parser"
         },
         {
           "id": "step-2",
-          "action": "Validate gate definitions against Zod schemas",
-          "symbol": "#gate-schemas"
+          "action": "Validate parsed data against PurposeFileSchema",
+          "symbol": "#zod-schemas"
         },
         {
           "id": "step-3",
-          "action": "Check for circular dependencies in gate requires",
-          "symbol": "#topology-checker"
+          "action": "Extract components, gates, signals, flows, aspects from validated data",
+          "symbol": "#symbol-extractor"
         },
         {
           "id": "step-4",
-          "action": "Validate routes reference declared gates",
-          "symbol": "#validator"
-        },
-        {
-          "id": "step-5",
-          "action": "Report issues and compliance status",
+          "action": "Return structured PurposeFile or validation errors",
           "symbol": "#validator"
         }
       ],
-      "definedIn": "packages/portal/core/.purpose"
+      "definedIn": "packages/purpose/core/.purpose"
     }
   },
   "symbolToFlows": {
+    "#detection-engine": [
+      "$ide-sync-flow"
+    ],
+    "#sync-handler": [
+      "$ide-sync-flow"
+    ],
+    "#ide-adapters": [
+      "$ide-sync-flow"
+    ],
+    "#mcp-setup-handler": [
+      "$ide-sync-flow"
+    ],
+    "#agent-classifier": [
+      "$agent-orchestration-flow"
+    ],
+    "#budget-tracker": [
+      "$agent-orchestration-flow"
+    ],
+    "#agent-spawner": [
+      "$agent-orchestration-flow"
+    ],
+    "#orchestrator": [
+      "$agent-orchestration-flow"
+    ],
+    "#audit-logger": [
+      "$agent-orchestration-flow"
+    ],
+    "#sentinel-web-client": [
+      "$event-ingestion"
+    ],
+    "#ring-buffer": [
+      "$event-ingestion"
+    ],
+    "#plsat-view": [
+      "$plsat-exam-flow"
+    ],
+    "#plsat-timer": [
+      "$plsat-exam-flow"
+    ],
+    "#question-card": [
+      "$plsat-exam-flow"
+    ],
+    "#plsat-store": [
+      "$plsat-exam-flow"
+    ],
+    "#certificate-view": [
+      "$plsat-exam-flow"
+    ],
     "#git-exec": [
       "$oracle-run",
       "$absorb-flow",
@@ -359,67 +407,19 @@
     "#weave": [
       "$weave-forecast"
     ],
-    "#plsat-view": [
-      "$plsat-exam-flow"
-    ],
-    "#plsat-timer": [
-      "$plsat-exam-flow"
-    ],
-    "#question-card": [
-      "$plsat-exam-flow"
-    ],
-    "#plsat-store": [
-      "$plsat-exam-flow"
-    ],
-    "#certificate-view": [
-      "$plsat-exam-flow"
-    ],
-    "#sentinel-web-client": [
-      "$event-ingestion"
-    ],
-    "#ring-buffer": [
-      "$event-ingestion"
-    ],
-    "#detection-engine": [
-      "$ide-sync-flow"
-    ],
-    "#sync-handler": [
-      "$ide-sync-flow"
-    ],
-    "#ide-adapters": [
-      "$ide-sync-flow"
-    ],
-    "#mcp-setup-handler": [
-      "$ide-sync-flow"
-    ],
-    "#agent-classifier": [
-      "$agent-orchestration-flow"
-    ],
-    "#budget-tracker": [
-      "$agent-orchestration-flow"
-    ],
-    "#agent-spawner": [
-      "$agent-orchestration-flow"
-    ],
-    "#orchestrator": [
-      "$agent-orchestration-flow"
-    ],
-    "#audit-logger": [
-      "$agent-orchestration-flow"
-    ],
     "#yaml-parser": [
-      "$purpose-parsing",
+      "$portal-validation-flow",
+      "$purpose-parsing"
+    ],
+    "#gate-schemas": [
       "$portal-validation-flow"
     ],
-    "#zod-schemas": [
-      "$purpose-parsing"
-    ],
-    "#symbol-extractor": [
-      "$purpose-parsing"
+    "#topology-checker": [
+      "$portal-validation-flow"
     ],
     "#validator": [
-      "$purpose-parsing",
-      "$portal-validation-flow"
+      "$portal-validation-flow",
+      "$purpose-parsing"
     ],
     "#aggregator": [
       "$symbol-aggregation"
@@ -436,11 +436,11 @@
     "#graph-builder": [
       "$symbol-aggregation"
     ],
-    "#gate-schemas": [
-      "$portal-validation-flow"
+    "#zod-schemas": [
+      "$purpose-parsing"
     ],
-    "#topology-checker": [
-      "$portal-validation-flow"
+    "#symbol-extractor": [
+      "$purpose-parsing"
     ],
     "#task-classifier": [
       "$agent-orchestration-flow"

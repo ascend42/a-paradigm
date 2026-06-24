@@ -141,7 +141,12 @@ export async function aggregateFromPremise(
 
         // Extract aspects from purpose files
         const aspects = extractAspects(parsed);
-        for (const [id, { item, filePath }] of aspects) {
+        for (const [rawId, { item, filePath }] of aspects) {
+          // Aspect keys are canonically BARE ('determinism:'); some .purpose files
+          // declare them '~'-prefixed. Strip any leading '~' so the symbol is
+          // idempotently single-prefixed — '~~determinism' is unreachable by
+          // aspect_check/aspect_get (which strip ONE '~'). (T-2026-06-24-002)
+          const id = rawId.replace(/^~+/, '');
           symbols.push(createSymbolEntry({
             id: `purpose-aspect-${id}`,
             symbol: `~${id}`,

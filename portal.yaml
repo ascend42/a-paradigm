@@ -437,6 +437,30 @@ routes:
     - ^local-only
     - ^write-capable
 
+  # ── Warpline (Convergence/Divergence Oracle — read path + append-only ledger) ──
+  # The engine NEVER mutates the user's git HEAD/index/worktree. Reads and the
+  # ephemeral computes (forecast/diff are weave --preview equivalents, no persist)
+  # are read-only. POST /oracle APPENDS an OracleRecord to .warpline/oracle.jsonl —
+  # an on-disk state mutation → write-capable.
+  GET /api/warpline/ledger:
+    - ^local-only
+    - ^read-only
+  GET /api/warpline/refs:
+    - ^local-only
+    - ^read-only
+  POST /api/warpline/forecast:
+    - ^local-only
+    - ^read-only
+  POST /api/warpline/diff:
+    - ^local-only
+    - ^read-only
+  GET /api/warpline/absorb/:ref:
+    - ^local-only
+    - ^read-only
+  POST /api/warpline/oracle:
+    - ^local-only
+    - ^write-capable
+
   # ── WebSocket ───────────────────────────────────────────────────────
   WS /ws:
     - ^local-only

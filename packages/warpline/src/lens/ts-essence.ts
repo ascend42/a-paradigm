@@ -412,7 +412,14 @@ export function codeCNFDetailed(node: ts.Node, opts: CodeCNFOptions = {}): CodeC
   const freeRefToken = (id: ts.Identifier): string => {
     const idx = indexOfFree(id);
     const cls = classifier ? classifier(id.text) : 'token';
-    if (cls === 'edge') return `f:${idx}`;
+    // The positional slot token carries a leading U+001F (unit-separator) control
+    // char so it cannot be forged from literal payload: str:/tmpl:/template-span
+    // text is emitted via JSON.stringify, which escapes ALL control chars (< 0x20),
+    // so a raw U+001F can never appear inside a literal. essence-hash substitutes on
+    // the U+001F-anchored token, so a string that happens to read "f:0" is no longer
+    // mistaken for slot 0. The readable "f:N" is kept after the sentinel (substring
+    // assertions and debug dumps still see "f:N"). MUST match essence-hash.ts. (T-2026-06-24-003)
+    if (cls === 'edge') return `\u001Ff:${idx}`;
     return `free:${id.text}`;
   };
 

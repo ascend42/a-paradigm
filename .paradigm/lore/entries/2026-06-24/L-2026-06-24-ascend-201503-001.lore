@@ -1,0 +1,41 @@
+id: L-2026-06-24-ascend-201503-001
+type: agent-session
+timestamp: '2026-06-24T20:15:03.424Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Self-study convene: 9 agents level up, surface 4 verified defects'
+summary: Ran a self-study convene (core + Mika + North, 9 agents in parallel) where each agent picked its own growth-edge elements, dug into the repo, and reported first findings + a candidate learning. Four findings were independently re-verified by the main loop and filed as tasks; Loid surfaced that the gated Classroom is unbootstrapped on this project so the learnings can't yet flow into the formal loop.
+symbols_touched:
+  - '#warpline'
+  - '#essence-hash'
+  - '#ts-lens'
+  - '#git-exec'
+  - '#captain-board'
+  - '#aspect-graph'
+  - ~determinism
+files_modified: []
+learnings:
+  - 'VERIFIED FRAMEWORK BUG (Scribe): aspect keys written with leading ''~'' in .purpose are indexed under a DOUBLE-tilde id (aspect-graph.ts:307 inserts entry.symbol verbatim; no idempotent ~-guard) and become unreachable by aspect_check/aspect_get (aspect-graph.ts:324 strips only one ~). purpose_validate passes clean, so green validate is NOT proof an aspect is queryable. Bare aspect keys are canonical; reindex.ts already flags ~-prefixed keys as ''prefix-stripped''.'
+  - 'VERIFIED WARPLINE CORRECTNESS (Kit): essence-hash.ts:319 f:N slot substitution uses a body-wide regex /\bf:(\d+)\b/g, but ts-essence.ts:455 emits string literals un-namespaced, so a literal ''f:0'' collides with a real slot token → silent contentId corruption when a local target exists at that index. Latent (guard no-ops without a matching target) but sits on the absorb-wiring path.'
+  - 'VERIFIED WARPLINE SECURITY (Aegis+Judge, two lenses converged): /api/warpline declares ZERO portal.yaml gates while POST /oracle appends to disk; isRef''s docstring claims metachar checking its body doesn''t do; refs reach execFile git args with no ''--'' end-of-options sentinel (arg-injection, not shell-injection); server binds 0.0.0.0 so ^local-only is unenforced.'
+  - 'VERIFIED CAPTAIN BLIND SPOT (Cid): settlementDebt only scans the runs array, so done-but-unsettled CHILDREN of an already-settled epic (which has left runs) can never be flagged. A correct debt sweep must scan all non-shelved tasks for status===''done'' && !settledAt.'
+  - 'META (Loid): the gated Classroom is unbootstrapped on a-paradigm — no .paradigm/curriculum/, zero syllabi, empty scenario bank — so /study-hall and /class are structural no-ops; the legacy ambient path (auto-promote at confidence>=0.8, no refutation) is the only learning loop actually running. Bootstrapping syllabi via paradigm_syllabus_record is the prerequisite to capturing these 18 candidate learnings formally.'
+  - 'PROCESS: a self-study convene that asks each agent to dig into its OWN domain doubles as a distributed audit — 4 of 9 agents surfaced real, independently-reproducible defects, and two independent lenses (security + compliance) converging on the same /api/warpline gap is a high-confidence signal.'
+tags:
+  - self-study
+  - convene
+  - learning-loop
+  - warpline
+  - framework-bug
+  - verification
+linked_tasks:
+  - T-2026-06-24-002
+  - T-2026-06-24-003
+  - T-2026-06-24-004
+confidence: 0.9
+git_context:
+  ref: d85dd6a4bd785a4429475639ed3b86471c8a0533
+  branch: warpline-surfaces
+  dirty: true

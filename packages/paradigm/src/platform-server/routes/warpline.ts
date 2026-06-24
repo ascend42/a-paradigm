@@ -6,11 +6,13 @@
  * EXPORTED functions, imported IN-PROCESS (never shelling the CLI). It owns no
  * storage of its own beyond an in-memory WarpState cache.
  *
- * READ-ONLY BY CONSTRUCTION. The `weave` write verb is RESERVED and not built in
- * the engine; this router NEVER constructs a write/`weave`/consolidate call. The
- * only disk Warpline ever touches is the engine's own `.warpline/oracle.jsonl`
- * append (via `oracle()` — append-only, the historical ledger). Read-only here
- * is therefore *structural*, not policed — there is no reachable write path.
+ * NO GIT-WRITE PATH. The `weave` write verb is RESERVED and not built in the
+ * engine; this router NEVER constructs a write/`weave`/consolidate/merge call —
+ * the user's HEAD, index, and worktree are never mutated. The ONE disk effect is
+ * POST /oracle, which APPENDS an OracleRecord to the engine's own
+ * `.warpline/oracle.jsonl` ledger (append-only history). That append IS a state
+ * mutation, so it is declared in portal.yaml: the GETs and the ephemeral POSTs
+ * carry ^read-only, POST /oracle carries ^write-capable.
  *
  * Three data layers (per the GUI plan §1):
  *   (A) Ledger reader — GET /ledger reads .warpline/oracle.jsonl (zero compute,
@@ -227,9 +229,20 @@ function parseLimit(raw: unknown): number | undefined {
   return Number.isFinite(n) && n > 0 ? n : undefined;
 }
 
-/** A usable git ref/branch string (non-empty, no obvious shell metacharacters). */
+/**
+ * A usable git ref the GUI may send: a branch/tag name, a full ref, a SHA, or the
+ * `WORKTREE`/`HEAD` sentinels. Refs flow into `git` via execFile arg arrays (no
+ * shell), so the residual risk is ARGUMENT injection — a value like
+ * `--upload-pack=…` that git parses as a flag. This allowlist requires an
+ * alphanumeric first char (so a leading `-` can never start a ref) and restricts
+ * the rest to `A-Za-z0-9 / . _ -`, which blocks arg/flag injection, shell
+ * metacharacters, whitespace, and control chars by construction. Revision
+ * expressions (`~`, `^`, `@{…}`) are intentionally rejected — the ref-pickers
+ * never produce them. The engine additionally interposes `--end-of-options`.
+ */
+const REF_RE = /^[A-Za-z0-9][A-Za-z0-9/._-]{0,255}$/;
 function isRef(value: unknown): value is string {
-  return typeof value === 'string' && value.length > 0;
+  return typeof value === 'string' && REF_RE.test(value);
 }
 
 /** Schema versions of OracleRecord this reader understands. Unknown → skipped. */

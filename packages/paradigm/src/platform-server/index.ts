@@ -58,6 +58,13 @@ export interface PlatformServerOptions {
   projectDir: string;
   open?: boolean;
   sections?: string[];
+  /**
+   * Interface to bind. Defaults to '127.0.0.1' (loopback only) — this ENFORCES
+   * the portal.yaml ^local-only gate at the socket, since that gate has no
+   * request-time middleware. Set to '0.0.0.0' ONLY to intentionally expose the
+   * platform on the LAN (it serves unauthenticated local-tooling routes).
+   */
+  host?: string;
 }
 
 /**
@@ -339,8 +346,11 @@ export async function startPlatformServer(options: PlatformServerOptions): Promi
     }
   }
 
+  // Bind loopback by default so the ^local-only portal gate is enforced at the
+  // socket (there is no request-time hostname middleware). Override via options.host.
+  const bindHost = options.host ?? '127.0.0.1';
   return new Promise((resolve, reject) => {
-    httpServer.listen(options.port, () => {
+    httpServer.listen(options.port, bindHost, () => {
       log.component('platform-server').success('Platform running', { url: `http://localhost:${options.port}` });
       log.component('platform-ws').success('WebSocket ready', { url: `ws://localhost:${options.port}/ws` });
       console.log('');

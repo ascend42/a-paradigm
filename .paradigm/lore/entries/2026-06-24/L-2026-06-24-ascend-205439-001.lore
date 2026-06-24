@@ -1,0 +1,57 @@
+id: L-2026-06-24-ascend-205439-001
+type: milestone
+timestamp: '2026-06-24T20:54:39.954Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Fixed the 3 convene-surfaced defects (double-tilde aspect, f:N collision, warpline security)
+summary: Implemented and verified all three defects the self-study convene surfaced. The double-tilde aspect bug was root-caused beyond the original report (the true source is the symbol builder in premise/core, not just the DB layer) and fixed at the root plus a defensive dedup at the DB layer; the f:N essence-hash collision was fixed with a U+001F-anchored slot token + regression test; the /api/warpline security cluster (arg-injection, portal gates, bind address, lying validator) was fully closed.
+symbols_touched:
+  - '#aspect-graph'
+  - '#paradigm-aspect-check'
+  - '#essence-hash'
+  - '#ts-lens'
+  - '#git-exec'
+  - '#warpline'
+  - ~determinism
+files_modified:
+  - packages/premise/core/src/aggregator.ts
+  - packages/paradigm-mcp/src/utils/aspect-graph.ts
+  - packages/warpline/src/lens/ts-essence.ts
+  - packages/warpline/src/warp/essence-hash.ts
+  - packages/warpline/src/git/git-exec.ts
+  - packages/warpline/test/code-warp.test.ts
+  - packages/paradigm/src/platform-server/routes/warpline.ts
+  - packages/paradigm/src/platform-server/index.ts
+  - packages/paradigm/src/platform-server/routes/.purpose
+  - portal.yaml
+learnings:
+  - 'The double-tilde aspect bug''s TRUE root was premise/core/src/aggregator.ts:147 (symbol: `~${id}` over an already-''~''-prefixed .purpose key), upstream of the aspect-graph DB layer the original report named — fixing the builder corrects ALL consumers (db, navigator, search, aspect_check) at once; the DB-layer canonicalize+dedup is defense-in-depth that also folds aspects declared both bare and prefixed.'
+  - Collapsing doubled aspect ids surfaced a hidden UNIQUE-constraint collision (same aspect declared bare AND '~'-prefixed across files) that materializeAspects' catch{} was silently swallowing — any id-merging fix MUST dedupe, not just transform.
+  - 'The f:N collision fix uses a U+001F (unit-separator) sentinel prefix on the slot token: literal payloads go through JSON.stringify which escapes all control chars, so the sentinel is unforgeable by string content — keeping the readable ''f:N'' after it preserves existing toContain(''f:0'') assertions and debug dumps.'
+  - A long-running MCP server caches its aggregation/aspect-graph at session start; an on-disk reindex via fresh code (CLI/tsx) corrects the data, but the server's tools stay stale until restart — verify framework-data fixes on-disk (sqlite3 + in-process getAspect), not only through the live MCP tool.
+verification:
+  status: pass
+  details:
+    warpline-tests: 98 passed (was 97 + 1 new regression)
+    double-tilde: aggregator emits single-tilde ~determinism; aspect-graph.db 0 doubles; getAspect resolves; no UNIQUE error
+    builds: premise/core, paradigm-mcp, paradigm, warpline all build clean
+    running-mcp-server: stale in-memory aggregation until restart (expected)
+tags:
+  - bugfix
+  - warpline
+  - framework-bug
+  - security
+  - verification
+linked_lore:
+  - L-2026-06-24-ascend-201503-001
+linked_tasks:
+  - T-2026-06-24-002
+  - T-2026-06-24-003
+  - T-2026-06-24-004
+confidence: 0.9
+git_context:
+  ref: d85dd6a4bd785a4429475639ed3b86471c8a0533
+  branch: warpline-surfaces
+  dirty: true

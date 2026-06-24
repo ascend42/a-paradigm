@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-06-24T19:03:40.946Z'
+generated: '2026-06-24T20:52:19.277Z'
 personas: {}
 chains: {}
 gate_coverage: {}
@@ -110,4 +110,10 @@ uncovered_routes:
   - POST /api/tasks/:id/block
   - POST /api/tasks/:id/unblock
   - POST /api/tasks/sync
+  - GET /api/warpline/ledger
+  - GET /api/warpline/refs
+  - POST /api/warpline/forecast
+  - POST /api/warpline/diff
+  - GET /api/warpline/absorb/:ref
+  - POST /api/warpline/oracle
   - WS /ws

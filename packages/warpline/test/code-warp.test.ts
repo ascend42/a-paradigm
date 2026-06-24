@@ -112,6 +112,33 @@ function f(){ ${order} }`,
 });
 
 // ===========================================================================
+// 2b. String literals are OPAQUE — the f:N slot substitution must not reach
+//     inside string content (regression for the U+001F-sentinel fix).
+// ===========================================================================
+describe('code-warp — string literals are opaque to slot substitution', () => {
+  it('two functions differing ONLY in a string literal ("f:0" vs "f:00") do NOT collide', async () => {
+    // Each f calls a local `helper` → a real positional slot at index 0. Each
+    // also RETURNS a string literal that happens to read like a slot token.
+    const tree = (lit: string) => ({
+      'src/x.ts': `function helper(){ return 1; }
+function f(){ helper(); return ${JSON.stringify(lit)}; }`,
+    });
+    const a = await essencesOfTree(tree('f:0'));
+    const b = await essencesOfTree(tree('f:00'));
+    const fa = a.get(sym('src/x.ts', 'f'))!;
+    const fb = b.get(sym('src/x.ts', 'f'))!;
+    expect(fa).toBeDefined();
+    expect(fb).toBeDefined();
+    // Before the fix, the body-wide regex /\bf:(\d+)\b/ matched the `f:0`/`f:00`
+    // INSIDE the string literal (str:"f:0") and rewrote it to helper's essence —
+    // collapsing both bodies to the same content-address: a silent false-EQUAL
+    // meaning collision. The U+001F-anchored slot token makes string content
+    // unforgeable, so the two distinct literals stay distinct. (T-2026-06-24-003)
+    expect(fa).not.toBe(fb);
+  });
+});
+
+// ===========================================================================
 // 3. Different-target DIFFER — calling a different-bodied local differs.
 // ===========================================================================
 describe('code-warp — different target differs', () => {

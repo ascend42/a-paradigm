@@ -7,6 +7,12 @@
  * worktree is never touched.
  *
  * Library code: no console output. Callers handle their own logging.
+ *
+ * ARG-INJECTION HARDENING: refs reach git via execFile arg arrays (no shell), so
+ * shell injection is impossible — but a ref like `--upload-pack=…` would still be
+ * parsed by git AS A FLAG. Every command that takes a user-controlled ref/path
+ * interposes `--end-of-options` (git ≥2.24) so all following args are treated as
+ * operands, never options. Callers SHOULD also validate refs at their boundary.
  */
 
 import { execFile } from 'node:child_process';
@@ -51,27 +57,27 @@ export async function repoRoot(opts: GitOptions = {}): Promise<string> {
 
 /** Resolve a ref to its full commit SHA. */
 export async function revParse(ref: string, opts: GitOptions = {}): Promise<string> {
-  return git(['rev-parse', '--verify', ref], opts);
+  return git(['rev-parse', '--verify', '--end-of-options', ref], opts);
 }
 
 /** Resolve a ref to its TREE SHA — provenance for a WarpState. */
 export async function revParseTree(ref: string, opts: GitOptions = {}): Promise<string> {
-  return git(['rev-parse', '--verify', `${ref}^{tree}`], opts);
+  return git(['rev-parse', '--verify', '--end-of-options', `${ref}^{tree}`], opts);
 }
 
 /** The merge-base (common ancestor) of two refs. */
 export async function mergeBase(a: string, b: string, opts: GitOptions = {}): Promise<string> {
-  return git(['merge-base', a, b], opts);
+  return git(['merge-base', '--end-of-options', a, b], opts);
 }
 
 /** The commit subject line of a ref's tip. */
 export async function commitSubject(ref: string, opts: GitOptions = {}): Promise<string> {
-  return git(['log', '-1', '--format=%s', ref], opts);
+  return git(['log', '-1', '--format=%s', '--end-of-options', ref], opts);
 }
 
 /** The author (name <email>) of a ref's tip commit. */
 export async function commitAuthor(ref: string, opts: GitOptions = {}): Promise<string> {
-  return git(['log', '-1', '--format=%an <%ae>', ref], opts);
+  return git(['log', '-1', '--format=%an <%ae>', '--end-of-options', ref], opts);
 }
 
 /**
@@ -83,7 +89,7 @@ export async function worktreeAdd(ref: string, opts: GitOptions = {}): Promise<s
   const base = await fs.mkdtemp(path.join(os.tmpdir(), 'warpline-wt-'));
   // `git worktree add` wants the leaf dir to NOT exist yet.
   const tmp = path.join(base, 'tree');
-  await git(['worktree', 'add', '--detach', '--quiet', tmp, ref], opts);
+  await git(['worktree', 'add', '--detach', '--quiet', '--end-of-options', tmp, ref], opts);
   return tmp;
 }
 
@@ -138,7 +144,7 @@ export async function mergeTree(
   // ── Primary: merge-tree --write-tree (git ≥2.38) ──
   try {
     // Exit 0 ⇒ clean merge. (stdout is just the resulting tree oid here.)
-    await execFileAsync('git', ['merge-tree', '--write-tree', '--name-only', a, b], {
+    await execFileAsync('git', ['merge-tree', '--write-tree', '--name-only', '--end-of-options', a, b], {
       cwd,
       maxBuffer: MAX_BUFFER,
       encoding: 'utf8',

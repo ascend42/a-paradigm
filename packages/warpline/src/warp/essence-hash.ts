@@ -298,7 +298,7 @@ export function computeEssences(index: SymbolIndex, symbols: string[]): EssenceR
 
     // ── Code-unit branch (spec §4.1) ────────────────────────────────────────
     // A code-unit's identity is its BODY with local refs substituted INLINE,
-    // positionally — NOT a sorted edge-set. The body's `f:N` token is the N-th
+    // positionally — NOT a sorted edge-set. The body's U+001F-anchored `f:N` token is the N-th
     // LOCAL reference (first-appearance order); we replace it with the essence
     // of `codeLocalTargets[N]`'s edge — which resolves via the SAME `edgeEssence`
     // resolver the rest of the algorithm passes in (so intra-SCC targets become
@@ -316,10 +316,14 @@ export function computeEssences(index: SymbolIndex, symbols: string[]): EssenceR
       for (const e of edges) {
         if (!targetEssence.has(e.to)) targetEssence.set(e.to, edgeEssence(e));
       }
-      const body = String(data.codeEssence ?? '').replace(/\bf:(\d+)\b/g, (_m, n: string) => {
+      // The slot token is U+001F-anchored (see ts-essence freeRefToken). The
+      // sentinel makes it unforgeable by literal payload — str:/tmpl: text is
+      // JSON.stringify'd, escaping all control chars — so a string literal that
+      // reads "f:0" is NOT matched here. (T-2026-06-24-003)
+      const body = String(data.codeEssence ?? '').replace(/\u001Ff:(\d+)/g, (_m, n: string) => {
         const idx = Number(n);
         const target = localTargets[idx];
-        if (target === undefined) return `f:${n}`; // alignment gap — leave as-is
+        if (target === undefined) return `\u001Ff:${n}`; // alignment gap — leave as-is
         const ess = targetEssence.get(target);
         return ess !== undefined ? ess : `essence:${ESSENCE_VERSION}:extern:${sha256(target)}`;
       });
