@@ -248,7 +248,7 @@ function DivergencePanel({
           is on every dangle's loose end, but reduce-motion keeps them static; the
           single-drift cap is honored by the spec's intent: one emotional core). */}
       {dangling.map((dangle, i) => (
-        <DangleRender key={`d-${dangle.fromKey}-${i}`} dangle={dangle} onClick={() => onOpenDangle(dangle)} />
+        <DangleRender key={`d-${dangle.fromKey}-${i}`} dangle={dangle} animate={i === 0} onClick={() => onOpenDangle(dangle)} />
       ))}
     </div>
   );
@@ -288,13 +288,14 @@ function KnotRender({
   );
 }
 
-function DangleRender({ dangle, onClick }: { dangle: Dangle; onClick: () => void }) {
+function DangleRender({ dangle, animate, onClick }: { dangle: Dangle; animate: boolean; onClick: () => void }) {
   return (
     <div className="wl-render wl-dangle" onClick={onClick}>
       <div className="wl-dangle__span">
         <span className="wl-dangle__edgekind">{dangle.edgeKind}</span>
         <div className="wl-dangle__live" />
-        <div className="wl-dangle__loose" />
+        {/* the drift is the emotional core — one per screen (the first dangle only) */}
+        <div className={`wl-dangle__loose${animate ? ' wl-dangle__loose--drift' : ''}`} />
         <div className="wl-dangle__void" />
       </div>
       <div className="wl-dangle__label">

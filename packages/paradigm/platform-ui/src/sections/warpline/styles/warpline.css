@@ -12,7 +12,6 @@
   --warp: #e9a23b;   /* branch A intent thread (amber) */
   --weft: #2dd4bf;   /* branch B intent thread (teal) */
   --seam: #7c6ff0;   /* the seam, DIVERGENT, the ★ cell, knot/void — git is blind here */
-  --seam-ring: #7c6ff0;
   --clean: #34d8a0;  /* git's CLEAN chip ONLY (the unreliable narrator's confident green) */
   --cut: #5e5c54;    /* the severed/loose thread end */
 
@@ -104,7 +103,7 @@
   font-size: 12px;
 }
 .wl-rail__row:hover { background: var(--p-bg-hover); }
-.wl-rail__row--active { background: var(--p-bg-tertiary); border-left: 2px solid var(--seam); }
+.wl-rail__row--active { background: var(--p-bg-tertiary); border-left: 2px solid var(--p-border-active); }
 
 .wl-rail__dot {
   width: 7px;
@@ -193,9 +192,9 @@
     animation: wl-seam-pulse 2.4s ease-in-out infinite;
   }
 }
-/* reduce-motion: solid + static glow (no animation) */
-.wl-seam--divergence {
-  box-shadow: 0 0 8px 1px var(--seam);
+@media (prefers-reduced-motion: reduce) {
+  /* solid + static glow, no animation — the intentional, rot-proof fallback */
+  .wl-seam--divergence { box-shadow: 0 0 8px 1px var(--seam); }
 }
 @keyframes wl-seam-pulse {
   0%, 100% { box-shadow: 0 0 4px 0 var(--seam); opacity: 0.6; }
@@ -302,9 +301,11 @@
   .wl-knot__thread--a { animation: wl-cinch-a 600ms ease-out 1 forwards; }
   .wl-knot__thread--b { animation: wl-cinch-b 600ms ease-out 1 forwards; }
 }
-/* reduce-motion: already cinched (the rotated end-state, no animation) */
-.wl-knot__thread--a { transform: rotate(14deg); }
-.wl-knot__thread--b { transform: rotate(-14deg); }
+@media (prefers-reduced-motion: reduce) {
+  /* already cinched — the rotated end-state gated to reduce-motion (rot-proof) */
+  .wl-knot__thread--a { transform: rotate(14deg); }
+  .wl-knot__thread--b { transform: rotate(-14deg); }
+}
 @keyframes wl-cinch-a { from { transform: rotate(0deg); } to { transform: rotate(14deg); } }
 @keyframes wl-cinch-b { from { transform: rotate(0deg); } to { transform: rotate(-14deg); } }
 
@@ -322,14 +323,17 @@
 .wl-dangle__void {
   position: absolute; right: 0; top: 8px;
   width: 34px; height: 34px; border-radius: 50%;
-  border: 1.5px dashed var(--seam-ring);
+  border: 1.5px dashed var(--seam);
 }
 .wl-dangle__edgekind { position: absolute; left: 8px; top: 2px; font-family: var(--warp-mono); font-size: 10px; color: var(--p-text-muted); }
-@media (prefers-reduced-motion: no-preference) {
-  .wl-dangle__loose { animation: wl-drift 2s ease-in-out 1 forwards; }
-}
-/* reduce-motion: already hanging (the drooped end-state, no animation) */
+/* the loose end hangs drooped by default (static end-state) — every non-drift
+   dangle AND all of reduce-motion land here. */
 .wl-dangle__loose { transform: rotate(28deg); }
+/* ONE drift per screen: only the FIRST dangle carries --drift, and only when
+   motion is allowed (the drift is the emotional core; N swaying threads = noise). */
+@media (prefers-reduced-motion: no-preference) {
+  .wl-dangle__loose--drift { transform: rotate(0deg); animation: wl-drift 2s ease-in-out 1 forwards; }
+}
 @keyframes wl-drift { 0% { transform: rotate(0deg); } 100% { transform: rotate(28deg); } }
 
 .wl-dangle__label { font-size: 12px; }
