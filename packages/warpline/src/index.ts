@@ -48,6 +48,23 @@ export { predict, type Prediction, type Knot, type Dangle } from './predict.js';
 // Justification
 export { justify, type Justification, type JustifyOptions } from './justification.js';
 
+// Fabric — the native write path (Phase 2): seal MEANING into this project's
+// OWN history under .warpline/, never git.
+export {
+  computePickId,
+  type Strand,
+  type StrandBody,
+  type StrandDelta,
+} from './fabric/strand.js';
+export {
+  warplineDirOf,
+  readSelvage,
+  writeSelvage,
+  appendStrand,
+  readFabric,
+} from './fabric/fabric.js';
+export { recordPick, type RecordPickOptions, type PickResult } from './fabric/pick.js';
+
 // Oracle
 export { oracle, type OracleRecord, type OracleOptions } from './oracle.js';
 

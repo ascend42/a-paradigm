@@ -1,6 +1,12 @@
 version: '1.0'
-generated: '2026-06-25T06:41:04.756Z'
+generated: '2026-06-25T07:48:21.532Z'
 syllabi:
+  - id: SY-architect
+    agent: architect
+    version: 1
+    status: current
+    last_ratified: '2026-06-25T06:56:23.521Z'
+    scope: generalizable
   - id: SY-compliance
     agent: compliance
     version: 1
@@ -8,8 +14,8 @@ syllabi:
     last_ratified: '2026-06-25T01:11:19.040Z'
     scope: project-specific
 health:
-  total: 1
-  current: 1
+  total: 2
+  current: 2
   stale: 0
   broken: 0
   expired: 0

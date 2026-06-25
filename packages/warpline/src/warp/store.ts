@@ -50,6 +50,43 @@ export class WarpStore {
     return this.states.get(stateId);
   }
 
+  /**
+   * Read a state back from the durable `.warpline/states/` cache (the Phase-2
+   * write path needs the PARENT state across CLI runs, when the in-mem map is
+   * empty). Rehydrates the serialized WarpObject[] into the objects Map keyed by
+   * symbol — faithful because `diff` reads only stableKey/contentId/contract off
+   * each object, all of which serializeState preserves. Returns undefined if the
+   * state was never persisted (or the JSON is unreadable).
+   */
+  loadState(stateId: string): WarpState | undefined {
+    const inMem = this.states.get(stateId);
+    if (inMem) return inMem;
+    try {
+      const full = path.join(this.warplineDir, 'states', `${this.safe(stateId)}.json`);
+      const data = JSON.parse(fs.readFileSync(full, 'utf8')) as {
+        ref: string;
+        treeSha: string | null;
+        stateId: string;
+        absorbedAt: string;
+        objects: WarpObject[];
+      };
+      const objects = new Map<string, WarpObject>();
+      for (const obj of data.objects) objects.set(obj.symbol, obj);
+      const state: WarpState = {
+        ref: data.ref,
+        treeSha: data.treeSha,
+        stateId: data.stateId,
+        absorbedAt: data.absorbedAt,
+        objects,
+      };
+      this.states.set(state.stateId, state);
+      for (const obj of objects.values()) this.objects.set(obj.contentId, obj);
+      return state;
+    } catch {
+      return undefined;
+    }
+  }
+
   /** Append a JSONL row to `.warpline/<file>` (the oracle ledger). */
   appendJsonl(file: string, row: unknown): void {
     const full = path.join(this.warplineDir, file);

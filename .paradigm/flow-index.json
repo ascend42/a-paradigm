@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generatedAt": "2026-06-25T06:41:04.673Z",
+  "generatedAt": "2026-06-25T07:48:21.428Z",
   "flows": {
     "$oracle-run": {
       "id": "$oracle-run",
@@ -67,6 +67,38 @@
           "id": "step-4",
           "action": "buildWarpState stamps each object's contentId and derives the stateId; remove the worktree in a finally",
           "symbol": "#warp-state"
+        }
+      ],
+      "definedIn": "packages/warpline/.purpose"
+    },
+    "$pick-flow": {
+      "id": "$pick-flow",
+      "description": "The single-writer WRITE PATH (Phase 2) — seal the working MEANING into this project's OWN durable history. Absorb the working tree, diff against the parent selvage (the source of truth for change), no-op on an empty diff, else seal a #strand, persist the snapshot, append to the #fabric ledger, and advance the selvage atomically. Writes .warpline/ only — git is read for provenance (HEAD sha, user.name) and never mutated.",
+      "steps": [
+        {
+          "id": "step-1",
+          "action": "Lift the working tree (or a ref) to a WarpState of MEANING",
+          "symbol": "#absorb"
+        },
+        {
+          "id": "step-2",
+          "action": "readSelvage — the parent tip (null at genesis)",
+          "symbol": "#fabric"
+        },
+        {
+          "id": "step-3",
+          "action": "diff(parent, current) — empty ⇒ no-op; else summarize born/retired/contract-changed/renamed",
+          "symbol": "#sem-delta"
+        },
+        {
+          "id": "step-4",
+          "action": "putState — durably persist the snapshot under .warpline/states/",
+          "symbol": "#warp-store"
+        },
+        {
+          "id": "step-5",
+          "action": "Seal the #strand (attribution + reserved confidence + git-HEAD anchor); appendStrand; writeSelvage (atomic publish)",
+          "symbol": "#pick"
         }
       ],
       "definedIn": "packages/warpline/.purpose"
@@ -331,10 +363,12 @@
     ],
     "#absorb": [
       "$oracle-run",
+      "$pick-flow",
       "$weave-forecast"
     ],
     "#sem-delta": [
       "$oracle-run",
+      "$pick-flow",
       "$weave-forecast"
     ],
     "#justification": [
@@ -355,6 +389,15 @@
     ],
     "#warp-state": [
       "$absorb-flow"
+    ],
+    "#fabric": [
+      "$pick-flow"
+    ],
+    "#warp-store": [
+      "$pick-flow"
+    ],
+    "#pick": [
+      "$pick-flow"
     ],
     "#weave": [
       "$weave-forecast"

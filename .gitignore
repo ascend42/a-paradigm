@@ -188,7 +188,14 @@ $RECYCLE.BIN/
 # Generated read-through of that pack (private)
 /ai-literacy-review.md
 
-# Warpline engine runtime output (content-addressed WARP cache + oracle log)
-.warpline/
+# Warpline: ignore the heavy/regenerable store (WARP snapshots + oracle log), but
+# TRACK this project's native meaning-history — the fabric ledger + the selvage
+# tip — so it pushes with git (coexistence). State snapshots are reconstructable
+# by re-absorbing each strand's provenance.gitCommit, so they stay ignored.
+.warpline/*
+!.warpline/fabric.jsonl
+!.warpline/refs/
+.warpline/refs/*
+!.warpline/refs/selvage
 # (legacy Loom runtime dir, kept ignored for back-compat)
 .loom/

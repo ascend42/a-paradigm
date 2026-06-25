@@ -1,11 +1,15 @@
 version: "2.0"
 description: >-
-  The Warpline Engine — Phase 1: the Convergence/Divergence Oracle. A read-only tool
-  that lifts two git branches to a content-addressed store of MEANING (the
+  The Warpline Engine. Phase 1: the Convergence/Divergence Oracle — a read-only
+  tool that lifts two git branches to a content-addressed store of MEANING (the
   Paradigm symbol graph), predicts the merge from meaning (clean / knot /
   dangling), runs git's actual merge read-only, and scores where meaning and
-  bytes agreed or diverged — appending a row to .warpline/oracle.jsonl. Never touches
-  HEAD/index/worktree.
+  bytes agreed or diverged. Phase 2 (the native WRITE PATH): #fabric/#pick seal
+  the working meaning into this project's OWN durable history (#strand records in
+  .warpline/fabric.jsonl + the .warpline/refs/selvage tip), single-writer, NO git
+  merge — git coexists (TD-2026-06-25-564). Multi-writer SCRATCH+CAS+WEFT is
+  deferred (Phase C, gated on the false-AUTOFOLD safety experiment). Warpline only
+  ever writes under .warpline/; the user's git HEAD/index/worktree are never touched.
 
 components:
   git-exec:
@@ -15,7 +19,9 @@ components:
       temp dir — NO worktree, no .git/worktrees lock — so absorbs run concurrently
       (T-2026-06-23-003). worktreeAdd/Remove remain only for the cold git<2.38
       merge-tree fallback, which needs real merge machinery and is serialized
-      per-repo via #repo-lock. The user's HEAD/index/worktree are never touched.
+      per-repo via #repo-lock. gitUserName reads `git config user.name` (read-only)
+      to seed the default ACTOR of a fabric #pick — coexistence only, never written
+      back. The user's HEAD/index/worktree are never touched.
     type: module
     components:
       - "#repo-lock"
@@ -80,9 +86,12 @@ components:
 
   warp-store:
     description: >-
-      Minimal content-addressed store (in-mem primary, .warpline/ disk debug cache)
-      and the .warpline/oracle.jsonl ledger appender. The ONLY thing Warpline writes to
-      disk is under .warpline/.
+      Content-addressed store for WARP objects + states and the .warpline/oracle.jsonl
+      ledger appender. In-mem primary with a .warpline/ disk cache; loadState(stateId)
+      rehydrates a persisted state back from .warpline/states/ (the Phase-2 write path
+      needs the PARENT state across CLI runs when the in-mem map is cold) — faithful
+      because diff reads only stableKey/contentId/contract, all preserved by
+      serializeState. The ONLY thing Warpline writes to disk is under .warpline/.
     type: module
 
   code-lens:
@@ -266,6 +275,58 @@ components:
       - "#sem-delta"
       - "#git-exec"
 
+  strand:
+    description: >-
+      A Strand — one PICK sealed into the fabric. Two deliberately-separated
+      identities: stateId (the REPRODUCIBLE content-address of the meaning it lands
+      on, from #warp-state) and pickId (pick:v0:sha256 over the canonical body — the
+      EVENT identity, including actor + time + intent, so attribution/provenance
+      lives here). Carries a compact StrandDelta (born/retired/contractChanged
+      names + renamedNoop count), an objectCount, git coexistence provenance
+      (ref/treeSha/gitCommit), and calibratedConfidence — RESERVED (null until
+      graded), the one field a git-backed history can't carry and the seed of the
+      non-portable moat. computePickId null-normalizes the body (canonical rejects
+      null) for the ADDRESS only; stored JSON keeps real nulls.
+    type: module
+    components:
+      - "#canonical-json"
+      - "#warp-state"
+
+  fabric:
+    description: >-
+      The durable Warpline history of this project — the append-only PICK-DAG
+      ledger (.warpline/fabric.jsonl) + the live tip pointer (.warpline/refs/selvage,
+      published atomically via write-tmp+rename so a crash never leaves a
+      half-written tip). readSelvage/writeSelvage/appendStrand/readFabric.
+      COEXISTENCE INVARIANT: writes ONLY under .warpline/ — never the user's git
+      HEAD/index/worktree — extending the Phase-1 ~read-only disk boundary from a
+      debug cache into the authoritative store. Git keeps running normally;
+      Warpline accumulates its OWN meaning-history alongside it.
+    type: module
+    components:
+      - "#strand"
+
+  pick:
+    description: >-
+      The single-writer WRITE PATH (Phase 2). recordPick(root, opts) absorbs the
+      working tree (or a ref) to a WarpState, and — using the DIFF vs the parent
+      selvage as the source of truth for "did meaning change?" (NOT stateId
+      equality, which hashes the DEDUPED essence set and so misses a born symbol
+      whose essence equals an existing one) — no-ops on an empty diff, else seals a
+      #strand (attribution + reserved confidence + git-HEAD coexistence anchor),
+      persists the snapshot, appends to #fabric, and advances the selvage. Genesis
+      (no selvage) records seq 0 with an empty delta; objectCount is the headline.
+      NO SCRATCH fork, NO per-domain CAS, NO WEFT group, NO auto-merge — those are
+      the multi-writer protocol (Phase C, gated on the false-AUTOFOLD experiment),
+      so this path doesn't depend on auto-merge safety.
+    type: module
+    components:
+      - "#absorb"
+      - "#sem-delta"
+      - "#warp-store"
+      - "#fabric"
+      - "#git-exec"
+
   oracle:
     description: >-
       oracle(branchA, branchB) — merge-base → absorb base/A/B → diff → predict →
@@ -359,8 +420,12 @@ components:
       two args = refA vs refB). Plus `warpline status [--json]` (the working tree's
       MEANING vs HEAD — the named, discoverable form of diff-no-args) and `warpline
       lifeline <symbol> [--max N] [--json]` (meaning-aware blame — who changed a
-      symbol's meaning, when, why; survives renames). The only module allowed to
-      write stdout; library code stays quiet.
+      symbol's meaning, when, why; survives renames). Phase-2 WRITE PATH: `warpline
+      pick -m <intent> [--as <actor>] [--confidence <n>] [--ref <ref>] [--json]`
+      seals the working meaning into the fabric (no-op when unchanged), and
+      `warpline log [--max N] [--json]` shows this project's native meaning-history
+      (the strands, newest first). The only module allowed to write stdout; library
+      code stays quiet.
     type: cli
     components:
       - "#oracle"
@@ -368,6 +433,8 @@ components:
       - "#weave"
       - "#consolidate"
       - "#lifeline"
+      - "#pick"
+      - "#fabric"
 
 flows:
   oracle-run:
@@ -408,6 +475,26 @@ flows:
       - component: "#warp-state"
         action: "buildWarpState stamps each object's contentId and derives the stateId; remove the worktree in a finally"
 
+  pick-flow:
+    description: >-
+      The single-writer WRITE PATH (Phase 2) — seal the working MEANING into this
+      project's OWN durable history. Absorb the working tree, diff against the
+      parent selvage (the source of truth for change), no-op on an empty diff, else
+      seal a #strand, persist the snapshot, append to the #fabric ledger, and
+      advance the selvage atomically. Writes .warpline/ only — git is read for
+      provenance (HEAD sha, user.name) and never mutated.
+    steps:
+      - component: "#absorb"
+        action: "Lift the working tree (or a ref) to a WarpState of MEANING"
+      - component: "#fabric"
+        action: "readSelvage — the parent tip (null at genesis)"
+      - component: "#sem-delta"
+        action: "diff(parent, current) — empty ⇒ no-op; else summarize born/retired/contract-changed/renamed"
+      - component: "#warp-store"
+        action: "putState — durably persist the snapshot under .warpline/states/"
+      - component: "#pick"
+        action: "Seal the #strand (attribution + reserved confidence + git-HEAD anchor); appendStrand; writeSelvage (atomic publish)"
+
   weave-forecast:
     description: >-
       The pre-merge MEANING forecast (read-only, ephemeral — no ledger write).
@@ -428,22 +515,27 @@ flows:
 aspects:
   ~read-only:
     description: >-
-      THE PHASE-1 SAFETY INVARIANT — Warpline NEVER mutates the user's git
-      HEAD/index/worktree. A ref is read by materializing its tree via `git archive`
-      into a throwaway temp dir (no worktree, no .git/worktrees lock); the cold
-      git<2.38 merge-tree fallback uses a detached worktree torn down in a finally.
-      The ONLY disk Warpline writes is under .warpline/ (the content-addressed store
-      + the oracle.jsonl ledger). Lifting a ref, or the WORKTREE pseudo-ref, only
-      READS files — the code-lens included.
+      THE GIT-SAFETY INVARIANT (Phase-1 read-only; PRESERVED by the Phase-2 write
+      path) — Warpline NEVER mutates the user's git HEAD/index/worktree. A ref is
+      read by materializing its tree via `git archive` into a throwaway temp dir (no
+      worktree, no .git/worktrees lock); the cold git<2.38 merge-tree fallback uses a
+      detached worktree torn down in a finally. The ONLY disk Warpline writes is
+      under .warpline/ — the content-addressed store, the oracle.jsonl ledger, AND
+      the Phase-2 native history (#fabric: refs/selvage + fabric.jsonl + states/).
+      The write path is a write to Warpline's OWN store, NOT to git: git is read for
+      provenance (HEAD sha, user.name) only. Lifting a ref, or the WORKTREE
+      pseudo-ref, only READS files — the code-lens included.
     category: invariant
     severity: critical
-    tags: [safety, read-only, git, phase-1]
+    tags: [safety, read-only, git, coexistence]
     anchors:
       - src/git/git-exec.ts:1-16
       - src/git/git-exec.ts:128-180
       - src/absorb.ts:37-66
       - src/git/repo-lock.ts:1-22
       - src/warp/store.ts:53-64
+      - src/fabric/fabric.ts:1-20
+      - src/fabric/pick.ts:1-26
     applies-to:
       - "#git-exec"
       - "#repo-lock"
@@ -455,6 +547,8 @@ aspects:
       - "#warp-store"
       - "#oracle"
       - "#weave"
+      - "#fabric"
+      - "#pick"
 
   ~determinism:
     description: >-

@@ -91,6 +91,16 @@ export async function commitAuthor(ref: string, opts: GitOptions = {}): Promise<
 }
 
 /**
+ * The configured git user.name (read-only) — used as the default ACTOR for a
+ * native fabric pick when the caller doesn't supply `--as`. Coexistence only:
+ * git identity seeds Warpline attribution, it is never written back to git.
+ */
+export async function gitUserName(opts: GitOptions = {}): Promise<string | null> {
+  const name = await git(['config', 'user.name'], opts).catch(() => '');
+  return name.trim() || null;
+}
+
+/**
  * Add a DETACHED, quiet worktree for `ref` in a fresh temp dir and return its
  * path. The caller MUST pass the returned path to `worktreeRemove` (ideally in
  * a `finally`). Never points at the user's worktree.

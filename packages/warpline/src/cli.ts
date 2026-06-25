@@ -28,6 +28,10 @@ import type { ContractChangeset } from './sem-delta.js';
 import { changedSlotsOf } from './sem-delta.js';
 import { serializeState } from './warp/store.js';
 import type { WarpState } from './warp/warp-state.js';
+import { recordPick, type PickResult } from './fabric/pick.js';
+import { warplineDirOf, readSelvage, readFabric } from './fabric/fabric.js';
+import type { Strand } from './fabric/strand.js';
+import { repoRoot } from './git/git-exec.js';
 
 // The shared .purpose parser (library code, purpose/core/aggregator) console.warns
 // about unrelated schema-invalid files (e.g. a stale conductor .purpose) on every
@@ -215,6 +219,137 @@ program
       fail(err);
     }
   });
+
+program
+  .command('pick')
+  .description("Seal the working tree's MEANING into the Warpline fabric — this project's OWN native history. Writes .warpline/ only (refs/selvage + fabric.jsonl), NEVER git. A no-op when meaning is unchanged.")
+  .requiredOption('-m, --intent <message>', 'why this pick — the human-readable intent')
+  .option('--as <actor>', 'actor identity recording this pick (default: git user.name)')
+  .option('--confidence <n>', 'graded belief 0..1 (reserved — the calibration signal)')
+  .option('--ref <ref>', 'snapshot a git ref instead of the working tree (default: WORKTREE)')
+  .option('--json', 'emit the sealed Strand as JSON')
+  .action(
+    async (options: {
+      intent: string;
+      as?: string;
+      confidence?: string;
+      ref?: string;
+      json?: boolean;
+    }) => {
+      try {
+        let confidence: number | undefined;
+        if (options.confidence !== undefined) {
+          confidence = Number(options.confidence);
+          if (!Number.isFinite(confidence) || confidence < 0 || confidence > 1) {
+            process.stderr.write(
+              `warpline: --confidence must be a number in [0,1] (got "${options.confidence}")\n`,
+            );
+            process.exit(1);
+          }
+        }
+        const root = await repoRoot().catch(() => process.cwd());
+        const result = await recordPick(root, {
+          cwd: root,
+          intent: options.intent,
+          actor: options.as,
+          confidence,
+          ref: options.ref,
+        });
+        if (options.json) {
+          process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+        } else {
+          printPick(result);
+        }
+      } catch (err) {
+        fail(err);
+      }
+    },
+  );
+
+program
+  .command('log')
+  .description("The Warpline fabric — this project's native meaning-history (the picks sealed into the WARP). Newest first.")
+  .option('--max <n>', 'max strands to show', '20')
+  .option('--json', 'emit the full fabric as JSON')
+  .action(async (options: { max?: string; json?: boolean }) => {
+    try {
+      const max = Number(options.max);
+      if (!Number.isInteger(max) || max < 1) {
+        process.stderr.write(`warpline: --max must be a positive integer (got "${options.max}")\n`);
+        process.exit(1);
+      }
+      const root = await repoRoot().catch(() => process.cwd());
+      const wdir = warplineDirOf(root);
+      const fabric = readFabric(wdir);
+      const selvage = readSelvage(wdir);
+      if (options.json) {
+        process.stdout.write(JSON.stringify({ selvage, strands: fabric }, null, 2) + '\n');
+      } else {
+        printFabric(fabric, selvage, max);
+      }
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+function printPick(r: PickResult): void {
+  if (r.noop) {
+    process.stdout.write(
+      `PICK  no-op — meaning unchanged since selvage (${short(r.stateId)})\n` +
+        '      nothing recorded; the fabric already holds this state.\n',
+    );
+    return;
+  }
+  const s = r.strand!;
+  const lines: string[] = [];
+  lines.push(`PICK  sealed into the fabric  ${r.isGenesis ? '◆ GENESIS' : `seq ${s.seq}`}`);
+  lines.push(`pick      ${s.pickId}`);
+  lines.push(`state     ${s.stateId}`);
+  lines.push(`actor     ${s.actor}`);
+  lines.push(`intent    ${s.intent}`);
+  if (r.isGenesis) {
+    lines.push(`objects   ${s.objectCount}  (the project's meaning, warped)`);
+  } else {
+    lines.push(
+      `delta     +${s.delta.born.length} born  ~${s.delta.contractChanged.length} changed  -${s.delta.retired.length} retired  ↻${s.delta.renamedNoop} renamed-noop`,
+    );
+  }
+  lines.push('');
+  lines.push('→ advanced selvage; appended → .warpline/fabric.jsonl');
+  process.stdout.write(lines.join('\n') + '\n');
+}
+
+function printFabric(fabric: Strand[], selvage: string | null, max: number): void {
+  const lines: string[] = [];
+  lines.push('WARPLINE FABRIC  (this project\'s native meaning-history)');
+  lines.push(`selvage   ${selvage ? short(selvage) : '(none — no picks sealed yet)'}`);
+  lines.push('');
+  if (fabric.length === 0) {
+    lines.push('(empty — run `warpline pick -m "..."` to seal the first strand)');
+    process.stdout.write(lines.join('\n') + '\n');
+    return;
+  }
+  const shown = fabric.slice(-max).reverse();
+  for (const s of shown) {
+    const date = s.recordedAt.slice(0, 10);
+    const tag = s.seq === 0 ? '◆ genesis' : `~ seq ${s.seq}`;
+    lines.push(`${tag}  ${short(s.pickId)}  ${date}  ${s.actor}`);
+    lines.push(`     intent:  ${s.intent}`);
+    if (s.seq === 0) {
+      lines.push(`     objects: ${s.objectCount}`);
+    } else {
+      lines.push(
+        `     delta:   +${s.delta.born.length} born  ~${s.delta.contractChanged.length} changed  -${s.delta.retired.length} retired  ↻${s.delta.renamedNoop} renamed-noop`,
+      );
+    }
+    if (s.calibratedConfidence !== null) lines.push(`     confidence: ${s.calibratedConfidence}`);
+  }
+  if (fabric.length > shown.length) {
+    lines.push('');
+    lines.push(`(${fabric.length - shown.length} older strand(s) — raise --max)`);
+  }
+  process.stdout.write(lines.join('\n') + '\n');
+}
 
 function printStatus(r: SemDiffReport): void {
   const lines: string[] = [];
