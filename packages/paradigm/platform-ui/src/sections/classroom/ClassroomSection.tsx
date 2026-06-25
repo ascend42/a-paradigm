@@ -141,6 +141,18 @@ function OutcomeBadge({ outcome }: { outcome: CertRow['outcome'] }) {
   return <span className="classroom__badge classroom__badge--pending">PENDING</span>;
 }
 
+/**
+ * The trust ladder, made visual. certified (green) ▸ provisional (orange) ▸
+ * external (cyan, dashed — outside knowledge, the context-excluded floor). Any
+ * unrecognized tier falls through as provisional, the documented live default.
+ */
+function TrustBadge({ trust }: { trust?: string }) {
+  const t = trust ?? 'provisional';
+  const mod =
+    t === 'certified' ? 'survived' : t === 'external' ? 'external' : 'pending';
+  return <span className={`classroom__badge classroom__badge--${mod}`}>{t}</span>;
+}
+
 function CertCard({ cert }: { cert: CertRow }) {
   const mod =
     cert.outcome === 'survived'
@@ -175,9 +187,7 @@ function StagedCard({ row }: { row: StagedRow }) {
           <b>{row.agent || 'unknown'}</b>
           {row.source && <span className="classroom__card-role">{row.source}</span>}
         </span>
-        {row.trust && (
-          <span className="classroom__badge classroom__badge--pending">{row.trust}</span>
-        )}
+        {row.trust && <TrustBadge trust={row.trust} />}
       </div>
       {row.insight && <div className="classroom__card-line">{row.insight}</div>}
       {typeof row.confidence === 'number' && (
@@ -352,12 +362,6 @@ function RapSheet({ rows }: { rows: RapRow[] }) {
 
 // ── Agent Locker (notebook vetting + backlog) ────────────────────────
 
-function trustBadgeClass(trust: string): string {
-  if (trust === 'certified') return 'classroom__badge classroom__badge--survived';
-  if (trust === 'external') return 'classroom__badge classroom__badge--legacy';
-  return 'classroom__badge classroom__badge--pending'; // provisional / untiered
-}
-
 function LockerEntryRow({ e }: { e: LockerEntry }) {
   return (
     <div className="classroom__locker-row">
@@ -370,7 +374,7 @@ function LockerEntryRow({ e }: { e: LockerEntry }) {
         </span>
       </div>
       <div className="classroom__locker-row-tags">
-        <span className={trustBadgeClass(e.trust)}>{e.trust}</span>
+        <TrustBadge trust={e.trust} />
         <span className="classroom__locker-applied">
           {e.appliedCount}× applied
           {e.brokeCount > 0 && <span className="classroom__locker-broke"> · {e.brokeCount} broke</span>}

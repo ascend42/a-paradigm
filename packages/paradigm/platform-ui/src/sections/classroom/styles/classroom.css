@@ -274,6 +274,14 @@
   color: var(--p-accent-orange);
 }
 
+/* External — the trust floor: foraged, un-vetted, context-excluded until a
+ * gated class certifies it. Cyan + a dashed border to read as "outside
+ * knowledge, not yet earned," distinct from provisional (orange) and legacy. */
+.classroom__badge--external {
+  color: var(--p-accent-cyan);
+  border-style: dashed;
+}
+
 /* ── Syllabi strip ─────────────────────────────────────────────────── */
 
 .classroom__syllabi {
