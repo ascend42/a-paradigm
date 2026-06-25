@@ -49,12 +49,12 @@ interface CertRow {
 }
 
 interface StagedRow {
-  id?: string;
   agent?: string;
-  type?: string;
-  urgency?: string;
-  brief?: string;
-  timestamp?: string;
+  insight?: string;
+  confidence?: number;
+  trust?: string;
+  source?: string;
+  ts?: string;
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────
@@ -113,18 +113,24 @@ function CertCard({ cert }: { cert: CertRow }) {
 }
 
 function StagedCard({ row }: { row: StagedRow }) {
+  // A staged study-hall journal candidate. trust (e.g. 'provisional') reads as
+  // the badge; source ('study-hall'/'expedition') as the role; insight as the
+  // claim line.
   return (
     <div className="classroom__card">
       <div className="classroom__card-top">
         <span className="classroom__card-agent">
           <b>{row.agent || 'unknown'}</b>
-          {row.type && <span className="classroom__card-role">{row.type}</span>}
+          {row.source && <span className="classroom__card-role">{row.source}</span>}
         </span>
-        {row.urgency && (
-          <span className="classroom__badge classroom__badge--pending">{row.urgency}</span>
+        {row.trust && (
+          <span className="classroom__badge classroom__badge--pending">{row.trust}</span>
         )}
       </div>
-      {row.brief && <div className="classroom__card-line">{row.brief}</div>}
+      {row.insight && <div className="classroom__card-line">{row.insight}</div>}
+      {typeof row.confidence === 'number' && (
+        <div className="classroom__card-meta">confidence {row.confidence.toFixed(2)}</div>
+      )}
     </div>
   );
 }
@@ -264,8 +270,8 @@ export default function ClassroomSection() {
     );
   }
 
-  // Term Board. Lifecycle split, derived from cert outcomes:
-  //   Staged   — un-engaged nominations (candidates wanting the stand).
+  // Term Board. Lifecycle split:
+  //   Staged   — study-hall journal candidates from enrolled agents (/staged).
   //   On Trial — pending certs (certified-pending, awaiting the field's veto).
   //   Settled  — resolved certs (survived OR overturned).
   const onTrial = certs.filter((c) => c.outcome === 'pending' || c.outcome === undefined);
@@ -291,9 +297,11 @@ export default function ClassroomSection() {
       <div className="classroom__cols">
         <div className="classroom__col">
           <div className="classroom__col-head">Staged · {staged.length}</div>
-          {staged.length === 0 && <div className="classroom__col-empty">Nothing staged</div>}
-          {staged.map((row) => (
-            <StagedCard key={row.id || `${row.agent}-${row.timestamp}`} row={row} />
+          {staged.length === 0 && (
+            <div className="classroom__col-empty">Nothing staged yet — run study-hall or an expedition</div>
+          )}
+          {staged.map((row, i) => (
+            <StagedCard key={`${row.agent}-${row.ts ?? i}`} row={row} />
           ))}
         </div>
 
