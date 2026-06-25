@@ -166,9 +166,17 @@ function printForecast(f: Forecast): void {
   lines.push(`mergeBase ${f.mergeBase}`);
   lines.push(`states    base=${short(f.stateIds.base)}  A=${short(f.stateIds.A)}  B=${short(f.stateIds.B)}`);
   lines.push('');
-  // The verdict line — the founder's killer line.
+  // The verdict line — the founder's killer line. Honour git reality: meaning can
+  // be clean while git conflicts on bytes (a non-symbol file — GAP-1); never headline
+  // "CLEAN TO WEAVE" over a real git conflict (T-2026-06-25-001).
   if (f.verdict === 'CLEAN') {
-    lines.push('VERDICT  CLEAN TO WEAVE  (no knots, no dangling references)');
+    if (f.vsGit?.gitConflicted) {
+      const sites = f.vsGit.conflictSymbols.length + f.vsGit.gitConflictUnmapped.length;
+      lines.push(`VERDICT  CLEAN IN MEANING — but git CONFLICTS (${sites || 'unmapped'} site(s))`);
+      lines.push('         no knots in meaning; git collides on bytes (often a non-symbol file — GAP-1)');
+    } else {
+      lines.push('VERDICT  CLEAN TO WEAVE  (no knots, no dangling references)');
+    }
   } else {
     const n = f.decisions;
     lines.push(`VERDICT  ${n} decision${n === 1 ? '' : 's'} needed  (${f.knots.length} knot(s), ${f.dangling.length} dangling)`);
@@ -197,6 +205,9 @@ function printForecast(f: Forecast): void {
     lines.push(`vs GIT REALITY: ${g.gitConflicted ? 'CONFLICT' : 'clean'}  (${g.conflictSymbols.length} symbol(s))`);
     lines.push(`  divergeGitOnly  ★   ${g.divergeGitOnly.length}${g.divergeGitOnly.length ? '  ' + g.divergeGitOnly.join(', ') : ''}`);
     lines.push(`  divergeMeaningOnly ★ ${g.divergeMeaningOnly.length}${g.divergeMeaningOnly.length ? '  ' + g.divergeMeaningOnly.join(', ') : ''}`);
+    if (g.gitConflictUnmapped.length) {
+      lines.push(`  gitConflictUnmapped  ${g.gitConflictUnmapped.length}  ${g.gitConflictUnmapped.join(', ')}  (git-only, no symbol — GAP-1)`);
+    }
     lines.push(`  score               ${g.score}`);
     lines.push(`  VERDICT             ${g.verdict}`);
   }
@@ -325,6 +336,9 @@ function printOracleSummary(record: OracleRecord): void {
   lines.push(`  agreeConflict       ${c.agreeConflict.length}`);
   lines.push(`  divergeGitOnly  ★   ${c.divergeGitOnly.length}${c.divergeGitOnly.length ? '  ' + c.divergeGitOnly.join(', ') : ''}`);
   lines.push(`  divergeMeaningOnly ★ ${c.divergeMeaningOnly.length}${c.divergeMeaningOnly.length ? '  ' + c.divergeMeaningOnly.join(', ') : ''}`);
+  if (c.gitConflictUnmapped.length) {
+    lines.push(`  gitConflictUnmapped  ${c.gitConflictUnmapped.length}  ${c.gitConflictUnmapped.join(', ')}  (git-only, no symbol — GAP-1)`);
+  }
   lines.push(`  score               ${c.score}`);
   lines.push(`  VERDICT             ${c.verdict}`);
   lines.push('');

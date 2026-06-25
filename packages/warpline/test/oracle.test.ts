@@ -83,6 +83,39 @@ describe('score — confusion-matrix partition (every cell positively exercised)
     // git and meaning AGREE there's a conflict ⇒ the oracle is CONVERGENT.
     expect(c.verdict).toBe('CONVERGENT');
   });
+
+  // T-2026-06-25-001 — the "lies green" guard. Before the fix, gitReality.conflicted
+  // never reached score(), so a git conflict in a NON-SYMBOL file (or an unresolvable
+  // merge) read CONVERGENT / score 1 — the worst failure for a divergence detector.
+  it('git conflict on a NON-SYMBOL path ⇒ DIVERGENT, never green (the lies-green guard)', () => {
+    const prediction = { autoClean: [], knots: [], dangling: [] };
+    const c = score(prediction, [], [] as any, {
+      gitConflicted: true,
+      unmappedConflictPaths: ['README.md'],
+      pathsEnumerated: true,
+    });
+    expect(c.gitConflictUnmapped).toEqual(['README.md']);
+    expect(c.verdict).toBe('DIVERGENT'); // was CONVERGENT before the fix
+    expect(c.score).toBeLessThan(1);
+  });
+
+  it('git conflicted but NO enumerable evidence ⇒ INDETERMINATE → DIVERGENT, not green', () => {
+    const prediction = { autoClean: [], knots: [], dangling: [] };
+    const c = score(prediction, [], [] as any, {
+      gitConflicted: true,
+      unmappedConflictPaths: [],
+      pathsEnumerated: false,
+    });
+    expect(c.verdict).toBe('DIVERGENT');
+    expect(c.score).toBeLessThan(1);
+  });
+
+  it('no git conflict (gitReality omitted) ⇒ unchanged: CONVERGENT when meaning is clean', () => {
+    const prediction = { autoClean: [], knots: [], dangling: [] };
+    const c = score(prediction, [], [] as any);
+    expect(c.verdict).toBe('CONVERGENT');
+    expect(c.gitConflictUnmapped).toEqual([]);
+  });
 });
 
 describe('predict — the algebra (synthetic fixtures)', () => {

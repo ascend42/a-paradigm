@@ -61,6 +61,13 @@ export interface OracleRecord {
     agreeConflict: string[];
     divergeGitOnly: string[];
     divergeMeaningOnly: string[];
+    /**
+     * Git conflict PATHS that mapped to NO symbol — a git-only divergence the
+     * meaning lens is blind to (GAP-1: a conflict in a non-symbol file like
+     * README.md, or an unresolvable/pseudo-ref merge). These MUST count against
+     * convergence, else a real git conflict reads green (T-2026-06-25-001).
+     */
+    gitConflictUnmapped: string[];
     score: number; // |agree| / |agree ∪ diverge|
     verdict: 'CONVERGENT' | 'DIVERGENT';
   };
@@ -120,13 +127,21 @@ export async function oracle(
     conflictPaths: [] as string[],
   }));
 
-  // map conflict paths → symbols via dir of the .purpose. Use the union of
-  // both branch states' objects so a symbol on either side is reachable.
-  const conflictDirs = new Set(reality.conflictPaths.map((p) => normalizeDir(p)));
-  const conflictSymbols = symbolsInDirs([aState, bState], conflictDirs, repo);
+  // map conflict paths → symbols via dir of the .purpose, AND keep the paths that
+  // mapped to NO symbol (git-only divergences the meaning lens can't see).
+  const { conflictSymbols, unmappedPaths } = mapConflicts(
+    [aState, bState],
+    reality.conflictPaths,
+    repo,
+  );
 
-  // 6. score the confusion matrix
-  const convergence = score(prediction, conflictSymbols, [aState, bState]);
+  // 6. score the confusion matrix — gitReality.conflicted MUST gate the verdict so
+  // a git conflict in a non-symbol file (or an unresolvable merge) can't read green.
+  const convergence = score(prediction, conflictSymbols, [aState, bState], {
+    gitConflicted: reality.conflicted,
+    unmappedConflictPaths: unmappedPaths,
+    pathsEnumerated: reality.conflictPaths.length > 0,
+  });
 
   const record: OracleRecord = {
     schemaVersion: 1,
@@ -184,13 +199,23 @@ function normalizeDir(p: string): string {
 }
 
 /**
- * Symbols whose defining `.purpose` lives in one of the conflicted dirs.
+ * Map git conflict PATHS to symbols (a symbol whose defining-file dir equals or is
+ * nested beneath a conflict dir). Returns BOTH the mapped symbols AND the conflict
+ * paths that mapped to NO symbol. The latter are git-only divergences the meaning
+ * lens is blind to (GAP-1: a conflict in a non-symbol file like README.md) and MUST
+ * still count against convergence — else the oracle lies green (T-2026-06-25-001).
  * filePath in a WarpObject may be absolute (worktree tmp) — reduce to the dir
- * RELATIVE to the repo root if possible, else compare basenames of dirs.
+ * RELATIVE to the repo root if possible.
  */
-function symbolsInDirs(states: WarpState[], conflictDirs: Set<string>, repo: string): string[] {
-  if (conflictDirs.size === 0) return [];
-  const result = new Set<string>();
+function mapConflicts(
+  states: WarpState[],
+  conflictPaths: string[],
+  repo: string,
+): { conflictSymbols: string[]; unmappedPaths: string[] } {
+  if (conflictPaths.length === 0) return { conflictSymbols: [], unmappedPaths: [] };
+  const conflictDirs = new Set(conflictPaths.map((p) => normalizeDir(p)));
+  const symbols = new Set<string>();
+  const mappedDirs = new Set<string>();
   for (const state of states) {
     for (const obj of state.objects.values()) {
       if (!obj.filePath) continue;
@@ -199,13 +224,14 @@ function symbolsInDirs(states: WarpState[], conflictDirs: Set<string>, repo: str
         // a symbol matches a conflict dir if its defining-file dir equals the
         // conflict dir or is nested beneath it (the .purpose covers that subtree).
         if (dir === cd || (cd !== '' && dir.startsWith(cd + '/'))) {
-          result.add(obj.symbol);
-          break;
+          symbols.add(obj.symbol);
+          mappedDirs.add(cd);
         }
       }
     }
   }
-  return Array.from(result).sort();
+  const unmappedPaths = conflictPaths.filter((p) => !mappedDirs.has(normalizeDir(p)));
+  return { conflictSymbols: Array.from(symbols).sort(), unmappedPaths };
 }
 
 /**
@@ -240,6 +266,14 @@ export function score(
   prediction: Prediction,
   conflictSymbols: string[],
   states: WarpState[],
+  gitReality?: {
+    /** did git's real merge conflict? */
+    gitConflicted: boolean;
+    /** conflict paths that mapped to NO symbol (git-only divergence; GAP-1). */
+    unmappedConflictPaths: string[];
+    /** did git enumerate any conflict paths at all? (false ⇒ indeterminate) */
+    pathsEnumerated: boolean;
+  },
 ): OracleRecord['convergence'] {
   // meaning-conflicted symbol NAMES (knots by symbol; dangles by fromSymbol).
   const meaningConflict = new Set<string>();
@@ -285,8 +319,25 @@ export function score(
   divergeGitOnly.sort();
   divergeMeaningOnly.sort();
 
+  // Git-only divergences with NO symbol home (a conflict in a non-symbol file).
+  const gitConflictUnmapped = (gitReality?.unmappedConflictPaths ?? []).slice().sort();
+
+  // INDETERMINATE: git said conflicted but produced zero matrix evidence — no
+  // conflicted symbol, no unmapped path (e.g. a pseudo-ref or a merge git couldn't
+  // resolve to paths). It must NOT read CONVERGENT.
+  const gitUnaccounted =
+    !!gitReality?.gitConflicted &&
+    agreeConflict.length === 0 &&
+    divergeGitOnly.length === 0 &&
+    gitConflictUnmapped.length === 0;
+
   const agree = agreeClean.length + agreeConflict.length;
-  const diverge = divergeGitOnly.length + divergeMeaningOnly.length;
+  // diverge = symbol-level (git/meaning) + path-level (unmapped) + the indeterminate unit.
+  const diverge =
+    divergeGitOnly.length +
+    divergeMeaningOnly.length +
+    gitConflictUnmapped.length +
+    (gitUnaccounted ? 1 : 0);
   const denom = agree + diverge;
   const scoreVal = denom === 0 ? 1 : agree / denom;
   const verdict: 'CONVERGENT' | 'DIVERGENT' = diverge === 0 ? 'CONVERGENT' : 'DIVERGENT';
@@ -296,6 +347,7 @@ export function score(
     agreeConflict,
     divergeGitOnly,
     divergeMeaningOnly,
+    gitConflictUnmapped,
     score: Number(scoreVal.toFixed(4)),
     verdict,
   };

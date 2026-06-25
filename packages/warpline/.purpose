@@ -272,7 +272,10 @@ components:
       git merge-tree reality (read-only) → score the confusion matrix
       (agreeClean/agreeConflict/divergeGitOnly/divergeMeaningOnly/score/verdict) →
       append an OracleRecord to .warpline/oracle.jsonl. The two divergence cells are
-      the experimental result. Conflict paths map to symbols at .purpose-dir level.
+      the experimental result. Conflict paths map to symbols at .purpose-dir level;
+      a git conflict in a NON-SYMBOL file (or an unresolvable merge) becomes
+      gitConflictUnmapped — a git-only divergence that gates the verdict, so the
+      oracle NEVER reads CONVERGENT over a real git conflict (T-2026-06-25-001).
     type: module
     components:
       - "#absorb"
