@@ -14,6 +14,7 @@ const SECTION_ICONS: Record<string, string> = {
   team: '◫',
   tasks: '▤',
   warpline: '⋈',
+  classroom: '⌂',
   meetings: '●',
 };
 

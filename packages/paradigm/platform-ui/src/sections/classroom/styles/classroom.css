@@ -1,0 +1,312 @@
+/* Academy (Classroom) Section Styles
+ *
+ * Mirrors the ambient section's structure and uses the Suite's --p-* design
+ * tokens (no hardcoded hexes except the small set of lifecycle accent colors
+ * that have no token, kept local and named). The look references
+ * docs/private/academy.html — the Bootstrap Doorway, the Term Board, the
+ * ghosted-denominator repeat-failure bar, and the GATED/LEGACY/SURVIVED/
+ * OVERTURNED badges — without copying it verbatim.
+ */
+
+.classroom {
+  padding: 24px;
+  max-width: 1200px;
+}
+
+.classroom__title {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.classroom__subtitle {
+  font-size: 13px;
+  color: var(--p-text-muted);
+  margin-bottom: 20px;
+}
+
+/* ── Bootstrap Doorway (empty state) ───────────────────────────────── */
+
+.classroom__doorway {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 18px;
+  padding: 64px 40px;
+  max-width: 620px;
+  margin: 24px auto 0;
+  background: var(--p-bg-secondary);
+  border: 1px solid var(--p-border);
+  border-radius: var(--p-radius);
+}
+
+.classroom__doorway-cap {
+  font-size: 42px;
+  color: var(--p-text-muted);
+  line-height: 1;
+}
+
+.classroom__doorway-h {
+  font-size: 24px;
+  font-weight: 600;
+  color: var(--p-text-primary);
+  max-width: 540px;
+  line-height: 1.2;
+}
+
+.classroom__doorway-sub {
+  color: var(--p-text-muted);
+  max-width: 470px;
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.classroom__doorway-checklist {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-top: 8px;
+  text-align: left;
+}
+
+.classroom__doorway-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  opacity: 0.55;
+}
+
+.classroom__doorway-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 1.5px solid var(--p-text-muted);
+  flex-shrink: 0;
+}
+
+.classroom__doorway-lbl {
+  color: var(--p-text-secondary);
+  font-size: 14px;
+}
+
+/* ── Hero / scoreboard ─────────────────────────────────────────────── */
+
+.classroom__hero {
+  background: var(--p-bg-secondary);
+  border: 1px solid var(--p-border);
+  border-radius: var(--p-radius);
+  padding: 20px 22px;
+  margin-bottom: 24px;
+}
+
+.classroom__hero-id {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.classroom__hero-id-title {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--p-text-primary);
+}
+
+.classroom__hero-id-meta {
+  font-size: 12px;
+  color: var(--p-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* The ghosted-denominator track: the filled portion is the overturn share;
+ * the rest is "ghost" (un-resolved). With 0 resolved the whole track is ghost. */
+.classroom__track {
+  height: 10px;
+  border-radius: 999px;
+  background: var(--p-bg-tertiary);
+  margin: 14px 0 8px;
+  overflow: hidden;
+  position: relative;
+}
+
+.classroom__track-fill {
+  height: 100%;
+  background: var(--p-accent-orange);
+  border-radius: 999px;
+  transition: width var(--p-transition);
+}
+
+.classroom__track--ghost {
+  background: repeating-linear-gradient(
+    45deg,
+    var(--p-bg-tertiary),
+    var(--p-bg-tertiary) 6px,
+    transparent 6px,
+    transparent 12px
+  );
+}
+
+.classroom__hero-caption {
+  font-size: 12px;
+  color: var(--p-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Lifecycle columns ─────────────────────────────────────────────── */
+
+.classroom__cols {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+}
+
+@media (max-width: 900px) {
+  .classroom__cols {
+    grid-template-columns: 1fr;
+  }
+}
+
+.classroom__col-head {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 1px;
+  text-transform: uppercase;
+  color: var(--p-text-secondary);
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--p-border);
+}
+
+.classroom__col-empty {
+  color: var(--p-text-muted);
+  font-size: 13px;
+  padding: 12px 0;
+}
+
+/* ── Cards ─────────────────────────────────────────────────────────── */
+
+.classroom__card {
+  background: var(--p-bg-secondary);
+  border: 1px solid var(--p-border);
+  border-radius: var(--p-radius);
+  padding: 14px;
+  margin-bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.classroom__card--survived {
+  border-left: 3px solid var(--p-accent-green);
+}
+
+.classroom__card--overturned {
+  border-left: 3px solid #e0586b;
+}
+
+.classroom__card-top {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.classroom__card-agent {
+  font-size: 12px;
+}
+
+.classroom__card-agent b {
+  font-weight: 600;
+  color: var(--p-text-primary);
+}
+
+.classroom__card-agent .classroom__card-role {
+  color: var(--p-text-muted);
+  margin-left: 4px;
+}
+
+.classroom__card-line {
+  color: var(--p-text-primary);
+  font-size: 13px;
+  line-height: 1.4;
+}
+
+.classroom__card-meta {
+  font-size: 11px;
+  color: var(--p-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Badges ────────────────────────────────────────────────────────── */
+
+.classroom__badge {
+  display: inline-block;
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  white-space: nowrap;
+  flex-shrink: 0;
+  border: 1px solid currentColor;
+}
+
+.classroom__badge--gated {
+  color: var(--p-accent-purple);
+}
+
+.classroom__badge--legacy {
+  color: var(--p-text-muted);
+}
+
+.classroom__badge--survived {
+  color: var(--p-accent-green);
+}
+
+.classroom__badge--overturned {
+  color: #e0586b;
+}
+
+.classroom__badge--pending {
+  color: var(--p-accent-orange);
+}
+
+/* ── Syllabi strip ─────────────────────────────────────────────────── */
+
+.classroom__syllabi {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+}
+
+.classroom__syllabus-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--p-text-secondary);
+  background: var(--p-bg-tertiary);
+  border: 1px solid var(--p-border);
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+
+.classroom__syllabus-chip b {
+  color: var(--p-text-primary);
+  font-weight: 600;
+}
+
+.classroom__syllabus-status {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.classroom__syllabus-status--current { color: var(--p-accent-green); }
+.classroom__syllabus-status--stale { color: var(--p-accent-orange); }
+.classroom__syllabus-status--broken { color: #e0586b; }
+.classroom__syllabus-status--expired { color: var(--p-text-muted); }

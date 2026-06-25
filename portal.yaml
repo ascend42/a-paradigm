@@ -461,6 +461,21 @@ routes:
     - ^local-only
     - ^write-capable
 
+  # ── Academy / Classroom (read-only over the gated-learning artifacts) ──
+  # Thin readers over .paradigm/curriculum + .paradigm/events JSONL. No write path.
+  GET /api/classroom/status:
+    - ^local-only
+    - ^read-only
+  GET /api/classroom/staged:
+    - ^local-only
+    - ^read-only
+  GET /api/classroom/certifications:
+    - ^local-only
+    - ^read-only
+  GET /api/classroom/refinements:
+    - ^local-only
+    - ^read-only
+
   # ── WebSocket ───────────────────────────────────────────────────────
   WS /ws:
     - ^local-only

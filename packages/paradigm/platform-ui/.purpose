@@ -108,3 +108,7 @@ components:
     type: view
     parent: '#SymphonySection'
     tags: [feature, symphony]
+  ClassroomSection:
+    description: The Academy — wave-1 READ-ONLY gated-learning view. Fetches /api/classroom/status on mount; if !bootstrapped renders the Bootstrap Doorway empty-state ("never been to class" + the honesty line, nothing green), else the Term Board — a hero with the ghosted-denominator repeat-failure bar (null-safe: 0 resolved → all-ghost track + "no settled exams yet" caption) and three lifecycle columns (Staged from /staged, On Trial = pending certs, Settled = resolved certs from /certifications) with GATED/LEGACY badges from the cert loop + SURVIVED/OVERTURNED/PENDING outcome badges. Local component state (no store); resilient to empty data.
+    type: view
+    tags: [feature, classroom, academy, read-only]
