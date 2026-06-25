@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-06-25T01:13:32.079Z'
+generated: '2026-06-25T06:41:04.753Z'
 personas: {}
 chains: {}
 gate_coverage: {}
@@ -116,4 +116,8 @@ uncovered_routes:
   - POST /api/warpline/diff
   - GET /api/warpline/absorb/:ref
   - POST /api/warpline/oracle
+  - GET /api/classroom/status
+  - GET /api/classroom/staged
+  - GET /api/classroom/certifications
+  - GET /api/classroom/refinements
   - WS /ws

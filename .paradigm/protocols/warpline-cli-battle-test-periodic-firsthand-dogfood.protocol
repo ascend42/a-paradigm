@@ -1,0 +1,35 @@
+id: P-warpline-cli-battle-test-periodic-firsthand-dogfood
+name: Warpline CLI battle-test (periodic firsthand dogfood)
+description: Periodically dogfood the Warpline CLI FIRSTHAND through pseudo-real-life scenarios — the team actually runs the commands on real branches + throwaway swarm repos, captures what works vs what breaks, and files findings. Run this after CLI/engine changes and on a periodic cadence, not just once.
+trigger:
+  - warpline battle-test
+  - battletest warpline
+  - dogfood the cli
+  - test the warpline cli
+  - periodic warpline test
+  - battle test the cli
+tags:
+  - warpline
+  - cli
+  - dogfood
+  - qa
+  - battle-test
+symbols:
+  - '#warpline-cli'
+  - '#oracle'
+  - '#consolidate'
+steps:
+  - action: run
+    command: cd packages/warpline && npm run build
+    notes: 'Build the CLI first so agents test the current code. Invocation: node packages/warpline/dist/cli.js <cmd> from repo root.'
+  - action: run
+    notes: 'Dispatch the team to run FIRSTHAND in parallel, each a distinct lens: Cid = daily-driver flows (oracle/weave --vs-git/diff/consolidate on DIVERGING branches — merged ones give empty results); Nora (ftux) = cold-newcomer friction (--help, blind commands, first-impression with the raw stderr flood); Jinx = break it (bad/degenerate/injection refs, --json validity, and the SILENT-LIE hunt — confident green on a real conflict is the worst class); Loid = the multi-agent dogfood (build a throwaway swarm repo, consolidate N branches, measure K_human vs git, + Paradigm symbol alignment).'
+  - action: verify
+    notes: 'Each agent reports the REAL command + observed output + a works/doesn''t verdict + confidence (0-1). Tip: 2>/dev/null to read clean output past the .purpose warning flood. Separate ''crashes/ugly'' from ''lies green''.'
+  - action: create
+    notes: Synthesize works-vs-doesn't; file each finding as a paradigm task (tag battle-test, mark lies-green findings high); record a review-type lore entry. Re-run periodically as the CLI grows.
+recorded_from: L-2026-06-25-ascend-005521-001
+recorded_at: '2026-06-25T01:07:39.274Z'
+last_verified: '2026-06-25T01:07:39.274Z'
+verified_by: claude-opus-4-6
+status: current
