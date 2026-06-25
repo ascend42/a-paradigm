@@ -10,10 +10,24 @@ description: >-
 components:
   git-exec:
     description: >-
-      Thin, READ-ONLY wrappers over git (merge-base, rev-parse, worktree
-      add/remove, merge-tree with a throwaway-worktree fallback for git <2.38).
-      Every mutation happens in a detached temp worktree torn down in a finally;
-      the user's HEAD/index/worktree are never touched.
+      Thin, READ-ONLY wrappers over git (merge-base, rev-parse, commit meta,
+      merge-tree). ABSORB materializes a ref's tree via `git archive | tar` into a
+      temp dir — NO worktree, no .git/worktrees lock — so absorbs run concurrently
+      (T-2026-06-23-003). worktreeAdd/Remove remain only for the cold git<2.38
+      merge-tree fallback, which needs real merge machinery and is serialized
+      per-repo via #repo-lock. The user's HEAD/index/worktree are never touched.
+    type: module
+    components:
+      - "#repo-lock"
+
+  repo-lock:
+    description: >-
+      A per-repo, in-process async mutex (withRepoLock(repoRoot, fn)). Serializes
+      the one remaining git-worktree user — the cold git<2.38 merge-tree fallback —
+      per resolved repo root so concurrent calls can't race the .git/worktrees lock;
+      distinct repos run free. A predecessor's rejection never blocks later callers.
+      In-process only (cross-process would need a .git flock; the parallel-absorb
+      path no longer needs a worktree at all).
     type: module
 
   canonical-json:
@@ -187,9 +201,11 @@ components:
 
   absorb:
     description: >-
-      absorb(gitRef) -> WarpState. Spins a detached temp worktree, loadLiveGraph
-      on it, lifts every symbol, builds the WarpState, removes the worktree in a
-      finally. The literal WORKTREE ref absorbs the live cwd uncommitted state.
+      absorb(gitRef) -> WarpState. Materializes the ref's tree via `git archive |
+      tar` into a temp dir (NO worktree, no .git/worktrees lock — concurrency-safe,
+      T-2026-06-23-003), loadLiveGraph on it, lifts every symbol, builds the
+      WarpState, releaseTree in a finally. The literal WORKTREE ref absorbs the live
+      cwd uncommitted state.
       STAGE 3a: after loadLiveGraph and before buildWarpState (both the ref and
       WORKTREE paths), liftCodeUnits + injectCodeUnits splice TS/TSX code-units
       into the index as synthetic nodes so code essences flow through the same
@@ -325,13 +341,14 @@ flows:
 
   absorb-flow:
     description: >-
-      One ref -> a WarpState of MEANING (stage 3a). Materialize a read-only
-      worktree, live-parse it, lift+inject TS/TSX code-units as synthetic nodes in
-      the SAME universe, then compute whole-state essences and stamp every object.
-      The lens only reads the worktree — the Phase-1 read-only invariant holds.
+      One ref -> a WarpState of MEANING (stage 3a). Materialize a read-only ref
+      tree (git archive | tar, no worktree), live-parse it, lift+inject TS/TSX
+      code-units as synthetic nodes in the SAME universe, then compute whole-state
+      essences and stamp every object. The lens only reads the tree — the Phase-1
+      read-only invariant holds.
     steps:
       - component: "#git-exec"
-        action: "git worktree add --detach the ref into a temp dir (read-only)"
+        action: "git archive | tar -x materialize the ref into a temp dir (no worktree, lock-free, read-only)"
       - component: "#lift-code-units"
         action: "liftCodeUnits(worktree) then injectCodeUnits(index, units) — synthetic code-unit nodes spliced in BEFORE essence computation"
       - component: "#essence-hash"
@@ -360,15 +377,18 @@ aspects:
   ~read-only:
     description: >-
       THE PHASE-1 SAFETY INVARIANT — Warpline NEVER mutates the user's git
-      HEAD/index/worktree. Every git read happens through a detached, throwaway
-      worktree torn down in a finally; the ONLY disk Warpline writes is under
-      .warpline/ (the content-addressed store + the oracle.jsonl ledger). Lifting a
-      ref, or the WORKTREE pseudo-ref, only READS files — the code-lens included.
+      HEAD/index/worktree. A ref is read by materializing its tree via `git archive`
+      into a throwaway temp dir (no worktree, no .git/worktrees lock); the cold
+      git<2.38 merge-tree fallback uses a detached worktree torn down in a finally.
+      The ONLY disk Warpline writes is under .warpline/ (the content-addressed store
+      + the oracle.jsonl ledger). Lifting a ref, or the WORKTREE pseudo-ref, only
+      READS files — the code-lens included.
     category: invariant
     severity: critical
     tags: [safety, read-only, git, phase-1]
     applies-to:
       - "#git-exec"
+      - "#repo-lock"
       - "#absorb"
       - "#lift-code-units"
       - "#ts-lens"

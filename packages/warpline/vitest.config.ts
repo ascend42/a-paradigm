@@ -4,16 +4,14 @@ export default defineConfig({
   test: {
     globals: true,
     include: ['test/**/*.test.ts'],
-    // Absorb spins up real git worktrees on this repo — generous timeout.
+    // Absorb materializes ref trees with `git archive | tar` — generous timeout.
     testTimeout: 60_000,
     hookTimeout: 60_000,
-    // ABSORB runs `git worktree add/remove`, which contends on a repo's
-    // .git/worktrees locks. Running test FILES in parallel lets two absorbs
-    // race on the same repo and intermittently throw — a test-infra artifact,
-    // not an engine bug. Serialize files so the proof suite is deterministic.
-    // (NB: the engine's worktree ops aren't concurrency-safe against one repo;
-    // a future parallel-absorb feature like CONSOLIDATE must isolate/serialize
-    // them — tracked separately.)
-    fileParallelism: false,
+    // PARALLEL — ABSORB no longer spins `git worktree` (it materializes via
+    // `git archive | tar`, which takes no `.git/worktrees` lock), so concurrent
+    // absorbs against one repo are safe (T-2026-06-23-003). The cold git<2.38
+    // merge-tree fallback is the one remaining worktree user and is serialized
+    // per-repo via #repo-lock. test/absorb-concurrency.test.ts is the proof.
+    fileParallelism: true,
   },
 });

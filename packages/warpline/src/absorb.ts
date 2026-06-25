@@ -1,11 +1,14 @@
 /**
  * #absorb — `absorb(gitRef) -> WarpState`. Lift a git ref to MEANING.
  *
- * Mechanism (READ-ONLY): `git worktree add --detach` the ref into a temp dir →
- * `loadLiveGraph(tmp)` (the SAME live-parse pipeline `paradigm ripple` uses) →
- * lift every SymbolEntry to a WarpObject → compute whole-state essences → build
- * the WarpState → `git worktree remove --force` the temp dir in a `finally`.
- * The user's HEAD/index/worktree are NEVER touched.
+ * Mechanism (READ-ONLY): `materializeTree(ref)` lifts the ref's tree into a temp
+ * dir via `git archive | tar` — NO `git worktree`, so it takes no `.git/worktrees`
+ * lock and absorbs run concurrently against one repo (T-2026-06-23-003) →
+ * `loadLiveGraph(tmp)` (the SAME live-parse pipeline `paradigm ripple` uses; it
+ * reads files only, never shells git inside the tree, so a plain dir with no `.git`
+ * is sufficient) → lift every SymbolEntry to a WarpObject → compute whole-state
+ * essences → build the WarpState → `releaseTree(tmp)` in a `finally`. The user's
+ * HEAD/index/worktree are NEVER touched.
  *
  * Special ref `"WORKTREE"` = `loadLiveGraph(process.cwd())` — absorbs the
  * current (possibly uncommitted) state without spinning a worktree.
@@ -17,8 +20,8 @@ import { loadLiveGraph } from '@a-company/premise-core';
 import { buildWarpState, type WarpState } from './warp/warp-state.js';
 import { liftCodeUnits, injectCodeUnits } from './lens/lift-code-units.js';
 import {
-  worktreeAdd,
-  worktreeRemove,
+  materializeTree,
+  releaseTree,
   revParseTree,
   type GitOptions,
 } from './git/git-exec.js';
@@ -49,18 +52,18 @@ export async function absorb(ref: string, opts: AbsorbOptions = {}): Promise<War
   }
 
   const treeSha = await revParseTree(ref, { cwd }).catch(() => null);
-  const tmp = await worktreeAdd(ref, { cwd });
+  const tmp = await materializeTree(ref, { cwd });
   try {
     const graph = await loadLiveGraph(tmp);
-    // Lift code-units from the throwaway worktree (read-only) and inject them as
+    // Lift code-units from the throwaway tree (read-only) and inject them as
     // synthetic nodes BEFORE essence computation (spec §2). The lens only reads
     // `tmp`; the user's HEAD/index/worktree are never touched.
     injectCodeUnits(graph.index, await liftCodeUnits(tmp));
-    // root = the temp worktree: strip the (per-absorb, nondeterministic) temp-dir
+    // root = the temp tree: strip the (per-absorb, nondeterministic) temp-dir
     // prefix so two absorbs of the same ref yield byte-identical, repo-relative
     // filePaths. The temp-dir prefix is provenance noise, never a "move".
     return buildWarpState(graph.index, { ref, treeSha, rootDir: tmp });
   } finally {
-    await worktreeRemove(tmp, { cwd });
+    await releaseTree(tmp);
   }
 }

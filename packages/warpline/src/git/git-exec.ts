@@ -1,10 +1,13 @@
 /**
  * #git-exec — thin, READ-ONLY wrappers over git.
  *
- * The Warpline Engine NEVER mutates the user's HEAD, index, or worktree. Every
- * mutation in this file happens inside a throwaway, detached `git worktree`
- * created in the OS temp dir and torn down in a `finally`. The user's primary
- * worktree is never touched.
+ * The Warpline Engine NEVER mutates the user's HEAD, index, or worktree. ABSORB
+ * materializes a ref's tree with `git archive | tar` into a throwaway temp dir
+ * (no worktree, no `.git/worktrees` lock — so absorbs run concurrently against one
+ * repo). The only remaining `git worktree` user is the git<2.38 merge-tree
+ * FALLBACK, which needs real merge machinery; it is serialized per-repo (see
+ * #repo-lock) and torn down in a `finally`. The user's primary worktree is never
+ * touched.
  *
  * Library code: no console output. Callers handle their own logging.
  *
@@ -15,11 +18,12 @@
  * operands, never options. Callers SHOULD also validate refs at their boundary.
  */
 
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import * as fs from 'node:fs/promises';
+import { withRepoLock } from './repo-lock.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -116,6 +120,115 @@ export async function worktreeRemove(tmp: string, opts: GitOptions = {}): Promis
   }
 }
 
+/**
+ * Materialize a ref's tree into a fresh temp dir WITHOUT a git worktree, and
+ * return the dir. Runs `git archive <sha> | tar -x` — a pure object-DB read that
+ * takes NO `.git/worktrees` lock, so absorbs run concurrently against one repo.
+ * The caller MUST pass the returned path to `releaseTree` (ideally in a `finally`).
+ * Never touches the user's HEAD/index/worktree, and the materialized dir has no
+ * `.git` (the parse pipeline reads files only — see #absorb).
+ */
+export async function materializeTree(ref: string, opts: GitOptions = {}): Promise<string> {
+  const cwd = opts.cwd ?? process.cwd();
+  // Pin to an immutable SHA first: provenance + injection-safe (a hex sha is never
+  // parsed as a flag, so no `--end-of-options` dance is needed past this point).
+  const sha = await revParse(ref, { cwd });
+  const base = await fs.mkdtemp(path.join(os.tmpdir(), 'warpline-tree-'));
+  const dest = path.join(base, 'tree');
+  await fs.mkdir(dest);
+
+  type Exit = { code: number | null; signal: NodeJS.Signals | null };
+  try {
+    await new Promise<void>((resolve, reject) => {
+      let settled = false;
+      const fail = (e: Error): void => {
+        if (!settled) {
+          settled = true;
+          reject(e);
+        }
+      };
+      const done = (): void => {
+        if (!settled) {
+          settled = true;
+          resolve();
+        }
+      };
+
+      // No shell — two execFile-style spawns piped through Node streams. `tar -f -`
+      // reads stdin (portable across GNU tar and macOS bsdtar).
+      const archive = spawn('git', ['archive', '--format=tar', sha], { cwd });
+      const extract = spawn('tar', ['-x', '-f', '-', '-C', dest]);
+
+      let aErr = '';
+      let xErr = '';
+      archive.stderr.on('data', (d) => {
+        aErr += d.toString();
+      });
+      extract.stderr.on('data', (d) => {
+        xErr += d.toString();
+      });
+
+      // If either side dies mid-stream the pipe EPIPEs — route every error to one path.
+      archive.on('error', fail);
+      extract.on('error', fail);
+      archive.stdout.on('error', fail);
+      extract.stdin.on('error', fail);
+
+      archive.stdout.pipe(extract.stdin);
+
+      let aExit: Exit | null = null;
+      let xExit: Exit | null = null;
+      const check = (): void => {
+        if (aExit === null || xExit === null) return;
+        // A SIGNAL-killed producer (code null, signal set) must NOT count as success:
+        // a truncated tar stream can leave `tar` exiting 0 on a PARTIAL extract → a
+        // smaller-but-valid-looking WarpState with no error, silently breaking the
+        // ~determinism thesis. Treat signal OR non-zero on EITHER side as failure, so
+        // a truncated materialize throws rather than returning a wrong tree.
+        if (aExit.signal !== null || aExit.code !== 0) {
+          return fail(
+            new Error(`git archive ${sha} failed: ${aExit.signal ? `killed by ${aExit.signal}` : aErr.trim()}`),
+          );
+        }
+        if (xExit.signal !== null || xExit.code !== 0) {
+          return fail(
+            new Error(`tar extract failed: ${xExit.signal ? `killed by ${xExit.signal}` : xErr.trim()}`),
+          );
+        }
+        done();
+      };
+      archive.on('close', (code, signal) => {
+        aExit = { code, signal };
+        check();
+      });
+      extract.on('close', (code, signal) => {
+        xExit = { code, signal };
+        check();
+      });
+    });
+  } catch (err) {
+    // The pipe failed AFTER we created the temp dir; absorb's `finally` only runs
+    // once materializeTree RETURNS a path, so clean up here before re-throwing.
+    await releaseTree(dest);
+    throw err;
+  }
+
+  return dest;
+}
+
+/**
+ * Remove a tree dir created by `materializeTree` (its mkdtemp parent and all).
+ * Best-effort: never throws. No `git worktree prune` — nothing was registered.
+ */
+export async function releaseTree(tmp: string): Promise<void> {
+  try {
+    // tmp is <mkdtemp>/tree — remove the mkdtemp parent too.
+    await fs.rm(path.dirname(tmp), { recursive: true, force: true });
+  } catch {
+    /* best-effort */
+  }
+}
+
 export interface MergeTreeResult {
   /** true when the two-way merge of a..b has textual conflicts. */
   conflicted: boolean;
@@ -204,37 +317,43 @@ async function mergeTreeFallback(
   const cwd = opts.cwd ?? process.cwd();
   // Resolve b to a SHA before we leave the primary worktree's ref namespace.
   const bSha = await revParse(b, opts);
-  const tmp = await worktreeAdd(a, opts);
-  try {
-    let conflicted = false;
+  // This path genuinely needs a real worktree (git's merge machinery). It is the
+  // one remaining `.git/worktrees` user, so serialize it per-repo: concurrent
+  // fallbacks on one repo can't race the worktree lock. Distinct repos run free.
+  const root = await repoRoot({ cwd }).catch(() => cwd);
+  return withRepoLock(root, async () => {
+    const tmp = await worktreeAdd(a, opts);
     try {
-      await execFileAsync('git', ['merge', '--no-commit', '--no-ff', bSha], {
-        cwd: tmp,
-        maxBuffer: MAX_BUFFER,
-        encoding: 'utf8',
-      });
-    } catch {
-      // Non-zero ⇒ conflict (or merge that needs a commit). Inspect unmerged.
-      conflicted = true;
+      let conflicted = false;
+      try {
+        await execFileAsync('git', ['merge', '--no-commit', '--no-ff', bSha], {
+          cwd: tmp,
+          maxBuffer: MAX_BUFFER,
+          encoding: 'utf8',
+        });
+      } catch {
+        // Non-zero ⇒ conflict (or merge that needs a commit). Inspect unmerged.
+        conflicted = true;
+      }
+      let paths: string[] = [];
+      try {
+        const out = await git(['diff', '--name-only', '--diff-filter=U'], { cwd: tmp });
+        paths = dedupeSorted(out.split('\n').map((s) => s.trim()).filter(Boolean));
+      } catch {
+        /* ignore */
+      }
+      if (paths.length > 0) conflicted = true;
+      // Abort any in-progress merge so the throwaway worktree is removable cleanly.
+      try {
+        await git(['merge', '--abort'], { cwd: tmp });
+      } catch {
+        /* best-effort */
+      }
+      return { conflicted, conflictPaths: paths };
+    } finally {
+      await worktreeRemove(tmp, { cwd });
     }
-    let paths: string[] = [];
-    try {
-      const out = await git(['diff', '--name-only', '--diff-filter=U'], { cwd: tmp });
-      paths = dedupeSorted(out.split('\n').map((s) => s.trim()).filter(Boolean));
-    } catch {
-      /* ignore */
-    }
-    if (paths.length > 0) conflicted = true;
-    // Abort any in-progress merge so the throwaway worktree is removable cleanly.
-    try {
-      await git(['merge', '--abort'], { cwd: tmp });
-    } catch {
-      /* best-effort */
-    }
-    return { conflicted, conflictPaths: paths };
-  } finally {
-    await worktreeRemove(tmp, { cwd });
-  }
+  });
 }
 
 function dedupeSorted(arr: string[]): string[] {
