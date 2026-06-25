@@ -302,6 +302,27 @@ components:
       - "#oracle"
       - "#git-exec"
 
+  consolidate:
+    description: >-
+      The N-way fold FORECAST (read-only) — the N-branch generalization of #weave's
+      forecast(). consolidate(refs[], {base?}) absorbs a common base + N refs IN
+      PARALLEL (concurrency-safe via git-archive materialization, T-2026-06-23-003),
+      diffs each against base, and runs the proven 2-way #predict PAIRWISE across
+      every (i<j), aggregating by symbol: an N-way knot is the union of the pairwise
+      knots on a stableKey (sides = the refs in tension), a dangle is an edge one ref
+      added into a symbol another ref retired, autoFolded = touched keys with no
+      decision. decisions (K_human) = knots + dangles. NO git merge, NO ledger write.
+      The engine behind the falsifiable multi-agent claim (T-2026-06-24-012): a
+      meaning-preserving edit (reorder, local rename) carries ZERO delta and
+      auto-folds where git textually conflicts, so human labor tracks GENUINE
+      meaning-collisions, not branch count. Engine only — no CLI verb wired yet.
+    type: module
+    components:
+      - "#absorb"
+      - "#sem-delta"
+      - "#predict"
+      - "#git-exec"
+
   warpline-cli:
     description: >-
       The warpline command line (commander). `warpline oracle <a> <b> [--json]`,

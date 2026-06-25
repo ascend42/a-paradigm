@@ -74,6 +74,12 @@ export async function mergeBase(a: string, b: string, opts: GitOptions = {}): Pr
   return git(['merge-base', '--end-of-options', a, b], opts);
 }
 
+/** The common ancestor of N refs (octopus merge-base) — the base for a consolidate. */
+export async function mergeBaseN(refs: string[], opts: GitOptions = {}): Promise<string> {
+  if (refs.length < 2) throw new Error('mergeBaseN needs at least 2 refs');
+  return git(['merge-base', '--octopus', '--end-of-options', ...refs], opts);
+}
+
 /** The commit subject line of a ref's tip. */
 export async function commitSubject(ref: string, opts: GitOptions = {}): Promise<string> {
   return git(['log', '-1', '--format=%s', '--end-of-options', ref], opts);
