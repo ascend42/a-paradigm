@@ -5,6 +5,29 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.6.0] — 2026-06-25 — The Academy: the Classroom you can see, run, and forage (experimental)
+
+7.5.0 shipped the Classroom *engine* — but it had never run a term and had no GUI. This makes it **real**: bootstrapped on a project in two calls, a visible Suite surface, the first live gated term run end-to-end, the two competing learning loops reconciled in data, and agents that forage the open web. Still **experimental**. Spec `docs/specs/classroom-experience.md`; decision `TD-2026-06-25-044`.
+
+### Added
+- **The visual Academy Suite section** (the long-tracked #30), read-only: a `/api/classroom` router (`/status`, `/staged`, `/certifications`, `/refinements`) + a `ClassroomSection` — the **Term Board** with the *honest ghosted-denominator scoreboard* (a null `repeat-failure-rate` reads "no settled exams yet," never a confident green), the Bootstrap Doorway empty-state, and `GATED`/`LEGACY`/`SURVIVED`/`OVERTURNED` badges. Portal-gated `^local-only ^read-only`.
+- **`/paradigm:forage` — Expeditions:** agents forage the wild (Reddit · Medium · articles · Anthropic docs) for **cited** external candidates, staged at the floor `trust:'external'`, never certifying. The firewall: cite-or-drop, per-tier confidence caps, an intake breaking-scenario authored against *our* repo (no scenario → Field Notes), conflicts as challengers, and the field as the final examiner.
+- **The gated promotion path:** `gatedPromoteJournalEntry` + the `paradigm_classroom_promote` MCP tool — a `/class` sign-off promotes to provisional with a cert stamped `certifiedBy:'peer'|'quorum'` (no 0.8 floor; the human's ruling *is* the gate), distinct from the legacy auto-promote's `'gate'`. The two-loops **visible-quarantine** resolution: the GUI derives GATED vs LEGACY from `certifiedBy`.
+- `paradigm_journal_record` gains an optional **`provenance`** envelope (`source`/`trust`/`sourceSet`) — the staging plumbing for foraged knowledge (backward-compatible; omitted ≡ unchanged output).
+
+### Changed
+- **`/paradigm:class`** — added **Step 0** (the Orientation cold-start divert, so a fresh project isn't an empty review) and rebuilt the review arm as **THE STAND**: a fixed dissent-first turn order, the one causal question with a *rule-or-interrogate* fork, `@`-interrogation on the record, a refine read-back, the "no one could break it ⇒ *untested, not strong*" rule, and an External-candidates section (citation-first, no benefit-of-the-doubt, provisional ceiling).
+- `/api/classroom/staged` reads **gated** journal candidates (not the Ambient nomination firehose) and excludes already-promoted entries.
+
+### Fixed
+- **`#aspect-graph`** — an aspect declared with a leading `~` key (e.g. `~determinism`) was indexed under a **double-tilde** id and was unreachable by `aspect_check`/`aspect_get`, while `purpose_validate` still passed clean. Root-fixed in the `premise/core` aggregator (idempotent symbol prefixing) + a canonicalize-and-dedup at the aspect-graph DB layer. A green validate is **not** proof an aspect is queryable.
+- **`#essence-hash`** — the `f:N` slot-substitution regex matched `f:N` *inside string literals* (`str:"f:0"`), silently corrupting code-unit content-addresses. Fixed with a U+001F-anchored slot token + a regression test.
+- **`#git-exec` / the `/api/warpline` route** — argument-injection hardening (`--end-of-options` on every user ref), a real `isRef` allowlist validator (its docstring had over-claimed), `portal.yaml` gates for `/api/warpline`, and a `127.0.0.1` bind default so the `^local-only` gate is enforced at the socket.
+- **`#oracle`** — positive test coverage for the previously-untested `agreeConflict` + `divergeGitOnly` confusion-matrix cells.
+
+### Docs
+- `docs/specs/classroom-experience.md` — the full Academy experience vision (the conversation model + the GUI) and the Expeditions external-knowledge design with its ratified trust/trigger decisions.
+
 ## [7.5.0] — 2026-06-22 — The Classroom: agents that learn from failure (experimental)
 
 The biggest change to how agents learn since the notebook itself — shipped **experimental** (the engine is built and tested; the skills are drafts and it hasn't run a full term yet). A new model: **learnings are provisional by default**, and the engine is the *failure → reinforcement* loop, not an entry exam. A certified learning that breaks in the real work is attributed back to the exact entry that caused it, revised down, and corrected — so the team gets *stronger over time*, measurably. Decision `TD-2026-06-19-007`; spec `docs/specs/classroom.md`.

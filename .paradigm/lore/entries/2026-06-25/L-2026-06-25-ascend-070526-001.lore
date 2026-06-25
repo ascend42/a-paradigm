@@ -1,0 +1,38 @@
+id: L-2026-06-25-ascend-070526-001
+type: retro
+timestamp: '2026-06-25T07:05:26.200Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Session capstone — the Academy: cold no-op → live, self-correcting, web-foraging learning loop'
+summary: 'One marathon session took the Paradigm Classroom from an unbootstrapped no-op to a working, demonstrable learning system, end-to-end on real data. Opened with 3 verified framework fixes (double-tilde aspect unreachability, the f:N essence-hash collision, the /api/warpline security cluster) surfaced by a self-study convene; then designed the whole Academy (vision spec, 7 Pencil screens, a 6-flow HTML prototype, the Expeditions external-knowledge model with ratified trust decisions TD-2026-06-25-044); then BUILT it: bootstrapped the gate, wrote /forage + upgraded /class (Step-0 Orientation + THE STAND), ported a read-only Academy section into the Suite, ran the first live gated term (Rune''s learning refined + a peer cert, scoreboard honestly null), closed the two-loops gap (gatedPromoteJournalEntry stamps peer vs the quarantined legacy gate), and made Expeditions real (journal provenance envelope + Arky''s genuine web dive → 3 cited external candidates on the board, the barrel-file challenger refuted against our 9 tsup-bundled barrels).'
+symbols_touched:
+  - '#classroom'
+  - '#ClassroomRouter'
+  - '#ClassroomSection'
+  - '#nomination-engine'
+  - '#aspect-graph'
+  - '#essence-hash'
+  - '#git-exec'
+learnings:
+  - 'The Classroom MVP truly needs near-zero engine changes: bootstrapping is two MCP calls; the gate + forage are SKILL.md choreography; the read-only GUI is one route + section on the ambient pattern; and the only real engine additions were small and additive (gatedPromoteJournalEntry stamping peer, an optional journal provenance envelope). Running it live is what proved each piece and surfaced the real gaps.'
+  - 'The honesty thesis is load-bearing and VISIBLE: a gated sign-off writes a PENDING cert so repeat-failure-rate stays null (''no settled exams yet'') even post-promotion — the board refuses green until the FIELD resolves a cert. That single rendered behavior is the whole product''s spine.'
+  - Delegating well-specified multi-file builds to paradigm:builder agents (the GUI section, the gated-promote, the provenance envelope) worked cleanly when the spec named exact files + patterns to mirror + a build/tsx verification step — each came back green with the patterns matched.
+tags:
+  - classroom
+  - academy
+  - expeditions
+  - session-capstone
+  - milestone
+  - arc:classroom
+linked_lore:
+  - L-2026-06-24-ascend-201503-001
+  - L-2026-06-24-ascend-233928-001
+  - L-2026-06-25-ascend-062939-001
+  - L-2026-06-25-ascend-065735-001
+confidence: 0.9
+git_context:
+  ref: fb1151c7cbdd2a50eb67b0ac42c692d52458c8d6
+  branch: warpline-surfaces
+  dirty: true
