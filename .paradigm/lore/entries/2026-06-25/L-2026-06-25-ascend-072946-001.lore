@@ -1,0 +1,37 @@
+id: L-2026-06-25-ascend-072946-001
+type: retro
+timestamp: '2026-06-25T07:29:46.753Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Classroom term — Arky's 3 foraged externals all REFINED at the gate
+summary: THE STAND (gated /class) ran on architect's 3 Expedition externals. Each was probed by a breaking scenario; all three certified as REFINE — true-in-general claims bounded to where they actually hold against our tooling (npm-workspace + tsup-bundled framework packages, Vite-split UIs). None promoted as a universal; none rejected. Surfaced + filed a real collision bug in the gated promote path.
+symbols_touched:
+  - '#classroom'
+  - '#nomination-engine'
+  - '#notebook'
+learnings:
+  - 'The gate''s value on foraged externals is LOCALIZATION: good general best-practices over-generalize against local tooling; refine-as-exception is the engine, not promote-or-reject.'
+  - Verify probes against the real tree before asserting them — path-aliases/refs/composite live only in our 4 Vite UIs, not the tsup-built framework packages.
+  - Gated promote collides distinct learnings sharing concepts[0] into one notebook id (T-2026-06-25-012); give each a distinct leading concept until fixed.
+body: |-
+  Learner: architect (Arky). Host/teacher: Cid. Verdicts (human gate): all three REFINE.
+
+  1. feature-sliced-beats-layered → "feature-slice product/app code; cross-cutting shared-kernel/infra (logger, runtime, premise/core, purpose/core, probe/core) stays LAYERED." Scenario SC-feature-slice-vs-shared-kernel. nb-architect-feature-slicing (pending, peer).
+  2. barrels-are-an-antipattern (the CHALLENGER) → "anti-pattern in app code importing a LIBRARY barrel; EXCEPT a framework package's own bundled barrel (our 9 packages/*/src/index.ts via tsup, tree-shaken at bundle time)." Scenario SC-barrels-antipattern-vs-our-tooling. nb-architect-barrel-files (pending, peer).
+  3. project-refs-should-replace-aliases → "true for tsc-EMIT monorepos; EXCEPT bundler-built workspaces (no cross-package aliases to replace; tsup gives incremental boundaries) and Vite UIs (refs+aliases coexist by the tsconfig.node split)." Scenario SC-project-refs-vs-tsup-bundling. nb-architect-project-references (pending, peer).
+
+  The term's thesis held visibly: the Expedition surfaced genuinely good external knowledge, and the gate's whole value was LOCALIZING it — every external over-generalized against our actual build tooling, and the engine's move was refine-as-exception, not adopt-or-discard. Probes were verified against the real tree (path-alias/references/composite only in the 4 Vite UIs; framework packages build via tsup sequenced in package.json) — not asserted from the claim text.
+
+  Process note: the live MCP server predated this session's paradigm_classroom_promote tool, so the refines were driven through the freshly-rebuilt gatedPromoteJournalEntry (refinedForm-aware) directly. Rebuilt paradigm-mcp first because the prior dist was stale (no refinedForm → would have certified the raw universal).
+
+  Collision bug (filed T-2026-06-25-012): first pass certified all 3 into ONE notebook id (nb-architect-expedition) because addNotebookEntry derives the id from concepts[0] and all 3 led with the shared `expedition` tag — 2 snippets silently overwritten. Corrected by leading each with a distinct topic concept; the underlying id-collision is a real framework defect (3 certs, 1 surviving entry).
+linked_tasks:
+  - T-2026-06-25-012
+  - T-2026-06-19-001
+confidence: 0.9
+git_context:
+  ref: 3110a1244a08471b476531494b4139440b01254f
+  branch: warpline-surfaces
+  dirty: true
