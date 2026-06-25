@@ -1,0 +1,26 @@
+id: L-2026-06-25-ascend-061847-001
+type: review
+timestamp: '2026-06-25T06:18:47.706Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Warpline CLI battle-test ROUND 2 — measured lift after fixes + new findings
+summary: 'Re-ran the firsthand CLI battle-test (the standing protocol) to MEASURE the lift after the T-001/002/003 fixes. Confidence moved hard: Cid daily-driver 0.45→0.72, Nora self-onboard 0.2→0.6, Jinx safe-no-footguns 0.25→0.45, Loid lifeline 0.80 (new). Verified firsthand: the green-lie''s two original triggers (WORKTREE + README non-symbol conflict) are DEAD (DIVERGENT + gitConflictUnmapped); the stderr flood is gone (raw oracle = 20 clean lines); lifeline''s rename-survival HOLDS (Loid''s 5-author stress repo: git blame credits the whitespace/rename commits, lifeline correctly credits the real meaning-change author, and the thread survives a git mv). BUT the re-test caught what the fixes missed: (1) Jinx — the lies-green class is NOT fully closed: agreeConflict (a symbol both git-conflicts AND meaning-knots) counts as AGREEMENT so verdict reads CONVERGENT/score 1 over a merge git can''t complete (the word CONVERGENT misreads as ''safe'' — separate the weave-clean answer from the meaning-vs-git agreement score); (2) lifeline mis-attributes when an intermediate commit''s .purpose is schema-invalid (absent symbol → phantom born + meaning-preserving commit mislabeled as change); (3) Nora — still no glossary/git-verb-map/output-legend. The standing practice worked: it validated the fixes AND surfaced the next round of work.'
+symbols_touched:
+  - '#warpline-cli'
+  - '#oracle'
+  - '#lifeline'
+  - '#consolidate'
+tags:
+  - warpline
+  - battle-test
+  - round-2
+  - measured-lift
+  - dogfood
+  - firsthand
+confidence: 0.85
+git_context:
+  ref: e7ccfbaf471f8e1932127972fd8d98e4bee42035
+  branch: warpline-surfaces
+  dirty: true

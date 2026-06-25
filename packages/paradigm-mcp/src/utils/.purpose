@@ -168,7 +168,7 @@ components:
       - decisions
       - v6.0
   nomination-engine:
-    description: 'Nomination engine — processes events into agent nominations and debates. Core loop: event → attention scoring → nomination → debate detection → surfacing. Includes learning feedback (threshold adjustment), journal-to-notebook auto-promotion (pattern_discovered + human_feedback triggers), Neverland validation metrics, stale nomination expiry (7-day), reason storage on engage, Symphony relay forwarding, and surfacing config.'
+    description: 'Nomination engine — processes events into agent nominations and debates. Core loop: event → attention scoring → nomination → debate detection → surfacing. Includes learning feedback (threshold adjustment), journal-to-notebook auto-promotion (LEGACY autoPromoteJournalEntries — pattern_discovered + human_feedback triggers, confidence≥0.8 gate, certifiedBy:gate) AND the GATED single-entry path (gatedPromoteJournalEntry — driven by the /class sign-off, NO 0.8 gate, certifiedBy:peer|quorum, no promotion-decision instrument row; TD-2026-06-25-044 two-loops; shared markJournalPromoted helper), Neverland validation metrics, stale nomination expiry (7-day), reason storage on engage, Symphony relay forwarding, and surfacing config.'
     type: engine
     anchors:
       - nomination-engine.ts:1

@@ -1,0 +1,32 @@
+id: L-2026-06-25-ascend-062939-001
+type: retro
+timestamp: '2026-06-25T06:29:39.282Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Orientation Term — first gated certification on a-paradigm (Rune, refined)
+summary: Ran the first live gated Classroom term on this repo, end-to-end, with the Academy GUI open beside it. Rune (compliance) took the stand with the double-tilde lesson; Kit (builder, cross-lens) refuted its breadth against the SC-aspect-validate-vs-queryable scenario; the human ruled REFINE. The learning was rewritten 'X except Y' (validate ≠ aspect_check, EXCEPT bare-key aspects are queryable post-aggregator-fix), promoted to provisional with a gated (certifiedBy:peer) pending cert. The repeat-failure-rate stayed honestly null — the board refuses green until the field rules.
+symbols_touched:
+  - '#classroom'
+  - '#ClassroomSection'
+  - ~~determinism
+decisions:
+  - id: verdict-orientation-c1
+    decision: REFINE Rune's double-tilde learning to 'X except Y'
+    rationale: 'Kit''s cross-lens refutation showed the claim over-broad: post-aggregator-fix, bare-key aspects ARE queryable on a green validate; the gap is specifically ''~''-keyed (double-tilde indexing). The durable rule is validate ≠ aspect_check, with the bare-key exception sourced to SC-aspect-validate-vs-queryable.'
+learnings:
+  - 'The gated loop runs end-to-end on real tools with zero engine changes: paradigm_journal_record stages, the human rules at THE STAND, and a classroom-certifications.jsonl row (outcome:pending, certifiedBy:peer) promotes to provisional — and the live Academy GUI reflects it (provisional:1, On Trial card, rate still null).'
+  - 'The honesty thesis is VISIBLE and load-bearing: a gated sign-off writes a PENDING cert, so repeat-failure-rate stays null (''no settled exams yet'') even post-promotion. The board cannot show green until the FIELD resolves a cert — exactly the ''your sign-off doesn''t make it true'' principle, rendered.'
+  - 'Two wiring TODOs surfaced by running it live: (1) /staged doesn''t yet filter already-promoted journal entries, so a promoted candidate still shows in Staged (should flag out on promotion); (2) the real engine auto-promote stamps certifiedBy:''gate'' (legacy) — the gated ''peer''/''quorum'' stamping (visible-quarantine demotion of the legacy path) is still design, not built. The cert here was written with the gated stamp by hand to represent the intended path.'
+tags:
+  - classroom
+  - orientation-term
+  - gated-cert
+  - milestone
+  - honest-scoreboard
+confidence: 0.9
+git_context:
+  ref: e7ccfbaf471f8e1932127972fd8d98e4bee42035
+  branch: warpline-surfaces
+  dirty: true

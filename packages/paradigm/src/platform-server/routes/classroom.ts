@@ -9,12 +9,15 @@
  * / an empty rollup when a file is missing (never throws on missing/malformed
  * data — the wave-1 MVP is honest about absence, not crash-on-cold-start).
  *
- * Data sources (all under .paradigm/, all optional):
+ * Data sources (all optional):
  *   .paradigm/curriculum/<agent>.syllabus       — per-agent syllabus (YAML).
  *   .paradigm/curriculum/index.yaml             — syllabus index + health.
  *   .paradigm/events/classroom-certifications.jsonl — cert rows (the loop spine).
  *   .paradigm/events/field-failures.jsonl       — attributed field breaks.
- *   .paradigm/events/nominations.jsonl          — staged-ish candidate signal.
+ *   ~/.paradigm/agents/<agent>/journal/*.yaml   — per-agent study-hall journal
+ *       entries; the REAL staged-candidate source (global, per-agent). NOT the
+ *       legacy Ambient nominations firehose — the Academy is the GATED-truth
+ *       counterpart to Ambient, so /staged must NOT conflate the two.
  *
  * `bootstrapped` = the curriculum dir exists with ≥1 *.syllabus. Until then the
  * UI renders the Bootstrap Doorway empty-state — a green checkmark that lies is
@@ -26,13 +29,17 @@
  *
  * Endpoints (all GET, all read-only):
  *   GET /status         — bootstrapped flag, per-agent syllabi, cert rollup.
- *   GET /staged         — staged candidates (best-effort, from nominations).
+ *   GET /staged         — staged candidates from ENROLLED agents' study-hall
+ *                         journals (~/.paradigm/agents/<agent>/journal/*.yaml).
+ *                         Excludes entries already promoted to the notebook
+ *                         (promoted_to_notebook set) — they've graduated.
  *   GET /certifications — cert rows with a derived `loop: 'gated'|'legacy'`.
  *   GET /refinements    — field-failure rows (the overturned/refinement signal).
  */
 
 import { Router, type Request, type Response } from 'express';
 import * as fs from 'fs';
+import * as os from 'os';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 import type { PlatformWsContext } from '../ws/index.js';
@@ -74,15 +81,28 @@ interface FieldFailureRow {
   [key: string]: unknown;
 }
 
-interface Nomination {
+/**
+ * A study-hall journal entry as it sits on disk. The Classroom reads it
+ * defensively — `provenance` is an optional, loosely-typed envelope (the
+ * JournalEntry type doesn't declare it, but on-disk YAML may carry it), so we
+ * fall back to sensible defaults (trust: 'provisional', source: 'study-hall').
+ */
+interface JournalEntryFile {
   id?: string;
   agent?: string;
-  type?: string;
-  urgency?: string;
-  brief?: string;
   timestamp?: string;
-  surfaced?: boolean;
-  engaged?: boolean;
+  insight?: string;
+  title?: string;
+  concept?: string;
+  confidence_after?: number;
+  /** Set once an entry has been promoted to the notebook — such entries are no
+   *  longer staged candidates and are excluded from GET /staged. */
+  promoted_to_notebook?: string;
+  provenance?: {
+    trust?: string;
+    source?: string;
+    [key: string]: unknown;
+  };
   [key: string]: unknown;
 }
 
@@ -124,6 +144,33 @@ function readSyllabi(curriculumDir: string): SyllabusFile[] {
       if (parsed?.id && parsed?.agent) out.push(parsed);
     } catch {
       // Skip malformed syllabus files.
+    }
+  }
+  return out;
+}
+
+/**
+ * Read one enrolled agent's GLOBAL study-hall journal
+ * (~/.paradigm/agents/<agent>/journal/*.yaml). Mirrors journal-loader's read
+ * pattern (readdirSync → filter .yaml → js-yaml parse). Missing dir/file → [];
+ * never throws on a single malformed entry.
+ */
+function readAgentJournal(agentId: string): JournalEntryFile[] {
+  const dir = path.join(os.homedir(), '.paradigm', 'agents', agentId, 'journal');
+  if (!fs.existsSync(dir)) return [];
+  let files: string[];
+  try {
+    files = fs.readdirSync(dir).filter(f => f.endsWith('.yaml'));
+  } catch {
+    return [];
+  }
+  const out: JournalEntryFile[] = [];
+  for (const file of files) {
+    try {
+      const parsed = yaml.load(fs.readFileSync(path.join(dir, file), 'utf-8')) as JournalEntryFile;
+      if (parsed?.id) out.push(parsed);
+    } catch {
+      // Skip malformed journal files.
     }
   }
   return out;
@@ -183,7 +230,6 @@ export function createClassroomRouter(projectDir: string, _wsContext?: PlatformW
   const curriculumDir = path.join(projectDir, '.paradigm', 'curriculum');
   const certsPath = path.join(projectDir, '.paradigm', 'events', 'classroom-certifications.jsonl');
   const failuresPath = path.join(projectDir, '.paradigm', 'events', 'field-failures.jsonl');
-  const nominationsPath = path.join(projectDir, '.paradigm', 'events', 'nominations.jsonl');
 
   // ── GET /status ────────────────────────────────────────────
   // The Academy's front door. `bootstrapped` gates the Doorway vs. the Board.
@@ -228,23 +274,39 @@ export function createClassroomRouter(projectDir: string, _wsContext?: PlatformW
   });
 
   // ── GET /staged ────────────────────────────────────────────
-  // Staged candidates surfaced from the nominations log — the "chattering"
-  // signal that something wants to take the stand. Best-effort and read-only:
-  // we surface un-engaged nominations as staged-ish candidates. [] if none.
+  // The REAL staged candidates: study-hall JOURNAL entries from the ENROLLED
+  // agents (= the agents that have a syllabus, the same set /status builds).
+  // For each, read its GLOBAL journal dir (~/.paradigm/agents/<agent>/journal/
+  // *.yaml) and emit one item per entry, newest-first. Already-promoted entries
+  // (promoted_to_notebook set) are excluded — once an entry graduates to the
+  // notebook it is no longer a staged candidate (T-007). This is the gated-truth
+  // counterpart to Ambient — it deliberately does NOT read the Ambient
+  // nominations firehose (that would flood the column with un-gated chatter).
+  // compliance has no journal on this repo → [] → an honest empty column that
+  // fills when study-hall / an Orientation Term stages a real candidate.
   router.get('/staged', (_req: Request, res: Response) => {
     try {
-      const nominations = readJsonlSafe<Nomination>(nominationsPath);
-      const staged = nominations
-        .filter(n => !n.engaged)
-        .slice(-50)
-        .map(n => ({
-          id: n.id,
-          agent: n.agent,
-          type: n.type,
-          urgency: n.urgency,
-          brief: n.brief,
-          timestamp: n.timestamp,
-        }));
+      const enrolledAgents = readSyllabi(curriculumDir)
+        .map(s => s.agent)
+        .filter((a): a is string => typeof a === 'string');
+
+      const staged = enrolledAgents
+        .flatMap(agent =>
+          readAgentJournal(agent)
+            // Exclude already-promoted entries — they've graduated to the
+            // notebook and are no longer staged candidates (T-007).
+            .filter(e => !e.promoted_to_notebook)
+            .map(e => ({
+            agent,
+            insight: e.insight ?? e.title ?? e.concept ?? '',
+            confidence: e.confidence_after,
+            trust: e.provenance?.trust ?? 'provisional',
+            source: e.provenance?.source ?? 'study-hall',
+            ts: e.timestamp,
+          })),
+        )
+        .sort((a, b) => (b.ts ?? '').localeCompare(a.ts ?? ''));
+
       res.json(staged);
     } catch (err) {
       res.status(500).json({ error: 'Failed to read staged candidates', detail: String(err) });
