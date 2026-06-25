@@ -448,3 +448,129 @@
   background: transparent;
   border: 1.5px solid var(--p-text-muted);
 }
+
+/* ── Agent Locker (notebook vetting + backlog) ─────────────────────── */
+
+.classroom__locker {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.classroom__locker-card {
+  background: var(--p-bg-secondary);
+  border: 1px solid var(--p-border);
+  border-radius: var(--p-radius);
+  padding: 16px 18px;
+}
+
+.classroom__locker-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--p-border);
+  margin-bottom: 10px;
+}
+
+.classroom__locker-agent {
+  font-size: 15px;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.classroom__locker-agent b {
+  color: var(--p-text-primary);
+  font-weight: 600;
+}
+
+.classroom__locker-enrolled {
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--p-accent-purple);
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+
+.classroom__locker-counts {
+  font-size: 12px;
+  color: var(--p-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.classroom__locker-group {
+  margin-top: 10px;
+}
+
+.classroom__locker-group-head {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: var(--p-text-secondary);
+  margin-bottom: 6px;
+}
+
+.classroom__locker-group-hint {
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--p-text-muted);
+}
+
+.classroom__locker-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--p-border-subtle, var(--p-border));
+}
+
+.classroom__locker-row:last-child {
+  border-bottom: none;
+}
+
+.classroom__locker-row-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.classroom__locker-title {
+  font-size: 13px;
+  color: var(--p-text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.classroom__locker-meta {
+  font-size: 11px;
+  color: var(--p-text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.classroom__locker-row-tags {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.classroom__locker-applied {
+  font-size: 11px;
+  color: var(--p-text-muted);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.classroom__locker-broke {
+  color: #e0586b;
+}

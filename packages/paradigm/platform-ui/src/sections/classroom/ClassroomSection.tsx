@@ -78,7 +78,30 @@ interface RapRow {
   breaks: RapBreak[];
 }
 
-type Tab = 'board' | 'roster' | 'rapsheet';
+interface LockerEntry {
+  id: string;
+  title: string;
+  source?: string;
+  trust: string;
+  scope?: string;
+  confidence?: number;
+  appliedCount: number;
+  brokeCount: number;
+  publishable: boolean;
+  vetted: boolean;
+}
+
+interface LockerAgent {
+  agent: string;
+  enrolled: boolean;
+  total: number;
+  certified: number;
+  provisional: number;
+  external: number;
+  entries: LockerEntry[];
+}
+
+type Tab = 'board' | 'roster' | 'rapsheet' | 'locker';
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
@@ -327,6 +350,94 @@ function RapSheet({ rows }: { rows: RapRow[] }) {
   );
 }
 
+// ── Agent Locker (notebook vetting + backlog) ────────────────────────
+
+function trustBadgeClass(trust: string): string {
+  if (trust === 'certified') return 'classroom__badge classroom__badge--survived';
+  if (trust === 'external') return 'classroom__badge classroom__badge--legacy';
+  return 'classroom__badge classroom__badge--pending'; // provisional / untiered
+}
+
+function LockerEntryRow({ e }: { e: LockerEntry }) {
+  return (
+    <div className="classroom__locker-row">
+      <div className="classroom__locker-row-main">
+        <span className="classroom__locker-title">{e.title}</span>
+        <span className="classroom__locker-meta">
+          {e.id}
+          {e.scope ? ` · ${e.scope}` : ''}
+          {typeof e.confidence === 'number' ? ` · conf ${e.confidence.toFixed(2)}` : ''}
+        </span>
+      </div>
+      <div className="classroom__locker-row-tags">
+        <span className={trustBadgeClass(e.trust)}>{e.trust}</span>
+        <span className="classroom__locker-applied">
+          {e.appliedCount}× applied
+          {e.brokeCount > 0 && <span className="classroom__locker-broke"> · {e.brokeCount} broke</span>}
+        </span>
+        {!e.publishable && <span className="classroom__badge classroom__badge--legacy">private</span>}
+      </div>
+    </div>
+  );
+}
+
+function LockerCard({ locker }: { locker: LockerAgent }) {
+  // Vetted = field/gate-certified trust. Backlog = provisional/external/legacy —
+  // knowledge the agent carries that hasn't been earned yet.
+  const vetted = locker.entries.filter((e) => e.vetted);
+  const backlog = locker.entries.filter((e) => !e.vetted);
+
+  return (
+    <div className="classroom__locker-card">
+      <div className="classroom__locker-head">
+        <span className="classroom__locker-agent">
+          <b>{locker.agent}</b>
+          {locker.enrolled && <span className="classroom__locker-enrolled">enrolled</span>}
+        </span>
+        <span className="classroom__locker-counts">
+          {locker.total} entr{locker.total === 1 ? 'y' : 'ies'} · {locker.certified} vetted ·{' '}
+          {locker.provisional + locker.external} backlog
+        </span>
+      </div>
+
+      {vetted.length > 0 && (
+        <div className="classroom__locker-group">
+          <div className="classroom__locker-group-head">Vetted · {vetted.length}</div>
+          {vetted.map((e) => <LockerEntryRow key={e.id} e={e} />)}
+        </div>
+      )}
+
+      <div className="classroom__locker-group">
+        <div className="classroom__locker-group-head">
+          Backlog · {backlog.length}
+          <span className="classroom__locker-group-hint"> — provisional &amp; external; the field hasn't earned these yet</span>
+        </div>
+        {backlog.length === 0 && <div className="classroom__col-empty">Nothing in the backlog.</div>}
+        {backlog.map((e) => <LockerEntryRow key={e.id} e={e} />)}
+      </div>
+    </div>
+  );
+}
+
+function Locker({ lockers }: { lockers: LockerAgent[] }) {
+  if (lockers.length === 0) {
+    return (
+      <div className="classroom__col-empty">
+        No notebooks on the project roster yet — entries appear here once agents promote learnings.
+      </div>
+    );
+  }
+  return (
+    <div className="classroom__locker">
+      <p className="classroom__rapsheet-lead">
+        What each agent actually carries into work, and how much of it is earned. <b>Vetted</b> entries cleared
+        the field; the <b>Backlog</b> is provisional &amp; external knowledge still awaiting it.
+      </p>
+      {lockers.map((l) => <LockerCard key={l.agent} locker={l} />)}
+    </div>
+  );
+}
+
 // ── Bootstrap Doorway (empty state) ──────────────────────────────────
 
 function BootstrapDoorway() {
@@ -417,6 +528,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'board', label: 'Term Board' },
   { id: 'roster', label: 'Roster' },
   { id: 'rapsheet', label: 'Rap Sheet' },
+  { id: 'locker', label: 'Agent Locker' },
 ];
 
 export default function ClassroomSection() {
@@ -424,6 +536,7 @@ export default function ClassroomSection() {
   const [certs, setCerts] = useState<CertRow[]>([]);
   const [staged, setStaged] = useState<StagedRow[]>([]);
   const [rap, setRap] = useState<RapRow[]>([]);
+  const [lockers, setLockers] = useState<LockerAgent[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>('board');
 
@@ -440,15 +553,17 @@ export default function ClassroomSection() {
 
       // Only fetch board/lineage data once we know the Academy is bootstrapped.
       if (s.bootstrapped) {
-        const [c, st, rs] = await Promise.all([
+        const [c, st, rs, lk] = await Promise.all([
           getJson<CertRow[]>('/api/classroom/certifications', []),
           getJson<StagedRow[]>('/api/classroom/staged', []),
           getJson<RapRow[]>('/api/classroom/rapsheet', []),
+          getJson<LockerAgent[]>('/api/classroom/locker', []),
         ]);
         if (cancelled) return;
         setCerts(c);
         setStaged(st);
         setRap(rs);
+        setLockers(lk);
       }
       setLoading(false);
     })();
@@ -498,6 +613,7 @@ export default function ClassroomSection() {
       {tab === 'board' && <TermBoard status={status} certs={certs} staged={staged} />}
       {tab === 'roster' && <Roster syllabi={status.syllabi} />}
       {tab === 'rapsheet' && <RapSheet rows={rap} />}
+      {tab === 'locker' && <Locker lockers={lockers} />}
     </div>
   );
 }

@@ -38,6 +38,9 @@
  *   GET /rapsheet       — per-entry learning lineage: born (cert) ⋈ applied
  *                         (notebook-refs) ⋈ broke (field-failures). `breaks: []`
  *                         means UNTESTED, never "passed".
+ *   GET /locker         — per-agent notebook vetting (project roster only):
+ *                         each entry's trust tier + applied/broke counts, split
+ *                         VETTED (certified) vs BACKLOG (provisional/external).
  */
 
 import { Router, type Request, type Response } from 'express';
@@ -163,6 +166,74 @@ function readSyllabi(curriculumDir: string): SyllabusFile[] {
     }
   }
   return out;
+}
+
+/**
+ * A notebook entry as it sits on disk — read defensively. Legacy entries may
+ * lack `provenance.trust`, `confidence`, `scope`, and `appliedAndBrokeCount`,
+ * so every consumer defaults gracefully (trust → 'provisional', the documented
+ * default for a live, un-gated entry).
+ */
+interface NotebookEntryFile {
+  id?: string;
+  context?: string;
+  concepts?: string[];
+  confidence?: number;
+  scope?: string;
+  appliedCount?: number;
+  appliedAndBrokeCount?: number;
+  publishable?: boolean;
+  provenance?: { source?: string; trust?: string; [key: string]: unknown };
+  [key: string]: unknown;
+}
+
+/** Read every nb-*.yaml in a notebook dir. Missing dir → []; skips malformed. */
+function readNotebookDir(dir: string): NotebookEntryFile[] {
+  if (!fs.existsSync(dir)) return [];
+  let files: string[];
+  try {
+    files = fs.readdirSync(dir).filter(f => f.startsWith('nb-') && f.endsWith('.yaml'));
+  } catch {
+    return [];
+  }
+  const out: NotebookEntryFile[] = [];
+  for (const file of files) {
+    try {
+      const parsed = yaml.load(fs.readFileSync(path.join(dir, file), 'utf-8')) as NotebookEntryFile;
+      if (parsed?.id) out.push(parsed);
+    } catch {
+      // Skip malformed notebook files.
+    }
+  }
+  return out;
+}
+
+/**
+ * One agent's notebook = GLOBAL (~/.paradigm/notebooks/<agent>) overlaid with
+ * PROJECT (.paradigm/notebooks/<agent>), deduped by id with the project copy
+ * winning — mirrors notebook-loader's loadNotebookEntries precedence.
+ */
+function readAgentNotebooks(agentId: string, projectDir: string): NotebookEntryFile[] {
+  const byId = new Map<string, NotebookEntryFile>();
+  for (const e of readNotebookDir(path.join(os.homedir(), '.paradigm', 'notebooks', agentId))) {
+    if (e.id) byId.set(e.id, e);
+  }
+  for (const e of readNotebookDir(path.join(projectDir, '.paradigm', 'notebooks', agentId))) {
+    if (e.id) byId.set(e.id, e);
+  }
+  return Array.from(byId.values());
+}
+
+/** List agent subdirectories under a notebooks root. Missing → []. */
+function listNotebookAgents(notebooksRoot: string): string[] {
+  if (!fs.existsSync(notebooksRoot)) return [];
+  try {
+    return fs.readdirSync(notebooksRoot, { withFileTypes: true })
+      .filter(d => d.isDirectory())
+      .map(d => d.name);
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -418,6 +489,60 @@ export function createClassroomRouter(projectDir: string, _wsContext?: PlatformW
       res.json(rows);
     } catch (err) {
       res.status(500).json({ error: 'Failed to read rap sheet', detail: String(err) });
+    }
+  });
+
+  // ── GET /locker ────────────────────────────────────────────
+  // The Agent Locker — per-agent notebook vetting. Scoped to the PROJECT's
+  // working roster (enrolled agents ∪ agents with a project notebook), NOT the
+  // whole installed library. Each entry carries its trust tier (provenance.trust
+  // → 'certified' is VETTED; 'provisional'/'external'/legacy-untiered is the
+  // BACKLOG — knowledge not yet earned). Legacy auto-promoted entries (no trust)
+  // default to 'provisional' so the un-gated quarantine loop reads as backlog,
+  // never as vetted. Read-only — surfaces vetting STATE, never mutates it.
+  router.get('/locker', (_req: Request, res: Response) => {
+    try {
+      const enrolled = readSyllabi(curriculumDir)
+        .map(s => s.agent)
+        .filter((a): a is string => typeof a === 'string');
+      const projectAgents = listNotebookAgents(path.join(projectDir, '.paradigm', 'notebooks'));
+      const agents = Array.from(new Set([...enrolled, ...projectAgents])).sort();
+
+      const lockers = agents
+        .map(agent => {
+          const entries = readAgentNotebooks(agent, projectDir).map(e => {
+            const trust = e.provenance?.trust ?? 'provisional';
+            return {
+              id: e.id,
+              title: (e.concepts && e.concepts.length > 0)
+                ? e.concepts.join(', ')
+                : (e.context ? e.context.slice(0, 80) : e.id),
+              source: e.provenance?.source,
+              trust,
+              scope: e.scope,
+              confidence: typeof e.confidence === 'number' ? e.confidence : undefined,
+              appliedCount: e.appliedCount ?? 0,
+              brokeCount: e.appliedAndBrokeCount ?? 0,
+              publishable: e.publishable !== false,
+              vetted: trust === 'certified',
+            };
+          });
+          // Most-applied first within an agent — the load-bearing entries on top.
+          entries.sort((a, b) => b.appliedCount - a.appliedCount);
+          const tally = { total: entries.length, certified: 0, provisional: 0, external: 0 };
+          for (const e of entries) {
+            if (e.trust === 'certified') tally.certified++;
+            else if (e.trust === 'external') tally.external++;
+            else tally.provisional++;
+          }
+          const enrolledFlag = enrolled.includes(agent);
+          return { agent, enrolled: enrolledFlag, ...tally, entries };
+        })
+        .filter(l => l.total > 0);
+
+      res.json(lockers);
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to read locker', detail: String(err) });
     }
   });
 
