@@ -1,0 +1,61 @@
+id: L-2026-06-25-ascend-000742-001
+type: milestone
+timestamp: '2026-06-25T00:07:42.784Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'FIXED: absorb worktree concurrency (T-2026-06-23-003) — git-archive materialization, the parallel-agent gate'
+summary: 'Implemented + shipped Cid''s round-2 fix for the absorb worktree concurrency bug — the literal gate to any parallel-agent path. absorb''s real-ref branch now materializes a ref''s tree via `git archive | tar` into a temp dir (no `git worktree`, no `.git/worktrees` lock) instead of `git worktree add/remove`, so concurrent absorbs against one repo are safe. The cold git<2.38 merge-tree fallback (the one remaining worktree user) is serialized per-repo by a new #repo-lock mutex. Proof: flipped vitest fileParallelism:false→true and the full 104-test suite passes (twice) under the exact parallelism that used to flake. Aegis security-reviewed (verdict ship-with-nits → both must-fixes landed).'
+symbols_touched:
+  - '#absorb'
+  - '#git-exec'
+  - '#repo-lock'
+  - ~read-only
+  - ~determinism
+symbols_created:
+  - '#repo-lock'
+files_created:
+  - packages/warpline/src/git/repo-lock.ts
+  - packages/warpline/test/absorb-concurrency.test.ts
+files_modified:
+  - packages/warpline/src/git/git-exec.ts
+  - packages/warpline/src/absorb.ts
+  - packages/warpline/vitest.config.ts
+  - packages/warpline/.purpose
+verification:
+  status: pass
+  details:
+    typecheck: pass
+    build: pass
+    tests: 104 pass, 2x under fileParallelism:true
+    security-review: ship-with-nits, both must-fixes landed
+tags:
+  - warpline
+  - concurrency
+  - absorb
+  - git-archive
+  - multi-agent
+  - fix
+  - shipped
+  - cid
+  - aegis
+body: |-
+  THE FIX (Cid's round-2 plan, verified against real code first):
+  - NEW git-exec.ts `materializeTree(ref)`: revParse the ref → immutable SHA (provenance + injection-safe: a hex SHA is never a parsable flag, preserving the no-shell hardening Aegis held the line on) → mkdtemp → two NO-SHELL spawns piped through Node streams: `git archive --format=tar <sha>` | `tar -x -f - -C <dest>` (`-f -` reads stdin, portable GNU/bsd tar). `git archive` is a pure object-DB read — NO `.git/worktrees` lock — so absorbs run concurrently. Returns the dir; `releaseTree` (fs.rm the mkdtemp parent, no `git worktree prune`) is in absorb's finally.
+  - absorb.ts real-ref branch: worktreeAdd/Remove → materializeTree/releaseTree. WORKTREE pseudo-ref path unchanged. The materialized dir has no `.git`; verified (grep) the lens + premise-core loadLiveGraph are fs-only reads (never shell git inside the tree), so a plain dir is sufficient.
+  - NEW #repo-lock (repo-lock.ts): per-repo in-process async mutex (`prev.then(fn,fn)` runs regardless of a predecessor's rejection; stored tail is non-rejecting so a rejection never poisons the chain or skips a turn). Wraps the cold mergeTreeFallback's worktree span — the one remaining `.git/worktrees` user — so concurrent fallbacks can't race the lock; distinct repos run free.
+  - vitest.config.ts fileParallelism:false → TRUE (the acceptance proof). NEW test/absorb-concurrency.test.ts: N concurrent absorbs of different refs all succeed; concurrent SAME-ref absorbs stay byte-identical (determinism under parallelism); an 8-wide burst (the shape that threw) doesn't throw; materializeTree REJECTS on an invalid ref.
+  - .purpose: registered #repo-lock, rewrote #git-exec / #absorb / absorb-flow / the ~read-only invariant to reflect archive-not-worktree.
+
+  AEGIS SECURITY REVIEW (ship-with-nits, conf 0.82→0.93 after fixes): confirmed the arg-injection hardening + read-only invariant are PRESERVED and strengthened (archive takes no lock, writes nothing; lens is fs-only — independently grep-verified). Two must-fixes LANDED: (1) [medium, determinism] close handlers now capture (code, signal) and treat a SIGNAL-kill (code null) OR non-zero on either side as FAILURE — a signal-killed `git archive` could otherwise leave `tar` exiting 0 on a truncated stream = a silently-wrong smaller WarpState (worse than a throw; breaks ~determinism). (2) [low, leak] materializeTree now wraps the pipe in try/catch and releaseTree(dest) before re-throwing, so a mid-pipe failure can't leak the temp dir (absorb's finally only runs once a path is RETURNED). Residual nit (informational, not fixed): a fault-injection test that kills the producer mid-stream and asserts rejection would raise confidence further — recommended follow-up; the signal-handling is correct by construction.
+
+  IMPACT: this UNBLOCKS T-2026-06-24-012 (the N≥3 same-feature consolidate fixture — the falsifiable demand) and any parallel-absorb path (CONSOLIDATE). The team built it: Cid designed + verified the codebase fact (fs-only pipeline), I (builder) implemented, Aegis reviewed security. Not pushed (per release convention — stops at the working tree).
+linked_tasks:
+  - T-2026-06-23-003
+  - T-2026-06-24-012
+confidence: 0.9
+git_context:
+  ref: b5829a75962c5f74e1de6f2bf38c5d9279d7e692
+  branch: warpline-surfaces
+  dirty: true

@@ -54,3 +54,5 @@
 {"timestamp":"2026-05-30T00:57:31.114Z","type":"notebook-reference","agentId":"reviewer","notebookEntryIds":["nb-acl-mn4wi3wd","nb-compliance-mn53xbhx","nb-compliance-check-001","nb-cross-package-mn53xf98"]}
 {"timestamp":"2026-05-30T00:57:31.116Z","type":"notebook-reference","agentId":"documentor","notebookEntryIds":["nb-purpose-files-mn6b4o3w","nb-purpose-files-mn53y3j4","nb-specs-mn53y8bq"]}
 {"timestamp":"2026-06-17T17:17:59.960Z","type":"notebook-reference","agentId":"architect","notebookEntryIds":["nb-flow-design-001"]}
+{"timestamp":"2026-06-24T23:21:11.331Z","type":"notebook-reference","agentId":"security","notebookEntryIds":["nb-jwt-best-practices-p20005","nb-oauth-pkce-flow-p20007","nb-ownership-mn4wi3ud","nb-acl-mn4wi3ue","nb-portal-yaml-mn53xthp"],"orchestrationId":"orch-mqsp5xu8-3uay"}
+{"timestamp":"2026-06-24T23:21:11.338Z","type":"notebook-reference","agentId":"architect","notebookEntryIds":["nb-acl-mn4wi3t1","nb-monorepo-mn53wvzd","nb-habits-mn6he1ec","nb-orchestrate-inline-001","nb-ripple-analysis-001"],"orchestrationId":"orch-mqsp5xu8-3uay"}
