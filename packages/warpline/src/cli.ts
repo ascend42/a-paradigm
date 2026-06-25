@@ -200,7 +200,12 @@ program
   .option('--json', 'emit the Lifeline as JSON')
   .action(async (symbol: string, options: { max?: string; json?: boolean }) => {
     try {
-      const ll = await lifeline(symbol, { maxCommits: Number(options.max) || 25 });
+      const max = Number(options.max);
+      if (!Number.isInteger(max) || max < 1) {
+        process.stderr.write(`warpline: --max must be a positive integer (got "${options.max}")\n`);
+        process.exit(1);
+      }
+      const ll = await lifeline(symbol, { maxCommits: max });
       if (options.json) {
         process.stdout.write(JSON.stringify(ll, null, 2) + '\n');
       } else {
@@ -415,6 +420,18 @@ function printOracleSummary(record: OracleRecord): void {
   lines.push(`mergeBase ${record.mergeBase}`);
   lines.push(`states    base=${short(record.stateIds.base)}  A=${short(record.stateIds.A)}  B=${short(record.stateIds.B)}`);
   lines.push('');
+  // The actionable "is it safe to weave?" answer FIRST — a contested merge is never
+  // presented as green, even when meaning and git AGREE it conflicts (T-2026-06-25-005).
+  if (record.mergeClean) {
+    lines.push('MERGE   CLEAN ✓   (no knots, no dangling, git merges clean)');
+  } else {
+    const why: string[] = [];
+    if (record.prediction.knots.length) why.push(`${record.prediction.knots.length} knot(s)`);
+    if (record.prediction.dangling.length) why.push(`${record.prediction.dangling.length} dangling`);
+    if (record.gitReality.conflicted) why.push('git CONFLICT');
+    lines.push(`MERGE   CONFLICTED   (${why.join(', ')}) — a human must resolve`);
+  }
+  lines.push('');
   lines.push('PREDICTION (from meaning):');
   lines.push(`  autoClean ${record.prediction.autoClean.length}`);
   lines.push(`  knots     ${record.prediction.knots.length}${record.prediction.knots.length ? '  ' + record.prediction.knots.map((k) => k.symbol).join(', ') : ''}`);
@@ -425,7 +442,7 @@ function printOracleSummary(record: OracleRecord): void {
     lines.push(`  paths: ${record.gitReality.conflictPaths.slice(0, 6).join(', ')}${record.gitReality.conflictPaths.length > 6 ? ' ...' : ''}`);
   }
   lines.push('');
-  lines.push('CONVERGENCE (confusion matrix):');
+  lines.push('CONVERGENCE — did MEANING agree with GIT? (the experiment, not "is it safe"):');
   lines.push(`  agreeClean          ${c.agreeClean.length}`);
   lines.push(`  agreeConflict       ${c.agreeConflict.length}`);
   lines.push(`  divergeGitOnly  ★   ${c.divergeGitOnly.length}${c.divergeGitOnly.length ? '  ' + c.divergeGitOnly.join(', ') : ''}`);

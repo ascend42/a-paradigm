@@ -56,6 +56,14 @@ export interface OracleRecord {
     conflictSymbols: string[];
     conflictPaths: string[];
   };
+  /**
+   * The ACTIONABLE answer — is this weave CLEAN? (no meaning knots, no dangling, AND
+   * git merges clean). Kept SEPARATE from `convergence`, which measures meaning⟷git
+   * AGREEMENT: a contested merge BOTH sides predict is "convergent agreement" (score
+   * may be 1) but is NOT clean. Read mergeClean for "is it safe to weave?", read
+   * convergence for "did meaning agree with bytes?" (the experiment). (T-2026-06-25-005)
+   */
+  mergeClean: boolean;
   convergence: {
     agreeClean: string[];
     agreeConflict: string[];
@@ -143,6 +151,10 @@ export async function oracle(
     pathsEnumerated: reality.conflictPaths.length > 0,
   });
 
+  // The actionable "is it safe to weave?" answer — independent of the agreement metric.
+  const mergeClean =
+    prediction.knots.length === 0 && prediction.dangling.length === 0 && !reality.conflicted;
+
   const record: OracleRecord = {
     schemaVersion: 1,
     ts: new Date().toISOString(),
@@ -161,6 +173,7 @@ export async function oracle(
       conflictSymbols,
       conflictPaths: reality.conflictPaths,
     },
+    mergeClean,
     convergence,
     justifications: { A: justA, B: justB },
   };

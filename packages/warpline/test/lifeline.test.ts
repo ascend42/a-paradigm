@@ -70,6 +70,10 @@ describe('lifeline — meaning-aware blame', () => {
     expect(ll.events[0].intent).toBe('calc doubles-plus-one');
     expect(ll.events[1].intent).toBe('calc now doubles');
     expect(ll.events[2].intent).toBe('born calc');
+    // the oldest event is the BIRTH (the window covers all history, not truncated).
+    expect(ll.truncated).toBe(false);
+    expect(ll.events[2].kind).toBe('born');
+    expect(ll.events[0].kind).toBe('essence-changed');
 
     // THE HEADLINE: the commit that touched the file but not calc's meaning
     // ("add unrelated other()") is NOT a lifeline event.

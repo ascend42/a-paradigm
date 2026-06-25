@@ -275,7 +275,11 @@ components:
       the experimental result. Conflict paths map to symbols at .purpose-dir level;
       a git conflict in a NON-SYMBOL file (or an unresolvable merge) becomes
       gitConflictUnmapped — a git-only divergence that gates the verdict, so the
-      oracle NEVER reads CONVERGENT over a real git conflict (T-2026-06-25-001).
+      oracle NEVER reads CONVERGENT over a real git conflict (T-2026-06-25-001). The
+      ACTIONABLE answer is a separate mergeClean flag (no knots ∧ no dangling ∧ no git
+      conflict); convergence measures meaning⟷git AGREEMENT, so a contested merge both
+      sides predict scores 'convergent agreement' but is NOT mergeClean — read
+      mergeClean for "is it safe to weave?" (T-2026-06-25-005).
     type: module
     components:
       - "#absorb"

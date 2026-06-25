@@ -76,7 +76,7 @@ function findByKey(state: WarpState, key: string): WarpObject | undefined {
 
 export async function lifeline(query: string, opts: LifelineOptions = {}): Promise<Lifeline> {
   const cwd = opts.cwd ?? process.cwd();
-  const max = opts.maxCommits ?? 25;
+  const max = Math.max(1, Math.floor(opts.maxCommits ?? 25));
 
   // 1. resolve the symbol at HEAD → its file + tracking key.
   const head = await absorb('HEAD', { cwd });
@@ -106,30 +106,61 @@ export async function lifeline(query: string, opts: LifelineOptions = {}): Promi
   const truncated = commits.length > max;
   const window = commits.slice(0, max);
 
-  // 3. absorb each commit in parallel; read the symbol's essence (null if absent).
+  // 3. absorb each commit in parallel and CLASSIFY it: found (essence known), absent
+  //    (parse ok, symbol not present), or unknown (absorb failed). Distinguishing
+  //    absent from unknown — and treating an absence that has an even-OLDER 'found'
+  //    as a PARSE GAP, not a death/birth — stops a transient bad parse (e.g. a
+  //    schema-invalid .purpose mid-history) from fabricating a 'born' and mislabelling
+  //    the next meaning-PRESERVING commit as a change (battle-test R2).
   const states = await Promise.all(window.map((c) => absorb(c.sha, { cwd }).catch(() => null)));
-  const objs = states.map((st) => (st ? findByKey(st, key) : undefined));
+  type Slot =
+    | { status: 'found'; obj: WarpObject }
+    | { status: 'absent' }
+    | { status: 'unknown' };
+  const slots: Slot[] = states.map((st) => {
+    if (!st) return { status: 'unknown' };
+    const o = findByKey(st, key);
+    return o ? { status: 'found', obj: o } : { status: 'absent' };
+  });
 
-  // 4. emit, NEWEST→oldest, each essence attributed to the commit that INTRODUCED it
-  //    (the oldest commit carrying it: emit when the next-OLDER essence differs, is
-  //    absent ⇒ born, or is the window edge).
+  // foundOlder[i] = is there a 'found' commit strictly OLDER than i (higher index)?
+  const foundOlder: boolean[] = new Array(window.length).fill(false);
+  for (let i = window.length - 2; i >= 0; i--) {
+    foundOlder[i] = foundOlder[i + 1] || slots[i + 1].status === 'found';
+  }
+
+  // 4. emit, NEWEST→oldest, each essence attributed to the commit that INTRODUCED it.
   const events: LifelineEvent[] = [];
   for (let i = 0; i < window.length; i++) {
-    const cur = objs[i];
-    if (!cur) continue; // symbol absent at this commit
-    const olderObj = i + 1 < window.length ? objs[i + 1] : undefined;
-    const olderEssence =
-      i + 1 < window.length ? (olderObj ? olderObj.contentId : null) : 'EDGE';
+    const cur = slots[i];
+    if (cur.status !== 'found') continue; // skip unknown + absent (not an event itself)
+
+    // the next-OLDER KNOWN essence: skip 'unknown' (absorb gaps) and 'absent' that
+    // still has an even-older 'found' (a parse gap — the symbol reappears older).
+    let olderEssence: string | null | 'EDGE' = 'EDGE';
+    for (let j = i + 1; j < window.length; j++) {
+      const s = slots[j];
+      if (s.status === 'unknown') continue;
+      if (s.status === 'absent') {
+        if (foundOlder[j]) continue; // parse gap, not a real absence
+        olderEssence = null; // genuinely absent below this point → born here
+        break;
+      }
+      olderEssence = s.obj.contentId;
+      break;
+    }
 
     let emit = false;
     let kind: LifelineEvent['kind'] = 'essence-changed';
     if (olderEssence === null) {
       emit = true;
-      kind = 'born'; // didn't exist in the next-older commit
+      kind = 'born';
     } else if (olderEssence === 'EDGE') {
-      emit = true; // window edge — earliest known state in scope
-    } else if (cur.contentId !== olderEssence) {
-      emit = true; // essence changed at this commit
+      // no older info in scope: it's a true birth iff the window covers all history.
+      emit = true;
+      kind = truncated ? 'essence-changed' : 'born';
+    } else if (cur.obj.contentId !== olderEssence) {
+      emit = true;
     }
 
     if (emit) {
@@ -138,9 +169,9 @@ export async function lifeline(query: string, opts: LifelineOptions = {}): Promi
         date: window[i].date,
         author: window[i].author,
         intent: window[i].subject,
-        contentId: cur.contentId,
-        symbol: cur.symbol,
-        filePath: cur.filePath ?? file,
+        contentId: cur.obj.contentId,
+        symbol: cur.obj.symbol,
+        filePath: cur.obj.filePath ?? file,
         kind,
       });
     }
