@@ -422,10 +422,11 @@ components:
       lifeline <symbol> [--max N] [--json]` (meaning-aware blame — who changed a
       symbol's meaning, when, why; survives renames). Phase-2 WRITE PATH: `warpline
       pick -m <intent> [--as <actor>] [--confidence <n>] [--ref <ref>] [--json]`
-      seals the working meaning into the fabric (no-op when unchanged), and
-      `warpline log [--max N] [--json]` shows this project's native meaning-history
-      (the strands, newest first). The only module allowed to write stdout; library
-      code stays quiet.
+      seals the working meaning into the fabric (no-op when unchanged), `warpline
+      log [--max N] [--json]` shows this project's native meaning-history (the
+      strands, newest first, with the git coexistence anchor), and `warpline
+      selvage [--json]` shows the current fabric tip + the strand that sealed it.
+      The only module allowed to write stdout; library code stays quiet.
     type: cli
     components:
       - "#oracle"

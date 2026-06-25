@@ -292,6 +292,46 @@ program
     }
   });
 
+program
+  .command('selvage')
+  .description("The current fabric tip — the selvage stateId and the strand that sealed it.")
+  .option('--json', 'emit the tip + sealing strand as JSON')
+  .action(async (options: { json?: boolean }) => {
+    try {
+      const root = await repoRoot().catch(() => process.cwd());
+      const wdir = warplineDirOf(root);
+      const selvage = readSelvage(wdir);
+      const fabric = readFabric(wdir);
+      const tip = selvage ? fabric.find((s) => s.stateId === selvage) ?? fabric[fabric.length - 1] : undefined;
+      if (options.json) {
+        process.stdout.write(JSON.stringify({ selvage, tip: tip ?? null, depth: fabric.length }, null, 2) + '\n');
+      } else {
+        printSelvage(selvage, tip, fabric.length);
+      }
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+function printSelvage(selvage: string | null, tip: Strand | undefined, depth: number): void {
+  const lines: string[] = [];
+  lines.push('WARPLINE SELVAGE  (the fabric tip)');
+  if (!selvage) {
+    lines.push('tip       (none — no picks sealed yet; run `warpline pick -m "..."`)');
+    process.stdout.write(lines.join('\n') + '\n');
+    return;
+  }
+  lines.push(`tip       ${selvage}`);
+  lines.push(`depth     ${depth} strand${depth === 1 ? '' : 's'}`);
+  if (tip) {
+    lines.push('');
+    lines.push(`sealed by ${tip.seq === 0 ? '◆ genesis' : `seq ${tip.seq}`}  ${short(tip.pickId)}  ${tip.recordedAt.slice(0, 10)}  ${tip.actor}`);
+    lines.push(`intent    ${tip.intent}`);
+    if (tip.provenance?.gitCommit) lines.push(`git       ${tip.provenance.gitCommit.slice(0, 12)}  (coexistence anchor)`);
+  }
+  process.stdout.write(lines.join('\n') + '\n');
+}
+
 function printPick(r: PickResult): void {
   if (r.noop) {
     process.stdout.write(
@@ -342,6 +382,7 @@ function printFabric(fabric: Strand[], selvage: string | null, max: number): voi
         `     delta:   +${s.delta.born.length} born  ~${s.delta.contractChanged.length} changed  -${s.delta.retired.length} retired  ↻${s.delta.renamedNoop} renamed-noop`,
       );
     }
+    if (s.provenance?.gitCommit) lines.push(`     git:     ${s.provenance.gitCommit.slice(0, 12)}`);
     if (s.calibratedConfidence !== null) lines.push(`     confidence: ${s.calibratedConfidence}`);
   }
   if (fabric.length > shown.length) {
