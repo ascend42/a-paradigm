@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-06-19T00:40:18.474Z'
+generated: '2026-06-25T07:07:15.264Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -343,7 +343,7 @@ by_symbol:
           - packages/university/src/server/routes/courses.ts
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'fix(#university): honor pack selector across CLI commands + serve server (v6.6.5)'
-      - &ref_211
+      - &ref_208
         id: h0397
         ts: '2026-05-31T19:51:22Z'
         type: implement
@@ -382,7 +382,7 @@ by_symbol:
           - .paradigm/lore/entries/2026-05-30/L-2026-05-30-ascend-055728-001.lore
           - .paradigm/lore/timeline.yaml
         description: 'chore(#paradigm-mcp): record lore for v6.6.3 anchor-check consolidation'
-      - &ref_261
+      - &ref_259
         id: h0395
         ts: '2026-05-30T05:57:06Z'
         type: implement
@@ -749,7 +749,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_202
+      - &ref_199
         id: h0293
         ts: '2026-04-03T13:45:44Z'
         type: implement
@@ -1155,12 +1155,48 @@ by_symbol:
       agent: []
   '#orchestrator':
     symbol: '#orchestrator'
-    total_changes: 11
-    last_modified: '2026-06-13T23:59:24Z'
+    total_changes: 12
+    last_modified: '2026-06-19T07:17:53Z'
     stability_score: 1
     fragility: low
     recent:
-      - &ref_269
+      - &ref_126
+        id: h0477
+        ts: '2026-06-19T07:17:53Z'
+        type: implement
+        symbols:
+          - '#nomination-engine'
+          - '#notebook-loader'
+          - '#orchestrator'
+          - '#session-work-log'
+        author:
+          type: human
+          id: ascend
+        commit: f55b25e62dc0b8ec4b0c41ad1e733eb32829d621
+        intent: feature
+        files:
+          - .paradigm/decisions/TD-2026-06-19-007.yaml
+          - .paradigm/events/debates.jsonl
+          - .paradigm/events/nominations.jsonl
+          - .paradigm/events/stream.jsonl
+          - .paradigm/history/index.yaml
+          - .paradigm/lore/entries/2026-06-19/L-2026-06-19-ascend-003907-001.lore
+          - .paradigm/lore/entries/2026-06-19/L-2026-06-19-ascend-053642-110.lore
+          - .paradigm/lore/entries/2026-06-19/L-2026-06-19-ascend-054814-001.lore
+          - .paradigm/lore/entries/2026-06-19/L-2026-06-19-ascend-055341-001.lore
+          - .paradigm/lore/timeline.yaml
+          - docs/specs/classroom.md
+          - packages/paradigm-mcp/src/tools/ambient.ts
+          - packages/paradigm-mcp/src/tools/orchestration.ts
+          - packages/paradigm-mcp/src/types/notebooks.ts
+          - packages/paradigm-mcp/src/utils/field-failure-reducer.test.ts
+          - packages/paradigm-mcp/src/utils/field-failure-reducer.ts
+          - packages/paradigm-mcp/src/utils/field-failures.ts
+          - packages/paradigm-mcp/src/utils/nomination-engine.ts
+          - packages/paradigm-mcp/src/utils/notebook-loader.ts
+          - packages/paradigm-mcp/src/utils/session-work-log.ts
+        description: 'feat(#nomination-engine): Classroom MVP wave 1 — the failure→reinforcement loop turns (learning-loop core)'
+      - &ref_267
         id: h0421
         ts: '2026-06-13T23:59:24Z'
         type: implement
@@ -1190,7 +1226,7 @@ by_symbol:
           - packages/paradigm-mcp/src/utils/task-settlement.ts
           - packages/paradigm-mcp/tests/orchestration-marker.test.ts
         description: 'fix(#orchestration-marker): T-005 — enforcement verifies completion, not invocation'
-      - &ref_273
+      - &ref_271
         id: h0418
         ts: '2026-06-13T21:38:15Z'
         type: implement
@@ -1230,7 +1266,7 @@ by_symbol:
           - packages/paradigm/src/core/orchestrator.ts
           - packages/paradigm/src/index.ts
         description: 'feat(#calibration): v7.1 — token estimates become learned, not hardcoded'
-      - &ref_274
+      - &ref_272
         id: h0417
         ts: '2026-06-13T21:24:17Z'
         type: implement
@@ -1287,37 +1323,6 @@ by_symbol:
           - packages/university/package.json
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'release: prep v7.0.0 "Close the Loop"'
-      - &ref_147
-        id: h0411
-        ts: '2026-06-13T20:08:51Z'
-        type: implement
-        symbols:
-          - '#nomination-engine'
-          - '#orchestrator'
-          - '#task-loader'
-          - '#task-settlement'
-        author:
-          type: human
-          id: ascend
-        commit: 3649936c016b79d42c21a98cc5d3bfa811382ba0
-        intent: feature
-        files:
-          - .paradigm/events/debates.jsonl
-          - .paradigm/events/nominations.jsonl
-          - .paradigm/events/stream.jsonl
-          - .paradigm/history/index.yaml
-          - .paradigm/history/log.jsonl
-          - .paradigm/lore/entries/2026-06-13/L-2026-06-13-ascend-200837-001.lore
-          - .paradigm/lore/timeline.yaml
-          - CHANGELOG.md
-          - packages/paradigm-mcp/src/tools/ambient-confidence.test.ts
-          - packages/paradigm-mcp/src/tools/ambient.ts
-          - packages/paradigm-mcp/src/utils/session-work-log.ts
-          - packages/paradigm-mcp/src/utils/task-loader.ts
-          - packages/paradigm-mcp/src/utils/task-settlement.test.ts
-          - packages/paradigm-mcp/src/utils/task-settlement.ts
-          - packages/paradigm/src/commands/doctor/index.ts
-        description: 'feat(#task-settlement): v7 §2 — the learning loop closes (settlement + falsifiable liveness)'
     contributors:
       human:
         - ascend
@@ -1399,7 +1404,7 @@ by_symbol:
           - packages/university/tests/pack-config.test.ts
         description: 'test(#university-server): add buildPackConfig test missed in v6.6.5 commit'
       - *ref_11
-      - &ref_254
+      - &ref_252
         id: h0375
         ts: '2026-05-19T05:25:21Z'
         type: implement
@@ -1462,7 +1467,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_253
+      - &ref_251
         id: h0374
         ts: '2026-05-19T05:22:00Z'
         type: implement
@@ -1478,7 +1483,7 @@ by_symbol:
         files:
           - packages/university/ui/src/views/CoursesView.tsx
         description: 'refactor(#university-ui): CoursesView routes via SectionView when sections declared (v6.5)'
-      - &ref_252
+      - &ref_250
         id: h0373
         ts: '2026-05-19T05:11:13Z'
         type: implement
@@ -1494,7 +1499,7 @@ by_symbol:
         files:
           - packages/university/ui/src/views/SectionView.tsx
         description: 'feat(#university-ui): SectionView style dispatcher (track-only at v6.5) (v6.5)'
-      - &ref_251
+      - &ref_249
         id: h0372
         ts: '2026-05-19T05:10:43Z'
         type: implement
@@ -1510,7 +1515,7 @@ by_symbol:
           - packages/university/ui/src/components/SectionNav.tsx
           - packages/university/ui/src/styles/academia.css
         description: 'feat(#university-ui): SectionNav tab strip with atelier-collapse rule (v6.5)'
-      - &ref_250
+      - &ref_248
         id: h0371
         ts: '2026-05-19T05:07:50Z'
         type: implement
@@ -1571,7 +1576,7 @@ by_symbol:
     fragility: low
     recent:
       - *ref_12
-      - &ref_249
+      - &ref_247
         id: h0376
         ts: '2026-05-19T05:36:16Z'
         type: implement
@@ -1726,7 +1731,7 @@ by_symbol:
           - packages/university/package.json
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'chore(#cleanup): v5.38.1 — publish hygiene sweep'
-      - &ref_209
+      - &ref_206
         id: h0314
         ts: '2026-04-22T14:38:49Z'
         type: implement
@@ -1839,7 +1844,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_267
+      - &ref_265
         id: h0407
         ts: '2026-06-10T18:35:38Z'
         type: implement
@@ -1996,7 +2001,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_266
+      - &ref_264
         id: h0406
         ts: '2026-06-09T23:24:45Z'
         type: implement
@@ -2094,7 +2099,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_158
+      - &ref_154
         id: h0381
         ts: '2026-05-22T19:20:10Z'
         type: implement
@@ -2139,7 +2144,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_128
+      - &ref_127
         id: h0266
         ts: '2026-03-27T14:13:44Z'
         type: implement
@@ -2174,7 +2179,7 @@ by_symbol:
           - packages/paradigm/package.json
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'feat(#orchestration): v5.25.0 — PAN integration: network fields, Symphony intents, feature tier'
-      - &ref_161
+      - &ref_158
         id: h0265
         ts: '2026-03-26T05:03:46Z'
         type: implement
@@ -2213,7 +2218,7 @@ by_symbol:
           - packages/paradigm/src/platform-server/routes/university.ts
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'feat(#platform): v5.24.0 — University UI, habits consolidation, symphony key fix'
-      - &ref_188
+      - &ref_185
         id: h0264
         ts: '2026-03-26T03:30:41Z'
         type: implement
@@ -2257,7 +2262,7 @@ by_symbol:
           - plugins/paradigm/.claude-plugin/plugin.json
           - plugins/paradigm/scripts/paradigm-common.sh
         description: 'feat(#orchestration): v5.23.0 — quick-check mode, Jinx core agent, magnitude-based triggers'
-      - &ref_144
+      - &ref_142
         id: h0226
         ts: '2026-03-21T11:52:35Z'
         type: implement
@@ -2329,7 +2334,7 @@ by_symbol:
     fragility: low
     recent:
       - *ref_16
-      - &ref_172
+      - &ref_168
         id: h0237
         ts: '2026-03-24T03:36:30Z'
         type: implement
@@ -2440,7 +2445,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_153
+      - &ref_149
         id: h0279
         ts: '2026-03-29T04:09:00Z'
         type: implement
@@ -3238,7 +3243,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_137
+      - &ref_135
         id: h0322
         ts: '2026-04-22T23:19:19Z'
         type: implement
@@ -3442,7 +3447,7 @@ by_symbol:
           - .paradigm/lore/timeline.yaml
         description: 'chore(#university): record lore for v6.6.5 pack-selector full fix'
       - *ref_11
-      - &ref_260
+      - &ref_258
         id: h0380
         ts: '2026-05-19T05:36:41Z'
         type: implement
@@ -3462,7 +3467,7 @@ by_symbol:
           - packages/university/package.json
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'chore(release): v6.5.0 — University Sections'
-      - &ref_256
+      - &ref_254
         id: h0379
         ts: '2026-05-19T05:36:33Z'
         type: implement
@@ -3480,7 +3485,7 @@ by_symbol:
           - packages/university/.purpose
           - packages/university/ui/.purpose
         description: 'docs(.purpose): sections across paradigm-mcp, paradigm, university (v6.5)'
-      - &ref_241
+      - &ref_239
         id: h0378
         ts: '2026-05-19T05:36:30Z'
         type: implement
@@ -3824,7 +3829,7 @@ by_symbol:
           - .paradigm/research/tier-split-design.md
           - .paradigm/research/v6.0.4-implementation-plan.md
         description: 'docs(#paradigm-enforcement-model): v6.0.4 + v6.1 design pass — 3 tracks complete'
-      - &ref_185
+      - &ref_182
         id: h0286
         ts: '2026-04-03T05:17:16Z'
         type: implement
@@ -4067,7 +4072,7 @@ by_symbol:
           - reviews/2026-04-22-portal-yaml-triage.md
           - reviews/2026-04-22-v5.37.12-hotfix-review.md
         description: 'fix(#portal-compliance): v5.37.12 — fail-closed portal compliance, closes auth-bypass class'
-      - &ref_206
+      - &ref_203
         id: h0310
         ts: '2026-04-18T16:32:28Z'
         type: implement
@@ -4086,7 +4091,7 @@ by_symbol:
           - plugins/paradigm/.claude-plugin/plugin.json
           - plugins/paradigm/scripts/paradigm-navigate-remind.sh
         description: 'fix(#hooks): v5.37.9 — paradigm-navigate-remind.sh execute bit, actually'
-      - &ref_207
+      - &ref_204
         id: h0309
         ts: '2026-04-11T05:38:34Z'
         type: implement
@@ -4413,7 +4418,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_170
+      - &ref_166
         id: h0227
         ts: '2026-03-21T12:33:27Z'
         type: implement
@@ -4486,7 +4491,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_181
+      - &ref_177
         id: h0258
         ts: '2026-03-25T17:27:03Z'
         type: implement
@@ -5150,11 +5155,54 @@ by_symbol:
       agent: []
   '#aspect-graph':
     symbol: '#aspect-graph'
-    total_changes: 9
-    last_modified: '2026-04-09T17:25:41Z'
+    total_changes: 10
+    last_modified: '2026-06-24T20:55:42Z'
     stability_score: 1
     fragility: low
     recent:
+      - &ref_227
+        id: h0507
+        ts: '2026-06-24T20:55:42Z'
+        type: implement
+        symbols:
+          - '#aspect-graph'
+          - '#essence-hash'
+          - '#git-exec'
+          - '#paradigm-aspect-check'
+          - '#ts-lens'
+          - '#warpline'
+        author:
+          type: human
+          id: ascend
+        commit: f6008cf2b3d033b72125dfbc600c3e2ab2bd7126
+        intent: fix
+        files:
+          - .paradigm/events/debates.jsonl
+          - .paradigm/events/nominations.jsonl
+          - .paradigm/events/stream.jsonl
+          - .paradigm/flow-index.json
+          - .paradigm/history/log.jsonl
+          - .paradigm/lore/entries/2026-06-24/L-2026-06-24-ascend-201351-001.lore
+          - .paradigm/lore/entries/2026-06-24/L-2026-06-24-ascend-201503-001.lore
+          - .paradigm/lore/entries/2026-06-24/L-2026-06-24-ascend-205439-001.lore
+          - .paradigm/lore/timeline.yaml
+          - .paradigm/manifest.consistency.json
+          - .paradigm/navigator.yaml
+          - .paradigm/personas/index.yaml
+          - .paradigm/protocols/index.yaml
+          - .paradigm/scan-index.json
+          - .paradigm/university/index.yaml
+          - packages/paradigm-mcp/src/utils/aspect-graph.ts
+          - packages/paradigm/src/platform-server/index.ts
+          - packages/paradigm/src/platform-server/routes/.purpose
+          - packages/paradigm/src/platform-server/routes/warpline.ts
+          - packages/premise/core/src/aggregator.ts
+          - packages/warpline/src/git/git-exec.ts
+          - packages/warpline/src/lens/ts-essence.ts
+          - packages/warpline/src/warp/essence-hash.ts
+          - packages/warpline/test/code-warp.test.ts
+          - portal.yaml
+        description: 'fix(#warpline): close 3 convene-surfaced defects — aspect double-tilde, f:N collision, /api/warpline security'
       - *ref_43
       - *ref_44
       - &ref_53
@@ -5198,19 +5246,6 @@ by_symbol:
           - packages/paradigm-mcp/src/types/aspect-graph.ts
           - packages/paradigm-mcp/src/utils/aspect-graph.ts
         description: 'feat(#aspect-graph): smart drift detection phase 1 — normalized hashing'
-      - id: h0063
-        ts: '2026-02-26T01:16:57Z'
-        type: implement
-        symbols:
-          - '#aspect-graph'
-        author:
-          type: human
-          id: ascend
-        commit: d92c26056bdf54987cc425e141bf861da4232f36
-        intent: feature
-        files:
-          - CHANGELOG.md
-        description: 'docs: finalize changelog for 3.5.0 release'
     contributors:
       human:
         - ascend
@@ -5616,7 +5651,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_226
+      - &ref_223
         id: h0346
         ts: '2026-04-28T16:42:20Z'
         type: implement
@@ -5641,7 +5676,7 @@ by_symbol:
           - packages/paradigm/tests/override.test.ts
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'feat(#paradigm-soft-block): v6.1 Sprint 1 close — Waves 4+5+6'
-      - &ref_233
+      - &ref_231
         id: h0345
         ts: '2026-04-28T16:03:06Z'
         type: implement
@@ -5662,7 +5697,7 @@ by_symbol:
           - packages/paradigm/src/commands/override.ts
           - packages/paradigm/src/index.ts
         description: 'feat(#paradigm-override-cli): v6.1 Sprint 1 Wave 3 — override CLI live'
-      - &ref_231
+      - &ref_229
         id: h0343
         ts: '2026-04-28T14:04:15Z'
         type: implement
@@ -5683,7 +5718,7 @@ by_symbol:
           - packages/paradigm/src/core/migration-notices.ts
           - packages/university/src/content/notes/N-para-451-tiers.md
         description: 'docs(#framework-bug-protocol): document path-bug fix + agent protocol'
-      - &ref_230
+      - &ref_228
         id: h0342
         ts: '2026-04-28T13:54:35Z'
         type: implement
@@ -5706,7 +5741,7 @@ by_symbol:
           - packages/paradigm-mcp/src/utils/anchor-path.ts
           - packages/paradigm-mcp/src/utils/aspect-graph.ts
         description: 'fix(#paradigm-aspect-check): writer/reader path-resolution mismatch'
-      - &ref_229
+      - &ref_226
         id: h0341
         ts: '2026-04-28T05:21:32Z'
         type: implement
@@ -5894,7 +5929,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_239
+      - &ref_237
         id: h0353
         ts: '2026-05-06T18:24:44Z'
         type: implement
@@ -5922,7 +5957,7 @@ by_symbol:
           - packages/university/ui/src/views/PLSATView.tsx
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'fix(#university): v6.3.1 — crash on course load + PLSAT inaccessible + 5 broken quizzes'
-      - &ref_163
+      - &ref_160
         id: h0246
         ts: '2026-03-24T23:41:57Z'
         type: implement
@@ -6422,7 +6457,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_242
+      - &ref_240
         id: h0357
         ts: '2026-05-07T20:33:15Z'
         type: implement
@@ -6440,7 +6475,7 @@ by_symbol:
           - docs/commands/doctor.md
           - plugins/paradigm/README.md
         description: 'docs(#docs): sweep remaining init→shift stragglers + compliance loop qualifier'
-      - &ref_243
+      - &ref_241
         id: h0356
         ts: '2026-05-07T20:09:47Z'
         type: implement
@@ -6466,7 +6501,7 @@ by_symbol:
           - plugins/paradigm/.claude-plugin/plugin.json
           - plugins/paradigm/README.md
         description: 'docs(#agents): v6.3.3 — agent roster corrections across all surfaces'
-      - &ref_177
+      - &ref_173
         id: h0355
         ts: '2026-05-07T20:01:09Z'
         type: implement
@@ -6496,7 +6531,7 @@ by_symbol:
           - packages/paradigm/package.json
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'docs(#docs): v6.3.2 — MP docs polish pass for public launch'
-      - &ref_238
+      - &ref_236
         id: h0352
         ts: '2026-05-04T21:04:38Z'
         type: implement
@@ -6588,7 +6623,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_196
+      - &ref_193
         id: h0282
         ts: '2026-04-01T00:48:57Z'
         type: implement
@@ -6649,7 +6684,7 @@ by_symbol:
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'fix(#shift): v5.27.1 — non-interactive by default, auto-detect model tiers'
       - *ref_66
-      - &ref_178
+      - &ref_174
         id: h0240
         ts: '2026-03-24T18:52:11Z'
         type: implement
@@ -6939,7 +6974,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_198
+      - &ref_195
         id: h0294
         ts: '2026-04-03T17:31:15Z'
         type: implement
@@ -7219,11 +7254,36 @@ by_symbol:
       agent: []
   '#aggregator':
     symbol: '#aggregator'
-    total_changes: 2
-    last_modified: '2026-03-14T03:10:20Z'
+    total_changes: 3
+    last_modified: '2026-06-23T18:07:47Z'
     stability_score: 1
     fragility: low
     recent:
+      - &ref_324
+        id: h0490
+        ts: '2026-06-23T18:07:47Z'
+        type: implement
+        symbols:
+          - '#aggregator'
+          - '#portal-parser'
+        author:
+          type: human
+          id: ascend
+        commit: 28705bc3d0fc7bae72d53d63b35cd5b2702412dc
+        intent: fix
+        files:
+          - .paradigm/events/debates.jsonl
+          - .paradigm/events/nominations.jsonl
+          - .paradigm/events/stream.jsonl
+          - .paradigm/history/log.jsonl
+          - .paradigm/lore/entries/2026-06-23/L-2026-06-23-ascend-180057-001.lore
+          - .paradigm/lore/timeline.yaml
+          - packages/portal/core/.purpose
+          - packages/portal/core/src/parser.ts
+          - packages/purpose/core/.purpose
+          - packages/purpose/core/dist/index.js
+          - packages/purpose/core/src/aggregator.ts
+        description: 'fix(#aggregator): deterministic .purpose/gate file ordering — closes reindex nondeterminism (T-2026-06-13-011)'
       - &ref_110
         id: h0169
         ts: '2026-03-14T03:10:20Z'
@@ -7698,7 +7758,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_215
+      - &ref_212
         id: h0354
         ts: '2026-05-07T19:22:41Z'
         type: implement
@@ -7723,7 +7783,7 @@ by_symbol:
           - docs/guides/sentinel-upgrade.md
           - plugins/paradigm/README.md
         description: 'docs(#university): QW batch — plugin README accuracy + init→shift sweep + quick-start polish'
-      - &ref_208
+      - &ref_205
         id: h0311
         ts: '2026-04-18T22:47:54Z'
         type: implement
@@ -7928,7 +7988,7 @@ by_symbol:
           - packages/conductor/Sources/Conductor/App/AppDelegate.swift
           - packages/conductor/Sources/Conductor/UI/Views/SessionManagerView.swift
         description: 'fix(#conductor-app): surface ATRIUM in main menu bar + uncap Sessions list'
-      - &ref_291
+      - &ref_289
         id: h0453
         ts: '2026-06-15T22:27:15Z'
         type: implement
@@ -8365,7 +8425,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_298
+      - &ref_296
         id: h0461
         ts: '2026-06-16T00:17:52Z'
         type: implement
@@ -8751,7 +8811,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_173
+      - &ref_169
         id: h0232
         ts: '2026-03-24T02:15:39Z'
         type: implement
@@ -9309,7 +9369,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_200
+      - &ref_197
         id: h0290
         ts: '2026-04-03T12:45:47Z'
         type: implement
@@ -11041,7 +11101,7 @@ by_symbol:
     fragility: low
     recent:
       - *ref_122
-      - &ref_157
+      - &ref_153
         id: h0216
         ts: '2026-03-21T05:39:36Z'
         type: implement
@@ -11166,7 +11226,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_149
+      - &ref_156
         id: h0285
         ts: '2026-04-01T21:18:23Z'
         type: implement
@@ -11190,7 +11250,7 @@ by_symbol:
           - packages/paradigm/src/commands/agent/index.ts
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'fix(#agent-roster): v5.35.1 — Agent benching is now per-project via roster, not global'
-      - &ref_195
+      - &ref_192
         id: h0283
         ts: '2026-04-01T00:57:43Z'
         type: implement
@@ -11211,7 +11271,7 @@ by_symbol:
           - packages/paradigm/src/commands/agent/adoption.ts
           - packages/paradigm/src/commands/agent/scopes-types.ts
         description: 'fix(#agent-security): integrity verification, permission enforcement, prompt sanitization, adoption hashing'
-      - &ref_145
+      - &ref_143
         id: h0218
         ts: '2026-03-21T06:37:21Z'
         type: implement
@@ -11254,7 +11314,7 @@ by_symbol:
           - plugins/paradigm/skills/handoff/SKILL.md
           - plugins/paradigm/skills/postflight/SKILL.md
         description: 'feat(#orchestration): Maestro Phase 1 — visible team orchestration (v5.4.0)'
-      - &ref_156
+      - &ref_152
         id: h0217
         ts: '2026-03-21T06:11:52Z'
         type: implement
@@ -11271,7 +11331,7 @@ by_symbol:
         files:
           - docs/specs/conductor-team-collab.md
         description: 'docs(#conductor): rewrite team collab spec — Maestro model, not persistent agents'
-      - &ref_155
+      - &ref_151
         id: h0213
         ts: '2026-03-21T00:58:17Z'
         type: implement
@@ -11314,7 +11374,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_221
+      - &ref_218
         id: h0330
         ts: '2026-04-25T22:05:01Z'
         type: implement
@@ -11476,7 +11536,7 @@ by_symbol:
     fragility: low
     recent:
       - *ref_125
-      - &ref_126
+      - &ref_148
         id: h0280
         ts: '2026-03-30T20:25:11Z'
         type: implement
@@ -11525,8 +11585,7 @@ by_symbol:
           - packages/paradigm/src/utils/gap-narrator.ts
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'feat(#gap-narrator): v5.32.0 — Gap Narration, Activity Metrics, Soft Provenance + security hardening'
-      - &ref_127
-        id: h0187
+      - id: h0187
         ts: '2026-03-17T00:21:05Z'
         type: implement
         symbols:
@@ -11555,13 +11614,63 @@ by_symbol:
       agent: []
   '#notebook-loader':
     symbol: '#notebook-loader'
-    total_changes: 6
-    last_modified: '2026-06-13T22:31:40Z'
+    total_changes: 9
+    last_modified: '2026-06-22T21:34:10Z'
     stability_score: 1
     fragility: low
     recent:
-      - &ref_146
-        id: h0420
+      - &ref_308
+        id: h0482
+        ts: '2026-06-22T21:34:10Z'
+        type: implement
+        symbols:
+          - '#classroom-decay'
+          - '#classroom-metrics'
+          - '#field-failure-reducer'
+          - '#notebook-loader'
+        author:
+          type: human
+          id: ascend
+        commit: aba1b895e389e7470d368a1a8e19f4232342c8a4
+        intent: feature
+        files:
+          - .paradigm/history/log.jsonl
+          - CHANGELOG.md
+          - packages/paradigm-mcp/package.json
+          - packages/paradigm/package.json
+          - packages/premise/core/package.json
+          - plugins/paradigm/.claude-plugin/plugin.json
+        description: 'release: v7.5.0 — The Classroom: agents that learn from failure (experimental)'
+      - &ref_144
+        id: h0481
+        ts: '2026-06-22T21:31:51Z'
+        type: implement
+        symbols:
+          - '#classroom-decay'
+          - '#classroom-fail-side'
+          - '#nomination-engine'
+          - '#notebook-loader'
+        author:
+          type: human
+          id: ascend
+        commit: 440d913eb9b71993c65d5686340e8ce0a7b6ea14
+        intent: feature
+        files:
+          - .paradigm/events/debates.jsonl
+          - .paradigm/events/nominations.jsonl
+          - .paradigm/events/stream.jsonl
+          - .paradigm/lore/entries/2026-06-20/L-2026-06-20-ascend-002137-001.lore
+          - .paradigm/lore/timeline.yaml
+          - packages/paradigm-mcp/src/tools/ambient.ts
+          - packages/paradigm-mcp/src/utils/.purpose
+          - packages/paradigm-mcp/src/utils/decay.test.ts
+          - packages/paradigm-mcp/src/utils/decay.ts
+          - packages/paradigm-mcp/src/utils/field-failure-reducer.test.ts
+          - packages/paradigm-mcp/src/utils/field-failures.ts
+          - packages/paradigm-mcp/src/utils/notebook-loader.ts
+        description: 'feat(#classroom-decay): Classroom Phase 2 core — refinement capture + decay pass (the metric becomes honest)'
+      - *ref_126
+      - id: h0420
         ts: '2026-06-13T22:31:40Z'
         type: implement
         symbols:
@@ -11585,8 +11694,7 @@ by_symbol:
           - packages/paradigm-mcp/src/utils/notebook-loader.ts
           - packages/paradigm-mcp/src/utils/promotion-belief-loop.test.ts
         description: 'feat(#nomination-engine): v7.1 — close the notebook loop + promotion instrument (gate deferred)'
-      - &ref_148
-        id: h0409
+      - id: h0409
         ts: '2026-06-13T19:21:16Z'
         type: implement
         symbols:
@@ -11614,30 +11722,6 @@ by_symbol:
           - packages/paradigm/src/core/agent-matcher.test.ts
           - packages/paradigm/src/core/orchestrator.ts
         description: 'feat(#orchestrator): v7 Front Door — honest classifier, full-roster routability, notebook-key fix'
-      - &ref_130
-        id: h0298
-        ts: '2026-04-03T22:36:34Z'
-        type: implement
-        symbols:
-          - '#aspect-fingerprint'
-          - '#notebook-loader'
-          - '#orchestration'
-        author:
-          type: human
-          id: ascend
-        commit: c5d27c25bd259fa27892036f18296aa4debde42d
-        intent: fix
-        files:
-          - CHANGELOG.md
-          - packages/paradigm-mcp/package.json
-          - packages/paradigm-mcp/src/tools/aspect-graph.ts
-          - packages/paradigm-mcp/src/tools/orchestration.ts
-          - packages/paradigm-mcp/src/utils/aspect-graph.ts
-          - packages/paradigm/package.json
-          - plugins/paradigm/.claude-plugin/plugin.json
-        description: 'fix(#aspect-fingerprint): v5.37.0 — B2 drift config + B4 notebook appliedCount'
-      - *ref_126
-      - *ref_127
     contributors:
       human:
         - ascend
@@ -11697,7 +11781,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_152
+      - &ref_147
         id: h0281
         ts: '2026-03-30T20:45:48Z'
         type: implement
@@ -11739,8 +11823,8 @@ by_symbol:
           - packages/paradigm/src/commands/hooks/scripts/paradigm-common.sh
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'feat(#compliance-health): v5.33.0 — Outcome Reference Tracking, Change-Based Health, Tool Aliases'
-      - *ref_128
-      - &ref_167
+      - *ref_127
+      - &ref_163
         id: h0251
         ts: '2026-03-25T11:03:25Z'
         type: implement
@@ -11769,7 +11853,7 @@ by_symbol:
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'feat(#orchestration): v5.17.0 — collaboration graph, feature cache, smart documentor'
       - *ref_44
-      - &ref_162
+      - &ref_159
         id: h0247
         ts: '2026-03-25T03:32:47Z'
         type: implement
@@ -11871,7 +11955,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_129
+      - &ref_128
         id: h0188
         ts: '2026-03-17T14:28:58Z'
         type: implement
@@ -12135,7 +12219,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_129
+      - *ref_128
     contributors:
       human:
         - ascend
@@ -12147,7 +12231,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_129
+      - *ref_128
     contributors:
       human:
         - ascend
@@ -12159,7 +12243,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_129
+      - *ref_128
     contributors:
       human:
         - ascend
@@ -12171,7 +12255,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_129
+      - *ref_128
     contributors:
       human:
         - ascend
@@ -12183,7 +12267,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_129
+      - *ref_128
     contributors:
       human:
         - ascend
@@ -12195,7 +12279,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_129
+      - *ref_128
     contributors:
       human:
         - ascend
@@ -12207,7 +12291,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_129
+      - *ref_128
     contributors:
       human:
         - ascend
@@ -12219,7 +12303,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_129
+      - *ref_128
     contributors:
       human:
         - ascend
@@ -12231,7 +12315,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_129
+      - *ref_128
     contributors:
       human:
         - ascend
@@ -12243,7 +12327,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_129
+      - *ref_128
     contributors:
       human:
         - ascend
@@ -12255,7 +12339,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_129
+      - *ref_128
     contributors:
       human:
         - ascend
@@ -12267,7 +12351,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_129
+      - *ref_128
     contributors:
       human:
         - ascend
@@ -12308,7 +12392,7 @@ by_symbol:
           - packages/paradigm/platform-ui/src/sections/ambient/store/ambientStore.ts
           - packages/university/package.json
         description: 'feat(#nomination-engine): Symphony relay, graduation candidates, journal promotion, surfacing config (v5.3.0)'
-      - *ref_129
+      - *ref_128
     contributors:
       human:
         - ascend
@@ -12320,7 +12404,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_129
+      - *ref_128
     contributors:
       human:
         - ascend
@@ -12332,7 +12416,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_129
+      - *ref_128
     contributors:
       human:
         - ascend
@@ -12344,7 +12428,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_129
+      - *ref_128
     contributors:
       human:
         - ascend
@@ -12356,7 +12440,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_129
+      - *ref_128
     contributors:
       human:
         - ascend
@@ -12368,7 +12452,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_129
+      - *ref_128
     contributors:
       human:
         - ascend
@@ -12380,7 +12464,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_129
+      - *ref_128
     contributors:
       human:
         - ascend
@@ -12392,7 +12476,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_129
+      - *ref_128
     contributors:
       human:
         - ascend
@@ -12404,7 +12488,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_129
+      - *ref_128
     contributors:
       human:
         - ascend
@@ -12416,7 +12500,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_129
+      - *ref_128
     contributors:
       human:
         - ascend
@@ -12428,7 +12512,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_129
+      - *ref_128
     contributors:
       human:
         - ascend
@@ -12440,7 +12524,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_129
+      - *ref_128
     contributors:
       human:
         - ascend
@@ -12452,7 +12536,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_129
+      - *ref_128
     contributors:
       human:
         - ascend
@@ -12464,7 +12548,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_129
+      - *ref_128
     contributors:
       human:
         - ascend
@@ -12476,7 +12560,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_129
+      - *ref_128
     contributors:
       human:
         - ascend
@@ -12488,7 +12572,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_129
+      - *ref_128
     contributors:
       human:
         - ascend
@@ -12500,7 +12584,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_129
+      - *ref_128
     contributors:
       human:
         - ascend
@@ -12512,7 +12596,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_129
+      - *ref_128
     contributors:
       human:
         - ascend
@@ -12524,7 +12608,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_129
+      - *ref_128
     contributors:
       human:
         - ascend
@@ -12563,7 +12647,27 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_130
+      - id: h0298
+        ts: '2026-04-03T22:36:34Z'
+        type: implement
+        symbols:
+          - '#aspect-fingerprint'
+          - '#notebook-loader'
+          - '#orchestration'
+        author:
+          type: human
+          id: ascend
+        commit: c5d27c25bd259fa27892036f18296aa4debde42d
+        intent: fix
+        files:
+          - CHANGELOG.md
+          - packages/paradigm-mcp/package.json
+          - packages/paradigm-mcp/src/tools/aspect-graph.ts
+          - packages/paradigm-mcp/src/tools/orchestration.ts
+          - packages/paradigm-mcp/src/utils/aspect-graph.ts
+          - packages/paradigm/package.json
+          - plugins/paradigm/.claude-plugin/plugin.json
+        description: 'fix(#aspect-fingerprint): v5.37.0 — B2 drift config + B4 notebook appliedCount'
       - id: h0190
         ts: '2026-03-17T15:36:00Z'
         type: implement
@@ -12592,7 +12696,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_131
+      - &ref_129
         id: h0191
         ts: '2026-03-17T17:13:32Z'
         type: implement
@@ -12619,7 +12723,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_136
+      - &ref_134
         id: h0195
         ts: '2026-03-17T18:01:52Z'
         type: implement
@@ -12638,7 +12742,7 @@ by_symbol:
           - packages/conductor/Sources/Conductor/UI/Views/CellFooterView.swift
           - packages/conductor/Tests/ConductorTests/TilingEngineTests.swift
         description: 'feat(#conductor): Sprint 20 — Cell Footer, Border Animations, Tiling Tests (v1.0.0)'
-      - &ref_132
+      - &ref_130
         id: h0192
         ts: '2026-03-17T17:30:47Z'
         type: implement
@@ -12663,7 +12767,7 @@ by_symbol:
           - packages/conductor/Sources/Conductor/UI/Views/MainOverlayView.swift
           - packages/conductor/Sources/Conductor/Workspace/TilingEngine.swift
         description: 'feat(#conductor): Sprint 17 — Container Window + Tiling Engine (v0.16.0)'
-      - *ref_131
+      - *ref_129
     contributors:
       human:
         - ascend
@@ -12675,7 +12779,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_131
+      - *ref_129
     contributors:
       human:
         - ascend
@@ -12687,7 +12791,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_132
+      - *ref_130
     contributors:
       human:
         - ascend
@@ -12719,7 +12823,7 @@ by_symbol:
           - packages/paradigm/package.json
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'fix(#conductor-app): v5.37.3 — Show Container + Show Sidebar crash fixes'
-      - &ref_134
+      - &ref_132
         id: h0233
         ts: '2026-03-24T02:50:03Z'
         type: implement
@@ -12744,7 +12848,7 @@ by_symbol:
           - packages/conductor/Sources/Conductor/UI/Views/MainOverlayView.swift
           - packages/conductor/Sources/Conductor/Workspace/WorkspaceGrid.swift
         description: 'feat(#conductor): in-app help system + sidebar/grid layout rewrite'
-      - *ref_132
+      - *ref_130
     contributors:
       human:
         - ascend
@@ -12756,7 +12860,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_132
+      - *ref_130
     contributors:
       human:
         - ascend
@@ -12768,7 +12872,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_132
+      - *ref_130
     contributors:
       human:
         - ascend
@@ -12780,7 +12884,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_133
+      - &ref_131
         id: h0193
         ts: '2026-03-17T17:57:07Z'
         type: implement
@@ -12812,7 +12916,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_133
+      - *ref_131
     contributors:
       human:
         - ascend
@@ -12824,7 +12928,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_133
+      - *ref_131
     contributors:
       human:
         - ascend
@@ -12836,8 +12940,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_134
-      - &ref_135
+      - *ref_132
+      - &ref_133
         id: h0194
         ts: '2026-03-17T17:59:35Z'
         type: implement
@@ -12868,7 +12972,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_135
+      - *ref_133
     contributors:
       human:
         - ascend
@@ -12880,7 +12984,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_136
+      - *ref_134
     contributors:
       human:
         - ascend
@@ -12905,7 +13009,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_137
+      - *ref_135
       - *ref_125
       - *ref_83
     contributors:
@@ -12943,7 +13047,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_265
+      - &ref_263
         id: h0405
         ts: '2026-06-09T23:04:18Z'
         type: implement
@@ -13008,7 +13112,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_138
+      - &ref_136
         id: h0200
         ts: '2026-03-18T23:25:55Z'
         type: implement
@@ -13071,7 +13175,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_138
+      - *ref_136
     contributors:
       human:
         - ascend
@@ -13083,7 +13187,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_138
+      - *ref_136
     contributors:
       human:
         - ascend
@@ -13123,7 +13227,7 @@ by_symbol:
           - packages/site/src/content/docs/mcp-tools.md
           - packages/site/src/content/docs/portal-and-gates.md
         description: 'fix(#site): docs content accuracy — flow CLI command, MCP tool count, gate fields'
-      - *ref_138
+      - *ref_136
     contributors:
       human:
         - ascend
@@ -13135,7 +13239,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_138
+      - *ref_136
     contributors:
       human:
         - ascend
@@ -13147,7 +13251,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_138
+      - *ref_136
     contributors:
       human:
         - ascend
@@ -13159,19 +13263,45 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_138
+      - *ref_136
     contributors:
       human:
         - ascend
       agent: []
   '#platform-server':
     symbol: '#platform-server'
-    total_changes: 6
-    last_modified: '2026-06-14T16:10:37Z'
+    total_changes: 7
+    last_modified: '2026-06-23T23:27:15Z'
     stability_score: 1
     fragility: low
     recent:
-      - &ref_268
+      - &ref_331
+        id: h0501
+        ts: '2026-06-23T23:27:15Z'
+        type: implement
+        symbols:
+          - '#platform-server'
+          - '#warpline-section-ui'
+          - '#warpline-web-router'
+        author:
+          type: human
+          id: ascend
+        commit: df12a3b7c7de1c81416628f931941097dd215cb7
+        intent: feature
+        files:
+          - package-lock.json
+          - packages/paradigm/package.json
+          - packages/paradigm/platform-ui/src/App.tsx
+          - packages/paradigm/platform-ui/src/components/SidebarNav.tsx
+          - packages/paradigm/platform-ui/src/sections/warpline/WarplineSection.tsx
+          - packages/paradigm/platform-ui/src/store/platformStore.ts
+          - packages/paradigm/src/platform-server/.purpose
+          - packages/paradigm/src/platform-server/index.ts
+          - packages/paradigm/src/platform-server/routes/.purpose
+          - packages/paradigm/src/platform-server/routes/warpline.ts
+          - packages/paradigm/tsup.config.ts
+        description: 'feat(#platform-server): Warpline GUI slice — read-only /api/warpline + section (sub-phases 0+1)'
+      - &ref_266
         id: h0436
         ts: '2026-06-14T16:10:37Z'
         type: implement
@@ -13205,7 +13335,7 @@ by_symbol:
           - packages/paradigm/src/platform-server/routes/tasks-write.ts
           - portal.yaml
         description: 'feat(#tasks-section): enforced agent write verbs — claim/start/done/block'
-      - &ref_286
+      - &ref_284
         id: h0431
         ts: '2026-06-14T06:02:40Z'
         type: implement
@@ -13242,7 +13372,7 @@ by_symbol:
           - packages/paradigm/src/platform-server/routes/tasks.ts
           - portal.yaml
         description: 'feat(#tasks-section): inbox/agent face, live agents, GitHub strip, detail (round D)'
-      - &ref_287
+      - &ref_285
         id: h0428
         ts: '2026-06-14T05:23:17Z'
         type: implement
@@ -13268,7 +13398,7 @@ by_symbol:
           - packages/paradigm/src/platform-server/routes/.purpose
           - packages/paradigm/src/platform-server/routes/tasks.ts
         description: 'feat(#calibration): surface learned estimates per task (renaissance round A)'
-      - &ref_288
+      - &ref_286
         id: h0427
         ts: '2026-06-14T05:01:53Z'
         type: implement
@@ -13296,66 +13426,6 @@ by_symbol:
           - packages/paradigm/src/platform-server/routes/.purpose
           - packages/paradigm/src/platform-server/routes/tasks.ts
         description: 'feat(#tasks): make the v7 claimant DAG web-reachable (renaissance steps 1-2)'
-      - &ref_285
-        id: h0426
-        ts: '2026-06-14T04:55:55Z'
-        type: implement
-        symbols:
-          - '#canvas'
-          - '#platform-server'
-          - '#serve'
-        author:
-          type: human
-          id: ascend
-        commit: 0cf59eabc6bba5aaf471ba61621f46d247a6cc29
-        intent: fix
-        files:
-          - .paradigm/decisions/TD-2026-06-14-853.yaml
-          - .paradigm/events/debates.jsonl
-          - .paradigm/events/nominations.jsonl
-          - .paradigm/events/stream.jsonl
-          - .paradigm/lore/entries/2026-06-14/L-2026-06-14-ascend-043023-001.lore
-          - .paradigm/lore/entries/2026-06-14/L-2026-06-14-ascend-044702-250.lore
-          - .paradigm/lore/entries/2026-06-14/L-2026-06-14-ascend-045537-001.lore
-          - .paradigm/lore/timeline.yaml
-          - CHANGELOG.md
-          - packages/paradigm/package.json
-          - packages/paradigm/platform-ui/src/App.tsx
-          - packages/paradigm/platform-ui/src/components/CommandPalette.tsx
-          - packages/paradigm/platform-ui/src/components/SidebarNav.tsx
-          - packages/paradigm/platform-ui/src/hooks/useAgentEffects.ts
-          - packages/paradigm/platform-ui/src/hooks/useKeyboardShortcuts.ts
-          - packages/paradigm/platform-ui/src/sections/canvas/.purpose
-          - packages/paradigm/platform-ui/src/sections/canvas/CanvasSection.tsx
-          - packages/paradigm/platform-ui/src/sections/canvas/components/editor/CanvasEditor.tsx
-          - packages/paradigm/platform-ui/src/sections/canvas/components/editor/CanvasFrame.tsx
-          - packages/paradigm/platform-ui/src/sections/canvas/components/editor/RenderNode.tsx
-          - packages/paradigm/platform-ui/src/sections/canvas/components/panels/BackgroundControls.tsx
-          - packages/paradigm/platform-ui/src/sections/canvas/components/panels/BorderControls.tsx
-          - packages/paradigm/platform-ui/src/sections/canvas/components/panels/ComponentPalette.tsx
-          - packages/paradigm/platform-ui/src/sections/canvas/components/panels/LayoutControls.tsx
-          - packages/paradigm/platform-ui/src/sections/canvas/components/panels/PropertyPanel.tsx
-          - packages/paradigm/platform-ui/src/sections/canvas/components/panels/SizeControls.tsx
-          - packages/paradigm/platform-ui/src/sections/canvas/components/panels/SpacingControls.tsx
-          - packages/paradigm/platform-ui/src/sections/canvas/components/panels/TypographyControls.tsx
-          - packages/paradigm/platform-ui/src/sections/canvas/components/toolbar/CanvasToolbar.tsx
-          - packages/paradigm/platform-ui/src/sections/canvas/components/user/ButtonComponent.tsx
-          - packages/paradigm/platform-ui/src/sections/canvas/components/user/ContainerComponent.tsx
-          - packages/paradigm/platform-ui/src/sections/canvas/components/user/ImageComponent.tsx
-          - packages/paradigm/platform-ui/src/sections/canvas/components/user/SpacerComponent.tsx
-          - packages/paradigm/platform-ui/src/sections/canvas/components/user/TextComponent.tsx
-          - packages/paradigm/platform-ui/src/sections/canvas/hooks/useCanvasData.ts
-          - packages/paradigm/platform-ui/src/sections/canvas/store/canvasStore.ts
-          - packages/paradigm/platform-ui/src/sections/canvas/styles/canvas.css
-          - packages/paradigm/platform-ui/src/sections/canvas/types.ts
-          - packages/paradigm/platform-ui/src/sections/canvas/utils/canvas-serializer.ts
-          - packages/paradigm/platform-ui/src/sections/canvas/utils/css-serializer.ts
-          - packages/paradigm/platform-ui/src/store/platformStore.ts
-          - packages/paradigm/src/commands/serve.ts
-          - packages/paradigm/src/platform-server/index.ts
-          - packages/paradigm/src/platform-server/routes/.purpose
-          - packages/paradigm/src/platform-server/routes/canvas.ts
-        description: 'fix(#serve): repair the launcher — build hole + boot crash + canvas cut'
     contributors:
       human:
         - ascend
@@ -13367,7 +13437,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_138
+      - *ref_136
     contributors:
       human:
         - ascend
@@ -13379,7 +13449,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_139
+      - &ref_137
         id: h0203
         ts: '2026-03-19T01:14:03Z'
         type: implement
@@ -13413,7 +13483,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_139
+      - *ref_137
     contributors:
       human:
         - ascend
@@ -13425,7 +13495,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_139
+      - *ref_137
     contributors:
       human:
         - ascend
@@ -13437,7 +13507,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_139
+      - *ref_137
     contributors:
       human:
         - ascend
@@ -13449,7 +13519,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_140
+      - &ref_138
         id: h0205
         ts: '2026-03-19T06:33:20Z'
         type: implement
@@ -13480,7 +13550,7 @@ by_symbol:
           - packages/site/src/components/NodeGraph/FauxTerminal.tsx
           - packages/site/src/components/NodeGraph/LiveGraph.tsx
         description: 'feat(#site): agentic hero terminals — 3 Claude Code loop scenarios, dual-pane Symphony (v4.16.3)'
-      - &ref_141
+      - &ref_139
         id: h0204
         ts: '2026-03-19T05:22:47Z'
         type: implement
@@ -13512,7 +13582,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_142
+      - &ref_140
         id: h0206
         ts: '2026-03-19T08:56:42Z'
         type: implement
@@ -13542,8 +13612,8 @@ by_symbol:
           - packages/site/src/components/SiteFooter.tsx
           - packages/site/src/content/docs/getting-started.md
         description: 'feat(#site): polish pass — layout widths, animated gradient, symbol cards, getting started scenarios (v4.16.4)'
-      - *ref_140
-      - *ref_141
+      - *ref_138
+      - *ref_139
     contributors:
       human:
         - ascend
@@ -13555,8 +13625,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_140
-      - *ref_141
+      - *ref_138
+      - *ref_139
     contributors:
       human:
         - ascend
@@ -13568,7 +13638,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_142
+      - *ref_140
     contributors:
       human:
         - ascend
@@ -13580,7 +13650,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_142
+      - *ref_140
     contributors:
       human:
         - ascend
@@ -13592,7 +13662,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_142
+      - *ref_140
     contributors:
       human:
         - ascend
@@ -13604,7 +13674,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_142
+      - *ref_140
     contributors:
       human:
         - ascend
@@ -13616,7 +13686,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_143
+      - &ref_141
         id: h0207
         ts: '2026-03-19T09:20:16Z'
         type: implement
@@ -13652,7 +13722,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_143
+      - *ref_141
     contributors:
       human:
         - ascend
@@ -13664,7 +13734,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_143
+      - *ref_141
     contributors:
       human:
         - ascend
@@ -13676,8 +13746,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_144
-      - &ref_168
+      - *ref_142
+      - &ref_164
         id: h0225
         ts: '2026-03-21T11:45:42Z'
         type: implement
@@ -13704,7 +13774,7 @@ by_symbol:
           - packages/paradigm-mcp/src/utils/session-work-log.ts
           - plugins/paradigm/skills/postflight/SKILL.md
         description: 'feat(#maestro-learning): Teacher model — session work log, documentor agent, learning pass'
-      - &ref_165
+      - &ref_162
         id: h0222
         ts: '2026-03-21T09:54:16Z'
         type: implement
@@ -13721,8 +13791,8 @@ by_symbol:
           - packages/paradigm-mcp/src/tools/ambient.ts
           - packages/paradigm-mcp/src/utils/nomination-engine.ts
         description: 'feat(#ambient): Maestro Phase 5 — Neverland validation instrumentation'
-      - *ref_145
-      - &ref_154
+      - *ref_143
+      - &ref_150
         id: h0215
         ts: '2026-03-21T01:21:55Z'
         type: implement
@@ -13773,7 +13843,7 @@ by_symbol:
           - packages/paradigm-mcp/src/utils/nomination-engine.ts
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'fix(#nomination-engine): weighted scoring, dedup, agent creation defaults, plugin version (v5.3.1)'
-      - &ref_150
+      - &ref_145
         id: h0208
         ts: '2026-03-20T15:42:50Z'
         type: implement
@@ -13847,49 +13917,98 @@ by_symbol:
       agent: []
   '#nomination-engine':
     symbol: '#nomination-engine'
-    total_changes: 20
-    last_modified: '2026-06-13T22:31:40Z'
+    total_changes: 25
+    last_modified: '2026-06-25T06:57:50Z'
     stability_score: 1
     fragility: low
     recent:
-      - *ref_146
-      - *ref_147
-      - *ref_148
-      - *ref_149
-      - &ref_166
-        id: h0253
-        ts: '2026-03-25T12:04:23Z'
+      - &ref_312
+        id: h0521
+        ts: '2026-06-25T06:57:50Z'
         type: implement
         symbols:
-          - '#ambient'
-          - '#compliance-check'
-          - '#journal-loader'
+          - '#classroom'
           - '#nomination-engine'
-          - '#postflight'
-          - '#teacher-model'
         author:
           type: human
           id: ascend
-        commit: 1ec6af7ac87ce42048b33caccddf36119165f101
+        commit: 663572f447046bdfb390e21a0727140d50435fcf
         intent: feature
         files:
-          - .paradigm/config.yaml
+          - .paradigm/curriculum/architect.syllabus
+          - .paradigm/curriculum/index.yaml
+          - .paradigm/curriculum/scenarios/SC-barrels-antipattern-vs-our-tooling.scenario
+          - .paradigm/curriculum/scenarios/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/lore/entries/2026-06-25/L-2026-06-25-ascend-065735-001.lore
+          - .paradigm/lore/timeline.yaml
+          - packages/paradigm-mcp/src/tools/streams.ts
+          - packages/paradigm-mcp/src/types/knowledge-streams.ts
+        description: 'feat(#classroom): Expeditions staging — journal provenance envelope + first real dive'
+      - &ref_313
+        id: h0520
+        ts: '2026-06-25T06:50:21Z'
+        type: implement
+        symbols:
+          - '#classroom'
+          - '#ClassroomRouter'
+          - '#nomination-engine'
+        author:
+          type: human
+          id: ascend
+        commit: e3be16b0202baf5424ca421d56ccbb5caa2cc8d8
+        intent: feature
+        files:
+          - .paradigm/events/classroom-certifications.jsonl
+          - .paradigm/history/log.jsonl
+          - .paradigm/lore/entries/2026-06-25/L-2026-06-25-ascend-061847-001.lore
+          - .paradigm/lore/entries/2026-06-25/L-2026-06-25-ascend-062939-001.lore
+          - .paradigm/lore/entries/2026-06-25/L-2026-06-25-ascend-064516-001.lore
+          - .paradigm/lore/timeline.yaml
+          - packages/paradigm-mcp/src/tools/classroom.ts
+          - packages/paradigm-mcp/src/utils/.purpose
+          - packages/paradigm-mcp/src/utils/nomination-engine.ts
+          - packages/paradigm/src/platform-server/routes/.purpose
+          - packages/paradigm/src/platform-server/routes/classroom.ts
+        description: 'feat(#classroom): gated promote (certifiedBy peer) + drop promoted from Staged'
+      - &ref_310
+        id: h0515
+        ts: '2026-06-25T01:15:59Z'
+        type: implement
+        symbols:
+          - '#classroom'
+          - '#nomination-engine'
+          - '#scenario-loader'
+          - '#syllabus-loader'
+        author:
+          type: human
+          id: ascend
+        commit: 09a7ed43df1f7945f534813e953215e169f23dd2
+        intent: feature
+        files:
+          - .paradigm/curriculum/compliance.syllabus
+          - .paradigm/curriculum/index.yaml
+          - .paradigm/curriculum/scenarios/SC-aspect-validate-vs-queryable.scenario
+          - .paradigm/curriculum/scenarios/index.yaml
+          - .paradigm/decisions/TD-2026-06-25-044.yaml
+          - .paradigm/events/debates.jsonl
+          - .paradigm/events/nominations.jsonl
           - .paradigm/events/stream.jsonl
           - .paradigm/history/log.jsonl
-          - CHANGELOG.md
-          - docs/polish-checklist.md
-          - packages/paradigm-mcp/package.json
-          - packages/paradigm-mcp/src/tools/ambient.ts
-          - packages/paradigm-mcp/src/utils/nomination-engine.ts
-          - packages/paradigm/package.json
-          - packages/paradigm/src/commands/compliance.ts
-          - packages/paradigm/src/commands/hooks/generated-hooks.ts
-          - packages/paradigm/src/commands/hooks/scripts/paradigm-common.sh
-          - packages/paradigm/src/index.ts
-          - plugins/paradigm-cursor/scripts/paradigm-common.sh
-          - plugins/paradigm/.claude-plugin/plugin.json
-          - plugins/paradigm/scripts/paradigm-common.sh
-        description: 'feat(#ambient): v5.18.0 — automated postflight learning, stale pruning, configurable TTL'
+          - .paradigm/lore/entries/2026-06-25/L-2026-06-25-ascend-005521-001.lore
+          - .paradigm/lore/entries/2026-06-25/L-2026-06-25-ascend-010243-060.lore
+          - .paradigm/lore/entries/2026-06-25/L-2026-06-25-ascend-011522-001.lore
+          - .paradigm/lore/entries/2026-06-25/L-2026-06-25-ascend-011533-001.lore
+          - .paradigm/lore/timeline.yaml
+          - .paradigm/manifest.consistency.json
+          - .paradigm/personas/index.yaml
+          - .paradigm/university/index.yaml
+          - docs/specs/classroom-experience.md
+          - plugins/paradigm/skills/class/SKILL.md
+          - plugins/paradigm/skills/forage/SKILL.md
+        description: 'feat(#classroom): Academy MVP first build — bootstrap the gate, /forage skill, /class THE STAND'
+      - *ref_144
+      - *ref_126
     contributors:
       human:
         - ascend
@@ -13901,7 +14020,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_150
+      - *ref_145
     contributors:
       human:
         - ascend
@@ -13913,7 +14032,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_151
+      - &ref_146
         id: h0209
         ts: '2026-03-20T16:00:28Z'
         type: implement
@@ -13957,7 +14076,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_151
+      - *ref_146
     contributors:
       human:
         - ascend
@@ -13969,11 +14088,11 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_152
-      - *ref_126
-      - *ref_153
-      - *ref_154
-      - *ref_155
+      - *ref_147
+      - *ref_148
+      - *ref_149
+      - *ref_150
+      - *ref_151
     contributors:
       human:
         - ascend
@@ -13985,7 +14104,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_218
+      - &ref_215
         id: h0327
         ts: '2026-04-25T20:34:26Z'
         type: implement
@@ -14003,8 +14122,8 @@ by_symbol:
           - .paradigm/research/conductor-16-bugs-triage.md
           - .paradigm/research/v6.0.3-implementation-plan.md
         description: 'docs(#research): v6.0.3 implementation plan + Conductor 16-bug triage'
-      - *ref_153
-      - &ref_194
+      - *ref_149
+      - &ref_191
         id: h0278
         ts: '2026-03-28T23:37:10Z'
         type: implement
@@ -14036,7 +14155,7 @@ by_symbol:
           - packages/paradigm/src/core/project-type.ts
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'feat(#agents): v5.30.0 — Rune (compliance) 8th core agent + Conductor drag-drop & font sizing'
-      - &ref_191
+      - &ref_188
         id: h0277
         ts: '2026-03-28T00:45:23Z'
         type: implement
@@ -14062,7 +14181,7 @@ by_symbol:
           - packages/conductor/Sources/Conductor/UI/Views/ContainerView.swift
           - packages/conductor/VERSION
         description: 'feat(#conductor): Sprints 2-3 — Symphony auto-link, shortcuts, workspace mode'
-      - &ref_192
+      - &ref_189
         id: h0276
         ts: '2026-03-28T00:32:18Z'
         type: implement
@@ -14097,9 +14216,9 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_145
-      - *ref_156
-      - *ref_157
+      - *ref_143
+      - *ref_152
+      - *ref_153
     contributors:
       human:
         - ascend
@@ -14111,7 +14230,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_186
+      - &ref_183
         id: h0390
         ts: '2026-05-26T07:03:22Z'
         type: implement
@@ -14145,7 +14264,7 @@ by_symbol:
         files:
           - packages/paradigm-mcp/src/tools/orchestration.ts
         description: 'feat(#agents): AGENT_TIERS + DEFAULT_MODELS cover all 67 archetypes (v6.6)'
-      - *ref_158
+      - *ref_154
       - id: h0303
         ts: '2026-04-06T21:04:48Z'
         type: implement
@@ -14205,7 +14324,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_159
+      - &ref_155
         id: h0219
         ts: '2026-03-21T06:45:50Z'
         type: implement
@@ -14237,7 +14356,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_189
+      - &ref_186
         id: h0268
         ts: '2026-03-27T15:20:55Z'
         type: implement
@@ -14277,7 +14396,7 @@ by_symbol:
           - packages/paradigm/package.json
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'feat(#conductor): v5.27.0 — cross-session Symphony fixes, multi-workspace threads'
-      - *ref_159
+      - *ref_155
     contributors:
       human:
         - ascend
@@ -14311,7 +14430,7 @@ by_symbol:
           - packages/paradigm/package.json
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'feat(#orchestration): v5.9.0 — live orchestration visibility via Symphony + Conductor'
-      - *ref_159
+      - *ref_155
     contributors:
       human:
         - ascend
@@ -14323,8 +14442,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_149
-      - &ref_197
+      - *ref_156
+      - &ref_194
         id: h0284
         ts: '2026-04-01T20:55:22Z'
         type: implement
@@ -14342,7 +14461,7 @@ by_symbol:
           - packages/paradigm/src/core/project-type.ts
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'feat(#analyst): v5.35.0 — Sage reworked to general-purpose data analyst savant'
-      - &ref_160
+      - &ref_157
         id: h0220
         ts: '2026-03-21T06:55:20Z'
         type: implement
@@ -14375,7 +14494,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_160
+      - *ref_157
     contributors:
       human:
         - ascend
@@ -14387,8 +14506,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_161
-      - &ref_183
+      - *ref_158
+      - &ref_180
         id: h0256
         ts: '2026-03-25T12:59:35Z'
         type: implement
@@ -14440,7 +14559,7 @@ by_symbol:
           - packages/paradigm/platform-ui/src/styles/tokens.css
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'feat(#platform): v5.21.0 — light mode color sweep, DetailPanel decomposition, fetch cleanup'
-      - &ref_184
+      - &ref_181
         id: h0248
         ts: '2026-03-25T03:58:27Z'
         type: implement
@@ -14472,8 +14591,8 @@ by_symbol:
           - packages/paradigm/src/utils/cli-output.ts
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'feat(#platform, #cli): v5.14.0 — command palette, explain-files, CLI output convention'
-      - *ref_162
-      - *ref_163
+      - *ref_159
+      - *ref_160
     contributors:
       human:
         - ascend
@@ -14485,7 +14604,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_164
+      - &ref_161
         id: h0221
         ts: '2026-03-21T07:00:17Z'
         type: implement
@@ -14520,7 +14639,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_164
+      - *ref_161
     contributors:
       human:
         - ascend
@@ -14532,7 +14651,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_164
+      - *ref_161
     contributors:
       human:
         - ascend
@@ -14544,7 +14663,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_165
+      - *ref_162
     contributors:
       human:
         - ascend
@@ -14581,7 +14700,40 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_166
+      - &ref_178
+        id: h0253
+        ts: '2026-03-25T12:04:23Z'
+        type: implement
+        symbols:
+          - '#ambient'
+          - '#compliance-check'
+          - '#journal-loader'
+          - '#nomination-engine'
+          - '#postflight'
+          - '#teacher-model'
+        author:
+          type: human
+          id: ascend
+        commit: 1ec6af7ac87ce42048b33caccddf36119165f101
+        intent: feature
+        files:
+          - .paradigm/config.yaml
+          - .paradigm/events/stream.jsonl
+          - .paradigm/history/log.jsonl
+          - CHANGELOG.md
+          - docs/polish-checklist.md
+          - packages/paradigm-mcp/package.json
+          - packages/paradigm-mcp/src/tools/ambient.ts
+          - packages/paradigm-mcp/src/utils/nomination-engine.ts
+          - packages/paradigm/package.json
+          - packages/paradigm/src/commands/compliance.ts
+          - packages/paradigm/src/commands/hooks/generated-hooks.ts
+          - packages/paradigm/src/commands/hooks/scripts/paradigm-common.sh
+          - packages/paradigm/src/index.ts
+          - plugins/paradigm-cursor/scripts/paradigm-common.sh
+          - plugins/paradigm/.claude-plugin/plugin.json
+          - plugins/paradigm/scripts/paradigm-common.sh
+        description: 'feat(#ambient): v5.18.0 — automated postflight learning, stale pruning, configurable TTL'
       - id: h0242
         ts: '2026-03-24T19:56:27Z'
         type: implement
@@ -14628,8 +14780,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_167
-      - &ref_169
+      - *ref_163
+      - &ref_165
         id: h0241
         ts: '2026-03-24T19:48:24Z'
         type: implement
@@ -14656,19 +14808,20 @@ by_symbol:
           - plugins/paradigm/.claude-plugin/plugin.json
           - plugins/paradigm/scripts/paradigm-postwrite.sh
         description: 'feat(#agent-state): v5.10.0 — agent state system, proactive documentor, auto learning feedback'
-      - *ref_168
+      - *ref_164
     contributors:
       human:
         - ascend
       agent: []
   '#session-work-log':
     symbol: '#session-work-log'
-    total_changes: 6
-    last_modified: '2026-06-09T16:36:13Z'
+    total_changes: 7
+    last_modified: '2026-06-19T07:17:53Z'
     stability_score: 1
     fragility: low
     recent:
-      - &ref_264
+      - *ref_126
+      - &ref_262
         id: h0404
         ts: '2026-06-09T16:36:13Z'
         type: implement
@@ -14750,10 +14903,9 @@ by_symbol:
           - packages/paradigm/src/core/orchestrator.ts
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'feat(#orchestrator): stateless iteration-loop primitive (v6.7.0)'
-      - *ref_152
-      - *ref_126
-      - *ref_169
-      - *ref_144
+      - *ref_147
+      - *ref_148
+      - *ref_165
     contributors:
       human:
         - ascend
@@ -14765,7 +14917,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_170
+      - *ref_166
     contributors:
       human:
         - ascend
@@ -14777,7 +14929,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_170
+      - *ref_166
     contributors:
       human:
         - ascend
@@ -14789,7 +14941,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_171
+      - &ref_167
         id: h0228
         ts: '2026-03-21T13:14:57Z'
         type: implement
@@ -14822,7 +14974,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_171
+      - *ref_167
     contributors:
       human:
         - ascend
@@ -14834,8 +14986,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_172
-      - *ref_173
+      - *ref_168
+      - *ref_169
     contributors:
       human:
         - ascend
@@ -14847,7 +14999,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_173
+      - *ref_169
     contributors:
       human:
         - ascend
@@ -14859,7 +15011,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_173
+      - *ref_169
     contributors:
       human:
         - ascend
@@ -14871,7 +15023,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_174
+      - &ref_170
         id: h0234
         ts: '2026-03-24T02:53:04Z'
         type: implement
@@ -14898,7 +15050,7 @@ by_symbol:
           - .paradigm/lore/timeline.yaml
           - CHANGELOG.md
         description: 'docs: update changelog for v5.7.0 help system + grid layout'
-      - *ref_134
+      - *ref_132
     contributors:
       human:
         - ascend
@@ -14910,8 +15062,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_174
-      - *ref_134
+      - *ref_170
+      - *ref_132
     contributors:
       human:
         - ascend
@@ -14923,7 +15075,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_175
+      - &ref_171
         id: h0235
         ts: '2026-03-24T03:23:42Z'
         type: implement
@@ -14993,7 +15145,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_175
+      - *ref_171
     contributors:
       human:
         - ascend
@@ -15024,7 +15176,7 @@ by_symbol:
           - .paradigm/protocols/index.yaml
           - .paradigm/university/index.yaml
         description: 'chore: include paradigm index and event files'
-      - *ref_175
+      - *ref_171
     contributors:
       human:
         - ascend
@@ -15036,7 +15188,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_175
+      - *ref_171
     contributors:
       human:
         - ascend
@@ -15077,8 +15229,8 @@ by_symbol:
           - packages/paradigm-mcp/src/tools/agents.ts
           - packages/paradigm-mcp/src/utils/agent-loader.ts
         description: 'feat(#agents): resolve agents by nickname — "Jinx" finds advocate'
-      - *ref_169
-      - &ref_176
+      - *ref_165
+      - &ref_172
         id: h0238
         ts: '2026-03-24T14:12:31Z'
         type: implement
@@ -15115,7 +15267,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_180
+      - &ref_176
         id: h0250
         ts: '2026-03-25T06:11:15Z'
         type: implement
@@ -15148,7 +15300,7 @@ by_symbol:
           - packages/paradigm/src/index.ts
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'feat(#agents, #orchestration): v5.16.0 — Agent System polish'
-      - *ref_176
+      - *ref_172
     contributors:
       human:
         - ascend
@@ -15160,7 +15312,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_279
+      - &ref_277
         id: h0419
         ts: '2026-06-13T22:03:16Z'
         type: implement
@@ -15194,9 +15346,9 @@ by_symbol:
           - packages/paradigm-mcp/src/tools/symphony.ts
           - packages/paradigm/.purpose
         description: 'feat(!symphony-status-flowback): v7.1 — Symphony/peer path joins the loop (+ .purpose YAML fix)'
-      - *ref_177
-      - *ref_126
-      - *ref_128
+      - *ref_173
+      - *ref_148
+      - *ref_127
       - id: h0252
         ts: '2026-03-25T11:42:37Z'
         type: implement
@@ -15221,7 +15373,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_179
+      - &ref_175
         id: h0244
         ts: '2026-03-24T20:16:03Z'
         type: implement
@@ -15253,7 +15405,7 @@ by_symbol:
           - packages/paradigm/src/core/.purpose
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'feat(#orchestration): v5.11.0 — enforcement habits, symbol debt cleanup, PARA 701 prep'
-      - *ref_178
+      - *ref_174
     contributors:
       human:
         - ascend
@@ -15265,8 +15417,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_179
-      - *ref_169
+      - *ref_175
+      - *ref_165
     contributors:
       human:
         - ascend
@@ -15278,7 +15430,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_179
+      - *ref_175
     contributors:
       human:
         - ascend
@@ -15290,9 +15442,9 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_180
-      - *ref_163
-      - *ref_179
+      - *ref_176
+      - *ref_160
+      - *ref_175
     contributors:
       human:
         - ascend
@@ -15304,7 +15456,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_163
+      - *ref_160
     contributors:
       human:
         - ascend
@@ -15316,7 +15468,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_163
+      - *ref_160
     contributors:
       human:
         - ascend
@@ -15328,7 +15480,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_163
+      - *ref_160
     contributors:
       human:
         - ascend
@@ -15340,7 +15492,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_163
+      - *ref_160
     contributors:
       human:
         - ascend
@@ -15352,7 +15504,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_163
+      - *ref_160
     contributors:
       human:
         - ascend
@@ -15365,8 +15517,8 @@ by_symbol:
     fragility: low
     recent:
       - *ref_66
-      - *ref_181
-      - &ref_187
+      - *ref_177
+      - &ref_184
         id: h0254
         ts: '2026-03-25T12:17:34Z'
         type: implement
@@ -15398,8 +15550,8 @@ by_symbol:
           - plugins/paradigm/scripts/paradigm-common.sh
           - plugins/paradigm/scripts/paradigm-postwrite.sh
         description: 'fix(#enforcement): v5.19.0 — stop hook false positives, legacy hook removal, structured violations'
-      - *ref_166
-      - *ref_162
+      - *ref_178
+      - *ref_159
     contributors:
       human:
         - ascend
@@ -15411,7 +15563,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_182
+      - &ref_179
         id: h0255
         ts: '2026-03-25T12:48:24Z'
         type: implement
@@ -15474,7 +15626,7 @@ by_symbol:
           - packages/paradigm/package.json
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'feat(#conductor): v5.20.0 — full theme adoption, overlay grouping, a11y completion, environment migration'
-      - *ref_162
+      - *ref_159
     contributors:
       human:
         - ascend
@@ -15486,8 +15638,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_182
-      - *ref_162
+      - *ref_179
+      - *ref_159
     contributors:
       human:
         - ascend
@@ -15499,8 +15651,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_183
-      - *ref_162
+      - *ref_180
+      - *ref_159
     contributors:
       human:
         - ascend
@@ -15512,7 +15664,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_162
+      - *ref_159
     contributors:
       human:
         - ascend
@@ -15524,7 +15676,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_162
+      - *ref_159
     contributors:
       human:
         - ascend
@@ -15536,7 +15688,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_184
+      - *ref_181
     contributors:
       human:
         - ascend
@@ -15548,7 +15700,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_184
+      - *ref_181
     contributors:
       human:
         - ascend
@@ -15560,7 +15712,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_184
+      - *ref_181
     contributors:
       human:
         - ascend
@@ -15572,7 +15724,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_184
+      - *ref_181
     contributors:
       human:
         - ascend
@@ -15596,7 +15748,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_185
+      - *ref_182
       - *ref_44
     contributors:
       human:
@@ -15609,7 +15761,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_216
+      - &ref_213
         id: h0326
         ts: '2026-04-25T20:30:23Z'
         type: implement
@@ -15633,7 +15785,7 @@ by_symbol:
           - CHANGELOG.md
           - packages/paradigm-mcp/src/tools/orchestration.ts
         description: 'feat(#scholar): add Scholar + Swift agents; fix Nora registration'
-      - *ref_180
+      - *ref_176
     contributors:
       human:
         - ascend
@@ -15645,7 +15797,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_257
+      - &ref_255
         id: h0391
         ts: '2026-05-26T11:56:21Z'
         type: implement
@@ -15664,8 +15816,8 @@ by_symbol:
           - packages/paradigm/package.json
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'chore(release): v6.6.1 — Arky, Topo, Atlas collision resolved'
-      - *ref_186
-      - &ref_240
+      - *ref_183
+      - &ref_238
         id: h0389
         ts: '2026-05-26T06:56:45Z'
         type: implement
@@ -15680,7 +15832,7 @@ by_symbol:
         files:
           - README.md
         description: 'docs(#agents): advertise the full 67-agent roster in README'
-      - &ref_258
+      - &ref_256
         id: h0388
         ts: '2026-05-22T20:02:13Z'
         type: implement
@@ -15695,7 +15847,7 @@ by_symbol:
         files:
           - CHANGELOG.md
         description: 'docs(#agents): note core-archetype precedence behavior change (v6.6)'
-      - &ref_259
+      - &ref_257
         id: h0387
         ts: '2026-05-22T19:43:15Z'
         type: implement
@@ -15724,7 +15876,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_180
+      - *ref_176
     contributors:
       human:
         - ascend
@@ -15736,7 +15888,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_180
+      - *ref_176
     contributors:
       human:
         - ascend
@@ -15748,7 +15900,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_180
+      - *ref_176
     contributors:
       human:
         - ascend
@@ -15760,7 +15912,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_167
+      - *ref_163
     contributors:
       human:
         - ascend
@@ -15772,7 +15924,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_167
+      - *ref_163
     contributors:
       human:
         - ascend
@@ -15784,7 +15936,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_166
+      - *ref_178
     contributors:
       human:
         - ascend
@@ -15796,7 +15948,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_166
+      - *ref_178
     contributors:
       human:
         - ascend
@@ -15808,7 +15960,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_166
+      - *ref_178
     contributors:
       human:
         - ascend
@@ -15820,7 +15972,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_187
+      - *ref_184
     contributors:
       human:
         - ascend
@@ -15832,7 +15984,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_182
+      - *ref_179
     contributors:
       human:
         - ascend
@@ -15844,7 +15996,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_182
+      - *ref_179
     contributors:
       human:
         - ascend
@@ -15856,7 +16008,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_182
+      - *ref_179
     contributors:
       human:
         - ascend
@@ -15868,7 +16020,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_183
+      - *ref_180
     contributors:
       human:
         - ascend
@@ -15880,7 +16032,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_183
+      - *ref_180
     contributors:
       human:
         - ascend
@@ -15892,7 +16044,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_183
+      - *ref_180
     contributors:
       human:
         - ascend
@@ -15942,7 +16094,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_188
+      - *ref_185
     contributors:
       human:
         - ascend
@@ -15954,7 +16106,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_188
+      - *ref_185
     contributors:
       human:
         - ascend
@@ -15966,7 +16118,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_188
+      - *ref_185
     contributors:
       human:
         - ascend
@@ -15978,7 +16130,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_188
+      - *ref_185
     contributors:
       human:
         - ascend
@@ -15990,7 +16142,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_161
+      - *ref_158
     contributors:
       human:
         - ascend
@@ -16002,7 +16154,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_161
+      - *ref_158
     contributors:
       human:
         - ascend
@@ -16014,7 +16166,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_161
+      - *ref_158
     contributors:
       human:
         - ascend
@@ -16026,7 +16178,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_128
+      - *ref_127
     contributors:
       human:
         - ascend
@@ -16038,7 +16190,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_189
+      - *ref_186
     contributors:
       human:
         - ascend
@@ -16086,7 +16238,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_190
+      - &ref_187
         id: h0274
         ts: '2026-03-27T23:55:19Z'
         type: implement
@@ -16129,7 +16281,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_190
+      - *ref_187
     contributors:
       human:
         - ascend
@@ -16141,7 +16293,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_193
+      - &ref_190
         id: h0275
         ts: '2026-03-28T00:11:52Z'
         type: implement
@@ -16173,9 +16325,9 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_191
-      - *ref_192
-      - *ref_193
+      - *ref_188
+      - *ref_189
+      - *ref_190
     contributors:
       human:
         - ascend
@@ -16187,8 +16339,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_191
-      - *ref_192
+      - *ref_188
+      - *ref_189
     contributors:
       human:
         - ascend
@@ -16200,7 +16352,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_194
+      - *ref_191
     contributors:
       human:
         - ascend
@@ -16212,7 +16364,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_194
+      - *ref_191
     contributors:
       human:
         - ascend
@@ -16224,7 +16376,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_126
+      - *ref_148
     contributors:
       human:
         - ascend
@@ -16236,7 +16388,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_126
+      - *ref_148
     contributors:
       human:
         - ascend
@@ -16248,7 +16400,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_126
+      - *ref_148
     contributors:
       human:
         - ascend
@@ -16260,7 +16412,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_126
+      - *ref_148
     contributors:
       human:
         - ascend
@@ -16272,7 +16424,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_152
+      - *ref_147
     contributors:
       human:
         - ascend
@@ -16284,7 +16436,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_152
+      - *ref_147
     contributors:
       human:
         - ascend
@@ -16296,7 +16448,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_152
+      - *ref_147
     contributors:
       human:
         - ascend
@@ -16308,7 +16460,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_203
+      - &ref_200
         id: h0295
         ts: '2026-04-03T18:28:42Z'
         type: implement
@@ -16337,8 +16489,8 @@ by_symbol:
           - packages/paradigm/package.json
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'docs(#portal-gate): v5.36.8 — E3/A1/A3/U1 honesty fixes'
-      - *ref_195
-      - *ref_196
+      - *ref_192
+      - *ref_193
     contributors:
       human:
         - ascend
@@ -16350,7 +16502,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_186
+      - *ref_183
       - id: h0386
         ts: '2026-05-22T19:33:24Z'
         type: implement
@@ -16444,7 +16596,7 @@ by_symbol:
           - packages/paradigm/templates/agents/regulatory.agent
           - packages/paradigm/templates/agents/report-gen.agent
         description: 'feat(#agents): bring 8 thin archetypes to canonical bar + fix Swift collision (v6.6)'
-      - *ref_196
+      - *ref_193
     contributors:
       human:
         - ascend
@@ -16456,7 +16608,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_196
+      - *ref_193
     contributors:
       human:
         - ascend
@@ -16468,7 +16620,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_196
+      - *ref_193
     contributors:
       human:
         - ascend
@@ -16480,7 +16632,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_196
+      - *ref_193
     contributors:
       human:
         - ascend
@@ -16492,7 +16644,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_196
+      - *ref_193
     contributors:
       human:
         - ascend
@@ -16504,7 +16656,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_195
+      - *ref_192
     contributors:
       human:
         - ascend
@@ -16516,7 +16668,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_197
+      - *ref_194
     contributors:
       human:
         - ascend
@@ -16528,7 +16680,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_270
+      - &ref_268
         id: h0412
         ts: '2026-06-13T20:20:34Z'
         type: implement
@@ -16559,7 +16711,7 @@ by_symbol:
           - packages/paradigm-mcp/src/types/captain.ts
           - packages/paradigm-mcp/src/utils/task-loader.ts
         description: 'feat(#captain-board): v7 §3 — Cid becomes a real Captain'
-      - &ref_199
+      - &ref_196
         id: h0287
         ts: '2026-04-03T06:18:11Z'
         type: implement
@@ -16584,7 +16736,7 @@ by_symbol:
           - packages/paradigm/package.json
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'feat(#forge): v5.36.1 — Loid consolidated as Agent Intelligence Officer'
-      - *ref_185
+      - *ref_182
     contributors:
       human:
         - ascend
@@ -16596,8 +16748,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_198
-      - *ref_199
+      - *ref_195
+      - *ref_196
     contributors:
       human:
         - ascend
@@ -16609,7 +16761,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_199
+      - *ref_196
     contributors:
       human:
         - ascend
@@ -16621,7 +16773,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_199
+      - *ref_196
     contributors:
       human:
         - ascend
@@ -16659,8 +16811,8 @@ by_symbol:
         files:
           - CLAUDE.md
         description: 'docs(#cli-surface): v5.36.5 — document plugin namespace collision (D5 B+C)'
-      - *ref_200
-      - &ref_201
+      - *ref_197
+      - &ref_198
         id: h0289
         ts: '2026-04-03T10:47:34Z'
         type: implement
@@ -16693,7 +16845,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_201
+      - *ref_198
     contributors:
       human:
         - ascend
@@ -16705,7 +16857,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_200
+      - *ref_197
     contributors:
       human:
         - ascend
@@ -16717,7 +16869,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_202
+      - *ref_199
     contributors:
       human:
         - ascend
@@ -16729,7 +16881,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_198
+      - *ref_195
     contributors:
       human:
         - ascend
@@ -16741,7 +16893,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_198
+      - *ref_195
     contributors:
       human:
         - ascend
@@ -16753,7 +16905,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_203
+      - *ref_200
     contributors:
       human:
         - ascend
@@ -16765,7 +16917,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_203
+      - *ref_200
     contributors:
       human:
         - ascend
@@ -16807,7 +16959,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_204
+      - &ref_201
         id: h0297
         ts: '2026-04-03T22:06:20Z'
         type: implement
@@ -16837,7 +16989,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_204
+      - *ref_201
     contributors:
       human:
         - ascend
@@ -16849,7 +17001,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_204
+      - *ref_201
     contributors:
       human:
         - ascend
@@ -16861,7 +17013,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_205
+      - &ref_202
         id: h0304
         ts: '2026-04-06T21:59:47Z'
         type: implement
@@ -16895,7 +17047,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_205
+      - *ref_202
     contributors:
       human:
         - ascend
@@ -16919,8 +17071,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_206
-      - *ref_207
+      - *ref_203
+      - *ref_204
       - *ref_43
     contributors:
       human:
@@ -16933,7 +17085,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_208
+      - *ref_205
     contributors:
       human:
         - ascend
@@ -16993,7 +17145,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_209
+      - *ref_206
     contributors:
       human:
         - ascend
@@ -17005,7 +17157,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_209
+      - *ref_206
     contributors:
       human:
         - ascend
@@ -17017,7 +17169,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_210
+      - &ref_207
         id: h0316
         ts: '2026-04-22T18:21:36Z'
         type: implement
@@ -17052,7 +17204,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_210
+      - *ref_207
     contributors:
       human:
         - ascend
@@ -17064,7 +17216,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_210
+      - *ref_207
     contributors:
       human:
         - ascend
@@ -17090,7 +17242,7 @@ by_symbol:
         files:
           - packages/paradigm-mcp/tests/pack-loader.test.ts
         description: 'test(#university): pack synthesis + section validator negatives'
-      - &ref_247
+      - &ref_245
         id: h0363
         ts: '2026-05-18T20:20:20Z'
         type: implement
@@ -17107,7 +17259,7 @@ by_symbol:
           - packages/paradigm-mcp/src/utils/pack-loader.ts
           - packages/paradigm-mcp/src/utils/pack-schema.ts
         description: 'feat(#university): add Section types and Zod schemas'
-      - &ref_245
+      - &ref_243
         id: h0362
         ts: '2026-05-18T20:06:54Z'
         type: implement
@@ -17125,7 +17277,7 @@ by_symbol:
           - packages/paradigm-mcp/src/utils/university-loader.ts
           - packages/paradigm-mcp/tests/pack-sections.test.ts
         description: 'feat(#university): loader synthesizes default + Zod validates sections (phase 2, v6.5)'
-      - &ref_213
+      - &ref_210
         id: h0319
         ts: '2026-04-22T19:33:28Z'
         type: implement
@@ -17150,7 +17302,7 @@ by_symbol:
           - packages/university/tests/plsat-migration.test.ts
           - packages/university/vitest.config.ts
         description: 'test(#university): v5.39.0 WIP — sub-phase 3 regression suites'
-      - &ref_212
+      - &ref_209
         id: h0318
         ts: '2026-04-22T19:17:09Z'
         type: implement
@@ -17394,7 +17546,7 @@ by_symbol:
           - .paradigm/lore/entries/2026-05-31/L-2026-05-31-ascend-195137-001.lore
           - .paradigm/lore/timeline.yaml
         description: 'chore(#university-loader): record lore for v6.6.4 pack-selector fix'
-      - *ref_211
+      - *ref_208
       - id: h0364
         ts: '2026-05-18T20:22:01Z'
         type: implement
@@ -17490,7 +17642,7 @@ by_symbol:
           - packages/paradigm/src/commands/agent/sync-global.ts
           - packages/paradigm/src/index.ts
         description: 'feat(#agents): paradigm agent sync-global materializes bundled agents (v6.6)'
-      - &ref_248
+      - &ref_246
         id: h0367
         ts: '2026-05-18T20:38:48Z'
         type: implement
@@ -17507,7 +17659,7 @@ by_symbol:
           - packages/paradigm/src/commands/university/init.ts
           - packages/paradigm/src/commands/university/serve.ts
         description: 'feat(#university): FTUX advisories for init and serve (v6.5)'
-      - &ref_244
+      - &ref_242
         id: h0366
         ts: '2026-05-18T20:37:29Z'
         type: implement
@@ -17529,7 +17681,7 @@ by_symbol:
           - packages/paradigm/src/core/university/types.ts
           - packages/paradigm/src/index.ts
         description: 'feat(#university): wire --section flag and validate section integrity (v6.5)'
-      - *ref_212
+      - *ref_209
     contributors:
       human:
         - ascend
@@ -17541,7 +17693,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_212
+      - *ref_209
     contributors:
       human:
         - ascend
@@ -17553,7 +17705,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_213
+      - *ref_210
     contributors:
       human:
         - ascend
@@ -17565,7 +17717,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_214
+      - &ref_211
         id: h0320
         ts: '2026-04-22T19:33:46Z'
         type: implement
@@ -17594,7 +17746,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_214
+      - *ref_211
     contributors:
       human:
         - ascend
@@ -17618,7 +17770,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_137
+      - *ref_135
     contributors:
       human:
         - ascend
@@ -17642,7 +17794,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_215
+      - *ref_212
       - *ref_8
     contributors:
       human:
@@ -17691,7 +17843,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_217
+      - &ref_214
         id: h0325
         ts: '2026-04-25T19:01:52Z'
         type: implement
@@ -17737,8 +17889,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_216
-      - *ref_217
+      - *ref_213
+      - *ref_214
     contributors:
       human:
         - ascend
@@ -17750,7 +17902,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_217
+      - *ref_214
     contributors:
       human:
         - ascend
@@ -17762,7 +17914,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_217
+      - *ref_214
     contributors:
       human:
         - ascend
@@ -17774,7 +17926,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_217
+      - *ref_214
     contributors:
       human:
         - ascend
@@ -17786,7 +17938,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_217
+      - *ref_214
     contributors:
       human:
         - ascend
@@ -17798,7 +17950,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_217
+      - *ref_214
     contributors:
       human:
         - ascend
@@ -17810,7 +17962,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_217
+      - *ref_214
     contributors:
       human:
         - ascend
@@ -17822,7 +17974,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_216
+      - *ref_213
     contributors:
       human:
         - ascend
@@ -17834,7 +17986,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_216
+      - *ref_213
     contributors:
       human:
         - ascend
@@ -17846,7 +17998,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_216
+      - *ref_213
     contributors:
       human:
         - ascend
@@ -17858,7 +18010,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_216
+      - *ref_213
     contributors:
       human:
         - ascend
@@ -17870,7 +18022,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_216
+      - *ref_213
     contributors:
       human:
         - ascend
@@ -17882,7 +18034,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_218
+      - *ref_215
     contributors:
       human:
         - ascend
@@ -17894,7 +18046,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_218
+      - *ref_215
     contributors:
       human:
         - ascend
@@ -17906,7 +18058,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_218
+      - *ref_215
     contributors:
       human:
         - ascend
@@ -17918,7 +18070,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_219
+      - &ref_216
         id: h0328
         ts: '2026-04-25T20:42:33Z'
         type: implement
@@ -17948,7 +18100,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_219
+      - *ref_216
     contributors:
       human:
         - ascend
@@ -17960,7 +18112,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_220
+      - &ref_217
         id: h0329
         ts: '2026-04-25T22:00:23Z'
         type: implement
@@ -17992,7 +18144,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_220
+      - *ref_217
     contributors:
       human:
         - ascend
@@ -18004,7 +18156,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_220
+      - *ref_217
     contributors:
       human:
         - ascend
@@ -18016,7 +18168,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_220
+      - *ref_217
     contributors:
       human:
         - ascend
@@ -18028,7 +18180,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_220
+      - *ref_217
     contributors:
       human:
         - ascend
@@ -18040,7 +18192,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_220
+      - *ref_217
     contributors:
       human:
         - ascend
@@ -18052,7 +18204,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_221
+      - *ref_218
     contributors:
       human:
         - ascend
@@ -18064,7 +18216,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_234
+      - &ref_232
         id: h0347
         ts: '2026-05-02T18:31:22Z'
         type: implement
@@ -18154,7 +18306,7 @@ by_symbol:
           - plugins/paradigm/.claude-plugin/plugin.json
           - plugins/paradigm/scripts/paradigm-navigate-remind.sh
         description: 'feat(#atlas-agent): v6.2.0 — Atlas the Cartographer, Agent #67'
-      - *ref_221
+      - *ref_218
     contributors:
       human:
         - ascend
@@ -18166,7 +18318,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_221
+      - *ref_218
     contributors:
       human:
         - ascend
@@ -18178,7 +18330,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_221
+      - *ref_218
     contributors:
       human:
         - ascend
@@ -18190,7 +18342,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_221
+      - *ref_218
     contributors:
       human:
         - ascend
@@ -18202,7 +18354,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_222
+      - &ref_219
         id: h0331
         ts: '2026-04-25T22:22:29Z'
         type: implement
@@ -18235,7 +18387,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_222
+      - *ref_219
     contributors:
       human:
         - ascend
@@ -18247,7 +18399,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_222
+      - *ref_219
     contributors:
       human:
         - ascend
@@ -18259,7 +18411,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_222
+      - *ref_219
     contributors:
       human:
         - ascend
@@ -18271,7 +18423,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_222
+      - *ref_219
     contributors:
       human:
         - ascend
@@ -18285,7 +18437,7 @@ by_symbol:
     recent:
       - *ref_77
       - *ref_78
-      - *ref_222
+      - *ref_219
     contributors:
       human:
         - ascend
@@ -18297,7 +18449,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_222
+      - *ref_219
     contributors:
       human:
         - ascend
@@ -18323,7 +18475,7 @@ by_symbol:
           - .paradigm/decisions/TD-2026-04-26-770.yaml
           - .paradigm/lore/entries/2026-04-26/L-2026-04-26-ascend-181544-979.lore
         description: 'docs(#para-451-agents-foundations): record TD-770 PARA 451 Phase A closure'
-      - &ref_225
+      - &ref_222
         id: h0337
         ts: '2026-04-27T19:51:56Z'
         type: implement
@@ -18338,7 +18490,7 @@ by_symbol:
         files:
           - packages/university/package.json
         description: 'chore(release): @a-company/university v6.0.2'
-      - &ref_223
+      - &ref_220
         id: h0334
         ts: '2026-04-26T18:15:25Z'
         type: implement
@@ -18382,7 +18534,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_223
+      - *ref_220
     contributors:
       human:
         - ascend
@@ -18394,7 +18546,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_232
+      - &ref_230
         id: h0344
         ts: '2026-04-28T14:16:02Z'
         type: implement
@@ -18437,7 +18589,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_224
+      - &ref_221
         id: h0336
         ts: '2026-04-27T18:24:12Z'
         type: implement
@@ -18467,7 +18619,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_224
+      - *ref_221
     contributors:
       human:
         - ascend
@@ -18479,7 +18631,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_224
+      - *ref_221
     contributors:
       human:
         - ascend
@@ -18491,7 +18643,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_225
+      - *ref_222
     contributors:
       human:
         - ascend
@@ -18503,8 +18655,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_226
-      - &ref_227
+      - *ref_223
+      - &ref_224
         id: h0340
         ts: '2026-04-28T05:07:39Z'
         type: implement
@@ -18533,7 +18685,7 @@ by_symbol:
           - packages/paradigm/src/core/authority.test.ts
           - packages/paradigm/src/core/authority.ts
         description: 'feat(#paradigm-propose-block): v6.1 Sprint 1 Wave 1 — soft-block foundation'
-      - &ref_228
+      - &ref_225
         id: h0339
         ts: '2026-04-27T20:20:37Z'
         type: implement
@@ -18563,9 +18715,9 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_226
-      - *ref_227
-      - *ref_228
+      - *ref_223
+      - *ref_224
+      - *ref_225
     contributors:
       human:
         - ascend
@@ -18577,7 +18729,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_229
+      - *ref_226
     contributors:
       human:
         - ascend
@@ -18589,19 +18741,20 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_229
+      - *ref_226
     contributors:
       human:
         - ascend
       agent: []
   '#paradigm-aspect-check':
     symbol: '#paradigm-aspect-check'
-    total_changes: 1
-    last_modified: '2026-04-28T13:54:35Z'
+    total_changes: 2
+    last_modified: '2026-06-24T20:55:42Z'
     stability_score: 1
     fragility: low
     recent:
-      - *ref_230
+      - *ref_227
+      - *ref_228
     contributors:
       human:
         - ascend
@@ -18613,7 +18766,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_230
+      - *ref_228
     contributors:
       human:
         - ascend
@@ -18625,7 +18778,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_231
+      - *ref_229
     contributors:
       human:
         - ascend
@@ -18637,7 +18790,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_231
+      - *ref_229
     contributors:
       human:
         - ascend
@@ -18649,7 +18802,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_232
+      - *ref_230
     contributors:
       human:
         - ascend
@@ -18661,7 +18814,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_233
+      - *ref_231
     contributors:
       human:
         - ascend
@@ -18673,7 +18826,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_233
+      - *ref_231
     contributors:
       human:
         - ascend
@@ -18685,7 +18838,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_235
+      - &ref_233
         id: h0348
         ts: '2026-05-02T19:57:36Z'
         type: implement
@@ -18718,7 +18871,7 @@ by_symbol:
           - .paradigm/lore/entries/2026-05-02/L-2026-05-02-ascend-193833-001.lore
           - .paradigm/lore/timeline.yaml
         description: 'feat(#atlas-agent): commit arch.yaml — first full architectural map of a-paradigm'
-      - *ref_234
+      - *ref_232
     contributors:
       human:
         - ascend
@@ -18730,7 +18883,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_237
+      - &ref_235
         id: h0351
         ts: '2026-05-02T21:24:54Z'
         type: implement
@@ -18749,7 +18902,7 @@ by_symbol:
           - packages/paradigm/package.json
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'chore(release): paradigm v6.2.1 + paradigm-mcp v6.2.1 + plugin v6.2.1'
-      - &ref_236
+      - &ref_234
         id: h0350
         ts: '2026-05-02T21:18:19Z'
         type: implement
@@ -18802,8 +18955,8 @@ by_symbol:
         files:
           - .paradigm/roster.yaml
         description: 'feat(#atlas-agent): add cartographer to a-paradigm roster'
-      - *ref_235
-      - *ref_234
+      - *ref_233
+      - *ref_232
     contributors:
       human:
         - ascend
@@ -18815,7 +18968,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_234
+      - *ref_232
     contributors:
       human:
         - ascend
@@ -18827,8 +18980,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_235
-      - *ref_234
+      - *ref_233
+      - *ref_232
     contributors:
       human:
         - ascend
@@ -18840,8 +18993,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_235
-      - *ref_234
+      - *ref_233
+      - *ref_232
     contributors:
       human:
         - ascend
@@ -18853,9 +19006,9 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_236
-      - *ref_235
       - *ref_234
+      - *ref_233
+      - *ref_232
     contributors:
       human:
         - ascend
@@ -18867,7 +19020,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_234
+      - *ref_232
     contributors:
       human:
         - ascend
@@ -18879,8 +19032,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_237
-      - *ref_236
+      - *ref_235
+      - *ref_234
     contributors:
       human:
         - ascend
@@ -18892,8 +19045,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_237
-      - *ref_236
+      - *ref_235
+      - *ref_234
     contributors:
       human:
         - ascend
@@ -18905,7 +19058,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_238
+      - *ref_236
     contributors:
       human:
         - ascend
@@ -18917,7 +19070,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_238
+      - *ref_236
     contributors:
       human:
         - ascend
@@ -18929,7 +19082,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_238
+      - *ref_236
     contributors:
       human:
         - ascend
@@ -18941,7 +19094,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_239
+      - *ref_237
     contributors:
       human:
         - ascend
@@ -18953,7 +19106,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_239
+      - *ref_237
     contributors:
       human:
         - ascend
@@ -18965,8 +19118,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_240
-      - *ref_241
+      - *ref_238
+      - *ref_239
       - id: h0358
         ts: '2026-05-07T20:34:00Z'
         type: implement
@@ -18982,8 +19135,8 @@ by_symbol:
           - .paradigm/history/log.jsonl
           - docs/commands/mcp-setup.md
         description: 'docs(#docs): fix missed init→shift in docs/commands/mcp-setup.md'
-      - *ref_242
-      - *ref_243
+      - *ref_240
+      - *ref_241
     contributors:
       human:
         - ascend
@@ -18995,7 +19148,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_177
+      - *ref_173
     contributors:
       human:
         - ascend
@@ -19007,7 +19160,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_246
+      - &ref_244
         id: h0361
         ts: '2026-05-18T20:04:07Z'
         type: implement
@@ -19035,9 +19188,9 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
+      - *ref_242
+      - *ref_243
       - *ref_244
-      - *ref_245
-      - *ref_246
     contributors:
       human:
         - ascend
@@ -19049,7 +19202,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_247
+      - *ref_245
     contributors:
       human:
         - ascend
@@ -19061,7 +19214,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_248
+      - *ref_246
     contributors:
       human:
         - ascend
@@ -19073,7 +19226,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_255
+      - &ref_253
         id: h0377
         ts: '2026-05-19T05:36:24Z'
         type: implement
@@ -19088,7 +19241,7 @@ by_symbol:
         files:
           - packages/university/src/content/pack.yaml
         description: 'feat(#university-pack): add Field Notes section to first-party pack (v6.5)'
-      - *ref_249
+      - *ref_247
       - id: h0368
         ts: '2026-05-19T05:01:51Z'
         type: implement
@@ -19154,7 +19307,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_250
+      - *ref_248
     contributors:
       human:
         - ascend
@@ -19166,7 +19319,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_250
+      - *ref_248
     contributors:
       human:
         - ascend
@@ -19178,7 +19331,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_251
+      - *ref_249
     contributors:
       human:
         - ascend
@@ -19190,7 +19343,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_252
+      - *ref_250
     contributors:
       human:
         - ascend
@@ -19202,8 +19355,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_253
-      - *ref_252
+      - *ref_251
+      - *ref_250
     contributors:
       human:
         - ascend
@@ -19215,7 +19368,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_253
+      - *ref_251
     contributors:
       human:
         - ascend
@@ -19227,7 +19380,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_254
+      - *ref_252
     contributors:
       human:
         - ascend
@@ -19239,7 +19392,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_255
+      - *ref_253
     contributors:
       human:
         - ascend
@@ -19251,7 +19404,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_256
+      - *ref_254
     contributors:
       human:
         - ascend
@@ -19263,10 +19416,10 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
+      - *ref_255
+      - *ref_256
       - *ref_257
       - *ref_258
-      - *ref_259
-      - *ref_260
     contributors:
       human:
         - ascend
@@ -19278,7 +19431,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_263
+      - &ref_261
         id: h0394
         ts: '2026-05-30T02:28:06Z'
         type: implement
@@ -19296,7 +19449,7 @@ by_symbol:
           - packages/paradigm-mcp/tests/flow-check-merge.test.ts
           - packages/paradigm-mcp/tests/purpose-writer-flows.test.ts
         description: 'test(#paradigm-mcp): regression tests for v6.6.2 flow_check merge + flow-key guard'
-      - &ref_262
+      - &ref_260
         id: h0392
         ts: '2026-05-30T02:14:45Z'
         type: implement
@@ -19331,8 +19484,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_261
-      - *ref_262
+      - *ref_259
+      - *ref_260
     contributors:
       human:
         - ascend
@@ -19344,8 +19497,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_263
-      - *ref_262
+      - *ref_261
+      - *ref_260
     contributors:
       human:
         - ascend
@@ -19357,7 +19510,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_261
+      - *ref_259
     contributors:
       human:
         - ascend
@@ -19369,7 +19522,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_261
+      - *ref_259
     contributors:
       human:
         - ascend
@@ -19428,7 +19581,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_264
+      - *ref_262
     contributors:
       human:
         - ascend
@@ -19440,8 +19593,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_265
-      - *ref_264
+      - *ref_263
+      - *ref_262
     contributors:
       human:
         - ascend
@@ -19453,7 +19606,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_264
+      - *ref_262
     contributors:
       human:
         - ascend
@@ -19465,7 +19618,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_264
+      - *ref_262
     contributors:
       human:
         - ascend
@@ -19477,7 +19630,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_265
+      - *ref_263
     contributors:
       human:
         - ascend
@@ -19552,7 +19705,7 @@ by_symbol:
           - packages/paradigm-mcp/src/utils/task-loader.test.ts
           - packages/paradigm-mcp/src/utils/task-loader.ts
         description: 'feat(#task-loader): v7 Spine — claimant-owned task DAG schema + typed AgentRelay'
-      - *ref_265
+      - *ref_263
     contributors:
       human:
         - ascend
@@ -19564,7 +19717,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_265
+      - *ref_263
     contributors:
       human:
         - ascend
@@ -19576,7 +19729,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_266
+      - *ref_264
     contributors:
       human:
         - ascend
@@ -19588,7 +19741,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_267
+      - *ref_265
     contributors:
       human:
         - ascend
@@ -19600,7 +19753,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_267
+      - *ref_265
     contributors:
       human:
         - ascend
@@ -19612,7 +19765,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_267
+      - *ref_265
     contributors:
       human:
         - ascend
@@ -19624,7 +19777,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_267
+      - *ref_265
     contributors:
       human:
         - ascend
@@ -19636,7 +19789,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_282
+      - &ref_280
         id: h0445
         ts: '2026-06-15T01:54:07Z'
         type: implement
@@ -19667,7 +19820,7 @@ by_symbol:
           - packages/paradigm-mcp/src/utils/task-loader.test.ts
           - packages/paradigm-mcp/src/utils/task-loader.ts
         description: 'feat(#task-sync): two-way GitHub sync foundation — enforced reconcile + reopen'
-      - &ref_272
+      - &ref_270
         id: h0440
         ts: '2026-06-14T17:18:56Z'
         type: implement
@@ -19685,8 +19838,8 @@ by_symbol:
           - packages/paradigm-mcp/src/utils/task-loader.test.ts
           - packages/paradigm-mcp/src/utils/task-loader.ts
         description: 'feat(#task-loader): blocked_on auto-clear on dependency settle (T-008)'
-      - *ref_268
-      - &ref_277
+      - *ref_266
+      - &ref_275
         id: h0435
         ts: '2026-06-14T15:44:18Z'
         type: implement
@@ -19760,7 +19913,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_275
+      - &ref_273
         id: h0442
         ts: '2026-06-14T17:22:28Z'
         type: implement
@@ -19782,7 +19935,7 @@ by_symbol:
           - CHANGELOG.md
           - packages/paradigm-mcp/src/utils/task-settlement.ts
         description: 'feat(#task-settlement): claimant-accuracy guard at settle (T-013)'
-      - &ref_271
+      - &ref_269
         id: h0441
         ts: '2026-06-14T17:20:56Z'
         type: implement
@@ -19800,7 +19953,7 @@ by_symbol:
           - packages/paradigm-mcp/src/tools/captain.ts
           - packages/paradigm-mcp/src/types/captain.ts
         description: 'feat(#captain-board): settlement-debt detection (T-012)'
-      - &ref_276
+      - &ref_274
         id: h0439
         ts: '2026-06-14T17:15:59Z'
         type: implement
@@ -19825,7 +19978,7 @@ by_symbol:
           - packages/paradigm-mcp/src/utils/task-settlement.ts
           - packages/paradigm/src/commands/calibrate.ts
         description: 'feat(#calibration): aggregate-on-settle — close the calibration loop (T-011)'
-      - &ref_278
+      - &ref_276
         id: h0433
         ts: '2026-06-14T06:31:56Z'
         type: implement
@@ -19849,7 +20002,7 @@ by_symbol:
           - .paradigm/lore/entries/2026-06-14/L-2026-06-14-ascend-063112-001.lore
           - .paradigm/lore/timeline.yaml
         description: 'docs(task-governance): settle ownership — no new agent, protocols by tense'
-      - *ref_269
+      - *ref_267
     contributors:
       human:
         - ascend
@@ -19861,8 +20014,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_269
-      - *ref_270
+      - *ref_267
+      - *ref_268
     contributors:
       human:
         - ascend
@@ -19874,7 +20027,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_289
+      - &ref_287
         id: h0444
         ts: '2026-06-14T17:28:19Z'
         type: implement
@@ -19911,8 +20064,8 @@ by_symbol:
           - packages/paradigm-mcp/src/tools/captain.ts
           - packages/paradigm-mcp/src/types/captain.ts
         description: 'feat(#captain-board): stale archetype-claim surfacing (T-010)'
-      - *ref_271
-      - *ref_272
+      - *ref_269
+      - *ref_270
       - id: h0437
         ts: '2026-06-14T17:00:28Z'
         type: implement
@@ -19951,7 +20104,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_270
+      - *ref_268
     contributors:
       human:
         - ascend
@@ -19963,8 +20116,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_273
-      - *ref_274
+      - *ref_271
+      - *ref_272
     contributors:
       human:
         - ascend
@@ -19976,8 +20129,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_275
-      - *ref_276
+      - *ref_273
+      - *ref_274
       - id: h0438
         ts: '2026-06-14T17:10:28Z'
         type: implement
@@ -20008,8 +20161,8 @@ by_symbol:
           - packages/paradigm/platform-ui/src/sections/tasks/styles/tasks.css
           - packages/paradigm/platform-ui/src/sections/tasks/utils/board.ts
         description: 'feat(#tasks-section): review polish batch 2 + blocked_on crash fix'
-      - *ref_277
-      - *ref_278
+      - *ref_275
+      - *ref_276
     contributors:
       human:
         - ascend
@@ -20021,7 +20174,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_279
+      - *ref_277
     contributors:
       human:
         - ascend
@@ -20033,7 +20186,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_269
+      - *ref_267
     contributors:
       human:
         - ascend
@@ -20045,7 +20198,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_280
+      - &ref_278
         id: h0448
         ts: '2026-06-15T02:51:52Z'
         type: implement
@@ -20065,7 +20218,7 @@ by_symbol:
           - packages/paradigm-mcp/src/sync/providers/github.ts
           - packages/paradigm/src/commands/task/index.ts
         description: 'fix(#github-provider): correct gh issue arg format + ESM config reader (live-tested)'
-      - &ref_281
+      - &ref_279
         id: h0447
         ts: '2026-06-15T02:06:51Z'
         type: implement
@@ -20097,7 +20250,7 @@ by_symbol:
           - packages/paradigm/src/commands/task/index.ts
           - packages/paradigm/src/index.ts
         description: 'feat(#task-sync): complete two-way GitHub sync — CLI verbs + task sync + web button'
-      - &ref_284
+      - &ref_282
         id: h0424
         ts: '2026-06-14T00:38:03Z'
         type: implement
@@ -20126,7 +20279,7 @@ by_symbol:
           - packages/paradigm/src/commands/task/index.ts
           - packages/paradigm/src/index.ts
         description: 'feat(#task-cli): v7.2 Phase 2b — the symbol-aware sync wedge (ripple + trailer→comment)'
-      - &ref_283
+      - &ref_281
         id: h0423
         ts: '2026-06-14T00:27:16Z'
         type: implement
@@ -20206,9 +20359,9 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
+      - *ref_278
+      - *ref_279
       - *ref_280
-      - *ref_281
-      - *ref_282
       - id: h0425
         ts: '2026-06-14T04:14:48Z'
         type: implement
@@ -20224,7 +20377,7 @@ by_symbol:
           - packages/paradigm-mcp/src/sync/providers/github.test.ts
           - packages/paradigm-mcp/src/sync/providers/github.ts
         description: 'fix(#github-provider): assignee @me (not raw email) + drop fragile tags-as-labels'
-      - *ref_283
+      - *ref_281
     contributors:
       human:
         - ascend
@@ -20236,9 +20389,9 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
+      - *ref_280
       - *ref_282
-      - *ref_284
-      - *ref_283
+      - *ref_281
     contributors:
       human:
         - ascend
@@ -20250,7 +20403,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_284
+      - *ref_282
     contributors:
       human:
         - ascend
@@ -20262,7 +20415,66 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_285
+      - &ref_283
+        id: h0426
+        ts: '2026-06-14T04:55:55Z'
+        type: implement
+        symbols:
+          - '#canvas'
+          - '#platform-server'
+          - '#serve'
+        author:
+          type: human
+          id: ascend
+        commit: 0cf59eabc6bba5aaf471ba61621f46d247a6cc29
+        intent: fix
+        files:
+          - .paradigm/decisions/TD-2026-06-14-853.yaml
+          - .paradigm/events/debates.jsonl
+          - .paradigm/events/nominations.jsonl
+          - .paradigm/events/stream.jsonl
+          - .paradigm/lore/entries/2026-06-14/L-2026-06-14-ascend-043023-001.lore
+          - .paradigm/lore/entries/2026-06-14/L-2026-06-14-ascend-044702-250.lore
+          - .paradigm/lore/entries/2026-06-14/L-2026-06-14-ascend-045537-001.lore
+          - .paradigm/lore/timeline.yaml
+          - CHANGELOG.md
+          - packages/paradigm/package.json
+          - packages/paradigm/platform-ui/src/App.tsx
+          - packages/paradigm/platform-ui/src/components/CommandPalette.tsx
+          - packages/paradigm/platform-ui/src/components/SidebarNav.tsx
+          - packages/paradigm/platform-ui/src/hooks/useAgentEffects.ts
+          - packages/paradigm/platform-ui/src/hooks/useKeyboardShortcuts.ts
+          - packages/paradigm/platform-ui/src/sections/canvas/.purpose
+          - packages/paradigm/platform-ui/src/sections/canvas/CanvasSection.tsx
+          - packages/paradigm/platform-ui/src/sections/canvas/components/editor/CanvasEditor.tsx
+          - packages/paradigm/platform-ui/src/sections/canvas/components/editor/CanvasFrame.tsx
+          - packages/paradigm/platform-ui/src/sections/canvas/components/editor/RenderNode.tsx
+          - packages/paradigm/platform-ui/src/sections/canvas/components/panels/BackgroundControls.tsx
+          - packages/paradigm/platform-ui/src/sections/canvas/components/panels/BorderControls.tsx
+          - packages/paradigm/platform-ui/src/sections/canvas/components/panels/ComponentPalette.tsx
+          - packages/paradigm/platform-ui/src/sections/canvas/components/panels/LayoutControls.tsx
+          - packages/paradigm/platform-ui/src/sections/canvas/components/panels/PropertyPanel.tsx
+          - packages/paradigm/platform-ui/src/sections/canvas/components/panels/SizeControls.tsx
+          - packages/paradigm/platform-ui/src/sections/canvas/components/panels/SpacingControls.tsx
+          - packages/paradigm/platform-ui/src/sections/canvas/components/panels/TypographyControls.tsx
+          - packages/paradigm/platform-ui/src/sections/canvas/components/toolbar/CanvasToolbar.tsx
+          - packages/paradigm/platform-ui/src/sections/canvas/components/user/ButtonComponent.tsx
+          - packages/paradigm/platform-ui/src/sections/canvas/components/user/ContainerComponent.tsx
+          - packages/paradigm/platform-ui/src/sections/canvas/components/user/ImageComponent.tsx
+          - packages/paradigm/platform-ui/src/sections/canvas/components/user/SpacerComponent.tsx
+          - packages/paradigm/platform-ui/src/sections/canvas/components/user/TextComponent.tsx
+          - packages/paradigm/platform-ui/src/sections/canvas/hooks/useCanvasData.ts
+          - packages/paradigm/platform-ui/src/sections/canvas/store/canvasStore.ts
+          - packages/paradigm/platform-ui/src/sections/canvas/styles/canvas.css
+          - packages/paradigm/platform-ui/src/sections/canvas/types.ts
+          - packages/paradigm/platform-ui/src/sections/canvas/utils/canvas-serializer.ts
+          - packages/paradigm/platform-ui/src/sections/canvas/utils/css-serializer.ts
+          - packages/paradigm/platform-ui/src/store/platformStore.ts
+          - packages/paradigm/src/commands/serve.ts
+          - packages/paradigm/src/platform-server/index.ts
+          - packages/paradigm/src/platform-server/routes/.purpose
+          - packages/paradigm/src/platform-server/routes/canvas.ts
+        description: 'fix(#serve): repair the launcher — build hole + boot crash + canvas cut'
     contributors:
       human:
         - ascend
@@ -20289,8 +20501,8 @@ by_symbol:
           - CHANGELOG.md
           - packages/paradigm/src/platform-server/ws/index.ts
         description: 'feat(#serve): split the WS firehose into channels (T-001, closes #19)'
-      - *ref_281
-      - &ref_290
+      - *ref_279
+      - &ref_288
         id: h0446
         ts: '2026-06-15T01:58:54Z'
         type: implement
@@ -20374,7 +20586,7 @@ by_symbol:
           - packages/paradigm/src/commands/lore/serve.ts
           - packages/paradigm/src/index.ts
         description: 'refactor(#serve): delete duplicate lore-ui + graph-ui SPAs, one UI entry point (subtract round)'
-      - *ref_285
+      - *ref_283
     contributors:
       human:
         - ascend
@@ -20386,7 +20598,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_286
+      - *ref_284
       - id: h0430
         ts: '2026-06-14T05:43:40Z'
         type: implement
@@ -20447,8 +20659,8 @@ by_symbol:
           - packages/paradigm/platform-ui/src/sections/tasks/utils/storyPoints.ts
           - packages/paradigm/platform-ui/src/store/platformStore.ts
         description: 'feat(#tasks-section): scaffold + List view + the calibration moat (round B)'
-      - *ref_287
-      - *ref_288
+      - *ref_285
+      - *ref_286
     contributors:
       human:
         - ascend
@@ -20519,8 +20731,8 @@ by_symbol:
           - packages/paradigm/platform-ui/src/sections/tasks/utils/storyPoints.ts
           - packages/paradigm/src/platform-server/routes/tasks.ts
         description: 'fix(#tasks-section): attach estimate on /inbox + /:id; defensive CalibrationBlock'
-      - *ref_281
-      - *ref_289
+      - *ref_279
+      - *ref_287
     contributors:
       human:
         - ascend
@@ -20532,10 +20744,10 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
+      - *ref_278
+      - *ref_279
+      - *ref_288
       - *ref_280
-      - *ref_281
-      - *ref_290
-      - *ref_282
     contributors:
       human:
         - ascend
@@ -20547,7 +20759,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_291
+      - *ref_289
     contributors:
       human:
         - ascend
@@ -20559,7 +20771,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_291
+      - *ref_289
     contributors:
       human:
         - ascend
@@ -20571,7 +20783,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_292
+      - &ref_290
         id: h0476
         ts: '2026-06-18T00:07:22Z'
         type: implement
@@ -20597,7 +20809,7 @@ by_symbol:
           - packages/conductor/Sources/Conductor/UI/Views/Atrium/AtriumThreadView.swift
           - packages/conductor/Tests/ConductorTests/DecisionDivergenceJournalTests.swift
         description: 'feat(#decision-divergence-journal): falsifiable learning instrument — close the sealed decision loop (Swift, Phase 2d)'
-      - &ref_304
+      - &ref_302
         id: h0472
         ts: '2026-06-17T07:17:09Z'
         type: implement
@@ -20620,7 +20832,7 @@ by_symbol:
           - packages/conductor/Sources/Conductor/UI/Views/Atrium/AtriumMessageView.swift
           - packages/conductor/Sources/Conductor/UI/Views/Cockpit/FleetSpineView.swift
         description: 'fix(#atrium-thread): larger, user-adjustable cockpit type scale (Swift)'
-      - &ref_293
+      - &ref_291
         id: h0468
         ts: '2026-06-16T08:58:21Z'
         type: implement
@@ -20646,7 +20858,7 @@ by_symbol:
           - packages/conductor/Sources/Conductor/UI/Views/Atrium/AtriumFanOutBlock.swift
           - packages/conductor/Sources/Conductor/UI/Views/Atrium/AtriumThreadView.swift
         description: 'feat(#atrium-chorus): sub-agent display (CHORUS rail + inline fan-out) + full-screen window (Swift)'
-      - &ref_301
+      - &ref_299
         id: h0462
         ts: '2026-06-16T00:39:36Z'
         type: implement
@@ -20671,7 +20883,7 @@ by_symbol:
           - packages/conductor/Sources/Conductor/UI/Views/Atrium/AtriumShellsPanel.swift
           - packages/conductor/Sources/Conductor/UI/Views/Atrium/AtriumThreadView.swift
         description: 'feat(#atrium-stop,#atrium-shells): interrupt-stop + background-shell inspect/kill (Swift)'
-      - &ref_297
+      - &ref_295
         id: h0459
         ts: '2026-06-15T23:51:58Z'
         type: implement
@@ -20702,8 +20914,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_292
-      - &ref_305
+      - *ref_290
+      - &ref_303
         id: h0470
         ts: '2026-06-16T21:09:13Z'
         type: implement
@@ -20740,7 +20952,7 @@ by_symbol:
           - packages/conductor/Sources/Conductor/UI/Views/Cockpit/FleetSpineView.swift
           - packages/conductor/Sources/Conductor/UI/Views/Cockpit/SessionSpawnSheet.swift
         description: 'feat(#cockpit-view): THE BRIDGE — full-screen N-session fleet cockpit (Swift)'
-      - &ref_294
+      - &ref_292
         id: h0469
         ts: '2026-06-16T09:09:05Z'
         type: implement
@@ -20766,8 +20978,8 @@ by_symbol:
           - packages/conductor/Sources/Conductor/UI/Views/Atrium/AtriumChorusRail.swift
           - packages/conductor/Sources/Conductor/UI/Views/Atrium/AtriumFanOutBlock.swift
         description: 'fix(#atrium-chorus): deterministic sub-agent correlation via real task fields (Swift)'
-      - *ref_293
-      - &ref_295
+      - *ref_291
+      - &ref_293
         id: h0467
         ts: '2026-06-16T07:06:48Z'
         type: implement
@@ -20796,7 +21008,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_296
+      - &ref_294
         id: h0463
         ts: '2026-06-16T01:10:07Z'
         type: implement
@@ -20820,7 +21032,7 @@ by_symbol:
           - packages/conductor/Sources/Conductor/UI/Views/Atrium/AtriumShellsPanel.swift
           - packages/conductor/Sources/Conductor/UI/Views/Atrium/AtriumThreadView.swift
         description: 'fix(#claude-stream-session): login-shell env (PATH), verify Stop, host-side shell inspect/kill (Swift)'
-      - *ref_291
+      - *ref_289
     contributors:
       human:
         - ascend
@@ -20832,10 +21044,10 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_294
+      - *ref_292
+      - *ref_291
       - *ref_293
-      - *ref_295
-      - &ref_300
+      - &ref_298
         id: h0464
         ts: '2026-06-16T01:29:02Z'
         type: implement
@@ -20854,7 +21066,7 @@ by_symbol:
           - packages/conductor/Sources/Conductor/Models/Stream/StreamEvent.swift
           - packages/conductor/Sources/Conductor/Services/ClaudeStreamSession.swift
         description: 'fix(#atrium-stop): real control_request interrupt + authoritative KillShell (Swift)'
-      - *ref_296
+      - *ref_294
     contributors:
       human:
         - ascend
@@ -20880,7 +21092,7 @@ by_symbol:
         files:
           - packages/conductor/Sources/Conductor/Services/ClaudeStreamSession.swift
         description: 'fix(#claude-stream-session): send first turn on spawn + resolve real claude path'
-      - *ref_291
+      - *ref_289
     contributors:
       human:
         - ascend
@@ -20892,7 +21104,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_297
+      - *ref_295
     contributors:
       human:
         - ascend
@@ -20904,8 +21116,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_298
-      - &ref_299
+      - *ref_296
+      - &ref_297
         id: h0460
         ts: '2026-06-16T00:07:53Z'
         type: implement
@@ -20925,7 +21137,7 @@ by_symbol:
           - packages/conductor/Sources/Conductor/UI/Views/Atrium/AtriumVoiceController.swift
           - packages/conductor/Tests/ConductorTests/AtriumVoiceKeywordTests.swift
         description: 'fix(#atrium-textview): native NSTextView composer + real mic permission path (Swift)'
-      - *ref_297
+      - *ref_295
     contributors:
       human:
         - ascend
@@ -20937,7 +21149,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_299
+      - *ref_297
     contributors:
       human:
         - ascend
@@ -20949,8 +21161,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_295
-      - &ref_302
+      - *ref_293
+      - &ref_300
         id: h0466
         ts: '2026-06-16T06:49:06Z'
         type: implement
@@ -20972,9 +21184,9 @@ by_symbol:
           - packages/conductor/Sources/Conductor/UI/Views/Atrium/AtriumShellsPanel.swift
           - packages/conductor/Sources/Conductor/UI/Views/Atrium/AtriumThreadView.swift
         description: 'fix(#atrium-shells): map all terminal task statuses + TaskStop kill (transcript-diagnosed)'
-      - *ref_300
-      - *ref_296
-      - *ref_301
+      - *ref_298
+      - *ref_294
+      - *ref_299
     contributors:
       human:
         - ascend
@@ -20986,9 +21198,9 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_300
-      - *ref_296
-      - *ref_301
+      - *ref_298
+      - *ref_294
+      - *ref_299
     contributors:
       human:
         - ascend
@@ -21000,9 +21212,9 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_294
-      - *ref_302
-      - &ref_303
+      - *ref_292
+      - *ref_300
+      - &ref_301
         id: h0465
         ts: '2026-06-16T01:37:19Z'
         type: implement
@@ -21031,7 +21243,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_303
+      - *ref_301
     contributors:
       human:
         - ascend
@@ -21043,9 +21255,9 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_304
-      - *ref_294
-      - *ref_293
+      - *ref_302
+      - *ref_292
+      - *ref_291
     contributors:
       human:
         - ascend
@@ -21057,8 +21269,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_294
-      - *ref_293
+      - *ref_292
+      - *ref_291
     contributors:
       human:
         - ascend
@@ -21070,7 +21282,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_306
+      - &ref_304
         id: h0471
         ts: '2026-06-17T04:50:57Z'
         type: implement
@@ -21110,7 +21322,7 @@ by_symbol:
           - packages/conductor/Tests/ConductorTests/AgentDecisionTests.swift
           - packages/conductor/Tests/ConductorTests/FencedBlockParserTests.swift
         description: 'feat(#atrium-decision-card): decisions + THE LIGHTBOX visual canvas — MVP (Swift)'
-      - *ref_305
+      - *ref_303
     contributors:
       human:
         - ascend
@@ -21122,7 +21334,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_305
+      - *ref_303
     contributors:
       human:
         - ascend
@@ -21134,7 +21346,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_305
+      - *ref_303
     contributors:
       human:
         - ascend
@@ -21146,8 +21358,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_304
-      - *ref_305
+      - *ref_302
+      - *ref_303
     contributors:
       human:
         - ascend
@@ -21159,7 +21371,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_305
+      - *ref_303
     contributors:
       human:
         - ascend
@@ -21171,7 +21383,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_305
+      - *ref_303
     contributors:
       human:
         - ascend
@@ -21183,7 +21395,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_305
+      - *ref_303
     contributors:
       human:
         - ascend
@@ -21195,7 +21407,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_305
+      - *ref_303
     contributors:
       human:
         - ascend
@@ -21207,7 +21419,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_305
+      - *ref_303
     contributors:
       human:
         - ascend
@@ -21219,7 +21431,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_305
+      - *ref_303
     contributors:
       human:
         - ascend
@@ -21231,7 +21443,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_307
+      - &ref_305
         id: h0475
         ts: '2026-06-17T23:26:51Z'
         type: implement
@@ -21267,7 +21479,7 @@ by_symbol:
           - packages/conductor/Sources/Conductor/UI/Views/Atrium/AtriumVisualCanvas.swift
           - packages/conductor/Tests/ConductorTests/FencedBlockParserTests.swift
         description: 'feat(#session-prompt): graph-grounding by default + decision symbol-grounding + hover spotlight (Swift, Phase 2b+2c)'
-      - *ref_306
+      - *ref_304
     contributors:
       human:
         - ascend
@@ -21279,7 +21491,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_308
+      - &ref_306
         id: h0474
         ts: '2026-06-17T23:09:02Z'
         type: implement
@@ -21302,7 +21514,7 @@ by_symbol:
           - packages/conductor/Sources/Conductor/UI/Views/Atrium/AtriumVisualCanvas.swift
           - packages/conductor/Tests/ConductorTests/FencedBlockParserTests.swift
         description: 'feat(#atrium-graph-view): native .graph LIGHTBOX kind — render symbol-graph slices (Swift, Phase 2a)'
-      - &ref_309
+      - &ref_307
         id: h0473
         ts: '2026-06-17T22:23:58Z'
         type: implement
@@ -21370,7 +21582,7 @@ by_symbol:
           - packages/premise/core/src/graph-slice.ts
           - packages/premise/core/src/index.ts
         description: 'feat(#graph-slice-projector): render-by-projection over the live symbol graph — Phase 1 standalone'
-      - *ref_306
+      - *ref_304
     contributors:
       human:
         - ascend
@@ -21382,10 +21594,10 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_292
-      - *ref_307
+      - *ref_290
+      - *ref_305
+      - *ref_302
       - *ref_304
-      - *ref_306
     contributors:
       human:
         - ascend
@@ -21397,9 +21609,9 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_307
-      - *ref_308
+      - *ref_305
       - *ref_306
+      - *ref_304
     contributors:
       human:
         - ascend
@@ -21411,10 +21623,10 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_307
-      - *ref_308
-      - *ref_309
+      - *ref_305
       - *ref_306
+      - *ref_307
+      - *ref_304
     contributors:
       human:
         - ascend
@@ -21426,7 +21638,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_306
+      - *ref_304
     contributors:
       human:
         - ascend
@@ -21438,8 +21650,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_307
-      - *ref_306
+      - *ref_305
+      - *ref_304
     contributors:
       human:
         - ascend
@@ -21451,7 +21663,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_306
+      - *ref_304
     contributors:
       human:
         - ascend
@@ -21463,7 +21675,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_309
+      - *ref_307
     contributors:
       human:
         - ascend
@@ -21475,8 +21687,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_307
-      - *ref_308
+      - *ref_305
+      - *ref_306
     contributors:
       human:
         - ascend
@@ -21488,7 +21700,1360 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_292
+      - *ref_290
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#classroom-tools':
+    symbol: '#classroom-tools'
+    total_changes: 2
+    last_modified: '2026-06-19T20:08:36Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_311
+        id: h0479
+        ts: '2026-06-19T20:08:36Z'
+        type: implement
+        symbols:
+          - '#classroom-metrics'
+          - '#classroom-tools'
+        author:
+          type: human
+          id: ascend
+        commit: e73d4ab6e8e392c9384da2b679cfc6587474d7d7
+        intent: feature
+        files:
+          - .paradigm/flow-index.json
+          - .paradigm/history/log.jsonl
+          - .paradigm/navigator.yaml
+          - .paradigm/scan-index.json
+          - packages/paradigm-mcp/src/tools/classroom.ts
+          - packages/paradigm/src/commands/doctor.test.ts
+          - packages/paradigm/src/commands/doctor/index.ts
+          - packages/premise/core/.purpose
+          - packages/premise/core/src/classroom-metrics.test.ts
+          - packages/premise/core/src/classroom-metrics.ts
+          - packages/premise/core/src/index.ts
+        description: 'feat(#classroom-metrics): Classroom MVP wave 2b — repeat-failure-rate in paradigm doctor (one canonical formula)'
+      - &ref_309
+        id: h0478
+        ts: '2026-06-19T19:06:58Z'
+        type: implement
+        symbols:
+          - '#classroom-tools'
+          - '#field-failure-reducer'
+          - '#scenario-loader'
+          - '#syllabus-loader'
+        author:
+          type: human
+          id: ascend
+        commit: b6adbc721f6b11923063a525b95956798eac7b54
+        intent: feature
+        files:
+          - .paradigm/events/debates.jsonl
+          - .paradigm/events/nominations.jsonl
+          - .paradigm/events/stream.jsonl
+          - .paradigm/history/log.jsonl
+          - .paradigm/lore/entries/2026-06-19/L-2026-06-19-ascend-071819-001.lore
+          - .paradigm/lore/timeline.yaml
+          - packages/paradigm-mcp/.purpose
+          - packages/paradigm-mcp/src/tools/classroom.ts
+          - packages/paradigm-mcp/src/tools/index.ts
+          - packages/paradigm-mcp/src/tools/reindex.ts
+          - packages/paradigm-mcp/src/utils/field-failure-reducer.test.ts
+          - packages/paradigm-mcp/src/utils/field-failure-reducer.ts
+          - packages/paradigm-mcp/src/utils/scenario-loader.test.ts
+          - packages/paradigm-mcp/src/utils/scenario-loader.ts
+          - packages/paradigm-mcp/src/utils/syllabus-loader.test.ts
+          - packages/paradigm-mcp/src/utils/syllabus-loader.ts
+        description: 'feat(#classroom-tools): Classroom MVP wave 2a — syllabus + scenario bank + field-failure→scenario converter'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#field-failure-reducer':
+    symbol: '#field-failure-reducer'
+    total_changes: 2
+    last_modified: '2026-06-22T21:34:10Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_308
+      - *ref_309
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#scenario-loader':
+    symbol: '#scenario-loader'
+    total_changes: 2
+    last_modified: '2026-06-25T01:15:59Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_310
+      - *ref_309
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#syllabus-loader':
+    symbol: '#syllabus-loader'
+    total_changes: 2
+    last_modified: '2026-06-25T01:15:59Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_310
+      - *ref_309
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#classroom-metrics':
+    symbol: '#classroom-metrics'
+    total_changes: 2
+    last_modified: '2026-06-22T21:34:10Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_308
+      - *ref_311
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#classroom':
+    symbol: '#classroom'
+    total_changes: 6
+    last_modified: '2026-06-25T07:07:14Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - id: h0522
+        ts: '2026-06-25T07:07:14Z'
+        type: implement
+        symbols:
+          - '#classroom'
+        author:
+          type: human
+          id: ascend
+        commit: 9e4adf5e28a065ce17110404559803d006253389
+        intent: feature
+        files:
+          - .paradigm/lore/entries/2026-06-25/L-2026-06-25-ascend-070526-001.lore
+          - .paradigm/lore/timeline.yaml
+          - CHANGELOG.md
+          - packages/paradigm-mcp/package.json
+          - packages/paradigm/package.json
+          - plugins/paradigm/.claude-plugin/plugin.json
+        description: 'chore(release): 7.6.0 — The Academy goes live (changelog + version bump)'
+      - *ref_312
+      - *ref_313
+      - &ref_337
+        id: h0517
+        ts: '2026-06-25T01:30:12Z'
+        type: implement
+        symbols:
+          - '#classroom'
+          - '#ClassroomRouter'
+          - '#ClassroomSection'
+        author:
+          type: human
+          id: ascend
+        commit: 4167d958630dc5596bbe6bd06bcbe3a104a87d88
+        intent: feature
+        files:
+          - .paradigm/flow-index.json
+          - .paradigm/history/log.jsonl
+          - .paradigm/navigator.yaml
+          - .paradigm/scan-index.json
+          - packages/paradigm/platform-ui/.purpose
+          - packages/paradigm/platform-ui/src/App.tsx
+          - packages/paradigm/platform-ui/src/components/SidebarNav.tsx
+          - packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx
+          - packages/paradigm/platform-ui/src/sections/classroom/styles/classroom.css
+          - packages/paradigm/platform-ui/src/store/platformStore.ts
+          - packages/paradigm/src/platform-server/index.ts
+          - packages/paradigm/src/platform-server/routes/.purpose
+          - packages/paradigm/src/platform-server/routes/classroom.ts
+          - portal.yaml
+        description: 'feat(#classroom): read-only Academy section in the Suite (route + section + wiring)'
+      - *ref_310
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#classroom-decay':
+    symbol: '#classroom-decay'
+    total_changes: 2
+    last_modified: '2026-06-22T21:34:10Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_308
+      - *ref_144
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#classroom-fail-side':
+    symbol: '#classroom-fail-side'
+    total_changes: 1
+    last_modified: '2026-06-22T21:31:51Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_144
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#loom':
+    symbol: '#loom'
+    total_changes: 7
+    last_modified: '2026-06-23T18:25:44Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_318
+        id: h0491
+        ts: '2026-06-23T18:25:44Z'
+        type: implement
+        symbols:
+          - '#absorb'
+          - '#essence-hash'
+          - '#loom'
+        author:
+          type: human
+          id: ascend
+        commit: 75b6e20aa70d90fa986f45a3fe411f21df94af2c
+        intent: feature
+        files:
+          - .paradigm/research/loom-ast-absorb-spike.md
+          - .paradigm/research/loom-ast-absorb-spike.ts
+        description: 'spike(#absorb): AST-absorb soundness — A (code meaning) is bounded, not research'
+      - &ref_319
+        id: h0488
+        ts: '2026-06-23T16:12:56Z'
+        type: implement
+        symbols:
+          - '#loom'
+          - '#loom-oracle'
+          - '#predict'
+          - '#sem-delta'
+        author:
+          type: human
+          id: ascend
+        commit: 053a7cf9c20517d2afe2c5fcea86bacc304723fd
+        intent: feature
+        files:
+          - .paradigm/history/log.jsonl
+          - packages/loom/.purpose
+          - packages/loom/src/sem-delta.ts
+          - packages/loom/test/divergence-proof.test.ts
+        description: 'test(#loom): the divergence proof — git merges clean, Loom catches the break (thesis proven)'
+      - id: h0487
+        ts: '2026-06-23T15:49:39Z'
+        type: implement
+        symbols:
+          - '#loom'
+        author:
+          type: human
+          id: ascend
+        commit: cfb0b9b980894cca90a37057f744b269e515cf09
+        intent: feature
+        files:
+          - .paradigm/decisions/TD-2026-06-23-181.yaml
+          - .paradigm/events/debates.jsonl
+          - .paradigm/events/nominations.jsonl
+          - .paradigm/events/stream.jsonl
+          - .paradigm/history/log.jsonl
+          - .paradigm/lore/entries/2026-06-23/L-2026-06-23-ascend-153935-001.lore
+          - .paradigm/lore/entries/2026-06-23/L-2026-06-23-ascend-154927-407.lore
+          - .paradigm/lore/timeline.yaml
+          - docs/specs/loom-flows.md
+        description: 'docs(#loom): flows convergence — every git flow mapped, the WEAVE process, collaboration model'
+      - &ref_320
+        id: h0486
+        ts: '2026-06-23T15:39:01Z'
+        type: implement
+        symbols:
+          - '#absorb'
+          - '#essence-hash'
+          - '#loom'
+          - '#loom-oracle'
+          - '#sem-delta'
+        author:
+          type: human
+          id: ascend
+        commit: b0725cc830f6d57cac631d35124f5438bb97f64f
+        intent: feature
+        files:
+          - .gitignore
+          - .paradigm/decisions/TD-2026-06-22-013.yaml
+          - .paradigm/decisions/TD-2026-06-23-398.yaml
+          - .paradigm/events/debates.jsonl
+          - .paradigm/events/nominations.jsonl
+          - .paradigm/events/stream.jsonl
+          - .paradigm/history/log.jsonl
+          - .paradigm/lore/entries/2026-06-22/L-2026-06-22-ascend-224453-001.lore
+          - .paradigm/lore/entries/2026-06-22/L-2026-06-22-ascend-224840-001.lore
+          - .paradigm/lore/entries/2026-06-22/L-2026-06-22-ascend-230127-755.lore
+          - .paradigm/lore/entries/2026-06-22/L-2026-06-22-ascend-231627-001.lore
+          - .paradigm/lore/entries/2026-06-23/L-2026-06-23-ascend-014721-124.lore
+          - .paradigm/lore/entries/2026-06-23/L-2026-06-23-ascend-140707-001.lore
+          - .paradigm/lore/entries/2026-06-23/L-2026-06-23-ascend-145542-001.lore
+          - .paradigm/lore/timeline.yaml
+          - docs/specs/loom-engine.md
+          - package-lock.json
+          - packages/loom/.purpose
+          - packages/loom/package.json
+          - packages/loom/src/absorb.ts
+          - packages/loom/src/cli.ts
+          - packages/loom/src/git/git-exec.ts
+          - packages/loom/src/index.ts
+          - packages/loom/src/justification.ts
+          - packages/loom/src/oracle.ts
+          - packages/loom/src/predict.ts
+          - packages/loom/src/sem-delta.ts
+          - packages/loom/src/warp/canonical.ts
+          - packages/loom/src/warp/essence-hash.ts
+          - packages/loom/src/warp/store.ts
+          - packages/loom/src/warp/warp-object.ts
+          - packages/loom/src/warp/warp-state.ts
+          - packages/loom/test/absorb.test.ts
+          - packages/loom/test/essence.test.ts
+          - packages/loom/test/oracle.test.ts
+          - packages/loom/tsconfig.json
+          - packages/loom/tsup.config.ts
+          - packages/loom/vitest.config.ts
+          - packages/premise/core/.purpose
+        description: 'feat(#loom): the Convergence/Divergence Oracle — Phase 1 engine RUNS (read-only on git)'
+      - &ref_314
+        id: h0485
+        ts: '2026-06-23T14:36:15Z'
+        type: implement
+        symbols:
+          - '#loom'
+          - '#tapestry'
+        author:
+          type: human
+          id: ascend
+        commit: bc7edf74bf0857640b161f1ec5f192769ffc6636
+        intent: feature
+        files:
+          - docs/loom/index.html
+        description: 'feat(#loom,#tapestry): add The Tapestry display + Working-in-Loom (CLI & workflow) sections'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#tapestry':
+    symbol: '#tapestry'
+    total_changes: 1
+    last_modified: '2026-06-23T14:36:15Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_314
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#absorb':
+    symbol: '#absorb'
+    total_changes: 7
+    last_modified: '2026-06-25T00:11:35Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_327
+        id: h0510
+        ts: '2026-06-25T00:11:35Z'
+        type: implement
+        symbols:
+          - '#absorb'
+          - '#git-exec'
+          - '#repo-lock'
+          - ~determinism
+          - ~read-only
+        author:
+          type: human
+          id: ascend
+        commit: 7ff2133c731c7d1affbdc04e96b9df37ef2ef52a
+        intent: fix
+        files:
+          - .paradigm/flow-index.json
+          - .paradigm/navigator.yaml
+          - .paradigm/scan-index.json
+          - packages/warpline/.purpose
+          - packages/warpline/src/absorb.ts
+          - packages/warpline/src/git/git-exec.ts
+          - packages/warpline/src/git/repo-lock.ts
+          - packages/warpline/test/absorb-concurrency.test.ts
+          - packages/warpline/vitest.config.ts
+        description: 'fix(#absorb): concurrency-safe ref materialization via git-archive (no worktree lock)'
+      - &ref_321
+        id: h0498
+        ts: '2026-06-23T22:28:37Z'
+        type: implement
+        symbols:
+          - '#absorb'
+          - '#code-lens'
+          - '#predict'
+          - '#warpline-oracle'
+        author:
+          type: human
+          id: ascend
+        commit: e640e8f43da80682072c76ca8f02b61b995af170
+        intent: feature
+        files:
+          - .paradigm/events/debates.jsonl
+          - .paradigm/events/nominations.jsonl
+          - .paradigm/events/stream.jsonl
+          - .paradigm/history/log.jsonl
+          - .paradigm/lore/entries/2026-06-23/L-2026-06-23-ascend-221716-001.lore
+          - .paradigm/lore/timeline.yaml
+          - packages/warpline/test/code-divergence-proof.test.ts
+        description: 'test(#warpline-oracle): THE DIVERGENCE PROOF on real code (A v1 capstone)'
+      - &ref_315
+        id: h0496
+        ts: '2026-06-23T22:00:04Z'
+        type: implement
+        symbols:
+          - '#absorb'
+          - '#code-essence'
+          - '#essence-hash'
+          - '#lift-code-units'
+        author:
+          type: human
+          id: ascend
+        commit: eebf1a6aab00dc799d0e9555fc05580c71edaa5b
+        intent: feature
+        files:
+          - .paradigm/events/stream.jsonl
+          - .paradigm/flow-index.json
+          - .paradigm/history/log.jsonl
+          - .paradigm/manifest.consistency.json
+          - .paradigm/navigator.yaml
+          - .paradigm/personas/index.yaml
+          - .paradigm/protocols/index.yaml
+          - .paradigm/scan-index.json
+          - .paradigm/university/index.yaml
+          - packages/warpline/.purpose
+          - packages/warpline/src/absorb.ts
+          - packages/warpline/src/lens/lift-code-units.ts
+          - packages/warpline/src/warp/essence-hash.ts
+          - packages/warpline/test/absorb.test.ts
+          - packages/warpline/test/code-warp.test.ts
+        description: 'feat(#essence-hash,#absorb): Warpline A v1 stage 3a — code-units in the WARP'
+      - &ref_316
+        id: h0494
+        ts: '2026-06-23T19:44:54Z'
+        type: implement
+        symbols:
+          - '#absorb'
+          - '#code-lens'
+          - '#essence-hash'
+          - '#warpline'
+          - '#warpline-oracle'
+          - '#weave'
+        author:
+          type: human
+          id: ascend
+        commit: abbda54f400721be395ee0c33696c2ffdfbc17f7
+        intent: refactor
+        files:
+          - .gitignore
+          - .paradigm/decisions/TD-2026-06-23-285.yaml
+          - .paradigm/events/stream.jsonl
+          - .paradigm/flow-index.json
+          - .paradigm/history/log.jsonl
+          - .paradigm/lore/entries/2026-06-23/L-2026-06-23-ascend-194402-450.lore
+          - .paradigm/manifest.consistency.json
+          - .paradigm/navigator.yaml
+          - .paradigm/personas/index.yaml
+          - .paradigm/protocols/index.yaml
+          - .paradigm/research/loom-ast-absorb-spike.md
+          - .paradigm/research/loom-ast-absorb-spike.ts
+          - .paradigm/research/warpline-ast-absorb-spike.md
+          - .paradigm/research/warpline-ast-absorb-spike.ts
+          - .paradigm/scan-index.json
+          - .paradigm/university/index.yaml
+          - docs/specs/loom-code-lens.md
+          - docs/specs/loom-engine.md
+          - docs/specs/loom-flows.md
+          - docs/specs/warpline-code-lens.md
+          - docs/specs/warpline-engine.md
+          - docs/specs/warpline-flows.md
+          - package-lock.json
+          - packages/.purpose
+          - packages/loom/.purpose
+          - packages/loom/package.json
+          - packages/loom/src/absorb.ts
+          - packages/loom/src/cli.ts
+          - packages/loom/src/git/git-exec.ts
+          - packages/loom/src/index.ts
+          - packages/loom/src/justification.ts
+          - packages/loom/src/lens/code-lens.ts
+          - packages/loom/src/lens/ts-essence.ts
+          - packages/loom/src/oracle.ts
+          - packages/loom/src/predict.ts
+          - packages/loom/src/sem-delta.ts
+          - packages/loom/src/warp/canonical.ts
+          - packages/loom/src/warp/essence-hash.ts
+          - packages/loom/src/warp/store.ts
+          - packages/loom/src/warp/warp-object.ts
+          - packages/loom/src/warp/warp-state.ts
+          - packages/loom/src/weave.ts
+          - packages/loom/test/absorb.test.ts
+          - packages/loom/test/code-essence.test.ts
+          - packages/loom/test/divergence-proof.test.ts
+          - packages/loom/test/essence.test.ts
+          - packages/loom/test/oracle.test.ts
+          - packages/loom/test/weave.test.ts
+          - packages/loom/tsconfig.json
+          - packages/loom/tsup.config.ts
+          - packages/loom/vitest.config.ts
+          - packages/warpline/.purpose
+          - packages/warpline/package.json
+          - packages/warpline/src/absorb.ts
+          - packages/warpline/src/cli.ts
+          - packages/warpline/src/git/git-exec.ts
+          - packages/warpline/src/index.ts
+          - packages/warpline/src/justification.ts
+          - packages/warpline/src/lens/code-lens.ts
+          - packages/warpline/src/lens/ts-essence.ts
+          - packages/warpline/src/oracle.ts
+          - packages/warpline/src/predict.ts
+          - packages/warpline/src/sem-delta.ts
+          - packages/warpline/src/warp/canonical.ts
+          - packages/warpline/src/warp/essence-hash.ts
+          - packages/warpline/src/warp/store.ts
+          - packages/warpline/src/warp/warp-object.ts
+          - packages/warpline/src/warp/warp-state.ts
+          - packages/warpline/src/weave.ts
+          - packages/warpline/test/absorb.test.ts
+          - packages/warpline/test/code-essence.test.ts
+          - packages/warpline/test/divergence-proof.test.ts
+          - packages/warpline/test/essence.test.ts
+          - packages/warpline/test/oracle.test.ts
+          - packages/warpline/test/weave.test.ts
+          - packages/warpline/tsconfig.json
+          - packages/warpline/tsup.config.ts
+          - packages/warpline/vitest.config.ts
+        description: 'refactor(#warpline): rename framework Loom → Warpline (brand collision)'
+      - &ref_317
+        id: h0492
+        ts: '2026-06-23T18:47:38Z'
+        type: implement
+        symbols:
+          - '#absorb'
+          - '#code-essence'
+          - '#code-lens'
+          - '#essence-hash'
+          - '#predict'
+          - '#sem-delta'
+        author:
+          type: human
+          id: ascend
+        commit: a36678411eaf6f1fef9bfc9686898858acf2ff7a
+        intent: feature
+        files:
+          - docs/specs/loom-code-lens.md
+        description: 'spec(#code-lens): Loom A v1 — the TS code-lens (AST code meaning)'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#essence-hash':
+    symbol: '#essence-hash'
+    total_changes: 6
+    last_modified: '2026-06-24T20:55:42Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_227
+      - *ref_315
+      - *ref_316
+      - *ref_317
+      - *ref_318
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#loom-oracle':
+    symbol: '#loom-oracle'
+    total_changes: 3
+    last_modified: '2026-06-23T18:00:40Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_323
+        id: h0489
+        ts: '2026-06-23T18:00:40Z'
+        type: implement
+        symbols:
+          - '#loom-cli'
+          - '#loom-oracle'
+          - '#weave'
+        author:
+          type: human
+          id: ascend
+        commit: bde51de8ed88f06e82447432561dbe4087fe2c40
+        intent: feature
+        files:
+          - .paradigm/events/debates.jsonl
+          - .paradigm/events/nominations.jsonl
+          - .paradigm/events/stream.jsonl
+          - .paradigm/flow-index.json
+          - .paradigm/history/log.jsonl
+          - .paradigm/lore/entries/2026-06-23/L-2026-06-23-ascend-161313-001.lore
+          - .paradigm/lore/timeline.yaml
+          - .paradigm/navigator.yaml
+          - .paradigm/scan-index.json
+          - packages/loom/.purpose
+          - packages/loom/src/cli.ts
+          - packages/loom/src/index.ts
+          - packages/loom/src/weave.ts
+          - packages/loom/test/weave.test.ts
+          - packages/loom/vitest.config.ts
+        description: 'feat(#weave): loom weave --preview (pre-merge forecast) + loom diff (semantic) — read-only'
+      - *ref_319
+      - *ref_320
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#sem-delta':
+    symbol: '#sem-delta'
+    total_changes: 4
+    last_modified: '2026-06-23T22:16:14Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_322
+        id: h0497
+        ts: '2026-06-23T22:16:14Z'
+        type: implement
+        symbols:
+          - '#code-essence'
+          - '#predict'
+          - '#sem-delta'
+        author:
+          type: human
+          id: ascend
+        commit: df6a87e84f6c0b5bb7c82bbe6b40c1ee99f5d915
+        intent: feature
+        files:
+          - .paradigm/events/stream.jsonl
+          - .paradigm/flow-index.json
+          - .paradigm/history/log.jsonl
+          - .paradigm/manifest.consistency.json
+          - .paradigm/navigator.yaml
+          - .paradigm/personas/index.yaml
+          - .paradigm/protocols/index.yaml
+          - .paradigm/scan-index.json
+          - .paradigm/university/index.yaml
+          - packages/warpline/.purpose
+          - packages/warpline/src/cli.ts
+          - packages/warpline/src/predict.ts
+          - packages/warpline/src/sem-delta.ts
+          - packages/warpline/test/code-diff.test.ts
+          - packages/warpline/test/oracle.test.ts
+        description: 'feat(#sem-delta,#predict): Warpline A v1 stage 3b — diff/predict SEE code'
+      - *ref_317
+      - *ref_319
+      - *ref_320
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#predict':
+    symbol: '#predict'
+    total_changes: 4
+    last_modified: '2026-06-23T22:28:37Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_321
+      - *ref_322
+      - *ref_317
+      - *ref_319
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#loom-cli':
+    symbol: '#loom-cli'
+    total_changes: 1
+    last_modified: '2026-06-23T18:00:40Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_323
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#weave':
+    symbol: '#weave'
+    total_changes: 2
+    last_modified: '2026-06-23T19:44:54Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_316
+      - *ref_323
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#portal-parser':
+    symbol: '#portal-parser'
+    total_changes: 1
+    last_modified: '2026-06-23T18:07:47Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_324
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#code-essence':
+    symbol: '#code-essence'
+    total_changes: 5
+    last_modified: '2026-06-23T22:16:14Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_322
+      - *ref_315
+      - &ref_325
+        id: h0495
+        ts: '2026-06-23T21:36:32Z'
+        type: implement
+        symbols:
+          - '#code-essence'
+          - '#code-lens'
+          - '#code-symbol'
+          - '#lens-registry'
+          - '#ts-lens'
+        author:
+          type: human
+          id: ascend
+        commit: 0b1be782d9448c3b34a4224ebc6cdec6a9dd2615
+        intent: feature
+        files:
+          - .paradigm/events/stream.jsonl
+          - .paradigm/flow-index.json
+          - .paradigm/history/log.jsonl
+          - .paradigm/manifest.consistency.json
+          - .paradigm/navigator.yaml
+          - .paradigm/personas/index.yaml
+          - .paradigm/protocols/index.yaml
+          - .paradigm/scan-index.json
+          - .paradigm/university/index.yaml
+          - docs/specs/warpline-code-lens.md
+          - packages/warpline/.purpose
+          - packages/warpline/package.json
+          - packages/warpline/src/index.ts
+          - packages/warpline/src/lens/code-lens.ts
+          - packages/warpline/src/lens/code-symbol.ts
+          - packages/warpline/src/lens/registry.ts
+          - packages/warpline/src/lens/ts-essence.ts
+          - packages/warpline/src/lens/ts-lens.ts
+          - packages/warpline/test/ts-lens.test.ts
+          - packages/warpline/tsup.config.ts
+        description: 'feat(#ts-lens): Warpline A v1 stage 2 — checker-resolved code-lens'
+      - &ref_326
+        id: h0493
+        ts: '2026-06-23T19:17:17Z'
+        type: implement
+        symbols:
+          - '#code-essence'
+          - '#code-lens'
+        author:
+          type: human
+          id: ascend
+        commit: 307582613d94205ee88920045a5c68753314f401
+        intent: feature
+        files:
+          - .paradigm/.cid-briefed
+          - .paradigm/.orchestrated
+          - .paradigm/.pending-review
+          - .paradigm/decisions/.purpose
+          - .paradigm/decisions/TD-2026-06-23-200.yaml
+          - .paradigm/decisions/TD-2026-06-23-688.yaml
+          - .paradigm/events/debates.jsonl
+          - .paradigm/events/nominations.jsonl
+          - .paradigm/events/session-log.jsonl
+          - .paradigm/events/settlement-liveness.jsonl
+          - .paradigm/events/stream.jsonl
+          - .paradigm/flow-index.json
+          - .paradigm/history/log.jsonl
+          - .paradigm/lore/entries/2026-06-23/L-2026-06-23-ascend-182624-211.lore
+          - .paradigm/lore/entries/2026-06-23/L-2026-06-23-ascend-182639-001.lore
+          - .paradigm/lore/entries/2026-06-23/L-2026-06-23-ascend-182715-001.lore
+          - .paradigm/lore/entries/2026-06-23/L-2026-06-23-ascend-184728-276.lore
+          - .paradigm/lore/timeline.yaml
+          - .paradigm/navigator.yaml
+          - .paradigm/scan-index.json
+          - .paradigm/work-log/2026-06-23/WL-architect-2026-06-23-289.yaml
+          - packages/loom/.purpose
+          - packages/loom/src/lens/code-lens.ts
+          - packages/loom/src/lens/ts-essence.ts
+          - packages/loom/test/code-essence.test.ts
+        description: 'feat(#code-lens): Loom A v1 stage 1 — ts-essence (syntactic CCNF) + tests'
+      - *ref_317
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#code-lens':
+    symbol: '#code-lens'
+    total_changes: 5
+    last_modified: '2026-06-23T22:28:37Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_321
+      - *ref_325
+      - *ref_316
+      - *ref_326
+      - *ref_317
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#warpline':
+    symbol: '#warpline'
+    total_changes: 9
+    last_modified: '2026-06-25T00:33:24Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - id: h0513
+        ts: '2026-06-25T00:33:24Z'
+        type: implement
+        symbols:
+          - '#warpline'
+        author:
+          type: human
+          id: ascend
+        commit: c789559ea60e921fd0d7e3be8aaee4c3b3028af3
+        intent: feature
+        files:
+          - docs/warpline/pov.html
+        description: 'docs(#warpline): the strategic POV page — what Warpline is + where it''s going'
+      - &ref_333
+        id: h0508
+        ts: '2026-06-24T21:18:48Z'
+        type: implement
+        symbols:
+          - '#oracle'
+          - '#warpline'
+        author:
+          type: human
+          id: ascend
+        commit: 24048c6bbb50acb40c3fce32029a396c9fbf3f50
+        intent: feature
+        files:
+          - .paradigm/events/debates.jsonl
+          - .paradigm/events/nominations.jsonl
+          - .paradigm/events/stream.jsonl
+          - .paradigm/history/log.jsonl
+          - .paradigm/lore/entries/2026-06-24/L-2026-06-24-ascend-211831-001.lore
+          - .paradigm/lore/timeline.yaml
+          - packages/warpline/src/oracle.ts
+          - packages/warpline/test/oracle.test.ts
+        description: 'test(#oracle): positively cover the agreeConflict + divergeGitOnly matrix cells (Probe)'
+      - *ref_227
+      - id: h0506
+        ts: '2026-06-24T19:52:04Z'
+        type: implement
+        symbols:
+          - '#warpline'
+        author:
+          type: human
+          id: ascend
+        commit: d85dd6a4bd785a4429475639ed3b86471c8a0533
+        intent: feature
+        files:
+          - docs/warpline/system.html
+        description: 'docs(#warpline): the Warpline system map HTML (system.html) — surfaces + user flows'
+      - &ref_330
+        id: h0505
+        ts: '2026-06-24T19:46:52Z'
+        type: implement
+        symbols:
+          - '#warpline'
+          - '#warpline-section-ui'
+        author:
+          type: human
+          id: ascend
+        commit: 0959a7837e1daa043061c1c330cf8b63355c8d61
+        intent: feature
+        files:
+          - docs/specs/warpline-design-system.md
+        description: 'docs(#warpline): the Warpline design system spec (Mika) — tokens · components · screens · flows'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#warpline-oracle':
+    symbol: '#warpline-oracle'
+    total_changes: 2
+    last_modified: '2026-06-23T22:28:37Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_321
+      - *ref_316
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#code-symbol':
+    symbol: '#code-symbol'
+    total_changes: 1
+    last_modified: '2026-06-23T21:36:32Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_325
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#lens-registry':
+    symbol: '#lens-registry'
+    total_changes: 1
+    last_modified: '2026-06-23T21:36:32Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_325
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#ts-lens':
+    symbol: '#ts-lens'
+    total_changes: 2
+    last_modified: '2026-06-24T20:55:42Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_227
+      - *ref_325
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#lift-code-units':
+    symbol: '#lift-code-units'
+    total_changes: 1
+    last_modified: '2026-06-23T22:00:04Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_315
+    contributors:
+      human:
+        - ascend
+      agent: []
+  ~determinism:
+    symbol: ~determinism
+    total_changes: 3
+    last_modified: '2026-06-25T00:32:11Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_328
+        id: h0512
+        ts: '2026-06-25T00:32:11Z'
+        type: implement
+        symbols:
+          - '#consolidate'
+          - '#warpline-cli'
+          - ~determinism
+          - ~meaning-coverage
+          - ~read-only
+        author:
+          type: human
+          id: ascend
+        commit: 87341f9d2535f23e9f8e467fba381ccba775b858
+        intent: feature
+        files:
+          - .paradigm/flow-index.json
+          - .paradigm/navigator.yaml
+          - .paradigm/scan-index.json
+          - packages/warpline/.purpose
+          - packages/warpline/src/cli.ts
+        description: 'feat(#warpline-cli): wire `warpline consolidate` + aspect-anchor coverage'
+      - *ref_327
+      - &ref_329
+        id: h0499
+        ts: '2026-06-23T22:39:22Z'
+        type: implement
+        symbols:
+          - '#warpline'
+          - ~determinism
+          - ~meaning-coverage
+          - ~read-only
+        author:
+          type: human
+          id: ascend
+        commit: 90496c19535dbf5a5a5d1e81d78ac2bbc7bc36da
+        intent: feature
+        files:
+          - .paradigm/events/stream.jsonl
+          - .paradigm/flow-index.json
+          - .paradigm/history/log.jsonl
+          - .paradigm/manifest.consistency.json
+          - .paradigm/navigator.yaml
+          - .paradigm/personas/index.yaml
+          - .paradigm/protocols/index.yaml
+          - .paradigm/scan-index.json
+          - .paradigm/university/index.yaml
+          - packages/warpline/.purpose
+        description: 'chore(#warpline): proper aspect symbols + cleanup'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  ~meaning-coverage:
+    symbol: ~meaning-coverage
+    total_changes: 2
+    last_modified: '2026-06-25T00:32:11Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_328
+      - *ref_329
+    contributors:
+      human:
+        - ascend
+      agent: []
+  ~read-only:
+    symbol: ~read-only
+    total_changes: 3
+    last_modified: '2026-06-25T00:32:11Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_328
+      - *ref_327
+      - *ref_329
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#warpline-section-ui':
+    symbol: '#warpline-section-ui'
+    total_changes: 4
+    last_modified: '2026-06-24T19:46:52Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_330
+      - id: h0504
+        ts: '2026-06-24T19:27:35Z'
+        type: implement
+        symbols:
+          - '#warpline-section-ui'
+        author:
+          type: human
+          id: ascend
+        commit: 776a53c64d778794c21fc6e30978274e351e4959
+        intent: fix
+        files:
+          - packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx
+          - packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css
+        description: 'fix(#warpline-section-ui): Mika''s design-QA pass — motion fallbacks + drift cap'
+      - &ref_332
+        id: h0503
+        ts: '2026-06-24T19:18:30Z'
+        type: implement
+        symbols:
+          - '#warpline-section-ui'
+          - '#warpline-web-router'
+        author:
+          type: human
+          id: ascend
+        commit: c77c69d63e53742281dec5c06ed83da1f605879b
+        intent: feature
+        files:
+          - .paradigm/events/debates.jsonl
+          - .paradigm/events/nominations.jsonl
+          - .paradigm/events/stream.jsonl
+          - .paradigm/flow-index.json
+          - .paradigm/history/log.jsonl
+          - .paradigm/lore/entries/2026-06-23/L-2026-06-23-ascend-232841-001.lore
+          - .paradigm/lore/timeline.yaml
+          - .paradigm/manifest.consistency.json
+          - .paradigm/navigator.yaml
+          - .paradigm/personas/index.yaml
+          - .paradigm/protocols/index.yaml
+          - .paradigm/scan-index.json
+          - .paradigm/university/index.yaml
+          - packages/paradigm/platform-ui/src/hooks/useAgentEffects.ts
+          - packages/paradigm/platform-ui/src/sections/warpline/.purpose
+          - packages/paradigm/platform-ui/src/sections/warpline/WarplineSection.tsx
+          - packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx
+          - packages/paradigm/platform-ui/src/sections/warpline/components/OracleLedgerRail.tsx
+          - packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css
+          - packages/paradigm/platform-ui/src/sections/warpline/types.ts
+          - packages/paradigm/platform-ui/src/sections/warpline/viewerState.test.ts
+          - packages/paradigm/platform-ui/src/sections/warpline/viewerState.ts
+          - packages/paradigm/vitest.config.ts
+        description: 'feat(#warpline-section-ui): Oracle Divergence Viewer UI (GUI sub-phase 2)'
+      - *ref_331
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#warpline-web-router':
+    symbol: '#warpline-web-router'
+    total_changes: 2
+    last_modified: '2026-06-24T19:18:30Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_332
+      - *ref_331
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#git-exec':
+    symbol: '#git-exec'
+    total_changes: 3
+    last_modified: '2026-06-25T00:24:17Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_334
+        id: h0511
+        ts: '2026-06-25T00:24:17Z'
+        type: implement
+        symbols:
+          - '#consolidate'
+          - '#git-exec'
+        author:
+          type: human
+          id: ascend
+        commit: 04ae007d805a5a3751819cd26ac9548146c47809
+        intent: feature
+        files:
+          - .paradigm/flow-index.json
+          - .paradigm/navigator.yaml
+          - .paradigm/scan-index.json
+          - packages/warpline/.purpose
+          - packages/warpline/src/consolidate.ts
+          - packages/warpline/src/git/git-exec.ts
+          - packages/warpline/test/consolidate-fixture.test.ts
+        description: 'feat(#consolidate): N-way fold forecast + the contended same-feature fixture'
+      - *ref_327
+      - *ref_227
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#oracle':
+    symbol: '#oracle'
+    total_changes: 3
+    last_modified: '2026-06-25T06:44:54Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - &ref_335
+        id: h0519
+        ts: '2026-06-25T06:44:54Z'
+        type: implement
+        symbols:
+          - '#lifeline'
+          - '#oracle'
+          - '#warpline-cli'
+        author:
+          type: human
+          id: ascend
+        commit: 75b0207d088dbef61671adbb74a5c26ccb08fe6c
+        intent: fix
+        files:
+          - .paradigm/flow-index.json
+          - .paradigm/navigator.yaml
+          - .paradigm/scan-index.json
+          - packages/warpline/.purpose
+          - packages/warpline/src/cli.ts
+          - packages/warpline/src/lifeline.ts
+          - packages/warpline/src/oracle.ts
+          - packages/warpline/test/lifeline.test.ts
+          - packages/warpline/test/oracle-contested-merge.test.ts
+        description: 'fix(#oracle,#lifeline): close the round-2 battle-test findings (T-2026-06-25-005/006)'
+      - &ref_336
+        id: h0514
+        ts: '2026-06-25T01:14:10Z'
+        type: implement
+        symbols:
+          - '#oracle'
+          - '#warpline-cli'
+        author:
+          type: human
+          id: ascend
+        commit: c3aecbf9d5db6bd5ac2dfe81ab380598b89ab4b6
+        intent: fix
+        files:
+          - .paradigm/flow-index.json
+          - .paradigm/navigator.yaml
+          - .paradigm/scan-index.json
+          - packages/warpline/.purpose
+          - packages/warpline/src/cli.ts
+          - packages/warpline/src/oracle.ts
+          - packages/warpline/test/oracle-nonsymbol-conflict.test.ts
+          - packages/warpline/test/oracle.test.ts
+        description: 'fix(#oracle): gitReality.conflicted gates the verdict — no more lies-green (T-2026-06-25-001)'
+      - *ref_333
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#warpline-design-system':
+    symbol: '#warpline-design-system'
+    total_changes: 1
+    last_modified: '2026-06-24T21:19:07Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - id: h0509
+        ts: '2026-06-24T21:19:07Z'
+        type: implement
+        symbols:
+          - '#warpline-design-system'
+        author:
+          type: human
+          id: ascend
+        commit: b5829a75962c5f74e1de6f2bf38c5d9279d7e692
+        intent: fix
+        files:
+          - docs/warpline/system.html
+        description: 'fix(#warpline-design-system): WCAG-AA contrast on system.html informational text (Mika)'
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#repo-lock':
+    symbol: '#repo-lock'
+    total_changes: 1
+    last_modified: '2026-06-25T00:11:35Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_327
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#consolidate':
+    symbol: '#consolidate'
+    total_changes: 2
+    last_modified: '2026-06-25T00:32:11Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_328
+      - *ref_334
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#warpline-cli':
+    symbol: '#warpline-cli'
+    total_changes: 5
+    last_modified: '2026-06-25T06:44:54Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_335
+      - &ref_338
+        id: h0518
+        ts: '2026-06-25T01:31:19Z'
+        type: implement
+        symbols:
+          - '#lifeline'
+          - '#warpline-cli'
+        author:
+          type: human
+          id: ascend
+        commit: e7ccfbaf471f8e1932127972fd8d98e4bee42035
+        intent: feature
+        files:
+          - .paradigm/flow-index.json
+          - .paradigm/navigator.yaml
+          - .paradigm/scan-index.json
+          - packages/warpline/.purpose
+          - packages/warpline/src/cli.ts
+          - packages/warpline/src/lifeline.ts
+          - packages/warpline/test/lifeline.test.ts
+        description: 'feat(#lifeline): meaning-aware blame + `warpline status` (T-2026-06-25-003)'
+      - id: h0516
+        ts: '2026-06-25T01:20:33Z'
+        type: implement
+        symbols:
+          - '#warpline-cli'
+        author:
+          type: human
+          id: ascend
+        commit: ba8ddbf19d29eaf451e0e1c6f2d605a9cdd77edf
+        intent: fix
+        files:
+          - packages/warpline/src/cli.ts
+        description: 'fix(#warpline-cli): silence the .purpose-parser stderr flood + reject stray args (T-2026-06-25-002)'
+      - *ref_336
+      - *ref_328
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#ClassroomRouter':
+    symbol: '#ClassroomRouter'
+    total_changes: 2
+    last_modified: '2026-06-25T06:50:21Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_313
+      - *ref_337
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#ClassroomSection':
+    symbol: '#ClassroomSection'
+    total_changes: 1
+    last_modified: '2026-06-25T01:30:12Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_337
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#lifeline':
+    symbol: '#lifeline'
+    total_changes: 2
+    last_modified: '2026-06-25T06:44:54Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_335
+      - *ref_338
     contributors:
       human:
         - ascend
