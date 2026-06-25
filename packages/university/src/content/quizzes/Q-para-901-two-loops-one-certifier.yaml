@@ -1,0 +1,54 @@
+id: Q-para-901-two-loops-one-certifier
+title: 'PARA 901: The Academy — Lesson 2: The Two Loops → One Certifier'
+description: 'Quiz for lesson: The Two Loops → One Certifier'
+author: paradigm
+created: '2026-06-25'
+updated: '2026-06-25'
+tags:
+  - course
+  - para-901
+symbols: []
+difficulty: intermediate
+passThreshold: 0.7
+category: paradigm-core
+questions:
+  - id: q1
+    question: What is the defining difference between the legacy auto-promote loop and the gated /class loop?
+    choices:
+      A: Legacy runs in the CLI and gated runs in the GUI
+      B: Legacy auto-promote stamps certifiedBy:'gate' when confidence>=0.8 with no refutation, while the gated path stamps certifiedBy:'peer' or 'quorum' through /class with NO confidence floor — the human ruling is the gate
+      C: They are identical paths with different names
+      D: Gated requires confidence>=0.8 and legacy does not
+      E: Legacy uses quorum and gated uses a single sign-off
+    correct: B
+    explanation: 'The legacy loop let a number certify: confidence>=0.8 auto-stamped certifiedBy:"gate" with no one ever trying to break the learning. The gated /class loop replaces the number with a ruling — peer (single sign-off) or quorum (>=2 assessors who brought breaking scenarios). Crucially there is NO 0.8 floor on the gated path: the human ruling IS the gate. A confidence score is never allowed to stand in for a verdict.'
+  - id: q2
+    question: A learning carries certifiedBy:'gate'. What does today's shipped Academy do about it?
+    choices:
+      A: It deletes the learning immediately
+      B: It refuses to load the learning into any notebook
+      C: Visible-quarantine — the learning is not deleted but is badged LEGACY so a human can see it was certified by a number, not a gated ruling (TD-2026-06-25-044)
+      D: It re-runs /class automatically to re-certify it
+      E: It silently rewrites the badge to 'peer'
+    correct: C
+    explanation: 'The shipped resolution (TD-2026-06-25-044) is visible-quarantine: legacy auto-promoted learnings keep their place but wear a LEGACY badge that surfaces their provenance — "a number certified me, not a ruling." The fix is daylight, not deletion. Nothing is silently lost or silently re-blessed; the human can see exactly which certs were never gated.'
+  - id: q3
+    question: The course describes "hard-demote" — stopping the legacy path from writing the 'gate' cert at all. What is its status?
+    choices:
+      A: It is current shipped behavior; the gate cert is no longer written
+      B: It is the INTENDED next step, not current behavior — today's shipped resolution is visible-quarantine (the badge); hard-demote is designed but not yet built
+      C: It was rejected and will never be built
+      D: It is an alias for quorum certification
+      E: It only applies to external learnings
+    correct: B
+    explanation: 'Accuracy matters here: hard-demote — ceasing to write the certifiedBy:"gate" cert so the legacy loop can no longer mint trust — is the *intended* next step, not what ships today. The current behavior is visible-quarantine (the LEGACY badge). Teaching hard-demote as already-built would misstate the system. Today: badge it. Intended next: stop minting it.'
+  - id: q4
+    question: What is the difference between a 'peer' and a 'quorum' certification on the gated path?
+    choices:
+      A: peer is automatic; quorum requires confidence>=0.8
+      B: peer is a single sign-off; quorum is >=2 assessors who brought breaking scenarios — both are human rulings on the gated path, neither uses a confidence floor
+      C: quorum is the legacy path and peer is the gated path
+      D: peer applies only to external learnings
+      E: They are the same; the framework picks randomly
+    correct: B
+    explanation: 'Both peer and quorum are GATED rulings, not numbers. peer is a single human sign-off; quorum is two or more assessors who each brought breaking scenarios to the stand. The distinction is the *weight of scrutiny* the learning survived — but in neither case does a 0.8 (or any) confidence floor substitute for the human verdict. The badge records which kind of ruling certified the learning.'

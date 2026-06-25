@@ -1,0 +1,54 @@
+id: Q-para-901-expeditions-and-foraging
+title: 'PARA 901: The Academy — Lesson 5: Expeditions — Foraging the Wild'
+description: 'Quiz for lesson: Expeditions — Foraging the Wild'
+author: paradigm
+created: '2026-06-25'
+updated: '2026-06-25'
+tags:
+  - course
+  - para-901
+symbols: []
+difficulty: advanced
+passThreshold: 0.7
+category: paradigm-core
+questions:
+  - id: q1
+    question: A foraged source is the official framework documentation (tier-A prestige). How does prestige affect where it enters the Academy?
+    choices:
+      A: Tier-A prestige lets it enter directly at trust:'certified'
+      B: Prestige caps CONFIDENCE, not trust tier — tier-A is capped at confidence <=0.6 but still enters at trust:'external'; prestige is a ceiling on starting confidence, never a shortcut up the trust ladder
+      C: Tier-A skips the scenario requirement at intake
+      D: "Prestige sets the trust tier directly: A=certified, B=provisional, C=external"
+      E: Official docs are exempt from the context-firewall
+    correct: B
+    explanation: 'This is the most common forage misconception. Prestige sets a CONFIDENCE ceiling (tier-A <=0.6, tier-B <=0.45, tier-C <=0.3, and tier-C needs corroboration) — it does NOT set the trust tier. The most official documentation in the world still enters at trust:"external" and must climb external -> provisional -> certified by surviving the field. Prestige caps how confident a candidate may *start*; it never lets a source skip the trust ladder.'
+  - id: q2
+    question: Why is the foraging path described as the most-scrutinized in the Academy, and what is permanent about a foraged learning?
+    choices:
+      A: It runs fewer gates because external sources are pre-vetted; nothing is permanent
+      B: It runs FIVE hard gates versus four for homegrown learnings; its provenance (source:external, sourceSet URLs) is permanent — only its trust moves (external -> provisional -> certified) as it survives the field
+      C: It is fastest because the web is authoritative; trust is fixed at external forever
+      D: It skips THE STAND entirely
+      E: It runs five gates but erases provenance once certified
+    correct: B
+    explanation: 'Foraged knowledge originates outside the project, so it gets the *most* scrutiny: five hard gates versus four for homegrown learnings — the longest, most-examined path. And provenance is permanent: a learning born source:external with its sourceSet URLs always remembers it was foraged, even after the field certifies it. Only trust moves up the ladder; where it came from never changes.'
+  - id: q3
+    question: An agent forages a useful claim but there is no local scenario to test it against the project. What happens at intake?
+    choices:
+      A: It is staged to the journal anyway since the source is reputable
+      B: No-scenario-no-assessment at intake — it is unstageable and lands in Field Notes rather than the journal; you cannot certify what you cannot test against your own project
+      C: It is auto-promoted to provisional
+      D: The forage aborts and the agent is benched
+      E: It enters at trust:'certified' pending a scenario later
+    correct: B
+    explanation: 'The no-scenario-no-assessment rule applies at INTAKE for forages: a candidate with no local scenario to test it against the project cannot be staged — it goes to Field Notes, unstageable. The Academy will not let an external claim enter the journal (let alone the gate) until there is a concrete way to test it against *this* project. Reputability of the source does not substitute for a local test.'
+  - id: q4
+    question: In Arky's vertical dive, the "barrels are an anti-pattern" claim was foraged as a CHALLENGER and the human ruled REFINE. What does the outcome illustrate about the gate's value?
+    choices:
+      A: That universal web claims should be adopted as-is when well-cited
+      B: That the gate's value is LOCALIZATION — refine rewrote the universal claim as "anti-pattern in app code importing a LIBRARY barrel EXCEPT the framework's own bundled barrel (9 packages/*/src/index.ts, tree-shaken by tsup)", turning a web generalization into a project-true rule; none of the three externals was universal and none was rejected
+      C: That conflicting forages should overwrite the incumbent learning
+      D: That CHALLENGER forages are always rejected
+      E: That barrels are simply correct everywhere
+    correct: B
+    explanation: 'All three of Arky''s externals refined — none was universal, none was rejected — which is the point: the gate''s value is LOCALIZATION. "Barrels are an anti-pattern" became "anti-pattern in app code importing a LIBRARY barrel EXCEPT the framework''s own bundled barrel," verified against the real tree (9 packages/*/src/index.ts, tree-shaken at bundle time by tsup). A conflict entered as a CHALLENGER (parentId/lineageType captured), and per TD-2026-06-25-044 conflicts keep both and refine the incumbent rather than overwrite it. Refine-as-localization is how foraged generalizations become project-true.'

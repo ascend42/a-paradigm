@@ -1,0 +1,54 @@
+id: Q-para-901-the-honest-scoreboard
+title: 'PARA 901: The Academy — Lesson 6: The Honest Scoreboard — Reading the Academy'
+description: 'Quiz for lesson: The Honest Scoreboard — Reading the Academy'
+author: paradigm
+created: '2026-06-25'
+updated: '2026-06-25'
+tags:
+  - course
+  - para-901
+symbols: []
+difficulty: intermediate
+passThreshold: 0.7
+category: paradigm-core
+questions:
+  - id: q1
+    question: How is repeat-failure-rate computed, and why does it read null on a fresh Academy?
+    choices:
+      A: survived / total; null means the system is broken
+      B: overturned / (survived + overturned); it is null until exams SETTLE — "no settled exams yet," never green-by-default — which is the honest state on a fresh or experimental Academy
+      C: journals / settlements; null means the loop is dead
+      D: peer-passes / trials; null means no agents are rostered
+      E: breaks / notebook-refs; null means perfect performance
+    correct: B
+    explanation: 'repeat-failure-rate = overturned / (survived + overturned) — it needs *settled* exams to compute. On a fresh or experimental Academy nothing has settled, so it reads null: "no settled exams yet," never a default green. A null board is the system being honest about how little has resolved, not a defect. Reading null as "everything passed" inverts the entire design.'
+  - id: q2
+    question: Why is peer-pass-rate flagged as a SUSPECT metric rather than a success metric?
+    choices:
+      A: It is too expensive to compute
+      B: Because passing the gate is not the same as surviving the field — peer-pass-rate measures agreement at the gate, not field survival, so a high value is a yellow flag, never a trophy
+      C: Because it double-counts quorum certifications
+      D: Because only legacy learnings have a peer-pass-rate
+      E: It is actually the primary success metric
+    correct: B
+    explanation: 'peer-pass-rate tells you how often learnings *passed the gate* — but the gate is not the field. A learning can sail through THE STAND and still be overturned in real use. So peer-pass-rate is suspect: a high value can mean the gate is too soft just as easily as it means the learnings are good. The real success signal is field survival (repeat-failure-rate), never agreement at the gate.'
+  - id: q3
+    question: On the Rap Sheet, a learning shows born and applied entries but breaks:[]. How should you read it?
+    choices:
+      A: Proven reliable — zero breaks means it never fails
+      B: Untested, not proven — breaks:[] means no field-failure has been attributed to it yet, which is absence of evidence, not a clean bill of health; the same "unbroken is untested" principle from the trust model
+      C: It was rejected at the gate
+      D: It is a legacy learning with no provenance
+      E: It has been overturned and should be red
+    correct: B
+    explanation: 'On the Rap Sheet (born -> applied -> broke, keyed by entryId), an empty breaks:[] means "untested, not proven" — no field-failure has yet been attributed to the learning, which is not the same as the learning being strong. This is the Lesson 1 principle surfaced in the GUI: unbroken is untested. Reading breaks:[] as a guarantee of reliability is exactly the misread the Academy is designed to prevent.'
+  - id: q4
+    question: A user opens the Academy on a brand-new project and sees the Bootstrap Doorway with nothing green. Which trust tiers does the GUI render, and what is the state telling them?
+    choices:
+      A: It renders certified/provisional/external/human-taught; green is missing due to a bug
+      B: It renders certified (green) / provisional (orange) / external (cyan-dashed) — NOT a human-taught tier — and the Bootstrap Doorway with nothing green is the honest expected first state until the project is bootstrapped (curriculum dir has >=1 *.syllabus)
+      C: It renders only certified and external; the project is broken
+      D: It renders nothing until the first /class certifies a learning
+      E: It renders human-taught as the default green tier
+    correct: B
+    explanation: 'The GUI renders three trust tiers on the ladder: certified (green) -> provisional (orange) -> external (cyan-dashed). It does NOT render a "human-taught" tier — that is a designed/spec-only third tier, not something the GUI shows, so never treat it as rendered. Before a project is bootstrapped (curriculum dir with >=1 *.syllabus), the Bootstrap Doorway appears and nothing is green. A blank-but-honest board is the expected first state, not a defect — consistent with the Academy shipping experimental.'

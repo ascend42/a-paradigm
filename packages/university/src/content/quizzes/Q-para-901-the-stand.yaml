@@ -1,0 +1,54 @@
+id: Q-para-901-the-stand
+title: 'PARA 901: The Academy — Lesson 4: THE STAND — The De-Anesthetized Gate'
+description: 'Quiz for lesson: THE STAND — The De-Anesthetized Gate'
+author: paradigm
+created: '2026-06-25'
+updated: '2026-06-25'
+tags:
+  - course
+  - para-901
+symbols: []
+difficulty: advanced
+passThreshold: 0.7
+category: paradigm-core
+questions:
+  - id: q1
+    question: Why does THE STAND open with the strongest breaking scenario rather than with the assessors' agreement?
+    choices:
+      A: Because dissent is faster to process than concurrence
+      B: Because concurrence anesthetizes — a gate that opens on agreement stops scrutinizing; leading with the strongest refutation keeps the gate awake, and the trial GUI even opens scrolled to the dissent with concurrence collapsed
+      C: Because the framework forbids agents from ever agreeing
+      D: Because the first speaker always wins the verdict
+      E: Because breaking scenarios are cheaper to compute
+    correct: B
+    explanation: 'Agreement puts a gate to sleep — if the first thing heard is a nod, scrutiny never engages. THE STAND is deliberately dissent-first: the strongest breaking scenario is presented FIRST, and the trial GUI reinforces it by opening scrolled to the dissent with concurrence collapsed. The design treats comfort as the enemy of a real gate.'
+  - id: q2
+    question: An assessor wants to weigh in at THE STAND but has not produced a breaking scenario. What happens?
+    choices:
+      A: Their opinion is recorded with reduced weight
+      B: No-scenario-no-assessment — without a concrete breaking scenario, they do not get to assess; an opinion with no test case is not an assessment
+      C: They automatically vote to promote
+      D: They are removed from the roster
+      E: The trial pauses until they agree with the claimant
+    correct: B
+    explanation: 'no-scenario-no-assessment is a hard rule of the gate: an assessor''s judgment counts only if it is backed by a concrete breaking scenario. Opinions without a test case are vibes, not assessments, and the gate refuses them. This is what forces genuine cross-lens scrutiny (a builder, a compliance lens, Jinx as standing adversary) instead of a show of hands.'
+  - id: q3
+    question: The verdict at THE STAND is REFINE. What does refine actually do, and why is it called "the engine"?
+    choices:
+      A: It lowers the learning's confidence score below the promote threshold
+      B: It rewrites the learning to fold the surviving counterexample in as an exception — "X except Y" — making the rule sharper; it is the mechanism by which the Academy improves, not a confidence tweak
+      C: It deletes the learning and asks the agent to start over
+      D: It promotes the learning to certified immediately
+      E: It defers the learning to the next study-hall session unchanged
+    correct: B
+    explanation: 'Refine is not a dial you turn down — it is the engine. When a breaking scenario survives the trial, refine folds it back into the learning as an exception, rewriting the rule as "X except Y." The counterexample makes the rule sharper rather than killing it. This localization is precisely how the Academy gets better over time; treating refine as a mere confidence adjustment misses the whole mechanism.'
+  - id: q4
+    question: In the worked example, Rune brings a learning, Kit refutes it cross-lens with SC-aspect-validate-vs-queryable, and the human rules REFINE. What is the resulting learning and its trust state?
+    choices:
+      A: '"validate == aspect_check"; promoted to certified green'
+      B: '"validate != aspect_check, EXCEPT bare-key aspects are queryable post-fix"; promoted provisional pending field survival, and repeat-failure-rate stayed null because nothing has settled'
+      C: The learning was rejected and removed
+      D: '"aspect_check is always queryable"; certified by gate at confidence 0.8'
+      E: The learning was auto-promoted because Kit and Rune disagreed
+    correct: B
+    explanation: 'The counterexample (SC-aspect-validate-vs-queryable) did not kill the learning — refine localized it to "validate != aspect_check EXCEPT bare-key aspects queryable post-fix." It was promoted PROVISIONAL, pending survival in the field — never straight to certified, because only field survival certifies. And the repeat-failure-rate stayed null: a fresh provisional ruling is not a *settled* exam, so the honest board reports nothing yet.'
