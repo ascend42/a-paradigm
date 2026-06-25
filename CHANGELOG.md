@@ -5,6 +5,18 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.7.0] — 2026-06-25 — The Academy chrome: Roster + Rap Sheet (experimental)
+
+The Academy was a single Term Board. This makes it a navigable surface — the gated-learning ledger you can actually read.
+
+### Added
+- **Tabbed Academy** (`#ClassroomSection`): Term Board · **Roster** · **Rap Sheet**, with the Bootstrap Doorway still gating an un-bootstrapped project.
+- **Roster** — per-enrolled-agent curriculum **traffic-lights**: a colored light for syllabus health (`current`/`stale`/`broken`/`expired`), a one-line "what this means" hint, and the agent's certified / on-trial counts. Data from `/api/classroom/status`; no new endpoint.
+- **Rap Sheet** — the **learning lineage**: a new read-only `GET /api/classroom/rapsheet` joins the three loop spines (born = the cert ⋈ applied = `notebook-refs.jsonl` by entryId ⋈ broke = `field-failures.jsonl` by entryId). Each certified learning is traced born → applied N× → broke (→ spawned scenario). The honest-null thesis made visual: a learning applied without ever breaking reads **"untested, not proven,"** never green — `breaks: []` is surfaced as exactly that.
+
+### Notes
+- Still **experimental**. The **Agent Locker** (notebook vetting + stub backlog) is the next chrome increment. `bin/paradigm` (Homebrew) still reports 7.6.x until a publish.
+
 ## [7.6.1] — 2026-06-25
 
 ### Fixed

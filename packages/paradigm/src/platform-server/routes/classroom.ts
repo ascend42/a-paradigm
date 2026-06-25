@@ -35,6 +35,9 @@
  *                         (promoted_to_notebook set) — they've graduated.
  *   GET /certifications — cert rows with a derived `loop: 'gated'|'legacy'`.
  *   GET /refinements    — field-failure rows (the overturned/refinement signal).
+ *   GET /rapsheet       — per-entry learning lineage: born (cert) ⋈ applied
+ *                         (notebook-refs) ⋈ broke (field-failures). `breaks: []`
+ *                         means UNTESTED, never "passed".
  */
 
 import { Router, type Request, type Response } from 'express';
@@ -78,6 +81,19 @@ interface FieldFailureRow {
   detail?: string;
   scenarioId?: string;
   sourceEvent?: string;
+  [key: string]: unknown;
+}
+
+/**
+ * A notebook-reference event — the "applied" join. Each row records that one
+ * orchestration consulted a set of notebook entries. The Rap Sheet joins these
+ * to certs (born) and field-failures (broke) by entryId / orchestrationId.
+ */
+interface NotebookRefRow {
+  timestamp?: string;
+  agentId?: string;
+  notebookEntryIds?: string[];
+  orchestrationId?: string;
   [key: string]: unknown;
 }
 
@@ -230,6 +246,7 @@ export function createClassroomRouter(projectDir: string, _wsContext?: PlatformW
   const curriculumDir = path.join(projectDir, '.paradigm', 'curriculum');
   const certsPath = path.join(projectDir, '.paradigm', 'events', 'classroom-certifications.jsonl');
   const failuresPath = path.join(projectDir, '.paradigm', 'events', 'field-failures.jsonl');
+  const refsPath = path.join(projectDir, '.paradigm', 'events', 'notebook-refs.jsonl');
 
   // ── GET /status ────────────────────────────────────────────
   // The Academy's front door. `bootstrapped` gates the Doorway vs. the Board.
@@ -338,6 +355,69 @@ export function createClassroomRouter(projectDir: string, _wsContext?: PlatformW
       res.json(failures.reverse());
     } catch (err) {
       res.status(500).json({ error: 'Failed to read refinements', detail: String(err) });
+    }
+  });
+
+  // ── GET /rapsheet ──────────────────────────────────────────
+  // The learning lineage: one row per certified entry, joining the three loop
+  // spines — born (the cert), applied (notebook-refs by entryId), broke (field-
+  // failures by entryId). This is the "why did this break" payload — and, just
+  // as load-bearing, the honest null: a cert applied many times with ZERO breaks
+  // is NOT proven safe, only UNTESTED, so `breaks: []` is surfaced as exactly
+  // that, never as a pass. Sorted most-instructive-first: overturned, then
+  // applied-but-pending, then never-applied. Read-only; [] on missing data.
+  router.get('/rapsheet', (_req: Request, res: Response) => {
+    try {
+      const certs = readJsonlSafe<ClassroomCertRow>(certsPath);
+      const refs = readJsonlSafe<NotebookRefRow>(refsPath);
+      const failures = readJsonlSafe<FieldFailureRow>(failuresPath);
+
+      const rows = certs
+        .filter(c => typeof c.entryId === 'string')
+        .map(c => {
+          const entryId = c.entryId as string;
+
+          // APPLIED: every orchestration whose ref-set named this entry.
+          const applications = refs.filter(r => (r.notebookEntryIds ?? []).includes(entryId));
+          const appliedTimes = applications
+            .map(r => r.timestamp)
+            .filter((t): t is string => typeof t === 'string')
+            .sort();
+
+          // BROKE: field-failures that attributed a break back to this entry.
+          const breaks = failures
+            .filter(f => (f.attributedEntryIds ?? []).includes(entryId))
+            .map(f => ({
+              ts: f.ts,
+              signal: f.signal,
+              severity: f.severity,
+              scenarioId: f.scenarioId,
+              detail: f.detail,
+            }))
+            .sort((a, b) => (a.ts ?? '').localeCompare(b.ts ?? ''));
+
+          return {
+            entryId,
+            agent: c.agent,
+            concepts: c.concepts ?? [],
+            certifiedBy: c.certifiedBy,
+            loop: deriveLoop(c.certifiedBy),
+            outcome: c.outcome ?? 'pending',
+            bornTs: c.ts,
+            appliedCount: applications.length,
+            lastAppliedAt: appliedTimes.length ? appliedTimes[appliedTimes.length - 1] : undefined,
+            breaks,
+          };
+        });
+
+      // Most-instructive-first: overturned (broke) → applied-but-pending → rest.
+      const rank = (r: { outcome: string; appliedCount: number }) =>
+        r.outcome === 'overturned' ? 0 : r.appliedCount > 0 ? 1 : 2;
+      rows.sort((a, b) => rank(a) - rank(b) || (b.bornTs ?? '').localeCompare(a.bornTs ?? ''));
+
+      res.json(rows);
+    } catch (err) {
+      res.status(500).json({ error: 'Failed to read rap sheet', detail: String(err) });
     }
   });
 

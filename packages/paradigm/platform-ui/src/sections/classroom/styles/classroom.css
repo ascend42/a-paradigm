@@ -310,3 +310,141 @@
 .classroom__syllabus-status--stale { color: var(--p-accent-orange); }
 .classroom__syllabus-status--broken { color: #e0586b; }
 .classroom__syllabus-status--expired { color: var(--p-text-muted); }
+
+/* ── Tab nav ────────────────────────────────────────────────────────── */
+
+.classroom__tabs {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 22px;
+  border-bottom: 1px solid var(--p-border);
+}
+
+.classroom__tab {
+  appearance: none;
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--p-text-muted);
+  font-size: 13px;
+  font-weight: 500;
+  padding: 8px 14px;
+  cursor: pointer;
+  transition: color var(--p-transition);
+}
+
+.classroom__tab:hover {
+  color: var(--p-text-secondary);
+}
+
+.classroom__tab--active {
+  color: var(--p-text-primary);
+  border-bottom-color: var(--p-accent-purple);
+}
+
+/* ── Roster (curriculum traffic-lights) ────────────────────────────── */
+
+.classroom__roster {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 14px;
+}
+
+.classroom__roster-card {
+  background: var(--p-bg-secondary);
+  border: 1px solid var(--p-border);
+  border-radius: var(--p-radius);
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.classroom__roster-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.classroom__roster-agent {
+  font-weight: 600;
+  color: var(--p-text-primary);
+  font-size: 14px;
+}
+
+/* The traffic light — a filled dot whose color encodes syllabus health. */
+.classroom__light {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 18%, transparent);
+}
+
+.classroom__light--current { background: var(--p-accent-green); color: var(--p-accent-green); }
+.classroom__light--stale { background: var(--p-accent-orange); color: var(--p-accent-orange); }
+.classroom__light--broken { background: #e0586b; color: #e0586b; }
+.classroom__light--expired { background: var(--p-text-muted); color: var(--p-text-muted); }
+
+.classroom__roster-hint {
+  font-size: 12px;
+  color: var(--p-text-muted);
+  line-height: 1.45;
+}
+
+.classroom__roster-counts {
+  display: flex;
+  gap: 6px;
+}
+
+/* ── Rap Sheet (learning lineage) ──────────────────────────────────── */
+
+.classroom__rapsheet-lead {
+  font-size: 13px;
+  color: var(--p-text-secondary);
+  line-height: 1.55;
+  margin-bottom: 16px;
+  max-width: 720px;
+}
+
+.classroom__rapsheet-lead b {
+  color: var(--p-text-primary);
+}
+
+.classroom__lineage {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+  padding-left: 4px;
+  border-left: 1px solid var(--p-border);
+}
+
+.classroom__lineage-step {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--p-text-secondary);
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+  padding-left: 10px;
+}
+
+.classroom__lineage-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--p-text-muted);
+  flex-shrink: 0;
+  margin-left: -14px;
+}
+
+.classroom__lineage-step--broke { color: #e0586b; }
+.classroom__lineage-dot--broke { background: #e0586b; }
+
+.classroom__lineage-step--untested { color: var(--p-text-muted); font-style: italic; }
+.classroom__lineage-dot--untested {
+  background: transparent;
+  border: 1.5px solid var(--p-text-muted);
+}
