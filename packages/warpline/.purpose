@@ -326,6 +326,23 @@ components:
       - "#predict"
       - "#git-exec"
 
+  lifeline:
+    description: >-
+      Meaning-aware blame — lifeline(symbol, {maxCommits}) traces a symbol's ESSENCE
+      through the commits that touched its file (git log --follow, so the thread
+      survives the renames/moves git blame resets on), attributing each essence-change
+      to the commit that INTRODUCED it (newest-first) with the author + INTENT (the
+      commit subject git blame can't show). Resolves the symbol at HEAD, absorbs up to
+      maxCommits of the file history IN PARALLEL (concurrency-safe per T-2026-06-23-003),
+      and emits ONLY genuine meaning changes — a commit that touched the file but not
+      the symbol's meaning is NOT an event. Read-only. MVP: tracks by the ::qualified
+      suffix (rename-stable across file moves; a same-suffix collision elsewhere is a
+      known limitation).
+    type: module
+    components:
+      - "#absorb"
+      - "#git-exec"
+
   warpline-cli:
     description: >-
       The warpline command line (commander). `warpline oracle <a> <b> [--json]`,
@@ -335,14 +352,18 @@ components:
       [--json]` (the N-way fold forecast — CLEAN-to-fold vs N decisions, knots with
       per-ref sides, dangling, auto-fold count), and `warpline diff [refA] [refB]
       [--json]` (semantic diff; no args = WORKTREE vs HEAD, one arg = ref vs HEAD,
-      two args = refA vs refB). The only module allowed to write stdout; library
-      code stays quiet.
+      two args = refA vs refB). Plus `warpline status [--json]` (the working tree's
+      MEANING vs HEAD — the named, discoverable form of diff-no-args) and `warpline
+      lifeline <symbol> [--max N] [--json]` (meaning-aware blame — who changed a
+      symbol's meaning, when, why; survives renames). The only module allowed to
+      write stdout; library code stays quiet.
     type: cli
     components:
       - "#oracle"
       - "#absorb"
       - "#weave"
       - "#consolidate"
+      - "#lifeline"
 
 flows:
   oracle-run:
@@ -424,6 +445,7 @@ aspects:
       - "#repo-lock"
       - "#absorb"
       - "#consolidate"
+      - "#lifeline"
       - "#lift-code-units"
       - "#ts-lens"
       - "#warp-store"

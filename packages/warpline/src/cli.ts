@@ -6,6 +6,8 @@
  *   warpline absorb <ref> [--json]                 lift a ref to a WarpState and dump it
  *   warpline weave --preview <A> <B> [--json]      THE PRE-MERGE FORECAST (meaning)
  *   warpline consolidate <refs...> [--base R]      THE N-WAY FOLD FORECAST (meaning)
+ *   warpline status [--json]                       working-tree MEANING vs HEAD
+ *   warpline lifeline <symbol> [--max N] [--json]  meaning-aware blame (survives renames)
  *   warpline diff [refA] [refB] [--json]           SEMANTIC diff between two refs
  *
  * This is the ONLY file allowed to write to stdout — library code stays quiet.
@@ -21,6 +23,7 @@ import {
   type SemDiffReport,
 } from './weave.js';
 import { consolidate, type ConsolidateForecast } from './consolidate.js';
+import { lifeline, type Lifeline } from './lifeline.js';
 import type { ContractChangeset } from './sem-delta.js';
 import { changedSlotsOf } from './sem-delta.js';
 import { serializeState } from './warp/store.js';
@@ -169,6 +172,87 @@ program
       fail(err);
     }
   });
+
+program
+  .command('status')
+  .description("The working tree's MEANING vs HEAD — what changed semantically (a rename is the EMPTY delta). The named, discoverable form of `diff` with no args.")
+  .option('--json', 'emit the SemDiffReport as JSON')
+  .action(async (options: { json?: boolean }) => {
+    try {
+      // HEAD is the base, the working tree is the branch — so a new symbol reads as
+      // `born`, a deleted one as `retired` (status semantics, not the inverse).
+      const report = await semanticDiff('HEAD', WORKTREE_REF);
+      if (options.json) {
+        process.stdout.write(JSON.stringify(report, null, 2) + '\n');
+      } else {
+        printStatus(report);
+      }
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+program
+  .command('lifeline')
+  .description("Meaning-aware blame: trace a symbol's ESSENCE through history — who changed its MEANING, when, and why. Follows the file across renames (git blame resets; lifeline doesn't).")
+  .argument('<symbol>', 'symbol to trace, e.g. #essence-hash or #code:src/foo.ts::bar')
+  .option('--max <n>', 'max file-touching commits to scan', '25')
+  .option('--json', 'emit the Lifeline as JSON')
+  .action(async (symbol: string, options: { max?: string; json?: boolean }) => {
+    try {
+      const ll = await lifeline(symbol, { maxCommits: Number(options.max) || 25 });
+      if (options.json) {
+        process.stdout.write(JSON.stringify(ll, null, 2) + '\n');
+      } else {
+        printLifeline(ll);
+      }
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+function printStatus(r: SemDiffReport): void {
+  const lines: string[] = [];
+  lines.push('WARPLINE STATUS  (working tree vs HEAD, by MEANING)');
+  lines.push('');
+  if (r.changedCount === 0 && r.renamedNoopCount === 0) {
+    lines.push('clean — no semantic change (HEAD and the working tree agree in meaning)');
+  } else {
+    lines.push(`born            ${r.born.length}`);
+    for (const d of r.born) lines.push(`  + ${d.symbol}`);
+    lines.push(`retired         ${r.retired.length}`);
+    for (const d of r.retired) lines.push(`  - ${d.symbol}`);
+    lines.push(`contract-changed ${r.contractChanged.length}`);
+    for (const d of r.contractChanged) lines.push(`  ~ ${d.symbol}`);
+    lines.push(`renamed (no meaning change)  ${r.renamedNoop.length}`);
+    for (const d of r.renamedNoop) lines.push(`  ↻ ${d.baseSymbol}→${d.symbol}`);
+    lines.push('');
+    lines.push(`summary  ${r.changedCount} changed, ${r.renamedNoopCount} renamed-noop`);
+  }
+  process.stdout.write(lines.join('\n') + '\n');
+}
+
+function printLifeline(ll: Lifeline): void {
+  const lines: string[] = [];
+  lines.push(`LIFELINE  ${ll.symbol}`);
+  lines.push(`file      ${ll.filePath}${ll.truncated ? '   (history capped — raise --max)' : ''}`);
+  lines.push('');
+  if (ll.events.length === 0) {
+    lines.push('(no essence-change history found in scope)');
+  } else {
+    for (const e of ll.events) {
+      const date = e.date.slice(0, 10);
+      const tag = e.kind === 'born' ? '◆ born  ' : '~ change';
+      lines.push(`${tag}  ${e.commit}  ${date}  ${e.author}`);
+      lines.push(`     intent:  ${e.intent}`);
+      lines.push(`     essence: ${e.contentId}`);
+      if (e.symbol !== ll.symbol) lines.push(`     (as ${e.symbol} — the thread survived a rename)`);
+    }
+    lines.push('');
+    lines.push('(git blame resets at every rename; lifeline follows the meaning)');
+  }
+  process.stdout.write(lines.join('\n') + '\n');
+}
 
 function printForecast(f: Forecast): void {
   const lines: string[] = [];
