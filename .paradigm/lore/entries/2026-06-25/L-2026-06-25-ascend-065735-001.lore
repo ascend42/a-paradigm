@@ -1,0 +1,35 @@
+id: L-2026-06-25-ascend-065735-001
+type: milestone
+timestamp: '2026-06-25T06:57:35.564Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Expeditions live — Arky's real web dive → 3 cited external candidates on the board
+summary: 'Ran the first real Expedition end-to-end. Extended paradigm_journal_record to carry a provenance envelope (source/trust/sourceSet) — the staging plumbing for foraged knowledge. Then sent Arky on a real vertical dive (''new paradigms for organizing TypeScript projects''): genuine WebSearch over Nx/moonrepo/feature-sliced.design/webpack, distilled to 3 cited candidates, ran the intake gate against OUR repo (verified a-paradigm ships 9 deliberate barrels bundled via tsup → authored SC-barrels-antipattern-vs-our-tooling), enrolled architect, and staged all 3 at trust:external with real sourceSet URLs. They appear on the live Academy board as external candidates, never touching a notebook — the firewall held end-to-end.'
+symbols_touched:
+  - '#classroom'
+  - '#nomination-engine'
+  - '#ClassroomRouter'
+files_created:
+  - .paradigm/curriculum/architect.syllabus
+  - .paradigm/curriculum/scenarios/SC-barrels-antipattern-vs-our-tooling.scenario
+files_modified:
+  - packages/paradigm-mcp/src/types/knowledge-streams.ts
+  - packages/paradigm-mcp/src/tools/streams.ts
+learnings:
+  - 'Expeditions runs for real with one small plumbing change: paradigm_journal_record gaining an optional provenance:{source,trust,sourceSet} envelope is enough to stage foraged web candidates at trust:external — the Academy /staged route already read provenance, so they surface badged external with zero GUI change.'
+  - 'The intake ''no scenario, no assessment'' gate is what makes external knowledge honest in practice: a foraged ''barrels are an anti-pattern'' claim, refuted against OUR repo (9 deliberate tsup-bundled barrels), becomes a challenger that the gate will refine to ''X except our framework packages'' — the scraped opinion can''t rewrite how we build, it can only earn a scoped exception.'
+tags:
+  - classroom
+  - expeditions
+  - external-knowledge
+  - milestone
+  - from-team
+linked_lore:
+  - L-2026-06-25-ascend-062939-001
+confidence: 0.9
+git_context:
+  ref: e3be16b0202baf5424ca421d56ccbb5caa2cc8d8
+  branch: warpline-surfaces
+  dirty: true

@@ -90,6 +90,15 @@ export function getStreamsToolsList() {
           },
           linked_work_log: { type: 'string', description: 'Work log entry that prompted this' },
           tags: { type: 'array', items: { type: 'string' } },
+          provenance: {
+            type: 'object',
+            description: 'Optional external-provenance envelope. Used by /paradigm:forage to stage foraged web candidates at the floor trust tier (source: "external", trust: "external"). Omit for ordinary entries.',
+            properties: {
+              source: { type: 'string', description: 'Source type (e.g., "external" for a foraged web candidate)' },
+              trust: { type: 'string', enum: ['certified', 'provisional', 'external'], description: 'Trust tier — "external" is the un-promoted, context-excluded floor' },
+              sourceSet: { type: 'array', items: { type: 'string' }, description: 'Source refs (e.g., foraged URLs) this entry was distilled from' },
+            },
+          },
         },
         required: ['agent', 'trigger', 'insight', 'project', 'transferable'],
       },
@@ -259,6 +268,12 @@ export async function handleStreamsTool(
         pattern: args.pattern as { id: string; applies_when: string; correct_approach: string } | undefined,
         linked_work_log: args.linked_work_log as string | undefined,
         tags: args.tags as string[] | undefined,
+        // Optional external-provenance envelope (e.g., /paradigm:forage staging
+        // foraged web candidates at the floor trust tier). Spread only when
+        // provided so ordinary entries serialize exactly as before.
+        ...(args.provenance
+          ? { provenance: args.provenance as { source?: string; trust?: 'certified' | 'provisional' | 'external'; sourceSet?: string[] } }
+          : {}),
       });
       return {
         text: json({ recorded: true, id: entry.id, agent: entry.agent, timestamp: entry.timestamp }),

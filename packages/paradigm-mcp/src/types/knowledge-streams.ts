@@ -74,6 +74,24 @@ export interface LearningPattern {
   correct_approach: string;
 }
 
+/**
+ * External-provenance envelope for a journal entry.
+ *
+ * Mirrors the trust/source literals of `NotebookProvenance` (types/notebooks.ts).
+ * Used by the Expeditions / `/paradigm:forage` flow to stage foraged web
+ * candidates as study-hall journal entries at the floor trust tier
+ * (source: 'external', trust: 'external'). Optional and additive — entries
+ * recorded without it serialize exactly as before.
+ */
+export interface JournalProvenance {
+  /** Source type (e.g., 'external' for a foraged web candidate). */
+  source?: string;
+  /** Trust tier — 'external' is the un-promoted, context-excluded floor. */
+  trust?: 'certified' | 'provisional' | 'external';
+  /** Source refs this entry was distilled from (e.g., foraged URLs). */
+  sourceSet?: string[];
+}
+
 export interface JournalEntry {
   /** Unique ID (e.g., "LJ-2026-03-20-001") */
   id: string;
@@ -101,6 +119,12 @@ export interface JournalEntry {
   tags?: string[];
   /** Whether this has been promoted to a notebook entry */
   promoted_to_notebook?: string;
+  /**
+   * External-provenance envelope. Present only for entries staged with
+   * provenance (e.g., foraged web candidates via `/paradigm:forage`).
+   * Omitted entirely for ordinary learning-journal entries.
+   */
+  provenance?: JournalProvenance;
 }
 
 // ────────────────────────────────────────────────────────

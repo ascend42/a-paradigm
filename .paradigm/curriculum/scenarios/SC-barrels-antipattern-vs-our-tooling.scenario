@@ -1,0 +1,12 @@
+id: SC-barrels-antipattern-vs-our-tooling
+scenario: 'The foraged claim ''barrel files (index.ts re-exports) are an anti-pattern at scale'' (defeats tree-shaking, slows builds 15–70%, MUI-button-via-barrel nearly doubled bundle). PROBE against OUR repo: a-paradigm ships 9 DELIBERATE barrels (packages/*/src/index.ts) and the CLI BUNDLES workspace deps THROUGH them via tsup — tree-shaking happens at bundle time, not via a consumer''s import graph. The anti-barrel argument targets app code importing a library''s barrel; it does NOT hold for our framework packages where the barrel IS the intentional, tooled public API. The claim must REJECT as a universal rule — it is app-code-specific, so the gated outcome is a refine to ''X except our bundled framework packages'', not adoption.'
+probes:
+  - agent: architect
+    learning_ref: architect/barrels-antipattern
+    claim: barrel files are an anti-pattern at scale
+origin: authored
+expected:
+  must: reject
+outcome_history: []
+repeat_failures: 0
+status: active
