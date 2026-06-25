@@ -1,0 +1,454 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>WARPLINE — Point of view: what it is, where it's going</title>
+<meta name="description" content="A point of view on Warpline — version control for meaning. Where it stands today, the one gate it has to clear (the write path), and why it wins once it does: the companion wedge and the non-portable calibration moat." />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+<style>
+  /* ============================ TOKENS (shared with index.html) ============================ */
+  :root {
+    --ink-900: #0B0D14; --ink-850: #0F1220; --ink-800: #141829; --ink-700: #1C2138; --ink-600: #2A3050;
+    --linen-50: #F4F1EA; --linen-200: #CFCABE; --linen-400: #8B8A82;
+    --warp: #E9A23B; --warp-soft: #F2C078; --weft: #2DD4BF; --weft-soft: #5EEAD4; --seam: #7C6FF0;
+    --clean: #34D8A0; --cut: #5E5C54;
+    --weave-grad: linear-gradient(135deg, #E9A23B 0%, #2DD4BF 100%);
+    --maxw: 1120px; --textw: 820px; --ease: cubic-bezier(0.22, 1, 0.36, 1); --pad-sec: clamp(88px, 12vh, 150px);
+    --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    --display: "Fraunces", Georgia, serif; --ui: "Inter", system-ui, -apple-system, sans-serif;
+  }
+  *, *::before, *::after { box-sizing: border-box; }
+  html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body { margin: 0; background: var(--ink-900); color: var(--linen-200); font-family: var(--ui); font-size: 17px; line-height: 1.65; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; overflow-x: hidden; }
+  svg { display: block; max-width: 100%; }
+  a { color: inherit; text-decoration: none; }
+  ::selection { background: rgba(233, 162, 59, 0.25); color: var(--linen-50); }
+  h1, h2, h3, h4 { font-family: var(--display); color: var(--linen-50); }
+  .mono { font-family: var(--mono); }
+  .muted { color: var(--linen-400); }
+  .emph { font-style: italic; color: var(--warp-soft); }
+  .emph-weft { font-style: italic; color: var(--weft-soft); }
+  .emph-seam { font-style: italic; color: var(--seam); }
+
+  .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 clamp(20px, 5vw, 48px); }
+  .section { position: relative; padding: var(--pad-sec) 0; }
+  .section--bleed { background: var(--ink-850); }
+  .lede { max-width: var(--textw); }
+
+  .warpgrid { position: absolute; inset: 0; pointer-events: none; opacity: 0; transition: opacity 1.1s var(--ease);
+    background-image: repeating-linear-gradient(to right, var(--ink-700) 0, var(--ink-700) 1px, transparent 1px, transparent 88px); }
+  .section.in-view .warpgrid { opacity: 0.08; }
+  .section--bleed.in-view .warpgrid { opacity: 0.12; }
+
+  /* ===== NAV ===== */
+  nav.topnav { position: fixed; top: 0; left: 0; right: 0; height: 64px; z-index: 100; display: flex; align-items: center; justify-content: space-between; padding: 0 clamp(20px, 5vw, 48px); transition: background 0.4s var(--ease), border-color 0.4s var(--ease); border-bottom: 1px solid transparent; }
+  nav.topnav.scrolled { background: rgba(11, 13, 20, 0.8); -webkit-backdrop-filter: blur(14px); backdrop-filter: blur(14px); border-bottom: 1px solid var(--ink-700); }
+  .wordmark { font-family: var(--display); font-size: 22px; font-weight: 500; color: var(--linen-50); letter-spacing: -0.01em; position: relative; padding-bottom: 4px; }
+  .wordmark::after { content: ""; position: absolute; left: 0; bottom: 0; height: 2px; width: 100%; background: var(--warp); border-radius: 2px; }
+  .wordmark .pov { font-family: var(--mono); font-size: 12px; color: var(--linen-400); margin-left: 10px; letter-spacing: 0.12em; }
+  .navlinks { display: flex; align-items: center; gap: clamp(14px, 2.5vw, 26px); }
+  .navlinks a.quiet { font-family: var(--mono); font-size: 12.5px; color: var(--linen-400); letter-spacing: 0.04em; transition: color 0.3s var(--ease); }
+  .navlinks a.quiet:hover { color: var(--linen-200); }
+  .ghost-btn { font-family: var(--ui); font-size: 13.5px; font-weight: 500; color: var(--linen-50); border: 1px solid var(--ink-600); border-radius: 999px; padding: 9px 18px; transition: border-color 0.3s var(--ease), transform 0.3s var(--ease); }
+  .ghost-btn:hover { border-color: var(--warp); transform: translateY(-1px); }
+  @media (max-width: 800px) { .navlinks a.quiet { display: none; } }
+
+  /* ===== HERO ===== */
+  .hero { position: relative; min-height: 92vh; display: flex; align-items: center; padding: 130px 0 90px; overflow: hidden; }
+  .hero-inner { max-width: 940px; position: relative; z-index: 2; }
+  .eyebrow { font-family: var(--mono); font-size: 13px; letter-spacing: 0.18em; text-transform: uppercase; color: var(--linen-400); margin: 0 0 22px; }
+  h1.hero-h1 { font-size: clamp(42px, 6.4vw, 84px); line-height: 1.03; letter-spacing: -0.015em; font-weight: 460; margin: 0 0 26px; text-wrap: balance; }
+  .hero-deck { font-family: var(--display); font-size: clamp(19px, 2.5vw, 28px); line-height: 1.34; color: var(--linen-200); font-weight: 360; max-width: 780px; margin: 0 0 38px; text-wrap: balance; }
+
+  /* ===== STATUS STRIP ===== */
+  .status-strip { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 6px; }
+  .stat { display: flex; align-items: baseline; gap: 10px; background: var(--ink-850); border: 1px solid var(--ink-700); border-radius: 12px; padding: 12px 16px; }
+  .stat .k { font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.05em; color: var(--linen-400); text-transform: uppercase; }
+  .stat .v { font-family: var(--mono); font-size: 13px; font-weight: 600; }
+  .stat .v.ok { color: var(--clean); } .stat .v.gate { color: var(--seam); } .stat .v.cold { color: var(--cut); } .stat .v.next { color: var(--weft); }
+
+  /* ===== REVEALS ===== */
+  .reveal { opacity: 0; transform: translateY(16px); transition: opacity 0.7s var(--ease), transform 0.7s var(--ease); will-change: opacity, transform; }
+  .reveal.in-view { opacity: 1; transform: none; }
+  .reveal.d1 { transition-delay: 0.06s; } .reveal.d2 { transition-delay: 0.13s; } .reveal.d3 { transition-delay: 0.2s; }
+
+  /* ===== HEADINGS ===== */
+  .sec-title { font-size: clamp(32px, 3.8vw, 52px); line-height: 1.07; letter-spacing: -0.01em; margin: 0 0 20px; }
+  .sec-deck { font-size: clamp(17px, 2vw, 20px); color: var(--linen-200); max-width: var(--textw); }
+  .pull-stmt { font-family: var(--display); font-size: clamp(36px, 5.6vw, 72px); line-height: 1.05; letter-spacing: -0.015em; color: var(--linen-50); max-width: 16ch; text-wrap: balance; font-weight: 420; margin: 0 0 26px; }
+
+  /* ===== LISTS / CARDS ===== */
+  .key-points { list-style: none; padding: 0; margin: 28px 0 0; max-width: var(--textw); }
+  .key-points li { position: relative; padding-left: 26px; margin-bottom: 14px; color: var(--linen-200); font-size: 16.5px; }
+  .key-points li::before { content: ""; position: absolute; left: 0; top: 12px; width: 14px; height: 1.5px; background: var(--warp); border-radius: 2px; }
+  .key-points li b { color: var(--linen-50); font-weight: 600; }
+
+  .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 40px; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-top: 40px; }
+  @media (max-width: 860px) { .grid-3, .grid-2 { grid-template-columns: 1fr; } }
+  .card { background: var(--ink-800); border: 1px solid var(--ink-700); border-radius: 15px; padding: clamp(20px, 3vw, 28px); transition: border-color 0.4s var(--ease), transform 0.4s var(--ease); }
+  .card:hover { transform: translateY(-2px); }
+  .card.warp:hover { border-color: var(--warp); } .card.weft:hover { border-color: var(--weft); } .card.seam:hover { border-color: var(--seam); }
+  .card .lbl { font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--linen-400); margin: 0 0 12px; }
+  .card h3 { font-size: 21px; margin: 0 0 10px; line-height: 1.15; }
+  .card p { margin: 0; font-size: 15px; color: var(--linen-400); line-height: 1.6; }
+  .card .tag { display: inline-block; margin-top: 14px; font-family: var(--mono); font-size: 11px; padding: 3px 9px; border-radius: 999px; }
+  .tag.built { color: var(--clean); border: 1px solid rgba(52,216,160,0.35); }
+  .tag.designed { color: var(--weft); border: 1px solid rgba(45,212,191,0.3); }
+  .tag.latent { color: var(--warp-soft); border: 1px solid rgba(233,162,59,0.3); }
+  .tag.gated { color: var(--cut); border: 1px solid var(--ink-600); }
+
+  .chip { display: inline-block; font-family: var(--mono); font-size: 11.5px; padding: 3px 9px; border-radius: 6px; background: var(--ink-700); color: var(--linen-200); letter-spacing: 0.02em; }
+  .chip.hash { color: var(--warp-soft); border: 1px solid rgba(233,162,59,0.3); }
+  .chip.weft { color: var(--weft); border: 1px solid rgba(45,212,191,0.3); }
+  .chip.seam { color: var(--seam); border: 1px solid rgba(124,111,240,0.35); }
+
+  .diagram { margin-top: 48px; background: var(--ink-800); border: 1px solid var(--ink-700); border-radius: 16px; padding: clamp(20px, 3.2vw, 38px); }
+  .diagram-cap { font-family: var(--mono); font-size: 12px; letter-spacing: 0.06em; color: var(--linen-400); text-transform: uppercase; margin: 18px 0 0; text-align: center; }
+  .banner { margin-top: 30px; text-align: center; font-family: var(--display); font-size: clamp(19px, 2.6vw, 30px); color: var(--linen-50); font-style: italic; text-wrap: balance; }
+
+  /* ===== HONESTY NOTE ===== */
+  .note { margin-top: 34px; border-left: 2px solid var(--seam); background: var(--ink-850); border-radius: 0 12px 12px 0; padding: 18px 22px; max-width: var(--textw); }
+  .note .lbl { font-family: var(--mono); font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--seam); margin: 0 0 8px; }
+  .note p { margin: 0; font-size: 15px; color: var(--linen-200); }
+
+  /* ===== LADDER (roadmap) ===== */
+  .ladder { margin-top: 48px; position: relative; padding-left: 34px; }
+  .ladder::before { content: ""; position: absolute; left: 9px; top: 8px; bottom: 8px; width: 2px; background: linear-gradient(to bottom, var(--warp), var(--weft), var(--seam)); opacity: 0.5; border-radius: 2px; }
+  .rung { position: relative; padding: 0 0 36px 0; }
+  .rung:last-child { padding-bottom: 0; }
+  .rung::before { content: ""; position: absolute; left: -33px; top: 4px; width: 16px; height: 16px; border-radius: 50%; background: var(--ink-900); border: 2px solid var(--cut); }
+  .rung.now::before { border-color: var(--clean); box-shadow: 0 0 0 4px rgba(52,216,160,0.1); }
+  .rung.gate::before { border-color: var(--seam); box-shadow: 0 0 14px rgba(124,111,240,0.5); }
+  .rung .phase { font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.1em; text-transform: uppercase; color: var(--linen-400); }
+  .rung.now .phase { color: var(--clean); } .rung.gate .phase { color: var(--seam); }
+  .rung h3 { font-size: 23px; margin: 6px 0 8px; }
+  .rung p { margin: 0; color: var(--linen-400); font-size: 15.5px; max-width: 720px; }
+  .rung .meta { margin-top: 10px; display: flex; flex-wrap: wrap; gap: 8px; }
+
+  /* ===== FOOTER ===== */
+  footer { position: relative; padding: 72px 0 56px; border-top: 1px solid var(--ink-700); background: linear-gradient(to bottom, var(--ink-850), #000); }
+  .foot-inner { display: flex; flex-wrap: wrap; gap: 24px; align-items: center; justify-content: space-between; }
+  .foot-links { display: flex; gap: 22px; }
+  .foot-links a { font-family: var(--mono); font-size: 12.5px; color: var(--linen-400); transition: color 0.3s var(--ease); }
+  .foot-links a:hover { color: var(--warp); }
+  .foot-tag { font-family: var(--mono); font-size: 12px; color: var(--linen-400); letter-spacing: 0.04em; }
+
+  text.l { font-family: var(--mono); font-size: 11px; fill: var(--linen-400); }
+  text.l-lit { font-family: var(--mono); font-size: 11px; fill: var(--linen-200); }
+  @media (max-width: 720px) { body { font-size: 16px; } .reveal { opacity: 1; transform: none; } }
+</style>
+</head>
+<body>
+
+<nav class="topnav" id="topnav" aria-label="Primary">
+  <a href="index.html" class="wordmark" aria-label="WARPLINE">WARPLINE<span class="pov">/ POV</span></a>
+  <div class="navlinks">
+    <a href="#thesis" class="quiet">Thesis</a>
+    <a href="#today" class="quiet">Today</a>
+    <a href="#gate" class="quiet">The Gate</a>
+    <a href="#wedge" class="quiet">Wedge</a>
+    <a href="#moat" class="quiet">Moat</a>
+    <a href="#path" class="quiet">The Path</a>
+    <a href="index.html" class="ghost-btn">The vision &rarr;</a>
+  </div>
+</nav>
+
+<!-- 1 · HERO -->
+<header class="hero section" id="top">
+  <div class="warpgrid" aria-hidden="true"></div>
+  <div class="wrap">
+    <div class="hero-inner">
+      <p class="eyebrow reveal in-view">Warpline · Point of view · v0, experimental</p>
+      <h1 class="hero-h1 reveal d1">Read-only is the&nbsp;trap. The write&nbsp;path is the&nbsp;product.</h1>
+      <p class="hero-deck reveal d2">Warpline is version control for <span class="emph">meaning</span>, not bytes. Today it can already see a merge that Git can't. This is where it honestly stands, the one gate it has to clear, and why it wins once&nbsp;it&nbsp;does.</p>
+      <div class="status-strip reveal d3">
+        <div class="stat"><span class="k">Oracle</span><span class="v ok">built ✓</span></div>
+        <div class="stat"><span class="k">Code-lens</span><span class="v ok">shipped ✓</span></div>
+        <div class="stat"><span class="k">Write path</span><span class="v gate">the gate</span></div>
+        <div class="stat"><span class="k">Git round-trip</span><span class="v gate">GAP-7</span></div>
+        <div class="stat"><span class="k">Moat clock</span><span class="v cold">not started</span></div>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- 2 · THESIS -->
+<section class="section" id="thesis">
+  <div class="warpgrid" aria-hidden="true"></div>
+  <div class="wrap">
+    <p class="eyebrow reveal">01 · The thesis</p>
+    <h2 class="pull-stmt reveal d1">WARP is truth. Bytes are a&nbsp;projection.</h2>
+    <p class="sec-deck reveal d2">Git versions the <em>file</em> — the photograph of the bytes. Warpline versions the <em>meaning</em>: every symbol's kind, contract, and typed edges. The bytes become one renderable projection of a deeper truth, the way source is a projection of intent.</p>
+    <ul class="key-points reveal d2">
+      <li>A change is a <b>PICK</b> — it carries its actor, its intent, its semantic-delta, a <em>store-computed</em> ripple it can't under-report, and a signature. Conscience travels with the change.</li>
+      <li>A <b>rename is nothing</b> — same meaning, same contentId, an empty delta. A move across files is nothing. Git sees churn; Warpline sees identity.</li>
+      <li>A <b>merge is a weave</b> — N non-intersecting branches fold into one fabric with zero human merge labor; only a genuine meaning-collision (a <span class="emph-seam">knot</span>) asks for a human.</li>
+      <li>The <b>Oracle already catches what Git can't</b>: on real code in this repo, Git merged clean and Warpline caught a call into a retired symbol. That test passes <em>today</em>.</li>
+    </ul>
+    <div class="note reveal d2">
+      <p class="lbl">Honest caveat — the lens is lossy</p>
+      <p>"WARP is truth" holds for the merge <em>decision</em> — that's proven. But materializing code still projects from stored bytes, so the lens is lossy, and the word <em>replacement</em> is earned, not yet shipped. We say what's true: the Oracle is real; the rest is being woven.</p>
+    </div>
+  </div>
+</section>
+
+<!-- 3 · TODAY -->
+<section class="section section--bleed" id="today">
+  <div class="warpgrid" aria-hidden="true"></div>
+  <div class="wrap">
+    <p class="eyebrow reveal">02 · Where it stands</p>
+    <h2 class="sec-title reveal d1">Built, designed, latent — and honestly, not&nbsp;yet.</h2>
+    <p class="sec-deck reveal d2">No vaporware. Here is the real state of the four layers.</p>
+    <div class="grid-2 reveal d2">
+      <div class="card warp">
+        <p class="lbl">Built &amp; proven</p>
+        <h3>The Oracle &amp; the code-lens</h3>
+        <p>ABSORB lifts a ref into a WARP; the Convergence/Divergence Oracle runs Git's real merge read-only and scores it against meaning. A v1 reads actual TypeScript (CCNF essences, checker-resolved refs). The divergence proof is a green test.</p>
+        <span class="tag built">RUNS TODAY</span>
+      </div>
+      <div class="card weft">
+        <p class="lbl">Designed</p>
+        <h3>The surfaces</h3>
+        <p>The Oracle Divergence Viewer and Semantic-Diff are built in the Platform; the Fabric and Lifeline navigation views are designed (the section below). A full design system — tokens, components, screens — anchors them.</p>
+        <span class="tag designed">DRAWN, WIRING NEXT</span>
+      </div>
+      <div class="card warp">
+        <p class="lbl">Latent</p>
+        <h3>~80% of the write path</h3>
+        <p>The Oracle already emits knots, dangling refs, the computed ripple, and the Justification. The write path (<span class="chip">weave</span>) is mostly assembling parts that already exist — plus the trust ledger, scrutiny routing, and the endorsement primitive.</p>
+        <span class="tag latent">PARTS EXIST</span>
+      </div>
+      <div class="card seam">
+        <p class="lbl">Not yet</p>
+        <h3>Writing &amp; the round-trip</h3>
+        <p>Warpline does not yet <em>weave</em> (write), and the Git export round-trip (<span class="chip seam">GAP-7</span>) — reconstruct byte-commits from meaning-PICKs without drift — is unproven. This is the gate. We won't hand-wave it.</p>
+        <span class="tag gated">THE GATE</span>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 4 · THE GATE -->
+<section class="section" id="gate">
+  <div class="warpgrid" aria-hidden="true"></div>
+  <div class="wrap">
+    <p class="eyebrow reveal">03 · The one move</p>
+    <h2 class="pull-stmt reveal d1">A read-only oracle is a&nbsp;linter. The value is in the&nbsp;weave.</h2>
+    <p class="sec-deck reveal d2">A four-lens product review landed on this unanimously: <b style="color:var(--linen-50)">the write path + the Git round-trip (GAP-7) is the gate to the product, the moat, and the wedge.</b> Read-only impresses once. Value compounds only when Warpline <em>writes</em> the weave and the round-trip back to Git is proven — that's what turns a demo into infrastructure.</p>
+    <div class="grid-2 reveal d2">
+      <div class="card weft">
+        <p class="lbl">Go-to-market — companion first</p>
+        <h3>Warpline Guard</h3>
+        <p>Ship the Oracle as a <b style="color:var(--linen-50)">CI check that fails the build on a meaning-break</b> — a call into a deleted symbol, a contract change Git merged clean. It rides <em>alongside</em> Git. No migration, no risk, immediate proof: "we ran your tool and it caught a break that shipped."</p>
+      </div>
+      <div class="card seam">
+        <p class="lbl">Then — replacement by gravity</p>
+        <h3>Not a frontal assault</h3>
+        <p>"Rip out Git" loses. Own the <em>agent review/merge layer</em> first — the place agents already break meaning fastest. Once teams trust the weave more than the merge, replacement happens by gravity, not by pitch.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 5 · WEDGE -->
+<section class="section section--bleed" id="wedge">
+  <div class="warpgrid" aria-hidden="true"></div>
+  <div class="wrap">
+    <p class="eyebrow reveal">04 · Who it's for</p>
+    <h2 class="sec-title reveal d1">The wedge: AI-agent-heavy TypeScript&nbsp;teams.</h2>
+    <p class="sec-deck reveal d2">Pick the room where the pain is sharpest and the lens is strongest.</p>
+    <ul class="key-points reveal d2">
+      <li><b>Agents merge fast and break meaning silently.</b> A human reads a diff; an agent ships ten. The faster the merge cadence, the more a byte-clean merge hides a meaning-break — exactly what the Oracle catches.</li>
+      <li><b>TypeScript, because the code-lens is bounded there.</b> A v1 already reads TS meaning end-to-end. We lead where we can tell the truth about the code, not everywhere at once.</li>
+      <li><b>This repo is user zero.</b> Warpline runs on its own history — the dog-food forcing function. The Fabric and Lifeline below render <em>this codebase's</em> real topology and real Oracle verdicts.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 6 · MOAT -->
+<section class="section" id="moat">
+  <div class="warpgrid" aria-hidden="true"></div>
+  <div class="wrap">
+    <p class="eyebrow reveal">05 · Why it compounds</p>
+    <h2 class="pull-stmt reveal d1">The moat is a history. The clock hasn't&nbsp;started.</h2>
+    <p class="sec-deck reveal d2">Every weave, every resolved knot, every field outcome accrues a <b style="color:var(--linen-50)">non-portable calibration corpus</b> — who is trusted on which symbols, which symbols are fragile, whose forecasts held. It can't be exported, scraped, or cold-started. A competitor can copy the engine; they can't copy your fabric's history.</p>
+    <ul class="key-points reveal d2">
+      <li><b>SCRUTINY = fragility(symbol) × (1 − trust(author, domain)).</b> Attention routed by expected loss — earned from real outcomes, not bought.</li>
+      <li><b>The loop is self-closing.</b> A woven change that breaks in the field lowers the author's and endorsers' trust and raises the symbol's fragility — so the next change there is reviewed harder. The corpus sharpens itself.</li>
+      <li><b>And it's worth ~0 until weaves accrue.</b> Which is the whole point: the moat <em>starts</em> when the write path ships. The clock only runs once Warpline writes — another reason the gate <em>is</em> the strategy.</li>
+    </ul>
+  </div>
+</section>
+
+<!-- 7 · THE SURFACES -->
+<section class="section section--bleed" id="surfaces">
+  <div class="warpgrid" aria-hidden="true"></div>
+  <div class="wrap">
+    <p class="eyebrow reveal">06 · The founder's question — answered</p>
+    <h2 class="sec-title reveal d1">You have to be able to see the&nbsp;weave.</h2>
+    <p class="sec-deck reveal d2">The verdict and diff screens told you <em>what</em> a merge meant — but there was no way to <em>navigate</em> the history the way SourceTree's commit graph lets you. Two surfaces answer it, both through the meaning lens, both deterministic — never a force-directed hairball, which would break the very thesis the product rests on.</p>
+
+    <!-- FABRIC -->
+    <div class="diagram reveal d2">
+      <svg viewBox="0 0 960 300" role="img" aria-label="The Fabric: a woven history with branch threads, weave nodes carrying the oracle verdict, a release bolt, and the live selvage edge.">
+        <!-- warp spine (main) -->
+        <line x1="120" y1="20" x2="120" y2="280" stroke="var(--warp)" stroke-width="2.4"/>
+        <text class="l" x="104" y="14">main</text>
+        <!-- selvage -->
+        <rect x="116" y="20" width="8" height="4" rx="2" fill="var(--seam)"/>
+        <text class="l-lit" x="134" y="30">SELVAGE · HEAD</text>
+        <!-- feature A (warpline-surfaces) picks, top -->
+        <line x1="240" y1="46" x2="240" y2="150" stroke="var(--weft)" stroke-width="2.2"/>
+        <circle cx="240" cy="66" r="5" fill="var(--weft)" stroke="var(--ink-800)" stroke-width="2"/>
+        <circle cx="240" cy="108" r="5" fill="var(--weft)" stroke="var(--ink-800)" stroke-width="2"/>
+        <text class="l" x="258" y="70">feat: Oracle Viewer UI · mika</text>
+        <!-- divergent weave (preview) -->
+        <path d="M240 150 C 240 168 120 162 120 178" fill="none" stroke="var(--seam)" stroke-width="2.4"/>
+        <circle cx="120" cy="178" r="13" fill="none" stroke="var(--seam)" stroke-width="2.4"/>
+        <path d="M114 172 L126 184 M126 172 L114 184" stroke="var(--seam)" stroke-width="1.6"/>
+        <!-- dangle -->
+        <path d="M133 178 C 150 188 178 184 190 196" fill="none" stroke="var(--cut)" stroke-width="2"/>
+        <circle cx="190" cy="196" r="4" fill="var(--cut)"/>
+        <circle cx="210" cy="200" r="8" fill="none" stroke="var(--seam)" stroke-width="1.6" stroke-dasharray="3 3"/>
+        <text class="l-lit" x="240" y="182" fill="var(--seam)">weave --preview · DIVERGENT</text>
+        <text class="l" x="240" y="198">git CLEAN ✓ — a live ref into a retired symbol</text>
+        <!-- bolt band -->
+        <line x1="60" y1="222" x2="900" y2="222" stroke="url(#pgrad)" stroke-width="2"/>
+        <defs><linearGradient id="pgrad" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="var(--warp)"/><stop offset="1" stop-color="var(--weft)"/></linearGradient></defs>
+        <text class="l" x="60" y="216">◆ BOLT · A v1 code-lens (experimental)</text>
+        <!-- convergent weave below -->
+        <line x1="240" y1="248" x2="240" y2="285" stroke="var(--weft)" stroke-width="2.2"/>
+        <path d="M120 252 C 120 270 240 264 240 282" fill="none" stroke="var(--weft)" stroke-width="2.2"/>
+        <circle cx="120" cy="252" r="9" fill="var(--weft)" stroke="var(--ink-800)" stroke-width="2"/>
+        <circle cx="120" cy="252" r="3.5" fill="var(--warp)"/>
+        <text class="l-lit" x="258" y="256" fill="var(--weft)">weave · loom-engine → main · CONVERGENT</text>
+      </svg>
+      <p class="diagram-cap">The Fabric — the oracle's verdict lives on the weave node. Calm teal = convergent · seam knot = divergent.</p>
+    </div>
+
+    <!-- LIFELINE -->
+    <div class="diagram reveal d2" style="margin-top:24px">
+      <svg viewBox="0 0 960 230" role="img" aria-label="The Lifeline: one symbol's continuous thread through time, surviving a rename and a move, beside the git-blame ghost that shatters into three mis-attributed spans.">
+        <text class="l-lit" x="40" y="30">#warpline-oracle — one thread, born → live</text>
+        <!-- the continuous thread -->
+        <line x1="70" y1="84" x2="890" y2="84" stroke="var(--warp)" stroke-width="2.6"/>
+        <!-- born -->
+        <line x1="52" y1="84" x2="70" y2="84" stroke="var(--warp)" stroke-width="2.6"/>
+        <circle cx="84" cy="84" r="6" fill="var(--warp)"/>
+        <text class="l" x="64" y="68">born · ascend</text>
+        <!-- essence change -->
+        <circle cx="300" cy="84" r="7" fill="none" stroke="var(--warp)" stroke-width="2.4"/>
+        <text class="l" x="276" y="68">essence · cid</text>
+        <!-- rename ∅ -->
+        <circle cx="500" cy="84" r="8" fill="none" stroke="var(--weft-soft)" stroke-width="2.4"/>
+        <text x="494" y="62" font-family="var(--mono)" font-size="14" fill="var(--weft-soft)">∅</text>
+        <text class="l" x="448" y="50" fill="var(--weft-soft)">renamed · loom→warpline</text>
+        <!-- knot -->
+        <circle cx="700" cy="84" r="11" fill="none" stroke="var(--seam)" stroke-width="2.4"/>
+        <path d="M694 78 L706 90 M706 78 L694 90" stroke="var(--seam)" stroke-width="1.6"/>
+        <text class="l" x="666" y="66" fill="var(--seam)">knot → Decision</text>
+        <!-- live selvage -->
+        <rect x="886" y="68" width="4" height="32" rx="2" fill="var(--seam)"/>
+        <circle cx="902" cy="84" r="6" fill="var(--weft)"/>
+        <text class="l-lit" x="852" y="68" fill="var(--weft)">LIVE</text>
+        <!-- name track continuity markers -->
+        <line x1="500" y1="84" x2="500" y2="128" stroke="var(--weft-soft)" stroke-width="1" opacity="0.5"/>
+        <text class="l" x="200" y="124">#loom-oracle</text>
+        <text x="372" y="124" font-family="var(--mono)" font-size="11" fill="var(--weft-soft)">∅ continuous</text>
+        <text class="l" x="560" y="124">#warpline-oracle</text>
+        <!-- git blame ghost -->
+        <text x="40" y="178" font-family="var(--mono)" font-size="11" fill="var(--cut)">git blame</text>
+        <line x1="120" y1="180" x2="488" y2="180" stroke="var(--cut)" stroke-width="2" opacity="0.8"/>
+        <text x="494" y="184" font-family="var(--ui)" font-size="13" fill="var(--cut)">✕</text>
+        <line x1="512" y1="180" x2="700" y2="180" stroke="var(--cut)" stroke-width="2" opacity="0.8"/>
+        <text x="706" y="184" font-family="var(--ui)" font-size="13" fill="var(--cut)">✕</text>
+        <line x1="724" y1="180" x2="890" y2="180" stroke="var(--cut)" stroke-width="2" opacity="0.8"/>
+        <text class="l" x="200" y="200" fill="var(--cut)">true span</text>
+        <text class="l" x="540" y="200" fill="var(--cut)">→ 'rename' commit</text>
+        <text class="l" x="752" y="200" fill="var(--cut)">→ 'move' commit</text>
+      </svg>
+      <p class="diagram-cap">The Lifeline — blame by meaning. One unbroken thread where git blame shatters into three mis-attributed spans.</p>
+    </div>
+    <p class="banner reveal d2">The history you can read at a glance — and the one Git's <span class="emph">git log --graph</span> can't draw.</p>
+  </div>
+</section>
+
+<!-- 8 · THE PATH -->
+<section class="section" id="path">
+  <div class="warpgrid" aria-hidden="true"></div>
+  <div class="wrap">
+    <p class="eyebrow reveal">07 · Where it's going</p>
+    <h2 class="sec-title reveal d1">The sequence — every rung gates the&nbsp;next.</h2>
+    <p class="sec-deck reveal d2">No leaping. Each step is buildable on what the last one proved.</p>
+    <div class="ladder reveal d2">
+      <div class="rung now">
+        <p class="phase">Now · runs today</p>
+        <h3>The Oracle &amp; the code-lens</h3>
+        <p>ABSORB, the Convergence/Divergence Oracle, the TS code-lens, and the read-only divergence proof. Git merges clean; Warpline catches the break.</p>
+        <div class="meta"><span class="chip">absorb ✓</span><span class="chip">oracle ✓</span><span class="chip hash">divergence proof ✓</span></div>
+      </div>
+      <div class="rung">
+        <p class="phase">Next · engines latent</p>
+        <h3>The cheap wins</h3>
+        <p>Surface what the engine already knows: <span class="chip">diff</span> (semantic), <span class="chip">move</span> (the empty-delta rename), <span class="chip">lifeline</span>, <span class="chip">weave --preview</span>. Light up the Fabric and Lifeline against live data.</p>
+        <div class="meta"><span class="chip weft">read paths first</span></div>
+      </div>
+      <div class="rung gate">
+        <p class="phase">The gate · the product</p>
+        <h3>Write the weave + prove GAP-7 → ship Warpline Guard</h3>
+        <p>Warpline <em>weaves</em> (writes), and the Git export round-trip is proven driftless. The Oracle ships as a CI companion that fails the build on a meaning-break. This is the line between demo and infrastructure.</p>
+        <div class="meta"><span class="chip seam">write path</span><span class="chip seam">GAP-7 round-trip</span><span class="chip">CI companion</span></div>
+      </div>
+      <div class="rung">
+        <p class="phase">Then · the moat clock starts</p>
+        <h3>The Classroom trust ledger</h3>
+        <p>One trust ledger serves the weave gate and the learning loop. SCRUTINY routing, the endorsement primitive, WeaveRecords graded by field outcome — and the full Tapestry, Bridge, and Lightbox light up on real data, not proxies.</p>
+        <div class="meta"><span class="chip">scrutiny routing</span><span class="chip">endorsement</span><span class="chip hash">calibration corpus →</span></div>
+      </div>
+      <div class="rung">
+        <p class="phase">Eventually · by gravity</p>
+        <h3>Own the agent review/merge layer → replacement</h3>
+        <p>When teams trust the weave more than the merge, Git becomes the projection target, not the source of truth. Replacement arrives because the fabric is where the meaning lives — not because anyone was told to switch.</p>
+        <div class="meta"><span class="chip">collaboration · trust · custody</span></div>
+      </div>
+    </div>
+    <p class="banner reveal d2">WARP is truth, bytes a projection — but only once it writes. <span class="emph-seam">The gate is the product.</span></p>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap foot-inner">
+    <div>
+      <div class="wordmark" style="font-size:20px">WARPLINE</div>
+      <p class="foot-tag" style="margin:10px 0 0">Point of view · experimental · built on Paradigm fundamentals</p>
+    </div>
+    <div class="foot-links">
+      <a href="index.html">The vision</a>
+      <a href="system.html">System map</a>
+      <a href="#thesis">Thesis</a>
+      <a href="#path">The path</a>
+    </div>
+  </div>
+</footer>
+
+<script>
+  // nav scrolled state
+  var nav = document.getElementById("topnav");
+  function onScrollNav() { if (window.scrollY > 24) nav.classList.add("scrolled"); else nav.classList.remove("scrolled"); }
+  window.addEventListener("scroll", onScrollNav, { passive: true });
+  onScrollNav();
+  // generic reveals + warpgrid intensify
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) { if (e.isIntersecting) { e.target.classList.add("in-view"); io.unobserve(e.target); } });
+  }, { threshold: 0.16 });
+  document.querySelectorAll(".reveal, .section").forEach(function (el) { io.observe(el); });
+</script>
+</body>
+</html>
