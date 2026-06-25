@@ -525,6 +525,69 @@ describe('addNotebookEntry', () => {
     expect(entry.concepts).toEqual(['caching', 'performance']);
     expect(entry.tags).toEqual(['pattern', 'optimization']);
   });
+
+  // ── Collision guard (T-2026-06-25-012) ──
+  // The id is concept-derived; distinct learnings that share a slug must NOT
+  // silently overwrite one another, but re-promoting the SAME learning must.
+
+  it('skips grouping/structured concepts when deriving the id slug', () => {
+    const { entry } = addNotebookEntry(
+      'arch',
+      {
+        context: 'x',
+        snippet: 'x',
+        provenance: { source: 'external' },
+        confidence: 0.5,
+        // Lead with a grouping tag + a structured tag — the slug must reach the topic.
+        concepts: ['expedition', 'source:external', 'barrel-files', 'typescript'],
+        tags: [],
+      },
+      'project',
+      projectDir,
+    );
+    expect(entry.id).toBe('nb-arch-barrel-files');
+  });
+
+  it('disambiguates distinct learnings that collide on the concept slug', () => {
+    const common = { context: 'c', concepts: ['typescript', 'architecture'], tags: [], confidence: 0.5 } as const;
+    const a = addNotebookEntry(
+      'arch',
+      { ...common, snippet: 'Feature-slicing wins for product code.', provenance: { source: 'lore', loreEntryId: 'LJ-a' } },
+      'project', projectDir,
+    );
+    const b = addNotebookEntry(
+      'arch',
+      { ...common, snippet: 'Barrels are an anti-pattern in app code.', provenance: { source: 'lore', loreEntryId: 'LJ-b' } },
+      'project', projectDir,
+    );
+
+    // Distinct ids → distinct files → neither snippet is lost.
+    expect(a.entry.id).toBe('nb-arch-typescript');
+    expect(b.entry.id).not.toBe(a.entry.id);
+    expect(b.entry.id.startsWith('nb-arch-typescript-')).toBe(true);
+    expect(fs.existsSync(a.filePath)).toBe(true);
+    expect(fs.existsSync(b.filePath)).toBe(true);
+    const aStored = yaml.load(fs.readFileSync(a.filePath, 'utf-8')) as NotebookEntry;
+    expect(aStored.snippet).toBe('Feature-slicing wins for product code.');
+  });
+
+  it('overwrites in place when the SAME learning is re-promoted (latest wins)', () => {
+    const mk = (snippet: string) => addNotebookEntry(
+      'arch',
+      {
+        context: 'c', snippet, concepts: ['typescript'], tags: [], confidence: 0.5,
+        provenance: { source: 'lore', loreEntryId: 'LJ-same' },
+      },
+      'project', projectDir,
+    );
+    const first = mk('v1');
+    const second = mk('v2 — refined');
+
+    // Same source lore id → same id → one file, latest content wins.
+    expect(second.entry.id).toBe(first.entry.id);
+    const stored = yaml.load(fs.readFileSync(first.filePath, 'utf-8')) as NotebookEntry;
+    expect(stored.snippet).toBe('v2 — refined');
+  });
 });
 
 // ────────────────────────────────────────────────────────

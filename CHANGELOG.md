@@ -5,6 +5,11 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.6.1] — 2026-06-25
+
+### Fixed
+- **`#notebook` / the gated promote path** — promoting two or more **distinct** learnings that shared a concept slug silently collapsed them into one notebook entry, the last write clobbering the rest (`addNotebookEntry` derived the id from `concepts[0]` alone, with no read-before-write). Surfaced live running the first real Expedition term: three foraged externals all tagged `[expedition, source:external, typescript, architecture, …]` certified as **one** entry. Two-part fix: (1) the id slug is now drawn from the **topical** concept, skipping grouping/structured tags (`expedition`, `source:external`, `tier:a`); (2) a **collision guard** — when the base id is already held by a genuinely different learning (different source lore id *and* different content), a stable content discriminator is appended so neither is lost. Re-promoting the same evolving insight still updates one entry ("latest measurement wins"). Filed `T-2026-06-25-012`; 3 regression tests.
+
 ## [7.6.0] — 2026-06-25 — The Academy: the Classroom you can see, run, and forage (experimental)
 
 7.5.0 shipped the Classroom *engine* — but it had never run a term and had no GUI. This makes it **real**: bootstrapped on a project in two calls, a visible Suite surface, the first live gated term run end-to-end, the two competing learning loops reconciled in data, and agents that forage the open web. Still **experimental**. Spec `docs/specs/classroom-experience.md`; decision `TD-2026-06-25-044`.

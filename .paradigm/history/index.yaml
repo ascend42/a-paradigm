@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-06-25T07:18:49.679Z'
+generated: '2026-06-25T07:31:37.307Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -13917,12 +13917,38 @@ by_symbol:
       agent: []
   '#nomination-engine':
     symbol: '#nomination-engine'
-    total_changes: 25
-    last_modified: '2026-06-25T06:57:50Z'
+    total_changes: 26
+    last_modified: '2026-06-25T07:31:31Z'
     stability_score: 1
     fragility: low
     recent:
       - &ref_312
+        id: h0526
+        ts: '2026-06-25T07:31:31Z'
+        type: implement
+        symbols:
+          - '#classroom'
+          - '#nomination-engine'
+          - '#notebook'
+        author:
+          type: human
+          id: ascend
+        commit: 83c609eeb3da147f7c95acc739d45057869cad40
+        intent: feature
+        files:
+          - .paradigm/curriculum/scenarios/SC-feature-slice-vs-shared-kernel.scenario
+          - .paradigm/curriculum/scenarios/SC-project-refs-vs-tsup-bundling.scenario
+          - .paradigm/events/classroom-certifications.jsonl
+          - .paradigm/events/debates.jsonl
+          - .paradigm/events/nominations.jsonl
+          - .paradigm/events/session-log.jsonl
+          - .paradigm/events/stream.jsonl
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/lore/entries/2026-06-25/L-2026-06-25-ascend-072946-001.lore
+          - .paradigm/lore/timeline.yaml
+        description: 'feat(#classroom): gated term — Arky''s 3 foraged externals all REFINED'
+      - &ref_313
         id: h0521
         ts: '2026-06-25T06:57:50Z'
         type: implement
@@ -13945,7 +13971,7 @@ by_symbol:
           - packages/paradigm-mcp/src/tools/streams.ts
           - packages/paradigm-mcp/src/types/knowledge-streams.ts
         description: 'feat(#classroom): Expeditions staging — journal provenance envelope + first real dive'
-      - &ref_313
+      - &ref_338
         id: h0520
         ts: '2026-06-25T06:50:21Z'
         type: implement
@@ -14008,7 +14034,6 @@ by_symbol:
           - plugins/paradigm/skills/forage/SKILL.md
         description: 'feat(#classroom): Academy MVP first build — bootstrap the gate, /forage skill, /class THE STAND'
       - *ref_144
-      - *ref_126
     contributors:
       human:
         - ascend
@@ -21827,11 +21852,12 @@ by_symbol:
       agent: []
   '#classroom':
     symbol: '#classroom'
-    total_changes: 8
-    last_modified: '2026-06-25T07:18:35Z'
+    total_changes: 9
+    last_modified: '2026-06-25T07:31:31Z'
     stability_score: 1
     fragility: low
     recent:
+      - *ref_312
       - id: h0525
         ts: '2026-06-25T07:18:35Z'
         type: implement
@@ -21858,7 +21884,7 @@ by_symbol:
           - .paradigm/notebooks/architect/nb-habits-mn6he1ec.yaml
           - .paradigm/notebooks/architect/nb-monorepo-mn53wvzd.yaml
         description: 'chore(paradigm): session state — Academy resume + Staged-card fix checkpoint'
-      - &ref_338
+      - &ref_339
         id: h0524
         ts: '2026-06-25T07:18:32Z'
         type: implement
@@ -21891,7 +21917,6 @@ by_symbol:
           - packages/paradigm/package.json
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'chore(release): 7.6.0 — The Academy goes live (changelog + version bump)'
-      - *ref_312
       - *ref_313
     contributors:
       human:
@@ -23014,7 +23039,7 @@ by_symbol:
     recent:
       - *ref_334
       - *ref_336
-      - &ref_340
+      - &ref_341
         id: h0518
         ts: '2026-06-25T01:31:19Z'
         type: implement
@@ -23060,8 +23085,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_313
-      - &ref_339
+      - *ref_338
+      - &ref_340
         id: h0517
         ts: '2026-06-25T01:30:12Z'
         type: implement
@@ -23101,8 +23126,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_338
       - *ref_339
+      - *ref_340
     contributors:
       human:
         - ascend
@@ -23116,7 +23141,19 @@ by_symbol:
     recent:
       - *ref_334
       - *ref_336
-      - *ref_340
+      - *ref_341
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#notebook':
+    symbol: '#notebook'
+    total_changes: 1
+    last_modified: '2026-06-25T07:31:31Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_312
     contributors:
       human:
         - ascend
