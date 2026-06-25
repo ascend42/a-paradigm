@@ -5,6 +5,7 @@
  *   warpline oracle <branchA> <branchB> [--json]   run the Convergence/Divergence Oracle
  *   warpline absorb <ref> [--json]                 lift a ref to a WarpState and dump it
  *   warpline weave --preview <A> <B> [--json]      THE PRE-MERGE FORECAST (meaning)
+ *   warpline consolidate <refs...> [--base R]      THE N-WAY FOLD FORECAST (meaning)
  *   warpline diff [refA] [refB] [--json]           SEMANTIC diff between two refs
  *
  * This is the ONLY file allowed to write to stdout — library code stays quiet.
@@ -19,6 +20,7 @@ import {
   type Forecast,
   type SemDiffReport,
 } from './weave.js';
+import { consolidate, type ConsolidateForecast } from './consolidate.js';
 import type { ContractChangeset } from './sem-delta.js';
 import { changedSlotsOf } from './sem-delta.js';
 import { serializeState } from './warp/store.js';
@@ -104,6 +106,29 @@ program
   );
 
 program
+  .command('consolidate')
+  .description('THE N-WAY FOLD FORECAST. Fold N branches at once from MEANING (read-only): which symbols auto-fold vs which KNOT across branches. Human labor tracks genuine meaning-collisions, not branch count.')
+  .argument('<refs...>', 'two or more git refs to fold')
+  .option('--base <ref>', 'common base (default: octopus merge-base of all refs)')
+  .option('--json', 'emit the full ConsolidateForecast as JSON')
+  .action(async (refs: string[], options: { base?: string; json?: boolean }) => {
+    try {
+      if (refs.length < 2) {
+        process.stderr.write('warpline: consolidate needs at least 2 refs\n');
+        process.exit(1);
+      }
+      const f = await consolidate(refs, { base: options.base });
+      if (options.json) {
+        process.stdout.write(JSON.stringify(f, null, 2) + '\n');
+      } else {
+        printConsolidate(f);
+      }
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+program
   .command('diff')
   .description('SEMANTIC diff between two refs (rides the meaning graph). Renames are the EMPTY delta. Defaults: no args = WORKTREE vs HEAD; one arg = ref vs HEAD; two args = refA vs refB.')
   .argument('[refA]', 'first ref (default: WORKTREE)')
@@ -178,6 +203,34 @@ function printForecast(f: Forecast): void {
 
   lines.push('');
   lines.push('(preview is ephemeral — no oracle.jsonl row written)');
+  process.stdout.write(lines.join('\n') + '\n');
+}
+
+function printConsolidate(f: ConsolidateForecast): void {
+  const lines: string[] = [];
+  lines.push(`CONSOLIDATE FORECAST  ${f.refs.join('  +  ')}`);
+  lines.push(`base      ${f.base}`);
+  lines.push('');
+  if (f.verdict === 'CLEAN') {
+    lines.push(`VERDICT  CLEAN TO FOLD  (${f.autoFolded.length} symbol(s) auto-fold, no decisions)`);
+  } else {
+    const n = f.decisions;
+    lines.push(
+      `VERDICT  ${n} decision${n === 1 ? '' : 's'} needed  (${f.knots.length} knot(s), ${f.dangling.length} dangling)  —  ${f.autoFolded.length} auto-fold`,
+    );
+  }
+  lines.push('');
+  lines.push(`knots      ${f.knots.length}`);
+  for (const k of f.knots) {
+    lines.push(`  ⊗ ${k.symbol}${k.conflictingSlots.length ? `  [${k.conflictingSlots.join(', ')}]` : ''}`);
+    for (const s of k.sides) lines.push(`      ${s.ref} → ${s.essence ?? '(retired)'}`);
+  }
+  lines.push(`dangling   ${f.dangling.length}`);
+  for (const d of f.dangling) {
+    lines.push(`  ⤬ ${d.fromSymbol} --${d.edgeKind}--> ${d.danglingTargetSymbol}  (${d.addedBy} adds, ${d.retiredBy} retired)`);
+  }
+  lines.push('');
+  lines.push('(forecast is ephemeral — no oracle.jsonl row written)');
   process.stdout.write(lines.join('\n') + '\n');
 }
 

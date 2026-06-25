@@ -328,15 +328,18 @@ components:
       The warpline command line (commander). `warpline oracle <a> <b> [--json]`,
       `warpline absorb <ref> [--json]`, `warpline weave --preview <a> <b> [--vs-git]
       [--json]` (the pre-merge forecast; the bare `weave` write verb is reserved
-      and refuses with a read-only notice), and `warpline diff [refA] [refB] [--json]`
-      (semantic diff; no args = WORKTREE vs HEAD, one arg = ref vs HEAD, two args
-      = refA vs refB). The only module allowed to write stdout; library code stays
-      quiet.
+      and refuses with a read-only notice), `warpline consolidate <refs...> [--base R]
+      [--json]` (the N-way fold forecast — CLEAN-to-fold vs N decisions, knots with
+      per-ref sides, dangling, auto-fold count), and `warpline diff [refA] [refB]
+      [--json]` (semantic diff; no args = WORKTREE vs HEAD, one arg = ref vs HEAD,
+      two args = refA vs refB). The only module allowed to write stdout; library
+      code stays quiet.
     type: cli
     components:
       - "#oracle"
       - "#absorb"
       - "#weave"
+      - "#consolidate"
 
 flows:
   oracle-run:
@@ -407,10 +410,17 @@ aspects:
     category: invariant
     severity: critical
     tags: [safety, read-only, git, phase-1]
+    anchors:
+      - src/git/git-exec.ts:1-16
+      - src/git/git-exec.ts:128-180
+      - src/absorb.ts:37-66
+      - src/git/repo-lock.ts:1-22
+      - src/warp/store.ts:53-64
     applies-to:
       - "#git-exec"
       - "#repo-lock"
       - "#absorb"
+      - "#consolidate"
       - "#lift-code-units"
       - "#ts-lens"
       - "#warp-store"
@@ -430,6 +440,11 @@ aspects:
     category: invariant
     severity: critical
     tags: [thesis, determinism, hashing, reproducibility]
+    anchors:
+      - src/warp/warp-state.ts:106-111
+      - src/lens/ts-essence.ts:374-393
+      - src/absorb.ts:1-14
+      - test/absorb.test.ts:54-77
     applies-to:
       - "#essence-hash"
       - "#canonical-json"
@@ -437,6 +452,7 @@ aspects:
       - "#ts-lens"
       - "#warp-state"
       - "#absorb"
+      - "#consolidate"
 
   ~meaning-coverage:
     description: >-
@@ -448,6 +464,9 @@ aspects:
     category: rule
     severity: medium
     tags: [honesty, fidelity-tiers, td-806, coverage]
+    anchors:
+      - src/lens/ts-lens.ts:391-431
+      - src/lens/lift-code-units.ts:120-135
     applies-to:
       - "#lift-code-units"
       - "#ts-lens"
