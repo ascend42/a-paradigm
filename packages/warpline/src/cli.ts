@@ -26,6 +26,16 @@ import { changedSlotsOf } from './sem-delta.js';
 import { serializeState } from './warp/store.js';
 import type { WarpState } from './warp/warp-state.js';
 
+// The shared .purpose parser (library code, purpose/core/aggregator) console.warns
+// about unrelated schema-invalid files (e.g. a stale conductor .purpose) on every
+// absorb — which floods the CLI (220+ lines/run) and makes it look broken to a
+// newcomer. Silence library console noise for the CLI run unless WARPLINE_DEBUG.
+// Real failures go through fail() → process.stderr, so they still surface.
+if (!process.env.WARPLINE_DEBUG) {
+  console.warn = () => {};
+  console.error = () => {};
+}
+
 const program = new Command();
 
 program
@@ -361,6 +371,9 @@ function fail(err: unknown): never {
   process.stderr.write(`warpline: ${msg}\n`);
   process.exit(1);
 }
+
+// Reject stray positional args so `diff a b c` errors instead of silently dropping `c`.
+program.commands.forEach((c) => c.allowExcessArguments(false));
 
 program.parseAsync(process.argv).catch((err) => fail(err));
 
