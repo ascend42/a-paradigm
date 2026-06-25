@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-06-25T07:07:15.264Z'
+generated: '2026-06-25T07:13:19.631Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -21852,7 +21852,7 @@ by_symbol:
         description: 'chore(release): 7.6.0 — The Academy goes live (changelog + version bump)'
       - *ref_312
       - *ref_313
-      - &ref_337
+      - &ref_338
         id: h0517
         ts: '2026-06-25T01:30:12Z'
         type: implement
@@ -22838,7 +22838,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_334
+      - &ref_335
         id: h0511
         ts: '2026-06-25T00:24:17Z'
         type: implement
@@ -22867,12 +22867,33 @@ by_symbol:
       agent: []
   '#oracle':
     symbol: '#oracle'
-    total_changes: 3
-    last_modified: '2026-06-25T06:44:54Z'
+    total_changes: 4
+    last_modified: '2026-06-25T07:13:18Z'
     stability_score: 1
     fragility: low
     recent:
-      - &ref_335
+      - &ref_334
+        id: h0523
+        ts: '2026-06-25T07:13:18Z'
+        type: implement
+        symbols:
+          - '#consolidate'
+          - '#lifeline'
+          - '#oracle'
+          - '#warpline-cli'
+        author:
+          type: human
+          id: ascend
+        commit: 43a7dc089fd5f086af3992693f94ba282b44f09a
+        intent: feature
+        files:
+          - .paradigm/events/debates.jsonl
+          - .paradigm/events/nominations.jsonl
+          - .paradigm/events/stream.jsonl
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+        description: 'chore(paradigm): session state — Warpline battle-test arc checkpoint'
+      - &ref_336
         id: h0519
         ts: '2026-06-25T06:44:54Z'
         type: implement
@@ -22896,7 +22917,7 @@ by_symbol:
           - packages/warpline/test/lifeline.test.ts
           - packages/warpline/test/oracle-contested-merge.test.ts
         description: 'fix(#oracle,#lifeline): close the round-2 battle-test findings (T-2026-06-25-005/006)'
-      - &ref_336
+      - &ref_337
         id: h0514
         ts: '2026-06-25T01:14:10Z'
         type: implement
@@ -22961,26 +22982,28 @@ by_symbol:
       agent: []
   '#consolidate':
     symbol: '#consolidate'
-    total_changes: 2
-    last_modified: '2026-06-25T00:32:11Z'
+    total_changes: 3
+    last_modified: '2026-06-25T07:13:18Z'
     stability_score: 1
     fragility: low
     recent:
-      - *ref_328
       - *ref_334
+      - *ref_328
+      - *ref_335
     contributors:
       human:
         - ascend
       agent: []
   '#warpline-cli':
     symbol: '#warpline-cli'
-    total_changes: 5
-    last_modified: '2026-06-25T06:44:54Z'
+    total_changes: 6
+    last_modified: '2026-06-25T07:13:18Z'
     stability_score: 1
     fragility: low
     recent:
-      - *ref_335
-      - &ref_338
+      - *ref_334
+      - *ref_336
+      - &ref_339
         id: h0518
         ts: '2026-06-25T01:31:19Z'
         type: implement
@@ -23014,8 +23037,7 @@ by_symbol:
         files:
           - packages/warpline/src/cli.ts
         description: 'fix(#warpline-cli): silence the .purpose-parser stderr flood + reject stray args (T-2026-06-25-002)'
-      - *ref_336
-      - *ref_328
+      - *ref_337
     contributors:
       human:
         - ascend
@@ -23028,7 +23050,7 @@ by_symbol:
     fragility: low
     recent:
       - *ref_313
-      - *ref_337
+      - *ref_338
     contributors:
       human:
         - ascend
@@ -23040,20 +23062,21 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_337
+      - *ref_338
     contributors:
       human:
         - ascend
       agent: []
   '#lifeline':
     symbol: '#lifeline'
-    total_changes: 2
-    last_modified: '2026-06-25T06:44:54Z'
+    total_changes: 3
+    last_modified: '2026-06-25T07:13:18Z'
     stability_score: 1
     fragility: low
     recent:
-      - *ref_335
-      - *ref_338
+      - *ref_334
+      - *ref_336
+      - *ref_339
     contributors:
       human:
         - ascend
