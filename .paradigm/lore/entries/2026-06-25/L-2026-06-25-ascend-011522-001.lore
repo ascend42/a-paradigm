@@ -1,0 +1,39 @@
+id: L-2026-06-25-ascend-011522-001
+type: milestone
+timestamp: '2026-06-25T01:15:22.849Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'FIXED: the Oracle lies-green bug (T-2026-06-25-001) — gitReality.conflicted now gates the verdict'
+summary: 'Fixed the critical trust bug the team found firsthand in the CLI battle-test: oracle/weave reported CONVERGENT/score 1/CLEAN TO WEAVE while git reality was CONFLICT, because a conflict in a non-symbol file (README.md) or the WORKTREE pseudo-ref mapped to no symbol and the `conflicted` boolean never reached the verdict. Now mapConflicts() surfaces unmapped conflict paths and score() counts them (+ the indeterminate no-paths case) as git-only divergences → DIVERGENT, never green. Verified firsthand: `oracle WORKTREE main` → DIVERGENT (was CONVERGENT/score 1). 4 new guards; 110 tests pass.'
+symbols_touched:
+  - '#oracle'
+  - '#warpline-cli'
+files_created:
+  - packages/warpline/test/oracle-nonsymbol-conflict.test.ts
+files_modified:
+  - packages/warpline/src/oracle.ts
+  - packages/warpline/src/cli.ts
+  - packages/warpline/.purpose
+verification:
+  status: pass
+  details:
+    typecheck: pass
+    build: pass
+    tests: 110 pass
+    firsthand: oracle WORKTREE main → DIVERGENT (was CONVERGENT/score 1)
+tags:
+  - warpline
+  - '#oracle'
+  - lies-green
+  - fix
+  - battle-test
+  - shipped
+linked_tasks:
+  - T-2026-06-25-001
+confidence: 0.9
+git_context:
+  ref: c3aecbf9d5db6bd5ac2dfe81ab380598b89ab4b6
+  branch: warpline-surfaces
+  dirty: true

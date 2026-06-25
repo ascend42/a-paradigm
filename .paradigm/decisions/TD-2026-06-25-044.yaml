@@ -1,0 +1,52 @@
+id: TD-2026-06-25-044
+timestamp: '2026-06-25T01:02:43.740Z'
+title: Expeditions (external-knowledge foraging) — v1 trust & trigger rules
+decision: >-
+  For the Academy's Expeditions capability (agents foraging Reddit/Medium/articles/Anthropic to grow their knowledge):
+  (1) Triggers in v1 include BOTH Matt-directed dives AND scheduled breadth-scouts (Cid on a budget), gated by a
+  per-term external-candidate cap so foraging can't out-shout homegrown learnings. (2) A strongly-sourced external
+  dossier CAN be certified at the gate (Matt's judgment substitutes for field history) — bounded by: an explicit certify
+  ruling (never default), a source-strength floor (tier-A or multi-source corroboration; never a lone tier-C comment),
+  and it stays field-watched so a later break still overturns it. (3) A foraged claim that conflicts with a SETTLED
+  learning keeps BOTH (incumbent refined to 'X except <new-context>') and requires Matt's explicit consent to put
+  settled curriculum on trial. Unchanged invariants: provenance is permanent (source:'external' forever);
+  trust:'external' is a context-firewall (hard-excluded from prompt injection pre-gate); 'no scenario, no assessment'
+  applied at intake (refuted against our repo before reaching the Docket).
+rationale: >-
+  Matt prioritized reach and his own judgment over maximum doctrinal purity: scheduled scouts (capped) keep the
+  knowledge base growing without him driving every dive, and letting a strong dossier certify lets well-sourced research
+  move fast — while the context-firewall, permanent provenance, intake refutation, and field-veto keep it honest. The
+  conflict rule preserves history and his control over settled curriculum.
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+  - id: forge
+    role: agent
+    stance: dissented
+  - id: researcher
+    role: agent
+    stance: supported
+  - id: architect
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: Matt-directed only, no scheduled scouts (Loid's lean)
+    rejected_because: >-
+      Matt wants the base to grow horizontally without driving every expedition; accepted flood risk in exchange for a
+      per-term cap
+  - option: External caps at provisional; certified requires field survival (Loid's lean)
+    rejected_because: >-
+      Matt wants strong sourcing + his ruling to be able to fast-track to certified; kept the field-veto as the honesty
+      backstop
+symbols_affected:
+  - '#classroom'
+  - '#notebook-loader'
+  - '#nomination-engine'
+status: active
+tags:
+  - classroom
+  - expeditions
+  - external-knowledge
+  - learning-loop
+  - from-team

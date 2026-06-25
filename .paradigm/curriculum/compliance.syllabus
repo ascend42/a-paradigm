@@ -1,0 +1,17 @@
+id: SY-compliance
+agent: compliance
+version: 1
+sources:
+  - kind: scenario
+    ref: SC-aspect-validate-vs-queryable
+    trust: certified
+scope: project-specific
+success_criteria:
+  - probe: SC-aspect-validate-vs-queryable
+    must: reject
+notebook_target: local
+approved_by: ascend
+approved_at: '2026-06-25T01:11:19.040Z'
+term_ttl_days: 14
+status: current
+last_ratified: '2026-06-25T01:11:19.040Z'

@@ -1,0 +1,15 @@
+version: '1.0'
+generated: '2026-06-25T01:13:32.081Z'
+syllabi:
+  - id: SY-compliance
+    agent: compliance
+    version: 1
+    status: current
+    last_ratified: '2026-06-25T01:11:19.040Z'
+    scope: project-specific
+health:
+  total: 1
+  current: 1
+  stale: 0
+  broken: 0
+  expired: 0
