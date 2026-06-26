@@ -1,0 +1,53 @@
+id: L-2026-06-25-ascend-081205-001
+type: agent-session
+timestamp: '2026-06-25T08:12:05.950Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: False-AUTOFOLD gate result — auto-fold safety is conditional on in-graph dependency linkage
+summary: |-
+  Ran Jinx's false-AUTOFOLD ship-gate as a characterization-test corpus of genuine cross-symbol semantic conflicts through consolidate(). The result refines Jinx's hypothesis into a mechanistic rule: the engine catches a cross-symbol semantic conflict IFF a dependency path links the conflicting symbols in the lifted graph (Merkle-by-target essence propagation moves the dependent's essence on both sides → knot). It is BLIND to conflicts between independent symbols and across extern/cross-file boundaries. Dependency-linked 3/3 caught, unlinked 5/5 blind, overall false-CLEAN 5/8 (63%).</summary>
+  <parameter name="type">insight
+files_created:
+  - packages/warpline/test/false-autofold-gate.test.ts
+commit: 6007549f
+learnings:
+  - 'Auto-fold safety is CONDITIONAL: the engine catches a cross-symbol semantic conflict iff a dependency path links the symbols in-graph (Merkle-by-target propagation) — NOT a blanket blindness'
+  - The blind spot is precisely independent symbols + cross-file/extern composition (cross-file refs are extern free-refs, never local edges, so no Merkle link)
+  - 'Phase C admission rule falls out directly: auto-admit only dependency-connected WEFTs; independent/cross-file-spanning WEFTs need human/peer confirm — a graph-reachability check on the existing edge graph'
+  - 'Same double-tax bug: CAUGHT same-file, BLIND cross-file — the local-edge-vs-extern-ref distinction is the whole hinge'
+verification:
+  status: pass
+  details:
+    tests: 136 green
+    gate: 5/8 false-CLEAN, controls pass
+tags:
+  - warpline
+  - safety-gate
+  - consolidate
+  - multi-writer
+  - phase-c
+  - insight
+body: |-
+  SETUP: test/false-autofold-gate.test.ts clones the FixtureRepo harness (throwaway git repo with .ts files), defines adversarial cross-symbol semantic-conflict pairs + controls, runs consolidate([branchA,branchB]) on each, and classifies dangle/knot/autofold.
+
+  THE FINDING (mechanistic, not just a rate): essence is Merkle-by-target — a caller's essence inlines its callees' essences. So when conflicting symbols are dependency-LINKED in the lifted graph (one calls/uses the other, or both feed a common in-graph dependent), an upstream change propagates into the dependent's essence; both branches then move that dependent to different essences → KNOT → CAUGHT. When the conflicting symbols are INDEPENDENT (no in-graph edge, composed only externally) or composed across an IMPORT boundary (cross-file refs are EXTERN free-refs, never local code-unit edges → no Merkle link), there is no propagation → autoClean → silent false-CLEAN.
+
+  THE KILLER CONTRAST: the SAME double-tax bug (rate*1.08 AND applyTax*1.08 → 1.1664) is CAUGHT same-file (applyTax CALLS rate) but BLIND cross-file (applyTax IMPORTS rate). Identical semantic bug, opposite engine verdict, decided purely by whether the link is a local edge or an extern ref.
+
+  NUMBERS (this corpus, 8 adversarial + 3 controls): dependency-linked 3/3 caught (double-tax-samefile, double-discount-samefile, nullable-drift-samefile); unlinked 5/5 blind (double-tax-crossfile, roundtrip-broken, bounds-inverted, version-skew, units-ms-vs-sec); overall false-CLEAN 5/8 = 63%. Controls: same-symbol knot caught, code dangle caught, genuinely-independent edits correctly clean.
+
+  IMPLICATION FOR PHASE C (multi-writer admission): auto-admit a WEFT ONLY when its conflict surface is dependency-connected in the lifted graph; a WEFT spanning independent symbols or cross-file/extern refs MUST require human/peer confirmation before admission. This makes the admission gate a graph-reachability question (is the contested surface within one dependency cone?), which is computable from the existing edge graph. Two engine improvements would shrink the blind spot: (1) lift cross-file imports to RESOLVED local edges (not extern by specifier) so the Merkle link survives file boundaries — but that costs determinism (needs node_modules/checker resolution); (2) a whole-program invariant layer above per-symbol essence. Both are out of scope now; the confirm-gate is the safe v1.
+
+  This is the moat-relevant outcome: Warpline can HONESTLY say where it can auto-merge safely (dependency-connected) vs where it must defer to a human — which is exactly the calibrated, legible behavior a meaning-native VCS needs to earn trust.</parameter>
+  <parameter name="symbols_touched">["#consolidate", "#predict", "#essence-hash", "#ts-lens"]
+linked_tasks:
+  - T-2026-06-25-013
+linked_commits:
+  - 6007549f
+confidence: 0.88
+git_context:
+  ref: 6007549f687c8db4d9214c9b9d7fa55a6ff03136
+  branch: warpline-surfaces
+  dirty: true

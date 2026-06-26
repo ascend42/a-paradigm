@@ -1,0 +1,15 @@
+id: L-2026-06-26-ascend-031508-413
+type: insight
+timestamp: '2026-06-26T03:15:08.157Z'
+author: ascend
+title: Decision TD-2026-06-26-881 recorded
+summary: Companion lore entry for decision record TD-2026-06-26-881. See .paradigm/decisions/TD-2026-06-26-881.yaml.
+symbols_touched:
+  - '#agent-registry'
+  - '#classroom'
+  - '#notebook'
+references:
+  decision_id: TD-2026-06-26-881
+tags:
+  - companion-lore
+  - decision-reference
