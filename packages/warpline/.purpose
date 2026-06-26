@@ -292,6 +292,34 @@ components:
       - "#canonical-json"
       - "#warp-state"
 
+  seal:
+    description: >-
+      The single place a pre-absorbed WarpState becomes a fabric #strand and the
+      selvage advances (atomic publish). sealState(root, store, state, input) —
+      shared by #pick, #admit (merge seal), and #resolve (KNOT-council seal) — owns
+      the strand schema, the seq, the delta summary (summarizeDelta), and the
+      optional `resolves` envelope, so there is ONE writer of fabric history.
+    type: module
+    components:
+      - "#sem-delta"
+      - "#fabric"
+
+  resolve:
+    description: >-
+      The KNOT council. resolveKnot(root, {agentId, resolvedRef, reason, decidedBy,
+      oursRef?}) seals a HUMAN resolution of a genuine conflict #admit refused to
+      auto-merge: it absorbs the resolved state, records a #strand `resolves`
+      envelope (decidedBy, reason, the contended symbols — precise when --ours is
+      supplied so the original knot is recomputed — and the symbols changed vs the
+      tip), seals via #seal, advances the selvage, and clears the scratch. The
+      reasoning git's merge commit can't keep lives natively in the fabric.
+    type: module
+    components:
+      - "#absorb"
+      - "#sem-delta"
+      - "#admit"
+      - "#seal"
+
   fabric:
     description: >-
       The durable Warpline history of this project — the append-only PICK-DAG
@@ -363,6 +391,7 @@ components:
       - "#fabric"
       - "#scratch"
       - "#materialize"
+      - "#seal"
 
   merge3:
     description: >-
@@ -511,10 +540,11 @@ components:
       strands, newest first, with the git coexistence anchor), `warpline selvage
       [--json]` shows the current fabric tip + the strand that sealed it, and
       `warpline hook <install|uninstall|status>` manages the post-commit auto-seal,
-      `warpline scratch <agentId>` forks a per-agent multi-writer base, and `warpline
+      `warpline scratch <agentId>` forks a per-agent multi-writer base, `warpline
       admit <agentId> [--ref <ref>] [--json]` runs the admission protocol (FAST_ADMIT
-      / CLEAN+confidence / KNOT / DANGLE). The only module allowed to write stdout;
-      library code stays quiet.
+      / CLEAN+confidence / KNOT / DANGLE), and `warpline resolve <agentId> --ref
+      <resolvedRef> -m <reason> [--by <who>] [--ours <ref>]` seals a KNOT-council
+      resolution. The only module allowed to write stdout; library code stays quiet.
     type: cli
     components:
       - "#oracle"
@@ -527,6 +557,7 @@ components:
       - "#hook"
       - "#scratch"
       - "#admit"
+      - "#resolve"
 
 flows:
   oracle-run:

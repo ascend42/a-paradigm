@@ -31,9 +31,10 @@ import { predict, type Knot, type Dangle } from '../predict.js';
 import { WarpStore } from '../warp/store.js';
 import type { WarpState } from '../warp/warp-state.js';
 import { revParse, commitAuthor, commitSubject, gitUserName } from '../git/git-exec.js';
-import { warplineDirOf, readSelvage, readFabric, appendStrand, writeSelvage } from './fabric.js';
+import { warplineDirOf, readSelvage, readFabric } from './fabric.js';
 import { readScratch, clearScratch } from './scratch.js';
-import { computePickId, type Strand, type StrandDelta } from './strand.js';
+import type { Strand } from './strand.js';
+import { sealState } from './seal.js';
 import { materializeMergedState, type MergePlan } from './materialize.js';
 
 export type AdmitStatus = 'NOOP' | 'FAST_ADMIT' | 'CLEAN' | 'KNOT' | 'DANGLE';
@@ -139,56 +140,6 @@ export interface AdmitResult {
   merged?: MergePlan;
 }
 
-const EMPTY_DELTA: StrandDelta = { born: [], retired: [], contractChanged: [], renamedNoop: 0 };
-
-function summarizeDelta(parent: WarpState | undefined, state: WarpState): StrandDelta {
-  if (!parent) return { ...EMPTY_DELTA };
-  const d = diff(parent, state);
-  const born: string[] = [];
-  const retired: string[] = [];
-  const contractChanged: string[] = [];
-  for (const x of d.deltas.values()) {
-    if (x.kind === 'symbol-born') born.push(x.symbol);
-    else if (x.kind === 'symbol-retired') retired.push(x.symbol);
-    else if (x.kind === 'contract-changed') contractChanged.push(x.symbol);
-  }
-  return { born: born.sort(), retired: retired.sort(), contractChanged: contractChanged.sort(), renamedNoop: d.renames.length };
-}
-
-/** Seal a (pre-absorbed) WarpState as a fabric strand and advance the selvage. */
-function sealState(
-  root: string,
-  store: WarpStore,
-  state: WarpState,
-  parentStateId: string | null,
-  actor: string,
-  intent: string,
-  gitCommit: string | null,
-  now: string,
-): Strand {
-  const wdir = warplineDirOf(root);
-  store.putState(state);
-  const seq = readFabric(wdir).length;
-  const parent = parentStateId ? store.loadState(parentStateId) : undefined;
-  const body = {
-    schemaVersion: 1 as const,
-    seq,
-    stateId: state.stateId,
-    parentStateId,
-    actor,
-    intent,
-    recordedAt: now,
-    objectCount: state.objects.size,
-    delta: summarizeDelta(parent, state),
-    calibratedConfidence: null,
-    provenance: { ref: state.ref, treeSha: state.treeSha, gitCommit },
-  };
-  const strand: Strand = { ...body, pickId: computePickId(body) };
-  appendStrand(wdir, strand);
-  writeSelvage(wdir, state.stateId);
-  return strand;
-}
-
 /** The git commit a fabric state was sealed from (its coexistence anchor), if any. */
 function commitOfState(root: string, stateId: string): string | null {
   for (const s of readFabric(warplineDirOf(root))) {
@@ -242,7 +193,7 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
 
   // Empty fabric (or unreadable base) → fast-admit the proposed state.
   if (!base || !selvage) {
-    const strand = sealState(root, store, proposed, selvageId ?? null, actor, intent, oursCommit, now);
+    const strand = sealState(root, store, proposed, { parentStateId: selvageId ?? null, actor, intent, gitCommit: oursCommit, now });
     clearScratch(root, opts.agentId);
     return { decision: blank('FAST_ADMIT'), sealed: true, proposedStateId: proposed.stateId, strand };
   }
@@ -253,7 +204,7 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
     return { decision, sealed: false, proposedStateId: proposed.stateId };
   }
   if (decision.status === 'FAST_ADMIT') {
-    const strand = sealState(root, store, proposed, selvageId, actor, intent, oursCommit, now);
+    const strand = sealState(root, store, proposed, { parentStateId: selvageId, actor, intent, gitCommit: oursCommit, now });
     clearScratch(root, opts.agentId);
     return { decision, sealed: true, proposedStateId: proposed.stateId, strand };
   }
@@ -265,7 +216,7 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
     }
     const mat = await materializeMergedState(baseCommit, opts.ref, theirsCommit, { cwd });
     if (mat.state && mat.plan.conflicts.length === 0) {
-      const strand = sealState(root, store, mat.state, selvageId, actor, intent, oursCommit, now);
+      const strand = sealState(root, store, mat.state, { parentStateId: selvageId, actor, intent, gitCommit: oursCommit, now });
       clearScratch(root, opts.agentId);
       return { decision, sealed: true, proposedStateId: proposed.stateId, strand, merged: mat.plan };
     }

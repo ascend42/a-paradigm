@@ -34,6 +34,7 @@ import type { Strand } from './fabric/strand.js';
 import { installHook, uninstallHook, hookStatus } from './fabric/hook.js';
 import { forkScratch } from './fabric/scratch.js';
 import { admit, type AdmitResult } from './fabric/admit.js';
+import { resolveKnot } from './fabric/resolve.js';
 import { repoRoot, gitPath } from './git/git-exec.js';
 
 // The shared .purpose parser (library code, purpose/core/aggregator) console.warns
@@ -398,6 +399,50 @@ program
       fail(err);
     }
   });
+
+program
+  .command('resolve')
+  .description("KNOT COUNCIL — seal a human resolution of a genuine conflict. Records WHO decided, WHY, and what was contended on the strand (the reasoning git's merge commit can't keep), advances the selvage, and clears the scratch.")
+  .argument('<agentId>', 'the agent whose conflicting admission is being resolved')
+  .requiredOption('-m, --reason <why>', 'why it was resolved this way (the accountability record)')
+  .requiredOption('--ref <ref>', 'the human-resolved state to seal (a git ref or WORKTREE)')
+  .option('--by <who>', 'who made the call (default: git user.name)')
+  .option('--ours <ref>', 'the original conflicting ref, to record the precise contended set')
+  .option('--json', 'emit the full ResolveResult as JSON')
+  .action(
+    async (
+      agentId: string,
+      options: { reason: string; ref: string; by?: string; ours?: string; json?: boolean },
+    ) => {
+      try {
+        const root = await repoRoot().catch(() => process.cwd());
+        const result = await resolveKnot(root, {
+          cwd: root,
+          agentId,
+          resolvedRef: options.ref,
+          reason: options.reason,
+          decidedBy: options.by,
+          oursRef: options.ours,
+        });
+        if (options.json) {
+          process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+        } else {
+          const r = result.resolution;
+          const s = result.strand;
+          const lines: string[] = [];
+          lines.push(`RESOLVE  ${agentId}  →  sealed (seq ${s.seq})`);
+          lines.push(`decidedBy ${r.decidedBy}`);
+          lines.push(`reason    ${r.reason}`);
+          lines.push(`contended ${r.contended.join(', ') || '(none recorded — pass --ours for precision)'}`);
+          lines.push(`resolved  ${r.resolvedSymbols.join(', ') || '(no symbols changed vs tip)'}`);
+          lines.push(`selvage   advanced to ${short(s.stateId)}`);
+          process.stdout.write(lines.join('\n') + '\n');
+        }
+      } catch (err) {
+        fail(err);
+      }
+    },
+  );
 
 function printAdmit(agentId: string, r: AdmitResult): void {
   const d = r.decision;

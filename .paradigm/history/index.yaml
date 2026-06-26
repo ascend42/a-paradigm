@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-06-26T03:28:47.407Z'
+generated: '2026-06-26T05:34:10.657Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -13938,7 +13938,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_344
+      - &ref_345
         id: h0527
         ts: '2026-06-25T07:44:29Z'
         type: implement
@@ -13960,7 +13960,7 @@ by_symbol:
           - packages/paradigm/package.json
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'fix(#notebook): collision-guard gated promote — distinct learnings no longer clobber (7.6.1)'
-      - &ref_345
+      - &ref_346
         id: h0526
         ts: '2026-06-25T07:31:31Z'
         type: implement
@@ -14008,7 +14008,7 @@ by_symbol:
           - packages/paradigm-mcp/src/tools/streams.ts
           - packages/paradigm-mcp/src/types/knowledge-streams.ts
         description: 'feat(#classroom): Expeditions staging — journal provenance envelope + first real dive'
-      - &ref_340
+      - &ref_341
         id: h0520
         ts: '2026-06-25T06:50:21Z'
         type: implement
@@ -21930,7 +21930,7 @@ by_symbol:
     recent:
       - *ref_310
       - *ref_311
-      - &ref_341
+      - &ref_342
         id: h0532
         ts: '2026-06-25T08:12:33Z'
         type: implement
@@ -21947,7 +21947,7 @@ by_symbol:
           - packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx
           - packages/paradigm/platform-ui/src/sections/classroom/styles/classroom.css
         description: 'feat(#ClassroomSection): unified trust-ladder badges (external tier)'
-      - &ref_338
+      - &ref_339
         id: h0530
         ts: '2026-06-25T08:08:25Z'
         type: implement
@@ -21968,7 +21968,7 @@ by_symbol:
           - packages/paradigm/src/platform-server/routes/.purpose
           - packages/paradigm/src/platform-server/routes/classroom.ts
         description: 'feat(#classroom): Agent Locker — per-agent notebook vetting tab'
-      - &ref_339
+      - &ref_340
         id: h0529
         ts: '2026-06-25T07:54:41Z'
         type: implement
@@ -22503,7 +22503,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_336
+      - &ref_337
         id: h0537
         ts: '2026-06-26T03:28:42Z'
         type: implement
@@ -23031,12 +23031,47 @@ by_symbol:
       agent: []
   '#git-exec':
     symbol: '#git-exec'
-    total_changes: 5
-    last_modified: '2026-06-26T03:16:05Z'
+    total_changes: 6
+    last_modified: '2026-06-26T05:34:04Z'
     stability_score: 1
     fragility: low
     recent:
-      - &ref_337
+      - &ref_336
+        id: h0538
+        ts: '2026-06-26T05:34:04Z'
+        type: implement
+        symbols:
+          - '#admit'
+          - '#git-exec'
+          - '#materialize'
+          - '#merge3'
+          - '#warpline-cli'
+        author:
+          type: human
+          id: ascend
+        commit: b8be799953ed178f05240e82c3a40d2fe0d08520
+        intent: feature
+        files:
+          - .paradigm/flow-index.json
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/manifest.consistency.json
+          - .paradigm/navigator.yaml
+          - .paradigm/scan-index.json
+          - .warpline/fabric.jsonl
+          - .warpline/refs/selvage
+          - packages/warpline/.purpose
+          - packages/warpline/src/cli.ts
+          - packages/warpline/src/fabric/admit.ts
+          - packages/warpline/src/fabric/materialize.ts
+          - packages/warpline/src/fabric/merge3.ts
+          - packages/warpline/src/git/git-exec.ts
+          - packages/warpline/src/index.ts
+          - packages/warpline/test/admit-seal.test.ts
+          - packages/warpline/test/materialize.test.ts
+          - packages/warpline/test/merge3.test.ts
+        description: 'feat(#materialize,#merge3): Phase C v2 — Warpline PERFORMS the merge (meaning→bytes)'
+      - &ref_338
         id: h0536
         ts: '2026-06-26T03:16:05Z'
         type: implement
@@ -23090,7 +23125,6 @@ by_symbol:
           - packages/warpline/test/consolidate-fixture.test.ts
         description: 'feat(#consolidate): N-way fold forecast + the contended same-feature fixture'
       - *ref_326
-      - *ref_226
     contributors:
       human:
         - ascend
@@ -23123,7 +23157,7 @@ by_symbol:
           - .paradigm/history/index.yaml
           - .paradigm/history/log.jsonl
         description: 'chore(paradigm): session state — Warpline battle-test arc checkpoint'
-      - &ref_343
+      - &ref_344
         id: h0519
         ts: '2026-06-25T06:44:54Z'
         type: implement
@@ -23226,14 +23260,15 @@ by_symbol:
       agent: []
   '#warpline-cli':
     symbol: '#warpline-cli'
-    total_changes: 10
-    last_modified: '2026-06-26T03:28:42Z'
+    total_changes: 11
+    last_modified: '2026-06-26T05:34:04Z'
     stability_score: 1
     fragility: low
     recent:
       - *ref_336
       - *ref_337
-      - &ref_346
+      - *ref_338
+      - &ref_347
         id: h0533
         ts: '2026-06-25T14:40:55Z'
         type: implement
@@ -23260,7 +23295,6 @@ by_symbol:
           - packages/warpline/src/cli.ts
         description: 'feat(#warpline-cli): `warpline selvage` + log git-anchor — finish the single-writer read surface'
       - *ref_332
-      - *ref_334
     contributors:
       human:
         - ascend
@@ -23272,10 +23306,10 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_338
       - *ref_339
       - *ref_340
-      - &ref_342
+      - *ref_341
+      - &ref_343
         id: h0517
         ts: '2026-06-25T01:30:12Z'
         type: implement
@@ -23315,9 +23349,9 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_341
-      - *ref_338
+      - *ref_342
       - *ref_339
+      - *ref_340
       - id: h0524
         ts: '2026-06-25T07:18:32Z'
         type: implement
@@ -23332,7 +23366,7 @@ by_symbol:
         files:
           - packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx
         description: 'fix(#ClassroomSection): align Staged cards to the real /staged payload'
-      - *ref_342
+      - *ref_343
     contributors:
       human:
         - ascend
@@ -23345,7 +23379,7 @@ by_symbol:
     fragility: low
     recent:
       - *ref_334
-      - *ref_343
+      - *ref_344
       - id: h0518
         ts: '2026-06-25T01:31:19Z'
         type: implement
@@ -23378,8 +23412,8 @@ by_symbol:
     fragility: low
     recent:
       - *ref_310
-      - *ref_344
       - *ref_345
+      - *ref_346
     contributors:
       human:
         - ascend
@@ -23391,7 +23425,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_346
+      - *ref_347
       - *ref_332
     contributors:
       human:
@@ -23404,8 +23438,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_337
-      - *ref_346
+      - *ref_338
+      - *ref_347
       - *ref_332
     contributors:
       human:
@@ -23454,19 +23488,20 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_337
+      - *ref_338
     contributors:
       human:
         - ascend
       agent: []
   '#admit':
     symbol: '#admit'
-    total_changes: 1
-    last_modified: '2026-06-26T03:28:42Z'
+    total_changes: 2
+    last_modified: '2026-06-26T05:34:04Z'
     stability_score: 1
     fragility: low
     recent:
       - *ref_336
+      - *ref_337
     contributors:
       human:
         - ascend
@@ -23475,6 +23510,30 @@ by_symbol:
     symbol: '#scratch'
     total_changes: 1
     last_modified: '2026-06-26T03:28:42Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_337
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#materialize':
+    symbol: '#materialize'
+    total_changes: 1
+    last_modified: '2026-06-26T05:34:04Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_336
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#merge3':
+    symbol: '#merge3'
+    total_changes: 1
+    last_modified: '2026-06-26T05:34:04Z'
     stability_score: 1
     fragility: low
     recent:

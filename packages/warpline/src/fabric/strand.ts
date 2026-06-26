@@ -28,6 +28,21 @@ export interface StrandDelta {
   renamedNoop: number; // count of pure renames/moves (the EMPTY delta)
 }
 
+/**
+ * The record a KNOT-council resolution carries on its strand: WHO resolved a
+ * genuine meaning conflict, WHY, what was contended, and how. This is what git
+ * can't keep — a merge commit records the bytes, not the reasoning. Warpline's
+ * history is accountability-native.
+ */
+export interface KnotResolution {
+  decidedBy: string; // the human (or agent) who made the call
+  reason: string; // why it was resolved this way
+  base: string | null; // the scratch base the resolution re-based from
+  against: string; // the selvage stateId the proposal conflicted with
+  contended: string[]; // the symbols that were in conflict (knots + dangles)
+  resolvedSymbols: string[]; // symbols the resolution changed vs the selvage
+}
+
 export interface Strand {
   schemaVersion: 1;
   seq: number; // monotonic history index (0 = genesis)
@@ -46,6 +61,8 @@ export interface Strand {
     treeSha: string | null; // git tree provenance, if any (coexistence, not identity)
     gitCommit: string | null; // git HEAD at record time — the coexistence anchor
   };
+  /** present only on a KNOT-council resolution strand (omitted on normal picks). */
+  resolves?: KnotResolution;
 }
 
 /** The strand minus its own content-address (what `pickId` is computed over). */
