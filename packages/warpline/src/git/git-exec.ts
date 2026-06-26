@@ -59,6 +59,17 @@ export async function repoRoot(opts: GitOptions = {}): Promise<string> {
   return git(['rev-parse', '--show-toplevel'], opts);
 }
 
+/**
+ * Resolve a git-dir-relative path (e.g. `hooks/post-commit`) to an ABSOLUTE
+ * path — worktree-correct (honors `.git` files + GIT_DIR), unlike joining
+ * repoRoot + '.git'. Read-only.
+ */
+export async function gitPath(rel: string, opts: GitOptions = {}): Promise<string> {
+  const cwd = opts.cwd ?? process.cwd();
+  const p = await git(['rev-parse', '--git-path', rel], opts);
+  return path.isAbsolute(p) ? p : path.resolve(cwd, p);
+}
+
 /** Resolve a ref to its full commit SHA. */
 export async function revParse(ref: string, opts: GitOptions = {}): Promise<string> {
   return git(['rev-parse', '--verify', '--end-of-options', ref], opts);

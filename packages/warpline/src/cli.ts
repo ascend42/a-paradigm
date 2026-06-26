@@ -31,7 +31,8 @@ import type { WarpState } from './warp/warp-state.js';
 import { recordPick, type PickResult } from './fabric/pick.js';
 import { warplineDirOf, readSelvage, readFabric } from './fabric/fabric.js';
 import type { Strand } from './fabric/strand.js';
-import { repoRoot } from './git/git-exec.js';
+import { installHook, uninstallHook, hookStatus } from './fabric/hook.js';
+import { repoRoot, gitPath } from './git/git-exec.js';
 
 // The shared .purpose parser (library code, purpose/core/aggregator) console.warns
 // about unrelated schema-invalid files (e.g. a stale conductor .purpose) on every
@@ -222,21 +223,30 @@ program
 
 program
   .command('pick')
-  .description("Seal the working tree's MEANING into the Warpline fabric — this project's OWN native history. Writes .warpline/ only (refs/selvage + fabric.jsonl), NEVER git. A no-op when meaning is unchanged.")
-  .requiredOption('-m, --intent <message>', 'why this pick — the human-readable intent')
-  .option('--as <actor>', 'actor identity recording this pick (default: git user.name)')
+  .description("Seal MEANING into the Warpline fabric — this project's OWN native history. Writes .warpline/ only (refs/selvage + fabric.jsonl), NEVER git. A no-op when meaning is unchanged. With --ref <commit> and no -m, intent + actor are derived from the commit (how the auto-seal hook records).")
+  .option('-m, --intent <message>', 'why this pick — the human-readable intent')
+  .option('--as <actor>', 'actor identity recording this pick (default: git user.name / commit author)')
   .option('--confidence <n>', 'graded belief 0..1 (reserved — the calibration signal)')
   .option('--ref <ref>', 'snapshot a git ref instead of the working tree (default: WORKTREE)')
+  .option('--quiet', 'suppress output (for hooks/scripts); still exits non-zero on error')
   .option('--json', 'emit the sealed Strand as JSON')
   .action(
     async (options: {
-      intent: string;
+      intent?: string;
       as?: string;
       confidence?: string;
       ref?: string;
+      quiet?: boolean;
       json?: boolean;
     }) => {
       try {
+        const isWorktree = !options.ref || options.ref === WORKTREE_REF;
+        if (!options.intent && isWorktree) {
+          process.stderr.write(
+            'warpline: pick needs -m <intent> (or --ref <commit> to derive intent from the commit)\n',
+          );
+          process.exit(1);
+        }
         let confidence: number | undefined;
         if (options.confidence !== undefined) {
           confidence = Number(options.confidence);
@@ -257,14 +267,52 @@ program
         });
         if (options.json) {
           process.stdout.write(JSON.stringify(result, null, 2) + '\n');
-        } else {
+        } else if (!options.quiet) {
           printPick(result);
         }
       } catch (err) {
+        if (options.quiet) process.exit(1); // hooks: fail quietly, never break the commit caller
         fail(err);
       }
     },
   );
+
+program
+  .command('hook')
+  .description('Manage the auto-seal git hook — seal every git commit into the fabric automatically (coexists with any existing post-commit hook).')
+  .argument('<action>', 'install | uninstall | status')
+  .action(async (action: string) => {
+    try {
+      const root = await repoRoot().catch(() => process.cwd());
+      const hookPath = await gitPath('hooks/post-commit', { cwd: root }).catch(() =>
+        `${root}/.git/hooks/post-commit`,
+      );
+      if (action === 'install') {
+        const r = installHook(hookPath);
+        const verb = r.created ? 'created' : r.refreshed ? 'refreshed' : 'appended to existing hook';
+        process.stdout.write(
+          `HOOK  auto-seal ${verb}\n  ${hookPath}\n  every git commit now seals --ref HEAD into the fabric (never blocks the commit).\n`,
+        );
+      } else if (action === 'uninstall') {
+        const r = uninstallHook(hookPath);
+        process.stdout.write(r.removed ? `HOOK  auto-seal removed\n  ${hookPath}\n` : `HOOK  not installed — nothing to remove\n`);
+      } else if (action === 'status') {
+        const s = hookStatus(hookPath);
+        const label =
+          s.state === 'installed'
+            ? 'INSTALLED'
+            : s.state === 'other-hook-no-warpline'
+              ? 'NOT installed (a non-warpline post-commit hook is present)'
+              : 'NOT installed';
+        process.stdout.write(`HOOK  ${label}\n  ${hookPath}\n`);
+      } else {
+        process.stderr.write(`warpline: hook action must be install | uninstall | status (got "${action}")\n`);
+        process.exit(1);
+      }
+    } catch (err) {
+      fail(err);
+    }
+  });
 
 program
   .command('log')

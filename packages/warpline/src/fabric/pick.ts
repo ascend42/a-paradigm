@@ -26,7 +26,7 @@
 import { absorb, WORKTREE_REF } from '../absorb.js';
 import { diff } from '../sem-delta.js';
 import { WarpStore } from '../warp/store.js';
-import { gitUserName, revParse } from '../git/git-exec.js';
+import { gitUserName, revParse, commitSubject, commitAuthor } from '../git/git-exec.js';
 import {
   warplineDirOf,
   readSelvage,
@@ -41,10 +41,10 @@ export interface RecordPickOptions {
   cwd?: string;
   /** snapshot a git ref instead of the live working tree. */
   ref?: string;
-  /** actor identity recording this pick (defaults to git user.name → 'unknown'). */
+  /** actor identity recording this pick (defaults: commit author for a ref, else git user.name). */
   actor?: string;
-  /** the human-readable intent — why this pick. */
-  intent: string;
+  /** the human-readable intent. Optional for a real ref (derived from the commit subject). */
+  intent?: string;
   /** graded belief 0..1 (reserved moat signal). */
   confidence?: number | null;
   /** injectable clock (ISO) — determinism in tests. */
@@ -110,8 +110,20 @@ export async function recordPick(root: string, opts: RecordPickOptions): Promise
   store.putState(current);
 
   const seq = readFabric(wdir).length;
-  const actor = opts.actor ?? (await gitUserName({ cwd })) ?? 'unknown';
-  const gitCommit = await revParse('HEAD', { cwd }).catch(() => null);
+
+  // Attribution + intent: for a real ref (e.g. a commit), derive from its git log
+  // when not supplied — this is what lets the post-commit hook seal with no -m.
+  // The git-commit anchor is the PICKED ref (HEAD for the worktree).
+  const isWorktree = ref === WORKTREE_REF;
+  const intent =
+    opts.intent ??
+    (isWorktree ? 'uncommitted worktree state' : (await commitSubject(ref, { cwd }).catch(() => '')) || '(no intent)');
+  const actor =
+    opts.actor ??
+    (isWorktree ? null : await commitAuthor(ref, { cwd }).catch(() => null)) ??
+    (await gitUserName({ cwd })) ??
+    'unknown';
+  const gitCommit = await revParse(isWorktree ? 'HEAD' : ref, { cwd }).catch(() => null);
   const now = opts.now ?? new Date().toISOString();
 
   const body: StrandBody = {
@@ -120,7 +132,7 @@ export async function recordPick(root: string, opts: RecordPickOptions): Promise
     stateId: current.stateId,
     parentStateId: selvage,
     actor,
-    intent: opts.intent,
+    intent,
     recordedAt: now,
     objectCount: current.objects.size,
     delta,

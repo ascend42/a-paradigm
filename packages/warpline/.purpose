@@ -327,6 +327,23 @@ components:
       - "#fabric"
       - "#git-exec"
 
+  hook:
+    description: >-
+      The auto-seal git hook. installHook/uninstallHook/hookStatus manage a
+      BEGIN/END-delimited block APPENDED to the repo's post-commit hook (worktree-
+      correct path via gitPath) so every git commit also seals a #strand — the
+      native history accrues in lockstep with git. Coexists with any existing
+      post-commit hook (e.g. Paradigm's history capture), never clobbers it;
+      install is idempotent (refreshes the block in place); uninstall strips only
+      the warpline block. The block seals `--ref HEAD` (the committed tree, never
+      the worktree — so it captures exactly what was committed and never conflates
+      another agent's uncommitted work). Runs in the BACKGROUND (a full-repo absorb
+      is slow) and is fail-safe (`|| true`) so it never delays, blocks, or fails the
+      commit; the strand for commit N lands shortly after N (and rides in N+1).
+    type: module
+    components:
+      - "#pick"
+
   oracle:
     description: >-
       oracle(branchA, branchB) — merge-base → absorb base/A/B → diff → predict →
@@ -421,11 +438,13 @@ components:
       MEANING vs HEAD — the named, discoverable form of diff-no-args) and `warpline
       lifeline <symbol> [--max N] [--json]` (meaning-aware blame — who changed a
       symbol's meaning, when, why; survives renames). Phase-2 WRITE PATH: `warpline
-      pick -m <intent> [--as <actor>] [--confidence <n>] [--ref <ref>] [--json]`
-      seals the working meaning into the fabric (no-op when unchanged), `warpline
+      pick [-m <intent>] [--as <actor>] [--confidence <n>] [--ref <ref>] [--quiet]
+      [--json]` seals meaning into the fabric (no-op when unchanged; with `--ref
+      <commit>` and no -m, intent + actor are derived from the commit), `warpline
       log [--max N] [--json]` shows this project's native meaning-history (the
-      strands, newest first, with the git coexistence anchor), and `warpline
-      selvage [--json]` shows the current fabric tip + the strand that sealed it.
+      strands, newest first, with the git coexistence anchor), `warpline selvage
+      [--json]` shows the current fabric tip + the strand that sealed it, and
+      `warpline hook <install|uninstall|status>` manages the post-commit auto-seal.
       The only module allowed to write stdout; library code stays quiet.
     type: cli
     components:
@@ -436,6 +455,7 @@ components:
       - "#lifeline"
       - "#pick"
       - "#fabric"
+      - "#hook"
 
 flows:
   oracle-run:

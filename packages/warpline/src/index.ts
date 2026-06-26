@@ -64,6 +64,13 @@ export {
   readFabric,
 } from './fabric/fabric.js';
 export { recordPick, type RecordPickOptions, type PickResult } from './fabric/pick.js';
+export {
+  installHook,
+  uninstallHook,
+  hookStatus,
+  type HookState,
+  type HookStatus,
+} from './fabric/hook.js';
 
 // Oracle
 export { oracle, type OracleRecord, type OracleOptions } from './oracle.js';
