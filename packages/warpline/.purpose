@@ -347,9 +347,13 @@ components:
       (Merkle would surface a real conflict, so autoClean is trustworthy) vs
       'independent' when disjoint (autoClean may HIDE a cross-symbol semantic conflict
       per the false-AUTOFOLD gate)); KNOT (same symbol, contradictory meaning → human
-      DECIDE, never silently merged); DANGLE (edge into a retired symbol). v1 SCOPE:
-      the decision + the FAST_ADMIT seal; materializing the MERGED bytes for a CLEAN
-      re-base is the meaning→bytes layer, deferred to v2.
+      DECIDE, never silently merged); DANGLE (edge into a retired symbol). v2: admit()
+      now PERFORMS the merge — on FAST_ADMIT it seals the proposed state; on CLEAN it
+      calls #materialize to produce the merged tree, seals it, advances selvage, and
+      clears the scratch (if materialization finds a byte conflict the meaning layer
+      missed, it downgrades to KNOT — never a silent wrong-merge). Materialization
+      needs git refs for ours/base/theirs (the strands' provenance.gitCommit anchors);
+      a WORKTREE proposal returns CLEAN unsealed.
     type: module
     components:
       - "#absorb"
@@ -358,6 +362,36 @@ components:
       - "#warp-store"
       - "#fabric"
       - "#scratch"
+      - "#materialize"
+
+  merge3:
+    description: >-
+      A token-level 3-way merge (the Phase-C v2 materialization primitive).
+      tokenize splits text into word/whitespace/punct runs (join === text);
+      merge3(base, ours, theirs) does a hunk-based diff3 over token arrays (LCS
+      alignment → change hunks → base-range overlap detection). A range changed by
+      only ONE side takes that side; disjoint changes — even two edits on ONE line,
+      or a deletion next to an edit — compose cleanly (this is what git's LINE-level
+      merge conflicts on). A range BOTH sides changed in OVERLAPPING base coordinates
+      is a CONFLICT (counted; merged then unsafe) — NEVER silently resolved (the VCS
+      cardinal sin). Pure, no I/O.
+    type: module
+
+  materialize:
+    description: >-
+      Phase-C v2 meaning→bytes — PERFORM the merge git could only forecast.
+      computeMerge(base, ours, theirs refs) reads each changed file via git (the
+      coexistence byte store) and merges per-file with #merge3; any add/delete-vs-edit
+      or overlapping token-region is a surfaced CONFLICT. materializeMergedState
+      applies the conflict-free plan onto a throwaway copy of the base tree and
+      absorbs it → the merged WarpState (the user's working tree is never touched).
+      gitShow is byte-faithful (no trim) so trailing newlines and exact bytes survive
+      — no drift.
+    type: module
+    components:
+      - "#merge3"
+      - "#absorb"
+      - "#git-exec"
 
   hook:
     description: >-

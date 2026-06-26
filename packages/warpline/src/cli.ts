@@ -407,9 +407,11 @@ function printAdmit(agentId: string, r: AdmitResult): void {
   if (d.status === 'CLEAN') {
     lines.push(`verdict   CLEAN to admit (concurrent edits commute in meaning — git may conflict on bytes)`);
     lines.push(`confidence ${d.confidence}${d.confidence === 'independent' ? '  (⚠ disjoint sets — autoClean may hide a cross-symbol semantic conflict; false-AUTOFOLD gate)' : '  (dependency-adjacent — trustworthy)'}`);
-    lines.push('  (v1 reports the decision; merged-tree materialization is v2)');
+    if (r.sealed && r.strand) lines.push(`  → MERGED + sealed (seq ${r.strand.seq}); selvage advanced to ${short(r.strand.stateId)}`);
+    else lines.push('  (not sealed — needs git refs to materialize; commit then admit)');
   } else if (d.status === 'FAST_ADMIT') {
     lines.push('verdict   FAST_ADMIT — selvage has not advanced; the proposed state admits directly');
+    if (r.sealed && r.strand) lines.push(`  → sealed (seq ${r.strand.seq}); selvage advanced to ${short(r.strand.stateId)}`);
   } else if (d.status === 'KNOT') {
     lines.push(`verdict   KNOT — a human DECIDE is required (NOT auto-merged)`);
     for (const k of d.knots) lines.push(`  ⊗ ${k.symbol}${k.conflictingSlots.length ? `  [${k.conflictingSlots.join(', ')}]` : ''}`);

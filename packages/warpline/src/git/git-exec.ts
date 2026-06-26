@@ -85,6 +85,35 @@ export async function mergeBase(a: string, b: string, opts: GitOptions = {}): Pr
   return git(['merge-base', '--end-of-options', a, b], opts);
 }
 
+/**
+ * The contents of `filePath` at `ref` (read-only). Throws if absent at that ref.
+ * BYTE-FAITHFUL — does NOT trim (a merge must preserve trailing newlines etc.;
+ * trimming would drift bytes, which v2 materialization exists to prevent).
+ */
+export async function gitShow(ref: string, filePath: string, opts: GitOptions = {}): Promise<string> {
+  const cwd = opts.cwd ?? process.cwd();
+  try {
+    const { stdout } = await execFileAsync('git', ['show', `${ref}:${filePath}`], {
+      cwd,
+      maxBuffer: MAX_BUFFER,
+      encoding: 'utf8',
+    });
+    return stdout; // no trim — exact blob bytes
+  } catch (err) {
+    const e = err as { stderr?: string; message?: string };
+    throw new Error(`git show ${ref}:${filePath} failed: ${(e.stderr || e.message || '').trim()}`);
+  }
+}
+
+/** The repo-relative paths that differ between two refs (read-only). */
+export async function changedPaths(refA: string, refB: string, opts: GitOptions = {}): Promise<string[]> {
+  const out = await git(['diff', '--name-only', '--end-of-options', refA, refB], opts);
+  return out
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.length > 0);
+}
+
 /** The common ancestor of N refs (octopus merge-base) — the base for a consolidate. */
 export async function mergeBaseN(refs: string[], opts: GitOptions = {}): Promise<string> {
   if (refs.length < 2) throw new Error('mergeBaseN needs at least 2 refs');

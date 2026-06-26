@@ -74,6 +74,15 @@ export {
 
 // Multi-writer (Phase C v1) — SCRATCH fork + the admission DECISION protocol.
 export { forkScratch, readScratch, clearScratch } from './fabric/scratch.js';
+// Phase C v2 — meaning→bytes: the token 3-way merge + tree materialization.
+export { tokenize, merge3, mergeText, type Merge3Result } from './fabric/merge3.js';
+export {
+  computeMerge,
+  materializeMergedState,
+  type MergePlan,
+  type MergeConflict,
+  type MaterializeResult,
+} from './fabric/materialize.js';
 export {
   admit,
   admitDecision,

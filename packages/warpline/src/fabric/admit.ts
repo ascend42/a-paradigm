@@ -25,13 +25,16 @@
  * Library code: no console output.
  */
 
-import { absorb } from '../absorb.js';
+import { absorb, WORKTREE_REF } from '../absorb.js';
 import { diff, type SemDeltaSet } from '../sem-delta.js';
 import { predict, type Knot, type Dangle } from '../predict.js';
 import { WarpStore } from '../warp/store.js';
 import type { WarpState } from '../warp/warp-state.js';
-import { warplineDirOf, readSelvage } from './fabric.js';
-import { readScratch } from './scratch.js';
+import { revParse, commitAuthor, commitSubject, gitUserName } from '../git/git-exec.js';
+import { warplineDirOf, readSelvage, readFabric, appendStrand, writeSelvage } from './fabric.js';
+import { readScratch, clearScratch } from './scratch.js';
+import { computePickId, type Strand, type StrandDelta } from './strand.js';
+import { materializeMergedState, type MergePlan } from './materialize.js';
 
 export type AdmitStatus = 'NOOP' | 'FAST_ADMIT' | 'CLEAN' | 'KNOT' | 'DANGLE';
 export type AdmitConfidence = 'linked' | 'independent';
@@ -127,15 +130,91 @@ export interface AdmitOptions {
 
 export interface AdmitResult {
   decision: AdmitDecision;
-  /** true only when v1 actually advanced the fabric (FAST_ADMIT). */
+  /** true when the fabric was advanced (FAST_ADMIT, or a materialized CLEAN). */
   sealed: boolean;
   proposedStateId: string;
+  /** the sealed strand (when sealed). */
+  strand?: Strand;
+  /** the merge plan (when a CLEAN admit was materialized). */
+  merged?: MergePlan;
 }
 
+const EMPTY_DELTA: StrandDelta = { born: [], retired: [], contractChanged: [], renamedNoop: 0 };
+
+function summarizeDelta(parent: WarpState | undefined, state: WarpState): StrandDelta {
+  if (!parent) return { ...EMPTY_DELTA };
+  const d = diff(parent, state);
+  const born: string[] = [];
+  const retired: string[] = [];
+  const contractChanged: string[] = [];
+  for (const x of d.deltas.values()) {
+    if (x.kind === 'symbol-born') born.push(x.symbol);
+    else if (x.kind === 'symbol-retired') retired.push(x.symbol);
+    else if (x.kind === 'contract-changed') contractChanged.push(x.symbol);
+  }
+  return { born: born.sort(), retired: retired.sort(), contractChanged: contractChanged.sort(), renamedNoop: d.renames.length };
+}
+
+/** Seal a (pre-absorbed) WarpState as a fabric strand and advance the selvage. */
+function sealState(
+  root: string,
+  store: WarpStore,
+  state: WarpState,
+  parentStateId: string | null,
+  actor: string,
+  intent: string,
+  gitCommit: string | null,
+  now: string,
+): Strand {
+  const wdir = warplineDirOf(root);
+  store.putState(state);
+  const seq = readFabric(wdir).length;
+  const parent = parentStateId ? store.loadState(parentStateId) : undefined;
+  const body = {
+    schemaVersion: 1 as const,
+    seq,
+    stateId: state.stateId,
+    parentStateId,
+    actor,
+    intent,
+    recordedAt: now,
+    objectCount: state.objects.size,
+    delta: summarizeDelta(parent, state),
+    calibratedConfidence: null,
+    provenance: { ref: state.ref, treeSha: state.treeSha, gitCommit },
+  };
+  const strand: Strand = { ...body, pickId: computePickId(body) };
+  appendStrand(wdir, strand);
+  writeSelvage(wdir, state.stateId);
+  return strand;
+}
+
+/** The git commit a fabric state was sealed from (its coexistence anchor), if any. */
+function commitOfState(root: string, stateId: string): string | null {
+  for (const s of readFabric(warplineDirOf(root))) {
+    if (s.stateId === stateId) return s.provenance?.gitCommit ?? null;
+  }
+  return null;
+}
+
+const blank = (status: AdmitStatus): AdmitDecision => ({
+  status,
+  knots: [],
+  dangling: [],
+  confidence: null,
+  rebasedOnto: null,
+  agentChanged: [],
+  otherChanged: [],
+});
+
 /**
- * Run the admission protocol against the live fabric for an agent's scratch.
- * v1 seals ONLY on FAST_ADMIT (a complete state); CLEAN (materialization v2),
- * KNOT, and DANGLE return the verdict for the caller to surface/resolve.
+ * Run the admission protocol against the live fabric and PERFORM the merge.
+ *  - FAST_ADMIT → seal the proposed state, advance selvage, clear scratch.
+ *  - CLEAN → materialize the merged tree (base+ours+theirs via #materialize) and
+ *    seal it; if materialization finds a byte conflict the meaning layer missed,
+ *    downgrade to KNOT (never a silent wrong-merge). Needs git refs for ours/base/
+ *    theirs; a WORKTREE proposal or a state with no git anchor returns CLEAN unsealed.
+ *  - KNOT / DANGLE / NOOP → no seal.
  */
 export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResult> {
   const cwd = opts.cwd ?? root;
@@ -147,18 +226,52 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
   const proposed = await absorb(opts.ref, { cwd });
   store.putState(proposed);
 
+  const isWorktree = opts.ref === WORKTREE_REF;
+  const oursCommit = isWorktree ? null : await revParse(opts.ref, { cwd }).catch(() => null);
+  const actor =
+    (isWorktree ? null : await commitAuthor(opts.ref, { cwd }).catch(() => null)) ??
+    (await gitUserName({ cwd })) ??
+    'unknown';
+  const intent = isWorktree
+    ? 'uncommitted worktree state'
+    : (await commitSubject(opts.ref, { cwd }).catch(() => '')) || `admit ${opts.agentId}`;
+  const now = new Date().toISOString();
+
   const base = baseId ? store.loadState(baseId) : undefined;
   const selvage = selvageId ? store.loadState(selvageId) : undefined;
 
-  // No base/selvage yet (empty fabric) → treat as a fast admit of the first state.
+  // Empty fabric (or unreadable base) → fast-admit the proposed state.
   if (!base || !selvage) {
-    return {
-      decision: { status: 'FAST_ADMIT', knots: [], dangling: [], confidence: null, rebasedOnto: null, agentChanged: [], otherChanged: [] },
-      sealed: false,
-      proposedStateId: proposed.stateId,
-    };
+    const strand = sealState(root, store, proposed, selvageId ?? null, actor, intent, oursCommit, now);
+    clearScratch(root, opts.agentId);
+    return { decision: blank('FAST_ADMIT'), sealed: true, proposedStateId: proposed.stateId, strand };
   }
 
   const decision = admitDecision(base, proposed, selvage);
+
+  if (decision.status === 'NOOP') {
+    return { decision, sealed: false, proposedStateId: proposed.stateId };
+  }
+  if (decision.status === 'FAST_ADMIT') {
+    const strand = sealState(root, store, proposed, selvageId, actor, intent, oursCommit, now);
+    clearScratch(root, opts.agentId);
+    return { decision, sealed: true, proposedStateId: proposed.stateId, strand };
+  }
+  if (decision.status === 'CLEAN') {
+    const baseCommit = commitOfState(root, baseId!);
+    const theirsCommit = commitOfState(root, selvageId!);
+    if (isWorktree || !baseCommit || !theirsCommit) {
+      return { decision, sealed: false, proposedStateId: proposed.stateId }; // can't materialize without git refs
+    }
+    const mat = await materializeMergedState(baseCommit, opts.ref, theirsCommit, { cwd });
+    if (mat.state && mat.plan.conflicts.length === 0) {
+      const strand = sealState(root, store, mat.state, selvageId, actor, intent, oursCommit, now);
+      clearScratch(root, opts.agentId);
+      return { decision, sealed: true, proposedStateId: proposed.stateId, strand, merged: mat.plan };
+    }
+    // The meaning layer said CLEAN but the bytes overlap → surface as a KNOT.
+    return { decision: { ...decision, status: 'KNOT' }, sealed: false, proposedStateId: proposed.stateId, merged: mat.plan };
+  }
+  // KNOT / DANGLE
   return { decision, sealed: false, proposedStateId: proposed.stateId };
 }

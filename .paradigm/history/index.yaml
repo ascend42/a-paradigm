@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-06-26T03:17:45.669Z'
+generated: '2026-06-26T03:28:47.407Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -13938,7 +13938,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_343
+      - &ref_344
         id: h0527
         ts: '2026-06-25T07:44:29Z'
         type: implement
@@ -13960,7 +13960,7 @@ by_symbol:
           - packages/paradigm/package.json
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'fix(#notebook): collision-guard gated promote — distinct learnings no longer clobber (7.6.1)'
-      - &ref_344
+      - &ref_345
         id: h0526
         ts: '2026-06-25T07:31:31Z'
         type: implement
@@ -22498,16 +22498,43 @@ by_symbol:
       agent: []
   '#predict':
     symbol: '#predict'
-    total_changes: 5
-    last_modified: '2026-06-25T08:11:23Z'
+    total_changes: 6
+    last_modified: '2026-06-26T03:28:42Z'
     stability_score: 1
     fragility: low
     recent:
+      - &ref_336
+        id: h0537
+        ts: '2026-06-26T03:28:42Z'
+        type: implement
+        symbols:
+          - '#admit'
+          - '#predict'
+          - '#scratch'
+          - '#warpline-cli'
+        author:
+          type: human
+          id: ascend
+        commit: 326c9ac517755071c0dd39ad71c227df0ff22eec
+        intent: feature
+        files:
+          - .paradigm/flow-index.json
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/manifest.consistency.json
+          - .paradigm/navigator.yaml
+          - .paradigm/scan-index.json
+          - packages/warpline/.purpose
+          - packages/warpline/src/cli.ts
+          - packages/warpline/src/fabric/admit.ts
+          - packages/warpline/src/fabric/scratch.ts
+          - packages/warpline/src/index.ts
+          - packages/warpline/test/multiwriter-admit.test.ts
+        description: 'feat(#admit,#scratch): multi-writer admission (Phase C v1) — converge where git conflicts'
       - *ref_319
       - *ref_320
       - *ref_321
       - *ref_316
-      - *ref_317
     contributors:
       human:
         - ascend
@@ -23009,7 +23036,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_336
+      - &ref_337
         id: h0536
         ts: '2026-06-26T03:16:05Z'
         type: implement
@@ -23096,7 +23123,7 @@ by_symbol:
           - .paradigm/history/index.yaml
           - .paradigm/history/log.jsonl
         description: 'chore(paradigm): session state — Warpline battle-test arc checkpoint'
-      - &ref_337
+      - &ref_343
         id: h0519
         ts: '2026-06-25T06:44:54Z'
         type: implement
@@ -23199,13 +23226,14 @@ by_symbol:
       agent: []
   '#warpline-cli':
     symbol: '#warpline-cli'
-    total_changes: 9
-    last_modified: '2026-06-26T03:16:05Z'
+    total_changes: 10
+    last_modified: '2026-06-26T03:28:42Z'
     stability_score: 1
     fragility: low
     recent:
       - *ref_336
-      - &ref_345
+      - *ref_337
+      - &ref_346
         id: h0533
         ts: '2026-06-25T14:40:55Z'
         type: implement
@@ -23233,7 +23261,6 @@ by_symbol:
         description: 'feat(#warpline-cli): `warpline selvage` + log git-anchor — finish the single-writer read surface'
       - *ref_332
       - *ref_334
-      - *ref_337
     contributors:
       human:
         - ascend
@@ -23318,7 +23345,7 @@ by_symbol:
     fragility: low
     recent:
       - *ref_334
-      - *ref_337
+      - *ref_343
       - id: h0518
         ts: '2026-06-25T01:31:19Z'
         type: implement
@@ -23351,8 +23378,8 @@ by_symbol:
     fragility: low
     recent:
       - *ref_310
-      - *ref_343
       - *ref_344
+      - *ref_345
     contributors:
       human:
         - ascend
@@ -23364,7 +23391,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_345
+      - *ref_346
       - *ref_332
     contributors:
       human:
@@ -23377,8 +23404,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_336
-      - *ref_345
+      - *ref_337
+      - *ref_346
       - *ref_332
     contributors:
       human:
@@ -23424,6 +23451,30 @@ by_symbol:
     symbol: '#hook'
     total_changes: 1
     last_modified: '2026-06-26T03:16:05Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_337
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#admit':
+    symbol: '#admit'
+    total_changes: 1
+    last_modified: '2026-06-26T03:28:42Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_336
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#scratch':
+    symbol: '#scratch'
+    total_changes: 1
+    last_modified: '2026-06-26T03:28:42Z'
     stability_score: 1
     fragility: low
     recent:
