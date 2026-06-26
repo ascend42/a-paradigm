@@ -32,6 +32,8 @@ import { recordPick, type PickResult } from './fabric/pick.js';
 import { warplineDirOf, readSelvage, readFabric } from './fabric/fabric.js';
 import type { Strand } from './fabric/strand.js';
 import { installHook, uninstallHook, hookStatus } from './fabric/hook.js';
+import { forkScratch } from './fabric/scratch.js';
+import { admit, type AdmitResult } from './fabric/admit.js';
 import { repoRoot, gitPath } from './git/git-exec.js';
 
 // The shared .purpose parser (library code, purpose/core/aggregator) console.warns
@@ -360,6 +362,67 @@ program
       fail(err);
     }
   });
+
+program
+  .command('scratch')
+  .description('Fork a per-agent SCRATCH at the current selvage (the optimistic base for multi-writer admission). N agents fork the same selvage with zero contention — what git\'s single shared working tree cannot do.')
+  .argument('<agentId>', 'the agent identity owning this scratch')
+  .action(async (agentId: string) => {
+    try {
+      const root = await repoRoot().catch(() => process.cwd());
+      const { base } = forkScratch(root, agentId);
+      process.stdout.write(
+        `SCRATCH  forked for ${agentId}\n  base    ${base ? base : '(none — empty fabric)'}\n`,
+      );
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+program
+  .command('admit')
+  .description("Run the multi-writer ADMISSION protocol for an agent's scratch: re-base against the live selvage and return the verdict — FAST_ADMIT / CLEAN (+confidence) / KNOT / DANGLE. v1 reports the decision; merged-tree materialization is v2.")
+  .argument('<agentId>', 'the agent whose scratch is being admitted')
+  .option('--ref <ref>', 'the agent\'s proposed state (a git ref or WORKTREE)', WORKTREE_REF)
+  .option('--json', 'emit the full AdmitResult as JSON')
+  .action(async (agentId: string, options: { ref?: string; json?: boolean }) => {
+    try {
+      const root = await repoRoot().catch(() => process.cwd());
+      const result = await admit(root, { cwd: root, agentId, ref: options.ref ?? WORKTREE_REF });
+      if (options.json) {
+        process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+      } else {
+        printAdmit(agentId, result);
+      }
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+function printAdmit(agentId: string, r: AdmitResult): void {
+  const d = r.decision;
+  const lines: string[] = [];
+  lines.push(`ADMIT  ${agentId}  →  ${d.status}`);
+  if (d.rebasedOnto) lines.push(`re-based onto selvage ${short(d.rebasedOnto)}`);
+  if (d.status === 'CLEAN') {
+    lines.push(`verdict   CLEAN to admit (concurrent edits commute in meaning — git may conflict on bytes)`);
+    lines.push(`confidence ${d.confidence}${d.confidence === 'independent' ? '  (⚠ disjoint sets — autoClean may hide a cross-symbol semantic conflict; false-AUTOFOLD gate)' : '  (dependency-adjacent — trustworthy)'}`);
+    lines.push('  (v1 reports the decision; merged-tree materialization is v2)');
+  } else if (d.status === 'FAST_ADMIT') {
+    lines.push('verdict   FAST_ADMIT — selvage has not advanced; the proposed state admits directly');
+  } else if (d.status === 'KNOT') {
+    lines.push(`verdict   KNOT — a human DECIDE is required (NOT auto-merged)`);
+    for (const k of d.knots) lines.push(`  ⊗ ${k.symbol}${k.conflictingSlots.length ? `  [${k.conflictingSlots.join(', ')}]` : ''}`);
+  } else if (d.status === 'DANGLE') {
+    lines.push('verdict   DANGLE — a meaning-level broken reference; resolve before admitting');
+    for (const x of d.dangling) lines.push(`  ⤬ ${x.fromSymbol} → ${x.danglingTargetSymbol}`);
+  } else {
+    lines.push('verdict   NOOP — the agent changed no meaning');
+  }
+  if (d.agentChanged.length) lines.push(`agent changed  ${d.agentChanged.join(', ')}`);
+  if (d.otherChanged.length) lines.push(`others changed ${d.otherChanged.join(', ')}`);
+  process.stdout.write(lines.join('\n') + '\n');
+}
 
 function printSelvage(selvage: string | null, tip: Strand | undefined, depth: number): void {
   const lines: string[] = [];

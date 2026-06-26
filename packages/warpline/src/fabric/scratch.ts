@@ -1,0 +1,45 @@
+/**
+ * #scratch — a per-agent ephemeral view. forkScratch(agentId) pins the stateId
+ * the agent is working against (its optimistic base), so N agents can fork the
+ * SAME selvage concurrently with zero contention — the thing git's single shared
+ * working-tree/index/HEAD cannot do. A SCRATCH is just a pointer under
+ * .warpline/refs/scratch/<agentId>; forking is O(1), no working-tree lock.
+ *
+ * This is the read side of the multi-writer protocol; #admit is the write side.
+ *
+ * Library code: no console output.
+ */
+
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { warplineDirOf, readSelvage } from './fabric.js';
+
+function scratchPath(wdir: string, agentId: string): string {
+  // agentId is a label; sanitize so it can't escape refs/scratch/.
+  const safe = agentId.replace(/[^a-zA-Z0-9._-]/g, '_');
+  return path.join(wdir, 'refs', 'scratch', safe);
+}
+
+/** Fork a scratch for `agentId` at the current selvage (its optimistic base). */
+export function forkScratch(root: string, agentId: string): { base: string | null } {
+  const wdir = warplineDirOf(root);
+  const base = readSelvage(wdir);
+  const p = scratchPath(wdir, agentId);
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  fs.writeFileSync(p, (base ?? '') + '\n', 'utf8');
+  return { base };
+}
+
+/** The stateId an agent's scratch was forked at, or null if none / unforked. */
+export function readScratch(root: string, agentId: string): string | null {
+  try {
+    return fs.readFileSync(scratchPath(warplineDirOf(root), agentId), 'utf8').trim() || null;
+  } catch {
+    return null;
+  }
+}
+
+/** Discard an agent's scratch (after admission or abandonment). */
+export function clearScratch(root: string, agentId: string): void {
+  fs.rmSync(scratchPath(warplineDirOf(root), agentId), { force: true });
+}

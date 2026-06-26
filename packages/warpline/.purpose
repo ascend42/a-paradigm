@@ -327,6 +327,38 @@ components:
       - "#fabric"
       - "#git-exec"
 
+  scratch:
+    description: >-
+      A per-agent ephemeral view (the read side of multi-writer). forkScratch(agentId)
+      pins the stateId the agent works against (its optimistic base) under
+      .warpline/refs/scratch/<agentId>; N agents fork the SAME selvage concurrently
+      with zero contention — what git's single shared working-tree/index/HEAD cannot
+      do. Forking is O(1), no working-tree lock. readScratch/clearScratch round it out.
+    type: module
+
+  admit:
+    description: >-
+      The multi-writer WRITE side (Phase C v1, DECISION-level). admitDecision(base,
+      proposed, selvage) is the pure verdict: NOOP (no meaning change); FAST_ADMIT
+      (selvage unadvanced since base → admit directly); CLEAN (selvage advanced but
+      predict(agentΔ, otherΔ) is autoClean — the concurrent edits commute in MEANING,
+      the case git CONFLICTS on for textually-adjacent edits — carrying a GATE-RULE
+      confidence: 'linked' when the two changed-sets are dependency-adjacent in-graph
+      (Merkle would surface a real conflict, so autoClean is trustworthy) vs
+      'independent' when disjoint (autoClean may HIDE a cross-symbol semantic conflict
+      per the false-AUTOFOLD gate)); KNOT (same symbol, contradictory meaning → human
+      DECIDE, never silently merged); DANGLE (edge into a retired symbol). v1 SCOPE:
+      the decision + the FAST_ADMIT seal; materializing the MERGED bytes for a CLEAN
+      re-base is the meaning→bytes layer, deferred to v2.
+    type: module
+    components:
+      - "#absorb"
+      - "#sem-delta"
+      - "#predict"
+      - "#warp-store"
+      - "#fabric"
+      - "#scratch"
+
   hook:
     description: >-
       The auto-seal git hook. installHook/uninstallHook/hookStatus manage a
@@ -444,8 +476,11 @@ components:
       log [--max N] [--json]` shows this project's native meaning-history (the
       strands, newest first, with the git coexistence anchor), `warpline selvage
       [--json]` shows the current fabric tip + the strand that sealed it, and
-      `warpline hook <install|uninstall|status>` manages the post-commit auto-seal.
-      The only module allowed to write stdout; library code stays quiet.
+      `warpline hook <install|uninstall|status>` manages the post-commit auto-seal,
+      `warpline scratch <agentId>` forks a per-agent multi-writer base, and `warpline
+      admit <agentId> [--ref <ref>] [--json]` runs the admission protocol (FAST_ADMIT
+      / CLEAN+confidence / KNOT / DANGLE). The only module allowed to write stdout;
+      library code stays quiet.
     type: cli
     components:
       - "#oracle"
@@ -456,6 +491,8 @@ components:
       - "#pick"
       - "#fabric"
       - "#hook"
+      - "#scratch"
+      - "#admit"
 
 flows:
   oracle-run:

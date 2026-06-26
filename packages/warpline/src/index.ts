@@ -72,6 +72,18 @@ export {
   type HookStatus,
 } from './fabric/hook.js';
 
+// Multi-writer (Phase C v1) — SCRATCH fork + the admission DECISION protocol.
+export { forkScratch, readScratch, clearScratch } from './fabric/scratch.js';
+export {
+  admit,
+  admitDecision,
+  type AdmitStatus,
+  type AdmitConfidence,
+  type AdmitDecision,
+  type AdmitOptions,
+  type AdmitResult,
+} from './fabric/admit.js';
+
 // Oracle
 export { oracle, type OracleRecord, type OracleOptions } from './oracle.js';
 
