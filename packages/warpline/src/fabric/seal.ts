@@ -48,6 +48,8 @@ export interface SealInput {
   confidence?: number | null;
   /** present only for a KNOT-council resolution strand. */
   resolves?: KnotResolution;
+  /** true when sealing a materialized CLEAN merge (its gitCommit is one parent). */
+  merged?: boolean;
 }
 
 /** Persist `state`, append its strand to the fabric, advance the selvage. */
@@ -79,6 +81,7 @@ export function sealState(
     calibratedConfidence: input.confidence ?? null,
     provenance: { ref: state.ref, treeSha: state.treeSha, gitCommit: input.gitCommit },
     ...(input.resolves ? { resolves: input.resolves } : {}),
+    ...(input.merged ? { merged: true } : {}),
   };
   const strand: Strand = { ...body, pickId: computePickId(body) };
   // CAS GUARD FIRST — refuse if the tip moved off the parent the decision was

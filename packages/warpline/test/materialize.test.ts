@@ -79,7 +79,7 @@ describe('MATERIALIZE — Warpline performs the merge where git conflicts', () =
   it('computeMerge produces the byte-correct merged file, no conflicts', async () => {
     const plan = await computeMerge('base', 'branchA', 'branchB', { cwd: repo.dir });
     expect(plan.conflicts).toEqual([]);
-    expect(plan.files.get(MOD)).toBe(
+    expect(plan.files.get(MOD)!.toString('utf8')).toBe(
       'export function foo() { return 10; } export function bar() { return 20; }\n',
     );
   });

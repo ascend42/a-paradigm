@@ -417,7 +417,9 @@ components:
       clears the scratch (if materialization finds a byte conflict the meaning layer
       missed, it downgrades to KNOT — never a silent wrong-merge). Materialization
       needs git refs for ours/base/theirs (the strands' provenance.gitCommit anchors);
-      a WORKTREE proposal returns CLEAN unsealed.
+      a WORKTREE proposal returns CLEAN unsealed. A CLEAN re-base onto a MERGE strand
+      also fails CLOSED (unsealed): a merge strand's gitCommit is ONE parent and lacks
+      the merged bytes, so re-basing off it would mis-materialize a 3rd-gen merge (H1).
     type: module
     components:
       - "#absorb"
@@ -440,14 +442,17 @@ components:
       or a deletion next to an edit — compose cleanly (this is what git's LINE-level
       merge conflicts on). A range BOTH sides changed in OVERLAPPING base coordinates
       is a CONFLICT (counted; merged then unsafe) — NEVER silently resolved (the VCS
-      cardinal sin). Pure, no I/O.
+      cardinal sin). Pure, no I/O. The O(n·m) LCS is CAPPED — an oversized/minified
+      file fails closed (whole-file conflict) instead of OOM-ing (M1).
     type: module
 
   materialize:
     description: >-
       Phase-C v2 meaning→bytes — PERFORM the merge git could only forecast.
-      computeMerge(base, ours, theirs refs) reads each changed file via git (the
-      coexistence byte store) and merges per-file with #merge3; any add/delete-vs-edit
+      computeMerge(base, ours, theirs refs) reads each changed file's RAW BYTES via
+      git (binary-safe: a binary blob — NUL-bearing — changed on both sides fails
+      CLOSED as a conflict, never a UTF-8 text-merge corruption, H3) and merges
+      per-file with #merge3; any add/delete-vs-edit
       or overlapping token-region is a surfaced CONFLICT. materializeMergedState
       applies the conflict-free plan onto a throwaway copy of the base tree and
       absorbs it → the merged WarpState (the user's working tree is never touched).

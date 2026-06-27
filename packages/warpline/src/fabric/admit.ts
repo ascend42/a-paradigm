@@ -141,14 +141,6 @@ export interface AdmitResult {
   merged?: MergePlan;
 }
 
-/** The git commit a fabric state was sealed from (its coexistence anchor), if any. */
-function commitOfState(root: string, stateId: string): string | null {
-  for (const s of readFabric(warplineDirOf(root))) {
-    if (s.stateId === stateId) return s.provenance?.gitCommit ?? null;
-  }
-  return null;
-}
-
 const blank = (status: AdmitStatus): AdmitDecision => ({
   status,
   knots: [],
@@ -227,14 +219,20 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
       return { decision, sealed: true, proposedStateId: proposed.stateId, strand };
     }
     if (decision.status === 'CLEAN') {
-      const baseCommit = commitOfState(root, baseId!);
-      const theirsCommit = commitOfState(root, selvageId!);
-      if (isWorktree || !baseCommit || !theirsCommit) {
-        return { decision, sealed: false, proposedStateId: proposed.stateId }; // can't materialize without git refs
+      const fabric = readFabric(wdir);
+      const baseStrand = fabric.find((s) => s.stateId === baseId);
+      const theirsStrand = fabric.find((s) => s.stateId === selvageId);
+      const baseCommit = baseStrand?.provenance?.gitCommit ?? null;
+      const theirsCommit = theirsStrand?.provenance?.gitCommit ?? null;
+      // H1: a MERGE strand's gitCommit is ONE parent and lacks the merged bytes, so
+      // re-basing base/theirs off it would mis-materialize. Fail CLOSED (unsealed)
+      // rather than produce a wrong 3rd-generation merge.
+      if (isWorktree || !baseCommit || !theirsCommit || baseStrand?.merged || theirsStrand?.merged) {
+        return { decision, sealed: false, proposedStateId: proposed.stateId };
       }
       const mat = await materializeMergedState(baseCommit, opts.ref, theirsCommit, { cwd });
       if (mat.state && mat.plan.conflicts.length === 0) {
-        const strand = sealState(root, store, mat.state, { parentStateId: selvageId, actor, intent, gitCommit: oursCommit, now, confidence: priorFor(decision) });
+        const strand = sealState(root, store, mat.state, { parentStateId: selvageId, actor, intent, gitCommit: oursCommit, now, confidence: priorFor(decision), merged: true });
         clearScratch(root, opts.agentId);
         return { decision, sealed: true, proposedStateId: proposed.stateId, strand, merged: mat.plan };
       }

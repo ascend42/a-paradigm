@@ -95,4 +95,15 @@ describe('merge3 · array-level (the primitive)', () => {
     const r = merge3(['a', 'b'], ['a', 'b'], ['a', 'b']);
     expect(r).toEqual({ merged: ['a', 'b'], conflicts: 0 });
   });
+
+  it('M1: an oversized file fails CLOSED (conflict, no O(n·m) OOM)', () => {
+    const big = Array.from({ length: 2100 }, (_, i) => `t${i}`); // 2100² > 4M cells
+    const ours = [...big];
+    ours[0] = 'X';
+    const theirs = [...big];
+    theirs[1] = 'Y';
+    const r = merge3(big, ours, theirs);
+    expect(r.conflicts).toBeGreaterThan(0);
+    expect(r.merged).toEqual([]); // never attempts the LCS grid
+  });
 });

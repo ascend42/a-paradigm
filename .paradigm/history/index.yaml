@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-06-27T04:04:25.304Z'
+generated: '2026-06-27T05:14:56.417Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -23260,12 +23260,43 @@ by_symbol:
       agent: []
   '#warpline-cli':
     symbol: '#warpline-cli'
-    total_changes: 12
-    last_modified: '2026-06-26T17:19:56Z'
+    total_changes: 13
+    last_modified: '2026-06-27T05:14:52Z'
     stability_score: 1
     fragility: low
     recent:
-      - &ref_348
+      - &ref_347
+        id: h0541
+        ts: '2026-06-27T05:14:52Z'
+        type: implement
+        symbols:
+          - '#fabric'
+          - '#grade'
+          - '#strand'
+          - '#warpline-cli'
+        author:
+          type: human
+          id: ascend
+        commit: 0e3d3d5710fddf37350b678239ef9a3f05668ebb
+        intent: feature
+        files:
+          - .paradigm/flow-index.json
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/manifest.consistency.json
+          - .paradigm/navigator.yaml
+          - .paradigm/scan-index.json
+          - .warpline/fabric.jsonl
+          - .warpline/refs/selvage
+          - packages/warpline/.purpose
+          - packages/warpline/src/cli.ts
+          - packages/warpline/src/fabric/fabric.ts
+          - packages/warpline/src/fabric/grade.ts
+          - packages/warpline/src/fabric/strand.ts
+          - packages/warpline/src/index.ts
+          - packages/warpline/test/grade.test.ts
+        description: 'feat(#grade): the calibration grader — confidence vs real outcome (the moat, live)'
+      - &ref_349
         id: h0539
         ts: '2026-06-26T17:19:56Z'
         type: implement
@@ -23301,32 +23332,6 @@ by_symbol:
       - *ref_336
       - *ref_337
       - *ref_338
-      - &ref_347
-        id: h0533
-        ts: '2026-06-25T14:40:55Z'
-        type: implement
-        symbols:
-          - '#fabric'
-          - '#pick'
-          - '#warpline-cli'
-        author:
-          type: human
-          id: ascend
-        commit: 14b58a9090bb13bc336bac7658d423312aa0f981
-        intent: feature
-        files:
-          - .paradigm/flow-index.json
-          - .paradigm/history/index.yaml
-          - .paradigm/history/log.jsonl
-          - .paradigm/lore/timeline.yaml
-          - .paradigm/manifest.consistency.json
-          - .paradigm/navigator.yaml
-          - .paradigm/scan-index.json
-          - .warpline/fabric.jsonl
-          - .warpline/refs/selvage
-          - packages/warpline/.purpose
-          - packages/warpline/src/cli.ts
-        description: 'feat(#warpline-cli): `warpline selvage` + log git-anchor — finish the single-writer read surface'
     contributors:
       human:
         - ascend
@@ -23452,12 +23457,38 @@ by_symbol:
       agent: []
   '#fabric':
     symbol: '#fabric'
-    total_changes: 2
-    last_modified: '2026-06-25T14:40:55Z'
+    total_changes: 3
+    last_modified: '2026-06-27T05:14:52Z'
     stability_score: 1
     fragility: low
     recent:
       - *ref_347
+      - &ref_348
+        id: h0533
+        ts: '2026-06-25T14:40:55Z'
+        type: implement
+        symbols:
+          - '#fabric'
+          - '#pick'
+          - '#warpline-cli'
+        author:
+          type: human
+          id: ascend
+        commit: 14b58a9090bb13bc336bac7658d423312aa0f981
+        intent: feature
+        files:
+          - .paradigm/flow-index.json
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/lore/timeline.yaml
+          - .paradigm/manifest.consistency.json
+          - .paradigm/navigator.yaml
+          - .paradigm/scan-index.json
+          - .warpline/fabric.jsonl
+          - .warpline/refs/selvage
+          - packages/warpline/.purpose
+          - packages/warpline/src/cli.ts
+        description: 'feat(#warpline-cli): `warpline selvage` + log git-anchor — finish the single-writer read surface'
       - *ref_332
     contributors:
       human:
@@ -23470,7 +23501,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_349
+      - &ref_350
         id: h0540
         ts: '2026-06-27T04:04:20Z'
         type: implement
@@ -23505,7 +23536,7 @@ by_symbol:
           - packages/warpline/test/concurrency.test.ts
         description: 'fix(#fabric-lock,#seal): close the lost-update race + unify the fabric writer (audit C1)'
       - *ref_338
-      - *ref_347
+      - *ref_348
       - *ref_332
     contributors:
       human:
@@ -23513,12 +23544,13 @@ by_symbol:
       agent: []
   '#strand':
     symbol: '#strand'
-    total_changes: 2
-    last_modified: '2026-06-26T17:19:56Z'
+    total_changes: 3
+    last_modified: '2026-06-27T05:14:52Z'
     stability_score: 1
     fragility: low
     recent:
-      - *ref_348
+      - *ref_347
+      - *ref_349
       - *ref_332
     contributors:
       human:
@@ -23531,7 +23563,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_349
+      - *ref_350
       - *ref_332
     contributors:
       human:
@@ -23568,8 +23600,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
+      - *ref_350
       - *ref_349
-      - *ref_348
       - *ref_336
       - *ref_337
     contributors:
@@ -23619,8 +23651,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
+      - *ref_350
       - *ref_349
-      - *ref_348
     contributors:
       human:
         - ascend
@@ -23632,8 +23664,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
+      - *ref_350
       - *ref_349
-      - *ref_348
     contributors:
       human:
         - ascend
@@ -23645,7 +23677,19 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_349
+      - *ref_350
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#grade':
+    symbol: '#grade'
+    total_changes: 1
+    last_modified: '2026-06-27T05:14:52Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_347
     contributors:
       human:
         - ascend

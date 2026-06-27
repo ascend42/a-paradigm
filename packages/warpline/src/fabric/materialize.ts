@@ -17,7 +17,7 @@ import * as path from 'node:path';
 import { absorb, WORKTREE_REF } from '../absorb.js';
 import type { WarpState } from '../warp/warp-state.js';
 import {
-  gitShow,
+  gitShowBuffer,
   changedPaths,
   materializeTree,
   releaseTree,
@@ -31,9 +31,37 @@ export interface MergeConflict {
 }
 
 export interface MergePlan {
-  /** merged content per CHANGED path (null = deleted in the merge). */
-  files: Map<string, string | null>;
+  /** merged BYTES per CHANGED path (null = deleted in the merge). */
+  files: Map<string, Buffer | null>;
   conflicts: MergeConflict[];
+}
+
+/** A blob is binary if it contains a NUL byte (git's own heuristic). */
+const isBinary = (b: Buffer | null): boolean => b !== null && b.includes(0);
+const bufEq = (a: Buffer | null, b: Buffer | null): boolean =>
+  (a === null && b === null) || (a !== null && b !== null && a.equals(b));
+
+/** Resolve one file's 3-way merge over raw bytes (binary-safe). */
+function resolveFile(
+  base: Buffer | null,
+  ours: Buffer | null,
+  theirs: Buffer | null,
+): { content: Buffer | null } | { reason: string } {
+  if (bufEq(ours, theirs)) return { content: ours }; // both same (incl. both-deleted)
+  if (bufEq(ours, base)) return { content: theirs }; // only theirs changed
+  if (bufEq(theirs, base)) return { content: ours }; // only ours changed
+  // Both sides changed differently.
+  if (base === null || ours === null || theirs === null) {
+    return { reason: 'add/delete vs edit on the same file' };
+  }
+  // H3: never token-merge binary — a NUL-bearing blob through the text path would
+  // corrupt silently. Fail CLOSED on binary-changed-both-sides.
+  if (isBinary(base) || isBinary(ours) || isBinary(theirs)) {
+    return { reason: 'binary file changed on both sides' };
+  }
+  const m = mergeText(base.toString('utf8'), ours.toString('utf8'), theirs.toString('utf8'));
+  if (m.conflicts > 0) return { reason: `${m.conflicts} overlapping token-region(s)` };
+  return { content: Buffer.from(m.text, 'utf8') };
 }
 
 /** Compute the merged content of every path that base→ours or base→theirs touched. */
@@ -47,37 +75,16 @@ export async function computeMerge(
     ...(await changedPaths(baseRef, oursRef, opts)),
     ...(await changedPaths(baseRef, theirsRef, opts)),
   ]);
-  const files = new Map<string, string | null>();
+  const files = new Map<string, Buffer | null>();
   const conflicts: MergeConflict[] = [];
 
   for (const p of changed) {
-    const base = await gitShow(baseRef, p, opts).catch(() => null);
-    const ours = await gitShow(oursRef, p, opts).catch(() => null);
-    const theirs = await gitShow(theirsRef, p, opts).catch(() => null);
-
-    if (ours === theirs) {
-      files.set(p, ours);
-      continue;
-    }
-    if (ours === base) {
-      files.set(p, theirs);
-      continue;
-    }
-    if (theirs === base) {
-      files.set(p, ours);
-      continue;
-    }
-    // Both sides changed it. An add/delete on either side can't token-merge.
-    if (base === null || ours === null || theirs === null) {
-      conflicts.push({ path: p, reason: 'add/delete vs edit on the same file' });
-      continue;
-    }
-    const m = mergeText(base, ours, theirs);
-    if (m.conflicts > 0) {
-      conflicts.push({ path: p, reason: `${m.conflicts} overlapping token-region(s)` });
-      continue;
-    }
-    files.set(p, m.text);
+    const base = await gitShowBuffer(baseRef, p, opts).catch(() => null);
+    const ours = await gitShowBuffer(oursRef, p, opts).catch(() => null);
+    const theirs = await gitShowBuffer(theirsRef, p, opts).catch(() => null);
+    const r = resolveFile(base, ours, theirs);
+    if ('reason' in r) conflicts.push({ path: p, reason: r.reason });
+    else files.set(p, r.content);
   }
   return { files, conflicts };
 }
@@ -110,7 +117,7 @@ export async function materializeMergedState(
         await fs.rm(full, { force: true });
       } else {
         await fs.mkdir(path.dirname(full), { recursive: true });
-        await fs.writeFile(full, content, 'utf8');
+        await fs.writeFile(full, content); // Buffer — raw bytes, no re-encoding
       }
     }
     const state = await absorb(WORKTREE_REF, { cwd: tmp });

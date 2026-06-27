@@ -91,10 +91,19 @@ function conflicts2(a: Hunk, b: Hunk): boolean {
  * coordinates is a CONFLICT (counted; `merged` then unsafe). Disjoint changes —
  * even within one line, or a deletion next to an edit — compose cleanly.
  */
+/** Cap on the O(n·m) LCS grid — a huge/minified file would OOM, so fail-closed. */
+const MAX_LCS_CELLS = 4_000_000; // ~2000×2000 tokens; real source is far smaller
+
 export function merge3(base: string[], ours: string[], theirs: string[]): Merge3Result {
   if (eq(ours, base)) return { merged: theirs.slice(), conflicts: 0 };
   if (eq(theirs, base)) return { merged: ours.slice(), conflicts: 0 };
   if (eq(ours, theirs)) return { merged: ours.slice(), conflicts: 0 };
+
+  // M1: the LCS is O(n·m) time AND memory. A pathological large/minified file
+  // would OOM the process — fail CLOSED (whole-file conflict), never crash.
+  if (base.length * Math.max(ours.length, theirs.length) > MAX_LCS_CELLS) {
+    return { merged: [], conflicts: 1 };
+  }
 
   const ha = hunks(base, ours);
   const hb = hunks(base, theirs);

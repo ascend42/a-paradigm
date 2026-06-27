@@ -105,6 +105,22 @@ export async function gitShow(ref: string, filePath: string, opts: GitOptions = 
   }
 }
 
+/** The RAW bytes of `filePath` at `ref` (read-only) — for binary detection. */
+export async function gitShowBuffer(ref: string, filePath: string, opts: GitOptions = {}): Promise<Buffer> {
+  const cwd = opts.cwd ?? process.cwd();
+  try {
+    const { stdout } = await execFileAsync('git', ['show', `${ref}:${filePath}`], {
+      cwd,
+      maxBuffer: MAX_BUFFER,
+      encoding: 'buffer',
+    });
+    return stdout as unknown as Buffer;
+  } catch (err) {
+    const e = err as { stderr?: string; message?: string };
+    throw new Error(`git show ${ref}:${filePath} failed: ${(e.stderr || e.message || '').trim()}`);
+  }
+}
+
 /** The repo-relative paths that differ between two refs (read-only). */
 export async function changedPaths(refA: string, refB: string, opts: GitOptions = {}): Promise<string[]> {
   const out = await git(['diff', '--name-only', '--end-of-options', refA, refB], opts);

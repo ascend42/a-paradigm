@@ -63,6 +63,13 @@ export interface Strand {
   };
   /** present only on a KNOT-council resolution strand (omitted on normal picks). */
   resolves?: KnotResolution;
+  /**
+   * true only on a strand sealed by a materialized CLEAN merge (#admit). Its
+   * provenance.gitCommit is ONE parent and does NOT contain the merged bytes, so a
+   * later merge must NOT re-base its base/theirs off this strand's commit — admit
+   * fails closed instead (H1; durable merged-tree byte-anchoring is native-store work).
+   */
+  merged?: boolean;
 }
 
 /** The strand minus its own content-address (what `pickId` is computed over). */
