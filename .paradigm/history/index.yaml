@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-06-26T17:20:01.665Z'
+generated: '2026-06-27T04:04:25.304Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -23465,11 +23465,45 @@ by_symbol:
       agent: []
   '#pick':
     symbol: '#pick'
-    total_changes: 3
-    last_modified: '2026-06-26T03:16:05Z'
+    total_changes: 4
+    last_modified: '2026-06-27T04:04:20Z'
     stability_score: 1
     fragility: low
     recent:
+      - &ref_349
+        id: h0540
+        ts: '2026-06-27T04:04:20Z'
+        type: implement
+        symbols:
+          - '#admit'
+          - '#fabric-lock'
+          - '#pick'
+          - '#resolve'
+          - '#seal'
+          - '#warp-store'
+        author:
+          type: human
+          id: ascend
+        commit: c679806677bf512846f62577c4a82ed79dbee3d1
+        intent: fix
+        files:
+          - .paradigm/flow-index.json
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/manifest.consistency.json
+          - .paradigm/navigator.yaml
+          - .paradigm/scan-index.json
+          - .warpline/fabric.jsonl
+          - .warpline/refs/selvage
+          - packages/warpline/.purpose
+          - packages/warpline/src/fabric/admit.ts
+          - packages/warpline/src/fabric/fabric.ts
+          - packages/warpline/src/fabric/lock.ts
+          - packages/warpline/src/fabric/pick.ts
+          - packages/warpline/src/fabric/resolve.ts
+          - packages/warpline/src/fabric/seal.ts
+          - packages/warpline/test/concurrency.test.ts
+        description: 'fix(#fabric-lock,#seal): close the lost-update race + unify the fabric writer (audit C1)'
       - *ref_338
       - *ref_347
       - *ref_332
@@ -23492,11 +23526,12 @@ by_symbol:
       agent: []
   '#warp-store':
     symbol: '#warp-store'
-    total_changes: 1
-    last_modified: '2026-06-25T07:49:41Z'
+    total_changes: 2
+    last_modified: '2026-06-27T04:04:20Z'
     stability_score: 1
     fragility: low
     recent:
+      - *ref_349
       - *ref_332
     contributors:
       human:
@@ -23528,11 +23563,12 @@ by_symbol:
       agent: []
   '#admit':
     symbol: '#admit'
-    total_changes: 3
-    last_modified: '2026-06-26T17:19:56Z'
+    total_changes: 4
+    last_modified: '2026-06-27T04:04:20Z'
     stability_score: 1
     fragility: low
     recent:
+      - *ref_349
       - *ref_348
       - *ref_336
       - *ref_337
@@ -23578,11 +23614,12 @@ by_symbol:
       agent: []
   '#resolve':
     symbol: '#resolve'
-    total_changes: 1
-    last_modified: '2026-06-26T17:19:56Z'
+    total_changes: 2
+    last_modified: '2026-06-27T04:04:20Z'
     stability_score: 1
     fragility: low
     recent:
+      - *ref_349
       - *ref_348
     contributors:
       human:
@@ -23590,12 +23627,25 @@ by_symbol:
       agent: []
   '#seal':
     symbol: '#seal'
-    total_changes: 1
-    last_modified: '2026-06-26T17:19:56Z'
+    total_changes: 2
+    last_modified: '2026-06-27T04:04:20Z'
     stability_score: 1
     fragility: low
     recent:
+      - *ref_349
       - *ref_348
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#fabric-lock':
+    symbol: '#fabric-lock'
+    total_changes: 1
+    last_modified: '2026-06-27T04:04:20Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_349
     contributors:
       human:
         - ascend

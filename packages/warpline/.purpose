@@ -309,6 +309,25 @@ components:
       - "#fabric"
       - "#fabric-lock"
 
+  grade:
+    description: >-
+      The calibration grader (Loid's MOAT — the one thing a git-backed history can't
+      carry). admit SEEDS strand.calibratedConfidence from the gate rule; gradeFabric
+      grades it against real OUTCOME, mirroring the classroom certify→outcome loop. A
+      strand's AUTHORED symbols (delta.born ∪ contractChanged) are OVERTURNED when a
+      later strand RETIRES one (or a #resolve names it in resolves.contended) →
+      confidence ↓; SURVIVED when they hold across a window of later strands → ↑;
+      PENDING when too recent. applyGrades updates calibratedConfidence in the ledger
+      (pickId EXCLUDES the field, so the content-address is unchanged) and appends the
+      trajectory to .warpline/grades.jsonl, under #fabric-lock. The report buckets
+      survival by gate-rule prior class — the falsifiable 'does linked beat
+      independent?' moat experiment.
+    type: module
+    components:
+      - "#fabric"
+      - "#fabric-lock"
+      - "#strand"
+
   fabric-lock:
     description: >-
       A cross-process advisory lock around the fabric's read-decide-write critical
@@ -562,7 +581,9 @@ components:
       admit <agentId> [--ref <ref>] [--json]` runs the admission protocol (FAST_ADMIT
       / CLEAN+confidence / KNOT / DANGLE), and `warpline resolve <agentId> --ref
       <resolvedRef> -m <reason> [--by <who>] [--ours <ref>]` seals a KNOT-council
-      resolution. The only module allowed to write stdout; library code stays quiet.
+      resolution, and `warpline grade [--window N] [--dry] [--json]` grades strand
+      confidence against real survive/overturn outcome (the moat). The only module
+      allowed to write stdout; library code stays quiet.
     type: cli
     components:
       - "#oracle"
@@ -576,6 +597,7 @@ components:
       - "#scratch"
       - "#admit"
       - "#resolve"
+      - "#grade"
 
 flows:
   oracle-run:

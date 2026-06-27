@@ -83,3 +83,24 @@ export function readFabric(wdir: string): Strand[] {
     return [];
   }
 }
+
+/**
+ * Rewrite the whole ledger atomically (write-tmp + rename). Used ONLY to update
+ * graded annotations (calibratedConfidence) — which are excluded from the pickId,
+ * so a strand's content-address is unchanged. The meaning-history (stateId/delta/
+ * pickId) is never rewritten. Callers hold #fabric-lock.
+ */
+export function rewriteFabric(wdir: string, strands: Strand[]): void {
+  const p = fabricPath(wdir);
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  const tmp = `${p}.tmp`;
+  fs.writeFileSync(tmp, strands.map((s) => JSON.stringify(s)).join('\n') + (strands.length ? '\n' : ''), 'utf8');
+  fs.renameSync(tmp, p);
+}
+
+/** Append a calibration-grade event to .warpline/grades.jsonl (the confidence trajectory). */
+export function appendGradeEvent(wdir: string, ev: unknown): void {
+  const p = path.join(wdir, 'grades.jsonl');
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  fs.appendFileSync(p, JSON.stringify(ev) + '\n', 'utf8');
+}

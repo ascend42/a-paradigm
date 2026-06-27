@@ -86,8 +86,14 @@ function canonicalSafe(v: unknown): CanonicalValue {
   return v as CanonicalValue;
 }
 
-/** pickId = pick:v0:sha256(canonical(body)) — stable for fixed (body) inputs. */
+/**
+ * pickId = pick:v0:sha256(canonical(identity)) — the EVENT identity. It EXCLUDES
+ * calibratedConfidence: that field is graded LATER (survive/overturn) and must be
+ * mutable without changing the strand's content-address. Everything else (stateId,
+ * actor, time, intent, delta, provenance, resolves) is the immutable event.
+ */
 export function computePickId(body: StrandBody): string {
-  const canon = canonicalSerialize(canonicalSafe(body));
+  const { calibratedConfidence: _graded, ...identity } = body;
+  const canon = canonicalSerialize(canonicalSafe(identity));
   return 'pick:v0:' + createHash('sha256').update(canon, 'utf8').digest('hex');
 }

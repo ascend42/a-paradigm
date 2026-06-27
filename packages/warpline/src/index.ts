@@ -87,6 +87,16 @@ export { sealState, summarizeDelta, type SealInput } from './fabric/seal.js';
 // Phase C v3 — the KNOT council (human resolution of a genuine conflict).
 export { resolveKnot, type ResolveOptions, type ResolveResult } from './fabric/resolve.js';
 export type { KnotResolution } from './fabric/strand.js';
+// Calibration — grade strand confidence against real survive/overturn outcome (the moat).
+export {
+  gradeFabric,
+  applyGrades,
+  type GradeReport,
+  type StrandGrade,
+  type GradeOutcome,
+  type PriorClass,
+  type MoatBucket,
+} from './fabric/grade.js';
 export {
   admit,
   admitDecision,

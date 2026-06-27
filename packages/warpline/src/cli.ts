@@ -35,6 +35,7 @@ import { installHook, uninstallHook, hookStatus } from './fabric/hook.js';
 import { forkScratch } from './fabric/scratch.js';
 import { admit, type AdmitResult } from './fabric/admit.js';
 import { resolveKnot } from './fabric/resolve.js';
+import { gradeFabric, applyGrades, type GradeReport } from './fabric/grade.js';
 import { repoRoot, gitPath } from './git/git-exec.js';
 
 // The shared .purpose parser (library code, purpose/core/aggregator) console.warns
@@ -399,6 +400,61 @@ program
       fail(err);
     }
   });
+
+program
+  .command('grade')
+  .description("Grade strand confidence against real OUTCOME (the moat): a pick whose symbols a later strand RETIRED/contended is overturned (confidence ↓); one whose symbols held is survived (↑). Updates calibratedConfidence in the ledger + appends the trajectory to .warpline/grades.jsonl, and reports survival by gate-rule prior class (does linked beat independent?).")
+  .option('--window <n>', 'later strands required before a pick counts as survived', '2')
+  .option('--dry', 'compute + report only; do not write')
+  .option('--json', 'emit the full GradeReport as JSON')
+  .action(async (options: { window?: string; dry?: boolean; json?: boolean }) => {
+    try {
+      const window = Number(options.window);
+      if (!Number.isInteger(window) || window < 1) {
+        process.stderr.write(`warpline: --window must be a positive integer (got "${options.window}")\n`);
+        process.exit(1);
+      }
+      const root = await repoRoot().catch(() => process.cwd());
+      const report = gradeFabric(root, { window });
+      if (!options.dry) await applyGrades(root, report, new Date().toISOString());
+      if (options.json) {
+        process.stdout.write(JSON.stringify(report, null, 2) + '\n');
+      } else {
+        printGrade(report, options.dry ?? false);
+      }
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+function printGrade(r: GradeReport, dry: boolean): void {
+  const lines: string[] = [];
+  lines.push(`WARPLINE GRADE  ${dry ? '(dry — not written)' : '(calibratedConfidence updated)'}`);
+  lines.push('');
+  for (const g of r.grades) {
+    if (g.outcome === 'baseline') continue;
+    const move =
+      g.confidenceBefore === g.confidenceAfter
+        ? `${g.confidenceAfter}`
+        : `${g.confidenceBefore ?? 'seed'} → ${g.confidenceAfter}`;
+    const mark = g.outcome === 'survived' ? '✓ survived ' : g.outcome === 'overturned' ? '✗ overturned' : '· pending  ';
+    lines.push(`  seq ${g.seq}  ${mark}  [${g.priorClass}]  conf ${move}`);
+    lines.push(`      ${g.reason}`);
+  }
+  lines.push('');
+  lines.push('MOAT SIGNAL — survival by gate-rule prior class (does the prior predict survival?):');
+  for (const cls of ['linked', 'independent', 'fast-admit', 'pick'] as const) {
+    const b = r.moat[cls];
+    const total = b.survived + b.overturned + b.pending;
+    if (total === 0) continue;
+    const rate = b.survived + b.overturned > 0 ? Math.round((100 * b.survived) / (b.survived + b.overturned)) : null;
+    lines.push(`  ${cls.padEnd(11)}  survived ${b.survived}  overturned ${b.overturned}  pending ${b.pending}${rate !== null ? `  → ${rate}% survival` : ''}`);
+  }
+  if (r.moat.linked.survived + r.moat.linked.overturned + r.moat.independent.survived + r.moat.independent.overturned === 0) {
+    lines.push('  (no graded ADMIT strands yet — the linked-vs-independent prior test awaits multi-writer admits)');
+  }
+  process.stdout.write(lines.join('\n') + '\n');
+}
 
 program
   .command('resolve')
