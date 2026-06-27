@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-06-26T05:34:10.657Z'
+generated: '2026-06-26T17:20:01.665Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -23260,11 +23260,44 @@ by_symbol:
       agent: []
   '#warpline-cli':
     symbol: '#warpline-cli'
-    total_changes: 11
-    last_modified: '2026-06-26T05:34:04Z'
+    total_changes: 12
+    last_modified: '2026-06-26T17:19:56Z'
     stability_score: 1
     fragility: low
     recent:
+      - &ref_348
+        id: h0539
+        ts: '2026-06-26T17:19:56Z'
+        type: implement
+        symbols:
+          - '#admit'
+          - '#resolve'
+          - '#seal'
+          - '#strand'
+          - '#warpline-cli'
+        author:
+          type: human
+          id: ascend
+        commit: 52850b4d368bce0e5b97090e64e538440af606dd
+        intent: feature
+        files:
+          - .paradigm/flow-index.json
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/manifest.consistency.json
+          - .paradigm/navigator.yaml
+          - .paradigm/scan-index.json
+          - .warpline/fabric.jsonl
+          - .warpline/refs/selvage
+          - packages/warpline/.purpose
+          - packages/warpline/src/cli.ts
+          - packages/warpline/src/fabric/admit.ts
+          - packages/warpline/src/fabric/resolve.ts
+          - packages/warpline/src/fabric/seal.ts
+          - packages/warpline/src/fabric/strand.ts
+          - packages/warpline/src/index.ts
+          - packages/warpline/test/resolve.test.ts
+        description: 'feat(#resolve): Phase C v3 — the KNOT council (human resolution, recorded natively)'
       - *ref_336
       - *ref_337
       - *ref_338
@@ -23294,7 +23327,6 @@ by_symbol:
           - packages/warpline/.purpose
           - packages/warpline/src/cli.ts
         description: 'feat(#warpline-cli): `warpline selvage` + log git-anchor — finish the single-writer read surface'
-      - *ref_332
     contributors:
       human:
         - ascend
@@ -23447,11 +23479,12 @@ by_symbol:
       agent: []
   '#strand':
     symbol: '#strand'
-    total_changes: 1
-    last_modified: '2026-06-25T07:49:41Z'
+    total_changes: 2
+    last_modified: '2026-06-26T17:19:56Z'
     stability_score: 1
     fragility: low
     recent:
+      - *ref_348
       - *ref_332
     contributors:
       human:
@@ -23495,11 +23528,12 @@ by_symbol:
       agent: []
   '#admit':
     symbol: '#admit'
-    total_changes: 2
-    last_modified: '2026-06-26T05:34:04Z'
+    total_changes: 3
+    last_modified: '2026-06-26T17:19:56Z'
     stability_score: 1
     fragility: low
     recent:
+      - *ref_348
       - *ref_336
       - *ref_337
     contributors:
@@ -23538,6 +23572,30 @@ by_symbol:
     fragility: low
     recent:
       - *ref_336
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#resolve':
+    symbol: '#resolve'
+    total_changes: 1
+    last_modified: '2026-06-26T17:19:56Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_348
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#seal':
+    symbol: '#seal'
+    total_changes: 1
+    last_modified: '2026-06-26T17:19:56Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_348
     contributors:
       human:
         - ascend

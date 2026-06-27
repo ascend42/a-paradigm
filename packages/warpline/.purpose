@@ -295,14 +295,31 @@ components:
   seal:
     description: >-
       The single place a pre-absorbed WarpState becomes a fabric #strand and the
-      selvage advances (atomic publish). sealState(root, store, state, input) —
-      shared by #pick, #admit (merge seal), and #resolve (KNOT-council seal) — owns
-      the strand schema, the seq, the delta summary (summarizeDelta), and the
-      optional `resolves` envelope, so there is ONE writer of fabric history.
+      selvage advances. sealState(root, store, state, input) — shared by #pick,
+      #admit (merge seal), and #resolve (KNOT-council seal) — owns the strand
+      schema, the seq, the delta summary (summarizeDelta computed BEFORE putState
+      so the dedup case where current.stateId === parent.stateId doesn't diff
+      against itself), and the optional `resolves` envelope, so there is ONE writer
+      of fabric history. Publishes ledger-first then a CAS'd selvage advance (only
+      if the tip is still the parent the decision was based on) — defense-in-depth
+      under #fabric-lock so a lost-update can never silently write a wrong tip.
     type: module
     components:
       - "#sem-delta"
       - "#fabric"
+      - "#fabric-lock"
+
+  fabric-lock:
+    description: >-
+      A cross-process advisory lock around the fabric's read-decide-write critical
+      section (Reviewer C1). admit/pick/resolve — and the post-commit auto-seal hook
+      which BACKGROUNDS its seal — can otherwise interleave readSelvage→…→writeSelvage
+      and lose a write (a strand appended that isn't the tip, two strands sharing a
+      seq). withFabricLock acquires an O_EXCL lockfile under .warpline/refs/.lock
+      (atomic create = acquire), bounded retry with backoff, and steals a stale lock
+      (crashed holder) after a TTL. The in-process #repo-lock only guards the git
+      merge-tree fallback; this is the on-disk lock the hook's cross-process seals need.
+    type: module
 
   resolve:
     description: >-
@@ -319,6 +336,7 @@ components:
       - "#sem-delta"
       - "#admit"
       - "#seal"
+      - "#fabric-lock"
 
   fabric:
     description: >-
@@ -341,18 +359,17 @@ components:
       selvage as the source of truth for "did meaning change?" (NOT stateId
       equality, which hashes the DEDUPED essence set and so misses a born symbol
       whose essence equals an existing one) — no-ops on an empty diff, else seals a
-      #strand (attribution + reserved confidence + git-HEAD coexistence anchor),
-      persists the snapshot, appends to #fabric, and advances the selvage. Genesis
-      (no selvage) records seq 0 with an empty delta; objectCount is the headline.
-      NO SCRATCH fork, NO per-domain CAS, NO WEFT group, NO auto-merge — those are
-      the multi-writer protocol (Phase C, gated on the false-AUTOFOLD experiment),
-      so this path doesn't depend on auto-merge safety.
+      #strand via #seal (the single fabric writer) under #fabric-lock (so a
+      backgrounded post-commit auto-seal can't race it). Genesis (no selvage)
+      records seq 0 with an empty delta; objectCount is the headline. The
+      single-writer daily-driver path — the multi-writer protocol is #admit.
     type: module
     components:
       - "#absorb"
       - "#sem-delta"
       - "#warp-store"
-      - "#fabric"
+      - "#seal"
+      - "#fabric-lock"
       - "#git-exec"
 
   scratch:
@@ -392,6 +409,7 @@ components:
       - "#scratch"
       - "#materialize"
       - "#seal"
+      - "#fabric-lock"
 
   merge3:
     description: >-

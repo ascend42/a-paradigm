@@ -35,6 +35,7 @@ import { warplineDirOf, readSelvage, readFabric } from './fabric.js';
 import { readScratch, clearScratch } from './scratch.js';
 import type { Strand } from './strand.js';
 import { sealState } from './seal.js';
+import { withFabricLock } from './lock.js';
 import { materializeMergedState, type MergePlan } from './materialize.js';
 
 export type AdmitStatus = 'NOOP' | 'FAST_ADMIT' | 'CLEAN' | 'KNOT' | 'DANGLE';
@@ -167,16 +168,27 @@ const blank = (status: AdmitStatus): AdmitDecision => ({
  *    theirs; a WORKTREE proposal or a state with no git anchor returns CLEAN unsealed.
  *  - KNOT / DANGLE / NOOP → no seal.
  */
+/**
+ * Seed calibratedConfidence from the gate rule (Loid's moat): a 'linked' CLEAN
+ * admit is trustworthy (Merkle would surface a real conflict); an 'independent'
+ * one carries the false-AUTOFOLD blind-spot risk, so it starts hedged. The
+ * survive/overturn grader later moves these against real outcome.
+ */
+function priorFor(d: AdmitDecision): number | null {
+  if (d.status === 'CLEAN') return d.confidence === 'linked' ? 0.9 : 0.6;
+  if (d.status === 'FAST_ADMIT') return 0.8;
+  return null;
+}
+
 export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResult> {
   const cwd = opts.cwd ?? root;
   const wdir = warplineDirOf(root);
   const store = new WarpStore(root, { diskCache: true });
 
-  const baseId = readScratch(root, opts.agentId) ?? readSelvage(wdir);
-  const selvageId = readSelvage(wdir);
+  // Lift proposed + resolve attribution OUTSIDE the lock (expensive / selvage-
+  // independent). proposed is NOT eagerly persisted — sealState putStates only
+  // what actually seals (no .warpline/states litter on a NOOP — Reviewer M4).
   const proposed = await absorb(opts.ref, { cwd });
-  store.putState(proposed);
-
   const isWorktree = opts.ref === WORKTREE_REF;
   const oursCommit = isWorktree ? null : await revParse(opts.ref, { cwd }).catch(() => null);
   const actor =
@@ -188,41 +200,48 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
     : (await commitSubject(opts.ref, { cwd }).catch(() => '')) || `admit ${opts.agentId}`;
   const now = new Date().toISOString();
 
-  const base = baseId ? store.loadState(baseId) : undefined;
-  const selvage = selvageId ? store.loadState(selvageId) : undefined;
+  // The read-decide-seal critical section runs under the fabric lock so concurrent
+  // admits can't lose a write (Reviewer C1). CLEAN materialization (git ops) runs
+  // inside too, so the decision and the seal are atomic against the live selvage.
+  return withFabricLock(root, async () => {
+    const baseId = readScratch(root, opts.agentId) ?? readSelvage(wdir);
+    const selvageId = readSelvage(wdir);
+    const base = baseId ? store.loadState(baseId) : undefined;
+    const selvage = selvageId ? store.loadState(selvageId) : undefined;
 
-  // Empty fabric (or unreadable base) → fast-admit the proposed state.
-  if (!base || !selvage) {
-    const strand = sealState(root, store, proposed, { parentStateId: selvageId ?? null, actor, intent, gitCommit: oursCommit, now });
-    clearScratch(root, opts.agentId);
-    return { decision: blank('FAST_ADMIT'), sealed: true, proposedStateId: proposed.stateId, strand };
-  }
-
-  const decision = admitDecision(base, proposed, selvage);
-
-  if (decision.status === 'NOOP') {
-    return { decision, sealed: false, proposedStateId: proposed.stateId };
-  }
-  if (decision.status === 'FAST_ADMIT') {
-    const strand = sealState(root, store, proposed, { parentStateId: selvageId, actor, intent, gitCommit: oursCommit, now });
-    clearScratch(root, opts.agentId);
-    return { decision, sealed: true, proposedStateId: proposed.stateId, strand };
-  }
-  if (decision.status === 'CLEAN') {
-    const baseCommit = commitOfState(root, baseId!);
-    const theirsCommit = commitOfState(root, selvageId!);
-    if (isWorktree || !baseCommit || !theirsCommit) {
-      return { decision, sealed: false, proposedStateId: proposed.stateId }; // can't materialize without git refs
-    }
-    const mat = await materializeMergedState(baseCommit, opts.ref, theirsCommit, { cwd });
-    if (mat.state && mat.plan.conflicts.length === 0) {
-      const strand = sealState(root, store, mat.state, { parentStateId: selvageId, actor, intent, gitCommit: oursCommit, now });
+    // Empty fabric (or unreadable base) → fast-admit the proposed state.
+    if (!base || !selvage) {
+      const strand = sealState(root, store, proposed, { parentStateId: selvageId ?? null, actor, intent, gitCommit: oursCommit, now, confidence: 0.8 });
       clearScratch(root, opts.agentId);
-      return { decision, sealed: true, proposedStateId: proposed.stateId, strand, merged: mat.plan };
+      return { decision: blank('FAST_ADMIT'), sealed: true, proposedStateId: proposed.stateId, strand };
     }
-    // The meaning layer said CLEAN but the bytes overlap → surface as a KNOT.
-    return { decision: { ...decision, status: 'KNOT' }, sealed: false, proposedStateId: proposed.stateId, merged: mat.plan };
-  }
-  // KNOT / DANGLE
-  return { decision, sealed: false, proposedStateId: proposed.stateId };
+
+    const decision = admitDecision(base, proposed, selvage);
+
+    if (decision.status === 'NOOP') {
+      return { decision, sealed: false, proposedStateId: proposed.stateId };
+    }
+    if (decision.status === 'FAST_ADMIT') {
+      const strand = sealState(root, store, proposed, { parentStateId: selvageId, actor, intent, gitCommit: oursCommit, now, confidence: priorFor(decision) });
+      clearScratch(root, opts.agentId);
+      return { decision, sealed: true, proposedStateId: proposed.stateId, strand };
+    }
+    if (decision.status === 'CLEAN') {
+      const baseCommit = commitOfState(root, baseId!);
+      const theirsCommit = commitOfState(root, selvageId!);
+      if (isWorktree || !baseCommit || !theirsCommit) {
+        return { decision, sealed: false, proposedStateId: proposed.stateId }; // can't materialize without git refs
+      }
+      const mat = await materializeMergedState(baseCommit, opts.ref, theirsCommit, { cwd });
+      if (mat.state && mat.plan.conflicts.length === 0) {
+        const strand = sealState(root, store, mat.state, { parentStateId: selvageId, actor, intent, gitCommit: oursCommit, now, confidence: priorFor(decision) });
+        clearScratch(root, opts.agentId);
+        return { decision, sealed: true, proposedStateId: proposed.stateId, strand, merged: mat.plan };
+      }
+      // The meaning layer said CLEAN but the bytes overlap → surface as a KNOT.
+      return { decision: { ...decision, status: 'KNOT' }, sealed: false, proposedStateId: proposed.stateId, merged: mat.plan };
+    }
+    // KNOT / DANGLE
+    return { decision, sealed: false, proposedStateId: proposed.stateId };
+  });
 }

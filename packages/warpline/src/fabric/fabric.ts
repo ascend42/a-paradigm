@@ -41,9 +41,23 @@ export function readSelvage(wdir: string): string | null {
   }
 }
 
-/** Advance the tip to `stateId` atomically (write-tmp + rename). */
-export function writeSelvage(wdir: string, stateId: string): void {
+/**
+ * Advance the tip to `stateId` atomically (write-tmp + rename). When `expectedOld`
+ * is supplied, this is a COMPARE-AND-SWAP: it throws if the on-disk selvage no
+ * longer equals what the caller's decision was based on (a concurrent writer moved
+ * it). Callers seal inside #fabric-lock; the CAS is defense-in-depth against a
+ * stolen/stale lock so a lost-update can never silently publish a wrong tip.
+ */
+export function writeSelvage(wdir: string, stateId: string, expectedOld?: string | null): void {
   const p = selvagePath(wdir);
+  if (expectedOld !== undefined) {
+    const cur = readSelvage(wdir);
+    if (cur !== expectedOld) {
+      throw new Error(
+        `warpline: selvage CAS failed — expected ${expectedOld ?? '(none)'}, found ${cur ?? '(none)'} (a concurrent writer advanced the tip)`,
+      );
+    }
+  }
   fs.mkdirSync(path.dirname(p), { recursive: true });
   const tmp = `${p}.tmp`;
   fs.writeFileSync(tmp, stateId + '\n', 'utf8');

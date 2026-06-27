@@ -9,7 +9,7 @@
 import { diff } from '../sem-delta.js';
 import type { WarpStore } from '../warp/store.js';
 import type { WarpState } from '../warp/warp-state.js';
-import { warplineDirOf, readFabric, appendStrand, writeSelvage } from './fabric.js';
+import { warplineDirOf, readFabric, readSelvage, appendStrand, writeSelvage } from './fabric.js';
 import {
   computePickId,
   type Strand,
@@ -58,9 +58,14 @@ export function sealState(
   input: SealInput,
 ): Strand {
   const wdir = warplineDirOf(root);
+  // Load the parent + compute the delta BEFORE persisting `state`. In the dedup
+  // edge case current.stateId === parent.stateId (an added symbol whose essence
+  // equals an existing one), putState(state) would overwrite the parent's stored
+  // snapshot under the shared id, making summarizeDelta diff state against itself.
+  const parent = input.parentStateId ? store.loadState(input.parentStateId) : undefined;
+  const delta = summarizeDelta(parent, state);
   store.putState(state);
   const seq = readFabric(wdir).length;
-  const parent = input.parentStateId ? store.loadState(input.parentStateId) : undefined;
   const body: Omit<Strand, 'pickId'> = {
     schemaVersion: 1,
     seq,
@@ -70,13 +75,23 @@ export function sealState(
     intent: input.intent,
     recordedAt: input.now,
     objectCount: state.objects.size,
-    delta: summarizeDelta(parent, state),
+    delta,
     calibratedConfidence: input.confidence ?? null,
     provenance: { ref: state.ref, treeSha: state.treeSha, gitCommit: input.gitCommit },
     ...(input.resolves ? { resolves: input.resolves } : {}),
   };
   const strand: Strand = { ...body, pickId: computePickId(body) };
-  appendStrand(wdir, strand);
-  writeSelvage(wdir, state.stateId);
+  // CAS GUARD FIRST — refuse if the tip moved off the parent the decision was
+  // based on (a concurrent writer won the race). Checking BEFORE mutating the
+  // ledger means a lost race throws cleanly with no orphan strand. Callers hold
+  // #fabric-lock; this is defense-in-depth against a stolen/stale lock.
+  const cur = readSelvage(wdir);
+  if (cur !== input.parentStateId) {
+    throw new Error(
+      `warpline: selvage CAS failed — expected ${input.parentStateId ?? '(none)'}, found ${cur ?? '(none)'} (a concurrent writer advanced the tip)`,
+    );
+  }
+  appendStrand(wdir, strand); // ledger first…
+  writeSelvage(wdir, state.stateId); // …then publish the tip (lesser-evil crash ordering)
   return strand;
 }

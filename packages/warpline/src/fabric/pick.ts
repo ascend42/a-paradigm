@@ -27,14 +27,10 @@ import { absorb, WORKTREE_REF } from '../absorb.js';
 import { diff } from '../sem-delta.js';
 import { WarpStore } from '../warp/store.js';
 import { gitUserName, revParse, commitSubject, commitAuthor } from '../git/git-exec.js';
-import {
-  warplineDirOf,
-  readSelvage,
-  writeSelvage,
-  appendStrand,
-  readFabric,
-} from './fabric.js';
-import { computePickId, type Strand, type StrandBody, type StrandDelta } from './strand.js';
+import { warplineDirOf, readSelvage } from './fabric.js';
+import { sealState } from './seal.js';
+import { withFabricLock } from './lock.js';
+import type { Strand } from './strand.js';
 
 export interface RecordPickOptions {
   /** cwd for git/absorb (defaults to root). */
@@ -62,58 +58,18 @@ export interface PickResult {
   stateId: string;
 }
 
-const EMPTY_DELTA: StrandDelta = { born: [], retired: [], contractChanged: [], renamedNoop: 0 };
-
 export async function recordPick(root: string, opts: RecordPickOptions): Promise<PickResult> {
   const cwd = opts.cwd ?? root;
   const ref = opts.ref ?? WORKTREE_REF;
   const wdir = warplineDirOf(root);
   const store = new WarpStore(root, { diskCache: true });
 
-  // 1. Lift the current meaning.
+  // 1. Lift the current meaning (no lock — this is the expensive step).
   const current = await absorb(ref, { cwd });
-  const selvage = readSelvage(wdir);
-  const isGenesis = selvage === null;
 
-  // 2. The DIFF is the source of truth for "did meaning change?" — NOT stateId
-  //    equality. stateId hashes the DEDUPED essence set, so adding a symbol whose
-  //    essence equals an existing one leaves stateId unchanged while the diff
-  //    (keyed by stableKey) correctly sees it born. So we no-op iff the diff is
-  //    empty (no deltas, no renames), and summarize from the same diff.
-  let delta: StrandDelta = EMPTY_DELTA;
-  if (!isGenesis) {
-    const parent = store.loadState(selvage);
-    if (parent) {
-      const d = diff(parent, current);
-      if (d.deltas.size === 0 && d.renames.length === 0) {
-        return { noop: true, isGenesis: false, stateId: current.stateId };
-      }
-      const born: string[] = [];
-      const retired: string[] = [];
-      const contractChanged: string[] = [];
-      for (const dd of d.deltas.values()) {
-        if (dd.kind === 'symbol-born') born.push(dd.symbol);
-        else if (dd.kind === 'symbol-retired') retired.push(dd.symbol);
-        else if (dd.kind === 'contract-changed') contractChanged.push(dd.symbol);
-      }
-      delta = {
-        born: born.sort(),
-        retired: retired.sort(),
-        contractChanged: contractChanged.sort(),
-        renamedNoop: d.renames.length,
-      };
-    }
-    // parent unreadable → fall through and record (safer than silently dropping).
-  }
-
-  // 3. Durably persist the snapshot only once we know we're sealing.
-  store.putState(current);
-
-  const seq = readFabric(wdir).length;
-
-  // Attribution + intent: for a real ref (e.g. a commit), derive from its git log
-  // when not supplied — this is what lets the post-commit hook seal with no -m.
-  // The git-commit anchor is the PICKED ref (HEAD for the worktree).
+  // Attribution + intent are independent of the selvage — resolve BEFORE locking
+  // to keep the critical section short. For a real ref, derive from its git log
+  // when not supplied (this is what lets the post-commit hook seal with no -m).
   const isWorktree = ref === WORKTREE_REF;
   const intent =
     opts.intent ??
@@ -126,23 +82,32 @@ export async function recordPick(root: string, opts: RecordPickOptions): Promise
   const gitCommit = await revParse(isWorktree ? 'HEAD' : ref, { cwd }).catch(() => null);
   const now = opts.now ?? new Date().toISOString();
 
-  const body: StrandBody = {
-    schemaVersion: 1,
-    seq,
-    stateId: current.stateId,
-    parentStateId: selvage,
-    actor,
-    intent,
-    recordedAt: now,
-    objectCount: current.objects.size,
-    delta,
-    calibratedConfidence: opts.confidence ?? null,
-    provenance: { ref: current.ref, treeSha: current.treeSha, gitCommit },
-  };
-  const strand: Strand = { ...body, pickId: computePickId(body) };
-
-  appendStrand(wdir, strand);
-  writeSelvage(wdir, current.stateId);
-
-  return { noop: false, isGenesis, strand, stateId: current.stateId };
+  // 2-3. Decide + seal under the fabric lock (the read-decide-write critical
+  //      section). The DIFF — not stateId equality — is the source of truth for
+  //      "did meaning change?": stateId hashes the DEDUPED essence set, so an
+  //      identical-essence born symbol leaves stateId unchanged while diff (keyed
+  //      by stableKey) sees it. #seal is the single writer of fabric history.
+  return withFabricLock(root, () => {
+    const selvage = readSelvage(wdir);
+    const isGenesis = selvage === null;
+    if (!isGenesis) {
+      const parent = store.loadState(selvage);
+      // parent unreadable → fall through and record (safer than silently dropping).
+      if (parent) {
+        const d = diff(parent, current);
+        if (d.deltas.size === 0 && d.renames.length === 0) {
+          return { noop: true, isGenesis: false, stateId: current.stateId };
+        }
+      }
+    }
+    const strand = sealState(root, store, current, {
+      parentStateId: selvage,
+      actor,
+      intent,
+      gitCommit,
+      now,
+      confidence: opts.confidence ?? null,
+    });
+    return { noop: false, isGenesis, strand, stateId: current.stateId };
+  });
 }

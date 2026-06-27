@@ -15,6 +15,7 @@ import { revParse, gitUserName } from '../git/git-exec.js';
 import { warplineDirOf, readSelvage } from './fabric.js';
 import { readScratch, clearScratch } from './scratch.js';
 import { sealState } from './seal.js';
+import { withFabricLock } from './lock.js';
 import { admitDecision } from './admit.js';
 import type { WarpState } from '../warp/warp-state.js';
 import type { Strand, KnotResolution } from './strand.js';
@@ -49,13 +50,16 @@ export async function resolveKnot(root: string, opts: ResolveOptions): Promise<R
   const wdir = warplineDirOf(root);
   const store = new WarpStore(root, { diskCache: true });
 
-  const selvageId = readSelvage(wdir);
-  if (!selvageId) throw new Error('resolve: no selvage — nothing to resolve against');
-  const selvage = store.loadState(selvageId);
-  if (!selvage) throw new Error('resolve: selvage state not found in the store');
+  // The decide-seal critical section runs under the fabric lock so a resolution
+  // can't race a concurrent admit/pick onto the same selvage (Reviewer C1).
+  return withFabricLock(root, async () => {
+    const selvageId = readSelvage(wdir);
+    if (!selvageId) throw new Error('resolve: no selvage — nothing to resolve against');
+    const selvage = store.loadState(selvageId);
+    if (!selvage) throw new Error('resolve: selvage state not found in the store');
 
-  const baseId = readScratch(root, opts.agentId) ?? selvageId;
-  const resolved = await absorb(opts.resolvedRef, { cwd });
+    const baseId = readScratch(root, opts.agentId) ?? selvageId;
+    const resolved = await absorb(opts.resolvedRef, { cwd });
 
   // Contended set: precise (recompute the knot from the original proposal) when
   // --ours is given; else the symbols the resolution itself changed vs the tip.
@@ -87,14 +91,15 @@ export async function resolveKnot(root: string, opts: ResolveOptions): Promise<R
     resolvedSymbols,
   };
 
-  const strand = sealState(root, store, resolved, {
-    parentStateId: selvageId,
-    actor,
-    intent: `resolve knot — ${opts.reason}`,
-    gitCommit,
-    now,
-    resolves: resolution,
+    const strand = sealState(root, store, resolved, {
+      parentStateId: selvageId,
+      actor,
+      intent: `resolve knot — ${opts.reason}`,
+      gitCommit,
+      now,
+      resolves: resolution,
+    });
+    clearScratch(root, opts.agentId);
+    return { strand, resolution };
   });
-  clearScratch(root, opts.agentId);
-  return { strand, resolution };
 }
