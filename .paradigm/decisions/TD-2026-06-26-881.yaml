@@ -97,12 +97,18 @@ amendments:
       from any DERIVED scalar rate. Publishing survived/overturned while hiding pending flatters an agent whose hard
       cases are all still-pending.
   - id: 5
-    title: External contamination — the trust-firewall is NOT enforced
+    title: External PROVENANCE segregation (RECHECKED 2026-07-01 — initial "firewall not enforced" flag was OVERSTATED)
     detail: >-
-      "trust: external → context-excluded" is aspirational: notebook-loader.ts:114 and orchestration.ts:1276 filter by
-      concepts/tags only, with NO trust!=external read-filter; 3 of the 5 live certs are foraged/external and loadable.
-      Either enforce a trust!=external read-filter or tag/segregate external-originated cert outcomes OUT of any published
-      survivalShape. Do not fold foraged-claim outcomes into "population survival" while asserting external is excluded.
+      CORRECTION after cross-check: the initial review claimed external content leaks into context ("firewall is
+      aspirational"). VERIFIED FALSE — 37 notebook files, ZERO carry a trust field, ZERO are trust:external, so no
+      foraged FLOOR content is loadable. PARA-901's context-firewall teaching is ACCURATE: the firewall is STRUCTURAL
+      (staging writes journals; only the /class gate writes notebooks; the loader has no read-path trust-filter BY
+      DESIGN — notebook-loader.ts:117,131-144). Do NOT add a trust!=external read-filter — it would contradict the
+      correct structural design. The 3 flagged certs carry source:external as a PROVENANCE concept (gate outputs of
+      certified-REFINE entries), not trust:external tier content. REMAINING VALID POINT (narrower): entries that
+      ORIGINATED external retain a source:external provenance concept, so if cert OUTCOMES feed a published survivalShape,
+      foraged-origin knowledge blends into the population prior — tag/segregate by provenance in any published shape.
+      This is provenance tracking, NOT context contamination.
   - id: 6
     title: '"No live consumer" premise is false — de-risk the dead-types landing'
     detail: >-
@@ -131,7 +137,7 @@ amendments:
 blocking_prerequisites:
   - Amendment 1 (exercise-intensity denominator) defined and enforced in the render
   - Amendment 2 (tamper-evident, refine-stable notebook-hash identity) specified
-  - Amendment 5 (external-outcome segregation OR trust read-filter)
+  - Amendment 5 (segregate external-PROVENANCE cert outcomes from a published survivalShape — NOT a read-filter; the structural firewall already holds)
   - Amendment 7 (search-render floor gate)
   - Non-zero RESOLVED certs across ≥ a few projects (time + volume)
 symbols_affected:
