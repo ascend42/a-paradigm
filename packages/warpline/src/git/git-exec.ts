@@ -121,13 +121,35 @@ export async function gitShowBuffer(ref: string, filePath: string, opts: GitOpti
   }
 }
 
-/** The repo-relative paths that differ between two refs (read-only). */
+/**
+ * The repo-relative paths that differ between two refs (read-only).
+ *
+ * `--no-renames` is LOAD-BEARING: with git's default rename detection on, a pure
+ * rename lists ONLY the new path, so the delete of the OLD path is dropped — and a
+ * merge that overrides the base tree with only the additions leaves BOTH files (a
+ * rename silently becomes a copy). Decomposing every rename into delete-of-old +
+ * add-of-new lets the 3-way merge apply the delete, and makes a rename racing an
+ * edit of the old path fail closed as add/delete-vs-edit instead of mis-merging.
+ */
 export async function changedPaths(refA: string, refB: string, opts: GitOptions = {}): Promise<string[]> {
-  const out = await git(['diff', '--name-only', '--end-of-options', refA, refB], opts);
+  const out = await git(['diff', '--name-only', '--no-renames', '--end-of-options', refA, refB], opts);
   return out
     .split('\n')
     .map((l) => l.trim())
     .filter((l) => l.length > 0);
+}
+
+/**
+ * The tree-entry MODE of `filePath` at `ref` (read-only) — the 6-digit git mode
+ * (`100644` regular, `100755` executable, `120000` symlink, `160000` gitlink),
+ * or `null` when the path is absent at that ref. Used by the merge to 3-way the
+ * file mode alongside the bytes and to fail closed on unmergeable entry types.
+ */
+export async function treeEntryMode(ref: string, filePath: string, opts: GitOptions = {}): Promise<string | null> {
+  const out = await git(['ls-tree', '--end-of-options', ref, '--', filePath], opts).catch(() => '');
+  // `ls-tree` line: "100755 blob <sha>\t<path>". No line ⇒ absent.
+  const m = out.match(/^(\d{6}) /);
+  return m ? m[1] : null;
 }
 
 /** The common ancestor of N refs (octopus merge-base) — the base for a consolidate. */

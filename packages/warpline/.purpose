@@ -453,11 +453,17 @@ components:
       git (binary-safe: a binary blob — NUL-bearing — changed on both sides fails
       CLOSED as a conflict, never a UTF-8 text-merge corruption, H3) and merges
       per-file with #merge3; any add/delete-vs-edit
-      or overlapping token-region is a surfaced CONFLICT. materializeMergedState
-      applies the conflict-free plan onto a throwaway copy of the base tree and
-      absorbs it → the merged WarpState (the user's working tree is never touched).
-      gitShow is byte-faithful (no trim) so trailing newlines and exact bytes survive
-      — no drift.
+      or overlapping token-region is a surfaced CONFLICT. changedPaths runs with
+      `--no-renames` so a rename decomposes to delete-of-old + add-of-new (H2): a
+      clean rename applies its delete instead of silently leaving a COPY, and a
+      rename racing an edit of the old path fails closed as add/delete-vs-edit. The
+      git tree-entry MODE is 3-way-merged alongside the bytes so the executable bit
+      survives a content merge; a changed symlink/submodule (non-blob entry) fails
+      CLOSED rather than round-trip as a regular blob and corrupt the entry type.
+      materializeMergedState applies the conflict-free plan onto a throwaway copy of
+      the base tree (restoring each merged file's mode) and absorbs it → the merged
+      WarpState (the user's working tree is never touched). gitShow is byte-faithful
+      (no trim) so trailing newlines and exact bytes survive — no drift.
     type: module
     components:
       - "#merge3"

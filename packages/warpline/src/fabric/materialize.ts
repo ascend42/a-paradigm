@@ -19,6 +19,7 @@ import type { WarpState } from '../warp/warp-state.js';
 import {
   gitShowBuffer,
   changedPaths,
+  treeEntryMode,
   materializeTree,
   releaseTree,
   type GitOptions,
@@ -30,10 +31,36 @@ export interface MergeConflict {
   reason: string;
 }
 
+/** A merged CHANGED path: the resolved bytes plus the 3-way-merged git file mode. */
+export interface MergedFile {
+  content: Buffer;
+  /** git tree-entry mode — `100644` regular or `100755` executable. */
+  mode: string;
+}
+
 export interface MergePlan {
-  /** merged BYTES per CHANGED path (null = deleted in the merge). */
-  files: Map<string, Buffer | null>;
+  /** merged file per CHANGED path (null = deleted in the merge). */
+  files: Map<string, MergedFile | null>;
   conflicts: MergeConflict[];
+}
+
+/** Entry modes we cannot byte-merge — fail closed rather than corrupt them. */
+const NON_BLOB_MODES = new Set(['120000', '160000']); // symlink, gitlink/submodule
+
+/**
+ * 3-way merge a file's git mode exactly like its bytes: unchanged on a side takes
+ * the other side; changed differently on both sides is a conflict. `null` = absent
+ * (only reached for a retained file, so at least one side is present).
+ */
+function mergeMode(
+  base: string | null,
+  ours: string | null,
+  theirs: string | null,
+): { mode: string } | { reason: string } {
+  if (ours === theirs) return { mode: ours ?? '100644' };
+  if (ours === base) return { mode: theirs ?? '100644' };
+  if (theirs === base) return { mode: ours ?? '100644' };
+  return { reason: `file mode changed differently on both sides (${ours ?? 'absent'} vs ${theirs ?? 'absent'})` };
 }
 
 /** A blob is binary if it contains a NUL byte (git's own heuristic). */
@@ -75,16 +102,41 @@ export async function computeMerge(
     ...(await changedPaths(baseRef, oursRef, opts)),
     ...(await changedPaths(baseRef, theirsRef, opts)),
   ]);
-  const files = new Map<string, Buffer | null>();
+  const files = new Map<string, MergedFile | null>();
   const conflicts: MergeConflict[] = [];
 
   for (const p of changed) {
+    const [baseMode, oursMode, theirsMode] = await Promise.all([
+      treeEntryMode(baseRef, p, opts),
+      treeEntryMode(oursRef, p, opts),
+      treeEntryMode(theirsRef, p, opts),
+    ]);
+    // Fail CLOSED on symlinks / submodules on any side: gitShowBuffer would hand
+    // us the target-path text / gitlink sha, and writing it as a regular blob would
+    // silently corrupt the entry type. We only byte-merge real blobs.
+    if ([baseMode, oursMode, theirsMode].some((m) => m !== null && NON_BLOB_MODES.has(m))) {
+      conflicts.push({ path: p, reason: 'symlink or submodule changed — unmergeable entry type' });
+      continue;
+    }
     const base = await gitShowBuffer(baseRef, p, opts).catch(() => null);
     const ours = await gitShowBuffer(oursRef, p, opts).catch(() => null);
     const theirs = await gitShowBuffer(theirsRef, p, opts).catch(() => null);
     const r = resolveFile(base, ours, theirs);
-    if ('reason' in r) conflicts.push({ path: p, reason: r.reason });
-    else files.set(p, r.content);
+    if ('reason' in r) {
+      conflicts.push({ path: p, reason: r.reason });
+      continue;
+    }
+    if (r.content === null) {
+      files.set(p, null); // deleted in the merge — no bytes, no mode
+      continue;
+    }
+    // The bytes merged cleanly; the executable bit must survive the merge too.
+    const mm = mergeMode(baseMode, oursMode, theirsMode);
+    if ('reason' in mm) {
+      conflicts.push({ path: p, reason: mm.reason });
+      continue;
+    }
+    files.set(p, { content: r.content, mode: mm.mode });
   }
   return { files, conflicts };
 }
@@ -111,13 +163,15 @@ export async function materializeMergedState(
 
   const tmp = await materializeTree(baseRef, opts);
   try {
-    for (const [p, content] of plan.files) {
+    for (const [p, entry] of plan.files) {
       const full = path.join(tmp, p);
-      if (content === null) {
+      if (entry === null) {
         await fs.rm(full, { force: true });
       } else {
         await fs.mkdir(path.dirname(full), { recursive: true });
-        await fs.writeFile(full, content); // Buffer — raw bytes, no re-encoding
+        await fs.writeFile(full, entry.content); // Buffer — raw bytes, no re-encoding
+        // Preserve the executable bit through the merge (fs.writeFile forces 0644).
+        await fs.chmod(full, entry.mode === '100755' ? 0o755 : 0o644);
       }
     }
     const state = await absorb(WORKTREE_REF, { cwd: tmp });

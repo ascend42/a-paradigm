@@ -80,6 +80,7 @@ export {
   computeMerge,
   materializeMergedState,
   type MergePlan,
+  type MergedFile,
   type MergeConflict,
   type MaterializeResult,
 } from './fabric/materialize.js';
