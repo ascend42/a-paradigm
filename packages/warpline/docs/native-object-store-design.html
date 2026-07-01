@@ -1,0 +1,977 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="generator" content="pandoc" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes" />
+  <title>Warpline Native Object Store — M1 Design Spec</title>
+  <style>
+
+html {
+color: #1a1a1a;
+background-color: #fdfdfd;
+}
+body {
+margin: 0 auto;
+max-width: 36em;
+padding-left: 50px;
+padding-right: 50px;
+padding-top: 50px;
+padding-bottom: 50px;
+hyphens: auto;
+overflow-wrap: break-word;
+text-rendering: optimizeLegibility;
+font-kerning: normal;
+}
+@media (max-width: 600px) {
+body {
+font-size: 0.9em;
+padding: 12px;
+}
+h1 {
+font-size: 1.8em;
+}
+}
+@media print {
+html {
+background-color: white;
+}
+body {
+background-color: transparent;
+color: black;
+font-size: 12pt;
+}
+p, h2, h3 {
+orphans: 3;
+widows: 3;
+}
+h2, h3, h4 {
+page-break-after: avoid;
+}
+}
+p {
+margin: 1em 0;
+}
+a {
+color: #1a1a1a;
+}
+a:visited {
+color: #1a1a1a;
+}
+img {
+max-width: 100%;
+}
+svg {
+height: auto;
+max-width: 100%;
+}
+h1, h2, h3, h4, h5, h6 {
+margin-top: 1.4em;
+}
+h5, h6 {
+font-size: 1em;
+font-style: italic;
+}
+h6 {
+font-weight: normal;
+}
+ol, ul {
+padding-left: 1.7em;
+margin-top: 1em;
+}
+li > ol, li > ul {
+margin-top: 0;
+}
+blockquote {
+margin: 1em 0 1em 1.7em;
+padding-left: 1em;
+border-left: 2px solid #e6e6e6;
+color: #606060;
+}
+code {
+white-space: pre-wrap;
+font-family: Menlo, Monaco, Consolas, 'Lucida Console', monospace;
+font-size: 85%;
+margin: 0;
+hyphens: manual;
+}
+pre {
+margin: 1em 0;
+overflow: auto;
+}
+pre code {
+padding: 0;
+overflow: visible;
+overflow-wrap: normal;
+}
+.sourceCode {
+background-color: transparent;
+overflow: visible;
+}
+hr {
+border: none;
+border-top: 1px solid #1a1a1a;
+height: 1px;
+margin: 1em 0;
+}
+table {
+margin: 1em 0;
+border-collapse: collapse;
+width: 100%;
+overflow-x: auto;
+display: block;
+font-variant-numeric: lining-nums tabular-nums;
+}
+table caption {
+margin-bottom: 0.75em;
+}
+tbody {
+margin-top: 0.5em;
+border-top: 1px solid #1a1a1a;
+border-bottom: 1px solid #1a1a1a;
+}
+th {
+border-top: 1px solid #1a1a1a;
+padding: 0.25em 0.5em 0.25em 0.5em;
+}
+td {
+padding: 0.125em 0.5em 0.25em 0.5em;
+}
+header {
+margin-bottom: 4em;
+text-align: center;
+}
+#TOC li {
+list-style: none;
+}
+#TOC ul {
+padding-left: 1.3em;
+}
+#TOC > ul {
+padding-left: 0;
+}
+#TOC a:not(:hover) {
+text-decoration: none;
+}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+
+ul.task-list[class]{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+font-size: inherit;
+width: 0.8em;
+margin: 0 0.8em 0.2em -1.6em;
+vertical-align: middle;
+}
+.display.math{display: block; text-align: center; margin: 0.5rem auto;}
+
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+{ counter-reset: source-line 0; }
+pre.numberSource code > span
+{ position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+{ content: counter(source-line);
+position: relative; left: -1em; text-align: right; vertical-align: baseline;
+border: none; display: inline-block;
+-webkit-touch-callout: none; -webkit-user-select: none;
+-khtml-user-select: none; -moz-user-select: none;
+-ms-user-select: none; user-select: none;
+padding: 0 4px; width: 4em;
+color: #aaaaaa;
+}
+pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa; padding-left: 4px; }
+div.sourceCode
+{ }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+code span.al { color: #ff0000; font-weight: bold; } 
+code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.at { color: #7d9029; } 
+code span.bn { color: #40a070; } 
+code span.bu { color: #008000; } 
+code span.cf { color: #007020; font-weight: bold; } 
+code span.ch { color: #4070a0; } 
+code span.cn { color: #880000; } 
+code span.co { color: #60a0b0; font-style: italic; } 
+code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.do { color: #ba2121; font-style: italic; } 
+code span.dt { color: #902000; } 
+code span.dv { color: #40a070; } 
+code span.er { color: #ff0000; font-weight: bold; } 
+code span.ex { } 
+code span.fl { color: #40a070; } 
+code span.fu { color: #06287e; } 
+code span.im { color: #008000; font-weight: bold; } 
+code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } 
+code span.kw { color: #007020; font-weight: bold; } 
+code span.op { color: #666666; } 
+code span.ot { color: #007020; } 
+code span.pp { color: #bc7a00; } 
+code span.sc { color: #4070a0; } 
+code span.ss { color: #bb6688; } 
+code span.st { color: #4070a0; } 
+code span.va { color: #19177c; } 
+code span.vs { color: #4070a0; } 
+code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } 
+</style>
+  <style>
+:root {
+--ink: #1a1d24; --muted: #5b6472; --line: #e3e7ee; --bg: #ffffff;
+--accent: #6d4aff; --accent-soft: #f1edff; --code-bg: #f6f8fa; --warn: #b3541e;
+}
+@media (prefers-color-scheme: dark) {
+:root { --ink:#e7e9ee; --muted:#9aa4b2; --line:#2a2f3a; --bg:#14161b;
+--accent:#9b86ff; --accent-soft:#211c3a; --code-bg:#1c2029; --warn:#e0a06a; }
+}
+* { box-sizing: border-box; }
+html { scroll-behavior: smooth; }
+body {
+font: 16px/1.65 -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+color: var(--ink); background: var(--bg);
+max-width: 860px; margin: 0 auto; padding: 3.5rem 1.5rem 6rem;
+-webkit-font-smoothing: antialiased;
+}
+h1, h2, h3, h4 { line-height: 1.25; font-weight: 680; letter-spacing: -0.01em; }
+h1 { font-size: 2.1rem; margin: 0 0 .3em; }
+h2 { font-size: 1.5rem; margin: 2.4em 0 .6em; padding-top: .6em; border-top: 1px solid var(--line); }
+h3 { font-size: 1.18rem; margin: 1.8em 0 .4em; color: var(--ink); }
+h4 { font-size: 1rem; margin: 1.4em 0 .3em; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+a { color: var(--accent); text-decoration: none; }
+a:hover { text-decoration: underline; }
+p, li { color: var(--ink); }
+code {
+font: 13.5px/1.5 ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+background: var(--code-bg); padding: .15em .4em; border-radius: 5px;
+}
+pre {
+background: var(--code-bg); border: 1px solid var(--line); border-radius: 10px;
+padding: 1rem 1.15rem; overflow-x: auto; font-size: 13.5px; line-height: 1.5;
+}
+pre code { background: none; padding: 0; }
+blockquote {
+margin: 1.2em 0; padding: .2em 1.1em; border-left: 3px solid var(--accent);
+background: var(--accent-soft); border-radius: 0 8px 8px 0; color: var(--ink);
+}
+table { border-collapse: collapse; width: 100%; margin: 1.3em 0; font-size: 14.5px; }
+th, td { border: 1px solid var(--line); padding: .5em .75em; text-align: left; vertical-align: top; }
+th { background: var(--code-bg); font-weight: 640; }
+hr { border: none; border-top: 1px solid var(--line); margin: 2.4em 0; }
+ul, ol { padding-left: 1.4em; }
+li { margin: .25em 0; }
+strong { font-weight: 660; }
+#TOC {
+background: var(--code-bg); border: 1px solid var(--line); border-radius: 12px;
+padding: 1rem 1.4rem; margin: 2rem 0 3rem; font-size: 14.5px;
+}
+#TOC::before { content: "Contents"; display: block; font-weight: 680; margin-bottom: .5em;
+text-transform: uppercase; letter-spacing: .05em; font-size: 12px; color: var(--muted); }
+#TOC ul { list-style: none; padding-left: 1em; }
+#TOC > ul { padding-left: 0; }
+#TOC a { color: var(--ink); }
+.doc-banner {
+background: linear-gradient(135deg, var(--accent-soft), transparent);
+border: 1px solid var(--line); border-radius: 12px; padding: 1rem 1.3rem;
+margin: 0 0 2rem; font-size: 14px; color: var(--muted);
+}
+.doc-banner strong { color: var(--ink); }
+</style>
+  <div class="doc-banner">
+    <strong>Warpline — M1 Design Spec (hydrated).</strong>
+    Native object store: the byte-authority design for the source-control replacement build.
+    Decision <strong>TD-2026-07-01-263</strong> · epic <strong>T-2026-07-01-007</strong> · author Arky (architect).
+    This HTML is a rendering of <code>packages/warpline/docs/native-object-store-design.md</code>.
+  </div>
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">Warpline Native Object Store — M1 Design Spec</h1>
+</header>
+<nav id="TOC" role="doc-toc">
+<ul>
+<li><a href="#warpline-native-object-store-m1-design-spec" id="toc-warpline-native-object-store-m1-design-spec">Warpline Native
+Object Store — M1 Design Spec</a>
+<ul>
+<li><a href="#problem-statement-grounded-in-the-code-not-prose" id="toc-problem-statement-grounded-in-the-code-not-prose">0. Problem
+statement (grounded in the code, not prose)</a></li>
+<li><a href="#object-model" id="toc-object-model">1. Object model</a>
+<ul>
+<li><a href="#blob" id="toc-blob">1.1 Blob</a></li>
+<li><a href="#tree" id="toc-tree">1.2 Tree</a></li>
+<li><a href="#a-full-source-tree" id="toc-a-full-source-tree">1.3 A full
+source tree</a></li>
+<li><a href="#hash-choice-sha256-and-why-we-diverge-from-git" id="toc-hash-choice-sha256-and-why-we-diverge-from-git">1.4 Hash choice
+— sha256, and why we diverge from git</a></li>
+<li><a href="#byte-source-git-cat-file-not-git-archive" id="toc-byte-source-git-cat-file-not-git-archive">1.5 Byte source —
+<code>git cat-file</code>, not <code>git archive</code></a></li>
+</ul></li>
+<li><a href="#on-disk-layout" id="toc-on-disk-layout">2. On-disk
+layout</a>
+<ul>
+<li><a href="#loose-objects-m1" id="toc-loose-objects-m1">2.1 Loose
+objects (M1)</a></li>
+<li><a href="#committed-to-git-vs-regenerable-the-coexistence-policy" id="toc-committed-to-git-vs-regenerable-the-coexistence-policy">2.2
+Committed-to-git vs regenerable (the coexistence policy)</a></li>
+<li><a href="#migration-backfill-from-existing-git-anchored-strands" id="toc-migration-backfill-from-existing-git-anchored-strands">2.3
+Migration / backfill from existing git-anchored strands</a></li>
+<li><a href="#shadow-git-oid-coexistence-verification-only" id="toc-shadow-git-oid-coexistence-verification-only">2.4 Shadow git OID
+(coexistence verification only)</a></li>
+</ul></li>
+<li><a href="#the-seam-to-the-meaning-layer" id="toc-the-seam-to-the-meaning-layer">3. The seam to the meaning
+layer</a>
+<ul>
+<li><a href="#why-binding-is-excluded-from-pickid-respecting-the-existing-pattern" id="toc-why-binding-is-excluded-from-pickid-respecting-the-existing-pattern">Why
+<code>binding</code> is excluded from <code>pickId</code> (respecting
+the existing pattern)</a></li>
+<li><a href="#stateid-meaning-and-treeid-bytes-coexist-cleanly" id="toc-stateid-meaning-and-treeid-bytes-coexist-cleanly"><code>stateId</code>
+(meaning) and <code>treeId</code> (bytes) coexist cleanly</a></li>
+</ul></li>
+<li><a href="#the-restore-path" id="toc-the-restore-path">4. The restore
+path</a>
+<ul>
+<li><a href="#resolution" id="toc-resolution">Resolution</a></li>
+<li><a href="#materialization-byte-faithful-mirrors-materialize.ts-lines-166175" id="toc-materialization-byte-faithful-mirrors-materialize.ts-lines-166175">Materialization
+(byte-faithful, mirrors <code>materialize.ts</code> lines
+166–175)</a></li>
+<li><a href="#acceptance-test-m1c-gate" id="toc-acceptance-test-m1c-gate">Acceptance test (M1c gate)</a></li>
+</ul></li>
+<li><a href="#durable-merge-bytes-m1b" id="toc-durable-merge-bytes-m1b">5. Durable merge bytes (M1b)</a></li>
+<li><a href="#integrity-hooks-for-m3-seams-only-not-designed-here" id="toc-integrity-hooks-for-m3-seams-only-not-designed-here">6.
+Integrity hooks for M3 (seams only — not designed here)</a></li>
+<li><a href="#implementation-plan-module-boundaries-risks" id="toc-implementation-plan-module-boundaries-risks">7. Implementation
+plan, module boundaries, risks</a>
+<ul>
+<li><a href="#m1a-the-object-store-pure-bytes-no-behavior-change-nothing-seals" id="toc-m1a-the-object-store-pure-bytes-no-behavior-change-nothing-seals">M1a
+— the object store (pure bytes; no behavior change, nothing
+seals)</a></li>
+<li><a href="#m1b-durable-merge-bytes-bind-on-seal" id="toc-m1b-durable-merge-bytes-bind-on-seal">M1b — durable merge bytes
++ bind on seal</a></li>
+<li><a href="#m1c-restore-git-absent-acceptance" id="toc-m1c-restore-git-absent-acceptance">M1c — restore + git-absent
+acceptance</a></li>
+<li><a href="#risks-open-questions" id="toc-risks-open-questions">Risks
+/ open questions</a></li>
+</ul></li>
+<li><a href="#appendix-invariants-test-these" id="toc-appendix-invariants-test-these">Appendix — invariants (test
+these)</a></li>
+</ul></li>
+</ul>
+</nav>
+<h1 id="warpline-native-object-store-m1-design-spec">Warpline Native
+Object Store — M1 Design Spec</h1>
+<p><strong>Task:</strong> T-2026-07-01-008 (epic T-2026-07-01-007) ·
+<strong>Decision:</strong> TD-2026-07-01-263 <strong>Author:</strong>
+Arky (Warpline system architect) · <strong>Status:</strong> design,
+spec-only (no source changes) <strong>Milestone:</strong> M1 —
+<em>Warpline OWNS the bytes and can reconstruct a working tree with git
+ABSENT.</em></p>
+<hr />
+<h2 id="problem-statement-grounded-in-the-code-not-prose">0. Problem
+statement (grounded in the code, not prose)</h2>
+<p>Today Warpline is <strong>meaning-authoritative</strong> but
+<strong>byte-dependent on git</strong>:</p>
+<ul>
+<li><code>WarpObject</code> (<code>src/warp/warp-object.ts</code>)
+deliberately <strong>drops path/position/bytes</strong> — it is
+<code>⟨kind, contract, sorted edges, contentId⟩</code>.
+<code>contentId = essence:v0:sha256(canonicalCNF)</code>
+(<code>src/warp/essence-hash.ts</code>). The dropping <em>is</em> the
+thesis.</li>
+<li><code>WarpState</code> (<code>src/warp/warp-state.ts</code>) =
+<code>stateId = state:v0:sha256(sorted contentIds)</code>.
+<code>treeSha</code> and <code>absorbedAt</code> are <strong>provenance,
+not identity</strong>.</li>
+<li><code>WarpStore</code> (<code>src/warp/store.ts</code>) is a
+content-addressed store of <strong>meaning objects and states
+only</strong> — an in-memory <code>Map</code> plus a regenerable JSON
+disk cache under <code>.warpline/{warp/objects,states}/</code>. There is
+<strong>no blob store, no tree store, no checkout.</strong></li>
+<li>Bytes come <strong>exclusively from git</strong>:
+<code>absorb()</code> (<code>src/absorb.ts</code>) runs
+<code>materializeTree()</code> = <code>git archive | tar</code> into a
+temp dir; <code>computeMerge()</code>
+(<code>src/fabric/materialize.ts</code>) reads bytes via
+<code>gitShowBuffer()</code>/<code>treeEntryMode()</code>/<code>changedPaths()</code>
+(<code>src/git/git-exec.ts</code>).</li>
+<li>Merges Warpline <strong>performs are thrown away</strong>:
+<code>admit()</code> CLEAN path (<code>src/fabric/admit.ts</code>)
+materializes the merged tree to a temp dir, absorbs the
+<em>meaning</em>, then <code>releaseTree()</code> <strong>deletes the
+bytes</strong>. The strand records
+<code>provenance.gitCommit = oursCommit</code> — <strong>one parent, not
+the merged bytes</strong> — and sets <code>merged: true</code>. The
+<strong>H1 guard</strong> (<code>admit.ts</code> line ~230) then
+<em>fails closed</em> on any later merge that would re-base off a merged
+strand, precisely because the merged bytes don’t exist anywhere.</li>
+<li><code>.gitignore</code> (lines 191–199) tracks <strong>only</strong>
+<code>.warpline/fabric.jsonl</code> +
+<code>.warpline/refs/selvage</code>; everything else under
+<code>.warpline/</code> is ignored as <strong>regenerable from each
+strand’s <code>provenance.gitCommit</code>.</strong> That regenerability
+assumption is exactly what dies when git dies.</li>
+</ul>
+<p><strong>M1 goal:</strong> give Warpline a <strong>byte home</strong>
+it owns, bind it to the meaning layer without disturbing identity rules,
+make merges durable, and prove
+<code>rm -rf .git &amp;&amp; warpline restore &lt;state&gt;</code>
+reproduces the exact tree.</p>
+<p><strong>Non-goals (seams only):</strong> cryptographic hash-chain +
+signatures (M3), pack/delta compression (post-M1), write-side authoring
+(Warpline B).</p>
+<hr />
+<h2 id="object-model">1. Object model</h2>
+<p>Warpline gains <strong>two owned object kinds</strong> —
+<code>blob</code> (bytes) and <code>tree</code> (a directory manifest) —
+mirroring git’s <em>conceptual</em> model while <strong>diverging on the
+wire format and hash</strong>. The existing meaning objects
+(<code>essence:</code> / <code>state:</code>) are unchanged and
+untouched.</p>
+<h3 id="blob">1.1 Blob</h3>
+<p>A blob is the <strong>raw, untransformed bytes</strong> of one file.
+No line-ending conversion, no clean/smudge filter, no
+<code>export-subst</code> — byte-authoritative means <em>the bytes</em>,
+full stop (see §1.5 on why we snapshot from
+<code>git cat-file blob</code>, not from the <code>git archive</code>
+tar).</p>
+<pre><code>blobId = &quot;blob:v1:&quot; + sha256( &quot;blob &quot; + &lt;byteLength-in-ascii-decimal&gt; + &quot;\0&quot; + &lt;raw bytes&gt; )</code></pre>
+<ul>
+<li>The <code>&quot;blob &quot; + len + &quot;\0&quot;</code> framing is git’s object-header
+idea, kept for <strong>domain separation</strong> (a blob and a tree of
+the same bytes can never collide) and because it lets us compute a
+<strong>shadow git-sha1 OID</strong> cheaply for coexistence
+cross-checks (§2.4).</li>
+<li><strong>sha256, not sha1</strong> — justified in §1.4.</li>
+</ul>
+<h3 id="tree">1.2 Tree</h3>
+<p>A tree is a <strong>sorted manifest of one directory</strong>. Each
+entry:</p>
+<table>
+<colgroup>
+<col style="width: 53%" />
+<col style="width: 46%" />
+</colgroup>
+<thead>
+<tr>
+<th>field</th>
+<th>value</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><code>mode</code></td>
+<td>git tree-entry mode string: <code>100644</code> (regular),
+<code>100755</code> (executable), <code>120000</code> (symlink),
+<code>160000</code> (gitlink/submodule), <code>40000</code>
+(subtree/directory)</td>
+</tr>
+<tr>
+<td><code>name</code></td>
+<td>the single path component (NFC-normalized, never a
+<code>/</code>-joined path)</td>
+</tr>
+<tr>
+<td><code>id</code></td>
+<td><code>blobId</code> for <code>100644/100755/120000</code>; child
+<code>treeId</code> for <code>40000</code>; the raw <strong>commit
+sha</strong> for <code>160000</code> (a gitlink carries no bytes — a
+pointer only)</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li><strong>Symlink (<code>120000</code>)</strong>: the blob’s bytes ARE
+the link target path (git’s own convention). Restore calls
+<code>symlink(target, path)</code>, never writes a regular file —
+byte/type faithful.</li>
+<li><strong>Gitlink (<code>160000</code>)</strong>: no blob. The entry
+stores the submodule commit sha as <code>id</code>. Restore writes
+nothing (or an empty dir); this matches the merge layer’s
+<code>NON_BLOB_MODES</code> fail-closed stance
+(<code>materialize.ts</code> line 48) — we <strong>represent</strong> it
+losslessly but never fabricate bytes for it.</li>
+</ul>
+<p>Canonical serialization (deterministic — the whole point):</p>
+<pre><code>tree bytes = concat, for each entry in TREE-ORDER:
+             &lt;mode&gt; &quot; &quot; &lt;name&gt; &quot;\0&quot; &lt;id-as-bytes&gt;
+treeId     = &quot;tree:v1:&quot; + sha256( &quot;tree &quot; + &lt;len&gt; + &quot;\0&quot; + &lt;tree bytes&gt; )</code></pre>
+<p><strong>TREE-ORDER</strong> is git’s exact tree-entry sort: compare
+<code>name</code> bytes, but a <code>40000</code> (directory) entry
+sorts <em>as if its name had a trailing <code>/</code></em>. This is
+nailed with a dedicated test vector so a directory <code>src</code> vs a
+file <code>src.ts</code> order deterministically. (Reproducing git’s
+order also keeps the shadow-OID cross-check in §2.4 exact.)</p>
+<h3 id="a-full-source-tree">1.3 A full source tree</h3>
+<p>The classic Merkle DAG: a <strong>root tree</strong> references
+sub-trees and blobs recursively. <code>treeId</code> is the byte
+identity of an entire working tree. Two byte-identical trees ⇒ identical
+<code>treeId</code>; any byte change anywhere ripples the root
+<code>treeId</code> (Merkle). Empty directories are <strong>not</strong>
+representable (git parity; tar/<code>loadLiveGraph</code> already ignore
+them — documented limitation, §7).</p>
+<h3 id="hash-choice-sha256-and-why-we-diverge-from-git">1.4 Hash choice
+— sha256, and why we diverge from git</h3>
+<p>We <strong>mimic git’s object <em>model</em></strong>
+(blob/tree/mode/tree-order) but <strong>diverge on hash + on-wire
+id</strong>:</p>
+<ul>
+<li><strong>One hash across the whole system.</strong>
+<code>essence-hash.ts</code>, <code>warp-state.ts</code>,
+<code>strand.ts</code> all use <strong>sha256</strong>. Introducing
+git’s default <strong>sha1</strong> for bytes would mean two algorithms,
+two collision stories, and a byte layer weaker than the meaning layer.
+Unacceptable for a system whose pitch is
+<em>accountability-native</em>.</li>
+<li><strong>Not bound to git’s legacy.</strong> git-sha1 is being
+retired; git-sha256 repos exist but aren’t universal. Owning the format
+frees the meaning↔︎bytes binding (§3, §6) from git’s transition.</li>
+<li><strong>Byte-faithfulness is preserved regardless of hash</strong> —
+parity with the merge hardening (binary via NUL, <code>100755</code>
+exec bit, <code>120000</code> symlink, <code>160000</code> gitlink,
+rename decomposition) is a property of <em>what we store</em> (raw bytes
++ git mode strings), not of the hash algorithm. We inherit that parity
+by reusing the same mode vocabulary the merge layer already speaks.</li>
+</ul>
+<p><strong>Tradeoff, stated honestly:</strong> a sha256 warpline object
+is <strong>not</strong> <code>git cat-file</code>-able, so we lose free
+git tooling on our store. We buy that back with the <strong>shadow
+git-sha1 OID</strong> (§2.4) computed <em>during coexistence only</em>,
+which lets backfill prove
+<code>treeId ⇄ strand.provenance.treeSha</code> byte-for-byte, then is
+dropped at cutover. This is the balanced-risk call: git-model
+familiarity and verifiability <strong>without</strong> inheriting git’s
+hash.</p>
+<h3 id="byte-source-git-cat-file-not-git-archive">1.5 Byte source —
+<code>git cat-file</code>, not <code>git archive</code></h3>
+<p><code>materializeTree()</code> uses <code>git archive | tar</code>,
+which applies <code>export-subst</code>/<code>export-ignore</code>/eol
+attributes — so archive bytes can differ from the true blob bytes. For
+<strong>authoritative</strong> byte capture we snapshot <strong>per-path
+raw blob bytes</strong>
+(<code>git cat-file blob &lt;ref&gt;:&lt;path&gt;</code>, same raw path
+<code>gitShowBuffer</code> already uses) for real refs, and
+<strong>as-on-disk bytes</strong> for <code>WORKTREE</code>. This is the
+one place we must <em>not</em> reuse the archive path, or
+“byte-authoritative” would silently mean “archive-massaged”. (Open item
+OQ-3.)</p>
+<hr />
+<h2 id="on-disk-layout">2. On-disk layout</h2>
+<h3 id="loose-objects-m1">2.1 Loose objects (M1)</h3>
+<pre><code>.warpline/objects/
+  blobs/&lt;aa&gt;/&lt;rest-of-sha256&gt;      # zlib-deflated: &quot;blob &quot; &lt;len&gt; &quot;\0&quot; &lt;raw bytes&gt;
+  trees/&lt;aa&gt;/&lt;rest-of-sha256&gt;      # zlib-deflated canonical tree bytes
+  pack/                            # RESERVED — packed objects (post-M1, §7 risk)</code></pre>
+<ul>
+<li><strong>Fan-out</strong> by first 2 hex chars of the sha256 (git
+convention) so a large repo doesn’t put 100k files in one
+directory.</li>
+<li><strong>Compression</strong>: zlib deflate (Node <code>zlib</code>),
+like git loose objects. Blobs already binary-safe.</li>
+<li><strong>Writes</strong> follow <code>WarpStore</code>’s disk
+discipline exactly: write-tmp + atomic <code>rename</code>,
+<code>.warpline/</code> only, idempotent (content-addressed ⇒ same id ⇒
+same bytes ⇒ write is a no-op / safe under the existing
+<code>#fabric-lock</code>). Best-effort read; a corrupt/absent loose
+object surfaces via <code>warpline objects verify</code>.</li>
+</ul>
+<h3 id="committed-to-git-vs-regenerable-the-coexistence-policy">2.2
+Committed-to-git vs regenerable (the coexistence policy)</h3>
+<p>The store runs in one of two <strong>modes</strong>:</p>
+<table style="width:100%;">
+<colgroup>
+<col style="width: 9%" />
+<col style="width: 20%" />
+<col style="width: 34%" />
+<col style="width: 25%" />
+<col style="width: 9%" />
+</colgroup>
+<thead>
+<tr>
+<th>Mode</th>
+<th>git present?</th>
+<th><code>.warpline/objects/</code></th>
+<th>restore source</th>
+<th>when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td><strong>mirror</strong> (default, M1a–M1b)</td>
+<td>yes</td>
+<td><strong>gitignored</strong> (regenerable from
+<code>provenance.gitCommit</code>)</td>
+<td>store if present, else re-materialize from git</td>
+<td>coexistence</td>
+</tr>
+<tr>
+<td><strong>authoritative</strong> (M1c cutover)</td>
+<td>optional/absent</td>
+<td><strong>committed</strong> (or packed + committed)</td>
+<td>store only</td>
+<td>git deletable</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>In <strong>mirror</strong> mode we keep
+<code>.warpline/objects/</code> <strong>gitignored</strong> to avoid
+~doubling repo size while git still holds the delta-packed truth. What
+newly enters the <em>tracked</em> fabric is only the tiny
+<code>binding.treeId</code> (a hash) inside <code>fabric.jsonl</code> —
+cheap.</li>
+<li><strong>Cutover to authoritative</strong> is an explicit step:
+<code>warpline objects materialize --all</code> ensures every strand’s
+<code>binding.treeId</code> is present as loose (or packed) objects on
+disk, then the <code>.gitignore</code> stops ignoring
+<code>.warpline/objects/</code> (or a packfile is committed). Only then
+is <code>rm -rf .git</code> safe. The M1c acceptance test performs this
+step.</li>
+</ul>
+<h3 id="migration-backfill-from-existing-git-anchored-strands">2.3
+Migration / backfill from existing git-anchored strands</h3>
+<p><code>warpline objects backfill</code>:</p>
+<ol type="1">
+<li>For each historical strand with <code>provenance.gitCommit</code>:
+snapshot its tree per §1.5 (<code>git cat-file</code> per path from the
+commit) → write blobs+trees → compute root <code>treeId</code>.</li>
+<li>Stamp <code>binding.treeId</code> (+ shadow <code>gitOid</code>)
+onto the strand via <code>rewriteFabric()</code>
+(<code>src/fabric/fabric.ts</code>) — the <strong>same mechanism
+<code>grade</code> uses</strong> to write annotations without moving
+<code>pickId</code> (§3). Requires <code>#fabric-lock</code>.</li>
+<li>Verify: recomputed <code>gitOid</code> (shadow sha1, §2.4)
+<strong>must equal</strong> <code>provenance.treeSha</code>, else refuse
+and report the strand — fail closed, never stamp an unverified
+binding.</li>
+</ol>
+<p>Merge strands (<code>merged: true</code>) have no single git tree to
+backfill from — their bytes are reconstructed by re-running the merge
+recipe (§5) and are handled by M1b’s seal path, not by backfill.</p>
+<h3 id="shadow-git-oid-coexistence-verification-only">2.4 Shadow git OID
+(coexistence verification only)</h3>
+<p>During <strong>mirror</strong> mode, <code>snapshotTree</code> also
+computes each object’s <strong>git-sha1 OID</strong> (git’s exact
+blob/tree serialization + sha1). This costs one extra hash and yields
+<code>binding.gitOid</code> = the git tree sha. Because we reproduce
+git’s tree-order (§1.2), <code>binding.gitOid</code> <strong>must
+equal</strong> <code>strand.provenance.treeSha</code> — a free, total
+byte-faithfulness proof against git. Dropped at cutover.</p>
+<hr />
+<h2 id="the-seam-to-the-meaning-layer">3. The seam to the meaning
+layer</h2>
+<p><strong>A strand gains a byte binding — as an annotation EXCLUDED
+from <code>pickId</code>, exactly like
+<code>calibratedConfidence</code>.</strong></p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode ts"><code class="sourceCode typescript"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a><span class="co">// strand.ts (additive)</span></span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a><span class="kw">interface</span> Strand {</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  <span class="co">// …existing fields…</span></span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>  calibratedConfidence<span class="op">:</span> <span class="dt">number</span> <span class="op">|</span> <span class="dt">null</span><span class="op">;</span>   <span class="co">// excluded from pickId (existing)</span></span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>  binding<span class="op">?:</span> {                            <span class="co">// NEW — the meaning↔bytes seam</span></span>
+<span id="cb4-6"><a href="#cb4-6" aria-hidden="true" tabindex="-1"></a>    treeId<span class="op">:</span> <span class="dt">string</span><span class="op">;</span>                       <span class="co">// byte identity (native object store)</span></span>
+<span id="cb4-7"><a href="#cb4-7" aria-hidden="true" tabindex="-1"></a>    gitOid<span class="op">?:</span> <span class="dt">string</span><span class="op">;</span>                      <span class="co">// shadow git-sha1 tree sha (coexistence only)</span></span>
+<span id="cb4-8"><a href="#cb4-8" aria-hidden="true" tabindex="-1"></a>  } <span class="op">|</span> <span class="dt">null</span><span class="op">;</span></span>
+<span id="cb4-9"><a href="#cb4-9" aria-hidden="true" tabindex="-1"></a>  merge<span class="op">?:</span> MergeRecipe<span class="op">;</span>                    <span class="co">// NEW — see §5 (merge strands only)</span></span>
+<span id="cb4-10"><a href="#cb4-10" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<div class="sourceCode" id="cb5"><pre class="sourceCode ts"><code class="sourceCode typescript"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a><span class="co">// computePickId — EXCLUDE binding + merge alongside calibratedConfidence</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a><span class="im">export</span> <span class="kw">function</span> <span class="fu">computePickId</span>(body<span class="op">:</span> StrandBody)<span class="op">:</span> <span class="dt">string</span> {</span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>  <span class="kw">const</span> { calibratedConfidence<span class="op">:</span> _c<span class="op">,</span> binding<span class="op">:</span> _b<span class="op">,</span> merge<span class="op">:</span> _m<span class="op">,</span> <span class="op">...</span>identity } <span class="op">=</span> body<span class="op">;</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>  <span class="co">// …unchanged…</span></span>
+<span id="cb5-5"><a href="#cb5-5" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<h3 id="why-binding-is-excluded-from-pickid-respecting-the-existing-pattern">Why
+<code>binding</code> is excluded from <code>pickId</code> (respecting
+the existing pattern)</h3>
+<ul>
+<li><strong>Meaning is the identity; bytes are one realization.</strong>
+Two different byte-trees can absorb to the <strong>same</strong>
+<code>stateId</code> (a comment/format/path change is
+meaning-invisible). So byte identity is <em>not</em> event identity — it
+belongs with provenance.</li>
+<li><strong><code>treeId</code> may be backfilled after the
+fact</strong> (§2.3) onto historical strands. Anything inside
+<code>pickId</code> is immutable-after-seal (that’s the whole contract
+of a content-address). <code>binding</code> must be
+<em>mutable-after-seal</em>, which is <strong>precisely why
+<code>calibratedConfidence</code> is excluded</strong> — same reasoning,
+same mechanism (<code>rewriteFabric</code>). We extend the existing
+precedent rather than invent a new rule.</li>
+</ul>
+<h3 id="stateid-meaning-and-treeid-bytes-coexist-cleanly"><code>stateId</code>
+(meaning) and <code>treeId</code> (bytes) coexist cleanly</h3>
+<ul>
+<li><code>stateId</code> =
+<code>state:v0:sha256(sorted contentIds)</code> —
+<strong>unchanged</strong>, <code>computeStateId</code> untouched.</li>
+<li><code>treeId</code> =
+<code>tree:v1:sha256(canonical root tree)</code> — new, orthogonal.</li>
+<li>Relationship is <strong>many-to-one</strong>: many
+<code>treeId</code>s can share one <code>stateId</code> (byte variants
+of identical meaning); one <code>treeId</code> maps to exactly one
+byte-tree. The strand is the join row carrying both.</li>
+<li><code>computePickId</code> / <code>computeStateId</code> identity
+rules are <strong>unaffected</strong> because
+<code>binding</code>/<code>merge</code> never enter either hash.
+<code>provenance.treeSha</code> (git) stays in <code>pickId</code> as
+before (it’s atomic-at-seal, not backfilled);
+<code>binding.treeId</code> (native) stays out (it may be backfilled).
+Documented asymmetry, §7.</li>
+</ul>
+<p><strong>Note:</strong> for <em>new</em> strands sealed in M1b+,
+<code>treeId</code> is known at seal time and <em>could</em> live inside
+<code>pickId</code>. We deliberately keep <strong>one uniform
+rule</strong> — binding always excluded — so backfill, repair, and
+re-derivation never fork the identity semantics between “new” and “old”
+strands.</p>
+<hr />
+<h2 id="the-restore-path">4. The restore path</h2>
+<p>New verb:
+<code>warpline restore &lt;selector&gt; [--to &lt;path&gt;] [--force] [--json]</code>.</p>
+<pre><code>selector := selvage (default) | &lt;stateId&gt; | &lt;pickId&gt; | seq:&lt;n&gt;
+--to      := target dir (default: refuse unless empty/--force; never the cwd tracked tree by accident)</code></pre>
+<h3 id="resolution">Resolution</h3>
+<ol type="1">
+<li>Resolve <code>&lt;selector&gt;</code> → a <strong>strand</strong>
+(selvage → current tip strand; <code>stateId</code> → newest strand on
+that state, or require a <code>pickId</code>/<code>seq:</code> if
+ambiguous — a bare <code>stateId</code> is many-to-one, §3).</li>
+<li>Read <code>strand.binding.treeId</code>.
+<ul>
+<li><strong>authoritative mode</strong> and no binding ⇒ hard error
+(<code>no bytes for this state; run backfill</code>).</li>
+<li><strong>mirror mode</strong> and no binding ⇒ fall back to git
+materialize from <code>provenance.gitCommit</code> (+ warn), so restore
+still works before backfill completes.</li>
+</ul></li>
+<li>Load the root tree object → walk recursively.</li>
+</ol>
+<h3 id="materialization-byte-faithful-mirrors-materialize.ts-lines-166175">Materialization
+(byte-faithful, mirrors <code>materialize.ts</code> lines 166–175)</h3>
+<p>For each entry, write to <code>--to</code>: -
+<code>100644</code>/<code>100755</code> →
+<code>writeFile(raw Buffer)</code> then
+<code>chmod(0o644 | 0o755)</code> (never re-encode). -
+<code>120000</code> →
+<code>symlink(&lt;blob-bytes-as-target&gt;, path)</code>. -
+<code>160000</code> → skip bytes; record a gitlink note (no
+fabrication). - <code>40000</code> → <code>mkdir</code> + recurse.
+Refuse to clobber a non-empty <code>--to</code> without
+<code>--force</code>.</p>
+<h3 id="acceptance-test-m1c-gate">Acceptance test (M1c gate)</h3>
+<pre><code># in a fixture repo, authoritative mode
+warpline pick                       # seal a strand → binding.treeId
+warpline objects materialize --all  # ensure bytes on disk (cutover step)
+rm -rf .git
+warpline restore selvage --to /tmp/out
+diff -r /tmp/out &lt;original-tree&gt;     # BYTE-IDENTICAL, git absent
+# self-consistency: re-snapshot the result equals the recorded id
+[ &quot;$(warpline objects snapshot /tmp/out)&quot; = &quot;&lt;strand.binding.treeId&gt;&quot; ]</code></pre>
+<p>Two independent proofs: <strong>external</strong>
+(<code>diff -r</code> vs the known tree) and <strong>internal</strong>
+(<code>snapshot(restore(x)) == x.binding.treeId</code>, the round-trip
+invariant). While git still exists,
+<code>binding.gitOid == provenance.treeSha</code> (§2.4) is a
+<strong>third</strong> proof.</p>
+<hr />
+<h2 id="durable-merge-bytes-m1b">5. Durable merge bytes (M1b)</h2>
+<p>Today <code>materializeMergedState()</code> builds the merged tree in
+a temp dir, absorbs meaning, and <code>releaseTree()</code>
+<strong>destroys the bytes</strong>; the strand records
+<code>gitCommit = oursCommit</code> and <code>merged: true</code>, and
+the <strong>H1 guard</strong> fails closed on any downstream merge.</p>
+<p><strong>M1b changes:</strong></p>
+<ol type="1">
+<li>In <code>materializeMergedState()</code>, <strong>before</strong>
+<code>releaseTree(tmp)</code>, call <code>snapshotTree(tmp)</code> → the
+merged <strong><code>treeId</code></strong> (§1.5 byte capture) and
+write its blobs+trees to the store. Return
+<code>{ plan, state, treeId, recipe }</code>.</li>
+<li>Record a <strong>merge recipe</strong> so the merge is both
+<strong>recoverable</strong> (bytes) and <strong>re-derivable</strong>
+(recompute + verify):</li>
+</ol>
+<div class="sourceCode" id="cb8"><pre class="sourceCode ts"><code class="sourceCode typescript"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="kw">interface</span> MergeRecipe {</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>  algo<span class="op">:</span> <span class="st">&#39;warpline-merge3-v1&#39;</span><span class="op">;</span>                  <span class="co">// the exact merge algorithm version</span></span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>  base<span class="op">:</span>   { treeId<span class="op">?:</span> <span class="dt">string</span><span class="op">;</span> gitCommit<span class="op">:</span> <span class="dt">string</span> <span class="op">|</span> <span class="dt">null</span> }<span class="op">;</span></span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>  ours<span class="op">:</span>   { treeId<span class="op">?:</span> <span class="dt">string</span><span class="op">;</span> gitCommit<span class="op">:</span> <span class="dt">string</span> <span class="op">|</span> <span class="dt">null</span> }<span class="op">;</span></span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>  theirs<span class="op">:</span> { treeId<span class="op">?:</span> <span class="dt">string</span><span class="op">;</span> gitCommit<span class="op">:</span> <span class="dt">string</span> <span class="op">|</span> <span class="dt">null</span> }<span class="op">;</span></span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>  resultTreeId<span class="op">:</span> <span class="dt">string</span><span class="op">;</span>                        <span class="co">// == binding.treeId; the recorded outcome</span></span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>}</span></code></pre></div>
+<ol start="3" type="1">
+<li><code>admit()</code> CLEAN seal now passes
+<code>binding: { treeId }</code> <strong>and</strong>
+<code>merge: recipe</code> to <code>sealState</code>.
+<code>binding.treeId</code> — the <strong>actual merged bytes</strong> —
+<strong>replaces the meaning of
+<code>gitCommit = oursCommit</code></strong> as the authoritative record
+of what the merge produced. <code>provenance.gitCommit</code> stays for
+coexistence attribution, but it is no longer the <em>only</em> trace of
+the merge.</li>
+<li><strong>Re-derivability check</strong> (correctness, the VCS
+cardinal rule): re-running <code>computeMerge(base, ours, theirs)</code>
++ <code>snapshotTree</code> must reproduce
+<code>recipe.resultTreeId</code>. This turns a merge into a
+<em>reproducible fact</em>, not a trusted side effect.</li>
+<li><strong>H1 relaxation seam (do not flip in M1b):</strong> once
+base/theirs bytes are recoverable from their own
+<code>binding.treeId</code> (restore-to-temp) rather than from
+<code>gitCommit</code>, the <code>admit.ts</code> fail-closed on
+<code>merged</code> strands can be lifted — a 3rd-generation merge can
+re-base off the stored merged bytes. M1b <strong>leaves the guard in
+place</strong> and only records the bytes; flipping it is a follow-up
+task with its own test matrix (noted OQ-5).</li>
+</ol>
+<p>Normal (non-merge) picks also get a <code>binding.treeId</code>:
+<code>pick.ts</code>/<code>admit()</code> FAST_ADMIT snapshot the
+absorbed tree (real ref → per-path <code>git cat-file</code>;
+<code>WORKTREE</code> → on-disk) so <strong>every</strong> strand
+carries byte identity, not just merges.</p>
+<hr />
+<h2 id="integrity-hooks-for-m3-seams-only-not-designed-here">6.
+Integrity hooks for M3 (seams only — not designed here)</h2>
+<p>Leave the attach points; do not build M3.</p>
+<ul>
+<li><strong>Hash-chain (event tamper-evidence):</strong> add
+<code>parentPickId: string | null</code> to <code>StrandBody</code>
+<strong>inside</strong> <code>computePickId</code> (unlike
+<code>binding</code>, a chain link <em>must</em> be part of identity).
+Each strand then commits to its predecessor’s <code>pickId</code> — a
+linear Merkle chain over the fabric. Seam: <code>StrandBody</code>,
+inside the <code>pickId</code> hash. (M1 may write the field as
+informational; M3 enforces.)</li>
+<li><strong>Signatures:</strong>
+<code>sig?: { alg; publicKey; signature }</code> over
+<code>(pickId, binding.treeId)</code> — <strong>excluded</strong> from
+<code>pickId</code> (you cannot sign a hash that contains the
+signature). Detached, like <code>calibratedConfidence</code>. Seam:
+strand field + <code>computePickId</code> exclusion list.</li>
+<li><strong>meaning↔︎bytes binding:</strong> <code>binding.treeId</code>
++ the per-blob/per-tree OIDs <strong>are</strong> the binding M3 signs.
+Signing <code>(stateId, treeId)</code> together makes it impossible to
+swap bytes under a meaning (or meaning under bytes) without invalidating
+the signature. Seam: already present as <code>binding</code> (§3).</li>
+</ul>
+<hr />
+<h2 id="implementation-plan-module-boundaries-risks">7. Implementation
+plan, module boundaries, risks</h2>
+<h3 id="m1a-the-object-store-pure-bytes-no-behavior-change-nothing-seals">M1a
+— the object store (pure bytes; no behavior change, nothing seals)</h3>
+<p>New modules: - <code>src/warp/blob.ts</code> —
+<code>blobId(buf)</code>; header framing; sha256 + shadow sha1. -
+<code>src/warp/tree.ts</code> — <code>TreeEntry</code>, canonical
+serialization, <strong>TREE-ORDER</strong> sort, <code>treeId</code>,
+walk. - <code>src/warp/object-store.ts</code> —
+<code>ObjectStore</code>:
+<code>putBlob/getBlob/putTree/getTree/has/verify</code>, loose fan-out
+layout, zlib, write-tmp+rename, <code>.warpline/</code>-only (mirrors
+<code>WarpStore</code> discipline). - <code>src/warp/snapshot.ts</code>
+— <code>snapshotTree(dir | ref)</code> → root <code>treeId</code>,
+writing all objects; per-path <code>git cat-file</code> for refs,
+on-disk bytes for a dir; symlink/exec/gitlink parity.</p>
+<p>CLI: <code>warpline objects verify | snapshot &lt;dir&gt;</code>.
+Tests: determinism (same dir → same <code>treeId</code> across
+runs/machines), round-trip byte-identity, binary/exec/symlink/gitlink
+parity, TREE-ORDER vectors, shadow-OID ==
+<code>git rev-parse &lt;ref&gt;^{tree}</code>.</p>
+<h3 id="m1b-durable-merge-bytes-bind-on-seal">M1b — durable merge bytes
++ bind on seal</h3>
+<p>Touch: - <code>strand.ts</code> — add <code>binding</code>,
+<code>merge</code>; extend <code>computePickId</code> exclusion list. -
+<code>seal.ts</code> — <code>SealInput</code> gains
+<code>binding?</code>, <code>merge?</code>; write onto the body, keep
+out of <code>pickId</code>. - <code>materialize.ts</code> — snapshot
+before <code>releaseTree</code>; return <code>{ treeId, recipe }</code>.
+- <code>admit.ts</code> — CLEAN seal passes <code>binding</code> +
+<code>merge</code>; FAST_ADMIT passes <code>binding</code>. (Leave H1
+guard.) - <code>pick.ts</code> / <code>absorb.ts</code> — capture
+<code>treeId</code> for normal picks (absorb returns <code>treeId</code>
+when asked). - <code>fabric.ts</code> — reuse <code>rewriteFabric</code>
+for <code>warpline objects backfill</code> (binding stamping,
+<code>#fabric-lock</code>).</p>
+<p>Tests: merged strand restores byte-identical; <code>recipe</code>
+re-derives the same <code>resultTreeId</code>; backfill stamps binding
+without moving any <code>pickId</code>;
+<code>binding.gitOid == provenance.treeSha</code>.</p>
+<h3 id="m1c-restore-git-absent-acceptance">M1c — restore + git-absent
+acceptance</h3>
+<p>New: <code>src/fabric/restore.ts</code>
+(<code>restore(root, selector, {to, force})</code>); CLI
+<code>warpline restore</code>. Cutover:
+<code>warpline objects materialize --all</code> +
+<code>.gitignore</code> policy flip. Ship the §4 acceptance test as an
+integration test (<code>rm -rf .git</code> in a fixture).</p>
+<h3 id="risks-open-questions">Risks / open questions</h3>
+<ul>
+<li><strong>OQ-1 Repo size.</strong> Loose+zlib stores every version
+whole — no delta compression. Fine for M1; large/binary-heavy repos need
+packing (git packfile format vs content-defined chunking) — deferred,
+<code>objects/pack/</code> reserved.</li>
+<li><strong>OQ-2 gitignore policy.</strong> Committing
+<code>.warpline/objects/</code> in mirror mode ~doubles repo size vs
+git’s packed store. Recommendation: <strong>gitignored + regenerable
+until explicit cutover</strong>; the git-absent acceptance test must run
+the cutover step first. Risk: a user who <code>rm -rf .git</code>
+<em>before</em> cutover loses bytes — mitigated by making cutover a
+loud, explicit command.</li>
+<li><strong>OQ-3 Byte source (archive vs blob).</strong> Must snapshot
+<strong>raw blob bytes</strong> (<code>git cat-file</code>), not
+<code>git archive</code> output, or
+filters/eol/<code>export-subst</code> silently drift bytes. Backfill and
+ref-snapshot use per-path <code>cat-file</code>; <code>WORKTREE</code>
+uses on-disk. Confirm no attribute path is missed.</li>
+<li><strong>OQ-4 Empty directories / non-file entries.</strong> git (and
+<code>tar</code>/<code>loadLiveGraph</code>) don’t track empty dirs;
+restore won’t recreate them — documented git-parity limitation.</li>
+<li><strong>OQ-5 H1 relaxation.</strong> Storing merged bytes
+<em>enables</em> lifting the <code>merged</code>-strand fail-closed
+guard, but flipping it is a separate task with its own conflict/re-base
+test matrix. M1b records bytes only.</li>
+<li><strong>OQ-6 Identity asymmetry.</strong>
+<code>provenance.treeSha</code> (git) is inside <code>pickId</code>;
+<code>binding.treeId</code> (native) is outside it. Intentional
+(atomic-at-seal vs backfillable) and mirrors the
+<code>calibratedConfidence</code> precedent — but it is an asymmetry to
+document loudly so no one “fixes” it by moving <code>treeId</code> into
+the hash and breaking backfill.</li>
+<li><strong>OQ-7 sha256 vs git-sha1.</strong> Native ids aren’t
+<code>git cat-file</code>-able; mitigated by shadow-OID verification
+during coexistence, then dropped.</li>
+</ul>
+<hr />
+<h2 id="appendix-invariants-test-these">Appendix — invariants (test
+these)</h2>
+<ol type="1">
+<li><strong>Determinism:</strong> <code>snapshot(dir)</code> is
+byte-stable across runs/machines (TREE-ORDER + NFC + no timestamps/paths
+in object bytes).</li>
+<li><strong>Round-trip:</strong>
+<code>snapshot(restore(treeId)) == treeId</code>.</li>
+<li><strong>Byte parity:</strong> binary (NUL), exec bit
+(<code>100755</code>), symlink (<code>120000</code>), gitlink
+(<code>160000</code>), rename — all faithful, matching the merge
+hardening vocabulary.</li>
+<li><strong>Identity stability:</strong> adding/backfilling
+<code>binding</code>/<code>merge</code> never changes any
+<code>pickId</code> or <code>stateId</code>.</li>
+<li><strong>Coexistence proof:</strong>
+<code>binding.gitOid == strand.provenance.treeSha</code> for every
+git-anchored strand.</li>
+<li><strong>Git-absent:</strong>
+<code>rm -rf .git &amp;&amp; warpline restore &lt;state&gt;</code>
+reproduces the exact tree. ```</li>
+</ol>
+</body>
+</html>
