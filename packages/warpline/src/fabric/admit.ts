@@ -201,7 +201,22 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
     const base = baseId ? store.loadState(baseId) : undefined;
     const selvage = selvageId ? store.loadState(selvageId) : undefined;
 
-    // Empty fabric (or unreadable base) → fast-admit the proposed state.
+    // A SET tip/base that we cannot LOAD is corruption or a regen-gap in the
+    // states cache — NOT an empty fabric. Fast-admitting here would seal a fresh
+    // genesis and ORPHAN the real history (silent data loss). Fail CLOSED: the
+    // caller must re-absorb the referenced state or repair .warpline/.
+    if (selvageId && !selvage) {
+      throw new Error(
+        `warpline: selvage points at ${selvageId} but that state cannot be loaded (states/ cache missing or corrupt) — refusing to fast-admit over existing history. Re-absorb the tip or repair .warpline/.`,
+      );
+    }
+    if (baseId && !base) {
+      throw new Error(
+        `warpline: base points at ${baseId} but that state cannot be loaded — refusing to fast-admit over existing history. Re-absorb the base or repair .warpline/.`,
+      );
+    }
+
+    // Genuinely empty fabric (no tip ever sealed) → fast-admit the proposed state.
     if (!base || !selvage) {
       const strand = sealState(root, store, proposed, { parentStateId: selvageId ?? null, actor, intent, gitCommit: oursCommit, now, confidence: 0.8 });
       clearScratch(root, opts.agentId);

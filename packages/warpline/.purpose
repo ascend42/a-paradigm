@@ -367,6 +367,12 @@ components:
       HEAD/index/worktree — extending the Phase-1 ~read-only disk boundary from a
       debug cache into the authoritative store. Git keeps running normally;
       Warpline accumulates its OWN meaning-history alongside it.
+      FAIL-CLOSED READS: readSelvage/readFabric swallow ONLY ENOENT (genuinely
+      never-sealed ⇒ null/[]). A present-but-unreadable tip, or a malformed ledger
+      line, THROWS (with the corrupt line's position) — an authoritative store must
+      never read corruption as "empty history", which would let #admit fast-admit a
+      fresh genesis over a real tip (silent data loss). Correspondingly #admit fails
+      closed when the selvage/base points at a stateId whose state cannot be loaded.
     type: module
     components:
       - "#strand"

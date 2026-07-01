@@ -36,8 +36,14 @@ function fabricPath(wdir: string): string {
 export function readSelvage(wdir: string): string | null {
   try {
     return fs.readFileSync(selvagePath(wdir), 'utf8').trim() || null;
-  } catch {
-    return null;
+  } catch (err) {
+    // ENOENT = never sealed (genuinely no tip). ANY other error (permission, I/O,
+    // a selvage that exists but can't be read) must NOT masquerade as "no history"
+    // — that would let a caller fast-admit a fresh genesis over a real tip. Fail closed.
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    throw new Error(
+      `warpline: selvage pointer unreadable at ${selvagePath(wdir)} — refusing to treat a corrupt tip as empty history: ${(err as Error).message}`,
+    );
   }
 }
 
@@ -73,15 +79,34 @@ export function appendStrand(wdir: string, strand: Strand): void {
 
 /** The full fabric history in seal order (oldest first). [] if none yet. */
 export function readFabric(wdir: string): Strand[] {
+  let raw: string;
   try {
-    const raw = fs.readFileSync(fabricPath(wdir), 'utf8');
-    return raw
-      .split('\n')
-      .filter((l) => l.trim().length > 0)
-      .map((l) => JSON.parse(l) as Strand);
-  } catch {
-    return [];
+    raw = fs.readFileSync(fabricPath(wdir), 'utf8');
+  } catch (err) {
+    // ENOENT = the ledger has never been written (genuinely empty). Any other read
+    // failure must fail closed — reading real history as [] is silent data loss.
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    throw new Error(
+      `warpline: fabric ledger unreadable at ${fabricPath(wdir)} — refusing to read history as empty: ${(err as Error).message}`,
+    );
   }
+  // A malformed line must THROW (with its position) — never silently drop the rest
+  // of the history. The ledger is authoritative; a truncated/corrupt strand is a
+  // signal to stop, not to forget everything after it.
+  const lines = raw.split('\n');
+  const strands: Strand[] = [];
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    if (line.trim().length === 0) continue;
+    try {
+      strands.push(JSON.parse(line) as Strand);
+    } catch (err) {
+      throw new Error(
+        `warpline: fabric ledger corrupt at ${fabricPath(wdir)}:${i + 1} — a malformed strand must not silently drop history: ${(err as Error).message}`,
+      );
+    }
+  }
+  return strands;
 }
 
 /**
