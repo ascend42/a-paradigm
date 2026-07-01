@@ -6,6 +6,22 @@
 
 ---
 
+## ★ RATIFICATION STATUS (2026-07-01) — ACCEPTED WITH AMENDMENTS
+
+Adversarial review run (orchestration `orch-mr2dysn1-ypmg`): **Arky** (architecture) + **Loid** (calibration), both **RATIFY-WITH-AMENDMENTS**. Decision `TD-2026-06-26-881` is now **`status: accepted`** with 9 amendments folded into the record. The core posture (publish a population SHAPE not a local number; contracts-only; ship no figure yet; scenarios-first) **survived the attack**. The amendments (see the decision YAML for full text):
+
+1. **Exercise-intensity denominator** — `survivalShape` alone is launderable, because `survived` is minted by 14-day time-decay (`decay.ts:52`), i.e. *silence*, not *tested-and-held*. `CalibrationPrior` MUST carry `adversarialProbes` (+ `distinctProjects`/`breakAttempts`); high `survived` + ~0 probes renders "unproven", never a %.
+2. **`notebook-hash` is an OPEN blocking dependency** — no training-identity fingerprint exists in source; must be specified, refine-stable, tamper-evident, adversary-resistant before any prior is populated.
+3. **Corrected null-rate cause** (see §C.2/§D fixes below).
+4. **Pending contradiction resolved** — keep `pending`+`sampleSize` in the shape for transparency; exclude pending only from a *derived scalar*.
+5. **External contamination** — the "external → context-excluded" boundary (§A3) is NOT enforced (`notebook-loader.ts:114` filters by concepts/tags only); segregate external-originated outcomes or enforce the filter.
+6. **"No live consumer" is false** — `registry-types.ts` already has `PartnerCoverage` (`registry.ts:61-64`); land `CalibrationPrior` with a "DO NOT RENDER" doc-comment.
+7. **Gate the search-time render** — `registry.ts:50-52` prints bare `calibration: X%` before any disclaimer; require a `sampleSize`+`adversarialProbes` floor.
+8. **Scenario payload redaction** — `probeConcepts` leaks internal invariants; bucket to a coarse taxonomy, opt-in `sourceHash`.
+9. **Decay-of-priors has no owner** — ruling #5 describes behavior no code performs; mark aspirational or file a task.
+
+---
+
 ## 0. Why this matters now
 
 The Classroom produces, per agent, exactly the signal a marketplace most wants and most easily abuses: **a track record of whether an agent's certified knowledge survives real use** (`classroom-certifications.jsonl` outcomes + `repeat-failure-rate`). The registry already exposes a per-agent `calibrationScore` on its search surface (`packages/paradigm/src/commands/agent/registry.ts:50-54`). So the question is not *whether* calibration touches the registry — it already does — but **what, precisely, is safe to publish without leaking or laundering the moat.**
@@ -43,7 +59,7 @@ interface TrustProfile {
 
 Key architectural decisions:
 - **Identity is the notebook-hash, not the agent id.** Population calibration aggregates over everyone running the same training/notebook fingerprint (consistent with the three-layer identity model and the cold-start archetype-prior). The agent *id*/nickname is cosmetic; the *hash* is what a prior attaches to.
-- **`survivalShape` is a distribution, not a score.** Publishing `{survived, overturned, pending}` counts lets the consumer compute their own prior and see the `sampleSize` honestly — a single 0–1 `calibrationScore` invites exactly the "green that lies" the Classroom exists to kill. (Recommend the rendered `calibrationScore` become a *derived* display of `survivalShape`, gated on `sampleSize ≥ N`.)
+- **`survivalShape` is a distribution, not a score** — necessary but **NOT sufficient** (review, amendment 1). Publishing `{survived, overturned, pending}` counts + `sampleSize` is more honest than a scalar, BUT `survived` is minted by time-decay (`decay.ts:52` — 14 days with no attributed break), so it conflates "tested hard and held" with "never tested." A distribution of decay-minted survivals is as launderable as the scalar derived from it. **Therefore** the shape MUST also carry an exercise-intensity denominator (`adversarialProbes` + `distinctProjects`), and the rendered `calibrationScore` may derive from `survivalShape` **only** when `sampleSize` AND `adversarialProbes` clear a floor — else render "unproven (n=…)", never a %.
 - **`asOf` + decay.** A prior with no refresh is stale; the registry should age it out, mirroring the Classroom's own "silence is signal" decay.
 
 ### A2. Cross-project scenario-propagation seam
@@ -131,7 +147,7 @@ Seats directly into the cold-start trust ladder (T-2026-06-24-017):
 ## C. Recommendations & sequencing
 
 1. **Land the contracts now, no behavior.** Add `CalibrationPrior`, `TrustProfile`, `ScenarioRef` to `registry-types.ts` as contracts-only shapes (matching the existing "no live consumer" posture). Zero runtime coupling. *This is the only buildable step, and it's optional/forward-compat.*
-2. **Do NOT publish any calibration figure until the loop resolves.** Today `repeat-failure-rate` is null (thin `orchestrationId` attribution); any number now is fabricated. **Blocker:** wire attribution + accumulate resolved certs across ≥ a few projects before a population prior is meaningful. This brief's rules are what *prevent* shipping a fake number early.
+2. **Do NOT publish any calibration figure until the loop resolves.** Today `repeat-failure-rate` is null, but **not** for the reason first stated. ~~thin `orchestrationId` attribution~~ **[CORRECTED by review, amendment 3]:** attribution IS wired (`field-failure-reducer.ts:111-135` joins breaks to notebook receipts by `orchestrationId`; `orchestration.ts:1299` stamps the receipt). The rate is null because **0 certs are resolved** — the 5 live certs are all `outcome:pending`, no `field-failures.jsonl` exists (zero breaks), and none has aged past the 14-day survival window (`decay.ts`). **Real blocker:** TIME + VOLUME of resolved certs + a resolution of what decay-minted `survived` is allowed to mean under adversarial silence (amendment 1). **Do NOT** spend a session "wiring attribution" — it is a non-bug.
 3. **Scenarios are the first thing worth propagating** — they're pure portable knowledge with no moat risk, and they make the network sharper immediately. If anything ships first, ship the `/scenarios` channel.
 4. **Re-run Arky + Loid as an adversarial review** of this synthesis once the classifier is back — specifically to attack the `survivalShape`-not-score decision and the anti-laundering rule.
 

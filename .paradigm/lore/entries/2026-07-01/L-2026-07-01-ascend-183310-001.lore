@@ -1,0 +1,27 @@
+id: L-2026-07-01-ascend-183310-001
+type: agent-session
+timestamp: '2026-07-01T18:33:10.304Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Cid Debrief: Adversarial review of the Classroom × nevr.land registry impact brief to ratify '
+summary: |-
+  Adversarial review of the Classroom × nevr.land registry impact brief to ratify TD-2026-06-26-881. Ran Arky (architecture lane) + Loid (calibration lane) as two isolated adversarial reviewers; both returned RATIFY-WITH-AMENDMENTS after verifying the brief's file:line code claims against the live tree. Core finding (independently found twice, verified): decay-minted `survived` = 14-day silence (decay.ts:52), not tested-and-held, so the published survivalShape carries no exercise-intensity signal and is launderable via idle throwaway projects — the anti-laundering rule guards only the local number. Also refuted the brief's null-rate diagnosis: attribution IS wired (field-failure-reducer.ts:111-135), the rate is null because 0 certs resolve (5 pending, no field-failures.jsonl, none aged past 14d). Folded 9 amendments into TD-2026-06-26-881 and flipped status proposed→accepted; corrected the brief inline; filed correction task T-2026-07-01-016 (the "wire orchestrationId attribution" keystone is a non-bug).</sessionSummary>
+  <parameter name="touchedFiles">[".paradigm/decisions/TD-2026-06-26-881.yaml", ".paradigm/research/classroom-registry-impact.md"]
+symbols_touched: []
+files_modified: []
+tags:
+  - arc:cid-debrief
+  - orch:orch-mr2dysn1-ypmg
+meta:
+  orchestrationId: orch-mr2dysn1-ypmg
+  coverageScore:
+    before: 1
+    after: 1
+  coverageAdded: []
+  notes: 'No source/code changes — decision-record + research-brief edits only (brief''s "no build" scope preserved; amendments 1/2/5/7 recorded as blocking prerequisites, not built). Shared-branch discipline: this session''s classroom/university/research paths only; the concurrent Warpline agent''s unpushed commit 03edbd7f and .warpline/ files left untouched. Commit local only, do NOT push (per human).'
+git_context:
+  ref: 03edbd7faf798a5717c3938ff5c1d50a649b1f13
+  branch: warpline-surfaces
+  dirty: true

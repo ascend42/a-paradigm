@@ -3,50 +3,142 @@ timestamp: '2026-06-26T03:15:08.152Z'
 title: 'Classroom × registry: publish the prior SHAPE, never the local trust number'
 decision: >-
   For the nevr.land registry, an agent's Classroom calibration is published ONLY as a population prior — a
-  notebook-hash's outcome distribution (survivalShape {survived,overturned,pending} + sampleSize), aggregated across
-  projects — never as a local repeat-failure-rate. An imported prior sets a fresh install's START-POINT shape; local
-  trust is earned per-project and confirmed by local evidence. Scenario outcomes on other projects feed the population
-  prior only, never a local trust number (anti-laundering). field-failures + per-project cert rows stay non-portable
-  (the moat); refined "X except Y" notebook entries + scenarios (SC-*) are portable knowledge. Land
+  notebook-hash's outcome distribution (survivalShape {survived,overturned,pending} + sampleSize + an
+  exercise-intensity denominator; see amendments), aggregated across projects — never as a local repeat-failure-rate.
+  An imported prior sets a fresh install's START-POINT shape; local trust is earned per-project and confirmed by local
+  evidence. Scenario outcomes on other projects feed the population prior only, never a local trust number
+  (anti-laundering — necessary but NOT sufficient; see amendment 1). field-failures + per-project cert rows stay
+  non-portable (the moat); refined "X except Y" notebook entries + scenarios (SC-*) are portable knowledge. Land
   CalibrationPrior/TrustProfile/ScenarioRef as contracts-only in registry-types.ts; ship NO published figure until the
-  loop resolves real outcomes (today repeat-failure-rate is null). Scenarios are the first artifact worth propagating
-  (pure knowledge, no moat risk).
+  loop resolves real outcomes AND the amendment prerequisites are met (today 0 certs are resolved).
+  Scenarios are the first artifact worth propagating (pure knowledge, no moat risk) — after payload redaction (amendment 8).
 rationale: >-
-  Resolves the apparent contradiction that the registry already shows a calibrationScore while 'non-portable calibration
-  = the moat': the distribution-over-many-projects tells you what to EXPECT (a prior); the actionable number only exists
-  after the agent survives YOUR field. Publishing a distribution + sampleSize (not a scalar score) prevents the 'green
-  that lies' the Classroom exists to kill, and keeping number-writes strictly local prevents trust-laundering (buying
-  standing on an easy project). Strengthens the moat by naming exactly what's portable, so the network can be generous
-  with knowledge while trust stays earned.
+  Resolves the apparent contradiction that the registry already shows a calibrationScore
+  (packages/paradigm/src/commands/agent/registry.ts:50-54, CONFIRMED) while 'non-portable calibration = the moat': the
+  distribution-over-many-projects tells you what to EXPECT (a prior); the actionable number only exists after the agent
+  survives YOUR field. Publishing a distribution + sampleSize (not a scalar score) is more honest than a scalar — BUT
+  the adversarial review (orch-mr2dysn1-ypmg, Arky + Loid, both RATIFY-WITH-AMENDMENTS) found the distribution defense
+  is insufficient on its own: `survived` is minted by TIME-DECAY (decay.ts:52, a 14-day no-attributed-break window),
+  not by "the field exercised this and it held", so a survivalShape carries no exercise-intensity signal and a
+  population of idle throwaway projects is indistinguishable from hard ones. The anti-laundering rule guards only the
+  local number, so the harm re-enters through the PRIOR (the marketing surface). Hence the amendments: an
+  exercise-intensity denominator, a search-render gate, and a defined tamper-evident training-identity before any figure
+  ships. Keeping number-writes strictly local still prevents trust-laundering of the local number; the amendments close
+  the population-prior laundering channel.
 participants:
   - id: cid
     role: agent
     stance: proposed
   - id: architect
     role: agent
-    stance: neutral
+    stance: ratify-with-amendments
+  - id: loid
+    role: agent
+    stance: ratify-with-amendments
   - id: forge
     role: agent
     stance: neutral
   - id: ascend
     role: human
-    stance: neutral
+    stance: accepted
 alternatives_considered:
   - option: Publish the local repeat-failure-rate / a scalar calibrationScore directly as trust
     rejected_because: Leaks + launders the moat; a transplanted number means nothing on a new fabric and invites a fake green
   - option: Publish nothing calibration-related
     rejected_because: >-
       Wastes the population signal that legitimately helps cold-start (archetype-prior); the prior SHAPE is safe to
-      share
+      share (once carrying an exercise-intensity denominator)
   - option: Build the publish pipeline now
     rejected_because: >-
-      repeat-failure-rate is null today (thin orchestrationId attribution); any figure now is fabricated —
-      contracts-only until the loop resolves
+      CORRECTED CAUSE (adversarial review): repeat-failure-rate is null today NOT because orchestrationId attribution is
+      thin — attribution IS wired (field-failure-reducer.ts:111-135 joins breaks to notebook receipts by
+      orchestrationId; orchestration.ts:1299 stamps the receipt). It is null because 0 certs are RESOLVED: the 5 live
+      certs are all `outcome:pending`, no field-failures.jsonl exists (zero breaks), and none has aged past the 14-day
+      survival window (decay.ts). The blocker is TIME + VOLUME + the unresolved meaning of decay-minted `survived`, not
+      missing wiring. Contracts-only until the loop resolves real outcomes.
+review:
+  orchestration_id: orch-mr2dysn1-ypmg
+  reviewers:
+    - agent: architect
+      verdict: ratify-with-amendments
+    - agent: loid
+      verdict: ratify-with-amendments
+  survived_attack:
+    - The prior-vs-number boundary itself — local repeat-failure-rate never leaks through prepareForPublish
+    - The no-cross-project-number-write rule (necessary; unbroken)
+    - Ship-no-figure-yet / contracts-only (0 resolved certs = nothing to leak)
+    - Scenarios-first as the safe portable artifact (channel safe; payload needs redaction)
+amendments:
+  - id: 1
+    title: Exercise-intensity denominator (closes the population-prior laundering channel)
+    detail: >-
+      CalibrationPrior MUST carry an exercise-intensity signal (at minimum adversarialProbes: number — scenario/poison-pill
+      probes actually RUN against the hash — plus distinctProjects / breakAttempts). High `survived` with near-zero
+      adversarialProbes MUST render "unproven", never a percentage. Without it, decay-minted survival (silence) is
+      indistinguishable from tested-and-held, and idle throwaway projects inflate the shape while satisfying every rule.
+  - id: 2
+    title: notebook-hash is an OPEN, BLOCKING dependency (not decided)
+    detail: >-
+      No training-identity fingerprint (notebookHash/trainingHash) exists in source. Before any CalibrationPrior can be
+      populated it MUST be specified: (i) exactly what is hashed, (ii) STABLE across a refine/"X except Y" edit (else
+      learning forks identity and defeats aggregation), (iii) collision handling, (iv) tamper-evident and
+      adversary-resistant (publisher-chosen hashes enable population-siloing / cherry-picking). Until then notebookHash
+      is a placeholder field, not an identity.
+  - id: 3
+    title: Corrected null-rate cause (see alternatives_considered / rationale)
+    detail: >-
+      Null because 0 certs resolved (all pending, no breaks, none aged past the 14-day window) — NOT thin attribution.
+      Attribution is wired but unexercised. Corrects the "keystone = wire orchestrationId attribution" arc plan.
+  - id: 4
+    title: Resolve the pending contradiction
+    detail: >-
+      The decision defines survivalShape as {survived,overturned,pending} (pending included) while draft ruling #4 said
+      "omit pending". RESOLUTION: keep pending + sampleSize in the published shape for transparency; exclude pending ONLY
+      from any DERIVED scalar rate. Publishing survived/overturned while hiding pending flatters an agent whose hard
+      cases are all still-pending.
+  - id: 5
+    title: External contamination — the trust-firewall is NOT enforced
+    detail: >-
+      "trust: external → context-excluded" is aspirational: notebook-loader.ts:114 and orchestration.ts:1276 filter by
+      concepts/tags only, with NO trust!=external read-filter; 3 of the 5 live certs are foraged/external and loadable.
+      Either enforce a trust!=external read-filter or tag/segregate external-originated cert outcomes OUT of any published
+      survivalShape. Do not fold foraged-claim outcomes into "population survival" while asserting external is excluded.
+  - id: 6
+    title: '"No live consumer" premise is false — de-risk the dead-types landing'
+    detail: >-
+      registry-types.ts already grew a live consumer (PartnerCoverage → registry.ts:61-64), so "land contracts, no
+      behavior" is not a proven-stable resting point. Land CalibrationPrior/survivalShape with an explicit
+      "DO NOT RENDER until sampleSize floor + intensity normalization decided" doc-comment so a future search renderer
+      cannot quietly promote it into the calibrationScore display.
+  - id: 7
+    title: Gate the SEARCH-time render (where prior≠trust actually has to hold)
+    detail: >-
+      registry.ts:50-52 prints bare `calibration: X%` at search time, before any install-time disclaimer, where buyers
+      sort/filter. No scalar unless sampleSize AND adversarialProbes clear a floor; below the floor render
+      "unproven (n=…)", never a percentage.
+  - id: 8
+    title: Scenario payload redaction (moat leak in publishedScenarios)
+    detail: >-
+      ScenarioRef.probeConcepts fingerprints a project's internal invariants/threat-model, and the
+      (probeConcepts, expected) content-hash de-dupe is a cross-project correlation surface. Bucket probeConcepts to a
+      coarse public taxonomy (not raw project concepts) and make sourceHash attribution OPT-IN per scenario.
+  - id: 9
+    title: Decay-of-priors has no owner
+    detail: >-
+      Hard ruling #5 ("a stale prior is suppressed") describes behavior no code performs (no registry-side ager, no
+      client suppressor). Mark aspirational ("enforced by the eventual registry consumer; not guaranteed by
+      contracts-only") or file a task.
+blocking_prerequisites:
+  - Amendment 1 (exercise-intensity denominator) defined and enforced in the render
+  - Amendment 2 (tamper-evident, refine-stable notebook-hash identity) specified
+  - Amendment 5 (external-outcome segregation OR trust read-filter)
+  - Amendment 7 (search-render floor gate)
+  - Non-zero RESOLVED certs across ≥ a few projects (time + volume)
 symbols_affected:
   - '#agent-registry'
   - '#classroom'
   - '#notebook'
-status: proposed
+status: accepted
 tags:
   - classroom
   - nevrland
@@ -56,4 +148,5 @@ tags:
   - trust-contract
   - architect
   - loid
-  - needs-team-review
+  - ratified
+  - adversarial-reviewed
