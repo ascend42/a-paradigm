@@ -152,6 +152,33 @@ export async function treeEntryMode(ref: string, filePath: string, opts: GitOpti
   return m ? m[1] : null;
 }
 
+export interface LsTreeEntry {
+  mode: string; // 6-digit git mode (100644/100755/120000/160000)
+  type: 'blob' | 'commit'; // commit = gitlink/submodule
+  sha: string; // git object sha (blob sha, or the submodule commit sha)
+  path: string; // repo-relative path (recursive; leaf entries only)
+}
+
+/**
+ * Every LEAF entry of a ref's tree (read-only), recursively — the byte inventory
+ * for a native snapshot. `-r` recurses to blobs; trees are rebuilt natively by the
+ * caller, so `-t` is intentionally omitted. `-z` NUL-delimits so paths with spaces
+ * or newlines survive intact.
+ */
+export async function lsTree(ref: string, opts: GitOptions = {}): Promise<LsTreeEntry[]> {
+  const out = await git(['ls-tree', '-r', '-z', '--end-of-options', ref], opts);
+  const entries: LsTreeEntry[] = [];
+  for (const rec of out.split('\0')) {
+    if (!rec) continue;
+    // "<mode> <type> <sha>\t<path>"
+    const tab = rec.indexOf('\t');
+    if (tab < 0) continue;
+    const meta = rec.slice(0, tab).split(/\s+/);
+    entries.push({ mode: meta[0], type: meta[1] as 'blob' | 'commit', sha: meta[2], path: rec.slice(tab + 1) });
+  }
+  return entries;
+}
+
 /** The common ancestor of N refs (octopus merge-base) — the base for a consolidate. */
 export async function mergeBaseN(refs: string[], opts: GitOptions = {}): Promise<string> {
   if (refs.length < 2) throw new Error('mergeBaseN needs at least 2 refs');

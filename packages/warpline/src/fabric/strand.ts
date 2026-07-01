@@ -43,6 +43,29 @@ export interface KnotResolution {
   resolvedSymbols: string[]; // symbols the resolution changed vs the selvage
 }
 
+/**
+ * The byte binding of a strand to the NATIVE object store (M1b) — the meaning↔bytes
+ * seam. EXCLUDED from pickId (like calibratedConfidence) because it may be backfilled
+ * after seal (§3) and because many byte-trees can absorb to one stateId.
+ */
+export interface StrandBinding {
+  treeId: string; // native root treeId — byte identity in the object store
+  gitOid?: string | null; // shadow git tree sha (coexistence proof), or null for a merge result
+}
+
+/**
+ * The re-derivable recipe of a materialized CLEAN merge (M1b). All three parents +
+ * the result are NATIVE treeIds (git-independent, review amendment A3 — non-optional)
+ * so the merge Warpline performed is both RESTORABLE (result) and RE-DERIVABLE
+ * (re-run the token merge over base/ours/theirs).
+ */
+export interface MergeRecipe {
+  base: string; // native treeId of the merge base
+  ours: string; // native treeId of the admitting agent's side
+  theirs: string; // native treeId of the live selvage side
+  result: string; // native treeId of the merged tree
+}
+
 export interface Strand {
   schemaVersion: 1;
   seq: number; // monotonic history index (0 = genesis)
@@ -70,6 +93,14 @@ export interface Strand {
    * fails closed instead (H1; durable merged-tree byte-anchoring is native-store work).
    */
   merged?: boolean;
+  /**
+   * NATIVE byte binding (M1b) — the treeId that reconstructs this strand's working
+   * tree from the object store with git ABSENT. EXCLUDED from pickId (backfillable,
+   * many-trees-to-one-meaning). Absent on strands not yet bound (backfill stamps it).
+   */
+  binding?: StrandBinding | null;
+  /** the re-derivable merge recipe (merge strands only, M1b). Excluded from pickId. */
+  merge?: MergeRecipe;
 }
 
 /** The strand minus its own content-address (what `pickId` is computed over). */
@@ -95,12 +126,19 @@ function canonicalSafe(v: unknown): CanonicalValue {
 
 /**
  * pickId = pick:v0:sha256(canonical(identity)) — the EVENT identity. It EXCLUDES
- * calibratedConfidence: that field is graded LATER (survive/overturn) and must be
- * mutable without changing the strand's content-address. Everything else (stateId,
- * actor, time, intent, delta, provenance, resolves) is the immutable event.
+ * calibratedConfidence, binding, and merge: those are graded/bound LATER
+ * (survive-overturn outcome; native byte backfill) and must be mutable without
+ * changing the strand's content-address. Everything else (stateId, actor, time,
+ * intent, delta, provenance, resolves) is the immutable event.
+ *
+ * Note: binding/merge are excluded even for strands where they ARE known at seal
+ * time — one uniform rule so backfill/repair/re-derivation never fork the identity
+ * semantics between "new" and "old" strands (native-object-store-design.md §3). The
+ * ledger's tamper-evidence is a separate concern handled by the pickId hash-chain
+ * (review amendment A1), authored as its own step.
  */
 export function computePickId(body: StrandBody): string {
-  const { calibratedConfidence: _graded, ...identity } = body;
+  const { calibratedConfidence: _graded, binding: _bound, merge: _merge, ...identity } = body;
   const canon = canonicalSerialize(canonicalSafe(identity));
   return 'pick:v0:' + createHash('sha256').update(canon, 'utf8').digest('hex');
 }

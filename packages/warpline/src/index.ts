@@ -43,7 +43,16 @@ export {
   type GitTreeEntry,
 } from './warp/tree.js';
 export { ObjectStore, type VerifyReport } from './warp/object-store.js';
-export { snapshotDir, restoreTree, type SnapshotResult } from './warp/snapshot.js';
+export {
+  snapshotDir,
+  snapshotRef,
+  snapshotState,
+  writeMergedTree,
+  captureMerge,
+  restoreTree,
+  type SnapshotResult,
+  type PathChange,
+} from './warp/snapshot.js';
 export { canonicalSerialize, type CanonicalValue } from './warp/canonical.js';
 
 // ABSORB
@@ -70,6 +79,8 @@ export {
   type Strand,
   type StrandBody,
   type StrandDelta,
+  type StrandBinding,
+  type MergeRecipe,
 } from './fabric/strand.js';
 export {
   warplineDirOf,

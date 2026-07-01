@@ -23,6 +23,9 @@ import * as path from 'node:path';
 import { gitBlobOid } from './blob.js';
 import { gitTreeOid, type TreeEntry, type GitTreeEntry, type TreeMode } from './tree.js';
 import { ObjectStore } from './object-store.js';
+import { gitShowBuffer, lsTree, type GitOptions } from '../git/git-exec.js';
+import { WORKTREE_REF } from '../absorb.js';
+import type { MergeRecipe } from '../fabric/strand.js';
 
 export interface SnapshotResult {
   /** native root tree id (byte identity of the whole directory). */
@@ -68,6 +71,107 @@ function walk(store: ObjectStore, dir: string, isRoot: boolean): SnapshotResult 
   }
 
   return { treeId: store.putTree(native), gitOid: gitTreeOid(git), entryCount: native.length };
+}
+
+/* ── M1b: ref snapshots + the compositional merged-tree builder ─────────────── */
+
+/** One byte change to overlay on a base tree: new/edited bytes+mode, or null=delete. */
+export type PathChange = { content: Buffer; mode: string } | null;
+
+interface Trie {
+  files: Map<string, PathChange>;
+  dirs: Map<string, Trie>;
+}
+const emptyTrie = (): Trie => ({ files: new Map(), dirs: new Map() });
+
+function insertChange(trie: Trie, parts: string[], i: number, val: PathChange): void {
+  if (i === parts.length - 1) {
+    trie.files.set(parts[i], val);
+    return;
+  }
+  let sub = trie.dirs.get(parts[i]);
+  if (!sub) {
+    sub = emptyTrie();
+    trie.dirs.set(parts[i], sub);
+  }
+  insertChange(sub, parts, i + 1, val);
+}
+
+function buildTree(store: ObjectStore, baseTreeId: string | null, node: Trie): string {
+  const map = new Map<string, TreeEntry>((baseTreeId ? store.getTree(baseTreeId) : []).map((e) => [e.name, e]));
+  for (const [name, val] of node.files) {
+    if (val === null) map.delete(name);
+    else map.set(name, { mode: val.mode as TreeMode, name, id: store.putBlob(val.content) });
+  }
+  for (const [name, child] of node.dirs) {
+    const existing = map.get(name);
+    const childBase = existing && existing.mode === '40000' ? existing.id : null;
+    const childId = buildTree(store, childBase, child);
+    if (store.getTree(childId).length === 0) map.delete(name); // empty dir → drop (git parity)
+    else map.set(name, { mode: '40000', name, id: childId });
+  }
+  return store.putTree([...map.values()]);
+}
+
+/**
+ * Build a native tree from a base tree + per-path byte changes — the COMPOSITIONAL
+ * construction (review amendment A2): unchanged subtrees are reused untouched
+ * (so it is naturally incremental, A3), and the changed bytes come straight from
+ * the caller (raw merge output / cat-file), NEVER the git-archive temp dir. `null`
+ * base + all-files-as-changes builds a whole tree from scratch (used by snapshotRef).
+ */
+export function writeMergedTree(
+  store: ObjectStore,
+  baseTreeId: string | null,
+  changes: Map<string, PathChange>,
+): string {
+  const root = emptyTrie();
+  for (const [full, val] of changes) insertChange(root, full.split('/'), 0, val);
+  return buildTree(store, baseTreeId, root);
+}
+
+/** Snapshot a git REF's tree natively via raw `cat-file` bytes (§1.5). */
+export async function snapshotRef(store: ObjectStore, ref: string, opts: GitOptions = {}): Promise<string> {
+  const entries = await lsTree(ref, opts);
+  const changes = new Map<string, PathChange>();
+  for (const e of entries) {
+    if (e.type === 'commit' || e.mode === '160000') {
+      throw new Error(`warpline: snapshotRef — submodule/gitlink at ${e.path} not yet supported (T-2026-07-01-018)`);
+    }
+    changes.set(e.path, { content: await gitShowBuffer(ref, e.path, opts), mode: e.mode });
+  }
+  return writeMergedTree(store, null, changes);
+}
+
+/** Snapshot the state a strand is being sealed from — worktree (fs) or a git ref. */
+export async function snapshotState(
+  store: ObjectStore,
+  ref: string,
+  cwd: string,
+  opts: GitOptions = {},
+): Promise<string> {
+  return ref === WORKTREE_REF ? snapshotDir(store, cwd).treeId : snapshotRef(store, ref, opts);
+}
+
+/**
+ * Capture the durable bytes of a materialized CLEAN merge: snapshot the three
+ * parents (native, git-independent) and build the merged result COMPOSITIONALLY
+ * from the base tree + the merge's own byte changes (A2). Returns the re-derivable
+ * recipe; `recipe.result` is the strand's binding.treeId.
+ */
+export async function captureMerge(
+  store: ObjectStore,
+  baseRef: string,
+  oursRef: string,
+  theirsRef: string,
+  files: Map<string, PathChange>,
+  opts: GitOptions = {},
+): Promise<MergeRecipe> {
+  const base = await snapshotRef(store, baseRef, opts);
+  const ours = await snapshotRef(store, oursRef, opts);
+  const theirs = await snapshotRef(store, theirsRef, opts);
+  const result = writeMergedTree(store, base, files);
+  return { base, ours, theirs, result };
 }
 
 /** Restore a native tree to `dest` byte-faithfully (M1a helper; the `warpline

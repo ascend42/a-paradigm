@@ -30,6 +30,8 @@ import { diff, type SemDeltaSet } from '../sem-delta.js';
 import { predict, type Knot, type Dangle } from '../predict.js';
 import { WarpStore } from '../warp/store.js';
 import type { WarpState } from '../warp/warp-state.js';
+import { ObjectStore } from '../warp/object-store.js';
+import { snapshotState, captureMerge } from '../warp/snapshot.js';
 import { revParse, commitAuthor, commitSubject, gitUserName } from '../git/git-exec.js';
 import { warplineDirOf, readSelvage, readFabric } from './fabric.js';
 import { readScratch, clearScratch } from './scratch.js';
@@ -176,6 +178,7 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
   const cwd = opts.cwd ?? root;
   const wdir = warplineDirOf(root);
   const store = new WarpStore(root, { diskCache: true });
+  const objStore = new ObjectStore(root); // native byte store (M1b bind-on-seal)
 
   // Lift proposed + resolve attribution OUTSIDE the lock (expensive / selvage-
   // independent). proposed is NOT eagerly persisted — sealState putStates only
@@ -218,7 +221,11 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
 
     // Genuinely empty fabric (no tip ever sealed) → fast-admit the proposed state.
     if (!base || !selvage) {
-      const strand = sealState(root, store, proposed, { parentStateId: selvageId ?? null, actor, intent, gitCommit: oursCommit, now, confidence: 0.8 });
+      const treeId = await snapshotState(objStore, opts.ref, cwd, { cwd });
+      const strand = sealState(root, store, proposed, {
+        parentStateId: selvageId ?? null, actor, intent, gitCommit: oursCommit, now, confidence: 0.8,
+        binding: { treeId, gitOid: proposed.treeSha ?? null },
+      });
       clearScratch(root, opts.agentId);
       return { decision: blank('FAST_ADMIT'), sealed: true, proposedStateId: proposed.stateId, strand };
     }
@@ -229,7 +236,11 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
       return { decision, sealed: false, proposedStateId: proposed.stateId };
     }
     if (decision.status === 'FAST_ADMIT') {
-      const strand = sealState(root, store, proposed, { parentStateId: selvageId, actor, intent, gitCommit: oursCommit, now, confidence: priorFor(decision) });
+      const treeId = await snapshotState(objStore, opts.ref, cwd, { cwd });
+      const strand = sealState(root, store, proposed, {
+        parentStateId: selvageId, actor, intent, gitCommit: oursCommit, now, confidence: priorFor(decision),
+        binding: { treeId, gitOid: proposed.treeSha ?? null },
+      });
       clearScratch(root, opts.agentId);
       return { decision, sealed: true, proposedStateId: proposed.stateId, strand };
     }
@@ -247,7 +258,14 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
       }
       const mat = await materializeMergedState(baseCommit, opts.ref, theirsCommit, { cwd });
       if (mat.state && mat.plan.conflicts.length === 0) {
-        const strand = sealState(root, store, mat.state, { parentStateId: selvageId, actor, intent, gitCommit: oursCommit, now, confidence: priorFor(decision), merged: true });
+        // A2: capture durable merged BYTES compositionally (base tree via cat-file +
+        // the merge's own byte changes) — never the git-archive temp dir. The recipe
+        // makes the merge both restorable (result) and re-derivable (3 parent trees).
+        const recipe = await captureMerge(objStore, baseCommit, opts.ref, theirsCommit, mat.plan.files, { cwd });
+        const strand = sealState(root, store, mat.state, {
+          parentStateId: selvageId, actor, intent, gitCommit: oursCommit, now, confidence: priorFor(decision),
+          merged: true, binding: { treeId: recipe.result, gitOid: null }, merge: recipe,
+        });
         clearScratch(root, opts.agentId);
         return { decision, sealed: true, proposedStateId: proposed.stateId, strand, merged: mat.plan };
       }

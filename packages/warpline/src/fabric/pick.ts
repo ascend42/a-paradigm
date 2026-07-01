@@ -26,6 +26,8 @@
 import { absorb, WORKTREE_REF } from '../absorb.js';
 import { diff } from '../sem-delta.js';
 import { WarpStore } from '../warp/store.js';
+import { ObjectStore } from '../warp/object-store.js';
+import { snapshotState } from '../warp/snapshot.js';
 import { gitUserName, revParse, commitSubject, commitAuthor } from '../git/git-exec.js';
 import { warplineDirOf, readSelvage } from './fabric.js';
 import { sealState } from './seal.js';
@@ -63,6 +65,7 @@ export async function recordPick(root: string, opts: RecordPickOptions): Promise
   const ref = opts.ref ?? WORKTREE_REF;
   const wdir = warplineDirOf(root);
   const store = new WarpStore(root, { diskCache: true });
+  const objStore = new ObjectStore(root); // native byte store (M1b bind-on-seal)
 
   // 1. Lift the current meaning (no lock — this is the expensive step).
   const current = await absorb(ref, { cwd });
@@ -87,7 +90,7 @@ export async function recordPick(root: string, opts: RecordPickOptions): Promise
   //      "did meaning change?": stateId hashes the DEDUPED essence set, so an
   //      identical-essence born symbol leaves stateId unchanged while diff (keyed
   //      by stableKey) sees it. #seal is the single writer of fabric history.
-  return withFabricLock(root, () => {
+  return withFabricLock(root, async () => {
     const selvage = readSelvage(wdir);
     const isGenesis = selvage === null;
     if (!isGenesis) {
@@ -100,6 +103,8 @@ export async function recordPick(root: string, opts: RecordPickOptions): Promise
         }
       }
     }
+    // Bind the durable bytes only when we actually seal (skip on a no-op above).
+    const treeId = await snapshotState(objStore, ref, cwd, { cwd });
     const strand = sealState(root, store, current, {
       parentStateId: selvage,
       actor,
@@ -107,6 +112,7 @@ export async function recordPick(root: string, opts: RecordPickOptions): Promise
       gitCommit,
       now,
       confidence: opts.confidence ?? null,
+      binding: { treeId, gitOid: current.treeSha ?? null },
     });
     return { noop: false, isGenesis, strand, stateId: current.stateId };
   });

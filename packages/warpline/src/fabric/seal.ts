@@ -15,6 +15,8 @@ import {
   type Strand,
   type StrandDelta,
   type KnotResolution,
+  type StrandBinding,
+  type MergeRecipe,
 } from './strand.js';
 
 const EMPTY_DELTA: StrandDelta = { born: [], retired: [], contractChanged: [], renamedNoop: 0 };
@@ -50,6 +52,10 @@ export interface SealInput {
   resolves?: KnotResolution;
   /** true when sealing a materialized CLEAN merge (its gitCommit is one parent). */
   merged?: boolean;
+  /** native byte binding (M1b) — the treeId that restores this strand git-absent. */
+  binding?: StrandBinding | null;
+  /** the re-derivable merge recipe (merge strands only, M1b). */
+  merge?: MergeRecipe;
 }
 
 /** Persist `state`, append its strand to the fabric, advance the selvage. */
@@ -82,6 +88,8 @@ export function sealState(
     provenance: { ref: state.ref, treeSha: state.treeSha, gitCommit: input.gitCommit },
     ...(input.resolves ? { resolves: input.resolves } : {}),
     ...(input.merged ? { merged: true } : {}),
+    ...(input.binding ? { binding: input.binding } : {}),
+    ...(input.merge ? { merge: input.merge } : {}),
   };
   const strand: Strand = { ...body, pickId: computePickId(body) };
   // CAS GUARD FIRST — refuse if the tip moved off the parent the decision was

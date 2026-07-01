@@ -299,10 +299,21 @@ components:
       graded), the one field a git-backed history can't carry and the seed of the
       non-portable moat. computePickId null-normalizes the body (canonical rejects
       null) for the ADDRESS only; stored JSON keeps real nulls.
+      M1b — the byte seam: a strand gains binding (native root treeId that restores
+      its working tree from #warp-store with git ABSENT, + shadow gitOid) and, on a
+      merge strand, a re-derivable MergeRecipe (base/ours/theirs/result — all NATIVE
+      treeIds, A3). Both are EXCLUDED from pickId alongside calibratedConfidence
+      (backfillable + many-trees-to-one-meaning; uniform rule so backfill never forks
+      identity). #pick/#admit/#seal stamp binding on every seal (snapshotState =
+      snapshotDir for worktree, snapshotRef for a git ref); a CLEAN merge stamps the
+      compositional result (A2 — base tree via cat-file + the merge's byte changes,
+      never the git-archive dir). Ledger tamper-evidence (pickId hash-chain, A1) is a
+      separate step.
     type: module
     components:
       - "#canonical-json"
       - "#warp-state"
+      - "#warp-store"
 
   seal:
     description: >-
