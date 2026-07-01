@@ -40,6 +40,7 @@ import { admit, type AdmitResult } from './fabric/admit.js';
 import { resolveKnot } from './fabric/resolve.js';
 import { gradeFabric, applyGrades, type GradeReport } from './fabric/grade.js';
 import { verifyFabric } from './fabric/verify.js';
+import { restore, type RestoreResult } from './fabric/restore.js';
 import { repoRoot, gitPath } from './git/git-exec.js';
 
 // The shared .purpose parser (library code, purpose/core/aggregator) console.warns
@@ -504,6 +505,30 @@ program
     },
   );
 
+program
+  .command('restore')
+  .description('Reconstruct a working tree from the NATIVE object store with git ABSENT — the layer→VCS threshold. Resolves a selector to a strand byte binding and materializes its bytes byte-faithfully into --to (default: the repo root). Path-hardened: a forged/corrupt tree name fails closed.')
+  .argument('[selector]', 'HEAD | selvage | N | @N | pick:<id> | state:<id> | tree:<id>', 'HEAD')
+  .option('--to <dir>', 'target directory to reconstruct into (default: the repo root)')
+  .option('--force', 'overwrite colliding paths in a non-empty dest (overlay, never wipe)')
+  .option('--json', 'emit the restore result as JSON')
+  .action(async (selector: string, options: { to?: string; force?: boolean; json?: boolean }) => {
+    try {
+      // repoRoot() shells git — which is the whole point ABSENT here — so fall back
+      // to the cwd, the repo root the user runs from (where .warpline/ lives).
+      const root = await repoRoot().catch(() => process.cwd());
+      const dest = options.to ? path.resolve(options.to) : root;
+      const result = restore(root, { selector, to: dest, force: options.force });
+      if (options.json) {
+        process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+      } else {
+        printRestore(result);
+      }
+    } catch (err) {
+      fail(err);
+    }
+  });
+
 const objects = program
   .command('objects')
   .description('The native content-addressed object store (byte authority) — the store that lets Warpline reconstruct a working tree with git ABSENT.');
@@ -592,6 +617,19 @@ fabric
       process.exit(2);
     }
   });
+
+function printRestore(r: RestoreResult): void {
+  const lines: string[] = [];
+  lines.push(`RESTORE  ${r.selector}  →  ${r.dest}`);
+  if (r.seq !== null) {
+    lines.push(`strand    seq ${r.seq}${r.pickId ? `  ${short(r.pickId)}` : ''}`);
+  } else {
+    lines.push('strand    (none — direct tree selector)');
+  }
+  lines.push(`treeId    ${r.treeId}`);
+  lines.push(`restored  ${r.entriesRestored} entr${r.entriesRestored === 1 ? 'y' : 'ies'}  (files + dirs + symlinks, git absent)`);
+  process.stdout.write(lines.join('\n') + '\n');
+}
 
 function printAdmit(agentId: string, r: AdmitResult): void {
   const d = r.decision;

@@ -175,22 +175,106 @@ export async function captureMerge(
   return { algo: 'warpline-merge3-v1', base, ours, theirs, result };
 }
 
-/** Restore a native tree to `dest` byte-faithfully (M1a helper; the `warpline
- * restore` verb + selector resolution is M1c). Mirrors materialize.ts §4. */
-export function restoreTree(store: ObjectStore, treeId: string, dest: string): void {
+/**
+ * Component names a restored tree must NEVER contain — restoring one would
+ * overwrite a real git repo (`.git`) or Warpline's own store (`.warpline`). A
+ * tree entry carrying such a name is a forged/corrupt tree, not a restorable state.
+ */
+const RESTORE_FORBIDDEN = new Set(['.git', '.warpline']);
+
+/**
+ * PATH-HARDENING (Aegis C3, CVE-2021-21300 class): assert a tree entry name is a
+ * single, safe path component before it is ever joined to a destination. This is
+ * the security boundary of `restore` — it writes attacker/corruption-influenceable
+ * tree bytes to disk. A violation means a FORGED or CORRUPT tree, so we FAIL CLOSED
+ * (throw, aborting the whole restore) rather than skip-and-continue: a partially
+ * restored tree from a tampered object is not a recoverable state.
+ */
+function assertSafeEntryName(name: string): void {
+  if (
+    name.length === 0 ||
+    name === '.' ||
+    name === '..' ||
+    name.includes('/') ||
+    name.includes('\\') ||
+    name.includes('\0') ||
+    path.isAbsolute(name) ||
+    /^[a-zA-Z]:/.test(name) // Windows drive-letter absolute (C:...)
+  ) {
+    throw new Error(
+      `warpline: refusing to restore — tree entry name is not a safe single path component: ` +
+        `${JSON.stringify(name)} (forged or corrupt tree; path-traversal blocked)`,
+    );
+  }
+  if (RESTORE_FORBIDDEN.has(name)) {
+    throw new Error(
+      `warpline: refusing to restore — tree entry name "${name}" would overwrite a real repo/VCS ` +
+        `directory (forged or corrupt tree)`,
+    );
+  }
+}
+
+/**
+ * Restore a native tree to `dest` byte-faithfully with git ABSENT (the primitive
+ * behind the `warpline restore` verb; selector resolution is #restore). Mirrors
+ * materialize.ts §4. Returns the count of entries written (files + dirs + symlinks
+ * + gitlinks, recursively) for the caller's report.
+ *
+ * SECURITY (Aegis C3): every entry name is validated as a safe single component
+ * (assertSafeEntryName) and the whole restore fails closed on the first violation.
+ * SYMLINK/TRAVERSAL SAFETY (defense in depth): the PARENT dir we write into must be
+ * a real directory and NOT a symlink; and we never write THROUGH a pre-existing
+ * symlink at a target path (an attacker-planted link could escape `dest`). A symlink
+ * ENTRY is created (it lives inside `dest`) but is never traversed — and because a
+ * mode-120000 entry is always a LEAF, it structurally cannot carry children.
+ */
+export function restoreTree(store: ObjectStore, treeId: string, dest: string): number {
   fs.mkdirSync(dest, { recursive: true });
+  // The dir we are about to write INTO must be a real directory, never a symlink —
+  // otherwise a symlinked parent would let writes land outside the intended root.
+  const parent = fs.lstatSync(dest);
+  if (!parent.isDirectory() || parent.isSymbolicLink()) {
+    throw new Error(
+      `warpline: refusing to restore into ${dest} — not a real directory (symlink or non-dir)`,
+    );
+  }
+  let count = 0;
   for (const e of store.getTree(treeId)) {
+    assertSafeEntryName(e.name); // FAIL CLOSED before any path is joined/written
     const full = path.join(dest, e.name);
+    // Never write through a symlink already occupying this path (traversal escape).
+    let existing: fs.Stats | undefined;
+    try {
+      existing = fs.lstatSync(full);
+    } catch {
+      existing = undefined; // ENOENT — nothing there, the normal case
+    }
+    if (existing?.isSymbolicLink()) {
+      throw new Error(
+        `warpline: refusing to restore ${e.name} — a symlink already occupies ${full} ` +
+          `(never write through a symlink)`,
+      );
+    }
+    count++;
     if (e.mode === '40000') {
-      restoreTree(store, e.id, full);
+      count += restoreTree(store, e.id, full);
     } else if (e.mode === '120000') {
+      if (existing) fs.rmSync(full, { force: true }); // --force overlay: replace, never write through a linked inode
       const target = store.getBlob(e.id).toString('utf8');
       fs.symlinkSync(target, full);
     } else if (e.mode === '160000') {
       fs.mkdirSync(full, { recursive: true }); // gitlink: no bytes to fabricate
-    } else {
+    } else if (e.mode === '100644' || e.mode === '100755') {
+      // Break any pre-existing HARDLINK before writing — write a FRESH inode so a
+      // --force overlay can never overwrite the content of a file hardlinked OUTSIDE
+      // dest (lstat cannot distinguish a hardlink from a plain file; unlink does).
+      if (existing) fs.rmSync(full, { force: true });
       fs.writeFileSync(full, store.getBlob(e.id));
       fs.chmodSync(full, e.mode === '100755' ? 0o755 : 0o644);
+    } else {
+      // Fail closed on any unknown/forged mode rather than coercing it to a file.
+      throw new Error(`warpline: refusing to restore ${e.name} — unknown tree entry mode ${e.mode}`);
     }
   }
+  return count;
 }

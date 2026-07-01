@@ -480,3 +480,73 @@ layer), gated on the must-fix items below.
 Net: the idea **works as true source control** — but it must be a hash-chained *graph* (A1),
 byte-honest at the merge core (A2), and it needs a branching model (A6). These are folded into
 the M1 build tasks and the epic (T-2026-07-01-007).
+
+---
+
+## 10. M1c — `warpline restore` (the layer→VCS threshold) — SHIPPED
+
+**Task:** T-2026-07-01-012 · builds ON TOP of schema-v2 + bind-on-seal (M1b). This is the verb
+that crosses from *"a store of bytes"* to *"source control"*: it reconstructs a working tree from
+the native object store with **git ABSENT**. Modules: `src/fabric/select.ts` (selector → treeId),
+`src/fabric/restore.ts` (dirty-dest guard + orchestration), the hardened `restoreTree`
+(`src/warp/snapshot.ts`), CLI verb `warpline restore`. Acceptance: `test/restore-git-absent.test.ts`
+(`rm -rf .git` → restore → byte-identical, proven end-to-end via the built CLI).
+
+### Selector grammar (`resolveSelector(wdir, selector)`)
+
+```
+selector := omitted | HEAD | selvage   → the TIP strand (strand at readSelvage; empty ⇒ error)
+          | N | @N                      → the strand with seq === N
+          | pick:<id>                   → the strand with that pickId (EVENT identity)
+          | state:<id>                  → the strand landing on that stateId (HIGHEST seq — §3 many-to-one)
+          | tree:<id>                   → that treeId DIRECTLY (no strand, no binding step)
+```
+
+Every non-`tree:` form resolves a strand and reads `binding.treeId`. An unrecognized selector
+throws listing the accepted forms.
+
+### A4 — cutover-refuse-on-missing-binding
+
+A resolved strand that has **no `binding.treeId`** (sealed before M1b bind-on-seal, or a failed
+backfill) is **refused loudly**, never silently restored as an empty/wrong tree:
+
+```
+warpline: cannot restore <selector> — strand seq <n> has no byte binding
+  (sealed before bind-on-seal / M1b). Run `warpline objects backfill` or pick a bound state.
+```
+
+This is the §2.2/A4 requirement made operational — the restore path is where "silent permanent
+unrecoverability the moment git is deleted" would otherwise surface, so it fails closed instead.
+
+### C3 — path hardening (Aegis, CVE-2021-21300 class)
+
+`restore` writes attacker/corruption-influenceable **tree bytes** to disk, so the byte writer is
+hardened and **fails closed** (throws, aborting the entire restore) on the first violation —
+a bad entry name means a forged/corrupt tree, not a recoverable state:
+
+- **`assertSafeEntryName`** (`snapshot.ts`): rejects an entry name that is empty / `.` / `..` /
+  contains `/`, `\`, or a NUL byte / is absolute / has a Windows drive-letter; and rejects the
+  reserved names **`.git`** and **`.warpline`** (a restored tree must never overwrite a real
+  repo/VCS dir). Called *before* the name is ever joined to a destination.
+- **Parent-dir assertion:** before writing a level's entries, the dir being written into is
+  `lstat`'d and must be a **real directory, not a symlink** (a symlinked parent could redirect
+  writes outside the root).
+- **Never write through a pre-existing symlink:** if a target path already exists as a symlink,
+  restore refuses (an attacker-planted link could escape `dest`). A symlink *entry* is created
+  (it lives inside `dest`) but is never traversed — and a mode-`120000` entry is structurally a
+  LEAF, so it can carry no children.
+
+### Dirty-dest guard & `--force` semantics
+
+`restore` refuses a **non-empty** destination unless `--force`. `--force` **overlays** — it writes
+the tree's paths (overwriting colliding *regular files*) and leaves unrelated files in place; it
+does **not** wipe the dest. Note the hardening takes precedence over convenience: `--force` still
+**fails closed** if a *symlink* already occupies a target path (the "never write through a symlink"
+rule), so a clean/empty dest is the reliable restore target.
+
+### Proof (three independent invariants)
+
+1. **External:** restored file contents / exec bit / symlink target / subdir structure match the
+   original with `rm -rf .git` first (proven end-to-end via the built CLI + the acceptance test).
+2. **Internal round-trip:** `snapshotDir(restore(x)) == x.binding.treeId`.
+3. **Coexistence (while git still exists):** `binding.gitOid == provenance.treeSha` (M1a/§2.4).

@@ -144,6 +144,9 @@ export {
   type FabricVerifyFailure,
   type FabricVerifyKind,
 } from './fabric/verify.js';
+// Restore (M1c) — reconstruct a working tree from the native store with git ABSENT.
+export { resolveSelector, type SelectorResolution } from './fabric/select.js';
+export { restore, type RestoreOptions, type RestoreResult } from './fabric/restore.js';
 
 // Oracle
 export { oracle, type OracleRecord, type OracleOptions } from './oracle.js';

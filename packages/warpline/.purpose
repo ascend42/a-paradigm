@@ -99,7 +99,12 @@ components:
       store.ts (loose zlib blobs/ + trees/ under .warpline/objects/ with git fan-out,
       write-tmp+rename, idempotent put, verify()), snapshot.ts (snapshotDir walks a
       tree writing every object → root treeId + shadow gitOid; restoreTree rebuilds a
-      byte-faithful tree with git ABSENT — binary/exec/symlink/empty-dir parity). The
+      byte-faithful tree with git ABSENT — binary/exec/symlink/empty-dir parity, and
+      returns the entry count). M1c PATH-HARDENING (Aegis C3, CVE-2021-21300 class):
+      restoreTree FAILS CLOSED on a forged/corrupt entry name (assertSafeEntryName
+      rejects empty/./../slash/backslash/NUL/absolute/drive-letter + reserved
+      .git/.warpline), asserts the parent dir is a real non-symlink directory, and
+      never writes THROUGH a pre-existing symlink — the #restore verb consumes it. The
       shadow gitOid EQUALS `git rev-parse <ref>^{tree}` for a clean worktree (a free
       byte-faithfulness proof during coexistence). Names use RAW bytes not NFC (A5).
       CLI: `warpline objects snapshot <dir>` / `objects verify`. Sha256 (one hash
@@ -437,6 +442,33 @@ components:
       - "#fabric"
       - "#warp-store"
 
+  restore:
+    description: >-
+      The layer→VCS THRESHOLD (M1c, T-2026-07-01-012) — reconstruct a working tree
+      from the NATIVE object store with git ABSENT. Two modules + a hardened writer:
+      select.ts (resolveSelector(wdir, selector) → treeId): omitted|HEAD|selvage →
+      the tip strand (readSelvage; empty fabric ⇒ error); N|@N → seq === N; pick:<id>
+      → that pickId; state:<id> → the HIGHEST-seq strand on that stateId (§3
+      many-to-one); tree:<id> → that treeId DIRECTLY (no strand). A4
+      (cutover-refuse-on-missing-binding): a resolved strand with no binding.treeId
+      (sealed pre-M1b) is REFUSED loudly — never silently restored empty. restore.ts
+      (restore(root, {selector, to, force})): the DIRTY-DEST GUARD refuses a non-empty
+      dest without --force; --force OVERLAYS (overwrites colliding regular files,
+      leaves unrelated files, never wipes). The byte writer restoreTree (#warp-store,
+      snapshot.ts) is PATH-HARDENED (Aegis C3, CVE-2021-21300 class): it FAILS CLOSED
+      (throws, aborting the whole restore) on a forged/corrupt entry name —
+      assertSafeEntryName rejects empty/./../slash/backslash/NUL/absolute/drive-letter
+      and the reserved .git/.warpline; the parent dir must be a real (non-symlink)
+      directory; and it never writes THROUGH a pre-existing symlink (traversal escape).
+      Byte-faithful modes preserved (100644/100755/120000/40000/160000). Proof:
+      rm -rf .git && warpline restore HEAD reproduces the exact tree (external), and
+      snapshot(restore(x)) == x.binding.treeId (internal round-trip).
+    type: module
+    components:
+      - "#warp-store"
+      - "#fabric"
+      - "#strand"
+
   pick:
     description: >-
       The single-writer WRITE PATH (Phase 2). recordPick(root, opts) absorbs the
@@ -669,8 +701,12 @@ components:
       resolution, and `warpline grade [--window N] [--dry] [--json]` grades strand
       confidence against real survive/overturn outcome (the moat), and `warpline
       fabric verify [--json]` authenticates the whole PICK-DAG (integrity + v2 chain
-      + binding re-derivation; exit 0 intact / 1 tamper / 2 I/O). The only module
-      allowed to write stdout; library code stays quiet.
+      + binding re-derivation; exit 0 intact / 1 tamper / 2 I/O), and `warpline
+      restore [selector] [--to <dir>] [--force] [--json]` reconstructs a working
+      tree from the native object store with git ABSENT (the layer→VCS threshold —
+      selector HEAD|selvage|N|@N|pick:|state:|tree:, path-hardened, A4-refuses an
+      unbound strand, dirty-dest guarded). The only module allowed to write stdout;
+      library code stays quiet.
     type: cli
     components:
       - "#oracle"
@@ -681,6 +717,7 @@ components:
       - "#pick"
       - "#fabric"
       - "#fabric-verify"
+      - "#restore"
       - "#hook"
       - "#scratch"
       - "#admit"
