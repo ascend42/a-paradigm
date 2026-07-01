@@ -1,0 +1,56 @@
+id: TD-2026-07-01-401
+timestamp: '2026-07-01T19:54:32.369Z'
+title: 'The falsifiable Classroom loop: survival minted by exercise, never by time (≥1 adversarial probe required)'
+decision: >-
+  Rebuild the Classroom continuous-improvement loop so agents get measurably better at micro (per-project moat) and
+  macro (population/registry prior) scales, governed by ONE principle: wall-clock time may DECAY a belief's confidence
+  but must never MINT evidence. Three layers: (L3) `survived` is minted only by real EXERCISE — a symmetric survival
+  reducer (mirror of the existing overturn reducer, same orchestrationId join over notebook-refs.jsonl) writes
+  `survived` when a certified claim is applied and holds; aged-but-untested certs become a NEW `unproven` state; decay
+  may still decrement confidence but never sets outcome. HUMAN RULING (2026-07-01): a cert reaches `survived` only with
+  ≥ K_MIN_EXERCISE exercises AND ≥1 deliberate adversarial probe (E2/E3) — passive apply-and-held (E1) accrues evidence
+  but cannot alone mint survival. (L2) Promote on the belief-DELTA the v7.1-r4 instrument already measures
+  (notebookPrior → promotion-decisions.jsonl), not absolute confidence≥0.8; stop stamping the fabricated journal
+  confidence_before; bands calibrated from the collected histogram. (L1) Widen capture to ad-hoc/non-DAG work
+  (leaf-capture arm) and add a learning-liveness metric (verdictsInScope → captureCoverage + learningYield) so a severed
+  loop is DETECTABLY different from a healthy quiet one. The L3 exercise counters ARE decision TD-2026-06-26-881
+  amendment 1's registry denominator — ONE shared ExerciseIntensity contract (home = premise-core, since the CLI must
+  not depend on paradigm-mcp), so idle throwaway projects produce `unproven` not `survived` and the population prior is
+  unlaunderable. Sub-phase 0 (contracts-only types/constants) is BUILT and green; sub-phases 1-3 (behavior) are filed.
+rationale: >-
+  The loop that is supposed to make agents better currently runs on two FABRICATED signals (verified against the tree):
+  confidence_before is hardcoded literals (ambient.ts:685,732) and `survived` is decay-minted silence
+  (decay.ts:52,127-139, a 14-day timer that consults no exercise signal). So `resolved`/repeat-failure-rate can look
+  healthy on a loop that tested nothing — empirically, all 5 settlement-liveness records read chainLive:true/journals:0,
+  byte-identical between a live and a dead loop. Three-lens team design (Loid lead + Arky + Cid, orch-mr2gqojz-jjh4)
+  converged: the fix is small and precise because the mechanisms already exist — the exercise signal is already
+  collected (notebook-refs.jsonl), the belief-delta is already measured (the v7.1-r4 instrument explicitly deferred the
+  gate flip 'until a histogram exists'), and `survived` is the symmetric complement of the overturn reducer.
+  ≥1-adversarial-probe requirement chosen (over passive-sufficient) because 'survived an attack' is far stronger
+  evidence than 'held under normal use' and it is what makes the registry prior unlaunderable. Everything fails toward
+  honesty: rate stays null until an EXERCISED cert resolves (no false-green regression).</parameter>
+
+  <parameter name="participants">[{"id": "loid", "role": "agent", "stance": "proposed"}, {"id": "architect", "role":
+  "agent", "stance": "supported"}, {"id": "cid", "role": "agent", "stance": "supported"}, {"id": "ascend", "role":
+  "human", "stance": "supported"}]
+symbols_affected:
+  - '#classroom'
+  - '#classroom-metrics'
+  - '#classroom-decay'
+  - '#classroom-certifications'
+  - '#field-failure-reducer'
+  - '#nomination-engine'
+  - '#notebook'
+  - '#agent-registry'
+  - '#task-settlement'
+status: active
+tags:
+  - classroom
+  - learning-loop
+  - falsifiability
+  - calibration-moat
+  - loid
+  - architect
+  - cid
+  - adversarial-reviewed
+  - design-arc

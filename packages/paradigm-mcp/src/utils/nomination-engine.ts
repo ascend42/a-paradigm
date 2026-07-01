@@ -290,6 +290,17 @@ function persistDebates(rootDir: string, debates: Debate[]): void {
  * the delta bands can be calibrated from a real histogram later. This is an
  * INSTRUMENT only — nothing reads it back to decide promotions.
  */
+/**
+ * Belief-delta promotion bands (docs/specs/classroom-falsifiable-loop.md §3).
+ * STARTING GUESSES — Loid calibrates these from the promotion-decisions.jsonl
+ * histogram the instrument has been collecting. NOT YET ENFORCED: the gate still
+ * uses absolute confidence_after >= 0.8 until sub-phase 2 flips it. Defined here
+ * now (contracts-only) so the flip is a one-line change against named constants.
+ */
+export const PROMOTION_FLOOR = 0.7;      // after must clear this regardless of delta
+export const PROMOTION_DELTA_MIN = 0.1;  // promote when belief rose by ≥ this
+export const PROMOTION_DELTA_EPSILON = 0.05; // |delta| < this AND priorFound ⇒ HOLD (silence is signal)
+
 interface PromotionDecision {
   ts: string;
   agent: string;
@@ -300,6 +311,8 @@ interface PromotionDecision {
   promoted: boolean;
   priorFound: boolean;
   gate: string;
+  /** The delta-gate floor in effect when recorded (sub-phase 0 forward-compat). */
+  floor?: number;
 }
 
 /**

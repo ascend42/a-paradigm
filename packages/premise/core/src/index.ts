@@ -118,4 +118,5 @@ export type {
   FieldFailureRow,
   AgentRepeatFailure,
   RepeatFailureRate,
+  ExerciseIntensity,
 } from './classroom-metrics.js';
