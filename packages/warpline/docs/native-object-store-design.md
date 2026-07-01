@@ -422,3 +422,61 @@ test as an integration test (`rm -rf .git` in a fixture).
 5. **Coexistence proof:** `binding.gitOid == strand.provenance.treeSha` for every git-anchored strand.
 6. **Git-absent:** `rm -rf .git && warpline restore <state>` reproduces the exact tree.
 ```
+
+---
+
+## 9. Design review — team vetting (2026-07-01)
+
+A six-lens panel vetted this design against the question *"once built, does this actually
+work as true byte-authoritative source control?"* Verdict: **directionally sound and
+buildable, but not as written** — mean confidence **≈ 0.53** (vs 0.05 for today's git-riding
+layer), gated on the must-fix items below.
+
+| Lens | Confidence | Load-bearing finding |
+|------|-----------|----------------------|
+| Jinx (adversarial) | 0.35 | History is a **graph**, not a tree — restore proves one snapshot, not `log`/`blame`/`diff A..B`/branches. |
+| Cid (daily-driver) | 0.45 | **No branching model** anywhere in M1–M4 — the op devs touch most. |
+| Aegis (integrity) | 0.50 | M1 stores bytes with **no anchor** — `binding.treeId` is excluded from `pickId`, mutable via `rewriteFabric`, sigs deferred to M3 → zero tamper-evidence in authoritative mode; the round-trip proof is a tautology (self-consistency ≠ authenticity). |
+| Judge (correctness) | 0.60 | **Merged-tree byte-source bug** — §5 `snapshotTree(tmp)` captures `git archive`-massaged bytes for unchanged paths, silently violating §1.5 at the durable-merge core. |
+| Loid (strategy) | 0.60 | Preserve/amplify the moat: wire `#grade` to the `MergeRecipe` now; hard-defer M4 remote + packing; ship mirror mode as the product. |
+| Bolt (performance) | 0.70 | Snapshot is **O(repo) per seal** with no delta — must be incremental (O(changed)) before it scales. |
+
+### Required amendments before building (M1)
+
+- **A1 — Chain the history in M1b, not M3.** Fold `parentPickId` **and** `binding.treeId`
+  into `computePickId` for strands sealed M1b+ (chain link = prev `pickId` + this `treeId`).
+  A content-addressed store without an authenticated parent chain is a snapshot bucket, not a
+  VCS; this also gives byte tamper-evidence at cutover *without* needing signatures. Backfilled
+  historical strands stay outside the chain (documented, git-verified during coexistence).
+  *(Jinx + Aegis — the strongest convergent finding.)*
+- **A2 — Build the merged `treeId` compositionally, never from the archive dir.** Snapshot
+  `baseRef` via per-path `git cat-file blob`, then substitute blob ids only for `plan.files`
+  changed/deleted paths at the tree level. The `git archive` temp dir is used **solely** for
+  the meaning `absorb`, never as a byte source. *(Judge, blocking.)*
+- **A3 — Incremental snapshot.** Before write, `store.has(id)` + diff against the parent
+  strand's tree → touch only changed paths (skip both the read-encode-write and the
+  `cat-file`). Turns per-seal cost O(repo)→O(changed); prerequisite for a pack threshold
+  reserved *before* cutover. Make `MergeRecipe` `treeId` **non-optional** for all three parents
+  (else re-derivation depends on git). *(Bolt + Judge.)*
+- **A4 — Cutover must REFUSE on any reachable strand lacking a binding.** Otherwise pre-M1b
+  merge strands (no recipe, bytes already `releaseTree`'d) and failed backfills survive into
+  authoritative mode as silent permanent unrecoverability the moment git is deleted. *(Judge.)*
+- **A5 — Corpus-fidelity fixes.** gitlink (`160000`) breaks round-trip #2 (store a sidecar so
+  re-snapshot matches); WORKTREE symlinks/exec must use `lstat`+`readlink` / `st_mode`, not
+  `readFile`; scope shadow-OID invariant #5 to **ref-sourced** strands (autocrlf/smudge makes
+  worktree bytes CRLF vs git's LF); hash the **raw** filename bytes, not NFC (NFC/NFD-distinct
+  names otherwise collide into one tree entry). *(Judge + Aegis.)*
+
+### Roadmap amendments
+
+- **A6 — Add M2.5 "branching model":** named selvages/refs, `warpline branch`/`switch`,
+  restore-over-dirty-tree conflict UX, and byte-`diff` between two arbitrary revs. Without a
+  branch primitive the "full everyday loop" claim is unmet regardless of M4. *(Cid.)*
+- **A7 — Moat-first sequencing:** wire `#grade`'s `calibratedConfidence` to each merge's
+  survive/overturn outcome via the `MergeRecipe` in M1b, so every quarter of byte work feeds
+  the differentiator; hard-defer M4 remote + packing. Treat mirror mode as the shipped product
+  and authoritative cutover as optional. *(Loid.)*
+
+Net: the idea **works as true source control** — but it must be a hash-chained *graph* (A1),
+byte-honest at the merge core (A2), and it needs a branching model (A6). These are folded into
+the M1 build tasks and the epic (T-2026-07-01-007).

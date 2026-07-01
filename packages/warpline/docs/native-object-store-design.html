@@ -370,6 +370,14 @@ acceptance</a></li>
 </ul></li>
 <li><a href="#appendix-invariants-test-these" id="toc-appendix-invariants-test-these">Appendix — invariants (test
 these)</a></li>
+<li><a href="#design-review-team-vetting-2026-07-01" id="toc-design-review-team-vetting-2026-07-01">9. Design review — team
+vetting (2026-07-01)</a>
+<ul>
+<li><a href="#required-amendments-before-building-m1" id="toc-required-amendments-before-building-m1">Required amendments
+before building (M1)</a></li>
+<li><a href="#roadmap-amendments" id="toc-roadmap-amendments">Roadmap
+amendments</a></li>
+</ul></li>
 </ul></li>
 </ul>
 </nav>
@@ -973,5 +981,134 @@ git-anchored strand.</li>
 <code>rm -rf .git &amp;&amp; warpline restore &lt;state&gt;</code>
 reproduces the exact tree. ```</li>
 </ol>
+<hr />
+<h2 id="design-review-team-vetting-2026-07-01">9. Design review — team
+vetting (2026-07-01)</h2>
+<p>A six-lens panel vetted this design against the question <em>“once
+built, does this actually work as true byte-authoritative source
+control?”</em> Verdict: <strong>directionally sound and buildable, but
+not as written</strong> — mean confidence <strong>≈ 0.53</strong> (vs
+0.05 for today’s git-riding layer), gated on the must-fix items
+below.</p>
+<table>
+<colgroup>
+<col style="width: 15%" />
+<col style="width: 28%" />
+<col style="width: 56%" />
+</colgroup>
+<thead>
+<tr>
+<th>Lens</th>
+<th>Confidence</th>
+<th>Load-bearing finding</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Jinx (adversarial)</td>
+<td>0.35</td>
+<td>History is a <strong>graph</strong>, not a tree — restore proves one
+snapshot, not
+<code>log</code>/<code>blame</code>/<code>diff A..B</code>/branches.</td>
+</tr>
+<tr>
+<td>Cid (daily-driver)</td>
+<td>0.45</td>
+<td><strong>No branching model</strong> anywhere in M1–M4 — the op devs
+touch most.</td>
+</tr>
+<tr>
+<td>Aegis (integrity)</td>
+<td>0.50</td>
+<td>M1 stores bytes with <strong>no anchor</strong> —
+<code>binding.treeId</code> is excluded from <code>pickId</code>,
+mutable via <code>rewriteFabric</code>, sigs deferred to M3 → zero
+tamper-evidence in authoritative mode; the round-trip proof is a
+tautology (self-consistency ≠ authenticity).</td>
+</tr>
+<tr>
+<td>Judge (correctness)</td>
+<td>0.60</td>
+<td><strong>Merged-tree byte-source bug</strong> — §5
+<code>snapshotTree(tmp)</code> captures
+<code>git archive</code>-massaged bytes for unchanged paths, silently
+violating §1.5 at the durable-merge core.</td>
+</tr>
+<tr>
+<td>Loid (strategy)</td>
+<td>0.60</td>
+<td>Preserve/amplify the moat: wire <code>#grade</code> to the
+<code>MergeRecipe</code> now; hard-defer M4 remote + packing; ship
+mirror mode as the product.</td>
+</tr>
+<tr>
+<td>Bolt (performance)</td>
+<td>0.70</td>
+<td>Snapshot is <strong>O(repo) per seal</strong> with no delta — must
+be incremental (O(changed)) before it scales.</td>
+</tr>
+</tbody>
+</table>
+<h3 id="required-amendments-before-building-m1">Required amendments
+before building (M1)</h3>
+<ul>
+<li><strong>A1 — Chain the history in M1b, not M3.</strong> Fold
+<code>parentPickId</code> <strong>and</strong>
+<code>binding.treeId</code> into <code>computePickId</code> for strands
+sealed M1b+ (chain link = prev <code>pickId</code> + this
+<code>treeId</code>). A content-addressed store without an authenticated
+parent chain is a snapshot bucket, not a VCS; this also gives byte
+tamper-evidence at cutover <em>without</em> needing signatures.
+Backfilled historical strands stay outside the chain (documented,
+git-verified during coexistence). <em>(Jinx + Aegis — the strongest
+convergent finding.)</em></li>
+<li><strong>A2 — Build the merged <code>treeId</code> compositionally,
+never from the archive dir.</strong> Snapshot <code>baseRef</code> via
+per-path <code>git cat-file blob</code>, then substitute blob ids only
+for <code>plan.files</code> changed/deleted paths at the tree level. The
+<code>git archive</code> temp dir is used <strong>solely</strong> for
+the meaning <code>absorb</code>, never as a byte source. <em>(Judge,
+blocking.)</em></li>
+<li><strong>A3 — Incremental snapshot.</strong> Before write,
+<code>store.has(id)</code> + diff against the parent strand’s tree →
+touch only changed paths (skip both the read-encode-write and the
+<code>cat-file</code>). Turns per-seal cost O(repo)→O(changed);
+prerequisite for a pack threshold reserved <em>before</em> cutover. Make
+<code>MergeRecipe</code> <code>treeId</code>
+<strong>non-optional</strong> for all three parents (else re-derivation
+depends on git). <em>(Bolt + Judge.)</em></li>
+<li><strong>A4 — Cutover must REFUSE on any reachable strand lacking a
+binding.</strong> Otherwise pre-M1b merge strands (no recipe, bytes
+already <code>releaseTree</code>’d) and failed backfills survive into
+authoritative mode as silent permanent unrecoverability the moment git
+is deleted. <em>(Judge.)</em></li>
+<li><strong>A5 — Corpus-fidelity fixes.</strong> gitlink
+(<code>160000</code>) breaks round-trip #2 (store a sidecar so
+re-snapshot matches); WORKTREE symlinks/exec must use
+<code>lstat</code>+<code>readlink</code> / <code>st_mode</code>, not
+<code>readFile</code>; scope shadow-OID invariant #5 to
+<strong>ref-sourced</strong> strands (autocrlf/smudge makes worktree
+bytes CRLF vs git’s LF); hash the <strong>raw</strong> filename bytes,
+not NFC (NFC/NFD-distinct names otherwise collide into one tree entry).
+<em>(Judge + Aegis.)</em></li>
+</ul>
+<h3 id="roadmap-amendments">Roadmap amendments</h3>
+<ul>
+<li><strong>A6 — Add M2.5 “branching model”:</strong> named
+selvages/refs, <code>warpline branch</code>/<code>switch</code>,
+restore-over-dirty-tree conflict UX, and byte-<code>diff</code> between
+two arbitrary revs. Without a branch primitive the “full everyday loop”
+claim is unmet regardless of M4. <em>(Cid.)</em></li>
+<li><strong>A7 — Moat-first sequencing:</strong> wire
+<code>#grade</code>’s <code>calibratedConfidence</code> to each merge’s
+survive/overturn outcome via the <code>MergeRecipe</code> in M1b, so
+every quarter of byte work feeds the differentiator; hard-defer M4
+remote + packing. Treat mirror mode as the shipped product and
+authoritative cutover as optional. <em>(Loid.)</em></li>
+</ul>
+<p>Net: the idea <strong>works as true source control</strong> — but it
+must be a hash-chained <em>graph</em> (A1), byte-honest at the merge
+core (A2), and it needs a branching model (A6). These are folded into
+the M1 build tasks and the epic (T-2026-07-01-007).</p>
 </body>
 </html>
