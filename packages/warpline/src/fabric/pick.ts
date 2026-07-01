@@ -95,12 +95,18 @@ export async function recordPick(root: string, opts: RecordPickOptions): Promise
     const isGenesis = selvage === null;
     if (!isGenesis) {
       const parent = store.loadState(selvage);
-      // parent unreadable → fall through and record (safer than silently dropping).
-      if (parent) {
-        const d = diff(parent, current);
-        if (d.deltas.size === 0 && d.renames.length === 0) {
-          return { noop: true, isGenesis: false, stateId: current.stateId };
-        }
+      // A SET selvage we cannot LOAD is corruption or a regen-gap in the states
+      // cache — NOT an empty fabric. Falling through to seal here would ORPHAN the
+      // real history (silent data loss), the exact class admit.ts fails closed on.
+      // Fail CLOSED: the caller must re-absorb the tip or repair .warpline/.
+      if (!parent) {
+        throw new Error(
+          `warpline: selvage points at ${selvage} but that state cannot be loaded (states/ cache missing or corrupt) — refusing to seal over existing history. Re-absorb the tip or repair .warpline/.`,
+        );
+      }
+      const d = diff(parent, current);
+      if (d.deltas.size === 0 && d.renames.length === 0) {
+        return { noop: true, isGenesis: false, stateId: current.stateId };
       }
     }
     // Bind the durable bytes only when we actually seal (skip on a no-op above).

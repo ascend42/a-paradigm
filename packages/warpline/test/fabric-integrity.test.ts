@@ -18,6 +18,7 @@ import * as path from 'node:path';
 import * as fs from 'node:fs/promises';
 import { readFabric, readSelvage, appendStrand, warplineDirOf } from '../src/fabric/fabric.js';
 import { admit } from '../src/fabric/admit.js';
+import { recordPick } from '../src/fabric/pick.js';
 import type { Strand } from '../src/fabric/strand.js';
 
 const execFileAsync = promisify(execFile);
@@ -120,5 +121,33 @@ describe('admit — a set tip we cannot load fails CLOSED (never orphans history
     await expect(
       admit(repo.dir, { cwd: repo.dir, agentId: 'X', ref: 'HEAD' }),
     ).rejects.toThrow(/selvage points at state:v0:ghosttip .* cannot be loaded/);
+  });
+});
+
+describe('recordPick (T-029) — a set tip we cannot load fails CLOSED (never orphans history)', () => {
+  let repo: FixtureRepo;
+  beforeEach(async () => {
+    repo = await FixtureRepo.create();
+    await repo.write('src/mod.ts', 'export function a() { return 1; }\n');
+    await repo.git('add', '-A');
+    await repo.git('commit', '-q', '-m', 'base');
+  });
+  afterEach(async () => {
+    await repo?.destroy();
+  });
+
+  it('selvage points at a stateId with no loadable state → recordPick throws, does NOT seal', async () => {
+    // Symmetric with the admit fail-closed test: a SET tip whose state cache is
+    // absent must NOT fall through and seal (which would orphan the real history).
+    const wdir = warplineDirOf(repo.dir);
+    await fs.mkdir(path.join(wdir, 'refs'), { recursive: true });
+    await fs.writeFile(path.join(wdir, 'refs', 'selvage'), 'state:v0:ghosttip\n', 'utf8');
+
+    await expect(
+      recordPick(repo.dir, { cwd: repo.dir, ref: 'HEAD', intent: 'pick over a ghost tip' }),
+    ).rejects.toThrow(/selvage points at state:v0:ghosttip .* cannot be loaded/);
+
+    // Nothing was appended — the ledger stays empty rather than orphaning the tip.
+    expect(readFabric(wdir)).toEqual([]);
   });
 });
