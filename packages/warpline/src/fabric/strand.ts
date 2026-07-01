@@ -60,6 +60,8 @@ export interface StrandBinding {
  * (re-run the token merge over base/ours/theirs).
  */
 export interface MergeRecipe {
+  /** the exact merge algorithm version — folded INTO the v2 pickId (restored per Judge). */
+  algo: 'warpline-merge3-v1';
   base: string; // native treeId of the merge base
   ours: string; // native treeId of the admitting agent's side
   theirs: string; // native treeId of the live selvage side
@@ -67,9 +69,25 @@ export interface MergeRecipe {
 }
 
 export interface Strand {
-  schemaVersion: 1;
+  schemaVersion: 1 | 2; // v1 = pick:v0 self-hash; v2 = pick:v2 authenticated chain link
   seq: number; // monotonic history index (0 = genesis)
-  pickId: string; // event content-address — pick:v0:<sha256(canonical body)>
+  pickId: string; // event content-address — pick:v0:… (v1) | pick:v2:… (v2)
+  /**
+   * NEW (v2) — the authenticated chain link: the pickId of the strand at
+   * parentStateId (always the ledger tip). null at genesis. IN the v2 pickId, so
+   * reordering/forging a strand breaks the chain. Absent on v1 strands.
+   */
+  parentPickId?: string | null;
+  /**
+   * NEW (v2) — agent attribution. agentId is IN the v2 pickId (attribution is
+   * event identity); sessionKey is an ephemeral breadcrumb EXCLUDED from the hash.
+   */
+  authoredBy?: { agentId: string | null; sessionKey?: string | null };
+  /**
+   * NEW (v2) — the SECOND merge parent (merge strands only): the pickId of the
+   * strand at the admit baseId (the ours-side fork base). IN the v2 pickId.
+   */
+  mergeParentPickId?: string | null;
   stateId: string; // the WarpState this strand lands on (the new selvage)
   parentStateId: string | null; // previous selvage (null at genesis)
   actor: string; // who recorded it — agent/operator identity (attribution)
@@ -138,7 +156,51 @@ function canonicalSafe(v: unknown): CanonicalValue {
  * (review amendment A1), authored as its own step.
  */
 export function computePickId(body: StrandBody): string {
-  const { calibratedConfidence: _graded, binding: _bound, merge: _merge, ...identity } = body;
+  // v1 legacy path — UNCHANGED self-hash. Lets `fabric verify` recompute every
+  // historical strand byte-for-byte; v1 pickIds are immutable and never promoted.
+  if (body.schemaVersion < 2) {
+    const { calibratedConfidence: _graded, binding: _bound, merge: _merge, ...identity } = body;
+    const canon = canonicalSerialize(canonicalSafe(identity));
+    return 'pick:v0:' + createHash('sha256').update(canon, 'utf8').digest('hex');
+  }
+  // v2 — authenticated chain link (parentPickId) + byte binding (bindingTreeId) +
+  // agent attribution (authoredBy.agentId) + the merge second-parent/algo folded IN.
+  // sessionKey, binding.gitOid, merge.{base,ours,theirs,result}, and
+  // calibratedConfidence remain EXCLUDED (§1.1) — each is mutable/derivable post-seal.
+  const { calibratedConfidence: _c, binding, merge, authoredBy, ...rest } = body;
+  const identity = {
+    ...rest, // schemaVersion, seq, stateId, parentStateId, parentPickId, actor, intent,
+    // recordedAt, objectCount, delta, provenance, resolves?, merged?, mergeParentPickId?
+    authoredBy: { agentId: authoredBy?.agentId ?? null }, // sessionKey EXCLUDED
+    bindingTreeId: binding?.treeId ?? null, // A1: fold byte identity into the address
+    mergeAlgo: merge?.algo ?? null, // Judge: restore the algo tag
+  };
   const canon = canonicalSerialize(canonicalSafe(identity));
+  return 'pick:v2:' + createHash('sha256').update(canon, 'utf8').digest('hex');
+}
+
+/**
+ * The pre-`59c138f7` WHOLE-BODY hashing rule (§7.1) — kept ONLY so `fabric verify`
+ * and the rewriteFabric guard can honestly re-verify strands sealed before the
+ * exclusion rule existed (this repo's dogfood genesis, seq 0). It hashes the FULL
+ * body, INCLUDING calibratedConfidence/binding/merge. Never used to seal new
+ * strands; a historical re-verification rule only.
+ */
+export function computePickIdWholeBody(body: StrandBody): string {
+  const canon = canonicalSerialize(canonicalSafe(body));
   return 'pick:v0:' + createHash('sha256').update(canon, 'utf8').digest('hex');
+}
+
+/**
+ * Does `strand`'s stored pickId reproduce under a KNOWN hashing rule (§7.1)? For a
+ * v2 strand: the v2 rule. For a v1 strand: the current-exclusion rule (§1.4) OR the
+ * legacy whole-body rule. Accept on the first match. Callers grandfather the
+ * graded-over residue (seq 1–7) separately (§7.2); a strand that reproduces under
+ * NO known rule and is NOT grandfathered is a real tamper.
+ */
+export function reproducesUnderKnownRule(strand: Strand): boolean {
+  const { pickId, ...body } = strand;
+  if (computePickId(body) === pickId) return true; // v1-exclusion or v2 dispatch
+  if (body.schemaVersion < 2 && computePickIdWholeBody(body) === pickId) return true; // legacy whole-body
+  return false;
 }

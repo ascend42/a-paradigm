@@ -224,6 +224,7 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
       const treeId = await snapshotState(objStore, opts.ref, cwd, { cwd });
       const strand = sealState(root, store, proposed, {
         parentStateId: selvageId ?? null, actor, intent, gitCommit: oursCommit, now, confidence: 0.8,
+        authoredBy: { agentId: opts.agentId },
         binding: { treeId, gitOid: proposed.treeSha ?? null },
       });
       clearScratch(root, opts.agentId);
@@ -239,6 +240,7 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
       const treeId = await snapshotState(objStore, opts.ref, cwd, { cwd });
       const strand = sealState(root, store, proposed, {
         parentStateId: selvageId, actor, intent, gitCommit: oursCommit, now, confidence: priorFor(decision),
+        authoredBy: { agentId: opts.agentId },
         binding: { treeId, gitOid: proposed.treeSha ?? null },
       });
       clearScratch(root, opts.agentId);
@@ -264,6 +266,8 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
         const recipe = await captureMerge(objStore, baseCommit, opts.ref, theirsCommit, mat.plan.files, { cwd });
         const strand = sealState(root, store, mat.state, {
           parentStateId: selvageId, actor, intent, gitCommit: oursCommit, now, confidence: priorFor(decision),
+          authoredBy: { agentId: opts.agentId },
+          mergeParentPickId: baseStrand?.pickId ?? null, // the SECOND DAG parent (the ours-side fork base)
           merged: true, binding: { treeId: recipe.result, gitOid: null }, merge: recipe,
         });
         clearScratch(root, opts.agentId);

@@ -1,0 +1,12 @@
+{
+  "reason": "TD-2026-07-01-202: sealed under the whole-body rule, then calibratedConfidence overwritten in place by #grade (0e3d3d57) before the exclusion rule + rewriteFabric guard existed. Hashed byte destroyed; unrecoverable.",
+  "grandfathered": [
+    "pick:v0:4713901b3396c8efa13bdccf9d0487dffbf6f668d8a6ff9f5d6a82dffda777b1",
+    "pick:v0:203e6d042a57df18adc80d85a4d8f552d5ec7f333dc57780fc7bb715bb95d206",
+    "pick:v0:802e86727dbc8ae6f00a3f65b624f58a415979b28c31febd9467c7a8220e28e2",
+    "pick:v0:ec2cb4d51db01f18f29e1b73bef4a5f0820201ca8dbd01ce233c42a899a4e75a",
+    "pick:v0:2859cd48b8c339f95cdf798b45ab0d1c8d6c73391d7e38c46f8056c673de73de",
+    "pick:v0:bcf82a3bc1fb33772338451791804b433771a7d59ce9827d327d4994d061d931",
+    "pick:v0:6c068e6de7a2086b33f25124e237f8c72cbbc8af7b7f8524159bbcd8d18364c0"
+  ]
+}

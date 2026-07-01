@@ -171,7 +171,8 @@ export async function captureMerge(
   const ours = await snapshotRef(store, oursRef, opts);
   const theirs = await snapshotRef(store, theirsRef, opts);
   const result = writeMergedTree(store, base, files);
-  return { base, ours, theirs, result };
+  // Pin the exact merge algorithm version — folded INTO the v2 pickId (Judge).
+  return { algo: 'warpline-merge3-v1', base, ours, theirs, result };
 }
 
 /** Restore a native tree to `dest` byte-faithfully (M1a helper; the `warpline

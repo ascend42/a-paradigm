@@ -47,6 +47,10 @@ export interface RecordPickOptions {
   confidence?: number | null;
   /** injectable clock (ISO) — determinism in tests. */
   now?: string;
+  /** the AGENT recording this pick (schema v2 attribution) — IN the pickId. Absent → null (human/git-commit default). */
+  agentId?: string;
+  /** ephemeral session breadcrumb (schema v2) — EXCLUDED from the pickId. */
+  sessionKey?: string;
 }
 
 export interface PickResult {
@@ -118,6 +122,7 @@ export async function recordPick(root: string, opts: RecordPickOptions): Promise
       gitCommit,
       now,
       confidence: opts.confidence ?? null,
+      authoredBy: { agentId: opts.agentId ?? null, sessionKey: opts.sessionKey ?? null },
       binding: { treeId, gitOid: current.treeSha ?? null },
     });
     return { noop: false, isGenesis, strand, stateId: current.stateId };

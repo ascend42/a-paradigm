@@ -194,6 +194,7 @@ $RECYCLE.BIN/
 # by re-absorbing each strand's provenance.gitCommit, so they stay ignored.
 .warpline/*
 !.warpline/fabric.jsonl
+!.warpline/fabric-legacy.json
 !.warpline/refs/
 .warpline/refs/*
 !.warpline/refs/selvage

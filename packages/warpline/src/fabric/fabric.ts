@@ -17,7 +17,31 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { Strand } from './strand.js';
+import { computePickId, reproducesUnderKnownRule, type Strand } from './strand.js';
+
+/** The grandfathered-legacy manifest (§7.2) — pickIds whose hashed byte #grade destroyed. */
+export interface FabricLegacy {
+  reason: string;
+  grandfathered: string[];
+}
+
+/**
+ * The set of stored pickIds grandfathered as `legacy-unverifiable` (§7.2), read from
+ * `.warpline/fabric-legacy.json`. ENOENT ⇒ empty set (no legacy residue). Any other
+ * read/parse failure THROWS — a corrupt allow-list must not silently widen or narrow.
+ */
+export function readLegacyGrandfathered(wdir: string): Set<string> {
+  const p = path.join(wdir, 'fabric-legacy.json');
+  let raw: string;
+  try {
+    raw = fs.readFileSync(p, 'utf8');
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return new Set();
+    throw new Error(`warpline: fabric-legacy.json unreadable at ${p}: ${(err as Error).message}`);
+  }
+  const parsed = JSON.parse(raw) as FabricLegacy;
+  return new Set(parsed.grandfathered ?? []);
+}
 
 /** The `.warpline/` dir for a repo root (same dir #warp-store writes under). */
 export function warplineDirOf(root: string): string {
@@ -116,6 +140,23 @@ export function readFabric(wdir: string): Strand[] {
  * pickId) is never rewritten. Callers hold #fabric-lock.
  */
 export function rewriteFabric(wdir: string, strands: Strand[]): void {
+  // IDENTITY GUARD (Aegis H2, §7.4): a strand passes if its stored pickId reproduces
+  // under ANY known hashing rule (§7.1) OR its pickId is grandfathered (§7.2). Because
+  // calibratedConfidence is excluded from the current v1/v2 rules, grade's confidence
+  // rewrite passes cleanly for non-grandfathered strands; the graded-over residue
+  // (seq 1–7) passes via the grandfather allow-list so `grade` still runs over the real
+  // fabric; and any accidental mutation of an identity field (stateId/delta/binding.
+  // treeId/parentPickId/…) on a NON-grandfathered strand THROWS — no silent drift.
+  const grandfathered = readLegacyGrandfathered(wdir);
+  for (const s of strands) {
+    if (reproducesUnderKnownRule(s)) continue;
+    if (grandfathered.has(s.pickId)) continue;
+    const { pickId, ...body } = s;
+    throw new Error(
+      `warpline: rewriteFabric refused — strand seq ${s.seq} recomputed pickId ${computePickId(body)} ` +
+        `!= stored ${pickId}; an identity field was mutated (only calibratedConfidence is rewritable).`,
+    );
+  }
   const p = fabricPath(wdir);
   fs.mkdirSync(path.dirname(p), { recursive: true });
   const tmp = `${p}.tmp`;

@@ -76,6 +76,8 @@ export { justify, type Justification, type JustifyOptions } from './justificatio
 // OWN history under .warpline/, never git.
 export {
   computePickId,
+  computePickIdWholeBody,
+  reproducesUnderKnownRule,
   type Strand,
   type StrandBody,
   type StrandDelta,
@@ -88,6 +90,8 @@ export {
   writeSelvage,
   appendStrand,
   readFabric,
+  readLegacyGrandfathered,
+  type FabricLegacy,
 } from './fabric/fabric.js';
 export { recordPick, type RecordPickOptions, type PickResult } from './fabric/pick.js';
 export {
@@ -133,6 +137,13 @@ export {
   type AdmitOptions,
   type AdmitResult,
 } from './fabric/admit.js';
+// Fabric verify — authenticate the whole PICK-DAG (integrity + chain + binding).
+export {
+  verifyFabric,
+  type FabricVerifyReport,
+  type FabricVerifyFailure,
+  type FabricVerifyKind,
+} from './fabric/verify.js';
 
 // Oracle
 export { oracle, type OracleRecord, type OracleOptions } from './oracle.js';

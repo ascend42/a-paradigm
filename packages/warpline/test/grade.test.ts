@@ -11,14 +11,15 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { warplineDirOf, appendStrand, readFabric } from '../src/fabric/fabric.js';
 import { gradeFabric, applyGrades } from '../src/fabric/grade.js';
-import type { Strand } from '../src/fabric/strand.js';
+import { computePickId, type Strand, type StrandBody } from '../src/fabric/strand.js';
 
 function strand(seq: number, over: Partial<Strand> & { born?: string[]; retired?: string[]; changed?: string[] } = {}): Strand {
-  const { born = [], retired = [], changed = [], ...rest } = over;
-  return {
+  const { born = [], retired = [], changed = [], pickId: _drop, ...rest } = over;
+  // A REAL self-consistent v1 pickId so the rewriteFabric identity guard (applyGrades)
+  // recomputes to the stored id (grading only moves calibratedConfidence, excluded).
+  const body: StrandBody = {
     schemaVersion: 1,
     seq,
-    pickId: `pick:v0:seq${seq}`,
     stateId: `state:v0:seq${seq}`,
     parentStateId: seq === 0 ? null : `state:v0:seq${seq - 1}`,
     actor: 'tester',
@@ -30,6 +31,7 @@ function strand(seq: number, over: Partial<Strand> & { born?: string[]; retired?
     provenance: { ref: 'WORKTREE', treeSha: null, gitCommit: null },
     ...rest,
   };
+  return { ...body, pickId: computePickId(body) };
 }
 
 describe('gradeFabric · survive / overturn / pending', () => {

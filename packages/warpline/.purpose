@@ -291,24 +291,31 @@ components:
     description: >-
       A Strand — one PICK sealed into the fabric. Two deliberately-separated
       identities: stateId (the REPRODUCIBLE content-address of the meaning it lands
-      on, from #warp-state) and pickId (pick:v0:sha256 over the canonical body — the
-      EVENT identity, including actor + time + intent, so attribution/provenance
-      lives here). Carries a compact StrandDelta (born/retired/contractChanged
-      names + renamedNoop count), an objectCount, git coexistence provenance
-      (ref/treeSha/gitCommit), and calibratedConfidence — RESERVED (null until
-      graded), the one field a git-backed history can't carry and the seed of the
-      non-portable moat. computePickId null-normalizes the body (canonical rejects
-      null) for the ADDRESS only; stored JSON keeps real nulls.
-      M1b — the byte seam: a strand gains binding (native root treeId that restores
-      its working tree from #warp-store with git ABSENT, + shadow gitOid) and, on a
-      merge strand, a re-derivable MergeRecipe (base/ours/theirs/result — all NATIVE
-      treeIds, A3). Both are EXCLUDED from pickId alongside calibratedConfidence
-      (backfillable + many-trees-to-one-meaning; uniform rule so backfill never forks
-      identity). #pick/#admit/#seal stamp binding on every seal (snapshotState =
-      snapshotDir for worktree, snapshotRef for a git ref); a CLEAN merge stamps the
-      compositional result (A2 — base tree via cat-file + the merge's byte changes,
-      never the git-archive dir). Ledger tamper-evidence (pickId hash-chain, A1) is a
-      separate step.
+      on, from #warp-state) and pickId (the EVENT identity, including actor + time +
+      intent, so attribution/provenance lives here). Carries a compact StrandDelta
+      (born/retired/contractChanged names + renamedNoop count), an objectCount, git
+      coexistence provenance (ref/treeSha/gitCommit), and calibratedConfidence —
+      RESERVED (null until graded), the one field a git-backed history can't carry
+      and the seed of the non-portable moat. computePickId null-normalizes the body
+      (canonical rejects null) for the ADDRESS only; stored JSON keeps real nulls.
+      SCHEMA v2 (TD-2026-07-01-721, the pickId identity contract): schemaVersion
+      widens 1→(1|2). A v2 pickId is pick:v2:sha256 and folds INTO the address the
+      chain link (parentPickId = the ledger tip's pickId, so reorder/forge breaks the
+      chain, A1), the byte binding (binding.treeId, so a bait-and-switch binding is
+      caught without a signature — Aegis C2), agent attribution (authoredBy.agentId;
+      sessionKey EXCLUDED), and on a merge the second DAG parent (mergeParentPickId =
+      the base strand) + the pinned merge algo (MergeRecipe.algo 'warpline-merge3-v1',
+      restored per Judge). Still EXCLUDED from both rules: calibratedConfidence,
+      binding.gitOid, merge.{base,ours,theirs,result}. The v1 rule (pick:v0) is
+      byte-for-byte preserved so historical strands re-verify. LEGACY (§7,
+      TD-2026-07-01-202): the on-disk fabric was sealed under two retired rules and
+      #grade overwrote a hashed field for the oldest strands; computePickIdWholeBody
+      + reproducesUnderKnownRule try the finite set of known rules, and the
+      graded-over residue is grandfathered by pickId in .warpline/fabric-legacy.json.
+      M1b — the byte seam: #pick/#admit/#seal stamp binding on every seal
+      (snapshotState = snapshotDir for worktree, snapshotRef for a git ref); a CLEAN
+      merge stamps the compositional result (A2 — base tree via cat-file + the merge's
+      byte changes, never the git-archive dir).
     type: module
     components:
       - "#canonical-json"
@@ -396,9 +403,39 @@ components:
       never read corruption as "empty history", which would let #admit fast-admit a
       fresh genesis over a real tip (silent data loss). Correspondingly #admit fails
       closed when the selvage/base points at a stateId whose state cannot be loaded.
+      rewriteFabric carries the §4.4/§7.4 IDENTITY GUARD: it recomputes every strand's
+      pickId (trying the known rules via reproducesUnderKnownRule) and refuses to write
+      unless each reproduces OR its pickId is grandfathered (readLegacyGrandfathered
+      reads .warpline/fabric-legacy.json) — so #grade may move calibratedConfidence
+      (excluded from the hash) but can never silently drift an identity field.
     type: module
     components:
       - "#strand"
+
+  fabric-verify:
+    description: >-
+      warpline fabric verify — authenticate the whole PICK-DAG (verifyFabric(root) ->
+      FabricVerifyReport), read-only. Per strand in seq order: (1) INTEGRITY —
+      recompute pickId trying the finite set of known hashing rules (§7.1: the v2
+      rule, or for v1 the current-exclusion rule OR the retired whole-body rule) and
+      accept on any match; (2) CHAIN (v2) — parentPickId == the immediately-preceding
+      strand's pickId (null at a v2 genesis, the v1 TIP at the boundary), else
+      chain-break; (3) MERGE (v2) — mergeParentPickId resolves to an earlier strand,
+      else merge-parent-unresolved; (4) BINDING — binding.treeId is present in the
+      object store and every referenced object exists (a self-consistent DANGLING
+      binding is the backstop for a re-forged pickId), else missing-binding /
+      binding-mismatch. Classification (§7.3): known-rule match -> OK; no match +
+      pickId grandfathered -> legacy-unverifiable (SOFT, exit 0); no match + not
+      grandfathered -> pickId-mismatch (HARD, non-zero exit) — how a real forgery
+      still surfaces. Report carries v1Prefix{count,selfHashOk}, v2Chain{count,ok},
+      boundaryAnchored, legacyUnverifiable{count,pickIds}, failures[]. Exit 0 intact /
+      1 tamper / 2 I/O error. Distinct from `objects verify` (loose-object
+      self-consistency). Spec docs/specs/warpline-fabric-schema-v2.md.
+    type: module
+    components:
+      - "#strand"
+      - "#fabric"
+      - "#warp-store"
 
   pick:
     description: >-
@@ -409,8 +446,13 @@ components:
       whose essence equals an existing one) — no-ops on an empty diff, else seals a
       #strand via #seal (the single fabric writer) under #fabric-lock (so a
       backgrounded post-commit auto-seal can't race it). Genesis (no selvage)
-      records seq 0 with an empty delta; objectCount is the headline. The
-      single-writer daily-driver path — the multi-writer protocol is #admit.
+      records seq 0 with an empty delta; objectCount is the headline. FAIL-CLOSED
+      (T-029): a SET selvage whose parent state cannot be loaded now THROWS rather
+      than falling through to seal (which would orphan history) — symmetric with the
+      #admit guard. SCHEMA v2: RecordPickOptions gains agentId/sessionKey; the seal
+      stamps authoredBy (agentId IN the pickId, sessionKey excluded). No agentId (the
+      hook/human path) → authoredBy.agentId null. The single-writer daily-driver path
+      — the multi-writer protocol is #admit.
     type: module
     components:
       - "#absorb"
@@ -449,6 +491,9 @@ components:
       a WORKTREE proposal returns CLEAN unsealed. A CLEAN re-base onto a MERGE strand
       also fails CLOSED (unsealed): a merge strand's gitCommit is ONE parent and lacks
       the merged bytes, so re-basing off it would mis-materialize a 3rd-gen merge (H1).
+      SCHEMA v2: all three seal calls pass authoredBy {agentId: opts.agentId}; the
+      CLEAN merge seal also passes mergeParentPickId = the base strand's pickId (the
+      SECOND DAG parent), folded with merge.algo into the authenticated v2 pickId.
     type: module
     components:
       - "#absorb"
@@ -622,7 +667,9 @@ components:
       / CLEAN+confidence / KNOT / DANGLE), and `warpline resolve <agentId> --ref
       <resolvedRef> -m <reason> [--by <who>] [--ours <ref>]` seals a KNOT-council
       resolution, and `warpline grade [--window N] [--dry] [--json]` grades strand
-      confidence against real survive/overturn outcome (the moat). The only module
+      confidence against real survive/overturn outcome (the moat), and `warpline
+      fabric verify [--json]` authenticates the whole PICK-DAG (integrity + v2 chain
+      + binding re-derivation; exit 0 intact / 1 tamper / 2 I/O). The only module
       allowed to write stdout; library code stays quiet.
     type: cli
     components:
@@ -633,6 +680,7 @@ components:
       - "#lifeline"
       - "#pick"
       - "#fabric"
+      - "#fabric-verify"
       - "#hook"
       - "#scratch"
       - "#admit"

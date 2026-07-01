@@ -56,6 +56,14 @@ export interface SealInput {
   binding?: StrandBinding | null;
   /** the re-derivable merge recipe (merge strands only, M1b). */
   merge?: MergeRecipe;
+  /**
+   * NEW (schema v2) — agent attribution. agentId is IN the v2 pickId; sessionKey is
+   * excluded. Absent → authoredBy.agentId hashes as null (the human/git-commit default).
+   * parentPickId is NOT a SealInput field — seal computes it from the ledger tip.
+   */
+  authoredBy?: { agentId: string | null; sessionKey?: string | null };
+  /** NEW (schema v2) — the SECOND merge parent (CLEAN merge only): the base strand's pickId. */
+  mergeParentPickId?: string | null;
 }
 
 /** Persist `state`, append its strand to the fabric, advance the selvage. */
@@ -73,10 +81,17 @@ export function sealState(
   const parent = input.parentStateId ? store.loadState(input.parentStateId) : undefined;
   const delta = summarizeDelta(parent, state);
   store.putState(state);
-  const seq = readFabric(wdir).length;
+  // The chain link (schema v2): parentPickId := the pickId of the strand at
+  // parentStateId, which is ALWAYS the ledger tip (append-only). Computed here from
+  // the fabric already read for `seq` — no threading needed. null at genesis; at the
+  // v1→v2 boundary this is the last v1 strand's pick:v0 (anchors the v1 tip for free).
+  const fab = readFabric(wdir);
+  const seq = fab.length;
+  const parentPickId = fab.length ? fab[fab.length - 1].pickId : null;
   const body: Omit<Strand, 'pickId'> = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     seq,
+    parentPickId,
     stateId: state.stateId,
     parentStateId: input.parentStateId,
     actor: input.actor,
@@ -88,6 +103,8 @@ export function sealState(
     provenance: { ref: state.ref, treeSha: state.treeSha, gitCommit: input.gitCommit },
     ...(input.resolves ? { resolves: input.resolves } : {}),
     ...(input.merged ? { merged: true } : {}),
+    ...(input.authoredBy ? { authoredBy: input.authoredBy } : {}),
+    ...(input.mergeParentPickId !== undefined ? { mergeParentPickId: input.mergeParentPickId } : {}),
     ...(input.binding ? { binding: input.binding } : {}),
     ...(input.merge ? { merge: input.merge } : {}),
   };

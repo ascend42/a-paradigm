@@ -39,6 +39,7 @@ import { forkScratch } from './fabric/scratch.js';
 import { admit, type AdmitResult } from './fabric/admit.js';
 import { resolveKnot } from './fabric/resolve.js';
 import { gradeFabric, applyGrades, type GradeReport } from './fabric/grade.js';
+import { verifyFabric } from './fabric/verify.js';
 import { repoRoot, gitPath } from './git/git-exec.js';
 
 // The shared .purpose parser (library code, purpose/core/aggregator) console.warns
@@ -549,6 +550,46 @@ objects
       }
     } catch (err) {
       fail(err);
+    }
+  });
+
+const fabric = program
+  .command('fabric')
+  .description('The fabric ledger (this project\'s native meaning-history) — authenticate the whole PICK-DAG.');
+
+fabric
+  .command('verify')
+  .description('Authenticate the fabric: recompute every strand\'s pickId (integrity), walk the v2 chain link (reorder/forge detection), resolve merge second-parents, and re-derive each strand\'s byte binding against the object store. Exit 0 = intact, 1 = tamper/break found.')
+  .option('--json', 'emit the full FabricVerifyReport as JSON')
+  .action(async (options: { json?: boolean }) => {
+    try {
+      const root = await repoRoot().catch(() => process.cwd());
+      const report = verifyFabric(root);
+      if (options.json) {
+        process.stdout.write(JSON.stringify(report, null, 2) + '\n');
+      } else if (report.failures.length === 0) {
+        process.stdout.write(
+          `VERIFY   ${report.checked} strand(s) — all intact\n` +
+            `  v1 prefix  ${report.v1Prefix.count} (self-hash ${report.v1Prefix.selfHashOk ? 'ok' : 'FAILED'}, ordering unauthenticated — OQ-A)\n` +
+            `  v2 chain   ${report.v2Chain.count} (${report.v2Chain.ok ? 'ok' : 'BROKEN'})\n` +
+            `  boundary   ${report.boundaryAnchored ? 'anchored ✓' : 'not anchored'}\n` +
+            (report.legacyUnverifiable.count
+              ? `  legacy     ${report.legacyUnverifiable.count} grandfathered (unverifiable, sealed under a retired rule — TD-2026-07-01-202)\n`
+              : ''),
+        );
+      } else {
+        process.stdout.write(`VERIFY   ${report.checked} checked, ${report.failures.length} FAILURE(S):\n`);
+        for (const f of report.failures) {
+          process.stdout.write(`  ✗ seq ${f.seq}  ${f.kind}  ${short(f.pickId)}\n    ${f.detail}\n`);
+        }
+        process.exitCode = 1;
+      }
+    } catch (err) {
+      // §4.3: a usage / I/O error (fabric unreadable, store missing) → exit 2,
+      // distinct from an authenticated-but-broken ledger (exit 1 above).
+      const msg = err instanceof Error ? err.message : String(err);
+      process.stderr.write(`warpline: ${msg}\n`);
+      process.exit(2);
     }
   });
 
