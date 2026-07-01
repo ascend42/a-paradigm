@@ -26,7 +26,10 @@ import { consolidate, type ConsolidateForecast } from './consolidate.js';
 import { lifeline, type Lifeline } from './lifeline.js';
 import type { ContractChangeset } from './sem-delta.js';
 import { changedSlotsOf } from './sem-delta.js';
+import * as path from 'node:path';
 import { serializeState } from './warp/store.js';
+import { ObjectStore } from './warp/object-store.js';
+import { snapshotDir } from './warp/snapshot.js';
 import type { WarpState } from './warp/warp-state.js';
 import { recordPick, type PickResult } from './fabric/pick.js';
 import { warplineDirOf, readSelvage, readFabric } from './fabric/fabric.js';
@@ -499,6 +502,55 @@ program
       }
     },
   );
+
+const objects = program
+  .command('objects')
+  .description('The native content-addressed object store (byte authority) — the store that lets Warpline reconstruct a working tree with git ABSENT.');
+
+objects
+  .command('snapshot')
+  .description('Snapshot a directory into the native object store; prints the root treeId (byte identity) + the shadow git tree OID (== `git rev-parse <ref>^{tree}` for a clean worktree).')
+  .argument('<dir>', 'the directory to snapshot')
+  .option('--json', 'emit the snapshot result as JSON')
+  .action(async (dir: string, options: { json?: boolean }) => {
+    try {
+      const root = await repoRoot().catch(() => process.cwd());
+      const target = path.resolve(dir);
+      const store = new ObjectStore(root);
+      const result = snapshotDir(store, target);
+      if (options.json) {
+        process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+      } else {
+        process.stdout.write(
+          `SNAPSHOT ${target}\n  treeId  ${result.treeId}\n  gitOid  ${result.gitOid}  (shadow — matches git during coexistence)\n  entries ${result.entryCount} (root)\n`,
+        );
+      }
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+objects
+  .command('verify')
+  .description('Recompute every loose object\'s content-address and confirm it matches its on-disk location — a corrupt/tampered object is reported, never silently trusted.')
+  .option('--json', 'emit the verify report as JSON')
+  .action(async (options: { json?: boolean }) => {
+    try {
+      const root = await repoRoot().catch(() => process.cwd());
+      const report = new ObjectStore(root).verify();
+      if (options.json) {
+        process.stdout.write(JSON.stringify(report, null, 2) + '\n');
+      } else if (report.corrupt.length === 0) {
+        process.stdout.write(`VERIFY   ${report.checked} object(s) — all intact\n`);
+      } else {
+        process.stdout.write(`VERIFY   ${report.checked} checked, ${report.corrupt.length} CORRUPT:\n`);
+        for (const id of report.corrupt) process.stdout.write(`  ✗ ${id}\n`);
+        process.exitCode = 1;
+      }
+    } catch (err) {
+      fail(err);
+    }
+  });
 
 function printAdmit(agentId: string, r: AdmitResult): void {
   const d = r.decision;

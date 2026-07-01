@@ -29,6 +29,21 @@ export {
   type BuildWarpStateOptions,
 } from './warp/warp-state.js';
 export { WarpStore, serializeState } from './warp/store.js';
+// M1a — the native content-addressed object store (byte authority).
+export { blobId, gitBlobOid, objectFrame, stripFrame } from './warp/blob.js';
+export {
+  treeId,
+  treeOrder,
+  nativeTreeBytes,
+  parseTree,
+  gitTreeOid,
+  gitTreeBytes,
+  type TreeEntry,
+  type TreeMode,
+  type GitTreeEntry,
+} from './warp/tree.js';
+export { ObjectStore, type VerifyReport } from './warp/object-store.js';
+export { snapshotDir, restoreTree, type SnapshotResult } from './warp/snapshot.js';
 export { canonicalSerialize, type CanonicalValue } from './warp/canonical.js';
 
 // ABSORB

@@ -92,6 +92,18 @@ components:
       needs the PARENT state across CLI runs when the in-mem map is cold) — faithful
       because diff reads only stableKey/contentId/contract, all preserved by
       serializeState. The ONLY thing Warpline writes to disk is under .warpline/.
+      M1a — the NATIVE OBJECT STORE (byte authority, the replacement build): blob.ts
+      (raw-byte blob, blobId=sha256 over git-style "blob <len>\0<bytes>" framing +
+      shadow gitBlobOid), tree.ts (sorted directory manifest, git TREE-ORDER, fixed-
+      width binary ids parseable by mode, treeId=sha256 + shadow gitTreeOid), object-
+      store.ts (loose zlib blobs/ + trees/ under .warpline/objects/ with git fan-out,
+      write-tmp+rename, idempotent put, verify()), snapshot.ts (snapshotDir walks a
+      tree writing every object → root treeId + shadow gitOid; restoreTree rebuilds a
+      byte-faithful tree with git ABSENT — binary/exec/symlink/empty-dir parity). The
+      shadow gitOid EQUALS `git rev-parse <ref>^{tree}` for a clean worktree (a free
+      byte-faithfulness proof during coexistence). Names use RAW bytes not NFC (A5).
+      CLI: `warpline objects snapshot <dir>` / `objects verify`. Sha256 (one hash
+      across meaning + bytes) — spec packages/warpline/docs/native-object-store-design.md.
     type: module
 
   code-lens:
