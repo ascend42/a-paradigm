@@ -11,9 +11,19 @@
  * acquire). Bounded retry with backoff; a stale lock (holder crashed) is stolen
  * after STALE_MS. Paired with the writeSelvage CAS as defense-in-depth.
  *
+ * OWNERSHIP (M2 trust floor, item 4 — Judge): the lockfile carries an OWNER TOKEN
+ * (pid + random) written at acquire. Release unlinks ONLY if the on-disk token is
+ * still ours — after a steal, the old (slow) holder's release must never delete
+ * the new holder's lockfile, or a third writer acquires alongside the second
+ * (cascading multi-holder). The steal itself CLAIMS the stale lockfile by
+ * atomically renaming it aside (exactly one stealer wins the rename; losers see
+ * ENOENT and re-race the O_EXCL create) — never a blind unlink, which could
+ * delete a lock a faster stealer just acquired.
+ *
  * Library code: no console output.
  */
 
+import { randomBytes } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { warplineDirOf } from './fabric.js';
@@ -28,17 +38,30 @@ function lockPath(root: string): string {
   return path.join(warplineDirOf(root), 'refs', '.lock');
 }
 
-/** Run `fn` while holding the fabric lock (acquire → fn → release, always). */
-export async function withFabricLock<T>(root: string, fn: () => Promise<T> | T): Promise<T> {
+/** An acquired fabric lock: the path + the owner token that must match to release. */
+export interface FabricLockHandle {
+  path: string;
+  /** `<pid>:<random>` — the first token on the lockfile's first line. */
+  token: string;
+}
+
+/**
+ * Acquire the fabric lock (exported for tests + composition; most callers want
+ * withFabricLock). Bounded retry; steals a stale lock by atomically renaming it
+ * aside so exactly ONE stealer claims it.
+ */
+export async function acquireFabricLock(root: string): Promise<FabricLockHandle> {
   const lp = lockPath(root);
   fs.mkdirSync(path.dirname(lp), { recursive: true });
+  const token = `${process.pid}:${randomBytes(8).toString('hex')}`;
   const deadline = Date.now() + TIMEOUT_MS;
-  let fd: number | null = null;
 
-  while (fd === null) {
+  for (;;) {
+    let fd: number | null = null;
     try {
       fd = fs.openSync(lp, 'wx'); // O_CREAT | O_EXCL — atomic acquire
-      fs.writeSync(fd, `${process.pid} ${new Date().toISOString()}\n`);
+      fs.writeSync(fd, `${token} ${new Date().toISOString()}\n`);
+      return { path: lp, token };
     } catch (err) {
       if ((err as NodeJS.ErrnoException).code !== 'EEXIST') throw err;
       // Held — steal if stale, else back off until the deadline.
@@ -46,13 +69,18 @@ export async function withFabricLock<T>(root: string, fn: () => Promise<T> | T):
       try {
         stale = Date.now() - fs.statSync(lp).mtimeMs > STALE_MS;
       } catch {
-        stale = true; // lock vanished between open and stat → retry immediately
+        stale = false; // lock vanished between open and stat → just re-race the create
       }
       if (stale) {
+        // CLAIM the stale lockfile atomically: exactly one stealer wins this rename
+        // (the losers get ENOENT and loop back to the O_EXCL create). A blind unlink
+        // here could delete a DIFFERENT lock a faster stealer already re-created.
+        const claimed = `${lp}.stale.${process.pid}.${randomBytes(4).toString('hex')}`;
         try {
-          fs.unlinkSync(lp);
+          fs.renameSync(lp, claimed);
+          fs.unlinkSync(claimed);
         } catch {
-          /* someone else stole it — retry */
+          /* someone else claimed it — re-race the create */
         }
         continue;
       }
@@ -62,21 +90,40 @@ export async function withFabricLock<T>(root: string, fn: () => Promise<T> | T):
         );
       }
       await sleep(RETRY_MS);
+    } finally {
+      if (fd !== null) {
+        try {
+          fs.closeSync(fd);
+        } catch {
+          /* best-effort */
+        }
+      }
     }
   }
+}
 
+/**
+ * Release a fabric lock — unlinks ONLY when the on-disk owner token is still
+ * `handle.token`. If the lock was stolen while we ran, the file now belongs to
+ * the new holder and must be left alone (best-effort: a read failure means the
+ * file is gone or unreadable, and we never unlink what we cannot attribute).
+ */
+export function releaseFabricLock(handle: FabricLockHandle): void {
+  try {
+    const owner = fs.readFileSync(handle.path, 'utf8').split(' ')[0]?.trim();
+    if (owner !== handle.token) return; // stolen — the new holder's lock, not ours
+    fs.unlinkSync(handle.path);
+  } catch {
+    /* best-effort — already gone, or unreadable (never unlink unattributed) */
+  }
+}
+
+/** Run `fn` while holding the fabric lock (acquire → fn → release, always). */
+export async function withFabricLock<T>(root: string, fn: () => Promise<T> | T): Promise<T> {
+  const handle = await acquireFabricLock(root);
   try {
     return await fn();
   } finally {
-    try {
-      fs.closeSync(fd);
-    } catch {
-      /* best-effort */
-    }
-    try {
-      fs.unlinkSync(lp);
-    } catch {
-      /* best-effort */
-    }
+    releaseFabricLock(handle);
   }
 }

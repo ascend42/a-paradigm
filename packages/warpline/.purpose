@@ -385,10 +385,18 @@ components:
       section (Reviewer C1). admit/pick/resolve — and the post-commit auto-seal hook
       which BACKGROUNDS its seal — can otherwise interleave readSelvage→…→writeSelvage
       and lose a write (a strand appended that isn't the tip, two strands sharing a
-      seq). withFabricLock acquires an O_EXCL lockfile under .warpline/refs/.lock
-      (atomic create = acquire), bounded retry with backoff, and steals a stale lock
-      (crashed holder) after a TTL. The in-process #repo-lock only guards the git
-      merge-tree fallback; this is the on-disk lock the hook's cross-process seals need.
+      seq). withFabricLock (acquireFabricLock/releaseFabricLock) acquires an O_EXCL
+      lockfile under .warpline/refs/.lock (atomic create = acquire), bounded retry
+      with backoff, and steals a stale lock (crashed holder) after a TTL. OWNERSHIP
+      (M2 item 4, Judge): the lockfile carries an OWNER TOKEN (pid+random) written
+      at acquire; release unlinks ONLY if the on-disk token is still ours — after a
+      steal the old holder's release leaves the new holder's lock alone (no
+      cascading multi-holder); the steal CLAIMS the stale file by atomic
+      rename-aside (exactly one stealer wins; never a blind unlink). The in-process
+      #repo-lock only guards the git merge-tree fallback; this is the on-disk lock
+      the hook's cross-process seals need. Paired with #fabric's rewriteFabric
+      LOST-UPDATE CAS: the on-disk ledger must still be pick-for-pick the one the
+      rewrite was derived from, else throw — racing an append never drops a strand.
     type: module
 
   resolve:

@@ -190,6 +190,21 @@ export function rewriteFabric(wdir: string, strands: Strand[]): void {
         `!= stored ${pickId}; an identity field was mutated (only calibratedConfidence is rewritable).`,
     );
   }
+  // LOST-UPDATE CAS (M2 trust floor, item 4 — Judge): the caller composed `strands`
+  // from a ledger READ some time ago; if a concurrent writer APPENDED since (a
+  // stolen/stale lock, or a caller outside #fabric-lock), blindly renaming over the
+  // file would silently DROP that strand. Assert the on-disk ledger is still
+  // pick-for-pick the one this rewrite was derived from — annotations may differ
+  // (that is what rewrite is for), identities may not. Callers hold #fabric-lock;
+  // this is defense-in-depth, symmetric with the writeSelvage CAS.
+  const onDisk = readFabric(wdir);
+  if (onDisk.length !== strands.length || onDisk.some((s, i) => s.pickId !== strands[i].pickId)) {
+    throw new Error(
+      `warpline: rewriteFabric CAS failed — the on-disk ledger (${onDisk.length} strand(s)) no longer matches ` +
+        `the ${strands.length} strand(s) this rewrite was derived from (a concurrent writer appended/changed ` +
+        `history); re-read and retry rather than silently dropping a strand.`,
+    );
+  }
   const p = fabricPath(wdir);
   fs.mkdirSync(path.dirname(p), { recursive: true });
   const tmp = `${p}.tmp`;
