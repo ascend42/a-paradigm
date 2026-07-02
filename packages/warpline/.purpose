@@ -100,7 +100,15 @@ components:
       write-tmp+rename, idempotent put, verify()), snapshot.ts (snapshotDir walks a
       tree writing every object → root treeId + shadow gitOid; restoreTree rebuilds a
       byte-faithful tree with git ABSENT — binary/exec/symlink/empty-dir parity, and
-      returns the entry count). TRUST FLOOR (MEDIUM-1): getBlob/getTree are VERIFIED
+      returns the entry count). IGNORE SEMANTICS (T-031/HIGH-3, the dogfooding
+      unblock): the WORKTREE walk (snapshotDir, behind worktree pick/admit) honors
+      ignore-rules.ts — .warplineignore at the root when present (gitignore syntax
+      via the `ignore` package: dir patterns, globs, negation !, anchored /), else
+      .gitignore, plus ALWAYS-ignored .git/.warpline/node_modules at any depth —
+      so dependency trees and secrets never enter the permanent no-gc store;
+      ignored dirs are PRUNED (no re-inclusion inside an excluded dir, gitignore
+      parity); the REF path (git ls-tree) is deliberately unaffected (git governs a
+      ref's contents). TRUST FLOOR (MEDIUM-1): getBlob/getTree are VERIFIED
       READS — always-on, they recompute the content-address of the raw framed bytes
       just inflated and FAIL CLOSED on a mismatch, so restore/materialize/verify can
       never consume a tampered loose object (one uniform rule, no trusted/untrusted

@@ -7,7 +7,8 @@
  *   - regular file → 100644, or 100755 when any exec bit is set
  *   - symlink      → 120000; the blob bytes ARE the link target (git's convention)
  *   - directory    → 40000 subtree, recursed; EMPTY dirs are omitted (git parity)
- *   - .git / .warpline are skipped at the root
+ *   - .git / .warpline / node_modules are ALWAYS skipped (any depth), and the walk
+ *     honors .warplineignore / .gitignore at the root (T-031 — see ignore-rules.ts)
  * Names use the RAW on-disk bytes (not NFC) so the shadow OID matches git exactly.
  * Gitlinks (160000) can't be detected from a plain fs walk — a submodule dir reads
  * as a subtree; native representation + ref-sourced snapshots land with M1b backfill.
@@ -25,6 +26,7 @@ import { gitTreeOid, type TreeEntry, type GitTreeEntry, type TreeMode } from './
 import { ObjectStore } from './object-store.js';
 import { gitShowBuffer, lsTree, type GitOptions } from '../git/git-exec.js';
 import { WORKTREE_REF } from '../absorb.js';
+import { loadIgnoreMatcher, type IgnoreMatcher } from './ignore-rules.js';
 import type { MergeRecipe } from '../fabric/strand.js';
 
 export interface SnapshotResult {
@@ -36,28 +38,37 @@ export interface SnapshotResult {
   entryCount: number;
 }
 
-const ROOT_IGNORE = new Set(['.git', '.warpline']);
-
-/** Snapshot a directory tree into `store`; returns the root ids. */
+/**
+ * Snapshot a directory tree into `store`; returns the root ids.
+ *
+ * IGNORE SEMANTICS (T-031 / HIGH-3): the worktree walk honors `.warplineignore`
+ * (preferred) or `.gitignore` (fallback) at the snapshot root, and ALWAYS skips
+ * .git/.warpline/node_modules at any depth (see ignore-rules.ts) — so a worktree
+ * pick/admit never ingests dependency trees or secrets into the permanent no-gc
+ * object store. Ignored directories are pruned (gitignore semantics: no
+ * re-inclusion inside an excluded directory). The shadow gitOid consequently
+ * equals `git rev-parse <ref>^{tree}` for a CLEAN tree whose ignores match git's.
+ */
 export function snapshotDir(store: ObjectStore, dir: string): SnapshotResult {
-  return walk(store, dir, true);
+  return walk(store, dir, '', loadIgnoreMatcher(dir));
 }
 
-function walk(store: ObjectStore, dir: string, isRoot: boolean): SnapshotResult {
+function walk(store: ObjectStore, dir: string, rel: string, ignored: IgnoreMatcher): SnapshotResult {
   const native: TreeEntry[] = [];
   const git: GitTreeEntry[] = [];
 
   for (const name of fs.readdirSync(dir)) {
-    if (isRoot && ROOT_IGNORE.has(name)) continue;
+    const relPath = rel ? `${rel}/${name}` : name;
     const full = path.join(dir, name);
     const st = fs.lstatSync(full);
+    if (ignored(relPath, st.isDirectory())) continue;
 
     if (st.isSymbolicLink()) {
       const target = Buffer.from(fs.readlinkSync(full), 'utf8'); // link target IS the blob
       native.push({ mode: '120000', name, id: store.putBlob(target) });
       git.push({ mode: '120000', name, sha1: gitBlobOid(target) });
     } else if (st.isDirectory()) {
-      const child = walk(store, full, false);
+      const child = walk(store, full, relPath, ignored);
       if (child.entryCount === 0) continue; // git does not track empty directories
       native.push({ mode: '40000', name, id: child.treeId });
       git.push({ mode: '40000', name, sha1: child.gitOid });

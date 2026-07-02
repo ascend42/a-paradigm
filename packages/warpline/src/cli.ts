@@ -535,7 +535,7 @@ const objects = program
 
 objects
   .command('snapshot')
-  .description('Snapshot a directory into the native object store; prints the root treeId (byte identity) + the shadow git tree OID (== `git rev-parse <ref>^{tree}` for a clean worktree).')
+  .description('Snapshot a directory into the native object store; prints the root treeId (byte identity) + the shadow git tree OID (== `git rev-parse <ref>^{tree}` for a clean worktree). Honors .warplineignore (else .gitignore) at the target root; .git/.warpline/node_modules are always skipped.')
   .argument('<dir>', 'the directory to snapshot')
   .option('--json', 'emit the snapshot result as JSON')
   .action(async (dir: string, options: { json?: boolean }) => {
