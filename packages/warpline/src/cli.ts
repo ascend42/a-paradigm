@@ -57,7 +57,7 @@ const program = new Command();
 
 program
   .name('warpline')
-  .description('The Warpline Engine — the Convergence/Divergence Oracle (read-only).')
+  .description('Warpline — version control for meaning. The Convergence/Divergence Oracle (read-only forecasts) + the native fabric (pick/admit/resolve/restore). Writes .warpline/ only, never git.')
   .version('0.1.0');
 
 program

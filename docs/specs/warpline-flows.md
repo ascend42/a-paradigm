@@ -38,14 +38,14 @@ First principle: git's unit of sharing is a byte-blob by SHA; Warpline's is a **
 - **TRUST DISTRIBUTION = web of trust, no central authority.** Trust is local/subjective/edge-computed; two clones disagreeing is correct. Trust travels as **signed, replayable evidence** (not scores) gossiped via the relay; you can re-run the evidence and decide for yourself (laundering fails because the evidence IS the claim). **Quarantine:** a fresh teammate/agent starts at zero local trust — their offers are gathered (inert) but non-admissible; their picks land in a quarantine selvage until accumulated replayable evidence clears your threshold. Symmetric for new humans and new agents.
 - **Attack surface:** malicious-peer-push (admission is trust-gated → quarantine), provenance forgery (hash-bound sig-chain + notebook-hash identity), trust laundering (replayable evidence only), poisoned meaning-object (content-addressing detects substitution; admission needs a signed weft; ripple-honesty catches lies), cold-start (quarantine), force-weave/history-rewrite (no force primitive; a rewrite is a *divergent* fabric, not a silent overwrite; bolts are signed cuts), malicious relay (a post office with no keys can censor but not forge; multi-relay + p2p fallback). Net: the dangerous operation (admitting to your fabric) is *always yours to gate*.
 
-## 4. Consolidated CLI surface (grouped; status: ✅built · 🔜next · 📐design · ⚠️gap)
-EVERYDAY: init🔜 clone📐 status🔜 pick🔜 pick --amend🔜 branch🔜 switch🔜 move🔜 remove🔜 restore📐 shelf⚠️ unpick📐 reset📐 revert📐 clean📐
-HISTORY: tapestry🔜 show🔜 diff🔜 lifeline🔜 heatmap📐 describe📐 reflog⚠️ bisect⚠️ absorb✅
-COLLABORATE: track📐 gather📐 draw📐 offer📐 clone📐 diverge📐 selvage📐 link⚠️ worktree📐 bundle📐
-REVIEW/APPROVE: oracle✅ weave🔜 weave --preview🔜 consolidate📐 decide🔜 pick-replay📐 replay --onto📐 propose/offer📐 review📐 scrutiny📐 endorse📐 request-changes📐 protect/law📐 owners📐 checks📐 queue📐 shadow📐 trust📐 whois/verify/whodunit📐 delegate📐 quarantine📐
+## 4. Consolidated CLI surface (grouped; status: ✅built · 🔜next · 📐design · ⚠️gap) — refreshed 2026-07-01 post-M1c
+EVERYDAY: init🔜 clone📐 status✅ pick✅ pick --amend🔜 branch🔜(M2) switch🔜(M2) move🔜 remove🔜 restore✅(git-absent, path-hardened) shelf⚠️ unpick📐 reset📐 revert📐 clean📐
+HISTORY: tapestry🔜 show🔜 diff✅ lifeline✅ log✅ selvage✅ heatmap📐 describe📐 reflog⚠️ bisect⚠️ absorb✅
+COLLABORATE: scratch✅(per-agent fork) admit✅(FAST_ADMIT/CLEAN/KNOT/DANGLE; H1: one merge-generation, fail-closed) track📐 gather📐 draw📐 offer📐 clone📐 diverge📐 link⚠️ worktree📐 bundle📐
+REVIEW/APPROVE: oracle✅ weave --preview✅ consolidate✅(forecast) resolve✅(knot council) grade✅(calibration ledger) weave(write)🔜 decide🔜 pick-replay📐 replay --onto📐 propose/offer📐 review📐 scrutiny📐 endorse📐 request-changes📐 protect/law📐 owners📐 checks📐 queue📐 shadow📐 trust📐 whois/verify/whodunit📐 delegate📐 quarantine📐
 RELEASE: bolt🔜 bolt --list📐
-PROJECT/EXPORT: project🔜 import --git✅(via absorb) export --git⚠️ blob⚠️
-ADMIN: config📐 hooks📐 ignore📐 compact⚠️ annotate📐 doctor📐
+PROJECT/EXPORT: project🔜 import --git✅(via absorb) export --git⚠️(GAP-7, unproven) blob⚠️
+ADMIN: hook✅(auto-seal) objects verify✅ fabric verify✅(v2 hash-chain walk) config📐 ignore🔜(T-031, pre-dogfood) compact⚠️(no gc) annotate📐 doctor📐
 
 ## 5. GAPS — flagged loudly (Cid)
 - **GAP-1 (biggest): non-symbol files** — config/prose/fixtures/images carry no Paradigm symbol; what is truth for a file with no meaning? Until decided, diff/weave on these degrades to byte-merge (the very thing Warpline replaces). Options: byte-blob attachment (loses semantic merge) vs a "text-meaning" essence for prose. Needs founder + Loid + Cid.

@@ -600,7 +600,7 @@
           <span class="layer-name">CLI &amp; the GUI</span>
         </div>
         <div class="layer-body">
-          The <strong>CLI</strong> (<code style="font-family:var(--mono);font-size:12px;color:var(--warp-soft)">warpline oracle</code> / <code style="font-family:var(--mono);font-size:12px;color:var(--warp-soft)">absorb</code>) writes the ledger. The <strong>GUI</strong> — a section in the Platform (<code style="font-family:var(--mono);font-size:12px;color:var(--warp-soft)">paradigm serve</code>) — reads that same ledger, runs compute-only endpoints in-process, and repaints live over a WS bus. No reachable write path.
+          The <strong>CLI</strong> (<code style="font-family:var(--mono);font-size:12px;color:var(--warp-soft)">warpline oracle</code> / <code style="font-family:var(--mono);font-size:12px;color:var(--warp-soft)">pick</code> / <code style="font-family:var(--mono);font-size:12px;color:var(--warp-soft)">admit</code> / <code style="font-family:var(--mono);font-size:12px;color:var(--warp-soft)">restore</code>) owns every write — the oracle ledger and the hash-chained fabric. The <strong>GUI</strong> — a section in the Platform (<code style="font-family:var(--mono);font-size:12px;color:var(--warp-soft)">paradigm serve</code>) — reads those same ledgers, runs compute-only endpoints in-process, and repaints live over a WS bus. No reachable write path in the GUI.
           <div class="layer-pills">
             <span class="pill built">warpline oracle / absorb (CLI)</span><span class="pill built">Oracle Divergence Viewer (GUI)</span><span class="pill weft">/api/warpline · forecast · diff · ledger</span>
           </div>
@@ -608,7 +608,7 @@
       </div>
     </div>
 
-    <p class="ro-note reveal">Phase&nbsp;1 is <b>read-only forever</b> — the GUI's <code style="font-family:var(--mono);font-size:11px;color:var(--linen-200)">weave</code> verb exits&nbsp;2; the router can never construct it. Read-only is <b>structural</b>, not policed.</p>
+    <p class="ro-note reveal">The GUI is <b>read-only by construction</b> — its <code style="font-family:var(--mono);font-size:11px;color:var(--linen-200)">weave</code> verb exits&nbsp;2; the router can never construct a write. Fabric writes live only in the CLI (<code style="font-family:var(--mono);font-size:11px;color:var(--linen-200)">pick / admit / resolve / restore</code>). Read-only here is <b>structural</b>, not policed.</p>
   </div>
 </section>
 
