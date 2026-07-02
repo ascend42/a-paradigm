@@ -100,7 +100,15 @@ components:
       write-tmp+rename, idempotent put, verify()), snapshot.ts (snapshotDir walks a
       tree writing every object → root treeId + shadow gitOid; restoreTree rebuilds a
       byte-faithful tree with git ABSENT — binary/exec/symlink/empty-dir parity, and
-      returns the entry count). M1c PATH-HARDENING (Aegis C3, CVE-2021-21300 class):
+      returns the entry count). TRUST FLOOR (MEDIUM-1): getBlob/getTree are VERIFIED
+      READS — always-on, they recompute the content-address of the raw framed bytes
+      just inflated and FAIL CLOSED on a mismatch, so restore/materialize/verify can
+      never consume a tampered loose object (one uniform rule, no trusted/untrusted
+      read fork). T-033 (root-ignore symmetry): snapshotRef skips .git/.warpline
+      path components at ANY depth — a repo that TRACKS its own fabric ledger (this
+      one does) would otherwise bind a ref tree that never matches the worktree
+      snapshot and that restoreTree refuses to write. M1c PATH-HARDENING (Aegis C3,
+      CVE-2021-21300 class):
       restoreTree FAILS CLOSED on a forged/corrupt entry name (assertSafeEntryName
       rejects empty/./../slash/backslash/NUL/absolute/drive-letter + reserved
       .git/.warpline), asserts the parent dir is a real non-symlink directory, and
@@ -426,10 +434,16 @@ components:
       accept on any match; (2) CHAIN (v2) — parentPickId == the immediately-preceding
       strand's pickId (null at a v2 genesis, the v1 TIP at the boundary), else
       chain-break; (3) MERGE (v2) — mergeParentPickId resolves to an earlier strand,
-      else merge-parent-unresolved; (4) BINDING — binding.treeId is present in the
-      object store and every referenced object exists (a self-consistent DANGLING
-      binding is the backstop for a re-forged pickId), else missing-binding /
-      binding-mismatch. Classification (§7.3): known-rule match -> OK; no match +
+      else merge-parent-unresolved; (4) BINDING — every tree/blob reachable from
+      binding.treeId RE-HASHES to its content-address (recompute via the store's
+      verified reads, NOT mere presence — MEDIUM-1; memoized so shared subtrees hash
+      once; a self-consistent DANGLING binding is the backstop for a re-forged
+      pickId), else missing-binding / corrupt-object / binding-mismatch; (5) MERGE
+      RECIPE (the OQ-D compensating control — recipe fields are EXCLUDED from the
+      pickId by design, so verify is the authority): all four recipe trees
+      ({base,ours,theirs,result}) exist AND recompute, and merge.result ===
+      binding.treeId, else merge-recipe-invalid. Classification (§7.3): known-rule
+      match -> OK; no match +
       pickId grandfathered -> legacy-unverifiable (SOFT, exit 0); no match + not
       grandfathered -> pickId-mismatch (HARD, non-zero exit) — how a real forgery
       still surfaces. Report carries v1Prefix{count,selfHashOk}, v2Chain{count,ok},

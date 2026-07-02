@@ -12,8 +12,14 @@
  *   2. Chain (v2)  — parentPickId == the immediately-preceding strand's pickId (the
  *                    first v2 strand anchors the v1 TIP; genesis anchors null).
  *   3. Merge (v2)  — mergeParentPickId resolves to some earlier strand's pickId.
- *   4. Binding     — binding.treeId is present in the object store and every object
- *                    it references exists; ref-sourced strands also match gitOid↔treeSha.
+ *   4. Binding     — every tree/blob reachable from binding.treeId RE-HASHES to its
+ *                    content-address (recompute, not presence — MEDIUM-1); ref-sourced
+ *                    strands also match gitOid↔treeSha.
+ *   5. Merge       — a strand carrying a `merge` recipe has all four recipe trees
+ *                    ({base,ours,theirs,result}) present + recomputing, and
+ *                    merge.result === binding.treeId. The recipe fields are EXCLUDED
+ *                    from the pickId by design (spec OQ-D) — this verify-side
+ *                    validation is the compensating control the spec committed to.
  *
  * Read-only — never writes .warpline/. Distinct from `objects verify` (loose-object
  * self-consistency); this authenticates the HISTORY.
@@ -31,6 +37,8 @@ export type FabricVerifyKind =
   | 'chain-break'
   | 'merge-parent-unresolved'
   | 'missing-binding'
+  | 'corrupt-object'
+  | 'merge-recipe-invalid'
   | 'binding-mismatch';
 
 export interface FabricVerifyFailure {
@@ -59,25 +67,44 @@ export interface FabricVerifyReport {
 
 const isV2 = (s: Strand): boolean => s.schemaVersion >= 2;
 
-/** Walk a binding tree; return the first missing object id, or null if fully present. */
-function firstMissingObject(store: ObjectStore, treeId: string): string | null {
-  if (!store.has(treeId)) return treeId;
+/** The first bad object found under a tree, or null if the whole DAG re-hashes. */
+interface BadObject {
+  id: string;
+  problem: 'missing' | 'corrupt';
+}
+
+/**
+ * Walk a binding tree RECOMPUTING every reachable object (trust floor, MEDIUM-1
+ * closure): presence is not integrity — every tree and blob under `treeId` must
+ * re-hash to its content-address (ObjectStore reads are verified and fail closed).
+ * `ok` memoizes fully-verified ids so shared subtrees across strands hash once.
+ */
+function firstBadObject(store: ObjectStore, treeId: string, ok: Set<string>): BadObject | null {
+  if (ok.has(treeId)) return null;
+  if (!store.has(treeId)) return { id: treeId, problem: 'missing' };
   let entries;
   try {
-    entries = store.getTree(treeId);
+    entries = store.getTree(treeId); // verified read — throws on tampered bytes
   } catch {
-    return treeId; // present but unreadable/corrupt
+    return { id: treeId, problem: 'corrupt' };
   }
   for (const e of entries) {
     if (e.mode === '40000') {
-      const missing = firstMissingObject(store, e.id);
-      if (missing) return missing;
+      const bad = firstBadObject(store, e.id, ok);
+      if (bad) return bad;
     } else if (e.mode === '160000') {
       continue; // gitlink — no bytes stored natively
-    } else if (!store.has(e.id)) {
-      return e.id;
+    } else if (!ok.has(e.id)) {
+      if (!store.has(e.id)) return { id: e.id, problem: 'missing' };
+      try {
+        store.getBlob(e.id); // verified read — recomputes the blob's address
+      } catch {
+        return { id: e.id, problem: 'corrupt' };
+      }
+      ok.add(e.id);
     }
   }
+  ok.add(treeId);
   return null;
 }
 
@@ -94,6 +121,7 @@ export function verifyFabric(root: string): FabricVerifyReport {
   const legacyPickIds: string[] = [];
 
   const knownPickIds = new Set<string>();
+  const verifiedObjects = new Set<string>(); // memo — shared subtrees re-hash once
   let v1Count = 0;
   let v2Count = 0;
   let v1SelfHashOk = true;
@@ -152,12 +180,18 @@ export function verifyFabric(root: string): FabricVerifyReport {
       }
     }
 
-    // 4. Binding re-derivation — the treeId is present and every referenced object exists;
-    //    ref-sourced strands additionally match the shadow gitOid to provenance.treeSha.
+    // 4. Binding re-derivation — every tree/blob reachable from binding.treeId
+    //    RE-HASHES to its content-address (not mere presence — MEDIUM-1); ref-sourced
+    //    strands additionally match the shadow gitOid to provenance.treeSha.
     if (s.binding) {
-      const missing = firstMissingObject(store, s.binding.treeId);
-      if (missing) {
-        push('missing-binding', `binding object ${missing} is absent from the object store`);
+      const bad = firstBadObject(store, s.binding.treeId, verifiedObjects);
+      if (bad) {
+        push(
+          bad.problem === 'missing' ? 'missing-binding' : 'corrupt-object',
+          bad.problem === 'missing'
+            ? `binding object ${bad.id} is absent from the object store`
+            : `binding object ${bad.id} does not recompute to its content-address (tampered bytes)`,
+        );
       }
       if (
         s.provenance.ref !== WORKTREE_REF &&
@@ -166,6 +200,29 @@ export function verifyFabric(root: string): FabricVerifyReport {
         s.binding.gitOid !== s.provenance.treeSha
       ) {
         push('binding-mismatch', `binding.gitOid ${s.binding.gitOid} != provenance.treeSha ${s.provenance.treeSha}`);
+      }
+    }
+
+    // 5. Merge-recipe validation (OQ-D compensating control): the recipe treeIds are
+    //    deliberately EXCLUDED from the v2 pickId, so verify is the authority — all
+    //    four recipe trees ({base,ours,theirs,result}) must exist AND recompute, and
+    //    the recipe's result must BE the strand's byte binding (a recipe that lands
+    //    on different bytes than the binding is a forged/desynced recipe).
+    if (s.merge) {
+      for (const slot of ['base', 'ours', 'theirs', 'result'] as const) {
+        const bad = firstBadObject(store, s.merge[slot], verifiedObjects);
+        if (bad) {
+          push(
+            'merge-recipe-invalid',
+            `merge recipe ${slot} tree ${s.merge[slot]}: object ${bad.id} is ${bad.problem === 'missing' ? 'absent from the object store' : 'tampered (does not recompute)'}`,
+          );
+        }
+      }
+      if (s.binding && s.merge.result !== s.binding.treeId) {
+        push(
+          'merge-recipe-invalid',
+          `merge.result ${s.merge.result} != binding.treeId ${s.binding.treeId} (recipe does not produce the bound bytes)`,
+        );
       }
     }
 

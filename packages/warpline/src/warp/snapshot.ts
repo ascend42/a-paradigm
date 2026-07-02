@@ -130,11 +130,21 @@ export function writeMergedTree(
   return buildTree(store, baseTreeId, root);
 }
 
-/** Snapshot a git REF's tree natively via raw `cat-file` bytes (§1.5). */
+/**
+ * Snapshot a git REF's tree natively via raw `cat-file` bytes (§1.5).
+ *
+ * T-033 (root-ignore symmetry): a repo may TRACK files under .warpline/ (this repo
+ * tracks its own fabric ledger) — but snapshotDir skips .git/.warpline, and
+ * restoreTree REFUSES to write those names (RESTORE_FORBIDDEN). A ref snapshot
+ * must therefore skip them too, or the hook's `--ref HEAD` seal binds a tree that
+ * (a) never matches the worktree snapshot of the same content and (b) can never
+ * be restored. Skipped at any depth, matching restoreTree's per-level guard.
+ */
 export async function snapshotRef(store: ObjectStore, ref: string, opts: GitOptions = {}): Promise<string> {
   const entries = await lsTree(ref, opts);
   const changes = new Map<string, PathChange>();
   for (const e of entries) {
+    if (e.path.split('/').some((part) => RESTORE_FORBIDDEN.has(part))) continue; // T-033
     if (e.type === 'commit' || e.mode === '160000') {
       throw new Error(`warpline: snapshotRef — submodule/gitlink at ${e.path} not yet supported (T-2026-07-01-018)`);
     }

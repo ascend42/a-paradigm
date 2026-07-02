@@ -16,6 +16,7 @@
  * Library code: no console output.
  */
 
+import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as zlib from 'node:zlib';
@@ -66,9 +67,32 @@ export class ObjectStore {
     return id;
   }
 
-  /** Read a blob's raw bytes back (byte-faithful — no re-encoding). */
+  /**
+   * VERIFIED READ (trust floor, MEDIUM-1): recompute the content-address of the
+   * body bytes just inflated and FAIL CLOSED on a mismatch. Content-addressed ⇒
+   * the id IS the contract; a loose object whose bytes no longer hash to their
+   * on-disk location is tamper/corruption and must never be silently trusted by
+   * restore/materialize/verify. Always-on — hashing on read is cheap at current
+   * scale, and one uniform rule beats a trusted/untrusted read fork.
+   */
+  private readVerified(id: string, kind: 'blob' | 'tree'): Buffer {
+    const body = stripFrame(zlib.inflateSync(fs.readFileSync(this.loosePath(id))));
+    // Hash the RAW framed bytes (stricter than parse→reserialize: a non-canonical
+    // byte tamper that round-trips the parser is still caught).
+    const actual =
+      `${kind}:v1:` + createHash('sha256').update(objectFrame(kind, body)).digest('hex');
+    if (actual !== id) {
+      throw new Error(
+        `warpline: object store corruption — ${kind} at ${id} recomputes to ${actual}; ` +
+          `refusing to return tampered bytes (fail closed)`,
+      );
+    }
+    return body;
+  }
+
+  /** Read a blob's raw bytes back (byte-faithful — no re-encoding; verified read). */
   getBlob(id: string): Buffer {
-    return stripFrame(zlib.inflateSync(fs.readFileSync(this.loosePath(id))));
+    return this.readVerified(id, 'blob');
   }
 
   /** Store a directory manifest as a tree; returns its id. */
@@ -78,9 +102,9 @@ export class ObjectStore {
     return id;
   }
 
-  /** Read a tree's entries back. */
+  /** Read a tree's entries back (verified read — fails closed on tampered bytes). */
   getTree(id: string): TreeEntry[] {
-    return parseTree(stripFrame(zlib.inflateSync(fs.readFileSync(this.loosePath(id)))));
+    return parseTree(this.readVerified(id, 'tree'));
   }
 
   /**
