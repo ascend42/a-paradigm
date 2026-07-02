@@ -1,0 +1,51 @@
+id: L-2026-07-02-ascend-161217-001
+type: milestone
+timestamp: '2026-07-02T16:12:17.643Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: GUARD-DECIDER lands — Guard is a new detection class (tsc 0/18) with 3 human-paid catches; pitch corrected to green-gates defects, knot-size is the precision lever
+summary: 'Both streams of ratified-sequence step 1 executed (orch-mr3o8b6l-r6d4). Stream A: CCNF v1.1 shipped (commit 9b49f22d) — decorators + full fail-closed modifier serialization, essence tag v1.1:ts5.9.3, 29-probe institutional ship gate, 292/292, coordinator re-probed live. Stream B: ALL 18 divergeMeaningOnly hits ground-truthed — 0 REAL-BREAK-AT-MERGE / 3 CAUGHT-LATER / 15 BENIGN / 0 UNKNOWN, and tsc (51 controlled typechecks incl. both-parents controls) would have caught 0/18: Guard is a NEW DETECTION CLASS, not a latency optimization. The 3 catches were real defects humans paid to fix within 1-6 days at exactly the flagged symbols (star: zod ZodRecord — maintainer''s ''Fix record type'' next day; coordinator re-verified commits/dates in the clone).'
+symbols_touched:
+  - '#warpline-oracle'
+  - '#ts-lens'
+  - '#essence-hash'
+  - '#code-essence'
+verification:
+  status: pass
+  details:
+    suite: 292/292
+    live-probes: 'coordinator re-run: 3 exploits DIFFER, controls EQUAL'
+    star-datum: coordinator re-verified zod 66cbfe09→ceca9e77 next-day fix in clone
+tags:
+  - arc:warpline
+  - guard
+  - ground-truth
+  - experiment
+  - milestone
+  - false-equal
+body: |-
+  HEADLINE NUMBERS: churn-validated flag rate = 1.1% of git-clean merges (1 per ~92). Precision structure UNPREDICTED by any panelist: flag-set size inversely predicts payoff — hits with ≤6 flagged symbols were 50% churn-validated (3/6); ALL 12 hits with ≥10 symbols (incl. all seven 48-176-symbol avalanches) were 0%. SMALL KNOTS ARE THE PRODUCT — knot-size ranking isn't noise control, it's the signal itself.
+
+  PITCH CORRECTION (critical honesty): 0/18 were cross-branch INTERACTION defects — all 3 CAUGHT-LATER defects were single-side-authored and shipped THROUGH clean merges. The evidenced Guard pitch = "green-gates defects shipping through clean merges, localized to 2-4 symbols, invisible to tsc+tests" (type-level defects where runtime tests are blind — zod ZodRecord 8/8 green at M). The multi-agent-interference pitch remains UNEVIDENCED in 275 real merges — it rides on Move-3 dogfooding, not on this data.
+
+  PANEL SCORING: Jinx's 80% all-benign prior — right about interaction-benignity, falsified on 'all' (3/18 real, paid fixes in 1-6 days). North's existential tsc-column — answered decisively in Guard's favor (0/18). North's conditional Guard 6-7/10 zone REACHED, conditional on shipping knot-size/direct-contested ranking. ⚠️ results.md's flagship xstate e66662e1 case study ground-truthed BENIGN (no break, zero graph.ts churn) — must not be used in marketing; the real star is zod 66cbfe09/ZodRecord.
+
+  DETAILS: zod 69ff844b = pre-existing red branch imported through clean merge (P2 11/33 fail), fixed next day at flagged symbol. xstate 7b808af4 = 4-symbol flag, +2d bad-import fix (invisible to monorepo tsc, breaks published consumers) + +6d failing-test-first path-dedup fix, both at flagged symbols. Evidence: .paradigm/research/warpline-guard-base-rate/ground-truth.{md,jsonl} (18 raw records, 51 typechecks, negative control verified).
+
+  NEXT (queued): base-rate RE-RUN with the v1.1 lens (6.2% was a lower bound — the false-EQUAL hole caused missed flags, esp. nest/decorator-native) + ground-truth NEW hits only; then knot-size ranking into oracle output (T-2026-07-02-002 remaining half); then Arky design pass (v1-prefix anchor + v3 DAG identity) and Move-3 dogfood.
+linked_lore:
+  - L-2026-07-02-ascend-153932-001
+linked_tasks:
+  - T-2026-07-02-002
+  - T-2026-07-02-008
+  - T-2026-07-02-010
+  - T-2026-07-02-011
+linked_commits:
+  - 9b49f22d
+confidence: 0.9
+git_context:
+  ref: 9b49f22d51e5c278e742b7283406c5456857331f
+  branch: warpline-surfaces
+  dirty: true

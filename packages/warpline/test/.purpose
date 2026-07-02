@@ -1,0 +1,14 @@
+# Auto-generated .purpose stub — created by Cid (captain debrief)
+# Delegate to Scribe (Documentor) for rich documentation
+name: test
+description: "TODO: describe what this directory/module does"
+context:
+  - "Stub created by Cid during coverage audit — update with real context"
+# Key files touched:
+# - false-equal-probes.test.ts
+# - code-warp.test.ts
+# - absorb.test.ts
+components:
+  test:
+    description: "TODO: describe this component"
+    tags: []

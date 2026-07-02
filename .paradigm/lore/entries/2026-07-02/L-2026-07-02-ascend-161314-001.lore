@@ -1,0 +1,38 @@
+id: L-2026-07-02-ascend-161314-001
+type: agent-session
+timestamp: '2026-07-02T16:13:14.891Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Cid Debrief: GUARD-DECIDER (ratified sequence step 1) executed and landed. Stream A (Kit, T-0'
+summary: 'GUARD-DECIDER (ratified sequence step 1) executed and landed. Stream A (Kit, T-011): CCNF v1.1 closes the confirmed false-EQUAL hole — decorators (fn+param, source order, refs join the frontier) + fail-closed EVERY-modifier serialization + type-param modifiers; essence tag v1.1:ts5.9.3 version fence; 29-test institutional false-EQUAL probe gate; 292/292 (was 263); coordinator independently re-probed live (3 exploits DIFFER, rename-empty-delta controls EQUAL); commit 9b49f22d; T-008 closed. Stream B (Probe, T-010): ALL 18 base-rate hits ground-truthed — 0 REAL-BREAK-AT-MERGE / 3 CAUGHT-LATER / 15 BENIGN / 0 UNKNOWN; tsc would catch 0/18 (51 controlled typechecks, both-parents controls) → Guard is a NEW DETECTION CLASS not a latency optimization; 3 catches were human-paid fixes within 1-6 days at exactly flagged symbols (star: zod ZodRecord, coordinator re-verified commits in clone); PITCH CORRECTED: 0/18 cross-branch interaction defects — evidenced pitch is green-gates defects through clean merges (2-4 symbols, tests blind); precision lever: flag-sets ≤6 symbols 50% validated, ≥10 (all avalanches) 0% — knot-size ranking IS the product; churn-validated rate 1.1% of git-clean merges; results.md flagship xstate e66662e1 case ground-truthed BENIGN (marketing must switch to zod 66cbfe09); commit 224d0b74. Lore: L-2026-07-02-ascend-161217-001. v1.1 base-rate re-run launched (background, T-002 in-progress — 6.2% was a lower bound). Next per ratified sequence: knot-size ranking, Arky design pass (v1-prefix anchor + v3 DAG identity), Move-3 dogfood.'
+symbols_touched: []
+files_modified:
+  - packages/warpline/src/lens/ts-essence.ts
+  - packages/warpline/src/lens/lift-code-units.ts
+  - packages/warpline/src/lens/ts-lens.ts
+  - packages/warpline/test/false-equal-probes.test.ts
+  - packages/warpline/test/code-warp.test.ts
+  - packages/warpline/test/absorb.test.ts
+  - docs/specs/warpline-code-lens.md
+  - packages/warpline/.purpose
+  - .paradigm/research/warpline-guard-base-rate/ground-truth.md
+  - .paradigm/research/warpline-guard-base-rate/ground-truth.jsonl
+tags:
+  - arc:cid-debrief
+  - orch:orch-mr3o8b6l-r6d4
+meta:
+  orchestrationId: orch-mr3o8b6l-r6d4
+  coverageScore:
+    before: 0.2
+    after: 1
+  coverageAdded:
+    - packages/warpline/src/lens
+    - packages/warpline/test
+    - docs/specs
+    - .paradigm/research/warpline-guard-base-rate
+git_context:
+  ref: 224d0b744f5dd6c82ff90cfe99c453324cd0ec09
+  branch: warpline-surfaces
+  dirty: true
