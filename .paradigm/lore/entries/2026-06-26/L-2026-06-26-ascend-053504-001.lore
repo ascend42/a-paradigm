@@ -1,0 +1,69 @@
+id: L-2026-06-26-ascend-053504-001
+type: agent-session
+timestamp: '2026-06-26T05:35:04.079Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Phase C v2 — Warpline PERFORMS the merge (meaning→bytes), the multi-writer git-replacement path closes
+summary: |-
+  Closed the last gap between 'Warpline decides the merge' and 'Warpline performs it'. Built a token-level 3-way merge (#merge3) that resolves the disjoint edits git's line-merge conflicts on, a materialization layer (#materialize) that reads bytes byte-faithfully via git and produces the merged tree, and wired #admit v2 to materialize + seal + advance the fabric on a CLEAN re-base. Proven end-to-end: two agents edit the same line, git merge-tree CONFLICTS, but Warpline produces the byte-exact AND meaning-identical both-edits merge and the fabric advances to it. 162 tests green.</summary>
+  <parameter name="type">milestone
+symbols_created:
+  - '#merge3'
+  - '#materialize'
+files_created:
+  - packages/warpline/src/fabric/merge3.ts
+  - packages/warpline/src/fabric/materialize.ts
+  - packages/warpline/test/merge3.test.ts
+  - packages/warpline/test/materialize.test.ts
+  - packages/warpline/test/admit-seal.test.ts
+files_modified:
+  - packages/warpline/src/fabric/admit.ts
+  - packages/warpline/src/git/git-exec.ts
+  - packages/warpline/src/cli.ts
+  - packages/warpline/src/index.ts
+  - packages/warpline/.purpose
+commit: b8be7999
+learnings:
+  - Token-level 3-way merge resolves the disjoint edits git's LINE-level merge conflicts on (two edits on one line touch different tokens) — this is the byte mechanism behind 'Warpline merges where git can't'
+  - Hunk-based diff3 with base-range OVERLAP detection is required; a 'stable-in-both-anchors' shortcut falsely conflicts a deletion adjacent to an edit (the test caught it)
+  - 'Byte fidelity is non-negotiable: the shared git() runner trims stdout, which dropped trailing newlines in gitShow — a meaning-equivalent but byte-drifting merge. gitShow must be byte-faithful'
+  - 'The full git-replacement multi-writer path = DECISION (v1) + MATERIALIZATION (v2): Warpline now produces correct merged bytes AND advances its own history where git conflicts'
+verification:
+  status: pass
+  details:
+    typecheck: clean
+    build: ok
+    tests: 162 green
+    proof: materialized merge byte-exact + meaning-identical; end-to-end fabric advance
+tags:
+  - warpline
+  - multi-writer
+  - materialization
+  - phase-c
+  - milestone
+body: |-
+  THE GAP (from v1): admit() DECIDED every concurrent merge (FAST_ADMIT/CLEAN/KNOT/DANGLE, proven where git conflicts) but on a CLEAN re-base did not PRODUCE the merged tree. v2 closes it.
+
+  #merge3 (the cardinal-sin component — a wrong merge silently corrupts): tokenize splits text into word/whitespace/punct runs (join===text). merge3 is a hunk-based diff3 over token arrays: LCS alignment → change hunks (base ranges + replacements) → walk merging by base position. A range changed by only ONE side takes that side; disjoint ranges compose; ranges BOTH changed in OVERLAPPING base coordinates are CONFLICTS (counted, never silently resolved). The first cut used a 'stable-in-both-anchors' approach that FALSELY conflicted a deletion next to an edit (lumped them in one inter-anchor gap); the test caught it and the hunk-based-with-overlap-detection rewrite fixed it. Token granularity is the key: git merges whole LINES (so two edits to one line conflict); token merge sees the edits touch different tokens.
+
+  #materialize: computeMerge(base, ours, theirs refs) reads each changed file via git and merges per-file; add/delete-vs-edit or any overlap → surfaced conflict. materializeMergedState applies the conflict-free plan onto a throwaway copy of the base tree (git archive) and absorbs it → the merged WarpState; the user's working tree is never touched. BYTE-FIDELITY BUG caught by the test: the shared git() runner trims stdout, so gitShow dropped trailing newlines → byte drift. Fixed gitShow to be byte-faithful (no trim). The stateId matched anyway (essences ignore whitespace) but byte-exactness is non-negotiable for a VCS.
+
+  #admit v2: on FAST_ADMIT seal the proposed state; on CLEAN call materializeMergedState (base/theirs git commits come from the strands' provenance.gitCommit anchors; ours = the agent's ref), seal the merged strand, advance selvage, clear scratch. If materialization finds a byte conflict the meaning layer missed → downgrade to KNOT (never a silent wrong-merge). Needs git refs (coexistence byte store); a WORKTREE proposal returns CLEAN unsealed.
+
+  PROOF: materialize.test — A edits foo, B edits bar on ONE line → git merge-tree CONFLICTS, computeMerge produces the byte-exact merged file, materializeMergedState's stateId equals the hand-authored both-edits branch. GUARD — both edit foo's return token → conflict, state null. admit-seal.test (end-to-end) — genesis(base) → fork B at genesis → A admits (FAST, seals A) → B admits (CLEAN re-base, MATERIALIZED + sealed) → selvage == both-edits state, fabric depth 3.
+
+  REMAINING (T-2026-06-26-002, Phase C v3): per-domain optimistic CAS (admission is currently serialized via the single selvage pointer; disjoint-domain WEFTs should admit concurrently without a global lock); KNOT council UX (structured resolution + paradigm_decision_record); grade calibratedConfidence via the classroom outcome loop.
+
+  Commit b8be7999. The multi-writer path of a true git replacement now works: Warpline performs merges git can't.</parameter>
+  <parameter name="symbols_touched">["#merge3", "#materialize", "#admit", "#git-exec", "#warpline-cli", "#scratch"]
+linked_tasks:
+  - T-2026-06-26-001
+linked_commits:
+  - b8be7999
+confidence: 0.88
+git_context:
+  ref: b8be799953ed178f05240e82c3a40d2fe0d08520
+  branch: warpline-surfaces
+  dirty: true

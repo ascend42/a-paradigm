@@ -1,0 +1,58 @@
+id: TD-2026-06-27-798
+timestamp: '2026-06-27T04:05:41.442Z'
+title: Defer per-domain CAS; the team audit redirected Warpline hardening (C1 + calibration + course)
+decision: >-
+  DO NOT build per-domain optimistic CAS now (the planned Phase-C v3 step). The team audit (Arky, Rune, Reviewer, Loid)
+  converged: per-domain CAS is premature optimization for a 2-5-agent workload AND structurally blocked behind unbuilt
+  prerequisites the code revealed. Instead the audit redirected v3 to: (1) DONE this session — close the lost-update
+  race (cross-process #fabric-lock + selvage CAS) and unify the fabric writer (#pick→#seal), plus seed
+  strand.calibratedConfidence from the gate rule; (2) the calibration grader + backfill (Loid: the moat, higher-value
+  than CAS); (3) multi-writer hardening H1/H2/H3/M1 + test gaps (Reviewer: dogfood-blockers); (4) the Warpline
+  University course (dogfoods University); (5) symbol hygiene incl. the ~~read-only framework-bug. Per-domain CAS is
+  deferred until a measured contention problem exists; the granularity design (owning-dir of AUTHORED stableKeys,
+  bounded by the empty-delta property of Merkle ripple) is captured for when/if it's needed.</decision>
+
+  <parameter name="rationale">The convergent finding (Arky + Reviewer independently): the real concurrency gap was NOT
+  domain granularity but that the selvage advance had NO synchronization at all — no lock, no CAS — and the post-commit
+  hook backgrounds its seal, so concurrent unsynchronized writes were the EXPECTED steady state (a lost write / wrong
+  tip reported as success = the VCS cardinal sin in its concurrency form). CAS-over-domains would have been built on
+  that unsound base. With N=2-5 agents admission is sub-second and serialized re-base is what you WANT for correctness
+  (it gives the false-AUTOFOLD gate honest inputs); there is no measured bottleneck. Loid: calibration is the only
+  property git structurally can't replicate, and the grader already exists (classroom survive/overturn) — highest value,
+  lowest marginal cost. Reviewer: the multi-writer path is NOT dogfood-trustworthy until C1/H1/H2/H3 land — so harden
+  before scaling concurrency.</parameter>
+
+  <parameter name="alternatives_considered">[{"option": "Build per-domain optimistic CAS now (the original v3 plan /
+  user's ask)", "rejected_because": "Premature for the actual workload + built on an unsynchronized selvage; granularity
+  trap (Merkle ripple). Deferred until measured contention; design captured."}, {"option": "Dogfood the multi-writer
+  admit/resolve path as a daily driver now", "rejected_because": "Reviewer NO-GO until C1 (fixed) + H1/H2/H3 land —
+  silent lost-update / rename-drop / binary-corruption risks. Single-writer path (pick/hook) IS safe to dogfood now."}]
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+  - id: architect
+    role: agent
+    stance: supported
+  - id: compliance
+    role: agent
+    stance: supported
+  - id: reviewer
+    role: agent
+    stance: supported
+  - id: learning
+    role: agent
+    stance: supported
+symbols_affected:
+  - '#fabric-lock'
+  - '#seal'
+  - '#admit'
+  - '#strand'
+  - '#materialize'
+status: active
+tags:
+  - warpline
+  - audit
+  - multi-writer
+  - cas
+  - calibration

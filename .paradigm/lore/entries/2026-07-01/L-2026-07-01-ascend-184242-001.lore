@@ -1,0 +1,69 @@
+id: L-2026-07-01-ascend-184242-001
+type: agent-session
+timestamp: '2026-07-01T18:42:42.241Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Warpline readiness gate → COMMIT to byte-authoritative replacement; M1 kicked off (design + fail-closed fix)
+summary: |-
+  A 6-lens team panel vetted Warpline for real source-control readiness and unanimously scored ~0.05: it is a meaning/accountability layer riding on git, not a standalone VCS (no native byte store, no checkout/restore, merges it performs are irrecoverable, no tamper-evidence, no remote). The founder chose REPLACEMENT over the team's harden-the-layer rec (TD-2026-07-01-263). Stood up the wedge-first M1-M4 milestone DAG (epic T-2026-07-01-007), authored the M1 native-object-store design spec (Arky), and fixed the blocking silent-history-loss bug (fail closed on a corrupt ledger). 184 tests green.</summary>
+  <parameter name="type">milestone</parameter>
+  <parameter name="body">THE GATE: user asked to vet whether Warpline is usable as source control ("if the team isn't confident it's not ready"). I first ground-truthed the code, then convened a 6-lens panel (Arky/Aegis/Judge/Jinx/Cid/Loid) in parallel — each read packages/warpline/src and returned an independent confidence verdict.
+
+  VERDICT (unanimous, mean ~0.05): Warpline today is a meaning/accountability LAYER on git, NOT a VCS. All five ground-truth claims verified against code:
+  - WarpState = content-addressed MEANING only (essence hashes); WarpObject deliberately drops path/position/bytes. No blob/tree store.
+  - Only .warpline/fabric.jsonl + refs/selvage are committed; states/oracle/grades are gitignored + regenerable.
+  - Every byte read routes through git (`git archive`/`git show`). git is the authoritative byte store.
+  - A CLEAN merge is absorbed for meaning then the tree is DELETED; strand records gitCommit=oursCommit (one parent), NOT the merged bytes — and doesn't even record the merge recipe, so the merge is neither restorable nor re-derivable.
+  - No checkout/restore/clone/push/pull/fetch. Jinx's demo: `git gc --prune=now` or delete the branch a strand points at → Warpline reconstructs ZERO files.
+  - Aegis: fabric is not hash-chained (computePickId doesn't commit to parent pickId) or signed (actor is a self-asserted string) → history rewritable, attribution forgeable, meaning not bound to bytes.
+
+  DECISION (TD-2026-07-01-263): founder committed to byte-authoritative REPLACEMENT, against the team's unanimous harden-the-layer recommendation (dissents recorded, not buried). The team's five block-points became the ordered build spec, sequenced WEDGE-FIRST so recoverability is proven early. Milestone DAG (epic T-2026-07-01-007): M1 native object store + durable merge bytes + `warpline restore` (T-008/010/011/012); M2 full checkout/working-tree write (T-013); M3 integrity hash-chain+sign+fsck (T-014, Aegis); M4 remote/sync (T-015). The #grade calibration moat rides along, not traded away.
+
+  M1 KICKOFF (this session, both delivered):
+  1. M1-DESIGN (T-008, Arky, spec at packages/warpline/docs/native-object-store-design.md, commit b96d3587): own blob+tree objects using git's conceptual model but sha256 hash; byte source = `git cat-file blob` NOT `git archive` (archive applies eol/filters → silent byte drift); strand gains binding.treeId (byte identity) EXCLUDED from pickId exactly like calibratedConfidence (many treeIds → one stateId); durable merges snapshot the merged tree + record a re-derivable MergeRecipe; restore acceptance = `rm -rf .git && warpline restore` yields a diff-identical tree. 7 open questions flagged.
+  2. BUG FIX (T-009, commit c80258ab): the authoritative store read corruption as "empty history" — readSelvage/readFabric blanket-caught every error and a malformed line dropped the whole ledger; admit then FAST_ADMITs a fresh genesis over the real tip (silent data loss). Now: swallow ONLY ENOENT; a corrupt/unreadable tip or malformed ledger line THROWS (with position); admit fails closed when selvage/base points at an unloadable state. +5 tests (fabric-integrity.test.ts), 184 green.
+
+  NEXT: M1a (T-010) — implement the native blob+tree store per the spec (blob.ts/tree.ts/object-store.ts/snapshot.ts, pure bytes, no behavior change), then M1b (durable merge bytes) and M1c (restore + the git-absent acceptance test — the verb that flips the panel's core objection).</parameter>
+  <parameter name="symbols_touched">["#fabric", "#admit", "#warp-store", "#materialize", "#strand", "#seal", "#warpline-cli"]
+files_created:
+  - packages/warpline/docs/native-object-store-design.md
+  - packages/warpline/test/fabric-integrity.test.ts
+files_modified:
+  - packages/warpline/src/fabric/fabric.ts
+  - packages/warpline/src/fabric/admit.ts
+  - packages/warpline/.purpose
+decisions:
+  - id: TD-2026-07-01-263
+    decision: Commit Warpline to byte-authoritative replacement (wedge-first M1-M4)
+    rationale: Founder's call over the team's unanimous ~0.05 harden-the-layer verdict; the block-points became the build spec
+verification:
+  status: pass
+  details:
+    tests: 184/184 pass
+    typecheck: pass
+    purpose: valid
+tags:
+  - warpline
+  - replacement
+  - readiness-gate
+  - team-panel
+  - native-store
+  - milestone
+  - fail-closed
+linked_lore:
+  - L-2026-07-01-ascend-180919-114
+  - L-2026-06-29-ascend-110541-001
+linked_tasks:
+  - T-2026-07-01-007
+  - T-2026-07-01-008
+  - T-2026-07-01-009
+linked_commits:
+  - c80258ab
+  - b96d3587
+confidence: 0.85
+git_context:
+  ref: b96d358734beed361c27656fa382ee0b82a87c7b
+  branch: warpline-surfaces
+  dirty: true

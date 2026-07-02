@@ -1,10 +1,10 @@
 id: security
 project: a-paradigm
 lastSession:
-  date: '2026-06-24T23:21:11.466Z'
-  sessionId: orch-mqsp5xu8-3uay
-  summary: '[Aegis (security)]: security: Process: THEORETICAL / ARCHITECTURE ANALYSIS (no c...'
+  date: '2026-07-01T23:30:43.939Z'
+  sessionId: orch-mr2pl68i-uloe
+  summary: '[Aegis (security)]: security: Process: Full-scope audit of Warpline (packages/wa...'
   symbolsTouched: []
 pendingWork: []
 recentPatterns: []
-sessionsOnProject: 6
+sessionsOnProject: 8

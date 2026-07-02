@@ -1,0 +1,55 @@
+id: L-2026-07-01-ascend-224144-001
+type: milestone
+timestamp: '2026-07-01T22:41:44.261Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Warpline M1.9 shipped — the fabric is now an authenticated chain (schema-v2 pickId, fabric verify), reviewer SHIP 0.9
+summary: 'Built and shipped the keystone from the 5-lens audit: the pickId identity contract v1→v2 (TD-2026-07-01-721), gating M1c. computePickId now folds parentPickId (chain link), binding.treeId (byte tamper-evidence), authoredBy.agentId (attribution), and merge second-parent + algo into the content-address — closing Aegis C1 (append-only-by-convention) and C2 (bait-and-switch bytes under a sealed meaning). New `warpline fabric verify` recomputes every pickId, walks the chain, and re-derives bindings; new rewriteFabric identity guard (closes H2) stops #grade from silently drifting identity fields. During build, caught a PRE-EXISTING drift (TD-2026-07-01-202): the real fabric was sealed under two historical rules and #grade overwrote a hashed field for seq 1–7 — resolved by try-known-rules verification + a pickId-pinned grandfather manifest (.warpline/fabric-legacy.json). Also fixed T-029 (pick fail-open). The migration is DOGFOODED: the real ledger now has live v2 strands (seq 15/16) anchoring the v1 tip, boundaryAnchored true, verify exits 0 with exactly 7 grandfathered strands. Independent verification + adversarial reviewer pass both confirm behavior (SHIP 0.9). 224/224 tests green. Local commits 67b8cf42 + 8daa5cb7, NOT pushed.'
+symbols_touched:
+  - '#strand'
+  - '#pick'
+  - '#seal'
+  - '#admit'
+  - '#fabric'
+  - '#fabric-verify'
+  - '#grade'
+  - '#warpline-cli'
+learnings:
+  - 'The keystone worked exactly as the audit predicted: ONE schema change closed two Aegis criticals (C1 chain + C2 binding), added agent attribution for the moat, and set up the DAG for branching — and doing it before M1c means the store becomes authoritative on an authenticated ledger, not a forgeable one.'
+  - 'Sequencing paid for itself immediately: building the migration SURFACED a pre-existing bug (the #grade in-place mutation of a hashed field, unverifiable seq 1–7) that a naive M1c-first path would have cemented as authoritative. The verify tool now proves the real fabric self-verifies (exit 0) — a capability that literally did not exist before this session.'
+  - 'Guardrail discipline held: told Builder to hard-stop on the v1-recompute check; it did, correctly diagnosed pre-existing-vs-mine on a pristine tree, and we ruled before writing more code. Then independent re-run caught 2 non-hermetic tests (reading the live growing fabric) that Builder''s own run missed — fixed by freezing the fixture to the v1 prefix. Always re-run the suite yourself; a subagent''s green can be stale.'
+verification:
+  status: pass
+  details:
+    tsc: clean
+    build: success
+    tests: 224/224
+    real-fabric-verify: exit 0, 7 grandfathered, boundaryAnchored true
+    independent-recheck: coordinator re-ran CLI + suite
+    adversarial-review: SHIP 0.9, no blocking defects
+tags:
+  - warpline
+  - replacement
+  - fabric-schema-v2
+  - A1
+  - keystone
+  - authenticated-fabric
+  - audit-driven
+linked_lore:
+  - L-2026-07-01-ascend-210748-001
+linked_tasks:
+  - T-2026-07-01-021
+  - T-2026-07-01-029
+  - T-2026-07-01-012
+  - T-2026-07-01-030
+  - T-2026-07-01-032
+linked_commits:
+  - 67b8cf4247e306c9b6ae152bfb0c12fac561c133
+  - 8daa5cb7
+confidence: 0.9
+git_context:
+  ref: 8daa5cb7978438c5fbf484adf2b7e6d5d8e05967
+  branch: warpline-surfaces
+  dirty: true

@@ -1,0 +1,58 @@
+id: L-2026-06-27-ascend-054450-001
+type: agent-session
+timestamp: '2026-06-27T05:44:50.126Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Warpline calibration grader (moat, live) + multi-writer hardening H1/H3/M1 — audit follow-through
+summary: |-
+  Executed the team audit's redirect: shipped Loid's calibration grader (#grade) and three of the Reviewer's multi-writer hardening fixes (H3 binary, H1 3rd-gen merge, M1 large-file). The grader closes the moat loop — it grades strand.calibratedConfidence against real survive/overturn outcome and backfilled the live fabric (8 strands: 4 survived, 1 overturned, 2 pending). The hardening makes the multi-writer path fail CLOSED rather than silently corrupt. 173 tests green, 2 commits (0e3d3d57 grader, a7acfac1 hardening).</summary>
+  <parameter name="type">milestone
+files_created:
+  - packages/warpline/src/fabric/grade.ts
+  - packages/warpline/test/grade.test.ts
+  - packages/warpline/test/hardening.test.ts
+files_modified:
+  - packages/warpline/src/fabric/strand.ts
+  - packages/warpline/src/fabric/fabric.ts
+  - packages/warpline/src/fabric/materialize.ts
+  - packages/warpline/src/fabric/merge3.ts
+  - packages/warpline/src/fabric/admit.ts
+  - packages/warpline/src/fabric/seal.ts
+  - packages/warpline/src/git/git-exec.ts
+  - packages/warpline/src/cli.ts
+learnings:
+  - 'The calibration moat is now MEASURED not asserted: gradeFabric populates real confidence from survive/overturn on the live ledger. computePickId must EXCLUDE calibratedConfidence (graded-later metadata ≠ event identity) so grading doesn''t break the content-address'
+  - 'The multi-writer corruption surfaces are all fail-closed now: binary→conflict, oversized→conflict, 3rd-gen-merge-onto-a-merge-strand→unsealed. The merge engine never silently produces wrong bytes'
+  - A merge strand needs a durable byte home; in coexistence its gitCommit is only one parent, so 3rd-gen merges fail closed until the native byte store (or a written merged git tree) exists
+tags:
+  - warpline
+  - calibration
+  - moat
+  - hardening
+  - multi-writer
+  - milestone
+body: |-
+  GRADER (#grade, 0e3d3d57) — Loid's moat made real: admit seeds calibratedConfidence from the gate rule (linked 0.9/independent 0.6/FAST_ADMIT 0.8); gradeFabric grades it against OUTCOME like the classroom certify→outcome loop — a strand's authored symbols (born ∪ contractChanged) are OVERTURNED when a later strand retires one or a #resolve contends it (confidence ↓), SURVIVED when they hold across a window (↑), PENDING when too recent. applyGrades mutates calibratedConfidence in the ledger + appends the trajectory to .warpline/grades.jsonl (gitignored) under #fabric-lock. KEY DESIGN: computePickId now EXCLUDES calibratedConfidence — it's graded-later metadata, not event identity, so grading can update it without changing the content-address. BACKFILL on the live fabric: 4 survived→0.8, 1 overturned→0.68 (the v2 commit, 2/37 symbols reworked by v3 + the lock fix), 2 pending. 80% pick-class survival. The linked-vs-independent PRIOR experiment awaits multi-writer admits (all 8 strands are auto-seal picks) — reported honestly.
+
+  HARDENING (a7acfac1) — the Reviewer's dogfood-blockers, each now fails CLOSED:
+  - H3 binary: computeMerge reads RAW BYTES (gitShowBuffer, no UTF-8 decode); MergePlan.files is Buffer-valued. A binary blob (NUL) changed on both sides → hard conflict, never a text-merge corruption.
+  - H1 3rd-gen merge: a merge strand's provenance.gitCommit is ONE parent and lacks the merged bytes, so re-basing a later merge's base/theirs off it mis-materializes. Merge strands are now MARKED (strand.merged); admit's CLEAN path refuses to materialize onto a merge strand → fail-closed unsealed. Proven with a 3-agent test (A fast, B clean-merge marked, C re-bases onto the merge → CLEAN but sealed:false).
+  - M1: merge3 caps the O(n·m) LCS grid at 4M cells → oversized/minified file fails closed (whole-file conflict), no OOM.
+
+  REMAINING hardening (T-2026-06-27-002): H2 rename (changedPaths lacks -M), mode-change detection, and the rest of the G-test matrix (G1 interleaved 3+ agents, G3 KNOT-downgrade, G4 multi-file).
+
+  This continues the audit-redirect (TD-2026-06-27-798): the moat + the fail-closed safety are the priorities, per the team; per-domain CAS stays deferred. The full git-replacement multi-writer path is now: decide → materialize → resolve → (concurrency-safe via #fabric-lock) → (fails closed on the corruption cases) → (confidence graded against outcome).</parameter>
+  <parameter name="symbols_touched">["#grade", "#strand", "#materialize", "#merge3", "#admit", "#seal", "#git-exec"]
+linked_tasks:
+  - T-2026-06-27-003
+  - T-2026-06-27-002
+linked_commits:
+  - 0e3d3d57
+  - a7acfac1
+confidence: 0.88
+git_context:
+  ref: a7acfac1b09eaf4fea6883221789beb5dda2753d
+  branch: warpline-surfaces
+  dirty: true
