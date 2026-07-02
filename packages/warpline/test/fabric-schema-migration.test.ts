@@ -82,7 +82,7 @@ describe('migration — the frozen v1 prefix verifies with the grandfathered res
     // the graded-over residue (seq 1–7) is exactly the grandfathered set
     expect(r.legacyUnverifiable.count).toBe(grandfathered.size);
     expect(r.legacyUnverifiable.count).toBe(7);
-    expect(new Set(r.legacyUnverifiable.pickIds)).toEqual(grandfathered);
+    expect(new Set(r.legacyUnverifiable.pickIds)).toEqual(new Set(grandfathered.keys()));
     // the fixture is v1-only by construction, so every checked strand is v1 and no v2 chain exists
     expect(r.checked).toBe(r.v1Prefix.count);
     expect(r.checked).toBe(realV1Lines().length);

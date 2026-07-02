@@ -28,7 +28,7 @@
  */
 
 import { warplineDirOf, readFabric, readLegacyGrandfathered } from './fabric.js';
-import { computePickId, reproducesUnderKnownRule, type Strand } from './strand.js';
+import { computePickId, computeLegacyBodyHash, reproducesUnderKnownRule, type Strand } from './strand.js';
 import { ObjectStore } from '../warp/object-store.js';
 import { WORKTREE_REF } from '../absorb.js';
 
@@ -39,9 +39,12 @@ export type FabricVerifyKind =
   | 'missing-binding'
   | 'corrupt-object'
   | 'merge-recipe-invalid'
+  | 'legacy-body-mismatch'
+  | 'legacy-manifest-invalid'
   | 'binding-mismatch';
 
 export interface FabricVerifyFailure {
+  /** the strand's seq — or -1 for a MANIFEST-level failure (no strand to point at). */
   seq: number;
   pickId: string;
   kind: FabricVerifyKind;
@@ -58,8 +61,10 @@ export interface FabricVerifyReport {
   /** the first v2 strand's parentPickId equals its predecessor (the v1 tip), or it is a well-rooted v2 genesis. */
   boundaryAnchored: boolean;
   /**
-   * SOFT (§7.3): strands sealed under an obsolete rule whose hashed byte #grade
-   * destroyed, grandfathered by pickId (§7.2). Counted, NOT a failure — exit stays 0.
+   * SOFT (§7.3): v1 strands sealed under an obsolete rule whose hashed byte #grade
+   * destroyed, grandfathered by pickId AND matching their PINNED bodyHash (§7.2
+   * containment). Counted, NOT a failure — exit stays 0. A grandfathered strand
+   * whose body moved is a HARD legacy-body-mismatch instead.
    */
   legacyUnverifiable: { count: number; pickIds: string[] };
   failures: FabricVerifyFailure[];
@@ -121,6 +126,7 @@ export function verifyFabric(root: string): FabricVerifyReport {
   const legacyPickIds: string[] = [];
 
   const knownPickIds = new Set<string>();
+  const versionByPickId = new Map<string, number>(); // for manifest membership sanity
   const verifiedObjects = new Set<string>(); // memo — shared subtrees re-hash once
   let v1Count = 0;
   let v2Count = 0;
@@ -139,16 +145,26 @@ export function verifyFabric(root: string): FabricVerifyReport {
     const push = (kind: FabricVerifyKind, detail: string): void => {
       failures.push({ seq: s.seq, pickId: s.pickId, kind, detail });
       if (v2) v2ChainOk = false;
-      else if (kind === 'pickId-mismatch') v1SelfHashOk = false;
+      else if (kind === 'pickId-mismatch' || kind === 'legacy-body-mismatch') v1SelfHashOk = false;
     };
 
-    // 1. Integrity (§7.1/§7.3) — try the finite set of known hashing rules. A stored
-    //    pickId reproduced by any known rule is OK; otherwise, a grandfathered pickId
-    //    is a SOFT legacy-unverifiable (exit stays 0), and anything else is a HARD
-    //    pickId-mismatch (real tamper — how a future forgery still surfaces).
+    // 1. Integrity (§7.1/§7.3 + HIGH-2 containment) — try the finite set of known
+    //    hashing rules. A stored pickId reproduced by any known rule is OK. Otherwise
+    //    the grandfather clause applies ONLY to a v1 strand whose PINNED body hash
+    //    still matches — that is a SOFT legacy-unverifiable (exit stays 0). A
+    //    grandfathered strand whose BODY moved is a HARD legacy-body-mismatch (the
+    //    clause exempts the retired pickId rule, never the body), and anything else
+    //    is a HARD pickId-mismatch (real tamper — how a future forgery surfaces).
     if (!reproducesUnderKnownRule(s)) {
-      if (grandfathered.has(s.pickId)) {
-        legacyPickIds.push(s.pickId); // soft — not a failure
+      const pinned = !isV2(s) ? grandfathered.get(s.pickId) : undefined;
+      if (pinned !== undefined) {
+        const { pickId: _stored, ...body } = s;
+        const actual = computeLegacyBodyHash(body);
+        if (actual === pinned) {
+          legacyPickIds.push(s.pickId); // soft — not a failure
+        } else {
+          push('legacy-body-mismatch', `body hash ${actual} != pinned ${pinned} (grandfathered strand's body was tampered)`);
+        }
       } else {
         const { pickId: _stored, ...body } = s;
         push('pickId-mismatch', `recomputed ${computePickId(body)} != stored ${s.pickId} (no known rule; not grandfathered)`);
@@ -227,6 +243,31 @@ export function verifyFabric(root: string): FabricVerifyReport {
     }
 
     knownPickIds.add(s.pickId);
+    versionByPickId.set(s.pickId, s.schemaVersion);
+  }
+
+  // 6. Manifest membership sanity (HIGH-2 containment): every grandfather entry must
+  //    correspond to an EXISTING v1 strand in this fabric. An unknown pickId is a
+  //    stale/foreign allow-list entry; a v2 pickId in the list is an attempt to
+  //    grandfather an authenticatable strand — both are HARD failures (seq -1: these
+  //    are manifest-level, there is no strand line to point at).
+  for (const [pickId] of grandfathered) {
+    const version = versionByPickId.get(pickId);
+    if (version === undefined) {
+      failures.push({
+        seq: -1,
+        pickId,
+        kind: 'legacy-manifest-invalid',
+        detail: 'fabric-legacy.json entry matches NO strand in the fabric (stale/foreign allow-list entry)',
+      });
+    } else if (version >= 2) {
+      failures.push({
+        seq: -1,
+        pickId,
+        kind: 'legacy-manifest-invalid',
+        detail: 'fabric-legacy.json entry names a schemaVersion 2 strand — grandfathering applies only to v1 (entry ignored for verification)',
+      });
+    }
   }
 
   return {

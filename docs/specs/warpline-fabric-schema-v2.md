@@ -366,3 +366,41 @@ Builder generates this file once by enumerating the real fabric: any strand whos
 ---
 
 **Files the Builder will touch:** `packages/warpline/src/fabric/strand.ts` (interface + `computePickId` + `MergeRecipe.algo`), `.../fabric/seal.ts` (`SealInput` + body), `.../fabric/pick.ts` (`RecordPickOptions` + seal call + T-029 fail-closed), `.../fabric/admit.ts` (3 seal calls + `mergeParentPickId`), `.../fabric/fabric.ts` (`rewriteFabric` guard), `.../warp/snapshot.ts` (`captureMerge` algo tag), new `.../fabric/verify.ts`, `.../cli.ts` (new `fabric verify` group), and the six test files in §6.
+
+---
+
+## Amendment 2026-07-01 — Move 2 trust-floor bundle (ratified 4-agent audit: Aegis → Arky → Judge)
+
+This amendment records semantics that CHANGED after the sections above were written. The original text is left intact as history.
+
+### A1. OQ-D resolved — `fabric verify` is the merge-recipe authority (the compensating control, shipped)
+
+OQ-D's recommendation is now implemented. `merge.{base,ours,theirs,result}` remain **excluded** from the v2 pickId, and `fabric verify` gained the committed compensating control as a fifth step:
+
+- all four recipe trees (`base`/`ours`/`theirs`/`result`) must be **present AND recompute** (a full verified walk — every reachable tree/blob re-hashes to its content-address), and
+- `merge.result === binding.treeId` — a recipe that lands on different bytes than the strand's binding is a forged/desynced recipe.
+
+Any violation is a HARD `merge-recipe-invalid` failure. This is the precondition T-030 (H1 relaxation) depends on; T-030 itself remains un-landed (PR-B).
+
+Supporting change (MEDIUM-1): `ObjectStore.getBlob/getTree` are now **verified reads** — always-on recompute of the content-address of the inflated bytes, failing closed on mismatch — and verify's step-4 binding walk upgraded from *presence* to *recompute* (new `corrupt-object` failure kind). `restore` therefore aborts on a tampered loose object instead of writing forged bytes.
+
+### A2. §7.2/§7.3/§7.4 superseded — the grandfather clause is BODY-PINNED and v1-only (HIGH-2 + MEDIUM-2 containment)
+
+The §7.2 manifest format changed from bare pickIds to pinned entries:
+
+```jsonc
+{
+  "reason": "…",
+  "grandfathered": [ { "pickId": "pick:v0:…", "bodyHash": "sha256:…" }, … ]
+}
+```
+
+`bodyHash = sha256(canonicalSerialize(canonicalSafe(body minus {calibratedConfidence, binding, merge})))` — the same exclusion set as the v1 pickId rule, so `#grade` (confidence) and `objects backfill` (binding) stay legal while intent/delta/stateId/actor/provenance are pinned.
+
+Semantics changes vs the original §7:
+
+1. **Body pinning (verify).** A grandfathered strand's body must match its pinned `bodyHash`; a mismatch is a HARD `legacy-body-mismatch` (not soft `legacy-unverifiable`). The clause exempts the retired pickId rule, never the body.
+2. **v1-only.** Grandfathering applies only to `schemaVersion < 2` strands. A v2 pickId in the manifest is ignored for verification and reported.
+3. **Manifest membership sanity (verify).** Every manifest entry must correspond to an existing v1 strand in the fabric; unknown/extra entries and v2 entries are HARD `legacy-manifest-invalid` failures (reported with `seq: -1`).
+4. **§7.4 guard no longer skips.** `rewriteFabric`'s grandfathered path enforces the pinned bodyHash — only a `calibratedConfidence` change passes; anything else throws, exactly like the known-rule path. The whole-body-rewritable hole (reachable via `warpline grade`) is closed.
+5. **Retired format fails closed.** A bare-pickId manifest is refused with a "regenerate the legacy manifest" error (no auto-upgrade — an unpinned grandfather clause is exactly the hole this closes). The real repo manifest was migrated once (7 entries, asserted to be exactly seq 1–7 per §7.2's original guard).

@@ -1,12 +1,33 @@
 {
-  "reason": "TD-2026-07-01-202: sealed under the whole-body rule, then calibratedConfidence overwritten in place by #grade (0e3d3d57) before the exclusion rule + rewriteFabric guard existed. Hashed byte destroyed; unrecoverable.",
+  "reason": "TD-2026-07-01-202: sealed under the whole-body rule, then calibratedConfidence overwritten in place by #grade (0e3d3d57) before the exclusion rule + rewriteFabric guard existed. Hashed byte destroyed; unrecoverable. Body-pinned 2026-07-01 (HIGH-2 containment): bodyHash = sha256 over the canonical body excluding calibratedConfidence/binding/merge — grading stays legal, everything else is tamper-evident.",
   "grandfathered": [
-    "pick:v0:4713901b3396c8efa13bdccf9d0487dffbf6f668d8a6ff9f5d6a82dffda777b1",
-    "pick:v0:203e6d042a57df18adc80d85a4d8f552d5ec7f333dc57780fc7bb715bb95d206",
-    "pick:v0:802e86727dbc8ae6f00a3f65b624f58a415979b28c31febd9467c7a8220e28e2",
-    "pick:v0:ec2cb4d51db01f18f29e1b73bef4a5f0820201ca8dbd01ce233c42a899a4e75a",
-    "pick:v0:2859cd48b8c339f95cdf798b45ab0d1c8d6c73391d7e38c46f8056c673de73de",
-    "pick:v0:bcf82a3bc1fb33772338451791804b433771a7d59ce9827d327d4994d061d931",
-    "pick:v0:6c068e6de7a2086b33f25124e237f8c72cbbc8af7b7f8524159bbcd8d18364c0"
+    {
+      "pickId": "pick:v0:4713901b3396c8efa13bdccf9d0487dffbf6f668d8a6ff9f5d6a82dffda777b1",
+      "bodyHash": "sha256:7b9dc74d875ef6b8d55be04dbf05108b1dbe32d62a5db1edadc95d24fd0a8781"
+    },
+    {
+      "pickId": "pick:v0:203e6d042a57df18adc80d85a4d8f552d5ec7f333dc57780fc7bb715bb95d206",
+      "bodyHash": "sha256:44cb9486c378dfdc6eced1e9f92fda983b10ed4f11c0532b6e9a24ca32020e85"
+    },
+    {
+      "pickId": "pick:v0:802e86727dbc8ae6f00a3f65b624f58a415979b28c31febd9467c7a8220e28e2",
+      "bodyHash": "sha256:75523edfc1bd0a1c0b3c495fdb1fb2b386fb0c62960457ce6223706cff15db64"
+    },
+    {
+      "pickId": "pick:v0:ec2cb4d51db01f18f29e1b73bef4a5f0820201ca8dbd01ce233c42a899a4e75a",
+      "bodyHash": "sha256:35fa162f5bec24089b281a7e619dd2b3c5ed45672542fbebf031ace547d88b0d"
+    },
+    {
+      "pickId": "pick:v0:2859cd48b8c339f95cdf798b45ab0d1c8d6c73391d7e38c46f8056c673de73de",
+      "bodyHash": "sha256:a055b9630da37834bb80072619c9f6078903f0b31de7e32f497bedb5235dfdbd"
+    },
+    {
+      "pickId": "pick:v0:bcf82a3bc1fb33772338451791804b433771a7d59ce9827d327d4994d061d931",
+      "bodyHash": "sha256:460f95e377095414de69d8f30862db11233008967b47032c861fed60ca9d8432"
+    },
+    {
+      "pickId": "pick:v0:6c068e6de7a2086b33f25124e237f8c72cbbc8af7b7f8524159bbcd8d18364c0",
+      "bodyHash": "sha256:8054fdb6f2abb18195ff942408c13b7b0c3c8a89f35c2e8ae12d80403b21105f"
+    }
   ]
 }

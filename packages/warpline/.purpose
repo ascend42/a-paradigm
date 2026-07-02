@@ -418,8 +418,15 @@ components:
       closed when the selvage/base points at a stateId whose state cannot be loaded.
       rewriteFabric carries the §4.4/§7.4 IDENTITY GUARD: it recomputes every strand's
       pickId (trying the known rules via reproducesUnderKnownRule) and refuses to write
-      unless each reproduces OR its pickId is grandfathered (readLegacyGrandfathered
-      reads .warpline/fabric-legacy.json) — so #grade may move calibratedConfidence
+      unless each reproduces OR it is a GRANDFATHERED v1 strand whose PINNED bodyHash
+      still matches (HIGH-2 containment — the grandfathered path no longer skips the
+      guard wholesale; only a calibratedConfidence change is legal). The legacy
+      manifest (.warpline/fabric-legacy.json, readLegacyGrandfathered) is BODY-PINNED
+      {pickId, bodyHash} where bodyHash = computeLegacyBodyHash (canonical body
+      excluding calibratedConfidence/binding/merge — the v1 exclusion set, so #grade
+      and `objects backfill` stay legal); the retired bare-pickId format FAILS CLOSED
+      with a regenerate instruction (never auto-upgraded — an unpinned grandfather
+      clause is the hole this closed). So #grade may move calibratedConfidence
       (excluded from the hash) but can never silently drift an identity field.
     type: module
     components:
@@ -442,14 +449,19 @@ components:
       RECIPE (the OQ-D compensating control — recipe fields are EXCLUDED from the
       pickId by design, so verify is the authority): all four recipe trees
       ({base,ours,theirs,result}) exist AND recompute, and merge.result ===
-      binding.treeId, else merge-recipe-invalid. Classification (§7.3): known-rule
-      match -> OK; no match +
-      pickId grandfathered -> legacy-unverifiable (SOFT, exit 0); no match + not
-      grandfathered -> pickId-mismatch (HARD, non-zero exit) — how a real forgery
-      still surfaces. Report carries v1Prefix{count,selfHashOk}, v2Chain{count,ok},
-      boundaryAnchored, legacyUnverifiable{count,pickIds}, failures[]. Exit 0 intact /
-      1 tamper / 2 I/O error. Distinct from `objects verify` (loose-object
-      self-consistency). Spec docs/specs/warpline-fabric-schema-v2.md.
+      binding.treeId, else merge-recipe-invalid. Classification (§7.3 + HIGH-2
+      containment): known-rule match -> OK; no match + a V1 strand grandfathered
+      AND matching its PINNED bodyHash -> legacy-unverifiable (SOFT, exit 0); a
+      grandfathered strand whose BODY moved -> legacy-body-mismatch (HARD — the
+      clause exempts the retired pickId rule, never the body); no match + not
+      grandfathered -> pickId-mismatch (HARD) — how a real forgery still surfaces.
+      MANIFEST SANITY: every fabric-legacy.json entry must correspond to an existing
+      v1 strand; an unknown entry or a v2 pickId in the list -> legacy-manifest-
+      invalid (HARD, seq -1). Report carries v1Prefix{count,selfHashOk},
+      v2Chain{count,ok}, boundaryAnchored, legacyUnverifiable{count,pickIds},
+      failures[]. Exit 0 intact / 1 tamper / 2 I/O error. Distinct from `objects
+      verify` (loose-object self-consistency). Spec
+      docs/specs/warpline-fabric-schema-v2.md (+ the 2026-07-01 amendment).
     type: module
     components:
       - "#strand"

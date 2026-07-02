@@ -17,30 +17,54 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { computePickId, reproducesUnderKnownRule, type Strand } from './strand.js';
+import { computePickId, computeLegacyBodyHash, reproducesUnderKnownRule, type Strand } from './strand.js';
 
-/** The grandfathered-legacy manifest (§7.2) — pickIds whose hashed byte #grade destroyed. */
+/** One grandfathered legacy strand: its stored pickId + its PINNED body hash (§7.2). */
+export interface FabricLegacyEntry {
+  pickId: string;
+  /** computeLegacyBodyHash over the strand body — pins everything but confidence/binding/merge. */
+  bodyHash: string;
+}
+
+/** The grandfathered-legacy manifest (§7.2) — strands whose hashed byte #grade destroyed. */
 export interface FabricLegacy {
   reason: string;
-  grandfathered: string[];
+  grandfathered: FabricLegacyEntry[];
 }
 
 /**
- * The set of stored pickIds grandfathered as `legacy-unverifiable` (§7.2), read from
- * `.warpline/fabric-legacy.json`. ENOENT ⇒ empty set (no legacy residue). Any other
- * read/parse failure THROWS — a corrupt allow-list must not silently widen or narrow.
+ * The grandfathered legacy manifest (§7.2 containment) as pickId → pinned bodyHash,
+ * read from `.warpline/fabric-legacy.json`. ENOENT ⇒ empty map (no legacy residue).
+ * Any other read/parse failure THROWS — a corrupt allow-list must not silently widen
+ * or narrow. The RETIRED bare-pickId format (pre body-pinning) FAILS CLOSED with a
+ * regenerate instruction rather than auto-upgrading: an unpinned grandfather clause
+ * is exactly the hole HIGH-2 closed, so we refuse to run with one.
  */
-export function readLegacyGrandfathered(wdir: string): Set<string> {
+export function readLegacyGrandfathered(wdir: string): Map<string, string> {
   const p = path.join(wdir, 'fabric-legacy.json');
   let raw: string;
   try {
     raw = fs.readFileSync(p, 'utf8');
   } catch (err) {
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return new Set();
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return new Map();
     throw new Error(`warpline: fabric-legacy.json unreadable at ${p}: ${(err as Error).message}`);
   }
   const parsed = JSON.parse(raw) as FabricLegacy;
-  return new Set(parsed.grandfathered ?? []);
+  const out = new Map<string, string>();
+  for (const entry of parsed.grandfathered ?? []) {
+    if (typeof entry === 'string') {
+      throw new Error(
+        `warpline: fabric-legacy.json at ${p} uses the retired bare-pickId format — ` +
+          `regenerate the legacy manifest with {pickId, bodyHash} entries ` +
+          `(bodyHash = computeLegacyBodyHash over the strand body; spec §7.2 amendment 2026-07-01)`,
+      );
+    }
+    if (!entry.pickId || !entry.bodyHash) {
+      throw new Error(`warpline: fabric-legacy.json at ${p} — entry missing pickId/bodyHash (corrupt allow-list)`);
+    }
+    out.set(entry.pickId, entry.bodyHash);
+  }
+  return out;
 }
 
 /** The `.warpline/` dir for a repo root (same dir #warp-store writes under). */
@@ -140,18 +164,27 @@ export function readFabric(wdir: string): Strand[] {
  * pickId) is never rewritten. Callers hold #fabric-lock.
  */
 export function rewriteFabric(wdir: string, strands: Strand[]): void {
-  // IDENTITY GUARD (Aegis H2, §7.4): a strand passes if its stored pickId reproduces
-  // under ANY known hashing rule (§7.1) OR its pickId is grandfathered (§7.2). Because
-  // calibratedConfidence is excluded from the current v1/v2 rules, grade's confidence
-  // rewrite passes cleanly for non-grandfathered strands; the graded-over residue
-  // (seq 1–7) passes via the grandfather allow-list so `grade` still runs over the real
-  // fabric; and any accidental mutation of an identity field (stateId/delta/binding.
-  // treeId/parentPickId/…) on a NON-grandfathered strand THROWS — no silent drift.
+  // IDENTITY GUARD (Aegis H2, §7.4 + HIGH-2 containment): a strand passes if its
+  // stored pickId reproduces under ANY known hashing rule (§7.1), OR it is a
+  // GRANDFATHERED v1 strand whose PINNED body hash still matches (§7.2). Because
+  // calibratedConfidence is excluded from the rules AND from the body hash, grade's
+  // confidence rewrite passes cleanly for every strand — but the grandfathered path
+  // no longer skips the guard wholesale: any mutation of an identity field
+  // (intent/stateId/delta/binding.treeId/parentPickId/…) THROWS, grandfathered or
+  // not — no silent drift, no whole-body rewrite hole.
   const grandfathered = readLegacyGrandfathered(wdir);
   for (const s of strands) {
     if (reproducesUnderKnownRule(s)) continue;
-    if (grandfathered.has(s.pickId)) continue;
     const { pickId, ...body } = s;
+    const pinned = grandfathered.get(s.pickId);
+    if (pinned !== undefined && s.schemaVersion < 2) {
+      if (computeLegacyBodyHash(body) === pinned) continue; // confidence-only change — legal
+      throw new Error(
+        `warpline: rewriteFabric refused — grandfathered strand seq ${s.seq} body hash ` +
+          `${computeLegacyBodyHash(body)} != pinned ${pinned}; grandfathering exempts the retired ` +
+          `pickId rule, NOT the body (only calibratedConfidence is rewritable).`,
+      );
+    }
     throw new Error(
       `warpline: rewriteFabric refused — strand seq ${s.seq} recomputed pickId ${computePickId(body)} ` +
         `!= stored ${pickId}; an identity field was mutated (only calibratedConfidence is rewritable).`,

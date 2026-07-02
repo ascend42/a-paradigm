@@ -192,6 +192,22 @@ export function computePickIdWholeBody(body: StrandBody): string {
 }
 
 /**
+ * The pinned BODY HASH of a grandfathered legacy strand (§7.2 containment,
+ * HIGH-2/MEDIUM-2): sha256 over the canonical strand body EXCLUDING
+ * calibratedConfidence/binding/merge — the same exclusion set as the v1 pickId
+ * rule, so #grade (confidence) and `objects backfill` (binding) stay legal while
+ * intent/delta/stateId/actor/provenance are all PINNED. A grandfathered strand
+ * escapes pickId re-verification (its hashed byte was destroyed, §7.2) but NOT
+ * body pinning — tampering its meaning now fails hard instead of hiding behind
+ * the grandfather clause.
+ */
+export function computeLegacyBodyHash(body: StrandBody): string {
+  const { calibratedConfidence: _graded, binding: _bound, merge: _merge, ...identity } = body;
+  const canon = canonicalSerialize(canonicalSafe(identity));
+  return 'sha256:' + createHash('sha256').update(canon, 'utf8').digest('hex');
+}
+
+/**
  * Does `strand`'s stored pickId reproduce under a KNOWN hashing rule (§7.1)? For a
  * v2 strand: the v2 rule. For a v1 strand: the current-exclusion rule (§1.4) OR the
  * legacy whole-body rule. Accept on the first match. Callers grandfather the

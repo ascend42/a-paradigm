@@ -13,7 +13,13 @@ import * as path from 'node:path';
 import * as fs from 'node:fs';
 import { warplineDirOf, appendStrand, readFabric } from '../src/fabric/fabric.js';
 import { gradeFabric, applyGrades } from '../src/fabric/grade.js';
-import { computePickId, computePickIdWholeBody, type Strand, type StrandBody } from '../src/fabric/strand.js';
+import {
+  computePickId,
+  computePickIdWholeBody,
+  computeLegacyBodyHash,
+  type Strand,
+  type StrandBody,
+} from '../src/fabric/strand.js';
 import { verifyFabric } from '../src/fabric/verify.js';
 
 const NOW = '2026-07-01T00:00:00.000Z';
@@ -61,7 +67,12 @@ function gradedOverWholeBody(): Strand {
   return { ...sealBody, calibratedConfidence: 0.5, pickId: sealedPickId };
 }
 
-function writeLegacy(root: string, grandfathered: string[]): void {
+/** Write a BODY-PINNED grandfather manifest for the given strands (§7.2 containment). */
+function writeLegacy(root: string, strands: Strand[]): void {
+  const grandfathered = strands.map((s) => {
+    const { pickId, ...body } = s;
+    return { pickId, bodyHash: computeLegacyBodyHash(body) };
+  });
   fs.writeFileSync(
     path.join(warplineDirOf(root), 'fabric-legacy.json'),
     JSON.stringify({ reason: 'test grandfather', grandfathered }, null, 2),
@@ -88,7 +99,7 @@ describe('fabric-legacy — hard vs soft classification of a graded-over strand'
 
   it('grandfathered by pickId → legacy-unverifiable (soft, exit stays 0)', () => {
     const graded = readFabric(warplineDirOf(root)).find((s) => s.seq === 1)!;
-    writeLegacy(root, [graded.pickId]);
+    writeLegacy(root, [graded]);
     const r = verifyFabric(root);
     expect(r.failures).toEqual([]); // soft — exit 0
     expect(r.legacyUnverifiable).toEqual({ count: 1, pickIds: [graded.pickId] });
@@ -97,7 +108,7 @@ describe('fabric-legacy — hard vs soft classification of a graded-over strand'
 
   it('the genesis (a real known-rule strand) is NEVER grandfathered away — a tamper on it still surfaces', () => {
     const fabric = readFabric(warplineDirOf(root));
-    writeLegacy(root, [fabric[1].pickId]); // grandfather only seq 1
+    writeLegacy(root, [fabric[1]]); // grandfather only seq 1
     fabric[0] = { ...fabric[0], intent: 'TAMPERED genesis' }; // corrupt seq 0, keep pickId
     fs.writeFileSync(warplineDirOf(root) + '/fabric.jsonl', fabric.map((s) => JSON.stringify(s)).join('\n') + '\n', 'utf8');
     const r = verifyFabric(root);
