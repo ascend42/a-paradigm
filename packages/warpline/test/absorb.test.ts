@@ -15,13 +15,13 @@ describe('absorb', () => {
     expect(state.objects.size).toBeGreaterThan(0);
     expect(state.stateId.startsWith('state:v0:')).toBe(true);
     // Post stage-3a the universe holds BOTH tiers: `.purpose` symbols carry the
-    // `essence:v0:` tag and synthetic code-units carry the compiler-pinned
-    // `essence:v1:ts<exact>:` tag. Every object must carry one valid tagged id.
+    // `essence:v0:` tag and synthetic code-units carry the algo+compiler-pinned
+    // `essence:v1.1:ts<exact>:` tag. Every object must carry one valid tagged id.
     let sawV0 = false;
     let sawCode = false;
     for (const obj of state.objects.values()) {
       const isV0 = obj.contentId.startsWith('essence:v0:');
-      const isCode = /^essence:v1:ts[\d.]+:/.test(obj.contentId);
+      const isCode = /^essence:v1\.1:ts[\d.]+:/.test(obj.contentId);
       expect(isV0 || isCode).toBe(true);
       if (isV0) sawV0 = true;
       if (isCode) sawCode = true;

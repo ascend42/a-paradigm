@@ -18,6 +18,22 @@
 
 import * as ts from 'typescript';
 
+/**
+ * The CCNF ALGORITHM version (stamped into the essence tag by
+ * `lift-code-units.ts` as `<algo>:ts<exact>`). Bump on ANY serialization-
+ * algorithm change so cross-version essence comparison is impossible — a
+ * changed algorithm is an explicitly different content-address namespace
+ * (spec §5.2; amendment 2026-07-02).
+ *
+ *   v1   — initial CCNF. Four-modifier whitelist (async/star/static/abstract);
+ *          decorators DROPPED (confirmed false-EQUAL classes, T-2026-07-02-008).
+ *   v1.1 — decorators serialized (function-like + parameter, SOURCE order) with
+ *          expressions through the standard expression path; FULL fail-closed
+ *          modifier serialization (every modifier, canonical token name, sorted);
+ *          type-parameter modifiers (`<const T>`).
+ */
+export const CCNF_ALGO_VERSION = 'v1.1';
+
 /** A binding's stable coordinate within its OWN scope, by declaration order. */
 interface BindingCoord {
   depth: number;
@@ -778,23 +794,29 @@ export function codeCNFDetailed(node: ts.Node, opts: CodeCNFOptions = {}): CodeC
 
   function serializeTypeParam(tp: ts.TypeParameterDeclaration): string {
     // The PARAM NAME is alpha-normalized to its `t:` index; constraint/default
-    // are written-annotation structure.
+    // are written-annotation structure. v1.1: type-param MODIFIERS (`const`,
+    // variance `in`/`out`) are identity-bearing, fail-closed — `<const T>` ≠ `<T>`.
+    const mods = serializeModifiers(tp);
     const idx = serializeEntityName(tp.name);
     const constraint = tp.constraint ? serializeType(tp.constraint) : '-';
     const def = tp.default ? serializeType(tp.default) : '-';
-    return `(tparam ${idx} ${constraint} ${def})`;
+    return `(tparam mods:[${mods}] ${idx} ${constraint} ${def})`;
   }
 
   // --- parameter (value-context): the false-EQUAL hot zone (§3.2). ---
   function serializeParam(p: ts.ParameterDeclaration): string {
+    // v1.1: parameter DECORATORS (source order — `@Body()` ≠ `@Query()`) and the
+    // FULL modifier set (parameter properties: `readonly` + accessibility) are
+    // identity-bearing, fail-closed. v1 only checked `readonly`.
+    const decs = serializeDecorators(p);
+    const mods = serializeModifiers(p);
     const rest = p.dotDotDotToken ? '...' : ''; // rest (§3.2)
     const opt = p.questionToken ? '?' : ''; // optional `?` (§3.2)
     const name = serializeBindingName(p.name);
     const typ = p.type ? serializeType(p.type) : 'τ:none';
     // default-PRESENCE is meaning; the default VALUE is also meaning (§3.2).
     const def = p.initializer ? `=${serialize(p.initializer)}` : '';
-    const ro = hasModifier(p, ts.SyntaxKind.ReadonlyKeyword) ? 'readonly ' : '';
-    return `(param ${ro}${rest}${name}${opt} ${typ}${def})`;
+    return `(param @[${decs}] mods:[${mods}] ${rest}${name}${opt} ${typ}${def})`;
   }
 
   // Parameter inside a TYPE position (no initializer body of interest).
@@ -811,12 +833,46 @@ export function codeCNFDetailed(node: ts.Node, opts: CodeCNFOptions = {}): CodeC
     return !!mods && mods.some((m) => m.kind === kind);
   }
 
+  // --- FAIL-CLOSED modifier serialization (§3.2, v1.1 amendment 2026-07-02) ---
+  // EVERY modifier present is identity-bearing: canonical token name per
+  // ts.SyntaxKind (via `op`), SORTED (deterministic; insensitive to any
+  // grammatically-legal keyword reordering). This makes accessibility
+  // (public/private/protected), override, readonly, accessor, declare, async,
+  // static, abstract, export/default — and any FUTURE modifier TypeScript adds —
+  // automatically identity-bearing. The v1 four-modifier whitelist FAILED OPEN
+  // (an unlisted modifier was silently EQUAL); an over-wide guard is a
+  // false-DIFFER (visible, cheap), an under-wide one is a false-EQUAL
+  // (invisible oracle corruption).
+  function serializeModifiers(n: ts.Node): string {
+    const mods = ts.canHaveModifiers(n) ? ts.getModifiers(n) : undefined;
+    if (!mods || mods.length === 0) return '';
+    return mods
+      .map((m) => op(m.kind))
+      .sort()
+      .join(' ');
+  }
+
+  // --- decorators (§3 Modifiers row, v1.1): SOURCE order — decorator order is
+  //     semantic (they compose). Each decorator expression goes through the
+  //     standard expression path, so its free references (e.g. `AuthGuard` in
+  //     `@UseGuards(AuthGuard)`) join the reference frontier like any other ref
+  //     (§4) and rename-consistency holds transitively. ---
+  function serializeDecorators(n: ts.Node): string {
+    const decs = ts.canHaveDecorators(n) ? ts.getDecorators(n) : undefined;
+    if (!decs || decs.length === 0) return '';
+    return decs.map((d) => `(dec ${serialize(d.expression)})`).join(' ');
+  }
+
   // --- the function-like serializer: the false-EQUAL guard lives here (§3.2) ---
   function serializeFunctionLike(n: ts.Node): string {
     const fn = n as ts.FunctionLikeDeclaration;
 
-    // Modifier/token flags — each MUST distinguish a node from its counterpart.
-    const async = hasModifier(n, ts.SyntaxKind.AsyncKeyword) ? 'async' : '-';
+    // Decorators FIRST (source order precedes the signature textually, so free
+    // refs take their first-appearance slots in reading order), then the full
+    // fail-closed modifier set. The generator `*` is a TOKEN, not a modifier —
+    // kept as its own flag.
+    const decs = serializeDecorators(n);
+    const mods = serializeModifiers(n);
     const star =
       (ts.isFunctionDeclaration(n) ||
         ts.isFunctionExpression(n) ||
@@ -824,8 +880,6 @@ export function codeCNFDetailed(node: ts.Node, opts: CodeCNFOptions = {}): CodeC
       (n as ts.FunctionDeclaration | ts.MethodDeclaration).asteriskToken
         ? '*'
         : '-';
-    const stat = hasModifier(n, ts.SyntaxKind.StaticKeyword) ? 'static' : '-';
-    const abstract = hasModifier(n, ts.SyntaxKind.AbstractKeyword) ? 'abstract' : '-';
 
     // Accessor get/set is a NODE-KIND distinction (a getter ≠ a method, §3.2).
     let formKind: string;
@@ -853,7 +907,7 @@ export function codeCNFDetailed(node: ts.Node, opts: CodeCNFOptions = {}): CodeC
     }
 
     return (
-      `(fn:${formKind} ${async} ${star} ${stat} ${abstract} ` +
+      `(fn:${formKind} @[${decs}] mods:[${mods}] ${star} ` +
       `<${typeParams}> [${params}] ${ret} ${body})`
     );
   }

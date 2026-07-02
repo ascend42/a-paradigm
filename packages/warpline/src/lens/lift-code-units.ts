@@ -25,7 +25,8 @@
  * code-unit branch — NO ts-lens import there): `codeEssence` (the body with
  * positional `f:idx` slots), `codeLocalTargets` (the ordered distinct local
  * target symbols, so `f:N` substitutes the N-th local target's essence INLINE),
- * and `essenceTag` (`v1:ts<exact>` — the compiler-pinned version namespace §5.2).
+ * and `essenceTag` (`<algo>:ts<exact>`, e.g. `v1.1:ts5.9.3` — the algorithm- and
+ * compiler-pinned version namespace §5.2).
  *
  * Library code: no console output.
  */
@@ -37,16 +38,20 @@ import {
 } from '@a-company/premise-core';
 import { allLenses } from './registry.js';
 import { TS_LENS_VERSION } from './ts-lens.js';
+import { CCNF_ALGO_VERSION } from './ts-essence.js';
 import type { CodeUnit } from './code-lens.js';
 
 /**
- * The code-essence version tag (spec §5.2). The compiler is pinned EXACT and
- * stamped into the namespace so a different TS version is an explicitly
- * different content-address space, never a silent collision. `.purpose` symbols
- * keep `v0`; the two interoperate because Merkle-by-target is opaque to a
- * target's version namespace.
+ * The code-essence version tag (spec §5.2). TWO version axes, both stamped:
+ * the CCNF ALGORITHM version (`v1.1` — bumped whenever the serialization
+ * algorithm changes, see `ts-essence.ts`) and the EXACT pinned compiler. A
+ * different algorithm OR a different TS version is an explicitly different
+ * content-address space, never a silent collision — cross-version essence
+ * comparison is impossible by construction. `.purpose` symbols keep `v0`; the
+ * schemes interoperate because Merkle-by-target is opaque to a target's
+ * version namespace.
  */
-export const CODE_ESSENCE_TAG = 'v1:ts' + TS_LENS_VERSION;
+export const CODE_ESSENCE_TAG = CCNF_ALGO_VERSION + ':ts' + TS_LENS_VERSION;
 
 /**
  * Run every registered lens over `rootDir` (an absolute path to a read-only

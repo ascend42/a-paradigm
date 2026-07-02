@@ -198,8 +198,8 @@ function b(){ return a(); }`,
     expect(ea).toBeDefined();
     expect(eb).toBeDefined();
     // Both members get the compiler-pinned SCC namespace.
-    expect(ea).toMatch(/^essence:v1:ts[\d.]+:scc:/);
-    expect(eb).toMatch(/^essence:v1:ts[\d.]+:scc:/);
+    expect(ea).toMatch(/^essence:v1\.1:ts[\d.]+:scc:/);
+    expect(eb).toMatch(/^essence:v1\.1:ts[\d.]+:scc:/);
   });
 
   it('changing a body inside the cycle changes the essences', async () => {
@@ -232,7 +232,7 @@ function b(){ return a(); }`,
 // 6. Mixed universe — a .purpose component + code-units coexist; tags split.
 // ===========================================================================
 describe('code-warp — mixed .purpose + code universe', () => {
-  it('a .purpose component (v0) and code-units (v1:ts...) coexist with no error', async () => {
+  it('a .purpose component (v0) and code-units (v1.1:ts...) coexist with no error', async () => {
     // Lift code-units from a tree, then inject them ALONGSIDE a .purpose entry
     // built the normal way, into one index → one computeEssences universe.
     const dir = await mkFixture({
@@ -268,9 +268,9 @@ describe('code-warp — mixed .purpose + code universe', () => {
       const code = ids.get(sym('src/m.ts', 'f'))!;
       expect(purpose).toBeDefined();
       expect(code).toBeDefined();
-      // .purpose stays v0; code carries the compiler-pinned v1 tag.
+      // .purpose stays v0; code carries the algo+compiler-pinned v1.1 tag.
       expect(purpose).toMatch(/^essence:v0:/);
-      expect(code).toMatch(/^essence:v1:ts[\d.]+:/);
+      expect(code).toMatch(/^essence:v1\.1:ts[\d.]+:/);
     } finally {
       await fs.rm(dir, { recursive: true, force: true });
     }
@@ -281,13 +281,13 @@ describe('code-warp — mixed .purpose + code universe', () => {
 // 7. Tag check — a code-unit contentId is in the pinned compiler namespace.
 // ===========================================================================
 describe('code-warp — version tag', () => {
-  it('a code-unit contentId starts essence:v1:ts5.9.3:', async () => {
+  it('a code-unit contentId starts essence:v1.1:ts5.9.3:', async () => {
     const ids = await essencesOfTree({
       'src/v.ts': `export function f(): number { return 1; }`,
     });
     const id = ids.get(sym('src/v.ts', 'f'))!;
     expect(id).toBeDefined();
-    // Exact-pinned compiler (package.json typescript 5.9.3).
-    expect(id.startsWith('essence:v1:ts5.9.3:')).toBe(true);
+    // Algo-pinned CCNF (v1.1) + exact-pinned compiler (package.json typescript 5.9.3).
+    expect(id.startsWith('essence:v1.1:ts5.9.3:')).toBe(true);
   });
 });

@@ -31,8 +31,10 @@ import { codeCNFDetailed } from './ts-essence.js';
 
 /**
  * The exact pinned TypeScript version (§5.2). Stage 3 stamps this into the
- * essence version tag (`essence:v1:ts<exact>:`) so a different compiler is an
- * explicitly different content-address namespace — never a silent collision.
+ * essence version tag (`essence:<algo>:ts<exact>:`, e.g. `essence:v1.1:ts5.9.3:`
+ * — algo axis from `CCNF_ALGO_VERSION` in `ts-essence.ts`) so a different
+ * compiler OR a different serialization algorithm is an explicitly different
+ * content-address namespace — never a silent collision.
  */
 export const TS_LENS_VERSION: string = ts.version;
 

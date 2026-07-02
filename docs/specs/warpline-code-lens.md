@@ -185,3 +185,44 @@ per absorb (no incremental cache — correctness/determinism first).
 - T-loom-a-extern-id: the deferred lockfile-fed `dependency-version` delta class (§5.3).
 - T-loom-a-program: confirm the fixed synthesized compiler-options baseline vs per-file program cost on a large repo.
 - Coverage target: what meaning-coverage % on THIS repo's `packages/warpline` counts as "A v1 proven"?
+
+## Amendments
+
+### 2026-07-02 — CCNF v1.1: the decorator/modifier false-EQUAL classes closed (T-2026-07-02-008, GUARD-DECIDER Stream A)
+
+**What was wrong.** Three CONFIRMED false-EQUAL classes were reproduced live against v1:
+`@UseGuards(AuthGuard) m()` vs `m()` → EQUAL; `@Get('/users')` vs `@Get('/admin')` → EQUAL;
+`private m()` vs `public m()` → EQUAL. Root cause: `serializeFunctionLike` enumerated exactly
+four modifiers (`async`/`*`/`static`/`abstract`) and never read `ts.getDecorators()`, despite
+the §3 Modifiers row listing decorators as identity-bearing. Architecturally, the whitelist +
+the generic `forEachChild` fallback **failed open** — unhandled syntax was silently EQUAL,
+the exact §3.2 hazard.
+
+**What changed (CCNF algorithm `v1` → `v1.1`, `ts-essence.ts`).**
+1. **Decorators are serialized** on function-likes AND parameters, in **source order**
+   (decorator order is semantic — they compose). Decorator expressions go through the standard
+   expression path, so their free references (e.g. `AuthGuard`) join the §4 reference frontier
+   like any other ref (verified: a decorator ref to a lifted local function emits a `local`
+   edge + `f:idx` slot — rename-consistency holds transitively).
+2. **Fail-closed full-modifier serialization**: EVERY modifier present is serialized
+   (canonical token name per `ts.SyntaxKind`, **sorted** — deterministic and insensitive to
+   grammatically-legal keyword reordering). Accessibility (`public`/`private`/`protected`),
+   `override`, `readonly`, `accessor`, `declare`, and any FUTURE modifier TypeScript adds are
+   automatically identity-bearing. Same for type-parameter modifiers (`<const T>` ≠ `<T>`).
+3. **Superseded row, stated honestly**: the §3 "Visibility → LABEL" row is superseded —
+   `export`/`default`/`declare` are now identity-bearing under fail-closed. An over-wide guard
+   is a visible, cheap false-DIFFER; an under-wide one is invisible oracle corruption. We
+   choose the visible cost.
+
+**Version bump rationale.** The serialization algorithm changed, so cross-version essence
+comparison must be impossible: the essence tag gains an ALGORITHM axis —
+`essence:v1.1:ts<exact>:` (`CCNF_ALGO_VERSION` in `ts-essence.ts`, stamped by
+`lift-code-units.ts` `CODE_ESSENCE_TAG`). Pre-v1.1 history discontinuity is ACCEPTED: every
+code-unit re-addresses under the new namespace; there is no silent cross-namespace collision
+by construction. `.purpose` symbols stay `essence:v0:`.
+
+**Institutional gate.** `packages/warpline/test/false-equal-probes.test.ts` is the per-TS-release
+false-EQUAL ship gate (§3.2): adversarial NOT-EQUAL probes (decorators, modifiers, `<const T>`,
+accessor kind) PLUS protective EQUAL controls (whitespace/comments, local/param/type-param
+rename — the rename-is-the-empty-delta thesis must survive every serializer change). Run it
+against every new pinned TypeScript version before bumping the pin.

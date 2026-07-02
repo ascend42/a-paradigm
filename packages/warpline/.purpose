@@ -55,10 +55,10 @@ components:
       intra-SCC targets become @scc-internal and a cross-symbol rename frees the
       chain); extern/builtin free:name tokens stay untouched; edgeBag is []. The
       version tag is read off entry.data.essenceTag (default ESSENCE_VERSION) so a
-      code-unit contentId is "essence:v1:ts<exact>:"+sha256(canonical) and SCC
-      members carry the same tag — mixed v0/v1 graphs interoperate because Merkle
-      substitutes the target's full TAGGED string. essence-hash never imports the
-      lens; the tag travels on the node.
+      code-unit contentId is "essence:<algo>:ts<exact>:"+sha256(canonical) (algo
+      currently v1.1) and SCC members carry the same tag — mixed v0/v1.1 graphs
+      interoperate because Merkle substitutes the target's full TAGGED string.
+      essence-hash never imports the lens; the tag travels on the node.
     type: module
     components:
       - "#canonical-json"
@@ -151,9 +151,19 @@ components:
       (depth, ordinal) coordinates and shadowing-correct use resolution, replacing
       the spike's unsound flat first-declaration-order map; (2) separate b:/t:/L:
       namespaces (the spike ignored type-params, so f<T> vs f<U> falsely DIFFERed);
-      (3) the false-EQUAL guard (§3.2) — async/generator*/static/readonly/abstract/
-      get-set/optional?/default-presence/rest.../definite!/optional-chain?./nullish??
-      each produce a DISTINCT cnf; (4) literal normalization (§3.3) — integers
+      (3) the false-EQUAL guard (§3.2), FAIL-CLOSED since CCNF v1.1 (amendment
+      2026-07-02): EVERY modifier present is serialized (canonical token name,
+      sorted — accessibility/override/readonly/accessor/declare/async/static/
+      abstract/export and any future modifier), decorators are serialized on
+      function-likes AND parameters in SOURCE order (order is semantic) with
+      their expressions through the standard expression path so decorator refs
+      join the §4 frontier, type-param modifiers (<const T>) included; plus
+      generator*/get-set/optional?/default-presence/rest.../definite!/
+      optional-chain?./nullish?? each produce a DISTINCT cnf. Exports
+      CCNF_ALGO_VERSION ('v1.1') — bumped on ANY serialization change so
+      cross-version essence comparison is impossible;
+      test/false-equal-probes.test.ts is the per-TS-release ship gate;
+      (4) literal normalization (§3.3) — integers
       (hex/oct/bin) -> exact decimal, bigint -> decimal+n, non-integer numerics ->
       raw source lexeme NOT an IEEE-754 round-trip (0.1 != 1e-1 by design),
       strings/templates NFC; (5) directive comments (@ts-ignore/@ts-expect-error/
@@ -233,8 +243,9 @@ components:
       never a parallel graph. The identity-bearing payload travels on entry.data:
       codeEssence (body with positional f:idx slots), codeLocalTargets (the
       ordered distinct local target symbols the f:N slots substitute against), and
-      essenceTag = "v1:ts"+TS_LENS_VERSION (the compiler-pinned version namespace
-      §5.2, so essence-hash never imports the lens — the tag travels with the node).
+      essenceTag = CCNF_ALGO_VERSION+":ts"+TS_LENS_VERSION (e.g. "v1.1:ts5.9.3" —
+      the algorithm- and compiler-pinned version namespace §5.2, so essence-hash
+      never imports the lens — the tag travels with the node).
     type: module
     components:
       - "#code-lens"
@@ -801,7 +812,7 @@ flows:
       - component: "#lift-code-units"
         action: "liftCodeUnits(worktree) then injectCodeUnits(index, units) — synthetic code-unit nodes spliced in BEFORE essence computation"
       - component: "#essence-hash"
-        action: "computeEssences over the merged .purpose+code universe (code-units take the v1:ts<exact> tag, .purpose stays v0)"
+        action: "computeEssences over the merged .purpose+code universe (code-units take the <algo>:ts<exact> tag, e.g. v1.1:ts5.9.3; .purpose stays v0)"
       - component: "#warp-state"
         action: "buildWarpState stamps each object's contentId and derives the stateId; remove the worktree in a finally"
 
@@ -888,8 +899,10 @@ aspects:
       timestamps/paths/positions/prose/embeddings enter the hashed byte stream;
       every set is sorted+deduped; strict canonical JSON; sorted file enumeration;
       deterministic synthetic code-unit ids; the TS compiler is exact-pinned and
-      stamped into the code essence tag (essence:v1:ts<exact>) so a different
-      compiler is a different content-address namespace, never a silent collision.
+      stamped, WITH the CCNF algorithm version, into the code essence tag
+      (essence:<algo>:ts<exact>, e.g. essence:v1.1:ts5.9.3) so a different
+      compiler OR serialization algorithm is a different content-address
+      namespace, never a silent collision.
     category: invariant
     severity: critical
     tags: [thesis, determinism, hashing, reproducibility]
