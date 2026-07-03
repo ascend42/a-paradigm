@@ -76,6 +76,23 @@ export interface OracleRecord {
      * convergence, else a real git conflict reads green (T-2026-06-25-001).
      */
     gitConflictUnmapped: string[];
+    /**
+     * DIRECT-CONTESTED / KNOT-SIZE RANKING of the divergeMeaningOnly flag set
+     * (T-2026-07-03-002, additive — verdict/score semantics untouched).
+     * Ground truth (275 real merges, 18 flags): flag-sets ≤6 symbols were 50%
+     * churn-validated; every ≥10-symbol set (incl. 48-176-symbol essence-
+     * transitivity avalanches from ~2 contested units) was 0%. So the record
+     * partitions the flags:
+     *   directContested — the unit's OWN content changed on ≥1 side (the knot)
+     *   rippleOnly      — flagged only because edge-target essences shifted
+     *                     transitively (Merkle-by-target)
+     * knotSize (= directContested.length) is the ranking/threshold key;
+     * flagCount (= divergeMeaningOnly.length) is the raw pre-ranking volume.
+     */
+    directContested: string[];
+    rippleOnly: string[];
+    knotSize: number;
+    flagCount: number;
     score: number; // |agree| / |agree ∪ diverge|
     verdict: 'CONVERGENT' | 'DIVERGENT';
   };
@@ -332,6 +349,24 @@ export function score(
   divergeGitOnly.sort();
   divergeMeaningOnly.sort();
 
+  // ── DIRECT-CONTESTED / KNOT-SIZE RANKING (additive; T-2026-07-03-002) ──
+  // Partition the divergeMeaningOnly flag set by the prediction's per-unit
+  // direct flags. A symbol is DIRECT if ANY knot/dangle carrying its name is
+  // direct; absent flags (hand-built fixtures, older callers) default to
+  // direct — unknown is surfaced, never silently collapsed into ripple.
+  const directByName = new Map<string, boolean>();
+  for (const k of prediction.knots) {
+    directByName.set(k.symbol, (directByName.get(k.symbol) ?? false) || (k.direct ?? true));
+  }
+  for (const d of prediction.dangling) {
+    directByName.set(
+      d.fromSymbol,
+      (directByName.get(d.fromSymbol) ?? false) || (d.direct ?? true),
+    );
+  }
+  const directContested = divergeMeaningOnly.filter((s) => directByName.get(s) ?? true);
+  const rippleOnly = divergeMeaningOnly.filter((s) => !(directByName.get(s) ?? true));
+
   // Git-only divergences with NO symbol home (a conflict in a non-symbol file).
   const gitConflictUnmapped = (gitReality?.unmappedConflictPaths ?? []).slice().sort();
 
@@ -361,6 +396,10 @@ export function score(
     divergeGitOnly,
     divergeMeaningOnly,
     gitConflictUnmapped,
+    directContested,
+    rippleOnly,
+    knotSize: directContested.length,
+    flagCount: divergeMeaningOnly.length,
     score: Number(scoreVal.toFixed(4)),
     verdict,
   };

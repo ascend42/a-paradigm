@@ -65,6 +65,17 @@ export interface SemDelta {
   changeset?: ContractChangeset;
   /** which top-level slots changed (for quick conflict detection) */
   changedSlots?: string[];
+  /**
+   * TRUE iff this side changed the symbol's OWN content — its own body text
+   * (code-unit codeEssence / local-ref wiring), a contract slot, or an edge
+   * (by target NAME). FALSE = a RIPPLE delta: the contentId moved only because
+   * edge-TARGET essences shifted transitively (Merkle-by-target), with zero
+   * local edit. This is the direct-contested vs ripple-only ranking signal
+   * (T-2026-07-03-002): flag-set ground truth showed small direct knots are the
+   * payoff and 48-176-symbol ripple avalanches are noise. ADDITIVE — never
+   * consulted by knot/dangle/autoClean semantics (verdicts are unchanged).
+   */
+  localChanged?: boolean;
 }
 
 export interface SemDeltaSet {
@@ -111,6 +122,7 @@ export function diff(base: WarpState, branch: WarpState): SemDeltaSet {
         symbol: h.symbol,
         essenceAfter: h.contentId,
         changeset: bornChangeset(h),
+        localChanged: true, // existence itself is own content
       });
       continue;
     }
@@ -120,6 +132,7 @@ export function diff(base: WarpState, branch: WarpState): SemDeltaSet {
         stableKey: key,
         symbol: b.symbol,
         essenceBefore: b.contentId,
+        localChanged: true, // existence itself is own content
       });
       continue;
     }
@@ -152,6 +165,7 @@ export function diff(base: WarpState, branch: WarpState): SemDeltaSet {
       essenceAfter: h.contentId,
       changeset,
       changedSlots: changedSlotsOf(changeset),
+      localChanged: ownContentChanged(b, h, changeset),
     });
   }
 
@@ -240,6 +254,60 @@ function classify(b: WarpObject, h: WarpObject): ContractChangeset {
     // body/inline-refs moved.
     bodyChanged: b.componentType === 'code-unit' || h.componentType === 'code-unit',
   };
+}
+
+/**
+ * Did THIS side change the symbol's OWN content — as opposed to its contentId
+ * shifting only because edge-TARGET essences moved transitively (ripple)?
+ *
+ * The essence is Merkle-by-target, so `classify` cannot answer this from the
+ * contentId: for a code-unit it sets `bodyChanged` whenever the contentId moved
+ * at all (incl. pure ripple). Here we compare the LOCAL Merkle inputs instead —
+ * every essence input EXCEPT the transitive target essences:
+ *   - the name-keyed slot/edge comparisons classify already made ('body' excluded);
+ *   - the scalar contract fields the essence hashes but classify doesn't
+ *     enumerate (category / severity / applies-to / enforcement);
+ *   - a code-unit's own body: the raw tokenized `codeEssence` (pre-substitution)
+ *     + the `codeLocalTargets` wiring (a call retargeted to a different local
+ *     unit changes the wiring even though the positional token stream doesn't).
+ *
+ * Known coarseness (documented, matches the essence's own name-blindness
+ * boundary): edges/codeLocalTargets compare by target NAME, so a target rename
+ * combined WITH an independent ripple on the same referrer reads as local. A
+ * pure target rename never gets here (contentId is unchanged — no delta).
+ *
+ * ADDITIVE ranking signal only — never feeds knot/dangle/autoClean semantics.
+ */
+function ownContentChanged(b: WarpObject, h: WarpObject, cs: ContractChangeset): boolean {
+  // 1. Any name-keyed slot classify detected, EXCLUDING the essence-derived
+  //    'body' bit (which fires on ripple too).
+  if (changedSlotsOf(cs).some((s) => s !== 'body')) return true;
+
+  // 2. Scalar identity-bearing contract fields not covered by classify.
+  const scalar = (obj: WarpObject, k: string): string => {
+    const v = (obj.contract as Record<string, unknown>)[k];
+    return typeof v === 'string' ? v.normalize('NFC') : '';
+  };
+  for (const k of ['category', 'severity', 'enforcement']) {
+    if (scalar(b, k) !== scalar(h, k)) return true;
+  }
+  if (JSON.stringify(listOf(b, 'applies-to')) !== JSON.stringify(listOf(h, 'applies-to'))) {
+    return true;
+  }
+
+  // 3. A code-unit's own body + local-ref wiring.
+  if (b.componentType === 'code-unit' || h.componentType === 'code-unit') {
+    const body = (obj: WarpObject): string => {
+      const v = (obj.contract as Record<string, unknown>).codeEssence;
+      return typeof v === 'string' ? v : '';
+    };
+    if (body(b) !== body(h)) return true;
+    if (JSON.stringify(listOf(b, 'codeLocalTargets')) !== JSON.stringify(listOf(h, 'codeLocalTargets'))) {
+      return true;
+    }
+  }
+
+  return false; // pure ripple — only transitive target essences moved
 }
 
 /** The top-level slot names that changed (for fast conflict detection). */

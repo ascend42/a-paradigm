@@ -292,7 +292,13 @@ components:
       contentId means the body moved. 'body' is the body-INTERNAL analog of 'steps'
       (a literal/operator change with no call change fires 'body' but not 'edges'; a
       call add/remove still fires 'edges' via the existing path — both correct). This
-      closes the TD-806 "0 deltas on a .ts-only change" gap.
+      closes the TD-806 "0 deltas on a .ts-only change" gap. RANKING SIGNAL
+      (T-2026-07-03-002, additive): each delta also carries localChanged — TRUE iff
+      THIS side changed the symbol's OWN content (born/retired existence, a
+      name-keyed slot/edge, a scalar contract field, or a code-unit's raw
+      codeEssence/codeLocalTargets), FALSE = a pure RIPPLE re-address (contentId
+      moved only via edge-target essence transitivity, Merkle-by-target). Never
+      consulted by knot/dangle/autoClean semantics — presentation+ranking data only.
     type: module
 
   predict:
@@ -304,7 +310,12 @@ components:
       two branches that edit the SAME code-unit's body to DIFFERENT essences are a
       KNOT with conflictingSlots ['body'] (git may auto-merge textually-distant
       edits Warpline flags at function granularity); a call to a code-unit the other
-      branch retired surfaces as a DANGLE via the unchanged edge pass.
+      branch retired surfaces as a DANGLE via the unchanged edge pass. RANKING
+      (T-2026-07-03-002, additive): Knot.direct / Dangle.direct = TRUE iff ≥1 side's
+      delta has localChanged (own-content edit); FALSE = a ripple-only knot (both
+      essences shifted transitively — the 48-176-symbol avalanche class ground truth
+      proved 0% churn-validated). Absent flags default direct (surfaced, never
+      silently collapsed). The knot/dangle DECISIONS themselves are unchanged.
     type: module
     components:
       - "#sem-delta"
@@ -659,7 +670,14 @@ components:
       ACTIONABLE answer is a separate mergeClean flag (no knots ∧ no dangling ∧ no git
       conflict); convergence measures meaning⟷git AGREEMENT, so a contested merge both
       sides predict scores 'convergent agreement' but is NOT mergeClean — read
-      mergeClean for "is it safe to weave?" (T-2026-06-25-005).
+      mergeClean for "is it safe to weave?" (T-2026-06-25-005). KNOT-SIZE RANKING
+      (T-2026-07-03-002, additive fields — verdict/score untouched, so the committed
+      base-rate evidence stays valid): convergence also partitions divergeMeaningOnly
+      into directContested[] (own content changed on ≥1 side) vs rippleOnly[]
+      (flagged only via essence transitivity) + knotSize (=|directContested|, the
+      ranking/threshold key) and flagCount. Ground truth: ≤6-symbol flag sets were
+      50% churn-validated, every ≥10-symbol avalanche 0% — small knots ARE the
+      product; the CLI names direct symbols and collapses ripple to a count line.
     type: module
     components:
       - "#absorb"

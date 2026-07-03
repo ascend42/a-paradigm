@@ -27,6 +27,12 @@ export interface Knot {
   essenceA?: string;
   essenceB?: string;
   conflictingSlots: string[];
+  /**
+   * DIRECT-CONTESTED vs RIPPLE-ONLY ranking (engine predict.ts, T-2026-07-03-002):
+   * true = a side changed the unit's OWN content; false = flagged only via
+   * edge-target essence transitivity (avalanche). Absent (older records) ⇒ direct.
+   */
+  direct?: boolean;
 }
 
 export interface Dangle {
@@ -36,6 +42,8 @@ export interface Dangle {
   /** The retired target's identity — the "target essence" the void is labeled with. */
   danglingTargetSymbol: string;
   retiredBy: 'A' | 'B';
+  /** Same ranking signal as Knot.direct (structurally true for dangles). */
+  direct?: boolean;
 }
 
 export interface OraclePrediction {
@@ -55,6 +63,17 @@ export interface Convergence {
   agreeConflict: string[];
   divergeGitOnly: string[];
   divergeMeaningOnly: string[];
+  /**
+   * KNOT-SIZE RANKING (engine oracle.ts, T-2026-07-03-002, additive): the
+   * divergeMeaningOnly flag set partitioned into direct-contested (own content
+   * changed on ≥1 side) vs ripple-only (essence-transitivity avalanche).
+   * knotSize = directContested.length is the ranking/threshold key. Optional —
+   * absent on records written before the ranking shipped.
+   */
+  directContested?: string[];
+  rippleOnly?: string[];
+  knotSize?: number;
+  flagCount?: number;
   score: number;
   verdict: 'CONVERGENT' | 'DIVERGENT';
 }

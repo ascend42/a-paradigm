@@ -30,6 +30,15 @@ export interface Knot {
   essenceA?: string;
   essenceB?: string;
   conflictingSlots: string[];
+  /**
+   * DIRECT-CONTESTED vs RIPPLE-ONLY (additive ranking signal, T-2026-07-03-002).
+   * TRUE iff at least one side changed the unit's OWN content (SemDelta.localChanged);
+   * FALSE = both sides' essences shifted only via edge-target transitivity
+   * (Merkle-by-target avalanche). Never feeds the knot decision itself —
+   * verdict semantics are unchanged; this is presentation/ranking data.
+   * Optional so hand-built Prediction fixtures stay valid; absent ⇒ treated direct.
+   */
+  direct?: boolean;
 }
 
 export interface Dangle {
@@ -38,6 +47,12 @@ export interface Dangle {
   edgeKind: string;
   danglingTargetSymbol: string;
   retiredBy: 'A' | 'B';
+  /**
+   * Same ranking signal as Knot.direct. A dangle's referencing side added the
+   * edge — an own-content change — so this is structurally true; carried for a
+   * uniform consumer contract (and defensively computed, not assumed).
+   */
+  direct?: boolean;
 }
 
 export interface Prediction {
@@ -90,6 +105,8 @@ export function predict(deltaA: SemDeltaSet, deltaB: SemDeltaSet): Prediction {
         edgeKind: e.kind,
         danglingTargetSymbol: e.to,
         retiredBy: 'A',
+        // the edge-ADD is the referencing side's own content change
+        direct: e.from.localChanged ?? true,
       });
       dangleKeys.add(e.from.stableKey);
     }
@@ -104,6 +121,7 @@ export function predict(deltaA: SemDeltaSet, deltaB: SemDeltaSet): Prediction {
         edgeKind: e.kind,
         danglingTargetSymbol: e.to,
         retiredBy: 'B',
+        direct: e.from.localChanged ?? true,
       });
       dangleKeys.add(e.from.stableKey);
     }
@@ -132,6 +150,11 @@ export function predict(deltaA: SemDeltaSet, deltaB: SemDeltaSet): Prediction {
         essenceA: essA,
         essenceB: essB,
         conflictingSlots: conflictingSlots(a, b),
+        // DIRECT iff either side edited the unit's own content; ripple-only
+        // knots exist because BOTH essences shifted transitively to different
+        // values (each side's ripple avalanche). Absent flags default to true
+        // (conservative: unknown ⇒ surfaced, never silently collapsed).
+        direct: (a.localChanged ?? true) || (b.localChanged ?? true),
       });
     }
     // else: same key, different essence, but DISJOINT slots ⇒ commutes (autoClean).

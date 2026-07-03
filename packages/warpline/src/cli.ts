@@ -36,6 +36,7 @@ import { warplineDirOf, readSelvage, readFabric } from './fabric/fabric.js';
 import type { Strand } from './fabric/strand.js';
 import { installHook, uninstallHook, hookStatus } from './fabric/hook.js';
 import { forkScratch } from './fabric/scratch.js';
+import type { Knot } from './predict.js';
 import { admit, type AdmitResult } from './fabric/admit.js';
 import { resolveKnot } from './fabric/resolve.js';
 import { gradeFabric, applyGrades, type GradeReport } from './fabric/grade.js';
@@ -646,7 +647,9 @@ function printAdmit(agentId: string, r: AdmitResult): void {
     if (r.sealed && r.strand) lines.push(`  → sealed (seq ${r.strand.seq}); selvage advanced to ${short(r.strand.stateId)}`);
   } else if (d.status === 'KNOT') {
     lines.push(`verdict   KNOT — a human DECIDE is required (NOT auto-merged)`);
-    for (const k of d.knots) lines.push(`  ⊗ ${k.symbol}${k.conflictingSlots.length ? `  [${k.conflictingSlots.join(', ')}]` : ''}`);
+    const { direct, ripple } = partitionKnots(d.knots);
+    for (const k of direct) lines.push(`  ⊗ ${k.symbol}${k.conflictingSlots.length ? `  [${k.conflictingSlots.join(', ')}]` : ''}`);
+    if (ripple.length) lines.push(rippleLine(ripple.length, '  '));
   } else if (d.status === 'DANGLE') {
     lines.push('verdict   DANGLE — a meaning-level broken reference; resolve before admitting');
     for (const x of d.dangling) lines.push(`  ⤬ ${x.fromSymbol} → ${x.danglingTargetSymbol}`);
@@ -748,8 +751,11 @@ function printStatus(r: SemDiffReport): void {
     for (const d of r.born) lines.push(`  + ${d.symbol}`);
     lines.push(`retired         ${r.retired.length}`);
     for (const d of r.retired) lines.push(`  - ${d.symbol}`);
-    lines.push(`contract-changed ${r.contractChanged.length}`);
-    for (const d of r.contractChanged) lines.push(`  ~ ${d.symbol}`);
+    const own = r.contractChanged.filter((d) => d.localChanged ?? true);
+    const rippled = r.contractChanged.filter((d) => !(d.localChanged ?? true));
+    lines.push(`contract-changed ${r.contractChanged.length}${rippled.length ? `  (${own.length} own, ${rippled.length} ripple)` : ''}`);
+    for (const d of own) lines.push(`  ~ ${d.symbol}`);
+    if (rippled.length) lines.push(rippleLine(rippled.length, '  '));
     lines.push(`renamed (no meaning change)  ${r.renamedNoop.length}`);
     for (const d of r.renamedNoop) lines.push(`  ↻ ${d.baseSymbol}→${d.symbol}`);
     lines.push('');
@@ -804,8 +810,11 @@ function printForecast(f: Forecast): void {
   lines.push('');
   lines.push(`autoClean  ${f.autoClean.length}`);
 
-  lines.push(`knots      ${f.knots.length}`);
-  for (const k of f.knots) {
+  // Anti-avalanche ranking: direct-contested knots first with full detail;
+  // ripple-only knots (essence transitivity) collapse to one count line.
+  const { direct: fDirect, ripple: fRipple } = partitionKnots(f.knots);
+  lines.push(`knots      ${f.knots.length}${fRipple.length ? `  (${fDirect.length} direct-contested, ${fRipple.length} ripple)` : ''}`);
+  for (const k of fDirect) {
     lines.push(`  ⊗ ${k.symbol}`);
     if (k.conflictingSlots.length) {
       lines.push(`      conflicting slot(s): ${k.conflictingSlots.join(', ')}`);
@@ -813,6 +822,7 @@ function printForecast(f: Forecast): void {
     lines.push(`      A → ${k.essenceA ?? '(retired)'}`);
     lines.push(`      B → ${k.essenceB ?? '(retired)'}`);
   }
+  if (fRipple.length) lines.push(rippleLine(fRipple.length, '  '));
 
   lines.push(`dangling   ${f.dangling.length}`);
   for (const d of f.dangling) {
@@ -824,7 +834,7 @@ function printForecast(f: Forecast): void {
     lines.push('');
     lines.push(`vs GIT REALITY: ${g.gitConflicted ? 'CONFLICT' : 'clean'}  (${g.conflictSymbols.length} symbol(s))`);
     lines.push(`  divergeGitOnly  ★   ${g.divergeGitOnly.length}${g.divergeGitOnly.length ? '  ' + g.divergeGitOnly.join(', ') : ''}`);
-    lines.push(`  divergeMeaningOnly ★ ${g.divergeMeaningOnly.length}${g.divergeMeaningOnly.length ? '  ' + g.divergeMeaningOnly.join(', ') : ''}`);
+    appendMeaningOnlyRanked(lines, g);
     if (g.gitConflictUnmapped.length) {
       lines.push(`  gitConflictUnmapped  ${g.gitConflictUnmapped.length}  ${g.gitConflictUnmapped.join(', ')}  (git-only, no symbol — GAP-1)`);
     }
@@ -877,12 +887,17 @@ function printSemDiff(r: SemDiffReport): void {
   lines.push(`retired         ${r.retired.length}`);
   for (const d of r.retired) lines.push(`  - ${d.symbol}`);
 
-  lines.push(`contract-changed ${r.contractChanged.length}`);
-  for (const d of r.contractChanged) {
+  // Own-content changes first; pure-ripple entries (contentId moved only via
+  // edge-target essence transitivity) collapse to one count line.
+  const ownChanged = r.contractChanged.filter((d) => d.localChanged ?? true);
+  const rippleChanged = r.contractChanged.filter((d) => !(d.localChanged ?? true));
+  lines.push(`contract-changed ${r.contractChanged.length}${rippleChanged.length ? `  (${ownChanged.length} own, ${rippleChanged.length} ripple)` : ''}`);
+  for (const d of ownChanged) {
     const slots = d.changedSlots ?? (d.changeset ? changedSlotsOf(d.changeset) : []);
     lines.push(`  ~ ${d.symbol}  [${slots.join(', ') || 'essence'}]`);
     if (d.changeset) appendSlotDetail(lines, d.changeset);
   }
+  if (rippleChanged.length) lines.push(rippleLine(rippleChanged.length, '  '));
 
   lines.push(`renamed (no meaning change)  ${r.renamedNoop.length}`);
   for (const d of r.renamedNoop) {
@@ -955,7 +970,15 @@ function printOracleSummary(record: OracleRecord): void {
   lines.push('');
   lines.push('PREDICTION (from meaning):');
   lines.push(`  autoClean ${record.prediction.autoClean.length}`);
-  lines.push(`  knots     ${record.prediction.knots.length}${record.prediction.knots.length ? '  ' + record.prediction.knots.map((k) => k.symbol).join(', ') : ''}`);
+  const { direct: directKnots, ripple: rippleKnots } = partitionKnots(record.prediction.knots);
+  if (rippleKnots.length === 0) {
+    lines.push(`  knots     ${record.prediction.knots.length}${record.prediction.knots.length ? '  ' + record.prediction.knots.map((k) => k.symbol).join(', ') : ''}`);
+  } else {
+    // anti-avalanche: name the direct-contested knots, collapse the ripple.
+    lines.push(`  knots     ${record.prediction.knots.length}`);
+    lines.push(`      direct-contested (${directKnots.length})${directKnots.length ? ': ' + directKnots.map((k) => k.symbol).join(', ') : ''}`);
+    lines.push(rippleLine(rippleKnots.length, '      '));
+  }
   lines.push(`  dangling  ${record.prediction.dangling.length}${record.prediction.dangling.length ? '  ' + record.prediction.dangling.map((d) => `${d.fromSymbol}→${d.danglingTargetSymbol}`).join(', ') : ''}`);
   lines.push('');
   lines.push(`GIT REALITY: ${record.gitReality.conflicted ? 'CONFLICT' : 'clean'}  (${record.gitReality.conflictPaths.length} path(s), ${record.gitReality.conflictSymbols.length} symbol(s))`);
@@ -967,7 +990,7 @@ function printOracleSummary(record: OracleRecord): void {
   lines.push(`  agreeClean          ${c.agreeClean.length}`);
   lines.push(`  agreeConflict       ${c.agreeConflict.length}`);
   lines.push(`  divergeGitOnly  ★   ${c.divergeGitOnly.length}${c.divergeGitOnly.length ? '  ' + c.divergeGitOnly.join(', ') : ''}`);
-  lines.push(`  divergeMeaningOnly ★ ${c.divergeMeaningOnly.length}${c.divergeMeaningOnly.length ? '  ' + c.divergeMeaningOnly.join(', ') : ''}`);
+  appendMeaningOnlyRanked(lines, c);
   if (c.gitConflictUnmapped.length) {
     lines.push(`  gitConflictUnmapped  ${c.gitConflictUnmapped.length}  ${c.gitConflictUnmapped.join(', ')}  (git-only, no symbol — GAP-1)`);
   }
@@ -976,6 +999,43 @@ function printOracleSummary(record: OracleRecord): void {
   lines.push('');
   lines.push('appended → .warpline/oracle.jsonl');
   process.stdout.write(lines.join('\n') + '\n');
+}
+
+/**
+ * The RANKED divergeMeaningOnly display (the anti-avalanche cell, T-2026-07-03-002):
+ * direct-contested symbols named prominently, ripple collapsed to a count line.
+ * Small direct sets ARE the product — ground truth put ≤6-symbol flag sets at 50%
+ * churn-validated and every ≥10-symbol avalanche at 0%.
+ */
+function appendMeaningOnlyRanked(
+  lines: string[],
+  c: Pick<OracleRecord['convergence'], 'divergeMeaningOnly' | 'directContested' | 'rippleOnly' | 'knotSize'>,
+): void {
+  if (!c.rippleOnly?.length) {
+    lines.push(`  divergeMeaningOnly ★ ${c.divergeMeaningOnly.length}${c.divergeMeaningOnly.length ? '  ' + c.divergeMeaningOnly.join(', ') : ''}`);
+    return;
+  }
+  lines.push(`  divergeMeaningOnly ★ ${c.divergeMeaningOnly.length}  (knot size ${c.knotSize})`);
+  lines.push(`      direct-contested (${c.knotSize})${c.directContested.length ? ': ' + c.directContested.join(', ') : ''}`);
+  lines.push(rippleLine(c.rippleOnly.length, '      '));
+}
+
+/**
+ * Partition knots into DIRECT-CONTESTED vs RIPPLE-ONLY for the anti-avalanche
+ * display (T-2026-07-03-002): direct knots are named prominently; ripple knots
+ * (essence-transitivity avalanche) collapse to a count line. An absent flag
+ * reads as direct — unknown is surfaced, never silently collapsed.
+ */
+function partitionKnots(knots: Knot[]): { direct: Knot[]; ripple: Knot[] } {
+  const direct: Knot[] = [];
+  const ripple: Knot[] = [];
+  for (const k of knots) (k.direct ?? true ? direct : ripple).push(k);
+  return { direct, ripple };
+}
+
+/** The collapsed ripple count line (shared wording across surfaces). */
+function rippleLine(n: number, indent: string): string {
+  return `${indent}+${n} ripple-reachable symbol${n === 1 ? '' : 's'} (essence transitivity)`;
 }
 
 function short(id: string): string {
