@@ -1,0 +1,37 @@
+id: L-2026-07-03-ascend-230852-001
+type: agent-session
+timestamp: '2026-07-03T23:08:52.748Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Cid Debrief: Ratified sequence steps 1b+2 landed. Stream A (Kit, T-2026-07-03-002): direct-co'
+summary: 'Ratified sequence steps 1b+2 landed. Stream A (Kit, T-2026-07-03-002): direct-contested/knot-size ranking shipped (commit 19d3f125) — SemDelta.localChanged partitions DIRECT (own local Merkle inputs changed ≥1 side) vs RIPPLE (essence transitivity); anti-avalanche CLI display; additive-only (both evidence merges byte-identical to committed base-rate); 297/297; coordinator re-ran the star merge live: zod 66cbfe09 → knot size 1, direct = ZodRecord (exactly the symbol the maintainer''s next-day fix rewrote; ZodRecord.create correctly demoted to ripple per raw-diff check — a ranking-precision WIN, not a miss); 84795b09 avalanche 78 → 11 direct + 67 collapsed. Stream B (Arky, T-2026-07-03-003): two specs committed (cdf8cff5) — warpline-v1-anchor.md (attestation = normal v2 strand w/ attests payload folding into pickId via existing ...rest spread; freeze → backfill → git commit → attest-once; coverage = CODE CONSTANT; net-new gap found: verify never checks selvage → §6.7 v1 tip-append check; residual honestly "tamper-evident short of full re-chain") + warpline-v3-identity.md (pick:v3 = H(parents[]+content), no seq; merge recipe folds IN closing MED-D structurally; zero post-seal-mutable fields → rewriteFabric retired; refs hold pickIds w/ per-ref CAS; epoch anchors generalize; six MAY-NOT guardrails for M2-on-v2). Five founder sign-off points pending in v3 §9. Earlier same session: v1.1 base-rate re-run committed 637688f5 (identical 6.2%, bound was tight, ranking = only precision lever; lore L-2026-07-03-ascend-223056-001). ANOMALY noted: T-2026-07-02-002 absent from task store when Kit tried to close it (Probe had set it in-progress earlier) — work is done and evidenced; no writer/reader file:line pair identified so logged as observation, not framework-bug. NEXT: founder sign-off on v3 §9 → Kit builds warpline-v1-anchor.md; Move-3 multi-agent dogfood per Loid''s falsifier (preconditions: thread agentIds through hook, T-030, GAP-1 scope).'
+symbols_touched: []
+files_modified:
+  - packages/warpline/src/sem-delta.ts
+  - packages/warpline/src/predict.ts
+  - packages/warpline/src/oracle.ts
+  - packages/warpline/src/cli.ts
+  - packages/warpline/test/direct-contested.test.ts
+  - packages/warpline/.purpose
+  - packages/paradigm/platform-ui/src/sections/warpline/types.ts
+  - docs/specs/warpline-v1-anchor.md
+  - docs/specs/warpline-v3-identity.md
+  - docs/specs/warpline-fabric-schema-v2.md
+  - .paradigm/research/warpline-guard-base-rate/v1.1-rerun/rerun-comparison.md
+tags:
+  - arc:cid-debrief
+  - orch:orch-mr5icaxr-19v4
+meta:
+  orchestrationId: orch-mr5icaxr-19v4
+  coverageScore:
+    before: 0.6666666666666666
+    after: 1
+  coverageAdded:
+    - packages/warpline/src
+    - .paradigm/research/warpline-guard-base-rate/v1.1-rerun
+git_context:
+  ref: 19d3f125ee63f9c8b00b9ea68e680607e83edaf4
+  branch: warpline-surfaces
+  dirty: true

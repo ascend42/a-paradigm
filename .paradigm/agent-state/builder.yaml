@@ -1,10 +1,10 @@
 id: builder
 project: a-paradigm
 lastSession:
-  date: '2026-07-02T15:40:30.438Z'
-  sessionId: orch-mr3o8b6l-r6d4
-  summary: '[Kit (builder)]: builder: Implement: GUARD-DECIDER (ratified sequence step 1...'
+  date: '2026-07-03T22:31:11.344Z'
+  sessionId: orch-mr5icaxr-19v4
+  summary: '[Kit (builder)]: builder: Implement: Ratified sequence steps 1b+2 (post GUAR...'
   symbolsTouched: []
 pendingWork: []
 recentPatterns: []
-sessionsOnProject: 11
+sessionsOnProject: 12

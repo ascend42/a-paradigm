@@ -1,6 +1,6 @@
 {
-  "timestamp": "2026-07-02T15:40:30.369Z",
-  "taskDescription": "GUARD-DECIDER (ratified sequence step 1, lore L-2026-07-02-ascend-153932-001): two parallel streams. Stream A — fix the confirmed false-EQUAL hole in the TS lens (T-2026-07-02-008): decorator + full-m",
+  "timestamp": "2026-07-03T22:31:11.298Z",
+  "taskDescription": "Ratified sequence steps 1b+2 (post GUARD-DECIDER, lore L-2026-07-03-ascend-223056-001): Stream A — build direct-contested/knot-size ranking into the oracle output (T-2026-07-02-002 remaining half; gro",
   "depth": "standard",
   "coverageScore": 0.5
 }

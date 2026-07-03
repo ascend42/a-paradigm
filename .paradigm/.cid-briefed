@@ -1,17 +1,18 @@
 {
-  "timestamp": "2026-07-02T16:13:15.138Z",
-  "sessionId": "orch-mr3o8b6l-r6d4",
+  "timestamp": "2026-07-03T23:08:52.946Z",
+  "sessionId": "orch-mr5icaxr-19v4",
   "touchedFiles": [
-    "packages/warpline/src/lens/ts-essence.ts",
-    "packages/warpline/src/lens/lift-code-units.ts",
-    "packages/warpline/src/lens/ts-lens.ts",
-    "packages/warpline/test/false-equal-probes.test.ts",
-    "packages/warpline/test/code-warp.test.ts",
-    "packages/warpline/test/absorb.test.ts",
-    "docs/specs/warpline-code-lens.md",
+    "packages/warpline/src/sem-delta.ts",
+    "packages/warpline/src/predict.ts",
+    "packages/warpline/src/oracle.ts",
+    "packages/warpline/src/cli.ts",
+    "packages/warpline/test/direct-contested.test.ts",
     "packages/warpline/.purpose",
-    ".paradigm/research/warpline-guard-base-rate/ground-truth.md",
-    ".paradigm/research/warpline-guard-base-rate/ground-truth.jsonl"
+    "packages/paradigm/platform-ui/src/sections/warpline/types.ts",
+    "docs/specs/warpline-v1-anchor.md",
+    "docs/specs/warpline-v3-identity.md",
+    "docs/specs/warpline-fabric-schema-v2.md",
+    ".paradigm/research/warpline-guard-base-rate/v1.1-rerun/rerun-comparison.md"
   ],
   "coverageScore": 1
 }
