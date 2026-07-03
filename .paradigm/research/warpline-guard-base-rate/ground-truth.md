@@ -182,3 +182,7 @@ second half).
   status, test outcomes, churn windows, fix-like commit lists, interpretations.
 - Working data (session scratchpad, ephemeral): tsc-{zod,xstate,nest}.json,
   columnC.json, gt-*.mjs drivers.
+
+## Correction (2026-07-03, from the v1.1 re-run field diff)
+
+The knot-size bucket table above misfiles zod 84795b09 (78 flagged symbols): correct bucket split is ≤6: 6 / 10–24: 4 / ≥48: 8 (not 5/7). Precision conclusions unaffected — 0 CAUGHT-LATER in both affected buckets. Full field-level diff: `v1.1-rerun/rerun-comparison.md` (v1.1 lens reproduced all 18 hits with byte-identical flag sets; 360/360 ok, 0 errors).
