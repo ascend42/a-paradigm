@@ -1,0 +1,35 @@
+{
+  "experiment": "warpline-move3-dogfood",
+  "mode": "PILOT",
+  "note": "PILOT proves the machinery end-to-end + that the §2.3 scoring table fires. NOT statistical power (that is the >=100-admission full run). Batch plan below yields 8 concurrent (non-FAST) symbol-bearing admissions across 4 batches, spanning LINKED-CLEAN, 2x TRUE-INTERFERENCE (silent-mismerge wedges), NEGATIVE-CONTROL, and 2 H1-relaxation admits (agent 3 admits onto a merge strand).",
+  "cli": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/dist/cli.js",
+  "agents": ["alice", "bob", "carol", "dave"],
+  "harness_tree": "DEDICATED MINIMAL real-TS repo built from seed-catalog.jsonl (NOT the monorepo clone). Rationale: each admit git-archives + native-snapshots + absorbs the WHOLE ref tree; on the full a-paradigm monorepo that is >2 min/admit (empirically it hung). A minimal tree exercises the identical code paths (scratch/admit/CLEAN-materialize/native-H1/restore/grade/oracle) at <1s/admit. See pilot-results.md Findings; the full run needs tree-scoping before it is feasible on monorepo TS.",
+  "sessions": [
+    {
+      "sessionId": "S1",
+      "batches": [
+        { "batchId": "B1", "admits": [
+          { "agent": "alice", "seed": "s5-linked",      "side": "A", "role": "fast" },
+          { "agent": "bob",   "seed": "s5-linked",      "side": "B", "role": "concurrent", "expect": "CLEAN/linked" },
+          { "agent": "carol", "seed": "s1-indep",       "side": "A", "role": "concurrent", "expect": "CLEAN/independent (H1: onto merge strand)" }
+        ]},
+        { "batchId": "B2", "admits": [
+          { "agent": "dave",  "seed": "s6-interference", "side": "A", "role": "fast" },
+          { "agent": "alice", "seed": "s6-interference", "side": "B", "role": "concurrent", "expect": "KNOT (silent-mismerge wedge)" },
+          { "agent": "bob",   "seed": "s2-indep",        "side": "A", "role": "concurrent", "expect": "CLEAN/independent" }
+        ]},
+        { "batchId": "B3", "admits": [
+          { "agent": "carol", "seed": "s7-interference", "side": "A", "role": "fast" },
+          { "agent": "dave",  "seed": "s7-interference", "side": "B", "role": "concurrent", "expect": "KNOT (silent-mismerge wedge)" },
+          { "agent": "alice", "seed": "s3-indep",        "side": "A", "role": "concurrent", "expect": "CLEAN/independent" }
+        ]},
+        { "batchId": "B4", "admits": [
+          { "agent": "bob",   "seed": "s8-negctrl",      "side": "A", "role": "fast" },
+          { "agent": "carol", "seed": "s8-negctrl",      "side": "B", "role": "concurrent", "expect": "CLEAN/independent (NEG-CONTROL: must NOT false-KNOT)" },
+          { "agent": "dave",  "seed": "s4-indep",        "side": "A", "role": "concurrent", "expect": "CLEAN/independent (H1: onto merge strand)" }
+        ]}
+      ]
+    }
+  ]
+}

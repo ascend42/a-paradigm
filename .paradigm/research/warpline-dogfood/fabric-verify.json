@@ -1,0 +1,21 @@
+{
+  "checked": 11,
+  "v1Prefix": {
+    "count": 0,
+    "selfHashOk": true
+  },
+  "v2Chain": {
+    "count": 11,
+    "ok": true
+  },
+  "boundaryAnchored": true,
+  "legacyUnverifiable": {
+    "count": 0,
+    "pickIds": []
+  },
+  "anchor": {
+    "present": false,
+    "ok": false
+  },
+  "failures": []
+}
