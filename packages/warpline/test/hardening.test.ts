@@ -111,7 +111,7 @@ describe('H1 (relaxed) — a 3rd agent re-basing onto a MERGE strand CLEAN-seals
     await repo?.destroy();
   });
 
-  it('the merge strand is marked, and admitting onto it does not silently mis-base', async () => {
+  it('the merge strand is marked, and admitting onto it CLEAN-seals off its durable bytes', async () => {
     const root = repo.dir;
     await recordPick(root, { cwd: root, ref: 'base', intent: 'genesis' });
     forkScratch(root, 'B');
@@ -125,12 +125,16 @@ describe('H1 (relaxed) — a 3rd agent re-basing onto a MERGE strand CLEAN-seals
     expect(rb.sealed).toBe(true);
     expect(rb.strand?.merged).toBe(true); // the merge strand is marked
 
-    // C re-bases onto the merge strand: meaning says CLEAN, but materializing
-    // base/theirs off the merge strand's single-parent commit would mis-base →
-    // fail CLOSED (unsealed), never a wrong 3rd-generation merge.
+    // C re-bases onto the merge strand M: meaning says CLEAN, and theirs (M) is a
+    // merge strand — the RELAXATION reconstructs M's second parent from its durable
+    // binding.treeId instead of mis-basing off its single-parent commit. So C now
+    // CLEAN-seals a well-formed 3rd-generation merge (never a wrong base).
     const rc = await admit(root, { cwd: root, agentId: 'C', ref: 'branchC' });
     expect(rc.decision.status).toBe('CLEAN');
-    expect(rc.sealed).toBe(false);
+    expect(rc.sealed).toBe(true);
+    expect(rc.strand?.merged).toBe(true);
+    // the sealed merge is content-addressed: binding.treeId IS the recipe result.
+    expect(rc.strand?.binding?.treeId).toBe(rc.strand?.merge?.result);
   });
 });
 
