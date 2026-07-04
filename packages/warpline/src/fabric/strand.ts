@@ -54,6 +54,29 @@ export interface StrandBinding {
 }
 
 /**
+ * Present only on an ANCHOR strand: a chained attestation over an earlier,
+ * weaker-authenticated segment of the fabric. IN the v2 pickId (rides via the
+ * preimage `...rest` spread in computePickId), so the attestation is itself
+ * chain-protected. kind/epoch are generalized so the v2→v3 epoch boundary can
+ * reuse this shape (docs/specs/warpline-v3-identity.md §5). See
+ * docs/specs/warpline-v1-anchor.md.
+ */
+export interface EpochAnchor {
+  kind: 'epoch-anchor';
+  version: 1; // attestation FORMAT version
+  epoch: 'v1'; // the segment being attested (v3 genesis will use 'v2')
+  prefixCount: number; // number of strands covered (== count of ALL v1 strands)
+  prefixTipPickId: string; // stored pickId of the last covered strand (redundant corroboration)
+  prefixDigest: string; // sha256:… — anchor.ts §3.1 fold over the covered strands
+  manifestDigest: string | null; // sha256:… over the canonical fabric-legacy.json (null iff no manifest)
+  grandfatheredCount: number; // pins manifest cardinality (kills the mint variant)
+  corroboration: {
+    method: 'git-history-prefix-match';
+    gitCommit: string; // the commit whose committed fabric.jsonl v1 prefix matched (attest §5.3)
+  };
+}
+
+/**
  * The re-derivable recipe of a materialized CLEAN merge (M1b). All three parents +
  * the result are NATIVE treeIds (git-independent, review amendment A3 — non-optional)
  * so the merge Warpline performed is both RESTORABLE (result) and RE-DERIVABLE
@@ -119,6 +142,12 @@ export interface Strand {
   binding?: StrandBinding | null;
   /** the re-derivable merge recipe (merge strands only, M1b). Excluded from pickId. */
   merge?: MergeRecipe;
+  /**
+   * Present ONLY on an epoch-anchor strand (docs/specs/warpline-v1-anchor.md): the
+   * chained attestation over the v1 prefix + grandfather manifest. IN the v2 pickId
+   * (rides the `...rest` spread), so editing/deleting the anchor breaks the chain.
+   */
+  attests?: EpochAnchor;
 }
 
 /** The strand minus its own content-address (what `pickId` is computed over). */
@@ -131,7 +160,7 @@ export type StrandBody = Omit<Strand, 'pickId'>;
  * "" for the ADDRESS only; the stored strand JSON keeps the real nulls. "" is
  * never a real stateId/confidence, so this introduces no collision.
  */
-function canonicalSafe(v: unknown): CanonicalValue {
+export function canonicalSafe(v: unknown): CanonicalValue {
   if (v === null || v === undefined) return '';
   if (Array.isArray(v)) return v.map(canonicalSafe);
   if (typeof v === 'object') {

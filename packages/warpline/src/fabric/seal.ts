@@ -17,6 +17,7 @@ import {
   type KnotResolution,
   type StrandBinding,
   type MergeRecipe,
+  type EpochAnchor,
 } from './strand.js';
 
 const EMPTY_DELTA: StrandDelta = { born: [], retired: [], contractChanged: [], renamedNoop: 0 };
@@ -64,6 +65,12 @@ export interface SealInput {
   authoredBy?: { agentId: string | null; sessionKey?: string | null };
   /** NEW (schema v2) — the SECOND merge parent (CLEAN merge only): the base strand's pickId. */
   mergeParentPickId?: string | null;
+  /**
+   * Present ONLY when sealing an epoch-anchor strand (anchor.ts). Rides into the v2
+   * pickId via the `...rest` spread in computePickId, so the attestation is itself
+   * chain-protected.
+   */
+  attests?: EpochAnchor;
 }
 
 /** Persist `state`, append its strand to the fabric, advance the selvage. */
@@ -107,6 +114,7 @@ export function sealState(
     ...(input.mergeParentPickId !== undefined ? { mergeParentPickId: input.mergeParentPickId } : {}),
     ...(input.binding ? { binding: input.binding } : {}),
     ...(input.merge ? { merge: input.merge } : {}),
+    ...(input.attests ? { attests: input.attests } : {}),
   };
   const strand: Strand = { ...body, pickId: computePickId(body) };
   // CAS GUARD FIRST — refuse if the tip moved off the parent the decision was

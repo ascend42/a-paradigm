@@ -18,6 +18,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { computePickId, computeLegacyBodyHash, reproducesUnderKnownRule, type Strand } from './strand.js';
+import { findAnchor, strandDigest } from './anchor.js';
 
 /** One grandfathered legacy strand: its stored pickId + its PINNED body hash (§7.2). */
 export interface FabricLegacyEntry {
@@ -65,6 +66,26 @@ export function readLegacyGrandfathered(wdir: string): Map<string, string> {
     out.set(entry.pickId, entry.bodyHash);
   }
   return out;
+}
+
+/**
+ * The parsed grandfather manifest as its full `FabricLegacy` object (reason +
+ * entries), or null when absent (ENOENT). Distinct from readLegacyGrandfathered
+ * (which returns the pickId→bodyHash Map for membership checks): the epoch anchor
+ * digests the WHOLE manifest object (anchor.ts §3.1 computeManifestDigest), so it
+ * needs the parsed value verbatim. A parse failure THROWS (fail-closed — a corrupt
+ * manifest must never hash as "empty").
+ */
+export function readLegacyManifest(wdir: string): FabricLegacy | null {
+  const p = path.join(wdir, 'fabric-legacy.json');
+  let raw: string;
+  try {
+    raw = fs.readFileSync(p, 'utf8');
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return null;
+    throw new Error(`warpline: fabric-legacy.json unreadable at ${p}: ${(err as Error).message}`);
+  }
+  return JSON.parse(raw) as FabricLegacy;
 }
 
 /** The `.warpline/` dir for a repo root (same dir #warp-store writes under). */
@@ -190,6 +211,28 @@ export function rewriteFabric(wdir: string, strands: Strand[]): void {
         `!= stored ${pickId}; an identity field was mutated (only calibratedConfidence is rewritable).`,
     );
   }
+  const onDisk = readFabric(wdir);
+
+  // V1 FREEZE (spec §7): once the ON-DISK fabric carries an epoch anchor, the v1
+  // prefix is IMMUTABLE — no grading, no binding stamps, no repair. Byte-level
+  // (full-strand canonical digest, calibratedConfidence + binding included), not
+  // rule-based: any change to a covered strand refuses at the WRITER, closing the
+  // HIGH-A binding-injection write path (and freezing v1 confidence — grade.ts
+  // skips frozen v1 strands, so this only fires on a genuine v1 mutation).
+  const anchor = findAnchor(onDisk);
+  if (anchor?.attests) {
+    const covered = anchor.attests.prefixCount;
+    for (let i = 0; i < covered && i < strands.length && i < onDisk.length; i++) {
+      if (strandDigest(strands[i]) !== strandDigest(onDisk[i])) {
+        throw new Error(
+          `warpline: rewriteFabric refused — v1 strand seq ${onDisk[i].seq} is FROZEN by the epoch ` +
+            `anchor (${anchor.pickId}); the v1 prefix is immutable: no grading, no binding stamps, no ` +
+            `repair. (v1-anchor freeze, docs/specs/warpline-v1-anchor.md §7)`,
+        );
+      }
+    }
+  }
+
   // LOST-UPDATE CAS (M2 trust floor, item 4 — Judge): the caller composed `strands`
   // from a ledger READ some time ago; if a concurrent writer APPENDED since (a
   // stolen/stale lock, or a caller outside #fabric-lock), blindly renaming over the
@@ -197,7 +240,6 @@ export function rewriteFabric(wdir: string, strands: Strand[]): void {
   // pick-for-pick the one this rewrite was derived from — annotations may differ
   // (that is what rewrite is for), identities may not. Callers hold #fabric-lock;
   // this is defense-in-depth, symmetric with the writeSelvage CAS.
-  const onDisk = readFabric(wdir);
   if (onDisk.length !== strands.length || onDisk.some((s, i) => s.pickId !== strands[i].pickId)) {
     throw new Error(
       `warpline: rewriteFabric CAS failed — the on-disk ledger (${onDisk.length} strand(s)) no longer matches ` +

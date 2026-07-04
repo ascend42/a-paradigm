@@ -95,7 +95,9 @@ describe('grandfather containment — the pinned body is tamper-evident', () => 
   afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
 
   it('untampered: soft legacy-unverifiable, exit-equivalent 0', () => {
-    const r = verifyFabric(root);
+    // requireAnchor:false isolates grandfather containment from the v1-anchor coverage
+    // gate (this fixture is an unanchored v1 fabric by design).
+    const r = verifyFabric(root, { requireAnchor: false });
     expect(r.failures).toEqual([]);
     expect(r.legacyUnverifiable.count).toBe(1);
   });

@@ -27,8 +27,9 @@
  * Library code: no console output — the CLI prints.
  */
 
-import { warplineDirOf, readFabric, readLegacyGrandfathered } from './fabric.js';
+import { warplineDirOf, readFabric, readLegacyGrandfathered, readLegacyManifest, readSelvage } from './fabric.js';
 import { computePickId, computeLegacyBodyHash, reproducesUnderKnownRule, type Strand } from './strand.js';
+import { findAnchor, computePrefixDigest, computeManifestDigest } from './anchor.js';
 import { ObjectStore } from '../warp/object-store.js';
 import { WORKTREE_REF } from '../absorb.js';
 
@@ -41,7 +42,13 @@ export type FabricVerifyKind =
   | 'merge-recipe-invalid'
   | 'legacy-body-mismatch'
   | 'legacy-manifest-invalid'
-  | 'binding-mismatch';
+  | 'binding-mismatch'
+  | 'anchor-missing'
+  | 'anchor-mismatch'
+  | 'anchor-manifest-mismatch'
+  | 'anchor-duplicate'
+  | 'anchor-malformed'
+  | 'v1-out-of-prefix';
 
 export interface FabricVerifyFailure {
   /** the strand's seq — or -1 for a MANIFEST-level failure (no strand to point at). */
@@ -67,7 +74,22 @@ export interface FabricVerifyReport {
    * whose body moved is a HARD legacy-body-mismatch instead.
    */
   legacyUnverifiable: { count: number; pickIds: string[] };
+  /**
+   * The v1-prefix epoch anchor (spec §6). `present` = an anchor strand exists;
+   * `ok` = the prefix + manifest authenticate against it. A fabric with v1 strands
+   * and no valid anchor HARD-FAILS (constraint c — coverage is a code constant).
+   */
+  anchor: { present: boolean; ok: boolean; corroboration?: string };
   failures: FabricVerifyFailure[];
+}
+
+export interface VerifyOptions {
+  /**
+   * Require the v1 coverage anchor (default true). `attest` alone passes false — it
+   * is the one verb that legitimately operates on an as-yet-uncovered fabric; every
+   * OTHER check still applies.
+   */
+  requireAnchor?: boolean;
 }
 
 const isV2 = (s: Strand): boolean => s.schemaVersion >= 2;
@@ -117,7 +139,8 @@ function firstBadObject(store: ObjectStore, treeId: string, ok: Set<string>): Ba
  * Authenticate the fabric at `root`. Pure over the on-disk ledger + object store.
  * `failures` empty ⇒ intact (CLI exit 0); non-empty ⇒ tamper/break (exit 1).
  */
-export function verifyFabric(root: string): FabricVerifyReport {
+export function verifyFabric(root: string, opts: VerifyOptions = {}): FabricVerifyReport {
+  const requireAnchor = opts.requireAnchor ?? true;
   const wdir = warplineDirOf(root);
   const fabric = readFabric(wdir);
   const store = new ObjectStore(root);
@@ -270,12 +293,165 @@ export function verifyFabric(root: string): FabricVerifyReport {
     }
   }
 
+  // 7. Selvage cross-check (spec §6.7 — the gap the audit found: verify never looked
+  //    at the selvage). If a selvage pointer exists it MUST point at the fabric tip
+  //    strand's stateId; a rolled-back selvage over a truncated head is otherwise
+  //    internally consistent. Lenient when no selvage is set (many strands appended
+  //    without a tip pointer in tests / mid-migration).
+  const selvage = readSelvage(wdir);
+  if (selvage !== null && fabric.length > 0) {
+    const tip = fabric[fabric.length - 1];
+    if (tip.stateId !== selvage) {
+      failures.push({
+        seq: tip.seq,
+        pickId: tip.pickId,
+        kind: 'chain-break',
+        detail: `selvage ${selvage} does not point at the fabric tip strand's stateId ${tip.stateId} (rolled-back tip)`,
+      });
+    }
+  }
+
+  // 8. Epoch-anchor authentication (spec §6) — the v1 prefix is authenticated against
+  //    its chained attestation, not per-strand self-hashes. This single walk flips
+  //    HIGH-A, HIGH-B co-tamper, MED-C, the mint variant, and the tip-append variant
+  //    to exit 1.
+  const v1Strands = fabric.filter((s) => !isV2(s));
+  const anchorStrands = fabric.filter((s) => s.attests?.kind === 'epoch-anchor' && s.attests.epoch === 'v1');
+  const anchor = findAnchor(fabric, 'v1');
+  let anchorOk = false;
+  let corroboration: string | undefined;
+
+  // 8a. Coverage requirement (constraint c) — a code constant, not deletable disk
+  //     state: any v1 strand present with no anchor HARD-fails.
+  if (requireAnchor && v1Strands.length > 0 && anchorStrands.length === 0) {
+    failures.push({
+      seq: -1,
+      pickId: '(none)',
+      kind: 'anchor-missing',
+      detail:
+        `fabric has ${v1Strands.length} v1 strand(s) but no epoch anchor — the v1 prefix is unauthenticated. ` +
+        `Run \`warpline objects backfill\` then \`warpline fabric attest\`.`,
+    });
+  }
+
+  // 8b. Exactly one anchor per epoch — every anchor after the first is a duplicate
+  //     (the CLI cannot seal a second; its existence is forgery or a bug).
+  if (anchorStrands.length > 1) {
+    for (let i = 1; i < anchorStrands.length; i++) {
+      failures.push({
+        seq: anchorStrands[i].seq,
+        pickId: anchorStrands[i].pickId,
+        kind: 'anchor-duplicate',
+        detail: `a second v1 epoch anchor — attestation is once-per-epoch; this one is forged/spurious`,
+      });
+    }
+  }
+
+  if (anchor?.attests) {
+    const a = anchor.attests;
+    const malformed = (detail: string): void => {
+      failures.push({ seq: anchor.seq, pickId: anchor.pickId, kind: 'anchor-malformed', detail });
+    };
+    let shapeOk = true;
+
+    // 8c. Shape.
+    if (a.kind !== 'epoch-anchor' || a.version !== 1 || a.epoch !== 'v1') {
+      malformed(`unrecognized attestation kind/version/epoch (${a.kind}/${a.version}/${a.epoch})`);
+      shapeOk = false;
+    }
+    if (a.prefixCount !== v1Strands.length) {
+      malformed(`prefixCount ${a.prefixCount} != v1 strand count ${v1Strands.length}`);
+      shapeOk = false;
+    }
+    // Every v1 strand must occupy seqs 0..prefixCount-1 (contiguous head); a v1 strand
+    // elsewhere → v1-out-of-prefix (kills the "append a fresh self-consistent v1 strand
+    // at the tip" variant). A v2 strand inside the prefix range → malformed.
+    for (let i = 0; i < fabric.length; i++) {
+      const isV1 = !isV2(fabric[i]);
+      if (i < a.prefixCount && !isV1) {
+        malformed(`a v2 strand (seq ${fabric[i].seq}) sits inside the covered prefix range [0..${a.prefixCount - 1}]`);
+        shapeOk = false;
+      }
+      if (i >= a.prefixCount && isV1) {
+        failures.push({
+          seq: fabric[i].seq,
+          pickId: fabric[i].pickId,
+          kind: 'v1-out-of-prefix',
+          detail: `a v1 strand at index ${i} is outside the covered prefix [0..${a.prefixCount - 1}] (appended v1 forgery)`,
+        });
+        shapeOk = false;
+      }
+    }
+    if (a.prefixCount > 0 && a.prefixCount <= fabric.length) {
+      if (fabric[a.prefixCount - 1].pickId !== a.prefixTipPickId) {
+        malformed(`prefixTipPickId ${a.prefixTipPickId} != covered tip strand's pickId ${fabric[a.prefixCount - 1].pickId}`);
+        shapeOk = false;
+      }
+    }
+    if (isV2(anchor) === false) {
+      malformed('the anchor strand itself is not a v2 strand');
+      shapeOk = false;
+    }
+    if (anchor.seq < a.prefixCount) {
+      malformed(`anchor seq ${anchor.seq} is not greater than every covered seq (prefixCount ${a.prefixCount})`);
+      shapeOk = false;
+    }
+
+    // 8d. Prefix digest — recompute over strands 0..prefixCount-1 as stored on disk.
+    //     THE check that flips HIGH-A, HIGH-B co-tamper, and MED-C to exit 1.
+    let prefixOk = false;
+    if (shapeOk) {
+      const recomputed = computePrefixDigest(fabric.slice(0, a.prefixCount));
+      if (recomputed !== a.prefixDigest) {
+        failures.push({
+          seq: anchor.seq,
+          pickId: anchor.pickId,
+          kind: 'anchor-mismatch',
+          detail:
+            `the v1 prefix does not match its chained attestation — some v1 body, binding, or id was rewritten ` +
+            `(recomputed ${recomputed} != attested ${a.prefixDigest})`,
+        });
+      } else {
+        prefixOk = true;
+      }
+    }
+
+    // 8e. Manifest digest + cardinality.
+    const legacy = readLegacyManifest(wdir);
+    const recomputedManifest = computeManifestDigest(legacy);
+    const manifestCount = legacy?.grandfathered.length ?? 0;
+    let manifestOk = false;
+    if (recomputedManifest !== a.manifestDigest) {
+      failures.push({
+        seq: anchor.seq,
+        pickId: anchor.pickId,
+        kind: 'anchor-manifest-mismatch',
+        detail:
+          `fabric-legacy.json digest ${recomputedManifest ?? '(absent)'} != attested ${a.manifestDigest ?? '(null)'} ` +
+          `(the grandfather manifest was tampered)`,
+      });
+    } else if (manifestCount !== a.grandfatheredCount) {
+      failures.push({
+        seq: anchor.seq,
+        pickId: anchor.pickId,
+        kind: 'anchor-manifest-mismatch',
+        detail: `grandfatheredCount moved ${a.grandfatheredCount}→${manifestCount} (a grandfather entry was added/removed)`,
+      });
+    } else {
+      manifestOk = true;
+    }
+
+    anchorOk = shapeOk && prefixOk && manifestOk;
+    if (anchorOk) corroboration = a.corroboration.gitCommit;
+  }
+
   return {
     checked: fabric.length,
     v1Prefix: { count: v1Count, selfHashOk: v1SelfHashOk },
     v2Chain: { count: v2Count, ok: v2ChainOk },
     boundaryAnchored,
     legacyUnverifiable: { count: legacyPickIds.length, pickIds: legacyPickIds },
+    anchor: { present: anchorStrands.length > 0, ok: anchorOk, corroboration },
     failures,
   };
 }

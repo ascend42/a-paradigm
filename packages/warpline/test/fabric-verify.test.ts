@@ -161,7 +161,9 @@ describe('verifyFabric — a v1 prefix self-hashes; the v2 chain authenticates f
     };
     appendStrand(wdir, { ...v2body, pickId: computePickId(v2body) });
 
-    const r = verifyFabric(root);
+    // requireAnchor:false isolates the v1-prefix/v2-chain/boundary sub-behaviors from
+    // the v1-anchor coverage gate (this synthetic v1+v2 fabric carries no anchor).
+    const r = verifyFabric(root, { requireAnchor: false });
     expect(r.v1Prefix).toEqual({ count: 2, selfHashOk: true });
     expect(r.v2Chain).toEqual({ count: 1, ok: true });
     expect(r.boundaryAnchored).toBe(true);
@@ -172,7 +174,7 @@ describe('verifyFabric — a v1 prefix self-hashes; the v2 chain authenticates f
     const fabric = readFabric(wdir);
     fabric[0] = { ...fabric[0], intent: 'CORRUPTED v1' };
     rewriteRaw(root, fabric);
-    const r2 = verifyFabric(root);
+    const r2 = verifyFabric(root, { requireAnchor: false });
     expect(r2.v1Prefix.selfHashOk).toBe(false);
     expect(r2.failures.some((f) => f.seq === 0 && f.kind === 'pickId-mismatch')).toBe(true);
     expect(r2.v2Chain.ok).toBe(true);

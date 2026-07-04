@@ -466,6 +466,11 @@ components:
       with a regenerate instruction (never auto-upgraded — an unpinned grandfather
       clause is the hole this closed). So #grade may move calibratedConfidence
       (excluded from the hash) but can never silently drift an identity field.
+      V1 FREEZE (#anchor, docs/specs/warpline-v1-anchor.md §7): once the ON-DISK
+      fabric carries an epoch anchor, rewriteFabric refuses ALL v1 mutation — grading,
+      binding stamps, repair — via a byte-level full-strand digest compare against the
+      on-disk prefix (closes the HIGH-A binding-injection WRITE path at the writer;
+      #grade skips frozen v1 strands, their trajectory living in grades.jsonl only).
     type: module
     components:
       - "#strand"
@@ -505,6 +510,52 @@ components:
       - "#strand"
       - "#fabric"
       - "#warp-store"
+      - "#anchor"
+
+  anchor:
+    description: >-
+      The v1-prefix EPOCH ANCHOR (docs/specs/warpline-v1-anchor.md) — closes the
+      HIGH-A / HIGH-B / MED-C live exploits (the v2 chain was authenticated, the v1
+      prefix was not). computePrefixDigest folds the FULL v1 strands (bodies,
+      bindings, pickIds all included) domain-separated + length-prefixed; the anchor
+      is a NORMAL v2 strand carrying an `attests` block (EpochAnchor) that rides into
+      its pickId via computePickId's ...rest spread — so the attestation is itself
+      chain-protected. `warpline fabric attest` (attestFabric) is the ONE-TIME verb:
+      refuse-if-attested → precondition verify (coverage suppressed) → corroborate the
+      working prefix+manifest against git history of .warpline/fabric.jsonl (record the
+      matching commit) → seal a meaning-no-op anchor at the tip. No re-attest/force/
+      repair verb exists (a re-attest path = tamper-then-re-attest). fabric-verify then
+      authenticates the prefix against the anchor (anchor-missing/mismatch/manifest-
+      mismatch/duplicate/malformed, v1-out-of-prefix; + the §6.7 selvage/tip cross-check)
+      and REQUIRES coverage as a code constant. assertV1Covered is the cheap restore
+      gate. Residual (stated honestly): a full re-chain by an in-loop writer stays
+      possible — tamper-EVIDENT, not trustworthy; signatures are M3.
+    type: module
+    components:
+      - "#strand"
+      - "#fabric"
+      - "#seal"
+      - "#fabric-lock"
+      - "#git-exec"
+
+  backfill:
+    description: >-
+      `warpline objects backfill` (backfillV1Bindings) — stamp a native byte binding
+      onto every v1 strand lacking one, from its provenance.gitCommit tree
+      (snapshotRef), so the v1 prefix has all the bindings it will EVER have BEFORE the
+      epoch anchor freezes it. gitOid:null deliberately (MED-E — a backfilled native
+      tree is ignore-filtered, so the git sha would be a lie; the check is vacuous for
+      self-produced values). Binding is EXCLUDED from the v1 pickId, so a stamp is
+      legal pre-anchor. A strand whose gitCommit is null/unreachable stays UNBOUND
+      forever (restore refuses permanently, A4). PRE-ATTESTATION ONLY: refuses once an
+      anchor exists (findAnchor) — the same one-way freeze gate #fabric's rewriteFabric
+      keys off. Ordering trap: backfill → git commit → attest must not be reordered.
+    type: module
+    components:
+      - "#fabric"
+      - "#fabric-lock"
+      - "#warp-store"
+      - "#anchor"
 
   restore:
     description: >-

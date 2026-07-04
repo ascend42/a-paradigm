@@ -100,7 +100,9 @@ describe('fabric-legacy — hard vs soft classification of a graded-over strand'
   it('grandfathered by pickId → legacy-unverifiable (soft, exit stays 0)', () => {
     const graded = readFabric(warplineDirOf(root)).find((s) => s.seq === 1)!;
     writeLegacy(root, [graded]);
-    const r = verifyFabric(root);
+    // requireAnchor:false isolates the grandfather-classification concern from the
+    // v1-anchor coverage gate (this fixture is an unanchored v1 fabric by design).
+    const r = verifyFabric(root, { requireAnchor: false });
     expect(r.failures).toEqual([]); // soft — exit 0
     expect(r.legacyUnverifiable).toEqual({ count: 1, pickIds: [graded.pickId] });
     expect(r.v1Prefix.selfHashOk).toBe(true); // genesis rule-verified, seq 1 grandfathered

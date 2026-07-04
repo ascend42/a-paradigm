@@ -75,7 +75,10 @@ describe('migration — the frozen v1 prefix verifies with the grandfathered res
 
   it('verifyFabric over the v1 prefix: seq 0 + 8–14 rule-verify, seq 1–7 grandfathered, exit 0', () => {
     const grandfathered = readLegacyGrandfathered(REAL_WDIR);
-    const r = verifyFabric(root);
+    // requireAnchor:false isolates the frozen-v1-prefix grandfather residue check from
+    // the v1-anchor coverage gate. The anchored migration is exercised end-to-end in
+    // fabric-anchor.test.ts (T-12 rehearsal: backfill → attest → verify exit 0).
+    const r = verifyFabric(root, { requireAnchor: false });
 
     expect(r.failures).toEqual([]); // exit-equivalent 0 — no hard tamper
     expect(r.v1Prefix.selfHashOk).toBe(true); // every v1 strand rule-verified OR grandfathered
@@ -125,7 +128,7 @@ describe('migration — the first v2 strand anchors the v1 tip', () => {
     expect(res.strand!.schemaVersion).toBe(2);
     expect(res.strand!.parentPickId).toBe(tip.pickId); // anchors the v1 tip for free
 
-    const r = verifyFabric(root);
+    const r = verifyFabric(root, { requireAnchor: false }); // pre-attest: the v1 coverage gate is exercised elsewhere
     expect(r.v2Chain).toEqual({ count: 1, ok: true }); // exactly one v2 strand — the one we just sealed
     expect(r.boundaryAnchored).toBe(true);
     expect(r.failures).toEqual([]); // still exit 0 (v1 residue grandfathered)

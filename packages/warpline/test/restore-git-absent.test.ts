@@ -160,9 +160,13 @@ describe('restore — A4 refuses a strand with no byte binding', () => {
     try {
       const wdir = warplineDirOf(root);
       const unbound: Strand = {
-        schemaVersion: 1,
+        // A v2 strand lacking a binding: isolates the A4 unbound-refusal concern from
+        // the v1-anchor restore gate (a v1 selector refuses at the anchor gate first —
+        // see fabric-anchor.test.ts; A4 for v1 strands only surfaces post-attest).
+        schemaVersion: 2,
         seq: 0,
-        pickId: 'pick:v0:unbound-fixture',
+        pickId: 'pick:v2:unbound-fixture',
+        parentPickId: null,
         stateId: 'state:v0:unbound',
         parentStateId: null,
         actor: 'tester',

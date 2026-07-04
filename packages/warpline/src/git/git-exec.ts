@@ -179,6 +179,20 @@ export async function lsTree(ref: string, opts: GitOptions = {}): Promise<LsTree
   return entries;
 }
 
+/**
+ * Every commit hash that touched `pathspec`, newest-first (read-only) — the
+ * corroboration walk for the epoch anchor (attest §5.3). Empty [] when the path
+ * was never committed. `--end-of-options` guards the pathspec; the `--` separates
+ * it from revision args so a path that looks like a flag/ref can never be misparsed.
+ */
+export async function gitLogHashes(pathspec: string, opts: GitOptions = {}): Promise<string[]> {
+  const out = await git(['log', '--format=%H', '--end-of-options', '--', pathspec], opts).catch(() => '');
+  return out
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => /^[0-9a-f]{7,64}$/.test(l));
+}
+
 /** The common ancestor of N refs (octopus merge-base) — the base for a consolidate. */
 export async function mergeBaseN(refs: string[], opts: GitOptions = {}): Promise<string> {
   if (refs.length < 2) throw new Error('mergeBaseN needs at least 2 refs');

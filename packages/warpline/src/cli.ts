@@ -41,6 +41,8 @@ import { admit, type AdmitResult } from './fabric/admit.js';
 import { resolveKnot } from './fabric/resolve.js';
 import { gradeFabric, applyGrades, type GradeReport } from './fabric/grade.js';
 import { verifyFabric } from './fabric/verify.js';
+import { attestFabric } from './fabric/anchor.js';
+import { backfillV1Bindings } from './fabric/backfill.js';
 import { restore, type RestoreResult } from './fabric/restore.js';
 import { repoRoot, gitPath } from './git/git-exec.js';
 
@@ -579,6 +581,31 @@ objects
     }
   });
 
+objects
+  .command('backfill')
+  .description('Stamp a native byte binding onto every v1 strand that lacks one, from its provenance git commit tree — so the v1 prefix has all the bindings it will ever have BEFORE `fabric attest` freezes it. Pre-attestation only; refuses once an anchor exists.')
+  .option('--json', 'emit the backfill result as JSON')
+  .action(async (options: { json?: boolean }) => {
+    try {
+      const root = await repoRoot().catch(() => process.cwd());
+      const result = await backfillV1Bindings(root, { cwd: root });
+      if (options.json) {
+        process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+      } else {
+        const lines: string[] = [];
+        lines.push(`BACKFILL  ${result.stamped.length} v1 strand(s) newly bound  (${result.alreadyBound} already bound)`);
+        for (const s of result.stamped) lines.push(`  ✓ seq ${s.seq}  ${short(s.treeId)}`);
+        if (result.unbound.length) {
+          lines.push(`  ⚠ ${result.unbound.length} strand(s) stay PERMANENTLY unbound (restore of them refuses forever):`);
+          for (const u of result.unbound) lines.push(`    ✗ seq ${u.seq}  ${u.reason}`);
+        }
+        process.stdout.write(lines.join('\n') + '\n');
+      }
+    } catch (err) {
+      fail(err);
+    }
+  });
+
 const fabric = program
   .command('fabric')
   .description('The fabric ledger (this project\'s native meaning-history) — authenticate the whole PICK-DAG.');
@@ -594,11 +621,17 @@ fabric
       if (options.json) {
         process.stdout.write(JSON.stringify(report, null, 2) + '\n');
       } else if (report.failures.length === 0) {
+        const anchorLine = report.anchor.present
+          ? `  anchor     epoch:v1 ✓${report.anchor.corroboration ? ` (corroborated at git ${report.anchor.corroboration.slice(0, 12)})` : ''}\n`
+          : report.v1Prefix.count
+            ? '  anchor     (none — v1 prefix unattested)\n'
+            : '';
         process.stdout.write(
           `VERIFY   ${report.checked} strand(s) — all intact\n` +
             `  v1 prefix  ${report.v1Prefix.count} (self-hash ${report.v1Prefix.selfHashOk ? 'ok' : 'FAILED'}, ordering unauthenticated — OQ-A)\n` +
             `  v2 chain   ${report.v2Chain.count} (${report.v2Chain.ok ? 'ok' : 'BROKEN'})\n` +
             `  boundary   ${report.boundaryAnchored ? 'anchored ✓' : 'not anchored'}\n` +
+            anchorLine +
             (report.legacyUnverifiable.count
               ? `  legacy     ${report.legacyUnverifiable.count} grandfathered (unverifiable, sealed under a retired rule — TD-2026-07-01-202)\n`
               : ''),
@@ -616,6 +649,40 @@ fabric
       const msg = err instanceof Error ? err.message : String(err);
       process.stderr.write(`warpline: ${msg}\n`);
       process.exit(2);
+    }
+  });
+
+fabric
+  .command('attest')
+  .description('THE ONE-TIME v1-anchor verb: digest the entire v1 prefix + grandfather manifest into a chained attestation strand, corroborated against git history, then FREEZE the v1 prefix forever. No re-attest/force/repair verb exists. Run `objects backfill` + commit first.')
+  .option('--as <actor>', 'actor recording the anchor (default: the tip strand actor)')
+  .option('--agent <id>', 'agent recording the anchor (IN the v2 pickId)')
+  .option('--allow-unbound', 'freeze permanently-unrestorable (unbound) v1 strands rather than refusing')
+  .option('--json', 'emit the attest result as JSON')
+  .action(async (options: { as?: string; agent?: string; allowUnbound?: boolean; json?: boolean }) => {
+    try {
+      const root = await repoRoot().catch(() => process.cwd());
+      const result = await attestFabric(root, {
+        cwd: root,
+        actor: options.as,
+        agentId: options.agent ?? null,
+        allowUnbound: options.allowUnbound,
+      });
+      if (options.json) {
+        process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+      } else {
+        const lines: string[] = [];
+        lines.push(`ATTEST  v1 epoch anchor sealed  (seq ${result.strand.seq})`);
+        lines.push(`pick        ${result.strand.pickId}`);
+        lines.push(`prefix      ${result.prefixCount} v1 strand(s) frozen  (${result.grandfatheredCount} grandfathered)`);
+        lines.push(`corroborated at git ${result.gitCommit.slice(0, 12)}`);
+        if (result.unbound.length) lines.push(`⚠ frozen unbound (unrestorable): seq ${result.unbound.join(', ')}`);
+        lines.push('');
+        lines.push('→ the v1 prefix is now IMMUTABLE; `fabric verify` authenticates it against this anchor.');
+        process.stdout.write(lines.join('\n') + '\n');
+      }
+    } catch (err) {
+      fail(err);
     }
   });
 

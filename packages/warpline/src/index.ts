@@ -77,6 +77,7 @@ export { justify, type Justification, type JustifyOptions } from './justificatio
 export {
   computePickId,
   computePickIdWholeBody,
+  computeLegacyBodyHash,
   reproducesUnderKnownRule,
   type Strand,
   type StrandBody,
@@ -137,13 +138,28 @@ export {
   type AdmitOptions,
   type AdmitResult,
 } from './fabric/admit.js';
-// Fabric verify — authenticate the whole PICK-DAG (integrity + chain + binding).
+// Fabric verify — authenticate the whole PICK-DAG (integrity + chain + binding + anchor).
 export {
   verifyFabric,
   type FabricVerifyReport,
   type FabricVerifyFailure,
   type FabricVerifyKind,
+  type VerifyOptions,
 } from './fabric/verify.js';
+// v1-prefix epoch anchor (docs/specs/warpline-v1-anchor.md) — freeze + attest-once.
+export {
+  strandDigest,
+  computePrefixDigest,
+  computeManifestDigest,
+  findAnchor,
+  assertV1Covered,
+  attestFabric,
+  type AttestOptions,
+  type AttestResult,
+} from './fabric/anchor.js';
+export { backfillV1Bindings, type BackfillResult } from './fabric/backfill.js';
+export { readLegacyManifest } from './fabric/fabric.js';
+export type { EpochAnchor } from './fabric/strand.js';
 // Restore (M1c) — reconstruct a working tree from the native store with git ABSENT.
 export { resolveSelector, type SelectorResolution } from './fabric/select.js';
 export { restore, type RestoreOptions, type RestoreResult } from './fabric/restore.js';

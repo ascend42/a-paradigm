@@ -21,6 +21,7 @@
 
 import { warplineDirOf, readFabric, rewriteFabric, appendGradeEvent } from './fabric.js';
 import { withFabricLock } from './lock.js';
+import { findAnchor } from './anchor.js';
 import type { Strand } from './strand.js';
 
 const PICK_PRIOR = 0.7; // a single-writer pick has no gate-rule seed
@@ -137,8 +138,14 @@ export async function applyGrades(root: string, report: GradeReport, now: string
   const wdir = warplineDirOf(root);
   await withFabricLock(root, () => {
     const fabric = readFabric(wdir);
+    // FREEZE (spec §7): once the fabric is attested, a v1 strand's calibratedConfidence
+    // is FROZEN at its attested value — rewriteFabric would refuse the mutation. Skip
+    // v1 strands in the LEDGER rewrite; their grade EVENTS still land in grades.jsonl
+    // below (the trajectory lives in the sidecar, the frozen byte does not move).
+    const frozen = findAnchor(fabric) !== undefined;
     const byPick = new Map(report.grades.map((g) => [g.pickId, g]));
     const updated: Strand[] = fabric.map((s) => {
+      if (frozen && s.schemaVersion < 2) return s; // v1 confidence frozen by the anchor
       const g = byPick.get(s.pickId);
       return g && g.confidenceAfter !== s.calibratedConfidence
         ? { ...s, calibratedConfidence: g.confidenceAfter }

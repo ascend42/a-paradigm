@@ -20,7 +20,8 @@
  * Library code: no console output.
  */
 
-import { readFabric, readSelvage } from './fabric.js';
+import { readFabric, readSelvage, readLegacyManifest } from './fabric.js';
+import { assertV1Covered } from './anchor.js';
 import type { Strand } from './strand.js';
 
 export interface SelectorResolution {
@@ -102,7 +103,15 @@ export function resolveSelector(wdir: string, selector?: string): SelectorResolu
     return { treeId: sel };
   }
 
-  const strand = resolveStrand(wdir, sel, readFabric(wdir));
+  const fabric = readFabric(wdir);
+  const strand = resolveStrand(wdir, sel, fabric);
+  // RESTORE GATE (spec §8): a v1 strand's byte binding is unauthenticated without a
+  // valid epoch anchor (HIGH-A). Refuse restoring any v1 selector until the prefix is
+  // validly attested — a cheap recheck (no object walks). v2 strands are
+  // chain-authenticated; `tree:` selectors named bytes explicitly and never reach here.
+  if (strand.schemaVersion < 2) {
+    assertV1Covered(wdir, fabric, readLegacyManifest(wdir));
+  }
   const treeId = strand.binding?.treeId;
   if (!treeId) {
     throw new Error(
