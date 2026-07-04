@@ -238,6 +238,7 @@ program
   .description("Seal MEANING into the Warpline fabric — this project's OWN native history. Writes .warpline/ only (refs/selvage + fabric.jsonl), NEVER git. A no-op when meaning is unchanged. With --ref <commit> and no -m, intent + actor are derived from the commit (how the auto-seal hook records).")
   .option('-m, --intent <message>', 'why this pick — the human-readable intent')
   .option('--as <actor>', 'actor identity recording this pick (default: git user.name / commit author)')
+  .option('--agent <id>', 'AGENT recording this pick — IN the pickId (falls back to $WARPLINE_AGENT_ID). Unsigned self-assertion: attribution data, not authenticated identity (M3)')
   .option('--confidence <n>', 'graded belief 0..1 (reserved — the calibration signal)')
   .option('--ref <ref>', 'snapshot a git ref instead of the working tree (default: WORKTREE)')
   .option('--quiet', 'suppress output (for hooks/scripts); still exits non-zero on error')
@@ -246,6 +247,7 @@ program
     async (options: {
       intent?: string;
       as?: string;
+      agent?: string;
       confidence?: string;
       ref?: string;
       quiet?: boolean;
@@ -270,10 +272,15 @@ program
           }
         }
         const root = await repoRoot().catch(() => process.cwd());
+        // Attribution precedence: --agent flag > $WARPLINE_AGENT_ID > null. Lets a
+        // per-agent worktree seal attributed strands during the multi-agent dogfood
+        // (unsigned self-assertion — attribution data, not authenticated identity).
+        const agentId = options.agent ?? process.env.WARPLINE_AGENT_ID ?? undefined;
         const result = await recordPick(root, {
           cwd: root,
           intent: options.intent,
           actor: options.as,
+          agentId,
           confidence,
           ref: options.ref,
         });

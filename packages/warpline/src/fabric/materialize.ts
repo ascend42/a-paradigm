@@ -13,6 +13,7 @@
  */
 
 import * as fs from 'node:fs/promises';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import { absorb, WORKTREE_REF } from '../absorb.js';
 import type { WarpState } from '../warp/warp-state.js';
@@ -24,6 +25,8 @@ import {
   releaseTree,
   type GitOptions,
 } from '../git/git-exec.js';
+import { ObjectStore } from '../warp/object-store.js';
+import { writeMergedTree, restoreTree } from '../warp/snapshot.js';
 import { mergeText } from './merge3.js';
 
 export interface MergeConflict {
@@ -178,5 +181,121 @@ export async function materializeMergedState(
     return { plan, state };
   } finally {
     await releaseTree(tmp);
+  }
+}
+
+/* ── NATIVE-tree merge (H1 relaxation, PR-B) ─────────────────────────────────── */
+
+/** Flatten a native tree to leaf paths → {mode, id}. Dirs are expanded; symlink /
+ * gitlink entries are kept as leaves (the merge fails them closed as NON_BLOB). */
+function flattenNativeTree(store: ObjectStore, treeId: string): Map<string, { mode: string; id: string }> {
+  const out = new Map<string, { mode: string; id: string }>();
+  const walk = (tid: string, prefix: string): void => {
+    for (const e of store.getTree(tid)) {
+      const p = prefix ? `${prefix}/${e.name}` : e.name;
+      if (e.mode === '40000') walk(e.id, p);
+      else out.set(p, { mode: e.mode, id: e.id });
+    }
+  };
+  walk(treeId, '');
+  return out;
+}
+
+type NativeEntry = { mode: string; id: string };
+/** A path differs between two native trees when presence, native id, OR mode moved.
+ * Because all three merge sides are normalized to NATIVE ids, unchanged files share
+ * one content-address across sides — so id-equality is an exact, cheap change test
+ * (the native equivalent of git diff --no-renames: a rename reads as delete+add). */
+const nativeDiffers = (a: NativeEntry | undefined, b: NativeEntry | undefined): boolean =>
+  (a === undefined) !== (b === undefined) ||
+  (a !== undefined && b !== undefined && (a.id !== b.id || a.mode !== b.mode));
+
+/**
+ * Compute the 3-way merge plan over three NATIVE trees (git ABSENT). The H1
+ * relaxation's core: when a merge base/theirs strand contributes its durable
+ * binding.treeId instead of a git commit, the whole merge runs off the object
+ * store. Byte + mode resolution is IDENTICAL to the git path (resolveFile /
+ * mergeMode / NON_BLOB fail-closed) — only the byte SOURCE changed.
+ */
+export function computeMergeNative(
+  store: ObjectStore,
+  baseTreeId: string,
+  oursTreeId: string,
+  theirsTreeId: string,
+): MergePlan {
+  const base = flattenNativeTree(store, baseTreeId);
+  const ours = flattenNativeTree(store, oursTreeId);
+  const theirs = flattenNativeTree(store, theirsTreeId);
+
+  const changed = new Set<string>();
+  for (const p of new Set([...base.keys(), ...ours.keys()])) if (nativeDiffers(base.get(p), ours.get(p))) changed.add(p);
+  for (const p of new Set([...base.keys(), ...theirs.keys()])) if (nativeDiffers(base.get(p), theirs.get(p))) changed.add(p);
+
+  const files = new Map<string, MergedFile | null>();
+  const conflicts: MergeConflict[] = [];
+
+  for (const p of changed) {
+    const bE = base.get(p);
+    const oE = ours.get(p);
+    const tE = theirs.get(p);
+    // Same fail-closed as the git path: we only byte-merge real blobs.
+    if ([bE?.mode, oE?.mode, tE?.mode].some((m) => m != null && NON_BLOB_MODES.has(m))) {
+      conflicts.push({ path: p, reason: 'symlink or submodule changed — unmergeable entry type' });
+      continue;
+    }
+    const b = bE ? store.getBlob(bE.id) : null; // verified read — fails closed on tamper
+    const o = oE ? store.getBlob(oE.id) : null;
+    const t = tE ? store.getBlob(tE.id) : null;
+    const r = resolveFile(b, o, t);
+    if ('reason' in r) {
+      conflicts.push({ path: p, reason: r.reason });
+      continue;
+    }
+    if (r.content === null) {
+      files.set(p, null);
+      continue;
+    }
+    const mm = mergeMode(bE?.mode ?? null, oE?.mode ?? null, tE?.mode ?? null);
+    if ('reason' in mm) {
+      conflicts.push({ path: p, reason: mm.reason });
+      continue;
+    }
+    files.set(p, { content: r.content, mode: mm.mode });
+  }
+  return { files, conflicts };
+}
+
+export interface MaterializeNativeResult {
+  plan: MergePlan;
+  /** the absorbed merged WarpState, or null when the plan has conflicts. */
+  state: WarpState | null;
+  /** the native treeId of the merged result (the strand's binding + recipe result). */
+  resultTreeId: string | null;
+}
+
+/**
+ * PERFORM a merge over three NATIVE trees: compute the plan, build the merged
+ * result tree in the object store (COMPOSITIONALLY — unchanged subtrees reused),
+ * restore it to a throwaway dir, and absorb → the merged WarpState. Returns the
+ * result treeId so the caller pins it as both binding.treeId and merge.result — so
+ * the merged strand re-verifies (verify: merge.result === binding.treeId). The
+ * user's worktree is never touched.
+ */
+export async function materializeMergedStateNative(
+  store: ObjectStore,
+  baseTreeId: string,
+  oursTreeId: string,
+  theirsTreeId: string,
+): Promise<MaterializeNativeResult> {
+  const plan = computeMergeNative(store, baseTreeId, oursTreeId, theirsTreeId);
+  if (plan.conflicts.length > 0) return { plan, state: null, resultTreeId: null };
+  const resultTreeId = writeMergedTree(store, baseTreeId, plan.files);
+  const tmp = await fs.mkdtemp(path.join(os.tmpdir(), 'warpline-merge-native-'));
+  try {
+    restoreTree(store, resultTreeId, tmp);
+    const state = await absorb(WORKTREE_REF, { cwd: tmp });
+    return { plan, state, resultTreeId };
+  } finally {
+    await fs.rm(tmp, { recursive: true, force: true });
   }
 }

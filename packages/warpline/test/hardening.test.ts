@@ -3,16 +3,19 @@
  * corrupting (Reviewer H3, H1; H2 + mode + the G-matrix).
  *   H3: a binary file changed on both sides FAILS CLOSED (conflict) instead of
  *       round-tripping through the UTF-8 text merge and corrupting bytes.
- *   H1: a 3rd agent re-basing onto a MERGE strand fails closed (no wrong base) —
- *       a merge strand's gitCommit is one parent and lacks the merged bytes.
+ *   H1 (RELAXED, PR-B): a 3rd agent re-basing onto a MERGE strand now CLEAN-seals
+ *       using the merge strand's DURABLE binding.treeId (the merged bytes an earlier
+ *       admit content-addressed) — the second-parent bytes ARE available natively, so
+ *       there is no wrong base. A merge strand with NO durable binding still fails
+ *       closed (see admit-h1-relax.test.ts for the full 3-agent + genuine-fail proof).
  *   H2: rename decomposes to add+delete — a clean rename merges byte-correctly,
  *       and a rename racing an edit of the old path FAILS CLOSED (add/delete-vs-edit).
  *   MODE: the executable bit and entry TYPE survive the merge — a content merge
  *       keeps `100755`, and a changed symlink/submodule fails closed (no type corruption).
  *   G3: meaning-CLEAN but bytes overlap in a NON-symbol file → downgraded to KNOT.
  *   G4: a multi-file CLEAN merge routes each file to the side that changed it.
- *   (G1 — a 3rd interleaved writer — is proven by H1: re-basing onto a merge strand
- *    fails closed rather than mis-merging a 3rd generation.)
+ *   (G1 — a 3rd interleaved writer — is exercised by H1: re-basing onto a merge
+ *    strand reconstructs the 3rd generation from durable merged bytes.)
  */
 
 import { describe, it, expect, beforeAll, afterAll } from 'vitest';
@@ -82,7 +85,7 @@ describe('H3 — binary changed on both sides fails closed (no silent corruption
   });
 });
 
-describe('H1 — a 3rd agent re-basing onto a MERGE strand fails closed', () => {
+describe('H1 (relaxed) — a 3rd agent re-basing onto a MERGE strand CLEAN-seals off its durable bytes', () => {
   let repo: FixtureRepo;
   const MOD = 'src/mod.ts';
 

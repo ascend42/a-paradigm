@@ -1,0 +1,48 @@
+id: L-2026-07-04-ascend-004205-001
+type: milestone
+timestamp: '2026-07-04T00:42:05.767Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Live fabric MIGRATED + anchored — HIGH-A/HIGH-B closed on the real record (coordinator reproduced exit 1 on a copy)
+summary: 'Founder-ratified live migration executed end to end: objects backfill (seq 1-12 bound, seq 0 genesis frozen-unbound per the --allow-unbound deviation) → commit f570b177 → fabric attest --allow-unbound (anchor seq 25, corroborated at f570b177) → fabric verify EXIT 0. Committed at 29e1d131. The v1 prefix is now immutable and chain-authenticated. Independent proof on a COPY of the live fabric (real fabric never risked): baseline verify exit 0; inject a binding onto v1 seq 5 → verify EXIT 1 with anchor-mismatch (prefix digest 0a041baa… ≠ attested 2c2a24ea…) — the exact HIGH-A that previously materialized attacker bytes at exit 0 is now caught by the attestation, not just the store check.'
+symbols_touched:
+  - '#fabric-verify'
+  - '#fabric'
+  - '#anchor'
+  - '#backfill'
+  - '#restore'
+verification:
+  status: pass
+  details:
+    live-verify: exit 0, anchor epoch:v1 corroborated
+    exploit-on-copy: HIGH-A binding injection → exit 1 via anchor-mismatch
+    real-fabric: never mutated during the check
+tags:
+  - arc:warpline
+  - security
+  - trust-floor
+  - anchor
+  - milestone
+  - migration
+body: |-
+  Final live state: 26 strands — v1 prefix 15 (frozen), v2 chain 11, boundary anchored, anchor epoch:v1 corroborated at git f570b177, 7 grandfathered (unverifiable under retired rule), seq 0 genesis frozen-unbound (restore of it refuses forever — acceptable, genesis restore already refused pre-anchor). Commits: f570b177 (backfill), 29e1d131 (attest). The migration is git-reversible (checkout .warpline from a prior commit) even though attest-once has no re-attest verb.
+
+  This closes the trust-floor v1-forgeability class that the 7-lens panel + the 2026-07-01 audit flagged as the arc's open security wound. Residual UNCHANGED and stated honestly: whole-fabric re-chain by an in-loop writer still possible (R1, no chain secret) — claim is "tamper-evident short of full re-chain," never "trustworthy"; MED-D + unsigned agentId remain M3/v3 work.
+
+  Concurrent: Kit building the other two Move-3 preconditions (H1 v2-relax via durable merged binding.treeId, guardrail-limited per v3 spec; agentId threading through the auto-seal hook) on isolated fixtures — firewalled off the live fabric during migration. Remaining Move-3 precondition = GAP-1 measurement scoping (T-2026-07-03-007, a harness decision). Then Move 3 dogfood per Loid's falsifier.
+linked_lore:
+  - L-2026-07-04-ascend-002629-001
+linked_tasks:
+  - T-2026-07-02-003
+  - T-2026-07-02-004
+  - T-2026-07-03-004
+linked_commits:
+  - f570b177
+  - 29e1d131
+confidence: 0.9
+git_context:
+  ref: 29e1d1318ed639712cf83065315a90cf9ad3a5cc
+  branch: warpline-surfaces
+  dirty: true

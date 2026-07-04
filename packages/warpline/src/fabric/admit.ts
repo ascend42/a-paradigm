@@ -31,14 +31,14 @@ import { predict, type Knot, type Dangle } from '../predict.js';
 import { WarpStore } from '../warp/store.js';
 import type { WarpState } from '../warp/warp-state.js';
 import { ObjectStore } from '../warp/object-store.js';
-import { snapshotState, captureMerge } from '../warp/snapshot.js';
+import { snapshotState, snapshotRef, captureMerge } from '../warp/snapshot.js';
 import { revParse, commitAuthor, commitSubject, gitUserName } from '../git/git-exec.js';
 import { warplineDirOf, readSelvage, readFabric } from './fabric.js';
 import { readScratch, clearScratch } from './scratch.js';
-import type { Strand } from './strand.js';
+import type { Strand, MergeRecipe } from './strand.js';
 import { sealState } from './seal.js';
 import { withFabricLock } from './lock.js';
-import { materializeMergedState, type MergePlan } from './materialize.js';
+import { materializeMergedState, materializeMergedStateNative, type MergePlan } from './materialize.js';
 
 export type AdmitStatus = 'NOOP' | 'FAST_ADMIT' | 'CLEAN' | 'KNOT' | 'DANGLE';
 export type AdmitConfidence = 'linked' | 'independent';
@@ -174,6 +174,34 @@ function priorFor(d: AdmitDecision): number | null {
   return null;
 }
 
+/** A resolved byte source for one side of a 3-way merge. */
+type MergeInput = { kind: 'git'; ref: string } | { kind: 'native'; treeId: string };
+
+/**
+ * Resolve a merge side (base or theirs) to a byte source (H1 relaxation, PR-B).
+ *
+ *  - A NORMAL strand contributes its git commit (UNCHANGED pre-relaxation posture):
+ *    no commit ⇒ null (fail closed, exactly as before).
+ *  - A MERGE strand's gitCommit is only ONE parent and lacks the merged bytes — so
+ *    it contributes its durable binding.treeId instead: the merged tree an earlier
+ *    CLEAN admit content-addressed into the object store IS the second-parent bytes.
+ *    A merge strand whose bytes were NEVER bound (no binding, or the object is
+ *    absent) is genuinely unreconstructable ⇒ null (fail closed — never a wrong
+ *    3rd-generation merge).
+ *
+ * The relaxation is deliberately narrow: ONLY "a merge strand with a durable
+ * binding.treeId is a valid merge input." A normal strand is never redirected to its
+ * binding here, so the common (no-merge-input) path stays byte-for-byte unchanged.
+ */
+function resolveMergeInput(strand: Strand | undefined, gitCommit: string | null, store: ObjectStore): MergeInput | null {
+  if (!strand) return null;
+  if (strand.merged) {
+    const treeId = strand.binding?.treeId;
+    return treeId && store.has(treeId) ? { kind: 'native', treeId } : null;
+  }
+  return gitCommit ? { kind: 'git', ref: gitCommit } : null;
+}
+
 export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResult> {
   const cwd = opts.cwd ?? root;
   const wdir = warplineDirOf(root);
@@ -252,28 +280,69 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
       const theirsStrand = fabric.find((s) => s.stateId === selvageId);
       const baseCommit = baseStrand?.provenance?.gitCommit ?? null;
       const theirsCommit = theirsStrand?.provenance?.gitCommit ?? null;
-      // H1: a MERGE strand's gitCommit is ONE parent and lacks the merged bytes, so
-      // re-basing base/theirs off it would mis-materialize. Fail CLOSED (unsealed)
-      // rather than produce a wrong 3rd-generation merge.
-      if (isWorktree || !baseCommit || !theirsCommit || baseStrand?.merged || theirsStrand?.merged) {
+
+      // `ours` is the agent's proposal: a WORKTREE proposal has no durable committed
+      // tree to merge from → fail CLOSED (unchanged posture).
+      if (isWorktree) {
         return { decision, sealed: false, proposedStateId: proposed.stateId };
       }
-      const mat = await materializeMergedState(baseCommit, opts.ref, theirsCommit, { cwd });
-      if (mat.state && mat.plan.conflicts.length === 0) {
-        // A2: capture durable merged BYTES compositionally (base tree via cat-file +
-        // the merge's own byte changes) — never the git-archive temp dir. The recipe
-        // makes the merge both restorable (result) and re-derivable (3 parent trees).
-        const recipe = await captureMerge(objStore, baseCommit, opts.ref, theirsCommit, mat.plan.files, { cwd });
-        const strand = sealState(root, store, mat.state, {
+
+      // Resolve base/theirs to byte sources. H1 relaxation (PR-B): a MERGE strand
+      // contributes its durable binding.treeId (the merged bytes an earlier CLEAN
+      // admit content-addressed) rather than failing closed on its single-parent
+      // commit. A side reconstructable via NEITHER a commit NOR a durable binding →
+      // null → fail CLOSED (never a wrong 3rd-generation merge).
+      const baseInput = resolveMergeInput(baseStrand, baseCommit, objStore);
+      const theirsInput = resolveMergeInput(theirsStrand, theirsCommit, objStore);
+      if (!baseInput || !theirsInput) {
+        return { decision, sealed: false, proposedStateId: proposed.stateId };
+      }
+
+      // Seal a materialized CLEAN merge: pin the result as BOTH binding.treeId and
+      // merge.result (so verify's `merge.result === binding.treeId` holds) and carry
+      // the base strand's pickId as the second DAG parent. Confidence uses the SAME
+      // gate rule (linked/independent over base/proposed/selvage) as a 1st-generation
+      // merge — the rule does not re-examine a merge input's internal provenance, an
+      // honest v2 limitation (the graded outcome corpus, not the prior, carries it).
+      const sealMerge = (state: WarpState, plan: MergePlan, recipe: MergeRecipe): AdmitResult => {
+        const strand = sealState(root, store, state, {
           parentStateId: selvageId, actor, intent, gitCommit: oursCommit, now, confidence: priorFor(decision),
           authoredBy: { agentId: opts.agentId },
           mergeParentPickId: baseStrand?.pickId ?? null, // the SECOND DAG parent (the ours-side fork base)
           merged: true, binding: { treeId: recipe.result, gitOid: null }, merge: recipe,
         });
         clearScratch(root, opts.agentId);
-        return { decision, sealed: true, proposedStateId: proposed.stateId, strand, merged: mat.plan };
+        return { decision, sealed: true, proposedStateId: proposed.stateId, strand, merged: plan };
+      };
+
+      if (baseInput.kind === 'git' && theirsInput.kind === 'git') {
+        // COMMON PATH (unchanged): neither side is a merge strand — the git-ref 3-way
+        // materialize + compositional capture, exactly as before the relaxation.
+        const mat = await materializeMergedState(baseInput.ref, opts.ref, theirsInput.ref, { cwd });
+        if (mat.state && mat.plan.conflicts.length === 0) {
+          // A2: capture durable merged BYTES compositionally (base tree via cat-file +
+          // the merge's own byte changes) — never the git-archive temp dir. The recipe
+          // makes the merge both restorable (result) and re-derivable (3 parent trees).
+          const recipe = await captureMerge(objStore, baseInput.ref, opts.ref, theirsInput.ref, mat.plan.files, { cwd });
+          return sealMerge(mat.state, mat.plan, recipe);
+        }
+        // The meaning layer said CLEAN but the bytes overlap → surface as a KNOT.
+        return { decision: { ...decision, status: 'KNOT' }, sealed: false, proposedStateId: proposed.stateId, merged: mat.plan };
       }
-      // The meaning layer said CLEAN but the bytes overlap → surface as a KNOT.
+
+      // RELAXED PATH: at least one side is a merge strand contributing its durable
+      // tree. Normalize ALL THREE sides to native treeIds (merge strand → binding;
+      // normal strand / ours → snapshotRef of its commit) and run the whole 3-way
+      // merge off the object store — the second-parent bytes are natively present.
+      const baseTree = baseInput.kind === 'native' ? baseInput.treeId : await snapshotRef(objStore, baseInput.ref, { cwd });
+      const theirsTree = theirsInput.kind === 'native' ? theirsInput.treeId : await snapshotRef(objStore, theirsInput.ref, { cwd });
+      const oursTree = await snapshotRef(objStore, opts.ref, { cwd });
+      const mat = await materializeMergedStateNative(objStore, baseTree, oursTree, theirsTree);
+      if (mat.state && mat.plan.conflicts.length === 0 && mat.resultTreeId) {
+        const recipe: MergeRecipe = { algo: 'warpline-merge3-v1', base: baseTree, ours: oursTree, theirs: theirsTree, result: mat.resultTreeId };
+        return sealMerge(mat.state, mat.plan, recipe);
+      }
+      // Meaning CLEAN but bytes overlap (or a genuinely unmergeable entry) → KNOT.
       return { decision: { ...decision, status: 'KNOT' }, sealed: false, proposedStateId: proposed.stateId, merged: mat.plan };
     }
     // KNOT / DANGLE

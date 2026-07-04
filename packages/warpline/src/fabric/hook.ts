@@ -10,6 +10,13 @@
  * what was committed and never conflates another agent's uncommitted work), and is
  * fully fail-safe: `|| true` means a Warpline error never fails the commit.
  *
+ * ATTRIBUTION (dogfood): when `WARPLINE_AGENT_ID` is exported in the committing
+ * environment (e.g. a per-agent worktree), the block forwards it as `--agent` so the
+ * auto-sealed strand records authoredBy.agentId instead of hashing null. This is
+ * UNSIGNED self-assertion — attribution DATA for the multi-agent dogfood, not
+ * authenticated identity (M3 signatures close that gap). The CLI also reads the env
+ * directly, so forwarding here is belt-and-suspenders / explicit intent.
+ *
  * Library code: no console output — the CLI prints.
  */
 
@@ -34,7 +41,9 @@ function block(): string {
     '    WARPLINE_BIN="node $_wl_root/packages/warpline/dist/cli.js"',
     '  fi',
     'fi',
-    '( $WARPLINE_BIN pick --ref HEAD --quiet >/dev/null 2>&1 || true ) &',
+    // Forward WARPLINE_AGENT_ID as --agent when set (per-agent worktree ⇒ attributed
+    // seal); ${VAR:+…} expands to nothing when unset, so the anonymous case is unchanged.
+    '( $WARPLINE_BIN pick --ref HEAD --quiet ${WARPLINE_AGENT_ID:+--agent "$WARPLINE_AGENT_ID"} >/dev/null 2>&1 || true ) &',
     END,
   ].join('\n');
 }
