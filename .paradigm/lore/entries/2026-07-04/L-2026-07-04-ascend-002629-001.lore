@@ -1,0 +1,59 @@
+id: L-2026-07-04-ascend-002629-001
+type: milestone
+timestamp: '2026-07-04T00:26:29.185Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: v1-prefix epoch anchor BUILT — HIGH-A + HIGH-B flip to verify exit 1; live migration held for founder ratification (irreversible attest-once + genesis deviation)
+summary: 'The v1-prefix anchor is built and coordinator-verified (commit 5af3f578): it authenticates the whole v1 prefix + grandfather manifest against a chained attestation strand, closing both confirmed live exploits — HIGH-A (binding injection) and HIGH-B (manifest co-tamper) now flip verify to exit 1, along with mint / MED-C / tip-append / no-downgrade variants; clean anchored fabric verifies exit 0. Suite 312/312; anchor test assertions independently confirmed non-vacuous (real tamper ops asserting anchor.ok=false + restore-refuses + write-refuses). The live 24-strand fabric is deliberately NOT migrated — attest-once is irreversible, it depends on a flagged genesis spec deviation, and it would sweep in the session''s uncommitted strand. Held as a founder decision.'
+symbols_touched:
+  - '#fabric-verify'
+  - '#fabric'
+  - '#anchor'
+  - '#backfill'
+  - '#restore'
+  - '#pick'
+  - '#fabric-lock'
+verification:
+  status: pass
+  details:
+    suite: 312/312
+    exploits: HIGH-A/HIGH-B/mint/MED-C/tip-append/no-downgrade all exit 1; clean-anchored exit 0
+    assertions: coordinator-confirmed non-vacuous (real tamper + anchor.ok=false + restore/write refuse)
+    live-migration: rehearsed on copy, NOT run on live fabric
+tags:
+  - arc:warpline
+  - security
+  - trust-floor
+  - anchor
+  - milestone
+body: |-
+  DESIGN→BUILD: Arky's warpline-v1-anchor.md (cdf8cff5) built by Kit in one pass. Attestation = normal v2 strand w/ attests payload (folds into pickId via existing ...rest spread, no hash-code change); coverage requirement is a CODE CONSTANT (verifyFabric requireAnchor defaults true — a fabric with v1 strands hard-fails without a valid anchor, not deletable disk state). New: anchor.ts, backfill.ts; verify §6 anchor walk + §6.7 selvage/tip check (the gap Arky found: verify never checked the selvage); fabric.ts §7 freeze (rewriteFabric refuses ALL v1 mutation post-anchor); select.ts §8 restore gate.
+
+  SPEC DEVIATION (flagged by Kit, needs founder ratification before live migration): spec §4/§9 said backfill binds seq 0–12, but seq 0 (genesis) is whole-body-hashed → its binding is folded INTO its pickId → stamping a binding forges identity and rewriteFabric correctly refuses. Spec-consistent fix implemented: backfill probes the identity guard and SKIPS whole-body strands (frozen unbound); migration uses `fabric attest --allow-unbound`. Genesis restore already refused pre-anchor, so nothing is lost. This is forced-by-the-math, not a judgment call with real alternatives — but it is IRREVERSIBLE once attested.
+
+  LIVE MIGRATION (rehearsed on a faithful copy, NOT run on live .warpline): backfill 12 v1 bound / seq 13–14 already bound / seq 0 frozen → verify_pre exit 1 (anchor-missing forced-migration window) → attest --allow-unbound seals anchor, 15 v1 frozen, 7 grandfathered, corroborated at git 250fb815 → verify_post exit 0. Command sequence for whoever runs it: `warpline objects backfill` (~5min, one git show per file × commits — real one-time cost) → `git add .warpline/fabric.jsonl && git commit` → `warpline fabric attest --allow-unbound` → `warpline fabric verify` (expect exit 0).
+
+  CURRENT REPO STATE: live fabric 24 strands (23 committed + 1 session pick), UNANCHORED — `warpline fabric verify` now reports anchor-missing (exit 1) and v1 restore refuses until migration. Auto-seal (pick) unaffected — seal/pick/admit/hook do NOT call verify. This is honest transient state on a local unpushed branch.
+
+  RESIDUAL (unchanged, stated honestly): whole-fabric re-chain by an in-loop writer still possible (R1, no chain secret) — the post-anchor claim is exactly "tamper-evident short of full re-chain," never "trustworthy"; MED-D (merge recipe re-derivation) + unsigned agentId (M3) untouched. These are the v3-identity + signatures work.
+
+  NEXT: bundle the founder decision — (1) ratify --allow-unbound genesis deviation → run live migration; (2) v3 §9 sign-off (refs=pickIds, calibratedConfidence→grades.jsonl sidecar, recipe-in-identity, recordedAt, allow-unbound); (3) Move-3 precondition calls (H1 relax on v2 vs wait for v3 — T-2026-07-03-006; GAP-1 scoping — T-007). Then Move-3 dogfood (agentId threading T-005 first — hook.ts:37 seals null).
+linked_lore:
+  - L-2026-07-03-ascend-230852-001
+linked_tasks:
+  - T-2026-07-02-003
+  - T-2026-07-02-004
+  - T-2026-07-03-004
+  - T-2026-07-03-005
+  - T-2026-07-03-006
+  - T-2026-07-03-007
+linked_commits:
+  - 5af3f578
+  - cdf8cff5
+confidence: 0.85
+git_context:
+  ref: 5af3f578e879e029f33535ddae98135232fc5fa8
+  branch: warpline-surfaces
+  dirty: true
