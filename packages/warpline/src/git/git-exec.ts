@@ -11,6 +11,10 @@
  *
  * Library code: no console output. Callers handle their own logging.
  *
+ * PERF (T-2026-07-04-003): `catFileBatch` reads many blobs through ONE
+ * `git cat-file --batch` process and `diffRaw` yields full-sha per-path change
+ * records — the plumbing behind the batched/incremental native snapshot.
+ *
  * ARG-INJECTION HARDENING: refs reach git via execFile arg arrays (no shell), so
  * shell injection is impossible — but a ref like `--upload-pack=…` would still be
  * parsed by git AS A FLAG. Every command that takes a user-controlled ref/path
@@ -119,6 +123,138 @@ export async function gitShowBuffer(ref: string, filePath: string, opts: GitOpti
     const e = err as { stderr?: string; message?: string };
     throw new Error(`git show ${ref}:${filePath} failed: ${(e.stderr || e.message || '').trim()}`);
   }
+}
+
+/**
+ * BATCH blob read (read-only): the raw bytes of many git objects through ONE
+ * `git cat-file --batch` process, instead of one `git show` spawn per file —
+ * the per-spawn overhead is what made whole-tree snapshots O(minutes) on a real
+ * monorepo (T-2026-07-04-003). Returns sha → bytes; FAILS CLOSED if any
+ * requested object is missing/unreadable (a partial snapshot must never look
+ * like a complete one).
+ */
+export async function catFileBatch(shas: string[], opts: GitOptions = {}): Promise<Map<string, Buffer>> {
+  const cwd = opts.cwd ?? process.cwd();
+  const unique = Array.from(new Set(shas));
+  const out = new Map<string, Buffer>();
+  if (unique.length === 0) return out;
+
+  await new Promise<void>((resolve, reject) => {
+    let settled = false;
+    const fail = (e: Error): void => {
+      if (!settled) {
+        settled = true;
+        reject(e);
+      }
+    };
+    const done = (): void => {
+      if (!settled) {
+        settled = true;
+        resolve();
+      }
+    };
+    const child = spawn('git', ['cat-file', '--batch'], { cwd });
+    const chunks: Buffer[] = [];
+    let err = '';
+    child.stdout.on('data', (d: Buffer) => chunks.push(d));
+    child.stderr.on('data', (d) => {
+      err += d.toString();
+    });
+    child.on('error', fail);
+    child.stdin.on('error', fail); // EPIPE if git dies mid-stream
+    child.on('close', (code, signal) => {
+      if (signal !== null || code !== 0) {
+        return fail(new Error(`git cat-file --batch failed: ${signal ? `killed by ${signal}` : err.trim()}`));
+      }
+      try {
+        parseCatFileBatch(Buffer.concat(chunks), out);
+        done();
+      } catch (e) {
+        fail(e as Error);
+      }
+    });
+    child.stdin.write(unique.join('\n') + '\n');
+    child.stdin.end();
+  });
+
+  for (const sha of unique) {
+    if (!out.has(sha)) {
+      throw new Error(`git cat-file --batch: object ${sha} missing — refusing a partial snapshot (fail closed)`);
+    }
+  }
+  return out;
+}
+
+/**
+ * Parse `git cat-file --batch` output: per object `<sha> <type> <size>\n<bytes>\n`,
+ * or `<name> missing\n`. Missing entries are simply not added; the caller's
+ * completeness check fails closed on them.
+ */
+function parseCatFileBatch(buf: Buffer, out: Map<string, Buffer>): void {
+  let pos = 0;
+  while (pos < buf.length) {
+    const nl = buf.indexOf(0x0a, pos);
+    if (nl < 0) break;
+    const header = buf.subarray(pos, nl).toString('utf8');
+    pos = nl + 1;
+    const parts = header.split(' ');
+    if (parts.length >= 3) {
+      const size = Number.parseInt(parts[2], 10);
+      if (!Number.isFinite(size) || size < 0 || pos + size > buf.length) {
+        throw new Error(`git cat-file --batch: malformed/truncated record for ${parts[0]}`);
+      }
+      out.set(parts[0], buf.subarray(pos, pos + size));
+      pos += size + 1; // skip the record-terminating LF
+    }
+    // `<name> missing` (2 parts) → skip; completeness is checked by the caller.
+  }
+}
+
+/** One `git diff --raw` record between two tree-ish refs. */
+export interface RawDiffEntry {
+  oldMode: string; // 6-digit git mode, 000000 when absent in refA
+  newMode: string; // 6-digit git mode, 000000 when deleted in refB
+  oldSha: string; // full blob sha at refA (all-zero when absent)
+  newSha: string; // full blob sha at refB (all-zero when deleted)
+  status: string; // A/M/D/T (single letter — --no-renames)
+  path: string; // repo-relative path
+}
+
+/**
+ * The full per-path change records between two refs (read-only) — the changed-
+ * path inventory for an INCREMENTAL native snapshot (T-2026-07-04-003): modes +
+ * full blob shas in one git call, so changed bytes can be batch-read by sha and
+ * overlaid on the parent's native tree. `--no-renames` for the same load-bearing
+ * reason as `changedPaths`; `--no-abbrev` because the shas feed `catFileBatch`
+ * (raw-format sha abbreviation is controlled by --abbrev, NOT --full-index);
+ * `-z` so exotic paths survive unquoted.
+ */
+export async function diffRaw(refA: string, refB: string, opts: GitOptions = {}): Promise<RawDiffEntry[]> {
+  const cwd = opts.cwd ?? process.cwd();
+  let stdout: string;
+  try {
+    ({ stdout } = await execFileAsync(
+      'git',
+      ['diff', '--raw', '-z', '--no-renames', '--no-abbrev', '--end-of-options', refA, refB],
+      { cwd, maxBuffer: MAX_BUFFER, encoding: 'utf8' },
+    ));
+  } catch (err) {
+    const e = err as { stderr?: string; message?: string };
+    throw new Error(`git diff --raw ${refA} ${refB} failed: ${(e.stderr || e.message || '').trim()}`);
+  }
+  // -z record: ":<oldMode> <newMode> <oldSha> <newSha> <status>\0<path>\0"
+  const fields = stdout.split('\0');
+  const entries: RawDiffEntry[] = [];
+  for (let i = 0; i + 1 < fields.length; i += 2) {
+    const meta = fields[i];
+    if (!meta.startsWith(':')) break; // trailing empty field / malformed tail
+    const m = meta.slice(1).split(' ');
+    if (m.length < 5) {
+      throw new Error(`git diff --raw: malformed record ${JSON.stringify(meta)}`);
+    }
+    entries.push({ oldMode: m[0], newMode: m[1], oldSha: m[2], newSha: m[3], status: m[4], path: fields[i + 1] });
+  }
+  return entries;
 }
 
 /**

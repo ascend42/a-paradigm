@@ -32,7 +32,7 @@ import { predict, type Knot, type Dangle } from '../predict.js';
 import { WarpStore } from '../warp/store.js';
 import type { WarpState } from '../warp/warp-state.js';
 import { ObjectStore } from '../warp/object-store.js';
-import { snapshotState, snapshotRef, captureMerge } from '../warp/snapshot.js';
+import { snapshotState, snapshotRef, captureMerge, strandSnapshotAnchor, type SnapshotAnchor } from '../warp/snapshot.js';
 import { revParse, commitAuthor, commitSubject, gitUserName } from '../git/git-exec.js';
 import { warplineDirOf, readSelvage, readFabric } from './fabric.js';
 import { readScratch, clearScratch } from './scratch.js';
@@ -273,7 +273,13 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
       return { decision, sealed: false, proposedStateId: proposed.stateId };
     }
     if (decision.status === 'FAST_ADMIT') {
-      const treeId = await snapshotState(objStore, opts.ref, cwd, { cwd });
+      // Incremental snapshot anchored on the tip strand (selvage === base here):
+      // the proposed ref usually differs from the tip by one agent's edits, so
+      // the snapshot costs the DIFF, not the universe. Unverifiable ⇒ full path.
+      const fabric = readFabric(wdir);
+      const tipStrand = [...fabric].reverse().find((s) => s.stateId === selvageId);
+      const anchor = await strandSnapshotAnchor(tipStrand, objStore, { cwd });
+      const treeId = await snapshotState(objStore, opts.ref, cwd, { cwd }, anchor);
       const strand = sealState(root, store, proposed, {
         parentStateId: selvageId, actor, intent, gitCommit: oursCommit, now, confidence: priorFor(decision),
         authoredBy: { agentId: opts.agentId },
@@ -331,7 +337,11 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
           // A2: capture durable merged BYTES compositionally (base tree via cat-file +
           // the merge's own byte changes) — never the git-archive temp dir. The recipe
           // makes the merge both restorable (result) and re-derivable (3 parent trees).
-          const recipe = await captureMerge(objStore, baseInput.ref, opts.ref, theirsInput.ref, mat.plan.files, { cwd });
+          // Anchor the base snapshot on the base strand's verified binding (ours/
+          // theirs then anchor on the base tree inside captureMerge) — the three
+          // whole-universe snapshots become three diffs (T-2026-07-04-003).
+          const baseAnchor = await strandSnapshotAnchor(baseStrand, objStore, { cwd });
+          const recipe = await captureMerge(objStore, baseInput.ref, opts.ref, theirsInput.ref, mat.plan.files, { cwd }, baseAnchor);
           return sealMerge(mat.state, mat.plan, recipe);
         }
         // The meaning layer said CLEAN but the bytes overlap → surface as a KNOT.
@@ -342,9 +352,24 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
       // tree. Normalize ALL THREE sides to native treeIds (merge strand → binding;
       // normal strand / ours → snapshotRef of its commit) and run the whole 3-way
       // merge off the object store — the second-parent bytes are natively present.
-      const baseTree = baseInput.kind === 'native' ? baseInput.treeId : await snapshotRef(objStore, baseInput.ref, { cwd });
-      const theirsTree = theirsInput.kind === 'native' ? theirsInput.treeId : await snapshotRef(objStore, theirsInput.ref, { cwd });
-      const oursTree = await snapshotRef(objStore, opts.ref, { cwd });
+      // Snapshots are anchored where verifiable (strand bindings / the fork base's
+      // git ref) so each costs its diff, not the universe (T-2026-07-04-003).
+      const baseTree =
+        baseInput.kind === 'native'
+          ? baseInput.treeId
+          : await snapshotRef(objStore, baseInput.ref, { cwd }, await strandSnapshotAnchor(baseStrand, objStore, { cwd }));
+      const theirsTree =
+        theirsInput.kind === 'native'
+          ? theirsInput.treeId
+          : await snapshotRef(objStore, theirsInput.ref, { cwd }, await strandSnapshotAnchor(theirsStrand, objStore, { cwd }));
+      // Ours can only anchor on a side that still has a GIT ref to diff against.
+      const oursAnchor: SnapshotAnchor | undefined =
+        baseInput.kind === 'git'
+          ? { ref: baseInput.ref, treeId: baseTree }
+          : theirsInput.kind === 'git'
+            ? { ref: theirsInput.ref, treeId: theirsTree }
+            : undefined;
+      const oursTree = await snapshotRef(objStore, opts.ref, { cwd }, oursAnchor);
       const mat = await materializeMergedStateNative(objStore, baseTree, oursTree, theirsTree);
       if (mat.state && mat.plan.conflicts.length === 0 && mat.resultTreeId) {
         const recipe: MergeRecipe = { algo: 'warpline-merge3-v1', base: baseTree, ours: oursTree, theirs: theirsTree, result: mat.resultTreeId };

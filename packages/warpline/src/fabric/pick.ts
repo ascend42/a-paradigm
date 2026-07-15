@@ -27,9 +27,9 @@ import { absorb, WORKTREE_REF } from '../absorb.js';
 import { diff } from '../sem-delta.js';
 import { WarpStore } from '../warp/store.js';
 import { ObjectStore } from '../warp/object-store.js';
-import { snapshotState } from '../warp/snapshot.js';
+import { snapshotState, strandSnapshotAnchor } from '../warp/snapshot.js';
 import { gitUserName, revParse, commitSubject, commitAuthor } from '../git/git-exec.js';
-import { warplineDirOf, readSelvage } from './fabric.js';
+import { warplineDirOf, readSelvage, readFabric } from './fabric.js';
 import { sealState } from './seal.js';
 import { withFabricLock } from './lock.js';
 import type { Strand } from './strand.js';
@@ -114,7 +114,17 @@ export async function recordPick(root: string, opts: RecordPickOptions): Promise
       }
     }
     // Bind the durable bytes only when we actually seal (skip on a no-op above).
-    const treeId = await snapshotState(objStore, ref, cwd, { cwd });
+    // A ref pick snapshots INCREMENTALLY off the tip strand's verified binding
+    // (T-2026-07-04-003) — the usual post-commit hook seal costs one commit's
+    // diff, not the whole tree. Unverifiable / worktree ⇒ full path, unchanged.
+    const anchor = isWorktree
+      ? undefined
+      : await strandSnapshotAnchor(
+          [...readFabric(wdir)].reverse().find((s) => s.stateId === selvage),
+          objStore,
+          { cwd },
+        );
+    const treeId = await snapshotState(objStore, ref, cwd, { cwd }, anchor);
     const strand = sealState(root, store, current, {
       parentStateId: selvage,
       actor,

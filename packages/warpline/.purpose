@@ -21,7 +21,14 @@ components:
       merge-tree fallback, which needs real merge machinery and is serialized
       per-repo via #repo-lock. gitUserName reads `git config user.name` (read-only)
       to seed the default ACTOR of a fabric #pick — coexistence only, never written
-      back. The user's HEAD/index/worktree are never touched.
+      back. The user's HEAD/index/worktree are never touched. PERF PLUMBING
+      (T-2026-07-04-003): catFileBatch streams many blobs through ONE `git cat-file
+      --batch` process (fail-closed on any missing object — a partial snapshot must
+      never look complete; previously one `git show` spawn per file made whole-tree
+      snapshots O(minutes) on a real monorepo), and diffRaw returns full-sha
+      (--no-abbrev — raw-format abbreviation is NOT governed by --full-index) per-path
+      change records (--raw -z --no-renames) — the changed-path inventory the
+      INCREMENTAL native snapshot overlays onto a parent tree.
     type: module
     components:
       - "#repo-lock"
@@ -125,6 +132,23 @@ components:
       byte-faithfulness proof during coexistence). Names use RAW bytes not NFC (A5).
       CLI: `warpline objects snapshot <dir>` / `objects verify`. Sha256 (one hash
       across meaning + bytes) — spec packages/warpline/docs/native-object-store-design.md.
+      DELTA-NATIVE SNAPSHOTS (T-2026-07-04-003 byte layer, the Move-3 full-run
+      unblock): snapshotRef has two byte-IDENTICAL paths — FULL (ls-tree inventory +
+      ONE catFileBatch stream; was one git-show spawn per file, ~30s on this
+      monorepo, now ~2s) and INCREMENTAL (a verified SnapshotAnchor {ref, treeId} →
+      `git diff --raw` overlay onto the anchor tree via writeMergedTree, so an admit
+      snapshot costs the DIFF, not the universe; sub-second warm). The incremental
+      path applies the T-033 .git/.warpline skip identically and falls OPEN to the
+      full walk on any anomaly (never fail-closed on the anchor). strandSnapshotAnchor
+      is the verification gate: only a non-merge strand whose binding.gitOid still
+      equals `rev-parse <provenance.gitCommit>^{tree}` and whose native tree is
+      present anchors — a merge strand's gitCommit is one parent, worktree/backfilled
+      seals carry gitOid null, both rejected. captureMerge anchors base on the base
+      strand's verified binding and ours/theirs on the just-built base tree (three
+      universe snapshots → three diffs). Equivalence pinned by
+      test/snapshot-incremental.test.ts (full treeId === incremental treeId on real
+      fixtures incl. tracked-.warpline, mode flips, symlinks, deletes; plus a
+      path-taken proof so fail-open can't mask a broken incremental path).
     type: module
 
   code-lens:
@@ -550,6 +574,8 @@ components:
       forever (restore refuses permanently, A4). PRE-ATTESTATION ONLY: refuses once an
       anchor exists (findAnchor) — the same one-way freeze gate #fabric's rewriteFabric
       keys off. Ordering trap: backfill → git commit → attest must not be reordered.
+      DELTA-NATIVE (T-2026-07-04-003): snapshots CHAIN — each strand anchors on the
+      previous one just computed, so a long v1 prefix costs N diffs, not N universes.
     type: module
     components:
       - "#fabric"
@@ -599,7 +625,10 @@ components:
       #admit guard. SCHEMA v2: RecordPickOptions gains agentId/sessionKey; the seal
       stamps authoredBy (agentId IN the pickId, sessionKey excluded). No agentId (the
       hook/human path) → authoredBy.agentId null. The single-writer daily-driver path
-      — the multi-writer protocol is #admit.
+      — the multi-writer protocol is #admit. DELTA-NATIVE (T-2026-07-04-003): a REF
+      pick's seal snapshot anchors on the tip strand's verified binding
+      (strandSnapshotAnchor) — the post-commit hook seal costs one commit's diff, not
+      the whole tree; worktree picks keep the full snapshotDir walk, unchanged.
     type: module
     components:
       - "#absorb"
@@ -644,6 +673,14 @@ components:
       SCHEMA v2: all three seal calls pass authoredBy {agentId: opts.agentId}; the
       CLEAN merge seal also passes mergeParentPickId = the base strand's pickId (the
       SECOND DAG parent), folded with merge.algo into the authenticated v2 pickId.
+      DELTA-NATIVE (T-2026-07-04-003): every seal-time snapshot is ANCHORED where
+      verifiable — FAST_ADMIT anchors on the tip strand (selvage === base there),
+      the CLEAN capture anchors base on the base strand's verified binding (ours/
+      theirs then diff off the base tree), and the H1-relaxed native path anchors
+      each git-ref side on its strand binding — so a warm admit on the full
+      monorepo runs in single-digit SECONDS (was >2min; bench/bench-admit.mts).
+      Anchors are verified by #warp-store's strandSnapshotAnchor and fail OPEN to
+      the full snapshot; verdict semantics are untouched (decision before bytes).
     type: module
     components:
       - "#absorb"

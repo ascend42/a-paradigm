@@ -21,7 +21,7 @@ import { withFabricLock } from './lock.js';
 import { findAnchor } from './anchor.js';
 import { reproducesUnderKnownRule, computeLegacyBodyHash, type Strand } from './strand.js';
 import { ObjectStore } from '../warp/object-store.js';
-import { snapshotRef } from '../warp/snapshot.js';
+import { snapshotRef, type SnapshotAnchor } from '../warp/snapshot.js';
 
 /**
  * Would a binding-stamped strand still pass rewriteFabric's identity guard? Binding is
@@ -71,6 +71,10 @@ export async function backfillV1Bindings(root: string, opts: { cwd?: string } = 
   // shells git — the expensive step). Keyed by pickId so the rewrite under the lock
   // re-reads a fresh ledger and matches by identity, not index.
   const bindings = new Map<string, string>(); // pickId -> treeId
+  // Chained incremental snapshots (T-2026-07-04-003): each strand's snapshot
+  // anchors on the PREVIOUS one just computed (treeId = snapshotRef(prev commit)
+  // by construction), so a long v1 prefix costs N diffs, not N universes.
+  let prev: SnapshotAnchor | undefined;
   for (const s of readFabric(wdir)) {
     if (s.schemaVersion >= 2) continue;
     if (s.binding) {
@@ -94,7 +98,9 @@ export async function backfillV1Bindings(root: string, opts: { cwd?: string } = 
       continue;
     }
     try {
-      bindings.set(s.pickId, await snapshotRef(store, commit, { cwd }));
+      const treeId = await snapshotRef(store, commit, { cwd }, prev);
+      bindings.set(s.pickId, treeId);
+      prev = { ref: commit, treeId };
     } catch (err) {
       unbound.push({
         seq: s.seq,

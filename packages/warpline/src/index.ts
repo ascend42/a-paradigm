@@ -47,10 +47,12 @@ export {
   snapshotDir,
   snapshotRef,
   snapshotState,
+  strandSnapshotAnchor,
   writeMergedTree,
   captureMerge,
   restoreTree,
   type SnapshotResult,
+  type SnapshotAnchor,
   type PathChange,
 } from './warp/snapshot.js';
 export { canonicalSerialize, type CanonicalValue } from './warp/canonical.js';

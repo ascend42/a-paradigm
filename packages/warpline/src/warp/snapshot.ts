@@ -16,6 +16,13 @@
  * The shadow `gitOid` MUST equal `git rev-parse <ref>^{tree}` for a clean worktree —
  * a free, total byte-faithfulness proof against git during coexistence (§2.4).
  *
+ * DELTA-NATIVE (T-2026-07-04-003): ref snapshots are batched (one `cat-file
+ * --batch` stream, not one spawn per file) and, given a VERIFIED SnapshotAnchor
+ * (strandSnapshotAnchor), INCREMENTAL — a `git diff --raw` overlay onto the
+ * anchor's native tree via writeMergedTree, byte-identical to the full walk and
+ * fail-OPEN to it. This is what makes a warm `admit` on a real monorepo run in
+ * seconds instead of minutes (see bench/bench-admit.mts).
+ *
  * Library code: no console output.
  */
 
@@ -24,10 +31,10 @@ import * as path from 'node:path';
 import { gitBlobOid } from './blob.js';
 import { gitTreeOid, type TreeEntry, type GitTreeEntry, type TreeMode } from './tree.js';
 import { ObjectStore } from './object-store.js';
-import { gitShowBuffer, lsTree, type GitOptions } from '../git/git-exec.js';
+import { catFileBatch, diffRaw, lsTree, revParseTree, type GitOptions } from '../git/git-exec.js';
 import { WORKTREE_REF } from '../absorb.js';
 import { loadIgnoreMatcher, type IgnoreMatcher } from './ignore-rules.js';
-import type { MergeRecipe } from '../fabric/strand.js';
+import type { MergeRecipe, Strand } from '../fabric/strand.js';
 
 export interface SnapshotResult {
   /** native root tree id (byte identity of the whole directory). */
@@ -142,36 +149,140 @@ export function writeMergedTree(
 }
 
 /**
- * Snapshot a git REF's tree natively via raw `cat-file` bytes (§1.5).
+ * A verified byte anchor for an INCREMENTAL ref snapshot (T-2026-07-04-003):
+ * `treeId` MUST be the native snapshot (`snapshotRef`) of `ref`'s tree. Callers
+ * derive it from a sealed strand's `binding.treeId` + `provenance.gitCommit`,
+ * verified via `binding.gitOid === rev-parse <commit>^{tree}` (see admit/pick).
+ */
+export interface SnapshotAnchor {
+  /** a git ref/sha whose native snapshot is already in the store. */
+  ref: string;
+  /** the native treeId `snapshotRef(store, ref)` produced for that ref. */
+  treeId: string;
+}
+
+/**
+ * A VERIFIED incremental-snapshot anchor off a sealed strand (T-2026-07-04-003,
+ * byte layer): usable ONLY when the strand's binding.treeId provably IS the
+ * native snapshot of its provenance.gitCommit's tree —
+ *   - not a merge strand (its gitCommit is one parent, NOT the merged tree),
+ *   - binding.gitOid present (ref-sealed; worktree/backfilled seals carry null
+ *     because their native tree is ignore-filtered vs the git tree),
+ *   - gitOid still equals `rev-parse <gitCommit>^{tree}` (guards a gc'd/rewritten
+ *     ref — verification failure falls back to the full snapshot, never a wrong tree),
+ *   - the native tree is actually present in the object store.
+ * Returns undefined when any leg fails — fail OPEN to the full snapshot.
+ */
+export async function strandSnapshotAnchor(
+  strand: Strand | undefined,
+  store: ObjectStore,
+  opts: GitOptions,
+): Promise<SnapshotAnchor | undefined> {
+  if (!strand || strand.merged) return undefined;
+  const treeId = strand.binding?.treeId;
+  const gitOid = strand.binding?.gitOid;
+  const commit = strand.provenance?.gitCommit;
+  if (!treeId || !gitOid || !commit || !store.has(treeId)) return undefined;
+  const actual = await revParseTree(commit, opts).catch(() => null);
+  return actual === gitOid ? { ref: commit, treeId } : undefined;
+}
+
+/**
+ * Snapshot a git REF's tree natively (§1.5).
+ *
+ * PERF (T-2026-07-04-003, byte layer): two paths, byte-identical results —
+ *   - FULL: `ls-tree -r` inventory + ONE `cat-file --batch` stream for all blobs
+ *     (previously one `git show` spawn per file — O(minutes) on a real monorepo).
+ *   - INCREMENTAL (when a verified `base` anchor is supplied and its tree is in
+ *     the store): `git diff --raw base.ref ref` → batch-read only the changed
+ *     blobs → overlay onto `base.treeId` via `writeMergedTree` (compositional —
+ *     unchanged subtrees reused untouched). Falls OPEN to the full path on any
+ *     anomaly (missing base tree, diff failure) — never fail-closed on the cache.
  *
  * T-033 (root-ignore symmetry): a repo may TRACK files under .warpline/ (this repo
  * tracks its own fabric ledger) — but snapshotDir skips .git/.warpline, and
  * restoreTree REFUSES to write those names (RESTORE_FORBIDDEN). A ref snapshot
  * must therefore skip them too, or the hook's `--ref HEAD` seal binds a tree that
  * (a) never matches the worktree snapshot of the same content and (b) can never
- * be restored. Skipped at any depth, matching restoreTree's per-level guard.
+ * be restored. Skipped at any depth, matching restoreTree's per-level guard —
+ * IDENTICALLY on both the full and incremental paths (the equivalence tests pin
+ * full-treeId === incremental-treeId, including tracked-.warpline fixtures).
  */
-export async function snapshotRef(store: ObjectStore, ref: string, opts: GitOptions = {}): Promise<string> {
+export async function snapshotRef(
+  store: ObjectStore,
+  ref: string,
+  opts: GitOptions = {},
+  base?: SnapshotAnchor,
+): Promise<string> {
+  if (base && store.has(base.treeId)) {
+    try {
+      return await snapshotRefIncremental(store, ref, base, opts);
+    } catch {
+      // Fail OPEN: the full snapshot is the source of truth. (A submodule in the
+      // diff throws here AND on the full path below — consistent fail-closed.)
+    }
+  }
+  return snapshotRefFull(store, ref, opts);
+}
+
+/** The FULL path: whole-tree inventory + one batched blob read. */
+async function snapshotRefFull(store: ObjectStore, ref: string, opts: GitOptions): Promise<string> {
   const entries = await lsTree(ref, opts);
-  const changes = new Map<string, PathChange>();
-  for (const e of entries) {
-    if (e.path.split('/').some((part) => RESTORE_FORBIDDEN.has(part))) continue; // T-033
+  const kept = entries.filter((e) => !e.path.split('/').some((part) => RESTORE_FORBIDDEN.has(part))); // T-033
+  for (const e of kept) {
     if (e.type === 'commit' || e.mode === '160000') {
       throw new Error(`warpline: snapshotRef — submodule/gitlink at ${e.path} not yet supported (T-2026-07-01-018)`);
     }
-    changes.set(e.path, { content: await gitShowBuffer(ref, e.path, opts), mode: e.mode });
   }
+  const blobs = await catFileBatch(kept.map((e) => e.sha), opts);
+  const changes = new Map<string, PathChange>();
+  for (const e of kept) changes.set(e.path, { content: blobs.get(e.sha)!, mode: e.mode });
   return writeMergedTree(store, null, changes);
 }
 
-/** Snapshot the state a strand is being sealed from — worktree (fs) or a git ref. */
+/**
+ * The INCREMENTAL path: overlay only the base→ref byte changes onto the base's
+ * native tree. Correct by construction WHEN base.treeId === snapshotRef(base.ref)
+ * (the caller's anchor-verification contract): git reports exactly the path set
+ * that differs, and writeMergedTree reuses every untouched subtree.
+ */
+async function snapshotRefIncremental(
+  store: ObjectStore,
+  ref: string,
+  base: SnapshotAnchor,
+  opts: GitOptions,
+): Promise<string> {
+  const raw = await diffRaw(base.ref, ref, opts);
+  const changes = new Map<string, PathChange>();
+  const pending: Array<{ path: string; sha: string; mode: string }> = [];
+  for (const e of raw) {
+    if (e.path.split('/').some((part) => RESTORE_FORBIDDEN.has(part))) continue; // T-033 parity
+    if (e.status === 'D') {
+      changes.set(e.path, null);
+      continue;
+    }
+    if (e.newMode === '160000') {
+      throw new Error(`warpline: snapshotRef — submodule/gitlink at ${e.path} not yet supported (T-2026-07-01-018)`);
+    }
+    pending.push({ path: e.path, sha: e.newSha, mode: e.newMode });
+  }
+  const blobs = await catFileBatch(pending.map((p) => p.sha), opts);
+  for (const p of pending) changes.set(p.path, { content: blobs.get(p.sha)!, mode: p.mode });
+  return writeMergedTree(store, base.treeId, changes);
+}
+
+/**
+ * Snapshot the state a strand is being sealed from — worktree (fs) or a git ref.
+ * `base` (optional) enables the incremental ref path; ignored for a worktree.
+ */
 export async function snapshotState(
   store: ObjectStore,
   ref: string,
   cwd: string,
   opts: GitOptions = {},
+  base?: SnapshotAnchor,
 ): Promise<string> {
-  return ref === WORKTREE_REF ? snapshotDir(store, cwd).treeId : snapshotRef(store, ref, opts);
+  return ref === WORKTREE_REF ? snapshotDir(store, cwd).treeId : snapshotRef(store, ref, opts, base);
 }
 
 /**
@@ -179,6 +290,11 @@ export async function snapshotState(
  * parents (native, git-independent) and build the merged result COMPOSITIONALLY
  * from the base tree + the merge's own byte changes (A2). Returns the re-derivable
  * recipe; `recipe.result` is the strand's binding.treeId.
+ *
+ * PERF (T-2026-07-04-003): `baseAnchor` (optional, verified by the caller) makes
+ * the base snapshot incremental; the base tree just built is BY CONSTRUCTION the
+ * native snapshot of `baseRef`, so ours/theirs anchor on it — their snapshots
+ * cost only their own diffs from the fork base, not the whole universe.
  */
 export async function captureMerge(
   store: ObjectStore,
@@ -187,10 +303,12 @@ export async function captureMerge(
   theirsRef: string,
   files: Map<string, PathChange>,
   opts: GitOptions = {},
+  baseAnchor?: SnapshotAnchor,
 ): Promise<MergeRecipe> {
-  const base = await snapshotRef(store, baseRef, opts);
-  const ours = await snapshotRef(store, oursRef, opts);
-  const theirs = await snapshotRef(store, theirsRef, opts);
+  const base = await snapshotRef(store, baseRef, opts, baseAnchor);
+  const fork: SnapshotAnchor = { ref: baseRef, treeId: base };
+  const ours = await snapshotRef(store, oursRef, opts, fork);
+  const theirs = await snapshotRef(store, theirsRef, opts, fork);
   const result = writeMergedTree(store, base, files);
   // Pin the exact merge algorithm version — folded INTO the v2 pickId (Judge).
   return { algo: 'warpline-merge3-v1', base, ours, theirs, result };
