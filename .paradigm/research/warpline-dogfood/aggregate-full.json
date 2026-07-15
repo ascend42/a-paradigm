@@ -1,0 +1,216 @@
+{
+  "mode": "FULL",
+  "denom_symbol_bearing_concurrent": 144,
+  "concurrent_total": 144,
+  "admissions_total": 192,
+  "sessions": 12,
+  "labels": {
+    "MEANING-DECISIVE:auto-resolve": 20,
+    "agree-clean": 96,
+    "agree-conflict": 5,
+    "MEANING-DECISIVE:silent-mismerge": 12,
+    "FALSE-CLEAN": 8,
+    "FALSE-KNOT": 3
+  },
+  "meaning_decisive": {
+    "total": 32,
+    "auto_resolve": 20,
+    "silent_mismerge": 12,
+    "rate": 0.2222222222222222
+  },
+  "guardrails": {
+    "false_knot": 3,
+    "false_clean": 8,
+    "false_knot_le_meaning_decisive": true
+  },
+  "h1_wall_rate": 0,
+  "byte_fallback_rate": 0,
+  "moat": {
+    "linked": {
+      "survived": 23,
+      "overturned": 7,
+      "pending": 1
+    },
+    "independent": {
+      "survived": 73,
+      "overturned": 19,
+      "pending": 1
+    },
+    "fastAdmit": {
+      "survived": 21,
+      "overturned": 7,
+      "pending": 0
+    },
+    "linkedSurvivalPct": 76.7,
+    "indepSurvivalPct": 79.3,
+    "priorGapPts": -2.7,
+    "nLinkedGraded": 30,
+    "nIndepGraded": 92,
+    "zTest": {
+      "z": -0.311,
+      "p": 0.7555
+    },
+    "k3Powered": true
+  },
+  "kill": {
+    "k1_meaning_decisive_lt_2pct": false,
+    "k2_false_knot_gt_meaning_decisive": false,
+    "k3_prior_indistinguishable": true,
+    "hard_stop_false_clean": true
+  },
+  "strata": {
+    "AUTO-RESOLVE-WIN-linked": {
+      "n": 10,
+      "labels": {
+        "MEANING-DECISIVE:auto-resolve": 10
+      },
+      "statuses": {
+        "CLEAN": 10
+      },
+      "confidences": {
+        "linked": 10
+      }
+    },
+    "INDEPENDENT": {
+      "n": 80,
+      "labels": {
+        "agree-clean": 72,
+        "FALSE-CLEAN": 8
+      },
+      "statuses": {
+        "CLEAN": 80
+      },
+      "confidences": {
+        "independent": 80
+      }
+    },
+    "LINKED-CLEAN": {
+      "n": 21,
+      "labels": {
+        "agree-clean": 21
+      },
+      "statuses": {
+        "CLEAN": 21
+      },
+      "confidences": {
+        "linked": 21
+      }
+    },
+    "TRUE-INTERFERENCE-direct": {
+      "n": 5,
+      "labels": {
+        "agree-conflict": 5
+      },
+      "statuses": {
+        "KNOT": 5
+      },
+      "confidences": {}
+    },
+    "TRUE-INTERFERENCE-ripple": {
+      "n": 12,
+      "labels": {
+        "MEANING-DECISIVE:silent-mismerge": 12
+      },
+      "statuses": {
+        "KNOT": 12
+      },
+      "confidences": {}
+    },
+    "AUTO-RESOLVE-WIN-indep": {
+      "n": 10,
+      "labels": {
+        "MEANING-DECISIVE:auto-resolve": 10
+      },
+      "statuses": {
+        "CLEAN": 10
+      },
+      "confidences": {
+        "independent": 10
+      }
+    },
+    "NEGATIVE-CONTROL": {
+      "n": 3,
+      "labels": {
+        "agree-clean": 3
+      },
+      "statuses": {
+        "CLEAN": 3
+      },
+      "confidences": {
+        "independent": 3
+      }
+    },
+    "NEGCTRL-RIPPLE": {
+      "n": 3,
+      "labels": {
+        "FALSE-KNOT": 3
+      },
+      "statuses": {
+        "KNOT": 3
+      },
+      "confidences": {}
+    }
+  },
+  "classificationFidelity": {
+    "LINKED-CLEAN": {
+      "expect": "linked",
+      "n": 21,
+      "asExpected": 21,
+      "pct": 100
+    },
+    "AUTO-RESOLVE-WIN-linked": {
+      "expect": "linked",
+      "n": 10,
+      "asExpected": 10,
+      "pct": 100
+    },
+    "AUTO-RESOLVE-WIN-indep": {
+      "expect": "independent",
+      "n": 10,
+      "asExpected": 10,
+      "pct": 100
+    },
+    "INDEPENDENT": {
+      "expect": "independent",
+      "n": 80,
+      "asExpected": 80,
+      "pct": 100
+    },
+    "NEGATIVE-CONTROL": {
+      "expect": "independent",
+      "n": 3,
+      "asExpected": 3,
+      "pct": 100
+    }
+  },
+  "gradeOutcomesByPrior": {
+    "fast-admit": {
+      "survived": 21,
+      "overturned": 7,
+      "pending": 0
+    },
+    "linked": {
+      "survived": 23,
+      "overturned": 7,
+      "pending": 1
+    },
+    "independent": {
+      "survived": 73,
+      "overturned": 19,
+      "pending": 1
+    }
+  },
+  "machineryChecks": {
+    "admit_json_shape_ok": true,
+    "no_admit_errors": true,
+    "fast_admit_seen": true,
+    "clean_linked_seen": true,
+    "clean_independent_seen": true,
+    "knot_seen": true,
+    "h1_relaxation_merge_onto_merge": true,
+    "meaning_decisive_fired": true,
+    "silent_mismerge_caught": true,
+    "negctrl_not_false_knot": true,
+    "no_false_clean": false
+  }
+}

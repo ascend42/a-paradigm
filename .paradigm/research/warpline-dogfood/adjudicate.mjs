@@ -18,20 +18,23 @@ import { fileURLToPath } from 'node:url';
 const here = path.dirname(fileURLToPath(import.meta.url));
 const manifest = JSON.parse(fs.readFileSync(path.join(here, 'run-manifest.json'), 'utf8'));
 const CLI = manifest.cli;
-const RUN_DIR = process.argv[2] || path.join(
-  '/private/tmp/claude-501/-Users-ascend-Documents-GitHub-a-paradigm/4809f9c5-1b81-447f-b8e8-98878157545f/scratchpad/warpline-dogfood-run',
-  'pilot',
-);
+const argv = process.argv.slice(2);
+const FULL = argv.includes('--full');
+const posArgs = argv.filter((a) => !a.startsWith('--'));
+const SUFFIX = FULL ? '-full' : '';
+const RUN_DIR = posArgs[0] || (FULL
+  ? '/private/tmp/claude-501/-Users-ascend-Documents-GitHub-a-paradigm/ed1612dd-e20a-4757-bb7a-13610ab71b45/scratchpad/warpline-move3-full/run'
+  : path.join('/private/tmp/claude-501/-Users-ascend-Documents-GitHub-a-paradigm/4809f9c5-1b81-447f-b8e8-98878157545f/scratchpad/warpline-dogfood-run', 'pilot'));
 const REPO = path.join(RUN_DIR, 'repo');
 const TSC = '/Users/ascend/Documents/GitHub/a-paradigm/node_modules/typescript/bin/tsc';
 
 const seeds = new Map();
-for (const line of fs.readFileSync(path.join(here, 'seed-catalog.jsonl'), 'utf8').split('\n')) {
+for (const line of fs.readFileSync(path.join(here, FULL ? 'seed-catalog-full.jsonl' : 'seed-catalog.jsonl'), 'utf8').split('\n')) {
   if (!line.trim()) continue;
   const s = JSON.parse(line);
   seeds.set(s.id, s);
 }
-const rows = fs.readFileSync(path.join(here, 'results-swarm.jsonl'), 'utf8')
+const rows = fs.readFileSync(path.join(here, `results-swarm${SUFFIX}.jsonl`), 'utf8')
   .split('\n').filter(Boolean).map((l) => JSON.parse(l));
 
 const gitOut = (args) => execFileSync('git', args, { cwd: REPO, encoding: 'utf8' });
@@ -49,8 +52,10 @@ function tsc(files) {
   }
 }
 
-/** Materialize git's 3-way merge of theirs/ours -> { conflicted, dir } (dir null on conflict). */
-function gitResultTree(theirs, ours) {
+/** Materialize git's 3-way merge of theirs/ours -> { conflicted, dir } (dir null on
+ *  conflict). Extraction is PATH-SCOPED to the seed's files (`git show tree:path`) —
+ *  full-archive extraction of a monorepo-scale tree per row is needless I/O. */
+function gitResultTree(theirs, ours, seedFiles) {
   let tree;
   try {
     tree = gitOut(['merge-tree', '--write-tree', theirs, ours]).trim().split('\n')[0];
@@ -58,16 +63,23 @@ function gitResultTree(theirs, ours) {
     return { conflicted: true, dir: null }; // git textual conflict
   }
   const dir = mktemp();
-  // Extract the merged tree bytes.
-  execFileSync('bash', ['-c', `git archive ${tree} | tar -x -C ${dir}`], { cwd: REPO });
+  for (const f of seedFiles) {
+    try {
+      const content = gitOut(['show', `${tree}:${f}`]);
+      const full = path.join(dir, f);
+      fs.mkdirSync(path.dirname(full), { recursive: true });
+      fs.writeFileSync(full, content);
+    } catch { /* file absent in merged tree — tolerated (checked by caller) */ }
+  }
   return { conflicted: false, dir };
 }
 
-/** Restore a warpline binding tree (the sealed merge bytes) -> dir. */
+/** Restore a warpline binding tree (the sealed merge bytes) -> dir (full restore;
+ *  the CLI has no path filter — caller must clean the dir up). */
 function warpResultTree(bindingTreeId) {
   const dir = mktemp();
   execFileSync('node', [CLI, 'restore', `tree:${bindingTreeId.replace(/^tree:/, '')}`, '--to', dir, '--force'],
-    { cwd: REPO, encoding: 'utf8' });
+    { cwd: REPO, encoding: 'utf8', maxBuffer: 256 * 1024 * 1024 });
   return dir;
 }
 
@@ -93,11 +105,12 @@ const out = [];
 const humanQueue = [];
 for (const row of rows) {
   if (!row.concurrent || !row.symbolBearing) continue;
+  if (row.stratum === 'CHURN-RETIRE') continue; // churn slots are fast/unscored anyway
   const seed = seeds.get(row.seedId);
   const seedFiles = seed.files;
 
-  // GIT result tree + tsc.
-  const gitRes = gitResultTree(row.theirsCommit, row.oursCommit);
+  // GIT result tree + tsc (path-scoped extraction).
+  const gitRes = gitResultTree(row.theirsCommit, row.oursCommit, seedFiles);
   let tscGit = null;
   if (!gitRes.conflicted) {
     const files = seedFiles.map((f) => path.join(gitRes.dir, f)).filter((p) => fs.existsSync(p));
@@ -107,9 +120,10 @@ for (const row of rows) {
   // WARPLINE result tree + tsc (only a sealed CLEAN merge has auto-result bytes).
   let tscWarp = null;
   let warpOutcome;
+  let warpDir = null;
   if (row.status === 'CLEAN' && row.sealed && row.bindingTreeId) {
-    const dir = warpResultTree(row.bindingTreeId);
-    const files = seedFiles.map((f) => path.join(dir, f)).filter((p) => fs.existsSync(p));
+    warpDir = warpResultTree(row.bindingTreeId);
+    const files = seedFiles.map((f) => path.join(warpDir, f)).filter((p) => fs.existsSync(p));
     tscWarp = files.length ? tsc(files) : { pass: true, out: '(no seed files)' };
     warpOutcome = 'auto-resolved';
   } else if (row.status === 'KNOT' || row.status === 'DANGLE') {
@@ -150,10 +164,14 @@ for (const row of rows) {
 
   console.log(`[${row.batchId} ${row.agentId} ${row.seedId}] warp=${row.status}${row.confidence ? '/' + row.confidence : ''} ` +
     `gitTreeConflict=${adj.gitConflicted} tscGit=${adj.tscGit ? adj.tscGit.pass : '-'} tscWarp=${adj.tscWarp ? adj.tscWarp.pass : '-'} => ${label}`);
+
+  // Bound temp usage: a monorepo-scale restore per CLEAN row adds up fast.
+  if (warpDir) fs.rmSync(warpDir, { recursive: true, force: true });
+  if (gitRes.dir) fs.rmSync(gitRes.dir, { recursive: true, force: true });
 }
 
-fs.writeFileSync(path.join(here, 'adjudication.jsonl'), out.map((r) => JSON.stringify(r)).join('\n') + '\n');
-fs.writeFileSync(path.join(here, 'human-review-queue.json'), JSON.stringify(humanQueue, null, 2));
+fs.writeFileSync(path.join(here, `adjudication${SUFFIX}.jsonl`), out.map((r) => JSON.stringify(r)).join('\n') + '\n');
+fs.writeFileSync(path.join(here, `human-review-queue${SUFFIX}.json`), JSON.stringify(humanQueue, null, 2));
 console.log(`\nadjudicated ${out.length} concurrent admissions -> adjudication.jsonl`);
 console.log(`human-review queue: ${humanQueue.length} item(s)`);
 const falseClean = out.filter((r) => r.label === 'FALSE-CLEAN');
