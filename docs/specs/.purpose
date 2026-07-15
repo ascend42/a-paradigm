@@ -4,7 +4,9 @@ name: specs
 description: "Ratified design specifications — Builder/Kit implements these verbatim; amendments append, never rewrite history"
 context:
   - "Warpline spec lineage registered by Arky (T-2026-07-03-003): fabric-schema-v2 → v1-anchor → v3-identity"
+  - "warpline-forge.md (T-2026-07-14-005) is a DRAFT CONSTRAINT spec, not a build contract — SPEC-ONLY, no forge code until graded-weaves/week > 0; it constrains Phase-2 API shapes (verdict JSON, KNOT payload, claim schema, injection envelope)"
 # Key files touched:
+# - warpline-forge.md (DRAFT — forge north-star constraint doc: GitHub-noun → Warpline-noun translation table + Phase-2 API compatibility constraints)
 # - warpline-code-lens.md
 # - warpline-fabric-schema-v2.md (schema-v2 identity contract + trust-floor amendments)
 # - warpline-v1-anchor.md (v1-prefix epoch anchor: backfill → attest-once → freeze; closes HIGH-A/HIGH-B/MED-C)
