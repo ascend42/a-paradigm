@@ -1,0 +1,10 @@
+name: warpline-llm-judge-falsifier
+description: "KS-F falsifier run (2026-07-15, Jinx): would a blind frontier-LLM reviewer flag the defects Warpline Guard flagged on git-clean merges? 36 blind Sonnet judges over the 18 ground-truthed hits + 18 matched controls."
+context:
+  - "Verdict: kill condition FALSIFIED (judge matched 1/3 caught-later, missed the flagship ZodRecord case while looking at it) — deterministic-detection wording armored"
+  - "New wound: judge found the corpus's only true merge-CREATED interaction defect in a control the oracle called CONVERGENT (xstate 72058a08, same-day fix f6d20164c) — knot detection is symbol-local, not a superset of merge risk"
+  - "Inputs: ../warpline-guard-base-rate/ground-truth.{md,jsonl} + results-*.jsonl"
+components:
+  warpline-llm-judge-falsifier:
+    description: "protocol.md (design/prompts/deviations), cases.jsonl (36 blinded cases), judgments.jsonl (judge outputs + scoring), results.md (verdict + confusion tables)"
+    tags: [research, warpline, falsifier, guard]
