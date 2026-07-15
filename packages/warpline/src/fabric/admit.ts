@@ -4,7 +4,8 @@
  * collision: each agent forks a #scratch at a base selvage, edits, then ADMITS.
  *
  * admitDecision(base, proposed, selvage) is the pure verdict:
- *   - NOOP        : the agent changed no meaning (proposed ≡ base).
+ *   - NOOP        : the agent changed no meaning — diff(base, proposed) is empty
+ *                   (the DIFF, not stateId equality, decides; same rule as #pick).
  *   - FAST_ADMIT  : selvage hasn't advanced since the agent's base — admit directly.
  *   - CLEAN       : selvage advanced, but predict(agentΔ, otherΔ) is autoClean — the
  *                   concurrent edits commute at the meaning level (this is the case
@@ -92,16 +93,23 @@ export function admitDecision(base: WarpState, proposed: WarpState, selvage: War
     otherChanged: [],
   });
 
-  if (proposed.stateId === base.stateId) {
+  // The DIFF — not stateId equality — is the source of truth for "did meaning
+  // change?" (mirrors #pick): stateId hashes the DEDUPED essence SET, so a
+  // symbol whose before- AND after-essence both already exist elsewhere in the
+  // tree leaves stateId unchanged while diff (keyed by stableKey) sees the
+  // change. stateId equality therefore CANNOT short-circuit to NOOP — it would
+  // drop a real admission invisibly. There is no safe stateId fast path in
+  // either direction (inequality needs the diff anyway for agentChanged), so
+  // always diff.
+  const agentDelta = diff(base, proposed);
+  if (agentDelta.deltas.size === 0 && agentDelta.renames.length === 0) {
     return { status: 'NOOP', ...empty() };
   }
   if (selvage.stateId === base.stateId) {
-    const agentDelta = diff(base, proposed);
     return { status: 'FAST_ADMIT', ...empty(), agentChanged: symbolsOf(agentDelta) };
   }
 
   // Concurrent advance — re-base the agent's delta against the new selvage.
-  const agentDelta = diff(base, proposed);
   const otherDelta = diff(base, selvage);
   const pred = predict(agentDelta, otherDelta);
   const agentChanged = symbolsOf(agentDelta);
