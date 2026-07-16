@@ -87,14 +87,14 @@ export async function backfillV1Bindings(root: string, opts: { cwd?: string } = 
     // is not — the genesis is whole-body-hashed). rewriteFabric would refuse it too.
     if (!survivesIdentityGuard({ ...s, binding: PROBE }, grandfathered)) {
       unbound.push({
-        seq: s.seq,
+        seq: s.seq ?? -1,
         reason: 'identity includes binding (whole-body-hashed strand, e.g. the genesis) — cannot bind without forging; frozen unbound',
       });
       continue;
     }
     const commit = s.provenance.gitCommit;
     if (!commit) {
-      unbound.push({ seq: s.seq, reason: 'provenance.gitCommit is null (sealed pre-coexistence) — permanently unrestorable' });
+      unbound.push({ seq: s.seq ?? -1, reason: 'provenance.gitCommit is null (sealed pre-coexistence) — permanently unrestorable' });
       continue;
     }
     try {
@@ -103,7 +103,7 @@ export async function backfillV1Bindings(root: string, opts: { cwd?: string } = 
       prev = { ref: commit, treeId };
     } catch (err) {
       unbound.push({
-        seq: s.seq,
+        seq: s.seq ?? -1,
         reason: `git commit ${commit.slice(0, 12)} unreachable (${(err as Error).message}) — permanently unrestorable`,
       });
     }
@@ -115,7 +115,7 @@ export async function backfillV1Bindings(root: string, opts: { cwd?: string } = 
       const updated = fabric.map((s) => {
         const treeId = bindings.get(s.pickId);
         if (treeId && s.schemaVersion < 2 && !s.binding) {
-          stamped.push({ seq: s.seq, treeId });
+          stamped.push({ seq: s.seq ?? -1, treeId });
           return { ...s, binding: { treeId, gitOid: null } };
         }
         return s;

@@ -383,6 +383,20 @@ components:
       (snapshotState = snapshotDir for worktree, snapshotRef for a git ref); a CLEAN
       merge stamps the compositional result (A2 — base tree via cat-file + the merge's
       byte changes, never the git-archive dir).
+      SCHEMA v3 (V3.1, docs/specs/warpline-v3-identity.md §1, founder-signed §9):
+      schemaVersion widens to (1|2|3). A v3 pickId is pick:v3:H(parents + content) —
+      NO ledger position, EVER: seq/parentStateId/merged/parentPickId/
+      mergeParentPickId are GONE from the strand (position/merged-ness are DERIVED,
+      #fabric-dag); parents: string[] is the ORDERED multi-parent chain link (IN the
+      hash — ancestry is identity, so reseal-on-retry mints a NEW id, §1.3); the
+      merge recipe folds WHOLE (closes MED-D structurally); binding.treeId folds in
+      and is MANDATORY at seal (buildStrandV3 refuses unbound — the HIGH-A class
+      dies at the schema level); calibratedConfidence does not exist on a v3 strand
+      AT ALL (§7 R4 — grades.jsonl sidecar is authoritative); recordedAt stays IN
+      (§9.5); sessionKey stays OUT. The v3 preimage is built EXPLICITLY (no
+      rest-spread) so a stray positional field can never move a v3 identity.
+      buildStrandV3(input) is the only v3 constructor (pure — the default seal-path
+      cutover is V3.3). A sealed v3 strand has ZERO post-seal-mutable fields.
     type: module
     components:
       - "#canonical-json"
@@ -400,11 +414,17 @@ components:
       of fabric history. Publishes ledger-first then a CAS'd selvage advance (only
       if the tip is still the parent the decision was based on) — defense-in-depth
       under #fabric-lock so a lost-update can never silently write a wrong tip.
+      REFS MODE (V3.2): once a repo has run the one-time `warpline refs migrate`,
+      seal DUAL-WRITES — the legacy stateId selvage AND refs/heads/selvage (the tip
+      pickId) advance together via #fabric-refs writeRef per-ref CAS; drifted tip
+      pointers refuse the seal fail-closed. Unmigrated repos are byte-for-byte
+      untouched (seal never creates refs/heads as a side effect).
     type: module
     components:
       - "#sem-delta"
       - "#fabric"
       - "#fabric-lock"
+      - "#fabric-refs"
 
   grade:
     description: >-
@@ -418,7 +438,10 @@ components:
       (pickId EXCLUDES the field, so the content-address is unchanged) and appends the
       trajectory to .warpline/grades.jsonl, under #fabric-lock. The report buckets
       survival by gate-rule prior class — the falsifiable 'does linked beat
-      independent?' moat experiment.
+      independent?' moat experiment. V3 (v3-identity §7, R4): a v3 strand carries NO
+      calibratedConfidence at all — applyGrades never rewrites a v3 strand; its
+      grade trajectory lives ONLY in grades.jsonl (the sidecar becomes fully
+      authoritative at V3.4, when rewriteFabric is deleted).
     type: module
     components:
       - "#fabric"
@@ -495,6 +518,11 @@ components:
       binding stamps, repair — via a byte-level full-strand digest compare against the
       on-disk prefix (closes the HIGH-A binding-injection WRITE path at the writer;
       #grade skips frozen v1 strands, their trajectory living in grades.jsonl only).
+      V3 IMMUTABILITY (v3-identity §1.1): rewriteFabric refuses ANY byte difference
+      on a v3 strand (zero post-seal-mutable fields — a writer can't even GRAFT a
+      calibratedConfidence on); rewriteFabric itself is scheduled for deletion at
+      V3.4. The tip pointer grows a refs-mode sibling: refs/heads/selvage (a pickId,
+      #fabric-refs) coexists with the legacy stateId selvage during the cutover.
     type: module
     components:
       - "#strand"
@@ -529,12 +557,67 @@ components:
       failures[]. Exit 0 intact / 1 tamper / 2 I/O error. Distinct from `objects
       verify` (loose-object self-consistency). Spec
       docs/specs/warpline-fabric-schema-v2.md (+ the 2026-07-01 amendment).
+      V3 DAG WALK (V3.1, v3-identity §3.1–4): v3 strands skip the linear chain check
+      and get (3.2) CLOSURE — every parents[] entry resolves in-fabric, else
+      parent-unresolved (HARD, truncation/forgery evidence); (3.3) CAUSALITY —
+      parent line-index < child line-index (the causal-append invariant), else
+      causality-violation; (3.4) acyclicity (dag-cycle — impossible under honest
+      hashing, so forgery evidence) + at most one parentless genesis
+      (multiple-genesis) + MANDATORY binding (missing-binding — no unbound v3
+      strand is legal). Report adds v3Dag{count,ok}. REFS (V3.2, §3.5): every
+      refs/heads/* entry resolves to a present strand else ref-unresolved (HARD);
+      headless tips no ref names land in report.abandonedHeads (REPORTED, never a
+      failure); in refs mode the legacy selvage is cross-checked against the
+      selvage REF's strand (not the physical tip). A v3 failure's `seq` is the
+      LINE INDEX (v3 stores no seq). The §3.7 nested-epoch anchor walk is V3.3.
     type: module
     components:
       - "#strand"
       - "#fabric"
+      - "#fabric-dag"
+      - "#fabric-refs"
       - "#warp-store"
       - "#anchor"
+
+  fabric-dag:
+    description: >-
+      The DERIVED DAG index over the fabric ledger (V3.1, v3-identity §1.2 + §4).
+      fabric.jsonl is an ARRIVAL LOG (a local receipt), not the authority on order —
+      the DAG in the strands is. parentsOf() unifies the epochs (v3 parents[]; v2
+      parentPickId+mergeParentPickId; v1 none). buildDag(strands) → byPickId,
+      children, the deterministic topological ORDER (ties between concurrent strands
+      broken by (recordedAt, pickId) ascending — deterministic across machines GIVEN
+      THE SAME STRAND SET, the correct promise), positionOf, heads (tips with no
+      children), roots, missingParents (closure holes — verify makes them HARD; the
+      index still orders the remainder for display), and cycle (unorderable strands —
+      forgery evidence under honest hashing). Duplicate appends dedup (content-
+      addressed, §1.3 idempotence). A derived position may be SHOWN (the @N selector
+      sugar) but is never persisted and never a durable selector across exchange.
+    type: module
+    components:
+      - "#strand"
+
+  fabric-refs:
+    description: >-
+      pickId refs + per-ref CAS (V3.2, v3-identity §2, founder-signed §9.1: refs
+      hold PICKIDS, not stateIds — a stateId is many-to-one and cannot name a
+      history position). .warpline/refs/heads/<name> each hold an event identity;
+      readRef/writeRef (atomic tmp+rename; CAS refuses when the on-disk ref moved —
+      verbatim the writeSelvage mechanics re-scoped per ref; a losing writer reseal-
+      retries or publishes under its own ref and weaves later, jj/darcs posture),
+      listRefs, heads() — the API new code writes against instead of assuming a
+      unique tip (spec §6.3; legacy fallback = the single ledger tip). Ref names are
+      single-segment validated fail-closed (spliced into a filesystem path — no
+      traversal). migrateSelvageToRefs is the ONE-TIME founder-visible migration:
+      resolves the legacy stateId selvage via the highest-seq hack for the LAST
+      time, writes refs/heads/selvage, idempotent, fails closed on a corrupt tip —
+      NEVER automatic (unmigrated repos, including the live dogfood fabric until
+      its own step, stay untouched). The O_EXCL #fabric-lock survives as the short
+      critical-section guard for append+ref-write.
+    type: module
+    components:
+      - "#fabric"
+      - "#strand"
 
   anchor:
     description: >-
@@ -588,9 +671,14 @@ components:
       The layer→VCS THRESHOLD (M1c, T-2026-07-01-012) — reconstruct a working tree
       from the NATIVE object store with git ABSENT. Two modules + a hardened writer:
       select.ts (resolveSelector(wdir, selector) → treeId): omitted|HEAD|selvage →
-      the tip strand (readSelvage; empty fabric ⇒ error); N|@N → seq === N; pick:<id>
-      → that pickId; state:<id> → the HIGHEST-seq strand on that stateId (§3
-      many-to-one); tree:<id> → that treeId DIRECTLY (no strand). A4
+      the tip strand — refs mode (V3.2) resolves the EXACT pickId at
+      refs/heads/selvage (no stateId ambiguity); legacy mode keeps the
+      latest-arrival-on-stateId disambiguation (grandfathered until migration);
+      N|@N → stored seq === N, falling back to the DERIVED topo position
+      (#fabric-dag) when the fabric carries position-free v3 strands (local sugar,
+      never durable); pick:<id> → that pickId; state:<id> → the most-recent-arrival
+      strand on that stateId (§3 many-to-one); tree:<id> → that treeId DIRECTLY
+      (no strand). A4
       (cutover-refuse-on-missing-binding): a resolved strand with no binding.treeId
       (sealed pre-M1b) is REFUSED loudly — never silently restored empty. restore.ts
       (restore(root, {selector, to, force})): the DIRTY-DEST GUARD refuses a non-empty
@@ -867,8 +955,12 @@ components:
       restore [selector] [--to <dir>] [--force] [--json]` reconstructs a working
       tree from the native object store with git ABSENT (the layer→VCS threshold —
       selector HEAD|selvage|N|@N|pick:|state:|tree:, path-hardened, A4-refuses an
-      unbound strand, dirty-dest guarded). The only module allowed to write stdout;
-      library code stays quiet.
+      unbound strand, dirty-dest guarded), and `warpline refs
+      <migrate|list> [--json]` (V3.2 pickId refs: `migrate` is the ONE-TIME
+      founder-visible stateId→pickId selvage conversion; `list` shows
+      refs/heads/* + the head set — legacy repos show the single ledger tip).
+      `fabric verify` additionally reports the v3 DAG segment + abandoned heads.
+      The only module allowed to write stdout; library code stays quiet.
     type: cli
     components:
       - "#oracle"
@@ -879,6 +971,7 @@ components:
       - "#pick"
       - "#fabric"
       - "#fabric-verify"
+      - "#fabric-refs"
       - "#restore"
       - "#hook"
       - "#scratch"

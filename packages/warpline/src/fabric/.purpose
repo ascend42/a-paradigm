@@ -1,0 +1,22 @@
+# Directory-level context for packages/warpline/src/fabric — the canonical
+# component docs live in packages/warpline/.purpose (#strand #fabric #fabric-dag
+# #fabric-refs #seal #pick #admit #resolve #grade #fabric-verify #anchor
+# #backfill #restore #fabric-lock #hook #scratch #materialize).
+name: fabric
+description: >-
+  The Warpline fabric — the native, git-independent WRITE layer: the append-only
+  PICK-DAG ledger (.warpline/fabric.jsonl), strand identity across three schema
+  epochs (pick:v0 self-hash → pick:v2 linear chain → pick:v3 position-free DAG
+  identity, docs/specs/warpline-v3-identity.md), the derived DAG index (dag.ts),
+  pickId refs with per-ref CAS (refs.ts), seal/pick/admit/resolve write paths,
+  calibration grading, epoch anchoring, verify, and git-absent restore.
+context:
+  - "v3 identity (V3.1): pickId = H(parents + content); NO ledger position; buildStrandV3 is the only v3 constructor; sealed v3 bytes are final"
+  - "refs (V3.2): refs/heads/<name> hold pickIds; migrateSelvageToRefs is the ONE-TIME founder-visible migration — never automatic"
+  - "coexistence invariant: this layer writes ONLY under .warpline/, never the user's git HEAD/index/worktree"
+components:
+  fabric:
+    description: >-
+      See the #fabric component (and siblings) in packages/warpline/.purpose for
+      the full per-module documentation.
+    tags: [warpline, fabric, v3]

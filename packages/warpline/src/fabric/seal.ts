@@ -10,6 +10,7 @@ import { diff } from '../sem-delta.js';
 import type { WarpStore } from '../warp/store.js';
 import type { WarpState } from '../warp/warp-state.js';
 import { warplineDirOf, readFabric, readSelvage, appendStrand, writeSelvage } from './fabric.js';
+import { readRef, writeRef } from './refs.js';
 import {
   computePickId,
   type Strand,
@@ -117,7 +118,7 @@ export function sealState(
     ...(input.attests ? { attests: input.attests } : {}),
   };
   const strand: Strand = { ...body, pickId: computePickId(body) };
-  // CAS GUARD FIRST — refuse if the tip moved off the parent the decision was
+  // CAS GUARDS FIRST — refuse if the tip moved off the parent the decision was
   // based on (a concurrent writer won the race). Checking BEFORE mutating the
   // ledger means a lost race throws cleanly with no orphan strand. Callers hold
   // #fabric-lock; this is defense-in-depth against a stolen/stale lock.
@@ -127,7 +128,18 @@ export function sealState(
       `warpline: selvage CAS failed — expected ${input.parentStateId ?? '(none)'}, found ${cur ?? '(none)'} (a concurrent writer advanced the tip)`,
     );
   }
+  // Refs mode (V3.2): once a repo has migrated to the pickId ref (refs/heads/
+  // selvage — refs.ts), seal maintains it alongside the legacy stateId selvage.
+  // The ref must still name the ledger tip this seal chained off; drift between
+  // the two tip pointers fails CLOSED (never publish over an unexplained tip).
+  const refTip = readRef(wdir, 'selvage'); // null ⇒ legacy (unmigrated) repo — untouched
+  if (refTip !== null && refTip !== parentPickId) {
+    throw new Error(
+      `warpline: ref CAS failed — refs/heads/selvage holds ${refTip} but the ledger tip is ${parentPickId ?? '(none)'} (drifted tip pointers; a concurrent writer advanced the ref)`,
+    );
+  }
   appendStrand(wdir, strand); // ledger first…
   writeSelvage(wdir, state.stateId); // …then publish the tip (lesser-evil crash ordering)
+  if (refTip !== null) writeRef(wdir, 'selvage', strand.pickId, refTip); // per-ref CAS (spec §2)
   return strand;
 }

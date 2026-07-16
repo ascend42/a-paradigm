@@ -41,6 +41,7 @@ import { admit, type AdmitResult } from './fabric/admit.js';
 import { resolveKnot } from './fabric/resolve.js';
 import { gradeFabric, applyGrades, type GradeReport } from './fabric/grade.js';
 import { verifyFabric } from './fabric/verify.js';
+import { listRefs, heads, migrateSelvageToRefs } from './fabric/refs.js';
 import { attestFabric } from './fabric/anchor.js';
 import { backfillV1Bindings } from './fabric/backfill.js';
 import { restore, type RestoreResult } from './fabric/restore.js';
@@ -637,10 +638,16 @@ fabric
           `VERIFY   ${report.checked} strand(s) — all intact\n` +
             `  v1 prefix  ${report.v1Prefix.count} (self-hash ${report.v1Prefix.selfHashOk ? 'ok' : 'FAILED'}, ordering unauthenticated — OQ-A)\n` +
             `  v2 chain   ${report.v2Chain.count} (${report.v2Chain.ok ? 'ok' : 'BROKEN'})\n` +
+            (report.v3Dag.count
+              ? `  v3 dag     ${report.v3Dag.count} (${report.v3Dag.ok ? 'ok' : 'BROKEN'} — closure/causality/acyclicity)\n`
+              : '') +
             `  boundary   ${report.boundaryAnchored ? 'anchored ✓' : 'not anchored'}\n` +
             anchorLine +
             (report.legacyUnverifiable.count
               ? `  legacy     ${report.legacyUnverifiable.count} grandfathered (unverifiable, sealed under a retired rule — TD-2026-07-01-202)\n`
+              : '') +
+            (report.abandonedHeads.length
+              ? `  ⚠ abandoned head(s) — no ref names: ${report.abandonedHeads.map((h) => h.slice(0, 20)).join(', ')}\n`
               : ''),
         );
       } else {
@@ -686,6 +693,57 @@ fabric
         if (result.unbound.length) lines.push(`⚠ frozen unbound (unrestorable): seq ${result.unbound.join(', ')}`);
         lines.push('');
         lines.push('→ the v1 prefix is now IMMUTABLE; `fabric verify` authenticates it against this anchor.');
+        process.stdout.write(lines.join('\n') + '\n');
+      }
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+const refs = program
+  .command('refs')
+  .description('pickId refs (v3-identity V3.2) — .warpline/refs/heads/<name> each hold an EVENT identity (a pickId), not a stateId. Per-ref CAS advance; `selvage` is the default head.');
+
+refs
+  .command('migrate')
+  .description('ONE-TIME migration: convert the legacy stateId selvage to refs/heads/selvage holding the tip strand\'s pickId (resolved via the highest-seq hack for the LAST time). Idempotent; a founder-visible step — never automatic.')
+  .option('--json', 'emit the migration result as JSON')
+  .action(async (options: { json?: boolean }) => {
+    try {
+      const root = await repoRoot().catch(() => process.cwd());
+      const result = migrateSelvageToRefs(warplineDirOf(root));
+      if (options.json) {
+        process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+      } else if (result.migrated) {
+        process.stdout.write(
+          `REFS MIGRATE  refs/heads/selvage → ${result.pickId}\n` +
+            '  seal now advances the pickId ref (per-ref CAS) alongside the legacy selvage.\n',
+        );
+      } else {
+        process.stdout.write(`REFS MIGRATE  nothing to do — ${result.reason}\n`);
+      }
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+refs
+  .command('list')
+  .description('List refs/heads/* (name → pickId) and the current head set. Legacy (unmigrated) repos show the single ledger tip.')
+  .option('--json', 'emit refs + heads as JSON')
+  .action(async (options: { json?: boolean }) => {
+    try {
+      const root = await repoRoot().catch(() => process.cwd());
+      const wdir = warplineDirOf(root);
+      const named = listRefs(wdir);
+      const tips = heads(wdir);
+      if (options.json) {
+        process.stdout.write(JSON.stringify({ refs: Object.fromEntries(named), heads: tips }, null, 2) + '\n');
+      } else {
+        const lines: string[] = ['WARPLINE REFS  (pickId heads)'];
+        if (named.size === 0) lines.push('  (no refs/heads — legacy selvage mode; run `warpline refs migrate`)');
+        for (const [name, id] of named) lines.push(`  ${name.padEnd(12)} ${id}`);
+        lines.push(`heads: ${tips.length ? tips.map((t) => t.slice(0, 20)).join(', ') : '(empty fabric)'}`);
         process.stdout.write(lines.join('\n') + '\n');
       }
     } catch (err) {
@@ -805,7 +863,7 @@ function printFabric(fabric: Strand[], selvage: string | null, max: number): voi
       );
     }
     if (s.provenance?.gitCommit) lines.push(`     git:     ${s.provenance.gitCommit.slice(0, 12)}`);
-    if (s.calibratedConfidence !== null) lines.push(`     confidence: ${s.calibratedConfidence}`);
+    if (s.calibratedConfidence != null) lines.push(`     confidence: ${s.calibratedConfidence}`);
   }
   if (fabric.length > shown.length) {
     lines.push('');

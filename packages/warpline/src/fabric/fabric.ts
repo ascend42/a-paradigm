@@ -1,7 +1,9 @@
 /**
  * #fabric — the durable Warpline history of this project. The append-only
- * PICK-DAG ledger (`.warpline/fabric.jsonl`) + the live tip pointer
- * (`.warpline/refs/selvage`).
+ * PICK-DAG ledger (`.warpline/fabric.jsonl`) + the live tip pointer: the LEGACY
+ * stateId selvage (`.warpline/refs/selvage`) and — once a repo runs the one-time
+ * V3.2 migration (refs.ts) — the authoritative pickId ref
+ * (`.warpline/refs/heads/selvage`). During coexistence seal maintains BOTH.
  *
  * COEXISTENCE INVARIANT: the fabric writes ONLY under `.warpline/` — never the
  * user's git HEAD/index/worktree/tracked files. Git keeps running normally;
@@ -212,6 +214,24 @@ export function rewriteFabric(wdir: string, strands: Strand[]): void {
     );
   }
   const onDisk = readFabric(wdir);
+
+  // V3 IMMUTABILITY (v3-identity spec §1.1): a v3 strand has ZERO post-seal-mutable
+  // fields — it does not even carry calibratedConfidence (grades live in the
+  // grades.jsonl sidecar, §7). The identity guard above cannot catch a mutation of
+  // a hash-EXCLUDED field (there are none IN the identity, but a writer could
+  // GRAFT one on, e.g. stamp calibratedConfidence onto a v3 strand), so refuse any
+  // byte difference outright. rewriteFabric itself retires at V3.4; until then no
+  // rewrite may touch a v3 strand.
+  for (let i = 0; i < strands.length && i < onDisk.length; i++) {
+    if (strands[i].schemaVersion >= 3 || onDisk[i].schemaVersion >= 3) {
+      if (strandDigest(strands[i]) !== strandDigest(onDisk[i])) {
+        throw new Error(
+          `warpline: rewriteFabric refused — v3 strand ${onDisk[i].pickId} has ZERO post-seal-mutable ` +
+            `fields (sealed bytes are final; grades belong in grades.jsonl — v3-identity spec §1.1/§7).`,
+        );
+      }
+    }
+  }
 
   // V1 FREEZE (spec §7): once the ON-DISK fabric carries an epoch anchor, the v1
   // prefix is IMMUTABLE — no grading, no binding stamps, no repair. Byte-level

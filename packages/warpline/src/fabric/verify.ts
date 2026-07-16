@@ -17,9 +17,27 @@
  *                    strands also match gitOid↔treeSha.
  *   5. Merge       — a strand carrying a `merge` recipe has all four recipe trees
  *                    ({base,ours,theirs,result}) present + recomputing, and
- *                    merge.result === binding.treeId. The recipe fields are EXCLUDED
- *                    from the pickId by design (spec OQ-D) — this verify-side
- *                    validation is the compensating control the spec committed to.
+ *                    merge.result === binding.treeId. The v2 recipe fields are
+ *                    EXCLUDED from the pickId by design (spec OQ-D) — this verify-
+ *                    side validation is the compensating control the spec committed
+ *                    to. (v3 folds the recipe INTO the pickId, so for v3 strands
+ *                    this walk is redundant-but-kept — defense in depth, v3 §3.6.)
+ *
+ * v3 strands (pick:v3 — the real PICK-DAG, docs/specs/warpline-v3-identity.md §3)
+ * get the DAG walk instead of the linear chain check:
+ *
+ *   3.1 Integrity  — pickId recomputes under the v3 rule (dispatched, step 1 above).
+ *   3.2 Closure    — every parents[] entry resolves to a strand present in the
+ *                    fabric (dangling parent = truncation/forgery evidence, HARD).
+ *   3.3 Causality  — arrival order respects parents (parent line-index < child
+ *                    line-index): the causal-append invariant. HARD.
+ *   3.4 DAG sanity — acyclic + at most one parentless v3 genesis.
+ *        (plus)    — binding is MANDATORY on a v3 strand (bind-on-seal is the only
+ *                    v3 write path; an unbound v3 strand is forged).
+ *   3.5 Heads↔refs — every refs/heads/* entry resolves to a present strand (HARD);
+ *                    every headless tip with no ref is REPORTED (abandoned head —
+ *                    legal, but surfaced). Refs mode only (V3.2).
+ *   (3.7 nested-epoch anchor walk is V3.3.)
  *
  * Read-only — never writes .warpline/. Distinct from `objects verify` (loose-object
  * self-consistency); this authenticates the HISTORY.
@@ -30,6 +48,8 @@
 import { warplineDirOf, readFabric, readLegacyGrandfathered, readLegacyManifest, readSelvage } from './fabric.js';
 import { computePickId, computeLegacyBodyHash, reproducesUnderKnownRule, type Strand } from './strand.js';
 import { findAnchor, computePrefixDigest, computeManifestDigest } from './anchor.js';
+import { buildDag } from './dag.js';
+import { listRefs, readRef } from './refs.js';
 import { ObjectStore } from '../warp/object-store.js';
 import { WORKTREE_REF } from '../absorb.js';
 
@@ -48,10 +68,20 @@ export type FabricVerifyKind =
   | 'anchor-manifest-mismatch'
   | 'anchor-duplicate'
   | 'anchor-malformed'
-  | 'v1-out-of-prefix';
+  | 'v1-out-of-prefix'
+  // v3 DAG kinds (V3.1, spec §3.2–3.4)
+  | 'parent-unresolved'
+  | 'causality-violation'
+  | 'dag-cycle'
+  | 'multiple-genesis'
+  // refs kinds (V3.2, spec §3.5)
+  | 'ref-unresolved';
 
 export interface FabricVerifyFailure {
-  /** the strand's seq — or -1 for a MANIFEST-level failure (no strand to point at). */
+  /**
+   * the strand's stored seq (v1/v2) or its LINE INDEX in fabric.jsonl (v3 —
+   * position is derived, never stored) — or -1 for a manifest/ref-level failure.
+   */
   seq: number;
   pickId: string;
   kind: FabricVerifyKind;
@@ -63,8 +93,16 @@ export interface FabricVerifyReport {
   checked: number;
   /** the v1 prefix: integrity yes (rule-verified OR grandfathered), ordering unauthenticatable (OQ-A). */
   v1Prefix: { count: number; selfHashOk: boolean };
-  /** the authenticated v2 chain. */
+  /** the authenticated v2 chain (schemaVersion === 2 strands only). */
   v2Chain: { count: number; ok: boolean };
+  /** the v3 PICK-DAG segment: closure + causality + acyclicity + single genesis (§3.2–4). */
+  v3Dag: { count: number; ok: boolean };
+  /**
+   * Headless tips no ref names (V3.2, §3.5) — REPORTED, never a failure (an
+   * abandoned head is legal). Only populated in refs mode; v1 strands excluded
+   * (they are unlinked by construction, not abandoned).
+   */
+  abandonedHeads: string[];
   /** the first v2 strand's parentPickId equals its predecessor (the v1 tip), or it is a well-rooted v2 genesis. */
   boundaryAnchored: boolean;
   /**
@@ -153,21 +191,26 @@ export function verifyFabric(root: string, opts: VerifyOptions = {}): FabricVeri
   const verifiedObjects = new Set<string>(); // memo — shared subtrees re-hash once
   let v1Count = 0;
   let v2Count = 0;
+  let v3Count = 0;
   let v1SelfHashOk = true;
   let v2ChainOk = true;
+  let v3DagOk = true;
   let boundaryAnchored = false;
   let firstV2Seen = false;
 
   for (let i = 0; i < fabric.length; i++) {
     const s = fabric[i];
     const prev = i > 0 ? fabric[i - 1] : undefined;
-    const v2 = isV2(s);
-    if (v2) v2Count++;
+    // epoch: 1 = pick:v0 self-hash · 2 = pick:v2 linear chain · 3 = pick:v3 DAG
+    const epoch = s.schemaVersion >= 3 ? 3 : s.schemaVersion >= 2 ? 2 : 1;
+    if (epoch === 3) v3Count++;
+    else if (epoch === 2) v2Count++;
     else v1Count++;
 
     const push = (kind: FabricVerifyKind, detail: string): void => {
-      failures.push({ seq: s.seq, pickId: s.pickId, kind, detail });
-      if (v2) v2ChainOk = false;
+      failures.push({ seq: s.seq ?? i, pickId: s.pickId, kind, detail });
+      if (epoch === 3) v3DagOk = false;
+      else if (epoch === 2) v2ChainOk = false;
       else if (kind === 'pickId-mismatch' || kind === 'legacy-body-mismatch') v1SelfHashOk = false;
     };
 
@@ -179,7 +222,7 @@ export function verifyFabric(root: string, opts: VerifyOptions = {}): FabricVeri
     //    clause exempts the retired pickId rule, never the body), and anything else
     //    is a HARD pickId-mismatch (real tamper — how a future forgery surfaces).
     if (!reproducesUnderKnownRule(s)) {
-      const pinned = !isV2(s) ? grandfathered.get(s.pickId) : undefined;
+      const pinned = epoch === 1 ? grandfathered.get(s.pickId) : undefined;
       if (pinned !== undefined) {
         const { pickId: _stored, ...body } = s;
         const actual = computeLegacyBodyHash(body);
@@ -194,9 +237,16 @@ export function verifyFabric(root: string, opts: VerifyOptions = {}): FabricVeri
       }
     }
 
+    // v3: binding is MANDATORY (bind-on-seal is the only v3 write path — an unbound
+    // v3 strand is forged; §1.1). The object walk below then re-derives its bytes.
+    if (epoch === 3 && !s.binding?.treeId) {
+      push('missing-binding', 'v3 strand has no byte binding — bind-on-seal is the only v3 write path (no unbound v3 strand is legal)');
+    }
+
     // 2. Chain (v2 only) — parentPickId must equal the immediately-preceding strand's
-    //    pickId (null at a v2 genesis; the v1 tip at the v1→v2 boundary).
-    if (v2) {
+    //    pickId (null at a v2 genesis; the v1 tip at the v1→v2 boundary). v3 strands
+    //    get the DAG walk (§3.2–4) after the loop instead.
+    if (epoch === 2) {
       const expectedParent = prev ? prev.pickId : null;
       const actualParent = s.parentPickId ?? null;
       if (actualParent !== expectedParent) {
@@ -269,6 +319,69 @@ export function verifyFabric(root: string, opts: VerifyOptions = {}): FabricVeri
     versionByPickId.set(s.pickId, s.schemaVersion);
   }
 
+  // 5b. The v3 DAG walk (spec §3.2–4) — closure, causality, acyclicity, single
+  //     genesis. Runs over the whole fabric (a v3 parent may legally be the v2 tip
+  //     pickId at the epoch boundary, §5).
+  if (v3Count > 0) {
+    const firstIndexOf = new Map<string, number>();
+    for (let i = 0; i < fabric.length; i++) {
+      if (!firstIndexOf.has(fabric[i].pickId)) firstIndexOf.set(fabric[i].pickId, i);
+    }
+    for (let i = 0; i < fabric.length; i++) {
+      const s = fabric[i];
+      if (s.schemaVersion < 3) continue;
+      for (const p of s.parents ?? []) {
+        const pi = firstIndexOf.get(p);
+        if (pi === undefined) {
+          // 3.2 Closure — a dangling parent is truncation/forgery evidence. HARD.
+          failures.push({
+            seq: s.seq ?? i,
+            pickId: s.pickId,
+            kind: 'parent-unresolved',
+            detail: `parent ${p} resolves to no strand present in the fabric (truncation/forgery evidence)`,
+          });
+          v3DagOk = false;
+        } else if (pi >= i) {
+          // 3.3 Causality — the causal-append invariant: an appender that cannot
+          // see the parent yet must not have the child. HARD.
+          failures.push({
+            seq: s.seq ?? i,
+            pickId: s.pickId,
+            kind: 'causality-violation',
+            detail: `parent ${p} arrives at line ${pi + 1}, not before child line ${i + 1} — the causal-append invariant is violated`,
+          });
+          v3DagOk = false;
+        }
+      }
+    }
+    // 3.4 Acyclicity — impossible under honest hashing (a v3 pickId embeds its
+    // parents), so a cycle is forgery evidence. HARD, per unorderable strand.
+    const dag = buildDag(fabric);
+    for (const id of dag.cycle) {
+      const s = dag.byPickId.get(id);
+      failures.push({
+        seq: s?.seq ?? firstIndexOf.get(id) ?? -1,
+        pickId: id,
+        kind: 'dag-cycle',
+        detail: 'strand cannot be topologically ordered — it sits in (or descends from) a parent cycle (forged identities)',
+      });
+      v3DagOk = false;
+    }
+    // 3.4 Single genesis — at most one parentless v3 strand per fabric. (The
+    // migrating-repo rule — first v3 strand parents the v2 tip AND carries the
+    // v2-epoch anchor — is the V3.3 nested-epoch walk.)
+    const geneses = fabric.filter((s) => s.schemaVersion >= 3 && (s.parents ?? []).length === 0);
+    for (let g = 1; g < geneses.length; g++) {
+      failures.push({
+        seq: geneses[g].seq ?? firstIndexOf.get(geneses[g].pickId) ?? -1,
+        pickId: geneses[g].pickId,
+        kind: 'multiple-genesis',
+        detail: `a second parentless v3 genesis (first: ${geneses[0].pickId}) — a fabric has one genesis per epoch`,
+      });
+      v3DagOk = false;
+    }
+  }
+
   // 6. Manifest membership sanity (HIGH-2 containment): every grandfather entry must
   //    correspond to an EXISTING v1 strand in this fabric. An unknown pickId is a
   //    stale/foreign allow-list entry; a v2 pickId in the list is an attempt to
@@ -294,21 +407,58 @@ export function verifyFabric(root: string, opts: VerifyOptions = {}): FabricVeri
   }
 
   // 7. Selvage cross-check (spec §6.7 — the gap the audit found: verify never looked
-  //    at the selvage). If a selvage pointer exists it MUST point at the fabric tip
-  //    strand's stateId; a rolled-back selvage over a truncated head is otherwise
-  //    internally consistent. Lenient when no selvage is set (many strands appended
-  //    without a tip pointer in tests / mid-migration).
+  //    at the selvage). Legacy mode: the selvage stateId MUST match the fabric tip
+  //    strand's stateId (a rolled-back selvage over a truncated head is otherwise
+  //    internally consistent). Refs mode (V3.2): the tip pointer is refs/heads/selvage
+  //    (a pickId); the legacy stateId file, while it coexists, must agree with THAT
+  //    strand's stateId instead of the physical tip. Lenient when no selvage is set.
   const selvage = readSelvage(wdir);
-  if (selvage !== null && fabric.length > 0) {
+  const selvageRefId = readRef(wdir, 'selvage');
+  if (selvageRefId !== null) {
+    const target = fabric.find((s) => s.pickId === selvageRefId);
+    // an absent target is reported as ref-unresolved below (step 7b)
+    if (target && selvage !== null && target.stateId !== selvage) {
+      failures.push({
+        seq: target.seq ?? -1,
+        pickId: target.pickId,
+        kind: 'chain-break',
+        detail: `legacy selvage ${selvage} does not match refs/heads/selvage strand's stateId ${target.stateId} (drifted dual tip pointers)`,
+      });
+    }
+  } else if (selvage !== null && fabric.length > 0) {
     const tip = fabric[fabric.length - 1];
     if (tip.stateId !== selvage) {
       failures.push({
-        seq: tip.seq,
+        seq: tip.seq ?? fabric.length - 1,
         pickId: tip.pickId,
         kind: 'chain-break',
         detail: `selvage ${selvage} does not point at the fabric tip strand's stateId ${tip.stateId} (rolled-back tip)`,
       });
     }
+  }
+
+  // 7b. Heads ↔ refs (V3.2, spec §3.5) — refs mode only. Every refs/heads/* entry
+  //     must resolve to a strand PRESENT in the fabric (HARD — a ref naming a
+  //     missing strand is truncation evidence). Every headless tip no ref names is
+  //     REPORTED as abandoned (legal — a lost race that never re-published), never
+  //     a failure. v1 strands are excluded from abandonment (unlinked ≠ abandoned).
+  const refs = listRefs(wdir);
+  let abandonedHeads: string[] = [];
+  if (refs.size > 0) {
+    for (const [name, id] of refs) {
+      if (!knownPickIds.has(id)) {
+        failures.push({
+          seq: -1,
+          pickId: id,
+          kind: 'ref-unresolved',
+          detail: `refs/heads/${name} points at a strand absent from the fabric (truncated/foreign ref)`,
+        });
+      }
+    }
+    const refTargets = new Set(refs.values());
+    abandonedHeads = buildDag(fabric)
+      .heads.filter((h) => h.schemaVersion >= 2 && !refTargets.has(h.pickId))
+      .map((h) => h.pickId);
   }
 
   // 8. Epoch-anchor authentication (spec §6) — the v1 prefix is authenticated against
@@ -339,7 +489,7 @@ export function verifyFabric(root: string, opts: VerifyOptions = {}): FabricVeri
   if (anchorStrands.length > 1) {
     for (let i = 1; i < anchorStrands.length; i++) {
       failures.push({
-        seq: anchorStrands[i].seq,
+        seq: anchorStrands[i].seq ?? -1,
         pickId: anchorStrands[i].pickId,
         kind: 'anchor-duplicate',
         detail: `a second v1 epoch anchor — attestation is once-per-epoch; this one is forged/spurious`,
@@ -350,7 +500,7 @@ export function verifyFabric(root: string, opts: VerifyOptions = {}): FabricVeri
   if (anchor?.attests) {
     const a = anchor.attests;
     const malformed = (detail: string): void => {
-      failures.push({ seq: anchor.seq, pickId: anchor.pickId, kind: 'anchor-malformed', detail });
+      failures.push({ seq: anchor.seq ?? -1, pickId: anchor.pickId, kind: 'anchor-malformed', detail });
     };
     let shapeOk = true;
 
@@ -374,7 +524,7 @@ export function verifyFabric(root: string, opts: VerifyOptions = {}): FabricVeri
       }
       if (i >= a.prefixCount && isV1) {
         failures.push({
-          seq: fabric[i].seq,
+          seq: fabric[i].seq ?? i,
           pickId: fabric[i].pickId,
           kind: 'v1-out-of-prefix',
           detail: `a v1 strand at index ${i} is outside the covered prefix [0..${a.prefixCount - 1}] (appended v1 forgery)`,
@@ -392,7 +542,7 @@ export function verifyFabric(root: string, opts: VerifyOptions = {}): FabricVeri
       malformed('the anchor strand itself is not a v2 strand');
       shapeOk = false;
     }
-    if (anchor.seq < a.prefixCount) {
+    if ((anchor.seq ?? -1) < a.prefixCount) {
       malformed(`anchor seq ${anchor.seq} is not greater than every covered seq (prefixCount ${a.prefixCount})`);
       shapeOk = false;
     }
@@ -404,7 +554,7 @@ export function verifyFabric(root: string, opts: VerifyOptions = {}): FabricVeri
       const recomputed = computePrefixDigest(fabric.slice(0, a.prefixCount));
       if (recomputed !== a.prefixDigest) {
         failures.push({
-          seq: anchor.seq,
+          seq: anchor.seq ?? -1,
           pickId: anchor.pickId,
           kind: 'anchor-mismatch',
           detail:
@@ -423,7 +573,7 @@ export function verifyFabric(root: string, opts: VerifyOptions = {}): FabricVeri
     let manifestOk = false;
     if (recomputedManifest !== a.manifestDigest) {
       failures.push({
-        seq: anchor.seq,
+        seq: anchor.seq ?? -1,
         pickId: anchor.pickId,
         kind: 'anchor-manifest-mismatch',
         detail:
@@ -432,7 +582,7 @@ export function verifyFabric(root: string, opts: VerifyOptions = {}): FabricVeri
       });
     } else if (manifestCount !== a.grandfatheredCount) {
       failures.push({
-        seq: anchor.seq,
+        seq: anchor.seq ?? -1,
         pickId: anchor.pickId,
         kind: 'anchor-manifest-mismatch',
         detail: `grandfatheredCount moved ${a.grandfatheredCount}→${manifestCount} (a grandfather entry was added/removed)`,
@@ -449,6 +599,8 @@ export function verifyFabric(root: string, opts: VerifyOptions = {}): FabricVeri
     checked: fabric.length,
     v1Prefix: { count: v1Count, selfHashOk: v1SelfHashOk },
     v2Chain: { count: v2Count, ok: v2ChainOk },
+    v3Dag: { count: v3Count, ok: v3DagOk },
+    abandonedHeads,
     boundaryAnchored,
     legacyUnverifiable: { count: legacyPickIds.length, pickIds: legacyPickIds },
     anchor: { present: anchorStrands.length > 0, ok: anchorOk, corroboration },

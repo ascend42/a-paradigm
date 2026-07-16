@@ -4,12 +4,18 @@
  * byte binding (native-object-store-design.md §4).
  *
  * Grammar:
- *   omitted | HEAD | selvage  → the TIP strand (the strand at readSelvage(wdir);
- *                               empty fabric ⇒ error).
- *   N | @N                    → the strand with seq === N.
+ *   omitted | HEAD | selvage  → the TIP strand. Refs mode (V3.2): the strand at
+ *                               refs/heads/selvage — an EXACT pickId, no state
+ *                               ambiguity. Legacy mode: the strand at
+ *                               readSelvage(wdir), highest-seq disambiguated
+ *                               (grandfathered until the one-time refs migration).
+ *   N | @N                    → the strand with stored seq === N (v1/v2); when the
+ *                               fabric carries v3 strands (position-free), N falls
+ *                               back to the DERIVED topological position (dag.ts —
+ *                               local sugar only, never durable across exchange).
  *   pick:<id>                 → the strand with that pickId.
- *   state:<id>                → the strand landing on that stateId (highest seq if
- *                               many — the most recent occurrence; §3 many-to-one).
+ *   state:<id>                → the strand landing on that stateId (the most recent
+ *                               arrival if many; §3 many-to-one).
  *   tree:<id>                 → that treeId DIRECTLY (no strand; skip the binding).
  *
  * A4 (cutover-refuse-on-missing-binding): a resolved strand MUST carry
@@ -22,6 +28,8 @@
 
 import { readFabric, readSelvage, readLegacyManifest } from './fabric.js';
 import { assertV1Covered } from './anchor.js';
+import { readRef } from './refs.js';
+import { buildDag } from './dag.js';
 import type { Strand } from './strand.js';
 
 export interface SelectorResolution {
@@ -31,11 +39,15 @@ export interface SelectorResolution {
   strand?: Strand;
 }
 
-/** The highest-seq strand landing on `stateId` (most recent occurrence), or undefined. */
-function highestSeqWithState(fabric: Strand[], stateId: string): Strand | undefined {
+/**
+ * The most recent strand landing on `stateId`, or undefined. "Most recent" = last
+ * arrival in the ledger (file order) — identical to the old highest-seq rule for
+ * v1/v2 (seq == index) and well-defined for position-free v3 strands.
+ */
+function latestWithState(fabric: Strand[], stateId: string): Strand | undefined {
   let best: Strand | undefined;
   for (const s of fabric) {
-    if (s.stateId === stateId && (!best || s.seq > best.seq)) best = s;
+    if (s.stateId === stateId) best = s;
   }
   return best;
 }
@@ -44,11 +56,23 @@ function highestSeqWithState(fabric: Strand[], stateId: string): Strand | undefi
 function resolveStrand(wdir: string, sel: string, fabric: Strand[]): Strand {
   // HEAD / selvage / omitted → the fabric tip.
   if (sel === '' || sel === 'HEAD' || sel === 'selvage') {
+    // Refs mode (V3.2): refs/heads/selvage holds the tip PICKID — an exact event
+    // identity, no many-to-one stateId ambiguity, no disambiguation hack.
+    const refTip = readRef(wdir, 'selvage');
+    if (refTip !== null) {
+      const s = fabric.find((x) => x.pickId === refTip);
+      if (!s) {
+        throw new Error(`warpline: refs/heads/selvage points at ${refTip} but no strand in the fabric carries that pickId`);
+      }
+      return s;
+    }
+    // Legacy (unmigrated) mode: the stateId selvage + latest-arrival disambiguation
+    // (grandfathered until the one-time refs migration — spec §2; do not copy).
     const selvage = readSelvage(wdir);
     if (selvage === null) {
       throw new Error('warpline: no selvage: empty fabric (nothing sealed yet — run `warpline pick`)');
     }
-    const tip = highestSeqWithState(fabric, selvage);
+    const tip = latestWithState(fabric, selvage);
     if (!tip) {
       throw new Error(`warpline: selvage points at ${selvage} but no strand in the fabric carries that state`);
     }
@@ -62,20 +86,27 @@ function resolveStrand(wdir: string, sel: string, fabric: Strand[]): Strand {
     return s;
   }
 
-  // state:<id> — the MEANING identity (highest seq wins; many-to-one, §3).
+  // state:<id> — the MEANING identity (most recent arrival wins; many-to-one, §3).
   if (sel.startsWith('state:')) {
-    const s = highestSeqWithState(fabric, sel);
+    const s = latestWithState(fabric, sel);
     if (!s) throw new Error(`warpline: no strand landing on state ${sel}`);
     return s;
   }
 
-  // @N or a bare non-negative integer N → the strand at that seq.
+  // @N or a bare non-negative integer N → the strand at that seq. v3 strands carry
+  // no stored seq (position is derived — v3-identity §1.2), so when the stored-seq
+  // lookup misses and the fabric holds v3 strands, N resolves through the DERIVED
+  // topological order instead (local sugar; never a durable selector).
   const seqStr = sel.startsWith('@') ? sel.slice(1) : sel;
   if (/^\d+$/.test(seqStr)) {
     const n = Number(seqStr);
     const s = fabric.find((x) => x.seq === n);
-    if (!s) throw new Error(`warpline: no strand at seq ${n} (fabric has ${fabric.length} strand(s))`);
-    return s;
+    if (s) return s;
+    if (fabric.some((x) => x.schemaVersion >= 3)) {
+      const derived = buildDag(fabric).order[n];
+      if (derived) return derived;
+    }
+    throw new Error(`warpline: no strand at seq ${n} (fabric has ${fabric.length} strand(s))`);
   }
 
   throw new Error(
@@ -115,7 +146,7 @@ export function resolveSelector(wdir: string, selector?: string): SelectorResolu
   const treeId = strand.binding?.treeId;
   if (!treeId) {
     throw new Error(
-      `warpline: cannot restore ${sel || 'HEAD'} — strand seq ${strand.seq} has no byte binding ` +
+      `warpline: cannot restore ${sel || 'HEAD'} — strand ${strand.seq !== undefined ? `seq ${strand.seq}` : strand.pickId} has no byte binding ` +
         `(sealed before bind-on-seal / M1b). Run \`warpline objects backfill\` or pick a bound state.`,
     );
   }

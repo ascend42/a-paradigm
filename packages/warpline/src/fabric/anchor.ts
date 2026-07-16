@@ -190,7 +190,7 @@ export async function attestFabric(root: string, opts: AttestOptions = {}): Prom
   }
 
   // Bound-ness: every v1 strand must be bound OR explicitly acknowledged.
-  const unbound = v1.filter((s) => !s.binding).map((s) => s.seq);
+  const unbound = v1.filter((s) => !s.binding).map((s) => s.seq ?? -1);
   if (unbound.length > 0 && !opts.allowUnbound) {
     throw new Error(
       `warpline: attest refused — ${unbound.length} v1 strand(s) are unbound (seq ${unbound.join(', ')}) and will be ` +

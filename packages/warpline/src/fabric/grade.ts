@@ -76,17 +76,19 @@ export function gradeFabric(root: string, opts: { window?: number } = {}): Grade
     const authored = Array.from(new Set([...s.delta.born, ...s.delta.contractChanged]));
     const base: Omit<StrandGrade, 'outcome' | 'confidenceAfter' | 'reason'> = {
       pickId: s.pickId,
-      seq: s.seq,
+      seq: s.seq ?? i, // v3 strands are position-free — report the arrival index
       stateId: s.stateId,
       authoredCount: authored.length,
       overturnedSymbols: [],
-      confidenceBefore: s.calibratedConfidence,
-      priorClass: priorClassOf(s.calibratedConfidence),
+      confidenceBefore: s.calibratedConfidence ?? null,
+      priorClass: priorClassOf(s.calibratedConfidence ?? null),
     };
 
-    // Genesis / empty-delta strands aren't calibrated decisions.
-    if (s.seq === 0 || authored.length === 0) {
-      grades.push({ ...base, outcome: 'baseline', confidenceAfter: s.calibratedConfidence, reason: 'baseline / no authored symbols' });
+    // Genesis / empty-delta strands aren't calibrated decisions. (v3 genesis =
+    // parents: [] — there is no stored seq on a v3 strand.)
+    const isGenesis = s.schemaVersion >= 3 ? (s.parents ?? []).length === 0 : s.seq === 0;
+    if (isGenesis || authored.length === 0) {
+      grades.push({ ...base, outcome: 'baseline', confidenceAfter: s.calibratedConfidence ?? null, reason: 'baseline / no authored symbols' });
       continue;
     }
 
@@ -146,8 +148,11 @@ export async function applyGrades(root: string, report: GradeReport, now: string
     const byPick = new Map(report.grades.map((g) => [g.pickId, g]));
     const updated: Strand[] = fabric.map((s) => {
       if (frozen && s.schemaVersion < 2) return s; // v1 confidence frozen by the anchor
+      // v3 strands carry NO calibratedConfidence AT ALL (v3-identity §7 — zero
+      // mutable fields); their grade trajectory lives ONLY in grades.jsonl below.
+      if (s.schemaVersion >= 3) return s;
       const g = byPick.get(s.pickId);
-      return g && g.confidenceAfter !== s.calibratedConfidence
+      return g && g.confidenceAfter !== (s.calibratedConfidence ?? null)
         ? { ...s, calibratedConfidence: g.confidenceAfter }
         : s;
     });

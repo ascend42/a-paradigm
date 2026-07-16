@@ -10,9 +10,23 @@
  *                different picks. This is where attribution/provenance lives
  *                (the substrate of the calibration corpus).
  *
- * `calibratedConfidence` is RESERVED (null until graded) — the one field a
- * git-backed history can't carry, and the seed of the non-portable moat: an
- * actor's graded belief at write time, later scored against outcome.
+ * THREE schema epochs (dispatched by `schemaVersion` in computePickId):
+ *   - v1 (pick:v0) — per-strand self-hash, unlinked.
+ *   - v2 (pick:v2) — authenticated LINEAR chain: parentPickId = the physical
+ *                    ledger tip; seq is IN the preimage (position-bound identity).
+ *   - v3 (pick:v3) — the real PICK-DAG (docs/specs/warpline-v3-identity.md §1):
+ *                    pickId = H(parents + content). NO ledger position, ever —
+ *                    seq/parentStateId/merged are GONE from the strand (derived);
+ *                    parents: string[] is ordered and multi-parent native; the
+ *                    full merge recipe and binding.treeId are folded IN; and
+ *                    calibratedConfidence leaves the strand entirely (grades.jsonl
+ *                    sidecar is authoritative, §7). A sealed v3 strand has ZERO
+ *                    post-seal-mutable fields.
+ *
+ * `calibratedConfidence` (v1/v2 only) is RESERVED (null until graded) — the one
+ * field a git-backed history can't carry, and the seed of the non-portable moat:
+ * an actor's graded belief at write time, later scored against outcome. On v3 the
+ * moat data lives in the grades.jsonl sidecar (spec §7, founder-signed R4).
  *
  * Library code: no console output.
  */
@@ -64,7 +78,7 @@ export interface StrandBinding {
 export interface EpochAnchor {
   kind: 'epoch-anchor';
   version: 1; // attestation FORMAT version
-  epoch: 'v1'; // the segment being attested (v3 genesis will use 'v2')
+  epoch: 'v1' | 'v2'; // the segment being attested ('v2' = the v3 genesis anchor, V3.3)
   prefixCount: number; // number of strands covered (== count of ALL v1 strands)
   prefixTipPickId: string; // stored pickId of the last covered strand (redundant corroboration)
   prefixDigest: string; // sha256:… — anchor.ts §3.1 fold over the covered strands
@@ -92,34 +106,55 @@ export interface MergeRecipe {
 }
 
 export interface Strand {
-  schemaVersion: 1 | 2; // v1 = pick:v0 self-hash; v2 = pick:v2 authenticated chain link
-  seq: number; // monotonic history index (0 = genesis)
-  pickId: string; // event content-address — pick:v0:… (v1) | pick:v2:… (v2)
+  schemaVersion: 1 | 2 | 3; // v1 = pick:v0 self-hash; v2 = pick:v2 chain link; v3 = pick:v3 DAG identity
   /**
-   * NEW (v2) — the authenticated chain link: the pickId of the strand at
+   * v1/v2 ONLY — monotonic history index (0 = genesis). GONE on v3: ledger
+   * position is a local arrival fact, not event identity; display order is
+   * DERIVED from the DAG (dag.ts; spec §1.2). Never persisted on a v3 strand.
+   */
+  seq?: number;
+  pickId: string; // event content-address — pick:v0:… (v1) | pick:v2:… (v2) | pick:v3:… (v3)
+  /**
+   * v3 ONLY — the ORDERED DAG parents (pickIds). [] at genesis; parents[0] is the
+   * primary (chain/ours-history) parent; parents[1] the admitted/merge parent;
+   * N-way councils get N. IN the v3 pickId — identity includes ancestry (§1).
+   */
+  parents?: string[];
+  /**
+   * v2 ONLY — the authenticated chain link: the pickId of the strand at
    * parentStateId (always the ledger tip). null at genesis. IN the v2 pickId, so
-   * reordering/forging a strand breaks the chain. Absent on v1 strands.
+   * reordering/forging a strand breaks the chain. Absent on v1/v3 strands
+   * (v3 carries `parents` instead).
    */
   parentPickId?: string | null;
   /**
-   * NEW (v2) — agent attribution. agentId is IN the v2 pickId (attribution is
+   * v2/v3 — agent attribution. agentId is IN the pickId (attribution is
    * event identity); sessionKey is an ephemeral breadcrumb EXCLUDED from the hash.
    */
   authoredBy?: { agentId: string | null; sessionKey?: string | null };
   /**
-   * NEW (v2) — the SECOND merge parent (merge strands only): the pickId of the
+   * v2 ONLY — the SECOND merge parent (merge strands only): the pickId of the
    * strand at the admit baseId (the ours-side fork base). IN the v2 pickId.
+   * Absent on v3 (parents[1] is the merge parent).
    */
   mergeParentPickId?: string | null;
   stateId: string; // the WarpState this strand lands on (the new selvage)
-  parentStateId: string | null; // previous selvage (null at genesis)
+  /**
+   * v1/v2 ONLY — previous selvage (null at genesis). GONE on v3 (derived: it is
+   * parents[0]'s stateId; storing it re-introduces a copy that can drift, §1.1).
+   */
+  parentStateId?: string | null;
   actor: string; // who recorded it — agent/operator identity (attribution)
   intent: string; // human-readable reason
-  recordedAt: string; // ISO timestamp (event provenance)
+  recordedAt: string; // ISO timestamp (event identity — stays IN the v3 hash, signed §9.5)
   objectCount: number; // size of the lifted meaning graph (headline for genesis)
   delta: StrandDelta;
-  /** RESERVED — graded belief in this pick (the moat signal). null until graded. */
-  calibratedConfidence: number | null;
+  /**
+   * v1/v2 ONLY — graded belief in this pick (the moat signal). null until graded.
+   * GONE on v3 (spec §7, R4): mutable trust data leaves the signed record; the
+   * grades.jsonl sidecar is authoritative. A v3 strand has ZERO mutable fields.
+   */
+  calibratedConfidence?: number | null;
   provenance: {
     ref: string; // WORKTREE or the git ref the snapshot was lifted from
     treeSha: string | null; // git tree provenance, if any (coexistence, not identity)
@@ -128,19 +163,28 @@ export interface Strand {
   /** present only on a KNOT-council resolution strand (omitted on normal picks). */
   resolves?: KnotResolution;
   /**
-   * true only on a strand sealed by a materialized CLEAN merge (#admit). Its
-   * provenance.gitCommit is ONE parent and does NOT contain the merged bytes, so a
-   * later merge must NOT re-base its base/theirs off this strand's commit — admit
-   * fails closed instead (H1; durable merged-tree byte-anchoring is native-store work).
+   * v2 ONLY — true only on a strand sealed by a materialized CLEAN merge (#admit).
+   * Its provenance.gitCommit is ONE parent and does NOT contain the merged bytes,
+   * so a later merge must NOT re-base its base/theirs off this strand's commit —
+   * admit fails closed instead (H1; durable merged-tree byte-anchoring is
+   * native-store work). GONE on v3 (derived: parents.length > 1).
    */
   merged?: boolean;
   /**
    * NATIVE byte binding (M1b) — the treeId that reconstructs this strand's working
-   * tree from the object store with git ABSENT. EXCLUDED from pickId (backfillable,
-   * many-trees-to-one-meaning). Absent on strands not yet bound (backfill stamps it).
+   * tree from the object store with git ABSENT. v1/v2: EXCLUDED from pickId AS A
+   * WHOLE (backfillable) though v2 folds binding.treeId in; absent on strands not
+   * yet bound. v3: MANDATORY at seal (bind-on-seal is the only v3 write path —
+   * there is no unbound v3 strand; §1.1) and treeId is IN the pickId. gitOid stays
+   * excluded/optional in every epoch (coexistence breadcrumb).
    */
   binding?: StrandBinding | null;
-  /** the re-derivable merge recipe (merge strands only, M1b). Excluded from pickId. */
+  /**
+   * The re-derivable merge recipe (merge strands only, M1b). v2: EXCLUDED from
+   * pickId (verify-side compensating control). v3: folded WHOLE into the pickId
+   * (§1.1 — closes MED-D structurally; a bad recipe means a superseding strand,
+   * never a repair).
+   */
   merge?: MergeRecipe;
   /**
    * Present ONLY on an epoch-anchor strand (docs/specs/warpline-v1-anchor.md): the
@@ -191,6 +235,34 @@ export function computePickId(body: StrandBody): string {
     const { calibratedConfidence: _graded, binding: _bound, merge: _merge, ...identity } = body;
     const canon = canonicalSerialize(canonicalSafe(identity));
     return 'pick:v0:' + createHash('sha256').update(canon, 'utf8').digest('hex');
+  }
+  // v3 — pickId = H(parents + content); NO ledger position, EVER (spec §1). The
+  // preimage is built EXPLICITLY (no rest-spread) so a stray positional field
+  // (seq/parentStateId/merged/parentPickId) can never leak into a v3 identity:
+  // position is a local arrival fact, not event identity. vs v2: parents[] replaces
+  // the two scalar chain links; the merge recipe is folded WHOLE (closes MED-D
+  // structurally); binding.treeId is mandatory-at-seal; calibratedConfidence does
+  // not exist on the strand at all (§7). recordedAt stays IN (signed §9.5).
+  // `attests` rides in when present (the v2-epoch anchor is chain-protected, §5).
+  if (body.schemaVersion >= 3) {
+    const identity = {
+      schemaVersion: body.schemaVersion,
+      parents: body.parents ?? [], // ORDERED; [] at genesis
+      stateId: body.stateId,
+      actor: body.actor,
+      authoredBy: { agentId: body.authoredBy?.agentId ?? null }, // sessionKey EXCLUDED
+      intent: body.intent,
+      recordedAt: body.recordedAt,
+      objectCount: body.objectCount,
+      delta: body.delta,
+      provenance: body.provenance,
+      ...(body.resolves ? { resolves: body.resolves } : {}), // KNOT council rides along
+      bindingTreeId: body.binding?.treeId ?? null, // mandatory at seal (buildStrandV3 enforces)
+      ...(body.merge ? { merge: body.merge } : {}), // folded WHOLE (§1.3)
+      ...(body.attests ? { attests: body.attests } : {}), // epoch anchor payload (§5)
+    };
+    const canon = canonicalSerialize(canonicalSafe(identity));
+    return 'pick:v3:' + createHash('sha256').update(canon, 'utf8').digest('hex');
   }
   // v2 — authenticated chain link (parentPickId) + byte binding (bindingTreeId) +
   // agent attribution (authoredBy.agentId) + the merge second-parent/algo folded IN.
@@ -245,7 +317,86 @@ export function computeLegacyBodyHash(body: StrandBody): string {
  */
 export function reproducesUnderKnownRule(strand: Strand): boolean {
   const { pickId, ...body } = strand;
-  if (computePickId(body) === pickId) return true; // v1-exclusion or v2 dispatch
+  if (computePickId(body) === pickId) return true; // v1-exclusion, v2, or v3 dispatch
   if (body.schemaVersion < 2 && computePickIdWholeBody(body) === pickId) return true; // legacy whole-body
   return false;
+}
+
+/* ── v3 construction (docs/specs/warpline-v3-identity.md §1) ─────────────────── */
+
+/** The input to buildStrandV3 — exactly the v3 event, nothing positional. */
+export interface StrandV3Input {
+  /** ORDERED DAG parents (pickIds). [] ONLY at a fresh-repo genesis (§1.3). */
+  parents: string[];
+  stateId: string;
+  actor: string;
+  /** agentId is IN the pickId; sessionKey is stored but EXCLUDED from the hash. */
+  authoredBy?: { agentId: string | null; sessionKey?: string | null };
+  intent: string;
+  recordedAt: string; // ISO — event identity (git-committer-date precedent, §9.5)
+  objectCount: number;
+  delta: StrandDelta;
+  provenance: { ref: string; treeSha: string | null; gitCommit: string | null };
+  /** present only on a KNOT-council resolution strand. */
+  resolves?: KnotResolution;
+  /** MANDATORY — bind-on-seal is the only v3 write path (no unbound v3 strand). */
+  binding: StrandBinding;
+  /** the merge recipe (weaves only) — folded WHOLE into the pickId (§1.1). */
+  merge?: MergeRecipe;
+  /** present only on an epoch-anchor strand (the v2-epoch anchor at v3 genesis, §5). */
+  attests?: EpochAnchor;
+}
+
+/**
+ * Build (and content-address) a v3 strand — the ONLY constructor of v3 identity.
+ * Validates the schema-level invariants the spec makes structural:
+ *   - binding.treeId present (bind-on-seal mandatory; HIGH-A class dies here);
+ *   - parents are well-formed pickIds, ordered, no duplicates;
+ *   - a merge recipe requires 2+ parents (a weave IS a multi-parent strand);
+ *   - no positional field can exist (the input shape simply has none).
+ * Pure — does NOT touch disk; callers append + advance refs themselves (seal/
+ * exchange are the write paths; the cutover of the default seal path is V3.3).
+ */
+export function buildStrandV3(input: StrandV3Input): Strand {
+  if (!input.binding?.treeId) {
+    throw new Error(
+      'warpline: buildStrandV3 refused — binding.treeId is mandatory at v3 seal (bind-on-seal is the only v3 write path; there is no unbound v3 strand — spec §1.1)',
+    );
+  }
+  if (!Array.isArray(input.parents)) {
+    throw new Error('warpline: buildStrandV3 refused — parents must be an (ordered) array of pickIds');
+  }
+  for (const p of input.parents) {
+    if (typeof p !== 'string' || !p.startsWith('pick:')) {
+      throw new Error(`warpline: buildStrandV3 refused — parent ${JSON.stringify(p)} is not a pickId (pick:…)`);
+    }
+  }
+  if (new Set(input.parents).size !== input.parents.length) {
+    throw new Error('warpline: buildStrandV3 refused — duplicate parent pickId (parents are an ordered set)');
+  }
+  if (input.merge && input.parents.length < 2) {
+    throw new Error(
+      'warpline: buildStrandV3 refused — a merge recipe requires 2+ parents (merged-ness is DERIVED: parents.length > 1; a single-parent "merge" is a forged recipe)',
+    );
+  }
+  const body: StrandBody = {
+    schemaVersion: 3,
+    parents: [...input.parents],
+    stateId: input.stateId,
+    actor: input.actor,
+    authoredBy: {
+      agentId: input.authoredBy?.agentId ?? null,
+      ...(input.authoredBy?.sessionKey !== undefined ? { sessionKey: input.authoredBy.sessionKey } : {}),
+    },
+    intent: input.intent,
+    recordedAt: input.recordedAt,
+    objectCount: input.objectCount,
+    delta: input.delta,
+    provenance: input.provenance,
+    ...(input.resolves ? { resolves: input.resolves } : {}),
+    binding: input.binding,
+    ...(input.merge ? { merge: input.merge } : {}),
+    ...(input.attests ? { attests: input.attests } : {}),
+  };
+  return { ...body, pickId: computePickId(body) };
 }

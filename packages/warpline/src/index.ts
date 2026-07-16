@@ -81,12 +81,26 @@ export {
   computePickIdWholeBody,
   computeLegacyBodyHash,
   reproducesUnderKnownRule,
+  buildStrandV3,
   type Strand,
   type StrandBody,
   type StrandDelta,
   type StrandBinding,
   type MergeRecipe,
+  type StrandV3Input,
 } from './fabric/strand.js';
+// v3 PICK-DAG (V3.1, docs/specs/warpline-v3-identity.md) — the derived DAG index:
+// position-free identity, deterministic topo order, heads/roots/closure.
+export { parentsOf, buildDag, type FabricDag } from './fabric/dag.js';
+// pickId refs (V3.2, spec §2) — per-ref tip CAS + the one-time selvage migration.
+export {
+  readRef,
+  writeRef,
+  listRefs,
+  heads,
+  migrateSelvageToRefs,
+  type RefsMigrationResult,
+} from './fabric/refs.js';
 export {
   warplineDirOf,
   readSelvage,
