@@ -40,6 +40,7 @@ import type { Strand, MergeRecipe } from './strand.js';
 import { sealState } from './seal.js';
 import { withFabricLock } from './lock.js';
 import { materializeMergedState, materializeMergedStateNative, type MergePlan } from './materialize.js';
+import { buildKnotPayload, persistKnotPayload, readFileFromTree } from './knot-payload.js';
 
 export type AdmitStatus = 'NOOP' | 'FAST_ADMIT' | 'CLEAN' | 'KNOT' | 'DANGLE';
 export type AdmitConfidence = 'linked' | 'independent';
@@ -149,6 +150,14 @@ export interface AdmitResult {
   strand?: Strand;
   /** the merge plan (when a CLEAN admit was materialized). */
   merged?: MergePlan;
+  /**
+   * P2.2 (forge-spec §3a, G1-additive): the content address of the persisted
+   * machine-readable KNOT payload (`.warpline/knots/`) — a POINTER, never the
+   * payload inline, so existing JSON consumers are untouched. Present only on a
+   * meaning-level KNOT/DANGLE verdict; hydrate via `warpline knot show <id>` or
+   * readKnotPayload().
+   */
+  knotPayloadId?: string;
 }
 
 const blank = (status: AdmitStatus): AdmitDecision => ({
@@ -378,7 +387,52 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
       // Meaning CLEAN but bytes overlap (or a genuinely unmergeable entry) → KNOT.
       return { decision: { ...decision, status: 'KNOT' }, sealed: false, proposedStateId: proposed.stateId, merged: mat.plan };
     }
-    // KNOT / DANGLE
-    return { decision, sealed: false, proposedStateId: proposed.stateId };
+    // KNOT / DANGLE — detection alone relocates the bottleneck (R3): attach the
+    // machine-readable resolution payload (forge-spec §3a) so a resolver agent
+    // can act from the payload alone. The verdict is already decided above from
+    // STRUCTURAL inputs only; the payload is derived evidence (G5 sidecar), so a
+    // payload-build failure degrades to a verdict without a payload pointer —
+    // it must never turn a KNOT into a crash (detection stays fail-closed).
+    let knotPayloadId: string | undefined;
+    try {
+      const fabric = readFabric(wdir);
+      const baseStrand = fabric.find((s) => s.stateId === baseId);
+      const theirsStrand = fabric.find((s) => s.stateId === selvageId);
+      // Durably snapshot OURS (the unsealed proposal): the payload's byte
+      // authority is the object store, and a KNOT proposal was never sealed, so
+      // its bytes are not yet content-addressed. Anchored on the tip strand's
+      // verified binding — costs the diff, not the universe (T-2026-07-04-003).
+      const oursAnchor = await strandSnapshotAnchor(theirsStrand, objStore, { cwd });
+      const oursTree = await snapshotState(objStore, opts.ref, cwd, { cwd }, oursAnchor);
+      const payload = buildKnotPayload({
+        decision,
+        base,
+        proposed,
+        selvage,
+        ours: {
+          agentId: opts.agentId,
+          actor,
+          intent,
+          ref: opts.ref,
+          gitCommit: oursCommit,
+          treeId: oursTree,
+        },
+        theirs: {
+          agentId: theirsStrand?.authoredBy?.agentId ?? null,
+          actor: theirsStrand?.actor ?? 'unknown',
+          intent: theirsStrand?.intent ?? '',
+          ref: theirsStrand?.provenance?.ref ?? null,
+          gitCommit: theirsStrand?.provenance?.gitCommit ?? null,
+          treeId: theirsStrand?.binding?.treeId ?? null,
+        },
+        baseTreeId: baseStrand?.binding?.treeId ?? null,
+        readFile: (treeId, rel) => readFileFromTree(objStore, treeId, rel),
+      });
+      persistKnotPayload(root, payload);
+      knotPayloadId = payload.payloadId;
+    } catch {
+      /* payload is auxiliary — the KNOT/DANGLE verdict stands without it */
+    }
+    return { decision, sealed: false, proposedStateId: proposed.stateId, ...(knotPayloadId ? { knotPayloadId } : {}) };
   });
 }

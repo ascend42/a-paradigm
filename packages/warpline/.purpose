@@ -477,6 +477,9 @@ components:
       supplied so the original knot is recomputed — and the symbols changed vs the
       tip), seals via #seal, advances the selvage, and clears the scratch. The
       reasoning git's merge commit can't keep lives natively in the fabric.
+      P2.2: also accepts a #knot-payload resolution proposal — proposalToResolveOptions
+      maps a verified knotResolutionProposal:v1 (enveloped reason, resolvedRef,
+      decidedBy) 1:1 onto ResolveOptions; sealing stays behind this verb (G4).
     type: module
     components:
       - "#absorb"
@@ -769,6 +772,14 @@ components:
       monorepo runs in single-digit SECONDS (was >2min; bench/bench-admit.mts).
       Anchors are verified by #warp-store's strandSnapshotAnchor and fail OPEN to
       the full snapshot; verdict semantics are untouched (decision before bytes).
+      P2.2 (forge-spec §3a): a meaning-level KNOT/DANGLE verdict additionally
+      durably snapshots the unsealed proposal's bytes, builds the machine-readable
+      #knot-payload, persists it to .warpline/knots/, and returns knotPayloadId —
+      a POINTER on AdmitResult (G1-additive; never the payload inline). Payload
+      construction is derived evidence: a build failure degrades to a verdict
+      without a pointer, never a crash. The verdict itself remains a pure function
+      of STRUCTURAL inputs — prose never reaches admitDecision (the poisoned-prose
+      invariant, test/injection-envelope.test.ts).
     type: module
     components:
       - "#absorb"
@@ -780,6 +791,53 @@ components:
       - "#materialize"
       - "#seal"
       - "#fabric-lock"
+      - "#knot-payload"
+
+  prose-envelope:
+    description: >-
+      The injection-safety envelope (P2.4 minimum slice, forge-spec §3d,
+      T-2026-06-24-013). Agent-authored prose (intents, resolution reasons,
+      proposal rationales) is UNTRUSTED INPUT to any reading agent/surface: every
+      free-text field crossing an agent or rendering boundary is wrapped at
+      creation as {kind:'untrusted-prose', contentAddress, body} — born
+      content-addressed ('prose:v1:'+sha256), kind tag unforgeable in the shape (a
+      body CONTAINING a serialized envelope stays a string). verifyProse recomputes
+      the address (tamper ⇒ false); frameProse is the ONLY legal human rendering —
+      Warpline authors the frame, control/ANSI bytes are escaped, every body line
+      is guttered so no body content can pose as a frame boundary, and a tampered
+      envelope refuses to render (fail closed). The third layer — the PURE-FUNCTION
+      CONTRACT (gate/verdict decisions read only structural inputs, never prose) —
+      is a TESTED invariant: the poisoned-prose suite asserts byte-identical
+      verdicts under an adversarial corpus in every prose field.
+    type: module
+
+  knot-payload:
+    description: >-
+      The machine-readable KNOT payload, knotPayload:v1 (P2.2 / R3, forge-spec §3a
+      — the forge's issue AND the agent's work order, ONE shape). buildKnotPayload
+      turns a KNOT/DANGLE decision + the three states into a SELF-SUFFICIENT
+      document: per contested unit both sides' MEANING bodies (the essence-data
+      body slot / canonical contract) AND durable file texts read from the
+      content-addressed object store, per-side sem-deltas, conflictingSlots,
+      direct-vs-ripple, essences; both sides' intents as #prose-envelope
+      (untrusted-prose) with agentId/actor attribution; base/ours/theirs stateIds +
+      treeIds; the blast-radius as a mode:'ripple' graph slice; and the
+      RESOLUTION-PROPOSAL envelope (knotResolutionProposal:v1) that
+      proposalToResolveOptions maps 1:1 onto #resolve's ResolveOptions after
+      VERIFYING the reason envelope (tamper ⇒ fail closed). Deterministic (no
+      clock; payloadId = content address), G1-versioned, G2 (no ledger positions),
+      G5 (persisted as derived sidecar data under .warpline/knots/ — never a
+      strand). §3a exit gate is a TESTED round-trip: a resolver acting from the
+      payload ALONE constructs a resolve call that seals. NO auto-resolution here
+      (P5, gated on the blind injection corpus). Surfaced via `warpline knot show
+      <payloadId|admitRef>` (--json = the exact engine shape; human view frames
+      all prose).
+    type: module
+    components:
+      - "#sem-delta"
+      - "#warp-store"
+      - "#prose-envelope"
+      - "#resolve"
 
   merge3:
     description: >-

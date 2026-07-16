@@ -9,6 +9,8 @@
  *   warpline status [--json]                       working-tree MEANING vs HEAD
  *   warpline lifeline <symbol> [--max N] [--json]  meaning-aware blame (survives renames)
  *   warpline diff [refA] [refB] [--json]           SEMANTIC diff between two refs
+ *   warpline knot show <selector> [--json]         a KNOT payload (forge-spec §3a) — the
+ *                                                  self-sufficient resolution work order
  *
  * This is the ONLY file allowed to write to stdout — library code stays quiet.
  */
@@ -39,6 +41,8 @@ import { forkScratch } from './fabric/scratch.js';
 import type { Knot } from './predict.js';
 import { admit, type AdmitResult } from './fabric/admit.js';
 import { resolveKnot } from './fabric/resolve.js';
+import { readKnotPayload, type KnotPayload, type ContestedUnit } from './fabric/knot-payload.js';
+import { frameProse } from './envelope.js';
 import { gradeFabric, applyGrades, type GradeReport } from './fabric/grade.js';
 import { verifyFabric } from './fabric/verify.js';
 import { listRefs, heads, migrateSelvageToRefs } from './fabric/refs.js';
@@ -516,6 +520,35 @@ program
     },
   );
 
+const knot = program
+  .command('knot')
+  .description('Machine-readable KNOT payloads (forge-spec §3a): the self-sufficient resolution work orders admit persists to .warpline/knots/ on a KNOT/DANGLE verdict.');
+
+knot
+  .command('show')
+  .description("Show a KNOT payload — everything a resolver needs (both sides' bodies, enveloped intents, per-side deltas, blast radius, the resolution-proposal envelope). --json emits the exact knotPayload:v1 shape; the human view renders all agent prose inside escaped untrusted-prose frames.")
+  .argument('<selector>', "a payloadId 'knotPayload:v1:…' (or a ≥12-char prefix), or the admitted side's git ref / commit / stateId")
+  .option('--json', 'emit the full knotPayload:v1 JSON')
+  .action(async (selector: string, options: { json?: boolean }) => {
+    try {
+      const root = await repoRoot().catch(() => process.cwd());
+      const payload = readKnotPayload(root, selector);
+      if (!payload) {
+        process.stderr.write(
+          `warpline: no KNOT payload matches ${JSON.stringify(selector)} — payloads are written by \`warpline admit\` on a KNOT/DANGLE verdict (see .warpline/knots/)\n`,
+        );
+        process.exit(1);
+      }
+      if (options.json) {
+        process.stdout.write(JSON.stringify(payload, null, 2) + '\n');
+      } else {
+        printKnotPayload(payload);
+      }
+    } catch (err) {
+      fail(err);
+    }
+  });
+
 program
   .command('restore')
   .description('Reconstruct a working tree from the NATIVE object store with git ABSENT — the layer→VCS threshold. Resolves a selector to a strand byte binding and materializes its bytes byte-faithfully into --to (default: the repo root). Path-hardened: a forged/corrupt tree name fails closed.')
@@ -790,7 +823,63 @@ function printAdmit(agentId: string, r: AdmitResult): void {
   }
   if (d.agentChanged.length) lines.push(`agent changed  ${d.agentChanged.join(', ')}`);
   if (d.otherChanged.length) lines.push(`others changed ${d.otherChanged.join(', ')}`);
+  if (r.knotPayloadId) {
+    lines.push(`payload   ${r.knotPayloadId}`);
+    lines.push(`          → warpline knot show ${r.knotPayloadId}   (the self-sufficient resolution work order)`);
+  }
   process.stdout.write(lines.join('\n') + '\n');
+}
+
+/**
+ * Human rendering of a knotPayload:v1 (forge-spec §3a). All agent prose renders
+ * inside the escaped untrusted-prose frame (§3d) — never interpolated bare.
+ */
+function printKnotPayload(p: KnotPayload): void {
+  const lines: string[] = [];
+  lines.push(`WARPLINE KNOT PAYLOAD  ${p.verdict}   (${p.schemaVersion})`);
+  lines.push(`id        ${p.payloadId}`);
+  lines.push(`re-based onto selvage ${short(p.rebasedOnto)}   base ${short(p.base.stateId)}`);
+  lines.push('');
+  const side = (label: 'ours' | 'theirs', s: KnotPayload['ours']): void => {
+    lines.push(`${label.toUpperCase()}  agent ${s.agentId ?? '(none)'}  actor ${s.actor}`);
+    lines.push(`  state ${short(s.stateId)}  tree ${s.treeId ? short(s.treeId) : '(unbound)'}  commit ${s.gitCommit ? s.gitCommit.slice(0, 8) : '(none)'}`);
+    lines.push(indent(frameProse(s.intent, { label: `intent (${label})` }), '  '));
+  };
+  side('ours', p.ours);
+  side('theirs', p.theirs);
+  lines.push('');
+  lines.push(`contested  ${p.contested.length} unit${p.contested.length === 1 ? '' : 's'}`);
+  for (const c of p.contested) {
+    lines.push(`  ${c.kind === 'knot' ? '⊗' : '⤬'} ${c.symbol}  [${c.kind}${c.direct ? ', direct' : ', ripple'}]${c.conflictingSlots.length ? `  slots: ${c.conflictingSlots.join(', ')}` : ''}`);
+    if (c.dangle) lines.push(`      dangling edge ${c.dangle.edgeKind} → ${c.dangle.danglingTargetSymbol}  (retired by ${c.dangle.retiredBy})`);
+    lines.push(`      file  ${c.ours.filePath ?? c.theirs.filePath ?? c.base.filePath ?? '(unknown)'}`);
+    const sideBody = (label: string, v: ContestedUnit['ours'] | ContestedUnit['base']): void => {
+      const essence = v.essence ? short(v.essence) : v.present ? '(no essence)' : '(absent)';
+      lines.push(`      ${label.padEnd(6)} ${essence}${v.body ? `  body: ${oneLine(v.body, 96)}` : ''}`);
+    };
+    sideBody('base', c.base);
+    sideBody('ours', c.ours);
+    sideBody('theirs', c.theirs);
+  }
+  lines.push('');
+  lines.push(`blast radius  ${p.blastRadius.symbols.length} symbol(s), ${p.blastRadius.edges.length} inbound edge(s)  [mode: ${p.blastRadius.mode}]`);
+  for (const e of p.blastRadius.edges.slice(0, 12)) lines.push(`  ${e.from} —${e.kind}→ ${e.to}`);
+  if (p.blastRadius.edges.length > 12) lines.push(`  … ${p.blastRadius.edges.length - 12} more`);
+  lines.push('');
+  lines.push(`RESOLVE  submit a ${p.resolution.proposalSchema} (${p.resolution.requires.join(', ')}) — sealed only via \`warpline resolve\`; never auto-applied`);
+  process.stdout.write(lines.join('\n') + '\n');
+}
+
+function indent(block: string, pad: string): string {
+  return block
+    .split('\n')
+    .map((l) => pad + l)
+    .join('\n');
+}
+
+function oneLine(s: string, max: number): string {
+  const flat = s.replace(/\s+/g, ' ').trim();
+  return flat.length > max ? flat.slice(0, max - 1) + '…' : flat;
 }
 
 function printSelvage(selvage: string | null, tip: Strand | undefined, depth: number): void {

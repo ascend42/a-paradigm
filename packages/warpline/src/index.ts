@@ -135,6 +135,38 @@ export { sealState, summarizeDelta, type SealInput } from './fabric/seal.js';
 // Phase C v3 — the KNOT council (human resolution of a genuine conflict).
 export { resolveKnot, type ResolveOptions, type ResolveResult } from './fabric/resolve.js';
 export type { KnotResolution } from './fabric/strand.js';
+// P2.4 — the injection-safety envelope (forge-spec §3d, T-2026-06-24-013):
+// typed untrusted prose, born content-addressed; frame-on-render.
+export {
+  envelopeProse,
+  verifyProse,
+  proseAddress,
+  frameProse,
+  escapeProseBody,
+  UNTRUSTED_PROSE_KIND,
+  type UntrustedProse,
+  type FrameOptions,
+} from './envelope.js';
+// P2.2 — the machine-readable KNOT payload (forge-spec §3a): the self-sufficient
+// resolution work order + the resolution-proposal envelope resolve accepts.
+export {
+  buildKnotPayload,
+  proposalToResolveOptions,
+  persistKnotPayload,
+  readKnotPayload,
+  listKnotPayloads,
+  readFileFromTree,
+  knotsDirOf,
+  KNOT_PAYLOAD_SCHEMA,
+  KNOT_PROPOSAL_SCHEMA,
+  type KnotPayload,
+  type KnotPayloadSide,
+  type ContestedUnit,
+  type ContestedSideView,
+  type RippleSlice,
+  type KnotResolutionProposal,
+  type BuildKnotPayloadInput,
+} from './fabric/knot-payload.js';
 // Calibration — grade strand confidence against real survive/overturn outcome (the moat).
 export {
   gradeFabric,
