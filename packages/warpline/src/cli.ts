@@ -437,13 +437,14 @@ program
 
 program
   .command('admit')
-  .description("Run the multi-writer ADMISSION protocol for an agent's scratch: re-base against the live selvage and return the verdict — FAST_ADMIT / CLEAN (+confidence) / KNOT / DANGLE / CLAIM-BREACH (when judged against a --claim). v1 reports the decision; merged-tree materialization is v2.")
+  .description("Run the multi-writer ADMISSION protocol for an agent's scratch: re-base against the live selvage and return the verdict — FAST_ADMIT / CLEAN (+confidence) / KNOT / DANGLE / CLAIM-BREACH (when judged against a --claim) / HELD (an independent-CLEAN into a low-survival symbol, per the grades sidecar). v1 reports the decision; merged-tree materialization is v2.")
   .argument('<agentId>', 'the agent whose scratch is being admitted')
   .option('--ref <ref>', 'the agent\'s proposed state (a git ref or WORKTREE)', WORKTREE_REF)
   .option('--claim <claimId>', 'judge this admission against a pre-declared claim (see `warpline propose`) — a breach HOLDS the admit (CLAIM-BREACH)')
   .option('--accept-breach', 'explicit override: seal the underlying verdict despite a claim breach; the breach fact is recorded in .warpline/claims/evaluations.jsonl')
+  .option('--accept-risk', 'explicit override: seal despite a trust-floor HELD (low graded survival on a touched symbol); the override is recorded in .warpline/grades-escalations.jsonl')
   .option('--json', 'emit the full AdmitResult as JSON')
-  .action(async (agentId: string, options: { ref?: string; claim?: string; acceptBreach?: boolean; json?: boolean }) => {
+  .action(async (agentId: string, options: { ref?: string; claim?: string; acceptBreach?: boolean; acceptRisk?: boolean; json?: boolean }) => {
     try {
       const root = await repoRoot().catch(() => process.cwd());
       const result = await admit(root, {
@@ -452,6 +453,7 @@ program
         ref: options.ref ?? WORKTREE_REF,
         ...(options.claim ? { claim: options.claim } : {}),
         ...(options.acceptBreach ? { acceptBreach: true } : {}),
+        ...(options.acceptRisk ? { acceptRisk: true } : {}),
       });
       if (options.json) {
         process.stdout.write(JSON.stringify(result, null, 2) + '\n');
@@ -870,6 +872,13 @@ function printAdmit(agentId: string, r: AdmitResult): void {
       if (r.claim.missing.length) lines.push(`  · missing ${r.claim.missing.join(', ')}  (claimed but untouched — recorded, not a breach)`);
       lines.push(`  → re-propose an honest claim, or override: warpline admit … --claim ${r.claim.claimId} --accept-breach`);
     }
+  } else if (d.status === 'HELD') {
+    lines.push('verdict   HELD — independent-CLEAN into a low-survival symbol (trust floor, forge-spec §1d; not sealed)');
+    if (r.escalation) {
+      lines.push(`  ⊘ ${r.escalation.symbol}  graded survival ${r.escalation.survival} (n=${r.escalation.graded}) < floor ${r.escalation.floor}`);
+      lines.push(`  underlying verdict ${r.escalation.underlyingStatus}`);
+      lines.push(`  → get the change reviewed/split, or override: warpline admit … --accept-risk`);
+    }
   } else {
     lines.push('verdict   NOOP — the agent changed no meaning');
   }
@@ -880,6 +889,9 @@ function printAdmit(agentId: string, r: AdmitResult): void {
       ? `BREACH accepted (excess: ${r.claim.excess.join(', ')})`
       : `honored${r.claim.missing.length ? `  (missing: ${r.claim.missing.join(', ')})` : ''}`;
     lines.push(`claim     ${short(r.claim.claimId)}  ${judged}  → recorded in .warpline/claims/evaluations.jsonl`);
+  }
+  if (r.escalation?.acceptedRisk) {
+    lines.push(`trust     RISK accepted on ${r.escalation.symbol} (survival ${r.escalation.survival}, n=${r.escalation.graded})  → recorded in .warpline/grades-escalations.jsonl`);
   }
   if (r.knotPayloadId) {
     lines.push(`payload   ${r.knotPayloadId}`);

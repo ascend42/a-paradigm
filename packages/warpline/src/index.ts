@@ -168,14 +168,29 @@ export {
   type BuildKnotPayloadInput,
 } from './fabric/knot-payload.js';
 // Calibration — grade strand confidence against real survive/overturn outcome (the moat).
+// P3 Lane A2: grades keyed by agentId + symbol, the sidecar survival index, and the
+// trust-floor escalation rule (admit's HELD consumer; forge-spec §1d).
 export {
   gradeFabric,
   applyGrades,
+  readGradeSidecar,
+  symbolSurvivalIndex,
+  evaluateEscalation,
+  recordGradeEscalation,
+  listGradeEscalations,
+  gradesPathOf,
+  escalationsPathOf,
+  K_MIN_GRADED,
+  SURVIVAL_FLOOR,
   type GradeReport,
   type StrandGrade,
   type GradeOutcome,
   type PriorClass,
   type MoatBucket,
+  type GradeSidecarRow,
+  type SymbolSurvival,
+  type GradeEscalation,
+  type GradeEscalationRow,
 } from './fabric/grade.js';
 export {
   admit,
@@ -186,6 +201,7 @@ export {
   type AdmitOptions,
   type AdmitResult,
   type AdmitClaimReport,
+  type AdmitEscalationReport,
 } from './fabric/admit.js';
 // P2.3 — the claim-scoped propose API (forge-spec §3b): the author's pre-declared
 // claim:v1 (the future OFFER metadata), the honesty-check evaluation, and the

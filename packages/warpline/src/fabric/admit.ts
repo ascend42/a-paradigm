@@ -24,6 +24,14 @@
  *                   with the exact excess set) — overridable via acceptBreach,
  *                   which seals the underlying verdict but records the breach fact
  *                   in the claims sidecar (see claim.ts; G5).
+ *   - HELD        : (P3 Lane A2, forge-spec §1d — trust-layer only, never returned
+ *                   by admitDecision) an independent-confidence CLEAN touching a
+ *                   symbol whose GRADED survival (grades.jsonl sidecar; ≥K graded
+ *                   outcomes, min across touched symbols) is below the floor. Same
+ *                   fail-safe mechanics as CLAIM-BREACH: refused, unsealed, selvage
+ *                   unmoved, report names the symbol + survival + n — overridable
+ *                   via acceptRisk, which seals and records the override in
+ *                   .warpline/grades-escalations.jsonl (see grade.ts; G5).
  *
  * v1 SCOPE: this is the DECISION engine + the FAST_ADMIT seal. Producing the
  * MERGED bytes for a CLEAN re-base (so the agent's tree reflects base+other+agent)
@@ -50,8 +58,9 @@ import { materializeMergedState, materializeMergedStateNative, type MergePlan } 
 import { buildKnotPayload, persistKnotPayload, readFileFromTree } from './knot-payload.js';
 import { classifyMergePaths, type MergeCoverage } from '../honesty.js';
 import { readClaim, evaluateClaim, recordClaimEvaluation, type Claim, type ClaimEvaluation } from './claim.js';
+import { readGradeSidecar, symbolSurvivalIndex, evaluateEscalation, recordGradeEscalation, type GradeEscalation } from './grade.js';
 
-export type AdmitStatus = 'NOOP' | 'FAST_ADMIT' | 'CLEAN' | 'KNOT' | 'DANGLE' | 'CLAIM-BREACH';
+export type AdmitStatus = 'NOOP' | 'FAST_ADMIT' | 'CLEAN' | 'KNOT' | 'DANGLE' | 'CLAIM-BREACH' | 'HELD';
 export type AdmitConfidence = 'linked' | 'independent';
 
 export interface AdmitDecision {
@@ -162,6 +171,13 @@ export interface AdmitOptions {
    * Never silent — the breach still lands in AdmitResult.claim and the JSONL row.
    */
   acceptBreach?: boolean;
+  /**
+   * Explicit trust-floor HELD override (P3 Lane A2, §1d): seal the underlying
+   * CLEAN verdict despite the low-survival escalation. Never silent — the
+   * escalation lands in AdmitResult.escalation AND as an override row in
+   * .warpline/grades-escalations.jsonl (G5).
+   */
+  acceptRisk?: boolean;
 }
 
 /**
@@ -181,6 +197,17 @@ export interface AdmitClaimReport {
   underlyingStatus?: AdmitStatus;
   /** true when the breach was explicitly overridden (acceptBreach). */
   acceptedBreach?: boolean;
+}
+
+/**
+ * The trust-floor escalation attached to an admit the grades sidecar HELD
+ * (P3 Lane A2, forge-spec §1d). Additive: absent whenever no escalation fired.
+ */
+export interface AdmitEscalationReport extends GradeEscalation {
+  /** the verdict class the admission carried before the trust gate (always CLEAN at v1). */
+  underlyingStatus: AdmitStatus;
+  /** true when the escalation was explicitly overridden (acceptRisk). */
+  acceptedRisk?: boolean;
 }
 
 export interface AdmitResult {
@@ -213,6 +240,12 @@ export interface AdmitResult {
    * verdict input. Present only when a CLEAN admit materialized.
    */
   coverage?: MergeCoverage;
+  /**
+   * P3 Lane A2 (§1d, G1-additive): the trust-floor escalation — present ONLY
+   * when an independent-CLEAN touched a below-floor symbol (HELD, or sealed via
+   * acceptRisk with the override row recorded in grades-escalations.jsonl).
+   */
+  escalation?: AdmitEscalationReport;
 }
 
 const blank = (status: AdmitStatus): AdmitDecision => ({
@@ -421,6 +454,42 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
       }
     }
 
+    // P3 Lane A2 — THE TRUST-FLOOR ESCALATION (forge-spec §1d: the permission
+    // model IS the scrutiny policy; TD-2026-07-16-426 organic arm). The FIRST
+    // consumer of the grades sidecar: an independent-confidence CLEAN — the
+    // autoClean class the false-AUTOFOLD gate proved blind — touching a symbol
+    // whose graded survival is below the floor is HELD (same fail-safe mechanics
+    // as CLAIM-BREACH: refused, unsealed, selvage unmoved), overridable via an
+    // explicit acceptRisk that seals AND records the override (G5 sidecar row).
+    // PURE over (decision, sidecar snapshot); the sidecar is read only on the
+    // independent-CLEAN path, so every other path is byte-identical to before.
+    // Claim gate FIRST (above): an honest claim is judged before trust is.
+    const escalation =
+      decision.status === 'CLEAN' && decision.confidence === 'independent'
+        ? evaluateEscalation(decision, symbolSurvivalIndex(readGradeSidecar(root)))
+        : null;
+    if (escalation && !opts.acceptRisk) {
+      return withClaim({
+        decision: { ...decision, status: 'HELD' },
+        sealed: false,
+        proposedStateId: proposed.stateId,
+        escalation: { ...escalation, underlyingStatus: decision.status },
+      });
+    }
+    // Attach (and record) an acceptRisk-overridden escalation on whatever the
+    // CLEAN path returns — the override is never silent, sealed or not.
+    const withEscalation = (r: AdmitResult): AdmitResult => {
+      if (!escalation) return r;
+      recordGradeEscalation(root, {
+        agentId: opts.agentId,
+        pickId: r.strand?.pickId ?? null,
+        ...escalation,
+        acceptedRisk: true,
+        ts: now,
+      });
+      return { ...r, escalation: { ...escalation, underlyingStatus: decision.status, acceptedRisk: true } };
+    };
+
     if (decision.status === 'NOOP') {
       return withClaim({ decision, sealed: false, proposedStateId: proposed.stateId });
     }
@@ -450,7 +519,7 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
       // `ours` is the agent's proposal: a WORKTREE proposal has no durable committed
       // tree to merge from → fail CLOSED (unchanged posture).
       if (isWorktree) {
-        return withClaim({ decision, sealed: false, proposedStateId: proposed.stateId });
+        return withClaim(withEscalation({ decision, sealed: false, proposedStateId: proposed.stateId }));
       }
 
       // Resolve base/theirs to byte sources. H1 relaxation (PR-B): a MERGE strand
@@ -461,7 +530,7 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
       const baseInput = resolveMergeInput(baseStrand, baseCommit, objStore);
       const theirsInput = resolveMergeInput(theirsStrand, theirsCommit, objStore);
       if (!baseInput || !theirsInput) {
-        return withClaim({ decision, sealed: false, proposedStateId: proposed.stateId });
+        return withClaim(withEscalation({ decision, sealed: false, proposedStateId: proposed.stateId }));
       }
 
       // Seal a materialized CLEAN merge: pin the result as BOTH binding.treeId and
@@ -481,7 +550,7 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
         // P3 GAP-1 honesty labels (additive): classify every changed path by the
         // tier that governed it, against the merge inputs + the merged result.
         const coverage = classifyMergePaths(plan.files.keys(), [state, proposed, selvage]);
-        return withClaim({ decision, sealed: true, proposedStateId: proposed.stateId, strand, merged: plan, coverage });
+        return withClaim(withEscalation({ decision, sealed: true, proposedStateId: proposed.stateId, strand, merged: plan, coverage }));
       };
 
       if (baseInput.kind === 'git' && theirsInput.kind === 'git') {

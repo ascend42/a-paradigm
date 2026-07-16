@@ -519,7 +519,20 @@ components:
       independent?' moat experiment. V3 (v3-identity §7, R4): a v3 strand carries NO
       calibratedConfidence at all — applyGrades never rewrites a v3 strand; its
       grade trajectory lives ONLY in grades.jsonl (the sidecar becomes fully
-      authoritative at V3.4, when rewriteFabric is deleted).
+      authoritative at V3.4, when rewriteFabric is deleted). P3 LANE A2 (forge-spec
+      §1d): grades are additionally KEYED by WHO and WHAT — every StrandGrade (and
+      thus every grades.jsonl row) carries authoredBy.agentId + the authoredSymbols
+      set, and GradeReport gains byAgent/bySymbol buckets (per-symbol outcome is
+      conservative: a non-overturned symbol on an OVERTURNED strand is not graded,
+      never silently 'survived'). The module also hosts the sidecar's FIRST
+      CONSUMER: readGradeSidecar → symbolSurvivalIndex (latest row per pickId wins
+      — the sidecar is a trajectory) → evaluateEscalation, a PURE function of
+      (decision, sidecar snapshot) implementing the one trust-floor rule for
+      #admit's HELD verdict; constants K_MIN_GRADED=3 / SURVIVAL_FLOOR=0.5 are
+      exported STARTING GUESSES, calibration-pending (TD-2026-07-16-426 organic
+      arm — moved only by graded outcome data, never hand-tuned). Accepted-risk
+      overrides append to .warpline/grades-escalations.jsonl (G5 sidecar;
+      recordGradeEscalation/listGradeEscalations).
     type: module
     components:
       - "#fabric"
@@ -875,7 +888,23 @@ components:
       P3 GAP-1 (G1-additive): a materialized CLEAN admit also attaches
       AdmitResult.coverage — the #honesty per-path labels (meaning-decided /
       byte-decided / derived) + aggregate counts over the merge plan's changed
-      paths. Presentation data, never a verdict input.
+      paths. Presentation data, never a verdict input. P3 LANE A2 (forge-spec §1d
+      — the permission model IS the scrutiny policy): the TRUST-FLOOR gate, the
+      grades sidecar's first consumer. After the claim gate (claims judge honesty
+      before trust is), an independent-confidence CLEAN — the autoClean class the
+      false-AUTOFOLD gate proved blind — touching a symbol whose GRADED survival
+      (#grade's symbolSurvivalIndex over grades.jsonl; ≥ K_MIN_GRADED graded
+      outcomes, MIN across touched symbols) is below SURVIVAL_FLOOR returns the
+      HELD verdict class (G1-additive to AdmitStatus; never returned by
+      admitDecision): refused, unsealed, selvage unmoved, with
+      AdmitResult.escalation naming the symbol + survival + n. Same fail-safe
+      mechanics as CLAIM-BREACH: acceptRisk is the explicit override — it seals
+      the underlying CLEAN and records the override row in
+      .warpline/grades-escalations.jsonl (G5; never silent). The escalation
+      decision is PURE over (decision, sidecar snapshot); the sidecar is read
+      ONLY on the independent-CLEAN path, so a repo with no grades data — and
+      every other verdict path — behaves byte-identically to before the rule
+      (regression-guarded in test/trust-escalation.test.ts).
     type: module
     components:
       - "#absorb"
@@ -890,6 +919,7 @@ components:
       - "#knot-payload"
       - "#claim"
       - "#honesty"
+      - "#grade"
 
   claim:
     description: >-
