@@ -1,0 +1,79 @@
+name: 'Warpline Guard'
+description: >-
+  Deterministically flags contested-symbol knots on pull requests — the merges
+  git completes clean while both branches changed the same symbol's meaning.
+  Advisory by default: it reports, it never blocks unless you opt in.
+author: 'ascend42'
+
+branding:
+  icon: 'git-merge'
+  color: 'purple'
+
+inputs:
+  base-ref:
+    description: >-
+      Base ref/SHA to adjudicate against. Empty = the pull_request event's
+      base.sha. Requires a checkout with fetch-depth: 0.
+    required: false
+    default: ''
+  head-ref:
+    description: >-
+      Head ref/SHA (the PR side). Empty = the pull_request event's head.sha.
+    required: false
+    default: ''
+  threshold:
+    description: >-
+      Max direct-contested knot size to LIST (default 6 — the stratum that was
+      50% churn-validated on ground-truthed real merges; larger flag sets were
+      0%-validated avalanches and are folded to a count, never listed).
+    required: false
+    default: '6'
+  paths:
+    description: >-
+      Comma- or newline-separated globs (`*`, `**`, `?`) over repo-relative
+      files; only flags in matching files are listed/failed on. Empty = all.
+    required: false
+    default: ''
+  fail-on-flag:
+    description: >-
+      "true" to fail the step on an in-stratum flag (and fail closed on engine
+      errors). Default "false": advisory — the check is never red by default.
+    required: false
+    default: 'false'
+  working-directory:
+    description: 'Repo checkout to adjudicate (default: the workspace root).'
+    required: false
+    default: '.'
+  report-path:
+    description: 'Where to write the JSON report (relative to working-directory).'
+    required: false
+    default: 'warpline-guard-report.json'
+
+outputs:
+  verdict:
+    description: 'clean | ripple-only | flagged | avalanche | git-conflict | error'
+    value: ${{ steps.guard.outputs.verdict }}
+  knot-size:
+    description: 'Direct-contested symbol count (the validated ranking key).'
+    value: ${{ steps.guard.outputs.knot-size }}
+  flag-count:
+    description: 'Raw meaning-flag count (direct + ripple).'
+    value: ${{ steps.guard.outputs.flag-count }}
+  report-path:
+    description: 'Absolute path of the JSON report artifact.'
+    value: ${{ steps.guard.outputs.report-path }}
+
+runs:
+  using: 'composite'
+  steps:
+    - id: guard
+      shell: bash
+      run: node "$GITHUB_ACTION_PATH/dist/main.js"
+      env:
+        WARPLINE_INPUT_BASE_REF: ${{ inputs.base-ref }}
+        WARPLINE_INPUT_HEAD_REF: ${{ inputs.head-ref }}
+        WARPLINE_INPUT_THRESHOLD: ${{ inputs.threshold }}
+        WARPLINE_INPUT_PATHS: ${{ inputs.paths }}
+        WARPLINE_INPUT_FAIL_ON_FLAG: ${{ inputs.fail-on-flag }}
+        WARPLINE_INPUT_WORKING_DIRECTORY: ${{ inputs.working-directory }}
+        WARPLINE_INPUT_REPORT_PATH: ${{ inputs.report-path }}

@@ -1,0 +1,50 @@
+version: "2.0"
+description: >-
+  Warpline Guard — the GitHub Action packaging of the Warpline oracle (P3 Lane
+  B, roadmap-2026H2). On pull_request it runs #oracle on PR-head × base (the
+  engine computes the merge-base), applies the KNOT-SIZE THRESHOLD (default 6 —
+  the 50%-churn-validated stratum from the 18-hit ground truth; ≥10-symbol flag
+  sets were 0% and are folded, never listed), and renders the verdict as a job
+  summary + JSON report + step outputs. ADVISORY BY DEFAULT: fail-on-flag is
+  false, so the check reports and never blocks; with fail-on-flag true it fails
+  on in-stratum flags AND fails closed on engine errors. Read-only forever: the
+  oracle runs with noWrite, nothing is written to the adjudicated repo except
+  the report file. Consumes @a-company/warpline exported functions only — never
+  vendors or edits engine code. private:true, unpublished (npm AND Marketplace;
+  the founder publishes).
+
+components:
+  guard-report:
+    description: >-
+      src/report.ts — the pure diff-of-verdicts core: OracleRecord →
+      GuardReport. Verdict ladder (git-conflict > clean > ripple-only > flagged
+      > avalanche), the knot-size threshold over the oracle's RAW knotSize (the
+      validated ranking key), the paths filter (minimal glob: **, *, ?) that
+      narrows listing/failure but never the stratum, per-flag detail (kind,
+      conflicting slots, dangle target, BOTH branches' touch points from the
+      justifications), and the honest SCOPE_LINE rendered on every report. No
+      I/O — fully unit-tested.
+  guard-render:
+    description: >-
+      src/render.ts — GuardReport → GitHub job-summary markdown + terse log
+      lines. Wording discipline (TD-2026-07-16-810) is enforced by test: scoped
+      claims only, ripple always folded to a count, avalanche never lists
+      symbols, scope line on every render, banned-phrase regex sweep in
+      test/render.test.ts.
+  guard-main:
+    description: >-
+      src/main.ts — the composite-action entrypoint (node dist/main.js). Env →
+      inputs, base/head resolution from the pull_request event payload when
+      inputs are empty, oracle run (noWrite), report JSON + GITHUB_STEP_SUMMARY
+      + GITHUB_OUTPUT, exit policy: verdicts never fail unless fail-on-flag;
+      engine errors fail only when enforcing (fail closed); config errors
+      always fail. Action-runner code — stdout is the Actions convention,
+      confined to this file.
+  guard-action-packaging:
+    description: >-
+      action.yml (composite, node20 runtime via the caller's setup-node) +
+      .github/workflows/warpline-guard.yml (the repo self-test: advisory,
+      continue-on-error, fail-on-flag false). test/action-packaging.test.ts is
+      the packaging lint: YAML validity, every input threaded to
+      WARPLINE_INPUT_* env, outputs wired to the guard step, safe defaults, no
+      expression smuggled into input defaults, self-test stays non-blocking.

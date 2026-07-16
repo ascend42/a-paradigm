@@ -1,0 +1,35 @@
+{
+  "name": "@a-company/warpline-action",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Warpline Guard — a GitHub Action that deterministically flags contested-symbol knots on pull requests. Advisory by default; consumes the @a-company/warpline oracle.",
+  "type": "module",
+  "main": "./dist/main.js",
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest"
+  },
+  "dependencies": {
+    "@a-company/warpline": "*"
+  },
+  "devDependencies": {
+    "@types/js-yaml": "^4.0.9",
+    "@types/node": "^22.10.0",
+    "js-yaml": "^4.1.0",
+    "tsup": "^8.0.1",
+    "vitest": "^4.1.0"
+  },
+  "author": "ascend42",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ascend42/a-paradigm.git",
+    "directory": "packages/warpline-action"
+  },
+  "engines": {
+    "node": ">=20.0.0"
+  }
+}
