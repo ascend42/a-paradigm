@@ -244,13 +244,84 @@ components:
   lens-registry:
     description: >-
       The code-lens registry (spec §9). lensFor(ext) -> CodeLens | undefined maps a
-      file extension (incl. leading dot) to the responsible lens; v1 registers only
-      TsLens (.ts/.tsx). The single seam future per-language lenses plug into without
-      touching the lift/absorb path.
+      file extension (incl. leading dot) to the responsible lens. Registered: TsLens
+      (.ts/.tsx) and CfgLens (.json/.yml/.yaml — #cfg-lens, P3 GAP-1). The single
+      seam per-language lenses plug into without touching the lift/absorb path.
     type: module
     components:
       - "#code-lens"
       - "#ts-lens"
+      - "#cfg-lens"
+
+  cfg-lens:
+    description: >-
+      The structured-data lens (P3 Lane A, GAP-1) — JSON/YAML key-trees lifted to
+      CodeUnit-shaped nodes so config files (the census-proven agent-collision
+      center of mass: package.json, tsconfig, CI yaml) get MEANING verdicts instead
+      of falling silently to the byte tier. GRANULARITY (cfg-v1): one file-root
+      marker unit per parsed file (key '/'); a top-level key whose value is a
+      non-empty map lifts ONE UNIT PER CHILD (/dependencies/react) so disjoint dep
+      adds COMMUTE (autoClean) while the same dep at different versions is a
+      same-unit divergent body → KNOT via predict's scalar 'body' slot rule; a
+      top-level scalar key is one unit; a child's whole value subtree is one leaf.
+      SEQUENCES defer to the byte tier: any unit whose subtree contains an array
+      becomes a content-INDEPENDENT reduced-fidelity 'seq' marker (order is meaning
+      the key-tree algebra cannot honestly claim — pretending would knot CI-step
+      edits the token merge composes today). DETERMINISM: raw scalar LEXEMES
+      (as-written is meaning, mirrors ts-essence's literal discipline; 1.0 ≠ 1);
+      map key ORDER is not meaning (canonical sort — a pure reorder is the empty
+      delta); the KEY PATH and FILE PATH are folded into the body (documented
+      exception to labels-never-hashed: for structured data the key path IS the
+      contract and the file location IS meaning; cost: cfg file rename reads as
+      retire+born). Essence tag cfg-v1 (own content-address namespace, never
+      colliding with TS CCNF). FAIL-CLOSED: unparseable / duplicate-key /
+      non-map-root / multi-document / anchor-alias-tag/merge-key YAML / oversize
+      (>1MiB) files fall to the byte tier with a single VISIBLE reduced-fidelity
+      'unliftable' marker unit — never silent-empty, never a false verdict. JSON is
+      parsed by a strict local scanner with JSONC comforts (comments + trailing
+      commas — tsconfig reality; comments are prose, never hashed) and raw-lexeme +
+      duplicate-key fidelity JSON.parse cannot provide; YAML via the `yaml` package,
+      plain core schema only. Lockfiles are excluded entirely (#derived-artifacts).
+      Skips node_modules/.git/dist/build/.next/coverage plus .warpline (the fabric
+      never lifts itself) and .paradigm (machine-managed state).
+    type: module
+    components:
+      - "#code-lens"
+      - "#code-symbol"
+      - "#canonical-json"
+      - "#derived-artifacts"
+
+  derived-artifacts:
+    description: >-
+      The DERIVED-ARTIFACT rule (P3 GAP-1). Lockfiles (package-lock.json,
+      npm-shrinkwrap.json, yarn.lock, pnpm-lock.yaml, bun.lockb/.lock, deno.lock,
+      Cargo.lock, composer.lock, Gemfile.lock, poetry.lock, Pipfile.lock,
+      flake.lock) are machine-generated projections of the manifests beside them —
+      derived, never meaning. isDerivedArtifact(relPath) matches by explicit
+      BASENAME set (no glob — fail-open here would silently wrong-merge a file we
+      pretended to understand). Consumers: #cfg-lens never lifts them; #materialize
+      never knots them (both-sides-divergent → take OURS wholesale + a STALE marker
+      in MergePlan.derivedStale — regeneration from the merged manifests is the
+      consumer's step, recorded not performed in v1); #honesty labels them
+      'derived'.
+    type: module
+
+  honesty:
+    description: >-
+      Per-path merge HONESTY labels (P3 GAP-1) — "what fraction of this merge did
+      meaning govern?" classifyMergePaths(paths, states) labels every touched path
+      exactly one of: meaning-decided (a lens lifted REAL units from the file — TS
+      code-units, cfg key units, .purpose symbols; cfg MARKER units never claim
+      coverage), derived (#derived-artifacts), or byte-decided (everything else —
+      README, unparseable configs, sequence-valued keys). Returns sorted perPath +
+      aggregate counts {meaningDecided, byteDecided, derived}. G1-ADDITIVE
+      presentation data, never a verdict input: attached as AdmitResult.coverage
+      (on a materialized CLEAN admit, classified against proposed/selvage/merged
+      states) and OracleRecord.coverage (over changedPaths(base,A) ∪ (base,B),
+      real refs only; schemaVersion unchanged).
+    type: module
+    components:
+      - "#derived-artifacts"
 
   lift-code-units:
     description: >-
@@ -269,12 +340,15 @@ components:
       ordered distinct local target symbols the f:N slots substitute against), and
       essenceTag = CCNF_ALGO_VERSION+":ts"+TS_LENS_VERSION (e.g. "v1.1:ts5.9.3" —
       the algorithm- and compiler-pinned version namespace §5.2, so essence-hash
-      never imports the lens — the tag travels with the node).
+      never imports the lens — the tag travels with the node). P3 GAP-1: a unit may
+      OVERRIDE the tag per-unit (CodeUnit.essenceTag — #cfg-lens stamps cfg-v1) and
+      carry a cfgMarker discriminator into entry.data for the #honesty classifier.
     type: module
     components:
       - "#code-lens"
       - "#lens-registry"
       - "#ts-lens"
+      - "#cfg-lens"
 
   absorb:
     description: >-
@@ -348,7 +422,11 @@ components:
     description: >-
       The v0 Justification — actor/intent from the branch tip's git log,
       computedRipple via getReferencesTo over changed symbols, danglingRefs, and a
-      reserved signature field (unsigned:sha256 stub).
+      reserved signature field (unsigned:sha256 stub). P2.3 (forge-spec §3b,
+      ADDITIVE): an optional claimId POINTER to the author's pre-declared #claim
+      sidecar — present only when the change was proposed under a claim (absent ⇒
+      byte-identical to the pre-claim schema); the claim body and its grading
+      never ride inline (G5).
     type: module
     components:
       - "#sem-delta"
@@ -779,7 +857,25 @@ components:
       construction is derived evidence: a build failure degrades to a verdict
       without a pointer, never a crash. The verdict itself remains a pure function
       of STRUCTURAL inputs — prose never reaches admitDecision (the poisoned-prose
-      invariant, test/injection-envelope.test.ts).
+      invariant, test/injection-envelope.test.ts). P2.3 (forge-spec §3b): admit
+      optionally judges the admission against a pre-declared #claim
+      (AdmitOptions.claim = a claimId from the propose API) — the CLAIM GATE runs
+      strictly BEFORE any seal: a breach (computed touched ⊄ claimed, per #claim's
+      documented excess rule) returns the CLAIM-BREACH verdict class (G1-additive
+      to AdmitStatus; never returned by admitDecision itself) — HELD, unsealed,
+      with the exact excess/missing sets and the underlying verdict on
+      AdmitResult.claim. FAIL-SAFE not fail-hard: acceptBreach is the explicit
+      override that seals the underlying verdict while recording the breach fact.
+      Every judgment (breach or not, sealed or not) appends a row to
+      .warpline/claims/evaluations.jsonl (the calibration-probe stream, G5).
+      Claims are OPT-IN: an admit without a claim is byte-identical to pre-claim
+      behavior (tested), and no claim ever narrows what admit computes (the perf
+      hint is recorded-only). Strand/pickId identity is UNTOUCHED — the claim
+      pointer lives in sidecars and the Justification, never the signed strand.
+      P3 GAP-1 (G1-additive): a materialized CLEAN admit also attaches
+      AdmitResult.coverage — the #honesty per-path labels (meaning-decided /
+      byte-decided / derived) + aggregate counts over the merge plan's changed
+      paths. Presentation data, never a verdict input.
     type: module
     components:
       - "#absorb"
@@ -792,6 +888,41 @@ components:
       - "#seal"
       - "#fabric-lock"
       - "#knot-payload"
+      - "#claim"
+      - "#honesty"
+
+  claim:
+    description: >-
+      The claim-scoped propose API, claim:v1 (P2.3, forge-spec §3b,
+      T-2026-06-24-018). A claim is the author's PRE-DECLARATION — agentId,
+      claimedSymbols, optional taskRef (a structured id/URL, not prose), optional
+      claimedContractDelta (the engine's SemDelta shape VERBATIM, G3 — recorded
+      for the future grade stream, not evaluated in v1), optional confidence, and
+      an ENVELOPED intent (#prose-envelope, §3d) — content-addressed at creation
+      (claimId = claim:v1:sha256(canonical body); createClaim is the only
+      constructor; verifyClaim recomputes the address + the intent envelope, and
+      persist/read fail CLOSED on tamper). The claim schema IS the future OFFER
+      metadata (§3b). Triple duty: (1) HONESTY CHECK — evaluateClaim(decision,
+      claim) compares claimed vs COMPUTED symbol sets: excess = changed-but-
+      unclaimed symbols that are DIRECT (SemDelta.localChanged) or ripple-only-
+      but-KNOTTING (a ripple-only non-knotting symbol is exempt — charging authors
+      for Merkle avalanches would make honest claims impossible; no agentDelta ⇒
+      all treated direct, conservative); missing = claimed-but-untouched, recorded
+      NEVER a breach; breach = excess nonempty → #admit's CLAIM-BREACH verdict.
+      (2) CALIBRATION PROBE — every evaluation appends {claimId, pickId?, agentId,
+      breach, excess, missing, acceptedBreach?, ts} to
+      .warpline/claims/evaluations.jsonl (G5 sidecar; the per-agent claimed-vs-
+      computed honesty signal for the grade layer). (3) PERF HINT — recorded so a
+      later layer CAN scope by claim; deliberately not implemented (no decision
+      function reads a claim to narrow computation). evaluateClaim reads NO prose
+      (the poisoned-prose invariant extends to claim fields). Sidecar persistence
+      under .warpline/claims/ keyed by claimId (G2: no ledger positions). Surfaced
+      via `warpline propose --agent <id> --claim <file|json>` (returns claimId)
+      and `warpline admit … --claim <claimId> [--accept-breach]`.
+    type: module
+    components:
+      - "#sem-delta"
+      - "#prose-envelope"
 
   prose-envelope:
     description: >-
@@ -870,12 +1001,18 @@ components:
       materializeMergedState applies the conflict-free plan onto a throwaway copy of
       the base tree (restoring each merged file's mode) and absorbs it → the merged
       WarpState (the user's working tree is never touched). gitShow is byte-faithful
-      (no trim) so trailing newlines and exact bytes survive — no drift.
+      (no trim) so trailing newlines and exact bytes survive — no drift. DERIVED
+      ARTIFACTS (P3 GAP-1): a lockfile (#derived-artifacts) changed divergently on
+      BOTH sides never conflicts/knots — taken from OURS wholesale (never
+      token-merged: a spliced lockfile pretends precision it doesn't have) and
+      recorded in MergePlan.derivedStale (additive) for regeneration from the
+      merged manifests. Applies identically on the git-ref and native-tree paths.
     type: module
     components:
       - "#merge3"
       - "#absorb"
       - "#git-exec"
+      - "#derived-artifacts"
 
   hook:
     description: >-
@@ -915,6 +1052,10 @@ components:
       ranking/threshold key) and flagCount. Ground truth: ≤6-symbol flag sets were
       50% churn-validated, every ≥10-symbol avalanche 0% — small knots ARE the
       product; the CLI names direct symbols and collapses ripple to a count line.
+      P3 GAP-1 (G1-additive, schemaVersion unchanged): the record also carries
+      coverage — the #honesty per-path labels over every path either side touched
+      (real refs only) + aggregate counts. A coverage failure never fails the
+      oracle.
     type: module
     components:
       - "#absorb"
@@ -923,6 +1064,7 @@ components:
       - "#justification"
       - "#warp-store"
       - "#git-exec"
+      - "#honesty"
 
   weave:
     description: >-

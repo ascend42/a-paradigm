@@ -29,6 +29,7 @@ import { lifeline, type Lifeline } from './lifeline.js';
 import type { ContractChangeset } from './sem-delta.js';
 import { changedSlotsOf } from './sem-delta.js';
 import * as path from 'node:path';
+import * as fs from 'node:fs/promises';
 import { serializeState } from './warp/store.js';
 import { ObjectStore } from './warp/object-store.js';
 import { snapshotDir } from './warp/snapshot.js';
@@ -40,6 +41,7 @@ import { installHook, uninstallHook, hookStatus } from './fabric/hook.js';
 import { forkScratch } from './fabric/scratch.js';
 import type { Knot } from './predict.js';
 import { admit, type AdmitResult } from './fabric/admit.js';
+import { createClaim, persistClaim, type CreateClaimInput } from './fabric/claim.js';
 import { resolveKnot } from './fabric/resolve.js';
 import { readKnotPayload, type KnotPayload, type ContestedUnit } from './fabric/knot-payload.js';
 import { frameProse } from './envelope.js';
@@ -402,15 +404,55 @@ program
   });
 
 program
-  .command('admit')
-  .description("Run the multi-writer ADMISSION protocol for an agent's scratch: re-base against the live selvage and return the verdict — FAST_ADMIT / CLEAN (+confidence) / KNOT / DANGLE. v1 reports the decision; merged-tree materialization is v2.")
-  .argument('<agentId>', 'the agent whose scratch is being admitted')
-  .option('--ref <ref>', 'the agent\'s proposed state (a git ref or WORKTREE)', WORKTREE_REF)
-  .option('--json', 'emit the full AdmitResult as JSON')
-  .action(async (agentId: string, options: { ref?: string; json?: boolean }) => {
+  .command('propose')
+  .description("Register a pre-declared CLAIM (claim:v1, forge-spec §3b) — the agent's belief about what its change touches, declared BEFORE admission. Persists to .warpline/claims/ and prints the claimId; pass it to `admit --claim` so the verdict is judged against the claim (honesty check + calibration probe). The claim is recorded, never used to scope computation.")
+  .requiredOption('--agent <id>', 'the declaring agent (the calibration probe is per-agent)')
+  .requiredOption('--claim <json>', 'the claim body: a path to a .json file, or inline JSON — {claimedSymbols: string[], intent: string, taskRef?, claimedContractDelta?, confidence?}')
+  .option('--json', 'emit the full persisted claim:v1 as JSON')
+  .action(async (options: { agent: string; claim: string; json?: boolean }) => {
     try {
       const root = await repoRoot().catch(() => process.cwd());
-      const result = await admit(root, { cwd: root, agentId, ref: options.ref ?? WORKTREE_REF });
+      const raw = options.claim.trimStart().startsWith('{')
+        ? options.claim
+        : await fs.readFile(path.resolve(options.claim), 'utf8');
+      const body = JSON.parse(raw) as Omit<CreateClaimInput, 'agentId'>;
+      const claim = createClaim({ ...body, agentId: options.agent });
+      persistClaim(root, claim);
+      if (options.json) {
+        process.stdout.write(JSON.stringify(claim, null, 2) + '\n');
+      } else {
+        const lines: string[] = [];
+        lines.push(`PROPOSE  ${options.agent}  →  claim registered`);
+        lines.push(`claimId   ${claim.claimId}`);
+        lines.push(`claimed   ${claim.claimedSymbols.join(', ') || '(no symbols)'}`);
+        if (claim.taskRef) lines.push(`taskRef   ${claim.taskRef}`);
+        if (claim.confidence !== undefined) lines.push(`confidence ${claim.confidence}`);
+        lines.push(`          → warpline admit ${options.agent} --claim ${claim.claimId}`);
+        process.stdout.write(lines.join('\n') + '\n');
+      }
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+program
+  .command('admit')
+  .description("Run the multi-writer ADMISSION protocol for an agent's scratch: re-base against the live selvage and return the verdict — FAST_ADMIT / CLEAN (+confidence) / KNOT / DANGLE / CLAIM-BREACH (when judged against a --claim). v1 reports the decision; merged-tree materialization is v2.")
+  .argument('<agentId>', 'the agent whose scratch is being admitted')
+  .option('--ref <ref>', 'the agent\'s proposed state (a git ref or WORKTREE)', WORKTREE_REF)
+  .option('--claim <claimId>', 'judge this admission against a pre-declared claim (see `warpline propose`) — a breach HOLDS the admit (CLAIM-BREACH)')
+  .option('--accept-breach', 'explicit override: seal the underlying verdict despite a claim breach; the breach fact is recorded in .warpline/claims/evaluations.jsonl')
+  .option('--json', 'emit the full AdmitResult as JSON')
+  .action(async (agentId: string, options: { ref?: string; claim?: string; acceptBreach?: boolean; json?: boolean }) => {
+    try {
+      const root = await repoRoot().catch(() => process.cwd());
+      const result = await admit(root, {
+        cwd: root,
+        agentId,
+        ref: options.ref ?? WORKTREE_REF,
+        ...(options.claim ? { claim: options.claim } : {}),
+        ...(options.acceptBreach ? { acceptBreach: true } : {}),
+      });
       if (options.json) {
         process.stdout.write(JSON.stringify(result, null, 2) + '\n');
       } else {
@@ -818,11 +860,27 @@ function printAdmit(agentId: string, r: AdmitResult): void {
   } else if (d.status === 'DANGLE') {
     lines.push('verdict   DANGLE — a meaning-level broken reference; resolve before admitting');
     for (const x of d.dangling) lines.push(`  ⤬ ${x.fromSymbol} → ${x.danglingTargetSymbol}`);
+  } else if (d.status === 'CLAIM-BREACH') {
+    lines.push('verdict   CLAIM-BREACH — the computed touched set escaped the pre-declared claim (HELD, not sealed)');
+    if (r.claim) {
+      lines.push(`  underlying verdict ${r.claim.underlyingStatus ?? '(unknown)'}`);
+      lines.push(`  claimed   ${r.claim.claimedSymbols.join(', ') || '(none)'}`);
+      lines.push(`  computed  ${d.agentChanged.join(', ') || '(none)'}`);
+      lines.push(`  ✗ excess  ${r.claim.excess.join(', ')}`);
+      if (r.claim.missing.length) lines.push(`  · missing ${r.claim.missing.join(', ')}  (claimed but untouched — recorded, not a breach)`);
+      lines.push(`  → re-propose an honest claim, or override: warpline admit … --claim ${r.claim.claimId} --accept-breach`);
+    }
   } else {
     lines.push('verdict   NOOP — the agent changed no meaning');
   }
   if (d.agentChanged.length) lines.push(`agent changed  ${d.agentChanged.join(', ')}`);
   if (d.otherChanged.length) lines.push(`others changed ${d.otherChanged.join(', ')}`);
+  if (r.claim && d.status !== 'CLAIM-BREACH') {
+    const judged = r.claim.breach
+      ? `BREACH accepted (excess: ${r.claim.excess.join(', ')})`
+      : `honored${r.claim.missing.length ? `  (missing: ${r.claim.missing.join(', ')})` : ''}`;
+    lines.push(`claim     ${short(r.claim.claimId)}  ${judged}  → recorded in .warpline/claims/evaluations.jsonl`);
+  }
   if (r.knotPayloadId) {
     lines.push(`payload   ${r.knotPayloadId}`);
     lines.push(`          → warpline knot show ${r.knotPayloadId}   (the self-sufficient resolution work order)`);

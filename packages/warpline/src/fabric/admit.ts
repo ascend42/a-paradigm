@@ -17,6 +17,13 @@
  *                   conflict the engine is blind to — per the false-AUTOFOLD gate).
  *   - KNOT        : same symbol, contradictory meaning — a human DECIDE is required.
  *   - DANGLE      : one side's edge into a symbol the other retired — broken ref.
+ *   - CLAIM-BREACH: (P2.3, forge-spec §3b — claim-layer only, never returned by
+ *                   admitDecision) the admission was judged against a pre-declared
+ *                   claim:v1 and the computed touched set escaped the claimed set.
+ *                   FAIL-SAFE, not fail-hard: the admit is HELD (refused, unsealed,
+ *                   with the exact excess set) — overridable via acceptBreach,
+ *                   which seals the underlying verdict but records the breach fact
+ *                   in the claims sidecar (see claim.ts; G5).
  *
  * v1 SCOPE: this is the DECISION engine + the FAST_ADMIT seal. Producing the
  * MERGED bytes for a CLEAN re-base (so the agent's tree reflects base+other+agent)
@@ -41,8 +48,10 @@ import { sealState } from './seal.js';
 import { withFabricLock } from './lock.js';
 import { materializeMergedState, materializeMergedStateNative, type MergePlan } from './materialize.js';
 import { buildKnotPayload, persistKnotPayload, readFileFromTree } from './knot-payload.js';
+import { classifyMergePaths, type MergeCoverage } from '../honesty.js';
+import { readClaim, evaluateClaim, recordClaimEvaluation, type Claim, type ClaimEvaluation } from './claim.js';
 
-export type AdmitStatus = 'NOOP' | 'FAST_ADMIT' | 'CLEAN' | 'KNOT' | 'DANGLE';
+export type AdmitStatus = 'NOOP' | 'FAST_ADMIT' | 'CLEAN' | 'KNOT' | 'DANGLE' | 'CLAIM-BREACH';
 export type AdmitConfidence = 'linked' | 'independent';
 
 export interface AdmitDecision {
@@ -139,6 +148,39 @@ export interface AdmitOptions {
   agentId: string;
   /** the agent's proposed state, as a git ref or WORKTREE. */
   ref: string;
+  /**
+   * P2.3 (forge-spec §3b, G1-additive, OPT-IN): judge this admission against a
+   * pre-declared claim — a claimId (or ≥12-char prefix) persisted by the
+   * propose API (`warpline propose` / createClaim+persistClaim). Absent ⇒ the
+   * admit behaves EXACTLY as before claims existed. The claim must verify
+   * (untampered) and belong to `agentId` — anything else fails closed.
+   */
+  claim?: string;
+  /**
+   * Explicit CLAIM-BREACH override: seal the underlying verdict anyway, but
+   * record the breach fact (acceptedBreach) in the claims sidecar stream.
+   * Never silent — the breach still lands in AdmitResult.claim and the JSONL row.
+   */
+  acceptBreach?: boolean;
+}
+
+/**
+ * The claim judgment attached to an admit that carried a claim (P2.3, §3b).
+ * Additive: absent whenever no claim was supplied.
+ */
+export interface AdmitClaimReport {
+  claimId: string;
+  /** the pre-declared symbol set the decision was judged against. */
+  claimedSymbols: string[];
+  breach: boolean;
+  /** changed-but-unclaimed symbols that count (direct, or ripple-only-but-knotting). */
+  excess: string[];
+  /** claimed-but-untouched symbols — recorded, never a breach. */
+  missing: string[];
+  /** on a CLAIM-BREACH refusal: the verdict class the admission carried before the claim gate. */
+  underlyingStatus?: AdmitStatus;
+  /** true when the breach was explicitly overridden (acceptBreach). */
+  acceptedBreach?: boolean;
 }
 
 export interface AdmitResult {
@@ -158,6 +200,19 @@ export interface AdmitResult {
    * readKnotPayload().
    */
   knotPayloadId?: string;
+  /**
+   * P2.3 (§3b, G1-additive): the claim judgment — present ONLY when the admit
+   * carried a claim. Every judgment is also appended to
+   * .warpline/claims/evaluations.jsonl (the calibration-probe stream, G5).
+   */
+  claim?: AdmitClaimReport;
+  /**
+   * P3 GAP-1 (G1-additive): per-path HONESTY labels for a materialized CLEAN
+   * merge — which tier GOVERNED each changed path (meaning-decided / byte-decided
+   * / derived) + the aggregate counts (#honesty). Presentation data, never a
+   * verdict input. Present only when a CLEAN admit materialized.
+   */
+  coverage?: MergeCoverage;
 }
 
 const blank = (status: AdmitStatus): AdmitDecision => ({
@@ -225,6 +280,25 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
   const store = new WarpStore(root, { diskCache: true });
   const objStore = new ObjectStore(root); // native byte store (M1b bind-on-seal)
 
+  // P2.3 — resolve the pre-declared claim BEFORE the lock (read-only sidecar).
+  // A named-but-unresolvable or tampered claim fails CLOSED: the caller asked
+  // for claim semantics, and silently judging unclaimed would corrupt the
+  // calibration stream. So does an agent mismatch — a claim grades ITS author.
+  let claim: Claim | null = null;
+  if (opts.claim) {
+    claim = readClaim(root, opts.claim);
+    if (!claim) {
+      throw new Error(
+        `warpline: admit --claim ${opts.claim} — no verified claim matches (missing, tampered, or a <12-char prefix). Claims are created by \`warpline propose\` (.warpline/claims/) — fail closed.`,
+      );
+    }
+    if (claim.agentId !== opts.agentId) {
+      throw new Error(
+        `warpline: admit --claim ${claim.claimId} belongs to agent ${JSON.stringify(claim.agentId)}, not ${JSON.stringify(opts.agentId)} — a claim grades its own author (fail closed).`,
+      );
+    }
+  }
+
   // Lift proposed + resolve attribution OUTSIDE the lock (expensive / selvage-
   // independent). proposed is NOT eagerly persisted — sealState putStates only
   // what actually seals (no .warpline/states litter on a NOOP — Reviewer M4).
@@ -249,6 +323,38 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
     const base = baseId ? store.loadState(baseId) : undefined;
     const selvage = selvageId ? store.loadState(selvageId) : undefined;
 
+    // P2.3 — the claim judgment, attached to whatever result this admit returns.
+    // Reaching withClaim with a breach means the gate PASSED via acceptBreach
+    // (the refusal path returns before any seal) — record the override fact.
+    // Every judgment (breach or not, sealed or not) lands as a sidecar JSONL
+    // row: the calibration-probe stream (§3b duty 2; G5 — never a strand field).
+    let claimEval: ClaimEvaluation | null = null;
+    const withClaim = (r: AdmitResult): AdmitResult => {
+      if (!claim || !claimEval) return r;
+      const accepted = claimEval.breach ? { acceptedBreach: true } : {};
+      recordClaimEvaluation(root, {
+        claimId: claim.claimId,
+        pickId: r.strand?.pickId ?? null,
+        agentId: opts.agentId,
+        breach: claimEval.breach,
+        excess: claimEval.excess,
+        missing: claimEval.missing,
+        ...accepted,
+        ts: now,
+      });
+      return {
+        ...r,
+        claim: {
+          claimId: claim.claimId,
+          claimedSymbols: [...claim.claimedSymbols],
+          breach: claimEval.breach,
+          excess: claimEval.excess,
+          missing: claimEval.missing,
+          ...accepted,
+        },
+      };
+    };
+
     // A SET tip/base that we cannot LOAD is corruption or a regen-gap in the
     // states cache — NOT an empty fabric. Fast-admitting here would seal a fresh
     // genesis and ORPHAN the real history (silent data loss). Fail CLOSED: the
@@ -266,6 +372,11 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
 
     // Genuinely empty fabric (no tip ever sealed) → fast-admit the proposed state.
     if (!base || !selvage) {
+      const genesis = blank('FAST_ADMIT');
+      // A claim on genesis is judged against the blank decision: with no base
+      // there is no computed delta, so agentChanged=[] ⇒ excess=[] (no breach),
+      // missing = the whole claimed set. Recorded like any other evaluation.
+      if (claim) claimEval = evaluateClaim(genesis, claim);
       const treeId = await snapshotState(objStore, opts.ref, cwd, { cwd });
       const strand = sealState(root, store, proposed, {
         parentStateId: selvageId ?? null, actor, intent, gitCommit: oursCommit, now, confidence: 0.8,
@@ -273,13 +384,45 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
         binding: { treeId, gitOid: proposed.treeSha ?? null },
       });
       clearScratch(root, opts.agentId);
-      return { decision: blank('FAST_ADMIT'), sealed: true, proposedStateId: proposed.stateId, strand };
+      return withClaim({ decision: genesis, sealed: true, proposedStateId: proposed.stateId, strand });
     }
 
     const decision = admitDecision(base, proposed, selvage);
 
+    // P2.3 — THE CLAIM GATE (§3b duty 1, the honesty check). Judged strictly
+    // BEFORE any seal so a breach can never silently land. FAIL-SAFE: a breach
+    // HOLDS the admission (refused, unsealed, exact excess/missing surfaced as
+    // the CLAIM-BREACH verdict class) rather than crashing or silently sealing;
+    // acceptBreach is the explicit override — the underlying verdict then
+    // proceeds, with the breach fact recorded (withClaim). The gate reads ONLY
+    // structural fields (symbol sets, localChanged, knots) — never prose (§3d).
+    // HELD takes precedence over KNOT/DANGLE side-work: no knot payload is
+    // persisted for a held admission (re-admit after the claim is squared).
+    if (claim) {
+      claimEval = evaluateClaim(decision, claim, { agentDelta: diff(base, proposed) });
+      if (claimEval.breach && !opts.acceptBreach) {
+        recordClaimEvaluation(root, {
+          claimId: claim.claimId, pickId: null, agentId: opts.agentId,
+          breach: true, excess: claimEval.excess, missing: claimEval.missing, ts: now,
+        });
+        return {
+          decision: { ...decision, status: 'CLAIM-BREACH' },
+          sealed: false,
+          proposedStateId: proposed.stateId,
+          claim: {
+            claimId: claim.claimId,
+            claimedSymbols: [...claim.claimedSymbols],
+            breach: true,
+            excess: claimEval.excess,
+            missing: claimEval.missing,
+            underlyingStatus: decision.status,
+          },
+        };
+      }
+    }
+
     if (decision.status === 'NOOP') {
-      return { decision, sealed: false, proposedStateId: proposed.stateId };
+      return withClaim({ decision, sealed: false, proposedStateId: proposed.stateId });
     }
     if (decision.status === 'FAST_ADMIT') {
       // Incremental snapshot anchored on the tip strand (selvage === base here):
@@ -295,7 +438,7 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
         binding: { treeId, gitOid: proposed.treeSha ?? null },
       });
       clearScratch(root, opts.agentId);
-      return { decision, sealed: true, proposedStateId: proposed.stateId, strand };
+      return withClaim({ decision, sealed: true, proposedStateId: proposed.stateId, strand });
     }
     if (decision.status === 'CLEAN') {
       const fabric = readFabric(wdir);
@@ -307,7 +450,7 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
       // `ours` is the agent's proposal: a WORKTREE proposal has no durable committed
       // tree to merge from → fail CLOSED (unchanged posture).
       if (isWorktree) {
-        return { decision, sealed: false, proposedStateId: proposed.stateId };
+        return withClaim({ decision, sealed: false, proposedStateId: proposed.stateId });
       }
 
       // Resolve base/theirs to byte sources. H1 relaxation (PR-B): a MERGE strand
@@ -318,7 +461,7 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
       const baseInput = resolveMergeInput(baseStrand, baseCommit, objStore);
       const theirsInput = resolveMergeInput(theirsStrand, theirsCommit, objStore);
       if (!baseInput || !theirsInput) {
-        return { decision, sealed: false, proposedStateId: proposed.stateId };
+        return withClaim({ decision, sealed: false, proposedStateId: proposed.stateId });
       }
 
       // Seal a materialized CLEAN merge: pin the result as BOTH binding.treeId and
@@ -335,7 +478,10 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
           merged: true, binding: { treeId: recipe.result, gitOid: null }, merge: recipe,
         });
         clearScratch(root, opts.agentId);
-        return { decision, sealed: true, proposedStateId: proposed.stateId, strand, merged: plan };
+        // P3 GAP-1 honesty labels (additive): classify every changed path by the
+        // tier that governed it, against the merge inputs + the merged result.
+        const coverage = classifyMergePaths(plan.files.keys(), [state, proposed, selvage]);
+        return withClaim({ decision, sealed: true, proposedStateId: proposed.stateId, strand, merged: plan, coverage });
       };
 
       if (baseInput.kind === 'git' && theirsInput.kind === 'git') {
@@ -354,7 +500,7 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
           return sealMerge(mat.state, mat.plan, recipe);
         }
         // The meaning layer said CLEAN but the bytes overlap → surface as a KNOT.
-        return { decision: { ...decision, status: 'KNOT' }, sealed: false, proposedStateId: proposed.stateId, merged: mat.plan };
+        return withClaim({ decision: { ...decision, status: 'KNOT' }, sealed: false, proposedStateId: proposed.stateId, merged: mat.plan });
       }
 
       // RELAXED PATH: at least one side is a merge strand contributing its durable
@@ -385,7 +531,7 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
         return sealMerge(mat.state, mat.plan, recipe);
       }
       // Meaning CLEAN but bytes overlap (or a genuinely unmergeable entry) → KNOT.
-      return { decision: { ...decision, status: 'KNOT' }, sealed: false, proposedStateId: proposed.stateId, merged: mat.plan };
+      return withClaim({ decision: { ...decision, status: 'KNOT' }, sealed: false, proposedStateId: proposed.stateId, merged: mat.plan });
     }
     // KNOT / DANGLE — detection alone relocates the bottleneck (R3): attach the
     // machine-readable resolution payload (forge-spec §3a) so a resolver agent
@@ -433,6 +579,6 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
     } catch {
       /* payload is auxiliary — the KNOT/DANGLE verdict stands without it */
     }
-    return { decision, sealed: false, proposedStateId: proposed.stateId, ...(knotPayloadId ? { knotPayloadId } : {}) };
+    return withClaim({ decision, sealed: false, proposedStateId: proposed.stateId, ...(knotPayloadId ? { knotPayloadId } : {}) });
   });
 }

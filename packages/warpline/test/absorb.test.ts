@@ -14,21 +14,26 @@ describe('absorb', () => {
     const state = await absorb(WORKTREE_REF);
     expect(state.objects.size).toBeGreaterThan(0);
     expect(state.stateId.startsWith('state:v0:')).toBe(true);
-    // Post stage-3a the universe holds BOTH tiers: `.purpose` symbols carry the
-    // `essence:v0:` tag and synthetic code-units carry the algo+compiler-pinned
-    // `essence:v1.1:ts<exact>:` tag. Every object must carry one valid tagged id.
+    // Post stage-3a the universe holds MULTIPLE tiers: `.purpose` symbols carry
+    // the `essence:v0:` tag, synthetic code-units the algo+compiler-pinned
+    // `essence:v1.1:ts<exact>:` tag, and (P3 GAP-1) cfg key-tree units the
+    // `essence:cfg-v1:` tag. Every object must carry one valid tagged id.
     let sawV0 = false;
     let sawCode = false;
+    let sawCfg = false;
     for (const obj of state.objects.values()) {
       const isV0 = obj.contentId.startsWith('essence:v0:');
       const isCode = /^essence:v1\.1:ts[\d.]+:/.test(obj.contentId);
-      expect(isV0 || isCode).toBe(true);
+      const isCfg = obj.contentId.startsWith('essence:cfg-v1:');
+      expect(isV0 || isCode || isCfg).toBe(true);
       if (isV0) sawV0 = true;
       if (isCode) sawCode = true;
+      if (isCfg) sawCfg = true;
     }
-    // This repo has both .purpose components and TS code-units, so both appear.
+    // This repo has .purpose components, TS code-units, AND json/yaml configs.
     expect(sawV0).toBe(true);
     expect(sawCode).toBe(true);
+    expect(sawCfg).toBe(true);
   });
 
   it('absorbing the same ref twice → identical stateId', async () => {

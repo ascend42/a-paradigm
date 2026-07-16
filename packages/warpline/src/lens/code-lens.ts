@@ -88,6 +88,20 @@ export interface CodeUnit {
   references: CodeRef[];
   /** Set when fidelity degraded (unresolved edge / lower tier). Visible marker. */
   reducedFidelity?: boolean;
+  /**
+   * Per-unit essence version-tag override (additive, P3 GAP-1). When absent the
+   * TS default (`CODE_ESSENCE_TAG`) applies; the cfg lens stamps `cfg-v1` so
+   * structured-data essences live in their own content-address namespace.
+   */
+  essenceTag?: string;
+  /**
+   * cfg-lens marker discriminator (additive, P3 GAP-1). Set on the units whose
+   * body is a MARKER rather than lifted meaning: `'file'` (file-presence root),
+   * `'seq'` (sequence-valued key — byte-tier deferral), `'unliftable'` (whole
+   * file fell to the byte tier). Consumed by the #honesty classifier: a path
+   * with ONLY marker units is `byte-decided`, never `meaning-decided`.
+   */
+  cfgMarker?: string;
 }
 
 /**

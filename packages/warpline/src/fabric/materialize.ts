@@ -28,6 +28,7 @@ import {
 import { ObjectStore } from '../warp/object-store.js';
 import { writeMergedTree, restoreTree } from '../warp/snapshot.js';
 import { mergeText } from './merge3.js';
+import { isDerivedArtifact } from '../lens/derived-artifacts.js';
 
 export interface MergeConflict {
   path: string;
@@ -45,6 +46,16 @@ export interface MergePlan {
   /** merged file per CHANGED path (null = deleted in the merge). */
   files: Map<string, MergedFile | null>;
   conflicts: MergeConflict[];
+  /**
+   * DERIVED artifacts (lockfiles, #derived-artifacts) BOTH sides changed
+   * divergently: resolved take-either (OURS — the admitting agent's bytes) and
+   * marked STALE here instead of conflicting — a lockfile is a machine-generated
+   * projection of the manifests, so a byte knot on it is noise; the honest
+   * resolution is "pick one, regenerate from the merged manifests". v1 records
+   * the staleness (typed concession); it does not shell out to a package manager.
+   * Optional so hand-built plans stay valid; both compute fns always set it.
+   */
+  derivedStale?: string[];
 }
 
 /** Entry modes we cannot byte-merge — fail closed rather than corrupt them. */
@@ -107,6 +118,7 @@ export async function computeMerge(
   ]);
   const files = new Map<string, MergedFile | null>();
   const conflicts: MergeConflict[] = [];
+  const derivedStale: string[] = [];
 
   for (const p of changed) {
     const [baseMode, oursMode, theirsMode] = await Promise.all([
@@ -124,6 +136,14 @@ export async function computeMerge(
     const base = await gitShowBuffer(baseRef, p, opts).catch(() => null);
     const ours = await gitShowBuffer(oursRef, p, opts).catch(() => null);
     const theirs = await gitShowBuffer(theirsRef, p, opts).catch(() => null);
+    // DERIVED-ARTIFACT rule (P3 GAP-1): a lockfile both sides changed divergently
+    // NEVER knots — take OURS wholesale (never token-merged: a spliced lockfile
+    // pretends a precision it doesn't have) and mark it STALE for regeneration.
+    if (isDerivedArtifact(p) && !bufEq(ours, theirs) && !bufEq(ours, base) && !bufEq(theirs, base)) {
+      files.set(p, ours === null ? null : { content: ours, mode: oursMode ?? '100644' });
+      derivedStale.push(p);
+      continue;
+    }
     const r = resolveFile(base, ours, theirs);
     if ('reason' in r) {
       conflicts.push({ path: p, reason: r.reason });
@@ -141,7 +161,7 @@ export async function computeMerge(
     }
     files.set(p, { content: r.content, mode: mm.mode });
   }
-  return { files, conflicts };
+  return { files, conflicts, derivedStale: derivedStale.sort() };
 }
 
 export interface MaterializeResult {
@@ -233,6 +253,7 @@ export function computeMergeNative(
 
   const files = new Map<string, MergedFile | null>();
   const conflicts: MergeConflict[] = [];
+  const derivedStale: string[] = [];
 
   for (const p of changed) {
     const bE = base.get(p);
@@ -246,6 +267,13 @@ export function computeMergeNative(
     const b = bE ? store.getBlob(bE.id) : null; // verified read — fails closed on tamper
     const o = oE ? store.getBlob(oE.id) : null;
     const t = tE ? store.getBlob(tE.id) : null;
+    // DERIVED-ARTIFACT rule (P3 GAP-1) — identical to the git path: a lockfile
+    // both sides changed divergently takes OURS wholesale + a STALE marker.
+    if (isDerivedArtifact(p) && !bufEq(o, t) && !bufEq(o, b) && !bufEq(t, b)) {
+      files.set(p, o === null ? null : { content: o, mode: oE?.mode ?? '100644' });
+      derivedStale.push(p);
+      continue;
+    }
     const r = resolveFile(b, o, t);
     if ('reason' in r) {
       conflicts.push({ path: p, reason: r.reason });
@@ -262,7 +290,7 @@ export function computeMergeNative(
     }
     files.set(p, { content: r.content, mode: mm.mode });
   }
-  return { files, conflicts };
+  return { files, conflicts, derivedStale: derivedStale.sort() };
 }
 
 export interface MaterializeNativeResult {

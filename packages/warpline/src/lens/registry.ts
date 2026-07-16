@@ -1,16 +1,18 @@
 /**
  * #lens-registry — the code-lens registry (spec §9).
  *
- * Maps a file extension to the `CodeLens` responsible for it. v1 registers only
- * the TS/TSX lens; the registry is the single seam future per-language lenses
- * plug into without touching `absorb`/`lift-code-units`.
+ * Maps a file extension to the `CodeLens` responsible for it. Registered lenses:
+ * the TS/TSX lens (v1) and the JSON/YAML structured-data lens (#cfg-lens, P3
+ * GAP-1). The registry is the single seam per-language lenses plug into without
+ * touching `absorb`/`lift-code-units`.
  */
 
 import type { CodeLens } from './code-lens.js';
 import { TsLens } from './ts-lens.js';
+import { CfgLens } from './cfg-lens.js';
 
 /** All registered lenses (instantiated once — they are stateless). */
-const LENSES: readonly CodeLens[] = [new TsLens()];
+const LENSES: readonly CodeLens[] = [new TsLens(), new CfgLens()];
 
 /** Extension → lens index, built once from the registered lenses' `extensions`. */
 const BY_EXTENSION: ReadonlyMap<string, CodeLens> = (() => {

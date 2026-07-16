@@ -32,12 +32,23 @@ export interface Justification {
     blastRadius: string[]; // union of getReferencesTo over changed symbols
     danglingRefs: string[];
   };
+  /**
+   * P2.3 (forge-spec §3b, ADDITIVE — G1): a POINTER to the author's pre-declared
+   * claim:v1 (.warpline/claims/<claimId>.json), when the change was proposed
+   * under one. The claim itself (and its grading — the breach/excess/missing
+   * evaluation stream) lives in the G5 sidecar, never inline here; strand/pickId
+   * identity is untouched (the pickId preimage is founder-signed). Absent ⇒ the
+   * justification is byte-identical to the pre-claim schema.
+   */
+  claimId?: string;
   signature: string;
 }
 
 export interface JustifyOptions extends GitOptions {
   /** the branch's live index, for blast-radius computation */
   branchIndex: SymbolIndex;
+  /** P2.3 — the claimId this change was proposed under (additive pointer, §3b). */
+  claimId?: string;
 }
 
 /**
@@ -92,6 +103,7 @@ export async function justify(
       blastRadius,
       danglingRefs: Array.from(danglingRefs).sort(),
     },
+    ...(opts.claimId ? { claimId: opts.claimId } : {}),
   };
 
   const signature = 'unsigned:' + sha256(canonicalSerialize(body as unknown as CanonicalValue));

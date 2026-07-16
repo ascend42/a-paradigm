@@ -185,7 +185,28 @@ export {
   type AdmitDecision,
   type AdmitOptions,
   type AdmitResult,
+  type AdmitClaimReport,
 } from './fabric/admit.js';
+// P2.3 — the claim-scoped propose API (forge-spec §3b): the author's pre-declared
+// claim:v1 (the future OFFER metadata), the honesty-check evaluation, and the
+// calibration-probe sidecar stream (.warpline/claims/).
+export {
+  createClaim,
+  verifyClaim,
+  evaluateClaim,
+  persistClaim,
+  readClaim,
+  claimsDirOf,
+  recordClaimEvaluation,
+  listClaimEvaluations,
+  evaluationsPathOf,
+  CLAIM_SCHEMA,
+  type Claim,
+  type CreateClaimInput,
+  type ClaimEvaluation,
+  type EvaluateClaimOptions,
+  type ClaimEvaluationRow,
+} from './fabric/claim.js';
 // Fabric verify — authenticate the whole PICK-DAG (integrity + chain + binding + anchor).
 export {
   verifyFabric,
@@ -241,6 +262,16 @@ export {
 export { codeSymbol, codeStableKey } from './lens/code-symbol.js';
 export { TsLens, TS_LENS_VERSION } from './lens/ts-lens.js';
 export { lensFor, allLenses } from './lens/registry.js';
+// Structured-data lens (P3 GAP-1) — JSON/YAML key-trees as meaning.
+export { CfgLens, CFG_ESSENCE_TAG } from './lens/cfg-lens.js';
+export { isDerivedArtifact, DERIVED_ARTIFACT_BASENAMES } from './lens/derived-artifacts.js';
+// Per-path merge honesty labels (P3 GAP-1) — "what did meaning govern?"
+export {
+  classifyMergePaths,
+  type MergeCoverage,
+  type CoverageCounts,
+  type PathDecision,
+} from './honesty.js';
 
 // git-exec (read-only primitives)
 export {

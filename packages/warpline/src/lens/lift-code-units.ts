@@ -132,8 +132,11 @@ function toSymbolEntry(unit: CodeUnit): SymbolEntry {
     data: {
       codeEssence: unit.codeEssence,
       codeLocalTargets,
-      essenceTag: CODE_ESSENCE_TAG,
+      // Per-unit tag override (P3 GAP-1): the cfg lens stamps `cfg-v1`; TS units
+      // keep the compiler-pinned default. The tag travels WITH the node.
+      essenceTag: unit.essenceTag ?? CODE_ESSENCE_TAG,
       ...(unit.reducedFidelity ? { reducedFidelity: true } : {}),
+      ...(unit.cfgMarker ? { cfgMarker: unit.cfgMarker } : {}),
     },
     references: localReferenceSymbols(unit),
     referencedBy: [],

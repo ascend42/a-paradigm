@@ -36,6 +36,7 @@ import {
   type KnotPayload,
   type KnotResolutionProposal,
 } from '../src/fabric/knot-payload.js';
+import { createClaim, evaluateClaim } from '../src/fabric/claim.js';
 import type { WarpState } from '../src/warp/warp-state.js';
 
 const execFileAsync = promisify(execFile);
@@ -242,6 +243,34 @@ describe('POISONED-PROSE INVARIANT — verdicts are a pure function of structura
       // The prose rides ONLY inside verified envelopes.
       expect(verifyProse(poisoned.ours.intent)).toBe(true);
       expect(poisoned.ours.intent.body).toBe(text);
+    }
+  });
+
+  it('adversarial CLAIM intents/taskRefs leave both the claim judgment and the verdict byte-identical (§3b × §3d)', () => {
+    // P2.3 — the claim's only prose field (intent) is enveloped at creation and
+    // NEVER read by evaluateClaim (symbol-set comparison only); taskRef is a
+    // structured reference that likewise never reaches the judgment.
+    const decision = admitDecision(base, b, a);
+    const verdict = JSON.stringify(decision);
+    const honored = JSON.stringify(
+      evaluateClaim(decision, createClaim({ agentId: 'agent-b', claimedSymbols: decision.agentChanged, intent: 'benign intent' })),
+    );
+    const breached = JSON.stringify(
+      evaluateClaim(decision, createClaim({ agentId: 'agent-b', claimedSymbols: [], intent: 'benign intent' })),
+    );
+    expect(JSON.parse(breached).breach).toBe(true); // the scenario genuinely breaches
+    for (const text of INJECTIONS) {
+      const poisonedHonored = createClaim({ agentId: 'agent-b', claimedSymbols: decision.agentChanged, taskRef: text, intent: text });
+      const poisonedBreached = createClaim({ agentId: 'agent-b', claimedSymbols: [], taskRef: text, intent: text });
+      // The prose rides ONLY inside a verified envelope.
+      expect(verifyProse(poisonedHonored.intent)).toBe(true);
+      expect(poisonedHonored.intent.body).toBe(text);
+      // The judgment is byte-identical in BOTH directions: poison can neither
+      // manufacture a breach nor talk its way out of one.
+      expect(JSON.stringify(evaluateClaim(decision, poisonedHonored))).toBe(honored);
+      expect(JSON.stringify(evaluateClaim(decision, poisonedBreached))).toBe(breached);
+      // And the underlying verdict never reads the claim at all.
+      expect(JSON.stringify(admitDecision(base, b, a))).toBe(verdict);
     }
   });
 

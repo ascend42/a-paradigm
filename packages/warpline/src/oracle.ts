@@ -35,8 +35,10 @@ import {
   repoRoot,
   worktreeAdd,
   worktreeRemove,
+  changedPaths,
   type GitOptions,
 } from './git/git-exec.js';
+import { classifyMergePaths, type MergeCoverage } from './honesty.js';
 
 export interface OracleRecord {
   schemaVersion: 1;
@@ -97,6 +99,14 @@ export interface OracleRecord {
     verdict: 'CONVERGENT' | 'DIVERGENT';
   };
   justifications: { A: Justification; B: Justification };
+  /**
+   * P3 GAP-1 (G1-additive, schemaVersion unchanged): per-path HONESTY labels over
+   * every path base→A or base→B touched — which tier GOVERNS each (meaning-decided
+   * / byte-decided / derived) + the aggregate counts (#honesty). "What fraction of
+   * this merge did meaning govern?" Present only when both refs are real git refs
+   * (a WORKTREE pseudo-ref has no diffable path inventory). Never a verdict input.
+   */
+  coverage?: MergeCoverage;
 }
 
 export interface OracleOptions extends GitOptions {
@@ -172,6 +182,22 @@ export async function oracle(
   const mergeClean =
     prediction.knots.length === 0 && prediction.dangling.length === 0 && !reality.conflicted;
 
+  // P3 GAP-1 honesty labels (additive): classify every path either side touched.
+  // Real refs only (WORKTREE has no diffable inventory); a coverage failure never
+  // fails the oracle — the labels are presentation, not a verdict input.
+  let coverage: MergeCoverage | undefined;
+  if (branchA !== WORKTREE_REF && branchB !== WORKTREE_REF) {
+    try {
+      const touched = new Set<string>([
+        ...(await changedPaths(base, branchA, { cwd })),
+        ...(await changedPaths(base, branchB, { cwd })),
+      ]);
+      coverage = classifyMergePaths(touched, [aState, bState]);
+    } catch {
+      /* additive — the record stands without coverage */
+    }
+  }
+
   const record: OracleRecord = {
     schemaVersion: 1,
     ts: new Date().toISOString(),
@@ -193,6 +219,7 @@ export async function oracle(
     mergeClean,
     convergence,
     justifications: { A: justA, B: justB },
+    ...(coverage ? { coverage } : {}),
   };
 
   // 7. append to ledger

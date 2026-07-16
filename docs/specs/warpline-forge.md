@@ -265,6 +265,22 @@ forge's OFFER metadata. Constraints:
 - Claims are sealed with the strand (they are the author's signed belief — immutable
   once judged), while their *grading* lives in the sidecar (G5).
 
+**SHIPPED (P2.3, `claim:v1`)** — `packages/warpline/src/fabric/claim.ts` + the admit
+gate in `admit.ts`: `warpline propose --agent <id> --claim <file|json>` content-addresses
+the claim (claimId; intent enveloped per §3d) into `.warpline/claims/`; `admit --claim
+<claimId>` judges the verdict against it. CLAIM-BREACH ships as a first-class
+`AdmitStatus` class (G1-additive), FAIL-SAFE: a breach HOLDS the admit (refused,
+unsealed, exact excess/missing surfaced) and `--accept-breach` is the explicit override
+that seals while recording the breach fact. Excess rule: a changed-but-unclaimed symbol
+counts when DIRECT-changed or when it knots; a ripple-only non-knotting symbol is exempt
+(Merkle-avalanche noise). `missing` (claimed-but-untouched) is recorded, never a breach.
+Every judgment lands in `.warpline/claims/evaluations.jsonl` — the calibration-probe
+stream (duty 2). The perf-scoping duty is RECORDED-ONLY (no decision function narrows by
+claim). v1 posture on the third bullet: the claim is immutable-by-content-address and
+referenced from the Justification (`claimId` pointer) + the evaluation stream (pickId ↔
+claimId), NOT folded into the founder-signed strand/pickId preimage — folding it into
+strand identity is a schema-epoch decision (v3+), not a P2.3 edit.
+
 ### 3c. Verdict JSON (stable, versioned, forge-renderable)
 
 The verdict is today's `AdmitDecision` — `{status: NOOP|FAST_ADMIT|CLEAN|KNOT|DANGLE,
