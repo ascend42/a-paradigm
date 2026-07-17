@@ -195,6 +195,10 @@ $RECYCLE.BIN/
 .warpline/*
 !.warpline/fabric.jsonl
 !.warpline/fabric-legacy.json
+# TRACK the repo config toggle (the R1 shadow-gate opt-in is a versioned,
+# founder-visible switch); shadow telemetry rows (.warpline/shadow/) stay
+# ignored via .warpline/* above — additive local evidence, never pushed.
+!.warpline/config.json
 !.warpline/refs/
 .warpline/refs/*
 !.warpline/refs/selvage

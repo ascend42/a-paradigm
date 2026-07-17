@@ -178,6 +178,22 @@ export interface AdmitOptions {
    * .warpline/grades-escalations.jsonl (G5).
    */
   acceptRisk?: boolean;
+  /**
+   * R1 SHADOW GATE (native-first, loid-loops.md §1 / #shadow-gate): run the FULL
+   * decision pipeline — claim gate, verdict, escalation check, coverage labels,
+   * knot-payload build — but NEVER seal, NEVER move the selvage, NEVER write
+   * fabric/objects/sidecars. Every would-be write becomes a plain return; the
+   * caller (shadowAdmit) records the one telemetry row. The decision FUNCTION
+   * is untouched — shadow only reroutes writes.
+   */
+  shadow?: boolean;
+  /**
+   * A pre-absorbed proposed state (skips the internal absorb of `ref`). Lets the
+   * #pick shadow wiring reuse the state it already lifted — the shadow verdict
+   * then costs pure compute, not a second absorb. `ref` stays the provenance
+   * label and must name the same state.
+   */
+  proposedState?: WarpState;
 }
 
 /**
@@ -312,6 +328,8 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
   const wdir = warplineDirOf(root);
   const store = new WarpStore(root, { diskCache: true });
   const objStore = new ObjectStore(root); // native byte store (M1b bind-on-seal)
+  // R1 shadow gate (#shadow-gate): observe-only — every write below is guarded.
+  const shadow = opts.shadow === true;
 
   // P2.3 — resolve the pre-declared claim BEFORE the lock (read-only sidecar).
   // A named-but-unresolvable or tampered claim fails CLOSED: the caller asked
@@ -335,7 +353,7 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
   // Lift proposed + resolve attribution OUTSIDE the lock (expensive / selvage-
   // independent). proposed is NOT eagerly persisted — sealState putStates only
   // what actually seals (no .warpline/states litter on a NOOP — Reviewer M4).
-  const proposed = await absorb(opts.ref, { cwd });
+  const proposed = opts.proposedState ?? (await absorb(opts.ref, { cwd }));
   const isWorktree = opts.ref === WORKTREE_REF;
   const oursCommit = isWorktree ? null : await revParse(opts.ref, { cwd }).catch(() => null);
   const actor =
@@ -365,16 +383,20 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
     const withClaim = (r: AdmitResult): AdmitResult => {
       if (!claim || !claimEval) return r;
       const accepted = claimEval.breach ? { acceptedBreach: true } : {};
-      recordClaimEvaluation(root, {
-        claimId: claim.claimId,
-        pickId: r.strand?.pickId ?? null,
-        agentId: opts.agentId,
-        breach: claimEval.breach,
-        excess: claimEval.excess,
-        missing: claimEval.missing,
-        ...accepted,
-        ts: now,
-      });
+      // Shadow never pollutes the REAL calibration-probe stream — the judgment
+      // rides the shadow row instead (G5 discipline, observe-only).
+      if (!shadow) {
+        recordClaimEvaluation(root, {
+          claimId: claim.claimId,
+          pickId: r.strand?.pickId ?? null,
+          agentId: opts.agentId,
+          breach: claimEval.breach,
+          excess: claimEval.excess,
+          missing: claimEval.missing,
+          ...accepted,
+          ts: now,
+        });
+      }
       return {
         ...r,
         claim: {
@@ -410,6 +432,10 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
       // there is no computed delta, so agentChanged=[] ⇒ excess=[] (no breach),
       // missing = the whole claimed set. Recorded like any other evaluation.
       if (claim) claimEval = evaluateClaim(genesis, claim);
+      if (shadow) {
+        // Observe-only: the verdict is recorded; the genesis is never sealed.
+        return withClaim({ decision: genesis, sealed: false, proposedStateId: proposed.stateId });
+      }
       const treeId = await snapshotState(objStore, opts.ref, cwd, { cwd });
       const strand = sealState(root, store, proposed, {
         parentStateId: selvageId ?? null, actor, intent, gitCommit: oursCommit, now, confidence: 0.8,
@@ -434,10 +460,12 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
     if (claim) {
       claimEval = evaluateClaim(decision, claim, { agentDelta: diff(base, proposed) });
       if (claimEval.breach && !opts.acceptBreach) {
-        recordClaimEvaluation(root, {
-          claimId: claim.claimId, pickId: null, agentId: opts.agentId,
-          breach: true, excess: claimEval.excess, missing: claimEval.missing, ts: now,
-        });
+        if (!shadow) {
+          recordClaimEvaluation(root, {
+            claimId: claim.claimId, pickId: null, agentId: opts.agentId,
+            breach: true, excess: claimEval.excess, missing: claimEval.missing, ts: now,
+          });
+        }
         return {
           decision: { ...decision, status: 'CLAIM-BREACH' },
           sealed: false,
@@ -480,13 +508,15 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
     // CLEAN path returns — the override is never silent, sealed or not.
     const withEscalation = (r: AdmitResult): AdmitResult => {
       if (!escalation) return r;
-      recordGradeEscalation(root, {
-        agentId: opts.agentId,
-        pickId: r.strand?.pickId ?? null,
-        ...escalation,
-        acceptedRisk: true,
-        ts: now,
-      });
+      if (!shadow) {
+        recordGradeEscalation(root, {
+          agentId: opts.agentId,
+          pickId: r.strand?.pickId ?? null,
+          ...escalation,
+          acceptedRisk: true,
+          ts: now,
+        });
+      }
       return { ...r, escalation: { ...escalation, underlyingStatus: decision.status, acceptedRisk: true } };
     };
 
@@ -494,6 +524,10 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
       return withClaim({ decision, sealed: false, proposedStateId: proposed.stateId });
     }
     if (decision.status === 'FAST_ADMIT') {
+      if (shadow) {
+        // Observe-only: the verdict (and any claim judgment) is the product.
+        return withClaim({ decision, sealed: false, proposedStateId: proposed.stateId });
+      }
       // Incremental snapshot anchored on the tip strand (selvage === base here):
       // the proposed ref usually differs from the tip by one agent's edits, so
       // the snapshot costs the DIFF, not the universe. Unverifiable ⇒ full path.
@@ -530,6 +564,26 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
       const baseInput = resolveMergeInput(baseStrand, baseCommit, objStore);
       const theirsInput = resolveMergeInput(theirsStrand, theirsCommit, objStore);
       if (!baseInput || !theirsInput) {
+        return withClaim(withEscalation({ decision, sealed: false, proposedStateId: proposed.stateId }));
+      }
+
+      // R1 SHADOW (#shadow-gate): compute the merge PLAN + coverage labels
+      // read-only — the git-ref 3-way plan touches only a throwaway temp dir.
+      // A native-input side would require object-store WRITES to normalize
+      // (snapshotRef), so its coverage honestly degrades to absent. A byte
+      // conflict the meaning layer missed still downgrades to KNOT — the shadow
+      // row records the verdict the real gate would have returned.
+      if (shadow) {
+        if (baseInput.kind === 'git' && theirsInput.kind === 'git') {
+          const mat = await materializeMergedState(baseInput.ref, opts.ref, theirsInput.ref, { cwd });
+          if (mat.state && mat.plan.conflicts.length === 0) {
+            const coverage = classifyMergePaths(mat.plan.files.keys(), [mat.state, proposed, selvage]);
+            return withClaim(
+              withEscalation({ decision, sealed: false, proposedStateId: proposed.stateId, merged: mat.plan, coverage }),
+            );
+          }
+          return withClaim({ decision: { ...decision, status: 'KNOT' }, sealed: false, proposedStateId: proposed.stateId, merged: mat.plan });
+        }
         return withClaim(withEscalation({ decision, sealed: false, proposedStateId: proposed.stateId }));
       }
 
@@ -617,8 +671,11 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
       // authority is the object store, and a KNOT proposal was never sealed, so
       // its bytes are not yet content-addressed. Anchored on the tip strand's
       // verified binding — costs the diff, not the universe (T-2026-07-04-003).
-      const oursAnchor = await strandSnapshotAnchor(theirsStrand, objStore, { cwd });
-      const oursTree = await snapshotState(objStore, opts.ref, cwd, { cwd }, oursAnchor);
+      // SHADOW: snapshotState WRITES the object store, so the shadow build runs
+      // with ours unbound (treeId null — the payload shape tolerates it) and the
+      // payload is exercised but NEVER persisted (observe-only).
+      const oursAnchor = shadow ? undefined : await strandSnapshotAnchor(theirsStrand, objStore, { cwd });
+      const oursTree = shadow ? null : await snapshotState(objStore, opts.ref, cwd, { cwd }, oursAnchor);
       const payload = buildKnotPayload({
         decision,
         base,
@@ -643,8 +700,8 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
         baseTreeId: baseStrand?.binding?.treeId ?? null,
         readFile: (treeId, rel) => readFileFromTree(objStore, treeId, rel),
       });
-      persistKnotPayload(root, payload);
-      knotPayloadId = payload.payloadId;
+      if (!shadow) persistKnotPayload(root, payload);
+      knotPayloadId = payload.payloadId; // shadow: built (pipeline proof), not persisted
     } catch {
       /* payload is auxiliary — the KNOT/DANGLE verdict stands without it */
     }

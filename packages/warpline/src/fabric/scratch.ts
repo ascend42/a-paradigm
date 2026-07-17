@@ -30,6 +30,21 @@ export function forkScratch(root: string, agentId: string): { base: string | nul
   return { base };
 }
 
+/**
+ * Write an agent's scratch ref VALUE directly (native-first, I9): the native
+ * write path stores a PICKID here — `warpline fork` mints the ref at the selvage
+ * tip pickId and `propose` advances it to each sealed scratch strand. The legacy
+ * (git-era) flow stores a stateId via forkScratch. Consumers dispatch on the
+ * `pick:`/`state:` prefix; a mismatch fails closed, never silently coerces.
+ */
+export function writeScratchRef(root: string, agentId: string, value: string): void {
+  const p = scratchPath(warplineDirOf(root), agentId);
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  const tmp = `${p}.tmp`;
+  fs.writeFileSync(tmp, value + '\n', 'utf8');
+  fs.renameSync(tmp, p); // atomic publish — no half-written scratch ref
+}
+
 /** The stateId an agent's scratch was forked at, or null if none / unforked. */
 export function readScratch(root: string, agentId: string): string | null {
   try {

@@ -1,7 +1,8 @@
 # Directory-level context for packages/warpline/src/fabric — the canonical
 # component docs live in packages/warpline/.purpose (#strand #fabric #fabric-dag
 # #fabric-refs #seal #pick #admit #resolve #grade #fabric-verify #anchor
-# #backfill #restore #fabric-lock #hook #scratch #materialize).
+# #backfill #restore #fabric-lock #hook #scratch #materialize #warpline-config
+# #shadow-gate #native-write-path).
 name: fabric
 description: >-
   The Warpline fabric — the native, git-independent WRITE layer: the append-only
@@ -9,11 +10,15 @@ description: >-
   epochs (pick:v0 self-hash → pick:v2 linear chain → pick:v3 position-free DAG
   identity, docs/specs/warpline-v3-identity.md), the derived DAG index (dag.ts),
   pickId refs with per-ref CAS (refs.ts), seal/pick/admit/resolve write paths,
-  calibration grading, epoch anchoring, verify, and git-absent restore.
+  calibration grading, epoch anchoring, verify, git-absent restore, the R1
+  shadow gate (config.ts/shadow.ts — observe-only admit verdicts), and the
+  phase-0 native write path (native.ts — fork/propose/admit/resolve, no git).
 context:
   - "v3 identity (V3.1): pickId = H(parents + content); NO ledger position; buildStrandV3 is the only v3 constructor; sealed v3 bytes are final"
   - "refs (V3.2): refs/heads/<name> hold pickIds; migrateSelvageToRefs is the ONE-TIME founder-visible migration — never automatic"
   - "coexistence invariant: this layer writes ONLY under .warpline/, never the user's git HEAD/index/worktree"
+  - "native-first R1 (shadow.ts): shadow admits are observe-only — the ONLY write is one row in .warpline/shadow/verdicts.jsonl; opt-in via .warpline/config.json shadowGate"
+  - "native-first phase 0 (native.ts): propose seals v3 SCRATCH strands; admit weaves via materializeMergedStateNative only; the git-era seal path stays v2 until the founder-visible cutover"
 components:
   fabric:
     description: >-

@@ -13,6 +13,12 @@
 `admit --shadow` on our own repo: records verdicts, never blocks. Starts the organic evidence
 clock (fabric today: 35 strands, ALL human auto-seals, 0 agent strands — every loop begins at
 zero). Feeds organic-K3, HELD precision, and the friction baseline before any cutover risk.
+> **[BUILT 2026-07-17, T-2026-07-17-006 / Kit]** `admit --shadow` + `AdmitOptions.shadow`
+> shipped (#shadow-gate, packages/warpline/src/fabric/shadow.ts); rows →
+> `.warpline/shadow/verdicts.jsonl` (shadowVerdict:v1). Hook-path wiring: `.warpline/
+> config.json` `shadowGate:true` (#warpline-config) makes every pick/auto-seal record the
+> observe-only verdict — flipped ON for this repo, first live row recorded. Zero-mutation
+> invariant pinned in test/shadow-admit.test.ts.
 
 **PHASE 0 (~1–2wk) — native write path, git-absent.**
 The keystone inversion (T-030's successor): worktree→pick with no git anywhere —
@@ -21,6 +27,15 @@ claim-attached) before judgment; admit weaves scratch-tip × selvage; on CLEAN t
 restores merged bytes back into the agent worktree. Every step append-or-CAS. Pulls forward
 v3.3 (seal cutover to pick:v3 + the v2-epoch anchor). Exit test: full loop green with no `.git`.
 Inversion list I1–I12 (arky-architecture.md §2) is the work manifest.
+> **[FIRST SLICE BUILT 2026-07-17, T-2026-07-17-006 / Kit]** #native-write-path
+> (packages/warpline/src/fabric/native.ts + CLI `fork` / `propose --native` / `admit
+> --native` / `resolve --native`): fork mints scratch refs at the selvage pickId (I9);
+> propose SEALS v3 scratch strands from the worktree (snapshotDir → absorb-from-store I2 →
+> buildStrandV3 bind-on-seal, git-null provenance I4, claim-attached); admit weaves via
+> materializeMergedStateNative ONLY (I6) with CLEAN write-back restore; resolveNative seals
+> the council weave. Exit test green: test/native-loop-no-git.test.ts (fork→propose→admit→
+> KNOT→payload→resolve→restore, no `.git` anywhere, pure-v3 DAG verifies). NOT yet: I5
+> incremental index, daemon verbs (phase 1), live-selvage v3 cutover (deliberately held).
 
 **PHASE 1 (~2wk) — the solo daemon + THE VALVE. → Rung R2 (mixed mode).**
 Home-fabric model: one symmetric `warplined`; loopback/unix socket IS the solo server (Aegis

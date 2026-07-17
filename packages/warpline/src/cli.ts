@@ -41,6 +41,13 @@ import { installHook, uninstallHook, hookStatus } from './fabric/hook.js';
 import { forkScratch } from './fabric/scratch.js';
 import type { Knot } from './predict.js';
 import { admit, type AdmitResult } from './fabric/admit.js';
+import { shadowAdmit } from './fabric/shadow.js';
+import {
+  forkNative,
+  proposeNative,
+  admitNative,
+  resolveNative,
+} from './fabric/native.js';
 import { createClaim, persistClaim, type CreateClaimInput } from './fabric/claim.js';
 import { resolveKnot } from './fabric/resolve.js';
 import { readKnotPayload, type KnotPayload, type ContestedUnit } from './fabric/knot-payload.js';
@@ -404,18 +411,73 @@ program
   });
 
 program
+  .command('fork')
+  .description('NATIVE-FIRST (phase 0): mint the agent\'s scratch ref at the current selvage pickId (base is a pickId, forever — I9). With --into, restore the base tree into the agent\'s fresh worktree (git absent).')
+  .argument('<agentId>', 'the agent identity owning the scratch ref')
+  .option('--into <dir>', 'restore the selvage tree into this directory (the agent worktree)')
+  .option('--json', 'emit the fork result as JSON')
+  .action(async (agentId: string, options: { into?: string; json?: boolean }) => {
+    try {
+      const root = await repoRoot().catch(() => process.cwd());
+      const result = forkNative(root, agentId, { into: options.into ? path.resolve(options.into) : undefined });
+      if (options.json) {
+        process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+      } else {
+        const lines: string[] = [];
+        lines.push(`FORK  scratch ref minted for ${agentId}`);
+        lines.push(`base      ${result.base ?? '(none — empty fabric; genesis propose next)'}`);
+        if (result.restoredEntries !== undefined) lines.push(`restored  ${result.restoredEntries} entr${result.restoredEntries === 1 ? 'y' : 'ies'} → ${options.into}`);
+        process.stdout.write(lines.join('\n') + '\n');
+      }
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+program
   .command('propose')
   .description("Register a pre-declared CLAIM (claim:v1, forge-spec §3b) — the agent's belief about what its change touches, declared BEFORE admission. Persists to .warpline/claims/ and prints the claimId; pass it to `admit --claim` so the verdict is judged against the claim (honesty check + calibration probe). The claim is recorded, never used to scope computation.")
   .requiredOption('--agent <id>', 'the declaring agent (the calibration probe is per-agent)')
   .requiredOption('--claim <json>', 'the claim body: a path to a .json file, or inline JSON — {claimedSymbols: string[], intent: string, taskRef?, claimedContractDelta?, confidence?}')
-  .option('--json', 'emit the full persisted claim:v1 as JSON')
-  .action(async (options: { agent: string; claim: string; json?: boolean }) => {
+  .option('--native', 'NATIVE-FIRST (phase 0): ALSO seal a v3 SCRATCH strand from the worktree — snapshot (native walk) → absorb from the store → bind-on-seal; advances only the agent\'s scratch ref, git absent')
+  .option('--worktree <dir>', 'the worktree to seal from (--native; default: the repo root)')
+  .option('-m, --intent <message>', 'the proposal intent (--native; default: the claim\'s intent text)')
+  .option('--as <actor>', 'actor identity (--native; default: the agent id)')
+  .option('--json', 'emit the result as JSON')
+  .action(async (options: { agent: string; claim: string; native?: boolean; worktree?: string; intent?: string; as?: string; json?: boolean }) => {
     try {
       const root = await repoRoot().catch(() => process.cwd());
       const raw = options.claim.trimStart().startsWith('{')
         ? options.claim
         : await fs.readFile(path.resolve(options.claim), 'utf8');
       const body = JSON.parse(raw) as Omit<CreateClaimInput, 'agentId'>;
+      if (options.native) {
+        const result = await proposeNative(root, {
+          worktree: options.worktree ? path.resolve(options.worktree) : root,
+          agentId: options.agent,
+          intent: options.intent ?? body.intent,
+          actor: options.as,
+          claim: body,
+        });
+        if (options.json) {
+          process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+        } else if (result.noop) {
+          process.stdout.write(
+            `PROPOSE  ${options.agent}  →  no-op (meaning unchanged vs the scratch base)\n` +
+              (result.claimId ? `claimId   ${result.claimId}\n` : ''),
+          );
+        } else {
+          const lines: string[] = [];
+          lines.push(`PROPOSE  ${options.agent}  →  scratch strand SEALED (durable before judgment)`);
+          lines.push(`pick      ${result.strand!.pickId}`);
+          lines.push(`state     ${short(result.stateId)}   tree ${short(result.treeId)}`);
+          lines.push(`base      ${result.base ?? '(genesis)'}`);
+          if (result.claimId) lines.push(`claimId   ${result.claimId}`);
+          lines.push(`          → warpline admit ${options.agent} --native${result.claimId ? ` --claim ${result.claimId}` : ''}`);
+          process.stdout.write(lines.join('\n') + '\n');
+        }
+        return;
+      }
       const claim = createClaim({ ...body, agentId: options.agent });
       persistClaim(root, claim);
       if (options.json) {
@@ -443,10 +505,56 @@ program
   .option('--claim <claimId>', 'judge this admission against a pre-declared claim (see `warpline propose`) — a breach HOLDS the admit (CLAIM-BREACH)')
   .option('--accept-breach', 'explicit override: seal the underlying verdict despite a claim breach; the breach fact is recorded in .warpline/claims/evaluations.jsonl')
   .option('--accept-risk', 'explicit override: seal despite a trust-floor HELD (low graded survival on a touched symbol); the override is recorded in .warpline/grades-escalations.jsonl')
+  .option('--shadow', 'R1 SHADOW GATE (observe-only): run the full decision pipeline, seal NOTHING, and append one row to .warpline/shadow/verdicts.jsonl — the organic evidence clock')
+  .option('--native', 'NATIVE-FIRST (phase 0): weave the agent\'s SEALED scratch strand × the selvage, git absent — CLEAN restores the merged bytes back into the worktree')
+  .option('--worktree <dir>', 'the agent worktree for the --native CLEAN write-back (default: the repo root)')
   .option('--json', 'emit the full AdmitResult as JSON')
-  .action(async (agentId: string, options: { ref?: string; claim?: string; acceptBreach?: boolean; acceptRisk?: boolean; json?: boolean }) => {
+  .action(async (agentId: string, options: { ref?: string; claim?: string; acceptBreach?: boolean; acceptRisk?: boolean; shadow?: boolean; native?: boolean; worktree?: string; json?: boolean }) => {
     try {
       const root = await repoRoot().catch(() => process.cwd());
+      if (options.shadow && options.native) {
+        process.stderr.write('warpline: admit --shadow and --native are mutually exclusive (the shadow gate rides the git-era seal path at R1)\n');
+        process.exit(1);
+      }
+      if (options.shadow) {
+        const { result, row } = await shadowAdmit(root, {
+          cwd: root,
+          agentId,
+          ref: options.ref ?? WORKTREE_REF,
+          ...(options.claim ? { claim: options.claim } : {}),
+          ...(options.acceptBreach ? { acceptBreach: true } : {}),
+          ...(options.acceptRisk ? { acceptRisk: true } : {}),
+        });
+        if (options.json) {
+          process.stdout.write(JSON.stringify({ shadow: true, row, result }, null, 2) + '\n');
+        } else {
+          process.stdout.write(`SHADOW  observe-only — nothing sealed, selvage unmoved\n`);
+          printAdmit(agentId, result);
+          process.stdout.write(
+            `shadow    ${row.status}${row.confidence ? ` (${row.confidence})` : ''}  wouldSeal=${row.wouldSeal}  ${row.durationMs}ms\n` +
+              `          → row appended to .warpline/shadow/verdicts.jsonl\n`,
+          );
+        }
+        return;
+      }
+      if (options.native) {
+        const result = await admitNative(root, {
+          worktree: options.worktree ? path.resolve(options.worktree) : root,
+          agentId,
+          ...(options.claim ? { claim: options.claim } : {}),
+          ...(options.acceptBreach ? { acceptBreach: true } : {}),
+          ...(options.acceptRisk ? { acceptRisk: true } : {}),
+        });
+        if (options.json) {
+          process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+        } else {
+          printAdmit(agentId, result);
+          if (result.sealed && result.restoredEntries !== undefined) {
+            process.stdout.write(`restore   merged bytes written back to the worktree (${result.restoredEntries} entries, git absent)\n`);
+          }
+        }
+        return;
+      }
       const result = await admit(root, {
         cwd: root,
         agentId,
@@ -525,17 +633,45 @@ program
   .description("KNOT COUNCIL — seal a human resolution of a genuine conflict. Records WHO decided, WHY, and what was contended on the strand (the reasoning git's merge commit can't keep), advances the selvage, and clears the scratch.")
   .argument('<agentId>', 'the agent whose conflicting admission is being resolved')
   .requiredOption('-m, --reason <why>', 'why it was resolved this way (the accountability record)')
-  .requiredOption('--ref <ref>', 'the human-resolved state to seal (a git ref or WORKTREE)')
-  .option('--by <who>', 'who made the call (default: git user.name)')
+  .option('--ref <ref>', 'the human-resolved state to seal (a git ref or WORKTREE; required unless --native)')
+  .option('--by <who>', 'who made the call (default: git user.name; --native: the agent id)')
   .option('--ours <ref>', 'the original conflicting ref, to record the precise contended set')
+  .option('--native', 'NATIVE-FIRST (phase 0): seal the resolution from --worktree as a v3 weave, git absent (the sealed scratch strand names the contended set for free)')
+  .option('--worktree <dir>', 'the worktree holding the resolved bytes (--native; default: the repo root)')
   .option('--json', 'emit the full ResolveResult as JSON')
   .action(
     async (
       agentId: string,
-      options: { reason: string; ref: string; by?: string; ours?: string; json?: boolean },
+      options: { reason: string; ref?: string; by?: string; ours?: string; native?: boolean; worktree?: string; json?: boolean },
     ) => {
       try {
         const root = await repoRoot().catch(() => process.cwd());
+        if (options.native) {
+          const result = await resolveNative(root, {
+            worktree: options.worktree ? path.resolve(options.worktree) : root,
+            agentId,
+            reason: options.reason,
+            decidedBy: options.by,
+          });
+          if (options.json) {
+            process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+          } else {
+            const r = result.resolution;
+            const lines: string[] = [];
+            lines.push(`RESOLVE  ${agentId}  →  sealed (native weave ${short(result.strand.pickId)})`);
+            lines.push(`decidedBy ${r.decidedBy}`);
+            lines.push(`reason    ${r.reason}`);
+            lines.push(`contended ${r.contended.join(', ') || '(none recorded)'}`);
+            lines.push(`resolved  ${r.resolvedSymbols.join(', ') || '(no symbols changed vs tip)'}`);
+            lines.push(`selvage   advanced to ${short(result.strand.stateId)}`);
+            process.stdout.write(lines.join('\n') + '\n');
+          }
+          return;
+        }
+        if (!options.ref) {
+          process.stderr.write('warpline: resolve needs --ref <ref> (or --native with --worktree)\n');
+          process.exit(1);
+        }
         const result = await resolveKnot(root, {
           cwd: root,
           agentId,
@@ -849,11 +985,11 @@ function printAdmit(agentId: string, r: AdmitResult): void {
   if (d.status === 'CLEAN') {
     lines.push(`verdict   CLEAN to admit (concurrent edits commute in meaning — git may conflict on bytes)`);
     lines.push(`confidence ${d.confidence}${d.confidence === 'independent' ? '  (⚠ disjoint sets — autoClean may hide a cross-symbol semantic conflict; false-AUTOFOLD gate)' : '  (dependency-adjacent — trustworthy)'}`);
-    if (r.sealed && r.strand) lines.push(`  → MERGED + sealed (seq ${r.strand.seq}); selvage advanced to ${short(r.strand.stateId)}`);
+    if (r.sealed && r.strand) lines.push(`  → MERGED + sealed (${strandTag(r.strand)}); selvage advanced to ${short(r.strand.stateId)}`);
     else lines.push('  (not sealed — needs git refs to materialize; commit then admit)');
   } else if (d.status === 'FAST_ADMIT') {
     lines.push('verdict   FAST_ADMIT — selvage has not advanced; the proposed state admits directly');
-    if (r.sealed && r.strand) lines.push(`  → sealed (seq ${r.strand.seq}); selvage advanced to ${short(r.strand.stateId)}`);
+    if (r.sealed && r.strand) lines.push(`  → sealed (${strandTag(r.strand)}); selvage advanced to ${short(r.strand.stateId)}`);
   } else if (d.status === 'KNOT') {
     lines.push(`verdict   KNOT — a human DECIDE is required (NOT auto-merged)`);
     const { direct, ripple } = partitionKnots(d.knots);
@@ -1327,6 +1463,11 @@ function partitionKnots(knots: Knot[]): { direct: Knot[]; ripple: Knot[] } {
 /** The collapsed ripple count line (shared wording across surfaces). */
 function rippleLine(n: number, indent: string): string {
   return `${indent}+${n} ripple-reachable symbol${n === 1 ? '' : 's'} (essence transitivity)`;
+}
+
+/** Human tag for a sealed strand: v1/v2 show seq; v3 (position-free) shows the pickId. */
+function strandTag(s: Strand): string {
+  return s.seq !== undefined ? `seq ${s.seq}` : short(s.pickId);
 }
 
 function short(id: string): string {

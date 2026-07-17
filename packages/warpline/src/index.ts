@@ -248,6 +248,43 @@ export type { EpochAnchor } from './fabric/strand.js';
 // Restore (M1c) — reconstruct a working tree from the native store with git ABSENT.
 export { resolveSelector, type SelectorResolution } from './fabric/select.js';
 export { restore, type RestoreOptions, type RestoreResult } from './fabric/restore.js';
+// NATIVE-FIRST R1 (#shadow-gate + #warpline-config) — observe-only admit verdicts
+// (the organic evidence clock) + the per-repo config toggle that opts them in.
+export { readWarplineConfig, configPathOf, type WarplineConfig } from './fabric/config.js';
+export {
+  shadowAdmit,
+  appendShadowVerdict,
+  readShadowVerdicts,
+  shadowDirOf,
+  shadowVerdictsPathOf,
+  SHADOW_VERDICT_SCHEMA,
+  type ShadowVerdictRow,
+  type ShadowAdmitResult,
+} from './fabric/shadow.js';
+// NATIVE-FIRST phase 0 (#native-write-path, arky-architecture.md §2.1 keystone) —
+// fork → propose-seals-a-scratch-strand → admit-weaves → restore, git absent.
+export { writeScratchRef } from './fabric/scratch.js';
+export {
+  forkNative,
+  proposeNative,
+  admitNative,
+  resolveNative,
+  absorbTree,
+  scratchRefName,
+  type ForkNativeOptions,
+  type ForkNativeResult,
+  type ProposeNativeOptions,
+  type ProposeNativeResult,
+  type AdmitNativeOptions,
+  type AdmitNativeResult,
+  type ResolveNativeOptions,
+  type ResolveNativeResult,
+} from './fabric/native.js';
+export {
+  computeMergeNative,
+  materializeMergedStateNative,
+  type MaterializeNativeResult,
+} from './fabric/materialize.js';
 
 // Oracle
 export { oracle, type OracleRecord, type OracleOptions } from './oracle.js';

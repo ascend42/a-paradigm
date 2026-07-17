@@ -32,6 +32,8 @@ import { gitUserName, revParse, commitSubject, commitAuthor } from '../git/git-e
 import { warplineDirOf, readSelvage, readFabric } from './fabric.js';
 import { sealState } from './seal.js';
 import { withFabricLock } from './lock.js';
+import { readWarplineConfig } from './config.js';
+import { shadowAdmit } from './shadow.js';
 import type { Strand } from './strand.js';
 
 export interface RecordPickOptions {
@@ -73,6 +75,26 @@ export async function recordPick(root: string, opts: RecordPickOptions): Promise
 
   // 1. Lift the current meaning (no lock — this is the expensive step).
   const current = await absorb(ref, { cwd });
+
+  // R1 SHADOW GATE (#shadow-gate; roadmap-native-first "START IMMEDIATELY",
+  // loid-loops.md §1): when `.warpline/config.json` sets shadowGate:true, every
+  // pick — including the post-commit auto-seal #hook path — ALSO records the
+  // observe-only admit verdict of this state vs the PRE-seal selvage, reusing
+  // the state just lifted (pure compute, no second absorb). This starts the
+  // organic evidence clock. FAIL-SAFE: shadow is telemetry — a shadow failure
+  // (corrupt config, decision crash) must never block or fail the seal path.
+  try {
+    if (readWarplineConfig(root).shadowGate === true) {
+      await shadowAdmit(root, {
+        cwd,
+        agentId: opts.agentId ?? 'auto-seal',
+        ref,
+        proposedState: current,
+      });
+    }
+  } catch {
+    /* observe-only — never break a seal over telemetry */
+  }
 
   // Attribution + intent are independent of the selvage — resolve BEFORE locking
   // to keep the critical section short. For a real ref, derive from its git log
