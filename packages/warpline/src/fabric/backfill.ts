@@ -22,6 +22,8 @@ import { findAnchor } from './anchor.js';
 import { reproducesUnderKnownRule, computeLegacyBodyHash, type Strand } from './strand.js';
 import { ObjectStore } from '../warp/object-store.js';
 import { snapshotRef, type SnapshotAnchor } from '../warp/snapshot.js';
+import { treeEntryMode } from '../git/git-exec.js';
+import { STAKE_MARKER } from './stake-guard.js';
 
 /**
  * Would a binding-stamped strand still pass rewriteFabric's identity guard? Binding is
@@ -95,6 +97,17 @@ export async function backfillV1Bindings(root: string, opts: { cwd?: string } = 
     const commit = s.provenance.gitCommit;
     if (!commit) {
       unbound.push({ seq: s.seq ?? -1, reason: 'provenance.gitCommit is null (sealed pre-coexistence) — permanently unrestorable' });
+      continue;
+    }
+    // S1 (checkpoint valve): a stake commit is never input — a provenance commit
+    // whose tree carries the .warpline-stake marker stays unbound rather than
+    // laundering the one-way valve into an import path.
+    const markerMode = await treeEntryMode(commit, STAKE_MARKER, { cwd }).catch(() => null);
+    if (markerMode !== null) {
+      unbound.push({
+        seq: s.seq ?? -1,
+        reason: `provenance commit ${commit.slice(0, 12)} carries the ${STAKE_MARKER} marker (a stake) — stakes are never input (S1); left unbound`,
+      });
       continue;
     }
     try {

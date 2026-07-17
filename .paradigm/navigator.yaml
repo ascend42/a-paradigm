@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-07-17T19:41:50.278Z'
+generated: '2026-07-17T22:30:21.231Z'
 structure: {}
 key_files:
   config:
@@ -508,6 +508,9 @@ symbols:
   '#purpose-component-materialize': /Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose
   '#purpose-component-hook': /Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose
   '#purpose-component-warpline-config': /Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose
+  '#purpose-component-stake': /Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose
+  '#purpose-component-stake-guard': /Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose
+  '#purpose-component-stake-git': /Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose
   '#purpose-component-shadow-gate': /Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose
   '#purpose-component-native-write-path': /Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose
   '#purpose-component-oracle': /Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose
@@ -1290,6 +1293,7 @@ symbols:
   '#purpose-ref-component-repo-lock.': /Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose
   '#purpose-ref-component-code': /Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose
   '#purpose-ref-component-ordinal': /Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose
+  '#purpose-ref-component-cfg': /Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose
   '#purpose-ref-component-fabric-lock.': /Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose
   '#purpose-ref-component-admit.': /Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose
   ~purpose-ref-aspect-yaml-config-loading: /Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose
@@ -1991,6 +1995,9 @@ symbolsByComponentType:
     - '#materialize'
     - '#hook'
     - '#warpline-config'
+    - '#stake'
+    - '#stake-guard'
+    - '#stake-git'
     - '#shadow-gate'
     - '#native-write-path'
     - '#oracle'

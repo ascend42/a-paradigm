@@ -19,6 +19,7 @@
 import { loadLiveGraph } from '@a-company/premise-core';
 import { buildWarpState, type WarpState } from './warp/warp-state.js';
 import { liftCodeUnits, injectCodeUnits } from './lens/lift-code-units.js';
+import { assertNotStakeInput } from './fabric/stake-guard.js';
 import {
   materializeTree,
   releaseTree,
@@ -39,6 +40,12 @@ export interface AbsorbOptions extends GitOptions {
  */
 export async function absorb(ref: string, opts: AbsorbOptions = {}): Promise<WarpState> {
   const cwd = opts.cwd ?? process.cwd();
+
+  // S1 (checkpoint valve, stake-guard.ts): a stake is a ONE-WAY export — a
+  // worktree carrying the .warpline-stake marker, a ref in the stake namespace,
+  // or a commit whose tree carries the marker is NEVER absorbed as input. One
+  // choke point covers pick (and therefore the auto-seal hook) as well.
+  await assertNotStakeInput(ref, cwd, ref === WORKTREE_REF);
 
   if (ref === WORKTREE_REF) {
     const graph = await loadLiveGraph(cwd);

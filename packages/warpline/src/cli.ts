@@ -58,6 +58,9 @@ import { listRefs, heads, migrateSelvageToRefs } from './fabric/refs.js';
 import { attestFabric } from './fabric/anchor.js';
 import { backfillV1Bindings } from './fabric/backfill.js';
 import { restore, type RestoreResult } from './fabric/restore.js';
+import { stake, stakeRecover, type StakeResult, type StakeRecoverResult } from './fabric/stake.js';
+import { STAKE_MARKER } from './fabric/stake-guard.js';
+import { existsSync } from 'node:fs';
 import { repoRoot, gitPath } from './git/git-exec.js';
 
 // The shared .purpose parser (library code, purpose/core/aggregator) console.warns
@@ -321,6 +324,15 @@ program
         `${root}/.git/hooks/post-commit`,
       );
       if (action === 'install') {
+        // S1 (checkpoint valve): the auto-seal hook refuses to INSTALL where the
+        // stake marker is present — this worktree is a one-way checkpoint state.
+        if (existsSync(path.join(root, STAKE_MARKER))) {
+          process.stderr.write(
+            `warpline: refusing to install the auto-seal hook — a ${STAKE_MARKER} marker is present at ${root} (a stake reset state; S1). ` +
+              `Run \`warpline stake recover <stakeCommit>\` first.\n`,
+          );
+          process.exit(1);
+        }
         const r = installHook(hookPath);
         const verb = r.created ? 'created' : r.refreshed ? 'refreshed' : 'appended to existing hook';
         process.stdout.write(
@@ -963,6 +975,75 @@ refs
       fail(err);
     }
   });
+
+const stakeCmd = program
+  .command('stake')
+  .description(
+    'THE CHECKPOINT VALVE (one-way warpline→git; T-2026-07-17-001). Export a SEALED fabric state as ONE git commit on a DEDICATED stake branch — first-parent checkpoints only, machine trailer only, never the human\'s working branch, never sidecar/trust data. Default OFF: requires .warpline/config.json {"stake":{"enabled":true,"refs":["selvage"]}}. Every invocation is audited (.warpline/stakes/audit.jsonl).',
+  );
+
+stakeCmd
+  .command('cut [selector]', { isDefault: true, hidden: true })
+  .description('Cut a stake of an allowlisted native ref (default: selvage). The tree is materialized from the object store, deny-list audited, recompute-verified (refuse on any mismatch), then committed with the .warpline-stake marker.')
+  .option('--json', 'emit the stake result as JSON')
+  .action(async (selector: string | undefined, options: { json?: boolean }) => {
+    try {
+      const root = await repoRoot().catch(() => process.cwd());
+      const result = await stake(root, { selector });
+      if (options.json) {
+        process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+      } else {
+        printStake(result);
+      }
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+stakeCmd
+  .command('recover <commit>')
+  .description('S5 re-entry after `git reset --hard <stake>`: verify the reset tree hashes to the staked binding.treeId, then MOVE refs/heads/selvage to the staked pick — a ref move under the fabric lock, never an import, never a new strand. Post-recover edits seal normally, parented on the staked pick.')
+  .option('--json', 'emit the recover result as JSON')
+  .action(async (commit: string, options: { json?: boolean }) => {
+    try {
+      const root = await repoRoot().catch(() => process.cwd());
+      const result = await stakeRecover(root, commit);
+      if (options.json) {
+        process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+      } else {
+        printStakeRecover(result);
+      }
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+function printStake(r: StakeResult): void {
+  const lines: string[] = [];
+  if (r.action === 'skipped') {
+    lines.push(`STAKE  skipped — refs/heads/${r.branch} tip already carries this sealed state (idempotent)`);
+  } else {
+    lines.push(`STAKE  ${r.ref}  →  refs/heads/${r.branch}`);
+  }
+  lines.push(`pick      ${r.pickId}`);
+  lines.push(`state     ${short(r.stateId)}`);
+  lines.push(`tree      ${short(r.treeId)}`);
+  lines.push(`commit    ${r.gitCommit}${r.parent ? `  (parent ${r.parent.slice(0, 12)} — first-parent chain)` : '  (first stake on this branch)'}`);
+  if (r.gitTreeOid) lines.push(`git tree  ${r.gitTreeOid}  (recompute-verified, S3)`);
+  lines.push(`audited   ${r.auditPath}`);
+  process.stdout.write(lines.join('\n') + '\n');
+}
+
+function printStakeRecover(r: StakeRecoverResult): void {
+  const lines: string[] = [];
+  lines.push(`STAKE RECOVER  ${r.gitCommit.slice(0, 12)}  →  refs/heads/selvage re-pointed (a ref move, never an import)`);
+  lines.push(`pick      ${r.pickId}`);
+  lines.push(`state     ${short(r.stateId)}`);
+  lines.push(`tree      ${short(r.treeId)}  (worktree recompute-verified against the fabric binding)`);
+  if (r.previous) lines.push(`previous  ${short(r.previous)}`);
+  lines.push('→ new strands seal normally from here, parented on the staked pick.');
+  process.stdout.write(lines.join('\n') + '\n');
+}
 
 function printRestore(r: RestoreResult): void {
   const lines: string[] = [];

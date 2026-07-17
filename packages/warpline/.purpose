@@ -1100,14 +1100,90 @@ components:
     description: >-
       Per-repo engine toggles, `.warpline/config.json` (NATIVE-FIRST R1;
       .paradigm/research/warpline-native-first/roadmap-native-first.md). OPT-IN
-      switches only — defaults never change because a config exists. v1 carries
-      exactly one key: shadowGate (default false) — when true, every #pick also
-      records the #shadow-gate observe-only verdict. A missing config is the
-      empty config; a MALFORMED config throws (a corrupt toggle file must not
-      silently read as "everything off") — the seal path catches (fail-safe),
-      interactive callers surface it.
+      switches only — defaults never change because a config exists. Keys:
+      shadowGate (default false) — when true, every #pick also records the
+      #shadow-gate observe-only verdict; and stake (default: valve OFF) — the
+      #stake checkpoint valve's S4 toggle {enabled, refs allowlist, branch,
+      repo, author}. The leakage deny-list is deliberately NOT here (D5:
+      constitution-grade frozen constant in #stake-guard, never a config flag).
+      A missing config is the empty config; a MALFORMED config throws (a
+      corrupt toggle file must not silently read as "everything off") — the
+      seal path catches (fail-safe), interactive callers surface it.
     type: module
     tags: [warpline, native-first]
+
+  stake:
+    description: >-
+      THE CHECKPOINT VALVE (Phase 1 native-first, T-2026-07-17-001, founder
+      ask; arky-architecture.md §3 + aegis-security.md §3). `warpline stake`
+      exports ONE sealed fabric state as ONE git commit on a DEDICATED stake
+      branch (default warpline-stakes; working-branch names refused) — git's
+      demoted role: a familiar, read-only checkpoint shelf. D3: stakes are a
+      FIRST-PARENT LINEARIZATION (each stake's single parent = the previous
+      stake commit; git receives checkpoints, never the weave topology).
+      Safeguards: S1 committed `.warpline-stake` marker + trailer-only message
+      (`warpline-stake` + PickId/StateId/TreeId/Schema, zero prose); S2
+      allowlist-by-materialization — the tree is built by restoreTree from the
+      bound object store into a clean temp dir, then the post-build audit walks
+      the built bytes against the #stake-guard deny-list + untrusted-prose
+      content markers (nothing touches the git odb until the audit passes); S3
+      verify-or-refuse — built tree re-hashed from disk must equal BOTH
+      binding.treeId and the shadow gitOid RECOMPUTED from the store (never
+      read from s.binding.gitOid), and `rev-parse <commit>^{tree}` must equal
+      the pure-TS expectation before the ref CAS-advances; S4 default OFF +
+      per-ref allowlist + EVERY invocation (stake/skip/refuse/recover) appends
+      a stakeAudit:v1 row to `.warpline/stakes/audit.jsonl`; S5 `warpline
+      stake recover <commit>` verifies the reset worktree hashes to the staked
+      binding then MOVES refs/heads/selvage (or the legacy selvage) under the
+      fabric lock — a ref move, NEVER an import or a new strand (post-recover
+      edits parent on the staked pick via the normal seal path). Idempotent:
+      re-staking the tip pickId SKIPS with an audit note. Gitlink-bearing
+      trees refuse (bytes Warpline does not own). Commit objects are written
+      as loose objects via #stake-git — no index, no filters, byte-exact.
+    type: module
+    tags: [warpline, native-first, valve, security]
+    components:
+      - "#stake-guard"
+      - "#stake-git"
+      - "#warp-store"
+      - "#restore"
+      - "#warpline-config"
+      - "#fabric-refs"
+
+  stake-guard:
+    description: >-
+      The S1 one-way guards + the D5 CONSTITUTION-GRADE deny-list of the
+      checkpoint valve. STAKE_DENYLIST (stake-denylist:v1) is a FROZEN,
+      schema-versioned constant — .git/.warpline/.warpline-stake, fabric and
+      oracle ledgers, sidecar trust data (grades*, evaluations, escalations,
+      shadow verdicts, overrides), claims/, knots/, session keys — plus
+      serialized untrusted-prose content markers; expanding it is a SCHEMA
+      CHANGE (bump the tag + re-pin the freeze-test digest in
+      test/stake.test.ts), never a config flag. assertNotStakeInput is the S1
+      choke point wired into #absorb (covering #pick and the #hook auto-seal
+      path): a worktree carrying the marker, a ref in the stake namespace, or
+      a commit whose tree carries the marker is REFUSED as input; #backfill
+      leaves marker-bearing provenance commits unbound. Cycle-free by design
+      (imports only fs/config/git-exec) so absorb can import it.
+    type: module
+    tags: [warpline, native-first, valve, security]
+
+  stake-git:
+    description: >-
+      The ONLY module in Warpline allowed to WRITE to a git repository, fenced
+      to the checkpoint valve. Two mutations exactly: (1) loose blob/tree/
+      commit objects constructed in pure TS (git's exact framing + sha1, zlib,
+      write-tmp + atomic rename) — no `git add`, no index, no clean/smudge/
+      autocrlf filters, so staked bytes can never be rewritten in flight; (2)
+      the stake ref advanced via `git update-ref <ref> <new> <old>` per-ref
+      CAS — never a checkout, never HEAD/index/worktree. sha256-object-format
+      repos refuse fail-closed. buildCommitBody is first-parent-only BY SHAPE
+      (a single optional parent — a stake commit structurally cannot be a
+      merge; D3). #git-exec stays read-only by contract.
+    type: module
+    tags: [warpline, native-first, valve]
+    components:
+      - "#git-exec"
 
   shadow-gate:
     description: >-

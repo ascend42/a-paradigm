@@ -70,6 +70,24 @@ become a shadow authority). Safeguards S1–S5 (aegis-security.md §3): one-way 
 enforced (stake marker + hook refusal + no provenance backflow); leakage prevented by
 allowlist-by-materialization; refuse-to-commit unless tree recomputes; every emission audited;
 recovery = ref move, never an import. Pulls forward M2 refs UX (branch/switch over v3 refs).
+> **[VALVE BUILT 2026-07-17, T-2026-07-17-010 / Kit]** `warpline stake [selector]` +
+> `warpline stake recover <commit>` shipped (#stake, packages/warpline/src/fabric/stake.ts;
+> #stake-guard S1 guards + D5 frozen deny-list `stake-denylist:v1`, fabric/stake-guard.ts;
+> #stake-git — the ONE git-write module: pure-TS loose blob/tree/commit objects, no
+> index/filters, `update-ref` CAS only, git/stake-git.ts). S4 toggle = `.warpline/config.json`
+> `stake:{enabled,refs,branch,repo,author}` (branch default `warpline-stakes`; working-branch
+> names + the checked-out branch refused); trailer-only message (`warpline-stake` +
+> PickId/StateId/TreeId/Schema: stake:v1); audit sidecar `.warpline/stakes/audit.jsonl`
+> (stakeAudit:v1, EVERY invocation incl. refusals). S1 choke point = assertNotStakeInput in
+> absorb (covers pick + the auto-seal hook); backfill leaves marker-bearing provenance
+> commits unbound; hook install refuses on a marked worktree. Idempotent tip-skip; gitlink
+> trees refuse; untrusted-prose content markers scanned (forge §3d — it never crosses).
+> 18 new tests (first-parent chain e2e, adversarial planted-sidecar/serialized-envelope/
+> marker-spoof/build-tamper, recover clean + refuse, D5 freeze test w/ pinned digest) —
+> 486/486 green. NAMED DEVIATIONS/deferrals: `--push` (manual `git push` of the stake
+> branch for now), `auto:` cadence, and S5 rule-4 auto-seal-of-divergence (recover REFUSES
+> an edited tree; edits seal normally post-recover, parented on the staked pick). Daemon
+> wiring = the separate Phase-1 lane. NOT enabled on this repo (founder-visible flip).
 
 **PHASE 2 (~3–4wk) — the team server. → Rung R3 (our own dev cuts over, GATED).**
 Team home on LAN/VPC; V3.5 bundles graduate to THE sync protocol (refs/negotiate/bundle/objects

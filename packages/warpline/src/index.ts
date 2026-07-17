@@ -260,7 +260,36 @@ export { resolveSelector, type SelectorResolution } from './fabric/select.js';
 export { restore, type RestoreOptions, type RestoreResult } from './fabric/restore.js';
 // NATIVE-FIRST R1 (#shadow-gate + #warpline-config) — observe-only admit verdicts
 // (the organic evidence clock) + the per-repo config toggle that opts them in.
-export { readWarplineConfig, configPathOf, type WarplineConfig } from './fabric/config.js';
+export { readWarplineConfig, configPathOf, type WarplineConfig, type StakeConfig } from './fabric/config.js';
+// NATIVE-FIRST phase 1 (#stake, T-2026-07-17-001) — the CHECKPOINT VALVE: one-way
+// warpline→git stake export (first-parent checkpoints, S1–S5 safeguarded, D5
+// constitution-grade deny-list) + the S5 recovery re-entry verb.
+export {
+  stake,
+  stakeRecover,
+  stakeMessage,
+  parseStakeTrailers,
+  stakesDirOf,
+  stakeAuditPathOf,
+  StakeRefusal,
+  STAKE_AUDIT_SCHEMA,
+  type StakeOptions,
+  type StakeResult,
+  type StakeRecoverResult,
+  type StakeAuditRow,
+  type StakeTrailers,
+} from './fabric/stake.js';
+export {
+  STAKE_MARKER,
+  STAKE_MARKER_CONTENT,
+  STAKE_SCHEMA,
+  STAKE_DEFAULT_BRANCH,
+  STAKE_DENYLIST,
+  STAKE_DENYLIST_SCHEMA,
+  STAKE_DENY_CONTENT_MARKERS,
+  isStakeNamespaceRef,
+  assertNotStakeInput,
+} from './fabric/stake-guard.js';
 export {
   shadowAdmit,
   appendShadowVerdict,

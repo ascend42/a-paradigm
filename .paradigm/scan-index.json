@@ -2,7 +2,7 @@
   "$meta": {
     "version": "1.0.0",
     "project": "a-paradigm",
-    "generatedAt": "2026-07-17T19:41:50.270Z",
+    "generatedAt": "2026-07-17T22:30:21.223Z",
     "paradigmVersion": "0.1.0",
     "sources": {
       "purposeFiles": 89,
@@ -36,7 +36,7 @@
       "installer": 1,
       "adapter": 1,
       "route": 4,
-      "module": 46,
+      "module": 49,
       "cli": 1,
       "test": 8,
       "state": 2,
@@ -5242,7 +5242,7 @@
       "symbol": "#warp-store",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
-      "description": "Content-addressed store for WARP objects + states and the .warpline/oracle.jsonl ledger appender. In-mem primary with a .warpline/ disk cache; loadState(stateId) rehydrates a persisted state back from .warpline/states/ (the Phase-2 write path needs the PARENT state across CLI runs when the in-mem map is cold) — faithful because diff reads only stableKey/contentId/contract, all preserved by serializeState. The ONLY thing Warpline writes to disk is under .warpline/. M1a — the NATIVE OBJECT STORE (byte authority, the replacement build): blob.ts (raw-byte blob, blobId=sha256 over git-style \"blob <len>\\0<bytes>\" framing + shadow gitBlobOid), tree.ts (sorted directory manifest, git TREE-ORDER, fixed- width binary ids parseable by mode, treeId=sha256 + shadow gitTreeOid), object- store.ts (loose zlib blobs/ + trees/ under .warpline/objects/ with git fan-out, write-tmp+rename, idempotent put, verify()), snapshot.ts (snapshotDir walks a tree writing every object → root treeId + shadow gitOid; restoreTree rebuilds a byte-faithful tree with git ABSENT — binary/exec/symlink/empty-dir parity, and returns the entry count). IGNORE SEMANTICS (T-031/HIGH-3, the dogfooding unblock): the WORKTREE walk (snapshotDir, behind worktree pick/admit) honors ignore-rules.ts — .warplineignore at the root when present (gitignore syntax via the `ignore` package: dir patterns, globs, negation !, anchored /), else .gitignore, plus ALWAYS-ignored .git/.warpline/node_modules at any depth — so dependency trees and secrets never enter the permanent no-gc store; ignored dirs are PRUNED (no re-inclusion inside an excluded dir, gitignore parity); the REF path (git ls-tree) is deliberately unaffected (git governs a ref's contents). TRUST FLOOR (MEDIUM-1): getBlob/getTree are VERIFIED READS — always-on, they recompute the content-address of the raw framed bytes just inflated and FAIL CLOSED on a mismatch, so restore/materialize/verify can never consume a tampered loose object (one uniform rule, no trusted/untrusted read fork). T-033 (root-ignore symmetry): snapshotRef skips .git/.warpline path components at ANY depth — a repo that TRACKS its own fabric ledger (this one does) would otherwise bind a ref tree that never matches the worktree snapshot and that restoreTree refuses to write. M1c PATH-HARDENING (Aegis C3, CVE-2021-21300 class): restoreTree FAILS CLOSED on a forged/corrupt entry name (assertSafeEntryName rejects empty/./../slash/backslash/NUL/absolute/drive-letter + reserved .git/.warpline), asserts the parent dir is a real non-symlink directory, and never writes THROUGH a pre-existing symlink — the #restore verb consumes it. The shadow gitOid EQUALS `git rev-parse <ref>^{tree}` for a clean worktree (a free byte-faithfulness proof during coexistence). Names use RAW bytes not NFC (A5). CLI: `warpline objects snapshot <dir>` / `objects verify`. Sha256 (one hash across meaning + bytes) — spec packages/warpline/docs/native-object-store-design.md. DELTA-NATIVE SNAPSHOTS (T-2026-07-04-003 byte layer, the Move-3 full-run unblock): snapshotRef has two byte-IDENTICAL paths — FULL (ls-tree inventory + ONE catFileBatch stream; was one git-show spawn per file, ~30s on this monorepo, now ~2s) and INCREMENTAL (a verified SnapshotAnchor {ref, treeId} → `git diff --raw` overlay onto the anchor tree via writeMergedTree, so an admit snapshot costs the DIFF, not the universe; sub-second warm). The incremental path applies the T-033 .git/.warpline skip identically and falls OPEN to the full walk on any anomaly (never fail-closed on the anchor). strandSnapshotAnchor is the verification gate: only a non-merge strand whose binding.gitOid still equals `rev-parse <provenance.gitCommit>^{tree}` and whose native tree is present anchors — a merge strand's gitCommit is one parent, worktree/backfilled seals carry gitOid null, both rejected. captureMerge anchors base on the base strand's verified binding and ours/theirs on the just-built base tree (three universe snapshots → three diffs). Equivalence pinned by test/snapshot-incremental.test.ts (full treeId === incremental treeId on real fixtures incl. tracked-.warpline, mode flips, symlinks, deletes; plus a path-taken proof so fail-open can't mask a broken incremental path).",
+      "description": "Content-addressed store for WARP objects + states and the .warpline/oracle.jsonl ledger appender. In-mem primary with a .warpline/ disk cache; loadState(stateId) rehydrates a persisted state back from .warpline/states/ (the Phase-2 write path needs the PARENT state across CLI runs when the in-mem map is cold) — faithful because diff reads only stableKey/contentId/contract, all preserved by serializeState. The ONLY thing Warpline writes to disk is under .warpline/. M1a — the NATIVE OBJECT STORE (byte authority, the replacement build): blob.ts (raw-byte blob, blobId=sha256 over git-style \"blob <len>\\0<bytes>\" framing + shadow gitBlobOid), tree.ts (sorted directory manifest, git TREE-ORDER, fixed- width binary ids parseable by mode, treeId=sha256 + shadow gitTreeOid), object- store.ts (loose zlib blobs/ + trees/ under .warpline/objects/ with git fan-out, write-tmp+rename, idempotent put, verify()), snapshot.ts (snapshotDir walks a tree writing every object → root treeId + shadow gitOid; restoreTree rebuilds a byte-faithful tree with git ABSENT — binary/exec/symlink/empty-dir parity, and returns the entry count). IGNORE SEMANTICS (T-031/HIGH-3, the dogfooding unblock): the WORKTREE walk (snapshotDir, behind worktree pick/admit) honors ignore-rules.ts — .warplineignore at the root when present (gitignore syntax via the `ignore` package: dir patterns, globs, negation !, anchored /), else .gitignore, plus ALWAYS-ignored .git/.warpline/.loom/node_modules at any depth (.loom = the Loom-era engine's own state dir, tool state never meaning — T-2026-07-17-007) — so dependency trees and secrets never enter the permanent no-gc store; ignored dirs are PRUNED (no re-inclusion inside an excluded dir, gitignore parity); the REF path (git ls-tree) is deliberately unaffected (git governs a ref's contents). TRUST FLOOR (MEDIUM-1): getBlob/getTree are VERIFIED READS — always-on, they recompute the content-address of the raw framed bytes just inflated and FAIL CLOSED on a mismatch, so restore/materialize/verify can never consume a tampered loose object (one uniform rule, no trusted/untrusted read fork). T-033 (root-ignore symmetry): snapshotRef skips .git/.warpline path components at ANY depth — a repo that TRACKS its own fabric ledger (this one does) would otherwise bind a ref tree that never matches the worktree snapshot and that restoreTree refuses to write. M1c PATH-HARDENING (Aegis C3, CVE-2021-21300 class): restoreTree FAILS CLOSED on a forged/corrupt entry name (assertSafeEntryName rejects empty/./../slash/backslash/NUL/absolute/drive-letter + reserved .git/.warpline), asserts the parent dir is a real non-symlink directory, and never writes THROUGH a pre-existing symlink — the #restore verb consumes it. The shadow gitOid EQUALS `git rev-parse <ref>^{tree}` for a clean worktree (a free byte-faithfulness proof during coexistence). Names use RAW bytes not NFC (A5). CLI: `warpline objects snapshot <dir>` / `objects verify`. Sha256 (one hash across meaning + bytes) — spec packages/warpline/docs/native-object-store-design.md. DELTA-NATIVE SNAPSHOTS (T-2026-07-04-003 byte layer, the Move-3 full-run unblock): snapshotRef has two byte-IDENTICAL paths — FULL (ls-tree inventory + ONE catFileBatch stream; was one git-show spawn per file, ~30s on this monorepo, now ~2s) and INCREMENTAL (a verified SnapshotAnchor {ref, treeId} → `git diff --raw` overlay onto the anchor tree via writeMergedTree, so an admit snapshot costs the DIFF, not the universe; sub-second warm). The incremental path applies the T-033 .git/.warpline skip identically and falls OPEN to the full walk on any anomaly (never fail-closed on the anchor). strandSnapshotAnchor is the verification gate: only a non-merge strand whose binding.gitOid still equals `rev-parse <provenance.gitCommit>^{tree}` and whose native tree is present anchors — a merge strand's gitCommit is one parent, worktree/backfilled seals carry gitOid null, both rejected. captureMerge anchors base on the base strand's verified binding and ours/theirs on the just-built base tree (three universe snapshots → three diffs). Equivalence pinned by test/snapshot-incremental.test.ts (full treeId === incremental treeId on real fixtures incl. tracked-.warpline, mode flips, symlinks, deletes; plus a path-taken proof so fail-open can't mask a broken incremental path). I5 — THE WORKTREE INDEX (NATIVE-FIRST phase 0, T-2026-07-17-008): the WORKTREE walk gets the same delta discipline via worktree-index.ts, a git- style stat cache (`.warpline/index`, worktreeIndex:v1, atomic tmp+rename, per-worktree sections of [mtimeMs,size,ino,mode,blobId,gitSha] tuples). snapshotDir(store, dir, {indexRoot}) trusts an entry only when the full stat key matches (mode included — a bare chmod is a miss), the recorded mtime clears the RACY_WINDOW_MS guard against builtAt (git's racy- timestamp lesson), and the cached blobId is still present in the store (a doctored index can never invent bytes); every anomaly fails OPEN to the full read+hash walk, and the refreshed index is written back after every walk. Warm walk on this monorepo (23k files): 7.1s full → 0.7-1.6s indexed, byte-identical treeId+gitOid (pinned with mutation-detection touch/edit/add/delete/chmod + path-taken + racy-guard + fail-open tests in test/worktree-index.test.ts). Wired behind native propose/resolve, worktree pick/admit (snapshotState indexRoot), and `objects snapshot`.",
       "visualTags": [],
       "related": [
         "#restore"
@@ -5324,10 +5324,11 @@
       "symbol": "#cfg-lens",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
-      "description": "The structured-data lens (P3 Lane A, GAP-1) — JSON/YAML key-trees lifted to CodeUnit-shaped nodes so config files (the census-proven agent-collision center of mass: package.json, tsconfig, CI yaml) get MEANING verdicts instead of falling silently to the byte tier. GRANULARITY (cfg-v1): one file-root marker unit per parsed file (key '/'); a top-level key whose value is a non-empty map lifts ONE UNIT PER CHILD (/dependencies/react) so disjoint dep adds COMMUTE (autoClean) while the same dep at different versions is a same-unit divergent body → KNOT via predict's scalar 'body' slot rule; a top-level scalar key is one unit; a child's whole value subtree is one leaf. SEQUENCES defer to the byte tier: any unit whose subtree contains an array becomes a content-INDEPENDENT reduced-fidelity 'seq' marker (order is meaning the key-tree algebra cannot honestly claim — pretending would knot CI-step edits the token merge composes today). DETERMINISM: raw scalar LEXEMES (as-written is meaning, mirrors ts-essence's literal discipline; 1.0 ≠ 1); map key ORDER is not meaning (canonical sort — a pure reorder is the empty delta); the KEY PATH and FILE PATH are folded into the body (documented exception to labels-never-hashed: for structured data the key path IS the contract and the file location IS meaning; cost: cfg file rename reads as retire+born). Essence tag cfg-v1 (own content-address namespace, never colliding with TS CCNF). FAIL-CLOSED: unparseable / duplicate-key / non-map-root / multi-document / anchor-alias-tag/merge-key YAML / oversize (>1MiB) files fall to the byte tier with a single VISIBLE reduced-fidelity 'unliftable' marker unit — never silent-empty, never a false verdict. JSON is parsed by a strict local scanner with JSONC comforts (comments + trailing commas — tsconfig reality; comments are prose, never hashed) and raw-lexeme + duplicate-key fidelity JSON.parse cannot provide; YAML via the `yaml` package, plain core schema only. Lockfiles are excluded entirely (#derived-artifacts). Skips node_modules/.git/dist/build/.next/coverage plus .warpline (the fabric never lifts itself) and .paradigm (machine-managed state).",
+      "description": "The structured-data lens (P3 Lane A, GAP-1) — JSON/YAML key-trees lifted to CodeUnit-shaped nodes so config files (the census-proven agent-collision center of mass: package.json, tsconfig, CI yaml) get MEANING verdicts instead of falling silently to the byte tier. GRANULARITY (cfg-v1): one file-root marker unit per parsed file (key '/'); a top-level key whose value is a non-empty map lifts ONE UNIT PER CHILD (/dependencies/react) so disjoint dep adds COMMUTE (autoClean) while the same dep at different versions is a same-unit divergent body → KNOT via predict's scalar 'body' slot rule; a top-level scalar key is one unit; a child's whole value subtree is one leaf. SEQUENCES defer to the byte tier: any unit whose subtree contains an array becomes a content-INDEPENDENT reduced-fidelity 'seq' marker (order is meaning the key-tree algebra cannot honestly claim — pretending would knot CI-step edits the token merge composes today). DETERMINISM: raw scalar LEXEMES (as-written is meaning, mirrors ts-essence's literal discipline; 1.0 ≠ 1); map key ORDER is not meaning (canonical sort — a pure reorder is the empty delta); the KEY PATH and FILE PATH are folded into the body (documented exception to labels-never-hashed: for structured data the key path IS the contract and the file location IS meaning; cost: cfg file rename reads as retire+born). Essence tag cfg-v1 (own content-address namespace, never colliding with TS CCNF). FAIL-CLOSED: unparseable / duplicate-key / non-map-root / multi-document / anchor-alias-tag/merge-key YAML / oversize (>1MiB) files fall to the byte tier with a single VISIBLE reduced-fidelity 'unliftable' marker unit — never silent-empty, never a false verdict. JSON is parsed by a strict local scanner with JSONC comforts (comments + trailing commas — tsconfig reality; comments are prose, never hashed) and raw-lexeme + duplicate-key fidelity JSON.parse cannot provide; YAML via the `yaml` package, plain core schema only. Lockfiles are excluded entirely (#derived-artifacts). Skips node_modules/.git/dist/build/.next/coverage plus .warpline (the fabric never lifts itself), .loom (the Loom-era engine's state dir — same rule, prior name; T-2026-07-17-007: worktree absorbs were lifting thousands of #cfg:.loom/states/* symbols into every verdict) and .paradigm (machine-managed state).",
       "visualTags": [],
       "related": [
         "#derived-artifacts",
+        "#cfg",
         "#code-lens",
         "#code-symbol",
         "#canonical-json"
@@ -5770,11 +5771,60 @@
       "symbol": "#warpline-config",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
-      "description": "Per-repo engine toggles, `.warpline/config.json` (NATIVE-FIRST R1; .paradigm/research/warpline-native-first/roadmap-native-first.md). OPT-IN switches only — defaults never change because a config exists. v1 carries exactly one key: shadowGate (default false) — when true, every #pick also records the #shadow-gate observe-only verdict. A missing config is the empty config; a MALFORMED config throws (a corrupt toggle file must not silently read as \"everything off\") — the seal path catches (fail-safe), interactive callers surface it.",
+      "description": "Per-repo engine toggles, `.warpline/config.json` (NATIVE-FIRST R1; .paradigm/research/warpline-native-first/roadmap-native-first.md). OPT-IN switches only — defaults never change because a config exists. Keys: shadowGate (default false) — when true, every #pick also records the #shadow-gate observe-only verdict; and stake (default: valve OFF) — the #stake checkpoint valve's S4 toggle {enabled, refs allowlist, branch, repo, author}. The leakage deny-list is deliberately NOT here (D5: constitution-grade frozen constant in #stake-guard, never a config flag). A missing config is the empty config; a MALFORMED config throws (a corrupt toggle file must not silently read as \"everything off\") — the seal path catches (fail-safe), interactive callers surface it.",
       "visualTags": [],
       "related": [
         "#pick",
-        "#shadow-gate"
+        "#shadow-gate",
+        "#stake",
+        "#stake-guard"
+      ],
+      "componentType": "module"
+    },
+    "stake": {
+      "id": "stake",
+      "name": "Stake",
+      "symbol": "#stake",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
+      "description": "THE CHECKPOINT VALVE (Phase 1 native-first, T-2026-07-17-001, founder ask; arky-architecture.md §3 + aegis-security.md §3). `warpline stake` exports ONE sealed fabric state as ONE git commit on a DEDICATED stake branch (default warpline-stakes; working-branch names refused) — git's demoted role: a familiar, read-only checkpoint shelf. D3: stakes are a FIRST-PARENT LINEARIZATION (each stake's single parent = the previous stake commit; git receives checkpoints, never the weave topology). Safeguards: S1 committed `.warpline-stake` marker + trailer-only message (`warpline-stake` + PickId/StateId/TreeId/Schema, zero prose); S2 allowlist-by-materialization — the tree is built by restoreTree from the bound object store into a clean temp dir, then the post-build audit walks the built bytes against the #stake-guard deny-list + untrusted-prose content markers (nothing touches the git odb until the audit passes); S3 verify-or-refuse — built tree re-hashed from disk must equal BOTH binding.treeId and the shadow gitOid RECOMPUTED from the store (never read from s.binding.gitOid), and `rev-parse <commit>^{tree}` must equal the pure-TS expectation before the ref CAS-advances; S4 default OFF + per-ref allowlist + EVERY invocation (stake/skip/refuse/recover) appends a stakeAudit:v1 row to `.warpline/stakes/audit.jsonl`; S5 `warpline stake recover <commit>` verifies the reset worktree hashes to the staked binding then MOVES refs/heads/selvage (or the legacy selvage) under the fabric lock — a ref move, NEVER an import or a new strand (post-recover edits parent on the staked pick via the normal seal path). Idempotent: re-staking the tip pickId SKIPS with an audit note. Gitlink-bearing trees refuse (bytes Warpline does not own). Commit objects are written as loose objects via #stake-git — no index, no filters, byte-exact.",
+      "visualTags": [],
+      "related": [
+        "#stake-guard",
+        "#stake-git",
+        "#warp-store",
+        "#restore",
+        "#warpline-config",
+        "#fabric-refs"
+      ],
+      "componentType": "module"
+    },
+    "stake-guard": {
+      "id": "stake-guard",
+      "name": "Stake Guard",
+      "symbol": "#stake-guard",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
+      "description": "The S1 one-way guards + the D5 CONSTITUTION-GRADE deny-list of the checkpoint valve. STAKE_DENYLIST (stake-denylist:v1) is a FROZEN, schema-versioned constant — .git/.warpline/.warpline-stake, fabric and oracle ledgers, sidecar trust data (grades*, evaluations, escalations, shadow verdicts, overrides), claims/, knots/, session keys — plus serialized untrusted-prose content markers; expanding it is a SCHEMA CHANGE (bump the tag + re-pin the freeze-test digest in test/stake.test.ts), never a config flag. assertNotStakeInput is the S1 choke point wired into #absorb (covering #pick and the #hook auto-seal path): a worktree carrying the marker, a ref in the stake namespace, or a commit whose tree carries the marker is REFUSED as input; #backfill leaves marker-bearing provenance commits unbound. Cycle-free by design (imports only fs/config/git-exec) so absorb can import it.",
+      "visualTags": [],
+      "related": [
+        "#absorb",
+        "#pick",
+        "#hook",
+        "#backfill"
+      ],
+      "componentType": "module"
+    },
+    "stake-git": {
+      "id": "stake-git",
+      "name": "Stake Git",
+      "symbol": "#stake-git",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
+      "description": "The ONLY module in Warpline allowed to WRITE to a git repository, fenced to the checkpoint valve. Two mutations exactly: (1) loose blob/tree/ commit objects constructed in pure TS (git's exact framing + sha1, zlib, write-tmp + atomic rename) — no `git add`, no index, no clean/smudge/ autocrlf filters, so staked bytes can never be rewritten in flight; (2) the stake ref advanced via `git update-ref <ref> <new> <old>` per-ref CAS — never a checkout, never HEAD/index/worktree. sha256-object-format repos refuse fail-closed. buildCommitBody is first-parent-only BY SHAPE (a single optional parent — a stake commit structurally cannot be a merge; D3). #git-exec stays read-only by contract.",
+      "visualTags": [],
+      "related": [
+        "#git-exec"
       ],
       "componentType": "module"
     },
@@ -5784,7 +5834,7 @@
       "symbol": "#shadow-gate",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
-      "description": "R1 of the native-first dogfood ladder (loid-loops.md §1) — the organic evidence clock. shadowAdmit runs the FULL #admit pipeline (claim gate, verdict, trust-floor escalation, coverage labels, knot-payload build) in OBSERVE-ONLY mode: never seals, never moves the selvage, never writes fabric/objects/sidecars — the ONLY write is one `shadowVerdict:v1` row appended to `.warpline/shadow/verdicts.jsonl` {ts, ref, agentId, status, confidence, knots, coverage, wouldSeal, durationMs, escalation?, claimReport?}. Feeds organic-K3, HELD precision (would-have-held counts), and the F1a latency baseline BEFORE any cutover risk. Surfaces: `warpline admit --shadow`, and the #pick auto-seal path when #warpline-config sets shadowGate:true. Zero-mutation invariant pinned byte-for-byte in test/shadow-admit.test.ts. Rows are LOCAL telemetry (gitignored); shadow never pollutes the real claims/grades calibration streams — its judgments ride the row.",
+      "description": "R1 of the native-first dogfood ladder (loid-loops.md §1) — the organic evidence clock. shadowAdmit runs the FULL #admit pipeline (claim gate, verdict, trust-floor escalation, coverage labels, knot-payload build) in OBSERVE-ONLY mode: never seals, never moves the selvage, never writes fabric/objects/sidecars — the ONLY write is one `shadowVerdict:v1` row appended to `.warpline/shadow/verdicts.jsonl` {ts, ref, agentId, status, confidence, knots, coverage, wouldSeal, durationMs, escalation?, claimReport?}. ROW BOUNDS (T-2026-07-17-007): the symbol arrays (knots/ agentChanged/otherChanged) cap at SHADOW_ROW_CAP=50 sorted entries with ADDITIVE exact-total fields (knotsTotal/agentChangedTotal/ otherChangedTotal) — a WORKTREE verdict over a 24k-symbol change is a ~5KB row; under-cap verdicts keep full symbol fidelity; schema stays v1 (additive only, G1). Feeds organic-K3, HELD precision (would-have-held counts), and the F1a latency baseline BEFORE any cutover risk. Surfaces: `warpline admit --shadow`, and the #pick auto-seal path when #warpline-config sets shadowGate:true. Zero-mutation invariant pinned byte-for-byte in test/shadow-admit.test.ts. Rows are LOCAL telemetry (gitignored); shadow never pollutes the real claims/grades calibration streams — its judgments ride the row.",
       "visualTags": [],
       "related": [
         "#admit",
@@ -5799,7 +5849,7 @@
       "symbol": "#native-write-path",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
-      "description": "PHASE 0 of NATIVE-FIRST (arky-architecture.md §2.1 — THE KEYSTONE; ratified D2): the worktree→pick→admit loop with NO git anywhere, T-030's successor. fork mints the agent's scratch ref at the selvage PICKID (I9; optional restore into the agent worktree); **propose SEALS a v3 SCRATCH STRAND from the worktree** — snapshotDir (native walk) → absorbTree (restore from the store → lens, I2: sealed meaning provably corresponds to snapshotted bytes) → buildStrandV3 (bind-on-seal, parents=[scratch base], claim attached via sidecar, provenance git-null per I4) — advancing ONLY the scratch ref: proposals are durable, addressable, exchangeable BEFORE judgment; admit weaves scratch-tip × selvage through the EXISTING decision engine (admitDecision + claim gate + trust floor verbatim), materializes via materializeMergedStateNative ONLY (pure object-store 3-way; no git merge machinery on this path), seals the v3 weave (parents=[selvageTip, scratchTip], recipe folded into the pickId) with per-ref CAS on refs/heads/selvage, and on CLEAN RESTORES the merged bytes back into the agent worktree (§2.1 step 5 — the agent continues from merged reality; no commit ever existed). FAST_ADMIT is a selvage FAST-FORWARD to the scratch strand (a v3 admission is a ref advance, not a re-seal). KNOT/DANGLE persist the #knot-payload (both sides' treeIds native) and refuse — the scratch ref keeps the durable work; resolveNative seals the council resolution as a v3 weave carrying KnotResolution. Every step is an append or a CAS. SCOPE: v3 writes for scratch strands + native weaves only — the git-era seal path stays v2 until the founder-visible cutover (no selvage cutover here). EXIT PROOF: test/native-loop-no-git.test.ts — the full fork→propose→admit→KNOT→resolve→restore loop green in a directory with no `.git` at all (I12), pure-v3 DAG authenticated by fabric verify.",
+      "description": "PHASE 0 of NATIVE-FIRST (arky-architecture.md §2.1 — THE KEYSTONE; ratified D2): the worktree→pick→admit loop with NO git anywhere, T-030's successor. fork mints the agent's scratch ref at the selvage PICKID (I9; optional restore into the agent worktree); **propose SEALS a v3 SCRATCH STRAND from the worktree** — snapshotDir (native walk, I5-INDEXED: the .warpline/index stat cache rehashes only changed files, so a warm propose walk on this monorepo costs ~1s not 7s) → absorbTree (restore from the store → lens, I2: sealed meaning provably corresponds to snapshotted bytes) → buildStrandV3 (bind-on-seal, parents=[scratch base], claim attached via sidecar, provenance git-null per I4) — advancing ONLY the scratch ref: proposals are durable, addressable, exchangeable BEFORE judgment; admit weaves scratch-tip × selvage through the EXISTING decision engine (admitDecision + claim gate + trust floor verbatim), materializes via materializeMergedStateNative ONLY (pure object-store 3-way; no git merge machinery on this path), seals the v3 weave (parents=[selvageTip, scratchTip], recipe folded into the pickId) with per-ref CAS on refs/heads/selvage, and on CLEAN RESTORES the merged bytes back into the agent worktree (§2.1 step 5 — the agent continues from merged reality; no commit ever existed). FAST_ADMIT is a selvage FAST-FORWARD to the scratch strand (a v3 admission is a ref advance, not a re-seal). KNOT/DANGLE persist the #knot-payload (both sides' treeIds native) and refuse — the scratch ref keeps the durable work; resolveNative seals the council resolution as a v3 weave carrying KnotResolution. Every step is an append or a CAS. SCOPE: v3 writes for scratch strands + native weaves only — the git-era seal path stays v2 until the founder-visible cutover (no selvage cutover here). EXIT PROOF: test/native-loop-no-git.test.ts — the full fork→propose→admit→KNOT→resolve→restore loop green in a directory with no `.git` at all (I12), pure-v3 DAG authenticated by fabric verify.",
       "visualTags": [],
       "related": [
         "#knot-payload",
@@ -10081,6 +10131,18 @@
       "visualTags": [],
       "related": [
         "#code-symbol"
+      ]
+    },
+    "cfg": {
+      "id": "cfg",
+      "name": "Cfg",
+      "symbol": "#cfg",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
+      "description": "Referenced from #cfg-lens",
+      "visualTags": [],
+      "related": [
+        "#cfg-lens"
       ]
     },
     "fabric-lock.": {
@@ -18191,6 +18253,18 @@
       "category": "components",
       "id": "warpline-config"
     },
+    "#stake": {
+      "category": "components",
+      "id": "stake"
+    },
+    "#stake-guard": {
+      "category": "components",
+      "id": "stake-guard"
+    },
+    "#stake-git": {
+      "category": "components",
+      "id": "stake-git"
+    },
     "#shadow-gate": {
       "category": "components",
       "id": "shadow-gate"
@@ -21318,6 +21392,10 @@
     "#ordinal": {
       "category": "components",
       "id": "ordinal"
+    },
+    "#cfg": {
+      "category": "components",
+      "id": "cfg"
     },
     "#fabric-lock.": {
       "category": "components",
