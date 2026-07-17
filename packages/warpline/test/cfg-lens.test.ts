@@ -258,4 +258,20 @@ describe('cfg-lens — determinism', () => {
     const units = await lift({ 'src/a.ts': 'export const one = () => 1;\n' });
     expect(units).toEqual([]);
   });
+
+  it('tool-state dirs (.warpline / .loom / .paradigm) are never descended into (T-2026-07-17-007)', async () => {
+    const units = await lift({
+      'app.json': '{"a": 1}\n',
+      '.warpline/config.json': '{"shadowGate": true}\n',
+      '.loom/states/state_x.json': '{"stateId": "x", "absorbedAt": "2026-01-01"}\n',
+      '.loom/oracle.jsonl.json': '{"row": 1}\n',
+      '.paradigm/config.json': '{"version": 2}\n',
+      'packages/a/.loom/state.json': '{"nested": true}\n', // any depth
+    });
+    const syms = units.map((u) => u.symbol);
+    expect(syms.some((s) => s.includes('.loom'))).toBe(false);
+    expect(syms.some((s) => s.includes('.warpline'))).toBe(false);
+    expect(syms.some((s) => s.includes('.paradigm'))).toBe(false);
+    expect(syms).toContain('#cfg:app.json::/');
+  });
 });

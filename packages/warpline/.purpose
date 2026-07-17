@@ -111,7 +111,9 @@ components:
       unblock): the WORKTREE walk (snapshotDir, behind worktree pick/admit) honors
       ignore-rules.ts — .warplineignore at the root when present (gitignore syntax
       via the `ignore` package: dir patterns, globs, negation !, anchored /), else
-      .gitignore, plus ALWAYS-ignored .git/.warpline/node_modules at any depth —
+      .gitignore, plus ALWAYS-ignored .git/.warpline/.loom/node_modules at any depth
+      (.loom = the Loom-era engine's own state dir, tool state never meaning —
+      T-2026-07-17-007) —
       so dependency trees and secrets never enter the permanent no-gc store;
       ignored dirs are PRUNED (no re-inclusion inside an excluded dir, gitignore
       parity); the REF path (git ls-tree) is deliberately unaffected (git governs a
@@ -149,6 +151,21 @@ components:
       test/snapshot-incremental.test.ts (full treeId === incremental treeId on real
       fixtures incl. tracked-.warpline, mode flips, symlinks, deletes; plus a
       path-taken proof so fail-open can't mask a broken incremental path).
+      I5 — THE WORKTREE INDEX (NATIVE-FIRST phase 0, T-2026-07-17-008): the
+      WORKTREE walk gets the same delta discipline via worktree-index.ts, a git-
+      style stat cache (`.warpline/index`, worktreeIndex:v1, atomic tmp+rename,
+      per-worktree sections of [mtimeMs,size,ino,mode,blobId,gitSha] tuples).
+      snapshotDir(store, dir, {indexRoot}) trusts an entry only when the full
+      stat key matches (mode included — a bare chmod is a miss), the recorded
+      mtime clears the RACY_WINDOW_MS guard against builtAt (git's racy-
+      timestamp lesson), and the cached blobId is still present in the store
+      (a doctored index can never invent bytes); every anomaly fails OPEN to
+      the full read+hash walk, and the refreshed index is written back after
+      every walk. Warm walk on this monorepo (23k files): 7.1s full → 0.7-1.6s
+      indexed, byte-identical treeId+gitOid (pinned with mutation-detection
+      touch/edit/add/delete/chmod + path-taken + racy-guard + fail-open tests
+      in test/worktree-index.test.ts). Wired behind native propose/resolve,
+      worktree pick/admit (snapshotState indexRoot), and `objects snapshot`.
     type: module
 
   code-lens:
@@ -283,7 +300,10 @@ components:
       duplicate-key fidelity JSON.parse cannot provide; YAML via the `yaml` package,
       plain core schema only. Lockfiles are excluded entirely (#derived-artifacts).
       Skips node_modules/.git/dist/build/.next/coverage plus .warpline (the fabric
-      never lifts itself) and .paradigm (machine-managed state).
+      never lifts itself), .loom (the Loom-era engine's state dir — same rule,
+      prior name; T-2026-07-17-007: worktree absorbs were lifting thousands of
+      #cfg:.loom/states/* symbols into every verdict) and .paradigm
+      (machine-managed state).
     type: module
     components:
       - "#code-lens"
@@ -1098,7 +1118,12 @@ components:
       fabric/objects/sidecars — the ONLY write is one `shadowVerdict:v1` row
       appended to `.warpline/shadow/verdicts.jsonl` {ts, ref, agentId, status,
       confidence, knots, coverage, wouldSeal, durationMs, escalation?,
-      claimReport?}. Feeds organic-K3, HELD precision (would-have-held counts),
+      claimReport?}. ROW BOUNDS (T-2026-07-17-007): the symbol arrays (knots/
+      agentChanged/otherChanged) cap at SHADOW_ROW_CAP=50 sorted entries with
+      ADDITIVE exact-total fields (knotsTotal/agentChangedTotal/
+      otherChangedTotal) — a WORKTREE verdict over a 24k-symbol change is a
+      ~5KB row; under-cap verdicts keep full symbol fidelity; schema stays v1
+      (additive only, G1). Feeds organic-K3, HELD precision (would-have-held counts),
       and the F1a latency baseline BEFORE any cutover risk. Surfaces: `warpline
       admit --shadow`, and the #pick auto-seal path when #warpline-config sets
       shadowGate:true. Zero-mutation invariant pinned byte-for-byte in
@@ -1117,7 +1142,9 @@ components:
       D2): the worktree→pick→admit loop with NO git anywhere, T-030's successor.
       fork mints the agent's scratch ref at the selvage PICKID (I9; optional
       restore into the agent worktree); **propose SEALS a v3 SCRATCH STRAND from
-      the worktree** — snapshotDir (native walk) → absorbTree (restore from the
+      the worktree** — snapshotDir (native walk, I5-INDEXED: the .warpline/index
+      stat cache rehashes only changed files, so a warm propose walk on this
+      monorepo costs ~1s not 7s) → absorbTree (restore from the
       store → lens, I2: sealed meaning provably corresponds to snapshotted
       bytes) → buildStrandV3 (bind-on-seal, parents=[scratch base], claim
       attached via sidecar, provenance git-null per I4) — advancing ONLY the

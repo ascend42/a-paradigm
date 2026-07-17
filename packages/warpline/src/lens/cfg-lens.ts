@@ -68,11 +68,14 @@ const CFG_EXTENSIONS = ['.json', '.yml', '.yaml'] as const;
 
 /**
  * Directories never descended into. The ts-lens set PLUS the framework/VCS state
- * dirs: `.warpline` (the fabric must never lift itself) and `.paradigm`
- * (machine-managed index/state — already lifted as symbols where it is meaning).
+ * dirs: `.warpline` (the fabric must never lift itself), `.loom` (the Loom-era
+ * engine's own state dir — same rule, prior name; R1 hygiene T-2026-07-17-007:
+ * absorb(WORKTREE) was lifting thousands of `#cfg:.loom/states/*.json` symbols
+ * into every worktree verdict) and `.paradigm` (machine-managed index/state —
+ * already lifted as symbols where it is meaning).
  */
 const SKIP_DIRS = new Set([
-  'node_modules', '.git', 'dist', 'build', '.next', 'coverage', '.warpline', '.paradigm',
+  'node_modules', '.git', 'dist', 'build', '.next', 'coverage', '.warpline', '.loom', '.paradigm',
 ]);
 
 /** Files above this size fall to the byte tier (`too-large` marker). */

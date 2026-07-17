@@ -21,6 +21,14 @@
  * (the weekly K3 aggregate, F1 friction reports) key on named fields, never
  * position.
  *
+ * ROW BOUNDS (R1 hygiene, T-2026-07-17-007): a WORKTREE verdict on a real
+ * monorepo can list thousands of changed symbols; unbounded rows would bloat
+ * the live telemetry file. The symbol arrays (`knots`, `agentChanged`,
+ * `otherChanged`) are therefore capped at SHADOW_ROW_CAP entries each (sorted —
+ * a deterministic top-N), with ADDITIVE total-count fields (`knotsTotal`,
+ * `agentChangedTotal`, `otherChangedTotal`) carrying the true sizes. Verdicts
+ * under the cap keep full symbol fidelity; the schema stays v1 (additive only).
+ *
  * Library code: no console output.
  */
 
@@ -30,6 +38,9 @@ import { admit, type AdmitOptions, type AdmitStatus, type AdmitConfidence, type 
 import type { CoverageCounts } from '../honesty.js';
 
 export const SHADOW_VERDICT_SCHEMA = 'shadowVerdict:v1' as const;
+
+/** Max entries per symbol array in a row (T-2026-07-17-007) — totals stay exact. */
+export const SHADOW_ROW_CAP = 50;
 
 /** One observe-only admission verdict — the R1 telemetry row (G1-versioned). */
 export interface ShadowVerdictRow {
@@ -42,10 +53,17 @@ export interface ShadowVerdictRow {
   status: AdmitStatus;
   /** the CLEAN gate-rule confidence (linked | independent), else null. */
   confidence: AdmitConfidence | null;
-  /** contested symbols (knots + dangles) — [] on a clean verdict. */
+  /** contested symbols (knots + dangles) — [] on a clean verdict. CAPPED at
+   * SHADOW_ROW_CAP entries (sorted top-N); `knotsTotal` carries the true count. */
   knots: string[];
+  /** capped like `knots`; `agentChangedTotal` / `otherChangedTotal` are exact. */
   agentChanged: string[];
   otherChanged: string[];
+  /** exact sizes of the (possibly capped) arrays above — additive fields (G1);
+   * absent on rows recorded before T-2026-07-17-007 (then array.length is exact). */
+  knotsTotal?: number;
+  agentChangedTotal?: number;
+  otherChangedTotal?: number;
   /** honesty-label aggregate for a materializable CLEAN (null when not computed). */
   coverage: CoverageCounts | null;
   /** would the REAL gate have sealed this admission? (FAST_ADMIT, or a conflict-free CLEAN plan). */
@@ -116,6 +134,13 @@ export async function shadowAdmit(
   const wouldSeal =
     d.status === 'FAST_ADMIT' ||
     (d.status === 'CLEAN' && result.merged !== undefined && result.merged.conflicts.length === 0);
+  // Bounded symbol arrays (T-2026-07-17-007): sort (deterministic top-N), cap,
+  // and carry the exact totals as additive fields. Under the cap = full fidelity.
+  const knots = Array.from(
+    new Set([...d.knots.map((k) => k.symbol), ...d.dangling.map((x) => x.fromSymbol)]),
+  ).sort();
+  const agentChanged = [...d.agentChanged].sort();
+  const otherChanged = [...d.otherChanged].sort();
   const row: ShadowVerdictRow = {
     schemaVersion: SHADOW_VERDICT_SCHEMA,
     ts: new Date().toISOString(),
@@ -123,11 +148,12 @@ export async function shadowAdmit(
     agentId: opts.agentId,
     status: d.status,
     confidence: d.confidence,
-    knots: Array.from(
-      new Set([...d.knots.map((k) => k.symbol), ...d.dangling.map((x) => x.fromSymbol)]),
-    ).sort(),
-    agentChanged: d.agentChanged,
-    otherChanged: d.otherChanged,
+    knots: knots.slice(0, SHADOW_ROW_CAP),
+    agentChanged: agentChanged.slice(0, SHADOW_ROW_CAP),
+    otherChanged: otherChanged.slice(0, SHADOW_ROW_CAP),
+    knotsTotal: knots.length,
+    agentChangedTotal: agentChanged.length,
+    otherChangedTotal: otherChanged.length,
     coverage: result.coverage?.counts ?? null,
     wouldSeal,
     proposedStateId: result.proposedStateId,

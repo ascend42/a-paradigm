@@ -95,6 +95,22 @@ describe('snapshotDir — worktree ignore semantics (T-031)', () => {
     expect(paths).not.toContain('b.txt'); // .warplineignore's rule applied
   });
 
+  it('.loom is ALWAYS ignored — tool state, any depth, even when a .warplineignore replaces .gitignore (T-2026-07-17-007)', () => {
+    fs.mkdirSync(path.join(root, '.loom'), { recursive: true });
+    fs.writeFileSync(path.join(root, '.loom', 'oracle.jsonl'), '{}\n');
+    fs.mkdirSync(path.join(root, 'packages', 'a', '.loom'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'packages', 'a', '.loom', 'state.json'), '{}\n');
+    fs.writeFileSync(path.join(root, 'packages', 'a', 'src.txt'), 'src\n');
+    // A .warplineignore with NO rules replaces .gitignore entirely — .loom must
+    // still be skipped (ALWAYS_IGNORE, not an ignore-file rule).
+    fs.writeFileSync(path.join(root, '.warplineignore'), '# no rules\n');
+
+    const snap = snapshotDir(store, root);
+    expect(allPaths(store, snap.treeId)).toEqual([
+      '.warplineignore', 'kept.txt', 'packages', 'packages/a', 'packages/a/src.txt',
+    ]);
+  });
+
   it('an ignored directory is PRUNED — no re-inclusion inside it (gitignore semantics)', () => {
     fs.mkdirSync(path.join(root, 'dist'));
     fs.writeFileSync(path.join(root, 'dist', 'bundle.js'), 'b\n');

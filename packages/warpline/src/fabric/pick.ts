@@ -146,7 +146,7 @@ export async function recordPick(root: string, opts: RecordPickOptions): Promise
           objStore,
           { cwd },
         );
-    const treeId = await snapshotState(objStore, ref, cwd, { cwd }, anchor);
+    const treeId = await snapshotState(objStore, ref, cwd, { cwd }, anchor, root); // I5: worktree walk is stat-indexed
     const strand = sealState(root, store, current, {
       parentStateId: selvage,
       actor,

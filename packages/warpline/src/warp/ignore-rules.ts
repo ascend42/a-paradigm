@@ -6,8 +6,13 @@
  * worktree snapshot skips:
  *
  *   1. ALWAYS ignored, at any depth: .git, .warpline (restoreTree refuses those
- *      names anyway — snapshot/restore symmetry) and node_modules (never meaning,
- *      never restorable intent — ratified by the Move-2 audit).
+ *      names anyway — snapshot/restore symmetry), .loom (the Loom-era engine's
+ *      own session/state dir — tool state, never meaning; R1 hygiene
+ *      T-2026-07-17-007: the tool never ingests its own state dirs) and
+ *      node_modules (never meaning, never restorable intent — ratified by the
+ *      Move-2 audit). Other session-state dirs (.claude/, .tmp/, build output)
+ *      are the ignore FILES' job — on a normal repo the root .gitignore
+ *      fallback already covers them.
  *   2. `.warplineignore` at the snapshot root, when present (gitignore syntax) —
  *      Warpline's own ignore file WINS over .gitignore.
  *   3. else `.gitignore` at the snapshot root, when present.
@@ -28,7 +33,7 @@ import * as path from 'node:path';
 import ignore from 'ignore';
 
 /** Names skipped at ANY depth, regardless of ignore files. */
-const ALWAYS_IGNORE = new Set(['.git', '.warpline', 'node_modules']);
+const ALWAYS_IGNORE = new Set(['.git', '.warpline', '.loom', 'node_modules']);
 
 /** Decides whether a snapshot walk skips `relPath` (posix, relative to the root). */
 export type IgnoreMatcher = (relPath: string, isDir: boolean) => boolean;

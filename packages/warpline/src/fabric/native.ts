@@ -227,9 +227,9 @@ export async function proposeNative(root: string, opts: ProposeNativeOptions): P
   const objStore = new ObjectStore(root);
   const refLabel = scratchRefName(opts.agentId);
 
-  // Bytes first (native walk), then meaning FROM the store (I2/I5) — expensive,
-  // outside the lock.
-  const snap = snapshotDir(objStore, opts.worktree);
+  // Bytes first (native walk, I5-indexed: only changed files are rehashed),
+  // then meaning FROM the store (I2) — expensive, outside the lock.
+  const snap = snapshotDir(objStore, opts.worktree, { indexRoot: root });
   const state = await absorbTree(objStore, snap.treeId, refLabel);
 
   // Claim registration (sidecar, G5) — the OFFER metadata rides beside the strand.
@@ -613,8 +613,8 @@ export async function resolveNative(root: string, opts: ResolveNativeOptions): P
   const now = opts.now ?? new Date().toISOString();
   const decidedBy = opts.decidedBy ?? opts.agentId;
 
-  // Bytes + meaning outside the lock (expensive).
-  const snap = snapshotDir(objStore, opts.worktree);
+  // Bytes + meaning outside the lock (expensive; I5-indexed walk).
+  const snap = snapshotDir(objStore, opts.worktree, { indexRoot: root });
   const resolved = await absorbTree(objStore, snap.treeId, 'refs/heads/selvage');
 
   return withFabricLock(root, () => {

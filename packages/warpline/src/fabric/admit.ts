@@ -436,7 +436,7 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
         // Observe-only: the verdict is recorded; the genesis is never sealed.
         return withClaim({ decision: genesis, sealed: false, proposedStateId: proposed.stateId });
       }
-      const treeId = await snapshotState(objStore, opts.ref, cwd, { cwd });
+      const treeId = await snapshotState(objStore, opts.ref, cwd, { cwd }, undefined, root); // I5-indexed worktree walk
       const strand = sealState(root, store, proposed, {
         parentStateId: selvageId ?? null, actor, intent, gitCommit: oursCommit, now, confidence: 0.8,
         authoredBy: { agentId: opts.agentId },
@@ -534,7 +534,7 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
       const fabric = readFabric(wdir);
       const tipStrand = [...fabric].reverse().find((s) => s.stateId === selvageId);
       const anchor = await strandSnapshotAnchor(tipStrand, objStore, { cwd });
-      const treeId = await snapshotState(objStore, opts.ref, cwd, { cwd }, anchor);
+      const treeId = await snapshotState(objStore, opts.ref, cwd, { cwd }, anchor, root); // I5-indexed worktree walk
       const strand = sealState(root, store, proposed, {
         parentStateId: selvageId, actor, intent, gitCommit: oursCommit, now, confidence: priorFor(decision),
         authoredBy: { agentId: opts.agentId },
@@ -675,7 +675,7 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
       // with ours unbound (treeId null — the payload shape tolerates it) and the
       // payload is exercised but NEVER persisted (observe-only).
       const oursAnchor = shadow ? undefined : await strandSnapshotAnchor(theirsStrand, objStore, { cwd });
-      const oursTree = shadow ? null : await snapshotState(objStore, opts.ref, cwd, { cwd }, oursAnchor);
+      const oursTree = shadow ? null : await snapshotState(objStore, opts.ref, cwd, { cwd }, oursAnchor, root);
       const payload = buildKnotPayload({
         decision,
         base,

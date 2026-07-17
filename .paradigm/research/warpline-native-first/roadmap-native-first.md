@@ -36,6 +36,27 @@ Inversion list I1–I12 (arky-architecture.md §2) is the work manifest.
 > the council weave. Exit test green: test/native-loop-no-git.test.ts (fork→propose→admit→
 > KNOT→payload→resolve→restore, no `.git` anywhere, pure-v3 DAG verifies). NOT yet: I5
 > incremental index, daemon verbs (phase 1), live-selvage v3 cutover (deliberately held).
+> **[I5 + R1 HYGIENE BUILT 2026-07-17, T-2026-07-17-008 / Kit]** I5 — the worktree
+> stat index shipped (#warp-store, src/warp/worktree-index.ts + snapshotDir
+> `{indexRoot}`): `.warpline/index` (worktreeIndex:v1) caches path→{mtimeMs,size,ino,
+> mode,blobId,gitSha}; warm walks rehash only changed files, fail OPEN on every
+> anomaly (racy-timestamp guard per git's lesson; store-presence insurance; corrupt
+> index ⇒ cold walk). THIS monorepo (23,085 files): warm walk 7.1s → 0.7–1.6s
+> (cold ~50s unchanged); byte-identical treeId+gitOid pinned cached-vs-uncached plus
+> touch/edit/add/delete/chmod mutation-detection, path-taken, racy-guard and
+> fail-open tests (test/worktree-index.test.ts). Wired behind native propose/resolve,
+> worktree pick/admit, `objects snapshot`. R1 hygiene (T-2026-07-17-007): `.loom`
+> joined the ALWAYS_IGNORE set in BOTH the byte walk (ignore-rules.ts) and the
+> cfg-lens meaning walk (SKIP_DIRS — worktree absorbs had been lifting ~24k
+> `#cfg:.loom/states/*` symbols per verdict); shadowVerdict:v1 symbol arrays now cap
+> at 50 sorted entries with additive exact totals (a live WORKTREE verdict over a
+> 24,403-symbol change = a 5.3KB row); `.warpline/shadow/` + `.warpline/index` stay
+> gitignored, `config.json` stays tracked. Residual-inversion audit: I3 (intent/actor
+> required from caller, no git fallback) and I4 (gitCommit as nullable breadcrumb)
+> verified DONE on the native path — no code owed. Named for phase 1: I1 session/
+> task-boundary seal verb rides the daemon API; and the lens-discovery/ignore-rules
+> asymmetry (lenses walk gitignored files the byte snapshot skips) wants one shared
+> matcher when the daemon lands. 467/467 green.
 
 **PHASE 1 (~2wk) — the solo daemon + THE VALVE. → Rung R2 (mixed mode).**
 Home-fabric model: one symmetric `warplined`; loopback/unix socket IS the solo server (Aegis

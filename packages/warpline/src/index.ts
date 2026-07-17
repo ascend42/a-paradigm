@@ -52,9 +52,19 @@ export {
   captureMerge,
   restoreTree,
   type SnapshotResult,
+  type SnapshotDirOptions,
   type SnapshotAnchor,
   type PathChange,
 } from './warp/snapshot.js';
+export {
+  loadWorktreeIndex,
+  saveWorktreeIndex,
+  worktreeIndexPathOf,
+  WORKTREE_INDEX_SCHEMA,
+  RACY_WINDOW_MS,
+  type WorktreeIndexEntry,
+  type LoadedWorktreeIndex,
+} from './warp/worktree-index.js';
 export { canonicalSerialize, type CanonicalValue } from './warp/canonical.js';
 
 // ABSORB
@@ -258,6 +268,7 @@ export {
   shadowDirOf,
   shadowVerdictsPathOf,
   SHADOW_VERDICT_SCHEMA,
+  SHADOW_ROW_CAP,
   type ShadowVerdictRow,
   type ShadowAdmitResult,
 } from './fabric/shadow.js';

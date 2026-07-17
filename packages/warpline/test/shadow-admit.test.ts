@@ -22,7 +22,7 @@ import * as fs from 'node:fs';
 import * as fsp from 'node:fs/promises';
 import { recordPick } from '../src/fabric/pick.js';
 import { forkScratch } from '../src/fabric/scratch.js';
-import { shadowAdmit, readShadowVerdicts, shadowVerdictsPathOf } from '../src/fabric/shadow.js';
+import { shadowAdmit, readShadowVerdicts, shadowVerdictsPathOf, SHADOW_ROW_CAP } from '../src/fabric/shadow.js';
 import { createClaim, persistClaim, evaluationsPathOf } from '../src/fabric/claim.js';
 import { warplineDirOf, readSelvage, readFabric } from '../src/fabric/fabric.js';
 
@@ -175,12 +175,13 @@ describe('R1 shadow gate — full pipeline, zero mutation', () => {
     expect(Object.fromEntries(after)).toEqual(Object.fromEntries(before));
   }, 120_000);
 
-  it('row shape is stable (shadowVerdict:v1 key set — G1)', () => {
+  it('row shape is stable (shadowVerdict:v1 key set — G1; totals additive per T-2026-07-17-007)', () => {
     const rows = readShadowVerdicts(repo.dir);
     expect(rows.length).toBeGreaterThanOrEqual(3);
     const CORE = [
       'schemaVersion', 'ts', 'ref', 'agentId', 'status', 'confidence', 'knots',
-      'agentChanged', 'otherChanged', 'coverage', 'wouldSeal', 'proposedStateId', 'durationMs',
+      'agentChanged', 'otherChanged', 'knotsTotal', 'agentChangedTotal', 'otherChangedTotal',
+      'coverage', 'wouldSeal', 'proposedStateId', 'durationMs',
     ];
     const OPTIONAL = ['escalation', 'claimReport', 'knotPayloadId'];
     for (const row of rows) {
@@ -190,4 +191,28 @@ describe('R1 shadow gate — full pipeline, zero mutation', () => {
     }
     expect(fs.existsSync(shadowVerdictsPathOf(repo.dir))).toBe(true);
   });
+
+  it('row bounds (T-2026-07-17-007): symbol arrays cap at SHADOW_ROW_CAP; totals stay exact; under-cap keeps full fidelity', async () => {
+    const root = repo.dir;
+    // 60 fresh exported functions — an over-cap agentChanged set.
+    const many = Array.from(
+      { length: 60 },
+      (_, i) => `export function gen${String(i).padStart(2, '0')}() { return ${i}; }`,
+    ).join('\n');
+    await repo.branch('branchMany', 'src/many.ts', many + '\n');
+    await repo.git('checkout', '-q', 'base');
+
+    const { row } = await shadowAdmit(root, { cwd: root, agentId: 'K', ref: 'branchMany' });
+
+    expect(row.agentChangedTotal!).toBeGreaterThanOrEqual(60);
+    expect(row.agentChanged).toHaveLength(SHADOW_ROW_CAP); // bounded
+    expect(row.agentChanged).toEqual([...row.agentChanged].sort()); // deterministic top-N
+    // Under-cap arrays keep full symbol fidelity; totals equal lengths exactly.
+    expect(row.knots.length).toBeLessThanOrEqual(SHADOW_ROW_CAP);
+    expect(row.knotsTotal).toBe(row.knots.length);
+    expect(row.otherChanged.length).toBeLessThanOrEqual(SHADOW_ROW_CAP);
+    expect(row.otherChangedTotal).toBe(row.otherChanged.length);
+    // The row is small even though the verdict touched 60+ symbols.
+    expect(JSON.stringify(row).length).toBeLessThan(8_000);
+  }, 120_000);
 });

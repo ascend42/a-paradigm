@@ -7,7 +7,7 @@
  *   - regular file → 100644, or 100755 when any exec bit is set
  *   - symlink      → 120000; the blob bytes ARE the link target (git's convention)
  *   - directory    → 40000 subtree, recursed; EMPTY dirs are omitted (git parity)
- *   - .git / .warpline / node_modules are ALWAYS skipped (any depth), and the walk
+ *   - .git / .warpline / .loom / node_modules are ALWAYS skipped (any depth), and the walk
  *     honors .warplineignore / .gitignore at the root (T-031 — see ignore-rules.ts)
  * Names use the RAW on-disk bytes (not NFC) so the shadow OID matches git exactly.
  * Gitlinks (160000) can't be detected from a plain fs walk — a submodule dir reads
@@ -34,6 +34,12 @@ import { ObjectStore } from './object-store.js';
 import { catFileBatch, diffRaw, lsTree, revParseTree, type GitOptions } from '../git/git-exec.js';
 import { WORKTREE_REF } from '../absorb.js';
 import { loadIgnoreMatcher, type IgnoreMatcher } from './ignore-rules.js';
+import {
+  loadWorktreeIndex,
+  saveWorktreeIndex,
+  RACY_WINDOW_MS,
+  type WorktreeIndexEntry,
+} from './worktree-index.js';
 import type { MergeRecipe, Strand } from '../fabric/strand.js';
 
 export interface SnapshotResult {
@@ -43,6 +49,16 @@ export interface SnapshotResult {
   gitOid: string;
   /** number of entries in the root tree (0 = empty). */
   entryCount: number;
+  /** I5 stat-cache telemetry, present only when an indexRoot was supplied:
+   * hits = files whose blob hash was reused from `.warpline/index` (never read),
+   * misses = files read + rehashed. Cold walk ⇒ hits 0. */
+  indexed?: { hits: number; misses: number };
+}
+
+export interface SnapshotDirOptions {
+  /** I5 (NATIVE-FIRST phase 0): repo root whose `.warpline/index` stat cache the
+   * walk consults + refreshes. Omitted ⇒ the plain full walk (every file read). */
+  indexRoot?: string;
 }
 
 /**
@@ -50,17 +66,63 @@ export interface SnapshotResult {
  *
  * IGNORE SEMANTICS (T-031 / HIGH-3): the worktree walk honors `.warplineignore`
  * (preferred) or `.gitignore` (fallback) at the snapshot root, and ALWAYS skips
- * .git/.warpline/node_modules at any depth (see ignore-rules.ts) — so a worktree
+ * .git/.warpline/.loom/node_modules at any depth (see ignore-rules.ts) — so a worktree
  * pick/admit never ingests dependency trees or secrets into the permanent no-gc
  * object store. Ignored directories are pruned (gitignore semantics: no
  * re-inclusion inside an excluded directory). The shadow gitOid consequently
  * equals `git rev-parse <ref>^{tree}` for a CLEAN tree whose ignores match git's.
+ *
+ * I5 (NATIVE-FIRST phase 0, `opts.indexRoot`): the walk consults the
+ * `.warpline/index` stat cache — a file whose {mtimeMs, size, ino, mode} match
+ * a trusted cache entry reuses its recorded blobId + gitSha WITHOUT being read
+ * or rehashed; only changed files cost I/O + hashing. Byte-identical to the
+ * cold walk by construction (same entries, same order, same ignore matcher) and
+ * fail-OPEN on every anomaly: unreadable/corrupt/stale index, racy timestamps
+ * (RACY_WINDOW_MS), a cached blob missing from the store, or any error inside
+ * the indexed attempt ⇒ the plain full walk runs instead. The refreshed index
+ * is written back after the walk (atomic; write failures swallowed).
  */
-export function snapshotDir(store: ObjectStore, dir: string): SnapshotResult {
-  return walk(store, dir, '', loadIgnoreMatcher(dir));
+export function snapshotDir(store: ObjectStore, dir: string, opts: SnapshotDirOptions = {}): SnapshotResult {
+  const ignored = loadIgnoreMatcher(dir);
+  if (opts.indexRoot) {
+    try {
+      const cached = loadWorktreeIndex(opts.indexRoot, dir); // null ⇒ cold (still records)
+      const ctx: IndexCtx = {
+        cache: cached?.entries ?? null,
+        builtAtMs: cached?.builtAtMs ?? 0,
+        out: new Map(),
+        hits: 0,
+        misses: 0,
+      };
+      const result = walk(store, dir, '', ignored, ctx);
+      saveWorktreeIndex(opts.indexRoot, dir, ctx.out);
+      return { ...result, indexed: { hits: ctx.hits, misses: ctx.misses } };
+    } catch {
+      // Fail OPEN on ANY anomaly inside the indexed attempt — the full walk is
+      // the source of truth (idempotent store ⇒ partial writes are harmless).
+    }
+  }
+  return walk(store, dir, '', ignored);
 }
 
-function walk(store: ObjectStore, dir: string, rel: string, ignored: IgnoreMatcher): SnapshotResult {
+/** The I5 stat-cache walk context (see worktree-index.ts for the trust rules). */
+interface IndexCtx {
+  cache: Map<string, WorktreeIndexEntry> | null;
+  /** the cache's builtAt (ms) — the racy-guard anchor; 0 when walking cold. */
+  builtAtMs: number;
+  /** entries the walk produces — becomes the refreshed index section. */
+  out: Map<string, WorktreeIndexEntry>;
+  hits: number;
+  misses: number;
+}
+
+function walk(
+  store: ObjectStore,
+  dir: string,
+  rel: string,
+  ignored: IgnoreMatcher,
+  idx?: IndexCtx,
+): SnapshotResult {
   const native: TreeEntry[] = [];
   const git: GitTreeEntry[] = [];
 
@@ -75,15 +137,37 @@ function walk(store: ObjectStore, dir: string, rel: string, ignored: IgnoreMatch
       native.push({ mode: '120000', name, id: store.putBlob(target) });
       git.push({ mode: '120000', name, sha1: gitBlobOid(target) });
     } else if (st.isDirectory()) {
-      const child = walk(store, full, relPath, ignored);
+      const child = walk(store, full, relPath, ignored, idx);
       if (child.entryCount === 0) continue; // git does not track empty directories
       native.push({ mode: '40000', name, id: child.treeId });
       git.push({ mode: '40000', name, sha1: child.gitOid });
     } else if (st.isFile()) {
-      const bytes = fs.readFileSync(full);
       const mode: TreeMode = st.mode & 0o111 ? '100755' : '100644';
-      native.push({ mode, name, id: store.putBlob(bytes) });
-      git.push({ mode, name, sha1: gitBlobOid(bytes) });
+      const ent = idx?.cache?.get(relPath);
+      if (
+        ent &&
+        ent[0] === st.mtimeMs &&
+        ent[1] === st.size &&
+        ent[2] === st.ino &&
+        ent[3] === mode && // chmod flips mode without touching mtime — mode is part of the key
+        st.mtimeMs + RACY_WINDOW_MS <= idx!.builtAtMs && // racy guard (worktree-index.ts)
+        store.has(ent[4]) // a copied/doctored index can never invent bytes
+      ) {
+        idx!.hits++;
+        native.push({ mode, name, id: ent[4] });
+        git.push({ mode, name, sha1: ent[5] });
+        idx!.out.set(relPath, ent);
+      } else {
+        const bytes = fs.readFileSync(full);
+        const id = store.putBlob(bytes);
+        const sha1 = gitBlobOid(bytes);
+        native.push({ mode, name, id });
+        git.push({ mode, name, sha1 });
+        if (idx) {
+          idx.misses++;
+          idx.out.set(relPath, [st.mtimeMs, st.size, st.ino, mode, id, sha1]);
+        }
+      }
     }
     // sockets/fifos/other special files are skipped (not representable in a tree)
   }
@@ -274,6 +358,7 @@ async function snapshotRefIncremental(
 /**
  * Snapshot the state a strand is being sealed from — worktree (fs) or a git ref.
  * `base` (optional) enables the incremental ref path; ignored for a worktree.
+ * `indexRoot` (optional, I5) enables the worktree stat cache; ignored for a ref.
  */
 export async function snapshotState(
   store: ObjectStore,
@@ -281,8 +366,11 @@ export async function snapshotState(
   cwd: string,
   opts: GitOptions = {},
   base?: SnapshotAnchor,
+  indexRoot?: string,
 ): Promise<string> {
-  return ref === WORKTREE_REF ? snapshotDir(store, cwd).treeId : snapshotRef(store, ref, opts, base);
+  return ref === WORKTREE_REF
+    ? snapshotDir(store, cwd, { indexRoot }).treeId
+    : snapshotRef(store, ref, opts, base);
 }
 
 /**
