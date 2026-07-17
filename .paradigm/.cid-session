@@ -1,6 +1,6 @@
 {
-  "timestamp": "2026-07-03T22:31:11.298Z",
-  "taskDescription": "Ratified sequence steps 1b+2 (post GUARD-DECIDER, lore L-2026-07-03-ascend-223056-001): Stream A — build direct-contested/knot-size ranking into the oracle output (T-2026-07-02-002 remaining half; gro",
+  "timestamp": "2026-07-15T07:47:57.285Z",
+  "taskDescription": "ROADMAP 2026H2 overnight execution wave (founder-authorized autonomous run, founder gates excluded): (1) T-2026-07-14-004 LLM-judge falsifier on the 18 ground-truthed Guard hits + benign controls; (2)",
   "depth": "standard",
   "coverageScore": 0.5
 }

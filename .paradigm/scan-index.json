@@ -2,10 +2,10 @@
   "$meta": {
     "version": "1.0.0",
     "project": "a-paradigm",
-    "generatedAt": "2026-07-16T14:57:47.551Z",
+    "generatedAt": "2026-07-17T19:41:50.270Z",
     "paradigmVersion": "0.1.0",
     "sources": {
-      "purposeFiles": 88,
+      "purposeFiles": 89,
       "portalFiles": 3,
       "premiseFiles": 0
     },
@@ -36,7 +36,7 @@
       "installer": 1,
       "adapter": 1,
       "route": 4,
-      "module": 39,
+      "module": 46,
       "cli": 1,
       "test": 8,
       "state": 2,
@@ -5309,11 +5309,56 @@
       "symbol": "#lens-registry",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
-      "description": "The code-lens registry (spec §9). lensFor(ext) -> CodeLens | undefined maps a file extension (incl. leading dot) to the responsible lens; v1 registers only TsLens (.ts/.tsx). The single seam future per-language lenses plug into without touching the lift/absorb path.",
+      "description": "The code-lens registry (spec §9). lensFor(ext) -> CodeLens | undefined maps a file extension (incl. leading dot) to the responsible lens. Registered: TsLens (.ts/.tsx) and CfgLens (.json/.yml/.yaml — #cfg-lens, P3 GAP-1). The single seam per-language lenses plug into without touching the lift/absorb path.",
       "visualTags": [],
       "related": [
+        "#cfg-lens",
         "#code-lens",
         "#ts-lens"
+      ],
+      "componentType": "module"
+    },
+    "cfg-lens": {
+      "id": "cfg-lens",
+      "name": "Cfg Lens",
+      "symbol": "#cfg-lens",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
+      "description": "The structured-data lens (P3 Lane A, GAP-1) — JSON/YAML key-trees lifted to CodeUnit-shaped nodes so config files (the census-proven agent-collision center of mass: package.json, tsconfig, CI yaml) get MEANING verdicts instead of falling silently to the byte tier. GRANULARITY (cfg-v1): one file-root marker unit per parsed file (key '/'); a top-level key whose value is a non-empty map lifts ONE UNIT PER CHILD (/dependencies/react) so disjoint dep adds COMMUTE (autoClean) while the same dep at different versions is a same-unit divergent body → KNOT via predict's scalar 'body' slot rule; a top-level scalar key is one unit; a child's whole value subtree is one leaf. SEQUENCES defer to the byte tier: any unit whose subtree contains an array becomes a content-INDEPENDENT reduced-fidelity 'seq' marker (order is meaning the key-tree algebra cannot honestly claim — pretending would knot CI-step edits the token merge composes today). DETERMINISM: raw scalar LEXEMES (as-written is meaning, mirrors ts-essence's literal discipline; 1.0 ≠ 1); map key ORDER is not meaning (canonical sort — a pure reorder is the empty delta); the KEY PATH and FILE PATH are folded into the body (documented exception to labels-never-hashed: for structured data the key path IS the contract and the file location IS meaning; cost: cfg file rename reads as retire+born). Essence tag cfg-v1 (own content-address namespace, never colliding with TS CCNF). FAIL-CLOSED: unparseable / duplicate-key / non-map-root / multi-document / anchor-alias-tag/merge-key YAML / oversize (>1MiB) files fall to the byte tier with a single VISIBLE reduced-fidelity 'unliftable' marker unit — never silent-empty, never a false verdict. JSON is parsed by a strict local scanner with JSONC comforts (comments + trailing commas — tsconfig reality; comments are prose, never hashed) and raw-lexeme + duplicate-key fidelity JSON.parse cannot provide; YAML via the `yaml` package, plain core schema only. Lockfiles are excluded entirely (#derived-artifacts). Skips node_modules/.git/dist/build/.next/coverage plus .warpline (the fabric never lifts itself) and .paradigm (machine-managed state).",
+      "visualTags": [],
+      "related": [
+        "#derived-artifacts",
+        "#code-lens",
+        "#code-symbol",
+        "#canonical-json"
+      ],
+      "componentType": "module"
+    },
+    "derived-artifacts": {
+      "id": "derived-artifacts",
+      "name": "Derived Artifacts",
+      "symbol": "#derived-artifacts",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
+      "description": "The DERIVED-ARTIFACT rule (P3 GAP-1). Lockfiles (package-lock.json, npm-shrinkwrap.json, yarn.lock, pnpm-lock.yaml, bun.lockb/.lock, deno.lock, Cargo.lock, composer.lock, Gemfile.lock, poetry.lock, Pipfile.lock, flake.lock) are machine-generated projections of the manifests beside them — derived, never meaning. isDerivedArtifact(relPath) matches by explicit BASENAME set (no glob — fail-open here would silently wrong-merge a file we pretended to understand). Consumers: #cfg-lens never lifts them; #materialize never knots them (both-sides-divergent → take OURS wholesale + a STALE marker in MergePlan.derivedStale — regeneration from the merged manifests is the consumer's step, recorded not performed in v1); #honesty labels them 'derived'.",
+      "visualTags": [],
+      "related": [
+        "#cfg-lens",
+        "#materialize",
+        "#honesty"
+      ],
+      "componentType": "module"
+    },
+    "honesty": {
+      "id": "honesty",
+      "name": "Honesty",
+      "symbol": "#honesty",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
+      "description": "Per-path merge HONESTY labels (P3 GAP-1) — \"what fraction of this merge did meaning govern?\" classifyMergePaths(paths, states) labels every touched path exactly one of: meaning-decided (a lens lifted REAL units from the file — TS code-units, cfg key units, .purpose symbols; cfg MARKER units never claim coverage), derived (#derived-artifacts), or byte-decided (everything else — README, unparseable configs, sequence-valued keys). Returns sorted perPath + aggregate counts {meaningDecided, byteDecided, derived}. G1-ADDITIVE presentation data, never a verdict input: attached as AdmitResult.coverage (on a materialized CLEAN admit, classified against proposed/selvage/merged states) and OracleRecord.coverage (over changedPaths(base,A) ∪ (base,B), real refs only; schemaVersion unchanged).",
+      "visualTags": [],
+      "related": [
+        "#derived-artifacts"
       ],
       "componentType": "module"
     },
@@ -5323,9 +5368,11 @@
       "symbol": "#lift-code-units",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
-      "description": "The absorb-side bridge (stage 3a, spec §9 sub-phase 2 / §4.1). liftCodeUnits(rootDir) runs every REGISTERED lens over a read-only worktree root and collects the union of CodeUnits (re-sorted by symbol for deterministic injection order). injectCodeUnits(index, units) turns each CodeUnit into a synthetic SymbolEntry (kind 'component' + componentType 'code-unit'; DETERMINISTIC id = sha256('code:'+symbol), NOT a uuid; source 'premise'; references = the distinct LOCAL targets in first-appearance order so liftEdges yields code->localTarget edges into buildEssenceGraph.adj and Tarjan detects code cycles) and splices it into the live SymbolIndex (entries + byType + bySource) BEFORE computeEssences runs — same universe, never a parallel graph. The identity-bearing payload travels on entry.data: codeEssence (body with positional f:idx slots), codeLocalTargets (the ordered distinct local target symbols the f:N slots substitute against), and essenceTag = CCNF_ALGO_VERSION+\":ts\"+TS_LENS_VERSION (e.g. \"v1.1:ts5.9.3\" — the algorithm- and compiler-pinned version namespace §5.2, so essence-hash never imports the lens — the tag travels with the node).",
+      "description": "The absorb-side bridge (stage 3a, spec §9 sub-phase 2 / §4.1). liftCodeUnits(rootDir) runs every REGISTERED lens over a read-only worktree root and collects the union of CodeUnits (re-sorted by symbol for deterministic injection order). injectCodeUnits(index, units) turns each CodeUnit into a synthetic SymbolEntry (kind 'component' + componentType 'code-unit'; DETERMINISTIC id = sha256('code:'+symbol), NOT a uuid; source 'premise'; references = the distinct LOCAL targets in first-appearance order so liftEdges yields code->localTarget edges into buildEssenceGraph.adj and Tarjan detects code cycles) and splices it into the live SymbolIndex (entries + byType + bySource) BEFORE computeEssences runs — same universe, never a parallel graph. The identity-bearing payload travels on entry.data: codeEssence (body with positional f:idx slots), codeLocalTargets (the ordered distinct local target symbols the f:N slots substitute against), and essenceTag = CCNF_ALGO_VERSION+\":ts\"+TS_LENS_VERSION (e.g. \"v1.1:ts5.9.3\" — the algorithm- and compiler-pinned version namespace §5.2, so essence-hash never imports the lens — the tag travels with the node). P3 GAP-1: a unit may OVERRIDE the tag per-unit (CodeUnit.essenceTag — #cfg-lens stamps cfg-v1) and carry a cfgMarker discriminator into entry.data for the #honesty classifier.",
       "visualTags": [],
       "related": [
+        "#cfg-lens",
+        "#honesty",
         "#code-lens",
         "#lens-registry",
         "#ts-lens"
@@ -5377,9 +5424,10 @@
       "symbol": "#justification",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
-      "description": "The v0 Justification — actor/intent from the branch tip's git log, computedRipple via getReferencesTo over changed symbols, danglingRefs, and a reserved signature field (unsigned:sha256 stub).",
+      "description": "The v0 Justification — actor/intent from the branch tip's git log, computedRipple via getReferencesTo over changed symbols, danglingRefs, and a reserved signature field (unsigned:sha256 stub). P2.3 (forge-spec §3b, ADDITIVE): an optional claimId POINTER to the author's pre-declared #claim sidecar — present only when the change was proposed under a claim (absent ⇒ byte-identical to the pre-claim schema); the claim body and its grading never ride inline (G5).",
       "visualTags": [],
       "related": [
+        "#claim",
         "#sem-delta",
         "#git-exec"
       ],
@@ -5422,11 +5470,12 @@
       "symbol": "#grade",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
-      "description": "The calibration grader (Loid's MOAT — the one thing a git-backed history can't carry). admit SEEDS strand.calibratedConfidence from the gate rule; gradeFabric grades it against real OUTCOME, mirroring the classroom certify→outcome loop. A strand's AUTHORED symbols (delta.born ∪ contractChanged) are OVERTURNED when a later strand RETIRES one (or a #resolve names it in resolves.contended) → confidence ↓; SURVIVED when they hold across a window of later strands → ↑; PENDING when too recent. applyGrades updates calibratedConfidence in the ledger (pickId EXCLUDES the field, so the content-address is unchanged) and appends the trajectory to .warpline/grades.jsonl, under #fabric-lock. The report buckets survival by gate-rule prior class — the falsifiable 'does linked beat independent?' moat experiment. V3 (v3-identity §7, R4): a v3 strand carries NO calibratedConfidence at all — applyGrades never rewrites a v3 strand; its grade trajectory lives ONLY in grades.jsonl (the sidecar becomes fully authoritative at V3.4, when rewriteFabric is deleted).",
+      "description": "The calibration grader (Loid's MOAT — the one thing a git-backed history can't carry). admit SEEDS strand.calibratedConfidence from the gate rule; gradeFabric grades it against real OUTCOME, mirroring the classroom certify→outcome loop. A strand's AUTHORED symbols (delta.born ∪ contractChanged) are OVERTURNED when a later strand RETIRES one (or a #resolve names it in resolves.contended) → confidence ↓; SURVIVED when they hold across a window of later strands → ↑; PENDING when too recent. applyGrades updates calibratedConfidence in the ledger (pickId EXCLUDES the field, so the content-address is unchanged) and appends the trajectory to .warpline/grades.jsonl, under #fabric-lock. The report buckets survival by gate-rule prior class — the falsifiable 'does linked beat independent?' moat experiment. V3 (v3-identity §7, R4): a v3 strand carries NO calibratedConfidence at all — applyGrades never rewrites a v3 strand; its grade trajectory lives ONLY in grades.jsonl (the sidecar becomes fully authoritative at V3.4, when rewriteFabric is deleted). P3 LANE A2 (forge-spec §1d): grades are additionally KEYED by WHO and WHAT — every StrandGrade (and thus every grades.jsonl row) carries authoredBy.agentId + the authoredSymbols set, and GradeReport gains byAgent/bySymbol buckets (per-symbol outcome is conservative: a non-overturned symbol on an OVERTURNED strand is not graded, never silently 'survived'). The module also hosts the sidecar's FIRST CONSUMER: readGradeSidecar → symbolSurvivalIndex (latest row per pickId wins — the sidecar is a trajectory) → evaluateEscalation, a PURE function of (decision, sidecar snapshot) implementing the one trust-floor rule for #admit's HELD verdict; constants K_MIN_GRADED=3 / SURVIVAL_FLOOR=0.5 are exported STARTING GUESSES, calibration-pending (TD-2026-07-16-426 organic arm — moved only by graded outcome data, never hand-tuned). Accepted-risk overrides append to .warpline/grades-escalations.jsonl (G5 sidecar; recordGradeEscalation/listGradeEscalations).",
       "visualTags": [],
       "related": [
         "#resolve",
         "#fabric-lock",
+        "#admit",
         "#fabric",
         "#strand"
       ],
@@ -5576,13 +5625,15 @@
       "symbol": "#pick",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
-      "description": "The single-writer WRITE PATH (Phase 2). recordPick(root, opts) absorbs the working tree (or a ref) to a WarpState, and — using the DIFF vs the parent selvage as the source of truth for \"did meaning change?\" (NOT stateId equality, which hashes the DEDUPED essence set and so misses a born symbol whose essence equals an existing one) — no-ops on an empty diff, else seals a #strand via #seal (the single fabric writer) under #fabric-lock (so a backgrounded post-commit auto-seal can't race it). Genesis (no selvage) records seq 0 with an empty delta; objectCount is the headline. FAIL-CLOSED (T-029): a SET selvage whose parent state cannot be loaded now THROWS rather than falling through to seal (which would orphan history) — symmetric with the #admit guard. SCHEMA v2: RecordPickOptions gains agentId/sessionKey; the seal stamps authoredBy (agentId IN the pickId, sessionKey excluded). No agentId (the hook/human path) → authoredBy.agentId null. The single-writer daily-driver path — the multi-writer protocol is #admit. DELTA-NATIVE (T-2026-07-04-003): a REF pick's seal snapshot anchors on the tip strand's verified binding (strandSnapshotAnchor) — the post-commit hook seal costs one commit's diff, not the whole tree; worktree picks keep the full snapshotDir walk, unchanged.",
+      "description": "The single-writer WRITE PATH (Phase 2). recordPick(root, opts) absorbs the working tree (or a ref) to a WarpState, and — using the DIFF vs the parent selvage as the source of truth for \"did meaning change?\" (NOT stateId equality, which hashes the DEDUPED essence set and so misses a born symbol whose essence equals an existing one) — no-ops on an empty diff, else seals a #strand via #seal (the single fabric writer) under #fabric-lock (so a backgrounded post-commit auto-seal can't race it). Genesis (no selvage) records seq 0 with an empty delta; objectCount is the headline. FAIL-CLOSED (T-029): a SET selvage whose parent state cannot be loaded now THROWS rather than falling through to seal (which would orphan history) — symmetric with the #admit guard. SCHEMA v2: RecordPickOptions gains agentId/sessionKey; the seal stamps authoredBy (agentId IN the pickId, sessionKey excluded). No agentId (the hook/human path) → authoredBy.agentId null. The single-writer daily-driver path — the multi-writer protocol is #admit. DELTA-NATIVE (T-2026-07-04-003): a REF pick's seal snapshot anchors on the tip strand's verified binding (strandSnapshotAnchor) — the post-commit hook seal costs one commit's diff, not the whole tree; worktree picks keep the full snapshotDir walk, unchanged. NATIVE-FIRST R1: when #warpline-config sets shadowGate:true, every pick ALSO records the #shadow-gate observe-only verdict of the just-lifted state vs the PRE-seal selvage (reusing the absorb — pure compute). FAIL-SAFE: shadow is telemetry; a shadow failure never blocks or fails the seal.",
       "visualTags": [],
       "related": [
         "#strand",
         "#seal",
         "#fabric-lock",
         "#admit",
+        "#warpline-config",
+        "#shadow-gate",
         "#absorb",
         "#sem-delta",
         "#warp-store",
@@ -5596,9 +5647,11 @@
       "symbol": "#scratch",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
-      "description": "A per-agent ephemeral view (the read side of multi-writer). forkScratch(agentId) pins the stateId the agent works against (its optimistic base) under .warpline/refs/scratch/<agentId>; N agents fork the SAME selvage concurrently with zero contention — what git's single shared working-tree/index/HEAD cannot do. Forking is O(1), no working-tree lock. readScratch/clearScratch round it out.",
+      "description": "A per-agent ephemeral view (the read side of multi-writer). forkScratch(agentId) pins the stateId the agent works against (its optimistic base) under .warpline/refs/scratch/<agentId>; N agents fork the SAME selvage concurrently with zero contention — what git's single shared working-tree/index/HEAD cannot do. Forking is O(1), no working-tree lock. readScratch/clearScratch round it out. NATIVE-FIRST (phase 0, I9): the same file doubles as the native SCRATCH REF — writeScratchRef stores a PICKID (`warpline fork` mints it at the selvage tip; #native-write-path propose advances it per sealed scratch strand). Consumers dispatch on the pick:/state: prefix; a mismatch fails closed, never coerces.",
       "visualTags": [],
-      "related": [],
+      "related": [
+        "#native-write-path"
+      ],
       "componentType": "module"
     },
     "admit": {
@@ -5607,13 +5660,17 @@
       "symbol": "#admit",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
-      "description": "The multi-writer WRITE side (Phase C v1, DECISION-level). admitDecision(base, proposed, selvage) is the pure verdict: NOOP (no meaning change — decided by diff(base, proposed) being empty, NOT stateId equality, same rule as #pick: stateId hashes the DEDUPED essence set and misses a change whose before/after essences both pre-exist elsewhere); FAST_ADMIT (selvage unadvanced since base → admit directly); CLEAN (selvage advanced but predict(agentΔ, otherΔ) is autoClean — the concurrent edits commute in MEANING, the case git CONFLICTS on for textually-adjacent edits — carrying a GATE-RULE confidence: 'linked' when the two changed-sets are dependency-adjacent in-graph (Merkle would surface a real conflict, so autoClean is trustworthy) vs 'independent' when disjoint (autoClean may HIDE a cross-symbol semantic conflict per the false-AUTOFOLD gate)); KNOT (same symbol, contradictory meaning → human DECIDE, never silently merged); DANGLE (edge into a retired symbol). v2: admit() now PERFORMS the merge — on FAST_ADMIT it seals the proposed state; on CLEAN it calls #materialize to produce the merged tree, seals it, advances selvage, and clears the scratch (if materialization finds a byte conflict the meaning layer missed, it downgrades to KNOT — never a silent wrong-merge). Materialization needs git refs for ours/base/theirs (the strands' provenance.gitCommit anchors); a WORKTREE proposal returns CLEAN unsealed. A CLEAN re-base onto a MERGE strand also fails CLOSED (unsealed): a merge strand's gitCommit is ONE parent and lacks the merged bytes, so re-basing off it would mis-materialize a 3rd-gen merge (H1). SCHEMA v2: all three seal calls pass authoredBy {agentId: opts.agentId}; the CLEAN merge seal also passes mergeParentPickId = the base strand's pickId (the SECOND DAG parent), folded with merge.algo into the authenticated v2 pickId. DELTA-NATIVE (T-2026-07-04-003): every seal-time snapshot is ANCHORED where verifiable — FAST_ADMIT anchors on the tip strand (selvage === base there), the CLEAN capture anchors base on the base strand's verified binding (ours/ theirs then diff off the base tree), and the H1-relaxed native path anchors each git-ref side on its strand binding — so a warm admit on the full monorepo runs in single-digit SECONDS (was >2min; bench/bench-admit.mts). Anchors are verified by #warp-store's strandSnapshotAnchor and fail OPEN to the full snapshot; verdict semantics are untouched (decision before bytes). P2.2 (forge-spec §3a): a meaning-level KNOT/DANGLE verdict additionally durably snapshots the unsealed proposal's bytes, builds the machine-readable #knot-payload, persists it to .warpline/knots/, and returns knotPayloadId — a POINTER on AdmitResult (G1-additive; never the payload inline). Payload construction is derived evidence: a build failure degrades to a verdict without a pointer, never a crash. The verdict itself remains a pure function of STRUCTURAL inputs — prose never reaches admitDecision (the poisoned-prose invariant, test/injection-envelope.test.ts).",
+      "description": "The multi-writer WRITE side (Phase C v1, DECISION-level). admitDecision(base, proposed, selvage) is the pure verdict: NOOP (no meaning change — decided by diff(base, proposed) being empty, NOT stateId equality, same rule as #pick: stateId hashes the DEDUPED essence set and misses a change whose before/after essences both pre-exist elsewhere); FAST_ADMIT (selvage unadvanced since base → admit directly); CLEAN (selvage advanced but predict(agentΔ, otherΔ) is autoClean — the concurrent edits commute in MEANING, the case git CONFLICTS on for textually-adjacent edits — carrying a GATE-RULE confidence: 'linked' when the two changed-sets are dependency-adjacent in-graph (Merkle would surface a real conflict, so autoClean is trustworthy) vs 'independent' when disjoint (autoClean may HIDE a cross-symbol semantic conflict per the false-AUTOFOLD gate)); KNOT (same symbol, contradictory meaning → human DECIDE, never silently merged); DANGLE (edge into a retired symbol). v2: admit() now PERFORMS the merge — on FAST_ADMIT it seals the proposed state; on CLEAN it calls #materialize to produce the merged tree, seals it, advances selvage, and clears the scratch (if materialization finds a byte conflict the meaning layer missed, it downgrades to KNOT — never a silent wrong-merge). Materialization needs git refs for ours/base/theirs (the strands' provenance.gitCommit anchors); a WORKTREE proposal returns CLEAN unsealed. A CLEAN re-base onto a MERGE strand also fails CLOSED (unsealed): a merge strand's gitCommit is ONE parent and lacks the merged bytes, so re-basing off it would mis-materialize a 3rd-gen merge (H1). SCHEMA v2: all three seal calls pass authoredBy {agentId: opts.agentId}; the CLEAN merge seal also passes mergeParentPickId = the base strand's pickId (the SECOND DAG parent), folded with merge.algo into the authenticated v2 pickId. DELTA-NATIVE (T-2026-07-04-003): every seal-time snapshot is ANCHORED where verifiable — FAST_ADMIT anchors on the tip strand (selvage === base there), the CLEAN capture anchors base on the base strand's verified binding (ours/ theirs then diff off the base tree), and the H1-relaxed native path anchors each git-ref side on its strand binding — so a warm admit on the full monorepo runs in single-digit SECONDS (was >2min; bench/bench-admit.mts). Anchors are verified by #warp-store's strandSnapshotAnchor and fail OPEN to the full snapshot; verdict semantics are untouched (decision before bytes). P2.2 (forge-spec §3a): a meaning-level KNOT/DANGLE verdict additionally durably snapshots the unsealed proposal's bytes, builds the machine-readable #knot-payload, persists it to .warpline/knots/, and returns knotPayloadId — a POINTER on AdmitResult (G1-additive; never the payload inline). Payload construction is derived evidence: a build failure degrades to a verdict without a pointer, never a crash. The verdict itself remains a pure function of STRUCTURAL inputs — prose never reaches admitDecision (the poisoned-prose invariant, test/injection-envelope.test.ts). P2.3 (forge-spec §3b): admit optionally judges the admission against a pre-declared #claim (AdmitOptions.claim = a claimId from the propose API) — the CLAIM GATE runs strictly BEFORE any seal: a breach (computed touched ⊄ claimed, per #claim's documented excess rule) returns the CLAIM-BREACH verdict class (G1-additive to AdmitStatus; never returned by admitDecision itself) — HELD, unsealed, with the exact excess/missing sets and the underlying verdict on AdmitResult.claim. FAIL-SAFE not fail-hard: acceptBreach is the explicit override that seals the underlying verdict while recording the breach fact. Every judgment (breach or not, sealed or not) appends a row to .warpline/claims/evaluations.jsonl (the calibration-probe stream, G5). Claims are OPT-IN: an admit without a claim is byte-identical to pre-claim behavior (tested), and no claim ever narrows what admit computes (the perf hint is recorded-only). Strand/pickId identity is UNTOUCHED — the claim pointer lives in sidecars and the Justification, never the signed strand. P3 GAP-1 (G1-additive): a materialized CLEAN admit also attaches AdmitResult.coverage — the #honesty per-path labels (meaning-decided / byte-decided / derived) + aggregate counts over the merge plan's changed paths. Presentation data, never a verdict input. P3 LANE A2 (forge-spec §1d — the permission model IS the scrutiny policy): the TRUST-FLOOR gate, the grades sidecar's first consumer. After the claim gate (claims judge honesty before trust is), an independent-confidence CLEAN — the autoClean class the false-AUTOFOLD gate proved blind — touching a symbol whose GRADED survival (#grade's symbolSurvivalIndex over grades.jsonl; ≥ K_MIN_GRADED graded outcomes, MIN across touched symbols) is below SURVIVAL_FLOOR returns the HELD verdict class (G1-additive to AdmitStatus; never returned by admitDecision): refused, unsealed, selvage unmoved, with AdmitResult.escalation naming the symbol + survival + n. Same fail-safe mechanics as CLAIM-BREACH: acceptRisk is the explicit override — it seals the underlying CLEAN and records the override row in .warpline/grades-escalations.jsonl (G5; never silent). The escalation decision is PURE over (decision, sidecar snapshot); the sidecar is read ONLY on the independent-CLEAN path, so a repo with no grades data — and every other verdict path — behaves byte-identically to before the rule (regression-guarded in test/trust-escalation.test.ts). NATIVE-FIRST R1 (AdmitOptions.shadow, #shadow-gate): shadow mode runs this whole pipeline — claim gate, verdict, escalation, coverage (read-only plan), knot-payload BUILD — and swaps every write (seal, snapshot, sidecar rows, payload persist) for a plain return; AdmitOptions.proposedState lets #pick reuse its own absorb. The decision function is untouched.",
       "visualTags": [],
       "related": [
         "#pick",
         "#materialize",
         "#warp-store",
         "#knot-payload",
+        "#claim",
+        "#honesty",
+        "#grade",
+        "#shadow-gate",
         "#absorb",
         "#sem-delta",
         "#predict",
@@ -5621,6 +5678,21 @@
         "#scratch",
         "#seal",
         "#fabric-lock"
+      ],
+      "componentType": "module"
+    },
+    "claim": {
+      "id": "claim",
+      "name": "Claim",
+      "symbol": "#claim",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
+      "description": "The claim-scoped propose API, claim:v1 (P2.3, forge-spec §3b, T-2026-06-24-018). A claim is the author's PRE-DECLARATION — agentId, claimedSymbols, optional taskRef (a structured id/URL, not prose), optional claimedContractDelta (the engine's SemDelta shape VERBATIM, G3 — recorded for the future grade stream, not evaluated in v1), optional confidence, and an ENVELOPED intent (#prose-envelope, §3d) — content-addressed at creation (claimId = claim:v1:sha256(canonical body); createClaim is the only constructor; verifyClaim recomputes the address + the intent envelope, and persist/read fail CLOSED on tamper). The claim schema IS the future OFFER metadata (§3b). Triple duty: (1) HONESTY CHECK — evaluateClaim(decision, claim) compares claimed vs COMPUTED symbol sets: excess = changed-but- unclaimed symbols that are DIRECT (SemDelta.localChanged) or ripple-only- but-KNOTTING (a ripple-only non-knotting symbol is exempt — charging authors for Merkle avalanches would make honest claims impossible; no agentDelta ⇒ all treated direct, conservative); missing = claimed-but-untouched, recorded NEVER a breach; breach = excess nonempty → #admit's CLAIM-BREACH verdict. (2) CALIBRATION PROBE — every evaluation appends {claimId, pickId?, agentId, breach, excess, missing, acceptedBreach?, ts} to .warpline/claims/evaluations.jsonl (G5 sidecar; the per-agent claimed-vs- computed honesty signal for the grade layer). (3) PERF HINT — recorded so a later layer CAN scope by claim; deliberately not implemented (no decision function reads a claim to narrow computation). evaluateClaim reads NO prose (the poisoned-prose invariant extends to claim fields). Sidecar persistence under .warpline/claims/ keyed by claimId (G2: no ledger positions). Surfaced via `warpline propose --agent <id> --claim <file|json>` (returns claimId) and `warpline admit … --claim <claimId> [--accept-breach]`.",
+      "visualTags": [],
+      "related": [
+        "#prose-envelope",
+        "#admit",
+        "#sem-delta"
       ],
       "componentType": "module"
     },
@@ -5668,10 +5740,11 @@
       "symbol": "#materialize",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
-      "description": "Phase-C v2 meaning→bytes — PERFORM the merge git could only forecast. computeMerge(base, ours, theirs refs) reads each changed file's RAW BYTES via git (binary-safe: a binary blob — NUL-bearing — changed on both sides fails CLOSED as a conflict, never a UTF-8 text-merge corruption, H3) and merges per-file with #merge3; any add/delete-vs-edit or overlapping token-region is a surfaced CONFLICT. changedPaths runs with `--no-renames` so a rename decomposes to delete-of-old + add-of-new (H2): a clean rename applies its delete instead of silently leaving a COPY, and a rename racing an edit of the old path fails closed as add/delete-vs-edit. The git tree-entry MODE is 3-way-merged alongside the bytes so the executable bit survives a content merge; a changed symlink/submodule (non-blob entry) fails CLOSED rather than round-trip as a regular blob and corrupt the entry type. materializeMergedState applies the conflict-free plan onto a throwaway copy of the base tree (restoring each merged file's mode) and absorbs it → the merged WarpState (the user's working tree is never touched). gitShow is byte-faithful (no trim) so trailing newlines and exact bytes survive — no drift.",
+      "description": "Phase-C v2 meaning→bytes — PERFORM the merge git could only forecast. computeMerge(base, ours, theirs refs) reads each changed file's RAW BYTES via git (binary-safe: a binary blob — NUL-bearing — changed on both sides fails CLOSED as a conflict, never a UTF-8 text-merge corruption, H3) and merges per-file with #merge3; any add/delete-vs-edit or overlapping token-region is a surfaced CONFLICT. changedPaths runs with `--no-renames` so a rename decomposes to delete-of-old + add-of-new (H2): a clean rename applies its delete instead of silently leaving a COPY, and a rename racing an edit of the old path fails closed as add/delete-vs-edit. The git tree-entry MODE is 3-way-merged alongside the bytes so the executable bit survives a content merge; a changed symlink/submodule (non-blob entry) fails CLOSED rather than round-trip as a regular blob and corrupt the entry type. materializeMergedState applies the conflict-free plan onto a throwaway copy of the base tree (restoring each merged file's mode) and absorbs it → the merged WarpState (the user's working tree is never touched). gitShow is byte-faithful (no trim) so trailing newlines and exact bytes survive — no drift. DERIVED ARTIFACTS (P3 GAP-1): a lockfile (#derived-artifacts) changed divergently on BOTH sides never conflicts/knots — taken from OURS wholesale (never token-merged: a spliced lockfile pretends precision it doesn't have) and recorded in MergePlan.derivedStale (additive) for regeneration from the merged manifests. Applies identically on the git-ref and native-tree paths.",
       "visualTags": [],
       "related": [
         "#merge3",
+        "#derived-artifacts",
         "#absorb",
         "#git-exec"
       ],
@@ -5691,15 +5764,66 @@
       ],
       "componentType": "module"
     },
+    "warpline-config": {
+      "id": "warpline-config",
+      "name": "Warpline Config",
+      "symbol": "#warpline-config",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
+      "description": "Per-repo engine toggles, `.warpline/config.json` (NATIVE-FIRST R1; .paradigm/research/warpline-native-first/roadmap-native-first.md). OPT-IN switches only — defaults never change because a config exists. v1 carries exactly one key: shadowGate (default false) — when true, every #pick also records the #shadow-gate observe-only verdict. A missing config is the empty config; a MALFORMED config throws (a corrupt toggle file must not silently read as \"everything off\") — the seal path catches (fail-safe), interactive callers surface it.",
+      "visualTags": [],
+      "related": [
+        "#pick",
+        "#shadow-gate"
+      ],
+      "componentType": "module"
+    },
+    "shadow-gate": {
+      "id": "shadow-gate",
+      "name": "Shadow Gate",
+      "symbol": "#shadow-gate",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
+      "description": "R1 of the native-first dogfood ladder (loid-loops.md §1) — the organic evidence clock. shadowAdmit runs the FULL #admit pipeline (claim gate, verdict, trust-floor escalation, coverage labels, knot-payload build) in OBSERVE-ONLY mode: never seals, never moves the selvage, never writes fabric/objects/sidecars — the ONLY write is one `shadowVerdict:v1` row appended to `.warpline/shadow/verdicts.jsonl` {ts, ref, agentId, status, confidence, knots, coverage, wouldSeal, durationMs, escalation?, claimReport?}. Feeds organic-K3, HELD precision (would-have-held counts), and the F1a latency baseline BEFORE any cutover risk. Surfaces: `warpline admit --shadow`, and the #pick auto-seal path when #warpline-config sets shadowGate:true. Zero-mutation invariant pinned byte-for-byte in test/shadow-admit.test.ts. Rows are LOCAL telemetry (gitignored); shadow never pollutes the real claims/grades calibration streams — its judgments ride the row.",
+      "visualTags": [],
+      "related": [
+        "#admit",
+        "#pick",
+        "#warpline-config"
+      ],
+      "componentType": "module"
+    },
+    "native-write-path": {
+      "id": "native-write-path",
+      "name": "Native Write Path",
+      "symbol": "#native-write-path",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
+      "description": "PHASE 0 of NATIVE-FIRST (arky-architecture.md §2.1 — THE KEYSTONE; ratified D2): the worktree→pick→admit loop with NO git anywhere, T-030's successor. fork mints the agent's scratch ref at the selvage PICKID (I9; optional restore into the agent worktree); **propose SEALS a v3 SCRATCH STRAND from the worktree** — snapshotDir (native walk) → absorbTree (restore from the store → lens, I2: sealed meaning provably corresponds to snapshotted bytes) → buildStrandV3 (bind-on-seal, parents=[scratch base], claim attached via sidecar, provenance git-null per I4) — advancing ONLY the scratch ref: proposals are durable, addressable, exchangeable BEFORE judgment; admit weaves scratch-tip × selvage through the EXISTING decision engine (admitDecision + claim gate + trust floor verbatim), materializes via materializeMergedStateNative ONLY (pure object-store 3-way; no git merge machinery on this path), seals the v3 weave (parents=[selvageTip, scratchTip], recipe folded into the pickId) with per-ref CAS on refs/heads/selvage, and on CLEAN RESTORES the merged bytes back into the agent worktree (§2.1 step 5 — the agent continues from merged reality; no commit ever existed). FAST_ADMIT is a selvage FAST-FORWARD to the scratch strand (a v3 admission is a ref advance, not a re-seal). KNOT/DANGLE persist the #knot-payload (both sides' treeIds native) and refuse — the scratch ref keeps the durable work; resolveNative seals the council resolution as a v3 weave carrying KnotResolution. Every step is an append or a CAS. SCOPE: v3 writes for scratch strands + native weaves only — the git-era seal path stays v2 until the founder-visible cutover (no selvage cutover here). EXIT PROOF: test/native-loop-no-git.test.ts — the full fork→propose→admit→KNOT→resolve→restore loop green in a directory with no `.git` at all (I12), pure-v3 DAG authenticated by fabric verify.",
+      "visualTags": [],
+      "related": [
+        "#knot-payload",
+        "#scratch",
+        "#admit",
+        "#materialize",
+        "#seal",
+        "#fabric-refs",
+        "#warp-store",
+        "#claim",
+        "#restore"
+      ],
+      "componentType": "module"
+    },
     "oracle": {
       "id": "oracle",
       "name": "Oracle",
       "symbol": "#oracle",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
-      "description": "oracle(branchA, branchB) — merge-base → absorb base/A/B → diff → predict → git merge-tree reality (read-only) → score the confusion matrix (agreeClean/agreeConflict/divergeGitOnly/divergeMeaningOnly/score/verdict) → append an OracleRecord to .warpline/oracle.jsonl. The two divergence cells are the experimental result. Conflict paths map to symbols at .purpose-dir level; a git conflict in a NON-SYMBOL file (or an unresolvable merge) becomes gitConflictUnmapped — a git-only divergence that gates the verdict, so the oracle NEVER reads CONVERGENT over a real git conflict (T-2026-06-25-001). The ACTIONABLE answer is a separate mergeClean flag (no knots ∧ no dangling ∧ no git conflict); convergence measures meaning⟷git AGREEMENT, so a contested merge both sides predict scores 'convergent agreement' but is NOT mergeClean — read mergeClean for \"is it safe to weave?\" (T-2026-06-25-005). KNOT-SIZE RANKING (T-2026-07-03-002, additive fields — verdict/score untouched, so the committed base-rate evidence stays valid): convergence also partitions divergeMeaningOnly into directContested[] (own content changed on ≥1 side) vs rippleOnly[] (flagged only via essence transitivity) + knotSize (=|directContested|, the ranking/threshold key) and flagCount. Ground truth: ≤6-symbol flag sets were 50% churn-validated, every ≥10-symbol avalanche 0% — small knots ARE the product; the CLI names direct symbols and collapses ripple to a count line.",
+      "description": "oracle(branchA, branchB) — merge-base → absorb base/A/B → diff → predict → git merge-tree reality (read-only) → score the confusion matrix (agreeClean/agreeConflict/divergeGitOnly/divergeMeaningOnly/score/verdict) → append an OracleRecord to .warpline/oracle.jsonl. The two divergence cells are the experimental result. Conflict paths map to symbols at .purpose-dir level; a git conflict in a NON-SYMBOL file (or an unresolvable merge) becomes gitConflictUnmapped — a git-only divergence that gates the verdict, so the oracle NEVER reads CONVERGENT over a real git conflict (T-2026-06-25-001). The ACTIONABLE answer is a separate mergeClean flag (no knots ∧ no dangling ∧ no git conflict); convergence measures meaning⟷git AGREEMENT, so a contested merge both sides predict scores 'convergent agreement' but is NOT mergeClean — read mergeClean for \"is it safe to weave?\" (T-2026-06-25-005). KNOT-SIZE RANKING (T-2026-07-03-002, additive fields — verdict/score untouched, so the committed base-rate evidence stays valid): convergence also partitions divergeMeaningOnly into directContested[] (own content changed on ≥1 side) vs rippleOnly[] (flagged only via essence transitivity) + knotSize (=|directContested|, the ranking/threshold key) and flagCount. Ground truth: ≤6-symbol flag sets were 50% churn-validated, every ≥10-symbol avalanche 0% — small knots ARE the product; the CLI names direct symbols and collapses ripple to a count line. P3 GAP-1 (G1-additive, schemaVersion unchanged): the record also carries coverage — the #honesty per-path labels over every path either side touched (real refs only) + aggregate counts. A coverage failure never fails the oracle.",
       "visualTags": [],
       "related": [
+        "#honesty",
         "#absorb",
         "#sem-delta",
         "#predict",
@@ -17947,6 +18071,18 @@
       "category": "components",
       "id": "lens-registry"
     },
+    "#cfg-lens": {
+      "category": "components",
+      "id": "cfg-lens"
+    },
+    "#derived-artifacts": {
+      "category": "components",
+      "id": "derived-artifacts"
+    },
+    "#honesty": {
+      "category": "components",
+      "id": "honesty"
+    },
     "#lift-code-units": {
       "category": "components",
       "id": "lift-code-units"
@@ -18027,6 +18163,10 @@
       "category": "components",
       "id": "admit"
     },
+    "#claim": {
+      "category": "components",
+      "id": "claim"
+    },
     "#prose-envelope": {
       "category": "components",
       "id": "prose-envelope"
@@ -18046,6 +18186,18 @@
     "#hook": {
       "category": "components",
       "id": "hook"
+    },
+    "#warpline-config": {
+      "category": "components",
+      "id": "warpline-config"
+    },
+    "#shadow-gate": {
+      "category": "components",
+      "id": "shadow-gate"
+    },
+    "#native-write-path": {
+      "category": "components",
+      "id": "native-write-path"
     },
     "#oracle": {
       "category": "components",
