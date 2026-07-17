@@ -326,6 +326,60 @@ export {
   type MaterializeNativeResult,
 } from './fabric/materialize.js';
 
+// NATIVE-FIRST phase 1 (#warplined) — the solo daemon: the fabric with a
+// NETWORK FACE (NDJSON over a 0600 unix socket; engine shapes verbatim, G3;
+// stage-1 server-stamped identity per aegis-security.md §1.2).
+export {
+  RPC_SCHEMA,
+  DAEMON_VERBS,
+  HUMAN_ONLY_VERBS,
+  HUMAN_ONLY_ADMIT_FLAGS,
+  type DaemonVerb,
+  type RpcRequest,
+  type RpcResponse,
+  type RpcOk,
+  type RpcErr,
+  type RpcErrorCode,
+} from './daemon/protocol.js';
+export {
+  mintToken,
+  readTokens,
+  resolveToken,
+  listTokenSummaries,
+  tokensPathOf,
+  DAEMON_TOKEN_SCHEMA,
+  type DaemonToken,
+  type Principal,
+  type PrincipalKind,
+} from './daemon/tokens.js';
+export {
+  socketPathOf,
+  pidPathOf,
+  readPidfile,
+  daemonState,
+  stopDaemon,
+  DAEMON_PIDFILE_SCHEMA,
+  type DaemonPidfile,
+  type DaemonState,
+} from './daemon/lifecycle.js';
+export {
+  startDaemon,
+  readDaemonAudit,
+  daemonAuditPathOf,
+  DAEMON_AUDIT_SCHEMA,
+  type DaemonHandle,
+  type StartDaemonOptions,
+  type DaemonAuditRow,
+} from './daemon/server.js';
+export {
+  DaemonClient,
+  DaemonRpcError,
+  daemonAvailable,
+  type DaemonStatus,
+  type ConnectOptions,
+  type ShadowAdmitOverDaemon,
+} from './daemon/client.js';
+
 // Oracle
 export { oracle, type OracleRecord, type OracleOptions } from './oracle.js';
 

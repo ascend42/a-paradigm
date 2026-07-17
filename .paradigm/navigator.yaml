@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-07-17T22:30:21.231Z'
+generated: '2026-07-17T22:59:31.203Z'
 structure: {}
 key_files:
   config:
@@ -513,6 +513,9 @@ symbols:
   '#purpose-component-stake-git': /Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose
   '#purpose-component-shadow-gate': /Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose
   '#purpose-component-native-write-path': /Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose
+  '#purpose-component-warplined': /Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose
+  '#purpose-component-warplined-tokens': /Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose
+  '#purpose-component-warplined-client': /Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose
   '#purpose-component-oracle': /Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose
   '#purpose-component-weave': /Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose
   '#purpose-component-consolidate': /Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose
@@ -1693,6 +1696,7 @@ symbolsByComponentType:
     - '#global-clean-handler'
     - '#sentinel-web-client'
     - '#university-server'
+    - '#warplined'
     - '#portal-client'
     - '#gate-client'
     - '#websocket-server'
@@ -2000,6 +2004,8 @@ symbolsByComponentType:
     - '#stake-git'
     - '#shadow-gate'
     - '#native-write-path'
+    - '#warplined-tokens'
+    - '#warplined-client'
     - '#oracle'
     - '#weave'
     - '#consolidate'

@@ -89,6 +89,33 @@ recovery = ref move, never an import. Pulls forward M2 refs UX (branch/switch ov
 > an edited tree; edits seal normally post-recover, parented on the staked pick). Daemon
 > wiring = the separate Phase-1 lane. NOT enabled on this repo (founder-visible flip).
 
+> **[DAEMON BUILT 2026-07-17, T-2026-07-17-011 / Kit]** `warplined` — the solo daemon
+> (#warplined, packages/warpline/src/daemon/{protocol,tokens,lifecycle,server,client}.ts):
+> the fabric with a NETWORK FACE, no database beside it. Transport = NDJSON over a unix
+> domain socket (`.warpline/daemon.sock`, mode 0600) — chosen over HTTP-over-uds because
+> the protocol is pure verb→result (no routing/headers/chunking needed) and node stdlib
+> does it in `net` + a line splitter, zero deps; envelope `{rpc:'warplined:v1', id, verb,
+> token, params}` → `{id, ok, result|error}` with results = ENGINE SHAPES VERBATIM (G3).
+> Verbs 1:1 onto engine fns (G4 — same fabric lock, no new mutation path): status,
+> refs.list, fork, propose, admit (native + R1 shadow flag), knot.show, resolve, stake,
+> stake.recover, grade.report, shadow.tail. Aegis STAGE 1 landed whole: per-principal
+> bearer tokens (`.warpline/daemon-tokens.jsonl`, 0600, gitignored, ALSO on the frozen
+> stake deny-list; minting local-CLI-only = the human's act), SERVER-STAMPED identity
+> (actor/agentId/decidedBy from the token — spoofed params proven ignored), the
+> verb×principal matrix (resolve/stake/stake.recover + accept-breach/accept-risk are
+> human-class only; an agent never accepts its own breach), and a daemonAudit:v1 row per
+> API call incl. refusals (structural targets only — never prose). Lifecycle: one daemon
+> per fabric (O_EXCL pidfile), stale-residue recovery, clean SIGTERM stop; CLI `warpline
+> daemon start|stop|status|token mint|token list|call`. **Loid R4 acceptance pulled
+> early and PASSED:** the same fixture loop (genesis FF, edit FF, CLEAN WEAVE) run
+> in-process vs through the socket is BYTE-IDENTICAL modulo the envelope
+> (test/daemon-byte-identity.test.ts); full e2e fork→propose→admit→knot→resolve through
+> the socket on a git-less fixture, fabric verify green (test/daemon.test.ts). 500/500.
+> NAMED DEVIATIONS/deferrals: token file is `daemon-tokens.jsonl` not `.json` (matches
+> the frozen D5 deny-list entry); loopback TCP flag, `warplined backup`, fs-watcher
+> index warming, and the console re-point (platform lane) deferred within Phase 1.
+> NOT started against this repo's live fabric (fixtures only; founder-visible flip).
+
 **PHASE 2 (~3–4wk) — the team server. → Rung R3 (our own dev cuts over, GATED).**
 Team home on LAN/VPC; V3.5 bundles graduate to THE sync protocol (refs/negotiate/bundle/objects
 + unsigned sidecar channel); `/refs/<name>/advance` (per-ref CAS) is the only privileged verb —

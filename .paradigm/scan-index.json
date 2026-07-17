@@ -2,7 +2,7 @@
   "$meta": {
     "version": "1.0.0",
     "project": "a-paradigm",
-    "generatedAt": "2026-07-17T22:30:21.223Z",
+    "generatedAt": "2026-07-17T22:59:31.196Z",
     "paradigmVersion": "0.1.0",
     "sources": {
       "purposeFiles": 89,
@@ -20,7 +20,7 @@
       "view": 125,
       "store": 20,
       "filter": 3,
-      "service": 87,
+      "service": 88,
       "model": 14,
       "utility": 58,
       "feature": 1,
@@ -36,7 +36,7 @@
       "installer": 1,
       "adapter": 1,
       "route": 4,
-      "module": 49,
+      "module": 51,
       "cli": 1,
       "test": 8,
       "state": 2,
@@ -5861,6 +5861,53 @@
         "#warp-store",
         "#claim",
         "#restore"
+      ],
+      "componentType": "module"
+    },
+    "warplined": {
+      "id": "warplined",
+      "name": "Warplined",
+      "symbol": "#warplined",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
+      "description": "PHASE 1 of NATIVE-FIRST (arky-architecture.md §1.1; roadmap PHASE 1): the solo daemon — THE FABRIC WITH A NETWORK FACE. No database beside it: every verb calls the SAME engine function the CLI calls, in-process, under the SAME #fabric-lock (G4 — no other mutation path). Transport: NDJSON over a unix domain socket (.warpline/daemon.sock, mode 0600 — Aegis stage-1 trust boundary is the OS user; loopback TCP is a later opt-in flag). One JSON line = one frame; envelope {rpc:'warplined:v1', id, verb, token, params} → {id, ok, result|error}; `result` is the ENGINE SHAPE VERBATIM (G3: AdmitResult, knotPayload:v1, GradeReport, shadowVerdict:v1, StakeResult). Verbs (1:1 onto engine fns — transport + identity, never logic): status, refs.list, fork, propose, admit (native, incl. the R1 shadow flag), knot.show, resolve, stake, stake.recover, grade.report, shadow.tail. STAGE-1 IDENTITY (aegis-security.md §1.2): every request carries a bearer token (#warplined-tokens); the daemon SERVER-STAMPS actor/agentId/decidedBy from the resolved principal — client-supplied identity params are advisory and ignored. The verb×principal matrix (§2.2): resolve / stake / stake.recover and the accept-breach / accept-risk override flags are HUMAN-CLASS ONLY (an agent never accepts its own breach); engine-side override records (claim evaluations, grade escalations) are reused, not duplicated. EVERY call appends a daemonAudit:v1 row — .warpline/daemon/audit.jsonl {ts, principal, kind, verb, target, ok, code} including refusals; targets are STRUCTURAL (selectors/paths/flags), never prose (§4.1: log the address, never the body). LIFECYCLE: exactly one daemon per fabric — O_EXCL pidfile lock (.warpline/daemon.pid), live-pid probe refuses a second start, dead-pid/orphaned-socket residue recovered on start, SIGTERM stops clean (socket+pidfile unlinked). CLI: `warpline daemon start|stop|status|token mint|token list|call`. BYTE-IDENTITY PROOF (Loid R4, pulled early): test/daemon-byte-identity.test.ts — the same fixture loop (genesis FF, edit FF, CLEAN WEAVE) in-process vs through the socket produces byte-identical results modulo the envelope. NEVER started against this repo's live fabric by tests — fixtures only.",
+      "visualTags": [],
+      "related": [
+        "#fabric-lock",
+        "#warplined-tokens",
+        "#warplined-client",
+        "#native-write-path",
+        "#shadow-gate",
+        "#knot-payload",
+        "#grade",
+        "#stake",
+        "#fabric-refs"
+      ],
+      "componentType": "service"
+    },
+    "warplined-tokens": {
+      "id": "warplined-tokens",
+      "name": "Warplined Tokens",
+      "symbol": "#warplined-tokens",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
+      "description": "Aegis stage-1 identity for #warplined: per-principal bearer tokens in .warpline/daemon-tokens.jsonl (append-only daemonToken:v1 rows {token, principal, kind:'human'|'agent', createdAt}; file mode 0600; gitignored via .warpline/*; the filename is ALSO on the frozen stake deny-list — never leaves the box twice over). Minting is LOCAL-CLI-ONLY (`warpline daemon token mint <name> --kind human|agent`) — the human's act, gated by possession of the box; no self-service daemon verb exists (anti-sockpuppet, §2.2). resolveToken does constant-time comparison and fails CLOSED (garbled rows never match); `token list` is redacted (tokens are shown exactly once, at mint). Honest trust claim: attribution is authentic within this machine's OS-user boundary; the daemon is the trusted stamper — per-strand signatures remain M3.",
+      "visualTags": [],
+      "related": [
+        "#warplined"
+      ],
+      "componentType": "module"
+    },
+    "warplined-client": {
+      "id": "warplined-client",
+      "name": "Warplined Client",
+      "symbol": "#warplined-client",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
+      "description": "The thin typed client of #warplined (DaemonClient): NDJSON frames over the unix socket, id-correlated (concurrent calls on one connection answer in order), engine shapes deserialized VERBATIM — the client never reshapes (G3). DaemonRpcError carries the machine-readable refusal code (AUTH/FORBIDDEN/BAD_REQUEST/UNKNOWN_VERB/NOT_FOUND/ENGINE); daemonAvailable() is the socket-presence auto-detect hook. This is the seam the platform router / judgment console re-points to in the console lane (not this lane). In-process engine calls remain the CLI default; `warpline daemon call <verb>` is the explicit transport path (token from --token or WARPLINE_DAEMON_TOKEN).",
+      "visualTags": [],
+      "related": [
+        "#warplined"
       ],
       "componentType": "module"
     },
@@ -18272,6 +18319,18 @@
     "#native-write-path": {
       "category": "components",
       "id": "native-write-path"
+    },
+    "#warplined": {
+      "category": "components",
+      "id": "warplined"
+    },
+    "#warplined-tokens": {
+      "category": "components",
+      "id": "warplined-tokens"
+    },
+    "#warplined-client": {
+      "category": "components",
+      "id": "warplined-client"
     },
     "#oracle": {
       "category": "components",

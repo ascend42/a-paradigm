@@ -62,6 +62,11 @@ import { stake, stakeRecover, type StakeResult, type StakeRecoverResult } from '
 import { STAKE_MARKER } from './fabric/stake-guard.js';
 import { existsSync } from 'node:fs';
 import { repoRoot, gitPath } from './git/git-exec.js';
+import { startDaemon } from './daemon/server.js';
+import { mintToken, listTokenSummaries } from './daemon/tokens.js';
+import { daemonState, stopDaemon, socketPathOf } from './daemon/lifecycle.js';
+import { DaemonClient } from './daemon/client.js';
+import { spawn } from 'node:child_process';
 
 // The shared .purpose parser (library code, purpose/core/aggregator) console.warns
 // about unrelated schema-invalid files (e.g. a stale conductor .purpose) on every
@@ -1012,6 +1017,157 @@ stakeCmd
         process.stdout.write(JSON.stringify(result, null, 2) + '\n');
       } else {
         printStakeRecover(result);
+      }
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+const daemonCmd = program
+  .command('daemon')
+  .description(
+    'warplined — the solo Warpline daemon (PHASE 1, native-first): the fabric with a NETWORK FACE. NDJSON over a unix socket (.warpline/daemon.sock, 0600); every verb calls the same engine function the CLI calls, under the same fabric lock. Stage-1 identity: per-principal bearer tokens (minted here, locally — never over the wire), server-stamped agentId, human-class-only overrides, every call audited (.warpline/daemon/audit.jsonl).',
+  );
+
+daemonCmd
+  .command('start')
+  .description('Start warplined for this fabric (exactly one per fabric — the pidfile is the lock). Default: detach to the background; --foreground stays attached (SIGTERM/SIGINT stop it cleanly).')
+  .option('--foreground', 'run in the foreground (the detached default re-execs this)')
+  .action(async (options: { foreground?: boolean }) => {
+    try {
+      const root = await repoRoot().catch(() => process.cwd());
+      if (options.foreground) {
+        const handle = await startDaemon(root);
+        process.stdout.write(`WARPLINED  serving ${root}\n  socket  ${handle.socketPath}\n  pid     ${handle.pid}\n`);
+        const shutdown = (): void => {
+          void handle.close().then(() => process.exit(0));
+        };
+        process.on('SIGTERM', shutdown);
+        process.on('SIGINT', shutdown);
+        return; // the server keeps the event loop alive
+      }
+      const st = daemonState(root);
+      if (st.state === 'running') {
+        process.stdout.write(`WARPLINED  already running (pid ${st.pidfile.pid}, socket ${st.pidfile.socketPath})\n`);
+        return;
+      }
+      const child = spawn(process.execPath, [process.argv[1], 'daemon', 'start', '--foreground'], {
+        cwd: root,
+        detached: true,
+        stdio: 'ignore',
+      });
+      child.unref();
+      process.stdout.write(`WARPLINED  starting detached (pid ${child.pid})\n  socket  ${socketPathOf(root)}\n  stop    warpline daemon stop\n`);
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+daemonCmd
+  .command('stop')
+  .description('Stop the daemon serving this fabric (SIGTERM the pidfile holder; stale residue is cleaned).')
+  .action(async () => {
+    try {
+      const root = await repoRoot().catch(() => process.cwd());
+      const r = await stopDaemon(root);
+      process.stdout.write(`WARPLINED  ${r.stopped ? 'stopped' : 'not stopped'} — ${r.reason}${r.pid ? ` (pid ${r.pid})` : ''}\n`);
+      if (!r.stopped && r.reason.includes('still running')) process.exitCode = 1;
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+daemonCmd
+  .command('status')
+  .description('Daemon lifecycle status for this fabric: running (live pid) / stale residue / stopped.')
+  .option('--json', 'emit the status as JSON')
+  .action(async (options: { json?: boolean }) => {
+    try {
+      const root = await repoRoot().catch(() => process.cwd());
+      const st = daemonState(root);
+      if (options.json) {
+        process.stdout.write(JSON.stringify(st, null, 2) + '\n');
+      } else if (st.state === 'running') {
+        process.stdout.write(`WARPLINED  running  (pid ${st.pidfile.pid}, since ${st.pidfile.startedAt})\n  socket  ${st.pidfile.socketPath}\n`);
+      } else if (st.state === 'stale') {
+        process.stdout.write(`WARPLINED  stale residue (crashed?) — \`warpline daemon stop\` cleans, \`warpline daemon start\` recovers\n`);
+      } else {
+        process.stdout.write('WARPLINED  stopped\n');
+      }
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+const tokenCmd = daemonCmd
+  .command('token')
+  .description('Stage-1 identity: per-principal bearer tokens (.warpline/daemon-tokens.jsonl, 0600, gitignored). Minting is LOCAL-CLI-ONLY — the human\'s act, gated by possession of the box (Aegis §2.2: anti-sockpuppet). The daemon derives agentId/actor FROM the token; client-supplied identity is ignored.');
+
+tokenCmd
+  .command('mint <name>')
+  .description('Mint a bearer token for a principal. kind:agent principals CANNOT resolve knots, cut/recover stakes, or accept-breach/accept-risk (human-class-only overrides). The token prints ONCE — hand it to the agent worktree via env, never commit it.')
+  .requiredOption('--kind <kind>', "principal class: 'human' or 'agent'")
+  .option('--json', 'emit the minted row as JSON (includes the token — once)')
+  .action(async (name: string, options: { kind: string; json?: boolean }) => {
+    try {
+      const root = await repoRoot().catch(() => process.cwd());
+      const row = mintToken(root, name, options.kind as 'human' | 'agent');
+      if (options.json) {
+        process.stdout.write(JSON.stringify(row, null, 2) + '\n');
+      } else {
+        process.stdout.write(
+          `TOKEN MINTED  ${row.principal}  (kind:${row.kind})\n` +
+            `  token   ${row.token}\n` +
+            `  shown once here — the row lives at .warpline/daemon-tokens.jsonl (0600, gitignored; never commit or ship it)\n`,
+        );
+      }
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+tokenCmd
+  .command('list')
+  .description('List minted principals (REDACTED — tokens are never re-shown).')
+  .option('--json', 'emit the redacted rows as JSON')
+  .action(async (options: { json?: boolean }) => {
+    try {
+      const root = await repoRoot().catch(() => process.cwd());
+      const rows = listTokenSummaries(root);
+      if (options.json) {
+        process.stdout.write(JSON.stringify(rows, null, 2) + '\n');
+      } else if (rows.length === 0) {
+        process.stdout.write('WARPLINED TOKENS  (none minted — `warpline daemon token mint <name> --kind human|agent`)\n');
+      } else {
+        const lines = ['WARPLINED TOKENS  (redacted)'];
+        for (const r of rows) lines.push(`  ${r.tokenPrefix}  ${r.kind.padEnd(5)}  ${r.principal}  (${r.createdAt})`);
+        process.stdout.write(lines.join('\n') + '\n');
+      }
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+daemonCmd
+  .command('call <verb>')
+  .description('Drive one daemon verb over the socket (status | refs.list | fork | propose | admit | knot.show | resolve | stake | stake.recover | grade.report | shadow.tail). Token from --token or WARPLINE_DAEMON_TOKEN. Prints the engine-shaped result as JSON (G3). The in-process CLI verbs remain the default; this is the transport path.')
+  .option('--params <json>', 'verb params as inline JSON', '{}')
+  .option('--token <token>', 'bearer token (default: $WARPLINE_DAEMON_TOKEN)')
+  .action(async (verb: string, options: { params: string; token?: string }) => {
+    try {
+      const root = await repoRoot().catch(() => process.cwd());
+      const token = options.token ?? process.env.WARPLINE_DAEMON_TOKEN;
+      if (!token) {
+        process.stderr.write('warpline: daemon call needs a token (--token or WARPLINE_DAEMON_TOKEN)\n');
+        process.exit(1);
+      }
+      const params = JSON.parse(options.params) as Record<string, unknown>;
+      const client = await DaemonClient.connect(root, token);
+      try {
+        const result = await client.call(verb, params);
+        process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+      } finally {
+        client.close();
       }
     } catch (err) {
       fail(err);
