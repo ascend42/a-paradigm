@@ -1,6 +1,6 @@
 # Warpline Forge — north-star CONSTRAINT spec (the "GitHub layer")
 
-> **Status: DRAFT — PENDING FOUNDER BLESSING. SPEC-ONLY — NO FORGE CODE until graded-weaves/week > 0** (North's freeze; roadmap freeze list).
+> **Status: CONSTITUTION EDITION — FOUNDER-BLESSED (TD-2026-07-17-085, D6).** The §5 "no forge code" freeze is retired per founder direction TD-2026-07-17-151: the forge is the paramount core product, built deliberately under founder pacing along `roadmap-native-first.md`; G1–G5 are constitutional law for the server. (Original freeze context preserved in §5 for the record.)
 > Author: Arky (architect) · Task T-2026-07-14-005 · Panel ruling L-2026-07-14-ascend-150429-001 · Roadmap `.paradigm/research/warpline-roadmap-2026H2.md` §0.5
 > Reads with: `warpline-flows.md` (OFFER/endorsement vocabulary), `warpline-engine.md` (verdict semantics), `warpline-gui.md` (the GUI seed), `warpline-v3-identity.md` (API guardrails), `warpline-fabric-schema-v2.md`.
 
