@@ -1,0 +1,46 @@
+id: TD-2026-07-17-085
+timestamp: '2026-07-17T17:49:39.204Z'
+title: D1–D6 RATIFIED — native-first build begins (Phase 0 + R1 shadow gate)
+decision: >-
+  Founder ratifies all six native-first decision points as presented (roadmap-native-first.md + the revised-map brief):
+  D1 home-fabric topology (one symmetric warplined; per project one ref-authority fabric); D2 propose SEALS a scratch
+  strand (durable pre-judgment attempts); D3 stakes = first-parent linearization (git never receives topology); D4 the
+  M3 split (identity registry at phase 2; per-author signatures at federation); D5 the valve deny-list is
+  constitution-grade (expansion = schema change, not a flag); D6 warpline-forge.md re-blessed as the CONSTITUTION
+  EDITION (DRAFT banner removed; §5 "no forge code" freeze retired per TD-2026-07-17-151; G1–G5 = constitutional law for
+  the server). Build begins: R1 shadow gate immediately on today's engine, then Phase 0 (native write path, git-absent;
+  v3.3 machinery pulled forward — live-fabric cutover remains a separate founder-visible step).
+rationale: >-
+  Founder ruling 2026-07-17 ("yes let's begin and push") on the revised map after the four-lens theorizing pass. All six
+  were panel recommendations with no dissent; cutover rungs remain gated by the pre-registered falsifiers F1–F3, not by
+  schedule.
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+  - id: architect
+    role: agent
+    stance: supported
+  - id: forge
+    role: agent
+    stance: supported
+  - id: security
+    role: agent
+    stance: supported
+  - id: product
+    role: agent
+    stance: supported
+symbols_affected:
+  - '#warpline-forge'
+  - '#fabric'
+  - '#admit'
+  - '#pick'
+  - '#seal'
+  - '#warp-store'
+status: active
+tags:
+  - warpline
+  - native-first
+  - founder-ratified
+  - phase-0
+  - constitution

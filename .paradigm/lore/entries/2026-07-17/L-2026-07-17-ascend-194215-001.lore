@@ -1,0 +1,47 @@
+id: L-2026-07-17-ascend-194215-001
+type: milestone
+timestamp: '2026-07-17T19:42:15.177Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: NATIVE-FIRST OPENS — R1 shadow gate live on the home repo, Phase-0 keystone green with no .git anywhere, first organic heartbeat recorded
+summary: 'The native-first era began in a single day: founder direction TD-2026-07-17-151 (own private server = the product; forge = paramount; git = safeguarded checkpoint valve) → 4-lens theorizing pass (Arky/North/Loid/Aegis) → fused roadmap → D1-D6 ratified (TD-2026-07-17-085) → forge spec re-blessed as CONSTITUTION EDITION → and the first build landed same-day (5ae6ed35, 457/457): the R1 shadow gate is LIVE on this repo (every auto-seal now also records an observe-only verdict — the organic evidence clock for K3/HELD-precision/F1 is running; first organic hook-path row: FAST_ADMIT, wouldSeal:true, 117ms) and the Phase-0 keystone is green — the full write loop (fork → propose seals a v3 scratch strand from the worktree → admit --native weaving via the native merge path only → KNOT → payload → resolve → restore) passes in a fixture with NO .git anywhere, pure-v3 DAG verifying clean. The git-free write path exists.'
+symbols_touched:
+  - '#native-write-path'
+  - '#shadow-gate'
+  - '#warpline-config'
+  - '#warpline-forge'
+  - '#admit'
+  - '#pick'
+  - '#scratch'
+  - '#fabric'
+commit: 5ae6ed35
+verification:
+  status: pass
+  details:
+    suite: 457/457 green, coordinator re-run
+    no-git-loop: pass
+    live-shadow-row: organic FAST_ADMIT @117ms verified
+    reindex: 1281 symbols, warpline .purpose valid
+tags:
+  - arc:warpline
+  - native-first
+  - milestone
+  - phase-0
+  - R1
+  - founder-direction
+body: 'Sequence of the day: (1) founder ruling after reading the sign-off brief — GitHub structurally cannot host the model; claims stake on our ground; git becomes stake-points-only; (2) theorizing pass fixed-premise, no re-litigation: Arky home-fabric topology + inversion list I1-I12 + keystone design; North dispositions (Guard Action = instrument never published; benchmark parked; category CLAIMED on our ground, dated, honest zeros); Loid dogfood ladder R0-R4 with pre-registered falsifiers F1-F3 gating rungs ("the ladder is the critical path; trust IS the forge''s permission model"); Aegis staged identity (M3 does NOT pull forward — server-stamped identity closes impersonation; signatures at federation) + valve safeguards S1-S5; (3) D1-D6 ratified same day; (4) Kit landed R1 + Phase-0 slice 1 with the no-.git exit test. Engine continuity total: v3 identity/refs, knotPayload, claims, HELD, cfg-lens, restore — all became the native substrate unchanged. Follow-ups filed: T-2026-07-17-007 (shadow-row hygiene before volume), T-2026-07-17-001 (the valve, phase 1). Remaining Phase-0: I5 incremental worktree index + residual inversions; live-selvage v3 cutover stays a founder-visible step. Discipline note: every lane coordinator-verified (independent suite re-runs) before commit; the falsifiers — not enthusiasm — gate the cutover.'
+linked_lore:
+  - L-2026-07-17-ascend-172635-979
+  - L-2026-07-17-ascend-174939-670
+  - L-2026-07-14-ascend-150429-001
+linked_tasks:
+  - T-2026-07-17-001
+  - T-2026-07-17-006
+  - T-2026-07-17-007
+confidence: 0.92
+git_context:
+  ref: 5ae6ed35104a9fcc0b0608688d93af03b8f7deaa
+  branch: warpline-surfaces
+  dirty: true

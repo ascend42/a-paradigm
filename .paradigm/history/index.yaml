@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-07-17T18:30:44.855Z'
+generated: '2026-07-17T19:42:32.355Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -22904,11 +22904,66 @@ by_symbol:
       agent: []
   '#warpline':
     symbol: '#warpline'
-    total_changes: 11
-    last_modified: '2026-07-15T09:06:46Z'
+    total_changes: 12
+    last_modified: '2026-07-17T19:42:29Z'
     stability_score: 1
     fragility: low
     recent:
+      - &ref_375
+        id: h0599
+        ts: '2026-07-17T19:42:29Z'
+        type: implement
+        symbols:
+          - '#native-write-path'
+          - '#shadow-gate'
+          - '#warpline'
+        author:
+          type: human
+          id: ascend
+        commit: 9e2d7cd4ba33ac1fc608f2ab8fb9d239544a1b3b
+        intent: feature
+        files:
+          - .paradigm/.cid-briefed
+          - .paradigm/.cid-session
+          - .paradigm/.nav-called
+          - .paradigm/.orchestrated
+          - .paradigm/.pending-review
+          - .paradigm/agent-state/architect.yaml
+          - .paradigm/agent-state/builder.yaml
+          - .paradigm/agent-state/scholar.yaml
+          - .paradigm/agent-state/tester.yaml
+          - .paradigm/curriculum/architect.syllabus
+          - .paradigm/curriculum/compliance.syllabus
+          - .paradigm/curriculum/index.yaml
+          - .paradigm/curriculum/scenarios/index.yaml
+          - .paradigm/events/.last-processed
+          - .paradigm/events/classroom-certifications.jsonl
+          - .paradigm/events/debates.jsonl
+          - .paradigm/events/nominations.jsonl
+          - .paradigm/events/notebook-refs.jsonl
+          - .paradigm/events/settlement-liveness.jsonl
+          - .paradigm/events/stream.jsonl
+          - .paradigm/events/team-funnel.jsonl
+          - .paradigm/flow-index.json
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/lore/timeline.yaml
+          - .paradigm/manifest.consistency.json
+          - .paradigm/navigator.yaml
+          - .paradigm/notebooks/architect/nb-habits-mn6he1ec.yaml
+          - .paradigm/notebooks/architect/nb-monorepo-mn53wvzd.yaml
+          - .paradigm/notebooks/builder/nb-build-mn53ww33.yaml
+          - .paradigm/notebooks/builder/nb-conductor-mn53x3e1.yaml
+          - .paradigm/notebooks/builder/nb-mcp-tools-mn53wzsn.yaml
+          - .paradigm/notebooks/tester/nb-conductor-tests-mn53xo9s.yaml
+          - .paradigm/notebooks/tester/nb-vitest-mn53xjlv.yaml
+          - .paradigm/personas/index.yaml
+          - .paradigm/protocols/index.yaml
+          - .paradigm/scan-index.json
+          - .paradigm/university/index.yaml
+          - .warpline/fabric.jsonl
+          - .warpline/refs/selvage
+        description: 'chore(#warpline): settlement — native-first opening lore + paradigm index/state sweep'
       - &ref_365
         id: h0589
         ts: '2026-07-15T09:06:46Z'
@@ -22977,7 +23032,6 @@ by_symbol:
           - packages/warpline/src/oracle.ts
           - packages/warpline/test/oracle.test.ts
         description: 'test(#oracle): positively cover the agreeConflict + divergeGitOnly matrix cells (Probe)'
-      - *ref_227
     contributors:
       human:
         - ascend
@@ -25113,11 +25167,12 @@ by_symbol:
       agent: []
   '#native-write-path':
     symbol: '#native-write-path'
-    total_changes: 1
-    last_modified: '2026-07-17T18:30:43Z'
+    total_changes: 2
+    last_modified: '2026-07-17T19:42:29Z'
     stability_score: 1
     fragility: low
     recent:
+      - *ref_375
       - *ref_351
     contributors:
       human:
@@ -25125,11 +25180,12 @@ by_symbol:
       agent: []
   '#shadow-gate':
     symbol: '#shadow-gate'
-    total_changes: 1
-    last_modified: '2026-07-17T18:30:43Z'
+    total_changes: 2
+    last_modified: '2026-07-17T19:42:29Z'
     stability_score: 1
     fragility: low
     recent:
+      - *ref_375
       - *ref_351
     contributors:
       human:
