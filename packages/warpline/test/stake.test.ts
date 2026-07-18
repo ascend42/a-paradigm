@@ -33,9 +33,12 @@ import { stake, stakeRecover, stakeAuditPathOf, stakeMessage, parseStakeTrailers
 import {
   STAKE_MARKER,
   STAKE_MARKER_CONTENT,
-  STAKE_DENYLIST,
   STAKE_DENYLIST_SCHEMA,
-  STAKE_DENY_CONTENT_MARKERS,
+  STAKE_DENY_NAMES,
+  STAKE_DENY_PATHS,
+  STAKE_DENY_ENVELOPE_KINDS,
+  STAKE_DENY_ROW_SCHEMAS,
+  STAKE_DENY_ROW_SHAPES,
 } from '../src/fabric/stake-guard.js';
 import { appendStrand, writeSelvage, readSelvage, readFabric, warplineDirOf } from '../src/fabric/fabric.js';
 import { ObjectStore } from '../src/warp/object-store.js';
@@ -305,17 +308,35 @@ describe('stake — S2/S3 adversarial refusals (crafted trees)', () => {
       () => true,
     );
 
-  it('S2: a planted sidecar path (claims/evaluations.jsonl) in the tree → refuse + audit, no commit', async () => {
+  it('S2: a planted fabric dir (vendored .warpline/claims/evaluations.jsonl) → refuse + audit, no commit', async () => {
+    // Nested under vendor/ so the STAKE deny-list (not restoreTree's own root
+    // guard) is the layer under test: `.warpline` is denied at ANY depth (v2).
     const evil = store.putTree([
       { mode: '100644', name: 'readme.md', id: store.putBlob(Buffer.from('ok\n')) },
       {
         mode: '40000',
-        name: 'claims',
-        id: store.putTree([{ mode: '100644', name: 'evaluations.jsonl', id: store.putBlob(Buffer.from('{"probe":1}\n')) }]),
+        name: 'vendor',
+        id: store.putTree([
+          {
+            mode: '40000',
+            name: '.warpline',
+            id: store.putTree([
+              {
+                mode: '40000',
+                name: 'claims',
+                id: store.putTree([
+                  { mode: '100644', name: 'evaluations.jsonl', id: store.putBlob(Buffer.from('{"probe":1}\n')) },
+                ]),
+              },
+            ]),
+          },
+        ]),
       },
     ]);
     forge(evil);
-    await expect(stake(repo.dir)).rejects.toThrow(/deny-list violation.*claims/);
+    // Either layer refusing is correct (defense in depth): restoreTree's VCS-dir
+    // guard, or the S2 deny-list audit. Both leave no commit + a refuse row.
+    await expect(stake(repo.dir)).rejects.toThrow(/deny-list violation|would overwrite a real repo\/VCS directory/);
     expect(repo.lastAudit().action).toBe('refuse');
     expect(await stakeBranchAbsent()).toBe(true);
   });
@@ -361,38 +382,55 @@ describe('stake — S2/S3 adversarial refusals (crafted trees)', () => {
 /* ── D5: the constitution test ───────────────────────────────────────────────── */
 
 describe('stake — D5: the deny-list is constitution-grade', () => {
-  // THE PINNED DIGEST OF stake-denylist:v1. If this test fails because you
-  // edited STAKE_DENYLIST or STAKE_DENY_CONTENT_MARKERS: that is a SCHEMA
-  // CHANGE, not a config tweak. Bump STAKE_DENYLIST_SCHEMA to stake-denylist:v2
-  // AND add a new pinned digest here as a deliberate, founder-visible edit.
-  // Editing this v1 digest in place without the schema bump is a constitution
-  // violation (D5).
-  const DENYLIST_DIGEST_V1 = '6ca2a4acede7332888d2a5a647a21fee24c93de73376f8d97e9acd1539df3ffc';
+  // THE PINNED DIGEST OF stake-denylist:v2 (T-2026-07-18-001 — the v1→v2 bump
+  // was forced by this very test after the first REAL stake refused on four
+  // false positives; the v1 digest was
+  // 6ca2a4acede7332888d2a5a647a21fee24c93de73376f8d97e9acd1539df3ffc).
+  // If this test fails because you edited any STAKE_DENY_* constant: that is a
+  // SCHEMA CHANGE, not a config tweak. Bump STAKE_DENYLIST_SCHEMA to
+  // stake-denylist:v3 AND add a new pinned digest here as a deliberate,
+  // founder-visible edit. Editing this v2 digest in place without the schema
+  // bump is a constitution violation (D5).
+  const DENYLIST_DIGEST_V2 = 'ddea850595b2a05040ce7a888b970c564a1de8483f4f563c1ca2d13c0ebbf3e2';
 
-  it('is frozen — the list cannot be mutated at runtime', () => {
-    expect(Object.isFrozen(STAKE_DENYLIST)).toBe(true);
-    expect(Object.isFrozen(STAKE_DENY_CONTENT_MARKERS)).toBe(true);
-    expect(() => (STAKE_DENYLIST as string[]).push('drift')).toThrow();
+  it('is frozen — no deny constant can be mutated at runtime', () => {
+    for (const c of [STAKE_DENY_NAMES, STAKE_DENY_PATHS, STAKE_DENY_ENVELOPE_KINDS, STAKE_DENY_ROW_SCHEMAS, STAKE_DENY_ROW_SHAPES]) {
+      expect(Object.isFrozen(c)).toBe(true);
+    }
+    for (const sig of STAKE_DENY_ROW_SHAPES) expect(Object.isFrozen(sig)).toBe(true);
+    expect(() => (STAKE_DENY_NAMES as string[]).push('drift')).toThrow();
   });
 
-  it('is schema-versioned, and expanding it REQUIRES the schema bump (pinned digest)', () => {
-    expect(STAKE_DENYLIST_SCHEMA).toBe('stake-denylist:v1');
+  it('is schema-versioned, and changing it REQUIRES the schema bump (pinned digest)', () => {
+    expect(STAKE_DENYLIST_SCHEMA).toBe('stake-denylist:v2');
     const digest = createHash('sha256')
       .update(
         JSON.stringify({
           schema: STAKE_DENYLIST_SCHEMA,
-          paths: STAKE_DENYLIST,
-          content: STAKE_DENY_CONTENT_MARKERS,
+          names: STAKE_DENY_NAMES,
+          paths: STAKE_DENY_PATHS,
+          envelopeKinds: STAKE_DENY_ENVELOPE_KINDS,
+          rowSchemas: STAKE_DENY_ROW_SCHEMAS,
+          rowShapes: STAKE_DENY_ROW_SHAPES,
         }),
       )
       .digest('hex');
-    expect(digest).toBe(DENYLIST_DIGEST_V1);
+    expect(digest).toBe(DENYLIST_DIGEST_V2);
   });
 
-  it('covers the constitution minimum: .warpline, marker, sidecar trust data, claims, knots, shadow', () => {
-    for (const required of ['.warpline', '.warpline-stake', 'grades.jsonl', 'claims', 'knots', 'shadow']) {
-      expect(STAKE_DENYLIST).toContain(required);
+  it('covers the constitution minimum: fabric internals, marker, secrets, sidecar streams + shapes', () => {
+    for (const required of ['.warpline', '.warpline-stake', '.git', 'daemon-tokens.jsonl', 'session-keys.jsonl']) {
+      expect(STAKE_DENY_NAMES).toContain(required);
     }
-    expect(STAKE_DENY_CONTENT_MARKERS).toContain('"kind":"untrusted-prose"');
+    for (const required of ['.warpline/shadow', '.warpline/stakes', '.warpline/claims', '.warpline/knots', '.warpline/grades.jsonl']) {
+      expect(STAKE_DENY_PATHS).toContain(required);
+    }
+    expect(STAKE_DENY_ENVELOPE_KINDS).toContain('untrusted-prose');
+    for (const required of ['shadowVerdict', 'stakeAudit', 'daemonAudit', 'daemonToken', 'grade']) {
+      expect(STAKE_DENY_ROW_SCHEMAS).toContain(required);
+    }
+    // the schema-less sidecars are covered by field signature
+    expect(STAKE_DENY_ROW_SHAPES).toContainEqual(['pickId', 'outcome', 'priorClass']);
+    expect(STAKE_DENY_ROW_SHAPES).toContainEqual(['claimId', 'breach', 'excess', 'missing']);
   });
 });

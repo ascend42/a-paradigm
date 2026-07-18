@@ -120,7 +120,7 @@ export {
   readLegacyGrandfathered,
   type FabricLegacy,
 } from './fabric/fabric.js';
-export { recordPick, type RecordPickOptions, type PickResult } from './fabric/pick.js';
+export { recordPick, PickGateRefusal, type RecordPickOptions, type PickResult } from './fabric/pick.js';
 export {
   installHook,
   uninstallHook,
@@ -260,7 +260,7 @@ export { resolveSelector, type SelectorResolution } from './fabric/select.js';
 export { restore, type RestoreOptions, type RestoreResult } from './fabric/restore.js';
 // NATIVE-FIRST R1 (#shadow-gate + #warpline-config) — observe-only admit verdicts
 // (the organic evidence clock) + the per-repo config toggle that opts them in.
-export { readWarplineConfig, configPathOf, type WarplineConfig, type StakeConfig } from './fabric/config.js';
+export { readWarplineConfig, configPathOf, type WarplineConfig, type StakeConfig, type GateConfig } from './fabric/config.js';
 // NATIVE-FIRST phase 1 (#stake, T-2026-07-17-001) — the CHECKPOINT VALVE: one-way
 // warpline→git stake export (first-parent checkpoints, S1–S5 safeguarded, D5
 // constitution-grade deny-list) + the S5 recovery re-entry verb.
@@ -271,6 +271,7 @@ export {
   parseStakeTrailers,
   stakesDirOf,
   stakeAuditPathOf,
+  maybeAutoStakeOnSeal,
   StakeRefusal,
   STAKE_AUDIT_SCHEMA,
   type StakeOptions,
@@ -278,15 +279,22 @@ export {
   type StakeRecoverResult,
   type StakeAuditRow,
   type StakeTrailers,
+  type AutoStakeOptions,
 } from './fabric/stake.js';
 export {
   STAKE_MARKER,
   STAKE_MARKER_CONTENT,
   STAKE_SCHEMA,
   STAKE_DEFAULT_BRANCH,
-  STAKE_DENYLIST,
   STAKE_DENYLIST_SCHEMA,
-  STAKE_DENY_CONTENT_MARKERS,
+  STAKE_DENY_NAMES,
+  STAKE_DENY_PATHS,
+  STAKE_DENY_ENVELOPE_KINDS,
+  STAKE_DENY_ROW_SCHEMAS,
+  STAKE_DENY_ROW_SHAPES,
+  stakeDeniedName,
+  stakeDeniedPath,
+  stakeContentViolation,
   isStakeNamespaceRef,
   assertNotStakeInput,
 } from './fabric/stake-guard.js';
@@ -300,6 +308,7 @@ export {
   SHADOW_ROW_CAP,
   type ShadowVerdictRow,
   type ShadowAdmitResult,
+  type ShadowGateMeta,
 } from './fabric/shadow.js';
 // NATIVE-FIRST phase 0 (#native-write-path, arky-architecture.md §2.1 keystone) —
 // fork → propose-seals-a-scratch-strand → admit-weaves → restore, git absent.

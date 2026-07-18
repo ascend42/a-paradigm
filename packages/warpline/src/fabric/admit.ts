@@ -59,6 +59,7 @@ import { buildKnotPayload, persistKnotPayload, readFileFromTree } from './knot-p
 import { classifyMergePaths, type MergeCoverage } from '../honesty.js';
 import { readClaim, evaluateClaim, recordClaimEvaluation, type Claim, type ClaimEvaluation } from './claim.js';
 import { readGradeSidecar, symbolSurvivalIndex, evaluateEscalation, recordGradeEscalation, type GradeEscalation } from './grade.js';
+import { maybeAutoStakeOnSeal } from './stake.js';
 
 export type AdmitStatus = 'NOOP' | 'FAST_ADMIT' | 'CLEAN' | 'KNOT' | 'DANGLE' | 'CLAIM-BREACH' | 'HELD';
 export type AdmitConfidence = 'linked' | 'independent';
@@ -324,6 +325,16 @@ function resolveMergeInput(strand: Strand | undefined, gitCommit: string | null,
 }
 
 export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResult> {
+  const result = await admitCore(root, opts);
+  // R2 auto-stake cadence: a SEALED, NON-SHADOW admission may trigger the valve —
+  // config-gated (stake.enabled + stake.auto + allowlist, all checked inside),
+  // best-effort (never throws, never blocks the admission; every actual valve
+  // invocation audits itself). One wrap point covers every seal return below.
+  if (result.sealed && opts.shadow !== true) await maybeAutoStakeOnSeal(root);
+  return result;
+}
+
+async function admitCore(root: string, opts: AdmitOptions): Promise<AdmitResult> {
   const cwd = opts.cwd ?? root;
   const wdir = warplineDirOf(root);
   const store = new WarpStore(root, { diskCache: true });

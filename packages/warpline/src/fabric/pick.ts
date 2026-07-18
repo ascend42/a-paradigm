@@ -32,8 +32,9 @@ import { gitUserName, revParse, commitSubject, commitAuthor } from '../git/git-e
 import { warplineDirOf, readSelvage, readFabric } from './fabric.js';
 import { sealState } from './seal.js';
 import { withFabricLock } from './lock.js';
-import { readWarplineConfig } from './config.js';
-import { shadowAdmit } from './shadow.js';
+import { readWarplineConfig, type WarplineConfig } from './config.js';
+import { shadowAdmit, type ShadowVerdictRow } from './shadow.js';
+import { maybeAutoStakeOnSeal } from './stake.js';
 import type { Strand } from './strand.js';
 
 export interface RecordPickOptions {
@@ -53,6 +54,27 @@ export interface RecordPickOptions {
   agentId?: string;
   /** ephemeral session breadcrumb (schema v2) — EXCLUDED from the pickId. */
   sessionKey?: string;
+  /**
+   * R2 (gate.agentWrites 'real'): explicit override — seal an agent-attributed
+   * pick DESPITE a would-not-seal gate verdict. Never silent: the verdict row
+   * records overridden:true. No effect on human/unattributed picks or when the
+   * gate is 'shadow' (mirrors admit's --accept-risk contract).
+   */
+  acceptRisk?: boolean;
+}
+
+/**
+ * R2 — the REAL gate refused an agent-attributed pick (gate.agentWrites 'real'
+ * + a would-not-seal verdict). The enforced verdict row is attached: the seal
+ * did NOT happen; the telemetry row did (the hold is always on the record).
+ */
+export class PickGateRefusal extends Error {
+  constructor(
+    message: string,
+    public readonly row?: ShadowVerdictRow,
+  ) {
+    super(message);
+  }
 }
 
 export interface PickResult {
@@ -76,24 +98,62 @@ export async function recordPick(root: string, opts: RecordPickOptions): Promise
   // 1. Lift the current meaning (no lock — this is the expensive step).
   const current = await absorb(ref, { cwd });
 
-  // R1 SHADOW GATE (#shadow-gate; roadmap-native-first "START IMMEDIATELY",
-  // loid-loops.md §1): when `.warpline/config.json` sets shadowGate:true, every
-  // pick — including the post-commit auto-seal #hook path — ALSO records the
-  // observe-only admit verdict of this state vs the PRE-seal selvage, reusing
-  // the state just lifted (pure compute, no second absorb). This starts the
-  // organic evidence clock. FAIL-SAFE: shadow is telemetry — a shadow failure
-  // (corrupt config, decision crash) must never block or fail the seal path.
-  try {
-    if (readWarplineConfig(root).shadowGate === true) {
-      await shadowAdmit(root, {
-        cwd,
-        agentId: opts.agentId ?? 'auto-seal',
-        ref,
-        proposedState: current,
-      });
+  // R1 SHADOW GATE + R2 REAL GATE (#shadow-gate / loid-loops.md §1 R1, R2):
+  //   - shadowGate:true → every pick (incl. the auto-seal #hook path) records
+  //     the OBSERVE-ONLY admit verdict of this state vs the PRE-seal selvage,
+  //     reusing the state just lifted (pure compute, no second absorb). FAIL-SAFE:
+  //     telemetry never blocks a seal.
+  //   - gate.agentWrites 'real' + an AGENT-ATTRIBUTED pick (agentId present) →
+  //     the SAME verdict is ENFORCED: a would-not-seal verdict (KNOT / DANGLE /
+  //     HELD / non-materializable CLEAN) REFUSES the seal (PickGateRefusal)
+  //     unless opts.acceptRisk explicitly overrides (recorded on the row —
+  //     never silent). FAIL-CLOSED for agents: a real gate that crashes (or a
+  //     toggle file too corrupt to read) refuses rather than silently waving
+  //     an agent write through. Humans/unattributed picks: byte-identical to R1.
+  {
+    let cfg: WarplineConfig | null = null;
+    try {
+      cfg = readWarplineConfig(root);
+    } catch {
+      cfg = null; // corrupt config: humans fail-safe (below); agents fail closed
     }
-  } catch {
-    /* observe-only — never break a seal over telemetry */
+    const agentAttributed = typeof opts.agentId === 'string' && opts.agentId.length > 0;
+    if (cfg === null && agentAttributed) {
+      throw new PickGateRefusal(
+        'warpline: pick refused — .warpline/config.json exists but cannot be read, so the R2 agent gate mode is undeterminable. ' +
+          'An agent-attributed seal fails CLOSED here (a corrupt toggle file must not silently disable the real gate); fix the config and re-run.',
+      );
+    }
+    const gateReal = agentAttributed && cfg?.gate?.agentWrites === 'real';
+    if (gateReal || cfg?.shadowGate === true) {
+      try {
+        const { row } = await shadowAdmit(
+          root,
+          { cwd, agentId: opts.agentId ?? 'auto-seal', ref, proposedState: current },
+          gateReal ? { gate: 'real', acceptRisk: opts.acceptRisk === true } : undefined,
+        );
+        if (gateReal && !row.wouldSeal && opts.acceptRisk !== true) {
+          const contested = row.knots.slice(0, 8).join(', ') || '(none listed)';
+          throw new PickGateRefusal(
+            `warpline: pick refused — the R2 agent gate is REAL for attributed writes (gate.agentWrites:"real") and this verdict would not seal: ` +
+              `${row.status}${row.knotsTotal ? ` (${row.knotsTotal} contested: ${contested})` : ''}. ` +
+              `The verdict row is recorded in .warpline/shadow/verdicts.jsonl. ` +
+              `Resolve against the current selvage, or seal explicitly with --accept-risk (recorded, never silent).`,
+            row,
+          );
+        }
+      } catch (err) {
+        if (err instanceof PickGateRefusal) throw err;
+        if (gateReal) {
+          // fail CLOSED: an enforced gate that cannot produce a verdict refuses.
+          throw new PickGateRefusal(
+            `warpline: pick refused — the R2 agent gate is enforced but the verdict pipeline failed (${(err as Error).message}). ` +
+              'Fail-closed for agent-attributed writes; the human/git door is unaffected.',
+          );
+        }
+        /* observe-only — never break a seal over telemetry */
+      }
+    }
   }
 
   // Attribution + intent are independent of the selvage — resolve BEFORE locking
@@ -116,7 +176,7 @@ export async function recordPick(root: string, opts: RecordPickOptions): Promise
   //      "did meaning change?": stateId hashes the DEDUPED essence set, so an
   //      identical-essence born symbol leaves stateId unchanged while diff (keyed
   //      by stableKey) sees it. #seal is the single writer of fabric history.
-  return withFabricLock(root, async () => {
+  const result = await withFabricLock(root, async (): Promise<PickResult> => {
     const selvage = readSelvage(wdir);
     const isGenesis = selvage === null;
     if (!isGenesis) {
@@ -159,4 +219,12 @@ export async function recordPick(root: string, opts: RecordPickOptions): Promise
     });
     return { noop: false, isGenesis, strand, stateId: current.stateId };
   });
+
+  // R2 auto-stake cadence: a successful (non-noop) seal MAY trigger the valve —
+  // config-gated (stake.enabled + stake.auto + ref allowlist, all checked inside),
+  // best-effort (never throws; every actual valve invocation audits itself),
+  // and OUTSIDE the fabric lock (the valve reads the fabric, never writes it).
+  if (!result.noop) await maybeAutoStakeOnSeal(root, { now: opts.now, actor });
+
+  return result;
 }

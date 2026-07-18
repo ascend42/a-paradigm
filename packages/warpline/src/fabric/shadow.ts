@@ -77,6 +77,12 @@ export interface ShadowVerdictRow {
   claimReport?: { claimId: string; breach: boolean; excess: string[]; missing: string[] };
   /** content address of the (built, NOT persisted) knot payload — pipeline proof, not a pointer. */
   knotPayloadId?: string;
+  /** R2 (additive): 'real' when this verdict was ENFORCED on an agent-attributed
+   * pick (gate.agentWrites 'real'); absent = observe-only (R1 rows unchanged). */
+  gate?: 'real';
+  /** R2 (additive): true when a would-not-seal verdict was explicitly sealed
+   * through via `pick --accept-risk` (never silent — the hold is on the row). */
+  overridden?: boolean;
 }
 
 export function shadowDirOf(root: string): string {
@@ -119,14 +125,29 @@ export interface ShadowAdmitResult {
   row: ShadowVerdictRow;
 }
 
+/** R2 metadata riding the row when #pick ENFORCES the verdict (gate 'real'). */
+export interface ShadowGateMeta {
+  /** the verdict is enforced, not observe-only (recorded as row.gate). */
+  gate: 'real';
+  /** caller-declared override intent: when the verdict would NOT seal, the
+   * caller seals anyway and the row records overridden:true. */
+  acceptRisk?: boolean;
+}
+
 /**
  * Run the full admission pipeline in OBSERVE-ONLY mode and append the verdict
  * row. The fabric/selvage/objects/sidecars are byte-identical before and after
  * (the shadow invariant — pinned by test/shadow-admit.test.ts).
+ *
+ * R2: `meta` (optional) marks the row as an ENFORCED verdict (#pick gate
+ * 'real'). shadowAdmit itself STILL never writes the fabric — enforcement
+ * (refuse-to-seal) is the CALLER's move, keyed off row.wouldSeal; the meta only
+ * makes the enforcement + any override durable on the telemetry row.
  */
 export async function shadowAdmit(
   root: string,
   opts: Omit<AdmitOptions, 'shadow'>,
+  meta?: ShadowGateMeta,
 ): Promise<ShadowAdmitResult> {
   const t0 = Date.now();
   const result = await admit(root, { ...opts, shadow: true });
@@ -179,6 +200,8 @@ export async function shadowAdmit(
         }
       : {}),
     ...(result.knotPayloadId ? { knotPayloadId: result.knotPayloadId } : {}),
+    ...(meta ? { gate: meta.gate } : {}),
+    ...(meta?.acceptRisk && !wouldSeal ? { overridden: true } : {}),
   };
   appendShadowVerdict(root, row);
   return { result, row };

@@ -264,6 +264,10 @@ program
   .option('--agent <id>', 'AGENT recording this pick — IN the pickId (falls back to $WARPLINE_AGENT_ID). Unsigned self-assertion: attribution data, not authenticated identity (M3)')
   .option('--confidence <n>', 'graded belief 0..1 (reserved — the calibration signal)')
   .option('--ref <ref>', 'snapshot a git ref instead of the working tree (default: WORKTREE)')
+  .option(
+    '--accept-risk',
+    "R2 gate override: seal an agent-attributed pick DESPITE a would-not-seal gate verdict (gate.agentWrites 'real'). Recorded on the verdict row (.warpline/shadow/verdicts.jsonl) — never silent",
+  )
   .option('--quiet', 'suppress output (for hooks/scripts); still exits non-zero on error')
   .option('--json', 'emit the sealed Strand as JSON')
   .action(
@@ -273,6 +277,7 @@ program
       agent?: string;
       confidence?: string;
       ref?: string;
+      acceptRisk?: boolean;
       quiet?: boolean;
       json?: boolean;
     }) => {
@@ -306,6 +311,7 @@ program
           agentId,
           confidence,
           ref: options.ref,
+          acceptRisk: options.acceptRisk,
         });
         if (options.json) {
           process.stdout.write(JSON.stringify(result, null, 2) + '\n');

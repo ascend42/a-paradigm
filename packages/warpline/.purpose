@@ -834,7 +834,18 @@ components:
       NATIVE-FIRST R1: when #warpline-config sets shadowGate:true, every pick ALSO
       records the #shadow-gate observe-only verdict of the just-lifted state vs the
       PRE-seal selvage (reusing the absorb — pure compute). FAIL-SAFE: shadow is
-      telemetry; a shadow failure never blocks or fails the seal.
+      telemetry; a shadow failure never blocks or fails the seal. NATIVE-FIRST R2
+      (T-2026-07-18-001, loid-loops.md R2 "mixed mode"): gate.agentWrites:'real'
+      makes an AGENT-ATTRIBUTED pick (agentId present — --agent /
+      $WARPLINE_AGENT_ID, incl. the auto-seal hook forwarding it) ENFORCE that
+      same verdict: would-not-seal (KNOT/DANGLE/HELD/non-materializable CLEAN)
+      REFUSES the seal (PickGateRefusal; row records gate:'real'), override =
+      `pick --accept-risk` (row records overridden:true — never silent).
+      FAIL-CLOSED for agents (an enforced gate that crashes, or a config too
+      corrupt to read, refuses); humans/unattributed picks stay byte-identical
+      (two doors, one fabric). After a successful non-noop seal the R2
+      auto-stake cadence (#stake maybeAutoStakeOnSeal) runs best-effort,
+      outside the fabric lock.
     type: module
     components:
       - "#absorb"
@@ -845,6 +856,7 @@ components:
       - "#git-exec"
       - "#warpline-config"
       - "#shadow-gate"
+      - "#stake"
 
   scratch:
     description: >-
@@ -940,6 +952,9 @@ components:
       plan), knot-payload BUILD — and swaps every write (seal, snapshot, sidecar
       rows, payload persist) for a plain return; AdmitOptions.proposedState lets
       #pick reuse its own absorb. The decision function is untouched.
+      NATIVE-FIRST R2 (T-2026-07-18-001): a SEALED, NON-SHADOW admission
+      triggers the config-gated auto-stake cadence (#stake maybeAutoStakeOnSeal)
+      best-effort at the single wrap point — never blocking the admission.
     type: module
     components:
       - "#absorb"
@@ -955,6 +970,7 @@ components:
       - "#claim"
       - "#honesty"
       - "#grade"
+      - "#stake"
 
   claim:
     description: >-
@@ -1098,17 +1114,24 @@ components:
 
   warpline-config:
     description: >-
-      Per-repo engine toggles, `.warpline/config.json` (NATIVE-FIRST R1;
+      Per-repo engine toggles, `.warpline/config.json` (NATIVE-FIRST R1/R2;
       .paradigm/research/warpline-native-first/roadmap-native-first.md). OPT-IN
       switches only — defaults never change because a config exists. Keys:
       shadowGate (default false) — when true, every #pick also records the
-      #shadow-gate observe-only verdict; and stake (default: valve OFF) — the
+      #shadow-gate observe-only verdict; stake (default: valve OFF) — the
       #stake checkpoint valve's S4 toggle {enabled, refs allowlist, branch,
-      repo, author}. The leakage deny-list is deliberately NOT here (D5:
-      constitution-grade frozen constant in #stake-guard, never a config flag).
-      A missing config is the empty config; a MALFORMED config throws (a
-      corrupt toggle file must not silently read as "everything off") — the
-      seal path catches (fail-safe), interactive callers surface it.
+      repo, author} plus the R2 auto-stake cadence stake.auto
+      ('every-seal'|'daily'|false, default false — S4 still rules); and gate
+      (R2, default agentWrites:'shadow') — gate.agentWrites:'real' makes an
+      AGENT-ATTRIBUTED #pick ENFORCE its admit verdict (blocking on a
+      would-not-seal verdict; humans keep the git door byte-identically). The
+      leakage deny-list is deliberately NOT here (D5: constitution-grade
+      frozen constant in #stake-guard, never a config flag). A missing config
+      is the empty config; a MALFORMED config throws (a corrupt toggle file
+      must not silently read as "everything off") — the seal path catches for
+      humans (fail-safe) but REFUSES agent-attributed picks (fail-closed: a
+      corrupt toggle must not silently disable the real gate); interactive
+      callers surface it.
     type: module
     tags: [warpline, native-first]
 
@@ -1140,6 +1163,16 @@ components:
       re-staking the tip pickId SKIPS with an audit note. Gitlink-bearing
       trees refuse (bytes Warpline does not own). Commit objects are written
       as loose objects via #stake-git — no index, no filters, byte-exact.
+      R2 AUTO-STAKE (T-2026-07-18-001, "the valve stakes every seal"):
+      maybeAutoStakeOnSeal — config-gated cadence (stake.auto:
+      'every-seal'|'daily'|false, default false) invoked best-effort by the
+      #pick and #admit seal paths after a successful NON-SHADOW seal; S4 still
+      rules (enabled + allowlist checked BEFORE invoking, so a disabled
+      cadence never spams refuse rows); 'daily' skips while a stake/skip ran
+      within 24h; a valve failure NEVER blocks the seal and every actual
+      invocation audits itself. FIRST LIVE STAKE cut 2026-07-18: commit
+      440fec31bd57e6cd61d87adbe06a22d08a63028f on warpline-stakes (the exact
+      sealed state the v1 deny-list had refused).
     type: module
     tags: [warpline, native-first, valve, security]
     components:
@@ -1153,18 +1186,31 @@ components:
   stake-guard:
     description: >-
       The S1 one-way guards + the D5 CONSTITUTION-GRADE deny-list of the
-      checkpoint valve. STAKE_DENYLIST (stake-denylist:v1) is a FROZEN,
-      schema-versioned constant — .git/.warpline/.warpline-stake, fabric and
-      oracle ledgers, sidecar trust data (grades*, evaluations, escalations,
-      shadow verdicts, overrides), claims/, knots/, session keys — plus
-      serialized untrusted-prose content markers; expanding it is a SCHEMA
-      CHANGE (bump the tag + re-pin the freeze-test digest in
-      test/stake.test.ts), never a config flag. assertNotStakeInput is the S1
-      choke point wired into #absorb (covering #pick and the #hook auto-seal
-      path): a worktree carrying the marker, a ref in the stake namespace, or
-      a commit whose tree carries the marker is REFUSED as input; #backfill
-      leaves marker-bearing provenance commits unbound. Cycle-free by design
-      (imports only fs/config/git-exec) so absorb can import it.
+      checkpoint valve — stake-denylist:v2 (R2, T-2026-07-18-001: the v1
+      basename-global + byte-substring rules refused the FIRST REAL stake on
+      four false positives — source/spec/tests QUOTING the envelope marker,
+      and a paradigm-events verdicts.jsonl hit by basename). v2 is FROZEN +
+      schema-versioned in FIVE constants with colocated pure matchers:
+      STAKE_DENY_NAMES (any-depth structural/secret names — .git, .warpline
+      wholesale [a stake is a reset target; fabric content inside one would
+      stomp the live fabric — tracked .warpline files are fine IN GIT but
+      never in a stake tree, which by construction the snapshot walk cannot
+      produce anyway], .warpline-stake, daemon-tokens/session-keys.jsonl);
+      STAKE_DENY_PATHS (ROOT-ANCHORED sidecar homes under .warpline/ — belts
+      pinned by name so narrowing the wholesale rule can never silently expose
+      a sidecar); STAKE_DENY_ENVELOPE_KINDS + STAKE_DENY_ROW_SCHEMAS +
+      STAKE_DENY_ROW_SHAPES (SHAPE-AWARE content rules: only PARSED
+      .json/.jsonl content matching an envelope object, a sidecar schema tag,
+      or a sidecar field signature refuses — source/markdown/tests can never
+      match). Any change is a SCHEMA CHANGE (bump the tag + re-pin the
+      freeze-test digest in test/stake.test.ts), never a config flag.
+      assertNotStakeInput is the S1 choke point wired into #absorb (covering
+      #pick and the #hook auto-seal path): a worktree carrying the marker, a
+      ref in the stake namespace, or a commit whose tree carries the marker is
+      REFUSED as input; #backfill leaves marker-bearing provenance commits
+      unbound. Cycle-free by design (imports only fs/config/git-exec) so
+      absorb can import it. Regressions pinned in test/stake-denylist-v2.test.ts
+      (each live false positive is a MUST-PASS fixture; true leaks still refuse).
     type: module
     tags: [warpline, native-first, valve, security]
 

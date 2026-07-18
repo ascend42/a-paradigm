@@ -72,9 +72,10 @@ import {
   STAKE_MARKER_CONTENT,
   STAKE_SCHEMA,
   STAKE_DEFAULT_BRANCH,
-  STAKE_DENYLIST,
   STAKE_DENYLIST_SCHEMA,
-  STAKE_DENY_CONTENT_MARKERS,
+  stakeDeniedName,
+  stakeDeniedPath,
+  stakeContentViolation,
 } from './stake-guard.js';
 import {
   gitDirOf,
@@ -197,11 +198,12 @@ interface BuiltAudit {
 
 /**
  * S2 belt + S3 recompute in ONE raw walk of the freshly-built stake tree: every
- * entry name is checked against the constitution deny-list (exact component,
- * any depth), every blob's bytes are scanned for the untrusted-prose content
- * markers, and the native treeId + shadow gitOid are re-derived FROM DISK (no
- * ignore rules — everything restoreTree wrote must account for itself). Pure:
- * writes nothing anywhere.
+ * entry is checked against the v2 constitution deny rules — NAME rules (exact
+ * component, any depth), ANCHORED path rules (root-relative sidecar paths), and
+ * the SHAPE-AWARE content audit (parsed .json/.jsonl envelope/sidecar detection
+ * — see stake-guard.ts; source/markdown/tests can never match) — and the native
+ * treeId + shadow gitOid are re-derived FROM DISK (no ignore rules — everything
+ * restoreTree wrote must account for itself). Pure: writes nothing anywhere.
  */
 function auditBuiltTree(dir: string, rel = ''): BuiltAudit & { native: TreeEntry[]; git: GitTreeEntry[] } {
   const native: TreeEntry[] = [];
@@ -210,17 +212,13 @@ function auditBuiltTree(dir: string, rel = ''): BuiltAudit & { native: TreeEntry
   let files = 0;
 
   const scan = (bytes: Buffer, relPath: string): void => {
-    for (const marker of STAKE_DENY_CONTENT_MARKERS) {
-      if (bytes.includes(marker)) {
-        violations.push(`${relPath} (content: ${marker})`);
-        return;
-      }
-    }
+    const hit = stakeContentViolation(bytes, relPath);
+    if (hit) violations.push(`${relPath} (${hit})`);
   };
 
   for (const name of fs.readdirSync(dir).sort()) {
     const relPath = rel ? `${rel}/${name}` : name;
-    if (STAKE_DENYLIST.includes(name)) violations.push(relPath);
+    if (stakeDeniedName(name) || stakeDeniedPath(relPath)) violations.push(relPath);
     const full = path.join(dir, name);
     const st = fs.lstatSync(full);
     if (st.isSymbolicLink()) {
@@ -520,6 +518,80 @@ export async function stake(root: string, opts: StakeOptions = {}): Promise<Stak
       gitCommit: null, gitTreeOid: null, reason: (err as Error).message,
     });
     throw err;
+  }
+}
+
+/* ── auto-stake-on-seal (R2 — "the valve stakes every seal") ─────────────────── */
+
+/** The daily-cadence window: a stake/skip within this window means "not due". */
+const AUTO_STAKE_DAILY_MS = 24 * 60 * 60 * 1000;
+
+/** Last time the valve actually ran to completion (action stake|skip), or null. */
+function lastStakeCutAt(root: string): number | null {
+  let raw: string;
+  try {
+    raw = fs.readFileSync(stakeAuditPathOf(root), 'utf8');
+  } catch {
+    return null;
+  }
+  let last: number | null = null;
+  for (const line of raw.split('\n')) {
+    if (!line.trim()) continue;
+    try {
+      const row = JSON.parse(line) as StakeAuditRow;
+      if (row.action === 'stake' || row.action === 'skip') {
+        const t = Date.parse(row.at);
+        if (Number.isFinite(t)) last = t;
+      }
+    } catch {
+      /* telemetry stream — never fatal */
+    }
+  }
+  return last;
+}
+
+export interface AutoStakeOptions {
+  /** injectable clock (ISO) — determinism in tests; also the stake's audit clock. */
+  now?: string;
+  /** actor recorded in the audit row (default: git user.name). */
+  actor?: string;
+}
+
+/**
+ * R2 auto-stake cadence (loid-loops.md R2: "→ checkpoint valve: stake the
+ * sealed stateId to git"). Called BEST-EFFORT by the seal call sites (#pick,
+ * #admit) after a successful NON-SHADOW seal. Config-gated (S4 — the master
+ * toggle still rules):
+ *   - `stake.auto` absent/false      → null (default: no cadence, R1 behavior)
+ *   - `stake.enabled` !== true       → null (auto never overrides the valve toggle)
+ *   - the sealed ref ('selvage') not in `stake.refs` → null (allowlist checked
+ *     HERE so a disabled cadence never spams refuse rows on every seal)
+ *   - 'daily' and a stake/skip ran within 24h → null (not due)
+ *   - otherwise → stake() — and EVERY actual invocation is audited by stake()
+ *     itself (stake / skip / refuse rows), so a failing auto-stake is always
+ *     on the record while NEVER blocking or failing the seal that triggered it.
+ * Returns the StakeResult, or null when nothing was attempted / it refused.
+ */
+export async function maybeAutoStakeOnSeal(root: string, opts: AutoStakeOptions = {}): Promise<StakeResult | null> {
+  let sc: StakeConfig | undefined;
+  try {
+    sc = readWarplineConfig(root).stake;
+  } catch {
+    return null; // corrupt config must never break the seal path
+  }
+  if (sc?.enabled !== true) return null;
+  if (sc.auto !== 'every-seal' && sc.auto !== 'daily') return null;
+  const refName = 'selvage'; // both seal call sites advance the selvage
+  if (!(sc.refs ?? []).includes(refName)) return null;
+  if (sc.auto === 'daily') {
+    const last = lastStakeCutAt(root);
+    const nowMs = opts.now ? Date.parse(opts.now) : Date.now();
+    if (last !== null && nowMs - last < AUTO_STAKE_DAILY_MS) return null;
+  }
+  try {
+    return await stake(root, { selector: refName, now: opts.now, actor: opts.actor });
+  } catch {
+    return null; // refusal/error already audited by stake(); the seal stands
   }
 }
 
