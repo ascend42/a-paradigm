@@ -1,0 +1,38 @@
+id: L-2026-07-18-ascend-023915-001
+type: milestone
+timestamp: '2026-07-18T02:39:15.354Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: PHASE 1 COMPLETE — the home fabric has a daemon, a valve, a console connection, and a backup; the private-server era is running code
+summary: 'Native-first Phases 0 AND 1 completed in ~24h from the founder direction (TD-2026-07-17-151 → D1-D6 → build). Landed and pushed (da3636d3→17dc8ab9, suite 468→510/510 warpline + platform green): I5 incremental worktree index (warm walk 7.14s→0.67s on 23k files); the checkpoint valve `warpline stake` (founder ask T-2026-07-17-001: S1-S5 safeguards, D5 frozen deny-list w/ schema-pinned digest, D3 first-parent-only, recover=ref-move-never-import, adversarial plants all refuse — NOT enabled, the flip is the founder''s); the `warplined` solo daemon (NDJSON/unix-socket, 11 verbs = engine fns verbatim under the fabric lock, Aegis stage-1 server-stamped identity, agent-class forbidden on overrides, Loid R4 byte-identity proof in-process≡socket); console re-pointed (GET-only fabric lane, read-scoped token class, mutations structurally unreachable); `warpline backup` (CoW clone, atomic publish, secrets excluded, restore = opening the backup as a fabric — proven by admitting a strand against it). R1 shadow gate live since yesterday, organic rows accruing per commit. Remaining founder-paced: enable stake on this repo, R2 mixed mode, live-selvage v3 cutover, then Phase 2 (team server, V3.5 exchange, R3 cutover gated on F1/F3).'
+symbols_touched:
+  - '#warplined'
+  - '#warplined-tokens'
+  - '#stake'
+  - '#stake-guard'
+  - '#stake-git'
+  - '#warp-store'
+  - '#native-write-path'
+  - '#shadow-gate'
+commit: 17dc8ab9
+tags:
+  - arc:warpline
+  - native-first
+  - milestone
+  - phase-1-complete
+  - daemon
+  - valve
+linked_lore:
+  - L-2026-07-17-ascend-194215-001
+linked_tasks:
+  - T-2026-07-17-001
+  - T-2026-07-17-010
+  - T-2026-07-17-011
+  - T-2026-07-17-012
+confidence: 0.92
+git_context:
+  ref: 17dc8ab9ae6d593884f5bce11f31ba3cb6b331a5
+  branch: warpline-surfaces
+  dirty: true

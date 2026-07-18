@@ -1126,3 +1126,4 @@
 {"id":"ev-1784327421358-3258","timestamp":"2026-07-17T22:30:21.358Z","type":"work-completed","source":"mcp-tool-call","tool":"paradigm_reindex","context":"Index rebuilt"}
 {"id":"ev-1784329171343-3993","timestamp":"2026-07-17T22:59:31.343Z","type":"work-completed","source":"mcp-tool-call","tool":"paradigm_reindex","context":"Index rebuilt"}
 {"id":"ev-1784342153553-6747","timestamp":"2026-07-18T02:35:53.553Z","type":"work-completed","source":"mcp-tool-call","tool":"paradigm_reindex","context":"Index rebuilt"}
+{"id":"ev-1784342355542-4008","timestamp":"2026-07-18T02:39:15.542Z","type":"work-completed","source":"mcp-tool-call","tool":"paradigm_lore_record","symbols":["#warplined","#warplined-tokens","#stake","#stake-guard","#stake-git","#warp-store","#native-write-path","#shadow-gate"],"context":"Lore recorded: PHASE 1 COMPLETE — the home fabric has a daemon, a valve, a console connection, and a backup; the private-server era is running code"}
