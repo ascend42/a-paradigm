@@ -116,8 +116,22 @@ components:
       T-2026-07-17-007) —
       so dependency trees and secrets never enter the permanent no-gc store;
       ignored dirs are PRUNED (no re-inclusion inside an excluded dir, gitignore
-      parity); the REF path (git ls-tree) is deliberately unaffected (git governs a
-      ref's contents). TRUST FLOOR (MEDIUM-1): getBlob/getTree are VERIFIED
+      parity). THE TREE SEMANTICS DECISION (T-2026-07-18-005; fixes the F3 drill-#1
+      recover false-refusal T-2026-07-18-004): WORKTREE SEMANTICS ('worktree:v1' —
+      the snapshotDir rules above) is THE canonical tree semantics for ALL NEW
+      bindings; the REF path (snapshotRef, full AND incremental) filters by the
+      ref's OWN committed root ignore rules, so ref tree ≡ worktree tree of the
+      same clean checkout (tracked-but-gitignored files OUT — git's view, not the
+      walk's). New bindings carry additive binding.treeSemantics:'worktree:v1'
+      (OUTSIDE the pickId preimage in both epochs; the founder-signed v3 preimage
+      untouched); ABSENT = legacy-git semantics, grandfathered — every strand is
+      judged under ITS OWN recorded semantics. projectTreeWorktreeSemantics(store,
+      treeId) = the pure deterministic projection of any store tree to its
+      worktree-semantics view (filtered by the tree's own root ignore blobs; zero
+      writes) — how #stake cut/recover derive a legacy binding's honest recovery
+      expectation. A root ignore-rule change between anchor and ref falls OPEN to
+      the full walk. Pinned by test/tree-semantics.test.ts + snapshot-ignore.test.ts.
+      TRUST FLOOR (MEDIUM-1): getBlob/getTree are VERIFIED
       READS — always-on, they recompute the content-address of the raw framed bytes
       just inflated and FAIL CLOSED on a mismatch, so restore/materialize/verify can
       never consume a tampered loose object (one uniform rule, no trusted/untrusted
@@ -142,10 +156,13 @@ components:
       snapshot costs the DIFF, not the universe; sub-second warm). The incremental
       path applies the T-033 .git/.warpline skip identically and falls OPEN to the
       full walk on any anomaly (never fail-closed on the anchor). strandSnapshotAnchor
-      is the verification gate: only a non-merge strand whose binding.gitOid still
+      is the verification gate: only a non-merge strand tagged
+      binding.treeSemantics:'worktree:v1' whose binding.gitOid still
       equals `rev-parse <provenance.gitCommit>^{tree}` and whose native tree is
       present anchors — a merge strand's gitCommit is one parent, worktree/backfilled
-      seals carry gitOid null, both rejected. captureMerge anchors base on the base
+      seals carry gitOid null, LEGACY-semantics (untagged) bindings must never seed a
+      worktree-semantics overlay: all rejected (the first post-cutover seal walks
+      full once, then re-anchors). captureMerge anchors base on the base
       strand's verified binding and ours/theirs on the just-built base tree (three
       universe snapshots → three diffs). Equivalence pinned by
       test/snapshot-incremental.test.ts (full treeId === incremental treeId on real
@@ -471,8 +488,14 @@ components:
       sessionKey EXCLUDED), and on a merge the second DAG parent (mergeParentPickId =
       the base strand) + the pinned merge algo (MergeRecipe.algo 'warpline-merge3-v1',
       restored per Judge). Still EXCLUDED from both rules: calibratedConfidence,
-      binding.gitOid, merge.{base,ours,theirs,result}. The v1 rule (pick:v0) is
-      byte-for-byte preserved so historical strands re-verify. LEGACY (§7,
+      binding.gitOid, merge.{base,ours,theirs,result} — and binding.treeSemantics
+      (T-2026-07-18-005: the additive tree-semantics tag, 'worktree:v1' on new
+      bindings, absent = legacy-git; rides OUTSIDE the preimage in BOTH epochs, so
+      no signed identity moved). strand.byteOnly (T-2026-07-18-002, the
+      byte-custody flag on a meaning-NOOP + tree-advanced seal) is additive and
+      rides INTO the v2 preimage via the rest spread (new strands only;
+      derivable: empty delta + stateId === parent's + binding advanced). The v1
+      rule (pick:v0) is byte-for-byte preserved so historical strands re-verify. LEGACY (§7,
       TD-2026-07-01-202): the on-disk fabric was sealed under two retired rules and
       #grade overwrote a hashed field for the oldest strands; computePickIdWholeBody
       + reproducesUnderKnownRule try the finite set of known rules, and the
@@ -818,9 +841,19 @@ components:
       working tree (or a ref) to a WarpState, and — using the DIFF vs the parent
       selvage as the source of truth for "did meaning change?" (NOT stateId
       equality, which hashes the DEDUPED essence set and so misses a born symbol
-      whose essence equals an existing one) — no-ops on an empty diff, else seals a
+      whose essence equals an existing one) — decides NOOP vs seal, then seals a
       #strand via #seal (the single fabric writer) under #fabric-lock (so a
-      backgrounded post-commit auto-seal can't race it). Genesis (no selvage)
+      backgrounded post-commit auto-seal can't race it). BYTE CUSTODY
+      (T-2026-07-18-002): NOOP ⟺ empty deltas AND empty renames AND tree
+      unchanged (vs the tip strand's binding, under the canonical worktree
+      semantics — T-2026-07-18-005); a meaning-NOOP whose TREE advanced seals a
+      BYTE-CUSTODY strand instead (strand.byteOnly:true additive, IN the v2
+      pickId via the rest spread; stateId naturally equals the parent's; the
+      binding advances) so doc/lore/config-only commits keep durable native
+      custody (git-absent restorable; auto-stake counts them). Byte-only is
+      always FAST/no-gate: a NOOP verdict never refuses, even agent-attributed
+      under gate:'real'. New bindings are stamped
+      binding.treeSemantics:'worktree:v1'. Genesis (no selvage)
       records seq 0 with an empty delta; objectCount is the headline. FAIL-CLOSED
       (T-029): a SET selvage whose parent state cannot be loaded now THROWS rather
       than falling through to seal (which would orphan history) — symmetric with the
@@ -1157,9 +1190,18 @@ components:
       per-ref allowlist + EVERY invocation (stake/skip/refuse/recover) appends
       a stakeAudit:v1 row to `.warpline/stakes/audit.jsonl`; S5 `warpline
       stake recover <commit>` verifies the reset worktree hashes to the staked
-      binding then MOVES refs/heads/selvage (or the legacy selvage) under the
-      fabric lock — a ref move, NEVER an import or a new strand (post-recover
-      edits parent on the staked pick via the normal seal path). Idempotent:
+      strand's WORKTREE-SEMANTICS EXPECTATION (T-2026-07-18-005, the F3
+      drill-#1 false-refusal fix: a worktree:v1 binding IS the expectation; a
+      legacy-git binding's expectation is projectTreeWorktreeSemantics of the
+      authenticated binding tree — each strand judged under ITS OWN recorded
+      semantics) then MOVES refs/heads/selvage (or the legacy selvage) under
+      the fabric lock — a ref move, NEVER an import or a new strand
+      (post-recover edits parent on the staked pick via the normal seal path).
+      The cut RECORDS worktreeTreeId (additive stakeAudit field + StakeResult)
+      — the honest recovery expectation, on the audit record for any strand;
+      recover records it too. Pinned by test/tree-semantics.test.ts (a
+      legacy-semantics stake recovers GREEN after `git reset --hard`; an
+      edited tree still refuses). Idempotent:
       re-staking the tip pickId SKIPS with an audit note. Gitlink-bearing
       trees refuse (bytes Warpline does not own). Commit objects are written
       as loose objects via #stake-git — no index, no filters, byte-exact.
@@ -1170,9 +1212,14 @@ components:
       rules (enabled + allowlist checked BEFORE invoking, so a disabled
       cadence never spams refuse rows); 'daily' skips while a stake/skip ran
       within 24h; a valve failure NEVER blocks the seal and every actual
-      invocation audits itself. FIRST LIVE STAKE cut 2026-07-18: commit
+      invocation audits itself; a byteOnly seal (#pick byte custody) counts —
+      doc-only commits reach the valve. FIRST LIVE STAKE cut 2026-07-18: commit
       440fec31bd57e6cd61d87adbe06a22d08a63028f on warpline-stakes (the exact
-      sealed state the v1 deny-list had refused).
+      sealed state the v1 deny-list had refused); SECOND (post-tree-semantics-
+      fix) 0f4b2ffe9d47, parent 440fec31 — F3 drill #2 recovered it GREEN
+      (f3-drills.jsonl n=2); 440fec31 itself remains recoverable via the
+      recorded-semantics projection (validated byte-for-byte against drill-1
+      evidence).
     type: module
     tags: [warpline, native-first, valve, security]
     components:

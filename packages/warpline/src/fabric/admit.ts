@@ -47,7 +47,7 @@ import { predict, type Knot, type Dangle } from '../predict.js';
 import { WarpStore } from '../warp/store.js';
 import type { WarpState } from '../warp/warp-state.js';
 import { ObjectStore } from '../warp/object-store.js';
-import { snapshotState, snapshotRef, captureMerge, strandSnapshotAnchor, type SnapshotAnchor } from '../warp/snapshot.js';
+import { snapshotState, snapshotRef, captureMerge, strandSnapshotAnchor, WORKTREE_SEMANTICS, type SnapshotAnchor } from '../warp/snapshot.js';
 import { revParse, commitAuthor, commitSubject, gitUserName } from '../git/git-exec.js';
 import { warplineDirOf, readSelvage, readFabric } from './fabric.js';
 import { readScratch, clearScratch } from './scratch.js';
@@ -451,7 +451,7 @@ async function admitCore(root: string, opts: AdmitOptions): Promise<AdmitResult>
       const strand = sealState(root, store, proposed, {
         parentStateId: selvageId ?? null, actor, intent, gitCommit: oursCommit, now, confidence: 0.8,
         authoredBy: { agentId: opts.agentId },
-        binding: { treeId, gitOid: proposed.treeSha ?? null },
+        binding: { treeId, gitOid: proposed.treeSha ?? null, treeSemantics: WORKTREE_SEMANTICS },
       });
       clearScratch(root, opts.agentId);
       return withClaim({ decision: genesis, sealed: true, proposedStateId: proposed.stateId, strand });
@@ -549,7 +549,7 @@ async function admitCore(root: string, opts: AdmitOptions): Promise<AdmitResult>
       const strand = sealState(root, store, proposed, {
         parentStateId: selvageId, actor, intent, gitCommit: oursCommit, now, confidence: priorFor(decision),
         authoredBy: { agentId: opts.agentId },
-        binding: { treeId, gitOid: proposed.treeSha ?? null },
+        binding: { treeId, gitOid: proposed.treeSha ?? null, treeSemantics: WORKTREE_SEMANTICS },
       });
       clearScratch(root, opts.agentId);
       return withClaim({ decision, sealed: true, proposedStateId: proposed.stateId, strand });
@@ -609,6 +609,10 @@ async function admitCore(root: string, opts: AdmitOptions): Promise<AdmitResult>
           parentStateId: selvageId, actor, intent, gitCommit: oursCommit, now, confidence: priorFor(decision),
           authoredBy: { agentId: opts.agentId },
           mergeParentPickId: baseStrand?.pickId ?? null, // the SECOND DAG parent (the ours-side fork base)
+          // Merge-result bindings stay UNTAGGED (no treeSemantics): the merge plan's
+          // byte changes come from git's view and an input side may be a legacy tree,
+          // so the result is not guaranteed a worktree-semantics fixed point —
+          // stake/recover derive its worktree expectation by projection instead.
           merged: true, binding: { treeId: recipe.result, gitOid: null }, merge: recipe,
         });
         clearScratch(root, opts.agentId);

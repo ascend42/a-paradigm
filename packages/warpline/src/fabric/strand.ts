@@ -64,7 +64,22 @@ export interface KnotResolution {
  */
 export interface StrandBinding {
   treeId: string; // native root treeId — byte identity in the object store
-  gitOid?: string | null; // shadow git tree sha (coexistence proof), or null for a merge result
+  /** git tree sha of the PROVENANCE ref (coexistence breadcrumb), or null for a
+   * merge result / worktree seal. Under worktree:v1 semantics this is the GIT
+   * view's oid, NOT the binding tree's own shadow oid (the binding is filtered). */
+  gitOid?: string | null;
+  /**
+   * TREE SEMANTICS (T-2026-07-18-005, the one-tree-semantics decision — see
+   * snapshot.ts header): 'worktree:v1' = the binding tree is ignore-honoring
+   * (snapshotDir rules — THE canonical semantics for new bindings). ABSENT =
+   * legacy-git semantics (git-commit-tree, tracked-but-gitignored files IN),
+   * grandfathered; verify/recover treat such a strand under ITS OWN semantics
+   * (stake/recover derive the worktree expectation by projection). Rides
+   * OUTSIDE the pickId preimage in BOTH epochs: the v2 rule destructures
+   * `binding` out and folds only bindingTreeId; the founder-signed v3 preimage
+   * (§9/G-law) lists bindingTreeId explicitly — the tag is never hashed.
+   */
+  treeSemantics?: 'worktree:v1';
 }
 
 /**
@@ -162,6 +177,18 @@ export interface Strand {
   };
   /** present only on a KNOT-council resolution strand (omitted on normal picks). */
   resolves?: KnotResolution;
+  /**
+   * BYTE-CUSTODY strand (T-2026-07-18-002): true only on a strand sealed for a
+   * meaning-NOOP whose TREE advanced (doc/config/lore-only change) — stateId
+   * naturally equals the parent's, the delta is empty, the byte binding advances.
+   * Always FAST/no-gate (there is no meaning to contest). Additive: absent on
+   * every pre-existing strand; on a NEW v2 strand it rides INTO the pickId via
+   * the `...rest` preimage spread (tamper-evident), and it is derivable anyway
+   * (empty delta + stateId === parent's + binding moved). v2 pick path only —
+   * the v3 preimage is founder-signed and does not carry it (native propose
+   * seals scratch strands regardless of meaning-NOOP, so it has no NOOP gap).
+   */
+  byteOnly?: boolean;
   /**
    * v2 ONLY — true only on a strand sealed by a materialized CLEAN merge (#admit).
    * Its provenance.gitCommit is ONE parent and does NOT contain the merged bytes,

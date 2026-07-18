@@ -6,8 +6,11 @@
  * Flow ($pick-flow):
  *   1. absorb(ref) — lift the working tree (or a git ref) to a WarpState.
  *   2. store.putState — durably persist the snapshot under .warpline/states/.
- *   3. If the new stateId === selvage, NO-OP (meaning unchanged — don't spam
- *      history). The provable-zero diff property makes this exact.
+ *   3. NO-OP ⟺ meaning unchanged (empty diff) AND bytes unchanged (the tree
+ *      equals the tip strand's binding under worktree semantics). A meaning-NOOP
+ *      whose TREE advanced seals a BYTE-CUSTODY strand instead (byteOnly:true,
+ *      stateId unchanged, binding advanced — T-2026-07-18-002: doc/config-only
+ *      commits keep durable native custody; auto-stake counts them).
  *   4. Else diff(parent, current) → summarize → build the Strand (attribution +
  *      reserved confidence + git-commit coexistence anchor) → appendStrand →
  *      writeSelvage (atomic). Genesis (no selvage yet) records seq 0 with an
@@ -27,7 +30,7 @@ import { absorb, WORKTREE_REF } from '../absorb.js';
 import { diff } from '../sem-delta.js';
 import { WarpStore } from '../warp/store.js';
 import { ObjectStore } from '../warp/object-store.js';
-import { snapshotState, strandSnapshotAnchor } from '../warp/snapshot.js';
+import { snapshotState, strandSnapshotAnchor, WORKTREE_SEMANTICS } from '../warp/snapshot.js';
 import { gitUserName, revParse, commitSubject, commitAuthor } from '../git/git-exec.js';
 import { warplineDirOf, readSelvage, readFabric } from './fabric.js';
 import { sealState } from './seal.js';
@@ -78,7 +81,9 @@ export class PickGateRefusal extends Error {
 }
 
 export interface PickResult {
-  /** true when the meaning was unchanged since selvage — nothing recorded. */
+  /** true when NEITHER meaning NOR bytes changed since selvage — nothing recorded
+   * (T-2026-07-18-002: NOOP ⟺ empty deltas AND empty renames AND tree unchanged
+   * under the canonical worktree semantics). */
   noop: boolean;
   /** true when this was the first pick (genesis, seq 0). */
   isGenesis: boolean;
@@ -86,6 +91,9 @@ export interface PickResult {
   strand?: Strand;
   /** the absorbed stateId (the new selvage, or the unchanged one on a no-op). */
   stateId: string;
+  /** true when a BYTE-CUSTODY strand was sealed (meaning-NOOP, tree advanced —
+   * doc/config/lore-only change; stateId unchanged, binding advanced). */
+  byteOnly?: boolean;
 }
 
 export async function recordPick(root: string, opts: RecordPickOptions): Promise<PickResult> {
@@ -132,7 +140,10 @@ export async function recordPick(root: string, opts: RecordPickOptions): Promise
           { cwd, agentId: opts.agentId ?? 'auto-seal', ref, proposedState: current },
           gateReal ? { gate: 'real', acceptRisk: opts.acceptRisk === true } : undefined,
         );
-        if (gateReal && !row.wouldSeal && opts.acceptRisk !== true) {
+        // A NOOP verdict never refuses: either nothing seals (true no-op), or the
+        // seal is a BYTE-CUSTODY strand (meaning-NOOP, tree advanced — always
+        // FAST/no-gate: there is no meaning for the gate to contest; T-2026-07-18-002).
+        if (gateReal && !row.wouldSeal && row.status !== 'NOOP' && opts.acceptRisk !== true) {
           const contested = row.knots.slice(0, 8).join(', ') || '(none listed)';
           throw new PickGateRefusal(
             `warpline: pick refused — the R2 agent gate is REAL for attributed writes (gate.agentWrites:"real") and this verdict would not seal: ` +
@@ -179,6 +190,7 @@ export async function recordPick(root: string, opts: RecordPickOptions): Promise
   const result = await withFabricLock(root, async (): Promise<PickResult> => {
     const selvage = readSelvage(wdir);
     const isGenesis = selvage === null;
+    let meaningNoop = false;
     if (!isGenesis) {
       const parent = store.loadState(selvage);
       // A SET selvage we cannot LOAD is corruption or a regen-gap in the states
@@ -191,22 +203,28 @@ export async function recordPick(root: string, opts: RecordPickOptions): Promise
         );
       }
       const d = diff(parent, current);
-      if (d.deltas.size === 0 && d.renames.length === 0) {
-        return { noop: true, isGenesis: false, stateId: current.stateId };
-      }
+      meaningNoop = d.deltas.size === 0 && d.renames.length === 0;
     }
-    // Bind the durable bytes only when we actually seal (skip on a no-op above).
-    // A ref pick snapshots INCREMENTALLY off the tip strand's verified binding
-    // (T-2026-07-04-003) — the usual post-commit hook seal costs one commit's
-    // diff, not the whole tree. Unverifiable / worktree ⇒ full path, unchanged.
-    const anchor = isWorktree
+    // Bind the durable bytes UNDER THE CANONICAL WORKTREE SEMANTICS (snapshot.ts
+    // decision header). A ref pick snapshots INCREMENTALLY off the tip strand's
+    // verified same-semantics binding (T-2026-07-04-003) — the usual post-commit
+    // hook seal costs one commit's diff, not the whole tree. Unverifiable /
+    // legacy-semantics tip / worktree ⇒ full path. Computed even on a meaning-
+    // NOOP: "did the TREE change?" is now part of the no-op decision
+    // (T-2026-07-18-002 — byte custody; a doc-only commit must leave a strand).
+    const parentStrand = isGenesis
       ? undefined
-      : await strandSnapshotAnchor(
-          [...readFabric(wdir)].reverse().find((s) => s.stateId === selvage),
-          objStore,
-          { cwd },
-        );
+      : [...readFabric(wdir)].reverse().find((s) => s.stateId === selvage);
+    const anchor = isWorktree ? undefined : await strandSnapshotAnchor(parentStrand, objStore, { cwd });
     const treeId = await snapshotState(objStore, ref, cwd, { cwd }, anchor, root); // I5: worktree walk is stat-indexed
+    if (meaningNoop && parentStrand?.binding?.treeId === treeId) {
+      // TRUE no-op: meaning unchanged AND bytes unchanged — don't spam history.
+      return { noop: true, isGenesis: false, stateId: current.stateId };
+    }
+    // meaning-NOOP + tree advanced ⇒ BYTE-CUSTODY strand (T-2026-07-18-002):
+    // stateId naturally equals the parent's; the binding advances so the bytes
+    // have durable native custody (git-absent restorable, auto-stake coverage).
+    const byteOnly = meaningNoop;
     const strand = sealState(root, store, current, {
       parentStateId: selvage,
       actor,
@@ -214,10 +232,11 @@ export async function recordPick(root: string, opts: RecordPickOptions): Promise
       gitCommit,
       now,
       confidence: opts.confidence ?? null,
+      byteOnly,
       authoredBy: { agentId: opts.agentId ?? null, sessionKey: opts.sessionKey ?? null },
-      binding: { treeId, gitOid: current.treeSha ?? null },
+      binding: { treeId, gitOid: current.treeSha ?? null, treeSemantics: WORKTREE_SEMANTICS },
     });
-    return { noop: false, isGenesis, strand, stateId: current.stateId };
+    return { noop: false, isGenesis, strand, stateId: current.stateId, ...(byteOnly ? { byteOnly: true } : {}) };
   });
 
   // R2 auto-stake cadence: a successful (non-noop) seal MAY trigger the valve —

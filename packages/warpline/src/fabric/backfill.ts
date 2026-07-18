@@ -21,7 +21,7 @@ import { withFabricLock } from './lock.js';
 import { findAnchor } from './anchor.js';
 import { reproducesUnderKnownRule, computeLegacyBodyHash, type Strand } from './strand.js';
 import { ObjectStore } from '../warp/object-store.js';
-import { snapshotRef, type SnapshotAnchor } from '../warp/snapshot.js';
+import { snapshotRef, WORKTREE_SEMANTICS, type SnapshotAnchor } from '../warp/snapshot.js';
 import { treeEntryMode } from '../git/git-exec.js';
 import { STAKE_MARKER } from './stake-guard.js';
 
@@ -129,7 +129,10 @@ export async function backfillV1Bindings(root: string, opts: { cwd?: string } = 
         const treeId = bindings.get(s.pickId);
         if (treeId && s.schemaVersion < 2 && !s.binding) {
           stamped.push({ seq: s.seq ?? -1, treeId });
-          return { ...s, binding: { treeId, gitOid: null } };
+          // snapshotRef applies worktree semantics (T-2026-07-18-005), so a
+          // NEWLY backfilled binding is honestly tagged; pre-existing backfilled
+          // bindings (untagged) stay grandfathered under legacy-git semantics.
+          return { ...s, binding: { treeId, gitOid: null, treeSemantics: WORKTREE_SEMANTICS } };
         }
         return s;
       });

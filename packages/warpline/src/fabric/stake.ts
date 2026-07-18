@@ -40,8 +40,12 @@
  *                       (.warpline/stakes/audit.jsonl — a G5 sidecar, never
  *                       inside the stake repo).
  *   S5 recovery       — `warpline stake recover <stakeCommit>`: verify the
- *                       reset worktree hashes to the staked binding.treeId,
- *                       then MOVE the working ref to the staked pickId — a ref
+ *                       reset worktree hashes to the staked strand's WORKTREE-
+ *                       SEMANTICS expectation (T-2026-07-18-005: the binding
+ *                       itself for a worktree:v1 seal; the deterministic
+ *                       projection of the binding for a legacy-git seal — each
+ *                       strand judged under ITS OWN recorded semantics), then
+ *                       MOVE the working ref to the staked pickId — a ref
  *                       move under the fabric lock, NEVER an import, never a
  *                       new strand (post-recover edits seal new strands
  *                       parented on the staked pick via the normal write path).
@@ -59,7 +63,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { ObjectStore } from '../warp/object-store.js';
-import { restoreTree, snapshotDir } from '../warp/snapshot.js';
+import { restoreTree, snapshotDir, projectTreeWorktreeSemantics, WORKTREE_SEMANTICS } from '../warp/snapshot.js';
 import { blobId, gitBlobOid } from '../warp/blob.js';
 import { treeId as nativeTreeIdOf, gitTreeOid, gitTreeBytes, type TreeEntry, type GitTreeEntry, type TreeMode } from '../warp/tree.js';
 import { warplineDirOf, readFabric, readSelvage, writeSelvage } from './fabric.js';
@@ -111,6 +115,15 @@ export interface StakeAuditRow {
   gitCommit?: string | null;
   gitTreeOid?: string | null;
   reason?: string | null;
+  /**
+   * ADDITIVE (T-2026-07-18-005): the WORKTREE-SEMANTICS expectation of the staked
+   * tree — what a pristine `git reset --hard <stake>` worktree re-hashes to under
+   * recover's ignore-honoring walk. Equals treeId for a worktree:v1 binding;
+   * derived by projection for a legacy-git binding. Recorded at cut AND at
+   * recover so the S5 rail's honest expectation is on the audit record for any
+   * strand. Absent on rows written before the tree-semantics decision.
+   */
+  worktreeTreeId?: string | null;
 }
 
 export function stakesDirOf(root: string): string {
@@ -352,6 +365,9 @@ export interface StakeResult {
   /** the previous stake tip this commit parents on (null = first stake). */
   parent: string | null;
   auditPath: string;
+  /** ADDITIVE (T-2026-07-18-005): the worktree-semantics recovery expectation of
+   * the staked tree (see StakeAuditRow.worktreeTreeId). Absent on a skip. */
+  worktreeTreeId?: string;
 }
 
 const STAKE_COMMITTER = 'Warpline Stake <noreply@warpline.local>';
@@ -432,6 +448,12 @@ export async function stake(root: string, opts: StakeOptions = {}): Promise<Stak
     // a gitlink-bearing tree refuses before any bytes hit disk.
     const store = new ObjectStore(root);
     const expectation = storeGitTree(store, boundTreeId);
+    // T-2026-07-18-005: compute + RECORD the worktree-semantics recovery
+    // expectation at cut time (the strand's own semantics: the binding itself
+    // for worktree:v1, its projection for legacy) — S5 recover re-derives the
+    // same value; recording it here puts the honest expectation on the audit
+    // record for any strand, cut-time-verifiable.
+    const worktreeTreeId = worktreeExpectationOf(store, strand);
     const buildDir = fs.mkdtempSync(path.join(os.tmpdir(), 'warpline-stake-'));
     try {
       restoreTree(store, boundTreeId, buildDir);
@@ -501,11 +523,12 @@ export async function stake(root: string, opts: StakeOptions = {}): Promise<Stak
         schema: STAKE_AUDIT_SCHEMA, at: now, actor, action: 'stake',
         selector: selectorRaw, ref: refName, pickId: strand.pickId, stateId: strand.stateId,
         treeId: boundTreeId, branch, gitCommit: commitSha, gitTreeOid: stakeTreeOid, reason: null,
+        worktreeTreeId,
       });
       return {
         action: 'staked', ref: refName, pickId: strand.pickId, stateId: strand.stateId,
         treeId: boundTreeId, branch, gitCommit: commitSha, gitTreeOid: stakeTreeOid,
-        parent: tip, auditPath: stakeAuditPathOf(root),
+        parent: tip, auditPath: stakeAuditPathOf(root), worktreeTreeId,
       };
     } finally {
       fs.rmSync(buildDir, { recursive: true, force: true });
@@ -680,20 +703,24 @@ export async function stakeRecover(
         `warpline: stake recover refused — no ${STAKE_MARKER} marker in the working tree; recover re-enters a \`git reset --hard <stake>\` state only`,
       );
     }
-    // …and, MINUS the marker, must re-hash to the staked binding (S3, re-run on
-    // re-entry — a stake repo tampered after the fact fails here). The marker is
+    // …and, MINUS the marker, must re-hash to the staked strand's WORKTREE-
+    // SEMANTICS expectation (S3, re-run on re-entry — a stake repo tampered
+    // after the fact fails here). The expectation is computed BEFORE the marker
+    // moves (pure store reads — any projection error refuses with the world
+    // untouched); each strand is judged under ITS OWN recorded semantics
+    // (T-2026-07-18-005 — the drill-#1 false-refusal fix). The marker is
     // Warpline's own file: it is removed as part of re-entry (leaving it would
     // keep S1 refusing every subsequent seal) and restored on refusal.
+    const expected = worktreeExpectationOf(new ObjectStore(root), strand);
     const markerBytes = fs.readFileSync(markerPath);
     fs.rmSync(markerPath, { force: true });
     let worktreeTreeId: string;
     try {
-      worktreeTreeId = auditBuiltTreeIdOfWorktree(root, bound);
+      worktreeTreeId = auditBuiltTreeIdOfWorktree(root, expected, bound);
     } catch (err) {
       fs.writeFileSync(markerPath, markerBytes); // refusal leaves the world as found
       throw err;
     }
-    void worktreeTreeId;
 
     // The ref MOVE — under the fabric lock; never a new strand.
     let previous: string | null = null;
@@ -712,6 +739,7 @@ export async function stakeRecover(
       schema: STAKE_AUDIT_SCHEMA, at: now, actor, action: 'recover',
       selector: commitish, ref: 'selvage', pickId: strand.pickId, stateId: strand.stateId,
       treeId: bound, branch: null, gitCommit: sha, gitTreeOid: meta.treeSha, reason: null,
+      worktreeTreeId,
     });
     return { pickId: strand.pickId, stateId: strand.stateId, treeId: bound, gitCommit: sha, ref: 'selvage', previous };
   } catch (err) {
@@ -726,18 +754,38 @@ export async function stakeRecover(
 }
 
 /**
+ * The WORKTREE-SEMANTICS expectation of a strand's staked bytes (the tree-
+ * semantics decision, T-2026-07-18-005 — fixes the F3 drill-#1 false refusal):
+ * what a PRISTINE `git reset --hard <stake>` worktree re-hashes to under the
+ * ignore-honoring walk. Each strand is judged under ITS OWN recorded semantics:
+ *   - binding.treeSemantics 'worktree:v1' → the binding IS the expectation;
+ *   - absent (legacy-git / merge-result binding) → the deterministic PROJECTION
+ *     of the authenticated binding tree (its tracked-but-gitignored files are on
+ *     the reset disk but invisible to the walk — project them out, from the
+ *     tree's own committed ignore rules; pure compute, store reads only).
+ */
+function worktreeExpectationOf(store: ObjectStore, strand: Strand): string {
+  const bound = strand.binding!.treeId;
+  if (strand.binding!.treeSemantics === WORKTREE_SEMANTICS) return bound;
+  return projectTreeWorktreeSemantics(store, bound);
+}
+
+/**
  * Recover's tree check: snapshot the live worktree (standard ignore semantics —
  * the same walk that would seal it) into the store and require it to equal the
- * staked binding. Kept as its own step so the marker restore-on-refusal in
- * stakeRecover stays airtight. Uses the ignore-honoring snapshot (unlike the
- * stake build audit) because a live repo root legitimately carries .warpline/,
- * .git/ and ignored files the staked tree never contained.
+ * WORKTREE-SEMANTICS expectation of the staked strand (worktreeExpectationOf —
+ * the binding itself for worktree:v1 seals, its projection for legacy seals).
+ * Kept as its own step so the marker restore-on-refusal in stakeRecover stays
+ * airtight. Uses the ignore-honoring snapshot (unlike the stake build audit)
+ * because a live repo root legitimately carries .warpline/, .git/ and ignored
+ * files the staked tree never contained.
  */
-function auditBuiltTreeIdOfWorktree(root: string, expected: string): string {
+function auditBuiltTreeIdOfWorktree(root: string, expected: string, bound: string): string {
   const snap = snapshotDir(new ObjectStore(root), root);
   if (snap.treeId !== expected) {
     throw new StakeRefusal(
-      `warpline: stake recover refused — the working tree hashes to ${snap.treeId}, not the staked binding ${expected}. ` +
+      `warpline: stake recover refused — the working tree hashes to ${snap.treeId}, not the staked expectation ${expected}` +
+        `${expected !== bound ? ` (worktree-semantics projection of binding ${bound})` : ''}. ` +
         `The tree was edited after the reset (or the stake was tampered). Re-run \`git reset --hard <stake>\` and recover; ` +
         `then seal your edits normally — they will parent on the staked pick.`,
     );

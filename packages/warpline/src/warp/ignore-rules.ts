@@ -38,23 +38,36 @@ const ALWAYS_IGNORE = new Set(['.git', '.warpline', '.loom', 'node_modules']);
 /** Decides whether a snapshot walk skips `relPath` (posix, relative to the root). */
 export type IgnoreMatcher = (relPath: string, isDir: boolean) => boolean;
 
+/** The precedence-ordered root ignore FILE names (.warplineignore WINS, never merges). */
+export const IGNORE_FILE_NAMES = ['.warplineignore', '.gitignore'] as const;
+
 /**
- * Build the ignore matcher for a snapshot rooted at `root`: always-ignores plus
- * the root `.warplineignore` (preferred) or `.gitignore` (fallback), when present.
+ * Build an ignore matcher from raw rule CONTENT (gitignore syntax) — the shared
+ * core behind every walk that applies WORKTREE SEMANTICS (the disk walk, the
+ * ref walk, and the store-tree projection — see snapshot.ts's tree-semantics
+ * decision header). `null` content = always-ignores only.
  */
-export function loadIgnoreMatcher(root: string): IgnoreMatcher {
+export function ignoreMatcherFrom(content: string | null): IgnoreMatcher {
   const ig = ignore();
-  for (const file of ['.warplineignore', '.gitignore']) {
-    const p = path.join(root, file);
-    if (fs.existsSync(p) && fs.statSync(p).isFile()) {
-      ig.add(fs.readFileSync(p, 'utf8'));
-      break; // .warplineignore PRECEDES and replaces .gitignore, never merges
-    }
-  }
+  if (content !== null) ig.add(content);
   return (relPath: string, isDir: boolean): boolean => {
     const base = relPath.slice(relPath.lastIndexOf('/') + 1);
     if (ALWAYS_IGNORE.has(base)) return true;
     // gitignore dir patterns (`dist/`) match only when tested WITH the trailing slash.
     return ig.ignores(isDir ? `${relPath}/` : relPath);
   };
+}
+
+/**
+ * Build the ignore matcher for a snapshot rooted at `root`: always-ignores plus
+ * the root `.warplineignore` (preferred) or `.gitignore` (fallback), when present.
+ */
+export function loadIgnoreMatcher(root: string): IgnoreMatcher {
+  for (const file of IGNORE_FILE_NAMES) {
+    const p = path.join(root, file);
+    if (fs.existsSync(p) && fs.statSync(p).isFile()) {
+      return ignoreMatcherFrom(fs.readFileSync(p, 'utf8'));
+    }
+  }
+  return ignoreMatcherFrom(null);
 }

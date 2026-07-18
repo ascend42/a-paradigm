@@ -225,21 +225,30 @@ describe('strandSnapshotAnchor — the verification gate', () => {
     const treeId = await snapshotRef(store, sha, { cwd: repo.dir });
 
     const good = strandFor({
-      binding: { treeId, gitOid: treeSha },
+      binding: { treeId, gitOid: treeSha, treeSemantics: 'worktree:v1' },
       provenance: { ref: 'main', treeSha, gitCommit: sha },
     });
     expect(await strandSnapshotAnchor(good, store, { cwd: repo.dir })).toEqual({ ref: sha, treeId });
 
+    // LEGACY-semantics binding (no treeSemantics tag — git-commit-tree epoch):
+    // must never anchor a worktree-semantics overlay (T-2026-07-18-005) → rejected
+    expect(
+      await strandSnapshotAnchor(strandFor({ ...good, binding: { treeId, gitOid: treeSha } }), store, { cwd: repo.dir }),
+    ).toBeUndefined();
     // merge strand: its gitCommit is one parent, never the merged tree → rejected
     expect(await strandSnapshotAnchor({ ...good, merged: true }, store, { cwd: repo.dir })).toBeUndefined();
     // worktree/backfilled seal (gitOid null) → rejected
     expect(
-      await strandSnapshotAnchor(strandFor({ ...good, binding: { treeId, gitOid: null } }), store, { cwd: repo.dir }),
+      await strandSnapshotAnchor(
+        strandFor({ ...good, binding: { treeId, gitOid: null, treeSemantics: 'worktree:v1' } }),
+        store,
+        { cwd: repo.dir },
+      ),
     ).toBeUndefined();
     // gitOid does not match the commit's tree (rewritten/wrong ref) → rejected
     expect(
       await strandSnapshotAnchor(
-        strandFor({ ...good, binding: { treeId, gitOid: '0'.repeat(40) } }),
+        strandFor({ ...good, binding: { treeId, gitOid: '0'.repeat(40), treeSemantics: 'worktree:v1' } }),
         store,
         { cwd: repo.dir },
       ),
@@ -247,7 +256,7 @@ describe('strandSnapshotAnchor — the verification gate', () => {
     // native tree missing from the store → rejected
     expect(
       await strandSnapshotAnchor(
-        strandFor({ ...good, binding: { treeId: 'tree:v1:' + 'f'.repeat(64), gitOid: treeSha } }),
+        strandFor({ ...good, binding: { treeId: 'tree:v1:' + 'f'.repeat(64), gitOid: treeSha, treeSemantics: 'worktree:v1' } }),
         store,
         { cwd: repo.dir },
       ),

@@ -149,7 +149,7 @@ describe('worktree pick — the sealed binding honors ignore rules end to end', 
   });
 });
 
-describe('snapshotRef — the hook path (--ref HEAD) is unaffected by ignore rules', () => {
+describe('snapshotRef — the hook path (--ref HEAD) applies WORKTREE SEMANTICS (T-2026-07-18-005)', () => {
   let root: string;
   beforeEach(async () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), 'warpline-ref-ignore-'));
@@ -168,13 +168,18 @@ describe('snapshotRef — the hook path (--ref HEAD) is unaffected by ignore rul
   });
   afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
 
-  it('a tracked file stays in the ref snapshot even when .gitignore lists it', async () => {
+  it('a tracked-but-gitignored file is OUT of the ref snapshot — ref tree === worktree tree (ONE semantics)', async () => {
+    // THE TREE SEMANTICS DECISION (snapshot.ts header): the old asymmetry — git
+    // governs the ref path, ignore rules govern the worktree path — is exactly
+    // what made every hook-sealed stake unrecoverable (F3 drill #1 false
+    // refusal). The ref walk now filters by the ref's OWN committed ignore
+    // rules, so both walks of the same clean tree agree byte-for-byte.
     const store = new ObjectStore(root);
     const treeId = await snapshotRef(store, 'HEAD', { cwd: root });
     const names = store.getTree(treeId).map((e) => e.name);
-    expect(names).toContain('tracked-but-listed.txt'); // git governs the ref path
-    // …while the WORKTREE path skips it (the asymmetry is the point: T-031 vs hook).
+    expect(names).not.toContain('tracked-but-listed.txt'); // worktree semantics govern BOTH paths
     const wt = snapshotDir(store, root);
     expect(store.getTree(wt.treeId).map((e) => e.name)).not.toContain('tracked-but-listed.txt');
+    expect(treeId).toBe(wt.treeId); // the unification IS the fix: one tree, one semantics
   });
 });

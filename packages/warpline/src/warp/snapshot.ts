@@ -23,17 +23,49 @@
  * fail-OPEN to it. This is what makes a warm `admit` on a real monorepo run in
  * seconds instead of minutes (see bench/bench-admit.mts).
  *
+ * ── THE TREE SEMANTICS DECISION (T-2026-07-18-005; fixes T-2026-07-18-004) ────
+ *
+ * There is exactly ONE canonical tree semantics for NEW bindings: WORKTREE
+ * SEMANTICS (`worktree:v1`) — the tree snapshotDir produces. Concretely: the
+ * root `.warplineignore` (preferred) or `.gitignore` (fallback) rules of the
+ * SOURCE BEING SNAPSHOTTED are honored, ALWAYS_IGNORE names (.git / .warpline /
+ * .loom / node_modules) are skipped at any depth, ignored directories are pruned,
+ * empty directories are dropped, and RESTORE_FORBIDDEN names never enter.
+ *
+ * WHY: F3 drill #1 (f3-drills.jsonl n=1) proved the old split — seal-time ref
+ * bindings using GIT-COMMIT-TREE semantics (tracked-but-gitignored files IN)
+ * while recover's worktree walk used ignore-honoring semantics (them OUT) —
+ * makes every hook-sealed stake verify at cut time yet FALSE-REFUSE recovery.
+ * Native-first resolves the fault line the native-first-honest way: the
+ * WORKTREE is the source of truth; the git commit tree is a legacy adapter
+ * view. snapshotRef therefore now applies the ref's OWN committed ignore rules
+ * (a git-commit-tree walk filtered to what a worktree walk of that tree would
+ * see); snapshotDir is unchanged (it already WAS the canonical semantics).
+ *
+ * EPOCH/GRANDFATHER (the pattern this project already uses): new bindings are
+ * tagged additively — `binding.treeSemantics: 'worktree:v1'`; ABSENT means
+ * legacy-git semantics. The tag rides OUTSIDE the pickId preimage in BOTH
+ * epochs (v2 folds only bindingTreeId via the explicit exclusion set; the
+ * founder-signed v3 preimage lists bindingTreeId explicitly — strand.ts), so
+ * no signed identity changes. Existing strands verify/recover under THEIR OWN
+ * recorded semantics: verify walks the recorded binding unchanged, and stake/
+ * recover derive the worktree-semantics EXPECTATION of a legacy binding by
+ * deterministic projection (projectTreeWorktreeSemantics — pure, from
+ * authenticated bytes only). Merge-result bindings stay UNTAGGED (their inputs
+ * may include legacy trees, so the result is not guaranteed a projection fixed
+ * point); projection covers them at recover.
+ *
  * Library code: no console output.
  */
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { gitBlobOid } from './blob.js';
-import { gitTreeOid, type TreeEntry, type GitTreeEntry, type TreeMode } from './tree.js';
+import { gitTreeOid, treeId as computeNativeTreeId, type TreeEntry, type GitTreeEntry, type TreeMode } from './tree.js';
 import { ObjectStore } from './object-store.js';
-import { catFileBatch, diffRaw, lsTree, revParseTree, type GitOptions } from '../git/git-exec.js';
+import { catFileBatch, diffRaw, lsTree, revParse, revParseTree, type GitOptions } from '../git/git-exec.js';
 import { WORKTREE_REF } from '../absorb.js';
-import { loadIgnoreMatcher, type IgnoreMatcher } from './ignore-rules.js';
+import { loadIgnoreMatcher, ignoreMatcherFrom, IGNORE_FILE_NAMES, type IgnoreMatcher } from './ignore-rules.js';
 import {
   loadWorktreeIndex,
   saveWorktreeIndex,
@@ -41,6 +73,13 @@ import {
   type WorktreeIndexEntry,
 } from './worktree-index.js';
 import type { MergeRecipe, Strand } from '../fabric/strand.js';
+
+/**
+ * The canonical tree-semantics tag for NEW bindings (see the decision header):
+ * additive on StrandBinding, OUTSIDE the pickId preimage in every epoch.
+ * Absent on a binding = legacy-git semantics (grandfathered).
+ */
+export const WORKTREE_SEMANTICS = 'worktree:v1' as const;
 
 export interface SnapshotResult {
   /** native root tree id (byte identity of the whole directory). */
@@ -248,10 +287,14 @@ export interface SnapshotAnchor {
 /**
  * A VERIFIED incremental-snapshot anchor off a sealed strand (T-2026-07-04-003,
  * byte layer): usable ONLY when the strand's binding.treeId provably IS the
- * native snapshot of its provenance.gitCommit's tree —
+ * WORKTREE-SEMANTICS snapshot of its provenance.gitCommit's tree —
  *   - not a merge strand (its gitCommit is one parent, NOT the merged tree),
- *   - binding.gitOid present (ref-sealed; worktree/backfilled seals carry null
- *     because their native tree is ignore-filtered vs the git tree),
+ *   - binding.treeSemantics === 'worktree:v1' (tree-semantics decision,
+ *     T-2026-07-18-005): a LEGACY-semantics binding (git-commit-tree, tracked-
+ *     but-gitignored files in) must never anchor a worktree-semantics overlay —
+ *     the diff would be applied against the wrong base path set. The first seal
+ *     after the semantics cutover therefore walks full ONCE, then re-anchors.
+ *   - binding.gitOid present (ref-sealed; worktree seals carry null),
  *   - gitOid still equals `rev-parse <gitCommit>^{tree}` (guards a gc'd/rewritten
  *     ref — verification failure falls back to the full snapshot, never a wrong tree),
  *   - the native tree is actually present in the object store.
@@ -266,13 +309,51 @@ export async function strandSnapshotAnchor(
   const treeId = strand.binding?.treeId;
   const gitOid = strand.binding?.gitOid;
   const commit = strand.provenance?.gitCommit;
+  if (strand.binding?.treeSemantics !== WORKTREE_SEMANTICS) return undefined; // legacy semantics never anchor
   if (!treeId || !gitOid || !commit || !store.has(treeId)) return undefined;
   const actual = await revParseTree(commit, opts).catch(() => null);
   return actual === gitOid ? { ref: commit, treeId } : undefined;
 }
 
 /**
- * Snapshot a git REF's tree natively (§1.5).
+ * The ref's OWN committed ignore rules (worktree semantics for a ref walk):
+ * `.warplineignore` at the ref root wins, else `.gitignore`, else always-ignores
+ * only. Read from the ref itself (not the live worktree) so a ref snapshot is
+ * deterministic from the ref alone — for a clean tree the two agree byte-for-byte.
+ */
+async function refIgnoreMatcher(ref: string, opts: GitOptions): Promise<IgnoreMatcher> {
+  for (const name of IGNORE_FILE_NAMES) {
+    const sha = await revParse(`${ref}:${name}`, opts).catch(() => null);
+    if (sha) {
+      const blobs = await catFileBatch([sha], opts).catch(() => null);
+      const buf = blobs?.get(sha);
+      if (buf) return ignoreMatcherFrom(buf.toString('utf8'));
+    }
+  }
+  return ignoreMatcherFrom(null);
+}
+
+/**
+ * Apply an IgnoreMatcher to a FLAT (ls-tree/diff-raw) path: an entry is ignored
+ * when any ancestor directory matches as a dir (gitignore pruning — no
+ * re-inclusion inside an excluded directory) or the path itself matches as a file.
+ */
+function flatPathIgnored(matcher: IgnoreMatcher, p: string): boolean {
+  const parts = p.split('/');
+  let prefix = '';
+  for (let i = 0; i < parts.length - 1; i++) {
+    prefix = prefix ? `${prefix}/${parts[i]}` : parts[i];
+    if (matcher(prefix, true)) return true;
+  }
+  return matcher(p, false);
+}
+
+/**
+ * Snapshot a git REF's tree natively (§1.5) under WORKTREE SEMANTICS (the
+ * tree-semantics decision, header above): the ref's committed root ignore rules
+ * filter the walk, so a ref snapshot equals the worktree snapshot of the same
+ * checked-out CLEAN tree — tracked-but-gitignored files are OUT (they are git's
+ * view, not the worktree walk's; F3 drill #1's false-refusal class dies here).
  *
  * PERF (T-2026-07-04-003, byte layer): two paths, byte-identical results —
  *   - FULL: `ls-tree -r` inventory + ONE `cat-file --batch` stream for all blobs
@@ -312,7 +393,12 @@ export async function snapshotRef(
 /** The FULL path: whole-tree inventory + one batched blob read. */
 async function snapshotRefFull(store: ObjectStore, ref: string, opts: GitOptions): Promise<string> {
   const entries = await lsTree(ref, opts);
-  const kept = entries.filter((e) => !e.path.split('/').some((part) => RESTORE_FORBIDDEN.has(part))); // T-033
+  const ignored = await refIgnoreMatcher(ref, opts); // worktree semantics (decision header)
+  const kept = entries.filter(
+    (e) =>
+      !e.path.split('/').some((part) => RESTORE_FORBIDDEN.has(part)) && // T-033
+      !flatPathIgnored(ignored, e.path),
+  );
   for (const e of kept) {
     if (e.type === 'commit' || e.mode === '160000') {
       throw new Error(`warpline: snapshotRef — submodule/gitlink at ${e.path} not yet supported (T-2026-07-01-018)`);
@@ -337,10 +423,19 @@ async function snapshotRefIncremental(
   opts: GitOptions,
 ): Promise<string> {
   const raw = await diffRaw(base.ref, ref, opts);
+  // Worktree semantics (decision header): the overlay is only correct when BOTH
+  // refs share the same root ignore rules — a changed root ignore file could
+  // re-include/exclude UNCHANGED paths the diff never lists. Fall OPEN to the
+  // full (freshly-filtered) walk on any root ignore-file change.
+  if (raw.some((e) => (IGNORE_FILE_NAMES as readonly string[]).includes(e.path))) {
+    throw new Error('warpline: snapshotRef — root ignore rules changed between anchor and ref (full walk)');
+  }
+  const ignored = await refIgnoreMatcher(ref, opts);
   const changes = new Map<string, PathChange>();
   const pending: Array<{ path: string; sha: string; mode: string }> = [];
   for (const e of raw) {
     if (e.path.split('/').some((part) => RESTORE_FORBIDDEN.has(part))) continue; // T-033 parity
+    if (flatPathIgnored(ignored, e.path)) continue; // ignored paths never enter (nor leave) the tree
     if (e.status === 'D') {
       changes.set(e.path, null);
       continue;
@@ -504,4 +599,49 @@ export function restoreTree(store: ObjectStore, treeId: string, dest: string): n
     }
   }
   return count;
+}
+
+/**
+ * The WORKTREE-SEMANTICS PROJECTION of a store tree (tree-semantics decision,
+ * T-2026-07-18-005): the treeId a snapshotDir walk of this tree's checked-out
+ * bytes would produce — filter by the tree's OWN root ignore rules
+ * (.warplineignore preferred, .gitignore fallback — read from the tree itself,
+ * so the projection is deterministic from AUTHENTICATED bytes only) plus the
+ * always-ignores, prune ignored directories, drop emptied directories.
+ *
+ * PURE COMPUTE: reads the store, writes NOTHING (ids are hashed via treeId(),
+ * never put) — safe on any read path. A worktree-semantics tree is a FIXED
+ * POINT (projection returns its own id); a LEGACY git-commit-tree binding
+ * projects to the honest recovery expectation stake/recover need (the exact
+ * value drill #1 proved the raw binding could never satisfy).
+ */
+export function projectTreeWorktreeSemantics(store: ObjectStore, rootTreeId: string): string {
+  const rootEntries = store.getTree(rootTreeId);
+  let rules: string | null = null;
+  for (const name of IGNORE_FILE_NAMES) {
+    const e = rootEntries.find((x) => x.name === name && (x.mode === '100644' || x.mode === '100755'));
+    if (e) {
+      rules = store.getBlob(e.id).toString('utf8');
+      break;
+    }
+  }
+  const ignored = ignoreMatcherFrom(rules);
+  const project = (entries: TreeEntry[], rel: string): string => {
+    const kept: TreeEntry[] = [];
+    for (const e of entries) {
+      const relPath = rel ? `${rel}/${e.name}` : e.name;
+      const isDir = e.mode === '40000';
+      if (ignored(relPath, isDir)) continue; // pruned — no re-inclusion inside (gitignore semantics)
+      if (isDir) {
+        const sub = store.getTree(e.id);
+        const childId = project(sub, relPath);
+        if (childId === computeNativeTreeId([])) continue; // emptied dir → dropped (git parity)
+        kept.push(childId === e.id ? e : { ...e, id: childId });
+      } else {
+        kept.push(e); // files/symlinks/gitlinks pass through untouched
+      }
+    }
+    return computeNativeTreeId(kept);
+  };
+  return project(rootEntries, '');
 }

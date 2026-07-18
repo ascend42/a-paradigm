@@ -46,7 +46,7 @@ import { loadLiveGraph } from '@a-company/premise-core';
 import { buildWarpState, type WarpState } from '../warp/warp-state.js';
 import { liftCodeUnits, injectCodeUnits } from '../lens/lift-code-units.js';
 import { ObjectStore } from '../warp/object-store.js';
-import { snapshotDir, restoreTree } from '../warp/snapshot.js';
+import { snapshotDir, restoreTree, WORKTREE_SEMANTICS } from '../warp/snapshot.js';
 import { WarpStore } from '../warp/store.js';
 import { diff } from '../sem-delta.js';
 import { classifyMergePaths } from '../honesty.js';
@@ -284,7 +284,7 @@ export async function proposeNative(root: string, opts: ProposeNativeOptions): P
       objectCount: state.objects.size,
       delta: summarizeDelta(baseState, state),
       provenance: { ref: refLabel, treeSha: null, gitCommit: null }, // git-null (I4)
-      binding: { treeId: snap.treeId, gitOid: snap.gitOid }, // bind-on-seal (v3 §1.1)
+      binding: { treeId: snap.treeId, gitOid: snap.gitOid, treeSemantics: WORKTREE_SEMANTICS }, // bind-on-seal (v3 §1.1)
     });
     store.putState(state);
     appendStrand(wdir, strand); // durable BEFORE judgment (D2)
@@ -670,7 +670,7 @@ export async function resolveNative(root: string, opts: ResolveNativeOptions): P
       delta: summarizeDelta(selvage, resolved),
       provenance: { ref: 'refs/heads/selvage', treeSha: null, gitCommit: null },
       resolves: resolution,
-      binding: { treeId: snap.treeId, gitOid: snap.gitOid },
+      binding: { treeId: snap.treeId, gitOid: snap.gitOid, treeSemantics: WORKTREE_SEMANTICS },
     });
     store.putState(resolved);
     appendStrand(wdir, strand);

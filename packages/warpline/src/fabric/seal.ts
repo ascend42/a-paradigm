@@ -54,6 +54,9 @@ export interface SealInput {
   resolves?: KnotResolution;
   /** true when sealing a materialized CLEAN merge (its gitCommit is one parent). */
   merged?: boolean;
+  /** true when sealing a BYTE-CUSTODY strand (meaning-NOOP, tree advanced —
+   * T-2026-07-18-002). Rides into the v2 pickId via the `...rest` spread. */
+  byteOnly?: boolean;
   /** native byte binding (M1b) — the treeId that restores this strand git-absent. */
   binding?: StrandBinding | null;
   /** the re-derivable merge recipe (merge strands only, M1b). */
@@ -111,6 +114,7 @@ export function sealState(
     provenance: { ref: state.ref, treeSha: state.treeSha, gitCommit: input.gitCommit },
     ...(input.resolves ? { resolves: input.resolves } : {}),
     ...(input.merged ? { merged: true } : {}),
+    ...(input.byteOnly ? { byteOnly: true } : {}),
     ...(input.authoredBy ? { authoredBy: input.authoredBy } : {}),
     ...(input.mergeParentPickId !== undefined ? { mergeParentPickId: input.mergeParentPickId } : {}),
     ...(input.binding ? { binding: input.binding } : {}),
