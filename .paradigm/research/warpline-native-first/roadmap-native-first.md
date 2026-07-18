@@ -152,6 +152,42 @@ recovery = ref move, never an import. Pulls forward M2 refs UX (branch/switch ov
 > lane): loopback TCP flag, fs-watcher index warming.
 > Nothing enabled on this repo's live fabric (founder-visible flip unchanged).
 
+> **[R2 CLIMBED 2026-07-18, T-2026-07-18-001 / Kit]** Rung R2 (loid-loops.md) landed in
+> four pieces. **(1) stake-denylist:v2 (D5 bump):** the FIRST REAL stake (valve flipped by
+> the founder: `.warpline/config.json` stake.enabled + refs:[selvage]) was refused by the
+> S2 audit on FOUR FALSE POSITIVES — basename-global 'verdicts.jsonl' hit
+> `.paradigm/events/verdicts.jsonl` (a paradigm-events file), and byte-substring markers
+> hit stake-guard.ts / stake.test.ts / aegis-security.md (source/tests/spec QUOTING the
+> envelope marker). v2 redesign (#stake-guard): PATH-ANCHORED sidecar rules (denied where
+> they live, under .warpline/ — never basename-global; .warpline stays an any-depth
+> STRUCTURAL deny because a stake is a reset target and fabric content inside one would
+> stomp the live fabric; the repo's TRACKED .warpline files are fine in git and by
+> construction never enter a stake tree) + SHAPE-AWARE content rules (only PARSED
+> .json/.jsonl matching an envelope object / sidecar schema tag / sidecar field signature
+> refuses — quoting can never match). Freeze test re-pinned (digest
+> ddea850595b2…, schema stake-denylist:v2); every live false positive is a MUST-PASS
+> fixture and true leaks (real grade rows, serialized envelope, daemon-tokens.jsonl,
+> renamed sidecar streams) still refuse (test/stake-denylist-v2.test.ts). CLI refusal
+> exit code pinned non-zero. **(2) FIRST LIVE STAKE CUT:** commit
+> `440fec31bd57e6cd61d87adbe06a22d08a63028f` on `warpline-stakes` (chain root, no parent) —
+> the EXACT sealed state v1 refused (PickId pick:v2:7ac0ad80…, TreeId tree:v1:6863eab8…);
+> trailer + marker + rev-parse tree all verified; audit row action:stake. **(3) auto-stake
+> cadence:** `stake.auto: 'every-seal'|'daily'|false` (default false) — a successful
+> non-shadow seal (#pick + #admit) triggers maybeAutoStakeOnSeal best-effort (S4 still
+> rules; failure never blocks the seal; every valve invocation self-audits). NOT enabled
+> live (founder-visible flip): add `"auto": "every-seal"` inside the existing `"stake"`
+> object of .warpline/config.json to turn it on. **(4) R2 agent write path:**
+> `gate: {"agentWrites": "real"}` (#warpline-config) makes an AGENT-ATTRIBUTED pick
+> (--agent / $WARPLINE_AGENT_ID, incl. the auto-seal hook) ENFORCE its admit verdict —
+> would-not-seal REFUSES (PickGateRefusal; enforced verdict row gate:'real'), override =
+> `pick --accept-risk` (row overridden:true, never silent); fail-CLOSED for agents on a
+> corrupt config or a crashed gate; humans keep the git door BYTE-IDENTICALLY (proved:
+> same tree + clock ⇒ identical fabric.jsonl with gate on/off). The `admit` verb needed
+> no routing — non-shadow admit already blocks for real. NOT enabled live (add
+> `"gate": {"agentWrites": "real"}` to .warpline/config.json when R2 mixed mode goes
+> live). warpline 533/533 (was 510). Live writes this lane: the one stake + its audit row
+> only.
+
 **PHASE 2 (~3–4wk) — the team server. → Rung R3 (our own dev cuts over, GATED).**
 Team home on LAN/VPC; V3.5 bundles graduate to THE sync protocol (refs/negotiate/bundle/objects
 + unsigned sidecar channel); `/refs/<name>/advance` (per-ref CAS) is the only privileged verb —

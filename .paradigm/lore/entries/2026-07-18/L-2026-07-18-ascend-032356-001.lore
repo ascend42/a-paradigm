@@ -1,0 +1,33 @@
+id: L-2026-07-18-ascend-032356-001
+type: milestone
+timestamp: '2026-07-18T03:23:56.475Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: R2 CLIMBED — first live stake in the ground, deny-list constitutionally amended to v2, both mixed-mode switches ON
+summary: 'Rung R2 (mixed mode) reached same-day: the valve''s FIRST LIVE USE was a correct fail-closed REFUSAL (S2 post-build audit caught 4 false positives of v1''s substring content markers — including the deny-list''s own source code); the fix went through the D5 constitutional path (stake-denylist:v2: path-anchored structural denies + shape-aware parsed-content rules, new pinned digest, freeze test forcing the bump, all 4 false positives now must-pass regressions); then the FIRST LIVE STAKE SUCCEEDED — warpline-stakes @ 440fec31, chain root, machine trailer, marker, audited. Auto-stake-on-seal (every-seal cadence) + the R2 agent gate (agent-attributed picks ENFORCE verdicts w/ PickGateRefusal + recorded --accept-risk override; humans keep the git door byte-identically, twin-repo-proven) both landed (533/533) and both flips are ON for this repo (2d8914fa). Config-only commits are meaning-NOOPs (.warpline excluded from the snapshot walk) so the cadence correctly idles on them; this lore commit is the first auto-stake candidate. The valve refusing its own creators on day one, and the amendment requiring a schema ceremony, is the system working exactly as constituted.'
+symbols_touched:
+  - '#stake-guard'
+  - '#stake'
+  - '#pick'
+  - '#admit'
+  - '#warpline-config'
+  - '#shadow-gate'
+commit: e45609b0
+tags:
+  - arc:warpline
+  - native-first
+  - R2
+  - milestone
+  - valve
+  - constitution
+linked_lore:
+  - L-2026-07-18-ascend-023915-001
+linked_tasks:
+  - T-2026-07-18-001
+confidence: 0.92
+git_context:
+  ref: 2d8914fa3823e68dde249053e66c611face60829
+  branch: warpline-surfaces
+  dirty: true
