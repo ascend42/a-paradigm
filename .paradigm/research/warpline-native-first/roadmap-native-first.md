@@ -116,6 +116,42 @@ recovery = ref move, never an import. Pulls forward M2 refs UX (branch/switch ov
 > index warming, and the console re-point (platform lane) deferred within Phase 1.
 > NOT started against this repo's live fabric (fixtures only; founder-visible flip).
 
+> **[PHASE 1 COMPLETE 2026-07-17, T-2026-07-17-012 / Kit]** Close-out: the console
+> re-point + `warpline backup` — the two deferred Phase-1 pieces — landed.
+> **CONSOLE RE-POINT** (#warpline-routes, packages/paradigm/src/platform-server/
+> routes/warpline.ts): a fabric-native GET-only lane (`/api/warpline/fabric/
+> {status,refs,shadow-tail,knot/:selector,grade-report}`) that serves THROUGH the
+> daemon when `.warpline/daemon.sock` + a read-SCOPED console token are present,
+> and in-process otherwise (zero breakage; DaemonRpcError NOT_FOUND is
+> authoritative → 404). CONSOLE-AUTH CHOICE: stage 1's "no anonymous reads" held —
+> tokenless local-socket reads REJECTED (would drop auth + audit on trust data);
+> instead tokens gained an additive `scope:'read'` (`warpline daemon token mint
+> console --kind human --scope read`), capped server-side at a READ_ONLY_VERBS
+> allowlist (status, refs.list, knot.show, grade.report, shadow.tail) BEFORE
+> dispatch; `consoleReadToken()` discovery structurally never returns a full-power
+> row. Byte-identity discipline extended to the router: daemon-mode vs in-process
+> responses proved byte-identical on refs/shadow-tail/grade-report/knot-404 (+
+> identical selvage projection on status), and an adversarial test pins the lane
+> to GET-only with every mutating method 404ing
+> (packages/paradigm/tests/platform-warpline-router.test.ts).
+> **BACKUP** (#warpline-backup, packages/warpline/src/fabric/backup.ts): `warpline
+> backup <dest>` (CLI + daemon verb, HUMAN-class) — atomic snapshot: mutable core
+> (ledger/refs/sidecars/audits) copied under the fabric lock, the immutable object
+> store lock-free after, staged on dest's volume and published by ONE rename;
+> CLONE-copy (COPYFILE_FICLONE — CoW on APFS, full copy elsewhere), NEVER
+> hardlinks (an in-place ledger append or tamper would mutate a hardlinked
+> "backup"); `daemon-tokens.jsonl`/pid/socket/lockfile EXCLUDED (D5
+> never-leaves-the-box; daemon audit INCLUDED — accountability survives a dead
+> disk); manifest `warplineBackup:v1` with per-file sha256 + counts. `warpline
+> backup verify <dest>` recomputes every digest (missing/extra/tampered flagged) +
+> runs the FULL verifyFabric authentication against the copy. THE RESTORE PATH IS
+> THE ENGINE: a backup IS a home-fabric root — proved by test (open → refs
+> identical → verify green → propose/admit a NEW strand against the backup →
+> still green; tamper one byte → verify fails, exit 1). warpline 510/510
+> (was 501), paradigm platform suite green. Remaining named deferrals (Phase-2
+> lane): loopback TCP flag, fs-watcher index warming.
+> Nothing enabled on this repo's live fabric (founder-visible flip unchanged).
+
 **PHASE 2 (~3–4wk) — the team server. → Rung R3 (our own dev cuts over, GATED).**
 Team home on LAN/VPC; V3.5 bundles graduate to THE sync protocol (refs/negotiate/bundle/objects
 + unsigned sidecar channel); `/refs/<name>/advance` (per-ref CAS) is the only privileged verb —

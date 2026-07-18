@@ -49,10 +49,12 @@ import {
   DAEMON_VERBS,
   HUMAN_ONLY_VERBS,
   HUMAN_ONLY_ADMIT_FLAGS,
+  READ_ONLY_VERBS,
   type RpcRequest,
   type RpcResponse,
   type RpcErrorCode,
 } from './protocol.js';
+import { backupFabric } from '../fabric/backup.js';
 import { resolveToken, type Principal } from './tokens.js';
 import { acquireDaemonLock, releaseDaemonLock } from './lifecycle.js';
 
@@ -174,6 +176,15 @@ export async function startDaemon(root: string, opts: StartDaemonOptions = {}): 
       if (!(DAEMON_VERBS as readonly string[]).includes(verb)) {
         throw new RpcFailure('UNKNOWN_VERB', `unknown verb ${JSON.stringify(verb)} — verbs: ${DAEMON_VERBS.join(', ')}`);
       }
+      // Read-SCOPE ceiling (the console class, tokens.ts): a scope:'read' token
+      // may only invoke READ_ONLY_VERBS — checked structurally BEFORE the kind
+      // matrix, so even a human-class read token holds no write capability.
+      if (who.scope === 'read' && !READ_ONLY_VERBS.includes(verb)) {
+        throw new RpcFailure(
+          'FORBIDDEN',
+          `verb ${verb} is outside the read scope (scope:'read' tokens are capped at: ${READ_ONLY_VERBS.join(', ')}) — principal ${JSON.stringify(who.principal)}`,
+        );
+      }
       // The verb × principal matrix (Aegis §2.2) — human-class-only verbs.
       if (who.kind === 'agent' && HUMAN_ONLY_VERBS.includes(verb)) {
         throw new RpcFailure('FORBIDDEN', `verb ${verb} is human-class only (Aegis §2.2) — principal ${JSON.stringify(who.principal)} is kind:agent`);
@@ -205,6 +216,7 @@ export async function startDaemon(root: string, opts: StartDaemonOptions = {}): 
           root: r,
           principal: who.principal,
           kind: who.kind,
+          scope: who.scope ?? null,
           selvage: (() => {
             try {
               return listRefs(wdir).get('selvage') ?? null;
@@ -313,6 +325,15 @@ export async function startDaemon(root: string, opts: StartDaemonOptions = {}): 
         const rows = readShadowVerdicts(r);
         return { rows: rows.slice(-Math.max(0, Math.floor(n))), total: rows.length };
       }
+      case 'backup': {
+        // Custodianship (human-class only, enforced above): atomic snapshot of
+        // THIS fabric into params.dest. The one verb whose write lands OUTSIDE
+        // `.warpline/` — it writes to dest only; the source fabric is read
+        // under the same fabric lock the CLI takes (backupFabric acquires it).
+        const dest = str(params, 'dest');
+        if (!dest) throw new RpcFailure('BAD_REQUEST', 'backup needs params.dest (the snapshot directory to create)');
+        return backupFabric(r, dest);
+      }
       default:
         throw new RpcFailure('UNKNOWN_VERB', `unknown verb ${JSON.stringify(verb)}`);
     }
@@ -383,7 +404,7 @@ export async function startDaemon(root: string, opts: StartDaemonOptions = {}): 
  * aegis-security.md §4.1: log the address, never the body). */
 function targetOf(params: Record<string, unknown>): string | null {
   const bits: string[] = [];
-  for (const k of ['selector', 'commit', 'agentId', 'claim', 'worktree', 'into']) {
+  for (const k of ['selector', 'commit', 'agentId', 'claim', 'worktree', 'into', 'dest']) {
     const v = params[k];
     if (typeof v === 'string' && v) bits.push(`${k}=${v}`);
   }

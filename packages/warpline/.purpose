@@ -1268,15 +1268,23 @@ components:
       AdmitResult, knotPayload:v1, GradeReport, shadowVerdict:v1, StakeResult).
       Verbs (1:1 onto engine fns — transport + identity, never logic): status,
       refs.list, fork, propose, admit (native, incl. the R1 shadow flag),
-      knot.show, resolve, stake, stake.recover, grade.report, shadow.tail.
+      knot.show, resolve, stake, stake.recover, grade.report, shadow.tail,
+      backup (#warpline-backup — snapshot to a dest dir, the one write that
+      lands OUTSIDE .warpline/).
       STAGE-1 IDENTITY (aegis-security.md §1.2): every request carries a bearer
       token (#warplined-tokens); the daemon SERVER-STAMPS actor/agentId/decidedBy
       from the resolved principal — client-supplied identity params are advisory
       and ignored. The verb×principal matrix (§2.2): resolve / stake /
-      stake.recover and the accept-breach / accept-risk override flags are
-      HUMAN-CLASS ONLY (an agent never accepts its own breach); engine-side
+      stake.recover / backup and the accept-breach / accept-risk override flags
+      are HUMAN-CLASS ONLY (an agent never accepts its own breach); engine-side
       override records (claim evaluations, grade escalations) are reused, not
-      duplicated. EVERY call appends a daemonAudit:v1 row —
+      duplicated. READ-SCOPE CEILING (PHASE 1 close-out, console lane): a
+      scope:'read' token (#warplined-tokens) is capped at READ_ONLY_VERBS
+      (status, refs.list, knot.show, grade.report, shadow.tail) — checked
+      structurally BEFORE dispatch, so even a human-class read token holds no
+      write capability. Chosen over tokenless local-socket reads: stage 1 says
+      no anonymous reads (sidecars are trust data), so the console stays
+      tokened + stamped + audited, just least-privilege. EVERY call appends a daemonAudit:v1 row —
       .warpline/daemon/audit.jsonl {ts, principal, kind, verb, target, ok, code}
       including refusals; targets are STRUCTURAL (selectors/paths/flags), never
       prose (§4.1: log the address, never the body). LIFECYCLE: exactly one
@@ -1305,16 +1313,23 @@ components:
     description: >-
       Aegis stage-1 identity for #warplined: per-principal bearer tokens in
       .warpline/daemon-tokens.jsonl (append-only daemonToken:v1 rows
-      {token, principal, kind:'human'|'agent', createdAt}; file mode 0600;
-      gitignored via .warpline/*; the filename is ALSO on the frozen stake
-      deny-list — never leaves the box twice over). Minting is LOCAL-CLI-ONLY
-      (`warpline daemon token mint <name> --kind human|agent`) — the human's
-      act, gated by possession of the box; no self-service daemon verb exists
-      (anti-sockpuppet, §2.2). resolveToken does constant-time comparison and
-      fails CLOSED (garbled rows never match); `token list` is redacted (tokens
-      are shown exactly once, at mint). Honest trust claim: attribution is
-      authentic within this machine's OS-user boundary; the daemon is the
-      trusted stamper — per-strand signatures remain M3.
+      {token, principal, kind:'human'|'agent', createdAt, scope?}; file mode
+      0600; gitignored via .warpline/*; the filename is ALSO on the frozen stake
+      deny-list — never leaves the box twice over; #warpline-backup excludes it
+      from snapshots for the same reason). Minting is LOCAL-CLI-ONLY
+      (`warpline daemon token mint <name> --kind human|agent [--scope read]`) —
+      the human's act, gated by possession of the box; no self-service daemon
+      verb exists (anti-sockpuppet, §2.2). SCOPE (additive, G1): absent = full
+      surface for the kind; 'read' = the CONSOLE class, capped server-side at
+      READ_ONLY_VERBS; an UNKNOWN scope fails closed (the row is skipped, never
+      resolved full-power). consoleReadToken() is the platform router's
+      discovery hook — it surfaces ONLY the newest console+read row, so the
+      console structurally never holds a full-power token. resolveToken does
+      constant-time comparison and fails CLOSED (garbled rows never match);
+      `token list` is redacted (tokens are shown exactly once, at mint). Honest
+      trust claim: attribution is authentic within this machine's OS-user
+      boundary; the daemon is the trusted stamper — per-strand signatures
+      remain M3.
     type: module
     tags: [warpline, native-first, phase-1, security]
 
@@ -1333,6 +1348,46 @@ components:
     type: module
     tags: [warpline, native-first, phase-1]
     components:
+      - "#warplined"
+
+  warpline-backup:
+    description: >-
+      PHASE 1 close-out — the custodianship tax's first payment: `warpline
+      backup <dest>` (fabric/backup.ts; also the daemon's HUMAN-CLASS `backup`
+      verb). ATOMIC snapshot of the whole fabric into `<dest>/.warpline/**`:
+      the mutable core (fabric.jsonl ledger, refs, sidecars, stake+daemon
+      audits) copies while HOLDING #fabric-lock (no writer can interleave a
+      half-appended ledger), then the object store copies lock-free
+      (content-addressed, immutable once written, no gc — anything the staged
+      ledger references already existed); everything stages in a sibling temp
+      dir on dest's own volume and ONE rename publishes the backup (a crash
+      never leaves a half-backup). COPY = fs.copyFile COPYFILE_FICLONE — a CoW
+      clone on APFS, a full byte copy elsewhere; NEVER hardlinks (a hardlink
+      shares the inode, so an in-place ledger append or source tamper would
+      mutate the "backup"). EXCLUDED, each named: daemon-tokens.jsonl (SECRETS
+      — D5 never-leaves-the-box), daemon.sock/daemon.pid (live process
+      residue), refs/.lock* (process state); daemon/audit.jsonl INCLUDED
+      (accountability survives a dead disk; structural targets, never prose).
+      MANIFEST `<dest>/backup.manifest.json` (warplineBackup:v1): per-file
+      bytes + sha256 digested from the STAGED bytes, plus counts
+      {files, objects, ledgerRows, refs}; lives BESIDE .warpline so the
+      backup's fabric dir holds only fabric. `warpline backup verify <dest>`:
+      recompute every digest (missing/extra/size/digest problems flagged —
+      an ADDITION is tamper evidence too) + run the FULL #fabric-verify
+      authentication against the copy; ok ⇔ zero problems AND zero fabric
+      failures; CLI exit 1 on any. THE RESTORE PATH IS THE ENGINE ITSELF:
+      a backup IS a home-fabric root — every read AND write verb works
+      against it directly (proved in test/backup.test.ts: open → refs
+      identical → verify green → a NEW strand proposes/admits against the
+      backup → still green). Refuses an existing dest and a dest inside the
+      source fabric.
+    type: module
+    tags: [warpline, native-first, phase-1, custodianship]
+    components:
+      - "#fabric"
+      - "#fabric-lock"
+      - "#fabric-refs"
+      - "#fabric-verify"
       - "#warplined"
 
   oracle:

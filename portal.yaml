@@ -460,6 +460,25 @@ routes:
   POST /api/warpline/oracle:
     - ^local-only
     - ^write-capable
+  # Fabric-native console lane (PHASE 1 re-point): read-only fabric views,
+  # daemon-backed when warplined + the read-SCOPED console token are present
+  # (in-process otherwise). The lane registers GET handlers only, and the
+  # console token is capped at the daemon's READ_ONLY_VERBS server-side.
+  GET /api/warpline/fabric/status:
+    - ^local-only
+    - ^read-only
+  GET /api/warpline/fabric/refs:
+    - ^local-only
+    - ^read-only
+  GET /api/warpline/fabric/shadow-tail:
+    - ^local-only
+    - ^read-only
+  GET /api/warpline/fabric/knot/:selector:
+    - ^local-only
+    - ^read-only
+  GET /api/warpline/fabric/grade-report:
+    - ^local-only
+    - ^read-only
 
   # ── Academy / Classroom (read-only over the gated-learning artifacts) ──
   # Thin readers over .paradigm/curriculum + .paradigm/events JSONL. No write path.

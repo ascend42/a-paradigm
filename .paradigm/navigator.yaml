@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-07-17T22:59:31.203Z'
+generated: '2026-07-18T02:35:53.420Z'
 structure: {}
 key_files:
   config:
@@ -516,6 +516,7 @@ symbols:
   '#purpose-component-warplined': /Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose
   '#purpose-component-warplined-tokens': /Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose
   '#purpose-component-warplined-client': /Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose
+  '#purpose-component-warpline-backup': /Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose
   '#purpose-component-oracle': /Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose
   '#purpose-component-weave': /Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose
   '#purpose-component-consolidate': /Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose
@@ -2006,6 +2007,7 @@ symbolsByComponentType:
     - '#native-write-path'
     - '#warplined-tokens'
     - '#warplined-client'
+    - '#warpline-backup'
     - '#oracle'
     - '#weave'
     - '#consolidate'

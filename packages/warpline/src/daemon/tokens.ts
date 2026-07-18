@@ -30,6 +30,18 @@ export const DAEMON_TOKEN_SCHEMA = 'daemonToken:v1' as const;
 
 export type PrincipalKind = 'human' | 'agent';
 
+/**
+ * Token scope. Absent = full verb surface for the principal's kind (the
+ * pre-existing token class). `'read'` = the CONSOLE class: the daemon caps the
+ * token at protocol.ts READ_ONLY_VERBS regardless of kind — least privilege
+ * for surfaces that only ever render (the platform console). The scope is
+ * additive schema (G1): old rows have no scope and behave exactly as before.
+ */
+export type TokenScope = 'read';
+
+/** The principal name the platform console's token is minted under. */
+export const CONSOLE_PRINCIPAL = 'console';
+
 /** One minted identity row (append-only; a re-mint for the same principal
  * simply adds a newer valid token — rotation without a revocation ceremony,
  * which is deliberately deferred at stage 1). */
@@ -39,12 +51,16 @@ export interface DaemonToken {
   principal: string;
   kind: PrincipalKind;
   createdAt: string;
+  /** absent = full surface; 'read' = READ_ONLY_VERBS ceiling (console class). */
+  scope?: TokenScope;
 }
 
 /** The resolved caller identity the daemon stamps onto every engine call. */
 export interface Principal {
   principal: string;
   kind: PrincipalKind;
+  /** 'read' caps the session at READ_ONLY_VERBS (server-enforced). */
+  scope?: TokenScope;
 }
 
 export function tokensPathOf(root: string): string {
@@ -57,12 +73,15 @@ export function mintToken(
   root: string,
   principal: string,
   kind: PrincipalKind,
-  opts: { now?: string } = {},
+  opts: { now?: string; scope?: TokenScope } = {},
 ): DaemonToken {
   const name = principal.trim();
   if (!name) throw new Error('warpline: daemon token mint — principal name is required');
   if (kind !== 'human' && kind !== 'agent') {
     throw new Error(`warpline: daemon token mint — kind must be 'human' or 'agent' (got ${JSON.stringify(kind)})`);
+  }
+  if (opts.scope !== undefined && opts.scope !== 'read') {
+    throw new Error(`warpline: daemon token mint — scope must be 'read' or omitted (got ${JSON.stringify(opts.scope)})`);
   }
   const row: DaemonToken = {
     schemaVersion: DAEMON_TOKEN_SCHEMA,
@@ -70,6 +89,7 @@ export function mintToken(
     principal: name,
     kind,
     createdAt: opts.now ?? new Date().toISOString(),
+    ...(opts.scope ? { scope: opts.scope } : {}),
   };
   const p = tokensPathOf(root);
   fs.mkdirSync(path.dirname(p), { recursive: true });
@@ -96,7 +116,15 @@ export function readTokens(root: string): DaemonToken[] {
     if (!line.trim()) continue;
     try {
       const row = JSON.parse(line) as DaemonToken;
-      if (row && typeof row.token === 'string' && typeof row.principal === 'string' && (row.kind === 'human' || row.kind === 'agent')) {
+      // An UNKNOWN scope fails closed (skipped): a row we cannot interpret must
+      // never resolve as a full-power token.
+      if (
+        row &&
+        typeof row.token === 'string' &&
+        typeof row.principal === 'string' &&
+        (row.kind === 'human' || row.kind === 'agent') &&
+        (row.scope === undefined || row.scope === 'read')
+      ) {
         out.push(row);
       }
     } catch {
@@ -118,7 +146,9 @@ function tokenEquals(a: string, b: string): boolean {
 export function resolveToken(root: string, token: string | undefined): Principal | null {
   if (!token || typeof token !== 'string') return null;
   for (const row of readTokens(root)) {
-    if (tokenEquals(row.token, token)) return { principal: row.principal, kind: row.kind };
+    if (tokenEquals(row.token, token)) {
+      return { principal: row.principal, kind: row.kind, ...(row.scope ? { scope: row.scope } : {}) };
+    }
   }
   return null;
 }
@@ -126,11 +156,30 @@ export function resolveToken(root: string, token: string | undefined): Principal
 /** Redacted listing for `warpline daemon token list` — never re-shows tokens. */
 export function listTokenSummaries(
   root: string,
-): Array<{ principal: string; kind: PrincipalKind; createdAt: string; tokenPrefix: string }> {
+): Array<{ principal: string; kind: PrincipalKind; scope: TokenScope | 'full'; createdAt: string; tokenPrefix: string }> {
   return readTokens(root).map((r) => ({
     principal: r.principal,
     kind: r.kind,
+    scope: r.scope ?? 'full',
     createdAt: r.createdAt,
     tokenPrefix: r.token.slice(0, 8) + '…',
   }));
+}
+
+/**
+ * The console lane's token discovery (platform router): the NEWEST token
+ * minted for the `console` principal with `scope:'read'` — and ONLY such a
+ * row. This helper structurally cannot hand a full-power token to the console:
+ * rows without the read scope never match, so a router bug upstream of the
+ * daemon still holds no write capability. Returns null when the human has not
+ * minted one (`warpline daemon token mint console --kind human --scope read`)
+ * — the caller falls back to its in-process read path.
+ */
+export function consoleReadToken(root: string): string | null {
+  let newest: DaemonToken | null = null;
+  for (const row of readTokens(root)) {
+    if (row.principal !== CONSOLE_PRINCIPAL || row.scope !== 'read') continue;
+    if (!newest || row.createdAt > newest.createdAt) newest = row;
+  }
+  return newest?.token ?? null;
 }

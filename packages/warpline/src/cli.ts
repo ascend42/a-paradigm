@@ -63,7 +63,8 @@ import { STAKE_MARKER } from './fabric/stake-guard.js';
 import { existsSync } from 'node:fs';
 import { repoRoot, gitPath } from './git/git-exec.js';
 import { startDaemon } from './daemon/server.js';
-import { mintToken, listTokenSummaries } from './daemon/tokens.js';
+import { mintToken, listTokenSummaries, type TokenScope } from './daemon/tokens.js';
+import { backupFabric, verifyBackup, type BackupResult, type BackupVerifyReport } from './fabric/backup.js';
 import { daemonState, stopDaemon, socketPathOf } from './daemon/lifecycle.js';
 import { DaemonClient } from './daemon/client.js';
 import { spawn } from 'node:child_process';
@@ -1105,18 +1106,21 @@ const tokenCmd = daemonCmd
 
 tokenCmd
   .command('mint <name>')
-  .description('Mint a bearer token for a principal. kind:agent principals CANNOT resolve knots, cut/recover stakes, or accept-breach/accept-risk (human-class-only overrides). The token prints ONCE — hand it to the agent worktree via env, never commit it.')
+  .description('Mint a bearer token for a principal. kind:agent principals CANNOT resolve knots, cut/recover stakes, or accept-breach/accept-risk (human-class-only overrides). --scope read caps the token at the read-only verbs (status, refs.list, knot.show, grade.report, shadow.tail) — the CONSOLE class: `warpline daemon token mint console --kind human --scope read` is what the platform Warpline section auto-discovers. The token prints ONCE — hand it to the agent worktree via env, never commit it.')
   .requiredOption('--kind <kind>', "principal class: 'human' or 'agent'")
+  .option('--scope <scope>', "'read' = read-only verb ceiling (console class); omit for the full surface")
   .option('--json', 'emit the minted row as JSON (includes the token — once)')
-  .action(async (name: string, options: { kind: string; json?: boolean }) => {
+  .action(async (name: string, options: { kind: string; scope?: string; json?: boolean }) => {
     try {
       const root = await repoRoot().catch(() => process.cwd());
-      const row = mintToken(root, name, options.kind as 'human' | 'agent');
+      const row = mintToken(root, name, options.kind as 'human' | 'agent', {
+        ...(options.scope ? { scope: options.scope as TokenScope } : {}),
+      });
       if (options.json) {
         process.stdout.write(JSON.stringify(row, null, 2) + '\n');
       } else {
         process.stdout.write(
-          `TOKEN MINTED  ${row.principal}  (kind:${row.kind})\n` +
+          `TOKEN MINTED  ${row.principal}  (kind:${row.kind}${row.scope ? `, scope:${row.scope}` : ''})\n` +
             `  token   ${row.token}\n` +
             `  shown once here — the row lives at .warpline/daemon-tokens.jsonl (0600, gitignored; never commit or ship it)\n`,
         );
@@ -1140,7 +1144,7 @@ tokenCmd
         process.stdout.write('WARPLINED TOKENS  (none minted — `warpline daemon token mint <name> --kind human|agent`)\n');
       } else {
         const lines = ['WARPLINED TOKENS  (redacted)'];
-        for (const r of rows) lines.push(`  ${r.tokenPrefix}  ${r.kind.padEnd(5)}  ${r.principal}  (${r.createdAt})`);
+        for (const r of rows) lines.push(`  ${r.tokenPrefix}  ${r.kind.padEnd(5)}  ${r.scope === 'read' ? 'read-only' : 'full     '}  ${r.principal}  (${r.createdAt})`);
         process.stdout.write(lines.join('\n') + '\n');
       }
     } catch (err) {
@@ -1173,6 +1177,77 @@ daemonCmd
       fail(err);
     }
   });
+
+// ── backup — the custodianship valve (PHASE 1 close-out) ─────────────────────
+
+const backupCmd = program
+  .command('backup')
+  .description(
+    'Custodianship: atomic fabric snapshots. `warpline backup <dest>` clone-copies the ledger + refs + sidecars + object store into <dest>/.warpline (CoW clones on APFS, full copies elsewhere — never hardlinks) with a digest manifest; `warpline backup verify <dest>` recomputes every digest AND authenticates the backup with the full fabric verify. THE RESTORE PATH IS THE ENGINE ITSELF: a backup IS a home-fabric root — run any warpline verb from <dest> (or `restore --to`) and you are restored. Secrets never travel: daemon-tokens.jsonl is excluded (D5 deny-list).',
+  );
+
+backupCmd
+  .command('create <dest>', { isDefault: true })
+  .description('Snapshot this fabric into a fresh directory <dest> (refuses an existing dest). Mutable core copies under the fabric lock; the manifest publishes last; one atomic rename lands the whole backup.')
+  .option('--json', 'emit the BackupResult as JSON')
+  .action(async (dest: string, options: { json?: boolean }) => {
+    try {
+      const root = await repoRoot().catch(() => process.cwd());
+      const result = await backupFabric(root, dest);
+      if (options.json) {
+        process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+      } else {
+        printBackup(result);
+      }
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+backupCmd
+  .command('verify <dest>')
+  .description('Verify a backup: recompute every manifest sha256 (missing/extra/mismatched files flagged), then run the full fabric authentication (pickId recompute, chain/DAG walk, byte-binding recompute) against the backup copy. Exit 0 = intact, 1 = problem found.')
+  .option('--json', 'emit the BackupVerifyReport as JSON')
+  .action(async (dest: string, options: { json?: boolean }) => {
+    try {
+      const report = verifyBackup(dest);
+      if (options.json) {
+        process.stdout.write(JSON.stringify(report, null, 2) + '\n');
+      } else {
+        printBackupVerify(report);
+      }
+      if (!report.ok) process.exitCode = 1;
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+function printBackup(r: BackupResult): void {
+  const lines: string[] = [];
+  lines.push(`BACKUP  →  ${r.dest}`);
+  lines.push(`files     ${r.counts.files}  (${r.counts.objects} objects, ${r.counts.ledgerRows} ledger rows, ${r.counts.refs} ref(s))`);
+  lines.push(`bytes     ${r.totalBytes}`);
+  if (r.selvage) lines.push(`selvage   ${r.selvage.slice(0, 20)}…`);
+  lines.push(`manifest  ${r.manifestPath}`);
+  lines.push('→ the backup IS a home-fabric root — any warpline verb run from it is the restore.');
+  process.stdout.write(lines.join('\n') + '\n');
+}
+
+function printBackupVerify(r: BackupVerifyReport): void {
+  const lines: string[] = [];
+  if (r.ok && r.manifest && r.fabric) {
+    lines.push(`BACKUP VERIFY  ${r.dest}  —  intact`);
+    lines.push(`files     ${r.manifest.counts.files} digest-true  (${r.manifest.counts.objects} objects, ${r.manifest.counts.ledgerRows} ledger rows)`);
+    lines.push(`fabric    ${r.fabric.checked} strand(s) authenticated — 0 failures`);
+  } else {
+    lines.push(`BACKUP VERIFY  ${r.dest}  —  FAILED`);
+    for (const p of r.problems) lines.push(`  ✗ ${p.kind}  ${p.path}\n    ${p.detail}`);
+    if (r.fabric && r.fabric.failures.length) {
+      for (const f of r.fabric.failures) lines.push(`  ✗ fabric ${f.kind}  seq ${f.seq}  ${short(f.pickId)}\n    ${f.detail}`);
+    }
+  }
+  process.stdout.write(lines.join('\n') + '\n');
+}
 
 function printStake(r: StakeResult): void {
   const lines: string[] = [];

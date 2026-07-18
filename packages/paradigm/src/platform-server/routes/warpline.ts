@@ -30,6 +30,25 @@
  *   POST /oracle   {branchA,branchB}         — full Oracle (appends ledger)
  *   POST /diff     {refA?,refB?}             — semantic diff
  *   GET  /absorb/:ref          — serialized WarpState for a ref
+ *
+ * (D) FABRIC-NATIVE CONSOLE LANE — the PHASE-1 re-point (native-first). Five
+ * read-only fabric views, DAEMON-BACKED when `warplined` serves this fabric:
+ *   GET  /fabric/status        — fabric tip + transport mode (+ daemon status)
+ *   GET  /fabric/refs          — native refs/heads map + head pickIds
+ *   GET  /fabric/shadow-tail?n=— last N shadow verdict rows
+ *   GET  /fabric/knot/:selector— a KNOT payload (404 when none matches)
+ *   GET  /fabric/grade-report?window= — the calibration report
+ * TRANSPORT SWAP, NOT A REDESIGN: when a daemon socket is present AND the
+ * human has minted the read-scoped console token (`warpline daemon token mint
+ * console --kind human --scope read`), these serve THROUGH the daemon client —
+ * results are the engine shapes verbatim (G3), so daemon-mode and in-process
+ * mode are byte-identical (proved in tests/platform-warpline-router.test.ts).
+ * No daemon / no token / transport failure → the identical in-process engine
+ * read (zero breakage). The console holds ONLY the read-scoped token
+ * (consoleReadToken structurally never returns a full-power row), the daemon
+ * caps that token at its READ_ONLY_VERBS allowlist server-side, and this
+ * router registers exclusively GET handlers under /fabric — read-only stays
+ * LAW at three independent layers.
  */
 
 import { Router, type Request, type Response } from 'express';
@@ -119,6 +138,149 @@ export function createWarplineRouter(projectDir: string, ws?: PlatformWsContext)
       res.json({ head: info.current, branches });
     } catch (err) {
       res.status(500).json({ error: 'Failed to list refs', detail: String(err) });
+    }
+  });
+
+  // ── (D) Fabric-native console lane (PHASE 1 re-point — daemon-backed) ─────
+  //
+  // Each route serves the SAME engine shape from one of two transports:
+  // through `warplined` (when its socket + the read-scoped console token are
+  // present) or in-process (the fallback — and the pre-daemon behavior,
+  // unchanged). A DaemonRpcError NOT_FOUND is authoritative (mapped to 404);
+  // any transport failure falls back in-process so the console never breaks.
+
+  type Engine = typeof import('@a-company/warpline');
+  // DaemonClient's constructor is private (connect() is the factory) — derive
+  // the instance type from the factory, not InstanceType.
+  type EngineClient = Awaited<ReturnType<Engine['DaemonClient']['connect']>>;
+  const loadEngine = (): Promise<Engine> => import('@a-company/warpline');
+
+  /** Try the daemon lane: null = not available (caller serves in-process). */
+  const tryDaemon = async <T>(
+    w: Engine,
+    call: (client: EngineClient) => Promise<T>,
+  ): Promise<{ result: T } | { notFound: string } | null> => {
+    let token: string | null = null;
+    try {
+      token = w.daemonAvailable(projectDir) ? w.consoleReadToken(projectDir) : null;
+    } catch {
+      return null;
+    }
+    if (!token) return null;
+    let client: EngineClient | null = null;
+    try {
+      client = await w.DaemonClient.connect(projectDir, token);
+      return { result: await call(client) };
+    } catch (err) {
+      if (err instanceof w.DaemonRpcError && err.code === 'NOT_FOUND') return { notFound: err.message };
+      return null; // transport/auth trouble → the in-process read (zero breakage)
+    } finally {
+      client?.close();
+    }
+  };
+
+  // GET /fabric/status — the fabric tip + which transport served it. The
+  // fabric-derived field (selvage) is byte-identical across modes; `mode` and
+  // `daemon` are declared transport metadata (that is the endpoint's job).
+  router.get('/fabric/status', async (_req: Request, res: Response) => {
+    try {
+      const w = await loadEngine();
+      const d = await tryDaemon(w, (c) => c.status());
+      if (d && 'result' in d) {
+        res.json({ mode: 'daemon', selvage: d.result.selvage, daemon: d.result });
+        return;
+      }
+      let selvage: string | null = null;
+      try {
+        selvage = w.listRefs(w.warplineDirOf(projectDir)).get('selvage') ?? null;
+      } catch {
+        selvage = null;
+      }
+      res.json({ mode: 'in-process', selvage, daemon: null });
+    } catch (err) {
+      res.status(500).json({ error: 'Fabric status failed', detail: String(err) });
+    }
+  });
+
+  // GET /fabric/refs — native refs/heads map + head pickIds (engine shape
+  // verbatim: identical to the daemon's refs.list result).
+  router.get('/fabric/refs', async (_req: Request, res: Response) => {
+    try {
+      const w = await loadEngine();
+      const d = await tryDaemon(w, (c) => c.refsList());
+      if (d && 'result' in d) {
+        res.json(d.result);
+        return;
+      }
+      const wdir = w.warplineDirOf(projectDir);
+      res.json({ refs: Object.fromEntries(w.listRefs(wdir)), heads: w.heads(wdir) });
+    } catch (err) {
+      res.status(500).json({ error: 'Fabric refs failed', detail: String(err) });
+    }
+  });
+
+  // GET /fabric/shadow-tail?n= — last N shadow verdict rows (R1 shadow gate
+  // telemetry). In-process mirrors the daemon dispatch expression exactly.
+  router.get('/fabric/shadow-tail', async (req: Request, res: Response) => {
+    try {
+      const n = parseLimit(req.query.n) ?? 20;
+      const w = await loadEngine();
+      const d = await tryDaemon(w, (c) => c.shadowTail(n));
+      if (d && 'result' in d) {
+        res.json(d.result);
+        return;
+      }
+      const rows = w.readShadowVerdicts(projectDir);
+      res.json({ rows: rows.slice(-Math.max(0, Math.floor(n))), total: rows.length });
+    } catch (err) {
+      res.status(500).json({ error: 'Shadow tail failed', detail: String(err) });
+    }
+  });
+
+  // GET /fabric/knot/:selector — the KNOT payload work order. 404 bodies are
+  // byte-identical across modes (the in-process message mirrors the daemon's).
+  router.get('/fabric/knot/:selector', async (req: Request, res: Response) => {
+    const selector = req.params.selector;
+    if (!isSelector(selector)) {
+      res.status(400).json({ error: 'knot requires a selector path param' });
+      return;
+    }
+    try {
+      const w = await loadEngine();
+      const d = await tryDaemon(w, (c) => c.knotShow(selector));
+      if (d && 'result' in d) {
+        res.json(d.result);
+        return;
+      }
+      if (d && 'notFound' in d) {
+        res.status(404).json({ error: d.notFound });
+        return;
+      }
+      const payload = w.readKnotPayload(projectDir, selector);
+      if (!payload) {
+        res.status(404).json({ error: `no KNOT payload matches ${JSON.stringify(selector)}` });
+        return;
+      }
+      res.json(payload);
+    } catch (err) {
+      res.status(500).json({ error: 'Knot payload failed', detail: String(err) });
+    }
+  });
+
+  // GET /fabric/grade-report?window= — the calibration report (report ONLY;
+  // applyGrades never rides this router, exactly as it never rides the daemon).
+  router.get('/fabric/grade-report', async (req: Request, res: Response) => {
+    try {
+      const window = parseLimit(req.query.window);
+      const w = await loadEngine();
+      const d = await tryDaemon(w, (c) => c.gradeReport(window !== undefined ? { window } : {}));
+      if (d && 'result' in d) {
+        res.json(d.result);
+        return;
+      }
+      res.json(w.gradeFabric(projectDir, window !== undefined ? { window } : {}));
+    } catch (err) {
+      res.status(500).json({ error: 'Grade report failed', detail: String(err) });
     }
   });
 
@@ -243,6 +405,17 @@ function parseLimit(raw: unknown): number | undefined {
 const REF_RE = /^[A-Za-z0-9][A-Za-z0-9/._-]{0,255}$/;
 function isRef(value: unknown): value is string {
   return typeof value === 'string' && REF_RE.test(value);
+}
+
+/**
+ * A KNOT selector the console may send (pickId/prefix, `pick:<id>`, `@N`, a
+ * seq number…). Same posture as REF_RE: conservative allowlist, no whitespace,
+ * no control chars; the engine treats it as pure data (readKnotPayload), so
+ * this is defense-in-depth, not the security boundary.
+ */
+const SELECTOR_RE = /^[A-Za-z0-9@][A-Za-z0-9@:._-]{0,255}$/;
+function isSelector(value: unknown): value is string {
+  return typeof value === 'string' && SELECTOR_RE.test(value);
 }
 
 /** Schema versions of OracleRecord this reader understands. Unknown → skipped. */

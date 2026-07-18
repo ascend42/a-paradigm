@@ -22,6 +22,7 @@ import type { KnotPayload } from '../fabric/knot-payload.js';
 import type { GradeReport } from '../fabric/grade.js';
 import type { ShadowVerdictRow } from '../fabric/shadow.js';
 import type { StakeResult, StakeRecoverResult } from '../fabric/stake.js';
+import type { BackupResult } from '../fabric/backup.js';
 import type { CreateClaimInput } from '../fabric/claim.js';
 import { RPC_SCHEMA, type RpcErrorCode, type RpcResponse } from './protocol.js';
 import { socketPathOf } from './lifecycle.js';
@@ -55,6 +56,8 @@ export interface DaemonStatus {
   root: string;
   principal: string;
   kind: 'human' | 'agent';
+  /** 'read' = console-class token capped at READ_ONLY_VERBS; null = full. */
+  scope: 'read' | null;
   selvage: string | null;
   verbs: string[];
 }
@@ -217,5 +220,10 @@ export class DaemonClient {
 
   shadowTail(n = 20): Promise<{ rows: ShadowVerdictRow[]; total: number }> {
     return this.call('shadow.tail', { n });
+  }
+
+  /** Snapshot the daemon's fabric into `dest` (human-class only — Aegis §2.2). */
+  backup(dest: string): Promise<BackupResult> {
+    return this.call('backup', { dest });
   }
 }

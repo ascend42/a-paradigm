@@ -43,6 +43,7 @@ export const DAEMON_VERBS = [
   'stake.recover', // stakeRecover               (write — human-class only)
   'grade.report', // gradeFabric (report only — applyGrades never rides the daemon)
   'shadow.tail', // readShadowVerdicts, last N   (read)
+  'backup', // backupFabric — atomic fabric snapshot (write to DEST only; human-class)
 ] as const;
 
 export type DaemonVerb = (typeof DAEMON_VERBS)[number];
@@ -88,11 +89,37 @@ export interface RpcErr {
 export type RpcResponse = RpcOk | RpcErr;
 
 /** Verbs an `agent`-class principal may NOT invoke at all (Aegis §2.2:
- * resolve is tier-gated human-class; the stake valve is operator/human). */
+ * resolve is tier-gated human-class; the stake valve is operator/human;
+ * backup is custodianship — the human's act, like token minting). */
 export const HUMAN_ONLY_VERBS: readonly string[] = Object.freeze([
   'resolve',
   'stake',
   'stake.recover',
+  'backup',
+]);
+
+/**
+ * The READ-ONLY verb allowlist — the verbs a `scope:'read'` token (the CONSOLE
+ * token class, tokens.ts) may invoke. Everything else is FORBIDDEN for a
+ * read-scoped principal, checked structurally before dispatch.
+ *
+ * CONSOLE-AUTH CHOICE (documented per the phase-1 close-out brief): stage 1
+ * says NO anonymous reads — the sidecars behind these verbs are trust data
+ * (Aegis §2.3) — so a tokenless local-socket allowlist was REJECTED: it would
+ * drop both authentication and audit attribution on trust data. Instead the
+ * console holds a minted, read-SCOPED token (`warpline daemon token mint
+ * console --kind human --scope read`): every call stays tokened, stamped, and
+ * audited, and the token is least-privilege — even if it leaks, no write verb
+ * is reachable (this list is the ceiling, enforced server-side). Conservative
+ * on both axes: stage-1 law intact + strictly narrower capability than any
+ * pre-existing token class.
+ */
+export const READ_ONLY_VERBS: readonly string[] = Object.freeze([
+  'status',
+  'refs.list',
+  'knot.show',
+  'grade.report',
+  'shadow.tail',
 ]);
 
 /** Param flags an `agent`-class principal may NOT set — the override verbs.

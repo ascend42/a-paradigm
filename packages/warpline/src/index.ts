@@ -334,6 +334,7 @@ export {
   DAEMON_VERBS,
   HUMAN_ONLY_VERBS,
   HUMAN_ONLY_ADMIT_FLAGS,
+  READ_ONLY_VERBS,
   type DaemonVerb,
   type RpcRequest,
   type RpcResponse,
@@ -346,11 +347,14 @@ export {
   readTokens,
   resolveToken,
   listTokenSummaries,
+  consoleReadToken,
   tokensPathOf,
   DAEMON_TOKEN_SCHEMA,
+  CONSOLE_PRINCIPAL,
   type DaemonToken,
   type Principal,
   type PrincipalKind,
+  type TokenScope,
 } from './daemon/tokens.js';
 export {
   socketPathOf,
@@ -379,6 +383,24 @@ export {
   type ConnectOptions,
   type ShadowAdmitOverDaemon,
 } from './daemon/client.js';
+
+// PHASE 1 close-out (#warpline-backup) — custodianship: atomic fabric
+// snapshots (clone-copy, never hardlinks; digest manifest; verify = digest
+// recompute + full fabric authentication). A backup IS a home-fabric root —
+// opening it with the engine is the restore.
+export {
+  backupFabric,
+  verifyBackup,
+  BACKUP_MANIFEST_SCHEMA,
+  BACKUP_MANIFEST_BASENAME,
+  type BackupResult,
+  type BackupManifest,
+  type BackupCounts,
+  type BackupFileEntry,
+  type BackupVerifyReport,
+  type BackupVerifyProblem,
+  type BackupProblemKind,
+} from './fabric/backup.js';
 
 // Oracle
 export { oracle, type OracleRecord, type OracleOptions } from './oracle.js';
