@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-07-18T02:35:53.420Z'
+generated: '2026-07-18T04:45:59.878Z'
 structure: {}
 key_files:
   config:
@@ -1300,6 +1300,7 @@ symbols:
   '#purpose-ref-component-cfg': /Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose
   '#purpose-ref-component-fabric-lock.': /Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose
   '#purpose-ref-component-admit.': /Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose
+  $purpose-ref-flow-WARPLINE_AGENT_ID: /Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose
   ~purpose-ref-aspect-yaml-config-loading: /Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose
   ~purpose-ref-aspect-file-glob-discovery: /Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose
   '#purpose-ref-component-session.active': /Users/ascend/Documents/GitHub/a-paradigm/packages/portal/viewer/.purpose

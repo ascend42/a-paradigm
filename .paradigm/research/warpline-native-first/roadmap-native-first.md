@@ -188,6 +188,48 @@ recovery = ref move, never an import. Pulls forward M2 refs UX (branch/switch ov
 > live). warpline 533/533 (was 510). Live writes this lane: the one stake + its audit row
 > only.
 
+> **[F3 DRILL #1 FAILED → DEMOTED TO R1 2026-07-18, cc9812b1]** The first live recovery
+> drill (f3-drills.jsonl n=1) FALSE-REFUSED a pristine `git reset --hard <stake>` tree:
+> seal-time ref bindings used GIT-COMMIT-TREE semantics (snapshotRef — tracked-but-
+> gitignored files IN) while recover's rehash used ignore-honoring WORKTREE semantics
+> (snapshotDir — them OUT). Pre-registered rule honored: gate→shadow, auto-stake→off,
+> F3 clock restarted. Tasks filed: T-2026-07-18-004 (recover), T-2026-07-18-002 (byte
+> custody — same fault line).
+
+> **[THE TREE SEMANTICS DECISION + FIX + DRILL #2 GREEN 2026-07-18, T-2026-07-18-005 / Kit]**
+> **THE DECISION (candidate B, ratified in code — snapshot.ts header):** WORKTREE
+> SEMANTICS (`worktree:v1` — ignore-honoring snapshotDir rules) is THE canonical tree
+> semantics for ALL NEW bindings; the worktree is the source of truth and the git
+> commit tree is a legacy adapter view. snapshotRef (full AND incremental) now filters
+> by the ref's OWN committed root ignore rules — ref tree ≡ worktree tree of the same
+> clean checkout, pinned by test. Existing strands are GRANDFATHERED under their
+> recorded semantics (the epoch pattern): new bindings carry additive
+> `binding.treeSemantics:'worktree:v1'`; absent = legacy-git. The tag rides OUTSIDE
+> the pickId preimage in BOTH epochs (v2 folds only bindingTreeId; the founder-signed
+> v3 preimage is untouched — §9/G-law respected). **FIX (T-004):** stake cut now
+> computes AND RECORDS `worktreeTreeId` (additive audit field + StakeResult) — the
+> honest recovery expectation; S5 recover judges each strand under ITS OWN semantics:
+> worktree:v1 binding = itself, legacy binding = `projectTreeWorktreeSemantics`
+> (pure, deterministic, from authenticated store bytes only). Validated against
+> drill-1 evidence: projection of the seq-40 binding computes tree:v1:2854d1ad… —
+> exactly drill #1's observed rehash; **stake 440fec31 REMAINS RECOVERABLE** (no
+> drill-void). Legacy-semantics anchors are refused (first post-cutover seal walks
+> full once, then re-anchors; bench spot-checked: warm FAST_ADMIT 4.2s, CLEAN merge
+> 7.8s on the monorepo clone — not regressed). **BYTE CUSTODY (T-002):** NOOP ⟺ empty
+> deltas AND renames AND tree unchanged (under THE semantics); meaning-NOOP +
+> tree-changed seals a **byteOnly strand** (additive flag, in the v2 preimage via the
+> rest spread; stateId naturally equals the parent's; binding advances; always
+> FAST/no-gate — a NOOP verdict never refuses, even agent-attributed under
+> gate:'real'; auto-stake counts it; verify/grade/dag/restore all pinned) — doc/lore/
+> config-only commits have durable native custody again. **DRILL #2 (f3-drills.jsonl
+> n=2, isolated clone, overlay-after-reset): ALL LEGS GREEN** — fresh live stake
+> 0f4b2ffe (parent 440fec31, first-parent chain) → backup+verify (42 strands, 0
+> failures) → reset → recover GREEN (the drill-1 failure leg) → git-absent restore
+> diff-identical (3175 entries). warpline 539/539 (was 533); tsc+build clean; live
+> fabric verify exit 0. Live writes this lane: ONE stake + its audit row + the drill
+> record row. F3 consecutive-green = 1 of 3; re-promotion to R2 is the
+> coordinator/founder's call.
+
 **PHASE 2 (~3–4wk) — the team server. → Rung R3 (our own dev cuts over, GATED).**
 Team home on LAN/VPC; V3.5 bundles graduate to THE sync protocol (refs/negotiate/bundle/objects
 + unsigned sidecar channel); `/refs/<name>/advance` (per-ref CAS) is the only privileged verb —

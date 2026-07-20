@@ -1,0 +1,36 @@
+id: L-2026-07-20-ascend-235226-001
+type: milestone
+timestamp: '2026-07-20T23:52:26.264Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'R2 RE-CLIMBED on repaired rails — worktree:v1 canonical tree semantics, drill #2 green, byte custody + auto-stake live on the home fabric'
+summary: 'The full falsifier cycle closed in one arc: F3 drill #1 FAILED honestly (recover false-refused pristine trees — writer bound git-commit-tree semantics incl. tracked-but-gitignored files while the reader walked ignore-honoring; caught in an isolated clone, never a real disaster) → rule-based demotion to R1 executed same-hour → THE TREE SEMANTICS decision (worktree:v1 canonical for all new bindings, native-first-honest; legacy strands grandfathered under their recorded semantics via pure zero-write projection — even stake #1 stays recoverable, no drill-void) → recover fixed, byte-custody seals built (NOOP now requires the TREE unchanged; meaning-NOOP+tree-changed seals a byteOnly strand — doc/config commits gain native custody, closing the R3 blocker) → drill #2 GREEN on the exact failed leg (F3 1/3) → RE-PROMOTED to R2. Live proof on the home fabric: strand 43 = real byteOnly seal (8858f59f); 4ebce159 = first unattended auto-stake; 3-stake first-parent chain; 539/539; fabric verify exit 0. Residue filed honestly: T-2026-07-18-006 (auto-stake misses byteOnly on the hook path, medium). The system now governs the development of the system.'
+symbols_touched:
+  - '#warp-store'
+  - '#stake'
+  - '#stake-guard'
+  - '#pick'
+  - '#warpline-config'
+  - '#fabric-verify'
+commit: 8858f59f
+tags:
+  - arc:warpline
+  - native-first
+  - R2
+  - milestone
+  - F3
+  - tree-semantics
+  - byte-custody
+linked_lore:
+  - L-2026-07-18-ascend-032356-001
+linked_tasks:
+  - T-2026-07-18-004
+  - T-2026-07-18-002
+  - T-2026-07-18-006
+confidence: 0.93
+git_context:
+  ref: 8858f59fe8ba801b199808aff597b47101ef980d
+  branch: warpline-surfaces
+  dirty: true
