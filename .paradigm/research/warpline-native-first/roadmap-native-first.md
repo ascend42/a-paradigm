@@ -256,10 +256,23 @@ feed, KNOT queue, honesty labels) — "we publish ledgers, they publish renders.
 - **F3 the valve is a real rail** (gates R3): 100% stake verification vs binding.treeId (one
   silent failure = hard stop); 3 consecutive monthly recovery DRILLS (git reset AND git-absent
   restore, identical trees); a failed real recovery demotes to R1.
+- **F4 cold-agent legibility** (gates any GUI-shaped work; founder constraint TD-2026-07-21):
+  an agent of ANY provider/make, with no Warpline in its weights and no Warpline docs in
+  context, completes propose → admit → KNOT → resolve using ONLY tool descriptions and
+  returned error/refusal objects. Pass: ≥80% task completion across ≥10 cold runs spanning
+  ≥2 model families (one non-Claude), median ≤2 wasted turns per refusal recovery, ZERO runs
+  requiring human hint. Strict superset of F2 — F2 tests the payload, F4 tests discovery of
+  the tool itself. Runs on the MCP skin AND the CLI skin; a pass on one is not a pass.
+  Rationale: git is easy for agents because it is MEMORIZED (public corpus); moat-silence +
+  no-publishing means Warpline is never in any model's weights, so every agent encounter is
+  permanently a cold encounter. Runtime self-description is therefore not polish — it is the
+  only available mechanism.
 - **Organic K3** (TD-426): survival(linked)−survival(independent) ≥15pts, verdict only at
   n≥50 graded per arm, FIXED evaluation points, moat-silent externally until then.
 - First trusted report: ≥100 organic admissions, ≥50 graded, ≥2 agentIds.
 - Standing hard stop: FALSE-CLEAN = 0 on live ops.
+- Standing hard stop: NO surface work (console, projection, section re-point) begins while
+  F4 is unmeasured — the GUI and every future agent consume the SAME refusal object.
 
 ## Dispositions (North, decisive)
 
