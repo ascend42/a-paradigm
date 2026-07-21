@@ -79,7 +79,7 @@ export {
   type SemDeltaSet,
   type ContractChangeset,
 } from './sem-delta.js';
-export { predict, type Prediction, type Knot, type Dangle } from './predict.js';
+export { predict, type Prediction, type Knot, type Dangle, type KnotRule } from './predict.js';
 
 // Justification
 export { justify, type Justification, type JustifyOptions } from './justification.js';
@@ -205,14 +205,38 @@ export {
 export {
   admit,
   admitDecision,
+  ADMIT_RESULT_SCHEMA,
   type AdmitStatus,
   type AdmitConfidence,
   type AdmitDecision,
   type AdmitOptions,
   type AdmitResult,
+  type AdmitResultBody,
   type AdmitClaimReport,
   type AdmitEscalationReport,
 } from './fabric/admit.js';
+// `refusal:v1` (TD-2026-07-21-766 / falsifier F4) — the MACHINE-READABLE refusal
+// every gate hands back, plus the direct-vs-ripple ranking rule it shares with
+// the CLI. `refuse` is the SINGLE constructor: no consumer builds the literal.
+export {
+  refuse,
+  contestedOf,
+  exitCodeFor,
+  gateFor,
+  retriabilityFor,
+  REFUSAL_SCHEMA,
+  MAX_CONTESTED,
+  type Refusal,
+  type RefusalCode,
+  type RefusalGate,
+  type Retriability,
+  type RefusalContested,
+  type RefusalNextStep,
+  type RefusalPointers,
+  type RefusalOverride,
+  type RefuseInput,
+} from './fabric/refusal.js';
+export { rankVerdicts, rankOf, type RankedVerdicts } from './fabric/rank.js';
 // P2.3 — the claim-scoped propose API (forge-spec §3b): the author's pre-declared
 // claim:v1 (the future OFFER metadata), the honesty-check evaluation, and the
 // calibration-probe sidecar stream (.warpline/claims/).

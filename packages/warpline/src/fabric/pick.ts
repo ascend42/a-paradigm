@@ -38,6 +38,7 @@ import { withFabricLock } from './lock.js';
 import { readWarplineConfig, type WarplineConfig } from './config.js';
 import { shadowAdmit, type ShadowVerdictRow } from './shadow.js';
 import { maybeAutoStakeOnSeal } from './stake.js';
+import { refuse, type Refusal, type RefusalNextStep } from './refusal.js';
 import type { Strand } from './strand.js';
 
 export interface RecordPickOptions {
@@ -75,9 +76,65 @@ export class PickGateRefusal extends Error {
   constructor(
     message: string,
     public readonly row?: ShadowVerdictRow,
+    /**
+     * `refusal:v1` (SP1, TD-2026-07-21-766 / falsifier F4): the MACHINE-READABLE
+     * account of this refusal — code, gate, retriability, the ranked contested
+     * index, and the recoverable `next[]` calls. `message` stays the HUMAN
+     * sentence; this is the half an agent of any provider can act on without
+     * parsing it. Optional on the constructor so external callers still compile;
+     * every throw site inside this module populates it.
+     */
+    public readonly refusal?: Refusal,
   ) {
     super(message);
   }
+}
+
+/* ── the pick-gate refusal shapes (#refusal, falsifier F4) ───────────────────── */
+
+/**
+ * The recovery ladder for an R2 pick-gate refusal. Note what is ABSENT: no
+ * `knot.show` step. The gate's verdict comes from shadowAdmit, which builds a
+ * #knot-payload as pipeline proof and never persists it — so there is no
+ * selector to hand out. The recorded VERDICT ROW is the durable artifact, and
+ * `shadow.tail` is how a cold agent reads it back.
+ */
+function pickNextSteps(row: ShadowVerdictRow): RefusalNextStep[] {
+  const steps: RefusalNextStep[] = [
+    { verb: 'shadow.tail', params: { n: '1' }, requires: [], principal: 'agent' },
+  ];
+  if (row.status === 'KNOT' || row.status === 'DANGLE') {
+    steps.push({ verb: 'resolve', params: {}, requires: ['resolvedRef', 'reason', 'decidedBy'], principal: 'human' });
+  }
+  // the override door — human-class: an agent must never wave through its own hold.
+  steps.push({ verb: 'pick', params: { ref: row.ref, acceptRisk: 'true' }, requires: [], principal: 'human' });
+  return steps;
+}
+
+/**
+ * The R2 gate refusing a would-not-seal verdict. The UNDERLYING #admit refusal
+ * (the shadow pipeline produces one for KNOT/DANGLE/HELD/CLAIM-BREACH) supplies
+ * the code, the ranked contested index, the pointers and the override door; the
+ * pick gate only re-homes it to gate:'pick' and rewrites the ladder, because the
+ * verb that retries HERE is `pick`, not `admit`. A CLEAN-that-would-not-
+ * materialize has no underlying refusal — that verdict refuses nothing at the
+ * admit layer; the pick gate is what holds it — so it falls back to GATE_REFUSED.
+ */
+function pickGateRefusal(row: ShadowVerdictRow, under: Refusal | undefined): Refusal {
+  const meaning = row.status === 'KNOT' || row.status === 'DANGLE';
+  return refuse({
+    code: under?.code ?? 'GATE_REFUSED',
+    verdict: row.status,
+    gate: 'pick',
+    retriable: meaning ? 'retry-after-resolve' : 'retry-with-override',
+    contested: under?.contested ?? [],
+    // Prefer the underlying UNIT count; the row's knotsTotal counts SYMBOLS
+    // (deduped across knots+dangles), so it is a fallback, not the truth.
+    contestedTotal: under?.contestedTotal ?? row.knotsTotal ?? row.knots.length,
+    pointers: { ...(under?.pointers ?? {}), proposedStateId: row.proposedStateId },
+    next: pickNextSteps(row),
+    override: under?.override ?? { flag: 'acceptRisk', principal: 'human' },
+  });
 }
 
 export interface PickResult {
@@ -130,12 +187,17 @@ export async function recordPick(root: string, opts: RecordPickOptions): Promise
       throw new PickGateRefusal(
         'warpline: pick refused — .warpline/config.json exists but cannot be read, so the R2 agent gate mode is undeterminable. ' +
           'An agent-attributed seal fails CLOSED here (a corrupt toggle file must not silently disable the real gate); fix the config and re-run.',
+        undefined,
+        // No verdict was ever computed (the gate could not be EVALUATED), and no
+        // call recovers a corrupt file on disk: `next` is empty by DESIGN — the
+        // machine-readable way to say "escalate to a human".
+        refuse({ code: 'ENGINE', gate: 'pick', retriable: 'never', next: [] }),
       );
     }
     const gateReal = agentAttributed && cfg?.gate?.agentWrites === 'real';
     if (gateReal || cfg?.shadowGate === true) {
       try {
-        const { row } = await shadowAdmit(
+        const { row, result } = await shadowAdmit(
           root,
           { cwd, agentId: opts.agentId ?? 'auto-seal', ref, proposedState: current },
           gateReal ? { gate: 'real', acceptRisk: opts.acceptRisk === true } : undefined,
@@ -151,6 +213,9 @@ export async function recordPick(root: string, opts: RecordPickOptions): Promise
               `The verdict row is recorded in .warpline/shadow/verdicts.jsonl. ` +
               `Resolve against the current selvage, or seal explicitly with --accept-risk (recorded, never silent).`,
             row,
+            // The message above is for the human; this is the same hold stated
+            // so an agent of any provider can act on it without parsing prose.
+            pickGateRefusal(row, result.refusal),
           );
         }
       } catch (err) {
@@ -160,6 +225,16 @@ export async function recordPick(root: string, opts: RecordPickOptions): Promise
           throw new PickGateRefusal(
             `warpline: pick refused — the R2 agent gate is enforced but the verdict pipeline failed (${(err as Error).message}). ` +
               'Fail-closed for agent-attributed writes; the human/git door is unaffected.',
+            undefined,
+            // The REQUEST was well-formed — only the pipeline failed — so the
+            // identical call is a legitimate recovery (lock contention is the
+            // common cause). No verdict exists to report, hence verdict:null.
+            refuse({
+              code: 'ENGINE',
+              gate: 'pick',
+              retriable: 'retry-identical',
+              next: [{ verb: 'pick', params: { ref }, requires: [], principal: 'agent' }],
+            }),
           );
         }
         /* observe-only — never break a seal over telemetry */

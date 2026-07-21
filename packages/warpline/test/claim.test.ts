@@ -402,7 +402,12 @@ describe('E2E — an admit WITHOUT a claim is byte-identical to pre-claim behavi
     expect(r.sealed).toBe(true);
     // The serialized result contains NO claim residue (byte-level guard).
     expect(JSON.stringify(r)).not.toContain('"claim"');
-    expect(Object.keys(r).sort()).toEqual(['decision', 'proposedStateId', 'sealed', 'strand']);
+    // Deliberately EXACT (not toContain): the guard is that nothing leaks onto
+    // the no-claim path. `schemaVersion` is the sanctioned G1 stamp added with
+    // refusal:v1 (admitResult:v1) — it rides EVERY result, claim or not, so it
+    // is part of the pre-claim baseline rather than claim residue. A sealed
+    // FAST_ADMIT refuses nothing, so `refusal` is correctly absent here.
+    expect(Object.keys(r).sort()).toEqual(['decision', 'proposedStateId', 'schemaVersion', 'sealed', 'strand'].sort());
     expect(Object.keys(r.decision).sort()).toEqual(
       ['agentChanged', 'confidence', 'dangling', 'knots', 'otherChanged', 'rebasedOnto', 'status'].sort(),
     );

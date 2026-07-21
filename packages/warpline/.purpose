@@ -451,6 +451,19 @@ components:
       essences shifted transitively — the 48-176-symbol avalanche class ground truth
       proved 0% churn-validated). Absent flags default direct (surfaced, never
       silently collapsed). The knot/dangle DECISIONS themselves are unchanged.
+      RULE LABELS (refusal:v1 SP1a, TD-2026-07-21-766): every emitted Knot and
+      Dangle carries KnotRule — which of the five branches fired (retire-vs-edit
+      | born-divergent | both-retype | conflicting-slot | dangle-retire). The
+      former boolean isKnot predicate became knotRuleOf, returning WHICH branch
+      fired instead of merely THAT one did (non-null is exactly the old true), so
+      the partition is byte-identical: this labels control flow, it does not
+      steer it. The label is what lets a cold agent (falsifier F4) branch on WHY
+      without parsing prose — retire-vs-edit is a keep-or-drop decision,
+      conflicting-slot is a merge-the-slot decision, born-divergent is a pick-one
+      decision: same verdict class, different work. OPTIONAL on the interface so
+      hand-built Prediction fixtures and pre-rule persisted shapes stay valid;
+      absent means UNLABELLED, never a guessed label (#refusal reports it as
+      null). Consumed by #refusal's contested index.
     type: module
     components:
       - "#sem-delta"
@@ -879,8 +892,25 @@ components:
       (two doors, one fabric). After a successful non-noop seal the R2
       auto-stake cadence (#stake maybeAutoStakeOnSeal) runs best-effort,
       outside the fabric lock.
+      REFUSAL (refusal:v1 SP1c, ADDITIVE): PickGateRefusal now carries a
+      `.refusal` — the machine-readable #refusal beside the human `message`.
+      The would-not-seal refusal re-homes the UNDERLYING #admit refusal (from the
+      shadow pipeline) to gate:'pick', keeping its code, ranked contested index,
+      pointers and override door, and rewrites next[] for the pick surface —
+      because the verb that retries HERE is `pick`, not `admit`. Its ladder omits
+      knot.show by design: the gate's verdict comes from #shadow-gate, which
+      builds a #knot-payload as pipeline proof and never persists it, so there is
+      no selector to hand out; the durable artifact is the VERDICT ROW, read back
+      via shadow.tail. The two fail-CLOSED throws are labelled too — a corrupt
+      config yields code ENGINE with retriable 'never' and an EMPTY next[] (the
+      machine-readable way to say "no call recovers this; escalate"), while a
+      failed verdict pipeline yields ENGINE with 'retry-identical' (the request
+      was well-formed; lock contention is the common cause). Constructor arg is
+      optional so external callers still compile; every throw site here populates
+      it.
     type: module
     components:
+      - "#refusal"
       - "#absorb"
       - "#sem-delta"
       - "#warp-store"
@@ -988,8 +1018,33 @@ components:
       NATIVE-FIRST R2 (T-2026-07-18-001): a SEALED, NON-SHADOW admission
       triggers the config-gated auto-stake cadence (#stake maybeAutoStakeOnSeal)
       best-effort at the single wrap point — never blocking the admission.
+      SCHEMA STAMP (refusal:v1 SP0): AdmitResult carries schemaVersion
+      'admitResult:v1' (G1) — the result crosses the daemon wire and lands in
+      forge/GUI consumers verbatim (G3), so it names its own shape instead of
+      being duck-typed. The stamp is applied EXACTLY ONCE at the public boundary
+      (admit(); admitNative() mirrors it) over an internal AdmitResultBody, so no
+      builder can forget or forge it and every internal return site is unchanged.
+      REFUSAL (refusal:v1 SP1c, ADDITIVE): every REFUSING return additionally
+      carries AdmitResult.refusal — the machine-readable #refusal. CLAIM-BREACH
+      raises code CLAIM_BREACH at gate 'claim' (pointers.symbols = the excess
+      set, override acceptBreach); the trust floor raises TRUST_HELD at gate
+      'trust' with an honestly EMPTY contested set (the verdict was CLEAN — what
+      refused is the floor, so pointers.symbols names the below-floor symbol);
+      KNOT/DANGLE raise GATE_REFUSED at gate 'meaning' pointing at the persisted
+      #knot-payload, with next[] = knot.show then resolve (human-class per Aegis
+      §2.2). The byte-conflict DOWNGRADES (meaning said CLEAN, bytes overlapped)
+      raise the same GATE_REFUSED with contestedTotal 0 — which is the honest
+      report that no MEANING unit is contested and the conflict lies below this
+      layer — because a refusal must never be ABSENT on a refusing verdict, or a
+      cold agent learns it cannot rely on the field (F4). Under SHADOW the
+      knot-payload id is deliberately withheld from pointers: the payload is
+      built as pipeline proof but never persisted, and a pointer that fails to
+      dereference is worse than no pointer. Every pre-existing field (status,
+      sealed, claim, escalation, knotPayloadId) is unchanged and remains the
+      authority — #refusal restates them in one shape an agent can act on.
     type: module
     components:
+      - "#refusal"
       - "#absorb"
       - "#sem-delta"
       - "#predict"
@@ -1083,6 +1138,76 @@ components:
       - "#warp-store"
       - "#prose-envelope"
       - "#resolve"
+
+  refusal:
+    description: >-
+      refusal:v1 — the MACHINE-READABLE REFUSAL every gate hands back (founder
+      constraint TD-2026-07-21-766; pre-registered falsifier F4 "cold-agent
+      legibility"). THE CONSTRAINT: an agent of ANY provider, with no Warpline in
+      its weights and no Warpline docs in context, must complete propose → admit
+      → KNOT → resolve using ONLY tool descriptions and the returned refusal
+      objects. Git is easy for models because git is MEMORIZED; Warpline never
+      will be, so runtime self-description is the only mechanism — and this
+      object is its load-bearing carrier. THE BINDING RULE: no human sentences in
+      a verdict, ever. Every field is an id, an enum, a pointer or a count;
+      human prose stays OUTSIDE the verdict (the thrown Error's message, CLI
+      rendering) or ENVELOPED as #prose-envelope untrusted-prose. Fields: code
+      (12-value closed enum — GATE_REFUSED / CLAIM_BREACH / TRUST_HELD /
+      STALE_BASE / INTEGRITY_BROKEN / AUTH / FORBIDDEN / BAD_REQUEST /
+      UNKNOWN_VERB / NOT_FOUND / UNSUPPORTED / ENGINE), verdict (the AdmitStatus
+      behind it, null for transport/usage), gate (meaning|claim|trust|pick|
+      transport|usage — WHICH layer refused), retriable (retry-identical |
+      retry-after-rebase | retry-after-resolve | retry-with-override | never),
+      contested[] (the RANKED index — stableKey, symbol, #predict KnotRule,
+      conflictingSlots, direct-vs-ripple rank), contestedTotal, pointers
+      (knotPayloadId / proposedStateId / rebasedOnto / claimId / symbols — G2:
+      never a ledger position), next[] (THE F4 field: verb + already-determined
+      params + the arg NAMES still required + principal agent|human, so an agent
+      seeing principal:'human' ESCALATES rather than attempts), and an optional
+      human-class override door (acceptBreach|acceptRisk). refuse() is the SINGLE
+      constructor — no other module builds a Refusal literal, which is what makes
+      the cap, the total, the ranking and the code tables INVARIANTS rather than
+      per-site conventions. TRUNCATION HONESTY: contested is capped at
+      MAX_CONTESTED (32) so an essence-transitivity avalanche cannot blow a
+      tool-result budget, contestedTotal always carries the FULL count (a
+      truncated list without a total is a lie), and the survivors are the
+      direct-contested ones (#rank) so the cap never eats the signal. Every
+      pointer must DEREFERENCE: a shadow-built knot payload is never persisted,
+      so its id is deliberately withheld rather than advertised as a dead
+      knot.show selector. exitCodeFor maps each code to the shell-legible exit
+      contract (1 refuse / 2 bad request / 3 claim breach / 4 trust held / 5
+      stale base), is TOTAL by construction, and fails CLOSED (1) on an unknown
+      code — a refusal must never exit success. Deterministic, pure, G1-versioned,
+      G5 (derived data — never a signed strand field).
+    type: module
+    components:
+      - "#rank"
+      - "#predict"
+
+  rank:
+    description: >-
+      The DIRECT-CONTESTED vs RIPPLE-ONLY ranking rule, as an engine function
+      (T-2026-07-03-002; lifted out of #warpline-cli in the refusal:v1 build).
+      rankOf(x) reads #predict's own-content-changed flag — DIRECT iff ≥1 side
+      edited the unit's OWN content, RIPPLE iff the essence moved only via
+      edge-target transitivity (Merkle-by-target); an ABSENT flag reads as
+      DIRECT, so unknown is surfaced and never silently collapsed into the bucket
+      consumers are entitled to hide. rankVerdicts(knots) partitions a knot set,
+      preserving input order within each bucket. WHY ENGINE, NOT PRESENTATION:
+      ground truth over 275 real merges put ≤6-symbol flag sets at 50%
+      churn-validated and every ≥10-symbol set — including seven 48-176-symbol
+      avalanches rippling out of ~2 genuinely contested units — at 0%, so "which
+      of these flags is the actual contest?" is a judgment the engine owes every
+      consumer, not a rendering choice one consumer makes. #warpline-cli's
+      anti-avalanche display and #refusal's contested cap are now the same
+      judgment applied twice (G3). Ranking is DATA ONLY — knot/dangle/autoClean/
+      verdict semantics do not move (a policy change would invalidate the
+      committed base-rate evidence). Pure and SILENT (cli.ts is the only file
+      allowed to write to stdout); parity with the pre-move implementation is a
+      TESTED invariant (test/rank.test.ts carries the old code as the oracle).
+    type: module
+    components:
+      - "#predict"
 
   merge3:
     description: >-

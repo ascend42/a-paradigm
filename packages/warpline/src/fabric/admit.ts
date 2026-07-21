@@ -60,6 +60,7 @@ import { classifyMergePaths, type MergeCoverage } from '../honesty.js';
 import { readClaim, evaluateClaim, recordClaimEvaluation, type Claim, type ClaimEvaluation } from './claim.js';
 import { readGradeSidecar, symbolSurvivalIndex, evaluateEscalation, recordGradeEscalation, type GradeEscalation } from './grade.js';
 import { maybeAutoStakeOnSeal } from './stake.js';
+import { refuse, contestedOf, type Refusal, type RefusalNextStep } from './refusal.js';
 
 export type AdmitStatus = 'NOOP' | 'FAST_ADMIT' | 'CLEAN' | 'KNOT' | 'DANGLE' | 'CLAIM-BREACH' | 'HELD';
 export type AdmitConfidence = 'linked' | 'independent';
@@ -227,7 +228,15 @@ export interface AdmitEscalationReport extends GradeEscalation {
   acceptedRisk?: boolean;
 }
 
+export const ADMIT_RESULT_SCHEMA = 'admitResult:v1' as const;
+
 export interface AdmitResult {
+  /**
+   * G1 version stamp. An admission result crosses the daemon wire and lands in
+   * forge/GUI consumers verbatim (G3), so it names its own shape rather than
+   * being identified by duck-typing — evolution is additive or a version bump.
+   */
+  schemaVersion: typeof ADMIT_RESULT_SCHEMA;
   decision: AdmitDecision;
   /** true when the fabric was advanced (FAST_ADMIT, or a materialized CLEAN). */
   sealed: boolean;
@@ -263,7 +272,26 @@ export interface AdmitResult {
    * acceptRisk with the override row recorded in grades-escalations.jsonl).
    */
   escalation?: AdmitEscalationReport;
+  /**
+   * `refusal:v1` (SP1, TD-2026-07-21-766 / falsifier F4): the MACHINE-READABLE
+   * account of a refusal — code, gate, retriability, the ranked contested index,
+   * content-address pointers, and the recoverable `next[]` calls. Present ONLY
+   * when this result refused (KNOT / DANGLE / CLAIM-BREACH / HELD); a sealed or
+   * NOOP admission carries none. Purely ADDITIVE: every pre-existing field
+   * (status, sealed, claim, escalation, knotPayloadId) is unchanged and remains
+   * the authority — #refusal restates them in one shape a cold agent can act on
+   * without parsing prose.
+   */
+  refusal?: Refusal;
 }
+
+/**
+ * An AdmitResult minus its G1 stamp — the shape internal builders produce. The
+ * stamp is applied EXACTLY ONCE, at the public boundary (`admit`), so every
+ * internal return site stays byte-identical to its pre-`schemaVersion` form and
+ * no builder can forget (or forge) the version.
+ */
+export type AdmitResultBody = Omit<AdmitResult, 'schemaVersion'>;
 
 const blank = (status: AdmitStatus): AdmitDecision => ({
   status,
@@ -294,6 +322,85 @@ function priorFor(d: AdmitDecision): number | null {
   if (d.status === 'CLEAN') return d.confidence === 'linked' ? 0.9 : 0.6;
   if (d.status === 'FAST_ADMIT') return 0.8;
   return null;
+}
+
+/* ── the refusal ladders (#refusal `next[]`, falsifier F4) ───────────────────── */
+
+/**
+ * The recovery ladder for a MEANING refusal (KNOT / DANGLE): read the
+ * machine-readable work order, then submit a resolution. `resolve` is
+ * HUMAN-class (Aegis §2.2 / HUMAN_ONLY_VERBS), so an agent reaching step 2 must
+ * ESCALATE, not attempt — which is why the step carries principal:'human'
+ * instead of a sentence saying so.
+ */
+function meaningNextSteps(knotPayloadId: string | undefined): RefusalNextStep[] {
+  const steps: RefusalNextStep[] = [];
+  if (knotPayloadId) {
+    // #knot-payload is self-sufficient: both sides' bodies + the proposal envelope.
+    steps.push({ verb: 'knot.show', params: { selector: knotPayloadId }, requires: [], principal: 'agent' });
+  }
+  steps.push({
+    verb: 'resolve',
+    params: {},
+    // exactly KnotPayload.resolution.requires — one vocabulary, two surfaces.
+    requires: ['resolvedRef', 'reason', 'decidedBy'],
+    principal: 'human',
+  });
+  return steps;
+}
+
+/**
+ * The recovery ladder for a CLAIM-BREACH: re-declare a claim that COVERS the
+ * excess (the agent's own honest move), or have a human re-admit with the
+ * override. An agent must never accept its own breach (Aegis §2.2), hence the
+ * principals.
+ */
+function claimNextSteps(claimId: string, ref: string): RefusalNextStep[] {
+  return [
+    { verb: 'propose', params: {}, requires: ['claimedSymbols'], principal: 'agent' },
+    { verb: 'admit', params: { ref, claim: claimId, acceptBreach: 'true' }, requires: [], principal: 'human' },
+  ];
+}
+
+/**
+ * The recovery ladder for a trust-floor HELD: inspect the graded evidence that
+ * held the write, then a human re-admits with the recorded override.
+ */
+function trustNextSteps(ref: string): RefusalNextStep[] {
+  return [
+    { verb: 'grade.report', params: {}, requires: [], principal: 'agent' },
+    { verb: 'admit', params: { ref, acceptRisk: 'true' }, requires: [], principal: 'human' },
+  ];
+}
+
+/**
+ * The MEANING-gate refusal (KNOT / DANGLE), built one way for every site that
+ * raises one — including the byte-conflict DOWNGRADES, where meaning said CLEAN
+ * but the bytes overlapped. Those carry no #knot-payload and an empty contested
+ * set, and that is the honest report: `contestedTotal: 0` on a KNOT says "no
+ * MEANING unit is contested — the conflict is below this layer", and the ladder
+ * degrades to the resolve step exactly as meaningNextSteps already defines. A
+ * refusal must never be absent on a refusing verdict, or a cold agent learns it
+ * cannot rely on the field (F4).
+ */
+function meaningRefusal(
+  verdict: AdmitStatus,
+  decision: AdmitDecision,
+  proposedStateId: string,
+  knotPayloadId?: string,
+): Refusal {
+  return refuse({
+    code: 'GATE_REFUSED',
+    verdict,
+    gate: 'meaning',
+    contested: contestedOf(decision.knots, decision.dangling),
+    pointers: {
+      knotPayloadId,
+      proposedStateId,
+      rebasedOnto: decision.rebasedOnto ?? undefined,
+    },
+    next: meaningNextSteps(knotPayloadId),
+  });
 }
 
 /** A resolved byte source for one side of a 3-way merge. */
@@ -331,10 +438,11 @@ export async function admit(root: string, opts: AdmitOptions): Promise<AdmitResu
   // best-effort (never throws, never blocks the admission; every actual valve
   // invocation audits itself). One wrap point covers every seal return below.
   if (result.sealed && opts.shadow !== true) await maybeAutoStakeOnSeal(root);
-  return result;
+  // THE single G1 stamp point (see AdmitResultBody).
+  return { schemaVersion: ADMIT_RESULT_SCHEMA, ...result };
 }
 
-async function admitCore(root: string, opts: AdmitOptions): Promise<AdmitResult> {
+async function admitCore(root: string, opts: AdmitOptions): Promise<AdmitResultBody> {
   const cwd = opts.cwd ?? root;
   const wdir = warplineDirOf(root);
   const store = new WarpStore(root, { diskCache: true });
@@ -391,7 +499,7 @@ async function admitCore(root: string, opts: AdmitOptions): Promise<AdmitResult>
     // Every judgment (breach or not, sealed or not) lands as a sidecar JSONL
     // row: the calibration-probe stream (§3b duty 2; G5 — never a strand field).
     let claimEval: ClaimEvaluation | null = null;
-    const withClaim = (r: AdmitResult): AdmitResult => {
+    const withClaim = (r: AdmitResultBody): AdmitResultBody => {
       if (!claim || !claimEval) return r;
       const accepted = claimEval.breach ? { acceptedBreach: true } : {};
       // Shadow never pollutes the REAL calibration-probe stream — the judgment
@@ -489,6 +597,22 @@ async function admitCore(root: string, opts: AdmitOptions): Promise<AdmitResult>
             missing: claimEval.missing,
             underlyingStatus: decision.status,
           },
+          // #refusal (additive): the same hold, stated so a cold agent can act.
+          refusal: refuse({
+            code: 'CLAIM_BREACH',
+            verdict: 'CLAIM-BREACH',
+            gate: 'claim',
+            contested: contestedOf(decision.knots, decision.dangling),
+            pointers: {
+              claimId: claim.claimId,
+              proposedStateId: proposed.stateId,
+              rebasedOnto: decision.rebasedOnto ?? undefined,
+              // the changed-but-unclaimed symbols — the breach itself.
+              symbols: claimEval.excess,
+            },
+            next: claimNextSteps(claim.claimId, opts.ref),
+            override: { flag: 'acceptBreach', principal: 'human' },
+          }),
         };
       }
     }
@@ -513,11 +637,26 @@ async function admitCore(root: string, opts: AdmitOptions): Promise<AdmitResult>
         sealed: false,
         proposedStateId: proposed.stateId,
         escalation: { ...escalation, underlyingStatus: decision.status },
+        // #refusal (additive). A HELD has no CONTESTED unit — the verdict was
+        // CLEAN; what refused is the trust floor, so `symbols` names the
+        // below-floor symbol and contested stays honestly empty.
+        refusal: refuse({
+          code: 'TRUST_HELD',
+          verdict: 'HELD',
+          gate: 'trust',
+          pointers: {
+            proposedStateId: proposed.stateId,
+            rebasedOnto: decision.rebasedOnto ?? undefined,
+            symbols: [escalation.symbol],
+          },
+          next: trustNextSteps(opts.ref),
+          override: { flag: 'acceptRisk', principal: 'human' },
+        }),
       });
     }
     // Attach (and record) an acceptRisk-overridden escalation on whatever the
     // CLEAN path returns — the override is never silent, sealed or not.
-    const withEscalation = (r: AdmitResult): AdmitResult => {
+    const withEscalation = (r: AdmitResultBody): AdmitResultBody => {
       if (!escalation) return r;
       if (!shadow) {
         recordGradeEscalation(root, {
@@ -593,7 +732,13 @@ async function admitCore(root: string, opts: AdmitOptions): Promise<AdmitResult>
               withEscalation({ decision, sealed: false, proposedStateId: proposed.stateId, merged: mat.plan, coverage }),
             );
           }
-          return withClaim({ decision: { ...decision, status: 'KNOT' }, sealed: false, proposedStateId: proposed.stateId, merged: mat.plan });
+          return withClaim({
+        decision: { ...decision, status: 'KNOT' },
+        sealed: false,
+        proposedStateId: proposed.stateId,
+        merged: mat.plan,
+        refusal: meaningRefusal('KNOT', decision, proposed.stateId),
+      });
         }
         return withClaim(withEscalation({ decision, sealed: false, proposedStateId: proposed.stateId }));
       }
@@ -604,7 +749,7 @@ async function admitCore(root: string, opts: AdmitOptions): Promise<AdmitResult>
       // gate rule (linked/independent over base/proposed/selvage) as a 1st-generation
       // merge — the rule does not re-examine a merge input's internal provenance, an
       // honest v2 limitation (the graded outcome corpus, not the prior, carries it).
-      const sealMerge = (state: WarpState, plan: MergePlan, recipe: MergeRecipe): AdmitResult => {
+      const sealMerge = (state: WarpState, plan: MergePlan, recipe: MergeRecipe): AdmitResultBody => {
         const strand = sealState(root, store, state, {
           parentStateId: selvageId, actor, intent, gitCommit: oursCommit, now, confidence: priorFor(decision),
           authoredBy: { agentId: opts.agentId },
@@ -638,7 +783,13 @@ async function admitCore(root: string, opts: AdmitOptions): Promise<AdmitResult>
           return sealMerge(mat.state, mat.plan, recipe);
         }
         // The meaning layer said CLEAN but the bytes overlap → surface as a KNOT.
-        return withClaim({ decision: { ...decision, status: 'KNOT' }, sealed: false, proposedStateId: proposed.stateId, merged: mat.plan });
+        return withClaim({
+        decision: { ...decision, status: 'KNOT' },
+        sealed: false,
+        proposedStateId: proposed.stateId,
+        merged: mat.plan,
+        refusal: meaningRefusal('KNOT', decision, proposed.stateId),
+      });
       }
 
       // RELAXED PATH: at least one side is a merge strand contributing its durable
@@ -669,7 +820,13 @@ async function admitCore(root: string, opts: AdmitOptions): Promise<AdmitResult>
         return sealMerge(mat.state, mat.plan, recipe);
       }
       // Meaning CLEAN but bytes overlap (or a genuinely unmergeable entry) → KNOT.
-      return withClaim({ decision: { ...decision, status: 'KNOT' }, sealed: false, proposedStateId: proposed.stateId, merged: mat.plan });
+      return withClaim({
+        decision: { ...decision, status: 'KNOT' },
+        sealed: false,
+        proposedStateId: proposed.stateId,
+        merged: mat.plan,
+        refusal: meaningRefusal('KNOT', decision, proposed.stateId),
+      });
     }
     // KNOT / DANGLE — detection alone relocates the bottleneck (R3): attach the
     // machine-readable resolution payload (forge-spec §3a) so a resolver agent
@@ -720,6 +877,19 @@ async function admitCore(root: string, opts: AdmitOptions): Promise<AdmitResult>
     } catch {
       /* payload is auxiliary — the KNOT/DANGLE verdict stands without it */
     }
-    return withClaim({ decision, sealed: false, proposedStateId: proposed.stateId, ...(knotPayloadId ? { knotPayloadId } : {}) });
+    return withClaim({
+      decision,
+      sealed: false,
+      proposedStateId: proposed.stateId,
+      ...(knotPayloadId ? { knotPayloadId } : {}),
+      // #refusal (additive): the KNOT/DANGLE hold, pointed at the payload that
+      // makes it resolvable. Built AFTER the payload attempt so `next[0]` names
+      // the work order whenever one actually persisted — and ONLY then: under
+      // SHADOW the payload is built as pipeline proof but never written, so
+      // carrying its id would advertise a `knot.show` selector that resolves to
+      // nothing. A refusal that points at an absent object is worse than one
+      // that points at none (F4: every pointer must dereference).
+      refusal: meaningRefusal(decision.status, decision, proposed.stateId, shadow ? undefined : knotPayloadId),
+    });
   });
 }

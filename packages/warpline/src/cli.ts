@@ -39,8 +39,8 @@ import { warplineDirOf, readSelvage, readFabric } from './fabric/fabric.js';
 import type { Strand } from './fabric/strand.js';
 import { installHook, uninstallHook, hookStatus } from './fabric/hook.js';
 import { forkScratch } from './fabric/scratch.js';
-import type { Knot } from './predict.js';
 import { admit, type AdmitResult } from './fabric/admit.js';
+import { rankVerdicts } from './fabric/rank.js';
 import { shadowAdmit } from './fabric/shadow.js';
 import {
   forkNative,
@@ -1770,13 +1770,11 @@ function appendMeaningOnlyRanked(
  * display (T-2026-07-03-002): direct knots are named prominently; ripple knots
  * (essence-transitivity avalanche) collapse to a count line. An absent flag
  * reads as direct — unknown is surfaced, never silently collapsed.
+ *
+ * The RULE now lives in the engine (#rank, fabric/rank.ts) so #refusal ranks its
+ * contested set identically; this stays as the CLI's local name for it.
  */
-function partitionKnots(knots: Knot[]): { direct: Knot[]; ripple: Knot[] } {
-  const direct: Knot[] = [];
-  const ripple: Knot[] = [];
-  for (const k of knots) (k.direct ?? true ? direct : ripple).push(k);
-  return { direct, ripple };
-}
+const partitionKnots = rankVerdicts;
 
 /** The collapsed ripple count line (shared wording across surfaces). */
 function rippleLine(n: number, indent: string): string {

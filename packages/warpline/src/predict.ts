@@ -24,6 +24,28 @@
 
 import type { SemDelta, SemDeltaSet } from './sem-delta.js';
 
+/**
+ * WHICH decision rule produced a knot/dangle — the five branches of the
+ * procedure above, named. A LABEL on control flow that already existed: adding
+ * it moved no verdict, no branch condition and no essence.
+ *
+ *   retire-vs-edit    one side retired the symbol, the other edited it.
+ *   born-divergent    both sides BORN the same stableKey to different essences.
+ *   both-retype       both sides changed the symbol's KIND, to different results.
+ *   conflicting-slot  both sides wrote the SAME slot in diverging directions.
+ *   dangle-retire     one side added an edge into a symbol the other retired.
+ *
+ * A machine-legible rule is what lets a cold agent (F4) branch on WHY without
+ * parsing prose: 'retire-vs-edit' is a keep-or-drop decision, 'conflicting-slot'
+ * is a merge-the-slot decision — different work, same verdict class.
+ */
+export type KnotRule =
+  | 'retire-vs-edit'
+  | 'born-divergent'
+  | 'both-retype'
+  | 'conflicting-slot'
+  | 'dangle-retire';
+
 export interface Knot {
   stableKey: string;
   symbol: string;
@@ -39,6 +61,12 @@ export interface Knot {
    * Optional so hand-built Prediction fixtures stay valid; absent ⇒ treated direct.
    */
   direct?: boolean;
+  /**
+   * WHICH rule fired (see KnotRule). Populated by `predict` at every knot site;
+   * OPTIONAL so hand-built Prediction fixtures and pre-`rule` persisted shapes
+   * stay valid. Absent ⇒ unlabelled, never a guessed label.
+   */
+  rule?: KnotRule;
 }
 
 export interface Dangle {
@@ -53,6 +81,12 @@ export interface Dangle {
    * uniform consumer contract (and defensively computed, not assumed).
    */
   direct?: boolean;
+  /**
+   * Always 'dangle-retire' when populated by `predict` — a dangle has exactly one
+   * rule. Carried for a uniform consumer contract with Knot.rule; optional for
+   * the same fixture-compatibility reason.
+   */
+  rule?: KnotRule;
 }
 
 export interface Prediction {
@@ -107,6 +141,7 @@ export function predict(deltaA: SemDeltaSet, deltaB: SemDeltaSet): Prediction {
         retiredBy: 'A',
         // the edge-ADD is the referencing side's own content change
         direct: e.from.localChanged ?? true,
+        rule: 'dangle-retire',
       });
       dangleKeys.add(e.from.stableKey);
     }
@@ -122,6 +157,7 @@ export function predict(deltaA: SemDeltaSet, deltaB: SemDeltaSet): Prediction {
         danglingTargetSymbol: e.to,
         retiredBy: 'B',
         direct: e.from.localChanged ?? true,
+        rule: 'dangle-retire',
       });
       dangleKeys.add(e.from.stableKey);
     }
@@ -143,7 +179,11 @@ export function predict(deltaA: SemDeltaSet, deltaB: SemDeltaSet): Prediction {
     const essB = essenceAfter(b);
     if (essA && essB && essA === essB) continue; // convergent → autoClean
 
-    if (isKnot(a, b)) {
+    // knotRuleOf is the former `isKnot` predicate returning WHICH branch fired
+    // instead of a bare boolean — non-null is exactly the old `true`, so the
+    // partition is byte-identical; the rule is pure labelling.
+    const rule = knotRuleOf(a, b);
+    if (rule) {
       knots.push({
         stableKey: key,
         symbol: b.symbol || a.symbol,
@@ -155,6 +195,7 @@ export function predict(deltaA: SemDeltaSet, deltaB: SemDeltaSet): Prediction {
         // values (each side's ripple avalanche). Absent flags default to true
         // (conservative: unknown ⇒ surfaced, never silently collapsed).
         direct: (a.localChanged ?? true) || (b.localChanged ?? true),
+        rule,
       });
     }
     // else: same key, different essence, but DISJOINT slots ⇒ commutes (autoClean).
@@ -192,19 +233,24 @@ function essenceAfter(d: SemDelta): string | undefined {
  *   - they changed the SAME slot to different values (conflictingSlot).
  * A retire on one side + contract-change on the other = a structural conflict
  * (retire-vs-edit) → knot.
+ *
+ * Returns WHICH rule fired, or null for "not a knot" — the same predicate the
+ * `isKnot` boolean expressed (non-null ⟺ the old `true`), carrying the branch
+ * identity the caller could otherwise only guess at. Every branch, condition and
+ * ordering below is UNCHANGED: this labels control flow, it does not steer it.
  */
-function isKnot(a: SemDelta, b: SemDelta): boolean {
+function knotRuleOf(a: SemDelta, b: SemDelta): KnotRule | null {
   // retire vs change (and vice versa) on the same key = contradiction.
   const aRetire = a.kind === 'symbol-retired';
   const bRetire = b.kind === 'symbol-retired';
-  if (aRetire !== bRetire) return true; // one deletes, one edits the same symbol
-  if (aRetire && bRetire) return false; // both delete the same thing → convergent
+  if (aRetire !== bRetire) return 'retire-vs-edit'; // one deletes, one edits the same symbol
+  if (aRetire && bRetire) return null; // both delete the same thing → convergent
 
   const aBorn = a.kind === 'symbol-born';
   const bBorn = b.kind === 'symbol-born';
   if (aBorn && bBorn) {
     // bornDivergent: same stableKey born on both sides to different essence.
-    return a.essenceAfter !== b.essenceAfter;
+    return a.essenceAfter !== b.essenceAfter ? 'born-divergent' : null;
   }
 
   // both contract-changed: conflict iff they touch the SAME slot AND diverge,
@@ -214,9 +260,9 @@ function isKnot(a: SemDelta, b: SemDelta): boolean {
   if (csA?.kindChanged && csB?.kindChanged) {
     // bothRetype to different kinds is detected via differing essences already;
     // if both retyped and essences differ → knot.
-    return a.essenceAfter !== b.essenceAfter;
+    return a.essenceAfter !== b.essenceAfter ? 'both-retype' : null;
   }
-  return conflictingSlots(a, b).length > 0;
+  return conflictingSlots(a, b).length > 0 ? 'conflicting-slot' : null;
 }
 
 /**

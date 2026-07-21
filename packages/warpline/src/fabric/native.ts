@@ -57,7 +57,7 @@ import { withFabricLock } from './lock.js';
 import { summarizeDelta } from './seal.js';
 import { buildStrandV3, type Strand, type MergeRecipe, type KnotResolution } from './strand.js';
 import { parentsOf } from './dag.js';
-import { admitDecision, type AdmitDecision, type AdmitResult, type AdmitStatus } from './admit.js';
+import { admitDecision, ADMIT_RESULT_SCHEMA, type AdmitDecision, type AdmitResult, type AdmitStatus } from './admit.js';
 import { materializeMergedStateNative } from './materialize.js';
 import { buildKnotPayload, persistKnotPayload, readFileFromTree } from './knot-payload.js';
 import { readClaim, evaluateClaim, recordClaimEvaluation, createClaim, persistClaim, type Claim, type ClaimEvaluation, type CreateClaimInput } from './claim.js';
@@ -323,6 +323,13 @@ export interface AdmitNativeResult extends AdmitResult {
 }
 
 /**
+ * AdmitNativeResult minus its G1 stamp — the shape the internal builders
+ * produce. Mirrors AdmitResultBody: the `admitResult:v1` stamp is applied
+ * EXACTLY ONCE, at the public boundary, so no builder can forget or forge it.
+ */
+type AdmitNativeResultBody = Omit<AdmitNativeResult, 'schemaVersion'>;
+
+/**
  * The native admission: verdict via the EXISTING decision engine, bytes via
  * materializeMergedStateNative only. FAST_ADMIT is a selvage fast-forward to the
  * scratch tip (the scratch strand IS the admissible DAG node — no re-seal);
@@ -353,7 +360,7 @@ export async function admitNative(root: string, opts: AdmitNativeOptions): Promi
     }
   }
 
-  return withFabricLock(root, async () => {
+  const result = await withFabricLock(root, async (): Promise<AdmitNativeResultBody> => {
     const fabric = readFabric(wdir);
     const byPick = byPickIndex(fabric);
 
@@ -371,7 +378,7 @@ export async function admitNative(root: string, opts: AdmitNativeOptions): Promi
 
     // Claim judgment plumbing — mirror of the git-era admit's withClaim.
     let claimEval: ClaimEvaluation | null = null;
-    const withClaim = (r: AdmitNativeResult): AdmitNativeResult => {
+    const withClaim = (r: AdmitNativeResultBody): AdmitNativeResultBody => {
       if (!claim || !claimEval) return r;
       const accepted = claimEval.breach ? { acceptedBreach: true } : {};
       recordClaimEvaluation(root, {
@@ -471,7 +478,7 @@ export async function admitNative(root: string, opts: AdmitNativeOptions): Promi
         escalation: { ...escalation, underlyingStatus: decision.status },
       });
     }
-    const withEscalation = (r: AdmitNativeResult): AdmitNativeResult => {
+    const withEscalation = (r: AdmitNativeResultBody): AdmitNativeResultBody => {
       if (!escalation) return r;
       recordGradeEscalation(root, {
         agentId: opts.agentId,
@@ -581,6 +588,8 @@ export async function admitNative(root: string, opts: AdmitNativeOptions): Promi
     }
     return withClaim({ decision, sealed: false, proposedStateId: proposed.stateId, ...(knotPayloadId ? { knotPayloadId } : {}) });
   });
+  // THE single G1 stamp point for the native path (see AdmitNativeResultBody).
+  return { schemaVersion: ADMIT_RESULT_SCHEMA, ...result };
 }
 
 /* ── 4. RESOLVE — the native KNOT council seal ───────────────────────────────── */
