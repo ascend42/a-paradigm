@@ -76,6 +76,41 @@ export interface SemDelta {
    * consulted by knot/dangle/autoClean semantics (verdicts are unchanged).
    */
   localChanged?: boolean;
+  /**
+   * TRUE iff at least one of this symbol's edge TARGETS moved its CONTRACT
+   * (signature), as opposed to only its body (T-2026-07-15-008 stage 1).
+   *
+   * The defect this answers: the essence inlines a callee's whole essence into
+   * its caller, and `codeEssence` is one monolithic `(fn:… [params] ret body)`
+   * string with no separable signature slot. So a callee BODY byte re-addresses
+   * every caller, and `bodyChanged` fires on the caller identically whether the
+   * ripple was contract-bearing (a real silent-mismerge risk) or body-internal
+   * (semantically commuting). The engine never computed "did the callee's
+   * SIGNATURE move?", so it could not tell the two apart.
+   *
+   * `codeSignature` (carried on `contract`, never hashed) supplies it. Per
+   * changed target, FAIL CLOSED — `true` unless we can PROVE the signature held:
+   *   - target's contentId identical on both sides → it did not move at all;
+   *     contributes nothing.
+   *   - both sides carry a non-empty `codeSignature` and they are EQUAL → a
+   *     body-internal ripple; contributes `false`.
+   *   - anything else (target born / retired / renamed away, or a target with no
+   *     signature projection such as a `.purpose` symbol) → `true`.
+   * OR over all targets; the empty OR is `false`, so a purely LOCAL edit with no
+   * moved targets reads `false` — this bit says nothing about local changes.
+   * Consult `localChanged` for those.
+   *
+   * Signatures are compared RAW (never Merkle-substituted): the projection's
+   * free-ref slots are serialized BEFORE the body and so hold the lowest
+   * first-appearance indices, which a body-only edit cannot renumber. A callee's
+   * own callee changing body therefore leaves the callee's signature byte-equal —
+   * correctly, since that is still a commuting change.
+   *
+   * ADDITIVE at stage 1 — NOT consulted by predict/oracle. Flipping the `body`
+   * scalar-conflict rule on it is stage 2, gated on re-scoring the evidence
+   * corpora for new false-CLEANs first.
+   */
+  rippleFromContract?: boolean;
 }
 
 export interface SemDeltaSet {
@@ -100,6 +135,13 @@ export function diff(base: WarpState, branch: WarpState): SemDeltaSet {
   const baseByKey = byStableKey(base);
   const branchByKey = byStableKey(branch);
   const keys = new Set<string>([...baseByKey.keys(), ...branchByKey.keys()]);
+
+  // Edges key on the target's readable SYMBOL name (`WarpEdge.to`), so the
+  // signature lookup for `rippleFromContract` goes through the name-keyed maps
+  // the WarpState already carries. A target renamed between the two states
+  // simply misses on one side → fail closed (see `contractBearingRipple`).
+  const baseByName = base.objects;
+  const branchByName = branch.objects;
 
   const deltas = new Map<string, SemDelta>();
   const renames: SemDelta[] = [];
@@ -166,6 +208,7 @@ export function diff(base: WarpState, branch: WarpState): SemDeltaSet {
       changeset,
       changedSlots: changedSlotsOf(changeset),
       localChanged: ownContentChanged(b, h, changeset),
+      rippleFromContract: contractBearingRipple(b, h, baseByName, branchByName),
     });
   }
 
@@ -308,6 +351,54 @@ function ownContentChanged(b: WarpObject, h: WarpObject, cs: ContractChangeset):
   }
 
   return false; // pure ripple — only transitive target essences moved
+}
+
+/**
+ * The unit's SIGNATURE projection — `codeEssence` minus the body, produced by
+ * the lens and carried on `data`/`contract` WITHOUT being hashed (see
+ * `normalizedContract` in essence-hash.ts: it enumerates the hashed slots and
+ * this is not one of them). Empty string when the object carries none.
+ */
+function codeSignatureOf(obj: WarpObject): string {
+  const v = (obj.contract as Record<string, unknown>).codeSignature;
+  return typeof v === 'string' ? v : '';
+}
+
+/**
+ * Did any edge TARGET of this symbol move its CONTRACT (as opposed to only its
+ * body)? See `SemDelta.rippleFromContract` for the full rationale.
+ *
+ * FAIL CLOSED throughout: a target contributes `false` only when we can PROVE
+ * its signature held (both sides present, both projections non-empty, byte-
+ * equal). Every other shape — born/retired/renamed target, missing projection —
+ * contributes `true`. A false "contract moved" costs a review; a false "body
+ * only" would license a silent mismerge. That asymmetry decides every branch.
+ *
+ * Targets absent from BOTH states are extern references: they never carry an
+ * essence in this universe (the code-unit branch substitutes a name-derived
+ * `extern:` address), so they cannot ripple and contribute nothing. A rename of
+ * such a target moves the referrer's OWN wiring and surfaces via `localChanged`.
+ */
+function contractBearingRipple(
+  b: WarpObject,
+  h: WarpObject,
+  baseByName: Map<string, WarpObject>,
+  branchByName: Map<string, WarpObject>,
+): boolean {
+  const targets = new Set<string>([...b.edges.map((e) => e.to), ...h.edges.map((e) => e.to)]);
+  for (const to of targets) {
+    const bt = baseByName.get(to);
+    const ht = branchByName.get(to);
+    if (!bt && !ht) continue; // extern — not a node in this universe
+    if (!bt || !ht) return true; // born/retired/renamed target — fail closed
+    if (bt.contentId === ht.contentId) continue; // target did not move at all
+    const bSig = codeSignatureOf(bt);
+    const hSig = codeSignatureOf(ht);
+    // Proven body-internal: both projections present AND byte-equal.
+    if (bSig !== '' && hSig !== '' && bSig === hSig) continue;
+    return true;
+  }
+  return false;
 }
 
 /** The top-level slot names that changed (for fast conflict detection). */

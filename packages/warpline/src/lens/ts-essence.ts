@@ -372,6 +372,23 @@ export interface FreeRef {
 export interface CodeCNFDetailed {
   /** The Code Canonical Normal Form token string (`codeCNF`'s output). */
   cnf: string;
+  /**
+   * The SIGNATURE-ONLY projection of the same unit (T-2026-07-15-008 stage 1):
+   * every slot the CCNF emits EXCEPT the body — `(fn:kind @[decs] mods:[...] *
+   * <typeParams> [params] ret)` plus the directive suffix. Derived at the
+   * producer by splitting the same serialization (never by re-parsing `cnf`),
+   * so it is exactly as deterministic as `cnf` itself.
+   *
+   * ESSENCE-NEUTRAL: `essence-hash.ts` hashes `codeEssence` only (see
+   * `normalizedContract` — `codeSignature` is not one of the hashed slots), so
+   * carrying this changes NO contentId and NO stateId. It exists to answer the
+   * one question the engine could not: when a caller's contentId moved purely
+   * by Merkle ripple, did the CALLEE'S CONTRACT move, or only its body?
+   *
+   * Non-function-like units have no separable signature; there this equals
+   * `cnf` (fail closed — any change reads as a contract move).
+   */
+  signature: string;
   /** Free value-namespace refs, indexed to match the body's `f:idx` slots. */
   freeRefs: FreeRef[];
 }
@@ -864,7 +881,16 @@ export function codeCNFDetailed(node: ts.Node, opts: CodeCNFOptions = {}): CodeC
   }
 
   // --- the function-like serializer: the false-EQUAL guard lives here (§3.2) ---
-  function serializeFunctionLike(n: ts.Node): string {
+  //
+  // Split into PARTS so the caller can project the SIGNATURE alone (everything
+  // the CCNF emits except the body). `serializeFunctionLike` recomposes the
+  // parts BYTE-IDENTICALLY to the pre-split string — the CCNF is unchanged and
+  // no essence moves (T-2026-07-15-008 stage 1). The split is derived at the
+  // producer; nothing re-parses the token string.
+  //
+  // `sig` deliberately carries the OPEN paren and no closing one: the whole CNF
+  // is `${sig} ${body})` and the signature projection is `${sig})`.
+  function functionLikeParts(n: ts.Node): { sig: string; body: string } {
     const fn = n as ts.FunctionLikeDeclaration;
 
     // Decorators FIRST (source order precedes the signature textually, so free
@@ -906,10 +932,18 @@ export function codeCNFDetailed(node: ts.Node, opts: CodeCNFOptions = {}): CodeC
       }
     }
 
-    return (
-      `(fn:${formKind} @[${decs}] mods:[${mods}] ${star} ` +
-      `<${typeParams}> [${params}] ${ret} ${body})`
-    );
+    return {
+      sig:
+        `(fn:${formKind} @[${decs}] mods:[${mods}] ${star} ` +
+        `<${typeParams}> [${params}] ${ret}`,
+      body,
+    };
+  }
+
+  /** The full CCNF for a function-like — `${sig} ${body})`, byte-identical to v1.1. */
+  function serializeFunctionLike(n: ts.Node): string {
+    const parts = functionLikeParts(n);
+    return `${parts.sig} ${parts.body})`;
   }
 
   // --- directive comments (§3 table): @ts-ignore / @ts-expect-error / @ts-nocheck
@@ -931,7 +965,30 @@ export function codeCNFDetailed(node: ts.Node, opts: CodeCNFOptions = {}): CodeC
 
   // ENTRY: serialize the unit. Function-likes go through the guard path; a class
   // or other declaration goes through the generic serializer (don't crash).
+  //
+  // The SIGNATURE projection (T-2026-07-15-008 stage 1) is emitted alongside —
+  // never instead of — the CNF:
+  //   - function-like → the parts minus the body: `(fn:kind @[decs] mods:[..] *
+  //     <typeParams> [params] ret)`. Free-ref slots inside the signature are
+  //     serialized BEFORE the body, so they hold the lowest first-appearance
+  //     indices and a body-only edit can never renumber them: the projection is
+  //     stable under body-internal change BY CONSTRUCTION, not by heuristic.
+  //   - anything else (class/cfg/generic path) → the WHOLE core. There is no
+  //     separable signature there, so we FAIL CLOSED: every change to such a
+  //     unit reads as a signature move. A false "contract moved" is expensive;
+  //     a false "only the body moved" would be a silent mismerge.
+  // Directives (`@ts-expect-error` &c.) change what COMPILES, so they ride the
+  // signature too — fail-closed again.
   const directives = collectDirectiveComments(node);
-  const core = isFunctionLike(node) ? serializeFunctionLike(node) : serialize(node);
-  return { cnf: core + directives, freeRefs };
+  let core: string;
+  let signature: string;
+  if (isFunctionLike(node)) {
+    const parts = functionLikeParts(node);
+    core = `${parts.sig} ${parts.body})`;
+    signature = `${parts.sig})`;
+  } else {
+    core = serialize(node);
+    signature = core;
+  }
+  return { cnf: core + directives, signature: signature + directives, freeRefs };
 }

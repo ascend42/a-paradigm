@@ -417,9 +417,10 @@ export class TsLens implements CodeLens {
     // → classification by index.
     const nameToClass = new Map<string, 'edge' | 'token'>();
     detailed.freeRefs.forEach((fr, i) => nameToClass.set(fr.name, classification[i]));
-    const finalCnf = codeCNFDetailed(u.node, {
+    const final = codeCNFDetailed(u.node, {
       freeRefClassifier: (name) => nameToClass.get(name) ?? 'token',
-    }).cnf;
+    });
+    const finalCnf = final.cnf;
 
     return {
       symbol: codeSymbol(relPath, u.qualifiedName),
@@ -429,6 +430,9 @@ export class TsLens implements CodeLens {
       stableKey: codeStableKey(relPath, u.structuralPath),
       componentType: 'code-unit',
       codeEssence: finalCnf,
+      // Signature-only projection of the SAME serialization pass (stage 1,
+      // T-2026-07-15-008). Essence-neutral — see `CodeCNFDetailed.signature`.
+      codeSignature: final.signature,
       references,
       ...(reducedFidelity ? { reducedFidelity: true } : {}),
     };

@@ -28,6 +28,12 @@
  * and `essenceTag` (`<algo>:ts<exact>`, e.g. `v1.1:ts5.9.3` — the algorithm- and
  * compiler-pinned version namespace §5.2).
  *
+ * `data` ALSO carries one NON-identity-bearing slot: `codeSignature`, the
+ * signature-only projection of the essence (T-2026-07-15-008 stage 1). The
+ * essence's `normalizedContract` enumerates its hashed slots, and this is not
+ * one of them — it travels with the node for `sem-delta` to read, and moves no
+ * content-address.
+ *
  * Library code: no console output.
  */
 
@@ -132,6 +138,15 @@ function toSymbolEntry(unit: CodeUnit): SymbolEntry {
     data: {
       codeEssence: unit.codeEssence,
       codeLocalTargets,
+      // NON-identity-bearing (T-2026-07-15-008 stage 1). `normalizedContract`
+      // in essence-hash.ts enumerates the hashed slots explicitly and
+      // `codeSignature` is not among them, so this rides `data` without moving
+      // any contentId/stateId — no essenceTag bump, no fabric migration.
+      // Absent on a lens with no separable signature (cfg) → fall back to the
+      // whole essence, which makes EVERY change to such a unit read as a
+      // contract move (fail closed: a false "contract moved" costs a review, a
+      // false "body only" would be a silent mismerge).
+      codeSignature: unit.codeSignature ?? unit.codeEssence,
       // Per-unit tag override (P3 GAP-1): the cfg lens stamps `cfg-v1`; TS units
       // keep the compiler-pinned default. The tag travels WITH the node.
       essenceTag: unit.essenceTag ?? CODE_ESSENCE_TAG,

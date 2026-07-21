@@ -84,6 +84,21 @@ export interface CodeUnit {
   componentType: 'code-unit';
   /** The Code Canonical Normal Form (§3) — the identity-bearing body slot. */
   codeEssence: string;
+  /**
+   * The SIGNATURE-ONLY projection of the same unit (T-2026-07-15-008 stage 1):
+   * `codeEssence` minus the body. NON-identity-bearing by construction — the
+   * essence hashes `codeEssence` and the enumerated contract slots only, so
+   * carrying this moves no contentId and no stateId.
+   *
+   * It supplies the datum the engine previously lacked: for a caller whose
+   * contentId moved by Merkle ripple alone, whether the CALLEE'S CONTRACT
+   * moved or only its body. `sem-delta` derives `rippleFromContract` from it.
+   *
+   * OPTIONAL on the lens surface: a lens with no separable signature (cfg)
+   * simply omits it and `lift-code-units` falls back to `codeEssence` — fail
+   * closed, i.e. every change to such a unit reads as a contract move.
+   */
+  codeSignature?: string;
   /** Resolved free-reference edges (§4), aligned to the body's `f:idx` slots. */
   references: CodeRef[];
   /** Set when fidelity degraded (unresolved edge / lower tier). Visible marker. */
