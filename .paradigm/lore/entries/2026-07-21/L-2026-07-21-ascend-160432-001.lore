@@ -1,0 +1,104 @@
+id: L-2026-07-21-ascend-160432-001
+type: milestone
+timestamp: '2026-07-21T16:04:32.335Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: F4 cold-agent constraint ratified + refusal:v1 and over-block stage 1 built — and the empty denominator root-caused to a never-written scratch ref
+summary: An 8-specialist panel on the founder's "CLI verifiably true before GUI" sequencing returned 8/8 ENDORSE on the sequencing but 8/8 REJECT on the gate ("the team believes"), and coordinator-verification of their numbers exposed that this repo has never produced a contested verdict. Founder then set a universal cold-agent usability constraint (TD-2026-07-21-766), pre-registered as falsifier F4; refusal:v1 SP0+SP1 and over-block stage 1 were built and committed. A second 5-agent panel ranked the next move UNANIMOUSLY as producing the first contested verdict — with three of five ranking their own lane below it.
+symbols_touched:
+  - '#refusal'
+  - '#rank'
+  - '#predict'
+  - '#admit'
+  - '#pick'
+  - '#code-lens'
+  - '#sem-delta'
+  - '#essence-hash'
+  - '#warpline-cli'
+  - '#warplined'
+  - '#shadow-gate'
+  - '#stake'
+  - '#knot-payload'
+  - '#grade'
+symbols_created:
+  - '#refusal'
+  - '#rank'
+decisions:
+  - id: TD-2026-07-21-766
+    decision: 'Universal cold-agent usability: agents of ALL providers must use Warpline as easily as git. Pre-registered as falsifier F4 (cold-agent legibility) with thresholds; standing hard stop on all surface work while F4 is unmeasured.'
+    rationale: Git is easy for agents because it is MEMORIZED in model weights, not because it is well designed. Moat-silence plus no-publishing means Warpline will never enter any model's weights, so every agent encounter is permanently a COLD encounter and runtime self-description is the only available mechanism.
+  - id: PANEL-2026-07-21-priority
+    decision: Next move is the first contested verdict (fork two agents, shared symbol, sequential admit), ahead of SP2 skins, over-block stage 2, and the MCP server.
+    rationale: Unanimous across 5 rankers, with 3 of 5 ranking their own authored lane below it. The adjudication path has never executed; every other candidate refines an unexercised claim. Jinx predicted the panel would pick SP2 and named the disconfirming experiment as the one he expected them to avoid.
+learnings:
+  - 'The empty denominator was a ROUTING fact, not a workflow problem: no scratch ref had ever been written, so base equaled selvage and the KNOT branch was structurally unreachable. Verify the mechanism before proposing a process change.'
+  - A refusal path can be 0-for-N by conjunct construction rather than by rarity — pick.ts:208's second and third conjuncts are mutually exclusive across all recorded history.
+  - 'Builder self-reported test counts must be independently re-run: 609/609 reported vs 608/609 actual, and diagnosing the delta required a stashed baseline re-run.'
+  - Panel rankings are more trustworthy when each ranker is explicitly asked to rank against their own authored lane; three of five did so here, and the unanimous winner was the option its own predictor expected to be avoided.
+verification:
+  status: pass
+  details:
+    typecheck: clean
+    tests: 609 total, 608 pass; 1 parallel-load timeout diagnosed as contention not regression
+    baseline: re-verified 539/539 with changes stashed
+    fabric: 48 strands verify exit 0, anchor corroborated
+    backup: byte copy taken pre-experiment
+tags:
+  - warpline
+  - native-first
+  - F4
+  - cold-agent
+  - refusal-object
+  - over-block
+  - empty-denominator
+  - TD-2026-07-21-766
+  - panel
+  - R2
+body: |-
+  ## The finding that reframed the arc
+
+  Four of eight panelists independently concluded the repo has never produced a contested verdict. Coordinator verification found the cause is STRUCTURAL, not behavioral — correcting an earlier reading ("one human editing serially") that implied a workflow overhaul:
+
+  - `.warpline/refs/scratch/` has NEVER been written (dir mtime Jun 25).
+  - `admit.ts:383` — `readScratch(root, opts.agentId) ?? readSelvage(wdir)` → with no scratch, base ≡ selvage ALWAYS.
+  - `admit.ts:128` — `if (selvage.stateId === base.stateId) return FAST_ADMIT`.
+  - Therefore `admit.ts:132-153` — the ONLY producer of KNOT/DANGLE/CLEAN — is unreachable on the exercised path. 21/21 verdicts (12 FAST_ADMIT, 9 NOOP) are forced by construction.
+
+  Second, independently found by Jinx and verified: `pick.ts:208` refuses on `gateReal && !row.wouldSeal && row.status !== 'NOOP'`. Across all 21 rows `wouldSeal:false` occurs on exactly 9 — ALL of them NOOP. Zero rows satisfy both conjuncts. **The refusal path is 0-for-21.** Related: `pick.ts:136` computes `gateReal` but `pick.ts:140` passes `agentId ?? 'auto-seal'` only into the telemetry row, so `gate.agentWrites:"real"` has never actually been consulted — no row carries `gate:"real"`.
+
+  Consequence: F1, F2, F4, organic K3 and the false-KNOT rate all have denominator zero, and K3's linked/independent arms are both 0 (`grades.jsonl` = 7 rows, all `priorClass:"pick"`).
+
+  ## The gate ruling
+
+  Loid audited her own machinery and reported against it: 200/200 debates `complementary` with ZERO contradictory; 96/96 nominations `surfaced:false`; 11/11 settlements `journalsWritten:0` with `chainLive:true`; 5 certifications, 0 overturns. Verdict: "a gate that has never once returned false is not a gate." The F3 drill that DID fail was a mechanical byte check with no agent in the loop. Ruling adopted: falsifiers gate, the team is the instrument that tries to trip them, the founder holds the decision.
+
+  ## What was built
+
+  `refusal:v1` (SP0+SP1, commit 969a32c6) — schemaVersion, code, verdict, gate, retriable, contested[] capped at 32 + contestedTotal, pointers, `next[]` (verb/params/requires/principal — the F4-critical field), override. `refuse()` is the single constructor. Scope ruled by Arky: Knot.rule IN, rankVerdicts IN, schemaVersion IN, over-block signal OUT (uncalibrated at n=3), scrutiny OUT (it is the permission model; refusal is merely its report surface).
+
+  Over-block stage 1 (commit 47f55ec9) — Trace rejected all three filed options and found a fourth. BRUSH demotion was DISQUALIFIED: its only available predicate is shared verbatim with the 12 real TRUE-INTERFERENCE catches. The chosen fix carries a signature-only projection as an essence-neutral field, since `normalizedContract` (essence-hash.ts:89-110) does not hash `codeSignature`. Proven not asserted: `signature-projection.test.ts` pins GOLDEN_STATE_ID and per-symbol GOLDEN_CONTENT_IDS.
+
+  ## Honest state
+
+  Both are inert. `refusal:v1` is UNREACHABLE — `exitCodeFor` exported and unconsumed, CLI still prose-behind-exit-1, daemon untouched; F4 has not improved by one point. Stage 1 changed NO verdict; the false-KNOT still fires 3/3. Also discovered: `dist/cli.js` was 4 days stale, so the live post-commit shadow gate had been grading commits with Jul-17 code (rebuilt).
+
+  ## Verification discipline that paid
+
+  Kit reported 609/609. The actual full-suite result was 608/609. The failure was benign (parallel-load contention in absorb-concurrency: 19.32s with changes vs 22.14s on a stashed baseline re-run at 539/539), but the report was wrong and would have shipped a false green. Jinx also caught the coordinator citing 19 shadow rows when the live file held 21.
+linked_tasks:
+  - T-2026-07-21-003
+  - T-2026-07-21-004
+  - T-2026-07-21-005
+  - T-2026-07-15-008
+  - T-2026-07-15-005
+linked_commits:
+  - 652d8ec0
+  - 969a32c6
+  - 47f55ec9
+confidence: 0.85
+git_context:
+  ref: 47f55ec9ae71a63535ed9f39d3ed2b9c9c40c5c5
+  branch: warpline-surfaces
+  dirty: true
