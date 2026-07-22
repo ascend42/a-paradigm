@@ -1,0 +1,28 @@
+id: L-2026-07-22-ascend-062324-001
+type: agent-session
+timestamp: '2026-07-22T06:23:24.559Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Cid Debrief: T-2026-07-21-004 MCP-server DESIGN PHASE complete via 4-agent panel (Aegis secur'
+summary: 'T-2026-07-21-004 MCP-server DESIGN PHASE complete via 4-agent panel (Aegis security → binding rulings; Jinx advocate → 10 evidence-backed attack findings incl. 2 critical pre-code; Loid forge → attribution/measurement requirements incl. f4Trace:v1 + descriptorsId pre-registration; Arky architect → synthesis spec). Deliverables: .paradigm/research/warpline-native-first/aegis-mcp-skin-ruling.md + mcp-skin-spec.md. Decisions: `warpline mcp` stdio subcommand in packages/warpline (moat-silent — paradigm-mcp ships to npm, REJECTED); one process = one human-minted agent-class token, pass-through only; socket-only transport (2 skin-built refusals: daemon-down UNSUPPORTED, token-missing AUTH); thin descriptions + state-aware `status` as the real F4 carrier (hosts defer/truncate descriptions); isError := exitCodeForResult(result) !== 0. Ten ordered pre-work items precede the build (engine-side sequencing refusals for six native.ts throw-sites currently surfacing as ENGINE/retry-identical/empty-next; additive ''retry-corrected'' retriability; next[] vocabulary totality test — 3 current mismatches; descriptors.ts canonical module; CAS writeScratchRef). FOUR FOUNDER-GATE items in ratification language (FG-1 F4 resolve-leg redefinition — fatal contradiction between F4-as-written and HUMAN_ONLY_VERBS; FG-2 truncated-descriptions arm; FG-3 descriptors freeze/denominator-reset; FG-4 KNOT seed corpus). Build may proceed; no F4 run scored until FG-1..FG-3 signed. No implementation code written this phase.'
+symbols_touched: []
+files_modified:
+  - .paradigm/research/warpline-native-first/aegis-mcp-skin-ruling.md
+  - .paradigm/research/warpline-native-first/mcp-skin-spec.md
+tags:
+  - arc:cid-debrief
+  - orch:orch-mrvoojya-428f
+meta:
+  orchestrationId: orch-mrvoojya-428f
+  coverageScore:
+    before: 0
+    after: 1
+  coverageAdded:
+    - .paradigm/research/warpline-native-first
+  notes: 'Panel convergence from three independent lenses: the MCP layer must be THIN (credential pass-through over the socket); the heavy F4 work is engine-side (refusal leaks at throw-sites) + the status result, not tool descriptions. Jinx re-verified the zero-KNOT premise live: shadow ledger now 25 rows, 14 FAST_ADMIT / 11 NOOP, zero KNOT ever. Loid flagged daemonAudit ok/code divergence from exitCodeForResult (audit(true) masks verdict-class refusals) — the audit-log twin of the fixed T-006 bug.'
+git_context:
+  ref: ef0e0836adc3bf11c434ffa1be73f54b768d6123
+  branch: warpline-surfaces
+  dirty: true
