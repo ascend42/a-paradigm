@@ -1511,6 +1511,16 @@ components:
       line = one frame; envelope {rpc:'warplined:v1', id, verb, token, params} →
       {id, ok, result|error}; `result` is the ENGINE SHAPE VERBATIM (G3:
       AdmitResult, knotPayload:v1, GradeReport, shadowVerdict:v1, StakeResult).
+      ONE ERROR VOCABULARY (SP2, TD-2026-07-21-766): RpcErrorCode is COLLAPSED
+      into #refusal's RefusalCode (the daemon's six codes were already a strict
+      subset — a pure widening, collapsed BEFORE any MCP tool schema could
+      freeze the duplicate), and every error frame additionally carries the
+      refusal:v1 object itself (error.refusal, built at the single response
+      boundary so no failure site can forget it) — a cold agent on this skin
+      branches on code/gate/retriable enums, never message prose;
+      DaemonRpcError passes it through typed. Verdict-class codes
+      (GATE_REFUSED/CLAIM_BREACH/TRUST_HELD/STALE_BASE) arrive INSIDE engine
+      results (AdmitResult.refusal), never as transport errors.
       Verbs (1:1 onto engine fns — transport + identity, never logic): status,
       refs.list, fork, propose, admit (native, incl. the R1 shadow flag),
       knot.show, resolve, stake, stake.recover, grade.report, shadow.tail,
@@ -1547,6 +1557,7 @@ components:
       - "#warplined-tokens"
       - "#warplined-client"
       - "#native-write-path"
+      - "#refusal"
       - "#fabric-lock"
       - "#shadow-gate"
       - "#knot-payload"

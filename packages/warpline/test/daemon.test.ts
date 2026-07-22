@@ -48,8 +48,17 @@ async function rejectsWith(p: Promise<unknown>, code: string): Promise<DaemonRpc
     await p;
   } catch (err) {
     expect(err).toBeInstanceOf(DaemonRpcError);
-    expect((err as DaemonRpcError).code).toBe(code);
-    return err as DaemonRpcError;
+    const e = err as DaemonRpcError;
+    expect(e.code).toBe(code);
+    // SP2 (TD-2026-07-21-766): EVERY daemon error frame carries refusal:v1
+    // with the SAME code — one vocabulary across the skins; a cold agent
+    // branches on code/gate/retriable enums, never on message prose. Asserted
+    // here, at the one choke point, so no error case can regress silently.
+    expect(e.refusal?.schemaVersion).toBe('refusal:v1');
+    expect(e.refusal?.code).toBe(code);
+    expect(e.refusal?.gate).toBeDefined();
+    expect(e.refusal?.retriable).toBeDefined();
+    return e;
   }
   throw new Error(`expected a DaemonRpcError(${code}) rejection, got a resolution`);
 }

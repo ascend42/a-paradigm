@@ -26,6 +26,8 @@
  * Library code: no console output.
  */
 
+import type { Refusal, RefusalCode } from '../fabric/refusal.js';
+
 export const RPC_SCHEMA = 'warplined:v1' as const;
 
 /** The daemon's verb surface — each maps 1:1 onto an existing engine function.
@@ -61,14 +63,19 @@ export interface RpcRequest {
   params?: Record<string, unknown>;
 }
 
-/** Machine-readable failure classes (stable — additive only, G1). */
-export type RpcErrorCode =
-  | 'AUTH' // missing/unknown token
-  | 'FORBIDDEN' // verb × principal-class matrix refused (Aegis §2.2)
-  | 'BAD_REQUEST' // malformed frame / missing required params
-  | 'UNKNOWN_VERB'
-  | 'NOT_FOUND' // selector matched nothing (e.g. knot.show)
-  | 'ENGINE'; // the engine function threw — message carries its error
+/**
+ * Machine-readable failure classes — COLLAPSED into #refusal's RefusalCode
+ * (SP2, TD-2026-07-21-766: one error vocabulary across every skin, collapsed
+ * BEFORE any MCP tool schema could freeze the duplicate). The daemon's original
+ * six codes (AUTH / FORBIDDEN / BAD_REQUEST / UNKNOWN_VERB / NOT_FOUND /
+ * ENGINE) were already a strict subset of RefusalCode, so this is a pure
+ * widening: every code the daemon has ever emitted is still valid, and clients
+ * must tolerate additional codes (G1 — additive only). TODAY the daemon emits
+ * only that transport/usage subset: the VERDICT-class codes (GATE_REFUSED /
+ * CLAIM_BREACH / TRUST_HELD / STALE_BASE) arrive INSIDE engine results
+ * (AdmitResult.refusal, G3), never as transport errors.
+ */
+export type RpcErrorCode = RefusalCode;
 
 export interface RpcOk {
   rpc: typeof RPC_SCHEMA;
@@ -83,7 +90,17 @@ export interface RpcErr {
   /** null when the request line did not even parse to a frame with an id. */
   id: string | number | null;
   ok: false;
-  error: { code: RpcErrorCode; message: string };
+  error: {
+    code: RpcErrorCode;
+    message: string;
+    /**
+     * `refusal:v1` for the transport/usage refusal itself (SP2, ADDITIVE):
+     * the SAME machine-readable object every gate hands back, so a cold agent
+     * on the daemon skin branches on enums (code / gate / retriable) and never
+     * on `message` prose — which stays for humans.
+     */
+    refusal?: Refusal;
+  };
 }
 
 export type RpcResponse = RpcOk | RpcErr;

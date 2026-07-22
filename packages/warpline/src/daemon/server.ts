@@ -55,6 +55,7 @@ import {
   type RpcErrorCode,
 } from './protocol.js';
 import { backupFabric } from '../fabric/backup.js';
+import { refuse } from '../fabric/refusal.js';
 import { resolveToken, type Principal } from './tokens.js';
 import { acquireDaemonLock, releaseDaemonLock } from './lifecycle.js';
 
@@ -195,7 +196,10 @@ export async function startDaemon(root: string, opts: StartDaemonOptions = {}): 
     } catch (err) {
       const f = err instanceof RpcFailure ? err : new RpcFailure('ENGINE', err instanceof Error ? err.message : String(err));
       audit(false, f.code);
-      return { rpc: RPC_SCHEMA, id, ok: false, error: { code: f.code, message: f.message } };
+      // SP2: the error frame carries the SAME refusal:v1 every gate hands back
+      // (code tables give gate/retriability; message stays human-only). Built at
+      // THIS single boundary so no RpcFailure site can forget it.
+      return { rpc: RPC_SCHEMA, id, ok: false, error: { code: f.code, message: f.message, refusal: refuse({ code: f.code }) } };
     }
   };
 

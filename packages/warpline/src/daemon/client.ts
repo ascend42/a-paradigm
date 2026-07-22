@@ -25,13 +25,19 @@ import type { StakeResult, StakeRecoverResult } from '../fabric/stake.js';
 import type { BackupResult } from '../fabric/backup.js';
 import type { CreateClaimInput } from '../fabric/claim.js';
 import { RPC_SCHEMA, type RpcErrorCode, type RpcResponse } from './protocol.js';
+import type { Refusal } from '../fabric/refusal.js';
 import { socketPathOf } from './lifecycle.js';
 
-/** A daemon-side refusal (AUTH / FORBIDDEN / …) or engine error, typed. */
+/**
+ * A daemon-side refusal (AUTH / FORBIDDEN / …) or engine error, typed. Carries
+ * the wire frame's `refusal:v1` verbatim (SP2) — a caller branches on
+ * code/gate/retriable enums, never on the human `message`.
+ */
 export class DaemonRpcError extends Error {
   constructor(
     public code: RpcErrorCode,
     message: string,
+    public refusal?: Refusal,
   ) {
     super(message);
     this.name = 'DaemonRpcError';
@@ -126,7 +132,7 @@ export class DaemonClient {
       this.pending.delete(id);
       clearTimeout(entry.timer);
       if (resp.ok) entry.resolve(resp.result);
-      else entry.reject(new DaemonRpcError(resp.error.code, resp.error.message));
+      else entry.reject(new DaemonRpcError(resp.error.code, resp.error.message, resp.error.refusal));
     }
   }
 
