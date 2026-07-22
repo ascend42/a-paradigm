@@ -494,3 +494,25 @@ export function readKnotPayload(root: string, selector: string): KnotPayload | n
     null
   );
 }
+
+/**
+ * The PW-7 summary projection: the payload minus per-side FILE BODIES — the
+ * structural index a resolver (or a cold agent on a token budget) can hold,
+ * with every contentAddress/id kept so the full payload stays one hydration
+ * away. A TRANSPORT projection of the persisted object, never persisted itself:
+ * `payloadId` still names the FULL payload, and the `summary:true` marker is
+ * the honest partiality flag (a truncated shape without a marker is a lie —
+ * same rule as contestedTotal).
+ */
+export function summarizeKnotPayload(payload: KnotPayload): KnotPayload & { summary: true } {
+  return {
+    ...payload,
+    summary: true,
+    contested: payload.contested.map((c) => ({
+      ...c,
+      base: { ...c.base, fileText: null },
+      ours: { ...c.ours, fileText: null },
+      theirs: { ...c.theirs, fileText: null },
+    })),
+  };
+}

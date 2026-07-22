@@ -183,3 +183,51 @@ export function consoleReadToken(root: string): string | null {
   }
   return newest?.token ?? null;
 }
+
+/* ── the MCP skin's token custody (PW-9, mcp-skin-spec D2/R5) ─────────────────── */
+
+/** The dedicated 0600 file the MCP skin reads — NEVER daemon-tokens.jsonl. */
+export function mcpTokenPathOf(root: string): string {
+  return path.join(warplineDirOf(root), 'daemon', 'mcp.token');
+}
+
+/**
+ * Write the MCP skin's bare token to its dedicated 0600 file (called by the
+ * mint CLI when the principal is an agent minted FOR the MCP skin). Custody
+ * rules (Aegis R5): the file lives under `.warpline/` (gitignored, on the
+ * stake deny-list); the token never appears in `.mcp.json` or any committable
+ * config; issuance stays the human's CLI act — the MCP server NEVER mints.
+ */
+export function writeMcpTokenFile(root: string, token: string): string {
+  const p = mcpTokenPathOf(root);
+  fs.mkdirSync(path.dirname(p), { recursive: true });
+  fs.writeFileSync(p, token + '\n', { encoding: 'utf8', mode: 0o600 });
+  try {
+    fs.chmodSync(p, 0o600); // writeFile mode only applies on create — re-assert
+  } catch {
+    /* best-effort on exotic filesystems */
+  }
+  return p;
+}
+
+/**
+ * The MCP skin's token discovery, mirroring the consoleReadToken structural
+ * pattern: `$WARPLINE_MCP_TOKEN` (shell/keychain-injected) first, else the
+ * dedicated mcp.token file. STRUCTURALLY AGENT-CLASS-SAFE: this helper reads
+ * ONLY the dedicated sources — it never scans daemon-tokens.jsonl (which holds
+ * human tokens; one "newest row" bug there would be a privilege escalation,
+ * Aegis R1). Whether the discovered token is actually agent-class is the
+ * DAEMON's judgment at resolve time — the skin holds a credential, never an
+ * identity. Returns null when neither source exists (the skin surfaces the
+ * structured AUTH refusal naming the human mint step).
+ */
+export function mcpAgentToken(root: string): string | null {
+  const env = process.env.WARPLINE_MCP_TOKEN;
+  if (env && env.trim()) return env.trim();
+  try {
+    const raw = fs.readFileSync(mcpTokenPathOf(root), 'utf8').trim();
+    return raw || null;
+  } catch {
+    return null;
+  }
+}

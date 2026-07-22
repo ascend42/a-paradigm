@@ -66,6 +66,13 @@ export interface DaemonStatus {
   scope: 'read' | null;
   selvage: string | null;
   verbs: string[];
+  /** PW-6 state-aware self-description (additive) — the relocated F4 carrier. */
+  cycle?: Array<{ verb: string; stage: string; principal: 'agent' | 'human' }>;
+  position?: { scratchPresent: boolean; scratchIsPickId: boolean; proposalSealed: boolean; behindSelvage: boolean };
+  nextLegalVerbs?: string[];
+  /** daemon verb → MCP tool name (`knot.show` → `warpline_knot_show`). */
+  toolMap?: Record<string, string>;
+  untrustedContent?: string;
 }
 
 export interface ShadowAdmitOverDaemon {

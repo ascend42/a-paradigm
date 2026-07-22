@@ -116,6 +116,7 @@ describe('gateFor / retriabilityFor — total over RefusalCode', () => {
   const GATES: RefusalGate[] = ['meaning', 'claim', 'trust', 'pick', 'transport', 'usage'];
   const RETRY: Retriability[] = [
     'retry-identical',
+    'retry-corrected',
     'retry-after-rebase',
     'retry-after-resolve',
     'retry-with-override',
@@ -135,6 +136,17 @@ describe('gateFor / retriabilityFor — total over RefusalCode', () => {
     expect(retriabilityFor('TRUST_HELD')).toBe('retry-with-override');
     expect(gateFor('CLAIM_BREACH')).toBe('claim');
     expect(gateFor('TRUST_HELD')).toBe('trust');
+  });
+
+  it("usage mistakes are 'retry-corrected', never 'never' (PW-1: a corrected call succeeds)", () => {
+    // 'never' on a fixable call taught cold agents to ABANDON exactly when
+    // they should fix one param and retry — the enum was lying.
+    expect(retriabilityFor('BAD_REQUEST')).toBe('retry-corrected');
+    expect(retriabilityFor('UNKNOWN_VERB')).toBe('retry-corrected');
+    expect(retriabilityFor('NOT_FOUND')).toBe('retry-corrected');
+    // Escalation-class stays 'never' for the SAME principal — the door is next[].
+    expect(retriabilityFor('AUTH')).toBe('never');
+    expect(retriabilityFor('FORBIDDEN')).toBe('never');
   });
 
   it('fails closed on an unknown code (never a retry, never a meaning gate)', () => {

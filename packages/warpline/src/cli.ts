@@ -40,7 +40,7 @@ import type { Strand } from './fabric/strand.js';
 import { installHook, uninstallHook, hookStatus } from './fabric/hook.js';
 import { forkScratch } from './fabric/scratch.js';
 import { admit, type AdmitResult } from './fabric/admit.js';
-import { exitCodeForResult } from './fabric/refusal.js';
+import { exitCodeForResult, exitCodeFor, RefusedError } from './fabric/refusal.js';
 import { rankVerdicts } from './fabric/rank.js';
 import { shadowAdmit } from './fabric/shadow.js';
 import {
@@ -64,7 +64,7 @@ import { STAKE_MARKER } from './fabric/stake-guard.js';
 import { existsSync } from 'node:fs';
 import { repoRoot, gitPath } from './git/git-exec.js';
 import { startDaemon } from './daemon/server.js';
-import { mintToken, listTokenSummaries, type TokenScope } from './daemon/tokens.js';
+import { mintToken, listTokenSummaries, writeMcpTokenFile, type TokenScope } from './daemon/tokens.js';
 import { backupFabric, verifyBackup, type BackupResult, type BackupVerifyReport } from './fabric/backup.js';
 import { daemonState, stopDaemon, socketPathOf } from './daemon/lifecycle.js';
 import { DaemonClient } from './daemon/client.js';
@@ -1122,22 +1122,31 @@ const tokenCmd = daemonCmd
 
 tokenCmd
   .command('mint <name>')
-  .description('Mint a bearer token for a principal. kind:agent principals CANNOT resolve knots, cut/recover stakes, or accept-breach/accept-risk (human-class-only overrides). --scope read caps the token at the read-only verbs (status, refs.list, knot.show, grade.report, shadow.tail) — the CONSOLE class: `warpline daemon token mint console --kind human --scope read` is what the platform Warpline section auto-discovers. The token prints ONCE — hand it to the agent worktree via env, never commit it.')
+  .description('Mint a bearer token for a principal. kind:agent principals CANNOT resolve knots, cut/recover stakes, or accept-breach/accept-risk (human-class-only overrides). --scope read caps the token at the read-only verbs (status, refs.list, knot.show, grade.report, shadow.tail) — the CONSOLE class: `warpline daemon token mint console --kind human --scope read` is what the platform Warpline section auto-discovers. --mcp additionally writes the bare token to .warpline/daemon/mcp.token (0600) — the MCP skin\'s only file source; agent-kind only. The token prints ONCE — hand it to the agent worktree via env, never commit it. Note: no revocation ceremony exists at stage 1 — rotating means minting anew; old rows stay valid.')
   .requiredOption('--kind <kind>', "principal class: 'human' or 'agent'")
   .option('--scope <scope>', "'read' = read-only verb ceiling (console class); omit for the full surface")
+  .option('--mcp', 'also write the token to .warpline/daemon/mcp.token (0600) for the MCP skin — requires --kind agent')
   .option('--json', 'emit the minted row as JSON (includes the token — once)')
-  .action(async (name: string, options: { kind: string; scope?: string; json?: boolean }) => {
+  .action(async (name: string, options: { kind: string; scope?: string; mcp?: boolean; json?: boolean }) => {
     try {
       const root = await repoRoot().catch(() => process.cwd());
+      if (options.mcp && options.kind !== 'agent') {
+        // The MCP server is an ambient agent-facing process — a human-class
+        // token in its file would hand every subagent human capability.
+        process.stderr.write('warpline: token mint --mcp requires --kind agent (the MCP skin must never hold a human-class token)\n');
+        process.exit(2);
+      }
       const row = mintToken(root, name, options.kind as 'human' | 'agent', {
         ...(options.scope ? { scope: options.scope as TokenScope } : {}),
       });
+      const mcpPath = options.mcp ? writeMcpTokenFile(root, row.token) : null;
       if (options.json) {
-        process.stdout.write(JSON.stringify(row, null, 2) + '\n');
+        process.stdout.write(JSON.stringify({ ...row, ...(mcpPath ? { mcpTokenFile: mcpPath } : {}) }, null, 2) + '\n');
       } else {
         process.stdout.write(
           `TOKEN MINTED  ${row.principal}  (kind:${row.kind}${row.scope ? `, scope:${row.scope}` : ''})\n` +
             `  token   ${row.token}\n` +
+            (mcpPath ? `  mcp     written to ${mcpPath} (0600) — the MCP skin reads env WARPLINE_MCP_TOKEN, then this file\n` : '') +
             `  shown once here — the row lives at .warpline/daemon-tokens.jsonl (0600, gitignored; never commit or ship it)\n`,
         );
       }
@@ -1809,6 +1818,13 @@ function pad(s: string, n: number): string {
 function fail(err: unknown): never {
   const msg = err instanceof Error ? err.message : String(err);
   process.stderr.write(`warpline: ${msg}\n`);
+  // PW-2: an engine-boundary RefusedError carries refusal:v1 — surface it as a
+  // machine-readable stderr line (prose-free by construction) and exit with
+  // its verdict-keyed code instead of the uniform 1.
+  if (err instanceof RefusedError) {
+    process.stderr.write(JSON.stringify({ refusal: err.refusal }) + '\n');
+    process.exit(exitCodeFor(err.refusal.code));
+  }
   process.exit(1);
 }
 

@@ -95,6 +95,12 @@ export type RefusalGate = 'meaning' | 'claim' | 'trust' | 'pick' | 'transport' |
  * recovery axis; when more than one door exists, `next[]` enumerates them all.
  *
  *   retry-identical      the same call may succeed (transient failure).
+ *   retry-corrected      a CORRECTED or PREREQUISITE call succeeds — follow
+ *                        `next[]`, then retry. Covers both wrong-params and
+ *                        missing-prerequisite: the recovery axis is identical
+ *                        ("a different call first") and `next[]` disambiguates
+ *                        (PW-1, mcp-skin-spec §4 — 'never' on a fixable call
+ *                        taught cold agents to abandon instead of correct).
  *   retry-after-rebase   re-fork/re-propose against the current selvage first.
  *   retry-after-resolve  a KNOT/DANGLE must be resolved first (human-class verb).
  *   retry-with-override  only an explicit human override flag unblocks this.
@@ -102,6 +108,7 @@ export type RefusalGate = 'meaning' | 'claim' | 'trust' | 'pick' | 'transport' |
  */
 export type Retriability =
   | 'retry-identical'
+  | 'retry-corrected'
   | 'retry-after-rebase'
   | 'retry-after-resolve'
   | 'retry-with-override'
@@ -242,6 +249,31 @@ export function exitCodeForResult(result: { refusal?: Refusal }): number {
 }
 
 /**
+ * A THROWN refusal — the typed carrier for prerequisite/usage refusals raised
+ * at engine boundaries (PW-2, mcp-skin-spec §4). Before this class, a
+ * sequencing mistake (admit with nothing proposed, propose over a legacy
+ * scratch, resolve with no scratch strand…) threw a prose Error that every
+ * skin's catch-all collapsed to ENGINE / retry-identical / empty next[] — the
+ * machine hint said "retry the identical call", which fails forever, while the
+ * real recovery lived only in prose. Throwing the refusal itself lets every
+ * skin (CLI fail(), daemon catch-all, MCP) detect it and emit the carried
+ * `refusal:v1` verbatim instead of the ENGINE dead-end (G3: one vocabulary,
+ * built engine-side, inherited by all skins).
+ *
+ * `message` stays the human sentence — prose belongs OUTSIDE the verdict, in
+ * the Error where it always was (the binding rule above).
+ */
+export class RefusedError extends Error {
+  constructor(
+    public refusal: Refusal,
+    message: string,
+  ) {
+    super(message);
+    this.name = 'RefusedError';
+  }
+}
+
+/**
  * DEFAULT gate per code, for the codes whose layer is unambiguous. Overridable
  * at the call site because one code can be raised by more than one gate: a
  * GATE_REFUSED is 'meaning' at #admit but 'pick' at the R2 agent gate, and an
@@ -276,11 +308,16 @@ const RETRIABLE_FOR: Record<RefusalCode, Retriability> = {
   STALE_BASE: 'retry-after-rebase',
   INTEGRITY_BROKEN: 'never',
   ENGINE: 'retry-identical',
+  // AUTH/FORBIDDEN stay 'never': true for the SAME principal — the recovery is
+  // escalation, and that door is carried by `next[]`, not the retry axis.
   AUTH: 'never',
   FORBIDDEN: 'never',
-  BAD_REQUEST: 'never',
-  UNKNOWN_VERB: 'never',
-  NOT_FOUND: 'never',
+  // The caller got the CALL wrong, not the outcome: a corrected call succeeds.
+  // 'never' here was semantically false and taught cold agents to abandon
+  // exactly when they should fix one param and retry (PW-1).
+  BAD_REQUEST: 'retry-corrected',
+  UNKNOWN_VERB: 'retry-corrected',
+  NOT_FOUND: 'retry-corrected',
   UNSUPPORTED: 'never',
 };
 

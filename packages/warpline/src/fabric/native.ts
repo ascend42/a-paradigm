@@ -73,6 +73,7 @@ import { materializeMergedStateNative } from './materialize.js';
 import { buildKnotPayload, persistKnotPayload, readFileFromTree } from './knot-payload.js';
 import { readClaim, evaluateClaim, recordClaimEvaluation, createClaim, persistClaim, type Claim, type ClaimEvaluation, type CreateClaimInput } from './claim.js';
 import { readGradeSidecar, symbolSurvivalIndex, evaluateEscalation, recordGradeEscalation } from './grade.js';
+import { refuse, RefusedError } from './refusal.js';
 
 /** The provenance/scratch ref label for an agent (sanitized like scratchPath). */
 export function scratchRefName(agentId: string): string {
@@ -155,7 +156,13 @@ function nativeSelvageTip(wdir: string): string | null {
   const tip = readRef(wdir, 'selvage');
   if (tip !== null) return tip;
   if (readSelvage(wdir) !== null) {
-    throw new Error(
+    // PW-2: a typed refusal, not a prose dead-end — the migration is a
+    // one-time human act, so the ladder escalates rather than instructs retry.
+    throw new RefusedError(
+      refuse({
+        code: 'UNSUPPORTED',
+        next: [{ verb: 'refs.migrate', params: {}, requires: [], principal: 'human' }],
+      }),
       'warpline: the native write path needs pickId refs (refs/heads/selvage) — this fabric predates them; run `warpline refs migrate` first (one-time, founder-visible)',
     );
   }
@@ -181,7 +188,23 @@ export interface ForkNativeResult {
 export function forkNative(root: string, agentId: string, opts: ForkNativeOptions = {}): ForkNativeResult {
   const wdir = warplineDirOf(root);
   const base = nativeSelvageTip(wdir);
-  writeScratchRef(root, agentId, base ?? '');
+  // PW-10 clobber guard: a scratch ref that is a pickId AND differs from the
+  // selvage tip is a sealed-but-unadmitted proposal — re-forking would orphan
+  // it silently (writeScratchRef was an unconditional overwrite; same-principal
+  // concurrent sessions clobbered each other with no error anywhere). Refuse
+  // loudly; the ladder says what to do with the pending work first.
+  const existing = readScratch(root, agentId);
+  if (existing !== null && existing.startsWith('pick:') && existing !== base) {
+    throw new RefusedError(
+      refuse({
+        code: 'BAD_REQUEST',
+        retriable: 'retry-corrected',
+        next: [{ verb: 'admit', params: {}, requires: [], principal: 'agent' }],
+      }),
+      `warpline: fork — ${JSON.stringify(agentId)} already has a sealed, unadmitted proposal (scratch ${existing}); admit it first, or resolve/abandon it explicitly — re-fork would orphan it silently`,
+    );
+  }
+  writeScratchRef(root, agentId, base ?? '', existing);
   let restoredEntries: number | undefined;
   if (opts.into) {
     if (!base) throw new Error('warpline: fork --into needs a sealed selvage to restore from (empty fabric)');
@@ -264,7 +287,13 @@ export async function proposeNative(root: string, opts: ProposeNativeOptions): P
     let basePickId: string | null;
     if (scratch !== null) {
       if (!scratch.startsWith('pick:')) {
-        throw new Error(
+        // PW-2: the corrected prerequisite is a fresh fork — retry-corrected.
+        throw new RefusedError(
+          refuse({
+            code: 'UNSUPPORTED',
+            retriable: 'retry-corrected',
+            next: [{ verb: 'fork', params: {}, requires: [], principal: 'agent' }],
+          }),
           `warpline: propose (native) — scratch for ${opts.agentId} holds ${JSON.stringify(scratch)} (a legacy stateId scratch); the native path needs a pickId scratch ref — run \`warpline fork ${opts.agentId}\``,
         );
       }
@@ -377,7 +406,19 @@ export async function admitNative(root: string, opts: AdmitNativeOptions): Promi
 
     const scratchTipId = readScratch(root, opts.agentId);
     if (!scratchTipId || !scratchTipId.startsWith('pick:')) {
-      throw new Error(
+      // PW-2: THE most common cold mistake (admit before propose). Pre-fix it
+      // surfaced as ENGINE/retry-identical/empty-next — a machine hint that
+      // instructed an infinite losing retry while the real recovery lived only
+      // in prose. The ladder is the recovery: fork, then propose, then retry.
+      throw new RefusedError(
+        refuse({
+          code: 'BAD_REQUEST',
+          retriable: 'retry-corrected',
+          next: [
+            { verb: 'fork', params: {}, requires: [], principal: 'agent' },
+            { verb: 'propose', params: {}, requires: ['intent', 'worktree'], principal: 'agent' },
+          ],
+        }),
         `warpline: admit (native) — nothing proposed for ${opts.agentId} (scratch ref ${scratchTipId ? 'is not a pickId' : 'absent'}); run \`warpline fork\` + \`warpline propose --native\` first`,
       );
     }
@@ -441,7 +482,10 @@ export async function admitNative(root: string, opts: AdmitNativeOptions): Promi
     }
     const baseStrand = forkBaseOf(byPick, scratchTipId, selvageAncestors);
     if (!baseStrand) {
-      throw new Error(
+      // PW-2: disjoint roots mean the record itself is suspect — no agent call
+      // recovers this; escalate (empty next[] means exactly that).
+      throw new RefusedError(
+        refuse({ code: 'INTEGRITY_BROKEN' }),
         `warpline: admit (native) — the scratch history of ${opts.agentId} shares no base with the selvage (disjoint DAG roots) — fail closed`,
       );
     }
@@ -536,7 +580,7 @@ export async function admitNative(root: string, opts: AdmitNativeOptions): Promi
           sealed: false,
           proposedStateId: proposed.stateId,
           merged: mat.plan,
-          refusal: meaningRefusal('KNOT', decision, proposed.stateId),
+          refusal: meaningRefusal('KNOT', decision, proposed.stateId, opts.agentId),
         });
       }
       const recipe: MergeRecipe = { algo: 'warpline-merge3-v1', base: baseTree, ours: oursTree, theirs: theirsTree, result: mat.resultTreeId };
@@ -615,7 +659,7 @@ export async function admitNative(root: string, opts: AdmitNativeOptions): Promi
       ...(knotPayloadId ? { knotPayloadId } : {}),
       // #refusal: built AFTER the payload attempt so `next[0]` names the work
       // order whenever one actually persisted (every pointer must dereference — F4).
-      refusal: meaningRefusal(decision.status, decision, proposed.stateId, knotPayloadId),
+      refusal: meaningRefusal(decision.status, decision, proposed.stateId, opts.agentId, knotPayloadId),
     });
   });
   // THE single G1 stamp point for the native path (see AdmitNativeResultBody).
@@ -660,14 +704,28 @@ export async function resolveNative(root: string, opts: ResolveNativeOptions): P
     const fabric = readFabric(wdir);
     const byPick = byPickIndex(fabric);
     const selvageTipId = nativeSelvageTip(wdir);
-    if (!selvageTipId) throw new Error('warpline: resolve (native) — no selvage; nothing to resolve against');
+    if (!selvageTipId) {
+      // PW-2: nothing sealed yet — there is no knot to resolve; no call fixes that.
+      throw new RefusedError(
+        refuse({ code: 'NOT_FOUND', retriable: 'never' }),
+        'warpline: resolve (native) — no selvage; nothing to resolve against',
+      );
+    }
     const selvageStrand = mustStrand(byPick, selvageTipId, 'refs/heads/selvage');
     const selvage = store.loadState(selvageStrand.stateId);
     if (!selvage) throw new Error(`warpline: resolve (native) — selvage state ${selvageStrand.stateId} cannot be loaded — fail closed`);
 
     const scratchTipId = readScratch(root, opts.agentId);
     if (!scratchTipId || !scratchTipId.startsWith('pick:')) {
-      throw new Error(`warpline: resolve (native) — no proposed scratch strand for ${opts.agentId} (the conflicting proposal names the second parent)`);
+      // PW-2: the conflicting proposal must exist first — sealed via propose.
+      throw new RefusedError(
+        refuse({
+          code: 'NOT_FOUND',
+          retriable: 'retry-corrected',
+          next: [{ verb: 'propose', params: {}, requires: ['intent', 'worktree'], principal: 'agent' }],
+        }),
+        `warpline: resolve (native) — no proposed scratch strand for ${opts.agentId} (the conflicting proposal names the second parent)`,
+      );
     }
     const scratchStrand = mustStrand(byPick, scratchTipId, `refs/scratch/${opts.agentId}`);
 

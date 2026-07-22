@@ -36,9 +36,27 @@ export function forkScratch(root: string, agentId: string): { base: string | nul
  * tip pickId and `propose` advances it to each sealed scratch strand. The legacy
  * (git-era) flow stores a stateId via forkScratch. Consumers dispatch on the
  * `pick:`/`state:` prefix; a mismatch fails closed, never silently coerces.
+ *
+ * CAS (PW-10, optional): pass `expect` to make the write conditional on the
+ * CURRENT value (null = "must be absent"). A mismatch throws instead of
+ * silently clobbering — before this, two same-principal sessions could orphan
+ * each other's sealed-but-unadmitted proposal with no error anywhere.
  */
-export function writeScratchRef(root: string, agentId: string, value: string): void {
+export function writeScratchRef(
+  root: string,
+  agentId: string,
+  value: string,
+  expect?: string | null,
+): void {
   const p = scratchPath(warplineDirOf(root), agentId);
+  if (expect !== undefined) {
+    const current = readScratch(root, agentId);
+    if (current !== expect) {
+      throw new Error(
+        `warpline: scratch ref for ${JSON.stringify(agentId)} is ${current ?? '(absent)'}, expected ${expect ?? '(absent)'} — concurrent write detected, refusing to clobber`,
+      );
+    }
+  }
   fs.mkdirSync(path.dirname(p), { recursive: true });
   const tmp = `${p}.tmp`;
   fs.writeFileSync(tmp, value + '\n', 'utf8');

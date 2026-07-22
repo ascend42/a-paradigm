@@ -932,6 +932,10 @@ components:
       writeScratchRef stores a PICKID (`warpline fork` mints it at the selvage tip;
       #native-write-path propose advances it per sealed scratch strand). Consumers
       dispatch on the pick:/state: prefix; a mismatch fails closed, never coerces.
+      CAS (PW-10, optional `expect` param): a conditional write throws on
+      current≠expected instead of silently clobbering — the loud-failure half
+      of the fork clobber guard (two same-principal sessions could orphan each
+      other's sealed proposal with no error anywhere).
     type: module
 
   admit:
@@ -1199,6 +1203,16 @@ components:
       from the result's OWN refusal object, never a re-derived vocabulary (G3).
       Deterministic, pure, G1-versioned, G5 (derived data — never a signed
       strand field).
+      PW-1 (mcp-skin-spec §4): retriability gains 'retry-corrected' ("a
+      corrected or prerequisite call succeeds — follow next[], then retry");
+      BAD_REQUEST/UNKNOWN_VERB/NOT_FOUND default to it ('never' on a fixable
+      call taught cold agents to abandon instead of correct); AUTH/FORBIDDEN
+      stay 'never' (escalation is the door, carried by next[]). RefusedError
+      (PW-2 shell) is the THROWN refusal: engine prerequisite boundaries throw
+      it carrying a typed refusal:v1, and every skin's catch-all (CLI fail(),
+      daemon boundary) detects it and emits the carried refusal verbatim
+      instead of collapsing to ENGINE/retry-identical/empty-next — the
+      machine hint that instructed an infinite losing retry.
     type: module
     components:
       - "#rank"
@@ -1480,7 +1494,18 @@ components:
       exported builders with native-path ladders ({native:'true'}) —
       T-2026-07-21-007: this is the path agents actually use, and a refusing
       native verdict without the F4 carrier made cold-agent recovery impossible
-      exactly where it matters most. Every step is an append
+      exactly where it matters most. PW-2 SEQUENCING REFUSALS (mcp-skin-spec
+      §4, pinned site table): every prerequisite boundary throws RefusedError
+      with a typed ladder instead of prose — legacy fabric → UNSUPPORTED/
+      refs.migrate(human); legacy stateId scratch → UNSUPPORTED/retry-corrected/
+      fork; admit-without-propose (THE cold mistake) → BAD_REQUEST/
+      retry-corrected/[fork, propose]; disjoint DAG → INTEGRITY_BROKEN/escalate;
+      resolve-no-selvage → NOT_FOUND/never; resolve-no-scratch → NOT_FOUND/
+      retry-corrected/propose. PW-10 FORK CLOBBER GUARD: re-fork over a sealed,
+      unadmitted proposal refuses (BAD_REQUEST/retry-corrected/admit ladder)
+      via CAS #scratch writes — before this, same-principal concurrent sessions
+      silently orphaned each other's proposals. Asserted site-by-site in
+      test/native-sequencing-refusals.test.ts. Every step is an append
       or a CAS. SCOPE: v3 writes for scratch strands + native weaves only — the
       git-era seal path stays v2 until the founder-visible cutover (no selvage
       cutover here). EXIT PROOF: test/native-loop-no-git.test.ts — the full
@@ -1521,6 +1546,21 @@ components:
       DaemonRpcError passes it through typed. Verdict-class codes
       (GATE_REFUSED/CLAIM_BREACH/TRUST_HELD/STALE_BASE) arrive INSIDE engine
       results (AdmitResult.refusal), never as transport errors.
+      MCP PRE-WORK (mcp-skin-spec §4): the boundary detects engine-thrown
+      RefusedError and emits its carried refusal verbatim (PW-2); the AUTH
+      refusal carries the mint escalation ladder (PW-3c: daemon.token.mint,
+      principal human); `status` is STATE-AWARE (PW-6, additive — the RELOCATED
+      F4 carrier since hosts truncate tool descriptions): cycle with stages,
+      the caller's position (scratchPresent/scratchIsPickId/proposalSealed/
+      behindSelvage), nextLegalVerbs, the verb→tool map, and the static
+      untrusted-content sentence; `knot.show` takes summary:true (PW-7 —
+      payload minus file bodies, summary marker honest); the audit row gains
+      resultCode (PW-8 — a verdict-class refusal inside an ok result is audited,
+      not masked; same derivation as exitCodeForResult; #f4-trace, not the
+      audit, is F4 ground truth). Teaching text is single-sourced from
+      #warplined-descriptors; MCP token custody (PW-9) = mint --mcp writes
+      .warpline/daemon/mcp.token (0600) and mcpAgentToken() reads ONLY env
+      WARPLINE_MCP_TOKEN then that file — never daemon-tokens.jsonl.
       Verbs (1:1 onto engine fns — transport + identity, never logic): status,
       refs.list, fork, propose, admit (native, incl. the R1 shadow flag),
       knot.show, resolve, stake, stake.recover, grade.report, shadow.tail,
@@ -1586,8 +1626,67 @@ components:
       trust claim: attribution is authentic within this machine's OS-user
       boundary; the daemon is the trusted stamper — per-strand signatures
       remain M3.
+      MCP TOKEN CUSTODY (PW-9, mcp-skin-spec D2/R5): `token mint <name> --kind
+      agent --mcp` additionally writes the bare token to
+      .warpline/daemon/mcp.token (0600; --mcp refuses non-agent kinds — an
+      ambient MCP process must never hold human capability); mcpAgentToken()
+      mirrors the consoleReadToken structural pattern — env WARPLINE_MCP_TOKEN
+      first, else the dedicated file, NEVER daemon-tokens.jsonl (it holds human
+      tokens; one "newest row" bug there is a privilege escalation). No
+      revocation ceremony at stage 1 — rotation = mint anew (documented in the
+      mint help).
     type: module
     tags: [warpline, native-first, phase-1, security]
+
+  warplined-descriptors:
+    description: >-
+      The CANONICAL verb descriptors (PW-5, mcp-skin-spec §4; Loid requirement
+      3): ONE source of teaching text per daemon verb — {verb, summary (1-2
+      sentence HARD budget), paramsSchema, cycleStage
+      (orient|fork|propose|admit|inspect|resolve|custody), principal
+      (agent|human)} — consumed by the MCP tool registration and #warplined's
+      state-aware status, so skins cannot drift into parallel vocabularies (G3
+      applied to teaching text). toolNameOf() is the ONE naming law between
+      dotted daemon verbs and MCP tool names (knot.show → warpline_knot_show);
+      wire shapes and refusal.next[].verb keep the dotted names verbatim.
+      agentSurfaceVerbs() derives the default MCP surface = every
+      principal:'agent' descriptor (human verbs OMITTED per Aegis R2). The
+      WHOLE table is CONTENT-ADDRESSED (descriptorsId, sha256 of canonical
+      serialization) — the FG-3 pre-registration anchor stamped into every
+      #f4-trace row: T-005 pins it before the first scored F4 batch, ANY change
+      resets the ≥10-run denominator, and test/descriptors-frozen.test.ts is
+      the tripwire that makes a change impossible to miss. Carries the static
+      untrusted-content sentence for the prose-carrying tools (admit /
+      knot.show / shadow.tail).
+    type: module
+    tags: [warpline, native-first, F4, mcp]
+    components:
+      - "#warplined"
+
+  f4-trace:
+    description: >-
+      f4Trace:v1 — the skin's OWN measurement stream and the F4 harness's
+      GROUND TRUTH (mcp-skin-spec §5; Loid requirement 2 — daemonAudit:v1 was
+      REJECTED for the job: audit(true) masks verdict-class refusals riding
+      inside ok results, rows carry no runId, and the wasted-turn classifier
+      needs the prior refusal's enums). One row per tool/CLI call appended to
+      .warpline/f4/trace.jsonl: {schemaVersion, ts, runId ($WARPLINE_F4_RUN_ID,
+      'unscored' outside a harness run — rows always emit), seq (per-process
+      ordinal), skin:'mcp'|'cli', principal, verb (dotted daemon name), target
+      (structural only — selectors/flags, NEVER prose), ok, refusal? (the
+      refusal:v1 VERBATIM, captured from error frames AND result.refusal),
+      resultClass? (structural: sealed | decision.status | noop | read),
+      descriptorsId (which teaching text served the call — FG-3)}. F4Tracer is
+      the per-process handle (fixes identity, counts seq; append is
+      BEST-EFFORT — a trace failure never fails the serving call);
+      resultClassOf derives the class from result SHAPE, never text. The W1-W4
+      wasted-turn taxonomy is the HARNESS's pure classifier over these rows —
+      this module only emits faithfully.
+    type: module
+    tags: [warpline, native-first, F4, measurement]
+    components:
+      - "#refusal"
+      - "#warplined-descriptors"
 
   warplined-client:
     description: >-

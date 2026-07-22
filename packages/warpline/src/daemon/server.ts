@@ -30,8 +30,12 @@
 import * as fs from 'node:fs';
 import * as net from 'node:net';
 import * as path from 'node:path';
-import { warplineDirOf } from '../fabric/fabric.js';
-import { listRefs, heads } from '../fabric/refs.js';
+import { warplineDirOf, readFabric } from '../fabric/fabric.js';
+import { listRefs, heads, readRef } from '../fabric/refs.js';
+import { readScratch } from '../fabric/scratch.js';
+import { parentsOf } from '../fabric/dag.js';
+import { summarizeKnotPayload } from '../fabric/knot-payload.js';
+import { VERB_DESCRIPTORS, toolNameOf, UNTRUSTED_CONTENT_SENTENCE } from './descriptors.js';
 import {
   forkNative,
   proposeNative,
@@ -55,7 +59,7 @@ import {
   type RpcErrorCode,
 } from './protocol.js';
 import { backupFabric } from '../fabric/backup.js';
-import { refuse } from '../fabric/refusal.js';
+import { refuse, RefusedError, type Refusal } from '../fabric/refusal.js';
 import { resolveToken, type Principal } from './tokens.js';
 import { acquireDaemonLock, releaseDaemonLock } from './lifecycle.js';
 
@@ -73,6 +77,15 @@ export interface DaemonAuditRow {
   target: string | null;
   ok: boolean;
   code?: RpcErrorCode;
+  /**
+   * PW-8 (additive): the refusal code of a VERDICT-CLASS refusal riding inside
+   * an ok result (CLAIM_BREACH/TRUST_HELD/GATE_REFUSED…). Before this field,
+   * `ok:true` masked exactly the refusals the founder constraint is about —
+   * the audit-log twin of the T-2026-07-21-006 exit-code bug. Derived from
+   * `result.refusal` per the same rule as exitCodeForResult. (f4Trace, not
+   * this audit, remains F4 ground truth.)
+   */
+  resultCode?: RpcErrorCode;
 }
 
 export function daemonAuditPathOf(root: string): string {
@@ -153,7 +166,7 @@ export async function startDaemon(root: string, opts: StartDaemonOptions = {}): 
     // AUTH — every verb requires a resolvable token (stage 1: no anonymous reads;
     // the sidecars behind these verbs are trust data, Aegis §2.3).
     const who: Principal | null = resolveToken(root, req.token);
-    const audit = (ok: boolean, code?: RpcErrorCode): void => {
+    const audit = (ok: boolean, code?: RpcErrorCode, resultCode?: RpcErrorCode): void => {
       try {
         appendAudit(root, {
           schemaVersion: DAEMON_AUDIT_SCHEMA,
@@ -164,6 +177,7 @@ export async function startDaemon(root: string, opts: StartDaemonOptions = {}): 
           target: targetOf(params),
           ok,
           ...(code ? { code } : {}),
+          ...(resultCode ? { resultCode } : {}),
         });
       } catch {
         /* the audit line must never take the daemon down */
@@ -191,15 +205,36 @@ export async function startDaemon(root: string, opts: StartDaemonOptions = {}): 
         throw new RpcFailure('FORBIDDEN', `verb ${verb} is human-class only (Aegis §2.2) — principal ${JSON.stringify(who.principal)} is kind:agent`);
       }
       const result = await dispatch(root, verb, params, who);
-      audit(true);
+      // PW-8: a VERDICT-CLASS refusal riding inside an ok result is audited
+      // (resultCode), not masked — same derivation rule as exitCodeForResult.
+      const inResult =
+        result && typeof result === 'object' && 'refusal' in result
+          ? (result as { refusal?: Refusal }).refusal
+          : undefined;
+      audit(true, undefined, inResult?.code);
       return { rpc: RPC_SCHEMA, id, ok: true, result };
     } catch (err) {
+      // PW-2: an engine-boundary RefusedError CARRIES its refusal — emit it
+      // verbatim (code included) instead of collapsing to ENGINE/retry-identical,
+      // which instructed cold agents to retry a call that fails forever.
+      if (err instanceof RefusedError) {
+        audit(false, err.refusal.code);
+        return { rpc: RPC_SCHEMA, id, ok: false, error: { code: err.refusal.code, message: err.message, refusal: err.refusal } };
+      }
       const f = err instanceof RpcFailure ? err : new RpcFailure('ENGINE', err instanceof Error ? err.message : String(err));
       audit(false, f.code);
       // SP2: the error frame carries the SAME refusal:v1 every gate hands back
       // (code tables give gate/retriability; message stays human-only). Built at
-      // THIS single boundary so no RpcFailure site can forget it.
-      return { rpc: RPC_SCHEMA, id, ok: false, error: { code: f.code, message: f.message, refusal: refuse({ code: f.code }) } };
+      // THIS single boundary so no RpcFailure site can forget it. AUTH carries
+      // its escalation ladder (PW-3c): minting is the human's CLI act.
+      const refusal =
+        f.code === 'AUTH'
+          ? refuse({
+              code: 'AUTH',
+              next: [{ verb: 'daemon.token.mint', params: {}, requires: ['name', 'kind'], principal: 'human' }],
+            })
+          : refuse({ code: f.code });
+      return { rpc: RPC_SCHEMA, id, ok: false, error: { code: f.code, message: f.message, refusal } };
     }
   };
 
@@ -212,6 +247,31 @@ export async function startDaemon(root: string, opts: StartDaemonOptions = {}): 
     const wdir = warplineDirOf(r);
     switch (verb) {
       case 'status': {
+        // PW-6 — the RELOCATED F4 carrier: hosts defer/truncate tool
+        // descriptions to names-only, but nothing truncates a RESULT. status
+        // teaches the cycle AND the caller's position in it, so a cold agent
+        // recovers orientation from one call. All fields additive (G1).
+        let scratch: string | null = null;
+        let proposalSealed = false;
+        let behindSelvage = false;
+        let selvageTip: string | null = null;
+        try {
+          scratch = readScratch(r, who.principal);
+          selvageTip = readRef(wdir, 'selvage');
+          if (scratch?.startsWith('pick:')) {
+            const strand = readFabric(wdir).find((s) => s.pickId === scratch);
+            // The scratch tip IS this principal's sealed proposal (propose
+            // advanced it) — vs the fork base it was minted at (a tip strand
+            // someone else authored, or the base itself).
+            proposalSealed = !!strand && strand.authoredBy?.agentId === who.principal;
+            const base = proposalSealed && strand ? (parentsOf(strand)[0] ?? null) : scratch;
+            behindSelvage = selvageTip !== null && base !== selvageTip;
+          }
+        } catch {
+          /* status stays best-effort — orientation must never throw */
+        }
+        const nextLegalVerbs =
+          scratch === null ? ['fork'] : proposalSealed ? ['admit'] : ['propose'];
         return {
           schemaVersion: RPC_SCHEMA,
           pid: process.pid,
@@ -229,6 +289,21 @@ export async function startDaemon(root: string, opts: StartDaemonOptions = {}): 
             }
           })(),
           verbs: [...DAEMON_VERBS],
+          // ── PW-6 state-aware self-description (additive) ──
+          cycle: DAEMON_VERBS.map((v) => ({
+            verb: v,
+            stage: VERB_DESCRIPTORS[v].cycleStage,
+            principal: VERB_DESCRIPTORS[v].principal,
+          })),
+          position: {
+            scratchPresent: scratch !== null,
+            scratchIsPickId: scratch?.startsWith('pick:') ?? false,
+            proposalSealed,
+            behindSelvage,
+          },
+          nextLegalVerbs,
+          toolMap: Object.fromEntries(DAEMON_VERBS.map((v) => [v, toolNameOf(v)])),
+          untrustedContent: UNTRUSTED_CONTENT_SENTENCE,
         };
       }
       case 'refs.list':
@@ -296,7 +371,9 @@ export async function startDaemon(root: string, opts: StartDaemonOptions = {}): 
         if (!selector) throw new RpcFailure('BAD_REQUEST', 'knot.show needs params.selector');
         const payload = readKnotPayload(r, selector);
         if (!payload) throw new RpcFailure('NOT_FOUND', `no KNOT payload matches ${JSON.stringify(selector)}`);
-        return payload;
+        // PW-7: summary=true bounds the recovery path's largest result — the
+        // structural index without file bodies (totals stay honest).
+        return bool(params, 'summary') ? summarizeKnotPayload(payload) : payload;
       }
       case 'resolve': {
         // params.agentId here is a TARGET (whose scratch strand is being

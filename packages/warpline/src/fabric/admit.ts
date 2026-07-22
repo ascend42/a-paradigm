@@ -333,7 +333,7 @@ function priorFor(d: AdmitDecision): number | null {
  * ESCALATE, not attempt — which is why the step carries principal:'human'
  * instead of a sentence saying so.
  */
-function meaningNextSteps(knotPayloadId: string | undefined): RefusalNextStep[] {
+function meaningNextSteps(agentId: string, knotPayloadId: string | undefined): RefusalNextStep[] {
   const steps: RefusalNextStep[] = [];
   if (knotPayloadId) {
     // #knot-payload is self-sufficient: both sides' bodies + the proposal envelope.
@@ -341,9 +341,13 @@ function meaningNextSteps(knotPayloadId: string | undefined): RefusalNextStep[] 
   }
   steps.push({
     verb: 'resolve',
-    params: {},
-    // exactly KnotPayload.resolution.requires — one vocabulary, two surfaces.
-    requires: ['resolvedRef', 'reason', 'decidedBy'],
+    // PW-3a: the params the resolve surface ACTUALLY accepts. agentId is the
+    // TARGET (whose conflicting scratch is being resolved) — already determined
+    // here, so it rides in params; `decidedBy` is server-stamped identity and
+    // must never be advertised as a caller param (the old requires list
+    // ['resolvedRef','reason','decidedBy'] BAD_REQUESTed when copied verbatim).
+    params: { agentId },
+    requires: ['worktree', 'reason'],
     principal: 'human',
   });
   return steps;
@@ -359,7 +363,9 @@ function meaningNextSteps(knotPayloadId: string | undefined): RefusalNextStep[] 
  */
 function claimNextSteps(claimId: string, admitParams: Record<string, string>): RefusalNextStep[] {
   return [
-    { verb: 'propose', params: {}, requires: ['claimedSymbols'], principal: 'agent' },
+    // PW-3b: propose REQUIRES intent (I3) and a worktree — the old requires
+    // list omitted both, so following the ladder verbatim BAD_REQUESTed.
+    { verb: 'propose', params: {}, requires: ['claimedSymbols', 'intent', 'worktree'], principal: 'agent' },
     { verb: 'admit', params: { ...admitParams, claim: claimId, acceptBreach: 'true' }, requires: [], principal: 'human' },
   ];
 }
@@ -389,6 +395,7 @@ export function meaningRefusal(
   verdict: AdmitStatus,
   decision: AdmitDecision,
   proposedStateId: string,
+  agentId: string,
   knotPayloadId?: string,
 ): Refusal {
   return refuse({
@@ -401,7 +408,7 @@ export function meaningRefusal(
       proposedStateId,
       rebasedOnto: decision.rebasedOnto ?? undefined,
     },
-    next: meaningNextSteps(knotPayloadId),
+    next: meaningNextSteps(agentId, knotPayloadId),
   });
 }
 
@@ -769,7 +776,7 @@ async function admitCore(root: string, opts: AdmitOptions): Promise<AdmitResultB
         sealed: false,
         proposedStateId: proposed.stateId,
         merged: mat.plan,
-        refusal: meaningRefusal('KNOT', decision, proposed.stateId),
+        refusal: meaningRefusal('KNOT', decision, proposed.stateId, opts.agentId),
       });
         }
         return withClaim(withEscalation({ decision, sealed: false, proposedStateId: proposed.stateId }));
@@ -820,7 +827,7 @@ async function admitCore(root: string, opts: AdmitOptions): Promise<AdmitResultB
         sealed: false,
         proposedStateId: proposed.stateId,
         merged: mat.plan,
-        refusal: meaningRefusal('KNOT', decision, proposed.stateId),
+        refusal: meaningRefusal('KNOT', decision, proposed.stateId, opts.agentId),
       });
       }
 
@@ -857,7 +864,7 @@ async function admitCore(root: string, opts: AdmitOptions): Promise<AdmitResultB
         sealed: false,
         proposedStateId: proposed.stateId,
         merged: mat.plan,
-        refusal: meaningRefusal('KNOT', decision, proposed.stateId),
+        refusal: meaningRefusal('KNOT', decision, proposed.stateId, opts.agentId),
       });
     }
     // KNOT / DANGLE — detection alone relocates the bottleneck (R3): attach the
@@ -921,7 +928,7 @@ async function admitCore(root: string, opts: AdmitOptions): Promise<AdmitResultB
       // carrying its id would advertise a `knot.show` selector that resolves to
       // nothing. A refusal that points at an absent object is worse than one
       // that points at none (F4: every pointer must dereference).
-      refusal: meaningRefusal(decision.status, decision, proposed.stateId, shadow ? undefined : knotPayloadId),
+      refusal: meaningRefusal(decision.status, decision, proposed.stateId, opts.agentId, shadow ? undefined : knotPayloadId),
     });
   });
 }
