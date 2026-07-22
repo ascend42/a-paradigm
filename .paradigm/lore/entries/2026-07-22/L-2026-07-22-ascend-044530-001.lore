@@ -1,0 +1,57 @@
+id: L-2026-07-22-ascend-044530-001
+type: agent-session
+timestamp: '2026-07-22T04:45:30.170Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: SP2 skins landed — the three contested-verdict defects fixed (exit codes, native refusals, claim honesty)
+summary: 'Fixed all three high-priority defects the first contested verdict surfaced, in the checkpoint''s ranked order: T-006 verdict-keyed exit codes wired into both CLI admit paths via exitCodeForResult (a refusing verdict can no longer exit 0); T-007 refusal:v1 now rides every refusing native verdict via shared exported builders with native-path ladders; T-008 the claim-honesty carve-out exempts PROVEN body-internal ripples (localChanged false AND rippleFromContract false), so an honest single-symbol claim no longer breaches on the essence over-block''s caller knots. Verified end-to-end through the real CLI in an isolated scratch repo: honest claim on a contested symbol → KNOT exit 1 with dereferenceable knot.show pointer (was CLAIM-BREACH exit 0); dishonest claim → exit 3 with the human-class acceptBreach ladder.'
+symbols_touched:
+  - '#refusal'
+  - '#admit'
+  - '#native-write-path'
+  - '#claim'
+  - '#warpline-cli'
+  - '#sem-delta'
+files_modified:
+  - packages/warpline/src/fabric/refusal.ts
+  - packages/warpline/src/fabric/admit.ts
+  - packages/warpline/src/fabric/native.ts
+  - packages/warpline/src/fabric/claim.ts
+  - packages/warpline/src/cli.ts
+  - packages/warpline/src/index.ts
+  - packages/warpline/.purpose
+  - packages/warpline/test/refusal.test.ts
+  - packages/warpline/test/claim.test.ts
+  - packages/warpline/test/native-loop-no-git.test.ts
+commit: 155b3bfd
+learnings:
+  - 'The T-008 mechanism was NOT the direct/ripple filter missing — evaluateClaim already had it. The carve-out ''ripple-only that KNOTS counts as excess'' was the leak: the over-block makes rippled callers knot, and the carve-out then charged the honest author for the engine''s own artifact. The fix is exactly as narrow as the stage-1 proof (rippleFromContract === false exempts; absent/true still counts — fail closed).'
+  - Shared refusal builders (meaningRefusal/claimRefusal/trustRefusal) exported from admit.ts, consumed by native.ts, parameterized only by the ladder's admit params ({ref} git-era, {native:'true'} native) — one vocabulary, two surfaces, and the git-era output stayed byte-identical.
+  - 'exitCodeForResult(result) derives the exit from the result''s OWN refusal object (G3) — no skin re-derives an error vocabulary. --shadow deliberately stays exit 0 (observe-only: the appended row is the success).'
+  - The exported-and-unconsumed defect class (exitCodeFor built in SP1, wired nowhere) is best killed by shipping the consumer in the same commit as a pure helper plus a wiring line, with the helper unit-tested across every code.
+verification:
+  status: pass
+  details:
+    tsc: clean
+    tests: 614/614 (was 609; +5 new)
+    live-cli: 'isolated scratch repo: KNOT exit 1 w/ refusal + deref knot.show; CLAIM-BREACH exit 3 w/ acceptBreach ladder; fast-admit exit 0'
+tags:
+  - arc:warpline
+  - F4
+  - cold-agent
+  - refusal-object
+  - SP2
+  - TD-2026-07-21-766
+linked_tasks:
+  - T-2026-07-21-006
+  - T-2026-07-21-007
+  - T-2026-07-21-008
+linked_commits:
+  - 155b3bfd
+confidence: 0.9
+git_context:
+  ref: 155b3bfdd0cb4393ad3d7fd649db6c06a50ac916
+  branch: warpline-surfaces
+  dirty: true
