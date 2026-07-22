@@ -1042,6 +1042,11 @@ components:
       dereference is worse than no pointer. Every pre-existing field (status,
       sealed, claim, escalation, knotPayloadId) is unchanged and remains the
       authority — #refusal restates them in one shape an agent can act on.
+      The refusal BUILDERS (meaningRefusal / claimRefusal / trustRefusal) are
+      exported and shared with #native-write-path (T-2026-07-21-007): both paths
+      raise the SAME objects, differing only in the ladder's admit params
+      ({ref} git-era, {native:'true'} native) so next[] is copy-paste runnable
+      on the surface that raised it.
     type: module
     components:
       - "#refusal"
@@ -1076,7 +1081,16 @@ components:
       unclaimed symbols that are DIRECT (SemDelta.localChanged) or ripple-only-
       but-KNOTTING (a ripple-only non-knotting symbol is exempt — charging authors
       for Merkle avalanches would make honest claims impossible; no agentDelta ⇒
-      all treated direct, conservative); missing = claimed-but-untouched, recorded
+      all treated direct, conservative). The knotting carve-out excludes PROVEN
+      body-internal ripples (localChanged false AND rippleFromContract false,
+      the #sem-delta stage-1 bit — T-2026-07-21-008): the essence inlines callee
+      bodies into callers, so an honest single-symbol edit re-addresses every
+      caller and can knot them against a concurrent writer; charging the claim
+      for that engine artifact converted accurate self-reporting into a breach
+      (the documented trust-erosion path — the CLI's remediation taught agents
+      --accept-breach as routine). Exemption exactly as narrow as the proof:
+      rippleFromContract absent or true keeps the knot counting (fail closed);
+      missing = claimed-but-untouched, recorded
       NEVER a breach; breach = excess nonempty → #admit's CLAIM-BREACH verdict.
       (2) CALIBRATION PROBE — every evaluation appends {claimId, pickId?, agentId,
       breach, excess, missing, acceptedBreach?, ts} to
@@ -1177,8 +1191,14 @@ components:
       knot.show selector. exitCodeFor maps each code to the shell-legible exit
       contract (1 refuse / 2 bad request / 3 claim breach / 4 trust held / 5
       stale base), is TOTAL by construction, and fails CLOSED (1) on an unknown
-      code — a refusal must never exit success. Deterministic, pure, G1-versioned,
-      G5 (derived data — never a signed strand field).
+      code — a refusal must never exit success. exitCodeForResult(result) is the
+      whole-OUTCOME form every skin consumes (T-2026-07-21-006: exitCodeFor was
+      exported-and-unconsumed, so `admit --native` exited 0 on an unsealed
+      CLAIM-BREACH — a silent failure indistinguishable from success): the
+      refusal's mapped code when one is present, else 0 — the exit is derived
+      from the result's OWN refusal object, never a re-derived vocabulary (G3).
+      Deterministic, pure, G1-versioned, G5 (derived data — never a signed
+      strand field).
     type: module
     components:
       - "#rank"
@@ -1454,7 +1474,13 @@ components:
       strand (a v3 admission is a ref advance, not a re-seal). KNOT/DANGLE
       persist the #knot-payload (both sides' treeIds native) and refuse — the
       scratch ref keeps the durable work; resolveNative seals the council
-      resolution as a v3 weave carrying KnotResolution. Every step is an append
+      resolution as a v3 weave carrying KnotResolution. EVERY refusing verdict
+      (KNOT / DANGLE / CLAIM-BREACH / HELD, incl. the byte-conflict downgrade)
+      carries the SAME #refusal object as the git-era gate, built by the shared
+      exported builders with native-path ladders ({native:'true'}) —
+      T-2026-07-21-007: this is the path agents actually use, and a refusing
+      native verdict without the F4 carrier made cold-agent recovery impossible
+      exactly where it matters most. Every step is an append
       or a CAS. SCOPE: v3 writes for scratch strands + native weaves only — the
       git-era seal path stays v2 until the founder-visible cutover (no selvage
       cutover here). EXIT PROOF: test/native-loop-no-git.test.ts — the full
@@ -1465,6 +1491,7 @@ components:
     components:
       - "#scratch"
       - "#admit"
+      - "#refusal"
       - "#materialize"
       - "#seal"
       - "#fabric-refs"
@@ -1723,7 +1750,12 @@ components:
       `warpline hook <install|uninstall|status>` manages the post-commit auto-seal,
       `warpline scratch <agentId>` forks a per-agent multi-writer base, `warpline
       admit <agentId> [--ref <ref>] [--json]` runs the admission protocol (FAST_ADMIT
-      / CLEAN+confidence / KNOT / DANGLE), and `warpline resolve <agentId> --ref
+      / CLEAN+confidence / KNOT / DANGLE) — its exit code is VERDICT-KEYED off
+      the result's #refusal via exitCodeForResult on both the git-era and
+      --native paths (0 sealed/NOOP, 1 GATE_REFUSED, 3 CLAIM_BREACH,
+      4 TRUST_HELD, 5 STALE_BASE — T-2026-07-21-006: a refusing verdict must
+      never exit 0; --shadow stays exit 0 by contract, observe-only), and
+      `warpline resolve <agentId> --ref
       <resolvedRef> -m <reason> [--by <who>] [--ours <ref>]` seals a KNOT-council
       resolution, and `warpline grade [--window N] [--dry] [--json]` grades strand
       confidence against real survive/overturn outcome (the moat), and `warpline
@@ -1753,6 +1785,7 @@ components:
       - "#hook"
       - "#scratch"
       - "#admit"
+      - "#refusal"
       - "#resolve"
       - "#grade"
 

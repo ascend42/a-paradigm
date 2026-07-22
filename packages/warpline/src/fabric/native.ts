@@ -25,7 +25,9 @@
  *                are RESTORED back into the agent worktree (step 5 of §2.1 —
  *                the agent continues from merged reality; no commit ever
  *                existed). KNOT/DANGLE/CLAIM-BREACH/HELD refuse; the scratch
- *                ref keeps the work; the knot payload carries both sides.
+ *                ref keeps the work; the knot payload carries both sides; every
+ *                refusing verdict carries `refusal:v1` (the F4 carrier,
+ *                T-2026-07-21-007 — this path is the one agents actually use).
  *   4. RESOLVE — `resolveNative` seals the human/agent resolution of a KNOT as
  *                a v3 weave carrying the KnotResolution envelope.
  *
@@ -57,7 +59,16 @@ import { withFabricLock } from './lock.js';
 import { summarizeDelta } from './seal.js';
 import { buildStrandV3, type Strand, type MergeRecipe, type KnotResolution } from './strand.js';
 import { parentsOf } from './dag.js';
-import { admitDecision, ADMIT_RESULT_SCHEMA, type AdmitDecision, type AdmitResult, type AdmitStatus } from './admit.js';
+import {
+  admitDecision,
+  ADMIT_RESULT_SCHEMA,
+  meaningRefusal,
+  claimRefusal,
+  trustRefusal,
+  type AdmitDecision,
+  type AdmitResult,
+  type AdmitStatus,
+} from './admit.js';
 import { materializeMergedStateNative } from './materialize.js';
 import { buildKnotPayload, persistKnotPayload, readFileFromTree } from './knot-payload.js';
 import { readClaim, evaluateClaim, recordClaimEvaluation, createClaim, persistClaim, type Claim, type ClaimEvaluation, type CreateClaimInput } from './claim.js';
@@ -461,6 +472,10 @@ export async function admitNative(root: string, opts: AdmitNativeOptions): Promi
             missing: claimEval.missing,
             underlyingStatus: decision.status,
           },
+          // #refusal (T-2026-07-21-007): the native path is the one agents
+          // actually use — a refusing verdict without the F4 carrier here made
+          // cold-agent recovery impossible exactly where it matters most.
+          refusal: claimRefusal(decision, proposed.stateId, claim.claimId, claimEval.excess, { native: 'true' }),
         };
       }
     }
@@ -476,6 +491,7 @@ export async function admitNative(root: string, opts: AdmitNativeOptions): Promi
         sealed: false,
         proposedStateId: proposed.stateId,
         escalation: { ...escalation, underlyingStatus: decision.status },
+        refusal: trustRefusal(decision, proposed.stateId, escalation.symbol, { native: 'true' }),
       });
     }
     const withEscalation = (r: AdmitNativeResultBody): AdmitNativeResultBody => {
@@ -515,7 +531,13 @@ export async function admitNative(root: string, opts: AdmitNativeOptions): Promi
       const mat = await materializeMergedStateNative(objStore, baseTree, oursTree, theirsTree);
       if (!mat.state || mat.plan.conflicts.length > 0 || !mat.resultTreeId) {
         // Meaning said CLEAN but bytes overlap → surface as KNOT (never a silent wrong-merge).
-        return withClaim({ decision: { ...decision, status: 'KNOT' }, sealed: false, proposedStateId: proposed.stateId, merged: mat.plan });
+        return withClaim({
+          decision: { ...decision, status: 'KNOT' },
+          sealed: false,
+          proposedStateId: proposed.stateId,
+          merged: mat.plan,
+          refusal: meaningRefusal('KNOT', decision, proposed.stateId),
+        });
       }
       const recipe: MergeRecipe = { algo: 'warpline-merge3-v1', base: baseTree, ours: oursTree, theirs: theirsTree, result: mat.resultTreeId };
       const weave = buildStrandV3({
@@ -586,7 +608,15 @@ export async function admitNative(root: string, opts: AdmitNativeOptions): Promi
     } catch {
       /* payload is auxiliary — the KNOT/DANGLE verdict stands without it */
     }
-    return withClaim({ decision, sealed: false, proposedStateId: proposed.stateId, ...(knotPayloadId ? { knotPayloadId } : {}) });
+    return withClaim({
+      decision,
+      sealed: false,
+      proposedStateId: proposed.stateId,
+      ...(knotPayloadId ? { knotPayloadId } : {}),
+      // #refusal: built AFTER the payload attempt so `next[0]` names the work
+      // order whenever one actually persisted (every pointer must dereference — F4).
+      refusal: meaningRefusal(decision.status, decision, proposed.stateId, knotPayloadId),
+    });
   });
   // THE single G1 stamp point for the native path (see AdmitNativeResultBody).
   return { schemaVersion: ADMIT_RESULT_SCHEMA, ...result };

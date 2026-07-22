@@ -353,12 +353,14 @@ function meaningNextSteps(knotPayloadId: string | undefined): RefusalNextStep[] 
  * The recovery ladder for a CLAIM-BREACH: re-declare a claim that COVERS the
  * excess (the agent's own honest move), or have a human re-admit with the
  * override. An agent must never accept its own breach (Aegis §2.2), hence the
- * principals.
+ * principals. `admitParams` names the caller's own admit surface — `{ ref }`
+ * on the git-era path, `{ native: 'true' }` on the native one — so the ladder's
+ * re-admit step is copy-paste runnable wherever the refusal was raised.
  */
-function claimNextSteps(claimId: string, ref: string): RefusalNextStep[] {
+function claimNextSteps(claimId: string, admitParams: Record<string, string>): RefusalNextStep[] {
   return [
     { verb: 'propose', params: {}, requires: ['claimedSymbols'], principal: 'agent' },
-    { verb: 'admit', params: { ref, claim: claimId, acceptBreach: 'true' }, requires: [], principal: 'human' },
+    { verb: 'admit', params: { ...admitParams, claim: claimId, acceptBreach: 'true' }, requires: [], principal: 'human' },
   ];
 }
 
@@ -366,10 +368,10 @@ function claimNextSteps(claimId: string, ref: string): RefusalNextStep[] {
  * The recovery ladder for a trust-floor HELD: inspect the graded evidence that
  * held the write, then a human re-admits with the recorded override.
  */
-function trustNextSteps(ref: string): RefusalNextStep[] {
+function trustNextSteps(admitParams: Record<string, string>): RefusalNextStep[] {
   return [
     { verb: 'grade.report', params: {}, requires: [], principal: 'agent' },
-    { verb: 'admit', params: { ref, acceptRisk: 'true' }, requires: [], principal: 'human' },
+    { verb: 'admit', params: { ...admitParams, acceptRisk: 'true' }, requires: [], principal: 'human' },
   ];
 }
 
@@ -383,7 +385,7 @@ function trustNextSteps(ref: string): RefusalNextStep[] {
  * refusal must never be absent on a refusing verdict, or a cold agent learns it
  * cannot rely on the field (F4).
  */
-function meaningRefusal(
+export function meaningRefusal(
   verdict: AdmitStatus,
   decision: AdmitDecision,
   proposedStateId: string,
@@ -400,6 +402,61 @@ function meaningRefusal(
       rebasedOnto: decision.rebasedOnto ?? undefined,
     },
     next: meaningNextSteps(knotPayloadId),
+  });
+}
+
+/**
+ * The CLAIM-gate refusal (CLAIM-BREACH), built one way for every path that
+ * raises one — git-era admit and the native write path alike (T-2026-07-21-007:
+ * native.ts building refusal-free verdicts left the NATIVE-FIRST pivot's
+ * primary path with no F4 carrier at all). `pointers.symbols` names the excess
+ * set — the breach itself.
+ */
+export function claimRefusal(
+  decision: AdmitDecision,
+  proposedStateId: string,
+  claimId: string,
+  excess: string[],
+  admitParams: Record<string, string>,
+): Refusal {
+  return refuse({
+    code: 'CLAIM_BREACH',
+    verdict: 'CLAIM-BREACH',
+    gate: 'claim',
+    contested: contestedOf(decision.knots, decision.dangling),
+    pointers: {
+      claimId,
+      proposedStateId,
+      rebasedOnto: decision.rebasedOnto ?? undefined,
+      symbols: excess,
+    },
+    next: claimNextSteps(claimId, admitParams),
+    override: { flag: 'acceptBreach', principal: 'human' },
+  });
+}
+
+/**
+ * The trust-floor refusal (HELD), one builder for both paths. A HELD has no
+ * CONTESTED unit — the verdict was CLEAN; what refused is the trust floor, so
+ * `symbols` names the below-floor symbol and contested stays honestly empty.
+ */
+export function trustRefusal(
+  decision: AdmitDecision,
+  proposedStateId: string,
+  symbol: string,
+  admitParams: Record<string, string>,
+): Refusal {
+  return refuse({
+    code: 'TRUST_HELD',
+    verdict: 'HELD',
+    gate: 'trust',
+    pointers: {
+      proposedStateId,
+      rebasedOnto: decision.rebasedOnto ?? undefined,
+      symbols: [symbol],
+    },
+    next: trustNextSteps(admitParams),
+    override: { flag: 'acceptRisk', principal: 'human' },
   });
 }
 
@@ -598,21 +655,7 @@ async function admitCore(root: string, opts: AdmitOptions): Promise<AdmitResultB
             underlyingStatus: decision.status,
           },
           // #refusal (additive): the same hold, stated so a cold agent can act.
-          refusal: refuse({
-            code: 'CLAIM_BREACH',
-            verdict: 'CLAIM-BREACH',
-            gate: 'claim',
-            contested: contestedOf(decision.knots, decision.dangling),
-            pointers: {
-              claimId: claim.claimId,
-              proposedStateId: proposed.stateId,
-              rebasedOnto: decision.rebasedOnto ?? undefined,
-              // the changed-but-unclaimed symbols — the breach itself.
-              symbols: claimEval.excess,
-            },
-            next: claimNextSteps(claim.claimId, opts.ref),
-            override: { flag: 'acceptBreach', principal: 'human' },
-          }),
+          refusal: claimRefusal(decision, proposed.stateId, claim.claimId, claimEval.excess, { ref: opts.ref }),
         };
       }
     }
@@ -640,18 +683,7 @@ async function admitCore(root: string, opts: AdmitOptions): Promise<AdmitResultB
         // #refusal (additive). A HELD has no CONTESTED unit — the verdict was
         // CLEAN; what refused is the trust floor, so `symbols` names the
         // below-floor symbol and contested stays honestly empty.
-        refusal: refuse({
-          code: 'TRUST_HELD',
-          verdict: 'HELD',
-          gate: 'trust',
-          pointers: {
-            proposedStateId: proposed.stateId,
-            rebasedOnto: decision.rebasedOnto ?? undefined,
-            symbols: [escalation.symbol],
-          },
-          next: trustNextSteps(opts.ref),
-          override: { flag: 'acceptRisk', principal: 'human' },
-        }),
+        refusal: trustRefusal(decision, proposed.stateId, escalation.symbol, { ref: opts.ref }),
       });
     }
     // Attach (and record) an acceptRisk-overridden escalation on whatever the

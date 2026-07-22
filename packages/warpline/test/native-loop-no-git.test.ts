@@ -95,6 +95,7 @@ describe('PHASE 0 exit test — the full native loop with no .git anywhere', () 
     const ga = await admitNative(root, { worktree: root, agentId: 'genesis' });
     expect(ga.sealed).toBe(true);
     expect(ga.decision.status).toBe('FAST_ADMIT');
+    expect(ga.refusal).toBeUndefined(); // a sealing admission NEVER carries a refusal
     expect(readRef(warplineDirOf(root), 'selvage')).toBe(g.strand!.pickId);
 
     // ── fork A and B at the same selvage (true concurrency), restored worktrees
@@ -139,6 +140,7 @@ describe('PHASE 0 exit test — the full native loop with no .git anywhere', () 
     const ab = await admitNative(root, { worktree: dirB, agentId: 'B', claim: pb.claimId });
     expect(ab.decision.status).toBe('CLEAN');
     expect(ab.sealed).toBe(true);
+    expect(ab.refusal).toBeUndefined();
     expect(ab.merged?.conflicts).toEqual([]);
     expect(ab.coverage).toBeDefined();
     expect(ab.strand!.parents).toEqual([pa.strand!.pickId, pb.strand!.pickId]); // the weave
@@ -174,12 +176,40 @@ describe('PHASE 0 exit test — the full native loop with no .git anywhere', () 
     expect(breach.claim?.excess.join(',')).toContain('foo');
     expect(readScratch(root, 'C')).toBe(pc.strand!.pickId); // the work is kept
 
+    // refusal:v1 rides EVERY refusing native verdict (T-2026-07-21-007) — the
+    // native path is the one agents actually use, so the F4 carrier must be here.
+    expect(breach.refusal?.schemaVersion).toBe('refusal:v1');
+    expect(breach.refusal?.code).toBe('CLAIM_BREACH');
+    expect(breach.refusal?.verdict).toBe('CLAIM-BREACH');
+    expect(breach.refusal?.retriable).toBe('retry-with-override');
+    expect(breach.refusal?.override).toEqual({ flag: 'acceptBreach', principal: 'human' });
+    expect(breach.refusal?.pointers.claimId).toBe(narrow.claimId);
+    expect(breach.refusal?.pointers.symbols?.join(',')).toContain('foo');
+    // the ladder's re-admit step is copy-paste runnable ON THIS PATH (native):
+    const readmit = breach.refusal?.next.find((n) => n.verb === 'admit');
+    expect(readmit?.principal).toBe('human');
+    expect(readmit?.params).toMatchObject({ native: 'true', claim: narrow.claimId, acceptBreach: 'true' });
+
     // Without the claim: the true verdict — KNOT, payload persisted, selvage unmoved
     const knot = await admitNative(root, { worktree: dirC, agentId: 'C' });
     expect(knot.decision.status).toBe('KNOT');
     expect(knot.sealed).toBe(false);
     expect(knot.knotPayloadId).toBeDefined();
     expect(readRef(warplineDirOf(root), 'selvage')).toBe(pd.strand!.pickId);
+
+    // The KNOT refusal points at the PERSISTED payload and leads with knot.show —
+    // every pointer dereferences (F4).
+    expect(knot.refusal?.code).toBe('GATE_REFUSED');
+    expect(knot.refusal?.verdict).toBe('KNOT');
+    expect(knot.refusal?.retriable).toBe('retry-after-resolve');
+    expect(knot.refusal?.pointers.knotPayloadId).toBe(knot.knotPayloadId);
+    expect(knot.refusal?.next[0]).toEqual({
+      verb: 'knot.show',
+      params: { selector: knot.knotPayloadId! },
+      requires: [],
+      principal: 'agent',
+    });
+    expect(knot.refusal?.contested.map((c) => c.symbol).join(',')).toContain('foo');
 
     const payload = readKnotPayload(root, knot.knotPayloadId!);
     expect(payload).not.toBeNull();

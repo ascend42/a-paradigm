@@ -134,11 +134,17 @@ const decisionOf = (over: Partial<AdmitDecision>): AdmitDecision => ({
 const claimOf = (symbols: string[]): Claim =>
   createClaim({ agentId: 'agent-a', claimedSymbols: symbols, intent: 'test claim' });
 
-const deltaSet = (entries: Array<{ symbol: string; localChanged?: boolean }>): SemDeltaSet => ({
+const deltaSet = (entries: Array<{ symbol: string; localChanged?: boolean; rippleFromContract?: boolean }>): SemDeltaSet => ({
   deltas: new Map(
     entries.map((e, i) => [
       `key-${i}`,
-      { kind: 'contract-changed', stableKey: `key-${i}`, symbol: e.symbol, ...(e.localChanged !== undefined ? { localChanged: e.localChanged } : {}) } as SemDelta,
+      {
+        kind: 'contract-changed',
+        stableKey: `key-${i}`,
+        symbol: e.symbol,
+        ...(e.localChanged !== undefined ? { localChanged: e.localChanged } : {}),
+        ...(e.rippleFromContract !== undefined ? { rippleFromContract: e.rippleFromContract } : {}),
+      } as SemDelta,
     ]),
   ),
   renames: [],
@@ -180,6 +186,52 @@ describe('EVALUATE — claimed vs computed (excess breaches; missing never does)
     const agentDelta = deltaSet([{ symbol: '#a', localChanged: true }, { symbol: '#ripple', localChanged: false }]);
     const ev = evaluateClaim(d, claimOf(['#a']), { agentDelta });
     expect(ev).toEqual({ breach: true, excess: ['#ripple'], missing: [] });
+  });
+
+  it('a knotting ripple-only symbol PROVEN body-internal is exempt — the over-block must not grade the author (T-2026-07-21-008)', () => {
+    // The live repro: agent edits ONLY foo, claims foo — a true and complete
+    // claim. The essence inlines foo's body into caller bar, bar knots against
+    // a concurrent writer, and pre-fix the breach charged the author for the
+    // engine's own artifact (teaching agents --accept-breach as routine).
+    const d = decisionOf({
+      status: 'KNOT',
+      agentChanged: ['#a', '#ripple'],
+      knots: [{ stableKey: 'k', symbol: '#ripple', conflictingSlots: [], direct: false }],
+    });
+    const agentDelta = deltaSet([
+      { symbol: '#a', localChanged: true },
+      { symbol: '#ripple', localChanged: false, rippleFromContract: false },
+    ]);
+    const ev = evaluateClaim(d, claimOf(['#a']), { agentDelta });
+    expect(ev).toEqual({ breach: false, excess: [], missing: [] });
+  });
+
+  it('the exemption is exactly as narrow as the proof: rippleFromContract true or ABSENT keeps the knot counting (fail closed)', () => {
+    for (const rippleFromContract of [true, undefined]) {
+      const d = decisionOf({
+        status: 'KNOT',
+        agentChanged: ['#a', '#ripple'],
+        knots: [{ stableKey: 'k', symbol: '#ripple', conflictingSlots: [], direct: false }],
+      });
+      const agentDelta = deltaSet([
+        { symbol: '#a', localChanged: true },
+        { symbol: '#ripple', localChanged: false, ...(rippleFromContract !== undefined ? { rippleFromContract } : {}) },
+      ]);
+      const ev = evaluateClaim(d, claimOf(['#a']), { agentDelta });
+      expect(ev.breach, `rippleFromContract=${String(rippleFromContract)}`).toBe(true);
+      expect(ev.excess).toEqual(['#ripple']);
+    }
+  });
+
+  it('a DIRECT edit is never exempted by rippleFromContract false (own content always counts)', () => {
+    const d = decisionOf({ agentChanged: ['#a', '#z'] });
+    const agentDelta = deltaSet([
+      { symbol: '#a', localChanged: true },
+      { symbol: '#z', localChanged: true, rippleFromContract: false },
+    ]);
+    const ev = evaluateClaim(d, claimOf(['#a']), { agentDelta });
+    expect(ev.breach).toBe(true);
+    expect(ev.excess).toEqual(['#z']);
   });
 
   it('a dangle counts like a knot for the ripple exemption', () => {

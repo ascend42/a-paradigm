@@ -26,13 +26,23 @@
  * THE EVALUATION RULE (conservative, documented per the mission):
  *   excess  = computed agentChanged symbols NOT in claimedSymbols, where the
  *             symbol is DIRECT-changed (SemDelta.localChanged — an own-content
- *             edit) OR it KNOTS/DANGLES in this admission. A ripple-only symbol
- *             (essence moved solely via Merkle-by-target transitivity, zero
- *             local edit) that does NOT knot never counts as excess — charging
- *             an author for a 48-symbol Merkle avalanche (T-2026-07-03-002)
- *             would make honest claims impossible. When no agentDelta is
- *             supplied, EVERY unclaimed changed symbol counts (absent ⇒ treated
- *             direct — the same conservative convention as Knot.direct).
+ *             edit) OR it KNOTS/DANGLES in this admission WITHOUT being a
+ *             PROVEN body-internal ripple. A ripple-only symbol (essence moved
+ *             solely via Merkle-by-target transitivity, zero local edit) that
+ *             does NOT knot never counts as excess — charging an author for a
+ *             48-symbol Merkle avalanche (T-2026-07-03-002) would make honest
+ *             claims impossible. A ripple-only symbol that DOES knot counts —
+ *             contested reality — UNLESS its ripple is proven body-internal
+ *             (localChanged false AND rippleFromContract false, the stage-1
+ *             bit): the essence inlines callee bodies into callers, so an
+ *             honest single-symbol edit re-addresses every caller and can knot
+ *             them against a concurrent writer; charging the claim for that
+ *             engine artifact converts accurate self-reporting into a breach
+ *             (T-2026-07-21-008 — the documented trust-erosion path). The
+ *             exemption is exactly as narrow as the proof: rippleFromContract
+ *             absent or true keeps the knot counting (fail closed). When no
+ *             agentDelta is supplied, EVERY unclaimed changed symbol counts
+ *             (absent ⇒ treated direct — the same convention as Knot.direct).
  *   missing = claimed but untouched. Recorded (an over-claim is calibration
  *             signal), NEVER a breach.
  *   breach  = excess.length > 0.
@@ -154,7 +164,10 @@ export function verifyClaim(c: unknown): c is Claim {
 export interface ClaimEvaluation {
   /** computed-touched ⊄ claimed (per the documented excess rule above). */
   breach: boolean;
-  /** changed-but-unclaimed symbols that COUNT (direct, or ripple-only-but-knotting). Sorted. */
+  /**
+   * changed-but-unclaimed symbols that COUNT (direct, or ripple-only-but-
+   * knotting minus the proven body-internal ripples — see the module rule). Sorted.
+   */
   excess: string[];
   /** claimed-but-untouched symbols. Recorded, never a breach. Sorted. */
   missing: string[];
@@ -187,18 +200,30 @@ export function evaluateClaim(decision: AdmitDecision, claim: Claim, opts: Evalu
   ]);
 
   // Direct-changed symbols: any delta for the symbol with an own-content edit
-  // (localChanged ≠ false; absent ⇒ treated direct — conservative).
+  // (localChanged ≠ false; absent ⇒ treated direct — conservative). Alongside:
+  // the PROVEN body-internal ripples (localChanged false AND rippleFromContract
+  // false — the stage-1 bit, fail-closed towards true), whose knots are the
+  // essence over-block's own artifact and must not grade the author
+  // (T-2026-07-21-008).
   let direct: Set<string> | null = null;
+  const bodyInternalRipple = new Set<string>();
   if (opts.agentDelta) {
     direct = new Set<string>();
     for (const d of opts.agentDelta.deltas.values()) {
       if (d.localChanged !== false) direct.add(d.symbol);
+      else if (d.rippleFromContract === false) bodyInternalRipple.add(d.symbol);
     }
   }
 
   const excess = [...computed]
     .filter((s) => !claimed.has(s))
-    .filter((s) => (direct ? direct.has(s) || knotted.has(s) : true))
+    .filter((s) => {
+      if (!direct) return true; // no delta info — every unclaimed change counts
+      if (direct.has(s)) return true; // own-content edit — always counts
+      if (!knotted.has(s)) return false; // ripple-only, uncontested — avalanche noise
+      // Ripple-only AND knotting: contested reality — unless PROVEN body-internal.
+      return !bodyInternalRipple.has(s);
+    })
     .sort();
   const missing = [...claimed].filter((s) => !computed.has(s)).sort();
   return { breach: excess.length > 0, excess, missing };

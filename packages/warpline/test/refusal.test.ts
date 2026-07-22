@@ -23,6 +23,7 @@ import {
   refuse,
   contestedOf,
   exitCodeFor,
+  exitCodeForResult,
   gateFor,
   retriabilityFor,
   REFUSAL_SCHEMA,
@@ -94,6 +95,20 @@ describe('exitCodeFor — total over RefusalCode', () => {
     // ever collapse, a shell-only agent loses the ability to branch.
     const distinct = new Set([exitCodeFor('CLAIM_BREACH'), exitCodeFor('TRUST_HELD'), exitCodeFor('STALE_BASE')]);
     expect(distinct.size).toBe(3);
+  });
+});
+
+describe('exitCodeForResult — the whole-outcome exit (T-2026-07-21-006)', () => {
+  it('0 when the result carries no refusal (sealed / NOOP / non-refusing report)', () => {
+    expect(exitCodeForResult({})).toBe(0);
+  });
+
+  it('the refusal-mapped code otherwise — for EVERY code', () => {
+    // The silent-failure class this kills: `admit --native` exiting 0 on an
+    // unsealed CLAIM-BREACH, indistinguishable from success without parsing.
+    for (const code of CODES) {
+      expect(exitCodeForResult({ refusal: refuse({ code }) }), `outcome exit for ${code}`).toBe(exitCodeFor(code));
+    }
   });
 });
 

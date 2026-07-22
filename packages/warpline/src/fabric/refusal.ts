@@ -229,6 +229,19 @@ export function exitCodeFor(code: RefusalCode): number {
 }
 
 /**
+ * The process exit code for a whole admission OUTCOME: the refusal's mapped
+ * code when one is present, else 0 (sealed, NOOP, or an unsealed non-refusing
+ * report). THE consumer wiring exitCodeFor was built for and then left
+ * unconsumed (T-2026-07-21-006): `admit --native` exited 0 on an unsealed
+ * CLAIM-BREACH — indistinguishable from success without parsing output, the
+ * F4-critical silent failure. Every skin (CLI, daemon, MCP) derives its exit
+ * from the result's OWN refusal object, never from a re-derived vocabulary (G3).
+ */
+export function exitCodeForResult(result: { refusal?: Refusal }): number {
+  return result.refusal ? exitCodeFor(result.refusal.code) : 0;
+}
+
+/**
  * DEFAULT gate per code, for the codes whose layer is unambiguous. Overridable
  * at the call site because one code can be raised by more than one gate: a
  * GATE_REFUSED is 'meaning' at #admit but 'pick' at the R2 agent gate, and an

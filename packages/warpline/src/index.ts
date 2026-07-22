@@ -222,6 +222,7 @@ export {
   refuse,
   contestedOf,
   exitCodeFor,
+  exitCodeForResult,
   gateFor,
   retriabilityFor,
   REFUSAL_SCHEMA,

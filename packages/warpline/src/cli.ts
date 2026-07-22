@@ -40,6 +40,7 @@ import type { Strand } from './fabric/strand.js';
 import { installHook, uninstallHook, hookStatus } from './fabric/hook.js';
 import { forkScratch } from './fabric/scratch.js';
 import { admit, type AdmitResult } from './fabric/admit.js';
+import { exitCodeForResult } from './fabric/refusal.js';
 import { rankVerdicts } from './fabric/rank.js';
 import { shadowAdmit } from './fabric/shadow.js';
 import {
@@ -559,6 +560,9 @@ program
               `          → row appended to .warpline/shadow/verdicts.jsonl\n`,
           );
         }
+        // SHADOW stays exit 0 by contract: observe-only, nothing was asked to
+        // seal — the appended row IS the success. (The refusal object still
+        // rides the JSON for would-refuse verdicts; only the exit is neutral.)
         return;
       }
       if (options.native) {
@@ -577,6 +581,11 @@ program
             process.stdout.write(`restore   merged bytes written back to the worktree (${result.restoredEntries} entries, git absent)\n`);
           }
         }
+        // T-2026-07-21-006: a refusing verdict must never exit 0 — the exit is
+        // keyed off the result's own refusal (0 sealed/NOOP, 1 GATE_REFUSED,
+        // 3 CLAIM_BREACH, 4 TRUST_HELD, 5 STALE_BASE). exitCode, not exit():
+        // stdout must flush the full JSON first.
+        process.exitCode = exitCodeForResult(result);
         return;
       }
       const result = await admit(root, {
@@ -592,6 +601,7 @@ program
       } else {
         printAdmit(agentId, result);
       }
+      process.exitCode = exitCodeForResult(result); // verdict-keyed (T-2026-07-21-006)
     } catch (err) {
       fail(err);
     }
