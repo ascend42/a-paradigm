@@ -92,7 +92,10 @@ export class F4Tracer {
   constructor(
     private readonly root: string,
     private readonly skin: 'mcp' | 'cli',
-    private readonly principal: string,
+    /** MUTABLE: the MCP skin learns its principal from the first status()
+     * round-trip — updating it here keeps one tracer (and one seq ordinal)
+     * per process instead of resetting the ordinal on discovery. */
+    public principal: string,
   ) {
     this.runId = process.env.WARPLINE_F4_RUN_ID || 'unscored';
     this.descriptorsId = descriptorsId();

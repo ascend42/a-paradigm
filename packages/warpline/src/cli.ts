@@ -65,6 +65,7 @@ import { existsSync } from 'node:fs';
 import { repoRoot, gitPath } from './git/git-exec.js';
 import { startDaemon } from './daemon/server.js';
 import { mintToken, listTokenSummaries, writeMcpTokenFile, type TokenScope } from './daemon/tokens.js';
+import { runMcpServer } from './mcp/server.js';
 import { backupFabric, verifyBackup, type BackupResult, type BackupVerifyReport } from './fabric/backup.js';
 import { daemonState, stopDaemon, socketPathOf } from './daemon/lifecycle.js';
 import { DaemonClient } from './daemon/client.js';
@@ -1035,6 +1036,23 @@ stakeCmd
       } else {
         printStakeRecover(result);
       }
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+program
+  .command('mcp')
+  .description(
+    'Serve the Warpline MCP skin over stdio — the THIRD skin (one shape, three skins). A thin credential pass-through over the daemon socket: 8 agent-class tools registered from the canonical descriptors; results are engine shapes VERBATIM with refusal:v1 riding every refusing verdict; isError derives from exitCodeForResult. Token: env WARPLINE_MCP_TOKEN, else .warpline/daemon/mcp.token (mint with `warpline daemon token mint mcp --kind agent --mcp`). Human-class verbs are OMITTED unless --operator verifies a human-class token at startup.',
+  )
+  .option('--operator', 'register human-class tools IFF the discovered token verifies kind:human via status at startup')
+  .option('--no-auto-start', 'do not auto-start the daemon on connect failure')
+  .action(async (options: { operator?: boolean; autoStart?: boolean }) => {
+    try {
+      const root = await repoRoot().catch(() => process.cwd());
+      await runMcpServer({ root, operator: options.operator ?? false, autoStart: options.autoStart !== false });
+      // the connected server keeps the event loop alive; stdout belongs to MCP.
     } catch (err) {
       fail(err);
     }

@@ -1688,6 +1688,46 @@ components:
       - "#refusal"
       - "#warplined-descriptors"
 
+  warpline-mcp:
+    description: >-
+      THE THIRD SKIN (T-2026-07-21-004, mcp-skin-spec §1-§3): the daemon verb
+      surface as MCP tools over stdio (`warpline mcp [--operator]
+      [--no-auto-start]`), for agents that call tools rather than shells.
+      DELIBERATELY THIN — a credential PASS-THROUGH, never a principal (D2):
+      one process holds one human-minted agent-class token (env
+      WARPLINE_MCP_TOKEN → .warpline/daemon/mcp.token via the single custody
+      seam src/mcp/token.ts); the daemon server-stamps identity; args are
+      FILTERED to each verb's declared schema properties so identity/clock
+      params structurally never reach the wire. SOCKET-ONLY (D3): every call
+      rides DaemonClient — in-process engine imports are PROHIBITED in
+      src/mcp/ (the whole stage-1 security layer lives in the daemon path);
+      optional auto-start (spawns the detached daemon, polls the socket);
+      daemon-down and token-missing return the ONLY two skin-built refusals
+      (src/mcp/refusals.ts — UNSUPPORTED + daemon.start ladder, AUTH + the
+      complete mint call), everything else arrives from the wire VERBATIM.
+      Results: one text content item, JSON of the engine shape unchanged
+      (UntrustedProse envelopes intact — Aegis R4). isError CONTRACT (§3, the
+      T-006 lesson): transport failure → true; ok result →
+      exitCodeForResult(result) !== 0 — a refusing verdict NEVER presents as
+      MCP success. Default surface = the 8 agent verbs from
+      #warplined-descriptors (human verbs + override flags OMITTED, Aegis R2);
+      --operator registers human tools IFF status verifies kind:'human' at
+      startup, never speculatively. Emits one #f4-trace row per call (skin
+      'mcp'), refusals captured from error frames AND result.refusal. Proven
+      end-to-end in test/mcp-skin.test.ts (real daemon + real MCP client over
+      a linked in-memory pair) and by a live stdio smoke (cold no-token call →
+      isError:true + AUTH ladder — the first thing a cold agent hits is now
+      structured). Moat-silent: lives in packages/warpline (unpublished);
+      paradigm-mcp integration was REJECTED (ships to npm).
+    type: service
+    tags: [warpline, native-first, F4, cold-agent, mcp, phase-2]
+    components:
+      - "#warplined-client"
+      - "#warplined-descriptors"
+      - "#warplined-tokens"
+      - "#f4-trace"
+      - "#refusal"
+
   warplined-client:
     description: >-
       The thin typed client of #warplined (DaemonClient): NDJSON frames over the
