@@ -1,0 +1,54 @@
+id: L-2026-07-22-ascend-130707-001
+type: agent-session
+timestamp: '2026-07-22T13:07:07.018Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: T-004 SHIPPED — MCP pre-work PW-1..10 + the third skin (warpline mcp), built to the panel spec
+summary: 'Executed the mcp-skin-spec end-to-end in one session: all ten pre-work items (retry-corrected retriability; RefusedError typed sequencing refusals at six native.ts boundaries — the ENGINE/retry-identical dead-end is gone from every skin; next[] vocabulary fixes + a totality test; canonical content-addressed descriptors; state-aware status as the relocated F4 carrier; knot.show summary; audit resultCode; MCP token custody; fork clobber guard with CAS scratch writes), then the third skin itself: `warpline mcp` stdio server in src/mcp/ — credential pass-through, socket-only, 8-tool agent surface with human verbs omitted, isError from exitCodeForResult, engine shapes verbatim, one f4Trace row per call, exactly two skin-built refusals. Proven by a real-daemon + real-MCP-client test suite and a live stdio smoke where the cold no-token call returned isError:true with the copy-paste mint ladder. Tests 614 → 640. FG-1..FG-4 remain founder-gated; no F4 run scored, no resolve-capable tool exists.'
+symbols_touched:
+  - '#warpline-mcp'
+  - '#refusal'
+  - '#native-write-path'
+  - '#warplined'
+  - '#warplined-descriptors'
+  - '#f4-trace'
+  - '#warplined-tokens'
+  - '#warplined-client'
+  - '#scratch'
+  - '#warpline-cli'
+  - '#knot-payload'
+  - '#admit'
+commit: 411ea82b
+learnings:
+  - 'The panel''s convergence held under implementation: the MCP layer came out ~300 lines because everything load-bearing (refusals, sequencing ladders, state-aware status, descriptors) landed engine/daemon-side where all three skins inherit it — the ''thin skin'' prediction was structural, not aesthetic.'
+  - The InMemoryTransport + real-daemon fixture pattern gives full-stack MCP coverage in ~1s per run without spawning stdio processes; extracting buildMcpServer from runMcpServer was the one refactor testability demanded.
+  - Skin-side schema filtering (args filtered to declared paramsSchema properties) is defense-in-depth that also implements 'never forwards identity params' structurally — no denylist to maintain.
+  - 'The daemon teardown hang (skin''s socket keeping handle.close() waiting) is the recurring shape of daemon-client tests: every skin needs an explicit close() seam even if production never calls it.'
+verification:
+  status: pass
+  details:
+    tsc: clean
+    tests: 640/640 (614 → 632 pre-work → 640 skin)
+    live-stdio-smoke: cold no-token tools/call → isError:true, AUTH refusal, mint ladder verbatim; tools/list = 8 agent tools
+    dist: rebuilt
+tags:
+  - arc:warpline
+  - F4
+  - cold-agent
+  - mcp
+  - third-skin
+  - TD-2026-07-21-766
+  - T-2026-07-21-004
+linked_tasks:
+  - T-2026-07-21-004
+  - T-2026-07-22-004
+linked_commits:
+  - 1fcdb570
+  - 411ea82b
+confidence: 0.88
+git_context:
+  ref: 411ea82b9bca7bc316d1dba1656b171242925199
+  branch: warpline-surfaces
+  dirty: true
