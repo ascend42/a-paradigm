@@ -1728,6 +1728,63 @@ components:
       - "#f4-trace"
       - "#refusal"
 
+  f4-classifier:
+    description: >-
+      The WASTED-TURN taxonomy as PURE CODE over #f4-trace rows
+      (T-2026-07-21-005 build side; Loid Q4 design). classifyRun(rows) →
+      F4RunReport: recovery EPISODES (open at any refusal-bearing row; a
+      same-verb+same-code row CONTINUES the incident, never re-opens; close =
+      the same verb completing with a different outcome class AND the row not
+      itself judged wasted — a FORBIDDEN override attempt is not recovery;
+      unresolved episodes reported), wasted marks W1-W4 per episode, the
+      medianWastedPerRecovery gate metric, surfaceMisses (the
+      DESCRIPTION-failure signal), and run-validity fields (distinct skins /
+      descriptorsIds — a valid run has exactly one of each, FG-3). Rules: W1
+      identical-repeat (retry-identical grants ONE productive repeat;
+      retry-corrected + performed ladder steps exempts the identical retry —
+      the correction WAS the prerequisite calls); W2 next-ignored (allowances:
+      ladder verbs, the retry goal, FIRST hydration per refusal pointer —
+      repeats wasted, one status/refs.list re-orientation per episode); W3
+      escalation-violation (foreign human-door verb, or acceptBreach/acceptRisk
+      in the target — the refused verb itself is the retry goal, never W3 by
+      verb alone); W4 surface-miss (every BAD_REQUEST/UNKNOWN_VERB call is
+      itself wasted, on its own episode). Every predicate reads ONLY
+      refusal:v1 enums/ids — the classifier doubles as a standing test of the
+      no-prose rule. Pure, no I/O, no clock. Documented limits: rows carry
+      `target` not full params, so W2 follow-through is verb+pointer
+      granularity; judgment is against the NEWEST open episode.
+    type: module
+    tags: [warpline, native-first, F4, measurement, harness]
+    components:
+      - "#f4-trace"
+      - "#refusal"
+
+  f4-seed:
+    description: >-
+      The SCRIPTED SECOND PRINCIPAL (T-2026-07-21-005; Jinx trap 6): a single
+      principal cannot produce a KNOT through the verb surface (fork re-mints
+      at the selvage tip; successful admit clears scratch), so the F4 harness
+      seeds contention with a scripted rival driving the SAME engine functions
+      the daemon drives. seedWorld(root) = base file + sealed genesis;
+      rivalAdvance(root) = fork→edit-the-contested-symbol→propose→admit in an
+      ISOLATED rival worktree, called by the runner AFTER the subject's
+      propose (observable via its #f4-trace rows) so the subject's admit meets
+      a moved selvage and KNOTs. MECHANISM ONLY — the pre-registered corpus
+      COMPOSITION (semantic-with-payload / byte-downgrade-without /
+      payload-persist-failure counts + corpus hash) is founder-gate FG-4,
+      never the harness builder's choice. ISOLATION LAW (Shield's ruling):
+      staged KNOTs never feed the organic K3/F2 record — scratch fabrics only;
+      every function demands the fixture root explicitly. Proven end-to-end in
+      test/f4-rig.test.ts: seeded world → scripted subject through the REAL
+      MCP skin (cold mistakes included) → real KNOT with payload → classifier
+      verdict over the real trace — the full measurement pipeline minus only
+      the cold model in the subject's seat.
+    type: module
+    tags: [warpline, native-first, F4, harness, seeding]
+    components:
+      - "#native-write-path"
+      - "#f4-classifier"
+
   warplined-client:
     description: >-
       The thin typed client of #warplined (DaemonClient): NDJSON frames over the

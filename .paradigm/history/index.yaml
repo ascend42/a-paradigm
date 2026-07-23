@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-07-20T23:52:36.747Z'
+generated: '2026-07-22T20:54:35.519Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -7274,7 +7274,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_322
+      - &ref_321
         id: h0490
         ts: '2026-06-23T18:07:47Z'
         type: implement
@@ -13290,7 +13290,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_337
+      - &ref_336
         id: h0501
         ts: '2026-06-23T23:27:15Z'
         type: implement
@@ -13963,7 +13963,7 @@ by_symbol:
           - packages/premise/core/src/classroom-metrics.ts
           - packages/premise/core/src/index.ts
         description: 'feat(#classroom): falsifiable loop sub-phase 0 — the ExerciseIntensity contract (TD-2026-07-01-401)'
-      - &ref_346
+      - &ref_344
         id: h0527
         ts: '2026-06-25T07:44:29Z'
         type: implement
@@ -13985,7 +13985,7 @@ by_symbol:
           - packages/paradigm/package.json
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'fix(#notebook): collision-guard gated promote — distinct learnings no longer clobber (7.6.1)'
-      - &ref_347
+      - &ref_345
         id: h0526
         ts: '2026-06-25T07:31:31Z'
         type: implement
@@ -14033,7 +14033,7 @@ by_symbol:
           - packages/paradigm-mcp/src/tools/streams.ts
           - packages/paradigm-mcp/src/types/knowledge-streams.ts
         description: 'feat(#classroom): Expeditions staging — journal provenance envelope + first real dive'
-      - &ref_341
+      - &ref_339
         id: h0520
         ts: '2026-06-25T06:50:21Z'
         type: implement
@@ -22195,7 +22195,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_349
+      - &ref_373
         id: h0588
         ts: '2026-07-15T09:05:12Z'
         type: implement
@@ -22223,7 +22223,7 @@ by_symbol:
           - packages/warpline/src/warp/snapshot.ts
           - packages/warpline/test/snapshot-incremental.test.ts
         description: 'perf(#warp-store): T-2026-07-04-003 — delta-native byte layer; warm admit 71s→5.3s on the monorepo'
-      - &ref_334
+      - &ref_333
         id: h0510
         ts: '2026-06-25T00:11:35Z'
         type: implement
@@ -22249,7 +22249,7 @@ by_symbol:
           - packages/warpline/test/absorb-concurrency.test.ts
           - packages/warpline/vitest.config.ts
         description: 'fix(#absorb): concurrency-safe ref materialization via git-archive (no worktree lock)'
-      - &ref_326
+      - &ref_325
         id: h0498
         ts: '2026-06-23T22:28:37Z'
         type: implement
@@ -22272,7 +22272,7 @@ by_symbol:
           - .paradigm/lore/timeline.yaml
           - packages/warpline/test/code-divergence-proof.test.ts
         description: 'test(#warpline-oracle): THE DIVERGENCE PROOF on real code (A v1 capstone)'
-      - &ref_325
+      - &ref_324
         id: h0496
         ts: '2026-06-23T22:00:04Z'
         type: implement
@@ -22303,7 +22303,7 @@ by_symbol:
           - packages/warpline/test/absorb.test.ts
           - packages/warpline/test/code-warp.test.ts
         description: 'feat(#essence-hash,#absorb): Warpline A v1 stage 3a — code-units in the WARP'
-      - &ref_321
+      - &ref_320
         id: h0494
         ts: '2026-06-23T19:44:54Z'
         type: implement
@@ -22405,12 +22405,34 @@ by_symbol:
       agent: []
   '#essence-hash':
     symbol: '#essence-hash'
-    total_changes: 11
-    last_modified: '2026-07-14T15:18:34Z'
+    total_changes: 12
+    last_modified: '2026-07-21T15:50:27Z'
     stability_score: 1
     fragility: low
     recent:
       - &ref_318
+        id: h0615
+        ts: '2026-07-21T15:50:27Z'
+        type: implement
+        symbols:
+          - '#code-lens'
+          - '#essence-hash'
+          - '#predict'
+          - '#sem-delta'
+        author:
+          type: human
+          id: ascend
+        commit: 47f55ec9ae71a63535ed9f39d3ed2b9c9c40c5c5
+        intent: feature
+        files:
+          - packages/warpline/src/lens/code-lens.ts
+          - packages/warpline/src/lens/lift-code-units.ts
+          - packages/warpline/src/lens/ts-essence.ts
+          - packages/warpline/src/lens/ts-lens.ts
+          - packages/warpline/src/sem-delta.ts
+          - packages/warpline/test/signature-projection.test.ts
+        description: 'feat(#code-lens): over-block T-008 stage 1 — emit rippleFromContract, change NO verdict'
+      - &ref_331
         id: h0583
         ts: '2026-07-14T15:18:34Z'
         type: implement
@@ -22433,7 +22455,7 @@ by_symbol:
           - .paradigm/lore/timeline.yaml
           - .paradigm/research/warpline-roadmap-2026H2.md
         description: 'docs(#warpline-oracle): first-principles reassessment RATIFIED-PENDING-FOUNDER + Roadmap 2026H2'
-      - &ref_333
+      - &ref_332
         id: h0567
         ts: '2026-07-02T16:12:56Z'
         type: implement
@@ -22450,7 +22472,7 @@ by_symbol:
           - .paradigm/research/warpline-guard-base-rate/ground-truth.jsonl
           - .paradigm/research/warpline-guard-base-rate/ground-truth.md
         description: 'docs(#warpline-oracle): GUARD-DECIDER ground truth — 0 REAL-BREAK / 3 CAUGHT-LATER / 15 BENIGN; tsc caught 0/18 (new detection class)'
-      - &ref_323
+      - &ref_322
         id: h0566
         ts: '2026-07-02T15:56:21Z'
         type: implement
@@ -22499,22 +22521,6 @@ by_symbol:
           - .paradigm/research/warpline-guard-base-rate/results.md
           - .paradigm/research/warpline-guard-base-rate/triage.mjs
         description: 'research(#warpline-oracle): Guard base-rate experiment — the wedge falsifier PASSES'
-      - &ref_339
-        id: h0531
-        ts: '2026-06-25T08:11:23Z'
-        type: implement
-        symbols:
-          - '#consolidate'
-          - '#essence-hash'
-          - '#predict'
-        author:
-          type: human
-          id: ascend
-        commit: 6007549f687c8db4d9214c9b9d7fa55a6ff03136
-        intent: feature
-        files:
-          - packages/warpline/test/false-autofold-gate.test.ts
-        description: 'test(#consolidate): false-AUTOFOLD safety gate — auto-fold is conditional, not blanket (T-2026-06-25-013)'
     contributors:
       human:
         - ascend
@@ -22526,7 +22532,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_320
+      - &ref_319
         id: h0489
         ts: '2026-06-23T18:00:40Z'
         type: implement
@@ -22564,11 +22570,12 @@ by_symbol:
       agent: []
   '#sem-delta':
     symbol: '#sem-delta'
-    total_changes: 6
-    last_modified: '2026-07-15T07:57:03Z'
+    total_changes: 7
+    last_modified: '2026-07-21T15:50:27Z'
     stability_score: 1
     fragility: low
     recent:
+      - *ref_318
       - id: h0585
         ts: '2026-07-15T07:57:03Z'
         type: implement
@@ -22587,8 +22594,7 @@ by_symbol:
           - packages/warpline/src/fabric/admit.ts
           - packages/warpline/test/admit-noop-diff.test.ts
         description: 'fix(#admit): T-2026-07-04-004 — diff-based NOOP detection (port pick.ts rule into admitDecision)'
-      - &ref_319
-        id: h0571
+      - id: h0571
         ts: '2026-07-03T23:08:29Z'
         type: implement
         symbols:
@@ -22610,7 +22616,7 @@ by_symbol:
           - packages/warpline/src/sem-delta.ts
           - packages/warpline/test/direct-contested.test.ts
         description: 'feat(#warpline-oracle): direct-contested / knot-size ranking — the anti-avalanche display (T-2026-07-02-002 ranking half)'
-      - &ref_324
+      - &ref_323
         id: h0497
         ts: '2026-06-23T22:16:14Z'
         type: implement
@@ -22640,8 +22646,7 @@ by_symbol:
           - packages/warpline/test/code-diff.test.ts
           - packages/warpline/test/oracle.test.ts
         description: 'feat(#sem-delta,#predict): Warpline A v1 stage 3b — diff/predict SEE code'
-      - &ref_329
-        id: h0492
+      - id: h0492
         ts: '2026-06-23T18:47:38Z'
         type: implement
         symbols:
@@ -22659,19 +22664,50 @@ by_symbol:
         files:
           - docs/specs/loom-code-lens.md
         description: 'spec(#code-lens): Loom A v1 — the TS code-lens (AST code meaning)'
-      - *ref_316
     contributors:
       human:
         - ascend
       agent: []
   '#predict':
     symbol: '#predict'
-    total_changes: 11
-    last_modified: '2026-07-15T23:21:56Z'
+    total_changes: 13
+    last_modified: '2026-07-21T15:50:27Z'
     stability_score: 1
     fragility: low
     recent:
-      - &ref_330
+      - *ref_318
+      - &ref_346
+        id: h0614
+        ts: '2026-07-21T15:50:10Z'
+        type: implement
+        symbols:
+          - '#admit'
+          - '#pick'
+          - '#predict'
+          - '#rank'
+          - '#refusal'
+          - '#warpline-cli'
+        author:
+          type: human
+          id: ascend
+        commit: 969a32c63c556ad2197963b8a802786da59a8b3f
+        intent: feature
+        files:
+          - packages/warpline/.purpose
+          - packages/warpline/src/cli.ts
+          - packages/warpline/src/fabric/admit.ts
+          - packages/warpline/src/fabric/native.ts
+          - packages/warpline/src/fabric/pick.ts
+          - packages/warpline/src/fabric/rank.ts
+          - packages/warpline/src/fabric/refusal.ts
+          - packages/warpline/src/index.ts
+          - packages/warpline/src/predict.ts
+          - packages/warpline/test/claim.test.ts
+          - packages/warpline/test/knot-rule.test.ts
+          - packages/warpline/test/rank.test.ts
+          - packages/warpline/test/refusal.test.ts
+        description: 'feat(#refusal): refusal:v1 SP0+SP1 — the F4 carrier (structured refusals, engine-side)'
+      - &ref_328
         id: h0590
         ts: '2026-07-15T23:21:56Z'
         type: implement
@@ -22704,7 +22740,7 @@ by_symbol:
           - .paradigm/research/warpline-dogfood/seeds.mjs
           - .paradigm/research/warpline-dogfood/swarm.mjs
         description: 'feat(#admit): MOVE-3 FULL STATISTICAL RUN — 192 admissions, verdict MIXED (K1/K2 PASS, K3 fired pre-declared-structural)'
-      - &ref_331
+      - &ref_329
         id: h0587
         ts: '2026-07-15T08:16:46Z'
         type: implement
@@ -22727,7 +22763,7 @@ by_symbol:
           - .paradigm/research/warpline-llm-judge-falsifier/protocol.md
           - .paradigm/research/warpline-llm-judge-falsifier/results.md
         description: 'feat(#warpline-oracle): P0.4 LLM-judge falsifier (Jinx) — kill condition FALSIFIED, detection wording ARMORED + one new wound'
-      - &ref_332
+      - &ref_330
         id: h0586
         ts: '2026-07-15T08:11:18Z'
         type: implement
@@ -22752,8 +22788,6 @@ by_symbol:
           - .paradigm/research/warpline-partition-census/score.mjs
           - .paradigm/research/warpline-partition-census/scored-night1.txt
         description: 'feat(#warpline-oracle): Partition Census night-1 (Loid) — K1 on track NOT to fire; 150/150 pairs'
-      - *ref_318
-      - *ref_319
     contributors:
       human:
         - ascend
@@ -22765,7 +22799,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_320
+      - *ref_319
     contributors:
       human:
         - ascend
@@ -22777,8 +22811,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_321
       - *ref_320
+      - *ref_319
     contributors:
       human:
         - ascend
@@ -22790,7 +22824,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_322
+      - *ref_321
     contributors:
       human:
         - ascend
@@ -22802,10 +22836,10 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
+      - *ref_322
       - *ref_323
       - *ref_324
-      - *ref_325
-      - &ref_327
+      - &ref_326
         id: h0495
         ts: '2026-06-23T21:36:32Z'
         type: implement
@@ -22842,7 +22876,7 @@ by_symbol:
           - packages/warpline/test/ts-lens.test.ts
           - packages/warpline/tsup.config.ts
         description: 'feat(#ts-lens): Warpline A v1 stage 2 — checker-resolved code-lens'
-      - &ref_328
+      - &ref_327
         id: h0493
         ts: '2026-06-23T19:17:17Z'
         type: implement
@@ -22887,28 +22921,68 @@ by_symbol:
       agent: []
   '#code-lens':
     symbol: '#code-lens'
-    total_changes: 5
-    last_modified: '2026-06-23T22:28:37Z'
+    total_changes: 6
+    last_modified: '2026-07-21T15:50:27Z'
     stability_score: 1
     fragility: low
     recent:
+      - *ref_318
+      - *ref_325
       - *ref_326
+      - *ref_320
       - *ref_327
-      - *ref_321
-      - *ref_328
-      - *ref_329
     contributors:
       human:
         - ascend
       agent: []
   '#warpline':
     symbol: '#warpline'
-    total_changes: 16
-    last_modified: '2026-07-20T23:52:35Z'
+    total_changes: 18
+    last_modified: '2026-07-22T13:07:12Z'
     stability_score: 1
     fragility: low
     recent:
-      - &ref_351
+      - id: h0623
+        ts: '2026-07-22T13:07:12Z'
+        type: implement
+        symbols:
+          - '#warpline'
+        author:
+          type: human
+          id: ascend
+        commit: abf3b7160ecd58c7ef30d0fe7cb7bbdaf9ea2fbb
+        intent: feature
+        files:
+          - .paradigm/events/debates.jsonl
+          - .paradigm/events/nominations.jsonl
+          - .paradigm/events/stream.jsonl
+          - .paradigm/history/log.jsonl
+          - .paradigm/lore/entries/2026-07-22/L-2026-07-22-ascend-130707-001.lore
+          - .paradigm/lore/timeline.yaml
+          - .warpline/fabric.jsonl
+          - .warpline/refs/selvage
+        description: 'chore(#warpline): settlement — T-004 build lore (L-2026-07-22-ascend-130707-001) + index sweep'
+      - id: h0619
+        ts: '2026-07-22T06:10:04Z'
+        type: implement
+        symbols:
+          - '#warpline'
+        author:
+          type: human
+          id: ascend
+        commit: ef0e0836adc3bf11c434ffa1be73f54b768d6123
+        intent: feature
+        files:
+          - .paradigm/events/debates.jsonl
+          - .paradigm/events/nominations.jsonl
+          - .paradigm/events/stream.jsonl
+          - .paradigm/history/log.jsonl
+          - .paradigm/lore/entries/2026-07-22/L-2026-07-22-ascend-044530-001.lore
+          - .paradigm/lore/timeline.yaml
+          - .warpline/fabric.jsonl
+          - .warpline/refs/selvage
+        description: 'chore(#warpline): settlement — SP2 session lore (L-2026-07-22-ascend-044530-001) + index sweep'
+      - &ref_348
         id: h0612
         ts: '2026-07-20T23:52:35Z'
         type: implement
@@ -22966,7 +23040,7 @@ by_symbol:
           - .paradigm/lore/timeline.yaml
           - .paradigm/research/warpline-native-first/roadmap-native-first.md
         description: 'chore(#warpline): settlement — R2 lore (L-2026-07-18-ascend-032356-001)'
-      - &ref_383
+      - &ref_384
         id: h0605
         ts: '2026-07-18T02:39:35Z'
         type: implement
@@ -22988,88 +23062,6 @@ by_symbol:
           - .paradigm/lore/entries/2026-07-18/L-2026-07-18-ascend-023915-001.lore
           - .paradigm/lore/timeline.yaml
         description: 'chore(#warpline): settlement — Phase 0+1 complete lore (L-2026-07-18-ascend-023915-001)'
-      - id: h0600
-        ts: '2026-07-17T19:42:49Z'
-        type: implement
-        symbols:
-          - '#warpline'
-        author:
-          type: human
-          id: ascend
-        commit: 27522772402be878a2d663cf6a604560885e0f2c
-        intent: feature
-        files:
-          - .github/workflows/.purpose
-          - .paradigm/decisions/TD-2026-07-16-277.yaml
-          - .paradigm/decisions/TD-2026-07-16-426.yaml
-          - .paradigm/decisions/TD-2026-07-16-810.yaml
-          - .paradigm/decisions/TD-2026-07-17-085.yaml
-          - .paradigm/decisions/TD-2026-07-17-151.yaml
-          - .paradigm/history/index.yaml
-          - .paradigm/history/log.jsonl
-          - .paradigm/lore/entries/2026-07-17/L-2026-07-17-ascend-194215-001.lore
-          - .paradigm/research/warpline-dogfood/.purpose
-          - .paradigm/research/warpline-partition-census/.purpose
-          - .paradigm/work-log/2026-07-14/WL-architect-2026-07-14-742.yaml
-          - .paradigm/work-log/2026-07-15/WL-builder-2026-07-15-470.yaml
-          - docs/warpline/.purpose
-          - packages/warpline-action/src/.purpose
-        description: 'chore(#warpline): settlement 2 — decision records TD-810/426/277/085/151 + remaining .purpose/work-log sweep'
-      - &ref_379
-        id: h0599
-        ts: '2026-07-17T19:42:29Z'
-        type: implement
-        symbols:
-          - '#native-write-path'
-          - '#shadow-gate'
-          - '#warpline'
-        author:
-          type: human
-          id: ascend
-        commit: 9e2d7cd4ba33ac1fc608f2ab8fb9d239544a1b3b
-        intent: feature
-        files:
-          - .paradigm/.cid-briefed
-          - .paradigm/.cid-session
-          - .paradigm/.nav-called
-          - .paradigm/.orchestrated
-          - .paradigm/.pending-review
-          - .paradigm/agent-state/architect.yaml
-          - .paradigm/agent-state/builder.yaml
-          - .paradigm/agent-state/scholar.yaml
-          - .paradigm/agent-state/tester.yaml
-          - .paradigm/curriculum/architect.syllabus
-          - .paradigm/curriculum/compliance.syllabus
-          - .paradigm/curriculum/index.yaml
-          - .paradigm/curriculum/scenarios/index.yaml
-          - .paradigm/events/.last-processed
-          - .paradigm/events/classroom-certifications.jsonl
-          - .paradigm/events/debates.jsonl
-          - .paradigm/events/nominations.jsonl
-          - .paradigm/events/notebook-refs.jsonl
-          - .paradigm/events/settlement-liveness.jsonl
-          - .paradigm/events/stream.jsonl
-          - .paradigm/events/team-funnel.jsonl
-          - .paradigm/flow-index.json
-          - .paradigm/history/index.yaml
-          - .paradigm/history/log.jsonl
-          - .paradigm/lore/timeline.yaml
-          - .paradigm/manifest.consistency.json
-          - .paradigm/navigator.yaml
-          - .paradigm/notebooks/architect/nb-habits-mn6he1ec.yaml
-          - .paradigm/notebooks/architect/nb-monorepo-mn53wvzd.yaml
-          - .paradigm/notebooks/builder/nb-build-mn53ww33.yaml
-          - .paradigm/notebooks/builder/nb-conductor-mn53x3e1.yaml
-          - .paradigm/notebooks/builder/nb-mcp-tools-mn53wzsn.yaml
-          - .paradigm/notebooks/tester/nb-conductor-tests-mn53xo9s.yaml
-          - .paradigm/notebooks/tester/nb-vitest-mn53xjlv.yaml
-          - .paradigm/personas/index.yaml
-          - .paradigm/protocols/index.yaml
-          - .paradigm/scan-index.json
-          - .paradigm/university/index.yaml
-          - .warpline/fabric.jsonl
-          - .warpline/refs/selvage
-        description: 'chore(#warpline): settlement — native-first opening lore + paradigm index/state sweep'
     contributors:
       human:
         - ascend
@@ -23081,10 +23073,10 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
+      - *ref_328
+      - *ref_329
       - *ref_330
       - *ref_331
-      - *ref_332
-      - *ref_318
       - id: h0582
         ts: '2026-07-04T15:53:44Z'
         type: implement
@@ -23115,7 +23107,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_327
+      - *ref_326
     contributors:
       human:
         - ascend
@@ -23127,7 +23119,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_327
+      - *ref_326
     contributors:
       human:
         - ascend
@@ -23139,8 +23131,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_331
-      - *ref_332
+      - *ref_329
+      - *ref_330
       - id: h0569
         ts: '2026-07-03T22:30:41Z'
         type: implement
@@ -23220,7 +23212,7 @@ by_symbol:
           - packages/warpline/src/lens/.purpose
           - packages/warpline/test/.purpose
         description: 'chore(#warpline): settlement — 7-lens panel + GUARD-DECIDER lore, events, purpose stubs, fabric picks'
-      - *ref_333
+      - *ref_332
     contributors:
       human:
         - ascend
@@ -23232,7 +23224,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_325
+      - *ref_324
     contributors:
       human:
         - ascend
@@ -23244,7 +23236,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_335
+      - &ref_334
         id: h0512
         ts: '2026-06-25T00:32:11Z'
         type: implement
@@ -23266,8 +23258,8 @@ by_symbol:
           - packages/warpline/.purpose
           - packages/warpline/src/cli.ts
         description: 'feat(#warpline-cli): wire `warpline consolidate` + aspect-anchor coverage'
-      - *ref_334
-      - &ref_336
+      - *ref_333
+      - &ref_335
         id: h0499
         ts: '2026-06-23T22:39:22Z'
         type: implement
@@ -23304,8 +23296,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
+      - *ref_334
       - *ref_335
-      - *ref_336
     contributors:
       human:
         - ascend
@@ -23317,7 +23309,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_356
+      - &ref_351
         id: h0528
         ts: '2026-06-25T07:49:41Z'
         type: implement
@@ -23363,9 +23355,9 @@ by_symbol:
           - packages/warpline/src/warp/store.ts
           - packages/warpline/test/fabric.test.ts
         description: 'feat(#fabric,#pick): the native WRITE PATH — Warpline starts its own history (Phase A/B)'
-      - *ref_335
       - *ref_334
-      - *ref_336
+      - *ref_333
+      - *ref_335
     contributors:
       human:
         - ascend
@@ -23405,7 +23397,7 @@ by_symbol:
           - packages/paradigm/platform-ui/src/sections/warpline/components/OracleDivergenceViewer.tsx
           - packages/paradigm/platform-ui/src/sections/warpline/styles/warpline.css
         description: 'fix(#warpline-section-ui): Mika''s design-QA pass — motion fallbacks + drift cap'
-      - &ref_338
+      - &ref_337
         id: h0503
         ts: '2026-06-24T19:18:30Z'
         type: implement
@@ -23442,7 +23434,7 @@ by_symbol:
           - packages/paradigm/platform-ui/src/sections/warpline/viewerState.ts
           - packages/paradigm/vitest.config.ts
         description: 'feat(#warpline-section-ui): Oracle Divergence Viewer UI (GUI sub-phase 2)'
-      - *ref_337
+      - *ref_336
     contributors:
       human:
         - ascend
@@ -23454,8 +23446,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_338
       - *ref_337
+      - *ref_336
     contributors:
       human:
         - ascend
@@ -23467,7 +23459,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_362
+      - &ref_358
         id: h0552
         ts: '2026-07-01T19:35:16Z'
         type: implement
@@ -23495,7 +23487,7 @@ by_symbol:
           - packages/warpline/src/warp/snapshot.ts
           - packages/warpline/test/bind-on-seal.test.ts
         description: 'feat(#strand,#admit,#pick): M1b bind-on-seal + durable merge bytes'
-      - &ref_363
+      - &ref_359
         id: h0544
         ts: '2026-07-01T17:42:07Z'
         type: implement
@@ -23517,7 +23509,7 @@ by_symbol:
           - packages/warpline/test/hardening.test.ts
           - packages/warpline/test/materialize.test.ts
         description: 'fix(#materialize,#merge3): multi-writer hardening — H2 rename + mode/entry-type fail-closed (audit)'
-      - &ref_364
+      - &ref_360
         id: h0542
         ts: '2026-06-27T05:43:55Z'
         type: implement
@@ -23553,7 +23545,7 @@ by_symbol:
           - packages/warpline/test/materialize.test.ts
           - packages/warpline/test/merge3.test.ts
         description: 'fix(#materialize,#merge3,#admit): multi-writer hardening — fail closed, never corrupt (audit H1/H3/M1)'
-      - &ref_365
+      - &ref_361
         id: h0538
         ts: '2026-06-26T05:34:04Z'
         type: implement
@@ -23588,7 +23580,7 @@ by_symbol:
           - packages/warpline/test/materialize.test.ts
           - packages/warpline/test/merge3.test.ts
         description: 'feat(#materialize,#merge3): Phase C v2 — Warpline PERFORMS the merge (meaning→bytes)'
-      - &ref_357
+      - &ref_352
         id: h0536
         ts: '2026-06-26T03:16:05Z'
         type: implement
@@ -23630,7 +23622,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_376
+      - &ref_375
         id: h0592
         ts: '2026-07-16T13:39:32Z'
         type: implement
@@ -23664,7 +23656,7 @@ by_symbol:
           - packages/warpline-action/tsup.config.ts
           - packages/warpline-action/vitest.config.ts
         description: 'feat(#warpline-cli): P3 Lane B — Warpline Guard GitHub Action (packages/warpline-action, unpublished)'
-      - &ref_340
+      - &ref_338
         id: h0523
         ts: '2026-06-25T07:13:18Z'
         type: implement
@@ -23685,7 +23677,7 @@ by_symbol:
           - .paradigm/history/index.yaml
           - .paradigm/history/log.jsonl
         description: 'chore(paradigm): session state — Warpline battle-test arc checkpoint'
-      - &ref_345
+      - &ref_343
         id: h0519
         ts: '2026-06-25T06:44:54Z'
         type: implement
@@ -23786,7 +23778,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_334
+      - *ref_333
     contributors:
       human:
         - ascend
@@ -23798,9 +23790,23 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_339
-      - *ref_340
-      - *ref_335
+      - id: h0531
+        ts: '2026-06-25T08:11:23Z'
+        type: implement
+        symbols:
+          - '#consolidate'
+          - '#essence-hash'
+          - '#predict'
+        author:
+          type: human
+          id: ascend
+        commit: 6007549f687c8db4d9214c9b9d7fa55a6ff03136
+        intent: feature
+        files:
+          - packages/warpline/test/false-autofold-gate.test.ts
+        description: 'test(#consolidate): false-AUTOFOLD safety gate — auto-fold is conditional, not blanket (T-2026-06-25-013)'
+      - *ref_338
+      - *ref_334
       - id: h0511
         ts: '2026-06-25T00:24:17Z'
         type: implement
@@ -23827,199 +23833,168 @@ by_symbol:
       agent: []
   '#warpline-cli':
     symbol: '#warpline-cli'
-    total_changes: 28
-    last_modified: '2026-07-18T02:38:56Z'
+    total_changes: 35
+    last_modified: '2026-07-22T13:06:26Z'
     stability_score: 1
     fragility: low
     recent:
-      - &ref_354
-        id: h0604
-        ts: '2026-07-18T02:38:56Z'
+      - &ref_385
+        id: h0622
+        ts: '2026-07-22T13:06:26Z'
         type: implement
         symbols:
-          - '#warp-store'
+          - '#f4-trace'
+          - '#refusal'
           - '#warpline-cli'
-          - '#warplined'
-          - '#warplined-tokens'
-        author:
-          type: human
-          id: ascend
-        commit: 17dc8ab9ae6d593884f5bce11f31ba3cb6b331a5
-        intent: feature
-        files:
-          - .paradigm/curriculum/index.yaml
-          - .paradigm/curriculum/scenarios/index.yaml
-          - .paradigm/events/stream.jsonl
-          - .paradigm/flow-index.json
-          - .paradigm/history/index.yaml
-          - .paradigm/history/log.jsonl
-          - .paradigm/manifest.consistency.json
-          - .paradigm/navigator.yaml
-          - .paradigm/personas/index.yaml
-          - .paradigm/protocols/index.yaml
-          - .paradigm/research/warpline-native-first/roadmap-native-first.md
-          - .paradigm/scan-index.json
-          - .paradigm/university/index.yaml
-          - .warpline/fabric.jsonl
-          - .warpline/refs/selvage
-          - packages/paradigm/src/platform-server/routes/.purpose
-          - packages/paradigm/src/platform-server/routes/warpline.ts
-          - packages/paradigm/tests/platform-warpline-router.test.ts
-          - packages/warpline/.purpose
-          - packages/warpline/src/cli.ts
-          - packages/warpline/src/daemon/client.ts
-          - packages/warpline/src/daemon/protocol.ts
-          - packages/warpline/src/daemon/server.ts
-          - packages/warpline/src/daemon/tokens.ts
-          - packages/warpline/src/fabric/backup.ts
-          - packages/warpline/src/index.ts
-          - packages/warpline/test/backup.test.ts
-          - portal.yaml
-        description: 'feat(#warplined): PHASE 1 COMPLETE — console re-points to the daemon + warpline backup'
-      - &ref_384
-        id: h0603
-        ts: '2026-07-17T23:07:15Z'
-        type: implement
-        symbols:
-          - '#stake'
-          - '#warpline-cli'
-          - '#warplined'
+          - '#warpline-mcp'
           - '#warplined-client'
+          - '#warplined-descriptors'
           - '#warplined-tokens'
         author:
           type: human
           id: ascend
-        commit: 3918df9e12fefcf678dad8cb9e05f6562cdd4231
+        commit: 411ea82b9bca7bc316d1dba1656b171242925199
         intent: feature
         files:
-          - .paradigm/curriculum/index.yaml
-          - .paradigm/curriculum/scenarios/index.yaml
-          - .paradigm/events/stream.jsonl
-          - .paradigm/flow-index.json
-          - .paradigm/history/index.yaml
-          - .paradigm/history/log.jsonl
-          - .paradigm/manifest.consistency.json
-          - .paradigm/navigator.yaml
-          - .paradigm/personas/index.yaml
-          - .paradigm/protocols/index.yaml
-          - .paradigm/research/warpline-native-first/roadmap-native-first.md
-          - .paradigm/scan-index.json
-          - .paradigm/university/index.yaml
-          - .warpline/fabric.jsonl
-          - .warpline/refs/selvage
+          - package-lock.json
+          - packages/warpline/.purpose
+          - packages/warpline/package.json
+          - packages/warpline/src/cli.ts
+          - packages/warpline/src/daemon/f4-trace.ts
+          - packages/warpline/src/mcp/refusals.ts
+          - packages/warpline/src/mcp/server.ts
+          - packages/warpline/src/mcp/token.ts
+          - packages/warpline/test/mcp-skin.test.ts
+        description: 'feat(#warpline-mcp): the THIRD SKIN — warpline mcp stdio server (T-004 phase 2+3)'
+      - &ref_353
+        id: h0621
+        ts: '2026-07-22T12:56:07Z'
+        type: implement
+        symbols:
+          - '#admit'
+          - '#f4-trace'
+          - '#knot-payload'
+          - '#native-write-path'
+          - '#refusal'
+          - '#scratch'
+          - '#warpline-cli'
+          - '#warplined'
+          - '#warplined-descriptors'
+        author:
+          type: human
+          id: ascend
+        commit: 1fcdb57022b108b0c19915232d51e21cb7c4295c
+        intent: feature
+        files:
           - packages/warpline/.purpose
           - packages/warpline/src/cli.ts
           - packages/warpline/src/daemon/client.ts
-          - packages/warpline/src/daemon/lifecycle.ts
-          - packages/warpline/src/daemon/protocol.ts
+          - packages/warpline/src/daemon/descriptors.ts
+          - packages/warpline/src/daemon/f4-trace.ts
           - packages/warpline/src/daemon/server.ts
           - packages/warpline/src/daemon/tokens.ts
-          - packages/warpline/src/index.ts
-          - packages/warpline/test/daemon-byte-identity.test.ts
-          - packages/warpline/test/daemon.test.ts
-        description: 'feat(#warplined): PHASE 1 — the solo daemon: home-fabric gets its network face'
-      - &ref_355
-        id: h0602
-        ts: '2026-07-17T22:35:27Z'
+          - packages/warpline/src/fabric/admit.ts
+          - packages/warpline/src/fabric/knot-payload.ts
+          - packages/warpline/src/fabric/native.ts
+          - packages/warpline/src/fabric/refusal.ts
+          - packages/warpline/src/fabric/scratch.ts
+          - packages/warpline/test/descriptors-frozen.test.ts
+          - packages/warpline/test/native-sequencing-refusals.test.ts
+          - packages/warpline/test/refusal-vocabulary-totality.test.ts
+          - packages/warpline/test/refusal.test.ts
+        description: 'feat(#refusal): MCP pre-work PW-1..PW-10 — typed sequencing refusals, retry-corrected, descriptors, f4Trace, state-aware status'
+      - &ref_383
+        id: h0620
+        ts: '2026-07-22T06:24:26Z'
         type: implement
         symbols:
-          - '#restore'
-          - '#stake'
-          - '#stake-git'
-          - '#stake-guard'
-          - '#warp-store'
+          - '#knot-payload'
+          - '#refusal'
+          - '#warpline-cli'
+          - '#warplined'
+        author:
+          type: human
+          id: ascend
+        commit: 01f9fe9e56f45efa06293388df77b24ebdaedb54
+        intent: feature
+        files:
+          - .paradigm/.cid-briefed
+          - .paradigm/.cid-session
+          - .paradigm/.nav-called
+          - .paradigm/.orchestrated
+          - .paradigm/.pending-review
+          - .paradigm/agent-state/architect.yaml
+          - .paradigm/agent-state/security.yaml
+          - .paradigm/events/.last-processed
+          - .paradigm/events/debates.jsonl
+          - .paradigm/events/nominations.jsonl
+          - .paradigm/events/notebook-refs.jsonl
+          - .paradigm/events/settlement-liveness.jsonl
+          - .paradigm/events/team-funnel.jsonl
+          - .paradigm/history/log.jsonl
+          - .paradigm/lore/entries/2026-07-22/L-2026-07-22-ascend-062324-001.lore
+          - .paradigm/lore/timeline.yaml
+          - .paradigm/notebooks/architect/nb-habits-mn6he1ec.yaml
+          - .paradigm/notebooks/architect/nb-monorepo-mn53wvzd.yaml
+          - .paradigm/notebooks/security/nb-portal-yaml-mn53xthp.yaml
+          - .paradigm/research/warpline-native-first/.purpose
+          - .paradigm/research/warpline-native-first/aegis-mcp-skin-ruling.md
+          - .paradigm/research/warpline-native-first/mcp-skin-spec.md
+          - .paradigm/work-log/2026-07-22/WL-architect-2026-07-22-586.yaml
+          - .warpline/fabric.jsonl
+        description: 'docs(#warplined): T-004 MCP-skin design phase — panel spec + security ruling (build-ready, founder-gated scoring)'
+      - &ref_354
+        id: h0617
+        ts: '2026-07-22T04:45:02Z'
+        type: implement
+        symbols:
+          - '#admit'
+          - '#claim'
+          - '#native-write-path'
+          - '#refusal'
           - '#warpline-cli'
         author:
           type: human
           id: ascend
-        commit: aea31025729e9697d8fed5c5f0e6f3c32a2be35c
+        commit: 155b3bfdd0cb4393ad3d7fd649db6c06a50ac916
         intent: feature
         files:
-          - .paradigm/curriculum/index.yaml
-          - .paradigm/curriculum/scenarios/index.yaml
+          - packages/warpline/.purpose
+          - packages/warpline/src/cli.ts
+          - packages/warpline/src/fabric/admit.ts
+          - packages/warpline/src/fabric/claim.ts
+          - packages/warpline/src/fabric/native.ts
+          - packages/warpline/src/fabric/refusal.ts
+          - packages/warpline/src/index.ts
+          - packages/warpline/test/claim.test.ts
+          - packages/warpline/test/native-loop-no-git.test.ts
+          - packages/warpline/test/refusal.test.ts
+        description: 'feat(#refusal): SP2 skins — stop the silent failure (T-006 exit codes, T-007 native refusals, T-008 claim honesty)'
+      - &ref_355
+        id: h0616
+        ts: '2026-07-22T04:20:01Z'
+        type: implement
+        symbols:
+          - '#admit'
+          - '#claim'
+          - '#native-write-path'
+          - '#refusal'
+          - '#warpline-cli'
+        author:
+          type: human
+          id: ascend
+        commit: e621f3f8bcc934a02465b725845e530575a3380d
+        intent: feature
+        files:
+          - .paradigm/events/debates.jsonl
+          - .paradigm/events/nominations.jsonl
           - .paradigm/events/stream.jsonl
-          - .paradigm/flow-index.json
-          - .paradigm/history/index.yaml
           - .paradigm/history/log.jsonl
-          - .paradigm/manifest.consistency.json
-          - .paradigm/navigator.yaml
-          - .paradigm/personas/index.yaml
-          - .paradigm/protocols/index.yaml
-          - .paradigm/research/warpline-native-first/roadmap-native-first.md
-          - .paradigm/scan-index.json
-          - .paradigm/university/index.yaml
+          - .paradigm/lore/entries/2026-07-21/L-2026-07-21-ascend-160432-001.lore
+          - .paradigm/lore/timeline.yaml
           - .warpline/fabric.jsonl
           - .warpline/refs/selvage
-          - packages/warpline/.purpose
-          - packages/warpline/src/absorb.ts
-          - packages/warpline/src/cli.ts
-          - packages/warpline/src/fabric/backfill.ts
-          - packages/warpline/src/fabric/config.ts
-          - packages/warpline/src/fabric/stake-guard.ts
-          - packages/warpline/src/fabric/stake.ts
-          - packages/warpline/src/git/stake-git.ts
-          - packages/warpline/src/index.ts
-          - packages/warpline/test/stake.test.ts
-        description: 'feat(#stake): PHASE 1 — the checkpoint valve (warpline stake), founder ask T-2026-07-17-001 CLOSED'
-      - &ref_348
-        id: h0598
-        ts: '2026-07-17T18:30:43Z'
-        type: implement
-        symbols:
-          - '#admit'
-          - '#native-write-path'
-          - '#pick'
-          - '#scratch'
-          - '#shadow-gate'
-          - '#warpline-cli'
-          - '#warpline-config'
-        author:
-          type: human
-          id: ascend
-        commit: 5ae6ed35104a9fcc0b0608688d93af03b8f7deaa
-        intent: feature
-        files:
-          - .gitignore
-          - .paradigm/history/log.jsonl
-          - .paradigm/research/warpline-native-first/roadmap-native-first.md
-          - .warpline/config.json
-          - packages/warpline/.purpose
-          - packages/warpline/src/cli.ts
-          - packages/warpline/src/fabric/.purpose
-          - packages/warpline/src/fabric/admit.ts
-          - packages/warpline/src/fabric/config.ts
-          - packages/warpline/src/fabric/native.ts
-          - packages/warpline/src/fabric/pick.ts
-          - packages/warpline/src/fabric/scratch.ts
-          - packages/warpline/src/fabric/shadow.ts
-          - packages/warpline/src/index.ts
-          - packages/warpline/test/native-loop-no-git.test.ts
-          - packages/warpline/test/shadow-admit.test.ts
-          - packages/warpline/test/shadow-pick-gate.test.ts
-        description: 'feat(#native-write-path): NATIVE-FIRST opens — R1 shadow gate LIVE + Phase 0 keystone (no-.git loop green)'
-      - &ref_360
-        id: h0595
-        ts: '2026-07-16T16:59:30Z'
-        type: implement
-        symbols:
-          - '#admit'
-          - '#grade'
-          - '#warpline-cli'
-        author:
-          type: human
-          id: ascend
-        commit: ac0615cda13b0dc5246c95037b19d8a4cec9eeb6
-        intent: feature
-        files:
-          - .paradigm/history/log.jsonl
-          - packages/warpline/.purpose
-          - packages/warpline/src/cli.ts
-          - packages/warpline/src/fabric/admit.ts
-          - packages/warpline/src/fabric/grade.ts
-          - packages/warpline/src/index.ts
-          - packages/warpline/test/grade.test.ts
-          - packages/warpline/test/trust-escalation.test.ts
-        description: 'feat(#grade): P3 Lane A2 — minimum trust: agentId×symbol grading + the HELD consumer'
+        description: 'chore(#warpline): settlement — F4 session lore (L-2026-07-21-ascend-160432-001) + index sweep'
     contributors:
       human:
         - ascend
@@ -24031,7 +24006,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_342
+      - &ref_340
         id: h0530
         ts: '2026-06-25T08:08:25Z'
         type: implement
@@ -24052,7 +24027,7 @@ by_symbol:
           - packages/paradigm/src/platform-server/routes/.purpose
           - packages/paradigm/src/platform-server/routes/classroom.ts
         description: 'feat(#classroom): Agent Locker — per-agent notebook vetting tab'
-      - &ref_343
+      - &ref_341
         id: h0529
         ts: '2026-06-25T07:54:41Z'
         type: implement
@@ -24076,8 +24051,8 @@ by_symbol:
           - packages/paradigm/src/platform-server/routes/classroom.ts
           - plugins/paradigm/.claude-plugin/plugin.json
         description: 'feat(#classroom): Academy chrome — Roster + Rap Sheet tabs (7.7.0)'
-      - *ref_341
-      - &ref_344
+      - *ref_339
+      - &ref_342
         id: h0517
         ts: '2026-06-25T01:30:12Z'
         type: implement
@@ -24133,8 +24108,8 @@ by_symbol:
           - packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx
           - packages/paradigm/platform-ui/src/sections/classroom/styles/classroom.css
         description: 'feat(#ClassroomSection): unified trust-ladder badges (external tier)'
-      - *ref_342
-      - *ref_343
+      - *ref_340
+      - *ref_341
       - id: h0524
         ts: '2026-06-25T07:18:32Z'
         type: implement
@@ -24149,7 +24124,7 @@ by_symbol:
         files:
           - packages/paradigm/platform-ui/src/sections/classroom/ClassroomSection.tsx
         description: 'fix(#ClassroomSection): align Staged cards to the real /staged payload'
-      - *ref_344
+      - *ref_342
     contributors:
       human:
         - ascend
@@ -24161,8 +24136,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_340
-      - *ref_345
+      - *ref_338
+      - *ref_343
       - id: h0518
         ts: '2026-06-25T01:31:19Z'
         type: implement
@@ -24197,8 +24172,8 @@ by_symbol:
       - *ref_311
       - *ref_312
       - *ref_313
-      - *ref_346
-      - *ref_347
+      - *ref_344
+      - *ref_345
     contributors:
       human:
         - ascend
@@ -24210,7 +24185,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_359
+      - &ref_366
         id: h0596
         ts: '2026-07-17T17:34:55Z'
         type: implement
@@ -24241,7 +24216,7 @@ by_symbol:
           - .paradigm/research/warpline-native-first/north-strategy.md
           - .paradigm/research/warpline-native-first/roadmap-native-first.md
         description: 'docs(#warpline-forge): NATIVE-FIRST pivot — founder direction TD-2026-07-17-151 + 4-lens theorizing pass + revised roadmap'
-      - &ref_366
+      - &ref_362
         id: h0593
         ts: '2026-07-16T16:00:22Z'
         type: implement
@@ -24269,7 +24244,7 @@ by_symbol:
           - packages/warpline/test/injection-envelope.test.ts
           - packages/warpline/test/knot-payload.test.ts
         description: 'feat(#admit): P2.2+P2.4 — machine-readable knotPayload:v1 + untrusted-prose injection envelope'
-      - &ref_350
+      - &ref_347
         id: h0591
         ts: '2026-07-16T08:03:06Z'
         type: implement
@@ -24309,7 +24284,7 @@ by_symbol:
           - packages/warpline/test/refs.test.ts
           - packages/warpline/test/strand-pickid-v3.test.ts
         description: 'feat(#fabric): P2.1 — v3 DAG identity (V3.1) + pickId refs (V3.2), founder-signed TD-2026-07-16-277'
-      - &ref_375
+      - &ref_374
         id: h0584
         ts: '2026-07-15T07:54:51Z'
         type: implement
@@ -24327,19 +24302,57 @@ by_symbol:
           - docs/specs/.purpose
           - docs/specs/warpline-forge.md
         description: 'docs(#warpline-forge): P0.5 forge north-star CONSTRAINT spec DRAFT (Arky) — pending founder blessing'
-      - *ref_318
+      - *ref_331
     contributors:
       human:
         - ascend
       agent: []
   '#pick':
     symbol: '#pick'
-    total_changes: 19
-    last_modified: '2026-07-18T04:48:20Z'
+    total_changes: 21
+    last_modified: '2026-07-21T15:50:10Z'
     stability_score: 1
     fragility: low
     recent:
-      - &ref_352
+      - *ref_346
+      - &ref_356
+        id: h0613
+        ts: '2026-07-21T14:49:38Z'
+        type: implement
+        symbols:
+          - '#admit'
+          - '#claim'
+          - '#knot-payload'
+          - '#pick'
+          - '#shadow-gate'
+          - '#warpline-cli'
+          - '#warplined'
+        author:
+          type: human
+          id: ascend
+        commit: 652d8ec0897e1c8985e7ece2a795c28ddc7abe4b
+        intent: feature
+        files:
+          - .paradigm/.cid-briefed
+          - .paradigm/.cid-session
+          - .paradigm/.nav-called
+          - .paradigm/agent-state/architect.yaml
+          - .paradigm/decisions/TD-2026-07-21-766.yaml
+          - .paradigm/events/.last-processed
+          - .paradigm/events/debates.jsonl
+          - .paradigm/events/nominations.jsonl
+          - .paradigm/events/notebook-refs.jsonl
+          - .paradigm/events/stream.jsonl
+          - .paradigm/events/team-funnel.jsonl
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/lore/entries/2026-07-21/L-2026-07-21-ascend-144444-607.lore
+          - .paradigm/notebooks/architect/nb-habits-mn6he1ec.yaml
+          - .paradigm/notebooks/architect/nb-monorepo-mn53wvzd.yaml
+          - .paradigm/research/warpline-native-first/roadmap-native-first.md
+          - .warpline/fabric.jsonl
+        description: 'feat(#warpline-cli): FOUNDER CONSTRAINT TD-766 — universal cold-agent usability, pre-registered as falsifier F4'
+      - &ref_349
         id: h0610
         ts: '2026-07-18T04:48:20Z'
         type: implement
@@ -24369,7 +24382,7 @@ by_symbol:
           - packages/warpline/test/snapshot-incremental.test.ts
           - packages/warpline/test/tree-semantics.test.ts
         description: 'feat(#warp-store): THE TREE SEMANTICS — worktree:v1 canonical + recover fixed + byte custody + drill #2 GREEN → RE-PROMOTE TO R2'
-      - &ref_353
+      - &ref_350
         id: h0609
         ts: '2026-07-18T04:04:06Z'
         type: implement
@@ -24388,7 +24401,7 @@ by_symbol:
           - .paradigm/research/warpline-native-first/f3-drills.jsonl
           - .warpline/config.json
         description: 'revert(#stake): F3 DRILL #1 FAILED → DEMOTE TO R1 (pre-registered rule honored)'
-      - &ref_358
+      - &ref_378
         id: h0606
         ts: '2026-07-18T03:22:59Z'
         type: implement
@@ -24419,8 +24432,6 @@ by_symbol:
           - packages/warpline/test/stake-denylist-v2.test.ts
           - packages/warpline/test/stake.test.ts
         description: 'feat(#stake-guard): R2 CLIMBED — stake-denylist:v2 + FIRST LIVE STAKE + auto-stake + real agent gate (both R2 flips ON)'
-      - *ref_348
-      - *ref_349
     contributors:
       human:
         - ascend
@@ -24432,7 +24443,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_350
+      - *ref_347
       - id: h0562
         ts: '2026-07-02T01:07:27Z'
         type: implement
@@ -24481,7 +24492,7 @@ by_symbol:
           - packages/warpline/src/warp/snapshot.ts
           - packages/warpline/test/restore-git-absent.test.ts
         description: 'feat(#warpline-cli,#restore): warpline restore — reconstruct a working tree, git absent (M1c, T-2026-07-01-012)'
-      - &ref_367
+      - &ref_363
         id: h0556
         ts: '2026-07-01T22:35:44Z'
         type: implement
@@ -24521,7 +24532,7 @@ by_symbol:
           - packages/warpline/test/rewrite-fabric-guard.test.ts
           - packages/warpline/test/strand-pickid-v2.test.ts
         description: 'feat(#strand,#fabric-verify): schema-v2 pickId identity contract + fabric verify (TD-2026-07-01-721)'
-      - &ref_368
+      - &ref_364
         id: h0555
         ts: '2026-07-01T22:26:29Z'
         type: implement
@@ -24572,11 +24583,96 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_351
-      - *ref_352
-      - *ref_353
-      - *ref_354
-      - *ref_355
+      - *ref_348
+      - *ref_349
+      - *ref_350
+      - &ref_387
+        id: h0604
+        ts: '2026-07-18T02:38:56Z'
+        type: implement
+        symbols:
+          - '#warp-store'
+          - '#warpline-cli'
+          - '#warplined'
+          - '#warplined-tokens'
+        author:
+          type: human
+          id: ascend
+        commit: 17dc8ab9ae6d593884f5bce11f31ba3cb6b331a5
+        intent: feature
+        files:
+          - .paradigm/curriculum/index.yaml
+          - .paradigm/curriculum/scenarios/index.yaml
+          - .paradigm/events/stream.jsonl
+          - .paradigm/flow-index.json
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/manifest.consistency.json
+          - .paradigm/navigator.yaml
+          - .paradigm/personas/index.yaml
+          - .paradigm/protocols/index.yaml
+          - .paradigm/research/warpline-native-first/roadmap-native-first.md
+          - .paradigm/scan-index.json
+          - .paradigm/university/index.yaml
+          - .warpline/fabric.jsonl
+          - .warpline/refs/selvage
+          - packages/paradigm/src/platform-server/routes/.purpose
+          - packages/paradigm/src/platform-server/routes/warpline.ts
+          - packages/paradigm/tests/platform-warpline-router.test.ts
+          - packages/warpline/.purpose
+          - packages/warpline/src/cli.ts
+          - packages/warpline/src/daemon/client.ts
+          - packages/warpline/src/daemon/protocol.ts
+          - packages/warpline/src/daemon/server.ts
+          - packages/warpline/src/daemon/tokens.ts
+          - packages/warpline/src/fabric/backup.ts
+          - packages/warpline/src/index.ts
+          - packages/warpline/test/backup.test.ts
+          - portal.yaml
+        description: 'feat(#warplined): PHASE 1 COMPLETE — console re-points to the daemon + warpline backup'
+      - &ref_369
+        id: h0602
+        ts: '2026-07-17T22:35:27Z'
+        type: implement
+        symbols:
+          - '#restore'
+          - '#stake'
+          - '#stake-git'
+          - '#stake-guard'
+          - '#warp-store'
+          - '#warpline-cli'
+        author:
+          type: human
+          id: ascend
+        commit: aea31025729e9697d8fed5c5f0e6f3c32a2be35c
+        intent: feature
+        files:
+          - .paradigm/curriculum/index.yaml
+          - .paradigm/curriculum/scenarios/index.yaml
+          - .paradigm/events/stream.jsonl
+          - .paradigm/flow-index.json
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/manifest.consistency.json
+          - .paradigm/navigator.yaml
+          - .paradigm/personas/index.yaml
+          - .paradigm/protocols/index.yaml
+          - .paradigm/research/warpline-native-first/roadmap-native-first.md
+          - .paradigm/scan-index.json
+          - .paradigm/university/index.yaml
+          - .warpline/fabric.jsonl
+          - .warpline/refs/selvage
+          - packages/warpline/.purpose
+          - packages/warpline/src/absorb.ts
+          - packages/warpline/src/cli.ts
+          - packages/warpline/src/fabric/backfill.ts
+          - packages/warpline/src/fabric/config.ts
+          - packages/warpline/src/fabric/stake-guard.ts
+          - packages/warpline/src/fabric/stake.ts
+          - packages/warpline/src/git/stake-git.ts
+          - packages/warpline/src/index.ts
+          - packages/warpline/test/stake.test.ts
+        description: 'feat(#stake): PHASE 1 — the checkpoint valve (warpline stake), founder ask T-2026-07-17-001 CLOSED'
     contributors:
       human:
         - ascend
@@ -24588,7 +24684,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_356
+      - *ref_351
     contributors:
       human:
         - ascend
@@ -24600,7 +24696,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_361
+      - &ref_357
         id: h0578
         ts: '2026-07-04T00:51:45Z'
         type: implement
@@ -24620,76 +24716,70 @@ by_symbol:
           - packages/warpline/test/hardening.test.ts
           - packages/warpline/test/pick-agentid-env.test.ts
         description: 'feat(#admit,#warpline-cli): Move-3 preconditions — H1 v2-relax off durable merged bytes + agentId threading'
-      - *ref_357
+      - *ref_352
     contributors:
       human:
         - ascend
       agent: []
   '#admit':
     symbol: '#admit'
-    total_changes: 28
-    last_modified: '2026-07-18T03:22:59Z'
+    total_changes: 33
+    last_modified: '2026-07-22T12:56:07Z'
     stability_score: 1
     fragility: low
     recent:
-      - *ref_358
-      - *ref_348
-      - *ref_359
-      - *ref_360
-      - &ref_377
-        id: h0594
-        ts: '2026-07-16T16:38:55Z'
-        type: implement
-        symbols:
-          - '#admit'
-          - '#cfg-lens'
-          - '#claim'
-          - '#derived-artifacts'
-          - '#honesty'
-          - '#justification'
-          - '#warpline-cli'
-        author:
-          type: human
-          id: ascend
-        commit: 49508500a65c7b79ebf26055934a33e16360d79d
-        intent: feature
-        files:
-          - .paradigm/history/log.jsonl
-          - docs/specs/warpline-forge.md
-          - package-lock.json
-          - packages/warpline/.purpose
-          - packages/warpline/package.json
-          - packages/warpline/src/cli.ts
-          - packages/warpline/src/fabric/admit.ts
-          - packages/warpline/src/fabric/claim.ts
-          - packages/warpline/src/fabric/materialize.ts
-          - packages/warpline/src/honesty.ts
-          - packages/warpline/src/index.ts
-          - packages/warpline/src/justification.ts
-          - packages/warpline/src/lens/cfg-lens.ts
-          - packages/warpline/src/lens/code-lens.ts
-          - packages/warpline/src/lens/derived-artifacts.ts
-          - packages/warpline/src/lens/lift-code-units.ts
-          - packages/warpline/src/lens/registry.ts
-          - packages/warpline/src/oracle.ts
-          - packages/warpline/test/absorb.test.ts
-          - packages/warpline/test/cfg-lens.test.ts
-          - packages/warpline/test/cfg-merge.test.ts
-          - packages/warpline/test/claim.test.ts
-          - packages/warpline/test/injection-envelope.test.ts
-        description: 'feat(#admit,#cfg-lens): P2.3 claims + P3 GAP-1 structured-data lens — combined lane landing'
+      - *ref_353
+      - *ref_354
+      - *ref_355
+      - *ref_346
+      - *ref_356
     contributors:
       human:
         - ascend
       agent: []
   '#scratch':
     symbol: '#scratch'
-    total_changes: 4
-    last_modified: '2026-07-17T18:30:43Z'
+    total_changes: 5
+    last_modified: '2026-07-22T12:56:07Z'
     stability_score: 1
     fragility: low
     recent:
-      - *ref_348
+      - *ref_353
+      - id: h0598
+        ts: '2026-07-17T18:30:43Z'
+        type: implement
+        symbols:
+          - '#admit'
+          - '#native-write-path'
+          - '#pick'
+          - '#scratch'
+          - '#shadow-gate'
+          - '#warpline-cli'
+          - '#warpline-config'
+        author:
+          type: human
+          id: ascend
+        commit: 5ae6ed35104a9fcc0b0608688d93af03b8f7deaa
+        intent: feature
+        files:
+          - .gitignore
+          - .paradigm/history/log.jsonl
+          - .paradigm/research/warpline-native-first/roadmap-native-first.md
+          - .warpline/config.json
+          - packages/warpline/.purpose
+          - packages/warpline/src/cli.ts
+          - packages/warpline/src/fabric/.purpose
+          - packages/warpline/src/fabric/admit.ts
+          - packages/warpline/src/fabric/config.ts
+          - packages/warpline/src/fabric/native.ts
+          - packages/warpline/src/fabric/pick.ts
+          - packages/warpline/src/fabric/scratch.ts
+          - packages/warpline/src/fabric/shadow.ts
+          - packages/warpline/src/index.ts
+          - packages/warpline/test/native-loop-no-git.test.ts
+          - packages/warpline/test/shadow-admit.test.ts
+          - packages/warpline/test/shadow-pick-gate.test.ts
+        description: 'feat(#native-write-path): NATIVE-FIRST opens — R1 shadow gate LIVE + Phase 0 keystone (no-.git loop green)'
       - id: h0581
         ts: '2026-07-04T15:52:29Z'
         type: implement
@@ -24775,8 +24865,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_361
-      - &ref_373
+      - *ref_357
+      - &ref_371
         id: h0558
         ts: '2026-07-01T23:16:37Z'
         type: implement
@@ -24801,7 +24891,7 @@ by_symbol:
           - packages/warpline/src/warp/snapshot.ts
           - packages/warpline/test/restore-git-absent.test.ts
         description: 'feat(#warpline-cli,#restore): warpline restore — reconstruct a working tree, git absent (M1c, T-2026-07-01-012)'
-      - *ref_362
+      - *ref_358
       - id: h0549
         ts: '2026-07-01T18:51:12Z'
         type: implement
@@ -24844,9 +24934,9 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_363
-      - *ref_364
-      - *ref_365
+      - *ref_359
+      - *ref_360
+      - *ref_361
     contributors:
       human:
         - ascend
@@ -24858,8 +24948,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_366
-      - &ref_369
+      - *ref_362
+      - &ref_365
         id: h0540
         ts: '2026-06-27T04:04:20Z'
         type: implement
@@ -24936,8 +25026,8 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_350
-      - &ref_370
+      - *ref_347
+      - &ref_367
         id: h0589
         ts: '2026-07-15T09:06:46Z'
         type: implement
@@ -24954,9 +25044,9 @@ by_symbol:
           - .paradigm/history/log.jsonl
           - docs/warpline/index.html
         description: 'docs(#warpline): P0.2 docs-honesty residue — vision page stops implying shipped signatures/trust-routing'
-      - *ref_367
-      - *ref_368
-      - *ref_362
+      - *ref_363
+      - *ref_364
+      - *ref_358
     contributors:
       human:
         - ascend
@@ -24968,7 +25058,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_371
+      - &ref_368
         id: h0570
         ts: '2026-07-03T22:44:23Z'
         type: implement
@@ -25007,7 +25097,7 @@ by_symbol:
           - packages/warpline/src/fabric/lock.ts
           - packages/warpline/test/lock-ownership.test.ts
         description: 'fix(#fabric-lock,#fabric): lock owner token + safe steal + rewriteFabric lost-update CAS (M2 trust floor, item 4)'
-      - *ref_369
+      - *ref_365
     contributors:
       human:
         - ascend
@@ -25019,11 +25109,32 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_359
-      - *ref_360
-      - *ref_350
-      - *ref_330
-      - *ref_370
+      - *ref_366
+      - id: h0595
+        ts: '2026-07-16T16:59:30Z'
+        type: implement
+        symbols:
+          - '#admit'
+          - '#grade'
+          - '#warpline-cli'
+        author:
+          type: human
+          id: ascend
+        commit: ac0615cda13b0dc5246c95037b19d8a4cec9eeb6
+        intent: feature
+        files:
+          - .paradigm/history/log.jsonl
+          - packages/warpline/.purpose
+          - packages/warpline/src/cli.ts
+          - packages/warpline/src/fabric/admit.ts
+          - packages/warpline/src/fabric/grade.ts
+          - packages/warpline/src/index.ts
+          - packages/warpline/test/grade.test.ts
+          - packages/warpline/test/trust-escalation.test.ts
+        description: 'feat(#grade): P3 Lane A2 — minimum trust: agentId×symbol grading + the HELD consumer'
+      - *ref_347
+      - *ref_328
+      - *ref_367
     contributors:
       human:
         - ascend
@@ -25078,9 +25189,9 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_352
-      - *ref_350
-      - &ref_374
+      - *ref_349
+      - *ref_347
+      - &ref_372
         id: h0576
         ts: '2026-07-04T00:40:30Z'
         type: implement
@@ -25096,7 +25207,7 @@ by_symbol:
         files:
           - .warpline/fabric.jsonl
         description: 'chore(#anchor): fabric attest — v1 epoch anchor sealed (seq 25), live fabric now authenticated'
-      - &ref_372
+      - &ref_370
         id: h0573
         ts: '2026-07-04T00:25:52Z'
         type: implement
@@ -25133,7 +25244,7 @@ by_symbol:
           - packages/warpline/test/grandfather-containment.test.ts
           - packages/warpline/test/restore-git-absent.test.ts
         description: 'fix(#fabric-verify,#fabric): v1-prefix epoch anchor — closes HIGH-A + HIGH-B live exploits (design cdf8cff5)'
-      - *ref_371
+      - *ref_368
     contributors:
       human:
         - ascend
@@ -25145,10 +25256,10 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_355
-      - *ref_359
-      - *ref_372
-      - *ref_371
+      - *ref_369
+      - *ref_366
+      - *ref_370
+      - *ref_368
       - id: h0565
         ts: '2026-07-02T01:41:02Z'
         type: implement
@@ -25176,7 +25287,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_373
+      - *ref_371
     contributors:
       human:
         - ascend
@@ -25212,7 +25323,7 @@ by_symbol:
           - packages/warpline/src/fabric/materialize.ts
           - packages/warpline/test/hardening.test.ts
         description: 'chore(#warpline): settlement — live-migration lore (fabric anchored, HIGH-A/B closed on real record)'
-      - *ref_374
+      - *ref_372
       - id: h0574
         ts: '2026-07-04T00:26:39Z'
         type: implement
@@ -25234,7 +25345,7 @@ by_symbol:
           - .warpline/fabric.jsonl
           - .warpline/refs/selvage
         description: 'chore(#warpline): settlement — v1-anchor lore + session picks (fabric left UNANCHORED, migration pending founder)'
-      - *ref_372
+      - *ref_370
     contributors:
       human:
         - ascend
@@ -25246,7 +25357,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_349
+      - *ref_373
       - id: h0575
         ts: '2026-07-04T00:39:57Z'
         type: implement
@@ -25261,7 +25372,7 @@ by_symbol:
         files:
           - .warpline/fabric.jsonl
         description: 'chore(#backfill): objects backfill — stamp v1 bindings (seq 1-12) ahead of epoch attestation'
-      - *ref_372
+      - *ref_370
     contributors:
       human:
         - ascend
@@ -25288,8 +25399,8 @@ by_symbol:
           - .paradigm/lore/entries/2026-07-17/L-2026-07-17-ascend-174939-670.lore
           - docs/specs/warpline-forge.md
         description: 'docs(#warpline-forge): D6 — forge spec re-blessed as CONSTITUTION EDITION (TD-2026-07-17-085)'
-      - *ref_359
-      - *ref_375
+      - *ref_366
+      - *ref_374
     contributors:
       human:
         - ascend
@@ -25301,7 +25412,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_376
+      - *ref_375
     contributors:
       human:
         - ascend
@@ -25313,7 +25424,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_376
+      - *ref_375
     contributors:
       human:
         - ascend
@@ -25325,7 +25436,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_376
+      - *ref_375
     contributors:
       human:
         - ascend
@@ -25337,7 +25448,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_376
+      - *ref_375
     contributors:
       human:
         - ascend
@@ -25349,7 +25460,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - &ref_378
+      - &ref_377
         id: h0601
         ts: '2026-07-17T22:05:06Z'
         type: implement
@@ -25384,19 +25495,63 @@ by_symbol:
           - packages/warpline/test/snapshot-ignore.test.ts
           - packages/warpline/test/worktree-index.test.ts
         description: 'perf(#warp-store): PHASE 0 COMPLETE — I5 incremental worktree index + R1 hygiene + inversion audit'
-      - *ref_377
+      - &ref_376
+        id: h0594
+        ts: '2026-07-16T16:38:55Z'
+        type: implement
+        symbols:
+          - '#admit'
+          - '#cfg-lens'
+          - '#claim'
+          - '#derived-artifacts'
+          - '#honesty'
+          - '#justification'
+          - '#warpline-cli'
+        author:
+          type: human
+          id: ascend
+        commit: 49508500a65c7b79ebf26055934a33e16360d79d
+        intent: feature
+        files:
+          - .paradigm/history/log.jsonl
+          - docs/specs/warpline-forge.md
+          - package-lock.json
+          - packages/warpline/.purpose
+          - packages/warpline/package.json
+          - packages/warpline/src/cli.ts
+          - packages/warpline/src/fabric/admit.ts
+          - packages/warpline/src/fabric/claim.ts
+          - packages/warpline/src/fabric/materialize.ts
+          - packages/warpline/src/honesty.ts
+          - packages/warpline/src/index.ts
+          - packages/warpline/src/justification.ts
+          - packages/warpline/src/lens/cfg-lens.ts
+          - packages/warpline/src/lens/code-lens.ts
+          - packages/warpline/src/lens/derived-artifacts.ts
+          - packages/warpline/src/lens/lift-code-units.ts
+          - packages/warpline/src/lens/registry.ts
+          - packages/warpline/src/oracle.ts
+          - packages/warpline/test/absorb.test.ts
+          - packages/warpline/test/cfg-lens.test.ts
+          - packages/warpline/test/cfg-merge.test.ts
+          - packages/warpline/test/claim.test.ts
+          - packages/warpline/test/injection-envelope.test.ts
+        description: 'feat(#admit,#cfg-lens): P2.3 claims + P3 GAP-1 structured-data lens — combined lane landing'
     contributors:
       human:
         - ascend
       agent: []
   '#claim':
     symbol: '#claim'
-    total_changes: 1
-    last_modified: '2026-07-16T16:38:55Z'
+    total_changes: 4
+    last_modified: '2026-07-22T04:45:02Z'
     stability_score: 1
     fragility: low
     recent:
-      - *ref_377
+      - *ref_354
+      - *ref_355
+      - *ref_356
+      - *ref_376
     contributors:
       human:
         - ascend
@@ -25408,7 +25563,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_377
+      - *ref_376
     contributors:
       human:
         - ascend
@@ -25420,7 +25575,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_377
+      - *ref_376
     contributors:
       human:
         - ascend
@@ -25432,32 +25587,89 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_377
+      - *ref_376
     contributors:
       human:
         - ascend
       agent: []
   '#native-write-path':
     symbol: '#native-write-path'
-    total_changes: 3
-    last_modified: '2026-07-17T22:05:06Z'
+    total_changes: 6
+    last_modified: '2026-07-22T12:56:07Z'
     stability_score: 1
     fragility: low
     recent:
-      - *ref_378
-      - *ref_379
-      - *ref_348
+      - *ref_353
+      - *ref_354
+      - *ref_355
+      - *ref_377
+      - &ref_379
+        id: h0599
+        ts: '2026-07-17T19:42:29Z'
+        type: implement
+        symbols:
+          - '#native-write-path'
+          - '#shadow-gate'
+          - '#warpline'
+        author:
+          type: human
+          id: ascend
+        commit: 9e2d7cd4ba33ac1fc608f2ab8fb9d239544a1b3b
+        intent: feature
+        files:
+          - .paradigm/.cid-briefed
+          - .paradigm/.cid-session
+          - .paradigm/.nav-called
+          - .paradigm/.orchestrated
+          - .paradigm/.pending-review
+          - .paradigm/agent-state/architect.yaml
+          - .paradigm/agent-state/builder.yaml
+          - .paradigm/agent-state/scholar.yaml
+          - .paradigm/agent-state/tester.yaml
+          - .paradigm/curriculum/architect.syllabus
+          - .paradigm/curriculum/compliance.syllabus
+          - .paradigm/curriculum/index.yaml
+          - .paradigm/curriculum/scenarios/index.yaml
+          - .paradigm/events/.last-processed
+          - .paradigm/events/classroom-certifications.jsonl
+          - .paradigm/events/debates.jsonl
+          - .paradigm/events/nominations.jsonl
+          - .paradigm/events/notebook-refs.jsonl
+          - .paradigm/events/settlement-liveness.jsonl
+          - .paradigm/events/stream.jsonl
+          - .paradigm/events/team-funnel.jsonl
+          - .paradigm/flow-index.json
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/lore/timeline.yaml
+          - .paradigm/manifest.consistency.json
+          - .paradigm/navigator.yaml
+          - .paradigm/notebooks/architect/nb-habits-mn6he1ec.yaml
+          - .paradigm/notebooks/architect/nb-monorepo-mn53wvzd.yaml
+          - .paradigm/notebooks/builder/nb-build-mn53ww33.yaml
+          - .paradigm/notebooks/builder/nb-conductor-mn53x3e1.yaml
+          - .paradigm/notebooks/builder/nb-mcp-tools-mn53wzsn.yaml
+          - .paradigm/notebooks/tester/nb-conductor-tests-mn53xo9s.yaml
+          - .paradigm/notebooks/tester/nb-vitest-mn53xjlv.yaml
+          - .paradigm/personas/index.yaml
+          - .paradigm/protocols/index.yaml
+          - .paradigm/scan-index.json
+          - .paradigm/university/index.yaml
+          - .warpline/fabric.jsonl
+          - .warpline/refs/selvage
+        description: 'chore(#warpline): settlement — native-first opening lore + paradigm index/state sweep'
     contributors:
       human:
         - ascend
       agent: []
   '#shadow-gate':
     symbol: '#shadow-gate'
-    total_changes: 5
-    last_modified: '2026-07-18T03:23:21Z'
+    total_changes: 6
+    last_modified: '2026-07-21T14:49:38Z'
     stability_score: 1
     fragility: low
     recent:
+      - *ref_356
       - &ref_380
         id: h0607
         ts: '2026-07-18T03:23:21Z'
@@ -25475,10 +25687,9 @@ by_symbol:
           - .paradigm/history/log.jsonl
           - .warpline/config.json
         description: 'chore(#warpline-config): R2 flips actually ON — auto-stake every-seal + real agent gate (corrects e45609b0''s config miss)'
-      - *ref_358
       - *ref_378
+      - *ref_377
       - *ref_379
-      - *ref_348
     contributors:
       human:
         - ascend
@@ -25506,10 +25717,10 @@ by_symbol:
           - .paradigm/history/log.jsonl
           - .warpline/config.json
         description: 'chore(#warpline-config): R2 re-promotion flips actually ON (corrects 8e89f695''s cwd miss)'
-      - *ref_352
-      - *ref_353
+      - *ref_349
+      - *ref_350
       - *ref_380
-      - *ref_358
+      - *ref_378
     contributors:
       human:
         - ascend
@@ -25521,10 +25732,10 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_351
+      - *ref_348
       - *ref_381
-      - *ref_352
-      - *ref_353
+      - *ref_349
+      - *ref_350
       - *ref_382
     contributors:
       human:
@@ -25537,7 +25748,7 @@ by_symbol:
     stability_score: 1
     fragility: low
     recent:
-      - *ref_355
+      - *ref_369
     contributors:
       human:
         - ascend
@@ -25550,21 +25761,42 @@ by_symbol:
     fragility: low
     recent:
       - *ref_382
-      - *ref_358
-      - *ref_355
+      - *ref_378
+      - *ref_369
     contributors:
       human:
         - ascend
       agent: []
   '#warplined':
     symbol: '#warplined'
-    total_changes: 3
-    last_modified: '2026-07-18T02:39:35Z'
+    total_changes: 7
+    last_modified: '2026-07-22T12:56:07Z'
     stability_score: 1
     fragility: low
     recent:
+      - *ref_353
       - *ref_383
-      - *ref_354
+      - &ref_386
+        id: h0618
+        ts: '2026-07-22T05:51:39Z'
+        type: implement
+        symbols:
+          - '#refusal'
+          - '#warplined'
+          - '#warplined-client'
+        author:
+          type: human
+          id: ascend
+        commit: f1f6adec93815074c8aecfbdb1c94de0fa3b00bb
+        intent: feature
+        files:
+          - packages/warpline/.purpose
+          - packages/warpline/src/daemon/client.ts
+          - packages/warpline/src/daemon/protocol.ts
+          - packages/warpline/src/daemon/server.ts
+          - packages/warpline/test/daemon.test.ts
+        description: 'feat(#warplined): SP2 — collapse RpcErrorCode into RefusalCode; refusal:v1 on every daemon error frame'
+      - *ref_356
       - *ref_384
     contributors:
       human:
@@ -25572,25 +25804,149 @@ by_symbol:
       agent: []
   '#warplined-client':
     symbol: '#warplined-client'
-    total_changes: 1
-    last_modified: '2026-07-17T23:07:15Z'
+    total_changes: 3
+    last_modified: '2026-07-22T13:06:26Z'
     stability_score: 1
     fragility: low
     recent:
-      - *ref_384
+      - *ref_385
+      - *ref_386
+      - &ref_388
+        id: h0603
+        ts: '2026-07-17T23:07:15Z'
+        type: implement
+        symbols:
+          - '#stake'
+          - '#warpline-cli'
+          - '#warplined'
+          - '#warplined-client'
+          - '#warplined-tokens'
+        author:
+          type: human
+          id: ascend
+        commit: 3918df9e12fefcf678dad8cb9e05f6562cdd4231
+        intent: feature
+        files:
+          - .paradigm/curriculum/index.yaml
+          - .paradigm/curriculum/scenarios/index.yaml
+          - .paradigm/events/stream.jsonl
+          - .paradigm/flow-index.json
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .paradigm/manifest.consistency.json
+          - .paradigm/navigator.yaml
+          - .paradigm/personas/index.yaml
+          - .paradigm/protocols/index.yaml
+          - .paradigm/research/warpline-native-first/roadmap-native-first.md
+          - .paradigm/scan-index.json
+          - .paradigm/university/index.yaml
+          - .warpline/fabric.jsonl
+          - .warpline/refs/selvage
+          - packages/warpline/.purpose
+          - packages/warpline/src/cli.ts
+          - packages/warpline/src/daemon/client.ts
+          - packages/warpline/src/daemon/lifecycle.ts
+          - packages/warpline/src/daemon/protocol.ts
+          - packages/warpline/src/daemon/server.ts
+          - packages/warpline/src/daemon/tokens.ts
+          - packages/warpline/src/index.ts
+          - packages/warpline/test/daemon-byte-identity.test.ts
+          - packages/warpline/test/daemon.test.ts
+        description: 'feat(#warplined): PHASE 1 — the solo daemon: home-fabric gets its network face'
     contributors:
       human:
         - ascend
       agent: []
   '#warplined-tokens':
     symbol: '#warplined-tokens'
-    total_changes: 2
-    last_modified: '2026-07-18T02:38:56Z'
+    total_changes: 3
+    last_modified: '2026-07-22T13:06:26Z'
     stability_score: 1
     fragility: low
     recent:
+      - *ref_385
+      - *ref_387
+      - *ref_388
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#knot-payload':
+    symbol: '#knot-payload'
+    total_changes: 3
+    last_modified: '2026-07-22T12:56:07Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_353
+      - *ref_383
+      - *ref_356
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#rank':
+    symbol: '#rank'
+    total_changes: 1
+    last_modified: '2026-07-21T15:50:10Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_346
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#refusal':
+    symbol: '#refusal'
+    total_changes: 7
+    last_modified: '2026-07-22T13:06:26Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_385
+      - *ref_353
+      - *ref_383
+      - *ref_386
       - *ref_354
-      - *ref_384
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#f4-trace':
+    symbol: '#f4-trace'
+    total_changes: 2
+    last_modified: '2026-07-22T13:06:26Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_385
+      - *ref_353
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#warplined-descriptors':
+    symbol: '#warplined-descriptors'
+    total_changes: 2
+    last_modified: '2026-07-22T13:06:26Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_385
+      - *ref_353
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#warpline-mcp':
+    symbol: '#warpline-mcp'
+    total_changes: 1
+    last_modified: '2026-07-22T13:06:26Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_385
     contributors:
       human:
         - ascend
