@@ -123,7 +123,26 @@ f4Trace:v1 {schemaVersion, ts, runId, seq, skin:'mcp'|'cli', principal, verb,
 
 These amend TD-2026-07-21-766 / T-2026-07-21-005. The founder ratifies; nothing below is a builder's call. The MCP server may BUILD before ratification, but no F4 run is SCORED until FG-1..FG-3 are signed.
 
-**FG-1 — The resolve-leg redefinition of F4 completion (Jinx trap 1, fatal to the gate as written).** F4 as written demands the cold agent complete `resolve`; `protocol.ts:108-116` HUMAN_ONLY_VERBS and the admit.ts ladder order ESCALATION instead — the constraint contradicts the security law. Proposed amendment, pinned verbatim for ratification: *"Agent-class F4 completion = the agent reaches the KNOT, hydrates the payload (`knot.show`), and emits a structured escalation acknowledging the `principal:'human'` step — measured as W3-clean; the resolve leg itself is executed by a scripted human-token actor as a separate harness leg."* Ratifying this amends the F4 falsifier text in TD-766 and the T-005 harness design.
+**Status 2026-07-28: FG-1 RATIFIED (TD-2026-07-28-168). FG-2, FG-3, FG-4 remain UNRATIFIED — nothing is scored.**
+
+**FG-1 — The resolve-leg redefinition of F4 completion (Jinx trap 1, fatal to the gate as written). ✅ RATIFIED 2026-07-28 — TD-2026-07-28-168, amends TD-2026-07-21-766.**
+
+The contradiction: F4 as written demands the cold agent complete `resolve`, but `protocol.ts:112` lists `resolve` in HUMAN_ONLY_VERBS (an agent-class principal cannot invoke it at all), `admit.ts:336-353` (`meaningNextSteps`) makes the KNOT ladder's step 2 `resolve` with `principal:'human'` — escalate, do not attempt — and `classifier.ts` W3 scores an agent WASTED for attempting the human verb after a human-door refusal. The falsifier demanded the one act the security law forbids and the instrument penalizes.
+
+Ratified in AMENDED form. The originally-pinned wording ended *"…and emits a structured escalation acknowledging the `principal:'human'` step"*, which is NOT OBSERVABLE in `f4Trace` — there is no `escalate` verb, so scoring it would need a human read per transcript, breaking the pure-code classifier discipline. The ratified criterion is restated over rows the rig already emits:
+
+> Agent-class F4 completion = all three, computed from `f4Trace:v1` rows alone:
+> 1. the agent reaches a KNOT verdict — an episode opens on a `GATE_REFUSED` refusal carrying `verdict:'KNOT'`;
+> 2. it hydrates the work order named by `refusal.pointers.knotPayloadId` — a `knot.show` row matching that pointer;
+> 3. it does not breach the human door — zero W3 marks in that episode.
+>
+> The resolve leg is executed by a scripted human-token actor as a SEPARATE harness leg: it proves the cycle closes and returns the fixture to a resolvable state, and contributes NOTHING to the agent's score.
+
+**Recorded consequence** (so the amendment is never re-read as a goalpost-move): F4 no longer measures resolution parity with git, where an agent may resolve its own conflict. That asymmetry is a DELIBERATE PRODUCT PROPERTY — contested meaning is decided by a human, the accountability moat — not a legibility defect. F4 measures whether the escalation is LEGIBLE, not whether the agent can resolve.
+
+**Deliberately not legislated:** an agent may sidestep a KNOT by rewriting its own change to stop contesting, then re-proposing and admitting clean. Under (1)-(3) that does not score as completion. It is arguably excellent cold behavior — WATCH for it in the first scored runs and rule with data, not blind.
+
+**Deferred, not rejected:** a first-class `escalate` verb would make escalation a recorded, accountable act (and is arguably better design), but it is new surface that moves `descriptorsId` and resets the FG-3 denominator, and building a verb *so the falsifier can pass* is instrument-shaping. Gated on whether scored runs show agents flailing at the wall.
 
 **FG-2 — Truncated-descriptions F4 arm.** Pre-register a harness arm running with tool descriptions stripped to names-only (the ~380-deferred-tools reality), scoring the same taxonomy. Ratification adds the arm to T-005's pre-registered design; running it later un-pre-registered would be the "the team believes" failure mode again.
 

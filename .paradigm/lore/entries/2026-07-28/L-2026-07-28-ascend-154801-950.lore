@@ -1,0 +1,20 @@
+id: L-2026-07-28-ascend-154801-950
+type: insight
+timestamp: '2026-07-28T15:48:01.940Z'
+author: ascend
+title: Decision TD-2026-07-28-168 recorded
+summary: Companion lore entry for decision record TD-2026-07-28-168. See .paradigm/decisions/TD-2026-07-28-168.yaml.
+symbols_touched:
+  - '#admit'
+  - '#refusal'
+  - '#knot-payload'
+  - '#f4-classifier'
+  - '#f4-trace'
+  - '#warplined'
+  - '#warpline-cli'
+  - '#resolve'
+references:
+  decision_id: TD-2026-07-28-168
+tags:
+  - companion-lore
+  - decision-reference
