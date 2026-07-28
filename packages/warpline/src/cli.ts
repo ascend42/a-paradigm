@@ -41,6 +41,7 @@ import { installHook, uninstallHook, hookStatus } from './fabric/hook.js';
 import { forkScratch } from './fabric/scratch.js';
 import { admit, type AdmitResult } from './fabric/admit.js';
 import { exitCodeForResult, exitCodeFor, RefusedError } from './fabric/refusal.js';
+import { traceCli, cliTarget } from './f4/cli-trace.js';
 import { rankVerdicts } from './fabric/rank.js';
 import { shadowAdmit } from './fabric/shadow.js';
 import {
@@ -223,7 +224,13 @@ program
     try {
       // HEAD is the base, the working tree is the branch — so a new symbol reads as
       // `born`, a deleted one as `retired` (status semantics, not the inverse).
-      const report = await semanticDiff('HEAD', WORKTREE_REF);
+      // f4Trace verb is `cli:status`, NOT `status`: this is the meaning diff, a
+      // different thing from the daemon's cycle-position self-description.
+      const root = await repoRoot().catch(() => process.cwd());
+      const report = await traceCli(
+        { root, verb: 'cli:status', target: cliTarget({}, { json: options.json }) },
+        () => semanticDiff('HEAD', WORKTREE_REF),
+      );
       if (options.json) {
         process.stdout.write(JSON.stringify(report, null, 2) + '\n');
       } else {
@@ -445,7 +452,10 @@ program
   .action(async (agentId: string, options: { into?: string; json?: boolean }) => {
     try {
       const root = await repoRoot().catch(() => process.cwd());
-      const result = forkNative(root, agentId, { into: options.into ? path.resolve(options.into) : undefined });
+      const result = await traceCli(
+        { root, verb: 'fork', target: cliTarget({ agentId, into: options.into }), principal: agentId },
+        () => forkNative(root, agentId, { into: options.into ? path.resolve(options.into) : undefined }),
+      );
       if (options.json) {
         process.stdout.write(JSON.stringify(result, null, 2) + '\n');
       } else {
@@ -478,13 +488,23 @@ program
         : await fs.readFile(path.resolve(options.claim), 'utf8');
       const body = JSON.parse(raw) as Omit<CreateClaimInput, 'agentId'>;
       if (options.native) {
-        const result = await proposeNative(root, {
-          worktree: options.worktree ? path.resolve(options.worktree) : root,
-          agentId: options.agent,
-          intent: options.intent ?? body.intent,
-          actor: options.as,
-          claim: body,
-        });
+        // f4Trace: intent and the --claim BODY are prose — neither may enter `target`.
+        const result = await traceCli(
+          {
+            root,
+            verb: 'propose',
+            target: cliTarget({ agentId: options.agent, worktree: options.worktree }, { native: true }),
+            principal: options.agent,
+          },
+          () =>
+            proposeNative(root, {
+              worktree: options.worktree ? path.resolve(options.worktree) : root,
+              agentId: options.agent,
+              intent: options.intent ?? body.intent,
+              actor: options.as,
+              claim: body,
+            }),
+        );
         if (options.json) {
           process.stdout.write(JSON.stringify(result, null, 2) + '\n');
         } else if (result.noop) {
@@ -504,8 +524,19 @@ program
         }
         return;
       }
-      const claim = createClaim({ ...body, agentId: options.agent });
-      persistClaim(root, claim);
+      const claim = await traceCli(
+        {
+          root,
+          verb: 'propose',
+          target: cliTarget({ agentId: options.agent }, { claimOnly: true }),
+          principal: options.agent,
+        },
+        () => {
+          const c = createClaim({ ...body, agentId: options.agent });
+          persistClaim(root, c);
+          return c;
+        },
+      );
       if (options.json) {
         process.stdout.write(JSON.stringify(claim, null, 2) + '\n');
       } else {
@@ -542,15 +573,37 @@ program
         process.stderr.write('warpline: admit --shadow and --native are mutually exclusive (the shadow gate rides the git-era seal path at R1)\n');
         process.exit(1);
       }
+      // f4Trace: one `admit` verb across all three engine paths — which path
+      // serves the call is Warpline's business; the agent asked for `admit`.
+      // The distinguishing flags ride `target`, where they are already legal.
+      const admitTarget = cliTarget(
+        { agentId, ref: options.ref, claim: options.claim, worktree: options.worktree },
+        {
+          shadow: options.shadow,
+          native: options.native,
+          acceptBreach: options.acceptBreach,
+          acceptRisk: options.acceptRisk,
+        },
+      );
       if (options.shadow) {
-        const { result, row } = await shadowAdmit(root, {
-          cwd: root,
-          agentId,
-          ref: options.ref ?? WORKTREE_REF,
-          ...(options.claim ? { claim: options.claim } : {}),
-          ...(options.acceptBreach ? { acceptBreach: true } : {}),
-          ...(options.acceptRisk ? { acceptRisk: true } : {}),
-        });
+        // the traced value is the AdmitResult itself, not the {result,row}
+        // wrapper — the would-refuse verdict (and its refusal) lives there.
+        let row!: Awaited<ReturnType<typeof shadowAdmit>>['row'];
+        const result = await traceCli(
+          { root, verb: 'admit', target: admitTarget, principal: agentId },
+          async () => {
+            const out = await shadowAdmit(root, {
+              cwd: root,
+              agentId,
+              ref: options.ref ?? WORKTREE_REF,
+              ...(options.claim ? { claim: options.claim } : {}),
+              ...(options.acceptBreach ? { acceptBreach: true } : {}),
+              ...(options.acceptRisk ? { acceptRisk: true } : {}),
+            });
+            row = out.row;
+            return out.result;
+          },
+        );
         if (options.json) {
           process.stdout.write(JSON.stringify({ shadow: true, row, result }, null, 2) + '\n');
         } else {
@@ -567,13 +620,17 @@ program
         return;
       }
       if (options.native) {
-        const result = await admitNative(root, {
-          worktree: options.worktree ? path.resolve(options.worktree) : root,
-          agentId,
-          ...(options.claim ? { claim: options.claim } : {}),
-          ...(options.acceptBreach ? { acceptBreach: true } : {}),
-          ...(options.acceptRisk ? { acceptRisk: true } : {}),
-        });
+        const result = await traceCli(
+          { root, verb: 'admit', target: admitTarget, principal: agentId },
+          () =>
+            admitNative(root, {
+              worktree: options.worktree ? path.resolve(options.worktree) : root,
+              agentId,
+              ...(options.claim ? { claim: options.claim } : {}),
+              ...(options.acceptBreach ? { acceptBreach: true } : {}),
+              ...(options.acceptRisk ? { acceptRisk: true } : {}),
+            }),
+        );
         if (options.json) {
           process.stdout.write(JSON.stringify(result, null, 2) + '\n');
         } else {
@@ -589,14 +646,18 @@ program
         process.exitCode = exitCodeForResult(result);
         return;
       }
-      const result = await admit(root, {
-        cwd: root,
-        agentId,
-        ref: options.ref ?? WORKTREE_REF,
-        ...(options.claim ? { claim: options.claim } : {}),
-        ...(options.acceptBreach ? { acceptBreach: true } : {}),
-        ...(options.acceptRisk ? { acceptRisk: true } : {}),
-      });
+      const result = await traceCli(
+        { root, verb: 'admit', target: admitTarget, principal: agentId },
+        () =>
+          admit(root, {
+            cwd: root,
+            agentId,
+            ref: options.ref ?? WORKTREE_REF,
+            ...(options.claim ? { claim: options.claim } : {}),
+            ...(options.acceptBreach ? { acceptBreach: true } : {}),
+            ...(options.acceptRisk ? { acceptRisk: true } : {}),
+          }),
+      );
       if (options.json) {
         process.stdout.write(JSON.stringify(result, null, 2) + '\n');
       } else {
@@ -622,7 +683,10 @@ program
         process.exit(1);
       }
       const root = await repoRoot().catch(() => process.cwd());
-      const report = gradeFabric(root, { window });
+      const report = await traceCli(
+        { root, verb: 'grade.report', target: cliTarget({ window: String(window) }, { dry: options.dry }) },
+        () => gradeFabric(root, { window }),
+      );
       if (!options.dry) await applyGrades(root, report, new Date().toISOString());
       if (options.json) {
         process.stdout.write(JSON.stringify(report, null, 2) + '\n');
@@ -747,13 +811,21 @@ knot
   .action(async (selector: string, options: { json?: boolean }) => {
     try {
       const root = await repoRoot().catch(() => process.cwd());
-      const payload = readKnotPayload(root, selector);
-      if (!payload) {
-        process.stderr.write(
-          `warpline: no KNOT payload matches ${JSON.stringify(selector)} — payloads are written by \`warpline admit\` on a KNOT/DANGLE verdict (see .warpline/knots/)\n`,
-        );
-        process.exit(1);
-      }
+      // f4Trace: a miss must record as NOT-ok (it is the cold agent hydrating a
+      // pointer that did not resolve) — so it throws to `fail()` like every
+      // other command rather than exiting inline. Same message, same exit 1.
+      const payload = await traceCli(
+        { root, verb: 'knot.show', target: cliTarget({ selector }, { json: options.json }) },
+        () => {
+          const p = readKnotPayload(root, selector);
+          if (!p) {
+            throw new Error(
+              `no KNOT payload matches ${JSON.stringify(selector)} — payloads are written by \`warpline admit\` on a KNOT/DANGLE verdict (see .warpline/knots/)`,
+            );
+          }
+          return p;
+        },
+      );
       if (options.json) {
         process.stdout.write(JSON.stringify(payload, null, 2) + '\n');
       } else {
@@ -982,9 +1054,13 @@ refs
   .action(async (options: { json?: boolean }) => {
     try {
       const root = await repoRoot().catch(() => process.cwd());
-      const wdir = warplineDirOf(root);
-      const named = listRefs(wdir);
-      const tips = heads(wdir);
+      const { named, tips } = await traceCli(
+        { root, verb: 'refs.list', target: cliTarget({}, { json: options.json }) },
+        () => {
+          const wdir = warplineDirOf(root);
+          return { named: listRefs(wdir), tips: heads(wdir) };
+        },
+      );
       if (options.json) {
         process.stdout.write(JSON.stringify({ refs: Object.fromEntries(named), heads: tips }, null, 2) + '\n');
       } else {
@@ -1211,7 +1287,20 @@ daemonCmd
       const params = JSON.parse(options.params) as Record<string, unknown>;
       const client = await DaemonClient.connect(root, token);
       try {
-        const result = await client.call(verb, params);
+        // the CLI's TRANSPORT path: traced under the verb it drives, so a
+        // socket-driven CLI arm is measured on the same footing as the skins.
+        const result = await traceCli(
+          {
+            root,
+            verb,
+            target: cliTarget({
+              selector: typeof params.selector === 'string' ? params.selector : undefined,
+              agentId: typeof params.agentId === 'string' ? params.agentId : undefined,
+            }),
+            ...(typeof params.agentId === 'string' ? { principal: params.agentId } : {}),
+          },
+          () => client.call(verb, params),
+        );
         process.stdout.write(JSON.stringify(result, null, 2) + '\n');
       } finally {
         client.close();

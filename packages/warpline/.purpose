@@ -1671,22 +1671,64 @@ components:
       inside ok results, rows carry no runId, and the wasted-turn classifier
       needs the prior refusal's enums). One row per tool/CLI call appended to
       .warpline/f4/trace.jsonl: {schemaVersion, ts, runId ($WARPLINE_F4_RUN_ID,
-      'unscored' outside a harness run — rows always emit), seq (per-process
+      'unscored' outside a harness run — rows always emit), seq (per-RUN
       ordinal), skin:'mcp'|'cli', principal, verb (dotted daemon name), target
       (structural only — selectors/flags, NEVER prose), ok, refusal? (the
       refusal:v1 VERBATIM, captured from error frames AND result.refusal),
       resultClass? (structural: sealed | decision.status | noop | read),
       descriptorsId (which teaching text served the call — FG-3)}. F4Tracer is
-      the per-process handle (fixes identity, counts seq; append is
-      BEST-EFFORT — a trace failure never fails the serving call);
-      resultClassOf derives the class from result SHAPE, never text. The W1-W4
-      wasted-turn taxonomy is the HARNESS's pure classifier over these rows —
-      this module only emits faithfully.
+      the emitting handle (fixes identity; append is BEST-EFFORT — a trace
+      failure never fails the serving call); resultClassOf derives the class
+      from result SHAPE, never text. seq is SEEDED from the trace file
+      (nextSeqFor: max(seq)+1 for the runId), not counted from zero per
+      process: the MCP skin is one long-lived process per run but the CLI is
+      one process PER COMMAND, and a process-local counter would stamp every
+      CLI row seq:0 — unorderable for a classifier that sorts by seq. Ordering
+      assumes a SERIAL arm (what F4 measures). The W1-W4 wasted-turn taxonomy
+      is the HARNESS's pure classifier over these rows — this module only emits
+      faithfully.
     type: module
     tags: [warpline, native-first, F4, measurement]
     components:
       - "#refusal"
       - "#warplined-descriptors"
+
+  f4-cli-trace:
+    description: >-
+      The CLI SKIN's emission side of #f4-trace (src/f4/cli-trace.ts) — the F4
+      bar scores BOTH skins independently and cli.ts emitted NO rows at all
+      until this landed, so the CLI arm was structurally unmeasurable. traceCli
+      wraps a command body: one row per call, ok with the result's structural
+      class and any result-borne refusal, not-ok on a throw (RefusedError
+      contributes its refusal:v1; a plain Error contributes NONE — the honest
+      record of a cold agent handed prose instead of a machine-readable
+      refusal, the residue T-2026-07-21-003 still tracks). ONE SHAPE, THREE
+      SKINS: rows name the DAEMON VERB, never the commander path, so the
+      classifier stays arm-agnostic — `warpline admit --native` and the
+      warpline_admit tool are the same verb through different skins (all three
+      admit engine paths emit verb 'admit'; the distinguishing flags ride
+      target). CLI-only commands emit under a `cli:` prefix rather than being
+      folded into a verb they are not — `warpline status` is 'cli:status' (the
+      MEANING DIFF; the daemon's `status` is cycle-position + next legal verbs,
+      a different thing, and conflating them would hand the classifier's
+      orientation allowance to a call that teaches nothing about what to do
+      next). cliTarget enforces the targetOf discipline; PROSE (--intent/-m,
+      the inline --claim BODY) never reaches it. PRINCIPAL on this arm is
+      SELF-ASSERTED (the native CLI verbs run in-process with no token, unlike
+      the MCP skin's daemon-stamped token principal) — honest for measurement,
+      never attribution. KNOWN ARM ASYMMETRIES, surfaced not papered over:
+      daemon `status` (the D4 load-bearing self-description carrier) and
+      `shadow.tail` have NO CLI equivalent, and CLI `propose` REQUIRES --claim
+      where the daemon's claim param is optional. Closing any of them changes
+      #warplined-descriptors and therefore resets the FG-3 denominator — so
+      they are founder decisions, not wiring. Proven over the real binary in
+      test/f4-cli-arm.test.ts (six separate processes, one continuous seq).
+    type: module
+    tags: [warpline, native-first, F4, measurement, cli]
+    components:
+      - "#f4-trace"
+      - "#refusal"
+      - "#warpline-cli"
 
   warpline-mcp:
     description: >-

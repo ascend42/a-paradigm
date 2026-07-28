@@ -19,6 +19,14 @@
  *    NEVER intent/reason/prose bodies. No other field may carry prose.
  *  - `runId` comes from $WARPLINE_F4_RUN_ID (set by the T-005 harness);
  *    'unscored' when absent — rows always emit, scoring filters by runId.
+ *  - `seq` is the per-RUN ordinal, seeded from the trace file at construction
+ *    rather than from zero. The MCP skin is one long-lived process per run, but
+ *    the CLI skin is one process PER COMMAND — a process-local counter would
+ *    stamp every CLI row seq:0 and the classifier (which orders by seq) would
+ *    see an unorderable transcript. Seeding makes the ordinal continuous across
+ *    the many short processes of a CLI-arm run. Ordering assumes the arm is
+ *    SERIAL (one subject issuing one command at a time, which is what F4
+ *    measures); genuinely concurrent writers in one runId could tie.
  *  - `descriptorsId` pins WHICH teaching text served this call (FG-3), so a
  *    failed run attributes to description vs refusal vs protocol.
  *  - The wasted-turn taxonomy (W1-W4) is the HARNESS's pure classifier over
@@ -80,12 +88,25 @@ export function resultClassOf(result: unknown): string | null {
 }
 
 /**
+ * The next ordinal for `runId` in this fabric's trace: max(seq)+1 over the rows
+ * already recorded for that run, 0 when the run has none. Best-effort — an
+ * unreadable trace starts a fresh ordinal rather than failing the call.
+ */
+export function nextSeqFor(root: string, runId: string): number {
+  let max = -1;
+  for (const row of readF4Trace(root)) {
+    if (row.runId === runId && typeof row.seq === 'number' && row.seq > max) max = row.seq;
+  }
+  return max + 1;
+}
+
+/**
  * One emitting process's trace handle: fixes runId/skin/principal/descriptorsId
- * at construction, counts seq. Append is BEST-EFFORT — a trace failure never
- * fails the serving call.
+ * at construction and counts seq from wherever the run left off. Append is
+ * BEST-EFFORT — a trace failure never fails the serving call.
  */
 export class F4Tracer {
-  private seq = 0;
+  private seq: number;
   private readonly runId: string;
   private readonly descriptorsId: string;
 
@@ -99,6 +120,7 @@ export class F4Tracer {
   ) {
     this.runId = process.env.WARPLINE_F4_RUN_ID || 'unscored';
     this.descriptorsId = descriptorsId();
+    this.seq = nextSeqFor(root, this.runId);
   }
 
   emit(entry: {
