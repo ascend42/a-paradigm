@@ -1552,8 +1552,17 @@ components:
       principal human); `status` is STATE-AWARE (PW-6, additive — the RELOCATED
       F4 carrier since hosts truncate tool descriptions): cycle with stages,
       the caller's position (scratchPresent/scratchIsPickId/proposalSealed/
-      behindSelvage), nextLegalVerbs, the verb→tool map, and the static
-      untrusted-content sentence; `knot.show` takes summary:true (PW-7 —
+      behindSelvage/knotOpen), nextLegalVerbs + nextBecause, the verb→tool map,
+      and the static untrusted-content sentence. The next-verb answer is
+      resolved from #warplined-descriptors' declarative table (so it rides
+      descriptorsId), and knotOpen — a persisted KNOT work order naming THIS
+      principal's CURRENT sealed proposal, keyed on stateId so re-proposing
+      clears it — routes a contested agent to knot.show. FG-3 review finding
+      (2026-07-28, fixed): the carrier previously answered 'admit' after a
+      KNOT, contradicting the refusal's own ladder and steering the agent into
+      the identical re-admit the #f4-classifier scores W1 — costly because the
+      classifier grants exactly ONE orientation call per recovery episode.
+      Regression: test/status-carrier.test.ts; `knot.show` takes summary:true (PW-7 —
       payload minus file bodies, summary marker honest); the audit row gains
       resultCode (PW-8 — a verdict-class refusal inside an ok result is audited,
       not masked; same derivation as exitCodeForResult; #f4-trace, not the
@@ -1650,13 +1659,27 @@ components:
       dotted daemon verbs and MCP tool names (knot.show → warpline_knot_show);
       wire shapes and refusal.next[].verb keep the dotted names verbatim.
       agentSurfaceVerbs() derives the default MCP surface = every
-      principal:'agent' descriptor (human verbs OMITTED per Aegis R2). The
-      WHOLE table is CONTENT-ADDRESSED (descriptorsId, sha256 of canonical
-      serialization) — the FG-3 pre-registration anchor stamped into every
-      #f4-trace row: T-005 pins it before the first scored F4 batch, ANY change
-      resets the ≥10-run denominator, and test/descriptors-frozen.test.ts is
-      the tripwire that makes a change impossible to miss. Carries the static
-      untrusted-content sentence for the prose-carrying tools (admit /
+      principal:'agent' descriptor (human verbs OMITTED per Aegis R2). ALSO
+      owns NEXT_LEGAL_VERBS + nextLegalVerbsFor() — the directive rule the
+      #warplined status result carries, declared as DATA (first-match-wins over
+      CyclePosition {scratchPresent, proposalSealed, behindSelvage, knotOpen},
+      each rule carrying a one-clause `because`). It lived as an inline
+      conditional in the daemon's status handler until the FG-3 review
+      (2026-07-28) moved it here for two reasons: it is the single most
+      DIRECTIVE thing Warpline says to a cold agent, and as code it sat OUTSIDE
+      the content address. The WHOLE TEACHING SURFACE is now CONTENT-ADDRESSED
+      (descriptorsId, sha256 of canonical serialization over the verb table +
+      the next-verb rule + the DERIVED tool-name map, so a change to
+      toolNameOf's law also moves the id) — the FG-3 pre-registration anchor
+      stamped into every #f4-trace row: T-005 pins it before the first scored
+      F4 batch, ANY change resets the ≥10-run denominator, and
+      test/descriptors-frozen.test.ts is the tripwire that makes a change
+      impossible to miss. Scoping the id to descriptions alone would have
+      pinned the WRONG artifact: PW-6 relocated the F4 carrier from
+      descriptions into the status RESULT because hosts truncate descriptions,
+      so a next-verb-rule edit would have changed what every cold agent is
+      taught while the id — and the denominator — stood still. Carries the
+      static untrusted-content sentence for the prose-carrying tools (admit /
       knot.show / shadow.tail).
     type: module
     tags: [warpline, native-first, F4, mcp]

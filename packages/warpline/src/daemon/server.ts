@@ -35,7 +35,7 @@ import { listRefs, heads, readRef } from '../fabric/refs.js';
 import { readScratch } from '../fabric/scratch.js';
 import { parentsOf } from '../fabric/dag.js';
 import { summarizeKnotPayload } from '../fabric/knot-payload.js';
-import { VERB_DESCRIPTORS, toolNameOf, UNTRUSTED_CONTENT_SENTENCE } from './descriptors.js';
+import { VERB_DESCRIPTORS, toolNameOf, UNTRUSTED_CONTENT_SENTENCE, nextLegalVerbsFor } from './descriptors.js';
 import {
   forkNative,
   proposeNative,
@@ -43,7 +43,7 @@ import {
   resolveNative,
 } from '../fabric/native.js';
 import { shadowAdmit, readShadowVerdicts } from '../fabric/shadow.js';
-import { readKnotPayload } from '../fabric/knot-payload.js';
+import { readKnotPayload, listKnotPayloads } from '../fabric/knot-payload.js';
 import { gradeFabric } from '../fabric/grade.js';
 import { stake, stakeRecover } from '../fabric/stake.js';
 import { WORKTREE_REF } from '../absorb.js';
@@ -254,6 +254,7 @@ export async function startDaemon(root: string, opts: StartDaemonOptions = {}): 
         let scratch: string | null = null;
         let proposalSealed = false;
         let behindSelvage = false;
+        let knotOpen = false;
         let selvageTip: string | null = null;
         try {
           scratch = readScratch(r, who.principal);
@@ -266,12 +267,22 @@ export async function startDaemon(root: string, opts: StartDaemonOptions = {}): 
             proposalSealed = !!strand && strand.authoredBy?.agentId === who.principal;
             const base = proposalSealed && strand ? (parentsOf(strand)[0] ?? null) : scratch;
             behindSelvage = selvageTip !== null && base !== selvageTip;
+            // FG-3 finding 2: a KNOT work order naming THIS principal's CURRENT
+            // sealed proposal means the contest is live. Keyed on stateId, so
+            // re-proposing (a new stateId) correctly clears it — the new
+            // proposal has not been judged yet.
+            if (proposalSealed && strand) {
+              knotOpen = listKnotPayloads(r).some(
+                (p) => p.ours.agentId === who.principal && p.ours.stateId === strand.stateId,
+              );
+            }
           }
         } catch {
           /* status stays best-effort — orientation must never throw */
         }
-        const nextLegalVerbs =
-          scratch === null ? ['fork'] : proposalSealed ? ['admit'] : ['propose'];
+        // the rule is DATA in #warplined-descriptors, so it rides descriptorsId
+        // and the FG-3 freeze covers the carrier and not just the descriptions.
+        const next = nextLegalVerbsFor({ scratchPresent: scratch !== null, proposalSealed, behindSelvage, knotOpen });
         return {
           schemaVersion: RPC_SCHEMA,
           pid: process.pid,
@@ -300,8 +311,10 @@ export async function startDaemon(root: string, opts: StartDaemonOptions = {}): 
             scratchIsPickId: scratch?.startsWith('pick:') ?? false,
             proposalSealed,
             behindSelvage,
+            knotOpen,
           },
-          nextLegalVerbs,
+          nextLegalVerbs: next.verbs,
+          nextBecause: next.because,
           toolMap: Object.fromEntries(DAEMON_VERBS.map((v) => [v, toolNameOf(v)])),
           untrustedContent: UNTRUSTED_CONTENT_SENTENCE,
         };

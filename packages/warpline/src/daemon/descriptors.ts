@@ -190,19 +190,108 @@ export function toolNameOf(verb: string): string {
   return 'warpline_' + verb.replace(/\./g, '_');
 }
 
+/* ── the next-legal-verbs rule (FG-3 review, 2026-07-28) ─────────────────────
+ *
+ * This table used to be an inline `? :` chain in the daemon's status handler,
+ * which put the single most DIRECTIVE thing Warpline says to a cold agent
+ * OUTSIDE `descriptorsId` — so a change to it altered what every cold agent is
+ * taught while the content address, and therefore the ≥10-run denominator,
+ * stayed put. PW-6 relocated the F4 carrier from descriptions INTO the status
+ * result precisely because hosts truncate descriptions; the freeze has to
+ * follow the carrier. Declaring the rule as DATA here fixes both problems at
+ * once: it is hashed, and it is reviewable before it is signed.
+ *
+ * FIRST MATCH WINS. `when` keys are conjunctive; omitted keys are wildcards.
+ */
+
+/** The agent's observable position in the write cycle — all structural. */
+export interface CyclePosition {
+  scratchPresent: boolean;
+  proposalSealed: boolean;
+  /** the proposal's base is no longer the selvage tip (someone else advanced it). */
+  behindSelvage: boolean;
+  /** a KNOT work order names THIS principal's current sealed proposal. */
+  knotOpen: boolean;
+}
+
+export interface NextVerbRule {
+  when: Partial<CyclePosition>;
+  verbs: DaemonVerb[];
+  /** one clause, agent-facing, telling it WHY — carried in the status result. */
+  because: string;
+}
+
+export const NEXT_LEGAL_VERBS: readonly NextVerbRule[] = Object.freeze([
+  {
+    // FG-3 finding 2: without this rule status answered 'admit' after a KNOT —
+    // contradicting the refusal's own ladder (knot.show, then a HUMAN resolve)
+    // and walking the agent into an identical-repeat the classifier scores W1.
+    // The classifier grants one orientation call per episode BECAUSE cold
+    // agents legitimately re-orient; the carrier must not misdirect that call.
+    when: { knotOpen: true },
+    verbs: ['knot.show'],
+    because:
+      'your proposal is contested: read the KNOT work order. Re-admitting unchanged cannot clear it, and resolution is human-class — escalate rather than retry.',
+  },
+  {
+    when: { scratchPresent: false },
+    verbs: ['fork'],
+    because: 'you have no scratch ref yet: mint one at the selvage tip before proposing.',
+  },
+  {
+    when: { proposalSealed: true },
+    verbs: ['admit'],
+    because: 'your proposal is sealed but unjudged: admit it against the live selvage.',
+  },
+  {
+    when: {},
+    verbs: ['propose'],
+    because: 'you have a scratch base but nothing sealed on it: seal your worktree as a proposal.',
+  },
+] as const satisfies readonly NextVerbRule[]);
+
+/** Resolve a position against the table. Total: the last rule is unconditional. */
+export function nextLegalVerbsFor(position: CyclePosition): { verbs: DaemonVerb[]; because: string } {
+  for (const rule of NEXT_LEGAL_VERBS) {
+    const matches = (Object.entries(rule.when) as Array<[keyof CyclePosition, boolean]>).every(
+      ([k, v]) => position[k] === v,
+    );
+    if (matches) return { verbs: [...rule.verbs], because: rule.because };
+  }
+  // unreachable while the table ends in an unconditional rule; fail toward
+  // orientation rather than toward a write.
+  return { verbs: ['status'], because: 'position indeterminate: re-orient.' };
+}
+
 /** The verbs the default (agent-mode) MCP surface registers, in cycle order. */
 export function agentSurfaceVerbs(): DaemonVerb[] {
   return DAEMON_VERBS.filter((v) => VERB_DESCRIPTORS[v].principal === 'agent');
 }
 
 /**
- * The content address of the WHOLE descriptor table — the pre-registration
+ * The content address of the WHOLE TEACHING SURFACE — the pre-registration
  * anchor (FG-3): stamped into every f4Trace row so a failed run attributes to
  * description vs refusal vs protocol, and frozen before the first scored batch.
+ *
+ * SCOPE (widened by the FG-3 review, 2026-07-28): this hashed the verb table
+ * ALONE, which left the load-bearing carrier outside the freeze — PW-6 moved
+ * the F4 teaching from descriptions into the `status` RESULT because hosts
+ * truncate descriptions, so pinning only the descriptions pinned the wrong
+ * artifact. A change to the next-verb rule or the tool-name law would have
+ * altered what every cold agent is taught while this id — and therefore the
+ * ≥10-run denominator — stood still. All three are now covered:
+ *   - VERB_DESCRIPTORS  the summaries + param schemas
+ *   - NEXT_LEGAL_VERBS  the directive rule the status result carries
+ *   - the tool-name map  DERIVED, so a change to toolNameOf's law moves the id
  */
 export function descriptorsId(): string {
   // Structural clone via JSON round-trip: canonicalSerialize wants the plain
-  // CanonicalValue shape, and the table is pure data (no functions, no cycles).
-  const plain = JSON.parse(JSON.stringify(VERB_DESCRIPTORS)) as Parameters<typeof canonicalSerialize>[0];
+  // CanonicalValue shape, and all three parts are pure data (no fns, no cycles).
+  const surface = {
+    verbs: VERB_DESCRIPTORS,
+    nextLegalVerbs: NEXT_LEGAL_VERBS,
+    toolNames: Object.fromEntries(DAEMON_VERBS.map((v) => [v, toolNameOf(v)])),
+  };
+  const plain = JSON.parse(JSON.stringify(surface)) as Parameters<typeof canonicalSerialize>[0];
   return DESCRIPTORS_SCHEMA + ':' + createHash('sha256').update(canonicalSerialize(plain), 'utf8').digest('hex');
 }

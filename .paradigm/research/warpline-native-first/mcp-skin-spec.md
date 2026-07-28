@@ -146,7 +146,23 @@ Ratified in AMENDED form. The originally-pinned wording ended *"…and emits a s
 
 **FG-2 — Truncated-descriptions F4 arm.** Pre-register a harness arm running with tool descriptions stripped to names-only (the ~380-deferred-tools reality), scoring the same taxonomy. Ratification adds the arm to T-005's pre-registered design; running it later un-pre-registered would be the "the team believes" failure mode again.
 
-**FG-3 — Descriptors freeze + denominator reset rule.** `descriptorsId` is pinned in the T-005 pre-registration before the first scored batch; ANY descriptor change (wording included) resets the ≥10-run denominator. Ratify the rule, then freeze.
+**FG-3 — Descriptors freeze + denominator reset rule.** `descriptorsId` is pinned in the T-005 pre-registration before the first scored batch; ANY change (wording included) resets the ≥10-run denominator. Ratify the rule, then freeze.
+
+**Review pass completed 2026-07-28 (pre-freeze, per the founder's instruction that the freeze is expensive to undo). Two findings, both FIXED before pinning — the id has MOVED as a result.**
+
+*Finding 1 — the id did not cover the load-bearing carrier.* `descriptorsId()` hashed `VERB_DESCRIPTORS` alone, but PW-6 deliberately relocated the F4 teaching OUT of descriptions and INTO the `status` result ("hosts defer/truncate tool descriptions to names-only, but nothing truncates a RESULT"). Two teaching-bearing pieces sat outside the hash: the `nextLegalVerbs` rule (then an inline conditional in the daemon's status handler) and the `toolNameOf` mangling law. Consequence: edit the next-verb rule → what every cold agent is taught changes → `descriptorsId` unchanged → **the denominator does not reset**, and the trace's stated purpose ("pins WHICH teaching text served this call") is void. The freeze would have been nominal. FIXED: the rule is now a declarative table in `descriptors.ts` (`NEXT_LEGAL_VERBS` + `nextLegalVerbsFor`), and the id hashes the verb table + the rule + the DERIVED tool-name map. Two tests assert the id MOVES when either changes.
+
+*Finding 2 — `status` misdirected a contested agent.* Probed live against the real skin: after a KNOT the carrier answered `nextLegalVerbs: ["admit"]`, while the refusal's own ladder said `[knot.show, resolve(principal:'human')]` — so re-orienting steered the agent straight into the identical re-admit the classifier scores **W1**. Expensive because the classifier grants exactly ONE orientation call per recovery episode, precisely on the assumption that cold agents re-orient. `behindSelvage` was already computed and then ignored by the rule. FIXED: the rule is KNOT-aware via a new `position.knotOpen` (a persisted work order naming this principal's CURRENT sealed proposal, keyed on `stateId` so re-proposing correctly clears it) and routes to `knot.show` with a `nextBecause` clause saying why retrying cannot work. Regression: `test/status-carrier.test.ts`.
+
+**NEW pinned id, awaiting FG-3 signature:**
+
+```
+descriptors:v1:445e4eb767771108a039f21606fa51bfe96d1ddc2b70246f311423184bc77964
+```
+
+(was `descriptors:v1:a2ca0ab96554e90881b7bcb398559282e183fb5143aeae49df4dc948cd829bcc` — superseded by the two fixes above, pre-freeze, with zero scored runs in the denominator, so nothing was discarded.)
+
+*Standing caveat carried into FG-2:* the CLI arm has NO `status` equivalent, so it has no orientation carrier at all. A CLI-arm F4 failure could be "no carrier" rather than "not legible", and the two would be indistinguishable.
 
 **FG-4 — KNOT seeding contract (Jinx 6, T-005 dependency).** A single principal cannot produce a KNOT (fork re-mints at selvage). T-005 needs a scripted second principal and a PRE-REGISTERED stratified seed corpus: semantic KNOTs with payload / byte-downgrade KNOTs without payload / one payload-persist-failure case. Ratify the corpus composition as part of T-005's pre-registration.
 
