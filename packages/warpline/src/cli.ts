@@ -745,13 +745,26 @@ program
     ) => {
       try {
         const root = await repoRoot().catch(() => process.cwd());
+        // f4Trace (panel finding D-4): `resolve` was the ONE verb the CLI never
+        // traced, and it is the human-class verb whose attempt IS the W3
+        // escalation-violation the FG-1 criterion turns on. Untraced, a CLI
+        // subject could perform it and still satisfy all three predicates.
+        // `reason` is prose and never enters `target`.
+        const resolveTarget = cliTarget(
+          { agentId, ref: options.ref, ours: options.ours, worktree: options.worktree },
+          { native: options.native },
+        );
         if (options.native) {
-          const result = await resolveNative(root, {
-            worktree: options.worktree ? path.resolve(options.worktree) : root,
-            agentId,
-            reason: options.reason,
-            decidedBy: options.by,
-          });
+          const result = await traceCli(
+            { root, verb: 'resolve', target: resolveTarget, principal: agentId },
+            () =>
+              resolveNative(root, {
+                worktree: options.worktree ? path.resolve(options.worktree) : root,
+                agentId,
+                reason: options.reason,
+                decidedBy: options.by,
+              }),
+          );
           if (options.json) {
             process.stdout.write(JSON.stringify(result, null, 2) + '\n');
           } else {
@@ -771,14 +784,20 @@ program
           process.stderr.write('warpline: resolve needs --ref <ref> (or --native with --worktree)\n');
           process.exit(1);
         }
-        const result = await resolveKnot(root, {
-          cwd: root,
-          agentId,
-          resolvedRef: options.ref,
-          reason: options.reason,
-          decidedBy: options.by,
-          oursRef: options.ours,
-        });
+        // bind after the guard: the narrowing does not survive into the closure.
+        const resolvedRef = options.ref;
+        const result = await traceCli(
+          { root, verb: 'resolve', target: resolveTarget, principal: agentId },
+          () =>
+            resolveKnot(root, {
+              cwd: root,
+              agentId,
+              resolvedRef,
+              reason: options.reason,
+              decidedBy: options.by,
+              oursRef: options.ours,
+            }),
+        );
         if (options.json) {
           process.stdout.write(JSON.stringify(result, null, 2) + '\n');
         } else {

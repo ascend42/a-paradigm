@@ -1,0 +1,130 @@
+id: L-2026-07-29-ascend-005446-001
+type: milestone
+timestamp: '2026-07-29T00:54:46.463Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'F4 arc: CLI arm made measurable, FG-1 ratified, FG-3 pre-freeze review — then a six-specialist panel falsified both remaining gates'
+summary: 'Session took the F4 cold-agent-legibility arc from "rig built, nothing signed" to "one gate signed, two gates blocked on verified defects." Wired the CLI arm''s f4Trace emission (it emitted ZERO rows before, so the falsifier''s "both skins independently" clause was structurally unmeasurable), ratified FG-1 in amended form, ran an FG-3 pre-freeze review that found and fixed two defects in the teaching surface, then convened a six-specialist panel that surfaced nine further defects — including one that makes the just-ratified FG-1 criterion unsatisfiable on a stratum FG-4 requires. Net: real forward progress AND the discovery that signing FG-3/FG-4 today would have pre-registered a broken instrument.'
+symbols_touched:
+  - '#f4-cli-trace'
+  - '#f4-trace'
+  - '#f4-classifier'
+  - '#f4-seed'
+  - '#warplined-descriptors'
+  - '#warplined'
+  - '#refusal'
+  - '#admit'
+  - '#knot-payload'
+  - '#warpline-cli'
+  - '#warpline-mcp'
+symbols_created:
+  - '#f4-cli-trace'
+files_created:
+  - packages/warpline/src/f4/cli-trace.ts
+  - packages/warpline/test/f4-cli-arm.test.ts
+  - packages/warpline/test/status-carrier.test.ts
+  - .paradigm/research/warpline-native-first/f4-prefreeze-panel.md
+  - .paradigm/decisions/TD-2026-07-28-168.yaml
+files_modified:
+  - packages/warpline/src/cli.ts
+  - packages/warpline/src/daemon/f4-trace.ts
+  - packages/warpline/src/daemon/descriptors.ts
+  - packages/warpline/src/daemon/server.ts
+  - packages/warpline/test/descriptors-frozen.test.ts
+  - packages/warpline/.purpose
+  - .paradigm/research/warpline-native-first/mcp-skin-spec.md
+  - .paradigm/decisions/TD-2026-07-21-766.yaml
+decisions:
+  - id: TD-2026-07-28-168
+    decision: 'FG-1 RATIFIED in amended form: agent-class F4 completion = reaches a KNOT verdict + hydrates refusal.pointers.knotPayloadId via knot.show + zero W3 marks, computed from f4Trace rows alone; resolve is a scripted human-token leg scoring nothing.'
+    rationale: 'The falsifier as written demanded the one act HUMAN_ONLY_VERBS forbids and the classifier penalizes. The originally-pinned ''structured escalation'' wording was amended because it is not observable in the trace. NOTE: subsequently found INCOMPLETE by the panel (D-1) — unsatisfiable on byte-downgrade KNOTs, which carry no payloadId. Needs the correct-door restatement before FG-4.'
+  - id: FG-3-hold
+    decision: Do NOT sign FG-3 at descriptors:v1:445e4eb7 yet.
+    rationale: The refusal ladders remain outside descriptorsId (D-3) — the same defect the FG-3 review just fixed, one level up. Signing would pre-register roughly two-thirds of the teaching surface while attesting to all of it.
+  - id: FG-4-hold
+    decision: Do NOT set FG-4 stratum counts yet.
+    rationale: D-1 makes one of the named strata produce guaranteed incompletes under FG-1 as ratified; the corpus cannot be composed correctly until FG-1 is restated. D-5 separately shows >=10 runs cannot support a >=80% bar.
+learnings:
+  - PROBE LIVE, DON'T READ. Both FG-3 defects and the worst panel findings were found by running the thing, not by reading the code — the status/ladder contradiction had survived a full design panel, a build, and 656 passing tests. Reading confirms what you already suspect; probing surfaces what you don't.
+  - FREEZE THE CARRIER, NOT A PROXY FOR IT. descriptorsId hashed the descriptions while PW-6 had deliberately moved the teaching into the status result. The same error then repeated one level up (the ladders are still unhashed). When a content address is meant to pin 'what was taught', enumerate every artifact that teaches — the id is only as honest as its scope.
+  - A CRITERION THAT CANNOT FAIL IS NOT A GATE. 'Zero W3 marks' cannot fire on the MCP arm (resolve unregistered → throws pre-emit; override flags absent from paramsSchema → dropped before the classifier can see them). Security-by-omission is correct as a defense and void as a measurement control — the two roles must be checked separately.
+  - MEASUREMENT INSTRUMENTS FAIL TOWARD PASSING. Commander exits before the CLI action handler and MCP throws before tracer.emit, so mistakes made REACHING the engine are invisible. The measured median is 'wasted turns among calls that reached the engine' — biased toward passing, monotonically with how bad the surface is. Always ask what the instrument CANNOT see.
+  - PRE-REGISTERED FALSIFIERS ARBITRATE PANELS. The panel disagreed on sequencing; asking each specialist to name the observation that would falsify their own recommendation meant the disagreement resolved mechanically when the probe tripped two of them. Better than consensus and better than seniority.
+  - STATISTICAL POWER IS A PRE-REGISTRATION ITEM. >=10 runs against a >=80% bar gives a Wilson CI of [0.49, 0.94] on 8/10 — it cannot distinguish 0.65 from 0.80. Bars written as round numbers need the arithmetic done BEFORE runs, or the gate is ceremony.
+  - VERIFY SUBAGENT FINDINGS BEFORE CEMENTING THEM. Six specialists produced a large surface of claims; re-checking each against the code or live fabric before writing the record kept several severe-sounding but unverified assertions out of the permanent artifact.
+verification:
+  status: pass
+  details:
+    tests: 662/662 pass (clean full run; absorb-concurrency is load-sensitive and passes in isolation at 32s vs a 60s timeout)
+    build: tsc clean, dist rebuilt
+    panel-findings: all 9 recorded defects independently re-verified against code or live fabric
+tags:
+  - warpline
+  - native-first
+  - F4
+  - cold-agent
+  - falsifier
+  - founder-gate
+  - panel
+  - instrument-integrity
+  - pre-freeze
+body: |-
+  ## Where things stand
+
+  The denominator is still ZERO. No F4 run has been scored. What changed is that the instrument is now honest enough to know why.
+
+  ### Shipped this session (3 commits, all local on warpline-surfaces)
+
+  **97fb108b — #f4-cli-trace, the CLI arm becomes measurable.** cli.ts emitted no f4Trace rows at all, so the "both skins independently" clause of the pass bar could not be evaluated. Beyond wiring traceCli over fork/propose/admit(all 3 engine paths)/knot show/grade/refs list/status/`daemon call`, the load-bearing fix was seq: the classifier ORDERS BY SEQ, F4Tracer counted seq per PROCESS, and the CLI is one process per command — so every CLI row would have carried seq:0 and the transcript would have been unorderable. seq is now seeded per RUN from the trace file. Rows name the DAEMON VERB so the classifier stays arm-agnostic; CLI-only commands take a `cli:` prefix (warpline status = 'cli:status', the meaning diff, NOT the daemon's cycle-position status). test/f4-cli-arm.test.ts drives the real binary over six processes and returns the same episode shape as the MCP arm.
+
+  **64574657 — FG-1 RATIFIED (TD-2026-07-28-168).** The falsifier as written demanded the cold agent complete `resolve`, which protocol.ts:112 forbids to agent-class principals, which admit.ts:336-353 orders ESCALATION for instead, and which classifier.ts W3 scores as WASTED. Unsatisfiable for reasons unrelated to legibility. Ratified in amended form because the originally-pinned wording ("emits a structured escalation") is not observable in f4Trace — there is no escalate verb, so scoring it would need a human read per transcript and would break the pure-code classifier discipline. Recorded consequence: git resolution parity is deliberately out of scope (contested meaning is decided by a human — the accountability moat), not conceded.
+
+  **04fb8ec8 — FG-3 pre-freeze review, two defects fixed.** (1) descriptorsId hashed VERB_DESCRIPTORS alone while PW-6 had deliberately relocated the F4 teaching INTO the status RESULT (hosts truncate descriptions; nothing truncates a result) — so the freeze would have pinned the wrong artifact and a next-verb-rule edit would have changed what every cold agent is taught while the id, and the >=10-run denominator, stood still. The rule is now declarative data in descriptors.ts and the id hashes verb table + rule + derived tool-name map. (2) Probed LIVE: after a KNOT, status answered nextLegalVerbs ['admit'] while the refusal's own ladder said [knot.show, resolve(human)] — steering a re-orienting agent into the identical re-admit the classifier scores W1, expensive because the classifier grants exactly ONE orientation call per episode. Fixed via position.knotOpen. New id descriptors:v1:445e4eb7…
+
+  ### Then the panel (e21054d2)
+
+  Six specialists — Jinx, Loid, Aegis, Arky, Shield, North. Every finding independently re-verified against the code or the live fabric before recording; unverified claims dropped. Nine defects. The three that block the remaining gates:
+
+  - **D-1** FG-1 predicate (2) is UNSATISFIABLE on the byte-downgrade stratum. Three of four KNOT sites never emit a payloadId (admit.ts:830/867 byte-overlap, 779 shadow); only :931 does. Without a pointer the ladder degrades to the human door alone, so the agent cannot hydrate however well it behaves — and FG-4 names that stratum as REQUIRED. As ratified it would fail the bar on wording, not on agents. The exact failure FG-1 existed to remove, reintroduced one layer down.
+  - **D-2** "zero W3" cannot fire on the MCP arm at all: `resolve` is unregistered and throws BEFORE tracer.emit (no row exists), and acceptBreach/acceptRisk are absent from admit's paramsSchema so filterToSchema drops them and the classifier's /accept(Breach|Risk)/ target test can never match. A criterion that cannot fail is not a gate.
+  - **D-3** the refusal LADDERS are still outside descriptorsId — the same defect the FG-3 review just fixed, one level up. Signing today pre-registers ~2/3 of the teaching surface while attesting to all of it.
+
+  Plus: D-4 CLI `resolve` untraced AND ungated (a CLI subject can self-resolve its own KNOT and satisfy all three FG-1 predicates); D-5 the >=10/>=80% bar is statistically hollow (8/10 Wilson CI [0.49, 0.94] — cannot separate 0.65 from 0.80); D-6 the ladder defect class is dense (CLAIM_BREACH ladder is an infinite loop; fork-clobber steers a KNOTted agent back to admit, contradicting the fix just landed); D-7 no --root anywhere, so an in-repo scratch fabric resolves via repoRoot() to the LIVE fabric and T-005 specifies fixtures inside the repo; D-8 the trace is blind to the mistakes it counts, biasing every number TOWARD passing monotonically with how bad the surface is; D-9 verified live — 33 shadow rows (19 FAST_ADMIT, 14 NOOP, 0 CLEAN, 0 KNOT), all 60 strands authoredBy.agentId null, gate.agentWrites:'real' ON and never fired.
+
+  ### How the panel's split resolved itself
+
+  North ranked "sign FG-3 after a bounded probe" #1 with the falsifier "unless the probe finds a third teaching carrier outside the hash" — the probe found one (D-3). North also flagged a full audit as theater "unless the probe turns up one further carrier/ladder contradiction" — Jinx found two (D-6). Both falsifiers tripped, converging on Arky's BOUNDED audit form. The pre-registered-falsifier discipline did the arbitration, not seniority and not consensus.
+
+  ### The strategic reframe (North)
+
+  F4 and the empty denominator are the same problem wearing two hats: both need a concurrent second principal, and seed.ts (seedWorld + rivalAdvance) is already a fleet in miniature driving the real engine functions. Build the runner as the CONCURRENCY DRIVER whose first consumer is F4, then re-point it at the live fabric with per-agent worktrees to start the organic K3 clock. Scoped narrower, North's own case against F4-first becomes correct.
+
+  Second, not previously in the record: F4 is not a UX gate, it is the test of the moat-silence STRATEGY. If cold agents of other providers cannot work the surface from runtime self-description alone, then "never published, never in weights" is not a defensible moat but a fatal distribution decision, and the founder must choose between publishing and a much more human-in-the-loop product. That fork is unavailable at n=0.
+
+  ### Recommended sequence (pre-freeze; each invalidates the denominator if it lands later)
+
+  1. Amend FG-1 for D-1/D-2 (correct-door restatement; make W3 measurable).
+  2. Widen the freeze to an instrumentId over descriptors ‖ ladder text ‖ classifier rule-set ‖ CLI_VERB_MAP ‖ corpus hash — freeze the carrier, not a proxy for it.
+  3. Bounded ladder audit: over corpus-reachable refusal classes × reachable CyclePosition states, assert P1 non-contradiction and P2 human-door safety, as a green CI extension of PW-4.
+  4. Implement the FG-1 completion predicate in code — it does not exist in src/f4/ today; the >=80% PRIMARY metric has no implementation, only the secondary wasted-turn metric does.
+  5. --root + the runner's scratch assertion.
+  6. Then set FG-4 (corrected strata + counts), then sign the widened freeze.
+
+  ### Correction carried forward
+
+  cli-trace.ts:26-28 asserts that closing the three CLI asymmetries moves descriptorsId and costs the denominator. It does not — projecting the existing daemon status result through a CLI command, adding shadow tail, and making CLI --claim optional touch none of the three hashed inputs. They were escalated to the founder as expensive decisions on a false premise. Comment needs fixing.
+linked_tasks:
+  - T-2026-07-21-005
+  - T-2026-07-21-003
+linked_commits:
+  - 97fb108b
+  - '64574657'
+  - 04fb8ec8
+  - e21054d2
+confidence: 0.85
+git_context:
+  ref: e21054d2b7ddb47c8386f53140c472ba65c5cca4
+  branch: warpline-surfaces
+  dirty: true

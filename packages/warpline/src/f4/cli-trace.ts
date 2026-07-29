@@ -24,8 +24,16 @@
  *     a semantic diff; nothing on the CLI answers "what may I legally do next".
  *   - `shadow.tail` — no CLI command reads shadow verdict rows (`admit --shadow`
  *     WRITES one; it does not tail them).
- * Both are design decisions for the founder, not wiring bugs: closing either
- * one changes VERB_DESCRIPTORS and therefore resets the FG-3 denominator.
+ *
+ * CORRECTED 2026-07-28 (pre-freeze panel): an earlier revision of this comment
+ * claimed closing either gap "changes VERB_DESCRIPTORS and therefore resets the
+ * FG-3 denominator". THAT WAS WRONG, and it caused both to be escalated to the
+ * founder as expensive calls. `descriptorsId` hashes VERB_DESCRIPTORS +
+ * NEXT_LEGAL_VERBS + the derived tool-name map; PROJECTING the existing daemon
+ * `status` result through a new CLI command, adding a `shadow tail` command over
+ * readShadowVerdicts, and making CLI `--claim` optional touch NONE of the three.
+ * They are cheap. Only adding a new DAEMON VERB, or rewording a summary, moves
+ * the id.
  *
  * PRINCIPAL, and how this arm differs from MCP: the MCP skin's principal is the
  * token's, server-stamped by the daemon. The native CLI verbs run in-process
@@ -48,6 +56,13 @@ export const CLI_VERB_MAP = {
   admit: 'admit',
   'knot show': 'knot.show',
   grade: 'grade.report',
+  /** HUMAN-CLASS. Traced because an agent-class subject ATTEMPTING it is the W3
+   * escalation-violation FG-1 turns on — untraced, the violation is invisible
+   * and the criterion cannot fail. Tracing is measurement, NOT enforcement: the
+   * native CLI has no token and no principal gate, so HUMAN_ONLY_VERBS is a
+   * DAEMON-BOUNDARY law, not a Warpline-wide one. Enforcing it on the CLI is an
+   * open founder decision, recorded in the pre-freeze panel as D-4. */
+  resolve: 'resolve',
   /** CLI-only — the meaning diff, NOT the daemon's cycle-position `status`. */
   status: 'cli:status',
 } as const;

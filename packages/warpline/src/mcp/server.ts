@@ -38,8 +38,8 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { DaemonClient, DaemonRpcError, daemonAvailable } from '../daemon/client.js';
 import { VERB_DESCRIPTORS, toolNameOf, agentSurfaceVerbs } from '../daemon/descriptors.js';
-import { DAEMON_VERBS, type DaemonVerb } from '../daemon/protocol.js';
-import { exitCodeForResult, type Refusal } from '../fabric/refusal.js';
+import { DAEMON_VERBS, HUMAN_ONLY_VERBS, HUMAN_ONLY_ADMIT_FLAGS, type DaemonVerb } from '../daemon/protocol.js';
+import { exitCodeForResult, refuse, type Refusal } from '../fabric/refusal.js';
 import { F4Tracer, resultClassOf } from '../daemon/f4-trace.js';
 import { mcpAgentToken } from './token.js';
 import { daemonDownRefusal, tokenMissingRefusal } from './refusals.js';
@@ -67,6 +67,18 @@ function targetOfParams(params: Record<string, unknown>): string | null {
     if (params[k] === true) bits.push(k);
   }
   return bits.length ? bits.join(' ') : null;
+}
+
+/**
+ * Inverse of `toolNameOf` for MEASUREMENT ONLY: recover the daemon verb an
+ * unregistered tool name was reaching for, so the attempt can be traced under
+ * the verb it meant. Returns null when the name is not a real daemon verb (a
+ * genuine surface miss rather than a reach for an omitted verb). Never used to
+ * dispatch — an unregistered tool stays unregistered.
+ */
+function demangleToolName(name: string): string | null {
+  const candidate = DAEMON_VERBS.find((v) => toolNameOf(v) === name);
+  return candidate ?? null;
 }
 
 /** Filter args to the verb's DECLARED schema properties — the skin-side
@@ -173,13 +185,41 @@ export async function buildMcpServer(
     const name = request.params.name;
     const verb = verbOfTool.get(name);
     if (!verb) {
-      // an unregistered tool name is a HOST protocol error, not a Warpline
-      // refusal — let the SDK surface it (the skin builds only its two refusals).
+      // An unregistered tool name stays a HOST protocol error — the skin builds
+      // only its two refusals and the SDK surfaces this one. But the ATTEMPT is
+      // now RECORDED first (F4 measurement fix, panel finding D-2): this branch
+      // threw before `tracer.emit` ever ran, so an agent reaching for an omitted
+      // HUMAN-CLASS verb left no trace row at all — and W3 (escalation-violation)
+      // reads rows. The violation was unrecorded, not merely unpunished, which
+      // made "zero W3 marks" a criterion that structurally could not fail.
+      //
+      // Omission still holds (Aegis R2): the tool is not registered, the call
+      // still fails, no human capability is exposed. Only the observation is new.
+      const attempted = demangleToolName(name);
+      const isOmittedHumanVerb = attempted !== null && HUMAN_ONLY_VERBS.includes(attempted);
+      tracer.emit({
+        verb: attempted ?? name,
+        target: null,
+        ok: false,
+        // FORBIDDEN, not UNKNOWN_VERB, when the agent reached for a real
+        // human-class verb: the classifier treats UNKNOWN_VERB as a SURFACE MISS
+        // and judges such rows against their OWN episode instead of the open one
+        // (classifier.ts:159), which would skip the W3 check entirely. FORBIDDEN
+        // is also what the daemon itself would have answered.
+        refusal: refuse({ code: isOmittedHumanVerb ? 'FORBIDDEN' : 'UNKNOWN_VERB' }),
+      });
       throw new Error(`unknown tool ${JSON.stringify(name)}`);
     }
     const args = (request.params.arguments ?? {}) as Record<string, unknown>;
     const params = filterToSchema(verb, args);
-    const target = targetOfParams(params);
+    // Human-class flags are dropped by filterToSchema (they are not in admit's
+    // paramsSchema, so they can never reach the wire — the defense is intact).
+    // They were dropped SILENTLY, so the classifier's /accept(Breach|Risk)/ test
+    // on `target` could never match and W3-by-flag was unobservable. Record the
+    // attempt: supplying one IS the escalation violation, whether or not it
+    // travelled. Flag names only — never a value, never prose.
+    const attemptedHumanFlags = HUMAN_ONLY_ADMIT_FLAGS.filter((f) => args[f] === true);
+    const target = [targetOfParams(params), ...attemptedHumanFlags].filter(Boolean).join(' ') || null;
 
     const asContent = (value: unknown): { content: Array<{ type: 'text'; text: string }> } => ({
       content: [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }],

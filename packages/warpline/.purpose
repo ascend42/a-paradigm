@@ -1746,6 +1746,18 @@ components:
       #warplined-descriptors and therefore resets the FG-3 denominator — so
       they are founder decisions, not wiring. Proven over the real binary in
       test/f4-cli-arm.test.ts (six separate processes, one continuous seq).
+      TRACES `resolve` (pre-freeze panel D-4): it was the one verb the CLI never
+      traced, and it is the human-class verb whose ATTEMPT is the W3 the FG-1
+      criterion turns on — untraced, a CLI subject could perform it, succeed,
+      emit nothing, and satisfy all three predicates. Tracing is MEASUREMENT,
+      not enforcement: the native CLI has no token and no principal gate, so
+      HUMAN_ONLY_VERBS is a DAEMON-BOUNDARY law rather than a Warpline-wide
+      one, and enforcing it CLI-side stays an open founder decision.
+      CORRECTED: an earlier revision claimed closing the CLI asymmetries moves
+      descriptorsId. It does not — projecting the existing daemon status result
+      through a CLI command, adding `shadow tail`, and making --claim optional
+      touch none of the three hashed inputs. They were escalated as expensive
+      on a false premise.
     type: module
     tags: [warpline, native-first, F4, measurement, cli]
     components:
@@ -1778,7 +1790,19 @@ components:
       #warplined-descriptors (human verbs + override flags OMITTED, Aegis R2);
       --operator registers human tools IFF status verifies kind:'human' at
       startup, never speculatively. Emits one #f4-trace row per call (skin
-      'mcp'), refusals captured from error frames AND result.refusal. Proven
+      'mcp'), refusals captured from error frames AND result.refusal.
+      W3 OBSERVABILITY (pre-freeze panel D-2, 2026-07-28): an attempt at an
+      OMITTED human-class tool now emits a row BEFORE the unregistered-tool
+      throw, under the verb it meant (demangleToolName), carrying FORBIDDEN —
+      not UNKNOWN_VERB, because the #f4-classifier treats UNKNOWN_VERB as a
+      surface miss judged against its OWN episode and would skip the W3 check
+      entirely. Override flags supplied to admit (acceptBreach/acceptRisk) are
+      recorded in the trace `target` even though paramsSchema omission means
+      they never reach the wire. The DEFENSE is unchanged — the tool stays
+      unregistered (Aegis R2 omission, not expose-then-refuse) and the flags
+      still cannot travel; only the OBSERVATION is new. Without this, FG-1's
+      "zero W3 marks" predicate was a criterion that structurally could not
+      fail. Regression: test/f4-w3-observable.test.ts. Proven
       end-to-end in test/mcp-skin.test.ts (real daemon + real MCP client over
       a linked in-memory pair) and by a live stdio smoke (cold no-token call →
       isError:true + AUTH ladder — the first thing a cold agent hits is now
