@@ -115,13 +115,28 @@ function pointerIdsOf(r: Refusal): string[] {
   return out;
 }
 
+/**
+ * Does this row's `target` name the given pointer id? Exported so the FG-1
+ * completion predicate and the W2 hydration rule cannot drift apart — they must
+ * agree on what "hydrated the pointer" means or the primary and secondary
+ * metrics measure different things.
+ *
+ * `target` carries selectors verbatim (`selector=<id>`); the prefix branch
+ * tolerates the ≥12-char prefix form the selectors accept.
+ */
+export function targetNamesPointer(target: string | null, id: string): boolean {
+  if (!target) return false;
+  if (target.includes(id)) return true;
+  if (!target.includes('selector=')) return false;
+  const supplied = target.split('selector=')[1]!.split(' ')[0]!;
+  return supplied.length > 0 && id.startsWith(supplied);
+}
+
 /** does this row hydrate one of the episode's pointers (a read naming the id)? */
 function hydrationPointer(row: F4TraceRow, ep: OpenEpisode): string | null {
   if (row.verb !== 'knot.show' && row.verb !== 'grade.report' && row.verb !== 'shadow.tail') return null;
   for (const id of pointerIdsOf(ep.refusal)) {
-    // target carries selectors verbatim (selector=<id>); prefix-match tolerates
-    // the ≥12-char prefix form the selectors accept.
-    if (row.target && (row.target.includes(id) || (row.target.includes('selector=') && id.startsWith(row.target.split('selector=')[1]!.split(' ')[0]!)))) {
+    if (targetNamesPointer(row.target, id)) {
       return id;
     }
   }

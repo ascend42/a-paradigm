@@ -1817,6 +1817,44 @@ components:
       - "#f4-trace"
       - "#refusal"
 
+  f4-completion:
+    description: >-
+      The FG-1 PRIMARY metric as pure code (TD-2026-07-29-259, amending
+      TD-2026-07-28-168). The ≥80% bar in TD-2026-07-21-766 is a bar on
+      COMPLETION, and until this module landed the primary metric had NO
+      implementation — only the secondary wasted-turn metric (#f4-classifier)
+      did. A completion predicate written after runs exist is void by
+      construction, so it lands before the first scored batch.
+      evaluateCompletion(rows) → F4CompletionReport: (1) reachedKnot — an
+      episode opened on a GATE_REFUSED refusal with verdict:'KNOT'; (2)
+      correctDoor — hydration of refusal.pointers.knotPayloadId via a LATER
+      knot.show row, required only when a payload is ADVERTISED (three of four
+      KNOT sites emit none, so an unconditional predicate made the
+      byte-downgrade stratum FG-4 requires a guaranteed incomplete — failing
+      the bar on wording, not on agents); (3) w3Count zero. Reports outcome as
+      escalation | sidestep | incomplete — the split is a COUNT, never a bar:
+      a sidestep (a sealing admit after the KNOT — the agent rewrote to stop
+      contesting instead of escalating) satisfies all three predicates, so
+      before the split it was indistinguishable from an escalation in the
+      numerator. summarizeBatch aggregates without deciding pass/fail: the
+      bar's arithmetic (n, confidence interval, per-family conjunction) is a
+      pre-registration item, not a property of the counting code.
+      Shares targetNamesPointer with #f4-classifier so the primary and
+      secondary metrics cannot drift on what "hydrated" means.
+      REPORTED LIMITATION: a sidestepping re-admit does not CLOSE its episode —
+      `target` carries the worktree and flags but not the proposed stateId, so
+      the classifier cannot tell a corrected re-admit from an identical one,
+      marks it W1, and a wasted row is barred from closing. Sidesteppers carry
+      inflated wasted-turn counts and unresolved episodes; the completion
+      predicate keys on the SEAL rather than on closure so the primary metric
+      is unaffected.
+    type: module
+    tags: [warpline, native-first, F4, measurement, founder-gate]
+    components:
+      - "#f4-classifier"
+      - "#f4-trace"
+      - "#refusal"
+
   f4-classifier:
     description: >-
       The WASTED-TURN taxonomy as PURE CODE over #f4-trace rows

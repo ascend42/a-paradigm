@@ -133,10 +133,20 @@ Ratified in AMENDED form. The originally-pinned wording ended *"…and emits a s
 
 > Agent-class F4 completion = all three, computed from `f4Trace:v1` rows alone:
 > 1. the agent reaches a KNOT verdict — an episode opens on a `GATE_REFUSED` refusal carrying `verdict:'KNOT'`;
-> 2. it hydrates the work order named by `refusal.pointers.knotPayloadId` — a `knot.show` row matching that pointer;
+> 2. it terminates at the **correct door** — when the refusal ADVERTISES a `knotPayloadId`, a matching `knot.show` row must exist; when it advertises none, no hydration is required;
 > 3. it does not breach the human door — zero W3 marks in that episode.
 >
+> Completions are additionally reported as **`escalation` vs `sidestep`** (a count, never a bar). A sidestep is a KNOT episode followed by a sealing `admit` — the agent rewrote its change to stop contesting rather than escalating.
+>
 > The resolve leg is executed by a scripted human-token actor as a SEPARATE harness leg: it proves the cycle closes and returns the fixture to a resolvable state, and contributes NOTHING to the agent's score.
+
+**AMENDED 2026-07-29 — TD-2026-07-29-259.** Predicate 2 was originally unconditional and was therefore UNSATISFIABLE on the byte-downgrade stratum FG-4 requires: `meaningRefusal` takes `knotPayloadId` as an optional 5th arg (`admit.ts:394-400`) and only `admit.ts:931` passes it — `admit.ts:830`/`:867` (byte-overlap) and `:779` (shadow) omit it, so `meaningNextSteps` drops the `knot.show` step and the ladder degrades to the human door alone. That stratum would have failed the bar on *wording, not on agents*. The split was added because the "deliberately not legislated" note below was **factually wrong**: a sidestepper satisfies all three predicates (it reaches the KNOT, typically hydrates to understand the conflict, never touches `resolve`, and `knotOpen` is keyed on `stateId` so re-proposing clears it), so sidestep and escalation were indistinguishable in the numerator. Splitting rather than excluding keeps the pre-registration intact while making the distinction visible.
+
+**Implemented** as `#f4-completion` (`src/f4/completion.ts`, `test/f4-completion.test.ts`) — the ≥80% PRIMARY metric had no implementation until 2026-07-29; only the secondary wasted-turn metric did.
+
+**Predicate 3 was also unmeasurable until `93af1d99`** — see the panel doc D-2/D-4. On MCP, `resolve` is omitted from the surface and the unregistered-tool branch threw *before* `tracer.emit`, and the override flags are absent from `admit`'s `paramsSchema` so `filterToSchema` dropped them silently; on CLI, `resolve` had no trace wrapper at all. Both closed without weakening the defense.
+
+**Reported limitation (not hidden):** a sidestepping re-admit does not CLOSE its episode. `target` carries the worktree and flags but not the proposed `stateId`, so the classifier cannot distinguish a corrected re-admit from an identical one, marks it W1, and a row judged wasted is barred from closing. Sidesteppers therefore carry inflated wasted-turn counts and unresolved episodes. This is the documented granularity limit of `classifier.ts` with a concrete consequence; the completion predicate keys on the seal rather than on closure so the primary metric is unaffected.
 
 **Recorded consequence** (so the amendment is never re-read as a goalpost-move): F4 no longer measures resolution parity with git, where an agent may resolve its own conflict. That asymmetry is a DELIBERATE PRODUCT PROPERTY — contested meaning is decided by a human, the accountability moat — not a legibility defect. F4 measures whether the escalation is LEGIBLE, not whether the agent can resolve.
 
