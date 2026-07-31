@@ -256,13 +256,36 @@ feed, KNOT queue, honesty labels) — "we publish ledgers, they publish renders.
 - **F3 the valve is a real rail** (gates R3): 100% stake verification vs binding.treeId (one
   silent failure = hard stop); 3 consecutive monthly recovery DRILLS (git reset AND git-absent
   restore, identical trees); a failed real recovery demotes to R1.
-- **F4 cold-agent legibility** (gates any GUI-shaped work; founder constraint TD-2026-07-21):
-  an agent of ANY provider/make, with no Warpline in its weights and no Warpline docs in
-  context, completes propose → admit → KNOT → resolve using ONLY tool descriptions and
-  returned error/refusal objects. Pass: ≥80% task completion across ≥10 cold runs spanning
-  ≥2 model families (one non-Claude), median ≤2 wasted turns per refusal recovery, ZERO runs
-  requiring human hint. Strict superset of F2 — F2 tests the payload, F4 tests discovery of
-  the tool itself. Runs on the MCP skin AND the CLI skin; a pass on one is not a pass.
+- **F4 cold-agent legibility** (gates any GUI-shaped work; founder constraint TD-2026-07-21-766,
+  AMENDED by TD-2026-07-28-168 and TD-2026-07-29-259 — see those decisions, not this summary,
+  for the binding wording): an agent of ANY provider/make, with no Warpline in its weights and
+  no Warpline docs in context, works propose → admit → KNOT using ONLY tool descriptions and
+  returned error/refusal objects. **Agent-class completion = all three, computed from
+  `f4Trace:v1` rows alone:** (1) it reaches a KNOT verdict — an episode opens on a
+  `GATE_REFUSED` refusal carrying `verdict:'KNOT'`; (2) it terminates at the correct door —
+  hydrates the work order named by `refusal.pointers.knotPayloadId` when one is ADVERTISED,
+  and escalates without attempting a human verb when none is; (3) zero W3 marks in that
+  episode. **The resolve leg is NOT part of the agent's score** — `resolve` is HUMAN_ONLY, so
+  it runs as a separate scripted human-token harness leg that proves the cycle closes and
+  returns the fixture to a resolvable state, contributing nothing to the agent's number. The
+  escalation/sidestep split is REPORTED, never gated. Predicate (2) is conditional because
+  three of the four KNOT sites emit no payloadId; an unconditional form made the
+  byte-downgrade stratum a guaranteed incomplete, failing the bar on wording rather than on
+  agents. Strict superset of F2 — F2 tests the payload, F4 tests discovery of the tool
+  itself. Runs on the MCP skin AND the CLI skin; a pass on one is not a pass.
+  - ⚠️ **The bar's arithmetic is CONTESTED and unratified.** "≥80% across ≥10 cold runs
+    spanning ≥2 model families (one non-Claude), median ≤2 wasted turns per refusal recovery,
+    ZERO runs requiring human hint" is the ORIGINAL TD-766 wording, retained here verbatim
+    because no founder decision has yet replaced it. Pre-freeze panel D-5 falsified it: for
+    8/10 the Wilson 95% CI is [0.49, 0.94], so the bar cannot distinguish a true 0.65 from a
+    true 0.80. Shield's defensible design is a two-stage n=12 kill-only screen then n=40, and
+    ≥4 models over ≥3 families with a conjunctive bar. The "median ≤2" statistic is also
+    ambiguous between per-run, median-of-medians and pooled — the code computes per-run and
+    the pooled form does not exist. **Open founder decision: the stopping rule and n.**
+  - ⚠️ **Both-skins ambiguity, unresolved.** "A pass on one is not a pass" binds the SKINS,
+    but the clause never says whether the non-Claude family must appear on BOTH skins or
+    whether family-spanning is a property of the run set as a whole. The two readings differ
+    by a ~6–8h MCP-client harness plus model procurement. **Open founder decision.**
   Rationale: git is easy for agents because it is MEMORIZED (public corpus); moat-silence +
   no-publishing means Warpline is never in any model's weights, so every agent encounter is
   permanently a cold encounter. Runtime self-description is therefore not polish — it is the

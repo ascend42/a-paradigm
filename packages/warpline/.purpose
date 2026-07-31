@@ -901,7 +901,20 @@ components:
       knot.show by design: the gate's verdict comes from #shadow-gate, which
       builds a #knot-payload as pipeline proof and never persists it, so there is
       no selector to hand out; the durable artifact is the VERDICT ROW, read back
-      via shadow.tail. The two fail-CLOSED throws are labelled too — a corrupt
+      via shadow.tail.
+      D-10 (F4 instrument panel, 2026-07-31): the ladder's `resolve` step
+      advertised ['resolvedRef','reason','decidedBy'] — the exact phantom list
+      PW-3a had already removed from #admit's meaningNextSteps, left unfixed
+      one file over. It OMITTED resolve's REQUIRED agentId and named two
+      params the verb has never accepted (decidedBy is SERVER-STAMPED
+      identity; resolvedRef was never a daemon param), so a human following
+      it verbatim BAD_REQUESTed. It now mirrors meaningNextSteps exactly: the
+      target agent rides in params (copy-paste ready), requires is
+      [worktree, reason]. pickGateRefusal is EXPORTED so PW-4
+      (test/refusal-vocabulary-totality.test.ts) can exercise this file's REAL
+      builder — the defect survived an era because a test cannot cover a
+      builder it cannot call.
+      The two fail-CLOSED throws are labelled too — a corrupt
       config yields code ENGINE with retriable 'never' and an EMPTY next[] (the
       machine-readable way to say "no call recovers this; escalate"), while a
       failed verdict pipeline yields ENGINE with 'retry-identical' (the request
@@ -1213,6 +1226,24 @@ components:
       daemon boundary) detects it and emits the carried refusal verbatim
       instead of collapsing to ENGINE/retry-identical/empty-next — the
       machine hint that instructed an infinite losing retry.
+      D-6a (F4 instrument panel, 2026-07-31) — THE PHANTOM-PARAM RULE, now
+      tested rather than remembered: a next[] step's params/requires must name
+      params that EXIST on the verb they call. The CLAIM_BREACH ladder's
+      propose step required 'claimedSymbols', which is a param of NO skin — it
+      lives one level DOWN, inside `claim` — and the MCP skin's filterToSchema
+      drops unknown keys SILENTLY, so a cold agent following the ladder
+      verbatim sealed a proposal with no claim on it, met the identical breach,
+      and (the other step being principal:'human') had no agent-runnable
+      recovery left in the ladder at all. It now requires [intent, worktree,
+      claim], and the honest recovery is to widen `claim` until it COVERS
+      pointers.symbols; the retry of the refused verb stays implicit, as in
+      every other ladder here (agent prerequisites, then the human door).
+      PW-4 (test/refusal-vocabulary-totality.test.ts) enforces BOTH halves of
+      the class across every ladder-bearing builder: an OMITTED required param
+      (coverage — now checked on human-class steps too, the skip that hid
+      #pick's D-10) and an INVENTED one (membership — with the human override
+      door exempted, since it is a CLI act carrying --native/--ref and the
+      accept* flags that are deliberately absent from the MCP schema).
     type: module
     components:
       - "#rank"
@@ -1502,9 +1533,27 @@ components:
       retry-corrected/[fork, propose]; disjoint DAG → INTEGRITY_BROKEN/escalate;
       resolve-no-selvage → NOT_FOUND/never; resolve-no-scratch → NOT_FOUND/
       retry-corrected/propose. PW-10 FORK CLOBBER GUARD: re-fork over a sealed,
-      unadmitted proposal refuses (BAD_REQUEST/retry-corrected/admit ladder)
-      via CAS #scratch writes — before this, same-principal concurrent sessions
-      silently orphaned each other's proposals. Asserted site-by-site in
+      unadmitted proposal refuses (BAD_REQUEST/retry-corrected) via CAS
+      #scratch writes — before this, same-principal concurrent sessions
+      silently orphaned each other's proposals. D-6b (F4 instrument panel,
+      2026-07-31): that guard's ladder is no longer a hardcoded [admit]. The
+      guard fires in TWO positions, and after a KNOT (scratch still holds the
+      sealed proposal, the selvage has moved) `admit` is the exact
+      identical-repeat #f4-classifier scores W1 — while #warplined's status
+      answered the SAME position with knot.show and "resolution is human-class,
+      escalate rather than retry". Two carriers, one position, opposite
+      instructions: the same misdirection the FG-3 review removed from status,
+      surviving one carrier over. The ladder is now DERIVED — the position is
+      computed exactly as the daemon's status handler computes it (a persisted
+      #knot-payload naming this principal's CURRENT sealed proposal by
+      (agentId, stateId)) and resolved through the SAME hashed
+      NEXT_LEGAL_VERBS table, with params/requires read off the verb's own
+      descriptor so a knot.show step carries its payload selector. The two
+      answers cannot diverge again: one rule moves both, and moves
+      descriptorsId with them. The human sentence follows the same carrier, so
+      there is no third instruction. Best-effort: the ladder degrades to the
+      unKNOTted position rather than throwing on the way to reporting a
+      refusal. Asserted site-by-site (BOTH positions) in
       test/native-sequencing-refusals.test.ts. Every step is an append
       or a CAS. SCOPE: v3 writes for scratch strands + native weaves only — the
       git-era seal path stays v2 until the founder-visible cutover (no selvage
@@ -1680,7 +1729,12 @@ components:
       so a next-verb-rule edit would have changed what every cold agent is
       taught while the id — and the denominator — stood still. Carries the
       static untrusted-content sentence for the prose-carrying tools (admit /
-      knot.show / shadow.tail).
+      knot.show / shadow.tail). SECOND CONSUMER (D-6b, 2026-07-31):
+      #native-write-path's fork-clobber ladder is now DERIVED from
+      nextLegalVerbsFor + the verbs' own paramsSchemas rather than hardcoded,
+      so an engine refusal and the status result can no longer answer one
+      position with opposite instructions — the rule is the single carrier,
+      and it is hashed.
     type: module
     tags: [warpline, native-first, F4, mcp]
     components:
@@ -1836,9 +1890,42 @@ components:
       a sidestep (a sealing admit after the KNOT — the agent rewrote to stop
       contesting instead of escalating) satisfies all three predicates, so
       before the split it was indistinguishable from an escalation in the
-      numerator. summarizeBatch aggregates without deciding pass/fail: the
-      bar's arithmetic (n, confidence interval, per-family conjunction) is a
-      pre-registration item, not a property of the counting code.
+      numerator.
+      THE FG-3 SCORING GATE (panel finding D-11, 2026-07-31 — the one item the
+      six-panelist board was unanimous on and that is independent of every open
+      scope question): FG-3 says a scored run is served by EXACTLY ONE teaching
+      surface, #f4-classifier had always REPORTED descriptorsIds, and NOTHING
+      asserted it — the pre-registration anchor was a field, not a gate, and the
+      old summarizeBatch(readonly F4CompletionReport[]) would pool runs served
+      by two different teaching surfaces into one completion rate. It is now
+      UNREPRESENTABLE rather than merely discouraged: F4Arm carries a
+      module-private unique-symbol BRAND, so it cannot be constructed outside
+      this module, and summarizeArm(arm) is the only way to a rate — the
+      ungated summarizeBatch is DELETED, not deprecated (an alias beside a gate
+      is how a second carrier survives). partitionArms(reports) is the TOTAL
+      entry point: it reads report.run.descriptorsIds (no upstream signature
+      moved), EXCLUDES a run whose own rows disagree ('mixed-teaching-surface')
+      or that produced no rows ('no-rows'), and SPLITS the rest by id;
+      singleArm(reports) is the assertion form, throwing F4UnscoreableError.
+      Splitting rather than refusing is Loid's correction and it is load-bearing:
+      the invariant is one id per RUN and per ARM, never per batch — FG-2 is a
+      TREATMENT variant of the teaching surface, so an FG-1-vs-FG-2 delta is
+      computed across two descriptorsIds BY CONSTRUCTION and a per-batch rule
+      would reject the analysis FG-2 exists to enable. The gate tests neither
+      against a pinned literal (the FG-3 freeze is unbuilt and unsigned — only
+      INTERNAL divergence is honestly assertable today) nor across any tuple:
+      pre-freeze item 2 (teachingId / scoringId / instrumentId) is an OPEN
+      founder decision and is deliberately NOT pre-empted here. KNOWN GAP,
+      reported not gated: `skin` is not part of the arm key, so two runs on
+      different skins with one teaching id land in ONE arm even though the bar
+      says a pass on one skin is not a pass — F4BatchReport.skins carries the
+      observed set so a cross-skin pool is at least VISIBLE, and widening the
+      key is a one-line founder call. The gate lives at the AGGREGATION
+      boundary precisely so classifyRun and evaluateCompletion stay pure and
+      total: re-scoring the durable row archive after a scorer fix still costs
+      zero runs. Aggregation still decides no pass/fail — the bar's arithmetic
+      (n, confidence interval, per-family conjunction) is a pre-registration
+      item, not a property of the counting code.
       Shares targetNamesPointer with #f4-classifier so the primary and
       secondary metrics cannot drift on what "hydrated" means.
       REPORTED LIMITATION: a sidestepping re-admit does not CLOSE its episode —
@@ -1866,7 +1953,10 @@ components:
       unresolved episodes reported), wasted marks W1-W4 per episode, the
       medianWastedPerRecovery gate metric, surfaceMisses (the
       DESCRIPTION-failure signal), and run-validity fields (distinct skins /
-      descriptorsIds — a valid run has exactly one of each, FG-3). Rules: W1
+      descriptorsIds — a valid run has exactly one of each, FG-3; the id half is
+      now ENFORCED downstream by #f4-completion's partitionArms, which excludes
+      a divergent run and refuses to pool runs across surfaces — reported here,
+      gated there, so this stays pure and total). Rules: W1
       identical-repeat (retry-identical grants ONE productive repeat;
       retry-corrected + performed ladder steps exempts the identical retry —
       the correction WAS the prerequisite calls); W2 next-ignored (allowances:
@@ -2283,3 +2373,46 @@ aspects:
       - "#lift-code-units"
       - "#ts-lens"
       - "#code-lens"
+
+  ~suite-gated:
+    description: >-
+      THE CI GATE (panel item 0 / blocker B-1, 2026-07-31). Until this landed,
+      packages/warpline/test/ — 83 files, 687 tests — RAN NOWHERE in CI: root
+      `npm test` chained only to @a-company/paradigm, whose vitest config
+      includes src/**, tests/** and platform-ui/src/sections/warpline/** and does
+      not reach this package; the only warpline-touching workflow
+      (warpline-guard.yml) is continue-on-error and runs the Guard ACTION, not
+      vitest. Consequence: test/descriptors-frozen.test.ts — the FG-3 freeze
+      tripwire — was wired to nothing, and every "green CI extension of PW-4"
+      exit criterion was unsatisfiable. Now root `npm test` = `test:cli &&
+      test:warpline`, and ci.yml carries a dedicated BLOCKING `warpline` job
+      (Node 20, NOT continue-on-error) that runs `npm run test:warpline`.
+      TWO DELIBERATE PROPERTIES. (1) `test:warpline` BUILDS dist before running:
+      four tests (f4-cli-arm, pick-agentid-env, two in stake-denylist-v2) are
+      `it.skipIf(!existsSync(dist/cli.js))`, so an absent or STALE dist makes
+      them evaporate silently while the run still reports green — building
+      immediately before the run is what makes the CLI arm observable at all,
+      and @a-company/warpline is now also in root `build:packages` (it was
+      absent). This narrows but does NOT close D-12: the arm still cannot
+      OBSERVE cross-image divergence, it merely no longer manufactures it.
+      (2) The gate covers TEST EXECUTION ONLY, NOT TEST TYPECHECKING —
+      tsconfig.json includes src/**/* alone, so test/ is never typechecked, and
+      wiring it in comes up RED today (pre-existing errors in backup.test.ts,
+      bind-on-seal.test.ts, code-diff.test.ts, knot-payload.test.ts,
+      knot-rule.test.ts). Do not mistake one for the other.
+    category: invariant
+    severity: high
+    tags: [ci, verification, f4, fg-3, panel-b-1, td-2026-07-21-766]
+    anchors:
+      - package.json:18
+      - package.json:32-34
+      - .github/workflows/ci.yml:38-89
+      - packages/warpline/test/descriptors-frozen.test.ts
+      - packages/warpline/test/f4-cli-arm.test.ts:35-48
+    applies-to:
+      - "#f4-trace"
+      - "#f4-cli-trace"
+      - "#f4-classifier"
+      - "#f4-completion"
+      - "#f4-seed"
+      - "#refusal"

@@ -70,10 +70,11 @@ import {
   type AdmitStatus,
 } from './admit.js';
 import { materializeMergedStateNative } from './materialize.js';
-import { buildKnotPayload, persistKnotPayload, readFileFromTree } from './knot-payload.js';
+import { buildKnotPayload, persistKnotPayload, readFileFromTree, listKnotPayloads } from './knot-payload.js';
+import { VERB_DESCRIPTORS, nextLegalVerbsFor } from '../daemon/descriptors.js';
 import { readClaim, evaluateClaim, recordClaimEvaluation, createClaim, persistClaim, type Claim, type ClaimEvaluation, type CreateClaimInput } from './claim.js';
 import { readGradeSidecar, symbolSurvivalIndex, evaluateEscalation, recordGradeEscalation } from './grade.js';
-import { refuse, RefusedError } from './refusal.js';
+import { refuse, RefusedError, type RefusalNextStep } from './refusal.js';
 
 /** The provenance/scratch ref label for an agent (sanitized like scratchPath). */
 export function scratchRefName(agentId: string): string {
@@ -184,6 +185,64 @@ export interface ForkNativeResult {
   restoredEntries?: number;
 }
 
+/**
+ * The fork-clobber ladder, DERIVED from the next-verb rule rather than
+ * hardcoded (D-6b, F4 instrument panel 2026-07-31).
+ *
+ * This ladder used to be a flat `[{verb:'admit'}]`. That is right for an
+ * unjudged proposal and WRONG after a KNOT: the scratch still holds the sealed
+ * proposal and the selvage has moved, so the guard fires — and told the agent
+ * to re-admit, which is the exact identical-repeat the classifier scores W1,
+ * while `status` answered the SAME position with `knot.show` and "resolution is
+ * human-class — escalate rather than retry". Two carriers, one position,
+ * opposite instructions; the same misdirection the FG-3 review already removed
+ * from `status`, surviving one carrier over.
+ *
+ * The fix is not a second hand-written branch — it is to stop being a second
+ * carrier at all. The position is computed exactly as the daemon's `status`
+ * handler computes it and resolved through the SAME hashed `NEXT_LEGAL_VERBS`
+ * table, so the two answers cannot diverge again: a change to the rule moves
+ * both, and moves `descriptorsId` with them.
+ *
+ * Params/requires come from the verb's own descriptor, so the step stays
+ * copy-paste runnable (a `knot.show` step carries the payload selector it
+ * needs). Best-effort throughout: a ladder must never throw on the way to
+ * reporting a refusal.
+ */
+function forkClobberNextSteps(root: string, agentId: string, scratchPick: string, base: string | null): RefusalNextStep[] {
+  let knotPayloadId: string | undefined;
+  let behindSelvage = false;
+  try {
+    const strand = readFabric(warplineDirOf(root)).find((s) => s.pickId === scratchPick);
+    if (strand) {
+      behindSelvage = (parentsOf(strand)[0] ?? null) !== base;
+      // Keyed on (agentId, stateId) verbatim as daemon/server.ts's status
+      // handler keys it: a work order naming THIS principal's CURRENT sealed
+      // proposal means the contest is live.
+      knotPayloadId = listKnotPayloads(root).find(
+        (p) => p.ours.agentId === agentId && p.ours.stateId === strand.stateId,
+      )?.payloadId;
+    }
+  } catch {
+    /* the ladder degrades to the unKNOTted position — never throws */
+  }
+  const { verbs } = nextLegalVerbsFor({
+    scratchPresent: true,
+    proposalSealed: true,
+    behindSelvage,
+    knotOpen: knotPayloadId !== undefined,
+  });
+  return verbs.map((verb) => {
+    const descriptor = VERB_DESCRIPTORS[verb];
+    const params: Record<string, string> =
+      verb === 'knot.show' && knotPayloadId ? { selector: knotPayloadId } : {};
+    const required = ((descriptor.paramsSchema as { required?: string[] }).required ?? []).filter(
+      (r) => !(r in params),
+    );
+    return { verb, params, requires: required, principal: descriptor.principal };
+  });
+}
+
 /** Mint the agent's scratch ref at the current selvage pickId (I9). */
 export function forkNative(root: string, agentId: string, opts: ForkNativeOptions = {}): ForkNativeResult {
   const wdir = warplineDirOf(root);
@@ -192,16 +251,23 @@ export function forkNative(root: string, agentId: string, opts: ForkNativeOption
   // selvage tip is a sealed-but-unadmitted proposal — re-forking would orphan
   // it silently (writeScratchRef was an unconditional overwrite; same-principal
   // concurrent sessions clobbered each other with no error anywhere). Refuse
-  // loudly; the ladder says what to do with the pending work first.
+  // loudly; the ladder (D-6b: derived from the next-verb rule, so it cannot
+  // contradict `status`) says what to do with the pending work first.
   const existing = readScratch(root, agentId);
   if (existing !== null && existing.startsWith('pick:') && existing !== base) {
+    const next = forkClobberNextSteps(root, agentId, existing, base);
+    const contested = next.some((n) => n.verb === 'knot.show');
     throw new RefusedError(
       refuse({
         code: 'BAD_REQUEST',
         retriable: 'retry-corrected',
-        next: [{ verb: 'admit', params: {}, requires: [], principal: 'agent' }],
+        next,
       }),
-      `warpline: fork — ${JSON.stringify(agentId)} already has a sealed, unadmitted proposal (scratch ${existing}); admit it first, or resolve/abandon it explicitly — re-fork would orphan it silently`,
+      `warpline: fork — ${JSON.stringify(agentId)} already has a sealed, unadmitted proposal (scratch ${existing}); ` +
+        `re-fork would orphan it silently. ` +
+        (contested
+          ? 'That proposal is CONTESTED: read the KNOT work order named in next[]. Re-admitting unchanged cannot clear it, and resolution is human-class — escalate rather than retry.'
+          : 'Admit it first, or resolve/abandon it explicitly.'),
     );
   }
   writeScratchRef(root, agentId, base ?? '', existing);

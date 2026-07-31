@@ -77,7 +77,13 @@ export interface F4RunReport {
   totalCalls: number;
   /** distinct skins seen (a valid single-arm run has exactly one). */
   skins: string[];
-  /** distinct descriptorsIds seen (a valid run has EXACTLY one — FG-3). */
+  /**
+   * distinct descriptorsIds seen (a valid run has EXACTLY one — FG-3).
+   * ENFORCED, since the 2026-07-31 panel found this had always been a field
+   * nobody read: #f4-completion's `partitionArms` excludes a run whose rows
+   * disagree and refuses to pool runs across surfaces. Reported here, gated
+   * there — `classifyRun` stays pure and total.
+   */
   descriptorsIds: string[];
   episodes: RecoveryEpisode[];
   /** wasted count per episode, episode order. */

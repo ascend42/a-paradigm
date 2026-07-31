@@ -127,6 +127,49 @@ describe('PW-2 — sequencing mistakes refuse with typed ladders, never ENGINE d
     expect(e.refusal.next).toEqual([{ verb: 'admit', params: {}, requires: [], principal: 'agent' }]);
   });
 
+  it('D-6b — re-fork over a CONTESTED proposal answers knot.show, NOT admit (aligned with status)', async () => {
+    // The guard fires in two different positions and used to answer both with
+    // `admit`. After a KNOT that is the exact identical-repeat the classifier
+    // scores W1, while the status carrier answers the SAME position with
+    // knot.show + "escalate rather than retry". The ladder is now derived from
+    // NEXT_LEGAL_VERBS, so the two carriers cannot contradict each other.
+    await proposeNative(root, { worktree: root, agentId: 'genesis', intent: 'genesis' });
+    await admitNative(root, { worktree: root, agentId: 'genesis', noRestore: true });
+
+    const dirW = fs.mkdtempSync(path.join(os.tmpdir(), 'warpline-seq-w-'));
+    const dirX = fs.mkdtempSync(path.join(os.tmpdir(), 'warpline-seq-x-'));
+    try {
+      forkNative(root, 'W', { into: dirW });
+      forkNative(root, 'X', { into: dirX });
+
+      // X advances the selvage; W contradicts it on the SAME symbol → KNOT.
+      write(dirX, MOD, 'export function foo() { return 300; }\n');
+      await proposeNative(root, { worktree: dirX, agentId: 'X', intent: 'X: foo 300' });
+      const ax = await admitNative(root, { worktree: dirX, agentId: 'X', noRestore: true });
+      expect(ax.sealed).toBe(true);
+
+      write(dirW, MOD, 'export function foo() { return 400; }\n');
+      await proposeNative(root, { worktree: dirW, agentId: 'W', intent: 'W: foo 400' });
+      const knot = await admitNative(root, { worktree: dirW, agentId: 'W', noRestore: true });
+      expect(knot.decision.status).toBe('KNOT');
+      expect(knot.knotPayloadId).toBeDefined();
+
+      // W re-forks instead of reading the work order — the clobber guard fires,
+      // and the ladder must name the work order, not a losing re-admit.
+      const e = await refusedBy(() => forkNative(root, 'W'));
+      expect(e.refusal.code).toBe('BAD_REQUEST');
+      expect(e.refusal.next).toEqual([
+        { verb: 'knot.show', params: { selector: knot.knotPayloadId }, requires: [], principal: 'agent' },
+      ]);
+      // the human sentence follows the same carrier — no third instruction
+      expect(e.message).toContain('CONTESTED');
+      expect(e.message).not.toMatch(/Admit it first/);
+    } finally {
+      fs.rmSync(dirW, { recursive: true, force: true });
+      fs.rmSync(dirX, { recursive: true, force: true });
+    }
+  }, 60_000);
+
   it('re-fork at the SAME selvage tip stays legal (idempotent fork is not a clobber)', async () => {
     await proposeNative(root, { worktree: root, agentId: 'genesis', intent: 'genesis' });
     await admitNative(root, { worktree: root, agentId: 'genesis', noRestore: true });

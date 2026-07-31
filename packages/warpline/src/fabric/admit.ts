@@ -365,7 +365,22 @@ function claimNextSteps(claimId: string, admitParams: Record<string, string>): R
   return [
     // PW-3b: propose REQUIRES intent (I3) and a worktree — the old requires
     // list omitted both, so following the ladder verbatim BAD_REQUESTed.
-    { verb: 'propose', params: {}, requires: ['claimedSymbols', 'intent', 'worktree'], principal: 'agent' },
+    //
+    // D-6a (F4 instrument panel, 2026-07-31): the list ALSO named
+    // `claimedSymbols`, which is a param of NO skin. propose's schema
+    // (#warplined-descriptors) is intent | worktree | claim | sessionKey —
+    // claimedSymbols lives one level DOWN, inside `claim`. The MCP skin's
+    // filterToSchema drops unknown keys SILENTLY, so a cold agent following
+    // this ladder verbatim sealed a proposal with no claim on it at all, then
+    // met the identical breach; and because the only other step is
+    // principal:'human', the ladder had no agent-runnable recovery in it.
+    //
+    // `claim` is the param that actually exists, and the honest recovery is to
+    // widen it until it COVERS `pointers.symbols` (the excess set the refusal
+    // already names). The retry of the refused verb itself is implicit — the
+    // classifier treats the refused verb as the goal, and every other ladder
+    // here follows the same shape (agent prerequisites, then the human door).
+    { verb: 'propose', params: {}, requires: ['intent', 'worktree', 'claim'], principal: 'agent' },
     { verb: 'admit', params: { ...admitParams, claim: claimId, acceptBreach: 'true' }, requires: [], principal: 'human' },
   ];
 }

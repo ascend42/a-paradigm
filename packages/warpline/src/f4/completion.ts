@@ -32,6 +32,9 @@
  * separately because one bypasses the accountability record and the founder
  * rules on whether that should count WITH the frequencies in hand.
  *
+ * SCORING GATE (2026-07-31 panel, D-11): the aggregator below refuses to pool
+ * runs served by different teaching surfaces — see the FG-3 SCORING GATE block.
+ *
  * Pure over its input; no I/O, no clock. Library code: no console output.
  */
 
@@ -139,7 +142,156 @@ export function evaluateCompletion(rows: F4TraceRow[]): F4CompletionReport {
   };
 }
 
+/* ── the FG-3 SCORING GATE (F4 instrument panel D-11, 2026-07-31) ─────────────
+ *
+ * FG-3 says a scored run is served by EXACTLY ONE teaching surface, and
+ * `classifyRun` has always REPORTED `descriptorsIds` so a reader could check
+ * it. Nothing ever did. The aggregator took a bare `F4CompletionReport[]`,
+ * never looked at an id, and would pool runs served by two different teaching
+ * surfaces into one rate — the pre-registration anchor was a FIELD, not a GATE,
+ * and the number it protects could be produced without it.
+ *
+ * The gate is structural rather than advisory, because advisory is exactly what
+ * just failed: an `F4Arm` cannot be constructed outside this module, and a rate
+ * can only be computed FROM an arm. A pooled cross-id rate is therefore not
+ * discouraged — it is unrepresentable.
+ *
+ * WHAT AN ARM IS (and why not "a batch"). The invariant is one id per RUN and
+ * per ARM, never per batch: FG-2 is a TREATMENT variant of the teaching
+ * surface, so an FG-1-vs-FG-2 delta is computed across two descriptorsIds BY
+ * CONSTRUCTION, and a naive per-batch rule would reject the very analysis FG-2
+ * exists to enable. `partitionArms` therefore SPLITS rather than refuses:
+ * divergent ids yield two arms with two keyed rates, and the delta is the
+ * caller's deliberate subtraction of two numbers that each name their surface.
+ *
+ * SCOPE, held deliberately narrow. The key is `descriptorsId` and nothing else.
+ * This builds no id, no tuple and no partition of the frozen surface — pre-
+ * freeze item 2 (teachingId / scoringId / instrumentId) is an OPEN founder
+ * decision and is not pre-empted here. Nor is there any comparison against a
+ * pinned literal: the freeze is unbuilt, so the only thing this can honestly
+ * assert is INTERNAL divergence. When a pin exists it becomes one more check on
+ * an arm, not a redesign of one.
+ *
+ * KNOWN GAP, reported not gated: `skin` is NOT part of the key, so two runs on
+ * different skins with the same teaching id land in ONE arm. The bar says
+ * otherwise (roadmap-native-first.md: "Runs on the MCP skin AND the CLI skin; a
+ * pass on one is not a pass"), so `F4BatchReport.skins` carries the observed
+ * set and a cross-skin pool is at least VISIBLE in the number. Widening the key
+ * is a one-line change; it is a founder call, not this fix's.
+ *
+ * `classifyRun` and `evaluateCompletion` stay PURE and total — the gate lives
+ * at the aggregation boundary, so re-scoring the durable row archive after a
+ * scorer fix still costs zero runs.
+ */
+
+/** Brand: an `F4Arm` can only come from `partitionArms` / `singleArm`. */
+declare const armBrand: unique symbol;
+
+/**
+ * A SCOREABLE set: runs that agree on the teaching surface that served them.
+ * The only input `summarizeArm` accepts.
+ */
+export interface F4Arm {
+  /** the ONE teaching-surface content address every row of every run carried. */
+  readonly descriptorsId: string;
+  readonly reports: readonly F4CompletionReport[];
+  readonly [armBrand]: true;
+}
+
+/** Why a run cannot be scored at all — excluded, never silently pooled. */
+export type F4UnscoreableReason =
+  /** no trace rows: there is no surface to attribute the run to. */
+  | 'no-rows'
+  /** ONE run's rows disagree on descriptorsId — the FG-3 per-run invariant. */
+  | 'mixed-teaching-surface';
+
+export interface F4Unscoreable {
+  runId: string;
+  reason: F4UnscoreableReason;
+  descriptorsIds: readonly string[];
+}
+
+export interface F4Partition {
+  /** one arm per distinct descriptorsId, sorted by id for determinism. */
+  arms: readonly F4Arm[];
+  /** runs excluded from every arm, with the reason. */
+  unscoreable: readonly F4Unscoreable[];
+}
+
+/** Thrown by `singleArm` when the caller's one-arm assumption does not hold. */
+export class F4UnscoreableError extends Error {
+  constructor(
+    message: string,
+    readonly partition: F4Partition,
+  ) {
+    super(message);
+    this.name = 'F4UnscoreableError';
+  }
+}
+
+/**
+ * Split reports into scoreable arms. TOTAL — never throws; a run that cannot be
+ * attributed to a surface lands in `unscoreable` rather than in a rate.
+ *
+ * Reads the ids off `report.run.descriptorsIds`, which `classifyRun` already
+ * collects — no upstream signature changed to make this possible.
+ */
+export function partitionArms(reports: readonly F4CompletionReport[]): F4Partition {
+  const byId = new Map<string, F4CompletionReport[]>();
+  const unscoreable: F4Unscoreable[] = [];
+
+  for (const report of reports) {
+    const ids = report.run.descriptorsIds;
+    const reason: F4UnscoreableReason | null =
+      ids.length === 0 ? 'no-rows' : ids.length > 1 ? 'mixed-teaching-surface' : null;
+    if (reason) {
+      unscoreable.push({ runId: report.runId, reason, descriptorsIds: [...ids] });
+      continue;
+    }
+    const id = ids[0]!;
+    const bucket = byId.get(id) ?? [];
+    bucket.push(report);
+    byId.set(id, bucket);
+  }
+
+  const arms = [...byId.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0))
+    .map(([descriptorsId, armReports]) => ({ descriptorsId, reports: armReports }) as unknown as F4Arm);
+
+  return { arms, unscoreable };
+}
+
+/**
+ * The single-arm ASSERTION: the caller believes this set is one arm (the FG-1
+ * confirmatory shape). Returns it, or throws — the set is UNSCOREABLE. Use
+ * `partitionArms` directly for a multi-arm analysis (the FG-2 delta).
+ */
+export function singleArm(reports: readonly F4CompletionReport[]): F4Arm {
+  const partition = partitionArms(reports);
+  if (partition.unscoreable.length > 0) {
+    const detail = partition.unscoreable.map((u) => `${u.runId}:${u.reason}`).join(', ');
+    throw new F4UnscoreableError(
+      `F4 scoring refused — ${partition.unscoreable.length} run(s) cannot be attributed to one teaching surface (${detail}). ` +
+        'FG-3 requires exactly one descriptorsId per run.',
+      partition,
+    );
+  }
+  if (partition.arms.length !== 1) {
+    const keys = partition.arms.map((a) => a.descriptorsId).join(' | ');
+    throw new F4UnscoreableError(
+      `F4 scoring refused — this set spans ${partition.arms.length} teaching surface(s) (${keys || 'none'}); ` +
+        'one rate across two surfaces is not a measurement. Score each arm and report the delta.',
+      partition,
+    );
+  }
+  return partition.arms[0]!;
+}
+
 export interface F4BatchReport {
+  /** the teaching surface this rate is KEYED to — a rate without it is unreadable. */
+  descriptorsId: string;
+  /** the skins observed across the arm. REPORTED, not gated (see KNOWN GAP). */
+  skins: string[];
   runs: number;
   completed: number;
   /** the ≥80% bar's numerator/denominator, as a rate in [0,1]. */
@@ -152,13 +304,21 @@ export interface F4BatchReport {
 }
 
 /**
- * Aggregate a batch. Deliberately does NOT decide pass/fail: the bar's
+ * Aggregate ONE arm. Deliberately does NOT decide pass/fail: the bar's
  * arithmetic (n, confidence interval, per-family conjunction) is a
  * pre-registration item, not a property of the code that counts.
+ *
+ * Takes an `F4Arm` and not a report array — that is the whole gate. The
+ * previous `summarizeBatch(readonly F4CompletionReport[])` is DELETED rather
+ * than deprecated: an ungated alias beside a gate is how the second carrier
+ * survives (Arky's Q4 rule, applied to the aggregator).
  */
-export function summarizeBatch(reports: readonly F4CompletionReport[]): F4BatchReport {
+export function summarizeArm(arm: F4Arm): F4BatchReport {
+  const { reports } = arm;
   const completed = reports.filter((r) => r.completed).length;
   return {
+    descriptorsId: arm.descriptorsId,
+    skins: [...new Set(reports.flatMap((r) => r.run.skins))].sort(),
     runs: reports.length,
     completed,
     completionRate: reports.length === 0 ? 0 : completed / reports.length,

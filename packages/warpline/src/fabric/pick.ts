@@ -104,7 +104,15 @@ function pickNextSteps(row: ShadowVerdictRow): RefusalNextStep[] {
     { verb: 'shadow.tail', params: { n: '1' }, requires: [], principal: 'agent' },
   ];
   if (row.status === 'KNOT' || row.status === 'DANGLE') {
-    steps.push({ verb: 'resolve', params: {}, requires: ['resolvedRef', 'reason', 'decidedBy'], principal: 'human' });
+    // D-10 (F4 instrument panel, 2026-07-31): this step advertised
+    // ['resolvedRef','reason','decidedBy'] — the exact phantom list PW-3a
+    // removed from admit.ts's meaningNextSteps, left unfixed one file over. It
+    // OMITTED resolve's required `agentId` and advertised two params the verb
+    // has never accepted (`decidedBy` is SERVER-STAMPED identity; `resolvedRef`
+    // was never a daemon param), so a human following it verbatim
+    // BAD_REQUESTed. Mirrors meaningNextSteps exactly: the target agent is
+    // already determined, so it rides in params, copy-paste ready.
+    steps.push({ verb: 'resolve', params: { agentId: row.agentId }, requires: ['worktree', 'reason'], principal: 'human' });
   }
   // the override door — human-class: an agent must never wave through its own hold.
   steps.push({ verb: 'pick', params: { ref: row.ref, acceptRisk: 'true' }, requires: [], principal: 'human' });
@@ -119,8 +127,13 @@ function pickNextSteps(row: ShadowVerdictRow): RefusalNextStep[] {
  * verb that retries HERE is `pick`, not `admit`. A CLEAN-that-would-not-
  * materialize has no underlying refusal — that verdict refuses nothing at the
  * admit layer; the pick gate is what holds it — so it falls back to GATE_REFUSED.
+ *
+ * EXPORTED for PW-4 (test/refusal-vocabulary-totality.test.ts): D-10 was a
+ * phantom-param ladder that the totality test missed because this file's
+ * ladders were not in its inventory at all. A test cannot cover a builder it
+ * cannot call.
  */
-function pickGateRefusal(row: ShadowVerdictRow, under: Refusal | undefined): Refusal {
+export function pickGateRefusal(row: ShadowVerdictRow, under: Refusal | undefined): Refusal {
   const meaning = row.status === 'KNOT' || row.status === 'DANGLE';
   return refuse({
     code: under?.code ?? 'GATE_REFUSED',

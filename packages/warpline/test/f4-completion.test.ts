@@ -15,11 +15,19 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { evaluateCompletion, summarizeBatch } from '../src/f4/completion.js';
+import {
+  evaluateCompletion,
+  partitionArms,
+  singleArm,
+  summarizeArm,
+  F4UnscoreableError,
+} from '../src/f4/completion.js';
 import type { F4TraceRow } from '../src/daemon/f4-trace.js';
 import type { Refusal } from '../src/fabric/refusal.js';
 
 const PAYLOAD = 'knotPayload:v1:' + 'a'.repeat(64);
+const FG1 = 'descriptors:v1:test';
+const FG2 = 'descriptors:v1:names-only';
 
 let seq = 0;
 const row = (over: Partial<F4TraceRow>): F4TraceRow => ({
@@ -32,7 +40,7 @@ const row = (over: Partial<F4TraceRow>): F4TraceRow => ({
   verb: 'admit',
   target: 'worktree=/w',
   ok: true,
-  descriptorsId: 'descriptors:v1:test',
+  descriptorsId: FG1,
   ...over,
 });
 
@@ -134,18 +142,105 @@ describe('#f4-completion — the ratified FG-1 criterion', () => {
     expect(r.outcome).toBe('sidestep');
   });
 
-  it('the batch summary counts the split without gating on it', () => {
+  it('the arm summary counts the split without gating on it', () => {
     const esc = evaluateCompletion([
       row({ verb: 'admit', ok: false, refusal: knotRefusal(undefined) }),
     ]);
     seq = 0;
     const miss = evaluateCompletion([row({ verb: 'status' })]);
-    const batch = summarizeBatch([esc, miss]);
+    const batch = summarizeArm(singleArm([esc, miss]));
+    expect(batch.descriptorsId).toBe(FG1); // the rate NAMES the surface it is keyed to
+    expect(batch.skins).toEqual(['mcp']);
     expect(batch.runs).toBe(2);
     expect(batch.completed).toBe(1);
     expect(batch.completionRate).toBe(0.5);
     expect(batch.escalations).toBe(1);
     expect(batch.sidesteps).toBe(0);
     expect(batch.neverReachedKnot).toBe(1);
+  });
+});
+
+/**
+ * The FG-3 SCORING GATE (panel finding D-11). Before this, `descriptorsIds` was
+ * a field the classifier computed and NOTHING read: the aggregator pooled
+ * whatever it was handed. These prove both directions — divergence is refused,
+ * and the legitimate two-surface comparison FG-2 requires is still expressible.
+ */
+describe('#f4-completion — the FG-3 scoring gate', () => {
+  beforeEach(() => {
+    seq = 0;
+  });
+
+  /** a completed (payload-less KNOT) run stamped with a given surface + skin. */
+  const completedRun = (runId: string, descriptorsId: string, skin: 'mcp' | 'cli' = 'mcp') => {
+    seq = 0;
+    return evaluateCompletion([
+      row({ runId, descriptorsId, skin, verb: 'admit', ok: false, refusal: knotRefusal(undefined) }),
+    ]);
+  };
+
+  it('ONE run whose own rows disagree on the surface is UNSCOREABLE, not pooled', () => {
+    seq = 0;
+    const straddler = evaluateCompletion([
+      row({ runId: 'r1', descriptorsId: FG1, verb: 'admit', ok: false, refusal: knotRefusal(undefined) }),
+      row({ runId: 'r1', descriptorsId: FG2, verb: 'knot.show', resultClass: 'read' }),
+    ]);
+    expect(straddler.run.descriptorsIds).toHaveLength(2);
+
+    const { arms, unscoreable } = partitionArms([straddler]);
+    expect(arms).toEqual([]);
+    expect(unscoreable).toEqual([
+      { runId: 'r1', reason: 'mixed-teaching-surface', descriptorsIds: [FG1, FG2] },
+    ]);
+    // and it can never reach a rate
+    expect(() => singleArm([straddler])).toThrow(F4UnscoreableError);
+  });
+
+  it('a run with no rows at all is UNSCOREABLE (no surface to attribute it to)', () => {
+    const empty = evaluateCompletion([]);
+    const { arms, unscoreable } = partitionArms([empty]);
+    expect(arms).toEqual([]);
+    expect(unscoreable[0]!.reason).toBe('no-rows');
+  });
+
+  it('runs on TWO surfaces cannot be pooled into one rate', () => {
+    const a = completedRun('a', FG1);
+    const b = completedRun('b', FG2);
+    // the old `summarizeBatch([a, b])` would have divided 2/2 across two
+    // teaching surfaces and called it a completion rate.
+    expect(() => singleArm([a, b])).toThrow(/spans 2 teaching surface/);
+  });
+
+  it("LOID'S CORRECTION: the FG-1 vs FG-2 delta is still computable — the invariant is per ARM, not per batch", () => {
+    // FG-2 is a TREATMENT variant of the teaching surface, so its delta is
+    // computed across two descriptorsIds BY CONSTRUCTION. A per-batch rule
+    // would have rejected the analysis FG-2 exists to enable.
+    const control = [completedRun('c1', FG1), completedRun('c2', FG1)];
+    seq = 0;
+    const incomplete = evaluateCompletion([row({ runId: 't2', descriptorsId: FG2, verb: 'status' })]);
+    const treatment = [completedRun('t1', FG2), incomplete];
+
+    const { arms, unscoreable } = partitionArms([...control, ...treatment]);
+    expect(unscoreable).toEqual([]);
+    expect(arms.map((a) => a.descriptorsId)).toEqual([FG1, FG2].sort()); // deterministic order
+
+    const rates = new Map(arms.map((a) => [a.descriptorsId, summarizeArm(a)]));
+    expect(rates.get(FG1)!.completionRate).toBe(1);
+    expect(rates.get(FG2)!.completionRate).toBe(0.5);
+    // the delta is the caller's DELIBERATE subtraction of two KEYED numbers
+    expect(rates.get(FG1)!.completionRate - rates.get(FG2)!.completionRate).toBe(0.5);
+  });
+
+  it('the arm carries the observed skins so a cross-skin pool is at least VISIBLE', () => {
+    // KNOWN GAP, reported not gated: skin is not part of the arm key (a founder
+    // call), so the number must at minimum say which skins it spans.
+    const report = summarizeArm(singleArm([completedRun('m', FG1, 'mcp'), completedRun('c', FG1, 'cli')]));
+    expect(report.skins).toEqual(['cli', 'mcp']);
+    expect(report.runs).toBe(2);
+  });
+
+  it('an empty set has no arm to score (a rate over zero runs is not a rate)', () => {
+    expect(partitionArms([])).toEqual({ arms: [], unscoreable: [] });
+    expect(() => singleArm([])).toThrow(/spans 0 teaching surface/);
   });
 });

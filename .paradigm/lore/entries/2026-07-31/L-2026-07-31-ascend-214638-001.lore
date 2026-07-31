@@ -1,0 +1,64 @@
+id: L-2026-07-31-ascend-214638-001
+type: agent-session
+timestamp: '2026-07-31T21:46:38.892Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'F4 instrument panel: item 2 rejected unanimously; the freeze was never enforced'
+summary: |
+  Convened the six-panelist board (Arky, Jinx, Aegis, Shield, North, Loid) on pre-freeze item 2 — widening the FG-3 freeze from descriptorsId to an instrumentId. All six rejected R-1 as scoped, including its own author, who amended himself on 2 of 5 components. The decisive finding, reached independently by three panelists and re-verified in the main session: FG-3 has never been enforced anywhere in the scoring path — summarizeBatch never sees an id — so the entire debate about which bytes to hash was running one level above a hash nothing checks. Two programme blockers surfaced beneath the whole pre-freeze queue: no CI runs Warpline's tests (so every "green CI" exit criterion ever written is unsatisfiable), and non-Claude MCP client reachability has never been established (so F4 as ratified may be unrunnable). Five new defects recorded, three prior-panel corrections, and two probes dispatched that decide item 2's shape and the programme's runnability.</summary>
+  <body>## Why this session mattered
+
+  The prior panel (2026-07-28) produced D-1..D-9 and a six-item pre-freeze sequence. This session took item 2 — "widen the freeze to an instrumentId" — to the same board and got it back rejected. Not softened: rejected, by a unanimous panel that includes the recommendation's author.
+
+  Arky, amending himself: "My own R-1 as recorded at panel line 128 is wrong on two of five components. The classifier rule-set must NOT be in the frozen id (it makes a scoring bugfix void a batch) and the corpus hash CANNOT be (seed.ts:11-15 — it does not exist)."
+
+  ## The finding that reframed everything
+
+  D-11, found independently by Shield, Jinx and Loid, then re-verified in the main session before recording: **FG-3 is enforced nowhere.** classifier.ts:266 collects descriptorsIds and classifier.ts:80 calls it a validity precondition, but summarizeBatch (completion.ts:159-169) takes only F4CompletionReport[] — it never sees an id at all. It will pool runs served by two different teaching surfaces and report one rate.
+
+  Jinx: "The FG-3 pre-registration anchor is a field, not a gate. Widening a field nobody reads buys exactly nothing."
+
+  Two panels and two research documents have now argued about which bytes belong in a hash that no code path checks. The ~10-line enforcement gate is the cheapest item on the entire list and the only one with teeth today.
+
+  ## Two blockers underneath the queue
+
+  B-1: root `npm test` runs the paradigm workspace only; its vitest include excludes packages/warpline/test entirely. 657 `it(` blocks never execute in CI, including the FG-3 freeze tripwire. Every exit criterion both panels have written specifies a green CI test that no CI runs.
+
+  B-2: TD-2026-07-21-766 requires >=2 model families, one non-Claude, unchanged by both amendments. Nothing in the record establishes that a non-Claude MCP client is reachable from this machine. If it is not, F4 as ratified is unrunnable and no number of pre-freeze items repairs that.
+
+  ## What the panel is actually for
+
+  Six agents, ~800k tokens, and the highest-value output was self-falsification. Arky amended his own R-1 and flagged an unrun falsifier against his own ruling. Jinx reported one of his four attacks as FAILED on verification. Aegis withdrew his own S4 recommendation when the falsifier tripped. Shield found her own component list omitted EXIT_FOR — "the D-3 defect recurring a fourth time" — and corrected it rather than shipping it. North argued against his own prior #1 ranking for the second time. Loid recorded that his own FG-2 delta framing is not currently computable.
+
+  The instrument works because it is pointed at itself.
+
+  ## The structural lesson
+
+  D-3 happened because someone enumerated carriers by hand and missed one. The proposed fix enumerates by hand again. Jinx found seven survivors — including src/f4/completion.ts, the PRIMARY metric, which landed one day AFTER the enumeration was written. The enumeration was stale within 24 hours.
+
+  That is not a gap you patch by adding a sixth term. Both Jinx (from the attack side) and Shield (from the test side) converged independently on the same answer: hash total-function OUTPUTS over closed domains, and enforce coverage with a census that fails the build for any unregistered carrier. Coverage by conjunction, not by memory.
+
+  ## North's asymmetry, which the queue should not lose
+
+  Item 4's justification — "a predicate written after runs exist is void" — is sound and irreversible; you cannot un-see transcripts. That argument does not transfer to the freeze. An instrumentId is computable retroactively over the commit that served run #1. Item 2 was granted item 4's justification without earning it.
+
+  And the corollary: pre-registration protects PASSES, not FAILS. A kill-only screen cannot inflate a zero, so FG-2/3/4 gate "claiming F4 passed" and not "discovering F4 fails". The queue treats them as prerequisites for both — which is why the denominator has been zero for the whole arc.
+
+  ## State at close
+
+  No source changed. Six commits still unpushed on warpline-surfaces. Panel record persisted to .paradigm/research/warpline-native-first/f4-instrument-panel.md with per-finding provenance marking (verified-by-Claude vs panel-asserted). Two probes dispatched: Falsifier B (decides item 2's shape) and B-2 reachability (decides runnability). Four founder decisions open; three items cleared to proceed without one.</body>
+  <type>agent-session</type>
+  <symbols_touched>["#f4-classifier", "#f4-completion", "#f4-trace", "#f4-cli-trace", "#warplined-descriptors", "#refusal", "#admit", "#knot-payload", "#warpline-mcp", "#warpline-cli"]</symbols_touched>
+  <tags>["warpline", "f4", "arc:warpline", "pre-freeze", "FG-3", "panel", "instrument-id", "falsifier", "denominator-zero"]</tags>
+  <files_created>[".paradigm/research/warpline-native-first/f4-instrument-panel.md"]</files_created>
+  <decisions>[{"id": "PANEL-ITEM2-REJECT", "decision": "Item 2 as scoped (instrumentId = descriptors ‖ ladders ‖ classifier ‖ CLI_VERB_MAP ‖ corpus) is rejected unanimously; R-1 amended by its own author on 2 of 5 components", "rationale": "The classifier rule-set must not sit in a denominator-resetting id (rows are durable and scoring is pure, so a scorer fix should re-score, not re-run — and folding it in creates a standing incentive to leave the scorer broken). The corpus hash cannot be included because seed.ts:11-15 states no corpus exists. Jinx found seven further carriers the proposal still misses, including the primary metric itself, proving the enumeration SHAPE is wrong rather than its contents."}, {"id": "PANEL-ENFORCEMENT-FIRST", "decision": "Making summarizeBatch refuse a mixed-id or off-pin batch (~10 lines) proceeds without a founder decision", "rationale": "Unanimous across the panel and independent of every scope question. FG-3 is currently unenforced — verified: summarizeBatch never receives an id — so widening the freeze before enforcing it widens a field nobody reads."}, {"id": "PANEL-HOLD-FOR-PROBES", "decision": "Hold the item-2 shape decision and the sequencing decision pending two dispatched probes", "rationale": "Arky pre-registered Falsifier B against his own ruling and flagged it UNRUN and load-bearing: if a coverage test cannot go red on a new ladder while staying green on a comment edit, option (d) collapses into source-text hashing and the fallback is the far more expensive full relocation. North's B-2 reachability check may show F4 as ratified is unrunnable, which outranks every item in the queue. Both are ~20 minutes and both were pre-registered by the panel as preceding implementation."}]</decisions>
+  <learnings>["FG-3 was never enforced: classifier.ts:266 collects descriptorsIds but summarizeBatch (completion.ts:159) never receives an id — two panels argued about the contents of a hash that no code path checks. Verify that a gate GATES before debating its scope.", "Hand-enumeration is the defect class, not the enumeration's contents. D-3 was a missed enumeration; the proposed fix enumerated again and was stale within 24 hours (it omitted src/f4/completion.ts, the primary metric, which landed a day later). The fix is a census that fails the build for any unregistered carrier — coverage by conjunction, not by memory.", "Source-text hashing is unimplementable in this package regardless of its merits: package.json declares files:['dist'] and tsup bundles every module into one chunk, so a runtime source hash is ENOENT when installed, different under npm link, different again in CI, and certifies a stale checkout under a bundled dist — the FG-3 defect class reintroduced one level up.", "Teaching change => re-run; instrument change => re-score. Rows are durable JSONL and classifyRun/evaluateCompletion are pure, so a scorer fix costs zero runs. Folding the scorer into the denominator-resetting id converts a free operation into an expensive one and creates a standing incentive to leave the scorer broken.", "Pre-registration protects PASSES, not FAILS. A kill-only screen cannot inflate a zero, so a freeze is a prerequisite for CLAIMING a pass and not for DISCOVERING a failure. Treating it as both is why the denominator has been zero for the entire arc.", "A panel's highest-value output is self-falsification, not consensus. Every one of the six panelists reported a finding against their own prior position, and those reversals — Arky amending R-1, Jinx reporting an attack as failed, Aegis withdrawing S4, Shield catching her own omission, North reversing twice, Loid finding his own framing uncomputable — carried more information than any agreement did.", "Mark provenance when recording panel findings into a permanent document: verified-by-Claude vs panel-asserted. source:external is not trust:external, and three of the panel's own citations to the PRIOR panel record had gone stale (D-2 closed, D-4 half-closed, D-5's line number drifted)."]</learnings>
+  <verification>{"status": "partial", "details": {"source_changes": "none — read-only panel session", "claims_independently_reverified": "5 of the load-bearing findings re-checked against code in the main session (FG-3 unenforced, no warpline CI, files:['dist'], RETRIABLE_FOR outside the hash, D-10 phantom resolve params)", "probes": "2 dispatched, results pending"}}</verification>
+  <confidence>0.85</confidence>
+  </invoke>
+git_context:
+  ref: 8cf4cc27df2b4babc75e17bdec74f2ec84db0a46
+  branch: warpline-surfaces
+  dirty: true

@@ -33,7 +33,9 @@ const breach = (): Refusal =>
     gate: 'claim',
     pointers: { claimId: 'claim:v1:aaaa', proposedStateId: 'state:v0:bbbb' },
     next: [
-      { verb: 'propose', params: {}, requires: ['claimedSymbols', 'intent', 'worktree'], principal: 'agent' },
+      // mirrors the real claimNextSteps ladder (D-6a: `claim`, never the
+      // nested `claimedSymbols`, which is a param of no skin)
+      { verb: 'propose', params: {}, requires: ['intent', 'worktree', 'claim'], principal: 'agent' },
       { verb: 'admit', params: { native: 'true', claim: 'claim:v1:aaaa', acceptBreach: 'true' }, requires: [], principal: 'human' },
     ],
     override: { flag: 'acceptBreach', principal: 'human' },
@@ -211,5 +213,47 @@ describe('report invariants', () => {
     ]);
     expect(r.wastedPerEpisode).toEqual([1, 0]);
     expect(r.medianWastedPerRecovery).toBe(0.5);
+  });
+});
+
+/**
+ * D-13 — the panel's claim that the instrument PUNISHES compliance with its own
+ * CLAIM_BREACH ladder. Verified, NOT fixed: the fix belongs on one of two sides
+ * (retriability, or the classifier exemption) and that is a founder call.
+ *
+ * The mechanism is real and unchanged here: `CLAIM_BREACH` defaults to
+ * `retry-with-override` (refusal.ts RETRIABLE_FOR), `claimRefusal` never
+ * overrides it, and the W1 ladder-progress exemption fires ONLY on
+ * `retry-corrected` (classifier.ts) — so ladder progress buys a CLAIM_BREACH
+ * episode nothing. These two cases pin exactly where that does and does not
+ * bite, so a later fix on either side has a before-picture.
+ */
+describe('D-13 — retry-with-override never grants the ladder-progress exemption', () => {
+  it('the COMPLIANT recovery is unpunished — widening the claim moves `target`', () => {
+    seq = 0;
+    const r = classifyRun([
+      row({ verb: 'admit', target: 'worktree=/w claim=claim:v1:aaaa', ok: false, refusal: breach() }),
+      row({ verb: 'propose', target: 'worktree=/w', resultClass: 'sealed' }), // the ladder step
+      row({ verb: 'admit', target: 'worktree=/w claim=claim:v1:bbbb', resultClass: 'sealed' }),
+    ]);
+    // Widening the claim mints a NEW claimId, and `claim` rides `target` on
+    // BOTH skins (mcp/server.ts targetOfParams; cli.ts admitTarget) — so the
+    // re-admit is not an identical repeat and W1 never fires.
+    expect(r.episodes[0]!.wasted).toEqual([]);
+    expect(r.medianWastedPerRecovery).toBe(0);
+  });
+
+  it('THE RESIDUE: an identical re-admit is W1 even after full ladder progress', () => {
+    seq = 0;
+    const r = classifyRun([
+      row({ verb: 'admit', target: 'worktree=/w claim=claim:v1:aaaa', ok: false, refusal: breach() }),
+      row({ verb: 'propose', target: 'worktree=/w', resultClass: 'sealed' }), // ladder progress
+      row({ verb: 'admit', target: 'worktree=/w claim=claim:v1:aaaa', ok: false }), // unchanged
+    ]);
+    // Had the code been `retry-corrected`, ladderProgress would have exempted
+    // this. It is `retry-with-override`, so it does not. Whether that is right
+    // depends on whether re-admitting the ADVERTISED claimId can ever be the
+    // correct recovery — the open question D-13 hands the founder.
+    expect(r.episodes[0]!.wasted.map((w) => w.rule)).toEqual(['W1']);
   });
 });
