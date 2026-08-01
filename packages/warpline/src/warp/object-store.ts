@@ -21,9 +21,8 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as zlib from 'node:zlib';
 import { blobId, objectFrame, stripFrame } from './blob.js';
+import { atomicWriteSync } from './durable.js';
 import { treeId, nativeTreeBytes, parseTree, type TreeEntry } from './tree.js';
-
-let tmpSeq = 0;
 
 export interface VerifyReport {
   checked: number;
@@ -51,13 +50,24 @@ export class ObjectStore {
     return fs.existsSync(this.loosePath(id));
   }
 
+  /**
+   * DURABILITY (audit C-7): loose objects are hardened, git-parity — git has
+   * fsynced loose objects by default since 2.36 (`core.fsync=committed`). Both
+   * halves matter and for different reasons: without the file fsync the rename
+   * can outrun the bytes and readVerified would reject a published object as
+   * corrupt; without the parent-directory fsync the object silently is not
+   * there and `restore` fails closed on a dangling treeId.
+   *
+   * Note git does NOT fsync the fanout directory here and we DO — the extra
+   * ~3.8 ms per NEW object is bought deliberately, because Warpline's ledger
+   * commits to `binding.treeId` and a lost directory entry turns a sealed,
+   * verified strand into an unrestorable one. `WARPLINE_FSYNC=none` is the
+   * escape for bulk backfills where that trade is wrong.
+   */
   private writeLoose(id: string, framed: Buffer): void {
     const p = this.loosePath(id);
     if (fs.existsSync(p)) return; // idempotent — same id ⇒ same bytes, never rewrite
-    fs.mkdirSync(path.dirname(p), { recursive: true });
-    const tmp = `${p}.tmp.${process.pid}.${tmpSeq++}`;
-    fs.writeFileSync(tmp, zlib.deflateSync(framed));
-    fs.renameSync(tmp, p); // atomic publish — no half-written object
+    atomicWriteSync(p, zlib.deflateSync(framed));
   }
 
   /** Store raw file bytes as a blob; returns its id. */

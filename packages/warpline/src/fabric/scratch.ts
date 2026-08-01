@@ -12,6 +12,7 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { atomicWriteSync } from '../warp/durable.js';
 import { warplineDirOf, readSelvage } from './fabric.js';
 
 function scratchPath(wdir: string, agentId: string): string {
@@ -24,9 +25,9 @@ function scratchPath(wdir: string, agentId: string): string {
 export function forkScratch(root: string, agentId: string): { base: string | null } {
   const wdir = warplineDirOf(root);
   const base = readSelvage(wdir);
-  const p = scratchPath(wdir, agentId);
-  fs.mkdirSync(path.dirname(p), { recursive: true });
-  fs.writeFileSync(p, (base ?? '') + '\n', 'utf8');
+  // Atomic + durable like every other ref publish: this was a bare truncate-then-
+  // write, the one ref writer with no staging file at all (C-7/C-15).
+  atomicWriteSync(scratchPath(wdir, agentId), (base ?? '') + '\n');
   return { base };
 }
 
@@ -57,10 +58,10 @@ export function writeScratchRef(
       );
     }
   }
-  fs.mkdirSync(path.dirname(p), { recursive: true });
-  const tmp = `${p}.tmp`;
-  fs.writeFileSync(tmp, value + '\n', 'utf8');
-  fs.renameSync(tmp, p); // atomic publish — no half-written scratch ref
+  // Unique staging name (C-15): a shared `${p}.tmp` here sat directly beneath
+  // the CAS above — the CAS runs BEFORE the write, so two writers that both
+  // passed it raced on one staging path and one could publish the other's value.
+  atomicWriteSync(p, value + '\n');
 }
 
 /** The stateId an agent's scratch was forked at, or null if none / unforked. */

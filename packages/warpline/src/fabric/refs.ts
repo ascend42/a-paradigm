@@ -28,6 +28,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { readFabric, readSelvage } from './fabric.js';
+import { atomicWriteSync, isTmpResidue } from '../warp/durable.js';
 import type { Strand } from './strand.js';
 
 /**
@@ -36,11 +37,28 @@ import type { Strand } from './strand.js';
  */
 const REF_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
 
+/**
+ * REF_NAME permits dots (real ref names use them: `v1.0`, `feature.x`), and that
+ * is exactly how a crashed writer's staging file became a REF (audit C-15):
+ * `selvage.tmp` matched, listRefs returned it, and heads() reported a PERMANENT
+ * phantom second head that `fabric verify` called intact. Unique staging names
+ * (`.tmp.<pid>.<n>`) do not fix this on their own — they still match REF_NAME.
+ *
+ * So staging residue is refused by NAME, in ONE predicate used on BOTH sides:
+ * listRefs never reads it as a ref, and writeRef never MINTS one (an
+ * asymmetric filter would be the mirror bug — a ref you can create and never
+ * see). A ref is a name a reader can enumerate; if it cannot, it is not a ref.
+ */
+function isRefName(name: string): boolean {
+  return REF_NAME.test(name) && !name.includes('..') && !isTmpResidue(name);
+}
+
 function assertRefName(name: string): void {
-  if (!REF_NAME.test(name) || name.includes('..')) {
+  if (!isRefName(name)) {
     throw new Error(
-      `warpline: illegal ref name "${name}" — a ref is a single path segment ([A-Za-z0-9][A-Za-z0-9._-]*); ` +
-        `it is spliced into .warpline/refs/heads/, so traversal is refused fail-closed`,
+      `warpline: illegal ref name "${name}" — a ref is a single path segment ([A-Za-z0-9][A-Za-z0-9._-]*) ` +
+        `that is not staging residue (no ".tmp" segment); it is spliced into .warpline/refs/heads/, ` +
+        `so traversal and unenumerable names are refused fail-closed`,
     );
   }
 }
@@ -91,10 +109,11 @@ export function writeRef(wdir: string, name: string, pickId: string, expectedOld
       );
     }
   }
-  fs.mkdirSync(path.dirname(p), { recursive: true });
-  const tmp = `${p}.tmp`;
-  fs.writeFileSync(tmp, pickId + '\n', 'utf8');
-  fs.renameSync(tmp, p); // atomic publish — no half-written ref
+  // atomic publish (no half-written ref) + DURABLE (C-7: the bytes and the
+  // rename are on the medium before this returns) + a UNIQUE staging name
+  // (C-15: a shared `${p}.tmp` let a racing writer publish another writer's
+  // value and return success, underneath the CAS above).
+  atomicWriteSync(p, pickId + '\n');
 }
 
 /** Every ref under refs/heads/ as name → pickId (sorted by name; {} when none). */
@@ -108,7 +127,7 @@ export function listRefs(wdir: string): Map<string, string> {
     throw new Error(`warpline: refs/heads unreadable: ${(err as Error).message}`);
   }
   for (const name of names.sort()) {
-    if (!REF_NAME.test(name)) continue; // tmp files / strays are not refs
+    if (!isRefName(name)) continue; // staging residue / strays are not refs (C-15)
     const v = readRef(wdir, name);
     if (v !== null) out.set(name, v);
   }

@@ -201,7 +201,72 @@ components:
       touch/edit/add/delete/chmod + path-taken + racy-guard + fail-open tests
       in test/worktree-index.test.ts). Wired behind native propose/resolve,
       worktree pick/admit (snapshotState indexRoot), and `objects snapshot`.
+      DURABILITY (soundness audit C-7): writeLoose no longer hand-rolls
+      write-tmp+rename — it goes through #warp-durable, so a loose object's
+      bytes AND the fanout directory entry that publishes them are on the
+      medium before put returns (git has hardened loose objects by default
+      since 2.36, `core.fsync`). The worktree INDEX is deliberately NOT
+      hardened: it is a self-declared cache whose corrupt read already falls
+      open to a cold walk.
     type: module
+
+  warp-durable:
+    description: >-
+      The ONE durable-write discipline for every Warpline write a verb later
+      claims succeeded (soundness audit C-7 + C-15) — durable.ts.
+      C-7: `grep -rnE "fsync|fdatasync|O_SYNC" src` returned ZERO matches, so
+      "PICK sealed → exit 0" was a claim about the PAGE CACHE. tmp+rename is
+      atomic against process death and silent about power loss: without an
+      fsync on the staging fd BEFORE the rename the rename can outrun the data
+      (the file is atomically published as garbage), and without an fsync on
+      the PARENT DIRECTORY AFTER it the rename itself can simply be lost — the
+      half people forget. atomicWriteSync does mkdir → unique `wx` staging file
+      → write → fsync(file) → rename → fsync(dir); appendDurableSync fsyncs the
+      ledger append (and the directory only when the append CREATED the file).
+      COVERED: the ledger append + whole-ledger rewrite (#fabric), both tip
+      pointers (#fabric writeSelvage and #fabric-refs writeRef), the per-agent
+      #scratch refs, and #warp-store loose objects. NOT covered, deliberately:
+      the worktree index (a cache) and the shadow/grade/audit sidecars
+      (observational telemetry — a lost last row is not a false success claim).
+      THE macOS CALL, STATED: Apple's fsync(2) does not flush the drive's own
+      write cache and F_FULLFSYNC does, at ~50x the cost; git exposes the choice
+      (core.fsyncMethod) — WE DO NOT GET IT. Node has no fcntl binding and
+      libuv's uv__fs_fsync on __APPLE__ already issues F_FULLFSYNC (falling back
+      to F_BARRIERFSYNC then plain fsync only when the filesystem rejects it),
+      so fs.fsyncSync IS the hardware flush here. Measured on APFS: 3.66 ms per
+      file fsync, 3.79 ms per directory fsync, against 0.17 ms for the whole
+      unhardened tmp+rename — the ~50x signature of F_FULLFSYNC, and
+      fdatasyncSync measured identically, so there is no cheaper Node-reachable
+      rung. The choice is therefore "hardware flush or nothing", which is why
+      the escape hatch is real: WARPLINE_FSYNC=none makes every fsync a no-op
+      and changes NOTHING else (same bytes, same atomic rename, same unique
+      staging names). Default is `all`, INCLUDING for an absent, empty or
+      UNRECOGNIZED value — a durability toggle fails SAFE. It is an ENV var and
+      deliberately not a .warpline/config.json key: config.json lives inside the
+      directory this module hardens, so the toggle would be less durable than
+      the thing it governs. setFsyncPolicy() is the seam for a future explicit
+      CLI flag. syncDir's tolerance is narrow ON PURPOSE — only a Windows
+      directory-open failure (no directory fsync exists there) and only
+      EINVAL/ENOTSUP/ENOSYS from the fsync itself ("this filesystem does not
+      implement it"); ENOENT, EACCES, EIO, ENOSPC and EBADF all PROPAGATE,
+      because durability that silently is not there is the bug being fixed.
+      C-15: tmpNameFor is the single source of the staging name,
+      `<target>.tmp.<pid>.<n>` — the pattern object-store.ts and stake-git.ts
+      already used correctly, now shared so a fixed `${p}.tmp` cannot reappear.
+      A SHARED staging name defeated the very CAS the ref writers publish (the
+      CAS runs BEFORE the write): two writers that both passed it raced on one
+      path, and A renamed B's VALUE into place and returned SUCCESS while B's
+      rename failed ENOENT (Arky D-B, demonstrated; reproduced deterministically
+      in test/staging-name-collision.test.ts by queueing the renames rather than
+      racing threads). isTmpResidue is the shared predicate #fabric-refs uses so
+      staging residue can never be read as — or minted as — a ref.
+      NOT closed by this: fsync does not make an APPEND atomic; a torn tail line
+      on a full disk (audit C-13) remains open. FOLLOW-UP: a cold genesis pays
+      ~10 ms per NEW loose object (2.2s → 22.9s for 2,000 objects, measured);
+      git's answer is core.fsyncMethod=batch, which needs a batch boundary the
+      ObjectStore does not currently have.
+    type: module
+    tags: [durability, soundness-audit, C-7, C-15]
 
   reserved-names:
     description: >-
@@ -722,6 +787,13 @@ components:
       calibratedConfidence on); rewriteFabric itself is scheduled for deletion at
       V3.4. The tip pointer grows a refs-mode sibling: refs/heads/selvage (a pickId,
       #fabric-refs) coexists with the legacy stateId selvage during the cutover.
+      DURABILITY (soundness audit C-7): appendStrand was a bare appendFileSync and
+      is now #warp-durable's appendDurableSync — the strand's bytes are fsynced
+      before the call returns, so "PICK sealed → exit 0" is a claim about the
+      DISK. writeSelvage and rewriteFabric publish through atomicWriteSync (fsync
+      the staging file, rename, fsync the parent dir) with per-writer staging
+      names (C-15). Still NOT atomic: a short write can tear the ledger's tail
+      line — audit C-13 is a separate, open defect that fsync does not close.
     type: module
     components:
       - "#strand"
@@ -813,10 +885,27 @@ components:
       NEVER automatic (unmigrated repos, including the live dogfood fabric until
       its own step, stay untouched). The O_EXCL #fabric-lock survives as the short
       critical-section guard for append+ref-write.
+      DURABLE + COLLISION-FREE PUBLISH (soundness audit C-7 + C-15): writeRef
+      goes through #warp-durable, so the ref bytes are fsynced BEFORE the rename
+      and refs/heads/ AFTER it, and the staging file is `<ref>.tmp.<pid>.<n>`
+      instead of a shared `<ref>.tmp` that let a racing writer publish another
+      writer's value underneath the CAS.
+      REF NAMES vs STAGING RESIDUE (C-15, the second half): REF_NAME permits
+      dots — legitimately, `v1.0` is a ref — and that is exactly how a crashed
+      writer's `refs/heads/selvage.tmp` became a REF: it matched, listRefs
+      returned it despite its own comment saying "tmp files / strays are not
+      refs", and heads() reported a PERMANENT phantom second head that
+      `fabric verify` called intact. Unique staging names do NOT fix this on
+      their own (`selvage.tmp.123.0` matches REF_NAME just as well). The fix is
+      the composed predicate isRefName = REF_NAME ∧ no `..` ∧ !isTmpResidue,
+      applied on BOTH sides: listRefs never READS residue as a ref and writeRef
+      never MINTS one. Symmetry is the point — an asymmetric filter would be the
+      mirror bug, a ref you can create and never see.
     type: module
     components:
       - "#fabric"
       - "#strand"
+      - "#warp-durable"
 
   anchor:
     description: >-
@@ -998,7 +1087,15 @@ components:
       current≠expected instead of silently clobbering — the loud-failure half
       of the fork clobber guard (two same-principal sessions could orphan each
       other's sealed proposal with no error anywhere).
+      DURABLE + COLLISION-FREE (soundness audit C-7 + C-15): both writers now go
+      through #warp-durable. writeScratchRef's shared `<agentId>.tmp` sat
+      DIRECTLY beneath the CAS above — the CAS runs before the write, so two
+      writers that both passed it raced on one staging path and one could publish
+      the other's value while returning success. forkScratch was worse still: a
+      bare truncate-then-write, the one ref writer with no staging file at all.
     type: module
+    components:
+      - "#warp-durable"
 
   admit:
     description: >-

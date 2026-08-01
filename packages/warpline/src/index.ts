@@ -282,7 +282,18 @@ export { readLegacyManifest } from './fabric/fabric.js';
 export type { EpochAnchor } from './fabric/strand.js';
 // Restore (M1c) — reconstruct a working tree from the native store with git ABSENT.
 export { resolveSelector, type SelectorResolution } from './fabric/select.js';
-export { restore, type RestoreOptions, type RestoreResult } from './fabric/restore.js';
+export {
+  restore,
+  // C-5 — the per-path dirty-destination guard EVERY byte write-back goes through.
+  guardedRestoreTree,
+  assertDirtyFree,
+  collectDirtyCollisions,
+  dirtyDestError,
+  type RestoreOptions,
+  type RestoreResult,
+  type DirtyCollision,
+  type DirtyGuardOptions,
+} from './fabric/restore.js';
 // NATIVE-FIRST R1 (#shadow-gate + #warpline-config) — observe-only admit verdicts
 // (the organic evidence clock) + the per-repo config toggle that opts them in.
 export { readWarplineConfig, configPathOf, type WarplineConfig, type StakeConfig, type GateConfig } from './fabric/config.js';
@@ -475,6 +486,15 @@ export {
   type CoverageCounts,
   type PathDecision,
 } from './honesty.js';
+
+// #warpline-root — the root chokepoint (D-7): --root > WARPLINE_ROOT > git > cwd
+export {
+  resolveRoot,
+  setExplicitRoot,
+  explicitRootOf,
+  extractRootFlag,
+  ROOT_ENV,
+} from './root.js';
 
 // git-exec (read-only primitives)
 export {

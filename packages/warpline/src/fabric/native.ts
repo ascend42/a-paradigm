@@ -55,6 +55,7 @@ import { classifyMergePaths } from '../honesty.js';
 import { warplineDirOf, readFabric, readSelvage, appendStrand, writeSelvage } from './fabric.js';
 import { readRef, writeRef } from './refs.js';
 import { readScratch, writeScratchRef, clearScratch } from './scratch.js';
+import { guardedRestoreTree, assertDirtyFree } from './restore.js';
 import { withFabricLock } from './lock.js';
 import { summarizeDelta } from './seal.js';
 import { buildStrandV3, type Strand, type MergeRecipe, type KnotResolution } from './strand.js';
@@ -175,6 +176,12 @@ function nativeSelvageTip(wdir: string): string | null {
 export interface ForkNativeOptions {
   /** restore the base tree into this directory (the agent's fresh worktree). */
   into?: string;
+  /**
+   * C-5: overwrite colliding paths in `--into` whose bytes are in no object.
+   * Without it the per-path dirty guard (#restore) refuses — `fork --into` used
+   * to call restoreTree RAW and silently clobber a working directory.
+   */
+  force?: boolean;
 }
 
 export interface ForkNativeResult {
@@ -277,7 +284,13 @@ export function forkNative(root: string, agentId: string, opts: ForkNativeOption
     const tip = mustStrand(byPickIndex(readFabric(wdir)), base, 'refs/heads/selvage');
     const treeId = tip.binding?.treeId;
     if (!treeId) throw new Error(`warpline: fork --into — selvage strand ${base} has no byte binding (unrestorable)`);
-    restoredEntries = restoreTree(new ObjectStore(root), treeId, opts.into);
+    // C-5: through the guard, never raw. `fork --into` has no snapshotted
+    // baseline (that is what propose is for), so ANY colliding path whose bytes
+    // differ from what we are about to write refuses without --force.
+    restoredEntries = guardedRestoreTree(new ObjectStore(root), treeId, opts.into, {
+      force: opts.force,
+      overrideHint: 'pass --force to overwrite them, or fork into an empty directory',
+    });
   }
   return { agentId, base, ...(restoredEntries !== undefined ? { restoredEntries } : {}) };
 }
@@ -649,6 +662,26 @@ export async function admitNative(root: string, opts: AdmitNativeOptions): Promi
           refusal: meaningRefusal('KNOT', decision, proposed.stateId, opts.agentId),
         });
       }
+      // C-5 DIRTY-WORKTREE GUARD, and it runs HERE — before a single ledger
+      // byte moves. The write-back below used to call restoreTree raw over the
+      // WHOLE merged tree (not just the merged paths) into the human's own
+      // working directory, and the clobbered bytes were in no object: propose
+      // snapshotted before the edit, the write-back snapshots nothing. Git
+      // aborts a merge that would overwrite local changes; so do we.
+      //
+      // The baseline is the PROPOSAL's own tree (`oursTree`): a path the agent
+      // has not touched since `propose` is recoverable and may be overwritten,
+      // which is the normal merge and must not be blocked. A path edited AFTER
+      // propose is bytes nothing holds — refuse, and name --no-restore, which
+      // seals the admission and simply declines the write-back.
+      if (!opts.noRestore) {
+        assertDirtyFree(objStore, mat.resultTreeId, opts.worktree, {
+          expectTreeId: oursTree,
+          overrideHint:
+            'pass --no-restore to admit WITHOUT the write-back (the merge still seals; reconcile with `warpline restore` afterwards), ' +
+            'or save those paths first',
+        });
+      }
       const recipe: MergeRecipe = { algo: 'warpline-merge3-v1', base: baseTree, ours: oursTree, theirs: theirsTree, result: mat.resultTreeId };
       const weave = buildStrandV3({
         parents: [selvageTipId, scratchTipId], // primary = selvage history; ours = the admitted proposal
@@ -670,7 +703,8 @@ export async function admitNative(root: string, opts: AdmitNativeOptions): Promi
       clearScratch(root, opts.agentId);
       const coverage = classifyMergePaths(mat.plan.files.keys(), [mat.state, proposed, selvage]);
       // Close the loop (§2.1 step 5): restore the merged bytes back into the
-      // agent worktree (overlay semantics) — the agent continues from merged reality.
+      // agent worktree (overlay semantics) — the agent continues from merged
+      // reality. Already cleared by assertDirtyFree above, before the seal.
       const restoredEntries = opts.noRestore ? undefined : restoreTree(objStore, mat.resultTreeId, opts.worktree);
       return withClaim(
         withEscalation({

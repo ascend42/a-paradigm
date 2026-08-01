@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-07-22T20:54:35.519Z'
+generated: '2026-07-23T03:51:20.237Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -25899,27 +25899,52 @@ by_symbol:
       agent: []
   '#refusal':
     symbol: '#refusal'
-    total_changes: 7
-    last_modified: '2026-07-22T13:06:26Z'
+    total_changes: 8
+    last_modified: '2026-07-23T03:50:49Z'
     stability_score: 1
     fragility: low
     recent:
+      - &ref_389
+        id: h0624
+        ts: '2026-07-23T03:50:49Z'
+        type: implement
+        symbols:
+          - '#f4-classifier'
+          - '#f4-seed'
+          - '#f4-trace'
+          - '#refusal'
+          - '#warpline-mcp'
+        author:
+          type: human
+          id: ascend
+        commit: 32ef0cd4d80e1777a7990731f3cea0311e9c7060
+        intent: feature
+        files:
+          - .paradigm/history/index.yaml
+          - .paradigm/history/log.jsonl
+          - .warpline/fabric.jsonl
+          - packages/warpline/.purpose
+          - packages/warpline/src/f4/classifier.ts
+          - packages/warpline/src/f4/seed.ts
+          - packages/warpline/test/f4-classifier.test.ts
+          - packages/warpline/test/f4-rig.test.ts
+        description: 'feat(#f4-classifier): F4 harness rig — W1-W4 classifier + scripted-rival seeding, full pipeline proven (T-005 build side)'
       - *ref_385
       - *ref_353
       - *ref_383
       - *ref_386
-      - *ref_354
     contributors:
       human:
         - ascend
       agent: []
   '#f4-trace':
     symbol: '#f4-trace'
-    total_changes: 2
-    last_modified: '2026-07-22T13:06:26Z'
+    total_changes: 3
+    last_modified: '2026-07-23T03:50:49Z'
     stability_score: 1
     fragility: low
     recent:
+      - *ref_389
       - *ref_385
       - *ref_353
     contributors:
@@ -25941,12 +25966,37 @@ by_symbol:
       agent: []
   '#warpline-mcp':
     symbol: '#warpline-mcp'
-    total_changes: 1
-    last_modified: '2026-07-22T13:06:26Z'
+    total_changes: 2
+    last_modified: '2026-07-23T03:50:49Z'
     stability_score: 1
     fragility: low
     recent:
+      - *ref_389
       - *ref_385
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#f4-classifier':
+    symbol: '#f4-classifier'
+    total_changes: 1
+    last_modified: '2026-07-23T03:50:49Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_389
+    contributors:
+      human:
+        - ascend
+      agent: []
+  '#f4-seed':
+    symbol: '#f4-seed'
+    total_changes: 1
+    last_modified: '2026-07-23T03:50:49Z'
+    stability_score: 1
+    fragility: low
+    recent:
+      - *ref_389
     contributors:
       human:
         - ascend

@@ -63,7 +63,8 @@ import { restore, type RestoreResult } from './fabric/restore.js';
 import { stake, stakeRecover, type StakeResult, type StakeRecoverResult } from './fabric/stake.js';
 import { STAKE_MARKER } from './fabric/stake-guard.js';
 import { existsSync } from 'node:fs';
-import { repoRoot, gitPath } from './git/git-exec.js';
+import { gitPath } from './git/git-exec.js';
+import { resolveRoot, setExplicitRoot, extractRootFlag, ROOT_ENV } from './root.js';
 import { startDaemon } from './daemon/server.js';
 import { mintToken, listTokenSummaries, writeMcpTokenFile, type TokenScope } from './daemon/tokens.js';
 import { runMcpServer } from './mcp/server.js';
@@ -87,7 +88,12 @@ const program = new Command();
 program
   .name('warpline')
   .description('Warpline — version control for meaning. The Convergence/Divergence Oracle (read-only forecasts) + the native fabric (pick/admit/resolve/restore). Writes .warpline/ only, never git.')
-  .version('0.1.0');
+  .version('0.1.0')
+  // D-7: the EXPLICIT root. Registered here so it appears in --help; the value
+  // is actually lifted out of argv by extractRootFlag below, which makes it
+  // legal in ANY position (commander would otherwise reject it after the
+  // subcommand). Precedence: --root > WARPLINE_ROOT > git rev-parse > cwd.
+  .option('--root <dir>', `the repository to operate on — overrides git rev-parse and $${ROOT_ENV} (must already exist)`);
 
 program
   .command('absorb')
@@ -226,7 +232,7 @@ program
       // `born`, a deleted one as `retired` (status semantics, not the inverse).
       // f4Trace verb is `cli:status`, NOT `status`: this is the meaning diff, a
       // different thing from the daemon's cycle-position self-description.
-      const root = await repoRoot().catch(() => process.cwd());
+      const root = await resolveRoot();
       const report = await traceCli(
         { root, verb: 'cli:status', target: cliTarget({}, { json: options.json }) },
         () => semanticDiff('HEAD', WORKTREE_REF),
@@ -308,7 +314,7 @@ program
             process.exit(1);
           }
         }
-        const root = await repoRoot().catch(() => process.cwd());
+        const root = await resolveRoot();
         // Attribution precedence: --agent flag > $WARPLINE_AGENT_ID > null. Lets a
         // per-agent worktree seal attributed strands during the multi-agent dogfood
         // (unsigned self-assertion — attribution data, not authenticated identity).
@@ -340,7 +346,7 @@ program
   .argument('<action>', 'install | uninstall | status')
   .action(async (action: string) => {
     try {
-      const root = await repoRoot().catch(() => process.cwd());
+      const root = await resolveRoot();
       const hookPath = await gitPath('hooks/post-commit', { cwd: root }).catch(() =>
         `${root}/.git/hooks/post-commit`,
       );
@@ -392,7 +398,7 @@ program
         process.stderr.write(`warpline: --max must be a positive integer (got "${options.max}")\n`);
         process.exit(1);
       }
-      const root = await repoRoot().catch(() => process.cwd());
+      const root = await resolveRoot();
       const wdir = warplineDirOf(root);
       const fabric = readFabric(wdir);
       const selvage = readSelvage(wdir);
@@ -412,7 +418,7 @@ program
   .option('--json', 'emit the tip + sealing strand as JSON')
   .action(async (options: { json?: boolean }) => {
     try {
-      const root = await repoRoot().catch(() => process.cwd());
+      const root = await resolveRoot();
       const wdir = warplineDirOf(root);
       const selvage = readSelvage(wdir);
       const fabric = readFabric(wdir);
@@ -433,7 +439,7 @@ program
   .argument('<agentId>', 'the agent identity owning this scratch')
   .action(async (agentId: string) => {
     try {
-      const root = await repoRoot().catch(() => process.cwd());
+      const root = await resolveRoot();
       const { base } = forkScratch(root, agentId);
       process.stdout.write(
         `SCRATCH  forked for ${agentId}\n  base    ${base ? base : '(none — empty fabric)'}\n`,
@@ -448,13 +454,18 @@ program
   .description('NATIVE-FIRST (phase 0): mint the agent\'s scratch ref at the current selvage pickId (base is a pickId, forever — I9). With --into, restore the base tree into the agent\'s fresh worktree (git absent).')
   .argument('<agentId>', 'the agent identity owning the scratch ref')
   .option('--into <dir>', 'restore the selvage tree into this directory (the agent worktree)')
+  .option('--force', 'with --into: overwrite colliding paths whose current bytes are in no object (they are unrecoverable — the guard refuses by default)')
   .option('--json', 'emit the fork result as JSON')
-  .action(async (agentId: string, options: { into?: string; json?: boolean }) => {
+  .action(async (agentId: string, options: { into?: string; force?: boolean; json?: boolean }) => {
     try {
-      const root = await repoRoot().catch(() => process.cwd());
+      const root = await resolveRoot();
       const result = await traceCli(
-        { root, verb: 'fork', target: cliTarget({ agentId, into: options.into }), principal: agentId },
-        () => forkNative(root, agentId, { into: options.into ? path.resolve(options.into) : undefined }),
+        { root, verb: 'fork', target: cliTarget({ agentId, into: options.into }, { force: options.force }), principal: agentId },
+        () =>
+          forkNative(root, agentId, {
+            into: options.into ? path.resolve(options.into) : undefined,
+            ...(options.force ? { force: true } : {}),
+          }),
       );
       if (options.json) {
         process.stdout.write(JSON.stringify(result, null, 2) + '\n');
@@ -482,7 +493,7 @@ program
   .option('--json', 'emit the result as JSON')
   .action(async (options: { agent: string; claim: string; native?: boolean; worktree?: string; intent?: string; as?: string; json?: boolean }) => {
     try {
-      const root = await repoRoot().catch(() => process.cwd());
+      const root = await resolveRoot();
       const raw = options.claim.trimStart().startsWith('{')
         ? options.claim
         : await fs.readFile(path.resolve(options.claim), 'utf8');
@@ -565,10 +576,11 @@ program
   .option('--shadow', 'R1 SHADOW GATE (observe-only): run the full decision pipeline, seal NOTHING, and append one row to .warpline/shadow/verdicts.jsonl — the organic evidence clock')
   .option('--native', 'NATIVE-FIRST (phase 0): weave the agent\'s SEALED scratch strand × the selvage, git absent — CLEAN restores the merged bytes back into the worktree')
   .option('--worktree <dir>', 'the agent worktree for the --native CLEAN write-back (default: the repo root)')
+  .option('--no-restore', 'do NOT write the merged bytes back into the worktree (--native): the merge still seals, the working directory is left exactly as it is')
   .option('--json', 'emit the full AdmitResult as JSON')
-  .action(async (agentId: string, options: { ref?: string; claim?: string; acceptBreach?: boolean; acceptRisk?: boolean; shadow?: boolean; native?: boolean; worktree?: string; json?: boolean }) => {
+  .action(async (agentId: string, options: { ref?: string; claim?: string; acceptBreach?: boolean; acceptRisk?: boolean; shadow?: boolean; native?: boolean; worktree?: string; restore?: boolean; json?: boolean }) => {
     try {
-      const root = await repoRoot().catch(() => process.cwd());
+      const root = await resolveRoot();
       if (options.shadow && options.native) {
         process.stderr.write('warpline: admit --shadow and --native are mutually exclusive (the shadow gate rides the git-era seal path at R1)\n');
         process.exit(1);
@@ -583,6 +595,7 @@ program
           native: options.native,
           acceptBreach: options.acceptBreach,
           acceptRisk: options.acceptRisk,
+          noRestore: options.restore === false,
         },
       );
       if (options.shadow) {
@@ -629,6 +642,8 @@ program
               ...(options.claim ? { claim: options.claim } : {}),
               ...(options.acceptBreach ? { acceptBreach: true } : {}),
               ...(options.acceptRisk ? { acceptRisk: true } : {}),
+              // commander negation: --no-restore sets options.restore === false
+              ...(options.restore === false ? { noRestore: true } : {}),
             }),
         );
         if (options.json) {
@@ -637,6 +652,9 @@ program
           printAdmit(agentId, result);
           if (result.sealed && result.restoredEntries !== undefined) {
             process.stdout.write(`restore   merged bytes written back to the worktree (${result.restoredEntries} entries, git absent)\n`);
+          } else if (result.sealed && options.restore === false) {
+            process.stdout.write(`restore   SKIPPED (--no-restore) — the worktree is untouched; `
+              + `\`warpline restore selvage --to <dir>\` materializes the merged bytes when you want them\n`);
           }
         }
         // T-2026-07-21-006: a refusing verdict must never exit 0 — the exit is
@@ -682,7 +700,7 @@ program
         process.stderr.write(`warpline: --window must be a positive integer (got "${options.window}")\n`);
         process.exit(1);
       }
-      const root = await repoRoot().catch(() => process.cwd());
+      const root = await resolveRoot();
       const report = await traceCli(
         { root, verb: 'grade.report', target: cliTarget({ window: String(window) }, { dry: options.dry }) },
         () => gradeFabric(root, { window }),
@@ -744,7 +762,7 @@ program
       options: { reason: string; ref?: string; by?: string; ours?: string; native?: boolean; worktree?: string; json?: boolean },
     ) => {
       try {
-        const root = await repoRoot().catch(() => process.cwd());
+        const root = await resolveRoot();
         // f4Trace (panel finding D-4): `resolve` was the ONE verb the CLI never
         // traced, and it is the human-class verb whose attempt IS the W3
         // escalation-violation the FG-1 criterion turns on. Untraced, a CLI
@@ -829,7 +847,7 @@ knot
   .option('--json', 'emit the full knotPayload:v1 JSON')
   .action(async (selector: string, options: { json?: boolean }) => {
     try {
-      const root = await repoRoot().catch(() => process.cwd());
+      const root = await resolveRoot();
       // f4Trace: a miss must record as NOT-ok (it is the cold agent hydrating a
       // pointer that did not resolve) — so it throws to `fail()` like every
       // other command rather than exiting inline. Same message, same exit 1.
@@ -864,9 +882,9 @@ program
   .option('--json', 'emit the restore result as JSON')
   .action(async (selector: string, options: { to?: string; force?: boolean; json?: boolean }) => {
     try {
-      // repoRoot() shells git — which is the whole point ABSENT here — so fall back
-      // to the cwd, the repo root the user runs from (where .warpline/ lives).
-      const root = await repoRoot().catch(() => process.cwd());
+      // resolveRoot() falls back to the cwd when git is absent — which is the
+      // whole point here (the repo root the user runs from, where .warpline/ lives).
+      const root = await resolveRoot();
       const dest = options.to ? path.resolve(options.to) : root;
       const result = restore(root, { selector, to: dest, force: options.force });
       if (options.json) {
@@ -890,7 +908,7 @@ objects
   .option('--json', 'emit the snapshot result as JSON')
   .action(async (dir: string, options: { json?: boolean }) => {
     try {
-      const root = await repoRoot().catch(() => process.cwd());
+      const root = await resolveRoot();
       const target = path.resolve(dir);
       const store = new ObjectStore(root);
       const result = snapshotDir(store, target, { indexRoot: root }); // I5 stat cache
@@ -912,7 +930,7 @@ objects
   .option('--json', 'emit the verify report as JSON')
   .action(async (options: { json?: boolean }) => {
     try {
-      const root = await repoRoot().catch(() => process.cwd());
+      const root = await resolveRoot();
       const report = new ObjectStore(root).verify();
       if (options.json) {
         process.stdout.write(JSON.stringify(report, null, 2) + '\n');
@@ -934,7 +952,7 @@ objects
   .option('--json', 'emit the backfill result as JSON')
   .action(async (options: { json?: boolean }) => {
     try {
-      const root = await repoRoot().catch(() => process.cwd());
+      const root = await resolveRoot();
       const result = await backfillV1Bindings(root, { cwd: root });
       if (options.json) {
         process.stdout.write(JSON.stringify(result, null, 2) + '\n');
@@ -963,7 +981,7 @@ fabric
   .option('--json', 'emit the full FabricVerifyReport as JSON')
   .action(async (options: { json?: boolean }) => {
     try {
-      const root = await repoRoot().catch(() => process.cwd());
+      const root = await resolveRoot();
       const report = verifyFabric(root);
       if (options.json) {
         process.stdout.write(JSON.stringify(report, null, 2) + '\n');
@@ -1014,7 +1032,7 @@ fabric
   .option('--json', 'emit the attest result as JSON')
   .action(async (options: { as?: string; agent?: string; allowUnbound?: boolean; json?: boolean }) => {
     try {
-      const root = await repoRoot().catch(() => process.cwd());
+      const root = await resolveRoot();
       const result = await attestFabric(root, {
         cwd: root,
         actor: options.as,
@@ -1049,7 +1067,7 @@ refs
   .option('--json', 'emit the migration result as JSON')
   .action(async (options: { json?: boolean }) => {
     try {
-      const root = await repoRoot().catch(() => process.cwd());
+      const root = await resolveRoot();
       const result = migrateSelvageToRefs(warplineDirOf(root));
       if (options.json) {
         process.stdout.write(JSON.stringify(result, null, 2) + '\n');
@@ -1072,7 +1090,7 @@ refs
   .option('--json', 'emit refs + heads as JSON')
   .action(async (options: { json?: boolean }) => {
     try {
-      const root = await repoRoot().catch(() => process.cwd());
+      const root = await resolveRoot();
       const { named, tips } = await traceCli(
         { root, verb: 'refs.list', target: cliTarget({}, { json: options.json }) },
         () => {
@@ -1106,7 +1124,7 @@ stakeCmd
   .option('--json', 'emit the stake result as JSON')
   .action(async (selector: string | undefined, options: { json?: boolean }) => {
     try {
-      const root = await repoRoot().catch(() => process.cwd());
+      const root = await resolveRoot();
       const result = await stake(root, { selector });
       if (options.json) {
         process.stdout.write(JSON.stringify(result, null, 2) + '\n');
@@ -1124,7 +1142,7 @@ stakeCmd
   .option('--json', 'emit the recover result as JSON')
   .action(async (commit: string, options: { json?: boolean }) => {
     try {
-      const root = await repoRoot().catch(() => process.cwd());
+      const root = await resolveRoot();
       const result = await stakeRecover(root, commit);
       if (options.json) {
         process.stdout.write(JSON.stringify(result, null, 2) + '\n');
@@ -1145,7 +1163,7 @@ program
   .option('--no-auto-start', 'do not auto-start the daemon on connect failure')
   .action(async (options: { operator?: boolean; autoStart?: boolean }) => {
     try {
-      const root = await repoRoot().catch(() => process.cwd());
+      const root = await resolveRoot();
       await runMcpServer({ root, operator: options.operator ?? false, autoStart: options.autoStart !== false });
       // the connected server keeps the event loop alive; stdout belongs to MCP.
     } catch (err) {
@@ -1165,7 +1183,7 @@ daemonCmd
   .option('--foreground', 'run in the foreground (the detached default re-execs this)')
   .action(async (options: { foreground?: boolean }) => {
     try {
-      const root = await repoRoot().catch(() => process.cwd());
+      const root = await resolveRoot();
       if (options.foreground) {
         const handle = await startDaemon(root);
         process.stdout.write(`WARPLINED  serving ${root}\n  socket  ${handle.socketPath}\n  pid     ${handle.pid}\n`);
@@ -1198,7 +1216,7 @@ daemonCmd
   .description('Stop the daemon serving this fabric (SIGTERM the pidfile holder; stale residue is cleaned).')
   .action(async () => {
     try {
-      const root = await repoRoot().catch(() => process.cwd());
+      const root = await resolveRoot();
       const r = await stopDaemon(root);
       process.stdout.write(`WARPLINED  ${r.stopped ? 'stopped' : 'not stopped'} — ${r.reason}${r.pid ? ` (pid ${r.pid})` : ''}\n`);
       if (!r.stopped && r.reason.includes('still running')) process.exitCode = 1;
@@ -1213,7 +1231,7 @@ daemonCmd
   .option('--json', 'emit the status as JSON')
   .action(async (options: { json?: boolean }) => {
     try {
-      const root = await repoRoot().catch(() => process.cwd());
+      const root = await resolveRoot();
       const st = daemonState(root);
       if (options.json) {
         process.stdout.write(JSON.stringify(st, null, 2) + '\n');
@@ -1242,7 +1260,7 @@ tokenCmd
   .option('--json', 'emit the minted row as JSON (includes the token — once)')
   .action(async (name: string, options: { kind: string; scope?: string; mcp?: boolean; json?: boolean }) => {
     try {
-      const root = await repoRoot().catch(() => process.cwd());
+      const root = await resolveRoot();
       if (options.mcp && options.kind !== 'agent') {
         // The MCP server is an ambient agent-facing process — a human-class
         // token in its file would hand every subagent human capability.
@@ -1274,7 +1292,7 @@ tokenCmd
   .option('--json', 'emit the redacted rows as JSON')
   .action(async (options: { json?: boolean }) => {
     try {
-      const root = await repoRoot().catch(() => process.cwd());
+      const root = await resolveRoot();
       const rows = listTokenSummaries(root);
       if (options.json) {
         process.stdout.write(JSON.stringify(rows, null, 2) + '\n');
@@ -1297,7 +1315,7 @@ daemonCmd
   .option('--token <token>', 'bearer token (default: $WARPLINE_DAEMON_TOKEN)')
   .action(async (verb: string, options: { params: string; token?: string }) => {
     try {
-      const root = await repoRoot().catch(() => process.cwd());
+      const root = await resolveRoot();
       const token = options.token ?? process.env.WARPLINE_DAEMON_TOKEN;
       if (!token) {
         process.stderr.write('warpline: daemon call needs a token (--token or WARPLINE_DAEMON_TOKEN)\n');
@@ -1343,7 +1361,7 @@ backupCmd
   .option('--json', 'emit the BackupResult as JSON')
   .action(async (dest: string, options: { json?: boolean }) => {
     try {
-      const root = await repoRoot().catch(() => process.cwd());
+      const root = await resolveRoot();
       const result = await backupFabric(root, dest);
       if (options.json) {
         process.stdout.write(JSON.stringify(result, null, 2) + '\n');
@@ -1957,7 +1975,19 @@ function fail(err: unknown): never {
 // Reject stray positional args so `diff a b c` errors instead of silently dropping `c`.
 program.commands.forEach((c) => c.allowExcessArguments(false));
 
-program.parseAsync(process.argv).catch((err) => fail(err));
+// D-7: lift `--root <dir>` out of argv (any position) BEFORE commander parses,
+// and validate it eagerly — a typo'd explicit root must refuse here, not after
+// a write has already landed somewhere unexpected.
+let userArgv: string[] = [];
+try {
+  const lifted = extractRootFlag(process.argv.slice(2));
+  setExplicitRoot(lifted.root);
+  userArgv = lifted.argv;
+} catch (err) {
+  fail(err);
+}
+
+program.parseAsync(userArgv, { from: 'user' }).catch((err) => fail(err));
 
 // referenced so WORKTREE_REF is part of the public CLI vocabulary surface
 void WORKTREE_REF;

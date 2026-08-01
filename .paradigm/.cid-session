@@ -1,6 +1,6 @@
 {
-  "timestamp": "2026-07-22T06:10:41.196Z",
-  "taskDescription": "T-2026-07-21-004: WARPLINE MCP SERVER — the missing third skin (TD-2026-07-21-766, F4). Wrap the 12 daemon verbs (daemon/protocol.ts DAEMON_VERBS: status, refs.list, fork, propose, admit, knot.show, r",
+  "timestamp": "2026-07-30T05:35:32.902Z",
+  "taskDescription": "WARPLINE F4 pre-freeze ITEM 2 (D-3): widen the FG-3 freeze from `descriptorsId` to an INSTRUMENTID — a content address over the WHOLE teaching instrument, not a proxy for it.\n\nCONTEXT (all independent",
   "depth": "standard",
   "coverageScore": 0.5
 }

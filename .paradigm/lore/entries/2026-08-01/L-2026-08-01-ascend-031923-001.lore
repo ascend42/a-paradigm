@@ -1,0 +1,51 @@
+id: L-2026-08-01-ascend-031923-001
+type: agent-session
+timestamp: '2026-08-01T03:19:23.540Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Audit P0 landed: the cardinal sin, an RCE, and a design decision that unified two findings'
+summary: |
+  Closed the first tranche of the soundness audit. Migrated the live fabric to refs mode (the single highest-value action — it re-engaged a CAS that was entirely disengaged on the founder's own data), then landed C-2 (a merge that silently dropped non-ASCII filename changes and sealed CLEAN), C-8 (git read failures read as "absent", and absent means DELETE), C-3 (an RCE: `.GIT` bypassed a case-sensitive guard and wrote an executable git hook), and C-4+C-12. The last two turned out to be one mechanism, discovered only because the builder implemented the fix, found it broke a legitimate tested recovery verb, and reverted rather than improvise. Founder ratified TD-2026-08-01-893: `stake recover` now seals an explicit reversion strand. 749 passing with ZERO skipped, up from 744 with 5 skipped.</summary>
+  <body>## What actually produced the value
+
+  Three things, none of which was writing code.
+
+  **Ruling the test suite inadmissible.** Carried over from the instrument panel earlier the same day. It is why six critical findings surfaced in one pass after four prior reviews had accepted "tests pass."
+
+  **Migrating before fixing.** `warpline refs migrate` was one existing command the CLI was already advertising, and it closed the only defect that could corrupt real data — the repo was in legacy selvage mode, which disengaged the pickId ref CAS entirely and left a stateId CAS structurally blind to 11 of 64 strands. No code was written for the highest-value action in the batch.
+
+  **The builder refusing to improvise.** Kit implemented C-4, went green, discovered the fix broke `test/stake.test.ts:256` — a real tested disaster-recovery behaviour — and REVERTED, wrote the fixtures, proved the red, and skipped the blocks with the reasoning documented in the test header. That surfaced what six auditors had missed: C-4 and C-12 are one mechanism. What the audit filed as "stake recover leaves the fabric reporting corrupt, then self-heals on the next seal" IS the laundering, seen from the other end.
+
+  ## The decision
+
+  Root cause was structural: the v2 linear chain cannot represent the fork `recover` creates, and the live fabric has zero v3 strands, so the DAG that could represent it was unavailable. Three resolutions existed; the founder chose the reversion strand (TD-2026-08-01-893).
+
+  The reason it is the right one goes beyond the bug: git records a reset in the reflog. A source-control system should not roll history back invisibly. The change makes Warpline's recovery MORE auditable than the thing it is measured against — what was reverted, from where, to where, by whom, why — and since `recover` is HUMAN_ONLY that is a real accountability record rather than a null field. It also preserves both invariants the audit found most load-bearing (append-only, linear v2 chain) instead of trading a known defect for a subtler one.
+
+  ## The discriminator that mattered
+
+  C-8's fix was the one where a wrong implementation would have been worse than the bug — turning legitimate absences into hard failures breaks every add/delete merge. The chosen discriminator is structural rather than error-parsing: presence now comes from the TREE ENTRY, because `ls-tree` exits 0 with empty output for a genuine absence. Any exit-code-based check would have been wrong, since `git show` exits 128 for both "not in this tree" and "corrupt pack."
+
+  ## Two process notes worth carrying
+
+  **The skipped count is the metric, not the passing count.** 744 passing / 5 skipped → 749 passing / 0 skipped. A suite that stays green because tests are skipped is the exact pattern the audit exists to kill, and it nearly recurred inside the audit's own remediation.
+
+  **The builder truncated mid-report three times** across this batch, so the red-first confirmations for C-2/C-8/C-3 never arrived. I verified outcomes and the discriminator directly, but cannot attest those three tests were observed failing first. Long multi-fix agent runs are unreliable at this length; smaller scopes would trade wall-clock for evidential completeness.
+
+  **Stale user-facing strings survive fixes.** Kit updated `stake.ts`'s module docs but left `cli.ts:1123` saying recover does "never a new strand" — false once it seals one. On this product that is not cosmetic: CLI descriptions are teaching surface, and a description contradicting its implementation is the same drift class as D-3.</body>
+  <type>milestone</type>
+  <symbols_touched>["#warp-store", "#materialize", "#seal", "#stake", "#fabric-verify", "#reserved-names", "#stake-guard", "#pick", "#warpline-cli"]</symbols_touched>
+  <tags>["warpline", "audit", "arc:warpline", "P0", "source-control", "git-parity", "TD-2026-08-01-893"]</tags>
+  <linked_commits>["7a9a555b", "c56e2fec"]</linked_commits>
+  <files_modified>["packages/warpline/src/git/git-exec.ts", "packages/warpline/src/fabric/materialize.ts", "packages/warpline/src/fabric/stake.ts", "packages/warpline/src/fabric/stake-guard.ts", "packages/warpline/src/fabric/seal.ts", "packages/warpline/src/fabric/verify.ts", "packages/warpline/src/warp/snapshot.ts", "packages/warpline/src/warp/ignore-rules.ts", "packages/warpline/src/warp/reserved-names.ts", "packages/warpline/src/cli.ts", ".warpline/refs/heads/selvage"]</files_modified>
+  <decisions>[{"id": "TD-2026-08-01-893", "decision": "stake recover seals an explicit reversion strand rather than silently moving the tip pointer", "rationale": "Closes C-4 and C-12 with one mechanism, preserves append-only and the linear v2 chain, works on the live v1/v2 fabric where the v3-DAG option would have removed disaster recovery entirely, and makes the rollback auditable — the git-parity answer, since git records a reset in the reflog."}, {"id": "MIGRATE-LIVE-FABRIC", "decision": "Ran `warpline refs migrate` on the live fabric, after a verified backup", "rationale": "The repo was in legacy selvage mode, which disengaged the pickId ref CAS and left only a stateId CAS blind to 11 of 64 strands. Combined with the installed backgrounded auto-seal hook, that was the one path to permanent corruption of real data. Migration touched no strands (ledger md5 unchanged) and downgrades a broken-mutex race from unrepairable corruption to a reported abandoned head."}]</decisions>
+  <learnings>["The highest-value action in a remediation batch may be a command that already exists. `refs migrate` was advertised by the CLI's own output, closed the only live-data corruption path, and required no code. Check what the tool is already telling you before writing anything.", "When a fix breaks a legitimate tested behaviour, that collision is information, not an obstacle — it revealed that two separately-filed audit findings were one mechanism. An agent that reverts and documents beats one that forces the fix through or weakens the test.", "For discriminators, prefer a structural signal over parsing errors: `ls-tree` exits 0 with empty output for a genuine absence, whereas `git show` exits 128 for both absence and corruption. The exit code could not have carried the distinction, and a wrong discriminator there would have broken every add/delete merge.", "Track the SKIPPED count, not just the passing count. 744/5-skipped to 749/0-skipped is the real delta; a green suite that is green because tests are skipped reproduces the exact defect the audit was convened to fix.", "Fixes leave stale user-facing strings behind. Module docs got updated while `cli.ts` still described the old contract — and on a product whose F4 arc is about cold agents learning from runtime self-description, a description that contradicts its implementation is a teaching-surface defect, not a typo."]</learnings>
+  <verification>{"status": "pass", "details": {"tests": "749 passed, 0 skipped (from 744 passed / 5 skipped)", "typecheck": "tsc --noEmit exit 0", "live_fabric": "64 strand(s) all intact; ledger md5 2503e2e4 unchanged throughout", "round_trip": "stake -> seal past -> reset -> recover verified end-to-end on a scratch fabric; verify passes IMMEDIATELY after recovery (C-12 closed), subsequent pick seals clean"}}</verification>
+  <confidence>0.88</confidence>
+  </invoke>
+git_context:
+  ref: 7a9a555b4ab1c6ea2d7d2026433aab336242b29a
+  branch: warpline-surfaces
+  dirty: true

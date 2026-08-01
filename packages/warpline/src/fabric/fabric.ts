@@ -19,6 +19,7 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { atomicWriteSync, appendDurableSync } from '../warp/durable.js';
 import { computePickId, computeLegacyBodyHash, reproducesUnderKnownRule, type Strand } from './strand.js';
 import { findAnchor, strandDigest } from './anchor.js';
 
@@ -135,17 +136,22 @@ export function writeSelvage(wdir: string, stateId: string, expectedOld?: string
       );
     }
   }
-  fs.mkdirSync(path.dirname(p), { recursive: true });
-  const tmp = `${p}.tmp`;
-  fs.writeFileSync(tmp, stateId + '\n', 'utf8');
-  fs.renameSync(tmp, p); // atomic publish — no half-written selvage
+  // atomic publish (no half-written selvage) + DURABLE + a UNIQUE staging name
+  // — see #warp-durable for why tmp+rename alone was a page-cache claim (C-7)
+  // and why a shared `${p}.tmp` defeated the CAS immediately above (C-15).
+  atomicWriteSync(p, stateId + '\n');
 }
 
-/** Append one strand to the fabric ledger (newest last). */
+/**
+ * Append one strand to the fabric ledger (newest last).
+ *
+ * DURABLE (C-7): the strand's bytes are fsynced before this returns, so
+ * "PICK sealed → exit 0" is a claim about the disk and not about the page
+ * cache. It is still not ATOMIC — a short write can tear the tail line
+ * (audit C-13 is a separate, open defect).
+ */
 export function appendStrand(wdir: string, strand: Strand): void {
-  const p = fabricPath(wdir);
-  fs.mkdirSync(path.dirname(p), { recursive: true });
-  fs.appendFileSync(p, JSON.stringify(strand) + '\n', 'utf8');
+  appendDurableSync(fabricPath(wdir), JSON.stringify(strand) + '\n');
 }
 
 /** The full fabric history in seal order (oldest first). [] if none yet. */
@@ -267,11 +273,13 @@ export function rewriteFabric(wdir: string, strands: Strand[]): void {
         `history); re-read and retry rather than silently dropping a strand.`,
     );
   }
-  const p = fabricPath(wdir);
-  fs.mkdirSync(path.dirname(p), { recursive: true });
-  const tmp = `${p}.tmp`;
-  fs.writeFileSync(tmp, strands.map((s) => JSON.stringify(s)).join('\n') + (strands.length ? '\n' : ''), 'utf8');
-  fs.renameSync(tmp, p);
+  // Durable + unique-staging publish of the WHOLE ledger (C-7/C-15). A shared
+  // `${p}.tmp` here was the worst of the four: two concurrent rewrites could
+  // interleave a partial ledger from one into the other's rename.
+  atomicWriteSync(
+    fabricPath(wdir),
+    strands.map((s) => JSON.stringify(s)).join('\n') + (strands.length ? '\n' : ''),
+  );
 }
 
 /** Append a calibration-grade event to .warpline/grades.jsonl (the confidence trajectory). */

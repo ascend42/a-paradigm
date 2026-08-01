@@ -17,6 +17,8 @@ context:
   - "v3 identity (V3.1): pickId = H(parents + content); NO ledger position; buildStrandV3 is the only v3 constructor; sealed v3 bytes are final"
   - "refs (V3.2): refs/heads/<name> hold pickIds; migrateSelvageToRefs is the ONE-TIME founder-visible migration — never automatic"
   - "coexistence invariant: this layer writes ONLY under .warpline/, never the user's git HEAD/index/worktree"
+  - "durability (C-7): every ledger append, tip-pointer publish and scratch-ref write goes through ../warp/durable.ts (#warp-durable) — fsync the staging file, rename, fsync the parent dir. Never hand-roll writeFileSync(tmp)+rename here again"
+  - "staging names (C-15): `<target>.tmp.<pid>.<n>` via tmpNameFor. A shared `${p}.tmp` defeats the per-ref CAS, which runs BEFORE the write; and refs/heads residue must never be readable as a ref (isRefName = REF_NAME ∧ no `..` ∧ !isTmpResidue, enforced on BOTH listRefs and writeRef)"
   - "native-first R1 (shadow.ts): shadow admits are observe-only — the ONLY write is one row in .warpline/shadow/verdicts.jsonl; opt-in via .warpline/config.json shadowGate"
   - "native-first phase 0 (native.ts): propose seals v3 SCRATCH strands; admit weaves via materializeMergedStateNative only; the git-era seal path stays v2 until the founder-visible cutover"
 components:

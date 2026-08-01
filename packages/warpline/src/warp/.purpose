@@ -1,12 +1,24 @@
-# Auto-generated .purpose stub — created by Cid (captain debrief)
-# Delegate to Scribe (Documentor) for rich documentation
+# Directory-level context for packages/warpline/src/warp — the canonical
+# component docs live in packages/warpline/.purpose (#warp-store #warp-object
+# #warp-state #warp-durable #reserved-names).
 name: warp
-description: "TODO: describe what this directory/module does"
+description: >-
+  The BYTE layer. Content-addressed WARP objects/states (warp-object.ts,
+  warp-state.ts, canonical.ts), the native loose object store (blob.ts, tree.ts,
+  object-store.ts — zlib blobs/ and trees/ under .warpline/objects/ with git
+  fan-out and always-on verified reads), whole-tree snapshot/restore
+  (snapshot.ts, ignore-rules.ts, reserved-names.ts), the worktree stat cache
+  (worktree-index.ts), and the ONE durable-write discipline every writer in the
+  package publishes through (durable.ts).
 context:
-  - "Stub created by Cid during coverage audit — update with real context"
-# Key files touched:
-# - snapshot.ts
+  - "meaning judges, bytes execute — this directory is the bytes half; #fabric imports from here, not the reverse (snapshot.ts's Strand type is the one exception)"
+  - "durable.ts (#warp-durable) owns tmp naming + fsync for the WHOLE package: atomicWriteSync / appendDurableSync / tmpNameFor / isTmpResidue. Do NOT hand-roll writeFileSync(tmp)+rename again — that is exactly what soundness audit C-7 and C-15 were"
+  - "WARPLINE_FSYNC=none is the only durability escape hatch; it defaults to `all` including on an unrecognized value, and it removes the fsyncs and nothing else"
+  - "Warpline writes ONLY under .warpline/; the user's git HEAD/index/worktree are never touched"
 components:
   warp:
-    description: "TODO: describe this component"
-    tags: []
+    description: >-
+      See #warp-store, #warp-object, #warp-state, #warp-durable and
+      #reserved-names in packages/warpline/.purpose for the full per-module
+      documentation.
+    tags: [warpline, bytes, object-store]

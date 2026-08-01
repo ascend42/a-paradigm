@@ -6,7 +6,9 @@
  * symlink target, subdir structure — with git ABSENT. Plus:
  *   - selector resolution (HEAD / @seq / seq / pick: / state: / tree:)
  *   - A4 refusal on a strand with no byte binding
- *   - the dirty-dest guard (refuse without --force, overlay with --force)
+ *   - the dirty-dest guard — PER-PATH since C-5 (a colliding path whose bytes are
+ *     in no object refuses without --force; an unrelated file never does). The
+ *     full policy lives in dirty-write-back-guard.test.ts.
  *   - the MALICIOUS-TREE rejection (a `../escape` / `.git` entry name fails closed,
  *     nothing written outside dest)
  */
@@ -108,15 +110,32 @@ describe('restore — the git-absent reconstruction (M1c money shot)', () => {
     expect(() => resolveSelector(wdir, 'garbage')).toThrow(/accepted: HEAD/);
   });
 
-  it('dirty-dest guard: refuses a non-empty dest without --force, overlays with it', async () => {
-    const out = await fsp.mkdtemp(path.join(os.tmpdir(), 'warpline-restore-dirty-'));
+  it('dirty-dest guard (C-5, PER-PATH): an UNRELATED file is not a collision — no --force needed', async () => {
+    // The old dir-emptiness guard refused here, which is precisely what made
+    // --force mandatory for the normal case and trained its own bypass.
+    const out = await fsp.mkdtemp(path.join(os.tmpdir(), 'warpline-restore-unrelated-'));
     try {
       fs.writeFileSync(path.join(out, 'preexisting.txt'), 'keep me\n');
-      expect(() => restore(repo.dir, { selector: 'HEAD', to: out })).toThrow(/not empty/);
+      const r = restore(repo.dir, { selector: 'HEAD', to: out });
+      expect(r.treeId).toBe(tip.binding!.treeId);
+      expect(fs.readFileSync(path.join(out, 'readme.md'), 'utf8')).toBe('hello world\n'); // tree overlaid
+      expect(fs.readFileSync(path.join(out, 'preexisting.txt'), 'utf8')).toBe('keep me\n'); // left in place
+    } finally {
+      await fsp.rm(out, { recursive: true, force: true });
+    }
+  });
+
+  it('dirty-dest guard (C-5, PER-PATH): a COLLIDING path refuses without --force, and --force overrides', async () => {
+    const out = await fsp.mkdtemp(path.join(os.tmpdir(), 'warpline-restore-dirty-'));
+    try {
+      fs.writeFileSync(path.join(out, 'readme.md'), 'local edit nobody has a copy of\n');
+      // the refusal writes NOTHING — the dirty bytes survive it.
+      expect(() => restore(repo.dir, { selector: 'HEAD', to: out })).toThrow(/refusing to overwrite/);
+      expect(fs.readFileSync(path.join(out, 'readme.md'), 'utf8')).toBe('local edit nobody has a copy of\n');
+
       const r = restore(repo.dir, { selector: 'HEAD', to: out, force: true });
       expect(r.treeId).toBe(tip.binding!.treeId);
       expect(fs.readFileSync(path.join(out, 'readme.md'), 'utf8')).toBe('hello world\n'); // tree overlaid
-      expect(fs.existsSync(path.join(out, 'preexisting.txt'))).toBe(true); // unrelated file left in place
     } finally {
       await fsp.rm(out, { recursive: true, force: true });
     }
