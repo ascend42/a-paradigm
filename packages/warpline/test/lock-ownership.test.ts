@@ -8,6 +8,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -54,12 +55,18 @@ describe('fabric lock — owner token + steal safety', () => {
   });
 
   it('after a steal, the OLD holder release does NOT remove the NEW holder lock', async () => {
-    const h1 = await acquireFabricLock(root);
-    // Simulate a crashed/stalled holder: age the lockfile past the stale TTL.
-    const old = new Date(Date.now() - 60_000);
-    fs.utimesSync(h1.path, old, old);
+    // Simulate a CRASHED holder — and note what changed: the victim used to be
+    // any holder whose lockfile mtime was 30s old, which is what the D-C fix
+    // (lock-heartbeat.test) removed. Aging alone no longer makes a lock
+    // stealable; the holder has to actually be gone. So the crashed holder is
+    // now planted with a pid that provably exited (spawnSync reaps it), which
+    // is the honest shape of the thing this test always meant to describe.
+    const lp = path.join(warplineDirOf(root), 'refs', '.lock');
+    fs.mkdirSync(path.dirname(lp), { recursive: true });
+    const h1 = { path: lp, token: `${spawnSync(process.execPath, ['-e', '']).pid}:c0ffee` };
+    fs.writeFileSync(lp, `${h1.token} ${new Date().toISOString()} host=${os.hostname().replace(/\s+/g, '_')}\n`, 'utf8');
 
-    const h2 = await acquireFabricLock(root); // steals the stale lock
+    const h2 = await acquireFabricLock(root); // steals the crashed holder's lock
     expect(h2.token).not.toBe(h1.token);
     expect(fs.readFileSync(h2.path, 'utf8').startsWith(h2.token + ' ')).toBe(true);
 

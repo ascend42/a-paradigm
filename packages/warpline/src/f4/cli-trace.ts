@@ -46,7 +46,8 @@
  */
 
 import { F4Tracer, resultClassOf } from '../daemon/f4-trace.js';
-import { RefusedError, type Refusal } from '../fabric/refusal.js';
+// C-16: the refusal accessor is SHARED, never re-derived per skin (refusal.ts).
+import { refusalOf, RefusedError } from '../fabric/refusal.js';
 
 /** The traced CLI surface: command → the daemon verb it is the CLI skin of. */
 export const CLI_VERB_MAP = {
@@ -54,15 +55,34 @@ export const CLI_VERB_MAP = {
   fork: 'fork',
   propose: 'propose',
   admit: 'admit',
+  abandon: 'abandon',
   'knot show': 'knot.show',
   grade: 'grade.report',
-  /** HUMAN-CLASS. Traced because an agent-class subject ATTEMPTING it is the W3
+  /**
+   * HUMAN-CLASS. Traced because an agent-class subject ATTEMPTING it is the W3
    * escalation-violation FG-1 turns on — untraced, the violation is invisible
-   * and the criterion cannot fail. Tracing is measurement, NOT enforcement: the
-   * native CLI has no token and no principal gate, so HUMAN_ONLY_VERBS is a
-   * DAEMON-BOUNDARY law, not a Warpline-wide one. Enforcing it on the CLI is an
-   * open founder decision, recorded in the pre-freeze panel as D-4. */
+   * and the criterion cannot fail.
+   *
+   * CORRECTED 2026-08-01 (audit C-11 / Aegis M-1): tracing is no longer the
+   * ONLY thing that happens here. This comment said HUMAN_ONLY_VERBS was "a
+   * DAEMON-BOUNDARY law, not a Warpline-wide one" and that enforcing it on the
+   * CLI was "an open founder decision" — both were true when written and are
+   * not now. #agent-shell gates the human-class verbs and the human-class admit
+   * flags whenever `$WARPLINE_AGENT_ID` marks the shell as an agent's, so the
+   * attempt is REFUSED as well as recorded (the gate emits its own row first —
+   * the same ordering the MCP skin adopted for panel finding D-2). An unmarked
+   * shell is unchanged: possession of the shell is still the human credential.
+   */
   resolve: 'resolve',
+  /**
+   * HUMAN-CLASS, traced ONLY on the #agent-shell gate path (C-11): these three
+   * commands do no F4-relevant work for an agent — the gate refuses before the
+   * engine runs — but the ATTEMPT is a W3-class observation and must be on the
+   * record under the verb it meant, exactly as `resolve` is.
+   */
+  stake: 'stake',
+  'stake recover': 'stake.recover',
+  backup: 'backup',
   /** CLI-only — the meaning diff, NOT the daemon's cycle-position `status`. */
   status: 'cli:status',
 } as const;
@@ -86,14 +106,6 @@ export function cliTarget(
   return bits.length ? bits.join(' ') : null;
 }
 
-/** the refusal riding INSIDE a result (the verdict-class refusals audit masks). */
-function refusalOf(result: unknown): Refusal | undefined {
-  if (result && typeof result === 'object' && 'refusal' in result) {
-    return (result as { refusal?: Refusal }).refusal ?? undefined;
-  }
-  return undefined;
-}
-
 /**
  * Run one CLI command body under the trace. Emits exactly one row — ok with the
  * result's structural class and any result-borne refusal, or not-ok on a throw
@@ -103,6 +115,17 @@ function refusalOf(result: unknown): Refusal | undefined {
  * is the honest record of a cold agent receiving prose instead of a
  * machine-readable refusal, and it is exactly the residue T-2026-07-21-003
  * still tracks on the CLI error paths.
+ *
+ * CORRECTED 2026-08-01 (audit C-16, last site): this module carried its OWN
+ * `refusalOf` that tested `'refusal' in result` on the OUTER object only — the
+ * same defect Jinx J-12 found on the daemon and MCP probes, surviving here on
+ * the CLI arm after the shared accessor landed. A shadow-enveloped refusal
+ * (`{shadow, row, result:{refusal}}`) emitted a row with `refusal: undefined`,
+ * and since the CLI is one of F4's two SCORED surfaces, that is a row the
+ * classifier cannot score. It now routes through `refusalOf` (refusal.ts),
+ * which knows both depths and validates the shape with `isRefusal` — so a new
+ * envelope is taught to every skin in one place, which is the whole point of a
+ * single accessor.
  */
 export async function traceCli<T>(
   spec: { root: string; verb: string; target: string | null; principal?: string },

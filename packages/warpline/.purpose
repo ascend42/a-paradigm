@@ -764,6 +764,28 @@ components:
       the hook's cross-process seals need. Paired with #fabric's rewriteFabric
       LOST-UPDATE CAS: the on-disk ledger must still be pick-for-pick the one the
       rewrite was derived from, else throw — racing an append never drops a strand.
+      D-C (audit 2026-07-31): staleness WAS a 30s wall clock stamped once at
+      acquire, so a merely-slow holder was presumed crashed and silently robbed —
+      the enabling condition for the two CRITICAL multi-writer findings. It is now
+      a three-tier liveness predicate (lockHolderPresumedGone, the one place the
+      policy is decided): (1) an UNREF'd heartbeat refreshes mtime every
+      HEARTBEAT_MS so mtime means "last seen alive" and a crashed holder stops
+      beating with its own event loop; (2) a PID LIVENESS probe — because the
+      critical section is largely SYNCHRONOUS (restoreTree) and a sync block
+      STARVES the timer, measured at zero beats landed across 11s of blocking, so
+      heartbeat alone would still rob the exact holder D-C is about — a same-host
+      holder that answers process.kill(pid,0) is NEVER presumed crashed and a
+      provably dead one is stolen IMMEDIATELY; (3) HARD_STALE_MS=600_000, the
+      un-wedge ceiling that steals regardless of liveness so a recycled pid can
+      never hold the fabric forever. A foreign-host holder is unprobeable and
+      falls back to tiers 1+3 (i.e. the pre-fix predicate). THE VICTIM IS TOLD:
+      fabricLockIsHeld is a timer-free synchronous token re-read, withFabricLock
+      throws rather than returning work done under a stolen lock, and
+      assertFabricLockHeld is exported so a section may refuse BEFORE its write.
+      OPEN (not fixed here — native.ts is out of this module's ownership):
+      restoreTree runs INSIDE the lock while touching only the agent's private
+      worktree, never the fabric; moving it out would shorten the critical
+      section materially (native.ts:711).
     type: module
 
   resolve:
@@ -2227,6 +2249,16 @@ components:
       through a CLI command, adding `shadow tail`, and making --claim optional
       touch none of the three hashed inputs. They were escalated as expensive
       on a false premise.
+      C-16, THE LAST SITE (2026-08-01): this module carried its OWN local
+      refusalOf testing `'refusal' in result` on the OUTER object — the identical
+      defect Jinx J-12 found on the daemon and MCP probes, surviving here after
+      the shared accessor landed. A shadow-enveloped refusal
+      ({shadow,row,result:{refusal}}) emitted `refusal: undefined`, and since
+      this is one of F4's two SCORED surfaces that is a row the wasted-turn
+      classifier cannot score. It now routes through #refusal's refusalOf, which
+      knows both depths AND shape-checks with isRefusal (the local copy returned
+      whatever sat under `refusal`, so an unversioned look-alike became a
+      verdict). No local re-derivation of the accessor remains in the package.
     type: module
     tags: [warpline, native-first, F4, measurement, cli]
     components:
