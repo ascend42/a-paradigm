@@ -29,6 +29,21 @@ components:
       (--no-abbrev — raw-format abbreviation is NOT governed by --full-index) per-path
       change records (--raw -z --no-renames) — the changed-path inventory the
       INCREMENTAL native snapshot overlays onto a parent tree.
+      NUL-DELIMITED PATHS (soundness audit C-2): changedPaths runs `-z` like its
+      siblings diffRaw/lsTree. `core.quotePath` defaults TRUE, so without `-z` git
+      returned `café.txt` as the octal-escaped literal `"caf\303\251.txt"` — that
+      phantom path entered the merge plan as a DELETE (absent on all three sides),
+      the REAL path never entered, and the merged tree silently kept the BASE
+      version: a wrong merge with zero conflicts, on the default path, for any
+      accent/CJK/Cyrillic/emoji/space/quote/backslash in a filename. NUL-delimited
+      output is deliberately NOT trimmed — a path may legitimately begin or end
+      with a space.
+      FAIL-CLOSED PRESENCE (soundness audit C-8): treeEntryMode no longer swallows
+      git errors. The discriminator is STRUCTURAL, not prose — `ls-tree` exits 0
+      with EMPTY output for a genuinely absent path and non-zero for a bad ref, a
+      corrupt object DB, EMFILE or ENOMEM — so only empty output yields null and
+      every error propagates. Returning null on error meant "deleted on that side"
+      to #materialize and "not a stake, allow" to #stake-guard.
     type: module
     components:
       - "#repo-lock"
@@ -116,7 +131,10 @@ components:
       T-2026-07-17-007) —
       so dependency trees and secrets never enter the permanent no-gc store;
       ignored dirs are PRUNED (no re-inclusion inside an excluded dir, gitignore
-      parity). THE TREE SEMANTICS DECISION (T-2026-07-18-005; fixes the F3 drill-#1
+      parity). Every reserved-name decision — the snapshotDir/ref-walk filters AND
+      restoreTree's refusal — goes through #reserved-names, so the two can never
+      disagree (a tree that could be sealed but never restored is the T-033
+      asymmetry). THE TREE SEMANTICS DECISION (T-2026-07-18-005; fixes the F3 drill-#1
       recover false-refusal T-2026-07-18-004): WORKTREE SEMANTICS ('worktree:v1' —
       the snapshotDir rules above) is THE canonical tree semantics for ALL NEW
       bindings; the REF path (snapshotRef, full AND incremental) filters by the
@@ -184,6 +202,37 @@ components:
       in test/worktree-index.test.ts). Wired behind native propose/resolve,
       worktree pick/admit (snapshotState indexRoot), and `objects snapshot`.
     type: module
+
+  reserved-names:
+    description: >-
+      The ONE normalizer behind every reserved-path-component decision — the fix
+      for soundness-audit C-3 (git's CVE-2014-9390 class). `restore` writes tree
+      bytes to disk, so a tree entry named `.git` overwrites a real repo and
+      `.git/hooks/post-commit` is arbitrary code execution on the victim's next
+      commit. The guard was an exact-match, case-SENSITIVE Set — the 2013 version
+      of git's — so on a case-insensitive filesystem (macOS by default, Windows
+      always) `.GIT` sailed through: the audit wrote a hook into the real `.git`
+      and watched it FIRE, and `.WARPLINE` overwrote a live ledger. Reachable on
+      case-SENSITIVE hosts too (Linux CI, Docker): an agent commits `.GIT/hooks/`,
+      the strand is legitimately sealed, correctly hashed and verify-clean, and it
+      detonates on a macOS box. normalizeReservedName folds a component before any
+      lookup — NFC, drop HFS+-IGNORABLE codepoints (U+200C-200F/202A-202E/206A-206F/
+      FEFF — HFS+ ignores them when comparing, so `.gi<ZWNJ>t` really opens `.git`,
+      git's next_hfs_char), strip trailing dots and spaces (Win32 strips them when
+      RESOLVING), case-fold — and matchesReservedName additionally recognizes `~N`
+      8.3 SHORTNAMES (Win32 takes the long name minus leading dots, truncates to 6
+      chars, appends ~N: `.git`→GIT~1, `.warpline`→WARPLI~1). Deliberately NOT
+      over-broad — .gitignore/.gitattributes/git-notes.md/g~1 stay ordinary files,
+      because these same predicates decide what a SNAPSHOT ingests and a false
+      positive silently drops a real file from the tree. Consumed by #warp-store
+      (restoreTree's assertSafeEntryName, snapshotRefFull, snapshotRefIncremental)
+      and by ignore-rules' ALWAYS_IGNORE, so snapshot and restore agree by
+      construction. KNOWN GAP: NTFS *hashed* shortnames (GI7EBA~1, emitted only on
+      an 8.3 basis collision) are not modeled. Pinned by
+      test/reserved-name-normalization.test.ts (every spelling REFUSED at restore
+      and never ingested by snapshotDir; legitimate names still allowed).
+    type: module
+    tags: [warpline, security, path-hardening]
 
   code-lens:
     description: >-
@@ -1298,7 +1347,16 @@ components:
       or overlapping token-region is a surfaced CONFLICT. changedPaths runs with
       `--no-renames` so a rename decomposes to delete-of-old + add-of-new (H2): a
       clean rename applies its delete instead of silently leaving a COPY, and a
-      rename racing an edit of the old path fails closed as add/delete-vs-edit. The
+      rename racing an edit of the old path fails closed as add/delete-vs-edit.
+      ABSENT-vs-FAILED (soundness audit C-8): a file's PRESENCE on each side is
+      decided by its TREE ENTRY (#git-exec treeEntryMode), never by a failed read.
+      `git show` exits 128 both for "path not in this tree" and for a missing
+      object / corrupt pack / EMFILE / ENOMEM, so catching it to null made
+      resolveFile read an I/O failure as "deleted on that side" and DROP the file
+      from the merged tree — zero conflicts, sealed CLEAN, a bad disk sector
+      becoming an `rm`. A present entry whose bytes will not read now THROWS and
+      aborts the merge (fail closed). computeMergeNative is structurally immune —
+      this was git-path only, and the git path is the default. The
       git tree-entry MODE is 3-way-merged alongside the bytes so the executable bit
       survives a content merge; a changed symlink/submodule (non-blob entry) fails
       CLOSED rather than round-trip as a regular blob and corrupt the entry type.
@@ -1445,7 +1503,11 @@ components:
       #pick and the #hook auto-seal path): a worktree carrying the marker, a
       ref in the stake namespace, or a commit whose tree carries the marker is
       REFUSED as input; #backfill leaves marker-bearing provenance commits
-      unbound. Cycle-free by design (imports only fs/config/git-exec) so
+      unbound. The marker read FAILS CLOSED (soundness audit C-8): it used to
+      catch a failed `ls-tree` to null, which the guard reads as "not a stake"
+      — a security guard whose failure mode was ALLOW. An unreadable ref is now
+      refused, never admitted; only a genuinely absent marker passes.
+      Cycle-free by design (imports only fs/config/git-exec) so
       absorb can import it. Regressions pinned in test/stake-denylist-v2.test.ts
       (each live false positive is a MUST-PASS fixture; true leaks still refuse).
     type: module

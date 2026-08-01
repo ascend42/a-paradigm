@@ -1,0 +1,78 @@
+id: TD-2026-08-01-893
+timestamp: '2026-08-01T02:15:28.941Z'
+title: stake recover seals an explicit REVERSION STRAND — closing C-4 and C-12 with one mechanism
+decision: >-
+  Founder ratification: `stake recover` stops being a silent ref MOVE and becomes a RECORDED act. It appends an explicit
+  reversion strand R to the ledger, then points both tip pointers at R.
+
+
+  RATIFIED SHAPE:
+    R.stateId       = the STAKED state's stateId (the state being rolled back TO)
+    R.parentStateId = the pre-recovery ledger tip's stateId (what is being rolled back FROM)
+    R.parentPickId  = the pre-recovery ledger tip's pickId
+    selvage         -> R.stateId ; refs/heads/selvage -> R.pickId
+
+  Consequences:
+    (1) The ledger stays APPEND-ONLY and the v2 chain stays LINEAR — no fork is introduced.
+    (2) The next pick sees parentStateId and parentPickId BOTH naming R, so C-4's invariant
+        ("parentStateId is always the ledger tip", strand.ts:140) becomes enforceable.
+    (3) C-4's two changes may then land: the writer assert in sealState (refuse, never repair)
+        and the symmetric per-strand detector in verify.ts, v2-only.
+    (4) C-12 closes with it: `fabric verify` is clean IMMEDIATELY after recovery rather than
+        reporting a chain-break that silently self-heals on the next seal.
+    (5) The rollback becomes AUDITABLE — what was reverted, from where, to where, by whom, why.
+        Recovery is HUMAN_ONLY, so the strand carries a real accountability record.
+
+  The prior contract "a ref MOVE, never an import" (stake.ts) is SUPERSEDED, and
+
+  test/stake.test.ts S5 ("post-recover edits seal NEW strands parented on the staked pick",
+
+  :256) must be updated: post-recover strands now parent on R, not on the staked pick directly.
+rationale: >
+  Surfaced by the 2026-07-31 soundness audit and a builder implementation attempt. The audit filed C-4 (crash-window
+  laundering) and C-12 (stake recover leaves the fabric reporting corrupt) as two findings across two auditors. They are
+  ONE mechanism: what C-12 calls "self-healing on the next seal" IS C-4's laundering. The builder implemented C-4's fix,
+  turned the tests green, then found it broke test/stake.test.ts:256 — a legitimate, tested disaster-recovery behaviour
+  — and correctly REVERTED rather than weaken the check or break recovery.
+
+
+  Root cause is structural: the v2 LINEAR chain cannot represent the fork that `recover` actually creates. Only three
+  resolutions existed, and this one is the only one that works on the fabric the founder actually has.
+
+
+  Chosen because:
+    - It is the GIT-PARITY answer. Git records a reset in the reflog; a source-control system
+      should not roll history back invisibly. This makes Warpline's recovery MORE auditable
+      than the thing it was compared against, rather than less.
+    - It preserves the two invariants the audit found most load-bearing — append-only, and a
+      linear v2 chain — instead of trading one defect for a subtler one.
+    - It works on the LIVE fabric today (15 v1 + 49 v2 + 0 v3), where the v3-only option would
+      have removed disaster recovery from the founder's real data until a P2 migration.
+    - It closes two audit findings with one change, and converts a documented-but-unenforced
+      invariant (strand.ts:140) into an enforced one.</rationale>
+  <alternatives_considered>[{"option": "Restrict `stake recover` to v3/refs-only fabrics, where parents[] represents the
+  fork natively, and enforce C-4 strictly on v2", "rejected_because": "Structurally the cleanest — it stops pretending a
+  linear chain can express a fork — but the live fabric is 15 v1 + 49 v2 and ZERO v3, so it would remove disaster
+  recovery from the founder's actual data until a v3 migration, which is a P2 item. Taking away the recovery verb to fix
+  a recovery-adjacent bug is the wrong trade."}, {"option": "Make sealState derive parentPickId from the selvage rather
+  than the ledger tip, so the pointers agree after a recover and v2 tolerates forks", "rejected_because": "Smallest
+  diff, worst outcome. It weakens the linear-chain invariant without the DAG machinery to represent what replaces it:
+  the ledger would contain a fork that verify's chain rule still treats as linear. Trades a known defect for a subtler
+  one — the exact pattern this audit exists to stop."}, {"option": "Leave C-4 open, keep recover as-is, document the
+  hazard in the spec", "rejected_because": "Defensible short-term — the refs migration landed the same day, and the ref
+  CAS now catches the drifted-tip case in refs mode, narrowing the window. But it leaves a documented invariant
+  unenforced and the silent-permanent-corruption path reachable in legacy mode, on a product whose thesis is that
+  disagreement fails closed."}]</alternatives_considered>
+
+  <participants>[{"id": "ascend", "role": "human", "stance": "proposed"}, {"id": "builder", "role": "agent", "stance":
+  "supported"}, {"id": "debugger", "role": "agent", "stance": "supported"}, {"id": "qa", "role": "agent", "stance":
+  "supported"}, {"id": "architect", "role": "agent", "stance": "neutral"}]</participants>
+
+  <symbols_affected>["#stake", "#seal", "#fabric-verify", "#pick", "#warp-store"]</symbols_affected>
+
+  <tags>["warpline", "audit", "C-4", "C-12", "stake-recover", "crash-safety", "append-only", "git-parity"]</tags>
+
+  <status>active</status>
+
+  </invoke>
+status: active

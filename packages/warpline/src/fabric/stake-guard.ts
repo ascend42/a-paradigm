@@ -262,8 +262,10 @@ export function isStakeNamespaceRef(ref: string, configuredBranch?: string): boo
  *   - ref source: the ref lives in the stake namespace, OR its tree carries the
  *     marker (checked via read-only `git ls-tree` — a stake commit reached by
  *     sha/any alias is still refused).
- * Throws on a stake input; resolves silently otherwise. Config read is
- * best-effort (a corrupt config must not turn the guard off — defaults apply).
+ * Throws on a stake input, AND on a marker read that fails (C-8: an unreadable ref
+ * is refused, never admitted — the guard fails closed). Resolves silently otherwise.
+ * Config read is best-effort (a corrupt config must not turn the guard off —
+ * defaults apply); the marker read is NOT, for the same reason.
  */
 export async function assertNotStakeInput(ref: string, cwd: string, isWorktree: boolean): Promise<void> {
   if (isWorktree) {
@@ -287,7 +289,11 @@ export async function assertNotStakeInput(ref: string, cwd: string, isWorktree: 
       `warpline: refusing ref ${ref} — it lives in the stake namespace (S1: stakes are a one-way export, never input)`,
     );
   }
-  const markerMode = await treeEntryMode(ref, STAKE_MARKER, { cwd }).catch(() => null);
+  // FAIL CLOSED (C-8): catching this read to `null` made the guard ALLOW on error —
+  // a security guard whose failure mode is "permit" is not a guard. `treeEntryMode`
+  // now returns null ONLY for a genuinely absent entry and throws on any read
+  // failure, so an unreadable ref refuses the input instead of admitting it.
+  const markerMode = await treeEntryMode(ref, STAKE_MARKER, { cwd });
   if (markerMode !== null) {
     throw new Error(
       `warpline: refusing ref ${ref} — its tree carries the ${STAKE_MARKER} marker (a stake commit; S1: stakes are a one-way export, never input). ` +

@@ -266,13 +266,29 @@ export async function diffRaw(refA: string, refB: string, opts: GitOptions = {})
  * rename silently becomes a copy). Decomposing every rename into delete-of-old +
  * add-of-new lets the 3-way merge apply the delete, and makes a rename racing an
  * edit of the old path fail closed as add/delete-vs-edit instead of mis-merging.
+ *
+ * `-z` is LOAD-BEARING TOO (C-2), for the same reason as its siblings `diffRaw`
+ * and `lsTree`: `core.quotePath` defaults TRUE, so without `-z` git returns
+ * `café.txt` as the octal-escaped literal `"caf\303\251.txt"`. That phantom path
+ * enters the merge plan as a DELETE (absent on all three sides), the REAL path
+ * never enters at all, and the merged tree silently keeps the BASE version — a
+ * wrong merge with zero conflicts. NUL-delimited output is deliberately NOT
+ * trimmed: a path may legitimately begin or end with a space.
  */
 export async function changedPaths(refA: string, refB: string, opts: GitOptions = {}): Promise<string[]> {
-  const out = await git(['diff', '--name-only', '--no-renames', '--end-of-options', refA, refB], opts);
-  return out
-    .split('\n')
-    .map((l) => l.trim())
-    .filter((l) => l.length > 0);
+  const cwd = opts.cwd ?? process.cwd();
+  let stdout: string;
+  try {
+    ({ stdout } = await execFileAsync(
+      'git',
+      ['diff', '--name-only', '-z', '--no-renames', '--end-of-options', refA, refB],
+      { cwd, maxBuffer: MAX_BUFFER, encoding: 'utf8' },
+    ));
+  } catch (err) {
+    const e = err as { stderr?: string; message?: string };
+    throw new Error(`git diff --name-only ${refA} ${refB} failed: ${(e.stderr || e.message || '').trim()}`);
+  }
+  return stdout.split('\0').filter((p) => p.length > 0);
 }
 
 /**
@@ -280,10 +296,17 @@ export async function changedPaths(refA: string, refB: string, opts: GitOptions 
  * (`100644` regular, `100755` executable, `120000` symlink, `160000` gitlink),
  * or `null` when the path is absent at that ref. Used by the merge to 3-way the
  * file mode alongside the bytes and to fail closed on unmergeable entry types.
+ *
+ * FAILS CLOSED (C-8): a git ERROR is NOT an absence, and it must never be reported
+ * as one — `null` here means "deleted on that side" to the merge, and to the stake
+ * guard it means "not a stake, allow". The discriminator is STRUCTURAL rather than
+ * prose: `ls-tree` exits 0 with EMPTY output for a genuinely absent path, and
+ * non-zero for a bad ref, a corrupt object DB, EMFILE or ENOMEM. So the empty-output
+ * case alone yields `null`; every error propagates to the caller.
  */
 export async function treeEntryMode(ref: string, filePath: string, opts: GitOptions = {}): Promise<string | null> {
-  const out = await git(['ls-tree', '--end-of-options', ref, '--', filePath], opts).catch(() => '');
-  // `ls-tree` line: "100755 blob <sha>\t<path>". No line ⇒ absent.
+  const out = await git(['ls-tree', '--end-of-options', ref, '--', filePath], opts);
+  // `ls-tree` line: "100755 blob <sha>\t<path>". No line ⇒ genuinely absent.
   const m = out.match(/^(\d{6}) /);
   return m ? m[1] : null;
 }

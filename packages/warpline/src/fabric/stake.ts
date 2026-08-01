@@ -45,10 +45,10 @@
  *                       itself for a worktree:v1 seal; the deterministic
  *                       projection of the binding for a legacy-git seal — each
  *                       strand judged under ITS OWN recorded semantics), then
- *                       MOVE the working ref to the staked pickId — a ref
- *                       move under the fabric lock, NEVER an import, never a
- *                       new strand (post-recover edits seal new strands
- *                       parented on the staked pick via the normal write path).
+ *                       APPEND A REVERSION STRAND and advance BOTH tip pointers
+ *                       onto it (TD-2026-08-01-893 — see stakeRecover below).
+ *                       Still never an import: the reversion strand lands on a
+ *                       stateId and a binding the fabric already contained.
  *
  * DETERMINISM: staking the same sealed state twice is IDEMPOTENT — if the stake
  * branch tip already carries this pickId, the invocation SKIPS (audit row
@@ -66,8 +66,11 @@ import { ObjectStore } from '../warp/object-store.js';
 import { restoreTree, snapshotDir, projectTreeWorktreeSemantics, WORKTREE_SEMANTICS } from '../warp/snapshot.js';
 import { blobId, gitBlobOid } from '../warp/blob.js';
 import { treeId as nativeTreeIdOf, gitTreeOid, gitTreeBytes, type TreeEntry, type GitTreeEntry, type TreeMode } from '../warp/tree.js';
+import { WarpStore } from '../warp/store.js';
+import { WORKTREE_REF } from '../absorb.js';
 import { warplineDirOf, readFabric, readSelvage, writeSelvage } from './fabric.js';
 import { readRef, writeRef } from './refs.js';
+import { sealState } from './seal.js';
 import { resolveSelector } from './select.js';
 import { withFabricLock } from './lock.js';
 import { readWarplineConfig, type StakeConfig } from './config.js';
@@ -619,6 +622,7 @@ export async function maybeAutoStakeOnSeal(root: string, opts: AutoStakeOptions 
 }
 
 export interface StakeRecoverResult {
+  /** the STAKED pick that was rolled back to (the thing the operator named). */
   pickId: string;
   stateId: string;
   treeId: string;
@@ -627,16 +631,49 @@ export interface StakeRecoverResult {
   ref: 'selvage';
   /** what the ref held before the move (pickId in refs mode, stateId legacy). */
   previous: string | null;
+  /**
+   * TD-2026-08-01-893 — the REVERSION STRAND this recovery appended, and the new
+   * value of both tip pointers. null ONLY on the idempotent case (the ledger tip
+   * already IS the staked pick, so nothing was reverted); the pointers are still
+   * normalized onto it.
+   */
+  reversionPickId: string | null;
 }
 
 /**
  * S5 — the re-entry verb after `git reset --hard <stake>`: consume exactly ONE
  * datum from git (the pickId trailer), verify EVERYTHING against the fabric
  * (the strand must exist; the trailer treeId must match its binding; the reset
- * worktree must re-hash to the binding), then MOVE refs/heads/selvage (or the
- * legacy selvage) to the staked pick under the fabric lock. Never an import,
- * never a new strand — a worktree edited after the reset REFUSES (re-reset and
- * recover, then seal your edits normally; they will parent on the staked pick).
+ * worktree must re-hash to the binding), then RECORD the rollback.
+ *
+ * RECORDED, NOT SILENT (TD-2026-08-01-893, supersedes the original "a ref MOVE,
+ * never an import" contract). Recovery used to move the tip pointer backwards and
+ * append nothing. That made the rollback invisible in the ledger AND it broke the
+ * ledger's own invariant: the next `pick` derived parentPickId from the LEDGER TIP
+ * (a later strand) while parentStateId came from the rolled-back selvage (an
+ * earlier state), so the strand named two DIFFERENT parents — audit finding C-4's
+ * laundering shape, reachable through a legitimate verb — and `fabric verify`
+ * reported the fabric corrupt in the window between (C-12).
+ *
+ * So recovery now APPENDS a reversion strand R and advances both pointers to it:
+ *
+ *   R.stateId       = the STAKED state's stateId          (rolled back TO)
+ *   R.parentStateId = the pre-recovery ledger tip's stateId (rolled back FROM)
+ *   R.parentPickId  = the pre-recovery ledger tip's pickId
+ *   selvage -> R.stateId ; refs/heads/selvage -> R.pickId
+ *
+ * The ledger stays APPEND-ONLY and the v2 chain stays LINEAR — no fork is
+ * introduced, because R chains off the tip like any other strand; it merely lands
+ * BACK on an earlier meaning. Its delta is the honest inverse of what was undone,
+ * its actor/intent name who rolled back and why (recovery is HUMAN_ONLY, so the
+ * strand is the accountability record), and its binding is the staked strand's own
+ * binding — nothing is imported, every byte it names was already in the store.
+ * `fabric verify` is therefore clean IMMEDIATELY after recovery, and the next pick
+ * sees both parent pointers naming R.
+ *
+ * A worktree edited after the reset still REFUSES (re-reset and recover, then seal
+ * your edits normally). Auto-stake is deliberately NOT triggered: R lands on bytes
+ * that are, by construction, already staked.
  */
 export async function stakeRecover(
   root: string,
@@ -722,26 +759,104 @@ export async function stakeRecover(
       throw err;
     }
 
-    // The ref MOVE — under the fabric lock; never a new strand.
+    // THE REVERSION STRAND (TD-2026-08-01-893) — under the fabric lock. This is
+    // the whole of the recorded-rollback change; everything above is unchanged
+    // verification. On refusal the marker is already back on disk (above) and
+    // nothing here has written, so the world is as found.
     let previous: string | null = null;
+    let reversionPickId: string | null = null;
     await withFabricLock(root, () => {
-      const refTip = readRef(wdir, 'selvage');
-      if (refTip !== null) {
-        previous = refTip;
-        writeRef(wdir, 'selvage', strand.pickId, refTip); // per-ref CAS
-      } else {
-        previous = readSelvage(wdir);
-        writeSelvage(wdir, strand.stateId, previous); // legacy CAS
+      const fabric = readFabric(wdir);
+      const tip = fabric[fabric.length - 1];
+      if (!tip) {
+        throw new StakeRefusal(
+          'warpline: stake recover refused — the ledger is empty, so there is nothing to roll back (the strand check above cannot pass on an empty fabric either)',
+        );
       }
+      const refTip = readRef(wdir, 'selvage'); // null ⇒ legacy (unmigrated) repo
+      const legacyTip = readSelvage(wdir);
+      previous = refTip ?? legacyTip;
+
+      // Both tip pointers must already name the LEDGER TIP. Recovery is the one
+      // verb that moves history backwards; it must start from a fabric whose
+      // pointers are honest, or the reversion strand would be chained onto an
+      // inconsistency instead of closing one. Refuse — never repair silently.
+      if (refTip !== null && refTip !== tip.pickId) {
+        throw new StakeRefusal(
+          `warpline: stake recover refused — refs/heads/selvage holds ${refTip} but the ledger tip is ${tip.pickId} (drifted tip pointers). ` +
+            `Run \`warpline fabric verify\` and repair the tip before recovering.`,
+        );
+      }
+      if (legacyTip !== tip.stateId) {
+        throw new StakeRefusal(
+          `warpline: stake recover refused — the selvage holds ${legacyTip ?? '(none)'} but the ledger tip's stateId is ${tip.stateId} (drifted tip pointers). ` +
+            `Run \`warpline fabric verify\` and repair the tip before recovering.`,
+        );
+      }
+
+      // IDEMPOTENT — the tip already IS the staked pick: nothing was rolled back,
+      // so nothing is recorded. Both pointers are still (re-)written onto it, which
+      // is also how a half-written pointer PAIR normalizes (C-12).
+      if (tip.pickId === strand.pickId) {
+        if (refTip !== null) writeRef(wdir, 'selvage', tip.pickId, refTip); // per-ref CAS
+        writeSelvage(wdir, tip.stateId, legacyTip); // legacy CAS
+        return;
+      }
+
+      // The two states the reversion spans must both be loadable — the delta on R
+      // IS the accountability record of what was undone, and a silently-empty one
+      // would be a lie. Fail closed rather than seal an unfaithful reversion.
+      const warpStore = new WarpStore(root, { diskCache: true });
+      const stakedState = warpStore.loadState(strand.stateId);
+      if (!stakedState) {
+        throw new StakeRefusal(
+          `warpline: stake recover refused — the staked strand's state ${strand.stateId} cannot be loaded from .warpline/states/ (cache missing or corrupt); ` +
+            `the reversion strand's delta would be unfaithful. Repair .warpline/states/ and re-run.`,
+        );
+      }
+      if (!warpStore.loadState(tip.stateId)) {
+        throw new StakeRefusal(
+          `warpline: stake recover refused — the pre-recovery tip state ${tip.stateId} cannot be loaded from .warpline/states/ (cache missing or corrupt); ` +
+            `the reversion strand's delta would be unfaithful. Repair .warpline/states/ and re-run.`,
+        );
+      }
+
+      // R chains off the tip like any other strand (append-only, linear v2 chain)
+      // and lands BACK on the staked meaning + the staked bytes. Nothing is
+      // imported: both the stateId and the binding were already in this fabric.
+      const reversion = sealState(root, warpStore, stakedState, {
+        parentStateId: tip.stateId,
+        actor, // HUMAN_ONLY verb — this names who rolled the fabric back
+        intent:
+          `stake recover — rolled back to staked pick ${strand.pickId} (stake commit ${sha.slice(0, 12)}); ` +
+          `reverted tip ${tip.pickId} (state ${tip.stateId} → ${strand.stateId})`,
+        gitCommit: strand.provenance?.gitCommit ?? null,
+        now,
+        binding: strand.binding ?? null,
+        // Carry the STAKED STRAND's provenance verbatim (see SealInput.provenance):
+        // it is the triple that matches the binding we are re-adopting.
+        provenance: {
+          ref: strand.provenance?.ref ?? WORKTREE_REF,
+          treeSha: strand.provenance?.treeSha ?? null,
+          gitCommit: strand.provenance?.gitCommit ?? null,
+        },
+      });
+      reversionPickId = reversion.pickId;
     });
 
     appendStakeAudit(root, {
       schema: STAKE_AUDIT_SCHEMA, at: now, actor, action: 'recover',
       selector: commitish, ref: 'selvage', pickId: strand.pickId, stateId: strand.stateId,
-      treeId: bound, branch: null, gitCommit: sha, gitTreeOid: meta.treeSha, reason: null,
+      treeId: bound, branch: null, gitCommit: sha, gitTreeOid: meta.treeSha,
+      reason: reversionPickId
+        ? `reversion strand ${reversionPickId} appended (rolled back from ${previous ?? '(none)'})`
+        : 'idempotent — the ledger tip already was the staked pick; tip pointers normalized, nothing reverted',
       worktreeTreeId,
     });
-    return { pickId: strand.pickId, stateId: strand.stateId, treeId: bound, gitCommit: sha, ref: 'selvage', previous };
+    return {
+      pickId: strand.pickId, stateId: strand.stateId, treeId: bound, gitCommit: sha,
+      ref: 'selvage', previous, reversionPickId,
+    };
   } catch (err) {
     appendStakeAudit(root, {
       schema: STAKE_AUDIT_SCHEMA, at: now, actor, action: 'recover-refuse',

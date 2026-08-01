@@ -14,8 +14,9 @@
  *   - S3: recompute mismatch (tampered build dir) → refuse, ref never advances
  *   - S1: pick/absorb (the hook path) REFUSE a stake commit / stake namespace /
  *     marked worktree as input
- *   - S5: `stake recover` verifies the reset tree and re-points the working ref
- *     WITHOUT minting a strand; an edited-after-reset tree refuses
+ *   - S5: `stake recover` verifies the reset tree, RECORDS the rollback as an
+ *     explicit reversion strand (TD-2026-08-01-893) and advances both tip
+ *     pointers onto it; an edited-after-reset tree refuses
  *   - D5: the deny-list is frozen + schema-versioned (the constitution test)
  */
 
@@ -41,6 +42,7 @@ import {
   STAKE_DENY_ROW_SHAPES,
 } from '../src/fabric/stake-guard.js';
 import { appendStrand, writeSelvage, readSelvage, readFabric, warplineDirOf } from '../src/fabric/fabric.js';
+import { verifyFabric } from '../src/fabric/verify.js';
 import { ObjectStore } from '../src/warp/object-store.js';
 import type { Strand } from '../src/fabric/strand.js';
 import type { StakeAuditRow } from '../src/fabric/stake.js';
@@ -97,6 +99,7 @@ describe('stake — the checkpoint valve e2e (S1–S5, D3)', () => {
   let repo: Repo;
   let s1: Strand;
   let s2: Strand;
+  let reversion: Strand; // the S5 recovery's reversion strand (TD-2026-08-01-893)
   let stake1 = ''; // first stake commit sha
   let stake2 = ''; // second stake commit sha
 
@@ -237,28 +240,59 @@ describe('stake — the checkpoint valve e2e (S1–S5, D3)', () => {
     expect(repo.lastAudit().action).toBe('recover-refuse');
   }, 120_000);
 
-  it('S5: clean recover verifies the reset tree and RE-POINTS the ref — no new strand', async () => {
+  it('S5: clean recover verifies the reset tree and RECORDS the rollback as a reversion strand', async () => {
     await repo.git('reset', '--hard', stake2); // back to the exact staked tree
-    const fabricBefore = readFabric(warplineDirOf(repo.dir)).length;
+    const before = readFabric(warplineDirOf(repo.dir));
+    const priorTip = before[before.length - 1];
+    expect(priorTip.pickId).not.toBe(s2.pickId); // the fabric really did advance past the stake
 
     const r = await stakeRecover(repo.dir, stake2);
     expect(r.pickId).toBe(s2.pickId);
     expect(r.treeId).toBe(s2.binding!.treeId);
     // the marker was consumed by re-entry (S1 stops refusing seals from here)
     expect(fs.existsSync(path.join(repo.dir, STAKE_MARKER))).toBe(false);
-    // the working ref moved BACK to the staked pick (legacy selvage mode here)
+
+    // TD-2026-08-01-893: the rollback is RECORDED, not silent. Exactly one strand
+    // is appended — the reversion strand R — and the ledger stays append-only.
+    const after = readFabric(warplineDirOf(repo.dir));
+    expect(after.length).toBe(before.length + 1);
+    expect(after.slice(0, before.length)).toEqual(before); // nothing rewritten
+    reversion = after[after.length - 1];
+    expect(r.reversionPickId).toBe(reversion.pickId);
+
+    // R's ratified shape: lands ON the staked state, parents on the pre-recovery tip.
+    expect(reversion.stateId).toBe(s2.stateId);
+    expect(reversion.parentStateId).toBe(priorTip.stateId);
+    expect(reversion.parentPickId).toBe(priorTip.pickId);
+    // never an import: R re-adopts the staked strand's own binding.
+    expect(reversion.binding!.treeId).toBe(s2.binding!.treeId);
+    // the accountability record — who rolled back, and to/from what.
+    expect(reversion.actor).toBeTruthy();
+    expect(reversion.intent).toContain('stake recover');
+    expect(reversion.intent).toContain(s2.pickId);
+    expect(reversion.intent).toContain(priorTip.pickId);
+
+    // the working tip pointer names R's state (legacy selvage mode in this repo),
+    // which IS the staked state — the rollback landed.
     expect(readSelvage(warplineDirOf(repo.dir))).toBe(s2.stateId);
-    // a ref MOVE, never an import: fabric unchanged
-    expect(readFabric(warplineDirOf(repo.dir)).length).toBe(fabricBefore);
+    // C-12: the fabric is clean IMMEDIATELY after recovery, not on the next seal.
+    expect(verifyFabric(repo.dir, { requireAnchor: false }).failures).toEqual([]);
     expect(repo.lastAudit().action).toBe('recover');
   }, 120_000);
 
-  it('S5: post-recover edits seal NEW strands parented on the staked pick', async () => {
+  it('S5: post-recover edits seal NEW strands parented on the REVERSION strand', async () => {
     await repo.write('src/mod.ts', 'export function f() { return 4; }\n');
     await repo.commitAll('diverge after recovery');
     const r = await recordPick(repo.dir, { cwd: repo.dir, ref: 'HEAD', intent: 'diverge after recovery' });
     expect(r.noop).toBe(false);
-    expect(r.strand!.parentStateId).toBe(s2.stateId); // parented on the STAKED state
+    // Both parent pointers now name R — which is exactly what makes C-4's writer
+    // guard satisfiable through the recovery path. R lands on the staked state, so
+    // parentStateId is STILL the staked state (the meaning genuinely rolled back);
+    // what changed is that parentPickId names R rather than a stale ledger tip.
+    expect(r.strand!.parentPickId).toBe(reversion.pickId);
+    expect(r.strand!.parentStateId).toBe(reversion.stateId);
+    expect(r.strand!.parentStateId).toBe(s2.stateId);
+    expect(verifyFabric(repo.dir, { requireAnchor: false }).failures).toEqual([]);
   }, 120_000);
 });
 

@@ -66,6 +66,7 @@ import { ObjectStore } from './object-store.js';
 import { catFileBatch, diffRaw, lsTree, revParse, revParseTree, type GitOptions } from '../git/git-exec.js';
 import { WORKTREE_REF } from '../absorb.js';
 import { loadIgnoreMatcher, ignoreMatcherFrom, IGNORE_FILE_NAMES, type IgnoreMatcher } from './ignore-rules.js';
+import { isRestoreForbiddenName, pathHasRestoreForbiddenName } from './reserved-names.js';
 import {
   loadWorktreeIndex,
   saveWorktreeIndex,
@@ -396,7 +397,7 @@ async function snapshotRefFull(store: ObjectStore, ref: string, opts: GitOptions
   const ignored = await refIgnoreMatcher(ref, opts); // worktree semantics (decision header)
   const kept = entries.filter(
     (e) =>
-      !e.path.split('/').some((part) => RESTORE_FORBIDDEN.has(part)) && // T-033
+      !pathHasRestoreForbiddenName(e.path) && // T-033 (C-3: normalized, any spelling)
       !flatPathIgnored(ignored, e.path),
   );
   for (const e of kept) {
@@ -434,7 +435,7 @@ async function snapshotRefIncremental(
   const changes = new Map<string, PathChange>();
   const pending: Array<{ path: string; sha: string; mode: string }> = [];
   for (const e of raw) {
-    if (e.path.split('/').some((part) => RESTORE_FORBIDDEN.has(part))) continue; // T-033 parity
+    if (pathHasRestoreForbiddenName(e.path)) continue; // T-033 parity (C-3: normalized)
     if (flatPathIgnored(ignored, e.path)) continue; // ignored paths never enter (nor leave) the tree
     if (e.status === 'D') {
       changes.set(e.path, null);
@@ -498,13 +499,6 @@ export async function captureMerge(
 }
 
 /**
- * Component names a restored tree must NEVER contain — restoring one would
- * overwrite a real git repo (`.git`) or Warpline's own store (`.warpline`). A
- * tree entry carrying such a name is a forged/corrupt tree, not a restorable state.
- */
-const RESTORE_FORBIDDEN = new Set(['.git', '.warpline']);
-
-/**
  * PATH-HARDENING (Aegis C3, CVE-2021-21300 class): assert a tree entry name is a
  * single, safe path component before it is ever joined to a destination. This is
  * the security boundary of `restore` — it writes attacker/corruption-influenceable
@@ -528,7 +522,10 @@ function assertSafeEntryName(name: string): void {
         `${JSON.stringify(name)} (forged or corrupt tree; path-traversal blocked)`,
     );
   }
-  if (RESTORE_FORBIDDEN.has(name)) {
+  // C-3: NORMALIZED lookup — `.GIT`, `.git `, `.git.`, `GIT~1` and HFS-ignorable
+  // spellings all resolve to `.git` on a real filesystem. An exact, case-sensitive
+  // match here let `.GIT/hooks/post-commit` land in the real `.git` and execute.
+  if (isRestoreForbiddenName(name)) {
     throw new Error(
       `warpline: refusing to restore — tree entry name "${name}" would overwrite a real repo/VCS ` +
         `directory (forged or corrupt tree)`,

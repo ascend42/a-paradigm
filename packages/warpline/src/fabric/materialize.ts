@@ -133,9 +133,16 @@ export async function computeMerge(
       conflicts.push({ path: p, reason: 'symlink or submodule changed — unmergeable entry type' });
       continue;
     }
-    const base = await gitShowBuffer(baseRef, p, opts).catch(() => null);
-    const ours = await gitShowBuffer(oursRef, p, opts).catch(() => null);
-    const theirs = await gitShowBuffer(theirsRef, p, opts).catch(() => null);
+    // PRESENCE comes from the TREE ENTRY, never from a failed read (C-8). `git show`
+    // exits 128 for "path not in this tree" AND for a missing object, a corrupt pack,
+    // EMFILE or ENOMEM alike — so catching it to `null` made resolveFile read a bad
+    // disk sector as "deleted on that side" and drop the file from the merged tree,
+    // with zero conflicts, sealed CLEAN. A bad sector became an `rm`. Now: absent
+    // (mode null) reads as absent; a present entry whose bytes will not read THROWS
+    // and aborts the merge. Fail closed — a wrong merge is the VCS cardinal sin.
+    const base = baseMode === null ? null : await gitShowBuffer(baseRef, p, opts);
+    const ours = oursMode === null ? null : await gitShowBuffer(oursRef, p, opts);
+    const theirs = theirsMode === null ? null : await gitShowBuffer(theirsRef, p, opts);
     // DERIVED-ARTIFACT rule (P3 GAP-1): a lockfile both sides changed divergently
     // NEVER knots — take OURS wholesale (never token-merged: a spliced lockfile
     // pretends a precision it doesn't have) and mark it STALE for regeneration.

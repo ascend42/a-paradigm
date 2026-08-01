@@ -31,9 +31,15 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import ignore from 'ignore';
+import { matchesReservedName } from './reserved-names.js';
 
-/** Names skipped at ANY depth, regardless of ignore files. */
-const ALWAYS_IGNORE = new Set(['.git', '.warpline', '.loom', 'node_modules']);
+/**
+ * Names skipped at ANY depth, regardless of ignore files. Matched through the
+ * shared C-3 normalizer, so `.GIT`, `.git ` and `GIT~1` are skipped too — the
+ * snapshot filter and restoreTree's refusal MUST agree on the name set, or a
+ * tree could be sealed that can never be restored (the T-033 asymmetry).
+ */
+const ALWAYS_IGNORE: ReadonlySet<string> = new Set(['.git', '.warpline', '.loom', 'node_modules']);
 
 /** Decides whether a snapshot walk skips `relPath` (posix, relative to the root). */
 export type IgnoreMatcher = (relPath: string, isDir: boolean) => boolean;
@@ -52,7 +58,7 @@ export function ignoreMatcherFrom(content: string | null): IgnoreMatcher {
   if (content !== null) ig.add(content);
   return (relPath: string, isDir: boolean): boolean => {
     const base = relPath.slice(relPath.lastIndexOf('/') + 1);
-    if (ALWAYS_IGNORE.has(base)) return true;
+    if (matchesReservedName(base, ALWAYS_IGNORE)) return true;
     // gitignore dir patterns (`dist/`) match only when tested WITH the trailing slash.
     return ig.ignores(isDir ? `${relPath}/` : relPath);
   };

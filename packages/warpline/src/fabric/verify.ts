@@ -10,7 +10,10 @@
  *
  *   1. Integrity   — recompute pickId (dispatched by schemaVersion) == stored id.
  *   2. Chain (v2)  — parentPickId == the immediately-preceding strand's pickId (the
- *                    first v2 strand anchors the v1 TIP; genesis anchors null).
+ *                    first v2 strand anchors the v1 TIP; genesis anchors null) AND
+ *                    parentStateId == that same strand's stateId (C-4: a v2 strand
+ *                    names its parent TWICE; both namings must agree or the strand
+ *                    was sealed across the append/publish crash window).
  *   3. Merge (v2)  — mergeParentPickId resolves to some earlier strand's pickId.
  *   4. Binding     — every tree/blob reachable from binding.treeId RE-HASHES to its
  *                    content-address (recompute, not presence — MEDIUM-1); ref-sourced
@@ -255,6 +258,28 @@ export function verifyFabric(root: string, opts: VerifyOptions = {}): FabricVeri
           `parentPickId ${actualParent ?? '(null)'} != prev ${expectedParent ?? '(null)'}`,
         );
       }
+      // 2b. C-4 DETECTOR — the SYMMETRIC check: a v2 strand declares its parent
+      //     TWICE (parentPickId = the ledger tip; parentStateId = the state that
+      //     tip lands on, strand.ts:140). Step 2 authenticates the pickId half;
+      //     nothing authenticated the stateId half, so a strand sealed across the
+      //     crash window — pickId naming the real tip, parentStateId naming an
+      //     earlier state — verified CLEAN once the selvage caught up. Permanently.
+      //     v2-ONLY, deliberately: v1 strands carry NO parentPickId (ordering is
+      //     unauthenticatable by construction, OQ-A) yet DO carry a non-null
+      //     parentStateId — 14 of the 15 v1 strands on the live fabric do — so an
+      //     epoch-blind check would fail real, legitimate history.
+      if (prev && actualParent === expectedParent) {
+        const expectedParentState = prev.stateId;
+        const actualParentState = s.parentStateId ?? null;
+        if (actualParentState !== expectedParentState) {
+          push(
+            'chain-break',
+            `parentStateId ${actualParentState ?? '(null)'} != the parent strand's stateId ${expectedParentState} ` +
+              `(parentPickId names ${actualParent}; the two parent pointers disagree — a strand sealed across the crash window)`,
+          );
+        }
+      }
+
       // boundaryAnchored: pin the FIRST v2 strand's anchor (the v1 tip, or null genesis).
       if (!firstV2Seen) {
         firstV2Seen = true;

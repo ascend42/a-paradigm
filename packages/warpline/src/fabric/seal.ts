@@ -62,6 +62,17 @@ export interface SealInput {
   /** the re-derivable merge recipe (merge strands only, M1b). */
   merge?: MergeRecipe;
   /**
+   * Provenance override (default: derived from the state being sealed — its ref +
+   * treeSha, plus `gitCommit`). ONE caller sets it: `stake recover`'s reversion
+   * strand (TD-2026-08-01-893), which lands on an EARLIER strand's state and must
+   * carry THAT strand's provenance triple rather than whatever the shared
+   * states/ cache last recorded under the stateId — a byte-custody strand can
+   * legitimately overwrite the cached snapshot of a stateId, and a provenance
+   * that drifted away from the binding it ships with would trip verify's
+   * binding.gitOid ↔ provenance.treeSha cross-check.
+   */
+  provenance?: { ref: string; treeSha: string | null; gitCommit: string | null };
+  /**
    * NEW (schema v2) — agent attribution. agentId is IN the v2 pickId; sessionKey is
    * excluded. Absent → authoredBy.agentId hashes as null (the human/git-commit default).
    * parentPickId is NOT a SealInput field — seal computes it from the ledger tip.
@@ -98,7 +109,31 @@ export function sealState(
   // v1→v2 boundary this is the last v1 strand's pick:v0 (anchors the v1 tip for free).
   const fab = readFabric(wdir);
   const seq = fab.length;
-  const parentPickId = fab.length ? fab[fab.length - 1].pickId : null;
+  const tip = fab.length ? fab[fab.length - 1] : undefined;
+  const parentPickId = tip ? tip.pickId : null;
+  // C-4 WRITER GUARD (the crash-window laundering): the two parent pointers this
+  // strand is about to declare are derived from DIFFERENT sources — parentPickId
+  // from the LEDGER TIP, parentStateId from the caller's selvage read. When those
+  // disagree the strand names one parent by pickId and a DIFFERENT one by
+  // stateId, its delta is diffed against the wrong parent, and once the selvage
+  // catches up `fabric verify` reports "all intact" forever: the evidence of the
+  // break is consumed by the break. That window opens when a crash lands between
+  // appendStrand and writeSelvage (the lesser-evil ordering below).
+  //
+  // REFUSE, NEVER REPAIR. Silently re-pointing at the real tip would seal a
+  // strand nobody asked for over a fabric whose operator has not yet seen the
+  // break. The break stays visible (verify keeps reporting chain-break) until a
+  // human decides. Recovery back to an EARLIER state is a first-class verb —
+  // `stake recover` — which appends an explicit reversion strand (TD-2026-08-01-893)
+  // and therefore re-establishes this invariant instead of violating it.
+  if ((tip?.stateId ?? null) !== (input.parentStateId ?? null)) {
+    throw new Error(
+      `warpline: seal refused — the ledger tip's stateId is ${tip?.stateId ?? '(empty ledger)'} but this seal parents on ${input.parentStateId ?? '(none)'}. ` +
+        `The two parent pointers would name DIFFERENT parents (parentPickId ${parentPickId ?? '(null)'} vs parentStateId ${input.parentStateId ?? '(null)'}) — ` +
+        `the crash-window laundering C-4. Refusing rather than repairing: run \`warpline fabric verify\` to see the break, ` +
+        `and \`warpline stake recover <stake>\` if you meant to roll history back (it records the reversion).`,
+    );
+  }
   const body: Omit<Strand, 'pickId'> = {
     schemaVersion: 2,
     seq,
@@ -111,7 +146,7 @@ export function sealState(
     objectCount: state.objects.size,
     delta,
     calibratedConfidence: input.confidence ?? null,
-    provenance: { ref: state.ref, treeSha: state.treeSha, gitCommit: input.gitCommit },
+    provenance: input.provenance ?? { ref: state.ref, treeSha: state.treeSha, gitCommit: input.gitCommit },
     ...(input.resolves ? { resolves: input.resolves } : {}),
     ...(input.merged ? { merged: true } : {}),
     ...(input.byteOnly ? { byteOnly: true } : {}),

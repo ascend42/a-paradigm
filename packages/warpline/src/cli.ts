@@ -1120,7 +1120,7 @@ stakeCmd
 
 stakeCmd
   .command('recover <commit>')
-  .description('S5 re-entry after `git reset --hard <stake>`: verify the reset tree hashes to the staked binding.treeId, then MOVE refs/heads/selvage to the staked pick — a ref move under the fabric lock, never an import, never a new strand. Post-recover edits seal normally, parented on the staked pick.')
+  .description('S5 re-entry after `git reset --hard <stake>`: verify the reset tree hashes to the staked binding.treeId, then seal a REVERSION STRAND recording the rollback and advance both tip pointers to it — under the fabric lock, never an import (the fabric stays authoritative). The rollback is therefore auditable, and the ledger stays append-only. Post-recover edits seal normally, parented on the reversion strand (TD-2026-08-01-893).')
   .option('--json', 'emit the recover result as JSON')
   .action(async (commit: string, options: { json?: boolean }) => {
     try {
@@ -1418,7 +1418,7 @@ function printStake(r: StakeResult): void {
 
 function printStakeRecover(r: StakeRecoverResult): void {
   const lines: string[] = [];
-  lines.push(`STAKE RECOVER  ${r.gitCommit.slice(0, 12)}  →  refs/heads/selvage re-pointed (a ref move, never an import)`);
+  lines.push(`STAKE RECOVER  ${r.gitCommit.slice(0, 12)}  →  reversion strand sealed; both tip pointers advanced (never an import)`);
   lines.push(`pick      ${r.pickId}`);
   lines.push(`state     ${short(r.stateId)}`);
   lines.push(`tree      ${short(r.treeId)}  (worktree recompute-verified against the fabric binding)`);
