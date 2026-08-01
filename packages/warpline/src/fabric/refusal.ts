@@ -248,6 +248,58 @@ export function exitCodeForResult(result: { refusal?: Refusal }): number {
   return result.refusal ? exitCodeFor(result.refusal.code) : 0;
 }
 
+/** Is this value a `refusal:v1` object? Shape-checked, never duck-typed on a
+ * bare `refusal` key: an unversioned look-alike must not be mistaken for a
+ * verdict, and a versioned one must be recognized after a JSON round-trip. */
+function isRefusal(value: unknown): value is Refusal {
+  return (
+    !!value &&
+    typeof value === 'object' &&
+    (value as { schemaVersion?: unknown }).schemaVersion === REFUSAL_SCHEMA &&
+    typeof (value as { code?: unknown }).code === 'string'
+  );
+}
+
+/**
+ * THE refusal accessor — the ONE place that knows WHERE a refusal can live in a
+ * result. Every skin asks this question ("did the thing I just did refuse?")
+ * and every skin must get the same answer, so the knowledge of the shapes lives
+ * here rather than being re-derived at each call site.
+ *
+ * Two depths are legal today:
+ *   1. `result.refusal` — the engine shape itself (AdmitResult and friends).
+ *   2. `result.result.refusal` — an ENVELOPE that nests the engine shape under
+ *      `result`. The shadow gate is the one that exists: daemon `admit
+ *      {shadow:true}` answers `{shadow:true, row, result}` (server.ts), the
+ *      whole point of which is to report what the gate WOULD have decided.
+ *
+ * C-16 (soundness audit 2026-07-31, Jinx J-12): both the daemon's PW-8 audit
+ * probe and the MCP skin's isError probe tested `'refusal' in result` on the
+ * OUTER object, so a shadow CLAIM_BREACH / TRUST_HELD / KNOT returned
+ * `isError:false` to the MCP host and audited as a clean ok — the exact
+ * masking class the PW-8 comment directly above it claimed to have closed. The
+ * damage is not only cosmetic: the shadow verdict stream is the evidence base
+ * for the R2 gate-promotion argument, and a masked refusal corrupts the
+ * observation the gate exists to make.
+ *
+ * Deliberately BOUNDED at one envelope level rather than recursive: a general
+ * deep search would find refusals in places that are not the caller's outcome
+ * (a knot payload's archived verdict, a tail of shadow rows) and turn reads
+ * into errors. If a THIRD depth is ever introduced, it is named here — that is
+ * the point of a single accessor.
+ */
+export function refusalOf(value: unknown): Refusal | undefined {
+  if (!value || typeof value !== 'object') return undefined;
+  const direct = (value as { refusal?: unknown }).refusal;
+  if (isRefusal(direct)) return direct;
+  const enveloped = (value as { result?: unknown }).result;
+  if (enveloped && typeof enveloped === 'object') {
+    const nested = (enveloped as { refusal?: unknown }).refusal;
+    if (isRefusal(nested)) return nested;
+  }
+  return undefined;
+}
+
 /**
  * A THROWN refusal — the typed carrier for prerequisite/usage refusals raised
  * at engine boundaries (PW-2, mcp-skin-spec §4). Before this class, a

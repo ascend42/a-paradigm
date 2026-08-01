@@ -12,7 +12,9 @@
  * extended from a debug cache into the authoritative store.
  *
  * The selvage publish is atomic (write-tmp + rename) so a crash never leaves a
- * half-written tip. The fabric append is line-atomic JSONL.
+ * half-written tip. The fabric append is durable (fsync — #warp-durable) but NOT
+ * atomic: a short write can tear the tail line, which is audit C-13 and is why
+ * `scanFabric` (the tolerant read) sits underneath the fail-closed `readFabric`.
  *
  * Library code: no console output.
  */
@@ -154,36 +156,112 @@ export function appendStrand(wdir: string, strand: Strand): void {
   appendDurableSync(fabricPath(wdir), JSON.stringify(strand) + '\n');
 }
 
-/** The full fabric history in seal order (oldest first). [] if none yet. */
-export function readFabric(wdir: string): Strand[] {
-  let raw: string;
+/** One physical line of the ledger that did not parse as a strand (audit C-13). */
+export interface MalformedLedgerLine {
+  /** 1-based physical line number in fabric.jsonl. */
+  line: number;
+  /** byte offset of the line's first byte. */
+  offset: number;
+  /** the line's length in bytes (newline excluded). */
+  bytes: number;
+  /** the JSON parse error. */
+  error: string;
+}
+
+/** A raw, TOLERANT read of the ledger — the substrate `readFabric` and repair share. */
+export interface FabricScan {
+  /** the ledger's absolute path. */
+  path: string;
+  /** the raw bytes exactly as stored (repair republishes a PREFIX of these verbatim). */
+  raw: Buffer;
+  /** every line that DID parse, in file order. */
+  strands: Strand[];
+  /** byte offset of each retained strand's line — parallel to `strands`. */
+  strandOffsets: number[];
+  /** every line that did NOT parse, in file order. */
+  malformed: MalformedLedgerLine[];
+  /** byte offset just past the newline of the last WELL-FORMED line (0 when none). */
+  lastGoodEnd: number;
+  /** total non-empty physical lines. */
+  lines: number;
+}
+
+/**
+ * Scan the ledger line-by-line WITHOUT throwing on a malformed strand — the read
+ * that makes audit C-13 recoverable. `readFabric` is the fail-closed reader every
+ * verb uses; this is the diagnostic underneath it, used by `warpline fabric repair`
+ * (#fabric-repair) and by readFabric itself so the two can never disagree about
+ * where the corruption is.
+ *
+ * Byte-exact by construction: it slices the raw Buffer rather than re-serializing,
+ * because the retained prefix must be republished VERBATIM — a strand's pickId and
+ * the epoch anchor's prefix digest are functions of the stored bytes, so a repair
+ * that re-serialized "the same" JSON would silently invalidate the whole v1 prefix.
+ */
+export function scanFabric(wdir: string): FabricScan {
+  const p = fabricPath(wdir);
+  let raw: Buffer;
   try {
-    raw = fs.readFileSync(fabricPath(wdir), 'utf8');
+    raw = fs.readFileSync(p);
   } catch (err) {
     // ENOENT = the ledger has never been written (genuinely empty). Any other read
     // failure must fail closed — reading real history as [] is silent data loss.
-    if ((err as NodeJS.ErrnoException).code === 'ENOENT') return [];
+    if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+      return { path: p, raw: Buffer.alloc(0), strands: [], strandOffsets: [], malformed: [], lastGoodEnd: 0, lines: 0 };
+    }
     throw new Error(
-      `warpline: fabric ledger unreadable at ${fabricPath(wdir)} — refusing to read history as empty: ${(err as Error).message}`,
+      `warpline: fabric ledger unreadable at ${p} — refusing to read history as empty: ${(err as Error).message}`,
     );
   }
+
+  const strands: Strand[] = [];
+  const strandOffsets: number[] = [];
+  const malformed: MalformedLedgerLine[] = [];
+  let lastGoodEnd = 0;
+  let lines = 0;
+  let lineNo = 0;
+  let offset = 0;
+  while (offset < raw.length) {
+    let nl = raw.indexOf(0x0a, offset);
+    const unterminated = nl === -1;
+    if (unterminated) nl = raw.length; // a tail with no newline — the classic torn line
+    lineNo++;
+    const slice = raw.subarray(offset, nl);
+    const text = slice.toString('utf8');
+    const end = unterminated ? nl : nl + 1;
+    if (text.trim().length === 0) {
+      offset = end;
+      continue;
+    }
+    lines++;
+    try {
+      strands.push(JSON.parse(text) as Strand);
+      strandOffsets.push(offset);
+      lastGoodEnd = end;
+    } catch (err) {
+      malformed.push({ line: lineNo, offset, bytes: slice.length, error: (err as Error).message });
+    }
+    offset = end;
+  }
+  return { path: p, raw, strands, strandOffsets, malformed, lastGoodEnd, lines };
+}
+
+/** The full fabric history in seal order (oldest first). [] if none yet. */
+export function readFabric(wdir: string): Strand[] {
   // A malformed line must THROW (with its position) — never silently drop the rest
   // of the history. The ledger is authoritative; a truncated/corrupt strand is a
-  // signal to stop, not to forget everything after it.
-  const lines = raw.split('\n');
-  const strands: Strand[] = [];
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i];
-    if (line.trim().length === 0) continue;
-    try {
-      strands.push(JSON.parse(line) as Strand);
-    } catch (err) {
-      throw new Error(
-        `warpline: fabric ledger corrupt at ${fabricPath(wdir)}:${i + 1} — a malformed strand must not silently drop history: ${(err as Error).message}`,
-      );
-    }
+  // signal to stop, not to forget everything after it. C-13 added the second
+  // sentence of the message: fail-closed was correct and the recovery advice
+  // ("hand-edit the JSONL") was not, so the diagnostic now names the repair verb.
+  const scan = scanFabric(wdir);
+  const bad = scan.malformed[0];
+  if (bad) {
+    throw new Error(
+      `warpline: fabric ledger corrupt at ${scan.path}:${bad.line} — a malformed strand must not silently drop history: ${bad.error}. ` +
+        `Run \`warpline fabric repair\` to inspect the damage (it reports what a repair would drop and writes nothing without --confirm).`,
+    );
   }
-  return strands;
+  return scan.strands;
 }
 
 /**

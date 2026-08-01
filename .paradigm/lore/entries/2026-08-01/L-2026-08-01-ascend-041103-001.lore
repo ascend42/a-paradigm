@@ -1,0 +1,49 @@
+id: L-2026-08-01-ascend-041103-001
+type: agent-session
+timestamp: '2026-08-01T04:11:03.126Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Audit P1: isolation, write-back safety, and durability — with the red-first discipline finally biting'
+summary: |
+  Closed D-7 (--root), C-5 (per-path dirty guard), C-7 (fsync), and C-15 (staging-name collisions) across two agents running in parallel on disjoint files. 813 passing, zero skipped, up from 749. The batch's real value was evidential rather than mechanical: each fix was reverted in source and the failures recorded, which reproduced Arky's "writer A's rename published writer B's value" verbatim — and caught one of the new tests being vacuous, passing both before and after. Warpline also sealed a strand for the commit that fixed its own merge path.</summary>
+  <body>## What the batch actually closed
+
+  **D-7** was the cheapest item in the audit and the one with the widest blast radius: no `--root`, no `WARPLINE_ROOT`, and a `process.cwd()` fallback that fires only when git fails, so every command targeted the live fabric by default. That is why all six auditors had to be given explicit `os.tmpdir()` discipline, and it was a hard prerequisite for the F4 runner whose fixtures live in-repo. Fixed with a real chokepoint (`src/root.ts`), not 31 edits — a per-site fix is how the 32nd site gets missed, and duplicated root resolution is why the defect existed at all.
+
+  **C-5** was mostly wiring: the correct policy already existed at `restore.ts:60-68` and two call sites bypassed it. The substantive part was Judge's sharper point — the guard tested directory emptiness, which an in-place restore can never satisfy, so `--force` became mandatory for the normal case and the guard trained its own bypass. Per-path is what turns it from theatre into a guard.
+
+  **C-7** produced the best-evidenced decision of the session. There was no fsync anywhere, so "sealed → exit 0" was a claim about the page cache. The builder could not choose between plain fsync and F_FULLFSYNC because on macOS Node's fsync IS F_FULLFSYNC — libuv routes both fsync and fdatasync there — and it proved this by cost signature (3.66ms vs 0.17ms unhardened) rather than asserting it. Hardware flush or nothing, hence an on/off knob rather than git's core.fsyncMethod. Cost measured, not assumed: +22-44ms on an incremental seal (immaterial), 10.2x on a 2,000-object cold genesis (very material). Batch-fsync recorded as a follow-up instead of improvised.
+
+  **C-15** fixed four durable writers sharing a `${p}.tmp`, where a racing writer could publish another's value AND return success underneath the CAS — because the CAS runs before the write. The ref-residue half was fixed better than specified: composing an explicit residue check into `isRefName` rather than banning dots in the regex, so a legitimately dotted ref name still works.
+
+  ## The evidential turn
+
+  Across the P0 batch I asked four times for red-first confirmations and never got them, because the builder truncated mid-report each time. This batch delivered them, and they earned their keep immediately:
+
+  - Reverting C-15 reproduced Arky's D-B verbatim: `expected 'pick:v2:bbbb…' to be 'pick:v2:aaaa…'` — writer A's rename publishing writer B's value.
+  - Reverting C-7 turned 7 of 14 tests red; the 6 that stayed green assert the ABSENCE of fsync, which is the correct split and is itself evidence the assertions bite where they should.
+  - The builder found one of its OWN new tests was vacuous — a syncDir ENOENT case that passed both before and after the tightening — and replaced it with a POSIX EACCES case that fails against the old code.
+
+  That last one is the whole thesis of this audit, occurring inside the audit's own remediation. A test written after a fix proves the code compiles.
+
+  ## Parallel agents: works, with one rule
+
+  Two builders on disjoint file sets, each told which four files the other owned and instructed to report — never fix — failures outside its own scope. The isolation agent correctly identified the only tsc errors as the durability agent's in-flight work and left them alone. Without that rule the predictable failure is one agent "fixing" the other's half-written code, producing a state neither can explain. The cost is that no intermediate test number is trustworthy; the coordinator has to do the authoritative run.
+
+  ## A pleasing verification
+
+  The fabric grew 64 to 65 strands mid-batch. `head -64 | md5` is byte-identical to the pre-audit baseline, and strand 65 is the post-commit hook sealing commit 7a9a555b — the commit that fixed Warpline's own merge path. The tool recorded the change that repaired it, and the isolation discipline held across all eight agents.</body>
+  <type>milestone</type>
+  <symbols_touched>["#warpline-root", "#restore", "#warp-durable", "#fabric-refs", "#warp-store", "#scratch", "#native-write-path", "#warpline-cli"]</symbols_touched>
+  <tags>["warpline", "audit", "arc:warpline", "P1", "durability", "isolation", "fsync", "source-control"]</tags>
+  <linked_commits>["292e740e", "7a9a555b"]</linked_commits>
+  <learnings>["Fix duplicated logic with a chokepoint, not N edits. Root resolution was duplicated across ~31 sites, which IS why D-7 existed; patching each site would have left the next one to reintroduce it. Same shape as the reserved-name normalizer in P0.", "A guard that cannot be satisfied in the normal case trains its own bypass. The dirty-destination check tested directory emptiness, which an in-place restore can never pass, so --force became routine and the guard protected nothing. Per-path made it real.", "Measure the cost of a safety default rather than asserting it is fine. fsync is +3.4% on an incremental seal and 10.2x on a cold genesis — the same change, two completely different verdicts, and only the numbers reveal that the escape hatch is load-bearing rather than decorative.", "Reverting the fix and re-running is the only proof a test is non-vacuous, and it pays for itself: it reproduced an auditor's finding verbatim AND exposed a brand-new test that passed both before and after. Ask for the failure text, not the assurance.", "Parallel builders on disjoint files work if and only if each is told to REPORT rather than FIX failures outside its scope. Otherwise one agent adapts to the other's half-written code. The trade is that no intermediate suite number is trustworthy — the coordinator must run the authoritative pass."]</learnings>
+  <verification>{"status": "pass", "details": {"tests": "813 passed, 0 skipped, 91 files (from 749)", "typecheck": "tsc --noEmit exit 0", "fsync_off_path": "813/813 green under WARPLINE_FSYNC=none", "live_fabric": "65 strands all intact; head -64 md5 2503e2e4 identical to pre-audit baseline; strand 65 is the post-commit auto-seal of 7a9a555b", "root_isolation": "verified functionally — --root run from inside the repo wrote to a scratch fabric and left the live fabric untouched"}}</verification>
+  <confidence>0.9</confidence>
+  </invoke>
+git_context:
+  ref: 292e740e55a963cf0cac3671efd23704d2f219d5
+  branch: warpline-surfaces
+  dirty: true

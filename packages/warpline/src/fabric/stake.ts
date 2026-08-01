@@ -69,6 +69,7 @@ import { treeId as nativeTreeIdOf, gitTreeOid, gitTreeBytes, type TreeEntry, typ
 import { WarpStore } from '../warp/store.js';
 import { WORKTREE_REF } from '../absorb.js';
 import { warplineDirOf, readFabric, readSelvage, writeSelvage } from './fabric.js';
+import { STAKE_AUDIT_SCHEMA, stakesDirOf, stakeAuditPathOf, type StakeAuditRow } from './stake-journal.js';
 import { readRef, writeRef } from './refs.js';
 import { sealState } from './seal.js';
 import { resolveSelector } from './select.js';
@@ -100,42 +101,19 @@ import type { Strand } from './strand.js';
 
 /* ── audit sidecar (S4/G5) ───────────────────────────────────────────────────── */
 
-export const STAKE_AUDIT_SCHEMA = 'stakeAudit:v1';
-
-export interface StakeAuditRow {
-  schema: typeof STAKE_AUDIT_SCHEMA;
-  at: string; // ISO
-  actor: string;
-  /** stake = a commit was cut; skip = idempotent no-op; refuse = any refusal;
-   * recover / recover-refuse = the S5 re-entry verb. */
-  action: 'stake' | 'skip' | 'refuse' | 'recover' | 'recover-refuse';
-  selector: string;
-  ref?: string | null;
-  pickId?: string | null;
-  stateId?: string | null;
-  treeId?: string | null;
-  branch?: string | null;
-  gitCommit?: string | null;
-  gitTreeOid?: string | null;
-  reason?: string | null;
-  /**
-   * ADDITIVE (T-2026-07-18-005): the WORKTREE-SEMANTICS expectation of the staked
-   * tree — what a pristine `git reset --hard <stake>` worktree re-hashes to under
-   * recover's ignore-honoring walk. Equals treeId for a worktree:v1 binding;
-   * derived by projection for a legacy-git binding. Recorded at cut AND at
-   * recover so the S5 rail's honest expectation is on the audit record for any
-   * strand. Absent on rows written before the tree-semantics decision.
-   */
-  worktreeTreeId?: string | null;
-}
-
-export function stakesDirOf(root: string): string {
-  return path.join(root, '.warpline', 'stakes');
-}
-
-export function stakeAuditPathOf(root: string): string {
-  return path.join(stakesDirOf(root), 'audit.jsonl');
-}
+// The row schema, its paths and its READER live in #stake-journal — a leaf module
+// (fs + path only) so `verify.ts` can consult the journal as anti-truncation
+// evidence (C-6) without importing this module's whole git/snapshot graph. Kept
+// re-exported here because the sidecar is the valve's own artifact.
+export {
+  STAKE_AUDIT_SCHEMA,
+  stakesDirOf,
+  stakeAuditPathOf,
+  readStakeJournal,
+  type StakeAuditRow,
+  type StakeAttestation,
+  type StakeJournal,
+} from './stake-journal.js';
 
 function appendStakeAudit(root: string, row: StakeAuditRow): void {
   try {

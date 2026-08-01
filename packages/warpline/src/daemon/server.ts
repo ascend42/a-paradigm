@@ -59,7 +59,7 @@ import {
   type RpcErrorCode,
 } from './protocol.js';
 import { backupFabric } from '../fabric/backup.js';
-import { refuse, RefusedError, type Refusal } from '../fabric/refusal.js';
+import { refuse, refusalOf, RefusedError } from '../fabric/refusal.js';
 import { resolveToken, type Principal } from './tokens.js';
 import { acquireDaemonLock, releaseDaemonLock } from './lifecycle.js';
 
@@ -81,9 +81,13 @@ export interface DaemonAuditRow {
    * PW-8 (additive): the refusal code of a VERDICT-CLASS refusal riding inside
    * an ok result (CLAIM_BREACH/TRUST_HELD/GATE_REFUSED…). Before this field,
    * `ok:true` masked exactly the refusals the founder constraint is about —
-   * the audit-log twin of the T-2026-07-21-006 exit-code bug. Derived from
-   * `result.refusal` per the same rule as exitCodeForResult. (f4Trace, not
-   * this audit, remains F4 ground truth.)
+   * the audit-log twin of the T-2026-07-21-006 exit-code bug. Derived via
+   * `refusalOf` (refusal.ts) — which knows BOTH the engine shape's own
+   * `refusal` AND the shadow envelope's nested `result.refusal` (C-16) — per
+   * the same rule as exitCodeForResult. `ok` is unchanged and still means "the
+   * dispatch produced a result": a verdict-class refusal is an ok row CARRYING
+   * a resultCode, on the shadow path exactly as on the direct one. (f4Trace,
+   * not this audit, remains F4 ground truth.)
    */
   resultCode?: RpcErrorCode;
 }
@@ -207,10 +211,13 @@ export async function startDaemon(root: string, opts: StartDaemonOptions = {}): 
       const result = await dispatch(root, verb, params, who);
       // PW-8: a VERDICT-CLASS refusal riding inside an ok result is audited
       // (resultCode), not masked — same derivation rule as exitCodeForResult.
-      const inResult =
-        result && typeof result === 'object' && 'refusal' in result
-          ? (result as { refusal?: Refusal }).refusal
-          : undefined;
+      // C-16: the probe that stood here read the OUTER object only, so the
+      // SHADOW path (`{shadow, row, result}` — the engine shape is nested one
+      // level down) audited as a clean ok:true with no resultCode at all: the
+      // very masking PW-8 was written to close, reopened by an envelope. The
+      // depths now live in ONE accessor (refusal.ts refusalOf) that both this
+      // probe and the MCP skin's isError probe share, so neither can drift.
+      const inResult = refusalOf(result);
       audit(true, undefined, inResult?.code);
       return { rpc: RPC_SCHEMA, id, ok: true, result };
     } catch (err) {

@@ -793,7 +793,18 @@ components:
       DISK. writeSelvage and rewriteFabric publish through atomicWriteSync (fsync
       the staging file, rename, fsync the parent dir) with per-writer staging
       names (C-15). Still NOT atomic: a short write can tear the ledger's tail
-      line — audit C-13 is a separate, open defect that fsync does not close.
+      line — fsync makes a write DURABLE, not ATOMIC, so C-13 stays REACHABLE and
+      is answered by RECOVERY rather than prevention.
+      THE TOLERANT READ (C-13): scanFabric(wdir) is the raw, non-throwing scan that
+      now sits UNDERNEATH readFabric — it returns {path, raw, strands, strandOffsets,
+      malformed[], lastGoodEnd, lines}, slicing the raw Buffer so a caller can read
+      the intact strands beneath a tear and republish a retained prefix BYTE-EXACTLY
+      (pickIds and the epoch anchor's prefix digest hash the STORED bytes, so a
+      re-serialized "identical" ledger would invalidate the whole v1 prefix).
+      readFabric is unchanged in POSTURE — still throws on the first malformed line,
+      still names its position — but its message now names the way out
+      (`warpline fabric repair`) instead of leaving the operator to hand-edit JSONL.
+      The repair verbs themselves live in #fabric-repair.
     type: module
     components:
       - "#strand"
@@ -841,14 +852,91 @@ components:
       failure); in refs mode the legacy selvage is cross-checked against the
       selvage REF's strand (not the physical tip). A v3 failure's `seq` is the
       LINE INDEX (v3 stores no seq). The §3.7 nested-epoch anchor walk is V3.3.
+      STAKE-JOURNAL CROSS-CHECK (step 7c — audit C-6, the ONLY check here that
+      speaks to how much history SHOULD be present). Every other check reads the
+      ledger and asks whether it is internally consistent, which is exactly why
+      cutting 59% of a replica of the live fabric off the TAIL and rolling the
+      selvage back verified "all intact", exit 0: the survivors agreed perfectly.
+      verify now consults #stake-journal — every pickId a COMPLETED checkpoint
+      attests must still be present, else stake-journal-orphan (HARD, seq -1),
+      surfaced in report.stakeJournal{present, attested, missing[]} and printed as
+      "stakes N checkpoint(s) cross-checked". HARD by symmetry with the
+      ref-unresolved rule directly above it ("a ref naming a missing strand is
+      truncation evidence") — a STAKE naming a missing strand is the same evidence
+      with STRONGER provenance (a git commit, pushable off-machine, vs a one-line
+      local file), so it cannot be the weaker verdict; and a warning that leaves
+      exit 0 would be deniable, which is precisely C-6's harm. Its OWN kind, never
+      folded into chain-break: "a strand that was here is gone" is a different
+      fact, with a different remedy, than "the strands present disagree".
+      ADVISORY IN, HARD OUT: the attestation set is empty whenever the journal is
+      absent, unreadable, disabled or fresh, and an empty set can never fail a
+      verification — absence of evidence is not evidence of truncation, and a
+      check that failed on every repo not running the valve would be unshippable.
+      Regression: test/stake-journal-truncation.test.ts (the reproduction + the
+      three negative cases).
     type: module
     components:
       - "#strand"
       - "#fabric"
       - "#fabric-dag"
       - "#fabric-refs"
+      - "#stake-journal"
       - "#warp-store"
       - "#anchor"
+
+  fabric-repair:
+    description: >-
+      THE REPAIR PATH (audit C-13 + the P1 entry "detection without repair is a
+      dead end a real crash will find"). Warpline detected nearly everything and
+      repaired nothing; the documented recovery from a torn ledger line was
+      hand-editing JSONL in a text editor — precisely what source control must
+      never require. Two verbs, both under #fabric-lock, both re-reading INSIDE
+      the lock (the plan was computed outside it and a seal may have landed).
+      `warpline fabric repair` [--confirm] [--json] — repairFabric(root, {confirm,
+      now}). C-13 is reachable WITHOUT a crash: a real `pick` on a full disk
+      committed a 142-byte partial line, after which log/selvage/restore/pick AND
+      `fabric verify` all failed; the live fabric's largest line is 307,905 bytes,
+      so the window is wide. Four design calls, all deliberate: (1) TAIL TEARS
+      ONLY — a malformed line with well-formed strands AFTER it REFUSES
+      (RepairRefusal), naming how many good strands truncation would have cost,
+      because "truncate to the last well-formed strand" applied mid-ledger makes
+      repair the data-loss event; (2) DRY RUN BY DEFAULT — --confirm is required
+      to write anything, since a verb that quietly shortens history the first time
+      it is run in a panic is worse than the corruption; (3) QUARANTINE FIRST,
+      DURABLY — the pre-repair bytes go to .warpline/repair/fabric.jsonl.<iso>.bak
+      through #warp-durable BEFORE the ledger is shortened (the torn bytes are
+      evidence, and a crash mid-repair must not leave neither copy); (4) VERBATIM
+      PREFIX — the retained bytes are a raw Buffer slice, never re-serialized.
+      The result itemizes EXACTLY what was dropped (line, offset, bytes, parse
+      error, and a bounded control-character-escaped excerpt — a torn line is
+      attacker-influenceable content headed for a terminal). Repair does NOT touch
+      the tip pointers: in the crash shape the append tore so the selvage/ref
+      publish never ran and both still name the last good strand; where they DO
+      disagree that is C-4/C-12 with its own detectors, and re-pointing heads
+      would be meaning-level surgery under a byte-level name. It also does not
+      PREVENT the tear — fsync makes a write durable, not atomic — it makes one
+      recoverable; a genuinely atomic append needs a different on-disk shape
+      (length-prefixed records / write-ahead intent / segment store) and is out of
+      scope.
+      `warpline refs set <name> <pickId>` [--force] — setFabricRef(root, name,
+      pickId, {force}). The actionable half of verify's "⚠ abandoned head(s) — no
+      ref names": recovering one used to require hand-editing
+      .warpline/refs/heads/. Two guards: a pickId ABSENT from the fabric refuses
+      (a repair verb that can mint the ref-unresolved corruption verify catches is
+      not a repair verb), and an EXISTING ref is never clobbered without --force
+      (overwriting a head is how sealed work becomes abandoned). Same value ⇒
+      idempotent no-op. Reads via scanFabric, not readFabric, so a torn ledger
+      does not block ref repair — the two verbs must work in either order. Write
+      is #fabric-refs writeRef with expectedOld = what was read under the lock
+      (per-ref CAS). Regression: test/fabric-repair.test.ts.
+    type: module
+    components:
+      - "#fabric"
+      - "#fabric-refs"
+      - "#fabric-lock"
+      - "#warp-durable"
+      - "#fabric-verify"
+    tags: [warpline, fabric, recovery, custodianship]
 
   fabric-dag:
     description: >-
@@ -1362,6 +1450,23 @@ components:
       from the result's OWN refusal object, never a re-derived vocabulary (G3).
       Deterministic, pure, G1-versioned, G5 (derived data — never a signed
       strand field).
+      refusalOf(value) is the SINGLE ACCESSOR — the counterpart to refuse()
+      being the single constructor: no consumer re-derives WHERE a refusal can
+      live. Two legal depths: the engine shape's own `.refusal`, and an
+      ENVELOPE that nests the engine shape under `.result` (the shadow gate's
+      {shadow, row, result}). Added for audit C-16 (Jinx J-12): #warplined's
+      PW-8 audit probe and #warpline-mcp's isError probe each tested
+      `'refusal' in result` on the OUTER object, so a SHADOW CLAIM_BREACH /
+      TRUST_HELD / KNOT reached the MCP host as isError:false and audited with
+      no resultCode — the exact masking PW-8 claims to close, reopened by an
+      envelope, and a corruption of the #shadow-gate verdict stream that the
+      R2 gate-promotion argument rests on. Shape-checked (schemaVersion +
+      code), so an unversioned look-alike is never mistaken for a verdict, and
+      DELIBERATELY BOUNDED at one envelope level — a deep search would find
+      refusals that are not the caller's outcome (an archived knot verdict, a
+      tail of shadow rows) and turn reads into errors. A third depth, if one
+      is ever introduced, is named HERE. Regression:
+      test/shadow-refusal-mask.test.ts.
       PW-1 (mcp-skin-spec §4): retriability gains 'retry-corrected' ("a
       corrected or prerequisite call succeeds — follow next[], then retry");
       BAD_REQUEST/UNKNOWN_VERB/NOT_FOUND default to it ('never' on a fixable
@@ -1570,10 +1675,52 @@ components:
     components:
       - "#stake-guard"
       - "#stake-git"
+      - "#stake-journal"
       - "#warp-store"
       - "#restore"
       - "#warpline-config"
       - "#fabric-refs"
+
+  stake-journal:
+    description: >-
+      The checkpoint valve's audit sidecar (.warpline/stakes/audit.jsonl,
+      stakeAudit:v1) AND THE ANTI-TRUNCATION WITNESS (audit C-6). A leaf module
+      (fs + path only) holding STAKE_AUDIT_SCHEMA / StakeAuditRow / stakesDirOf /
+      stakeAuditPathOf / readStakeJournal — split out of #stake precisely so
+      #fabric-verify can consult it WITHOUT importing the valve's git/snapshot
+      graph (a verify→stake→seal import cycle); #stake re-exports all of it, so
+      the sidecar stays the valve's own artifact.
+      WHY IT EXISTS AS A WITNESS: Warpline's tamper-evidence against MUTATION is
+      real (six mutation classes, six detections) and against TAIL DELETION did
+      not exist. The evidence to close that was already on disk — with stake.auto
+      on, every seal names the pickId it staked, an append-only journal of every
+      tip this fabric has held, git's reflog — and verify.ts never read it.
+      TWO DESIGN CALLS, both load-bearing. (1) ADVISORY EVIDENCE, NEVER AUTHORITY:
+      readStakeJournal NEVER throws — a missing file, an unreadable file, a
+      disabled valve and a fresh fabric all collapse to an empty attestation set,
+      and an empty set can never fail a verification. The corollary is stated, not
+      hidden: a truncator who ALSO deletes this file leaves no local trace; the
+      tamper-resistant corroborator is the git side (refs/heads/warpline-stakes
+      carries the same pickIds in push-able commit objects), which is an ASYNC git
+      read while verifyFabric is deliberately synchronous and pure — noted as
+      future work, not silently skipped. (2) ONLY COMPLETED ACTIONS ATTEST — stake
+      / skip / recover, because completion is what PROVES the strand was in this
+      fabric (each resolves the ref THROUGH a strand's byte binding, or passes a
+      fabric-membership check, before the row is written). recover-refuse is
+      excluded as UNSOUND (one of its own refusal reasons is literally "stake
+      names pickId X, which is absent from the fabric" — attesting it would turn a
+      correct refusal into a permanent false alarm); refuse is excluded as merely
+      UNNEEDED (sound today, but it is the diagnostic stream, and pinning a HARD
+      verify failure to a non-completing path is a premise a refactor can silently
+      break). (3) A torn journal row is COUNTED and skipped, never fatal —
+      appendStakeAudit swallows write errors by design, so a half-written last row
+      is expected. Duplicate pickIds keep the EARLIEST attestation.
+      Regression: test/stake-journal-truncation.test.ts.
+    type: module
+    components:
+      - "#stake"
+      - "#fabric-verify"
+    tags: [warpline, native-first, valve, integrity, custodianship]
 
   stake-guard:
     description: >-
@@ -1774,7 +1921,13 @@ components:
       payload minus file bodies, summary marker honest); the audit row gains
       resultCode (PW-8 — a verdict-class refusal inside an ok result is audited,
       not masked; same derivation as exitCodeForResult; #f4-trace, not the
-      audit, is F4 ground truth). Teaching text is single-sourced from
+      audit, is F4 ground truth). C-16: resultCode is now derived via #refusal's
+      refusalOf, which knows BOTH depths — the outer-only probe saw nothing on
+      the SHADOW path ({shadow, row, result} nests the engine shape one level
+      down), so a shadow CLAIM_BREACH audited as a clean ok row. `ok` is
+      unchanged and still means "the dispatch produced a result": a
+      verdict-class refusal is an ok row CARRYING a resultCode, on the shadow
+      path exactly as on the direct one. Teaching text is single-sourced from
       #warplined-descriptors; MCP token custody (PW-9) = mint --mcp writes
       .warpline/daemon/mcp.token (0600) and mcpAgentToken() reads ONLY env
       WARPLINE_MCP_TOKEN then that file — never daemon-tokens.jsonl.
@@ -1999,7 +2152,13 @@ components:
       (UntrustedProse envelopes intact — Aegis R4). isError CONTRACT (§3, the
       T-006 lesson): transport failure → true; ok result →
       exitCodeForResult(result) !== 0 — a refusing verdict NEVER presents as
-      MCP success. Default surface = the 8 agent verbs from
+      MCP success, INCLUDING a shadow verdict. C-16 (Jinx J-12): the probe here
+      tested `'refusal' in result` on the outer object, so `admit {shadow:true}`
+      — whose answer is the {shadow, row, result} envelope — returned
+      isError:false on a CLAIM_BREACH / TRUST_HELD / KNOT. Both depths now live
+      in ONE accessor (#refusal refusalOf) shared with #warplined's audit probe;
+      two call sites each knowing one depth is exactly how it regressed.
+      Default surface = the 8 agent verbs from
       #warplined-descriptors (human verbs + override flags OMITTED, Aegis R2);
       --operator registers human tools IFF status verifies kind:'human' at
       startup, never speculatively. Emits one #f4-trace row per call (skin
@@ -2196,6 +2355,26 @@ components:
       — D5 never-leaves-the-box), daemon.sock/daemon.pid (live process
       residue), refs/.lock* (process state); daemon/audit.jsonl INCLUDED
       (accountability survives a dead disk; structural targets, never prose).
+      EXCLUSION IS MATCHED ON THE FULL RELATIVE PATH (audit C-14, Jinx J-11):
+      the v1 rule fired only at depth 1 (`parts.length === 1`), so it caught
+      daemon-tokens.jsonl and MISSED .warpline/daemon/mcp.token — the MCP
+      bearer token (#warplined-tokens), which was clone-copied into every
+      backup AND hashed into the published manifest while the module header
+      and the CLI help both promised "secrets never travel". Tokens have no
+      expiry and no revocation (stage-1 deferral) and dest is caller-chosen,
+      so a leaked backup was a PERMANENT credential leak. Now: secret-bearing
+      BASENAMES are denied at ANY depth (daemon-tokens.jsonl, mcp.token,
+      session-keys.jsonl — the same name-anywhere rule the frozen
+      STAKE_DENY_NAMES uses), plus the `*.token` SUFFIX class so the next
+      credential sidecar is withheld the day it is written; live-process
+      residue stays anchored to its exact path. POSTURE PRESERVED: this is
+      still a DENY-list — an unregistered sidecar (root or nested) is backed
+      up BY DEFAULT, because custodianship must fail toward preservation and
+      an allow-list would silently drop whatever nobody remembered to register.
+      Regression: test/backup-secret-exclusion.test.ts — the token is absent
+      from tree, manifest and BYTES at every depth (a control marker in a
+      backed-up sidecar proves the byte scan is live), and unknown sidecars
+      still travel.
       MANIFEST `<dest>/backup.manifest.json` (warplineBackup:v1): per-file
       bytes + sha256 digested from the STAGED bytes, plus counts
       {files, objects, ledgerRows, refs}; lives BESIDE .warpline so the
@@ -2351,10 +2530,20 @@ components:
       <migrate|list> [--json]` (V3.2 pickId refs: `migrate` is the ONE-TIME
       founder-visible stateId→pickId selvage conversion; `list` shows
       refs/heads/* + the head set — legacy repos show the single ledger tip).
-      `fabric verify` additionally reports the v3 DAG segment + abandoned heads.
+      `fabric verify` additionally reports the v3 DAG segment, abandoned heads and
+      the C-6 stake-journal cross-check ("stakes N checkpoint(s) cross-checked").
+      THE REPAIR PATH (#fabric-repair — audit C-13/P1): `warpline fabric repair
+      [--confirm] [--json]` salvages a torn TAIL line (dry run by default —
+      itemizes the dropped line, its bytes, its parse error and a bounded escaped
+      excerpt; --confirm quarantines the original under .warpline/repair/ FIRST,
+      then republishes the well-formed prefix verbatim; refuses mid-ledger damage),
+      and `warpline refs set <name> <pickId> [--force] [--json]` re-points a head —
+      the actionable half of the abandoned-head warning, which the verify output
+      now names inline. Both refuse rather than improvise; neither writes silently.
       The only module allowed to write stdout; library code stays quiet.
     type: cli
     components:
+      - "#fabric-repair"
       - "#oracle"
       - "#absorb"
       - "#weave"

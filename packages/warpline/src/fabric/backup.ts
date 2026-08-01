@@ -29,14 +29,34 @@
  *      `rename(staging → dest)` publishes the whole backup. A crash never
  *      leaves a half-backup at dest.
  *
- * EXCLUDED from the snapshot (each a named choice):
- *   - `daemon-tokens.jsonl` — SECRETS on the frozen never-leaves-the-box
- *     deny-list (stake-guard D5); a backup may travel, tokens must not.
+ * EXCLUDED from the snapshot (each a named choice), matched on the FULL
+ * RELATIVE PATH inside `.warpline/` — never on a root basename alone:
+ *   - BEARER SECRETS, at ANY depth (see EXCLUDED_SECRET_BASENAMES):
+ *     `daemon-tokens.jsonl` (root) AND `daemon/mcp.token` (two levels down).
+ *     Both are on the frozen never-leaves-the-box deny-list (stake-guard D5);
+ *     a backup may travel, tokens must not.
  *   - `daemon.sock` / `daemon.pid` — live process residue, meaningless (and
  *     uncopyable, for the socket) off the box.
  *   - `refs/.lock*` — the fabric lock is process state, not history.
  *   The daemon AUDIT (`daemon/audit.jsonl`) IS included: accountability data
  *   should survive a dead disk (structural targets only — never prose).
+ *
+ * C-14 (soundness audit 2026-07-31, Jinx J-11) — WHY the path rule is full-path.
+ * The v1 rule fired only at `parts.length === 1`, so it saw `daemon-tokens.jsonl`
+ * and missed `.warpline/daemon/mcp.token`, the MCP skin's bearer token
+ * (tokens.ts mcpTokenPathOf): it was clone-copied into EVERY backup and hashed
+ * into the PUBLISHED manifest, while this header and the CLI help both promised
+ * "secrets never travel". Daemon tokens have no expiry and no revocation
+ * (tokens.ts — a recorded stage-1 deferral) and the backup destination is
+ * caller-chosen, so a leaked backup was a permanent credential leak. The defect
+ * CLASS is "the rule can only see depth 1", so secrets are now denied by name at
+ * any depth (mirroring the frozen STAKE_DENY_NAMES rule) plus by the `*.token`
+ * suffix class, and the residue rules are anchored to their exact paths.
+ *
+ * POSTURE PRESERVED — this stays a DENY-LIST, deliberately. A sidecar added next
+ * month is backed up by DEFAULT; custodianship fails toward preservation. C-14
+ * tightens the deny-list; it does not convert it to an allow-list, because an
+ * allow-list would silently drop the next sidecar someone forgets to register.
  *
  * MANIFEST: `<dest>/backup.manifest.json` (`warplineBackup:v1`) — one entry
  * per copied file with byte count + sha256 (digested from the STAGED bytes,
@@ -118,14 +138,51 @@ export interface BackupVerifyReport {
   fabric: FabricVerifyReport | null;
 }
 
-/** Root-level basenames excluded from a snapshot (see header — each named). */
-const EXCLUDED_ROOT_BASENAMES = new Set(['daemon-tokens.jsonl', 'daemon.sock', 'daemon.pid']);
+/**
+ * BEARER SECRETS by name, denied at ANY DEPTH inside `.warpline/` — the same
+ * name-anywhere rule the frozen stake deny-list uses (stake-guard.ts
+ * STAKE_DENY_NAMES). Depth-agnostic ON PURPOSE: C-14's defect class was a rule
+ * that could only see depth 1, and a secret is a secret wherever it sits.
+ * The complete enumeration of secret-bearing artifacts under `.warpline/`:
+ *   - `daemon-tokens.jsonl` — every minted bearer token (tokens.ts tokensPathOf).
+ *   - `mcp.token`           — the MCP skin's bearer token, at `daemon/mcp.token`
+ *                             (tokens.ts mcpTokenPathOf). THE C-14 miss.
+ *   - `session-keys.jsonl`  — no writer exists today; the frozen D5 list already
+ *                             names it a bearer secret, so it is denied BEFORE
+ *                             it can be written rather than after.
+ */
+const EXCLUDED_SECRET_BASENAMES: ReadonlySet<string> = new Set([
+  'daemon-tokens.jsonl',
+  'mcp.token',
+  'session-keys.jsonl',
+]);
 
+/**
+ * Secret-bearing SUFFIX class, at any depth. The generalization C-14 asks for:
+ * a future credential sidecar following the established `mcp.token` naming is
+ * withheld the day it is WRITTEN, not the day someone remembers to extend the
+ * set above. Narrow by design — `.token` is not used by any non-secret fabric
+ * artifact, so this cannot swallow a legitimate sidecar.
+ */
+const EXCLUDED_SECRET_SUFFIXES: readonly string[] = ['.token'];
+
+/**
+ * LIVE-PROCESS RESIDUE at its exact relative path (anchored, not by basename):
+ * these are meaningless off the box, and the socket is uncopyable. Anchored
+ * because a file that merely SHARES the name deeper in the tree is not the
+ * daemon's socket or pidfile and has no reason to be withheld.
+ */
+const EXCLUDED_EXACT_PATHS: ReadonlySet<string> = new Set(['daemon.sock', 'daemon.pid']);
+
+/** `rel` is the POSIX path relative to `.warpline/` — always matched whole. */
 function isExcluded(rel: string, entry: fs.Dirent): boolean {
   if (entry.isSocket() || entry.isFIFO()) return true; // never snapshot live endpoints
   const parts = rel.split('/');
-  if (parts.length === 1 && EXCLUDED_ROOT_BASENAMES.has(parts[0])) return true;
-  if (parts[0] === 'refs' && parts.length === 2 && parts[1].startsWith('.lock')) return true;
+  const base = parts[parts.length - 1]!;
+  if (EXCLUDED_SECRET_BASENAMES.has(base)) return true;
+  if (EXCLUDED_SECRET_SUFFIXES.some((suffix) => base.endsWith(suffix))) return true;
+  if (EXCLUDED_EXACT_PATHS.has(rel)) return true;
+  if (parts[0] === 'refs' && parts.length === 2 && parts[1]!.startsWith('.lock')) return true;
   return false;
 }
 

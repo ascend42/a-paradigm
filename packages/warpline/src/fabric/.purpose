@@ -1,8 +1,8 @@
 # Directory-level context for packages/warpline/src/fabric — the canonical
 # component docs live in packages/warpline/.purpose (#strand #fabric #fabric-dag
-# #fabric-refs #seal #pick #admit #resolve #grade #fabric-verify #anchor
-# #backfill #restore #fabric-lock #hook #scratch #materialize #warpline-config
-# #shadow-gate #native-write-path).
+# #fabric-refs #seal #pick #admit #resolve #grade #fabric-verify #fabric-repair
+# #anchor #backfill #restore #fabric-lock #hook #scratch #materialize
+# #warpline-config #shadow-gate #native-write-path #stake #stake-journal).
 name: fabric
 description: >-
   The Warpline fabric — the native, git-independent WRITE layer: the append-only
@@ -21,6 +21,8 @@ context:
   - "staging names (C-15): `<target>.tmp.<pid>.<n>` via tmpNameFor. A shared `${p}.tmp` defeats the per-ref CAS, which runs BEFORE the write; and refs/heads residue must never be readable as a ref (isRefName = REF_NAME ∧ no `..` ∧ !isTmpResidue, enforced on BOTH listRefs and writeRef)"
   - "native-first R1 (shadow.ts): shadow admits are observe-only — the ONLY write is one row in .warpline/shadow/verdicts.jsonl; opt-in via .warpline/config.json shadowGate"
   - "native-first phase 0 (native.ts): propose seals v3 SCRATCH strands; admit weaves via materializeMergedStateNative only; the git-era seal path stays v2 until the founder-visible cutover"
+  - "truncation evidence (C-6): the hash chain only proves the strands PRESENT agree; stake-journal.ts is the only thing attesting how many there should be. It is advisory IN (absent/unreadable/disabled ⇒ no evidence, never a failure) and hard OUT (a COMPLETED checkpoint naming a missing strand ⇒ stake-journal-orphan, exit 1). Never make the reader throw"
+  - "repair (C-13): fsync makes an append DURABLE, not ATOMIC — a torn tail line is still reachable. scanFabric is the tolerant read UNDER the fail-closed readFabric; repair.ts truncates TAIL tears only, dry-run by default, quarantining the original first and republishing a raw Buffer PREFIX (never re-serialized — pickIds and the anchor prefix digest hash the stored bytes)"
 components:
   fabric:
     description: >-

@@ -42,6 +42,13 @@
  *                    legal, but surfaced). Refs mode only (V3.2).
  *   (3.7 nested-epoch anchor walk is V3.3.)
  *
+ * 6. Stake journal (C-6) — every pickId a COMPLETED checkpoint attests must still
+ *    be present in the ledger. The chain above authenticates that what is PRESENT
+ *    is consistent; this is the only check that speaks to HOW MUCH SHOULD BE THERE.
+ *    Advisory-in, hard-out: no journal ⇒ no evidence ⇒ no failure (see
+ *    #stake-journal for the two design calls); a journal that DOES attest a pickId
+ *    the fabric no longer carries is `stake-journal-orphan`, HARD.
+ *
  * Read-only — never writes .warpline/. Distinct from `objects verify` (loose-object
  * self-consistency); this authenticates the HISTORY.
  *
@@ -53,6 +60,7 @@ import { computePickId, computeLegacyBodyHash, reproducesUnderKnownRule, type St
 import { findAnchor, computePrefixDigest, computeManifestDigest } from './anchor.js';
 import { buildDag } from './dag.js';
 import { listRefs, readRef } from './refs.js';
+import { readStakeJournal } from './stake-journal.js';
 import { ObjectStore } from '../warp/object-store.js';
 import { WORKTREE_REF } from '../absorb.js';
 
@@ -78,7 +86,15 @@ export type FabricVerifyKind =
   | 'dag-cycle'
   | 'multiple-genesis'
   // refs kinds (V3.2, spec §3.5)
-  | 'ref-unresolved';
+  | 'ref-unresolved'
+  /**
+   * C-6 — a COMPLETED stake checkpoint attests a pickId the ledger no longer
+   * carries. Deliberately its OWN kind and not folded into chain-break: a
+   * chain-break says "the strands present disagree with each other", this says
+   * "a strand that was here is gone". Different evidence, different remedy
+   * (recover from the stake branch / a backup), different question for the human.
+   */
+  | 'stake-journal-orphan';
 
 export interface FabricVerifyFailure {
   /**
@@ -106,6 +122,15 @@ export interface FabricVerifyReport {
    * (they are unlinked by construction, not abandoned).
    */
   abandonedHeads: string[];
+  /**
+   * C-6 — the anti-TRUNCATION witness (#stake-journal). `present` = the audit
+   * sidecar was readable; `attested` = distinct pickIds a COMPLETED checkpoint
+   * names; `missing` = those the ledger no longer carries (each also a HARD
+   * stake-journal-orphan failure). An absent/empty journal is `{present:false,
+   * attested:0, missing:[]}` and can never fail a verification — absence of
+   * evidence is not evidence of truncation.
+   */
+  stakeJournal: { present: boolean; attested: number; missing: string[] };
   /** the first v2 strand's parentPickId equals its predecessor (the v1 tip), or it is a well-rooted v2 genesis. */
   boundaryAnchored: boolean;
   /**
@@ -486,6 +511,50 @@ export function verifyFabric(root: string, opts: VerifyOptions = {}): FabricVeri
       .map((h) => h.pickId);
   }
 
+  // 7c. STAKE-JOURNAL CROSS-CHECK (audit C-6) — the only check in this function
+  //     that speaks to how much history SHOULD be here. Every other check reads
+  //     the ledger and asks whether it is internally consistent, which is exactly
+  //     why cutting 59% of the strands off the tail and rolling the selvage back
+  //     verified CLEAN: the survivors agreed with each other perfectly.
+  //
+  //     The checkpoint valve already wrote the missing attestation. Each COMPLETED
+  //     row in .warpline/stakes/audit.jsonl names a pickId the valve resolved
+  //     THROUGH a strand's byte binding and then committed to git — proof that
+  //     strand was in THIS fabric at that instant. The ledger is append-only, and
+  //     no code path anywhere removes a strand (rewriteFabric refuses identity
+  //     mutation, there is no gc, no prune, no expiry), so a staked pickId that is
+  //     now absent has exactly one explanation: history was truncated or rewritten.
+  //
+  //     HARD, by symmetry with the rule directly above: `ref-unresolved` is already
+  //     HARD because "a ref naming a missing strand is truncation evidence". A
+  //     STAKE naming a missing strand is the same evidence with a stronger
+  //     provenance (a git commit, off-machine-able, versus a local one-line file),
+  //     so it cannot be the weaker verdict. Reporting it as a warning would also
+  //     defeat the point of the finding — C-6's harm is deniability, and a warning
+  //     that leaves exit 0 is deniable.
+  //
+  //     Advisory IN, hard OUT: the attestation set is empty whenever the journal is
+  //     absent, unreadable, disabled or fresh (#stake-journal call 1), and an empty
+  //     set cannot produce a failure — `verify` stays fully usable on the vast
+  //     majority of repos, which never turn the valve on.
+  const journal = readStakeJournal(root);
+  const stakeMissing: string[] = [];
+  for (const a of journal.attestations) {
+    if (knownPickIds.has(a.pickId)) continue;
+    stakeMissing.push(a.pickId);
+    failures.push({
+      seq: -1,
+      pickId: a.pickId,
+      kind: 'stake-journal-orphan',
+      detail:
+        `the stake journal attests this pickId (${a.action} at ${a.at}` +
+        `${a.gitCommit ? `, stake commit ${a.gitCommit.slice(0, 12)}` : ''}) but NO strand in the fabric carries it. ` +
+        `The ledger is append-only and nothing deletes a strand, so history was TRUNCATED or REWRITTEN since that ` +
+        `checkpoint. Recover the missing strands from the stake branch or a backup ` +
+        `(\`warpline backup verify <dest>\`); do not seal on top of a truncated ledger.`,
+    });
+  }
+
   // 8. Epoch-anchor authentication (spec §6) — the v1 prefix is authenticated against
   //    its chained attestation, not per-strand self-hashes. This single walk flips
   //    HIGH-A, HIGH-B co-tamper, MED-C, the mint variant, and the tip-append variant
@@ -626,6 +695,7 @@ export function verifyFabric(root: string, opts: VerifyOptions = {}): FabricVeri
     v2Chain: { count: v2Count, ok: v2ChainOk },
     v3Dag: { count: v3Count, ok: v3DagOk },
     abandonedHeads,
+    stakeJournal: { present: journal.present, attested: journal.attestations.length, missing: stakeMissing },
     boundaryAnchored,
     legacyUnverifiable: { count: legacyPickIds.length, pickIds: legacyPickIds },
     anchor: { present: anchorStrands.length > 0, ok: anchorOk, corroboration },

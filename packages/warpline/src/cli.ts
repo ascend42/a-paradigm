@@ -57,6 +57,7 @@ import { frameProse } from './envelope.js';
 import { gradeFabric, applyGrades, type GradeReport } from './fabric/grade.js';
 import { verifyFabric } from './fabric/verify.js';
 import { listRefs, heads, migrateSelvageToRefs } from './fabric/refs.js';
+import { repairFabric, setFabricRef, type FabricRepairResult, type RefSetResult } from './fabric/repair.js';
 import { attestFabric } from './fabric/anchor.js';
 import { backfillV1Bindings } from './fabric/backfill.js';
 import { restore, type RestoreResult } from './fabric/restore.js';
@@ -1003,8 +1004,12 @@ fabric
             (report.legacyUnverifiable.count
               ? `  legacy     ${report.legacyUnverifiable.count} grandfathered (unverifiable, sealed under a retired rule — TD-2026-07-01-202)\n`
               : '') +
+            (report.stakeJournal.attested
+              ? `  stakes     ${report.stakeJournal.attested} checkpoint(s) cross-checked — no history missing (C-6)\n`
+              : '') +
             (report.abandonedHeads.length
-              ? `  ⚠ abandoned head(s) — no ref names: ${report.abandonedHeads.map((h) => h.slice(0, 20)).join(', ')}\n`
+              ? `  ⚠ abandoned head(s) — no ref names: ${report.abandonedHeads.map((h) => h.slice(0, 20)).join(', ')}\n` +
+                `    recover one with: warpline refs set <name> <pickId>\n`
               : ''),
         );
       } else {
@@ -1051,6 +1056,27 @@ fabric
         lines.push('');
         lines.push('→ the v1 prefix is now IMMUTABLE; `fabric verify` authenticates it against this anchor.');
         process.stdout.write(lines.join('\n') + '\n');
+      }
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+fabric
+  .command('repair')
+  .description(
+    'THE REPAIR PATH (audit C-13): salvage a TORN TAIL line. A short write (a full disk needs no crash at all) leaves a partial strand that bricks every verb including `fabric verify` — the recovery used to be hand-editing JSONL. Reports what it would drop and writes NOTHING without --confirm; with --confirm it quarantines the original under .warpline/repair/ first, then republishes the well-formed prefix VERBATIM. Refuses when the corruption is not at the tail (truncating would discard good strands). Repair does not PREVENT the tear — fsync makes a write durable, not atomic — it makes one recoverable.',
+  )
+  .option('--confirm', 'actually rewrite the ledger (default: dry run — report the plan, write nothing)')
+  .option('--json', 'emit the repair result as JSON')
+  .action(async (options: { confirm?: boolean; json?: boolean }) => {
+    try {
+      const root = await resolveRoot();
+      const result = await repairFabric(root, { confirm: options.confirm });
+      if (options.json) {
+        process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+      } else {
+        printRepair(result);
       }
     } catch (err) {
       fail(err);
@@ -1106,6 +1132,29 @@ refs
         for (const [name, id] of named) lines.push(`  ${name.padEnd(12)} ${id}`);
         lines.push(`heads: ${tips.length ? tips.map((t) => t.slice(0, 20)).join(', ') : '(empty fabric)'}`);
         process.stdout.write(lines.join('\n') + '\n');
+      }
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+refs
+  .command('set')
+  .description(
+    'Point refs/heads/<name> at <pickId> — the actionable half of `fabric verify`\'s abandoned-head report (recovering one used to require hand-editing .warpline/refs/heads/). Refuses a pickId absent from the fabric (that would MINT the ref-unresolved corruption verify catches) and refuses to clobber an existing ref without --force (overwriting a head is how sealed work becomes abandoned). Per-ref CAS; runs under the fabric lock.',
+  )
+  .argument('<name>', 'the ref under .warpline/refs/heads/ ([A-Za-z0-9][A-Za-z0-9._-]*)')
+  .argument('<pickId>', 'the strand this ref names — must be present in the fabric')
+  .option('--force', 'overwrite an existing ref (the previous pickId is printed)')
+  .option('--json', 'emit the result as JSON')
+  .action(async (name: string, pickId: string, options: { force?: boolean; json?: boolean }) => {
+    try {
+      const root = await resolveRoot();
+      const result = await setFabricRef(root, name, pickId, { force: options.force });
+      if (options.json) {
+        process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+      } else {
+        printRefSet(result);
       }
     } catch (err) {
       fail(err);
@@ -1352,7 +1401,7 @@ daemonCmd
 const backupCmd = program
   .command('backup')
   .description(
-    'Custodianship: atomic fabric snapshots. `warpline backup <dest>` clone-copies the ledger + refs + sidecars + object store into <dest>/.warpline (CoW clones on APFS, full copies elsewhere — never hardlinks) with a digest manifest; `warpline backup verify <dest>` recomputes every digest AND authenticates the backup with the full fabric verify. THE RESTORE PATH IS THE ENGINE ITSELF: a backup IS a home-fabric root — run any warpline verb from <dest> (or `restore --to`) and you are restored. Secrets never travel: daemon-tokens.jsonl is excluded (D5 deny-list).',
+    'Custodianship: atomic fabric snapshots. `warpline backup <dest>` clone-copies the ledger + refs + sidecars + object store into <dest>/.warpline (CoW clones on APFS, full copies elsewhere — never hardlinks) with a digest manifest; `warpline backup verify <dest>` recomputes every digest AND authenticates the backup with the full fabric verify. THE RESTORE PATH IS THE ENGINE ITSELF: a backup IS a home-fabric root — run any warpline verb from <dest> (or `restore --to`) and you are restored. Secrets never travel: bearer secrets are denied at ANY depth by name and by `.token` suffix (D5 deny-list) — the v1 rule matched root basenames only, so daemon/mcp.token rode along (audit C-14). Everything else is included BY DEFAULT: a sidecar added later travels unless it is denied.',
   );
 
 backupCmd
@@ -1414,6 +1463,49 @@ function printBackupVerify(r: BackupVerifyReport): void {
     if (r.fabric && r.fabric.failures.length) {
       for (const f of r.fabric.failures) lines.push(`  ✗ fabric ${f.kind}  seq ${f.seq}  ${short(f.pickId)}\n    ${f.detail}`);
     }
+  }
+  process.stdout.write(lines.join('\n') + '\n');
+}
+
+function printRepair(r: FabricRepairResult): void {
+  const lines: string[] = [];
+  if (r.intact) {
+    lines.push(`FABRIC REPAIR  nothing to repair — ${r.kept} strand(s), every line well-formed`);
+    lines.push(`ledger    ${r.ledger}`);
+    process.stdout.write(lines.join('\n') + '\n');
+    return;
+  }
+  lines.push(
+    r.applied
+      ? `FABRIC REPAIR  REPAIRED — torn tail salvaged (${r.kept} strand(s) retained, ${r.dropped.length} line(s) dropped)`
+      : `FABRIC REPAIR  DRY RUN — nothing written. Re-run with --confirm to apply.`,
+  );
+  lines.push(`ledger    ${r.ledger}`);
+  lines.push(`scanned   ${r.lines} line(s)  →  keep ${r.kept} strand(s) (${r.keptBytes} bytes), drop ${r.droppedBytes} bytes`);
+  // EXACTLY what is/was lost — a repair that does not itemize the damage is the
+  // silent repair the audit refused to accept.
+  for (const d of r.dropped) {
+    lines.push(`  ✗ line ${d.line}  (${d.bytes} bytes)  ${d.error}`);
+    lines.push(`    ${d.excerpt}`);
+  }
+  lines.push(`new tip   ${r.newTip ?? '(none — the repair empties the ledger)'}`);
+  if (r.backup) lines.push(`quarantine ${r.backup}  (the ORIGINAL bytes, torn line included — evidence, keep it)`);
+  lines.push(
+    r.applied
+      ? '→ run `warpline fabric verify` next; repair fixes the BYTES, it does not adjudicate the tip pointers.'
+      : '→ the torn line is evidence: --confirm quarantines the original under .warpline/repair/ before truncating.',
+  );
+  process.stdout.write(lines.join('\n') + '\n');
+}
+
+function printRefSet(r: RefSetResult): void {
+  const lines: string[] = [];
+  if (!r.moved) {
+    lines.push(`REFS SET  refs/heads/${r.name} already points at ${r.pickId} (no-op)`);
+  } else {
+    lines.push(`REFS SET  refs/heads/${r.name}  →  ${r.pickId}`);
+    if (r.previous) lines.push(`previous  ${r.previous}${r.forced ? '  (overwritten under --force)' : ''}`);
+    else lines.push('previous  (none — new ref)');
   }
   process.stdout.write(lines.join('\n') + '\n');
 }

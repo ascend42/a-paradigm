@@ -217,9 +217,11 @@ export {
 } from './fabric/admit.js';
 // `refusal:v1` (TD-2026-07-21-766 / falsifier F4) — the MACHINE-READABLE refusal
 // every gate hands back, plus the direct-vs-ripple ranking rule it shares with
-// the CLI. `refuse` is the SINGLE constructor: no consumer builds the literal.
+// the CLI. `refuse` is the SINGLE constructor: no consumer builds the literal;
+// `refusalOf` is the SINGLE accessor: no consumer re-derives where one can live.
 export {
   refuse,
+  refusalOf,
   contestedOf,
   exitCodeFor,
   exitCodeForResult,
@@ -278,7 +280,19 @@ export {
   type AttestResult,
 } from './fabric/anchor.js';
 export { backfillV1Bindings, type BackfillResult } from './fabric/backfill.js';
-export { readLegacyManifest } from './fabric/fabric.js';
+// THE REPAIR PATH (audit C-13 + P1) — detection without repair is a dead end a
+// real crash will find: torn-tail salvage + the actionable half of verify's
+// abandoned-head report.
+export {
+  repairFabric,
+  setFabricRef,
+  RepairRefusal,
+  type FabricRepairResult,
+  type RepairOptions,
+  type DroppedLine,
+  type RefSetResult,
+} from './fabric/repair.js';
+export { readLegacyManifest, scanFabric, type FabricScan, type MalformedLedgerLine } from './fabric/fabric.js';
 export type { EpochAnchor } from './fabric/strand.js';
 // Restore (M1c) — reconstruct a working tree from the native store with git ABSENT.
 export { resolveSelector, type SelectorResolution } from './fabric/select.js';

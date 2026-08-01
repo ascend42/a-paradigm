@@ -21,7 +21,9 @@
  *     interpolates prose bodies.
  *   - isError CONTRACT (§3, the T-006 lesson): transport/usage failure → true;
  *     ok result → exitCodeForResult(result) !== 0. A refusing verdict NEVER
- *     presents as MCP success.
+ *     presents as MCP success — including a SHADOW verdict, whose refusal rides
+ *     one level down inside the `{shadow, row, result}` envelope (C-16; the
+ *     depths are known by `refusalOf`, not by this call site).
  *   - DEFAULT SURFACE = agent verbs only (Aegis R2: omission, not
  *     expose-then-refuse). `--operator` registers the human verbs IFF the
  *     discovered token verifies kind:'human' via status at startup — never
@@ -39,7 +41,7 @@ import { ListToolsRequestSchema, CallToolRequestSchema } from '@modelcontextprot
 import { DaemonClient, DaemonRpcError, daemonAvailable } from '../daemon/client.js';
 import { VERB_DESCRIPTORS, toolNameOf, agentSurfaceVerbs } from '../daemon/descriptors.js';
 import { DAEMON_VERBS, HUMAN_ONLY_VERBS, HUMAN_ONLY_ADMIT_FLAGS, type DaemonVerb } from '../daemon/protocol.js';
-import { exitCodeForResult, refuse, type Refusal } from '../fabric/refusal.js';
+import { exitCodeForResult, refusalOf, refuse } from '../fabric/refusal.js';
 import { F4Tracer, resultClassOf } from '../daemon/f4-trace.js';
 import { mcpAgentToken } from './token.js';
 import { daemonDownRefusal, tokenMissingRefusal } from './refusals.js';
@@ -232,10 +234,14 @@ export async function buildMcpServer(
         const p = (result as { principal?: unknown }).principal;
         if (typeof p === 'string') tracer.principal = p;
       }
-      const refusal =
-        result && typeof result === 'object' && 'refusal' in result
-          ? ((result as { refusal?: Refusal }).refusal ?? undefined)
-          : undefined;
+      // §3 detection, ONE accessor for BOTH depths (refusal.ts refusalOf).
+      // C-16: the outer-only probe that stood here could not see the SHADOW
+      // envelope — daemon `admit {shadow:true}` answers `{shadow, row, result}`
+      // and nests the verdict at `result.refusal`, so a shadow CLAIM_BREACH /
+      // TRUST_HELD / KNOT reached the host as isError:false. Two call sites each
+      // knowing one depth is exactly how that regressed; one accessor that knows
+      // both is why it cannot regress again.
+      const refusal = refusalOf(result);
       tracer.emit({ verb, target, ok: true, refusal, resultClass: resultClassOf(result) });
       // §3: a refusing verdict inside an ok result must NEVER present as success.
       return { ...asContent(result), isError: exitCodeForResult({ refusal }) !== 0 };
