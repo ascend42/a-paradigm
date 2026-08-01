@@ -1,0 +1,52 @@
+id: L-2026-08-01-ascend-074024-001
+type: agent-session
+timestamp: '2026-08-01T07:40:24.962Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Why remediation quality climbed: the evidence standard ratcheted and was enforced when ignored'
+summary: |
+  Across four remediation batches the output quality rose sharply — from a builder that truncated three times and delivered no red-first evidence, to one that caught its own fix reintroducing the defect it closed, measured a 96.1x improvement, confirmed rather than asserted its own estimate, and named where its change was worse. The cause was not agent capability. It was an evidence standard that escalated, was refused when unmet, and accumulated precedent that later briefs could cite.</summary>
+  <body>## The progression
+
+  P0 (Kit, four fixes): truncated three times, red-first confirmations requested four times and delivered zero times, tests missing entirely on the first pass, +182 lines that needed pushback to justify.
+
+  P1 (two parallel builders): red-first finally delivered with actual failure text. Found one of its own new tests was vacuous — passed both before and after — and replaced it.
+
+  P2 (two parallel builders): 22/22 red-first with zero vacuous on one tranche; the other declared its four non-regression CONTROLS explicitly rather than letting them read as red-first results, and ran a second call-sites-only revert proving its e2e tests guarded the wiring independently of its unit tests. One builder corrected my brief and was right.
+
+  P3 (index agent): 16/16 mutations, zero survived. Caught its own prune step reintroducing the O(all worktrees) cost mid-implementation, measured both versions (172.9ms vs 1.4ms), confirmed its own sub-ms estimate by measurement rather than assertion, enumerated eight fail-open modes, and named the axis where its change was worse.
+
+  ## What actually caused it
+
+  **Refusing to accept the missing evidence.** Red-first was requested four times in P0 and never arrived. Accepting "813 passing" would have been the path of least resistance — and is precisely how this codebase accumulated 687 tests that never ran in CI. Holding the batch is what made the standard real.
+
+  **Briefs carrying precedent, not instructions.** "Fix C-2" became "here is the file:line, what the audit demonstrated, the failure mode of the naive fix, the property you must not break, and what a prior agent got wrong here." Citing that a previous builder STOPPED rather than improvised is what licensed later builders to do the same. Permission to push back only exists once someone has visibly used it.
+
+  **Naming anti-patterns turned them into shared vocabulary.** Once one agent separated controls from red-first results, that went into every later brief. Same for "the guard trains its own bypass", "advisory in, hard out", "the witness is already on disk". Compressed concepts let briefs get shorter and more demanding at the same time.
+
+  **Specifying what must NOT change.** Fail-open on the cache, deny-list posture on backups, non-shadow path unchanged, human path byte-identical. A property to protect gives an agent a frame for judgement; a task only gives it something to complete. That is why the index agent could recognise its own prune regression — it knew which property it was defending.
+
+  **Shrinking scope.** Every tests-only resume outperformed the multi-item run before it. Six truncations, all at the test-writing step: implementation consumes the budget and tests are last.
+
+  ## The recursive part
+
+  The audit's central finding was that this repo's verification surface was decorative. Applying that same suspicion to the audit's OWN remediation is what caught a new test that passed before and after, and a prune step that reintroduced the defect it was closing.
+
+  Two of my briefs were wrong — the C-4/stake-recover collision and the ok:false audit semantics. Both were caught by builders refusing to comply rather than complying. Recording those corrections in the commits, instead of overriding them, is what made pushback normal.
+
+  ## Honest discount
+
+  Later items were also better specified because the audit had already done the expensive diagnostic work. The index agent had Arky's exact stress-run numbers to target. Diagnosis was the costly half; remediation inherited it.</body>
+  <type>retro</type>
+  <symbols_touched>["#warp-store", "#f4-trace", "#warpline-cli", "#refusal"]</symbols_touched>
+  <tags>["warpline", "audit", "arc:warpline", "process", "agent-orchestration", "evidence-standard", "retro"]</tags>
+  <learnings>["Refusing to accept missing evidence is what makes a standard real. Red-first was asked for four times before it arrived once; accepting the green suite instead would have reproduced the exact defect the audit existed to fix.", "Briefs should carry PRECEDENT, not just instructions. Citing that a previous builder stopped and reported rather than improvising is what licenses the next one to do it — permission to push back is only credible once someone has visibly used it and been backed.", "Specify the property that must NOT change, not only the defect to fix. Fail-open on a cache, deny-list posture on backups, byte-identical human path — a property to defend gives an agent a frame for judgement, which is what lets it catch its own regression mid-implementation.", "Name anti-patterns so they become shared vocabulary. Once 'declare your controls separately from red-first results' entered the briefs, every later agent did it unprompted, and the briefs got shorter while the bar got higher.", "Long multi-item agent runs truncate at the test-writing step, consistently — six times across this session. Tests-only resumes produced the best reports every time. Trade wall-clock for evidential completeness by scoping smaller.", "Apply the audit's own suspicion to the audit's remediation. The finding was 'the verification surface is decorative'; recursively applying it caught a brand-new vacuous test and a prune step that reintroduced the very cost it was removing."]</learnings>
+  <verification>{"status": "pass", "details": {"evidence": "16/16 red-first mutations on the index tranche with zero survivors; 96.1x measured improvement (404.2ms -> 4.2ms per save); concurrency 1-of-2 sections surviving -> 2-of-2 across two real OS processes"}}</verification>
+  <confidence>0.85</confidence>
+  </invoke>
+git_context:
+  ref: 0f561ecfccbb869752a28f04fb364a8fa5c83263
+  branch: warpline-surfaces
+  dirty: true

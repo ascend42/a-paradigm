@@ -30,7 +30,7 @@ import { DAEMON_VERBS, type DaemonVerb } from './protocol.js';
 export const DESCRIPTORS_SCHEMA = 'descriptors:v1' as const;
 
 /** Where a verb sits in the write cycle a cold agent must learn. */
-export type CycleStage = 'orient' | 'fork' | 'propose' | 'admit' | 'inspect' | 'resolve' | 'custody';
+export type CycleStage = 'orient' | 'fork' | 'propose' | 'admit' | 'abandon' | 'inspect' | 'resolve' | 'custody';
 
 export interface VerbDescriptor {
   verb: DaemonVerb;
@@ -114,6 +114,14 @@ export const VERB_DESCRIPTORS: Record<DaemonVerb, VerbDescriptor> = {
       noRestore: { type: 'boolean', description: 'skip the CLEAN write-back restore' },
     }),
     cycleStage: 'admit',
+    principal: 'agent',
+  },
+  abandon: {
+    verb: 'abandon',
+    summary:
+      'Withdraw your scratch so you can fork again — the agent-class exit when admit cannot proceed. Your sealed proposal is NOT deleted: it stays in the ledger as an abandoned head, restorable by pickId, and an open KNOT stays open (abandoning concedes a contest, it never resolves one).',
+    paramsSchema: obj({}),
+    cycleStage: 'abandon',
     principal: 'agent',
   },
   'knot.show': {
@@ -229,9 +237,9 @@ export const NEXT_LEGAL_VERBS: readonly NextVerbRule[] = Object.freeze([
     // The classifier grants one orientation call per episode BECAUSE cold
     // agents legitimately re-orient; the carrier must not misdirect that call.
     when: { knotOpen: true },
-    verbs: ['knot.show'],
+    verbs: ['knot.show', 'abandon'],
     because:
-      'your proposal is contested: read the KNOT work order. Re-admitting unchanged cannot clear it, and resolution is human-class — escalate rather than retry.',
+      'your proposal is contested: read the KNOT work order. Re-admitting unchanged cannot clear it, and resolution is human-class — escalate rather than retry; if you must move on, abandon withdraws your proposal (it concedes the contest, it does not resolve it).',
   },
   {
     when: { scratchPresent: false },
@@ -239,9 +247,17 @@ export const NEXT_LEGAL_VERBS: readonly NextVerbRule[] = Object.freeze([
     because: 'you have no scratch ref yet: mint one at the selvage tip before proposing.',
   },
   {
+    // C-10: this rule used to answer 'admit' ALONE, which is a closed cycle
+    // whenever admit cannot move — after a crash between the weave's ref
+    // advance and clearScratch, the scratch tip is already selvage history, so
+    // admit NOOPs forever while fork refuses and points right back here. Every
+    // door was agent-class and shut; the only scratch-clearing verb left was
+    // HUMAN_ONLY. `abandon` is the exit, second because admitting is still the
+    // goal.
     when: { proposalSealed: true },
-    verbs: ['admit'],
-    because: 'your proposal is sealed but unjudged: admit it against the live selvage.',
+    verbs: ['admit', 'abandon'],
+    because:
+      'your proposal is sealed but unjudged: admit it against the live selvage — or abandon it to withdraw the proposal and fork again (the sealed strand stays in the ledger).',
   },
   {
     when: {},

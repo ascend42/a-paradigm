@@ -39,6 +39,7 @@ export const DAEMON_VERBS = [
   'fork', // forkNative                          (write — scratch ref only)
   'propose', // proposeNative                    (write — scratch strand)
   'admit', // admitNative | shadowAdmit          (write | observe-only row)
+  'abandon', // abandonNative                    (write — clears the caller's scratch pointer)
   'knot.show', // readKnotPayload                (read)
   'resolve', // resolveNative                    (write — human-class only)
   'stake', // stake                              (write — human-class only)

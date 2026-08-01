@@ -234,7 +234,11 @@ describe('#warplined — backup over the daemon + the read-scope ceiling', () =>
   it('ADVERSARIAL: a read-scoped token is refused on EVERY non-read verb, allowed on every read verb', async () => {
     // the ceiling is the allowlist — derive the write set from the protocol
     const writeVerbs = DAEMON_VERBS.filter((v) => !READ_ONLY_VERBS.includes(v));
-    expect(writeVerbs).toEqual(['fork', 'propose', 'admit', 'resolve', 'stake', 'stake.recover', 'backup']);
+    // The literal is the REVIEWER's tripwire: the loop below is derived, so a
+    // new write verb is refused automatically — but silently. C-10's `abandon`
+    // clears a ref, so it belongs here and must be visibly accounted for.
+    expect(writeVerbs).toEqual(['fork', 'propose', 'admit', 'abandon', 'resolve', 'stake', 'stake.recover', 'backup']);
+    expect(writeVerbs).toContain('abandon');
     for (const verb of writeVerbs) {
       const err = await rejectsWith(consoleC.call(verb, { intent: 'x', agentId: 'y', reason: 'z', commit: 'c', dest: path.join(out, 'nope') }), 'FORBIDDEN');
       expect(err.message).toContain('read scope');

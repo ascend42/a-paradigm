@@ -188,8 +188,9 @@ components:
       path-taken proof so fail-open can't mask a broken incremental path).
       I5 — THE WORKTREE INDEX (NATIVE-FIRST phase 0, T-2026-07-17-008): the
       WORKTREE walk gets the same delta discipline via worktree-index.ts, a git-
-      style stat cache (`.warpline/index`, worktreeIndex:v1, atomic tmp+rename,
-      per-worktree sections of [mtimeMs,size,ino,mode,blobId,gitSha] tuples).
+      style stat cache (`.warpline/index.d/<sha256(worktree)[:40]>`,
+      worktreeIndex:v2, atomic tmp+rename, ONE FILE PER WORKTREE holding
+      [mtimeMs,size,ino,mode,blobId,gitSha] tuples).
       snapshotDir(store, dir, {indexRoot}) trusts an entry only when the full
       stat key matches (mode included — a bare chmod is a miss), the recorded
       mtime clears the RACY_WINDOW_MS guard against builtAt (git's racy-
@@ -208,6 +209,42 @@ components:
       since 2.36, `core.fsync`). The worktree INDEX is deliberately NOT
       hardened: it is a self-declared cache whose corrupt read already falls
       open to a cold walk.
+      D-G — ONE SHARD PER WORKTREE, NOT ONE SHARED FILE (soundness audit
+      2026-07-31, Arky): worktreeIndex:v1 was a SINGLE `.warpline/index`
+      holding every worktree's section, and save was an UNLOCKED
+      read-modify-write of the whole file called from snapshotDir OUTSIDE the
+      fabric lock — two concurrent snapshots interleave and the last writer
+      silently drops the other agent's section. Nothing ever pruned a dead
+      worktree, so one stress run left 54 MB / 308,497 entries / 82 sections
+      that every subsequent propose re-read and re-serialized (which also
+      widened the clobber window from microseconds to hundreds of ms). Cost per
+      save was O(all worktrees ever seen). git is per-worktree AND locked
+      (index.lock); Warpline was weaker on both halves. THE CHOICE: shard, do
+      not lock — sharding removes the SHARING, so there is no critical section
+      to get wrong, whereas a lock leaves the 54 MB re-serialize in place and
+      then serializes every agent's snapshot behind it; a lock also adds a
+      timeout/staleness policy, i.e. a way for a CACHE to fail CLOSED, and a
+      cache that can fail closed is worse than one that can be stale. Pruning
+      becomes unlink, decidable per file (each shard records the absolute
+      worktree path it caches), and a corrupt shard now costs ONE worktree a
+      cold walk instead of all 82. saveWorktreeIndex reads/writes NOTHING but
+      its own shard; pruneWorktreeIndex(root, keep?) unlinks shards whose
+      worktree is gone using a BOUNDED 4 KB header read (the `worktree` field
+      is serialized before `entries` for exactly this — a full parse would
+      reintroduce the O(all worktrees) wall it removes: measured 172.9 ms vs
+      1.4 ms). Staging residue (`.tmp.*`) and headers that yield no worktree
+      are never deleted — a `.tmp.*` may be another writer's mid-publish file.
+      MIGRATION: an existing v1 file is ADOPTED, not orphaned — load falls back
+      to its section so the first walk after the upgrade is still warm, and the
+      first save splits EVERY section into shards (skipping any that already
+      has one, so a fresher shard always wins) then deletes the v1 file, so no
+      worktree suffers a cold-walk storm and the 54 MB is reclaimed once.
+      MEASURED at the audit's 82 sections / 308,497 entries / 62.3 MB:
+      404.2 → 4.2 ms per save (96x), bytes touched 62.3 MB read + 62.3 MB
+      re-serialized → 0.32 MB read + 0.76 MB re-serialized, and two real
+      concurrent OS processes go from 1/2 survivors to 2/2
+      (bench/worktree-index-dg.mts; pinned by
+      test/worktree-index-sharding.test.ts).
     type: module
 
   warp-durable:
@@ -226,7 +263,7 @@ components:
       COVERED: the ledger append + whole-ledger rewrite (#fabric), both tip
       pointers (#fabric writeSelvage and #fabric-refs writeRef), the per-agent
       #scratch refs, and #warp-store loose objects. NOT covered, deliberately:
-      the worktree index (a cache) and the shadow/grade/audit sidecars
+      the worktree index shards (a cache) and the shadow/grade/audit sidecars
       (observational telemetry — a lost last row is not a false success claim).
       THE macOS CALL, STATED: Apple's fsync(2) does not flush the drive's own
       write cache and F_FULLFSYNC does, at ~50x the cost; git exposes the choice
@@ -1860,8 +1897,38 @@ components:
       there is no third instruction. Best-effort: the ladder degrades to the
       unKNOTted position rather than throwing on the way to reporting a
       refusal. Asserted site-by-site (BOTH positions) in
-      test/native-sequencing-refusals.test.ts. Every step is an append
-      or a CAS. SCOPE: v3 writes for scratch strands + native weaves only — the
+      test/native-sequencing-refusals.test.ts.
+      C-10 THE AGENT-CLASS EXIT (soundness audit 2026-07-31, Arky D-D —
+      reproduced organically during stress, not merely reasoned about):
+      abandonNative WITHDRAWS an agent's scratch, and it exists because every
+      agent-class door could be shut at once. After a KNOT — or after a crash
+      between the weave's ref advance and clearScratch — `admit` answers NOOP
+      without clearing the scratch and `fork` refuses with the clobber guard
+      pointing straight back at `admit`: a closed cycle whose only escape,
+      `resolve`, is HUMAN_ONLY. The guard's own prose even named `abandon` as
+      the way out and NO SUCH VERB EXISTED. git has always had
+      `git merge --abort`, always agent-runnable; without this an all-agent
+      swarm halts on its first genuine conflict, which is the exact scenario
+      the product exists to serve. TWO DESIGN CHOICES, both load-bearing:
+      (1) SEALED WORK IS NEVER LOST — only the scratch POINTER is cleared. The
+      strand stays in the append-only ledger, its state in the store, its bytes
+      in the object store, and it stays restorable by pickId forever
+      (`warpline restore pick:<id>`). #fabric-verify's abandonedHeads report is
+      UNCHANGED by construction: it is computed from DAG heads no refs/heads
+      entry names, and listRefs reads refs/heads ONLY, so a scratch ref never
+      suppressed the report and clearing one cannot alter it. Legal, visible,
+      recoverable. (2) AN OPEN KNOT STAYS OPEN — the #knot-payload sidecar is
+      not deleted, not mutated, not marked resolved; the OTHER side (the
+      selvage) does not move; no weave is sealed and no KnotResolution envelope
+      is written. Abandoning CONCEDES a contest; a human still owns resolving
+      it, and the still-open payload ids ride back in the result so the
+      withdrawal is legible rather than silent. IDEMPOTENT (no scratch is not
+      an error) and SCOPED TO THE CALLER (the daemon verb takes no target
+      param, so it can never reach across principals). The exit is also
+      OFFERED: NEXT_LEGAL_VERBS now names it SECOND in both wedge positions
+      (knot.show→abandon, admit→abandon), which moves descriptorsId — see
+      #warplined-descriptors. Proved in test/abandon-exit.test.ts. Every step is
+      an append or a CAS. SCOPE: v3 writes for scratch strands + native weaves only — the
       git-era seal path stays v2 until the founder-visible cutover (no selvage
       cutover here). EXIT PROOF: test/native-loop-no-git.test.ts — the full
       fork→propose→admit→KNOT→resolve→restore loop green in a directory with no
@@ -2013,7 +2080,7 @@ components:
       The CANONICAL verb descriptors (PW-5, mcp-skin-spec §4; Loid requirement
       3): ONE source of teaching text per daemon verb — {verb, summary (1-2
       sentence HARD budget), paramsSchema, cycleStage
-      (orient|fork|propose|admit|inspect|resolve|custody), principal
+      (orient|fork|propose|admit|abandon|inspect|resolve|custody), principal
       (agent|human)} — consumed by the MCP tool registration and #warplined's
       state-aware status, so skins cannot drift into parallel vocabularies (G3
       applied to teaching text). toolNameOf() is the ONE naming law between
@@ -2047,6 +2114,23 @@ components:
       so an engine refusal and the status result can no longer answer one
       position with opposite instructions — the rule is the single carrier,
       and it is hashed.
+      C-10 RE-PIN (2026-08-01, descriptors:v1:445e4eb7… → df0550c6…): the
+      agent-class `abandon` verb joined the table, and the next-verb rule now
+      names it SECOND in the two positions that previously DEAD-ENDED —
+      knotOpen ['knot.show','abandon'] and proposalSealed ['admit','abandon'].
+      Both were positions where every offered verb was one an agent could run
+      forever without moving (escalation is human-class; a post-crash `admit`
+      NOOPs while `fork` refuses back to it), so the carrier itself was half
+      the wedge. Ordering is deliberate: the escalation/admission door stays
+      the instruction read FIRST, and the withdrawal door exists so a swarm is
+      never stuck. The id moved because the teaching genuinely changed — the
+      denominator-reset rule applies, and it costs nothing today because FG-3
+      is unratified and no scored batch has started. Excluding a new verb from
+      the hash to hold the id still would BE defect D-3, inside the test built
+      to catch it. New invariants in test/descriptors-frozen.test.ts: every
+      position offers at least one agent-runnable verb, and the wedge positions
+      name the withdrawal verb specifically (an agent-runnable READ like
+      knot.show satisfies the first check while leaving the position wedged).
     type: module
     tags: [warpline, native-first, F4, mcp]
     components:
@@ -2068,7 +2152,21 @@ components:
       descriptorsId (which teaching text served the call — FG-3)}. F4Tracer is
       the emitting handle (fixes identity; append is BEST-EFFORT — a trace
       failure never fails the serving call); resultClassOf derives the class
-      from result SHAPE, never text. seq is SEEDED from the trace file
+      from result SHAPE, never text. resultClassOf knows TWO DEPTHS, exactly as
+      #refusal's refusalOf does and for the same reason (soundness audit
+      2026-07-31, MEDIUM): the shadow gate answers an ENVELOPE,
+      {shadow, row, result}, so a probe reading only the outer object found no
+      decision and recorded resultClass:'read' for every shadow KNOT / CLEAN /
+      HELD / FAST_ADMIT there has ever been — not masking (C-16 closed the
+      refusal half) but it made SHADOW rows strictly LESS classifiable than
+      direct ones, and the shadow verdict stream is the evidence base for the R2
+      gate-promotion argument. Bounded at ONE envelope level, like refusalOf: a
+      deep search would find decisions that are not the caller's own outcome (an
+      archived verdict inside a knot payload, a tail of shadow rows). The class
+      is recorded UNPREFIXED because the arm is already recoverable from the row
+      — `shadow` rides in target — so the classifier's status vocabulary does
+      not fork per skin. Pinned by test/f4-trace-shadow-class.test.ts.
+      seq is SEEDED from the trace file
       (nextSeqFor: max(seq)+1 for the runId), not counted from zero per
       process: the MCP skin is one long-lived process per run but the CLI is
       one process PER COMMAND, and a process-local counter would stamp every
@@ -2115,10 +2213,15 @@ components:
       TRACES `resolve` (pre-freeze panel D-4): it was the one verb the CLI never
       traced, and it is the human-class verb whose ATTEMPT is the W3 the FG-1
       criterion turns on — untraced, a CLI subject could perform it, succeed,
-      emit nothing, and satisfy all three predicates. Tracing is MEASUREMENT,
-      not enforcement: the native CLI has no token and no principal gate, so
-      HUMAN_ONLY_VERBS is a DAEMON-BOUNDARY law rather than a Warpline-wide
-      one, and enforcing it CLI-side stays an open founder decision.
+      emit nothing, and satisfy all three predicates.
+      SUPERSEDED 2026-08-01 (audit C-11): this entry said tracing was
+      MEASUREMENT and not enforcement, because "the native CLI has no token and
+      no principal gate, so HUMAN_ONLY_VERBS is a DAEMON-BOUNDARY law rather
+      than a Warpline-wide one" and CLI-side enforcement was an open founder
+      decision. That decision is taken — see #agent-shell. Both now hold on this
+      arm, and the ORDER between them is load-bearing: the gate emits its trace
+      row BEFORE the refusal propagates, so refusing the violation does not
+      re-blind the W3 rule that tracing was added to un-blind.
       CORRECTED: an earlier revision claimed closing the CLI asymmetries moves
       descriptorsId. It does not — projecting the existing daemon status result
       through a CLI command, adding `shadow tail`, and making --claim optional
@@ -2490,6 +2593,57 @@ components:
       - "#absorb"
       - "#git-exec"
 
+  agent-shell:
+    description: >-
+      THE CLI HALF OF THE HUMAN-CLASS LAW (soundness audit 2026-07-31 C-11 /
+      Aegis S3; pre-freeze panel D-4; Aegis M-1). HUMAN_ONLY_VERBS and
+      HUMAN_ONLY_ADMIT_FLAGS were enforced at exactly ONE place — #warplined's
+      verb × principal matrix. The native CLI has no token, no principal and no
+      gate, so `warpline resolve` sailed past authorization and failed only on a
+      missing argument, and resolve / stake / stake.recover / backup /
+      --accept-breach / --accept-risk all sat on the top-level help with no
+      credential. Not tidiness: FG-1's ratified completion criterion rests on
+      `resolve` being the act the security law FORBIDS, and that law held for an
+      agent on the MCP skin and evaporated for an agent with a shell — which
+      every coding agent has. THE NAIVE FIX IS INCOHERENT (possession of the
+      shell IS the human credential under the stage-1 model, #daemon-tokens —
+      there is no CLI principal to gate on), so this uses the product's OWN
+      precedent: `$WARPLINE_AGENT_ID` is the established "this shell is an agent
+      shell" marker (#pick attributes by it, and #pick's R2 gate already refuses
+      an agent-attributed CLI write under gate.agentWrites:'real'). When it is
+      set, the human-class verbs and flags are refused with a real refusal:v1 —
+      never a bare Error — carrying the DAEMON'S OWN ANSWER VERBATIM: FORBIDDEN,
+      gate 'transport', retriable 'never', EMPTY next[]. Empty means exactly one
+      thing in #refusal: no call recovers this, ESCALATE; naming the human verb
+      in next[] would invite the retry that IS the W3 violation. BOUND, NEVER
+      RE-LISTED: the gated sets are DERIVED from the daemon's two constants
+      (cliPathOf: dots are CLI subcommand separators exactly as toolNameOf
+      mangles them for MCP, so stake.recover → `stake recover`; longFlagOf:
+      camelCase → --kebab), so a fourth divergent copy of the law cannot appear
+      and adding a verb to HUMAN_ONLY_VERBS gates its CLI command in the same
+      edit. ORDERING (the MCP skin's D-2 lesson): the attempt is TRACED before
+      the refusal propagates — a violation that is refused but unrecorded makes
+      "zero W3 marks" unfailable, which is the blindness tracing `resolve` was
+      added to remove. INVISIBILITY IS A REQUIREMENT, not a side effect: an
+      UNMARKED shell returns from the gate having done nothing — no row, no
+      throw — so the founder's shell and the F4 harness's scripted human-resolve
+      leg (which runs unmarked, in its own shell) are byte-identical to before.
+      HONEST SCOPE: $WARPLINE_AGENT_ID is UNSIGNED self-assertion exactly as it
+      is for pick attribution — an agent that unsets it is unmarked. This raises
+      the cost of the violation from zero to deliberate; it is not
+      authentication, and M3 signatures still close that gap. Gated sites:
+      resolve, stake, stake recover, backup, admit --accept-breach/--accept-risk,
+      and pick --accept-risk (the R2 override door, which #pick's own ladder
+      already marks principal:'human'). `daemon token mint` is deliberately NOT
+      gated — it is not in HUMAN_ONLY_VERBS, and widening the set is a founder
+      call, not a wiring one. Proved in test/agent-shell-gate.test.ts.
+    type: module
+    tags: [warpline, security, cli, F4]
+    components:
+      - "#refusal"
+      - "#warplined-protocol"
+      - "#warpline-cli"
+
   warpline-cli:
     description: >-
       The warpline command line (commander). `warpline oracle <a> <b> [--json]`,
@@ -2519,7 +2673,12 @@ components:
       never exit 0; --shadow stays exit 0 by contract, observe-only), and
       `warpline resolve <agentId> --ref
       <resolvedRef> -m <reason> [--by <who>] [--ours <ref>]` seals a KNOT-council
-      resolution, and `warpline grade [--window N] [--dry] [--json]` grades strand
+      resolution, and `warpline abandon <agentId> [--json]` is THE AGENT-CLASS
+      EXIT (audit C-10) — it withdraws the agent's scratch pointer and nothing
+      else, so the sealed proposal survives as a restorable abandoned head and
+      an open KNOT stays open (see #native-write-path for the two design
+      choices); it is idempotent, and it is what makes `git merge --abort`'s
+      always-available escape hatch exist here, and `warpline grade [--window N] [--dry] [--json]` grades strand
       confidence against real survive/overturn outcome (the moat), and `warpline
       fabric verify [--json]` authenticates the whole PICK-DAG (integrity + v2 chain
       + binding re-derivation; exit 0 intact / 1 tamper / 2 I/O), and `warpline

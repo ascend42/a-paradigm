@@ -32,7 +32,18 @@ import {
 import { DAEMON_VERBS } from '../src/daemon/protocol.js';
 import { HUMAN_ONLY_VERBS } from '../src/daemon/protocol.js';
 
-const PINNED_DESCRIPTORS_ID = 'descriptors:v1:445e4eb767771108a039f21606fa51bfe96d1ddc2b70246f311423184bc77964';
+/**
+ * RE-PINNED 2026-08-01 for the soundness audit's C-10 remediation: the
+ * agent-class `abandon` verb joined DAEMON_VERBS/VERB_DESCRIPTORS and the
+ * next-verb rule gained it as the SECOND door in the two positions that
+ * previously dead-ended (proposal-sealed, and KNOT-open). The teaching surface
+ * genuinely changed, so the id genuinely moves — the denominator-reset rule
+ * applies, and it costs nothing today because FG-3 is unratified and the scored
+ * batch has not started. Excluding the new verb from the hash to hold the id
+ * still would be defect D-3, which is the reason this file exists.
+ *   was: descriptors:v1:445e4eb767771108a039f21606fa51bfe96d1ddc2b70246f311423184bc77964
+ */
+const PINNED_DESCRIPTORS_ID = 'descriptors:v1:df0550c66cb565b3069c8367e9534ad88af3c547d73aa66201296dca9e3b42ac';
 
 describe('descriptors — frozen, total, surface-correct', () => {
   it('the descriptor table matches the pinned content address (FG-3 tripwire)', () => {
@@ -101,10 +112,14 @@ describe('descriptors — frozen, total, surface-correct', () => {
             const out = nextLegalVerbsFor({ scratchPresent, proposalSealed, behindSelvage, knotOpen });
             expect(out.verbs.length, 'every position resolves to a verb').toBeGreaterThan(0);
             expect(out.because.length).toBeGreaterThan(0);
-            // An open KNOT ALWAYS routes to the work order, never back to admit:
-            // re-admitting unchanged is the W1 the classifier scores wasted.
+            // An open KNOT ALWAYS routes to the work order FIRST, and never back
+            // to admit: re-admitting unchanged is the W1 the classifier scores
+            // wasted. C-10 widened this from "knot.show alone" to "knot.show
+            // first" — the position also needs an agent-runnable exit, or an
+            // all-agent swarm halts here forever, but the escalation door must
+            // stay the instruction the agent reads first.
             if (knotOpen) {
-              expect(out.verbs).toEqual(['knot.show']);
+              expect(out.verbs[0]).toBe('knot.show');
               expect(out.verbs).not.toContain('admit');
             }
           }
@@ -118,5 +133,53 @@ describe('descriptors — frozen, total, surface-correct', () => {
     for (const rule of NEXT_LEGAL_VERBS) {
       for (const v of rule.verbs) expect(human.has(v), `${v} is human-class`).toBe(false);
     }
+  });
+
+  /**
+   * C-10, stated as an invariant rather than a fix: the rule table is the ONE
+   * carrier that answers "what may I legally do next", and before `abandon`
+   * existed two of its positions could answer with a verb that does not move.
+   * After a KNOT the only door was human-class escalation; after a crash
+   * between the weave's ref advance and clearScratch the only door was an
+   * `admit` that NOOPs forever while `fork` refuses and points back at it.
+   * Every position must offer at least one verb an AGENT can actually run.
+   */
+  it('every position offers an agent-runnable verb — no position is a dead end (C-10)', () => {
+    const agent = new Set<string>(agentSurfaceVerbs());
+    for (const scratchPresent of [true, false]) {
+      for (const proposalSealed of [true, false]) {
+        for (const behindSelvage of [true, false]) {
+          for (const knotOpen of [true, false]) {
+            const pos = { scratchPresent, proposalSealed, behindSelvage, knotOpen };
+            const { verbs } = nextLegalVerbsFor(pos);
+            expect(
+              verbs.some((v) => agent.has(v)),
+              `position ${JSON.stringify(pos)} offers no agent-runnable verb (${verbs.join(', ')})`,
+            ).toBe(true);
+          }
+        }
+      }
+    }
+  });
+
+  /**
+   * And the exit itself must be reachable from the two wedge positions —
+   * "an agent-runnable verb exists" is satisfied by `knot.show`, which READS and
+   * changes nothing. The position stays wedged unless a verb that CLEARS the
+   * scratch is offered, and `abandon` is the only agent-class one there is
+   * (`resolve` clears it too and is HUMAN_ONLY — that asymmetry IS C-10).
+   */
+  it('the two wedge positions name the withdrawal verb (C-10)', () => {
+    const wedged = [
+      { scratchPresent: true, proposalSealed: true, behindSelvage: true, knotOpen: true },
+      { scratchPresent: true, proposalSealed: true, behindSelvage: true, knotOpen: false },
+      { scratchPresent: true, proposalSealed: true, behindSelvage: false, knotOpen: false },
+    ];
+    for (const pos of wedged) {
+      expect(nextLegalVerbsFor(pos).verbs, `position ${JSON.stringify(pos)}`).toContain('abandon');
+    }
+    // …and it is agent-class on the surface an agent actually holds.
+    expect(agentSurfaceVerbs()).toContain('abandon');
+    expect(VERB_DESCRIPTORS.abandon.principal).toBe('agent');
   });
 });

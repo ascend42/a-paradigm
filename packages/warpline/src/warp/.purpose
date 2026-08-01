@@ -8,10 +8,13 @@ description: >-
   object-store.ts — zlib blobs/ and trees/ under .warpline/objects/ with git
   fan-out and always-on verified reads), whole-tree snapshot/restore
   (snapshot.ts, ignore-rules.ts, reserved-names.ts), the worktree stat cache
-  (worktree-index.ts), and the ONE durable-write discipline every writer in the
-  package publishes through (durable.ts).
+  (worktree-index.ts — ONE SHARD PER WORKTREE under .warpline/index.d/), and the
+  ONE durable-write discipline every writer in the package publishes through
+  (durable.ts).
 context:
   - "meaning judges, bytes execute — this directory is the bytes half; #fabric imports from here, not the reverse (snapshot.ts's Strand type is the one exception)"
+  - "worktree-index.ts is a CACHE and must stay one: every anomaly (missing/corrupt/wrong-schema/wrong-worktree shard, racy builtAt, evicted blob) fails OPEN to a cold walk, and every write failure is swallowed. It may cost time, never correctness — do not add a lock, a throw, or a fail-closed branch to it (audit D-G)"
+  - "a worktree-index save touches ONLY its own shard; prune reads a BOUNDED 4 KB header, which is why `worktree` is serialized before `entries` — full-parsing there reintroduces the O(all worktrees) wall D-G removed (measured 172.9 ms vs 1.4 ms)"
   - "durable.ts (#warp-durable) owns tmp naming + fsync for the WHOLE package: atomicWriteSync / appendDurableSync / tmpNameFor / isTmpResidue. Do NOT hand-roll writeFileSync(tmp)+rename again — that is exactly what soundness audit C-7 and C-15 were"
   - "WARPLINE_FSYNC=none is the only durability escape hatch; it defaults to `all` including on an unrecognized value, and it removes the fsyncs and nothing else"
   - "Warpline writes ONLY under .warpline/; the user's git HEAD/index/worktree are never touched"

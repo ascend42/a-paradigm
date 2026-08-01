@@ -1,6 +1,6 @@
 /**
  * worktree-index.test — I5, NATIVE-FIRST phase 0 (arky-architecture.md §2 I5):
- * the `.warpline/index` stat cache behind the worktree snapshot walk.
+ * the `.warpline/index.d/<hash>` per-worktree stat cache behind the snapshot walk.
  *
  * THE INVARIANT (same discipline as snapshot-incremental.test): the INDEXED
  * walk must produce the BYTE-IDENTICAL treeId + gitOid the plain full walk
@@ -18,7 +18,7 @@ import { ObjectStore } from '../src/warp/object-store.js';
 import { snapshotDir } from '../src/warp/snapshot.js';
 import {
   loadWorktreeIndex,
-  worktreeIndexPathOf,
+  worktreeShardPathOf,
   WORKTREE_INDEX_SCHEMA,
 } from '../src/warp/worktree-index.js';
 import { forkNative, proposeNative } from '../src/fabric/native.js';
@@ -49,7 +49,7 @@ function seed(wt: string): void {
 }
 const SEED_FILES = 5; // regular files (symlinks are never cached)
 
-describe('I5 — the worktree stat cache (.warpline/index)', () => {
+describe('I5 — the worktree stat cache (.warpline/index.d)', () => {
   let root: string; // fabric home: store + index
   let wt: string; // the worktree being snapshotted
   let store: ObjectStore;
@@ -81,7 +81,7 @@ describe('I5 — the worktree stat cache (.warpline/index)', () => {
     expect(cold.treeId).toBe(truth.treeId);
     expect(cold.gitOid).toBe(truth.gitOid);
     expect(cold.indexed).toEqual({ hits: 0, misses: SEED_FILES }); // nothing cached yet
-    expect(fs.existsSync(worktreeIndexPathOf(root))).toBe(true);
+    expect(fs.existsSync(worktreeShardPathOf(root, wt))).toBe(true);
 
     const warm = snapshotDir(store, wt, { indexRoot: root });
     expect(warm.treeId).toBe(truth.treeId); // ← the headline invariant
@@ -157,16 +157,17 @@ describe('I5 — the worktree stat cache (.warpline/index)', () => {
   it('fails OPEN on a corrupt or wrong-schema index, then heals it', () => {
     snapshotDir(store, wt, { indexRoot: root });
     const truth = coldTruth();
+    const shard = worktreeShardPathOf(root, wt);
 
-    fs.writeFileSync(worktreeIndexPathOf(root), 'not json at all{{{', 'utf8');
+    fs.writeFileSync(shard, 'not json at all{{{', 'utf8');
     const afterCorrupt = snapshotDir(store, wt, { indexRoot: root });
     expect(afterCorrupt.treeId).toBe(truth.treeId);
     expect(afterCorrupt.indexed!.hits).toBe(0); // cold — the corrupt cache was distrusted
     expect(loadWorktreeIndex(root, wt)?.entries.size).toBe(SEED_FILES); // healed by the walk
 
     fs.writeFileSync(
-      worktreeIndexPathOf(root),
-      JSON.stringify({ schemaVersion: 'worktreeIndex:v999', worktrees: {} }),
+      shard,
+      JSON.stringify({ schemaVersion: 'worktreeIndex:v999', worktree: wt, builtAt: new Date().toISOString(), entries: {} }),
       'utf8',
     );
     const afterWrongSchema = snapshotDir(store, wt, { indexRoot: root });
@@ -176,7 +177,7 @@ describe('I5 — the worktree stat cache (.warpline/index)', () => {
     const healed = snapshotDir(store, wt, { indexRoot: root });
     expect(healed.indexed).toEqual({ hits: SEED_FILES, misses: 0 });
     expect(loadWorktreeIndex(root, wt)).not.toBeNull();
-    const raw = JSON.parse(fs.readFileSync(worktreeIndexPathOf(root), 'utf8'));
+    const raw = JSON.parse(fs.readFileSync(shard, 'utf8'));
     expect(raw.schemaVersion).toBe(WORKTREE_INDEX_SCHEMA);
   });
 
@@ -196,7 +197,7 @@ describe('I5 — the worktree stat cache (.warpline/index)', () => {
     expect(fs.existsSync(loose)).toBe(true); // re-ingested — the tree is materializable again
   });
 
-  it('two worktrees share one index file without clobbering each other', () => {
+  it('two worktrees each get their own shard without clobbering each other', () => {
     const wt2 = fs.mkdtempSync(path.join(os.tmpdir(), 'warpline-wtidx-wt2-'));
     try {
       write(wt2, 'other.txt', 'other\n');
@@ -213,7 +214,7 @@ describe('I5 — the worktree stat cache (.warpline/index)', () => {
 });
 
 describe('I5 end to end — the native propose path rides the index', () => {
-  it('proposeNative writes .warpline/index and a re-propose walks warm off it', async () => {
+  it('proposeNative writes a .warpline/index.d shard and a re-propose walks warm off it', async () => {
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'warpline-wtidx-native-'));
     const wt = fs.mkdtempSync(path.join(os.tmpdir(), 'warpline-wtidx-native-wt-'));
     try {

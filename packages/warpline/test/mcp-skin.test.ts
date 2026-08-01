@@ -89,7 +89,7 @@ describe('#warpline-mcp — the third skin over a real daemon (fixtures only)', 
   const call = (name: string, args: Record<string, unknown> = {}): Promise<ToolResult> =>
     mcp.callTool({ name, arguments: args }) as Promise<ToolResult>;
 
-  it('registers the 8-tool agent surface — human verbs and override flags OMITTED', async () => {
+  it('registers the 9-tool agent surface — human verbs and override flags OMITTED', async () => {
     const { tools } = await mcp.listTools();
     const names = tools.map((t) => t.name).sort();
     expect(names).toEqual(
@@ -99,6 +99,9 @@ describe('#warpline-mcp — the third skin over a real daemon (fixtures only)', 
         'warpline_fork',
         'warpline_propose',
         'warpline_admit',
+        // C-10: the agent-class exit. It MUST be on this surface — a swarm with
+        // no withdrawal verb halts on its first genuine conflict.
+        'warpline_abandon',
         'warpline_knot_show',
         'warpline_grade_report',
         'warpline_shadow_tail',

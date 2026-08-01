@@ -124,7 +124,17 @@ describe('PW-2 — sequencing mistakes refuse with typed ladders, never ENGINE d
     const e = await refusedBy(() => forkNative(root, 'W'));
     expect(e.refusal.code).toBe('BAD_REQUEST');
     expect(e.refusal.retriable).toBe('retry-corrected');
-    expect(e.refusal.next).toEqual([{ verb: 'admit', params: {}, requires: [], principal: 'agent' }]);
+    // C-10: `abandon` rides SECOND — admitting is still the goal, but the ladder
+    // must offer an agent-runnable exit here, because the position where admit
+    // NOOPs forever (a crash between the weave's ref advance and clearScratch)
+    // is answered by this exact rule and used to point straight back at admit.
+    expect(e.refusal.next).toEqual([
+      { verb: 'admit', params: {}, requires: [], principal: 'agent' },
+      { verb: 'abandon', params: {}, requires: [], principal: 'agent' },
+    ]);
+    // the prose named a verb that did not exist until C-10 ("resolve/abandon")
+    expect(e.message).toContain('abandon');
+    expect(e.message).not.toMatch(/resolve\/abandon/);
   });
 
   it('D-6b — re-fork over a CONTESTED proposal answers knot.show, NOT admit (aligned with status)', async () => {
@@ -160,6 +170,10 @@ describe('PW-2 — sequencing mistakes refuse with typed ladders, never ENGINE d
       expect(e.refusal.code).toBe('BAD_REQUEST');
       expect(e.refusal.next).toEqual([
         { verb: 'knot.show', params: { selector: knot.knotPayloadId }, requires: [], principal: 'agent' },
+        // C-10: and the withdrawal door, SECOND — the work order stays the first
+        // instruction, but "escalate rather than retry" was previously the whole
+        // ladder, which left an all-agent swarm with no legal move at all.
+        { verb: 'abandon', params: {}, requires: [], principal: 'agent' },
       ]);
       // the human sentence follows the same carrier — no third instruction
       expect(e.message).toContain('CONTESTED');

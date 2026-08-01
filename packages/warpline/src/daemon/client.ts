@@ -17,7 +17,7 @@
 
 import * as fs from 'node:fs';
 import * as net from 'node:net';
-import type { AdmitNativeResult, ForkNativeResult, ProposeNativeResult, ResolveNativeResult } from '../fabric/native.js';
+import type { AbandonNativeResult, AdmitNativeResult, ForkNativeResult, ProposeNativeResult, ResolveNativeResult } from '../fabric/native.js';
 import type { KnotPayload } from '../fabric/knot-payload.js';
 import type { GradeReport } from '../fabric/grade.js';
 import type { ShadowVerdictRow } from '../fabric/shadow.js';
@@ -209,6 +209,11 @@ export class DaemonClient {
 
   admitShadow(params: { worktree?: string; claim?: string } = {}): Promise<ShadowAdmitOverDaemon> {
     return this.call('admit', { ...params, shadow: true });
+  }
+
+  /** Withdraw THIS session's scratch (C-10 agent-class exit) — no target param. */
+  abandon(): Promise<AbandonNativeResult> {
+    return this.call('abandon');
   }
 
   knotShow(selector: string): Promise<KnotPayload> {

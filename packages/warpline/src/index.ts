@@ -59,8 +59,12 @@ export {
 export {
   loadWorktreeIndex,
   saveWorktreeIndex,
+  pruneWorktreeIndex,
   worktreeIndexPathOf,
+  worktreeIndexDirOf,
+  worktreeShardPathOf,
   WORKTREE_INDEX_SCHEMA,
+  LEGACY_WORKTREE_INDEX_SCHEMA,
   RACY_WINDOW_MS,
   type WorktreeIndexEntry,
   type LoadedWorktreeIndex,
@@ -368,6 +372,9 @@ export {
   proposeNative,
   admitNative,
   resolveNative,
+  // C-10: the agent-class exit, on the public surface beside the verbs it
+  // un-wedges (a withdrawal verb a library consumer cannot reach is no exit).
+  abandonNative,
   absorbTree,
   scratchRefName,
   type ForkNativeOptions,
@@ -378,7 +385,22 @@ export {
   type AdmitNativeResult,
   type ResolveNativeOptions,
   type ResolveNativeResult,
+  type AbandonNativeResult,
 } from './fabric/native.js';
+// C-11 (#agent-shell): the CLI half of the human-class law — HUMAN_ONLY_VERBS
+// and HUMAN_ONLY_ADMIT_FLAGS enforced on a shell marked by $WARPLINE_AGENT_ID.
+export {
+  AGENT_ID_ENV,
+  HUMAN_ONLY_CLI_PATHS,
+  HUMAN_ONLY_CLI_FLAGS,
+  agentShellId,
+  agentShellRefusal,
+  checkHumanClass,
+  assertHumanClass,
+  cliPathOf,
+  type AgentShellViolation,
+  type HumanClassCheck,
+} from './agent-shell.js';
 export {
   computeMergeNative,
   materializeMergedStateNative,

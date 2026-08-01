@@ -30,6 +30,9 @@
  *                T-2026-07-21-007 — this path is the one agents actually use).
  *   4. RESOLVE — `resolveNative` seals the human/agent resolution of a KNOT as
  *                a v3 weave carrying the KnotResolution envelope.
+ *   5. ABANDON — `abandonNative` WITHDRAWS the agent's scratch: the pointer is
+ *                cleared, nothing else. The AGENT-CLASS exit (audit C-10), and
+ *                the only verb here whose whole job is to un-wedge a principal.
  *
  * Every step is an append or a per-ref CAS — nothing is lost if the process
  * dies between any two steps. SCOPE (founder-visible cutover discipline): this
@@ -273,8 +276,8 @@ export function forkNative(root: string, agentId: string, opts: ForkNativeOption
       `warpline: fork — ${JSON.stringify(agentId)} already has a sealed, unadmitted proposal (scratch ${existing}); ` +
         `re-fork would orphan it silently. ` +
         (contested
-          ? 'That proposal is CONTESTED: read the KNOT work order named in next[]. Re-admitting unchanged cannot clear it, and resolution is human-class — escalate rather than retry.'
-          : 'Admit it first, or resolve/abandon it explicitly.'),
+          ? 'That proposal is CONTESTED: read the KNOT work order named in next[]. Re-admitting unchanged cannot clear it, and resolution is human-class — escalate rather than retry, or `abandon` to withdraw your proposal.'
+          : 'Admit it first, or `abandon` to withdraw it (the sealed strand stays in the ledger, restorable by pickId).'),
     );
   }
   writeScratchRef(root, agentId, base ?? '', existing);
@@ -875,5 +878,86 @@ export async function resolveNative(root: string, opts: ResolveNativeOptions): P
     writeSelvage(wdir, resolved.stateId);
     clearScratch(root, opts.agentId);
     return { strand, resolution };
+  });
+}
+
+/* ── 5. ABANDON — the agent-class exit ───────────────────────────────────────── */
+
+export interface AbandonNativeResult {
+  agentId: string;
+  /** true when a scratch pointer was actually cleared (false = already clear). */
+  abandoned: boolean;
+  /** the value the scratch ref held — the ABANDONED HEAD when it was a pickId. */
+  abandonedPick: string | null;
+  /** true when `abandonedPick` names a SEALED proposal this agent authored. */
+  sealedProposal: boolean;
+  /**
+   * KNOT work orders that still name the withdrawn proposal. REPORTED, never
+   * touched: abandoning CONCEDES a contest, it does not resolve one.
+   */
+  openKnotPayloadIds: string[];
+}
+
+/**
+ * WITHDRAW an agent's scratch — the agent-class exit git has always had
+ * (`git merge --abort`) and Warpline did not (soundness audit 2026-07-31, C-10;
+ * P1 remediation "agent-class `abandon` verb").
+ *
+ * THE WEDGE THIS OPENS. After a KNOT — or after a crash between the weave's ref
+ * advance and `clearScratch` — the scratch still holds a sealed proposal that
+ * `admit` answers with NOOP (it is already selvage history, or it is contested)
+ * while `fork` REFUSES with the clobber guard. Both doors are agent-class, both
+ * are closed, and the only verb that clears scratch as a side effect (`resolve`)
+ * is HUMAN_ONLY. An all-agent swarm therefore halted on its first genuine
+ * conflict — the exact scenario the product exists to serve. Worse, the clobber
+ * guard's own prose named `abandon` as the way out, and no such verb existed.
+ *
+ * WHAT IT DOES, AND ONLY THIS: clears `.warpline/refs/scratch/<agentId>`.
+ *
+ *   - SEALED WORK IS NEVER LOST. The strand stays in the ledger (append-only;
+ *     nothing here deletes), its state stays in the store, its bytes stay in the
+ *     object store, and it stays restorable by pickId forever
+ *     (`warpline restore pick:<id> --to <dir>`). `fabric verify` already reports
+ *     it as an ABANDONED HEAD and always did: `abandonedHeads` is computed from
+ *     DAG heads that no `refs/heads/*` entry names (verify.ts:508-511) and
+ *     `listRefs` reads refs/heads ONLY — a scratch ref never suppressed the
+ *     report, so clearing one cannot change it. Legal, visible, recoverable.
+ *   - AN OPEN KNOT IS LEFT OPEN. The payload sidecar is not read for mutation,
+ *     not deleted, not marked resolved; the other side (the selvage) does not
+ *     move; no weave is sealed and no `resolves` envelope is written. A KNOT is
+ *     a human's decision and abandoning must not silently make it. The still-open
+ *     payload ids are RETURNED so the withdrawal is legible rather than silent.
+ *
+ * IDEMPOTENT: no scratch is not an error — `abandoned:false` and exit 0. A cold
+ * agent that retries its own exit must not be handed a refusal for succeeding.
+ */
+export async function abandonNative(root: string, agentId: string): Promise<AbandonNativeResult> {
+  const wdir = warplineDirOf(root);
+  return withFabricLock(root, () => {
+    const existing = readScratch(root, agentId);
+    if (existing === null) {
+      return { agentId, abandoned: false, abandonedPick: null, sealedProposal: false, openKnotPayloadIds: [] };
+    }
+    let sealedProposal = false;
+    let openKnotPayloadIds: string[] = [];
+    if (existing.startsWith('pick:')) {
+      try {
+        const strand = readFabric(wdir).find((s) => s.pickId === existing);
+        // The scratch tip is a PROPOSAL (vs the fork base it was minted at) only
+        // when this principal authored it — keyed exactly as the daemon's
+        // `status` handler and the fork clobber guard key it.
+        sealedProposal = !!strand && strand.authoredBy?.agentId === agentId;
+        if (sealedProposal && strand) {
+          openKnotPayloadIds = listKnotPayloads(root)
+            .filter((p) => p.ours.agentId === agentId && p.ours.stateId === strand.stateId)
+            .map((p) => p.payloadId)
+            .sort();
+        }
+      } catch {
+        /* the REPORT degrades; the withdrawal itself must never be blocked by it */
+      }
+    }
+    clearScratch(root, agentId);
+    return { agentId, abandoned: true, abandonedPick: existing, sealedProposal, openKnotPayloadIds };
   });
 }

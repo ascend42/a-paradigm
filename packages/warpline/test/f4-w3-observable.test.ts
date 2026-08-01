@@ -94,7 +94,11 @@ describe('#f4-classifier — W3 (escalation-violation) is OBSERVABLE, so FG-1 ca
     expect(surface).not.toContain('resolve');
     expect(surface).not.toContain('stake');
     expect(surface).not.toContain('backup');
-    // and the CLI map traces resolve for MEASUREMENT — that is not enforcement.
+    // and the CLI map traces resolve for MEASUREMENT. Since audit C-11 the CLI
+    // ALSO enforces: #agent-shell refuses the human-class verbs whenever
+    // $WARPLINE_AGENT_ID marks the shell as an agent's (see agent-shell-gate.
+    // test.ts). Measurement and enforcement are now both present on this arm —
+    // the trace row is emitted BEFORE the refusal so W3 can still see it.
     expect(CLI_VERB_MAP.resolve).toBe('resolve');
   });
 

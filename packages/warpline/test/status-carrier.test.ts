@@ -91,7 +91,11 @@ describe('#warplined status — the orientation carrier tracks the cycle, includ
     fs.writeFileSync(path.join(root, file), SUBJECT_EDIT, 'utf8');
     await call('warpline_propose', { intent: 'subject: pivot returns 7', worktree: root });
     const proposed = await status();
-    expect(proposed.nextLegalVerbs).toEqual(['admit']);
+    // C-10: admitting is still the GOAL and stays first; `abandon` rides second
+    // because this position is also the post-crash wedge (scratch already in
+    // selvage history ⇒ admit NOOPs forever while fork refuses back to it).
+    expect(proposed.nextLegalVerbs).toEqual(['admit', 'abandon']);
+    expect(proposed.nextLegalVerbs[0]).toBe('admit');
     expect(proposed.position.proposalSealed).toBe(true);
     expect(proposed.position.behindSelvage).toBe(false);
 
@@ -100,7 +104,8 @@ describe('#warplined status — the orientation carrier tracks the cycle, includ
     await rivalAdvance({ root, file });
     const stale = await status();
     expect(stale.position.behindSelvage).toBe(true);
-    expect(stale.nextLegalVerbs).toEqual(['admit']);
+    expect(stale.nextLegalVerbs).toEqual(['admit', 'abandon']);
+    expect(stale.nextLegalVerbs[0]).toBe('admit');
     expect(stale.position.knotOpen).toBe(false);
 
     // the admit KNOTs.
@@ -112,8 +117,14 @@ describe('#warplined status — the orientation carrier tracks the cycle, includ
     // THE REGRESSION: the carrier must now agree with the refusal's ladder.
     const knotted = await status();
     expect(knotted.position.knotOpen).toBe(true);
-    expect(knotted.nextLegalVerbs).toEqual(['knot.show']);
+    // THE PROPERTY THIS TEST EXISTS FOR, unchanged by C-10: a contested agent
+    // is never pointed back at `admit` — re-admitting unchanged is the W1 the
+    // classifier scores wasted. What C-10 adds is a SECOND door, so the
+    // position is not a dead end for an all-agent swarm; the work order stays
+    // the instruction read first.
     expect(knotted.nextLegalVerbs).not.toContain('admit');
+    expect(knotted.nextLegalVerbs[0]).toBe('knot.show');
+    expect(knotted.nextLegalVerbs).toEqual(['knot.show', 'abandon']);
     // and it must say WHY, or the agent has no reason not to retry.
     expect(knotted.nextBecause).toMatch(/escalate|human/i);
 

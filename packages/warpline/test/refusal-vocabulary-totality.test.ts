@@ -20,6 +20,7 @@ import type { AdmitStatus } from '../src/fabric/admit.js';
 import type { Refusal, RefusalNextStep } from '../src/fabric/refusal.js';
 import { VERB_DESCRIPTORS, toolNameOf, agentSurfaceVerbs } from '../src/daemon/descriptors.js';
 import { DAEMON_VERBS, type DaemonVerb } from '../src/daemon/protocol.js';
+import { agentShellRefusal } from '../src/agent-shell.js';
 
 /**
  * Steps whose verb is NOT an agent-callable daemon verb by design: human-class
@@ -115,16 +116,35 @@ function emittedRefusals(): Array<{ site: string; refusal: Refusal | null; steps
     // native.ts fork clobber guard — DERIVED from NEXT_LEGAL_VERBS since D-6b,
     // so both positions it can answer are pinned (asserted live in
     // native-sequencing-refusals.test.ts).
-    { site: 'native: fork clobber guard (unjudged proposal)', steps: [{ verb: 'admit', params: {}, requires: [], principal: 'agent' }] },
+    // C-10: both positions now carry the withdrawal door SECOND. These pins are
+    // literals, so they passed unchanged when `abandon` landed — the live
+    // assertions in native-sequencing-refusals.test.ts are what caught the
+    // drift; keeping the mirror honest is what keeps THIS file's inventory
+    // (and therefore its param/phantom checks) covering the real ladders.
+    {
+      site: 'native: fork clobber guard (unjudged proposal)',
+      steps: [
+        { verb: 'admit', params: {}, requires: [], principal: 'agent' },
+        { verb: 'abandon', params: {}, requires: [], principal: 'agent' },
+      ],
+    },
     {
       site: 'native: fork clobber guard (KNOT open)',
-      steps: [{ verb: 'knot.show', params: { selector: 'knotPayload:v1:abc' }, requires: [], principal: 'agent' }],
+      steps: [
+        { verb: 'knot.show', params: { selector: 'knotPayload:v1:abc' }, requires: [], principal: 'agent' },
+        { verb: 'abandon', params: {}, requires: [], principal: 'agent' },
+      ],
     },
     // pick.ts inline ENGINE throws (asserted live in the R2 gate tests)
     { site: 'pick: corrupt config (escalate)', steps: [] },
     { site: 'pick: gate crash', steps: [{ verb: 'pick', params: { ref: 'WORKTREE' }, requires: [], principal: 'agent' }] },
     // server.ts boundary AUTH ladder (PW-3c)
     { site: 'daemon: AUTH', steps: [{ verb: 'daemon.token.mint', params: {}, requires: ['name', 'kind'], principal: 'human' }] },
+    // C-11 #agent-shell: the CLI's human-class gate. EMPTY by design and
+    // inventoried so it stays empty — an empty next[] means "escalate", and
+    // naming the human verb here would invite the retry that IS the violation.
+    // Built by the real builder below, not pinned as a literal.
+    { site: 'cli: agent-shell human-class gate', steps: [...agentShellRefusal().next] },
     // the two skin-built refusals (mcp-skin-spec D3)
     { site: 'mcp: daemon-down', steps: [{ verb: 'daemon.start', params: {}, requires: [], principal: 'human' }] },
   ];

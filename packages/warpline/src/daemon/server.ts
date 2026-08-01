@@ -41,6 +41,7 @@ import {
   proposeNative,
   admitNative,
   resolveNative,
+  abandonNative,
 } from '../fabric/native.js';
 import { shadowAdmit, readShadowVerdicts } from '../fabric/shadow.js';
 import { readKnotPayload, listKnotPayloads } from '../fabric/knot-payload.js';
@@ -386,6 +387,11 @@ export async function startDaemon(root: string, opts: StartDaemonOptions = {}): 
           ...(bool(params, 'noRestore') ? { noRestore: true } : {}),
         });
       }
+      case 'abandon':
+        // SERVER-STAMPED: an agent may only withdraw its OWN scratch — there is
+        // no target param, so `abandon` can never reach across principals (the
+        // C-10 exit must not become a way to orphan someone else's proposal).
+        return abandonNative(r, who.principal);
       case 'knot.show': {
         const selector = str(params, 'selector');
         if (!selector) throw new RpcFailure('BAD_REQUEST', 'knot.show needs params.selector');

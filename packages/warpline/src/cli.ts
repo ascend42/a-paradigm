@@ -49,7 +49,9 @@ import {
   proposeNative,
   admitNative,
   resolveNative,
+  abandonNative,
 } from './fabric/native.js';
+import { checkHumanClass } from './agent-shell.js';
 import { createClaim, persistClaim, type CreateClaimInput } from './fabric/claim.js';
 import { resolveKnot } from './fabric/resolve.js';
 import { readKnotPayload, type KnotPayload, type ContestedUnit } from './fabric/knot-payload.js';
@@ -85,6 +87,36 @@ if (!process.env.WARPLINE_DEBUG) {
 }
 
 const program = new Command();
+
+/**
+ * THE CLI HALF OF THE HUMAN-CLASS LAW (audit C-11 / Aegis M-1) — #agent-shell
+ * decides, this records and throws.
+ *
+ * Ordering is load-bearing and copied from the MCP skin's D-2 fix: the ATTEMPT
+ * is written to the f4 trace BEFORE the refusal propagates, because W3
+ * (escalation-violation) is computed from rows — a violation that is refused but
+ * unrecorded makes "zero W3 marks" a predicate that cannot fail. On an UNMARKED
+ * (human) shell this returns immediately having done nothing at all: no trace
+ * row, no throw, no observable difference from before the gate existed.
+ */
+async function gateHumanClass(spec: {
+  root: string;
+  /** the CLI command path, matched against HUMAN_ONLY_CLI_PATHS. */
+  cliPath: string;
+  /** the daemon verb to RECORD the attempt under (CLI_VERB_MAP's value). */
+  verb: string;
+  target: string | null;
+  /** parsed options, keyed by HUMAN_ONLY_ADMIT_FLAGS param names. */
+  flags?: Record<string, unknown>;
+}): Promise<void> {
+  const violation = checkHumanClass({ cliPath: spec.cliPath, ...(spec.flags ? { flags: spec.flags } : {}) });
+  if (!violation) return;
+  // traceCli emits the row (refusal included) and RE-THROWS unchanged, so
+  // fail() still owns the stderr refusal line and the verdict-keyed exit.
+  await traceCli({ root: spec.root, verb: spec.verb, target: spec.target, principal: violation.agentId }, () => {
+    throw new RefusedError(violation.refusal, violation.message);
+  });
+}
 
 program
   .name('warpline')
@@ -320,6 +352,18 @@ program
         // per-agent worktree seal attributed strands during the multi-agent dogfood
         // (unsigned self-assertion — attribution data, not authenticated identity).
         const agentId = options.agent ?? process.env.WARPLINE_AGENT_ID ?? undefined;
+        // C-11: `pick --accept-risk` is the R2 gate's OVERRIDE DOOR, and #pick's
+        // own refusal ladder already marks it principal:'human'. It was reachable
+        // from any shell, which meant an agent could wave through the very
+        // verdict the R2 gate exists to refuse. Recorded under the CLI verb
+        // `pick` (there is no daemon `pick` — it stays off CLI_VERB_MAP).
+        await gateHumanClass({
+          root,
+          cliPath: 'pick',
+          verb: 'pick',
+          target: cliTarget({ ref: options.ref, agentId }, { acceptRisk: options.acceptRisk }),
+          flags: { acceptRisk: options.acceptRisk },
+        });
         const result = await recordPick(root, {
           cwd: root,
           intent: options.intent,
@@ -599,6 +643,16 @@ program
           noRestore: options.restore === false,
         },
       );
+      // C-11: the override flags are human-class on every skin (the daemon
+      // refuses them for an agent token; the MCP schema omits them outright).
+      // An agent shell must never accept its own breach or risk.
+      await gateHumanClass({
+        root,
+        cliPath: 'admit',
+        verb: 'admit',
+        target: admitTarget,
+        flags: { acceptBreach: options.acceptBreach, acceptRisk: options.acceptRisk },
+      });
       if (options.shadow) {
         // the traced value is the AdmitResult itself, not the {result,row}
         // wrapper — the would-refuse verdict (and its refusal) lives there.
@@ -689,6 +743,48 @@ program
   });
 
 program
+  .command('abandon')
+  .description(
+    "THE AGENT-CLASS EXIT (audit C-10) — withdraw an agent's scratch so it can fork again. Clears .warpline/refs/scratch/<agentId> and NOTHING else: the sealed proposal stays in the ledger as an abandoned head (restorable forever with `warpline restore pick:<id>`), the selvage does not move, and an open KNOT stays OPEN — abandoning concedes a contest, it never resolves one. Idempotent: no scratch is not an error.",
+  )
+  .argument('<agentId>', 'the agent whose scratch is being withdrawn')
+  .option('--json', 'emit the abandon result as JSON')
+  .action(async (agentId: string, options: { json?: boolean }) => {
+    try {
+      const root = await resolveRoot();
+      const result = await traceCli(
+        { root, verb: 'abandon', target: cliTarget({ agentId }), principal: agentId },
+        () => abandonNative(root, agentId),
+      );
+      if (options.json) {
+        process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+        return;
+      }
+      if (!result.abandoned) {
+        process.stdout.write(`ABANDON  ${agentId}  →  no-op (no scratch ref to withdraw)\n`);
+        return;
+      }
+      const lines: string[] = [];
+      lines.push(`ABANDON  ${agentId}  →  scratch withdrawn`);
+      lines.push(`was       ${result.abandonedPick}`);
+      if (result.sealedProposal) {
+        lines.push(`sealed    the proposal is NOT lost — it stays in the ledger as an abandoned head`);
+        lines.push(`          → warpline restore ${result.abandonedPick} --to <dir>`);
+      }
+      if (result.openKnotPayloadIds.length) {
+        lines.push(
+          `knot      ${result.openKnotPayloadIds.length} work order(s) STILL OPEN — withdrawing conceded the contest, it did not resolve it:`,
+        );
+        for (const id of result.openKnotPayloadIds) lines.push(`          ${id}`);
+      }
+      lines.push(`          → warpline fork ${agentId}`);
+      process.stdout.write(lines.join('\n') + '\n');
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+program
   .command('grade')
   .description("Grade strand confidence against real OUTCOME (the moat): a pick whose symbols a later strand RETIRED/contended is overturned (confidence ↓); one whose symbols held is survived (↑). Updates calibratedConfidence in the ledger + appends the trajectory to .warpline/grades.jsonl, and reports survival by gate-rule prior class (does linked beat independent?).")
   .option('--window <n>', 'later strands required before a pick counts as survived', '2')
@@ -773,6 +869,10 @@ program
           { agentId, ref: options.ref, ours: options.ours, worktree: options.worktree },
           { native: options.native },
         );
+        // C-11: the law that made FG-1 measurable. `resolve` is HUMAN_ONLY on
+        // the daemon and used to be free on the CLI — a security law that held
+        // for an agent on MCP and evaporated for an agent with a shell.
+        await gateHumanClass({ root, cliPath: 'resolve', verb: 'resolve', target: resolveTarget });
         if (options.native) {
           const result = await traceCli(
             { root, verb: 'resolve', target: resolveTarget, principal: agentId },
@@ -1174,6 +1274,8 @@ stakeCmd
   .action(async (selector: string | undefined, options: { json?: boolean }) => {
     try {
       const root = await resolveRoot();
+      // C-11: the stake valve is operator/human class (HUMAN_ONLY_VERBS).
+      await gateHumanClass({ root, cliPath: 'stake', verb: 'stake', target: cliTarget({ selector }) });
       const result = await stake(root, { selector });
       if (options.json) {
         process.stdout.write(JSON.stringify(result, null, 2) + '\n');
@@ -1192,6 +1294,8 @@ stakeCmd
   .action(async (commit: string, options: { json?: boolean }) => {
     try {
       const root = await resolveRoot();
+      // C-11: disaster recovery is the human's act (HUMAN_ONLY_VERBS).
+      await gateHumanClass({ root, cliPath: 'stake recover', verb: 'stake.recover', target: cliTarget({ commit }) });
       const result = await stakeRecover(root, commit);
       if (options.json) {
         process.stdout.write(JSON.stringify(result, null, 2) + '\n');
@@ -1411,6 +1515,9 @@ backupCmd
   .action(async (dest: string, options: { json?: boolean }) => {
     try {
       const root = await resolveRoot();
+      // C-11: custodianship is the human's act, like token minting (Aegis §2.2)
+      // — and a backup copies the whole fabric somewhere the gates do not reach.
+      await gateHumanClass({ root, cliPath: 'backup', verb: 'backup', target: cliTarget({ dest }) });
       const result = await backupFabric(root, dest);
       if (options.json) {
         process.stdout.write(JSON.stringify(result, null, 2) + '\n');

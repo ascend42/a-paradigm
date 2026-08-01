@@ -69,13 +69,12 @@ export function f4TracePathOf(root: string): string {
 }
 
 /**
- * Structural verdict class from a result SHAPE — never from text. Admit-shaped
- * results report 'sealed' or their decision status; propose no-ops report
- * 'noop'; sealing writes report 'sealed'; everything else is a 'read'.
+ * The one classifiable shape, or null when this object carries no verdict.
+ * Kept separate from `resultClassOf` so the SAME rules apply at both depths.
  */
-export function resultClassOf(result: unknown): string | null {
-  if (!result || typeof result !== 'object') return null;
-  const r = result as Record<string, unknown>;
+function classOfShape(value: unknown): string | null {
+  if (!value || typeof value !== 'object') return null;
+  const r = value as Record<string, unknown>;
   const decision = r.decision;
   if (decision && typeof decision === 'object') {
     if (r.sealed === true) return 'sealed';
@@ -84,6 +83,39 @@ export function resultClassOf(result: unknown): string | null {
   }
   if (r.noop === true) return 'noop';
   if ('strand' in r && r.strand) return 'sealed';
+  return null; // no verdict at THIS depth — the caller decides what that means
+}
+
+/**
+ * Structural verdict class from a result SHAPE — never from text. Admit-shaped
+ * results report 'sealed' or their decision status; propose no-ops report
+ * 'noop'; sealing writes report 'sealed'; everything else is a 'read'.
+ *
+ * TWO DEPTHS, exactly as `refusalOf` (refusal.ts) knows two depths — and for
+ * the same reason. The shadow gate answers an ENVELOPE, `{shadow, row, result}`
+ * (daemon server.ts), so a probe that reads only the outer object finds no
+ * `decision` and records the honest-looking but wrong `resultClass: 'read'` for
+ * every shadow KNOT, CLEAN, HELD and FAST_ADMIT there has ever been. That is
+ * not a masking bug — C-16 closed the refusal half — but it makes SHADOW rows
+ * strictly less classifiable than direct ones, and the shadow verdict stream is
+ * the evidence base for the R2 gate-promotion argument. A trace that mislabels
+ * its own rows undermines the thing it exists to measure.
+ *
+ * The class is recorded UNPREFIXED — a shadow KNOT reports 'KNOT' — because the
+ * arm is already recoverable from the row: `shadow` rides in `target` (the
+ * `targetOf` flag list, mcp/server.ts + cli-trace.ts). Prefixing would fork the
+ * classifier's status vocabulary per skin for no added information.
+ *
+ * Bounded at ONE envelope level, like `refusalOf`: a general deep search would
+ * find decisions that are not the caller's own outcome (an archived verdict
+ * inside a knot payload, a tail of shadow rows) and misreport a read as one.
+ */
+export function resultClassOf(result: unknown): string | null {
+  if (!result || typeof result !== 'object') return null;
+  const direct = classOfShape(result);
+  if (direct) return direct;
+  const enveloped = classOfShape((result as { result?: unknown }).result);
+  if (enveloped) return enveloped;
   return 'read';
 }
 
