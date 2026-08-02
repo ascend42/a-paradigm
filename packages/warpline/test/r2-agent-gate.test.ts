@@ -114,6 +114,17 @@ describe('R2 — the real gate for agent-attributed picks', () => {
     expect(rows.at(-1)?.gate).toBe('real');
     expect(rows.at(-1)?.wouldSeal).toBe(true);
     expect(rows.at(-1)?.overridden).toBeUndefined();
+    // VACUITY AUDIT (C-9, 2026-08-01). This case is named "agent CLEAN/
+    // FAST_ADMIT … seals normally", but K2 has NO scratch ref, so its base
+    // FELL BACK to the selvage and `admitDecision` returned FAST_ADMIT
+    // UNCONDITIONALLY — `wouldSeal:true` here was forced by construction and
+    // could not have observed the gate evaluating anything. That is exactly the
+    // FAST_ADMIT stratum C-9 found filling the live verdict stream. The
+    // assertion is kept (the seal behaviour is real) and made HONEST: the row
+    // now states which base produced it, so the forced case is legible instead
+    // of masquerading as a passed gate. The genuinely evaluated arm is the KNOT
+    // below (K, which forked) and test/pick-gate-contested.test.ts.
+    expect(rows.at(-1)?.baseFrom).toBe('selvage');
   }, 120_000);
 
   it('agent KNOT under "real" REFUSES the seal: no strand, selvage unmoved, verdict on the record', async () => {
@@ -140,6 +151,10 @@ describe('R2 — the real gate for agent-attributed picks', () => {
     expect(rows.at(-1)?.gate).toBe('real');
     expect(rows.at(-1)?.wouldSeal).toBe(false);
     expect(rows.at(-1)?.agentId).toBe('K');
+    // …and THIS one was a real re-base judgment: K forked (line ~99), so the
+    // base was its own, not the selvage. The pair of assertions is what makes
+    // the two FAST_ADMIT/KNOT strata distinguishable on the stream (C-9).
+    expect(rows.at(-1)?.baseFrom).toBe('scratch');
   }, 120_000);
 
   it('--accept-risk seals through the hold, and the override is recorded (never silent)', async () => {

@@ -34,7 +34,7 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import { admit, type AdmitOptions, type AdmitStatus, type AdmitConfidence, type AdmitResult } from './admit.js';
+import { admit, type AdmitOptions, type AdmitStatus, type AdmitConfidence, type AdmitResult, type AdmitBaseSource } from './admit.js';
 import type { CoverageCounts } from '../honesty.js';
 
 export const SHADOW_VERDICT_SCHEMA = 'shadowVerdict:v1' as const;
@@ -83,6 +83,16 @@ export interface ShadowVerdictRow {
   /** R2 (additive): true when a would-not-seal verdict was explicitly sealed
    * through via `pick --accept-risk` (never silent — the hold is on the row). */
   overridden?: boolean;
+  /**
+   * C-9 (additive): WHERE the verdict's base came from — see AdmitBaseSource.
+   * `'selvage'` means the gate had NO agent base and FAST_ADMIT was structurally
+   * forced, which is a different fact from "nothing contended" and used to be
+   * indistinguishable from it on this stream. Carried verbatim from the value
+   * `admit` actually decided with (never re-read here — a second reader of the
+   * scratch ref would report what the row's own authority did not use).
+   * Absent on rows recorded before this field existed.
+   */
+  baseFrom?: AdmitBaseSource;
 }
 
 export function shadowDirOf(root: string): string {
@@ -200,6 +210,7 @@ export async function shadowAdmit(
         }
       : {}),
     ...(result.knotPayloadId ? { knotPayloadId: result.knotPayloadId } : {}),
+    ...(result.baseFrom ? { baseFrom: result.baseFrom } : {}),
     ...(meta ? { gate: meta.gate } : {}),
     ...(meta?.acceptRisk && !wouldSeal ? { overridden: true } : {}),
   };

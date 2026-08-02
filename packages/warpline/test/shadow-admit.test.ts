@@ -182,6 +182,11 @@ describe('R1 shadow gate — full pipeline, zero mutation', () => {
       'schemaVersion', 'ts', 'ref', 'agentId', 'status', 'confidence', 'knots',
       'agentChanged', 'otherChanged', 'knotsTotal', 'agentChangedTotal', 'otherChangedTotal',
       'coverage', 'wouldSeal', 'proposedStateId', 'durationMs',
+      // C-9 (2026-08-01): CORE, not OPTIONAL. shadowAdmit runs the GIT-ERA
+      // admit, which resolves a base on every path, so every row minted from
+      // here on names the pointer that base came from. Rows written before the
+      // field existed simply lack it (G1 additive) — this pin governs new rows.
+      'baseFrom',
     ];
     const OPTIONAL = ['escalation', 'claimReport', 'knotPayloadId'];
     for (const row of rows) {

@@ -459,7 +459,14 @@ describe('E2E — an admit WITHOUT a claim is byte-identical to pre-claim behavi
     // refusal:v1 (admitResult:v1) — it rides EVERY result, claim or not, so it
     // is part of the pre-claim baseline rather than claim residue. A sealed
     // FAST_ADMIT refuses nothing, so `refusal` is correctly absent here.
-    expect(Object.keys(r).sort()).toEqual(['decision', 'proposedStateId', 'schemaVersion', 'sealed', 'strand'].sort());
+    // `baseFrom` (C-9, 2026-08-01) is the second sanctioned always-present
+    // field: like schemaVersion it is stamped once at the boundary and rides
+    // EVERY git-era result, claim or not, so it is part of the pre-claim
+    // baseline rather than claim residue.
+    expect(Object.keys(r).sort()).toEqual(
+      ['baseFrom', 'decision', 'proposedStateId', 'schemaVersion', 'sealed', 'strand'].sort(),
+    );
+    expect(r.baseFrom).toBe('selvage'); // A never forked — the C-9 fallback, named
     expect(Object.keys(r.decision).sort()).toEqual(
       ['agentChanged', 'confidence', 'dangling', 'knots', 'otherChanged', 'rebasedOnto', 'status'].sort(),
     );

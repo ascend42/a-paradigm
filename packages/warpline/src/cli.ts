@@ -480,7 +480,7 @@ program
 
 program
   .command('scratch')
-  .description('Fork a per-agent SCRATCH at the current selvage (the optimistic base for multi-writer admission). N agents fork the same selvage with zero contention — what git\'s single shared working tree cannot do.')
+  .description('Fork a per-agent SCRATCH at the current selvage (the optimistic base for multi-writer admission). N agents fork the same selvage with zero contention — what git\'s single shared working tree cannot do. This is ALSO the base the R2 agent gate judges an attributed `pick` against: without it the gate falls back to the selvage and every verdict is FAST_ADMIT by construction (C-9). For the NATIVE cycle use `warpline fork` instead — the two mint different base epochs and are not interchangeable.')
   .argument('<agentId>', 'the agent identity owning this scratch')
   .action(async (agentId: string) => {
     try {

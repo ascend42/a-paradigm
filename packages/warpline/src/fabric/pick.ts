@@ -38,7 +38,7 @@ import { withFabricLock } from './lock.js';
 import { readWarplineConfig, type WarplineConfig } from './config.js';
 import { shadowAdmit, type ShadowVerdictRow } from './shadow.js';
 import { maybeAutoStakeOnSeal } from './stake.js';
-import { refuse, type Refusal, type RefusalNextStep } from './refusal.js';
+import { refuse, RefusedError, type Refusal, type RefusalNextStep } from './refusal.js';
 import type { Strand } from './strand.js';
 
 export interface RecordPickOptions {
@@ -150,6 +150,37 @@ export function pickGateRefusal(row: ShadowVerdictRow, under: Refusal | undefine
   });
 }
 
+/**
+ * RE-HOME a refusal the pipeline itself already typed (a thrown RefusedError)
+ * onto gate:'pick'. That re-homing is the WHOLE adaptation the pick gate needs:
+ * the code, the retriability and the ladder were built by the boundary that
+ * actually refused, and they are already the honest account of how to recover.
+ *
+ * Why this exists (C-9). The fail-closed catch below used to overwrite EVERY
+ * pipeline failure — typed or not — with ENGINE / 'retry-identical' / a
+ * `next[]` naming the identical `pick` call. For a genuinely transient failure
+ * (lock contention, the case the comment there describes) that is correct. For
+ * a DETERMINISTIC prerequisite refusal it is the precise laundering PW-2 and the
+ * RefusedError class were built to stop: it discards a 'retry-corrected' ladder
+ * that would have worked and replaces it with an instruction to repeat a call
+ * that cannot ever succeed — the infinite losing retry the F4 classifier scores
+ * as W1. Built through `refuse()` like every other refusal in the package: no
+ * module builds a Refusal literal (refusal.ts).
+ */
+function pickPipelineRefusal(under: Refusal): Refusal {
+  return refuse({
+    code: under.code,
+    verdict: under.verdict,
+    gate: 'pick',
+    retriable: under.retriable,
+    contested: under.contested,
+    contestedTotal: under.contestedTotal,
+    pointers: under.pointers,
+    next: under.next,
+    ...(under.override ? { override: under.override } : {}),
+  });
+}
+
 export interface PickResult {
   /** true when NEITHER meaning NOR bytes changed since selvage — nothing recorded
    * (T-2026-07-18-002: NOOP ⟺ empty deltas AND empty renames AND tree unchanged
@@ -188,6 +219,19 @@ export async function recordPick(root: string, opts: RecordPickOptions): Promise
   //     never silent). FAIL-CLOSED for agents: a real gate that crashes (or a
   //     toggle file too corrupt to read) refuses rather than silently waving
   //     an agent write through. Humans/unattributed picks: byte-identical to R1.
+  //
+  // THE GATE'S BASE PREREQUISITE, stated because nothing else states it (C-9).
+  // #pick has no fork step — by design; it is the SINGLE-WRITER git-coexistence
+  // door (see the module header), and the multi-writer cycle is fork → propose →
+  // admit. So the verdict below is only ever a real RE-BASE judgment when a
+  // SCRATCH ref already pins this agent's base: `warpline scratch <agentId>`
+  // (forkScratch — a stateId base, the epoch this path judges in). Without one,
+  // admit.ts falls back to the selvage, base === selvage, and FAST_ADMIT is
+  // forced structurally — every verdict this gate has ever recorded on the live
+  // fabric (42 rows: 27 FAST_ADMIT, 15 NOOP) was reached that way. The row now
+  // carries `baseFrom` so the two cases are distinguishable on the record.
+  // WITH one, the gate produces genuine KNOT / CLEAN / DANGLE / HELD verdicts —
+  // pinned by test/r2-agent-gate.test.ts and test/pick-gate-contested.test.ts.
   {
     let cfg: WarplineConfig | null = null;
     try {
@@ -234,6 +278,15 @@ export async function recordPick(root: string, opts: RecordPickOptions): Promise
       } catch (err) {
         if (err instanceof PickGateRefusal) throw err;
         if (gateReal) {
+          // A TYPED refusal from inside the pipeline already states what
+          // refused and what to call instead — carry it (re-homed to
+          // gate:'pick'), never overwrite it with the ENGINE default below.
+          // C-9: the one live producer is the git-era admit meeting a NATIVE
+          // pickId scratch, i.e. an agent that followed `status` → `fork` and
+          // then had an attributed pick fire under it.
+          if (err instanceof RefusedError) {
+            throw new PickGateRefusal(err.message, undefined, pickPipelineRefusal(err.refusal));
+          }
           // fail CLOSED: an enforced gate that cannot produce a verdict refuses.
           throw new PickGateRefusal(
             `warpline: pick refused — the R2 agent gate is enforced but the verdict pipeline failed (${(err as Error).message}). ` +

@@ -15,6 +15,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import * as fs from 'node:fs';
 import { forkNative, proposeNative, admitNative, resolveNative } from '../src/fabric/native.js';
+import { admit } from '../src/fabric/admit.js';
+import { WORKTREE_REF } from '../src/absorb.js';
 import { RefusedError } from '../src/fabric/refusal.js';
 import { writeScratchRef } from '../src/fabric/scratch.js';
 import { warplineDirOf, writeSelvage } from '../src/fabric/fabric.js';
@@ -67,6 +69,30 @@ describe('PW-2 — sequencing mistakes refuse with typed ladders, never ENGINE d
     expect(e.refusal.code).toBe('UNSUPPORTED');
     expect(e.refusal.retriable).toBe('retry-corrected');
     expect(e.refusal.next).toEqual([{ verb: 'fork', params: {}, requires: [], principal: 'agent' }]);
+  });
+
+  it('C-9 — git-era admit over a NATIVE pickId scratch → UNSUPPORTED / retry-corrected / ladder admit --native', async () => {
+    // The MIRROR of the case directly above, and the one PW-2's site table
+    // missed. `warpline fork` (the first step the agent-facing descriptors
+    // teach) leaves a pickId in scratch; the git-era admission path handed that
+    // raw value to store.loadState, got null, and reported it through the
+    // "base cannot be loaded — repair .warpline/" guard: an untyped Error that
+    // every skin's catch-all collapsed to ENGINE / retry-identical / prose-only
+    // recovery. scratch.ts's own contract says consumers dispatch on the
+    // `pick:`/`state:` prefix and never silently coerce — so dispatch, and name
+    // the call that actually works.
+    await proposeNative(root, { worktree: root, agentId: 'genesis', intent: 'genesis' });
+    await admitNative(root, { worktree: root, agentId: 'genesis', noRestore: true });
+    forkNative(root, 'crossed');
+    const e = await refusedBy(admit(root, { cwd: root, agentId: 'crossed', ref: WORKTREE_REF }));
+    expect(e.refusal.code).toBe('UNSUPPORTED');
+    expect(e.refusal.retriable).toBe('retry-corrected');
+    expect(e.refusal.next).toEqual([
+      { verb: 'admit', params: { native: 'true' }, requires: [], principal: 'agent' },
+    ]);
+    // The prose must not repeat the false diagnosis the old Error carried.
+    expect(e.message).not.toMatch(/repair \.warpline/);
+    expect(e.message).toContain('--native');
   });
 
   it('resolve with no selvage → NOT_FOUND / never (nothing to resolve against)', async () => {

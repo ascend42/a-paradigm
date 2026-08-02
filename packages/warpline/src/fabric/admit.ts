@@ -60,7 +60,7 @@ import { classifyMergePaths, type MergeCoverage } from '../honesty.js';
 import { readClaim, evaluateClaim, recordClaimEvaluation, type Claim, type ClaimEvaluation } from './claim.js';
 import { readGradeSidecar, symbolSurvivalIndex, evaluateEscalation, recordGradeEscalation, type GradeEscalation } from './grade.js';
 import { maybeAutoStakeOnSeal } from './stake.js';
-import { refuse, contestedOf, type Refusal, type RefusalNextStep } from './refusal.js';
+import { refuse, contestedOf, RefusedError, type Refusal, type RefusalNextStep } from './refusal.js';
 
 export type AdmitStatus = 'NOOP' | 'FAST_ADMIT' | 'CLEAN' | 'KNOT' | 'DANGLE' | 'CLAIM-BREACH' | 'HELD';
 export type AdmitConfidence = 'linked' | 'independent';
@@ -230,6 +230,29 @@ export interface AdmitEscalationReport extends GradeEscalation {
 
 export const ADMIT_RESULT_SCHEMA = 'admitResult:v1' as const;
 
+/**
+ * WHERE the git-era admission read its BASE — the side of the three-way verdict
+ * that says "what this principal branched from".
+ *
+ *   'scratch'  a per-agent scratch ref supplied it (`warpline scratch <agentId>`).
+ *              Only here can the verdict be a genuine RE-BASE judgment, because
+ *              only here can base ≠ selvage.
+ *   'selvage'  NO scratch existed, so the base FELL BACK to the selvage. Then
+ *              `admitDecision` compares selvage.stateId === base.stateId at
+ *              line ~129 and returns FAST_ADMIT unconditionally: KNOT, DANGLE,
+ *              CLEAN and HELD are unreachable BY CONSTRUCTION, not by the
+ *              absence of contention.
+ *   'none'     no base and no selvage — a genuinely empty fabric (genesis).
+ *
+ * C-9 is the reason this is on the record rather than inferable. Every one of
+ * the 42 live shadow verdicts is FAST_ADMIT or NOOP, and nothing distinguished
+ * "FAST_ADMIT because nothing contended" from "FAST_ADMIT because the gate had
+ * no base to contend against" — so an empty K3 denominator could not be read as
+ * mechanical or behavioural without re-deriving the answer from source. It can
+ * now be read off the row.
+ */
+export type AdmitBaseSource = 'scratch' | 'selvage' | 'none';
+
 export interface AdmitResult {
   /**
    * G1 version stamp. An admission result crosses the daemon wire and lands in
@@ -283,6 +306,14 @@ export interface AdmitResult {
    * without parsing prose.
    */
   refusal?: Refusal;
+  /**
+   * C-9 (G1-additive): which pointer supplied the admission BASE — see
+   * AdmitBaseSource. Emitted by the GIT-ERA path (`admit`), the only one with a
+   * selvage FALLBACK and therefore the only one where the answer is not already
+   * implied: the native path (`admitNative`) refuses outright without a scratch
+   * base, so it has nothing to disambiguate and carries no field.
+   */
+  baseFrom?: AdmitBaseSource;
 }
 
 /**
@@ -566,8 +597,47 @@ async function admitCore(root: string, opts: AdmitOptions): Promise<AdmitResultB
   // The read-decide-seal critical section runs under the fabric lock so concurrent
   // admits can't lose a write (Reviewer C1). CLEAN materialization (git ops) runs
   // inside too, so the decision and the seal are atomic against the live selvage.
-  return withFabricLock(root, async () => {
-    const baseId = readScratch(root, opts.agentId) ?? readSelvage(wdir);
+  // WHERE the admission BASE came from — set inside the lock at the one
+  // expression that decides it (never re-derived afterwards), and folded onto
+  // the result at the boundary below. See AdmitResult.baseFrom for why it exists.
+  let baseFrom: AdmitBaseSource = 'none';
+  const body = await withFabricLock(root, async (): Promise<AdmitResultBody> => {
+    // The scratch ref is DUAL-EPOCH (scratch.ts:38-44): the git-era flow stores a
+    // stateId (`state:`), the native flow a pickId (`pick:`), and the documented
+    // contract is that "consumers dispatch on the prefix; a mismatch fails
+    // closed, never silently coerces." This reader did NEITHER. It handed the
+    // raw value to store.loadState — which answers null for a pickId — and the
+    // null fell through to the `base cannot be loaded` guard below, whose
+    // message diagnoses a corrupt states cache and tells the caller to
+    // "repair .warpline/". The base is not corrupt: it is a NATIVE base being
+    // read by the GIT-ERA reader.
+    //
+    // C-9 (soundness audit 2026-07-31). The practical shape is worse than a
+    // wrong sentence. `fork` is the only scratch-minting verb ON THE AGENT
+    // SURFACE (VERB_DESCRIPTORS has no `scratch`), so after the very first step
+    // the descriptors teach, an agent-attributed #pick hit this Error, the R2
+    // gate's fail-closed catch rewrote it as ENGINE / 'retry-identical', and the
+    // ladder instructed an infinite losing retry — with NO verdict row recorded,
+    // because the pipeline never reached a decision. That is exactly the
+    // pre-PW-2 dead-end class (RefusedError's own docstring names it), surviving
+    // at the one prerequisite boundary PW-2 did not enumerate: the MIRROR of
+    // native.ts's "propose over a legacy stateId scratch" refusal.
+    //
+    // Fail closed, and say the true thing: the work lives on the native path,
+    // and the native admit is the corrected call.
+    const scratchBase = readScratch(root, opts.agentId);
+    if (scratchBase !== null && scratchBase.startsWith('pick:')) {
+      throw new RefusedError(
+        refuse({
+          code: 'UNSUPPORTED',
+          retriable: 'retry-corrected',
+          next: [{ verb: 'admit', params: { native: 'true' }, requires: [], principal: 'agent' }],
+        }),
+        `warpline: admit — scratch for ${JSON.stringify(opts.agentId)} holds ${scratchBase} (a NATIVE pickId base, minted by \`warpline fork\`); the git-era admission path bases on a stateId and cannot judge against it. Admit the native proposal instead: \`warpline admit ${opts.agentId} --native\`.`,
+      );
+    }
+    const baseId = scratchBase ?? readSelvage(wdir);
+    baseFrom = scratchBase !== null ? 'scratch' : baseId !== null ? 'selvage' : 'none';
     const selvageId = readSelvage(wdir);
     const base = baseId ? store.loadState(baseId) : undefined;
     const selvage = selvageId ? store.loadState(selvageId) : undefined;
@@ -946,4 +1016,7 @@ async function admitCore(root: string, opts: AdmitOptions): Promise<AdmitResultB
       refusal: meaningRefusal(decision.status, decision, proposed.stateId, opts.agentId, shadow ? undefined : knotPayloadId),
     });
   });
+  // ONE fold point: every return site above stays byte-identical to its
+  // pre-`baseFrom` form, and no builder can forget the field or invent one.
+  return { ...body, baseFrom };
 }

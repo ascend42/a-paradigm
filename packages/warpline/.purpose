@@ -1206,6 +1206,33 @@ components:
       was well-formed; lock contention is the common cause). Constructor arg is
       optional so external callers still compile; every throw site here populates
       it.
+      C-9 (soundness audit 2026-07-31, closed-as-diagnosed 2026-08-01) — THE
+      GATE'S BASE, and the two defects around it. #pick has NO fork step BY
+      DESIGN: it is the SINGLE-WRITER git-coexistence door, and the multi-writer
+      cycle is fork→propose→admit (#native-write-path). So the R2 verdict is a
+      real RE-BASE judgment only when a SCRATCH ref already pins this agent's
+      base — `warpline scratch <agentId>` (#scratch forkScratch, a `state:`
+      base). With none, #admit falls back to the selvage, base === selvage, and
+      admitDecision returns FAST_ADMIT UNCONDITIONALLY: KNOT/CLEAN/DANGLE/HELD
+      are unreachable BY CONSTRUCTION, not for want of contention. That is how
+      all 42 live verdict rows (27 FAST_ADMIT, 15 NOOP) were produced. The audit
+      concluded from this that the gate was DEAD; it is not — with a base it
+      produces genuine KNOTs, demonstrated end-to-end against the #f4-seed
+      engine functions in test/pick-gate-contested.test.ts and pinned since R2
+      in test/r2-agent-gate.test.ts. It is UNDISCOVERABLE, not dead: nothing in
+      #pick, in `pick --help`, or in the R2 record named the base prerequisite,
+      and `scratch` is on NO taught surface (it is not a DaemonVerb, so it is
+      absent from VERB_DESCRIPTORS, the MCP tool set and CLI_VERB_MAP). Whether
+      an AGENT should be able to reach this gate is therefore an OPEN FOUNDER
+      DECISION — see #warpline-descriptors — and was deliberately not decided
+      here, because adding a verb to the agent surface moves descriptorsId.
+      (2) The gate's fail-closed catch used to overwrite EVERY pipeline failure
+      with ENGINE/'retry-identical'. That is right for a transient (lock
+      contention) and is the pre-PW-2 dead-end for a DETERMINISTIC prerequisite
+      refusal: it discards a working 'retry-corrected' ladder and instructs an
+      infinite losing retry. A thrown RefusedError is now re-homed to gate:'pick'
+      via pickPipelineRefusal with its code, retriability and ladder intact; only
+      an UNTYPED throw still becomes ENGINE/'retry-identical'.
     type: module
     components:
       - "#refusal"
@@ -1230,6 +1257,16 @@ components:
       writeScratchRef stores a PICKID (`warpline fork` mints it at the selvage tip;
       #native-write-path propose advances it per sealed scratch strand). Consumers
       dispatch on the pick:/state: prefix; a mismatch fails closed, never coerces.
+      C-9 (2026-08-01): that contract had exactly ONE conforming direction.
+      #native-write-path refused a `state:` scratch (UNSUPPORTED/retry-corrected/
+      fork) from PW-2 onward; the GIT-ERA #admit did neither — it handed a
+      `pick:` value straight to store.loadState, read the null as "base cannot be
+      loaded", and reported a corrupt states cache with an instruction to repair
+      .warpline/. Wrong diagnosis, untyped throw, and (through the R2 gate's
+      catch) an ENGINE/'retry-identical' ladder — reached by an agent that had
+      done nothing but follow `status` → `fork`, since `fork` is the ONLY
+      scratch-minting verb on the agent surface. Now symmetric: UNSUPPORTED/
+      retry-corrected naming the other path's admit, on both sides.
       CAS (PW-10, optional `expect` param): a conditional write throws on
       current≠expected instead of silently clobbering — the loud-failure half
       of the fork clobber guard (two same-principal sessions could orphan each
@@ -1854,6 +1891,15 @@ components:
       test/shadow-admit.test.ts. Rows are LOCAL telemetry (gitignored); shadow
       never pollutes the real claims/grades calibration streams — its judgments
       ride the row.
+      C-9 (ADDITIVE, 2026-08-01): the row carries `baseFrom` —
+      'scratch' | 'selvage' | 'none' — the pointer #admit actually read its BASE
+      from, carried verbatim from the AdmitResult (never re-read here; a second
+      reader of the scratch ref would report something the row's own authority
+      did not use). 'selvage' means the gate had NO agent base and FAST_ADMIT was
+      forced structurally, which is a different fact from "nothing contended" and
+      was previously indistinguishable from it on this stream — so an empty K3
+      denominator could not be read as mechanical or behavioural without
+      re-deriving the answer from source. Absent on pre-C-9 rows.
     type: module
     tags: [warpline, native-first, telemetry]
     components:
