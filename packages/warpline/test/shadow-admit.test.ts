@@ -187,12 +187,20 @@ describe('R1 shadow gate — full pipeline, zero mutation', () => {
       // here on names the pointer that base came from. Rows written before the
       // field existed simply lack it (G1 additive) — this pin governs new rows.
       'baseFrom',
+      // #git-counterfactual: CORE for the same reason. Every verdict records
+      // WHAT GIT WOULD HAVE DECIDED, and a row that simply omits the field is
+      // the exact ambiguity baseFrom exists to kill — "git said clean" and "we
+      // never asked git" are opposite facts. Rows written before the field
+      // existed lack it (G1 additive); this pin governs new rows.
+      'gitCounterfactual',
     ];
     const OPTIONAL = ['escalation', 'claimReport', 'knotPayloadId'];
     for (const row of rows) {
       const keys = Object.keys(row);
       for (const k of CORE) expect(keys).toContain(k);
       for (const k of keys) expect([...CORE, ...OPTIONAL]).toContain(k);
+      // …and `unavailable` is REQUIRED inside it, present even when git decided.
+      expect(Object.keys(row.gitCounterfactual!)).toContain('unavailable');
     }
     expect(fs.existsSync(shadowVerdictsPathOf(repo.dir))).toBe(true);
   });

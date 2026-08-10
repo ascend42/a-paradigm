@@ -7,6 +7,8 @@
  *   warpline weave --preview <A> <B> [--json]      THE PRE-MERGE FORECAST (meaning)
  *   warpline consolidate <refs...> [--base R]      THE N-WAY FOLD FORECAST (meaning)
  *   warpline status [--json]                       working-tree MEANING vs HEAD
+ *   warpline health [--json]                       READ-ONLY: is the fabric sound, is the
+ *                                                  hook reaching, is anything MEASURED?
  *   warpline lifeline <symbol> [--max N] [--json]  meaning-aware blame (survives renames)
  *   warpline diff [refA] [refB] [--json]           SEMANTIC diff between two refs
  *   warpline knot show <selector> [--json]         a KNOT payload (forge-spec §3a) — the
@@ -68,6 +70,7 @@ import { STAKE_MARKER } from './fabric/stake-guard.js';
 import { existsSync } from 'node:fs';
 import { gitPath } from './git/git-exec.js';
 import { resolveRoot, setExplicitRoot, extractRootFlag, ROOT_ENV } from './root.js';
+import { health, healthExitCode, type HealthReport } from './health.js';
 import { startDaemon } from './daemon/server.js';
 import { mintToken, listTokenSummaries, writeMcpTokenFile, type TokenScope } from './daemon/tokens.js';
 import { runMcpServer } from './mcp/server.js';
@@ -275,6 +278,29 @@ program
       } else {
         printStatus(report);
       }
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+program
+  .command('health')
+  .description(
+    'THE READ-ONLY DIAGNOSTIC (#warpline-health). One screen for the questions no other surface answers: is the ledger sound, is the auto-seal hook actually REACHING a binary (installed and reachable are different facts — `hook status` only knows the first), how far behind HEAD has the fabric fallen, how many verdicts were ever MEASURED AGAINST GIT, and what a strand costs on disk. Writes NOTHING — no trace row, no cache, no lock (audit C-13: a diagnostic that writes is one you cannot run on a full disk). Exit 0 green, 1 warnings, 2 fabric unsound.',
+  )
+  .option('--json', 'emit the full HealthReport as JSON (for CI gating)')
+  .action(async (options: { json?: boolean }) => {
+    try {
+      const root = await resolveRoot();
+      // NOT wrapped in traceCli: that WRITES an f4 row, and this verb's whole
+      // contract is that it writes nothing.
+      const report = await health(root);
+      if (options.json) {
+        process.stdout.write(JSON.stringify(report, null, 2) + '\n');
+      } else {
+        printHealth(report);
+      }
+      process.exitCode = healthExitCode(report);
     } catch (err) {
       fail(err);
     }
@@ -1869,6 +1895,111 @@ function printStatus(r: SemDiffReport): void {
     lines.push(`summary  ${r.changedCount} changed, ${r.renamedNoopCount} renamed-noop`);
   }
   process.stdout.write(lines.join('\n') + '\n');
+}
+
+/** bytes → a human magnitude (the report carries the exact number). */
+function mag(bytes: number): string {
+  if (bytes >= 1_073_741_824) return `${(bytes / 1_073_741_824).toFixed(2)} GB`;
+  if (bytes >= 1_048_576) return `${(bytes / 1_048_576).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${bytes} B`;
+}
+
+const tally = (m: Record<string, number | undefined>): string =>
+  Object.entries(m)
+    .filter(([, v]) => (v ?? 0) > 0)
+    .sort((a, b) => (b[1] ?? 0) - (a[1] ?? 0))
+    .map(([k, v]) => `${k} ${v}`)
+    .join(', ') || 'none';
+
+/**
+ * #warpline-health, printed. The ordering is deliberate: SOUNDNESS first (can
+ * this ledger be trusted), then LIVENESS (is it still being written), then
+ * MEASUREMENT (is it producing evidence) — because a green fabric that measures
+ * nothing is the failure mode this verb exists to make impossible to miss.
+ */
+function printHealth(h: HealthReport): void {
+  const L: string[] = [];
+  const v = h.fabric.verify;
+  L.push(`WARPLINE HEALTH  ${h.root}`);
+  L.push('');
+
+  L.push(
+    `FABRIC     ${h.fabric.strands} strand(s) — ${h.fabric.byVersion.v1} v1, ${h.fabric.byVersion.v2} v2, ${h.fabric.byVersion.v3} v3` +
+      (h.fabric.malformedLines ? `  ⚠ ${h.fabric.malformedLines} MALFORMED line(s)` : ''),
+  );
+  L.push(
+    `           verify     ${v.ran ? (v.ok ? `all intact (${v.checked} checked)` : `${v.failures} FAILURE(S) of ${v.checked}`) : 'DID NOT RUN'}`,
+  );
+  for (const d of v.detail) L.push(`             ✗ ${d}`);
+  L.push(
+    `           refs mode  ${h.fabric.refsMode}` +
+      (h.fabric.refsMode === 'refs' ? ` (${Object.keys(h.fabric.refs).join(', ')})` : ' — per-ref CAS DISENGAGED (C-1)'),
+  );
+  L.push(`           selvage    ${h.fabric.selvage ? short(h.fabric.selvage) : '(none)'}`);
+  if (h.fabric.abandonedHeads.length) {
+    L.push(`           abandoned  ${h.fabric.abandonedHeads.length} head(s) no ref names`);
+  }
+  if (h.fabric.stakeJournal?.present) {
+    L.push(`           stakes     ${h.fabric.stakeJournal.attested} checkpoint(s) cross-checked (C-6 anti-truncation)`);
+  }
+
+  L.push('');
+  L.push(
+    `SEAL       last       ${h.seal.lastSealedAt ?? '(never)'}` +
+      (h.seal.lastGitCommit ? `  at git ${h.seal.lastGitCommit.slice(0, 12)}` : ''),
+  );
+  L.push(
+    `           behind     ${
+      h.seal.commitsBehindHead !== null
+        ? `${h.seal.commitsBehindHead} commit(s) behind HEAD`
+        : `unknown (${h.seal.behindUnknown})`
+    }`,
+  );
+
+  L.push('');
+  L.push(`HOOK       block      ${h.hook.state}${h.hook.hookPath ? `  ${h.hook.hookPath}` : ''}`);
+  L.push(
+    `           resolves   ${h.hook.arm === 'none' ? 'NOTHING — every commit runs it, it fails, `|| true` hides it' : `${h.hook.arm} → ${h.hook.resolved}`}`,
+  );
+  if (h.hook.arm !== 'path') L.push(`           (\`${h.hook.bin}\` is not on PATH)`);
+
+  L.push('');
+  const cf = h.adjudication.counterfactual;
+  L.push(`VERDICTS   recorded   ${h.adjudication.verdicts}  (${tally(h.adjudication.byStatus)})`);
+  L.push(
+    `           vs git     ${cf.measured} of ${h.adjudication.verdicts} MEASURED` +
+      (cf.predatesField ? `  ·  ${cf.predatesField} predate the counterfactual` : '') +
+      (Object.keys(cf.unavailable).length ? `  ·  unavailable: ${tally(cf.unavailable)}` : ''),
+  );
+  if (cf.measured > 0) L.push(`           cells      ${tally(cf.cells)}`);
+  L.push(`           contested  ${h.adjudication.contested}  (KNOT/DANGLE — what this product adjudicates)`);
+  L.push(`           base       ${tally(h.adjudication.baseFrom)}`);
+
+  L.push('');
+  L.push(
+    `DISK       .warpline  ${mag(h.disk.bytes)} across ${h.disk.files} file(s)` +
+      (h.disk.mbPerStrand !== null ? `  —  ${h.disk.mbPerStrand} MB per strand` : ''),
+  );
+  if (h.disk.largest.length) {
+    L.push(`           largest    ${h.disk.largest.map((e) => `${e.name} ${mag(e.bytes)}`).join(' · ')}`);
+  }
+
+  if (h.unsound.length) {
+    L.push('');
+    L.push(`✗ UNSOUND (${h.unsound.length}) — do not treat this fabric as authoritative`);
+    for (const s of h.unsound) L.push(`  - ${s}`);
+  }
+  if (h.warnings.length) {
+    L.push('');
+    L.push(`⚠ ${h.warnings.length} warning(s)`);
+    for (const s of h.warnings) L.push(`  - ${s}`);
+  }
+  if (!h.unsound.length && !h.warnings.length) {
+    L.push('');
+    L.push('✓ green — sound, live, and measuring.');
+  }
+  process.stdout.write(L.join('\n') + '\n');
 }
 
 function printLifeline(ll: Lifeline): void {

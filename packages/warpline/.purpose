@@ -1394,9 +1394,22 @@ components:
       raise the SAME objects, differing only in the ladder's admit params
       ({ref} git-era, {native:'true'} native) so next[] is copy-paste runnable
       on the surface that raised it.
+      gitSides (ADDITIVE, 2026-08-10): AdmitResult carries {ours, theirs} — the
+      two GIT commits the verdict's two meaning-sides correspond to. `ours` is
+      the agent's ref (fixed above the lock); `theirs` is the commit of the
+      strand the SELVAGE named, resolved INSIDE the fabric lock at the same
+      expression that decides `baseFrom`, for the identical reason: the selvage
+      can move the instant the lock releases, so a consumer that re-read it would
+      measure against a tip this verdict never judged. Its one consumer is
+      #git-counterfactual, and a counterfactual measured against the wrong pair
+      is worse than none. The ledger read is try/caught — an unreadable ledger
+      yields theirs:null (surfacing downstream as an explicit 'no-two-refs')
+      rather than making a NOOP admission start throwing where it succeeded
+      before. Git-era path only; #native-write-path is git-absent by definition.
     type: module
     components:
       - "#refusal"
+      - "#git-counterfactual"
       - "#absorb"
       - "#sem-delta"
       - "#predict"
@@ -1900,11 +1913,122 @@ components:
       was previously indistinguishable from it on this stream — so an empty K3
       denominator could not be read as mechanical or behavioural without
       re-deriving the answer from source. Absent on pre-C-9 rows.
+      GIT COUNTERFACTUAL (ADDITIVE, 2026-08-10): every row now also carries
+      `gitCounterfactual` — see #git-counterfactual. The row's `durationMs`
+      keeps its ORIGINAL meaning (the decision pipeline, F1a) and is stopped
+      before the git call; the counterfactual's own cost rides its own field, so
+      an existing series is never silently redefined. The zero-mutation
+      invariant is unchanged for everything it ever covered (.warpline
+      byte-identical but the one row; HEAD/index/worktree untouched), with one
+      thing now said out loud: `git merge-tree --write-tree` parks a few
+      unreferenced, gc-able tree objects in `.git/objects`.
     type: module
     tags: [warpline, native-first, telemetry]
     components:
       - "#admit"
       - "#warpline-config"
+      - "#git-counterfactual"
+
+  git-counterfactual:
+    description: >-
+      WHAT GIT WOULD HAVE DECIDED, recorded on the live verdict row at the moment
+      the verdict was reached (src/fabric/counterfactual.ts). The product claim is
+      "meaning caught what bytes missed" and nothing measured it: #oracle computes
+      the git×meaning confusion matrix but is an OFFLINE MANUAL verb whose ledger
+      (.warpline/oracle.jsonl — 11 MB, 28 rows) has ZERO readers, while
+      #shadow-gate, the only instrument that fires on real work, never called git
+      at all. It must be measured at verdict time or never: the two commits
+      survive, but WHICH PAIR a given verdict adjudicated stops being recoverable
+      the moment the selvage moves.
+      MECHANISM: `git merge-tree --write-tree <theirs> <ours>` — the same call
+      oracle.ts:160 makes — over the SAME two sides the meaning verdict judged.
+      The sides come from AdmitResult.gitSides, resolved inside #admit's fabric
+      lock, NEVER re-read here (a second reader would report against a tip the
+      row's own authority never judged — the mistake `baseFrom` exists to refuse).
+      Git picks its own merge base, so the counterfactual is the question a human
+      would actually have asked git, not a rigged one.
+      TAXONOMY REUSED, NOT REINVENTED: ConvergenceCell names #oracle's four cells
+      verbatim (agreeClean / agreeConflict / divergeGitOnly / divergeMeaningOnly)
+      and partitions on the same two predicates score() uses; the binding is a
+      TEST that drives the real score() through all four cells, not a comment.
+      divergeMeaningOnly is the headline; divergeGitOnly is the text noise
+      Warpline absorbs. `meaningContested` is oracle's own predicate (knots ∪
+      dangles non-empty), never a status-string test, so the two cannot drift.
+      `unavailable` IS A REQUIRED ENUM, NEVER AN ABSENT FIELD — null means git
+      decided; 'worktree-ref' | 'no-two-refs' | 'git-error' | 'timeout' each name
+      a distinct reason it did not. Absence would reproduce C-9 exactly one field
+      over: "git said clean" and "we never asked git" are opposite facts.
+      PRE-FLIGHT (2026-08-10, found while red-firsting): `git merge-tree
+      --write-tree` exits 1 for BOTH "conflicted" and "not something we can
+      merge", and git-exec.ts:563 keys on code===1, so an UNRESOLVABLE REF comes
+      back as {conflicted:true, conflictPaths:[]} with no throw. A
+      provenance.gitCommit naming a rebased-away commit would therefore have been
+      filed as agreeConflict on the strength of a git ERROR — fabricated evidence
+      for the very claim being measured. Both sides are revParse'd first; a side
+      that does not resolve is 'git-error'. THE SAME CONFLATION REACHES
+      oracle.ts:160, whose .catch() cannot fire for this class either — reported,
+      not unilaterally changed, because it is shared merge semantics.
+      BOUNDS + COST: conflictPaths uses the SHADOW_ROW_CAP pattern (sorted top-N
+      + exact total) — one constant, passed in, no second cap. Measured on this
+      monorepo: p50 9 ms, max 12 ms across three commit spans, against a shadow
+      decision pipeline of p50 87 ms / p99 41,496 ms — ~0.02% of p99, so it is
+      NOT config-gated. Every call is timeout-bounded (20 s) because it rides the
+      auto-seal hook and may never wedge a commit; it never throws.
+    type: module
+    tags: [warpline, native-first, telemetry, measurement]
+    components:
+      - "#shadow-gate"
+      - "#admit"
+      - "#oracle"
+
+  warpline-health:
+    description: >-
+      THE READ-ONLY DIAGNOSTIC (src/health.ts, `warpline health [--json]`). CLI
+      ONLY — deliberately not on the daemon/MCP surface, which also makes it FREE
+      against the FG-3 freeze: descriptorsId hashes VERB_DESCRIPTORS +
+      NEXT_LEGAL_VERBS + the derived tool-name map, none of which a CLI-only verb
+      touches (test/descriptors-frozen.test.ts passes with its literal unchanged).
+      WHY A NEW VERB, NOT MORE `status`: #warpline-cli's `status` has a contract —
+      it is the MEANING DIFF of the working tree vs HEAD, traced as `cli:status`
+      and documented as distinct from the daemon's cycle-position `status`.
+      WHAT IT SURFACES, all of it already on disk and none of it previously read:
+      FABRIC (strand count by schema epoch, `fabric verify` in-process, selvage,
+      refs vs legacy mode, abandoned heads, the C-6 stake-journal witness);
+      SEAL LIVENESS (the last strand names its git commit, so `git rev-list
+      --count <that>..HEAD` gives commits-behind-HEAD — a subtraction over data
+      already present, zero new writes); HOOK REACHABILITY (replicates the hook's
+      own resolution — `command -v $WARPLINE_BIN`, then the dist fallback — and
+      reports WHICH ARM WINS OR NONE. `hook status` only knows the block is
+      present; installed and reachable are different facts, and on this repo
+      `warpline` is NOT on PATH, so the whole ledger rides the dist arm);
+      ADJUDICATION (verdicts by status, and how many were MEASURED AGAINST GIT —
+      see #git-counterfactual); DISK (total AND MB PER STRAND, because a team can
+      multiply a per-strand number and a total is abstract).
+      THREE BUCKETS, NEVER TWO: the counterfactual census separates measured /
+      explicitly-unavailable / predates-the-field. Collapsing the third is the
+      C-9 mistake, and the 43 live rows are ALL in it.
+      IT WRITES NOTHING — no traceCli row, no WarpStore disk cache, no lock; the
+      tolerant scanFabric rather than the throwing readFabric, so a torn tail
+      (C-13) is REPORTED and exits 2 instead of bricking the diagnostic. C-13 was
+      found on a full disk, where a diagnostic that writes is one you cannot run.
+      Pinned by a before/after byte digest of .warpline in
+      test/warpline-health.test.ts.
+      HOOK-STATE TOTALITY: the state space is a switch, not an if-chain. The
+      earlier chain ended on a conjunct that could never fire, and a dead
+      condition inside the one check whose job is catching a SILENT failure is
+      the same defect class as the failure itself.
+      EXIT: 0 green · 1 warnings (sound, but unmeasured or unreachable) · 2
+      unsound (verify failed, ledger torn, a tip naming nothing, or an installed
+      hook resolving to nothing). Green is REACHABLE and tested, so "warnings" is
+      a finding about the project, not a property of the verb.
+    type: module
+    tags: [warpline, cli, diagnostic, read-only, measurement]
+    components:
+      - "#fabric-verify"
+      - "#hook"
+      - "#shadow-gate"
+      - "#git-counterfactual"
+      - "#warpline-cli"
 
   native-write-path:
     description: >-
@@ -2777,9 +2901,17 @@ components:
       and `warpline refs set <name> <pickId> [--force] [--json]` re-points a head —
       the actionable half of the abandoned-head warning, which the verify output
       now names inline. Both refuse rather than improvise; neither writes silently.
+      `warpline health [--json]` (2026-08-10) is the READ-ONLY diagnostic —
+      #warpline-health. It is ADDITIVE, never an overload of `status`: `status`
+      is the meaning diff and is traced as `cli:status`, a different thing from
+      the daemon's cycle-position `status`. `health` is CLI-ONLY (so the FG-3
+      descriptor freeze is untouched — descriptorsId hashes nothing a CLI verb
+      reaches), is NOT wrapped in traceCli because that would WRITE, and exits
+      0/1/2 for green/warnings/unsound so CI can gate on `--json`.
       The only module allowed to write stdout; library code stays quiet.
     type: cli
     components:
+      - "#warpline-health"
       - "#fabric-repair"
       - "#oracle"
       - "#absorb"

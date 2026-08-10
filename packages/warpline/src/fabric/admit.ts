@@ -253,6 +253,27 @@ export const ADMIT_RESULT_SCHEMA = 'admitResult:v1' as const;
  */
 export type AdmitBaseSource = 'scratch' | 'selvage' | 'none';
 
+/**
+ * The two GIT commits this admission's two meaning-sides correspond to —
+ * `ours` = the agent's proposed ref, `theirs` = the strand the selvage named.
+ *
+ * Resolved INSIDE the fabric lock, at the same expression that decides
+ * `baseFrom`, and for the same reason: the selvage can move the instant the
+ * lock releases, so a consumer that re-read it would report against a tip this
+ * verdict never judged. The one consumer today is #git-counterfactual (the
+ * shadow row's `git merge-tree` measurement), which is evidence — and evidence
+ * measured against the wrong pair is worse than no evidence.
+ *
+ * A null side is not an error: a WORKTREE proposal has no commit, and a native
+ * (git-absent) strand carries `provenance.gitCommit: null` by construction.
+ */
+export interface AdmitGitSides {
+  /** the proposed side's commit, or null (WORKTREE / unresolvable ref). */
+  ours: string | null;
+  /** the selvage strand's commit, or null (native strand, pre-coexistence seal, genesis). */
+  theirs: string | null;
+}
+
 export interface AdmitResult {
   /**
    * G1 version stamp. An admission result crosses the daemon wire and lands in
@@ -314,6 +335,12 @@ export interface AdmitResult {
    * base, so it has nothing to disambiguate and carries no field.
    */
   baseFrom?: AdmitBaseSource;
+  /**
+   * (G1-additive) The git commits behind the verdict's two sides — see
+   * AdmitGitSides. Emitted by the GIT-ERA path (`admit`) only; the native path
+   * is git-absent by definition and carries no field.
+   */
+  gitSides?: AdmitGitSides;
 }
 
 /**
@@ -601,6 +628,10 @@ async function admitCore(root: string, opts: AdmitOptions): Promise<AdmitResultB
   // expression that decides it (never re-derived afterwards), and folded onto
   // the result at the boundary below. See AdmitResult.baseFrom for why it exists.
   let baseFrom: AdmitBaseSource = 'none';
+  // The git sides behind the verdict, resolved in the SAME critical section for
+  // the same reason (AdmitGitSides). `ours` is already fixed — it is the agent's
+  // own ref, resolved above the lock and immune to a moving selvage.
+  let gitSides: AdmitGitSides = { ours: oursCommit, theirs: null };
   const body = await withFabricLock(root, async (): Promise<AdmitResultBody> => {
     // The scratch ref is DUAL-EPOCH (scratch.ts:38-44): the git-era flow stores a
     // stateId (`state:`), the native flow a pickId (`pick:`), and the documented
@@ -641,6 +672,23 @@ async function admitCore(root: string, opts: AdmitOptions): Promise<AdmitResultB
     const selvageId = readSelvage(wdir);
     const base = baseId ? store.loadState(baseId) : undefined;
     const selvage = selvageId ? store.loadState(selvageId) : undefined;
+
+    // THE SECOND GIT SIDE (AdmitGitSides), read here and nowhere later. The tip
+    // rule is the ledger's own: the LAST strand landing on the selvage stateId
+    // (stateIds are many-to-one — select.ts:44-51 and the FAST_ADMIT branch
+    // below use the identical rule). An unreadable ledger yields `theirs: null`
+    // rather than throwing: this field is a diagnostic, and a torn tail must not
+    // start failing a NOOP admission that used to succeed. Null then surfaces
+    // downstream as an explicit 'no-two-refs', never as "git said clean".
+    if (selvageId) {
+      try {
+        let tip: Strand | undefined;
+        for (const s of readFabric(wdir)) if (s.stateId === selvageId) tip = s;
+        gitSides = { ours: oursCommit, theirs: tip?.provenance?.gitCommit ?? null };
+      } catch {
+        gitSides = { ours: oursCommit, theirs: null };
+      }
+    }
 
     // P2.3 — the claim judgment, attached to whatever result this admit returns.
     // Reaching withClaim with a breach means the gate PASSED via acceptBreach
@@ -1018,5 +1066,5 @@ async function admitCore(root: string, opts: AdmitOptions): Promise<AdmitResultB
   });
   // ONE fold point: every return site above stays byte-identical to its
   // pre-`baseFrom` form, and no builder can forget the field or invent one.
-  return { ...body, baseFrom };
+  return { ...body, baseFrom, gitSides };
 }

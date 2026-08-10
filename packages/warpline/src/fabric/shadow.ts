@@ -28,6 +28,25 @@
  * a deterministic top-N), with ADDITIVE total-count fields (`knotsTotal`,
  * `agentChangedTotal`, `otherChangedTotal`) carrying the true sizes. Verdicts
  * under the cap keep full symbol fidelity; the schema stays v1 (additive only).
+ * The counterfactual's `conflictPaths` is bounded by the SAME constant.
+ *
+ * THE GIT COUNTERFACTUAL (#git-counterfactual, additive): every row now also
+ * records what `git merge-tree` would have decided about the same two sides.
+ * The product claim is "meaning caught what bytes missed" and until this field
+ * existed nothing on any stream measured it — #oracle computed the confusion
+ * matrix but is an offline manual verb whose ledger has zero readers, and this
+ * gate, the only thing that fires on real work, never called git at all. It is
+ * measured HERE and not in a later pass because it is the one fact that cannot
+ * be reconstructed: which two commits a verdict adjudicated stops being
+ * recoverable the moment the selvage moves.
+ *
+ * THE WRITE BOUNDARY, RESTATED PRECISELY. The shadow invariant is unchanged and
+ * still exact for everything it ever covered: `.warpline/` is byte-identical
+ * except the one verdict row, and HEAD/index/worktree are untouched. The
+ * counterfactual does, however, run `git merge-tree --write-tree`, which parks
+ * a few unreferenced (gc-able) tree objects in `.git/objects` — read-only with
+ * respect to every pointer, not literally write-free. Said out loud rather than
+ * left for someone to discover on a full disk.
  *
  * Library code: no console output.
  */
@@ -35,6 +54,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { admit, type AdmitOptions, type AdmitStatus, type AdmitConfidence, type AdmitResult, type AdmitBaseSource } from './admit.js';
+import { gitCounterfactual, type GitCounterfactual } from './counterfactual.js';
 import type { CoverageCounts } from '../honesty.js';
 
 export const SHADOW_VERDICT_SCHEMA = 'shadowVerdict:v1' as const;
@@ -93,6 +113,20 @@ export interface ShadowVerdictRow {
    * Absent on rows recorded before this field existed.
    */
   baseFrom?: AdmitBaseSource;
+  /**
+   * THE GIT COUNTERFACTUAL (additive) — what `git merge-tree` would have
+   * decided about the SAME two sides, measured at verdict time. See
+   * #git-counterfactual for why this cannot be reconstructed afterwards and why
+   * its `unavailable` field is a required enum rather than an absence.
+   *
+   * OPTIONAL ON THE TYPE, MANDATORY ON A NEW ROW. Every row minted from here on
+   * carries it; the rows already on this stream predate it and simply lack it
+   * (G1 additive evolution). A reader must therefore distinguish THREE states,
+   * not two — measured, explicitly-unavailable, and predates-the-field — which
+   * is exactly the distinction `baseFrom` above exists to preserve, and
+   * `warpline health` reports all three separately for that reason.
+   */
+  gitCounterfactual?: GitCounterfactual;
 }
 
 export function shadowDirOf(root: string): string {
@@ -172,6 +206,27 @@ export async function shadowAdmit(
   ).sort();
   const agentChanged = [...d.agentChanged].sort();
   const otherChanged = [...d.otherChanged].sort();
+  // F1a latency keeps its ORIGINAL meaning — the DECISION pipeline — and is
+  // stopped before the counterfactual runs. Folding a new git call into an
+  // existing metric would silently redefine the series it belongs to; the
+  // counterfactual's own cost is reported on its own field instead, where it is
+  // separable and comparable.
+  const decisionMs = Date.now() - t0;
+  // THE GIT COUNTERFACTUAL (#git-counterfactual). Measured HERE because it
+  // cannot be measured later: the pair of commits this verdict adjudicated is
+  // knowable now and unrecoverable once the selvage advances. The sides come
+  // from `result.gitSides` — the values `admit` resolved under its own lock —
+  // never from a re-read here, for the reason `baseFrom` documents above.
+  // `meaningContested` is oracle's own predicate (knots ∪ dangles non-empty),
+  // not a status-string test, so the two instruments cannot drift apart.
+  const gitCf = await gitCounterfactual({
+    cwd: opts.cwd ?? root,
+    ref: opts.ref,
+    ours: result.gitSides?.ours ?? null,
+    theirs: result.gitSides?.theirs ?? null,
+    meaningContested: d.knots.length > 0 || d.dangling.length > 0,
+    cap: SHADOW_ROW_CAP,
+  });
   const row: ShadowVerdictRow = {
     schemaVersion: SHADOW_VERDICT_SCHEMA,
     ts: new Date().toISOString(),
@@ -188,7 +243,8 @@ export async function shadowAdmit(
     coverage: result.coverage?.counts ?? null,
     wouldSeal,
     proposedStateId: result.proposedStateId,
-    durationMs: Date.now() - t0,
+    durationMs: decisionMs,
+    gitCounterfactual: gitCf,
     ...(result.escalation
       ? {
           escalation: {

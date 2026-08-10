@@ -463,9 +463,18 @@ describe('E2E — an admit WITHOUT a claim is byte-identical to pre-claim behavi
     // field: like schemaVersion it is stamped once at the boundary and rides
     // EVERY git-era result, claim or not, so it is part of the pre-claim
     // baseline rather than claim residue.
+    // `gitSides` (2026-08-10) is the THIRD, and arrives by the same rule — one
+    // fold point at the boundary, every git-era result, claim or not. It exists
+    // because #git-counterfactual must know the two commits the verdict judged
+    // WITHOUT re-reading the selvage after the lock releases. This pin firing
+    // when it was added is the tripwire working: a new always-present field on
+    // AdmitResult is a deliberate act, and there is no other way through.
     expect(Object.keys(r).sort()).toEqual(
-      ['baseFrom', 'decision', 'proposedStateId', 'schemaVersion', 'sealed', 'strand'].sort(),
+      ['baseFrom', 'decision', 'gitSides', 'proposedStateId', 'schemaVersion', 'sealed', 'strand'].sort(),
     );
+    // …and it names the pair this FAST_ADMIT actually adjudicated.
+    expect(r.gitSides!.ours).toBeTruthy();
+    expect(r.gitSides!.theirs).toBeTruthy();
     expect(r.baseFrom).toBe('selvage'); // A never forked — the C-9 fallback, named
     expect(Object.keys(r.decision).sort()).toEqual(
       ['agentChanged', 'confidence', 'dangling', 'knots', 'otherChanged', 'rebasedOnto', 'status'].sort(),

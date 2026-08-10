@@ -352,6 +352,22 @@ export async function gitLogHashes(pathspec: string, opts: GitOptions = {}): Pro
     .filter((l) => /^[0-9a-f]{7,64}$/.test(l));
 }
 
+/**
+ * How many commits `to` is ahead of `from` (`git rev-list --count from..to`),
+ * or null when either end does not resolve. READ-ONLY.
+ *
+ * The one consumer is #warpline-health's SEAL LIVENESS line: the last strand
+ * records the git commit it sealed at, so this answers "how far has git run on
+ * without the fabric?" — the drift that makes an auto-seal hook look installed
+ * while it silently does nothing. Null is returned rather than thrown because a
+ * pruned or rewritten commit is a legitimate answer of "unknowable", and a
+ * diagnostic must survive the condition it diagnoses.
+ */
+export async function revListCount(from: string, to: string, opts: GitOptions = {}): Promise<number | null> {
+  const out = await git(['rev-list', '--count', '--end-of-options', `${from}..${to}`], opts).catch(() => '');
+  return /^\d+$/.test(out.trim()) ? Number(out.trim()) : null;
+}
+
 /** The common ancestor of N refs (octopus merge-base) — the base for a consolidate. */
 export async function mergeBaseN(refs: string[], opts: GitOptions = {}): Promise<string> {
   if (refs.length < 2) throw new Error('mergeBaseN needs at least 2 refs');

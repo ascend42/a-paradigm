@@ -202,5 +202,15 @@ $RECYCLE.BIN/
 !.warpline/refs/
 .warpline/refs/*
 !.warpline/refs/selvage
+# TRACK the AUTHORITATIVE tip too. Migrating to refs mode (V3.2, refs.ts) moved the
+# real tip out of `refs/selvage` (a stateId — many-to-one, cannot name a history
+# position) and into `refs/heads/selvage` (a pickId). `.warpline/refs/*` above was
+# catching it, so git was replicating only the LEGACY, ambiguous pointer while the
+# one thing refs.ts exists to replace stayed local-only — and git-tracking is
+# currently Warpline's whole anti-truncation backstop (audit C-6). Per-agent scratch
+# refs (refs/scratch/*) and any other head stay ignored: ephemeral, per-clone.
+!.warpline/refs/heads/
+.warpline/refs/heads/*
+!.warpline/refs/heads/selvage
 # (legacy Loom runtime dir, kept ignored for back-compat)
 .loom/
