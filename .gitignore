@@ -214,3 +214,6 @@ $RECYCLE.BIN/
 !.warpline/refs/heads/selvage
 # (legacy Loom runtime dir, kept ignored for back-compat)
 .loom/
+
+# agent scratch — never commit
+packages/warpline/probe-*/
