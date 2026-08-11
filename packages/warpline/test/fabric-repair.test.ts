@@ -191,8 +191,13 @@ describe('refs set — the actionable half of the abandoned-head report', () => 
   beforeEach(async () => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), 'warpline-refs-set-'));
     strands = await sealThree(root);
-    // refs mode (V3.2) — abandoned heads only exist here
-    expect(migrateSelvageToRefs(warplineDirOf(root)).migrated).toBe(true);
+    // REFS MODE (V3.2) — abandoned heads only exist here. Asserted as the
+    // POSTCONDITION rather than as "a migration happened": genesis is now born in
+    // refs mode (finding B5), so `migrateSelvageToRefs` is an idempotent no-op on
+    // a fabric sealed by `pick` and reports migrated:false. What this fixture
+    // needs is the state, and the state is now stronger — the ref names the tip.
+    migrateSelvageToRefs(warplineDirOf(root));
+    expect(readRef(warplineDirOf(root), 'selvage')).toBe(strands[2].pickId);
   });
   afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
 

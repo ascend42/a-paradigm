@@ -81,6 +81,23 @@ components:
       currently v1.1) and SCC members carry the same tag — mixed v0/v1.1 graphs
       interoperate because Merkle substitutes the target's full TAGGED string.
       essence-hash never imports the lens; the tag travels on the node.
+      THE WALK IS ITERATIVE (T-2026-08-10). computeEssences used to resolve
+      through a MUTUAL recursion with two entry arms — essenceOf reached itself
+      via the singleton edge resolver AND via hashSCC's out-of-unit resolver,
+      with essenceOf calling hashSCC in turn — so JS call depth equalled the
+      longest chain in the SCC CONDENSATION and threw "Maximum call stack size
+      exceeded" at roughly a THOUSAND (measured 1,050 ok / 1,080 throws;
+      seal-path 1,000 ok / 2,000 throws). NOT an object-count ceiling: a real
+      seal of 125,010 objects succeeded on the recursive code, because a shared
+      gate back-links every component and Tarjan folds a naive fixture into ONE
+      SCC the walk never nests into. resolve() now walks the condensation with an
+      explicit heap stack (unitOf / dependenciesOf / hashUnit); `open` is the
+      former `computing` guard, and a dependency already open reads back as
+      @scc-internal exactly as before. tarjanSCCs was ALREADY iterative and was
+      left alone. Content addresses are byte-identical: pinned against a
+      pre-change golden in test/essence-iterative.test.ts, and differentially
+      checked over this repo's own 25,336-symbol live graph, where the only two
+      ids that moved were the code-units lifted from essence-hash.ts itself.
     type: module
     components:
       - "#canonical-json"
@@ -1981,6 +1998,34 @@ components:
       - "#admit"
       - "#oracle"
 
+  warpline-root:
+    description: >-
+      THE ROOT CHOKEPOINT (src/root.ts, soundness audit D-7). Every skin used to
+      resolve its target repository inline as `repoRoot().catch(() =>
+      process.cwd())` at ~31 call sites, so the cwd fallback fired ONLY when git
+      failed — meaning every command, including every experiment anyone ran while
+      learning the tool, targeted the LIVE fabric by default, with no --root and
+      no WARPLINE_ROOT. The fix is a chokepoint, not 31 patches: a per-site fix is
+      how the 32nd site gets missed. PRECEDENCE (explicit beats inference,
+      always): --root anywhere on the command line > $WARPLINE_ROOT > repoRoot()
+      > process.cwd(). With neither override set, behaviour is byte-identical to
+      the pre-D-7 code. An explicit root must ALREADY EXIST and be a real
+      directory (never a symlink) — a typo must refuse, never silently mint a
+      second fabric. extractRootFlag pulls --root/--root=<dir> out of argv
+      wherever it appears (commander only accepts program-level options before
+      the subcommand, and `warpline pick --root /tmp/x` failing with "unknown
+      option" is the papercut that sends a user back to the unguarded default);
+      a bare -- terminates scanning.
+      resolveRootVerbose() ALSO REPORTS WHICH ARM WON (RootArm: flag | env | git
+      | cwd, T-2026-08-10) and resolveRoot() is kept as its one-line projection
+      so adding the arm did not become a reason to touch the ~31 call sites —
+      which is the per-site drift the chokepoint exists to prevent.
+      #warpline-health reads the arm and prints it.
+    type: module
+    tags: [warpline, root, chokepoint, safety, d-7]
+    components:
+      - "#git-exec"
+      - "#warpline-cli"
   warpline-health:
     description: >-
       THE READ-ONLY DIAGNOSTIC (src/health.ts, `warpline health [--json]`). CLI
@@ -2021,6 +2066,24 @@ components:
       unsound (verify failed, ledger torn, a tip naming nothing, or an installed
       hook resolving to nothing). Green is REACHABLE and tested, so "warnings" is
       a finding about the project, not a property of the verb.
+      ROOT PROVENANCE (T-2026-08-10): the report carries `rootResolution` — WHICH
+      arm of #warpline-root's precedence chain chose this fabric, whether that
+      arm was EXPLICIT, the git toplevel of the resolved root, and any enclosing
+      directory that also holds a .warpline/. The path alone was not enough:
+      "--root took" and "it fell through to the git root, which happens to be
+      correct today" printed identically, and only the second is D-7. One terse
+      line under the header ("root via --root (explicit)"), and a field in
+      --json. TWO WARNINGS, DELIBERATELY NARROW: (1) the cwd arm — with no
+      override the root IS repoRoot() by construction, so "not the toplevel and
+      not overridden" reduces exactly to "git could not answer", the one arm
+      where nothing chose the fabric; (2) a fabric NESTED inside another
+      fabric, the concrete form of the hazard #warpline-root's header names,
+      warned even when today's resolution is right because the hazard is the
+      NEXT unqualified invocation. NOT warned: an explicit root that merely
+      differs from the git toplevel, and the mere use of $WARPLINE_ROOT — both
+      are the tool working as designed, and warning on the intended path is how
+      a diagnostic teaches people to ignore it (pinned by an anti-noise case in
+      test/root-provenance.test.ts).
     type: module
     tags: [warpline, cli, diagnostic, read-only, measurement]
     components:
@@ -2028,6 +2091,7 @@ components:
       - "#hook"
       - "#shadow-gate"
       - "#git-counterfactual"
+      - "#warpline-root"
       - "#warpline-cli"
 
   native-write-path:

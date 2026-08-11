@@ -55,16 +55,50 @@ export function explicitRootOf(): string | null {
 }
 
 /**
- * Resolve the repository root every verb operates on, honouring the precedence
- * above. THE one place any skin may ask "which fabric?".
+ * WHICH arm of the precedence chain above actually decided the root.
+ *   'flag' `--root <dir>`   (1) explicit, on the command line
+ *   'env'  `WARPLINE_ROOT`  (2) explicit, in the environment
+ *   'git'  `repoRoot()`     (3) inferred from git
+ *   'cwd'  `process.cwd()`  (4) git absent or not a repo — the SILENT fallback
  */
-export async function resolveRoot(): Promise<string> {
-  if (explicitRoot !== null) return explicitRoot;
+export type RootArm = 'flag' | 'env' | 'git' | 'cwd';
+
+/** A resolved root together with the arm that produced it. */
+export interface RootResolution {
+  root: string;
+  arm: RootArm;
+}
+
+/**
+ * Resolve the root AND report which arm won.
+ *
+ * The path alone is not the interesting fact. "I passed --root and it took" and
+ * "it silently fell through to the git root, which happens to be correct today"
+ * print the same string, and only the second is D-7 — the defect where every
+ * command targeted the live fabric by default and no surface said so. A reader
+ * that cannot distinguish them cannot catch the recurrence.
+ */
+export async function resolveRootVerbose(): Promise<RootResolution> {
+  if (explicitRoot !== null) return { root: explicitRoot, arm: 'flag' };
   const fromEnv = process.env[ROOT_ENV];
   if (fromEnv !== undefined && fromEnv.trim() !== '') {
-    return assertUsableRoot(fromEnv, `${ROOT_ENV}`);
+    return { root: assertUsableRoot(fromEnv, `${ROOT_ENV}`), arm: 'env' };
   }
-  return repoRoot().catch(() => process.cwd());
+  return repoRoot()
+    .then((root): RootResolution => ({ root, arm: 'git' }))
+    .catch((): RootResolution => ({ root: process.cwd(), arm: 'cwd' }));
+}
+
+/**
+ * Resolve the repository root every verb operates on, honouring the precedence
+ * above. THE one place any skin may ask "which fabric?".
+ *
+ * Kept as the one-line projection of `resolveRootVerbose` ON PURPOSE: adding
+ * the arm must not become a reason to touch ~31 call sites, which is the
+ * per-site drift D-7 was a chokepoint against in the first place.
+ */
+export async function resolveRoot(): Promise<string> {
+  return (await resolveRootVerbose()).root;
 }
 
 /**

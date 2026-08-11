@@ -48,6 +48,10 @@
 
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+// TYPE-ONLY (erased at runtime, so no cycle with health.ts, which imports this
+// module): the arm vocabulary is health's, and taking `string` here would let a
+// typo'd arm silently fall through to the 'reachable, say nothing' branch.
+import type { HookArm } from '../health.js';
 
 const BEGIN = '# >>> warpline auto-seal >>>';
 const END = '# <<< warpline auto-seal <<<';
@@ -155,6 +159,111 @@ function block(): string {
     'fi',
     END,
   ].join('\n');
+}
+
+/* ───────────────────────── the remedy (finding C2) ─────────────────────────── */
+
+/**
+ * The warpline SOURCE checkout under `root`, or null when this is not one.
+ *
+ * Identified by `package.json`.name — not by the presence of a directory — because
+ * the remedy below tells an operator to run `npm run build && npm link` inside it,
+ * and pointing that at a coincidentally-named directory is worse than saying
+ * nothing. Both layouts a real operator hits: the monorepo root (the a-paradigm
+ * checkout, where the hook's own dist fallback lives) and the package directory
+ * itself (someone running warpline from inside packages/warpline).
+ */
+function warplineSourceDir(root: string): string | null {
+  for (const candidate of [path.join(root, 'packages', 'warpline'), root]) {
+    try {
+      const pkg = JSON.parse(fs.readFileSync(path.join(candidate, 'package.json'), 'utf8')) as { name?: string };
+      if (pkg.name === '@a-company/warpline') return candidate;
+    } catch {
+      /* not a warpline checkout — try the next layout */
+    }
+  }
+  return null;
+}
+
+/**
+ * ONE COPY-PASTEABLE LINE that puts `warpline` where the hook can reach it.
+ *
+ * WHY THIS EXISTS (finding C2). The failure this whole module is built around is
+ * not "the hook is broken" — it is "the hook is fine and `warpline` is not on
+ * PATH", which is a SETUP state, not a code state. `warpline health` already
+ * says the arm resolves to nothing; saying so without saying what to type leaves
+ * the operator to reverse-engineer the fix from a diagnostic, which is exactly
+ * how "runs fine and produces nothing" survives. Outside this monorepo there is
+ * no dist fallback at all, so this is the likeliest way a first real project
+ * seals nothing whatsoever.
+ *
+ * The command is DERIVED FROM DISK, never guessed: in a warpline source checkout
+ * it is the local build + link (the package is unpublished, so `npm i -g` would
+ * be a lie); anywhere else it is the global install, with the `WARPLINE_BIN`
+ * escape hatch for an operator who has a binary somewhere non-standard. The env
+ * var is spelled inline here, as it is in `block()` above — hook.ts is its
+ * authority, and health.ts replicates it under test rather than importing it.
+ */
+export function hookRemedy(root: string): string {
+  const src = warplineSourceDir(root);
+  if (src !== null) {
+    return `(cd ${src} && npm run build && npm link) && warpline hook install`;
+  }
+  return (
+    'npm i -g @a-company/warpline && warpline hook install' +
+    '  — or, without a global install, export WARPLINE_BIN=/absolute/path/to/warpline' +
+    ' in the environment that runs `git commit`'
+  );
+}
+
+/**
+ * What `hook install` says on stderr about a block it just wrote that cannot
+ * reach a binary — or `null` when the hook resolves and there is nothing to say.
+ *
+ * ═══ WARN LOUDLY, DO NOT REFUSE (the C2 design call) ═══
+ *
+ * The tempting move is to make `hook install` REFUSE when neither arm resolves.
+ * It is the wrong one, and not merely because refusing is unfriendly:
+ *
+ *  1. INSTALL-TIME RESOLUTION IS NOT THE PREDICATE WE CARE ABOUT. The block runs
+ *     in whatever environment invokes `git commit` — a GUI client, an editor
+ *     terminal, CI, an asdf/direnv shim — whose PATH need not be the installing
+ *     shell's. Refusing on this process's PATH would hard-block setups that in
+ *     fact work: a false negative in the one verb whose entire job is making
+ *     history accrue. A guard whose predicate is a proxy for the real condition
+ *     must not be the guard that fails closed.
+ *  2. IT PUNISHES A CORRECT ORDERING. "Install the hook, then finish putting the
+ *     binary on PATH" is an ordinary sequence, and an operator who was about to
+ *     fix PATH anyway is worse off being stopped than being told.
+ *  3. THE FAILURE IS ALREADY AUDIBLE AT THE MOMENT IT MATTERS. The block's
+ *     foreground resolution check prints a SKIPPED line to stderr on every commit
+ *     that cannot resolve. Install-time refusal buys nothing that commit-time
+ *     reporting does not already provide.
+ *  4. THE SCRIPTABLE GATE EXISTS AND IS BETTER PLACED. `warpline health` exits 2
+ *     on arm 'none'. It can be re-asked at any time, after PATH changes, from CI
+ *     — none of which an install-time refusal can do.
+ *
+ * So the install SUCCEEDS (it did — the block is on disk) and says plainly that
+ * the binary it can see does not resolve, with the command that fixes it.
+ */
+export function hookInstallAdvice(root: string, res: { bin: string; arm: HookArm; resolved: string | null }): string | null {
+  if (res.arm === 'none') {
+    return (
+      `\nwarpline: ⚠ THE HOOK IS INSTALLED BUT WILL NOT REACH A BINARY.\n` +
+      `  \`${res.bin}\` is not on this shell's PATH and there is no packages/warpline/dist/cli.js fallback here.\n` +
+      `  If the environment that runs \`git commit\` is this one, every commit will print a SKIPPED line and seal nothing.\n` +
+      `  FIX: ${hookRemedy(root)}\n` +
+      `  VERIFY: \`warpline health\` (exit 2 while the hook resolves to nothing).\n`
+    );
+  }
+  if (res.arm === 'dist') {
+    return (
+      `\nwarpline: ⚠ the hook will resolve via the MONOREPO DIST FALLBACK (${res.resolved}).\n` +
+      `  That arm works only inside this checkout and only while dist/ is built.\n` +
+      `  FIX: ${hookRemedy(root)}\n`
+    );
+  }
+  return null; // 'path' / 'env-bin' — installed AND reachable; silence is correct.
 }
 
 export type HookState = 'installed' | 'absent' | 'other-hook-no-warpline';

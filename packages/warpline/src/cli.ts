@@ -39,7 +39,7 @@ import type { WarpState } from './warp/warp-state.js';
 import { recordPick, type PickResult } from './fabric/pick.js';
 import { warplineDirOf, readSelvage, readFabric } from './fabric/fabric.js';
 import type { Strand } from './fabric/strand.js';
-import { installHook, uninstallHook, hookStatus } from './fabric/hook.js';
+import { installHook, uninstallHook, hookStatus, hookInstallAdvice } from './fabric/hook.js';
 import { forkScratch } from './fabric/scratch.js';
 import { admit, type AdmitResult } from './fabric/admit.js';
 import { exitCodeForResult, exitCodeFor, RefusedError } from './fabric/refusal.js';
@@ -69,8 +69,8 @@ import { stake, stakeRecover, type StakeResult, type StakeRecoverResult } from '
 import { STAKE_MARKER } from './fabric/stake-guard.js';
 import { existsSync } from 'node:fs';
 import { gitPath } from './git/git-exec.js';
-import { resolveRoot, setExplicitRoot, extractRootFlag, ROOT_ENV } from './root.js';
-import { health, healthExitCode, type HealthReport } from './health.js';
+import { resolveRoot, setExplicitRoot, extractRootFlag, ROOT_ENV, type RootArm } from './root.js';
+import { health, healthExitCode, hookResolution, type HealthReport } from './health.js';
 import { startDaemon } from './daemon/server.js';
 import { mintToken, listTokenSummaries, writeMcpTokenFile, type TokenScope } from './daemon/tokens.js';
 import { runMcpServer } from './mcp/server.js';
@@ -436,6 +436,11 @@ program
         process.stdout.write(
           `HOOK  auto-seal ${verb}\n  ${hookPath}\n  every git commit now seals --ref HEAD into the fabric (never blocks the commit).\n`,
         );
+        // WARN LOUDLY, DO NOT REFUSE (finding C2) — the argument is in
+        // hookInstallAdvice's docstring, which is also where the text lives so it
+        // is testable without spawning a CLI. Exit stays 0: the install succeeded.
+        const advice = hookInstallAdvice(root, hookResolution(root));
+        if (advice !== null) process.stderr.write(advice);
       } else if (action === 'uninstall') {
         const r = uninstallHook(hookPath);
         process.stdout.write(r.removed ? `HOOK  auto-seal removed\n  ${hookPath}\n` : `HOOK  not installed — nothing to remove\n`);
@@ -1918,10 +1923,27 @@ const tally = (m: Record<string, number | undefined>): string =>
  * MEASUREMENT (is it producing evidence) — because a green fabric that measures
  * nothing is the failure mode this verb exists to make impossible to miss.
  */
+/**
+ * WHY the root is what it is, in one phrase. `health` printed the resolved PATH
+ * and nothing else, so "--root took" and "it fell through to the git root,
+ * which happens to be correct today" were indistinguishable on screen — and
+ * only the second is D-7.
+ */
+const ROOT_ARM_LABEL: Record<RootArm, string> = {
+  flag: '--root (explicit)',
+  env: `$${ROOT_ENV} (explicit)`,
+  git: 'git toplevel (inferred)',
+  cwd: 'process.cwd() FALLBACK — nothing chose this fabric',
+};
+
 function printHealth(h: HealthReport): void {
   const L: string[] = [];
   const v = h.fabric.verify;
   L.push(`WARPLINE HEALTH  ${h.root}`);
+  L.push(
+    `           root       via ${ROOT_ARM_LABEL[h.rootResolution.arm]}` +
+      (h.rootResolution.nestedUnder ? `  ⚠ NESTED under ${h.rootResolution.nestedUnder}` : ''),
+  );
   L.push('');
 
   L.push(
@@ -1969,6 +1991,10 @@ function printHealth(h: HealthReport): void {
   L.push(`VERDICTS   recorded   ${h.adjudication.verdicts}  (${tally(h.adjudication.byStatus)})`);
   L.push(
     `           vs git     ${cf.measured} of ${h.adjudication.verdicts} MEASURED` +
+      // The COVERAGE RATIO is printed at every level, not only when it warns
+      // (finding B3): the alarm has a floor, the number does not, and a founder
+      // reading a green report should still be able to read the denominator.
+      (cf.coveragePct !== null ? `  ·  ${cf.coveragePct}% of ${cf.measurable} measurable` : '') +
       (cf.predatesField ? `  ·  ${cf.predatesField} predate the counterfactual` : '') +
       (Object.keys(cf.unavailable).length ? `  ·  unavailable: ${tally(cf.unavailable)}` : ''),
   );

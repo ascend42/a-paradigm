@@ -179,6 +179,36 @@ export function sealState(
   }
   appendStrand(wdir, strand); // ledger first…
   writeSelvage(wdir, state.stateId); // …then publish the tip (lesser-evil crash ordering)
-  if (refTip !== null) writeRef(wdir, 'selvage', strand.pickId, refTip); // per-ref CAS (spec §2)
+  if (refTip !== null) {
+    writeRef(wdir, 'selvage', strand.pickId, refTip); // per-ref CAS (spec §2)
+  } else if (parentPickId === null) {
+    // GENESIS IS BORN IN REFS MODE (finding B5). A brand-new fabric used to seal
+    // its first strand with no refs/heads/selvage at all and therefore came up
+    // LEGACY: the per-ref CAS disengaged (audit C-1), `warpline health` warning on
+    // run one, the native write path refusing outright (native.ts: "this fabric
+    // predates them; run `warpline refs migrate` first"), and no authoritative tip
+    // for git's .gitignore allowlist to carry. A new project starting C-1-exposed
+    // until someone runs a second, undocumented command is a setup trap, not a
+    // migration policy.
+    //
+    // AND IT SKIPS NOTHING migration performs. `migrateSelvageToRefs` exists for
+    // exactly one job: recover a pickId from a legacy stateId selvage via the
+    // highest-seq disambiguation hack, because stateIds are many-to-one and cannot
+    // name a history position. At genesis there is no legacy selvage to resolve
+    // and the tip's pickId is in hand — the hack has nothing to disambiguate. On
+    // an empty fabric migration is already a documented reasoned no-op ("no legacy
+    // selvage (empty fabric — nothing to migrate)"), so this is not a shortcut
+    // around it; it is the case it declines to handle. The native admit path has
+    // minted the genesis ref this way since it was written (native.ts, "GENESIS
+    // admit: fast-forward the (new) selvage ref") — this closes the gap for
+    // `pick`, which is how every fabric that is not born multi-writer starts.
+    //
+    // EXISTING LEGACY FABRICS ARE UNTOUCHED. The predicate is `parentPickId ===
+    // null` — an EMPTY LEDGER — not "the ref is missing". An unmigrated fabric
+    // with history has a non-null parentPickId on every seal and never enters this
+    // arm, so it stays legacy until its operator runs the founder-visible
+    // `warpline refs migrate`, exactly as before.
+    writeRef(wdir, 'selvage', strand.pickId, null); // CAS: must still be unborn
+  }
   return strand;
 }

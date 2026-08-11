@@ -129,6 +129,8 @@ export {
   installHook,
   uninstallHook,
   hookStatus,
+  hookRemedy,
+  hookInstallAdvice,
   type HookState,
   type HookStatus,
 } from './fabric/hook.js';

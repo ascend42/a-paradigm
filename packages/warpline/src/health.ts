@@ -45,13 +45,55 @@ import * as path from 'node:path';
 import { warplineDirOf, readSelvage, scanFabric } from './fabric/fabric.js';
 import { listRefs, readRef } from './fabric/refs.js';
 import { verifyFabric, type FabricVerifyReport } from './fabric/verify.js';
-import { hookStatus, type HookState } from './fabric/hook.js';
+import { hookStatus, hookRemedy, type HookState } from './fabric/hook.js';
 import { readShadowVerdicts, type ShadowVerdictRow } from './fabric/shadow.js';
 import type { CounterfactualUnavailable, ConvergenceCell } from './fabric/counterfactual.js';
 import type { AdmitBaseSource, AdmitStatus } from './fabric/admit.js';
-import { gitPath, revListCount } from './git/git-exec.js';
+import { gitPath, repoRoot, revListCount } from './git/git-exec.js';
+import { ROOT_ENV, explicitRootOf, type RootArm } from './root.js';
 
 export const HEALTH_SCHEMA = 'health:v1' as const;
+
+/**
+ * THE COVERAGE FLOOR for the git counterfactual, in percent (finding B3).
+ *
+ * WHAT THIS REPLACED, AND WHY IT HAD TO GO. The guard was `measured === 0`: it
+ * fired at EXACTLY zero and nowhere else, so the single most important number in
+ * the programme could be silenced forever by one measured row — and on the live
+ * fabric it already had been. An alarm with a one-row escape hatch is not an
+ * alarm on a metric, it is an alarm on a boolean.
+ *
+ * THE DENOMINATOR IS `measurable`, NOT `verdicts`. Rows that PREDATE the
+ * counterfactual field can never be measured by any amount of future work, so
+ * including them makes the ratio a function of frozen history rather than of
+ * current behaviour: with 43 legacy rows on this fabric, 387 new measurements
+ * would be needed to clear a 90% bar that today's pipeline already satisfies
+ * perfectly. A warning that correct behaviour cannot clear is one operators
+ * learn to ignore — which is how `=== 0` came to be trusted. Coverage and VOLUME
+ * are two different deficiencies; collapsing them into one number is the C-9
+ * mistake wearing a percent sign.
+ *
+ * WHY 90 AND NOT 100. The counterfactual is asked automatically on every admit,
+ * so near-total coverage is the expected steady state and unavailability is
+ * never sampling noise — each `unavailable` row names a structural reason. Two
+ * of those reasons are workflow-legitimate and permanent for a team that uses
+ * them (`worktree-ref`: admitting uncommitted work; `no-two-refs`), and a 100%
+ * floor would warn such a team on every run, forever. Two are FAULTS that must
+ * not be able to hide (`git-error`, and `timeout` — a 20 s bound riding the
+ * post-commit hook). 90 tolerates the first pair at a realistic rate while
+ * keeping fewer than one adjudication in ten unexplained.
+ *
+ * WHAT A FOUNDER SEES:
+ *   50%  WARNING — half the adjudications never got a git answer; the headline
+ *        claim's denominator is half the size the verdict count suggests.
+ *   89%  WARNING — deliberately on the far side of the line. 89 and 90 must fall
+ *        on opposite sides or the threshold is decoration, and the boundary is
+ *        what the test pins (the ends alone would not have caught `=== 0`).
+ *   90%  silent on the ratio — and the census line still prints
+ *        `90 of 100 MEASURED (90.0% coverage)`, so the number is never hidden,
+ *        only un-alarmed.
+ */
+export const COUNTERFACTUAL_COVERAGE_MIN_PCT = 90;
 
 /* ────────────────────────── the hook reachability law ──────────────────────── */
 
@@ -60,9 +102,19 @@ export const HEALTH_SCHEMA = 'health:v1' as const;
  * or none?" — the check that catches the SILENT failure mode, where the block is
  * installed, `$WARPLINE_BIN` resolves to nothing, and `|| true` swallows it.
  *
- * These three constants are the hook's, not ours: test/warpline-health.test.ts
- * asserts each appears VERBATIM in the text `installHook` actually writes, so a
- * change to the hook breaks the replication instead of silently outdating it.
+ * These three constants are the hook's, not ours, and the binding is asserted
+ * against the hook's RESOLUTION LINES — the operand of `command -v`, the shell
+ * variable that operand names, its `${VAR:-default}` expansion, and the operand
+ * of the dist-path `[ -f … ]` test — not against the block as a whole
+ * (test/warpline-health.test.ts §2).
+ *
+ * THE WEAKER VERSION OF THIS TEST WAS VACUOUS AND SHIPPED. It asserted only that
+ * the three strings appeared SOMEWHERE in the generated text. `warpline` occurs
+ * on eight lines of the block, `WARPLINE_BIN` on five, and the dist path on
+ * three — including prose comments and the operator-advice `echo` — so renaming
+ * BOTH the binary and the env var, and separately DELETING the entire dist
+ * fallback arm, each left the test green. A containment check over a file that
+ * documents itself in prose is a check on the prose.
  */
 export const HOOK_BIN_ENV = 'WARPLINE_BIN';
 export const HOOK_DEFAULT_BIN = 'warpline';
@@ -108,18 +160,28 @@ export interface HookHealth {
   resolved: string | null;
 }
 
-function hookHealth(root: string, hookPath: string | null): HookHealth {
+/**
+ * The BINARY-RESOLUTION half of hookHealth, on its own.
+ *
+ * Split out for `hook install` (finding C2), which needs exactly this fact at
+ * install time and must not pay for `verifyFabric`. Deliberately does NOT read
+ * the hook file: whether the block is installed and whether a binary resolves
+ * are independent questions, and conflating them is what let "installed" stand
+ * in for "reaching" in the first place.
+ */
+export function hookResolution(root: string): Pick<HookHealth, 'bin' | 'arm' | 'resolved'> {
   const envBin = process.env[HOOK_BIN_ENV];
   const bin = envBin && envBin.trim() !== '' ? envBin.trim() : HOOK_DEFAULT_BIN;
-  const state = hookPath ? hookStatus(hookPath).state : ('unknown' as const);
-
   const onPath = commandV(bin);
-  if (onPath) {
-    return { hookPath, state, bin, arm: envBin ? 'env-bin' : 'path', resolved: onPath };
-  }
+  if (onPath) return { bin, arm: envBin ? 'env-bin' : 'path', resolved: onPath };
   const dist = path.join(root, HOOK_DIST_FALLBACK);
-  if (fs.existsSync(dist)) return { hookPath, state, bin, arm: 'dist', resolved: `node ${dist}` };
-  return { hookPath, state, bin, arm: 'none', resolved: null };
+  if (fs.existsSync(dist)) return { bin, arm: 'dist', resolved: `node ${dist}` };
+  return { bin, arm: 'none', resolved: null };
+}
+
+function hookHealth(root: string, hookPath: string | null): HookHealth {
+  const state = hookPath ? hookStatus(hookPath).state : ('unknown' as const);
+  return { hookPath, state, ...hookResolution(root) };
 }
 
 /* ──────────────────────────────── the report ───────────────────────────────── */
@@ -173,6 +235,15 @@ export interface AdjudicationHealth {
     predatesField: number;
     unavailable: Partial<Record<CounterfactualUnavailable, number>>;
     cells: Partial<Record<ConvergenceCell, number>>;
+    /**
+     * Verdicts that COULD have been measured: `verdicts − predatesField`, which
+     * is identically `measured + Σunavailable`. The denominator of the coverage
+     * ratio — see COUNTERFACTUAL_COVERAGE_MIN_PCT for why the third bucket is
+     * excluded rather than counted as a miss.
+     */
+    measurable: number;
+    /** `measured / measurable` as a percent (1 dp), or null when nothing is measurable. */
+    coveragePct: number | null;
   };
   /**
    * Verdicts where MEANING contested (KNOT/DANGLE). Zero means this project has
@@ -190,9 +261,65 @@ export interface DiskHealth {
   largest: Array<{ name: string; bytes: number }>;
 }
 
+/* ─────────────────────────── root provenance ───────────────────────────── */
+
+/**
+ * WHICH fabric this invocation is pointed at, and WHY.
+ *
+ * `report.root` has always carried the path. The path is not the fact that
+ * matters: "--root took" and "it fell through to the git root, which happens to
+ * be correct today" print identically, and only the second is D-7 in miniature.
+ * The arm is the difference.
+ */
+export interface RootHealth {
+  /** the arm of the precedence chain that decided it (#warpline-root). */
+  arm: RootArm;
+  /** true for the two EXPLICIT arms — the operator said which fabric. */
+  explicit: boolean;
+  /** `git -C <root> rev-parse --show-toplevel`, or null when git could not answer. */
+  gitToplevel: string | null;
+  /** an ENCLOSING directory that also carries a `.warpline/`, or null. */
+  nestedUnder: string | null;
+}
+
+/**
+ * Re-derive which arm won, from the same inputs `resolveRootVerbose` reads.
+ *
+ * Derived rather than threaded through `health(root)` so that every caller —
+ * CLI, MCP skin, tests — gets the field without a signature change; the two
+ * explicit arms are process state (`explicitRootOf()`, `$WARPLINE_ROOT`) and so
+ * are read back exactly, not guessed.
+ */
+function rootArmNow(): RootArm {
+  if (explicitRootOf() !== null) return 'flag';
+  const fromEnv = process.env[ROOT_ENV];
+  if (fromEnv !== undefined && fromEnv.trim() !== '') return 'env';
+  return 'git'; // corrected to 'cwd' below when git cannot answer
+}
+
+/**
+ * The nearest ANCESTOR directory carrying its own `.warpline/`, or null.
+ *
+ * A fabric nested inside another fabric's tree is the concrete form of the
+ * hazard `root.ts` names in its header: a scratch fabric created under the live
+ * checkout, after which an unqualified command resolves to whichever one git
+ * answers with. Pure `existsSync` up the chain — no reads, nothing written.
+ */
+function nestedUnderOf(root: string): string | null {
+  let dir = path.dirname(path.resolve(root));
+  for (;;) {
+    if (fs.existsSync(path.join(dir, '.warpline'))) return dir;
+    const parent = path.dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
 export interface HealthReport {
   schemaVersion: typeof HEALTH_SCHEMA;
   root: string;
+  /** WHY this root — the arm, and the two ways it can be quietly wrong. */
+  rootResolution: RootHealth;
   fabric: FabricHealth;
   seal: SealHealth;
   hook: HookHealth;
@@ -267,7 +394,15 @@ function adjudicationOf(rows: ShadowVerdictRow[]): AdjudicationHealth {
       unavailable[cf.unavailable] = (unavailable[cf.unavailable] ?? 0) + 1;
     }
   }
-  return { verdicts: rows.length, byStatus, baseFrom, counterfactual: { measured, predatesField, unavailable, cells }, contested };
+  const measurable = rows.length - predatesField;
+  const coveragePct = measurable > 0 ? Number(((measured / measurable) * 100).toFixed(1)) : null;
+  return {
+    verdicts: rows.length,
+    byStatus,
+    baseFrom,
+    counterfactual: { measured, predatesField, unavailable, cells, measurable, coveragePct },
+    contested,
+  };
 }
 
 /**
@@ -278,6 +413,53 @@ export async function health(root: string): Promise<HealthReport> {
   const wdir = warplineDirOf(root);
   const warnings: string[] = [];
   const unsound: string[] = [];
+
+  /* ── root provenance ── */
+  // Read-only git, and only from the RESOLVED root (not process.cwd()): the
+  // question is "is the fabric I am about to report on the toplevel of its own
+  // repository?", which is a fact about `root`, not about where I was invoked.
+  const gitToplevel = await repoRoot({ cwd: root }).catch(() => null);
+  const derivedArm = rootArmNow();
+  const rootResolution: RootHealth = {
+    // The 'git' arm is only real if git can actually answer; otherwise
+    // `resolveRoot` took the cwd fallback and so did we.
+    arm: derivedArm === 'git' && gitToplevel === null ? 'cwd' : derivedArm,
+    explicit: derivedArm === 'flag' || derivedArm === 'env',
+    gitToplevel,
+    nestedUnder: nestedUnderOf(root),
+  };
+
+  // WARNING 1 — the SILENT fallback. With no override the root is `repoRoot()`
+  // BY CONSTRUCTION, so "not the git toplevel and not overridden" reduces
+  // exactly to "git could not answer and we used process.cwd()". That is the
+  // only unexplained arm in the chain and it is the one that can point at a
+  // directory nobody chose, so it is the one worth a line.
+  if (rootResolution.arm === 'cwd') {
+    warnings.push(
+      `root resolved by FALLING BACK to the working directory — \`--root\` was not given, $${ROOT_ENV} is not set, ` +
+        `and git could not name a toplevel for ${root}. Nothing chose this fabric; it is wherever the shell happened to be. ` +
+        `Pass \`--root <dir>\` to say which fabric you mean.`,
+    );
+  }
+
+  // WARNING 2 — a fabric INSIDE another fabric. Rare, cheap to detect, and the
+  // exact accident root.ts's header is about (a scratch fabric under the live
+  // checkout, after which an unqualified command targets whichever one git
+  // answers with). Worth warning even when the current resolution is correct:
+  // the hazard is the NEXT invocation, which may not pass --root.
+  if (rootResolution.nestedUnder) {
+    warnings.push(
+      `this root's .warpline/ is NESTED inside another fabric at ${rootResolution.nestedUnder} — ` +
+        `two fabrics are stacked on one path, and a command run without \`--root\` here targets whichever ` +
+        `one git names first. Move the inner fabric out, or always pass \`--root\`.`,
+    );
+  }
+  // DELIBERATELY NOT WARNED: an explicit root that merely differs from the git
+  // toplevel, and the mere USE of $WARPLINE_ROOT. Both are the tool working as
+  // designed — an operator who names a fabric gets that fabric — and warning on
+  // the intended path is how a diagnostic teaches people to ignore it. The ARM
+  // LINE already makes an inherited $WARPLINE_ROOT visible, which is the actual
+  // need; a warning on top of it would be noise, not information.
 
   /* ── fabric ── */
   let scan: ReturnType<typeof scanFabric>;
@@ -420,13 +602,13 @@ export async function health(root: string): Promise<HealthReport> {
         unsound.push(
           `the auto-seal hook is INSTALLED but resolves to nothing: neither \`${hook.bin}\` on PATH nor ` +
             `${HOOK_DIST_FALLBACK} exists. Every commit runs it, it fails, and \`|| true\` hides that — ` +
-            `the ledger silently stops growing.`,
+            `the ledger silently stops growing. FIX: ${hookRemedy(root)}`,
         );
       } else if (hook.arm === 'dist') {
         warnings.push(
           `the auto-seal hook resolves via the MONOREPO DIST FALLBACK (${HOOK_DIST_FALLBACK}), not \`${hook.bin}\` ` +
             `on PATH. That arm works only inside this checkout and only while dist/ is built — a stale or ` +
-            `deleted dist makes every seal a silent no-op.`,
+            `deleted dist makes every seal a silent no-op. FIX: ${hookRemedy(root)}`,
         );
       }
       // 'path' / 'env-bin' — installed AND reachable. The only silent case here
@@ -444,11 +626,32 @@ export async function health(root: string): Promise<HealthReport> {
   /* ── adjudication ── */
   const adjudication = adjudicationOf(readShadowVerdicts(root));
   const cf = adjudication.counterfactual;
-  if (adjudication.verdicts > 0 && cf.measured === 0) {
+  // TOTAL over the three states of the denominator, like the hook switch above:
+  // nothing measurable at all / measurable but under the floor / at or above it.
+  // The predecessor tested `measured === 0`, which is the ratio's ZERO END and
+  // nothing else — one measured row disarmed it permanently (finding B3).
+  if (adjudication.verdicts > 0 && cf.measurable === 0) {
     warnings.push(
-      `0 of ${adjudication.verdicts} verdict(s) were measured against git` +
-        (cf.predatesField ? ` (${cf.predatesField} predate the counterfactual field)` : '') +
-        ` — the headline claim ("meaning caught what bytes missed") has NO denominator on this project.`,
+      `all ${adjudication.verdicts} verdict(s) PREDATE the counterfactual field — not one adjudication on ` +
+        `this project has ever been measured against git, so the headline claim ("meaning caught what bytes ` +
+        `missed") has NO denominator here. These rows are unmeasurable by construction; only NEW adjudications ` +
+        `can build one.`,
+    );
+  } else if (cf.measurable > 0 && cf.measured * 100 < cf.measurable * COUNTERFACTUAL_COVERAGE_MIN_PCT) {
+    // Integer cross-multiplication, not `coveragePct < 90`: the reported pct is
+    // rounded for humans, and a threshold compared against a rounded value is a
+    // threshold at an unknown place. 89.96% must warn.
+    warnings.push(
+      `git-counterfactual coverage is ${cf.coveragePct}% — ${cf.measured} of ${cf.measurable} MEASURABLE verdict(s) ` +
+        `were actually measured against git (floor ${COUNTERFACTUAL_COVERAGE_MIN_PCT}%)` +
+        (Object.keys(cf.unavailable).length
+          ? `; unmeasured: ${Object.entries(cf.unavailable)
+              .map(([k, v]) => `${k} ${v}`)
+              .join(', ')}`
+          : '') +
+        (cf.predatesField ? ` (${cf.predatesField} further row(s) predate the field and are excluded)` : '') +
+        ` — the headline claim ("meaning caught what bytes missed") is being computed over a denominator that ` +
+        `is quietly smaller than the verdict count.`,
     );
   }
   if (adjudication.contested === 0) {
@@ -465,7 +668,7 @@ export async function health(root: string): Promise<HealthReport> {
   const disk = diskOf(wdir);
   disk.mbPerStrand = fabric.strands > 0 ? Number((disk.bytes / fabric.strands / 1_048_576).toFixed(2)) : null;
 
-  return { schemaVersion: HEALTH_SCHEMA, root, fabric, seal, hook, adjudication, disk, warnings, unsound };
+  return { schemaVersion: HEALTH_SCHEMA, root, rootResolution, fabric, seal, hook, adjudication, disk, warnings, unsound };
 }
 
 /** 0 green · 1 warnings · 2 the fabric is unsound. */

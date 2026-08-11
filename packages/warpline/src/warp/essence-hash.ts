@@ -286,7 +286,6 @@ export function computeEssences(index: SymbolIndex, symbols: string[]): EssenceR
   }
 
   const contentIds = new Map<string, string>();
-  const computing = new Set<string>(); // cycle guard for non-SCC recursion safety
 
   // Essence of a single node's CNF given a resolver for its (out-of-unit) edges.
   const localCNF = (
@@ -369,61 +368,149 @@ export function computeEssences(index: SymbolIndex, symbols: string[]): EssenceR
     return cnf;
   };
 
-  const essenceOf = (sym: string): string => {
-    const cached = contentIds.get(sym);
-    if (cached) return cached;
+  /**
+   * The UNIT a symbol hashes AS: its SCC when that SCC has more than one
+   * member, else the symbol alone. (A 1-node self-loop is a singleton — both
+   * `liftEdges` and `buildEssenceGraph` drop self-edges, so it carries no
+   * intra-unit edge to placeholder.)
+   */
+  const unitOf = (sym: string): Set<string> | null => {
+    const u = sccOf.get(sym);
+    return u && u.size > 1 ? u : null;
+  };
 
-    const unit = sccOf.get(sym);
-    if (unit && unit.size > 1) {
-      hashSCC(unit);
-      return contentIds.get(sym)!;
+  /**
+   * The out-of-unit targets that must already be hashed before `sym`'s unit
+   * can hash. Mirrors each resolver's admission test EXACTLY:
+   *   - SCC member edges → EVERY out-of-unit target, unconditionally, because
+   *     the SCC resolver asked for the target essence unconditionally (an
+   *     entry-less target must still be visited so it fails exactly where it
+   *     always failed, rather than silently becoming a placeholder).
+   *   - singleton edges → only what the singleton resolver would have resolved;
+   *     anything else is the `extern` literal and needs nothing resolved.
+   *
+   * The singleton test is stable over time even though `contentIds` grows:
+   * nothing enters `contentIds` that `graph.entryOf` does not already admit
+   * (only a unit with an entry can be hashed), so `contentIds ⊆ entryOf` and
+   * the disjunction cannot flip between this call and `hashUnit`.
+   */
+  const dependenciesOf = (sym: string): string[] => {
+    const unit = unitOf(sym);
+    const deps: string[] = [];
+    if (unit) {
+      for (const member of unit) {
+        for (const e of graph.edgesOf.get(member) ?? []) {
+          if (!unit.has(e.to)) deps.push(e.to);
+        }
+      }
+      return deps;
+    }
+    for (const e of graph.edgesOf.get(sym) ?? []) {
+      if (contentIds.has(e.to) || graph.entryOf.has(e.to)) deps.push(e.to);
+    }
+    return deps;
+  };
+
+  /**
+   * Hash `sym`'s unit and stamp every member's contentId. PRECONDITION: every
+   * dependency `dependenciesOf(sym)` named is already in `contentIds` (or was
+   * deliberately skipped as an open cycle member — see `resolve`).
+   */
+  const hashUnit = (sym: string): void => {
+    const unit = unitOf(sym);
+
+    if (unit) {
+      // Intra-unit edges → placeholder; out-of-unit edges → the real target
+      // essence. `?? SCC_INTERNAL` IS the old `computing` guard: a dependency
+      // skipped because it is already open on the walk is, by definition, in a
+      // cycle with this one.
+      const edgeEssence = (e: WarpEdge): string =>
+        unit.has(e.to) ? SCC_INTERNAL : (contentIds.get(e.to) ?? SCC_INTERNAL);
+      // Order members by their name-stripped canonical CNF so the unit hash is
+      // independent of symbol naming. `localCNF` is pure given the resolver, so
+      // ONE call now feeds both the ordering key and the unit hash — it used to
+      // be invoked twice per member for two provably equal results.
+      const memberCNFs = Array.from(unit).map((m) => {
+        const cnf = localCNF(m, edgeEssence);
+        return { sym: m, cnf, serialized: canonicalSerialize(cnf) };
+      });
+      memberCNFs.sort((a, b) => (a.serialized < b.serialized ? -1 : a.serialized > b.serialized ? 1 : 0));
+      const unitSerialized = canonicalSerialize(memberCNFs.map((m) => m.cnf as CanonicalValue));
+      const sccHash = sha256(unitSerialized);
+      memberCNFs.forEach((m, ordinal) => {
+        // Per-member version tag: a code-level SCC carries `v1:ts...`, a `.purpose`
+        // SCC stays `v0`. (A mixed SCC can't form — code→component edges are one-way.)
+        const tag = essenceTagOf(graph.entryOf.get(m.sym)!);
+        contentIds.set(m.sym, `essence:${tag}:scc:${sccHash}:${ordinal}`);
+      });
+      return;
     }
 
-    // Singleton (possibly a 1-node self-loop SCC — treat as singleton). Resolve
-    // edges via target essence; a self/forward cycle that isn't an SCC>1 can't
-    // exist, but guard recursion anyway.
-    if (computing.has(sym)) {
-      // Defensive: a cycle not caught as SCC>1 — fall back to placeholder so we
-      // never infinite-loop. (Shouldn't happen given Tarjan.)
-      return `${SCC_INTERNAL}`;
-    }
-    computing.add(sym);
     const cnf = localCNF(sym, (e) =>
       contentIds.has(e.to) || graph.entryOf.has(e.to)
-        ? essenceOf(e.to)
+        ? (contentIds.get(e.to) ?? SCC_INTERNAL)
         : `essence:${ESSENCE_VERSION}:extern:${sha256(e.to)}`,
     );
-    computing.delete(sym);
     const tag = essenceTagOf(graph.entryOf.get(sym)!);
-    const id = `essence:${tag}:${sha256(canonicalSerialize(cnf))}`;
-    contentIds.set(sym, id);
-    return id;
+    contentIds.set(sym, `essence:${tag}:${sha256(canonicalSerialize(cnf))}`);
   };
 
-  const hashSCC = (unit: Set<string>): void => {
-    const members = Array.from(unit);
-    // Resolver: intra-unit edges → placeholder; out-of-unit edges → real essence.
-    const edgeEssence = (e: WarpEdge): string =>
-      unit.has(e.to) ? SCC_INTERNAL : essenceOf(e.to);
-    // Build each member's local CNF, then order members by their name-stripped
-    // canonical CNF so the unit hash is independent of symbol naming.
-    const memberCNFs = members.map((m) => ({
-      sym: m,
-      cnf: localCNF(m, edgeEssence),
-      serialized: canonicalSerialize(localCNF(m, edgeEssence)),
-    }));
-    memberCNFs.sort((a, b) => (a.serialized < b.serialized ? -1 : a.serialized > b.serialized ? 1 : 0));
-    const unitSerialized = canonicalSerialize(memberCNFs.map((m) => m.cnf as CanonicalValue));
-    const sccHash = sha256(unitSerialized);
-    memberCNFs.forEach((m, ordinal) => {
-      // Per-member version tag: a code-level SCC carries `v1:ts...`, a `.purpose`
-      // SCC stays `v0`. (A mixed SCC can't form — code→component edges are one-way.)
-      const tag = essenceTagOf(graph.entryOf.get(m.sym)!);
-      contentIds.set(m.sym, `essence:${tag}:scc:${sccHash}:${ordinal}`);
-    });
+  /**
+   * Resolve `root` and everything it transitively depends on, walking the SCC
+   * CONDENSATION with an EXPLICIT, heap-allocated stack.
+   *
+   * WHAT THIS REPLACED, and why one conversion would not have been enough.
+   * `essenceOf` was a closure that reached itself through TWO resolvers — the
+   * singleton edge resolver, and `hashSCC`'s out-of-unit resolver — with
+   * `essenceOf` calling `hashSCC` in turn. That is ONE mutual recursion with two
+   * entry arms, so converting either arm alone would have left the ceiling
+   * exactly where it was while looking like a fix. Both are gone: nothing below
+   * calls itself, and `hashUnit` only ever READS `contentIds`.
+   *
+   * The bound that mattered was never the object COUNT — it was the length of
+   * the longest chain in the condensation, because that was the JS call depth.
+   * A heap stack has no such bound.
+   *
+   * `open` is the former `computing` set with the same job: a dependency
+   * already open on this walk belongs to a cycle Tarjan did not fold into an
+   * SCC, so it is not descended into and its edge reads back as the
+   * `@scc-internal` placeholder. With a correct Tarjan that state is
+   * unreachable; where the old code would have recursed forever on it, this
+   * terminates. That is the one behavioural difference, and it is strictly
+   * safer in a state neither version can reach.
+   */
+  const resolve = (root: string): void => {
+    if (contentIds.has(root)) return;
+    const open = new Set<string>([root]);
+    const stack: Array<{ sym: string; deps: string[]; next: number }> = [
+      { sym: root, deps: dependenciesOf(root), next: 0 },
+    ];
+    while (stack.length > 0) {
+      const frame = stack[stack.length - 1];
+      // An SCC unit stamps ALL its members at once, so a frame can be finished
+      // by a sibling before its own turn comes.
+      if (contentIds.has(frame.sym)) {
+        open.delete(frame.sym);
+        stack.pop();
+        continue;
+      }
+      let descended = false;
+      while (frame.next < frame.deps.length) {
+        const dep = frame.deps[frame.next++];
+        if (contentIds.has(dep) || open.has(dep)) continue;
+        open.add(dep);
+        stack.push({ sym: dep, deps: dependenciesOf(dep), next: 0 });
+        descended = true;
+        break;
+      }
+      if (descended) continue;
+      hashUnit(frame.sym);
+      open.delete(frame.sym);
+      stack.pop();
+    }
   };
 
-  for (const sym of symbols) essenceOf(sym);
+  for (const sym of symbols) resolve(sym);
   return { contentIds };
 }
 

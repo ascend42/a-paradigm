@@ -32,6 +32,7 @@ import * as fs from 'node:fs';
 import * as fsp from 'node:fs/promises';
 import { recordPick } from '../src/fabric/pick.js';
 import { warplineDirOf, readFabric, readSelvage, writeSelvage } from '../src/fabric/fabric.js';
+import { readRef, writeRef } from '../src/fabric/refs.js';
 import { verifyFabric } from '../src/fabric/verify.js';
 import { readStakeJournal, stakeAuditPathOf } from '../src/fabric/stake-journal.js';
 import type { Strand } from '../src/fabric/strand.js';
@@ -84,14 +85,30 @@ class StakedRepo {
 
   ledgerPath = (): string => path.join(warplineDirOf(this.dir), 'fabric.jsonl');
 
-  /** Cut the ledger to its first `keep` strands AND roll the selvage back — the
-   *  auditor's exact move: the survivors stay perfectly consistent with each other. */
+  /**
+   * Cut the ledger to its first `keep` strands and roll the tip back — the
+   * auditor's exact move: cut the tail, then MAKE THE SURVIVORS AGREE.
+   *
+   * BOTH TIP POINTERS, not one. This used to roll back only the legacy stateId
+   * selvage, which was a faithful model while a fresh fabric came up unmigrated.
+   * Genesis is now born in refs mode (finding B5), so a fabric has a second tip —
+   * refs/heads/selvage, holding a pickId — and leaving it pointing into the erased
+   * region makes `verify` report `ref-unresolved`. That is a truncator who forgot
+   * a file, not the C-6 finding: the finding is that a COMPETENT truncation leaves
+   * the surviving record self-consistent and only the stake journal dissents. A
+   * fixture that models an incompetent attacker would make the negative half of
+   * this file ("verify must STAY usable without a journal") pass for the wrong
+   * reason, so the helper models the competent one.
+   */
   truncateTo(keep: number): void {
     const raw = fs.readFileSync(this.ledgerPath(), 'utf8');
     const lines = raw.split('\n').filter((l) => l.trim().length > 0);
     fs.writeFileSync(this.ledgerPath(), lines.slice(0, keep).join('\n') + '\n', 'utf8');
-    const survivors = readFabric(warplineDirOf(this.dir));
-    writeSelvage(warplineDirOf(this.dir), survivors[survivors.length - 1].stateId);
+    const wdir = warplineDirOf(this.dir);
+    const survivors = readFabric(wdir);
+    const tip = survivors[survivors.length - 1];
+    writeSelvage(wdir, tip.stateId);
+    if (readRef(wdir, 'selvage') !== null) writeRef(wdir, 'selvage', tip.pickId);
   }
 
   destroy = (): Promise<void> => fsp.rm(this.dir, { recursive: true, force: true });
