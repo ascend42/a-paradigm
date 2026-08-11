@@ -74,7 +74,7 @@ import {
   type AdmitStatus,
 } from './admit.js';
 import { materializeMergedStateNative } from './materialize.js';
-import { buildKnotPayload, persistKnotPayload, readFileFromTree, listKnotPayloads } from './knot-payload.js';
+import { buildKnotPayload, persistKnotPayload, readFileFromTree, listKnotPayloads, readKnotPayload } from './knot-payload.js';
 import { VERB_DESCRIPTORS, nextLegalVerbsFor } from '../daemon/descriptors.js';
 import { readClaim, evaluateClaim, recordClaimEvaluation, createClaim, persistClaim, type Claim, type ClaimEvaluation, type CreateClaimInput } from './claim.js';
 import { readGradeSidecar, symbolSurvivalIndex, evaluateEscalation, recordGradeEscalation } from './grade.js';
@@ -872,6 +872,15 @@ export async function resolveNative(root: string, opts: ResolveNativeOptions): P
     ).sort();
     if (contended.length === 0) contended = resolvedSymbols;
 
+    // Link to the payload this resolution settles (see
+    // KnotResolution.knotPayloadId): the payload already classifies each
+    // contested unit direct-vs-ripple, which is what separates a GENUINE contest
+    // from an OVER-BLOCK, and the field test's falsifiers are unreadable without
+    // that split. Joined by the ours-side stateId rather than by symbol name,
+    // which breaks as soon as one symbol is contested twice. Best-effort: a
+    // contest with no persisted payload simply omits the field, never a guess.
+    const knotPayloadId = readKnotPayload(root, scratchStrand.stateId)?.payloadId;
+
     const resolution: KnotResolution = {
       decidedBy,
       reason: opts.reason,
@@ -879,6 +888,7 @@ export async function resolveNative(root: string, opts: ResolveNativeOptions): P
       against: selvage.stateId,
       contended,
       resolvedSymbols,
+      ...(knotPayloadId ? { knotPayloadId } : {}),
     };
     const strand = buildStrandV3({
       parents: [selvageTipId, scratchTipId],

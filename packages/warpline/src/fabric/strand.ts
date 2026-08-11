@@ -55,6 +55,31 @@ export interface KnotResolution {
   against: string; // the selvage stateId the proposal conflicted with
   contended: string[]; // the symbols that were in conflict (knots + dangles)
   resolvedSymbols: string[]; // symbols the resolution changed vs the selvage
+  /**
+   * The #knot-payload this resolution settles, when one was persisted.
+   *
+   * WHY A POINTER AND NOT A COPY. The payload already classifies every contested
+   * unit as `direct` (an own-content edit by at least one side) or ripple-only
+   * (both essences moved solely through edge-target transitivity — the
+   * Merkle-by-target avalanche). That distinction is what separates a GENUINE
+   * contest from an OVER-BLOCK, and the field test's headline falsifiers cannot
+   * be read without it: "meaning adds nothing over bytes" and "failing closed is
+   * unaffordable" are both unreadable if the denominator mixes real contests with
+   * commuting-edit false positives (T-2026-07-15-008, measured 3/3 on Move-3).
+   *
+   * `contended` carries only symbol NAMES, so joining a resolution back to its
+   * classification previously meant matching on name and timing — which breaks
+   * the moment one symbol is contested twice. This makes the join exact.
+   *
+   * A pointer rather than an inlined copy because duplicated data drifts, and
+   * `.warpline/knots/` is never gc'd (per the audit, "nothing is ever deleted" is
+   * load-bearing for recoverability), so the payload is durable. OPTIONAL: a
+   * resolution sealed before this field, or one with no persisted payload (a
+   * shadow-era contest), stays valid — and because `resolves` is folded WHOLE
+   * into the v3 pickId, an ABSENT field is absent from the preimage, so every
+   * already-sealed strand keeps its identity.
+   */
+  knotPayloadId?: string;
 }
 
 /**

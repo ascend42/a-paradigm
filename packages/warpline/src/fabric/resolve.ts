@@ -17,6 +17,7 @@ import { readScratch, clearScratch } from './scratch.js';
 import { sealState } from './seal.js';
 import { withFabricLock } from './lock.js';
 import { admitDecision } from './admit.js';
+import { readKnotPayload } from './knot-payload.js';
 import type { WarpState } from '../warp/warp-state.js';
 import type { Strand, KnotResolution } from './strand.js';
 
@@ -82,6 +83,21 @@ export async function resolveKnot(root: string, opts: ResolveOptions): Promise<R
   const gitCommit = await revParse(isWorktree ? 'HEAD' : opts.resolvedRef, { cwd }).catch(() => null);
   const now = new Date().toISOString();
 
+  // Link the resolution to the payload it settles, so the genuine-vs-over-block
+  // classification the payload already computed can be joined EXACTLY rather than
+  // by symbol name (see KnotResolution.knotPayloadId). Resolved by the ours-side
+  // stateId — the same selector `warpline knot show` accepts. Best-effort and
+  // never fatal: a contest with no persisted payload simply omits the field.
+  let knotPayloadId: string | undefined;
+  if (opts.oursRef) {
+    try {
+      const ours = await absorb(opts.oursRef, { cwd });
+      knotPayloadId = readKnotPayload(root, ours.stateId)?.payloadId;
+    } catch {
+      /* no payload resolvable — the field stays absent, never guessed */
+    }
+  }
+
   const resolution: KnotResolution = {
     decidedBy: actor,
     reason: opts.reason,
@@ -89,6 +105,7 @@ export async function resolveKnot(root: string, opts: ResolveOptions): Promise<R
     against: selvageId,
     contended,
     resolvedSymbols,
+    ...(knotPayloadId ? { knotPayloadId } : {}),
   };
 
     const strand = sealState(root, store, resolved, {
