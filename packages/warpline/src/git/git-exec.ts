@@ -638,9 +638,17 @@ async function mergeTreeFallback(
   const cwd = opts.cwd ?? process.cwd();
   // Resolve b to a SHA before we leave the primary worktree's ref namespace.
   const bSha = await revParse(b, opts);
-  // This path genuinely needs a real worktree (git's merge machinery). It is the
-  // one remaining `.git/worktrees` user, so serialize it per-repo: concurrent
-  // fallbacks on one repo can't race the worktree lock. Distinct repos run free.
+  // This path genuinely needs a real worktree (git's merge machinery), so
+  // serialize it per-repo: concurrent fallbacks on one repo can't race the
+  // worktree registry. Distinct repos run free.
+  //
+  // It is NOT the only `.git/worktrees` user, though this comment claimed to be
+  // for a long time — #oracle's loadBranchIndex is the other, and it ran UNLOCKED
+  // while resolving both branches through `Promise.all`, i.e. two concurrent adds
+  // against one repo on every oracle run. `git worktree add` validates the whole
+  // registry as it runs, so a sibling mid-create fails the add with "failed to
+  // read .git/worktrees/<other>/commondir". Both callers now take this lock; if a
+  // third appears, it must take it too.
   const root = await repoRoot({ cwd }).catch(() => cwd);
   return withRepoLock(root, async () => {
     const tmp = await worktreeAdd(a, opts);

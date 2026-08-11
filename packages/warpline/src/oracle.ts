@@ -33,11 +33,13 @@ import {
   mergeBase,
   mergeTree,
   repoRoot,
+  revParse,
   worktreeAdd,
   worktreeRemove,
   changedPaths,
   type GitOptions,
 } from './git/git-exec.js';
+import { withRepoLock } from './git/repo-lock.js';
 import { classifyMergePaths, type MergeCoverage } from './honesty.js';
 
 export interface OracleRecord {
@@ -157,10 +159,48 @@ export async function oracle(
   const prediction = predict(deltaA, deltaB);
 
   // 5. git reality (read-only)
-  const reality = await mergeTree(branchA, branchB, { cwd }).catch(() => ({
-    conflicted: false,
-    conflictPaths: [] as string[],
-  }));
+  //
+  // A FAILED MEASUREMENT IS NOT A CLEAN MERGE. This `catch` used to answer
+  // `conflicted: false` for ANY failure — a bad ref, a broken repo, git absent —
+  // and `conflicted: false` is not a neutral default here: `score()` gates the
+  // confusion matrix on it, so an unmeasurable merge was scored as "git merged
+  // clean", which is precisely the cell that FLATTERS the headline claim
+  // ("meaning caught what bytes missed"). The instrument that measures our own
+  // claim was failing toward the favourable answer. #git-counterfactual already
+  // learned this one field over and says so in its header: "git said clean" and
+  // "we never asked git" are opposite facts.
+  //
+  // PRE-FLIGHT, mirroring counterfactual.ts: a side git cannot resolve must
+  // never reach merge-tree, because `git merge-tree --write-tree` exits 1 for
+  // BOTH "conflicted" and "not something we can merge" — so git-exec reports an
+  // unresolvable ref as a CONFLICT. Checking first keeps that conflation out of
+  // the scored record without touching the shared merge semantics every other
+  // caller (admit, weave, the counterfactual) depends on.
+  //
+  // The oracle FAILS LOUD rather than carrying an `unavailable` state: unlike a
+  // shadow row, which is one observation among many and must survive a hole, an
+  // OracleRecord IS the scored verdict. A record whose git side was never
+  // measured has nothing to score, and emitting one would put a fabricated cell
+  // into the only evidence base for the claim.
+  for (const ref of [branchA, branchB]) {
+    if (ref === WORKTREE_REF) continue; // uncommitted by construction; handled below
+    try {
+      await revParse(`${ref}^{commit}`, { cwd });
+    } catch {
+      throw new Error(
+        `warpline: oracle cannot measure git reality — '${ref}' does not resolve to a commit. ` +
+          `Refusing to score a confusion matrix against a merge that was never performed ` +
+          `(an unmeasured merge is not a clean one).`,
+      );
+    }
+  }
+  const reality = await mergeTree(branchA, branchB, { cwd }).catch((err: unknown) => {
+    throw new Error(
+      `warpline: oracle cannot measure git reality — merging '${branchA}' and '${branchB}' failed: ` +
+        `${err instanceof Error ? err.message : String(err)}. ` +
+        `Refusing to score this as a clean merge.`,
+    );
+  });
 
   // map conflict paths → symbols via dir of the .purpose, AND keep the paths that
   // mapped to NO symbol (git-only divergences the meaning lens can't see).
@@ -240,13 +280,32 @@ async function loadBranchIndex(ref: string, cwd: string) {
     const g = await loadLiveGraph(cwd);
     return g.index;
   }
-  const tmp = await worktreeAdd(ref, { cwd });
-  try {
-    const g = await loadLiveGraph(tmp);
-    return g.index;
-  } finally {
-    await worktreeRemove(tmp, { cwd });
-  }
+  // SERIALIZED PER REPO (#repo-lock). `git worktree add` VALIDATES the whole
+  // `.git/worktrees/` registry as it runs, so a sibling that is mid-create — its
+  // directory present but `commondir` not yet written — fails the add outright
+  // ("failed to read .git/worktrees/<other>/commondir"). Unique leaf names do not
+  // help: the collision is not on the name, it is on the shared registry.
+  //
+  // This raced with ITSELF on every oracle run, not merely under test load: the
+  // caller resolves both branches through `Promise.all`, so two concurrent adds
+  // against one repo are the DESIGNED path. It surfaced as unrelated red across
+  // divergence-proof/oracle/absorb whenever the machine was busy.
+  //
+  // git-exec's merge-tree fallback already takes this lock and its comment called
+  // itself "the one remaining .git/worktrees user" — which was untrue while these
+  // two calls existed. Taking the same lock makes that statement true again, and
+  // costs only the serialization of two short reads on ONE repo (distinct repos
+  // still run free, since the mutex is keyed by repo root).
+  const root = await repoRoot({ cwd }).catch(() => cwd);
+  return withRepoLock(root, async () => {
+    const tmp = await worktreeAdd(ref, { cwd });
+    try {
+      const g = await loadLiveGraph(tmp);
+      return g.index;
+    } finally {
+      await worktreeRemove(tmp, { cwd });
+    }
+  });
 }
 
 /** dir of a repo-relative file path (the `.purpose` dirname for symbol mapping). */

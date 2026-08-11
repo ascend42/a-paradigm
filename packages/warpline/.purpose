@@ -2861,6 +2861,39 @@ components:
 
   oracle:
     description: >-
+      WORKTREE LOADS ARE SERIALIZED PER REPO (T-2026-08-11, #repo-lock).
+      loadBranchIndex spins a temp worktree per branch, and the caller resolves
+      BOTH branches through Promise.all — so two concurrent `git worktree add`
+      calls against one repo were the DESIGNED path, on every oracle run. `git
+      worktree add` validates the whole `.git/worktrees/` registry as it runs, so
+      a sibling mid-create (directory present, `commondir` not yet written) fails
+      the add outright; unique leaf names do not help, because the collision is on
+      the shared registry, not the name. It surfaced as unrelated red across
+      divergence-proof / oracle / absorb whenever the machine was loaded — three
+      different tests failing on three different runs, none of them the defect.
+      #git-exec's merge-tree fallback already took this lock and described itself
+      as "the one remaining .git/worktrees user", which was untrue while these
+      calls existed; both now take it, and a third caller must too.
+      A FAILED MEASUREMENT IS NOT A CLEAN MERGE (T-2026-08-11). The git-reality
+      step used to swallow EVERY failure into `conflicted: false`, and that is not
+      a neutral default: score() gates the confusion matrix on it, so an
+      unmeasurable merge was scored as "git merged clean" — precisely the cell
+      that FLATTERS the headline claim ("meaning caught what bytes missed"). The
+      instrument that measures our own claim was failing toward the favourable
+      answer, the exact asymmetry the merge-tree exit-1 conflation already taught
+      once. #git-counterfactual learned it one field over and says so in its
+      header: "git said clean" and "we never asked git" are opposite facts. Now a
+      PRE-FLIGHT rev-parses both sides (mirroring counterfactual.ts) so a ref git
+      cannot resolve never reaches merge-tree — `git merge-tree --write-tree`
+      exits 1 for BOTH "conflicted" and "not something we can merge", so git-exec
+      reports an unresolvable ref as a CONFLICT — and any merge-tree failure
+      THROWS rather than scoring. Deliberately contained to the oracle: the shared
+      merge semantics every other caller (#admit, #weave, #git-counterfactual)
+      depends on are untouched. The oracle FAILS LOUD rather than carrying an
+      `unavailable` state, because unlike a shadow row (one observation among many,
+      which must survive a hole) an OracleRecord IS the scored verdict — a record
+      whose git side was never measured has nothing to score, and emitting one
+      would put a fabricated cell into the only evidence base for the claim.
       oracle(branchA, branchB) — merge-base → absorb base/A/B → diff → predict →
       git merge-tree reality (read-only) → score the confusion matrix
       (agreeClean/agreeConflict/divergeGitOnly/divergeMeaningOnly/score/verdict) →
