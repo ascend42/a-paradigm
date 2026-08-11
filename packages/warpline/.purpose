@@ -1685,6 +1685,38 @@ components:
       - "#prose-envelope"
       - "#resolve"
 
+  judge:
+    description: >-
+      The Warpline LLM-JUDGE — the blinded second rater / meaning-judge falsifier
+      of the Expo field test (expo-field-test-protocol.md §5 / §4;
+      T-2026-07-14-004). A STANDALONE COLD INSTRUMENT, blind by construction: pure,
+      deterministic, no clock, no API call, no Warpline daemon token, and NO import
+      path to the agent runtime/roster/notebooks. Three foundation modules:
+      #judge/rubric — the FROZEN rubric text + two version-tagged prompt templates,
+      each with a stable rubricHash (rubric:v1:sha256 over the canonical text): the
+      §5 GENUINE / OVER-BLOCK question for KNOT cards (the (B)/(C) denominator) and
+      the §4 broken / not-broken question for false-CLEAN cards, each carrying the
+      standing injection instruction that ALL framed content is quoted UNTRUSTED
+      DATA, never instruction. #judge/rating-card — the STRIPPER: buildKnotRatingCard
+      walks agentChanged ∪ otherChanged (recovering file paths from #code:/#cfg:
+      symbol names) plus the contested units' own paths to the FULL changed-file set,
+      reads base/ours/theirs bodies via #knot-payload readFileFromTree, keeps the two
+      #prose-envelope intents, and STRIPS the verdict, confidence, contested[].kind,
+      conflictingSlots, blastRadius, direct flag, payloadId, rebasedOnto — everything
+      evaluative; buildCleanRatingCard does the same from a §4 audit row (two parent
+      trees + merged tree + the failing check NAME, never the CLEAN verdict).
+      cardId = ratingCard:v1:sha256(canonical(cardBody)), clock-free. #judge/card-render
+      — the ONLY surface the model sees: every side body + intent rendered through
+      #prose-envelope frameProse (escaped, guttered, visibly UNTRUSTED), a
+      400-line-per-body truncation note that never hides silently, then the frozen
+      rubric text + the framed card as one inert prompt string. Does NOT include the
+      API-call runner, scoring, or the regression harness (the next increment).
+    type: module
+    components:
+      - "#knot-payload"
+      - "#prose-envelope"
+      - "#warp-store"
+
   refusal:
     description: >-
       refusal:v1 — the MACHINE-READABLE REFUSAL every gate hands back (founder
