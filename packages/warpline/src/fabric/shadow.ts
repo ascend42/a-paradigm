@@ -55,6 +55,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { admit, type AdmitOptions, type AdmitStatus, type AdmitConfidence, type AdmitResult, type AdmitBaseSource } from './admit.js';
 import { gitCounterfactual, type GitCounterfactual } from './counterfactual.js';
+import type { CleanHazard } from './hazard.js';
 import type { CoverageCounts } from '../honesty.js';
 
 export const SHADOW_VERDICT_SCHEMA = 'shadowVerdict:v1' as const;
@@ -127,6 +128,25 @@ export interface ShadowVerdictRow {
    * `warpline health` reports all three separately for that reason.
    */
   gitCounterfactual?: GitCounterfactual;
+  /**
+   * T-2026-06-24-015 (additive) — the CLEAN-hazard ADVISORY (#clean-hazard):
+   * LEXICAL couplings between the two sides that the symbol graph did not
+   * model, on a verdict that was nonetheless CLEAN.
+   *
+   * IT IS NOT CONTENTION AND MUST NEVER BE READ AS SUCH. `wouldSeal`,
+   * `status`, `confidence` and the counterfactual's `meaningContested` are all
+   * computed WITHOUT reference to this field — a row with twenty hazards is
+   * still a CLEAN row, and `health.ts` counts hazards in their own bucket. The
+   * K3 denominator is contested verdicts; folding advisories into it would
+   * manufacture the very number the field test is trying to measure honestly.
+   *
+   * Capped at SHADOW_ROW_CAP like the symbol arrays; `hazardsTotal` is exact.
+   */
+  hazards?: CleanHazard[];
+  /** exact hazard count before the cap (additive; absent on pre-field rows). */
+  hazardsTotal?: number;
+  /** the highest-scoring hazard's token — the one-glance scan field. */
+  hazardTop?: string;
 }
 
 export function shadowDirOf(root: string): string {
@@ -263,6 +283,16 @@ export async function shadowAdmit(
             excess: result.claim.excess,
             missing: result.claim.missing,
           },
+        }
+      : {}),
+    // The advisory rides the row (capped like every other array here). It is
+    // deliberately NOT an input to `wouldSeal` above or to the counterfactual's
+    // `meaningContested` — see ShadowVerdictRow.hazards.
+    ...(result.hazards && result.hazards.length > 0
+      ? {
+          hazards: result.hazards.slice(0, SHADOW_ROW_CAP),
+          hazardsTotal: result.hazards.length,
+          hazardTop: result.hazards[0].token,
         }
       : {}),
     ...(result.knotPayloadId ? { knotPayloadId: result.knotPayloadId } : {}),

@@ -78,6 +78,7 @@ import { buildKnotPayload, persistKnotPayload, readFileFromTree, listKnotPayload
 import { VERB_DESCRIPTORS, nextLegalVerbsFor } from '../daemon/descriptors.js';
 import { readClaim, evaluateClaim, recordClaimEvaluation, createClaim, persistClaim, type Claim, type ClaimEvaluation, type CreateClaimInput } from './claim.js';
 import { readGradeSidecar, symbolSurvivalIndex, evaluateEscalation, recordGradeEscalation } from './grade.js';
+import { hazardAdvisory } from './hazard.js';
 import { refuse, RefusedError, type RefusalNextStep } from './refusal.js';
 
 /** The provenance/scratch ref label for an agent (sanitized like scratchPath). */
@@ -653,6 +654,23 @@ export async function admitNative(root: string, opts: AdmitNativeOptions): Promi
       return { ...r, escalation: { ...escalation, underlyingStatus: decision.status, acceptedRisk: true } };
     };
 
+    // THE CLEAN-HAZARD ADVISORY (#clean-hazard, T-2026-06-24-015) — the SAME
+    // helper the git-era path calls, at the same point in the pipeline, for the
+    // same reason the refusal carrier is built one way for both (T-2026-07-21-007:
+    // this is the path agents actually use, and a native-only gap is invisible
+    // exactly where it matters most). Advisory: it writes `hazards` and nothing
+    // else — no status, no `sealed`, no refusal.
+    const withHazards = hazardAdvisory({
+      root,
+      agentId: opts.agentId,
+      base,
+      proposed,
+      selvage,
+      decision,
+      shadow: false, // the native path never runs observe-only
+      now,
+    }).attach;
+
     if (decision.status === 'NOOP') {
       return withClaim({ decision, sealed: false, proposedStateId: proposed.stateId });
     }
@@ -731,15 +749,17 @@ export async function admitNative(root: string, opts: AdmitNativeOptions): Promi
       // reality. Already cleared by assertDirtyFree above, before the seal.
       const restoredEntries = opts.noRestore ? undefined : restoreTree(objStore, mat.resultTreeId, opts.worktree);
       return withClaim(
-        withEscalation({
-          decision,
-          sealed: true,
-          proposedStateId: proposed.stateId,
-          strand: weave,
-          merged: mat.plan,
-          coverage,
-          ...(restoredEntries !== undefined ? { restoredEntries } : {}),
-        }),
+        withEscalation(
+          withHazards({
+            decision,
+            sealed: true,
+            proposedStateId: proposed.stateId,
+            strand: weave,
+            merged: mat.plan,
+            coverage,
+            ...(restoredEntries !== undefined ? { restoredEntries } : {}),
+          }),
+        ),
       );
     }
 

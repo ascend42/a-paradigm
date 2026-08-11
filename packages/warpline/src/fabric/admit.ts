@@ -59,6 +59,7 @@ import { buildKnotPayload, persistKnotPayload, readFileFromTree } from './knot-p
 import { classifyMergePaths, type MergeCoverage } from '../honesty.js';
 import { readClaim, evaluateClaim, recordClaimEvaluation, type Claim, type ClaimEvaluation } from './claim.js';
 import { readGradeSidecar, symbolSurvivalIndex, evaluateEscalation, recordGradeEscalation, type GradeEscalation } from './grade.js';
+import { hazardAdvisory, type CleanHazard } from './hazard.js';
 import { maybeAutoStakeOnSeal } from './stake.js';
 import { refuse, contestedOf, RefusedError, type Refusal, type RefusalNextStep } from './refusal.js';
 
@@ -316,6 +317,19 @@ export interface AdmitResult {
    * acceptRisk with the override row recorded in grades-escalations.jsonl).
    */
   escalation?: AdmitEscalationReport;
+  /**
+   * T-2026-06-24-015 (G1-additive): the CLEAN-hazard ADVISORY (#clean-hazard) —
+   * LEXICAL couplings the symbol graph did not model, present ONLY on a CLEAN
+   * result that produced at least one.
+   *
+   * IT IS AN ADVISORY, AND THAT IS LOAD-BEARING. Nothing here changes
+   * `decision.status`, `sealed`, `confidence`, `knots`, `dangling` or
+   * `refusal` — a hazard cannot make a verdict contested, which is why
+   * `health.ts` counts it in its own bucket and never folds it into
+   * `contested`. The field test this exists for measures a contested
+   * denominator; an advisory that inflated it would corrupt the measurement.
+   */
+  hazards?: CleanHazard[];
   /**
    * `refusal:v1` (SP1, TD-2026-07-21-766 / falsifier F4): the MACHINE-READABLE
    * account of a refusal — code, gate, retriability, the ranked contested index,
@@ -842,6 +856,26 @@ async function admitCore(root: string, opts: AdmitOptions): Promise<AdmitResultB
       return { ...r, escalation: { ...escalation, underlyingStatus: decision.status, acceptedRisk: true } };
     };
 
+    // T-2026-06-24-015 — THE CLEAN-HAZARD ADVISORY (#clean-hazard). Computed
+    // for BOTH confidence values, not just 'independent': the 'linked' prior is
+    // inverted for the born-caller case, so restricting to 'independent' would
+    // miss it. `evaluateHazards` returns [] for every non-CLEAN status, so this
+    // costs nothing on any other path — and `withHazards` is applied at the
+    // CLEAN return sites ONLY, so no return site's `decision.status` or
+    // `sealed` can move. Built by the SAME helper the native path uses
+    // (hazard.ts hazardAdvisory) so the two paths cannot diverge.
+    const advisory = hazardAdvisory({
+      root,
+      agentId: opts.agentId,
+      base,
+      proposed,
+      selvage,
+      decision,
+      shadow,
+      now,
+    });
+    const withHazards = advisory.attach;
+
     if (decision.status === 'NOOP') {
       return withClaim({ decision, sealed: false, proposedStateId: proposed.stateId });
     }
@@ -875,7 +909,7 @@ async function admitCore(root: string, opts: AdmitOptions): Promise<AdmitResultB
       // `ours` is the agent's proposal: a WORKTREE proposal has no durable committed
       // tree to merge from → fail CLOSED (unchanged posture).
       if (isWorktree) {
-        return withClaim(withEscalation({ decision, sealed: false, proposedStateId: proposed.stateId }));
+        return withClaim(withEscalation(withHazards({ decision, sealed: false, proposedStateId: proposed.stateId })));
       }
 
       // Resolve base/theirs to byte sources. H1 relaxation (PR-B): a MERGE strand
@@ -886,7 +920,7 @@ async function admitCore(root: string, opts: AdmitOptions): Promise<AdmitResultB
       const baseInput = resolveMergeInput(baseStrand, baseCommit, objStore);
       const theirsInput = resolveMergeInput(theirsStrand, theirsCommit, objStore);
       if (!baseInput || !theirsInput) {
-        return withClaim(withEscalation({ decision, sealed: false, proposedStateId: proposed.stateId }));
+        return withClaim(withEscalation(withHazards({ decision, sealed: false, proposedStateId: proposed.stateId })));
       }
 
       // R1 SHADOW (#shadow-gate): compute the merge PLAN + coverage labels
@@ -901,7 +935,9 @@ async function admitCore(root: string, opts: AdmitOptions): Promise<AdmitResultB
           if (mat.state && mat.plan.conflicts.length === 0) {
             const coverage = classifyMergePaths(mat.plan.files.keys(), [mat.state, proposed, selvage]);
             return withClaim(
-              withEscalation({ decision, sealed: false, proposedStateId: proposed.stateId, merged: mat.plan, coverage }),
+              withEscalation(
+                withHazards({ decision, sealed: false, proposedStateId: proposed.stateId, merged: mat.plan, coverage }),
+              ),
             );
           }
           return withClaim({
@@ -912,7 +948,7 @@ async function admitCore(root: string, opts: AdmitOptions): Promise<AdmitResultB
         refusal: meaningRefusal('KNOT', decision, proposed.stateId, opts.agentId),
       });
         }
-        return withClaim(withEscalation({ decision, sealed: false, proposedStateId: proposed.stateId }));
+        return withClaim(withEscalation(withHazards({ decision, sealed: false, proposedStateId: proposed.stateId })));
       }
 
       // Seal a materialized CLEAN merge: pin the result as BOTH binding.treeId and
@@ -936,7 +972,11 @@ async function admitCore(root: string, opts: AdmitOptions): Promise<AdmitResultB
         // P3 GAP-1 honesty labels (additive): classify every changed path by the
         // tier that governed it, against the merge inputs + the merged result.
         const coverage = classifyMergePaths(plan.files.keys(), [state, proposed, selvage]);
-        return withClaim(withEscalation({ decision, sealed: true, proposedStateId: proposed.stateId, strand, merged: plan, coverage }));
+        return withClaim(
+          withEscalation(
+            withHazards({ decision, sealed: true, proposedStateId: proposed.stateId, strand, merged: plan, coverage }),
+          ),
+        );
       };
 
       if (baseInput.kind === 'git' && theirsInput.kind === 'git') {

@@ -209,6 +209,27 @@ export {
   type GradeEscalationRow,
 } from './fabric/grade.js';
 export {
+  evaluateHazards,
+  hazardAdvisory,
+  rarityIndex,
+  rarityOf,
+  extractCodeTokens,
+  extractCfgTokens,
+  tokensOf,
+  recordHazards,
+  listHazards,
+  hazardsPathOf,
+  HAZARD_SCHEMA,
+  HAZARD_MIN_SCORE,
+  type CleanHazard,
+  type CleanHazardRow,
+  type HazardKind,
+  type HazardDangerFlag,
+  type HazardAdvisory,
+  type HazardAdvisoryInput,
+  type RarityIndex,
+} from './fabric/hazard.js';
+export {
   admit,
   admitDecision,
   ADMIT_RESULT_SCHEMA,

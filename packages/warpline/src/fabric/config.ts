@@ -20,6 +20,11 @@
  *   - `gate` (R2, default: agentWrites 'shadow'): routes AGENT-ATTRIBUTED picks
  *     through the REAL admit gate ('real' — blocking on a would-not-seal
  *     verdict) while humans keep the git door untouched (see GateConfig).
+ *   - `hazard` (T-2026-06-24-015, default: mode 'advise'): the CLEAN-hazard
+ *     ADVISORY (#clean-hazard). The ONE exception to "opt-in only", and it is
+ *     not really one: `advise` cannot change a verdict, a status, a `sealed`
+ *     value or a refusal, so defaulting it on changes no behavior anything can
+ *     branch on (see HazardConfig).
  *
  * Read posture: a MISSING config is the empty config (defaults). A config that
  * exists but cannot be parsed THROWS — a corrupt toggle file must not silently
@@ -73,6 +78,29 @@ export interface GateConfig {
   agentWrites?: 'shadow' | 'real';
 }
 
+/**
+ * The CLEAN-hazard ADVISORY toggle (#clean-hazard, T-2026-06-24-015).
+ *
+ * 'hold' IS DECLARED AND DELIBERATELY NOT IMPLEMENTED. Arky's spec is explicit:
+ * leave it unreachable rather than implemented-and-disabled, so it cannot
+ * become a gate mid-run. There is no code path anywhere that turns a hazard
+ * into a HELD, a refusal, or any other verdict change — `resolveHazardMode`
+ * folds 'hold' to 'advise' and reports that it did (never silently), and the
+ * field test's contested denominator therefore cannot be inflated by a config
+ * edit. Implementing 'hold' is a deliberate, reviewed change, not a flag flip.
+ */
+export interface HazardConfig {
+  /**
+   * 'off'    — do not compute the advisory at all.
+   * 'advise' — DEFAULT. Compute it, attach it to the CLEAN result, record it in
+   *            `.warpline/hazards.jsonl`. Changes no verdict.
+   * 'hold'   — RESERVED, NOT IMPLEMENTED. Behaves as 'advise'; the surfaces say so.
+   */
+  mode?: 'off' | 'advise' | 'hold';
+  /** hazards scoring below this are not reported (default HAZARD_MIN_SCORE = 0.5). */
+  minScore?: number;
+}
+
 export interface WarplineConfig {
   /** R1 shadow gate: record observe-only admit verdicts on every pick (default false). */
   shadowGate?: boolean;
@@ -80,6 +108,8 @@ export interface WarplineConfig {
   stake?: StakeConfig;
   /** R2 gate routing (default: agentWrites 'shadow' — see GateConfig). */
   gate?: GateConfig;
+  /** the CLEAN-hazard advisory (default: mode 'advise' — see HazardConfig). */
+  hazard?: HazardConfig;
 }
 
 /** `.warpline/config.json` for a repo root. */
@@ -109,4 +139,40 @@ export function readWarplineConfig(root: string): WarplineConfig {
     throw new Error(`warpline: config at ${p} must be a JSON object`);
   }
   return parsed as WarplineConfig;
+}
+
+/** The EFFECTIVE hazard settings, with the unimplemented arm made visible. */
+export interface ResolvedHazardConfig {
+  /** what the engine will actually do. Never 'hold' — that arm does not exist. */
+  mode: 'off' | 'advise';
+  minScore: number | undefined;
+  /** true when the config asked for 'hold' and got 'advise' — surfaced, never silent. */
+  holdRequested: boolean;
+}
+
+/**
+ * Resolve `hazard` from a config object. FAIL-SAFE by construction: an absent,
+ * malformed or unrecognized value lands on the default 'advise', which cannot
+ * change a verdict, so there is no reading of a broken config that alters what
+ * the gate decides.
+ */
+export function resolveHazardMode(cfg: WarplineConfig | null | undefined): ResolvedHazardConfig {
+  const h = cfg?.hazard;
+  const raw = h?.mode;
+  const minScore = typeof h?.minScore === 'number' && Number.isFinite(h.minScore) ? h.minScore : undefined;
+  if (raw === 'off') return { mode: 'off', minScore, holdRequested: false };
+  return { mode: 'advise', minScore, holdRequested: raw === 'hold' };
+}
+
+/**
+ * `resolveHazardMode` over the on-disk config, NEVER throwing. The advisory is
+ * not allowed to break an admission — including by way of a corrupt toggle file
+ * — so a read failure degrades to the default rather than propagating.
+ */
+export function readHazardConfig(root: string): ResolvedHazardConfig {
+  try {
+    return resolveHazardMode(readWarplineConfig(root));
+  } catch {
+    return { mode: 'advise', minScore: undefined, holdRequested: false };
+  }
 }

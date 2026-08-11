@@ -57,7 +57,7 @@ import { checkHumanClass } from './agent-shell.js';
 import { createClaim, persistClaim, type CreateClaimInput } from './fabric/claim.js';
 import { resolveKnot } from './fabric/resolve.js';
 import { readKnotPayload, type KnotPayload, type ContestedUnit } from './fabric/knot-payload.js';
-import { frameProse } from './envelope.js';
+import { frameProse, escapeProseBody } from './envelope.js';
 import { gradeFabric, applyGrades, type GradeReport } from './fabric/grade.js';
 import { verifyFabric } from './fabric/verify.js';
 import { listRefs, heads, migrateSelvageToRefs } from './fabric/refs.js';
@@ -1760,6 +1760,23 @@ function printAdmit(agentId: string, r: AdmitResult): void {
   } else {
     lines.push('verdict   NOOP — the agent changed no meaning');
   }
+  // CLEAN-hazard advisory (#hazard). Printed BELOW the verdict and never as part
+  // of it: this is a note on a merge that already sealed, not a refusal. The
+  // wording is deliberate and must not be loosened — it says LEXICAL, and it
+  // states the blind spot in the same breath, because the failure mode of an
+  // advisory is a reader treating an empty list as an all-clear. Nothing here
+  // may license the sentence "Warpline catches invariant conflicts."
+  if (r.hazards?.length) {
+    lines.push('');
+    lines.push(`⚠ ${r.hazards.length} LEXICAL coupling advisor${r.hazards.length === 1 ? 'y' : 'ies'} — this merge SEALED; review, do not assume`);
+    for (const h of r.hazards.slice(0, 5)) {
+      lines.push(`  · ${h.token}  [${h.kind}]  score ${h.score.toFixed(2)}${h.dangerFlags.length ? `  ⚑ ${h.dangerFlags.join(', ')}` : ''}`);
+      lines.push(`      yours:  ${h.oursSymbols.join(', ')}`);
+      lines.push(`      theirs: ${h.theirsSymbols.join(', ')}`);
+    }
+    if (r.hazards.length > 5) lines.push(`  … ${r.hazards.length - 5} more (see .warpline/hazards.jsonl)`);
+    lines.push('  NOT a conflict check: invariant conflicts that share NO token are undetectable here.');
+  }
   if (d.agentChanged.length) lines.push(`agent changed  ${d.agentChanged.join(', ')}`);
   if (d.otherChanged.length) lines.push(`others changed ${d.otherChanged.join(', ')}`);
   if (r.claim && d.status !== 'CLAIM-BREACH') {
@@ -1825,8 +1842,22 @@ function indent(block: string, pad: string): string {
     .join('\n');
 }
 
+/**
+ * Collapse to one line for display — CONTROL-SAFE.
+ *
+ * `oneLine` renders ATTACKER-AUTHORED SOURCE: `knot show` prints contested unit
+ * bodies through it, and those bodies come from the other side's file. The v1
+ * implementation collapsed `\s+` only, which leaves ESC (0x1b) and every other
+ * C0 byte intact — so ANSI/OSC sequences in a contested file reached the
+ * terminal verbatim (screen clears, title rewrites, fake status lines). The
+ * envelope defends `intent`; this is the neighbouring field it never covered
+ * (Aegis, pre-field-test audit 2026-08-11).
+ *
+ * `escapeProseBody` is the same escaper the untrusted-prose frame uses, so the
+ * two paths cannot drift apart on what "safe to print" means.
+ */
 function oneLine(s: string, max: number): string {
-  const flat = s.replace(/\s+/g, ' ').trim();
+  const flat = escapeProseBody(s).replace(/\s+/g, ' ').trim();
   return flat.length > max ? flat.slice(0, max - 1) + '…' : flat;
 }
 
@@ -2047,6 +2078,15 @@ function printHealth(h: HealthReport): void {
         : ''),
   );
   L.push(`           base       ${tally(h.adjudication.baseFrom)}`);
+  // ADJACENT TO `contested`, NEVER FOLDED INTO IT. A hazard is a note on a CLEAN
+  // that sealed; adding it to the contested count would inflate the one number
+  // the field test exists to measure with events that contested nothing.
+  {
+    const ha = h.adjudication.hazardAdvisories;
+    if (ha.total > 0) {
+      L.push(`           advisories ${ha.total} lexical-coupling (NOT contests) — ${ha.recordedRows} recorded, ${ha.shadowRows} shadow${Object.keys(ha.byKind).length ? `  ·  ${tally(ha.byKind)}` : ''}`);
+    }
+  }
 
   L.push('');
   L.push(

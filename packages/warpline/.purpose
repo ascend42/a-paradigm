@@ -628,6 +628,70 @@ components:
       - "#warp-state"
       - "#lift-code-units"
 
+  hazard:
+    description: >-
+      THE CLEAN-HAZARD ADVISORY (T-2026-06-24-015, founder-gated pre-field-test).
+      An ADVISORY, never a gate: it cannot raise a refusal, cannot enter
+      knots/dangling, cannot move status or sealed. evaluateHazards returns [] for
+      any status other than CLEAN, so it is structurally incapable of riding a
+      contested verdict — which matters because the founder DELIBERATELY declined
+      the over-block fix in favour of measuring the real false-KNOT rate in the
+      field (TD-2026-08-11-663), making the contested denominator the headline
+      instrument of the whole value-prop proof. A feature that could add to it
+      would corrupt the number everything rests on.
+      WHAT IT ACTUALLY CATCHES, which is narrower than the task title suggests.
+      The recorded canonical example (A lowers a limit 100->50, B adds a retry
+      loop assuming the old one) is NOT the live defect: essences are
+      Merkle-by-target and TRANSITIVE, so if B's symbol references A's, the edit
+      ripples into a shared key and the verdict is already a conflicting-slot KNOT
+      — an over-block, i.e. #essence-hash's problem, not this one. The residual
+      class is changes whose transitive closures are DISJOINT in the lifted graph
+      but coupled through a channel the graph does not represent. The sharpest
+      instance is guaranteed rather than probable: #cfg-lens emits references: []
+      on every config node, so a config value and the code reading it are ALWAYS
+      graph islands, and any (config-value x code) pair is necessarily a
+      symbol-disjoint independent CLEAN that auto-weaves with zero review. On an
+      Expo app that is app.json / eas.json / package.json versus the code reading
+      them. There is no safety net under it either: #grade's trust floor needs
+      K_MIN_GRADED=3 graded outcomes and readGradeSidecar returns [] on a missing
+      sidecar, so HELD cannot fire on a fresh repo at all.
+      THE RULE. On CLEAN — for BOTH confidence values, because the 'linked' prior
+      is inverted for the born-caller case and restricting to 'independent' would
+      miss it — take each side's LOCALLY-CHANGED units, extract the value tokens
+      that entered or left the essence (free:/str:/num:/tmpl: for code, canonical
+      JSON scalars for cfg), intersect across sides, and weight by CORPUS RARITY
+      computed in one pass over the base state. Rarity is the whole noise control
+      and needs no break-history, which is essential because a new repo has none:
+      num:0 and free:useState score ~0; num:8500 and str:"rate_limit" score high.
+      Danger signals (a portal gate, high fan-in) are a SEVERITY MULTIPLIER on an
+      already-triggered hazard, never the trigger. A token whose participants are
+      the same symbol on both sides is dropped — the graph saw that one.
+      WHAT IT DOES NOT CATCH, pinned as an executable assertion in
+      test/hazard-advisory.test.ts rather than left in prose: the canonical case
+      itself (zero shared tokens), invariants expressed only in comments
+      (excluded from the essence), anything in unlifted files (.js/.mjs/native —
+      and Expo ships babel.config.js, metro.config.js, app.config.js), and
+      cross-process or temporal invariants with no shared literal. It also
+      produces false positives by construction. An empty hazard list is NOT an
+      all-clear, and nothing in the surface may license the sentence "Warpline
+      catches invariant conflicts" — the CLI says LEXICAL and states the blind
+      spot in the same breath.
+      WHERE IT LIVES: additive `hazards?` on #admit's result, attached by ONE
+      shared helper (hazardAdvisory) that both the git-era and native paths call,
+      because two copies of a rule is exactly how #refusal diverged; a
+      .warpline/hazards.jsonl sidecar (G5 pattern, suppressed under shadow); an
+      additive capped field on the #shadow row; and a #warpline-health line
+      ADJACENT TO but never folded into `contested`. `mode: 'hold'` is DECLARED
+      AND UNIMPLEMENTED — it folds to 'advise' — so it cannot quietly become a
+      gate mid-measurement.
+    type: module
+    components:
+      - "#admit"
+      - "#grade"
+      - "#shadow"
+      - "#cfg-lens"
+      - "#essence-hash"
+
   sem-delta:
     description: >-
       The SemDelta and diff(base, branch), keyed by stableKey (SymbolEntry.id, so

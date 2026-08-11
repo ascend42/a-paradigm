@@ -47,6 +47,7 @@ import { listRefs, readRef } from './fabric/refs.js';
 import { verifyFabric, type FabricVerifyReport } from './fabric/verify.js';
 import { hookStatus, hookRemedy, type HookState } from './fabric/hook.js';
 import { readShadowVerdicts, type ShadowVerdictRow } from './fabric/shadow.js';
+import { listHazards, type CleanHazardRow, type HazardKind } from './fabric/hazard.js';
 import { listKnotPayloads } from './fabric/knot-payload.js';
 import type { CounterfactualUnavailable, ConvergenceCell } from './fabric/counterfactual.js';
 import type { AdmitBaseSource, AdmitStatus } from './fabric/admit.js';
@@ -270,6 +271,31 @@ export interface AdjudicationHealth {
    * construction: a shadow run deliberately persists no payload.
    */
   contestedRecorded: number;
+  /**
+   * CLEAN-HAZARD ADVISORIES (#clean-hazard, T-2026-06-24-015) — REPORTED
+   * SEPARATELY AND NEVER FOLDED INTO `contested`.
+   *
+   * A hazard is a LEXICAL coupling noticed on a verdict that was CLEAN and
+   * stayed CLEAN. It is not a KNOT, not a DANGLE, and not a would-be one:
+   * nothing about it changed a status, a `sealed` value, or a refusal. Adding
+   * it to `contested` would inflate the one number the field test exists to
+   * measure — the contested denominator — with events that contested nothing.
+   * Kept adjacent so a reader sees both, kept apart so neither can be mistaken
+   * for the other.
+   *
+   * BOTH WRITERS, for the reason `contested` documents above: the shadow gate
+   * puts advisories on its verdict rows, the real seal paths append them to
+   * `.warpline/hazards.jsonl`. Reading one would report the favourable answer.
+   */
+  hazardAdvisories: {
+    /** advisories observed on shadow verdict rows (seals nothing). */
+    shadowRows: number;
+    /** advisory rows recorded by the real seal paths (.warpline/hazards.jsonl). */
+    recordedRows: number;
+    /** total hazards across both populations (exact — uses the pre-cap totals). */
+    total: number;
+    byKind: Partial<Record<HazardKind, number>>;
+  };
 }
 
 export interface DiskHealth {
@@ -390,7 +416,11 @@ function diskOf(wdir: string): DiskHealth {
   return { bytes, files, mbPerStrand: null, largest };
 }
 
-function adjudicationOf(rows: ShadowVerdictRow[], recordedKnots: number): AdjudicationHealth {
+function adjudicationOf(
+  rows: ShadowVerdictRow[],
+  recordedKnots: number,
+  hazardRows: CleanHazardRow[],
+): AdjudicationHealth {
   const byStatus: Partial<Record<AdmitStatus, number>> = {};
   const baseFrom: Partial<Record<AdmitBaseSource | 'predates-field', number>> = {};
   const unavailable: Partial<Record<CounterfactualUnavailable, number>> = {};
@@ -416,11 +446,42 @@ function adjudicationOf(rows: ShadowVerdictRow[], recordedKnots: number): Adjudi
   }
   const measurable = rows.length - predatesField;
   const coveragePct = measurable > 0 ? Number(((measured / measurable) * 100).toFixed(1)) : null;
+
+  // ADVISORIES, COUNTED APART FROM CONTESTS. A hazard is a note on a CLEAN that
+  // sealed; it is not a KNOT and must never be added to `contested`, or the
+  // headline denominator inflates with events that contested nothing.
+  //
+  // Both writers, for the same reason `contested` documents: the shadow gate puts
+  // advisories on its verdict rows, the real seal paths append to
+  // .warpline/hazards.jsonl. `hazardsTotal` is preferred over `hazards.length`
+  // because the row array is CAPPED — reading the capped array would silently
+  // under-report exactly when a session produced the most.
+  const byKind: Partial<Record<HazardKind, number>> = {};
+  let hazardShadowRows = 0;
+  let hazardTotal = 0;
+  for (const r of rows) {
+    const n = r.hazardsTotal ?? r.hazards?.length ?? 0;
+    if (n === 0) continue;
+    hazardShadowRows++;
+    hazardTotal += n;
+    for (const h of r.hazards ?? []) byKind[h.kind] = (byKind[h.kind] ?? 0) + 1;
+  }
+  for (const row of hazardRows) {
+    hazardTotal += row.hazards.length;
+    for (const h of row.hazards) byKind[h.kind] = (byKind[h.kind] ?? 0) + 1;
+  }
+
   return {
     verdicts: rows.length,
     byStatus,
     baseFrom,
     counterfactual: { measured, predatesField, unavailable, cells, measurable, coveragePct },
+    hazardAdvisories: {
+      shadowRows: hazardShadowRows,
+      recordedRows: hazardRows.length,
+      total: hazardTotal,
+      byKind,
+    },
     contested: contestedShadow + recordedKnots,
     contestedShadow,
     contestedRecorded: recordedKnots,
@@ -648,7 +709,7 @@ export async function health(root: string): Promise<HealthReport> {
   /* ── adjudication ── */
   // Both writers, never one. `listKnotPayloads` is the SAME reader `warpline
   // knot` uses, so the two surfaces cannot drift apart about what exists.
-  const adjudication = adjudicationOf(readShadowVerdicts(root), listKnotPayloads(root).length);
+  const adjudication = adjudicationOf(readShadowVerdicts(root), listKnotPayloads(root).length, listHazards(root));
   const cf = adjudication.counterfactual;
   // TOTAL over the three states of the denominator, like the hook switch above:
   // nothing measurable at all / measurable but under the floor / at or above it.
