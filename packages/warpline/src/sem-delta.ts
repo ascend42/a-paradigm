@@ -212,7 +212,76 @@ export function diff(base: WarpState, branch: WarpState): SemDeltaSet {
     });
   }
 
+  reconcileMovedCodeUnits(deltas, renames);
   return { deltas, renames };
+}
+
+/**
+ * MOVE RECONCILIATION — pair a retired symbol with a born one that carries the
+ * IDENTICAL essence, and re-classify the pair as a zero-weight rename.
+ *
+ * WHY THIS IS NOT A NEW RULE. This module's contract is stated at the top: a
+ * pure move/rename produces ZERO deltas, keyed by a stableKey that "survives
+ * rename". That holds for `.purpose` symbols, whose ids are path-independent.
+ * It is STRUCTURALLY IMPOSSIBLE for code-units, because `codeStableKey` is
+ * `relPath + '::' + structuralPath` (lens/code-symbol.ts) — moving a file
+ * changes the key itself, so both sides land in the born/retired branches above
+ * and the contentId-equal rename branch can never be reached. The delta was
+ * reporting a refactor as destruction.
+ *
+ * WHAT IT COST, measured on a 40-seal run: 12 of 42 strands (29%) were graded
+ * `overturned` with calibratedConfidence 0.8 → 0.35, every one of them a file
+ * move whose function body never changed. `grade` overturns a strand when a
+ * later strand RETIRES its symbols, so routine reorganisation was silently
+ * corrupting the calibration signal — the per-codebase moat.
+ *
+ * CONSERVATIVE BY CONSTRUCTION, because the failure it could introduce (calling
+ * two distinct symbols one move) is worse than the one it fixes:
+ *   - `#code:` units ONLY. `#cfg:` renames stay retire+born — that is a RATIFIED
+ *     trade (cfg folds the file path into the body because for structured data
+ *     the location IS meaning); this pass must not quietly revisit it.
+ *   - Identical contentId AND identical structural path (the `::` suffix), so a
+ *     move is only ever paired with the same declaration under the same name.
+ *   - STRICTLY 1:1. If a contentId+suffix maps to more than one born or more
+ *     than one retired, every candidate is left alone — an ambiguous pairing is
+ *     a guess, and a wrong `rename` erases a real retirement.
+ */
+function reconcileMovedCodeUnits(deltas: Map<string, SemDelta>, renames: SemDelta[]): void {
+  /** contentId + ' ' + structural suffix — the move identity. */
+  const moveKey = (essence: string, symbol: string): string =>
+    essence + ' ' + symbol.slice(symbol.indexOf('::') + 2);
+
+  const isCodeUnit = (d: SemDelta): boolean => d.symbol.startsWith('#code:');
+  const born = new Map<string, SemDelta[]>();
+  const retired = new Map<string, SemDelta[]>();
+
+  for (const d of deltas.values()) {
+    if (!isCodeUnit(d)) continue;
+    if (d.kind === 'symbol-born' && d.essenceAfter) {
+      const k = moveKey(d.essenceAfter, d.symbol);
+      (born.get(k) ?? born.set(k, []).get(k)!).push(d);
+    } else if (d.kind === 'symbol-retired' && d.essenceBefore) {
+      const k = moveKey(d.essenceBefore, d.symbol);
+      (retired.get(k) ?? retired.set(k, []).get(k)!).push(d);
+    }
+  }
+
+  for (const [k, bs] of born) {
+    const rs = retired.get(k);
+    if (!rs || bs.length !== 1 || rs.length !== 1) continue; // ambiguous → leave both
+    const b = bs[0]!;
+    const r = rs[0]!;
+    deltas.delete(b.stableKey);
+    deltas.delete(r.stableKey);
+    renames.push({
+      kind: 'rename',
+      stableKey: b.stableKey,
+      symbol: b.symbol,
+      baseSymbol: r.symbol,
+      essenceBefore: r.essenceBefore,
+      essenceAfter: b.essenceAfter,
+    });
+  }
 }
 
 function listOf(obj: WarpObject, slot: string): string[] {

@@ -220,4 +220,60 @@ function g(){ return helper(); }`,
     );
     expect(dangle).toBeDefined();
   });
+
+  /**
+   * MOVE RECONCILIATION. `sem-delta`'s stated contract is that a pure move
+   * produces ZERO deltas, but a code-unit's stableKey is an opaque hash and its
+   * SYMBOL embeds the file path, so a moved file used to land in the born and
+   * retired branches as two unrelated symbols. Measured cost on a 40-seal run
+   * before the fix: 12 of 42 strands graded `overturned` (confidence 0.8 → 0.35)
+   * purely because their file was later moved — `grade` overturns a strand whose
+   * symbols a later strand RETIRES, so routine refactoring was corrupting the
+   * calibration signal. These pin the fix AND the two ways it must NOT overreach.
+   */
+  describe('a moved file is a rename, not retire+born', () => {
+    const BODY = `export function helper(n: number): number { return n * 2; }`;
+
+    it('pure move, identical body → zero deltas, one rename', async () => {
+      const base = await stateOfTree('base', { 'src/helper.ts': BODY });
+      const moved = await stateOfTree('moved', { 'src/util/helper.ts': BODY });
+
+      const d = diff(base, moved);
+      expect([...d.deltas.values()]).toEqual([]); // nothing born, nothing retired
+      expect(d.renames).toHaveLength(1);
+      expect(d.renames[0]!.baseSymbol).toBe(sym('src/helper.ts', 'helper'));
+      expect(d.renames[0]!.symbol).toBe(sym('src/util/helper.ts', 'helper'));
+    });
+
+    it('move WITH a body change stays a real delta — the essence differs', async () => {
+      const base = await stateOfTree('base', { 'src/helper.ts': BODY });
+      const movedEdited = await stateOfTree('movedEdited', {
+        'src/util/helper.ts': `export function helper(n: number): number { return n * 3; }`,
+      });
+
+      const d = diff(base, movedEdited);
+      expect(d.renames).toHaveLength(0); // NOT a rename — meaning moved
+      const kinds = [...d.deltas.values()].map((x) => x.kind).sort();
+      expect(kinds).toEqual(['symbol-born', 'symbol-retired']);
+    });
+
+    it('AMBIGUOUS move (two identical bodies, same name) pairs NOTHING', async () => {
+      // Two files declaring the SAME name with byte-identical bodies collapse to
+      // one contentId+suffix key. Pairing either one would be a guess, and a
+      // wrong `rename` erases a real retirement — so both are left alone.
+      const base = await stateOfTree('base', {
+        'src/a.ts': BODY,
+        'src/b.ts': BODY,
+      });
+      const after = await stateOfTree('after', {
+        'src/x/a.ts': BODY,
+        'src/x/b.ts': BODY,
+      });
+
+      const d = diff(base, after);
+      expect(d.renames).toHaveLength(0);
+      expect([...d.deltas.values()].filter((x) => x.kind === 'symbol-born')).toHaveLength(2);
+      expect([...d.deltas.values()].filter((x) => x.kind === 'symbol-retired')).toHaveLength(2);
+    });
+  });
 });

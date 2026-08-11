@@ -632,7 +632,29 @@ components:
     description: >-
       The SemDelta and diff(base, branch), keyed by stableKey (SymbolEntry.id, so
       rename survives). contentId-equal short-circuits to no-delta; a pure
-      rename/move is the EMPTY delta. Classifies changed contract slots and edge
+      rename/move is the EMPTY delta.
+      MOVE RECONCILIATION (T-2026-08-11) makes that last sentence true for CODE
+      UNITS, which it never was. The contentId-equal rename branch only runs for a
+      key present on BOTH sides, and a code-unit's stableKey is an opaque HASH
+      while its SYMBOL embeds the file path — so moving a file produced two
+      unrelated entries (retired at the old path, born at the new) and the rename
+      branch was unreachable by construction. The delta reported a refactor as
+      destruction. MEASURED COST on a 40-seal run: 12 of 42 strands graded
+      `overturned`, calibratedConfidence 0.8 -> 0.35, every one of them a file move
+      whose body never changed — #grade overturns a strand whose symbols a later
+      strand RETIRES, so routine reorganisation was silently corrupting the
+      per-codebase calibration signal (the moat). After the fix the same run grades
+      0 overturned / 29 survived / 0 retirements / 10 renamed-noop.
+      reconcileMovedCodeUnits pairs a retired with a born carrying the IDENTICAL
+      contentId AND the identical qualified-name suffix, and re-emits the pair as
+      one zero-weight rename. CONSERVATIVE BY CONSTRUCTION, because a wrong pairing
+      erases a real retirement: `#code:` only (a `#cfg:` file rename stays
+      retire+born — that is the RATIFIED trade in #cfg-lens, where the file path is
+      deliberately folded into the body because for structured data the location IS
+      meaning); the suffix is taken from the SYMBOL after its FIRST `::`, kept whole
+      so `Cls::method` never collides with a free function of the same leaf name;
+      and pairing is STRICTLY 1:1 — an ambiguous key (two identical bodies under
+      one name) pairs nothing and is pinned as such in test/code-diff.test.ts. Classifies changed contract slots and edge
       add/remove. A symbol-born delta carries an edgesAdded-only changeset (ALL of
       the born object's outgoing edges) so a new symbol's outgoing edges feed the
       dangle pass the same way a gained edge does (born-consumer → retired-target).
