@@ -467,6 +467,9 @@ components:
       .gitignore). Extracted because each lens carried its OWN denylist and
       neither ever consulted the repository's own ignore semantics: cfg-lens was
       lifting every JSON key under Swift's .build/ as a symbol — 14,168 of 25,341
+      IN A WORKTREE ABSORB (name the surface: seals ride `git archive`, which
+      carries git-tracked files only, so the sealed LEDGER never saw this junk —
+      the measured seal delta across the fix was +2, not a mass retirement)
       absorbed symbols (55.9%), one output-file-map.json alone yielding 927 — with
       ABSOLUTE machine paths inside the ids, making the state's content-address
       machine-dependent. Sharing the snapshot path's matcher means what a lens
@@ -527,7 +530,12 @@ components:
       .warplineignore/.gitignore; this lens adds only .paradigm (machine-managed
       state). Before that delegation existed this lens was the single largest
       source of junk in the universe — every JSON key under Swift's .build/ became
-      a symbol (14,168 of 25,341, 55.9%), with ABSOLUTE machine paths in the ids.
+      a symbol (14,168 of 25,341 in a WORKTREE absorb — 55.9% of what `status`,
+      `diff` and worktree-mode absorbs saw; the git-ref seal path was never
+      affected), with ABSOLUTE machine paths in the ids. Measured again on an
+      Expo-shaped fixture, where the field test is headed: 3,673 symbols without
+      ignore-awareness vs 13 with it, and the junk (ios/Pods, .expo) is reachable
+      ONLY through .gitignore — no baseline denylist would have caught it.
     type: module
     components:
       - "#code-lens"
