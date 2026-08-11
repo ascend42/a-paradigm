@@ -1,0 +1,55 @@
+id: TD-2026-08-11-122
+timestamp: '2026-08-11T22:33:28.186Z'
+title: >-
+  Field-test judge validation: the blinded second rater is a built LLM-judge (discharges T-2026-07-14-004), and
+  judge-validation leads the post-run track
+decision: >-
+  Two founder rulings on the Warpline field-test path, made from the post-audit decision series (2026-08-11): (1) The
+  protocol's blinded second rater will be a BUILT LLM-judge, not a naive human — chosen because it does double duty: it
+  blinds the genuine-vs-over-block classification AND validates the meaning judge (CLEAN=safe) against a real model for
+  the first time, discharging the long-deferred meaning-judge falsifier T-2026-07-14-004. This elevates the LLM-judge
+  from the protocol's Section-5 second-rater FALLBACK (priority 2, after a human) to the chosen instrument. (2) After
+  the field test reports, JUDGE-VALIDATION leads the path toward 'true source control' — overridable by the run's own
+  result (if falsifier A fires it is forced anyway; if it survives, optionality opens). Security (M3) and the
+  replacement verbs are explicitly NOT pre-committed ahead of knowing the core judgment holds.
+rationale: >-
+  The five-agent flight-readiness audit (L-2026-08-11-ascend-202004-001) named the
+  meaning-judge-never-validated-against-a-model as the single biggest unvalidated claim — there is no model anywhere in
+  the loop today (Probe: zero anthropic/openai/claude hits in src+test). Building the LLM-judge as the field test's
+  blinded rater collapses two needs into one artifact: the pre-registration's required blinding, and the falsifier that
+  proves the thesis. Judge-validation-first as the default lead track follows the same logic — the product claim is
+  worthless if the core judgment fails, so security and replacement-verb work should not be sequenced ahead of it. Both
+  rulings preserve the run's ability to override the sequence based on what it finds, consistent with 'falsifiers gate,
+  the founder decides.'
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+  - id: architect
+    role: agent
+    stance: supported
+  - id: security
+    role: agent
+    stance: supported
+  - id: reviewer
+    role: agent
+    stance: supported
+  - id: tester
+    role: agent
+    stance: supported
+  - id: advocate
+    role: agent
+    stance: supported
+symbols_affected:
+  - '#oracle'
+  - '#admit'
+  - '#knot-payload'
+status: active
+tags:
+  - warpline
+  - field-test
+  - falsifier
+  - llm-judge
+  - T-2026-07-14-004
+  - meaning-judge
+  - audit-2026-08-11

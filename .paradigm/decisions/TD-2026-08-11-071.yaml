@@ -1,0 +1,66 @@
+id: TD-2026-08-11-071
+timestamp: '2026-08-11T22:56:59.837Z'
+title: >-
+  The Warpline LLM-judge is a standalone COLD blinded instrument, NOT a roster agent — and the field-test protocol needs
+  pre-lock amendments so the judge can falsify, not merely ratify
+decision: >-
+  Resolving the founder's question 'should the LLM-judge just be another Paradigm agent?' — NO, unanimous across the
+  design panel (Arky/Loid/Jinx/Aegis). The judge is a standalone COLD instrument (packages/warpline/src/judge/), a
+  direct pinned Claude API call, read-only against the fabric, instantiated fresh per card from a frozen rating-card +
+  frozen rubric ONLY — blindness enforced BY CONSTRUCTION (no import path from judge-run to the agent runtime), never as
+  a suppressible config. It gets a lightweight pinned IDENTITY (id/nickname, provider+exact-version) purely for the run
+  record and an accuracy ledger that flows OUTWARD only — never a notebook that flows back in (Loid: 'a falsifier can be
+  named but never briefed'). A roster agent was rejected on three independent axes: it is warm by construction (TD-351
+  injects Warpline notebooks AND every rostered agent gets the 5 most-recent active decisions — which right now ARE the
+  field-test pre-registration, the literal answer key), it breaches the injection/integrity boundary both ways (Aegis:
+  notebooks are a second injection surface AND leak the verdict; knot.show is agent-readable), and an owned falsifier
+  becomes a yes-man (Jinx: the project rejects 'the team believes' as a gate). SEPARATELY, the panel found the protocol
+  as drafted makes the judge able only to RATIFY, not falsify, and needs amendments BEFORE it locks (see companion
+  lore).
+rationale: >-
+  The judge's entire validity rests on independence from Warpline. Every path that makes it 'an agent' reintroduces
+  Warpline context — Loid traced two injection channels in buildProfileEnrichment (notebooks + unconditional
+  recent-decisions), Aegis showed the integrity boundary breaks both ways, Jinx showed ownership inverts the adversarial
+  property, and Arky showed a 'blind-profile' makes blindness a config that can silently fail mid-run and void a
+  pre-registered run. The prior LLM-judge study already proved the cold-instrument pattern works (36 fresh blind
+  invocations). The judge belongs in the INSTRUMENT family with the F4 cold-agent harness, not the roster.
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+  - id: architect
+    role: agent
+    stance: supported
+  - id: forge
+    role: agent
+    stance: supported
+  - id: advocate
+    role: agent
+    stance: supported
+  - id: security
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: Rostered Paradigm agent (the founder's question)
+    rejected_because: >-
+      warm by construction — notebooks + recent-decisions injection carry the field-test answer key; owned falsifier is
+      a yes-man
+  - option: Blind-profile of a roster agent (fresh, no notebooks)
+    rejected_because: >-
+      blindness becomes a suppressible config that can silently fail on any one of 100 invocations and void the run;
+      still inherits the session model alias, cannot satisfy exact-version pinning
+symbols_affected:
+  - '#oracle'
+  - '#knot-payload'
+  - '#hazard'
+  - '#envelope'
+  - '#admit'
+status: active
+tags:
+  - warpline
+  - llm-judge
+  - field-test
+  - falsifier
+  - T-2026-07-14-004
+  - cold-instrument
+  - audit-2026-08-11

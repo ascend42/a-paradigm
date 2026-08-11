@@ -1,0 +1,58 @@
+id: TD-2026-08-11-913
+timestamp: '2026-08-11T22:44:56.991Z'
+title: >-
+  Field-test pre-run gate: protocol locked, BOTH known error classes pre-fixed, M3 signing required before the run,
+  cold-model runner stays deferred
+decision: >-
+  Four founder rulings completing the post-audit decision series (2026-08-11), setting the preconditions the Expo field
+  test must clear before its first admission: (1) The pre-registration protocol is ACCEPTED and locks, with Section 5
+  amended so the built LLM-judge (TD-2026-08-11-122) is the committed blinded rater. (2) BOTH known error classes are
+  PRE-FIXED before the run: the Tier-0 invariant false-CLEAN (T-2026-06-24-015) and the essence-hash over-block
+  false-KNOT (T-2026-07-15-008) — the field test measures the RESIDUAL over a hardened system, not the known-broken
+  baseline. (3) M3 integrity (hash-chained + signed strands, T-2026-07-01-014) is REQUIRED before the run — the run will
+  have the real signed agent/human boundary, not MCP-only-as-procedure. (4) The F4 cold-agent RUNNER stays deferred
+  (confirms TD-2026-08-11-838); the LLM-judge-as-rater is the only model-in-the-loop for this run.
+rationale: >-
+  The founder chose to go into the field test with the KNOWN gaps closed rather than spend the run re-confirming rates
+  already measured (over-block 3/3 on Move-3; false-CLEAN 8/80 on the 144-run). This is a deliberate strengthening: the
+  run validates the fixes and bounds the residual instead of measuring a broken baseline. Requiring M3 before the run
+  exceeds Aegis's assessment (who judged MCP-only-as-procedure adequate for a single-author run) — a conservative call
+  that trades schedule for a real, not procedural, security boundary. Keeping the cold-model runner deferred preserves
+  TD-838 scope (prove the value prop on Claude first).
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+  - id: security
+    role: agent
+    stance: supported
+  - id: architect
+    role: agent
+    stance: neutral
+  - id: advocate
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: Measure both error rates live in the field (hold TD-663's declined-over-block posture)
+    rejected_because: Founder chose to close known gaps first so the run measures residual, not a baseline already quantified
+  - option: 'Run on MCP-only procedural security (Aegis: adequate for a single-author run)'
+    rejected_because: Founder required the real signed M3 boundary before spending field-test evidence, accepting the schedule cost
+  - option: Pull the F4 cold-model runner forward alongside the run
+    rejected_because: Kept deferred to preserve TD-838's prove-on-Claude-first scope
+symbols_affected:
+  - '#admit'
+  - '#strand'
+  - '#seal'
+  - '#oracle'
+  - '#hazard'
+  - '#essence-hash'
+status: active
+tags:
+  - warpline
+  - field-test
+  - pre-run-gate
+  - M3
+  - over-block
+  - tier-0
+  - amends-TD-2026-08-11-663
+  - audit-2026-08-11

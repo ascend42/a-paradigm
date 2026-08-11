@@ -1,0 +1,60 @@
+id: L-2026-08-11-ascend-212756-001
+type: milestone
+timestamp: '2026-08-11T21:27:56.232Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Track A COMPLETE: field-test instruments hardened, reviewed, committed (b85d56a8)'
+summary: All six Track-A findings from the flight-readiness audit are fixed, reviewed, and committed to warpline-surfaces as b85d56a8 (1023 passing / 115 files / exit 0). Track A = "make the Expo field test able to prove something" by closing the silent-divergence gaps in the instruments the three falsifiers read. B-1 (byte-only work now lands), B-3 (contested denominator counts every KNOT incl. byte-conflict downgrades), I-1 (resolve join unconditional+deterministic), I-2 (derivedStale surfaced), hazard-forecast (preview no longer more optimistic than admit). A pre-commit reviewer pass (Judge) caught a real bug B-1 newly made reachable — a FAST_ADMIT downgrade whose rebasedOnto:null made buildKnotPayload throw silently — fixed in-round with the payloadError render, and the previously-impossible-to-construct downgrade test was written using the reviewer's non-symbol-file fixture. Field-test protocol pre-registration drafted for founder review.
+symbols_touched:
+  - '#native'
+  - '#strand'
+  - '#admit'
+  - '#knot-payload'
+  - '#warpline-health'
+  - '#resolve'
+  - '#hazard'
+  - '#oracle'
+commit: b85d56a8
+tags:
+  - warpline
+  - track-a
+  - field-test
+  - milestone
+  - silent-divergence
+  - arc:warpline
+body: |-
+  METHOD: five-agent adversarial audit (each tasked to FALSIFY) → founder picked Track A (harden the instrument) → 6 findings fixed (2 by me on the interlocking native/admit files, 2+ by parallel builder subagents on disjoint files, 1 protocol doc by architect) → consolidated single-threaded full suite → pre-commit reviewer pass → fixed the 2 findings the review surfaced → commit. The concurrent-worker 60s test timeouts were CPU oversubscription, NOT regressions (confirmed: clean single-threaded).
+
+  WHAT'S DONE (committed b85d56a8):
+  - B-1: proposeNative seals byte-custody strand on meaning-NOOP+tree-advance; admitNative NOOP branch carries it as FAST_ADMIT when it linearly fast-forwards the selvage. Held (not lost) under concurrent meaning advance.
+  - B-3: persistContested() helper on both contested sites; downgrade sets rebasedOnto:=selvage.stateId (fixes the FAST_ADMIT-flavor silent throw B-1 made reachable); payloadError field + CLI render.
+  - I-1: findKnotPayloadForResolve unconditional+deterministic; C-9 loud guard in resolve.
+  - I-2: printAdmit renders derivedStale.
+  - hazard-forecast: evaluateHazards wired into oracle()/weave --preview, advisory-only.
+  - 4 new tests; full suite 1023/115/exit 0.
+
+  STILL OPEN (tracked, NOT in this commit):
+  - T-2026-08-11-018 field-test protocol — DRAFTED, awaits FOUNDER review (n=100 fixed, contested floor=20, green-gate+behavioral-smoke false-CLEAN oracle, blinded 2nd rater that also discharges the LLM-judge falsifier T-2026-07-14-004).
+  - T-2026-08-11-019 git-era B-3 arm (admit.ts:1006/1043 same downgrade gap; off the native field-test path).
+  - Judge follow-ups (not yet ticketed): contentless byte-conflict payload (contested:[] — thread mat.plan.conflicts in); BYTE_ADMIT status/flag for legibility (byte-custody carry currently relabels to FAST_ADMIT with empty agentChanged).
+  - T-2026-08-11-020 teaching-surface refresh (university + notebooks + docs) — GATED on interface finalization.
+  - The 28+ unpushed commits: push STILL never authorized.
+
+  WHAT TRACK A DID NOT DO (deliberately — these are the OTHER tracks, still not-ready for the product claim): the meaning judge is still never validated against a real model (T-2026-07-14-004 partially discharged only IF the protocol's blinded-LLM-rater is built); the security boundary is still one unsigned env var (M3); no publishing, branching, cold-model, GUI migration. Track A makes the FIELD TEST honest; it does not make the PRODUCT CLAIM true.
+linked_lore:
+  - L-2026-08-11-ascend-202004-001
+  - L-2026-08-11-ascend-204052-001
+linked_tasks:
+  - T-2026-08-11-013
+  - T-2026-08-11-014
+  - T-2026-08-11-015
+  - T-2026-08-11-016
+  - T-2026-08-11-017
+  - T-2026-08-11-018
+confidence: 0.85
+git_context:
+  ref: b85d56a863ca5a793ad6e3a529f534c783323b54
+  branch: warpline-surfaces
+  dirty: true
