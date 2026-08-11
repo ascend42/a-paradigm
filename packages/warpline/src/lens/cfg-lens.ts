@@ -56,6 +56,7 @@ import type { CodeLens, CodeUnit } from './code-lens.js';
 import { codeStableKey } from './code-symbol.js';
 import { canonicalSerialize, type CanonicalValue } from '../warp/canonical.js';
 import { isDerivedArtifact } from './derived-artifacts.js';
+import { enumerateLensFiles } from './lens-walk.js';
 
 /**
  * The cfg essence version tag (its own content-address namespace, spec §5.2
@@ -67,16 +68,15 @@ export const CFG_ESSENCE_TAG = 'cfg-v1';
 const CFG_EXTENSIONS = ['.json', '.yml', '.yaml'] as const;
 
 /**
- * Directories never descended into. The ts-lens set PLUS the framework/VCS state
- * dirs: `.warpline` (the fabric must never lift itself), `.loom` (the Loom-era
- * engine's own state dir — same rule, prior name; R1 hygiene T-2026-07-17-007:
- * absorb(WORKTREE) was lifting thousands of `#cfg:.loom/states/*.json` symbols
- * into every worktree verdict) and `.paradigm` (machine-managed index/state —
- * already lifted as symbols where it is meaning).
+ * Directories this lens skips ON TOP of `BASELINE_SKIP_DIRS` (which already
+ * covers dependency/build output and `.warpline`/`.loom` — the fabric must
+ * never lift itself; R1 hygiene T-2026-07-17-007: absorb(WORKTREE) was lifting
+ * thousands of `#cfg:.loom/states/*.json` symbols into every worktree verdict).
+ *
+ * `.paradigm` is cfg-lens-specific: machine-managed index/state, already lifted
+ * as symbols where it is meaning, so lifting its JSON would double-count.
  */
-const SKIP_DIRS = new Set([
-  'node_modules', '.git', 'dist', 'build', '.next', 'coverage', '.warpline', '.loom', '.paradigm',
-]);
+const CFG_EXTRA_SKIP_DIRS: ReadonlySet<string> = new Set(['.paradigm']);
 
 /** Files above this size fall to the byte tier (`too-large` marker). */
 const MAX_CFG_BYTES = 1 << 20; // 1 MiB
@@ -445,27 +445,22 @@ function unliftableUnit(relPath: string, reason: UnliftableReason): CodeUnit {
 
 /* ── the lens ─────────────────────────────────────────────────────────────── */
 
-/** Enumerate cfg files under `rootDir`, SORTED; lockfiles excluded entirely. */
+/**
+ * Enumerate cfg files under `rootDir`, SORTED; lockfiles excluded entirely.
+ *
+ * Directory pruning + the repo's own ignore semantics live in the shared walk
+ * (`lens-walk.ts`). This lens is the one that made the case for it: with no
+ * ignore-file awareness it lifted every JSON key under Swift's `.build/` as a
+ * symbol — 14,168 of 25,341, one `output-file-map.json` alone yielding 927.
+ */
 async function enumerateCfgFiles(rootDir: string): Promise<string[]> {
-  const out: string[] = [];
-  const walk = async (dir: string): Promise<void> => {
-    const entries = await fs.readdir(dir, { withFileTypes: true });
-    for (const e of entries) {
-      const full = path.join(dir, e.name);
-      if (e.isDirectory()) {
-        if (SKIP_DIRS.has(e.name)) continue;
-        await walk(full);
-      } else if (e.isFile()) {
-        const ext = path.extname(e.name);
-        if (!(CFG_EXTENSIONS as readonly string[]).includes(ext)) continue;
-        if (isDerivedArtifact(e.name)) continue; // derived — never lifted
-        out.push(full);
-      }
-    }
-  };
-  await walk(rootDir);
-  out.sort();
-  return out;
+  return enumerateLensFiles(
+    rootDir,
+    (name) =>
+      (CFG_EXTENSIONS as readonly string[]).includes(path.extname(name)) &&
+      !isDerivedArtifact(name), // derived — never lifted
+    CFG_EXTRA_SKIP_DIRS,
+  );
 }
 
 /**

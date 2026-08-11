@@ -23,8 +23,8 @@
  */
 
 import * as ts from 'typescript';
-import { promises as fs } from 'node:fs';
 import * as path from 'node:path';
+import { enumerateLensFiles } from './lens-walk.js';
 import type { CodeLens, CodeUnit, CodeRef, CodeEdgeKind } from './code-lens.js';
 import { codeSymbol, codeStableKey } from './code-symbol.js';
 import { codeCNFDetailed } from './ts-essence.js';
@@ -56,9 +56,6 @@ const BASELINE_COMPILER_OPTIONS: ts.CompilerOptions = {
 
 const TS_EXTENSIONS = ['.ts', '.tsx'] as const;
 
-/** Directories we never descend into when enumerating source files. */
-const SKIP_DIRS = new Set(['node_modules', '.git', 'dist', 'build', '.next', 'coverage']);
-
 /** Declaration-file suffix check (`.d.ts` / `.d.tsx` / `.d.mts` / `.d.cts`). */
 function isDeclarationFile(fileName: string): boolean {
   return /\.d\.[cm]?tsx?$/.test(fileName);
@@ -67,28 +64,17 @@ function isDeclarationFile(fileName: string): boolean {
 /**
  * Enumerate `.ts`/`.tsx` files under `rootDir`, SORTED (determinism §5). `.d.ts`
  * files are excluded — they declare types, not liftable code-units.
+ *
+ * Directory pruning + the repo's own ignore semantics live in the shared walk
+ * (`lens-walk.ts`) so this lens and `cfg-lens` can never disagree about what is
+ * build output — they did, and it cost 55.9% of this repo's symbol universe.
  */
 async function enumerateSourceFiles(rootDir: string): Promise<string[]> {
-  const out: string[] = [];
-  const walk = async (dir: string): Promise<void> => {
-    const entries = await fs.readdir(dir, { withFileTypes: true });
-    for (const e of entries) {
-      const full = path.join(dir, e.name);
-      if (e.isDirectory()) {
-        if (SKIP_DIRS.has(e.name)) continue;
-        await walk(full);
-      } else if (e.isFile()) {
-        const ext = path.extname(e.name);
-        if ((TS_EXTENSIONS as readonly string[]).includes(ext) && !isDeclarationFile(e.name)) {
-          out.push(full);
-        }
-      }
-    }
-  };
-  await walk(rootDir);
-  // Sort by absolute path — deterministic, locale-independent (default codepoint).
-  out.sort();
-  return out;
+  return enumerateLensFiles(
+    rootDir,
+    (name) =>
+      (TS_EXTENSIONS as readonly string[]).includes(path.extname(name)) && !isDeclarationFile(name),
+  );
 }
 
 /** A code-unit declaration node we lift, paired with its identity. */

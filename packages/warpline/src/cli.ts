@@ -1811,7 +1811,11 @@ function printSelvage(selvage: string | null, tip: Strand | undefined, depth: nu
   lines.push(`depth     ${depth} strand${depth === 1 ? '' : 's'}`);
   if (tip) {
     lines.push('');
-    lines.push(`sealed by ${tip.seq === 0 ? '◆ genesis' : `seq ${tip.seq}`}  ${short(tip.pickId)}  ${tip.recordedAt.slice(0, 10)}  ${tip.actor}`);
+    // strandPositionTag, never a raw `seq ${…}`: v3 strands are POSITION-FREE
+    // (seq is undefined by design), so interpolating it printed "sealed by seq
+    // undefined" on the first line of the first screen an agent reads.
+    const tipPos = tip.seq === 0 ? '◆ genesis' : strandPositionTag(tip);
+    lines.push(`sealed by ${tipPos ? `${tipPos}  ` : ''}${short(tip.pickId)}  ${tip.recordedAt.slice(0, 10)}  ${tip.actor}`);
     lines.push(`intent    ${tip.intent}`);
     if (tip.provenance?.gitCommit) lines.push(`git       ${tip.provenance.gitCommit.slice(0, 12)}  (coexistence anchor)`);
   }
@@ -1828,7 +1832,9 @@ function printPick(r: PickResult): void {
   }
   const s = r.strand!;
   const lines: string[] = [];
-  lines.push(`PICK  sealed into the fabric  ${r.isGenesis ? '◆ GENESIS' : `seq ${s.seq}`}`);
+  // The pickId gets its own `pick` line below — a v3 strand adds nothing here.
+  const pickPos = r.isGenesis ? '◆ GENESIS' : strandPositionTag(s);
+  lines.push(`PICK  sealed into the fabric${pickPos ? `  ${pickPos}` : ''}`);
   lines.push(`pick      ${s.pickId}`);
   lines.push(`state     ${s.stateId}`);
   lines.push(`actor     ${s.actor}`);
@@ -1858,7 +1864,8 @@ function printFabric(fabric: Strand[], selvage: string | null, max: number): voi
   const shown = fabric.slice(-max).reverse();
   for (const s of shown) {
     const date = s.recordedAt.slice(0, 10);
-    const tag = s.seq === 0 ? '◆ genesis' : `~ seq ${s.seq}`;
+    const pos = strandPositionTag(s);
+    const tag = s.seq === 0 ? '◆ genesis' : pos ? `~ ${pos}` : '~';
     lines.push(`${tag}  ${short(s.pickId)}  ${date}  ${s.actor}`);
     lines.push(`     intent:  ${s.intent}`);
     if (s.seq === 0) {
@@ -1999,7 +2006,15 @@ function printHealth(h: HealthReport): void {
       (Object.keys(cf.unavailable).length ? `  ·  unavailable: ${tally(cf.unavailable)}` : ''),
   );
   if (cf.measured > 0) L.push(`           cells      ${tally(cf.cells)}`);
-  L.push(`           contested  ${h.adjudication.contested}  (KNOT/DANGLE — what this product adjudicates)`);
+  // Both populations, always — the split is the point. A bare total hides WHICH
+  // writer produced the contention, and this counter read only the shadow half
+  // for the whole native era (see AdjudicationHealth.contested).
+  L.push(
+    `           contested  ${h.adjudication.contested}  (KNOT/DANGLE — what this product adjudicates)` +
+      (h.adjudication.contested > 0
+        ? `  ·  ${h.adjudication.contestedRecorded} recorded, ${h.adjudication.contestedShadow} shadow-observed`
+        : ''),
+  );
   L.push(`           base       ${tally(h.adjudication.baseFrom)}`);
 
   L.push('');
@@ -2303,6 +2318,17 @@ function rippleLine(n: number, indent: string): string {
 /** Human tag for a sealed strand: v1/v2 show seq; v3 (position-free) shows the pickId. */
 function strandTag(s: Strand): string {
   return s.seq !== undefined ? `seq ${s.seq}` : short(s.pickId);
+}
+
+/**
+ * The LEDGER-POSITION tag, for lines that already print the pickId in their own
+ * column: `seq N` for v1/v2, and `null` for v3 — which is position-free by
+ * design, so there is nothing to say. Callers omit the segment rather than
+ * interpolate: `seq ${s.seq}` printed "seq undefined", and falling back to
+ * `strandTag` printed the pickId TWICE on the same line.
+ */
+function strandPositionTag(s: Strand): string | null {
+  return s.seq !== undefined ? `seq ${s.seq}` : null;
 }
 
 function short(id: string): string {

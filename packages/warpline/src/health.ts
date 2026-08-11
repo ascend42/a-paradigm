@@ -47,6 +47,7 @@ import { listRefs, readRef } from './fabric/refs.js';
 import { verifyFabric, type FabricVerifyReport } from './fabric/verify.js';
 import { hookStatus, hookRemedy, type HookState } from './fabric/hook.js';
 import { readShadowVerdicts, type ShadowVerdictRow } from './fabric/shadow.js';
+import { listKnotPayloads } from './fabric/knot-payload.js';
 import type { CounterfactualUnavailable, ConvergenceCell } from './fabric/counterfactual.js';
 import type { AdmitBaseSource, AdmitStatus } from './fabric/admit.js';
 import { gitPath, repoRoot, revListCount } from './git/git-exec.js';
@@ -246,10 +247,29 @@ export interface AdjudicationHealth {
     coveragePct: number | null;
   };
   /**
-   * Verdicts where MEANING contested (KNOT/DANGLE). Zero means this project has
-   * never produced the thing the product adjudicates — which no other surface says.
+   * TOTAL contested verdicts — `contestedShadow + contestedRecorded`. Zero means
+   * this project has never produced the thing the product adjudicates, which no
+   * other surface says.
+   *
+   * THIS COUNTER WAS BLIND FOR THE ENTIRE NATIVE ERA. It summed shadow rows
+   * only, so every KNOT the NATIVE path produced — the path agents actually use
+   * — was invisible: `native.ts` writes no shadow row, it persists a payload
+   * under `.warpline/knots/`. A fresh repo driven through fork → propose →
+   * admit to a real KNOT still reported "ZERO contested verdicts". An
+   * instrument that reads one of the two writers reports the FAVOURABLE answer
+   * about its own emptiness — the symmetry rule the merge-tree exit-1
+   * conflation already taught us once.
    */
   contested: number;
+  /** Contested rows OBSERVED by the shadow gate (`--shadow`; seals nothing). */
+  contestedShadow: number;
+  /**
+   * Contested verdicts RECORDED in the ledger — distinct payloads under
+   * `.warpline/knots/`, written by the native and git-era seal paths
+   * (`native.ts:753`, `admit.ts:1047`). Disjoint from `contestedShadow` by
+   * construction: a shadow run deliberately persists no payload.
+   */
+  contestedRecorded: number;
 }
 
 export interface DiskHealth {
@@ -370,20 +390,20 @@ function diskOf(wdir: string): DiskHealth {
   return { bytes, files, mbPerStrand: null, largest };
 }
 
-function adjudicationOf(rows: ShadowVerdictRow[]): AdjudicationHealth {
+function adjudicationOf(rows: ShadowVerdictRow[], recordedKnots: number): AdjudicationHealth {
   const byStatus: Partial<Record<AdmitStatus, number>> = {};
   const baseFrom: Partial<Record<AdmitBaseSource | 'predates-field', number>> = {};
   const unavailable: Partial<Record<CounterfactualUnavailable, number>> = {};
   const cells: Partial<Record<ConvergenceCell, number>> = {};
   let measured = 0;
   let predatesField = 0;
-  let contested = 0;
+  let contestedShadow = 0;
 
   for (const r of rows) {
     byStatus[r.status] = (byStatus[r.status] ?? 0) + 1;
     const bf = r.baseFrom ?? 'predates-field';
     baseFrom[bf] = (baseFrom[bf] ?? 0) + 1;
-    if (r.status === 'KNOT' || r.status === 'DANGLE') contested++;
+    if (r.status === 'KNOT' || r.status === 'DANGLE') contestedShadow++;
     const cf = r.gitCounterfactual;
     if (!cf) {
       predatesField++;
@@ -401,7 +421,9 @@ function adjudicationOf(rows: ShadowVerdictRow[]): AdjudicationHealth {
     byStatus,
     baseFrom,
     counterfactual: { measured, predatesField, unavailable, cells, measurable, coveragePct },
-    contested,
+    contested: contestedShadow + recordedKnots,
+    contestedShadow,
+    contestedRecorded: recordedKnots,
   };
 }
 
@@ -624,7 +646,9 @@ export async function health(root: string): Promise<HealthReport> {
   }
 
   /* ── adjudication ── */
-  const adjudication = adjudicationOf(readShadowVerdicts(root));
+  // Both writers, never one. `listKnotPayloads` is the SAME reader `warpline
+  // knot` uses, so the two surfaces cannot drift apart about what exists.
+  const adjudication = adjudicationOf(readShadowVerdicts(root), listKnotPayloads(root).length);
   const cf = adjudication.counterfactual;
   // TOTAL over the three states of the denominator, like the hook switch above:
   // nothing measurable at all / measurable but under the floor / at or above it.

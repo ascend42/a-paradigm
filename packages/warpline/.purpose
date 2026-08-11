@@ -436,12 +436,37 @@ components:
       reducedFidelity. Checker is used for identity resolution ONLY (getSymbolAtLocation
       + getAliasedSymbol), never inferred types (§5.1). lift() returns CodeUnit[]
       sorted by symbol (determinism). Exports TS_LENS_VERSION (the exact pinned ts
-      version) for stage 3 to stamp into the essence tag.
+      version) for stage 3 to stamp into the essence tag. File enumeration is
+      delegated to #lens-walk (shared pruning + the repo's own ignore rules).
     type: module
     components:
       - "#code-essence"
       - "#code-symbol"
       - "#code-lens"
+      - "#lens-walk"
+
+  lens-walk:
+    description: >-
+      The SHARED source-enumeration walk behind every code-lens.
+      enumerateLensFiles(rootDir, accept, extraSkipDirs) prunes directories and
+      returns the accepted files sorted by absolute path (determinism §5). A file
+      is lifted only when BOTH agree: it is not under a BASELINE_SKIP_DIRS name
+      (dependency/build output + VCS/tool state — node_modules, .git, .warpline,
+      .loom, dist, build, .build, .next, coverage) AND the root ignore matcher
+      admits it (#warp-store loadIgnoreMatcher — .warplineignore preferred, else
+      .gitignore). Extracted because each lens carried its OWN denylist and
+      neither ever consulted the repository's own ignore semantics: cfg-lens was
+      lifting every JSON key under Swift's .build/ as a symbol — 14,168 of 25,341
+      absorbed symbols (55.9%), one output-file-map.json alone yielding 927 — with
+      ABSOLUTE machine paths inside the ids, making the state's content-address
+      machine-dependent. Sharing the snapshot path's matcher means what a lens
+      lifts and what a snapshot seals can no longer disagree by construction.
+      SCOPE (v1, inherited from #warp-store): root-level ignore files only —
+      nested .gitignore files are not collected, which is why .build is in the
+      baseline rather than left to packages/conductor/.gitignore.
+    type: module
+    components:
+      - "#warp-store"
 
   lens-registry:
     description: >-
@@ -484,17 +509,22 @@ components:
       commas — tsconfig reality; comments are prose, never hashed) and raw-lexeme +
       duplicate-key fidelity JSON.parse cannot provide; YAML via the `yaml` package,
       plain core schema only. Lockfiles are excluded entirely (#derived-artifacts).
-      Skips node_modules/.git/dist/build/.next/coverage plus .warpline (the fabric
-      never lifts itself), .loom (the Loom-era engine's state dir — same rule,
-      prior name; T-2026-07-17-007: worktree absorbs were lifting thousands of
-      #cfg:.loom/states/* symbols into every verdict) and .paradigm
-      (machine-managed state).
+      File enumeration is delegated to #lens-walk, which prunes the shared baseline
+      (node_modules/.git/.warpline/.loom/dist/build/.build/.next/coverage — the
+      fabric never lifts itself; .loom is the Loom-era engine's state dir, same
+      rule, prior name, T-2026-07-17-007: worktree absorbs were lifting thousands
+      of #cfg:.loom/states/* symbols into every verdict) AND applies the repo's own
+      .warplineignore/.gitignore; this lens adds only .paradigm (machine-managed
+      state). Before that delegation existed this lens was the single largest
+      source of junk in the universe — every JSON key under Swift's .build/ became
+      a symbol (14,168 of 25,341, 55.9%), with ABSOLUTE machine paths in the ids.
     type: module
     components:
       - "#code-lens"
       - "#code-symbol"
       - "#canonical-json"
       - "#derived-artifacts"
+      - "#lens-walk"
 
   derived-artifacts:
     description: >-
@@ -2052,6 +2082,19 @@ components:
       THREE BUCKETS, NEVER TWO: the counterfactual census separates measured /
       explicitly-unavailable / predates-the-field. Collapsing the third is the
       C-9 mistake, and the 43 live rows are ALL in it.
+      BOTH WRITERS, NEVER ONE (T-2026-08-11): `contested` sums the shadow rows
+      (#shadow, observe-only) AND the payloads persisted under .warpline/knots/
+      by the SEAL paths (#admit admit.ts, native.ts) — reported split as
+      contestedShadow / contestedRecorded. It previously read shadow rows alone,
+      so every KNOT the NATIVE path produced was invisible: a fresh repo driven
+      fork -> propose -> admit to a real KNOT, payload hydrated on disk, still
+      reported "this project has produced ZERO contested verdicts". The two
+      populations are disjoint by construction (a --shadow run deliberately
+      persists no payload, admit.ts:1047), so the sum cannot double-count, and
+      the count comes from listKnotPayloads — the SAME reader `warpline knot`
+      uses — so the surfaces cannot drift apart. An instrument that reads one of
+      two writers reports the FAVOURABLE answer about its own emptiness; this is
+      the merge-tree exit-1 symmetry lesson in a second location.
       IT WRITES NOTHING — no traceCli row, no WarpStore disk cache, no lock; the
       tolerant scanFabric rather than the throwing readFabric, so a torn tail
       (C-13) is REPORTED and exits 2 instead of bricking the diagnostic. C-13 was
