@@ -246,6 +246,50 @@ describe('POISONED-PROSE INVARIANT — verdicts are a pure function of structura
     }
   });
 
+  /**
+   * THE FIELD THE ENVELOPE DOES NOT MARK (Aegis, pre-field-test audit 2026-08-11).
+   *
+   * The envelope covers `intent`. It does NOT cover `fileText`/`body` — and
+   * `knot.show` returns `contested[].{ours,theirs,base}.fileText`, the FULL RAW
+   * SOURCE of the contested file, comments included, verbatim into a reviewing
+   * agent's context. An attacker does not need to beat the envelope; they move
+   * the payload one field over, into a code comment, and it is delivered to
+   * every reviewer.
+   *
+   * So the purity claim has to hold for SOURCE TEXT, not merely for prose
+   * fields. It should, by construction — comments are excluded from the essence
+   * (warp/essence-hash.ts) — but "should, by construction" is exactly the class
+   * of claim that was wrong three times in one day on this codebase, so it gets
+   * an assertion.
+   *
+   * SCOPE, stated so this test is not over-read: it pins that a poisoned comment
+   * cannot move the VERDICT. It does not prove the reviewing agent is safe —
+   * that is a model, not a function, and it is the model arm of the acceptance
+   * criterion. `fileText` population itself needs durable treeIds on both sides
+   * and is not exercised here.
+   */
+  it('an injection hidden in SOURCE COMMENTS leaves the verdict byte-identical — the field the envelope does not mark', async () => {
+    const benignFoo = `// a perfectly ordinary comment\nexport function foo() { return 30; }\nexport function bar() { return 2; }\n`;
+    await repo.branch('benignSrc', 'base', MOD, benignFoo);
+    const benignState = await absorb('benignSrc', { cwd: repo.dir });
+    const expected = JSON.stringify(admitDecision(base, benignState, a));
+    expect(JSON.parse(expected).status).toBe('KNOT'); // genuinely contested vs branchA
+
+    for (const [i, text] of INJECTIONS.entries()) {
+      // Same code, byte-for-byte — only the COMMENT carries the payload. A
+      // block comment keeps every payload (newlines, NUL, ANSI, frame-escapes)
+      // syntactically inert so the file still parses and the units still lift.
+      const poisonedSrc =
+        `/* ${text.replace(/\*\//g, '* /')} */\nexport function foo() { return 30; }\nexport function bar() { return 2; }\n`;
+      await repo.branch(`poisonSrc${i}`, 'base', MOD, poisonedSrc);
+      const poisoned = await absorb(`poisonSrc${i}`, { cwd: repo.dir });
+      expect(
+        JSON.stringify(admitDecision(base, poisoned, a)),
+        `injection #${i} moved the verdict from a source comment`,
+      ).toBe(expected);
+    }
+  }, 180_000);
+
   it('adversarial CLAIM intents/taskRefs leave both the claim judgment and the verdict byte-identical (§3b × §3d)', () => {
     // P2.3 — the claim's only prose field (intent) is enveloped at creation and
     // NEVER read by evaluateClaim (symbol-set comparison only); taskRef is a

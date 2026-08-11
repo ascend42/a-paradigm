@@ -43,7 +43,27 @@ import { HUMAN_ONLY_VERBS } from '../src/daemon/protocol.js';
  * still would be defect D-3, which is the reason this file exists.
  *   was: descriptors:v1:445e4eb767771108a039f21606fa51bfe96d1ddc2b70246f311423184bc77964
  */
-const PINNED_DESCRIPTORS_ID = 'descriptors:v1:df0550c66cb565b3069c8367e9534ad88af3c547d73aa66201296dca9e3b42ac';
+/**
+ * RE-PINNED 2026-08-11 — the untrusted-content sentence widened to name RAW FILE
+ * SOURCE, not only prose envelopes (Aegis, pre-field-test audit).
+ *
+ * The v1 wording said "as untrusted-prose envelopes", which does not obviously
+ * cover the largest untrusted channel on this surface: `knot.show` returns
+ * `contested[].{ours,theirs,base}.fileText` — the full raw source of the
+ * contested file, comments included — verbatim into a reviewing agent's context,
+ * enveloped by nothing. An attacker never has to beat the envelope; they move
+ * the payload one field over, into a code comment. The teaching surface genuinely
+ * changed, so the id genuinely moves.
+ *
+ * WHY THE RESET WAS AFFORDABLE, which is the part worth recording: moving this
+ * id resets the FG-3 denominator, and while F4 was the headline claim that made
+ * any wording fix expensive. F4 is now scoped to the FLOOR and deferred behind
+ * the value-prop proof (TD-2026-08-11-838), and there are zero scored runs to
+ * discard — so the cost of this change was near zero today and would have been
+ * real last week. Sequencing a freeze after the surface settles is what made it
+ * cheap; that is the argument for FG-3's own instruction to review before pinning.
+ */
+const PINNED_DESCRIPTORS_ID = 'descriptors:v1:0bb2c860c675b713fe61e7db947bd782bad2286c6fdb171ab544768e9d9ca3b3';
 
 describe('descriptors — frozen, total, surface-correct', () => {
   it('the descriptor table matches the pinned content address (FG-3 tripwire)', () => {
