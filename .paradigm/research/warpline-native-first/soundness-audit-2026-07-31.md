@@ -2,6 +2,84 @@
 
 **Date:** 2026-07-31 · **Auditors:** Trace (crash safety), Arky (concurrency), Jinx (fail-open), Aegis (integrity), Shield (data loss), Judge (git-parity) · **Commissioned by:** the founder — *"this is source control and we need to be certain that pieces work as deliberately intended."*
 
+---
+
+## STATUS LOG — as of 2026-08-11 (added, not rewritten)
+
+**Everything below this block is the audit AS WRITTEN on 2026-07-31 and is left
+verbatim.** A point-in-time audit that gets edited to match the present stops
+being evidence. This block records what has changed since; where the two
+disagree, this block is current and the text below is the historical record.
+
+### Facts stated below that are now STALE
+
+| Stated 2026-07-31 | Measured 2026-08-11 |
+|---|---|
+| live fabric **64 lines**, md5 `2503e2e4…`, selvage `state:v0:6ef03392…` | **78 strands**, selvage `…2296765f`, `verify all intact (78 checked)` |
+| `.warpline/refs/heads` **does not exist** — "the live repo is not in refs mode" | **exists**; `health` reports `refs mode  refs (selvage)` |
+| **687 tests**, never run in CI, 4 dist-tests `skipIf` out of existence | **1006 passing / 110 files / exit 0**, two consecutive clean runs; Warpline into CI at `c56e2fec` |
+| "no `--root` and no `WARPLINE_ROOT`" (D-7, P0 item 7) | both exist; `health` reports **which arm** resolved the root |
+
+### Still TRUE, and worth re-reading below
+
+- **0 v3 strands.** The live fabric is 15 v1 + 63 v2. Consequence #2 of the
+  structural discovery holds unchanged: *every v3 protection covers zero of the
+  founder's strands*, and "v3 fixes that" remains a guarantee not currently held.
+- **C-9 is structurally live on this repo.** `health` says so unprompted:
+  `contested 0 … 52 verdict(s) had no agent base, so FAST_ADMIT was structurally
+  forced and contention was UNREACHABLE (audit C-9), not merely absent`
+  (base: predates-field 43, selvage 9). `.warpline/knots/` and `.warpline/claims/`
+  still do not exist here — this repo has never produced a contested verdict.
+  A genuine KNOT *was* produced on 2026-08-11, but on a scratch repo, not this one.
+- **The "Note on the new claims" closing paragraph.** The false-CLEAN rate is
+  still uncalibrated; nothing since has measured it.
+
+### Remediation map — finding → commit that ADDRESSED it
+
+Derived from commit bodies, **not** from a per-finding re-verification. Treat as
+"where to look", not as proof of closure; the two items above are direct evidence
+that being *mentioned* in a remediation commit does not mean *closed*.
+
+| Finding | Addressed in |
+|---|---|
+| C-2, C-3, C-4, C-8, C-12 | `7a9a555b` (P0 — the cardinal sin, an RCE, two integrity holes) |
+| C-5, C-6, C-7 | `7a9a555b`, then `292e740e` (P1 — isolation, write-back safety, durability) |
+| C-11, C-13, C-14, C-15, C-16 | `292e740e`, `0f561ecf` (P2 — truncation detection + repair) |
+| C-16 | also `5bb2edae` (fabric-lock heartbeat) |
+| C-9, C-10 | `280633d9` (P3 — agent-class `abandon`), `3a5c3b75` (the gate CAN fire; agents cannot reach it) — **diagnosed and instrumented, NOT closed** |
+| C-1 | `5ab60202`; the P0 item 1 `refs migrate` has since run — `refs/heads` now exists |
+| C-6 (truncation detectability) | `bf216132` (`health` surfaces the stake-journal witness) |
+| D-7 (`--root`) | `bf216132` (root-resolution arm reported by `health`) |
+
+### NOT re-verified
+
+No auditor re-ran the original demonstrations. C-1 through C-16 have **not** been
+individually re-tested against the current code, and this log deliberately does
+not mark any of them "closed" on the strength of a commit message. Re-running the
+six auditors' demonstrations against HEAD is the outstanding work; until then the
+findings below stand as written.
+
+### Defects found AFTER this audit (not in the findings below)
+
+Each is the audit's own "two failure cultures" shape — a silent divergence where
+failure renders identically to success:
+
+- `health` counted contested verdicts from shadow rows only, while the native
+  path persists payloads to `.warpline/knots/` — it reported "ZERO contested
+  verdicts" with a real KNOT on disk (`ae708ec5`).
+- Both code-lenses ignored the repo's own `.gitignore`; 55.9% of a *worktree*
+  absorb was build output carrying absolute machine paths in symbol ids
+  (`ae708ec5`). The sealed ledger was never affected (`f988b090`).
+- Renames graded as destruction: a moved file read as retire+born, falsely
+  overturning 29% of strands on a 40-seal run and corrupting the calibration
+  signal (`f8978bb1`).
+- `oracle` scored *any* failed git measurement as "git merged clean" — the cell
+  that flatters the headline claim (`81f98359`).
+- Concurrent `git worktree add` raced on the shared `.git/worktrees` registry;
+  `oracle` ran two adds per invocation, unlocked, by construction (`81f98359`).
+
+---
+
 ## Method, and why it differs from every prior review
 
 Two rules bound every auditor:
