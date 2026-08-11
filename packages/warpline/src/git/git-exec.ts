@@ -402,7 +402,18 @@ export async function gitUserName(opts: GitOptions = {}): Promise<string | null>
 export async function worktreeAdd(ref: string, opts: GitOptions = {}): Promise<string> {
   const base = await fs.mkdtemp(path.join(os.tmpdir(), 'warpline-wt-'));
   // `git worktree add` wants the leaf dir to NOT exist yet.
-  const tmp = path.join(base, 'tree');
+  //
+  // THE LEAF NAME IS NOT COSMETIC. git registers a worktree under
+  // `.git/worktrees/<basename-of-path>`, de-duplicating by CHECKING whether that
+  // name is taken and then creating it — a TOCTOU window. While every call named
+  // its leaf `tree`, N concurrent adds against ONE repo all proposed the name
+  // `tree`, raced in that window, and surfaced as
+  // `failed to read .git/worktrees/tree/commondir` on the loser and ENOTEMPTY on
+  // teardown. The mkdtemp suffix is already unique and collision-free, so reusing
+  // it as the leaf makes the registry name unique too and the race cannot form.
+  // (`materializeTree` keeps a fixed leaf: it is `git archive | tar` into a plain
+  // directory and registers no worktree, so it never touches this namespace.)
+  const tmp = path.join(base, `tree-${path.basename(base).slice('warpline-wt-'.length)}`);
   await git(['worktree', 'add', '--detach', '--quiet', '--end-of-options', tmp, ref], opts);
   return tmp;
 }

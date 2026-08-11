@@ -19,7 +19,17 @@ components:
       temp dir — NO worktree, no .git/worktrees lock — so absorbs run concurrently
       (T-2026-06-23-003). worktreeAdd/Remove remain only for the cold git<2.38
       merge-tree fallback, which needs real merge machinery and is serialized
-      per-repo via #repo-lock. gitUserName reads `git config user.name` (read-only)
+      per-repo via #repo-lock. WORKTREE LEAF NAMES ARE UNIQUE (T-2026-08-11): git
+      registers a worktree under `.git/worktrees/<basename-of-path>`, resolving
+      collisions by CHECKING the name then creating it — a TOCTOU window. Every
+      worktreeAdd used to name its leaf `tree`, so N concurrent adds against ONE
+      repo proposed the same registry name, raced in that window, and surfaced as
+      `failed to read .git/worktrees/tree/commondir` on the loser plus ENOTEMPTY on
+      teardown. It read as random unrelated failures across the git-era suite
+      (divergence-proof, oracle, absorb) whenever the machine was loaded. The leaf
+      now carries the mkdtemp suffix, which is already unique, so the race cannot
+      form. materializeTree keeps a fixed leaf deliberately: it is
+      `git archive | tar` into a plain directory and registers no worktree. gitUserName reads `git config user.name` (read-only)
       to seed the default ACTOR of a fabric #pick — coexistence only, never written
       back. The user's HEAD/index/worktree are never touched. PERF PLUMBING
       (T-2026-07-04-003): catFileBatch streams many blobs through ONE `git cat-file
@@ -2172,7 +2182,17 @@ components:
       with a typed ladder instead of prose — legacy fabric → UNSUPPORTED/
       refs.migrate(human); legacy stateId scratch → UNSUPPORTED/retry-corrected/
       fork; admit-without-propose (THE cold mistake) → BAD_REQUEST/
-      retry-corrected/[fork, propose]; disjoint DAG → INTEGRITY_BROKEN/escalate;
+      retry-corrected/[fork, propose]; FORKED-BUT-NEVER-PROPOSED (T-2026-08-11,
+      the other half of that same mistake and the half the scratch-ref check
+      CANNOT catch, because `fork` mints a VALID pickId and the call sails past
+      it) → BAD_REQUEST/retry-corrected/[propose]. Before this it fell through to
+      the "already selvage history" NOOP and reported "the agent changed no
+      meaning" — false, and the expensive kind of false: the work is real and
+      merely unsealed, so the agent is told its edits were empty. A proposal
+      strand is sealed THROUGH the scratch ref and carries it as provenance.ref
+      (refs/scratch/<agentId>); a fork base carries whatever sealed it (WORKTREE,
+      a git ref, refs/heads/selvage) — so the discriminator is EXACT, not
+      heuristic. disjoint DAG → INTEGRITY_BROKEN/escalate;
       resolve-no-selvage → NOT_FOUND/never; resolve-no-scratch → NOT_FOUND/
       retry-corrected/propose. PW-10 FORK CLOBBER GUARD: re-fork over a sealed,
       unadmitted proposal refuses (BAD_REQUEST/retry-corrected) via CAS
@@ -2955,6 +2975,24 @@ components:
 
   warpline-cli:
     description: >-
+      COLD-AGENT LEGIBILITY (F4, TD-2026-07-21-766 — an agent of ANY provider must
+      use Warpline as easily as git, and since Warpline is unpublished and in no
+      model's weights, runtime self-description is the ONLY mechanism). fork /
+      propose / admit each NAME THEIR CYCLE POSITION in --help ("CYCLE STEP 1|2|3"),
+      matching the daemon/MCP descriptors which always numbered them. Two CLI-only
+      defects made the write path unreachable from --help alone, both found by
+      driving a fresh repo end to end: (1) `propose` marked --claim REQUIRED while
+      the ENGINE requires `intent` and treats `claim` as optional (native.ts), so an
+      agent had to author `#code:<file>::<name>` symbol-id syntax — which the CLI
+      never teaches — before it could capture ANY work; --claim is now optional with
+      --native, required only in claim-only mode, and intent is enforced with the I3
+      reason. (2) `admit` after fork-without-propose reported NOOP "the agent changed
+      no meaning" — false, and expensively so: the work is real and merely unsealed
+      (see #admit for the engine-side refusal). Also: `fail()` no longer prints
+      `warpline: warpline:` on engine errors, which is precisely the text an agent
+      reads when it is already lost. Pinned in test/cli-cold-agent-cycle.test.ts,
+      which drives the REAL binary because the defects lived in option wiring and
+      prose that no library-level test can see.
       The warpline command line (commander). `warpline oracle <a> <b> [--json]`,
       `warpline absorb <ref> [--json]`, `warpline weave --preview <a> <b> [--vs-git]
       [--json]` (the pre-merge forecast; the bare `weave` write verb is reserved

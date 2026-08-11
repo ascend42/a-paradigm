@@ -527,7 +527,7 @@ program
 
 program
   .command('fork')
-  .description('NATIVE-FIRST (phase 0): mint the agent\'s scratch ref at the current selvage pickId (base is a pickId, forever — I9). With --into, restore the base tree into the agent\'s fresh worktree (git absent).')
+  .description('CYCLE STEP 1 (FORK → propose → admit). Mint the agent\'s scratch ref at the current selvage pickId — the private base it proposes against (base is a pickId, forever — I9). With --into, restore the base tree into the agent\'s fresh worktree (git absent). NEXT: edit, then `warpline propose --agent <id> --native -m "<why>"` to seal.')
   .argument('<agentId>', 'the agent identity owning the scratch ref')
   .option('--into <dir>', 'restore the selvage tree into this directory (the agent worktree)')
   .option('--force', 'with --into: overwrite colliding paths whose current bytes are in no object (they are unrecoverable — the guard refuses by default)')
@@ -559,21 +559,50 @@ program
 
 program
   .command('propose')
-  .description("Register a pre-declared CLAIM (claim:v1, forge-spec §3b) — the agent's belief about what its change touches, declared BEFORE admission. Persists to .warpline/claims/ and prints the claimId; pass it to `admit --claim` so the verdict is judged against the claim (honesty check + calibration probe). The claim is recorded, never used to scope computation.")
+  .description("CYCLE STEP 2 (fork → PROPOSE → admit). With --native: SEAL your worktree as a durable proposal on your own scratch ref — this is the step that captures your work, and nothing is judged or shared until `admit`. Optionally pre-declare what you touched with --claim (claim:v1, forge-spec §3b): the agent's belief about what its change touches, declared BEFORE admission, so `admit --claim` can judge the verdict against it (honesty check + calibration probe). A claim is recorded, never used to scope computation. WITHOUT --native this registers a claim ONLY and seals nothing.")
   .requiredOption('--agent <id>', 'the declaring agent (the calibration probe is per-agent)')
-  .requiredOption('--claim <json>', 'the claim body: a path to a .json file, or inline JSON — {claimedSymbols: string[], intent: string, taskRef?, claimedContractDelta?, confidence?}')
-  .option('--native', 'NATIVE-FIRST (phase 0): ALSO seal a v3 SCRATCH strand from the worktree — snapshot (native walk) → absorb from the store → bind-on-seal; advances only the agent\'s scratch ref, git absent')
+  .option('--claim <json>', 'OPTIONAL with --native (required without it): the claim body — a path to a .json file, or inline JSON — {claimedSymbols: string[], intent: string, taskRef?, claimedContractDelta?, confidence?}')
+  .option('--native', 'NATIVE-FIRST (phase 0): SEAL a v3 SCRATCH strand from the worktree — snapshot (native walk) → absorb from the store → bind-on-seal; advances only the agent\'s scratch ref, git absent')
   .option('--worktree <dir>', 'the worktree to seal from (--native; default: the repo root)')
-  .option('-m, --intent <message>', 'the proposal intent (--native; default: the claim\'s intent text)')
+  .option('-m, --intent <message>', 'why this change exists — REQUIRED with --native (there is no git fallback on the native path, I3); defaults to the claim\'s intent text when a claim is given')
   .option('--as <actor>', 'actor identity (--native; default: the agent id)')
   .option('--json', 'emit the result as JSON')
-  .action(async (options: { agent: string; claim: string; native?: boolean; worktree?: string; intent?: string; as?: string; json?: boolean }) => {
+  .action(async (options: { agent: string; claim?: string; native?: boolean; worktree?: string; intent?: string; as?: string; json?: boolean }) => {
     try {
       const root = await resolveRoot();
-      const raw = options.claim.trimStart().startsWith('{')
-        ? options.claim
-        : await fs.readFile(path.resolve(options.claim), 'utf8');
-      const body = JSON.parse(raw) as Omit<CreateClaimInput, 'agentId'>;
+      // THE CLI ONCE DEMANDED A CLAIM TO SEAL, and the engine never did
+      // (native.ts: `intent` throws when missing, `claim` is `if (opts.claim)`).
+      // That inversion is an F4 legibility failure with teeth: it forced an
+      // agent to author `#code:<file>::<name>` symbol-id syntax — knowledge the
+      // CLI never teaches — before it could capture ANY work. The daemon/MCP
+      // descriptor for the same verb always had it right (intent required,
+      // claim optional); the two surfaces now agree with each other and with
+      // the engine.
+      const body = options.claim
+        ? (JSON.parse(
+            options.claim.trimStart().startsWith('{')
+              ? options.claim
+              : await fs.readFile(path.resolve(options.claim), 'utf8'),
+          ) as Omit<CreateClaimInput, 'agentId'>)
+        : undefined;
+      if (!options.native && !body) {
+        fail(
+          new Error(
+            'warpline: propose without --native registers a CLAIM and seals nothing, so --claim is required. ' +
+              'To SEAL your work (cycle step 2), use --native with -m <intent>.',
+          ),
+        );
+        return;
+      }
+      if (options.native && !(options.intent ?? body?.intent)?.trim()) {
+        fail(
+          new Error(
+            'warpline: propose --native refused — intent is required (I3: no git fallback on the native path). ' +
+              'Pass -m "<why this change exists>", or a --claim whose body carries an `intent`.',
+          ),
+        );
+        return;
+      }
       if (options.native) {
         // f4Trace: intent and the --claim BODY are prose — neither may enter `target`.
         const result = await traceCli(
@@ -587,9 +616,9 @@ program
             proposeNative(root, {
               worktree: options.worktree ? path.resolve(options.worktree) : root,
               agentId: options.agent,
-              intent: options.intent ?? body.intent,
+              intent: (options.intent ?? body?.intent)!,
               actor: options.as,
-              claim: body,
+              ...(body ? { claim: body } : {}),
             }),
         );
         if (options.json) {
@@ -619,7 +648,9 @@ program
           principal: options.agent,
         },
         () => {
-          const c = createClaim({ ...body, agentId: options.agent });
+          // Unreachable with body === undefined: the guard above refuses
+          // claim-only mode without --claim before we get here.
+          const c = createClaim({ ...body!, agentId: options.agent });
           persistClaim(root, c);
           return c;
         },
@@ -643,7 +674,7 @@ program
 
 program
   .command('admit')
-  .description("Run the multi-writer ADMISSION protocol for an agent's scratch: re-base against the live selvage and return the verdict — FAST_ADMIT / CLEAN (+confidence) / KNOT / DANGLE / CLAIM-BREACH (when judged against a --claim) / HELD (an independent-CLEAN into a low-survival symbol, per the grades sidecar). v1 reports the decision; merged-tree materialization is v2.")
+  .description("CYCLE STEP 3 (fork → propose → ADMIT). Judge the agent's SEALED proposal against the live selvage and return the verdict — FAST_ADMIT / CLEAN (+confidence) / KNOT / DANGLE / CLAIM-BREACH (when judged against a --claim) / HELD (an independent-CLEAN into a low-survival symbol, per the grades sidecar). REQUIRES a sealed scratch: run `propose --native` FIRST, or this reports NOOP because there is no proposal to judge. Resolution of a KNOT is human-class — escalate, do not attempt. v1 reports the decision; merged-tree materialization is v2.")
   .argument('<agentId>', 'the agent whose scratch is being admitted')
   .option('--ref <ref>', 'the agent\'s proposed state (a git ref or WORKTREE)', WORKTREE_REF)
   .option('--claim <claimId>', 'judge this admission against a pre-declared claim (see `warpline propose`) — a breach HOLDS the admit (CLAIM-BREACH)')
@@ -2343,7 +2374,10 @@ function pad(s: string, n: number): string {
 
 function fail(err: unknown): never {
   const msg = err instanceof Error ? err.message : String(err);
-  process.stderr.write(`warpline: ${msg}\n`);
+  // Engine-boundary messages already open with `warpline: ` (every RefusedError
+  // in fabric/ does), so prefixing unconditionally printed "warpline: warpline:"
+  // on exactly the errors an agent is most likely to be reading.
+  process.stderr.write(msg.startsWith('warpline: ') ? `${msg}\n` : `warpline: ${msg}\n`);
   // PW-2: an engine-boundary RefusedError carries refusal:v1 — surface it as a
   // machine-readable stderr line (prose-free by construction) and exit with
   // its verdict-keyed code instead of the uniform 1.

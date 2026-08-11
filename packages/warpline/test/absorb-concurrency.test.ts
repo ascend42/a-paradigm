@@ -37,6 +37,12 @@ describe('absorb — concurrency (T-2026-06-23-003)', () => {
     }
   });
 
+  // TIMEOUT, NOT A LATENCY BUDGET. What this asserts is "no throw, one stateId";
+  // it deliberately says nothing about how long 8 concurrent absorbs take. At the
+  // default 60s it was a LOAD FLAKE — ~10s standing alone, over 60s when 109 other
+  // files compete for the same cores — so the suite reported a concurrency DEFECT
+  // whenever the machine was busy. A flaky red is worse than no test: it trains
+  // the reader to discount exactly the signal this file exists to raise.
   it('a high-fanout burst against one repo does not throw on worktree locks', async () => {
     // 8 concurrent absorbs of one ref — the exact shape that threw under the
     // worktree impl. Promise.all rejects if ANY throws; one stateId proves all
@@ -45,7 +51,7 @@ describe('absorb — concurrency (T-2026-06-23-003)', () => {
     const states = await Promise.all(burst);
     const ids = new Set(states.map((s) => s.stateId));
     expect(ids.size).toBe(1);
-  });
+  }, 180_000);
 
   it('materializeTree REJECTS on an invalid ref (no silent empty tree, no hang)', async () => {
     // The materialize path must fail loudly on bad input — never return a dir that

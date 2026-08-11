@@ -63,6 +63,30 @@ describe('PW-2 — sequencing mistakes refuse with typed ladders, never ENGINE d
     for (const n of e.refusal.next) expect(n.principal).toBe('agent');
   });
 
+  it('FORKED but never proposed → BAD_REQUEST / ladder propose, NOT a silent NOOP', async () => {
+    // The other half of the same cold mistake, and the one the `nothing
+    // proposed` guard above CANNOT catch: `fork` mints a VALID pickId (the
+    // base), so the scratch-ref check passes and the call used to fall through
+    // to the "already selvage history" NOOP — reporting "the agent changed no
+    // meaning" to an agent whose edits were real and simply unsealed. Sealing a
+    // genesis strand first is what puts a base under the fork.
+    await proposeNative(root, { worktree: root, agentId: 'seed', intent: 'genesis' });
+    await admitNative(root, { worktree: root, agentId: 'seed' });
+
+    forkNative(root, 'forgetful');
+    write(root, MOD, 'export function foo() { return 99; }\n'); // real work, never proposed
+
+    const e = await refusedBy(admitNative(root, { worktree: root, agentId: 'forgetful' }));
+    expect(e.refusal.code).toBe('BAD_REQUEST');
+    expect(e.refusal.retriable).toBe('retry-corrected');
+    expect(e.refusal.next.map((n) => n.verb)).toEqual(['propose']);
+    expect(e.refusal.next[0]!.requires).toEqual(['intent', 'worktree']);
+    expect(e.refusal.next[0]!.principal).toBe('agent');
+    // The prose must name the recovery verb, not merely deny the work exists.
+    expect(e.message).toContain('nothing PROPOSED');
+    expect(e.message).toContain('warpline propose');
+  });
+
   it('propose over a legacy stateId scratch → UNSUPPORTED / retry-corrected / ladder fork', async () => {
     writeScratchRef(root, 'legacy', 'state:v0:deadbeef');
     const e = await refusedBy(proposeNative(root, { worktree: root, agentId: 'legacy', intent: 'x' }));

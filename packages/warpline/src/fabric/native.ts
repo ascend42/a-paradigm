@@ -505,6 +505,27 @@ export async function admitNative(root: string, opts: AdmitNativeOptions): Promi
       );
     }
     const scratchStrand = mustStrand(byPick, scratchTipId, `refs/scratch/${opts.agentId}`);
+    // THE SECOND HALF OF THE SAME COLD MISTAKE. The guard above catches `admit`
+    // with no scratch at all — but `fork` MINTS a valid pickId (the base), so an
+    // agent that forked and edited but never PROPOSED sails past it and lands on
+    // the "already selvage history" NOOP below, which reports "the agent changed
+    // no meaning". That message is false and it is the expensive kind of false:
+    // the work is real and unsealed, and the agent is told its edits were empty.
+    // A proposal strand is sealed THROUGH the scratch ref and carries it as
+    // provenance; a fork base carries whatever sealed it (WORKTREE, a git ref,
+    // refs/heads/selvage). So the discriminator is exact, not heuristic.
+    if (scratchStrand.provenance.ref !== scratchRefName(opts.agentId)) {
+      throw new RefusedError(
+        refuse({
+          code: 'BAD_REQUEST',
+          retriable: 'retry-corrected',
+          next: [{ verb: 'propose', params: {}, requires: ['intent', 'worktree'], principal: 'agent' }],
+        }),
+        `warpline: admit (native) — ${opts.agentId} has a scratch ref but nothing PROPOSED on it: it still points at the fork base ` +
+          `(${scratchTipId.slice(0, 20)}…, sealed as "${scratchStrand.intent}"). Forking mints the base; it does not capture your work. ` +
+          `Run \`warpline propose --agent ${opts.agentId} --native -m "<why this change exists>"\` to seal the worktree, then admit.`,
+      );
+    }
     const proposed = store.loadState(scratchStrand.stateId);
     if (!proposed) {
       throw new Error(`warpline: admit (native) — proposed state ${scratchStrand.stateId} cannot be loaded — fail closed`);
