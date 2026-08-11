@@ -123,6 +123,6 @@ aspects:
     severity: medium
     tags: [syntax-highlighting, injection]
     anchors:
-      - package.json:46-54
+      - package.json:48-56
     applies-to:
       - "#paradigm-symbols-grammar"

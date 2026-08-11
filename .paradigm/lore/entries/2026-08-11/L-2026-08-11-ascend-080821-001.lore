@@ -1,0 +1,81 @@
+id: L-2026-08-11-ascend-080821-001
+type: retro
+timestamp: '2026-08-11T08:08:21.531Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Warpline flight-readiness: seven things we believed, measured against what is actually true'
+summary: 'Pre-flight for the first real Warpline field test (an Expo/React Native app). Every load-bearing belief carried into this session was checked against the code or a falsifier rather than inherited. Seven were wrong — four in Warpline''s favour, three against it — and two of the wrong ones were mine, produced during this session. The dress rehearsal passed end to end (first genuine KNOT), the 40-seal scale run passed all six pre-registered criteria, and four defects were fixed: lens ignore-blindness, health blindness to native KNOTs, cold-agent unreachability of the write path, and a git worktree TOCTOU race. A fifth — renames grading as destruction — was found by the scale run itself.'
+symbols_touched:
+  - '#lens-walk'
+  - '#cfg-lens'
+  - '#ts-lens'
+  - '#warpline-health'
+  - '#warpline-cli'
+  - '#admit'
+  - '#sem-delta'
+  - '#grade'
+  - '#git-exec'
+  - '#knot-payload'
+  - '#shadow'
+  - '#resolve'
+commit: f8978bb1
+learnings:
+  - INHERITED NUMBERS ARE CLAIMS, NOT FACTS. Of seven load-bearing beliefs carried into this session, seven were wrong. Not one survived contact with a measurement. The cost of checking was minutes each; the cost of acting on any one of them would have been a fix aimed at the wrong mechanism, or a false alarm to the founder.
+  - TWO OF THE WRONG BELIEFS WERE MANUFACTURED IN-SESSION, WHICH MEANS FRESHNESS IS NOT ACCURACY. I reported '55.9% junk' without naming which of the three absorb surfaces it came from, producing a false mass-retirement alarm; and I shipped a rename fix keyed on stableKey (an opaque hash) that matched zero pairs and changed nothing. A correct-looking no-op is the hardest defect to see, because success and failure render identically.
+  - 'THE SAME DEFECT SHAPE APPEARED FIVE TIMES IN ONE DAY ACROSS UNRELATED SUBSYSTEMS: health reading one of two writers; my un-surfaced measurement; the worktree leaf-name collision; the orchestrator dropping 18 of 26 agents; my no-op rename fix. In every case two records diverged and the failure was byte-identical to success. This is the dominant failure mode of this codebase and deserves a standing audit question: for every counter, enumerate ALL writers; for every fix, prove the output CHANGED.'
+  - A FALSIFIER FINDS WHAT ITS CRITERIA DO NOT ASK FOR. The 40-seal scale run passed all six pre-registered criteria and then surfaced the rename/grade corruption, which no criterion covered. Pre-registration protects against moving the goalposts; it does not bound what the exercise can teach. Run the thing even when you expect it to pass.
+  - PRODUCT CLAIMS DECAY INTO FICTION WHERE THEY ARE UNTESTED. 'Renames are the EMPTY delta' was in the CLI help and the module header, true for .purpose symbols and structurally impossible for code-units since the code-lens shipped. A documented invariant with no test is a belief, and it silently cost 29% of strands their calibration.
+  - 'DRIVE THE SYSTEM TO PRODUCE ONE OF THE THING BEFORE TRUSTING A ZERO. ''This project has never produced a KNOT'' was partly the instrument: health counted only shadow rows while the native path writes payloads to .warpline/knots/. One hand-driven KNOT on a scratch repo falsified the belief in under an hour.'
+  - EXONERATE-OR-CONVICT BY EXPERIMENT. When the suite began failing after my changes, the plausible story was that my new subprocess-spawning tests caused it. Removing them and re-running showed the suite fail WORSE (3 failures vs 1), which is what pointed at the real git worktree TOCTOU race. Plausibility would have had me delete good tests and ship the bug.
+verification:
+  status: pass
+  details:
+    tests: 1006 passing / 110 files / exit 0, two consecutive clean runs
+    tsc: exit 0
+    lifecycle: fresh-repo genesis -> fork x2 -> propose x2 -> FAST_ADMIT -> KNOT -> resolve
+    scale: 40 seals, all 6 pre-registered criteria PASS
+    restore: byte-identical at depth 41
+tags:
+  - warpline
+  - field-test
+  - pre-flight
+  - belief-vs-reality
+  - calibration
+  - instrument-honesty
+  - scale-run
+body: |-
+  THE SHAPE OF THIS ENTRY: each item is BELIEVED -> ACTUAL -> CONSEQUENCE. The point is not the individual corrections but the base rate, which is the calibration datum worth keeping.
+
+  1. BELIEVED: the ledger was polluted with build output; a correction seal would retire ~16,015 symbols. ACTUAL: the sealed ledger was NEVER polluted. Seals absorb a git ref, which materialises through `git archive` = git-tracked files only, and every junk source (.build/, **/target/, .mcp.json) is gitignored. Live counts across the fix: 9325 -> 9327, a delta of +2, which was this session's own new file. The 55.9%-junk figure was real but belonged to `absorb WORKTREE` — the surface behind `status`, `diff` and worktree-mode absorbs. CONSEQUENCE: a false alarm delivered to the founder, caught only because he asked "holy, we are retiring that many symbols?". Warpline has THREE absorb surfaces with different visibility; a measurement that does not name its surface will be read as global.
+
+  2. BELIEVED (checkpoint): 13,179 of 16,035 born symbols came from `.build/** or node_modules`. ACTUAL: 14,168 of 25,341, node_modules contributes exactly ZERO, and the mechanism is cfg-lens lifting every JSON key as a symbol (one Swift output-file-map.json yields 927), not the snapshot path. Those ids also embedded absolute machine paths, making the state's content-address machine-dependent. CONSEQUENCE: acting on the inherited number would have produced a fix aimed at the wrong walker entirely.
+
+  3. BELIEVED: ZERO KNOTs had ever been produced; the denominator was structurally empty. ACTUAL: partly an instrument artifact. `warpline health` counted contested verdicts only from shadow rows, while the NATIVE path — the one agents use — persists payloads to .warpline/knots/ and writes no shadow row. A real KNOT sat on disk while the diagnostic printed "ZERO contested verdicts". The lifecycle itself worked on the first honest attempt: genesis -> fork x2 -> propose x2 -> FAST_ADMIT -> KNOT with hydrated payload -> human resolve.
+
+  4. BELIEVED: the write path was usable by a cold agent (F4 / TD-2026-07-21-766). ACTUAL: I could not complete the cycle from --help with the source open. `admit --native` returned NOOP three times. The CLI marked --claim REQUIRED while the engine requires `intent` and treats claim as optional, forcing an agent to author `#code:<file>::<name>` symbol-id syntax the CLI never teaches; and admit-after-fork-without-propose reported "the agent changed no meaning", which is false when the work is real and merely unsealed.
+
+  5. BELIEVED: one known flaky test (essence-iterative, 25k-deep, load-sensitive). ACTUAL: a genuine concurrency bug. Every `git worktree add` named its leaf `tree`, and git registers worktrees under `.git/worktrees/<basename>`, de-duplicating by check-then-create — a TOCTOU window. Concurrent adds against one repo raced, surfacing as three DIFFERENT unrelated tests failing across three runs. Suite went from 997/109 with 1-3 load-dependent failures to 1006/110 stable across consecutive runs.
+
+  6. BELIEVED (product claim, in CLI help and the sem-delta header): renames are the EMPTY delta. ACTUAL: true for .purpose symbols, structurally impossible for code-units — a code-unit's symbol embeds the file path, so the contentId-equal rename branch was unreachable. Measured on the 40-seal run: 12 of 42 strands graded `overturned` with confidence 0.8 -> 0.35, every one a file move whose body never changed, because `grade` overturns a strand whose symbols a later strand RETIRES. Routine refactoring was degrading the per-codebase calibration signal — the moat. After the fix: 0 overturned, 29 survived, 0 retirements, 10 renamed-noop.
+
+  7. BELIEVED (open task T-2026-06-13-004): the learning loop only PRINTS advice. ACTUAL: out of date — the chain is wired at task-loader.ts:556, but gated on `isTerminalStatus && parentTaskId` plus whole-sibling-set settlement, and only 53 of 231 tasks carry a parent. The deeper finding is separate and worse: `orchestrate_inline` silently drops 18 of 26 rostered agents (manifest holds 8), so Loid — who owns the learning loop — cannot be dispatched at all. Filed as T-2026-08-11-007; deferred by founder decision until Warpline's flight version is settled.
+
+  WHERE THINGS ACTUALLY STAND. Lifecycle verified end to end on a fresh repo. Expo-shaped absorb yields 13 real symbols where it would have yielded 3,673 (99.6% junk). Scale run: 40 seals, all six pre-registered criteria pass, marginal cost per seal DECREASING with depth (0.53x), latency flat (0.98x), 0.84 MB total, byte-identical restore at depth 41. Cold-agent path reachable from --help alone. 21 commits unpushed; push has never been authorised.
+
+  STILL OPEN, all previously flagged as founder decisions rather than blockers: oracle.ts:160 shares the merge-tree bad-ref conflation (git merge-tree exits 1 for BOTH "conflicted" and "not a ref"); states/ has no replication path and a lost state file is a permanent fail-closed; the soundness-audit doc is stale; the standing-report artifact needs Rev 3.
+linked_lore:
+  - L-2026-08-11-ascend-063622-001
+linked_tasks:
+  - T-2026-08-11-007
+linked_commits:
+  - ae708ec5
+  - a31397c0
+  - f988b090
+  - f8978bb1
+confidence: 0.92
+git_context:
+  ref: f8978bb1701584e811a19a2175eba06091df4f41
+  branch: warpline-surfaces
+  dirty: true

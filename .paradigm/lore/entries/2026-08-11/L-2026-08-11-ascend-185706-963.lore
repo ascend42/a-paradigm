@@ -1,0 +1,19 @@
+id: L-2026-08-11-ascend-185706-963
+type: insight
+timestamp: '2026-08-11T18:57:06.141Z'
+author: ascend
+title: Decision TD-2026-08-11-351 recorded
+summary: Companion lore entry for decision record TD-2026-08-11-351. See .paradigm/decisions/TD-2026-08-11-351.yaml.
+symbols_touched:
+  - '#f4-classifier'
+  - '#f4-seed'
+  - '#f4-cli-trace'
+  - '#warpline-cli'
+  - '#admit'
+  - '#orchestrator'
+  - '#agent-registry'
+references:
+  decision_id: TD-2026-08-11-351
+tags:
+  - companion-lore
+  - decision-reference

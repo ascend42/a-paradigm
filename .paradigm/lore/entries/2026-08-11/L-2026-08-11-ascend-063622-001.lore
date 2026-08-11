@@ -1,0 +1,81 @@
+id: L-2026-08-11-ascend-063622-001
+type: milestone
+timestamp: '2026-08-11T06:36:22.616Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'First end-to-end lifecycle verification: a real KNOT on a fresh repo, and two instruments that were lying'
+summary: 'Ran the never-started dress rehearsal on a genuinely fresh repo ahead of the first field test (an Expo/React Native app). The full native cycle — genesis, fork x2, propose x2, FAST_ADMIT, KNOT with hydrated payload, human resolve, backup, destroy, byte-identical restore — passed, producing the first GENUINE KNOT this project has ever made. The run exposed that 55.9% of the WORKTREE-absorbed symbol universe was Swift build output with machine-absolute paths in the ids, and that `warpline health` was structurally blind to every KNOT the native path produces. CORRECTION (post-hoc, founder-prompted): the sealed LEDGER was never polluted — seals absorb a git ref via `git archive`, which carries git-tracked files only, so the junk never entered history and there is NO mass-retirement to seal. The claimed "~16,015 symbols retiring" was wrong; the measured seal delta was +2.'
+symbols_touched:
+  - '#lens-walk'
+  - '#ts-lens'
+  - '#cfg-lens'
+  - '#warpline-health'
+  - '#warpline-cli'
+  - '#warp-store'
+  - '#admit'
+  - '#shadow'
+  - '#resolve'
+  - '#knot-payload'
+symbols_created:
+  - '#lens-walk'
+files_created:
+  - packages/warpline/src/lens/lens-walk.ts
+files_modified:
+  - packages/warpline/src/lens/ts-lens.ts
+  - packages/warpline/src/lens/cfg-lens.ts
+  - packages/warpline/src/health.ts
+  - packages/warpline/src/cli.ts
+  - packages/warpline/.purpose
+commit: ae708ec5
+decisions:
+  - id: TD-2026-08-11-lens-ignore
+    decision: Code lenses delegate file enumeration to a shared walk that applies BOTH a never-meaning baseline AND the repository's own root .warplineignore/.gitignore, reusing the same matcher the worktree snapshot path uses.
+    rationale: Per-lens hardcoded denylists diverged from each other and from the snapshot path, and none encoded project intent. Sharing the snapshot's matcher makes 'what a lens lifts' and 'what a snapshot seals' agree by construction rather than by vigilance. Nested ignore files stay out of scope at v1, so .build remains in the baseline.
+  - id: TD-2026-08-11-both-writers
+    decision: health.contested sums shadow-observed AND ledger-recorded contested verdicts, reported split, counted through the same reader `warpline knot` uses.
+    rationale: The two populations are disjoint by construction (a --shadow run deliberately persists no payload), so summing cannot double-count. Reading only one writer made the instrument report zero for the entire native era. Sharing the reader prevents the two surfaces from drifting apart about what exists.
+learnings:
+  - THE DRESS REHEARSAL WAS THE CHEAPEST TEST AVAILABLE AND IT WAS DEFERRED LONGEST. Everything was component-verified and nothing was lifecycle-verified; one scripted end-to-end run on a fresh repo found three defects in under an hour, including the one that had been distorting the programme's headline belief. Component tests pass on a system whose parts cannot be reached in sequence.
+  - 'AN INSTRUMENT THAT READS ONE OF TWO WRITERS REPORTS THE FAVOURABLE ANSWER ABOUT ITS OWN EMPTINESS. `health` counted contested verdicts from shadow rows alone while the native seal path persists payloads to .warpline/knots/ and writes no shadow row. A real KNOT sat on disk one directory over while the diagnostic printed ''ZERO contested verdicts''. This is the merge-tree exit-1 conflation lesson recurring in a second location — the same failure SHAPE, so the audit question generalizes: for every counter, enumerate ALL writers before trusting a zero.'
+  - A ZERO FROM AN INSTRUMENT IS A CLAIM ABOUT THE INSTRUMENT UNTIL PROVEN OTHERWISE. The belief that this project had never produced a KNOT was partly a measurement artifact. Before treating an empty denominator as a fact about the world, drive the system to produce ONE of the thing by hand and check the instrument sees it.
+  - INHERITED NUMBERS DECAY — RE-MEASURE BEFORE ACTING ON THEM. The checkpoint's '13,179 of 16,035 born, .build/** or node_modules' was wrong in magnitude (14,168 of 25,341), wrong in mechanism (cfg-lens key-lifting, not the snapshot path), and wrong in attribution (node_modules contributes exactly zero). Acting on it directly would have produced a fix aimed at the wrong walker.
+  - NAME THE SURFACE A NUMBER BELONGS TO, OR THE NUMBER WILL BE READ AS GLOBAL. The 55.9%-junk figure was true of `absorb WORKTREE` and FALSE of the sealed ledger, because seals ride `git archive` (git-tracked files only) while the worktree walk sees everything on disk. Stated without that qualifier it produced a false alarm about a 16,015-symbol mass retirement; the real seal delta was +2. Warpline has THREE absorb surfaces (git-ref, worktree, native snapshot) with different visibility — every measurement must say which one it came from.
+  - 'HARDCODED DENYLISTS ENCODE THE ECOSYSTEMS SOMEONE HAPPENED TO THINK OF; .gitignore ENCODES THE PROJECT. Two lenses carried private skip-lists that had silently diverged, and neither read the repo''s own ignore rules — so Swift''s .build was invisible to both. Measured on an Expo-shaped fixture: 3,673 symbols without ignore-awareness vs 13 with it, and the junk sources (ios/Pods, .expo) are reachable ONLY through .gitignore — no baseline denylist would have caught them.'
+  - 'SYMBOL IDS THAT EMBED ABSOLUTE PATHS SILENTLY DESTROY THE CORE PROPERTY. #cfg ids carried /Users/ascend/... , making the state''s content-address machine-dependent — the exact thing the WARP exists to guarantee. Worth an explicit invariant test, because nothing else would have caught it.'
+  - A FLAKY RED TRAINS THE READER TO DISCOUNT THE SIGNAL. Concurrent `git worktree add` calls all named their leaf `tree`, colliding in git's check-then-create window on `.git/worktrees/<basename>`; it surfaced as three DIFFERENT unrelated tests failing on three different runs. Diagnosing it required removing my own new tests and re-running to see the suite fail WORSE without them — exonerate-or-convict by experiment, never by plausibility.
+verification:
+  status: pass
+  details:
+    tsc: exit 0
+    tests: 997 passing / 109 files / exit 0
+    lifecycle: fresh-repo native cycle re-run against rebuilt dist
+    restore: byte-identical after full .warpline destruction
+tags:
+  - warpline
+  - field-test
+  - pre-flight
+  - dress-rehearsal
+  - F4
+  - FG-1
+  - instrument-honesty
+body: |-
+  CONTEXT. Resumed from a checkpoint into a founder directive: be completely ready for the first true field test, which will be a completely fresh repo. That reframing is what made the dress rehearsal the priority — a fresh repo IS the rehearsal, and the rehearsal had never been started.
+
+  THE FIELD TEST TARGET. Confirmed with the founder mid-session: an iOS/Android app that "probably doesn't need to be native Swift" — i.e. React Native / Expo, which is TypeScript. This is the good outcome: the TS lens covers the app code on day one. Flutter/Dart or Kotlin Multiplatform would have needed a new lens before the test could measure anything, since Warpline's entire semantic universe is TS/TSX code units + JSON/YAML config units + .purpose files.
+
+  It also sharpened the lens fix from "nice" to "blocking": an Expo app ships ios/Pods/, android/build/, android/.gradle/ and .expo/, all dense with JSON/plist, none of them in either lens's old skip-list. Without the fix the .build explosion would have reproduced on day one of the field test. Expo's default .gitignore covers all of them at ROOT level, so honoring root ignore files is sufficient — no nested-gitignore work needed for the test.
+
+  WHAT THE REHEARSAL PROVED. On a fresh `git init` repo with no .purpose files, git absent for the whole native cycle: absorb produced 5 sensible symbols (1 TS code unit + 4 config units); genesis sealed; two agents forked the SAME selvage; both edited the same function and proposed with claims; A fast-admitted; B produced a KNOT (exit 1) naming the contested unit with base/ours/theirs essences, blast radius, and the untrusted-prose envelope intact around agent-authored intent; the human resolve leg sealed decidedBy/reason/contended and advanced the selvage; backup created and verified (35 files digest-true, 4 strands authenticated); the entire .warpline was destroyed; restore from the backup root reproduced the worktree BYTE-IDENTICAL.
+
+  Per FG-1 (agent-class F4 completion = reaches KNOT + hydrates knotPayloadId), that is the completion condition met on the path the field test will use.
+
+  A LEGIBILITY DATA POINT WORTH KEEPING. It took several wrong attempts to drive the cycle even with the source open. `admit --native` returned NOOP three times because the agent's work must first be SEALED by `propose --native`, and `warpline propose --help` describes only the claim side-effect — it never says that this is the verb that captures your work. `--worktree` on admit governs only the CLEAN write-back, not what gets absorbed. A cold agent reading only --help would not find this path. That is direct evidence for the F4 cold-agent legibility constraint (TD-2026-07-21-766) and argues for a propose/admit help rewrite before the field test.
+
+  NOT DONE, DELIBERATELY. The one-time correction seal on this repo (~16,015 symbols retiring) has not been made — it should be an intent-labelled, founder-visible pick rather than something the auto-seal hook does silently on the next commit. The 30-50 seal scale run to see the cost curve has not been done. The counterfactual denominator on this repo is still 1 of 44.
+confidence: 0.9
+git_context:
+  ref: ae708ec560fcc68900b8a2b7b4cdd1cd33e1eff4
+  branch: warpline-surfaces
+  dirty: true

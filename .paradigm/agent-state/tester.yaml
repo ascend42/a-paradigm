@@ -1,10 +1,11 @@
 id: tester
 project: a-paradigm
 lastSession:
-  date: '2026-07-15T07:47:57.342Z'
-  sessionId: orch-mrls0vbc-qryc
-  summary: '[Probe (tester)]: tester: Test: ROADMAP 2026H2 overnight execution wave (fou...'
-  symbolsTouched: []
+  date: '2026-08-11T07:40:51.844Z'
+  sessionId: orch-msocpiyv-oojg
+  summary: '[Probe (tester)]: tester: Test: Close the agent-learning gap on a-paradigm. ...'
+  symbolsTouched:
+    - ~8
 pendingWork: []
 recentPatterns: []
-sessionsOnProject: 3
+sessionsOnProject: 4

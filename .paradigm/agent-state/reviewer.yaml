@@ -1,10 +1,11 @@
 id: reviewer
 project: a-paradigm
 lastSession:
-  date: '2026-07-01T23:30:43.941Z'
-  sessionId: orch-mr2pl68i-uloe
-  summary: '[Judge (reviewer)]: reviewer: Process: Full-scope audit of Warpline (packages/wa...'
-  symbolsTouched: []
+  date: '2026-08-11T07:40:51.845Z'
+  sessionId: orch-msocpiyv-oojg
+  summary: '[Judge (reviewer)]: reviewer: Process: Close the agent-learning gap on a-paradig...'
+  symbolsTouched:
+    - ~8
 pendingWork: []
 recentPatterns: []
-sessionsOnProject: 15
+sessionsOnProject: 16

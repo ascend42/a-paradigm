@@ -1,10 +1,11 @@
 id: builder
 project: a-paradigm
 lastSession:
-  date: '2026-07-15T07:47:57.346Z'
-  sessionId: orch-mrls0vbc-qryc
-  summary: '[Kit (builder)]: builder: Implement: ROADMAP 2026H2 overnight execution wave...'
-  symbolsTouched: []
+  date: '2026-08-11T07:40:51.844Z'
+  sessionId: orch-msocpiyv-oojg
+  summary: '[Kit (builder)]: builder: Implement: Close the agent-learning gap on a-parad...'
+  symbolsTouched:
+    - ~8
 pendingWork: []
 recentPatterns: []
-sessionsOnProject: 13
+sessionsOnProject: 14
