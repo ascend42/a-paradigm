@@ -19,7 +19,8 @@
 
 import { Command } from 'commander';
 import { absorb, WORKTREE_REF } from './absorb.js';
-import { oracle, type OracleRecord } from './oracle.js';
+import { oracle, forecastHazardsFromRefs, type OracleRecord } from './oracle.js';
+import type { CleanHazard } from './fabric/hazard.js';
 import {
   forecast,
   semanticDiff,
@@ -192,10 +193,15 @@ program
           process.exit(2);
         }
         const f = await forecast(branchA, branchB, { vsGit: options.vsGit });
+        // #hazard (T-2026-08-11-016): the CLEAN-hazard advisory on the preview, so
+        // it is never MORE optimistic than the admit it forecasts. Advisory-only —
+        // it qualifies nothing in `f`.
+        const hazards = await forecastHazardsFromRefs(branchA, branchB);
         if (options.json) {
-          process.stdout.write(JSON.stringify(f, null, 2) + '\n');
+          const out = hazards.length ? { ...f, hazards } : f;
+          process.stdout.write(JSON.stringify(out, null, 2) + '\n');
         } else {
-          printForecast(f);
+          printForecast(f, hazards);
         }
       } catch (err) {
         fail(err);
@@ -911,7 +917,7 @@ program
   .requiredOption('-m, --reason <why>', 'why it was resolved this way (the accountability record)')
   .option('--ref <ref>', 'the human-resolved state to seal (a git ref or WORKTREE; required unless --native)')
   .option('--by <who>', 'who made the call (default: git user.name; --native: the agent id)')
-  .option('--ours <ref>', 'the original conflicting ref, to record the precise contended set')
+  .option('--ours <ref>', 'the original conflicting ref — sharpens the ours-side of the payload join (optional; the join and precise contended set now bind without it)')
   .option('--native', 'NATIVE-FIRST (phase 0): seal the resolution from --worktree as a v3 weave, git absent (the sealed scratch strand names the contended set for free)')
   .option('--worktree <dir>', 'the worktree holding the resolved bytes (--native; default: the repo root)')
   .option('--json', 'emit the full ResolveResult as JSON')
@@ -1777,6 +1783,19 @@ function printAdmit(agentId: string, r: AdmitResult): void {
     if (r.hazards.length > 5) lines.push(`  … ${r.hazards.length - 5} more (see .warpline/hazards.jsonl)`);
     lines.push('  NOT a conflict check: invariant conflicts that share NO token are undetectable here.');
   }
+  // I-2 (T-2026-08-11-017): DERIVED-ARTIFACT staleness. A lockfile BOTH sides changed
+  // divergently is never token-merged (a spliced lockfile fakes a precision it lacks) —
+  // the merge takes OURS wholesale and marks it STALE (materialize.ts derivedStale). The
+  // sealed selvage then carries one agent's package-lock.json against a MERGED manifest,
+  // byte-identical to a consistent merge on every other surface. Printed prominently so
+  // "re-run install" is never silent; the merge still SEALED — this is a note, not a refusal.
+  const stale = r.merged?.derivedStale;
+  if (stale?.length) {
+    lines.push('');
+    lines.push(`⚠ ${stale.length} derived artifact${stale.length === 1 ? '' : 's'} taken OURS-wholesale (STALE) — regenerate; the merged bytes are one side's, not a real merge:`);
+    for (const p of stale) lines.push(`  · ${p}`);
+    lines.push('  → re-run your package manager (e.g. `npm install`) to regenerate from the merged manifests.');
+  }
   if (d.agentChanged.length) lines.push(`agent changed  ${d.agentChanged.join(', ')}`);
   if (d.otherChanged.length) lines.push(`others changed ${d.otherChanged.join(', ')}`);
   if (r.claim && d.status !== 'CLAIM-BREACH') {
@@ -1791,6 +1810,12 @@ function printAdmit(agentId: string, r: AdmitResult): void {
   if (r.knotPayloadId) {
     lines.push(`payload   ${r.knotPayloadId}`);
     lines.push(`          → warpline knot show ${r.knotPayloadId}   (the self-sufficient resolution work order)`);
+  }
+  // A contested verdict whose work order failed to build/persist (B-3): the
+  // verdict stands, but a lost work order must NOT read as a quiet success on the
+  // default surface — render it here, not only in --json (Judge, Track-A review).
+  if (r.payloadError) {
+    lines.push(`⚠ work order NOT persisted — this contested verdict is invisible to \`warpline health\`: ${r.payloadError}`);
   }
   process.stdout.write(lines.join('\n') + '\n');
 }
@@ -2136,7 +2161,30 @@ function printLifeline(ll: Lifeline): void {
   process.stdout.write(lines.join('\n') + '\n');
 }
 
-function printForecast(f: Forecast): void {
+/**
+ * The CLEAN-hazard advisory (#hazard) on a FORECAST surface (oracle / weave
+ * --preview). Mirrors printAdmit's advisory block — same LEXICAL wording, the same
+ * stated blind spot — but framed for a PREVIEW: nothing has sealed; this merge
+ * WOULD auto-weave. Advisory only: it qualifies no verdict. The wording states the
+ * blind spot in the same breath by design — an empty list is NOT an all-clear, and
+ * nothing here licenses "Warpline catches invariant conflicts."
+ */
+function appendForecastHazards(lines: string[], hazards: CleanHazard[] | undefined): void {
+  if (!hazards?.length) return;
+  lines.push('');
+  lines.push(
+    `⚠ ${hazards.length} LEXICAL coupling advisor${hazards.length === 1 ? 'y' : 'ies'} — CLEAN in meaning, WOULD auto-weave; review before admitting`,
+  );
+  for (const h of hazards.slice(0, 5)) {
+    lines.push(`  · ${h.token}  [${h.kind}]  score ${h.score.toFixed(2)}${h.dangerFlags.length ? `  ⚑ ${h.dangerFlags.join(', ')}` : ''}`);
+    lines.push(`      A: ${h.oursSymbols.join(', ')}`);
+    lines.push(`      B: ${h.theirsSymbols.join(', ')}`);
+  }
+  if (hazards.length > 5) lines.push(`  … ${hazards.length - 5} more`);
+  lines.push('  NOT a conflict check: invariant conflicts that share NO token are undetectable here.');
+}
+
+function printForecast(f: Forecast, hazards?: CleanHazard[]): void {
   const lines: string[] = [];
   lines.push(`WEAVE FORECAST  ${f.branchA}  ⟶  ${f.branchB}`);
   lines.push(`mergeBase ${f.mergeBase}`);
@@ -2191,6 +2239,8 @@ function printForecast(f: Forecast): void {
     lines.push(`  score               ${g.score}`);
     lines.push(`  VERDICT             ${g.verdict}`);
   }
+
+  appendForecastHazards(lines, hazards);
 
   lines.push('');
   lines.push('(preview is ephemeral — no oracle.jsonl row written)');
@@ -2346,6 +2396,7 @@ function printOracleSummary(record: OracleRecord): void {
   }
   lines.push(`  score               ${c.score}`);
   lines.push(`  VERDICT             ${c.verdict}`);
+  appendForecastHazards(lines, record.hazards);
   lines.push('');
   lines.push('appended → .warpline/oracle.jsonl');
   process.stdout.write(lines.join('\n') + '\n');

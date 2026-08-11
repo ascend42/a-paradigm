@@ -684,6 +684,15 @@ components:
       ADJACENT TO but never folded into `contested`. `mode: 'hold'` is DECLARED
       AND UNIMPLEMENTED — it folds to 'advise' — so it cannot quietly become a
       gate mid-measurement.
+      ALSO ON THE FORECAST (T-2026-08-11-016): the same evaluateHazards signal
+      now rides #oracle's OracleRecord and #weave's `weave --preview` (additive
+      `hazards?`, via oracle.forecastHazards / forecastHazardsFromRefs), so a
+      preview is never MORE optimistic than the admit it forecasts — a
+      jointly-wrong (config x code) pair used to preview as an unqualified CLEAN
+      while admit surfaced the coupling. Gated on the MEANING-CLEAN forecast (no
+      knots/dangling — the admit-CLEAN equivalent) and honours `mode: off`. The
+      forecast writes NO sidecar (a preview is ephemeral); it is still
+      advisory-only and moves no verdict, no mergeClean, no convergence.
     type: module
     components:
       - "#admit"
@@ -691,6 +700,8 @@ components:
       - "#shadow"
       - "#cfg-lens"
       - "#essence-hash"
+      - "#oracle"
+      - "#weave"
 
   sem-delta:
     description: >-
@@ -944,10 +955,20 @@ components:
       The KNOT council. resolveKnot(root, {agentId, resolvedRef, reason, decidedBy,
       oursRef?}) seals a HUMAN resolution of a genuine conflict #admit refused to
       auto-merge: it absorbs the resolved state, records a #strand `resolves`
-      envelope (decidedBy, reason, the contended symbols — precise when --ours is
-      supplied so the original knot is recomputed — and the symbols changed vs the
-      tip), seals via #seal, advances the selvage, and clears the scratch. The
-      reasoning git's merge commit can't keep lives natively in the fabric.
+      envelope (decidedBy, reason, the contended symbols, the symbols changed vs
+      the tip, and knotPayloadId — the EXACT join to the #knot-payload this
+      resolution settles), seals via #seal, advances the selvage, and clears the
+      scratch. The reasoning git's merge commit can't keep lives natively in the
+      fabric. I-1 (2026-08-11): the knotPayloadId join + the precise contended set
+      now bind UNCONDITIONALLY — findKnotPayloadForResolve pins the (ours, theirs)
+      contested stateId PAIR (theirs = the selvage being resolved), so a proposal
+      re-admitted against a moved selvage binds the RIGHT payload deterministically;
+      --ours only SHARPENS the ours-side key, it is no longer the switch. The join
+      is now the precise contended set's source (the payload's classified units);
+      it degrades to the resolved-symbols fallback only when no payload persisted,
+      and the PRESENCE of knotPayloadId is the honest precise/fallback marker. A
+      native `pick:` scratch value flowing into this git-era path now REFUSES loudly
+      (the C-9 mirror), never recording a non-stateId into resolves.base.
       P2.2: also accepts a #knot-payload resolution proposal — proposalToResolveOptions
       maps a verified knotResolutionProposal:v1 (enveloped reason, resolvedRef,
       decidedBy) 1:1 onto ResolveOptions; sealing stays behind this verb (G4).

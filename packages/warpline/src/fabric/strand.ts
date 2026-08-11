@@ -210,8 +210,12 @@ export interface Strand {
    * every pre-existing strand; on a NEW v2 strand it rides INTO the pickId via
    * the `...rest` preimage spread (tamper-evident), and it is derivable anyway
    * (empty delta + stateId === parent's + binding moved). v2 pick path only —
-   * the v3 preimage is founder-signed and does not carry it (native propose
-   * seals scratch strands regardless of meaning-NOOP, so it has no NOOP gap).
+   * the v3 preimage is founder-signed and does not carry the flag. On the native
+   * path byte-custody is likewise DERIVED, not flagged: proposeNative seals a
+   * strand whenever the meaning is a NOOP but the tree advanced (empty delta,
+   * stateId === parent's, binding.treeId moved) and admitNative carries it forward
+   * as a byte-custody FAST_ADMIT — so a doc/asset/.js-only change leaves a strand
+   * on both paths (B-1, T-2026-08-11-013; before that fix native dropped it).
    */
   byteOnly?: boolean;
   /**

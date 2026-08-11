@@ -299,6 +299,14 @@ export interface AdmitResult {
    */
   knotPayloadId?: string;
   /**
+   * B-3 (T-2026-08-11-014, G1-additive): set ONLY when a contested verdict's work
+   * order failed to build/persist. The KNOT/DANGLE VERDICT stands regardless (the
+   * payload is auxiliary), but a lost work order must not read as a quiet success:
+   * this field makes the failure visible to health/GUI/forge and to the human
+   * classifying the contested denominator. Absent on the normal path.
+   */
+  payloadError?: string;
+  /**
    * P2.3 (§3b, G1-additive): the claim judgment — present ONLY when the admit
    * carried a claim. Every judgment is also appended to
    * .warpline/claims/evaluations.jsonl (the calibration-probe stream, G5).

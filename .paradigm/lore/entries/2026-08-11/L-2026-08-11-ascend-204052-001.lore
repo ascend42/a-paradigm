@@ -1,0 +1,52 @@
+id: L-2026-08-11-ascend-204052-001
+type: agent-session
+timestamp: '2026-08-11T20:40:52.274Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Track A: B-1 byte-custody + B-3 contested-denominator fixes landed (native path)'
+summary: 'Implemented the two field-test-blocking instrument fixes from the readiness audit. B-1: the native path dropped byte-only work (assets/fonts/.js/.env/docs) because proposeNative returned {noop:true} on any empty meaning delta and admitNative NOOP''d it — now it seals a byte-custody strand when the tree advanced and carries it forward as a FAST_ADMIT, mirroring the git-era pick path. B-3: the CLEAN→byte-conflict KNOT downgrade returned without persisting a payload, so health''s contested denominator (listKnotPayloads().length) counted it as zero while the shadow arm counted it — now both contested sites persist through one shared helper and a payload-build failure surfaces as payloadError instead of being swallowed. Typecheck clean; new byte-custody-native.test.ts green; existing native tests green.'
+symbols_touched:
+  - '#native'
+  - '#strand'
+  - '#admit'
+  - '#knot-payload'
+  - '#warpline-health'
+files_modified:
+  - packages/warpline/src/fabric/native.ts
+  - packages/warpline/src/fabric/admit.ts
+  - packages/warpline/src/fabric/strand.ts
+  - packages/warpline/test/byte-custody-native.test.ts
+tags:
+  - warpline
+  - track-a
+  - field-test
+  - silent-divergence
+  - B-1
+  - B-3
+body: |-
+  FILES/LINES:
+  - native.ts proposeNative (~394): meaning-NOOP is a TRUE no-op ONLY when baseStrand.binding.treeId === snap.treeId; otherwise fall through and seal (byte-custody strand: empty delta, stateId === parent's, binding.treeId moved).
+  - native.ts admitNative NOOP branch (~674): when the scratch tip linearly fast-forwards the selvage (baseStrand.pickId === selvageTipId) and scratchTree !== selvageTree, advance the ref (writeRef/writeSelvage/clearScratch) and return status FAST_ADMIT sealed:true. A byte-only change under a CONCURRENT meaning advance (base ≠ selvage tip) is NOT a linear fast-forward and stays a NOOP — no silent carry across a divergence.
+  - native.ts admitNative (~672): new closure persistContested(dec) — the buildKnotPayload+persistKnotPayload path, try/catch RETURNS {id?|error?} instead of swallowing.
+  - native.ts downgrade site (~697): CLEAN-but-bytes-overlap now calls persistContested({...decision,status:'KNOT'}) and threads knotPayloadId + payloadError + the payload id into meaningRefusal.
+  - native.ts KNOT/DANGLE site (~768): refactored to call the same persistContested helper (two sites cannot drift about what lands in the denominator).
+  - admit.ts AdmitResult (~300): added optional payloadError?: string (G1-additive) — a lost work order must be visible, not byte-identical to a quiet repo.
+  - strand.ts byteOnly doc (~214): corrected — it previously CLAIMED native "has no NOOP gap"; now documents the derived byte-custody behavior on both paths.
+
+  TESTS: byte-custody-native.test.ts — (1) an asset-only (.txt, non-lens) edit proposes non-noop, admits FAST_ADMIT, and the bytes are canonical on a fresh restore while the meaning file is untouched; (2) a true no-op (no byte change after fork) still returns noop:true. Gotcha: restore() takes {to}, not {into}.
+
+  NOT YET COVERED (follow-up): a deterministic test that reaches the byte-conflict DOWNGRADE and asserts the payload persisted + health counts it — constructing meaning-CLEAN + byte-conflict deterministically is fiddly (same-symbol edits read as a meaning KNOT, not a downgrade). Refactor-to-helper is covered by existing KNOT/DANGLE tests staying green; the downgrade-persist enhancement wants its own test in the tester pass.
+
+  CONCURRENCY NOTE: two builder subagents were editing resolve.ts/knot-payload.ts (I-1) and oracle.ts/cli.ts (I-2/hazard) at the same time on disjoint files; full-suite run deferred until they land.
+linked_lore:
+  - L-2026-08-11-ascend-202004-001
+linked_tasks:
+  - T-2026-08-11-013
+  - T-2026-08-11-014
+confidence: 0.8
+git_context:
+  ref: 2d9655454a85cc803e0813edf89bc56c5beea2cc
+  branch: warpline-surfaces
+  dirty: true

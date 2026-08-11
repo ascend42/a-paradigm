@@ -393,7 +393,18 @@ export async function proposeNative(root: string, opts: ProposeNativeOptions): P
     }
     if (baseState) {
       const d = diff(baseState, state);
-      if (d.deltas.size === 0 && d.renames.length === 0) {
+      const meaningNoop = d.deltas.size === 0 && d.renames.length === 0;
+      // B-1 (T-2026-08-11-013): a meaning-NOOP is a TRUE no-op ONLY when the TREE
+      // is also unchanged. Byte-only work (assets, fonts, .js/.env configs, docs —
+      // exactly what an Expo repo is full of) carries an empty meaning delta but an
+      // ADVANCED binding.treeId. Returning noop here dropped it on the floor and
+      // left admit in a dead-end loop (propose no-ops → admit refuses "nothing
+      // proposed" → propose no-ops). Mirror the git-era byte-custody strand
+      // (pick.ts, T-2026-07-18-002): only short-circuit when the tree is identical;
+      // otherwise fall through and SEAL. On v3 byteOnly is DERIVED, not a flag —
+      // the sealed strand has an empty delta, stateId === parent's, and a moved
+      // binding.treeId, which IS a byte-custody strand.
+      if (meaningNoop && baseStrand?.binding?.treeId === snap.treeId) {
         return { noop: true, stateId: state.stateId, treeId: snap.treeId, base: basePickId, ...(claimId ? { claimId } : {}) };
       }
     }
@@ -671,7 +682,74 @@ export async function admitNative(root: string, opts: AdmitNativeOptions): Promi
       now,
     }).attach;
 
+    // B-3 (T-2026-08-11-014): persist the contested work order on EVERY contested
+    // verdict — the KNOT/DANGLE refusals AND the CLEAN→KNOT byte-conflict
+    // downgrade below. `health` counts the contested denominator (the field
+    // test's exit-gate number) as `listKnotPayloads().length`; the downgrade site
+    // used to return a KNOT WITHOUT persisting a payload, so a byte-overlap KNOT —
+    // exactly what a config×code Expo collision produces — moved the denominator
+    // by ZERO while the shadow arm counted it, leaving the two instrument arms
+    // measuring different populations. One helper, both sites, so they cannot
+    // drift again. The payload is auxiliary to the VERDICT (which stands
+    // regardless), so a build failure is caught — but returned, not swallowed:
+    // a lost work order must not be byte-identical to a quiet repo.
+    const persistContested = (dec: AdmitDecision): { id?: string; error?: string } => {
+      try {
+        const payload = buildKnotPayload({
+          decision: dec,
+          base,
+          proposed,
+          selvage,
+          ours: {
+            agentId: opts.agentId,
+            actor: opts.actor ?? opts.agentId,
+            intent: scratchStrand.intent,
+            ref: scratchRefName(opts.agentId),
+            gitCommit: null,
+            treeId: scratchStrand.binding?.treeId ?? null,
+          },
+          theirs: {
+            agentId: selvageStrand.authoredBy?.agentId ?? null,
+            actor: selvageStrand.actor,
+            intent: selvageStrand.intent,
+            ref: selvageStrand.provenance?.ref ?? null,
+            gitCommit: selvageStrand.provenance?.gitCommit ?? null,
+            treeId: selvageStrand.binding?.treeId ?? null,
+          },
+          baseTreeId: baseStrand.binding?.treeId ?? null,
+          readFile: (treeId, rel) => readFileFromTree(objStore, treeId, rel),
+        });
+        persistKnotPayload(root, payload);
+        return { id: payload.payloadId };
+      } catch (e) {
+        return { error: e instanceof Error ? e.message : String(e) };
+      }
+    };
+
     if (decision.status === 'NOOP') {
+      // B-1 (T-2026-08-11-013): a NOOP means the MEANING is unchanged — but a
+      // byte-custody proposal (assets/fonts/.js/.env/docs) advances the TREE with
+      // an empty meaning delta (admitDecision short-circuits to NOOP before it
+      // ever looks at bytes). When the scratch tip linearly fast-forwards the
+      // selvage and its bytes differ, CARRY the bytes: advance the ref to the
+      // byte-custody strand instead of reporting "the agent changed nothing" and
+      // discarding real work. Mirrors the plain FAST_ADMIT branch below (a ref
+      // advance, no re-seal) and the git-era byte-custody strand. A byte-only
+      // change under a CONCURRENT meaning advance (base ≠ selvage tip) is not a
+      // linear fast-forward and stays a NOOP — no silent carry across a divergence.
+      const scratchTree = scratchStrand.binding?.treeId;
+      const selvageTree = selvageStrand.binding?.treeId;
+      if (baseStrand.pickId === selvageTipId && scratchTree && selvageTree && scratchTree !== selvageTree) {
+        writeRef(wdir, 'selvage', scratchTipId, selvageTipId); // per-ref CAS
+        writeSelvage(wdir, scratchStrand.stateId);
+        clearScratch(root, opts.agentId);
+        return withClaim({
+          decision: { ...decision, status: 'FAST_ADMIT' },
+          sealed: true,
+          proposedStateId: proposed.stateId,
+          strand: scratchStrand,
+        });
+      }
       return withClaim({ decision, sealed: false, proposedStateId: proposed.stateId });
     }
 
@@ -695,13 +773,25 @@ export async function admitNative(root: string, opts: AdmitNativeOptions): Promi
       }
       const mat = await materializeMergedStateNative(objStore, baseTree, oursTree, theirsTree);
       if (!mat.state || mat.plan.conflicts.length > 0 || !mat.resultTreeId) {
-        // Meaning said CLEAN but bytes overlap → surface as KNOT (never a silent wrong-merge).
+        // Meaning said CLEAN but bytes overlap → surface as KNOT (never a silent
+        // wrong-merge). B-3: persist the work order like every other contested
+        // verdict, so `health` counts this KNOT in the contested denominator.
+        // rebasedOnto MUST be set — buildKnotPayload fails closed without it — and
+        // this branch is reached by FAST_ADMIT too (its meaning decision carries
+        // rebasedOnto:null), a flavor B-1's byte-custody selvage strands newly make
+        // reachable. The downgrade IS a rebase onto the selvage, so name it: else
+        // the payload build throws, the denominator misses it, and we reopen the
+        // very silent-divergence B-3 closed (Judge, Track-A review 2026-08-11).
+        const knot = { ...decision, status: 'KNOT' as const, rebasedOnto: selvage.stateId };
+        const contested = persistContested(knot);
         return withClaim({
-          decision: { ...decision, status: 'KNOT' },
+          decision: knot,
           sealed: false,
           proposedStateId: proposed.stateId,
           merged: mat.plan,
-          refusal: meaningRefusal('KNOT', decision, proposed.stateId, opts.agentId),
+          ...(contested.id ? { knotPayloadId: contested.id } : {}),
+          ...(contested.error ? { payloadError: contested.error } : {}),
+          refusal: meaningRefusal('KNOT', knot, proposed.stateId, opts.agentId, contested.id),
         });
       }
       // C-5 DIRTY-WORKTREE GUARD, and it runs HERE — before a single ledger
@@ -764,46 +854,19 @@ export async function admitNative(root: string, opts: AdmitNativeOptions): Promi
     }
 
     // KNOT / DANGLE — persist the machine-readable resolution work order; the
-    // scratch ref KEEPS the work (durable strand — nothing is lost).
-    let knotPayloadId: string | undefined;
-    try {
-      const payload = buildKnotPayload({
-        decision,
-        base,
-        proposed,
-        selvage,
-        ours: {
-          agentId: opts.agentId,
-          actor: opts.actor ?? opts.agentId,
-          intent: scratchStrand.intent,
-          ref: scratchRefName(opts.agentId),
-          gitCommit: null,
-          treeId: scratchStrand.binding?.treeId ?? null,
-        },
-        theirs: {
-          agentId: selvageStrand.authoredBy?.agentId ?? null,
-          actor: selvageStrand.actor,
-          intent: selvageStrand.intent,
-          ref: selvageStrand.provenance?.ref ?? null,
-          gitCommit: selvageStrand.provenance?.gitCommit ?? null,
-          treeId: selvageStrand.binding?.treeId ?? null,
-        },
-        baseTreeId: baseStrand.binding?.treeId ?? null,
-        readFile: (treeId, rel) => readFileFromTree(objStore, treeId, rel),
-      });
-      persistKnotPayload(root, payload);
-      knotPayloadId = payload.payloadId;
-    } catch {
-      /* payload is auxiliary — the KNOT/DANGLE verdict stands without it */
-    }
+    // scratch ref KEEPS the work (durable strand — nothing is lost). B-3: same
+    // helper the byte-conflict downgrade uses, so the two contested sites cannot
+    // drift about what lands in the denominator.
+    const contested = persistContested(decision);
     return withClaim({
       decision,
       sealed: false,
       proposedStateId: proposed.stateId,
-      ...(knotPayloadId ? { knotPayloadId } : {}),
+      ...(contested.id ? { knotPayloadId: contested.id } : {}),
+      ...(contested.error ? { payloadError: contested.error } : {}),
       // #refusal: built AFTER the payload attempt so `next[0]` names the work
       // order whenever one actually persisted (every pointer must dereference — F4).
-      refusal: meaningRefusal(decision.status, decision, proposed.stateId, opts.agentId, knotPayloadId),
+      refusal: meaningRefusal(decision.status, decision, proposed.stateId, opts.agentId, contested.id),
     });
   });
   // THE single G1 stamp point for the native path (see AdmitNativeResultBody).

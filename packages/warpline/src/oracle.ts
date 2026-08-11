@@ -41,6 +41,8 @@ import {
 } from './git/git-exec.js';
 import { withRepoLock } from './git/repo-lock.js';
 import { classifyMergePaths, type MergeCoverage } from './honesty.js';
+import { evaluateHazards, type CleanHazard } from './fabric/hazard.js';
+import { readHazardConfig } from './fabric/config.js';
 
 export interface OracleRecord {
   schemaVersion: 1;
@@ -109,6 +111,21 @@ export interface OracleRecord {
    * (a WORKTREE pseudo-ref has no diffable path inventory). Never a verdict input.
    */
   coverage?: MergeCoverage;
+  /**
+   * T-2026-08-11-016 (G1-additive, schemaVersion unchanged): the CLEAN-hazard
+   * ADVISORY (#hazard) for the FORECAST surface — LEXICAL couplings the symbol
+   * graph did not model, present ONLY when the forecast is MEANING-CLEAN (no
+   * knots, no dangling — the admit-CLEAN equivalent) and at least one fired.
+   *
+   * PARITY WITH ADMIT, NOT A NEW GATE. The oracle/weave preview was hazard-BLIND
+   * while `admit` surfaced these, so a jointly-wrong (config × code) pair previewed
+   * as an unqualified CLEAN and admitted with a warning — the preview was MORE
+   * optimistic than the act. Same helper (`fabric/hazard.evaluateHazards`) as the
+   * two admit paths, so they cannot diverge. ADVISORY-ONLY and it is load-bearing:
+   * nothing here moves `mergeClean`, `convergence`, or the verdict — a forecast
+   * with hazards is still whatever it was without them.
+   */
+  hazards?: CleanHazard[];
 }
 
 export interface OracleOptions extends GitOptions {
@@ -238,6 +255,18 @@ export async function oracle(
     }
   }
 
+  // #hazard (T-2026-08-11-016): the CLEAN-hazard advisory on the FORECAST, so the
+  // preview is never MORE optimistic than the admit it forecasts. Computed for the
+  // MEANING-CLEAN case only (the admit-CLEAN equivalent) via the same helper both
+  // admit paths use. Advisory-only: it touches no field above.
+  const hazards = forecastHazards(
+    baseTagged,
+    aState,
+    bState,
+    prediction.knots.length === 0 && prediction.dangling.length === 0,
+    hazardMinScore(repo || cwd),
+  );
+
   const record: OracleRecord = {
     schemaVersion: 1,
     ts: new Date().toISOString(),
@@ -260,6 +289,7 @@ export async function oracle(
     convergence,
     justifications: { A: justA, B: justB },
     ...(coverage ? { coverage } : {}),
+    ...(hazards.length ? { hazards } : {}),
   };
 
   // 7. append to ledger
@@ -273,6 +303,96 @@ export async function oracle(
   }
 
   return record;
+}
+
+/* ── #hazard on the FORECAST surface (T-2026-08-11-016) ──────────────────────────
+ *
+ * The CLEAN-hazard advisory (#hazard) was wired ONLY into `fabric/admit.ts`, so
+ * the oracle and `weave --preview` forecasts were hazard-BLIND for the very case
+ * the advisory CAN catch: a jointly-wrong (config × code) pair previewed as an
+ * unqualified CLEAN, while the SAME merge through admit surfaced the coupling. A
+ * preview must never be MORE optimistic than the act it forecasts.
+ *
+ * The advisory is ADVISORY-ONLY on both surfaces — `evaluateHazards` returns [] for
+ * any status but CLEAN and only ever ADDS a `hazards` key; it moves no verdict, no
+ * `mergeClean`, no `convergence`. These wrappers own the forecast plumbing (the
+ * meaning-clean gate + the config read); the SIGNAL is `fabric/hazard`'s, unchanged,
+ * so the preview and the two admit paths cannot diverge on what fires. */
+
+/** The forecast's config gate: 'off' skips the advisory; `minScore` tightens it. */
+interface HazardForecastCfg {
+  off: boolean;
+  minScore?: number;
+}
+
+/** Read the project's `hazard` config the way admit does (default: mode 'advise'). */
+function hazardMinScore(root: string): HazardForecastCfg {
+  try {
+    const cfg = readHazardConfig(root);
+    return { off: cfg.mode === 'off', ...(cfg.minScore !== undefined ? { minScore: cfg.minScore } : {}) };
+  } catch {
+    return { off: false };
+  }
+}
+
+/**
+ * The CLEAN-hazard advisory for a pre-merge FORECAST, from already-absorbed states.
+ * `meaningClean` is the admit-CLEAN equivalent (no knots, no dangling); the advisory
+ * rides ONLY a meaning-clean forecast, exactly as `evaluateHazards` rides only a
+ * CLEAN admit. PURE + fail-safe: a throw yields no advisory, never a failed forecast.
+ */
+export function forecastHazards(
+  base: WarpState,
+  ours: WarpState,
+  theirs: WarpState,
+  meaningClean: boolean,
+  cfg: HazardForecastCfg = { off: false },
+): CleanHazard[] {
+  if (!meaningClean || cfg.off) return [];
+  try {
+    return evaluateHazards(
+      base,
+      ours,
+      theirs,
+      { status: 'CLEAN' },
+      cfg.minScore !== undefined ? { minScore: cfg.minScore } : {},
+    );
+  } catch {
+    return []; // an advisory must never break a read-only preview
+  }
+}
+
+/**
+ * The CLEAN-hazard advisory for `weave --preview` from two refs. `weave.forecast`
+ * (another worker's file, and outside this change's edit scope) does not expose its
+ * absorbed states, so the preview surface recomputes the meaning side here — the
+ * same base/absorb/diff/predict the forecast runs, read-only and ephemeral. A
+ * throw anywhere degrades to "no advisory", never a failed preview.
+ */
+export async function forecastHazardsFromRefs(
+  branchA: string,
+  branchB: string,
+  opts: GitOptions = {},
+): Promise<CleanHazard[]> {
+  const cwd = opts.cwd ?? process.cwd();
+  try {
+    const base =
+      branchA === WORKTREE_REF || branchB === WORKTREE_REF
+        ? 'HEAD'
+        : await mergeBase(branchA, branchB, { cwd });
+    const [baseState, aState, bState] = await Promise.all([
+      absorb(base, { cwd }),
+      absorb(branchA, { cwd }),
+      absorb(branchB, { cwd }),
+    ]);
+    const baseTagged: WarpState = { ...baseState, ref: base };
+    const prediction = predict(diff(baseTagged, aState), diff(baseTagged, bState));
+    const meaningClean = prediction.knots.length === 0 && prediction.dangling.length === 0;
+    const repo = await repoRoot({ cwd }).catch(() => cwd);
+    return forecastHazards(baseTagged, aState, bState, meaningClean, hazardMinScore(repo));
+  } catch {
+    return [];
+  }
 }
 
 async function loadBranchIndex(ref: string, cwd: string) {

@@ -466,9 +466,30 @@ export function listKnotPayloads(root: string): KnotPayload[] {
 }
 
 /**
+ * The DETERMINISTIC pick among ambiguous matches: sort by the content-address
+ * payloadId (a total order, clock-free — payloads carry no wall-clock field, G2)
+ * and take the first. A `.find()` over `listKnotPayloads` bound whatever
+ * fs.readdir happened to yield first (I-1 defect #2): a proposal re-admitted
+ * against a moved selvage persists a SECOND payload with the same ours.stateId,
+ * and the coin-flip picked an arbitrary one. Sorting makes the tie-break stable.
+ */
+function firstByPayloadId(candidates: KnotPayload[]): KnotPayload | null {
+  if (candidates.length === 0) return null;
+  return candidates
+    .slice()
+    .sort((a, b) => (a.payloadId < b.payloadId ? -1 : a.payloadId > b.payloadId ? 1 : 0))[0];
+}
+
+/**
  * Resolve a selector to a persisted payload: an exact payloadId, a payloadId
  * prefix, or an ADMIT reference — the ours-side git ref/commit/stateId of the
  * admission that produced it. Returns null when nothing matches.
+ *
+ * A single selector can match MULTIPLE payloads (a re-admitted proposal shares
+ * its ours.stateId / ref / commit across contests). Each ambiguous category is
+ * resolved DETERMINISTICALLY by `firstByPayloadId` — never fs.readdir order. For
+ * the EXACT knot a resolution settles, prefer `findKnotPayloadForResolve`, which
+ * pins the (ours, theirs) stateId pair rather than the ours-side alone.
  */
 export function readKnotPayload(root: string, selector: string): KnotPayload | null {
   const dir = knotsDirOf(root);
@@ -481,18 +502,50 @@ export function readKnotPayload(root: string, selector: string): KnotPayload | n
     }
   }
   const all = listKnotPayloads(root);
-  return (
-    all.find((p) => p.payloadId === selector) ??
-    all.find((p) => selector.length >= 12 && p.payloadId.startsWith(selector)) ??
-    all.find(
+  // payloadId is the content address — an exact hit is unique, so `.find` is safe.
+  const byId = all.find((p) => p.payloadId === selector);
+  if (byId) return byId;
+  const byPrefix = firstByPayloadId(
+    all.filter((p) => selector.length >= 12 && p.payloadId.startsWith(selector)),
+  );
+  if (byPrefix) return byPrefix;
+  return firstByPayloadId(
+    all.filter(
       (p) =>
         p.ours.ref === selector ||
         p.ours.gitCommit === selector ||
         p.ours.stateId === selector ||
         (selector.length >= 7 && !!p.ours.gitCommit && p.ours.gitCommit.startsWith(selector)),
-    ) ??
-    null
+    ),
   );
+}
+
+/**
+ * Find THE payload a resolution settles — the EXACT join behind
+ * KnotResolution.knotPayloadId. Where `readKnotPayload` matches on the ours-side
+ * alone, this pins the CONTESTED stateId PAIR: the payload whose theirs-side is
+ * the selvage now being resolved AND whose ours-side is this agent's proposal.
+ *
+ * That pair is what disambiguates the SAME proposal contested twice (I-1 defect
+ * #2): re-admitted against a moved selvage it yields two payloads with an
+ * identical ours.stateId but DIFFERENT theirs.stateId — only the one rebased onto
+ * the CURRENT selvage is the knot this resolve seals (`theirs.stateId ===
+ * rebasedOnto === selvage`, admit.ts). The ours-side key is `oursStateId` when
+ * the caller knows it (resolve --ours) and otherwise the admitting `agentId`,
+ * which is derivable without --ours — so the join no longer waits for the flag
+ * (defect #1). Residual ties break by payloadId (deterministic, never readdir
+ * order). Returns null when no payload was persisted (a shadow-era contest) — the
+ * field then stays honestly absent rather than guessed.
+ */
+export function findKnotPayloadForResolve(
+  root: string,
+  q: { selvageStateId: string; agentId: string; oursStateId?: string | null },
+): KnotPayload | null {
+  const onThisSelvage = listKnotPayloads(root).filter((p) => p.theirs.stateId === q.selvageStateId);
+  const scoped = q.oursStateId
+    ? onThisSelvage.filter((p) => p.ours.stateId === q.oursStateId)
+    : onThisSelvage.filter((p) => p.ours.agentId === q.agentId);
+  return firstByPayloadId(scoped);
 }
 
 /**
