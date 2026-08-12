@@ -57,6 +57,7 @@ import { diff } from '../sem-delta.js';
 import { classifyMergePaths } from '../honesty.js';
 import { warplineDirOf, readFabric, readSelvage, appendStrand, writeSelvage } from './fabric.js';
 import { readRef, writeRef } from './refs.js';
+import { readHead, DEFAULT_BRANCH } from './head.js';
 import { readScratch, writeScratchRef, clearScratch } from './scratch.js';
 import { guardedRestoreTree, assertDirtyFree } from './restore.js';
 import { withFabricLock } from './lock.js';
@@ -449,6 +450,14 @@ export interface AdmitNativeOptions {
   now?: string;
   /** skip the CLEAN write-back restore (server/test callers). */
   noRestore?: boolean;
+  /**
+   * The branch this admission advances. Absent → the CURRENT branch (HEAD via
+   * readHead), and an absent HEAD is `selvage` (DEFAULT_BRANCH) — so a fabric
+   * that has never branched behaves EXACTLY as it did before onto existed
+   * (byte-identical). A named non-selvage branch is a refs-only tip: it advances
+   * `refs/heads/<name>` and never the legacy stateId selvage pointer.
+   */
+  onto?: string;
 }
 
 export interface AdmitNativeResult extends AdmitResult {
@@ -464,12 +473,405 @@ export interface AdmitNativeResult extends AdmitResult {
 type AdmitNativeResultBody = Omit<AdmitNativeResult, 'schemaVersion'>;
 
 /**
+ * Attach a claim's grade to a result and RECORD the evaluation (side effect) —
+ * the extracted body of admit's former inline `withClaim` closure. Pure
+ * translation: `if (!claim || !claimEval) return r` untouched, so a claimless
+ * admit returns the result verbatim (byte-identical). Shared by admit's genesis
+ * and already-history short-circuits AND by weaveTips' main pipeline, so the two
+ * cannot grade a claim differently.
+ */
+function attachClaim(
+  root: string,
+  claim: Claim | null,
+  claimEval: ClaimEvaluation | null,
+  agentId: string,
+  now: string,
+  r: AdmitNativeResultBody,
+): AdmitNativeResultBody {
+  if (!claim || !claimEval) return r;
+  const accepted = claimEval.breach ? { acceptedBreach: true } : {};
+  recordClaimEvaluation(root, {
+    claimId: claim.claimId,
+    pickId: r.strand?.pickId ?? null,
+    agentId,
+    breach: claimEval.breach,
+    excess: claimEval.excess,
+    missing: claimEval.missing,
+    ...accepted,
+    ts: now,
+  });
+  return {
+    ...r,
+    claim: {
+      claimId: claim.claimId,
+      claimedSymbols: [...claim.claimedSymbols],
+      breach: claimEval.breach,
+      excess: claimEval.excess,
+      missing: claimEval.missing,
+      ...accepted,
+    },
+  };
+}
+
+/**
+ * The branch an admission advances (M2.5 spine, TD-2026-08-12-813): the caller's
+ * `--onto`, else the CURRENT branch (HEAD via readHead), else `selvage`
+ * (DEFAULT_BRANCH). An ABSENT HEAD — the pre-branching world, which is every
+ * fabric that never branched — resolves to `selvage`, so admit is BYTE-IDENTICAL
+ * to hardcoding it. A DETACHED HEAD names no branch, so a seal there has nowhere
+ * to advance: fail closed (head.ts leaves that policy to the caller, and admit is
+ * the caller). readHead itself fails closed on a corrupt HEAD.
+ */
+function admitTargetBranch(root: string, opts: AdmitNativeOptions): string {
+  if (opts.onto !== undefined) return opts.onto;
+  const head = readHead(root);
+  if (head === null) return DEFAULT_BRANCH;
+  if (head.kind === 'branch') return head.branch;
+  throw new RefusedError(
+    refuse({
+      code: 'BAD_REQUEST',
+      retriable: 'retry-corrected',
+      next: [{ verb: 'admit', params: {}, requires: ['onto'], principal: 'agent' }],
+    }),
+    `warpline: admit (native) — HEAD is detached at ${head.pickId}; a seal has no branch to advance. ` +
+      `Pass --onto <branch>, or switch onto a branch first.`,
+  );
+}
+
+/**
+ * The target branch's current tip pickId (null = unborn → genesis). The `selvage`
+ * branch keeps its legacy path — nativeSelvageTip carries the one-time migration
+ * refusal for a fabric that predates pickId refs — so the default is byte-identical
+ * to the old hardcoded read. Any other branch is refs-only: a plain readRef.
+ */
+function admitTargetTip(wdir: string, targetBranch: string): string | null {
+  return targetBranch === DEFAULT_BRANCH ? nativeSelvageTip(wdir) : readRef(wdir, targetBranch);
+}
+
+/**
+ * All inputs weaveTips needs once admit (or, in increment 4, merge) has resolved
+ * the three DAG positions and the target branch. Internal-only — no CLI/principal
+ * surface this increment.
+ */
+interface WeaveTipsInput {
+  root: string;
+  wdir: string;
+  store: WarpStore;
+  objStore: ObjectStore;
+  opts: AdmitNativeOptions;
+  now: string;
+  claim: Claim | null;
+  /** the branch this weave advances (`selvage` on the default no-branch path). */
+  targetBranch: string;
+  /** THEIRS — the target branch's current tip strand/state (the side being merged into). */
+  selvageTipId: string;
+  selvageStrand: Strand;
+  selvage: WarpState;
+  /** BASE — the fork point shared by ours and theirs. */
+  baseStrand: Strand;
+  base: WarpState;
+  /** OURS — the proposal being admitted. */
+  scratchTipId: string;
+  scratchStrand: Strand;
+  proposed: WarpState;
+}
+
+/**
+ * THE SHARED SEAL CORE (M2.5 spine, TD-2026-08-12-813). The decision→seal
+ * pipeline, factored out of admitNative verbatim so both `admit` (increment 3)
+ * and the coming `merge` verb (increment 4) run the SAME steps in the SAME order:
+ * admitDecision → claim gate → trust floor → hazard advisory → materialize →
+ * byte-conflict downgrade (persistContested) → seal weave (buildStrandV3,
+ * multi-parent) → advance the TARGET ref → knot payload → refusal carrier. Nothing
+ * about any step changed in the extraction; the only generalization is that the
+ * ref advanced and the strand's provenance name the `targetBranch` instead of a
+ * hardcoded `selvage`, and the legacy stateId selvage pointer (writeSelvage) is
+ * written ONLY when the target IS selvage — new branches are refs-only.
+ */
+async function weaveTips(input: WeaveTipsInput): Promise<AdmitNativeResultBody> {
+  const {
+    root, wdir, store, objStore, opts, now, claim, targetBranch,
+    selvageTipId, selvageStrand, selvage, baseStrand, base, scratchTipId, scratchStrand, proposed,
+  } = input;
+
+  // Claim judgment plumbing — mirror of the git-era admit's withClaim.
+  let claimEval: ClaimEvaluation | null = null;
+  const withClaim = (r: AdmitNativeResultBody): AdmitNativeResultBody =>
+    attachClaim(root, claim, claimEval, opts.agentId, now, r);
+
+  const decision = admitDecision(base, proposed, selvage);
+
+  // THE CLAIM GATE — judged strictly before any seal (verbatim rule).
+  if (claim) {
+    claimEval = evaluateClaim(decision, claim, { agentDelta: diff(base, proposed) });
+    if (claimEval.breach && !opts.acceptBreach) {
+      recordClaimEvaluation(root, {
+        claimId: claim.claimId, pickId: null, agentId: opts.agentId,
+        breach: true, excess: claimEval.excess, missing: claimEval.missing, ts: now,
+      });
+      return {
+        decision: { ...decision, status: 'CLAIM-BREACH' },
+        sealed: false,
+        proposedStateId: proposed.stateId,
+        claim: {
+          claimId: claim.claimId,
+          claimedSymbols: [...claim.claimedSymbols],
+          breach: true,
+          excess: claimEval.excess,
+          missing: claimEval.missing,
+          underlyingStatus: decision.status,
+        },
+        // #refusal (T-2026-07-21-007): the native path is the one agents
+        // actually use — a refusing verdict without the F4 carrier here made
+        // cold-agent recovery impossible exactly where it matters most.
+        refusal: claimRefusal(decision, proposed.stateId, claim.claimId, claimEval.excess, { native: 'true' }),
+      };
+    }
+  }
+
+  // THE TRUST FLOOR — independent-CLEAN into a low-survival symbol is HELD.
+  const escalation =
+    decision.status === 'CLEAN' && decision.confidence === 'independent'
+      ? evaluateEscalation(decision, symbolSurvivalIndex(readGradeSidecar(root)))
+      : null;
+  if (escalation && !opts.acceptRisk) {
+    return withClaim({
+      decision: { ...decision, status: 'HELD' },
+      sealed: false,
+      proposedStateId: proposed.stateId,
+      escalation: { ...escalation, underlyingStatus: decision.status },
+      refusal: trustRefusal(decision, proposed.stateId, escalation.symbol, { native: 'true' }),
+    });
+  }
+  const withEscalation = (r: AdmitNativeResultBody): AdmitNativeResultBody => {
+    if (!escalation) return r;
+    recordGradeEscalation(root, {
+      agentId: opts.agentId,
+      pickId: r.strand?.pickId ?? null,
+      ...escalation,
+      acceptedRisk: true,
+      ts: now,
+    });
+    return { ...r, escalation: { ...escalation, underlyingStatus: decision.status, acceptedRisk: true } };
+  };
+
+  // THE CLEAN-HAZARD ADVISORY (#clean-hazard, T-2026-06-24-015) — the SAME
+  // helper the git-era path calls, at the same point in the pipeline, for the
+  // same reason the refusal carrier is built one way for both (T-2026-07-21-007:
+  // this is the path agents actually use, and a native-only gap is invisible
+  // exactly where it matters most). Advisory: it writes `hazards` and nothing
+  // else — no status, no `sealed`, no refusal.
+  const withHazards = hazardAdvisory({
+    root,
+    agentId: opts.agentId,
+    base,
+    proposed,
+    selvage,
+    decision,
+    shadow: false, // the native path never runs observe-only
+    now,
+  }).attach;
+
+  // B-3 (T-2026-08-11-014): persist the contested work order on EVERY contested
+  // verdict — the KNOT/DANGLE refusals AND the CLEAN→KNOT byte-conflict
+  // downgrade below. `health` counts the contested denominator (the field
+  // test's exit-gate number) as `listKnotPayloads().length`; the downgrade site
+  // used to return a KNOT WITHOUT persisting a payload, so a byte-overlap KNOT —
+  // exactly what a config×code Expo collision produces — moved the denominator
+  // by ZERO while the shadow arm counted it, leaving the two instrument arms
+  // measuring different populations. One helper, both sites, so they cannot
+  // drift again. The payload is auxiliary to the VERDICT (which stands
+  // regardless), so a build failure is caught — but returned, not swallowed:
+  // a lost work order must not be byte-identical to a quiet repo.
+  const persistContested = (dec: AdmitDecision): { id?: string; error?: string } => {
+    try {
+      const payload = buildKnotPayload({
+        decision: dec,
+        base,
+        proposed,
+        selvage,
+        ours: {
+          agentId: opts.agentId,
+          actor: opts.actor ?? opts.agentId,
+          intent: scratchStrand.intent,
+          ref: scratchRefName(opts.agentId),
+          gitCommit: null,
+          treeId: scratchStrand.binding?.treeId ?? null,
+        },
+        theirs: {
+          agentId: selvageStrand.authoredBy?.agentId ?? null,
+          actor: selvageStrand.actor,
+          intent: selvageStrand.intent,
+          ref: selvageStrand.provenance?.ref ?? null,
+          gitCommit: selvageStrand.provenance?.gitCommit ?? null,
+          treeId: selvageStrand.binding?.treeId ?? null,
+        },
+        baseTreeId: baseStrand.binding?.treeId ?? null,
+        readFile: (treeId, rel) => readFileFromTree(objStore, treeId, rel),
+      });
+      persistKnotPayload(root, payload);
+      return { id: payload.payloadId };
+    } catch (e) {
+      return { error: e instanceof Error ? e.message : String(e) };
+    }
+  };
+
+  if (decision.status === 'NOOP') {
+    // B-1 (T-2026-08-11-013): a NOOP means the MEANING is unchanged — but a
+    // byte-custody proposal (assets/fonts/.js/.env/docs) advances the TREE with
+    // an empty meaning delta (admitDecision short-circuits to NOOP before it
+    // ever looks at bytes). When the scratch tip linearly fast-forwards the
+    // selvage and its bytes differ, CARRY the bytes: advance the ref to the
+    // byte-custody strand instead of reporting "the agent changed nothing" and
+    // discarding real work. Mirrors the plain FAST_ADMIT branch below (a ref
+    // advance, no re-seal) and the git-era byte-custody strand. A byte-only
+    // change under a CONCURRENT meaning advance (base ≠ selvage tip) is not a
+    // linear fast-forward and stays a NOOP — no silent carry across a divergence.
+    const scratchTree = scratchStrand.binding?.treeId;
+    const selvageTree = selvageStrand.binding?.treeId;
+    if (baseStrand.pickId === selvageTipId && scratchTree && selvageTree && scratchTree !== selvageTree) {
+      writeRef(wdir, targetBranch, scratchTipId, selvageTipId); // per-ref CAS
+      if (targetBranch === DEFAULT_BRANCH) writeSelvage(wdir, scratchStrand.stateId); // selvage-only legacy pointer
+      clearScratch(root, opts.agentId);
+      return withClaim({
+        decision: { ...decision, status: 'FAST_ADMIT' },
+        sealed: true,
+        proposedStateId: proposed.stateId,
+        strand: scratchStrand,
+      });
+    }
+    return withClaim({ decision, sealed: false, proposedStateId: proposed.stateId });
+  }
+
+  if (decision.status === 'FAST_ADMIT' && baseStrand.pickId === selvageTipId) {
+    // Fast-forward: the scratch strand IS the admissible node — the ref moves,
+    // no re-seal (v3: admission of a sealed strand is a ref advance).
+    writeRef(wdir, targetBranch, scratchTipId, selvageTipId); // per-ref CAS
+    if (targetBranch === DEFAULT_BRANCH) writeSelvage(wdir, scratchStrand.stateId); // selvage-only legacy pointer
+    clearScratch(root, opts.agentId);
+    return withClaim({ decision, sealed: true, proposedStateId: proposed.stateId, strand: scratchStrand });
+  }
+
+  if (decision.status === 'CLEAN' || decision.status === 'FAST_ADMIT') {
+    // All three sides are BOUND v3 strands — the whole 3-way merge runs off
+    // the object store (I6): no git merge-file, no git anything.
+    const baseTree = baseStrand.binding?.treeId;
+    const oursTree = scratchStrand.binding?.treeId;
+    const theirsTree = selvageStrand.binding?.treeId;
+    if (!baseTree || !oursTree || !theirsTree) {
+      throw new Error('warpline: admit (native) — a merge side has no byte binding (bind-on-seal is mandatory on v3 strands) — fail closed');
+    }
+    const mat = await materializeMergedStateNative(objStore, baseTree, oursTree, theirsTree);
+    if (!mat.state || mat.plan.conflicts.length > 0 || !mat.resultTreeId) {
+      // Meaning said CLEAN but bytes overlap → surface as KNOT (never a silent
+      // wrong-merge). B-3: persist the work order like every other contested
+      // verdict, so `health` counts this KNOT in the contested denominator.
+      // rebasedOnto MUST be set — buildKnotPayload fails closed without it — and
+      // this branch is reached by FAST_ADMIT too (its meaning decision carries
+      // rebasedOnto:null), a flavor B-1's byte-custody selvage strands newly make
+      // reachable. The downgrade IS a rebase onto the selvage, so name it: else
+      // the payload build throws, the denominator misses it, and we reopen the
+      // very silent-divergence B-3 closed (Judge, Track-A review 2026-08-11).
+      const knot = { ...decision, status: 'KNOT' as const, rebasedOnto: selvage.stateId };
+      const contested = persistContested(knot);
+      return withClaim({
+        decision: knot,
+        sealed: false,
+        proposedStateId: proposed.stateId,
+        merged: mat.plan,
+        ...(contested.id ? { knotPayloadId: contested.id } : {}),
+        ...(contested.error ? { payloadError: contested.error } : {}),
+        refusal: meaningRefusal('KNOT', knot, proposed.stateId, opts.agentId, contested.id),
+      });
+    }
+    // C-5 DIRTY-WORKTREE GUARD, and it runs HERE — before a single ledger
+    // byte moves. The write-back below used to call restoreTree raw over the
+    // WHOLE merged tree (not just the merged paths) into the human's own
+    // working directory, and the clobbered bytes were in no object: propose
+    // snapshotted before the edit, the write-back snapshots nothing. Git
+    // aborts a merge that would overwrite local changes; so do we.
+    //
+    // The baseline is the PROPOSAL's own tree (`oursTree`): a path the agent
+    // has not touched since `propose` is recoverable and may be overwritten,
+    // which is the normal merge and must not be blocked. A path edited AFTER
+    // propose is bytes nothing holds — refuse, and name --no-restore, which
+    // seals the admission and simply declines the write-back.
+    if (!opts.noRestore) {
+      assertDirtyFree(objStore, mat.resultTreeId, opts.worktree, {
+        expectTreeId: oursTree,
+        overrideHint:
+          'pass --no-restore to admit WITHOUT the write-back (the merge still seals; reconcile with `warpline restore` afterwards), ' +
+          'or save those paths first',
+      });
+    }
+    const recipe: MergeRecipe = { algo: 'warpline-merge3-v1', base: baseTree, ours: oursTree, theirs: theirsTree, result: mat.resultTreeId };
+    const weave = buildStrandV3({
+      parents: [selvageTipId, scratchTipId], // primary = target history; ours = the admitted proposal
+      stateId: mat.state.stateId,
+      actor: opts.actor ?? opts.agentId,
+      authoredBy: { agentId: opts.agentId },
+      intent: opts.intent ?? `admit ${opts.agentId}`,
+      recordedAt: now,
+      objectCount: mat.state.objects.size,
+      delta: summarizeDelta(selvage, mat.state),
+      provenance: { ref: `refs/heads/${targetBranch}`, treeSha: null, gitCommit: null },
+      binding: { treeId: mat.resultTreeId, gitOid: null },
+      merge: recipe,
+    });
+    store.putState(mat.state);
+    appendStrand(wdir, weave);
+    writeRef(wdir, targetBranch, weave.pickId, selvageTipId); // per-ref CAS
+    if (targetBranch === DEFAULT_BRANCH) writeSelvage(wdir, mat.state.stateId); // selvage-only legacy pointer
+    clearScratch(root, opts.agentId);
+    const coverage = classifyMergePaths(mat.plan.files.keys(), [mat.state, proposed, selvage]);
+    // Close the loop (§2.1 step 5): restore the merged bytes back into the
+    // agent worktree (overlay semantics) — the agent continues from merged
+    // reality. Already cleared by assertDirtyFree above, before the seal.
+    const restoredEntries = opts.noRestore ? undefined : restoreTree(objStore, mat.resultTreeId, opts.worktree);
+    return withClaim(
+      withEscalation(
+        withHazards({
+          decision,
+          sealed: true,
+          proposedStateId: proposed.stateId,
+          strand: weave,
+          merged: mat.plan,
+          coverage,
+          ...(restoredEntries !== undefined ? { restoredEntries } : {}),
+        }),
+      ),
+    );
+  }
+
+  // KNOT / DANGLE — persist the machine-readable resolution work order; the
+  // scratch ref KEEPS the work (durable strand — nothing is lost). B-3: same
+  // helper the byte-conflict downgrade uses, so the two contested sites cannot
+  // drift about what lands in the denominator.
+  const contested = persistContested(decision);
+  return withClaim({
+    decision,
+    sealed: false,
+    proposedStateId: proposed.stateId,
+    ...(contested.id ? { knotPayloadId: contested.id } : {}),
+    ...(contested.error ? { payloadError: contested.error } : {}),
+    // #refusal: built AFTER the payload attempt so `next[0]` names the work
+    // order whenever one actually persisted (every pointer must dereference — F4).
+    refusal: meaningRefusal(decision.status, decision, proposed.stateId, opts.agentId, contested.id),
+  });
+}
+
+/**
  * The native admission: verdict via the EXISTING decision engine, bytes via
- * materializeMergedStateNative only. FAST_ADMIT is a selvage fast-forward to the
+ * materializeMergedStateNative only. FAST_ADMIT is a target fast-forward to the
  * scratch tip (the scratch strand IS the admissible DAG node — no re-seal);
- * CLEAN seals a weave (parents [selvageTip, scratchTip]) and restores the
+ * CLEAN seals a weave (parents [targetTip, scratchTip]) and restores the
  * merged tree into the agent worktree; KNOT/DANGLE persist the payload and
  * refuse; CLAIM-BREACH/HELD refuse exactly as the git-era gate does.
+ *
+ * M2.5 spine (TD-2026-08-12-813): admit RESOLVES base+ours+theirs+target, then
+ * hands the seal to the shared `weaveTips` core. The TARGET is the current branch
+ * (`opts.onto` → HEAD → selvage); with no branching HEAD is absent → selvage →
+ * byte-identical to the pre-branch world.
  */
 export async function admitNative(root: string, opts: AdmitNativeOptions): Promise<AdmitNativeResult> {
   const wdir = warplineDirOf(root);
@@ -543,57 +945,37 @@ export async function admitNative(root: string, opts: AdmitNativeOptions): Promi
       throw new Error(`warpline: admit (native) — proposed state ${scratchStrand.stateId} cannot be loaded — fail closed`);
     }
 
-    // Claim judgment plumbing — mirror of the git-era admit's withClaim.
-    let claimEval: ClaimEvaluation | null = null;
-    const withClaim = (r: AdmitNativeResultBody): AdmitNativeResultBody => {
-      if (!claim || !claimEval) return r;
-      const accepted = claimEval.breach ? { acceptedBreach: true } : {};
-      recordClaimEvaluation(root, {
-        claimId: claim.claimId,
-        pickId: r.strand?.pickId ?? null,
-        agentId: opts.agentId,
-        breach: claimEval.breach,
-        excess: claimEval.excess,
-        missing: claimEval.missing,
-        ...accepted,
-        ts: now,
-      });
-      return {
-        ...r,
-        claim: {
-          claimId: claim.claimId,
-          claimedSymbols: [...claim.claimedSymbols],
-          breach: claimEval.breach,
-          excess: claimEval.excess,
-          missing: claimEval.missing,
-          ...accepted,
-        },
-      };
-    };
+    // Resolve the TARGET branch (M2.5 spine): --onto → HEAD → selvage. The
+    // default (no HEAD) is `selvage`, byte-identical to the old hardcoded target.
+    const targetBranch = admitTargetBranch(root, opts);
 
-    const selvageTipId = nativeSelvageTip(wdir);
+    const selvageTipId = admitTargetTip(wdir, targetBranch);
     if (selvageTipId === null) {
-      // GENESIS admit: fast-forward the (new) selvage ref to the scratch tip.
+      // GENESIS admit: fast-forward the (unborn) target ref to the scratch tip.
       const genesis = blankDecision('FAST_ADMIT');
-      if (claim) claimEval = evaluateClaim(genesis, claim);
-      writeRef(wdir, 'selvage', scratchTipId, null); // CAS: must still be unborn
-      writeSelvage(wdir, scratchStrand.stateId); // legacy stateId pointer kept in lockstep
+      const claimEval = claim ? evaluateClaim(genesis, claim) : null;
+      writeRef(wdir, targetBranch, scratchTipId, null); // CAS: must still be unborn
+      if (targetBranch === DEFAULT_BRANCH) writeSelvage(wdir, scratchStrand.stateId); // selvage-only legacy pointer
       clearScratch(root, opts.agentId);
-      return withClaim({ decision: genesis, sealed: true, proposedStateId: proposed.stateId, strand: scratchStrand });
+      return attachClaim(root, claim, claimEval, opts.agentId, now, {
+        decision: genesis, sealed: true, proposedStateId: proposed.stateId, strand: scratchStrand,
+      });
     }
 
-    const selvageStrand = mustStrand(byPick, selvageTipId, 'refs/heads/selvage');
+    const selvageStrand = mustStrand(byPick, selvageTipId, `refs/heads/${targetBranch}`);
     const selvage = store.loadState(selvageStrand.stateId);
     if (!selvage) {
-      throw new Error(`warpline: admit (native) — selvage state ${selvageStrand.stateId} cannot be loaded — fail closed`);
+      throw new Error(`warpline: admit (native) — ${targetBranch} state ${selvageStrand.stateId} cannot be loaded — fail closed`);
     }
 
     const selvageAncestors = ancestorSet(byPick, selvageTipId);
     if (selvageAncestors.has(scratchTipId)) {
-      // The scratch tip is already selvage history — nothing to admit.
+      // The scratch tip is already the target branch's history — nothing to admit.
       const noop = blankDecision('NOOP');
-      if (claim) claimEval = evaluateClaim(noop, claim);
-      return withClaim({ decision: noop, sealed: false, proposedStateId: proposed.stateId });
+      const claimEval = claim ? evaluateClaim(noop, claim) : null;
+      return attachClaim(root, claim, claimEval, opts.agentId, now, {
+        decision: noop, sealed: false, proposedStateId: proposed.stateId,
+      });
     }
     const baseStrand = forkBaseOf(byPick, scratchTipId, selvageAncestors);
     if (!baseStrand) {
@@ -601,7 +983,7 @@ export async function admitNative(root: string, opts: AdmitNativeOptions): Promi
       // recovers this; escalate (empty next[] means exactly that).
       throw new RefusedError(
         refuse({ code: 'INTEGRITY_BROKEN' }),
-        `warpline: admit (native) — the scratch history of ${opts.agentId} shares no base with the selvage (disjoint DAG roots) — fail closed`,
+        `warpline: admit (native) — the scratch history of ${opts.agentId} shares no base with ${targetBranch} (disjoint DAG roots) — fail closed`,
       );
     }
     const base = store.loadState(baseStrand.stateId);
@@ -609,264 +991,10 @@ export async function admitNative(root: string, opts: AdmitNativeOptions): Promi
       throw new Error(`warpline: admit (native) — base state ${baseStrand.stateId} cannot be loaded — fail closed`);
     }
 
-    const decision = admitDecision(base, proposed, selvage);
-
-    // THE CLAIM GATE — judged strictly before any seal (verbatim rule).
-    if (claim) {
-      claimEval = evaluateClaim(decision, claim, { agentDelta: diff(base, proposed) });
-      if (claimEval.breach && !opts.acceptBreach) {
-        recordClaimEvaluation(root, {
-          claimId: claim.claimId, pickId: null, agentId: opts.agentId,
-          breach: true, excess: claimEval.excess, missing: claimEval.missing, ts: now,
-        });
-        return {
-          decision: { ...decision, status: 'CLAIM-BREACH' },
-          sealed: false,
-          proposedStateId: proposed.stateId,
-          claim: {
-            claimId: claim.claimId,
-            claimedSymbols: [...claim.claimedSymbols],
-            breach: true,
-            excess: claimEval.excess,
-            missing: claimEval.missing,
-            underlyingStatus: decision.status,
-          },
-          // #refusal (T-2026-07-21-007): the native path is the one agents
-          // actually use — a refusing verdict without the F4 carrier here made
-          // cold-agent recovery impossible exactly where it matters most.
-          refusal: claimRefusal(decision, proposed.stateId, claim.claimId, claimEval.excess, { native: 'true' }),
-        };
-      }
-    }
-
-    // THE TRUST FLOOR — independent-CLEAN into a low-survival symbol is HELD.
-    const escalation =
-      decision.status === 'CLEAN' && decision.confidence === 'independent'
-        ? evaluateEscalation(decision, symbolSurvivalIndex(readGradeSidecar(root)))
-        : null;
-    if (escalation && !opts.acceptRisk) {
-      return withClaim({
-        decision: { ...decision, status: 'HELD' },
-        sealed: false,
-        proposedStateId: proposed.stateId,
-        escalation: { ...escalation, underlyingStatus: decision.status },
-        refusal: trustRefusal(decision, proposed.stateId, escalation.symbol, { native: 'true' }),
-      });
-    }
-    const withEscalation = (r: AdmitNativeResultBody): AdmitNativeResultBody => {
-      if (!escalation) return r;
-      recordGradeEscalation(root, {
-        agentId: opts.agentId,
-        pickId: r.strand?.pickId ?? null,
-        ...escalation,
-        acceptedRisk: true,
-        ts: now,
-      });
-      return { ...r, escalation: { ...escalation, underlyingStatus: decision.status, acceptedRisk: true } };
-    };
-
-    // THE CLEAN-HAZARD ADVISORY (#clean-hazard, T-2026-06-24-015) — the SAME
-    // helper the git-era path calls, at the same point in the pipeline, for the
-    // same reason the refusal carrier is built one way for both (T-2026-07-21-007:
-    // this is the path agents actually use, and a native-only gap is invisible
-    // exactly where it matters most). Advisory: it writes `hazards` and nothing
-    // else — no status, no `sealed`, no refusal.
-    const withHazards = hazardAdvisory({
-      root,
-      agentId: opts.agentId,
-      base,
-      proposed,
-      selvage,
-      decision,
-      shadow: false, // the native path never runs observe-only
-      now,
-    }).attach;
-
-    // B-3 (T-2026-08-11-014): persist the contested work order on EVERY contested
-    // verdict — the KNOT/DANGLE refusals AND the CLEAN→KNOT byte-conflict
-    // downgrade below. `health` counts the contested denominator (the field
-    // test's exit-gate number) as `listKnotPayloads().length`; the downgrade site
-    // used to return a KNOT WITHOUT persisting a payload, so a byte-overlap KNOT —
-    // exactly what a config×code Expo collision produces — moved the denominator
-    // by ZERO while the shadow arm counted it, leaving the two instrument arms
-    // measuring different populations. One helper, both sites, so they cannot
-    // drift again. The payload is auxiliary to the VERDICT (which stands
-    // regardless), so a build failure is caught — but returned, not swallowed:
-    // a lost work order must not be byte-identical to a quiet repo.
-    const persistContested = (dec: AdmitDecision): { id?: string; error?: string } => {
-      try {
-        const payload = buildKnotPayload({
-          decision: dec,
-          base,
-          proposed,
-          selvage,
-          ours: {
-            agentId: opts.agentId,
-            actor: opts.actor ?? opts.agentId,
-            intent: scratchStrand.intent,
-            ref: scratchRefName(opts.agentId),
-            gitCommit: null,
-            treeId: scratchStrand.binding?.treeId ?? null,
-          },
-          theirs: {
-            agentId: selvageStrand.authoredBy?.agentId ?? null,
-            actor: selvageStrand.actor,
-            intent: selvageStrand.intent,
-            ref: selvageStrand.provenance?.ref ?? null,
-            gitCommit: selvageStrand.provenance?.gitCommit ?? null,
-            treeId: selvageStrand.binding?.treeId ?? null,
-          },
-          baseTreeId: baseStrand.binding?.treeId ?? null,
-          readFile: (treeId, rel) => readFileFromTree(objStore, treeId, rel),
-        });
-        persistKnotPayload(root, payload);
-        return { id: payload.payloadId };
-      } catch (e) {
-        return { error: e instanceof Error ? e.message : String(e) };
-      }
-    };
-
-    if (decision.status === 'NOOP') {
-      // B-1 (T-2026-08-11-013): a NOOP means the MEANING is unchanged — but a
-      // byte-custody proposal (assets/fonts/.js/.env/docs) advances the TREE with
-      // an empty meaning delta (admitDecision short-circuits to NOOP before it
-      // ever looks at bytes). When the scratch tip linearly fast-forwards the
-      // selvage and its bytes differ, CARRY the bytes: advance the ref to the
-      // byte-custody strand instead of reporting "the agent changed nothing" and
-      // discarding real work. Mirrors the plain FAST_ADMIT branch below (a ref
-      // advance, no re-seal) and the git-era byte-custody strand. A byte-only
-      // change under a CONCURRENT meaning advance (base ≠ selvage tip) is not a
-      // linear fast-forward and stays a NOOP — no silent carry across a divergence.
-      const scratchTree = scratchStrand.binding?.treeId;
-      const selvageTree = selvageStrand.binding?.treeId;
-      if (baseStrand.pickId === selvageTipId && scratchTree && selvageTree && scratchTree !== selvageTree) {
-        writeRef(wdir, 'selvage', scratchTipId, selvageTipId); // per-ref CAS
-        writeSelvage(wdir, scratchStrand.stateId);
-        clearScratch(root, opts.agentId);
-        return withClaim({
-          decision: { ...decision, status: 'FAST_ADMIT' },
-          sealed: true,
-          proposedStateId: proposed.stateId,
-          strand: scratchStrand,
-        });
-      }
-      return withClaim({ decision, sealed: false, proposedStateId: proposed.stateId });
-    }
-
-    if (decision.status === 'FAST_ADMIT' && baseStrand.pickId === selvageTipId) {
-      // Fast-forward: the scratch strand IS the admissible node — the ref moves,
-      // no re-seal (v3: admission of a sealed strand is a ref advance).
-      writeRef(wdir, 'selvage', scratchTipId, selvageTipId); // per-ref CAS
-      writeSelvage(wdir, scratchStrand.stateId);
-      clearScratch(root, opts.agentId);
-      return withClaim({ decision, sealed: true, proposedStateId: proposed.stateId, strand: scratchStrand });
-    }
-
-    if (decision.status === 'CLEAN' || decision.status === 'FAST_ADMIT') {
-      // All three sides are BOUND v3 strands — the whole 3-way merge runs off
-      // the object store (I6): no git merge-file, no git anything.
-      const baseTree = baseStrand.binding?.treeId;
-      const oursTree = scratchStrand.binding?.treeId;
-      const theirsTree = selvageStrand.binding?.treeId;
-      if (!baseTree || !oursTree || !theirsTree) {
-        throw new Error('warpline: admit (native) — a merge side has no byte binding (bind-on-seal is mandatory on v3 strands) — fail closed');
-      }
-      const mat = await materializeMergedStateNative(objStore, baseTree, oursTree, theirsTree);
-      if (!mat.state || mat.plan.conflicts.length > 0 || !mat.resultTreeId) {
-        // Meaning said CLEAN but bytes overlap → surface as KNOT (never a silent
-        // wrong-merge). B-3: persist the work order like every other contested
-        // verdict, so `health` counts this KNOT in the contested denominator.
-        // rebasedOnto MUST be set — buildKnotPayload fails closed without it — and
-        // this branch is reached by FAST_ADMIT too (its meaning decision carries
-        // rebasedOnto:null), a flavor B-1's byte-custody selvage strands newly make
-        // reachable. The downgrade IS a rebase onto the selvage, so name it: else
-        // the payload build throws, the denominator misses it, and we reopen the
-        // very silent-divergence B-3 closed (Judge, Track-A review 2026-08-11).
-        const knot = { ...decision, status: 'KNOT' as const, rebasedOnto: selvage.stateId };
-        const contested = persistContested(knot);
-        return withClaim({
-          decision: knot,
-          sealed: false,
-          proposedStateId: proposed.stateId,
-          merged: mat.plan,
-          ...(contested.id ? { knotPayloadId: contested.id } : {}),
-          ...(contested.error ? { payloadError: contested.error } : {}),
-          refusal: meaningRefusal('KNOT', knot, proposed.stateId, opts.agentId, contested.id),
-        });
-      }
-      // C-5 DIRTY-WORKTREE GUARD, and it runs HERE — before a single ledger
-      // byte moves. The write-back below used to call restoreTree raw over the
-      // WHOLE merged tree (not just the merged paths) into the human's own
-      // working directory, and the clobbered bytes were in no object: propose
-      // snapshotted before the edit, the write-back snapshots nothing. Git
-      // aborts a merge that would overwrite local changes; so do we.
-      //
-      // The baseline is the PROPOSAL's own tree (`oursTree`): a path the agent
-      // has not touched since `propose` is recoverable and may be overwritten,
-      // which is the normal merge and must not be blocked. A path edited AFTER
-      // propose is bytes nothing holds — refuse, and name --no-restore, which
-      // seals the admission and simply declines the write-back.
-      if (!opts.noRestore) {
-        assertDirtyFree(objStore, mat.resultTreeId, opts.worktree, {
-          expectTreeId: oursTree,
-          overrideHint:
-            'pass --no-restore to admit WITHOUT the write-back (the merge still seals; reconcile with `warpline restore` afterwards), ' +
-            'or save those paths first',
-        });
-      }
-      const recipe: MergeRecipe = { algo: 'warpline-merge3-v1', base: baseTree, ours: oursTree, theirs: theirsTree, result: mat.resultTreeId };
-      const weave = buildStrandV3({
-        parents: [selvageTipId, scratchTipId], // primary = selvage history; ours = the admitted proposal
-        stateId: mat.state.stateId,
-        actor: opts.actor ?? opts.agentId,
-        authoredBy: { agentId: opts.agentId },
-        intent: opts.intent ?? `admit ${opts.agentId}`,
-        recordedAt: now,
-        objectCount: mat.state.objects.size,
-        delta: summarizeDelta(selvage, mat.state),
-        provenance: { ref: 'refs/heads/selvage', treeSha: null, gitCommit: null },
-        binding: { treeId: mat.resultTreeId, gitOid: null },
-        merge: recipe,
-      });
-      store.putState(mat.state);
-      appendStrand(wdir, weave);
-      writeRef(wdir, 'selvage', weave.pickId, selvageTipId); // per-ref CAS
-      writeSelvage(wdir, mat.state.stateId);
-      clearScratch(root, opts.agentId);
-      const coverage = classifyMergePaths(mat.plan.files.keys(), [mat.state, proposed, selvage]);
-      // Close the loop (§2.1 step 5): restore the merged bytes back into the
-      // agent worktree (overlay semantics) — the agent continues from merged
-      // reality. Already cleared by assertDirtyFree above, before the seal.
-      const restoredEntries = opts.noRestore ? undefined : restoreTree(objStore, mat.resultTreeId, opts.worktree);
-      return withClaim(
-        withEscalation(
-          withHazards({
-            decision,
-            sealed: true,
-            proposedStateId: proposed.stateId,
-            strand: weave,
-            merged: mat.plan,
-            coverage,
-            ...(restoredEntries !== undefined ? { restoredEntries } : {}),
-          }),
-        ),
-      );
-    }
-
-    // KNOT / DANGLE — persist the machine-readable resolution work order; the
-    // scratch ref KEEPS the work (durable strand — nothing is lost). B-3: same
-    // helper the byte-conflict downgrade uses, so the two contested sites cannot
-    // drift about what lands in the denominator.
-    const contested = persistContested(decision);
-    return withClaim({
-      decision,
-      sealed: false,
-      proposedStateId: proposed.stateId,
-      ...(contested.id ? { knotPayloadId: contested.id } : {}),
-      ...(contested.error ? { payloadError: contested.error } : {}),
-      // #refusal: built AFTER the payload attempt so `next[0]` names the work
-      // order whenever one actually persisted (every pointer must dereference — F4).
-      refusal: meaningRefusal(decision.status, decision, proposed.stateId, opts.agentId, contested.id),
+    // The seal itself — the shared core (increment 4's merge verb calls the same).
+    return weaveTips({
+      root, wdir, store, objStore, opts, now, claim, targetBranch,
+      selvageTipId, selvageStrand, selvage, baseStrand, base, scratchTipId, scratchStrand, proposed,
     });
   });
   // THE single G1 stamp point for the native path (see AdmitNativeResultBody).

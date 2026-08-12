@@ -2616,6 +2616,24 @@ components:
       cutover here). EXIT PROOF: test/native-loop-no-git.test.ts — the full
       fork→propose→admit→KNOT→resolve→restore loop green in a directory with no
       `.git` at all (I12), pure-v3 DAG authenticated by fabric verify.
+      M2.5 SPINE REFACTOR (increment 3, TD-2026-08-12-813, Arky's design):
+      admitNative no longer hardcodes `selvage`. It RESOLVES base+ours+theirs+
+      target then hands the seal to weaveTips — an INTERNAL shared core (no CLI/
+      principal surface yet) that both admit and the coming increment-4 `merge`
+      verb call, running EXACTLY the current steps in the current order
+      (admitDecision → claim gate → trust floor → hazard advisory → materialize →
+      byte-conflict downgrade/persistContested → seal weave buildStrandV3
+      multi-parent → advance the TARGET ref → knot payload → refusal carrier). The
+      TARGET branch is the CURRENT one: opts.onto ?? HEAD (readHead) ?? selvage —
+      an ABSENT HEAD (every fabric that never branched) resolves to selvage, so the
+      default path is BYTE-IDENTICAL to the old hardcoded target; a DETACHED HEAD
+      names no branch and fails closed (BAD_REQUEST/retry-corrected/[admit needs
+      onto]). THE COMPATIBILITY SPINE: the legacy stateId `selvage` pointer
+      (#fabric writeSelvage) is a lockstep pointer that exists ONLY for selvage, so
+      EVERY writeSelvage call is now conditional — `if (targetBranch === selvage)`
+      — keeping the default byte-identical and named branches refs-only (they
+      advance refs/heads/<name> alone, never the legacy pointer, and never move
+      selvage). Pinned in test/admit-onto-branch.test.ts.
     type: module
     tags: [warpline, native-first, phase-0]
     components:
