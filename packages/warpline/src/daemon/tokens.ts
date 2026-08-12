@@ -186,22 +186,83 @@ export function consoleReadToken(root: string): string | null {
 
 /* ── the MCP skin's token custody (PW-9, mcp-skin-spec D2/R5) ─────────────────── */
 
-/** The dedicated 0600 file the MCP skin reads — NEVER daemon-tokens.jsonl. */
+/**
+ * The LEGACY single-valued 0600 file (`daemon/mcp.token`). Superseded by the
+ * per-agent keyed map below, but still HONORED on read for back-compat: a box
+ * that minted before the keyed store existed keeps working untouched.
+ */
 export function mcpTokenPathOf(root: string): string {
   return path.join(warplineDirOf(root), 'daemon', 'mcp.token');
 }
 
 /**
- * Write the MCP skin's bare token to its dedicated 0600 file (called by the
- * mint CLI when the principal is an agent minted FOR the MCP skin). Custody
- * rules (Aegis R5): the file lives under `.warpline/` (gitignored, on the
- * stake deny-list); the token never appears in `.mcp.json` or any committable
- * config; issuance stays the human's CLI act — the MCP server NEVER mints.
+ * The per-agent keyed 0600 store (`daemon/mcp-tokens.json`): a flat
+ * `{ [agentId]: token }` map so N agents minted `--mcp` COEXIST — minting bob
+ * after alice no longer clobbers alice (the #1 multi-instance trap). Same
+ * custody as the legacy file: under `.warpline/` (gitignored, stake/backup
+ * deny-listed), never in committable config, never minted by the server.
  */
-export function writeMcpTokenFile(root: string, token: string): string {
-  const p = mcpTokenPathOf(root);
+export function mcpTokensPathOf(root: string): string {
+  return path.join(warplineDirOf(root), 'daemon', 'mcp-tokens.json');
+}
+
+/**
+ * Read the keyed MCP-token map. Fails CLOSED to `{}` on any parse/shape error:
+ * a garbled store yields no tokens rather than a wrong one. Only string→string
+ * pairs survive.
+ */
+export function readMcpTokens(root: string): Record<string, string> {
+  let raw: string;
+  try {
+    raw = fs.readFileSync(mcpTokensPathOf(root), 'utf8');
+  } catch {
+    return {};
+  }
+  try {
+    const obj = JSON.parse(raw) as unknown;
+    if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return {};
+    const out: Record<string, string> = {};
+    for (const [k, v] of Object.entries(obj as Record<string, unknown>)) {
+      if (typeof k === 'string' && k && typeof v === 'string' && v) out[k] = v;
+    }
+    return out;
+  } catch {
+    return {};
+  }
+}
+
+/**
+ * Persist an agent's bare MCP token under its agentId in the keyed 0600 store
+ * (called by the mint CLI when `--mcp` is passed; agentId = the mint <name>).
+ * Read-merge-write so a second agent's mint ADDS to the map instead of
+ * replacing it. Returns the store path. Custody rules (Aegis R5) are unchanged;
+ * this only fixes STORAGE (single-value → keyed), not the trust model — every
+ * token here is still per-agent, still human-minted, still daemon-verified.
+ *
+ * `agentId` is optional ONLY for back-compat with the legacy single-file
+ * callers (pre-keyed tests): when omitted, the legacy `mcp.token` file is
+ * written exactly as before.
+ */
+export function writeMcpTokenFile(root: string, token: string, agentId?: string): string {
+  if (agentId === undefined) {
+    // Legacy single-file path (back-compat) — unchanged behavior.
+    const p = mcpTokenPathOf(root);
+    fs.mkdirSync(path.dirname(p), { recursive: true });
+    fs.writeFileSync(p, token + '\n', { encoding: 'utf8', mode: 0o600 });
+    try {
+      fs.chmodSync(p, 0o600); // writeFile mode only applies on create — re-assert
+    } catch {
+      /* best-effort on exotic filesystems */
+    }
+    return p;
+  }
+  const key = agentId.trim();
+  if (!key) throw new Error('warpline: writeMcpTokenFile — agentId must be non-empty when provided');
+  const p = mcpTokensPathOf(root);
   fs.mkdirSync(path.dirname(p), { recursive: true });
-  fs.writeFileSync(p, token + '\n', { encoding: 'utf8', mode: 0o600 });
+  const map = readMcpTokens(root);
+  map[key] = token; // re-mint for the same agent rotates its slot in place
+  fs.writeFileSync(p, JSON.stringify(map, null, 2) + '\n', { encoding: 'utf8', mode: 0o600 });
   try {
     fs.chmodSync(p, 0o600); // writeFile mode only applies on create — re-assert
   } catch {
@@ -212,22 +273,48 @@ export function writeMcpTokenFile(root: string, token: string): string {
 
 /**
  * The MCP skin's token discovery, mirroring the consoleReadToken structural
- * pattern: `$WARPLINE_MCP_TOKEN` (shell/keychain-injected) first, else the
- * dedicated mcp.token file. STRUCTURALLY AGENT-CLASS-SAFE: this helper reads
- * ONLY the dedicated sources — it never scans daemon-tokens.jsonl (which holds
- * human tokens; one "newest row" bug there would be a privilege escalation,
- * Aegis R1). Whether the discovered token is actually agent-class is the
- * DAEMON's judgment at resolve time — the skin holds a credential, never an
- * identity. Returns null when neither source exists (the skin surfaces the
- * structured AUTH refusal naming the human mint step).
+ * pattern. STRUCTURALLY AGENT-CLASS-SAFE: this helper reads ONLY the dedicated
+ * MCP sources (env + the two dedicated files) — it never scans
+ * daemon-tokens.jsonl (which holds human tokens; one "newest row" bug there
+ * would be a privilege escalation, Aegis R1). Whether the discovered token is
+ * actually agent-class is the DAEMON's judgment at resolve time — the skin
+ * holds a credential, never an identity.
+ *
+ * Resolution order (each concurrent instance identifies ITSELF; the file paths
+ * are single-agent conveniences that fail closed on ambiguity rather than
+ * silently pick the wrong agent's identity):
+ *   1. `$WARPLINE_MCP_TOKEN` — the raw token; the per-instance mechanism, so N
+ *      concurrent Claude Code instances each present their own.
+ *   2. `$WARPLINE_MCP_AGENT` — a name selector into the keyed store; null (AUTH
+ *      refusal) if the named agent is absent — never falls through to another.
+ *   3. the keyed store with EXACTLY ONE entry — the unambiguous single-agent case.
+ *   4. the legacy `mcp.token` file — back-compat for boxes minted pre-keyed store.
+ *   5. otherwise null (incl. a multi-agent store with no selector — the caller
+ *      surfaces the structured AUTH refusal naming how to disambiguate).
  */
 export function mcpAgentToken(root: string): string | null {
   const env = process.env.WARPLINE_MCP_TOKEN;
   if (env && env.trim()) return env.trim();
-  try {
-    const raw = fs.readFileSync(mcpTokenPathOf(root), 'utf8').trim();
-    return raw || null;
-  } catch {
-    return null;
+
+  const map = readMcpTokens(root);
+  const selector = process.env.WARPLINE_MCP_AGENT?.trim();
+  if (selector) {
+    // Named explicitly — resolve it or fail CLOSED (never pick another agent).
+    return map[selector] ?? null;
   }
+
+  const keys = Object.keys(map);
+  if (keys.length === 1) return map[keys[0]!]!;
+
+  // Multiple keyed agents with no selector is ambiguous — do NOT guess an
+  // identity. Fall to the legacy single file only when the keyed store is empty.
+  if (keys.length === 0) {
+    try {
+      const raw = fs.readFileSync(mcpTokenPathOf(root), 'utf8').trim();
+      return raw || null;
+    } catch {
+      return null;
+    }
+  }
+  return null;
 }

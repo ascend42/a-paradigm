@@ -2569,9 +2569,12 @@ components:
       unchanged and still means "the dispatch produced a result": a
       verdict-class refusal is an ok row CARRYING a resultCode, on the shadow
       path exactly as on the direct one. Teaching text is single-sourced from
-      #warplined-descriptors; MCP token custody (PW-9) = mint --mcp writes
-      .warpline/daemon/mcp.token (0600) and mcpAgentToken() reads ONLY env
-      WARPLINE_MCP_TOKEN then that file — never daemon-tokens.jsonl.
+      #warplined-descriptors; MCP token custody (PW-9) = mint --mcp persists
+      the token KEYED BY AGENT in .warpline/daemon/mcp-tokens.json (0600, so N
+      agents coexist — no clobber) and mcpAgentToken() reads ONLY env
+      WARPLINE_MCP_TOKEN, then env WARPLINE_MCP_AGENT (name selector), then the
+      keyed store (single-entry), then the legacy mcp.token file — never
+      daemon-tokens.jsonl.
       Verbs (1:1 onto engine fns — transport + identity, never logic): status,
       refs.list, fork, propose, admit (native, incl. the R1 shadow flag),
       knot.show, resolve, stake, stake.recover, grade.report, shadow.tail,
@@ -2638,14 +2641,20 @@ components:
       boundary; the daemon is the trusted stamper — per-strand signatures
       remain M3.
       MCP TOKEN CUSTODY (PW-9, mcp-skin-spec D2/R5): `token mint <name> --kind
-      agent --mcp` additionally writes the bare token to
-      .warpline/daemon/mcp.token (0600; --mcp refuses non-agent kinds — an
+      agent --mcp` additionally persists the bare token KEYED BY AGENT in
+      .warpline/daemon/mcp-tokens.json ({agentId:token}, 0600; read-merge-write
+      so a second agent's mint COEXISTS with the first — the #1 multi-instance
+      trap fixed: single-value → keyed; --mcp refuses non-agent kinds — an
       ambient MCP process must never hold human capability); mcpAgentToken()
       mirrors the consoleReadToken structural pattern — env WARPLINE_MCP_TOKEN
-      first, else the dedicated file, NEVER daemon-tokens.jsonl (it holds human
-      tokens; one "newest row" bug there is a privilege escalation). No
-      revocation ceremony at stage 1 — rotation = mint anew (documented in the
-      mint help).
+      (raw token, the per-instance mechanism for N concurrent instances), then
+      env WARPLINE_MCP_AGENT (name selector; fails CLOSED if the named agent is
+      absent — never picks another), then the keyed store when it holds exactly
+      one entry, then the legacy mcp.token file (back-compat), NEVER
+      daemon-tokens.jsonl (it holds human tokens; one "newest row" bug there is
+      a privilege escalation). A multi-agent store with no selector fails closed
+      (AUTH refusal) rather than guess an identity. No revocation ceremony at
+      stage 1 — rotation = mint anew (documented in the mint help).
     type: module
     tags: [warpline, native-first, phase-1, security]
 
@@ -2825,8 +2834,10 @@ components:
       [--no-auto-start]`), for agents that call tools rather than shells.
       DELIBERATELY THIN — a credential PASS-THROUGH, never a principal (D2):
       one process holds one human-minted agent-class token (env
-      WARPLINE_MCP_TOKEN → .warpline/daemon/mcp.token via the single custody
-      seam src/mcp/token.ts); the daemon server-stamps identity; args are
+      WARPLINE_MCP_TOKEN → WARPLINE_MCP_AGENT selector → keyed
+      .warpline/daemon/mcp-tokens.json → legacy mcp.token, via the single
+      custody seam src/mcp/token.ts — so N concurrent instances each present
+      their own token); the daemon server-stamps identity; args are
       FILTERED to each verb's declared schema properties so identity/clock
       params structurally never reach the wire. SOCKET-ONLY (D3): every call
       rides DaemonClient — in-process engine imports are PROHIBITED in
@@ -3051,7 +3062,9 @@ components:
       expiry and no revocation (stage-1 deferral) and dest is caller-chosen,
       so a leaked backup was a PERMANENT credential leak. Now: secret-bearing
       BASENAMES are denied at ANY depth (daemon-tokens.jsonl, mcp.token,
-      session-keys.jsonl — the same name-anywhere rule the frozen
+      mcp-tokens.json — the per-agent MCP token map, whose `.json` suffix the
+      `.token` rule cannot see, so it is named explicitly — session-keys.jsonl —
+      the same name-anywhere rule the frozen
       STAKE_DENY_NAMES uses), plus the `*.token` SUFFIX class so the next
       credential sidecar is withheld the day it is written; live-process
       residue stays anchored to its exact path. POSTURE PRESERVED: this is

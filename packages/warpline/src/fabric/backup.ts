@@ -145,8 +145,12 @@ export interface BackupVerifyReport {
  * that could only see depth 1, and a secret is a secret wherever it sits.
  * The complete enumeration of secret-bearing artifacts under `.warpline/`:
  *   - `daemon-tokens.jsonl` — every minted bearer token (tokens.ts tokensPathOf).
- *   - `mcp.token`           — the MCP skin's bearer token, at `daemon/mcp.token`
- *                             (tokens.ts mcpTokenPathOf). THE C-14 miss.
+ *   - `mcp.token`           — the MCP skin's LEGACY single bearer token, at
+ *                             `daemon/mcp.token` (tokens.ts mcpTokenPathOf). THE C-14 miss.
+ *   - `mcp-tokens.json`     — the MCP skin's per-agent bearer-token map, at
+ *                             `daemon/mcp-tokens.json` (tokens.ts mcpTokensPathOf).
+ *                             Holds EVERY agent's MCP token; the `.token` suffix
+ *                             rule below cannot see it (`.json`), so it is named here.
  *   - `session-keys.jsonl`  — no writer exists today; the frozen D5 list already
  *                             names it a bearer secret, so it is denied BEFORE
  *                             it can be written rather than after.
@@ -154,6 +158,7 @@ export interface BackupVerifyReport {
 const EXCLUDED_SECRET_BASENAMES: ReadonlySet<string> = new Set([
   'daemon-tokens.jsonl',
   'mcp.token',
+  'mcp-tokens.json',
   'session-keys.jsonl',
 ]);
 

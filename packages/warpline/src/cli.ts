@@ -765,7 +765,7 @@ program
 
 program
   .command('admit')
-  .description("CYCLE STEP 3 (fork → propose → ADMIT). Judge the agent's SEALED proposal against the live selvage and return the verdict — FAST_ADMIT / CLEAN (+confidence) / KNOT / DANGLE / CLAIM-BREACH (when judged against a --claim) / HELD (an independent-CLEAN into a low-survival symbol, per the grades sidecar). REQUIRES a sealed scratch: run `propose --native` FIRST, or this reports NOOP because there is no proposal to judge. Resolution of a KNOT is human-class — escalate, do not attempt. v1 reports the decision; merged-tree materialization is v2.")
+  .description("CYCLE STEP 3 (fork → propose → ADMIT). Judge the agent's SEALED proposal against the live selvage and return the verdict — FAST_ADMIT / CLEAN (+confidence) / KNOT / DANGLE / CLAIM-BREACH (when judged against a --claim) / HELD (an independent-CLEAN into a low-survival symbol, per the grades sidecar). REQUIRES a sealed scratch: run `propose --native` FIRST, or this reports NOOP because there is no proposal to judge. NATIVE FORM (git-absent, the form the init/propose banners instruct): `warpline admit <agent> --native` — see the --native option below. Resolution of a KNOT is human-class — escalate, do not attempt. v1 reports the decision; merged-tree materialization is v2.")
   .argument('<agentId>', 'the agent whose scratch is being admitted')
   .option('--ref <ref>', 'the agent\'s proposed state (a git ref or WORKTREE)', WORKTREE_REF)
   .option('--claim <claimId>', 'judge this admission against a pre-declared claim (see `warpline propose`) — a breach HOLDS the admit (CLAIM-BREACH)')
@@ -1559,10 +1559,10 @@ const tokenCmd = daemonCmd
 
 tokenCmd
   .command('mint <name>')
-  .description('Mint a bearer token for a principal. kind:agent principals CANNOT resolve knots, cut/recover stakes, or accept-breach/accept-risk (human-class-only overrides). --scope read caps the token at the read-only verbs (status, refs.list, knot.show, grade.report, shadow.tail) — the CONSOLE class: `warpline daemon token mint console --kind human --scope read` is what the platform Warpline section auto-discovers. --mcp additionally writes the bare token to .warpline/daemon/mcp.token (0600) — the MCP skin\'s only file source; agent-kind only. The token prints ONCE — hand it to the agent worktree via env, never commit it. Note: no revocation ceremony exists at stage 1 — rotating means minting anew; old rows stay valid.')
+  .description('Mint a bearer token for a principal. kind:agent principals CANNOT resolve knots, cut/recover stakes, or accept-breach/accept-risk (human-class-only overrides). --scope read caps the token at the read-only verbs (status, refs.list, knot.show, grade.report, shadow.tail) — the CONSOLE class: `warpline daemon token mint console --kind human --scope read` is what the platform Warpline section auto-discovers. --mcp additionally persists the bare token KEYED BY AGENT in .warpline/daemon/mcp-tokens.json (0600); minting a second agent coexists with the first (no clobber), so N concurrent instances each keep a durable token — the MCP skin reads env WARPLINE_MCP_TOKEN, then WARPLINE_MCP_AGENT (name selector), then the keyed store, then the legacy mcp.token file; agent-kind only. The token prints ONCE — hand it to the agent worktree via env, never commit it. Note: no revocation ceremony exists at stage 1 — rotating means minting anew; old rows stay valid.')
   .requiredOption('--kind <kind>', "principal class: 'human' or 'agent'")
   .option('--scope <scope>', "'read' = read-only verb ceiling (console class); omit for the full surface")
-  .option('--mcp', 'also write the token to .warpline/daemon/mcp.token (0600) for the MCP skin — requires --kind agent')
+  .option('--mcp', 'also persist the token KEYED BY AGENT in .warpline/daemon/mcp-tokens.json (0600) for the MCP skin — a second agent coexists with the first (no clobber); requires --kind agent')
   .option('--json', 'emit the minted row as JSON (includes the token — once)')
   .action(async (name: string, options: { kind: string; scope?: string; mcp?: boolean; json?: boolean }) => {
     try {
@@ -1576,14 +1576,38 @@ tokenCmd
       const row = mintToken(root, name, options.kind as 'human' | 'agent', {
         ...(options.scope ? { scope: options.scope as TokenScope } : {}),
       });
-      const mcpPath = options.mcp ? writeMcpTokenFile(root, row.token) : null;
+      // --mcp persists the token KEYED BY AGENT (row.principal) so a second
+      // agent's mint coexists with the first — N concurrent instances each keep
+      // a durable token instead of the last mint clobbering the file.
+      const mcpPath = options.mcp ? writeMcpTokenFile(root, row.token, row.principal) : null;
       if (options.json) {
-        process.stdout.write(JSON.stringify({ ...row, ...(mcpPath ? { mcpTokenFile: mcpPath } : {}) }, null, 2) + '\n');
+        process.stdout.write(
+          JSON.stringify(
+            {
+              ...row,
+              ...(mcpPath
+                ? {
+                    mcpTokenStore: mcpPath,
+                    mcpEnv: { WARPLINE_MCP_TOKEN: row.token },
+                    mcpAgentSelector: { WARPLINE_MCP_AGENT: row.principal },
+                  }
+                : {}),
+            },
+            null,
+            2,
+          ) + '\n',
+        );
       } else {
         process.stdout.write(
           `TOKEN MINTED  ${row.principal}  (kind:${row.kind}${row.scope ? `, scope:${row.scope}` : ''})\n` +
             `  token   ${row.token}\n` +
-            (mcpPath ? `  mcp     written to ${mcpPath} (0600) — the MCP skin reads env WARPLINE_MCP_TOKEN, then this file\n` : '') +
+            (mcpPath
+              ? `  mcp     stored for agent '${row.principal}' in ${mcpPath} (0600, keyed — coexists with other agents)\n` +
+                `  wire    give THIS instance its own token in its MCP server env:\n` +
+                `            WARPLINE_MCP_TOKEN=${row.token}\n` +
+                `          or select this agent by name from the keyed store:\n` +
+                `            WARPLINE_MCP_AGENT=${row.principal}\n`
+              : '') +
             `  shown once here — the row lives at .warpline/daemon-tokens.jsonl (0600, gitignored; never commit or ship it)\n`,
         );
       }
