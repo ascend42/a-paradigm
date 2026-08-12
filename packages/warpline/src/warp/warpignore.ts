@@ -52,6 +52,14 @@ import { matchesReservedName } from './reserved-names.js';
 export const WARPIGNORE_FILE = '.warpignore' as const;
 
 /**
+ * The DEPRECATED legacy alias (ignore-rules.ts owned it first). `.warpignore` is
+ * canonical (TD-2026-08-12-218); when it is absent this file is still read so
+ * existing repos never break — with a one-time deprecation notice (see
+ * `noteWarpignoreDeprecation`). `warpline init` only ever writes `.warpignore`.
+ */
+export const LEGACY_WARPIGNORE_FILE = '.warplineignore' as const;
+
+/**
  * Names skipped at ANY depth regardless of the ignore file, and NOT re-includable
  * by a `!` rule (the floor). Matched through the C-3 normalizer (reserved-names).
  */
@@ -180,19 +188,67 @@ export function parseWarpignore(content: string | null): WarpignoreMatcher {
   };
 }
 
+/** Read a file's content, or null when it is absent / not a regular file / unreadable. */
+function readIfFile(p: string): string | null {
+  try {
+    if (fs.statSync(p).isFile()) return fs.readFileSync(p, 'utf8');
+  } catch {
+    // ENOENT or an unreadable file → null. A missing ignore file never fails a walk.
+  }
+  return null;
+}
+
 /**
  * Load the matcher for a walk rooted at `root`: the built-in defaults plus the
  * root `.warpignore` when present. Reads + parses ONCE; the returned matcher is
  * reused across the whole walk.
+ *
+ * CANONICAL-WITH-LEGACY-FALLBACK: `.warpignore` wins. When it is ABSENT, a legacy
+ * `.warplineignore` is read through THIS handler too, so its rules keep applying
+ * on the native path (existing repos don't break). Only ENLARGES the exclude set
+ * — the superset invariant recover relies on holds. Present `.warpignore` shadows
+ * the legacy file (canonical wins); the legacy alias then only rides the separate
+ * ignore-rules matcher the callers already OR in.
  */
 export function loadWarpignore(root: string): WarpignoreMatcher {
-  const p = path.join(root, WARPIGNORE_FILE);
-  let content: string | null = null;
-  try {
-    if (fs.statSync(p).isFile()) content = fs.readFileSync(p, 'utf8');
-  } catch {
-    // No `.warpignore` (ENOENT) or an unreadable one → defaults only. A missing
-    // ignore file must never fail a snapshot.
-  }
-  return parseWarpignore(content);
+  const primary = readIfFile(path.join(root, WARPIGNORE_FILE));
+  if (primary !== null) return parseWarpignore(primary);
+  const legacy = readIfFile(path.join(root, LEGACY_WARPIGNORE_FILE));
+  return parseWarpignore(legacy); // null → defaults only
+}
+
+/** Which ignore file (if any) governs `root`: canonical, deprecated legacy, or none. */
+export function warpignoreSource(root: string): 'warpignore' | 'legacy' | 'defaults' {
+  if (readIfFile(path.join(root, WARPIGNORE_FILE)) !== null) return 'warpignore';
+  if (readIfFile(path.join(root, LEGACY_WARPIGNORE_FILE)) !== null) return 'legacy';
+  return 'defaults';
+}
+
+/** The deprecation notice text when a legacy `.warplineignore` is in force, else null. */
+export function warpignoreDeprecationNotice(root: string): string | null {
+  return warpignoreSource(root) === 'legacy'
+    ? `warpline: \`${LEGACY_WARPIGNORE_FILE}\` is deprecated — rename it to \`${WARPIGNORE_FILE}\` (the canonical native ignore file). ` +
+        `It is still honored for now; \`warpline init\` writes \`${WARPIGNORE_FILE}\`.`
+    : null;
+}
+
+/** Roots that have already been warned this process (the one-time dedup). */
+const deprecationNotified = new Set<string>();
+
+/**
+ * ONE-TIME-PER-ROOT deprecation notice: returns the text the FIRST time `root`
+ * is on the deprecated legacy alias, null on every subsequent call (and null when
+ * there is no legacy file). Impure BY DESIGN — it holds the dedup state — but it
+ * writes NOTHING: the CALLER emits to stderr, so this module stays console-free.
+ */
+export function noteWarpignoreDeprecation(root: string): string | null {
+  const notice = warpignoreDeprecationNotice(root);
+  if (!notice || deprecationNotified.has(root)) return null;
+  deprecationNotified.add(root);
+  return notice;
+}
+
+/** Test seam: forget which roots have been warned (so the once-guard can be re-exercised). */
+export function __resetWarpignoreDeprecationNotices(): void {
+  deprecationNotified.clear();
 }

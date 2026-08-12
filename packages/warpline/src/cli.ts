@@ -57,6 +57,10 @@ import {
   abandonNative,
 } from './fabric/native.js';
 import { checkHumanClass } from './agent-shell.js';
+import { initWarpline, type InitResult } from './fabric/init.js';
+import { nativeStatus, gitHeadReachable, type DiskHonesty } from './native-status.js';
+import { noteWarpignoreDeprecation } from './warp/warpignore.js';
+import { worktreeChangeCount } from './git/git-exec.js';
 import { createClaim, persistClaim, type CreateClaimInput } from './fabric/claim.js';
 import { resolveKnot } from './fabric/resolve.js';
 import { readKnotPayload, type KnotPayload, type ContestedUnit } from './fabric/knot-payload.js';
@@ -126,13 +130,52 @@ async function gateHumanClass(spec: {
 
 program
   .name('warpline')
-  .description('Warpline — version control for meaning. The Convergence/Divergence Oracle (read-only forecasts) + the native fabric (pick/admit/resolve/restore). Writes .warpline/ only, never git.')
+  .description('Warpline — version control for meaning. START HERE: `warpline init` onboards a project (git optional), then `warpline status` is the manual. The Convergence/Divergence Oracle (read-only forecasts) + the native fabric (fork/propose/admit/resolve/restore). Writes .warpline/ only, never git.')
   .version('0.1.0')
   // D-7: the EXPLICIT root. Registered here so it appears in --help; the value
   // is actually lifted out of argv by extractRootFlag below, which makes it
   // legal in ANY position (commander would otherwise reject it after the
   // subcommand). Precedence: --root > WARPLINE_ROOT > git rev-parse > cwd.
   .option('--root <dir>', `the repository to operate on — overrides git rev-parse and $${ROOT_ENV} (must already exist)`);
+
+/**
+ * The one-time `.warplineignore` deprecation notice, emitted to STDERR (never
+ * stdout, so `--json` stays clean). The handler computes the text + owns the
+ * once-per-root dedup; the CLI is the only thing that writes.
+ */
+function emitWarpignoreDeprecation(root: string): void {
+  const notice = noteWarpignoreDeprecation(root);
+  if (notice) process.stderr.write(notice + '\n');
+}
+
+program
+  .command('init')
+  .description(
+    "ONBOARD a project onto Warpline (native-first — git optional). Seals the genesis fabric (so `status` has a base), writes a starter `.warpignore`, and keeps `.warpline/` out of git. IDEMPOTENT — safe to re-run. Then `warpline status` is the manual; the cycle is fork → propose → admit, and a contested merge (KNOT) needs a human `resolve`.",
+  )
+  .argument('[dir]', 'the project directory to initialize (default: the resolved root)')
+  .option('--json', 'emit the InitResult as JSON')
+  .action(async (dir: string | undefined, options: { json?: boolean }) => {
+    try {
+      // An explicit [dir] names the target directly (like --root); otherwise the
+      // normal root resolution decides. Either way the target must already exist —
+      // init onboards a project, it never conjures the directory.
+      const root = dir ? path.resolve(dir) : await resolveRoot();
+      if (!existsSync(root)) {
+        process.stderr.write(`warpline: init — ${root} does not exist (create the project directory first)\n`);
+        process.exit(1);
+      }
+      const result = await initWarpline(root);
+      emitWarpignoreDeprecation(root);
+      if (options.json) {
+        process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+      } else {
+        printInit(result);
+      }
+    } catch (err) {
+      fail(err);
+    }
+  });
 
 program
   .command('absorb')
@@ -242,7 +285,19 @@ program
   .option('--json', 'emit the full SemDiffReport as JSON')
   .action(async (refA: string | undefined, refB: string | undefined, options: { json?: boolean }) => {
     try {
+      const root = await resolveRoot();
       // no args = WORKTREE vs HEAD; one arg = ref vs HEAD; two args = refA vs refB.
+      const noArgs = !refA && !refB;
+      // NATIVE PATH: no-args (worktree vs base) in a project with no reachable git
+      // — `absorb('HEAD')` shells git and would die "not a repository". Explicit
+      // refs always need git (they ARE git refs); only the worktree default lifts.
+      if (noArgs && !(await gitHeadReachable(root))) {
+        emitWarpignoreDeprecation(root);
+        const report = await nativeStatus(root);
+        if (options.json) process.stdout.write(JSON.stringify(report, null, 2) + '\n');
+        else printSemDiff(report);
+        return;
+      }
       let a: string;
       let b: string;
       if (refA && refB) {
@@ -255,7 +310,11 @@ program
         a = WORKTREE_REF;
         b = 'HEAD';
       }
-      const report = await semanticDiff(a, b);
+      const report: StatusReport = await semanticDiff(a, b);
+      // Byte-honesty on the worktree-vs-HEAD default: a clean meaning diff over
+      // real byte changes must not read as a no-op. Explicit ref↔ref diffs have no
+      // "on disk" — skip. Best-effort: a git failure just omits the layer.
+      if (noArgs) report.onDisk = await gitDiskHonesty(root, report);
       if (options.json) {
         process.stdout.write(JSON.stringify(report, null, 2) + '\n');
       } else {
@@ -277,9 +336,20 @@ program
       // f4Trace verb is `cli:status`, NOT `status`: this is the meaning diff, a
       // different thing from the daemon's cycle-position self-description.
       const root = await resolveRoot();
-      const report = await traceCli(
-        { root, verb: 'cli:status', target: cliTarget({}, { json: options.json }) },
-        () => semanticDiff('HEAD', WORKTREE_REF),
+      // THE DOGFOOD REGRESSION (T-2026-08-12-002): in a project with no reachable
+      // git, `semanticDiff('HEAD', …)` shells `git archive` and dies "not a
+      // repository" — on the very first thing an agent runs. Take the NATIVE path
+      // then: worktree MEANING vs the SELVAGE, git absent. git present ⇒ unchanged.
+      const useNative = !(await gitHeadReachable(root));
+      if (useNative) emitWarpignoreDeprecation(root);
+      const report: StatusReport = await traceCli(
+        { root, verb: 'cli:status', target: cliTarget({}, { json: options.json, native: useNative || undefined }) },
+        async () => {
+          if (useNative) return nativeStatus(root);
+          const r: StatusReport = await semanticDiff('HEAD', WORKTREE_REF);
+          r.onDisk = await gitDiskHonesty(root, r);
+          return r;
+        },
       );
       if (options.json) {
         process.stdout.write(JSON.stringify(report, null, 2) + '\n');
@@ -2008,12 +2078,83 @@ function printFabric(fabric: Strand[], selvage: string | null, max: number): voi
   process.stdout.write(lines.join('\n') + '\n');
 }
 
-function printStatus(r: SemDiffReport): void {
+/** The `warpline init` result + the next-steps an agent needs to start the cycle. */
+function printInit(r: InitResult): void {
   const lines: string[] = [];
-  lines.push('WARPLINE STATUS  (working tree vs HEAD, by MEANING)');
+  lines.push(`WARPLINE INIT  ${r.root}`);
+  if (r.alreadyInitialized) {
+    lines.push('genesis      already initialized — no second genesis sealed');
+  } else {
+    lines.push(`genesis      sealed  ${r.genesisPickId ? short(r.genesisPickId) : '(pending)'}`);
+  }
+  lines.push(`.warpignore  ${r.warpignoreWritten ? 'written (starter with commented examples)' : 'present — left as-is'}`);
+  const gi = r.gitignore;
+  lines.push(
+    `.gitignore   ${
+      gi.action === 'created'
+        ? `created — ${gi.addedLines.join(', ')}`
+        : gi.action === 'appended'
+          ? `appended — ${gi.addedLines.join(', ')}`
+          : gi.action === 'present'
+            ? 'already covers the fabric'
+            : 'skipped (no git here — nothing to defend the fabric from)'
+    }`,
+  );
+  lines.push('');
+  lines.push('You are now tracking with Warpline (native-first — git optional).');
+  lines.push('→ agents: run `warpline status` FIRST — it is the manual (what changed, in MEANING).');
+  lines.push('→ the cycle:  warpline fork <agent>  →  edit  →  warpline propose --agent <agent> --native -m "<why>"  →  warpline admit <agent> --native');
+  lines.push('→ a CONTESTED merge (KNOT) needs a HUMAN:  warpline resolve <agent> -m "<decision>"  (agents escalate, never resolve).');
+  process.stdout.write(lines.join('\n') + '\n');
+}
+
+/**
+ * A SemDiffReport carrying the optional BYTE-HONESTY layer (#native-status): how
+ * much moved on disk that MEANING did not govern. Present on `status` and on the
+ * worktree-default `diff`; a native report also sets `native`.
+ */
+type StatusReport = SemDiffReport & { native?: boolean; onDisk?: DiskHonesty };
+
+/**
+ * The git-path byte-honesty layer: count working-tree changes vs HEAD so a clean
+ * MEANING diff over real byte edits (an asset, a scalar-only const, a doc) never
+ * reads as a no-op. Best-effort — a git failure omits the layer (undefined).
+ */
+async function gitDiskHonesty(root: string, r: SemDiffReport): Promise<DiskHonesty | undefined> {
+  const filesChanged = await worktreeChangeCount({ cwd: root }).catch(() => null);
+  if (filesChanged === null) return undefined;
+  return { filesChanged, byteOnly: filesChanged > 0 && r.changedCount === 0 && r.renamedNoopCount === 0 };
+}
+
+/** The base a status/diff report compares against, for the human header/prose. */
+function baseLabel(r: StatusReport): string {
+  return r.refA === 'HEAD' ? 'HEAD' : r.refA === 'selvage' ? 'the selvage' : r.refA;
+}
+
+/**
+ * The byte-honesty line for a CLEAN meaning diff — surfaced so a byte-only /
+ * scalar-only change is never mistaken for a no-op. Returns the lines to add, or
+ * a single "clean" line when nothing changed on disk either.
+ */
+function honestyLines(r: StatusReport): string[] {
+  const od = r.onDisk;
+  if (od && od.filesChanged > 0) {
+    return [
+      `0 meaning changes, but ${od.filesChanged} file${od.filesChanged === 1 ? '' : 's'} changed on disk ` +
+        `(byte-only / not lifted into meaning).`,
+      `${baseLabel(r)} and the working tree agree in MEANING; those are bytes Warpline does not adjudicate ` +
+        `(assets, configs, docs, or scalar-only edits) — review them, this is NOT a no-op.`,
+    ];
+  }
+  return [`clean — no semantic change (${baseLabel(r)} and the working tree agree in meaning)`];
+}
+
+function printStatus(r: StatusReport): void {
+  const lines: string[] = [];
+  lines.push(`WARPLINE STATUS  (working tree vs ${baseLabel(r)}, by MEANING${r.native ? ' — native, git absent' : ''})`);
   lines.push('');
   if (r.changedCount === 0 && r.renamedNoopCount === 0) {
-    lines.push('clean — no semantic change (HEAD and the working tree agree in meaning)');
+    lines.push(...honestyLines(r));
   } else {
     lines.push(`born            ${r.born.length}`);
     for (const d of r.born) lines.push(`  + ${d.symbol}`);
@@ -2027,7 +2168,10 @@ function printStatus(r: SemDiffReport): void {
     lines.push(`renamed (no meaning change)  ${r.renamedNoop.length}`);
     for (const d of r.renamedNoop) lines.push(`  ↻ ${d.baseSymbol}→${d.symbol}`);
     lines.push('');
-    lines.push(`summary  ${r.changedCount} changed, ${r.renamedNoopCount} renamed-noop`);
+    lines.push(
+      `summary  ${r.changedCount} changed, ${r.renamedNoopCount} renamed-noop` +
+        (r.onDisk ? `  ·  ${r.onDisk.filesChanged} file(s) changed on disk` : ''),
+    );
   }
   process.stdout.write(lines.join('\n') + '\n');
 }
@@ -2313,9 +2457,9 @@ function printConsolidate(f: ConsolidateForecast): void {
   process.stdout.write(lines.join('\n') + '\n');
 }
 
-function printSemDiff(r: SemDiffReport): void {
+function printSemDiff(r: StatusReport): void {
   const lines: string[] = [];
-  lines.push(`SEMANTIC DIFF  ${r.refA}  ⟶  ${r.refB}`);
+  lines.push(`SEMANTIC DIFF  ${r.refA}  ⟶  ${r.refB}${r.native ? '  (native, git absent)' : ''}`);
   lines.push(`states    A=${short(r.stateIds.A)}  B=${short(r.stateIds.B)}`);
   lines.push('');
 
@@ -2343,7 +2487,16 @@ function printSemDiff(r: SemDiffReport): void {
   }
 
   lines.push('');
-  lines.push(`summary  ${r.changedCount} changed, ${r.renamedNoopCount} renamed-noop`);
+  lines.push(
+    `summary  ${r.changedCount} changed, ${r.renamedNoopCount} renamed-noop` +
+      (r.onDisk ? `  ·  ${r.onDisk.filesChanged} file(s) changed on disk` : ''),
+  );
+  // Byte-honesty: a CLEAN meaning diff over real byte changes is NOT a no-op.
+  if (r.onDisk?.byteOnly) {
+    lines.push(
+      `note     0 meaning changes, but ${r.onDisk.filesChanged} file(s) changed on disk (byte-only / not lifted into meaning) — review, this is NOT a no-op.`,
+    );
+  }
   process.stdout.write(lines.join('\n') + '\n');
 }
 
@@ -2548,6 +2701,13 @@ if (runningAsCli()) {
     userArgv = lifted.argv;
   } catch (err) {
     fail(err);
+  }
+
+  // No command → the help screen, whose description points at `init` then
+  // `status` as the starting points (a bare `warpline` should orient, not error).
+  if (userArgv.length === 0) {
+    program.outputHelp();
+    process.exit(0);
   }
 
   program.parseAsync(userArgv, { from: 'user' }).catch((err) => fail(err));

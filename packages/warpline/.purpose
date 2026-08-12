@@ -356,7 +356,13 @@ components:
       COMPOSE (OR) this native matcher OVER the legacy ignore-rules matcher — never
       replace it — so the worktree filter stays a SUPERSET of the ref-snapshot /
       worktree-semantics projection filter (the invariant recover relies on), and
-      `.warpignore` only ever ENLARGES the exclude set. Ignored paths never enter a
+      `.warpignore` only ever ENLARGES the exclude set. CANONICAL-WITH-LEGACY-FALLBACK
+      (T-2026-08-12-002): `.warpignore` is canonical and `warpline init` only ever
+      writes it; when it is ABSENT the deprecated legacy `.warplineignore` is read
+      through THIS handler too (loadWarpignore) so existing repos never break, and
+      `noteWarpignoreDeprecation` returns a one-time-per-root stderr notice the CLI
+      emits on init/status/diff. A present `.warpignore` SHADOWS the legacy alias for
+      this handler (canonical wins). Ignored paths never enter a
       tree, so they never become symbols and never enter the fabric — this is what
       kills the `fork --into <dir-under-repo-root>` phantom-symbol footgun (a nested
       worktree absorbed as `#cfg:wt-*/...` on the next root propose). Pure +
@@ -3285,7 +3291,26 @@ components:
       two args = refA vs refB). Plus `warpline status [--json]` (the working tree's
       MEANING vs HEAD — the named, discoverable form of diff-no-args) and `warpline
       lifeline <symbol> [--max N] [--json]` (meaning-aware blame — who changed a
-      symbol's meaning, when, why; survives renames). Phase-2 WRITE PATH: `warpline
+      symbol's meaning, when, why; survives renames). ONBOARDING + NATIVE STATUS
+      (T-2026-08-12-002, cold-agent dogfood): `warpline init [dir] [--json]`
+      (#warpline-init) is the discoverable onboarding verb — it seals the genesis
+      fabric via the native path (proposeNative → admitNative), writes a starter
+      `.warpignore` (commented examples so the syntax is visible), keeps
+      `.warpline/`+`.warpline-judge/` out of git (.gitignore append-or-create,
+      idempotent), and prints the fork→propose→admit→resolve next-steps; it is
+      idempotent (a second run seals no genesis, duplicates no line). `status`/`diff`
+      take a NATIVE path (#native-status: nativeStatus — worktree MEANING vs the
+      SELVAGE, snapshotDir+absorbTree, no git) when `HEAD` is not git-reachable, so
+      the FIRST thing an agent runs no longer dies `git … not a repository` in a
+      native project; git present ⇒ the git path is unchanged. Both also carry a
+      BYTE-HONESTY layer (DiskHonesty {filesChanged, byteOnly}): a byte-only or
+      scalar-only change that lifts to NO meaning delta prints "0 meaning changes,
+      but N files changed on disk (byte-only / not lifted into meaning)" instead of a
+      bare "clean", so an agent never mistakes real work for a no-op — surface strings
+      only, never a verdict input. A bare `warpline` (no command) prints help pointing
+      at init then status; the legacy `.warplineignore` earns a one-time stderr
+      deprecation notice on these surfaces when `.warpignore` is absent. Pinned by
+      test/init-status-native.test.ts. Phase-2 WRITE PATH: `warpline
       pick [-m <intent>] [--as <actor>] [--confidence <n>] [--ref <ref>] [--quiet]
       [--json]` seals meaning into the fabric (no-op when unchanged; with `--ref
       <commit>` and no -m, intent + actor are derived from the commit), `warpline

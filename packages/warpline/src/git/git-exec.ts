@@ -292,6 +292,18 @@ export async function changedPaths(refA: string, refB: string, opts: GitOptions 
 }
 
 /**
+ * The count of paths that differ between the WORKING TREE and HEAD — tracked
+ * edits/adds/deletes plus untracked files (read-only; `git status --porcelain`).
+ * The byte-honesty number `warpline status`/`diff` prints so a change git sees
+ * but MEANING did not is never read as a no-op. `--no-renames` keeps every record
+ * a single NUL-terminated line, so counting is exact.
+ */
+export async function worktreeChangeCount(opts: GitOptions = {}): Promise<number> {
+  const out = await git(['status', '--porcelain=v1', '-z', '--no-renames'], opts);
+  return out.split('\0').filter((r) => r.length > 0).length;
+}
+
+/**
  * The tree-entry MODE of `filePath` at `ref` (read-only) — the 6-digit git mode
  * (`100644` regular, `100755` executable, `120000` symlink, `160000` gitlink),
  * or `null` when the path is absent at that ref. Used by the merge to 3-way the
