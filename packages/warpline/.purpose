@@ -1383,6 +1383,52 @@ components:
       - "#restore"
       - "#warp-store"
 
+  merge:
+    description: >-
+      The BRANCH-MERGE verb (M2.5 increment 4 — the acceptance-gate increment;
+      TD-2026-08-12-813 spine, TD-2026-08-12-351 fail-closed rule; Arky's design,
+      Jinx's gate) — merge.ts. mergeBranch(root, {into, from}) folds `from` (OURS —
+      the branch being merged) into `into` (THEIRS/selvage role — the integration
+      line advanced). base = #mergebase LCA of (from-tip, into-tip): a CRISS-CROSS
+      ({ambiguous}) fails closed UNSUPPORTED (v1 has no recursive merge — a wrong
+      base is a silently-wrong merge), disjoint roots (null) fail closed
+      INTEGRITY_BROKEN. FAST-FORWARD when into ∈ ancestors(from): advance into's ref
+      to from-tip, no weave strand (mirrors #admit FAST_ADMIT); ALREADY-UP-TO-DATE
+      when from ∈ ancestors(into); an UNBORN into genesis-es at from. Otherwise it
+      calls the SHARED seal core #native-write-path weaveTips with ours=from,
+      theirs=into, base=LCA, targetBranch=into — the SAME engine #admit runs, so
+      disjoint meaning auto-folds CLEAN, same-symbol contradiction KNOTs, and a
+      byte-conflict downgrades to KNOT, all inherited verbatim. THE FAIL-CLOSED
+      RULE (the whole point): merge passes holdOnByteDecided=true, which #admit
+      NEVER sets — after a CLEAN weave that would auto-seal, if ANY changed path is
+      BYTE-DECIDED (#honesty classifyMergePaths — no lens lifted it: a `.js`/cfg
+      config value, a scalar `export const LIMIT=100→50` invariant carrier), the
+      merge does NOT seal. It surfaces a MEANING-BLIND HOLD: status HELD, sealed
+      false, the target ref UNMOVED, meaningBlind.bytePaths names the paths, and the
+      refusal (GATE_REFUSED / verdict HELD / retry-with-override) escalates to a
+      human `--confirm` (acceptMeaningBlind) — human-class to clear, exactly like a
+      KNOT. DERIVED (take-either lockfiles) are deliberately NOT held. This makes
+      merge STRICTLY SAFER than git (git auto-merges disjoint config×code silently).
+      The hold is MERGE-TIME only — #admit's linear path is byte-identical
+      (increment 3 preserved it; weaveTips computes coverage one line earlier now,
+      identical inputs). Attribution: a branch merge has no scratch, so `from`
+      stands in as the ours-side principal (clearScratch of a branch name is a
+      harmless no-op absent a same-named live agent). CLI: `warpline merge <from>
+      [--into <branch>] [--confirm] [--no-restore]` — default into = the current
+      HEAD branch (detached fails closed); verdict-keyed exit. THE ACCEPTANCE GATE:
+      test/merge-falsifier.test.ts drives the two canonical §8 breaks across a real
+      branch merge — (a) config×code and (b) no-shared-token const HOLD; (c) two
+      disjoint lifted functions auto-fold (no over-hold); (d) same-symbol KNOTs.
+      Library code: no console output.
+    type: module
+    components:
+      - "#mergebase"
+      - "#native-write-path"
+      - "#admit"
+      - "#honesty"
+      - "#fabric-refs"
+      - "#head"
+
   anchor:
     description: >-
       The v1-prefix EPOCH ANCHOR (docs/specs/warpline-v1-anchor.md) — closes the

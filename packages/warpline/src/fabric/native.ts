@@ -80,7 +80,7 @@ import { VERB_DESCRIPTORS, nextLegalVerbsFor } from '../daemon/descriptors.js';
 import { readClaim, evaluateClaim, recordClaimEvaluation, createClaim, persistClaim, type Claim, type ClaimEvaluation, type CreateClaimInput } from './claim.js';
 import { readGradeSidecar, symbolSurvivalIndex, evaluateEscalation, recordGradeEscalation } from './grade.js';
 import { hazardAdvisory } from './hazard.js';
-import { refuse, RefusedError, type RefusalNextStep } from './refusal.js';
+import { refuse, RefusedError, type RefusalNextStep, type Refusal } from './refusal.js';
 
 /** The provenance/scratch ref label for an agent (sanitized like scratchPath). */
 export function scratchRefName(agentId: string): string {
@@ -114,13 +114,13 @@ export async function absorbTree(store: ObjectStore, treeId: string, refLabel: s
 
 /* ── helpers over the DAG ────────────────────────────────────────────────────── */
 
-function byPickIndex(fabric: Strand[]): Map<string, Strand> {
+export function byPickIndex(fabric: Strand[]): Map<string, Strand> {
   const m = new Map<string, Strand>();
   for (const s of fabric) if (!m.has(s.pickId)) m.set(s.pickId, s);
   return m;
 }
 
-function mustStrand(byPick: Map<string, Strand>, pickId: string, what: string): Strand {
+export function mustStrand(byPick: Map<string, Strand>, pickId: string, what: string): Strand {
   const s = byPick.get(pickId);
   if (!s) {
     throw new Error(`warpline: ${what} points at ${pickId} but no strand in the fabric carries that pickId (closure hole — repair .warpline/)`);
@@ -458,11 +458,33 @@ export interface AdmitNativeOptions {
    * `refs/heads/<name>` and never the legacy stateId selvage pointer.
    */
   onto?: string;
+  /**
+   * THE FAIL-CLOSED MERGE RULE (M2.5 increment 4, Jinx's gate — TD-2026-08-12-351).
+   * Set true ONLY by `mergeBranch`; `admit` never sets it, so admit's linear
+   * behavior stays byte-identical. When set, a CLEAN weave that would auto-seal is
+   * HELD (not sealed, ref unmoved) if ANY changed path is BYTE-DECIDED — i.e.
+   * meaning contributed nothing to it and could not have judged the change. This
+   * is the branch-merge safety a straight admit does not need: a branch merge folds
+   * two whole lines, so a byte-decided divergence meaning was blind to must not
+   * seal silently — a human confirms it, exactly like a KNOT.
+   */
+  holdOnByteDecided?: boolean;
+  /** Human override for the meaning-blind hold: seal despite byte-decided paths. */
+  acceptMeaningBlind?: boolean;
+  /** The branch being merged (ours) — names the `merge` retry in the hold refusal. */
+  mergeFrom?: string;
 }
 
 export interface AdmitNativeResult extends AdmitResult {
   /** entries restored into the worktree on a CLEAN weave (absent otherwise). */
   restoredEntries?: number;
+  /**
+   * M2.5 increment 4 (merge, G1-additive): the MEANING-BLIND HOLD — present ONLY
+   * when a branch merge's CLEAN weave was HELD because these changed paths were
+   * byte-decided (meaning saw nothing there). A human must confirm the merge
+   * (`--confirm`). Absent on `admit` and on a merge that sealed.
+   */
+  meaningBlind?: { bytePaths: string[] };
 }
 
 /**
@@ -553,7 +575,7 @@ function admitTargetTip(wdir: string, targetBranch: string): string | null {
  * the three DAG positions and the target branch. Internal-only — no CLI/principal
  * surface this increment.
  */
-interface WeaveTipsInput {
+export interface WeaveTipsInput {
   root: string;
   wdir: string;
   store: WarpStore;
@@ -577,6 +599,39 @@ interface WeaveTipsInput {
 }
 
 /**
+ * THE MEANING-BLIND HOLD refusal (M2.5 increment 4, TD-2026-08-12-351). A CLEAN
+ * merge weave whose changed set includes a BYTE-DECIDED path is HELD, because
+ * meaning saw nothing there and cannot vouch for the fold. It is a fail-SAFE hold
+ * (like TRUST_HELD / KNOT): the ref does not move, and a human `--confirm`s the
+ * merge. Built the same way for every merge site — no prose in the verdict; the
+ * byte-decided paths ride `pointers.symbols`, and `next[]` carries the exact
+ * human-class re-run (F4: a cold agent must ESCALATE, never self-confirm).
+ */
+function meaningBlindRefusal(
+  proposedStateId: string,
+  rebasedOnto: string,
+  bytePaths: string[],
+  mergeFrom: string | undefined,
+  into: string,
+): Refusal {
+  return refuse({
+    code: 'GATE_REFUSED',
+    verdict: 'HELD',
+    gate: 'meaning',
+    retriable: 'retry-with-override',
+    pointers: { proposedStateId, rebasedOnto, symbols: bytePaths },
+    next: [
+      {
+        verb: 'merge',
+        params: { ...(mergeFrom ? { from: mergeFrom } : {}), into, confirm: 'true' },
+        requires: mergeFrom ? [] : ['from'],
+        principal: 'human',
+      },
+    ],
+  });
+}
+
+/**
  * THE SHARED SEAL CORE (M2.5 spine, TD-2026-08-12-813). The decision→seal
  * pipeline, factored out of admitNative verbatim so both `admit` (increment 3)
  * and the coming `merge` verb (increment 4) run the SAME steps in the SAME order:
@@ -588,7 +643,7 @@ interface WeaveTipsInput {
  * hardcoded `selvage`, and the legacy stateId selvage pointer (writeSelvage) is
  * written ONLY when the target IS selvage — new branches are refs-only.
  */
-async function weaveTips(input: WeaveTipsInput): Promise<AdmitNativeResultBody> {
+export async function weaveTips(input: WeaveTipsInput): Promise<AdmitNativeResultBody> {
   const {
     root, wdir, store, objStore, opts, now, claim, targetBranch,
     selvageTipId, selvageStrand, selvage, baseStrand, base, scratchTipId, scratchStrand, proposed,
@@ -784,6 +839,39 @@ async function weaveTips(input: WeaveTipsInput): Promise<AdmitNativeResultBody> 
         refusal: meaningRefusal('KNOT', knot, proposed.stateId, opts.agentId, contested.id),
       });
     }
+    // Coverage computed HERE — before any seal — because the meaning-blind hold
+    // (merge only) reads it, and the CLEAN return attaches the SAME value. Admit
+    // sets holdOnByteDecided=false and computes coverage identically from the
+    // identical inputs, so its output stays byte-identical (only the line moved).
+    const coverage = classifyMergePaths(mat.plan.files.keys(), [mat.state, proposed, selvage]);
+
+    // THE FAIL-CLOSED MERGE RULE (Jinx's gate, TD-2026-08-12-351) — merge ONLY.
+    // Meaning said CLEAN and the bytes did NOT overlap, so a straight admit would
+    // seal. But a BRANCH merge folds two whole lines, and a changed path that is
+    // BYTE-DECIDED is one meaning never saw: a config value (`config.js`/cfg
+    // island), a scalar invariant carrier (`export const LIMIT = 100→50`, not
+    // lifted). Auto-folding it would be the exact false-CLEAN the product exists
+    // to refuse — git merges config×code silently; Warpline HOLDS. So: no ref
+    // moves, no write-back, and the verdict names the byte-decided paths and
+    // escalates to a human `--confirm` (like a KNOT). Meaning-DECIDED disjoint
+    // changes still auto-fold below (the value prop is preserved). DERIVED
+    // (take-either lockfiles) are deliberately NOT held — meaning's own contract
+    // is that they regenerate, so a divergence there is not a blind fold.
+    if (opts.holdOnByteDecided && !opts.acceptMeaningBlind) {
+      const bytePaths = coverage.perPath.filter((p) => p.decidedBy === 'byte-decided').map((p) => p.path);
+      if (bytePaths.length > 0) {
+        return withClaim({
+          decision: { ...decision, status: 'HELD' },
+          sealed: false,
+          proposedStateId: proposed.stateId,
+          merged: mat.plan,
+          coverage,
+          meaningBlind: { bytePaths },
+          refusal: meaningBlindRefusal(proposed.stateId, selvage.stateId, bytePaths, opts.mergeFrom, targetBranch),
+        });
+      }
+    }
+
     // C-5 DIRTY-WORKTREE GUARD, and it runs HERE — before a single ledger
     // byte moves. The write-back below used to call restoreTree raw over the
     // WHOLE merged tree (not just the merged paths) into the human's own
@@ -823,7 +911,6 @@ async function weaveTips(input: WeaveTipsInput): Promise<AdmitNativeResultBody> 
     writeRef(wdir, targetBranch, weave.pickId, selvageTipId); // per-ref CAS
     if (targetBranch === DEFAULT_BRANCH) writeSelvage(wdir, mat.state.stateId); // selvage-only legacy pointer
     clearScratch(root, opts.agentId);
-    const coverage = classifyMergePaths(mat.plan.files.keys(), [mat.state, proposed, selvage]);
     // Close the loop (§2.1 step 5): restore the merged bytes back into the
     // agent worktree (overlay semantics) — the agent continues from merged
     // reality. Already cleared by assertDirtyFree above, before the seal.

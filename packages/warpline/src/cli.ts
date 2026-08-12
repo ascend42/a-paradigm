@@ -82,6 +82,8 @@ import {
   type SwitchResult,
   type BranchInfo,
 } from './fabric/branch.js';
+import { mergeBranch, type MergeBranchResult } from './fabric/merge.js';
+import { readHead, DEFAULT_BRANCH } from './fabric/head.js';
 import { stake, stakeRecover, type StakeResult, type StakeRecoverResult } from './fabric/stake.js';
 import { STAKE_MARKER } from './fabric/stake-guard.js';
 import { existsSync } from 'node:fs';
@@ -1216,6 +1218,58 @@ program
     }
   });
 
+program
+  .command('merge')
+  .description(
+    "Merge a branch INTO the current one (M2.5). `warpline merge <from>` folds <from> into the current HEAD branch (or --into <branch>) through the SAME seal core `admit` runs: disjoint meaning auto-folds CLEAN, a same-symbol contradiction KNOTs, a byte-conflict downgrades to KNOT. THE FAIL-CLOSED RULE — a merge that would auto-fold a change MEANING WAS BLIND TO (a byte-decided config value or a scalar `const` invariant) does NOT seal: it HOLDS, names the byte-decided paths, and a human must `--confirm`. That makes merge STRICTLY SAFER than git (git auto-merges disjoint config×code silently). A CLEAN fold is agent-class; a HOLD or KNOT escalates to a human, exactly like admit→resolve. Criss-cross / disjoint roots fail closed.",
+  )
+  .argument('<from>', 'the branch to merge in (ours)')
+  .option('--into <branch>', 'the target branch to advance (default: the current HEAD branch)')
+  .option('--confirm', 'human override: seal a merge that meaning was blind to (byte-decided paths) — like a resolve')
+  .option('--worktree <dir>', 'the worktree for a CLEAN write-back (default: the repo root)')
+  .option('--no-restore', 'do NOT write the merged bytes back into the worktree')
+  .option('--json', 'emit the full merge result as JSON')
+  .action(async (from: string, options: { into?: string; confirm?: boolean; worktree?: string; restore?: boolean; json?: boolean }) => {
+    try {
+      const root = await resolveRoot();
+      // Default `into` = the current HEAD branch. A detached HEAD names no branch
+      // to advance, so a merge there fails closed (mirrors admit's --onto rule).
+      let into = options.into;
+      if (into === undefined) {
+        const head = readHead(root);
+        if (head === null) into = DEFAULT_BRANCH;
+        else if (head.kind === 'branch') into = head.branch;
+        else {
+          process.stderr.write(
+            `warpline: merge — HEAD is detached at ${head.pickId}; there is no current branch to merge into. Pass --into <branch>, or switch onto a branch first.\n`,
+          );
+          process.exit(2);
+        }
+      }
+      const mergeTarget = cliTarget({ from, into }, { confirm: options.confirm, noRestore: options.restore === false });
+      const result = await traceCli(
+        { root, verb: 'merge', target: mergeTarget, principal: from },
+        () =>
+          mergeBranch(root, {
+            from,
+            into: into!,
+            ...(options.confirm ? { acceptMeaningBlind: true } : {}),
+            ...(options.worktree ? { worktree: path.resolve(options.worktree) } : {}),
+            ...(options.restore === false ? { noRestore: true } : {}),
+          }),
+      );
+      if (options.json) {
+        process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+      } else {
+        printMerge(result);
+      }
+      // Verdict-keyed exit (T-2026-07-21-006): a HOLD/KNOT must not exit 0.
+      process.exitCode = exitCodeForResult(result);
+    } catch (err) {
+      fail(err);
+    }
+  });
+
 const objects = program
   .command('objects')
   .description('The native content-addressed object store (byte authority) — the store that lets Warpline reconstruct a working tree with git ABSENT.');
@@ -1935,6 +1989,35 @@ function printSwitch(r: SwitchResult): void {
 
 function printAdmit(agentId: string, r: AdmitResult): void {
   process.stdout.write(admitReportLines(agentId, r).join('\n') + '\n');
+}
+
+function printMerge(r: MergeBranchResult): void {
+  const lines: string[] = [];
+  if (r.alreadyUpToDate) {
+    lines.push(`MERGE  ${r.from} → ${r.into}  already up to date (nothing to fold)`);
+    process.stdout.write(lines.join('\n') + '\n');
+    return;
+  }
+  if (r.fastForward) {
+    lines.push(`MERGE  ${r.from} → ${r.into}  FAST-FORWARD (no weave — ${r.into} advanced to ${short(r.proposedStateId)})`);
+    process.stdout.write(lines.join('\n') + '\n');
+    return;
+  }
+  // THE MEANING-BLIND HOLD — the fail-closed rule fired. Name the byte-decided
+  // paths and say, in the same breath, that meaning did NOT see them.
+  if (r.meaningBlind) {
+    lines.push(`MERGE  ${r.from} → ${r.into}  →  HELD (meaning-blind)`);
+    lines.push(`verdict   the merge would auto-fold changes MEANING DID NOT SEE — a human must confirm this merge`);
+    lines.push(`          these changed paths are BYTE-DECIDED (no lens lifted them; the token merge governed them):`);
+    for (const p of r.meaningBlind.bytePaths) lines.push(`  ⊘ ${p}`);
+    lines.push(`          → warpline merge ${r.from} --into ${r.into} --confirm   (human-class, like resolve)`);
+    lines.push(`          (git auto-merges disjoint config×code silently; Warpline HELD it — nothing sealed, ${r.into} unmoved)`);
+    process.stdout.write(lines.join('\n') + '\n');
+    return;
+  }
+  // Otherwise the shared admit renderer speaks the verdict (CLEAN sealed / KNOT /
+  // DANGLE), so merge and admit describe the SAME engine identically.
+  process.stdout.write(admitReportLines(`${r.from} → ${r.into}`, r).join('\n') + '\n');
 }
 
 /**
