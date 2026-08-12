@@ -43,6 +43,27 @@
  * resets it in place once it passes `LOG_CAP_BYTES` — so an append-per-commit file
  * inside `.git` cannot grow without limit.
  *
+ * ═══ THE PATH-GUESS DEFECT, AND WHY THE FIX IS TO BAKE THE INSTALL-TIME BINARY ═══
+ *
+ * The block above USED to default `WARPLINE_BIN="${WARPLINE_BIN:-warpline}"` — a bare
+ * name resolved off the committing shell's PATH, with the monorepo `dist/cli.js` as
+ * the only fallback. That is the wrong default for the situation the tool is built
+ * for. A cold agent — any provider, no global install — invokes the CLI as
+ * `node /abs/path/dist/cli.js`. That binary IS runnable and IS KNOWN at install time
+ * (it is the process doing the installing), yet the generated hook threw that fact
+ * away and guessed `warpline` off PATH, which the agent does not have. Every commit
+ * then printed SKIPPED and sealed nothing, while `warpline status` said clean.
+ *
+ * The fix: `hook install` captures the EXACT interpreter + CLI entry running it
+ * (`resolveInvokingBinary`) and BAKES those absolute paths into the block as its
+ * DEFAULT seal binary — the hook seals with the same binary that installed it. The
+ * `WARPLINE_BIN` env var remains the explicit escape hatch, and a bare `warpline` on
+ * PATH plus the monorepo `dist/cli.js` remain as last-ditch fallbacks for the case
+ * where the baked binary is later moved or rebuilt away. And if the install cannot
+ * resolve a runnable binary AT ALL (`resolveInvokingBinary` returns null), it FAILS
+ * LOUDLY rather than writing a hook that resolves to nothing — the one refusal that
+ * is on the REAL condition, not a PATH proxy.
+ *
  * Library code: no console output — the CLI prints.
  */
 
@@ -60,6 +81,76 @@ const END = '# <<< warpline auto-seal <<<';
 const LOG_CAP_BYTES = 1_048_576;
 /** Install-time bound: `hook install` keeps at most this much of the log's tail. */
 const LOG_KEEP_BYTES = 65_536;
+
+/**
+ * The two shell variables the block bakes its install-time binary into. `health.ts`
+ * reads them back (`parseBakedBinary`) to answer "will THIS hook actually seal",
+ * which the install-time environment cannot answer on its own — so the names are a
+ * shared operand, not a private literal.
+ */
+export const BAKED_NODE_VAR = '_wl_node';
+export const BAKED_SCRIPT_VAR = '_wl_script';
+
+export interface BakedBinary {
+  /** absolute path to the node interpreter that ran `hook install` (process.execPath). */
+  node: string;
+  /** absolute, symlink-resolved path to the CLI entry script (process.argv[1]). */
+  script: string;
+}
+
+/**
+ * The interpreter + CLI entry RUNNING RIGHT NOW, resolved to absolute paths the
+ * generated hook can bake as its DEFAULT seal binary — so the hook seals with the
+ * SAME binary that installed it, not a bare `warpline` guessed off PATH (which a
+ * cold agent invoking `node /abs/dist/cli.js`, with no global install, never has).
+ *
+ * Returns null when argv/execPath name nothing runnable — the one case `hook
+ * install` must FAIL LOUDLY on rather than write a hook that resolves to nothing.
+ * Parameterised on argv/execPath so the null path is unit-testable without a
+ * subprocess.
+ */
+export function resolveInvokingBinary(
+  argv: readonly string[] = process.argv,
+  execPath: string = process.execPath,
+): BakedBinary | null {
+  const entry = argv[1];
+  if (entry === undefined || entry === '') return null;
+  const runnableFile = (p: string): string | null => {
+    try {
+      const real = fs.realpathSync(p);
+      return fs.statSync(real).isFile() ? real : null;
+    } catch {
+      return null;
+    }
+  };
+  const script = runnableFile(entry);
+  if (script === null) return null;
+  const node = runnableFile(execPath);
+  if (node === null) return null;
+  return { node, script };
+}
+
+/** POSIX single-quote a string so it survives verbatim inside the shell block. */
+function shSingleQuote(s: string): string {
+  return `'${s.replace(/'/g, `'\\''`)}'`;
+}
+
+/**
+ * Read the baked interpreter + script back out of an installed hook's text. Returns
+ * null when the block is absent or either baked line is missing — health treats that
+ * as "this hook cannot resolve through the baked arm" and falls to its fallbacks.
+ */
+export function parseBakedBinary(hookText: string): BakedBinary | null {
+  const grab = (varName: string): string | null => {
+    const m = new RegExp(`^${varName}='(.*)'$`, 'm').exec(hookText);
+    if (m === null) return null;
+    return m[1].replace(/'\\''/g, "'"); // reverse shSingleQuote's escaping
+  };
+  const node = grab(BAKED_NODE_VAR);
+  const script = grab(BAKED_SCRIPT_VAR);
+  if (node === null || script === null) return null;
+  return { node, script };
+}
 
 /**
  * Where the backgrounded seal's output lands: `<git-dir>/warpline-hook.log`, i.e.
@@ -114,11 +205,21 @@ function truncateHookLog(logPath: string): void {
 }
 
 /**
- * The shell block appended to post-commit. Resolves `warpline` on PATH, else a local
- * monorepo build; REPORTS (foreground, stderr) when neither resolves; otherwise seals
- * HEAD in the background — never blocking or failing the commit.
+ * The shell block appended to post-commit. Its DEFAULT seal binary is the one BAKED
+ * at install time (`baked` — the interpreter + CLI that ran `hook install`), so the
+ * hook seals with the same binary that installed it. Resolution precedence mirrors
+ * what `health.hookResolution` reports, exactly:
+ *
+ *   env   — an explicit WARPLINE_BIN override resolves
+ *   baked — the install-time interpreter + script both still exist   ← the default
+ *   path  — a bare `warpline` on the committing shell's PATH
+ *   dist  — the monorepo packages/warpline/dist/cli.js build
+ *   none  — nothing resolves ⇒ a foreground stderr SKIPPED line, non-fatal
+ *
+ * REPORTS (foreground, stderr) when nothing resolves; otherwise seals HEAD in the
+ * background — never blocking or failing the commit.
  */
-function block(): string {
+function block(baked: BakedBinary): string {
   return [
     BEGIN,
     '# Seal each git commit into the Warpline fabric (this project\'s native history).',
@@ -126,22 +227,37 @@ function block(): string {
     '# absorb is slow) so it never delays, blocks, or fails the commit. The binary',
     '# RESOLUTION check is FOREGROUND: an unresolvable binary used to mean the commit',
     '# was silently never sealed while `warpline status` still reported "clean".',
-    'WARPLINE_BIN="${WARPLINE_BIN:-warpline}"',
+    '#',
+    '# _wl_node/_wl_script are BAKED at install: the exact interpreter + CLI that ran',
+    '# `warpline hook install`, so the seal uses the SAME binary — NOT a bare `warpline`',
+    '# off PATH, which a cold agent invoking `node /abs/cli.js` (no global install)',
+    '# never has. Override with WARPLINE_BIN=/path/to/warpline in the committing env;',
+    '# a bare `warpline` on PATH and the monorepo packages/warpline/dist/cli.js remain',
+    '# as last-ditch fallbacks if the baked binary is later moved or rebuilt away.',
+    `${BAKED_NODE_VAR}=${shSingleQuote(baked.node)}`,
+    `${BAKED_SCRIPT_VAR}=${shSingleQuote(baked.script)}`,
     '_wl_gitdir="$(git rev-parse --absolute-git-dir 2>/dev/null || git rev-parse --git-dir 2>/dev/null)"',
     '_wl_log="${_wl_gitdir:-.}/warpline-hook.log"',
-    '_wl_found=no',
-    'if command -v "$WARPLINE_BIN" >/dev/null 2>&1; then',
-    '  _wl_found=yes',
+    '_wl_mode=none',
+    'if [ -n "${WARPLINE_BIN:-}" ]; then',
+    '  # An explicit override is honoured verbatim — resolved or reported, never',
+    '  # silently swapped for the baked binary.',
+    '  if command -v "${WARPLINE_BIN%% *}" >/dev/null 2>&1 || [ -x "${WARPLINE_BIN%% *}" ]; then',
+    '    _wl_mode=env',
+    '  fi',
+    `elif [ -x "$${BAKED_NODE_VAR}" ] && [ -f "$${BAKED_SCRIPT_VAR}" ]; then`,
+    '  _wl_mode=baked',
+    'elif command -v warpline >/dev/null 2>&1; then',
+    '  _wl_mode=path',
     'else',
     '  _wl_root="$(git rev-parse --show-toplevel 2>/dev/null)"',
     '  if [ -n "$_wl_root" ] && [ -f "$_wl_root/packages/warpline/dist/cli.js" ]; then',
-    '    WARPLINE_BIN="node $_wl_root/packages/warpline/dist/cli.js"',
-    '    _wl_found=yes',
+    '    _wl_mode=dist',
     '  fi',
     'fi',
-    'if [ "$_wl_found" = no ]; then',
+    'if [ "$_wl_mode" = none ]; then',
     // The one line the old block could not print. Stderr, foreground, non-fatal.
-    '  echo "warpline: auto-seal SKIPPED — cannot resolve \\"$WARPLINE_BIN\\" (not on PATH, and no packages/warpline/dist/cli.js fallback). This commit was NOT sealed into the fabric; \'warpline status\' will still say clean. Install warpline (or export WARPLINE_BIN=/path/to/warpline) and re-run \'warpline hook install\'." >&2',
+    `  echo "warpline: auto-seal SKIPPED — cannot resolve a warpline binary to seal with (WARPLINE_BIN=\\"\${WARPLINE_BIN:-}\\" unset or unresolvable; baked \\"$${BAKED_NODE_VAR} $${BAKED_SCRIPT_VAR}\\" is gone; no \\\`warpline\\\` on PATH; no packages/warpline/dist/cli.js fallback). This commit was NOT sealed into the fabric; \\\`warpline status\\\` will still say clean. Re-run \\\`warpline hook install\\\` from a reachable warpline, or export WARPLINE_BIN=/path/to/warpline." >&2`,
     'else',
     // Runtime ceiling — the log is appended to on every commit, so it needs a bound
     // that does not depend on anyone re-running `hook install`. Reset in place (not
@@ -152,8 +268,15 @@ function block(): string {
     // Forward WARPLINE_AGENT_ID as --agent when set (per-agent worktree ⇒ attributed
     // seal); ${VAR:+…} expands to nothing when unset, so the anonymous case is unchanged.
     // Output goes to the LOG, not /dev/null: a backgrounded failure must leave evidence.
+    // The baked arm invokes node + script FULLY QUOTED, so an install path with spaces
+    // is sealed correctly; the override/path/dist arms keep the historical word-split form.
     '  ( { echo "--- $(date -u +%Y-%m-%dT%H:%M:%SZ) post-commit $(git rev-parse --short HEAD 2>/dev/null)"',
-    '      $WARPLINE_BIN pick --ref HEAD --quiet ${WARPLINE_AGENT_ID:+--agent "$WARPLINE_AGENT_ID"}',
+    '      case "$_wl_mode" in',
+    '        env)   $WARPLINE_BIN pick --ref HEAD --quiet ${WARPLINE_AGENT_ID:+--agent "$WARPLINE_AGENT_ID"} ;;',
+    `        baked) "$${BAKED_NODE_VAR}" "$${BAKED_SCRIPT_VAR}" pick --ref HEAD --quiet \${WARPLINE_AGENT_ID:+--agent "$WARPLINE_AGENT_ID"} ;;`,
+    '        path)  warpline pick --ref HEAD --quiet ${WARPLINE_AGENT_ID:+--agent "$WARPLINE_AGENT_ID"} ;;',
+    '        dist)  node "$_wl_root/packages/warpline/dist/cli.js" pick --ref HEAD --quiet ${WARPLINE_AGENT_ID:+--agent "$WARPLINE_AGENT_ID"} ;;',
+    '      esac',
     '      echo "    exit=$?"',
     '    } >>"$_wl_log" 2>&1 || true ) &',
     'fi',
@@ -245,6 +368,13 @@ export function hookRemedy(root: string): string {
  *
  * So the install SUCCEEDS (it did — the block is on disk) and says plainly that
  * the binary it can see does not resolve, with the command that fixes it.
+ *
+ * SINCE THE BAKING CHANGE: `hook install` now bakes the RUNNING binary as the block's
+ * default, so at install the resolution is always 'baked' (or 'env-bin') and this
+ * advice is silent. It is retained as a pure classifier of what a given resolution
+ * warrants — and `hook install` additionally FAILS LOUDLY when it cannot resolve the
+ * running binary at all (`resolveInvokingBinary` → null), which is a REAL condition,
+ * not the PATH proxy this function's four points argue against refusing on.
  */
 export function hookInstallAdvice(root: string, res: { bin: string; arm: HookArm; resolved: string | null }): string | null {
   if (res.arm === 'none') {
@@ -309,22 +439,40 @@ export function hookStatus(hookPath: string): HookStatus {
 /**
  * Install (or refresh) the warpline auto-seal block. Idempotent.
  *
+ * `baked` is the interpreter + CLI to bake as the block's default seal binary —
+ * defaults to the RUNNING process (`resolveInvokingBinary`), so the hook seals with
+ * the same binary that installed it. Passing an explicit value is for tests and for
+ * a caller that has already resolved it. THROWS when `baked` is null: a hook baked
+ * with no binary would resolve to nothing and seal silently, which is the entire
+ * defect this module exists to prevent — so the failure is loud, not written to disk.
+ *
  * Also bounds `<git-dir>/warpline-hook.log` — the block appends to it on every
  * commit, so the one moment we are certainly running is the right moment to cap it.
  */
-export function installHook(hookPath: string): { created: boolean; refreshed: boolean } {
+export function installHook(
+  hookPath: string,
+  baked: BakedBinary | null = resolveInvokingBinary(),
+): { created: boolean; refreshed: boolean } {
+  if (baked === null) {
+    throw new Error(
+      'warpline: cannot resolve the running warpline binary to bake into the auto-seal hook ' +
+        '(process.argv named no runnable CLI entry). Refusing to install a hook that would resolve ' +
+        'to nothing and seal silently — invoke via `node /absolute/path/to/warpline/dist/cli.js hook install` ' +
+        'or a real `warpline` executable.',
+    );
+  }
   fs.mkdirSync(path.dirname(hookPath), { recursive: true });
   truncateHookLog(hookLogPath(hookPath));
   const existing = readHook(hookPath);
   if (existing === null) {
-    fs.writeFileSync(hookPath, `#!/bin/sh\n${block()}\n`, 'utf8');
+    fs.writeFileSync(hookPath, `#!/bin/sh\n${block(baked)}\n`, 'utf8');
     fs.chmodSync(hookPath, 0o755);
     return { created: true, refreshed: false };
   }
   const hadBlock = existing.includes(BEGIN);
   const base = stripBlock(existing).replace(/\n+$/, '\n');
   const withShebang = base.startsWith('#!') ? base : `#!/bin/sh\n${base}`;
-  fs.writeFileSync(hookPath, `${withShebang.replace(/\n+$/, '\n')}\n${block()}\n`, 'utf8');
+  fs.writeFileSync(hookPath, `${withShebang.replace(/\n+$/, '\n')}\n${block(baked)}\n`, 'utf8');
   fs.chmodSync(hookPath, 0o755);
   return { created: false, refreshed: hadBlock };
 }

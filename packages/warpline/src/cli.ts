@@ -42,7 +42,7 @@ import type { WarpState } from './warp/warp-state.js';
 import { recordPick, type PickResult } from './fabric/pick.js';
 import { warplineDirOf, readSelvage, readFabric } from './fabric/fabric.js';
 import type { Strand } from './fabric/strand.js';
-import { installHook, uninstallHook, hookStatus, hookInstallAdvice } from './fabric/hook.js';
+import { installHook, uninstallHook, hookStatus, resolveInvokingBinary } from './fabric/hook.js';
 import { forkScratch } from './fabric/scratch.js';
 import { admit, type AdmitResult } from './fabric/admit.js';
 import { exitCodeForResult, exitCodeFor, RefusedError } from './fabric/refusal.js';
@@ -73,7 +73,7 @@ import { STAKE_MARKER } from './fabric/stake-guard.js';
 import { existsSync } from 'node:fs';
 import { gitPath } from './git/git-exec.js';
 import { resolveRoot, setExplicitRoot, extractRootFlag, ROOT_ENV, type RootArm } from './root.js';
-import { health, healthExitCode, hookResolution, type HealthReport } from './health.js';
+import { health, healthExitCode, type HealthReport } from './health.js';
 import { startDaemon } from './daemon/server.js';
 import { mintToken, listTokenSummaries, writeMcpTokenFile, type TokenScope } from './daemon/tokens.js';
 import { runMcpServer } from './mcp/server.js';
@@ -439,16 +439,29 @@ program
           );
           process.exit(1);
         }
-        const r = installHook(hookPath);
+        // Capture the ACTUAL binary running this install and bake it into the hook,
+        // so the seal uses the same binary that installed it — not a bare `warpline`
+        // guessed off the committing shell's PATH (which a cold agent that ran us as
+        // `node /abs/cli.js`, with no global install, never has). If we cannot resolve
+        // a runnable binary AT ALL, FAIL LOUDLY rather than write a hook that silently
+        // no-ops — the one refusal on the REAL condition, not a PATH proxy.
+        const baked = resolveInvokingBinary();
+        if (baked === null) {
+          process.stderr.write(
+            `warpline: refusing to install the auto-seal hook — could not resolve the warpline binary ` +
+              `running this install to bake into it (process.argv named no runnable CLI entry). A hook baked ` +
+              `with no binary would resolve to nothing and seal every commit silently. Invoke via ` +
+              `\`node /absolute/path/to/warpline/dist/cli.js hook install\` or a real \`warpline\` executable.\n`,
+          );
+          process.exit(1);
+        }
+        const r = installHook(hookPath, baked);
         const verb = r.created ? 'created' : r.refreshed ? 'refreshed' : 'appended to existing hook';
         process.stdout.write(
-          `HOOK  auto-seal ${verb}\n  ${hookPath}\n  every git commit now seals --ref HEAD into the fabric (never blocks the commit).\n`,
+          `HOOK  auto-seal ${verb}\n  ${hookPath}\n  every git commit now seals --ref HEAD into the fabric, ` +
+            `using the baked binary \`${baked.node} ${baked.script}\` (never blocks the commit).\n` +
+            `  override at commit time with WARPLINE_BIN=/path/to/warpline; verify with \`warpline health\`.\n`,
         );
-        // WARN LOUDLY, DO NOT REFUSE (finding C2) — the argument is in
-        // hookInstallAdvice's docstring, which is also where the text lives so it
-        // is testable without spawning a CLI. Exit stays 0: the install succeeded.
-        const advice = hookInstallAdvice(root, hookResolution(root));
-        if (advice !== null) process.stderr.write(advice);
       } else if (action === 'uninstall') {
         const r = uninstallHook(hookPath);
         process.stdout.write(r.removed ? `HOOK  auto-seal removed\n  ${hookPath}\n` : `HOOK  not installed — nothing to remove\n`);
@@ -2099,9 +2112,11 @@ function printHealth(h: HealthReport): void {
   L.push('');
   L.push(`HOOK       block      ${h.hook.state}${h.hook.hookPath ? `  ${h.hook.hookPath}` : ''}`);
   L.push(
-    `           resolves   ${h.hook.arm === 'none' ? 'NOTHING — every commit runs it, it fails, `|| true` hides it' : `${h.hook.arm} → ${h.hook.resolved}`}`,
+    `           resolves   ${h.hook.arm === 'none' ? 'NOTHING — every commit prints SKIPPED and seals nothing' : `${h.hook.arm} → ${h.hook.resolved}`}`,
   );
-  if (h.hook.arm !== 'path') L.push(`           (\`${h.hook.bin}\` is not on PATH)`);
+  if (h.hook.arm === 'dist' || h.hook.arm === 'none') {
+    L.push(`           (\`${h.hook.bin}\` is not on PATH; the baked install-time binary did not resolve)`);
+  }
 
   L.push('');
   const cf = h.adjudication.counterfactual;

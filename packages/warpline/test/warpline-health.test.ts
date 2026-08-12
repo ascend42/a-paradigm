@@ -55,7 +55,26 @@ import * as fsp from 'node:fs/promises';
 import { recordPick } from '../src/fabric/pick.js';
 import { forkScratch } from '../src/fabric/scratch.js';
 import { shadowAdmit, appendShadowVerdict, type ShadowVerdictRow } from '../src/fabric/shadow.js';
-import { installHook, hookRemedy, hookInstallAdvice } from '../src/fabric/hook.js';
+import {
+  installHook,
+  hookRemedy,
+  hookInstallAdvice,
+  BAKED_NODE_VAR,
+  BAKED_SCRIPT_VAR,
+  type BakedBinary,
+} from '../src/fabric/hook.js';
+
+/**
+ * A baked binary whose interpreter + script do NOT exist, so the block's DEFAULT
+ * (baked) arm cannot resolve. Installing with this forces the FALLBACK arms
+ * (env / path / dist / none) to be the ones under test — the arms that mattered
+ * before baking existed. Without it, `installHook` bakes the running vitest binary,
+ * which resolves through the 'baked' arm and masks every fallback.
+ */
+const GONE_BAKED: BakedBinary = {
+  node: path.join(os.tmpdir(), 'warpline-no-such-node-9f3c1e'),
+  script: path.join(os.tmpdir(), 'warpline-no-such-cli-9f3c1e.js'),
+};
 import { migrateSelvageToRefs } from '../src/fabric/refs.js';
 import { warplineDirOf } from '../src/fabric/fabric.js';
 import {
@@ -198,57 +217,66 @@ describe('#warpline-health — writes nothing', () => {
 
 describe('#warpline-health — hook reachability (the silent-failure check)', () => {
   /**
-   * WHY THIS PARSES INSTEAD OF SEARCHING (finding A2).
+   * WHY THIS PARSES INSTEAD OF SEARCHING (finding A2), NOW OVER THE BAKED BLOCK.
    *
-   * The predecessor asserted that health's three literals appeared SOMEWHERE in
-   * the text `installHook` writes, and an independent verifier proved it vacuous
-   * with two mutations of hook.ts that it survived GREEN:
+   * health can no longer be pinned to a single `${WARPLINE_BIN:-warpline}` default —
+   * that default WAS the bug (a bare PATH guess a cold agent never has). The block's
+   * default is now the BAKED interpreter + script, and `command -v warpline` is only
+   * a fallback arm. But the anti-vacuity discipline is unchanged: assert against the
+   * RESOLUTION OPERANDS on the block's EXECUTABLE lines (comments and the advice
+   * `echo` — which NAME every constant — are filtered out), so deleting an arm fails
+   * on a count of zero rather than passing on a leftover mention in prose.
    *
-   *   (i)  default bin `warpline` → `wl` AND env var `WARPLINE_BIN` → `WL_BIN`
-   *   (ii) the ENTIRE dist-fallback arm deleted
-   *
-   * `warpline` occurs on eight lines of the generated block, `WARPLINE_BIN` on
-   * five and the dist path on three — in prose comments and in the operator-advice
-   * `echo`. So containment was satisfied by the block's DOCUMENTATION of itself,
-   * not by the block. The ordering guard failed the same way: `indexOf` over the
-   * whole text found the surviving copy inside the advice string, so it held even
-   * with the arm it was ordering against gone.
-   *
-   * The fix asserts against the RESOLUTION OPERANDS — the shell variable the block
-   * assigns and defaults, the operand `command -v` actually tests, the operand the
-   * dist `[ -f … ]` actually tests, and the `node <dist>` value the winning
-   * fallback assigns (which is verbatim what health reports as `resolved`). Each
-   * must occur EXACTLY ONCE among the block's EXECUTABLE lines, so deleting an arm
-   * fails on a count of zero instead of passing on a leftover mention.
+   * The operands, in the block's own precedence order:
+   *   • the BAKED default — `_wl_node=` / `_wl_script=` assignments, tested by
+   *     `[ -x "$_wl_node" ] && [ -f "$_wl_script" ]` (this is what health's 'baked'
+   *     arm reads back via `parseBakedBinary`);
+   *   • the env override `command -v "${WARPLINE_BIN%% *}"` — operand is HOOK_BIN_ENV;
+   *   • the bare-name fallback `command -v warpline` — operand is HOOK_DEFAULT_BIN;
+   *   • the dist fallback `[ -f "$_wl_root/<HOOK_DIST_FALLBACK>" ]`.
    */
-  it("health's three constants are bound to the hook's RESOLUTION OPERANDS, not to its prose", async () => {
+  it("the block's default is the BAKED binary, and health's constants are bound to its fallback operands", async () => {
     const dir = await tmpdir('warpline-health-hooktext-');
     const hookPath = path.join(dir, 'post-commit');
-    installHook(hookPath);
+    const baked = { node: path.join(dir, 'node-xyz'), script: path.join(dir, 'cli-xyz.js') };
+    installHook(hookPath, baked);
     const lines = shellLines(fs.readFileSync(hookPath, 'utf8').split('\n'));
 
-    // 1. THE DEFAULTING ASSIGNMENT — `WARPLINE_BIN="${WARPLINE_BIN:-warpline}"`.
-    //    Both names health replicates are operands here: the variable the block
-    //    resolves through, and the bare name it falls back to.
-    const DEFAULTING = /^([A-Za-z_]\w*)="\$\{([A-Za-z_]\w*):-([^}]*)\}"$/;
-    const defaulting = lines.filter((l) => DEFAULTING.test(l));
-    expect(defaulting, `expected exactly one \${VAR:-default} assignment, got ${JSON.stringify(defaulting)}`).toHaveLength(1);
-    const [, assignedVar, defaultedFrom, defaultName] = DEFAULTING.exec(defaulting[0])!;
-    expect(assignedVar).toBe(HOOK_BIN_ENV);
-    expect(defaultedFrom).toBe(HOOK_BIN_ENV);
-    expect(defaultName).toBe(HOOK_DEFAULT_BIN);
+    // 0. THE FIX ITSELF: the block MUST NOT default WARPLINE_BIN to the bare name.
+    //    `${WARPLINE_BIN:-warpline}` is precisely the defect — its absence is the fix.
+    const bareDefault = lines.filter((l) => /^WARPLINE_BIN="\$\{WARPLINE_BIN:-warpline\}"$/.test(l));
+    expect(bareDefault, 'the bare-`warpline` PATH-guess default is the bug and must be gone').toHaveLength(0);
 
-    // 2. THE PATH PROBE — the operand of `command -v` must be the variable health
-    //    reads, or health is probing a name the hook never resolves through.
-    const probes = lines.filter((l) => l.includes('command -v'));
-    expect(probes, `expected exactly one \`command -v\` probe, got ${JSON.stringify(probes)}`).toHaveLength(1);
-    const probeOperand = /command -v\s+"?\$\{?([A-Za-z_]\w*)\}?"?/.exec(probes[0]);
-    expect(probeOperand, `unparseable \`command -v\` operand in: ${probes[0]}`).not.toBeNull();
-    expect(probeOperand![1]).toBe(HOOK_BIN_ENV);
+    // 1. THE BAKED DEFAULT — the two assignments health reads back through
+    //    `parseBakedBinary`, tested by the block's `[ -x … ] && [ -f … ]`. These are
+    //    the operands of the arm that now resolves in the common cold-agent case.
+    const nodeAssign = lines.filter((l) => l.startsWith(`${BAKED_NODE_VAR}=`));
+    const scriptAssign = lines.filter((l) => l.startsWith(`${BAKED_SCRIPT_VAR}=`));
+    expect(nodeAssign, `expected exactly one ${BAKED_NODE_VAR}= assignment`).toHaveLength(1);
+    expect(scriptAssign, `expected exactly one ${BAKED_SCRIPT_VAR}= assignment`).toHaveLength(1);
+    // and they carry the ABSOLUTE paths passed at install, single-quoted verbatim.
+    expect(nodeAssign[0]).toBe(`${BAKED_NODE_VAR}='${baked.node}'`);
+    expect(scriptAssign[0]).toBe(`${BAKED_SCRIPT_VAR}='${baked.script}'`);
+    // the baked arm's runtime test names BOTH baked operands
+    const bakedTest = lines.filter(
+      (l) => l.includes(`-x "$${BAKED_NODE_VAR}"`) && l.includes(`-f "$${BAKED_SCRIPT_VAR}"`),
+    );
+    expect(bakedTest, 'the baked arm must test both `-x $_wl_node` and `-f $_wl_script`').toHaveLength(1);
 
-    // 3. THE DIST EXISTENCE TEST, by the operand of `[ -f … ]`. The block contains
-    //    a SECOND file test (the hook log), so this is a filter over operands and
-    //    not a search for the string: deleting the fallback arm makes it ZERO.
+    // 2. THE ENV-OVERRIDE PROBE — its operand is the variable health reads.
+    const envProbe = lines.filter((l) => l.includes('command -v') && l.includes(HOOK_BIN_ENV));
+    expect(envProbe, `expected one env-override \`command -v\` naming ${HOOK_BIN_ENV}`).toHaveLength(1);
+
+    // 3. THE BARE-NAME FALLBACK PROBE — operand is HOOK_DEFAULT_BIN (`warpline`).
+    //    A distinct executable line from the env probe: exactly two `command -v`.
+    const allProbes = lines.filter((l) => l.includes('command -v'));
+    expect(allProbes, `expected exactly two \`command -v\` probes, got ${JSON.stringify(allProbes)}`).toHaveLength(2);
+    const bareProbe = lines.filter((l) => new RegExp(`command -v\\s+${HOOK_DEFAULT_BIN}\\b`).test(l));
+    expect(bareProbe, `expected one bare \`command -v ${HOOK_DEFAULT_BIN}\``).toHaveLength(1);
+
+    // 4. THE DIST EXISTENCE TEST, by the operand of `[ -f … ]`. The block has other
+    //    `[ -f … ]` tests (the hook log, the baked script), so this is a filter over
+    //    operands: deleting the dist arm makes the count ZERO, not a prose match.
     const fileTests = lines.flatMap((l, i) =>
       [...l.matchAll(/\[\s+-f\s+"([^"]+)"\s+\]/g)].map((m) => ({ line: i, operand: m[1] })),
     );
@@ -258,19 +286,11 @@ describe('#warpline-health — hook reachability (the silent-failure check)', ()
       `no \`[ -f … ]\` operand ends with ${HOOK_DIST_FALLBACK}; the block's file tests were ${JSON.stringify(fileTests)}`,
     ).toHaveLength(1);
 
-    // 4. WHAT THE FALLBACK ARM ASSIGNS is verbatim what health reports as
-    //    `resolved` for arm 'dist' (`node ${root}/${HOOK_DIST_FALLBACK}`).
-    const DIST_ASSIGN = /^([A-Za-z_]\w*)="node \$([A-Za-z_]\w*)\/(.+)"$/;
-    const distAssign = lines.filter((l) => DIST_ASSIGN.test(l));
-    expect(distAssign, `expected exactly one \`node <dist>\` assignment, got ${JSON.stringify(distAssign)}`).toHaveLength(1);
-    const [, distVar, , distRelPath] = DIST_ASSIGN.exec(distAssign[0])!;
-    expect(distVar).toBe(HOOK_BIN_ENV);
-    expect(distRelPath).toBe(HOOK_DIST_FALLBACK);
-
-    // 5. ORDERING, over EXECUTABLE LINE INDICES — PATH probe first, dist second.
-    //    The predecessor compared `indexOf` over the raw text, which is why it
-    //    survived deleting the very arm it claimed to be ordering against.
-    expect(lines.indexOf(probes[0])).toBeLessThan(distTests[0].line);
+    // 5. ORDERING, over EXECUTABLE LINE INDICES — the precedence health mirrors:
+    //    env override, then baked default, then bare-name fallback, then dist.
+    expect(lines.indexOf(envProbe[0])).toBeLessThan(lines.indexOf(bakedTest[0]));
+    expect(lines.indexOf(bakedTest[0])).toBeLessThan(lines.indexOf(bareProbe[0]));
+    expect(lines.indexOf(bareProbe[0])).toBeLessThan(distTests[0].line);
   });
 
   /**
@@ -304,7 +324,11 @@ describe('#warpline-health — hook reachability (the silent-failure check)', ()
     await repo.write('src/tight.ts', TIGHT('1'));
     await repo.commitAll('base');
     await recordPick(repo.dir, { cwd: repo.dir, ref: 'base', intent: 'genesis' });
-    installHook(path.join(repo.dir, '.git', 'hooks', 'post-commit'));
+    // Bake a binary that does NOT exist, so the block's default (baked) arm cannot
+    // resolve either — arm 'none' now requires the baked binary gone AS WELL AS no
+    // `warpline` on PATH and no dist. (A hook baked with the running binary would
+    // resolve via the 'baked' arm; that is exactly the cold-agent fix.)
+    installHook(path.join(repo.dir, '.git', 'hooks', 'post-commit'), GONE_BAKED);
 
     const savedPath = process.env.PATH;
     process.env.PATH = pathWithout(await tmpdir('warpline-health-nowl-')); // git yes, `warpline` no
@@ -325,7 +349,8 @@ describe('#warpline-health — hook reachability (the silent-failure check)', ()
     await repo.write('src/tight.ts', TIGHT('1'));
     await repo.commitAll('base');
     await recordPick(repo.dir, { cwd: repo.dir, ref: 'base', intent: 'genesis' });
-    installHook(path.join(repo.dir, '.git', 'hooks', 'post-commit'));
+    // Baked binary gone, so the block falls through to the bare-`warpline`-on-PATH arm.
+    installHook(path.join(repo.dir, '.git', 'hooks', 'post-commit'), GONE_BAKED);
 
     const bin = await tmpdir('warpline-health-bin-');
     const shim = path.join(bin, HOOK_DEFAULT_BIN);
@@ -369,8 +394,9 @@ describe('#warpline-health — hook reachability (the silent-failure check)', ()
     await repo.write('src/tight.ts', TIGHT('1'));
     await repo.commitAll('base');
     await recordPick(repo.dir, { cwd: repo.dir, ref: 'base', intent: 'genesis' });
-    installHook(path.join(repo.dir, '.git', 'hooks', 'post-commit'));
-    // the exact path the hook's second arm names, relative to the repo root
+    // Baked binary gone and no `warpline` on PATH, so the monorepo dist arm wins.
+    installHook(path.join(repo.dir, '.git', 'hooks', 'post-commit'), GONE_BAKED);
+    // the exact path the hook's dist arm names, relative to the repo root
     const dist = path.join(repo.dir, HOOK_DIST_FALLBACK);
     fs.mkdirSync(path.dirname(dist), { recursive: true });
     fs.writeFileSync(dist, '// build artifact\n');
@@ -482,7 +508,7 @@ describe('#warpline-health — the hook remedy is DERIVED FROM DISK (finding C2)
     await repo.write('src/tight.ts', TIGHT('1'));
     await repo.commitAll('base');
     await recordPick(repo.dir, { cwd: repo.dir, ref: 'base', intent: 'genesis' });
-    installHook(path.join(repo.dir, '.git', 'hooks', 'post-commit'));
+    installHook(path.join(repo.dir, '.git', 'hooks', 'post-commit'), GONE_BAKED);
 
     const savedPath = process.env.PATH;
     process.env.PATH = pathWithout(await tmpdir('warpline-remedy-nowl-'));

@@ -43,6 +43,7 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { loadIgnoreMatcher } from '../warp/ignore-rules.js';
+import { loadWarpignore } from '../warp/warpignore.js';
 
 /**
  * Directory names no lens descends into, in ANY project. Dependency trees and
@@ -80,7 +81,14 @@ export async function enumerateLensFiles(
   accept: FileFilter,
   extraSkipDirs: ReadonlySet<string> = new Set(),
 ): Promise<string[]> {
-  const ignored = loadIgnoreMatcher(rootDir);
+  // Warpline's NATIVE `.warpignore` (TD-2026-08-12-218) composed with the legacy
+  // `.warplineignore`/`.gitignore` matcher — the SAME superset the worktree
+  // snapshot uses (snapshot.ts worktreeIgnoreMatcher), so what a lens lifts and
+  // what a snapshot seals stay in agreement (and fork --into's nested-worktree
+  // phantom-symbol footgun is skipped the moment it is listed in `.warpignore`).
+  const warp = loadWarpignore(rootDir);
+  const legacy = loadIgnoreMatcher(rootDir);
+  const ignored = (rel: string, isDir: boolean): boolean => warp.isIgnored(rel, isDir) || legacy(rel, isDir);
   const out: string[] = [];
 
   const walk = async (dir: string): Promise<void> => {

@@ -158,7 +158,12 @@ components:
       T-2026-07-17-007) —
       so dependency trees and secrets never enter the permanent no-gc store;
       ignored dirs are PRUNED (no re-inclusion inside an excluded dir, gitignore
-      parity). Every reserved-name decision — the snapshotDir/ref-walk filters AND
+      parity). NATIVE IGNORE (TD-2026-08-12-218): snapshotDir's
+      worktreeIgnoreMatcher COMPOSES #warpignore (`.warpignore` + the
+      `.git`/`.warpline`/`.warpline-judge`/`node_modules` defaults — governs skips
+      with git ABSENT) OVER the legacy ignore-rules matcher, so the worktree filter
+      is a SUPERSET of the ref/projection filter (the recover invariant) and the
+      absorb it feeds can never lift an ignored path as a symbol. Every reserved-name decision — the snapshotDir/ref-walk filters AND
       restoreTree's refusal — goes through #reserved-names, so the two can never
       disagree (a tree that could be sealed but never restored is the T-033
       asymmetry). THE TREE SEMANTICS DECISION (T-2026-07-18-005; fixes the F3 drill-#1
@@ -332,6 +337,36 @@ components:
     type: module
     tags: [durability, soundness-audit, C-7, C-15]
 
+  warpignore:
+    description: >-
+      Warpline's OWN, git-INDEPENDENT ignore mechanism (warp/warpignore.ts;
+      T-2026-08-12-002, founder correction TD-2026-08-12-218). A native-first tool
+      that "never touches git" cannot govern its own skips through git's
+      `.gitignore` — so Warpline owns the `.warpignore` file + a pure hand-rolled
+      gitignore-style handler (no third-party matcher on the native path).
+      loadWarpignore(root) reads `<root>/.warpignore` (v1: root-level only) and
+      returns a WarpignoreMatcher with isIgnored(relPath, isDir?); parseWarpignore
+      is the pure content seam. Syntax: `#` comments + blank lines skipped, `!`
+      negation (last match wins), trailing `/` = dir-only, `*`/`**`/`?` globs,
+      leading (or non-trailing) `/` = root-anchored else any-depth. BUILT-IN
+      DEFAULTS, always ignored at any depth and NOT un-negatable by a stray `!`:
+      `.git`, `.warpline`, `.warpline-judge` (the Judge's witness/sandbox dir) and
+      `node_modules` — matched through #reserved-names so `.GIT`/`GIT~1` spellings
+      are covered too. WIRING: #snapshot's worktreeIgnoreMatcher and #lens-walk
+      COMPOSE (OR) this native matcher OVER the legacy ignore-rules matcher — never
+      replace it — so the worktree filter stays a SUPERSET of the ref-snapshot /
+      worktree-semantics projection filter (the invariant recover relies on), and
+      `.warpignore` only ever ENLARGES the exclude set. Ignored paths never enter a
+      tree, so they never become symbols and never enter the fabric — this is what
+      kills the `fork --into <dir-under-repo-root>` phantom-symbol footgun (a nested
+      worktree absorbed as `#cfg:wt-*/...` on the next root propose). Pure +
+      deterministic (no clock, no ambient state); rules precompile once per load.
+      Pinned by test/warpignore.test.ts (defaults, dir-only/globs/negation/anchoring,
+      the dogfood regression asserting phantom symbols absent from the absorbed
+      state, and the `!.git` safety case).
+    type: module
+    tags: [warpignore, native-first, ignore-mechanism, tier-1, dogfood, T-2026-08-12-002]
+
   reserved-names:
     description: >-
       The ONE normalizer behind every reserved-path-component decision — the fix
@@ -462,9 +497,12 @@ components:
       returns the accepted files sorted by absolute path (determinism §5). A file
       is lifted only when BOTH agree: it is not under a BASELINE_SKIP_DIRS name
       (dependency/build output + VCS/tool state — node_modules, .git, .warpline,
-      .loom, dist, build, .build, .next, coverage) AND the root ignore matcher
-      admits it (#warp-store loadIgnoreMatcher — .warplineignore preferred, else
-      .gitignore). Extracted because each lens carried its OWN denylist and
+      .loom, dist, build, .build, .next, coverage) AND the composed root ignore
+      matcher admits it: #warpignore (native `.warpignore` + defaults, governs
+      skips with git absent, TD-2026-08-12-218) OR'd OVER #warp-store
+      loadIgnoreMatcher (.warplineignore preferred, else .gitignore) — the SAME
+      superset the worktree snapshot uses, so a nested worktree listed in
+      `.warpignore` is pruned here too. Extracted because each lens carried its OWN denylist and
       neither ever consulted the repository's own ignore semantics: cfg-lens was
       lifting every JSON key under Swift's .build/ as a symbol — 14,168 of 25,341
       IN A WORKTREE ABSORB (name the surface: seals ride `git archive`, which
@@ -480,6 +518,7 @@ components:
     type: module
     components:
       - "#warp-store"
+      - "#warpignore"
 
   lens-registry:
     description: >-
@@ -1950,6 +1989,18 @@ components:
       another agent's uncommitted work). Runs in the BACKGROUND (a full-repo absorb
       is slow) and is fail-safe (`|| true`) so it never delays, blocks, or fails the
       commit; the strand for commit N lands shortly after N (and rides in N+1).
+      BINARY RESOLUTION (T-2026-08-12-002 item 4 — the cold-agent silent-skip fix):
+      `hook install` BAKES the exact interpreter + CLI running it
+      (resolveInvokingBinary → process.execPath + realpath(argv[1])) into the block
+      as its DEFAULT seal binary (_wl_node/_wl_script), so the hook seals with the
+      same binary that installed it — NOT a bare `warpline` guessed off PATH, which a
+      cold agent invoking `node /abs/cli.js` (no global install) never has. Precedence
+      mirrors health.hookResolution exactly: env WARPLINE_BIN override → baked → bare
+      `warpline` on PATH → monorepo dist/cli.js → none. On `none` the block prints a
+      VISIBLE foreground `auto-seal SKIPPED` stderr line (the commit still succeeds);
+      and `hook install` FAILS LOUDLY (non-zero, writes no hook) when it cannot
+      resolve a runnable binary at all — the one refusal on the REAL condition, not a
+      PATH proxy (see hookInstallAdvice's retained four-point argument).
     type: module
     components:
       - "#pick"
@@ -2274,11 +2325,16 @@ components:
       refs vs legacy mode, abandoned heads, the C-6 stake-journal witness);
       SEAL LIVENESS (the last strand names its git commit, so `git rev-list
       --count <that>..HEAD` gives commits-behind-HEAD — a subtraction over data
-      already present, zero new writes); HOOK REACHABILITY (replicates the hook's
-      own resolution — `command -v $WARPLINE_BIN`, then the dist fallback — and
-      reports WHICH ARM WINS OR NONE. `hook status` only knows the block is
-      present; installed and reachable are different facts, and on this repo
-      `warpline` is NOT on PATH, so the whole ledger rides the dist arm);
+      already present, zero new writes); HOOK REACHABILITY (mirrors the hook's own
+      resolution precedence — env WARPLINE_BIN override, then the BAKED install-time
+      binary parsed back out of the hook via parseBakedBinary, then a bare `warpline`
+      on PATH, then the dist fallback — and reports WHICH ARM WINS OR NONE. `hook
+      status` only knows the block is present; installed and reachable are different
+      facts. Since the baking fix (T-2026-08-12-002 item 4) a cold-agent hook that
+      baked an absolute `node /abs/cli.js` resolves via the 'baked' arm — health
+      reports that, instead of false-alarming 'none' just because `warpline` is off
+      PATH; 'none' now means the baked binary is GONE and no fallback resolves, still
+      UNSOUND/exit 2);
       ADJUDICATION (verdicts by status, and how many were MEASURED AGAINST GIT —
       see #git-counterfactual); DISK (total AND MB PER STRAND, because a team can
       multiply a per-strand number and a total is abstract).

@@ -66,6 +66,7 @@ import { ObjectStore } from './object-store.js';
 import { catFileBatch, diffRaw, lsTree, revParse, revParseTree, type GitOptions } from '../git/git-exec.js';
 import { WORKTREE_REF } from '../absorb.js';
 import { loadIgnoreMatcher, ignoreMatcherFrom, IGNORE_FILE_NAMES, type IgnoreMatcher } from './ignore-rules.js';
+import { loadWarpignore } from './warpignore.js';
 import { isRestoreForbiddenName, pathHasRestoreForbiddenName } from './reserved-names.js';
 import {
   loadWorktreeIndex,
@@ -122,8 +123,22 @@ export interface SnapshotDirOptions {
  * the indexed attempt ⇒ the plain full walk runs instead. The refreshed index
  * is written back after the walk (atomic; write failures swallowed).
  */
+/**
+ * The WORKTREE walk's ignore matcher: Warpline's NATIVE `.warpignore` (defaults +
+ * file — governs skip decisions with git absent, TD-2026-08-12-218) COMPOSED with
+ * the legacy `.warplineignore`/`.gitignore` matcher. Composition (OR), never
+ * replacement: `.warpignore` only ENLARGES the exclude set, so the worktree
+ * filter stays a SUPERSET of the ref-snapshot / worktree-semantics projection
+ * filter (snapshot.ts tree-semantics decision) — the invariant recover relies on.
+ */
+function worktreeIgnoreMatcher(dir: string): IgnoreMatcher {
+  const warp = loadWarpignore(dir);
+  const legacy = loadIgnoreMatcher(dir);
+  return (relPath: string, isDir: boolean): boolean => warp.isIgnored(relPath, isDir) || legacy(relPath, isDir);
+}
+
 export function snapshotDir(store: ObjectStore, dir: string, opts: SnapshotDirOptions = {}): SnapshotResult {
-  const ignored = loadIgnoreMatcher(dir);
+  const ignored = worktreeIgnoreMatcher(dir);
   if (opts.indexRoot) {
     try {
       const cached = loadWorktreeIndex(opts.indexRoot, dir); // null ⇒ cold (still records)

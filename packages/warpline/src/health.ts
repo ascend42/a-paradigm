@@ -45,7 +45,7 @@ import * as path from 'node:path';
 import { warplineDirOf, readSelvage, scanFabric } from './fabric/fabric.js';
 import { listRefs, readRef } from './fabric/refs.js';
 import { verifyFabric, type FabricVerifyReport } from './fabric/verify.js';
-import { hookStatus, hookRemedy, type HookState } from './fabric/hook.js';
+import { hookStatus, hookRemedy, parseBakedBinary, type HookState, type BakedBinary } from './fabric/hook.js';
 import { readShadowVerdicts, type ShadowVerdictRow } from './fabric/shadow.js';
 import { listHazards, type CleanHazardRow, type HazardKind } from './fabric/hazard.js';
 import { listKnotPayloads } from './fabric/knot-payload.js';
@@ -123,13 +123,15 @@ export const HOOK_DEFAULT_BIN = 'warpline';
 export const HOOK_DIST_FALLBACK = 'packages/warpline/dist/cli.js';
 
 /**
- * WHICH arm of the hook's resolution wins.
- *   'env-bin'  $WARPLINE_BIN is set and resolves
- *   'path'     the bare name `warpline` is on PATH (the intended arm)
+ * WHICH arm of the hook's resolution wins — in the SAME precedence order the shell
+ * block itself uses, so health reports what the hook will actually do:
+ *   'env-bin'  $WARPLINE_BIN is set and resolves (an explicit override)
+ *   'baked'    the interpreter + CLI baked at install time both still exist (default)
+ *   'path'     the bare name `warpline` is on PATH (a fallback)
  *   'dist'     the monorepo build fallback — works HERE and nowhere else
- *   'none'     nothing resolves: the hook runs, fails, and says nothing
+ *   'none'     nothing resolves: the hook runs, prints SKIPPED, and seals nothing
  */
-export type HookArm = 'env-bin' | 'path' | 'dist' | 'none';
+export type HookArm = 'env-bin' | 'baked' | 'path' | 'dist' | 'none';
 
 /** POSIX `command -v` for a program name or path, without spawning a shell. */
 function commandV(bin: string): string | null {
@@ -165,25 +167,68 @@ export interface HookHealth {
 /**
  * The BINARY-RESOLUTION half of hookHealth, on its own.
  *
- * Split out for `hook install` (finding C2), which needs exactly this fact at
- * install time and must not pay for `verifyFabric`. Deliberately does NOT read
- * the hook file: whether the block is installed and whether a binary resolves
- * are independent questions, and conflating them is what let "installed" stand
- * in for "reaching" in the first place.
+ * `baked` is the interpreter + script the INSTALLED hook baked (parsed from the hook
+ * file by the caller), or null when no hook / no baked line is present. The
+ * precedence below MIRRORS the shell block exactly — env override, then baked, then
+ * a bare `warpline` on PATH, then the monorepo dist build — so the arm health reports
+ * is the arm the hook will actually take at commit time. Reporting "installed" while
+ * the block would SKIP is the very confusion this diagnostic exists to end.
  */
-export function hookResolution(root: string): Pick<HookHealth, 'bin' | 'arm' | 'resolved'> {
+export function hookResolution(
+  root: string,
+  baked: BakedBinary | null,
+): Pick<HookHealth, 'bin' | 'arm' | 'resolved'> {
   const envBin = process.env[HOOK_BIN_ENV];
   const bin = envBin && envBin.trim() !== '' ? envBin.trim() : HOOK_DEFAULT_BIN;
+
+  // 1. An explicit override is honoured VERBATIM — resolved, or 'none'. The block
+  //    does not fall through from a set-but-unresolvable override to the baked arm,
+  //    so health must not either (it would SKIP; health agrees it resolves nothing).
+  if (envBin && envBin.trim() !== '') {
+    const onPath = commandV(bin);
+    return onPath ? { bin, arm: 'env-bin', resolved: onPath } : { bin, arm: 'none', resolved: null };
+  }
+
+  // 2. The BAKED install-time binary — the block's default, so health's default too.
+  //    Matches the block's `[ -x "$_wl_node" ] && [ -f "$_wl_script" ]`.
+  if (baked !== null && commandV(baked.node) !== null && isFile(baked.script)) {
+    return { bin, arm: 'baked', resolved: `${baked.node} ${baked.script}` };
+  }
+
+  // 3. A bare `warpline` on PATH.
   const onPath = commandV(bin);
-  if (onPath) return { bin, arm: envBin ? 'env-bin' : 'path', resolved: onPath };
+  if (onPath) return { bin, arm: 'path', resolved: onPath };
+
+  // 4. The monorepo dist build.
   const dist = path.join(root, HOOK_DIST_FALLBACK);
   if (fs.existsSync(dist)) return { bin, arm: 'dist', resolved: `node ${dist}` };
+
   return { bin, arm: 'none', resolved: null };
+}
+
+/** Regular-file test mirroring the block's `[ -f … ]`. */
+function isFile(p: string): boolean {
+  try {
+    return fs.statSync(p).isFile();
+  } catch {
+    return false;
+  }
+}
+
+/** The installed hook's text, or null when unreadable / no path. */
+function readHookText(hookPath: string): string | null {
+  try {
+    return fs.readFileSync(hookPath, 'utf8');
+  } catch {
+    return null;
+  }
 }
 
 function hookHealth(root: string, hookPath: string | null): HookHealth {
   const state = hookPath ? hookStatus(hookPath).state : ('unknown' as const);
-  return { hookPath, state, ...hookResolution(root) };
+  const text = hookPath ? readHookText(hookPath) : null;
+  const baked = text ? parseBakedBinary(text) : null;
+  return { hookPath, state, ...hookResolution(root, baked) };
 }
 
 /* ──────────────────────────────── the report ───────────────────────────────── */
@@ -683,9 +728,10 @@ export async function health(root: string): Promise<HealthReport> {
     case 'installed':
       if (hook.arm === 'none') {
         unsound.push(
-          `the auto-seal hook is INSTALLED but resolves to nothing: neither \`${hook.bin}\` on PATH nor ` +
-            `${HOOK_DIST_FALLBACK} exists. Every commit runs it, it fails, and \`|| true\` hides that — ` +
-            `the ledger silently stops growing. FIX: ${hookRemedy(root)}`,
+          `the auto-seal hook is INSTALLED but resolves to nothing: the baked install-time binary is ` +
+            `gone (or an explicit \`${HOOK_BIN_ENV}\` override is unresolvable), \`${hook.bin}\` is not on ` +
+            `PATH, and ${HOOK_DIST_FALLBACK} does not exist. Every commit runs it, it fails, and the ` +
+            `background seal hides that — the ledger silently stops growing. FIX: ${hookRemedy(root)}`,
         );
       } else if (hook.arm === 'dist') {
         warnings.push(

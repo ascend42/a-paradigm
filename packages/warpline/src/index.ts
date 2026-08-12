@@ -131,8 +131,11 @@ export {
   hookStatus,
   hookRemedy,
   hookInstallAdvice,
+  resolveInvokingBinary,
+  parseBakedBinary,
   type HookState,
   type HookStatus,
+  type BakedBinary,
 } from './fabric/hook.js';
 
 // Multi-writer (Phase C v1) — SCRATCH fork + the admission DECISION protocol.
