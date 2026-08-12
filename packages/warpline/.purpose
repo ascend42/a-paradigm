@@ -931,9 +931,19 @@ components:
       carry). admit SEEDS strand.calibratedConfidence from the gate rule; gradeFabric
       grades it against real OUTCOME, mirroring the classroom certify→outcome loop. A
       strand's AUTHORED symbols (delta.born ∪ contractChanged) are OVERTURNED when a
-      later strand RETIRES one (or a #resolve names it in resolves.contended) →
-      confidence ↓; SURVIVED when they hold across a window of later strands → ↑;
-      PENDING when too recent. applyGrades updates calibratedConfidence in the ledger
+      DAG-DESCENDANT strand RETIRES one (or a #resolve names it in resolves.contended)
+      → confidence ↓; SURVIVED when they hold across a window of DESCENDANTS → ↑;
+      PENDING when too recent. Survival/overturn is DAG-REACHABILITY-scoped, NOT
+      ledger-linear (M2.5 branch-safety, TD-2026-08-12-813): "later" means a strand
+      that actually builds on this one (dag.ts children reachability, buildDag once
+      per run), never fabric.jsonl arrival order. This is the prerequisite for
+      branching — all branches append to one fabric.jsonl, so slice(i+1) would mix
+      concurrent branches and a doomed branch's revert would overturn a survivor on
+      the integration line. A retire/contend on a CONCURRENT (non-descendant) branch
+      is not an overturn; an ABANDONED branch (never merged → never a descendant of
+      the integration head) contributes ZERO — it falls out of reachability with no
+      dead-branch check. Unlinked v1 strands (parentsOf → []) have no resolvable
+      descendants and grade PENDING rather than off arrival order. applyGrades updates calibratedConfidence in the ledger
       (pickId EXCLUDES the field, so the content-address is unchanged) and appends the
       trajectory to .warpline/grades.jsonl, under #fabric-lock. The report buckets
       survival by gate-rule prior class — the falsifiable 'does linked beat
@@ -1278,6 +1288,59 @@ components:
       - "#strand"
       - "#warp-durable"
 
+  head:
+    description: >-
+      The CURRENT-BRANCH pointer (the git HEAD analog), M2.5 branching foundation
+      (TD-2026-08-12-813, Arky's design) — head.ts. #fabric-refs already NAME
+      history positions; what did not exist is a pointer saying WHICH ref the next
+      seal advances. `.warpline/HEAD` is a SYMREF with exactly two shapes (git's,
+      honestly borrowed): `ref: refs/heads/<name>` (attached to a branch) or a bare
+      `pick:<id>` (DETACHED at an event identity). readHead → {kind:'branch',branch}
+      | {kind:'detached',pickId} | null (absent); writeHead publishes it atomically
+      + durably via #warp-durable atomicWriteSync; resolveHeadTip(root, wdir)
+      follows the symref to its ref tip (readRef) or returns the detached pickId.
+      DEFAULT: an ABSENT HEAD is treated as refs/heads/selvage (DEFAULT_BRANCH) so a
+      fabric that never branched behaves exactly as before HEAD existed — the
+      pre-branching world is "always on selvage"; readHead reports absence faithfully
+      (null) and resolveHeadTip applies the default. The branch name is validated
+      through the SHARED #fabric-refs isRefName predicate (now exported) — the same
+      fail-closed grammar that guards a ref filename, because a symref target is
+      spliced into refs/heads/<name> and read back as a path; no second grammar can
+      drift from the first. Fails closed: a HEAD that exists but is unreadable or
+      malformed throws rather than masquerading as absent. Structurally a sibling of
+      #fabric-refs. Pinned by test/branch-foundation.test.ts.
+    type: module
+    components:
+      - "#fabric"
+      - "#fabric-refs"
+      - "#warp-durable"
+
+  mergebase:
+    description: >-
+      The MERGE-BASE (lowest common ancestor) over the fabric DAG, M2.5 branching
+      foundation (TD-2026-08-12-813, Arky's design) — mergebase.ts. The one
+      genuinely new algorithm branching needs: given two heads, find the history
+      position they last shared, so a three-way merge (base × ours × theirs) has its
+      base. ancestorSet(byPick, tip) is the inclusive BFS over the unified DAG
+      parents (#fabric-dag parentsOf) — the same walk #native-write-path does over
+      the selvage tip, generalized and EXPORTED here so branching does not re-derive
+      it. mergeBase(byPick, a, b): I = ancestors(a) ∩ ancestors(b); the base is the
+      element of I that is a proper ancestor of NO other element of I (the lowest
+      common ancestor, closest to a and b). CRISS-CROSS FAILS CLOSED: when the
+      history criss-crosses (a diamond whose two merge strands cross), I has MORE
+      THAN ONE minimal element and there is no single base — returns {ambiguous:[…]}
+      rather than silently choosing one (Arky's v1 decision: a wrong base is a
+      silently-wrong merge, the exact class Warpline refuses). DISJOINT roots → null
+      (I empty; the record is suspect, the caller escalates). DETERMINISTIC +
+      CLOCK-FREE: the ambiguous list is ordered by the derived topological position
+      (#fabric-dag buildDag), pickId as the tiebreak, so two machines with the same
+      strand set report the same base(s) in the same order. Pure — no clock, no I/O,
+      no git. Pinned by test/branch-foundation.test.ts.
+    type: module
+    components:
+      - "#fabric-dag"
+      - "#strand"
+
   anchor:
     description: >-
       The v1-prefix EPOCH ANCHOR (docs/specs/warpline-v1-anchor.md) — closes the
@@ -1337,7 +1400,11 @@ components:
       (#fabric-dag) when the fabric carries position-free v3 strands (local sugar,
       never durable); pick:<id> → that pickId; state:<id> → the most-recent-arrival
       strand on that stateId (§3 many-to-one); tree:<id> → that treeId DIRECTLY
-      (no strand). A4
+      (no strand). <branch> → a BARE BRANCH NAME (an existing refs/heads/<name>,
+      M2.5 branching) resolves to that ref's tip strand — checked LAST so it never
+      shadows the reserved forms, and only when a ref actually holds the name (an
+      unknown name still errors; `selvage` resolves via the tip branch to the
+      identical strand). A4
       (cutover-refuse-on-missing-binding): a resolved strand with no binding.treeId
       (sealed pre-M1b) is REFUSED loudly — never silently restored empty. restore.ts
       (restore(root, {selector, to, force})): the DIRTY-DEST GUARD refuses a non-empty

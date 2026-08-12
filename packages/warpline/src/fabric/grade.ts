@@ -4,13 +4,21 @@
  * one thing a git-backed history structurally can't carry. Mirrors the classroom
  * certify→outcome loop (survive / overturn):
  *
- *   A strand's AUTHORED symbols = delta.born ∪ delta.contractChanged.
- *   - OVERTURNED: a later strand RETIRED one of them, OR a #resolve named one in
- *     its resolves.contended (this pick caused a collision a human had to settle)
- *     → lower confidence (the meaning didn't hold).
- *   - SURVIVED: none overturned AND ≥ window later strands exist (they held) →
- *     raise confidence.
- *   - PENDING: not enough later history yet → leave at the seed.
+ *   A strand's AUTHORED symbols = delta.born ∪ delta.contractChanged. "later" here
+ *   means a DAG DESCENDANT (a strand that actually builds on this one — dag.ts
+ *   reachability), NOT merely a strand further down the shared arrival log. Once
+ *   branches append to one fabric.jsonl, ledger order mixes concurrent branches;
+ *   reachability keeps a doomed branch's revert from overturning a survivor on the
+ *   integration line (M2.5 branch-safety, TD-2026-08-12-813).
+ *   - OVERTURNED: a DESCENDANT strand RETIRED one of them, OR a #resolve named one
+ *     in its resolves.contended (this pick caused a collision a human had to settle)
+ *     → lower confidence (the meaning didn't hold). A retire/contend on a CONCURRENT
+ *     (non-descendant) branch is NOT an overturn of this strand's meaning.
+ *   - SURVIVED: none overturned AND ≥ window DESCENDANTS exist (strands on this
+ *     strand's own line of history held) → raise confidence.
+ *   - PENDING: not enough descendant history yet → leave at the seed. (An abandoned
+ *     branch — never merged, so never a descendant of the integration head —
+ *     contributes ZERO here, and it falls out of reachability with NO dead-branch check.)
  *
  * THE MOAT EXPERIMENT: bucket graded strands by their seed PRIOR class (linked /
  * independent / fast-admit / pick) and report survival rate — the falsifiable
@@ -25,6 +33,7 @@ import { warplineDirOf, readFabric, rewriteFabric, appendGradeEvent } from './fa
 import { withFabricLock } from './lock.js';
 import { findAnchor } from './anchor.js';
 import type { Strand } from './strand.js';
+import { buildDag, type FabricDag } from './dag.js';
 import type { AdmitDecision } from './admit.js';
 
 const PICK_PRIOR = 0.7; // a single-writer pick has no gate-rule seed
@@ -104,10 +113,37 @@ function priorClassOf(seed: number | null): PriorClass {
 
 const round2 = (n: number): number => Math.round(n * 100) / 100;
 
+/**
+ * The DAG DESCENDANTS of `start` — every strand reachable via child edges (its own
+ * line of history), EXCLUDING `start` itself. This is the reachability that scopes
+ * survival/overturn (M2.5, TD-2026-08-12-813): a strand on a CONCURRENT branch is
+ * not reachable from `start`, so it cannot overturn `start`'s meaning; a strand on
+ * an ABANDONED branch is never reachable from the integration head, so it counts
+ * toward neither survival nor overturn — no "is this branch dead" check is needed,
+ * it falls straight out of reachability. Unlinked strands (v1 — parentsOf returns [])
+ * have no resolvable descendants, so their outcome is honestly PENDING rather than
+ * graded off arrival order.
+ */
+function descendantPickIds(dag: FabricDag, start: string): Set<string> {
+  const seen = new Set<string>();
+  const stack = [...(dag.children.get(start) ?? [])];
+  while (stack.length > 0) {
+    const id = stack.pop()!;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    for (const c of dag.children.get(id) ?? []) if (!seen.has(c)) stack.push(c);
+  }
+  return seen;
+}
+
 /** Compute the grade for every strand in the fabric (pure — no writes). */
 export function gradeFabric(root: string, opts: { window?: number } = {}): GradeReport {
   const window = opts.window ?? DEFAULT_WINDOW;
   const fabric = readFabric(warplineDirOf(root));
+  // The DAG index derived from the strands themselves (parents/children) — the
+  // authority on "what builds on what". survival/overturn is scoped to REACHABILITY
+  // over this DAG, never to fabric.jsonl arrival order (which mixes branches).
+  const dag = buildDag(fabric);
   const grades: StrandGrade[] = [];
 
   for (let i = 0; i < fabric.length; i++) {
@@ -133,7 +169,14 @@ export function gradeFabric(root: string, opts: { window?: number } = {}): Grade
       continue;
     }
 
-    const later = fabric.slice(i + 1);
+    // REACHABILITY-scoped, not ledger-linear (M2.5, TD-2026-08-12-813): "later" =
+    // this strand's DAG DESCENDANTS (strands that actually build on it), NOT
+    // fabric.slice(i + 1) (every strand that merely sits further down the shared
+    // arrival log). Once branches append to one fabric.jsonl, slice(i + 1) mixes
+    // concurrent branches — a doomed branch's revert of #x would overturn a
+    // survivor on the integration line. Descendants are deduped via byPickId.
+    const descIds = descendantPickIds(dag, s.pickId);
+    const later = [...descIds].map((id) => dag.byPickId.get(id)).filter((l): l is Strand => l !== undefined);
     const overturned = new Set<string>();
     for (const l of later) {
       for (const sym of l.delta.retired) if (authored.includes(sym)) overturned.add(sym);

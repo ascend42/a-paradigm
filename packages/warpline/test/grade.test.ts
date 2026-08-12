@@ -22,23 +22,36 @@ import {
 } from '../src/fabric/grade.js';
 import { computePickId, type Strand, type StrandBody } from '../src/fabric/strand.js';
 
-function strand(seq: number, over: Partial<Strand> & { born?: string[]; retired?: string[]; changed?: string[] } = {}): Strand {
-  const { born = [], retired = [], changed = [], pickId: _drop, ...rest } = over;
-  // A REAL self-consistent v1 pickId so the rewriteFabric identity guard (applyGrades)
-  // recomputes to the stored id (grading only moves calibratedConfidence, excluded).
+/**
+ * Build a REAL, DAG-linked v2 strand. Grading is now REACHABILITY-scoped
+ * (TD-2026-08-12-813), so a fixture must express genuine ancestry via parentPickId
+ * — an unlinked strand (a v1 self-hash, or a v2 with a dangling parent) has NO
+ * resolvable descendants and would grade PENDING regardless of arrival order. The
+ * v2 pickId excludes calibratedConfidence (like v1), so applyGrades still moves the
+ * confidence byte without disturbing the content-address. Pass the PARENT strand
+ * (null at genesis) to place this strand on a line of history; two children of the
+ * same parent are CONCURRENT branches.
+ */
+function v2(
+  seq: number,
+  parent: Strand | null,
+  over: { born?: string[]; retired?: string[]; changed?: string[]; conf?: number | null; agentId?: string } = {},
+): Strand {
+  const { born = [], retired = [], changed = [], conf = null, agentId } = over;
   const body: StrandBody = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     seq,
+    parentPickId: parent ? parent.pickId : null,
+    parentStateId: parent ? parent.stateId : null,
+    ...(agentId ? { authoredBy: { agentId } } : {}),
     stateId: `state:v0:seq${seq}`,
-    parentStateId: seq === 0 ? null : `state:v0:seq${seq - 1}`,
     actor: 'tester',
     intent: `seq ${seq}`,
     recordedAt: '2026-06-27T00:00:00.000Z',
     objectCount: 10,
     delta: { born, retired, contractChanged: changed, renamedNoop: 0 },
-    calibratedConfidence: null,
+    calibratedConfidence: conf,
     provenance: { ref: 'WORKTREE', treeSha: null, gitCommit: null },
-    ...rest,
   };
   return { ...body, pickId: computePickId(body) };
 }
@@ -48,15 +61,18 @@ describe('gradeFabric · survive / overturn / pending', () => {
   beforeEach(() => {
     root = fs.mkdtempSync(path.join(os.tmpdir(), 'warpline-grade-'));
     const wdir = warplineDirOf(root);
-    // 0 genesis; 1 pick(#a,#b); 2 pick(#c) retires #a; 3 LINKED admit(#x);
-    // 4 INDEPENDENT admit(#y) retires #x; 5 pick(#z); 6 pick(#w)
-    appendStrand(wdir, strand(0));
-    appendStrand(wdir, strand(1, { born: ['#a', '#b'] }));
-    appendStrand(wdir, strand(2, { born: ['#c'], retired: ['#a'] }));
-    appendStrand(wdir, strand(3, { born: ['#x'], calibratedConfidence: 0.9, authoredBy: { agentId: 'agent-a' } }));
-    appendStrand(wdir, strand(4, { born: ['#y'], retired: ['#x'], calibratedConfidence: 0.6, authoredBy: { agentId: 'agent-b' } }));
-    appendStrand(wdir, strand(5, { born: ['#z'] }));
-    appendStrand(wdir, strand(6, { born: ['#w'] }));
+    // A LINEAR v2 chain (each strand's parent = the previous strand), so DAG
+    // reachability == ledger order here — the linear-chain behavior is preserved
+    // EXACTLY. 0 genesis; 1 pick(#a,#b); 2 pick(#c) retires #a; 3 LINKED admit(#x);
+    // 4 INDEPENDENT admit(#y) retires #x; 5 pick(#z); 6 pick(#w).
+    const s0 = v2(0, null);
+    const s1 = v2(1, s0, { born: ['#a', '#b'] });
+    const s2 = v2(2, s1, { born: ['#c'], retired: ['#a'] });
+    const s3 = v2(3, s2, { born: ['#x'], conf: 0.9, agentId: 'agent-a' });
+    const s4 = v2(4, s3, { born: ['#y'], retired: ['#x'], conf: 0.6, agentId: 'agent-b' });
+    const s5 = v2(5, s4, { born: ['#z'] });
+    const s6 = v2(6, s5, { born: ['#w'] });
+    for (const s of [s0, s1, s2, s3, s4, s5, s6]) appendStrand(wdir, s);
   });
   afterEach(() => {
     fs.rmSync(root, { recursive: true, force: true });
@@ -146,6 +162,79 @@ describe('gradeFabric · survive / overturn / pending', () => {
     expect(index.get('#y')).toEqual({ survived: 1, overturned: 0, graded: 1, survival: 1 });
     expect(index.get('#x')).toEqual({ survived: 0, overturned: 1, graded: 1, survival: 0 });
     expect(index.get('#z')).toBeUndefined(); // pending — not a graded outcome
+  });
+});
+
+// ── M2.5 branch-safety — survival/overturn is DAG-REACHABILITY-scoped, not ledger
+// order (TD-2026-08-12-813). A concurrent branch's retire is NOT an overturn; an
+// abandoned branch contributes nothing; and neither manufactures a false HELD.
+describe('gradeFabric · reachability-scoped (M2.5 branches)', () => {
+  let root: string;
+  let wdir: string;
+  beforeEach(() => {
+    root = fs.mkdtempSync(path.join(os.tmpdir(), 'warpline-grade-dag-'));
+    wdir = warplineDirOf(root);
+  });
+  afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
+
+  it('(b) a symbol RETIRED on a concurrent (non-descendant) branch does NOT overturn it', () => {
+    // g0 ← main1(#a) ← main2 ← main3   [integration line]
+    //  └──── branch(retire #a)          [CONCURRENT: forks g0, never builds on main1]
+    const g0 = v2(0, null);
+    const main1 = v2(1, g0, { born: ['#a'], conf: 0.6, agentId: 'agent-main' });
+    const main2 = v2(2, main1);
+    const main3 = v2(3, main2);
+    const branch = v2(4, g0, { retired: ['#a'] }); // sibling of main1, not a descendant
+    for (const s of [g0, main1, main2, main3, branch]) appendStrand(wdir, s);
+
+    const by = new Map(gradeFabric(root, { window: 2 }).grades.map((g) => [g.seq, g]));
+    // #a held across its OWN 2 descendants (main2, main3); the concurrent retire is
+    // NOT in main1's descendant set, so it is NOT an overturn. (Under the old
+    // ledger-linear slice(i+1), `branch` sat later in the file and marked #a overturned.)
+    expect(by.get(1)!.outcome).toBe('survived');
+    expect(by.get(1)!.overturnedSymbols).toEqual([]);
+  });
+
+  it('(c) an abandoned-branch strand contributes nothing to the integration line bySymbol survival', () => {
+    // g0 ← m1(#a) ← m2 ← m3            [integration line — #a survives]
+    //  └──── dead(#dead, retire #a)     [ABANDONED: never merged → no descendants]
+    const g0 = v2(0, null);
+    const m1 = v2(1, g0, { born: ['#a'] });
+    const m2 = v2(2, m1);
+    const m3 = v2(3, m2);
+    const dead = v2(4, g0, { born: ['#dead'], retired: ['#a'] });
+    for (const s of [g0, m1, m2, m3, dead]) appendStrand(wdir, s);
+
+    const r = gradeFabric(root, { window: 2 });
+    // #a survives on the integration line — the abandoned retire is not a descendant.
+    expect(r.bySymbol['#a']).toEqual({ survived: 1, overturned: 0, pending: 0 });
+    // #dead was authored ONLY on the abandoned tip (zero descendants) → PENDING →
+    // it contributes NOTHING to survival/overturn. Falls out of reachability with no
+    // dead-branch check.
+    expect(r.bySymbol['#dead']?.survived ?? 0).toBe(0);
+    expect(r.bySymbol['#dead']?.overturned ?? 0).toBe(0);
+  });
+
+  it('(d) evaluateEscalation does NOT fire when a symbol’s only "overturn" was a concurrent branch', async () => {
+    // g0 ← p1(#s) ← p2(#s) ← p3(#s) ← p4 ← p5   [#s survives 3× on the line]
+    //  └──── branch(retire #s)                    [CONCURRENT fork of g0]
+    const g0 = v2(0, null);
+    const p1 = v2(1, g0, { born: ['#s'], conf: 0.6, agentId: 'agent-a' });
+    const p2 = v2(2, p1, { changed: ['#s'] });
+    const p3 = v2(3, p2, { changed: ['#s'] });
+    const p4 = v2(4, p3);
+    const p5 = v2(5, p4);
+    const branch = v2(6, g0, { retired: ['#s'] });
+    for (const s of [g0, p1, p2, p3, p4, p5, branch]) appendStrand(wdir, s);
+
+    await applyGrades(root, gradeFabric(root, { window: 2 }), '2026-06-27T01:00:00.000Z');
+    const index = symbolSurvivalIndex(readGradeSidecar(root));
+    // p1/p2/p3 each survived on their own line — 3 graded survivals, none overturned
+    // (the concurrent retire never reached them). Under ledger-linear grading the
+    // retire would overturn all three → survival 0/3 → a false HELD.
+    expect(index.get('#s')).toEqual({ survived: 3, overturned: 0, graded: 3, survival: 1 });
+    const esc = evaluateEscalation({ status: 'CLEAN', confidence: 'independent', agentChanged: ['#s'] }, index);
+    expect(esc).toBeNull();
   });
 });
 

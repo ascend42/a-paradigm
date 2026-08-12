@@ -42,10 +42,16 @@ describe('rewriteFabric guard — grade round-trips without moving identity', ()
     root = fs.mkdtempSync(path.join(os.tmpdir(), 'warpline-guard-'));
     const wdir = warplineDirOf(root);
     // 0 genesis; 1 pick(#a); 2 pick(#b); 3 pick(#c) — enough later strands to grade #a survived.
-    appendStrand(wdir, v2(0));
-    appendStrand(wdir, v2(1, { delta: { born: ['#a'], retired: [], contractChanged: [], renamedNoop: 0 }, calibratedConfidence: 0.7 }));
-    appendStrand(wdir, v2(2, { delta: { born: ['#b'], retired: [], contractChanged: [], renamedNoop: 0 } }));
-    appendStrand(wdir, v2(3, { delta: { born: ['#c'], retired: [], contractChanged: [], renamedNoop: 0 } }));
+    // Grading is now DAG-REACHABILITY-scoped (TD-2026-08-12-813), so the chain must
+    // carry REAL parentPickId links: the default `pick:v2:prev${seq}` parents dangle
+    // (no matching strand), which under reachability yields zero descendants → #a
+    // would grade PENDING, not survived. Thread the actual previous pickId so the
+    // linear chain is a real DAG line and seq1's #a holds across seq2/seq3.
+    const s0 = v2(0);
+    const s1 = v2(1, { parentPickId: s0.pickId, parentStateId: s0.stateId, delta: { born: ['#a'], retired: [], contractChanged: [], renamedNoop: 0 }, calibratedConfidence: 0.7 });
+    const s2 = v2(2, { parentPickId: s1.pickId, parentStateId: s1.stateId, delta: { born: ['#b'], retired: [], contractChanged: [], renamedNoop: 0 } });
+    const s3 = v2(3, { parentPickId: s2.pickId, parentStateId: s2.stateId, delta: { born: ['#c'], retired: [], contractChanged: [], renamedNoop: 0 } });
+    for (const s of [s0, s1, s2, s3]) appendStrand(wdir, s);
   });
   afterEach(() => fs.rmSync(root, { recursive: true, force: true }));
 

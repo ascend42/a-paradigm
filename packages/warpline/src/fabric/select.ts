@@ -28,7 +28,7 @@
 
 import { readFabric, readSelvage, readLegacyManifest } from './fabric.js';
 import { assertV1Covered } from './anchor.js';
-import { readRef } from './refs.js';
+import { readRef, isRefName } from './refs.js';
 import { buildDag } from './dag.js';
 import type { Strand } from './strand.js';
 
@@ -109,9 +109,25 @@ function resolveStrand(wdir: string, sel: string, fabric: Strand[]): Strand {
     throw new Error(`warpline: no strand at seq ${n} (fabric has ${fabric.length} strand(s))`);
   }
 
+  // A bare BRANCH NAME → the strand at refs/heads/<name> (M2.5 branching). Checked
+  // LAST so it never shadows the reserved forms (HEAD/selvage/pick:/state:/N),
+  // and only resolves when a ref actually holds that name — an unknown name falls
+  // through to the unrecognized-selector error. `selvage` still resolves via the
+  // tip branch above, to the identical strand.
+  if (isRefName(sel)) {
+    const refTip = readRef(wdir, sel);
+    if (refTip !== null) {
+      const s = fabric.find((x) => x.pickId === refTip);
+      if (!s) {
+        throw new Error(`warpline: refs/heads/${sel} points at ${refTip} but no strand in the fabric carries that pickId`);
+      }
+      return s;
+    }
+  }
+
   throw new Error(
     `warpline: unrecognized selector "${sel}" — accepted: HEAD | selvage (the tip) | ` +
-      `N or @N (a seq) | pick:<id> | state:<id> | tree:<id>`,
+      `<branch> (a refs/heads name) | N or @N (a seq) | pick:<id> | state:<id> | tree:<id>`,
   );
 }
 
