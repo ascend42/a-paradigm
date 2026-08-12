@@ -49,7 +49,7 @@ const REF_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
  * asymmetric filter would be the mirror bug — a ref you can create and never
  * see). A ref is a name a reader can enumerate; if it cannot, it is not a ref.
  */
-function isRefName(name: string): boolean {
+export function isRefName(name: string): boolean {
   return REF_NAME.test(name) && !name.includes('..') && !isTmpResidue(name);
 }
 

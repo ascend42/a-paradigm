@@ -1383,6 +1383,42 @@ components:
       - "#restore"
       - "#warp-store"
 
+  graph:
+    description: >-
+      MULTI-BRANCH HISTORY presentation (M2.5 increment 6, TD-2026-08-12-813;
+      closes M2 history-nav T-2026-07-01-013) — graph.ts. READ-ONLY: nothing here
+      changes a verdict, a seal, or a ref. It CONSUMES the layers increments 1–5
+      built — the derived pick-DAG (#fabric-dag), the ref layer (#fabric-refs),
+      HEAD (#head), and the native object store (#warp-store) — to present history
+      ACROSS branches, exactly as `git log --all` / `git diff A..B` / `git show`
+      present git's object graph without mutating it. branchGraph(fabric, refs,
+      head): the whole DAG order (buildDag.order) reversed to NEWEST-FIRST, each
+      node annotated with the ref names that point at its pickId (inverted ref map;
+      a tip may carry several), whether HEAD resolves to it, and the HEAD branch
+      name — where an ABSENT HEAD ≡ the selvage trunk (the same DEFAULT_BRANCH
+      default resolveHeadTip applies). ancestorsOf(fabric, tip): the INCLUSIVE
+      ancestry line of a branch tip, the #mergebase ancestorSet presented in DAG
+      topo order newest-first (reuses the unified-parent walk — no second walker).
+      diffTrees(store, A, B): the byte diff between two native trees — flattens BOTH
+      through #materialize flattenNativeTree and compares {mode,id} per path via the
+      SAME nativeDiffers the native merge decides changed-ness with (a rename reads
+      as delete+add; an unchanged file is exactly id-equal) → added / removed /
+      modified. CONSUMED by the CLI: `warpline log [<branch>]` (multi-branch
+      annotated by default; `<branch>` = that branch's ancestry line), `warpline
+      diff <A>..<B>` (byte diff between two branch/rev tips — resolveSelector each
+      side → treeId → diffTrees), and `warpline show <selector>` (extended beyond
+      KNOT payloads: an ordinary strand renders its meaning delta + intent + author
+      + DAG parents + byte paths changed vs its primary parent). Library code: no
+      console output — the CLI prints. Pinned by test/branch-history.test.ts.
+    type: module
+    components:
+      - "#fabric-dag"
+      - "#fabric-refs"
+      - "#head"
+      - "#mergebase"
+      - "#materialize"
+      - "#warp-store"
+
   merge:
     description: >-
       The BRANCH-MERGE verb (M2.5 increment 4 — the acceptance-gate increment;
@@ -2811,10 +2847,29 @@ components:
       keyed store (single-entry), then the legacy mcp.token file — never
       daemon-tokens.jsonl.
       Verbs (1:1 onto engine fns — transport + identity, never logic): status,
-      refs.list, fork, propose, admit (native, incl. the R1 shadow flag),
-      knot.show, resolve, stake, stake.recover, grade.report, shadow.tail,
-      backup (#warpline-backup — snapshot to a dest dir, the one write that
-      lands OUTSIDE .warpline/).
+      refs.list, branch, switch, fork, propose, admit (native, incl. the R1
+      shadow flag), merge, knot.show, resolve, stake, stake.recover,
+      grade.report, shadow.tail, backup (#warpline-backup — snapshot to a dest
+      dir, the one write that lands OUTSIDE .warpline/).
+      M2.5 SKINS (increment 7, TD-2026-08-12-813): the #branch model's three
+      verbs join the surface. `branch` multiplexes create|list|delete (agent) +
+      protect|unprotect|list-protected — protect/unprotect are HUMAN-class OPS of
+      the agent-class verb, refused for an agent-class principal by
+      HUMAN_ONLY_BRANCH_OPS (verb×op, mirroring admit's verb×flag override gate);
+      `switch` (#branch switchBranch) and `merge` (#merge mergeBranch) are
+      agent-class, `merge`'s `confirm`→acceptMeaningBlind override being human-only
+      (HUMAN_ONLY_MERGE_FLAGS, off the descriptor schema like the admit flags). THE
+      DAEMON-SIDE PROTECTED-BRANCH LANDING GATE — the increment-5 deferral (it
+      noted server.ts was out of its scope) is now CLOSED: the admit and merge
+      dispatch pass principal=who.kind into #native-write-path / #merge, so
+      #protected protectedLandingRefusal refuses an agent-class admit/merge that
+      would LAND onto a protected branch (once branching is in use) with the same
+      FORBIDDEN refusal (retriable 'never', escalate) the CLI gate emits; human
+      tokens and the single-line world pass byte-identical. The three verbs
+      auto-register on the MCP surface (all agent-class) via
+      #warplined-descriptors, so warpline_branch/switch/merge need no bespoke MCP
+      code. Adding them MOVED descriptorsId (the FG-3 teaching freeze):
+      descriptors:v1:0bb2c860… → descriptors:v1:6e86dce8… (test/descriptors-frozen.test.ts).
       STAGE-1 IDENTITY (aegis-security.md §1.2): every request carries a bearer
       token (#warplined-tokens); the daemon SERVER-STAMPS actor/agentId/decidedBy
       from the resolved principal — client-supplied identity params are advisory

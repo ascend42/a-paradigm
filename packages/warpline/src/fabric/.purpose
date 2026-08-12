@@ -2,7 +2,8 @@
 # component docs live in packages/warpline/.purpose (#strand #fabric #fabric-dag
 # #fabric-refs #seal #pick #admit #resolve #grade #fabric-verify #fabric-repair
 # #anchor #backfill #restore #fabric-lock #hook #scratch #materialize
-# #warpline-config #shadow-gate #native-write-path #stake #stake-journal).
+# #warpline-config #shadow-gate #native-write-path #mergebase #head #branch #merge
+# #protected #stake #stake-journal #graph).
 name: fabric
 description: >-
   The Warpline fabric — the native, git-independent WRITE layer: the append-only

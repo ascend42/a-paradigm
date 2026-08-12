@@ -36,9 +36,12 @@ export const RPC_SCHEMA = 'warplined:v1' as const;
 export const DAEMON_VERBS = [
   'status', // daemon liveness + fabric identity (no engine mutation)
   'refs.list', // listRefs + heads               (read)
+  'branch', // createBranch|listBranches|deleteBranch|protectBranch|unprotectBranch (write — refs/heads; protect/unprotect human-class)
+  'switch', // switchBranch                       (write — restores the branch tip into the worktree, moves HEAD)
   'fork', // forkNative                          (write — scratch ref only)
   'propose', // proposeNative                    (write — scratch strand)
   'admit', // admitNative | shadowAdmit          (write | observe-only row)
+  'merge', // mergeBranch                        (write — folds one branch into another via the shared seal core)
   'abandon', // abandonNative                    (write — clears the caller's scratch pointer)
   'knot.show', // readKnotPayload                (read)
   'resolve', // resolveNative                    (write — human-class only)
@@ -148,16 +151,47 @@ export const HUMAN_ONLY_ADMIT_FLAGS: readonly string[] = Object.freeze([
 ]);
 
 /**
+ * The `branch` verb OPS an `agent`-class principal may NOT invoke (M2.5 skins,
+ * TD-2026-08-12-813). The `branch` VERB is agent-class for its create/list/delete
+ * purpose, but changing WHAT is protected FROM agents is a HUMAN-class act — an
+ * agent must never decide its own gate. Enforced structurally in the branch
+ * handler EXACTLY as HUMAN_ONLY_ADMIT_FLAGS is enforced on `admit`: the op is
+ * refused FORBIDDEN before any engine work, so no mutation ever runs. (Not a
+ * separate verb: the verb×op split mirrors admit's verb×flag split.) */
+export const HUMAN_ONLY_BRANCH_OPS: readonly string[] = Object.freeze([
+  'protect',
+  'unprotect',
+]);
+
+/**
+ * The `merge` flag an `agent`-class principal may NOT set (M2.5 skins). `confirm`
+ * (→ `acceptMeaningBlind`) seals a merge that MEANING WAS BLIND TO (a byte-decided
+ * config value / scalar invariant) despite the fail-safe HOLD — the hold refusal
+ * escalates to a human `--confirm`, so an agent self-confirming it would be the
+ * exact escalation-violation the hold exists to prevent. Refused structurally,
+ * same shape as the admit override flags. Kept OFF `merge`'s descriptor schema
+ * (like the admit flags): the MCP skin's filterToSchema drops it so it never
+ * reaches the wire from an agent, and the daemon refuses it for direct callers. */
+export const HUMAN_ONLY_MERGE_FLAGS: readonly string[] = Object.freeze([
+  'confirm',
+]);
+
+/**
  * THE PROTECTED-BRANCH PRINCIPAL SURFACE (#protected, M2.5 security,
  * TD-2026-08-12-813 — Aegis's own finding). Two acts join the human-class law
  * here, and NEITHER is a static verb in HUMAN_ONLY_VERBS — deliberately:
  *
  *   1. `branch --protect` / `branch --unprotect` — changing WHAT is protected is
  *      a human-class act (an agent must never decide what is protected FROM
- *      agents). These are CLI-only acts; the daemon exposes NO protect verb, so
- *      the wire surface simply never offers them to a token-bearing agent. The
- *      CLI enforces it with the #agent-shell credential (an agent shell is
- *      refused FORBIDDEN), the same mechanism the HUMAN_ONLY_VERBS CLI skin uses.
+ *      agents). The CLI enforces it with the #agent-shell credential (an agent
+ *      shell is refused FORBIDDEN), the same mechanism the HUMAN_ONLY_VERBS CLI
+ *      skin uses. On the daemon (M2.5 skins increment 7) these are the `protect`
+ *      / `unprotect` OPS of the agent-class `branch` verb, refused FORBIDDEN for
+ *      an agent-class principal by HUMAN_ONLY_BRANCH_OPS — the verb×op split
+ *      mirrors admit's verb×flag override gate (HUMAN_ONLY_ADMIT_FLAGS): the
+ *      branch VERB is agent-legal for create/list/delete, but the two ops that
+ *      re-draw the gate are human-only modes within it. A human operator token
+ *      may invoke them; the mutation never runs for an agent.
  *
  *   2. `merge` INTO a protected branch (and a direct agent `admit` onto one) is
  *      human-class — but DESTINATION-DEPENDENT, so it CANNOT be a static verb

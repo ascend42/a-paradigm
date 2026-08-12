@@ -65,7 +65,7 @@ import { worktreeChangeCount } from './git/git-exec.js';
 import { createClaim, persistClaim, type CreateClaimInput } from './fabric/claim.js';
 import { resolveKnot } from './fabric/resolve.js';
 import { readKnotPayload, type KnotPayload, type ContestedUnit } from './fabric/knot-payload.js';
-import { frameProse, escapeProseBody } from './envelope.js';
+import { frameProse, escapeProseBody, envelopeProse } from './envelope.js';
 import { gradeFabric, applyGrades, type GradeReport } from './fabric/grade.js';
 import { verifyFabric } from './fabric/verify.js';
 import { listRefs, heads, migrateSelvageToRefs } from './fabric/refs.js';
@@ -85,6 +85,9 @@ import {
 } from './fabric/branch.js';
 import { mergeBranch, type MergeBranchResult } from './fabric/merge.js';
 import { readHead, DEFAULT_BRANCH } from './fabric/head.js';
+import { branchGraph, ancestorsOf, diffTrees, type BranchGraph, type GraphNode, type TreeDiff } from './fabric/graph.js';
+import { resolveSelector } from './fabric/select.js';
+import { parentsOf } from './fabric/dag.js';
 import { stake, stakeRecover, type StakeResult, type StakeRecoverResult } from './fabric/stake.js';
 import { STAKE_MARKER } from './fabric/stake-guard.js';
 import { existsSync } from 'node:fs';
@@ -305,13 +308,34 @@ program
 
 program
   .command('diff')
-  .description('SEMANTIC diff between two refs (rides the meaning graph). Renames are the EMPTY delta. Defaults: no args = WORKTREE vs HEAD; one arg = ref vs HEAD; two args = refA vs refB.')
-  .argument('[refA]', 'first ref (default: WORKTREE)')
+  .description('SEMANTIC diff between two refs (rides the meaning graph). Renames are the EMPTY delta. Defaults: no args = WORKTREE vs HEAD; one arg = ref vs HEAD; two args = refA vs refB. The `<A>..<B>` range form is a BYTE diff between two branch/rev TIPS (native trees, git absent) — added / removed / modified paths.')
+  .argument('[refA]', 'first ref (default: WORKTREE), or the `<A>..<B>` range form for a byte diff between two tips')
   .argument('[refB]', 'second ref (default: HEAD)')
-  .option('--json', 'emit the full SemDiffReport as JSON')
+  .option('--json', 'emit the full SemDiffReport as JSON (or the TreeDiff for a `<A>..<B>` range)')
   .action(async (refA: string | undefined, refB: string | undefined, options: { json?: boolean }) => {
     try {
       const root = await resolveRoot();
+
+      // `warpline diff <A>..<B>` — the RANGE form: a byte diff between two branch/rev
+      // TIPS (native trees, git absent), NOT the semantic meaning diff. Resolve each
+      // side to its binding treeId through the shared selector, then #graph diffTrees
+      // (reusing the native flatten primitive). An omitted side defaults to HEAD, as
+      // git's `..` does. Read-only — reads the object store, writes nothing.
+      if (refA && !refB && refA.includes('..')) {
+        const idx = refA.indexOf('..');
+        const aSel = refA.slice(0, idx) || 'HEAD';
+        const bSel = refA.slice(idx + 2) || 'HEAD';
+        const wdir = warplineDirOf(root);
+        const aTree = resolveSelector(wdir, aSel).treeId;
+        const bTree = resolveSelector(wdir, bSel).treeId;
+        const td = diffTrees(new ObjectStore(root), aTree, bTree);
+        if (options.json) {
+          process.stdout.write(JSON.stringify({ a: aSel, b: bSel, ...td }, null, 2) + '\n');
+        } else {
+          printTreeDiff(aSel, bSel, td);
+        }
+        return;
+      }
       // no args = WORKTREE vs HEAD; one arg = ref vs HEAD; two args = refA vs refB.
       const noArgs = !refA && !refB;
       // NATIVE PATH: no-args (worktree vs base) in a project with no reachable git
@@ -581,10 +605,11 @@ program
 
 program
   .command('log')
-  .description("The Warpline fabric — this project's native meaning-history (the picks sealed into the WARP). Newest first.")
+  .description("The Warpline fabric — this project's native meaning-history (the picks sealed into the WARP), newest first. MULTI-BRANCH by default: every strand annotated with the branch/ref names that point at it and the current HEAD (* = HEAD). `log <branch>` narrows to that branch's ANCESTRY line (its tip and everything reachable from it).")
+  .argument('[branch]', 'narrow to one branch: show only its ancestry line (default: all branches, annotated)')
   .option('--max <n>', 'max strands to show', '20')
-  .option('--json', 'emit the full fabric as JSON')
-  .action(async (options: { max?: string; json?: boolean }) => {
+  .option('--json', 'emit the annotated graph (default) or the branch ancestry (with <branch>) as JSON')
+  .action(async (branch: string | undefined, options: { max?: string; json?: boolean }) => {
     try {
       const max = Number(options.max);
       if (!Number.isInteger(max) || max < 1) {
@@ -594,11 +619,88 @@ program
       const root = await resolveRoot();
       const wdir = warplineDirOf(root);
       const fabric = readFabric(wdir);
-      const selvage = readSelvage(wdir);
+
+      // `log <branch>` — the ANCESTRY LINE of one branch: resolve its tip through
+      // the shared selector (a branch name IS a selector, M2.5 select.ts) and walk
+      // its ancestors in DAG order (#graph ancestorsOf → #mergebase ancestorSet).
+      if (branch !== undefined) {
+        const tip = resolveSelector(wdir, branch).strand;
+        if (!tip) {
+          throw new Error(`warpline: "${branch}" names no history position (a tree: selector has no ancestry) — log a branch | HEAD | selvage | pick:<id>`);
+        }
+        const line = ancestorsOf(fabric, tip.pickId);
+        if (options.json) {
+          process.stdout.write(JSON.stringify({ branch, tip: tip.pickId, strands: line }, null, 2) + '\n');
+        } else {
+          printBranchAncestry(branch, tip.pickId, line, max);
+        }
+        return;
+      }
+
+      // Default — the MULTI-BRANCH annotated log: the whole DAG with every ref/HEAD
+      // decoration (#graph branchGraph). Absent HEAD ≡ the selvage trunk.
+      const graph = branchGraph(fabric, listRefs(wdir), readHead(root));
       if (options.json) {
-        process.stdout.write(JSON.stringify({ selvage, strands: fabric }, null, 2) + '\n');
+        process.stdout.write(JSON.stringify(graph, null, 2) + '\n');
       } else {
-        printFabric(fabric, selvage, max);
+        printLog(graph, max);
+      }
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+program
+  .command('show')
+  .description("Show a strand OR a KNOT payload (M2.5). Given a KNOT payloadId (or the admitted side's ref) it renders the full resolution work order — the same as `warpline knot show`. Given an ORDINARY strand selector (a branch | HEAD | selvage | pick:<id> | state:<id> | @N) it renders that strand's OWN diff: its meaning delta, intent (enveloped), author, DAG parents, and the byte paths it changed vs its primary parent. Read-only.")
+  .argument('<selector>', "a KNOT payloadId 'knotPayload:v1:…' (≥12-char prefix ok), OR an ordinary strand selector (branch | HEAD | selvage | pick:<id> | state:<id> | @N)")
+  .option('--json', 'emit the knotPayload:v1 JSON, or the strand JSON')
+  .action(async (selector: string, options: { json?: boolean }) => {
+    try {
+      const root = await resolveRoot();
+      // KNOT PAYLOAD first — the pointer a cold agent hydrates. A hit renders like
+      // `knot show` (traced verb knot.show). A miss is NOT an error here: it means
+      // an ORDINARY strand selector, so fall through to the strand view.
+      const payload = readKnotPayload(root, selector);
+      if (payload) {
+        await traceCli(
+          { root, verb: 'knot.show', target: cliTarget({ selector }, { json: options.json }) },
+          () => payload,
+        );
+        if (options.json) process.stdout.write(JSON.stringify(payload, null, 2) + '\n');
+        else printKnotPayload(payload);
+        return;
+      }
+
+      // ORDINARY STRAND — a strand's own diff (extending show beyond KNOTs). Resolve
+      // through the shared selector (a branch name IS a selector), read its stored
+      // semantic delta + intent + author + DAG parents, and (when the parent is
+      // bound) the BYTE paths this strand changed vs its primary parent (#graph
+      // diffTrees). Read-only presentation — no verdict, seal, or ref changes.
+      const wdir = warplineDirOf(root);
+      let res;
+      try {
+        res = resolveSelector(wdir, selector);
+      } catch (err) {
+        throw new Error(
+          `no KNOT payload and no strand match ${JSON.stringify(selector)}. A KNOT payload is written by \`warpline admit\` on a KNOT/DANGLE (see .warpline/knots/); a strand selector is a branch | HEAD | selvage | pick:<id> | state:<id> | @N. (${(err as Error).message})`,
+        );
+      }
+      const strand = res.strand!;
+      const fabric = readFabric(wdir);
+      // Byte diff vs the PRIMARY parent (parents[0]) when it is present + bound —
+      // "what this strand changed". Genesis (no parents) or an unbound parent → none.
+      let td: TreeDiff | undefined;
+      const primaryParent = parentsOf(strand)[0];
+      if (primaryParent) {
+        const parentStrand = fabric.find((x) => x.pickId === primaryParent);
+        const parentTree = parentStrand?.binding?.treeId;
+        if (parentTree && res.treeId) td = diffTrees(new ObjectStore(root), parentTree, res.treeId);
+      }
+      if (options.json) {
+        process.stdout.write(JSON.stringify({ strand, parents: parentsOf(strand), byteDiff: td ?? null }, null, 2) + '\n');
+      } else {
+        printStrandShow(strand, td);
       }
     } catch (err) {
       fail(err);
@@ -2308,36 +2410,134 @@ function printPick(r: PickResult): void {
   process.stdout.write(lines.join('\n') + '\n');
 }
 
-function printFabric(fabric: Strand[], selvage: string | null, max: number): void {
-  const lines: string[] = [];
-  lines.push('WARPLINE FABRIC  (this project\'s native meaning-history)');
-  lines.push(`selvage   ${selvage ? short(selvage) : '(none — no picks sealed yet)'}`);
+/** The one-strand summary block shared by the multi-branch log and the ancestry line. */
+function strandLogLines(s: Strand): string[] {
+  const merge = parentsOf(s).length > 1 ? `  [merge: ${parentsOf(s).length} parents]` : '';
+  const lines = [`    intent:  ${s.intent}`];
+  if (s.seq === 0) {
+    lines.push(`    objects: ${s.objectCount}  (genesis)${merge}`);
+  } else {
+    lines.push(
+      `    delta:   +${s.delta.born.length} born  ~${s.delta.contractChanged.length} changed  -${s.delta.retired.length} retired  ↻${s.delta.renamedNoop} renamed-noop${merge}`,
+    );
+  }
+  return lines;
+}
+
+/** The git-style ref decoration for a node: `(HEAD -> feature, other-ref)`. */
+function decorate(node: GraphNode): string {
+  const decos: string[] = [];
+  if (node.head) decos.push(node.headBranch ? `HEAD -> ${node.headBranch}` : 'HEAD (detached)');
+  for (const r of node.refs) {
+    if (node.head && node.headBranch === r) continue; // already folded into `HEAD -> r`
+    decos.push(r);
+  }
+  return decos.length ? `  (${decos.join(', ')})` : '';
+}
+
+/** The DEFAULT `warpline log`: the whole DAG, newest first, ref/HEAD-annotated. */
+function printLog(graph: BranchGraph, max: number): void {
+  const lines: string[] = ['WARPLINE LOG  (multi-branch — * = HEAD)'];
+  const h = graph.head;
+  lines.push(
+    `HEAD      ${h === null ? `${DEFAULT_BRANCH} (default trunk)` : h.kind === 'branch' ? h.branch : `detached ${short(h.pickId)}`}`,
+  );
   lines.push('');
-  if (fabric.length === 0) {
+  if (graph.nodes.length === 0) {
     lines.push('(empty — run `warpline pick -m "..."` to seal the first strand)');
     process.stdout.write(lines.join('\n') + '\n');
     return;
   }
-  const shown = fabric.slice(-max).reverse();
-  for (const s of shown) {
-    const date = s.recordedAt.slice(0, 10);
-    const pos = strandPositionTag(s);
-    const tag = s.seq === 0 ? '◆ genesis' : pos ? `~ ${pos}` : '~';
-    lines.push(`${tag}  ${short(s.pickId)}  ${date}  ${s.actor}`);
-    lines.push(`     intent:  ${s.intent}`);
-    if (s.seq === 0) {
-      lines.push(`     objects: ${s.objectCount}`);
-    } else {
-      lines.push(
-        `     delta:   +${s.delta.born.length} born  ~${s.delta.contractChanged.length} changed  -${s.delta.retired.length} retired  ↻${s.delta.renamedNoop} renamed-noop`,
-      );
-    }
-    if (s.provenance?.gitCommit) lines.push(`     git:     ${s.provenance.gitCommit.slice(0, 12)}`);
-    if (s.calibratedConfidence != null) lines.push(`     confidence: ${s.calibratedConfidence}`);
+  const shown = graph.nodes.slice(0, max);
+  for (const node of shown) {
+    const s = node.strand;
+    lines.push(`${node.head ? '*' : ' '} ${short(s.pickId)}${decorate(node)}  ${s.recordedAt.slice(0, 10)}  ${s.actor}`);
+    lines.push(...strandLogLines(s));
   }
-  if (fabric.length > shown.length) {
+  if (graph.nodes.length > shown.length) {
     lines.push('');
-    lines.push(`(${fabric.length - shown.length} older strand(s) — raise --max)`);
+    lines.push(`(${graph.nodes.length - shown.length} older strand(s) — raise --max)`);
+  }
+  process.stdout.write(lines.join('\n') + '\n');
+}
+
+/** `warpline log <branch>`: one branch's ancestry line, newest first (* = the tip). */
+function printBranchAncestry(branch: string, tip: string, strands: Strand[], max: number): void {
+  const lines: string[] = [`WARPLINE LOG  ${branch}  (ancestry — newest first)`];
+  lines.push(`tip       ${short(tip)}`);
+  lines.push(`depth     ${strands.length} strand${strands.length === 1 ? '' : 's'}`);
+  lines.push('');
+  if (strands.length === 0) {
+    lines.push('(no ancestry — the branch is unborn)');
+    process.stdout.write(lines.join('\n') + '\n');
+    return;
+  }
+  const shown = strands.slice(0, max);
+  for (const s of shown) {
+    lines.push(`${s.pickId === tip ? '*' : ' '} ${short(s.pickId)}  ${s.recordedAt.slice(0, 10)}  ${s.actor}`);
+    lines.push(...strandLogLines(s));
+  }
+  if (strands.length > shown.length) {
+    lines.push('');
+    lines.push(`(${strands.length - shown.length} older strand(s) — raise --max)`);
+  }
+  process.stdout.write(lines.join('\n') + '\n');
+}
+
+/** `warpline diff <A>..<B>`: the byte diff between two native tree tips. */
+function printTreeDiff(a: string, b: string, td: TreeDiff): void {
+  const lines: string[] = [`WARPLINE DIFF  ${a}..${b}  (byte diff between two tips — git absent)`];
+  const total = td.added.length + td.removed.length + td.modified.length;
+  if (total === 0) {
+    lines.push('  (identical — no path differs between the two trees)');
+    process.stdout.write(lines.join('\n') + '\n');
+    return;
+  }
+  lines.push(`  +${td.added.length} added  ~${td.modified.length} modified  -${td.removed.length} removed`);
+  lines.push('');
+  for (const p of td.added) lines.push(`  + ${p}`);
+  for (const p of td.modified) lines.push(`  ~ ${p}`);
+  for (const p of td.removed) lines.push(`  - ${p}`);
+  process.stdout.write(lines.join('\n') + '\n');
+}
+
+/** `warpline show <ordinary-strand>`: the strand's OWN diff — delta, intent, author, parents. */
+function printStrandShow(s: Strand, td?: TreeDiff): void {
+  const lines: string[] = [];
+  const pos = s.seq === 0 ? '◆ genesis' : strandPositionTag(s);
+  lines.push(`WARPLINE STRAND  ${short(s.pickId)}${pos ? `  (${pos})` : ''}`);
+  lines.push(`pick      ${s.pickId}`);
+  lines.push(`state     ${s.stateId}`);
+  lines.push(`actor     ${s.actor}`);
+  lines.push(`author    ${s.authoredBy?.agentId ?? '(no agent — operator seal)'}`);
+  lines.push(`recorded  ${s.recordedAt.slice(0, 10)}`);
+  const parents = parentsOf(s);
+  lines.push(
+    `parents   ${parents.length ? parents.map(short).join(', ') : '(genesis — no parents)'}${parents.length > 1 ? '  [merge]' : ''}`,
+  );
+  // intent is agent-authored — envelope it, then render inside the escaped
+  // untrusted-prose frame (the same defense `knot show` gives both sides' intents).
+  lines.push(frameProse(envelopeProse(s.intent), { label: 'intent' }));
+  lines.push('');
+  if (s.seq === 0) {
+    lines.push(`objects   ${s.objectCount}  (the project's meaning, warped)`);
+  } else {
+    lines.push(
+      `delta     +${s.delta.born.length} born  ~${s.delta.contractChanged.length} changed  -${s.delta.retired.length} retired  ↻${s.delta.renamedNoop} renamed-noop`,
+    );
+    if (s.delta.born.length) lines.push(`  born:     ${s.delta.born.join(', ')}`);
+    if (s.delta.contractChanged.length) lines.push(`  changed:  ${s.delta.contractChanged.join(', ')}`);
+    if (s.delta.retired.length) lines.push(`  retired:  ${s.delta.retired.join(', ')}`);
+  }
+  if (td) {
+    const total = td.added.length + td.removed.length + td.modified.length;
+    lines.push('');
+    lines.push(
+      `bytes vs parent  +${td.added.length} added  ~${td.modified.length} modified  -${td.removed.length} removed${total === 0 ? '  (meaning-only — no byte change)' : ''}`,
+    );
+    for (const p of td.added) lines.push(`  + ${p}`);
+    for (const p of td.modified) lines.push(`  ~ ${p}`);
+    for (const p of td.removed) lines.push(`  - ${p}`);
   }
   process.stdout.write(lines.join('\n') + '\n');
 }

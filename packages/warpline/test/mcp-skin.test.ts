@@ -89,13 +89,20 @@ describe('#warpline-mcp — the third skin over a real daemon (fixtures only)', 
   const call = (name: string, args: Record<string, unknown> = {}): Promise<ToolResult> =>
     mcp.callTool({ name, arguments: args }) as Promise<ToolResult>;
 
-  it('registers the 9-tool agent surface — human verbs and override flags OMITTED', async () => {
+  it('registers the 12-tool agent surface — human verbs and override flags OMITTED', async () => {
     const { tools } = await mcp.listTools();
     const names = tools.map((t) => t.name).sort();
     expect(names).toEqual(
       [
         'warpline_status',
         'warpline_refs_list',
+        // M2.5 skins (increment 7): the branch model's agent-class verbs. `branch`
+        // is registered even though its protect/unprotect OPS are human-class —
+        // the verb is agent-legal for create/list/delete; the ops are gated at the
+        // daemon (verb×op, like admit's verb×flag), so this is not expose-a-human-VERB.
+        'warpline_branch',
+        'warpline_switch',
+        'warpline_merge',
         'warpline_fork',
         'warpline_propose',
         'warpline_admit',
@@ -125,7 +132,7 @@ describe('#warpline-mcp — the third skin over a real daemon (fixtures only)', 
     const s = bodyOf(r);
     expect(s.principal).toBe('mcp');
     expect(s.kind).toBe('agent');
-    expect(s.nextLegalVerbs).toEqual(['fork']); // cold position: nothing forked yet
+    expect(s.nextLegalVerbs).toEqual(['fork', 'branch', 'switch']); // cold position: fork first, then lane setup
     expect((s.toolMap as Record<string, string>)['knot.show']).toBe('warpline_knot_show');
     expect(Array.isArray(s.cycle)).toBe(true);
   });

@@ -43,6 +43,10 @@ import {
   resolveNative,
   abandonNative,
 } from '../fabric/native.js';
+import { createBranch, listBranches, deleteBranch, switchBranch } from '../fabric/branch.js';
+import { mergeBranch } from '../fabric/merge.js';
+import { protectBranch, unprotectBranch, listProtected } from '../fabric/protected.js';
+import { readHead, DEFAULT_BRANCH } from '../fabric/head.js';
 import { shadowAdmit, readShadowVerdicts } from '../fabric/shadow.js';
 import { readKnotPayload, listKnotPayloads } from '../fabric/knot-payload.js';
 import { gradeFabric } from '../fabric/grade.js';
@@ -54,6 +58,8 @@ import {
   DAEMON_VERBS,
   HUMAN_ONLY_VERBS,
   HUMAN_ONLY_ADMIT_FLAGS,
+  HUMAN_ONLY_BRANCH_OPS,
+  HUMAN_ONLY_MERGE_FLAGS,
   READ_ONLY_VERBS,
   type RpcRequest,
   type RpcResponse,
@@ -329,6 +335,61 @@ export async function startDaemon(root: string, opts: StartDaemonOptions = {}): 
       }
       case 'refs.list':
         return { refs: Object.fromEntries(listRefs(wdir)), heads: heads(wdir) };
+      case 'branch': {
+        // The `branch` VERB is agent-class (create/list/delete open and move
+        // among the lanes the fabric adjudicates). protect/unprotect re-draw the
+        // gate itself — a HUMAN-class act — refused for an agent-class principal
+        // BEFORE any engine work, structurally, exactly as HUMAN_ONLY_ADMIT_FLAGS
+        // gates admit's overrides (the verb×op split mirrors the verb×flag split).
+        const op = str(params, 'op') ?? (str(params, 'name') ? 'create' : 'list');
+        if (who.kind === 'agent' && HUMAN_ONLY_BRANCH_OPS.includes(op)) {
+          throw new RpcFailure(
+            'FORBIDDEN',
+            `branch op ${JSON.stringify(op)} is a human-class act (an agent must never change what is protected FROM agents; Aegis §2.2) — principal ${JSON.stringify(who.principal)} is kind:agent`,
+          );
+        }
+        switch (op) {
+          case 'create': {
+            const name = str(params, 'name');
+            if (!name) throw new RpcFailure('BAD_REQUEST', 'branch op:create needs params.name');
+            return createBranch(r, name, { ...(str(params, 'from') ? { from: str(params, 'from') } : {}) });
+          }
+          case 'delete': {
+            const name = str(params, 'name');
+            if (!name) throw new RpcFailure('BAD_REQUEST', 'branch op:delete needs params.name');
+            return deleteBranch(r, name);
+          }
+          case 'protect': {
+            const name = str(params, 'name');
+            if (!name) throw new RpcFailure('BAD_REQUEST', 'branch op:protect needs params.name');
+            return protectBranch(r, name);
+          }
+          case 'unprotect': {
+            const name = str(params, 'name');
+            if (!name) throw new RpcFailure('BAD_REQUEST', 'branch op:unprotect needs params.name');
+            return unprotectBranch(r, name);
+          }
+          case 'list-protected':
+            return { protected: listProtected(r) };
+          case 'list':
+            return { branches: listBranches(r) };
+          default:
+            throw new RpcFailure(
+              'BAD_REQUEST',
+              `branch op ${JSON.stringify(op)} — expected create | list | delete | protect | unprotect | list-protected`,
+            );
+        }
+      }
+      case 'switch': {
+        const name = str(params, 'name');
+        if (!name) throw new RpcFailure('BAD_REQUEST', 'switch needs params.name (the branch to move onto)');
+        // worktree defaults to the fabric root (in-place switch), mirroring the
+        // CLI `switchBranch(root, root, …)`; a daemon-driven agent may target its
+        // own worktree via params.worktree.
+        return switchBranch(r, str(params, 'worktree') ?? r, name, {
+          ...(bool(params, 'force') ? { force: true } : {}),
+        });
+      }
       case 'fork':
         // SERVER-STAMPED: the scratch ref belongs to the SESSION principal —
         // params.agentId is ignored.
@@ -379,12 +440,62 @@ export async function startDaemon(root: string, opts: StartDaemonOptions = {}): 
           worktree: str(params, 'worktree') ?? r,
           agentId: who.principal, // server-stamped (params.agentId ignored)
           actor: who.principal, // server-stamped
+          // THE DAEMON-SIDE PROTECTED-BRANCH LANDING GATE (M2.5 skins increment 7,
+          // TD-2026-08-12-813) — the increment-5 deferral, now closed. The
+          // principal class is the TOKEN KIND; admitNative routes it through
+          // protectedLandingRefusal (fabric/protected.ts), so an agent-class admit
+          // that would LAND onto a protected branch (once branching is in use) is
+          // refused server-side with the same FORBIDDEN refusal the CLI gate emits.
+          // Human tokens / the single-line world pass unchanged (byte-identical).
+          principal: who.kind,
           ...(str(params, 'intent') ? { intent: str(params, 'intent') } : {}),
           ...(str(params, 'claim') ? { claim: str(params, 'claim') } : {}),
           ...(bool(params, 'acceptBreach') ? { acceptBreach: true } : {}),
           ...(bool(params, 'acceptRisk') ? { acceptRisk: true } : {}),
           ...(str(params, 'now') ? { now: str(params, 'now') } : {}),
           ...(bool(params, 'noRestore') ? { noRestore: true } : {}),
+        });
+      }
+      case 'merge': {
+        const from = str(params, 'from');
+        if (!from) throw new RpcFailure('BAD_REQUEST', 'merge needs params.from (the branch to merge in)');
+        // `confirm` (→ acceptMeaningBlind) is a HUMAN-class override — an agent
+        // must never self-confirm a meaning-blind HOLD (the hold refusal escalates
+        // to a human). Refused structurally, same shape as the admit override flags.
+        if (who.kind === 'agent') {
+          for (const flag of HUMAN_ONLY_MERGE_FLAGS) {
+            if (bool(params, flag)) {
+              throw new RpcFailure(
+                'FORBIDDEN',
+                `merge ${flag} is a human-class override (an agent must never self-confirm a meaning-blind hold; Aegis §2.2) — principal ${JSON.stringify(who.principal)} is kind:agent`,
+              );
+            }
+          }
+        }
+        // Default `into` = the current HEAD branch (mirrors the CLI). A detached
+        // HEAD names no branch to advance → fail closed (mirrors admit's --onto rule).
+        let into = str(params, 'into');
+        if (into === undefined) {
+          const head = readHead(r);
+          if (head === null) into = DEFAULT_BRANCH;
+          else if (head.kind === 'branch') into = head.branch;
+          else
+            throw new RpcFailure(
+              'BAD_REQUEST',
+              `merge — HEAD is detached at ${head.pickId}; pass params.into <branch>, or switch onto a branch first`,
+            );
+        }
+        return mergeBranch(r, {
+          from,
+          into,
+          // THE DAEMON-SIDE PROTECTED-BRANCH LANDING GATE (increment-5 deferral,
+          // now closed): principal = the token kind, so an agent-class merge INTO a
+          // protected branch is refused server-side by protectedLandingRefusal
+          // inside mergeBranch. Human tokens integrate freely (byte-identical).
+          principal: who.kind,
+          ...(str(params, 'worktree') ? { worktree: str(params, 'worktree') } : {}),
+          ...(bool(params, 'noRestore') ? { noRestore: true } : {}),
+          ...(bool(params, 'confirm') ? { acceptMeaningBlind: true } : {}),
         });
       }
       case 'abandon':
@@ -511,11 +622,11 @@ export async function startDaemon(root: string, opts: StartDaemonOptions = {}): 
  * aegis-security.md §4.1: log the address, never the body). */
 function targetOf(params: Record<string, unknown>): string | null {
   const bits: string[] = [];
-  for (const k of ['selector', 'commit', 'agentId', 'claim', 'worktree', 'into', 'dest']) {
+  for (const k of ['selector', 'commit', 'agentId', 'claim', 'worktree', 'into', 'dest', 'op', 'name', 'from']) {
     const v = params[k];
     if (typeof v === 'string' && v) bits.push(`${k}=${v}`);
   }
-  for (const k of ['acceptBreach', 'acceptRisk', 'shadow', 'noRestore']) {
+  for (const k of ['acceptBreach', 'acceptRisk', 'shadow', 'noRestore', 'force', 'confirm']) {
     if (params[k] === true) bits.push(k);
   }
   return bits.length ? bits.join(' ') : null;

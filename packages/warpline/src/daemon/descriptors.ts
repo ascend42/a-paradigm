@@ -29,8 +29,10 @@ import { DAEMON_VERBS, type DaemonVerb } from './protocol.js';
 
 export const DESCRIPTORS_SCHEMA = 'descriptors:v1' as const;
 
-/** Where a verb sits in the write cycle a cold agent must learn. */
-export type CycleStage = 'orient' | 'fork' | 'propose' | 'admit' | 'abandon' | 'inspect' | 'resolve' | 'custody';
+/** Where a verb sits in the write cycle a cold agent must learn. `branch` covers
+ * the lane-management verbs (branch/switch) — opening and moving between the named
+ * lines the fabric adjudicates, orthogonal to the fork→propose→admit progression. */
+export type CycleStage = 'orient' | 'branch' | 'fork' | 'propose' | 'admit' | 'abandon' | 'inspect' | 'resolve' | 'custody';
 
 export interface VerbDescriptor {
   verb: DaemonVerb;
@@ -94,6 +96,40 @@ export const VERB_DESCRIPTORS: Record<DaemonVerb, VerbDescriptor> = {
     cycleStage: 'orient',
     principal: 'agent',
   },
+  branch: {
+    verb: 'branch',
+    summary:
+      'Manage named lines. op create|list|delete opens, enumerates, or retires a refs/heads line (agent-class). op protect|unprotect changes what an agent may NOT auto-land onto — HUMAN-class, refused for agents; op list-protected reads the set. `selvage` is the default trunk and is protected by default.',
+    paramsSchema: obj({
+      op: {
+        type: 'string',
+        enum: ['create', 'list', 'delete', 'protect', 'unprotect', 'list-protected'],
+        description: 'default: list (create when a name is given without an op). protect/unprotect are human-class.',
+      },
+      name: { type: 'string', description: 'the branch name (required for create/delete/protect/unprotect)' },
+      from: {
+        type: 'string',
+        description: 'create at this selector instead of the HEAD tip (HEAD | selvage | <branch> | pick:<id> | state:<id> | @N)',
+      },
+    }),
+    cycleStage: 'branch',
+    principal: 'agent',
+  },
+  switch: {
+    verb: 'switch',
+    summary:
+      "Move your worktree onto a branch: restore the branch tip's bytes through the shared guarded writer, then advance HEAD. Refuse-dirty by default — a worktree path whose bytes are in no object refuses unless force:true. Overlays the target tree (unrelated files stay in place). Agent-class.",
+    paramsSchema: obj(
+      {
+        name: { type: 'string', description: 'the branch to switch onto' },
+        worktree: { type: 'string', description: 'the directory to restore into (default: repo root)' },
+        force: { type: 'boolean', description: 'overwrite colliding worktree paths whose bytes are in no object' },
+      },
+      ['name'],
+    ),
+    cycleStage: 'branch',
+    principal: 'agent',
+  },
   fork: {
     verb: 'fork',
     summary:
@@ -133,6 +169,22 @@ export const VERB_DESCRIPTORS: Record<DaemonVerb, VerbDescriptor> = {
       shadow: { type: 'boolean', description: 'observe-only: record the verdict row, seal nothing' },
       noRestore: { type: 'boolean', description: 'skip the CLEAN write-back restore' },
     }),
+    cycleStage: 'admit',
+    principal: 'agent',
+  },
+  merge: {
+    verb: 'merge',
+    summary:
+      'Fold branch `from` into `into` (default: the current HEAD branch) through the SAME seal core admit runs: disjoint meaning auto-folds CLEAN, a contradiction KNOTs, and a byte-decided change meaning was blind to HOLDS for a human (escalate via refusal.next[], never self-confirm). An agent-class merge INTO a protected branch is refused.',
+    paramsSchema: obj(
+      {
+        from: { type: 'string', description: 'the branch to merge in (ours)' },
+        into: { type: 'string', description: 'the target branch to advance (default: the current HEAD branch)' },
+        worktree: { type: 'string', description: 'worktree for a CLEAN write-back (default: repo root)' },
+        noRestore: { type: 'boolean', description: 'do not write the merged bytes back into the worktree' },
+      },
+      ['from'],
+    ),
     cycleStage: 'admit',
     principal: 'agent',
   },
@@ -262,9 +314,17 @@ export const NEXT_LEGAL_VERBS: readonly NextVerbRule[] = Object.freeze([
       'your proposal is contested: read the KNOT work order. Re-admitting unchanged cannot clear it, and resolution is human-class — escalate rather than retry; if you must move on, abandon withdraws your proposal (it concedes the contest, it does not resolve it).',
   },
   {
+    // M2.5 skins (increment 7): the no-scratch point is also where a cold agent
+    // sets up its LANE. `fork` stays FIRST (the cycle's own step 1); `branch` and
+    // `switch` follow so the directive carrier surfaces the lane verbs the
+    // fork→propose→admit ladder otherwise never mentions. `merge` is a lane FOLD,
+    // not a per-position "what do I do next", so it is taught via the status
+    // `cycle`/`verbs`/`toolMap` (which enumerate every DAEMON_VERB) rather than
+    // the directive ladder — a cold agent that has just oriented is not at a merge.
     when: { scratchPresent: false },
-    verbs: ['fork'],
-    because: 'you have no scratch ref yet: mint one at the selvage tip before proposing.',
+    verbs: ['fork', 'branch', 'switch'],
+    because:
+      'you have no scratch ref yet: `fork` mints one at the current branch tip before proposing. To work on a different line first, `branch` opens or lists a named line and `switch` moves your worktree onto it.',
   },
   {
     // C-10: this rule used to answer 'admit' ALONE, which is a closed cycle

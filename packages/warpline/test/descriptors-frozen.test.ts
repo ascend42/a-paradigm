@@ -63,7 +63,20 @@ import { HUMAN_ONLY_VERBS } from '../src/daemon/protocol.js';
  * real last week. Sequencing a freeze after the surface settles is what made it
  * cheap; that is the argument for FG-3's own instruction to review before pinning.
  */
-const PINNED_DESCRIPTORS_ID = 'descriptors:v1:0bb2c860c675b713fe61e7db947bd782bad2286c6fdb171ab544768e9d9ca3b3';
+/**
+ * RE-PINNED 2026-08-12 (M2.5 skins increment 7, TD-2026-08-12-813) — the branch
+ * model's three verbs joined the surface: `branch` (create/list/delete +
+ * human-class protect/unprotect ops), `switch` (move the worktree onto a branch),
+ * and `merge` (fold one line into another through the shared seal core). All three
+ * are agent-class, so agentSurfaceVerbs and DAEMON_VERBS grew by 3 together; the
+ * next-verb rule's no-scratch orientation point gained `branch`/`switch` as the
+ * lane-setup verbs a cold agent otherwise never hears named. The teaching surface
+ * legitimately EXTENDED, so the id genuinely moves — the denominator-reset rule
+ * applies and costs nothing today (F4 deferred behind the value-prop proof,
+ * TD-2026-08-11-838; zero scored runs to discard).
+ *   was: descriptors:v1:0bb2c860c675b713fe61e7db947bd782bad2286c6fdb171ab544768e9d9ca3b3
+ */
+const PINNED_DESCRIPTORS_ID = 'descriptors:v1:6e86dce81f3632714983a4aee35d8a7377ca97710bb9ba589a36dcb29e096ca2';
 
 describe('descriptors — frozen, total, surface-correct', () => {
   it('the descriptor table matches the pinned content address (FG-3 tripwire)', () => {

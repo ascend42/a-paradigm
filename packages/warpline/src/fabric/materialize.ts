@@ -214,8 +214,10 @@ export async function materializeMergedState(
 /* ── NATIVE-tree merge (H1 relaxation, PR-B) ─────────────────────────────────── */
 
 /** Flatten a native tree to leaf paths → {mode, id}. Dirs are expanded; symlink /
- * gitlink entries are kept as leaves (the merge fails them closed as NON_BLOB). */
-function flattenNativeTree(store: ObjectStore, treeId: string): Map<string, { mode: string; id: string }> {
+ * gitlink entries are kept as leaves (the merge fails them closed as NON_BLOB).
+ * Exported so #graph's read-only `diff A..B` reuses this exact walker rather than
+ * re-deriving a second tree flattener (M2.5 increment 6). */
+export function flattenNativeTree(store: ObjectStore, treeId: string): Map<string, { mode: string; id: string }> {
   const out = new Map<string, { mode: string; id: string }>();
   const walk = (tid: string, prefix: string): void => {
     for (const e of store.getTree(tid)) {
@@ -233,7 +235,7 @@ type NativeEntry = { mode: string; id: string };
  * Because all three merge sides are normalized to NATIVE ids, unchanged files share
  * one content-address across sides — so id-equality is an exact, cheap change test
  * (the native equivalent of git diff --no-renames: a rename reads as delete+add). */
-const nativeDiffers = (a: NativeEntry | undefined, b: NativeEntry | undefined): boolean =>
+export const nativeDiffers = (a: NativeEntry | undefined, b: NativeEntry | undefined): boolean =>
   (a === undefined) !== (b === undefined) ||
   (a !== undefined && b !== undefined && (a.id !== b.id || a.mode !== b.mode));
 
