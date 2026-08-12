@@ -1729,7 +1729,27 @@ components:
       JOIN, seeded-control precision/recall vs the ~29% prior, before/after pre-fix
       scoring against the fixed judge label, the §7A two-denominator bounds (objective
       vs subjective, rule-of-three each, NEVER blended), and the INDETERMINATE fraction
-      against the contested floor.
+      against the contested floor. #judge/judge-runner — the ENFORCING run path that
+      wires the three together so the foundation gates actually fire: runJudgeEnforced
+      runs #judge/preflight FIRST and HARD-REFUSES (JudgeRefusedError / hard-fail result)
+      if the judge is disqualified — nothing real scores past an unvalidated judge; only
+      twin-PASSING eligibleCards are sampled (verbatim run-record.json + judgments.jsonl
+      kept as the §5 raw-output AUDIT artifact) and each MAJORITY verdict is SEALED into
+      the hash-chained #judge/ledger via sealJudgeVerdict — the LEDGER, not the plaintext
+      log, is the AUTHORITATIVE denominator, and a later Warpline join goes through
+      joinWarplineVerdict (write-before-reveal). At each BLOCK BOUNDARY it writes
+      ledger.head() to a git-tracked witness file (default
+      <outDir>/.warpline-judge/expo-field-audit.head) and surfaces it via the return
+      value / injected logger: committing (or GPG-signing) that head into git is a
+      REQUIRED run-procedure step (§3 A13) — the code writes and surfaces the head, the
+      OPERATOR commits it, so git's independent history externally witnesses the chain.
+      CARD HARDENING (§5, §3d): #judge/card-render routes EVERY filePath and failingCheck
+      — the bare `file:` lines, the changed-files list, the failingCheck line, AND the
+      frameProse LABEL (which frameProse does NOT escape) — through sanitizeField
+      (escapeProseBody + newline/tab collapse), so an agent-controlled filename carrying
+      newlines/control bytes can no longer forge a column-0 narration line or a frame
+      edge; #judge/preflight's benign twin ALSO neutralizes filePath/failingCheck (defense
+      in depth — the differential COVERS those channels).
     type: module
     components:
       - "#knot-payload"
