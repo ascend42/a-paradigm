@@ -72,6 +72,16 @@ import { repairFabric, setFabricRef, type FabricRepairResult, type RefSetResult 
 import { attestFabric } from './fabric/anchor.js';
 import { backfillV1Bindings } from './fabric/backfill.js';
 import { restore, type RestoreResult } from './fabric/restore.js';
+import {
+  createBranch,
+  listBranches,
+  deleteBranch,
+  switchBranch,
+  type CreateBranchResult,
+  type DeleteBranchResult,
+  type SwitchResult,
+  type BranchInfo,
+} from './fabric/branch.js';
 import { stake, stakeRecover, type StakeResult, type StakeRecoverResult } from './fabric/stake.js';
 import { STAKE_MARKER } from './fabric/stake-guard.js';
 import { existsSync } from 'node:fs';
@@ -1151,6 +1161,61 @@ program
     }
   });
 
+program
+  .command('branch')
+  .description(
+    'Branches (M2.5). A BRANCH is a NAMED LINE of history — a refs/heads/<name> holding a pickId, exactly like `selvage` (the default trunk). `branch <name>` opens a new line at the current HEAD tip (or --from <selector>); `branch --list` (or no args) shows them all with the current one marked *; `branch -d <name>` retires a name (its strand survives in the ledger as an abandoned head, recoverable with `warpline refs set`). These are AGENT-CLASS verbs — opening a lane is what the fabric exists to adjudicate. NEXT: `warpline switch <name>` to move your worktree onto it.',
+  )
+  .argument('[name]', 'the branch to create (omit with --list, or to just list)')
+  .option('-l, --list', 'list branches (the current one marked with *)')
+  .option('-d, --delete', 'delete the named branch (unlinks the ref; the strand survives in the ledger)')
+  .option('--from <selector>', 'create at this selector instead of the HEAD tip (HEAD | selvage | <branch> | pick:<id> | state:<id> | @N)')
+  .option('--json', 'emit the result as JSON')
+  .action(async (name: string | undefined, options: { list?: boolean; delete?: boolean; from?: string; json?: boolean }) => {
+    try {
+      const root = await resolveRoot();
+      if (options.delete) {
+        if (!name) throw new Error('`branch -d` needs a <name> to delete');
+        const result = deleteBranch(root, name);
+        if (options.json) process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+        else printBranchDelete(result);
+        return;
+      }
+      if (name && !options.list) {
+        const result = createBranch(root, name, { from: options.from });
+        if (options.json) process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+        else printBranchCreate(result);
+        return;
+      }
+      // no name (or --list) → list branches, git-parity.
+      const branches = listBranches(root);
+      if (options.json) process.stdout.write(JSON.stringify(branches, null, 2) + '\n');
+      else printBranchList(branches);
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+program
+  .command('switch')
+  .alias('checkout')
+  .description(
+    'Move your worktree onto a branch (M2.5). SWITCH restores the branch tip\'s bytes into the worktree (git ABSENT — through the same guarded writer restore/admit use) and moves HEAD onto the branch. REFUSE-DIRTY by default (git-parity): a worktree path whose current bytes are in NO object refuses — pass --force to overwrite it. Switch OVERLAYS the target tree (unrelated files are left in place). AGENT-CLASS. `checkout` is an alias.',
+  )
+  .argument('<name>', 'the branch to switch to')
+  .option('--force', 'overwrite colliding worktree paths whose bytes are in no object (refuse-dirty is the default)')
+  .option('--json', 'emit the result as JSON')
+  .action(async (name: string, options: { force?: boolean; json?: boolean }) => {
+    try {
+      const root = await resolveRoot();
+      const result = switchBranch(root, root, name, { force: options.force });
+      if (options.json) process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+      else printSwitch(result);
+    } catch (err) {
+      fail(err);
+    }
+  });
+
 const objects = program
   .command('objects')
   .description('The native content-addressed object store (byte authority) — the store that lets Warpline reconstruct a working tree with git ABSENT.');
@@ -1832,6 +1897,40 @@ function printRestore(r: RestoreResult): void {
   lines.push(`treeId    ${r.treeId}`);
   lines.push(`restored  ${r.entriesRestored} entr${r.entriesRestored === 1 ? 'y' : 'ies'}  (files + dirs + symlinks, git absent)`);
   process.stdout.write(lines.join('\n') + '\n');
+}
+
+function printBranchCreate(r: CreateBranchResult): void {
+  process.stdout.write(
+    `BRANCH  ${r.name}  created at ${r.pickId}  (from ${r.from})\n` +
+      `→ switch your worktree onto it with \`warpline switch ${r.name}\`\n`,
+  );
+}
+
+function printBranchDelete(r: DeleteBranchResult): void {
+  process.stdout.write(
+    `BRANCH  deleted ${r.name}  (was ${r.pickId})\n` +
+      `→ the strand survives in the ledger (abandoned head); recover with \`warpline refs set ${r.name} ${r.pickId}\`\n`,
+  );
+}
+
+function printBranchList(branches: BranchInfo[]): void {
+  const lines: string[] = ['WARPLINE BRANCHES  (* = current)'];
+  if (branches.length === 0) {
+    lines.push('  (no branches — legacy selvage mode; run `warpline refs migrate`, then `warpline branch <name>`)');
+  }
+  const width = branches.reduce((w, b) => Math.max(w, b.name.length), 0);
+  for (const b of branches) {
+    lines.push(`${b.current ? '*' : ' '} ${pad(b.name, width)}  ${b.pickId}`);
+  }
+  process.stdout.write(lines.join('\n') + '\n');
+}
+
+function printSwitch(r: SwitchResult): void {
+  process.stdout.write(
+    `SWITCH  now on ${r.branch}  (was ${r.previous})\n` +
+      `tip       ${r.tip}\n` +
+      `restored  ${r.entriesRestored} entr${r.entriesRestored === 1 ? 'y' : 'ies'} into the worktree (git absent)\n`,
+  );
 }
 
 function printAdmit(agentId: string, r: AdmitResult): void {

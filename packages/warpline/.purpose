@@ -1341,6 +1341,48 @@ components:
       - "#fabric-dag"
       - "#strand"
 
+  branch:
+    description: >-
+      The BRANCH VERBS (M2.5 increment 2, TD-2026-08-12-813, Arky's design) —
+      branch.ts. The human/agent layer OVER the increment-1 foundation (#head
+      symref, #fabric-refs CAS, #mergebase, a bare branch name as a #restore
+      selector): create / list / delete a named line, and SWITCH the worktree
+      between them. A branch is nothing new underneath — a `refs/heads/<name>`
+      holding a pickId, exactly like `selvage` (the default trunk / #head
+      DEFAULT_BRANCH); this module only mints, enumerates, retires, and MOVES-TO
+      those refs, wiring primitives rather than adding a ref grammar or a
+      worktree-writer. createBranch(root, name, {from?}): resolve the source tip
+      (from HEAD via resolveHeadTip when omitted/`HEAD` — the CURRENT branch, not
+      select.ts's legacy selvage-alias; else resolveSelector, a `tree:` selector
+      refused), then writeRef with CAS-null (must-not-exist — a concurrent create
+      loses cleanly, a branch is never silently re-pointed). listBranches(root):
+      listRefs sorted, each annotated `current` (HEAD's branch; absent HEAD ≡
+      selvage, detached ≡ none — the '*' marker). deleteBranch(root, name): UNLINK
+      the ref only — the strand survives in append-only fabric.jsonl as an abandoned
+      head (`fabric verify` reports it, `refs set` recovers it); refuses `selvage`
+      (the trunk) and the current HEAD branch. switchBranch(root, worktree, name,
+      {force?}): resolve the branch tip → treeId (A4-refuses an unbound strand,
+      exactly as #restore does), write those bytes into the worktree through the
+      SHARED guarded byte-writer (guardedRestoreTree — refuse-dirty by default, a
+      path whose bytes are in no object refuses; `--force` overrides, git-parity),
+      THEN writeHead — the restore precedes the HEAD move, so a dirty refusal leaves
+      both worktree and HEAD untouched. Switch OVERLAYS the tip tree (#restore
+      semantics reused verbatim): it writes the target's paths and leaves unrelated
+      files in place, and does not prune paths absent from the target — so switching
+      BETWEEN branches whose tracked content diverges needs `--force` (the guard has
+      no index/baseline to know the current bytes are captured in the other branch's
+      tree). branch/switch are AGENT-CLASS verbs (opening/moving lanes is the
+      concurrency the fabric adjudicates) — deliberately NOT in the HUMAN_ONLY set.
+      CLI: `warpline branch [<name>] [--from <sel>] [-l|--list] [-d|--delete]`,
+      `warpline switch <name> [--force]` (alias `checkout`). Library code: no console
+      output. Pinned by test/branch-verbs.test.ts.
+    type: module
+    components:
+      - "#head"
+      - "#fabric-refs"
+      - "#restore"
+      - "#warp-store"
+
   anchor:
     description: >-
       The v1-prefix EPOCH ANCHOR (docs/specs/warpline-v1-anchor.md) — closes the
