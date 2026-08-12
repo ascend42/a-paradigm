@@ -33,6 +33,8 @@ import type { ContractChangeset } from './sem-delta.js';
 import { changedSlotsOf } from './sem-delta.js';
 import * as path from 'node:path';
 import * as fs from 'node:fs/promises';
+import { realpathSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 import { serializeState } from './warp/store.js';
 import { ObjectStore } from './warp/object-store.js';
 import { snapshotDir } from './warp/snapshot.js';
@@ -1726,6 +1728,17 @@ function printRestore(r: RestoreResult): void {
 }
 
 function printAdmit(agentId: string, r: AdmitResult): void {
+  process.stdout.write(admitReportLines(agentId, r).join('\n') + '\n');
+}
+
+/**
+ * The admit report as an array of lines — pure over (agentId, result), no I/O,
+ * so the surface strings (the LEXICAL advisory block and the independent-CLEAN
+ * standing disclaimer) are testable without capturing stdout. It READS the
+ * result and never mutates it: no line here touches `status`, `sealed`,
+ * `confidence`, `knots`/`dangling` or the contested denominator.
+ */
+export function admitReportLines(agentId: string, r: AdmitResult): string[] {
   const d = r.decision;
   const lines: string[] = [];
   lines.push(`ADMIT  ${agentId}  →  ${d.status}`);
@@ -1735,6 +1748,16 @@ function printAdmit(agentId: string, r: AdmitResult): void {
     lines.push(`confidence ${d.confidence}${d.confidence === 'independent' ? '  (⚠ disjoint sets — autoClean may hide a cross-symbol semantic conflict; false-AUTOFOLD gate)' : '  (dependency-adjacent — trustworthy)'}`);
     if (r.sealed && r.strand) lines.push(`  → MERGED + sealed (${strandTag(r.strand)}); selvage advanced to ${short(r.strand.stateId)}`);
     else lines.push('  (not sealed — needs git refs to materialize; commit then admit)');
+    // STANDING DISCLAIMER (T-2026-06-24-015, posture TD-2026-08-12-831; protocol
+    // §8 line 711 — the CLI must "say so in the same breath"). An independent
+    // CLEAN sealed because the two changed sets are SYMBOL-DISJOINT, which is
+    // exactly the case with no cross-symbol invariant guarantee. It prints on
+    // EVERY such admit — not only when the LEXICAL advisory fired — because the
+    // dangerous read is an EMPTY hazard list taken as an all-clear. Surface string
+    // only: it reads `confidence`/`sealed`, mutates nothing, gates nothing.
+    if (d.confidence === 'independent' && r.sealed) {
+      lines.push('  ⚠ independent-CLEAN: the two changed sets are SYMBOL-DISJOINT — this admission carries NO cross-symbol invariant guarantee; a conflict sharing no token (e.g. a bound one side lowered, a loop the other wrote assuming the old value) is UNDETECTABLE by meaning and did NOT gate this merge.');
+    }
   } else if (d.status === 'FAST_ADMIT') {
     lines.push('verdict   FAST_ADMIT — selvage has not advanced; the proposed state admits directly');
     if (r.sealed && r.strand) lines.push(`  → sealed (${strandTag(r.strand)}); selvage advanced to ${short(r.strand.stateId)}`);
@@ -1817,7 +1840,7 @@ function printAdmit(agentId: string, r: AdmitResult): void {
   if (r.payloadError) {
     lines.push(`⚠ work order NOT persisted — this contested verdict is invisible to \`warpline health\`: ${r.payloadError}`);
   }
-  process.stdout.write(lines.join('\n') + '\n');
+  return lines;
 }
 
 /**
@@ -2482,19 +2505,38 @@ function fail(err: unknown): never {
 // Reject stray positional args so `diff a b c` errors instead of silently dropping `c`.
 program.commands.forEach((c) => c.allowExcessArguments(false));
 
-// D-7: lift `--root <dir>` out of argv (any position) BEFORE commander parses,
-// and validate it eagerly — a typo'd explicit root must refuse here, not after
-// a write has already landed somewhere unexpected.
-let userArgv: string[] = [];
-try {
-  const lifted = extractRootFlag(process.argv.slice(2));
-  setExplicitRoot(lifted.root);
-  userArgv = lifted.argv;
-} catch (err) {
-  fail(err);
+/**
+ * Run the parse ONLY when this file is the process entry point. When cli.ts is
+ * imported as a module (e.g. a test exercising `admitReportLines`), parsing
+ * `process.argv` under a foreign runner would try to run a bogus subcommand and
+ * `process.exit`. realpathSync makes the check symlink-safe, so the npm `bin`
+ * shim (a symlink to dist/cli.js) still matches when invoked as `warpline`.
+ */
+function runningAsCli(): boolean {
+  const entry = process.argv[1];
+  if (entry === undefined) return false;
+  try {
+    return realpathSync(entry) === fileURLToPath(import.meta.url);
+  } catch {
+    return false;
+  }
 }
 
-program.parseAsync(userArgv, { from: 'user' }).catch((err) => fail(err));
+if (runningAsCli()) {
+  // D-7: lift `--root <dir>` out of argv (any position) BEFORE commander parses,
+  // and validate it eagerly — a typo'd explicit root must refuse here, not after
+  // a write has already landed somewhere unexpected.
+  let userArgv: string[] = [];
+  try {
+    const lifted = extractRootFlag(process.argv.slice(2));
+    setExplicitRoot(lifted.root);
+    userArgv = lifted.argv;
+  } catch (err) {
+    fail(err);
+  }
+
+  program.parseAsync(userArgv, { from: 'user' }).catch((err) => fail(err));
+}
 
 // referenced so WORKTREE_REF is part of the public CLI vocabulary surface
 void WORKTREE_REF;

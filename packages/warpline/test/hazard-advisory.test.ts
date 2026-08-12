@@ -38,8 +38,9 @@ import { TsLens } from '../src/lens/ts-lens.js';
 import { CfgLens } from '../src/lens/cfg-lens.js';
 import { injectCodeUnits } from '../src/lens/lift-code-units.js';
 import { buildWarpState, type WarpState } from '../src/warp/warp-state.js';
-import { evaluateHazards, rarityIndex } from '../src/fabric/hazard.js';
-import { admitDecision } from '../src/fabric/admit.js';
+import { evaluateHazards, rarityIndex, type CleanHazard } from '../src/fabric/hazard.js';
+import { admitDecision, type AdmitDecision, type AdmitResult } from '../src/fabric/admit.js';
+import { admitReportLines } from '../src/cli.js';
 
 /** Write an in-memory tree and lift it the way `absorb` does (ts + cfg lenses). */
 async function stateOf(ref: string, files: Record<string, string>): Promise<WarpState> {
@@ -221,4 +222,108 @@ describe('#hazard — the CLEAN advisory catches lexical coupling the graph miss
     expect(b).toBe(a);
     expect(c).toBe(a);
   }, 120_000);
+});
+
+/**
+ * FIX A — the SURFACE-AND-SAMPLE posture (T-2026-06-24-015, TD-2026-08-12-831).
+ *
+ * The engine tests above pin what the advisory computes. These pin what the CLI
+ * SAYS — the two honest surface strings — and, most importantly, that saying
+ * them changes no verdict field. Protocol §8 (line 711) requires the CLI to
+ * "say so in the same breath": an independent-CLEAN sealed BECAUSE the two
+ * changed sets are symbol-disjoint, which is exactly the case that carries no
+ * cross-symbol invariant guarantee, so it must announce that on EVERY such
+ * admit — not only when the LEXICAL advisory happens to fire.
+ */
+const DISCLAIMER_SIG = 'independent-CLEAN: the two changed sets are SYMBOL-DISJOINT';
+const ADVISORY_SIG = 'LEXICAL coupling advisor';
+
+function cleanDecision(confidence: 'linked' | 'independent'): AdmitDecision {
+  return {
+    status: 'CLEAN',
+    knots: [],
+    dangling: [],
+    confidence,
+    rebasedOnto: 'selvage-tip-000',
+    agentChanged: ['#net'],
+    otherChanged: ['#cfg:app.json'],
+  };
+}
+
+/** A minimal CLEAN AdmitResult — only the fields the printer reads. */
+function cleanResult(opts: {
+  confidence: 'linked' | 'independent';
+  sealed: boolean;
+  hazards?: CleanHazard[];
+}): AdmitResult {
+  return {
+    decision: cleanDecision(opts.confidence),
+    sealed: opts.sealed,
+    proposedStateId: 'proposed-000',
+    ...(opts.sealed ? { strand: { pickId: 'pick0000', stateId: 'state000', seq: 1 } } : {}),
+    ...(opts.hazards ? { hazards: opts.hazards } : {}),
+  } as unknown as AdmitResult;
+}
+
+const SAMPLE_HAZARD: CleanHazard = {
+  kind: 'cfg-island',
+  token: 'num:8500',
+  oursSymbols: ['#net'],
+  theirsSymbols: ['#cfg:app.json'],
+  rarity: 1,
+  score: 1,
+  dangerFlags: [],
+};
+
+describe('#hazard FIX A — the honest surface strings, and their invariance', () => {
+  it('the STANDING DISCLAIMER fires on an independent-CLEAN sealed admit', () => {
+    const out = admitReportLines('agent-x', cleanResult({ confidence: 'independent', sealed: true })).join('\n');
+    expect(out, 'protocol §8 L711: the CLI must say so in the same breath').toContain(DISCLAIMER_SIG);
+    expect(out).toContain('NO cross-symbol invariant guarantee');
+  });
+
+  it('the disclaimer fires EVEN WITH NO hazards — an empty list is the dangerous read', () => {
+    // The whole point: a clean (empty) hazard list must not read as an all-clear.
+    const noHaz = cleanResult({ confidence: 'independent', sealed: true });
+    expect(noHaz.hazards, 'this arm carries no advisory at all').toBeUndefined();
+    expect(admitReportLines('agent-x', noHaz).join('\n')).toContain(DISCLAIMER_SIG);
+  });
+
+  it('the disclaimer is SCOPED — a linked CLEAN does not carry it', () => {
+    const out = admitReportLines('agent-x', cleanResult({ confidence: 'linked', sealed: true })).join('\n');
+    expect(out).not.toContain(DISCLAIMER_SIG);
+  });
+
+  it('INVARIANCE — neither the disclaimer nor the advisory alters status / sealed / the contested count', () => {
+    const withHaz = cleanResult({ confidence: 'independent', sealed: true, hazards: [SAMPLE_HAZARD] });
+    const withoutHaz = cleanResult({ confidence: 'independent', sealed: true });
+
+    // Rendering is a pure read: it must not mutate the verdict it is describing.
+    const snapWith = JSON.stringify(withHaz.decision);
+    const snapWithout = JSON.stringify(withoutHaz.decision);
+    const linesWith = admitReportLines('a', withHaz).join('\n');
+    const linesWithout = admitReportLines('a', withoutHaz).join('\n');
+    expect(JSON.stringify(withHaz.decision), 'printing perturbed the decision').toBe(snapWith);
+    expect(JSON.stringify(withoutHaz.decision)).toBe(snapWithout);
+
+    // The verdict fields are BYTE-IDENTICAL across the hazard / no-hazard arms —
+    // the advisory rides on top of the verdict, it never becomes part of it.
+    expect(withHaz.decision.status).toBe(withoutHaz.decision.status);
+    expect(withHaz.decision.status).toBe('CLEAN');
+    expect(withHaz.sealed).toBe(withoutHaz.sealed);
+    expect(withHaz.sealed).toBe(true);
+    // The contested denominator (knots || dangling) is empty in BOTH — an
+    // advisory can never move it (the field-test instrument stays intact).
+    expect(withHaz.decision.knots).toEqual([]);
+    expect(withHaz.decision.dangling).toEqual([]);
+    expect(withoutHaz.decision.knots).toEqual([]);
+    expect(withoutHaz.decision.dangling).toEqual([]);
+
+    // The disclaimer is present in BOTH arms (independent of hazards firing);
+    // the LEXICAL advisory block appears ONLY when a hazard is present.
+    expect(linesWith).toContain(DISCLAIMER_SIG);
+    expect(linesWithout).toContain(DISCLAIMER_SIG);
+    expect(linesWith).toContain(ADVISORY_SIG);
+    expect(linesWithout).not.toContain(ADVISORY_SIG);
+  });
 });

@@ -129,16 +129,22 @@ const fn = (name: string, body: string) => `export function ${name}() {\n  ${bod
 const SCENARIOS: Scenario[] = [
   // ════ THE CONTRAST PAIR — the same double-tax conflict, caught vs blind ════
   // 1a. DOUBLE-TAX, SAME FILE (dependency edge: applyTax CALLS rate). A bakes the
-  //     factor into rate; B adds it again in applyTax. Because applyTax Merkle-
-  //     includes rate, A's rate-change moves applyTax's essence too → both sides
-  //     move applyTax → CAUGHT as a knot. Auto-admit is SAFE here.
+  //     factor into rate; B adds it again in applyTax. applyTax Merkle-includes
+  //     rate, so A's rate-change moves applyTax's essence too. BEFORE the ripple-
+  //     gate this was CAUGHT as a knot. AFTER the ripple-gate (TD-2026-08-12-831)
+  //     it AUTO-FOLDS: A's change to rate is a CONST body edit — rate's SIGNATURE
+  //     holds — so applyTax's A-side ripple is body-internal (rippleFromContract
+  //     =false, localChanged=false) and does NOT contest applyTax's body; only
+  //     B's local edit does. bodyContested(A)=false ⇒ CLEAN. This is a KNOWN,
+  //     RATIFIED false-CLEAN: const-body double-transform through a dependency
+  //     edge is NOT among the 12 signature-bearing catches the gate preserves.
   {
     name: 'double-tax-samefile',
     category: 'double-applied-transform',
     linkage: 'dependent',
     adversarial: true,
-    note: 'rate*1.08 AND applyTax*1.08 → 1.1664 (taxed twice); applyTax calls rate ⇒ Merkle links them',
-    expect: 'knot',
+    note: 'rate*1.08 AND applyTax*1.08 → 1.1664; const ripple (rate sig holds) ⇒ ripple-gate auto-folds (accepted false-CLEAN, TD-831)',
+    expect: 'autofold',
     base: { 'src/money.ts': fn('rate', 'return 100 * 1.0;') + fn('applyTax', 'return rate();') },
     a: { 'src/money.ts': fn('rate', 'return 100 * 1.08;') + fn('applyTax', 'return rate();') },
     b: { 'src/money.ts': fn('rate', 'return 100 * 1.0;') + fn('applyTax', 'return rate() * 1.08;') },
@@ -161,14 +167,16 @@ const SCENARIOS: Scenario[] = [
     a: { 'src/rate.ts': fn('rate', 'return 100 * 1.08;') },
     b: { 'src/tax.ts': `import { rate } from './rate';\n` + fn('applyTax', 'return rate() * 1.08;') },
   },
-  // 2. DOUBLE-DISCOUNT, SAME FILE (dependency edge) — caught for the same reason.
+  // 2. DOUBLE-DISCOUNT, SAME FILE (dependency edge) — SAME const-ripple shape as
+  //    1a: listPrice's SIGNATURE holds, so the ripple-gate auto-folds it too.
+  //    Another RATIFIED const-body false-CLEAN (TD-2026-08-12-831).
   {
     name: 'double-discount-samefile',
     category: 'double-applied-transform',
     linkage: 'dependent',
     adversarial: true,
-    note: 'listPrice*0.9 AND checkout*0.9 → 0.81; checkout calls listPrice ⇒ caught',
-    expect: 'knot',
+    note: 'listPrice*0.9 AND checkout*0.9 → 0.81; const ripple (listPrice sig holds) ⇒ ripple-gate auto-folds (accepted false-CLEAN, TD-831)',
+    expect: 'autofold',
     base: { 'src/cart.ts': fn('listPrice', 'return 50;') + fn('checkout', 'return listPrice();') },
     a: { 'src/cart.ts': fn('listPrice', 'return 50 * 0.9;') + fn('checkout', 'return listPrice();') },
     b: { 'src/cart.ts': fn('listPrice', 'return 50;') + fn('checkout', 'return listPrice() * 0.9;') },

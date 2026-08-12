@@ -758,7 +758,14 @@ components:
       two branches that edit the SAME code-unit's body to DIFFERENT essences are a
       KNOT with conflictingSlots ['body'] (git may auto-merge textually-distant
       edits Warpline flags at function granularity); a call to a code-unit the other
-      branch retired surfaces as a DANGLE via the unchanged edge pass. RANKING
+      branch retired surfaces as a DANGLE via the unchanged edge pass. RIPPLE-GATE
+      (stage 2, TD-2026-08-12-831): the 'body' slot is a genuine conflict only when
+      BOTH sides contest it — bodyContested(d) = (d.localChanged ?? true) ||
+      (d.rippleFromContract ?? true). A callee const/body ripple that re-addresses
+      the caller's inlined body but COMMUTES (signature held) leaves that side
+      uncontested → CLEAN, killing the measured 3/3 over-block false-KNOTs while
+      direct×direct and signature-bearing-ripple×edit stay contested → KNOT
+      preserved. Consults #sem-delta.rippleFromContract/localChanged. RANKING
       (T-2026-07-03-002, additive): Knot.direct / Dangle.direct = TRUE iff ≥1 side's
       delta has localChanged (own-content edit); FALSE = a ripple-only knot (both
       essences shifted transitively — the 48-176-symbol avalanche class ground truth

@@ -80,6 +80,14 @@ async function stateOfTree(ref: string, files: Record<string, string>): Promise<
 }
 
 const sym = (file: string, qname: string) => `#code:${file}::${qname}`;
+// autoClean holds stableKeys, not #code: symbols — translate before asserting
+// membership (the established pattern from code-diff.test.ts).
+function keyOf(state: ReturnType<typeof diff>, symbol: string): string {
+  for (const d of state.deltas.values()) {
+    if (d.symbol === symbol) return d.stableKey;
+  }
+  throw new Error(`no delta for ${symbol}`);
+}
 
 function changedFor(set: ReturnType<typeof diff>, symbol: string) {
   for (const d of set.deltas.values()) {
@@ -378,27 +386,26 @@ function r(){ return t() + 7; }`,
 });
 
 // ===========================================================================
-// 4. STAGE-2 PENDING — the over-block, recorded as it stands TODAY.
+// 4. STAGE-2 SHIPPED — the ripple-gate (TD-2026-08-12-831). The commuting pair
+//    now CLEANs; the contract-bearing pair keeps knotting.
 // ===========================================================================
-describe('STAGE-2 PENDING — the commuting pair still KNOTs (current behavior)', () => {
+describe('STAGE-2 SHIPPED — the commuting pair CLEANs; the ripple-gate', () => {
   /**
    * A edits callee `t`'s constant; B edits caller `r`'s constant. The two edits
-   * are semantically INDEPENDENT and commute. Today both sides move `r`'s
-   * essence — A by Merkle ripple, B by its own body — and predict's `body`
-   * scalar-conflict rule contends them → KNOT on `r`. This is the false KNOT
-   * measured 3/3 in the NEGCTRL-RIPPLE stratum.
+   * are semantically INDEPENDENT and commute. Before the ripple-gate, both sides
+   * moved `r`'s essence — A by Merkle ripple, B by its own body — and predict's
+   * unconditional `body` scalar-conflict rule contended them → false KNOT on `r`
+   * (measured 3/3 in the NEGCTRL-RIPPLE stratum).
    *
-   * STAGE 1 CHANGES NO VERDICT. This test asserts the CURRENT (blocking)
-   * behavior deliberately, and pins the new bit that would license the flip:
-   * A's ripple on `r` carries `rippleFromContract === false`.
+   * The RIPPLE-GATE (stage 2, TD-2026-08-12-831) narrows the `body` rule: it is a
+   * genuine conflict only when BOTH sides contest it — `bodyContested(d) =
+   * (localChanged ?? true) || (rippleFromContract ?? true)`. A's side of `r` is a
+   * body-internal ripple whose callee SIGNATURE held (localChanged=false AND
+   * rippleFromContract=false), so it does NOT contest `r`'s body → `r` is CLEAN.
    *
-   * STAGE 2 flips this — gated on re-scoring the two evidence corpora for new
-   * false-CLEANs first, because the same predicate is shared verbatim with the
-   * 12 real TRUE-INTERFERENCE ripple catches. When the flip lands, `r` leaves
-   * `p.knots` and THIS TEST MUST BE UPDATED, not deleted: it is the record of
-   * what the flip actually changed.
+   * This is the record of what the flip changed: `r` LEFT `p.knots`.
    */
-  it('r knots today; the bit that would clear it is already present', async () => {
+  it('r now CLEANs — the ripple side does not contest the body', async () => {
     const tree = (tBody: string, rBody: string) => ({
       'src/l.ts': `function t(){ return ${tBody}; }
 function r(){ return t() + ${rBody}; }`,
@@ -412,14 +419,14 @@ function r(){ return t() + ${rBody}; }`,
     const p = predict(dA, dB);
 
     const r = sym('src/l.ts', 'r');
-    const rKnot = p.knots.find((k) => k.symbol === r);
 
-    // CURRENT BEHAVIOR — the false KNOT. Do not "fix" this here.
-    expect(rKnot).toBeDefined();
-    expect(rKnot!.conflictingSlots).toContain('body');
+    // NEW BEHAVIOR — the false KNOT is gone. `r` merges cleanly.
+    expect(p.knots.find((k) => k.symbol === r)).toBeUndefined();
+    expect(p.autoClean).toContain(keyOf(dA, r));
 
-    // The stage-2 predicate, already computed and already correct: A's side of
-    // `r` is a body-internal ripple; B's side is a genuine local edit.
+    // The predicate that cleared it: A's side of `r` is a body-internal ripple
+    // (signature held); B's side is a genuine local edit. bodyContested(A)=false
+    // ⇒ NOT both-contested ⇒ not a body conflict.
     expect(changedFor(dA, r)!.localChanged).toBe(false);
     expect(changedFor(dA, r)!.rippleFromContract).toBe(false);
     expect(changedFor(dB, r)!.localChanged).toBe(true);

@@ -71,6 +71,14 @@ async function stateOfTree(ref: string, files: Record<string, string>): Promise<
 }
 
 const sym = (file: string, qname: string) => `#code:${file}::${qname}`;
+// autoClean holds stableKeys, not #code: symbols — translate before asserting
+// membership (the established pattern from code-diff.test.ts).
+function keyOf(state: ReturnType<typeof diff>, symbol: string): string {
+  for (const d of state.deltas.values()) {
+    if (d.symbol === symbol) return d.stableKey;
+  }
+  throw new Error(`no delta for ${symbol}`);
+}
 
 /** The contract-changed delta for a code symbol, by readable symbol name. */
 function changedFor(set: ReturnType<typeof diff>, symbol: string) {
@@ -112,10 +120,21 @@ function r(){ return t(); }`,
 });
 
 // ===========================================================================
-// 2. THE AVALANCHE — 2 contested units, many transitive referrers. The output
-//    must rank 2 direct + collapse the rest to a ripple count.
+// 2. THE AVALANCHE — 2 independently-const-edited SCC members, many transitive
+//    referrers. Under the RIPPLE-GATE (TD-2026-08-12-831) this whole avalanche
+//    now AUTO-CLEANS: it is the exact NEGCTRL-RIPPLE shape the gate eliminates.
+//
+//    HISTORY: before the ripple-gate, predict's unconditional `body` scalar-
+//    conflict rule KNOTTED all 12 (both SCC members + every referrer), because A
+//    editing u1 and B editing u2 each Merkle-re-addressed the shared essences on
+//    both sides. This §2 pinned that behavior and the DEMOTE-only ranking layer
+//    (2 direct / 10 ripple) that ground truth showed were 0% payoff. The gate now
+//    RESOLVES what ranking could only demote: A's edit is direct on u1 but a
+//    body-internal ripple (signature held) on u2 and every referrer, and B's is
+//    the mirror — so NO symbol is contested on BOTH sides ⇒ CLEAN. The score()
+//    direct/ripple partition is now characterized by §4 over hand-built knots.
 // ===========================================================================
-describe('ranking — avalanche: 2 contested units → many ripple referrers', () => {
+describe('ranking — avalanche: pure-const SCC edits now AUTO-CLEAN (ripple-gate)', () => {
   // u1⇄u2 form an SCC (the types.ts shape from the zod avalanches): ANY member
   // edit moves the whole unit hash, so every member AND every referrer
   // re-addresses on BOTH sides — the 48-176-symbol flag sets of ground truth.
@@ -126,7 +145,7 @@ function u2(n: number): number { return n <= 0 ? ${u2Body} : u1(n - 1); }
 ${referrers}`,
   });
 
-  it('knots carry direct flags; score partitions the flag set 2 direct / 10 ripple', async () => {
+  it('the whole const avalanche auto-cleans; no symbol is contested on both sides', async () => {
     const base = await stateOfTree('base', tree('1', '2'));
     const branchA = await stateOfTree('A', tree('111', '2')); // A edits u1 only
     const branchB = await stateOfTree('B', tree('1', '222')); // B edits u2 only
@@ -139,35 +158,33 @@ ${referrers}`,
     const u2 = sym('src/knot.ts', 'u2');
     const rSyms = Array.from({ length: 10 }, (_, i) => sym('src/knot.ts', `r${i}`));
 
-    // The avalanche is real: all 12 knot (SCC members + every referrer).
-    const knotSyms = p.knots.map((k) => k.symbol);
-    expect(knotSyms).toContain(u1);
-    expect(knotSyms).toContain(u2);
-    for (const r of rSyms) expect(knotSyms).toContain(r);
+    // RIPPLE-GATE: the commuting const avalanche produces ZERO knots.
+    expect(p.knots).toEqual([]);
+    for (const s of [u1, u2, ...rSyms]) expect(p.autoClean).toContain(keyOf(dA, s));
 
-    // The ranking signal: exactly the two own-edited units are direct.
-    const directSyms = p.knots.filter((k) => k.direct).map((k) => k.symbol).sort();
-    expect(directSyms).toEqual([u1, u2]);
-    for (const k of p.knots) {
-      if (k.symbol !== u1 && k.symbol !== u2) expect(k.direct).toBe(false);
+    // WHY it cleans — the direct/ripple asymmetry the gate now reads. On the
+    // OWN-edited member each side is direct (localChanged=true); on the OTHER
+    // member and every referrer it is a body-internal ripple whose callee
+    // signature held (localChanged=false AND rippleFromContract=false). No
+    // symbol carries a contesting change on BOTH sides.
+    expect(changedFor(dA, u1)!.localChanged).toBe(true);
+    expect(changedFor(dB, u1)!.localChanged).toBe(false);
+    expect(changedFor(dB, u1)!.rippleFromContract).toBe(false);
+    expect(changedFor(dB, u2)!.localChanged).toBe(true);
+    expect(changedFor(dA, u2)!.localChanged).toBe(false);
+    expect(changedFor(dA, u2)!.rippleFromContract).toBe(false);
+    for (const r of rSyms) {
+      expect(changedFor(dA, r)!.localChanged).toBe(false);
+      expect(changedFor(dA, r)!.rippleFromContract).toBe(false);
+      expect(changedFor(dB, r)!.localChanged).toBe(false);
+      expect(changedFor(dB, r)!.rippleFromContract).toBe(false);
     }
 
-    // Oracle scoring with git CLEAN (the divergeMeaningOnly cell) — the record
-    // partitions the flags and knotSize is the ranking key.
+    // Oracle scoring agrees: git CLEAN + meaning CLEAN ⇒ no meaning-only flags.
     const c = score(p, [], [branchA, branchB]);
-    expect(c.flagCount).toBe(p.knots.length);
-    expect(c.knotSize).toBe(2);
-    expect(c.directContested).toEqual([u1, u2]);
-    expect(c.rippleOnly.length).toBe(10);
-    expect(c.rippleOnly).toEqual(rSyms.slice().sort());
-    // Partition invariant: direct ∪ ripple == divergeMeaningOnly, no overlap.
-    expect([...c.directContested, ...c.rippleOnly].sort()).toEqual(
-      c.divergeMeaningOnly.slice().sort(),
-    );
-
-    // ADDITIVE-ONLY guard: verdict/score semantics unchanged by ranking.
-    expect(c.verdict).toBe('DIVERGENT');
-    expect(c.divergeMeaningOnly.length).toBe(12);
+    expect(c.flagCount).toBe(0);
+    expect(c.knotSize).toBe(0);
+    expect(c.divergeMeaningOnly).toEqual([]);
   });
 });
 

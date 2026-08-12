@@ -10,7 +10,12 @@
  *   - knots[]   : same symbol, contradictory meaning. k ∈ keys(ΔA)∩keys(ΔB),
  *                 essenceAfterA ≠ essenceAfterB, AND (bothRetype-to-different ∨
  *                 conflictingSlot — both changed the SAME slot to different
- *                 values ∨ bornDivergent).
+ *                 values ∨ bornDivergent). The `body` slot is RIPPLE-GATED
+ *                 (TD-2026-08-12-831): a genuine conflict only when BOTH sides
+ *                 contest it (`bodyContested`, consulting `SemDelta.localChanged`
+ *                 and `rippleFromContract`) — a callee const/body ripple that
+ *                 re-addresses the caller's inlined body but COMMUTES is not a
+ *                 knot. See `bodyContested` / `conflictingSlots`.
  *   - dangling[]: meaning-level broken ref git is blind to. One side adds an edge
  *                 to a target the OTHER side retired (or changed so the target
  *                 essence no longer exists).
@@ -266,9 +271,31 @@ function knotRuleOf(a: SemDelta, b: SemDelta): KnotRule | null {
 }
 
 /**
+ * bodyContested — did THIS side GENUINELY contest the code-unit's body?
+ *
+ * TRUE iff the side edited the unit's OWN body (`localChanged`) OR re-addressed
+ * through a callee whose CONTRACT moved (`rippleFromContract`) — a signature-
+ * bearing ripple that can silently mismerge. FALSE = a pure body-INTERNAL ripple
+ * (a callee const/body edit whose signature held): the essence inlines the
+ * callee, so the caller's `body` re-addresses, but the change COMMUTES.
+ *
+ * Absent flags default TRUE (fail-closed, matching the delta-side defaults): an
+ * unknown side stays contested rather than silently collapsing a real conflict.
+ * The `body` slot consults this in `conflictingSlots` — the RIPPLE-GATE (stage 2,
+ * TD-2026-08-12-831). See `SemDelta.rippleFromContract`.
+ */
+function bodyContested(d: SemDelta): boolean {
+  return (d.localChanged ?? true) || (d.rippleFromContract ?? true);
+}
+
+/**
  * The slots both sides changed in CONFLICTING directions. v0 heuristic: a slot
  * is conflicting if both sides changed it (same top-level slot in changedSlots)
  * AND the resulting essences differ. Disjoint slots commute.
+ *
+ * `body` is RIPPLE-GATED (TD-2026-08-12-831): see `bodyContested`. This function
+ * feeds BOTH the verdict (via `knotRuleOf`) and the reported `conflictingSlots`,
+ * so gating here flips exactly the verdict AND keeps the displayed slots honest.
  */
 function conflictingSlots(a: SemDelta, b: SemDelta): string[] {
   const sa = new Set(a.changedSlots ?? []);
@@ -283,12 +310,21 @@ function conflictingSlots(a: SemDelta, b: SemDelta): string[] {
   const conflicting: string[] = [];
   for (const slot of shared) {
     // Scalar slots: a single value, so both sides reaching here (different
-    // essences, same slot) means they wrote DIFFERENT values → conflict. `body`
-    // is scalar (a code-unit's whole body essence) — two divergent body edits to
-    // the SAME code-unit are a KNOT even where git auto-merges textually-distant
-    // edits at function granularity.
-    if (slot === 'componentType' || slot === 'kind' || slot === 'steps' || slot === 'body') {
+    // essences, same slot) means they wrote DIFFERENT values → conflict.
+    if (slot === 'componentType' || slot === 'kind' || slot === 'steps') {
       conflicting.push(slot);
+      continue;
+    }
+    // `body` is scalar (a code-unit's whole inlined body essence), but the
+    // essence inlines callees, so a callee const/body edit re-addresses the
+    // caller's `body` even when the change COMMUTES. RIPPLE-GATE: it is a genuine
+    // conflict only when BOTH sides contest the body — a direct edit or a
+    // signature-bearing ripple. Two commuting edits (callee-const ripple ×
+    // caller-const edit) leave the ripple side uncontested → CLEAN, killing the
+    // measured false KNOTs; direct×direct and signature-ripple×edit both stay
+    // contested → the KNOT is preserved. See `bodyContested`, TD-2026-08-12-831.
+    if (slot === 'body') {
+      if (bodyContested(a) && bodyContested(b)) conflicting.push('body');
       continue;
     }
     if (slotMembersConflict(a, b, slot)) conflicting.push(slot);

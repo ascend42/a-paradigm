@@ -106,9 +106,12 @@ export interface SemDelta {
    * own callee changing body therefore leaves the callee's signature byte-equal —
    * correctly, since that is still a commuting change.
    *
-   * ADDITIVE at stage 1 — NOT consulted by predict/oracle. Flipping the `body`
-   * scalar-conflict rule on it is stage 2, gated on re-scoring the evidence
-   * corpora for new false-CLEANs first.
+   * CONSULTED by predict (stage 2, TD-2026-08-12-831): predict's `bodyContested`
+   * gate reads this bit — the `body` slot is a genuine conflict only when BOTH
+   * sides contest it (`localChanged ?? true) || (rippleFromContract ?? true`), so
+   * a callee const/body ripple whose signature held no longer over-blocks a
+   * commuting caller edit. The evidence corpora were re-scored for new
+   * false-CLEANs before the flip landed (the A11 seeded controls are its falsifier).
    */
   rippleFromContract?: boolean;
 }
