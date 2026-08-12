@@ -146,3 +146,38 @@ export const HUMAN_ONLY_ADMIT_FLAGS: readonly string[] = Object.freeze([
   'acceptBreach',
   'acceptRisk',
 ]);
+
+/**
+ * THE PROTECTED-BRANCH PRINCIPAL SURFACE (#protected, M2.5 security,
+ * TD-2026-08-12-813 — Aegis's own finding). Two acts join the human-class law
+ * here, and NEITHER is a static verb in HUMAN_ONLY_VERBS — deliberately:
+ *
+ *   1. `branch --protect` / `branch --unprotect` — changing WHAT is protected is
+ *      a human-class act (an agent must never decide what is protected FROM
+ *      agents). These are CLI-only acts; the daemon exposes NO protect verb, so
+ *      the wire surface simply never offers them to a token-bearing agent. The
+ *      CLI enforces it with the #agent-shell credential (an agent shell is
+ *      refused FORBIDDEN), the same mechanism the HUMAN_ONLY_VERBS CLI skin uses.
+ *
+ *   2. `merge` INTO a protected branch (and a direct agent `admit` onto one) is
+ *      human-class — but DESTINATION-DEPENDENT, so it CANNOT be a static verb
+ *      flag: the SAME `merge`/`admit` verb is agent-legal onto a feature branch
+ *      and human-only onto the protected integration line. The classification is
+ *      therefore made at RUNTIME by the registry check (fabric/protected.ts
+ *      `protectedLandingRefusal`), inside the engine (merge.ts / native.ts), on
+ *      the RESOLVED target branch — an agent-class landing onto a protected
+ *      branch returns the same FORBIDDEN `refusal:v1` (Aegis §2.2, retriable
+ *      'never', escalate) every other human-class refusal does. Listed here as
+ *      the documented reason merge/admit are absent from the static matrix, not
+ *      to add them to it (adding `merge` would forbid ALL agent merges, including
+ *      the feature-to-feature folds the whole branch model is FOR).
+ *
+ * Named as a constant so the classification is greppable next to its siblings,
+ * even though enforcement is destination-dependent rather than a flat allowlist. */
+export const PROTECTED_BRANCH_HUMAN_ONLY = Object.freeze({
+  /** CLI-only human-class acts (no daemon verb exists for them). */
+  registryVerbs: Object.freeze(['branch --protect', 'branch --unprotect']),
+  /** verbs whose human-class-ness depends on whether the RESOLVED target branch
+   * is protected — enforced by fabric/protected.ts, never a static flag. */
+  destinationGated: Object.freeze(['merge', 'admit']),
+});

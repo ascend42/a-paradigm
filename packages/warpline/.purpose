@@ -1428,6 +1428,59 @@ components:
       - "#honesty"
       - "#fabric-refs"
       - "#head"
+      - "#protected"
+
+  protected:
+    description: >-
+      The PROTECTED-BRANCH registry and the AGENT-CLASS LANDING GATE (M2.5
+      security, TD-2026-08-12-813 — Aegis's own finding) — protected.ts. THE
+      THREAT it closes: with branches, an agent can isolate work on a private
+      feature branch — GUARANTEED CLEAN, because it is alone there, so the
+      KNOT/resolve gate never trips — then clean-MERGE that branch into the
+      integration line with NO human. That laundering route bypasses the human
+      gate that is the entire safety model. THE FIX: name the integration line
+      PROTECTED; refuse an AGENT-class admit/merge that LANDS onto it (feature
+      branches stay agent-writable, main is a human/policy act). THE REGISTRY:
+      `.warpline/protected.json`, a JSON string[] of branch names. ABSENT ⇒ the
+      DEFAULT set — the trunk `selvage` (#head DEFAULT_BRANCH), plus `main` iff a
+      branch by that name exists (git-parity alias) — so a fresh `warpline init`
+      protects its trunk with NO file written. Once a human writes the file
+      (protect/unprotect), it is AUTHORITATIVE (the default no longer applies, so
+      `unprotect selvage` genuinely removes protection). Reads fail CLOSED (a
+      corrupt / non-array registry throws, never "nothing protected" — mirrors
+      #head / #fabric-refs). isProtected / listProtected / protectBranch /
+      unprotectBranch (pure mutators; idempotent). THE GATE
+      (protectedLandingRefusal): refuses when THREE things all hold — the
+      principal is AGENT-class, the target branch is PROTECTED, and BRANCHING IS
+      IN USE (branchingInUse = listRefs > 1). THE DEFAULT-PROTECTION POLICY, chosen
+      to preserve the baseline: `selvage` protected by default, but the third
+      clause keeps the SINGLE-LINE world byte-identical — with only the trunk,
+      there is no feature branch to launder FROM, so an agent admits onto the
+      trunk exactly as before (the daemon genesis cycle + every pre-branch test
+      stay green); the gate ENGAGES the instant a feature branch opens. A merge
+      inherently needs ≥2 named lines, so an agent merge into protected is always
+      gated. PRINCIPAL SOURCE (no new vocabulary — Aegis §2.2): 'human'|'agent' is
+      the SAME class the daemon token kind and #refusal next[] speak. The CLI
+      derives it from `$WARPLINE_AGENT_ID` (#agent-shell — possession of an
+      UNMARKED shell is the human credential); an ABSENT principal is human, so
+      agent-class is OPT-IN and every existing engine caller is unaffected. The
+      refusal is FORBIDDEN / retriable 'never' with next[] naming the human path
+      (escalate, never self-retry). ENFORCEMENT POINTS: the merge gate in #merge
+      mergeBranch (before any tip read — the ref never moves) and the admit gate in
+      #native-write-path admitNative (on the resolved targetBranch). protect /
+      unprotect is a HUMAN-class act (an agent must never decide what is protected
+      FROM agents) — CLI `warpline branch --protect/--unprotect <name>`, guarded by
+      the same #agent-shell credential; the daemon exposes NO protect verb
+      (#warplined-protocol PROTECTED_BRANCH_HUMAN_ONLY documents both surfaces).
+      Library code: no console output. Pinned by test/protected-branch.test.ts.
+    type: module
+    components:
+      - "#fabric-refs"
+      - "#head"
+      - "#refusal"
+      - "#agent-shell"
+      - "#merge"
+      - "#native-write-path"
 
   anchor:
     description: >-
@@ -2679,7 +2732,15 @@ components:
       EVERY writeSelvage call is now conditional — `if (targetBranch === selvage)`
       — keeping the default byte-identical and named branches refs-only (they
       advance refs/heads/<name> alone, never the legacy pointer, and never move
-      selvage). Pinned in test/admit-onto-branch.test.ts.
+      selvage). Pinned in test/admit-onto-branch.test.ts. THE PROTECTED-BRANCH
+      LANDING GATE (#protected, M2.5 security TD-2026-08-12-813 — Aegis's finding):
+      once the targetBranch is resolved, an AGENT-class admit ONTO a PROTECTED
+      branch is REFUSED (FORBIDDEN/never, next[] naming the human path) via
+      protectedLandingRefusal — an agent lands onto feature branches, never
+      directly onto the protected integration line; the ref never moves. The gate
+      engages ONLY once branching is in use (>1 named line), so the single-line
+      world and every human/absent-principal caller are byte-identical (the
+      opts.principal default is human). Pinned in test/protected-branch.test.ts.
     type: module
     tags: [warpline, native-first, phase-0]
     components:
@@ -2693,6 +2754,7 @@ components:
       - "#knot-payload"
       - "#claim"
       - "#restore"
+      - "#protected"
 
   warplined:
     description: >-

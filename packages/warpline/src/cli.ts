@@ -45,7 +45,7 @@ import type { Strand } from './fabric/strand.js';
 import { installHook, uninstallHook, hookStatus, resolveInvokingBinary } from './fabric/hook.js';
 import { forkScratch } from './fabric/scratch.js';
 import { admit, type AdmitResult } from './fabric/admit.js';
-import { exitCodeForResult, exitCodeFor, RefusedError } from './fabric/refusal.js';
+import { exitCodeForResult, exitCodeFor, RefusedError, refuse } from './fabric/refusal.js';
 import { traceCli, cliTarget } from './f4/cli-trace.js';
 import { rankVerdicts } from './fabric/rank.js';
 import { shadowAdmit } from './fabric/shadow.js';
@@ -56,7 +56,8 @@ import {
   resolveNative,
   abandonNative,
 } from './fabric/native.js';
-import { checkHumanClass } from './agent-shell.js';
+import { checkHumanClass, agentShellId } from './agent-shell.js';
+import { protectBranch, unprotectBranch, listProtected, type PrincipalClass } from './fabric/protected.js';
 import { initWarpline, type InitResult } from './fabric/init.js';
 import { nativeStatus, gitHeadReachable, type DiskHonesty } from './native-status.js';
 import { noteWarpignoreDeprecation } from './warp/warpignore.js';
@@ -138,6 +139,19 @@ async function gateHumanClass(spec: {
   await traceCli({ root: spec.root, verb: spec.verb, target: spec.target, principal: violation.agentId }, () => {
     throw new RefusedError(violation.refusal, violation.message);
   });
+}
+
+/**
+ * THE CLI PRINCIPAL CLASS for the #protected landing gate. Reuses the #agent-shell
+ * credential model verbatim: an UNMARKED shell is the human operator (possession
+ * of the box is the credential), a shell exporting `$WARPLINE_AGENT_ID` is an
+ * agent's. So `warpline admit`/`merge` from the operator console is human-class
+ * (never gated), and an agent driving the CLI is agent-class (refused from landing
+ * onto a protected branch once branching is in use). No new vocabulary — the same
+ * marker #pick attributes by and #agent-shell gates the human-only verbs by.
+ */
+function shellPrincipal(): PrincipalClass {
+  return agentShellId(process.env) ? 'agent' : 'human';
 }
 
 program
@@ -859,6 +873,11 @@ program
             admitNative(root, {
               worktree: options.worktree ? path.resolve(options.worktree) : root,
               agentId,
+              // #protected landing gate: an AGENT shell ($WARPLINE_AGENT_ID set)
+              // is agent-class; an UNMARKED (operator) shell is human-class and
+              // never gated (#agent-shell — possession of the shell is the human
+              // credential). Attribution (agentId) is NOT the principal class.
+              principal: shellPrincipal(),
               ...(options.claim ? { claim: options.claim } : {}),
               ...(options.acceptBreach ? { acceptBreach: true } : {}),
               ...(options.acceptRisk ? { acceptRisk: true } : {}),
@@ -1166,16 +1185,51 @@ program
 program
   .command('branch')
   .description(
-    'Branches (M2.5). A BRANCH is a NAMED LINE of history — a refs/heads/<name> holding a pickId, exactly like `selvage` (the default trunk). `branch <name>` opens a new line at the current HEAD tip (or --from <selector>); `branch --list` (or no args) shows them all with the current one marked *; `branch -d <name>` retires a name (its strand survives in the ledger as an abandoned head, recoverable with `warpline refs set`). These are AGENT-CLASS verbs — opening a lane is what the fabric exists to adjudicate. NEXT: `warpline switch <name>` to move your worktree onto it.',
+    'Branches (M2.5). A BRANCH is a NAMED LINE of history — a refs/heads/<name> holding a pickId, exactly like `selvage` (the default trunk). `branch <name>` opens a new line at the current HEAD tip (or --from <selector>); `branch --list` (or no args) shows them all with the current one marked *; `branch -d <name>` retires a name (its strand survives in the ledger as an abandoned head, recoverable with `warpline refs set`). These are AGENT-CLASS verbs — opening a lane is what the fabric exists to adjudicate. NEXT: `warpline switch <name>` to move your worktree onto it. PROTECTED BRANCHES (M2.5 security): `branch --protect <name>` / `--unprotect <name>` (HUMAN-class) control which lines an agent may NOT auto-land onto — `selvage` is protected by default. An agent-class admit/merge ONTO a protected branch is refused (land onto a feature branch, let a human integrate); `branch --protected` lists them.',
   )
   .argument('[name]', 'the branch to create (omit with --list, or to just list)')
   .option('-l, --list', 'list branches (the current one marked with *)')
   .option('-d, --delete', 'delete the named branch (unlinks the ref; the strand survives in the ledger)')
   .option('--from <selector>', 'create at this selector instead of the HEAD tip (HEAD | selvage | <branch> | pick:<id> | state:<id> | @N)')
+  .option('--protect <name>', 'PROTECT a branch: agent-class admit/merge may not LAND onto it (main is a human/policy act). HUMAN-CLASS. Default: selvage is protected.')
+  .option('--unprotect <name>', 'UNPROTECT a branch (agents may land onto it again). HUMAN-CLASS.')
+  .option('--protected', 'list the protected branches')
   .option('--json', 'emit the result as JSON')
-  .action(async (name: string | undefined, options: { list?: boolean; delete?: boolean; from?: string; json?: boolean }) => {
+  .action(async (name: string | undefined, options: { list?: boolean; delete?: boolean; from?: string; protect?: string; unprotect?: string; protected?: boolean; json?: boolean }) => {
     try {
       const root = await resolveRoot();
+      // #protected registry (M2.5 security, TD-2026-08-12-813). protect/unprotect
+      // is a HUMAN-class act — an agent must never decide what is protected FROM
+      // agents — enforced with the same #agent-shell credential the landing gate
+      // uses: an agent shell ($WARPLINE_AGENT_ID) is refused, an operator console
+      // is not. Listing is a plain read (any shell).
+      if (options.protect !== undefined || options.unprotect !== undefined) {
+        if (shellPrincipal() === 'agent') {
+          throw new RefusedError(
+            refuse({ code: 'FORBIDDEN', retriable: 'never' }),
+            `warpline: branch --${options.protect !== undefined ? 'protect' : 'unprotect'} is a HUMAN-class act — an agent must never change what is protected FROM agents (Aegis §2.2). ` +
+              `This shell is an AGENT shell (${'WARPLINE_AGENT_ID'} set); escalate to a human. A human shell does not export it.`,
+          );
+        }
+        const result = options.protect !== undefined
+          ? protectBranch(root, options.protect)
+          : unprotectBranch(root, options.unprotect!);
+        if (options.json) process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+        else {
+          const verb = options.protect !== undefined ? 'PROTECT' : 'UNPROTECT';
+          process.stdout.write(
+            `BRANCH ${verb}  ${result.name}${result.changed ? '' : '  (no-op — already ' + (options.protect !== undefined ? 'protected' : 'unprotected') + ')'}\n` +
+              `  protected now: ${result.protected.length ? result.protected.join(', ') : '(none)'}\n`,
+          );
+        }
+        return;
+      }
+      if (options.protected) {
+        const names = listProtected(root);
+        if (options.json) process.stdout.write(JSON.stringify(names, null, 2) + '\n');
+        else process.stdout.write(`PROTECTED  ${names.length ? names.join(', ') : '(none)'}\n`);
+        return;
+      }
       if (options.delete) {
         if (!name) throw new Error('`branch -d` needs a <name> to delete');
         const result = deleteBranch(root, name);
@@ -1253,6 +1307,10 @@ program
           mergeBranch(root, {
             from,
             into: into!,
+            // #protected landing gate: an AGENT shell may not merge INTO a
+            // protected branch (the clean-land laundering route); an UNMARKED
+            // operator shell is human-class and integrates freely.
+            principal: shellPrincipal(),
             ...(options.confirm ? { acceptMeaningBlind: true } : {}),
             ...(options.worktree ? { worktree: path.resolve(options.worktree) } : {}),
             ...(options.restore === false ? { noRestore: true } : {}),

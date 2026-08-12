@@ -48,6 +48,7 @@ import { withFabricLock } from './lock.js';
 import { ADMIT_RESULT_SCHEMA } from './admit.js';
 import { byPickIndex, mustStrand, weaveTips, type AdmitNativeResult } from './native.js';
 import { refuse, RefusedError } from './refusal.js';
+import { protectedLandingRefusal, type PrincipalClass } from './protected.js';
 
 export interface MergeBranchOptions {
   /** the TARGET/integration branch being advanced (theirs/selvage role). */
@@ -64,6 +65,15 @@ export interface MergeBranchOptions {
   actor?: string;
   intent?: string;
   now?: string;
+  /**
+   * THE PROTECTED-BRANCH LANDING GATE principal (#protected, TD-2026-08-12-813
+   * security). Absent ⇒ human ⇒ never gated (the operator console, every existing
+   * merge caller/test, the single-human dogfood are byte-identical). An
+   * agent-class merge whose `into` is a PROTECTED branch is REFUSED — folding a
+   * solitary feature branch into main is the clean-land laundering route the whole
+   * gate exists to close; landing into protected main is a human/policy act.
+   */
+  principal?: PrincipalClass;
 }
 
 export interface MergeBranchResult extends AdmitNativeResult {
@@ -93,6 +103,28 @@ export async function mergeBranch(root: string, opts: MergeBranchOptions): Promi
   const worktree = opts.worktree ? path.resolve(opts.worktree) : root;
 
   return withFabricLock(root, async (): Promise<MergeBranchResult> => {
+    // THE PROTECTED-BRANCH LANDING GATE (#protected, TD-2026-08-12-813 security):
+    // an AGENT-class merge INTO a protected branch is refused — an agent may fold
+    // among feature branches freely, but landing into the protected integration
+    // line requires a human. Checked BEFORE any tip read or ref write so the
+    // refusal is structural (the ref never moves). Human/absent principal passes
+    // unchanged, so the CLI operator console and every existing merge test/dogfood
+    // are byte-identical. (A real merge always has ≥2 named lines, so branchingInUse
+    // holds — the gate turns purely on protected(into) × agent-class.)
+    const protectedRefusal = protectedLandingRefusal(root, {
+      principal: opts.principal,
+      target: opts.into,
+      next: [{ verb: 'merge', params: { from: opts.from, into: opts.into }, requires: [], principal: 'human' }],
+    });
+    if (protectedRefusal) {
+      throw new RefusedError(
+        protectedRefusal,
+        `warpline: merge — ${JSON.stringify(opts.into)} is a PROTECTED branch; an agent-class merge may not land onto it ` +
+          `(a solitary feature branch folds CLEAN with no human — the laundering route). A human integrates into ${opts.into}. ` +
+          `(protect/unprotect: \`warpline branch --protect/--unprotect <name>\`, human-class.)`,
+      );
+    }
+
     const fabric = readFabric(wdir);
     const byPick = byPickIndex(fabric);
 

@@ -81,6 +81,7 @@ import { readClaim, evaluateClaim, recordClaimEvaluation, createClaim, persistCl
 import { readGradeSidecar, symbolSurvivalIndex, evaluateEscalation, recordGradeEscalation } from './grade.js';
 import { hazardAdvisory } from './hazard.js';
 import { refuse, RefusedError, type RefusalNextStep, type Refusal } from './refusal.js';
+import { protectedLandingRefusal, type PrincipalClass } from './protected.js';
 
 /** The provenance/scratch ref label for an agent (sanitized like scratchPath). */
 export function scratchRefName(agentId: string): string {
@@ -473,6 +474,16 @@ export interface AdmitNativeOptions {
   acceptMeaningBlind?: boolean;
   /** The branch being merged (ours) — names the `merge` retry in the hold refusal. */
   mergeFrom?: string;
+  /**
+   * THE PROTECTED-BRANCH LANDING GATE principal (#protected, TD-2026-08-12-813
+   * security). The acting principal class — the CLI derives it from
+   * `$WARPLINE_AGENT_ID` (#agent-shell), the daemon from the token kind. ABSENT ⇒
+   * human ⇒ never gated, so every existing engine caller (the operator console,
+   * the direct-call test suite, the single-human dogfood) is byte-identical. An
+   * agent-class admit ONTO a protected branch (once branching is in use) is
+   * REFUSED — an agent lands onto feature branches, never directly onto main.
+   */
+  principal?: PrincipalClass;
 }
 
 export interface AdmitNativeResult extends AdmitResult {
@@ -1035,6 +1046,25 @@ export async function admitNative(root: string, opts: AdmitNativeOptions): Promi
     // Resolve the TARGET branch (M2.5 spine): --onto → HEAD → selvage. The
     // default (no HEAD) is `selvage`, byte-identical to the old hardcoded target.
     const targetBranch = admitTargetBranch(root, opts);
+
+    // THE PROTECTED-BRANCH LANDING GATE (#protected, TD-2026-08-12-813 security):
+    // an AGENT-class admit ONTO a protected branch is refused once branching is in
+    // use — an agent lands onto feature branches, never directly onto main; the
+    // human/policy path carries the seal into the integration line. Human/absent
+    // principal and the single-line world both pass this (byte-identical baseline).
+    const protectedRefusal = protectedLandingRefusal(root, {
+      principal: opts.principal,
+      target: targetBranch,
+      next: [{ verb: 'admit', params: { onto: targetBranch }, requires: [], principal: 'human' }],
+    });
+    if (protectedRefusal) {
+      throw new RefusedError(
+        protectedRefusal,
+        `warpline: admit (native) — ${JSON.stringify(targetBranch)} is a PROTECTED branch; an agent-class admit may not land onto it directly ` +
+          `(the isolate-then-clean-land laundering route). Land onto a feature branch and let a human integrate, or a human admits/merges onto ${targetBranch}. ` +
+          `(protect/unprotect: \`warpline branch --protect/--unprotect <name>\`, human-class.)`,
+      );
+    }
 
     const selvageTipId = admitTargetTip(wdir, targetBranch);
     if (selvageTipId === null) {
