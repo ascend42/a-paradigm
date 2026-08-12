@@ -1709,8 +1709,27 @@ components:
       — the ONLY surface the model sees: every side body + intent rendered through
       #prose-envelope frameProse (escaped, guttered, visibly UNTRUSTED), a
       400-line-per-body truncation note that never hides silently, then the frozen
-      rubric text + the framed card as one inert prompt string. Does NOT include the
-      API-call runner, scoring, or the regression harness (the next increment).
+      rubric text + the framed card as one inert prompt string. THE LIVE HALF:
+      #judge/types — the shared vocabulary (Judgment with verbatim per-sample outputs
+      + majority/spread/indeterminate; RunRecord pinning model=claude-opus-4-5-20251101,
+      agentsModel=claude-opus-5, temp 0, N=3; LedgerRow; the pinned constants).
+      #judge/judge-run — the INSTRUMENT: an INJECTABLE CallModel (unit tests pass a
+      deterministic fake, NEVER the network), N=3 sampling with no-2-of-3 → INDETERMINATE,
+      run-record.json frozen pin + verbatim judgments.jsonl; liveCallModel lazily wires
+      @anthropic-ai/sdk (OPTIONAL dep) at the pinned model + temp 0, guarded to construct
+      only with an API key — imports NOTHING from src/daemon or the agent loader.
+      #judge/ledger — hash-chained content-addressed custody (rowHash = sha256(canonical
+      (body)+prevRowHash)) with WRITE-BEFORE-REVEAL (the judge-verdict row sealed before
+      the warpline-join that references it), head() as the git external witness, and
+      verify() first-bad-row. #judge/preflight — the BLOCKING gate: the per-card
+      twin-invariant (a card whose verdict moves under a comment/prose-neutralized twin
+      is VOID) plus the blind injection corpus (a judge that tracks a planted payload is
+      DISQUALIFIED for the whole run). #judge/scoring — the falsifier harness: Cohen's
+      kappa, confusion tables, the §4 objective-non-vetoable false-CLEAN confirmation
+      JOIN, seeded-control precision/recall vs the ~29% prior, before/after pre-fix
+      scoring against the fixed judge label, the §7A two-denominator bounds (objective
+      vs subjective, rule-of-three each, NEVER blended), and the INDETERMINATE fraction
+      against the contested floor.
     type: module
     components:
       - "#knot-payload"
