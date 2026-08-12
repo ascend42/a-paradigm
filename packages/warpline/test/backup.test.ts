@@ -236,8 +236,23 @@ describe('#warplined — backup over the daemon + the read-scope ceiling', () =>
     const writeVerbs = DAEMON_VERBS.filter((v) => !READ_ONLY_VERBS.includes(v));
     // The literal is the REVIEWER's tripwire: the loop below is derived, so a
     // new write verb is refused automatically — but silently. C-10's `abandon`
-    // clears a ref, so it belongs here and must be visibly accounted for.
-    expect(writeVerbs).toEqual(['fork', 'propose', 'admit', 'abandon', 'resolve', 'stake', 'stake.recover', 'backup']);
+    // clears a ref, so it belongs here and must be visibly accounted for. M2.5
+    // skins (increment 7) add the branch model's write verbs: branch/switch/merge
+    // are outside the read scope, so a read-scoped console token is capped away
+    // from them by the SAME ceiling (checked before the kind/op matrices).
+    expect(writeVerbs).toEqual([
+      'branch',
+      'switch',
+      'fork',
+      'propose',
+      'admit',
+      'merge',
+      'abandon',
+      'resolve',
+      'stake',
+      'stake.recover',
+      'backup',
+    ]);
     expect(writeVerbs).toContain('abandon');
     for (const verb of writeVerbs) {
       const err = await rejectsWith(consoleC.call(verb, { intent: 'x', agentId: 'y', reason: 'z', commit: 'c', dest: path.join(out, 'nope') }), 'FORBIDDEN');

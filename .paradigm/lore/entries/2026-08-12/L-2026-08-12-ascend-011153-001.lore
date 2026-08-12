@@ -1,0 +1,44 @@
+id: L-2026-08-12-ascend-011153-001
+type: milestone
+timestamp: '2026-08-12T01:11:53.916Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'MILESTONE: Warpline LLM-judge built and security-CLEARED (foundation + live half + gap fixes)'
+summary: 'The field-test LLM-judge is built and Aegis-cleared to rate real cards. Standalone cold instrument (TD-071): frozen rubric + card stripper + render surface (21d95b25), pinned-Opus-4.5 injectable API call + hash-chained write-before-reveal ledger + blocking twin-invariant/blind-corpus preflight + falsifier/kappa scoring (a92bfd21), then three security gaps closed (346c9cf8) — filePath/failingCheck sanitized at every render site incl. the frame label, the enforcing runJudgeEnforced runner that gates on preflight and seals verdicts through the ledger as the authoritative denominator, and the external git-witness. Judge suite 44 tests; full suite 1067 passing; tsc clean. Blind by construction (no daemon/roster/notebook imports). Discharges the meaning-judge falsifier T-2026-07-14-004 once run live.'
+symbols_touched:
+  - '#judge'
+  - '#envelope'
+  - '#knot-payload'
+  - '#oracle'
+tags:
+  - warpline
+  - llm-judge
+  - field-test
+  - milestone
+  - cleared
+  - arc:warpline
+  - T-2026-07-14-004
+body: |-
+  BUILD METHOD: design panel (Arky/Loid/Jinx/Aegis, TD-071) → foundation build + verify → live-half build + verify → Aegis security review (found 1 blocking injection gap + 2 unwired-gate gaps) → gap fixes + verify → Aegis re-review CLEARED. Every increment independently verified (tsc + tests) before commit; the security review caught a real filePath/failingCheck injection channel the twin was blind to.
+
+  CLEARED with two conditions/notes:
+  - OPERATIONAL (not a code gap): the run procedure MUST `git commit` the witness head (ledger.head() → the git-tracked witness file) BEFORE any Warpline verdict is joined — the external-witness tamper-evidence binds against the incentivized owner only once committed. The runner writes+reminds; the operator commits.
+  - BACKLOG (minor, non-blocking): (a) neutralizeField truncates the twin path at the first control byte while sanitizeField escapes-in-place at render → hostile card and twin carry slightly different BENIGN residual path text (harmless; escape-vs-truncate if byte-parity ever wanted); (b) parseLabel substring fallback on the model's own output (mitigated by temp 0 / N=3 / 'nothing else').
+
+  REMAINING before the judge runs live: a runner that walks the Expo audit rows/KNOTs → cards → runJudgeEnforced → scoring (Arky file-plan step 7, the field-test wiring), and the real-API regression over case-13/case-20 (behind WARPLINE_JUDGE_LIVE). These are run-wiring, not instrument-build.
+
+  NEXT PATH ITEM: the two engine pre-fixes the judge measures — Tier-0 invariant false-CLEAN (T-2026-06-24-015) and essence-hash over-block false-KNOT (T-2026-07-15-008). Design pass underway.
+linked_lore:
+  - L-2026-08-11-ascend-225659-543
+  - L-2026-08-11-ascend-234354-818
+linked_commits:
+  - 21d95b25
+  - a92bfd21
+  - 346c9cf8
+confidence: 0.85
+git_context:
+  ref: 346c9cf8dc0c02ed46f72e0ad250cb1c8296872c
+  branch: warpline-surfaces
+  dirty: true

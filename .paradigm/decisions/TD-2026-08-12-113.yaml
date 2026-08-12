@@ -1,0 +1,50 @@
+id: TD-2026-08-12-113
+timestamp: '2026-08-12T04:17:03.430Z'
+title: >-
+  Warpline's readiness bar and next core build: #1 concurrent meaning-adjudication (proven) + #2 durable
+  branches-merged-by-meaning (M2.5), together — the multi-branch capability git structurally lacks
+decision: >-
+  The founder set the readiness bar for Warpline as the mega-goal other developers also validate: work MULTIPLE DURABLE
+  BRANCHES AT ONCE, reconciled BY MEANING — the thing git structurally cannot do (one folder = one branch; parallel
+  lines meet only at a manual textual merge). This is BOTH: (#1) concurrent lines continuously adjudicated by meaning —
+  the engine, already BUILT and now PROVEN end-to-end (multi-instance demo: two agents collided on one symbol → real
+  KNOT → human resolve → woven history); AND (#2) durable, named, switchable BRANCHES that merge by meaning — M2.5, NOT
+  built (single linear selvage, one in-flight proposal per agent). Both together are the target, not either alone. M2.5
+  is elevated from 'Tier-2' to the readiness-defining core build. Its shape: generalize the single selvage into named
+  branch refs, add switch/checkout, let admit target a branch, and let branch-merge run THROUGH the existing
+  adjudication engine (disjoint auto-folds, real conflicts KNOT) — a branch model git can't reach because git merges are
+  textual, Warpline's are semantic. Design first (team panel), then build.
+rationale: >-
+  The founder clarified the value prop: the pain git handles worst is parallel lines of work (heavy worktrees + manual
+  textual merges), and in an agent-swarm world that is fatal. Warpline's differentiator is not parallel folders (git
+  worktree exists) but CONTINUOUS RECONCILIATION BY MEANING. The concurrent-adjudication engine (the hard half) is built
+  and proven; the durable-branch exposure (the familiar half) is the gap Arky already flagged as the single biggest one.
+  Building M2.5 on the existing engine yields multi-branch-merged-by-meaning — strictly better than git branches at the
+  merge, which is git's weakest point. #1 alone serves the swarm; #1+#2 delivers the full 'source control that does the
+  multi-branch thing git can't.'
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+  - id: architect
+    role: agent
+    stance: supported
+  - id: advocate
+    role: agent
+    stance: supported
+symbols_affected:
+  - '#native'
+  - '#admit'
+  - '#selvage'
+  - '#refs'
+  - '#warpline-cli'
+  - '#oracle'
+status: active
+tags:
+  - warpline
+  - M2.5
+  - branching
+  - multi-branch
+  - readiness-bar
+  - merge-by-meaning
+  - T-2026-07-01-017

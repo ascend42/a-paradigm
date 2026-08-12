@@ -77,9 +77,11 @@ describe('#warplined status — the orientation carrier tracks the cycle, includ
   const status = async (): Promise<StatusBody> => (await call('warpline_status')).body as unknown as StatusBody;
 
   it('walks fork → propose → KNOT and never points a contested agent back at admit', async () => {
-    // cold: nothing minted.
+    // cold: nothing minted. `fork` stays FIRST (the cycle's step 1); M2.5 skins
+    // added the lane-setup verbs after it at this orientation point.
     const cold = await status();
-    expect(cold.nextLegalVerbs).toEqual(['fork']);
+    expect(cold.nextLegalVerbs).toEqual(['fork', 'branch', 'switch']);
+    expect(cold.nextLegalVerbs[0]).toBe('fork');
     expect(cold.position.knotOpen).toBe(false);
 
     // forked but nothing sealed.

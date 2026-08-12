@@ -77,9 +77,10 @@ describe('#f4-rig — seeded world → scripted subject over the MCP skin → cl
   const bodyOf = (r: ToolResult): Record<string, unknown> => JSON.parse(r.content[0]!.text) as Record<string, unknown>;
 
   it('runs the scripted transcript and the classifier renders the expected verdict', async () => {
-    // 1. orient — position: nothing forked, nextLegalVerbs [fork]
+    // 1. orient — position: nothing forked, nextLegalVerbs [fork, branch, switch]
+    // (fork FIRST — the cycle's step 1; M2.5 skins add the lane-setup verbs after).
     const s = await call('warpline_status');
-    expect((bodyOf(s) as { nextLegalVerbs?: string[] }).nextLegalVerbs).toEqual(['fork']);
+    expect((bodyOf(s) as { nextLegalVerbs?: string[] }).nextLegalVerbs).toEqual(['fork', 'branch', 'switch']);
 
     // 2. COLD MISTAKE #1 — admit before propose: PW-2 over the full stack
     const early = await call('warpline_admit', { worktree: root, noRestore: true });

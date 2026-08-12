@@ -1,0 +1,52 @@
+id: L-2026-08-12-ascend-072605-001
+type: milestone
+timestamp: '2026-08-12T07:26:05.280Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'MILESTONE: M2.5 branching FUNCTIONALLY COMPLETE — durable branches merged by meaning, the readiness bar delivered (lock-narrowing the one deferred optimization)'
+summary: 'M2.5 — the founder''s readiness bar (work N durable branches at once, merged by meaning, the thing git can''t do) — is functionally complete and correct across 7 commits (af9c2bce, fe7f5219, 40ec9139, a7e9b12e, 1e271752, e0e81f34; +1b2f874a keyed tokens). Delivered: HEAD + merge-base/LCA, DAG-reachable grading, branch/switch/checkout verbs, the weaveTips spine refactor (behavior-preserving), merge-by-meaning with the FAIL-CLOSED rule (Jinx''s divergent-branch falsifier PASSES — config×code and no-shared-token invariant both HELD, not silently sealed), protected main + merge-to-protected human-only (anti agent-self-merge), multi-branch log/diff/show, and the daemon/MCP/descriptor skins. Full suite 1158 passing. The ONE remaining piece is lock-narrowing (per-branch-CAS concurrency win) — deliberately deferred as a correctness-delicate change (C-13: the fabric.jsonl append is not atomic) not needed for correctness or until many-agent scale.'
+symbols_touched:
+  - '#branch'
+  - '#merge'
+  - '#head'
+  - '#mergebase'
+  - '#native'
+  - '#admit'
+  - '#grade'
+  - '#protected'
+  - '#graph'
+  - '#daemon-descriptors'
+  - '#warpline-cli'
+tags:
+  - warpline
+  - M2.5
+  - branching
+  - merge-by-meaning
+  - milestone
+  - functionally-complete
+  - arc:warpline
+  - readiness-bar
+body: |-
+  WHAT THE FOUNDER CAN DO NOW: warpline init a project; `branch <name>` + `switch` to work a durable feature line; multiple agents/instances fork+propose+admit onto branches; `merge <from>` reconciles BY MEANING — disjoint auto-folds, real conflicts KNOT, and anything meaning is blind to (config×code, scalar-const invariants, .js configs, byte-decided) is HELD for a human instead of silently auto-merged (STRICTLY safer than git); protected main means a swarm can't auto-land into the integration line; `log`/`diff A..B`/`show` navigate the multi-branch history; agents drive it all via the MCP skins with F4-legible descriptors.
+
+  THE DEFERRED PIECE — lock-narrowing (Aegis's concurrency finding): today every write serializes on the single global fabric lock, so disjoint-branch admits that COULD run concurrently (per-ref CAS = per-branch domain) are throttled to serial. Unlocking it requires making the fabric.jsonl append atomic/sharded FIRST (C-13: O_APPEND tears a strand line past PIPE_BUF; the global lock is currently the only thing preventing multi-writer ledger corruption). This is correctness-critical and was DEFERRED rather than rushed at the end of a marathon session — the current global lock is CORRECT (just serial), so M2.5 is complete and safe without it; the win is throughput at N≥3 agents, which is not the current single-machine use. Recommended as a careful standalone next pass. Tracked on T-2026-07-01-017.
+
+  FOLLOW-UPS (all non-blocking, tracked): cross-branch clean switch (expectTreeId baseline — currently needs --force between divergent branches), a dedicated meaning-blind RefusalCode (reuses HELD today), and the criss-cross recursive merge (v1 fails closed).
+
+  ARC: this is the culmination — from the flight-readiness audit through Track-A, the LLM-judge, the pre-fixes, the Tier-1 dogfood, the multi-instance proof, and now M2.5. Warpline now does the multi-branch-by-meaning thing git structurally cannot, on this machine, with the fail-closed safety git can't offer.
+linked_lore:
+  - L-2026-08-12-ascend-055700-001
+linked_commits:
+  - af9c2bce
+  - fe7f5219
+  - 40ec9139
+  - a7e9b12e
+  - '1e271752'
+  - e0e81f34
+confidence: 0.85
+git_context:
+  ref: e0e81f34678552f9cc0e6f12e64a629e8c825c39
+  branch: warpline-surfaces
+  dirty: true

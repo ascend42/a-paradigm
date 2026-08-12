@@ -1,0 +1,54 @@
+id: L-2026-08-12-ascend-020618-001
+type: milestone
+timestamp: '2026-08-12T02:06:18.118Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'MILESTONE: pre-run engine + instrument hardening COMPLETE — judge cleared, both error-class pre-fixes landed'
+summary: 'The app-independent half of the Expo field-test pre-run critical path is complete and committed. The LLM-judge is built and security-cleared (21d95b25/a92bfd21/346c9cf8), and both engine pre-fixes it will measure have landed (58cb76e9): Fix B ripple-gate kills the measured 3/3 over-block false-KNOTs while preserving genuine KNOTs (one pure function in predict, zero determinism cost), Fix A surfaces the Tier-0 invariant false-CLEAN as a disclaimer-on-every-independent-CLEAN with no gate (the canonical case stays undetectable-by-meaning and bounded by the oracle/judge). Full suite 1071 passing. Protocol locked (TD-154). What remains before a live run is increasingly app-coupled: the field-test runner driver, the frozen behavioral smoke oracle''s app-specific assertions, the seeded controls, the Expo backlog with overlap zones, and the run itself.'
+symbols_touched:
+  - '#judge'
+  - '#predict'
+  - '#sem-delta'
+  - '#hazard'
+  - '#oracle'
+  - '#essence-hash'
+  - '#warpline-cli'
+tags:
+  - warpline
+  - field-test
+  - milestone
+  - pre-run
+  - arc:warpline
+  - audit-2026-08-11
+body: |-
+  CRITICAL PATH STATUS (settled by TD-704, hardened by the design panels):
+  DONE (app-independent, committed):
+  1. LLM-judge — standalone cold instrument, foundation + live half + Aegis-cleared (TD-071; L-2026-08-12-011153).
+  2. Fix B over-block false-KNOT — ripple-gate (TD-831; predict.ts bodyContested gate).
+  3. Fix A Tier-0 false-CLEAN — surface-and-sample, no gate (TD-831; cli.ts disclaimer).
+  5. Protocol amended (2 adversarial rounds) + LOCKED (TD-154).
+
+  REMAINING (increasingly Expo-app-coupled):
+  - Field-test RUNNER DRIVER: runJudgeEnforced exists; the 'walk Expo audit rows/KNOTs → cards' driver needs the actual run-data shape. Partially app-coupled. (T-2026-08-12-001.)
+  - FROZEN BEHAVIORAL SMOKE ORACLE (protocol §4, the (A)-detector): the framework is app-independent; its ASSERTIONS probe THIS Expo app's config×code couplings → app-coupled.
+  - SEEDED CONTROLS (A6 planted false-CLEAN, A11 known-GENUINE/OVER-BLOCK): fixture framework buildable; concrete seeds may mirror the app's patterns.
+  - EXPO BACKLOG with overlap zones (protocol §3 driver): needs the actual Expo app.
+  - THE RUN: needs the app + API keys + is the founder's operation; the witness-commit habit (T-2026-08-12-001) is part of the runbook.
+  - Real-API regression case-13/case-20 (behind WARPLINE_JUDGE_LIVE): needs API access.
+
+  The two HARDEST, most app-independent pieces (the instrument and the engine hardening) are done. The boundary now: the rest wants the actual Expo app in hand.
+
+  Commits this arc: b85d56a8 (Track-A instruments) → 3862f450 (protocol lock) → 21d95b25/a92bfd21/346c9cf8 (judge) → 58cb76e9 (pre-fixes). All on warpline-surfaces, pushed to the (public) origin.
+linked_lore:
+  - L-2026-08-12-ascend-011153-001
+  - L-2026-08-12-ascend-013406-013
+linked_commits:
+  - 58cb76e9
+  - 346c9cf8
+confidence: 0.85
+git_context:
+  ref: 58cb76e97dc7231bb41dd1a3e77e3aa5b2a29e79
+  branch: warpline-surfaces
+  dirty: true
