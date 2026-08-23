@@ -31,8 +31,14 @@ import { ObjectStore } from '../warp/object-store.js';
 
 /** A KNOT that produced no payload — recorded card-less, never fabricated. */
 export interface ByteDowngradeEntry {
-  /** the identity the refusal recorded (proposedStateId / rebasedOnto); never invented. */
-  strandId: string;
+  /**
+   * The identity the refusal recorded (proposedStateId / rebasedOnto); never
+   * invented. Named `stateRef`, not `strandId` (reviewer follow-on, 2026-08-23):
+   * a byte-downgrade KNOT never sealed a strand — the value is a STATE reference
+   * off the refusal pointers, and calling it a strandId claimed an identity that
+   * does not exist on the fabric.
+   */
+  stateRef: string;
   reason: string;
 }
 
@@ -93,11 +99,11 @@ export function collectFieldCards(root: string, ctx: { store: ObjectStore }): Fi
     const r = row.refusal;
     if (!r || r.verdict !== 'KNOT') continue;
     if (r.pointers?.knotPayloadId) continue; // a payload exists → the card scan above covers it
-    const strandId = r.pointers?.proposedStateId ?? r.pointers?.rebasedOnto ?? '(unrecorded)';
-    if (seenDowngrades.has(strandId)) continue;
-    seenDowngrades.add(strandId);
+    const stateRef = r.pointers?.proposedStateId ?? r.pointers?.rebasedOnto ?? '(unrecorded)';
+    if (seenDowngrades.has(stateRef)) continue;
+    seenDowngrades.add(stateRef);
     byteDowngrades.push({
-      strandId,
+      stateRef,
       reason:
         'byte-downgrade KNOT without a persisted payload (B-3 gap: the refusal advertised no knotPayloadId; ' +
         'a rating card needs both sides’ bodies — building one from MergeRecipe trees alone is increment-2 work)',
@@ -124,7 +130,7 @@ export interface WriteCardsResult {
   written: number;
   /** cards already on disk (idempotent skip by cardId). */
   skippedExisting: number;
-  /** byte-downgrade entries newly appended (idempotent by strandId). */
+  /** byte-downgrade entries newly appended (idempotent by stateRef). */
   downgradesRecorded: number;
 }
 
@@ -132,7 +138,7 @@ export interface WriteCardsResult {
  * Persist the collected cards: one `<cardId>.json` per card (idempotent by
  * cardId — a card is content-addressed, so an existing file IS the card) and the
  * card-less byte-downgrade entries appended to byte-downgrades.jsonl (idempotent
- * by strandId). The card JSON is the RatingCard verbatim — the stripper already
+ * by stateRef). The card JSON is the RatingCard verbatim — the stripper already
  * removed every evaluative field, and the blindness test guards the bytes.
  */
 export function writeCards(root: string, cards: FieldCards): WriteCardsResult {
@@ -159,7 +165,11 @@ export function writeCards(root: string, cards: FieldCards): WriteCardsResult {
     for (const line of fs.readFileSync(dlPath, 'utf8').split('\n')) {
       if (line.trim().length === 0) continue;
       try {
-        already.add((JSON.parse(line) as ByteDowngradeEntry).strandId);
+        // Accept the pre-rename key too: an increment-1 log wrote `strandId`
+        // for the same value (renamed to stateRef, reviewer follow-on 2026-08-23).
+        const parsed = JSON.parse(line) as { stateRef?: string; strandId?: string };
+        const ref = parsed.stateRef ?? parsed.strandId;
+        if (ref !== undefined) already.add(ref);
       } catch {
         /* skip unreadable line */
       }
@@ -167,9 +177,9 @@ export function writeCards(root: string, cards: FieldCards): WriteCardsResult {
   }
   let downgradesRecorded = 0;
   for (const entry of cards.byteDowngrades) {
-    if (already.has(entry.strandId)) continue;
+    if (already.has(entry.stateRef)) continue;
     fs.appendFileSync(dlPath, JSON.stringify(entry) + '\n', 'utf8');
-    already.add(entry.strandId);
+    already.add(entry.stateRef);
     downgradesRecorded++;
   }
 

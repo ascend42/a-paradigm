@@ -127,8 +127,12 @@ export interface JudgeRunnerResult {
   rawRun: RunResult | null;
 }
 
-/** The operator-facing, git-commit reminder for the witnessed head (§3 A13). */
-function witnessReminder(witnessPath: string, head: string | null): string {
+/**
+ * The operator-facing, git-commit reminder for the witnessed head (§3 A13).
+ * Exported so `warpline field join` (src/field/join.ts) prints the IDENTICAL
+ * wording after the join rows extend the chain to a new head.
+ */
+export function witnessReminder(witnessPath: string, head: string | null): string {
   if (!head) {
     return `EXTERNAL WITNESS (§3 A13): no verdict was sealed, so there is no ledger head to witness.`;
   }

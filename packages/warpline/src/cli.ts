@@ -111,6 +111,10 @@ import {
 } from './field/oracle.js';
 import { collectFieldCards, writeCards, byteDowngradesPathOf, fieldCardsDirOf, type WriteCardsResult, type FieldCards } from './field/cards.js';
 import { recordGitFallback, listGitFallbacks, gitFallbackPathOf, type GitFallbackEntry } from './field/fallback.js';
+import { runFieldJudge, fakeFieldCallModel, fieldJudgeLedgerPathOf, type FieldJudgeResult } from './field/judge-run.js';
+import { joinFieldVerdicts, type FieldJoinResult } from './field/join.js';
+import { scoreFieldRunFromDisk, renderFieldReport, fieldReportMarkdownPathOf, fieldReportJsonPathOf, type FieldScore } from './field/score.js';
+import { liveCallModel } from './judge/judge-run.js';
 
 // The shared .purpose parser (library code, purpose/core/aggregator) console.warns
 // about unrelated schema-invalid files (e.g. a stale conductor .purpose) on every
@@ -1386,6 +1390,109 @@ field
             (entry.knotId ? `  knot   ${entry.knotId}\n` : '') +
             (entry.admitRef ? `  admit  ${entry.admitRef}\n` : ''),
         );
+      }
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+field
+  .command('judge')
+  .description('Run the blinded cold judge over the assembled §5 card stream: KNOT cards (field cards output) + oracle-flagged CLEANs + the §4 random audit sample + planted/genuine/over-block seeds, interleaved with the COMMITTED shuffle seed, through the enforcing runner (injection pre-flight FIRST; majority verdicts sealed with §4 provenance into the hash-chained ledger .warpline/field/judge/expo-field-audit.jsonl; head written to the git witness file). Idempotent by cardId. Default requires ANTHROPIC_API_KEY (the pinned live judge); --fake is a deterministic dry-run that measures nothing.')
+  .option('--fake', 'deterministic fake model (labels by card kind) — pipeline rehearsal only')
+  .option('--batch-limit <n>', 'cap NEW cards scored this invocation (continuity scores the rest next run)')
+  .option('--seed <hex>', 'shuffle seed — refused if a DIFFERENT seed is already committed')
+  .option('--json', 'emit the run result as JSON')
+  .action(async (options: { fake?: boolean; batchLimit?: string; seed?: string; json?: boolean }) => {
+    try {
+      const root = await resolveRoot();
+      let batchLimit: number | undefined;
+      if (options.batchLimit !== undefined) {
+        batchLimit = Number(options.batchLimit);
+        if (!Number.isInteger(batchLimit) || batchLimit < 0) {
+          process.stderr.write(`warpline: --batch-limit must be a non-negative integer (got "${options.batchLimit}")\n`);
+          process.exit(1);
+        }
+      }
+      const callModel = options.fake ? fakeFieldCallModel() : liveCallModel();
+      const result = await runFieldJudge(root, {
+        callModel,
+        seed: options.seed,
+        batchLimit,
+      });
+      if (options.json) {
+        const { runner, ...rest } = result;
+        process.stdout.write(
+          JSON.stringify(
+            {
+              ...rest,
+              disqualified: runner.disqualified,
+              disqualifyReason: runner.disqualifyReason ?? null,
+              scored: runner.scored,
+              previousHead: runner.previousHead,
+              ledgerHead: runner.ledgerHead,
+              witnessPath: runner.witnessPath,
+              voided: runner.preflight.voided,
+              corpusResults: runner.preflight.corpusResults,
+            },
+            null,
+            2,
+          ) + '\n',
+        );
+      } else {
+        printFieldJudge(root, result, options.fake === true);
+      }
+      if (result.runner.disqualified) process.exit(1);
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+field
+  .command('join')
+  .description('Join Warpline\'s verdicts to the sealed judge ratings (write-before-reveal). PRECONDITION (§3 A13, no escape hatch): the ledger chain must contain a GIT-COMMITTED head — `git show HEAD:<witness>` must equal some row\'s rowHash — or NOTHING is joined. CLEAN cards join the oracle-row verdict; KNOT cards join \'KNOT\' (\'KNOT:resolved\' when the fabric records the resolution). Idempotent; the join rows extend the chain, so the NEW head needs its own witness commit (printed).')
+  .option('--json', 'emit the join result as JSON')
+  .action(async (options: { json?: boolean }) => {
+    try {
+      const root = await resolveRoot();
+      const result = joinFieldVerdicts(root);
+      if (options.json) {
+        process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+      } else {
+        printFieldJoin(result);
+      }
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+field
+  .command('score')
+  .description('Score the run PURELY from recorded artifacts (oracle ledger + judge ledger + judgments.jsonl + fallback log): §7A two separate false-CLEAN bounds (never blended), §7B byte-baseline column + meaning-decisive count (+ catch-candidates, not claimed), §7C intervention rate + K2, seeded-control precision/recall, indeterminate fraction. Writes the §9 report to .warpline/field/report.md + report.json — every mandatory element, VOID/not-tested defaults when preconditions are unmet.')
+  .option('--admissions <n>', 'admissions denominator override (default: oracle-ledger seals, planted excluded)')
+  .option('--json', 'emit the full score as JSON (still writes report.md/report.json)')
+  .action(async (options: { admissions?: string; json?: boolean }) => {
+    try {
+      const root = await resolveRoot();
+      let admissionsOverride: number | undefined;
+      if (options.admissions !== undefined) {
+        admissionsOverride = Number(options.admissions);
+        if (!Number.isInteger(admissionsOverride) || admissionsOverride < 0) {
+          process.stderr.write(`warpline: --admissions must be a non-negative integer (got "${options.admissions}")\n`);
+          process.exit(1);
+        }
+      }
+      const score = scoreFieldRunFromDisk(root, { admissionsOverride });
+      const markdown = renderFieldReport(score);
+      const mdPath = fieldReportMarkdownPathOf(root);
+      const jsonPath = fieldReportJsonPathOf(root);
+      await fs.mkdir(path.dirname(mdPath), { recursive: true });
+      await fs.writeFile(mdPath, markdown, 'utf8');
+      await fs.writeFile(jsonPath, JSON.stringify(score, null, 2) + '\n', 'utf8');
+      if (options.json) {
+        process.stdout.write(JSON.stringify(score, null, 2) + '\n');
+      } else {
+        printFieldScore(score, mdPath, jsonPath);
       }
     } catch (err) {
       fail(err);
@@ -3272,7 +3379,7 @@ function printFieldCards(root: string, cards: FieldCards, r: WriteCardsResult): 
     `DOWNGRADES ${cards.byteDowngrades.length} byte-downgrade KNOT(s) without a payload — ${r.downgradesRecorded} newly recorded (${byteDowngradesPathOf(root)})`,
   );
   for (const d of cards.byteDowngrades) {
-    lines.push(`  ${short(d.strandId)}  card-less (B-3 gap)`);
+    lines.push(`  ${short(d.stateRef)}  card-less (B-3 gap)`);
   }
   process.stdout.write(lines.join('\n') + '\n');
 }
@@ -3286,6 +3393,68 @@ function printFieldFallbackList(root: string, entries: GitFallbackEntry[]): void
     lines.push(`  ${e.ts}  ${e.actor}${e.knotId ? `  knot ${short(e.knotId)}` : ''}${e.admitRef ? `  admit ${short(e.admitRef)}` : ''}`);
     lines.push(`    ${e.message}`);
   }
+  process.stdout.write(lines.join('\n') + '\n');
+}
+
+function printFieldJudge(root: string, r: FieldJudgeResult, fake: boolean): void {
+  const lines: string[] = [`FIELD JUDGE  (§5 blinded cold judge${fake ? ' — FAKE MODEL DRY-RUN: measures nothing' : ''})`];
+  const a = r.assembled;
+  lines.push(
+    `STREAM    knot ${a.knot} · oracle-flagged ${a.oracleFlagged} · audit-sample ${a.auditSample} · planted ${a.planted} · seeded ${a.seededControls} · corpus ${a.corpus} (seed ${r.seed.slice(0, 16)}…)`,
+  );
+  lines.push(`SKIPPED   ${r.skippedAlreadyJudged} already judged · ${r.batchDeferred} deferred past --batch-limit`);
+  if (r.runner.disqualified) {
+    lines.push('');
+    lines.push('DISQUALIFIED — the judge FAILED the injection pre-flight (§5). NOTHING was scored,');
+    lines.push('nothing was sealed, and no blinded (B)/(C) denominator may be claimed for this run.');
+    lines.push(`  reason: ${r.runner.disqualifyReason ?? '(none recorded)'}`);
+    process.stdout.write(lines.join('\n') + '\n');
+    return;
+  }
+  lines.push(
+    `SCORED    ${r.runner.scored} card(s) sealed · voided (twin-invariant) ${r.runner.preflight.voided.length} · ledger ${fieldJudgeLedgerPathOf(root)}`,
+  );
+  lines.push(`HEAD      ${r.runner.previousHead ? short(r.runner.previousHead) : '(fresh ledger)'} → ${r.runner.ledgerHead ? short(r.runner.ledgerHead) : '(nothing sealed)'}`);
+  lines.push(`MANIFEST  ${r.manifestPath} (carries the F3c audit-sample leak caveat)`);
+  lines.push('');
+  lines.push(r.runner.witnessCommitReminder);
+  process.stdout.write(lines.join('\n') + '\n');
+}
+
+function printFieldJoin(r: FieldJoinResult): void {
+  const lines: string[] = ['FIELD JOIN  (§3 write-before-reveal — answers joined AFTER the sealed ratings)'];
+  lines.push(
+    `WITNESS   git-committed head ${short(r.witness.witnessedRowHash)} at chain ordinal ${r.witness.witnessedOrdinal} · un-witnessed tail before join: ${r.witness.unwitnessedTail} row(s)`,
+  );
+  lines.push(
+    `JOINED    ${r.joined} verdict(s) · already joined ${r.skippedAlreadyJoined} · controls skipped ${r.skippedControls} (calibration, no Warpline verdict)`,
+  );
+  if (r.awaitingWitness > 0) {
+    lines.push(`AWAITING  ${r.awaitingWitnessNote}`);
+  }
+  for (const u of r.unjoinable) {
+    lines.push(`  UNJOINABLE ${short(u.cardId)} — ${u.reason}`);
+  }
+  lines.push(`HEAD      ${r.ledgerHead ? short(r.ledgerHead) : '(empty ledger)'}`);
+  lines.push('');
+  lines.push(r.witnessCommitReminder);
+  process.stdout.write(lines.join('\n') + '\n');
+}
+
+function printFieldScore(s: FieldScore, mdPath: string, jsonPath: string): void {
+  const lines: string[] = ['FIELD SCORE  (§7 pre-committed thresholds → §9 report)'];
+  lines.push(`ADMISSIONS ${s.admissions.n} (${s.admissions.source})`);
+  lines.push(`(A) ${s.sevenA.verdict} — ${s.sevenA.reason}`);
+  lines.push(`(B) ${s.sevenB.verdict} — ${s.sevenB.reason}`);
+  lines.push(`(C) ${s.sevenC.verdict} — ${s.sevenC.reason}`);
+  lines.push(
+    `BOUNDS    objective ${s.sevenA.bounds.objective.observed}/${s.sevenA.bounds.objective.n} · subjective ${s.sevenA.bounds.subjective.observed}/${s.sevenA.bounds.subjective.n} — reported separately, never blended (§7A A12)`,
+  );
+  lines.push(
+    `SEEDS     precision ${s.seededControl.genuinePrecision === null ? 'n/a' : (s.seededControl.genuinePrecision * 100).toFixed(0) + '%'} · beats ~29% prior: ${s.seededControl.beatsPrior ? 'yes' : 'NO (denominator uncalibrated)'}`,
+  );
+  lines.push(`REPORT    ${mdPath}`);
+  lines.push(`          ${jsonPath}`);
   process.stdout.write(lines.join('\n') + '\n');
 }
 

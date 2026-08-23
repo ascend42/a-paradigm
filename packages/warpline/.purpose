@@ -3763,18 +3763,97 @@ components:
       fallback is the exact flattering-direction error (C) measures). CLI:
       `warpline field oracle [--since <seq>] [--greengate <path>]` /
       `warpline field cards` / `warpline field fallback -m <msg> [--knot]
-      [--admit] | --list`, all with --json. Increment 2 (field judge/join/
-      score) is NOT here.
+      [--admit] | --list`, all with --json.
+      INCREMENT 2 (T-2026-08-23-003, §5/§3/§7/§9): FOUR MORE PIECES.
+      (4) #field-interleave: the §5 card stream. selectAuditSample = the §4
+      rule VERBATIM (every 5th true-clean by LEDGER order among dismissed
+      CLEANs, floor 15 per block, planted excluded — the fraction never
+      re-tunes to the observed count). buildCleanCardFromOracleRow bridges an
+      OracleRow to the #judge stripper's CleanAuditRow (sides from the
+      strand's OWN MergeRecipe trees for the CHANGED paths the row recorded;
+      intents from the parent strands; oracle-flagged carries the failing
+      check NAME, audit-sample carries the F3c sentinel 'none-declared' —
+      the rubric fix is FOUNDER-GATED, so the leak is carried as the LOUD
+      AUDIT_SAMPLE_LEAK_CAVEAT in the run manifest + §9 report, never
+      silently fixed). interleave = deterministic Fisher–Yates keyed by
+      sha256(seed‖index), seed COMMITTED to .warpline/field/judge/
+      shuffle-seed before the first batch (a different later seed REFUSES).
+      loadSeedCards reads .warpline/field/seeds/{planted,genuine,over-block,
+      corpus}/ — manifest.json seals ground truth + per-file sha256; cardId
+      re-verified against content; any mismatch/unsealed file refuses;
+      absent dirs → empty sets (the run then refuses on empty corpus).
+      (5) #field-judge-run: `warpline field judge` — assembles KNOT cards +
+      oracle-flagged + audit-sample + seeds → interleaves with the committed
+      seed → #judge-runner runJudgeEnforced (pre-flight FIRST, §4 provenance
+      sealed per row, LEDGER-FILE PAIRING: the judge custody ledger keeps
+      the protocol name expo-field-audit.jsonl under .warpline/field/judge/,
+      the oracle ledger stays expo-field-oracle.jsonl — module-header notes
+      in each name the other). Idempotent by cardId; --batch-limit defers to
+      continuity; --fake = deterministic by-kind dry-run (measures nothing);
+      default requires ANTHROPIC_API_KEY → liveCallModel. Writes
+      field-judge-manifest.json (counts + seed + the F3c caveat).
+      (6) #field-join: `warpline field join` — §3 A13 PRECONDITION with NO
+      escape hatch: `git show HEAD:<witness>` must equal SOME chain row's
+      rowHash or NOTHING joins (git absent / uncommitted / matching no row
+      each refuse precisely; rows after the witnessed head are the only
+      permitted un-witnessed tail). CLEAN cards join the oracle-row verdict
+      via provenance pickId; KNOT cards join 'KNOT' ('KNOT:resolved' when a
+      fabric strand's resolves.knotPayloadId names the payload); planted/
+      seeded/corpus rows are calibration and are skipped, counted, never
+      guessed. A verdict row sealed AFTER the witnessed ordinal is NOT
+      joined this pass (reported awaitingWitness with an operator
+      commit-first instruction) — only a head witnessed BEFORE the answer
+      counts. Idempotent; after joining the NEW head is re-witnessed and
+      the VERBATIM commit reminder printed.
+      (7) #field-score: `warpline field score` — PURE over recorded
+      artifacts. §7A twoDenominatorBounds (objective over covered CLEANs,
+      subjective via subjectiveBoundInputs over the JOINED audits — a
+      rating is 'pending' until its warpline-join row exists in the chain,
+      rated-but-unjoined never enters n_subjective; NEVER blended, no
+      combined field exists). Audit-sample floor: applied GLOBALLY,
+      equivalent to §4's per-block rule below 100 admissions (caveat stated
+      in the module + report; per-block flooring needed for multi-block
+      runs). §7B
+      byte-baseline column per audited merge target (fabric/merge3 mergeText
+      over base/ours/theirs bodies; unrecorded recipe → computable:false,
+      never guessed); meaning-decisive = CLEAN ∧ byte-conflicted ∧ oracle
+      true-clean COUNTED; the silent-mismerge class emitted as
+      CATCH-CANDIDATES requiring oracle confirmation, NOT claimed (honest
+      increment-2 scope). §7C intervention rate (KNOTs + logged fallbacks
+      over admissions; --admissions override) + K2 flag. Seeded-control
+      precision/recall + Wilson-LB beats-prior gate; indeterminate fraction
+      with GENUINE-only floor; genuine reported BOTH uncorrected and
+      naive-precision-corrected, labeled 'correction formula pending
+      pre-registration v2' (F3d founder-gated). Report → .warpline/field/
+      report.md + report.json with every §9 mandatory element: the
+      correlated-priors ≠-branch caveat VERBATIM (agents claude-opus-5 vs
+      judge claude-opus-4-5-20251101, version-only separation, discount at
+      the STRONGER end), the pre-fix baseline framing, the audit-sample
+      leak caveat, blind-class exclusions, kappa honestly reported as NOT
+      COMPUTABLE (founder primary labels not captured), and VOID/not-tested
+      defaults (planted control absent/uncaught → '(A) not tested';
+      genuine<20 → (B)/(C) INCONCLUSIVE). Reviewer follow-ons folded in:
+      ByteDowngradeEntry.strandId renamed stateRef (a byte-downgrade never
+      sealed a strand; legacy key still read for idempotency), and
+      appendAuditRow's O(n²) tail re-read replaced by a per-path head cache
+      (verify-on-load kept — first append per process verifies the whole
+      chain).
     type: module
     components:
       - "#field-oracle"
       - "#field-blind-class"
       - "#field-cards"
       - "#field-fallback"
-    tags: [field-test, protocol-s4, protocol-s6, protocol-s8, b7, harness]
+      - "#field-interleave"
+      - "#field-judge-run"
+      - "#field-join"
+      - "#field-score"
+    tags: [field-test, protocol-s3, protocol-s4, protocol-s5, protocol-s6, protocol-s7, protocol-s8, protocol-s9, b7, harness]
     references:
       - "#judge-rating-card"
+      - "#judge"
       - "#knot-payload"
+      - "#merge3"
       - "#fabric"
       - "#graph"
       - "#warp-snapshot"

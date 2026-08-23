@@ -20,6 +20,14 @@
  * seal's changed paths: a seal that touched ONLY blind classes is recorded
  * `blind-untested` and can never read as evidence for (A) surviving.
  *
+ * LEDGER-FILE PAIRING (reviewer follow-on, 2026-08-23): the run keeps TWO
+ * hash-chained ledgers with deliberately similar protocol names. THIS module owns
+ * the ORACLE ledger, `.warpline/field/expo-field-oracle.jsonl` (one row per
+ * audited seal, §4 RECORDING). The JUDGE custody ledger keeps the protocol's own
+ * name `expo-field-audit.jsonl` (§3 LEDGER CUSTODY) and lives under
+ * `.warpline/field/judge/` — written by #judge/ledger via src/field/judge-run.ts.
+ * They chain independently; only the judge ledger gets the §3 A13 git witness.
+ *
  * STANDALONE from src/daemon by construction. Library code: no console output.
  */
 
@@ -219,6 +227,14 @@ export interface OracleRowBody {
   };
   /** the seal's changed paths (union of both sides' changes vs base; null = underivable). */
   changedPaths: string[] | null;
+  /**
+   * §4 PLANTED POSITIVE CONTROL — true only on a row the operator harness appended
+   * for the planted known-broken seed. NEVER set by `auditOne` (a real audit cannot
+   * know it is rating a plant); set at append time by the seeding procedure, sealed
+   * into the hash chain, and EXCLUDED from every real denominator (audit-sample
+   * selection, §7A bounds, admissions). Additive: absent = not planted.
+   */
+  planted?: boolean;
   coveredClass: boolean;
   /** every blind changed path + its §8 reason. */
   blind: BlindPathFinding[];
@@ -426,14 +442,39 @@ export function readAuditLedger(root: string): OracleRow[] {
   return out;
 }
 
+/**
+ * Per-ledger-path HEAD cache (reviewer follow-on, 2026-08-23): `appendAuditRow`
+ * used to re-read the WHOLE ledger to find the tail on every append — O(n²)
+ * across a run. The first append through this process still LOADS AND VERIFIES
+ * the full on-disk chain (verify-on-load is kept: nothing is appended onto a
+ * broken chain); every later append chains onto the cached head. The cache is
+ * process-local — an external write to the file between appends in the SAME
+ * process is not re-detected until the next process (the ledger is single-writer
+ * by run procedure, and `verifyAuditLedger` still catches it after the fact).
+ */
+const ledgerHeadCache = new Map<string, string | null>();
+
 /** Append one audited row, chained onto the current tail. Returns the sealed row. */
 export function appendAuditRow(root: string, body: OracleRowBody): OracleRow {
   const p = fieldOracleLedgerPathOf(root);
   fs.mkdirSync(path.dirname(p), { recursive: true });
-  const prev = readAuditLedger(root);
-  const prevRowHash = prev.length ? prev[prev.length - 1].rowHash : null;
+  let prevRowHash: string | null;
+  if (ledgerHeadCache.has(p)) {
+    prevRowHash = ledgerHeadCache.get(p)!;
+  } else {
+    // First append through this process: load + VERIFY the whole chain once.
+    const rows = readAuditLedger(root);
+    const v = verifyOracleRowChain(rows);
+    if (!v.ok) {
+      throw new Error(
+        `warpline: field oracle ledger ${p} fails verification at row ${v.firstBadIndex}: ${v.detail ?? '(no detail)'} — refusing to append onto a broken chain`,
+      );
+    }
+    prevRowHash = rows.length ? rows[rows.length - 1].rowHash : null;
+  }
   const row: OracleRow = { ...body, prevRowHash, rowHash: oracleRowHashOf(body, prevRowHash) };
   appendDurableSync(p, JSON.stringify(row) + '\n');
+  ledgerHeadCache.set(p, row.rowHash);
   return row;
 }
 
@@ -444,9 +485,8 @@ export interface AuditLedgerVerifyResult {
   detail?: string;
 }
 
-/** Walk the chain: recompute every rowHash + check every prevRowHash link. */
-export function verifyAuditLedger(root: string): AuditLedgerVerifyResult {
-  const rows = readAuditLedger(root);
+/** Walk an in-memory row sequence: recompute every rowHash + check every link. */
+export function verifyOracleRowChain(rows: readonly OracleRow[]): AuditLedgerVerifyResult {
   for (let i = 0; i < rows.length; i++) {
     const { rowHash, prevRowHash, ...body } = rows[i];
     const expectedPrev = i === 0 ? null : rows[i - 1].rowHash;
@@ -459,6 +499,11 @@ export function verifyAuditLedger(root: string): AuditLedgerVerifyResult {
     }
   }
   return { ok: true, rows: rows.length, firstBadIndex: null };
+}
+
+/** Walk the on-disk chain: recompute every rowHash + check every prevRowHash link. */
+export function verifyAuditLedger(root: string): AuditLedgerVerifyResult {
+  return verifyOracleRowChain(readAuditLedger(root));
 }
 
 /* ── the run orchestration (discover → audit → append; idempotent) ───────────── */

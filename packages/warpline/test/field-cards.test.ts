@@ -171,7 +171,7 @@ describe('FIELD CARDS — habit (ii) scan-based capture', () => {
   it('records the B-3 byte-downgrade gap card-less — never fakes a card', () => {
     const cards = collectFieldCards(root, { store });
     expect(cards.byteDowngrades).toHaveLength(1); // the payload-bearing refusal is NOT double-counted
-    expect(cards.byteDowngrades[0].strandId).toBe('state:v0:downgraded');
+    expect(cards.byteDowngrades[0].stateRef).toBe('state:v0:downgraded');
     expect(cards.byteDowngrades[0].reason).toContain('B-3');
     expect(cards.byteDowngrades[0].reason).toContain('increment-2');
   });
