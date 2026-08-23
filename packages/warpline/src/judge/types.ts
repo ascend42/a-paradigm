@@ -70,7 +70,22 @@ export interface Judgment {
   noMajority: boolean;
 }
 
-/** The frozen pin of one run (§9 RUN-RECORD SPEC). Written once, before any card scores. */
+/**
+ * One BATCH of a run (§3 A13 multi-batch continuity): a run may be scored across
+ * several invocations; each appends a batch here, and the pinned instrument fields
+ * (model / promptHash / rubricHash / samplesPerCard) must match across every batch.
+ */
+export interface RunBatch {
+  createdAt: string;
+  /** the cardIds THIS batch rated, in order (may overlap an earlier batch). */
+  cardIds: string[];
+}
+
+/**
+ * The frozen pin of one run (§9 RUN-RECORD SPEC). Written before any card scores;
+ * on a later batch it is RE-READ, verified to match the pinned instrument, and its
+ * `cardIds` MERGED (additive — schemaVersion stays 'runRecord:v1').
+ */
 export interface RunRecord {
   schemaVersion: 'runRecord:v1';
   /** the provider the judge is a direct API call to (§2 — Claude only). */
@@ -87,14 +102,64 @@ export interface RunRecord {
   promptHash: string;
   /** the two frozen rubric content addresses (§5). */
   rubricHash: { knot: string; clean: string };
-  /** every cardId this run rates, in order — the frozen denominator membership. */
+  /** every cardId this run rates, in order (the UNION across batches) — the frozen denominator membership. */
   cardIds: string[];
-  /** the run date (§2 — the JUDGE is the reproducible instrument; the date is provenance, not identity). */
+  /** the run date of the FIRST batch (§2 — the JUDGE is the reproducible instrument; the date is provenance, not identity). */
   createdAt: string;
+  /** per-batch membership, appended on every invocation (§3 A13 continuity). Absent on a pre-batch record. */
+  batches?: RunBatch[];
 }
 
 /** Which kind of ledger row this is — the WRITE-BEFORE-REVEAL split (§3, §4). */
 export type LedgerRowKind = 'judge-verdict' | 'warpline-join';
+
+/** Where a rated card came from (§4 RECORDING) — sealed into the LEDGER, never shown to the judge. */
+export type ProvenanceSource = 'oracle-flagged' | 'audit-sample' | 'planted-control' | 'seeded-control' | 'knot' | 'corpus';
+
+/** A per-assertion oracle outcome map, or one outcome for the whole check. */
+export type OracleOutcome = 'pass' | 'fail' | 'absent' | Record<string, 'pass' | 'fail'>;
+
+/**
+ * The §4 RECORDING fields for one rated card — WRITE-TIME-IMMUTABLE once sealed into
+ * the hash-chained ledger row (a later edit of any flag breaks `verify()`). BLINDNESS:
+ * provenance lives ONLY in the ledger; it is never rendered into the rating card or the
+ * model prompt (#judge/card-render takes a RatingCard, which has no provenance field).
+ */
+export interface Provenance {
+  source: ProvenanceSource;
+  /** true when this card is a §4 audit sample drawn from the CLEAN seals. */
+  auditSample?: boolean;
+  /** true when this card is a PLANTED control (known answer, excluded from the denominator). */
+  planted?: boolean;
+  /** true when this card is a SEEDED classifier control (A11, excluded from the denominator). */
+  seededControl?: boolean;
+  /** the sealed ground truth for a control card (GENUINE / OVER-BLOCK for knots; broken / not-broken for cleans). */
+  groundTruth?: 'GENUINE' | 'OVER-BLOCK' | 'broken' | 'not-broken';
+  /** false when the merge touched only blind classes (§8). */
+  coveredClass?: boolean;
+  /** true when a green-gate / frozen-oracle assertion regressed on the merge (§4 objective, non-vetoable). */
+  objectiveRegression?: boolean;
+  strandId?: string;
+  pickId?: string;
+  agents?: string[];
+  parentStateIds?: string[];
+  mergedTreeId?: string;
+  /** per-check oracle outcomes on the parents/merge (§4). */
+  oracle?: Record<string, OracleOutcome>;
+}
+
+/** Provenance sources that are NEVER part of the blinded (B)/(C) or §4 denominator. */
+export const EXCLUDED_PROVENANCE_SOURCES: readonly ProvenanceSource[] = ['planted-control', 'seeded-control', 'corpus'];
+
+/**
+ * True iff a card with this provenance is EXCLUDED from the denominator: planted or
+ * seeded controls and injection-corpus cards are instrument calibration, not the
+ * population being measured (§5 / A11, §9 A14).
+ */
+export function provenanceExcludedFromDenominator(p: Provenance | undefined): boolean {
+  if (!p) return false;
+  return p.planted === true || p.seededControl === true || EXCLUDED_PROVENANCE_SOURCES.includes(p.source);
+}
 
 /**
  * A hash-chained ledger row body (§3 custody). The `judge-verdict` row is sealed
@@ -112,6 +177,15 @@ export interface LedgerRowBody {
   prevRowHash: string | null;
   /** present on a `judge-verdict` row: the sealed majority label (the rating). */
   judgeVerdict?: string;
+  /**
+   * present on a `judge-verdict` row: `judgment:v1:sha256(canonical(Judgment))` over the
+   * FULL verbatim Judgment (samples, parsedLabels, spread, majorityLabel, …) — chain-binds
+   * the raw model bytes to the sealed verdict so the plaintext judgments.jsonl cannot be
+   * silently rewritten under the ledger (§3 verbatim, §4 "immutable at write time").
+   */
+  judgmentHash?: string;
+  /** present on a `judge-verdict` row: the §4 RECORDING fields, sealed at write time. */
+  provenance?: Provenance;
   /** present on a `warpline-join` row: the sealed verdict row it joins to. */
   judgeRowHash?: string;
   /** present on a `warpline-join` row: the Warpline answer being joined AFTER the seal. */

@@ -7,6 +7,8 @@
  *     the denominator lives in the LEDGER, not only the plaintext judgments.jsonl.
  *   - a later Warpline join goes through joinWarplineVerdict (refused unless sealed first).
  *   - the EXTERNAL WITNESS file is written with the current head at the block boundary.
+ *   - an EMPTY injection corpus is a §5 gate-(b) REFUSAL, not a trivial pass (B4);
+ *     `allowEmptyCorpus: true` is the TEST-ONLY hatch for exercising other invariants.
  */
 
 import { describe, it, expect } from 'vitest';
@@ -20,6 +22,8 @@ import { JudgeLedger } from '../src/judge/ledger.js';
 import type { CallModel } from '../src/judge/judge-run.js';
 import { type CorpusCard } from '../src/judge/preflight.js';
 import { runJudgeEnforced, JudgeRefusedError, LEDGER_FILENAME } from '../src/judge/judge-runner.js';
+import { renderRatingCard } from '../src/judge/card-render.js';
+import type { Provenance } from '../src/judge/types.js';
 
 /** A plain knot card with no steering marker anywhere. */
 function plainCard(id: string): RatingCard {
@@ -95,12 +99,30 @@ describe('#judge/judge-runner — pre-flight gate + hash-chained denominator + e
     fs.rmSync(outDir, { recursive: true, force: true });
   });
 
+  it('an EMPTY injection corpus DISQUALIFIES — §5 gate (b) cannot be passed trivially (B4)', async () => {
+    const outDir = tmp('judge-runner-empty-corpus-');
+    let calls = 0;
+    const counting: CallModel = async () => {
+      calls++;
+      return 'OVER-BLOCK';
+    };
+    const result = await runJudgeEnforced({ cards: [plainCard('real')], corpus: [], callModel: counting, outDir });
+    expect(result.disqualified).toBe(true);
+    expect(result.disqualifyReason).toMatch(/no injection corpus supplied/);
+    expect(result.scored).toBe(0);
+    expect(calls).toBe(0); // the judge never saw a real card
+    expect(fs.existsSync(path.join(outDir, 'judgments.jsonl'))).toBe(false);
+    fs.rmSync(outDir, { recursive: true, force: true });
+  });
+
   it('SEALS eligible verdicts into a valid hash-chain — the denominator is the ledger, not the plaintext log', async () => {
     const outDir = tmp('judge-runner-ok-');
     const cards = [plainCard('a'), plainCard('b')];
+    // A NON-EMPTY benign corpus: the honest model ignores the payload, so gate (b) passes on merit.
+    const corpus: CorpusCard[] = [{ card: markedCard('inj', 'STEER:GENUINE'), steeredLabel: 'GENUINE' }];
     const result = await runJudgeEnforced({
       cards,
-      corpus: [], // no injection corpus → not disqualified
+      corpus,
       callModel: honestModel,
       outDir,
       now: () => '2026-08-11T00:00:00.000Z',
@@ -116,6 +138,10 @@ describe('#judge/judge-runner — pre-flight gate + hash-chained denominator + e
     expect(rows.every((r) => r.kind === 'judge-verdict')).toBe(true);
     expect(rows.map((r) => r.judgeVerdict)).toEqual(['OVER-BLOCK', 'OVER-BLOCK']);
     expect(rows.map((r) => r.cardId)).toEqual(cards.map((c) => c.cardId));
+    // Every sealed verdict row chain-binds its verbatim Judgment (B2).
+    expect(rows.every((r) => typeof r.judgmentHash === 'string' && r.judgmentHash.startsWith('judgment:v1:'))).toBe(true);
+    expect(result.previousHead).toBeNull(); // fresh outDir
+    expect(result.ledgerHead).toBe(rows[1].rowHash);
 
     // The plaintext judgments.jsonl is the §5 RAW audit artifact — present, but NOT the denominator.
     expect(fs.existsSync(path.join(outDir, 'judgments.jsonl'))).toBe(true);
@@ -132,7 +158,8 @@ describe('#judge/judge-runner — pre-flight gate + hash-chained denominator + e
   it('a later Warpline join goes through joinWarplineVerdict (write-before-reveal enforced)', async () => {
     const outDir = tmp('judge-runner-join-');
     const card = plainCard('join');
-    const result = await runJudgeEnforced({ cards: [card], corpus: [], callModel: honestModel, outDir });
+    // allowEmptyCorpus is the TEST-ONLY hatch: this test exercises the join, not gate (b).
+    const result = await runJudgeEnforced({ cards: [card], corpus: [], callModel: honestModel, outDir, allowEmptyCorpus: true });
 
     const sealed = result.verdictRows.get(card.cardId)!;
     expect(sealed).toBeDefined();
@@ -154,8 +181,10 @@ describe('#judge/judge-runner — pre-flight gate + hash-chained denominator + e
     const result = await runJudgeEnforced({
       cards: [plainCard('w')],
       corpus: [],
+      allowEmptyCorpus: true, // TEST-ONLY hatch: this test exercises the witness, not gate (b)
       callModel: honestModel,
       outDir,
+      now: () => '2026-08-11T00:00:00.000Z',
       log: {
         witnessed: (head, wp) => {
           witnessedHead = head;
@@ -175,6 +204,54 @@ describe('#judge/judge-runner — pre-flight gate + hash-chained denominator + e
     // The operator-facing reminder names the required git-commit step.
     expect(result.witnessCommitReminder).toMatch(/git add/);
     expect(result.witnessCommitReminder).toMatch(/git commit/);
+    // Every batch boundary head is ALSO appended to <witness>.log as `<iso> <head>` (B1).
+    expect(result.witnessLogPath).toBe(result.witnessPath + '.log');
+    expect(fs.readFileSync(result.witnessLogPath, 'utf8')).toBe(`2026-08-11T00:00:00.000Z ${result.ledgerHead}\n`);
     fs.rmSync(outDir, { recursive: true, force: true });
+  });
+
+  it('§4 provenance is sealed into the LEDGER only — the model prompt is byte-identical with or without it (B2 blindness)', async () => {
+    const card = plainCard('prov');
+    const seed = plainCard('seed');
+    const provenance = new Map<string, Provenance>([
+      [card.cardId, { source: 'oracle-flagged', strandId: 'strand-SECRET', agents: ['agent-SECRET'], objectiveRegression: true, oracle: { 'behavioral:x': 'fail' } }],
+      [seed.cardId, { source: 'seeded-control', seededControl: true, groundTruth: 'GENUINE' }],
+    ]);
+    const capture = (): { model: CallModel; prompts: string[] } => {
+      const prompts: string[] = [];
+      const model: CallModel = async (prompt) => {
+        prompts.push(prompt);
+        return 'OVER-BLOCK';
+      };
+      return { model, prompts };
+    };
+
+    const without = capture();
+    const outA = tmp('judge-runner-blind-a-');
+    const resA = await runJudgeEnforced({ cards: [card, seed], corpus: [], allowEmptyCorpus: true, callModel: without.model, outDir: outA });
+
+    const withProv = capture();
+    const outB = tmp('judge-runner-blind-b-');
+    const resB = await runJudgeEnforced({ cards: [card, seed], corpus: [], allowEmptyCorpus: true, callModel: withProv.model, outDir: outB, cardProvenance: provenance });
+
+    // Every prompt the model saw is byte-identical across the two runs.
+    expect(withProv.prompts).toEqual(without.prompts);
+    expect(withProv.prompts.length).toBeGreaterThan(0);
+    // And no provenance value ever appears in any prompt or in the rendered card.
+    for (const p of [...withProv.prompts, renderRatingCard(card)]) {
+      expect(p).not.toContain('SECRET');
+      expect(p).not.toContain('seeded-control');
+      expect(p).not.toContain('oracle-flagged');
+      expect(p).not.toContain('groundTruth');
+    }
+    // …while the LEDGER carries it: sealed, chained, and the seed excluded from the denominator.
+    const sealed = resB.verdictRows.get(card.cardId)!;
+    expect(sealed.provenance).toEqual(provenance.get(card.cardId));
+    expect(resB.ledger.verify().ok).toBe(true);
+    expect(resB.ledger.denominatorRows().map((r) => r.cardId)).toEqual([card.cardId]);
+    expect(resA.ledger.denominatorRows()).toHaveLength(2); // no provenance → nothing excluded
+    expect(resA.verdictRows.get(card.cardId)!.provenance).toBeUndefined();
+    fs.rmSync(outA, { recursive: true, force: true });
+    fs.rmSync(outB, { recursive: true, force: true });
   });
 });

@@ -14,7 +14,7 @@ import * as fs from 'node:fs';
 import { envelopeProse } from '../src/envelope.js';
 import { RATING_CARD_SCHEMA, type RatingCard } from '../src/judge/rating-card.js';
 import { rubricRefForCardKind } from '../src/judge/rubric.js';
-import { judgeCard, runJudge, parseLabel, type CallModel } from '../src/judge/judge-run.js';
+import { judgeCard, runJudge, parseLabel, RunRecordMismatchError, type CallModel } from '../src/judge/judge-run.js';
 import { PINNED_JUDGE_MODEL, AGENTS_MODEL } from '../src/judge/types.js';
 
 /** A minimal, well-formed KNOT rating card (bodies + framed intents; id is arbitrary). */
@@ -106,7 +106,32 @@ describe('#judge/judge-run — the instrument, fake model, no network', () => {
     expect(first.samples).toEqual(['GENUINE', 'GENUINE', 'GENUINE']);
     expect(first.majorityLabel).toBe('GENUINE');
     expect(judgments).toHaveLength(2);
+    expect(onDisk.batches).toEqual([{ createdAt: '2026-08-11T00:00:00.000Z', cardIds: cards.map((c) => c.cardId) }]);
 
+    fs.rmSync(outDir, { recursive: true, force: true });
+  });
+
+  it('runJudge on the same outDir APPENDS judgments and MERGES the run record; a pin mismatch throws (B1)', async () => {
+    const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'judge-run-batch-'));
+    const a = knotCard('a');
+    const b = knotCard('b');
+    const first = await runJudge({ cards: [a], callModel: scriptedModel(['GENUINE']), outDir, now: () => '2026-08-23T00:00:00.000Z' });
+    expect(first.batchIndex).toBe(0);
+    const second = await runJudge({ cards: [b, a], callModel: scriptedModel(['OVER-BLOCK']), outDir, now: () => '2026-08-23T01:00:00.000Z' });
+    expect(second.batchIndex).toBe(1);
+
+    const lines = fs.readFileSync(path.join(outDir, 'judgments.jsonl'), 'utf8').split('\n').filter((l) => l.trim());
+    expect(lines.map((l) => JSON.parse(l).cardId)).toEqual([a.cardId, b.cardId, a.cardId]); // appended, not truncated
+    const rr = JSON.parse(fs.readFileSync(path.join(outDir, 'run-record.json'), 'utf8'));
+    expect(rr.cardIds).toEqual([a.cardId, b.cardId]); // union
+    expect(rr.batches).toHaveLength(2);
+    expect(rr.createdAt).toBe('2026-08-23T00:00:00.000Z');
+
+    // A different N is a different instrument — refused before anything is written.
+    await expect(runJudge({ cards: [b], callModel: scriptedModel(['GENUINE']), outDir, samplesPerCard: 1 })).rejects.toBeInstanceOf(
+      RunRecordMismatchError,
+    );
+    expect(fs.readFileSync(path.join(outDir, 'judgments.jsonl'), 'utf8').split('\n').filter((l) => l.trim())).toHaveLength(3);
     fs.rmSync(outDir, { recursive: true, force: true });
   });
 });

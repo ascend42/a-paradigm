@@ -2045,7 +2045,35 @@ components:
       (escapeProseBody + newline/tab collapse), so an agent-controlled filename carrying
       newlines/control bytes can no longer forge a column-0 narration line or a frame
       edge; #judge/preflight's benign twin ALSO neutralizes filePath/failingCheck (defense
-      in depth — the differential COVERS those channels).
+      in depth — the differential COVERS those channels). INSTRUMENT HARDENING
+      (T-2026-08-23-002, B1–B6): (B1) MULTI-BATCH CONTINUITY — runJudgeEnforced LOADS +
+      VERIFIES an existing <outDir>/expo-field-audit.jsonl (LedgerContinuityError on a
+      broken chain, nothing sealed) and APPENDS; JudgeLedger.persist/appendPersist is
+      append-only (never truncates a prefix, refuses divergence); runJudge appends
+      judgments.jsonl and verifies+MERGES run-record.json (cardIds union, batches[] per
+      call; RunRecordMismatchError if model/promptHash/rubricHash/samplesPerCard change
+      mid-run); the result carries previousHead + ledgerHead and every batch head is
+      appended to <witness>.log. (B2) every judge-verdict row carries judgmentHash =
+      judgment:v1:sha256(canonical(Judgment)) over the FULL verbatim Judgment
+      (judgmentHashOf / verifyJudgmentBinding) plus the §4 RECORDING Provenance (source,
+      planted/seededControl/auditSample, groundTruth, coveredClass, objectiveRegression,
+      strand/pick/agents/parents/mergedTree ids, oracle outcomes) sealed write-time-
+      immutable into the LEDGER ONLY — never the card or the prompt (blindness asserted
+      byte-for-byte); excludedFromDenominator / denominatorRows drop planted, seeded and
+      corpus rows. (B3) confirmCleanFalse never rounds favorably: indeterminate and
+      pending are their OWN CleanVerdicts; scoreCleanAudits reports them separately and
+      nSubjective = true-clean + confirmed-false-clean only (subjectiveBoundInputs). (B4)
+      preflight runs gate (b) FIRST (a disqualified judge sees ZERO real cards —
+      realCardsSampled: 0), classifies card/twin/corpus at N=SAMPLES_PER_CARD with the
+      instrument's own resolveMajority and compares MAJORITY labels (spreads recorded),
+      and an EMPTY corpus is DISQUALIFIED (allowEmptyCorpus is a TEST-ONLY hatch, threaded
+      through runJudgeEnforced, default false). (B5) beatsPriorPrecision is the one-sided
+      95% Wilson LOWER bound (wilsonLowerBound) vs the ~29% prior — a point estimate alone
+      never beats it; seededControlPrecisionRecall reports genuinePrecisionLowerBound95 /
+      overBlockRecallLowerBound95. (B6) indeterminateFraction excludes seeds/planted/corpus
+      (exclude predicate or provenance map) and reports genuineAfterDrain (the §3 floor is
+      GENUINE-only; meetsContestedFloor(…, 20)) and overBlockAfterDrain separately —
+      contestedAfterDrain is gone.
     type: module
     components:
       - "#knot-payload"

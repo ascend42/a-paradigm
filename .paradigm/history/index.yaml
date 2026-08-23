@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-08-12T07:25:31.172Z'
+generated: '2026-08-12T08:17:55.329Z'
 by_symbol:
   '#plsat-router':
     symbol: '#plsat-router'
@@ -3525,11 +3525,55 @@ by_symbol:
       agent: []
   '#paradigm':
     symbol: '#paradigm'
-    total_changes: 12
-    last_modified: '2026-08-11T20:04:42Z'
+    total_changes: 13
+    last_modified: '2026-08-12T08:17:53Z'
     stability_score: 1
     fragility: low
     recent:
+      - &ref_409
+        id: h0668
+        ts: '2026-08-12T08:17:53Z'
+        type: implement
+        symbols:
+          - '#branch'
+          - '#merge'
+          - '#paradigm'
+        author:
+          type: human
+          id: ascend
+        commit: f38445f0ab214d9a04d69dda104edf4054517d48
+        intent: feature
+        files:
+          - .paradigm/decisions/TD-2026-08-12-113.yaml
+          - .paradigm/decisions/TD-2026-08-12-218.yaml
+          - .paradigm/decisions/TD-2026-08-12-351.yaml
+          - .paradigm/decisions/TD-2026-08-12-813.yaml
+          - .paradigm/decisions/TD-2026-08-12-831.yaml
+          - .paradigm/events/.last-processed
+          - .paradigm/events/debates.jsonl
+          - .paradigm/events/nominations.jsonl
+          - .paradigm/events/stream.jsonl
+          - .paradigm/events/team-funnel.jsonl
+          - .paradigm/history/index.yaml
+          - .paradigm/lore/entries/2026-08-12/L-2026-08-12-ascend-011153-001.lore
+          - .paradigm/lore/entries/2026-08-12/L-2026-08-12-ascend-013406-013.lore
+          - .paradigm/lore/entries/2026-08-12/L-2026-08-12-ascend-020618-001.lore
+          - .paradigm/lore/entries/2026-08-12/L-2026-08-12-ascend-022145-001.lore
+          - .paradigm/lore/entries/2026-08-12/L-2026-08-12-ascend-025504-823.lore
+          - .paradigm/lore/entries/2026-08-12/L-2026-08-12-ascend-034616-001.lore
+          - .paradigm/lore/entries/2026-08-12/L-2026-08-12-ascend-041703-629.lore
+          - .paradigm/lore/entries/2026-08-12/L-2026-08-12-ascend-042418-718.lore
+          - .paradigm/lore/entries/2026-08-12/L-2026-08-12-ascend-042909-715.lore
+          - .paradigm/lore/entries/2026-08-12/L-2026-08-12-ascend-055700-001.lore
+          - .paradigm/lore/entries/2026-08-12/L-2026-08-12-ascend-072605-001.lore
+          - .paradigm/lore/timeline.yaml
+          - .paradigm/work-log/2026-08-11/WL-claude-opus-4-6-2026-08-11-095.yaml
+          - docs/guides/warpline-multi-instance-demo.md
+          - docs/warpline-overview.html
+          - packages/warpline/test/backup.test.ts
+          - packages/warpline/test/f4-rig.test.ts
+          - packages/warpline/test/status-carrier.test.ts
+        description: 'chore(#paradigm): session records — M2.5 decisions + lore, multi-instance runbook, overview doc, increment-7 test follow-ons'
       - &ref_403
         id: h0652
         ts: '2026-08-11T20:04:42Z'
@@ -3576,19 +3620,6 @@ by_symbol:
         files:
           - .paradigm/habits.yaml
         description: 'feat(#paradigm): add sync-plugin-version habit — blocks if plugin version drifts'
-      - id: h0122
-        ts: '2026-03-04T08:54:40Z'
-        type: implement
-        symbols:
-          - '#paradigm'
-        author:
-          type: human
-          id: ascend
-        commit: 0308d694633cf9a17c5aec3fcee7f0dfba5ff93c
-        intent: fix
-        files:
-          - plugins/paradigm/.claude-plugin/plugin.json
-        description: 'fix(#paradigm): sync plugin version to 3.20.2'
     contributors:
       human:
         - ascend
@@ -23938,7 +23969,7 @@ by_symbol:
           - packages/warpline/src/fabric/native.ts
           - packages/warpline/test/merge-falsifier.test.ts
         description: 'feat(#merge): M2.5 increment 4 — merge by meaning, FAIL-CLOSED on blind classes (falsifier PASSES)'
-      - &ref_409
+      - &ref_410
         id: h0663
         ts: '2026-08-12T05:14:12Z'
         type: implement
@@ -27226,14 +27257,15 @@ by_symbol:
       agent: []
   '#branch':
     symbol: '#branch'
-    total_changes: 4
-    last_modified: '2026-08-12T07:24:54Z'
+    total_changes: 5
+    last_modified: '2026-08-12T08:17:53Z'
     stability_score: 1
     fragility: low
     recent:
+      - *ref_409
       - *ref_396
       - *ref_406
-      - *ref_409
+      - *ref_410
       - *ref_363
     contributors:
       human:
@@ -27247,7 +27279,7 @@ by_symbol:
     fragility: low
     recent:
       - *ref_406
-      - *ref_409
+      - *ref_410
       - *ref_363
     contributors:
       human:
@@ -27268,11 +27300,12 @@ by_symbol:
       agent: []
   '#merge':
     symbol: '#merge'
-    total_changes: 3
-    last_modified: '2026-08-12T07:24:54Z'
+    total_changes: 4
+    last_modified: '2026-08-12T08:17:53Z'
     stability_score: 1
     fragility: low
     recent:
+      - *ref_409
       - *ref_396
       - *ref_404
       - *ref_405

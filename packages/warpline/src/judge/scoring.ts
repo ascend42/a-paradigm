@@ -11,16 +11,22 @@
  *   - §4 false-CLEAN confirmation JOIN honoring the OBJECTIVE-NON-VETOABLE rule (A7/
  *     A10): an objective regression is a confirmed false CLEAN regardless of the LLM.
  *   - Seeded-classifier-control precision/recall (§5 / A11) — known-GENUINE precision,
- *     known-OVER-BLOCK recall — the required denominator correction.
+ *     known-OVER-BLOCK recall — the required denominator correction, with a ONE-SIDED
+ *     95% Wilson LOWER bound: "materially beats the prior" means the lower bound
+ *     clears it, never the point estimate (8/8 beats; 1/3 does not).
  *   - Before/after pre-fix scoring against the FIXED judge label (A3).
  *   - §7A TWO-denominator false-CLEAN bounds (objective vs subjective, rule-of-three
- *     each) — NEVER a blended number (A12).
- *   - The INDETERMINATE fraction against the contested floor (§9 / A14).
+ *     each) — NEVER a blended number (A12). `indeterminate` and `pending` audits are
+ *     their OWN verdicts — never rounded into true-clean (§5 "never rounded into a
+ *     favorable bucket") and never in n_subjective.
+ *   - The INDETERMINATE fraction against the contested floor (§9 / A14) — seeds,
+ *     planted controls and corpus cards excluded from the denominator; the §3 floor is
+ *     GENUINE-only (`genuineAfterDrain`, not genuine+over-block).
  *
  * Library code: no console output.
  */
 
-import { INDETERMINATE_LABEL, NO_MAJORITY, type Judgment } from './types.js';
+import { INDETERMINATE_LABEL, NO_MAJORITY, provenanceExcludedFromDenominator, type Judgment, type Provenance } from './types.js';
 
 /* ── Cohen's kappa + confusion ───────────────────────────────────────────────── */
 
@@ -69,31 +75,81 @@ export function ruleOfThree(n: number): number {
   return 3 / n;
 }
 
+/** The §3 contested floor: the minimum GENUINE KNOTs a (B)/(C) claim may rest on. */
+export const CONTESTED_FLOOR = 20;
+
 /**
  * INDETERMINATE fraction against the contested floor (§9 / A14): a card is
  * INDETERMINATE when the N=3 samples produce no 2-of-3 majority OR the majority is the
- * rubric's own INDETERMINATE label. Reported as a share of ALL classified KNOTs; a
- * high fraction means (B)/(C) were measured on the easy tail.
+ * rubric's own INDETERMINATE label. Reported as a share of the REAL classified KNOTs —
+ * seeded / planted controls and injection-corpus cards are EXCLUDED from the
+ * denominator (by `opts.exclude`, or by default from `opts.provenance` when supplied).
+ * A high fraction means (B)/(C) were measured on the easy tail. After INDETERMINATE
+ * drains out, `genuineAfterDrain` (majority GENUINE) is what the §3 floor is read
+ * against — over-blocks are reported SEPARATELY, never folded into "contested".
  */
-export function indeterminateFraction(judgments: readonly Judgment[]): {
+export function indeterminateFraction(
+  judgments: readonly Judgment[],
+  opts: {
+    /** exclude a card from the denominator by id (wins over `provenance`). */
+    exclude?: (cardId: string) => boolean;
+    /** per-card §4 provenance — when supplied, seeds / planted / corpus are excluded by default. */
+    provenance?: Map<string, Provenance>;
+  } = {},
+): {
+  /** real KNOTs in the denominator (after exclusions). */
   total: number;
+  /** how many KNOTs were excluded as seeds / planted / corpus. */
+  excluded: number;
   indeterminate: number;
   noMajority: number;
   fraction: number;
-  /** genuine-contested count remaining after INDETERMINATE drains out. */
-  contestedAfterDrain: number;
+  /** majority-GENUINE KNOTs remaining after INDETERMINATE drains out — the §3 floor counts THESE. */
+  genuineAfterDrain: number;
+  /** majority-OVER-BLOCK KNOTs remaining after the drain — reported separately, never "contested". */
+  overBlockAfterDrain: number;
 } {
-  const knots = judgments.filter((j) => j.cardKind === 'knot');
+  const exclude =
+    opts.exclude ??
+    (opts.provenance
+      ? (cardId: string): boolean => provenanceExcludedFromDenominator(opts.provenance!.get(cardId))
+      : (): boolean => false);
+  const allKnots = judgments.filter((j) => j.cardKind === 'knot');
+  const knots = allKnots.filter((j) => !exclude(j.cardId));
   const total = knots.length;
   const indeterminate = knots.filter((j) => j.indeterminate).length;
   const noMajority = knots.filter((j) => j.noMajority).length;
   return {
     total,
+    excluded: allKnots.length - total,
     indeterminate,
     noMajority,
     fraction: total === 0 ? 0 : indeterminate / total,
-    contestedAfterDrain: total - indeterminate,
+    genuineAfterDrain: knots.filter((j) => !j.indeterminate && j.majorityLabel === 'GENUINE').length,
+    overBlockAfterDrain: knots.filter((j) => !j.indeterminate && j.majorityLabel === 'OVER-BLOCK').length,
   };
+}
+
+/** Does the post-drain GENUINE count reach the §3 contested floor (default 20)? */
+export function meetsContestedFloor(genuineAfterDrain: number, floor = CONTESTED_FLOOR): boolean {
+  return genuineAfterDrain >= floor;
+}
+
+/* ── Wilson lower bound ───────────────────────────────────────────────────────── */
+
+/**
+ * The one-sided Wilson score LOWER bound on a proportion (default z = 1.645 → 95%
+ * one-sided). 0 when n == 0. This is what "materially beats the prior" is read
+ * against — the point estimate is never enough (1/3 = 0.33 does not beat 0.29).
+ */
+export function wilsonLowerBound(successes: number, n: number, z = 1.645): number {
+  if (n <= 0) return 0;
+  const p = successes / n;
+  const z2 = z * z;
+  const denom = 1 + z2 / n;
+  const centre = (p + z2 / (2 * n)) / denom;
+  const half = (z * Math.sqrt((p * (1 - p)) / n + z2 / (4 * n * n))) / denom;
+  return Math.max(0, centre - half);
 }
 
 /* ── seeded classifier control (A11) ─────────────────────────────────────────── */
@@ -114,6 +170,10 @@ export interface SeededControl {
 export function seededControlPrecisionRecall(seeds: readonly SeededControl[]): {
   genuinePrecision: number | null;
   overBlockRecall: number | null;
+  /** one-sided 95% Wilson LOWER bound on the GENUINE precision (null when the judge called none genuine). */
+  genuinePrecisionLowerBound95: number | null;
+  /** one-sided 95% Wilson LOWER bound on the OVER-BLOCK recall (null when no true over-blocks were seeded). */
+  overBlockRecallLowerBound95: number | null;
   judgeSaidGenuine: number;
   trueGenuineAmongJudgeGenuine: number;
   trueOverBlock: number;
@@ -126,6 +186,8 @@ export function seededControlPrecisionRecall(seeds: readonly SeededControl[]): {
   return {
     genuinePrecision: judgeSaidGenuine === 0 ? null : trueGenuineAmongJudgeGenuine / judgeSaidGenuine,
     overBlockRecall: trueOverBlock === 0 ? null : caughtOverBlock / trueOverBlock,
+    genuinePrecisionLowerBound95: judgeSaidGenuine === 0 ? null : wilsonLowerBound(trueGenuineAmongJudgeGenuine, judgeSaidGenuine),
+    overBlockRecallLowerBound95: trueOverBlock === 0 ? null : wilsonLowerBound(caughtOverBlock, trueOverBlock),
     judgeSaidGenuine,
     trueGenuineAmongJudgeGenuine,
     trueOverBlock,
@@ -133,9 +195,20 @@ export function seededControlPrecisionRecall(seeds: readonly SeededControl[]): {
   };
 }
 
-/** Does the judge's measured seed precision materially beat the prior study's ~29%? (§5 / A11) */
-export function beatsPriorPrecision(genuinePrecision: number | null, prior = 0.29): boolean {
-  return genuinePrecision !== null && genuinePrecision > prior;
+/**
+ * Does the judge's measured seed precision MATERIALLY beat the prior study's ~29%?
+ * (§5 / A11). "Materially" = the one-sided 95% Wilson LOWER bound of `counts`
+ * (successes = true-GENUINE among judge-GENUINE, n = judge-GENUINE) exceeds the prior.
+ * The point estimate alone is NEVER sufficient: with no `counts` there is no bound,
+ * so this returns false (fail closed — 1/3 = 0.33 must not "beat" 0.29).
+ */
+export function beatsPriorPrecision(
+  genuinePrecision: number | null,
+  prior = 0.29,
+  counts?: { successes: number; n: number },
+): boolean {
+  if (genuinePrecision === null || !counts) return false;
+  return wilsonLowerBound(counts.successes, counts.n) > prior;
 }
 
 /* ── §4 false-CLEAN confirmation JOIN (A7 / A10) ─────────────────────────────── */
@@ -151,33 +224,85 @@ export interface CleanAudit {
   coveredClass?: boolean;
 }
 
-export type CleanVerdict = 'confirmed-false-clean' | 'true-clean' | 'blind-untested';
+/**
+ * The §4 verdict buckets. `indeterminate` and `pending` are their OWN buckets: an
+ * audit the rater could not decide, or has not yet rated, is NEVER rounded into
+ * `true-clean` (§5 "never rounded into a favorable bucket").
+ */
+export type CleanVerdict = 'confirmed-false-clean' | 'true-clean' | 'blind-untested' | 'indeterminate' | 'pending';
 
 /**
  * The §4 confirmation JOIN. An OBJECTIVE regression is a confirmed false CLEAN, FULL
  * STOP — the blinded LLM may NOT veto it, downgrade it, or launder it to
  * indeterminate (A7/A10). Only where objectivity runs out is the blinded rater
- * load-bearing: a SUBJECTIVE candidate is confirmed only when the rater says "broken".
+ * load-bearing: a SUBJECTIVE candidate is confirmed only when the rater says "broken",
+ * survives only when it says "not-broken", and is otherwise `indeterminate` /
+ * `pending` — never silently true-clean.
  */
 export function confirmCleanFalse(audit: CleanAudit): CleanVerdict {
   if (audit.objectiveRegression) return 'confirmed-false-clean'; // NON-VETOABLE
   if (audit.coveredClass === false) return 'blind-untested';
-  return audit.blindedConfirmation === 'broken' ? 'confirmed-false-clean' : 'true-clean';
+  switch (audit.blindedConfirmation) {
+    case 'broken':
+      return 'confirmed-false-clean';
+    case 'not-broken':
+      return 'true-clean';
+    case 'indeterminate':
+      return 'indeterminate';
+    case 'pending':
+      return 'pending';
+  }
 }
 
-/** Roll up a set of audited CLEANs into their §4 verdicts + counts. */
+/**
+ * Roll up a set of audited CLEANs into their §4 verdicts + counts. `nSubjective` is
+ * the ONLY number that may feed the §7A subjective denominator: true-clean +
+ * confirmed-false-clean. `indeterminate` is reported separately; `pending` is
+ * not-yet-rated and is in NO denominator.
+ */
 export function scoreCleanAudits(audits: readonly CleanAudit[]): {
   verdicts: Array<{ cardId: string; verdict: CleanVerdict }>;
   confirmedFalseClean: number;
   trueClean: number;
   blindUntested: number;
+  indeterminate: number;
+  pending: number;
+  /** true-clean + confirmed-false-clean — the §7A subjective denominator (nothing else enters). */
+  nSubjective: number;
 } {
   const verdicts = audits.map((a) => ({ cardId: a.cardId, verdict: confirmCleanFalse(a) }));
+  const count = (v: CleanVerdict): number => verdicts.filter((x) => x.verdict === v).length;
+  const confirmedFalseClean = count('confirmed-false-clean');
+  const trueClean = count('true-clean');
   return {
     verdicts,
-    confirmedFalseClean: verdicts.filter((v) => v.verdict === 'confirmed-false-clean').length,
-    trueClean: verdicts.filter((v) => v.verdict === 'true-clean').length,
-    blindUntested: verdicts.filter((v) => v.verdict === 'blind-untested').length,
+    confirmedFalseClean,
+    trueClean,
+    blindUntested: count('blind-untested'),
+    indeterminate: count('indeterminate'),
+    pending: count('pending'),
+    nSubjective: trueClean + confirmedFalseClean,
+  };
+}
+
+/**
+ * The §7A SUBJECTIVE-denominator inputs derived from audited CLEANs: n_subjective =
+ * true-clean + confirmed-false-clean ONLY; indeterminate and pending audits never
+ * enter the denominator (they would flatter the bound).
+ */
+export function subjectiveBoundInputs(audits: readonly CleanAudit[]): {
+  nSubjective: number;
+  subjectiveConfirmed: number;
+  /** reported alongside, outside the denominator. */
+  indeterminate: number;
+  pending: number;
+} {
+  const roll = scoreCleanAudits(audits);
+  return {
+    nSubjective: roll.nSubjective,
+    subjectiveConfirmed: roll.confirmedFalseClean,
+    indeterminate: roll.indeterminate,
+    pending: roll.pending,
   };
 }
 
@@ -203,9 +328,13 @@ export interface FalseCleanBound {
 export function twoDenominatorBounds(args: {
   nObjective: number;
   objectiveConfirmed: number;
+  /** true-clean + confirmed-false-clean ONLY (see `subjectiveBoundInputs`) — never indeterminate / pending. */
   nSubjective: number;
   subjectiveConfirmed: number;
 }): { objective: FalseCleanBound; subjective: FalseCleanBound } {
+  if (args.subjectiveConfirmed > args.nSubjective || args.objectiveConfirmed > args.nObjective) {
+    throw new Error('twoDenominatorBounds: observed exceeds its denominator');
+  }
   const bound = (denominator: 'objective' | 'subjective', n: number, observed: number): FalseCleanBound => {
     const zero = observed === 0;
     return { denominator, n, observed, upper95: zero ? ruleOfThree(n) : observed / n, ruleOfThree: zero };

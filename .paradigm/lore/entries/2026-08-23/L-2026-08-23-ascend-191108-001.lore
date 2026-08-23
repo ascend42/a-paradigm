@@ -1,0 +1,47 @@
+id: L-2026-08-23-ascend-191108-001
+type: review
+timestamp: '2026-08-23T19:11:08.621Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Field-test readiness panel: instrument real, run harness unbuilt, three founder gates'
+summary: 'Five-agent readiness panel (Arky/Aegis/Jinx/Loid/Judge) against the LOCKED expo-field-test-protocol, launched directly because orchestrate_inline dropped Jinx+Loid again (T-2026-08-11-007). Verdict: the judge instrument is real but the RUN HARNESS around it is unbuilt, and a run today would complete and prove nothing. Three founder gates: M3 signing required by TD-913(3); the only Expo subject on disk is a live client project; the locked protocol has internal contradictions (≥20 genuine vs ≤25 interventions) needing pre-registration v2. Six instrument defects (ledger continuity, §4 row fields, favorable rounding, pre-flight ordering/empty corpus, bare precision threshold, wrong indeterminate denominator) are buildable now → T-2026-08-23-002 in progress.'
+symbols_touched:
+  - '#judge'
+  - '#warpline-cli'
+  - '#admit'
+  - '#predict'
+  - '#strand'
+verification:
+  status: partial
+  details:
+    baseline-tests: pass (1158)
+    claims-reverified: TD-913, predict.ts, judge-run.ts, callers, subject repo
+    threshold-arithmetic: verified under intervention=resolve assumption
+tags:
+  - warpline
+  - field-test
+  - readiness
+  - panel
+  - arc:warpline
+  - pre-registration
+  - M3
+body: |-
+  Full synthesis with file:line evidence: .paradigm/research/warpline-native-first/field-test-readiness-2026-08-23.md. Orchestrator re-verified every load-bearing claim: TD-913 text (M3 REQUIRED; both classes pre-fixed), predict.ts bodyContested (Fix B shipped), liveCallModel free-text parse (judge-run.ts:209-214), zero callers of the card builders/runJudgeEnforced outside src/judge, a-climbers-gift has tsc only (no lint/test/node_modules). Baseline 1158 tests green re-run today.
+
+  Stale beliefs corrected: the session brief said the over-block bug was "deliberately unfixed (TD-663 (6))" — TD-913 superseded that and TD-831 shipped the ripple-gate. The brief omitted TD-913 (3) M3 entirely. The live case-13/20 regression IS wired (never executed).
+
+  Jinx's sharpest: thresholds are arithmetically self-defeating (every KNOT = one HUMAN_ONLY resolve = one intervention; §3 needs ≥20 corrected-genuine, §7C falsifies at >25/100) — a 5-KNOT window even at perfect judge precision. Loid's sharpest: the ~29%/33% prior cited in §5 is from a different question (precision 2/7, Sonnet, n=7, CI 0.08–0.64) — direction only; and NO precision-correction formula exists anywhere (naive vs Rogan-Gladen differ by 3–4 KNOTs at the floor). Loid's empirical lift of a-climbers-gift src/ (57 files → 83 units): every screen is ONE code-unit so same-screen pairs are the dominant contention AND over-block generator (Z1); services×screens are all-extern → the independent-CLEAN false-CLEAN vector (Z3); 14/57 files lift zero units (Z4, blind).
+
+  Process note: three of five agents stopped before emitting a report and had to be resumed via SendMessage; the returned "result" was a first-line fragment. Worth a framework task if it recurs.
+linked_tasks:
+  - T-2026-08-23-001
+  - T-2026-08-23-002
+  - T-2026-08-23-003
+  - T-2026-07-01-014
+confidence: 0.85
+git_context:
+  ref: f38445f0ab214d9a04d69dda104edf4054517d48
+  branch: warpline-surfaces
+  dirty: true

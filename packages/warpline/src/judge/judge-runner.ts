@@ -34,7 +34,21 @@
  *      REQUIRED run-procedure step — the code writes and surfaces the head; the
  *      OPERATOR commits it, so git's independent history is the external clock the owner
  *      cannot silently rewind. A run whose final head does not chain forward from its
- *      git-witnessed intermediate heads is VOID.
+ *      git-witnessed intermediate heads is VOID. Every batch boundary head is ALSO
+ *      appended to `<witness>.log` (`<iso> <head>`), so the intermediate heads survive,
+ *      not only the latest.
+ *
+ *   4. MULTI-BATCH CONTINUITY (§3 A13). A run is scored across several invocations of
+ *      the same outDir. If `<outDir>/expo-field-audit.jsonl` exists it is LOADED and
+ *      VERIFIED first (a broken chain raises `LedgerContinuityError` and NOTHING is
+ *      sealed), then this batch APPENDS to it — never `new JudgeLedger()` over an
+ *      existing file. The result carries `previousHead` (loaded from disk) and
+ *      `ledgerHead` (after this batch) so the operator can see the chain advance.
+ *
+ *   5. VERBATIM BINDING + §4 RECORDING. Every sealed verdict row carries
+ *      `judgmentHash` over the FULL verbatim Judgment (chain-binds judgments.jsonl) and,
+ *      when the caller supplies `cardProvenance`, the §4 RECORDING provenance — sealed
+ *      into the LEDGER only; it never reaches the rating card or the model prompt.
  *
  * STANDALONE by construction (§5 SECOND-RATER IDENTITY): imports only the judge
  * foundation and node stdlib — NOTHING from src/daemon or the agent loader/roster.
@@ -49,9 +63,11 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { preflight, type CorpusCard, type PreflightResult } from './preflight.js';
 import { runJudge, type CallModel, type RunResult } from './judge-run.js';
-import { JudgeLedger } from './ledger.js';
+import { JudgeLedger, LedgerContinuityError, judgmentHashOf } from './ledger.js';
 import type { RatingCard } from './rating-card.js';
-import type { LedgerRow } from './types.js';
+import type { LedgerRow, Provenance } from './types.js';
+
+export { LedgerContinuityError } from './ledger.js';
 
 /** The git-tracked witness file, relative to the run's outDir (§3 A13). */
 export const DEFAULT_WITNESS_RELPATH = path.join('.warpline-judge', 'expo-field-audit.head');
@@ -95,10 +111,14 @@ export interface JudgeRunnerResult {
   scored: number;
   /** the AUTHORITATIVE hash-chained denominator — the sealed verdict rows (§3/§4). */
   ledger: JudgeLedger;
+  /** the on-disk ledger head loaded BEFORE this batch (null for a fresh outDir). */
+  previousHead: string | null;
   /** the ledger head written to the witness file (null when nothing was sealed). */
   ledgerHead: string | null;
   /** where the head was written — the REQUIRED-to-commit external witness (§3 A13). */
   witnessPath: string;
+  /** `<witnessPath>.log` — every batch boundary head, one `<iso> <head>` line per batch. */
+  witnessLogPath: string;
   /** operator-facing reminder: this head MUST be committed/signed into git. */
   witnessCommitReminder: string;
   /** the sealed judge-verdict row per cardId — a later join references its rowHash. */
@@ -142,12 +162,42 @@ export async function runJudgeEnforced(args: {
   log?: JudgeRunnerLogger;
   /** raise `JudgeRefusedError` on disqualification instead of returning a hard-fail result. */
   throwOnDisqualified?: boolean;
+  /**
+   * §4 RECORDING provenance per cardId — sealed into the LEDGER row at seal time. It is
+   * NEVER rendered into the card or the model prompt (blindness is structural: the
+   * rating card has no provenance field).
+   */
+  cardProvenance?: Map<string, Provenance>;
+  /** TEST-ONLY hatch passed through to `preflight` — an empty corpus otherwise DISQUALIFIES. */
+  allowEmptyCorpus?: boolean;
 }): Promise<JudgeRunnerResult> {
   const witnessPath = args.witnessPath ?? path.join(args.outDir, DEFAULT_WITNESS_RELPATH);
-  const ledger = new JudgeLedger();
+  const witnessLogPath = witnessPath + '.log';
+  const ledgerPath = path.join(args.outDir, LEDGER_FILENAME);
+
+  // ── INVARIANT 4: CONTINUITY — load + verify an existing ledger BEFORE anything (§3 A13) ──
+  let ledger: JudgeLedger;
+  if (fs.existsSync(ledgerPath)) {
+    ledger = JudgeLedger.load(ledgerPath);
+    const v = ledger.verify();
+    if (!v.ok) {
+      throw new LedgerContinuityError(
+        `runJudgeEnforced: the on-disk ledger ${ledgerPath} fails verification at row ${v.firstBadIndex}: ${v.detail ?? '(no detail)'} — refusing to seal anything over a broken chain`,
+      );
+    }
+  } else {
+    ledger = new JudgeLedger();
+  }
+  const previousHead = ledger.head();
 
   // ── INVARIANT 1: PRE-FLIGHT FIRST (§5) ──────────────────────────────────────────
-  const pf = await preflight({ cards: args.cards, corpus: args.corpus, callModel: args.callModel });
+  const pf = await preflight({
+    cards: args.cards,
+    corpus: args.corpus,
+    callModel: args.callModel,
+    ...(args.samplesPerCard !== undefined ? { samplesPerCard: args.samplesPerCard } : {}),
+    ...(args.allowEmptyCorpus ? { allowEmptyCorpus: true } : {}),
+  });
 
   if (pf.disqualified) {
     const reason = pf.disqualifyReason ?? 'judge disqualified by the injection pre-flight (§5)';
@@ -162,8 +212,10 @@ export async function runJudgeEnforced(args: {
       preflight: pf,
       scored: 0,
       ledger,
+      previousHead,
       ledgerHead: null,
       witnessPath,
+      witnessLogPath,
       witnessCommitReminder: witnessReminder(witnessPath, null),
       verdictRows: new Map(),
       rawRun: null,
@@ -184,18 +236,27 @@ export async function runJudgeEnforced(args: {
 
   const verdictRows = new Map<string, LedgerRow>();
   for (const j of rawRun.judgments) {
-    // Seal the majority verdict as its OWN row BEFORE any Warpline answer is known.
-    const row = ledger.sealJudgeVerdict({ cardId: j.cardId, judgeVerdict: j.majorityLabel });
+    // Seal the majority verdict as its OWN row BEFORE any Warpline answer is known —
+    // chain-bound to the verbatim Judgment, with the §4 provenance (ledger-only).
+    const provenance = args.cardProvenance?.get(j.cardId);
+    const row = ledger.sealJudgeVerdict({
+      cardId: j.cardId,
+      judgeVerdict: j.majorityLabel,
+      judgmentHash: judgmentHashOf(j),
+      ...(provenance !== undefined ? { provenance } : {}),
+    });
     verdictRows.set(j.cardId, row);
   }
 
-  // Persist the authoritative denominator alongside the raw artifacts.
-  ledger.persist(path.join(args.outDir, LEDGER_FILENAME));
+  // APPEND the authoritative denominator alongside the raw artifacts (never truncate).
+  ledger.appendPersist(ledgerPath);
 
   // ── INVARIANT 3: EXTERNAL WITNESS at the block boundary (§3 A13) ─────────────────
   const head = ledger.head();
   fs.mkdirSync(path.dirname(witnessPath), { recursive: true });
   fs.writeFileSync(witnessPath, (head ?? '') + '\n', 'utf8');
+  const iso = (args.now ?? (() => new Date().toISOString()))();
+  fs.appendFileSync(witnessLogPath, `${iso} ${head ?? '(none)'}\n`, 'utf8');
   args.log?.witnessed(head, witnessPath);
 
   return {
@@ -203,8 +264,10 @@ export async function runJudgeEnforced(args: {
     preflight: pf,
     scored: verdictRows.size,
     ledger,
+    previousHead,
     ledgerHead: head,
     witnessPath,
+    witnessLogPath,
     witnessCommitReminder: witnessReminder(witnessPath, head),
     verdictRows,
     rawRun,
