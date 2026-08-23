@@ -100,7 +100,17 @@ import { runMcpServer } from './mcp/server.js';
 import { backupFabric, verifyBackup, type BackupResult, type BackupVerifyReport } from './fabric/backup.js';
 import { daemonState, stopDaemon, socketPathOf } from './daemon/lifecycle.js';
 import { DaemonClient } from './daemon/client.js';
-import { spawn } from 'node:child_process';
+import { spawn, execFile } from 'node:child_process';
+import {
+  runFieldOracle,
+  greenGatePathOf,
+  type CheckRunner,
+  type CheckSpec,
+  type FieldOracleRunResult,
+  type OracleRow,
+} from './field/oracle.js';
+import { collectFieldCards, writeCards, byteDowngradesPathOf, fieldCardsDirOf, type WriteCardsResult, type FieldCards } from './field/cards.js';
+import { recordGitFallback, listGitFallbacks, gitFallbackPathOf, type GitFallbackEntry } from './field/fallback.js';
 
 // The shared .purpose parser (library code, purpose/core/aggregator) console.warns
 // about unrelated schema-invalid files (e.g. a stale conductor .purpose) on every
@@ -1254,6 +1264,128 @@ knot
         process.stdout.write(JSON.stringify(payload, null, 2) + '\n');
       } else {
         printKnotPayload(payload);
+      }
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+const field = program
+  .command('field')
+  .description('The expo-field-test-protocol harness (§4 oracle / §6 habits (ii)+(iii)): audit CLEAN seals against the project\'s OWN declared green-gate, capture blinded KNOT rating cards, and log every reach for the git fallback. Writes .warpline/field/ only.');
+
+/**
+ * The REAL CheckRunner (§4): node execFile with a timeout, no shell. pass ⇔
+ * exit 0; the combined output is captured for the operator, never parsed.
+ */
+const FIELD_CHECK_TIMEOUT_MS = 10 * 60 * 1000;
+const realCheckRunner: CheckRunner = (spec: CheckSpec, cwd: string) =>
+  new Promise((resolve) => {
+    execFile(
+      spec.cmd,
+      spec.args,
+      { cwd, timeout: FIELD_CHECK_TIMEOUT_MS, maxBuffer: 16 * 1024 * 1024 },
+      (err, stdout, stderr) => {
+        resolve({ status: err ? 'fail' : 'pass', output: `${stdout ?? ''}${stderr ?? ''}` });
+      },
+    );
+  });
+
+field
+  .command('oracle')
+  .description('Run the §4 CLEAN-seal oracle over every not-yet-audited seal: restore result (and, for merges, ours+theirs) trees, run the declared green-gate on the PARENTS FIRST (establishing power), then the merged tree; append one hash-chained row per seal to .warpline/field/expo-field-oracle.jsonl. Idempotent — already-audited strands are skipped. The check set comes from .warpline/field/greengate.json (never hardcoded); an absent config records every check absent, not passed.')
+  .option('--since <seq>', 'only audit seals with a ledger seq greater than this (v3 strands carry no seq and always qualify)')
+  .option('--greengate <path>', 'explicit greengate.json path (default: .warpline/field/greengate.json)')
+  .option('--json', 'emit the run result (audited rows + totals) as JSON')
+  .action(async (options: { since?: string; greengate?: string; json?: boolean }) => {
+    try {
+      const root = await resolveRoot();
+      let since: number | undefined;
+      if (options.since !== undefined) {
+        since = Number(options.since);
+        if (!Number.isInteger(since) || since < 0) {
+          process.stderr.write(`warpline: --since must be a non-negative integer seq (got "${options.since}")\n`);
+          process.exit(1);
+        }
+      }
+      const result = await runFieldOracle(root, {
+        runner: realCheckRunner,
+        since,
+        greengatePath: options.greengate ? path.resolve(options.greengate) : undefined,
+      });
+      if (options.json) {
+        process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+      } else {
+        printFieldOracle(root, result);
+      }
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+field
+  .command('cards')
+  .description('Habit (ii) capture, SCAN-based: build the blinded §5 rating card for every persisted KNOT payload (.warpline/knots/) via the judge stripper — the card on disk carries NO Warpline verdict/confidence/founder label — and record byte-downgrade KNOTs that have no payload (B-3 gap) card-less in .warpline/field/cards/byte-downgrades.jsonl. Idempotent by cardId.')
+  .option('--json', 'emit the collected counts as JSON')
+  .action(async (options: { json?: boolean }) => {
+    try {
+      const root = await resolveRoot();
+      const cards = collectFieldCards(root, { store: new ObjectStore(root) });
+      const result = writeCards(root, cards);
+      if (options.json) {
+        process.stdout.write(
+          JSON.stringify(
+            {
+              knotCards: cards.knotCards.map((c) => c.cardId),
+              byteDowngrades: cards.byteDowngrades,
+              ...result,
+            },
+            null,
+            2,
+          ) + '\n',
+        );
+      } else {
+        printFieldCards(root, cards, result);
+      }
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+field
+  .command('fallback')
+  .description('Habit (iii): log a reach for the git fallback (git merge / stash / manual resolution outside Warpline / unadmittable byte-only work) to .warpline/field/git-fallback.jsonl — what was reached for, why, and which admit/KNOT it relates to. --list prints the log.')
+  .option('-m, --message <msg>', 'what was reached for, and why (required unless --list)')
+  .option('--knot <id>', 'the related KNOT (payloadId / selector)')
+  .option('--admit <ref>', 'the related admit (ref / stateId / pickId)')
+  .option('-l, --list', 'print the fallback log instead of appending')
+  .option('--json', 'emit the entry (or the whole log with --list) as JSON')
+  .action(async (options: { message?: string; knot?: string; admit?: string; list?: boolean; json?: boolean }) => {
+    try {
+      const root = await resolveRoot();
+      if (options.list) {
+        const entries = listGitFallbacks(root);
+        if (options.json) process.stdout.write(JSON.stringify(entries, null, 2) + '\n');
+        else printFieldFallbackList(root, entries);
+        return;
+      }
+      if (!options.message) {
+        process.stderr.write('warpline: field fallback — provide -m <msg> (what was reached for, and why), or --list\n');
+        process.exit(1);
+      }
+      const entry = recordGitFallback(root, {
+        message: options.message,
+        actor: process.env.USER ?? process.env.USERNAME ?? 'unknown',
+        knotId: options.knot,
+        admitRef: options.admit,
+      });
+      if (options.json) process.stdout.write(JSON.stringify(entry, null, 2) + '\n');
+      else {
+        process.stdout.write(
+          `FALLBACK  logged (${gitFallbackPathOf(root)})\n  ${entry.ts}  ${entry.actor}\n  ${entry.message}\n` +
+            (entry.knotId ? `  knot   ${entry.knotId}\n` : '') +
+            (entry.admitRef ? `  admit  ${entry.admitRef}\n` : ''),
+        );
       }
     } catch (err) {
       fail(err);
@@ -3106,6 +3238,55 @@ function strandTag(s: Strand): string {
  */
 function strandPositionTag(s: Strand): string | null {
   return s.seq !== undefined ? `seq ${s.seq}` : null;
+}
+
+function printFieldOracle(root: string, r: FieldOracleRunResult): void {
+  const lines: string[] = ['FIELD ORACLE  (§4 CLEAN-seal audit — parents first, then the merge)'];
+  lines.push(
+    r.greengate === 'declared'
+      ? `GATE      declared (${greenGatePathOf(root)})`
+      : `GATE      ABSENT — every check recorded absent; these seals are untested, not passed (${greenGatePathOf(root)})`,
+  );
+  lines.push('');
+  if (r.audited.length === 0) {
+    lines.push('(nothing new to audit — every seal is already in the ledger)');
+  }
+  for (const row of r.audited) {
+    const reg = row.objectiveRegression ? '  OBJECTIVE-REGRESSION' : '';
+    const cov = row.coveredClass ? 'covered' : `blind (${row.blind.length} path(s))`;
+    lines.push(`  ${short(row.pickId)}  ${row.mode.padEnd(13)} ${row.verdict.padEnd(21)} ${cov}${reg}`);
+  }
+  lines.push('');
+  const by = (v: OracleRow['verdict']): number => r.audited.filter((x) => x.verdict === v).length;
+  lines.push(
+    `TOTALS    audited ${r.audited.length} · skipped (already audited) ${r.skipped} · ` +
+      `true-clean ${by('true-clean')} · candidate-false-clean ${by('candidate-false-clean')} · blind-untested ${by('blind-untested')}`,
+  );
+  process.stdout.write(lines.join('\n') + '\n');
+}
+
+function printFieldCards(root: string, cards: FieldCards, r: WriteCardsResult): void {
+  const lines: string[] = ['FIELD CARDS  (habit (ii) — blinded §5 rating cards, scan-based)'];
+  lines.push(`CARDS     ${cards.knotCards.length} KNOT card(s) — ${r.written} written, ${r.skippedExisting} already on disk (${fieldCardsDirOf(root)})`);
+  lines.push(
+    `DOWNGRADES ${cards.byteDowngrades.length} byte-downgrade KNOT(s) without a payload — ${r.downgradesRecorded} newly recorded (${byteDowngradesPathOf(root)})`,
+  );
+  for (const d of cards.byteDowngrades) {
+    lines.push(`  ${short(d.strandId)}  card-less (B-3 gap)`);
+  }
+  process.stdout.write(lines.join('\n') + '\n');
+}
+
+function printFieldFallbackList(root: string, entries: GitFallbackEntry[]): void {
+  const lines: string[] = [`GIT FALLBACKS  (habit (iii) — ${gitFallbackPathOf(root)})`];
+  if (entries.length === 0) {
+    lines.push('(none logged)');
+  }
+  for (const e of entries) {
+    lines.push(`  ${e.ts}  ${e.actor}${e.knotId ? `  knot ${short(e.knotId)}` : ''}${e.admitRef ? `  admit ${short(e.admitRef)}` : ''}`);
+    lines.push(`    ${e.message}`);
+  }
+  process.stdout.write(lines.join('\n') + '\n');
 }
 
 function short(id: string): string {

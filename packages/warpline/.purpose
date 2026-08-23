@@ -3713,6 +3713,73 @@ components:
       - "#resolve"
       - "#grade"
 
+  field-harness:
+    description: >-
+      The expo-field-test-protocol RUN HARNESS, increment 1 of 2 (§B7,
+      T-2026-08-23-003) — src/field/*, standalone from src/daemon by rule, and
+      writing under .warpline/field/ only. THREE PIECES. (1) #field-oracle:
+      the §4 CLEAN-seal oracle AUTOMATION. discoverAuditTargets walks the
+      fabric for MergeRecipe strands (a real merge: two parents + result) AND
+      single-parent CLEAN/FAST_ADMIT seals — every field READ off the strand
+      or its parents, null where unrecorded, never invented (v3 strands carry
+      no seq → seq:null). auditOne restores result (+ ours/theirs for merges)
+      trees via the native restoreTree into scratch dirs and runs the
+      DECLARED green-gate (.warpline/field/greengate.json — loaded, never
+      hardcoded; an ABSENT config records every check 'absent' and the row
+      says so: the default is not a pass) through an INJECTED CheckRunner
+      (unit tests fake exec; the CLI injects execFile+timeout, no shell).
+      ESTABLISHING POWER (§4): every check — and every frozen behavioral
+      assertion, run as `script <assertion>` through the same runner — runs
+      on BOTH parents first; red on either parent alone → recorded
+      'excluded-parent-red' (proves nothing); green-both-parents ∧
+      red-on-merge → objectiveRegression (non-vetoable) → verdict
+      'candidate-false-clean'. Single-parent seals: mode:'single-parent',
+      result-only run, objectiveRegression structurally false (no merge to
+      regress). coveredClass comes from #field-blind-class over the seal's
+      changed paths (merge: union of both sides' diffs vs base via #graph
+      diffTrees; single-parent: diff vs the bound parent; underivable ⇒
+      null ⇒ coveredClass false — ignorance is not coverage); a blind-only
+      seal is 'blind-untested', NEVER 'true-clean'. Rows land hash-chained in
+      .warpline/field/expo-field-oracle.jsonl (rowHash = fieldOracleRow:v1:
+      sha256(canonical(body)+prev), the #judge-ledger idiom);
+      verifyAuditLedger recomputes the chain; runFieldOracle is idempotent by
+      strandId (already-audited seals skipped). (2) #field-cards: habit (ii)
+      capture, SCAN-based (no admit-path hook in increment 1) — every
+      persisted KNOT payload (.warpline/knots/) becomes a blinded §5 rating
+      card via the EXISTING #judge stripper buildKnotRatingCard, written
+      idempotently by content-addressed cardId to .warpline/field/cards/;
+      the card on disk carries NO verdict/confidence/founder label (blindness
+      re-asserted on the serialized bytes in test). The B-3 gap — a
+      byte-downgrade KNOT whose refusal advertises no knotPayloadId (git-path
+      downgrade sites; evidence trail = .warpline/f4/trace.jsonl, read
+      DIRECTLY with a narrow local type because field modules may not import
+      src/daemon) — is RECORDED card-less in cards/byte-downgrades.jsonl
+      (idempotent by recorded identity), never faked into a card: a card
+      needs sides, and building one from MergeRecipe trees alone is
+      increment-2 work. (3) #field-fallback: habit (iii) — every reach for
+      the git fallback appended to .warpline/field/git-fallback.jsonl
+      {ts, actor, message, knotId?, admitRef?}: plain JSONL by design (the
+      protocol asks a LOG, not custody); an empty message refuses (a silent
+      fallback is the exact flattering-direction error (C) measures). CLI:
+      `warpline field oracle [--since <seq>] [--greengate <path>]` /
+      `warpline field cards` / `warpline field fallback -m <msg> [--knot]
+      [--admit] | --list`, all with --json. Increment 2 (field judge/join/
+      score) is NOT here.
+    type: module
+    components:
+      - "#field-oracle"
+      - "#field-blind-class"
+      - "#field-cards"
+      - "#field-fallback"
+    tags: [field-test, protocol-s4, protocol-s6, protocol-s8, b7, harness]
+    references:
+      - "#judge-rating-card"
+      - "#knot-payload"
+      - "#fabric"
+      - "#graph"
+      - "#warp-snapshot"
+      - "#warpline-cli"
+
 flows:
   oracle-run:
     description: >-
