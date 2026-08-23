@@ -242,7 +242,7 @@ describe('FIELD SCORE — §7 over synthetic artifacts', () => {
     expect(md).toContain(CORRELATED_PRIORS_CAVEAT);
     expect(md).toContain(PRE_FIX_BASELINE_FRAMING);
     expect(md).toContain(AUDIT_SAMPLE_LEAK_CAVEAT);
-    expect(md).toContain('claude-opus-5');
+    expect(md).toContain('claude-opus-4-8');
     expect(md).toContain('claude-opus-4-5-20251101');
     expect(md).toContain('VERSION-ONLY');
     expect(md).toContain('INCONCLUSIVE');

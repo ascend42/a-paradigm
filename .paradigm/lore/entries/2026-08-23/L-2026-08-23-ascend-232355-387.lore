@@ -1,0 +1,16 @@
+id: L-2026-08-23-ascend-232355-387
+type: insight
+timestamp: '2026-08-23T23:23:55.914Z'
+author: ascend
+title: Decision TD-2026-08-23-042 recorded
+summary: Companion lore entry for decision record TD-2026-08-23-042. See .paradigm/decisions/TD-2026-08-23-042.yaml.
+symbols_touched:
+  - '#judge'
+  - '#field-judge-run'
+  - '#strand'
+  - '#seal'
+references:
+  decision_id: TD-2026-08-23-042
+tags:
+  - companion-lore
+  - decision-reference

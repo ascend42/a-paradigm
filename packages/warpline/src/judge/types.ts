@@ -16,7 +16,7 @@
 export const PINNED_JUDGE_MODEL = 'claude-opus-4-5-20251101' as const;
 
 /** The agents-under-test model (§2 A15 — the SUBJECT, alias-only, recorded with the run date). */
-export const AGENTS_MODEL = 'claude-opus-5' as const;
+export const AGENTS_MODEL = 'claude-opus-4-8' as const;
 
 /** N = 3 samples per card, majority label (§5 A2). */
 export const SAMPLES_PER_CARD = 3 as const;

@@ -1,0 +1,47 @@
+id: L-2026-08-23-ascend-212401-001
+type: milestone
+timestamp: '2026-08-23T21:24:01.917Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'MILESTONE: field-test run harness CODE-COMPLETE — live run now blocked on founder gates only'
+summary: 'Everything buildable without the founder is built, reviewed, and green: judge instrument hardening B1–B6 (ec546c4d) and the full run harness B7 (`warpline field oracle|cards|fallback|judge|join|score`, 52555dc2 + 39002602). Suite 1158 → 1225 (+67, 0 regressions), tsc clean, LOCKED protocol and rubric byte-untouched. Reviewer caught 2 blocking integrity gaps in increment 2 (join bypassing the witnessed ordinal; score counting unjoined ratings) — both fixed and tested. The live Expo field test is now blocked EXCLUSIVELY on the founder gates in T-2026-08-23-001: M3 signing per TD-913(3) (build or supersede), subject-repo consent (a-climbers-gift is a client project), pre-registration v2 for the protocol contradictions, seeds/corpus/backlog authoring, SDK+API key.'
+symbols_touched:
+  - '#field-oracle'
+  - '#field-cards'
+  - '#field-fallback'
+  - '#field-blind-class'
+  - '#field-interleave'
+  - '#field-judge-run'
+  - '#field-join'
+  - '#field-score'
+  - '#judge'
+  - '#warpline-cli'
+verification:
+  status: pass
+  details:
+    full-suite: 1225 passed / 2 skipped (independently re-run)
+    tsc: clean
+    frozen-files: git-diff empty on rubric.ts + protocol
+    reviews: B1-B6 APPROVE-WITH-NITS (folded); inc1 APPROVED (folded); inc2 CHANGES-REQUESTED → fixed → verified
+tags:
+  - warpline
+  - field-test
+  - milestone
+  - arc:warpline
+  - run-harness
+linked_tasks:
+  - T-2026-08-23-001
+  - T-2026-08-23-002
+  - T-2026-08-23-003
+  - T-2026-08-23-004
+linked_commits:
+  - ec546c4d
+  - 52555dc2
+  - '39002602'
+confidence: 0.9
+git_context:
+  ref: 39002602048c81d7b4b44caa045ae404927c76e8
+  branch: warpline-surfaces
+  dirty: true
