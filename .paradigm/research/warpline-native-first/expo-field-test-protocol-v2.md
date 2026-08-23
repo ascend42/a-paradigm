@@ -114,10 +114,14 @@ runs under the operator's credentials in the operator's shell; NO swarm agent sh
 shell or those credentials; the judge still holds no Warpline daemon token (cold, outward-
 only — unchanged).
 
-### A11 — M3 precondition (restates TD-913(3), TD-042 F1)
-Signed strands (M3, T-2026-07-01-014) land BEFORE admission 1: the agent/human boundary the
-run measures is cryptographic, not procedural. MCP-only operation and tool-permission denies
-remain as defense-in-depth, not as the boundary. Design: `m3-integrity-design-2026-08-23.md`.
+### A11 — M3 precondition (amended by TD-2026-08-23-136, superseding TD-913(3)'s crypto clause)
+M3-LITE lands BEFORE admission 1: Ed25519 AGENT-key signed strands (attribution integrity
+between agents), `warpline fsck`, and the auto-resolve grant mechanism (present, NO grant
+active during the run — the fail-closed arm as registered). The HUMAN boundary is PROCEDURAL
+by founder ruling: HUMAN_ONLY_VERBS at the daemon + tool-permission denies including
+`.warpline/keys/**` reads. THE REPORT STATES THIS PLAINLY: the run's human/agent boundary is
+enforcement-by-permissions, not cryptography; agent-to-agent attribution IS signed. Design +
+rulings: `m3-integrity-design-2026-08-23.md` §6.
 
 ## B. Unchanged (carried forward verbatim from v1)
 n=100 fixed, no optional stopping; contested floor ≥20 (now on the A6-corrected count);
@@ -130,7 +134,7 @@ framing; habits (i)/(ii)/(iii).
 ## C. Freeze checklist (all before admission 1)
 - [ ] Founder ratifies this text (v2 id becomes LOCKED; amendment log closed)
 - [ ] §A2 SUBJECT named; subject onboarded (.warpline, .warpignore, MCP tokens, permissions)
-- [ ] M3 shipped + fsck green on the subject fabric (A11)
+- [ ] M3-lite shipped + fsck green on the subject fabric; no auto-resolve grant active (A11)
 - [ ] Behavioral checklist authored on the subject + frozen; greengate.json committed
 - [ ] Seeds (≥20+≥20) + planted control + corpus manifests sealed, hashes committed
 - [ ] Backlog with overlap zones fixed and committed

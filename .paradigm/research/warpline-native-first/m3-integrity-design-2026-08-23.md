@@ -68,3 +68,32 @@ Each increment ships independently with tests; I3 is the first behavior change a
 3. **Daemon resolve:** M3 makes resolve CLI-only (refusal on daemon). Acceptable for the field test (resolve legs are scripted human-token legs per FG-1)?
 4. **T-014 scope:** the task's chain/meaning↔bytes/fail-closed items are already shipped by v2/v3 — proposal: narrow T-014 to signatures+fsck (this design), record the supersession as a TD.
 5. **Cross-agent forgery (T5) stays possible within the box** at M3 — accepted residue, or does the field test's tool-permission deny need to cover `.warpline/keys/` reads explicitly?
+
+
+---
+
+## 6. FOUNDER RULINGS (2026-08-23, TD-2026-08-23-136 — supersedes §3/§4 where they conflict)
+
+- **Q1 → PROCEDURAL.** The human root key / passphrase ceremony is DROPPED. No human-as-CA,
+  no root countersignature, no passphrase prompts. The human boundary = HUMAN_ONLY_VERBS at
+  the daemon + tool-permission denies (now incl. `.warpline/keys/**` reads — Q5 ruling).
+  This knowingly supersedes TD-913(3)'s "real, not procedural" clause.
+- **Q2 → no git key witness.** Keys stay out of git entirely; re-key undetectable in-box (accepted).
+- **Q3 → auto-resolve GRANTS ship in M3, OFF for the field test.** `warpline grant auto-resolve`:
+  human-ISSUED (console-token-gated) policy object, scoped (branch/TTL/conditions), revocable;
+  an agent-class resolve is valid iff it chains to a live grant; fabric records
+  resolved-under-grant-G. Product driver: long autonomous builds (full PRD / ticket list)
+  where agents continue through KNOTs on best judgment.
+- **Q4 → T-014 narrowed** to signatures+fsck+grants (chain half verified shipped, §1).
+- **Q5 → keys-dir read deny** added to the runbook habit-(i) checklist.
+
+### Revised increment plan (M3-lite, ~20h)
+| # | Increment | hrs | Delta vs §4 |
+|---|---|---|---|
+| I1 | fabric/keys.ts: Ed25519 gen, keyId, sign/verify (domain-separated pickId); NO passphrase wrap | 3 | scrypt/GCM dropped |
+| I2 | `warpline key mint <principal>` + registry.jsonl plain human-gated appends; agent-shell human-class set | 3 | no root, no countersign, no `key init` ceremony (a marker row pins `signedFrom`) |
+| I3 | Seal-time agent signing in sealState; sig excluded from v2 preimage; fail-closed refusal post-boundary | 6 | human-class strands stay UNSIGNED (procedural boundary) — verifier skips them |
+| I4 | verifyFabric agent-sig rules (sig-missing/invalid/key-unknown/principal-mismatch) | 4 | human-class rules dropped |
+| I5 | `warpline fsck` umbrella + daemon health + descriptor skin | 3 | unchanged |
+| I6 | `warpline grant auto-resolve` + enforcement: agent resolve valid iff live grant; resolved-under-grant-G recorded; revocation; grant absent → refusal unchanged | 5 | NEW (Q3) |
+| I7 | Falsifier: agent resolve with no grant refused (CLI + daemon); forged sig / wrong-principal sig → fsck HARD; grant revoke kills in-flight autonomy | 2 | replaces §4 I6 (human-forgery arms dropped — boundary is procedural) |

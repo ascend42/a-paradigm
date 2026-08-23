@@ -1,0 +1,69 @@
+id: TD-2026-08-23-136
+timestamp: '2026-08-23T23:46:32.911Z'
+title: >-
+  M3 scope ruled: M3-lite — agent-key attribution + fsck + auto-resolve grants; human boundary PROCEDURAL (supersedes
+  TD-913(3))
+decision: >-
+  Founder rulings on the M3 design's open questions (2026-08-23, follow-up to TD-2026-08-23-042 F1): (1) HUMAN BOUNDARY
+  IS PROCEDURAL — the passphrase-wrapped human root key / human-as-CA ceremony is DROPPED. This knowingly supersedes
+  TD-2026-08-11-913(3)'s "real signed agent/human boundary, not MCP-only-as-procedure": the founder was shown that a
+  disk-resident human key is agent-readable and only a passphrase makes the boundary cryptographic, and chose
+  procedural. The human/agent boundary = HUMAN_ONLY_VERBS at the daemon + Claude Code tool-permission denies, now
+  explicitly including Read/Bash denies on `.warpline/keys/**` (M3-Q5 ruling). (2) M3-LITE SCOPE: Ed25519 AGENT keys
+  (plaintext 0600, human-gated mint via CLI human-class verb), agent-signed strands (sign the pickId at sealState, sig
+  excluded from the v2 preimage), registry as plain human-gated append (no root countersignature), verify rules for
+  agent-signature validity + principal match, `warpline fsck` umbrella, grandfathered unsigned prefix. Value =
+  ATTRIBUTION INTEGRITY between agents (T1/T5 raised from free to requires-key-file), NOT a cryptographic human boundary
+  (T2 remains procedural — accepted). (3) NO GIT KEY WITNESS (M3-Q2): keys stay entirely out of git; whole-fabric re-key
+  undetectable from inside the box — accepted, stake journal/remotes remain the corroboration. (4) AUTO-RESOLVE GRANTS
+  IN M3, OFF FOR THE RUN (M3-Q3): `warpline grant auto-resolve` — a human-ISSUED (console-token-gated,
+  procedurally-bound) policy object, scoped (branch/TTL/conditions) + revocable; an agent-class resolve is valid iff it
+  chains to a live grant, and the fabric records resolved-under-grant-G. Exists for long autonomous builds
+  (full-PRD/ticket-list runs where agents should make the best judgment and continue); the field test runs with NO grant
+  active — the fail-closed arm as pre-registered. (5) T-2026-07-01-014 narrowed: the chain/meaning-bytes/fail-closed
+  items shipped with the v2/v3 epochs (design doc §1 verified computePickId commits to parents — the task text was
+  stale); remaining scope = signatures+fsck+grants per this ruling. Estimated ~20h (passphrase increments dropped, grant
+  increment added).
+rationale: >-
+  The founder questioned the passphrase ceremony's necessity ("wait why is this actually necessary"); after the honest
+  explanation — same-OS-user agents can read any disk-resident key, so promptless AND cryptographically-real is not on
+  the menu — the founder chose the procedural posture over both prompt variants. This reverses the conservative half of
+  TD-913(3) with full knowledge of what it trades away: the run's human boundary is enforcement-by-permissions, and the
+  report must say so (the pre-reg v2 A11 is amended accordingly). The agent-key half is kept because attribution
+  integrity between agents is the calibration moat's substrate and works without any human ceremony. The auto-resolve
+  grant answers a product requirement the founder stated directly: long builds with a full PRD or ticket list where
+  agents should continue through KNOTs on their best judgment — delegated, auditable autonomy rather than either a hard
+  wall or an ambient bypass. Keeping the grant OFF during the field test preserves the pre-registered fail-closed
+  measurement.
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+  - id: architect
+    role: agent
+    stance: supported
+  - id: security
+    role: agent
+    stance: neutral
+alternatives_considered:
+  - option: Passphrase-wrapped human root key (per-resolve prompt or timed unlock)
+    rejected_because: Founder declined the ceremony after understanding it is the only cryptographic human boundary; chose procedural
+  - option: Git-committed root public keyId witness
+    rejected_because: Founder chose to keep keys entirely out of git
+  - option: Defer auto-resolve grants to M3.5
+    rejected_because: Founder wants the continue-through option for long autonomous builds now; grant ships in M3, OFF for the run
+symbols_affected:
+  - '#strand'
+  - '#seal'
+  - '#verify'
+  - '#warpline-cli'
+  - '#daemon-descriptors'
+status: active
+tags:
+  - warpline
+  - M3
+  - M3-lite
+  - signing
+  - auto-resolve-grant
+  - supersedes-TD-2026-08-11-913
+  - field-test
