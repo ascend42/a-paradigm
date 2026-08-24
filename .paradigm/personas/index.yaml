@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-06-19T23:04:04.876Z'
+generated: '2026-07-18T04:45:59.996Z'
 personas: {}
 chains: {}
 gate_coverage: {}
@@ -110,4 +110,19 @@ uncovered_routes:
   - POST /api/tasks/:id/block
   - POST /api/tasks/:id/unblock
   - POST /api/tasks/sync
+  - GET /api/warpline/ledger
+  - GET /api/warpline/refs
+  - POST /api/warpline/forecast
+  - POST /api/warpline/diff
+  - GET /api/warpline/absorb/:ref
+  - POST /api/warpline/oracle
+  - GET /api/warpline/fabric/status
+  - GET /api/warpline/fabric/refs
+  - GET /api/warpline/fabric/shadow-tail
+  - GET /api/warpline/fabric/knot/:selector
+  - GET /api/warpline/fabric/grade-report
+  - GET /api/classroom/status
+  - GET /api/classroom/staged
+  - GET /api/classroom/certifications
+  - GET /api/classroom/refinements
   - WS /ws

@@ -1,0 +1,59 @@
+pairs=150
+a-paradigm: n=80 OVERLAPPING=13 (16.3%) ADJACENT=16 (20.0%) DISJOINT=51 (63.8%) [Wilson95 disjoint 52.8-73.4%]
+  sensitivity (non-empty symbols, lens ok): n=80 O=16.3% A=20.0% D=63.8%
+zod: n=70 OVERLAPPING=4 (5.7%) ADJACENT=15 (21.4%) DISJOINT=51 (72.9%) [Wilson95 disjoint 61.5-81.9%]
+  sensitivity (non-empty symbols, lens ok): n=31 O=12.9% A=16.1% D=71.0%
+POOLED: n=150 OVERLAPPING=17 (11.3%) ADJACENT=31 (20.7%) DISJOINT=102 (68.0%) [Wilson95 disjoint 60.2-74.9%]
+  sensitivity (non-empty symbols, lens ok): n=111 O=15.3% A=18.9% D=65.8%
+
+OVERLAPPING pairs:
+  AP-0003 [a-paradigm] shared symbols: #anchor, #fabric
+  AP-0013 [a-paradigm] shared symbols: #orchestrationtools
+  AP-0014 [a-paradigm] shared symbols: #code-essence, #predict, #sem-delta
+  AP-0028 [a-paradigm] shared symbols: #loom-oracle, #weave
+  AP-0033 [a-paradigm] shared symbols: #fabric, #pick, #warpline-cli
+  AP-0038 [a-paradigm] shared symbols: #fabric
+  AP-0040 [a-paradigm] shared symbols: #task-cli
+  AP-0049 [a-paradigm] shared symbols: #ambienttools, #nomination-engine
+  AP-0057 [a-paradigm] shared symbols: #fabric
+  AP-0064 [a-paradigm] shared symbols: #claude-stream-session
+  AP-0071 [a-paradigm] shared symbols: #warpline-cli
+  AP-0073 [a-paradigm] shared symbols: #git-exec
+  AP-0077 [a-paradigm] shared symbols: #claude-stream-session
+  ZD-0027 [zod] shared symbols: #code:packages/zod/src/v4/core/to-json-schema.ts::JSONSchemaGenerator, #code:packages/zod/src/v4/core/to-json-schema.ts::JSONSchemaGenerator.process
+  ZD-0028 [zod] shared symbols: #code:packages/zod/src/v4/locales/nl.ts::default, #code:packages/zod/src/v4/locales/nl.ts::error
+  ZD-0037 [zod] shared symbols: #code:packages/zod/src/v4/core/schemas.ts::handleTupleResults
+  ZD-0051 [zod] shared symbols: #code:packages/zod/src/v4/core/to-json-schema.ts::JSONSchemaGenerator, #code:packages/zod/src/v4/core/to-json-schema.ts::JSONSchemaGenerator.process
+
+ADJACENT pairs:
+  AP-0006 [a-paradigm] shared files: packages/warpline/.purpose
+  AP-0016 [a-paradigm] shared files: packages/paradigm-mcp/package.json, packages/paradigm/package.json
+  AP-0017 [a-paradigm] shared files: CLAUDE.md, packages/paradigm-mcp/package.json, packages/paradigm/package.json
+  AP-0020 [a-paradigm] shared files: packages/paradigm-mcp/package.json, packages/paradigm/package.json
+  AP-0032 [a-paradigm] shared files: packages/paradigm-mcp/package.json, packages/paradigm/package.json
+  AP-0036 [a-paradigm] shared files: packages/paradigm-mcp/src/tools/index.ts, packages/paradigm-mcp/src/tools/reindex.ts
+  AP-0039 [a-paradigm] shared files: packages/paradigm/package.json, packages/paradigm/src/index.ts
+  AP-0048 [a-paradigm] shared files: packages/paradigm-mcp/package.json, packages/paradigm/package.json
+  AP-0051 [a-paradigm] shared files: packages/paradigm-mcp/package.json, packages/paradigm/package.json, plugins/paradigm-cursor/README.md
+  AP-0053 [a-paradigm] shared files: packages/paradigm-mcp/package.json, packages/paradigm/package.json
+  AP-0054 [a-paradigm] shared files: packages/paradigm-mcp/src/tools/context.ts, packages/paradigm-mcp/src/tools/wisdom.ts
+  AP-0058 [a-paradigm] shared files: packages/paradigm/package.json
+  AP-0061 [a-paradigm] shared files: packages/paradigm/src/index.ts
+  AP-0068 [a-paradigm] shared files: packages/paradigm/package.json
+  AP-0070 [a-paradigm] shared files: packages/warpline/.purpose
+  AP-0080 [a-paradigm] shared files: packages/paradigm/package.json
+  ZD-0001 [zod] shared files: packages/zod/src/v4/classic/tests/to-json-schema.test.ts
+  ZD-0004 [zod] shared files: packages/zod/src/v4/core/schemas.ts
+  ZD-0005 [zod] shared files: packages/zod/src/v4/classic/schemas.ts
+  ZD-0007 [zod] shared files: packages/zod/src/v4/core/checks.ts
+  ZD-0010 [zod] shared files: packages/zod/src/v4/classic/schemas.ts
+  ZD-0012 [zod] shared files: packages/zod/src/v4/classic/schemas.ts, packages/zod/src/v4/mini/schemas.ts
+  ZD-0013 [zod] shared files: packages/zod/src/v4/locales/index.ts
+  ZD-0014 [zod] shared files: packages/zod/src/v4/core/util.ts
+  ZD-0016 [zod] shared files: packages/zod/src/v4/core/schemas.ts
+  ZD-0033 [zod] shared files: packages/zod/src/v4/classic/schemas.ts
+  ZD-0052 [zod] shared files: packages/zod/src/v4/core/schemas.ts
+  ZD-0053 [zod] shared files: packages/zod/src/v4/core/schemas.ts
+  ZD-0061 [zod] shared files: packages/zod/src/v4/core/checks.ts
+  ZD-0069 [zod] shared files: packages/zod/src/v4/mini/schemas.ts
+  ZD-0070 [zod] shared files: packages/zod/src/v4/core/schemas.ts

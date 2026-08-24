@@ -1,10 +1,19 @@
 id: reviewer
 project: a-paradigm
 lastSession:
-  date: '2026-05-30T00:57:31.181Z'
-  sessionId: orch-mprn5oa3-27lj
-  summary: '[Judge (reviewer)]: reviewer: Process: Fix 3 confirmed Paradigm framework bugs. ...'
-  symbolsTouched: []
+  date: '2026-08-11T20:07:51.126Z'
+  sessionId: orch-msp3e6xq-v88m
+  summary: '[Judge (reviewer)]: reviewer: Process: AUDIT (analysis only, no code changes): I...'
+  symbolsTouched:
+    - '#admit'
+    - '#resolve'
+    - '#knot-payload'
+    - '#hazard'
+    - '#grade'
+    - '#shadow'
+    - '#ts-lens'
+    - '#cfg-lens'
+    - '#envelope'
 pendingWork: []
 recentPatterns: []
-sessionsOnProject: 13
+sessionsOnProject: 17

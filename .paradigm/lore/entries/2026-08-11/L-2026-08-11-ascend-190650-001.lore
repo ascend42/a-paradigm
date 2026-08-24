@@ -1,0 +1,57 @@
+id: L-2026-08-11-ascend-190650-001
+type: insight
+timestamp: '2026-08-11T19:06:50.681Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Positioning before the field test: value prop and git-replacement are two claims, and the fallback is the instrument that measures the second'
+summary: 'Separated the two claims the field test was in danger of conflating, and audited Warpline''s verb surface against git''s everyday surface with evidence rather than the inherited roadmap. Value prop (meaning judges better than bytes) is provable now via the three standing falsifiers. Replacement is a larger claim gated on branching, distribution and signing — none of which exist, and none of which block the test. The reframe: every reach for the git fallback during the field test is a logged data point, which converts the safety net into a ranked, measured replacement gap-list obtained from real use rather than from a roadmap. Also cleared T-2026-07-01-030 (H1) as stale by direct test — the third inherited task claim today that did not survive contact with the code.'
+symbols_touched:
+  - '#warpline-cli'
+  - '#admit'
+  - '#lifeline'
+  - '#fabric-verify'
+  - '#warp-store'
+  - '#weave'
+learnings:
+  - THE FALLBACK IS THE INSTRUMENT. Running the field test with git as a safety net looked like a hedge; it is actually the cheapest possible measurement of replacement-readiness. Every reach for git is a logged gap, ranked by real frequency of need rather than by roadmap opinion. A safety net you instrument costs one habit; the equivalent gap-analysis costs a milestone and is worse evidence.
+  - TWO CLAIMS WERE ABOUT TO BE CONFLATED, AND THEY HAVE DIFFERENT EVIDENCE. 'Meaning judges better than bytes' (the value prop) is provable now on one app with the three standing falsifiers. 'Warpline is sufficient as THE source control' (replacement) is gated on branching, distribution and signing. Conflating them would have made the field test unfalsifiable — any shortfall attributable to the missing half.
+  - 'BRANCHING IS THE #1 REPLACEMENT GAP AND SIMULTANEOUSLY NOT A TEST BLOCKER. In mirror mode git supplies the branches and Warpline adjudicates across them — `absorb <ref>` and `oracle A B` already accept any git ref. The gap costs nothing during the test and everything after it, which is exactly the kind of item that gets mis-sequenced when ''replacement'' is treated as one undifferentiated goal.'
+  - MY OWN PROBE WAS THE FALSE POSITIVE THIS TIME. Testing verb existence with `warpline <verb> --help` returned exit 0 for all thirteen missing verbs, because an unknown verb prints top-level help and exits 0. A control — running a deliberately fake verb — exposed it in one line. Any existence check needs a negative control, or it is measuring the harness rather than the system.
+  - 'THREE INHERITED TASK CLAIMS FAILED VERIFICATION IN ONE DAY (learning-loop ''only PRINTS advice'', the .build pollution attribution, and now H1 ''refuses CLEAN admits over a merged tip''). H1 was tested directly: agent C forked a tip with 2 parents and got FAST_ADMIT, sealed cleanly. A backlog is a record of what was true when written, and its age is the probability it is now fiction.'
+tags:
+  - warpline
+  - positioning
+  - field-test
+  - git-replacement
+  - gap-analysis
+  - falsifier
+  - stale-task
+body: |-
+  THE VERB AUDIT, measured. Present: abandon absorb admit backup consolidate daemon diff fabric fork grade health hook knot lifeline log mcp objects oracle pick propose refs resolve restore scratch selvage stake status weave. Mapped against git's everyday surface, several gaps are already covered under different names: `blame` -> `lifeline` (meaning-aware, survives renames, arguably better than git's), `checkout` -> `restore`, `fsck` -> `fabric verify` + `health` (which verifies on EVERY read, not only under fsck). Genuinely ABSENT: branch, switch, clone, push, pull, fetch, tag, bisect, signing. `gc` is absent DELIBERATELY — "nothing is ever deleted" is load-bearing for recoverability per the audit.
+
+  SO THE REPLACEMENT GAP IS THREE THINGS, not thirteen: (1) BRANCHING — a single linear selvage, no branch primitive (T-2026-07-01-017); (2) DISTRIBUTION — no clone/push/pull/fetch, which is the audit's top-line risk restated (T-2026-07-01-015, hard-deferred by Loid's A7 review); (3) SIGNING — actor is a self-asserted string (T-2026-07-01-014). Tag and bisect are conveniences. Corpus fidelity (submodules, symlinks, exec bit, CRLF, NFC filenames — T-2026-07-01-018) is a correctness tail that matters for replacement and not for this test.
+
+  WHAT MUST BE FIXED BEFORE THE TEST, and why the list is short: Tier-0 invariant conflicts (founder call, TD-2026-08-11-663 — the failure that reaches production on a real app); the blind injection corpus (founder call, same — agent prose flows between agents in any real swarm); and KNOT CLASSIFICATION, genuine vs over-block, at resolve time. The third is not a preference: falsifiers (B) "meaning adds nothing over bytes" and (C) "failing closed is unaffordable" are both unreadable if the denominator mixes genuine contests with commuting-edit false positives, and the over-block fix was deliberately declined in favour of field observation.
+
+  DELIBERATELY NOT FIXED BEFORE THE TEST: branching, distribution, signing, tag/bisect, corpus fidelity. Each is replacement-grade rather than test-blocking, and the reach-for-git log will rank them by measured need.
+
+  H1 CLEARED BY TEST, not by reading. T-2026-07-01-030 claimed the guard "refuses CLEAN admits over a merged tip", serializing multi-agent work to one merge per generation at N>=3. Constructed the case on the NATIVE path: A and B fork one selvage and edit different files; A FAST_ADMITs; B admits CLEAN, producing a tip with two parents; C forks THAT tip, edits a third file, and admits — FAST_ADMIT, sealed, selvage advanced. The relaxation had already shipped (resolveMergeInput, admit.ts:562, using the merge strand's durable binding.treeId). ONE INCONSISTENCY WORTH RECORDING: the native merge strand carries `parents: 2` but `merged: false`, while the git-era guard keys on `strand.merged` — so the two paths disagree about what a merge strand IS. Harmless for a pure-native field test; a latent trap for any cross-path work.
+linked_lore:
+  - L-2026-08-11-ascend-181500-001
+  - L-2026-08-11-ascend-080821-001
+linked_tasks:
+  - T-2026-07-01-030
+  - T-2026-07-01-017
+  - T-2026-07-01-015
+  - T-2026-07-01-014
+  - T-2026-07-01-018
+  - T-2026-06-24-015
+  - T-2026-06-24-013
+  - T-2026-07-15-008
+confidence: 0.9
+git_context:
+  ref: 4ce423e82270318698e5b80fe351898132e61ced
+  branch: warpline-surfaces
+  dirty: true

@@ -1,0 +1,41 @@
+id: L-2026-06-23-ascend-232841-001
+type: milestone
+timestamp: '2026-06-23T23:28:41.645Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Warpline: A v1 merged to main · vision page rethemed+refreshed · GUI slice built · Oracle-Viewer design locked'
+summary: 'Founder''s 3-step sequence executed: (1) MERGED warpline-ast-spike → main (merge 189eb64c) — the A v1 code-lens + Loom→Warpline rename + ~aspects + GUI plan are on main experimental (not pushed); 97 tests green post-merge; warpline-ast-spike retired. (2) RETHEMED the vision page to docs/warpline/index.html on branch warpline-surfaces (commit 979000d7 — word-boundary-safe Loom→Warpline, brand tokens --warp/--weft/--seam intact, ''bloom'' preserved) + 3 A-v1 content edits from Mika (commit ecbc0d7a): hero now leads with ''reads your actual code'', §05 ''Down to the function'' (essence lifts every TS function), §06 THE DIVERGENCE PROOF card (git merge-tree CLEAN vs warpline DIVERGENT on real code). (3) STARTED the GUI build (T-008) — sub-phases 0+1 DONE (commit df12a3b7): a Warpline SECTION in the Platform — read-only /api/warpline router (ledger/refs/forecast/oracle/diff/absorb; engine fns in-process; concurrency semaphore + per-stateId WarpState cache; fs.watch→WS !oracle-record-appended; NO reachable write path = read-only structural) + @a-company/warpline workspace dep + a platform-ui ledger table; build green, router smoke-verified (real in-process /forecast HEAD-vs-HEAD → CLEAN). Mika delivered the full buildable Oracle Divergence Viewer design (every component bound to a real OracleRecord field; token map +new --clean/--cut; cinch/drift/seam-pulse motion w/ reduce-motion fallbacks; the calm CONVERGENT default). NEXT: GUI sub-phase 2 — build the real viewer UI per Mika''s direction.'
+symbols_touched:
+  - '#warpline'
+  - '#platform-server'
+  - '#warpline-web-router'
+  - '#warpline-section-ui'
+  - '#warpline-oracle'
+verification:
+  status: pass
+  details:
+    main_merge: 97 tests green
+    gui_build: paradigm build green
+    router: 6 smoke checks incl real /forecast HEAD-vs-HEAD → CLEAN
+    page: 13/13 sections balanced, no stray loom
+tags:
+  - warpline
+  - gui
+  - platform
+  - oracle-viewer
+  - retheme
+  - milestone
+linked_tasks:
+  - T-2026-06-23-008
+linked_commits:
+  - 189eb64c
+  - 979000d7
+  - ecbc0d7a
+  - df12a3b7
+confidence: 0.84
+git_context:
+  ref: ecbc0d7a4d647b66d79d8776925598d5291b9db5
+  branch: warpline-surfaces
+  dirty: true

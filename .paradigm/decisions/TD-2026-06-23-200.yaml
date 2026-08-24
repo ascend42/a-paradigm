@@ -1,0 +1,70 @@
+id: TD-2026-06-23-200
+timestamp: '2026-06-23T18:47:28.904Z'
+title: >-
+  Loom A v1 code-lens spec — determinism rules locked (checker for identity-only; pin+stamp compiler; external ids by
+  specifier-as-written)
+decision: >-
+  The A v1 TS code-lens (docs/specs/loom-code-lens.md) lifts code-units as synthetic component-kinded nodes injected
+  into the existing SymbolIndex before computeEssences, so the diff/predict/oracle algebra is consumed unchanged
+  (~6-line touch + one 'body'/'codeEssence' contract slot, the analog of 'steps'). Three determinism rules are LOCKED:
+  (1) the TS checker is used for reference RESOLUTION ONLY (getSymbolAtLocation) — checker-INFERRED types never enter
+  the hash; only syntactic structure + WRITTEN annotations are identity-bearing. (2) @a-company/loom exact-pins
+  TypeScript (no caret) and the essence version tag embeds the resolved compiler — `essence:v1:ts<exact>:` — built
+  against a fixed synthesized compiler-options baseline, not a discovered tsconfig. (3) External-symbol ids derive from
+  the import specifier AS WRITTEN + export name (`extern:<specifier>#<export>`), NOT the resolved path/version. v1 is
+  structural identity (NOT semantic equivalence); all unsupported TS forms emit visible fidelity-tier markers (TD-806),
+  never silent-empty essences.
+rationale: >-
+  Determinism is the thesis. Jinx confirmed the kill-shots concretely (TS is caret-pinned ^5.0.0/^5.3.3/^5.7.0 across
+  packages → resolved compiler varies per machine; inferred-type string form is not stable across TS
+  versions×tsconfig×@types; resolved external paths/versions drift with npm install — poisoning every transitive
+  caller's Merkle hash). Restricting the checker to discrete identity resolution, pinning+stamping the compiler, and
+  deriving external ids from source text keep the (conditional) cross-machine promise true. Cid and Jinx independently
+  reached the no-inferred-types conclusion. The 'false-EQUAL' hazard (silent no-delta on changed code) is the sharpest
+  risk — worse than false-DIFFER — so meaning-bearing modifiers/tokens are explicitly enumerated and adversarial
+  false-EQUAL probes are a ship gate.
+participants:
+  - id: ascend
+    role: human
+    stance: supported
+  - id: architect
+    role: agent
+    stance: proposed
+  - id: cid
+    role: agent
+    stance: proposed
+  - id: advocate
+    role: agent
+    stance: proposed
+alternatives_considered:
+  - option: External ids pin dependency name@version (Cid's proposal)
+    rejected_because: >-
+      Resolved version/path is a node_modules-state function → drifts with npm install → breaks
+      byte-identical-across-machines non-locally (one unstable extern id poisons every transitive caller). Determinism
+      wins; dependency-meaning-change is DEFERRED to a future low-weight lockfile-fed 'dependency-version' delta class
+      (not the hash).
+  - option: Include checker-inferred types in the essence (richer code meaning)
+    rejected_because: >-
+      Inferred-type string form is not stable across TS versions/tsconfig/@types → same source hashes differently across
+      machines, the exact failure the project prevents. Written annotations give the meaningful 80% with zero
+      determinism cost.
+  - option: Keep the spike's flat first-declaration-order alpha-normalization
+    rejected_because: >-
+      Unsound under shadowing/hoisting and cross-scope-order-dependent → both false-DIFFER on rename and dangerous
+      false-EQUAL on shadowing. v1 requires scope-resolved binding indices + a type-param namespace.
+symbols_affected:
+  - '#code-lens'
+  - '#code-essence'
+  - '#absorb'
+  - '#essence-hash'
+  - '#sem-delta'
+  - '#predict'
+  - '#loom-oracle'
+status: active
+tags:
+  - loom
+  - code-lens
+  - ast-absorb
+  - determinism
+  - the-prize
+  - spec

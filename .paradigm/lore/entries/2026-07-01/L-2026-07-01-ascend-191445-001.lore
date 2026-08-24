@@ -1,0 +1,72 @@
+id: L-2026-07-01-ascend-191445-001
+type: agent-session
+timestamp: '2026-07-01T19:14:45.951Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Warpline M1a shipped — the native object store; Warpline can now own & restore bytes with git absent
+summary: |-
+  Built M1a, the first byte-authority milestone of the replacement build (TD-2026-07-01-263): Warpline's own content-addressed blob+tree object store (blob.ts/tree.ts/object-store.ts/snapshot.ts) + `warpline objects snapshot|verify`. Proven byte-faithful two ways — the shadow git OID equals `git rev-parse HEAD^{tree}` for a clean worktree, and snapshot(restore(x))==x reconstructs a byte-identical tree with git ABSENT (binary/exec/symlink/empty-dir parity). +9 tests, 193 green. This is the concrete rebuttal to the readiness panel's core objection ("no native byte store; delete git → zero files").</summary>
+  <parameter name="type">milestone</parameter>
+  <parameter name="body">MILESTONE: M1a (T-2026-07-01-010) under the replacement epic T-2026-07-01-007. First implementation step after the design was team-vetted.
+
+  WHAT SHIPPED (packages/warpline/src/warp/):
+  - blob.ts — raw-byte blob; blobId = "blob:v1:" + sha256 over git-style `blob <len>\0<bytes>` framing (domain separation so a blob and tree of the same bytes never collide); shadow gitBlobOid == `git hash-object`.
+  - tree.ts — sorted directory manifest; git TREE-ORDER (a 40000 dir sorts as if name+"/"); canonical bytes `<mode> <name>\0<id>` with FIXED-WIDTH binary ids (32B sha256 / 20B gitlink sha1) so the stream is parseable by mode; treeId = sha256; shadow gitTreeOid. Names are RAW on-disk bytes, NOT NFC (review amendment A5 — matches git + avoids NFC/NFD collision).
+  - object-store.ts — loose zlib blobs/ + trees/ under .warpline/objects/ with git 2-char fan-out; write-tmp+rename; idempotent put (content-addressed skip = the M1a slice of A3); verify() recomputes every object's address and reports corruption.
+  - snapshot.ts — snapshotDir walks a directory writing every blob+tree → {treeId, gitOid, entryCount}; restoreTree rebuilds a byte-faithful tree (regular/exec 100755/symlink 120000/subtree; empty dirs omitted per git parity; gitlink represented, bytes never fabricated).
+  - CLI: `warpline objects snapshot <dir>` (prints treeId + shadow gitOid) and `objects verify`.
+
+  TWO INDEPENDENT PROOFS (tests, 9 new):
+  1. EXTERNAL: shadow gitOid == `git rev-parse HEAD^{tree}` for a clean worktree — a total byte-faithfulness proof against git during coexistence.
+  2. INTERNAL: snapshot(restore(x)) == x, restoring purely from the native store into a fresh dir (git absent) — binary NUL bytes, exec bit, and symlink-as-link all verified byte-identical.
+  Plus: gitBlobOid == `git hash-object`, TREE-ORDER dir-slash vector, parseTree round-trip (incl. gitlink), verify() catches a corrupted loose object.
+
+  SCOPING (honest deferrals, noted on the task):
+  - Ref-sourced snapshot (git cat-file/ls-tree, per §1.5) is consumed by BACKFILL → lands with M1b (T-011).
+  - Full A3 incremental read-skip (mtime/index parent-tree diff) belongs at the SEAL path where a parent strand exists → M1b. M1a does the store-level idempotent-write skip.
+  - Decisions: sha256 (one hash across meaning+bytes) per §1.4; raw names per A5.
+
+  VERIFICATION: 193 tests green (was 184); tsc clean; `npm run build` clean; CLI smoke-tested (`objects snapshot src` wrote 44 objects, `objects verify` all intact). Committed e90ee203 on warpline-surfaces (NOT pushed). .purpose #warp-store updated + reindexed.
+
+  NEXT: M1b (T-011) — bind-on-seal: add strand.binding.treeId (excluded from pickId like calibratedConfidence), snapshot the merged tree compositionally via cat-file (amendment A2, NOT the archive dir), record the re-derivable MergeRecipe, chain parentPickId+treeId into pickId for M1b+ strands (A1), and wire #grade to the recipe (A7). Then M1c restore verb + git-absent acceptance test.</parameter>
+  <parameter name="symbols_touched">["#warp-store", "#warpline-cli"]
+files_created:
+  - packages/warpline/src/warp/blob.ts
+  - packages/warpline/src/warp/tree.ts
+  - packages/warpline/src/warp/object-store.ts
+  - packages/warpline/src/warp/snapshot.ts
+  - packages/warpline/test/object-store.test.ts
+files_modified:
+  - packages/warpline/src/index.ts
+  - packages/warpline/src/cli.ts
+  - packages/warpline/.purpose
+verification:
+  status: pass
+  details:
+    tests: 193/193 pass (+9)
+    typecheck: pass
+    build: pass
+    cli-smoke: pass
+    purpose: valid
+tags:
+  - warpline
+  - replacement
+  - native-store
+  - byte-authority
+  - M1
+  - milestone
+linked_lore:
+  - L-2026-07-01-ascend-185215-001
+linked_tasks:
+  - T-2026-07-01-007
+  - T-2026-07-01-010
+  - T-2026-07-01-011
+linked_commits:
+  - e90ee203
+confidence: 0.88
+git_context:
+  ref: e90ee2038b967ceb39da4b6c0e4080532898f7e9
+  branch: warpline-surfaces
+  dirty: true

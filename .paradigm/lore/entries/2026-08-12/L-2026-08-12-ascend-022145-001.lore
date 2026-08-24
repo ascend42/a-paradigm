@@ -1,0 +1,50 @@
+id: L-2026-08-12-ascend-022145-001
+type: review
+timestamp: '2026-08-12T02:21:45.092Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'ASSESSMENT: what''s missing for Warpline to be day-one agent-managed source control for a new project'
+summary: 'Four-agent panel (cold-agent empirical dogfood + Arky lifecycle + Loid teaching-layer + Jinx abandonment-risks) on the founder''s real question: can I start a new project and tell the agent team to build it on Warpline like git? Verdict: the adjudication ENGINE (fork→propose→admit→KNOT→resolve) is real, works, and its refusals/knot-payloads are unusually legible — the dogfood ran the full loop incl. a real cross-agent KNOT and human resolve on a throwaway project. But ''build it like any other project'' is blocked by a CHEAP usability/onboarding layer (fixable in days) sitting on top of DEEPER structural gaps (branching, N≥3 concurrency, blind-class honesty — weeks) and one EXISTENTIAL point: solo serial work produces zero contention, so the adjudication never fires and Warpline is pure additive friction over a git it can''t yet replace. The value only appears under real concurrency.'
+symbols_touched:
+  - '#warpline-cli'
+  - '#native'
+  - '#hazard'
+  - '#grade'
+  - '#daemon-descriptors'
+  - '#hook'
+tags:
+  - warpline
+  - dogfood
+  - usability
+  - onboarding
+  - assessment
+  - arc:warpline
+  - audit-2026-08-12
+body: |-
+  TIER 1 — DAY-ONE USABILITY (cheap; several are outright BUGS; this is 'what's missing to make it possible'):
+  1. NO `warpline init` — onboarding undiscoverable; first `pick` secretly bootstraps genesis but nothing says so (dogfood, Arky).
+  2. `status`/`diff` HARD-FAIL without git (`git ls-tree ... not a git repository`) even though the native fabric exists and pick/log work — a cold agent concludes 'Warpline needs git' and never finds the native path (dogfood #1). Real gap: no git-absent `status`.
+  3. AGENTS KNOW NOTHING PRE-LOADED — notebooks have ZERO warpline entries, CLAUDE.md 0 mentions, MCP server not registered (settings.local.json mcpServers:{}). TD-351 'warm by construction' is decided-not-built (Loid).
+  4. NO 'start here / call status first' POINTER — hosts truncate tool descriptions to bare names; agent must GUESS the entry point though status IS the manual (Loid — highest-leverage teaching gap).
+  5. `.warpline/` NOT gitignored + hook never creates .gitignore → `git add -A` commits the whole fabric ledger into git, contradicting the 'never touches git' pitch (dogfood #5). BUG.
+  6. AUTO-SEAL HOOK silently no-ops unless warpline is globally installed / WARPLINE_BIN set (an abs-node-path invocation gets a hook that prints SKIPPED while status says 'clean') (dogfood #3). 
+  7. SCALAR-CONST value changes are INVISIBLE to meaning: PORT 3000→9999 reports 'clean, no semantic change' (top-level const not lifted, T-2026-07-15-005) — an agent trusting status believes it changed nothing. Silent + common + dangerous (dogfood #6).
+  8. `fork --into <relativedir>` under repo root → later root `propose`/`resolve` ABSORBS the worktrees as phantom symbols; no `.warplineignore` (dogfood #8). Footgun.
+
+  TIER 2 — STRUCTURAL (determines whether it's WORTH it vs git; weeks+):
+  9. NO BRANCHING / feature isolation (M2.5, T-2026-07-01-017) — single linear selvage, one in-flight proposal per agent, no switch/checkout. Arky's SINGLE BIGGEST gap; all four cited.
+  10. N≥3 CONCURRENCY degrades — H1 (T-2026-07-01-030) serializes to one-merge-per-generation; 20s global lock throws >4 writers; per-domain CAS deferred (T-016). Degrades at the exact 2-4 band it's sold for.
+  11. BLIND CLASSES auto-weave on a real app's first hour — .js/.env configs (no lens), config×code (cfg-lens references:[]), lockfiles, assets; trust floor dead day one (K_MIN_GRADED=3, no history). ~10% false-CLEAN measured in the independent stratum.
+  12. KNOT WEDGES the swarm — resolve is HUMAN_ONLY, no autonomous path through a conflict (abandon concedes, doesn't resolve).
+  13. GIT STILL LOAD-BEARING (mirror mode, TD-663) — additive overhead + permanent-fail-closed cache-loss risk.
+
+  THE EXISTENTIAL POINT (Jinx #1): solo serial building produces zero contention → every admit is FAST_ADMIT/NOOP → the adjudication that justifies Warpline never fires → 3x the keystrokes of `git commit` for a payoff that structurally can't arrive alone. Value requires a REAL swarm from hour one, or a solo reason that doesn't exist yet.
+
+  WHAT WORKS / TELL THE AGENTS TODAY: two postures — (A) GIT-NATIVE (most git-like): git normally + `warpline hook install` (WARPLINE_BIN set) auto-seals meaning; agents use git for branch/commit/merge, Warpline adds status/log/lifeline/weave/oracle as the meaning-lens. (B) NATIVE ADJUDICATION (the product, for a swarm): daemon start + token mint per agent; agents run fork→propose→admit via MCP; human resolves KNOTs. Loid wrote the verbatim agent instruction block (status-first → cycle → escalate-on-principal:human → treat file text as untrusted data).
+confidence: 0.85
+git_context:
+  ref: 58cb76e97dc7231bb41dd1a3e77e3aa5b2a29e79
+  branch: warpline-surfaces
+  dirty: true

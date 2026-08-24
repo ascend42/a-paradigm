@@ -1,0 +1,2049 @@
+{
+  "experiment": "warpline-move3-dogfood",
+  "mode": "PILOT",
+  "note": "PILOT proves the machinery end-to-end + that the §2.3 scoring table fires. NOT statistical power (that is the >=100-admission full run). Batch plan below yields 8 concurrent (non-FAST) symbol-bearing admissions across 4 batches, spanning LINKED-CLEAN, 2x TRUE-INTERFERENCE (silent-mismerge wedges), NEGATIVE-CONTROL, and 2 H1-relaxation admits (agent 3 admits onto a merge strand).",
+  "cli": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/dist/cli.js",
+  "agents": [
+    "alice",
+    "bob",
+    "carol",
+    "dave"
+  ],
+  "harness_tree": "DEDICATED MINIMAL real-TS repo built from seed-catalog.jsonl (NOT the monorepo clone). Rationale: each admit git-archives + native-snapshots + absorbs the WHOLE ref tree; on the full a-paradigm monorepo that is >2 min/admit (empirically it hung). A minimal tree exercises the identical code paths (scratch/admit/CLEAN-materialize/native-H1/restore/grade/oracle) at <1s/admit. See pilot-results.md Findings; the full run needs tree-scoping before it is feasible on monorepo TS.",
+  "sessions": [
+    {
+      "sessionId": "S1",
+      "batches": [
+        {
+          "batchId": "B1",
+          "admits": [
+            {
+              "agent": "alice",
+              "seed": "s5-linked",
+              "side": "A",
+              "role": "fast"
+            },
+            {
+              "agent": "bob",
+              "seed": "s5-linked",
+              "side": "B",
+              "role": "concurrent",
+              "expect": "CLEAN/linked"
+            },
+            {
+              "agent": "carol",
+              "seed": "s1-indep",
+              "side": "A",
+              "role": "concurrent",
+              "expect": "CLEAN/independent (H1: onto merge strand)"
+            }
+          ]
+        },
+        {
+          "batchId": "B2",
+          "admits": [
+            {
+              "agent": "dave",
+              "seed": "s6-interference",
+              "side": "A",
+              "role": "fast"
+            },
+            {
+              "agent": "alice",
+              "seed": "s6-interference",
+              "side": "B",
+              "role": "concurrent",
+              "expect": "KNOT (silent-mismerge wedge)"
+            },
+            {
+              "agent": "bob",
+              "seed": "s2-indep",
+              "side": "A",
+              "role": "concurrent",
+              "expect": "CLEAN/independent"
+            }
+          ]
+        },
+        {
+          "batchId": "B3",
+          "admits": [
+            {
+              "agent": "carol",
+              "seed": "s7-interference",
+              "side": "A",
+              "role": "fast"
+            },
+            {
+              "agent": "dave",
+              "seed": "s7-interference",
+              "side": "B",
+              "role": "concurrent",
+              "expect": "KNOT (silent-mismerge wedge)"
+            },
+            {
+              "agent": "alice",
+              "seed": "s3-indep",
+              "side": "A",
+              "role": "concurrent",
+              "expect": "CLEAN/independent"
+            }
+          ]
+        },
+        {
+          "batchId": "B4",
+          "admits": [
+            {
+              "agent": "bob",
+              "seed": "s8-negctrl",
+              "side": "A",
+              "role": "fast"
+            },
+            {
+              "agent": "carol",
+              "seed": "s8-negctrl",
+              "side": "B",
+              "role": "concurrent",
+              "expect": "CLEAN/independent (NEG-CONTROL: must NOT false-KNOT)"
+            },
+            {
+              "agent": "dave",
+              "seed": "s4-indep",
+              "side": "A",
+              "role": "concurrent",
+              "expect": "CLEAN/independent (H1: onto merge strand)"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "full": {
+    "mode": "FULL",
+    "note": "Move-3 ≥100-admission statistical run (T-2026-07-15-007). Monorepo-clone throwaway tree (git archive of liveHead, .warpline stripped + fully ignored), seeds under src-dogfood/. 12 sessions × 4 batches, k=4 → 192 admissions, 144 scored concurrent. Churn model: prior-blind uniform retirement (see gen-manifest-full.mjs header). Pilot block above is untouched and reproducible.",
+    "generated": "2026-07-15T16:21:53.216Z",
+    "prngSeed": 20260715,
+    "catalog": "seed-catalog-full.jsonl",
+    "liveHeadAtGeneration": "0d317aa34981298fa34780397f4fb6910131527e",
+    "cli": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/dist/cli.js",
+    "agents": [
+      "alice",
+      "bob",
+      "carol",
+      "dave"
+    ],
+    "planSummary": {
+      "sessions": 12,
+      "batches": 48,
+      "admissionsTotal": 192,
+      "scoredConcurrent": 144,
+      "churnBatches": 20,
+      "seedCount": 96,
+      "pairEventAllocation": {
+        "INDEPENDENT": 12,
+        "LINKED-CLEAN": 21,
+        "AUTO-RESOLVE-WIN-linked": 10,
+        "AUTO-RESOLVE-WIN-indep": 10,
+        "TRUE-INTERFERENCE-ripple": 12,
+        "TRUE-INTERFERENCE-direct": 5,
+        "NEGATIVE-CONTROL": 3,
+        "NEGCTRL-RIPPLE": 3
+      },
+      "catalogStratumCounts": {
+        "AUTO-RESOLVE-WIN-linked": 10,
+        "LINKED-CLEAN": 21,
+        "TRUE-INTERFERENCE-direct": 5,
+        "TRUE-INTERFERENCE-ripple": 12,
+        "INDEPENDENT": 32,
+        "AUTO-RESOLVE-WIN-indep": 10,
+        "NEGATIVE-CONTROL": 3,
+        "NEGCTRL-RIPPLE": 3
+      }
+    },
+    "sessions": [
+      {
+        "sessionId": "F-S1",
+        "batches": [
+          {
+            "batchId": "F-B01",
+            "admits": [
+              {
+                "agent": "alice",
+                "seed": "f100-arwL",
+                "side": "A",
+                "role": "fast"
+              },
+              {
+                "agent": "bob",
+                "seed": "f100-arwL",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "AUTO-RESOLVE-WIN-linked",
+                "rowTruth": "mergeable",
+                "expect": "CLEAN/linked+sealed"
+              },
+              {
+                "agent": "carol",
+                "seed": "f101-arwL",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided pair A)"
+              },
+              {
+                "agent": "dave",
+                "seed": "f101-arwL",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "AUTO-RESOLVE-WIN-linked",
+                "rowTruth": "mergeable",
+                "expect": "CLEAN/linked+sealed"
+              }
+            ]
+          },
+          {
+            "batchId": "F-B02",
+            "admits": [
+              {
+                "agent": "bob",
+                "seed": "f102-linked",
+                "side": "A",
+                "role": "fast"
+              },
+              {
+                "agent": "carol",
+                "seed": "f102-linked",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "LINKED-CLEAN",
+                "rowTruth": "mergeable",
+                "expect": "CLEAN/linked"
+              },
+              {
+                "agent": "dave",
+                "seed": "f103-tiD",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided pair A)"
+              },
+              {
+                "agent": "alice",
+                "seed": "f103-tiD",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "TRUE-INTERFERENCE-direct",
+                "rowTruth": "conflict",
+                "expect": "KNOT"
+              }
+            ]
+          },
+          {
+            "batchId": "F-B03",
+            "admits": [
+              {
+                "agent": "carol",
+                "seed": "f104-tiR",
+                "side": "A",
+                "role": "fast"
+              },
+              {
+                "agent": "dave",
+                "seed": "f104-tiR",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "TRUE-INTERFERENCE-ripple",
+                "rowTruth": "conflict",
+                "expect": "KNOT"
+              },
+              {
+                "agent": "alice",
+                "seed": "f105-linked",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided pair A)"
+              },
+              {
+                "agent": "bob",
+                "seed": "f105-linked",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "LINKED-CLEAN",
+                "rowTruth": "mergeable",
+                "expect": "CLEAN/linked"
+              }
+            ]
+          },
+          {
+            "batchId": "F-B04",
+            "admits": [
+              {
+                "agent": "dave",
+                "seed": "f106-linked",
+                "side": "A",
+                "role": "fast"
+              },
+              {
+                "agent": "alice",
+                "seed": "f106-linked",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "LINKED-CLEAN",
+                "rowTruth": "mergeable",
+                "expect": "CLEAN/linked"
+              },
+              {
+                "agent": "bob",
+                "seed": "f107-tiR",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided pair A)"
+              },
+              {
+                "agent": "carol",
+                "seed": "f107-tiR",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "TRUE-INTERFERENCE-ripple",
+                "rowTruth": "conflict",
+                "expect": "KNOT"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "sessionId": "F-S2",
+        "batches": [
+          {
+            "batchId": "F-B05",
+            "admits": [
+              {
+                "agent": "alice",
+                "seed": "f108-ind",
+                "side": "A",
+                "role": "fast"
+              },
+              {
+                "agent": "bob",
+                "seed": "f108-ind",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent"
+              },
+              {
+                "agent": "carol",
+                "seed": "f109-ind",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided pair A)"
+              },
+              {
+                "agent": "dave",
+                "seed": "f109-ind",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent"
+              }
+            ]
+          },
+          {
+            "batchId": "F-B06",
+            "admits": [
+              {
+                "agent": "bob",
+                "seed": "f110-linked",
+                "side": "A",
+                "role": "fast"
+              },
+              {
+                "agent": "carol",
+                "seed": "f110-linked",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "LINKED-CLEAN",
+                "rowTruth": "mergeable",
+                "expect": "CLEAN/linked"
+              },
+              {
+                "agent": "dave",
+                "seed": "f111-linked",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided pair A)"
+              },
+              {
+                "agent": "alice",
+                "seed": "f111-linked",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "LINKED-CLEAN",
+                "rowTruth": "mergeable",
+                "expect": "CLEAN/linked"
+              }
+            ]
+          },
+          {
+            "batchId": "F-B07",
+            "admits": [
+              {
+                "agent": "carol",
+                "seed": "f112-linked",
+                "side": "A",
+                "role": "fast"
+              },
+              {
+                "agent": "dave",
+                "seed": "f112-linked",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "LINKED-CLEAN",
+                "rowTruth": "mergeable",
+                "expect": "CLEAN/linked"
+              },
+              {
+                "agent": "alice",
+                "seed": "f113-arwI",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided pair A)"
+              },
+              {
+                "agent": "bob",
+                "seed": "f113-arwI",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "AUTO-RESOLVE-WIN-indep",
+                "rowTruth": "mergeable",
+                "expect": "CLEAN/independent+sealed"
+              }
+            ]
+          },
+          {
+            "batchId": "F-B08",
+            "admits": [
+              {
+                "agent": "dave",
+                "seed": "f114-linked",
+                "side": "A",
+                "role": "fast"
+              },
+              {
+                "agent": "alice",
+                "seed": "f114-linked",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "LINKED-CLEAN",
+                "rowTruth": "mergeable",
+                "expect": "CLEAN/linked"
+              },
+              {
+                "agent": "bob",
+                "seed": "f115-arwI",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided pair A)"
+              },
+              {
+                "agent": "carol",
+                "seed": "f115-arwI",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "AUTO-RESOLVE-WIN-indep",
+                "rowTruth": "mergeable",
+                "expect": "CLEAN/independent+sealed"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "sessionId": "F-S3",
+        "batches": [
+          {
+            "batchId": "F-B09",
+            "admits": [
+              {
+                "agent": "alice",
+                "churnTarget": "f100-arwL",
+                "churnIndex": 1,
+                "role": "churn-fast"
+              },
+              {
+                "agent": "bob",
+                "seed": "f116-arwL",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided vs churn)"
+              },
+              {
+                "agent": "carol",
+                "seed": "f116-arwL",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "AUTO-RESOLVE-WIN-linked",
+                "rowTruth": "mergeable",
+                "expect": "CLEAN/linked+sealed"
+              },
+              {
+                "agent": "dave",
+                "seed": "f117-ind",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (filler)"
+              }
+            ]
+          },
+          {
+            "batchId": "F-B10",
+            "admits": [
+              {
+                "agent": "bob",
+                "seed": "f118-ind",
+                "side": "A",
+                "role": "fast"
+              },
+              {
+                "agent": "carol",
+                "seed": "f118-ind",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent"
+              },
+              {
+                "agent": "dave",
+                "seed": "f119-negctrl",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided pair A)"
+              },
+              {
+                "agent": "alice",
+                "seed": "f119-negctrl",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "NEGATIVE-CONTROL",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent"
+              }
+            ]
+          },
+          {
+            "batchId": "F-B11",
+            "admits": [
+              {
+                "agent": "carol",
+                "churnTarget": "f102-linked",
+                "churnIndex": 2,
+                "role": "churn-fast"
+              },
+              {
+                "agent": "dave",
+                "seed": "f120-ind",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided vs churn)"
+              },
+              {
+                "agent": "alice",
+                "seed": "f120-ind",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent"
+              },
+              {
+                "agent": "bob",
+                "seed": "f121-ind",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (filler)"
+              }
+            ]
+          },
+          {
+            "batchId": "F-B12",
+            "admits": [
+              {
+                "agent": "dave",
+                "seed": "f122-negctrl",
+                "side": "A",
+                "role": "fast"
+              },
+              {
+                "agent": "alice",
+                "seed": "f122-negctrl",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "NEGATIVE-CONTROL",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent"
+              },
+              {
+                "agent": "bob",
+                "seed": "f123-tiR",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided pair A)"
+              },
+              {
+                "agent": "carol",
+                "seed": "f123-tiR",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "TRUE-INTERFERENCE-ripple",
+                "rowTruth": "conflict",
+                "expect": "KNOT"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "sessionId": "F-S4",
+        "batches": [
+          {
+            "batchId": "F-B13",
+            "admits": [
+              {
+                "agent": "alice",
+                "churnTarget": "f109-ind",
+                "churnIndex": 3,
+                "role": "churn-fast"
+              },
+              {
+                "agent": "bob",
+                "seed": "f124-negctrl",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided vs churn)"
+              },
+              {
+                "agent": "carol",
+                "seed": "f124-negctrl",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "NEGATIVE-CONTROL",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent"
+              },
+              {
+                "agent": "dave",
+                "seed": "f125-ind",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (filler)"
+              }
+            ]
+          },
+          {
+            "batchId": "F-B14",
+            "admits": [
+              {
+                "agent": "bob",
+                "seed": "f126-tiR",
+                "side": "A",
+                "role": "fast"
+              },
+              {
+                "agent": "carol",
+                "seed": "f126-tiR",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "TRUE-INTERFERENCE-ripple",
+                "rowTruth": "conflict",
+                "expect": "KNOT"
+              },
+              {
+                "agent": "dave",
+                "seed": "f127-linked",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided pair A)"
+              },
+              {
+                "agent": "alice",
+                "seed": "f127-linked",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "LINKED-CLEAN",
+                "rowTruth": "mergeable",
+                "expect": "CLEAN/linked"
+              }
+            ]
+          },
+          {
+            "batchId": "F-B15",
+            "admits": [
+              {
+                "agent": "carol",
+                "churnTarget": "f115-arwI",
+                "churnIndex": 4,
+                "role": "churn-fast"
+              },
+              {
+                "agent": "dave",
+                "seed": "f128-arwL",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided vs churn)"
+              },
+              {
+                "agent": "alice",
+                "seed": "f128-arwL",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "AUTO-RESOLVE-WIN-linked",
+                "rowTruth": "mergeable",
+                "expect": "CLEAN/linked+sealed"
+              },
+              {
+                "agent": "bob",
+                "seed": "f129-ind",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (filler)"
+              }
+            ]
+          },
+          {
+            "batchId": "F-B16",
+            "admits": [
+              {
+                "agent": "dave",
+                "seed": "f130-linked",
+                "side": "A",
+                "role": "fast"
+              },
+              {
+                "agent": "alice",
+                "seed": "f130-linked",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "LINKED-CLEAN",
+                "rowTruth": "mergeable",
+                "expect": "CLEAN/linked"
+              },
+              {
+                "agent": "bob",
+                "seed": "f131-tiD",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided pair A)"
+              },
+              {
+                "agent": "carol",
+                "seed": "f131-tiD",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "TRUE-INTERFERENCE-direct",
+                "rowTruth": "conflict",
+                "expect": "KNOT"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "sessionId": "F-S5",
+        "batches": [
+          {
+            "batchId": "F-B17",
+            "admits": [
+              {
+                "agent": "alice",
+                "churnTarget": "f126-tiR",
+                "churnIndex": 5,
+                "role": "churn-fast"
+              },
+              {
+                "agent": "bob",
+                "seed": "f132-linked",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided vs churn)"
+              },
+              {
+                "agent": "carol",
+                "seed": "f132-linked",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "LINKED-CLEAN",
+                "rowTruth": "mergeable",
+                "expect": "CLEAN/linked"
+              },
+              {
+                "agent": "dave",
+                "seed": "f133-ind",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (filler)"
+              }
+            ]
+          },
+          {
+            "batchId": "F-B18",
+            "admits": [
+              {
+                "agent": "bob",
+                "seed": "f134-ind",
+                "side": "A",
+                "role": "fast"
+              },
+              {
+                "agent": "carol",
+                "seed": "f134-ind",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent"
+              },
+              {
+                "agent": "dave",
+                "seed": "f135-ncr",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided pair A)"
+              },
+              {
+                "agent": "alice",
+                "seed": "f135-ncr",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "NEGCTRL-RIPPLE",
+                "rowTruth": "mergeable",
+                "expect": "KNOT (over-block — expected FALSE-KNOT)"
+              }
+            ]
+          },
+          {
+            "batchId": "F-B19",
+            "admits": [
+              {
+                "agent": "carol",
+                "churnTarget": "f125-ind",
+                "churnIndex": 6,
+                "role": "churn-fast"
+              },
+              {
+                "agent": "dave",
+                "seed": "f136-arwL",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided vs churn)"
+              },
+              {
+                "agent": "alice",
+                "seed": "f136-arwL",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "AUTO-RESOLVE-WIN-linked",
+                "rowTruth": "mergeable",
+                "expect": "CLEAN/linked+sealed"
+              },
+              {
+                "agent": "bob",
+                "seed": "f137-ind",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (filler)"
+              }
+            ]
+          },
+          {
+            "batchId": "F-B20",
+            "admits": [
+              {
+                "agent": "dave",
+                "seed": "f138-ind",
+                "side": "A",
+                "role": "fast"
+              },
+              {
+                "agent": "alice",
+                "seed": "f138-ind",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent"
+              },
+              {
+                "agent": "bob",
+                "seed": "f139-ind",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided pair A)"
+              },
+              {
+                "agent": "carol",
+                "seed": "f139-ind",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "sessionId": "F-S6",
+        "batches": [
+          {
+            "batchId": "F-B21",
+            "admits": [
+              {
+                "agent": "alice",
+                "churnTarget": "f103-tiD",
+                "churnIndex": 7,
+                "role": "churn-fast"
+              },
+              {
+                "agent": "bob",
+                "seed": "f140-tiR",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided vs churn)"
+              },
+              {
+                "agent": "carol",
+                "seed": "f140-tiR",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "TRUE-INTERFERENCE-ripple",
+                "rowTruth": "conflict",
+                "expect": "KNOT"
+              },
+              {
+                "agent": "dave",
+                "seed": "f141-ind",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (filler)"
+              }
+            ]
+          },
+          {
+            "batchId": "F-B22",
+            "admits": [
+              {
+                "agent": "bob",
+                "seed": "f142-arwL",
+                "side": "A",
+                "role": "fast"
+              },
+              {
+                "agent": "carol",
+                "seed": "f142-arwL",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "AUTO-RESOLVE-WIN-linked",
+                "rowTruth": "mergeable",
+                "expect": "CLEAN/linked+sealed"
+              },
+              {
+                "agent": "dave",
+                "seed": "f143-ind",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided pair A)"
+              },
+              {
+                "agent": "alice",
+                "seed": "f143-ind",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent"
+              }
+            ]
+          },
+          {
+            "batchId": "F-B23",
+            "admits": [
+              {
+                "agent": "carol",
+                "churnTarget": "f119-negctrl",
+                "churnIndex": 8,
+                "role": "churn-fast"
+              },
+              {
+                "agent": "dave",
+                "seed": "f144-arwI",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided vs churn)"
+              },
+              {
+                "agent": "alice",
+                "seed": "f144-arwI",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "AUTO-RESOLVE-WIN-indep",
+                "rowTruth": "mergeable",
+                "expect": "CLEAN/independent+sealed"
+              },
+              {
+                "agent": "bob",
+                "seed": "f145-ind",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (filler)"
+              }
+            ]
+          },
+          {
+            "batchId": "F-B24",
+            "admits": [
+              {
+                "agent": "dave",
+                "seed": "f146-tiR",
+                "side": "A",
+                "role": "fast"
+              },
+              {
+                "agent": "alice",
+                "seed": "f146-tiR",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "TRUE-INTERFERENCE-ripple",
+                "rowTruth": "conflict",
+                "expect": "KNOT"
+              },
+              {
+                "agent": "bob",
+                "seed": "f147-linked",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided pair A)"
+              },
+              {
+                "agent": "carol",
+                "seed": "f147-linked",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "LINKED-CLEAN",
+                "rowTruth": "mergeable",
+                "expect": "CLEAN/linked"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "sessionId": "F-S7",
+        "batches": [
+          {
+            "batchId": "F-B25",
+            "admits": [
+              {
+                "agent": "alice",
+                "churnTarget": "f111-linked",
+                "churnIndex": 9,
+                "role": "churn-fast"
+              },
+              {
+                "agent": "bob",
+                "seed": "f148-arwL",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided vs churn)"
+              },
+              {
+                "agent": "carol",
+                "seed": "f148-arwL",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "AUTO-RESOLVE-WIN-linked",
+                "rowTruth": "mergeable",
+                "expect": "CLEAN/linked+sealed"
+              },
+              {
+                "agent": "dave",
+                "seed": "f149-ind",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (filler)"
+              }
+            ]
+          },
+          {
+            "batchId": "F-B26",
+            "admits": [
+              {
+                "agent": "bob",
+                "seed": "f150-ind",
+                "side": "A",
+                "role": "fast"
+              },
+              {
+                "agent": "carol",
+                "seed": "f150-ind",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent"
+              },
+              {
+                "agent": "dave",
+                "seed": "f151-linked",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided pair A)"
+              },
+              {
+                "agent": "alice",
+                "seed": "f151-linked",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "LINKED-CLEAN",
+                "rowTruth": "mergeable",
+                "expect": "CLEAN/linked"
+              }
+            ]
+          },
+          {
+            "batchId": "F-B27",
+            "admits": [
+              {
+                "agent": "carol",
+                "churnTarget": "f104-tiR",
+                "churnIndex": 10,
+                "role": "churn-fast"
+              },
+              {
+                "agent": "dave",
+                "seed": "f152-linked",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided vs churn)"
+              },
+              {
+                "agent": "alice",
+                "seed": "f152-linked",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "LINKED-CLEAN",
+                "rowTruth": "mergeable",
+                "expect": "CLEAN/linked"
+              },
+              {
+                "agent": "bob",
+                "seed": "f153-ind",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (filler)"
+              }
+            ]
+          },
+          {
+            "batchId": "F-B28",
+            "admits": [
+              {
+                "agent": "dave",
+                "seed": "f154-linked",
+                "side": "A",
+                "role": "fast"
+              },
+              {
+                "agent": "alice",
+                "seed": "f154-linked",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "LINKED-CLEAN",
+                "rowTruth": "mergeable",
+                "expect": "CLEAN/linked"
+              },
+              {
+                "agent": "bob",
+                "seed": "f155-arwI",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided pair A)"
+              },
+              {
+                "agent": "carol",
+                "seed": "f155-arwI",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "AUTO-RESOLVE-WIN-indep",
+                "rowTruth": "mergeable",
+                "expect": "CLEAN/independent+sealed"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "sessionId": "F-S8",
+        "batches": [
+          {
+            "batchId": "F-B29",
+            "admits": [
+              {
+                "agent": "alice",
+                "churnTarget": "f120-ind",
+                "churnIndex": 11,
+                "role": "churn-fast"
+              },
+              {
+                "agent": "bob",
+                "seed": "f156-tiR",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided vs churn)"
+              },
+              {
+                "agent": "carol",
+                "seed": "f156-tiR",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "TRUE-INTERFERENCE-ripple",
+                "rowTruth": "conflict",
+                "expect": "KNOT"
+              },
+              {
+                "agent": "dave",
+                "seed": "f157-ind",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (filler)"
+              }
+            ]
+          },
+          {
+            "batchId": "F-B30",
+            "admits": [
+              {
+                "agent": "bob",
+                "seed": "f158-linked",
+                "side": "A",
+                "role": "fast"
+              },
+              {
+                "agent": "carol",
+                "seed": "f158-linked",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "LINKED-CLEAN",
+                "rowTruth": "mergeable",
+                "expect": "CLEAN/linked"
+              },
+              {
+                "agent": "dave",
+                "seed": "f159-arwI",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided pair A)"
+              },
+              {
+                "agent": "alice",
+                "seed": "f159-arwI",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "AUTO-RESOLVE-WIN-indep",
+                "rowTruth": "mergeable",
+                "expect": "CLEAN/independent+sealed"
+              }
+            ]
+          },
+          {
+            "batchId": "F-B31",
+            "admits": [
+              {
+                "agent": "carol",
+                "churnTarget": "f112-linked",
+                "churnIndex": 12,
+                "role": "churn-fast"
+              },
+              {
+                "agent": "dave",
+                "seed": "f160-arwI",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided vs churn)"
+              },
+              {
+                "agent": "alice",
+                "seed": "f160-arwI",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "AUTO-RESOLVE-WIN-indep",
+                "rowTruth": "mergeable",
+                "expect": "CLEAN/independent+sealed"
+              },
+              {
+                "agent": "bob",
+                "seed": "f161-ind",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (filler)"
+              }
+            ]
+          },
+          {
+            "batchId": "F-B32",
+            "admits": [
+              {
+                "agent": "dave",
+                "seed": "f162-arwL",
+                "side": "A",
+                "role": "fast"
+              },
+              {
+                "agent": "alice",
+                "seed": "f162-arwL",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "AUTO-RESOLVE-WIN-linked",
+                "rowTruth": "mergeable",
+                "expect": "CLEAN/linked+sealed"
+              },
+              {
+                "agent": "bob",
+                "seed": "f163-tiR",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided pair A)"
+              },
+              {
+                "agent": "carol",
+                "seed": "f163-tiR",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "TRUE-INTERFERENCE-ripple",
+                "rowTruth": "conflict",
+                "expect": "KNOT"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "sessionId": "F-S9",
+        "batches": [
+          {
+            "batchId": "F-B33",
+            "admits": [
+              {
+                "agent": "alice",
+                "churnTarget": "f132-linked",
+                "churnIndex": 13,
+                "role": "churn-fast"
+              },
+              {
+                "agent": "bob",
+                "seed": "f164-tiR",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided vs churn)"
+              },
+              {
+                "agent": "carol",
+                "seed": "f164-tiR",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "TRUE-INTERFERENCE-ripple",
+                "rowTruth": "conflict",
+                "expect": "KNOT"
+              },
+              {
+                "agent": "dave",
+                "seed": "f165-ind",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (filler)"
+              }
+            ]
+          },
+          {
+            "batchId": "F-B34",
+            "admits": [
+              {
+                "agent": "bob",
+                "seed": "f166-ind",
+                "side": "A",
+                "role": "fast"
+              },
+              {
+                "agent": "carol",
+                "seed": "f166-ind",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent"
+              },
+              {
+                "agent": "dave",
+                "seed": "f167-linked",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided pair A)"
+              },
+              {
+                "agent": "alice",
+                "seed": "f167-linked",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "LINKED-CLEAN",
+                "rowTruth": "mergeable",
+                "expect": "CLEAN/linked"
+              }
+            ]
+          },
+          {
+            "batchId": "F-B35",
+            "admits": [
+              {
+                "agent": "carol",
+                "churnTarget": "f122-negctrl",
+                "churnIndex": 14,
+                "role": "churn-fast"
+              },
+              {
+                "agent": "dave",
+                "seed": "f168-ncr",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided vs churn)"
+              },
+              {
+                "agent": "alice",
+                "seed": "f168-ncr",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "NEGCTRL-RIPPLE",
+                "rowTruth": "mergeable",
+                "expect": "KNOT (over-block — expected FALSE-KNOT)"
+              },
+              {
+                "agent": "bob",
+                "seed": "f169-ind",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (filler)"
+              }
+            ]
+          },
+          {
+            "batchId": "F-B36",
+            "admits": [
+              {
+                "agent": "dave",
+                "seed": "f170-ind",
+                "side": "A",
+                "role": "fast"
+              },
+              {
+                "agent": "alice",
+                "seed": "f170-ind",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent"
+              },
+              {
+                "agent": "bob",
+                "seed": "f171-linked",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided pair A)"
+              },
+              {
+                "agent": "carol",
+                "seed": "f171-linked",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "LINKED-CLEAN",
+                "rowTruth": "mergeable",
+                "expect": "CLEAN/linked"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "sessionId": "F-S10",
+        "batches": [
+          {
+            "batchId": "F-B37",
+            "admits": [
+              {
+                "agent": "alice",
+                "churnTarget": "f167-linked",
+                "churnIndex": 15,
+                "role": "churn-fast"
+              },
+              {
+                "agent": "bob",
+                "seed": "f172-linked",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided vs churn)"
+              },
+              {
+                "agent": "carol",
+                "seed": "f172-linked",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "LINKED-CLEAN",
+                "rowTruth": "mergeable",
+                "expect": "CLEAN/linked"
+              },
+              {
+                "agent": "dave",
+                "seed": "f173-ind",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (filler)"
+              }
+            ]
+          },
+          {
+            "batchId": "F-B38",
+            "admits": [
+              {
+                "agent": "bob",
+                "seed": "f174-tiD",
+                "side": "A",
+                "role": "fast"
+              },
+              {
+                "agent": "carol",
+                "seed": "f174-tiD",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "TRUE-INTERFERENCE-direct",
+                "rowTruth": "conflict",
+                "expect": "KNOT"
+              },
+              {
+                "agent": "dave",
+                "seed": "f175-linked",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided pair A)"
+              },
+              {
+                "agent": "alice",
+                "seed": "f175-linked",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "LINKED-CLEAN",
+                "rowTruth": "mergeable",
+                "expect": "CLEAN/linked"
+              }
+            ]
+          },
+          {
+            "batchId": "F-B39",
+            "admits": [
+              {
+                "agent": "carol",
+                "churnTarget": "f140-tiR",
+                "churnIndex": 16,
+                "role": "churn-fast"
+              },
+              {
+                "agent": "dave",
+                "seed": "f176-tiD",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided vs churn)"
+              },
+              {
+                "agent": "alice",
+                "seed": "f176-tiD",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "TRUE-INTERFERENCE-direct",
+                "rowTruth": "conflict",
+                "expect": "KNOT"
+              },
+              {
+                "agent": "bob",
+                "seed": "f177-ind",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (filler)"
+              }
+            ]
+          },
+          {
+            "batchId": "F-B40",
+            "admits": [
+              {
+                "agent": "dave",
+                "seed": "f178-arwI",
+                "side": "A",
+                "role": "fast"
+              },
+              {
+                "agent": "alice",
+                "seed": "f178-arwI",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "AUTO-RESOLVE-WIN-indep",
+                "rowTruth": "mergeable",
+                "expect": "CLEAN/independent+sealed"
+              },
+              {
+                "agent": "bob",
+                "seed": "f179-arwI",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided pair A)"
+              },
+              {
+                "agent": "carol",
+                "seed": "f179-arwI",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "AUTO-RESOLVE-WIN-indep",
+                "rowTruth": "mergeable",
+                "expect": "CLEAN/independent+sealed"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "sessionId": "F-S11",
+        "batches": [
+          {
+            "batchId": "F-B41",
+            "admits": [
+              {
+                "agent": "alice",
+                "churnTarget": "f137-ind",
+                "churnIndex": 17,
+                "role": "churn-fast"
+              },
+              {
+                "agent": "bob",
+                "seed": "f180-tiD",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided vs churn)"
+              },
+              {
+                "agent": "carol",
+                "seed": "f180-tiD",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "TRUE-INTERFERENCE-direct",
+                "rowTruth": "conflict",
+                "expect": "KNOT"
+              },
+              {
+                "agent": "dave",
+                "seed": "f181-ind",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (filler)"
+              }
+            ]
+          },
+          {
+            "batchId": "F-B42",
+            "admits": [
+              {
+                "agent": "bob",
+                "seed": "f182-tiR",
+                "side": "A",
+                "role": "fast"
+              },
+              {
+                "agent": "carol",
+                "seed": "f182-tiR",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "TRUE-INTERFERENCE-ripple",
+                "rowTruth": "conflict",
+                "expect": "KNOT"
+              },
+              {
+                "agent": "dave",
+                "seed": "f183-arwI",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided pair A)"
+              },
+              {
+                "agent": "alice",
+                "seed": "f183-arwI",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "AUTO-RESOLVE-WIN-indep",
+                "rowTruth": "mergeable",
+                "expect": "CLEAN/independent+sealed"
+              }
+            ]
+          },
+          {
+            "batchId": "F-B43",
+            "admits": [
+              {
+                "agent": "carol",
+                "churnTarget": "f148-arwL",
+                "churnIndex": 18,
+                "role": "churn-fast"
+              },
+              {
+                "agent": "dave",
+                "seed": "f184-arwL",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided vs churn)"
+              },
+              {
+                "agent": "alice",
+                "seed": "f184-arwL",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "AUTO-RESOLVE-WIN-linked",
+                "rowTruth": "mergeable",
+                "expect": "CLEAN/linked+sealed"
+              },
+              {
+                "agent": "bob",
+                "seed": "f185-ind",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (filler)"
+              }
+            ]
+          },
+          {
+            "batchId": "F-B44",
+            "admits": [
+              {
+                "agent": "dave",
+                "seed": "f186-linked",
+                "side": "A",
+                "role": "fast"
+              },
+              {
+                "agent": "alice",
+                "seed": "f186-linked",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "LINKED-CLEAN",
+                "rowTruth": "mergeable",
+                "expect": "CLEAN/linked"
+              },
+              {
+                "agent": "bob",
+                "seed": "f187-tiR",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided pair A)"
+              },
+              {
+                "agent": "carol",
+                "seed": "f187-tiR",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "TRUE-INTERFERENCE-ripple",
+                "rowTruth": "conflict",
+                "expect": "KNOT"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "sessionId": "F-S12",
+        "batches": [
+          {
+            "batchId": "F-B45",
+            "admits": [
+              {
+                "agent": "alice",
+                "churnTarget": "f138-ind",
+                "churnIndex": 19,
+                "role": "churn-fast"
+              },
+              {
+                "agent": "bob",
+                "seed": "f188-arwI",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided vs churn)"
+              },
+              {
+                "agent": "carol",
+                "seed": "f188-arwI",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "AUTO-RESOLVE-WIN-indep",
+                "rowTruth": "mergeable",
+                "expect": "CLEAN/independent+sealed"
+              },
+              {
+                "agent": "dave",
+                "seed": "f189-ind",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (filler)"
+              }
+            ]
+          },
+          {
+            "batchId": "F-B46",
+            "admits": [
+              {
+                "agent": "bob",
+                "seed": "f190-ncr",
+                "side": "A",
+                "role": "fast"
+              },
+              {
+                "agent": "carol",
+                "seed": "f190-ncr",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "NEGCTRL-RIPPLE",
+                "rowTruth": "mergeable",
+                "expect": "KNOT (over-block — expected FALSE-KNOT)"
+              },
+              {
+                "agent": "dave",
+                "seed": "f191-ind",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided pair A)"
+              },
+              {
+                "agent": "alice",
+                "seed": "f191-ind",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent"
+              }
+            ]
+          },
+          {
+            "batchId": "F-B47",
+            "admits": [
+              {
+                "agent": "carol",
+                "churnTarget": "f181-ind",
+                "churnIndex": 20,
+                "role": "churn-fast"
+              },
+              {
+                "agent": "dave",
+                "seed": "f192-tiR",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided vs churn)"
+              },
+              {
+                "agent": "alice",
+                "seed": "f192-tiR",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "TRUE-INTERFERENCE-ripple",
+                "rowTruth": "conflict",
+                "expect": "KNOT"
+              },
+              {
+                "agent": "bob",
+                "seed": "f193-ind",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (filler)"
+              }
+            ]
+          },
+          {
+            "batchId": "F-B48",
+            "admits": [
+              {
+                "agent": "dave",
+                "seed": "f194-arwL",
+                "side": "A",
+                "role": "fast"
+              },
+              {
+                "agent": "alice",
+                "seed": "f194-arwL",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "AUTO-RESOLVE-WIN-linked",
+                "rowTruth": "mergeable",
+                "expect": "CLEAN/linked+sealed"
+              },
+              {
+                "agent": "bob",
+                "seed": "f195-linked",
+                "side": "A",
+                "role": "concurrent",
+                "stratumRow": "INDEPENDENT",
+                "rowTruth": "independent",
+                "expect": "CLEAN/independent (single-sided pair A)"
+              },
+              {
+                "agent": "carol",
+                "seed": "f195-linked",
+                "side": "B",
+                "role": "concurrent",
+                "stratumRow": "LINKED-CLEAN",
+                "rowTruth": "mergeable",
+                "expect": "CLEAN/linked"
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}

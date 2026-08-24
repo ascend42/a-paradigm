@@ -1,0 +1,68 @@
+id: L-2026-07-01-ascend-185215-001
+type: agent-session
+timestamp: '2026-07-01T18:52:15.127Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Warpline M1 design vetted by the team — sound but not as written (mean 0.53); 7 amendments folded in
+summary: |-
+  Hydrated Arky's M1 native-object-store spec to standalone HTML (pandoc) and ran a 6-lens team design review of whether the plan, once built, actually becomes true byte-authoritative source control. Verdict: directionally sound and buildable but NOT as written — mean ~0.53 (vs 0.05 for today's git-riding layer). Seven amendments (A1-A7) captured as §9 of the spec and folded into the M1 build tasks + two new tasks (M2.5 branching, corpus-fidelity). Strongest finding (Jinx+Aegis): it must be a hash-chained GRAPH, not a snapshot bucket — pull parentPickId+treeId into pickId in M1b, not M3.</summary>
+  <parameter name="type">review</parameter>
+  <parameter name="body">USER ASK: hydrate the spec to HTML and have the team vet that the idea of true Warpline source control will actually work.
+
+  HTML: pandoc → packages/warpline/docs/native-object-store-design.html (self-contained, embedded CSS + TOC, dark-mode aware). Rebuilt after the review to include §9.
+
+  PANEL (6 lenses, parallel, each read the spec + real code):
+  - Jinx 0.35 — history is a GRAPH not a tree; restore proves ONE snapshot, not log/blame/diff A..B/branches; parentPickId (the DAG link) punted to M3. `rm -rf .git && restore` is a demo hiding the absence of an object GRAPH.
+  - Cid 0.45 — NO branching model anywhere in M1-M4 (fabric is a single linear selvage; scratch/admit are agent-concurrency, not human branches). The op devs touch most. restore is the right M1 wedge but is not checkout.
+  - Aegis 0.50 — M1 stores bytes with NO anchor: binding.treeId excluded from pickId + mutable via rewriteFabric + M3 sigs unbuilt → in authoritative mode anyone swaps a blob, recomputes treeId, restamps, history still validates. The M1c round-trip is a TAUTOLOGY (self-consistency ≠ authenticity). Also NFC-normalized names collide (hash raw bytes).
+  - Judge 0.60 (3 blocking) — load-bearing byte-source bug: §5 snapshotTree(tmp) captures git-archive-massaged bytes for unchanged paths in a merged tree, violating §1.5's own rule at the durable-merge core. Also gitlink round-trip breaks; worktree symlink/exec via readFile is wrong; cutover doesn't refuse on missing bindings → silent permanent unrecoverability.
+  - Loid 0.60 — design preserves/amplifies the moat; wire #grade to the MergeRecipe NOW; hard-defer M4 remote + packing; ship mirror mode as the product, cutover optional. Est. readiness AFTER M1 as-specced ≈ 0.25.
+  - Bolt 0.70 — snapshot is O(repo) per seal with no delta; make it incremental (store.has + diff parent tree → O(changed)); coexistence gitignored-mirror mitigates the doubling concern.
+
+  Mean ≈ 0.53 (vs the 0.05 readiness gate for today's layer) → the DESIGN is validated as directionally correct and buildable, gated on must-fix items.
+
+  AMENDMENTS (A1-A7, now §9 of the spec + folded into tasks):
+  A1 chain parentPickId+treeId into pickId in M1b not M3 (graph + tamper-evidence) → T-011.
+  A2 build merged treeId compositionally via `git cat-file blob`, never the archive dir → T-011.
+  A3 incremental O(changed) snapshot; MergeRecipe.treeId non-optional → T-010/T-011.
+  A4 cutover refuses on any reachable strand lacking a binding → T-012.
+  A5 corpus fidelity (gitlink sidecar, worktree lstat/readlink, autocrlf scoping, raw-name hashing) → new T-018.
+  A6 add M2.5 branching model + walkable history graph → new T-017.
+  A7 wire #grade↔MergeRecipe now; hard-defer M4 remote+packing; mirror mode is the product → T-015/T-011.
+
+  ANSWER TO THE USER'S QUESTION: yes, the idea works as true source control — but only if it is a hash-chained GRAPH (A1), byte-honest at the merge core (A2), and gains a branching model (A6). Those three are the difference between "snapshot bucket" and "VCS."
+
+  Commits: 541714d7 (HTML v1), bbb9d1c3 (spec §9 + HTML rebuild). Tasks: updated T-010/011/012/015, created T-017 (M2.5 branching), T-018 (corpus fidelity).</parameter>
+  <parameter name="symbols_touched">["#warp-store", "#strand", "#materialize", "#admit", "#warpline-cli", "#grade"]
+files_created:
+  - packages/warpline/docs/native-object-store-design.html
+files_modified:
+  - packages/warpline/docs/native-object-store-design.md
+tags:
+  - warpline
+  - replacement
+  - design-review
+  - team-panel
+  - native-store
+  - history-graph
+  - tamper-evidence
+linked_lore:
+  - L-2026-07-01-ascend-184242-001
+  - L-2026-07-01-ascend-180919-114
+linked_tasks:
+  - T-2026-07-01-007
+  - T-2026-07-01-010
+  - T-2026-07-01-011
+  - T-2026-07-01-012
+  - T-2026-07-01-017
+  - T-2026-07-01-018
+linked_commits:
+  - bbb9d1c3
+  - 541714d7
+confidence: 0.85
+git_context:
+  ref: bbb9d1c3ce1da8b92ae698f651b1a9338243b62b
+  branch: warpline-surfaces
+  dirty: true

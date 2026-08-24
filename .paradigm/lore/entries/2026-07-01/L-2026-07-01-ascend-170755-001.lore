@@ -1,0 +1,51 @@
+id: L-2026-07-01-ascend-170755-001
+type: retro
+timestamp: '2026-07-01T17:07:55.956Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: The Academy arc — gated term, chrome, PARA 901, registry brief (session capstone)
+summary: A long session that carried the Classroom from "engine shipped, never run" to a full, taught, visible system. Ran the first real gated term (3 externals all REFINED), fixed a framework bug found live, built the entire 4-tab Academy GUI, authored PARA 901 via the team, and delivered the nevr.land registry impact brief. Both sequenced-after-MVP strategic tasks closed. Everything pushed to origin/warpline-surfaces alongside another agent's live Warpline write-path work with zero crossover.
+symbols_touched:
+  - '#classroom'
+  - '#ClassroomSection'
+  - '#ClassroomRouter'
+  - '#notebook'
+  - '#nomination-engine'
+  - '#agent-registry'
+  - '#university'
+learnings:
+  - The gate's value on foraged externals is LOCALIZATION — good general best-practices over-generalize against local tooling; refine-as-exception is the engine.
+  - 'The whole Academy reports honest-null for ONE root reason: orchestrationId field-break attribution is thin, so no cert resolves — wiring it is the keystone that unblocks scoreboard, Rap Sheet, cert resolution, and the registry prior.'
+  - 'Registry/moat rule: publish the population PRIOR SHAPE, never the local trust number (TD-2026-06-26-881).'
+  - 'Shared-branch discipline works: fetch-first + explicit path staging = zero crossover with a concurrent agent over ~7 commits.'
+body: |-
+  Chronological arc (all on branch warpline-surfaces, shared with another agent building the Warpline VCS write-path):
+
+  1. GATED TERM (THE STAND). Ran /class on Arky's 3 foraged externals from the first Expedition. All three certified REFINE — true-in-general web claims bounded to our tooling: feature-slice→"except shared-kernel/infra stays layered"; barrels-antipattern (CHALLENGER)→"except our 9 tsup-bundled framework barrels"; project-refs→"except bundler-built pkgs + Vite UIs". Verified every probe against the real tree. Wrote 2 breaking scenarios (SC-feature-slice-vs-shared-kernel, SC-project-refs-vs-tsup-bundling). The gate's value = LOCALIZATION.
+
+  2. FRAMEWORK BUG (7.6.1). The gated promote collided distinct learnings sharing concepts[0] into ONE notebook id (3 certs → 1 surviving entry). Root: addNotebookEntry derived id from concepts[0] with no read-before-write. Fix: topical-slug selection (skip grouping/structured tags) + a collision guard (disambiguate a genuinely-different learning by loreEntryId/snippet, preserving "latest measurement wins"). 3 regression tests; full mcp suite 503 green. Closed T-2026-06-25-012.
+
+  3. ACADEMY CHROME (7.7.0). Turned the single Term Board into a 4-tab section: Term Board · Roster (curriculum traffic-lights) · Rap Sheet (born→applied→broke lineage, new GET /api/classroom/rapsheet joining certs⋈notebook-refs⋈field-failures; breaks:[]="untested not proven") · Agent Locker (notebook vetting Vetted-vs-Backlog, new GET /api/classroom/locker scoped to the project roster). Unified TrustBadge (certified▸provisional▸external). Restarted the suite server to verify live each increment.
+
+  4. PARA 901 UNIVERSITY COURSE (pack 6.6.0). Team-authored: Scholar (cited brief, flagged accuracy risks) → Sheila (6-lesson structure + 24 quiz questions) → builder (transcription) → Loid (loop-accuracy review: ACCURATE, 0 corrections). Course teaches the whole model agent-facing + human-facing. Accuracy guardrails held: context-firewall taught as STRUCTURAL (Loid grepped notebook-loader.ts — no trust!=external read-filter exists), hard-demote as intended-next (visible-quarantine shipped), human-taught spec-only/not-rendered, null scoreboard honest. Updated the course-count canary 11→12. Closed T-2026-06-19-003.
+
+  5. NEVR.LAND REGISTRY IMPACT BRIEF (.paradigm/research/classroom-registry-impact.md). Answered the 4 questions; core ruling TD-2026-06-26-881 (proposed): publish the PRIOR SHAPE (notebook-hash population outcome distribution + sampleSize), NEVER the local repeat-failure-rate; imported prior = start-point not standing; scenario outcomes elsewhere feed only the population prior (anti-laundering); refined entries + scenarios portable, field-failures + cert rows non-portable (the moat); land CalibrationPrior/TrustProfile/ScenarioRef contracts-only, ship no figure until the loop resolves. Closed T-2026-06-19-004.
+
+  INFRA NOTE: a sustained model-classifier outage blocked ALL subagent launches for the back half of the session — so the registry brief's Arky+Loid ADVERSARIAL REVIEW and the next-priority team panel could NOT run. Both are PENDING infra recovery; TD-2026-06-26-881 stays 'proposed' until Loid ratifies.
+
+  KEYSTONE NEXT (synthesized, not team-ratified): wire orchestrationId field-break ATTRIBUTION in paradigm-mcp — today repeat-failure-rate is null because notebook-refs aren't keyed back, so no cert can resolve. This one gap blocks the honest scoreboard showing real data, the Rap Sheet broke-lineage, cert resolution, AND the registry CalibrationPrior. It generates the data the whole honest-null system waits on. Deferred behind it: two-loops hard-demote (gate unproven), cold-start trust ladder T-2026-06-24-017 (needs swarm data).
+
+  SHARED-BRANCH HYGIENE: the other agent pushed the Warpline write-path (fabric/pick/selvage) throughout; every one of my ~7 commits fetched-first and staged classroom/university paths EXPLICITLY (never git add -A), leaving their warpline source + decisions (TD-2026-06-25-564, L-...072923-380) untouched. Zero crossover.
+linked_tasks:
+  - T-2026-06-19-001
+  - T-2026-06-19-003
+  - T-2026-06-19-004
+  - T-2026-06-25-012
+  - T-2026-06-24-017
+confidence: 0.9
+git_context:
+  ref: a7acfac1b09eaf4fea6883221789beb5dda2753d
+  branch: warpline-surfaces
+  dirty: true

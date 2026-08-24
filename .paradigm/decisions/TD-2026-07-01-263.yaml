@@ -1,0 +1,49 @@
+id: TD-2026-07-01-263
+timestamp: '2026-07-01T18:09:19.941Z'
+title: Warpline commits to byte-authoritative REPLACEMENT — build the native store, wedge-first
+decision: >-
+  Commit the Warpline arc to becoming a byte-authoritative standalone VCS (git replacement), NOT just an accountability
+  layer on git. A 6-lens readiness panel (Arky, Aegis, Judge, Jinx, Cid, Loid) unanimously found Warpline is NOT source
+  control today (mean confidence ~0.05): no native byte store, no checkout/restore, merges it performs are
+  irrecoverable, no tamper-evidence, no remote. The founder chose replacement over the team's harden-the-layer
+  recommendation. Build sequence (wedge-first, so recoverability is proven early): M1 native content-addressed blob+tree
+  store + durable merge bytes + `warpline restore <state>` (reconstruct a working tree with git ABSENT — the layer→VCS
+  threshold, and where Warpline already does something git can't: performs the merge but currently throws the bytes
+  away); M2 full checkout/restore across all history + working-tree write path; M3 integrity (hash-chained + signed
+  fabric committing to parent pickId AND real tree/blob OIDs — meaning↔bytes binding; fsck/gc); M4 remote/sync
+  (clone/push/pull/fetch). The corrupt-ledger silent-history-loss bug (store.ts/fabric.ts swallow read errors → reads as
+  empty fabric → FAST_ADMIT over it) is fixed under M1/M3.</parameter>
+
+  <parameter name="rationale">Replacement was the arc's north star from the start (coexistence-with-git was always
+  staging). The founder accepts the multi-quarter cost and the 'worse-than-git-until-parity' interim. The team's verdict
+  is not overridden but REDIRECTED into the build spec: the same five gaps they'd block on become the ordered
+  milestones. Wedge-first sequencing (M1 = merge-durability + restore) de-risks the biggest question — can Warpline own
+  and reproduce bytes — before investing in remote/protocol plumbing, and delivers a recoverability proof that flips the
+  panel's core objection. The differentiated moat (#grade calibratedConfidence) rides along and is preserved, not
+  abandoned.</parameter>
+
+  <parameter name="participants">[{"id": "ascend", "role": "human", "stance": "proposed"}, {"id": "architect", "role":
+  "agent", "stance": "supported"}, {"id": "security", "role": "agent", "stance": "dissented"}, {"id": "reviewer",
+  "role": "agent", "stance": "dissented"}, {"id": "advocate", "role": "agent", "stance": "dissented"}, {"id": "cid",
+  "role": "agent", "stance": "dissented"}, {"id": "forge", "role": "agent", "stance": "dissented"}]
+alternatives_considered:
+  - option: Harden the meaning-layer-on-git (team's unanimous rec)
+    rejected_because: >-
+      Founder's call: replacement is the arc's north star; an accountability overlay, however differentiated, is not the
+      product goal.
+  - option: Prove the byte-wedge first, then decide
+    rejected_because: Founder committed to replacement outright; the wedge is retained as M1 sequencing rather than as a decision gate.
+symbols_affected:
+  - '#warp-store'
+  - '#materialize'
+  - '#strand'
+  - '#seal'
+  - '#admit'
+  - '#warpline-cli'
+status: active
+tags:
+  - warpline
+  - replacement
+  - native-store
+  - readiness-gate
+  - arc-direction

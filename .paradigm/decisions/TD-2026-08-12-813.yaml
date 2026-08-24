@@ -1,0 +1,49 @@
+id: TD-2026-08-12-813
+timestamp: '2026-08-12T04:29:09.827Z'
+title: >-
+  M2.5 sequencing ruled: build all of M2.5 now with the fail-closed merge baked in (Jinx's divergent-branch falsifier as
+  the build gate)
+decision: >-
+  Resolves the open sequencing question in TD-2026-08-12-351. Build the FULL M2.5 branching feature now, with the merge
+  failing closed on the §8 blind classes from day one — Jinx's divergent-branch merge falsifier (a merge over seeded
+  config×code + no-shared-token-invariant breaks must surface a KNOT/hold on both, never a silent independent-CLEAN) is
+  the acceptance gate the build must pass, not a later add. This makes branch-merge SAFER than today's linear admit
+  rather than a multiplier of the blind-class risk. The three prerequisites hold as part of the build: DAG-reachable
+  grading (Loid), narrowed global lock + atomic ledger append (Aegis), protected main + merge-to-protected=HUMAN_ONLY +
+  scratch keyed agentId×branch (Aegis). Build order per Arky's file plan: foundations (HEAD, merge-base/LCA, branch
+  selector, DAG-grading) → branch/switch verbs → the native.ts weaveTips spine refactor → merge with the fail-closed
+  rule + the falsifier test → protected-main + lock-narrowing → graph/diff → skins/descriptors. Each increment verified
+  + committed.
+rationale: >-
+  The founder chose speed-to-full-vision with the safety gate baked in rather than measure-floor-first. This is
+  defensible because the fail-closed-merge rule directly addresses the blind-class danger Jinx raised — a merge that
+  surfaces meaning-blind changes as a hold is strictly safer than the current linear admit that auto-folds them
+  silently. The falsifier is the objective build gate that keeps this from being theater: M2.5 is not done until a
+  divergent branch seeded with the canonical §8 breaks fails closed.
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+  - id: architect
+    role: agent
+    stance: supported
+  - id: advocate
+    role: agent
+    stance: neutral
+symbols_affected:
+  - '#native'
+  - '#admit'
+  - '#refs'
+  - '#grade'
+  - '#merge'
+  - '#branch'
+  - '#warpline-cli'
+status: active
+tags:
+  - warpline
+  - M2.5
+  - branching
+  - fail-closed-merge
+  - falsifier-gate
+  - build
+  - amends-TD-2026-08-12-351

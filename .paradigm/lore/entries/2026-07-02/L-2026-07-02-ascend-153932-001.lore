@@ -1,0 +1,57 @@
+id: L-2026-07-02-ascend-153932-001
+type: milestone
+timestamp: '2026-07-02T15:39:32.580Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Warpline 7-lens panel verdict ratified — replacement demoted to internal thesis, Guard-decider sequence begins
+summary: 'Founder-requested honest full-team assessment of the entire Warpline idea (Arky/Aegis/North/Scout/Mika/Loid/Jinx, orch-mr34gttt-1rg6, panel lore L-2026-07-02-ascend-063903-001). Convergent verdict across 7 independent contexts: the validated artifact is a meaning-level JUDGMENT LAYER for agent swarms (Guard/oracle + admit protocol), not a git replacement — replacement priced 2-4/10 everywhere, judgment layer 6-7/10. Official thesis reworded: "meaning decides, bytes record" (Arky). Founder ratified the revised sequence and execution begins now.'
+symbols_touched:
+  - '#warpline-oracle'
+  - '#essence-hash'
+  - '#ts-lens'
+  - '#fabric'
+  - '#fabric-verify'
+  - '#admit'
+  - '#warpline-cli'
+tags:
+  - arc:warpline
+  - panel
+  - strategy
+  - false-equal
+  - guard
+  - milestone
+body: |-
+  PANEL SCOREBOARD: Arky 4/10 replacement / 7/10 judgment layer; Aegis 7/10 accountability makeable ("the gap is a key, not a hash"); North 2/10 replacement, Guard-alone 4/10 widest-variance; Scout 6/10 market window (12-18mo, judgment layer only), 2/10 replacement; Mika 4→7/10 daily surface; Loid 5/10 composite (merge gate 7, trust/calibration 3); Jinx 3/10 survival-in-any-form.
+
+  NET-NEW CONFIRMED FINDINGS beyond the prior audit:
+  1. FALSE-EQUAL LIVE (Jinx KS1, coordinator-reproduced with own probe run): @UseGuards(AuthGuard) removal, @Get route change, private→public all EQUAL; spec §3 names decorators identity-bearing, implementation never calls ts.getDecorators(); CCNF forEachChild fallback FAILS OPEN. Contaminates the 6.2% base-rate (computed blind to Nest's decorator channel) → T-2026-07-02-008 HIGH.
+  2. seq-in-identity (Arky): v2 pickId folds ledger position → linear chain structurally blocks distributed strand exchange; v3 DAG identity (parents+content, no seq) must be DESIGNED before M2 branching.
+  3. R4 (Aegis): trust ledger (calibratedConfidence/grades.jsonl) is the least-authenticated data in the system yet slated to drive scrutiny routing.
+  4. agentId:null on ALL 20 strands incl. v2 (Loid) — auto-seal hook passes no agentId; Move-3 dogfood via hook path would produce zero attribution data by construction. Trust/scrutiny/endorsement = zero code.
+  5. Dep-bump blindness (Jinx): specifier-as-written means lib@1≡lib@2 forever — nest's "zero false alarms" partly a lens hole, not precision.
+
+  RATIFIED REVISED SEQUENCE (supersedes the checkpoint's A-vs-B fork — neither goes first):
+  (1) GUARD-DECIDER: fix false-EQUAL (decorators+modifiers in CCNF, bump lens version tag, institutional per-TS-release probe suite) ∥ ground-truth the base-rate hits with THREE columns (tsc-on-merged-tree, tests, post-merge fixup churn on flagged symbols) → re-run base rate with fixed lens. This single package resolves North's variance, Jinx's KS1/KS2, Scout's benchmark precondition.
+  (2) One Arky design pass, two artifacts: v1-prefix attestation anchor (Aegis freeze semantics: backfill→attest-once→refuse all v1 mutation) + v3 DAG identity. Design only, before any M2 branching code.
+  (3) Move 3 dogfood per Loid's falsifier: ≥100 concurrent admissions ≥3 real agents, H1 ≥5% meaning-decisive, kill <2% or false-KNOT>true catches or indistinguishable prior classes. Preconditions: thread real agentIds through the hook, land T-030, scope GAP-1. Classroom DECOUPLED. Mika's deep-links + Tapestry-v0 allowed as dogfood support only.
+  (4) If (1) survives: Guard packaging — zero-config GitHub Action, PR-head×base + agent-branch pairs (not historical merges), AgenticFlict benchmark (arXiv 2604.03551: 27.67% conflict rate on 142K agent PRs = free public eval set), published precision/recall. Never utter "provenance"/"accountability" externally until keys exist.
+  (5) FREEZE: design-system breadth, University course, trademark, trust-layer code — until graded-weaves/week > 0 (North's one metric).
+
+  MARKET FRAME (Scout): GitHub Agent HQ absorbing forge-layer provenance NOW (GA Feb 2026); jj+GitButler ($22M a16z) own human DX; mergiraf/tree-sitter commoditize syntax-aware merge at $0; SemanticMerge died as feature-not-company; a16z bet on git-compatible evolution. Window 12-18 months for the judgment layer.
+
+  DISCIPLINE NOTE: Jinx's KS1 was accepted only after coordinator live reproduction (per feedback_recheck_reviewer_findings). Jinx's 80% ground-truth-zeroes-out prior deliberately softened: shipped-in-healthy-repo ≠ never-broke — fixup churn counts as a sellable event (pre-merge detection of a break someone later paid to fix).
+linked_lore:
+  - L-2026-07-02-ascend-063903-001
+linked_tasks:
+  - T-2026-07-02-008
+  - T-2026-07-02-002
+  - T-2026-07-02-003
+  - T-2026-07-02-004
+  - T-2026-07-02-005
+confidence: 0.9
+git_context:
+  ref: 03f31054f759ad3e1f43607e9dae63f26039a7f7
+  branch: warpline-surfaces
+  dirty: true

@@ -11,6 +11,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import * as crypto from 'crypto';
 import * as yaml from 'js-yaml';
 import type { NotebookEntry, NotebookProvenance, NotebookScope } from '../types/notebooks.js';
 
@@ -46,6 +47,61 @@ export function normalizeConcept(s: string): string {
   // Strip a single leading Paradigm sigil
   out = out.replace(/^[#$^!~@&%?]/, '');
   return out.trim().toLowerCase();
+}
+
+/**
+ * Concepts that GROUP or LABEL an entry rather than NAME its topic — poor id-slug
+ * sources. Any concept containing ':' (structured tags like `source:external`,
+ * `tier:a`, `trust:provisional`) plus these bare grouping words are skipped when
+ * choosing the id slug, so two distinct learnings filed under the same grouping
+ * don't both derive `nb-{agent}-{grouping}`. They remain in `concepts` for
+ * retrieval — only the slug source is affected. See T-2026-06-25-012.
+ */
+const NON_TOPICAL_CONCEPTS = new Set([
+  'expedition', 'study-hall', 'challenger', 'external', 'provisional', 'certified', 'transferable',
+]);
+
+/** Lowercase → hyphenated slug, trimmed to 40 chars. */
+function slugify(s: string): string {
+  return (s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
+}
+
+/**
+ * Choose the concept that names the entry's TOPIC for the id slug: the first
+ * normalized concept that is neither a structured tag (contains ':') nor a known
+ * grouping word. Falls back to the first concept, then '' (caller uses context).
+ */
+function pickSlugConcept(concepts: string[]): string {
+  const normalized = (concepts || []).map(normalizeConcept).filter(Boolean);
+  const topical = normalized.find(c => !c.includes(':') && !NON_TOPICAL_CONCEPTS.has(c));
+  return topical || normalized[0] || '';
+}
+
+/**
+ * Are an existing on-disk entry and an incoming one the SAME learning (→ overwrite,
+ * honoring "latest measurement wins") or DISTINCT learnings that merely collided on
+ * the concept slug (→ disambiguate, so neither is silently lost — T-2026-06-25-012)?
+ *
+ * Same iff they share a source lore id OR their snippets are byte-identical.
+ * DISTINCT only when the source AND the content both differ — so re-promoting the
+ * same concept (a new measurement, same or evolved wording from the same source,
+ * or identical content from a different source) still updates ONE entry ("latest
+ * measurement wins"), while two genuinely different claims sharing a slug split.
+ */
+function isSameLearning(
+  existing: Pick<NotebookEntry, 'provenance' | 'snippet'>,
+  incoming: { provenance?: NotebookProvenance; snippet: string },
+): boolean {
+  const a = existing.provenance?.loreEntryId;
+  const b = incoming.provenance?.loreEntryId;
+  if (a && b && a === b) return true;
+  return (existing.snippet || '').trim() === (incoming.snippet || '').trim();
+}
+
+/** Short stable discriminator for a colliding-but-distinct entry's id. */
+function learningDiscriminator(entry: { provenance?: NotebookProvenance; snippet: string }): string {
+  const seed = entry.provenance?.loreEntryId || entry.snippet || '';
+  return crypto.createHash('sha1').update(seed).digest('hex').slice(0, 6);
 }
 
 // ────────────────────────────────────────────────────────
@@ -233,15 +289,38 @@ export function addNotebookEntry(
   const now = new Date().toISOString();
 
   // Generate stable deterministic ID: nb-{agentId}-{slug}
-  // Slug derived from first concept — no timestamps, no random suffixes.
-  // Stable IDs are required for the nevr.land merge-by-id algorithm.
-  const conceptSlug = (entry.concepts[0] || entry.context.split(' ').slice(0, 4).join(' ') || 'entry')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-|-$/g, '')
-    .slice(0, 40);
-  const agentSlug = agentId.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-  const id = `nb-${agentSlug}-${conceptSlug}`;
+  // Slug derived from the TOPICAL concept (skipping grouping/structured tags) —
+  // no timestamps, no random suffixes. Stable IDs are required for the nevr.land
+  // merge-by-id algorithm. See pickSlugConcept / T-2026-06-25-012.
+  const conceptSlug =
+    slugify(pickSlugConcept(entry.concepts) || entry.context.split(' ').slice(0, 4).join(' ')) || 'entry';
+  const agentSlug = slugify(agentId);
+  const baseId = `nb-${agentSlug}-${conceptSlug}`;
+
+  const dir = scope === 'global'
+    ? path.join(GLOBAL_NOTEBOOKS_DIR, agentId)
+    : path.join(rootDir || process.cwd(), PROJECT_NOTEBOOKS_DIR, agentId);
+
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+
+  // Collision guard (T-2026-06-25-012): the base id is concept-derived, so two
+  // DISTINCT learnings sharing a slug would silently overwrite one another (a whole
+  // class of foraged claims tagged identically e.g. [expedition, typescript,…]).
+  // If the base id is already held by a DIFFERENT learning, append a stable
+  // content discriminator so neither is lost. Re-promoting the SAME learning keeps
+  // the base id (no churn → merge-by-id stays stable; "latest measurement wins").
+  let id = baseId;
+  const basePath = path.join(dir, `${baseId}${NOTEBOOK_EXT}`);
+  if (fs.existsSync(basePath)) {
+    try {
+      const existing = yaml.load(fs.readFileSync(basePath, 'utf-8')) as NotebookEntry | undefined;
+      if (existing && !isSameLearning(existing, entry)) {
+        id = `${baseId}-${learningDiscriminator(entry)}`;
+      }
+    } catch { /* unreadable existing entry — fall through and overwrite the base id */ }
+  }
 
   // Auto-classify scope if not explicitly set
   const resolvedScope: NotebookScope = entry.scope ?? classifyNotebookScope({
@@ -273,14 +352,6 @@ export function addNotebookEntry(
     created: now,
     updated: now,
   };
-
-  const dir = scope === 'global'
-    ? path.join(GLOBAL_NOTEBOOKS_DIR, agentId)
-    : path.join(rootDir || process.cwd(), PROJECT_NOTEBOOKS_DIR, agentId);
-
-  if (!fs.existsSync(dir)) {
-    fs.mkdirSync(dir, { recursive: true });
-  }
 
   const fileName = `${id}${NOTEBOOK_EXT}`;
   const filePath = path.join(dir, fileName);

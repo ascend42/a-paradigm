@@ -1,0 +1,75 @@
+id: TD-2026-07-01-721
+timestamp: '2026-07-01T21:09:55.670Z'
+title: Fabric-schema-v2 migration lands BEFORE M1c — the keystone reorder (post 5-lens audit)
+decision: >-
+  Reverse the checkpoint sequencing: the fabric-schema-v2 migration becomes the immediate next milestone (call it M1.9)
+  and HARD-GATES M1c restore/cutover. Schema-v2 = one identity-contract change folding parentPickId + binding.treeId + a
+  second merge-parent + authoredBy:{agentId} into computePickId (pickId v1→v2), plus a `fabric verify` reader (recompute
+  every pickId, walk the parent chain, re-derive binding.treeId against the object store), plus a rewriteFabric
+  invariant (assert per-strand pickId equality — only excluded fields may move), plus restore path-hardening (reject
+  `..`/`/`/leading-slash/`.git`/`.warpline` tree-entry names + refuse symlink-follow). The confirmed pick fail-open bug
+  (pick.ts:97 seals an empty-delta strand over an unloadable parent) and the H1 multi-agent guard (admit.ts:256 refuses
+  CLEAN over a merged tip despite M1b's MergeRecipe) ride along as they touch the same files. Replacement stays the
+  public headline / north star — the audit reorders the build, not the mission.</decision>
+
+  <parameter name="rationale">A read-only 5-lens panel (Arky/arch, Judge/review, Aegis/security, North/product,
+  Loid/agent-moat) converged from three independent directions on one keystone: the same schema change closes
+  tamper-evidence (Aegis C1/C2 — the fabric is append-only by convention only; binding excluded from pickId allows
+  bait-and-switch bytes under a sealed meaning), fixes compounding identity-DAG debt (Arky — parentStateId not pickId,
+  single-parent merges can't express two histories), starts the calibration moat (Loid — agentId is never recorded; all
+  14 live strands attribute to 'ascend'; pickId immutability makes it unfixable later), and unblocks branching + M2's
+  log/diff/checkout which need a walkable graph anyway. The cost compounds with every strand sealed and pickId
+  immutability makes deferral permanent. Aegis is explicit that M1c cutover DELETES the shadow-gitOid check that
+  currently detects C2, and M1c ships restoreTree — an exploit-execution primitive (CVE-2021-21300 class) — so integrity
+  primitives must precede the store becoming authoritative. Founder chose this over staying the course,
+  fixing-bugs-first, and pivoting to the Guard wedge; and chose to keep replacement as the headline.
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+  - id: architect
+    role: agent
+    stance: supported
+  - id: security
+    role: agent
+    stance: supported
+  - id: reviewer
+    role: agent
+    stance: supported
+  - id: forge
+    role: agent
+    stance: supported
+  - id: advocate
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: Stay the course — ship M1c restore next, A1 later
+    rejected_because: >-
+      Accepts a growing unauthenticatable + non-well-formed strand prefix that pickId immutability makes permanent;
+      cutover deletes the last detection mechanism (shadow gitOid) at the moment the store becomes load-bearing.
+  - option: Fix the confirmed bugs first, defer schema
+    rejected_because: >-
+      Good hygiene but doesn't stop the identity-debt clock; the schema change is the compounding-cost item, so it
+      leads. Bugs fold into it since they share files.
+  - option: Pivot to the Guard wedge, pause replacement
+    rejected_because: >-
+      Founder kept replacement as the headline; the Guard/mirror-mode packaging is retained as a parallel go-to-market
+      option, not a redirection of the build.
+symbols_affected:
+  - '#strand'
+  - '#pick'
+  - '#seal'
+  - '#admit'
+  - '#fabric'
+  - '#warp-store'
+  - '#materialize'
+  - '#grade'
+status: active
+tags:
+  - warpline
+  - replacement
+  - fabric-schema-v2
+  - A1
+  - sequencing
+  - identity-contract
+  - audit-driven

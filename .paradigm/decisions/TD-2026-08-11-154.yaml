@@ -1,0 +1,46 @@
+id: TD-2026-08-11-154
+timestamp: '2026-08-11T23:43:54.582Z'
+title: Expo field-test pre-registration LOCKED — frozen 2026-08-11 after two adversarial verification rounds
+decision: >-
+  The Warpline Expo field-test pre-registration (.paradigm/research/warpline-native-first/expo-field-test-protocol.md)
+  is LOCKED and frozen as of 2026-08-11, ahead of the run (the doc's own 'locks at first admission' was the floor; the
+  founder locked it earlier). No further edits are permitted — any change now requires a NEW pre-registration id, not an
+  amendment. The locked version incorporates amendment log A1–A15: the standalone cold LLM judge (Opus 4.5, N=3),
+  pre-fix-both-error-classes framing, and the six round-2 verification closes (anti-laundering for the canonical class,
+  (B)/(C) seeded classifier calibration, split false-CLEAN bounds, externally-witnessed ledger,
+  indeterminate-as-directional-bias, and agents pinned to Opus 5). Judge=Opus 4.5, agents=Opus 5 (same Opus line,
+  different version → §9 ≠-branch caveat at its stronger end).
+rationale: >-
+  Two adversarial verification rounds hardened the pre-registration: round 1 found three blockers (the judge could only
+  ratify not falsify; uncalibrated (B)/(C) classifier; conflated false-CLEAN denominators), round 2 closed all six
+  findings. The founder judged the rigor sufficient and locked ahead of the run rather than deferring the lock to first
+  admission, so the frozen instrument is fixed before any build or run work proceeds — the whole point of
+  pre-registration. A final independent verification of the round-2 closes was offered and the founder elected to lock
+  now and continue.
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+  - id: architect
+    role: agent
+    stance: supported
+  - id: advocate
+    role: agent
+    stance: supported
+  - id: security
+    role: agent
+    stance: supported
+symbols_affected:
+  - '#oracle'
+  - '#knot-payload'
+  - '#hazard'
+  - '#envelope'
+  - '#admit'
+status: active
+tags:
+  - warpline
+  - field-test
+  - pre-registration
+  - locked
+  - llm-judge
+  - audit-2026-08-11

@@ -1,0 +1,110 @@
+id: TD-2026-07-21-766
+timestamp: '2026-07-21T14:44:44.357Z'
+title: >-
+  FOUNDER CONSTRAINT: universal cold-agent usability — any provider's agent must use Warpline as easily as git, via
+  runtime self-description (F4 pre-registered)
+decision: >-
+  All future AI agents, of ALL providers and makes, must be able to use Warpline's CLI/MCP with the same ease they use
+  git today. This is a founder-level product constraint on #warpline-cli, #warplined, and the agent-facing contract —
+  not an aspiration.
+
+
+  Pre-registered as falsifier F4 (cold-agent legibility) in roadmap-native-first.md: an agent with no Warpline in its
+  weights and no Warpline docs in context completes propose → admit → KNOT → resolve using ONLY tool descriptions and
+  returned error/refusal objects. Pass = ≥80% completion over ≥10 cold runs spanning ≥2 model families (one non-Claude),
+  median ≤2 wasted turns per refusal recovery, zero runs needing a human hint. Must pass on the MCP skin AND the CLI
+  skin independently.
+
+
+  Two standing consequences:
+
+  1. A Warpline MCP server over the existing 12 daemon verbs is now REQUIRED, and is sequenced AHEAD of any GUI-shaped
+  work. Verified 2026-07-21: zero warpline references exist in packages/paradigm-mcp/src.
+
+  2. A structured, versioned, addressable REFUSAL object is REQUIRED — same rigor as knotPayload:v1, carrying the
+  verdict row, a stable error code, a retriability class, and a RESOLVABLE payload pointer, returned identically across
+  CLI --json, daemon, and MCP. Verified defects blocking this: cli.ts:1801 fail() collapses every error to exit 1;
+  admit.ts:718 returns a knotPayloadId that the shadow path never persists, so `warpline knot show` cannot resolve it;
+  hook.ts:44 backgrounds, silences and `|| true`s the live gate so no agent ever observes the refusal it is subject to.
+
+
+  Standing hard stop added: no surface work begins while F4 is unmeasured, because the GUI and every future agent
+  consume the same refusal object.
+
+
+  ── AMENDED 2026-07-28 by TD-2026-07-28-168 (FG-1 ratification) ──
+
+  The clause above reading "completes propose → admit → KNOT → resolve" is SUPERSEDED for the agent-class leg. `resolve`
+  is HUMAN_ONLY (protocol.ts:112) and the KNOT ladder orders escalation instead (admit.ts:336-353), so as written the
+  falsifier demanded the one act the security law forbids. Agent-class F4 completion is now, computed from f4Trace:v1
+  rows alone: (1) reaches a KNOT verdict, (2) hydrates refusal.pointers.knotPayloadId via knot.show, (3) zero W3 marks
+  in that episode. The resolve leg runs as a scripted human-token harness leg and scores nothing. All other terms of
+  this constraint — ≥80% over ≥10 cold runs, ≥2 model families with one non-Claude, median ≤2 wasted turns, zero hints,
+  BOTH skins independently, and the standing no-surface-work-while-F4-unmeasured hard stop — are UNCHANGED. See
+  TD-2026-07-28-168 for the recorded consequence (git resolution parity is deliberately out of scope, not conceded).
+rationale: >-
+  The mechanism that makes git easy for agents is MEMORIZATION, not design — fifteen years of public corpus put git in
+  every model's weights. Warpline cannot obtain ease that way, and the ratified moat-silent (TD-2026-07-16-426) plus
+  no-publishing posture means it never will: no model will ever be trained on Warpline. Therefore every agent encounter
+  with Warpline is permanently a COLD encounter, and runtime self-description is the only available mechanism. This
+  inverts the usual DX priority — structured refusals and MCP tool schemas stop being polish and become the load-bearing
+  carrier of the constraint.
+
+
+  The constraint is made falsifiable rather than aspirational because the team's standing discipline is pre-registered
+  falsifiers (F1/F2/F3, organic K3), and because value statements without thresholds erode silently. Cross-model testing
+  is mandatory: a surface legible only to Claude is not the property the founder asked for.
+
+
+  Sequencing consequence is real but small: MCP + the refusal object are agent-contract work, not GUI work, so they do
+  not conflict with the founder's ratified CLI-before-GUI hold — they precede it in the same lane. Panel (2026-07-21, 8
+  specialists) converged independently on the refusal object as the single missing piece; Helix identified MCP absence
+  as the fastest agent win; Arky independently ruled that the GUI and agents consume the same contract, so the contract
+  must be fixed first regardless of GUI timing.
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+  - id: dx
+    role: agent
+    stance: supported
+  - id: architect
+    role: agent
+    stance: supported
+  - id: advocate
+    role: agent
+    stance: supported
+  - id: qa
+    role: agent
+    stance: supported
+  - id: product
+    role: agent
+    stance: supported
+  - id: researcher
+    role: agent
+    stance: neutral
+  - id: designer
+    role: agent
+    stance: supported
+  - id: forge
+    role: agent
+    stance: supported
+symbols_affected:
+  - '#warpline-cli'
+  - '#warplined'
+  - '#admit'
+  - '#pick'
+  - '#knot-payload'
+  - '#shadow-gate'
+  - '#claim'
+status: active
+tags:
+  - warpline
+  - native-first
+  - founder-constraint
+  - F4
+  - cold-agent
+  - mcp
+  - refusal-object
+  - agent-first
+  - roadmap-2026H2

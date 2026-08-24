@@ -1,0 +1,50 @@
+id: L-2026-07-02-ascend-011046-001
+type: milestone
+timestamp: '2026-07-02T01:10:46.772Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Warpline M2 trust-floor bundle — closes v2-chain findings; v1 prefix still forgeable (corrected)
+summary: 'CORRECTION to the initial "byte-authenticated end to end" claim: an adversarial Judge re-review + coordinator live exploits found the v1 half of the ledger is still forgeable. Built + verified the 4-item bundle (verified reads, merge-recipe presence check, grandfather body-pinning, lock owner-token + rewrite CAS), 263/263 tests, and it DOES defeat single-artifact hash-preserving tamper of v2 strands. But it does NOT authenticate v1 strand bindings (HIGH-A, T-2026-07-02-003: injected binding onto v1 seq 8 → verify exit 0 → restore materialized attacker files — REPRODUCED) nor make the legacy manifest tamper-proof (HIGH-B, T-2026-07-02-004: strand+manifest co-tamper of grandfathered seq 1 → verify "all intact" exit 0 — REPRODUCED). Root cause: the v1 prefix is anchored only at its tip (first v2 parentPickId); interior v1 bodies+bindings are malleable. Honest claim: v2 chain trustworthy; v1 prefix tamper-evident ONLY against single-file hash-preserving tamper.'
+symbols_touched:
+  - '#fabric-verify'
+  - '#warp-store'
+  - '#fabric'
+  - '#fabric-lock'
+  - '#pick'
+  - '#admit'
+  - '#restore'
+verification:
+  status: partial
+  details:
+    tests: 263/263
+    single_artifact_tamper: caught (verify exit 1 + restore fail-closed)
+    v1_binding_injection: NOT caught — HIGH-A reproduced live
+    grandfather_co_tamper: NOT caught — HIGH-B reproduced live
+    v2_chain: sound
+tags:
+  - warpline
+  - trust-floor
+  - security
+  - arc:warpline
+  - M2
+body: 'Closes audit findings HIGH-2 (grandfather allowlist), HIGH-3/T-031 (ignore semantics), MEDIUM-1 (byte authenticity on read), MEDIUM-2 (rewrite guard bypass), and Judge''s net-new lock-ownership + CAS-less-rewrite finding. HIGH-1 (unsigned attribution) stays deferred to M3 by design — the docs (Move 0) no longer overclaim it. Commits on warpline-surfaces (pushed, 095256a1): 69652088 (item1) 1910080a (item2) 355b5343 (item3) 28687f0c (item4). Built by a worktree builder off warpline-surfaces; the 4 substantive commits were cherry-picked (dropping the builder''s .paradigm history-chore commit) and re-verified in the main checkout — 263/263, not trusting the subagent''s green. The OQ-D resolution + §7 legacy supersession are a dated amendment in docs/specs/warpline-fabric-schema-v2.md. Design calls: verified reads always-on (no opt-in); retired bare-string legacy manifest fails closed (regenerate error, no auto-upgrade — an unpinned grandfather clause is the hole); .warplineignore replaces rather than merges .gitignore; ignore v1 scope = root-level only. Follow-ups filed: T-2026-07-02-001 (freeze a hermetic fixture fabric — 2 migration tests read the live gitignored .warpline), T-2026-07-02-002 (Guard precision — ground-truth the 17 base-rate hits + rank direct-contested above closure ripple). This clears the PR-B precondition (verify now re-derives merge recipes) but PR-B stays evidence-gated on dogfooding actually hitting the H1 guard.'
+linked_tasks:
+  - T-2026-07-01-031
+  - T-2026-07-02-001
+  - T-2026-07-02-002
+linked_commits:
+  - '69652088'
+  - 1910080a
+  - 355b5343
+  - 28687f0c
+  - 095256a1
+git_context:
+  ref: 095256a14d7459ea04cc766639155afe2c252e70
+  branch: warpline-surfaces
+  dirty: true
+learnings:
+  - A tamper demo that only flips one artifact's bytes proves fail-closed against a LAZY attacker, not a coherent one — the real threat edits the strand AND the thing that pins it (manifest, or an excluded binding). Always exploit the co-tamper.
+  - Excluding a field from the identity hash (binding, merge inputs) for legitimate mutability reasons means it needs a SEPARATE authenticated anchor, or it is forgeable — 'excluded from pickId' silently means 'unauthenticated' unless something else pins it.
+  - The v1/v2 boundary anchors only the v1 TIP; a prefix of self-hashing strands is content-forgeable, not merely order-forgeable — the header caveat understated the real exposure.

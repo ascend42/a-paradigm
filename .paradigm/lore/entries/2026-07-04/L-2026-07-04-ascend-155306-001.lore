@@ -1,0 +1,55 @@
+id: L-2026-07-04-ascend-155306-001
+type: milestone
+timestamp: '2026-07-04T15:53:06.842Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Move-3 dogfood PILOT PASSED — the multi-agent merge wedge reproduces on real TS (2 silent-mismerge catches); full run gated on tree-scoping
+summary: 'The #1 wedge got its first field evidence. Loid''s falsifier harness built + pilot run (commit 602a92d2, throwaway fabric, live .warpline coordinator-verified byte-untouched: selvage state:v0:…3da228c, 28 strands, verify exit 0). Pilot: 8 concurrent non-FAST symbol-bearing admissions, 2 MEANING-DECISIVE silent-mismerge catches, 0 FALSE-KNOT, 0 FALSE-CLEAN, negative-control correctly agree-clean, H1 relaxation exercised twice, all 10 machinery checks green. Decisive rows read from raw adjudication.jsonl (not the agent''s summary): s6/s7 TRUE-INTERFERENCE — git merge-tree CLEAN but the merged result FAILS tsc (TS2554), Warpline KNOTs → blocked-for-human. The manufactured agent-swarm condition git history can''t supply (0/18 organic) produces exactly the meaning-decisive catch the arc is built on.'
+symbols_touched:
+  - '#admit'
+  - '#warpline-oracle'
+  - '#scratch'
+  - '#grade'
+  - '#restore'
+  - '#absorb'
+verification:
+  status: pass
+  details:
+    pilot: 8 concurrent admissions, 2 meaning-decisive, 0 false-knot, 0 false-clean
+    isolation: live .warpline byte-untouched, verify exit 0 (coordinator-verified)
+    decisive-rows: s6/s7 read from raw adjudication.jsonl — git clean, git-result fails tsc, warpline KNOT
+tags:
+  - arc:warpline
+  - dogfood
+  - move-3
+  - wedge
+  - milestone
+  - experiment
+body: |-
+  STATUS: this is a MACHINERY proof + existence proof, NOT the statistical H1 result. The pilot proves (a) the harness works end-to-end (admit --json shape, git counterfactual, git-absent restore, the external tsc/tests/ground-truth scoring table all fire correctly), and (b) the wedge phenomenon reproduces on real TypeScript under multi-agent concurrency. The full ≥100-admission statistical run (meaning-decisive rate, linked−independent prior signal ≥15pts, KILL thresholds) is NOT yet run.
+
+  THREE FINDINGS SURFACED BY DOGFOODING (the dogfood earning its keep):
+  1. ENGINE BUG (T-2026-07-04-004, framework-bug bar cleared): admit() NOOP uses stateId-equality (admit.ts:95) — essence-SET-deduped, blind to a symbol-level change when before/after essences exist elsewhere; pick.ts:111 already uses diff-based detection, admit never adopted it. Reproduced live. A wrongly-NOOP'd admission is an invisible miss → should-fix before the full run.
+  2. FULL-RUN BLOCKER (T-2026-07-04-003): whole-ref-tree snapshot+absorb per admit hung >2min on the real monorepo. This IS Arky's O(repo)-per-pick scale finding from the 7-lens panel, hit in practice. Needs changed-paths-only tree-scoping before the ≥100-admission run.
+  3. Cross-file #code call edges don't resolve in absorb (no tsconfig in archived tree) → wedge constructions intra-file for now.
+  Also: pilot catches are all silent-mismerge (the safety half); add an auto-resolve-win seed (git-textual-conflict that meaning-commutes — the throughput half) before scaling.
+
+  NEXT (full-run path): tree-scoping (T-003, blocker) → admit NOOP fix (T-004, should-fix) → auto-resolve-win seed → full ≥100-admission run to Loid's thresholds. Reproduce pilot: node swarm.mjs && node adjudicate.mjs && node aggregate-dogfood.mjs in the harness dir. STILL PENDING FOUNDER: v3 §9 sign-off (gates v3 build, not the dogfood).
+
+  WEDGE STATUS UPGRADE: was "zero field data, #1 wedge unproven" (all 7 panelists). Now: existence proven on real TS; rate/prior-signal still to be measured. Loid's composite 5/10 (merge-gate 7, trust 3) — the merge-gate half just got its first evidence in the predicted direction.
+linked_lore:
+  - L-2026-07-04-004205-001
+linked_tasks:
+  - T-2026-07-04-002
+  - T-2026-07-04-003
+  - T-2026-07-04-004
+linked_commits:
+  - 602a92d2
+  - da1012c2
+confidence: 0.85
+git_context:
+  ref: 602a92d2de2caea78c644537bcf4a45fbadcb38b
+  branch: warpline-surfaces
+  dirty: true

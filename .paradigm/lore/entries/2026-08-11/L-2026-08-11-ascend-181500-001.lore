@@ -1,0 +1,79 @@
+id: L-2026-08-11-ascend-181500-001
+type: insight
+timestamp: '2026-08-11T18:15:00.458Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'The Warpline decision landscape at flight-readiness: what is actually the founder''s to call, and what only looks like consensus'
+summary: 'Enumerated every open founder decision and every standing recommendation across the soundness audit, the F4 programme, the replacement epic and this session''s measurements — as preparation for a decision session. Two structural findings: there is NO live team consensus (the 200-row debate record is entirely auto-generated type:"complementary" nomination overlaps with zero conflicting positions, so it carries no signal), and one previously-listed founder call was resolved rather than decided, without moving the FG-3 freeze. The top-line decision changed shape: the contested-denominator question is no longer blocked on whether the mechanism works, because it now demonstrably does.'
+symbols_touched:
+  - '#admit'
+  - '#oracle'
+  - '#grade'
+  - '#warp-store'
+  - '#f4-classifier'
+  - '#warpline-cli'
+  - '#weave'
+  - '#essence-hash'
+  - '#ts-lens'
+learnings:
+  - '"THE TEAM AGREES" WAS NEVER MEASURED HERE — the 200-row debate ledger is 200/200 type:"complementary", every row auto-generated from nomination overlap ("Multiple agents responded to event ev-…"), with no stance field and no conflicting position ever recorded. It is not a consensus instrument; it is a log of co-occurrence. The founder had already rejected "the team believes" as a gate on principle, and the data independently shows there was no signal there to reject. Any future claim of team agreement needs an instrument that can record DISAGREEMENT, or it measures nothing.'
+  - 'A DECISION CAN BE DISSOLVED INSTEAD OF MADE. T-2026-07-21-005 listed the CLI/daemon `--claim` asymmetry as a founder call because closing it would "move descriptorsId and reset the FG-3 denominator". It did not: descriptorsId hashes VERB_DESCRIPTORS + NEXT_LEGAL_VERBS + the tool-name map, all in daemon/descriptors.ts, and the fix was CLI prose and option wiring only. Before scheduling a decision, check whether its stated cost is actually incurred — the cost was inherited, not verified.'
+  - 'AN ''UNMEASURED'' THAT TRACES TO ONE ROOT IS ONE DECISION, NOT MANY. Every falsifier on the standing report reads unmeasured, and all of them reduce to the same fact: this repo has a single writer, so it structurally cannot produce a contested verdict. The apparent breadth of open questions was one decision (where the denominator comes from) wearing several costumes.'
+  - PROVING THE MECHANISM CHANGES WHICH DECISION IS TOP-LINE. Before the dress rehearsal, 'where does the denominator come from' competed with 'does the contested path even work'. The rehearsal answered the second, which promoted the first from one-of-many to the item everything else waits on. Sequencing decisions is downstream of removing uncertainty, not parallel to it.
+tags:
+  - warpline
+  - decisions
+  - founder-gated
+  - f4
+  - field-test
+  - consensus-audit
+  - decision-landscape
+body: |-
+  PREPARED FOR A DECISION SESSION. This entry is the landscape as measured on 2026-08-11, so the session itself has a durable starting point and the decisions can be recorded against it.
+
+  FOUNDER DECISIONS, GROUPED BY WHAT THEY GATE.
+
+  Gating the field test:
+   1. WHERE THE FIRST CONTESTED DENOMINATOR COMES FROM. Newly sharp. The mechanism is proven end-to-end (genesis -> fork x2 -> propose x2 -> FAST_ADMIT -> KNOT -> resolve, plus byte-identical restore at depth 41), so the blocker is no longer capability — it is that this repo has ONE writer and a serial human cannot manufacture concurrency. Candidate sources: the Expo field-test project, a driven swarm, or a synthetic harness.
+   2. REPLICATION / states/. One fabric, one disk, one manual backup verb; a lost state file is a permanent fail-closed for that base and nothing re-derives it. The audit named this the top-line risk and it has been open since P2.
+
+  Gating the F4 measurement (all from T-2026-07-21-005):
+   3. FG-2 — the truncated-descriptions arm, and whether the >=80% bar applies to it or it is observational.
+   4. FG-3 — the descriptor freeze + denominator-reset rule; the task's own instruction is to do a descriptor REVIEW PASS BEFORE pinning, because every later fix is expensive.
+   5. FG-4 — stratified KNOT seed corpus: strata are named, COUNTS are undecided.
+   6. The stopping rule and n — without it, optional stopping voids the number however well the instrument is frozen.
+   7. Both-skins ambiguity — must the non-Claude family appear on both arms? A day of harness work plus procurement rides on one sentence.
+   8. The two remaining CLI-arm asymmetries (daemon `status`, `shadow.tail` — neither has a CLI equivalent). Closing either DOES move descriptorsId. The third listed asymmetry (`propose --claim`) was resolved 2026-08-11 without moving the freeze.
+
+  Product shape:
+   9. LAYER OR REPLACEMENT. T-2026-07-01-007 is an epic to make Warpline byte-authoritative; the team's own readiness panel scored ~0.05. Loid's A7 review recommends hard-deferring remote/sync and shipping MIRROR MODE as the product.
+   10. MOAT-SILENCE ITSELF. The moat memo locates the moat in per-codebase calibration, which a specification cannot leak — so silence may be buying nothing while costing permanently-cold agents, an entire falsifier programme, and a procurement problem.
+   11. WHETHER AGENTS CAN REACH THE GATED PATH — three recorded options: expose the base-minting verb; accept that the gate guards the human door and source the agent denominator from the native write path; or move the gate. Adding a verb changes what the cold-agent test measures.
+
+  Safety, before any swarm:
+   12. TIER-0 INVARIANT CONFLICTS (T-2026-06-24-015) — disjoint-but-jointly-wrong changes auto-weave at Tier 0 with zero review; "no graph knot" is being trusted as "safe".
+   13. THE OVER-BLOCK CEILING (T-2026-07-15-008) — measured 3/3 on Move-3: commuting edits contend the same caller essence and produce a false KNOT. Options: essence granularity, BRUSH demotion, or ranking-side mitigation.
+   14. INJECTION DEFENCE SCOPE (T-2026-06-24-013) — the envelope shipped; the acceptance criterion is a BLIND, externally-authored red-team corpus scored by someone who did not write the payloads.
+
+  STANDING RECOMMENDATIONS (owners and evidence exist; these need scheduling, not adjudication): use alongside git never instead until P0 closes (audit); hard-defer M4 remote/sync and ship mirror mode (Loid A7); branching model + walkable history graph (Cid + Jinx, T-2026-07-01-017); relax the H1 guard so multi-agent work does not serialize to one merge per generation at N>=3 (T-2026-07-01-030 — the stated blocker, MergeRecipe, already shipped); lift top-level const units in the TS lens (T-2026-07-15-005 — false-equal shaped, and an Expo app is full of exported consts); re-run the six auditors' original demonstrations against HEAD (nothing is verified closed, only mapped to commits).
+
+  MY RANKING, RECORDED SO IT CAN BE CHECKED LATER: the denominator decision should not wait, because every "unmeasured" on the standing report reduces to it. T-2026-07-01-030 (the H1 guard) is the one to pull forward before the field test, because at N>=3 the swarm would serialize and the run would measure a known bottleneck instead of the product.
+linked_lore:
+  - L-2026-08-11-ascend-080821-001
+  - L-2026-08-11-ascend-063622-001
+linked_tasks:
+  - T-2026-07-21-005
+  - T-2026-07-01-030
+  - T-2026-07-15-008
+  - T-2026-06-24-015
+  - T-2026-06-24-013
+  - T-2026-07-01-007
+  - T-2026-07-15-005
+  - T-2026-07-01-017
+confidence: 0.88
+git_context:
+  ref: 4ce423e82270318698e5b80fe351898132e61ced
+  branch: warpline-surfaces
+  dirty: true

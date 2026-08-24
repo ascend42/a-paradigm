@@ -1,0 +1,45 @@
+id: TD-2026-08-11-084
+timestamp: '2026-08-11T22:46:51.117Z'
+title: >-
+  Amend TD-913: M3 is NOT a pre-run gate — the MCP-only procedural boundary is adequate for the single-author field
+  test; M3 stays scheduled for the product claim
+decision: >-
+  Amends ruling (3) of TD-2026-08-11-913. M3 integrity (hash-chained + signed strands, T-2026-07-01-014) is NO LONGER
+  required before the Expo field test. The field test runs on the MCP-only procedural security boundary (Aegis's
+  assessment: adequate for a single author running their own agents, verified as a setup precondition per protocol
+  Section 6 habit i). M3 remains scheduled — required before any external, adversarial, or multi-agent-untrusted use
+  (the product claim), not before this run. All other TD-913 rulings stand: protocol accepted/locked with the LLM-judge
+  as committed rater, both known error classes (Tier-0 false-CLEAN T-2026-06-24-015, over-block false-KNOT
+  T-2026-07-15-008) pre-fixed before the run, cold-model runner deferred.
+rationale: >-
+  The founder confirmed the system should be completely adequate for the field test's actual threat model — a single
+  author running their own agents. M3's signing hardens against the adversarial multi-agent world (the product claim),
+  which this run explicitly is not (TD-838 scope: prove the value prop on Paradigm+Claude, mirror mode, own agents).
+  Gating the run behind milestone-scale security work Aegis already judged unnecessary for this threat model traded
+  weeks of schedule for protection the run does not need. Removing M3 from the pre-run path leaves the critical path as:
+  LLM-judge → the two error pre-fixes → smoke oracle + Expo backlog → lock — all weeks-scale, not milestone-scale.
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+  - id: security
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: Keep M3 as a hard pre-run gate (TD-913 as originally recorded)
+    rejected_because: >-
+      M3's threat model is adversarial multi-agent use; the field test is single-author own-agents, for which Aegis
+      judged the procedural boundary adequate
+symbols_affected:
+  - '#strand'
+  - '#seal'
+  - '#admit'
+status: active
+tags:
+  - warpline
+  - field-test
+  - pre-run-gate
+  - M3
+  - security
+  - amends-TD-2026-08-11-913
+  - audit-2026-08-11

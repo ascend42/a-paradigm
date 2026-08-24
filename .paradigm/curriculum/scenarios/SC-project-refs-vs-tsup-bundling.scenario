@@ -1,0 +1,13 @@
+id: SC-project-refs-vs-tsup-bundling
+scenario: 'The foraged claim "project references + composite builds should REPLACE path aliases in TS monorepos" (they give incremental-rebuild cache boundaries AND enforce module boundaries, whereas path aliases treat the whole monorepo as one graph). PROBE against OUR repo: (1) Our framework packages (paradigm, paradigm-mcp, sentinel, warpline, runtime, university…) use NO cross-package path aliases at all — they resolve each other by npm-workspace package name (@a-company/*), so there is no alias to "replace". (2) Those packages build via tsup/esbuild, sequenced explicitly in package.json (build:core → build:packages → build:cli) — incremental boundaries already come from the bundler, not a tsc composite graph. Adopting composite project references would force `composite:true` + declaration emit + a references array across ~15 packages for a benefit tsup already delivers — ceremony without the emit payoff. (3) The only place we DO use path aliases (the Vite UIs: site, sentinel/ui, university/ui, portal/viewer) ALSO uses references+composite in tsconfig.node.json — the standard Vite app/node split — so here they COEXIST by design rather than one replacing the other. The claim must REJECT as a universal "replace" rule: it holds for tsc-EMIT monorepos, not a bundler-built (tsup/esbuild) workspace. Gated outcome: refine to "X except bundler-built framework packages (no aliases to replace) and Vite UIs (refs+aliases coexist)".'
+probes:
+  - agent: architect
+    learning_ref: LJ-2026-06-25-065652-041
+    claim: Project references + composite builds should replace path aliases in TS monorepos
+origin: authored
+origin_ref: LJ-2026-06-25-065652-041
+expected:
+  must: reject
+outcome_history: []
+repeat_failures: 0
+status: active

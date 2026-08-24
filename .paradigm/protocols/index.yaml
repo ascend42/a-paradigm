@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-06-19T23:04:04.877Z'
+generated: '2026-07-18T04:45:59.998Z'
 protocols:
   - id: P-add-agent-provider
     name: Add an agent provider
@@ -502,8 +502,25 @@ protocols:
       - lesson
       - plsat
       - content
+  - id: P-warpline-cli-battle-test-periodic-firsthand-dogfood
+    name: Warpline CLI battle-test (periodic firsthand dogfood)
+    status: current
+    last_verified: '2026-06-25T01:07:39.274Z'
+    trigger:
+      - warpline battle-test
+      - battletest warpline
+      - dogfood the cli
+      - test the warpline cli
+      - periodic warpline test
+      - battle test the cli
+    tags:
+      - warpline
+      - cli
+      - dogfood
+      - qa
+      - battle-test
 health:
-  total: 38
-  current: 21
+  total: 39
+  current: 22
   stale: 13
   broken: 4

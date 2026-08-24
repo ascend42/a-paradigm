@@ -1,0 +1,158 @@
+{
+  "grades": [
+    {
+      "pickId": "pick:v2:fde2d04a62fe0e6fa2138e1f0f1719c4cf42a9be9b88c83ba1a9d4ab1afcacfc",
+      "seq": 0,
+      "stateId": "state:v0:11113aca7fdcd1a2ab102c2e45e4b3ccaefac24e5ceaa09810874e5a2e053ea6",
+      "authoredCount": 0,
+      "overturnedSymbols": [],
+      "confidenceBefore": null,
+      "priorClass": "pick",
+      "outcome": "baseline",
+      "confidenceAfter": null,
+      "reason": "baseline / no authored symbols"
+    },
+    {
+      "pickId": "pick:v2:50a95adc0499e4eed4da9118761a691e77ec21b95703d1973c7be5894c852725",
+      "seq": 1,
+      "stateId": "state:v0:5541c2234b10f65fdd144cc509b73691dea1c389f3b949c6001c623d93cfa2ed",
+      "authoredCount": 1,
+      "overturnedSymbols": [],
+      "confidenceBefore": 0.8,
+      "priorClass": "fast-admit",
+      "outcome": "survived",
+      "confidenceAfter": 0.9,
+      "reason": "all 1 authored symbol(s) held across 9 later strand(s)"
+    },
+    {
+      "pickId": "pick:v2:2cd9967ced6743996f9f037c311d3a565f27d39e807c89703107b849225bb6fc",
+      "seq": 2,
+      "stateId": "state:v0:94678a6d4726d58e1130e679da0a936bede46d6d4b4e0fd3a8fb048b03739de1",
+      "authoredCount": 2,
+      "overturnedSymbols": [],
+      "confidenceBefore": 0.9,
+      "priorClass": "linked",
+      "outcome": "survived",
+      "confidenceAfter": 0.97,
+      "reason": "all 2 authored symbol(s) held across 8 later strand(s)"
+    },
+    {
+      "pickId": "pick:v2:d1957746a5cefb83d7e103b32b4ed1f9f509e8804930c4e7d38607ede179f805",
+      "seq": 3,
+      "stateId": "state:v0:a1e854edb616d8f5c84701431eec85b3aca4a9ea93821da5fbb71d407112864a",
+      "authoredCount": 1,
+      "overturnedSymbols": [],
+      "confidenceBefore": 0.6,
+      "priorClass": "independent",
+      "outcome": "survived",
+      "confidenceAfter": 0.7,
+      "reason": "all 1 authored symbol(s) held across 7 later strand(s)"
+    },
+    {
+      "pickId": "pick:v2:cca150dd7872146f636bb17862d559d5ad5dcba33cf16c8789055af0337588d6",
+      "seq": 4,
+      "stateId": "state:v0:2cbb6c010bdc77c22276fcd8d6d86abc37d2415822f990c892a921bb490e3b2e",
+      "authoredCount": 2,
+      "overturnedSymbols": [],
+      "confidenceBefore": 0.8,
+      "priorClass": "fast-admit",
+      "outcome": "survived",
+      "confidenceAfter": 0.9,
+      "reason": "all 2 authored symbol(s) held across 6 later strand(s)"
+    },
+    {
+      "pickId": "pick:v2:dc0d8ed71574943252d7d0018eeef638cf7d41d6ff249ed09bde1094bca10cd3",
+      "seq": 5,
+      "stateId": "state:v0:fda2f52f5863723b8939bb75deb3de2ef40ed9ac57abdbadf49e8d5d0ffa9b10",
+      "authoredCount": 1,
+      "overturnedSymbols": [],
+      "confidenceBefore": 0.6,
+      "priorClass": "independent",
+      "outcome": "survived",
+      "confidenceAfter": 0.7,
+      "reason": "all 1 authored symbol(s) held across 5 later strand(s)"
+    },
+    {
+      "pickId": "pick:v2:9113ce2b691c11eb793bd5c4c39e2d28bed5640b7278accb3b8c678ec9f31446",
+      "seq": 6,
+      "stateId": "state:v0:860f9d419231a69073e5ba9324f2db435da3c5551abbe2c0b687794313b4dc3a",
+      "authoredCount": 2,
+      "overturnedSymbols": [],
+      "confidenceBefore": 0.8,
+      "priorClass": "fast-admit",
+      "outcome": "survived",
+      "confidenceAfter": 0.9,
+      "reason": "all 2 authored symbol(s) held across 4 later strand(s)"
+    },
+    {
+      "pickId": "pick:v2:813bc840d536478b51112dfe82d1f588c948259ab4561bdb181d35a906afb60a",
+      "seq": 7,
+      "stateId": "state:v0:48317805caca8e531799980a1d1afc0d89213450da8ac5faae5f3273f9bbe50d",
+      "authoredCount": 1,
+      "overturnedSymbols": [],
+      "confidenceBefore": 0.6,
+      "priorClass": "independent",
+      "outcome": "survived",
+      "confidenceAfter": 0.7,
+      "reason": "all 1 authored symbol(s) held across 3 later strand(s)"
+    },
+    {
+      "pickId": "pick:v2:355beba80c346819ecead0bd34b4622e103cd2078d0941e5c04bbcfc2806104b",
+      "seq": 8,
+      "stateId": "state:v0:3265c882701d36ca7065daead2d07ab57bce6c5f85b4ab3a03e9cffe2082e7fb",
+      "authoredCount": 1,
+      "overturnedSymbols": [],
+      "confidenceBefore": 0.8,
+      "priorClass": "fast-admit",
+      "outcome": "survived",
+      "confidenceAfter": 0.9,
+      "reason": "all 1 authored symbol(s) held across 2 later strand(s)"
+    },
+    {
+      "pickId": "pick:v2:52881e6f8ce78f53c985a8656434ada83c82d9e294b9d0b5182fbd7825c072df",
+      "seq": 9,
+      "stateId": "state:v0:ef85cbecde43455572879fb9c9cbad8f92d988bb438c91e8adc3a491ee7e3bb9",
+      "authoredCount": 1,
+      "overturnedSymbols": [],
+      "confidenceBefore": 0.6,
+      "priorClass": "independent",
+      "outcome": "pending",
+      "confidenceAfter": 0.6,
+      "reason": "only 1 later strand(s) — survival window (2) not met"
+    },
+    {
+      "pickId": "pick:v2:3b059fdffa6927b92ff48482a0c036f2114b9c4387f0aec88d71008bdf46f357",
+      "seq": 10,
+      "stateId": "state:v0:411c1d29b85310fa474122a7f3bfbfade96b41807f8356971c00203e4a98e5a6",
+      "authoredCount": 1,
+      "overturnedSymbols": [],
+      "confidenceBefore": 0.6,
+      "priorClass": "independent",
+      "outcome": "pending",
+      "confidenceAfter": 0.6,
+      "reason": "only 0 later strand(s) — survival window (2) not met"
+    }
+  ],
+  "moat": {
+    "linked": {
+      "survived": 1,
+      "overturned": 0,
+      "pending": 0
+    },
+    "independent": {
+      "survived": 3,
+      "overturned": 0,
+      "pending": 2
+    },
+    "fast-admit": {
+      "survived": 4,
+      "overturned": 0,
+      "pending": 0
+    },
+    "pick": {
+      "survived": 0,
+      "overturned": 0,
+      "pending": 0
+    }
+  }
+}

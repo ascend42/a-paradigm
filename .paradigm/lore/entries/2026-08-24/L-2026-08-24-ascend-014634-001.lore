@@ -1,0 +1,49 @@
+id: L-2026-08-24-ascend-014634-001
+type: milestone
+timestamp: '2026-08-24T01:46:34.826Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'MILESTONE: M3-lite COMPLETE — signed agent strands, fsck, auto-resolve grants; falsifier green; Aegis approved'
+summary: 'M3-lite (T-2026-07-01-014, the last engineering precondition for the field test) shipped in four reviewed builds: I1+I2 Ed25519 agent keys + human-gated mint (e300bb41); I3+I4 agent-signed strands with the preimage-audited sig exclusion + verify signature walk (e98fac35); I5 `warpline fsck` (90433152); I6+I7 auto-resolve grants + the 12-test adversary falsifier (88897879); Aegis combined review APPROVE-WITH-NITS, four hardenings folded (1ce75f5d: server-stamped clock on granted resolves, reader-side TTL cap, dead-scope warn, write-deny rule). Suite 1158 → 1316 across the session. The v2 §C freeze checklist''s engineering items are ALL done; remaining items are founder acts only.'
+symbols_touched:
+  - '#keys'
+  - '#grants'
+  - '#strand'
+  - '#seal'
+  - '#fabric-verify'
+  - '#fabric-fsck'
+  - '#native'
+  - '#warplined'
+  - '#warpline-cli'
+verification:
+  status: pass
+  details:
+    full-suite: 1316 passed / 2 skipped (independently re-run per build)
+    tsc: clean
+    falsifier: 12/12 — all six arms, both skins
+    review: Aegis combined APPROVE-WITH-NITS, 4 hardenings folded, finding 4 = stated limit
+tags:
+  - warpline
+  - M3-lite
+  - milestone
+  - arc:warpline
+  - field-test
+  - signing
+  - grants
+body: 'HONEST LIMITS (Aegis, for the record — the report must restate these): (1) library boundary honest, not enforced (resolveNative importable; enforcement at the two gates; Bash-denial is the procedural answer); (2) a resolves-strand without underGrant is presumed human — library-reaching agents are cryptographically indistinguishable (accepted, TD-136); (3) grant store + key registry are same-OS-user writable — edits detected, self-consistent forgeries not; the runbook write-deny on .warpline/{keys,grants}/** is the load-bearing authority boundary; (4) recordedAt is writer-asserted except server-stamped granted resolves; (5) key re-mint is not revocation — superseded keys verify forever, incl. on new strands (deferred by design); (6) in-box re-key undetectable (no git witness, Q2 ruling); (7) knotClass scope stored but never matches (fail-closed); branch scope effectively selvage-only. Build-D fixture finding: signed-from pins at the selvage tip while an unadmitted scratch proposal can sit later in the ledger — mint keys BEFORE agents propose (runbook ordering). Builder-stop pattern recurred 4/6 agent runs (stops before .purpose/report; resumed via SendMessage each time).'
+linked_tasks:
+  - T-2026-07-01-014
+  - T-2026-08-23-001
+linked_commits:
+  - e300bb41
+  - e98fac35
+  - '90433152'
+  - '88897879'
+  - 1ce75f5d
+confidence: 0.9
+git_context:
+  ref: 1ce75f5ddff4a7b14824d98845f629ee48417e1d
+  branch: warpline-surfaces
+  dirty: true

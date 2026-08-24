@@ -1,0 +1,58 @@
+id: TD-2026-06-25-564
+timestamp: '2026-06-25T07:29:23.594Z'
+title: Warpline coexists with git; start building this project's native Warpline history now (write path Phase A/B)
+decision: >-
+  Keep git as the working substrate for a-paradigm (continue to push/update git, CI, forge — unchanged). In PARALLEL,
+  begin building Warpline's OWN native history of this project: implement the durable single-writer write path — Phase A
+  (durable .warp/ store seeded from current project state → refs/selvage) then Phase B (warpline pick seals a WEFT and
+  advances selvage) — and record ongoing changes as native PICKs going forward. DEFER the "rip git out as substrate"
+  question and the multi-writer per-domain CAS protocol until the native history and Jinx's false-AUTOFOLD gate provide
+  real data.
+rationale: >-
+  Dissolves the git-vs-native fork. The user gets 'Warpline is its own thing, accumulating its own meaning-history' and
+  the moat clock starts (Loid: the clock starts when the write path ships) WITHOUT the multi-year storage rewrite or the
+  silent-wrong-merge exposure (Jinx's double-tax false-autofold) on the project's critical path. Git coexistence keeps
+  CI/forge/durability free. Single-writer history-building does NOT depend on auto-merge safety, so it is a no-regret
+  first move; the native store remains swappable behind the broker, and the substrate decision is reopened later with
+  measured data. The conflict algebra (predict/consolidate/sem-delta) is already substrate-agnostic and reused verbatim;
+  absorb's WORKTREE_REF path is already git-free and becomes the genesis template.
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+  - id: architect
+    role: agent
+    stance: supported
+  - id: advocate
+    role: agent
+    stance: dissented
+  - id: learning
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: Full native rip-out now (Arky Phase A→D, git only as export boundary)
+    rejected_because: >-
+      Multi-year storage rewrite re-deriving Unison+Pijul+Dolt; introduces silent-wrong-merge exposure (Jinx) with no
+      human byte-diff backstop once Warpline is the primary auto-admitting store. Decision deferred until data justifies
+      it.
+  - option: Git invisible + swappable broker now (no visible git)
+    rejected_because: >-
+      User wants to KEEP pushing/updating git visibly for this project while starting to accumulate Warpline history in
+      parallel — not hide git yet.
+  - option: Decide nothing until the false-AUTOFOLD gate runs
+    rejected_because: >-
+      Single-writer history-building doesn't depend on auto-merge safety, so we can start building the native history
+      immediately; the gate gates multi-writer auto-admission (Phase C), not Phase A/B.
+symbols_affected:
+  - '#warp-store'
+  - '#absorb'
+  - '#weave'
+  - '#lifeline'
+  - '#git-export'
+status: active
+tags:
+  - warpline
+  - architecture
+  - write-path
+  - multi-agent
+  - moat

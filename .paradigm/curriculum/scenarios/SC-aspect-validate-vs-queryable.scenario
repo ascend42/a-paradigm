@@ -1,0 +1,12 @@
+id: SC-aspect-validate-vs-queryable
+scenario: 'An aspect declared with a leading ''~'' in its .purpose key (e.g. `~determinism:`) is indexed under a DOUBLE-tilde id (''~~determinism'') and is unreachable by paradigm_aspect_check / aspect_get — yet paradigm_purpose_validate reports valid:true with 0 issues. PROBE: declare such an aspect, run purpose_validate (it passes green), then run aspect_check on it (returns ''not found''). The claim ''a clean purpose_validate proves an aspect is queryable'' must be REJECTED — a green validate is NOT proof of queryability. (Lived 2026-06-24; root-fixed in premise/core aggregator + the aspect-graph dedup.)'
+probes:
+  - agent: compliance
+    learning_ref: compliance/aspect-validate-proves-queryable
+    claim: a clean purpose_validate proves an aspect is queryable
+origin: authored
+expected:
+  must: reject
+outcome_history: []
+repeat_failures: 0
+status: active

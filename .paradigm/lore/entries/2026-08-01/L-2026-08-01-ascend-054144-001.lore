@@ -1,0 +1,57 @@
+id: L-2026-08-01-ascend-054144-001
+type: agent-session
+timestamp: '2026-08-01T05:41:44.787Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Audit P2 closes the P0 list: Warpline moves from silently wrong to loudly honest'
+summary: |
+  Closed C-6 (truncation was undetectable — the witness was already on disk and unread), C-13 (a repair path where hand-editing JSONL was the documented recovery), C-14 (the MCP bearer token rode in every backup), and C-16 (shadow refusals audited clean). 852 passing, zero skipped. That completes all eight P0 items from the soundness audit. Re-scoring the audit's own grid: durability, recoverability, immutable history and the repair path all moved from ABSENT/PARTIAL to HOLDS. The honest verdict shifts from "not ready to be the only copy of anything" to "sound enough for a single writer, not yet for a swarm" — because the concurrency surface still has never executed in anger.</summary>
+  <body>## The shape of what was fixed
+
+  Every P0 defect shared one shape: the tool reported success while something was lost or exposed. A merge that sealed CLEAN on the wrong bytes. A verify that said "all intact" over a laundered lie, or over a fabric cut from 64 strands to 26. A backup that promised "secrets never travel" while carrying a bearer token with no expiry and no revocation. A shadow refusal returning isError:false.
+
+  That is why the count matters less than the character change. A source-control tool's core promise is not "never fails" — it is "never lies about failing." The system moved from silently wrong to loudly honest.
+
+  ## Three judgment calls the builders made that I did not specify
+
+  **Repair handles TAIL tears only; mid-ledger corruption REFUSES.** My brief said "truncate to the last well-formed strand." Applied to mid-ledger damage that discards every good strand after it — repair becomes the data-loss event. The builder specialized it and said so explicitly rather than following the letter.
+
+  **C-6 is advisory-in, hard-out.** An absent, unreadable, disabled or fresh journal yields an empty attestation set and cannot fail. A check that fired on every non-staking repo would teach people to ignore verify, which is worse than the hole. Severity was argued from symmetry rather than taste: ref-unresolved is ALREADY hard for the same class of evidence, and a stake has stronger provenance than a local ref because it is a git commit that can be pushed off-machine.
+
+  **The C-6 hole is left open on purpose and pinned by a test.** The journal is local, so a truncator who also deletes it leaves no trace. The tamper-resistant corroborator is refs/heads/warpline-stakes, but reading it needs an async verifyFabric while backup.ts calls it synchronously. Documented as future work with a test that keeps the gap visible rather than letting it look closed.
+
+  ## The builder corrected my brief and was right
+
+  I twice specified that shadow refusals should audit ok:false. The builder refused to implement it and argued: daemonAudit.ok means "the dispatch produced a result", mcp-skin.test.ts:242 pins exactly that, PW-8's answer to masking was the additive resultCode field, and flipping ok on the shadow path alone would contradict the same brief's "non-shadow unchanged" clause. All verifiable, all correct. The defect was that the refusal was INVISIBLE; making it visible was the fix.
+
+  Worth recording because the instruction to push back has to actually be honoured to be real, and this is the second time in two days a builder has done it (the first being the C-4 / stake recover collision).
+
+  ## Re-scored grid
+
+  Durability ABSENT to HOLDS. Recoverability PARTIAL to HOLDS. Immutable history PARTIAL to HOLDS. Repair path ABSENT to HOLDS. Bounded blast radius ABSENT/INVERTED to PARTIAL (--root exists; replication does not). No-silent-overwrite PARTIAL to HOLDS. Fail-closed-on-unknown PARTIAL to HOLDS on the write path.
+
+  Unchanged: concurrency safety, still PARTIAL and still untested in anger.
+
+  ## What I would still refuse to sign
+
+  The concurrency surface has never run: zero KNOTs, zero attributed strands, every seal serial and anonymous. Migrating to refs mode engaged the CAS, but the R2 gate STILL cannot produce a KNOT because Jinx's C-9 second structural break is unfixed — admit short-circuits to FAST_ADMIT. Every concurrency verdict remains "holds because nothing has stressed it."
+
+  C-13 is recoverable, not prevented — fsync makes an append durable, not atomic.
+
+  Replication is absent. One fabric, one disk, one manual backup verb. Git's blast radius is bounded by every clone being a full copy; Warpline has no analogue and that is a design decision not yet consciously made.
+
+  A swarm still wedges on its first genuine conflict: no abandon verb.</body>
+  <type>milestone</type>
+  <symbols_touched>["#stake-journal", "#fabric-repair", "#fabric-verify", "#warpline-backup", "#refusal", "#warplined", "#warpline-mcp", "#fabric", "#warpline-cli"]</symbols_touched>
+  <tags>["warpline", "audit", "arc:warpline", "P2", "source-control", "git-parity", "truncation", "repair"]</tags>
+  <linked_commits>["0f561ecf", "292e740e", "7a9a555b"]</linked_commits>
+  <learnings>["The witness for a missing integrity check is often already on disk. C-6's anti-truncation evidence — a pickId per seal in .warpline/stakes/audit.jsonl — had been written for months and verify.ts had never imported it. Before building a new mechanism, check what the system already records and ignores.", "A check that fires on legitimate configurations is worse than the hole it closes, because it teaches people to ignore the tool. C-6 is advisory-in/hard-out: no journal, disabled valve, or fresh fabric all yield an empty attestation set and cannot fail.", "Argue severity from symmetry with an existing rule rather than from judgement. `stake-journal-orphan` is HARD because `ref-unresolved` is already HARD for the same class of evidence and a stake has stronger provenance — that reasoning survives a reviewer who disagrees about the feature.", "A literal reading of a remediation brief can be the data-loss event. 'Truncate to the last well-formed strand' is right for a tail tear and catastrophic mid-ledger. Builders should specialize and say so; briefs are written by someone who has not read the code as closely as the implementer will.", "Leaving a hole open, documenting it, and PINNING IT WITH A TEST is better than closing it badly. The C-6 journal is local and deletable; the async git-side corroborator conflicts with a synchronous verifyFabric. A test that keeps the gap visible prevents it reading as closed.", "The instruction to push back only counts if it is honoured. Two briefs of mine were wrong in two days — the C-4/stake-recover collision and the ok:false audit semantics — and both were caught by a builder refusing rather than complying. Record the correction in the commit, not just the fix."]</learnings>
+  <verification>{"status": "pass", "details": {"tests": "852 passed, 0 skipped, 95 files (from 813)", "typecheck": "tsc --noEmit exit 0", "red_first": "22/22 on the repair tranche via one targeted source mutation per test, zero vacuous; the security tranche declared 4 non-regression controls explicitly and ran a second call-sites-only revert proving the e2e tests guard the wiring", "live_fabric": "66 strands all intact; head -64 md5 2503e2e4 byte-identical to the pre-audit baseline; new verify line 'stakes 25 checkpoint(s) cross-checked — no history missing (C-6)'", "p0_status": "all 8 P0 items closed"}}</verification>
+  <confidence>0.88</confidence>
+  </invoke>
+git_context:
+  ref: 0f561ecfccbb869752a28f04fb364a8fa5c83263
+  branch: warpline-surfaces
+  dirty: true

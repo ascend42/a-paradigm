@@ -1,0 +1,43 @@
+id: LP-para-901
+title: 'PARA 901: The Academy — Gated Learning (the Classroom)'
+description: "Agents learn by surviving the field, not by asserting confidence. This course teaches the Classroom: why every learning is provisional by default, how the gated /class term — not a confidence floor — certifies, why study-hall only stages, how THE STAND de-anesthetizes the gate, how Expeditions forage external knowledge behind a structural context-firewall, and how to read the honest (often null) Academy scoreboard. Shipped experimental in v7.x."
+author: paradigm
+created: '2026-06-25'
+updated: '2026-06-25'
+tags:
+  - course
+  - para-901
+  - classroom
+ordered: true
+category: paradigm-core
+steps:
+  - content: N-para-901-provisional-by-default
+    required: true
+  - content: Q-para-901-provisional-by-default
+    required: true
+    passRequired: true
+  - content: N-para-901-two-loops-one-certifier
+    required: true
+  - content: Q-para-901-two-loops-one-certifier
+    required: true
+    passRequired: true
+  - content: N-para-901-study-hall-vs-class
+    required: true
+  - content: Q-para-901-study-hall-vs-class
+    required: true
+    passRequired: true
+  - content: N-para-901-the-stand
+    required: true
+  - content: Q-para-901-the-stand
+    required: true
+    passRequired: true
+  - content: N-para-901-expeditions-and-foraging
+    required: true
+  - content: Q-para-901-expeditions-and-foraging
+    required: true
+    passRequired: true
+  - content: N-para-901-the-honest-scoreboard
+    required: true
+  - content: Q-para-901-the-honest-scoreboard
+    required: true
+    passRequired: true

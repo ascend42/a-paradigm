@@ -1,0 +1,59 @@
+id: TD-2026-06-23-181
+timestamp: '2026-06-23T15:49:27.679Z'
+title: >-
+  Loom flows converged: every git flow mapped; WEAVE = trust-routed review/approval; collaboration = transfer≠admission
+  over content-addressed meaning
+decision: >-
+  The team converged on how Loom handles the full surface git has owned, captured in docs/specs/loom-flows.md. THREE
+  pillars: (1) FLOW MAP (Cid) — every git flow has a loom command; key transforms: merge→weave+decide-a-knot,
+  blame→lifeline, mv→the zero-diff rename (empty delta), rebase mostly OBSOLETE (no linear narrative to tidy when
+  history is a meaning-DAG), the GitHub social layer (PR/review/approve/CODEOWNERS/CI/merge-queue) becomes NATIVE loom
+  verbs; OBSOLETE: staging/add, rebase-for-cleanliness, .gitattributes, LFS, byte pre-commit hooks, conflict-markers.
+  (2) THE WEAVE PROCESS (Loid) — a PR-equivalent is an OFFER carrying the Justification + the author's graded
+  predictedRipple; review is EXPECTED-LOSS ROUTING via SCRUTINY = fragility(symbol) × (1 − trust(author,domain)) with a
+  policy ladder (auto-weave → peer-endorse → mandatory-human → knot-council); discussion lives on the KNOT and resolves
+  to a permanent essence-anchored DECISION (institutional memory + Classroom calibration); approval is a trust-weighted
+  ENDORSEMENT with a HARD human floor on fragile symbols (trust schedules attention, never replaces it) + the Shadow
+  Panel falsifiability guard; the WeaveRecord + the Classroom field-failure reducer close the self-closing loop (field
+  break → author/endorser trust ↓, symbol fragility ↑ → next change reviewed harder) — ONE trust ledger for the weave
+  gate and the learning loop. (3) COLLABORATION (Aegis) — sharing is set-reconciliation over content-addressed MEANING
+  (deduped, far less wire than git); the load-bearing invariant is TRANSFER ≠ ADMISSION (gather is
+  inert/safe-from-strangers; weave is trust-gated); protected-fabric = WEAVE-LAW (CODEOWNERS as a domain-scoped trust
+  predicate, admissibility is subjective, canonical = the quorum view); identity = the Custody Chain
+  (operator→runtime→agent archetype = hash(training), offline-verifiable incl. ripple-honesty; session-scoped delegation
+  certs for machine-scale agent signing); trust = web-of-trust, edge-computed from replayable signed evidence via a
+  relay that is a post office not an oracle; fresh identities QUARANTINE at zero trust. 7 GAPS flagged (GAP-1 non-symbol
+  files = biggest; GAP-7 git-export round-trip = interop lifeline). The CLI now MAPS all of it (only oracle+absorb
+  built). Build sequencing: the weave/write path is ~80% latent in the Oracle; net-new = trust ledger (REUSE the
+  Classroom, don't fork) + scrutiny routing + endorsement + WeaveRecord↔reducer back-binding; weave gate depends on
+  Classroom trust → Classroom-first/-parallel.
+rationale: >-
+  Founder asked the team to converge on how merging, discussion, approval, and all other git-managed flows work in Loom,
+  and ensure the CLI handles all of it. The three lenses interlock: the KNOT (which the Oracle already emits) is where
+  discussion happens; trust is domain-scoped from the Classroom and edge-computed; transfer≠admission composes with
+  scrutiny-gated weave; CODEOWNERS becomes a trust policy in both the local (Loid) and remote (Aegis) views. The
+  convergence also reveals the weave gate and the Classroom learning loop share one trust ledger — making the Classroom
+  a hard dependency of the write path, which sequences the roadmap.
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+  - id: cid
+    role: agent
+    stance: supported
+  - id: forge
+    role: agent
+    stance: supported
+  - id: security
+    role: agent
+    stance: supported
+status: active
+tags:
+  - loom
+  - git-successor
+  - flows
+  - weave
+  - review-approval
+  - collaboration
+  - cli
+  - convergence

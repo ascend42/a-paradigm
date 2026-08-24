@@ -40,6 +40,54 @@ jobs:
         run: npm run format:check
         continue-on-error: true
 
+  # Warpline's vitest suite (packages/warpline/test/, 83 files) is NOT reachable
+  # from the `build` job: root `npm test` chains to it, but that job's matrix
+  # includes Node 18, which vitest 4 does not support, and its `npm test` leg
+  # also carries @a-company/paradigm. A warpline gate riding on that job would
+  # be permanently red for unrelated reasons and therefore ignored — which is
+  # the exact "wired to nothing" failure this job exists to close (panel B-1).
+  #
+  # So warpline gets its own BLOCKING job, pinned to Node 20, with the same
+  # dependency build chain warpline-guard.yml already establishes. Unlike
+  # warpline-guard, this one is NOT continue-on-error: descriptors-frozen.test.ts
+  # and the rest of the F4 tripwires have to be able to fail a PR.
+  warpline:
+    runs-on: ubuntu-latest
+    name: Warpline tests
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Same chain as warpline-guard.yml: purpose-core → portal-core →
+      # premise-core, then the engine itself.
+      - name: Build workspace dependencies
+        run: |
+          npm run build --workspace=@a-company/purpose-core
+          npm run build --workspace=@a-company/portal-core
+          npm run build --workspace=@a-company/premise-core
+
+      # `test:warpline` rebuilds dist before running. That is load-bearing, not
+      # belt-and-braces: four tests (f4-cli-arm, pick-agentid-env, two in
+      # stake-denylist-v2) are `it.skipIf(!existsSync(dist/cli.js))`, so an
+      # unbuilt or STALE dist makes them vanish silently while the run still
+      # reports green. Building immediately before the run is what makes the
+      # CLI arm observable at all.
+      - name: Test (@a-company/warpline)
+        run: npm run test:warpline
+
+      - name: Typecheck (@a-company/warpline src)
+        run: npm run typecheck --workspace=@a-company/warpline
+
   publish-dry-run:
     runs-on: ubuntu-latest
     needs: build

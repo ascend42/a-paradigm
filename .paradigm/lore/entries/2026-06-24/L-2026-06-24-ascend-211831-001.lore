@@ -1,0 +1,47 @@
+id: L-2026-06-24-ascend-211831-001
+type: milestone
+timestamp: '2026-06-24T21:18:31.341Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Worked the remaining convene findings: 1 refuted, 2 fixed, 1 to the human'
+summary: Filed and worked through the four lower-priority convene findings. Cid's captain-board 'settlement-debt blind spot' was REFUTED on verification (settledAt is epic-level by design; a child sweep would false-positive on every done task). Probe's oracle falsifiability gap was closed (exported score(), added a partition test positively exercising the two previously-uncovered cells agreeConflict and divergeGitOnly). Mika's contrast failures were fixed in system.html (4 informational --cut texts promoted to --linen-400, --seam floor guard added). North's moat-vs-demo finding is a product decision, filed to the human (T-008).
+symbols_touched:
+  - '#oracle'
+  - '#warpline'
+  - '#captain-board'
+  - '#warpline-design-system'
+files_modified:
+  - packages/warpline/src/oracle.ts
+  - packages/warpline/test/oracle.test.ts
+  - docs/warpline/system.html
+learnings:
+  - 'A convene/self-study finding can be a confident FALSE POSITIVE: Cid''s ''done children missing settledAt = invisible settlement debt'' rested on a misread of the field-ownership model — settledAt is stamped on the parent epic only (task-settlement.ts:365-375), so children correctly lack it and a child sweep would noise-flag every done task. Verifying findings before fixing is what caught it.'
+  - The right place to lock a confusion-matrix's falsifiability is a unit test on the partition function itself (score()) fed synthetic per-cell inputs — far more controllable than constructing real git-conflict fixtures, and it targets exactly the mislabel regression (m&&g misfiled).
+  - 'Accessibility token discipline: a deliberately-low-contrast token (--cut 2.6:1) is fine for strikethrough/bar-fills/redundant-color counters but must never color standalone readable text; promote those to --linen-400 (5.0+). A semantic anchor near the AA floor (--seam 4.52) needs a guard comment so future value changes re-run the contrast calc.'
+verification:
+  status: pass
+  details:
+    warpline-tests: 100 passed (98 + 2 new oracle partition tests)
+    contrast: 'WCAG recomputed: --cut 2.63-2.90 (fails AA, decoration-only now); --linen-400 5.08-5.60 (AA); --seam 4.52-4.98 (AA, guarded)'
+    cid-finding: refuted — settledAt is epic-level (task-settlement.ts:365-375)
+tags:
+  - from-convene
+  - warpline
+  - test
+  - accessibility
+  - refutation
+linked_lore:
+  - L-2026-06-24-ascend-201503-001
+  - L-2026-06-24-ascend-205439-001
+linked_tasks:
+  - T-2026-06-24-005
+  - T-2026-06-24-006
+  - T-2026-06-24-007
+  - T-2026-06-24-008
+confidence: 0.9
+git_context:
+  ref: f6008cf2b3d033b72125dfbc600c3e2ab2bd7126
+  branch: warpline-surfaces
+  dirty: true

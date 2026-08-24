@@ -1,10 +1,11 @@
 id: builder
 project: a-paradigm
 lastSession:
-  date: '2026-05-30T00:57:31.181Z'
-  sessionId: orch-mprn5oa3-27lj
-  summary: '[Kit (builder)]: builder: Implement: Fix 3 confirmed Paradigm framework bugs...'
-  symbolsTouched: []
+  date: '2026-08-11T07:40:51.844Z'
+  sessionId: orch-msocpiyv-oojg
+  summary: '[Kit (builder)]: builder: Implement: Close the agent-learning gap on a-parad...'
+  symbolsTouched:
+    - ~8
 pendingWork: []
 recentPatterns: []
-sessionsOnProject: 10
+sessionsOnProject: 14

@@ -1,0 +1,31 @@
+id: L-2026-07-01-ascend-195542-001
+type: agent-session
+timestamp: '2026-07-01T19:55:42.714Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Cid Debrief: Designed the falsifiable Classroom continuous-improvement loop (all 3 layers as '
+summary: |-
+  Designed the falsifiable Classroom continuous-improvement loop (all 3 layers as one arc) via a 3-lens team pass (Loid lead + Arky + Cid, all verified against the tree), then BUILT sub-phase 0 (contracts-only). Core: time may decay confidence but never mint evidence — `survived` minted by real exercise (symmetric survival reducer, ≥1 adversarial probe required per human ruling), aged-untested certs become `unproven`; L2 promotes on the belief-delta the v7.1-r4 instrument already measures; L1 adds a verdictsInScope liveness metric so a dead loop is detectably different from a healthy quiet one. The L3 exercise counters ARE TD-2026-06-26-881 amendment 1's registry denominator — one shared ExerciseIntensity contract (home = premise-core, since the CLI must not depend on paradigm-mcp — corrected Arky's plan). Recorded decision TD-2026-07-01-401 + spec docs/specs/classroom-falsifiable-loop.md; filed build tasks T-024..028. Sub-phase 0 builds green across premise-core/paradigm-mcp/paradigm CLI; 499/503 mcp tests pass (4 pre-existing syllabus-loader failures, confirmed unrelated by stash-revert).</sessionSummary>
+  <parameter name="touchedFiles">["docs/specs/classroom-falsifiable-loop.md", "packages/premise/core/src/classroom-metrics.ts", "packages/premise/core/src/index.ts", "packages/paradigm-mcp/src/utils/field-failures.ts", "packages/paradigm-mcp/src/utils/nomination-engine.ts", "packages/paradigm/src/commands/agent/registry-types.ts"]
+symbols_touched:
+  - '#classroom-exercise'
+  - ExerciseIntensity
+  - ExerciseEvent
+  - CalibrationPrior
+files_modified: []
+tags:
+  - arc:cid-debrief
+  - orch:orch-mr2gqojz-jjh4
+meta:
+  orchestrationId: orch-mr2gqojz-jjh4
+  coverageScore:
+    before: 1
+    after: 1
+  coverageAdded: []
+  notes: 'Sub-phase 0 is contracts-only (types/constants, all additive/optional — no behavior change; builds green). Behavior is filed as T-024..028. Human ruling: survived requires ≥1 adversarial probe. Shared-branch: classroom/premise/registry source + docs/decisions only; the concurrent Warpline agent advanced HEAD to 59c138f7 — leave their .warpline/ + warpline commits untouched; commit local only, do NOT push (per human).'
+git_context:
+  ref: 59c138f79ea35d11a741b965e4d5b2e5165c45ff
+  branch: warpline-surfaces
+  dirty: true

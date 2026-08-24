@@ -1,0 +1,35 @@
+id: TD-2026-07-16-277
+timestamp: '2026-07-16T03:38:11.526Z'
+title: v3 §9 SIGNED (all five points) — v3 DAG identity build authorized, pulled ahead of M2
+decision: >-
+  Founder signs all five v3 §9 points as written: (1) refs hold pickIds not stateIds; (2) full merge recipe folds into
+  identity (bad recipes superseded, never repaired); (3) calibratedConfidence leaves the strand — grades.jsonl sidecar
+  authoritative, deliberately unauthenticated until M3, rewriteFabric deleted; (4) one anchor per epoch (v1 now, v2 at
+  v3 genesis, no re-attestation); (5) recordedAt stays in identity (retry-collision safety; flippable before V3.1).
+  Phase 2 launches: V3.1 DAG identity + V3.2 refs build FIRST (before M2 branching, per Arky), then machine-readable
+  KNOT payload, claim-scoped propose API, injection envelope. Gate 0.3 closed.
+rationale: >-
+  Arky's panel finding: the v2 linear chain (seq-in-identity) structurally serializes the very swarm the wedge sells,
+  and every Phase-2/3 artifact writes against strand identity — building on v2 then migrating doubles the work. v3 is a
+  net deletion (~400 lines of guard scar-tissue: rewriteFabric + CAS/freeze/grandfather machinery). Founder reviewed the
+  five §9 points with coordinator digest and signed 2026-07-15/16 (gate question; point 5 kept as specced).
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+  - id: architect
+    role: agent
+    stance: supported
+symbols_affected:
+  - '#fabric'
+  - '#strand'
+  - '#seal'
+  - '#fabric-verify'
+  - '#grade'
+status: active
+tags:
+  - warpline
+  - v3
+  - dag-identity
+  - roadmap-2026H2
+  - gate-0.3

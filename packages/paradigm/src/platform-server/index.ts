@@ -22,6 +22,7 @@ import { createAgentRouter } from './routes/agent.js';
 import { createOverviewHandler } from './routes/overview.js';
 import { createGitRouter } from './routes/git.js';
 import { createAmbientRouter } from './routes/ambient.js';
+import { createClassroomRouter } from './routes/classroom.js';
 import { createTeamRouter } from './routes/team.js';
 import { createTasksRouter } from './routes/tasks.js';
 import { createTasksWriteRouter } from './routes/tasks-write.js';
@@ -58,6 +59,13 @@ export interface PlatformServerOptions {
   projectDir: string;
   open?: boolean;
   sections?: string[];
+  /**
+   * Interface to bind. Defaults to '127.0.0.1' (loopback only) — this ENFORCES
+   * the portal.yaml ^local-only gate at the socket, since that gate has no
+   * request-time middleware. Set to '0.0.0.0' ONLY to intentionally expose the
+   * platform on the LAN (it serves unauthenticated local-tooling routes).
+   */
+  host?: string;
 }
 
 /**
@@ -77,8 +85,8 @@ function isPackageAvailable(packageName: string): boolean {
  * Resolve the set of enabled sections based on config and available packages
  */
 function resolveSections(options: PlatformServerOptions): Set<string> {
-  const always = ['overview', 'tasks', 'lore', 'graph', 'git', 'ambient', 'team'];
-  const requested = options.sections ?? [...always, 'sentinel', 'university', 'symphony', 'docs'];
+  const always = ['overview', 'tasks', 'lore', 'graph', 'git', 'ambient', 'team', 'classroom'];
+  const requested = options.sections ?? [...always, 'sentinel', 'university', 'symphony', 'docs', 'warpline'];
 
   const enabled = new Set<string>();
   for (const section of requested) {
@@ -87,7 +95,15 @@ function resolveSections(options: PlatformServerOptions): Set<string> {
       continue;
     }
     // Auto-detect optional sections
-    if (section === 'sentinel') {
+    if (section === 'warpline') {
+      // The Warpline engine ships as a hard workspace dependency of the CLI and
+      // is bundled into the dist (the router imports it in-process), so it is
+      // always present — always-enable, like `university`. If the engine import
+      // ever fails at mount time, the router mount in startPlatformServer is
+      // try/caught and the section simply won't respond. Read-only Oracle/
+      // forecast/diff over HTTP.
+      enabled.add(section);
+    } else if (section === 'sentinel') {
       // Check if sentinel server routes exist (bundled in same dist)
       const sentinelRoutesPath = path.join(options.projectDir, '.paradigm');
       if (fs.existsSync(sentinelRoutesPath)) {
@@ -228,6 +244,10 @@ export async function startPlatformServer(options: PlatformServerOptions): Promi
   // Mount ambient coordination routes (always available)
   app.use('/api/ambient', createAmbientRouter(options.projectDir, wsContext));
 
+  // Mount Academy (Classroom) routes (always available — read-only gated-learning
+  // ledger: status/staged/certifications/refinements, no write path).
+  app.use('/api/classroom', createClassroomRouter(options.projectDir, wsContext));
+
   // Mount team routes (always available — Maestro orchestration display)
   app.use('/api/team', createTeamRouter(options.projectDir));
 
@@ -269,6 +289,19 @@ export async function startPlatformServer(options: PlatformServerOptions): Promi
       }
     }, SYNC_POLL_MS);
     timer.unref?.();
+  }
+
+  // Mount Warpline routes if section is enabled (read-only Oracle/forecast/diff
+  // over HTTP — no reachable write path; passes wsContext for the ledger watch
+  // → !oracle-record-appended broadcast).
+  if (sections.has('warpline')) {
+    try {
+      const { createWarplineRouter } = await import('./routes/warpline.js');
+      app.use('/api/warpline', createWarplineRouter(options.projectDir, wsContext));
+      log.component('platform-server').success('Warpline routes mounted');
+    } catch (err) {
+      log.component('platform-server').warn('Warpline routes failed to mount');
+    }
   }
 
   // Mount Sentinel routes if section is enabled
@@ -318,8 +351,11 @@ export async function startPlatformServer(options: PlatformServerOptions): Promi
     }
   }
 
+  // Bind loopback by default so the ^local-only portal gate is enforced at the
+  // socket (there is no request-time hostname middleware). Override via options.host.
+  const bindHost = options.host ?? '127.0.0.1';
   return new Promise((resolve, reject) => {
-    httpServer.listen(options.port, () => {
+    httpServer.listen(options.port, bindHost, () => {
       log.component('platform-server').success('Platform running', { url: `http://localhost:${options.port}` });
       log.component('platform-ws').success('WebSocket ready', { url: `ws://localhost:${options.port}/ws` });
       console.log('');

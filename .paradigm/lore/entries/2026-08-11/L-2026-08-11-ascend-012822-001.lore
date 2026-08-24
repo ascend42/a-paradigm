@@ -1,0 +1,66 @@
+id: L-2026-08-11-ascend-012822-001
+type: agent-session
+timestamp: '2026-08-11T01:28:22.298Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Pre-flight 1-6 land: the measurement instrument would have fabricated evidence for its own claim'
+summary: |
+  Six of nine pre-flight items closed across two parallel builders — 964 tests, zero skipped, 32 mutations with zero survivors, FG-3 freeze intact. The pass justified itself with a single finding: `git merge-tree` exits 1 for both "conflicted" and "not a ref", so an unresolvable ref returned {conflicted:true} with no throw. A rebased-away provenance.gitCommit — entirely routine — would have been recorded as agreeConflict, fabricating evidence FOR the headline claim, inside the instrument built to measure it, biased toward the favourable answer. Found by chasing an impossible failure text during a mutation pass, not by review.</summary>
+  <body>## The finding
+
+  Mutation M18 produced a failure text that should have been impossible. Chasing it:
+
+  ```
+  $ git merge-tree --write-tree --name-only definitely-not-a-ref HEAD
+  merge-tree: definitely-not-a-ref - not something we can merge
+  EXIT=1
+  ```
+
+  `git-exec.ts:579` keys on `e.code === 1 && typeof e.stdout === 'string'`. Git uses exit 1 for BOTH "the merge conflicted" and "that is not a ref", so an unresolvable side returned `{conflicted:true, conflictPaths:[]}` with no throw.
+
+  The consequence is specific and bad: a `provenance.gitCommit` naming a rebased-away commit is ordinary, and it would have been filed as `agreeConflict` — git "confirming" a conflict it never evaluated. That is fabricated evidence for the exact claim the counterfactual exists to test, biased toward the answer the project wants.
+
+  Fixed by rev-parsing both sides before merging. Deliberately NOT fixed in `mergeTree` itself, because `oracle.ts:160` shares the exposure and changing it alters shared merge semantics — reported as a founder call rather than decided.
+
+  The general lesson: an instrument that measures your own claim must be audited for whether its failure modes are symmetric. This one's weren't — every failure mode pointed the same direction.
+
+  ## What the health verb does that no prior surface did
+
+  Run against this repo it exits 1 with three warnings, and the third is the one that matters:
+
+  ```
+  contested 0 — and 43 verdict(s) had no agent base, so FAST_ADMIT was
+  structurally forced and contention was UNREACHABLE (audit C-9), not merely absent.
+  ```
+
+  That distinction — unreachable versus absent — is what the entire F4/K3 arc has been fighting to make legible, and it is now on an operator surface that runs in a second. It also reports 14.87 MB PER STRAND rather than a total, because a team can multiply a per-strand number.
+
+  The founder's stated nightmare was a project that runs fine and produces no measurement, because that looks like success. Something now says so out loud on every invocation.
+
+  ## Two orderings that mattered
+
+  **Durability before compression.** gzip and the ENOSPC fix landed in the same change on purpose: a compressed file that is also non-atomically written is strictly worse than a plain one, because a truncated deflate stream is unreadable where truncated JSON might partly parse. Shipping the 7.88x win first would have deepened the hole it was dug next to.
+
+  **The dirty check before the seal, not before the restore.** Verified while auditing C-5: `assertDirtyFree` runs pre-seal and the raw `restoreTree` runs after. I had assumed the guard belonged at the restore call and was wrong — guarding there means you have already sealed and then refuse to write back, leaving the fabric ahead of the worktree with no clean recovery.
+
+  ## Attribution held under pressure
+
+  `admit.ts` showed +50 lines from neither agent's ownership list. I asked twice and held the commit rather than assume it was benign. The answer was correct and well-reasoned — the counterfactual needs the selvage-side commit resolved INSIDE admit's lock, because reading it after release would measure against a tip the verdict never adjudicated, which is verbatim the baseFrom trap. Worth recording that the process worked: an unattributed change to a source-control tool's write path is exactly the thing not to wave through, and asking cost nothing.
+
+  ## Numbers
+
+  7.88x gzip measured. ~10 ms counterfactual on the hot path = 11% of p50, 0.02% of p99 — measured against 43 real rows, not reasoned. 964 tests from 916. 32 mutations, zero survivors. Live fabric untouched throughout: 70 strands, 43 shadow rows, head-64 md5 unchanged across both builders.</body>
+  <type>milestone</type>
+  <symbols_touched>["#fabric-hook", "#warp-store", "#git-counterfactual", "#warpline-health", "#shadow", "#admit", "#warpline-cli", "#oracle"]</symbols_touched>
+  <tags>["warpline", "arc:warpline", "pre-flight", "observability", "durability", "measurement-integrity"]</tags>
+  <linked_commits>["bf216132"]</linked_commits>
+  <learnings>["An instrument that measures your own claim must have its failure modes audited for SYMMETRY. git merge-tree's exit-1 conflation meant every failure pointed the same direction — toward 'conflict', the favourable answer. A biased failure mode in a measurement tool is worse than a broken one, because it produces plausible data.", "Ship durability before compression, never after. gzip and the ENOSPC fix had to land together: a truncated deflate stream is unreadable where truncated JSON might partly parse, so compressing a non-atomically-written file makes the existing hole deeper while looking like an improvement.", "Guard the destination BEFORE committing to the seal, not at the write-back. I assumed the dirty check belonged at restoreTree and was wrong — guarding there means you have already sealed and then refuse to write, leaving the fabric ahead of the worktree with no clean recovery.", "Hold the commit on an unattributed change, even when it is almost certainly fine. +50 lines appeared in admit.ts from neither agent's ownership list; asking twice cost nothing and the answer turned out to be load-bearing (the value must be resolved inside admit's lock or it measures against a tip the verdict never judged).", "Report a per-unit number, not a total. `14.87 MB per strand` is actionable where `1.02 GB` is abstract — a team can multiply the first by their expected commit count and decide; the second just sounds large.", "A config line that carries a durability property deserves a test. The .gitignore un-ignore of the authoritative tip got a regression test, because a future ignore-file cleanup would otherwise silently drop replication of the only pointer that matters."]</learnings>
+  <verification>{"status": "pass", "details": {"tests": "964 passed, 0 skipped, 107 files (from 916)", "typecheck": "tsc --noEmit exit 0", "mutations": "32 across two builders, zero survivors", "fg3_freeze": "descriptorsId untouched; descriptors-frozen.test.ts and descriptors.ts diffs both empty", "live_fabric": "70 strands, 43 shadow rows, head-64 md5 2503e2e4 unchanged; no write verb run against the repo", "back_compat": "legacy uncompressed states still load, pinned at state-cache-durability.test.ts:262", "independently_reverified": "merge-tree exit-1 conflation reproduced directly; gitignore negation rule; health output run live"}}</verification>
+  <confidence>0.92</confidence>
+  </invoke>
+git_context:
+  ref: bf216132be516d77aa8aa361413b4baff87a17a5
+  branch: warpline-surfaces
+  dirty: true

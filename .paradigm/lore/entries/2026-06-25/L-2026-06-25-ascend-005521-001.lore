@@ -1,0 +1,29 @@
+id: L-2026-06-25-ascend-005521-001
+type: review
+timestamp: '2026-06-25T00:55:21.723Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Warpline CLI battle-test (firsthand team dogfood) — consolidate holds, the verdict lies green
+summary: 'The team (Cid/Nora/Jinx/Loid) battle-tested the Warpline CLI FIRSTHAND — actually running absorb/oracle/weave/consolidate/diff on real repo branches + throwaway swarm repos — to learn what works vs doesn''t. WORKS: consolidate is genuinely decision-useful (8 branches→2 decisions; git=4 conflicts, octopus=total failure; 99.6% Paradigm-symbol-aligned + 3,856 #code: AST symbols; confidence 0.78), diff/semantic is the clearest surface (rename=empty-delta shows live), and the security hardening HELD (injection blocked, --json well-formed). DOESN''T: a CRITICAL ''lies green'' bug — oracle/weave report CONVERGENT/score 1/CLEAN TO WEAVE while git reality is CONFLICT (root cause pinned: the `conflicted` boolean never gates the verdict; oracle.ts:239 reader, git-exec.ts:351 writer), persisted to oracle.jsonl; a same-ref weave --preview HANG; a 220-250-line stderr ''Schema error'' flood that makes newcomers think it''s broken (FTUX onboard 0.2); and the whole single-ref daily surface (status/lifeline/log) is absent. 4 tasks filed.'
+symbols_touched:
+  - '#warpline-cli'
+  - '#oracle'
+  - '#git-exec'
+  - '#consolidate'
+  - '#absorb'
+  - '#weave'
+tags:
+  - warpline
+  - battle-test
+  - dogfood
+  - cli
+  - firsthand
+  - lies-green
+  - ftux
+confidence: 0.85
+git_context:
+  ref: 01b9e05a184baddd96d9fd256b5810ff413c778d
+  branch: warpline-surfaces
+  dirty: true

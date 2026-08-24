@@ -1,0 +1,11 @@
+id: rmd-mqtmlci5
+claimant: navigation
+severity: advise
+reason: >-
+  Postflight learning did not run and Cid's self-heal failed: Cannot find module
+  '/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/dist/ambient-W3SPKLKC.js' imported
+  from /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/dist/chunk-PFGVFD2E.js
+unblock_hint: >-
+  Run `paradigm_ambient_learn_postflight` manually, or inspect
+  .paradigm/events/settlement-liveness.jsonl for the severed stage.
+created: '2026-06-25T14:56:57.485Z'

@@ -1,0 +1,28 @@
+id: L-2026-06-24-ascend-201351-001
+type: insight
+timestamp: '2026-06-24T20:13:51.940Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Warpline: team''s convergent product view (write-path is the gate; companion-first) + the missing WEAVE-TREE / Tapestry navigation surface'
+summary: 'A 4-lens product panel (North/product, Scout/market, Loid/moat, Arky/technical) converged UNANIMOUSLY: Warpline today is a magnificent READ-ONLY instrument (observes git, scores it, is right) with NO verb that mutates state — "read-only is the trap." THE GATE to the product, the moat, AND the wedge is the WRITE PATH (pick/weave/PROJECT) + GAP-7 git round-trip (export --git, the interop kill-switch — "nobody adopts a VCS they can''t leave"). Loid: the moat is a non-portable CALIBRATION CORPUS, not the algorithm — worth ~0 until weaves accrue history ("the clock hasn''t started"); capture graded belief from weave #1 (unrecoverable if missed). STRATEGIC CONVERGENCE (North+Scout): do NOT lead with frontal "replacement" — every better-git (Hg/Bzr/Pijul/Fossil) died asking people to leave git. Lead with the TROJAN HORSE: ship "Warpline Guard" (the oracle as a CI check that fails the build when git would merge a meaning-break — adoptable TODAY, zero migration, valuable day one) → earn the daily driver (empty-delta diff + lifeline) → THEN the write path + Classroom trust ledger → git demoted to import/export BY GRAVITY. WEDGE: AI-agent-heavy TS teams who feel git''s meaning-blindness now (this repo = user zero). Arky''s honesty checks: "WARP is truth, bytes are a projection" is true for merge DECISIONS but the lens is LOSSY → materialization serves STORED bytes (not regenerated meaning); "replacement" messaging is premature until GAP-7 round-trips. FOUNDER''S NEW DESIGN INSIGHT (the next focus): the built GUI (Oracle viewer, semantic-diff) are verdict/diff surfaces but LACK a HISTORY/NAVIGATION view — compared to git tree tools (SourceTree''s commit graph) it "fails." Founder wants to SEE THE WEAVE: branch topology, where branches CONVERGE (weaves), where BOLTs (releases/tags) are, the SELVAGE (HEAD) — a SourceTree-like woven-history/tree rendered through the meaning lens. This IS the TAPESTRY (spec screen 7, deferred) but a NAVIGATION view of the existing git branch/merge/tag topology + oracle verdicts is renderable read-only NOW. Needs TRULY EXPLORATORY design (Mika-led) in paradigm.pen.'
+symbols_touched:
+  - '#warpline'
+  - '#warpline-section-ui'
+  - '#warpline-oracle'
+  - '#weave'
+tags:
+  - warpline
+  - gui
+  - product-strategy
+  - team-panel
+  - tapestry
+  - weave-tree
+  - design-direction
+  - restart-anchor
+confidence: 0.82
+git_context:
+  ref: d85dd6a4bd785a4429475639ed3b86471c8a0533
+  branch: warpline-surfaces
+  dirty: true

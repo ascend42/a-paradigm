@@ -1,0 +1,54 @@
+id: Q-para-901-provisional-by-default
+title: 'PARA 901: The Academy — Lesson 1: Provisional by Default'
+description: 'Quiz for lesson: Provisional by Default'
+author: paradigm
+created: '2026-06-25'
+updated: '2026-06-25'
+tags:
+  - course
+  - para-901
+symbols: []
+difficulty: intermediate
+passThreshold: 0.7
+category: paradigm-core
+questions:
+  - id: q1
+    question: In the Academy, what actually certifies that a learning is true?
+    choices:
+      A: The agent's stated confidence score crossing a threshold
+      B: The field — the learning being applied in real work and not breaking; no agent and no confidence number can certify itself
+      C: A majority vote of all agents on the roster
+      D: The number of journal entries that reference it
+      E: Whether the learning was authored by a senior archetype
+    correct: B
+    explanation: 'The field is the final examiner. A learning is not "true" because an agent is confident in it — it is true because it survived being used in real work without breaking. This is why every learning is born provisional: confidence and authorship are inputs, never proof. Certification is something the field grants over time, not a state an agent can assert into existence.'
+  - id: q2
+    question: An agent's learning shows breaks:[] — an empty break list. What is the correct reading?
+    choices:
+      A: The learning is proven strong and can be trusted
+      B: The learning is untested, not proven — breaks:[] means no exam has yet been hard enough to break it, which is absence of evidence, not evidence of strength
+      C: The learning has been certified by the gate
+      D: The learning was rejected and its breaks were cleared
+      E: The learning is external and cannot accumulate breaks
+    correct: B
+    explanation: 'breaks:[] is the most seductive misread in the Academy. An empty break list does not mean the learning survived hard scrutiny — it means scrutiny has not yet been hard enough to break it. Unbroken is untested, not strong. Absence of recorded failure is absence of evidence, and the Academy treats it that way rather than rewarding it with trust.'
+  - id: q3
+    question: The Academy's repeat-failure-rate scoreboard currently reads null. Why, and what does it signify?
+    choices:
+      A: A defect in the metric pipeline that drops the denominator
+      B: Not enough exams have settled yet — no certification has resolved, partly because orchestrationId field-break attribution is still thin, so the board is honestly null rather than falsely green
+      C: All learnings have passed, so there is nothing to report
+      D: The scoreboard only renders after the first agent is benched
+      E: Null means the loop is dead and should alarm
+    correct: B
+    explanation: 'A null scoreboard is honest, not broken. repeat-failure-rate needs *settled* exams to compute, and few have settled — partly because orchestrationId attribution that ties field-breaks back to a learning is still thin, so no cert has resolved yet. The Academy ships experimental and reports null rather than inventing a green number. A board that tells the truth about how little has settled is worth more than one that lies.'
+  - id: q4
+    question: Why does the Academy treat a confident self-assessment and a field-survived record as fundamentally different kinds of evidence?
+    choices:
+      A: They are the same; confidence is just a faster proxy for survival
+      B: Because an asserted "this is true" and an actually-true learning look identical from the outside until the field contradicts the assertion — only survival under real use is falsifiable evidence
+      C: Because confidence scores are harder to compute than survival rates
+      D: Because only humans are allowed to assign confidence
+      E: Because field survival is optional once confidence exceeds 0.8
+    correct: B
+    explanation: 'A learning an agent merely asserts and a learning that is genuinely sound are indistinguishable until you need it and it fails. Confidence is a claim about the world; field survival is the world answering back. The Academy is built so that trust tracks the falsifiable thing (did it survive use?) rather than the unfalsifiable one (how sure is the agent?). That is the whole reason learnings are born provisional.'

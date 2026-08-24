@@ -1,0 +1,60 @@
+id: L-2026-06-26-ascend-032923-001
+type: agent-session
+timestamp: '2026-06-26T03:29:23.919Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Auto-seal hook (A) + multi-writer admission Phase C v1 (C) — the collision-ending protocol, proven
+summary: |-
+  Built 'A then C'. A: a post-commit auto-seal hook so the fabric grows automatically on every git commit — it immediately proved itself by recording BOTH agents' commits (mine + the concurrent classroom agent's) into one attributed history. C: the multi-writer admission protocol (Phase C v1) — SCRATCH fork + admitDecision (FAST_ADMIT/CLEAN/KNOT/DANGLE) with the gate-rule confidence — proven by a test where two agents edit the same line, git merge-tree CONFLICTS, but Warpline admits CLEAN. A profound corollary emerged: dependency-linked concurrent edits almost always KNOT (caught by Merkle propagation), so CLEAN admissions are almost always between INDEPENDENT symbols (carrying the false-AUTOFOLD blind-spot) — which is exactly why CLEAN confidence defaults to 'independent'.</summary>
+  <parameter name="type">milestone
+symbols_created:
+  - '#hook'
+  - '#scratch'
+  - '#admit'
+files_created:
+  - packages/warpline/src/fabric/hook.ts
+  - packages/warpline/src/fabric/scratch.ts
+  - packages/warpline/src/fabric/admit.ts
+  - packages/warpline/test/hook.test.ts
+  - packages/warpline/test/multiwriter-admit.test.ts
+learnings:
+  - The auto-seal hook makes the fabric a SHARED multi-agent history automatically — it recorded a concurrent agent's commit with correct per-commit attribution, no coordination
+  - 'Phase C corollary: dependency-linked concurrent edits almost always KNOT (Merkle propagation routes a shared symbol to both sides), so CLEAN multi-writer admissions are almost always between INDEPENDENT symbols — exactly the false-AUTOFOLD blind spot, which is why CLEAN confidence defaults to ''independent'''
+  - 'The last gap to a true git replacement is meaning→bytes materialization (v2): v1 DECIDES every merge correctly (proven where git conflicts) but doesn''t yet PRODUCE the merged tree for a CLEAN re-base'
+verification:
+  status: pass
+  details:
+    typecheck: clean
+    build: ok
+    tests: 146 green
+    dogfood: auto-seal recorded both agents' commits; CLI scratch/admit smoke-tested
+tags:
+  - warpline
+  - multi-writer
+  - auto-seal
+  - phase-c
+  - milestone
+body: |-
+  A — AUTO-SEAL (#hook): install/uninstall/status manage a BEGIN/END-guarded block APPENDED to the repo's post-commit hook (coexists with Paradigm's history capture, idempotent, clean uninstall, worktree-correct path via gitPath). Seals `--ref HEAD` (the committed tree, never the worktree — clean attribution, no conflation of other agents' uncommitted work), in the BACKGROUND (full-repo absorb is slow) and fail-safe (`|| true`). `#pick` gained commit-derived intent/actor (so the hook seals with no -m) + `--quiet`. PROVEN LIVE: the hook sealed the classroom agent's commit (seq 2) and the #hook commit (seq 3) into the shared fabric automatically. A .warpline-only commit changes no meaning, so its own auto-seal no-ops — the ledger settles instead of trailing forever.
+
+  C — MULTI-WRITER ADMISSION (#scratch, #admit, Phase C v1): forkScratch pins a per-agent optimistic base (O(1), zero contention — git's single shared working-tree/index/HEAD cannot). admitDecision(base, proposed, selvage) is the pure verdict: NOOP / FAST_ADMIT (selvage unadvanced) / CLEAN (predict autoClean — concurrent edits commute in MEANING where git conflicts on bytes) / KNOT (same symbol contradictory — human DECIDE, never silently merged) / DANGLE. CLEAN carries the GATE-RULE confidence: 'linked' (changed sets dependency-adjacent in-graph → trustworthy) vs 'independent' (disjoint → autoClean may hide a cross-symbol semantic conflict, per T-013).
+
+  THE PROOF (test/multiwriter-admit.test.ts): foo and bar on ONE physical line; A edits foo, B edits bar → git merge-tree CONFLICTS (both rewrote the line), but admitDecision(base, B, selvage=A) → CLEAN, confidence=independent. KNOT control (both edit foo) → KNOT. LINKED control (A adds caller→bar, B edits bar) → CLEAN, confidence=linked. 146 tests green.
+
+  THE COROLLARY (important): under body edits, ANY dependency linkage between two writers' changes routes a shared symbol's essence to both sides via Merkle-by-target → KNOT. So dependency-linked concurrent edits almost always get CAUGHT, and CLEAN admissions are almost always between INDEPENDENT symbols — which is precisely the false-AUTOFOLD blind spot. This validates defaulting CLEAN confidence to 'independent' and surfacing it as a watch flag.
+
+  v1 SCOPE / v2 GAP: v1 is the admission DECISION + the FAST_ADMIT seal. Producing the MERGED bytes for a CLEAN re-base (so the agent's tree reflects base+other+agent) is the meaning→bytes materialization layer (GAP-7 / write-path), deferred to v2. That's the last gap between 'Warpline decides the merge' and 'Warpline performs the merge'.
+
+  Commits: 1064c41b (#hook), e9c37b93 (ledger catch-up), 326c9ac5 (#admit/#scratch). All pushed to origin/warpline-surfaces.</parameter>
+  <parameter name="symbols_touched">["#hook", "#pick", "#scratch", "#admit", "#warpline-cli", "#git-exec", "#predict"]
+linked_commits:
+  - 1064c41b
+  - e9c37b93
+  - 326c9ac5
+confidence: 0.88
+git_context:
+  ref: 326c9ac517755071c0dd39ad71c227df0ff22eec
+  branch: warpline-surfaces
+  dirty: true

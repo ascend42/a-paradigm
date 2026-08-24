@@ -1,0 +1,69 @@
+id: L-2026-08-10-ascend-215428-001
+type: agent-session
+timestamp: '2026-08-10T21:54:28.582Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Pre-flight established for the first real Warpline project: nine blockers, three from measurement rather than review'
+summary: |
+  Three parallel agents — storage measurement, retention/durability design, and observability design — produced a consolidated pre-flight for committing a real project to Warpline. The most valuable output was not a design but a demonstration: `hook install` reports success, `git commit` exits 0, no fabric is ever created, and `warpline status` says "clean". Storage measurement overturned the retention question entirely (pruning would reclaim 12% while 96.5% is redundancy), and surfaced a hard ceiling nobody knew about: Warpline cannot seal a repo above ~100k symbols. Two agents contradicted each other on whether contentId is a safe dedup key; the reconciliation is what makes the 19.6x storage fix legal.</summary>
+  <body>## The demonstration that reordered the list
+
+  Helix ran this in a scratch repo and it is the whole problem in one transcript:
+
+  ```
+  $ warpline hook install     → "auto-seal created"
+  $ git commit                → exit 0
+  $ ls .warpline              → No such file or directory
+  $ warpline status           → "clean — no semantic change", exit 0
+  ```
+
+  Nothing was sealed. No fabric was ever created. Every surface reported success. The trigger is that `warpline` is not on PATH — the default for a local `npm i`, and verified true in this repo, which survives only on the `dist/cli.js` fallback at hook.ts:41. A positive control with WARPLINE_BIN set sealed correctly, so the mechanism works and only its failure is invisible.
+
+  That is a rocket flying with an empty fabric and every green light on, and it moved the hook fix to the top of the list ahead of every design item.
+
+  ## Measurement beat design on the storage question
+
+  Arky's ruling was careful and well-argued: reclaim losslessly, do not buy a gc, do not spend the "nothing is ever deleted" property that makes sealed work outlast a git reflog. Correct conclusion. But the measurement pass showed the property was never at risk, for a reason no amount of design reasoning would have produced:
+
+  - `states/` is a CACHE. The code says so at store.ts:53, and restore.ts / materialize.ts / object-store.ts contain zero references to it. Restore reconstructs from the 35 MB native object store.
+  - Per-seal cost is the FULL symbol graph re-serialized, always — linear in object count, provably independent of changed files (a 1-file and a 20-file seal produced identical deltas).
+  - Only 12% of states/ is unreachable garbage. 96.5% is redundancy: 468,355 object instances storing 13,848 unique, 29x.
+
+  So a retention policy — the thing that was about to be designed — would have reclaimed 123 MB and left the 29x untouched. The lever was never pruning.
+
+  ## The contradiction that had to be resolved rather than averaged
+
+  Arky (F-B): contentId is not a usable dedup key — 57% of keys map to more than one distinct body; keying on it would be a wrong-merge generator.
+
+  Measurement: codeEssence is 100% invariant per contentId — 42,819 instances, zero exceptions.
+
+  Both true, measuring different things. The 57% variation lives in carried provenance (description, tags, anchors, codeSignature); the codeEssence payload never varies. Arky's warning stands against keying the whole body; the narrower move of externalizing only codeEssence is safe. Without explicitly reconciling these, F-B would have blocked the 19.6x fix on a true-but-misapplied objection — an averaged or deferred answer would have been strictly worse than either agent's.
+
+  ## The instrument already exists and is wired to the wrong path
+
+  oracle.ts already computes the meaning-vs-git confusion matrix (agreeClean / agreeConflict / divergeGitOnly / divergeMeaningOnly). The git counterfactual is mergeTree() at git-exec.ts:544. Both work. But oracle is an offline manual verb, shadow.ts never calls mergeTree, and oracle.jsonl has zero readers — 11 MB, 28 rows, written and never once folded.
+
+  So the one item that is unanswerable retroactively is not a build. It is connecting two existing pieces to the live verdict row.
+
+  ## New hard ceiling
+
+  Warpline cannot seal above ~100k symbols: 100,008 objects seals, 125,008 fails with Maximum call stack size exceeded. Object-count driven, reproduced at two different file counts, site is essenceOf at essence-hash.ts:372 — the one remaining recursive graph walk. This directly constrains which project can be the test, at roughly 4,000 files.
+
+  ## The list
+
+  Nine blocking items: un-silence the hook (~6 lines), fix the state-cache ENOSPC swallow, un-ignore refs/heads (1 line), gzip states (1 call site, 7.5x), the counterfactual field on the shadow row, `warpline health`, confirm C-2/C-3/C-5 on the run branch, confirm the project gets its own root, and raise the symbol ceiling if the project is large. Four one-liners plus the hook fix are half the risk.
+
+  Machine state at the time of writing: 7.6 GiB free, 99% full, down from 9.3 GiB during the session.</body>
+  <type>milestone</type>
+  <symbols_touched>["#warp-store", "#fabric-hook", "#shadow", "#oracle", "#warpline-cli", "#essence-hash", "#warpline-backup"]</symbols_touched>
+  <tags>["warpline", "arc:warpline", "pre-flight", "storage", "observability", "durability", "measurement"]</tags>
+  <learnings>["Measurement beat design on a question that looked like a design question. Arky's retention ruling was well-argued and correct in conclusion, but the measurement pass showed the property under protection was never at risk — states/ is a cache the restore path never reads. Measure the artifact before designing a policy for it.", "When two agents contradict each other, resolve rather than average or defer. Arky said contentId is an unsafe dedup key (57% multi-body); measurement said codeEssence is 100% invariant per contentId. Both true at different scopes, and only the explicit reconciliation makes the 19.6x fix legal — deferring would have preserved a true-but-misapplied objection as a blocker.", "The most valuable output of an observability design pass was a demonstration, not a design: hook install succeeds, commit succeeds, no fabric is created, status reports clean. A reproduction reorders a priority list in a way that no amount of argument does.", "Check whether the instrument already exists before building it. oracle.ts already computed the exact meaning-vs-git confusion matrix; the gap was that shadow.ts never calls mergeTree and oracle.jsonl has zero readers. The unanswerable-retroactively item turned out to be wiring, not construction.", "Per-seal cost being independent of changed files is the kind of fact that only falls out of a controlled experiment — a 1-file and a 20-file seal produced identical deltas. It inverts the intuition that a VCS charges for what changed, and it is what makes the curve linear in project SIZE rather than in activity."]</learnings>
+  <verification>{"status": "pass", "details": {"isolation": "all three agents read-only; experiments in os.tmpdir(); live fabric verified byte-identical (head-64 md5 2503e2e4)", "storage_numbers": "measured on scratch fabrics across 100/1000/2000/3000/4000/5000-file repos, not extrapolated", "demonstration": "hook silent-failure reproduced with a positive control proving the mechanism works when the binary resolves", "independently_reverified": "states-is-a-cache (store.ts:53 + zero refs in restore/materialize/object-store), warpline not on PATH, oracle.jsonl zero readers, shadow.ts never calls mergeTree, essenceOf recursion site"}}</verification>
+  <confidence>0.9</confidence>
+  </invoke>
+git_context:
+  ref: 3a5c3b751dc977e93da55f5130ceddcaf28bcf29
+  branch: warpline-surfaces
+  dirty: true

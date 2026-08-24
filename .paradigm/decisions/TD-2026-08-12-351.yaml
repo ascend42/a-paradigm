@@ -1,0 +1,72 @@
+id: TD-2026-08-12-351
+timestamp: '2026-08-12T04:24:18.067Z'
+title: >-
+  AMENDS TD-113: advocate DISSENTS on M2.5 — merge-by-meaning must fail closed on blind classes (falsifier gate);
+  DAG-grading + narrowed-lock + protected-main are prerequisites; sequencing (measure-floor-first) is an open founder
+  call
+decision: >-
+  Corrects the participant record of TD-2026-08-12-113: 'advocate: supported' was pre-filled before Jinx reviewed — a
+  dissent-free consensus the project's own epistemics reject. Jinx's actual verdict is DISSENT. The M2.5 design panel's
+  real outcome: (1) ARCHITECTURE (Arky): M2.5 is a ~10 engineer-day WIRING build on a finished engine — a branch is a
+  named ref (refs.ts already generic over name), merge = admitDecision pointed at two tips via a factored weaveTips(),
+  the only net-new algorithm is LCA/merge-base; plus HEAD, switch/checkout (=M2 T-013), multi-branch log/diff. (2) THE
+  DISSENT (Jinx, source-confirmed, the load-bearing finding): merge-by-meaning's CLEAN trigger is the near-INVERSE of
+  git's conflict trigger — git conflicts on same-lines, Warpline CLEANs on disjoint-symbols — so on divergent branches
+  merge auto-folds exactly the §8 blind classes (config×code, no-shared-token invariants, scalar consts, .js configs)
+  that git would surface textually, with the trust floor structurally dead on a fresh branch. 'Better than git at the
+  merge' is FALSE for the hard stratum unless merge fails closed on meaning-blind changes. (3) ACCEPTANCE GATE (ratified
+  as a hard requirement): the DIVERGENT-BRANCH MERGE FALSIFIER — a merge over two branches seeded with the §8 canonical
+  breaks (config×code; limit-100→50 vs retry-loop) must surface a KNOT/hold on BOTH, never a silent independent-CLEAN.
+  M2.5's merge is not 'done' until this passes; Jinx predicts it FAILS today. (4) PREREQUISITES: DAG-reachable grading
+  (Loid — gradeFabric uses fabric.slice(i+1) not DAG ancestry; branches corrupt the moat until fixed); narrowed global
+  lock + atomic/sharded fabric.jsonl append (Aegis — else the per-branch-CAS concurrency win is throttled to zero and
+  C-13 tearing goes live); protected main + merge-to-protected=HUMAN_ONLY + scratch keyed agentId×branch (Aegis — else
+  agent self-merge bypasses the human resolve gate). (5) SEQUENCING (OPEN founder decision): Jinx argues measure the
+  LINEAR-case false-CLEAN rate (run the built LLM-judge live on the field test) BEFORE building the merge multiplier,
+  since branch-merge concentrates blind-class exposure and the base rate is still unmeasured.
+rationale: >-
+  The advocate did its job: the M2.5 merge inherits the engine's blind-class unsafety and is a MULTIPLIER on it (longer
+  divergence = more §8 merges), while the base false-CLEAN rate on the simple linear case is still unmeasured (the
+  LLM-judge is built and cleared but has not run live). Arky's design is sound and cheap, but 'cheap to build' and 'safe
+  to ship' are different questions. The fail-closed-merge property is what separates a real 'branches-by-meaning better
+  than git' from 'git-worktree with the safety rails removed.' Recording the honest dissent enacts the founder's own
+  gate: falsifiers gate, dissent-free consensus is a broken instrument.
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+  - id: architect
+    role: agent
+    stance: supported
+  - id: advocate
+    role: agent
+    stance: dissented
+  - id: security
+    role: agent
+    stance: neutral
+  - id: forge
+    role: agent
+    stance: neutral
+alternatives_considered:
+  - option: Build M2.5 now as designed (merge = admit, auto-fold disjoint)
+    rejected_because: >-
+      inherits the §8 blind-class auto-fold; on divergent branches it silently seals invariant breaks git would surface
+      — theater/dangerous until the fail-closed-merge gate passes
+symbols_affected:
+  - '#admit'
+  - '#native'
+  - '#refs'
+  - '#grade'
+  - '#hazard'
+  - '#oracle'
+  - '#warpline-cli'
+status: active
+tags:
+  - warpline
+  - M2.5
+  - branching
+  - merge-by-meaning
+  - falsifier
+  - blind-classes
+  - amends-TD-2026-08-12-113
+  - dissent

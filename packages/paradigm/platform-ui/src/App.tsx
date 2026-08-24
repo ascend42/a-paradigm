@@ -23,6 +23,8 @@ const AmbientSection = lazy(() => import('./sections/ambient/AmbientSection'));
 const TeamSection = lazy(() => import('./sections/team/TeamSection'));
 const UniversitySection = lazy(() => import('./sections/university/UniversitySection'));
 const TasksSection = lazy(() => import('./sections/tasks/TasksSection'));
+const WarplineSection = lazy(() => import('./sections/warpline/WarplineSection'));
+const ClassroomSection = lazy(() => import('./sections/classroom/ClassroomSection'));
 
 function SectionFallback() {
   return (
@@ -60,7 +62,7 @@ export default function App() {
     // Handle browser back/forward
     const handlePopState = () => {
       const path = window.location.pathname.slice(1) || 'overview';
-      const validSections = ['overview', 'lore', 'graph', 'git', 'sentinel', 'university', 'symphony', 'docs', 'ambient', 'team', 'tasks'];
+      const validSections = ['overview', 'lore', 'graph', 'git', 'sentinel', 'university', 'symphony', 'docs', 'ambient', 'team', 'tasks', 'warpline', 'classroom'];
       if (validSections.includes(path)) {
         usePlatformStore.getState().setActiveSection(path as any);
       }
@@ -91,6 +93,8 @@ export default function App() {
             {activeSection === 'ambient' && <ErrorBoundary sectionName="Ambient"><AmbientSection /></ErrorBoundary>}
             {activeSection === 'team' && <ErrorBoundary sectionName="Team"><TeamSection /></ErrorBoundary>}
             {activeSection === 'tasks' && <ErrorBoundary sectionName="Tasks"><TasksSection /></ErrorBoundary>}
+            {activeSection === 'warpline' && <ErrorBoundary sectionName="Warpline"><WarplineSection /></ErrorBoundary>}
+            {activeSection === 'classroom' && <ErrorBoundary sectionName="Academy"><ClassroomSection /></ErrorBoundary>}
           </Suspense>
         </div>
       </div>

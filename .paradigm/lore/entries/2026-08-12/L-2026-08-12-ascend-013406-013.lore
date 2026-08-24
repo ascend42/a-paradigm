@@ -1,0 +1,18 @@
+id: L-2026-08-12-ascend-013406-013
+type: insight
+timestamp: '2026-08-12T01:34:06.340Z'
+author: ascend
+title: Decision TD-2026-08-12-831 recorded
+summary: Companion lore entry for decision record TD-2026-08-12-831. See .paradigm/decisions/TD-2026-08-12-831.yaml.
+symbols_touched:
+  - '#predict'
+  - '#sem-delta'
+  - '#essence-hash'
+  - '#hazard'
+  - '#oracle'
+  - '#admit'
+references:
+  decision_id: TD-2026-08-12-831
+tags:
+  - companion-lore
+  - decision-reference

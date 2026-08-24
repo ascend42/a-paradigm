@@ -1,0 +1,43 @@
+id: L-2026-06-23-ascend-180057-001
+type: milestone
+timestamp: '2026-06-23T18:00:57.128Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Loom — weave --preview + diff shipped; flaky-test root-caused (worktree concurrency)
+summary: 'Pushed two read-only engine-backed CLI commands on branch loom-engine (commit bde51de8): `loom weave --preview <A> <B> [--vs-git]` — the founder''s killer-feature pre-merge forecast (reuses the Oracle through predict() → autoClean/knots/dangling + a CLEAN-TO-WEAVE / N-decisions verdict; ephemeral, no jsonl; bare `weave` is a reserved read-only notice, write verb deferred) — and `loom diff [a] [b]` (semantic diff: born/retired/contract-changed-by-slot/renamed-noop, making the zero-diff move/rename visible). New #weave (forecast()+semanticDiff(), thin reuse of absorb/diff/predict). DISCIPLINE WIN: caught a flaky test (the divergence-proof beforeAll intermittently skipped/failed) and root-caused it instead of papering over — in isolation the test passes 8/8, but under vitest FILE PARALLELISM two absorbs race on the same repo''s `git worktree` locks and throw. The engine''s worktree ops genuinely aren''t concurrency-safe against one repo, so the honest fix is fileParallelism:false (verified 33/33 across 10 consecutive runs), and the underlying concurrency-safety (required before the CONSOLIDATE feature does parallel absorbs) is filed T-2026-06-23-003. Loom now has: oracle (proven), absorb, weave --preview, diff. Cheapest next: lifeline (needs history walk) / the real write `weave` (Classroom-coupled). Open founder call: GAP-1 (non-symbol files) — diff/weave see 0 deltas on .ts-only commits because Loom v0 only versions .purpose symbols.'
+symbols_touched:
+  - '#weave'
+  - '#loom-cli'
+  - '#loom-oracle'
+  - '#absorb'
+  - '#sem-delta'
+symbols_created:
+  - '#weave'
+commit: bde51de8
+verification:
+  status: pass
+  details:
+    tests: loom 33/33 stable across 10 runs (flake fixed)
+    build: clean
+    commands: weave --preview + diff run read-only on real refs; bare weave reserved; oracle HEAD HEAD 0/0/0
+    git-safety: HEAD/worktree untouched
+tags:
+  - loom
+  - git-successor
+  - weave-preview
+  - diff
+  - cli
+  - flaky-fix
+  - concurrency
+  - phase-1
+linked_lore:
+  - L-2026-06-23-ascend-161313-001
+linked_tasks:
+  - T-2026-06-23-003
+confidence: 0.85
+git_context:
+  ref: bde51de8ed88f06e82447432561dbe4087fe2c40
+  branch: loom-engine
+  dirty: true

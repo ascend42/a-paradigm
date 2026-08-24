@@ -41,6 +41,11 @@ export function useAgentEffects() {
           if (msg.type?.startsWith('tasks:')) {
             window.dispatchEvent(new CustomEvent('tasks-ws', { detail: msg }));
           }
+          // Forward warpline:* messages (warpline:oracle-record-appended from the
+          // ledger fs.watch) so the Warpline section prepends new Oracle runs live.
+          if (msg.type?.startsWith('warpline:')) {
+            window.dispatchEvent(new CustomEvent('warpline-ws', { detail: msg }));
+          }
         } catch {
           // Ignore malformed
         }

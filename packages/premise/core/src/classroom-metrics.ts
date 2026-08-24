@@ -48,6 +48,31 @@ export interface FieldFailureRow {
   [key: string]: unknown;
 }
 
+/**
+ * ExerciseIntensity — the evidence that a certified claim was actually EXERCISED,
+ * not merely aged (docs/specs/classroom-falsifiable-loop.md). Lives here in
+ * premise-core because it is the ONE shared contract across the boundary: the
+ * paradigm-mcp cert row carries it as local per-cert counters, and the CLI's
+ * registry `CalibrationPrior` carries the cross-project SUM of the same shape.
+ * The CLI does NOT depend on paradigm-mcp, so this shared home is premise-core.
+ *
+ * Falsifiability contract: a cert may only resolve to `survived` when these
+ * counters clear a floor (≥ K_MIN_EXERCISE exercises AND ≥1 adversarial probe).
+ * Wall-clock time may DECAY confidence but must NEVER mint these — every
+ * increment carries a real join receipt (an orchestrationId notebook-ref or a
+ * scenario-run id).
+ */
+export interface ExerciseIntensity {
+  /** Total real invocations of the claim that held (E1 apply-and-held + E2/E3 probes). */
+  timesExercised: number;
+  /** Deliberate scenario/poison-pill probes run against the claim that it held. */
+  adversarialProbes: number;
+  /** Applications under a break-attempt that the claim survived. */
+  breakAttempts: number;
+  /** ISO timestamp of the most recent exercise. */
+  lastExercisedAt?: string;
+}
+
 // ────────────────────────────────────────────────────────
 // Tolerant .paradigm readers (mirror graph-slice's file access)
 // ────────────────────────────────────────────────────────
@@ -110,6 +135,14 @@ export interface AgentRepeatFailure {
   overturned: number;
   /** overturned / resolved, rounded to 3dp; `null` until ≥1 cert resolves. */
   rate: number | null;
+  /**
+   * Certs that aged past the survival window WITHOUT being exercised — the
+   * honest floor (docs/specs/classroom-falsifiable-loop.md, TD-2026-06-26-881
+   * amendment 4). Distinct from `pending` (young, not yet aged) and from
+   * `survived` (aged AND tested-and-held). Optional/forward-compat until the
+   * survival reducer populates it (sub-phase 1). "Merely aged" ≠ "survived".
+   */
+  unproven?: number;
 }
 
 export interface RepeatFailureRate {

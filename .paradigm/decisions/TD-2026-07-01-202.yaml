@@ -1,0 +1,66 @@
+id: TD-2026-07-01-202
+timestamp: '2026-07-01T21:56:42.581Z'
+title: Pre-existing pickId drift in the dogfood fabric — verify tries known rules + grandfathers the 7 graded-over strands
+decision: >-
+  Handle the pre-existing self-hash drift discovered during schema-v2 build (fabric verify over the real
+  .warpline/fabric.jsonl fails to reproduce 8 of 15 pickIds) by: (1) `fabric verify` and the §4.4 rewriteFabric guard
+  try the FINITE SET of known historical hashing rules — whole-body (pre-59c138f7) then current-exclusion — and accept a
+  strand if ANY reproduces its stored pickId; this cleanly re-verifies seq 0 and seq 8–14 with no marker. (2) The
+  residue that reproduces under NO rule because #grade (0e3d3d57) overwrote the hashed calibratedConfidence byte in
+  place — seq 1–7, physically unrecoverable — is recorded as an explicit grandfathered set PINNED BY EXACT pickId (never
+  over-grandfathers a future strand), classified `legacy-unverifiable` (a soft finding, exit 0), and SKIPPED by the §4.4
+  guard so the grade loop keeps working. Reject re-sealing seq 0–7 (breaks immutability and can't recover the destroyed
+  bytes anyway). This extends the already-ratified OQ-A accept+document stance from ORDERING to SELF-HASH.</decision>
+
+  <parameter name="rationale">Root cause is two shipped commits that changed the pickId contract out from under the
+  on-disk fabric: 59c138f7 (M1b) switched computePickId from whole-body to excluding calibratedConfidence/binding/merge
+  (retroactively broke seq 0–7 recompute); 0e3d3d57 (#grade) mutates calibratedConfidence in place, and for the
+  whole-body-sealed seq 1–7 that destroyed the exact hashed byte, making those ids unrecoverable under any rule. Builder
+  proved on a pristine tree that the v2 mechanism is NOT implicated — the current-rule strands (seq 8–14) are
+  byte-stable, so v2 (which preserves that rule) is sound. 'Try known rules' is principled and finite (there are exactly
+  two historical rules), recovers all recoverable strands automatically, and isolates the genuinely-destroyed set.
+  Pinning the grandfathered strands by pickId (not a seq threshold) means a real future tamper still surfaces as
+  pickId-mismatch. The incident VALIDATES shipping the §4.4 guard — in-place mutation of a hashed field is precisely
+  what it now prevents for all v2 strands. For a 14-strand experimental dogfood fabric, preserving the real immutable
+  history + honest grandfather beats a re-stamp that loses the ids anyway.
+participants:
+  - id: ascend
+    role: human
+    stance: neutral
+  - id: forge
+    role: agent
+    stance: proposed
+  - id: architect
+    role: agent
+    stance: supported
+  - id: security
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: One-time re-seal/migration of seq 0–7 under the current rule
+    rejected_because: >-
+      Breaks the immutability thesis, and seq 1–7's original confidence is unrecoverable so it can only re-STAMP (assign
+      new ids), not faithfully re-hash — losing the original pickIds is exactly what immutability exists to prevent.
+      Little gained for a dogfood fabric.
+  - option: Persist a per-strand rule/version tag and dispatch verify per strand
+    rejected_because: >-
+      Doesn't help seq 1–7 (graded-over regardless of which rule tag), and adds a field to strands whose ids can't be
+      recomputed anyway. 'Try known rules' achieves the recoverable-strand goal without mutating history.
+  - option: Classify all 8 (seq 0–7) as legacy-unverifiable
+    rejected_because: >-
+      Over-broad — seq 0 reproduces perfectly under the whole-body rule. Trying known rules re-verifies it; only the 7
+      truly-destroyed strands need grandfathering.
+symbols_affected:
+  - '#strand'
+  - '#pick'
+  - '#fabric'
+  - '#grade'
+status: active
+tags:
+  - warpline
+  - fabric-schema-v2
+  - pickId-drift
+  - fabric-verify
+  - grandfather
+  - pre-existing-bug
+  - audit-driven

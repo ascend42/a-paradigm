@@ -1,0 +1,96 @@
+id: TD-2026-08-11-663
+timestamp: '2026-08-11T18:36:32.638Z'
+title: >-
+  Warpline flight-version decisions: the Expo project supplies the denominator, mirror mode ships, and two safety items
+  gate the swarm
+decision: >-
+  Six founder decisions taken 2026-08-11, ahead of the first real field test (an Expo/React Native app). (1) THE
+  CONTESTED DENOMINATOR comes from the EXPO FIELD-TEST PROJECT — real agents contending on a real app, not a driven
+  swarm on a-paradigm and not a synthetic harness. (2) REPLICATION for this run: git-track the tip (fabric.jsonl + refs
+  already push with the repo), states/ stays a regenerable cache; the permanent-fail-closed risk on a lost state file is
+  accepted explicitly rather than engineered away. (3) THE H1 GUARD (T-2026-07-01-030) is FIXED BEFORE the field test —
+  relax the refusal on CLEAN admits over a merged tip using the MergeRecipe, which was the stated blocker and already
+  shipped. (4) PRODUCT SHAPE is MIRROR MODE NOW, with an explicit trigger to revisit: when the Expo project accumulates
+  history the founder would be unwilling to lose, replication and replacement get re-decided TOGETHER, because they are
+  the same decision. M4 remote/sync, M2.5 branching and M3 signing stay unfunded. (5) FG-3: a DESCRIPTOR REVIEW PASS
+  runs BEFORE the freeze is pinned, including whether the two remaining CLI-arm asymmetries (daemon `status`,
+  `shadow.tail`) should close; descriptorsId is pinned once, afterward. (6) SWARM SAFETY: Tier-0 invariant conflicts
+  (T-2026-06-24-015) and the blind injection corpus (T-2026-06-24-013) are addressed BEFORE the swarm runs; the
+  over-block ceiling (T-2026-07-15-008) is deliberately NOT — it is observed in the field instead.
+rationale: >-
+  Sequencing was unblocked by evidence, not argument. The dress rehearsal proved the contested lifecycle works end to
+  end (genesis, fork x2, propose x2, FAST_ADMIT, KNOT with hydrated payload, human resolve, byte-identical restore at
+  depth 41), which promoted "where does the denominator come from" from one open question among many to the item
+  everything else waits on — every `unmeasured` on the standing report reduces to it. The Expo project was chosen over a
+  driven swarm because self-generated contention on our own calibrated codebase invites the obvious objection at
+  publication time, and over a synthetic harness because a harness assumes the very thing the measurement is meant to
+  show (that contested merges HAPPEN). Replication is deliberately under-engineered for THIS run because the field-test
+  repo starts with no history worth losing; the risk is real but its cost is currently near zero, and pairing the
+  revisit trigger to accumulated history keeps it from being forgotten. Mirror mode was confirmed reversible by direct
+  test rather than by reasoning: the full native cycle (pick, fork with tree restore, propose, admit) runs in a
+  directory with NO .git present at all, so the git-independent substrate is built, not deferred — what mirror mode
+  defers (M4/M2.5/M3) is purely additive. The coupling that actually hardens over time is decision (2), git-tracking the
+  tip, which makes git load-bearing for durability; naming that explicitly is why (2) and (4) share a revisit trigger.
+  FG-3's own task text says every fix after the pin is expensive, so the review pass pays that cost once. On safety,
+  Tier-0 invariant conflicts auto-weave disjoint-but-jointly-wrong changes with ZERO review — the failure that reaches
+  production on a real app — and agent prose flows between agents in any real swarm, so the injection envelope needs its
+  blind externally-authored corpus before, not after. KNOWN CONSEQUENCE, accepted: declining the over-block fix while
+  sourcing the denominator from the field test means that denominator will contain false KNOTs from commuting edits
+  (measured 3/3 on Move-3). The field test must therefore CLASSIFY each KNOT as genuine or over-block at resolve time,
+  or the headline number will not survive scrutiny.
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+  - id: claude
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: Driven swarm on a-paradigm for the denominator
+    rejected_because: >-
+      Fastest to a non-zero number, but it is our own codebase and our own calibration — a skeptic reads it as
+      self-generated evidence, and the headline claim is exactly the thing under scrutiny.
+  - option: Synthetic harness for the denominator
+    rejected_because: >-
+      Fully controlled and repeatable, and still the right instrument for the F4 cold-agent run specifically — but as
+      evidence that contested merges OCCUR it assumes its conclusion.
+  - option: Build re-derivation of states/ from provenance.gitCommit
+    rejected_because: >-
+      Would remove the permanent-fail-closed class outright, but it is real work whose value is near zero on a fresh
+      repo, and it only holds while the git commits survive — which is the same dependency being accepted anyway.
+  - option: Keep byte-authoritative replacement as the active goal
+    rejected_because: >-
+      Team readiness panel scored ~0.05; M4 remote/sync is pure git-parity plumbing with zero differentiation (Loid A7).
+      The real gate on replacement was never format — it is distribution: no host, no review surface, no bisect/blame
+      analogue, and not in weights or fingers.
+  - option: Freeze descriptorsId now and accept a denominator reset later
+    rejected_because: >-
+      Would start accumulating scored runs immediately, but any later descriptor change discards them — and two known
+      CLI-arm asymmetries are still open, so a change is likely rather than hypothetical.
+  - option: Fix the over-block ceiling before the swarm
+    rejected_because: >-
+      Deliberately declined: the real-world false-KNOT rate on a live codebase is itself unmeasured and worth knowing.
+      Accepted with the mitigation that each KNOT must be classified genuine-vs-over-block at resolve time.
+  - option: Run the field test at N<=2 to sidestep the H1 guard
+    rejected_because: >-
+      Would reach real contention sooner, but caps the concurrency story at a number git already handles well —
+      measuring nothing the product is for.
+symbols_affected:
+  - '#admit'
+  - '#grade'
+  - '#warp-store'
+  - '#weave'
+  - '#oracle'
+  - '#f4-classifier'
+  - '#essence-hash'
+  - '#warpline-cli'
+status: active
+tags:
+  - warpline
+  - field-test
+  - founder-decision
+  - mirror-mode
+  - denominator
+  - f4
+  - swarm-safety
+  - flight-version

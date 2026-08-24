@@ -1,0 +1,50 @@
+id: TD-2026-08-11-704
+timestamp: '2026-08-11T23:17:44.153Z'
+title: >-
+  Field-test judge parameters set: standalone cold instrument, all 6 protocol amendments accepted, pinned Claude
+  snapshot (correlated-priors accepted as stated limitation), N=3 majority
+decision: >-
+  Four founder rulings finalizing the LLM-judge before the protocol locks: (1) SHAPE ratified — standalone cold
+  instrument, not a roster or blind-profile agent (confirms TD-2026-08-11-071). (2) All SIX protocol §4/§5 pre-lock
+  amendments ACCEPTED (T-2026-08-11-022): selection-bias fix (judge independently rates a random audit sample of
+  auto-wove CLEANs), planted positive control, anti-laundering (objective regression is 'broken', LLM confirms
+  subjective cases only), injection hardening (envelope+frame every field, cold model no token, twin-invariant + blind
+  corpus as blocking pre-flight), ledger custody (hash-chained + write-before-reveal), and freeze-before-lock. (3) Judge
+  MODEL = a pinned Claude snapshot (exact dated version, not an alias) — chosen for simplicity and pinnability over a
+  non-Claude model; the correlated-priors risk (judge shares a family with the agents under test) is ACCEPTED as a
+  stated limitation reported in §9, mitigated but not eliminated by N=3 + the twin-invariant + the positive control. (4)
+  samplesPerCard = N=3, majority label, per-card spread reported.
+rationale: >-
+  These are the pre-registration parameters that must be frozen before the first admission (optional-stopping doctrine
+  forbids tuning them to the result). The founder took the panel's unanimous cold-instrument recommendation and its full
+  amendment set, and chose Claude-for-pinnability while accepting the correlated-priors limitation openly rather than
+  paying the setup cost of a second provider — an honest-limit call consistent with 'report the limitation, don't hide
+  it.' N=3 balances the prior study's measured single-sample flip risk against cost.
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+  - id: architect
+    role: agent
+    stance: supported
+  - id: advocate
+    role: agent
+    stance: neutral
+alternatives_considered:
+  - option: Non-Claude frontier judge (maximal independence)
+    rejected_because: founder chose Claude pinnability/simplicity and accepted correlated-priors as a reported limitation
+  - option: N=1 (prior study default)
+    rejected_because: single-sample noise; the study itself flagged a second sample could flip borderline cases
+symbols_affected:
+  - '#oracle'
+  - '#knot-payload'
+  - '#envelope'
+status: active
+tags:
+  - warpline
+  - llm-judge
+  - field-test
+  - pre-registration
+  - N-3
+  - correlated-priors
+  - audit-2026-08-11

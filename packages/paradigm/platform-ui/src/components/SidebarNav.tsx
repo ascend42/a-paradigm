@@ -13,6 +13,8 @@ const SECTION_ICONS: Record<string, string> = {
   ambient: '◌',
   team: '◫',
   tasks: '▤',
+  warpline: '⋈',
+  classroom: '⌂',
   meetings: '●',
 };
 

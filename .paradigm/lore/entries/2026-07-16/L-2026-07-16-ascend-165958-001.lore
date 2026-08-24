@@ -1,0 +1,55 @@
+id: L-2026-07-16-ascend-165958-001
+type: agent-session
+timestamp: '2026-07-16T16:59:58.674Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Cid Debrief: PHASE 2+3 EXECUTION WAVE (post-founder-gates; continuation of the overnight wave'
+summary: 'PHASE 2+3 EXECUTION WAVE (post-founder-gates; continuation of the overnight wave). All founder gates executed: thesis RATIFIED (TD-2026-07-16-810), branch PUSHED to origin, v3 §9 SIGNED all-five (TD-2026-07-16-277), K3 re-scoped to organic arm (TD-2026-07-16-426). Then five verified lanes landed: (1) P2.1 v3 DAG identity V3.1+V3.2 (549889d0) — pick:v3 explicit preimage, no seq-in-identity, opposite-arrival-order identical pickIds proven, pickId refs w/ per-ref CAS, 369/369; (2) P3-B Guard GitHub Action (ba03888b) — knot-size ≤6 default, advisory-first, wording-law enforced BY TEST, e2e flagged a synthetic git-clean divergence, 29/29, publishing seam documented for founder; (3) P2.2+P2.4 knotPayload:v1 + UntrustedProse envelope (17032adb) — resolver sealed a real KNOT from payload JSON alone; 8-payload adversarial poisoned-prose corpus → verdicts byte-identical; 387/387; (4) P2.3 claims + P3-A GAP-1 cfg-lens combined (49508500) — claim:v1 + CLAIM-BREACH held-by-default + evaluations.jsonl probe stream; essence:cfg-v1 key-tree lens (disjoint dep adds COMMUTE, same-key KNOT), lockfiles=derived-take-ours, per-path honesty labels + coverage counts; 436/436; (5) P3-A2 minimum trust (ac0615cd) — grades keyed agentId×symbol into the v3 sidecar + the HELD consumer (independent-CLEAN on <0.5-survival symbols held, --accept-risk override row); 448/448. Every lane coordinator-verified (independent suite re-runs) before commit. Loid''s R3 axis: 2.5→shipped; GAP-1 structured-config tier: shipped; calibration loop: first consumer live. Remaining: benchmark P4.1 (founder positioning sign-off), organic K3 telemetry standing loop, v3.3+ seal cutover (founder-visible live migration), H1 worktree-seal residue (T-2026-07-01-030), census night-2, frozen list intact.'
+symbols_touched:
+  - '#claim'
+  - '#cfg-lens'
+  - '#derived-artifacts'
+  - '#honesty'
+  - '#guard-report'
+  - '#guard-render'
+  - '#guard-main'
+files_modified:
+  - packages/warpline/src/fabric/strand.ts
+  - packages/warpline/src/fabric/dag.ts
+  - packages/warpline/src/fabric/refs.ts
+  - packages/warpline/src/fabric/verify.ts
+  - packages/warpline/src/fabric/seal.ts
+  - packages/warpline/src/fabric/select.ts
+  - packages/warpline/src/fabric/admit.ts
+  - packages/warpline/src/fabric/claim.ts
+  - packages/warpline/src/fabric/knot-payload.ts
+  - packages/warpline/src/fabric/grade.ts
+  - packages/warpline/src/envelope.ts
+  - packages/warpline/src/honesty.ts
+  - packages/warpline/src/lens/cfg-lens.ts
+  - packages/warpline/src/lens/derived-artifacts.ts
+  - packages/warpline/src/cli.ts
+  - packages/warpline-action/action.yml
+  - packages/warpline-action/src/report.ts
+  - packages/warpline-action/src/render.ts
+  - packages/warpline-action/src/main.ts
+  - .github/workflows/warpline-guard.yml
+  - docs/specs/warpline-forge.md
+tags:
+  - arc:cid-debrief
+  - orch:orch-mrls0vbc-qryc
+meta:
+  orchestrationId: orch-mrls0vbc-qryc
+  coverageScore:
+    before: 0.7142857142857143
+    after: 1
+  coverageAdded:
+    - packages/warpline-action/src
+    - .github/workflows
+  notes: 'Commits this wave: 549889d0, ba03888b, 17032adb, 49508500, ac0615cd (+decisions TD-2026-07-16-810/-277/-426). Suite trajectory 329→448 green. Origin push at a96aa82d predates the wave; the five wave commits are LOCAL and ready for the founder''s next push decision (previous push authorization was for the 25 commits; not auto-extending it).'
+git_context:
+  ref: ac0615cda13b0dc5246c95037b19d8a4cec9eeb6
+  branch: warpline-surfaces
+  dirty: true

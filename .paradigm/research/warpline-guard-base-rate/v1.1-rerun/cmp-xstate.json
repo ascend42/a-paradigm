@@ -1,0 +1,30 @@
+{
+  "repo": "xstate",
+  "n": 100,
+  "errorsOld": 0,
+  "errorsNew": 0,
+  "errorRecsNew": [],
+  "gitCleanOld": 84,
+  "gitCleanNew": 84,
+  "hitsOld": 3,
+  "hitsNew": 3,
+  "gained": [],
+  "lost": [],
+  "unchanged": [
+    {
+      "merge": "e66662e1ff",
+      "flags": 10
+    },
+    {
+      "merge": "7b808af40f",
+      "flags": 4
+    },
+    {
+      "merge": "2d0cf66ee6",
+      "flags": 10
+    }
+  ],
+  "changedSet": [],
+  "rateOldPctOfClean": 3.6,
+  "rateNewPctOfClean": 3.6
+}

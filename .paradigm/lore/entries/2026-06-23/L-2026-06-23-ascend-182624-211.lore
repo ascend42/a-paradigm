@@ -1,0 +1,17 @@
+id: L-2026-06-23-ascend-182624-211
+type: insight
+timestamp: '2026-06-23T18:26:24.193Z'
+author: ascend
+title: Decision TD-2026-06-23-688 recorded
+summary: Companion lore entry for decision record TD-2026-06-23-688. See .paradigm/decisions/TD-2026-06-23-688.yaml.
+symbols_touched:
+  - '#absorb'
+  - '#essence-hash'
+  - '#loom'
+  - '#loom-oracle'
+  - '#sem-delta'
+references:
+  decision_id: TD-2026-06-23-688
+tags:
+  - companion-lore
+  - decision-reference

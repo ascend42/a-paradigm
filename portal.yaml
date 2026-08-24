@@ -437,6 +437,64 @@ routes:
     - ^local-only
     - ^write-capable
 
+  # ── Warpline (Convergence/Divergence Oracle — read path + append-only ledger) ──
+  # The engine NEVER mutates the user's git HEAD/index/worktree. Reads and the
+  # ephemeral computes (forecast/diff are weave --preview equivalents, no persist)
+  # are read-only. POST /oracle APPENDS an OracleRecord to .warpline/oracle.jsonl —
+  # an on-disk state mutation → write-capable.
+  GET /api/warpline/ledger:
+    - ^local-only
+    - ^read-only
+  GET /api/warpline/refs:
+    - ^local-only
+    - ^read-only
+  POST /api/warpline/forecast:
+    - ^local-only
+    - ^read-only
+  POST /api/warpline/diff:
+    - ^local-only
+    - ^read-only
+  GET /api/warpline/absorb/:ref:
+    - ^local-only
+    - ^read-only
+  POST /api/warpline/oracle:
+    - ^local-only
+    - ^write-capable
+  # Fabric-native console lane (PHASE 1 re-point): read-only fabric views,
+  # daemon-backed when warplined + the read-SCOPED console token are present
+  # (in-process otherwise). The lane registers GET handlers only, and the
+  # console token is capped at the daemon's READ_ONLY_VERBS server-side.
+  GET /api/warpline/fabric/status:
+    - ^local-only
+    - ^read-only
+  GET /api/warpline/fabric/refs:
+    - ^local-only
+    - ^read-only
+  GET /api/warpline/fabric/shadow-tail:
+    - ^local-only
+    - ^read-only
+  GET /api/warpline/fabric/knot/:selector:
+    - ^local-only
+    - ^read-only
+  GET /api/warpline/fabric/grade-report:
+    - ^local-only
+    - ^read-only
+
+  # ── Academy / Classroom (read-only over the gated-learning artifacts) ──
+  # Thin readers over .paradigm/curriculum + .paradigm/events JSONL. No write path.
+  GET /api/classroom/status:
+    - ^local-only
+    - ^read-only
+  GET /api/classroom/staged:
+    - ^local-only
+    - ^read-only
+  GET /api/classroom/certifications:
+    - ^local-only
+    - ^read-only
+  GET /api/classroom/refinements:
+    - ^local-only
+    - ^read-only
+
   # ── WebSocket ───────────────────────────────────────────────────────
   WS /ws:
     - ^local-only

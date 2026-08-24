@@ -1,0 +1,17 @@
+{
+  "repo": "nest",
+  "n": 100,
+  "errorsOld": 0,
+  "errorsNew": 0,
+  "errorRecsNew": [],
+  "gitCleanOld": 84,
+  "gitCleanNew": 84,
+  "hitsOld": 0,
+  "hitsNew": 0,
+  "gained": [],
+  "lost": [],
+  "unchanged": [],
+  "changedSet": [],
+  "rateOldPctOfClean": 0,
+  "rateNewPctOfClean": 0
+}

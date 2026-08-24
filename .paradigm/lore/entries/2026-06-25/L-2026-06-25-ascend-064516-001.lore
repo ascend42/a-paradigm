@@ -1,0 +1,43 @@
+id: L-2026-06-25-ascend-064516-001
+type: milestone
+timestamp: '2026-06-25T06:45:16.830Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: FIXED round-2 battle-test findings — weave-clean (lies-green fully closed) + lifeline phantom-attribution
+summary: 'Fixed both round-2 findings. T-005: the last lies-green facet — a symbol both git-conflicting AND meaning-knotting counted as agreeConflict (agreement) so convergence could read CONVERGENT over a merge git can''t complete. Added a separate #oracle mergeClean flag (no knots ∧ no dangling ∧ no git conflict) as the actionable answer; the CLI now LEADS with MERGE CLEAN/CONFLICTED and relabels CONVERGENCE as the meaning⟷git agreement experiment. T-006: #lifeline phantom-attribution — a transient absorb gap / schema-invalid .purpose mid-history fabricated a born + mislabelled the next meaning-preserving commit. Fixed with monotonic-birth classification (found/absent/unknown; an absence with an even-older found is a parse GAP, not a death/birth) + edge=born only when not truncated + --max validation. Verified firsthand; 113 tests pass (new contested-merge + lifeline-born guards). Commit 75b0207d.'
+symbols_touched:
+  - '#oracle'
+  - '#lifeline'
+  - '#warpline-cli'
+files_created:
+  - packages/warpline/test/oracle-contested-merge.test.ts
+files_modified:
+  - packages/warpline/src/oracle.ts
+  - packages/warpline/src/lifeline.ts
+  - packages/warpline/src/cli.ts
+  - packages/warpline/.purpose
+verification:
+  status: pass
+  details:
+    typecheck: pass
+    build: pass
+    tests: 113 pass (2x)
+    firsthand: oracle readme-rewrite main → MERGE CONFLICTED; --max abc/0 → error+exit1
+tags:
+  - warpline
+  - '#oracle'
+  - '#lifeline'
+  - lies-green
+  - fix
+  - battle-test-r2
+  - shipped
+linked_tasks:
+  - T-2026-06-25-005
+  - T-2026-06-25-006
+confidence: 0.88
+git_context:
+  ref: 75b0207d088dbef61671adbb74a5c26ccb08fe6c
+  branch: warpline-surfaces
+  dirty: true

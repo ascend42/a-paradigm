@@ -1,0 +1,29 @@
+id: TD-2026-08-24-012
+timestamp: '2026-08-24T01:52:21.128Z'
+title: Pre-registration v2 RATIFIED as drafted — text locked; freeze awaits subject naming + sealed manifests
+decision: >-
+  The founder ratifies expo-field-test-protocol-v2.md exactly as drafted (amendments A1–A11, incl. the TD-136 M3-lite
+  A11). The TEXT is LOCKED as of this decision: the amendment log is closed; any further text change requires a v3. The
+  FREEZE (after which admissions count) still requires v2 §C conditions (b) the subject Expo app named in §A2 and (c)
+  seed/corpus manifest hashes committed. Also authorized: push the warpline-surfaces branch (11 local commits: readiness
+  panel → M3-lite) to origin.
+rationale: >-
+  All six v1 contradictions are resolved in the ratified text; every engineering precondition (judge hardening, field
+  pipeline, M3-lite) is built, reviewed, and green (1316). Locking the text now lets the remaining work — subject
+  creation, seeds, corpus, dry run — proceed against a fixed target, preserving the pre-registration discipline
+  (decisions made before the run, not fitted to it).
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+symbols_affected:
+  - '#judge'
+  - '#field-judge-run'
+  - '#grants'
+status: active
+tags:
+  - warpline
+  - field-test
+  - pre-registration-v2
+  - ratified
+  - locked

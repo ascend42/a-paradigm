@@ -1,0 +1,57 @@
+id: L-2026-06-24-ascend-234356-001
+type: milestone
+timestamp: '2026-06-24T23:43:56.058Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Warpline multi-agent: round-2 attack panel — the fixes, and Jinx''s critical-path correction'
+summary: 'Round-2 team panel attacked the 6 swarm problems with concrete fixes AND the recursive "make ourselves better" angle. Key reframe (Jinx, verified at cli.ts:89 = "weave write not implemented; Phase 1 read-only"): 4 of 6 fixes defend a WRITE PATH THAT DOESN''T EXIST, so they are DESIGN-CONSTRAINTS on the write-path build, not parallel features to build now. Corrected critical path: fix absorb concurrency → build the write path (weave/consolidate/GAP-7) → build the N≥3 same-feature CONTENDED fixture → MEASURE labor_ratio vs git. Self-improvement claims are only real with FALSIFIABLE ARTIFACTS (blind human-scored red-team for injection; a logged agent decision changed by an intent-board read) — else calibration-of-the-calibrator.'
+symbols_touched:
+  - '#warpline'
+  - '#absorb'
+  - '#consolidate'
+  - '#weave'
+  - '#oracle'
+  - '#ts-lens'
+  - '#git-exec'
+tags:
+  - warpline
+  - multi-agent
+  - attack-panel
+  - critical-path
+  - falsifiability
+  - dogfood
+  - design-constraints
+body: |-
+  RECLASSIFICATION (the actionable output of round 2):
+
+  BUILD NOW (real defect in shipped code, the literal gate): T-2026-06-23-003 absorb worktree concurrency. Cid VERIFIED the load-bearing fact — premise-core's loadLiveGraph + the lens do pure fs reads, never shell git inside the lifted tree (grep: only git-exec.ts touches child_process). So `git archive <ref> | tar -x` into a temp dir kills the .git/worktrees lock cleanly. Plan: materializeTree/releaseTree (stream not shell-pipe, preserve no-shell arg-array hardening; rev-parse to a SHA first), per-repo in-process mutex for the cold mergeTree fallback (which needs a real worktree — archive can't serve it). ACCEPTANCE: flip vitest fileParallelism:true + N=4 concurrent-absorb test green + an invariant guard test (no git subprocess with cwd inside a materialized tree). Unblocks T-012.
+
+  DESIGN-CONSTRAINTS ON THE WRITE-PATH BUILD (capture as "build the write path THIS way", do NOT parallel-build as standalone features — Jinx's one concession):
+  - T-016 CAS admission: per-symbol-DOMAIN optimistic CAS on the selvage tip; snapshot trust+fragility+WEAVE-LAW-version AT the evaluated tip, FREEZE into the WeaveRecord (kills the scrutiny-read-to-admit TOCTOU; the loser re-predicts against the winner's tip so the manufactured-post-hoc-knot can't happen). Canonical domain lock-ordering (shared with consolidate's topo-sort) avoids deadlock; FIFO admission ticket + non-conflicting coalescing avoids hot-symbol livelock. Make `warpline queue` the MANDATORY admission path. Hot fragile symbol = correctly serialized, NOT parallelized (honest scope: "neutral for DEEP-OVERLAP").
+  - T-013 injection: typed untrusted-prose envelope (content-addressed kind tag) → sentinel-escaped frame-on-render → trust-scoped quarantine-render; gate decision = pure function of signed/computed inputs, never prose. Warpline owns envelope+frame+contract; runtime owns honoring it (advisory per CLAUDE.md → needs tool-permission backing). Twin test = the falsifiable proof. Co-design with T-015 (content) + T-017 (render-trust for seeds).
+  - Arky's weft + scratch primitives: WEFT = atomic content-addressed PICK-GROUP, closure computed by Tarjan SCC over the dependency graph (cyclic dependency ⇒ atomic group is FORCED by the math, not declared — reuse essence-hash.ts SCC), all-or-nothing admission. SCRATCH = ephemeral owner-private MUTABLE view (folds in GAP-2 shelf); scratch=ownership/not-ready, quarantine=trust/don't-trust-you — must not conflate.
+  - T-014 (the REAL slice): structural essence for JSON/YAML (key-path set → disjoint adds COMMUTE, same-key-diff-value KNOTS); lockfiles + generated files = REGENERATE-not-merge behind a determinism contract (pin generator + verify byte-reproducibility in CI), NOT structural-merge (a structurally-merged lockfile installs but is invalid = green footgun); T3 coverage triple per file makes byte-blob fallback HONEST (reported number) not hidden. The test-assertion lens is RESEARCH (semantic equivalence of test intent = the hardest core), NOT a v1 fix — Jinx correctly flagged it as GAP-1+T-015 in a trenchcoat.
+
+  NEEDS-DATA / RESEARCH (don't score as "designed"): T-017 cold-start ladder — build Rung C (shadow-earned) FIRST (only rung that manufactures evidence; safe-by-construction; the instrument that generates data for A's τ_seed/λ/K and B's prior_weight). Rung B (archetype prior) is CONDITIONAL — drop if cross-population data shows the notebook-hash prior predicts nothing (Jinx: astrology until cohort-homogeneity proven). Jinx's shadow-earned critique stands: it may RELOCATE human cost (review shadow runs instead of clearing quarantine) — must show net reduction. T-015 static danger-signal coefficients = educated priors needing the field-failure distribution of statically-seeded-but-history-clean symbols.
+
+  MAKE-US-BETTER (recursive dogfood) — only real with FALSIFIABLE ARTIFACTS:
+  - Intent board (T-new): theater unless a logged agent decision changed by a board read (collision-rate in stream.jsonl before/after). This session = first datum (round-2 agents had overlapping territory).
+  - Injection hardening: theater unless a BLIND externally-authored, human-scored red-team corpus (seen + unseen payloads) flips zero verdicts (added as T-013 acceptance criterion).
+  - Loid's highest-leverage: run the Warpline arc as a live Classroom term — every decision provisional, peer-refuted, certified/killed against our own subsequent merges via the field-failure reducer pointed at our own work. GUARD (Jinx): needs an OUTSIDE-LOOP metric / exogenous signal or it's the closed loop the Classroom poison-pill exists to prevent. Aegis's parallel: frame agent-to-agent orchestrator handoffs as UPSTREAM_AGENT_OUTPUT data + tag repo-sourced prose UNTRUSTED_REPO_PROSE (the orchestrator currently feeds one agent's raw output to the next unframed — same vuln as the weft channel, internal scale).
+
+  CONFIDENCE SPREAD: Arky 0.62 (GAP-1 solvable to fan-out claim), Cid 0.78 (parallel flow shippable; measurement risk on labor_ratio<1), Aegis 0.78 (security holds once T-013+T-016 land; residual = advisory runtime adoption + semantic injection below the frame), Loid 0.45 (architecture ~0.8, safe-at-scale dragged down by 4 guessed parameters needing swarm data), Jinx 0.3 (real improvement vs satisfying conversation — moves to 0.6 IFF absorb-fix+write-path+contended-fixture built first AND a blind red-team artifact attached). Converged: architecture sound (~0.8), product unproven (~0.5) until the write path runs and the contended fixture measures < git.
+linked_tasks:
+  - T-2026-06-23-003
+  - T-2026-06-24-012
+  - T-2026-06-24-013
+  - T-2026-06-24-014
+  - T-2026-06-24-015
+  - T-2026-06-24-016
+  - T-2026-06-24-017
+confidence: 0.8
+git_context:
+  ref: b5829a75962c5f74e1de6f2bf38c5d9279d7e692
+  branch: warpline-surfaces
+  dirty: true

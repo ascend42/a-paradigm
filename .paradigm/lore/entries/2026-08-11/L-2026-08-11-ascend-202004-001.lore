@@ -1,0 +1,54 @@
+id: L-2026-08-11-ascend-202004-001
+type: review
+timestamp: '2026-08-11T20:20:04.735Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Warpline flight-readiness audit: five-agent adversarial panel, unanimous split verdict'
+summary: 'A five-agent adversarial panel (architect, Aegis/security, Judge/reviewer, Probe/tester, Jinx/advocate — the last dispatched manually because the orchestrator bug T-2026-08-11-007 drops her) audited the "WARPLINE FLIGHT VERSION IS READY" checkpoint, each tasked to FALSIFY not confirm. Unanimous, independently-converged verdict: NOT READY as "true source control for the agentic age"; READY-WITH-CAVEATS only as a supervised, git-backed, mirror-mode field trial operated by its own author. Two agents reproduced a false CLEAN by hand on the canonical invariant case. This is the opening state for the session''s work toward the true goal.'
+symbols_touched:
+  - '#admit'
+  - '#resolve'
+  - '#knot-payload'
+  - '#hazard'
+  - '#grade'
+  - '#shadow'
+  - '#ts-lens'
+  - '#cfg-lens'
+  - '#envelope'
+  - '#oracle'
+  - '#native'
+  - '#strand'
+tags:
+  - warpline
+  - audit
+  - flight-readiness
+  - adversarial
+  - falsifier
+  - field-test
+body: |-
+  FRAMING: Founder asked "is it really ready?" after the prior session checkpointed flight-readiness (1013 tests / 111 files / exit 0; first genuine KNOT via scripted dress rehearsal; 40-seal synthetic scale run). Panel run read-only, each agent instructed to try to break the claim.
+
+  CONFIRMED TRUE: 1013 tests / 111 files / exit 0 re-run by Probe (184s). Deterministic machinery genuinely strong — hash-chain w/ verified-read content addressing, CAS + lock serialization surviving lock theft, refusal vocabulary, envelope tamper-evidence, byte-identical restore at depth 41, git-absent substrate runs with no .git. Engineering hygiene high; codebase pins its own blind spots as executable tests.
+
+  THE THREE LOAD-BEARING FALSIFYING FINDINGS:
+
+  1. CLEAN=safe is UNVALIDATED and failed its own hard gate where measured. No LLM anywhere in the loop (Probe: zero anthropic/openai/claude hits in src+test) — "meaning judgment" is a token/symbol-graph heuristic on canned fixtures; the LLM-judge falsifier (T-2026-07-14-004) is unbuilt. The one POWERED run — .paradigm/research/warpline-dogfood/aggregate-full.md, 144 concurrent admissions — produced 8 FALSE-CLEANs against a pre-registered "must be 0 → HARD STOP" (10% in the independent/auto-weave stratum), verdict INCOMPLETE, confidence prior showed NO predictive signal (z=-0.31, p=0.76 linked vs independent survival). This run is NOT reflected in the readiness checkpoint. The enforced CLEAN branch has never run on real telemetry (58 shadow rows all NOOP/FAST_ADMIT, confidence null). Probe AND architect each independently sealed a jointly-wrong config-vs-code CLEAN (exit 0) in throwaway repos — the canonical case hazard.ts pins as undetectable.
+
+  2. Blind spots concentrate on exactly Expo's risk surface. Config×code invisible by construction (cfg-lens.ts:375 references:[]); .js configs (app.config.js/babel/metro) + .env covered by NO lens (ts-lens.ts:57, cfg-lens.ts:68); trust floor #grade dead on fresh repo (K_MIN_GRADED=3, [] on missing sidecar). NEW silent-divergence bugs from Judge: (B-1) byte-only work (assets/fonts/.js) is UNADMITTABLE on native path — propose no-ops, admit refuses, dead-end loop (native.ts:394-398), while strand.ts:212 doc claims the opposite; (B-3) real byte-downgrade KNOTs do NOT increment the contested denominator the field-test exit gate reads (health.ts:710 counts payloads; native.ts:697/admit.ts:997 downgrade returns before persisting payload) — the two arms of the instrument measure different populations; (I-2) derivedStale (lockfile staleness concession) has ZERO consumers — ours-wholesale lockfile merge is byte-identical to a consistent merge on every surface.
+
+  3. Agent/human security boundary = one unsigned agent-settable env var. Aegis widened D-3: $WARPLINE_AGENT_ID is the SOLE key for BOTH the HUMAN_ONLY law (agent-shell.ts:117-118) AND the R2 write gate (pick.ts:242,254). `unset WARPLINE_AGENT_ID` makes an agent byte-identical to the founder — can resolve/stake/backup/accept-breach. MCP-only mitigation enforced NOWHERE in code, purely run-procedure. Hash chain is verify-on-demand only — nothing re-authenticates ledger on read/admit; agent can rewrite fabric.jsonl/selvage on disk, noticed only when a human runs `fabric verify`. Envelope marks `intent` only; raw fileText/body reach the reviewing agent un-marked (can't flip deterministic verdict, but reach the model).
+
+  GOALPOST HISTORY (Jinx): written exit gate was ≥100 contested verdicts w/ pre-registered floor (roadmap K3) — never ran; live repo has produced ZERO contested verdicts. TD-2026-08-11-838 replaced it with three falsifiers carrying no n / no floor / no stopping rule — reused ratified criteria (defensible) while deleting ratified quantity (a softening). Preconditions satisfied by checkbox not substance: "blind externally-authored" injection corpus shipped as 8 self-authored payloads scored same session; invariant-conflict fix shipped as an advisory whose own test certifies it can't catch the class it was commissioned for.
+
+  FIELD-TEST INSTRUMENT FLAW: as instrumented, most likely outcome is "no false CLEAN observed" reported as falsifier (A) surviving — when nothing capable of observing one was present. False CLEAN is invisible by construction; rate uncalibrated; genuine-vs-over-block classifier is the founder, unblinded, max incentive, no second rater, no pre-registered n.
+
+  SPLIT VERDICT (all five agents): (a) "true source control for the agentic age" = NOT READY, not close — unpublished, 28 unpushed commits, single-repo calibration, Paradigm-dependent by decision, zero cold-model runs, zero external users, git load-bearing underneath, replacement verbs (branch/clone/push/signing) absent, GUI an era stale, standing "alongside git never instead of it" verdict un-rescinded. (b) Expo field test = READY-WITH-CAVEATS as the mirror-mode experiment TD-663 actually authorized: 2-4 agents (20s global lock throws above), MCP-only enforced as setup, three instruments converted from habit to written procedure first.
+
+  Full agent reports captured in session transcript. Orchestration id orch-msp3e6xq-v88m; DAG epic T-2026-08-11-008.
+confidence: 0.85
+git_context:
+  ref: 2d9655454a85cc803e0813edf89bc56c5beea2cc
+  branch: warpline-surfaces
+  dirty: true

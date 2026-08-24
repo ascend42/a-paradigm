@@ -1,0 +1,859 @@
+<title>Warpline</title>
+
+<style>
+  :root {
+    /* light palette — cool linen-paper with indigo bias */
+    --ground: #eceef5;
+    --surface: #f8f9fd;
+    --surface-2: #f1f3f9;
+    --ink: #191b28;
+    --ink-soft: #4b4f66;
+    --ink-faint: #767a92;
+    --thread: #b9bdd2;
+    --line: #d7dae6;
+    --accent: #a9761a;      /* brass — the selvage / live edge */
+    --accent-soft: #c79a3e;
+    --clean: #2f8a5c;       /* auto-fold */
+    --knot: #c4463b;        /* contested — human required */
+    --held: #574fc0;        /* meaning-blind — held for a human */
+    --shadow: 0 1px 2px rgba(20,22,40,.06), 0 8px 24px rgba(20,22,40,.06);
+
+    --font-display: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    --font-body: "Iowan Old Style", "Palatino Linotype", "Charter", Georgia, "Times New Roman", serif;
+    --font-mono: ui-monospace, "SF Mono", "JetBrains Mono", "Cascadia Code", Menlo, Consolas, monospace;
+
+    --maxw: 1080px;
+    --readw: 66ch;
+  }
+  :root:not([data-theme="light"]) {
+    @media (prefers-color-scheme: dark) {
+      --ground: #0e101a;
+      --surface: #161927;
+      --surface-2: #1b1f30;
+      --ink: #e8eaf4;
+      --ink-soft: #a6abc6;
+      --ink-faint: #7a80a0;
+      --thread: #383d5a;
+      --line: #262b3e;
+      --accent: #d9ac52;
+      --accent-soft: #b98f38;
+      --clean: #5cc08a;
+      --knot: #e56a5e;
+      --held: #8f86f0;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --ground: #0e101a;
+    --surface: #161927;
+    --surface-2: #1b1f30;
+    --ink: #e8eaf4;
+    --ink-soft: #a6abc6;
+    --ink-faint: #7a80a0;
+    --thread: #383d5a;
+    --line: #262b3e;
+    --accent: #d9ac52;
+    --accent-soft: #b98f38;
+    --clean: #5cc08a;
+    --knot: #e56a5e;
+    --held: #8f86f0;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 10px 30px rgba(0,0,0,.35);
+  }
+
+  * { box-sizing: border-box; }
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: var(--font-body);
+    font-size: 18px;
+    line-height: 1.6;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+  }
+  .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 24px; }
+  .prose { max-width: var(--readw); }
+
+  h1, h2, h3, .eyebrow, .mono, nav, .chip, .verb, .metric, .tl-date, .legend, button, .stat-n {
+    font-family: var(--font-display);
+  }
+  .mono, .verb, code, .tl-date, .id, .legend, .lane-label { font-family: var(--font-mono); }
+
+  h1 { font-weight: 780; letter-spacing: -.035em; line-height: .98; text-wrap: balance; margin: 0; }
+  h2 { font-weight: 720; letter-spacing: -.025em; font-size: clamp(1.7rem, 3.4vw, 2.5rem); line-height: 1.05; text-wrap: balance; margin: 0 0 .2em; }
+  h3 { font-weight: 680; letter-spacing: -.01em; font-size: 1.12rem; margin: 0 0 .3em; }
+  p { margin: 0 0 1em; }
+  a { color: var(--accent); }
+  .eyebrow {
+    font-size: .74rem; font-weight: 640; letter-spacing: .18em; text-transform: uppercase;
+    color: var(--accent); margin: 0 0 1.1rem;
+  }
+  .ink-soft { color: var(--ink-soft); }
+
+  /* ── top bar ── */
+  .topbar {
+    position: sticky; top: 0; z-index: 40;
+    backdrop-filter: blur(10px);
+    background: color-mix(in srgb, var(--ground) 82%, transparent);
+    border-bottom: 1px solid var(--line);
+  }
+  .topbar .wrap { display: flex; align-items: center; justify-content: space-between; height: 54px; }
+  .brand { display: flex; align-items: center; gap: 10px; font-family: var(--font-display); font-weight: 720; letter-spacing: -.02em; }
+  .brand .spool { width: 22px; height: 22px; }
+  nav { display: flex; gap: 22px; font-size: .82rem; font-weight: 560; }
+  nav a { color: var(--ink-soft); text-decoration: none; }
+  nav a:hover { color: var(--ink); }
+  #themeBtn {
+    font-size: .74rem; letter-spacing: .08em; text-transform: uppercase; font-weight: 600;
+    background: var(--surface); color: var(--ink-soft); border: 1px solid var(--line);
+    border-radius: 999px; padding: 6px 12px; cursor: pointer;
+  }
+  #themeBtn:hover { color: var(--ink); border-color: var(--thread); }
+  @media (max-width: 720px){ nav { display:none; } }
+
+  /* ── hero ── */
+  .hero { position: relative; overflow: hidden; border-bottom: 1px solid var(--line); }
+  .hero .wrap { padding-top: 72px; padding-bottom: 64px; position: relative; z-index: 2; }
+  .hero h1 { font-size: clamp(2.9rem, 7.4vw, 5.6rem); max-width: 15ch; }
+  .hero .lede { font-size: clamp(1.15rem, 2vw, 1.5rem); color: var(--ink-soft); max-width: 40ch; margin-top: 1.1rem; }
+  .hero .thesis {
+    font-family: var(--font-mono); font-size: .92rem; letter-spacing: .01em;
+    margin-top: 1.8rem; color: var(--ink); display: inline-flex; flex-wrap: wrap; gap: .5rem .9rem;
+  }
+  .hero .thesis b { color: var(--accent); font-weight: 600; }
+  .hero-canvas { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; opacity: .5; }
+  :root[data-theme="dark"] .hero-canvas, :root:not([data-theme="light"]) .hero-canvas { opacity: .62; }
+  .status-row { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 2rem; }
+  .chip {
+    font-size: .72rem; font-weight: 600; letter-spacing: .04em;
+    border: 1px solid var(--line); background: var(--surface); border-radius: 999px;
+    padding: 6px 12px; display: inline-flex; align-items: center; gap: 7px; color: var(--ink-soft);
+  }
+  .chip .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--clean); }
+  .chip.warn .dot { background: var(--accent); }
+
+  /* ── section scaffolding ── */
+  section { padding: 76px 0; border-bottom: 1px solid var(--line); }
+  .sec-head { margin-bottom: 40px; }
+  .sec-head .num {
+    font-family: var(--font-mono); font-size: .8rem; color: var(--accent);
+    letter-spacing: .1em; display: block; margin-bottom: .6rem;
+  }
+
+  /* ── cards / grids ── */
+  .grid { display: grid; gap: 18px; }
+  .cols-2 { grid-template-columns: repeat(2, 1fr); }
+  .cols-3 { grid-template-columns: repeat(3, 1fr); }
+  @media (max-width: 820px){ .cols-2, .cols-3 { grid-template-columns: 1fr; } }
+  .card {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+    padding: 22px 22px; box-shadow: var(--shadow);
+  }
+  .card h3 { display: flex; align-items: baseline; gap: 9px; }
+  .card p { font-size: .96rem; color: var(--ink-soft); margin: 0; }
+  .card .verb { font-size: .8rem; color: var(--accent); font-weight: 600; }
+
+  .verdict-list { display: flex; flex-direction: column; gap: 12px; }
+  .vrow {
+    display: grid; grid-template-columns: 128px 1fr; gap: 16px; align-items: start;
+    padding: 14px 16px; border: 1px solid var(--line); border-radius: 11px; background: var(--surface);
+    border-left: 3px solid var(--tag, var(--thread));
+  }
+  .vrow .tag {
+    font-family: var(--font-mono); font-size: .82rem; font-weight: 600; color: var(--tag, var(--ink));
+    letter-spacing: .02em;
+  }
+  .vrow p { margin: 0; font-size: .92rem; color: var(--ink-soft); }
+  .vrow.clean { --tag: var(--clean); }
+  .vrow.knot  { --tag: var(--knot); }
+  .vrow.held  { --tag: var(--held); }
+  .vrow.fast  { --tag: var(--accent); }
+  @media (max-width:560px){ .vrow{ grid-template-columns: 1fr; gap:4px; } }
+
+  figure { margin: 0; }
+  figure svg { display: block; width: 100%; height: auto; }
+  .figwrap { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 26px 22px 16px; box-shadow: var(--shadow); overflow-x: auto; }
+  figcaption { font-size: .84rem; color: var(--ink-faint); margin-top: 12px; max-width: 62ch; }
+  figcaption b { color: var(--ink-soft); font-weight: 600; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 18px; font-size: .72rem; color: var(--ink-soft); margin-top: 14px; }
+  .legend span { display: inline-flex; align-items: center; gap: 6px; }
+  .legend i { width: 11px; height: 11px; border-radius: 3px; display: inline-block; }
+
+  /* ── timeline ── */
+  .timeline { position: relative; margin-top: 20px; }
+  .timeline::before {
+    content: ""; position: absolute; left: 15px; top: 6px; bottom: 6px; width: 2px;
+    background: linear-gradient(var(--clean), var(--accent) 46%, var(--held) 62%, var(--thread));
+  }
+  .era { position: relative; padding: 0 0 30px 52px; }
+  .era::before {
+    content: ""; position: absolute; left: 9px; top: 5px; width: 14px; height: 14px; border-radius: 50%;
+    background: var(--ground); border: 3px solid var(--dot, var(--thread));
+  }
+  .era.done::before { background: var(--dot); }
+  .era.now::before { box-shadow: 0 0 0 5px color-mix(in srgb, var(--accent) 22%, transparent); }
+  .era .tl-date { font-size: .74rem; letter-spacing: .06em; color: var(--dot, var(--ink-faint)); text-transform: uppercase; font-weight: 600; }
+  .era h3 { margin: 3px 0 4px; font-size: 1.06rem; }
+  .era p { font-size: .93rem; color: var(--ink-soft); margin: 0; max-width: 60ch; }
+  .era .state {
+    font-family: var(--font-mono); font-size: .68rem; letter-spacing: .05em; text-transform: uppercase;
+    padding: 2px 8px; border-radius: 6px; border: 1px solid var(--line); color: var(--dot); margin-left: 8px; vertical-align: 2px;
+  }
+  .era.d-code   { --dot: var(--clean); }
+  .era.d-store  { --dot: var(--clean); }
+  .era.d-judge  { --dot: var(--held); }
+  .era.d-dogfood{ --dot: var(--accent); }
+  .era.now      { --dot: var(--accent); }
+  .era.d-future { --dot: var(--thread); }
+
+  /* ── estimate bars ── */
+  .est { display: flex; flex-direction: column; gap: 16px; margin-top: 8px; }
+  .estrow { display: grid; grid-template-columns: 190px 1fr 96px; gap: 16px; align-items: center; }
+  .estrow .name { font-family: var(--font-display); font-weight: 600; font-size: .95rem; }
+  .estrow .name small { display:block; font-family: var(--font-body); font-weight: 400; color: var(--ink-faint); font-size: .8rem; }
+  .bar { height: 12px; border-radius: 999px; background: var(--surface-2); border: 1px solid var(--line); overflow: hidden; position: relative; }
+  .bar i { position: absolute; top: 0; bottom: 0; border-radius: 999px; }
+  .estrow .weeks { font-family: var(--font-mono); font-size: .84rem; text-align: right; color: var(--ink-soft); }
+  @media (max-width: 640px){ .estrow{ grid-template-columns: 1fr 70px; } .estrow .bar{ grid-column: 1 / -1; order: 3; } }
+
+  /* ── viewer mockup ── */
+  .viewer {
+    border: 1px solid var(--line); border-radius: 16px; overflow: hidden; box-shadow: var(--shadow);
+    background: var(--surface);
+  }
+  .viewer-chrome {
+    display: flex; align-items: center; gap: 10px; padding: 11px 16px; border-bottom: 1px solid var(--line);
+    background: var(--surface-2);
+  }
+  .viewer-chrome .traffic { display: flex; gap: 7px; }
+  .viewer-chrome .traffic i { width: 11px; height: 11px; border-radius: 50%; background: var(--thread); opacity: .6; }
+  .viewer-path { font-family: var(--font-mono); font-size: .8rem; color: var(--ink-soft); }
+  .viewer-live { margin-left: auto; font-family: var(--font-mono); font-size: .7rem; letter-spacing: .08em; color: var(--knot); display: inline-flex; align-items: center; gap: 6px; }
+  .viewer-live .pulse { width: 8px; height: 8px; border-radius: 50%; background: var(--knot); }
+  .viewer-body { display: grid; grid-template-columns: 1fr 260px; min-height: 340px; }
+  @media (max-width: 760px){ .viewer-body { grid-template-columns: 1fr; } .viewer-side{ border-left:none !important; border-top: 1px solid var(--line); } }
+  #loom { width: 100%; height: 100%; display: block; }
+  .viewer-side { border-left: 1px solid var(--line); padding: 16px; background: var(--surface); font-size: .84rem; }
+  .viewer-side h4 { margin: 0 0 10px; font-family: var(--font-display); font-size: .72rem; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); }
+  .lane-legend { display: flex; flex-direction: column; gap: 9px; margin-bottom: 18px; }
+  .lane-legend .lane-label { display: flex; align-items: center; gap: 8px; font-size: .82rem; color: var(--ink-soft); }
+  .lane-legend .swatch { width: 22px; height: 3px; border-radius: 2px; }
+  #eventlog { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 7px; font-family: var(--font-mono); font-size: .74rem; }
+  #eventlog li { color: var(--ink-soft); display: flex; gap: 8px; opacity: 0; animation: fadein .4s forwards; }
+  #eventlog li b { font-weight: 600; }
+  #eventlog li .k { color: var(--knot); } #eventlog li .c { color: var(--clean); } #eventlog li .h { color: var(--held); } #eventlog li .s { color: var(--accent); }
+  @keyframes fadein { to { opacity: 1; } }
+
+  .note { font-size: .82rem; color: var(--ink-faint); margin-top: 14px; max-width: 64ch; font-style: italic; }
+
+  .kicker { font-family: var(--font-mono); font-size: .74rem; color: var(--accent); letter-spacing: .04em; }
+  .stat-strip { display: grid; grid-template-columns: repeat(4,1fr); gap: 14px; margin-top: 26px; }
+  @media (max-width: 720px){ .stat-strip{ grid-template-columns: repeat(2,1fr);} }
+  .stat { border: 1px solid var(--line); border-radius: 12px; padding: 16px; background: var(--surface); }
+  .stat .stat-n { font-family: var(--font-display); font-weight: 740; font-size: 1.8rem; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+  .stat .stat-l { font-size: .78rem; color: var(--ink-faint); }
+
+  /* ── git map ── */
+  .tag-callout {
+    border: 1px solid var(--line); border-left: 3px solid var(--accent);
+    background: var(--surface); border-radius: 12px; padding: 20px 22px; margin: 22px 0 30px;
+    box-shadow: var(--shadow); max-width: 74ch;
+  }
+  .tag-callout h3 { color: var(--accent); }
+  .tag-callout p { color: var(--ink-soft); font-size: .96rem; margin: 0; }
+  .tag-callout code, .maptable code, .note code { font-family: var(--font-mono); font-size: .86em; background: var(--surface-2); padding: 1px 6px; border-radius: 5px; border: 1px solid var(--line); }
+  .maptable-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 14px; box-shadow: var(--shadow); }
+  .maptable { width: 100%; border-collapse: collapse; font-size: .92rem; min-width: 640px; background: var(--surface); }
+  .maptable th { text-align: left; font-family: var(--font-display); font-size: .68rem; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); font-weight: 640; padding: 13px 18px; border-bottom: 1px solid var(--line); }
+  .maptable td { padding: 12px 18px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  .maptable .git { font-family: var(--font-mono); color: var(--ink); white-space: nowrap; font-size: .88rem; }
+  .maptable .wl { color: var(--ink-soft); max-width: 52ch; }
+  .maptable .wl b { color: var(--ink); font-weight: 600; }
+  .maptable tr.cat td { background: var(--surface-2); font-family: var(--font-display); font-size: .7rem; letter-spacing: .1em; text-transform: uppercase; color: var(--ink-faint); font-weight: 640; padding: 9px 18px; }
+  .pill { font-family: var(--font-mono); font-size: .67rem; font-weight: 600; letter-spacing: .03em; padding: 3px 9px; border-radius: 999px; white-space: nowrap; border: 1px solid; }
+  .pill.ship   { color: var(--clean);  border-color: color-mix(in srgb, var(--clean) 42%, transparent);  background: color-mix(in srgb, var(--clean) 12%, transparent); }
+  .pill.sup    { color: var(--held);   border-color: color-mix(in srgb, var(--held) 42%, transparent);   background: color-mix(in srgb, var(--held) 12%, transparent); }
+  .pill.prim   { color: var(--accent); border-color: color-mix(in srgb, var(--accent) 48%, transparent); background: color-mix(in srgb, var(--accent) 12%, transparent); }
+  .pill.pend   { color: var(--ink-faint); border-color: var(--line); background: var(--surface-2); }
+  .pill.design { color: var(--knot);   border-color: color-mix(in srgb, var(--knot) 42%, transparent);   background: color-mix(in srgb, var(--knot) 10%, transparent); }
+
+  footer { padding: 46px 0 64px; color: var(--ink-faint); font-size: .85rem; }
+  footer .wrap { display: flex; flex-wrap: wrap; gap: 18px; justify-content: space-between; align-items: baseline; }
+  footer .id { font-size: .74rem; }
+
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+  @media (prefers-reduced-motion: reduce){ * { animation-duration: .001ms !important; } }
+</style>
+
+<div class="topbar">
+  <div class="wrap">
+    <span class="brand">
+      <svg class="spool" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <rect x="4" y="3" width="16" height="3" rx="1.5" fill="var(--accent)"/>
+        <rect x="4" y="18" width="16" height="3" rx="1.5" fill="var(--accent)"/>
+        <path d="M8 6 L16 18 M16 6 L8 18 M12 6 L12 18" stroke="var(--ink)" stroke-width="1.4"/>
+      </svg>
+      Warpline
+    </span>
+    <nav>
+      <a href="#works">How it works</a>
+      <a href="#gitmap">Git, mapped</a>
+      <a href="#timeline">Timeline</a>
+      <a href="#ahead">The road ahead</a>
+      <a href="#viewer">The loom viewer</a>
+    </nav>
+    <button id="themeBtn" aria-label="Toggle colour theme">Theme</button>
+  </div>
+</div>
+
+<header class="hero">
+  <canvas class="hero-canvas" id="heroCanvas" aria-hidden="true"></canvas>
+  <div class="wrap">
+    <p class="eyebrow">Meaning-aware source control · Milestone: M2.5</p>
+    <h1>Source control that thinks in&nbsp;meaning, not&nbsp;lines.</h1>
+    <p class="lede">Many agents weave one fabric at once. Warpline judges their work by what it <em>means</em> — folding what agrees, holding what it can’t see, and stopping only for what genuinely conflicts.</p>
+    <p class="thesis"><b>meaning judges</b> · <b>bytes execute</b> · <b>disagreement fails closed</b></p>
+    <div class="status-row">
+      <span class="chip"><span class="dot"></span> Native cycle — fork · propose · admit · resolve</span>
+      <span class="chip"><span class="dot"></span> Branches merged by meaning — live</span>
+      <span class="chip warn"><span class="dot"></span> Runs git-absent, or alongside git in mirror mode</span>
+    </div>
+  </div>
+</header>
+
+<main>
+
+<!-- ══════════ 1. HOW IT WORKS ══════════ -->
+<section id="works" class="wrap">
+  <div class="sec-head prose">
+    <span class="num">01 — the mechanism</span>
+    <h2>How Warpline works today</h2>
+    <p class="ink-soft">Git tracks <em>bytes</em> and reconciles them by matching lines. Warpline lifts every change into a graph of <em>symbols</em> — functions, config keys, contracts — and reconciles by whether those meanings commute. That single shift is the whole product.</p>
+  </div>
+
+  <!-- the vocabulary -->
+  <div class="grid cols-3" style="margin-bottom:26px;">
+    <div class="card">
+      <h3>The&nbsp;<span class="verb">fabric</span></h3>
+      <p>An append-only, content-addressed DAG of <b>strands</b> — one per sealed unit of work, each naming its parents. Nothing is ever rewritten; history is woven, not overwritten. It reconstructs byte-for-byte with git absent.</p>
+    </div>
+    <div class="card">
+      <h3>The&nbsp;<span class="verb">selvage</span></h3>
+      <p>The finished edge of the weave — the tip of a line of history that everything integrates into. Advancing it is a per-ref compare-and-swap: two writers can’t silently clobber the same edge.</p>
+    </div>
+    <div class="card">
+      <h3>A&nbsp;<span class="verb">scratch</span> &amp; a&nbsp;<span class="verb">knot</span></h3>
+      <p>Each agent forks a private <b>scratch</b> lane to propose in. When two lanes change the <em>same</em> meaning to different values, the merge ties a <b>knot</b> — the one thing a human, never an agent, must untie.</p>
+    </div>
+  </div>
+
+  <!-- diagram: the cycle -->
+  <div class="figwrap" style="margin-bottom:26px;">
+    <figure>
+      <svg viewBox="0 0 900 210" role="img" aria-label="The Warpline write cycle: an agent forks a scratch lane, proposes a sealed strand, and admits it against the selvage. A clean admit seals; a knot routes to a human resolve.">
+        <defs>
+          <marker id="ah" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0 0 L10 5 L0 10 z" fill="currentColor"/>
+          </marker>
+        </defs>
+        <g font-family="var(--font-mono)" font-size="13" fill="currentColor">
+          <!-- lane baseline -->
+          <line x1="40" y1="70" x2="620" y2="70" stroke="var(--thread)" stroke-width="1.5"/>
+          <!-- nodes -->
+          <g>
+            <circle cx="70"  cy="70" r="7" fill="var(--ink)"/>
+            <text x="70" y="48" text-anchor="middle" fill="var(--accent)">fork</text>
+            <text x="70" y="98" text-anchor="middle" fill="var(--ink-soft)" font-size="11">scratch lane</text>
+          </g>
+          <g>
+            <circle cx="250" cy="70" r="7" fill="var(--ink)"/>
+            <text x="250" y="48" text-anchor="middle" fill="var(--accent)">propose</text>
+            <text x="250" y="98" text-anchor="middle" fill="var(--ink-soft)" font-size="11">seal a strand</text>
+          </g>
+          <g>
+            <circle cx="440" cy="70" r="9" fill="var(--accent)"/>
+            <text x="440" y="46" text-anchor="middle" fill="var(--accent)">admit</text>
+            <text x="440" y="98" text-anchor="middle" fill="var(--ink-soft)" font-size="11">judge vs selvage</text>
+          </g>
+          <line x1="77" y1="70" x2="243" y2="70" stroke="var(--ink-soft)" stroke-width="1.5" marker-end="url(#ah)"/>
+          <line x1="257" y1="70" x2="431" y2="70" stroke="var(--ink-soft)" stroke-width="1.5" marker-end="url(#ah)"/>
+
+          <!-- branch out to CLEAN -->
+          <path d="M449 66 C 540 40, 560 34, 640 34" fill="none" stroke="var(--clean)" stroke-width="1.6" marker-end="url(#ah)"/>
+          <text x="648" y="30" fill="var(--clean)" font-size="12.5">CLEAN</text>
+          <text x="648" y="47" fill="var(--ink-soft)" font-size="11">seals · selvage advances</text>
+
+          <!-- branch out to KNOT -->
+          <path d="M449 76 C 540 104, 560 112, 640 112" fill="none" stroke="var(--knot)" stroke-width="1.6" marker-end="url(#ah)"/>
+          <text x="648" y="108" fill="var(--knot)" font-size="12.5">KNOT</text>
+          <g>
+            <line x1="742" y1="112" x2="800" y2="112" stroke="var(--knot)" stroke-width="1.5" marker-end="url(#ah)"/>
+            <rect x="806" y="98" width="86" height="30" rx="8" fill="none" stroke="var(--held)" stroke-width="1.5"/>
+            <text x="849" y="117" text-anchor="middle" fill="var(--held)" font-size="12">resolve</text>
+            <text x="849" y="150" text-anchor="middle" fill="var(--ink-soft)" font-size="10.5">human only</text>
+          </g>
+
+          <!-- HELD note -->
+          <path d="M449 72 C 560 72, 560 72, 640 72" fill="none" stroke="var(--held)" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#ah)"/>
+          <text x="648" y="69" fill="var(--held)" font-size="12.5">HELD</text>
+          <text x="648" y="86" fill="var(--ink-soft)" font-size="11">meaning was blind — a human confirms</text>
+        </g>
+      </svg>
+      <figcaption>The everyday loop. <b>fork → propose → admit.</b> A clean admit auto-folds and advances the edge with no human in the loop; a <b>knot</b> — two lanes contradicting the same symbol — is the only thing that stops for a person, and <code>resolve</code> is structurally human-only. <b>HELD</b> is the honesty valve: when a change lands in a class meaning cannot read, Warpline refuses to pretend it judged it.</figcaption>
+    </figure>
+  </div>
+
+  <!-- the verdicts -->
+  <h3 style="margin-bottom:14px;">Every admit returns one verdict — and each is a decision, not a guess</h3>
+  <div class="verdict-list">
+    <div class="vrow clean"><span class="tag">CLEAN&nbsp;·&nbsp;auto-fold</span><p>The two lanes touched <em>disjoint</em> meanings. They commute — Warpline weaves them with no merge step and no review. This is where it quietly beats git: disjoint work never conflicts, no matter how long the lanes ran apart.</p></div>
+    <div class="vrow fast"><span class="tag">FAST_ADMIT</span><p>The lane is a straight-line advance over the tip — nothing to reconcile. The edge moves forward.</p></div>
+    <div class="vrow knot"><span class="tag">KNOT</span><p>Both lanes changed the <em>same</em> symbol to different meanings, or the bytes genuinely overlap. Fails closed — sealed, refused, and handed to a human as a self-sufficient work order carrying both sides.</p></div>
+    <div class="vrow held"><span class="tag">HELD</span><p>The verdict looked clean, but a changed path was <em>byte-decided</em> — a config value, a <code>.js</code> file, a bare constant meaning never lifted. Warpline holds it for a human rather than auto-fold something it couldn’t read.</p></div>
+  </div>
+
+  <!-- branches / merge by meaning -->
+  <div class="sec-head prose" style="margin-top:64px;">
+    <h2 style="font-size:clamp(1.4rem,2.6vw,2rem);">Branches, merged by meaning</h2>
+    <p class="ink-soft">Git’s working folder holds one branch at a time, and parallel branches meet only at a manual, textual merge. Warpline’s new layer (<span class="kicker">M2.5</span>) gives you durable, named, switchable branches — and merges them the way it admits: by meaning.</p>
+  </div>
+
+  <div class="figwrap" style="margin-bottom:8px;">
+    <figure>
+      <svg viewBox="0 0 900 300" role="img" aria-label="Comparison of a git textual merge versus a Warpline merge by meaning. Git auto-merges disjoint config and code silently; Warpline auto-folds disjoint meaning, knots real contradictions, and holds byte-decided changes for a human.">
+        <defs>
+          <marker id="ah2" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0 0 L10 5 L0 10 z" fill="currentColor"/></marker>
+        </defs>
+        <g font-family="var(--font-mono)" font-size="12">
+          <!-- shared base -->
+          <circle cx="60" cy="150" r="7" fill="var(--ink)"/>
+          <text x="60" y="176" text-anchor="middle" fill="var(--ink-soft)" font-size="11">base</text>
+          <!-- branch A (feature) up -->
+          <path d="M67 146 C 150 110, 190 92, 300 92" fill="none" stroke="var(--accent)" stroke-width="2"/>
+          <circle cx="300" cy="92" r="6" fill="var(--accent)"/>
+          <text x="300" y="80" text-anchor="middle" fill="var(--accent)">feature</text>
+          <!-- branch B (main) down -->
+          <path d="M67 154 C 150 190, 190 208, 300 208" fill="none" stroke="var(--ink-soft)" stroke-width="2"/>
+          <circle cx="300" cy="208" r="6" fill="var(--ink-soft)"/>
+          <text x="300" y="228" text-anchor="middle" fill="var(--ink-soft)">main</text>
+
+          <!-- merge fan -->
+          <line x1="308" y1="90" x2="392" y2="132" stroke="var(--thread)" stroke-width="1.5" marker-end="url(#ah2)"/>
+          <line x1="308" y1="206" x2="392" y2="168" stroke="var(--thread)" stroke-width="1.5" marker-end="url(#ah2)"/>
+          <text x="405" y="118" fill="var(--ink)" font-size="12.5">merge</text>
+          <text x="405" y="134" fill="var(--ink-soft)" font-size="11">base = lowest common ancestor</text>
+
+          <!-- three outcomes -->
+          <g transform="translate(470,0)">
+            <line x1="0" y1="70" x2="40" y2="70" stroke="var(--clean)" stroke-width="1.6" marker-end="url(#ah2)"/>
+            <rect x="46" y="52" width="380" height="36" rx="8" fill="none" stroke="var(--clean)" stroke-width="1.5"/>
+            <text x="60" y="68" fill="var(--clean)" font-size="12.5">disjoint meaning</text>
+            <text x="60" y="82" fill="var(--ink-soft)" font-size="11">→ auto-folds. git can do this too — but only if lines don’t touch.</text>
+
+            <line x1="0" y1="150" x2="40" y2="150" stroke="var(--knot)" stroke-width="1.6" marker-end="url(#ah2)"/>
+            <rect x="46" y="132" width="380" height="36" rx="8" fill="none" stroke="var(--knot)" stroke-width="1.5"/>
+            <text x="60" y="148" fill="var(--knot)" font-size="12.5">same symbol, contradicted</text>
+            <text x="60" y="162" fill="var(--ink-soft)" font-size="11">→ KNOT. a human decides — with both meanings in hand.</text>
+
+            <line x1="0" y1="230" x2="40" y2="230" stroke="var(--held)" stroke-width="1.6" marker-end="url(#ah2)"/>
+            <rect x="46" y="212" width="380" height="36" rx="8" fill="none" stroke="var(--held)" stroke-width="1.5"/>
+            <text x="60" y="228" fill="var(--held)" font-size="12.5">byte-decided (config × code, invariant)</text>
+            <text x="60" y="242" fill="var(--ink-soft)" font-size="11">→ HELD. git silently ships this; Warpline stops you.</text>
+          </g>
+        </g>
+      </svg>
+      <figcaption>The differentiator, and its safety. A merge runs the <em>same</em> adjudication engine as an everyday admit, based at the branches’ lowest common ancestor. Disjoint meaning folds; real contradictions knot. The critical rule: anything <b>meaning was blind to</b> — a config value the code depends on, a bare <code>const&nbsp;LIMIT&nbsp;=&nbsp;100</code>, a <code>.js</code> config — is <b>held for a human</b>, never silently auto-merged. Git’s textual merge would ship those breaks; Warpline refuses to.</figcaption>
+    </figure>
+  </div>
+  <div class="legend">
+    <span><i style="background:var(--clean)"></i> CLEAN — folds automatically</span>
+    <span><i style="background:var(--knot)"></i> KNOT — a human resolves</span>
+    <span><i style="background:var(--held)"></i> HELD — meaning-blind, human confirms</span>
+    <span><i style="background:var(--accent)"></i> selvage / protected edge</span>
+  </div>
+
+  <div class="grid cols-3" style="margin-top:34px;">
+    <div class="card"><h3>Protected <span class="verb">main</span></h3><p>A swarm can fork, propose, and merge freely among feature branches — but an <em>agent</em> can’t auto-land into the integration line. Merging into protected main is human-only, so no agent can launder work past the review gate.</p></div>
+    <div class="card"><h3>The calibration <span class="verb">moat</span></h3><p>Every outcome — did this symbol survive, or get reverted? — grades the codebase’s own trust, scoped to real DAG ancestry so a doomed branch can’t poison main. It’s per-repository and can’t be copied: the moat is the memory of <em>this</em> code.</p></div>
+    <div class="card"><h3>Mirror mode</h3><p>Warpline runs its own native object store git-absent, or rides <em>alongside</em> git — git as the durable backstop while Warpline adds the meaning layer. You never have to leave git to start.</p></div>
+  </div>
+</section>
+
+<!-- ══════════ 2. GIT, MAPPED ══════════ -->
+<section id="gitmap" class="wrap">
+  <div class="sec-head prose">
+    <span class="num">02 — the map</span>
+    <h2>Git, mapped onto the weave</h2>
+    <p class="ink-soft">Git stores <em>bytes</em> and reconciles by matching lines. Warpline stores a snapshot <em>and its meaning</em> and reconciles by judgment. That inverts which features are hard — and the one you’d expect to be work, snapshots, turns out nearly free.</p>
+  </div>
+
+  <div class="tag-callout">
+    <h3>Tags &amp; releases — every strand is already a snapshot</h3>
+    <p>A git tag names a commit, and a commit is a tree snapshot. In Warpline <b>every sealed strand already binds a byte-exact tree</b> — so you don’t <em>make</em> a snapshot to tag, you just name a strand. It works today with the primitives: <code>warpline refs set v1.0 pick:…</code> then <code>warpline restore v1.0</code> reconstructs that exact tree, git absent. What’s pending is only the ceremony — a branded <code>tag</code> verb, and <em>signed</em> releases, which wait on M3 integrity. A release is a named strand + its intent as notes + an <code>attest</code> freeze (+ a signature, at M3).</p>
+  </div>
+
+  <div class="maptable-wrap">
+    <table class="maptable">
+      <thead><tr><th style="width:26%">Git</th><th>In Warpline</th><th style="width:1%">Status</th></tr></thead>
+      <tbody>
+        <tr class="cat"><td colspan="3">Replicated — same idea, works today</td></tr>
+        <tr><td class="git">.gitignore</td><td class="wl"><b>.warpignore</b> — its own native ignore handler; governs skips with git absent</td><td><span class="pill ship">shipped</span></td></tr>
+        <tr><td class="git">checkout / switch</td><td class="wl"><b>switch</b> / <b>checkout</b>, plus <code>restore &lt;selector&gt;</code> to any historical state</td><td><span class="pill ship">shipped</span></td></tr>
+        <tr><td class="git">branch</td><td class="wl"><b>branch</b> — durable, named, switchable lines (M2.5)</td><td><span class="pill ship">shipped</span></td></tr>
+        <tr><td class="git">hooks</td><td class="wl">a native auto-seal hook — or Warpline runs <em>as</em> a git post-commit hook in mirror mode</td><td><span class="pill ship">shipped</span></td></tr>
+
+        <tr class="cat"><td colspan="3">Superseded — the same job, done by meaning</td></tr>
+        <tr><td class="git">commit</td><td class="wl">a sealed <b>strand</b> — meaning + bytes. A rename is an <em>empty</em> strand; a moved constant is a <em>real</em> one</td><td><span class="pill sup">superseded</span></td></tr>
+        <tr><td class="git">merge</td><td class="wl"><b>merge by meaning</b> — disjoint folds, real contradictions knot, blind classes held. Git’s weakest point, inverted</td><td><span class="pill sup">superseded</span></td></tr>
+        <tr><td class="git">blame</td><td class="wl"><b>lifeline</b> — traces a <em>symbol’s meaning</em> across renames and moves, not lines</td><td><span class="pill sup">superseded</span></td></tr>
+        <tr><td class="git">diff</td><td class="wl">semantic <b>diff</b> (born / changed / retired symbols) + byte <code>diff A..B</code></td><td><span class="pill sup">superseded</span></td></tr>
+        <tr><td class="git">revert</td><td class="wl"><b>stake recover</b> — an explicit, attributed reversion <em>strand</em>, not a silent pointer move</td><td><span class="pill sup">superseded</span></td></tr>
+        <tr><td class="git">rebase (integrate)</td><td class="wl">automatic — every <b>admit</b> already rebases your meaning onto the current tip</td><td><span class="pill sup">superseded</span></td></tr>
+        <tr><td class="git">stash</td><td class="wl">subsumed — your WIP is a durable <b>scratch</b> lane; <code>abandon</code> to drop it</td><td><span class="pill sup">superseded</span></td></tr>
+        <tr><td class="git">reflog</td><td class="wl">the append-only ledger itself — nothing is ever lost, tamper-evidently</td><td><span class="pill sup">superseded</span></td></tr>
+
+        <tr class="cat"><td colspan="3">Tags &amp; releases — free snapshot, ceremony pending</td></tr>
+        <tr><td class="git">tag</td><td class="wl">a named ref at a strand (<code>refs set</code> + <code>restore</code> today; a branded <code>tag</code> verb pending)</td><td><span class="pill prim">primitive</span></td></tr>
+        <tr><td class="git">release</td><td class="wl">a named strand + intent notes + an <b>attest</b> freeze (+ signature, at M3)</td><td><span class="pill prim">primitive</span></td></tr>
+        <tr><td class="git">cherry-pick</td><td class="wl">the merge engine pointed at a single strand — the mechanism exists, no branded verb</td><td><span class="pill prim">primitive</span></td></tr>
+
+        <tr class="cat"><td colspan="3">Deliberately absent, or still ahead</td></tr>
+        <tr><td class="git">rebase -i / reset --hard</td><td class="wl">history rewriting — <em>deliberately impossible.</em> The ledger is append-only; you seal a correction over the past, never erase it</td><td><span class="pill design">by design</span></td></tr>
+        <tr><td class="git">bisect</td><td class="wl">a meaning-aware bisect is the natural next step — <b>lifeline</b> is its seed</td><td><span class="pill pend">ahead</span></td></tr>
+        <tr><td class="git">GPG signing / signed tags</td><td class="wl">sign strands, witness branch heads</td><td><span class="pill pend">M3</span></td></tr>
+        <tr><td class="git">clone / push / pull / fetch</td><td class="wl">a shared fabric across machines — mirror mode uses git as the transport today</td><td><span class="pill pend">M4</span></td></tr>
+        <tr><td class="git">submodules · exec-bit · symlinks</td><td class="wl">corpus-fidelity round-tripping — partially handled</td><td><span class="pill pend">partial</span></td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <p class="note">The through-line: snapshots — tags, releases, checkout of any point — are nearly free, because every strand already carries a byte-exact tree. History rewriting is intentionally off the table. And the features that get <em>better</em> — merge, blame, diff, revert — are exactly the ones git does textually. What’s left to match git’s surface is notarization (signing, M3) and distribution (remote, M4).</p>
+</section>
+
+<!-- ══════════ 3. TIMELINE ══════════ -->
+<section id="timeline" class="wrap">
+  <div class="sec-head prose">
+    <span class="num">03 — the arc</span>
+    <h2>What Warpline is, and what it becomes</h2>
+    <p class="ink-soft">Warpline started as a lens that could <em>read</em> a merge and became an engine that can <em>run</em> one. The line below is the real build order — each era earned by the one before it.</p>
+  </div>
+
+  <div class="timeline">
+    <div class="era done d-code">
+      <span class="tl-date">era one</span><span class="state">shipped</span>
+      <h3>The meaning lens</h3>
+      <p>Lift code and config into a symbol graph; diff by meaning, so a rename is an empty change and a moved constant is a real one. The insight the whole product rests on.</p>
+    </div>
+    <div class="era done d-store">
+      <span class="tl-date">era two — M1</span><span class="state">shipped</span>
+      <h3>The native fabric</h3>
+      <p>A content-addressed object store and hash-chained ledger that reconstructs any state byte-for-byte with git absent. Durable merge bytes, restore, verify — the substrate that makes Warpline a place work can live, not just a lens over git.</p>
+    </div>
+    <div class="era done d-judge">
+      <span class="tl-date">era three</span><span class="state">shipped · cleared</span>
+      <h3>The judge &amp; the instruments</h3>
+      <p>A standalone, blind LLM-judge — built to falsify the core claim that “clean means safe,” security-cleared, tamper-evident. Plus the honesty valves: contested-denominator counting, byte-only surfacing, the injection-hardened rating card.</p>
+    </div>
+    <div class="era done d-dogfood">
+      <span class="tl-date">era four</span><span class="state">shipped</span>
+      <h3>Dogfoodable</h3>
+      <p><code>warpline init</code>, git-absent <code>status</code>, a native <code>.warpignore</code>, agent onboarding baked into notebooks. A fresh project can be tracked — and two Claude Code instances on one machine were proven to weave, knot, and resolve a real contest.</p>
+    </div>
+    <div class="era now">
+      <span class="tl-date">now — M2.5</span><span class="state">functionally complete</span>
+      <h3>Branches, merged by meaning</h3>
+      <p>Durable named branches, <code>switch</code>, and <code>merge</code> by meaning with the fail-closed rule — the thing git structurally can’t do, delivered with safety git can’t offer. The advocate’s falsifier passes: the canonical config-and-invariant breaks are held, not silently sealed.</p>
+    </div>
+    <div class="era d-future">
+      <span class="tl-date">next</span><span class="state">designed</span>
+      <h3>Concurrency &amp; measured trust</h3>
+      <p>Narrow the global lock so disjoint branches admit in parallel (per-branch compare-and-swap). Run the field test live — the LLM-judge measuring the real false-clean floor. Turn the trust moat from “wired” into “calibrated on real outcomes.”</p>
+    </div>
+    <div class="era d-future">
+      <span class="tl-date">then — M3</span><span class="state">planned</span>
+      <h3>Integrity</h3>
+      <p>Sign the strands, witness the branch heads. Today the agent/human boundary rests on an unsigned convention; M3 makes it cryptographic — the cardinal source-control property for an adversarial, multi-writer world.</p>
+    </div>
+    <div class="era d-future">
+      <span class="tl-date">the penultimate goal — M4</span><span class="state">deferred</span>
+      <h3>Remote &amp; sync</h3>
+      <p>Clone, push, pull for the fabric — so your Mac and your Windows box collaborate on one shared weave, not two. The distributed version of the thing that already works on one machine.</p>
+    </div>
+    <div class="era d-future">
+      <span class="tl-date">the whole point</span><span class="state">the horizon</span>
+      <h3>Source control for the agentic age</h3>
+      <p>Published, calibrated per codebase, with a viewer anyone can point at any directory. The layer where meaning judges, bytes execute, and a swarm of agents builds without stepping on each other — and without a human hand-merging every lane.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ══════════ 3. ROAD AHEAD + VIEWER ══════════ -->
+<section id="ahead" class="wrap">
+  <div class="sec-head prose">
+    <span class="num">04 — the estimate</span>
+    <h2>Roughly how far is left</h2>
+    <p class="ink-soft">A candid, load-bearing-caveats-attached read from where M2.5 sits. These are engineering-effort estimates, not calendar promises — the field test is an <em>operation</em> the founder runs, and its result can reorder everything after it.</p>
+  </div>
+
+  <div class="est">
+    <div class="estrow"><div class="name">Lock-narrowing <small>parallel disjoint-branch admits</small></div><div class="bar"><i style="left:0;width:12%;background:var(--clean)"></i></div><div class="weeks">~1 wk</div></div>
+    <div class="estrow"><div class="name">Field test, run live <small>measure the false-clean floor</small></div><div class="bar"><i style="left:0;width:22%;background:var(--accent)"></i></div><div class="weeks">1–3 wks</div></div>
+    <div class="estrow"><div class="name">M3 · integrity <small>sign strands, witness heads</small></div><div class="bar"><i style="left:0;width:40%;background:var(--held)"></i></div><div class="weeks">3–5 wks</div></div>
+    <div class="estrow"><div class="name">The loom viewer <small>desktop tool, live monitoring</small></div><div class="bar"><i style="left:0;width:34%;background:var(--accent)"></i></div><div class="weeks">3–4 wks</div></div>
+    <div class="estrow"><div class="name">M4 · remote &amp; sync <small>the multi-machine goal</small></div><div class="bar"><i style="left:0;width:52%;background:var(--knot)"></i></div><div class="weeks">4–8 wks</div></div>
+    <div class="estrow"><div class="name">Publish &amp; harden <small>corpus fidelity, DX, calibration</small></div><div class="bar"><i style="left:0;width:60%;background:var(--thread)"></i></div><div class="weeks">ongoing</div></div>
+  </div>
+
+  <div class="stat-strip">
+    <div class="stat"><div class="stat-n">6 / 7</div><div class="stat-l">M2.5 increments landed</div></div>
+    <div class="stat"><div class="stat-n">≈ 3–6 mo</div><div class="stat-l">focused work to a credible v1 that replaces git for agentic teams</div></div>
+    <div class="stat"><div class="stat-n">1</div><div class="stat-l">machine needed to see it work — today</div></div>
+    <div class="stat"><div class="stat-n">2</div><div class="stat-l">machines needed for the full vision — awaiting M4</div></div>
+  </div>
+  <p class="note">The honest framing: the hard, differentiated half — meaning-adjudicated concurrency and merge — is <em>built</em>. What remains is largely hardening (integrity, atomic-append concurrency), reach (remote sync), and surface (the viewer, publishing). None of it is a new engine; the engine already runs.</p>
+</section>
+
+<section id="viewer" class="wrap">
+  <div class="sec-head prose">
+    <span class="num">05 — the surface we want</span>
+    <h2>A loom you can point at any directory</h2>
+    <p class="ink-soft">The CLI is the truth; the <em>viewer</em> is how you feel it. Picture a desktop tool — the way SourceTree opens on any repo — launched at a directory, watching <code>.warpline/</code> as it changes, and drawing the weave live: the lanes each agent is running, the selvage edge advancing, a knot blooming red the instant two lanes contradict, a resolve sealing it gold.</p>
+  </div>
+
+  <div class="viewer">
+    <div class="viewer-chrome">
+      <span class="traffic"><i></i><i></i><i></i></span>
+      <span class="viewer-path">~/projects/atlas · <span style="color:var(--accent)">on&nbsp;selvage</span></span>
+      <span class="viewer-live"><span class="pulse"></span> WATCHING · 3 lanes active</span>
+    </div>
+    <div class="viewer-body">
+      <canvas id="loom" width="1160" height="680" aria-label="A live-simulating visualisation of the Warpline fabric: horizontal lanes for each agent weave rightward, occasionally tying a red knot where two lanes contradict, which a gold resolve seals."></canvas>
+      <aside class="viewer-side">
+        <h4>Lanes</h4>
+        <div class="lane-legend">
+          <span class="lane-label"><span class="swatch" style="background:var(--accent)"></span> selvage · the edge</span>
+          <span class="lane-label"><span class="swatch" style="background:var(--clean)"></span> agent&nbsp;·&nbsp;alice</span>
+          <span class="lane-label"><span class="swatch" style="background:var(--held)"></span> agent&nbsp;·&nbsp;bob</span>
+          <span class="lane-label"><span class="swatch" style="background:#6f9bd6"></span> agent&nbsp;·&nbsp;cara</span>
+        </div>
+        <h4>Live feed</h4>
+        <ul id="eventlog"></ul>
+      </aside>
+    </div>
+  </div>
+  <p class="note">Concept, not chrome. This canvas <em>simulates</em> the feed to show the feel; the real tool is a small desktop app watching the fabric via filesystem events, rendering strands, branch refs, knot payloads, and the calibration heatmap — and it stays honest, drawing byte-decided folds in a different weight so you never mistake “Warpline judged this” for “Warpline saw bytes move.”</p>
+
+  <div class="grid cols-3" style="margin-top:28px;">
+    <div class="card"><h3>Point &amp; open</h3><p>Any directory with a <code>.warpline/</code>. No server, no account — the same reach SourceTree has over a git repo, over the weave instead.</p></div>
+    <div class="card"><h3>Live by default</h3><p>Filesystem watch on the fabric and the scratch refs. Lanes advance, knots appear, resolves seal — you watch the swarm work, not a snapshot of it.</p></div>
+    <div class="card"><h3>Every nuance, visible</h3><p>Click a knot for its work order — both sides’ meaning-diffs. Hover a strand for its intent and author. See which folds meaning decided versus bytes. The subtlety made legible.</p></div>
+  </div>
+</section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>Warpline · meaning-aware source control for the agentic age</span>
+    <span class="id">M2.5 functionally complete · the engine that git structurally can’t be</span>
+  </div>
+</footer>
+
+<script>
+(function () {
+  "use strict";
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var css = getComputedStyle(document.documentElement);
+  function tok(n, f){ var v = css.getPropertyValue(n).trim(); return v || f; }
+
+  /* ── theme toggle ── */
+  var btn = document.getElementById("themeBtn");
+  btn && btn.addEventListener("click", function () {
+    var cur = document.documentElement.getAttribute("data-theme");
+    var sysDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
+    var next = cur ? (cur === "dark" ? "light" : "dark") : (sysDark ? "light" : "dark");
+    document.documentElement.setAttribute("data-theme", next);
+    css = getComputedStyle(document.documentElement);
+    palette();
+  });
+
+  var C = {};
+  function palette(){
+    C.ink = tok("--ink","#e8eaf4"); C.soft = tok("--ink-soft","#a6abc6");
+    C.thread = tok("--thread","#383d5a"); C.accent = tok("--accent","#d9ac52");
+    C.clean = tok("--clean","#5cc08a"); C.knot = tok("--knot","#e56a5e");
+    C.held = tok("--held","#8f86f0"); C.cara = "#6f9bd6";
+    C.ground = tok("--ground","#0e101a");
+  }
+  palette();
+
+  /* ── hero background weave ── */
+  var hc = document.getElementById("heroCanvas");
+  if (hc) {
+    var hx = hc.getContext("2d"), hw, hh, hDots = [];
+    function hsize(){
+      var r = hc.parentElement.getBoundingClientRect();
+      hw = hc.width = r.width * (window.devicePixelRatio||1);
+      hh = hc.height = r.height * (window.devicePixelRatio||1);
+      hx.setTransform(window.devicePixelRatio||1,0,0,window.devicePixelRatio||1,0,0);
+    }
+    hsize();
+    function hero(){
+      var W = hc.parentElement.getBoundingClientRect().width, H = hc.parentElement.getBoundingClientRect().height;
+      hx.clearRect(0,0,hw,hh);
+      var gap = 46, t = reduce ? 0.5 : (Date.now()/3600);
+      for (var y = gap/2; y < H; y += gap){
+        hx.beginPath();
+        for (var x = 0; x <= W; x += 6){
+          var yy = y + Math.sin((x/150) + t + y*0.02) * 7;
+          x===0 ? hx.moveTo(x,yy) : hx.lineTo(x,yy);
+        }
+        hx.strokeStyle = C.thread; hx.globalAlpha = 0.5; hx.lineWidth = 1; hx.stroke();
+      }
+      // a couple of accent selvage threads + a knot
+      hx.globalAlpha = 0.9;
+      [0.32, 0.64].forEach(function(fy, i){
+        var y = H*fy;
+        hx.beginPath();
+        for (var x=0; x<=W; x+=6){ var yy = y + Math.sin((x/130)+t*1.4+i)*10; x===0?hx.moveTo(x,yy):hx.lineTo(x,yy); }
+        hx.strokeStyle = i? C.held : C.accent; hx.lineWidth = 1.8; hx.stroke();
+      });
+      var kx = W*0.5 + Math.sin(t*1.4)*8, ky = H*0.48;
+      hx.beginPath(); hx.arc(kx, ky, 4.5, 0, 7); hx.fillStyle = C.knot; hx.fill();
+      hx.globalAlpha = 1;
+      if (!reduce) requestAnimationFrame(hero);
+    }
+    hero();
+    window.addEventListener("resize", function(){ hsize(); if(reduce) hero(); });
+  }
+
+  /* ── the loom viewer simulation ── */
+  var cvs = document.getElementById("loom");
+  if (cvs) {
+    var g = cvs.getContext("2d");
+    var W = cvs.width, H = cvs.height;
+    var lanes = [
+      { name: "selvage", y: 0.5, color: function(){return C.accent;}, edge: true },
+      { name: "alice",   y: 0.24, color: function(){return C.clean;} },
+      { name: "bob",     y: 0.68, color: function(){return C.held;} },
+      { name: "cara",    y: 0.86, color: function(){return C.cara;} }
+    ];
+    lanes.forEach(function(l){ l.strands = []; l.head = 60; });
+    var events = [], knots = [], head = 60, tick = 0;
+    var log = document.getElementById("eventlog");
+    var pickPool = ["a91f","3d2c","7b80","c4e6","0f19","5a4d","e820","b6f1","9c07","24aa"];
+    function pid(){ return "pick:" + pickPool[(Math.random()*pickPool.length)|0] + "…"; }
+    function pushLog(cls, verb, txt){
+      if (!log) return;
+      var li = document.createElement("li");
+      li.innerHTML = '<b class="'+cls+'">'+verb+'</b><span>'+txt+'</span>';
+      log.insertBefore(li, log.firstChild);
+      while (log.children.length > 7) log.removeChild(log.lastChild);
+    }
+
+    function lane_y(l){ return H * l.y; }
+
+    // scripted-ish random weave
+    function step(){
+      tick++;
+      head += 2.1;
+      // advance agent lanes toward the edge, occasionally seal a strand
+      lanes.forEach(function(l){
+        if (l.edge) return;
+        if (Math.random() < 0.012 && head - l.head > 120){
+          l.head = head;
+          var roll = Math.random();
+          if (roll < 0.20){
+            // KNOT against selvage
+            knots.push({ x: head, y: (lane_y(l)+H*0.5)/2, born: tick, resolved: 0, lane: l });
+            pushLog("k","KNOT", l.name+" ⊗ selvage · "+pid());
+          } else if (roll < 0.34){
+            pushLog("h","HELD", l.name+" · byte-decided config · human confirms");
+          } else {
+            l.strands.push({ x: head, y: lane_y(l) });
+            pushLog("c","CLEAN", l.name+" folds · "+pid());
+          }
+        }
+      });
+      // resolve knots after a beat
+      knots.forEach(function(k){
+        if (!k.resolved && tick - k.born > 130){
+          k.resolved = tick;
+          pushLog("s","RESOLVE", "human sealed "+k.lane.name+"↔selvage");
+        }
+      });
+      // prune offscreen
+      knots = knots.filter(function(k){ return head - k.x < W + 40; });
+    }
+
+    function draw(){
+      g.clearRect(0,0,W,H);
+      var ox = Math.max(0, head - W + 80); // scroll so head stays near right
+      function X(x){ return x - ox; }
+
+      // faint warp grid
+      g.globalAlpha = 0.5; g.strokeStyle = C.thread; g.lineWidth = 1;
+      for (var gy = 40; gy < H; gy += 48){
+        g.beginPath(); g.moveTo(0, gy); g.lineTo(W, gy); g.stroke();
+      }
+      g.globalAlpha = 1;
+
+      // lanes
+      lanes.forEach(function(l){
+        var y = lane_y(l);
+        g.beginPath();
+        g.moveTo(X(0), y);
+        // gentle weave
+        for (var x = 0; x <= (l.edge?head:l.head); x += 8){
+          var yy = y + Math.sin(x/90 + (l.edge?0:1.5))* (l.edge?3:5);
+          g.lineTo(X(x), yy);
+        }
+        g.strokeStyle = l.color(); g.lineWidth = l.edge ? 3.4 : 2.2;
+        g.globalAlpha = l.edge ? 1 : 0.92; g.stroke(); g.globalAlpha = 1;
+
+        // strand nodes
+        (l.strands||[]).forEach(function(s){
+          g.beginPath(); g.arc(X(s.x), s.y, 3.2, 0, 7); g.fillStyle = l.color(); g.fill();
+        });
+        // lane label
+        g.fillStyle = C.soft; g.font = "12px ui-monospace, monospace"; g.textAlign = "left";
+        g.fillText(l.name, 8, y - 8);
+      });
+
+      // knots
+      knots.forEach(function(k){
+        var kx = X(k.x), ky = k.y;
+        var live = !k.resolved;
+        var r = live ? 6 + Math.sin(tick/6)*1.6 : 5;
+        // tie line from lane to selvage
+        g.beginPath(); g.moveTo(kx, lane_y(k.lane)); g.lineTo(kx, H*0.5);
+        g.strokeStyle = k.resolved ? C.accent : C.knot; g.lineWidth = 1.4; g.globalAlpha = 0.7; g.stroke(); g.globalAlpha = 1;
+        // the knot
+        g.beginPath(); g.arc(kx, ky, r, 0, 7);
+        g.fillStyle = k.resolved ? C.accent : C.knot; g.fill();
+        if (live){ g.beginPath(); g.arc(kx, ky, r+5, 0, 7); g.strokeStyle = C.knot; g.globalAlpha = 0.35; g.stroke(); g.globalAlpha = 1; }
+        else { g.fillStyle = C.ground; g.font="9px ui-monospace"; g.textAlign="center"; g.fillText("✓", kx, ky+3); }
+      });
+
+      // the advancing edge head
+      g.beginPath(); g.arc(X(head), H*0.5, 7, 0, 7); g.fillStyle = C.accent; g.fill();
+      g.beginPath(); g.arc(X(head), H*0.5, 12, 0, 7); g.strokeStyle = C.accent; g.globalAlpha=0.4; g.stroke(); g.globalAlpha=1;
+    }
+
+    function frame(){ step(); draw(); if (!reduce) requestAnimationFrame(frame); }
+    if (reduce){
+      // static: pre-seed a legible frame
+      for (var i=0;i<8;i++) step();
+      knots.push({x: head-180, y:(lane_y(lanes[2])+H*0.5)/2, born:0, resolved:1, lane:lanes[2]});
+      draw();
+      pushLog("c","CLEAN","alice folds · "+pid());
+      pushLog("k","KNOT","bob ⊗ selvage · "+pid());
+      pushLog("s","RESOLVE","human sealed bob↔selvage");
+    } else {
+      frame();
+    }
+  }
+})();
+</script>

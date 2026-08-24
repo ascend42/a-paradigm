@@ -5,6 +5,65 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.8.0] — 2026-08-24 — Warpline: field-test readiness (experimental, in progress)
+
+**Warpline is very much in progress** — an experimental package (`@a-company/warpline`, 0.2.0), bundled with the Paradigm CLI but not yet a finished product. This release merges a long-lived feature branch: the deterministic merge-adjudication substrate ("meaning judges, bytes execute, disagreement fails closed") reaches the point where a pre-registered field test *can be run* on a real app. Nothing here changes the Paradigm framework's own surfaces; treat every Warpline feature as a research instrument, not a stable API.
+
+### Added — Warpline
+- **M2.5 durable branches, merged by meaning** — branch/switch/checkout, multi-branch log/diff/show, protected `main` (anti agent-self-merge gate), merge-by-meaning that fails **closed** on blind classes. The founder's divergent-branch falsifier passes (config×code + no-shared-token invariant held, not silently sealed).
+- **Field-test run pipeline** (`warpline field oracle | cards | fallback | judge | join | score`) — the full harness for a pre-registered study: a CLEAN-seal green-gate oracle with the both-parents power rule, resolve-time blinded rating cards, a hash-chained tamper-evident denominator ledger with write-before-reveal + git-witnessed heads, a cold LLM-judge instrument (blocking twin-invariant + injection-corpus pre-flight, N=3 majority), and a §-by-§ falsifier report (two-denominator bounds, Wilson-gated seed calibration, honest INCONCLUSIVE/VOID defaults).
+- **M3-lite integrity** — Ed25519 **agent-signed strands** (signature bound into the pickId, human-gated key mint), `warpline fsck` (fabric + objects + refs + registry + signatures in one verb), and **auto-resolve grants** (`warpline grant auto-resolve`): a human-issued, scoped, expiring, revocable exception that lets agents continue through KNOTs on long autonomous builds — off by default. Adversary falsifier green. The human/agent boundary is enforced procedurally (permissions + gates); agent-to-agent attribution is cryptographic. Honest limits are documented, not hidden.
+- **Pre-app kit** — `warpline field seed corpus|planted|classify|verify` and `warpline field init-subject`, so an operator can seal the injection corpus + planted control and bootstrap a subject app; `field seed verify` runs the run's own loader as a pre-freeze proof.
+- **Operator runbook** (`docs/guides/warpline-field-test-runbook.md`) and the ratified, locked pre-registration v2.
+
+### Notes
+- **Experimental.** `@a-company/warpline` is 0.x; the interface will keep moving. The field test itself has not been run — the remaining steps require a subject app and are founder-gated (see the runbook's §C freeze checklist).
+- Also included from the branch: the Academy / Classroom experience (7.6.x–7.7.0 entries below) already merges to `main` with this release.
+- Still experimental surfaces report their own versions until a publish.
+
+## [7.7.0] — 2026-06-25 — The Academy chrome: Roster · Rap Sheet · Agent Locker (experimental)
+
+The Academy was a single Term Board. This makes it a navigable surface — the gated-learning ledger you can actually read.
+
+### Added
+- **Tabbed Academy** (`#ClassroomSection`): Term Board · **Roster** · **Rap Sheet** · **Agent Locker**, with the Bootstrap Doorway still gating an un-bootstrapped project.
+- **Roster** — per-enrolled-agent curriculum **traffic-lights**: a colored light for syllabus health (`current`/`stale`/`broken`/`expired`), a one-line "what this means" hint, and the agent's certified / on-trial counts. Data from `/api/classroom/status`; no new endpoint.
+- **Rap Sheet** — the **learning lineage**: a new read-only `GET /api/classroom/rapsheet` joins the three loop spines (born = the cert ⋈ applied = `notebook-refs.jsonl` by entryId ⋈ broke = `field-failures.jsonl` by entryId). Each certified learning is traced born → applied N× → broke (→ spawned scenario). The honest-null thesis made visual: a learning applied without ever breaking reads **"untested, not proven,"** never green — `breaks: []` is surfaced as exactly that.
+- **Agent Locker** — per-agent notebook vetting via a new read-only `GET /api/classroom/locker`, scoped to the **project roster** (enrolled agents ∪ agents with a project notebook, not the whole installed library). Each agent's entries (global overlaid with project, deduped by id) are split **Vetted** (`trust: certified`) vs **Backlog** (provisional / external / legacy-untiered — knowledge not yet earned), each row carrying its trust badge, applied·broke counts, scope and confidence. Legacy auto-promoted entries (no trust) read as backlog, never vetted.
+- **Trust-ladder badges** — a unified `TrustBadge` renders the tier consistently across Staged + Locker: certified (green) ▸ provisional (orange) ▸ **external** (cyan, dashed — the foraged, context-excluded floor), so the trust gradient reads at a glance.
+- **University course PARA 901 — "The Academy: Gated Learning (the Classroom)"** (first-party pack → 6.6.0): a 6-lesson course (note + quiz each, 24 questions) teaching the whole model — provisional-by-default, the two loops → one certifier, study-hall-stages-vs-class-certifies, THE STAND (dissent-first, no-scenario-no-assessment, refine = "X except Y"), Expeditions (the 5-gate firewall, refine-as-localization), and reading the honest (often null) scoreboard + the four Academy tabs. Authored by the team (Scholar brief → Sheila structure → Loid loop-accuracy review); teaches the context-firewall as a **structural** guarantee and hard-demote as intended-next (not shipped), per the accuracy pass. This is "the huge agent-learning change, taught."
+
+### Notes
+- Still **experimental**. `bin/paradigm` (Homebrew) still reports 7.6.x until a publish.
+
+## [7.6.1] — 2026-06-25
+
+### Fixed
+- **`#notebook` / the gated promote path** — promoting two or more **distinct** learnings that shared a concept slug silently collapsed them into one notebook entry, the last write clobbering the rest (`addNotebookEntry` derived the id from `concepts[0]` alone, with no read-before-write). Surfaced live running the first real Expedition term: three foraged externals all tagged `[expedition, source:external, typescript, architecture, …]` certified as **one** entry. Two-part fix: (1) the id slug is now drawn from the **topical** concept, skipping grouping/structured tags (`expedition`, `source:external`, `tier:a`); (2) a **collision guard** — when the base id is already held by a genuinely different learning (different source lore id *and* different content), a stable content discriminator is appended so neither is lost. Re-promoting the same evolving insight still updates one entry ("latest measurement wins"). Filed `T-2026-06-25-012`; 3 regression tests.
+
+## [7.6.0] — 2026-06-25 — The Academy: the Classroom you can see, run, and forage (experimental)
+
+7.5.0 shipped the Classroom *engine* — but it had never run a term and had no GUI. This makes it **real**: bootstrapped on a project in two calls, a visible Suite surface, the first live gated term run end-to-end, the two competing learning loops reconciled in data, and agents that forage the open web. Still **experimental**. Spec `docs/specs/classroom-experience.md`; decision `TD-2026-06-25-044`.
+
+### Added
+- **The visual Academy Suite section** (the long-tracked #30), read-only: a `/api/classroom` router (`/status`, `/staged`, `/certifications`, `/refinements`) + a `ClassroomSection` — the **Term Board** with the *honest ghosted-denominator scoreboard* (a null `repeat-failure-rate` reads "no settled exams yet," never a confident green), the Bootstrap Doorway empty-state, and `GATED`/`LEGACY`/`SURVIVED`/`OVERTURNED` badges. Portal-gated `^local-only ^read-only`.
+- **`/paradigm:forage` — Expeditions:** agents forage the wild (Reddit · Medium · articles · Anthropic docs) for **cited** external candidates, staged at the floor `trust:'external'`, never certifying. The firewall: cite-or-drop, per-tier confidence caps, an intake breaking-scenario authored against *our* repo (no scenario → Field Notes), conflicts as challengers, and the field as the final examiner.
+- **The gated promotion path:** `gatedPromoteJournalEntry` + the `paradigm_classroom_promote` MCP tool — a `/class` sign-off promotes to provisional with a cert stamped `certifiedBy:'peer'|'quorum'` (no 0.8 floor; the human's ruling *is* the gate), distinct from the legacy auto-promote's `'gate'`. The two-loops **visible-quarantine** resolution: the GUI derives GATED vs LEGACY from `certifiedBy`.
+- `paradigm_journal_record` gains an optional **`provenance`** envelope (`source`/`trust`/`sourceSet`) — the staging plumbing for foraged knowledge (backward-compatible; omitted ≡ unchanged output).
+
+### Changed
+- **`/paradigm:class`** — added **Step 0** (the Orientation cold-start divert, so a fresh project isn't an empty review) and rebuilt the review arm as **THE STAND**: a fixed dissent-first turn order, the one causal question with a *rule-or-interrogate* fork, `@`-interrogation on the record, a refine read-back, the "no one could break it ⇒ *untested, not strong*" rule, and an External-candidates section (citation-first, no benefit-of-the-doubt, provisional ceiling).
+- `/api/classroom/staged` reads **gated** journal candidates (not the Ambient nomination firehose) and excludes already-promoted entries.
+
+### Fixed
+- **`#aspect-graph`** — an aspect declared with a leading `~` key (e.g. `~determinism`) was indexed under a **double-tilde** id and was unreachable by `aspect_check`/`aspect_get`, while `purpose_validate` still passed clean. Root-fixed in the `premise/core` aggregator (idempotent symbol prefixing) + a canonicalize-and-dedup at the aspect-graph DB layer. A green validate is **not** proof an aspect is queryable.
+- **`#essence-hash`** — the `f:N` slot-substitution regex matched `f:N` *inside string literals* (`str:"f:0"`), silently corrupting code-unit content-addresses. Fixed with a U+001F-anchored slot token + a regression test.
+- **`#git-exec` / the `/api/warpline` route** — argument-injection hardening (`--end-of-options` on every user ref), a real `isRef` allowlist validator (its docstring had over-claimed), `portal.yaml` gates for `/api/warpline`, and a `127.0.0.1` bind default so the `^local-only` gate is enforced at the socket.
+- **`#oracle`** — positive test coverage for the previously-untested `agreeConflict` + `divergeGitOnly` confusion-matrix cells.
+
+### Docs
+- `docs/specs/classroom-experience.md` — the full Academy experience vision (the conversation model + the GUI) and the Expeditions external-knowledge design with its ratified trust/trigger decisions.
+
 ## [7.5.0] — 2026-06-22 — The Classroom: agents that learn from failure (experimental)
 
 The biggest change to how agents learn since the notebook itself — shipped **experimental** (the engine is built and tested; the skills are drafts and it hasn't run a full term yet). A new model: **learnings are provisional by default**, and the engine is the *failure → reinforcement* loop, not an entry exam. A certified learning that breaks in the real work is attributed back to the exact entry that caused it, revised down, and corrected — so the team gets *stronger over time*, measurably. Decision `TD-2026-06-19-007`; spec `docs/specs/classroom.md`.

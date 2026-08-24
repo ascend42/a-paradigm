@@ -1,0 +1,14 @@
+id: L-2026-07-16-ascend-023428-651
+type: insight
+timestamp: '2026-07-16T02:34:28.106Z'
+author: ascend
+title: Decision TD-2026-07-16-426 recorded
+summary: Companion lore entry for decision record TD-2026-07-16-426. See .paradigm/decisions/TD-2026-07-16-426.yaml.
+symbols_touched:
+  - '#grade'
+  - '#admit'
+references:
+  decision_id: TD-2026-07-16-426
+tags:
+  - companion-lore
+  - decision-reference

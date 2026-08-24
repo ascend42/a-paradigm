@@ -1,0 +1,43 @@
+id: L-2026-07-01-ascend-210748-001
+type: review
+timestamp: '2026-07-01T21:07:48.690Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 5-lens audit of the Warpline replacement arc (Fable) — the keystone is fabric-schema-v2, before M1c
+summary: 'A full 5-lens read-only panel (Arky/arch, Judge/review, Aegis/security, North/product, Loid/agent-moat) audited proposed-vs-built for the Warpline byte-authoritative replacement (TD-2026-07-01-263) across four vectors: AI agents, humans, cross-tree, beyond. Unanimous: the store DIRECTION and the hard part (meaning-level admission + fail-closed materialization + native object store) are SOUND and well-tested; the gaps are wiring/sequencing, not thesis failure. The convergent keystone finding: a single fabric-schema-v2 migration (A1 hash-chain + parentPickId + second merge-parent + authoredBy:agentId) simultaneously closes tamper-evidence, fixes the compounding identity-DAG debt, starts the calibration moat, and unblocks branching+M2 history — and it gets strictly more expensive with every strand sealed, so it must precede M1c cutover, reversing the checkpoint plan that had M1c next and A1 as later-optional.'
+symbols_touched:
+  - '#strand'
+  - '#pick'
+  - '#admit'
+  - '#seal'
+  - '#fabric'
+  - '#grade'
+  - '#warp-store'
+  - '#materialize'
+  - '#warpline-cli'
+learnings:
+  - A1 (pickId hash-chain) is not just tamper-evidence — it is the same schema change that fixes the identity-DAG debt (parentPickId, two-parent merges), starts the moat (authoredBy:agentId), and unblocks branching. Doing it as one migration BEFORE more history accrues is the highest-leverage move; deferring it compounds an unauthenticatable + non-well-formed prefix that pickId immutability makes unfixable.
+  - 'Confirmed real bugs beyond sequencing: (1) pick.ts:97-99 fails OPEN on an unloadable parent → seal.ts:73-74 seals an EMPTY-delta strand on the daily-driver verb (the exact silent-history-corruption class TD-263 claimed fixed — fixed in admit/fabric, NOT in pick). (2) admit.ts:256 H1 guard still refuses CLEAN admits over a merged tip even though M1b shipped the MergeRecipe that was the stated blocker → multi-agent work serializes to one merge per generation at N>=3. (3) agentId is never recorded on the strand (admit.ts:189-192) — all 14 live strands attribute to ''ascend''; the moat keys on an identity the ledger doesn''t capture. (4) snapshotDir has no ignore semantics → worktree picks ingest node_modules/.env as permanent content-addressed objects with no gc. (5) restoreTree (snapshot.ts:179) has no path-traversal/symlink guard — CVE-2021-21300 class, ships as an exploit primitive when M1c lands restore as a verb.'
+  - 'Strategy (North+Loid concur): replacement stays the quiet north star, but the SHIPPABLE product today is mirror-mode + the trojan-horse ''Warpline Guard'' (oracle/lifeline/grade packaged as a zero-config CI check on plain git+TS repos, no Paradigm init). lifeline (rename-surviving blame) is the one verb already better than git today. GAP-1 (non-symbol files invisible to `warpline status`) is the trust-killer and has no milestone.'
+  - 'M1 is NOT actually complete: restore is a library primitive only (no `warpline restore` verb), backfill is unbuilt, so ''reconstruct with git absent'' is true of a fixture, not of any real repo''s pre-M1b history. Do not claim M1 done before the restore verb + A4 cutover-refusal + ignore semantics + a rehydrate path exist.'
+tags:
+  - warpline
+  - replacement
+  - audit
+  - 5-lens-panel
+  - fabric-schema-v2
+  - A1
+  - sequencing
+linked_tasks:
+  - T-2026-07-01-007
+  - T-2026-07-01-012
+  - T-2026-07-01-017
+  - T-2026-07-01-021
+  - T-2026-07-01-022
+confidence: 0.8
+git_context:
+  ref: 00a28c153aed3a9284f9ef5ee669ad8adac2bb0a
+  branch: warpline-surfaces
+  dirty: true

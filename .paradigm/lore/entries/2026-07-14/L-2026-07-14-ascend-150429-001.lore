@@ -1,0 +1,63 @@
+id: L-2026-07-14-ascend-150429-001
+type: milestone
+timestamp: '2026-07-14T15:04:29.518Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Warpline first-principles reassessment RATIFIED-PENDING-FOUNDER — dream sound, center of gravity moves from detection to deterministic adjudication
+summary: 'Founder-requested 6-lens research panel (Scout/Scholar/Arky/Loid/Jinx/North, orch-mrk0fx7e-g75j) reassessed the entire Warpline idea from first principles with external web research. Convergent verdict: the dream is SOUND but the valuable/defensible/evidenced thing is a deterministic coordination protocol (merge adjudication at admit-time) — not byte custody, and not "detection of what tsc can''t see." Category crystallized H1-2026 (Cursor Origin, Entire.io $60M, Ataraxy, gfix) yet Warpline''s specific layer — deterministic false-CLEAN judgment on git-clean merges — is empty; window revised to 9-15mo.'
+symbols_touched:
+  - '#warpline-oracle'
+  - '#essence-hash'
+  - '#admit'
+  - '#fabric'
+  - '#warp-store'
+  - '#ts-lens'
+  - '#grade'
+  - '#predict'
+tags:
+  - arc:warpline
+  - panel
+  - strategy
+  - first-principles
+  - reassessment
+  - milestone
+  - market-research
+body: |-
+  ## Panel verdict (all six lenses, independently converging)
+
+  1. THEORY SOUND (Scholar): determinism discipline verified in code (exact-pin TS 5.9.3, checker-resolution-only, fail-closed v1.1, 29 probes). Unison 1.0 production-proves content-addressed structural identity. Correction: it is an INTERFERENCE-WITNESS ALGEBRA (KNOT = "deltas don't commute over structural identity" — theorem-shaped), not "meaning." Historical law: darcs/Pijul/SemanticMerge all had better merge theory and died — better theory wins only attached to a workload where git measurably fails; that workload arrived 2026 (AgenticFlict 27.67% of 142K agent PRs). Hard ceiling that matters: C1 disjoint-touch data-flow interference (invisible to reference topology IN PRINCIPLE).
+
+  2. MARKET REAL + CROWDING (Scout, + coordinator verification): Cursor Origin (June 17 2026, agent-first git forge on Graphite acquisition, fall release — Jinx caught it, Scout missed it, coordinator verified multi-source). Entire.io $60M Dohmke seed ("semantic reasoning layer"). Ataraxy Labs weave/sem (entity-level agent merge, 1.2k stars). GitHub shipped Copilot conflict RESOLUTION 3x since March. NOBODY ships deterministic judgment of merges git wrongly blesses; AgenticFlict explicitly disclaims measuring that class; our 6.2% base rate is the only number that exists for it. GitButler correction: $17M (primary source), not $22M.
+
+  3. SURVIVING KILL-SHOT (Jinx, coordinator-verified against ground-truth.md + pilot-results.md): the "new detection class" pitch is ONE datapoint deep. Of 18 ground-truthed hits: zod 69ff844b had RED TESTS at M (boring CI catches); xstate 7b808af4 pack-check-catchable; only zod 66cbfe09 invisible to every gate. Both Move-3 pilot catches (s6/s7) were adjudicated BY tsc on the merged tree — tsc-visible by construction. Honest pitch: Warpline decides EARLIER (admit-time vs CI-time), DETERMINISTICALLY (schedulers can't run on flaky judgment), ATTRIBUTED (the exact 1-4 contested symbols + author). "Decide before tsc has to," not "see what tsc can't."
+
+  4. ARCHITECTURE (Arky): build = judgment core (~2,500 lines, thesis-aligned, validated) stapled to a replacement-era chassis. Three ranked refactorings: (i) delta-native core — compositional snapshots + incremental essence recomputation (T-2026-07-04-003 solved properly, existential, ~1-2wk); (ii) pull v3 DAG identity + refs FORWARD of M2 (v2 chain serializes the swarm; v3 deletes ~400 lines of guard scar tissue); (iii) GAP-1 honest minimum: JSON/YAML key-tree lens, lockfiles = derived artifacts (regenerate, never knot), cross-file TS call resolution, per-path meaning-decided vs byte-decided labeling. Plus claim-scoped propose API: agent-claimed symbol set = perf scoping hint = CLAIM-BREACH verdict = calibration probe (one fix, three payoffs).
+
+  5. AGENT-FIRST REQUIREMENTS (Loid): composite 4.8/10. Strongest = the wedge (verdicts 7, never-silently-wrong 7.5). Critical hole = R3 programmatic KNOT resolution (2.5): payload gives essence hashes, not bodies/intents — detection without machine resolution relocates the bottleneck. Moat re-keyed PER-CODEBASE not per-agent (model updates reset agent behavior; symbol-level survival history never resets, lives in the fabric, genuinely non-portable). grade.ts computes ~80% of it, has ZERO consumers. Partition Trial designed (Phase 0 = 150-task-pair disjointness census, no swarm needed) with kill criteria K1-K4. Principle triage: "bytes-as-projection" ACTIVELY IN THE WAY — restate thesis "meaning judges, bytes execute, disagreement fails closed" (the shipped code already implements this).
+
+  6. PRODUCT (North): staircase Guard→admit→judgment→substrate breaks between 1 and 2 (Guard = distribution + data, not a business: 1 churn-validated catch per ~92 clean merges). All four step-metrics currently ZERO. Boost: tree-scoping, the Guard GitHub Action (knot-size ≤6 default — small knots are 50%-precision, every avalanche benign), AgenticFlict benchmark publication before GitHub blurs the semantic/textual distinction. Positioning: hold "agent-first source control" as internal north star; ship "the merge judge for agent teams."
+
+  ## LLM-judge frontier (Scholar): the judge never generates so never hallucinates; the generator never judges so provenance survives. LLMs enter only inside a KNOT as resolution proposers re-entering through the deterministic gate. Unrun counterfactual (Jinx KS-F): prompt a frontier model with the same 18 flagged diffs + benign controls — one day of work, kills or armors the deterministic pitch. Run it ourselves before a competitor does.
+
+  ## Forge question (founder, this session): "GitHub for Warpline" (CI/CD, issues, merge, branching, permissions, tree). Panel-informed answer: don't build a forge now ($60M+ contested space: Origin/Entire/Agent HQ); be the judgment engine inside their surfaces near-term. But the Warpline-native translation is real and unclaimed: issues→KNOT queue, PRs→OFFERs carrying verdicts+claims, CI/CD→the admit gate, permissions→scrutiny policy (trust layer IS the permission model), tree→Tapestry. Capture as north-star spec (warpline-forge.md) so verdict JSON/knot payload/claim schema stay forge-compatible; defer every pixel behind graded-weaves/week > 0.
+
+  ## Coordinator verification log (recheck discipline): pilot s6/s7 tsc-adjudication confirmed (pilot-results.md); caught-later trio characterization confirmed (ground-truth.md:67-93); Cursor Origin confirmed real (cursor_ai X post + AlphaSignal + BigGo) — Scout's miss, Jinx's catch; GitButler $17M primary-source correction accepted.
+
+  ## Status: recommendations PENDING FOUNDER RATIFICATION (thesis rewording, resequencing, positioning). Prioritization pass follows this entry.
+linked_lore:
+  - L-2026-07-02-ascend-153932-001
+  - L-2026-07-14-ascend-023240-001
+linked_tasks:
+  - T-2026-07-04-003
+  - T-2026-07-04-004
+  - T-2026-07-01-030
+  - T-2026-07-01-017
+  - T-2026-07-01-014
+  - T-2026-07-02-005
+confidence: 0.9
+git_context:
+  ref: c38a7975c23f628b4c1b1ac30ef50c9c36aa1c64
+  branch: warpline-surfaces
+  dirty: true

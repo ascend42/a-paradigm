@@ -1,0 +1,55 @@
+id: TD-2026-07-16-810
+timestamp: '2026-07-16T02:34:20.335Z'
+title: >-
+  Warpline thesis RATIFIED: "meaning judges, bytes execute, disagreement fails closed" — product = deterministic
+  adjudication at admit-time
+decision: >-
+  The official Warpline thesis is "meaning judges, bytes execute, disagreement fails closed." Public positioning: the
+  deterministic merge-adjudication layer for agent teams — "decide before tsc has to" (earlier + deterministic +
+  attributed + cheap). "Detection tsc can't do" is RETIRED as the lead claim; the standing wording rule for all external
+  artifacts (Guard README, benchmark, forge spec): Guard "deterministically flags contested-symbol knots your
+  typechecker and tests provably missed" — never unscoped detection-superiority claims. "Agent-first source control" is
+  held as the internal north star, not the public category claim. Closes gate 0.1 of roadmap 2026H2 and resolves
+  T-2026-06-24-008.
+rationale: >-
+  6-lens first-principles panel (orch-mrk0fx7e-g75j) + two falsifiers: (1) coordinator-verified that the detection pitch
+  rests on zod 66cbfe09 alone (69ff844b had red tests at M; xstate 7b808af4 asterisked — defects predate the merge; both
+  Move-3 pilot catches tsc-visible by construction); (2) the LLM-judge falsifier ARMORED the deterministic-adjudication
+  framing (blind judge missed the flagship at 1000x cost, non-deterministic) while evidencing the complementary LLM
+  lane; (3) Loid's principles triage: "bytes-as-projection" was actively in the way — the shipped code already
+  implements the ratified wording (byte-conflict downgrades CLEAN→KNOT); (4) Move-3 full run: 22.2% meaning-decisive
+  with 0 wrong merges = adjudication evidenced statistically. Founder ratified 2026-07-15 via gate question.
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+  - id: forge
+    role: agent
+    stance: supported
+  - id: architect
+    role: agent
+    stance: supported
+  - id: advocate
+    role: agent
+    stance: supported
+  - id: product
+    role: agent
+    stance: supported
+  - id: scholar
+    role: agent
+    stance: supported
+  - id: researcher
+    role: agent
+    stance: supported
+symbols_affected:
+  - '#warpline-oracle'
+  - '#admit'
+  - '#essence-hash'
+  - '#fabric'
+status: active
+tags:
+  - warpline
+  - thesis
+  - roadmap-2026H2
+  - gate-0.1
+  - positioning

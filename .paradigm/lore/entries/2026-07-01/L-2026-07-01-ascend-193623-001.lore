@@ -1,0 +1,79 @@
+id: L-2026-07-01-ascend-193623-001
+type: agent-session
+timestamp: '2026-07-01T19:36:23.953Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Warpline M1b shipped — bind-on-seal + durable merge bytes; a merge Warpline performs is now recoverable git-absent
+summary: |-
+  Built M1b-core of the replacement build: every sealed strand now carries a native byte binding (treeId), and a materialized CLEAN merge is durably captured with a re-derivable MergeRecipe (base/ours/theirs/result, all native treeIds) — the merge Warpline performs is no longer thrown away. Byte capture is compositional (review amendment A2: base tree via cat-file + the merge's own changes, never the git-archive dir) and incremental (A3, reuses unchanged subtrees). binding/merge are excluded from pickId. Proven: picked trees AND merged results both restore byte-identically with git absent. +4 tests, 197 green. A1 (hash-chain), A7 (grade↔recipe), and historical backfill spun into their own tasks.</summary>
+  <parameter name="type">milestone</parameter>
+  <parameter name="body">MILESTONE: M1b-core (T-2026-07-01-011) under the replacement epic T-2026-07-01-007, commit 59c138f7. Directly closes the panel's finding that "the merges Warpline performs are irrecoverable."
+
+  WHAT SHIPPED:
+  - #strand: binding {treeId, gitOid?} (native root treeId that restores the strand's working tree from #warp-store with git ABSENT) + MergeRecipe {base, ours, theirs, result} — all NATIVE treeIds (A3 non-optional). Both EXCLUDED from computePickId alongside calibratedConfidence (backfillable + many-byte-trees-to-one-meaning; one uniform rule so backfill never forks identity).
+  - #warp-store (snapshot.ts): snapshotRef (native tree from RAW `git cat-file`/`git show` bytes enumerated via a new git-exec lsTree, NUL-delimited); writeMergedTree (compositional trie builder: base tree + per-path byte changes, reuses unchanged subtrees → naturally incremental A3); snapshotState (worktree via snapshotDir | ref via snapshotRef); captureMerge (the A2 path).
+  - #git-exec: lsTree (recursive leaf inventory).
+  - #pick / #admit / #seal: SealInput gains binding/merge; EVERY seal path stamps binding — genesis + normal FAST_ADMIT (snapshotState), and the CLEAN merge stamps the COMPOSITIONAL result + recipe (base tree via cat-file + mat.plan.files byte changes, NEVER the git-archive temp dir — amendment A2). pick.ts snapshots only when it actually seals (skips on a no-op) inside the fabric lock.
+
+  PROVEN (4 new tests, bind-on-seal.test.ts):
+  - A normal pick stamps binding.treeId, and snapshotRef(HEAD) == snapshotDir(worktree) == binding.treeId (faithful ref walk); binding.gitOid == git rev-parse HEAD^{tree}.
+  - restoreTree(binding.treeId) reproduces the picked tree byte-identically with git absent.
+  - Adding binding/merge never changes computePickId (excluded from the address).
+  - A CLEAN merge (A edits a(), B edits b()) seals with binding + a 3-parent recipe (all tree:v1:); restoring recipe.result yields BOTH concurrent edits — the merge Warpline performed, recovered git-absent.
+
+  197 tests green (was 193); tsc + build clean.
+
+  SCOPING — deferred to dedicated follow-ups (the amendment-heavy remainder of T-011):
+  - A1 pickId HASH-CHAIN (T-2026-07-01-021, Aegis/high): fold parentPickId (+ binding.treeId for M1b+ strands) INTO computePickId so the ledger is tamper-evident. This changes the identity contract for NEW strands (new-vs-old fork, accepted per Aegis; historical strands git-verified during coexistence) — isolated deliberately; confirm the fork before landing.
+  - A7 #grade↔recipe (T-2026-07-01-022, Loid/medium): grade calibratedConfidence against each merge's survive/overturn outcome so byte work feeds the moat.
+  - objects backfill (T-2026-07-01-023, builder/medium): stamp binding on HISTORICAL strands via rewriteFabric + shadow-OID verify; report pre-M1b merge strands as unrestorable (feeds M1c cutover-refuse A4).
+
+  DESIGN NOTE (the §3-vs-A1 tension, resolved): the spec's "uniform exclude binding/merge from pickId" stays for those ANNOTATIONS; A1's tamper-evidence is a SEPARATE committed chain field/derivation, not a mutation of the binding rule — so backfill still works AND new strands get a chain.
+
+  NEXT: M1c (T-012) — the `warpline restore <selector>` verb + selector resolution + the git-absent acceptance integration test (rm -rf .git). restoreTree already exists as the primitive; M1c wires selector→strand→binding.treeId + the cutover-refuse gate (A4).</parameter>
+  <parameter name="symbols_touched">["#strand", "#admit", "#pick", "#seal", "#warp-store", "#git-exec", "#materialize"]
+files_created:
+  - packages/warpline/test/bind-on-seal.test.ts
+files_modified:
+  - packages/warpline/src/fabric/strand.ts
+  - packages/warpline/src/fabric/seal.ts
+  - packages/warpline/src/fabric/pick.ts
+  - packages/warpline/src/fabric/admit.ts
+  - packages/warpline/src/warp/snapshot.ts
+  - packages/warpline/src/git/git-exec.ts
+  - packages/warpline/src/index.ts
+  - packages/warpline/.purpose
+verification:
+  status: pass
+  details:
+    tests: 197/197 pass (+4)
+    typecheck: pass
+    build: pass
+    purpose: valid
+tags:
+  - warpline
+  - replacement
+  - native-store
+  - durable-merge
+  - bind-on-seal
+  - M1
+  - milestone
+linked_lore:
+  - L-2026-07-01-ascend-191445-001
+  - L-2026-07-01-ascend-185215-001
+linked_tasks:
+  - T-2026-07-01-007
+  - T-2026-07-01-011
+  - T-2026-07-01-012
+  - T-2026-07-01-021
+  - T-2026-07-01-022
+  - T-2026-07-01-023
+linked_commits:
+  - 59c138f7
+confidence: 0.86
+git_context:
+  ref: 59c138f79ea35d11a741b965e4d5b2e5165c45ff
+  branch: warpline-surfaces
+  dirty: true

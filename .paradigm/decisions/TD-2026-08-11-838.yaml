@@ -1,0 +1,69 @@
+id: TD-2026-08-11-838
+timestamp: '2026-08-11T19:00:01.070Z'
+title: >-
+  Prove the value prop first: Warpline on Paradigm + Claude is sufficient scope, and the three standing falsifiers are
+  the bar
+decision: >-
+  SCOPE NARROWED, 2026-08-11. The thing to prove is that Warpline WORKS — delivers its value proposition as source
+  control — and it is acceptable for that proof to hold only on Paradigm with Claude. Cross-model and cross-provider
+  generality is explicitly DEFERRED, not abandoned: the founder's position is that the ability to make Warpline work for
+  other models will come after, provided Warpline itself works. CONSEQUENCE FOR THE QUEUE: the F4 apparatus leaves the
+  critical path. The cold-agent runner, the both-skins matrix, the FG-3 descriptor freeze and the FG-4 seed corpus are
+  all deferred behind the value-prop proof — decisions 9 through 12 in TD-2026-08-11-351 stand as recorded but are no
+  longer scheduled ahead of the field test. THE BAR is the three falsifiers already written into the standing report and
+  previously ratified: (A) a FALSE CLEAN — one admit that seals clean over a state a competent human calls broken
+  falsifies "meaning judges" outright; (B) MEANING ADDS NOTHING OVER BYTES — if semantic verdicts nearly always agree
+  with a three-way byte merge, the layer is decoration; (C) FAILING CLOSED IS UNAFFORDABLE — if the refusal rate makes
+  humans the bottleneck it is a tax, not a feature. All three are currently unmeasured and all three become measurable
+  on the Expo field-test project without a cold model or a second provider.
+rationale: >-
+  Generality is worth nothing if the core claim fails, so proving value precedes proving portability. This also resolves
+  a tension that had been accumulating: the F4 programme was consuming the critical path on behalf of a claim (any
+  provider, cold) that is downstream of a claim never yet tested (semantic adjudication is better than byte
+  adjudication). Narrowing to Paradigm + Claude removes the harness day, the second-provider procurement, the descriptor
+  freeze sequencing and the corpus pinning from the pre-field-test queue, and none of that work is lost — it is recorded
+  and re-schedulable the moment the value prop holds. The bar is deliberately NOT newly invented: the three falsifiers
+  were already written, already ratified, and are stated in the standing report as the things that would kill the
+  thesis, which keeps this from being a bar chosen to be passable. LOAD-BEARING DEPENDENCY, carried forward from
+  TD-2026-08-11-663: falsifiers (B) and (C) both require separating genuine KNOTs from over-block false KNOTs, because a
+  denominator inflated by commuting-edit false positives makes "meaning adds something" and "the refusal rate is
+  affordable" both unreadable. Since the over-block fix (T-2026-07-15-008) was deliberately declined in favour of field
+  observation, the field test MUST classify each KNOT as genuine or over-block at resolve time. That classification is
+  not extra scope; it is the difference between a number that means something and one that does not.
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+  - id: claude
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: Keep F4 on the critical path alongside the value-prop proof
+    rejected_because: >-
+      Runs two programmes at once and lets the portability claim consume time on behalf of a thesis that has never been
+      tested. Generality is downstream of value.
+  - option: Invent a new value-prop bar for the field test
+    rejected_because: >-
+      The three falsifiers were already written and ratified in the standing report. Choosing a fresh bar after the fact
+      is how a bar gets chosen to be passable.
+  - option: Fix the over-block ceiling first so the denominator is clean
+    rejected_because: >-
+      Already declined in TD-2026-08-11-663 in favour of measuring the real-world false-KNOT rate. Carried forward
+      instead as a hard requirement to classify each KNOT genuine-vs-over-block at resolve time.
+symbols_affected:
+  - '#admit'
+  - '#predict'
+  - '#oracle'
+  - '#grade'
+  - '#essence-hash'
+  - '#f4-classifier'
+status: active
+tags:
+  - warpline
+  - founder-decision
+  - scope
+  - value-prop
+  - falsifier
+  - field-test
+  - f4-deferred
+  - flight-version

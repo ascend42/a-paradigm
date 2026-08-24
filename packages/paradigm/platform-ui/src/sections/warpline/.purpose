@@ -1,0 +1,72 @@
+version: 2.0.0
+components:
+  WarplineSection:
+    description: >-
+      Warpline section shell (sub-phase 2) — the Oracle Divergence Viewer. Lays out
+      the OracleLedgerRail (left) beside the OracleDivergenceViewer (right). On mount
+      fetches GET /api/warpline/ledger?limit=200 (selecting the newest row) and GET
+      /api/warpline/refs (for the picker). Run posts /api/warpline/oracle (records →
+      prepends + selects) and Preview posts /api/warpline/forecast {vsGit:true}
+      (ephemeral, adapted via forecastToRecord, never added to the rail). Subscribes
+      to the `warpline-ws` CustomEvent (forwarded by useAgentEffects from the
+      `warpline:*` server broadcast) — on `warpline:oracle-record-appended` it
+      prepends the new record (deduped by rowKey) so a live run repaints without a
+      poll. All read-only; the UI never constructs a write/weave call.
+    type: view
+    tags: [feature, warpline, platform]
+  OracleLedgerRail:
+    description: >-
+      Left rail — a RefPicker (two branch <select>s sourced from /refs + Run/Preview
+      buttons) above the /ledger list rendered newest-first. Each row shows
+      branchA→branchB (ledgerRowLabel) · verdict · ts; DIVERGENT rows (isDivergentRow)
+      carry a seam-violet dot. Clicking a row selects it (rowKey identity) → drives
+      the viewer. Run is disabled until two distinct branches are picked.
+    type: component
+    tags: [feature, warpline, platform]
+  OracleDivergenceViewer:
+    description: >-
+      THE screen where "git sees bytes, Warpline sees meaning" is the whole page.
+      Composes RunHeader (branchA ◀ weave ▶ branchB + mergeBase + ts),
+      MeaningVsBytesSplit (the hero — a hard 50/50 split: LEFT bytes/git monospace
+      with a CLEAN ✓ / CONFLICT chip off gitReality.conflicted; a 1px center violet
+      SEAM that pulses on headline divergence; RIGHT meaning/warp serif with a
+      DIVERGENT/CLEAN chip off convergence.verdict + knot/dangle tally),
+      ConfusionMatrix (a literal 2×2 git×meaning whose 4 cells bind
+      convergence.{agreeClean,divergeGitOnly,divergeMeaningOnly,agreeConflict}; each
+      cell clickable to expand its real symbol keys; the divergeMeaningOnly cell is
+      the ★, the only cell that glows — static box-shadow, never animated, no
+      count-up), VerdictCard (verdict + score ALWAYS beside the raw agree/git-only/
+      meaning-only counts + a templated consequence line from dangling[0] or
+      knots[0]) and DivergencePanel (a KnotRender per prediction.knots — two intent
+      threads A=--warp/B=--weft cinching a knot glyph, conflictingSlots incl. the
+      code-lens 'body' slot; a DangleRender per prediction.dangling — a severed
+      thread drifting into a dashed violet void labeled danglingTargetSymbol +
+      retiredBy). CONVERGENT/empty renders the calm "No knots. No dangles. The weave
+      is clean." Includes a basic DrillDown slide-over (knot essenceA/essenceB +
+      slots, or dangle from→target). All four hero states are chosen purely from real
+      OracleRecord fields (heroState).
+    type: component
+    tags: [feature, warpline, platform, hero]
+  warpline-viewer-state:
+    description: >-
+      The React-free PURE binding layer (viewerState.ts). Maps real OracleRecord
+      fields onto UI decisions: heroState (the 4-state mood), isHeadlineDivergence
+      (divergeMeaningOnly>0 — lights the ★ + pulses the seam), gitChip/meaningChip,
+      matrixCells (the literal 2×2 with per-cell symbol keys + the ★ flag), rawCounts,
+      consequenceLine (dangle-first templated line), isCalm + CALM_DIVERGENCE_COPY,
+      ledgerRowLabel/isDivergentRow/rowKey, knotDrill/dangleDrill, and forecastToRecord
+      (adapts a vsGit Forecast to an ephemeral OracleRecord for Preview). Unit-tested
+      in a node env (viewerState.test.ts) against a DIVERGENT and a CONVERGENT sample
+      — keeps "the number can't lie" falsifiability a pure asserted function.
+    type: util
+    tags: [feature, warpline, platform, binding]
+  warpline-web-types:
+    description: >-
+      types.ts — a structural mirror of the engine's exported shapes (OracleRecord,
+      Knot, Dangle, Justification, Convergence, GitReality) plus RefsResponse. Field
+      names track @a-company/warpline VERBATIM; the platform-ui is a separate Vite
+      package so it re-declares the read-only fields the viewer binds rather than
+      importing the engine. The dangle target is read from danglingTargetSymbol (the
+      engine's real field), presented as the "target essence" the spec describes.
+    type: util
+    tags: [feature, warpline, platform, types]

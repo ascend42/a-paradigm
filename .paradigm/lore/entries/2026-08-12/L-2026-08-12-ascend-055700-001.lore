@@ -1,0 +1,50 @@
+id: L-2026-08-12-ascend-055700-001
+type: milestone
+timestamp: '2026-08-12T05:57:00.660Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'MILESTONE: M2.5 merge-by-meaning core works and the fail-closed falsifier PASSES — the multi-branch capability git can''t do'
+summary: 'The core of M2.5 branching — the founder''s readiness bar (work N durable branches at once, merged by meaning) — is built and the acceptance gate PASSES. Four increments committed: foundations + DAG-reachable grading (af9c2bce), branch/switch verbs (fe7f5219), the weaveTips spine refactor (40ec9139, behavior-preserving), and merge-by-meaning with the fail-closed rule (a7e9b12e). Jinx''s divergent-branch falsifier passes independently: the two canonical §8 breaks (config×code, no-shared-token invariant const LIMIT 100→50) surface a HELD naming the byte-decided path instead of a silent CLEAN, the control auto-folds, same-symbol KNOTs. So merge is SAFER than git''s silent auto-merge, not a blind-class multiplier — which was the advocate''s whole objection. Full suite 1133 passing, admit''s linear path byte-identical. Remaining (hardening/exposure, not core): protected main + merge-to-protected-human-only, lock-narrowing for the per-branch-CAS concurrency win, multi-branch log/diff, and the MCP/daemon skins.'
+symbols_touched:
+  - '#branch'
+  - '#merge'
+  - '#head'
+  - '#mergebase'
+  - '#native'
+  - '#admit'
+  - '#grade'
+  - '#warpline-cli'
+tags:
+  - warpline
+  - M2.5
+  - branching
+  - merge-by-meaning
+  - milestone
+  - falsifier-passed
+  - arc:warpline
+  - readiness-bar
+body: |-
+  THE GATE: TD-2026-08-12-813 made Jinx's divergent-branch merge falsifier the non-negotiable acceptance test. It passes (test/merge-falsifier.test.ts, verified independently): (a) config×code .js value → HELD; (b) no-shared-token invariant (scalar const not lifted → byte-decided) → HELD naming the file; (c) control disjoint lifted functions → auto-fold CLEAN (value prop survives); (d) same-symbol → KNOT. The fail-closed rule: on a merge, classifyMergePaths runs BEFORE any ref moves; any byte-decided change (meaning was blind) → HELD requiring human --confirm, ref not advanced. Admit never sets the flag → linear behavior unchanged.
+
+  WHY THIS ANSWERS THE DISSENT: Jinx showed merge-by-meaning's CLEAN trigger is the inverse of git's conflict trigger, so naive merge would auto-fold the §8 blind classes git surfaces. The fail-closed rule inverts that: meaning auto-folds only what it SAW; anything it was blind to is held for a human. Git silently auto-merges disjoint config×code; Warpline holds it. That is 'better than git at the merge' made true and honest.
+
+  BUILD SHAPE (Arky was right): ~cheap wiring on a finished engine. merge = weaveTips (the factored admit core) pointed at two branch tips with base=LCA. The only net-new algorithm was the merge-base. Every increment verified (tsc + full suite) before commit; the spine refactor changed ZERO existing tests.
+
+  REMAINING increments (5-7): protected main + merge-to-protected=HUMAN_ONLY (Aegis's anti-self-merge gate — a swarm must not auto-land into main); lock-narrowing to unlock the per-branch-CAS concurrency win (Aegis — risky: fabric.jsonl append isn't atomic, C-13); multi-branch log + diff A..B; MCP/daemon/descriptor skins for branch/switch/merge (F4 legibility). Plus follow-ups: cross-branch clean switch (expectTreeId baseline), dedicated meaning-blind RefusalCode.
+
+  ARC COMMITS: ...58cb76e9 (pre-fixes) → judge → Tier-1 dogfood (36bd7c73, 964f047c) → multi-instance (1b2f874a) → M2.5 (af9c2bce, fe7f5219, 40ec9139, a7e9b12e). All on warpline-surfaces at origin.
+linked_lore:
+  - L-2026-08-12-ascend-042418-718
+  - L-2026-08-12-ascend-042909-715
+linked_commits:
+  - af9c2bce
+  - fe7f5219
+  - 40ec9139
+  - a7e9b12e
+confidence: 0.85
+git_context:
+  ref: a7e9b12edd161bdaf96867d2b9d367416d097803
+  branch: warpline-surfaces
+  dirty: true

@@ -1,0 +1,40 @@
+id: L-2026-06-25-ascend-011533-001
+type: milestone
+timestamp: '2026-06-25T01:15:33.510Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Classroom MVP — first real build: gate bootstrapped, /forage skill, /class THE STAND'
+summary: Began building the Academy for real (zero engine changes, per the MVP plan). (1) Bootstrapped the gate on this repo — recorded SC-aspect-validate-vs-queryable (the double-tilde lesson we lived this session) + SY-compliance syllabus v1, so .paradigm/curriculum/ exists and /class is no longer a cold no-op. (2) Wrote the new /paradigm:forage skill — the Expeditions MVP (agents foraging the wild for cited external candidates, staged at trust:external, never certifying), encoding the ratified trust rules (TD-2026-06-25-044). (3) Upgraded /paradigm:class with Step 0 (the Orientation cold-start divert) + the review arm rebuilt as THE STAND (dissent-first turn order, @-interrogation, refine read-back, the no-one-could-break='untested' rule) + an External-candidates section (citation-first, no benefit-of-the-doubt, provisional ceiling) + the context-firewall hard rule.
+symbols_touched:
+  - '#classroom'
+  - '#syllabus-loader'
+  - '#scenario-loader'
+  - '#nomination-engine'
+files_created:
+  - plugins/paradigm/skills/forage/SKILL.md
+  - .paradigm/curriculum/compliance.syllabus
+  - .paradigm/curriculum/scenarios/SC-aspect-validate-vs-queryable.scenario
+files_modified:
+  - plugins/paradigm/skills/class/SKILL.md
+  - docs/specs/classroom-experience.md
+  - docs/private/academy.html
+learnings:
+  - 'The Classroom MVP genuinely needs zero engine changes: bootstrapping is two MCP calls (paradigm_scenario_record + paradigm_syllabus_record create .paradigm/curriculum/ and flip /class + /study-hall from no-op to live), and the rest is SKILL.md choreography. The plan''s ''bootstrap first'' sequencing is real — done in minutes.'
+  - Plugin skills are auto-discovered by directory (plugins/paradigm/skills/<name>/SKILL.md) — no manifest enumeration; the plugin.json version bump is a release-time step, not needed for a local skill to work.
+  - '/paradigm:forage is study-hall pointed outward: same staging machine (paradigm_journal_record), same ''stage-never-certify'' guarantee, but trust:''external'' + sourceSet + an intake evidence-gate (a breaking scenario against OUR repo or it stays in Field Notes) — the firewall that makes scraped opinion the most-scrutinized path, not a backdoor.'
+tags:
+  - classroom
+  - expeditions
+  - build
+  - skills
+  - bootstrap
+  - from-team
+linked_lore:
+  - L-2026-06-24-ascend-233928-001
+confidence: 0.85
+git_context:
+  ref: c3aecbf9d5db6bd5ac2dfe81ab380598b89ab4b6
+  branch: warpline-surfaces
+  dirty: true

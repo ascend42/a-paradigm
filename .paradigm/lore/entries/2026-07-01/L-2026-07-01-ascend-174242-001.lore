@@ -1,0 +1,58 @@
+id: L-2026-07-01-ascend-174242-001
+type: agent-session
+timestamp: '2026-07-01T17:42:42.549Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Warpline H2 rename + mode hardening — a real rename→copy corruption found & fixed
+summary: |-
+  Finished the last multi-writer dogfood-blocker (T-2026-06-27-002). Writing the H2 rename test surfaced a REAL silent-corruption bug: git's default rename detection makes `git diff --name-only` list only the NEW path, so changedPaths dropped the old-path DELETE and the merge left BOTH files (a rename became a COPY). Fixed with `--no-renames` (forces delete+add decomposition); also 3-way-merged the git tree-entry mode so the executable bit survives and symlinks/submodules fail closed. 179 tests green (was 173); the live two-writer capstone is now unblocked.</summary>
+  <parameter name="type">agent-session</parameter>
+  <parameter name="body">CONTEXT: resumed from restart anchor L-2026-06-29-ascend-110541-001; picked up T-2026-06-27-002 (remaining multi-writer hardening: H2 rename, mode-change detection, G-test matrix).
+
+  THE FINDING (the important part): the task framed H2 as "changedPaths lacks -M → rename=add+delete, clean rename correct-by-luck". The reality was the OPPOSITE and worse. git's default rename detection is ON for `git diff --name-only`, so a pure rename lists ONLY the destination path (bar.ts), NOT the source (foo.ts). computeMerge overrides the checked-out base tree with only the additions → the old file is NEVER deleted → a rename silently materializes as a COPY (both foo.ts AND bar.ts present in the merged tree). That is exactly the "wrong merge" cardinal sin the whole hardening pass exists to prevent, and it was live. The clean-rename test caught it (expected old-path deleted, got undefined). FIX: `git diff --name-only --no-renames` forces every rename to decompose into delete-of-old + add-of-new; the 3-way merge then applies the delete, and a rename racing an edit of the old path fails closed as add/delete-vs-edit.
+
+  MODE / ENTRY-TYPE (the other silent-loss): materializeMergedState overrides changed files via fs.writeFile, which forces 0644 — the executable bit was silently dropped on any content-merged file. Added #git-exec treeEntryMode (git ls-tree mode parse), 3-way-merge the mode alongside bytes (mergeMode — regular/exec only conflict is unreachable with 2 values, defensive), and chmod on apply. A changed symlink (120000) or submodule (160000) on any side now fails CLOSED — gitShowBuffer would hand back the target-path text / gitlink sha and writing it as a regular blob would corrupt the entry type.
+
+  SCOPE HONESTY: the merged bytes are currently absorbed transiently for MEANING (the tmp tree is released; the sealed strand stores meaning + gitCommit=oursCommit). So mode/rename faithfulness of the byte tree is not YET observable in a persisted artifact — but the merge PRODUCT is what the meaning→bytes capstone will persist, so these are the right latent-corruption fixes to land before it. G1 (3rd interleaved writer) is subsumed by H1's merge-strand fail-closed (a 3rd-gen merge onto a merge strand refuses to seal) — noted rather than re-tested.
+
+  API: MergePlan.files value shape Buffer|null → MergedFile{content,mode}|null (+MergedFile export). Only materialize.ts iterates it; admit reads .conflicts/.plan only, so no ripple. Updated the one existing test that read the old shape (materialize.test.ts).
+
+  VERIFICATION: full suite 179 green (was 173, +6). tsc --noEmit clean. Committed 03edbd7f on warpline-surfaces (NOT pushed). .purpose #materialize updated + reindexed (valid, 1264 symbols).
+
+  NEXT (per DAG): T-2026-06-27-004 Warpline University course; T-2026-06-27-001 framework-bug ~~read-only (rebuild paradigm-mcp — do OUTSIDE a live session); T-2026-06-27-005 symbol hygiene (#seal collision). Loid's dogfood sequence: grade ✓ → hardening ✓ → course → live two-writer collision capstone (now safe — the corruption surfaces fail closed).</parameter>
+  <parameter name="symbols_touched">["#materialize", "#merge3", "#admit", "#git-exec"]
+files_modified:
+  - packages/warpline/src/git/git-exec.ts
+  - packages/warpline/src/fabric/materialize.ts
+  - packages/warpline/src/index.ts
+  - packages/warpline/test/hardening.test.ts
+  - packages/warpline/test/materialize.test.ts
+  - packages/warpline/.purpose
+commit: 03edbd7f
+verification:
+  status: pass
+  details:
+    tests: pass (179/179)
+    typecheck: pass
+    purpose: valid
+tags:
+  - warpline
+  - hardening
+  - multi-writer
+  - rename
+  - silent-corruption
+  - fail-closed
+  - dogfood-blocker
+linked_lore:
+  - L-2026-06-29-ascend-110541-001
+linked_tasks:
+  - T-2026-06-27-002
+linked_commits:
+  - 03edbd7f
+confidence: 0.88
+git_context:
+  ref: 03edbd7faf798a5717c3938ff5c1d50a649b1f13
+  branch: warpline-surfaces
+  dirty: true

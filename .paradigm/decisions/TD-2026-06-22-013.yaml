@@ -1,0 +1,57 @@
+id: TD-2026-06-22-013
+timestamp: '2026-06-22T23:01:27.138Z'
+title: 'Loom strategy: dual-write to git + WARP from day one (git = durable truth, WARP = continuously-falsified shadow)'
+decision: >-
+  Build Loom as a DUAL-WRITE system from the very start: every change writes to BOTH git (the real, durable,
+  byte-source-of-truth — your actual repo, normal commits) AND the WARP (the meaning store, derived by ABSORB-ing the
+  committed bytes into the symbol/meaning graph + a Justification). Git stays authoritative for bytes; WARP runs
+  alongside as a continuously-validated shadow. This means: (1) we only need ABSORB (bytes→meaning) to start — the risky
+  WEAVE/meaning-primary inversion and the absorb(weave)≡W round-trip law are DEFERRED, not on the critical path; (2)
+  Jinx's Convergence/Divergence Oracle runs LIVE and CONTINUOUSLY on real work, not as a one-off — every real merge,
+  WARP predicts the outcome and we score it against git's actual result, so WARP is falsified every day; (3) it is the
+  bridge from 'git+metadata sidecar' to 'true replacement' — WARP earns trust by matching reality, and only when it
+  consistently does can the source-of-truth flip; until then zero data-loss risk because git holds the bytes. Backfill
+  (founder call #3) and dual-write are the SAME machine (ABSORB) pointed at past history vs forward commits. WARP v0
+  granularity = the Paradigm symbol graph (components/flows/gates/signals/aspects from .purpose + references), reusing
+  the existing extractor + ripple; AST/function-level fidelity is a later tier.
+rationale: >-
+  Founder's move: 'if we build from the get-go the ability to push to both git and this new WARP format we can test it
+  live and build on it.' This is the synthesis position the panel converged toward — bytes stay durable truth, meaning
+  is a falsifiable index — made operational. It neutralizes the kill shot (a probabilistic interpreter as ground truth =
+  data loss) by never making WARP authoritative until proven, and it turns the weekend Oracle into a permanent live
+  instrument (deeply on-brand with Paradigm's decision-divergence / Classroom falsifiability discipline). It also
+  collapses scope: only the bytes→meaning direction is needed to begin, and it reuses the symbol extractor + ripple +
+  the Classroom (trust) + render-by-projection we already shipped.
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+  - id: architect
+    role: agent
+    stance: supported
+  - id: advocate
+    role: agent
+    stance: supported
+  - id: forge
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: Build meaning-primary (WARP-as-truth) from the start
+    rejected_because: bets the repo on absorb-soundness/round-trip fidelity before it's proven; Jinx's data-loss kill shot; huge scope
+  - option: One-off weekend read-only Oracle, then decide
+    rejected_because: >-
+      dual-write gives the same proof CONTINUOUSLY and simultaneously builds the real thing — strictly more information
+      for similar cost
+  - option: Just make Paradigm-on-git great, never replace
+    rejected_because: >-
+      founder wants the eventual replacement; dual-write keeps that door open and lets WARP earn the flip, rather than
+      foreclosing it
+status: active
+tags:
+  - loom
+  - git-successor
+  - dual-write
+  - warp
+  - convergence-oracle
+  - de-risk
+  - strategy

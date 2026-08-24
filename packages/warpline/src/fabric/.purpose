@@ -1,0 +1,37 @@
+# Directory-level context for packages/warpline/src/fabric — the canonical
+# component docs live in packages/warpline/.purpose (#strand #fabric #fabric-dag
+# #fabric-refs #seal #pick #admit #resolve #grade #fabric-verify #fabric-repair
+# #anchor #backfill #restore #fabric-lock #hook #scratch #materialize
+# #warpline-config #shadow-gate #native-write-path #mergebase #head #branch #merge
+# #protected #stake #stake-journal #graph).
+name: fabric
+description: >-
+  The Warpline fabric — the native, git-independent WRITE layer: the append-only
+  PICK-DAG ledger (.warpline/fabric.jsonl), strand identity across three schema
+  epochs (pick:v0 self-hash → pick:v2 linear chain → pick:v3 position-free DAG
+  identity, docs/specs/warpline-v3-identity.md), the derived DAG index (dag.ts),
+  pickId refs with per-ref CAS (refs.ts), seal/pick/admit/resolve write paths,
+  calibration grading, epoch anchoring, verify, git-absent restore, the R1
+  shadow gate (config.ts/shadow.ts — observe-only admit verdicts), and the
+  phase-0 native write path (native.ts — fork/propose/admit/resolve, no git).
+context:
+  - "v3 identity (V3.1): pickId = H(parents + content); NO ledger position; buildStrandV3 is the only v3 constructor; sealed v3 bytes are final"
+  - "refs (V3.2): refs/heads/<name> hold pickIds; migrateSelvageToRefs is the ONE-TIME founder-visible migration — never automatic"
+  - "coexistence invariant: this layer writes ONLY under .warpline/, never the user's git HEAD/index/worktree"
+  - "durability (C-7): every ledger append, tip-pointer publish and scratch-ref write goes through ../warp/durable.ts (#warp-durable) — fsync the staging file, rename, fsync the parent dir. Never hand-roll writeFileSync(tmp)+rename here again"
+  - "staging names (C-15): `<target>.tmp.<pid>.<n>` via tmpNameFor. A shared `${p}.tmp` defeats the per-ref CAS, which runs BEFORE the write; and refs/heads residue must never be readable as a ref (isRefName = REF_NAME ∧ no `..` ∧ !isTmpResidue, enforced on BOTH listRefs and writeRef)"
+  - "native-first R1 (shadow.ts): shadow admits are observe-only — the ONLY write is one row in .warpline/shadow/verdicts.jsonl; opt-in via .warpline/config.json shadowGate"
+  - "the git COUNTERFACTUAL (counterfactual.ts, 2026-08-10): every shadow verdict records what `git merge-tree` would have decided about the SAME two sides. It must be measured at verdict time — which pair a verdict adjudicated is unrecoverable once the selvage moves. The sides come from AdmitResult.gitSides (resolved inside admit's lock, NEVER re-read — the baseFrom lesson), the four cells are #oracle's own taxonomy bound by a test that drives the real score(), and `unavailable` is a REQUIRED enum because absence would reproduce C-9 one field over"
+  - "git merge-tree LIES ABOUT BAD REFS: it exits 1 for BOTH \"conflicted\" and \"not something we can merge\", and git-exec.ts:563 keys on code===1 — so an unresolvable ref returns {conflicted:true, conflictPaths:[]} with no throw. counterfactual.ts revParses both sides FIRST; never merge a side you have not resolved, or a rebased-away provenance.gitCommit becomes fabricated evidence. The same conflation reaches oracle.ts:160 and is UNFIXED there (shared merge semantics — reported, not changed unilaterally)"
+  - "native-first phase 0 (native.ts): propose seals v3 SCRATCH strands; admit weaves via materializeMergedStateNative only; the git-era seal path stays v2 until the founder-visible cutover"
+  - "truncation evidence (C-6): the hash chain only proves the strands PRESENT agree; stake-journal.ts is the only thing attesting how many there should be. It is advisory IN (absent/unreadable/disabled ⇒ no evidence, never a failure) and hard OUT (a COMPLETED checkpoint naming a missing strand ⇒ stake-journal-orphan, exit 1). Never make the reader throw"
+  - "the scratch ref is DUAL-EPOCH (scratch.ts): `state:` = a git-era stateId base (forkScratch / `warpline scratch`), `pick:` = a native pickId base (forkNative / `warpline fork`). CONSUMERS DISPATCH ON THE PREFIX AND FAIL CLOSED — never coerce. admit.ts did neither: it handed a `pick:` value to store.loadState, got null, and reported it through the corrupt-cache guard, which every skin's catch-all then collapsed to ENGINE/retry-identical (C-9). Both directions now refuse UNSUPPORTED/retry-corrected naming the other path's admit"
+  - "the R2 pick gate's BASE (C-9): #pick has NO fork step by design — it is the single-writer git-coexistence door; the multi-writer cycle is fork→propose→admit. The gate therefore yields a real re-base judgment ONLY when a scratch ref pins the agent's base (`warpline scratch <agentId>`); with none, base === selvage and admitDecision returns FAST_ADMIT unconditionally, so KNOT/CLEAN/DANGLE/HELD are unreachable BY CONSTRUCTION. AdmitResult.baseFrom + the shadow row's baseFrom record which case a verdict was, so a FAST_ADMIT that had no base is no longer indistinguishable from one that had a base and found no contest"
+  - "the pick gate never LAUNDERS a typed refusal (C-9): a thrown RefusedError from inside the verdict pipeline is re-homed to gate:'pick' with its code, retriability and ladder intact. ENGINE/retry-identical is correct ONLY for an untyped (transient) failure — applying it to a deterministic prerequisite refusal is the pre-PW-2 dead-end that instructs an infinite losing retry"
+  - "repair (C-13): fsync makes an append DURABLE, not ATOMIC — a torn tail line is still reachable. scanFabric is the tolerant read UNDER the fail-closed readFabric; repair.ts truncates TAIL tears only, dry-run by default, quarantining the original first and republishing a raw Buffer PREFIX (never re-serialized — pickIds and the anchor prefix digest hash the stored bytes)"
+components:
+  fabric:
+    description: >-
+      See the #fabric component (and siblings) in packages/warpline/.purpose for
+      the full per-module documentation.
+    tags: [warpline, fabric, v3]

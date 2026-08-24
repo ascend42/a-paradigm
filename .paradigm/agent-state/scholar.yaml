@@ -1,16 +1,10 @@
 id: scholar
 project: a-paradigm
 lastSession:
-  date: '2026-06-17T17:18:02.131Z'
-  sessionId: orch-mqic3yiz-ca35
-  summary: '[Scholar (scholar)]: scholar: Process: EXPLORATION (understand-first, do NOT bui...'
-  symbolsTouched:
-    - '#component'
-    - $flow
-    - ^gate
-    - '!signal'
-    - ~aspect
-    - '#x'
+  date: '2026-07-14T02:06:39.759Z'
+  sessionId: orch-mrk0fx7e-g75j
+  summary: '[Scholar (scholar)]: scholar: Process: FOUNDER FIRST-PRINCIPLES REASSESSMENT of ...'
+  symbolsTouched: []
 pendingWork: []
 recentPatterns: []
-sessionsOnProject: 9
+sessionsOnProject: 12

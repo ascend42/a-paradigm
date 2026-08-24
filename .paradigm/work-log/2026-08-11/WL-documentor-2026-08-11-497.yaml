@@ -1,0 +1,7 @@
+id: WL-documentor-2026-08-11-497
+timestamp: '2026-08-11T07:44:52.468Z'
+agent: documentor
+task_ref: T-2026-08-11-001
+summary: Settlement of task DAG T-2026-08-11-001 (shelved)
+outcome: partial
+symbols_touched: []

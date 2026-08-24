@@ -21,11 +21,29 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { log } from './mcp-logger.js';
+import type { ExerciseIntensity } from '@a-company/premise-core';
 
 const EVENTS_DIR = '.paradigm/events';
 const FIELD_FAILURES_FILE = 'field-failures.jsonl';
 const CLASSROOM_CERTS_FILE = 'classroom-certifications.jsonl';
+/**
+ * Append-only ledger of exercise events (docs/specs/classroom-falsifiable-loop.md).
+ * The rebuild source-of-truth for a cert's `exercise` counters; the survival
+ * reducer (sub-phase 1) joins these to certs by `(certEntryId, orchestrationId)`
+ * with the same durable-dedupe discipline as the field-failure reducer.
+ */
+export const EXERCISES_FILE = 'classroom-exercises.jsonl';
 const MAX_ENTRIES = 500;
+
+/**
+ * Survival gate (docs/specs/classroom-falsifiable-loop.md §1-2, TD-2026-07-01-…).
+ * A cert may resolve to `survived` only when it has been exercised at least
+ * K_MIN_EXERCISE times AND faced at least MIN_ADVERSARIAL_PROBES deliberate
+ * probes (human ruling 2026-07-01: passive apply-and-held alone cannot mint
+ * survival). Aging alone never resolves — it renders `unproven`.
+ */
+export const K_MIN_EXERCISE = 2;
+export const MIN_ADVERSARIAL_PROBES = 1;
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -81,8 +99,35 @@ export interface ClassroomCertRow {
    * This is what makes `resolved` (survived + overturned) a real denominator:
    * without survival flips, resolved == overturned and repeat-failure-rate is a
    * structural 1.0 (a lie).
+   *
+   * SUPERSEDED by the falsifiable loop (docs/specs/classroom-falsifiable-loop.md):
+   * survival must be minted by EXERCISE, not by aging. Sub-phase 1 gates this on
+   * `exercise` below; until then the field is retained for back-compat.
    */
   survivedAt?: string;
+  /**
+   * Exercise evidence accrued by the survival reducer (sub-phase 1). Absent =
+   * `unproven` (never exercised). The SAME shape the registry `CalibrationPrior`
+   * publishes as a cross-project sum (one contract — TD-2026-06-26-881 amend 1).
+   */
+  exercise?: ExerciseIntensity;
+}
+
+/**
+ * One exercise event — a real invocation of a certified claim that held. The
+ * append-only row behind `ClassroomCertRow.exercise`; joined to certs by
+ * `(certEntryId, orchestrationId)`. `kind` distinguishes natural apply-and-held
+ * (E1) from a deliberate adversarial probe (E2/E3) — only the latter can lift a
+ * cert to `survived` (K_MIN_EXERCISE + MIN_ADVERSARIAL_PROBES).
+ */
+export interface ExerciseEvent {
+  ts: string;
+  /** The cert's notebook entry id this exercise attributes to. */
+  certEntryId: string;
+  /** The join receipt — an orchestration application, or a scenario-run id. */
+  orchestrationId: string;
+  agent: string;
+  kind: 'application' | 'adversarial-probe' | 'break-attempt';
 }
 
 // ── Helpers ──────────────────────────────────────────────────────────

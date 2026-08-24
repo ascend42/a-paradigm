@@ -1,0 +1,66 @@
+id: TD-2026-08-23-042
+timestamp: '2026-08-23T23:23:55.910Z'
+title: 'Field-test founder gates ruled: M3 first, new subject app, pre-reg v2 now, Opus 4.8 agents, subscription-auth judge'
+decision: >-
+  Eight founder rulings (2026-08-23) closing T-2026-08-23-001's decision surface: (F1) M3 IS BUILT FIRST — TD-913(3)
+  stands as written; signed strands land before the run (T-2026-07-01-014 is the next major build). (F2) The subject is
+  a NEW Expo app the founder will start soon — NOT a-climbers-gift (client project rejected as subject); overlap zones +
+  behavioral checklist re-derived once it exists. (F3) Pre-registration v2 is drafted NOW with its own id, resolving:
+  the ≥20-genuine/≤25-intervention contradiction, structured-output wording vs free-text parse, the audit-sample
+  failingCheck leak, the missing precision-correction formula, the TD-831 sampling conflict, and HELD's §7C status. (F4)
+  Green gate = {tsc --noEmit, expo export} + frozen behavioral checklist, objective bound labeled 'tsc+bundle only';
+  lint/test recorded absent. (F5) The judge runs on the operator's STANDARD ACCOUNT SUBSCRIPTION — SDK zero-arg client
+  resolving the `ant auth login` OAuth profile (ANTHROPIC_API_KEY optional, no longer required); liveCallModel updated
+  accordingly. (F6) Injection corpus = PUBLIC payload strings in team-built cards, stated as such in v2 ('externally
+  authored payloads, internally assembled cards'). (F7) Agents' model = claude-opus-4-8 (exact alias ID; founder
+  explicitly does not want Opus 5) — v2 re-registers §2/§9; judge pin unchanged at claude-opus-4-5-20251101 (still the
+  strongest model with a dated snapshot); the §9 caveat stays the same-Opus-line, version-separated ≠-branch. (F8,
+  implicit) Backlog + seeds authored against the new subject once it exists, labels founder-sealed.
+rationale: >-
+  F1: the founder reaffirmed the conservative TD-913(3) posture over the faster supersede option — the run's security
+  boundary should be real, not procedural, even at schedule cost. F2: swarming a paying client's repo (secrets to API,
+  planted broken merges, agent commits) was rejected outright; a purpose-built app the founder wants anyway makes the
+  backlog honest real work. F3: running under a self-contradictory frozen protocol would void by its own rule; v2 with a
+  new id is the only honest path. F5: requiring a metered API key contradicts the product goal that Warpline's judge
+  runs on whatever account the operator already has; the SDK's credential chain (key → auth token → OAuth profile)
+  supports this natively per the claude-api reference. F7: founder preference against Opus 5; claude-opus-4-8 verified
+  as the exact ID from the claude-api reference (alias-only is acceptable for AGENTS because they are the subject of the
+  run, not the reproducible instrument — §2's existing reasoning).
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+  - id: architect
+    role: agent
+    stance: supported
+  - id: security
+    role: agent
+    stance: supported
+  - id: advocate
+    role: agent
+    stance: supported
+  - id: forge
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: Supersede TD-913(3) with MCP-only-as-procedure for this run
+    rejected_because: Founder chose to keep the real signed boundary; schedule cost accepted
+  - option: Stripped fork of a-climbers-gift as subject
+    rejected_because: Founder rejected using the client project in any form; a new app is coming
+  - option: Agents on claude-opus-5 as originally registered
+    rejected_because: Founder explicitly prefers Opus 4.8 over Opus 5
+  - option: Metered ANTHROPIC_API_KEY for the judge
+    rejected_because: 'Product goal: runs on the operator''s standard subscription; SDK OAuth-profile auth supports it'
+symbols_affected:
+  - '#judge'
+  - '#field-judge-run'
+  - '#strand'
+  - '#seal'
+status: active
+tags:
+  - warpline
+  - field-test
+  - founder-gate
+  - M3
+  - pre-registration-v2
+  - amends-TD-2026-08-11-913-scope

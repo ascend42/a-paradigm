@@ -1,0 +1,72 @@
+id: L-2026-06-25-ascend-075114-001
+type: agent-session
+timestamp: '2026-06-25T07:51:14.999Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Warpline pivot + native write path (Phase A/B) — the project's own history begins
+summary: |-
+  The Warpline arc pivoted from git-companion to its OWN multi-agent-native store (TD-2026-06-25-564), driven by a live multi-agent-git collision (a classroom agent mutated the tree under us all session). After a team analysis (Arky designed the store/concurrency model, Jinx red-teamed it surfacing the silent-wrong-merge risk + the false-AUTOFOLD gate, Loid mapped the calibration-corpus dividend), we shipped the single-writer write path: #strand/#fabric/#pick, store.loadState read-back, and `warpline pick`/`warpline log`. Genesis sealed on this repo (5162 objects). git coexists; the rip-out + multi-writer CAS are deferred behind the safety gate.</summary>
+  <parameter name="type">milestone
+symbols_created:
+  - '#fabric'
+  - '#pick'
+  - '#strand'
+  - $pick-flow
+files_created:
+  - packages/warpline/src/fabric/strand.ts
+  - packages/warpline/src/fabric/fabric.ts
+  - packages/warpline/src/fabric/pick.ts
+  - packages/warpline/test/fabric.test.ts
+files_modified:
+  - packages/warpline/src/warp/store.ts
+  - packages/warpline/src/git/git-exec.ts
+  - packages/warpline/src/cli.ts
+  - packages/warpline/src/index.ts
+  - packages/warpline/.purpose
+  - .gitignore
+commit: 7c9b1f63
+learnings:
+  - The multi-agent-git collision is real and was happening live in this very session — the classroom agent's files churned the working tree throughout, which is exactly the pain Warpline targets
+  - Warpline's conflict algebra (predict/consolidate/sem-delta) was already substrate-agnostic — only the store was git-coupled, so a native single-writer write path is a small, bounded addition, not a rewrite
+  - stateId is a meaning-SET address (deduped) — never use it as a change-detector; the stableKey-keyed diff is the source of truth
+  - 'Jinx''s false-AUTOFOLD risk is the gating correctness question for multi-writer: per-symbol structural essence can auto-fold cross-symbol semantic conflicts green (double-tax), and a primary auto-admitting store removes the human byte-diff that catches them'
+verification:
+  status: pass
+  details:
+    typecheck: pass
+    build: pass
+    tests: pass (123)
+    dogfood: genesis sealed, 5162 objects
+tags:
+  - warpline
+  - write-path
+  - pivot
+  - multi-agent
+  - milestone
+body: |-
+  CONTEXT: User rejected the recovered "companion-first, not a frontal replacement" framing with the live pain: "multiple agents able to work using this new source control without being FUCKED by git. our system needs to NOT work with git and be its own thing." We were literally in the failure case — a second agent doing classroom work was bleeding ClassroomSection.tsx + routes/classroom.ts into our working tree throughout.
+
+  TEAM (orchestrate plan→execute, then parallel Agent fan-out):
+  - Arky (architect): the conflict algebra (predict/consolidate/sem-delta) is ALREADY substrate-agnostic; the store is the only git-coupled gap. Designed .warp/ object model, SCRATCH=O(1) pointer fork, consolidate-run-continuously as the multi-writer protocol, blobManifest for driftless export. Biggest unknown: symbol-domain CAS granularity.
+  - Jinx (advocate): WARP≈Unison, PICK≈Pijul/Darcs, CAS≈Dolt/MVCC — the one novel thing is the TS checker-backed lens (needs none of the store rewrite). KILLER point: per-symbol structural essence is blind to cross-symbol semantic conflict (the double-tax 1.08×1.08 example) — as a primary auto-admitting store there's no human byte-diff backstop. The pain is the shared working tree, not git's object model. Proposed the false-AUTOFOLD adversarial corpus as the decisive cheap gate.
+  - Loid (learning): multi-writer DEEPENS the moat via independent-convergence + graded-confidence-vs-outcome, IFF attribution is per-PICK (not per-WEFT) and calibration credits OUTCOME (not CAS-win). The one missing field = calibratedConfidence per PICK.
+
+  RESOLUTION (user): "for this project we will continue to push and update git but we will be starting to manage and build out the ongoing history of this project's warpline." → coexistence. Build the native history NOW (single-writer), defer rip-out + multi-writer.
+
+  BUILT: #strand (stateId=reproducible meaning address vs pickId=event identity w/ actor+time; reserved calibratedConfidence), #fabric (.warpline/fabric.jsonl + atomic refs/selvage), #pick (recordPick), WarpStore.loadState (disk read-back across CLI runs), gitUserName (read-only actor seed), CLI `pick`+`log`, $pick-flow, ~read-only extended to cover the write path (writes .warpline/ only, never git).
+
+  BUG CAUGHT IN BUILD: no-op detection can't use stateId-equality — computeStateId hashes the DEDUPED essence set, so adding an identical-essence symbol leaves stateId unchanged while the meaning DID change. Fixed to diff-based detection + added a regression test.
+
+  VERIFICATION: typecheck + build clean; 10 new fabric tests; full suite 123 green; genesis pick on this repo sealed 5162 objects (state:v0:2309baa8); .gitignore tracks the ledger, ignores heavy snapshots. Committed 7c9b1f63, pushed origin/warpline-surfaces.
+
+  NEXT: (1) Jinx's false-AUTOFOLD gate — SHIP-GATE before any multi-writer auto-admission. (2) keep dogfooding picks; wire GUI Fabric to fabric.jsonl. Phase C (SCRATCH+per-domain CAS+WEFT) deferred until the gate passes.</parameter>
+  <parameter name="symbols_touched">["#fabric", "#pick", "#strand", "#warp-store", "#git-exec", "#warpline-cli", "$pick-flow", "~read-only"]
+linked_commits:
+  - 7c9b1f63
+confidence: 0.9
+git_context:
+  ref: 7c9b1f63cc20faef64f55fc0257897a8806c547a
+  branch: warpline-surfaces
+  dirty: true

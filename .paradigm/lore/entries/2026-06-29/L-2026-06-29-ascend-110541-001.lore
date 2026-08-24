@@ -1,0 +1,55 @@
+id: L-2026-06-29-ascend-110541-001
+type: agent-session
+timestamp: '2026-06-29T11:05:41.320Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'STATE OF THE ARC — Warpline write path: single-writer history → multi-writer merge → calibration moat (restart anchor)'
+summary: |-
+  Restart anchor for the Warpline arc. Warpline (packages/warpline/) is git's REPLACEMENT — a meaning-primary VCS — coexisting with git for this project while it accumulates its own history. This multi-session run built the entire WRITE PATH: single-writer history (pick/fabric/strand/seal + auto-seal hook), the false-AUTOFOLD safety gate, multi-writer admission (scratch/admit: FAST_ADMIT/CLEAN/KNOT/DANGLE), meaning→bytes materialization (merge3/materialize — performs merges git conflicts on), the KNOT council (resolve), the calibration moat (grade — confidence vs real outcome), cross-process concurrency safety (fabric-lock + selvage CAS), and fail-closed hardening (binary/large-file/3rd-gen-merge). A team audit redirected away from per-domain CAS toward this hardening + the moat. 173 tests green; HEAD a7acfac1 on branch warpline-surfaces (pushed); fabric has 10 real strands of this project's own history.</summary>
+  <parameter name="type">milestone
+tags:
+  - warpline
+  - state-of-arc
+  - write-path
+  - multi-writer
+  - moat
+  - restart-anchor
+body: |-
+  ORIENTATION (read this first on restart):
+  - Warpline = meaning-primary VCS, git REPLACEMENT (NOT a pivot/companion — that was a misread; replacement was the goal from the arc's start). Coexists with git for a-paradigm now (we keep pushing git) while accumulating its OWN meaning-history under .warpline/. Engine: packages/warpline/. Spec/symbol map: packages/warpline/.purpose.
+  - Branch warpline-surfaces, HEAD a7acfac1 (pushed to origin). 173 tests green. The .warpline/fabric.jsonl ledger (tracked) + refs/selvage are the project's native history (10 strands); states/ + grades.jsonl + oracle.jsonl are gitignored (regenerable).
+
+  THE WRITE-PATH STACK (all built this run, src/fabric/):
+  - #strand/#fabric/#seal — a sealed PICK is a strand; #seal is the SINGLE fabric writer (pick/admit/resolve all route through it); stateId=reproducible meaning address, pickId=event identity (EXCLUDES calibratedConfidence so grading can mutate it).
+  - #pick + #hook — `warpline pick` seals working meaning; the post-commit auto-seal hook accrues a strand on every git commit (recorded BOTH agents' commits when a classroom agent ran concurrently). `warpline log`/`selvage`.
+  - #scratch/#admit (multi-writer DECISION) — fork a per-agent base, admit → FAST_ADMIT / CLEAN (gate-rule confidence linked|independent) / KNOT / DANGLE.
+  - #merge3/#materialize (meaning→bytes) — token-level 3-way merge PERFORMS the merge git's line-merge conflicts on; admit materializes + seals on CLEAN; byte-faithful.
+  - #resolve (KNOT council) — human resolution sealed with a `resolves` envelope (decidedBy/reason/contended) — accountability git's merge commit can't keep.
+  - #grade (the MOAT) — seeds confidence from the gate rule, grades it against real survive/overturn outcome (classroom certify→outcome model). Backfilled live (80% pick survival). `warpline grade`.
+  - #fabric-lock + selvage CAS — cross-process O_EXCL lock + check-then-append-then-publish, closing the lost-update race (the hook backgrounds its seal).
+  - HARDENING (fail-closed, never corrupt): H3 binary→conflict, M1 oversized→conflict, H1 3rd-gen-merge-onto-a-merge-strand→unsealed (merge strands marked strand.merged).
+
+  KEY FINDING — the false-AUTOFOLD gate (T-013, the SHIP-GATE): the engine catches a cross-symbol semantic conflict IFF a dependency path links the symbols in-graph (Merkle-by-target propagation). Dependency-LINKED → caught; INDEPENDENT / cross-file → BLIND (silent false-CLEAN). The SAME double-tax bug is caught same-file, blind cross-file. This is WHY admit's CLEAN confidence defaults to 'independent'=hedged 0.6, and why a primary auto-admitting store must surface/confirm rather than silently merge.
+
+  THE AUDIT (TD-2026-06-27-798) — team (Arky/Rune/Reviewer/Loid) converged: DEFER per-domain CAS (premature for 2-5 agents + was built on an unsynchronized selvage — the real gap, now fixed). Calibration > CAS (the only thing git can't replicate). Multi-writer not dogfood-ready until the hardening (now mostly done). Per-domain CAS granularity design captured for if/when needed (owning-dir of authored stableKeys, bounded by empty-delta ripple).
+
+  OPEN TASKS (restart from these): T-2026-06-27-002 remaining hardening (H2 rename -M, mode-change detection, G-tests: interleaved 3+ agents / KNOT-downgrade / multi-file) — last dogfood-blocker; T-2026-06-27-004 author the Warpline University course in the ai-literacy pack (dogfoods University; moat is live now so it can teach a real graded field); T-2026-06-27-001 FRAMEWORK BUG ~~read-only (rebuild paradigm-mcp dist — the f6008cf2 fix never compiled); T-2026-06-27-005 symbol hygiene (#seal collides with university/ui's seal view; add ~accountability aspect). Loid's dogfood sequence: (d) grade ✓ DONE → (a) course → (c) live two-writer collision capstone (now safe-ish — multi-writer fails closed on the corruption cases).
+
+  KEY LINEAGE: gate L-2026-06-25-ascend-081205-001; pivot/write-path L-2026-06-25-ascend-075114-001; v2 materialize L-2026-06-26-ascend-053504-001; grader+hardening L-2026-06-27-ascend-054450-001; decisions TD-2026-06-25-564 (coexistence) + TD-2026-06-27-798 (defer CAS).</parameter>
+  <parameter name="symbols_touched">["#fabric", "#pick", "#strand", "#seal", "#scratch", "#admit", "#merge3", "#materialize", "#resolve", "#grade", "#fabric-lock", "#hook", "#warpline-cli"]</parameter>
+  <parameter name="commit">a7acfac1
+linked_lore:
+  - L-2026-06-27-ascend-054450-001
+  - L-2026-06-26-ascend-053504-001
+  - L-2026-06-25-ascend-081205-001
+linked_commits:
+  - a7acfac1
+  - 0e3d3d57
+  - c6798066
+confidence: 0.9
+git_context:
+  ref: a7acfac1b09eaf4fea6883221789beb5dda2753d
+  branch: warpline-surfaces
+  dirty: true

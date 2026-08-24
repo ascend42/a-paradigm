@@ -1,0 +1,61 @@
+id: TD-2026-06-23-285
+timestamp: '2026-06-23T19:44:02.094Z'
+title: 'Framework renamed: Loom → Warpline (brand collision with Atlassian Loom; textile theme kept)'
+decision: >-
+  The meaning-primary git-replacement framework codenamed "Loom" is renamed to "Warpline". Rename applied across live
+  artifacts: package @a-company/loom → @a-company/warpline (dir packages/loom → packages/warpline, bin loom → warpline),
+  specs docs/specs/loom-{engine,flows,code-lens}.md → warpline-*, research files, the .loom/ runtime dir → .warpline/,
+  and symbols #loom/#loom-oracle → #warpline/#warpline-oracle. Build + 67 tests green post-rename; CLI runs as
+  `warpline`. The INTERNAL textile nomenclature is preserved unchanged (WARP=the meaning store, WEAVE=merge, PICK,
+  SELVAGE, BOLT, FABRIC, TAPESTRY, KNOT) — "Warpline" (the held line of warp = the line of truth) sits coherently over
+  it. Historical lore/decisions were NOT rewritten (immutable record that the product was Loom). Final name still
+  pending a formal trademark/registrar sweep before public launch.
+rationale: >-
+  "Loom" collides hard with Atlassian's Loom (screen recording, ~$1B). A 3-lens team panel (Scout/research,
+  North/product, Mika/design) confirmed the collision and vetted alternatives with real availability data. The founder's
+  floated "Weave" was killed (taken on every axis — W&B Weave, Weave GitOps, getweave, npm taken — AND it self-collides
+  with our internal WEAVE merge verb). A space-theme exploration (founder-floated "Gravitas") was also explored and
+  rejected: Gravitas is npm-taken with live software trademarks and the "gravi.tas" domain isn't even registrable; and
+  North showed a space brand over textile internals would be "split-brain" (would force rethem ing the whole internal
+  vocabulary). Staying textile keeps the product name coherent with the existing command lexicon at near-zero cost and
+  preserves momentum on the A v1 build. "Warpline" is verified npm-free with no dev-tool collision.
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+  - id: researcher
+    role: agent
+    stance: supported
+  - id: product
+    role: agent
+    stance: supported
+  - id: designer
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: Weave (founder's first idea)
+    rejected_because: >-
+      Taken everywhere (W&B Weave, Weave GitOps, getweave, npm taken, software trademarks) AND self-collides with the
+      internal WEAVE merge verb.
+  - option: Space theme / Gravitas (founder's second idea)
+    rejected_because: >-
+      Gravitas npm-taken + live software trademark + 'gravi.tas' not a registrable TLD; and a space brand over textile
+      internals is 'split-brain' (North) — would force rethem ing the whole internal vocabulary. Staying textile is
+      coherent at near-zero cost.
+  - option: Treadle / Weftwise (other clear textile options)
+    rejected_because: >-
+      Verified clear but 'ok, not exciting' to the founder; Warpline was preferred (on-theme: the held line of warp =
+      the line of truth).
+symbols_affected:
+  - '#warpline'
+  - '#warpline-oracle'
+  - '#essence-hash'
+  - '#absorb'
+  - '#weave'
+  - '#code-lens'
+status: active
+tags:
+  - warpline
+  - rename
+  - branding
+  - loom

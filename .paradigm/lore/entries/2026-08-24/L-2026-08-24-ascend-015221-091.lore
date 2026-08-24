@@ -1,0 +1,15 @@
+id: L-2026-08-24-ascend-015221-091
+type: insight
+timestamp: '2026-08-24T01:52:21.129Z'
+author: ascend
+title: Decision TD-2026-08-24-012 recorded
+summary: Companion lore entry for decision record TD-2026-08-24-012. See .paradigm/decisions/TD-2026-08-24-012.yaml.
+symbols_touched:
+  - '#judge'
+  - '#field-judge-run'
+  - '#grants'
+references:
+  decision_id: TD-2026-08-24-012
+tags:
+  - companion-lore
+  - decision-reference

@@ -1,0 +1,5 @@
+{
+  "shadowGate": true,
+  "stake": { "enabled": true, "refs": ["selvage"], "auto": "every-seal" },
+  "gate": { "agentWrites": "real" }
+}

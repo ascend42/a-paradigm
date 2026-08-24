@@ -1,0 +1,17 @@
+id: L-2026-08-11-ascend-225659-543
+type: insight
+timestamp: '2026-08-11T22:56:59.839Z'
+author: ascend
+title: Decision TD-2026-08-11-071 recorded
+summary: Companion lore entry for decision record TD-2026-08-11-071. See .paradigm/decisions/TD-2026-08-11-071.yaml.
+symbols_touched:
+  - '#oracle'
+  - '#knot-payload'
+  - '#hazard'
+  - '#envelope'
+  - '#admit'
+references:
+  decision_id: TD-2026-08-11-071
+tags:
+  - companion-lore
+  - decision-reference

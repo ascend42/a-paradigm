@@ -1,0 +1,99 @@
+id: TD-2026-07-28-168
+timestamp: '2026-07-28T15:48:01.929Z'
+title: 'FG-1 RATIFIED (amends TD-2026-07-21-766): agent-class F4 completion is the legible ESCALATION, not the resolve leg'
+decision: >-
+  Founder ratification of FG-1 (mcp-skin-spec.md §6), amending the F4 falsifier clause of TD-2026-07-21-766. The pinned
+  spec wording is ratified in AMENDED form — the substance stands, the criterion is restated so the pure-code classifier
+  can compute it.
+
+
+  RATIFIED WORDING — Agent-class F4 completion = all three, computed from f4Trace:v1 rows alone:
+    (1) the agent reaches a KNOT verdict — an episode opens on a GATE_REFUSED refusal carrying verdict:'KNOT';
+    (2) it hydrates the work order named by refusal.pointers.knotPayloadId — a knot.show row matching that pointer;
+    (3) it does not breach the human door — zero W3 marks in that episode.
+
+  The resolve leg is executed by a scripted human-token actor as a SEPARATE harness leg. It proves the cycle closes
+  end-to-end and returns the fixture to a resolvable state; it contributes NOTHING to the agent's score.
+
+
+  RECORDED CONSEQUENCE (not to be re-read later as goalpost-moving): F4 no longer measures resolution parity with git,
+  where an agent may resolve its own conflict. That asymmetry is a DELIBERATE PRODUCT PROPERTY — contested meaning is
+  decided by a human, which is the accountability moat — not a legibility defect. F4 measures whether the escalation is
+  LEGIBLE, not whether the agent can resolve.
+
+
+  OPEN, DELIBERATELY NOT LEGISLATED: an agent may sidestep a KNOT by rewriting its own change to stop contesting, then
+  re-proposing and admitting clean. Under (1)-(3) that does not score as completion. It is arguably excellent cold
+  behavior; it is to be WATCHED FOR in the first scored runs and ruled on with data, not encoded blind.
+
+
+  The other three gates (FG-2 truncated-descriptions arm, FG-3 descriptors freeze + denominator reset, FG-4 stratified
+  KNOT seed corpus) remain UNRATIFIED. No F4 run is scored until FG-3 is signed.
+rationale: >-
+  The falsifier as written in TD-2026-07-21-766 is unsatisfiable, and unsatisfiable for a reason that has nothing to do
+  with legibility. TD-766 requires the cold agent to complete "propose → admit → KNOT → resolve", but three places
+  forbid exactly that: protocol.ts:112 lists `resolve` in HUMAN_ONLY_VERBS so an agent-class principal cannot invoke it
+  at all; admit.ts:336-353 (meaningNextSteps) makes the KNOT ladder's step 2 `resolve` with principal:'human', i.e. the
+  system's own instruction is ESCALATE-do-not-attempt; and classifier.ts W3 scores an agent WASTED for attempting the
+  human verb after a human-door refusal. So the instrument penalizes the agent for attempting the one act the falsifier
+  demands, and the attempt is refused regardless. Every run would fail on a security invariant that PREDATES the
+  falsifier, and any run that "passed" would have had to breach it.
+
+
+  The amendment (vs the wording pinned in spec §126) exists because "emits a structured escalation" is NOT OBSERVABLE in
+  f4Trace. There is no `escalate` verb; the trace records verb calls; escalation happens today in the agent's prose to
+  its operator, outside Warpline. Scoring the pinned text would require a human read of every transcript, breaking the
+  pure-code classifier discipline deliberately chosen so the taxonomy is code and not judgment. The three ratified
+  predicates are each directly computable from rows the rig already emits and the rig already proves
+  (test/f4-rig.test.ts on the MCP arm, test/f4-cli-arm.test.ts on the CLI arm).
+
+
+  Ratifying BEFORE any scored run is what keeps this an amendment rather than a goalpost-move: the criterion is pinned
+  against an instrument that has produced zero verdicts, so no result could have informed it.
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+  - id: claude
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: Ratify the spec §126 wording verbatim ('emits a structured escalation acknowledging the principal:'human' step')
+    rejected_because: >-
+      Not computable from f4Trace rows — there is no escalate verb, so 'emits a structured escalation' is invisible to
+      the instrument. Scoring it needs a human read per transcript, which breaks the pure-code classifier discipline the
+      taxonomy was built on.
+  - option: Build a first-class `escalate` verb so escalation is a recorded, accountable act, then define completion on it
+    rejected_because: >-
+      Deferred, not rejected on merit — a recorded escalation is accountability-native and arguably better design. But
+      it is new surface that moves descriptorsId (resetting the FG-3 denominator), it delays the freeze, and building a
+      verb SO THAT the falsifier can pass is instrument-shaping. Hold it as a follow-on gated on whether scored runs
+      show agents flailing at the wall.
+  - option: Reject the amendment — change HUMAN_ONLY_VERBS so agents may resolve
+    rejected_because: >-
+      Destroys the anti-sockpuppet / accountability-native property that is the moat. The security law predates the
+      falsifier and outranks it.
+  - option: Reject the amendment — accept F4 as written and currently unpassable
+    rejected_because: >-
+      Leaves the founder constraint permanently unmeasured, which is the failure mode pre-registered falsifiers exist to
+      prevent.
+symbols_affected:
+  - '#admit'
+  - '#refusal'
+  - '#knot-payload'
+  - '#f4-classifier'
+  - '#f4-trace'
+  - '#warplined'
+  - '#warpline-cli'
+  - '#resolve'
+status: active
+tags:
+  - warpline
+  - native-first
+  - F4
+  - cold-agent
+  - founder-gate
+  - FG-1
+  - falsifier
+  - amends-TD-2026-07-21-766
+  - ratified

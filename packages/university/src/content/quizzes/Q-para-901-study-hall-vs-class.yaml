@@ -1,0 +1,54 @@
+id: Q-para-901-study-hall-vs-class
+title: 'PARA 901: The Academy — Lesson 3: Study Hall vs Class'
+description: 'Quiz for lesson: Study Hall vs Class'
+author: paradigm
+created: '2026-06-25'
+updated: '2026-06-25'
+tags:
+  - course
+  - para-901
+symbols: []
+difficulty: intermediate
+passThreshold: 0.7
+category: paradigm-core
+questions:
+  - id: q1
+    question: What does /study-hall do with the learnings an agent produces, and what does it NOT do?
+    choices:
+      A: It certifies them directly into notebooks if confidence is high enough
+      B: It STAGES candidate learnings into journals (drilling against the scenario bank) and never certifies or writes notebooks — it is safe to run unattended
+      C: It deletes any learning that fails a scenario
+      D: It promotes learnings to certified after two passes
+      E: It writes directly to the agent's notebook but marks them provisional
+    correct: B
+    explanation: 'study-hall stages, full stop. Each active agent follows its approved curriculum, drills against the scenario bank, and writes candidate learnings to JOURNALS — never to notebooks. It certifies nothing, which is exactly why it is safe to run unattended on a schedule. The only thing that mints trust is the gated /class term.'
+  - id: q2
+    question: The Academy claims external/staged knowledge can never be injected into a live session. How is that context-firewall actually enforced?
+    choices:
+      A: A runtime filter in the notebook loader rejects any entry whose trust != 'external'
+      B: Structurally — staging writes only to journals and ONLY the gate writes notebooks, so a staged or external candidate has no pipe that reaches a notebook to be loaded; the guarantee comes from pipeline shape, not a trust read-filter
+      C: The user must manually approve every learning before each session
+      D: External learnings are encrypted so the loader can't read them
+      E: A scheduled job purges external entries nightly
+    correct: B
+    explanation: 'The firewall is a STRUCTURAL guarantee. Staging writes only to journals; only the gated path writes notebooks; sessions load only notebooks. An untrusted candidate therefore cannot reach a live session — not because a runtime filter rejects it, but because no pipe connects journals to notebooks except the gate. Note: do not claim a tested trust!=external read-filter in the loader enforces this — it is the pipeline shape, not a verified filter, that holds the line.'
+  - id: q3
+    question: An agent's syllabus contains an entry that is marked expired. What happens when study-hall runs?
+    choices:
+      A: The entry is studied anyway because the syllabus is advisory
+      B: "The entry is skipped — the syllabus is gate-zero: stale, broken, or expired entries are skipped before any learning is attempted (hand-authored entries are exempt)"
+      C: The whole study-hall session aborts
+      D: The entry is auto-promoted to certified to clear the backlog
+      E: The agent is benched until a human fixes the syllabus
+    correct: B
+    explanation: 'The syllabus is gate-zero — the first screen, before an agent studies anything. Entries that are stale, broken, or expired are simply skipped (hand-authored entries are exempt from the staleness screen). This keeps agents from drilling on knowledge that is already known-bad, so the journal does not fill with candidates derived from rotten source material.'
+  - id: q4
+    question: In the scenario bank, what distinguishes an 'authored' scenario with expected 'must survive' from a 'poison-pill' scenario?
+    choices:
+      A: Poison-pills are written by the user; authored ones by the agent
+      B: An authored 'must survive' scenario is one a sound learning should pass, while a poison-pill is one a sound learning must correctly REJECT — testing both proves the learning discriminates, not just that it agrees
+      C: Poison-pills are only used in /class, never in study-hall
+      D: There is no difference; both must survive
+      E: Authored scenarios test speed; poison-pills test cost
+    correct: B
+    explanation: 'A learning that only ever agrees is not discriminating — it is credulous. The scenario bank tests both directions: authored scenarios (expected: must survive) confirm the learning holds where it should, and poison-pills (expected: must reject) confirm it refuses where it should. Surviving the first while rejecting the second is what earns a staged candidate its place in the journal before it ever reaches the gate.'

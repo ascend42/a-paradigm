@@ -509,11 +509,12 @@ describe('plsat-migration — server route response shape smoke', () => {
     expect(body).toBeDefined();
     expect(Array.isArray(body.courses)).toBe(true);
     // v6.5: added LP-para-451.yaml + the LP-fieldnotes-authoring.yaml elective.
-    // v7.0: added LP-para-801.yaml (PARA 801 "Closing the Loop") — 11 total
-    // first-party learning paths (10 para-NNN courses + 1 fieldnotes elective).
+    // v7.0: added LP-para-801.yaml (PARA 801 "Closing the Loop").
+    // v7.x: added LP-para-901.yaml (PARA 901 "The Academy — Gated Learning") — 12
+    // total first-party learning paths (11 para-NNN courses + 1 fieldnotes elective).
     // Hard-coded count — if a course is added/removed later, update this test
     // explicitly (don't soften to >=; first-party pack is a stable surface).
-    expect(body.courses.length).toBe(11);
+    expect(body.courses.length).toBe(12);
     for (const c of body.courses) {
       // Course ids are either para-NNN courses or the kebab-case fieldnotes elective.
       expect(c.id).toMatch(/^(para-\d{3}|[a-z][a-z0-9-]*)$/);
@@ -522,7 +523,7 @@ describe('plsat-migration — server route response shape smoke', () => {
     }
     // The para-NNN course track is the stable certifiable surface.
     const paraCourses = body.courses.filter(c => /^para-\d{3}$/.test(c.id));
-    expect(paraCourses.length).toBe(10);
+    expect(paraCourses.length).toBe(11);
   });
 
   it('plsat router /api/plsat returns v5-compatible { versions: [...] } shape', async () => {

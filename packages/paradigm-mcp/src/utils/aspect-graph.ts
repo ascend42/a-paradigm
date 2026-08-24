@@ -290,7 +290,26 @@ export function materializeAspects(db: Database, symbols: SymbolEntry[], rootDir
     // FTS not available
   }
 
+  // Canonical aspect id: exactly ONE leading '~'. entry.symbol arrives doubled
+  // ('~~determinism') when a .purpose declares its aspect key WITH the '~' prefix
+  // — the symbol builder prepends '~' un-idempotently. Collapse to one '~' so the
+  // DB id matches what readers expect (aspect_check/aspect_get strip a single '~').
+  // Without this a '~'-keyed aspect is search-visible but unreachable by check/get,
+  // while purpose_validate still passes. Dedupe by canonical id so the SAME aspect
+  // declared both bare ('determinism:') and prefixed ('~determinism:') across
+  // .purpose files folds to ONE row instead of a UNIQUE-constraint failure; prefer
+  // the definition carrying anchors so coverage isn't dropped. (T-2026-06-24-002)
+  const canonicalAspectId = (sym: string): string => '~' + sym.replace(/^~+/, '');
+  const byCanonicalId = new Map<string, SymbolEntry>();
   for (const entry of aspects) {
+    const id = canonicalAspectId(entry.symbol);
+    const existing = byCanonicalId.get(id);
+    if (!existing || (entry.anchors?.length ?? 0) > (existing.anchors?.length ?? 0)) {
+      byCanonicalId.set(id, entry);
+    }
+  }
+
+  for (const [aspectId, entry] of byCanonicalId) {
     const data = (entry.data ?? {}) as Record<string, unknown>;
 
     const category = inferCategory(data, entry);
@@ -304,7 +323,7 @@ export function materializeAspects(db: Database, symbols: SymbolEntry[], rootDir
       `INSERT INTO aspects (id, description, category, severity, value, enforcement, defined_in, tags, created_at, updated_at)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       [
-        entry.symbol,
+        aspectId,
         entry.description ?? '',
         category,
         severity,
@@ -326,7 +345,7 @@ export function materializeAspects(db: Database, symbols: SymbolEntry[], rootDir
         db.run(
           `INSERT INTO anchors (aspect_id, file_path, start_line, end_line, content_hash, normalized_hash, materialized_at_commit, last_verified, original_content)
            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-          [entry.symbol, anchor.path, startLine, endLine, hashes.exact, hashes.normalized, headCommit, now, hashes.normalizedContent]
+          [aspectId, anchor.path, startLine, endLine, hashes.exact, hashes.normalized, headCommit, now, hashes.normalizedContent]
         );
       }
     }
@@ -346,7 +365,7 @@ export function materializeAspects(db: Database, symbols: SymbolEntry[], rootDir
           `INSERT INTO edges (source, target, relation, weight, origin, created_at)
            VALUES (?, ?, ?, ?, ?, ?)`,
           [
-            edge.source ?? entry.symbol,
+            edge.source ?? aspectId,
             edge.target ?? '',
             edge.relation ?? 'related-to',
             edge.weight ?? 1.0,
@@ -363,7 +382,7 @@ export function materializeAspects(db: Database, symbols: SymbolEntry[], rootDir
         db.run(
           `INSERT INTO edges (source, target, relation, weight, origin, created_at)
            VALUES (?, ?, ?, ?, ?, ?)`,
-          [entry.symbol, target, 'related-to', 0.5, 'inferred', now]
+          [aspectId, target, 'related-to', 0.5, 'inferred', now]
         );
       }
     }
@@ -373,7 +392,7 @@ export function materializeAspects(db: Database, symbols: SymbolEntry[], rootDir
       db.run(
         `INSERT INTO aspects_fts (id, description, enforcement, tags)
          VALUES (?, ?, ?, ?)`,
-        [entry.symbol, entry.description ?? '', enforcement ?? '', tags ?? '']
+        [aspectId, entry.description ?? '', enforcement ?? '', tags ?? '']
       );
     } catch {
       // FTS not available

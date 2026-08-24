@@ -1,0 +1,55 @@
+id: L-2026-08-12-ascend-034616-001
+type: milestone
+timestamp: '2026-08-12T03:46:16.112Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'MILESTONE: Warpline Tier-1 make-it-dogfoodable COMPLETE — a fresh project can now be tracked by an agent team'
+summary: 'The day-one usability layer from the 4-agent panel (L-2026-08-12-022145) is built and committed across two increments (36bd7c73, 964f047c). A fresh project can now be onboarded onto Warpline and tracked by a Paradigm agent team as a human+agent relay with git in mirror mode. Shipped: `warpline init` (one-command onboarding — genesis + .warpignore + .gitignore, idempotent, discoverable); the native `.warpignore` ignore mechanism (git-absent governance, closes the fork-into phantom-symbol pollution); git-absent native `status`/`diff` (the headline dogfood regression — status died without git — is fixed); honesty surfacing (byte-only / scalar-const changes no longer read as bare ''clean''); the auto-seal hook binary-baking fix (no more silent no-op); and agent onboarding (the status-first cycle seeded into builder/architect/reviewer notebooks — TD-351 ''warm by construction'' finally has cargo — plus a project-setup runbook). Full suite 1096 passing.'
+symbols_touched:
+  - '#warpline-cli'
+  - '#warpignore'
+  - '#native'
+  - '#hook'
+  - '#warpline-health'
+  - '#warp-store'
+  - '#lens-walk'
+  - '#git-exec'
+tags:
+  - warpline
+  - tier-1
+  - dogfood
+  - usability
+  - onboarding
+  - milestone
+  - arc:warpline
+  - audit-2026-08-12
+body: |-
+  TIER-1 SCORECARD (T-2026-08-12-002, all core items done):
+  1. warpline init — DONE (src/fabric/init.ts).
+  2. git-absent native status/diff — DONE (src/native-status.ts); the #1 cold-agent wall.
+  3. .gitignore .warpline/ — DONE (init writes it when git present).
+  4. hook binary-baking fix — DONE (36bd7c73).
+  5. honesty surfacing (byte-only/scalar-const ≠ 'clean') — DONE for status.
+  6. .warpignore native ignore mechanism + canonical/legacy-alias — DONE; closes fork-into pollution.
+  7. agent onboarding (notebook seed + runbook) — DONE (MCP registration DOCUMENTED, founder's env step).
+
+  MINOR RESIDUALS (not blocking; note for later): (a) an explicit WARN when `fork --into` nests a worktree under the repo root (the .warpignore closes the real pollution; the warning is nicety); (b) admit-time 'byte-decided, not judged' label on independent CLEANs is partially covered by Track-A coverage labels + the Fix A disclaimer — could be sharper.
+
+  HOW TO START A PROJECT NOW: `warpline init` → tell agents (they're now warm via notebooks) to call `warpline status` first then fork→propose→admit; human resolves KNOTs; git stays in mirror mode as durability backstop. Runbook: docs/guides/warpline-project-setup.md.
+
+  WHAT REMAINS = TIER-2 STRUCTURAL (determines whether it's WORTH it over git, not just usable): branching/feature-isolation (M2.5, T-2026-07-01-017), N≥3 concurrency (H1 T-030 / per-domain CAS T-016), autonomous-KNOT-path, blind-class coverage/honesty. AND the existential point (Jinx): solo serial building generates no contention, so the adjudication only pays off under a real concurrent swarm.
+
+  ARC COMMITS: b85d56a8 (Track-A) → 3862f450 (protocol lock) → judge (21d95b25/a92bfd21/346c9cf8) → 58cb76e9 (pre-fixes) → 36bd7c73 + 964f047c (Tier-1 dogfood). All on warpline-surfaces at origin.
+linked_lore:
+  - L-2026-08-12-ascend-022145-001
+  - L-2026-08-12-ascend-025504-823
+linked_commits:
+  - 36bd7c73
+  - 964f047c
+confidence: 0.85
+git_context:
+  ref: 964f047c452fc747377b63955c466b3ed1b1a6c1
+  branch: warpline-surfaces
+  dirty: true

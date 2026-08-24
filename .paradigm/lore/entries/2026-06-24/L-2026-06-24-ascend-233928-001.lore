@@ -1,0 +1,34 @@
+id: L-2026-06-24-ascend-233928-001
+type: milestone
+timestamp: '2026-06-24T23:39:28.331Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Classroom Experience vision — THE STAND (conversation) + The Academy (GUI)
+summary: 'Ran an 11-agent design session (4 mappers → Loid/Sheila/Mika/North/Nora/Arky → Loid synthesis) to flesh out the full Paradigm Classroom experience: the agent↔Matt↔agent conversation model and the (greenfield) GUI. Output is a coherent vision persisted to docs/specs/classroom-experience.md. Core metaphor: a courtroom of attributed turns — agents propose a learning, peers try to break it with a scenario they had to author first, Matt judges (dissent shown first), the field is the final examiner. The two competing loops resolve via near-free demotion (legacy auto-promote → stage-only; the certifiedBy enum already distinguishes gate/peer/quorum). MVP is buildable now with zero engine changes: skill-choreography upgrade + cold-start Orientation Term + a read-only Academy section.'
+symbols_touched:
+  - '#classroom'
+  - '#nomination-engine'
+  - '#notebook-loader'
+  - '#field-failure-reducer'
+files_created:
+  - docs/specs/classroom-experience.md
+learnings:
+  - The Classroom's cold-start no-op (unbootstrapped → /class gate-zero-skips everyone) is best fixed as a Step-0 detect-and-divert into a guided 'Orientation Term' that enrolls one agent, seeds one syllabus + one breaking scenario, stages one candidate, and ends in a signed-off learning — turning the empty machinery on experientially.
+  - 'The two competing learning loops can be reconciled with ZERO schema migration: ClassroomCertRow.certifiedBy is already a gate|peer|quorum enum — demote the legacy auto-promoter to stage-only (write a docket candidate, never call appendClassroomCertification) so there is exactly ONE certifier, and derive a GATED-vs-LEGACY GUI badge from certifiedBy.'
+  - 'The whole Classroom MVP is buildable with no engine changes: upgrade skills/class/SKILL.md to THE STAND (fixed turn order, dissent-first, one causal question, refine read-back), persist a per-term transcript JSONL, and mount a read-only Academy section modeled line-for-line on ambient.ts (reader) + team.ts (roster).'
+tags:
+  - classroom
+  - design
+  - vision
+  - learning-loop
+  - gui
+  - from-convene
+linked_lore:
+  - L-2026-06-24-ascend-201503-001
+confidence: 0.85
+git_context:
+  ref: b5829a75962c5f74e1de6f2bf38c5d9279d7e692
+  branch: warpline-surfaces
+  dirty: true

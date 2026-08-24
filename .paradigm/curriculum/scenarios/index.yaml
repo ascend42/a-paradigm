@@ -1,0 +1,35 @@
+version: '1.0'
+generated: '2026-07-18T04:46:00.000Z'
+scenarios:
+  - id: SC-aspect-validate-vs-queryable
+    origin: authored
+    status: active
+    agents:
+      - compliance
+    repeat_failures: 0
+  - id: SC-barrels-antipattern-vs-our-tooling
+    origin: authored
+    status: active
+    agents:
+      - architect
+    repeat_failures: 0
+  - id: SC-feature-slice-vs-shared-kernel
+    origin: authored
+    status: active
+    agents:
+      - architect
+    repeat_failures: 0
+  - id: SC-project-refs-vs-tsup-bundling
+    origin: authored
+    status: active
+    agents:
+      - architect
+    repeat_failures: 0
+health:
+  total: 4
+  active: 4
+  retired: 0
+  byOrigin:
+    field-failure: 0
+    poison-pill: 0
+    authored: 4

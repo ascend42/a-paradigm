@@ -1,0 +1,50 @@
+id: TD-2026-08-12-218
+timestamp: '2026-08-12T02:55:04.244Z'
+title: >-
+  Proceed with the Warpline Tier-1 make-it-dogfoodable package; the ignore mechanism is Warpline-NATIVE (own file + own
+  handler), not a lean on .gitignore
+decision: >-
+  Build the Tier-1 usability layer (T-2026-08-12-002) next so a new project can actually be tracked/built on Warpline by
+  an agent team: warpline init, git-absent status/diff, gitignore .warpline, the auto-seal hook binary fix, honesty
+  surfacing (byte-decided / scalar-const-invisible must not read as 'clean, no change'), MCP registration + a seeded
+  onboarding notebook entry, and a first-class IGNORE mechanism. FOUNDER CORRECTION on the ignore mechanism: it must be
+  WARPLINE-NATIVE — its own ignore file (a Warpline-idiom name) AND its own handler module that reads and applies it
+  everywhere Warpline walks a tree (snapshot ROOT_IGNORE, absorb, fork --into) — NOT a dependency on git's .gitignore.
+  Warpline still WRITES a .gitignore entry for .warpline/ (so git doesn't swallow the fabric) but its OWN ignore
+  decisions are governed by the native ignore file, so the mechanism works with git absent. Deeper Tier-2 structural
+  gaps (branching M2.5, N≥3 concurrency, autonomous-KNOT-path, blind-class coverage) come after.
+rationale: >-
+  The four-agent panel (L-2026-08-12-022145) found the engine is real but 'build a project on it like git' is blocked by
+  a cheap onboarding/legibility layer sitting on structural gaps. Tier-1 is days of mostly bug-fixes + one init command
+  and turns 'agents flail' into 'a project can be tracked'. The founder corrected the ignore design: a native-first tool
+  cannot govern its own ignores through git's file — Warpline needs its own named ignore convention and handler, or the
+  whole git-absent story is incoherent (the tool that 'never touches git' would depend on a git file to know what to
+  skip).
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+  - id: architect
+    role: agent
+    stance: supported
+  - id: forge
+    role: agent
+    stance: supported
+  - id: advocate
+    role: agent
+    stance: supported
+symbols_affected:
+  - '#warpline-cli'
+  - '#native'
+  - '#hook'
+  - '#warp-store'
+  - '#snapshot'
+status: active
+tags:
+  - warpline
+  - tier-1
+  - usability
+  - onboarding
+  - ignore-mechanism
+  - native-first
+  - audit-2026-08-12

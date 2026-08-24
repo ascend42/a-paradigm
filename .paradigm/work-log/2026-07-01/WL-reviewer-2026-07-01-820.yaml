@@ -1,0 +1,7 @@
+id: WL-reviewer-2026-07-01-820
+timestamp: '2026-07-01T18:12:57.134Z'
+agent: reviewer
+task_ref: T-2026-07-01-001
+summary: Settlement of task DAG T-2026-07-01-001 (shelved)
+outcome: partial
+symbols_touched: []

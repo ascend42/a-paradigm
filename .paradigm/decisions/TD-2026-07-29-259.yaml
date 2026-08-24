@@ -1,0 +1,109 @@
+id: TD-2026-07-29-259
+timestamp: '2026-07-29T08:01:02.839Z'
+title: >-
+  FG-1 AMENDED (amends TD-2026-07-28-168): completion is terminating at the CORRECT DOOR; sidestep vs escalation is
+  split and reported, not gated
+decision: >-
+  Founder amendment to FG-1, correcting two defects the pre-freeze panel verified in the criterion ratified 2026-07-28
+  (TD-2026-07-28-168).
+
+
+  RATIFIED WORDING — Agent-class F4 completion = all three, computed from f4Trace:v1 rows alone:
+    (1) the agent reaches a KNOT verdict — an episode opens on a GATE_REFUSED refusal carrying verdict:'KNOT';
+    (2) it terminates at the CORRECT DOOR — when the refusal ADVERTISES a knotPayloadId, a matching knot.show row must exist; when it advertises none, no hydration is required;
+    (3) it does not breach the human door — zero W3 marks in that episode.
+
+  REPORTED SPLIT (a count, never a bar): completions are reported as `escalation` vs `sidestep`. A sidestep is a KNOT
+  episode closed by an `admit` row whose resultClass is `sealed` — i.e. the agent rewrote its change to stop contesting,
+  re-proposed, and admitted clean rather than escalating. Both count as completion under (1)-(3); they are counted
+  SEPARATELY so the founder can rule on whether sidesteps should count with data in hand.
+
+
+  WHY (1)-(3) CHANGED. Predicate (2) as originally ratified was UNSATISFIABLE on the byte-downgrade stratum.
+  `meaningRefusal` takes knotPayloadId as an optional 5th arg (admit.ts:394-400) and only admit.ts:931 passes it;
+  admit.ts:830 and :867 — the byte-overlap downgrade paths — omit it, as does the shadow path admit.ts:779. With no
+  pointer, meaningNextSteps (admit.ts:336-341) omits the knot.show step entirely and the ladder degrades to the human
+  door alone. FG-4 names byte-downgrade-KNOT-without-payload as a REQUIRED stratum, so as ratified that stratum would
+  have produced guaranteed incompletes and failed the ≥80% bar on WORDING, not on agents — the exact failure FG-1 was
+  created to remove, reintroduced one layer down.
+
+
+  WHY THE SPLIT. mcp-skin-spec §6 claimed a KNOT-sidestepper "does not score as completion" under (1)-(3). That claim is
+  factually wrong: the sidestepper reaches the KNOT, typically calls knot.show to understand the conflict, never touches
+  resolve, and `knotOpen` is keyed on stateId so re-proposing legitimately clears it. All three predicates hold.
+  Sidestep and escalation were therefore indistinguishable in the numerator. Splitting rather than excluding preserves
+  the pre-registration (nothing is decided after seeing results) while making the distinction visible.
+
+
+  SEPARATELY RESOLVED, same session: FG-1's predicate (3) was unmeasurable on both arms until commit 93af1d99. On MCP,
+  `resolve` is omitted from the surface and the unregistered-tool branch threw BEFORE tracer.emit, so the attempt left
+  no row; and acceptBreach/acceptRisk are absent from admit's paramsSchema so filterToSchema dropped them silently and
+  the classifier's /accept(Breach|Risk)/ target test could never match. On CLI, `resolve` had no traceCli wrapper at
+  all, so a CLI subject could perform the human verb, succeed, emit nothing, and satisfy all three predicates. Both
+  closed WITHOUT weakening the defense (the tool stays unregistered per Aegis R2; the flags still never reach the wire)
+  — only the observation is new.
+
+
+  STILL UNRATIFIED: FG-2, FG-3, FG-4. Nothing is scored.
+rationale: >-
+  A completion criterion must be satisfiable by correct behavior and must be able to fail on incorrect behavior. FG-1 as
+  first ratified failed both tests, in opposite directions, and neither failure was visible from reading the wording —
+  one needed the engine's four KNOT call sites compared, the other needed the MCP dispatch order and the classifier's
+  surface-miss branch read together.
+
+
+  The conditional form of (2) is not a weakening. It is what "hydrates the payload" always meant operationally: follow
+  the pointer the refusal gives you. When the refusal gives none, following it is vacuous, and demanding it anyway
+  measures the engine's payload-persistence policy rather than the agent's legibility — which is a different question
+  and belongs to a different falsifier.
+
+
+  The split is preferred to exclusion because excluding sidesteps would decide, before any data exists, that
+  self-deconfliction is not a valid cold-agent outcome. It may well be the BEST outcome — an agent that recognizes a
+  contest and withdraws from it costs the human nothing. But it also bypasses the accountability record, which is the
+  moat. That trade is a founder call that should be made against observed frequencies, not assumed. Reporting both
+  counts keeps the pre-registration honest either way: the bar is fixed now, the interpretation is informed later.
+
+
+  Amending BEFORE any scored run is again what keeps this an amendment rather than a goalpost-move: the denominator is
+  still zero, so no result could have informed the wording.</rationale>
+
+  <parameter name="participants">[{"id": "ascend", "role": "human", "stance": "proposed"}, {"id": "qa", "role": "agent",
+  "stance": "supported"}, {"id": "architect", "role": "agent", "stance": "supported"}, {"id": "security", "role":
+  "agent", "stance": "supported"}, {"id": "claude", "role": "agent", "stance": "supported"}]
+alternatives_considered:
+  - option: Minimal conditional fix only — make hydration conditional, leave sidestep and escalation pooled
+    rejected_because: >-
+      Leaves spec §6's claim about sidesteps factually wrong and leaves the numerator ambiguous: two materially
+      different agent behaviours, one of which bypasses the accountability record, counted as the same success.
+  - option: Fix the engine instead — make the byte-overlap KNOT paths persist a payload so every KNOT is hydratable
+    rejected_because: >-
+      Larger change to #admit and #knot-payload needing its own design pass, and it changes the PRODUCT to fit the
+      falsifier. The payload-less ladder is a real shape agents will meet; F4 should measure whether they handle it, not
+      delete it.
+  - option: Drop the byte-downgrade stratum from FG-4 and score semantic KNOTs only
+    rejected_because: >-
+      It is the only stratum that tests pointer-DEPENDENCE (Loid): whether recovery survives when next[] exists but
+      nothing is hydratable. Removing it would let the corpus conclude 'cold agents recover' when it had only shown
+      'cold agents follow a pointer that always resolves'.
+symbols_affected:
+  - '#f4-classifier'
+  - '#f4-trace'
+  - '#f4-cli-trace'
+  - '#admit'
+  - '#knot-payload'
+  - '#refusal'
+  - '#warpline-mcp'
+  - '#warpline-cli'
+status: active
+tags:
+  - warpline
+  - native-first
+  - F4
+  - cold-agent
+  - founder-gate
+  - FG-1
+  - falsifier
+  - amends-TD-2026-07-28-168
+  - ratified
+  - pre-freeze

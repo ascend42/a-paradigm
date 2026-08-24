@@ -1,0 +1,22 @@
+{
+  "repo": "nest-ts",
+  "n": 40,
+  "errorsOld": 0,
+  "errorsNew": 0,
+  "errorRecsNew": [],
+  "gitCleanOld": 39,
+  "gitCleanNew": 39,
+  "hitsOld": 1,
+  "hitsNew": 1,
+  "gained": [],
+  "lost": [],
+  "unchanged": [
+    {
+      "merge": "7c10646a05",
+      "flags": 2
+    }
+  ],
+  "changedSet": [],
+  "rateOldPctOfClean": 2.6,
+  "rateNewPctOfClean": 2.6
+}

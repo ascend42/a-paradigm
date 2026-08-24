@@ -1,0 +1,74 @@
+{
+  "repo": "zod",
+  "n": 120,
+  "errorsOld": 0,
+  "errorsNew": 0,
+  "errorRecsNew": [],
+  "gitCleanOld": 107,
+  "gitCleanNew": 107,
+  "hitsOld": 14,
+  "hitsNew": 14,
+  "gained": [],
+  "lost": [],
+  "unchanged": [
+    {
+      "merge": "d1982eaf0d",
+      "flags": 1
+    },
+    {
+      "merge": "84795b099e",
+      "flags": 78
+    },
+    {
+      "merge": "157f8c560a",
+      "flags": 22
+    },
+    {
+      "merge": "66cbfe092f",
+      "flags": 2
+    },
+    {
+      "merge": "c63a598861",
+      "flags": 6
+    },
+    {
+      "merge": "9c6e487fa1",
+      "flags": 134
+    },
+    {
+      "merge": "69ff844b86",
+      "flags": 2
+    },
+    {
+      "merge": "625c28e25a",
+      "flags": 67
+    },
+    {
+      "merge": "fdd708493e",
+      "flags": 134
+    },
+    {
+      "merge": "fe5bbf61a1",
+      "flags": 24
+    },
+    {
+      "merge": "4785fe6f5c",
+      "flags": 176
+    },
+    {
+      "merge": "f4437e6ab6",
+      "flags": 172
+    },
+    {
+      "merge": "405e33b083",
+      "flags": 172
+    },
+    {
+      "merge": "7fdfae12d0",
+      "flags": 48
+    }
+  ],
+  "changedSet": [],
+  "rateOldPctOfClean": 13.1,
+  "rateNewPctOfClean": 13.1
+}

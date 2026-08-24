@@ -1,0 +1,24 @@
+id: WL-claude-opus-4-6-2026-08-11-095
+timestamp: '2026-08-11T20:40:55.016Z'
+agent: claude-opus-4-6
+summary: >-
+  Implemented the two field-test-blocking instrument fixes from the readiness audit. B-1: the native path dropped
+  byte-only work (assets/fonts/.js/.env/docs) because proposeNative returned {noop:true} on any empty meaning delta and
+  admitNative NOOP'd it — now it seals a byte-custody strand when the tree advanced and carries it forward as a
+  FAST_ADMIT, mirroring the git-era pick path. B-3: the CLEAN→byte-conflict KNOT downgrade returned without persisting a
+  payload, so health's contested denominator (listKnotPayloads().length) counted it as zero while the shadow arm counted
+  it — now both contested sites persist through one shared helper and a payload-build failure surfaces as payloadError
+  instead of being swallowed. Typecheck clean; new byte-custody-native.test.ts green; existing native tests green.
+outcome: partial
+files_modified:
+  - packages/warpline/src/fabric/native.ts
+  - packages/warpline/src/fabric/admit.ts
+  - packages/warpline/src/fabric/strand.ts
+  - packages/warpline/test/byte-custody-native.test.ts
+symbols_touched:
+  - '#native'
+  - '#strand'
+  - '#admit'
+  - '#knot-payload'
+  - '#warpline-health'
+linked_lore: L-2026-08-11-ascend-204052-001

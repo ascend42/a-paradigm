@@ -290,6 +290,17 @@ function persistDebates(rootDir: string, debates: Debate[]): void {
  * the delta bands can be calibrated from a real histogram later. This is an
  * INSTRUMENT only — nothing reads it back to decide promotions.
  */
+/**
+ * Belief-delta promotion bands (docs/specs/classroom-falsifiable-loop.md §3).
+ * STARTING GUESSES — Loid calibrates these from the promotion-decisions.jsonl
+ * histogram the instrument has been collecting. NOT YET ENFORCED: the gate still
+ * uses absolute confidence_after >= 0.8 until sub-phase 2 flips it. Defined here
+ * now (contracts-only) so the flip is a one-line change against named constants.
+ */
+export const PROMOTION_FLOOR = 0.7;      // after must clear this regardless of delta
+export const PROMOTION_DELTA_MIN = 0.1;  // promote when belief rose by ≥ this
+export const PROMOTION_DELTA_EPSILON = 0.05; // |delta| < this AND priorFound ⇒ HOLD (silence is signal)
+
 interface PromotionDecision {
   ts: string;
   agent: string;
@@ -300,6 +311,8 @@ interface PromotionDecision {
   promoted: boolean;
   priorFound: boolean;
   gate: string;
+  /** The delta-gate floor in effect when recorded (sub-phase 0 forward-compat). */
+  floor?: number;
 }
 
 /**
@@ -1059,34 +1072,9 @@ export function autoPromoteJournalEntries(
         });
       } catch { /* non-fatal — certification is an instrument, never blocks promotion */ }
 
-      // Mark the journal entry as promoted (update in-place via YAML rewrite)
-      try {
-        const journalDir = path.join(os.homedir(), '.paradigm', 'agents', agentId, 'journal');
-        if (fs.existsSync(journalDir)) {
-          const files = fs.readdirSync(journalDir).filter(f => f.endsWith('.yaml'));
-          for (const file of files) {
-            const filePath = path.join(journalDir, file);
-            const content = fs.readFileSync(filePath, 'utf8');
-            if (content.includes(entry.id)) {
-              const updated = content.replace(
-                /promoted_to_notebook:.*$/m,
-                `promoted_to_notebook: "${nbEntry.id}"`
-              );
-              if (updated === content) {
-                // Field didn't exist — append it
-                const lines = content.trimEnd().split('\n');
-                lines.push(`promoted_to_notebook: "${nbEntry.id}"`);
-                fs.writeFileSync(filePath, lines.join('\n') + '\n', 'utf8');
-              } else {
-                fs.writeFileSync(filePath, updated, 'utf8');
-              }
-              break;
-            }
-          }
-        }
-      } catch {
-        // Marking promoted is non-fatal
-      }
+      // Mark the journal entry as promoted (update in-place via YAML rewrite).
+      // Shared with gatedPromoteJournalEntry — byte-identical to the prior inline block.
+      markJournalPromoted(agentId, entry.id, nbEntry.id);
     } catch (e) {
       // eslint-disable-next-line no-console
       console.error('PROMOTE_THREW', (e as Error).message);
@@ -1095,6 +1083,126 @@ export function autoPromoteJournalEntries(
   }
 
   return { promoted: promoted.length, entries: promoted };
+}
+
+/**
+ * Mark a journal entry as promoted (update in-place via YAML rewrite). Shared by
+ * autoPromoteJournalEntries' inline block and gatedPromoteJournalEntry. Locates
+ * the YAML file in ~/.paradigm/agents/<agent>/journal/ containing `journalId`
+ * and sets/appends `promoted_to_notebook: "<notebookId>"`. Non-fatal on failure.
+ */
+function markJournalPromoted(agentId: string, journalId: string, notebookId: string): void {
+  try {
+    const journalDir = path.join(os.homedir(), '.paradigm', 'agents', agentId, 'journal');
+    if (fs.existsSync(journalDir)) {
+      const files = fs.readdirSync(journalDir).filter(f => f.endsWith('.yaml'));
+      for (const file of files) {
+        const filePath = path.join(journalDir, file);
+        const content = fs.readFileSync(filePath, 'utf8');
+        if (content.includes(journalId)) {
+          const updated = content.replace(
+            /promoted_to_notebook:.*$/m,
+            `promoted_to_notebook: "${notebookId}"`
+          );
+          if (updated === content) {
+            // Field didn't exist — append it
+            const lines = content.trimEnd().split('\n');
+            lines.push(`promoted_to_notebook: "${notebookId}"`);
+            fs.writeFileSync(filePath, lines.join('\n') + '\n', 'utf8');
+          } else {
+            fs.writeFileSync(filePath, updated, 'utf8');
+          }
+          break;
+        }
+      }
+    }
+  } catch {
+    // Marking promoted is non-fatal
+  }
+}
+
+/**
+ * Gated promotion (TD-2026-06-25-044, the "two-loops" resolution) — the sibling
+ * of the LEGACY autoPromoteJournalEntries. This is the path driven by the gated
+ * `/class` sign-off: a HUMAN ruling IS the gate, so there is NO confidence-0.8
+ * threshold and NO appendPromotionDecision instrument row (that's the legacy
+ * belt). The certification it writes is stamped `certifiedBy: 'peer' | 'quorum'`
+ * — the ONLY semantic difference from the legacy 'gate' cert — so the GUI renders
+ * these as peer-certified rather than LEGACY.
+ *
+ * Promotes a SINGLE journal entry by id. Returns the outcome.
+ */
+export function gatedPromoteJournalEntry(
+  rootDir: string,
+  agentId: string,
+  journalId: string,
+  opts: { certifiedBy?: 'peer' | 'quorum'; refinedForm?: string } = {}
+): { promoted: boolean; journalId: string; notebookId?: string; reason?: string } {
+  // Load all of the agent's journal entries (all triggers) and find the target.
+  const journal = loadJournalEntries(agentId, { limit: 500 }) as Array<{
+    id: string;
+    insight: string;
+    confidence_after?: number;
+    promoted_to_notebook?: string;
+    pattern?: { id: string; applies_when: string; correct_approach: string };
+    tags?: string[];
+  }>;
+
+  const entry = journal.find(e => e.id === journalId);
+  if (!entry) {
+    return { promoted: false, journalId, reason: 'not found' };
+  }
+  if (entry.promoted_to_notebook) {
+    return {
+      promoted: false,
+      journalId,
+      notebookId: entry.promoted_to_notebook,
+      reason: 'already promoted',
+    };
+  }
+
+  // Derive concepts exactly the way autoPromote does.
+  const concepts = (entry.tags || [entry.pattern?.id || 'learned-pattern'])
+    .map(normalizeConcept)
+    .filter(Boolean);
+
+  const { entry: nbEntry } = addNotebookEntry(
+    agentId,
+    {
+      context: entry.pattern?.applies_when || entry.insight.slice(0, 80),
+      // A gated sign-off may supply a refined form of the snippet; else mirror
+      // autoPromote (correct_approach, else the raw insight).
+      snippet: opts.refinedForm || entry.pattern?.correct_approach || entry.insight,
+      confidence: entry.confidence_after ?? 0.5,
+      concepts,
+      tags: entry.tags ?? [],
+      provenance: {
+        source: 'lore',
+        loreEntryId: entry.id,
+        createdBy: agentId,
+      },
+    },
+    'global',
+    rootDir
+  );
+
+  // Write a `pending` certification — peer/quorum certified (NOT 'gate'). The
+  // fail-side reducer later-binds outcome to `overturned`/`survived`.
+  try {
+    appendClassroomCertification(rootDir, {
+      ts: new Date().toISOString(),
+      agent: agentId,
+      entryId: nbEntry.id,
+      concepts,
+      confidenceAtCert: entry.confidence_after ?? 0.5,
+      certifiedBy: opts.certifiedBy ?? 'peer',
+      outcome: 'pending',
+    });
+  } catch { /* non-fatal — certification is an instrument, never blocks promotion */ }
+
+  markJournalPromoted(agentId, entry.id, nbEntry.id);
+
+  return { promoted: true, journalId, notebookId: nbEntry.id };
 }
 
 // ── Surfacing Config ──

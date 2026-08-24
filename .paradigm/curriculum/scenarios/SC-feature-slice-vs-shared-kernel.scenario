@@ -1,0 +1,13 @@
+id: SC-feature-slice-vs-shared-kernel
+scenario: 'The foraged claim "feature-sliced design beats layered architecture for scalability: organize by FEATURE not technical layer". PROBE against OUR repo: a-paradigm IS domain/feature-sliced at the TOP (packages/paradigm, -mcp, sentinel, conductor, warpline, university, portal) — but it deliberately keeps a set of LAYERED shared-kernel packages (logger, runtime, premise/core, purpose/core, probe/core) that are cross-cutting infra consumed by every slice. Feature-slicing those would FRAGMENT a cohesive substrate that exists precisely so the feature slices DON''T each reinvent it. The claim''s own hedge ("most resilient = a layered gradient WITH per-feature locality") already concedes this. So the strong form "feature-sliced BEATS layered" must REJECT as a universal rule: it holds for product/app code, but shared-kernel/infra packages are correctly layered. Gated outcome: refine to "feature-slice product code; keep cross-cutting infra layered as a shared kernel".'
+probes:
+  - agent: architect
+    learning_ref: LJ-2026-06-25-065652-628
+    claim: Feature-sliced design beats layered architecture for scalability
+origin: authored
+origin_ref: LJ-2026-06-25-065652-628
+expected:
+  must: reject
+outcome_history: []
+repeat_failures: 0
+status: active

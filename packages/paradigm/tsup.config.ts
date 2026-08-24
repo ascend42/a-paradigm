@@ -21,6 +21,13 @@ export default defineConfig([
     entry: { index: 'src/index.ts' },
     dts: true,
     clean: true,
+    // Keep the Warpline engine (and its TS-compiler dep) EXTERNAL: it pulls in
+    // the `typescript` package via the code-lens, a large CJS module whose
+    // dynamic `require('fs')` calls do not survive ESM bundling ("Dynamic
+    // require of 'fs' is not supported" at runtime). Warpline is a hard
+    // dependency in package.json, so it resolves from node_modules at runtime
+    // with its own resolution intact. The platform-server imports it lazily.
+    external: [...shared.external, '@a-company/warpline', 'typescript'],
   },
   {
     ...shared,

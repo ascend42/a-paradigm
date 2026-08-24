@@ -1,0 +1,51 @@
+id: L-2026-07-01-ascend-231720-001
+type: milestone
+timestamp: '2026-07-01T23:17:20.062Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Warpline M1c shipped — `warpline restore`: a working tree reconstructed with git ABSENT (the layer→VCS threshold)'
+summary: 'Built and shipped M1c (T-2026-07-01-012): the `warpline restore` verb. Warpline now reconstructs a byte-identical working tree — contents, exec bits, symlinks, subdirs — from its own native object store with .git DELETED. Proven end-to-end (I ran rm -rf .git && restore myself; diff IDENTICAL). Selector grammar HEAD/@seq/pick:/state:/tree: → strand → binding.treeId; A4 refuses a strand with no byte binding; dirty-dest guard. Security-critical: hardened restoreTree closes Aegis''s C3 (per-level single-component name validation, reject .git/.warpline at every level, no symlink-follow, fail-closed on forged trees) — Aegis adversarial review verdict C3 CLOSED, SHIP 0.85. His review surfaced two adjacent gaps I reproduced LIVE and fixed in the same commit: a --force HARDLINK write-through that clobbered a file outside dest (now breaks the link with a fresh inode), and an unvalidated tree:<id> reaching the object-store path (now shape-validated); also added an unknown-mode fail-closed. This crosses the layer→VCS threshold the readiness panel scored ~0.05 on: Warpline can now OWN and REPRODUCE bytes without git. 233/233 tests green. Commit bc5f1bc5 (local, unpushed).'
+symbols_touched:
+  - '#restore'
+  - '#warpline-cli'
+  - '#warp-store'
+  - '#materialize'
+  - '#select'
+  - '#strand'
+learnings:
+  - 'The ''verify with your own eyes'' discipline paid off twice this milestone: (1) the git-absent restore is real, confirmed by an independent rm-rf-.git run, not just a green test; (2) re-running the reviewer''s findings as LIVE exploits confirmed BOTH the hardlink write-through and the tree:-id store-escape were real (the reviewer could only static-trace) — fixed and regression-tested before cementing. A read-only reviewer''s ''MED, needs live repro'' is a to-do, not a footnote.'
+  - 'M1 is now functionally COMPLETE across its wedge: native object store (M1a) + durable merge bytes (M1b) + authenticated fabric (M1.9 schema-v2) + git-absent restore (M1c). Warpline owns and reproduces bytes without git — the capability the readiness panel scored ~0.05 on now exists and is proven.'
+  - 'Sequencing the authenticated fabric (M1.9) BEFORE restore (M1c) was correct: restore now materializes bytes bound to a tamper-evident pickId chain, so the restore path sits on an authenticated store rather than a forgeable one — exactly the reorder the audit argued for.'
+verification:
+  status: pass
+  details:
+    tsc: clean
+    build: success
+    tests: 233/233
+    git-absent-restore: 'reproduced by coordinator: rm -rf .git then restore → diff IDENTICAL'
+    adversarial-security-review: Aegis C3 CLOSED, SHIP 0.85
+    hardlink-exploit: reproduced then fixed + regression-tested
+    tree-id-escape: reproduced then fixed + regression-tested
+tags:
+  - warpline
+  - replacement
+  - M1c
+  - restore
+  - git-absent
+  - C3-closed
+  - layer-to-vcs
+linked_lore:
+  - L-2026-07-01-ascend-224144-001
+linked_tasks:
+  - T-2026-07-01-012
+  - T-2026-07-01-007
+  - T-2026-07-01-033
+linked_commits:
+  - bc5f1bc5
+confidence: 0.88
+git_context:
+  ref: bc5f1bc502bfee370bb82049233958fc554f927c
+  branch: warpline-surfaces
+  dirty: true

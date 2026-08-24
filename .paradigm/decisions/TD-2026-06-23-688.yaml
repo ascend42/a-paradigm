@@ -1,0 +1,63 @@
+id: TD-2026-06-23-688
+timestamp: '2026-06-23T18:26:24.190Z'
+title: >-
+  Loom fork resolved by spike — A (AST code-meaning) is bounded engineering, not research; commit to A next; loom-engine
+  merged to main (experimental)
+decision: >-
+  The next Loom push is (A) AST-level code meaning, scoped as an additive TS code-lens behind the existing
+  essence/diff/predict/oracle contract. The team split 3–B/1–A, but all four lenses agreed the pivot was North's flip
+  condition: is sound, deterministic AST→meaning achievable in bounded effort? A read-only spike
+  (.paradigm/research/loom-ast-absorb-spike.ts) answered YES with data: 10/10 per-function essence properties hold
+  (determinism, local-rename/format/comment/paren invariance + correct sensitivity), file-level reorder invariance
+  holds, and the one frontier (cross-symbol rename) is closed by the SAME Merkle-by-target-essence rule essence-hash
+  already implements for .purpose edges + TS-checker name resolution. Flip condition did NOT trigger. Separately:
+  loom-engine (+5, read-only, proven) merged to main as experimental (package only, no CLI promotion, not pushed);
+  loom-presentation held on-branch; Loom University course deferred (outline only).
+rationale: >-
+  Determinism IS the thesis; the spike refuted the only disqualifying risk (heuristic/noisy code-diffs) by showing the
+  structural lift is exactly as deterministic as the .purpose essence — no embeddings, no probabilistic step. A removes
+  the fatal "only works on Paradigm's own .purpose files" asterisk (North), makes loom diff non-zero on ordinary code,
+  and is additive not a rewrite (Arky's prediction confirmed). Every B-voter (Loid, Aegis) conceded A gives B its teeth
+  (thin .purpose-only meaning makes B's scrutiny/fragility shallow). The hard part is bounded engineering — reuses
+  shipped machinery (Merkle-by-target + Tarjan SCC) plus an off-the-shelf TS checker resolver — not open research.
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+  - id: product
+    role: agent
+    stance: proposed
+  - id: architect
+    role: agent
+    stance: supported
+  - id: forge
+    role: agent
+    stance: supported
+  - id: security
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: B — the write path (loom weave/consolidate/decide) now
+    rejected_because: >-
+      Valuable, ~80% latent, and unblocked — but every B-voter agreed A first makes the meaning layer thick enough that
+      B's trust gate (scrutiny=fragility×(1−trust)) is honest rather than shallow. Deferred to after A; B does not block
+      A and A does not block B.
+  - option: Commit to A blind (skip the spike)
+    rejected_because: >-
+      The determinism/soundness risk was the one disqualifying unknown; a cheap read-only spike resolved it before
+      committing months of effort.
+  - option: Merge both loom branches to main now
+    rejected_because: loom-presentation may overstate an unshipped write path (Aegis); held on-branch until claims are verified.
+symbols_affected:
+  - '#absorb'
+  - '#essence-hash'
+  - '#loom'
+  - '#loom-oracle'
+  - '#sem-delta'
+status: active
+tags:
+  - loom
+  - ast-absorb
+  - fork-decision
+  - spike
+  - the-prize

@@ -1,0 +1,43 @@
+id: TD-2026-07-17-151
+timestamp: '2026-07-17T17:26:35.374Z'
+title: >-
+  FOUNDER DIRECTION: Warpline-native operation via our own local/private forge — paramount core path; git demoted to
+  safeguarded checkpoint export; GitHub-facing surfaces are not where claims are staked
+decision: >-
+  (1) Warpline's operational end state is a LOCAL/PRIVATE SERVER running Warpline natively — GitHub will not operate the
+  way Warpline requires; the system should work ONLY this way. (2) Building our own forge ("our GitHub") is PARAMOUNT to
+  the product's future: core roadmap, designed deliberately over time to Warpline's specs and demands — this supersedes
+  the forge freeze (the "no forge code until graded-weaves/week>0" thaw condition becomes: forge DESIGN starts now,
+  build proceeds deliberately under founder pacing). (3) Git is relegated to a TOGGLEABLE, LIMITED, SAFEGUARDED one-way
+  checkpoint export — "hard reset points" for staking progress while Warpline is tested and reviewed. (4) "git-conflict"
+  framing and Guard-as-GitHub-Action are NOT the claim-staking ground; GitHub-facing surfaces are at most instruments,
+  with their disposition (park/instrument/kill) to be recommended by the re-plan pass. KEPT INTACT: thesis wording
+  TD-2026-07-16-810; the engine roadmap (v3, knot payload, claims, trust); K3 organic arm TD-2026-07-16-426. The forge
+  constraint spec (warpline-forge.md) is promoted from constraint-doc to the seed of the product's constitution.
+rationale: >-
+  Founder ruling 2026-07-17 after reading the sign-off brief: the full thesis (admit gate as the pipeline, scrutiny as
+  the permission model, KNOTs as self-filing issues) is only realizable on a substrate we control; hosting it inside
+  GitHub's model permanently caps it. Recorded with eyes open against the panel's market findings (Cursor Origin fall
+  ship, Entire.io $60M, 9-15mo window, "don't spend our window on their moat" — L-2026-07-14-ascend-150429-001): the
+  founder is choosing product integrity over the borrowed-distribution wedge; the panel's findings remain in the record
+  for future calibration, not as a veto. Engineering continuity is high: v3 DAG+refs, knotPayload, claims,
+  HELD/scrutiny, git-absent restore, and v3.5 exchange are precisely the native-forge substrate — the pivot re-aims
+  positioning and sequencing, not the built engine.
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+symbols_affected:
+  - '#warpline-forge'
+  - '#fabric'
+  - '#admit'
+  - '#warp-store'
+  - '#warpline-cli'
+status: active
+tags:
+  - warpline
+  - founder-direction
+  - forge
+  - native-first
+  - pivot
+  - roadmap-2026H2

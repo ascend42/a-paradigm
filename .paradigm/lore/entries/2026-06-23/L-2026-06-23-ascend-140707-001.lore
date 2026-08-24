@@ -1,0 +1,30 @@
+id: L-2026-06-23-ascend-140707-001
+type: insight
+timestamp: '2026-06-23T14:07:07.779Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Loom — THE TAPESTRY: the woven history view + Loom-native weaving nomenclature'
+summary: 'Founder flagged a big build item: an easy DISPLAY of the woven threads of changes (history view), open to new nomenclature ''if it makes sense for how we do everything in Loom''. Proposal: THE TAPESTRY — a tapestry is a picture woven from threads you read, the exact need. It''s the cockpit for Loom''s killer use case (many parallel branches), because git''s commit-graph view collapses under many branches while a weave gets MORE legible. Weaving vocabulary maps onto Loom: WARP (vertical) = symbols (lifelines you follow down through time); WEFT (horizontal) = branches; a PICK = one weft pass = a single change/Justification crossing a warp thread (replaces ''commit'' floating in a graph); a KNOT = a conflict-as-decision (violet); the SELVAGE = the live working edge (git HEAD); a BOLT = a release/tag; the FABRIC = consolidated history, THE TAPESTRY = the view of it. Three cockpit capabilities (from Cid''s panel): (1) follow one warp thread — see every branch that touched ^auth + who decided what, one hop not twenty git-log scans; (2) contention heatmap — color warp threads by # of open branches touching them (cold=auto-consolidate, hot=schedule a decision), steer the agent-branch fleet away from collisions before merge-day; (3) speculative weave / merge-preview — preview a subset''s weave, forecast clean/knot/dangling, zero bytes checked out. It IS render-by-projection (the graph-slice projector we shipped, extended over symbol×branch×time) and would live in the Suite/Conductor as Loom''s navigation surface. Not chrome — the navigation primitive the parallel-branch killer feature requires.'
+symbols_touched:
+  - '#loom'
+  - '#graph-slice-projector'
+  - '#cockpit-view'
+symbols_created:
+  - '#tapestry'
+tags:
+  - loom
+  - tapestry
+  - history-view
+  - navigation
+  - nomenclature
+  - render-by-projection
+linked_lore:
+  - L-2026-06-22-ascend-224840-001
+  - L-2026-06-23-ascend-014721-124
+confidence: 0.75
+git_context:
+  ref: 1853a7774b177ffefdda48d86e6a7d945a1069d4
+  branch: loom-presentation
+  dirty: true

@@ -1,0 +1,19 @@
+id: L-2026-08-12-ascend-042909-715
+type: insight
+timestamp: '2026-08-12T04:29:09.828Z'
+author: ascend
+title: Decision TD-2026-08-12-813 recorded
+summary: Companion lore entry for decision record TD-2026-08-12-813. See .paradigm/decisions/TD-2026-08-12-813.yaml.
+symbols_touched:
+  - '#native'
+  - '#admit'
+  - '#refs'
+  - '#grade'
+  - '#merge'
+  - '#branch'
+  - '#warpline-cli'
+references:
+  decision_id: TD-2026-08-12-813
+tags:
+  - companion-lore
+  - decision-reference

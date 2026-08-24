@@ -1,0 +1,2320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>WARPLINE — Version control for meaning</title>
+<meta name="description" content="WARPLINE — a successor to Git. Version control for meaning, not bytes. The first version control that knows who changed what, why, and what it cost." />
+
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,300..700;1,9..144,300..700&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+
+<style>
+  /* ============================ TOKENS ============================ */
+  :root {
+    --ink-900: #0B0D14;
+    --ink-850: #0F1220;
+    --ink-800: #141829;
+    --ink-700: #1C2138;
+    --ink-600: #2A3050;
+
+    --linen-50: #F4F1EA;
+    --linen-200: #CFCABE;
+    --linen-400: #8B8A82;
+
+    --warp: #E9A23B;
+    --warp-soft: #F2C078;
+    --weft: #2DD4BF;
+    --weft-soft: #5EEAD4;
+    --seam: #7C6FF0;
+
+    --weave-grad: linear-gradient(135deg, #E9A23B 0%, #2DD4BF 100%);
+
+    --maxw: 1120px;
+    --textw: 820px;
+    --ease: cubic-bezier(0.22, 1, 0.36, 1);
+    --pad-sec: clamp(96px, 14vh, 180px);
+
+    --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+    --display: "Fraunces", Georgia, serif;
+    --ui: "Inter", system-ui, -apple-system, sans-serif;
+  }
+
+  /* ============================ RESET ============================ */
+  *, *::before, *::after { box-sizing: border-box; }
+  html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
+  @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } }
+  body {
+    margin: 0;
+    background: var(--ink-900);
+    color: var(--linen-200);
+    font-family: var(--ui);
+    font-size: 17px;
+    line-height: 1.65;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+    overflow-x: hidden;
+  }
+  img, svg { display: block; max-width: 100%; }
+  a { color: inherit; text-decoration: none; }
+  ::selection { background: rgba(233, 162, 59, 0.25); color: var(--linen-50); }
+
+  /* ============================ TYPE ============================ */
+  h1, h2, h3 {
+    font-family: var(--display);
+    color: var(--linen-50);
+    text-wrap: balance;
+    font-weight: 460;
+    margin: 0;
+  }
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 13px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--linen-400);
+    margin: 0 0 22px;
+  }
+  .emph { font-style: italic; color: var(--warp-soft); }
+  .emph-weft { font-style: italic; color: var(--weft-soft); }
+  .emph-seam { font-style: italic; color: var(--seam); }
+
+  /* ============================ LAYOUT ============================ */
+  .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 clamp(20px, 5vw, 48px); }
+  .section { position: relative; padding: var(--pad-sec) 0; }
+  .section--bleed { background: var(--ink-850); }
+  .section--bleed-deep { background: var(--ink-900); }
+  .lede { max-width: var(--textw); }
+  .muted { color: var(--linen-400); }
+
+  /* faint warp grid skeleton */
+  .warpgrid {
+    position: absolute; inset: 0;
+    pointer-events: none;
+    background-image: repeating-linear-gradient(
+      to right,
+      var(--ink-700) 0, var(--ink-700) 1px,
+      transparent 1px, transparent 72px
+    );
+    opacity: 0.06;
+    transition: opacity 1.1s var(--ease);
+    z-index: 0;
+  }
+  .section.in-view .warpgrid { opacity: 0.1; }
+  .section--bleed.in-view .warpgrid { opacity: 0.13; }
+  .section > .wrap { position: relative; z-index: 1; }
+
+  /* ============================ NAV ============================ */
+  nav.topnav {
+    position: fixed; top: 0; left: 0; right: 0; height: 64px; z-index: 100;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 clamp(20px, 5vw, 48px);
+    transition: background 0.4s var(--ease), border-color 0.4s var(--ease);
+    border-bottom: 1px solid transparent;
+  }
+  nav.topnav.scrolled {
+    background: rgba(11, 13, 20, 0.8);
+    -webkit-backdrop-filter: blur(14px);
+    backdrop-filter: blur(14px);
+    border-bottom: 1px solid var(--ink-700);
+  }
+  .wordmark {
+    font-family: var(--display);
+    font-size: 22px; font-weight: 500; color: var(--linen-50);
+    letter-spacing: -0.01em; position: relative; padding-bottom: 4px;
+  }
+  .wordmark::after {
+    content: ""; position: absolute; left: 0; bottom: 0; height: 2px;
+    width: 100%; background: var(--warp); border-radius: 2px;
+  }
+  .navlinks { display: flex; align-items: center; gap: clamp(14px, 2.5vw, 28px); }
+  .navlinks a.quiet {
+    font-family: var(--mono); font-size: 12.5px; color: var(--linen-400);
+    letter-spacing: 0.04em; transition: color 0.3s var(--ease);
+  }
+  .navlinks a.quiet:hover { color: var(--linen-200); }
+  .ghost-btn {
+    font-family: var(--ui); font-size: 13.5px; font-weight: 500;
+    color: var(--linen-50);
+    border: 1px solid var(--ink-600); border-radius: 999px;
+    padding: 9px 18px; transition: border-color 0.3s var(--ease), transform 0.3s var(--ease);
+  }
+  .ghost-btn:hover { border-color: var(--warp); transform: translateY(-1px); }
+  @media (max-width: 720px) { .navlinks a.quiet { display: none; } }
+
+  /* ============================ HERO ============================ */
+  .hero {
+    position: relative; min-height: 100vh;
+    display: flex; align-items: center;
+    padding: 120px 0 96px; overflow: hidden;
+  }
+  .hero-canvas { position: absolute; inset: 0; z-index: 0; pointer-events: none; }
+  .hero-canvas svg { width: 100%; height: 100%; }
+  .hero .wrap { position: relative; z-index: 2; }
+  .hero-inner { max-width: 940px; }
+  h1.hero-h1 {
+    font-size: clamp(48px, 7vw, 92px);
+    line-height: 1.02; letter-spacing: -0.015em; font-weight: 460;
+    margin: 0 0 28px;
+  }
+  @media (max-width: 720px) { h1.hero-h1 { font-size: clamp(40px, 9vw, 56px); } }
+  .hero-deck {
+    font-family: var(--display); font-size: clamp(20px, 2.6vw, 30px);
+    line-height: 1.32; color: var(--linen-200); font-weight: 360;
+    max-width: 760px; margin: 0 0 22px; text-wrap: balance;
+  }
+  .hero-sub {
+    font-size: 16px; color: var(--linen-400); max-width: 560px; margin: 0 0 40px;
+  }
+  .cta-row { display: flex; flex-wrap: wrap; gap: 16px; }
+  .btn-primary {
+    font-family: var(--ui); font-size: 15px; font-weight: 600;
+    background: var(--warp); color: var(--ink-900);
+    border-radius: 999px; padding: 14px 26px;
+    transition: transform 0.3s var(--ease), box-shadow 0.3s var(--ease);
+    box-shadow: 0 0 0 rgba(233, 162, 59, 0);
+  }
+  .btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 30px rgba(233, 162, 59, 0.28);
+  }
+  .btn-ghost {
+    font-family: var(--ui); font-size: 15px; font-weight: 500;
+    color: var(--linen-50); border: 1px solid var(--ink-600);
+    border-radius: 999px; padding: 14px 26px;
+    transition: border-color 0.3s var(--ease), transform 0.3s var(--ease);
+  }
+  .btn-ghost:hover { border-color: var(--weft); transform: translateY(-2px); }
+
+  /* ============================ REVEALS ============================ */
+  .reveal {
+    opacity: 0; transform: translateY(16px);
+    transition: opacity 0.7s var(--ease), transform 0.7s var(--ease);
+    will-change: opacity, transform;
+  }
+  .reveal.in-view { opacity: 1; transform: none; }
+  .reveal.d1 { transition-delay: 0.06s; }
+  .reveal.d2 { transition-delay: 0.13s; }
+  .reveal.d3 { transition-delay: 0.2s; }
+  .reveal.d4 { transition-delay: 0.27s; }
+
+  /* ============================ HEADINGS / DECKS ============================ */
+  .sec-title { font-size: clamp(34px, 4vw, 56px); line-height: 1.06; letter-spacing: -0.01em; margin: 0 0 24px; }
+  .sec-deck { font-size: clamp(18px, 2vw, 21px); color: var(--linen-200); max-width: var(--textw); }
+  .pull-stmt {
+    font-family: var(--display); font-size: clamp(38px, 6vw, 78px);
+    line-height: 1.04; letter-spacing: -0.015em; color: var(--linen-50);
+    max-width: 14ch; text-wrap: balance; font-weight: 420;
+  }
+
+  /* ============================ CARDS ============================ */
+  .card {
+    background: var(--ink-800); border: 1px solid var(--ink-700);
+    border-radius: 15px; padding: clamp(20px, 3vw, 30px);
+    transition: border-color 0.4s var(--ease), transform 0.4s var(--ease);
+  }
+  .card:hover { border-color: var(--warp); transform: translateY(-2px); }
+  .card .lbl {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em;
+    text-transform: uppercase; color: var(--linen-400); margin: 0 0 10px;
+  }
+  .term-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 44px; }
+  @media (max-width: 720px) { .term-row { grid-template-columns: 1fr; } }
+  .term { background: var(--ink-800); border: 1px solid var(--ink-700); border-radius: 14px; padding: 22px; transition: border-color 0.4s var(--ease), transform 0.4s var(--ease); }
+  .term:hover { transform: translateY(-2px); }
+  .term.warp:hover { border-color: var(--warp); }
+  .term.weft:hover { border-color: var(--weft); }
+  .term h4 { font-family: var(--mono); font-size: 15px; letter-spacing: 0.06em; margin: 0 0 8px; color: var(--linen-50); }
+  .term.warp h4 { color: var(--warp); }
+  .term.weft h4 { color: var(--weft); }
+  .term p { margin: 0; font-size: 14.5px; color: var(--linen-400); }
+
+  .key-points { list-style: none; padding: 0; margin: 30px 0 0; max-width: var(--textw); }
+  .key-points li {
+    position: relative; padding-left: 26px; margin-bottom: 14px;
+    color: var(--linen-200); font-size: 16.5px;
+  }
+  .key-points li::before {
+    content: ""; position: absolute; left: 0; top: 11px;
+    width: 14px; height: 1.5px; background: var(--warp); border-radius: 2px;
+  }
+
+  /* ============================ DIAGRAM SHELL ============================ */
+  .diagram {
+    margin-top: 56px; background: var(--ink-800);
+    border: 1px solid var(--ink-700); border-radius: 16px;
+    padding: clamp(20px, 3.5vw, 44px); position: relative;
+  }
+  .diagram-cap {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.06em;
+    color: var(--linen-400); text-transform: uppercase; margin: 18px 0 0;
+    text-align: center;
+  }
+  .banner {
+    margin-top: 28px; text-align: center;
+    font-family: var(--display); font-size: clamp(18px, 2.4vw, 26px);
+    color: var(--linen-50); font-style: italic; text-wrap: balance;
+  }
+  .two-up { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; align-items: stretch; }
+  @media (max-width: 860px) { .two-up { grid-template-columns: 1fr; } }
+
+  .chip {
+    display: inline-block; font-family: var(--mono); font-size: 11.5px;
+    padding: 3px 9px; border-radius: 6px; background: var(--ink-700);
+    color: var(--linen-200); letter-spacing: 0.02em;
+  }
+  .chip.hash { color: var(--warp-soft); border: 1px solid rgba(233,162,59,0.3); }
+  .chip.weft { color: var(--weft); border: 1px solid rgba(45,212,191,0.3); }
+
+  pre.code {
+    font-family: var(--mono); font-size: 13px; line-height: 1.7;
+    color: var(--linen-400); margin: 0; white-space: pre-wrap; word-break: break-word;
+  }
+  pre.code .add { color: var(--weft); }
+  pre.code .rem { color: var(--linen-400); text-decoration: line-through; opacity: 0.7; }
+  pre.code .kw { color: var(--warp-soft); }
+
+  /* ============================ INVERSION (signature) ============================ */
+  .inversion-stage {
+    position: relative; min-height: 460px; margin-top: 56px;
+    perspective: 1600px;
+  }
+  .inv-cols { display: grid; grid-template-columns: 1fr 2px 1fr; gap: 0; align-items: stretch; min-height: 420px; }
+  .inv-axis { position: relative; }
+  .inv-axis::before {
+    content: ""; position: absolute; left: 50%; top: 6%; bottom: 6%; width: 2px;
+    transform: translateX(-50%);
+    background: linear-gradient(to bottom, transparent, var(--warp), transparent);
+    box-shadow: 0 0 14px rgba(233,162,59,0.5); opacity: 0.85;
+  }
+  .inv-panel {
+    transform-style: preserve-3d; backface-visibility: hidden;
+    border: 1px solid var(--ink-700); border-radius: 14px;
+    background: var(--ink-850); padding: 26px; position: relative;
+    transition: filter 0.2s linear;
+  }
+  .inv-left { transform-origin: right center; }
+  .inv-right { transform-origin: left center; }
+  .inv-eyebrow {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.08em;
+    text-transform: uppercase; margin-bottom: 14px; transition: color 0.3s var(--ease), font-size 0.3s var(--ease);
+  }
+  .inv-note { font-size: 13px; color: var(--linen-400); margin-top: 16px; }
+
+  /* ============================ ACCOUNTABILITY ============================ */
+  .loop-stage { margin-top: 56px; display: flex; justify-content: center; }
+  .loop-center {
+    text-align: center; font-family: var(--display); font-style: italic;
+    color: var(--linen-50); font-size: clamp(17px, 2vw, 22px);
+    max-width: 30ch; margin: 36px auto 0; text-wrap: balance;
+  }
+
+  /* ============================ TABLE ============================ */
+  .cmp-scroll { margin-top: 56px; overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 14px; border: 1px solid var(--ink-700); }
+  table.cmp { width: 100%; border-collapse: collapse; min-width: 760px; font-size: 13.5px; }
+  table.cmp th, table.cmp td {
+    text-align: left; padding: 14px 16px; border-bottom: 1px solid var(--ink-700);
+    vertical-align: top;
+  }
+  table.cmp thead th {
+    font-family: var(--mono); font-size: 12px; letter-spacing: 0.06em;
+    text-transform: uppercase; color: var(--linen-50); background: var(--ink-850);
+  }
+  table.cmp thead th.warpline-col { color: var(--warp); }
+  table.cmp td.axis { font-family: var(--ui); font-weight: 600; color: var(--linen-200); }
+  table.cmp td.git, table.cmp td.uni { color: var(--linen-400); }
+  table.cmp td.warpline { color: var(--linen-200); }
+  table.cmp tr.glow td {
+    background: linear-gradient(90deg, rgba(233,162,59,0.04), rgba(45,212,191,0.06));
+  }
+  table.cmp tr.glow td.warpline {
+    color: var(--linen-50);
+    box-shadow: inset 3px 0 0 var(--warp);
+  }
+  .cmp-foot { font-size: 13.5px; color: var(--linen-400); margin-top: 20px; max-width: var(--textw); font-style: italic; }
+
+  /* ============================ DUAL WRITE / ONRAMP ============================ */
+  .rail-tag {
+    font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.05em;
+    color: var(--linen-400); margin-top: 10px;
+  }
+
+  /* ============================ RECKONING (git parity) ============================ */
+  .honor-list { list-style: none; padding: 0; margin: 30px 0 0; max-width: var(--textw); }
+  .honor-list li {
+    position: relative; padding-left: 26px; margin-bottom: 13px;
+    color: var(--linen-200); font-size: 16px;
+  }
+  .honor-list li::before {
+    content: "✓"; position: absolute; left: 0; top: 0;
+    color: var(--weft); font-size: 14px; font-family: var(--mono);
+  }
+  .parity {
+    margin-top: 56px; display: grid; grid-template-columns: 0.85fr 1.15fr; gap: 22px; align-items: stretch;
+  }
+  @media (max-width: 860px) { .parity { grid-template-columns: 1fr; } }
+  .parity-keep, .parity-close {
+    background: var(--ink-800); border: 1px solid var(--ink-700);
+    border-radius: 16px; padding: clamp(20px, 3vw, 30px);
+  }
+  .parity-keep { border-color: rgba(45,212,191,0.22); }
+  .parity h3.parity-h {
+    font-family: var(--mono); font-size: 13px; letter-spacing: 0.06em;
+    text-transform: uppercase; margin: 0 0 20px; font-weight: 500;
+  }
+  .keep-row {
+    display: flex; align-items: center; gap: 12px; padding: 11px 0;
+    border-bottom: 1px solid var(--ink-700); font-size: 14.5px; color: var(--linen-200);
+  }
+  .keep-row:last-child { border-bottom: none; }
+  .keep-row svg { flex: none; }
+  .gap-row {
+    display: grid; grid-template-columns: 1fr; gap: 4px; padding: 12px 0;
+    border-bottom: 1px solid var(--ink-700);
+  }
+  .gap-row:last-child { border-bottom: none; }
+  .gap-row .gap { font-size: 13.5px; color: var(--linen-400); display: flex; align-items: baseline; gap: 8px; }
+  .gap-row .fix { font-size: 13.5px; color: var(--warp); display: flex; align-items: baseline; gap: 8px; }
+  .gap-row .arr { font-family: var(--mono); font-size: 11px; flex: none; }
+  .gap-row .gap .arr { color: var(--ink-600); }
+  .gap-row .fix .arr { color: var(--warp); }
+
+  /* ============================ PHASE PATH ============================ */
+  .obj-list { list-style: none; padding: 0; margin: 30px 0 0; max-width: var(--textw); }
+  .obj-list li {
+    padding: 11px 0; border-bottom: 1px solid var(--ink-700);
+    font-size: 15px; color: var(--linen-200);
+    display: grid; grid-template-columns: minmax(120px, 0.35fr) 1fr; gap: 16px; align-items: baseline;
+  }
+  .obj-list li:last-child { border-bottom: none; }
+  .obj-list li .ol {
+    font-family: var(--mono); font-size: 13px; color: var(--warp); letter-spacing: 0.04em;
+  }
+  @media (max-width: 600px) { .obj-list li { grid-template-columns: 1fr; gap: 3px; } }
+
+  .phase-path { margin-top: 56px; }
+  .phase-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 18px; }
+  @media (max-width: 860px) { .phase-row { grid-template-columns: 1fr 1fr; } }
+  @media (max-width: 520px) { .phase-row { grid-template-columns: 1fr; } }
+  .phase-node {
+    background: var(--ink-800); border: 1px solid var(--ink-700);
+    border-radius: 14px; padding: 22px; position: relative;
+    transition: border-color 0.4s var(--ease), transform 0.4s var(--ease);
+  }
+  .phase-node:hover { border-color: var(--warp); transform: translateY(-2px); }
+  .phase-node .pn {
+    font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.06em;
+    color: var(--linen-400); margin: 0 0 8px;
+  }
+  .phase-node h4 {
+    font-family: var(--mono); font-size: 15px; letter-spacing: 0.04em;
+    margin: 0 0 10px; color: var(--warp);
+  }
+  .phase-node p { margin: 0; font-size: 13.5px; color: var(--linen-400); }
+  .phase-note {
+    margin-top: 22px; text-align: center; font-family: var(--mono);
+    font-size: 12px; color: var(--linen-400); letter-spacing: 0.03em;
+  }
+
+  /* ============================ TAPESTRY (capability cards) ============================ */
+  .cap-row { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; margin-top: 30px; }
+  @media (max-width: 860px) { .cap-row { grid-template-columns: 1fr; } }
+  .cap-card .cap-cmd {
+    font-family: var(--mono); font-size: 12px; margin-top: 14px;
+    color: var(--warp-soft); letter-spacing: 0.02em;
+  }
+  .cap-card p { font-size: 14px; color: var(--linen-400); margin: 0; }
+  .cap-card h4 {
+    font-family: var(--display); font-size: 19px; font-weight: 460;
+    color: var(--linen-50); margin: 0 0 10px;
+  }
+
+  /* ============================ WORKING IN WARPLINE (terminal + CLI table) ============================ */
+  .mental-model {
+    margin-top: 30px; padding: clamp(18px, 2.5vw, 26px);
+    border-radius: 14px; border: 1px solid var(--ink-700);
+    background: var(--ink-850); max-width: var(--textw);
+    font-size: 16px; color: var(--linen-200);
+  }
+  .mental-model em { font-style: italic; color: var(--warp-soft); }
+
+  .walkthrough { margin-top: 44px; display: grid; gap: 22px; }
+  .term-step { display: grid; gap: 12px; }
+  .terminal {
+    background: var(--ink-850); border: 1px solid var(--ink-700);
+    border-radius: 13px; overflow: hidden;
+    transition: border-color 0.4s var(--ease);
+  }
+  .terminal:hover { border-color: rgba(45,212,191,0.28); }
+  .terminal .term-bar {
+    display: flex; align-items: center; gap: 7px;
+    padding: 9px 14px; border-bottom: 1px solid var(--ink-700);
+    background: var(--ink-800);
+  }
+  .terminal .term-bar i {
+    width: 10px; height: 10px; border-radius: 50%; display: inline-block;
+    background: var(--ink-600);
+  }
+  .terminal .term-bar i.lit { background: var(--warp); opacity: 0.7; }
+  .terminal .term-bar span {
+    font-family: var(--mono); font-size: 11px; color: var(--linen-400);
+    letter-spacing: 0.06em; margin-left: 8px;
+  }
+  .terminal pre {
+    margin: 0; padding: 16px 18px;
+    font-family: var(--mono); font-size: 13px; line-height: 1.7;
+    color: var(--linen-200); white-space: pre;
+    overflow-x: auto; -webkit-overflow-scrolling: touch;
+  }
+  .terminal pre .prompt { color: var(--warp); }
+  .terminal pre .cmd { color: var(--linen-50); }
+  .terminal pre .ok { color: var(--weft); }
+  .terminal pre .knot { color: var(--seam); }
+  .terminal pre .dim { color: var(--linen-400); }
+  .terminal pre .lit { color: var(--warp-soft); }
+  .step-cap {
+    font-size: 13.5px; color: var(--linen-400); margin: 0;
+    max-width: var(--textw); display: flex; gap: 9px; align-items: baseline;
+  }
+  .step-cap .git-eq {
+    font-family: var(--mono); font-size: 11px; letter-spacing: 0.04em;
+    color: var(--linen-400); flex: none; padding-top: 1px;
+  }
+  .step-cap em { font-style: italic; color: var(--linen-200); }
+  .step-cap.sell { color: var(--linen-200); }
+
+  table.cmp td.gitcol { color: var(--linen-400); font-family: var(--mono); font-size: 12.5px; }
+  table.cmp td.doescol { color: var(--linen-200); }
+
+  /* ============================ NAME STRIP ============================ */
+  .weave-strip { margin-top: 56px; border-radius: 16px; overflow: hidden; border: 1px solid var(--ink-700); background: var(--ink-850); }
+  .glossary { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 44px; }
+  @media (max-width: 720px) { .glossary { grid-template-columns: 1fr 1fr; } }
+  .gloss { padding: 20px; border-radius: 14px; border: 1px solid var(--ink-700); background: var(--ink-800); transition: border-color 0.3s var(--ease); }
+  .gloss h4 { font-family: var(--mono); font-size: 14px; letter-spacing: 0.05em; margin: 0 0 8px; }
+  .gloss p { margin: 0; font-size: 13.5px; color: var(--linen-400); }
+  .gloss.g-warp h4 { color: var(--warp); } .gloss.g-warp:hover { border-color: var(--warp); }
+  .gloss.g-weft h4 { color: var(--weft); } .gloss.g-weft:hover { border-color: var(--weft); }
+  .gloss.g-weave h4 { color: var(--warp-soft); } .gloss.g-weave:hover { border-color: var(--warp-soft); }
+  .gloss.g-fabric h4 { color: var(--weft-soft); } .gloss.g-fabric:hover { border-color: var(--weft-soft); }
+
+  .final-cta {
+    margin-top: 48px; padding: 36px; border-radius: 16px;
+    border: 1px solid var(--ink-700); background: var(--ink-800);
+    text-align: center;
+  }
+  .final-cta p { font-size: 18px; color: var(--linen-200); max-width: 56ch; margin: 0 auto 28px; }
+
+  /* ============================ FOOTER ============================ */
+  footer {
+    position: relative; padding: 80px 0 60px;
+    border-top: 1px solid var(--ink-700);
+    background: linear-gradient(to bottom, var(--ink-850), #000);
+  }
+  .foot-inner { display: flex; flex-wrap: wrap; gap: 24px; align-items: center; justify-content: space-between; position: relative; z-index: 1; }
+  .foot-links { display: flex; gap: 22px; }
+  .foot-links a { font-family: var(--mono); font-size: 12.5px; color: var(--linen-400); transition: color 0.3s var(--ease); }
+  .foot-links a:hover { color: var(--warp); }
+  .foot-tag { font-family: var(--mono); font-size: 12px; color: var(--linen-400); letter-spacing: 0.04em; }
+  .foot-grid {
+    position: absolute; inset: 0; pointer-events: none;
+    background-image: repeating-linear-gradient(to right, var(--ink-700) 0, var(--ink-700) 1px, transparent 1px, transparent 72px);
+    -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,0.5), transparent);
+    mask-image: linear-gradient(to bottom, rgba(0,0,0,0.5), transparent);
+    opacity: 0.08;
+  }
+
+  /* svg helpers */
+  .draw { stroke-dasharray: 1; stroke-dashoffset: 1; }
+  .glow-amber { filter: drop-shadow(0 0 5px rgba(233,162,59,0.7)); }
+  .glow-weft { filter: drop-shadow(0 0 5px rgba(45,212,191,0.7)); }
+  .glow-seam { filter: drop-shadow(0 0 6px rgba(124,111,240,0.8)); }
+  text.svg-lbl { font-family: var(--mono); font-size: 11px; fill: var(--linen-400); }
+  text.svg-lbl-lit { font-family: var(--mono); font-size: 11px; fill: var(--linen-200); }
+
+  /* ============================ MOBILE ============================ */
+  @media (max-width: 720px) {
+    body { font-size: 16px; }
+    .key-points li { font-size: 15.5px; }
+    .inv-cols { grid-template-columns: 1fr; gap: 18px; }
+    .inv-axis { display: none; }
+    .pull-stmt { max-width: 100%; }
+  }
+
+  /* ============================ REDUCED MOTION ============================ */
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation: none !important;
+      transition-duration: 0.001ms !important;
+    }
+    .reveal { opacity: 1; transform: none; transition: opacity 0.3s ease !important; }
+    .draw { stroke-dashoffset: 0 !important; }
+    .anim-loop { animation: none !important; }
+    .hero-breathe { animation: none !important; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============================ NAV ============================ -->
+<nav class="topnav" id="topnav" aria-label="Primary">
+  <a href="#hero" class="wordmark" aria-label="WARPLINE home">WARPLINE</a>
+  <div class="navlinks">
+    <a href="#inversion" class="quiet">The Inversion</a>
+    <a href="#merge" class="quiet">Weaving</a>
+    <a href="#tapestry" class="quiet">Tapestry</a>
+    <a href="#reckoning" class="quiet">vs Git</a>
+    <a href="#working" class="quiet">The CLI</a>
+    <a href="#weave" class="ghost-btn">Follow the build &rarr;</a>
+  </div>
+</nav>
+
+<!-- ============================ 1 · HERO ============================ -->
+<header class="hero section" id="hero">
+  <div class="hero-canvas" aria-hidden="true">
+    <svg id="hero-svg" viewBox="0 0 1200 800" preserveAspectRatio="xMidYMid slice"></svg>
+  </div>
+  <div class="wrap">
+    <div class="hero-inner">
+      <p class="eyebrow reveal in-view">WARPLINE · A successor to Git</p>
+      <h1 class="hero-h1" id="hero-h1">Version control for meaning,&nbsp;not&nbsp;bytes.</h1>
+      <p class="hero-deck reveal d1">The first version control that knows who changed what, why,&nbsp;and what&nbsp;it&nbsp;cost.</p>
+      <p class="hero-sub reveal d2">Now it reads your actual&nbsp;code. Warpline lifts every function into meaning — so a rename costs&nbsp;nothing, and a call into a deleted one can't&nbsp;hide. Experimental, and being woven&nbsp;now.</p>
+      <div class="cta-row reveal d3">
+        <a href="#problem" class="btn-primary">Read the thesis</a>
+        <a href="#inversion" class="btn-ghost">See it weave &darr;</a>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- ============================ 2 · THE PROBLEM ============================ -->
+<section class="section" id="problem">
+  <div class="warpgrid"></div>
+  <div class="wrap">
+    <p class="eyebrow reveal">02 · The problem</p>
+    <h2 class="pull-stmt reveal d1">Git took a photograph. It froze the&nbsp;bytes.</h2>
+    <p class="sec-deck muted reveal d2" style="margin-top:30px;">
+      Every other version control system still versions the <em class="emph">artifact</em>, not the meaning.
+      It records that characters moved on disk — never what those characters were supposed to mean, who decided it,
+      or what depended on the decision. The text is preserved with perfect fidelity. The intent&nbsp;evaporates.
+    </p>
+  </div>
+</section>
+
+<!-- ============================ 3 · THE INVERSION ============================ -->
+<section class="section section--bleed" id="inversion">
+  <div class="warpgrid"></div>
+  <div class="wrap">
+    <p class="eyebrow reveal">03 · The inversion · the worldview</p>
+    <h2 class="sec-title reveal d1">Bytes were never the&nbsp;point.</h2>
+    <p class="sec-deck reveal d2">
+      Code is a <em class="emph">projection</em> of meaning, not the other way around. Warpline stores the meaning —
+      the WARP — and lets the bytes be re-derived from it. Scroll, and watch the world&nbsp;flip.
+    </p>
+
+    <!-- D1 — signature scroll-flip -->
+    <div class="inversion-stage reveal d3" id="inv-stage" aria-label="Diagram: meaning flips ahead of bytes as you scroll">
+      <div class="inv-cols">
+        <!-- LEFT: code -->
+        <div class="inv-panel inv-left" id="inv-left">
+          <p class="inv-eyebrow" id="inv-left-lbl" style="color:var(--linen-50)">bytes</p>
+          <pre class="code" id="inv-code"><span class="kw">function</span> totalDue(cart) {
+  <span class="kw">return</span> cart.items
+    .map(i =&gt; i.price * i.qty)
+    .reduce((a, b) =&gt; a + b, 0);
+}</pre>
+          <p class="inv-note" id="inv-left-note">the file on disk · authoritative today</p>
+        </div>
+
+        <div class="inv-axis" aria-hidden="true"></div>
+
+        <!-- RIGHT: meaning graph -->
+        <div class="inv-panel inv-right" id="inv-right">
+          <p class="inv-eyebrow" id="inv-right-lbl" style="color:var(--linen-400)">meaning</p>
+          <svg viewBox="0 0 320 230" id="inv-graph" role="img" aria-label="A small graph of meaning nodes with typed edges and hash chips">
+            <!-- edges -->
+            <g stroke="var(--warp)" stroke-width="1.4" fill="none" opacity="0.85" id="inv-edges">
+              <path d="M70,55 L190,55" />
+              <path d="M70,55 L130,130" />
+              <path d="M190,55 L250,130" />
+              <path d="M130,130 L250,130" />
+            </g>
+            <!-- nodes -->
+            <g id="inv-nodes" font-family="var(--mono)">
+              <g transform="translate(70,55)">
+                <circle r="13" fill="var(--ink-800)" stroke="var(--warp)" stroke-width="1.6"/>
+                <text x="0" y="4" text-anchor="middle" font-size="11" fill="var(--warp-soft)">fn</text>
+                <text x="0" y="-22" text-anchor="middle" font-size="9" fill="var(--linen-400)">totalDue</text>
+                <text x="0" y="32" text-anchor="middle" font-size="8" fill="var(--warp-soft)">#a1f0</text>
+              </g>
+              <g transform="translate(190,55)">
+                <circle r="13" fill="var(--ink-800)" stroke="var(--warp)" stroke-width="1.6"/>
+                <text x="0" y="4" text-anchor="middle" font-size="11" fill="var(--warp-soft)">⊟</text>
+                <text x="0" y="-22" text-anchor="middle" font-size="9" fill="var(--linen-400)">Cart</text>
+                <text x="0" y="32" text-anchor="middle" font-size="8" fill="var(--warp-soft)">#9c3b</text>
+              </g>
+              <g transform="translate(130,130)">
+                <circle r="13" fill="var(--ink-800)" stroke="var(--warp)" stroke-width="1.6"/>
+                <text x="0" y="4" text-anchor="middle" font-size="11" fill="var(--warp-soft)">∑</text>
+                <text x="0" y="-22" text-anchor="middle" font-size="9" fill="var(--linen-400)">price</text>
+                <text x="0" y="32" text-anchor="middle" font-size="8" fill="var(--warp-soft)">#4e71</text>
+              </g>
+              <g transform="translate(250,130)">
+                <circle r="13" fill="var(--ink-800)" stroke="var(--warp)" stroke-width="1.6"/>
+                <text x="0" y="4" text-anchor="middle" font-size="11" fill="var(--warp-soft)">¤</text>
+                <text x="0" y="-22" text-anchor="middle" font-size="9" fill="var(--linen-400)">Money</text>
+                <text x="0" y="32" text-anchor="middle" font-size="8" fill="var(--warp-soft)">#22da</text>
+              </g>
+            </g>
+          </svg>
+          <p class="inv-note" id="inv-right-note">kind + contract + typed edges · ghosted</p>
+        </div>
+      </div>
+
+      <!-- asymmetric arrows + identity badge -->
+      <svg viewBox="0 0 1000 90" style="margin-top:18px;width:100%" aria-hidden="true">
+        <defs>
+          <marker id="arr-amber" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--warp)"/>
+          </marker>
+          <marker id="arr-weft" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--weft)"/>
+          </marker>
+        </defs>
+        <path d="M280,20 L720,20" stroke="var(--warp)" stroke-width="1.6" marker-end="url(#arr-amber)" opacity="0.9"/>
+        <text x="500" y="14" text-anchor="middle" class="svg-lbl-lit" fill="var(--warp-soft)">WEAVE ↓  (meaning → code · roadmap)</text>
+        <path d="M720,62 L280,62" stroke="var(--weft)" stroke-width="1.6" marker-end="url(#arr-weft)" opacity="0.9"/>
+        <text x="500" y="80" text-anchor="middle" class="svg-lbl-lit" fill="var(--weft)">ABSORB ↑  (edits → semantic delta, lossless)</text>
+      </svg>
+      <div style="text-align:center;margin-top:8px;">
+        <span class="chip hash" style="font-size:13px;padding:7px 16px;">absorb( weave( W ) ) &nbsp;≡&nbsp; W</span>
+      </div>
+    </div>
+
+    <div class="term-row">
+      <div class="term warp reveal">
+        <h4>WARP</h4>
+        <p>The store of meaning. The source of truth — kind, contract, and typed edges, content-addressed.</p>
+      </div>
+      <div class="term warp reveal d1">
+        <h4>WEAVE</h4>
+        <p>Project the warp back into code — the roadmap direction. Today, bytes are materialized from Warpline's own content-addressed store.</p>
+      </div>
+      <div class="term weft reveal d2">
+        <h4>ABSORB</h4>
+        <p>Re-ingest hand edits as a semantic delta — losslessly, back into the warp.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 4 · THE ATOM ============================ -->
+<section class="section" id="atom">
+  <div class="warpgrid"></div>
+  <div class="wrap">
+    <p class="eyebrow reveal">04 · The atom of change</p>
+    <h2 class="sec-title reveal d1">Every change carries its own&nbsp;conscience.</h2>
+    <p class="sec-deck reveal d2">A Git commit makes no claim about consequences. A Warpline <em class="emph">justification</em> is the atom — and it can be checked.</p>
+
+    <div class="diagram reveal d3">
+      <div class="two-up">
+        <!-- git commit -->
+        <div class="card" style="opacity:0.92">
+          <p class="lbl">Git commit · thin</p>
+          <pre class="code">commit 8f3c0a2
+Author:  "j. rivera" &lt;j@x&gt;
+Date:    Tue 14:02
+
+  fix totals</pre>
+          <hr style="border:none;border-top:1px solid var(--ink-700);margin:18px 0"/>
+          <p style="font-size:13px;color:var(--linen-400);margin:0">
+            <strong style="color:var(--linen-200)">byte-diff</strong> · <strong style="color:var(--linen-200)">author string</strong> · <strong style="color:var(--linen-200)">free-text message</strong>
+          </p>
+          <p style="font-size:13px;color:var(--linen-400);margin:14px 0 0;font-style:italic">Makes no claim about consequences.</p>
+        </div>
+
+        <!-- justification -->
+        <div class="card" style="box-shadow:0 0 0 1px rgba(233,162,59,0.25), 0 0 34px rgba(233,162,59,0.08)">
+          <p class="lbl" style="color:var(--warp)">Warpline justification · rich</p>
+          <div style="display:grid;gap:13px;font-family:var(--mono);font-size:13px;">
+            <div><span class="chip">actor</span> &nbsp; agent:rune#7c2 · sealed into the pickId</div>
+            <div><span class="chip">intent</span> &nbsp; correct rounding on multi-currency carts</div>
+            <div><span class="chip">semantic-delta</span> &nbsp; totalDue: ℤ → Money(ccy)</div>
+            <div>
+              <span class="chip">ripple-closure</span>
+              <svg viewBox="0 0 130 34" style="display:inline-block;vertical-align:middle;width:130px;height:34px" aria-label="radiating thread fan, computed by the store">
+                <g stroke="var(--warp)" stroke-width="1.1" fill="none" opacity="0.8">
+                  <path d="M8,17 L120,5"/><path d="M8,17 L120,13"/><path d="M8,17 L120,21"/><path d="M8,17 L120,29"/>
+                </g>
+                <circle cx="8" cy="17" r="3.5" fill="var(--warp)"/>
+              </svg>
+              <span style="font-size:11px;color:var(--linen-400)">🔒 computed by the store, not claimed</span>
+            </div>
+            <div><span class="chip weft">witness</span> &nbsp; hash-chained ✓ &nbsp;<span style="color:var(--weft)">tamper-evident</span> <span style="font-size:11px;color:var(--linen-400)">(signatures: roadmap)</span></div>
+          </div>
+        </div>
+      </div>
+      <p class="banner">A change is malformed if it lies about what it&nbsp;touches.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 5 · STRUCTURAL IDENTITY ============================ -->
+<section class="section section--bleed" id="identity">
+  <div class="warpgrid"></div>
+  <div class="wrap">
+    <p class="eyebrow reveal">05 · Structural identity</p>
+    <h2 class="sec-title reveal d1">A rename is not a&nbsp;conflict. It's nothing&nbsp;at&nbsp;all.</h2>
+    <p class="sec-deck reveal d2">When meaning is the identity, a label change moves nothing. The <em class="emph">hash</em> moves only when the meaning does.</p>
+
+    <div class="diagram reveal d3">
+      <div class="two-up">
+        <!-- git panel -->
+        <div class="card">
+          <p class="lbl">Git · text-diff</p>
+          <pre class="code"><span class="rem">- function getUser(id) { … }</span>
+<span class="add">+ function fetchUser(id) { … }</span>
+
+callsites flagged:
+  · checkout.ts:42
+  · profile.ts:11
+  · admin.ts:88</pre>
+          <p style="font-size:13px;color:var(--linen-400);margin:14px 0 0;font-style:italic">3 files dirtied · review required.</p>
+        </div>
+
+        <!-- warpline panel -->
+        <div class="card" style="border-color:rgba(45,212,191,0.25)">
+          <p class="lbl" style="color:var(--weft)">Warpline · structural identity</p>
+          <div style="font-family:var(--mono);font-size:13px;line-height:2;">
+            <div>label: <span style="color:var(--linen-400);text-decoration:line-through">getUser</span> → <span style="color:var(--weft)">fetchUser</span></div>
+            <div>hash(kind + contract + edges):</div>
+            <div style="margin:6px 0">
+              <span class="chip hash" id="id-hash-a" style="font-size:13px">#b30f-77ac-e1</span>
+              <span style="color:var(--linen-400)">→</span>
+              <span class="chip hash" id="id-hash-b" style="font-size:13px">#b30f-77ac-e1</span>
+            </div>
+            <div style="color:var(--linen-400);font-size:11.5px">edges addressed by target-hash → stay attached</div>
+            <div style="margin-top:12px">diff counter: <span style="color:var(--weft);font-size:16px;font-weight:600">0</span></div>
+          </div>
+        </div>
+      </div>
+      <p class="banner">The hash moves iff the meaning&nbsp;moves.</p>
+    </div>
+    <p class="sec-deck reveal" style="margin-top:44px"><strong style="font-family:var(--display);font-style:italic;color:var(--weft-soft)">Down to the function.</strong> Warpline doesn't stop at components — it lifts every TypeScript function, method, and class into the same&nbsp;WARP. A function's identity is its structure and written types, never its name or its&nbsp;formatting. Rename <code>getUser</code>&nbsp;→&nbsp;<code>fetchUser</code>, move it to another file, reformat it: same essence, zero&nbsp;delta. Change what it <em class="emph">does</em> — one operator, one missing <code>await</code> — and the essence&nbsp;moves. Code becomes meaning the same way symbols do, and the two share one&nbsp;fabric.</p>
+  </div>
+</section>
+
+<!-- ============================ 6 · MERGE = WEAVING ============================ -->
+<section class="section section--bleed-deep" id="merge">
+  <div class="warpgrid"></div>
+  <div class="wrap">
+    <p class="eyebrow reveal">06 · Merge is weaving</p>
+    <h2 class="sec-title reveal d1">Many branches. One&nbsp;fabric.</h2>
+    <p class="sec-deck reveal d2">
+      Vertical warp threads are symbols; each branch is a horizontal weft thread crossing them.
+      Disjoint or commutative changes <em class="emph-weft">weave</em> clean. Only true incompatibility blooms a&nbsp;decision.
+    </p>
+
+    <!-- D4 — weaving animation -->
+    <div class="diagram reveal d3" id="merge-diagram">
+      <svg id="merge-svg" viewBox="0 0 1000 420" role="img" aria-label="Branches weave into one fabric; one incompatible pair blooms a violet decision node">
+        <!-- warp threads (vertical symbols) -->
+        <g id="warp-threads" stroke="var(--warp)" stroke-width="1.3" opacity="0.55">
+          <line x1="160" y1="40" x2="160" y2="380" class="draw"/>
+          <line x1="320" y1="40" x2="320" y2="380" class="draw"/>
+          <line x1="480" y1="40" x2="480" y2="380" class="draw"/>
+          <line x1="640" y1="40" x2="640" y2="380" class="draw"/>
+          <line x1="800" y1="40" x2="800" y2="380" class="draw"/>
+        </g>
+        <g font-family="var(--mono)" font-size="10" fill="var(--linen-400)">
+          <text x="160" y="30" text-anchor="middle">User</text>
+          <text x="320" y="30" text-anchor="middle">Cart</text>
+          <text x="480" y="30" text-anchor="middle">Money</text>
+          <text x="640" y="30" text-anchor="middle">Order</text>
+          <text x="800" y="30" text-anchor="middle">Tax</text>
+        </g>
+        <!-- weft threads (branches) -->
+        <g id="weft-threads" fill="none" stroke-width="2">
+          <line x1="100" y1="110" x2="900" y2="110" stroke="var(--weft)" class="draw weft-anim" opacity="0.8"/>
+          <line x1="100" y1="200" x2="900" y2="200" stroke="var(--weft-soft)" class="draw weft-anim" opacity="0.7"/>
+          <line x1="100" y1="300" x2="900" y2="300" stroke="var(--weft)" class="draw weft-anim" opacity="0.7"/>
+        </g>
+        <g font-family="var(--mono)" font-size="10" fill="var(--linen-400)">
+          <text x="90" y="113" text-anchor="end">feat/a</text>
+          <text x="90" y="203" text-anchor="end">feat/b</text>
+          <text x="90" y="303" text-anchor="end">feat/c</text>
+        </g>
+        <!-- crossing nodes that ignite -->
+        <g id="cross-nodes">
+          <circle cx="160" cy="110" r="3.5" fill="var(--weft)" opacity="0"/>
+          <circle cx="480" cy="200" r="3.5" fill="var(--weft)" opacity="0"/>
+          <circle cx="640" cy="300" r="3.5" fill="var(--weft)" opacity="0"/>
+          <circle cx="800" cy="110" r="3.5" fill="var(--weft)" opacity="0"/>
+        </g>
+        <!-- clean fabric fill region -->
+        <rect id="fabric-fill" x="100" y="90" width="800" height="230" fill="var(--weft)" opacity="0" rx="6"/>
+        <!-- conflict: both feat/a and feat/c bind Money -->
+        <g id="knot" opacity="0">
+          <circle cx="480" cy="300" r="9" fill="var(--seam)" class="glow-seam"/>
+          <circle cx="480" cy="110" r="9" fill="var(--seam)" class="glow-seam"/>
+          <line x1="480" y1="110" x2="480" y2="300" stroke="var(--seam)" stroke-width="2.4" class="glow-seam"/>
+          <text x="500" y="208" font-family="var(--mono)" font-size="11" fill="var(--seam)">decision</text>
+        </g>
+        <!-- dangling reference callout -->
+        <g id="dangling" opacity="0" font-family="var(--mono)" font-size="9.5" fill="var(--linen-400)">
+          <path d="M640,300 L720,355" stroke="var(--linen-400)" stroke-width="1" stroke-dasharray="3 3" fill="none"/>
+          <text x="724" y="358">dangling reference a text-merge would miss</text>
+        </g>
+      </svg>
+
+      <!-- decision card that blooms -->
+      <div id="decision-card" style="margin-top:18px;opacity:0;transform:translateY(10px);transition:opacity .6s var(--ease),transform .6s var(--ease)">
+        <div class="card" style="border-color:rgba(124,111,240,0.4);box-shadow:0 0 30px rgba(124,111,240,0.1)">
+          <p class="lbl" style="color:var(--seam)">⬡ Recorded decision · not an error · warp node: Money</p>
+          <div class="two-up" style="gap:18px">
+            <div>
+              <p style="font-family:var(--mono);font-size:12px;color:var(--seam);margin:0 0 6px">SIDE A · feat/a</p>
+              <p style="font-size:13.5px;margin:0;color:var(--linen-200)">Money is minor-units integer. Rationale: avoids float drift.</p>
+              <p style="font-size:11.5px;color:var(--linen-400);margin:8px 0 0">ripple blast radius: 11 symbols</p>
+            </div>
+            <div>
+              <p style="font-family:var(--mono);font-size:12px;color:var(--seam);margin:0 0 6px">SIDE C · feat/c</p>
+              <p style="font-size:13.5px;margin:0;color:var(--linen-200)">Money carries currency tag. Rationale: multi-ccy correctness.</p>
+              <p style="font-size:11.5px;color:var(--linen-400);margin:8px 0 0">ripple blast radius: 23 symbols</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:20px;text-align:center">
+        <span class="chip weft" style="font-size:12.5px;padding:7px 14px">N non-intersecting branches → one weave, zero human merge labor</span>
+      </div>
+    </div>
+
+    <!-- the code-level divergence proof — real, backed by a passing test -->
+    <div class="reveal" style="margin-top:32px">
+      <div class="card" style="border-color:rgba(124,111,240,0.4);box-shadow:0 0 30px rgba(124,111,240,0.1)">
+        <p class="lbl" style="color:var(--seam)">⬡ The divergence proof · real code · run on this&nbsp;repo</p>
+        <div style="font-family:var(--mono);font-size:13px;line-height:1.95;color:var(--linen-200)">
+          <div>Two branches touch one <span style="color:var(--linen-400)">.ts</span>&nbsp;file.</div>
+          <div>Branch <span style="color:var(--warp)">A</span> renames <span style="text-decoration:line-through;color:var(--linen-400)">getUser</span>&nbsp;→&nbsp;<span style="color:var(--warp)">fetchUser</span> &amp; deletes the old&nbsp;name.</div>
+          <div>Branch <span style="color:var(--weft)">B</span> adds a new call to <span style="color:var(--weft)">getUser()</span>.</div>
+          <div style="margin-top:14px">git merge-tree:&nbsp;&nbsp;<span style="color:#34D8A0;font-weight:600">CLEAN&nbsp;✓</span>&nbsp;&nbsp;— 0 conflicts. It would&nbsp;ship.</div>
+          <div>warpline oracle:&nbsp;<span style="color:var(--seam);font-weight:600">DIVERGENT</span>&nbsp;— a call into a function that no longer&nbsp;exists.</div>
+        </div>
+        <p style="font-size:13.5px;color:var(--linen-200);margin:16px 0 0;font-style:italic">git merged the bytes. Warpline saw the break in the&nbsp;meaning.</p>
+        <p style="font-family:var(--mono);font-size:12px;color:var(--seam);margin:8px 0 0">verdict: DIVERGENT&nbsp;·&nbsp;divergeMeaningOnly:&nbsp;1</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 7 · THE TAPESTRY ============================ -->
+<section class="section" id="tapestry">
+  <div class="warpgrid"></div>
+  <div class="wrap">
+    <p class="eyebrow reveal">07 · The Tapestry</p>
+    <h2 class="sec-title reveal d1">A history you can read at a&nbsp;glance.</h2>
+    <p class="sec-deck reveal d2">
+      Warp threads are your symbols — stable vertical lanes whose identity <em class="emph">is</em> meaning,
+      so a rename just slides within the same lane. Weft are branches; a <em class="emph-weft">pick</em> is a
+      change at a crossing; a <em class="emph-seam">knot</em> is a decision. The bright bottom edge is the
+      <em class="emph-weft">selvage</em> — now — and the solid cloth up top is consolidated fabric. The more
+      branches you run in parallel, the more the weave clarifies instead of tangling — the opposite of
+      <span class="chip" style="font-size:11px">git log --graph</span>.
+    </p>
+
+    <!-- D-tapestry — the woven-history view -->
+    <div class="diagram reveal d3" id="tapestry-diagram">
+      <svg id="tapestry-svg" viewBox="0 0 1000 460" role="img" aria-label="A woven history: five vertical warp symbol-lanes crossed by four horizontal branch wefts; the money lane glows hot and resolves into a violet decision knot; the bright bottom edge is the live selvage; the top region reads as solid consolidated fabric sealed by a release bolt.">
+        <defs>
+          <linearGradient id="tap-fabric" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="var(--warp)" stop-opacity="0.10"/><stop offset="1" stop-color="var(--weft)" stop-opacity="0.10"/></linearGradient>
+          <radialGradient id="tap-heat" cx="0.5" cy="0.5" r="0.5"><stop offset="0" stop-color="var(--warp)" stop-opacity="0.28"/><stop offset="1" stop-color="var(--warp)" stop-opacity="0"/></radialGradient>
+        </defs>
+        <rect id="tap-fabric-fill" x="150" y="46" width="700" height="120" fill="url(#tap-fabric)" rx="6" opacity="0"/>
+        <g id="tap-bolt" opacity="0"><line x1="120" y1="172" x2="880" y2="172" stroke="var(--linen-400)" stroke-width="1" opacity="0.7"/><path d="M120,172 l-8,-5 l0,10 z" fill="var(--linen-400)"/><text x="888" y="176" font-family="var(--mono)" font-size="11" fill="var(--linen-400)">BOLT · v2.1.0</text></g>
+        <g id="tap-warp" fill="none">
+          <line x1="220" y1="50" x2="220" y2="430" stroke="var(--warp)" stroke-width="1.1" opacity="0.42" class="draw"/>
+          <line x1="360" y1="50" x2="360" y2="430" stroke="var(--warp)" stroke-width="1.1" opacity="0.42" class="draw"/>
+          <line x1="500" y1="50" x2="500" y2="430" stroke="var(--warp)" stroke-width="1.8" opacity="0.42" class="draw glow-amber" id="tap-hotwarp"/>
+          <line x1="640" y1="50" x2="640" y2="430" stroke="var(--warp)" stroke-width="1.1" opacity="0.42" class="draw"/>
+          <line x1="780" y1="50" x2="780" y2="430" stroke="var(--warp)" stroke-width="1.1" opacity="0.42" class="draw"/>
+        </g>
+        <rect id="tap-halo" x="460" y="50" width="80" height="380" fill="url(#tap-heat)" opacity="0"/>
+        <g font-family="var(--mono)" font-size="11">
+          <text x="220" y="38" text-anchor="middle" fill="var(--linen-400)">#user</text>
+          <text x="360" y="38" text-anchor="middle" fill="var(--linen-400)">#cart</text>
+          <text x="500" y="38" text-anchor="middle" fill="var(--warp-soft)">#money ◉3</text>
+          <text x="640" y="38" text-anchor="middle" fill="var(--linen-400)">#order</text>
+          <text x="780" y="38" text-anchor="middle" fill="var(--linen-400)">#tax</text>
+        </g>
+        <g id="tap-weft" fill="none" stroke-width="2">
+          <line x1="160" y1="100" x2="840" y2="100" stroke="var(--weft)" opacity="0.30" class="draw"/>
+          <line x1="160" y1="140" x2="840" y2="140" stroke="var(--weft)" opacity="0.30" class="draw"/>
+          <line x1="160" y1="250" x2="840" y2="250" stroke="var(--weft)" opacity="0.80" class="draw" id="tap-weft-c"/>
+          <line x1="160" y1="320" x2="840" y2="320" stroke="var(--weft-soft)" opacity="0.80" class="draw" id="tap-weft-d"/>
+        </g>
+        <g font-family="var(--mono)" font-size="10" fill="var(--linen-400)">
+          <text x="150" y="103" text-anchor="end" opacity="0.5">main</text>
+          <text x="150" y="143" text-anchor="end" opacity="0.5">feat/checkout</text>
+          <text x="150" y="253" text-anchor="end">feat/pricing</text>
+          <text x="150" y="323" text-anchor="end">feat/multi-ccy</text>
+        </g>
+        <g id="tap-picks">
+          <circle cx="220" cy="100" r="3" fill="var(--weft)" opacity="0"/>
+          <circle cx="360" cy="140" r="3" fill="var(--weft)" opacity="0"/>
+          <circle cx="640" cy="140" r="3" fill="var(--weft)" opacity="0"/>
+          <circle cx="360" cy="250" r="3" fill="var(--weft)" opacity="0"/>
+          <circle cx="780" cy="250" r="3" fill="var(--weft)" opacity="0"/>
+          <circle cx="500" cy="250" r="3.5" fill="var(--weft)" stroke="var(--warp)" stroke-width="1" opacity="0" id="tap-pick-c"/>
+          <circle cx="500" cy="320" r="3.5" fill="var(--weft-soft)" stroke="var(--warp)" stroke-width="1" opacity="0" id="tap-pick-d"/>
+          <circle cx="640" cy="320" r="3" fill="var(--weft-soft)" opacity="0"/>
+        </g>
+        <g id="tap-knot" opacity="0">
+          <circle cx="500" cy="250" r="8" fill="var(--seam)" class="glow-seam"/>
+          <circle cx="500" cy="320" r="8" fill="var(--seam)" class="glow-seam"/>
+          <line x1="500" y1="250" x2="500" y2="320" stroke="var(--seam)" stroke-width="2.4" class="glow-seam"/>
+          <text x="516" y="289" font-family="var(--mono)" font-size="11" fill="var(--seam)">knot · decision</text>
+        </g>
+        <g id="tap-selvage" opacity="0">
+          <line x1="150" y1="385" x2="850" y2="385" stroke="var(--weft-soft)" stroke-width="2.5" class="glow-weft" stroke-dasharray="10 6" id="tap-selvage-line"/>
+          <text x="858" y="389" font-family="var(--mono)" font-size="10" fill="var(--weft-soft)">selvage · live edge</text>
+        </g>
+      </svg>
+      <p class="diagram-cap">Warp = meaning · Weft = branches · the hot lane glows before it knots · the bright edge is now</p>
+    </div>
+
+    <!-- capability cards -->
+    <div class="cap-row">
+      <div class="card cap-card reveal">
+        <h4>Follow a thread</h4>
+        <p>Click a warp — a symbol — and its whole lifeline lights up across every branch, with <em class="emph">who</em> decided each change, unbroken across renames. The query git can't answer: a symbol's whole&nbsp;life.</p>
+        <p class="cap-cmd">warpline lifeline ^auth</p>
+      </div>
+      <div class="card cap-card reveal d1">
+        <h4>The heatmap</h4>
+        <p>Warp threads glow by how many open branches contend for them. Cold = will auto-consolidate; hot = a decision is coming. Steer your fleet of branches away from collisions <em class="emph-weft">before</em> merge-day, not&nbsp;after.</p>
+        <p class="cap-cmd">warpline heatmap</p>
+      </div>
+      <div class="card cap-card reveal d2">
+        <h4>Preview the weave</h4>
+        <p>Select branches and forecast the result with zero checkout: how many auto-clean, which knots, any dangling references — and the lowest-knot order to weave them. Merge-day becomes a forecast you read&nbsp;first.</p>
+        <p class="cap-cmd">warpline weave --preview</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 8 · ACCOUNTABILITY LOOP ============================ -->
+<section class="section section--bleed" id="loop">
+  <div class="warpgrid"></div>
+  <div class="wrap">
+    <p class="eyebrow reveal">08 · The accountability loop</p>
+    <h2 class="sec-title reveal d1">Trust is earned, scoped, and&nbsp;it&nbsp;compounds.</h2>
+    <p class="sec-deck reveal d2">
+      Field outcomes flow back to the change, the author, and a domain-scoped trust vector — which
+      sets how hard the <em class="emph-seam">next</em> change gets reviewed. The loop&nbsp;closes.
+    </p>
+
+    <!-- D5 — closed accountability circle -->
+    <div class="loop-stage reveal d3">
+      <svg id="loop-svg" viewBox="0 0 620 560" role="img" aria-label="A closed directed cycle of four nodes: change, field outcome, attribution, trust update, returning to a harder-reviewed next change">
+        <defs>
+          <marker id="loop-arr" viewBox="0 0 10 10" refX="6" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--warp)"/>
+          </marker>
+        </defs>
+        <!-- the ring path -->
+        <circle cx="310" cy="280" r="190" fill="none" stroke="var(--ink-700)" stroke-width="1" opacity="0.6"/>
+        <circle id="loop-track" cx="310" cy="280" r="190" fill="none" stroke="var(--warp)" stroke-width="1.6" opacity="0.45"
+                stroke-dasharray="6 10"/>
+        <!-- directed arcs between nodes -->
+        <g fill="none" stroke="var(--warp)" stroke-width="1.6" opacity="0.8">
+          <path d="M395,118 A190,190 0 0,1 500,280" marker-end="url(#loop-arr)"/>
+          <path d="M500,280 A190,190 0 0,1 395,442" marker-end="url(#loop-arr)"/>
+          <path d="M225,442 A190,190 0 0,1 120,280" marker-end="url(#loop-arr)"/>
+          <path d="M120,280 A190,190 0 0,1 225,118" marker-end="url(#loop-arr)"/>
+        </g>
+        <!-- traveling pulse -->
+        <circle id="loop-pulse" r="5" fill="var(--warp-soft)" class="glow-amber" cx="310" cy="90"/>
+
+        <!-- nodes -->
+        <g font-family="var(--mono)">
+          <!-- 1 change (top) -->
+          <g transform="translate(310,90)">
+            <circle r="44" fill="var(--ink-800)" stroke="var(--warp)" stroke-width="1.6"/>
+            <text y="-2" text-anchor="middle" font-size="12" fill="var(--linen-50)">①</text>
+            <text y="14" text-anchor="middle" font-size="11" fill="var(--linen-200)">CHANGE</text>
+          </g>
+          <!-- 2 field outcome (right) -->
+          <g transform="translate(500,280)">
+            <circle r="44" fill="var(--ink-800)" stroke="var(--weft)" stroke-width="1.6"/>
+            <text y="-6" text-anchor="middle" font-size="12" fill="var(--linen-50)">②</text>
+            <text y="9" text-anchor="middle" font-size="10" fill="var(--linen-200)">FIELD</text>
+            <text y="21" text-anchor="middle" font-size="10" fill="var(--linen-200)">OUTCOME</text>
+          </g>
+          <!-- 3 attribution (bottom) -->
+          <g transform="translate(310,470)">
+            <circle r="44" fill="var(--ink-800)" stroke="var(--weft)" stroke-width="1.6"/>
+            <text y="-2" text-anchor="middle" font-size="12" fill="var(--linen-50)">③</text>
+            <text y="14" text-anchor="middle" font-size="10" fill="var(--linen-200)">ATTRIBUTION</text>
+          </g>
+          <!-- 4 trust update (left) -->
+          <g transform="translate(120,280)">
+            <circle r="44" fill="var(--ink-800)" stroke="var(--warp)" stroke-width="1.6"/>
+            <text y="-6" text-anchor="middle" font-size="12" fill="var(--linen-50)">④</text>
+            <text y="9" text-anchor="middle" font-size="10" fill="var(--linen-200)">TRUST</text>
+            <text y="21" text-anchor="middle" font-size="10" fill="var(--linen-200)">UPDATE</text>
+          </g>
+        </g>
+
+        <!-- annotations -->
+        <text x="500" y="150" text-anchor="middle" class="svg-lbl">breaks / holds</text>
+        <text x="310" y="540" text-anchor="middle" class="svg-lbl">scored vs predicted ripple · honest uncertainty rewarded</text>
+        <text x="84" y="200" text-anchor="middle" class="svg-lbl">domain-scoped vector</text>
+        <text x="84" y="214" text-anchor="middle" class="svg-lbl">only relevant domain moves</text>
+        <!-- closing arc label (top-left, bold) -->
+        <text x="160" y="120" text-anchor="middle" font-family="var(--mono)" font-size="11" fill="var(--warp-soft)" font-weight="600">SCRUTINY =</text>
+        <text x="172" y="136" text-anchor="middle" font-family="var(--mono)" font-size="11" fill="var(--warp-soft)" font-weight="600">fragility × (1 − trust)</text>
+      </svg>
+    </div>
+    <p class="loop-center reveal">Field outcome → author trust → future scrutiny. No VCS has closed this&nbsp;loop.</p>
+  </div>
+</section>
+
+<!-- ============================ 9 · NEW CATEGORY + PROVENANCE ============================ -->
+<section class="section" id="category">
+  <div class="warpgrid"></div>
+  <div class="wrap">
+    <p class="eyebrow reveal">09 · A new category</p>
+    <h2 class="sec-title reveal d1">Not a better git. Not a Unison clone. A new&nbsp;category.</h2>
+
+    <ul class="key-points reveal d2">
+      <li>Not just a faster git — a <em class="emph">different atom</em> of change. Justifications, not snapshots.</li>
+      <li>Not Unison — Unison invented its own language. Warpline hosts real <em class="emph-weft">polyglot</em> code via dual-write. Keep your stack.</li>
+      <li>Tamper-evident Merkle DAG over <em class="emph">meaning</em>, not bytes. Web-of-trust, no central authority, verifiable offline.</li>
+    </ul>
+
+    <!-- D6 — custody chain ribbon -->
+    <div class="diagram reveal d3">
+      <p class="lbl" style="text-align:center;margin-bottom:20px">Custody chain · D6</p>
+      <svg viewBox="0 0 1000 130" role="img" aria-label="Custody chain ribbon: human operator key to runtime model to agent archetype and notebook hash, sealed">
+        <defs>
+          <linearGradient id="ribbon" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%" stop-color="var(--warp)"/>
+            <stop offset="100%" stop-color="var(--weft)"/>
+          </linearGradient>
+        </defs>
+        <line x1="120" y1="65" x2="880" y2="65" stroke="url(#ribbon)" stroke-width="2.4" class="draw" id="custody-line"/>
+        <g font-family="var(--mono)" font-size="11" fill="var(--linen-200)" text-anchor="middle">
+          <g transform="translate(180,65)">
+            <circle r="30" fill="var(--ink-800)" stroke="var(--warp)" stroke-width="1.6"/>
+            <text y="3">🔑</text><text y="46" fill="var(--linen-400)" font-size="10">operator key</text>
+          </g>
+          <g transform="translate(420,65)">
+            <circle r="30" fill="var(--ink-800)" stroke="var(--warp-soft)" stroke-width="1.6"/>
+            <text y="4" font-size="13">⚙</text><text y="46" fill="var(--linen-400)" font-size="10">runtime / model</text>
+          </g>
+          <g transform="translate(660,65)">
+            <circle r="30" fill="var(--ink-800)" stroke="var(--weft)" stroke-width="1.6"/>
+            <text y="4" font-size="13">◈</text><text y="46" fill="var(--linen-400)" font-size="10">archetype</text>
+          </g>
+          <g transform="translate(820,65)">
+            <circle r="30" fill="var(--ink-800)" stroke="var(--weft-soft)" stroke-width="1.6"/>
+            <text y="4" font-size="11">#h</text><text y="46" fill="var(--linen-400)" font-size="10">notebook-hash</text>
+          </g>
+        </g>
+      </svg>
+      <p class="banner" style="font-size:clamp(15px,2vw,19px)">🔒 agent identity = hash of its training (unforgeable)</p>
+    </div>
+
+    <!-- D7 — comparison table -->
+    <div class="cmp-scroll reveal d4">
+      <table class="cmp">
+        <thead>
+          <tr>
+            <th>Axis</th><th>Git</th><th>Unison</th><th class="warpline-col">Warpline</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td class="axis">Atom of change</td>
+            <td class="git">Byte-snapshot (commit)</td>
+            <td class="uni">Hashed AST definition</td>
+            <td class="warpline">Justification (intent + semantic-delta + computed ripple + witness)</td>
+          </tr>
+          <tr>
+            <td class="axis">Identity hash</td>
+            <td class="git">File / tree bytes</td>
+            <td class="uni">Definition AST</td>
+            <td class="warpline">Symbol meaning (kind + contract + edges-by-target-hash)</td>
+          </tr>
+          <tr>
+            <td class="axis">Renames / moves</td>
+            <td class="git">Delete + add (conflict-prone)</td>
+            <td class="uni">Free</td>
+            <td class="warpline">Free (hash moves iff meaning moves)</td>
+          </tr>
+          <tr>
+            <td class="axis">Language model</td>
+            <td class="git">Any (just bytes)</td>
+            <td class="uni">Its own language (must adopt)</td>
+            <td class="warpline">Any polyglot, via dual-write to real compilers</td>
+          </tr>
+          <tr>
+            <td class="axis">Merge</td>
+            <td class="git">Line-of-text 3-way</td>
+            <td class="uni">Definition-level</td>
+            <td class="warpline">Graph op: commuting deltas auto-weave; true conflict → recorded decision + ripple</td>
+          </tr>
+          <tr>
+            <td class="axis">Semantic conflict detection</td>
+            <td class="git">None (text-blind)</td>
+            <td class="uni">Partial</td>
+            <td class="warpline">Ripple-based (catches dangling / contract breaks)</td>
+          </tr>
+          <tr class="glow">
+            <td class="axis">Accountability (who / why / trust)</td>
+            <td class="git">Author string + message</td>
+            <td class="uni">Not a focus</td>
+            <td class="warpline">Native: identity + intent + provenance + domain-scoped trust</td>
+          </tr>
+          <tr class="glow">
+            <td class="axis">Field-outcome → future-scrutiny loop</td>
+            <td class="git">✗</td>
+            <td class="uni">✗</td>
+            <td class="warpline">✓ (category-defining)</td>
+          </tr>
+          <tr>
+            <td class="axis">Integrity</td>
+            <td class="git">Merkle DAG over bytes ✓</td>
+            <td class="uni">Content-addressed ✓</td>
+            <td class="warpline">Merkle DAG over meaning</td>
+          </tr>
+          <tr>
+            <td class="axis">Adoption risk</td>
+            <td class="git">n/a (incumbent)</td>
+            <td class="uni">High (new language)</td>
+            <td class="warpline">Low (shadows git; zero data-loss)</td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="cmp-foot reveal">Unison proved you can hash meaning. Warpline's bet is different: keep your language, and make accountability the&nbsp;axis.</p>
+  </div>
+</section>
+
+<!-- ============================ 10 · THE RECKONING WITH GIT ============================ -->
+<section class="section section--bleed-deep" id="reckoning">
+  <div class="warpgrid"></div>
+  <div class="wrap">
+    <p class="eyebrow reveal">10 · The reckoning with git</p>
+    <h2 class="sec-title reveal d1">Git is bulletproof. So is&nbsp;Warpline — it just versions the right&nbsp;thing.</h2>
+    <p class="sec-deck reveal d2">
+      A replacement has to clear the bar git already set. So first we honor what git does
+      <em class="emph">brilliantly</em> — then we name what it can't see, and prove Warpline keeps every
+      guarantee while it gains&nbsp;eyes.
+    </p>
+
+    <!-- (a) what git does brilliantly -->
+    <h3 class="sec-title reveal d2" style="font-size:clamp(22px,2.6vw,30px);margin:64px 0 0">What git does — and does&nbsp;brilliantly.</h3>
+    <ul class="honor-list reveal d2">
+      <li>A content-addressed <strong style="color:var(--linen-50)">Merkle DAG</strong> that is tamper-evident — history can't silently corrupt.</li>
+      <li>Fully <strong style="color:var(--linen-50)">distributed</strong>, with no central authority.</li>
+      <li><strong style="color:var(--linen-50)">Durable and offline-verifiable</strong> — every clone can check its own integrity.</li>
+      <li><strong style="color:var(--linen-50)">Universal</strong> — it versions any bytes, in any language.</li>
+      <li><strong style="color:var(--linen-50)">Battle-tested</strong> over 20 years, on nearly every codebase alive.</li>
+    </ul>
+    <p class="banner reveal d2" style="margin-top:30px;font-size:clamp(16px,2.2vw,22px)">These are not features to beat. They are guarantees to&nbsp;keep.</p>
+
+    <!-- (b)+(c) parity grid: guarantees we keep · gaps we close -->
+    <div class="parity reveal d3">
+      <!-- LEFT: guarantees we keep -->
+      <div class="parity-keep">
+        <h3 class="parity-h" style="color:var(--weft)">Guarantees we keep</h3>
+        <div class="keep-row">
+          <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><path d="M3,11 L6,16 L11,3 L19,3 L19,19 L3,19 Z" fill="none" stroke="var(--weft)" stroke-width="1.4"/><path d="M7,11 l3,3 l5,-7" fill="none" stroke="var(--weft)" stroke-width="1.6"/></svg>
+          Merkle integrity — tamper-evident, over meaning
+        </div>
+        <div class="keep-row">
+          <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="6" r="3" fill="none" stroke="var(--weft)" stroke-width="1.4"/><circle cx="5" cy="16" r="3" fill="none" stroke="var(--weft)" stroke-width="1.4"/><circle cx="17" cy="16" r="3" fill="none" stroke="var(--weft)" stroke-width="1.4"/><path d="M9,8 L7,13 M13,8 L15,13 M8,16 L14,16" stroke="var(--weft)" stroke-width="1.2"/></svg>
+          Fully distributed — no central authority
+        </div>
+        <div class="keep-row">
+          <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><rect x="4" y="6" width="14" height="11" rx="2" fill="none" stroke="var(--weft)" stroke-width="1.4"/><path d="M7,6 V4 a4,4 0 0 1 8,0 V6" fill="none" stroke="var(--weft)" stroke-width="1.4"/></svg>
+          Durable — no data loss, complete history
+        </div>
+        <div class="keep-row">
+          <svg width="22" height="22" viewBox="0 0 22 22" aria-hidden="true"><circle cx="11" cy="11" r="7" fill="none" stroke="var(--weft)" stroke-width="1.4"/><path d="M4,11 H18 M11,4 a10,10 0 0 1 0,14 M11,4 a10,10 0 0 0 0,14" fill="none" stroke="var(--weft)" stroke-width="1.1"/></svg>
+          Offline-verifiable — every clone proves itself
+        </div>
+      </div>
+      <!-- RIGHT: gaps we close -->
+      <div class="parity-close">
+        <h3 class="parity-h" style="color:var(--warp)">Gaps we close</h3>
+        <div class="gap-row">
+          <div class="gap"><span class="arr">git</span> versions bytes, not meaning → rename / move blindness, cosmetic-churn conflicts</div>
+          <div class="fix"><span class="arr">⟶</span> Warpline hashes meaning: renames are free, cosmetics never conflict</div>
+        </div>
+        <div class="gap-row">
+          <div class="gap"><span class="arr">git</span> merge is line-of-text</div>
+          <div class="fix"><span class="arr">⟶</span> merge is a graph op; dangling refs &amp; broken contracts are caught, real conflicts become recorded decisions</div>
+        </div>
+        <div class="gap-row">
+          <div class="gap"><span class="arr">git</span> intent is a free-text message</div>
+          <div class="fix"><span class="arr">⟶</span> intent is a structured, first-class field on every Justification</div>
+        </div>
+        <div class="gap-row">
+          <div class="gap"><span class="arr">git</span> author is an unverified string</div>
+          <div class="fix"><span class="arr">⟶</span> accountable provenance: a custody chain (operator key → model → archetype-hash), unforgeable</div>
+        </div>
+        <div class="gap-row">
+          <div class="gap"><span class="arr">git</span> a commit makes no claim about impact</div>
+          <div class="fix"><span class="arr">⟶</span> the store computes each change's ripple / blast-radius; a change can't lie about what it touches</div>
+        </div>
+        <div class="gap-row">
+          <div class="gap"><span class="arr">git</span> no link from field outcome to authorship</div>
+          <div class="fix"><span class="arr">⟶</span> the accountability loop: breakage attributes to the change and its author, and hardens their next review</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- (c) parity promise -->
+    <div class="diagram reveal d3" style="margin-top:30px">
+      <p class="lbl" style="color:var(--weft);margin-bottom:14px">Just as bulletproof · the parity promise</p>
+      <p style="font-size:16px;color:var(--linen-200);max-width:var(--textw);margin:0">
+        Warpline keeps <strong style="color:var(--linen-50)">every</strong> git guarantee, by construction — a
+        tamper-evident Merkle DAG (over <em class="emph">meaning</em> instead of bytes), content-addressed
+        integrity, fully distributed and offline-verifiable, no data loss, complete durable history.
+      </p>
+      <p class="banner" style="margin-top:24px;font-size:clamp(16px,2.2vw,23px)">We don't trade reliability for intelligence — we keep git's spine and give it&nbsp;eyes.</p>
+      <p style="font-size:13.5px;color:var(--linen-400);max-width:var(--textw);margin:18px auto 0;text-align:center;font-style:italic">
+        Anything Warpline can't yet lift to meaning is carried as an opaque, content-addressed blob (git-grade) —
+        graceful degradation, never silent&nbsp;loss.
+      </p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 11 · GIT AS ONRAMP ============================ -->
+<section class="section section--bleed" id="onramp">
+  <div class="warpgrid"></div>
+  <div class="wrap">
+    <p class="eyebrow reveal">11 · Replacement, not companion</p>
+    <h2 class="sec-title reveal d1">Git is where you come&nbsp;from. Not where truth&nbsp;lives.</h2>
+    <p class="sec-deck reveal d2">
+      The WARP — the meaning store — <em class="emph">is</em> the repository and the source of truth.
+      Warpline is a <em class="emph">replacement</em>, not a companion. Git keeps two jobs, neither
+      foundational: <em class="emph-weft">backfill</em> in, <em class="emph-weft">export</em> out.
+    </p>
+
+    <ul class="key-points reveal d2">
+      <li><strong style="color:var(--linen-50)">WARP — the meaning store — IS the repository</strong> and the source of truth. Warpline is a replacement, not a companion.</li>
+      <li><strong style="color:var(--warp)">BACKFILL</strong> — import an existing repo's full history into the WARP (the same <span class="chip weft" style="font-size:11px">ABSORB</span> run over history), so you adopt without losing a&nbsp;day.</li>
+      <li><strong style="color:var(--warp)">EXPORT</strong> — <span class="chip hash" style="font-size:11.5px">warpline export --git</span> weaves a conventional git repo for CI, GitHub, and teammates who haven't switched — an <em class="emph">output format</em>, not a&nbsp;dependency.</li>
+      <li><strong style="color:var(--weft)">Dual-write is a build-time validation harness:</strong> while Warpline matures it writes both, and the live Convergence / Divergence Oracle scores WARP's predicted merges against git's actual results. WARP earns confidence against reality, then the scaffold&nbsp;retires. It is how we <em class="emph">prove</em> it, not what we&nbsp;ship.</li>
+      <li>Honest: Warpline is <em class="emph">experimental</em>; the Oracle is the discipline that lets meaning earn the seat git holds&nbsp;today.</li>
+    </ul>
+
+    <!-- D8 — git as onramp: backfill in, warp center, export out -->
+    <div class="diagram reveal d3">
+      <svg id="onramp-svg" viewBox="0 0 1000 360" role="img" aria-label="WARP at center is the repository and source of truth; a git glyph flows in via ABSORB (backfill) on the left and out via WEAVE (export) on the right; below, a retiring validation scaffold runs WARP against git scored by an oracle">
+        <defs>
+          <marker id="or-arr-a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--warp)"/>
+          </marker>
+          <marker id="or-arr-w" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--weft)"/>
+          </marker>
+        </defs>
+
+        <!-- left: incoming git repo glyph (backfill) -->
+        <g transform="translate(95,115)">
+          <rect x="-42" y="-30" width="84" height="60" rx="9" fill="var(--ink-850)" stroke="var(--ink-600)" stroke-width="1.4"/>
+          <circle cx="-16" cy="0" r="4" fill="var(--linen-400)"/>
+          <circle cx="6" cy="0" r="4" fill="var(--linen-400)"/>
+          <circle cx="24" cy="0" r="4" fill="var(--linen-400)"/>
+          <line x1="-12" y1="0" x2="2" y2="0" stroke="var(--linen-400)" stroke-width="1.2"/>
+          <line x1="10" y1="0" x2="20" y2="0" stroke="var(--linen-400)" stroke-width="1.2"/>
+          <text y="50" text-anchor="middle" class="svg-lbl">existing git repo</text>
+        </g>
+
+        <!-- backfill arrow in -->
+        <path id="or-in" d="M150,115 C260,115 320,150 400,168" fill="none" stroke="var(--warp)" stroke-width="2.2" class="draw" marker-end="url(#or-arr-a)"/>
+        <text x="278" y="118" text-anchor="middle" class="svg-lbl-lit" fill="var(--warp-soft)">ABSORB · backfill / import</text>
+        <text x="278" y="134" text-anchor="middle" class="svg-lbl" fill="var(--linen-400)">full history → the WARP</text>
+
+        <!-- center: WARP — the repository, source of truth -->
+        <g transform="translate(500,180)">
+          <circle r="70" fill="var(--ink-800)" stroke="var(--warp)" stroke-width="2.4" class="glow-amber"/>
+          <text y="-8" text-anchor="middle" font-family="var(--display)" font-size="26" fill="var(--warp)">WARP</text>
+          <text y="14" text-anchor="middle" font-family="var(--mono)" font-size="10" fill="var(--linen-200)">the repository</text>
+          <text y="28" text-anchor="middle" font-family="var(--mono)" font-size="10" fill="var(--linen-50)">· source of truth ·</text>
+        </g>
+
+        <!-- export arrow out -->
+        <path id="or-out" d="M600,168 C680,150 740,115 850,115" fill="none" stroke="var(--weft)" stroke-width="2.2" class="draw" marker-end="url(#or-arr-w)"/>
+        <text x="725" y="118" text-anchor="middle" class="svg-lbl-lit" fill="var(--weft)">WEAVE · export</text>
+        <text x="725" y="134" text-anchor="middle" class="svg-lbl" fill="var(--linen-400)">warpline export --git → the outside world</text>
+
+        <!-- right: outgoing git repo glyph (export) -->
+        <g transform="translate(905,115)">
+          <rect x="-42" y="-30" width="84" height="60" rx="9" fill="var(--ink-850)" stroke="var(--ink-600)" stroke-width="1.4"/>
+          <circle cx="-16" cy="0" r="4" fill="var(--linen-400)"/>
+          <circle cx="6" cy="0" r="4" fill="var(--linen-400)"/>
+          <circle cx="24" cy="0" r="4" fill="var(--linen-400)"/>
+          <line x1="-12" y1="0" x2="2" y2="0" stroke="var(--linen-400)" stroke-width="1.2"/>
+          <line x1="10" y1="0" x2="20" y2="0" stroke="var(--linen-400)" stroke-width="1.2"/>
+          <text y="50" text-anchor="middle" class="svg-lbl">git for CI · GitHub</text>
+        </g>
+
+        <!-- inset: validation scaffold (retires) -->
+        <g transform="translate(0,278)">
+          <rect x="300" y="-14" width="400" height="74" rx="10" fill="none" stroke="var(--ink-700)" stroke-width="1" stroke-dasharray="4 4"/>
+          <text x="500" y="2" text-anchor="middle" class="svg-lbl" fill="var(--linen-400)">validation scaffold · retires once WARP is trusted</text>
+          <!-- warp vs git rails -->
+          <line x1="340" y1="24" x2="560" y2="24" stroke="var(--warp)" stroke-width="1.8" class="draw" id="or-railw"/>
+          <text x="328" y="27" text-anchor="end" class="svg-lbl" fill="var(--warp-soft)">WARP</text>
+          <line x1="340" y1="44" x2="560" y2="44" stroke="var(--linen-400)" stroke-width="1.8" stroke-dasharray="6 5" class="draw" id="or-railg"/>
+          <text x="328" y="47" text-anchor="end" class="svg-lbl" fill="var(--linen-400)">git</text>
+          <!-- oracle node scoring convergence -->
+          <g transform="translate(620,34)">
+            <circle r="30" fill="var(--ink-800)" stroke="var(--weft)" stroke-width="1.6"/>
+            <text y="-2" text-anchor="middle" font-family="var(--mono)" font-size="10" fill="var(--linen-50)">ORACLE</text>
+            <text y="11" text-anchor="middle" font-family="var(--mono)" font-size="8" fill="var(--linen-400)">scores</text>
+          </g>
+          <!-- convergence sparkline -->
+          <polyline id="or-spark" points="660,46 672,44 684,38 696,34 708,24 720,18 732,12" fill="none" stroke="var(--weft-soft)" stroke-width="2" class="draw glow-weft"/>
+          <text x="696" y="58" text-anchor="middle" class="svg-lbl" fill="var(--weft-soft)">convergence ↗</text>
+        </g>
+      </svg>
+      <p class="banner" style="font-size:clamp(15px,2vw,19px)">The WARP is the truth. Git is an onramp and an&nbsp;exit.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 12 · ARCHITECTURE & THE PATH ============================ -->
+<section class="section" id="architecture">
+  <div class="warpgrid"></div>
+  <div class="wrap">
+    <p class="eyebrow reveal">12 · What we're building</p>
+    <h2 class="sec-title reveal d1">What we're building, and how it holds&nbsp;together.</h2>
+    <p class="sec-deck reveal d2">
+      A concrete architecture — the WARP object model — and an honest path from
+      validatable shadow to full&nbsp;replacement.
+    </p>
+
+    <!-- THE WHAT -->
+    <h3 class="sec-title reveal d2" style="font-size:clamp(22px,2.6vw,30px);margin:64px 0 0">The what — the&nbsp;pieces.</h3>
+    <ul class="obj-list reveal d2">
+      <li><span class="ol">WARP</span> Content-addressed meaning store — the repository.</li>
+      <li><span class="ol">WEAVE</span> Project meaning → code (roadmap; bytes today come from the native store).</li>
+      <li><span class="ol">ABSORB</span> Ingest edits → semantic deltas.</li>
+      <li><span class="ol">JUSTIFICATION</span> The atom — actor · intent · semantic-delta · computed ripple, hash-chained (signatures: roadmap).</li>
+      <li><span class="ol">STRUCTURAL&nbsp;IDENTITY</span> Hash meaning, free renames.</li>
+      <li><span class="ol">GRAPH-MERGE&nbsp;/&nbsp;CONSOLIDATE</span> Parallel branches, woven.</li>
+      <li><span class="ol">ACCOUNTABILITY&nbsp;LOOP</span> Trust earned from field outcomes (grading shipped; routing: roadmap).</li>
+    </ul>
+
+    <!-- THE WHY -->
+    <h3 class="sec-title reveal d2" style="font-size:clamp(22px,2.6vw,30px);margin:64px 0 0">The why.</h3>
+    <p class="sec-deck reveal d2" style="margin-top:18px">
+      Git versions bytes. In a world where most code is authored by agents you didn't supervise, the unit
+      that matters is <em class="emph">meaning + accountability</em>. That's a change of the thing being
+      versioned — <em class="emph">structural</em>, not a feature you can bolt&nbsp;on.
+    </p>
+
+    <!-- THE HOW — object model -->
+    <h3 class="sec-title reveal d2" style="font-size:clamp(22px,2.6vw,30px);margin:64px 0 0">The how — the object&nbsp;model.</h3>
+    <ul class="key-points reveal d2">
+      <li>Content-addressed semantic objects in a <em class="emph">Merkle DAG</em>.</li>
+      <li>Identity = the <em class="emph">hash of meaning</em> (kind + contract + edges-by-target-hash), never name or path.</li>
+      <li>Bytes are a <em class="emph-weft">regenerable projection</em>, not the source.</li>
+      <li>The round-trip law <span class="chip hash" style="font-size:11.5px">absorb(weave(W)) ≡ W</span> is the correctness invariant the write path must earn — not yet proven (GAP-7).</li>
+      <li>Real polyglot code is hosted via <em class="emph">fidelity-tiered lenses</em> + a meaning-coverage metric, with opaque spans for anything not yet liftable — graceful degradation, never silent&nbsp;loss.</li>
+    </ul>
+
+    <!-- THE PATH — 4-phase roadmap diagram -->
+    <h3 class="sec-title reveal d2" style="font-size:clamp(22px,2.6vw,30px);margin:64px 0 0">The path — four&nbsp;phases.</h3>
+    <div class="phase-path reveal d3" id="phase-path">
+      <!-- warp thread the nodes ride on -->
+      <svg viewBox="0 0 1000 40" style="width:100%;height:32px" aria-hidden="true">
+        <line id="phase-thread" x1="40" y1="20" x2="960" y2="20" stroke="var(--warp)" stroke-width="2" class="draw"/>
+        <g id="phase-stops">
+          <circle cx="160" cy="20" r="5" fill="var(--ink-900)" stroke="var(--warp)" stroke-width="2" opacity="0"/>
+          <circle cx="400" cy="20" r="5" fill="var(--ink-900)" stroke="var(--warp)" stroke-width="2" opacity="0"/>
+          <circle cx="640" cy="20" r="5" fill="var(--ink-900)" stroke="var(--warp)" stroke-width="2" opacity="0"/>
+          <circle cx="880" cy="20" r="5" fill="var(--ink-900)" stroke="var(--warp)" stroke-width="2" opacity="0"/>
+        </g>
+      </svg>
+      <div class="phase-row">
+        <div class="phase-node reveal"><p class="pn">Phase 1</p><h4>VALIDATE</h4><p>ABSORB + the WARP store + dual-write + the live Oracle: prove meaning carries merge-information git's bytes can't.</p></div>
+        <div class="phase-node reveal d1"><p class="pn">Phase 2</p><h4>REPLACE</h4><p>WEAVE + the round-trip soundness law: make WARP the editable source of truth.</p></div>
+        <div class="phase-node reveal d2"><p class="pn">Phase 3</p><h4>WEAVE AT SCALE</h4><p>Graph-merge + CONSOLIDATE: the parallel-branch killer feature.</p></div>
+        <div class="phase-node reveal d3"><p class="pn">Phase 4</p><h4>ACCOUNTABILITY</h4><p>Trust-weighted review + the self-closing loop: the new category.</p></div>
+      </div>
+      <p class="phase-note">backfill from git and export to git span every&nbsp;phase.</p>
+    </div>
+
+    <!-- small WARP object-model sketch -->
+    <div class="diagram reveal d3" style="margin-top:30px">
+      <p class="lbl" style="text-align:center;margin-bottom:18px">The object model · a Merkle DAG of meaning, projected to bytes</p>
+      <svg viewBox="0 0 1000 230" id="objmodel-svg" role="img" aria-label="A small Merkle DAG of meaning-nodes above, with a WEAVE arrow down and ABSORB arrow up to a strip of bytes below">
+        <defs>
+          <marker id="om-arr-a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--warp)"/>
+          </marker>
+          <marker id="om-arr-w" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+            <path d="M0,0 L10,5 L0,10 z" fill="var(--weft)"/>
+          </marker>
+        </defs>
+        <!-- meaning DAG -->
+        <g stroke="var(--warp)" stroke-width="1.3" fill="none" opacity="0.8">
+          <path d="M500,55 L360,110" class="draw om-edge"/>
+          <path d="M500,55 L640,110" class="draw om-edge"/>
+          <path d="M360,110 L300,165" class="draw om-edge"/>
+          <path d="M360,110 L640,110" class="draw om-edge"/>
+          <path d="M640,110 L700,165" class="draw om-edge"/>
+        </g>
+        <g font-family="var(--mono)" id="om-nodes">
+          <g transform="translate(500,55)"><circle r="14" fill="var(--ink-800)" stroke="var(--warp)" stroke-width="1.6" opacity="0"/><text y="4" text-anchor="middle" font-size="9" fill="var(--warp-soft)" opacity="0">#a1</text></g>
+          <g transform="translate(360,110)"><circle r="14" fill="var(--ink-800)" stroke="var(--warp)" stroke-width="1.6" opacity="0"/><text y="4" text-anchor="middle" font-size="9" fill="var(--warp-soft)" opacity="0">#9c</text></g>
+          <g transform="translate(640,110)"><circle r="14" fill="var(--ink-800)" stroke="var(--warp)" stroke-width="1.6" opacity="0"/><text y="4" text-anchor="middle" font-size="9" fill="var(--warp-soft)" opacity="0">#4e</text></g>
+          <g transform="translate(300,165)"><circle r="14" fill="var(--ink-800)" stroke="var(--warp)" stroke-width="1.6" opacity="0"/><text y="4" text-anchor="middle" font-size="9" fill="var(--warp-soft)" opacity="0">#22</text></g>
+          <g transform="translate(700,165)"><circle r="14" fill="var(--ink-800)" stroke="var(--warp)" stroke-width="1.6" opacity="0"/><text y="4" text-anchor="middle" font-size="9" fill="var(--warp-soft)" opacity="0">#f7</text></g>
+        </g>
+        <text x="500" y="22" text-anchor="middle" class="svg-lbl" fill="var(--warp-soft)">WARP · meaning, content-addressed</text>
+        <!-- weave / absorb arrows -->
+        <path d="M770,120 L770,178" stroke="var(--warp)" stroke-width="1.8" marker-end="url(#om-arr-a)" opacity="0.9"/>
+        <text x="820" y="150" text-anchor="start" class="svg-lbl-lit" fill="var(--warp-soft)">WEAVE ↓</text>
+        <path d="M810,178 L810,120" stroke="var(--weft)" stroke-width="1.8" marker-end="url(#om-arr-w)" opacity="0.9"/>
+        <text x="855" y="166" text-anchor="start" class="svg-lbl-lit" fill="var(--weft)">ABSORB ↑</text>
+        <!-- bytes strip -->
+        <rect x="60" y="188" width="640" height="30" rx="5" fill="var(--ink-850)" stroke="var(--ink-700)" stroke-width="1"/>
+        <g stroke="var(--linen-400)" stroke-width="1" opacity="0.5">
+          <line x1="90" y1="194" x2="170" y2="194"/><line x1="90" y1="203" x2="220" y2="203"/><line x1="90" y1="212" x2="150" y2="212"/>
+          <line x1="260" y1="194" x2="380" y2="194"/><line x1="260" y1="203" x2="340" y2="203"/>
+          <line x1="430" y1="194" x2="560" y2="194"/><line x1="430" y1="203" x2="500" y2="203"/><line x1="430" y1="212" x2="600" y2="212"/>
+        </g>
+        <text x="380" y="172" text-anchor="middle" class="svg-lbl" fill="var(--linen-400)">bytes · a regenerable projection</text>
+      </svg>
+      <p class="banner" style="font-size:clamp(15px,2vw,19px)">Meaning is the source. Bytes are&nbsp;woven.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ 13 · WORKING IN WARPLINE ============================ -->
+<section class="section section--bleed" id="working">
+  <div class="warpgrid"></div>
+  <div class="wrap">
+    <p class="eyebrow reveal">13 · Working in Warpline</p>
+    <h2 class="sec-title reveal d1">It feels like git. It thinks in&nbsp;meaning.</h2>
+    <p class="sec-deck reveal d2">
+      A real, learnable CLI — familiar verbs where the operation is the same, woven names only where the
+      operation is genuinely new — and you always know the git&nbsp;equivalent.
+    </p>
+
+    <div class="mental-model reveal d2">
+      Warpline is git where the repository stores <em>meaning</em> instead of bytes: you record intentions
+      (picks), renames are free, merges that don't touch the same meaning just work, and the only real
+      conflicts are decisions about what a symbol should mean — git is just the export&nbsp;format.
+    </div>
+
+    <!-- walkthrough -->
+    <div class="walkthrough reveal d3">
+
+      <div class="term-step">
+        <div class="terminal">
+          <div class="term-bar"><i></i><i></i><i class="lit"></i><span>import</span></div>
+          <pre><span class="prompt">$</span> <span class="cmd">warpline import --git git@github.com:acme/storefront.git</span>
+<span class="dim">backfilling</span> <span class="lit">4,182 commits</span> <span class="dim">→ picks</span>
+<span class="ok">✓</span> 1,944 symbols · <span class="lit">^auth</span> now a first-class lifeline
+<span class="ok">✓</span> selvage <span class="dim">→</span> main</pre>
+        </div>
+        <p class="step-cap"><span class="git-eq">git ≈</span><span><em>git clone</em> — but history is indexed by meaning.</span></p>
+      </div>
+
+      <div class="term-step">
+        <div class="terminal">
+          <div class="term-bar"><i></i><i></i><i class="lit"></i><span>pick</span></div>
+          <pre><span class="prompt">$</span> <span class="cmd">warpline pick -i "add TOTP second factor to ^auth.verify; gate ^checkout on factor-level"</span>
+<span class="ok">sealed ✓ hash-chained</span>
+<span class="dim">semantic-delta:</span> <span class="lit">^auth.verify</span>, <span class="lit">^auth.session</span>
+<span class="dim">computed ripple →</span> $checkout-flow, ^checkout-gate, #payment-form  <span class="dim">(blast-radius 3)</span></pre>
+        </div>
+        <p class="step-cap"><span class="git-eq">git ≈</span><span><em>git commit -m</em> — but the message is intent, and the store computed who's downstream before you push.</span></p>
+      </div>
+
+      <div class="term-step">
+        <div class="terminal">
+          <div class="term-bar"><i></i><i></i><i class="lit"></i><span>move · the non-event</span></div>
+          <pre><span class="prompt">$</span> <span class="cmd">warpline move ^auth.verify ^auth.assertIdentity</span>
+<span class="dim">structural identity unchanged</span>
+<span class="ok">0 semantic-delta</span> · <span class="ok">0 ripple</span> · <span class="dim">no pick required</span></pre>
+        </div>
+        <p class="step-cap sell"><span class="git-eq">git ≈</span><span><em>git mv</em> records a delete+add that churns blame and <strong style="color:var(--linen-50)">will</strong> conflict; here identity is meaning, so the name was never load-bearing — zero diff, zero conflict.</span></p>
+      </div>
+
+      <div class="term-step">
+        <div class="terminal">
+          <div class="term-bar"><i></i><i></i><i class="lit"></i><span>lifeline</span></div>
+          <pre><span class="prompt">$</span> <span class="cmd">warpline lifeline ^auth</span>
+<span class="dim">p4031</span>  carla       introduce ^auth.verify
+<span class="dim">p4183</span>  priya       require factor-level on ^checkout
+<span class="dim">p4188</span>  agent:aegis rate-limit ^auth.session   <span class="dim">⚠ overlaps p4183</span>
+<span class="knot">⬡ 1 open knot</span> on ^auth.assertIdentity</pre>
+        </div>
+        <p class="step-cap"><span class="git-eq">git ≈</span><span><em>git log --follow</em> is a path heuristic that breaks on renames and can't tell you who decided anything.</span></p>
+      </div>
+
+      <div class="term-step">
+        <div class="terminal">
+          <div class="term-bar"><i></i><i></i><i class="lit"></i><span>weave --preview</span></div>
+          <pre><span class="prompt">$</span> <span class="cmd">warpline weave --preview 2fa-auth rate-limit sms-fallback</span>
+<span class="ok">✓</span> rate-limit  <span class="dim">disjoint →</span> auto-clean
+<span class="ok">✓</span> 2fa-auth    clean
+<span class="knot">✗ KNOT k01</span> on <span class="lit">^auth.assertIdentity</span>: required-factor <span class="dim">(priya)</span> vs optional-factor <span class="dim">(agent:aegis)</span>
+<span class="dim">summary:</span> 2 auto-clean · <span class="knot">1 knot</span></pre>
+        </div>
+        <p class="step-cap"><span class="git-eq">git ≈</span><span>three throwaway <em>git merge --no-commit</em> runs — but Warpline tells you the semantic incompatibility, not which lines overlap.</span></p>
+      </div>
+
+      <div class="term-step">
+        <div class="terminal">
+          <div class="term-bar"><i></i><i></i><i class="lit"></i><span>decide + weave</span></div>
+          <pre><span class="prompt">$</span> <span class="cmd">warpline decide k01 --bind p4183 -r "factor must be REQUIRED before session; SMS becomes a factor TYPE under the gate"</span>
+<span class="knot">knot resolved</span> <span class="dim">→ decision recorded in</span> <span class="lit">^auth</span><span class="dim">'s lifeline</span>
+<span class="prompt">$</span> <span class="cmd">warpline weave sms-fallback</span>
+<span class="ok">✓</span> wove sms-fallback · <span class="dim">selvage advanced</span></pre>
+        </div>
+        <p class="step-cap"><span class="git-eq">git ≈</span><span>in git the reasoning lives only in a commit message if you're lucky; here the decision is attached to <em>^auth</em> forever.</span></p>
+      </div>
+
+      <div class="term-step">
+        <div class="terminal">
+          <div class="term-bar"><i></i><i></i><i class="lit"></i><span>bolt + export</span></div>
+          <pre><span class="prompt">$</span> <span class="cmd">warpline bolt v2.4.0-2fa</span>
+<span class="ok">bolt cut, sealed, immutable</span>
+<span class="prompt">$</span> <span class="cmd">warpline export --git --out ./dist-git</span>
+<span class="dim">projecting</span> <span class="lit">WARP → bytes</span> · <span class="dim">synthesizing git history</span>
+<span class="ok">✓</span> ./dist-git <span class="dim">is a real git repo for CI</span></pre>
+        </div>
+        <p class="step-cap"><span class="git-eq">git ≈</span><span>git is the export format, never the source of truth.</span></p>
+      </div>
+
+    </div>
+
+    <!-- compact CLI reference -->
+    <div class="cmp-scroll reveal d3">
+      <table class="cmp">
+        <thead>
+          <tr><th class="warpline-col">Warpline</th><th>What it does</th><th>git equivalent</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="warpline" style="font-family:var(--mono);font-size:12.5px">warpline init</td><td class="doescol">create a WARP — the repository</td><td class="gitcol">git init</td></tr>
+          <tr><td class="warpline" style="font-family:var(--mono);font-size:12.5px">warpline import --git &lt;repo&gt;</td><td class="doescol">backfill: ingest git history into the WARP</td><td class="gitcol">git clone</td></tr>
+          <tr><td class="warpline" style="font-family:var(--mono);font-size:12.5px">warpline branch / switch</td><td class="doescol">open / move to a weft (branch)</td><td class="gitcol">git branch / switch</td></tr>
+          <tr class="glow"><td class="warpline" style="font-family:var(--mono);font-size:12.5px">warpline pick -i "&lt;intent&gt;"</td><td class="doescol">record a pick — a change with intent + computed ripple, sealed into the hash-chain</td><td class="gitcol">git commit -m</td></tr>
+          <tr><td class="warpline" style="font-family:var(--mono);font-size:12.5px">warpline status</td><td class="doescol">the selvage — your live working edge</td><td class="gitcol">git status</td></tr>
+          <tr class="glow"><td class="warpline" style="font-family:var(--mono);font-size:12.5px">warpline move ^sym &lt;name&gt;</td><td class="doescol">rename: zero diff (identity is meaning)</td><td class="gitcol">git mv (delete+add)</td></tr>
+          <tr><td class="warpline" style="font-family:var(--mono);font-size:12.5px">warpline tapestry</td><td class="doescol">read the woven history, symbol-indexed</td><td class="gitcol">git log --graph</td></tr>
+          <tr class="glow"><td class="warpline" style="font-family:var(--mono);font-size:12.5px">warpline lifeline ^sym</td><td class="doescol">a symbol's whole life + who decided, across renames</td><td class="gitcol">git log --follow (heuristic)</td></tr>
+          <tr><td class="warpline" style="font-family:var(--mono);font-size:12.5px">warpline heatmap</td><td class="doescol">hot symbols — where decisions are coming</td><td class="gitcol">— no equivalent</td></tr>
+          <tr><td class="warpline" style="font-family:var(--mono);font-size:12.5px">warpline weave --preview &lt;wefts&gt;</td><td class="doescol">forecast a weave with zero checkout</td><td class="gitcol">git merge --no-commit ×N</td></tr>
+          <tr><td class="warpline" style="font-family:var(--mono);font-size:12.5px">warpline weave &lt;weft&gt;</td><td class="doescol">weave a branch in — auto-clean when disjoint</td><td class="gitcol">git merge</td></tr>
+          <tr><td class="warpline" style="font-family:var(--mono);font-size:12.5px">warpline consolidate &lt;wefts&gt;</td><td class="doescol">fold N independent branches, no human labor</td><td class="gitcol">git merge --ff-only ×N</td></tr>
+          <tr class="glow"><td class="warpline" style="font-family:var(--mono);font-size:12.5px">warpline decide &lt;knot&gt; --bind &lt;pick&gt; -r "&lt;why&gt;"</td><td class="doescol">resolve a knot as a recorded decision</td><td class="gitcol">conflict markers + commit</td></tr>
+          <tr><td class="warpline" style="font-family:var(--mono);font-size:12.5px">warpline bolt &lt;name&gt;</td><td class="doescol">cut a release</td><td class="gitcol">git tag -s</td></tr>
+          <tr><td class="warpline" style="font-family:var(--mono);font-size:12.5px">warpline project [--out]</td><td class="doescol">render meaning → real code (materialize the worktree)</td><td class="gitcol">git checkout</td></tr>
+          <tr><td class="warpline" style="font-family:var(--mono);font-size:12.5px">warpline export --git</td><td class="doescol">generate a real git repo for CI / the outside world</td><td class="gitcol">— this IS git, generated</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="cmp-foot reveal">Familiar where it should be. Woven only where the operation is genuinely new — and git is always one command&nbsp;away.</p>
+  </div>
+</section>
+
+<!-- ============================ 14 · THE WEAVE ============================ -->
+<section class="section section--bleed-deep" id="weave">
+  <div class="warpgrid"></div>
+  <div class="wrap">
+    <p class="eyebrow reveal">14 · The weave</p>
+    <h2 class="sec-title reveal d1" style="font-size:clamp(38px,5vw,68px)">Git is photography. Warpline is&nbsp;weaving.</h2>
+    <p class="sec-deck reveal d2">
+      A photograph freezes a surface. A weave is built from threads with structure and tension — and it
+      can be re-woven without losing what it&nbsp;means.
+    </p>
+
+    <!-- name strip weaves itself -->
+    <div class="weave-strip reveal d3">
+      <svg id="strip-svg" viewBox="0 0 1000 160" role="img" aria-label="A strip weaving warp and weft into solid fabric">
+        <g id="strip-warp" stroke="var(--warp)" stroke-width="1.4" opacity="0.7"></g>
+        <g id="strip-weft" stroke="var(--weft)" stroke-width="1.4" opacity="0.7"></g>
+        <rect id="strip-fabric" x="0" y="0" width="1000" height="160" fill="url(#ribbon)" opacity="0"/>
+      </svg>
+    </div>
+
+    <div class="glossary reveal d4">
+      <div class="gloss g-warp"><h4>WARP</h4><p>The stable meaning-threads. The truth held taut.</p></div>
+      <div class="gloss g-weft"><h4>WEFT</h4><p>The branches, woven across the warp.</p></div>
+      <div class="gloss g-weave"><h4>WEAVE</h4><p>Projecting meaning into code you can ship.</p></div>
+      <div class="gloss g-fabric"><h4>FABRIC</h4><p>The codebase you ship — the woven result.</p></div>
+    </div>
+
+    <div class="final-cta reveal">
+      <p>Backfill a repo into the WARP. Let the Oracle score its merges against git's. Watch meaning earn the&nbsp;seat — then export back to git any time. That's the whole&nbsp;ask.</p>
+      <a href="#hero" class="btn-primary" style="margin-right:12px">Follow the build &rarr;</a>
+      <a href="#hero" class="btn-ghost">Back to top</a>
+    </div>
+  </div>
+</section>
+
+<!-- ============================ FOOTER ============================ -->
+<footer>
+  <div class="foot-grid" aria-hidden="true"></div>
+  <div class="wrap foot-inner">
+    <div>
+      <div class="wordmark" style="font-size:20px">WARPLINE</div>
+      <p class="foot-tag" style="margin:10px 0 0">Experimental · built on Paradigm fundamentals</p>
+    </div>
+    <div class="foot-links">
+      <a href="#">GitHub</a>
+      <a href="#problem">Thesis</a>
+      <a href="#">Contact</a>
+    </div>
+  </div>
+</footer>
+
+<!-- ============================ SCRIPT ============================ -->
+<script>
+(function () {
+  "use strict";
+  var REDUCED = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var SMALL = window.matchMedia && window.matchMedia("(max-width: 720px)").matches;
+
+  /* ---------- NAV scroll state ---------- */
+  var nav = document.getElementById("topnav");
+  function onScrollNav() {
+    if (window.scrollY > 24) nav.classList.add("scrolled");
+    else nav.classList.remove("scrolled");
+  }
+  window.addEventListener("scroll", onScrollNav, { passive: true });
+  onScrollNav();
+
+  /* ---------- generic reveals + section warpgrid intensify ---------- */
+  var io = new IntersectionObserver(function (entries) {
+    entries.forEach(function (e) {
+      if (e.isIntersecting) {
+        e.target.classList.add("in-view");
+        io.unobserve(e.target);
+      }
+    });
+  }, { threshold: 0.18 });
+  document.querySelectorAll(".reveal, .section").forEach(function (el) { io.observe(el); });
+
+  /* ============================================================
+     HERO weave spin-up
+     ============================================================ */
+  (function heroWeave() {
+    var svg = document.getElementById("hero-svg");
+    if (!svg) return;
+    var NS = "http://www.w3.org/2000/svg";
+    var W = 1200, H = 800;
+    var warpXs = [], weftYs = [];
+    for (var i = 0; i < 9; i++) warpXs.push(80 + i * (W - 160) / 8);
+    for (var j = 0; j < 6; j++) weftYs.push(120 + j * (H - 240) / 5);
+
+    function line(x1, y1, x2, y2, color) {
+      var l = document.createElementNS(NS, "line");
+      l.setAttribute("x1", x1); l.setAttribute("y1", y1);
+      l.setAttribute("x2", x2); l.setAttribute("y2", y2);
+      l.setAttribute("stroke", color);
+      l.setAttribute("stroke-width", "1.1");
+      l.setAttribute("opacity", "0");
+      return l;
+    }
+
+    var warpEls = [], weftEls = [], nodeEls = [];
+    warpXs.forEach(function (x) {
+      var l = line(x, 60, x, H - 60, "#E9A23B");
+      svg.appendChild(l); warpEls.push(l);
+    });
+    weftYs.forEach(function (y) {
+      var l = line(80, y, W - 80, y, "#2DD4BF");
+      svg.appendChild(l); weftEls.push(l);
+    });
+    // crossing nodes
+    weftYs.forEach(function (y) {
+      warpXs.forEach(function (x) {
+        var c = document.createElementNS(NS, "circle");
+        c.setAttribute("cx", x); c.setAttribute("cy", y); c.setAttribute("r", "2.2");
+        c.setAttribute("fill", "#F2C078"); c.setAttribute("opacity", "0");
+        svg.appendChild(c); nodeEls.push(c);
+      });
+    });
+
+    if (REDUCED) {
+      // static poster: faint pre-woven grid
+      warpEls.forEach(function (l) { l.setAttribute("opacity", "0.12"); });
+      weftEls.forEach(function (l) { l.setAttribute("opacity", "0.1"); });
+      nodeEls.forEach(function (c) { c.setAttribute("opacity", "0.18"); });
+      return;
+    }
+
+    var rafId = null, t0 = null, settled = false;
+    var SETTLE = 0.12;
+    function spin(ts) {
+      if (t0 === null) t0 = ts;
+      var t = (ts - t0) / 1000;
+      // warp draws L->R, staggered, downward fade-in over ~1.6s
+      warpEls.forEach(function (l, k) {
+        var s = k * 0.09;
+        var p = Math.min(1, Math.max(0, (t - s) / 1.2));
+        l.setAttribute("opacity", (p * 0.55).toFixed(3));
+      });
+      // weft sweeps after ~0.8s
+      weftEls.forEach(function (l, k) {
+        var s = 0.8 + k * 0.12;
+        var p = Math.min(1, Math.max(0, (t - s) / 1.0));
+        l.setAttribute("opacity", (p * 0.45).toFixed(3));
+        l.setAttribute("x2", (80 + p * (W - 160)).toFixed(0));
+      });
+      // nodes ignite
+      nodeEls.forEach(function (c, k) {
+        var col = k % 9, row = Math.floor(k / 9);
+        var s = 0.9 + row * 0.12 + col * 0.04;
+        var p = Math.min(1, Math.max(0, (t - s) / 0.5));
+        c.setAttribute("opacity", (p * 0.7).toFixed(3));
+      });
+      if (t < 3.0) {
+        rafId = requestAnimationFrame(spin);
+      } else {
+        settled = true;
+        breathe(ts);
+      }
+    }
+    // gentle breathing after settle
+    function breathe(ts) {
+      var b = ts / 1000;
+      var mod = 1 + 0.04 * Math.sin(b * (2 * Math.PI / 6));
+      warpEls.forEach(function (l) { l.setAttribute("opacity", (SETTLE * mod).toFixed(3)); });
+      weftEls.forEach(function (l) { l.setAttribute("opacity", (SETTLE * mod * 0.85).toFixed(3)); });
+      rafId = requestAnimationFrame(breathe);
+    }
+
+    var hero = document.getElementById("hero");
+    var running = false;
+    var heroIO = new IntersectionObserver(function (es) {
+      es.forEach(function (e) {
+        if (e.isIntersecting && !running) {
+          running = true; t0 = null; rafId = requestAnimationFrame(spin);
+        } else if (!e.isIntersecting && running) {
+          running = false; if (rafId) cancelAnimationFrame(rafId); rafId = null;
+        }
+      });
+    }, { threshold: 0.05 });
+    heroIO.observe(hero);
+  })();
+
+  /* ============================================================
+     SIGNATURE — Inversion scroll-flip (scrub on scroll progress)
+     ============================================================ */
+  (function inversion() {
+    var stage = document.getElementById("inv-stage");
+    if (!stage) return;
+    var left = document.getElementById("inv-left");
+    var right = document.getElementById("inv-right");
+    var leftLbl = document.getElementById("inv-left-lbl");
+    var rightLbl = document.getElementById("inv-right-lbl");
+    var leftNote = document.getElementById("inv-left-note");
+    var rightNote = document.getElementById("inv-right-note");
+    var graph = document.getElementById("inv-graph");
+    var code = document.getElementById("inv-code");
+
+    function setState(p) {
+      // p: 0 = code-first (bytes truth), 1 = meaning-first (WARP truth)
+      // rotate columns about central axis
+      var ang = p * 8; // subtle plane tilt
+      left.style.transform = "rotateY(" + (ang) + "deg)";
+      right.style.transform = "rotateY(" + (-ang) + "deg)";
+
+      // emphasis crossfade around midpoint
+      var meaningFront = p; // 0..1
+      // code recedes / desaturates as meaning surges
+      code.style.opacity = (1 - 0.55 * meaningFront).toFixed(3);
+      code.style.filter = "saturate(" + (1 - 0.7 * meaningFront).toFixed(2) + ") brightness(" + (1 - 0.25 * meaningFront).toFixed(2) + ")";
+      // meaning graph surges
+      graph.style.opacity = (0.35 + 0.65 * meaningFront).toFixed(3);
+      graph.style.filter = "drop-shadow(0 0 " + (8 * meaningFront).toFixed(1) + "px rgba(233,162,59," + (0.5 * meaningFront).toFixed(2) + "))";
+      right.style.borderColor = "rgba(233,162,59," + (0.15 + 0.4 * meaningFront).toFixed(2) + ")";
+      left.style.borderColor = "rgba(28,33,56," + (1) + ")";
+
+      // labels swap
+      if (meaningFront > 0.5) {
+        leftLbl.textContent = "← projection (WEAVE)";
+        leftLbl.style.color = "var(--linen-400)";
+        leftLbl.style.fontSize = "11px";
+        rightLbl.textContent = "WARP · source of truth";
+        rightLbl.style.color = "var(--warp)";
+        rightLbl.style.fontSize = "13px";
+        leftNote.textContent = "re-derived from the warp";
+        rightNote.textContent = "kind + contract + typed edges · the truth";
+      } else {
+        leftLbl.textContent = "bytes";
+        leftLbl.style.color = "var(--linen-50)";
+        leftLbl.style.fontSize = "12px";
+        rightLbl.textContent = "meaning";
+        rightLbl.style.color = "var(--linen-400)";
+        rightLbl.style.fontSize = "12px";
+        leftNote.textContent = "the file on disk · authoritative today";
+        rightNote.textContent = "kind + contract + typed edges · ghosted";
+      }
+    }
+
+    if (REDUCED || SMALL) {
+      // static pre-flipped poster: meaning is truth
+      setState(1);
+      return;
+    }
+
+    var ticking = false, curP = 0;
+    function compute() {
+      ticking = false;
+      var r = stage.getBoundingClientRect();
+      var vh = window.innerHeight;
+      // progress as the stage travels through the viewport center band
+      var start = vh * 0.85;
+      var end = vh * 0.25;
+      var p = (start - r.top) / (start - end);
+      p = Math.min(1, Math.max(0, p));
+      curP = p;
+      setState(p);
+    }
+    function onScroll() {
+      if (!ticking) { ticking = true; requestAnimationFrame(compute); }
+    }
+    var active = false;
+    var invIO = new IntersectionObserver(function (es) {
+      es.forEach(function (e) {
+        if (e.isIntersecting && !active) {
+          active = true; window.addEventListener("scroll", onScroll, { passive: true }); compute();
+        } else if (!e.isIntersecting && active) {
+          active = false; window.removeEventListener("scroll", onScroll);
+        }
+      });
+    }, { threshold: 0 });
+    invIO.observe(stage);
+    setState(0);
+  })();
+
+  /* ============================================================
+     MERGE weave
+     ============================================================ */
+  (function mergeWeave() {
+    var diagram = document.getElementById("merge-diagram");
+    if (!diagram) return;
+    var svg = document.getElementById("merge-svg");
+    var wefts = svg.querySelectorAll(".weft-anim");
+    var warps = document.getElementById("warp-threads").querySelectorAll("line");
+    var crossNodes = document.getElementById("cross-nodes").querySelectorAll("circle");
+    var fabric = document.getElementById("fabric-fill");
+    var knot = document.getElementById("knot");
+    var dangling = document.getElementById("dangling");
+    var card = document.getElementById("decision-card");
+
+    function setLen(el) {
+      try { var L = el.getTotalLength(); el.style.strokeDasharray = L; el.style.strokeDashoffset = L; return L; }
+      catch (e) { el.style.strokeDasharray = "1000"; el.style.strokeDashoffset = "1000"; return 1000; }
+    }
+    [].concat([].slice.call(wefts), [].slice.call(warps)).forEach(setLen);
+
+    function staticPoster() {
+      [].concat([].slice.call(wefts), [].slice.call(warps)).forEach(function (l) { l.style.strokeDashoffset = "0"; });
+      crossNodes.forEach(function (c) { c.setAttribute("opacity", "0.9"); });
+      fabric.setAttribute("opacity", "0.06");
+      knot.setAttribute("opacity", "1");
+      dangling.setAttribute("opacity", "1");
+      card.style.opacity = "1"; card.style.transform = "none";
+    }
+
+    if (REDUCED || SMALL) { staticPoster(); return; }
+
+    var played = false;
+    function play() {
+      if (played) return; played = true;
+      // warp draws first
+      warps.forEach(function (l, i) {
+        l.style.transition = "stroke-dashoffset 1.2s var(--ease)";
+        l.style.transitionDelay = (i * 0.07) + "s";
+        requestAnimationFrame(function () { l.style.strokeDashoffset = "0"; });
+      });
+      // wefts advance at slightly different speeds
+      wefts.forEach(function (l, i) {
+        var dur = 1.4 + i * 0.25;
+        l.style.transition = "stroke-dashoffset " + dur + "s var(--ease)";
+        l.style.transitionDelay = (0.6 + i * 0.18) + "s";
+        requestAnimationFrame(function () { l.style.strokeDashoffset = "0"; });
+      });
+      // ignite crossings
+      crossNodes.forEach(function (c, i) {
+        setTimeout(function () {
+          c.style.transition = "opacity .5s var(--ease)";
+          c.setAttribute("opacity", "0.9");
+        }, 900 + i * 180);
+      });
+      // clean fabric fill
+      setTimeout(function () {
+        fabric.style.transition = "opacity 1s var(--ease)";
+        fabric.setAttribute("opacity", "0.06");
+      }, 1700);
+      // conflict knot blooms
+      setTimeout(function () {
+        knot.style.transition = "opacity .7s var(--ease)";
+        knot.setAttribute("opacity", "1");
+      }, 2300);
+      setTimeout(function () {
+        dangling.style.transition = "opacity .6s var(--ease)";
+        dangling.setAttribute("opacity", "1");
+      }, 2700);
+      setTimeout(function () {
+        card.style.opacity = "1"; card.style.transform = "none";
+      }, 2900);
+    }
+
+    var mIO = new IntersectionObserver(function (es) {
+      es.forEach(function (e) { if (e.isIntersecting) { play(); mIO.unobserve(diagram); } });
+    }, { threshold: 0.25 });
+    mIO.observe(diagram);
+  })();
+
+  /* ============================================================
+     TAPESTRY — the woven-history view
+     warp lanes draw → fabric + bolt → wefts draw → picks fade →
+     #money lane heats → knot blooms → selvage fades + shimmers
+     ============================================================ */
+  (function tapestry() {
+    var diagram = document.getElementById("tapestry-diagram");
+    if (!diagram) return;
+    var svg = document.getElementById("tapestry-svg");
+    var warps = document.getElementById("tap-warp").querySelectorAll("line");
+    var wefts = document.getElementById("tap-weft").querySelectorAll("line");
+    var picks = document.getElementById("tap-picks").querySelectorAll("circle");
+    var fabric = document.getElementById("tap-fabric-fill");
+    var bolt = document.getElementById("tap-bolt");
+    var halo = document.getElementById("tap-halo");
+    var hotwarp = document.getElementById("tap-hotwarp");
+    var knot = document.getElementById("tap-knot");
+    var selvage = document.getElementById("tap-selvage");
+    var selvageLine = document.getElementById("tap-selvage-line");
+
+    // map each pick to the y of its weft, so it can fade in "as its weft passes"
+    function pickDelay(c) {
+      var cy = parseFloat(c.getAttribute("cy"));
+      // weft draw order: 100,140 (~early), 250,320 (~mid). approximate timing band.
+      if (cy <= 140) return 1500 + cy;        // top consolidated wefts first
+      return 2100 + (cy - 250);               // contended wefts after
+    }
+
+    function setLen(el) {
+      try { var L = el.getTotalLength(); el.style.strokeDasharray = L; el.style.strokeDashoffset = L; return L; }
+      catch (e) { el.style.strokeDasharray = "1000"; el.style.strokeDashoffset = "1000"; return 1000; }
+    }
+    [].concat([].slice.call(warps), [].slice.call(wefts)).forEach(setLen);
+
+    function staticPoster() {
+      [].concat([].slice.call(warps), [].slice.call(wefts)).forEach(function (l) { l.style.strokeDashoffset = "0"; });
+      picks.forEach(function (c) { c.setAttribute("opacity", "0.95"); });
+      fabric.setAttribute("opacity", "1");
+      bolt.setAttribute("opacity", "1");
+      halo.setAttribute("opacity", "1");
+      knot.setAttribute("opacity", "1");
+      selvage.setAttribute("opacity", "1");
+    }
+
+    // reduced-motion: .draw resolves to drawn via CSS; show everything, skip the shimmer loop
+    if (REDUCED) { staticPoster(); return; }
+    if (SMALL) {
+      // mobile: draw it but still allow the gentle shimmer for life
+      staticPoster();
+      shimmer();
+      return;
+    }
+
+    var shimmerRaf = null;
+    function shimmer() {
+      if (!selvageLine) return;
+      var t0 = null;
+      function frame(ts) {
+        if (t0 === null) t0 = ts;
+        var t = (ts - t0) / 1000;
+        // ~6s loop along the dash pattern (10 6 = period 16)
+        var off = -((t % 6) / 6) * 16;
+        selvageLine.style.strokeDashoffset = off.toFixed(2);
+        shimmerRaf = requestAnimationFrame(frame);
+      }
+      shimmerRaf = requestAnimationFrame(frame);
+    }
+
+    var played = false;
+    function play() {
+      if (played) return; played = true;
+      // 1. warp lanes draw top→down, staggered ~60ms
+      warps.forEach(function (l, i) {
+        l.style.transition = "stroke-dashoffset 1.1s var(--ease)";
+        l.style.transitionDelay = (i * 0.06) + "s";
+        requestAnimationFrame(function () { l.style.strokeDashoffset = "0"; });
+      });
+      // 2. fabric fill + bolt fade in
+      setTimeout(function () {
+        fabric.style.transition = "opacity 1s var(--ease)";
+        fabric.setAttribute("opacity", "1");
+        bolt.style.transition = "opacity .8s var(--ease)";
+        bolt.setAttribute("opacity", "1");
+      }, 700);
+      // 3. weft lines draw left→right
+      wefts.forEach(function (l, i) {
+        var dur = 1.3 + i * 0.2;
+        l.style.transition = "stroke-dashoffset " + dur + "s var(--ease)";
+        l.style.transitionDelay = (1.1 + i * 0.18) + "s";
+        requestAnimationFrame(function () { l.style.strokeDashoffset = "0"; });
+      });
+      // 4. picks fade in as their weft passes
+      picks.forEach(function (c) {
+        setTimeout(function () {
+          c.style.transition = "opacity .45s var(--ease)";
+          c.setAttribute("opacity", "0.95");
+        }, pickDelay(c));
+      });
+      // 5. the #money lane heats (halo brightens)
+      setTimeout(function () {
+        halo.style.transition = "opacity 1.1s var(--ease)";
+        halo.setAttribute("opacity", "1");
+      }, 2600);
+      // 6. the knot blooms
+      setTimeout(function () {
+        knot.style.transition = "opacity .7s var(--ease)";
+        knot.setAttribute("opacity", "1");
+      }, 3100);
+      // 7. selvage fades in, then shimmers continuously
+      setTimeout(function () {
+        selvage.style.transition = "opacity .7s var(--ease)";
+        selvage.setAttribute("opacity", "1");
+        shimmer();
+      }, 3500);
+    }
+
+    var tIO = new IntersectionObserver(function (es) {
+      es.forEach(function (e) { if (e.isIntersecting) { play(); tIO.unobserve(diagram); } });
+    }, { threshold: 0.22 });
+    tIO.observe(diagram);
+  })();
+
+  /* ============================================================
+     ACCOUNTABILITY loop — traveling pulse
+     ============================================================ */
+  (function loopRing() {
+    var svg = document.getElementById("loop-svg");
+    if (!svg) return;
+    var pulse = document.getElementById("loop-pulse");
+    var cx = 310, cy = 280, r = 190;
+    // node angles (top, right, bottom, left) for "hardening" pass
+    var changeNode = svg.querySelector("g[transform='translate(310,90)'] circle");
+
+    if (REDUCED) {
+      pulse.setAttribute("opacity", "0.6");
+      return;
+    }
+
+    var rafId = null, running = false, t0 = null;
+    function frame(ts) {
+      if (t0 === null) t0 = ts;
+      var t = (ts - t0) / 1000;
+      var period = 6;
+      // start at top (angle -90deg), go clockwise
+      var ang = (-Math.PI / 2) + (t / period) * 2 * Math.PI;
+      var x = cx + r * Math.cos(ang);
+      var y = cy + r * Math.sin(ang);
+      pulse.setAttribute("cx", x.toFixed(1));
+      pulse.setAttribute("cy", y.toFixed(1));
+      // near top (next change), thicken the change node briefly
+      var nearTop = Math.cos(ang) > 0.6 && Math.sin(ang) < -0.6;
+      if (changeNode) changeNode.setAttribute("stroke-width", nearTop ? "3" : "1.6");
+      rafId = requestAnimationFrame(frame);
+    }
+    var lIO = new IntersectionObserver(function (es) {
+      es.forEach(function (e) {
+        if (e.isIntersecting && !running) { running = true; t0 = null; rafId = requestAnimationFrame(frame); }
+        else if (!e.isIntersecting && running) { running = false; if (rafId) cancelAnimationFrame(rafId); }
+      });
+    }, { threshold: 0.2 });
+    lIO.observe(svg);
+  })();
+
+  /* ============================================================
+     GIT-AS-ONRAMP — backfill in, export out, scaffold scores
+     ============================================================ */
+  (function onramp() {
+    var svg = document.getElementById("onramp-svg");
+    if (!svg) return;
+    var paths = [
+      document.getElementById("or-in"),
+      document.getElementById("or-out"),
+      document.getElementById("or-railw"),
+      document.getElementById("or-railg"),
+      document.getElementById("or-spark")
+    ];
+    paths.forEach(function (p) {
+      if (!p) return;
+      try { var L = p.getTotalLength(); p.style.strokeDasharray = L; p.style.strokeDashoffset = L; }
+      catch (e) {}
+    });
+    if (REDUCED) { paths.forEach(function (p) { if (p) p.style.strokeDashoffset = "0"; }); return; }
+
+    var done = false;
+    var dIO = new IntersectionObserver(function (es) {
+      es.forEach(function (e) {
+        if (e.isIntersecting && !done) {
+          done = true;
+          paths.forEach(function (p, i) {
+            if (!p) return;
+            p.style.transition = "stroke-dashoffset 1.2s var(--ease)";
+            p.style.transitionDelay = (i * 0.18) + "s";
+            requestAnimationFrame(function () { p.style.strokeDashoffset = "0"; });
+          });
+          dIO.unobserve(svg);
+        }
+      });
+    }, { threshold: 0.25 });
+    dIO.observe(svg);
+  })();
+
+  /* ============================================================
+     PHASE PATH — thread draws L→R, stops ignite in sequence
+     ============================================================ */
+  (function phasePath() {
+    var host = document.getElementById("phase-path");
+    if (!host) return;
+    var thread = document.getElementById("phase-thread");
+    var stops = document.getElementById("phase-stops").querySelectorAll("circle");
+    if (thread) {
+      try { var L = thread.getTotalLength(); thread.style.strokeDasharray = L; thread.style.strokeDashoffset = L; }
+      catch (e) {}
+    }
+    if (REDUCED) {
+      if (thread) thread.style.strokeDashoffset = "0";
+      stops.forEach(function (c) { c.setAttribute("opacity", "1"); });
+      return;
+    }
+    var done = false;
+    var pIO = new IntersectionObserver(function (es) {
+      es.forEach(function (e) {
+        if (e.isIntersecting && !done) {
+          done = true;
+          if (thread) {
+            thread.style.transition = "stroke-dashoffset 1.4s var(--ease)";
+            requestAnimationFrame(function () { thread.style.strokeDashoffset = "0"; });
+          }
+          stops.forEach(function (c, i) {
+            setTimeout(function () { c.style.transition = "opacity .5s var(--ease)"; c.setAttribute("opacity", "1"); }, 350 + i * 320);
+          });
+          pIO.unobserve(host);
+        }
+      });
+    }, { threshold: 0.3 });
+    pIO.observe(host);
+  })();
+
+  /* ============================================================
+     OBJECT MODEL — Merkle DAG of meaning draws, nodes ignite
+     ============================================================ */
+  (function objModel() {
+    var svg = document.getElementById("objmodel-svg");
+    if (!svg) return;
+    var edges = svg.querySelectorAll(".om-edge");
+    var nodeEls = document.getElementById("om-nodes").querySelectorAll("circle, text");
+    edges.forEach(function (p) {
+      try { var L = p.getTotalLength(); p.style.strokeDasharray = L; p.style.strokeDashoffset = L; }
+      catch (e) {}
+    });
+    if (REDUCED) {
+      edges.forEach(function (p) { p.style.strokeDashoffset = "0"; });
+      nodeEls.forEach(function (n) { n.setAttribute("opacity", "1"); });
+      return;
+    }
+    var done = false;
+    var oIO = new IntersectionObserver(function (es) {
+      es.forEach(function (e) {
+        if (e.isIntersecting && !done) {
+          done = true;
+          edges.forEach(function (p, i) {
+            p.style.transition = "stroke-dashoffset 1s var(--ease)";
+            p.style.transitionDelay = (i * 0.12) + "s";
+            requestAnimationFrame(function () { p.style.strokeDashoffset = "0"; });
+          });
+          nodeEls.forEach(function (n, i) {
+            setTimeout(function () { n.style.transition = "opacity .5s var(--ease)"; n.setAttribute("opacity", "1"); }, 200 + i * 90);
+          });
+          oIO.unobserve(svg);
+        }
+      });
+    }, { threshold: 0.25 });
+    oIO.observe(svg);
+  })();
+
+  /* ============================================================
+     NAME STRIP — weaves into fabric
+     ============================================================ */
+  (function nameStrip() {
+    var svg = document.getElementById("strip-svg");
+    if (!svg) return;
+    var NS = "http://www.w3.org/2000/svg";
+    var warpG = document.getElementById("strip-warp");
+    var weftG = document.getElementById("strip-weft");
+    var fabric = document.getElementById("strip-fabric");
+    var warpEls = [], weftEls = [];
+    for (var x = 20; x <= 980; x += 24) {
+      var l = document.createElementNS(NS, "line");
+      l.setAttribute("x1", x); l.setAttribute("y1", 0); l.setAttribute("x2", x); l.setAttribute("y2", 160);
+      l.setAttribute("opacity", "0"); warpG.appendChild(l); warpEls.push(l);
+    }
+    for (var y = 12; y <= 148; y += 18) {
+      var h = document.createElementNS(NS, "line");
+      h.setAttribute("x1", 0); h.setAttribute("y1", y); h.setAttribute("x2", 1000); h.setAttribute("y2", y);
+      h.setAttribute("opacity", "0"); weftG.appendChild(h); weftEls.push(h);
+    }
+
+    if (REDUCED) {
+      warpEls.forEach(function (l) { l.setAttribute("opacity", "0.5"); });
+      weftEls.forEach(function (l) { l.setAttribute("opacity", "0.45"); });
+      fabric.setAttribute("opacity", "0.18");
+      return;
+    }
+
+    var done = false;
+    var sIO = new IntersectionObserver(function (es) {
+      es.forEach(function (e) {
+        if (e.isIntersecting && !done) {
+          done = true;
+          warpEls.forEach(function (l, i) {
+            setTimeout(function () { l.style.transition = "opacity .5s var(--ease)"; l.setAttribute("opacity", "0.6"); }, i * 28);
+          });
+          weftEls.forEach(function (l, i) {
+            setTimeout(function () { l.style.transition = "opacity .5s var(--ease)"; l.setAttribute("opacity", "0.55"); }, 400 + i * 40);
+          });
+          setTimeout(function () {
+            fabric.style.transition = "opacity 1s var(--ease)";
+            fabric.setAttribute("opacity", "0.16");
+          }, 1500);
+          sIO.unobserve(svg);
+        }
+      });
+    }, { threshold: 0.3 });
+    sIO.observe(svg);
+  })();
+
+})();
+</script>
+</body>
+</html>

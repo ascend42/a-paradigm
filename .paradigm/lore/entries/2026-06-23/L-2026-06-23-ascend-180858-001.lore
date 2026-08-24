@@ -1,0 +1,38 @@
+id: L-2026-06-23-ascend-180858-001
+type: milestone
+timestamp: '2026-06-23T18:08:58.248Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Loom — STATE OF THE ARC (restart anchor): Phase-1 engine proven, flows converged, GAP-1 settled'
+summary: 'Comprehensive restart anchor for the Loom arc (a git replacement built on Paradigm — meaning-primary, WARP is truth, accountability-native). BRANCHES (both unmerged off main): loom-engine (5 commits ahead — the engine) and loom-presentation (3 ahead — the marketing/vision page docs/loom/index.html). main is at v7.5.0 (the Classroom, published). BUILT + PROVEN (packages/loom, @a-company/loom, read-only on git): the WARP (content-addressed MEANING store), #essence-hash (Merkle over structured .purpose contract + edges-by-target-essence, never prose/name/path/embeddings; Tarjan SCC; deterministic), #absorb (git ref → WarpState via throwaway git worktree, never touches HEAD/index/worktree), #sem-delta (typed deltas; rename = empty delta), #predict (commute/knot/dangle algebra), #loom-oracle (predict a weave from meaning, compare to git''s real merge, score divergence → .loom/oracle.jsonl), #weave (loom weave --preview = pre-merge forecast; loom diff = semantic diff). THE THESIS IS PROVEN WITH DATA (commit 053a7cf9): a durable test where two branches touch different files (git merges CLEAN) but Loom catches the dangling reference (divergeMeaningOnly, DIVERGENT) — meaning carries merge-info bytes can''t, on real branches, zero risk. Determinism is a tested invariant (oracle HEAD HEAD = 0/0/0; diff(absorb(HEAD),absorb(HEAD))==0); the root-cause file-ordering nondeterminism was fixed at source (commit 28705bc3, closing T-2026-06-13-011). SETTLED: replacement-not-companion (TD-2026-06-23-398); the full flows convergence — every git flow → loom command, the WEAVE/review/approval process, the collaboration model (TD-2026-06-23-181, docs/specs/loom-flows.md); GAP-1 non-symbol files = 3-tier fidelity, durable byte-blobs for the opaque tier, coverage as an honesty metric (TD-2026-06-23-806). SPECS: docs/specs/loom-engine.md (built engine), docs/specs/loom-flows.md (flows/weave/collab). OPEN TASKS: T-2026-06-23-001 (duplicate symbols across packages — real modeling issue), T-2026-06-23-002 (extensive Loom University course, after maturity), T-2026-06-23-003 (absorb worktree concurrency-safety — needed before CONSOLIDATE). OPEN GAPS (in loom-flows.md): GAP-2..7 (stash edges, reflog/compact GC, bisect bridge, binary versioning, link trust composition, GAP-7 git-export round-trip = the interop lifeline). NEXT (the fork): (A) the v1 PRIZE — AST-level code meaning so Loom versions real code not just .purpose symbols (the Unison-grade absorb-soundness lift; biggest value lever, hardest); (B) the WRITE PATH — real loom weave/consolidate/decide, which is CLASSROOM-COUPLED (shares the trust ledger: scrutiny routing, endorsements, the self-closing loop reusing the Classroom field-failure reducer); (C) merge the loom branches to main as experimental + the University course. Recommendation: next session, pick A (v1 fidelity) or B (write path) — both are major; A unlocks the most value, B unlocks collaboration/review. Also decide the branch-merge strategy.'
+symbols_touched:
+  - '#loom'
+  - '#essence-hash'
+  - '#absorb'
+  - '#sem-delta'
+  - '#predict'
+  - '#loom-oracle'
+  - '#weave'
+  - '#aggregator'
+tags:
+  - loom
+  - git-successor
+  - state-of-arc
+  - restart-anchor
+  - checkpoint
+  - phase-1
+linked_lore:
+  - L-2026-06-23-ascend-180057-001
+  - L-2026-06-23-ascend-161313-001
+  - L-2026-06-22-ascend-224840-001
+linked_tasks:
+  - T-2026-06-23-001
+  - T-2026-06-23-002
+  - T-2026-06-23-003
+confidence: 0.86
+git_context:
+  ref: 28705bc3d0fc7bae72d53d63b35cd5b2702412dc
+  branch: loom-engine
+  dirty: true

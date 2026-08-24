@@ -187,3 +187,33 @@ $RECYCLE.BIN/
 .paradigm/university/ai-literacy/
 # Generated read-through of that pack (private)
 /ai-literacy-review.md
+
+# Warpline: ignore the heavy/regenerable store (WARP snapshots + oracle log), but
+# TRACK this project's native meaning-history — the fabric ledger + the selvage
+# tip — so it pushes with git (coexistence). State snapshots are reconstructable
+# by re-absorbing each strand's provenance.gitCommit, so they stay ignored.
+.warpline/*
+!.warpline/fabric.jsonl
+!.warpline/fabric-legacy.json
+# TRACK the repo config toggle (the R1 shadow-gate opt-in is a versioned,
+# founder-visible switch); shadow telemetry rows (.warpline/shadow/) stay
+# ignored via .warpline/* above — additive local evidence, never pushed.
+!.warpline/config.json
+!.warpline/refs/
+.warpline/refs/*
+!.warpline/refs/selvage
+# TRACK the AUTHORITATIVE tip too. Migrating to refs mode (V3.2, refs.ts) moved the
+# real tip out of `refs/selvage` (a stateId — many-to-one, cannot name a history
+# position) and into `refs/heads/selvage` (a pickId). `.warpline/refs/*` above was
+# catching it, so git was replicating only the LEGACY, ambiguous pointer while the
+# one thing refs.ts exists to replace stayed local-only — and git-tracking is
+# currently Warpline's whole anti-truncation backstop (audit C-6). Per-agent scratch
+# refs (refs/scratch/*) and any other head stay ignored: ephemeral, per-clone.
+!.warpline/refs/heads/
+.warpline/refs/heads/*
+!.warpline/refs/heads/selvage
+# (legacy Loom runtime dir, kept ignored for back-compat)
+.loom/
+
+# agent scratch — never commit
+packages/warpline/probe-*/

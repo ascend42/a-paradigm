@@ -1,0 +1,56 @@
+id: L-2026-06-25-ascend-002447-001
+type: milestone
+timestamp: '2026-06-25T00:24:47.010Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'SHIPPED: #consolidate N-way fold forecast + the falsifiable multi-agent proof (K_human < C_git)'
+summary: 'Built the consolidate forecaster (the N-branch generalization of weave''s 2-way forecast) and met Jinx''s falsifiable demand (T-2026-06-24-012): a contended same-feature fixture proving Warpline reduces HUMAN merge labor vs git, not the easy non-intersecting case. consolidate(refs[]) absorbs base+N refs in parallel (now safe per the just-shipped T-2026-06-23-003 fix), diffs each vs base, runs the proven 2-way predict pairwise, and aggregates by symbol into N-way knots/dangles/auto-folded. The fixture: 4 branches all edit one function''s return line — 2 alpha-equivalent renames (zero essence delta → auto-fold) + 2 divergent changes (one real knot). Measured K_human=1 < C_git=3: Warpline asks ONE decision where git''s sequential merge halts THREE times. The multi-agent thesis moves from asserted to SHOWN on contended work.'
+symbols_touched:
+  - '#consolidate'
+  - '#predict'
+  - '#sem-delta'
+  - '#absorb'
+  - '#git-exec'
+  - '#weave'
+symbols_created:
+  - '#consolidate'
+files_created:
+  - packages/warpline/src/consolidate.ts
+  - packages/warpline/test/consolidate-fixture.test.ts
+files_modified:
+  - packages/warpline/src/git/git-exec.ts
+  - packages/warpline/.purpose
+verification:
+  status: pass
+  details:
+    typecheck: pass
+    build: pass
+    tests: 106 pass under fileParallelism:true
+    claim: K_human=1 < C_git=3 on the contended fixture
+tags:
+  - warpline
+  - '#consolidate'
+  - multi-agent
+  - fixture
+  - falsifiable
+  - shipped
+  - cid
+  - jinx
+body: |-
+  THE ENGINE (#consolidate, src/consolidate.ts): consolidate(refs[], {base?}) — read-only N-way fold forecast. base = opts.base ?? mergeBaseN(refs) (new octopus merge-base in git-exec). Absorbs base + every ref IN PARALLEL via Promise.all (the fan-out that the T-2026-06-23-003 git-archive fix made safe — this is why that fix was the gate). diff(base, ref_i) for each. Then runs the PROVEN 2-way predict() pairwise across every (i<j) and aggregates: an N-way knot = the union of pairwise knots on a stableKey (sides[] = the distinct refs in tension, each with its essence); a dangle = an edge one ref added into a symbol another ref retired (addedBy/retiredBy); autoFolded = every touched stableKey not in a knot or dangle. decisions (K_human) = knots.length + dangling.length. NO new conflict logic — reuses predict, so nothing to get wrong. NO git merge, NO .warpline write.
+
+  THE PROOF (test/consolidate-fixture.test.ts, T-2026-06-24-012): a throwaway git repo (built in beforeAll, fs-only, .ts-only — confirms absorb works on a bare repo with no .purpose, code-units lifted by the TS lens). One file mod.ts with `export function beta(n){ return n+1 }`. FOUR branches off one base, ALL editing beta's single return line (so git collides on every pair): rename-a (param n→a, alpha-equivalent → SAME essence), rename-b (n→b, SAME essence), change-x (return n*2, divergent essence), change-y (return n+100, divergent essence). Results, asserted: (1) consolidate.decisions===1, exactly one knot on beta with conflictingSlots ['body'] and sides [change-x, change-y] — the renames are NOT in the tension; (2) the pre-registered metric K_human=1 < C_git=3, where C_git = the count of sequential `git merge` ops that HALT on a textual conflict (rename-a merges clean, then rename-b / change-x / change-y each conflict). The meaning-preserving renames auto-fold (zero delta) exactly where git textually conflicts — that is the whole win, measured.
+
+  HONEST SCOPE (what this does + does NOT claim): proves the FAN-OUT / meaning-preserving case (Warpline < git on contended same-feature work because alpha-equivalent edits carry zero delta). It does NOT implement cross-branch DEPENDENCY ORDERING (topo-sort over the ripple-DAG; cycles→atomic SCC group) — that is a WRITE-PATH concern (admission ordering), correctly out of scope for a read-only forecast, and already captured as a design-constraint-on-the-write-path in the round-2 lore (L-2026-06-24-ascend-234356-001). No CLI verb wired yet (engine + fixture only). Per round-1's honest scope, this is a step-change for fan-out and (correctly) neutral for a genuinely-contended single hot symbol — change-x vs change-y IS a real knot and Warpline keeps it as a human decision, it does not pretend to auto-resolve it.
+
+  Committed 04ae007d (history h0511) on warpline-surfaces, after the T-2026-06-23-003 fix at 7ff2133c (h0510). Not pushed.
+linked_tasks:
+  - T-2026-06-24-012
+  - T-2026-06-23-003
+confidence: 0.85
+git_context:
+  ref: 04ae007d805a5a3751819cd26ac9548146c47809
+  branch: warpline-surfaces
+  dirty: true

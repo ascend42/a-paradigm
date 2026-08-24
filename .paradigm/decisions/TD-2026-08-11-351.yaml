@@ -1,0 +1,81 @@
+id: TD-2026-08-11-351
+timestamp: '2026-08-11T18:57:06.138Z'
+title: >-
+  Warpline distribution turn: publish the interface, teach Warpline through Paradigm notebooks, and re-scope F4 from
+  headline to floor
+decision: >-
+  Five further founder decisions, 2026-08-11, taken after TD-2026-08-11-663. (7) MOAT-SILENCE ENDS for the interface:
+  PUBLISH THE INTERFACE, KEEP THE CALIBRATION PRIVATE. (8) WARPLINE KNOW-HOW SHIPS IN PARADIGM AGENT NOTEBOOKS, so any
+  model driving a Paradigm agent is warm by construction; delivery is blocked on T-2026-08-11-007 (orchestrate_inline
+  silently drops 18 of 26 rostered agents, Loid among them). (9) F4 IS RE-SCOPED FROM HEADLINE TO FLOOR: it no longer
+  claims runtime self-description is "the ONLY mechanism" — notebooks are now a mechanism — and instead measures the
+  RESIDUAL: agents OUTSIDE Paradigm, and agents inside it in situations the notebook does not cover. (10) F4 STOPPING
+  RULE: fix n up front, run all of them, report whatever comes, including a fail. (11) FG-4 CORPUS: a small fixed count
+  per stratum (~3), hash-pinned so the denominator is reproducible and the freeze is meaningful. (12) BOTH-SKINS: the
+  FIRST scored run is CLAUDE-ONLY.
+rationale: >-
+  These decisions convert the cold-agent problem from a legibility problem into a DISTRIBUTION problem, and they are
+  mutually reinforcing rather than independent. Publishing the interface is what makes notebooks legitimate — you are
+  distributing know-how, not leaking an asset — and the moat memo's own logic supports it: the moat lives in
+  per-codebase calibration, which sits in a calibrated lens over one repository's history and cannot be carried by a
+  specification, so silence was buying protection that was already held elsewhere while costing permanently-cold agents,
+  an entire falsifier programme and a procurement problem. Notebooks are mechanically ready today (entries are already
+  injected into agent prompts in execute mode; 158 exist), so this is a content problem, not an engineering one. THE
+  HONEST LIMIT, accepted explicitly: notebooks do not make Warpline model-agnostic, they make it Paradigm-dependent. An
+  agent inside Paradigm gets the knowledge regardless of model; an agent outside it — a raw Claude Code session, a
+  Cursor agent, someone else's orchestrator — is exactly as cold as before. That is a bet that Warpline's distribution
+  channel IS Paradigm. F4 had to be re-scoped rather than deleted because injecting a notebook is a HINT, and
+  TD-2026-07-21-766's pass condition requires zero hints and zero Warpline docs in context; leaving F4 as written while
+  shipping notebooks would have made it vacuous. Re-scoping to the floor keeps it falsifiable and keeps it honest, and
+  today's session is the evidence that the floor still matters: a WARM agent with the source open was misled three times
+  by the CLI, and a notebook written from that same wrong surface would have carried the same error. Fixed-n stopping is
+  the only form that cannot be gamed by optional stopping, and a fail is publishable evidence rather than a wasted run.
+  Hash-pinning the FG-4 corpus is what makes the FG-3 freeze mean anything — a frozen surface measured against a
+  drifting corpus is not a controlled measurement.
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+  - id: claude
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: Retire F4 entirely once notebooks ship
+    rejected_because: >-
+      Would free the whole harness/corpus/freeze/runs programme, but loses all evidence that anything works outside
+      Paradigm — and the floor is exactly where this session's failure occurred (a warm agent misled by the CLI three
+      times).
+  - option: Run F4 cold first, add notebooks afterwards
+    rejected_because: >-
+      Would capture a clean cold number while it is still obtainable, and a surface that needs notebooks to be usable is
+      itself a finding — but it delays the distribution turn for a measurement that is no longer the headline claim.
+  - option: Non-Claude on both arms for the first scored run
+    rejected_because: >-
+      The full matrix and the strongest claim, but with F4 demoted to the floor and the 'any provider' claim now resting
+      on notebooks rather than on F4, the extra harness day buys less than it did when F4 was load-bearing.
+  - option: Keep moat-silence indefinitely
+    rejected_because: >-
+      Consistent with the prior record, but pays the cold-agent cost forever to protect an asset the memo says a
+      specification cannot reach.
+  - option: Sequential stopping design with pre-registered boundaries
+    rejected_because: >-
+      Statistically valid and cheaper in tokens, but the boundary must be exactly right before the first run and is easy
+      to get subtly wrong — fixed n is unambiguous.
+symbols_affected:
+  - '#f4-classifier'
+  - '#f4-seed'
+  - '#f4-cli-trace'
+  - '#warpline-cli'
+  - '#admit'
+  - '#orchestrator'
+  - '#agent-registry'
+status: active
+tags:
+  - warpline
+  - founder-decision
+  - f4
+  - moat-silence
+  - notebooks
+  - distribution
+  - paradigm-coupling
+  - flight-version

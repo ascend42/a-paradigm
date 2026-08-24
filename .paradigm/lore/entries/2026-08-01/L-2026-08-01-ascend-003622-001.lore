@@ -1,0 +1,56 @@
+id: L-2026-08-01-ascend-003622-001
+type: agent-session
+timestamp: '2026-08-01T00:36:22.929Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Warpline soundness audit: judgment layer sound, custodianship layer not ready to be a sole copy'
+summary: |
+  Six-auditor adversarial audit against the founder's git-parity bar, with the test suite ruled inadmissible as evidence and all experiments confined to os.tmpdir(). Verdict: the judgment layer is sound and in seven respects ahead of git; the custodianship layer is not ready to hold anyone's only copy. Sixteen critical/high findings, six of them demonstrated rather than argued — including a merge that silently drops non-ASCII filename changes and seals CLEAN, a restore path that writes into .git and executes code, and a crash window that heals itself into a permanent undetectable lie. The reframing discovery: the live repo is not in refs mode, so the multi-writer write path is switched OFF, every v3 protection covers zero live strands, and the CAS that works is disengaged on the founder's own fabric. Live fabric verified byte-identical throughout.</summary>
+  <body>## Why this audit found what four prior reviews did not
+
+  Two rules, and they were the whole difference.
+
+  **The test suite was inadmissible.** Established hours earlier the same day: 687 tests that never ran in CI, test files never typechecked, a root typecheck with no root tsconfig that checks nothing, CI dead since 2026-02-04, and four dist-dependent tests that skipIf themselves out of existence. Auditors had to demonstrate breaks, not infer safety. Six of the sixteen findings are demonstrations — a hook that actually fired, a fabric cut from 64 strands to 26 that verify called "all intact", a merge run through the real computeMerge that dropped a file.
+
+  **All experiments in os.tmpdir().** D-7 means an in-repo scratch fabric drives the live one. Isolation held: 64 lines, md5 2503e2e4, byte-identical at every checkpoint across six agents doing deliberately destructive work.
+
+  ## The shape of the system
+
+  Jinx named it and the evidence across all six lenses supports it: two failure cultures in one package. Where Warpline owns the substrate — object store, restore path-hardening, daemon auth, the shadow boundary, the fabric lock — it is rigorous, genuinely fail-closed, and in seven named respects better than git. Where it delegates to git and catches the result, it converts every error into "absent," and on the merge path absent means delete. J-1, J-2 and J-3 are each one `.catch(() => null)` from correct.
+
+  ## The discovery that reframed everything
+
+  The live repo is not in refs mode. No refs/heads, no knots/, no claims/, 49 v2 + 15 v1 + zero v3, zero agentIds. `warpline fork` against the founder's own repo refuses with UNSUPPORTED → refs.migrate, and the CLI already prints the instruction.
+
+  Three consequences outranking any individual bug: the multi-writer path is switched OFF rather than unexercised (Judge's scratch KNOT is plausibly the first this system ever produced outside a test file); every v3 protection covers zero live strands, so "v3 fixes that" is not a guarantee currently held; and the pickId ref CAS — the mechanism Arky demonstrated catching a real race — is disengaged, leaving only a stateId CAS that is structurally blind to 11 of 64 live strands.
+
+  That last one has a live conjunction behind it: the auto-seal hook is installed and backgrounds, and a 2,729-file absorb inside a 30-second steal window is not exotic.
+
+  ## What made the panel work
+
+  Every auditor reported something against their own position. Aegis corrected the brief's pessimism about the MCP untrusted-content control and withdrew a recommendation when a falsifier tripped. Jinx reported one of four attacks as FAILED on verification and corrected the panel's own D-6 wording. Judge caught and reported four of its own measurement artifacts from reading exit codes through a pipe. Arky's headline contradicted the brief's premise — the selvage advance is NOT a bare read-modify-write — and then found the real defect one level down.
+
+  And Jinx directly corrected a plan the founder and I had discussed hours earlier: Aegis's M-1 (export WARPLINE_AGENT_ID) will not arm the R2 gate, because a second independent structural break forces FAST_ADMIT. Verified on live data — all 37 shadow verdicts are FAST_ADMIT or NOOP, and KNOT cannot occur on that path.
+
+  ## The single highest-value action
+
+  `warpline refs migrate`. One existing command, already implemented at refs.ts:146, already advertised by the CLI. It downgrades the only finding that can corrupt the live fabric from permanent unrepairable corruption to a reported abandoned head.
+
+  ## What is not broken
+
+  Worth as much as the findings, and named in the record so a refactor cannot quietly undo them: the object store verifies content addresses on every read and throws (better than git, which only checks under fsck); tamper-evidence against in-place mutation is real across six mutation classes; backup round-trips byte-perfectly through total fabric destruction; git-absent restore works and can still seal; sealed work is never unreachable and outlasts a reflog; admit never touches the user's worktree during merge; daemon auth is fail-closed and the privilege-escalation attack failed.
+
+  Shield tried to make sealed work unrecoverable and could not. That is the property the product most needs, and it holds.</body>
+  <type>review</type>
+  <symbols_touched>["#warp-store", "#materialize", "#admit", "#refusal", "#native-write-path", "#pick", "#warpline-cli", "#warpline-mcp", "#warplined", "#knot-payload", "#stake", "#f4-seed"]</symbols_touched>
+  <tags>["warpline", "audit", "arc:warpline", "source-control", "git-parity", "crash-safety", "concurrency", "fail-open", "integrity", "data-loss", "security"]</tags>
+  <files_created>[".paradigm/research/warpline-native-first/soundness-audit-2026-07-31.md"]</files_created>
+  <learnings>["Ruling the test suite inadmissible as evidence is what made this audit productive. Four prior reviews accepted 'tests pass'; once auditors were required to demonstrate breaks in a scratch fabric, six critical findings surfaced in one pass — including two that had been latent through every earlier review.", "The live repo being unmigrated is not a configuration detail, it is a safety posture: it disengages the working CAS, leaves 11 of 64 strands CAS-blind, and means every v3 structural protection covers zero of the founder's data. Check which epoch the DATA is in before crediting a fix that lives in a later epoch.", "A documented invariant with no checker is worse than an undocumented one — it reads as a guarantee. strand.ts:140 documents 'parentStateId (always the ledger tip)' and nothing anywhere compares it, which is exactly how a detected crash-break launders itself into a permanent 'all intact'.", "Detection without repair is a dead end a real crash will find. Warpline detects nearly everything and repairs nothing: a torn tail line — reachable by plain disk-full, no crash required — bricks every verb including fabric verify itself, and the documented recovery is a text editor.", "Guards that exist but are bypassed are a distinct and common defect class here: restore.ts has the correct dirty-dest policy and two call sites skip it; the stake journal that would make truncation loud is already written to disk and verify never reads it. Look for the correct implementation before writing a new one.", "'Fails open' and 'fails open AND reports success' deserve separate lists. The second class — a merge that drops a file and seals CLEAN, a shadow refusal that returns isError:false — is what actually loses data, and it is invisible to anyone reading exit codes."]</learnings>
+  <verification>{"status": "pass", "details": {"live_fabric": "64 lines, md5 2503e2e4bea85e4eafeb52eed95709d0, byte-identical before and after all six audits", "isolation": "all experiments in os.tmpdir(); no tracked file modified", "independently_reverified": "11 of the load-bearing findings re-checked against code or live data in the main session"}}</verification>
+  <confidence>0.9</confidence>
+git_context:
+  ref: c56e2fec2f406a874932079d890b1d1cd675a3ad
+  branch: warpline-surfaces
+  dirty: true

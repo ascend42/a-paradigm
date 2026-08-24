@@ -1,0 +1,42 @@
+id: L-2026-06-25-ascend-145657-001
+type: agent-session
+timestamp: '2026-06-25T14:56:57.265Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Cid Debrief: Authored Paradigm University first-party course PARA 901 "The Academy — Gated Le'
+summary: 'Authored Paradigm University first-party course PARA 901 "The Academy — Gated Learning (the Classroom)" (T-2026-06-19-003): a 6-lesson course (path + 6 notes + 6 quizzes, 24 questions) teaching the Classroom model — provisional-by-default, two-loops→one-certifier, study-hall-vs-class, THE STAND, Expeditions, the honest scoreboard + 4 Academy tabs. Team chain: Scholar (cited research brief, flagged accuracy risks) → Sheila (lesson structure + quiz pedagogy) → builder (transcription) → Loid (loop-accuracy review: all 6 notes ACCURATE, 0 corrections). Accuracy guardrails enforced: context-firewall taught as STRUCTURAL (no trust!=external read-filter exists), hard-demote taught as intended-next (visible-quarantine is shipped), human-taught is spec-only not rendered, null scoreboard is honest. University tests pass (course count 11→12 para-NNN canary updated). Pack 6.5.0→6.6.0.'
+symbols_touched: []
+files_modified:
+  - packages/university/src/content/paths/LP-para-901.yaml
+  - packages/university/src/content/notes/N-para-901-provisional-by-default.md
+  - packages/university/src/content/notes/N-para-901-two-loops-one-certifier.md
+  - packages/university/src/content/notes/N-para-901-study-hall-vs-class.md
+  - packages/university/src/content/notes/N-para-901-the-stand.md
+  - packages/university/src/content/notes/N-para-901-expeditions-and-foraging.md
+  - packages/university/src/content/notes/N-para-901-the-honest-scoreboard.md
+  - packages/university/src/content/quizzes/Q-para-901-provisional-by-default.yaml
+  - packages/university/src/content/quizzes/Q-para-901-two-loops-one-certifier.yaml
+  - packages/university/src/content/quizzes/Q-para-901-study-hall-vs-class.yaml
+  - packages/university/src/content/quizzes/Q-para-901-the-stand.yaml
+  - packages/university/src/content/quizzes/Q-para-901-expeditions-and-foraging.yaml
+  - packages/university/src/content/quizzes/Q-para-901-the-honest-scoreboard.yaml
+  - packages/university/src/content/pack.yaml
+  - packages/university/tests/plsat-migration.test.ts
+  - CHANGELOG.md
+tags:
+  - arc:cid-debrief
+  - orch:orch-mqtlu4rj-ehv2
+meta:
+  orchestrationId: orch-mqtlu4rj-ehv2
+  coverageScore:
+    before: 0.8
+    after: 1
+  coverageAdded:
+    - packages/university/src/content
+  notes: Content-authoring task (no source-code symbols). Loid's accuracy review is the load-bearing verdict. The two highest-risk teachings (firewall=structural, hard-demote=intended-next) were verified against the engine by Loid herself.
+git_context:
+  ref: 14b58a9090bb13bc336bac7658d423312aa0f981
+  branch: warpline-surfaces
+  dirty: true

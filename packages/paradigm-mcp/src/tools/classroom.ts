@@ -9,6 +9,7 @@
  *   paradigm_scenario_list    — list/filter the scenario bank by agent
  *   paradigm_scenario_record  — author a scenario (origin: authored | poison-pill)
  *   paradigm_classroom_status — read-only per-agent: field-failures + certs + repeat-rate
+ *   paradigm_classroom_promote — gated single-entry promotion (certifiedBy: peer|quorum)
  *
  * Handlers are THIN: they delegate to syllabus-loader / scenario-loader / the
  * wave-1 field-failures ledger. paradigm_classroom_status is the same rollup the
@@ -31,6 +32,7 @@ import {
   type ScenarioProbe,
 } from '../utils/scenario-loader.js';
 import { readFieldFailures } from '../utils/field-failures.js';
+import { gatedPromoteJournalEntry } from '../utils/nomination-engine.js';
 // The repeat-failure-rate rollup is the ONE canonical formula in premise-core
 // (TD-2026-06-19-007) — shared with `paradigm doctor` so the metric never
 // drifts between the MCP tool and the CLI. The cert WRITER stays in
@@ -158,6 +160,29 @@ export function getClassroomToolsList() {
         properties: { agent: { type: 'string', description: 'Filter to one agent (omit for all)' } },
       },
       annotations: { readOnlyHint: true, destructiveHint: false },
+    },
+    {
+      name: 'paradigm_classroom_promote',
+      description:
+        'Gated promotion of a SINGLE journal entry to the notebook (TD-2026-06-25-044, the "two-loops" resolution). This is the gated `/class` sign-off path: a human ruling IS the gate, so there is NO confidence-0.8 threshold. Writes a `pending` certification stamped certifiedBy: peer|quorum (NOT the legacy `gate`). ~100 tokens.',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          agent: { type: 'string', description: 'Agent id whose journal entry is promoted' },
+          journalId: { type: 'string', description: 'The journal entry id to promote' },
+          certifiedBy: {
+            type: 'string',
+            enum: ['peer', 'quorum'],
+            description: 'Certification authority for the gated sign-off (default: peer)',
+          },
+          refinedForm: {
+            type: 'string',
+            description: 'Optional refined snippet to store instead of the raw correct_approach/insight',
+          },
+        },
+        required: ['agent', 'journalId'],
+      },
+      annotations: { readOnlyHint: false, destructiveHint: false },
     },
   ];
 }
@@ -314,6 +339,19 @@ export async function handleClassroomTool(
           perAgent,
         }, null, 2),
       };
+    }
+
+    case 'paradigm_classroom_promote': {
+      const result = gatedPromoteJournalEntry(
+        ctx.rootDir,
+        args.agent as string,
+        args.journalId as string,
+        {
+          certifiedBy: args.certifiedBy as 'peer' | 'quorum' | undefined,
+          refinedForm: args.refinedForm as string | undefined,
+        },
+      );
+      return { handled: true, text: JSON.stringify(result, null, 2) };
     }
 
     default:

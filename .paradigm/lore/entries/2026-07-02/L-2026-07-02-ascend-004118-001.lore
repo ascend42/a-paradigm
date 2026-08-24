@@ -1,0 +1,33 @@
+id: L-2026-07-02-ascend-004118-001
+type: milestone
+timestamp: '2026-07-02T00:41:18.608Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Guard base-rate falsifier PASSES — 6.2% of git-clean merges carry a meaning-break in the wild
+summary: 'The 2026-07-01 audit''s cheapest falsifier ran: 360 oracle runs over historical 2-parent merges of zod/nest/xstate (external unprepared clones, zero .purpose, no npm install) — 0 errors. divergeMeaningOnly on git-CLEAN merges = 17/275 (6.2%): zod 13.1% (human-PR era), xstate 3.6%, nest 0% on recent-100 (~89% dependabot; dep bumps are meaning-empty so ALSO zero false alarms) / 2.6% on the TS-touching stratum. The Warpline Guard GTM has a catch-rate to sell. Coordinator independently recounted the raw JSONL — exact match.'
+symbols_touched:
+  - '#warpline-oracle'
+  - '#essence-hash'
+  - '#ts-lens'
+  - '#absorb'
+verification:
+  status: pass
+  details:
+    oracle_runs: 360/360 ok
+    recount: coordinator recount from raw JSONL matches report exactly
+tags:
+  - warpline
+  - guard
+  - base-rate
+  - falsifier
+  - evidence
+  - arc:warpline
+body: 'Evidence + scripts + raw JSONL preserved in .paradigm/research/warpline-guard-base-rate/ (commit 149e04fa). Hit quality spot-checked: xstate e66662e1 (concurrent generic-signature rewrite × option-type rename in the same traversal functions, git clean) and nest 7c10646a (concurrent logic change + internals refactor of the same SseStream class) are genuine sellable catches; zod d1982eaf is shrug-grade (essence transitivity flagged a symbol whose own text was unchanged). All 17 hits had both sides textually editing the same file(s) — none were cross-file-ripple-only. reducedFidelity ceiling is a non-issue (0.3–4.3% of lifted units). THE OPEN GTM VARIABLE IS PRECISION, NOT BASE RATE: essence-transitivity avalanches flag up to 176 symbols from ~2 directly-contested units (zod types.ts SCC). Next steps named by the experiment: (1) ground-truth the 17 hits (tsc/tests at the merge commit + scan post-merge fixups touching flagged symbols) → convert flag rate into verified catch/false-alarm split; (2) rank direct-contested units above closure ripple to cap per-merge flag volume. Population lesson: merge-traffic composition dominates the observed rate (bot-heavy repos ≈ 0 by construction) — Guard''s target population is human/agent PR merges, which is exactly the wedge.'
+linked_commits:
+  - 149e04fa
+git_context:
+  ref: 149e04facaec44b3b6e17197cec193d38990b3aa
+  branch: warpline-surfaces
+  dirty: true

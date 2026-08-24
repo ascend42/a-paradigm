@@ -1,0 +1,44 @@
+id: L-2026-07-15-ascend-081529-001
+type: insight
+timestamp: '2026-07-15T08:15:29.937Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'KS-F LLM-judge falsifier VERDICT: detection wording armored (1/3), but Guard missed the corpus''s only true merge-created defect'
+summary: '[Jinx (advocate)] Ran the panel-mandated LLM-judge falsifier: 36 fully-blind Sonnet judges over all 18 ground-truthed Guard hits + 18 era/size-matched clean-merge controls. The kill condition ("judge matches 3/3 at tolerable false-flag rate") is decisively FALSIFIED — the judge caught zod 69ff844b exactly (doubled ${issue.minimum}) but MISSED the flagship zod 66cbfe09 ZodRecord defect while looking straight at the Partial<Record> diff, and missed xstate 7b808af4 (defect lines verifiably absent from the merge view). But the judge''s single control flag (0.88, highest of the run) was a REAL merge-created cross-branch interaction defect (xstate 72058a08: new test expecting old getDescription format x format change; same-day fix f6d20164c) in a merge the oracle classified CONVERGENT — the only such defect in the 275-merge corpus, caught by the LLM and structurally invisible to symbol-local knot detection.'
+symbols_touched:
+  - '#warpline-oracle'
+files_created:
+  - .paradigm/research/warpline-llm-judge-falsifier/protocol.md
+  - .paradigm/research/warpline-llm-judge-falsifier/cases.jsonl
+  - .paradigm/research/warpline-llm-judge-falsifier/judgments.jsonl
+  - .paradigm/research/warpline-llm-judge-falsifier/results.md
+  - .paradigm/research/warpline-llm-judge-falsifier/.purpose
+learnings:
+  - 'Blind frontier review does not reproduce Guard''s catches: sensitivity 1/3 on caught-later, 33% flag rate on benign hits, median 39s and ~49k tokens (~$0.15) per merge vs Guard''s 1.4-5.4s deterministic $0 — earlier+deterministic+attributed+cheap stands'
+  - 'Contested-symbol knot detection is symbol-LOCAL by construction: the one true merge-created defect in 275 merges was a cross-symbol interaction (function output x test expectation string) with divergeMeaningOnly EMPTY — Guard README must scope the claim to contested-symbol knots and never imply its flags bound merge risk'
+  - Judge flags carry no within-hit signal (1/3 CL vs 5/15 benign flagged = 33% both) and confidence does not rescue precision; but population-level, Guard-flagged merges do look riskier blind (6/18 vs 1/18)
+  - xstate 7b808af4's churn-validated defect lines predate the flagged merge's base — Guard's flag localized the right symbols, but the defect is not in that merge's delta; worth a footnote wherever that hit is cited
+verification:
+  status: pass
+  details:
+    coverage: 36/36 cases judged, full protocol (no minimum-viable fallback)
+    case-13 adjudication: same-day descendant fix f6d20164c verified via git ancestry + line match
+    case-08 visibility: defect strings verified absent from both side diffs vs base
+    no-touch: nothing committed; packages/ and live .warpline untouched
+tags:
+  - warpline
+  - falsifier
+  - guard
+  - roadmap-2026H2
+  - phase-0
+  - advocate
+linked_tasks:
+  - T-2026-07-14-004
+  - T-2026-07-15-002
+confidence: 0.92
+git_context:
+  ref: bfcdbb3a7897bc80cb42efa86b7f462a1f1d2f55
+  branch: warpline-surfaces
+  dirty: true

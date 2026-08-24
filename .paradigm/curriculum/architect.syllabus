@@ -1,0 +1,20 @@
+id: SY-architect
+agent: architect
+version: 1
+sources:
+  - kind: external
+    ref: expedition:typescript-project-organization
+    trust: external
+  - kind: scenario
+    ref: SC-barrels-antipattern-vs-our-tooling
+    trust: certified
+scope: generalizable
+success_criteria:
+  - probe: SC-barrels-antipattern-vs-our-tooling
+    must: reject
+notebook_target: global
+approved_by: ascend
+approved_at: '2026-06-25T06:56:23.521Z'
+term_ttl_days: 14
+status: expired
+last_ratified: '2026-06-25T06:56:23.521Z'

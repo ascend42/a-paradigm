@@ -1,0 +1,60 @@
+{
+  "denom_symbol_bearing_concurrent": 8,
+  "concurrent_total": 8,
+  "admissions_total": 12,
+  "labels": {
+    "agree-clean": 6,
+    "MEANING-DECISIVE:silent-mismerge": 2
+  },
+  "meaning_decisive": {
+    "total": 2,
+    "auto_resolve": 0,
+    "silent_mismerge": 2,
+    "rate": 0.25
+  },
+  "guardrails": {
+    "false_knot": 0,
+    "false_clean": 0,
+    "false_knot_le_meaning_decisive": true
+  },
+  "h1_wall_rate": 0,
+  "byte_fallback_rate": 0,
+  "moat": {
+    "linked": {
+      "survived": 1,
+      "overturned": 0,
+      "pending": 0
+    },
+    "independent": {
+      "survived": 3,
+      "overturned": 0,
+      "pending": 2
+    },
+    "fastAdmit": {
+      "survived": 4,
+      "overturned": 0,
+      "pending": 0
+    },
+    "linkedSurvivalPct": 100,
+    "indepSurvivalPct": 100,
+    "priorGapPts": 0
+  },
+  "kill": {
+    "k1_meaning_decisive_lt_2pct": "not-powered",
+    "k2_false_knot_gt_meaning_decisive": false,
+    "k3_prior_indistinguishable": "not-powered",
+    "hard_stop_false_clean": false
+  },
+  "machineryChecks": {
+    "admit_json_shape_ok": true,
+    "fast_admit_seen": true,
+    "clean_linked_seen": true,
+    "clean_independent_seen": true,
+    "knot_seen": true,
+    "h1_relaxation_merge_onto_merge": true,
+    "meaning_decisive_fired": true,
+    "silent_mismerge_caught": true,
+    "negctrl_not_false_knot": true,
+    "no_false_clean": true
+  }
+}

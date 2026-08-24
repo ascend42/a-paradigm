@@ -1,0 +1,51 @@
+id: TD-2026-08-12-831
+timestamp: '2026-08-12T01:34:06.339Z'
+title: >-
+  Engine pre-fix approaches ratified: Fix B = ripple-gate (narrow the KNOT body rule); Fix A = surface-and-sample, no
+  gate
+decision: >-
+  The two pre-run engine fixes the LLM-judge will measure (TD-913) have ratified approaches. FIX B (over-block
+  false-KNOT, T-2026-07-15-008): the RIPPLE-GATE — narrow predict's body-conflict rule so `body` is a genuine conflict
+  only when BOTH sides contest it (bodyContested(d) = (d.localChanged ?? true) || (d.rippleFromContract ?? true), the
+  fail-closed signals already computed on every delta). Kills the measured 3/3 false-KNOTs, preserves all 12 genuine
+  silent-mismerge catches, zero determinism cost, one pure function in predict.ts. Rejected: BRUSH-demotion (moves
+  cry-wolf from KNOT to advisory) and ranking-side (agent still hits the false KNOT). FIX A (Tier-0 invariant
+  false-CLEAN, T-2026-06-24-015): SURFACE-AND-SAMPLE, NO GATE — the canonical no-shared-token invariant conflict is
+  undetectable-by-meaning by construction, so the engine 'fix' is not detection: keep the lexical #hazard advisory on
+  (flags the detectable shared-token tier), add a standing 'no cross-symbol invariant guarantee' disclaimer on every
+  independent CLEAN, and weight the audit sampling toward danger-flagged CLEANs. The undetectable residue stays a
+  declared known-blind class (locked §8) BOUNDED by the oracle/judge, never gated. 'hold' mode stays
+  declared-and-unimplemented (upholds advisory-never-a-gate); const-lifting deferred post-run (no lens surgery in the
+  frozen window). Build Fix B first.
+rationale: >-
+  Arky's design established the fixes are asymmetric: Fix B is a real deterministic verdict correction whose
+  distinguishing signal (rippleFromContract) is already built and unused, with the A11 seeded controls as its own
+  falsifier; Fix A's substantive improvement is fundamentally undetectable and must be surfaced/bounded/sampled, not
+  blocked. The founder took both recommendations. Fix A's no-gate posture aligns with the already-ratified
+  advisory-must-never-become-a-gate decision and protects the contested denominator the run exists to measure.
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+  - id: architect
+    role: agent
+    stance: supported
+  - id: forge
+    role: agent
+    stance: neutral
+symbols_affected:
+  - '#predict'
+  - '#sem-delta'
+  - '#essence-hash'
+  - '#hazard'
+  - '#oracle'
+  - '#admit'
+status: active
+tags:
+  - warpline
+  - field-test
+  - pre-fix
+  - over-block
+  - tier-0
+  - ripple-gate
+  - audit-2026-08-11

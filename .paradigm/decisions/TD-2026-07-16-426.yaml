@@ -1,0 +1,34 @@
+id: TD-2026-07-16-426
+timestamp: '2026-07-16T02:34:28.105Z'
+title: K3 re-scoped to the ORGANIC arm — seeded-arm result recorded as "moat unmeasured, not refuted"
+decision: >-
+  The K3 kill criterion (linked−independent survival separation ≥15pts) moves from the seeded dogfood arm to the ORGANIC
+  arm: prospective grading of real admissions on this repo's live fabric (roadmap P4.3 standing telemetry). The
+  seeded-arm firing (gap −2.7pts, p=0.756) is recorded as "moat unmeasured, not refuted" — NOT as a pass. Wording
+  discipline: all external material stays calibration-moat-SILENT until organic data exists. Precondition for any seeded
+  rerun: fix the harness seed artifact (8 quarantined FALSE-CLEANs = side-A patches failing tsc standalone). Resolves
+  founder convening T-2026-07-15-009.
+rationale: >-
+  Loid pre-declared in run-results-full.md §2 (written BEFORE the run; file timestamps verified) that a fully-seeded arm
+  is structurally unable to measure the moat: churn is prior-blind so the expected gap is ≈0 by construction, and
+  conditioning churn on the prior would author the answer. The breach stood as written per falsifier discipline; the
+  founder ruled re-scope over hold-as-failed, with the hold option's wording discipline adopted anyway (moat-silent
+  externally) since the benchmark is unwritten. Founder ruled 2026-07-15.
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+  - id: forge
+    role: agent
+    stance: supported
+symbols_affected:
+  - '#grade'
+  - '#admit'
+status: active
+tags:
+  - warpline
+  - K3
+  - kill-criteria
+  - moat
+  - roadmap-2026H2
+  - falsifiable-loop

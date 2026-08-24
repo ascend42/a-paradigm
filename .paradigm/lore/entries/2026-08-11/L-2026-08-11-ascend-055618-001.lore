@@ -1,0 +1,69 @@
+id: L-2026-08-11-ascend-055618-001
+type: agent-session
+timestamp: '2026-08-11T05:56:18.662Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Pre-flight nearly closed: an independent verifier caught my closure errors, and a diagnostic scare found a real defect'
+summary: |
+  Cleared the four verification findings (B3 coverage ratio, A2 vacuous test, C2 PATH remedy, B5 genesis in refs mode), landed item 9's recursion ceiling and item 8's root provenance. 997 tests, zero skipped. Two things stand out beyond the work: an independent verifier — briefed on my own two prior closure errors — caught a third, and it was the same substitution each time (mechanism built mistaken for outcome achieved). And a false alarm I chased about content-address drift turned out to be a genuine, previously-unknown defect: Warpline absorbs Swift build artifacts as semantic symbols, and they outnumber the entire real sealed state.</summary>
+  <body>## The verifier caught the error I keep making
+
+  I commissioned an independent agent specifically because I had been wrong twice about closure status, both times optimistically. I briefed it on those two errors and told it that finding something NOT closed was worth more than a clean bill of health.
+
+  It found a third, and it was the same substitution: **item 3 (git replicating the authoritative tip) was not closed.** The `.gitignore` allowlist was correct. Its test was genuinely good — it asks `git check-ignore` rather than pattern-matching the file, and carries four control cases. And nobody had ever run `git add`. Git was replicating only the legacy many-to-one stateId pointer that `refs.ts` exists to replace.
+
+  I had verified "not ignored" and reported "tracked." Those are different claims. The test has the same blind spot: it asserts not-ignored, and nothing asserts tracked, so CI could never have caught it either.
+
+  Three for three, always the same shape — the mechanism exists, so the outcome is assumed.
+
+  ## A2: the vacuous test was two hours old
+
+  The seventh vacuity catch of this arc, and the most instructive, because it was not inherited debt. A careful builder wrote it that same afternoon, following this exact standard, and it still asserted the derived side.
+
+  `warpline-health.test.ts` asserted that health's three replicated constants appear in the text `installHook` writes. The verifier mutation-proved that renaming the hook's default binary AND deleting the dist-fallback arm entirely both leave every assertion green — because `'warpline'` occurs on 8 lines of the hook, `WARPLINE_BIN` on 5, the dist path on 3, counting comments and the advice echo. Even the ordering guard survived, since `indexOf` found the surviving copy.
+
+  `health.ts` claimed in writing that "a change to the hook breaks the replication instead of silently outdating it." It did not. Fixed by extracting the resolution lines and asserting on the operands of `command -v` and the dist existence check.
+
+  The lesson is not "audit old tests." It is that the discipline has to be applied to work finished ten minutes ago.
+
+  ## B3: the alarm was already off
+
+  `health` warned about counterfactual coverage only at exactly zero measured. The repo had already reached 1 of 44 — 2.3% — so the warning about the single most important number in the programme was permanently silenced by one measured verdict. A founder running `health` on a project measuring 2% of its verdicts would have seen a clean adjudication section.
+
+  Now a ratio, with `predatesField` excluded from the denominator because those rows are unmeasurable by construction and including them would let the warning decay as history accumulates. The guard cross-multiplies integers rather than comparing a rounded percentage, so there is no boundary artifact at the threshold.
+
+  ## The scare that found a real defect
+
+  `warpline status` reported 16,035 symbols born against a sealed state of 9,306. That is the signature of essence content-address drift, which would be catastrophic — every strand's contentId disagreeing with what the code computes, the whole fabric unverifiable, and all 997 tests still passing.
+
+  I chased it rather than assuming either way, and it was not drift: `fabric verify` was clean across all 71 real strands with the new code in dist, and status reported ZERO died symbols. An id shift would have retired all 9,306 sealed symbols as dead.
+
+  What it actually was: **`.build` is not in the absorb ignore rules.** 13,179 of the 16,035 born symbols are `packages/conductor/.build/**` Swift build artifacts. Build output exceeds the entire real sealed state. `node_modules` is handled; `.build` slipped through.
+
+  That is a genuine pre-flight item nobody had found. It inflates per-seal cost (the headline 14.87 MB/strand is largely build output), it generates churn verdicts on every rebuild over files nobody authored, and it would dilute the counterfactual denominator with noise the product has no opinion about — corrupting both the cost figure and the adjudication signal the rehearsal is meant to measure.
+
+  ## Scratch under two names
+
+  I committed 4K of agent scratch. I had deleted `probe-tmp/` before committing and did not check for siblings; a second agent had created `probe-bench/` under a different name. Backed it out and added `packages/warpline/probe-*/` to `.gitignore` — two agents producing scratch under two names in one session means a pattern is the right guard, not another manual sweep.
+
+  ## Where it ends
+
+  997 passing, 109 files, zero skipped, tsc clean. Live fabric 71 strands, head-64 md5 unchanged since the audit began. 17 commits unpushed.
+
+  Item 8 landed after all — `health` now reports `root  via git toplevel (inferred)`, which is the distinction that was missing: not where the root resolved, but whether it was inferred or explicitly set.
+
+  Item 9's evidence is the thinnest in the pre-flight and that is recorded rather than smoothed: its agents stalled without final reports, the claim that a sibling SCC routine was already iterative is UNVERIFIED (no such symbol found), there is no measured ceiling number on default stack size, and its 25k-deep test takes 73 seconds and has flaked under parallel load.</body>
+  <type>milestone</type>
+  <symbols_touched>["#warpline-health", "#fabric-hook", "#seal", "#essence-hash", "#fabric-refs", "#warpline-root", "#warp-store", "#warpline-cli"]</symbols_touched>
+  <tags>["warpline", "arc:warpline", "pre-flight", "verification", "vacuity", "observability", "measurement-integrity"]</tags>
+  <linked_commits>["5ab60202", "7bb18f3e", "3f566526"]</linked_commits>
+  <learnings>["Commission an independent verifier for your own tally, and brief it on your specific past errors. I had been wrong twice about closure status, both optimistically; the verifier found a third instance of the same substitution — mechanism built mistaken for outcome achieved. Naming my prior errors in its brief is what pointed it at the right shape.", "'Not ignored' is not 'tracked'. The .gitignore allowlist was correct, its test was good, and nobody ran git add — so git replicated nothing. The test asserted not-ignored and nothing asserted tracked, so CI could never catch it either. When verifying a fix, verify the OUTCOME, not the mechanism that enables it.", "Vacuity discipline has to be applied to work finished minutes ago, not just to inherited code. The seventh catch this arc was a test written that same afternoon by a careful builder following this exact standard.", "An alarm gated on a boundary value (=== 0) silences itself the moment anything happens. The counterfactual-coverage warning was already off at 2.3% measured. Gate on a RATIO, and exclude structurally-unmeasurable rows from the denominator or the warning decays as history grows.", "Chase the scare rather than assuming either way. A 16,035-born reading looked exactly like content-address drift, which would have been catastrophic and invisible to all 997 tests. It was not drift — but chasing it surfaced a real unknown defect (.build absorbed as semantic symbols, outnumbering the entire sealed state).", "When two agents produce scratch under two different names in one session, add a PATTERN to .gitignore rather than sweeping again. I deleted probe-tmp/, missed probe-bench/, and committed it."]</learnings>
+  <verification>{"status": "pass", "details": {"tests": "997 passed, 0 skipped, 109 files (from 964)", "typecheck": "tsc --noEmit exit 0", "live_fabric": "71 strands, head-64 md5 2503e2e4bea85e4eafeb52eed95709d0 unchanged since the audit began", "content_address_invariance": "independently confirmed — fabric verify clean on all 71 strands with new dist, and zero died symbols in status (an id shift would have retired all 9,306 sealed symbols)", "item_9_caveat": "thinnest evidence in the pre-flight: agents stalled without reports, sibling-recursion claim UNVERIFIED, no measured ceiling number, 73s test flaky under parallel load"}}</verification>
+  <confidence>0.87</confidence>
+  </invoke>
+git_context:
+  ref: 7bb18f3e48121deb058689bbb2383085a9a7777b
+  branch: warpline-surfaces
+  dirty: true
