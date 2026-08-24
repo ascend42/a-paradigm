@@ -203,6 +203,27 @@ export interface Strand {
   /** present only on a KNOT-council resolution strand (omitted on normal picks). */
   resolves?: KnotResolution;
   /**
+   * M3-lite I6 (m3-integrity-design-2026-08-23.md §6 Q3) — the auto-resolve
+   * GRANT this resolution was performed under: present ONLY on a resolves-
+   * strand whose ACTING principal was an AGENT admitted through an active
+   * `grant:v1` row (#grants). The acting principal is known only at the GATE
+   * (daemon who.kind / CLI shell marker) — authoredBy.agentId names the
+   * CONTESTED agent even when a human resolves, so it can never discriminate
+   * who acted; the gate threads the grantId into the seal instead.
+   *
+   * INSIDE the pickId preimage in BOTH sealing epochs (attribution-load-
+   * bearing — stripping or grafting the field must break the identity): on v2
+   * it rides the `...rest` spread in computePickId; the explicit v3 preimage
+   * lists it conditionally, so an ABSENT field is absent from the preimage and
+   * every already-sealed strand keeps its identity.
+   *
+   * A resolves-strand WITHOUT underGrant is presumed HUMAN-resolved — the
+   * procedural human boundary cannot cryptographically distinguish it, and
+   * that residue is ACCEPTED (TD-2026-08-23-136); verify checks only strands
+   * that DO carry the field (grant-violation).
+   */
+  underGrant?: string;
+  /**
    * BYTE-CUSTODY strand (T-2026-07-18-002): true only on a strand sealed for a
    * meaning-NOOP whose TREE advanced (doc/config/lore-only change) — stateId
    * naturally equals the parent's, the delta is empty, the byte binding advances.
@@ -345,6 +366,10 @@ export function computePickId(body: StrandBody): string {
       delta: body.delta,
       provenance: body.provenance,
       ...(body.resolves ? { resolves: body.resolves } : {}), // KNOT council rides along
+      // I6: the auto-resolve grant is attribution-load-bearing — IN the v3
+      // identity when present; absent = absent from the preimage, so every
+      // strand sealed before the field existed keeps its pickId.
+      ...(body.underGrant ? { underGrant: body.underGrant } : {}),
       bindingTreeId: body.binding?.treeId ?? null, // mandatory at seal (buildStrandV3 enforces)
       ...(body.merge ? { merge: body.merge } : {}), // folded WHOLE (§1.3)
       ...(body.attests ? { attests: body.attests } : {}), // epoch anchor payload (§5)
@@ -363,7 +388,8 @@ export function computePickId(body: StrandBody): string {
   const { calibratedConfidence: _c, binding, merge, authoredBy, sig: _sig, ...rest } = body;
   const identity = {
     ...rest, // schemaVersion, seq, stateId, parentStateId, parentPickId, actor, intent,
-    // recordedAt, objectCount, delta, provenance, resolves?, merged?, mergeParentPickId?
+    // recordedAt, objectCount, delta, provenance, resolves?, merged?, mergeParentPickId?,
+    // underGrant? (I6 — attribution-load-bearing, deliberately IN via this spread)
     authoredBy: { agentId: authoredBy?.agentId ?? null }, // sessionKey EXCLUDED
     bindingTreeId: binding?.treeId ?? null, // A1: fold byte identity into the address
     mergeAlgo: merge?.algo ?? null, // Judge: restore the algo tag
@@ -435,6 +461,9 @@ export interface StrandV3Input {
   provenance: { ref: string; treeSha: string | null; gitCommit: string | null };
   /** present only on a KNOT-council resolution strand. */
   resolves?: KnotResolution;
+  /** I6 — the auto-resolve grant an AGENT-acted resolution was performed under
+   * (threaded from the gate; IN the v3 pickId when present). */
+  underGrant?: string;
   /** MANDATORY — bind-on-seal is the only v3 write path (no unbound v3 strand). */
   binding: StrandBinding;
   /** the merge recipe (weaves only) — folded WHOLE into the pickId (§1.1). */
@@ -470,6 +499,11 @@ export function buildStrandV3(input: StrandV3Input): Strand {
   if (new Set(input.parents).size !== input.parents.length) {
     throw new Error('warpline: buildStrandV3 refused — duplicate parent pickId (parents are an ordered set)');
   }
+  if (input.underGrant && !input.resolves) {
+    throw new Error(
+      'warpline: buildStrandV3 refused — underGrant without resolves (grants cover RESOLVE ONLY; an auto-resolve grant can never authorize any other seal)',
+    );
+  }
   if (input.merge && input.parents.length < 2) {
     throw new Error(
       'warpline: buildStrandV3 refused — a merge recipe requires 2+ parents (merged-ness is DERIVED: parents.length > 1; a single-parent "merge" is a forged recipe)',
@@ -490,6 +524,7 @@ export function buildStrandV3(input: StrandV3Input): Strand {
     delta: input.delta,
     provenance: input.provenance,
     ...(input.resolves ? { resolves: input.resolves } : {}),
+    ...(input.underGrant ? { underGrant: input.underGrant } : {}),
     binding: input.binding,
     ...(input.merge ? { merge: input.merge } : {}),
     ...(input.attests ? { attests: input.attests } : {}),

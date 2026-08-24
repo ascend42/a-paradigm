@@ -32,6 +32,12 @@ export interface ResolveOptions {
   decidedBy?: string;
   /** the original conflicting ref — supplied to record the PRECISE contended set. */
   oursRef?: string;
+  /**
+   * M3-lite I6 — the auto-resolve grant this resolution is performed under,
+   * threaded from the GATE (which alone knows the acting principal — see
+   * strand.ts `underGrant`). Absent on every human-acted resolve.
+   */
+  underGrant?: string;
 }
 
 export interface ResolveResult {
@@ -142,6 +148,7 @@ export async function resolveKnot(root: string, opts: ResolveOptions): Promise<R
       gitCommit,
       now,
       resolves: resolution,
+      ...(opts.underGrant ? { underGrant: opts.underGrant } : {}),
     });
     clearScratch(root, opts.agentId);
     return { strand, resolution };

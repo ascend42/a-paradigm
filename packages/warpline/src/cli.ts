@@ -91,6 +91,15 @@ import { resolveSelector } from './fabric/select.js';
 import { parentsOf } from './fabric/dag.js';
 import { stake, stakeRecover, type StakeResult, type StakeRecoverResult } from './fabric/stake.js';
 import { mintAgentKey, listKeySummaries, keyRegistryPathOf } from './fabric/keys.js';
+import {
+  issueGrant,
+  revokeGrant,
+  listGrantSummaries,
+  activeGrantFor,
+  parseGrantTtl,
+  grantsPathOf,
+  GRANT_TTL_MAX_MS,
+} from './fabric/grants.js';
 import { STAKE_MARKER } from './fabric/stake-guard.js';
 import { existsSync } from 'node:fs';
 import { gitPath } from './git/git-exec.js';
@@ -140,6 +149,16 @@ const program = new Command();
  * unrecorded makes "zero W3 marks" a predicate that cannot fail. On an UNMARKED
  * (human) shell this returns immediately having done nothing at all: no trace
  * row, no throw, no observable difference from before the gate existed.
+ *
+ * M3-lite I6 (the Q3 ruling): an ACTIVE auto-resolve grant (#grants) is an
+ * exception INSIDE this gate for `resolve` ONLY — the verb stays in
+ * HUMAN_ONLY_VERBS (frozen descriptors untouched); every other human-class
+ * verb/flag refuses regardless of grants. The gate is where the ACTING
+ * principal is known (the shell marker — authoredBy on the strand names the
+ * CONTESTED agent even for a human resolve), so on allow the grantId is
+ * RETURNED and the resolve action threads it into the seal (`underGrant`).
+ * Unmarked (human) shells always return underGrant:null; a marked shell on a
+ * zero-grant repo takes the identical refusal as before, byte for byte.
  */
 async function gateHumanClass(spec: {
   root: string;
@@ -150,14 +169,20 @@ async function gateHumanClass(spec: {
   target: string | null;
   /** parsed options, keyed by HUMAN_ONLY_ADMIT_FLAGS param names. */
   flags?: Record<string, unknown>;
-}): Promise<void> {
+}): Promise<{ underGrant: string | null }> {
   const violation = checkHumanClass({ cliPath: spec.cliPath, ...(spec.flags ? { flags: spec.flags } : {}) });
-  if (!violation) return;
+  if (!violation) return { underGrant: null }; // unmarked shell — presumed human
+  if (violation.verb === 'resolve' && violation.flags.length === 0) {
+    const grant = activeGrantFor(spec.root, { branch: 'selvage', now: new Date().toISOString() });
+    if (grant) return { underGrant: grant.grantId }; // admitted UNDER the grant
+  }
   // traceCli emits the row (refusal included) and RE-THROWS unchanged, so
   // fail() still owns the stderr refusal line and the verdict-keyed exit.
   await traceCli({ root: spec.root, verb: spec.verb, target: spec.target, principal: violation.agentId }, () => {
     throw new RefusedError(violation.refusal, violation.message);
   });
+  /* unreachable — traceCli re-threw */
+  return { underGrant: null };
 }
 
 /**
@@ -1174,7 +1199,10 @@ program
         // C-11: the law that made FG-1 measurable. `resolve` is HUMAN_ONLY on
         // the daemon and used to be free on the CLI — a security law that held
         // for an agent on MCP and evaporated for an agent with a shell.
-        await gateHumanClass({ root, cliPath: 'resolve', verb: 'resolve', target: resolveTarget });
+        // I6: the gate returns the grantId when an AGENT shell was admitted
+        // under an active auto-resolve grant — threaded into the seal so the
+        // resolution strand records underGrant. Human shells get null.
+        const gate = await gateHumanClass({ root, cliPath: 'resolve', verb: 'resolve', target: resolveTarget });
         if (options.native) {
           const result = await traceCli(
             { root, verb: 'resolve', target: resolveTarget, principal: agentId },
@@ -1184,6 +1212,7 @@ program
                 agentId,
                 reason: options.reason,
                 decidedBy: options.by,
+                ...(gate.underGrant ? { underGrant: gate.underGrant } : {}),
               }),
           );
           if (options.json) {
@@ -1217,6 +1246,7 @@ program
               reason: options.reason,
               decidedBy: options.by,
               oursRef: options.ours,
+              ...(gate.underGrant ? { underGrant: gate.underGrant } : {}),
             }),
         );
         if (options.json) {
@@ -2052,6 +2082,126 @@ keyCmd
       );
       if (result.malformed.length) {
         lines.push(`  MALFORMED  ${result.malformed.length} registry row(s) skipped fail-closed: ${result.malformed.map((m) => `line ${m.line} (${m.reason})`).join('; ')}`);
+      }
+      process.stdout.write(lines.join('\n') + '\n');
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+const grantCmd = program
+  .command('grant')
+  .description(
+    'M3-lite auto-resolve grants (#grants). A grant is a HUMAN-ISSUED, scoped, expiring, revocable exception INSIDE the resolve gate: while one is active, an AGENT-class principal may run `resolve` (and ONLY resolve — never stake/backup/recover), and the resolution strand records `underGrant: <grantId>` inside its pickId. `resolve` stays a human-class verb; with no active grant nothing changes, byte for byte. Store: .warpline/grants/auto-resolve.jsonl (append-only; revoke = append).',
+  );
+
+grantCmd
+  .command('auto-resolve')
+  .description(
+    'ISSUE an auto-resolve grant (HUMAN-class — gated like `key mint`; an agent shell is refused). expiresAt is REQUIRED: default ttl 24h, hard cap 7d. While active, agents may resolve KNOTs within scope and every such resolution is attributed via underGrant.',
+  )
+  .option('--branch <branch>', 'scope the grant to ONE branch (exact match; default: all branches)')
+  .option('--ttl <duration>', 'time to live — <n>m|<n>h|<n>d (default 24h, max 7d)', '24h')
+  .option('-m, --note <note>', 'why this grant exists (the audit record)')
+  .option('--json', 'emit the issued grant row as JSON')
+  .action(async (options: { branch?: string; ttl: string; note?: string; json?: boolean }) => {
+    try {
+      const root = await resolveRoot();
+      // Grant issuance is HUMAN-class (Q3 ruling: console/CLI human-class act,
+      // procedurally bound) — same #agent-shell credential as `key mint`,
+      // because `grant.issue` is deliberately NOT a daemon verb (no
+      // self-service grant surface, anti-sockpuppet) and cannot ride
+      // HUMAN_ONLY_VERBS' derived CLI map.
+      if (shellPrincipal() === 'agent') {
+        throw new RefusedError(
+          refuse({ code: 'FORBIDDEN', retriable: 'never' }),
+          `warpline: grant auto-resolve is a HUMAN-class act — an agent must never grant itself resolve authority (Aegis §2.2). ` +
+            `This shell is an AGENT shell (WARPLINE_AGENT_ID set); escalate to a human. A human shell does not export it.`,
+        );
+      }
+      const ttlMs = parseGrantTtl(options.ttl);
+      if (ttlMs > GRANT_TTL_MAX_MS) {
+        throw new Error(`warpline: grant refused — ttl ${options.ttl} exceeds the 7-day cap`);
+      }
+      const result = issueGrant(root, {
+        ...(options.branch !== undefined ? { branch: options.branch } : {}),
+        ttlMs,
+        ...(options.note !== undefined ? { note: options.note } : {}),
+      });
+      if (options.json) {
+        process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+        return;
+      }
+      const g = result.grant;
+      // THE LOUD LINE — issuing a grant suspends a security law inside its scope.
+      process.stdout.write(
+        `GRANT ACTIVE  ${g.grantId}\n` +
+          `  !! AGENTS MAY NOW RESOLVE KNOTS ${g.scope.branch ? `on branch "${g.scope.branch}"` : 'on ALL branches'} until ${g.ttl.expiresAt} !!\n` +
+          `  scope    resolve ONLY (stake/backup/recover stay human-class regardless)\n` +
+          `  issued   ${g.ttl.issuedAt}${g.note ? `  — ${g.note}` : ''}\n` +
+          `  store    ${result.storePath}\n` +
+          `  revoke   warpline grant revoke ${g.grantId.slice(0, 'grant:'.length + 12)}\n`,
+      );
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+grantCmd
+  .command('revoke <grantId>')
+  .description('REVOKE a grant by id or ≥12-char prefix (HUMAN-class). Appends a revoke row — a revoked grantId never matches again at the gate; strands sealed BEFORE the revocation instant stay valid.')
+  .option('--json', 'emit the revoke row as JSON')
+  .action(async (grantId: string, options: { json?: boolean }) => {
+    try {
+      const root = await resolveRoot();
+      if (shellPrincipal() === 'agent') {
+        throw new RefusedError(
+          refuse({ code: 'FORBIDDEN', retriable: 'never' }),
+          `warpline: grant revoke is a HUMAN-class act (the grant lifecycle is the human's — Aegis §2.2). ` +
+            `This shell is an AGENT shell (WARPLINE_AGENT_ID set); escalate to a human. A human shell does not export it.`,
+        );
+      }
+      const result = revokeGrant(root, grantId);
+      if (options.json) {
+        process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+        return;
+      }
+      process.stdout.write(
+        `GRANT REVOKED  ${result.revoke.grantId}\n` + `  at  ${result.revoke.revokedAt} — agents may no longer resolve under it\n`,
+      );
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+grantCmd
+  .command('list')
+  .description('List grant rows with status (active/expired/revoked). Agent-readable — a plain read; malformed/tampered rows are surfaced (they are skipped fail-closed by every reader).')
+  .option('--json', 'emit the grant summary as JSON')
+  .action(async (options: { json?: boolean }) => {
+    try {
+      const root = await resolveRoot();
+      const result = listGrantSummaries(root);
+      if (options.json) {
+        process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+        return;
+      }
+      if (result.grants.length === 0 && result.malformed.length === 0) {
+        process.stdout.write('WARPLINE GRANTS  (none issued — `warpline grant auto-resolve`)\n');
+        return;
+      }
+      const lines = [`WARPLINE GRANTS  (store ${grantsPathOf(root)})`];
+      for (const g of result.grants) {
+        lines.push(
+          `  ${g.grantId.slice(0, 'grant:'.length + 12)}…  ${g.status.toUpperCase().padEnd(8)}  ` +
+            `${g.scope.branch ? `branch ${g.scope.branch}` : 'all branches'}  ` +
+            `${g.issuedAt} → ${g.expiresAt}${g.revokedAt ? `  (revoked ${g.revokedAt})` : ''}${g.note ? `  — ${g.note}` : ''}`,
+        );
+      }
+      if (result.malformed.length) {
+        lines.push(
+          `  MALFORMED  ${result.malformed.length} row(s) skipped fail-closed: ${result.malformed.map((m) => `line ${m.line} (${m.reason})`).join('; ')}`,
+        );
       }
       process.stdout.write(lines.join('\n') + '\n');
     } catch (err) {

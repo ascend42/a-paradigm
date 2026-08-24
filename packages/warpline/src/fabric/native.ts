@@ -1139,6 +1139,13 @@ export interface ResolveNativeOptions {
   /** who made the call (defaults to agentId — no git user.name on this path). */
   decidedBy?: string;
   now?: string;
+  /**
+   * M3-lite I6 — the auto-resolve grant this resolution is performed under,
+   * threaded from the GATE (daemon verb×principal matrix / agent-shell CLI
+   * gate), which alone knows the ACTING principal. Absent on every
+   * human-acted resolve. Rides INTO the v3 pickId (strand.ts).
+   */
+  underGrant?: string;
 }
 
 export interface ResolveNativeResult {
@@ -1232,6 +1239,18 @@ export async function resolveNative(root: string, opts: ResolveNativeOptions): P
     // the agent whose proposal it settles), so post-boundary it is signed under
     // that principal's key — resolve is a human-run verb on the same box, and
     // the key resolves the same fail-closed way.
+    //
+    // M3 I6 — THE DISCRIMINATOR CORRECTION (Build B deviation 3): because
+    // authoredBy.agentId names the CONTESTED agent even when a HUMAN performs
+    // the resolve, authoredBy can NEVER discriminate who acted. The acting
+    // principal is known only at the GATE (daemon who.kind / CLI shell
+    // marker), so the gate threads `underGrant` into this seal input when —
+    // and only when — the actor was an AGENT admitted through an active
+    // auto-resolve grant (#grants). A resolves-strand WITHOUT underGrant is
+    // presumed human-resolved: the procedural human boundary cannot
+    // cryptographically distinguish it, and that residue is ACCEPTED
+    // (TD-2026-08-23-136) — verify checks only strands that DO carry the
+    // field (grant-violation), and no check is invented for the absence.
     const strand = signStrandForSeal(
       root,
       buildStrandV3({
@@ -1245,6 +1264,7 @@ export async function resolveNative(root: string, opts: ResolveNativeOptions): P
         delta: summarizeDelta(selvage, resolved),
         provenance: { ref: 'refs/heads/selvage', treeSha: null, gitCommit: null },
         resolves: resolution,
+        ...(opts.underGrant ? { underGrant: opts.underGrant } : {}),
         binding: { treeId: snap.treeId, gitOid: snap.gitOid, treeSemantics: WORKTREE_SEMANTICS },
       }),
     );

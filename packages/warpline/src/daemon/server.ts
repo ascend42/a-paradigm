@@ -67,6 +67,7 @@ import {
 } from './protocol.js';
 import { backupFabric } from '../fabric/backup.js';
 import { refuse, refusalOf, RefusedError } from '../fabric/refusal.js';
+import { activeGrantFor } from '../fabric/grants.js';
 import { resolveToken, type Principal } from './tokens.js';
 import { acquireDaemonLock, releaseDaemonLock } from './lifecycle.js';
 
@@ -212,10 +213,26 @@ export async function startDaemon(root: string, opts: StartDaemonOptions = {}): 
         );
       }
       // The verb × principal matrix (Aegis §2.2) — human-class-only verbs.
+      //
+      // M3-lite I6 (the Q3 ruling): an ACTIVE auto-resolve grant (#grants) is an
+      // exception INSIDE this gate for the verb `resolve` ONLY — the verb stays
+      // in HUMAN_ONLY_VERBS (the frozen descriptor invariants do not move), and
+      // every other human-only verb (stake / stake.recover / backup) refuses
+      // regardless of grants. The gate is the ONE place the acting principal is
+      // known (who.kind — authoredBy on the strand names the CONTESTED agent
+      // even for a human resolve, so it can never discriminate); on allow, the
+      // grantId is threaded to the resolve handler so the seal records
+      // underGrant. A zero-grant repo takes the identical throw below,
+      // byte-for-byte — grants default OFF (v2 §A11).
+      let resolveGrantId: string | null = null;
       if (who.kind === 'agent' && HUMAN_ONLY_VERBS.includes(verb)) {
-        throw new RpcFailure('FORBIDDEN', `verb ${verb} is human-class only (Aegis §2.2) — principal ${JSON.stringify(who.principal)} is kind:agent`);
+        const grant = verb === 'resolve' ? activeGrantFor(root, { branch: 'selvage', now: new Date().toISOString() }) : null;
+        if (!grant) {
+          throw new RpcFailure('FORBIDDEN', `verb ${verb} is human-class only (Aegis §2.2) — principal ${JSON.stringify(who.principal)} is kind:agent`);
+        }
+        resolveGrantId = grant.grantId;
       }
-      const result = await dispatch(root, verb, params, who);
+      const result = await dispatch(root, verb, params, who, resolveGrantId);
       // PW-8: a VERDICT-CLASS refusal riding inside an ok result is audited
       // (resultCode), not masked — same derivation rule as exitCodeForResult.
       // C-16: the probe that stood here read the OUTER object only, so the
@@ -257,6 +274,10 @@ export async function startDaemon(root: string, opts: StartDaemonOptions = {}): 
     verb: string,
     params: Record<string, unknown>,
     who: Principal,
+    /** I6: the auto-resolve grant the GATE admitted an agent-class `resolve`
+     * under (null on every human call and every other verb) — never a param,
+     * so no client can assert it. */
+    resolveGrantId: string | null = null,
   ): Promise<unknown> => {
     const wdir = warplineDirOf(r);
     switch (verb) {
@@ -525,6 +546,10 @@ export async function startDaemon(root: string, opts: StartDaemonOptions = {}): 
           reason,
           decidedBy: who.principal, // server-stamped
           ...(str(params, 'now') ? { now: str(params, 'now') } : {}),
+          // I6: threaded from the GATE (never a client param) — present only
+          // when an agent-class call was admitted under an active grant, so the
+          // resolution seal records underGrant (strand.ts).
+          ...(resolveGrantId ? { underGrant: resolveGrantId } : {}),
         });
       }
       case 'stake':

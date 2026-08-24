@@ -74,6 +74,7 @@ import { buildDag } from './dag.js';
 import { listRefs, readRef } from './refs.js';
 import { readStakeJournal } from './stake-journal.js';
 import { hasSignedFrom, signedFromOf, readKeyRegistry, verifyPickIdSig, type AgentKeyRegistryRow } from './keys.js';
+import { grantActiveAt } from './grants.js';
 import { ObjectStore } from '../warp/object-store.js';
 import { WORKTREE_REF } from '../absorb.js';
 
@@ -107,6 +108,15 @@ export type FabricVerifyKind =
   | 'sig-principal-mismatch'
   /** the key registry's signed-from row names a pickId absent from the fabric. */
   | 'registry-invalid'
+  /**
+   * M3-lite I6 — a strand carries `underGrant` but the named grant row was NOT
+   * active (non-revoked, non-expired, scope-matched) at the strand's
+   * recordedAt — or the strand is not a resolution at all (grants cover
+   * RESOLVE only). Checked ONLY when underGrant is present: a resolves-strand
+   * WITHOUT it is presumed human-resolved (the procedural boundary cannot
+   * cryptographically distinguish it — accepted residue, TD-2026-08-23-136).
+   */
+  | 'grant-violation'
   /**
    * C-6 — a COMPLETED stake checkpoint attests a pickId the ledger no longer
    * carries. Deliberately its OWN kind and not folded into chain-break: a
@@ -575,6 +585,45 @@ export function verifyFabric(root: string, opts: VerifyOptions = {}): FabricVeri
         }
         sigSigned++;
       }
+    }
+  }
+
+  // 5d. GRANTS (M3-lite I6) — auto-resolve grant attribution. A strand that
+  //     RECORDS `underGrant` claims its resolution was agent-acted under a
+  //     named grant; the claim is checkable and checked: the grant row must
+  //     have been ACTIVE — issued, not yet expired (strict), not yet revoked —
+  //     at the strand's recordedAt, and scope-matched ('selvage': the resolve
+  //     path's only target branch). And grants cover RESOLVE ONLY, so an
+  //     underGrant on a non-resolves strand is itself a violation.
+  //
+  //     A resolves-strand WITHOUT underGrant is presumed HUMAN-resolved. The
+  //     procedural human boundary cannot cryptographically distinguish a human
+  //     resolve from an agent that stripped the field before seal — that
+  //     residue is ACCEPTED (TD-2026-08-23-136; no cryptographic human
+  //     signature exists by ruling), so NO check is invented for the absence.
+  //
+  //     A zero-grant repo with zero underGrant strands does not even read the
+  //     grant store — nothing to check, byte-identical to pre-M3.
+  for (let i = 0; i < fabric.length; i++) {
+    const s = fabric[i];
+    if (!s.underGrant) continue;
+    if (!s.resolves) {
+      failures.push({
+        seq: s.seq ?? i,
+        pickId: s.pickId,
+        kind: 'grant-violation',
+        detail: `strand carries underGrant ${s.underGrant} but is not a resolution strand — grants cover RESOLVE only (a grant can never authorize any other seal)`,
+      });
+      continue;
+    }
+    const check = grantActiveAt(root, s.underGrant, { at: s.recordedAt, branch: 'selvage' });
+    if (!check.ok) {
+      failures.push({
+        seq: s.seq ?? i,
+        pickId: s.pickId,
+        kind: 'grant-violation',
+        detail: `resolution recorded under grant ${s.underGrant}, which was not active at recordedAt ${s.recordedAt}: ${check.reason}`,
+      });
     }
   }
 

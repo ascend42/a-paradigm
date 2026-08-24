@@ -908,6 +908,14 @@ components:
       (pre-epoch by construction), so a grafted sig fails CLOSED
       (pickId-mismatch / legacy-body-mismatch). Regression:
       test/strand-sig-preimage.test.ts pins all three postures both ways.
+      UNDER-GRANT (M3-lite I6): optional `underGrant: grantId` on a
+      resolves-strand whose ACTING principal was an agent admitted through an
+      active #grants row (threaded from the gate — authoredBy names the
+      CONTESTED agent and can never discriminate who acted). INSIDE the pickId
+      preimage in BOTH epochs, the exact opposite posture to sig: on v2 it
+      rides the `...rest` spread; the explicit v3 preimage lists it
+      conditionally (absent = absent, old identities hold), and buildStrandV3
+      refuses underGrant without resolves. Regression: test/m3-grants.test.ts.
     type: module
     components:
       - "#canonical-json"
@@ -1213,6 +1221,15 @@ components:
       signing{epochPinned, signedFromPickId, signed, exempt, failed}; the CLI
       prints "signing epoch: none" on unpinned repos. Tests:
       test/verify-sig.test.ts.
+      GRANTS (step 5d — M3-lite I6): a strand carrying `underGrant` claims its
+      resolution was agent-acted under a named #grants row — checked: the grant
+      must have been ACTIVE (issued, unexpired — strict — and unrevoked AT the
+      strand's recordedAt, scope-matched) else grant-violation; underGrant on a
+      non-resolves strand is grant-violation too (grants cover RESOLVE only).
+      A resolves-strand WITHOUT underGrant is presumed human-resolved (accepted
+      residue, TD-2026-08-23-136 — no check invented for the absence); zero
+      underGrant strands = the grant store is never even read. Tests:
+      test/m3-falsifier.test.ts.
     type: module
     components:
       - "#strand"
@@ -1223,6 +1240,7 @@ components:
       - "#warp-store"
       - "#anchor"
       - "#keys"
+      - "#grants"
 
   fabric-fsck:
     description: >-
@@ -3029,6 +3047,14 @@ components:
       fixture loop (genesis FF, edit FF, CLEAN WEAVE) in-process vs through the
       socket produces byte-identical results modulo the envelope. NEVER started
       against this repo's live fabric by tests — fixtures only.
+      AUTO-RESOLVE GRANTS (M3-lite I6): the verb×principal matrix now carries
+      ONE exception INSIDE the gate — agent + verb 'resolve' + an ACTIVE
+      #grants row (activeGrantFor) is allowed through, with the grantId
+      threaded via dispatch (NEVER a client param) so the resolution seal
+      records underGrant; every other human-only verb refuses regardless, and
+      with no active grant the refusal is byte-identical to before (pinned by
+      test/m3-falsifier.test.ts). 'resolve' STAYS in HUMAN_ONLY_VERBS — the
+      frozen descriptor invariants do not move.
     type: service
     tags: [warpline, native-first, phase-1, daemon]
     components:
@@ -3123,6 +3149,54 @@ components:
       v1-anchor shape); seals after it REQUIRE signatures now that I3 is live
       (#seal signStrandForSeal signs agent-class seals and refuses on an
       unresolvable key; #fabric-verify enforces the sig-* rules at I4).
+    type: module
+    tags: [warpline, m3, integrity, security]
+
+  grants:
+    description: >-
+      M3-lite I6+I7 (m3-integrity-design-2026-08-23.md §6 Q3 ruling,
+      TD-2026-08-23-136 item 4): HUMAN-ISSUED auto-resolve grants — a scoped,
+      expiring, revocable exception INSIDE the resolve gate. `resolve` STAYS in
+      HUMAN_ONLY_VERBS (the frozen descriptor invariants never move; the grant
+      is an exception inside the gate, not a re-classification), and grants
+      cover RESOLVE ONLY — stake/stake.recover/backup refuse regardless. The
+      grant is PROCEDURALLY bound (by ruling NO cryptographic human signature
+      exists): issue/revoke are console/CLI human-class acts gated exactly like
+      `key mint` (the #agent-shell credential); `grant list` is agent-readable.
+      STORE .warpline/grants/auto-resolve.jsonl — append-only grant:v1 rows,
+      strict union {kind:'grant'|'revoke'}, reader fail-closed per row (#keys
+      registry pattern: malformed rows skipped AND surfaced). grantId =
+      'grant:' + sha256 over the canonical row body and is RECOMPUTED on read —
+      a row whose id does not reproduce from its own body (tampered scope/ttl)
+      loses its authority. TTL: expiresAt REQUIRED (no unbounded grants),
+      default 24h, hard cap 7d, expiry STRICT (dead at the boundary instant).
+      MATCHING (activeGrantFor — every miss fails closed): revoke WINS over any
+      later re-read; branch scope exact-or-absent; scope.knotClass
+      'over-block-suspect' NEVER matches (the gate cannot classify the knot at
+      enforcement time — a scope it cannot check does not match; 'any'/absent
+      matches). ENFORCEMENT lives at the TWO gates, which alone know the ACTING
+      principal (the DISCRIMINATOR CORRECTION, Build B deviation 3: a resolve
+      strand's authoredBy.agentId names the CONTESTED agent even when a human
+      acts, so authorship can never discriminate who acted): the daemon
+      verb×principal matrix (#warplined server.ts — agent + 'resolve' + active
+      grant → allowed, grantId threaded through dispatch, NEVER a client param)
+      and the CLI's gateHumanClass (#agent-shell marker + active grant →
+      allowed, grantId returned to the resolve action). On allow the resolution
+      seal records `underGrant: grantId` — INSIDE the pickId preimage in BOTH
+      epochs (attribution-load-bearing: v2 rides the `...rest` spread, the
+      explicit v3 preimage lists it conditionally, absent = absent so old
+      identities hold), and buildStrandV3 refuses underGrant without resolves.
+      VERIFY/FSCK (#fabric-verify 'grant-violation'): a resolves-strand WITH
+      underGrant is checked — the named grant must have been active
+      (issued/unexpired/unrevoked-at-recordedAt, scope-matched) at seal time;
+      an underGrant on a non-resolve strand is itself a violation. A
+      resolves-strand WITHOUT underGrant is PRESUMED human-resolved — the
+      procedural boundary cannot cryptographically distinguish it, residue
+      ACCEPTED by ruling, no check invented. DEFAULT OFF (v2 §A11): a
+      zero-grant repo never even reads the store and every no-grant refusal is
+      byte-identical to pre-M3 (pinned by test/m3-falsifier.test.ts arm 6; the
+      full six-arm falsifier is the field-test precondition, with unit coverage
+      in test/m3-grants.test.ts).
     type: module
     tags: [warpline, m3, integrity, security]
 
@@ -3735,6 +3809,12 @@ components:
       already marks principal:'human'). `daemon token mint` is deliberately NOT
       gated — it is not in HUMAN_ONLY_VERBS, and widening the set is a founder
       call, not a wiring one. Proved in test/agent-shell-gate.test.ts.
+      AUTO-RESOLVE GRANTS (M3-lite I6): the CLI resolve gate (cli.ts
+      gateHumanClass) consults #grants the same way the daemon matrix does —
+      a MARKED shell attempting `resolve` (verb only, never the override
+      flags) under an ACTIVE grant is allowed through and the grantId is
+      returned so the seal records underGrant; no grant → the identical
+      refusal as before, byte for byte.
     type: module
     tags: [warpline, security, cli, F4]
     components:

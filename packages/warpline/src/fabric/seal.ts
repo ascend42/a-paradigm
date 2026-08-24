@@ -54,6 +54,13 @@ export interface SealInput {
   confidence?: number | null;
   /** present only for a KNOT-council resolution strand. */
   resolves?: KnotResolution;
+  /**
+   * M3-lite I6 — the auto-resolve grant an AGENT-acted resolution was
+   * performed under (threaded from the GATE, which alone knows the acting
+   * principal — strand.ts `underGrant`). Resolution seals only; rides INTO
+   * the v2 pickId via the `...rest` spread (attribution-load-bearing).
+   */
+  underGrant?: string;
   /** true when sealing a materialized CLEAN merge (its gitCommit is one parent). */
   merged?: boolean;
   /** true when sealing a BYTE-CUSTODY strand (meaning-NOOP, tree advanced —
@@ -206,6 +213,7 @@ export function sealState(
     calibratedConfidence: input.confidence ?? null,
     provenance: input.provenance ?? { ref: state.ref, treeSha: state.treeSha, gitCommit: input.gitCommit },
     ...(input.resolves ? { resolves: input.resolves } : {}),
+    ...(input.underGrant ? { underGrant: input.underGrant } : {}),
     ...(input.merged ? { merged: true } : {}),
     ...(input.byteOnly ? { byteOnly: true } : {}),
     ...(input.authoredBy ? { authoredBy: input.authoredBy } : {}),

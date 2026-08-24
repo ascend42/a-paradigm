@@ -509,6 +509,37 @@ export {
   type KeySummary,
   type KeyListResult,
 } from './fabric/keys.js';
+// M3-lite I6 (#grants): human-issued auto-resolve grants — a scoped, expiring,
+// revocable exception INSIDE the resolve gate (resolve stays HUMAN_ONLY;
+// TD-2026-08-23-136 item 4 / §6 Q3). Zero grants = byte-identical to pre-M3.
+export {
+  GRANT_SCHEMA,
+  GRANT_ID_PREFIX,
+  GRANT_TTL_MAX_MS,
+  GRANT_TTL_DEFAULT_MS,
+  grantsDirOf,
+  grantsPathOf,
+  computeGrantId,
+  readGrantStore,
+  issueGrant,
+  revokeGrant,
+  activeGrantFor,
+  grantActiveAt,
+  listGrantSummaries,
+  parseGrantTtl,
+  type GrantScope,
+  type GrantRow,
+  type RevokeRow,
+  type GrantStoreRow,
+  type GrantStoreReadResult,
+  type IssueGrantOptions,
+  type IssueGrantResult,
+  type RevokeGrantResult,
+  type ActiveGrantQuery,
+  type GrantAtCheck,
+  type GrantSummary,
+  type GrantListResult,
+} from './fabric/grants.js';
 export {
   socketPathOf,
   pidPathOf,
