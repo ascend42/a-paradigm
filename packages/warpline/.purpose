@@ -1224,6 +1224,58 @@ components:
       - "#anchor"
       - "#keys"
 
+  fabric-fsck:
+    description: >-
+      warpline fsck — THE INTEGRITY UMBRELLA (M3-lite I5, m3-integrity-design
+      §3+§6): runFsck(root, {store?}) -> FsckReport, ONE read-only pass
+      aggregating every custody check the individual verbs already run into
+      five sections {ok, findings[{level: warn|fail, kind, message}], notes[]}.
+      REUSE-ONLY by rule — fsck adds aggregation + sectioning, never new
+      verification machinery: (1) FABRIC — verifyFabric verbatim (integrity +
+      chain + DAG + bindings + anchor + the I4 signature walk); notes carry the
+      strand counts and the signing summary ("signing epoch: none" on unpinned
+      repos — the fabric-verify CLI vocabulary). (2) OBJECTS —
+      ObjectStore.verify() verbatim (the `objects verify` loose-object
+      re-hash); each corrupt id a corrupt-object FAIL. (3) REFS — the checks
+      verifyFabric already exposes, re-sectioned: ref-unresolved failures route
+      here (FAIL) and abandonedHeads become abandoned-head WARNINGS (legal,
+      surfaced with the `refs set` recovery line); selvage-tip drift stays in
+      the fabric section (verify reports it as chain-break — existing
+      vocabulary, not re-classified). (4) REGISTRY — readKeyRegistry /
+      listKeySummaries diagnostics: a malformed row is a FAIL
+      (registry-malformed-row — a garbled line in an append-only registry is
+      tamper/corruption evidence; every reader already skips it fail-closed,
+      fsck makes it non-deniable); a LATEST-row key FILE missing is a WARNING
+      only (key-file-missing — a verifier box may hold no private keys;
+      verification uses REGISTRY public keys, never key files); extra
+      signed-from rows are WARNINGS (signed-from-duplicate — ignored by design,
+      the first pin is authoritative forever); a signed-from naming a pickId
+      absent from the fabric is a FAIL (verifyFabric's registry-invalid, ROUTED
+      here so the registry section — not fabric — fails). (5) STAKES — the C-6
+      cross-check verifyFabric already ran (stake-journal-orphan routed here);
+      a grades↔fabric cross-check is deliberately ABSENT (no exported check
+      exists — gradeFabric is a scoring report) and the absence is SAID in the
+      section notes, not silent. Overall ok = every section ok; warnings never
+      fail. CLI `warpline fsck` [--json]: per-section PASS/WARN/FAIL + finding
+      lines (✗ fail / ⚠ warn); exit 0 iff ok IN BOTH RENDER MODES (fsck's own
+      contract — stricter than the fabric-verify --json idiom), 1 on any failed
+      section, 2 on a usage/I/O error (the §4.3 split). NO daemon/descriptor
+      skin: adding a daemon verb grows DAEMON_VERBS and moves the FG-3-frozen
+      descriptorsId (descriptors-frozen.test.ts pins the content address +
+      totality) — founder-gated territory, so fsck is CLI-only at M3-lite. NO
+      daemon startup hook either (no startup health framework exists to hang
+      it on; not invented). Tests: test/fsck.test.ts (healthy signed fabric;
+      per-section tamper routing incl. chain byte-flip, sig strip, loose-object
+      flip, garbled registry row, missing key file WARN-only, unknown
+      signed-from; epoch-less repo; CLI exit codes + --json).
+    type: module
+    tags: [warpline, m3, integrity]
+    components:
+      - "#fabric-verify"
+      - "#warp-store"
+      - "#keys"
+      - "#stake-journal"
+
   fabric-repair:
     description: >-
       THE REPAIR PATH (audit C-13 + the P1 entry "detection without repair is a
@@ -3789,10 +3841,17 @@ components:
       descriptor freeze is untouched — descriptorsId hashes nothing a CLI verb
       reaches), is NOT wrapped in traceCli because that would WRITE, and exits
       0/1/2 for green/warnings/unsound so CI can gate on `--json`.
+      `warpline fsck [--json]` (M3-lite I5, #fabric-fsck) is the INTEGRITY
+      umbrella — fabric + objects + refs + registry + stakes in one read-only
+      pass (each check reused verbatim, nothing new); per-section
+      PASS/WARN/FAIL lines, exit 0 iff every section ok (warnings never fail;
+      --json included — fsck's own contract), 1 on a failed section, 2 on
+      usage/I/O. CLI-only for the same FG-3 reason as `health`.
       The only module allowed to write stdout; library code stays quiet.
     type: cli
     components:
       - "#warpline-health"
+      - "#fabric-fsck"
       - "#fabric-repair"
       - "#oracle"
       - "#absorb"

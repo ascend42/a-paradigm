@@ -298,6 +298,17 @@ export {
   type FabricVerifyKind,
   type VerifyOptions,
 } from './fabric/verify.js';
+// fsck — the M3-lite I5 integrity umbrella: fabric + objects + refs + registry +
+// stakes in one read-only pass (reuses the verify functions verbatim).
+export {
+  runFsck,
+  type FsckReport,
+  type FsckSection,
+  type FsckSections,
+  type FsckFinding,
+  type FsckLevel,
+  type FsckOptions,
+} from './fabric/fsck.js';
 // v1-prefix epoch anchor (docs/specs/warpline-v1-anchor.md) — freeze + attest-once.
 export {
   strandDigest,

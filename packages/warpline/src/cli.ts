@@ -68,6 +68,7 @@ import { readKnotPayload, type KnotPayload, type ContestedUnit } from './fabric/
 import { frameProse, escapeProseBody, envelopeProse } from './envelope.js';
 import { gradeFabric, applyGrades, type GradeReport } from './fabric/grade.js';
 import { verifyFabric } from './fabric/verify.js';
+import { runFsck, type FsckSection } from './fabric/fsck.js';
 import { listRefs, heads, migrateSelvageToRefs } from './fabric/refs.js';
 import { repairFabric, setFabricRef, type FabricRepairResult, type RefSetResult } from './fabric/repair.js';
 import { attestFabric } from './fabric/anchor.js';
@@ -1855,6 +1856,41 @@ fabric
       }
     } catch (err) {
       fail(err);
+    }
+  });
+
+program
+  .command('fsck')
+  .description(
+    'THE INTEGRITY UMBRELLA (M3-lite I5): one read-only pass over every custody surface — fabric verify (chain + DAG + bindings + signatures), objects verify (loose-object re-hash), refs consistency, key-registry health, and the stake-journal cross-check. Reuses the exact checks the individual verbs run; fsck adds aggregation, never new verification machinery. Exit 0 = every section ok (warnings do not fail), 1 = a section failed, 2 = could not run.',
+  )
+  .option('--json', 'emit the full FsckReport as JSON')
+  .action(async (options: { json?: boolean }) => {
+    try {
+      const root = await resolveRoot();
+      const report = runFsck(root);
+      if (options.json) {
+        process.stdout.write(JSON.stringify(report, null, 2) + '\n');
+      } else {
+        const lines: string[] = [];
+        lines.push(report.ok ? 'FSCK     ok — every section intact' : 'FSCK     FAILED');
+        for (const [name, section] of Object.entries(report.sections) as Array<[string, FsckSection]>) {
+          const verdict = !section.ok ? 'FAIL' : section.findings.length ? 'WARN' : 'PASS';
+          lines.push(`  ${pad(name, 10)}${verdict}${section.notes.length ? `  (${section.notes.join('; ')})` : ''}`);
+          for (const f of section.findings) {
+            lines.push(`    ${f.level === 'fail' ? '✗' : '⚠'} ${f.kind}  ${f.message}`);
+          }
+        }
+        process.stdout.write(lines.join('\n') + '\n');
+      }
+      // exit 0 iff ok — in BOTH render modes (fsck's contract; warnings never fail).
+      if (!report.ok) process.exitCode = 1;
+    } catch (err) {
+      // §4.3 (the `fabric verify` idiom): a usage / I/O error (fabric unreadable,
+      // store missing) → exit 2, distinct from an integrity failure (exit 1).
+      const msg = err instanceof Error ? err.message : String(err);
+      process.stderr.write(`warpline: ${msg}\n`);
+      process.exit(2);
     }
   });
 
