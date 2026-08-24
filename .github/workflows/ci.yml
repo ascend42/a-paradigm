@@ -12,7 +12,7 @@ jobs:
 
     strategy:
       matrix:
-        node-version: [18, 20, 22]
+        node-version: [20, 22]
 
     steps:
       - name: Checkout
@@ -25,7 +25,7 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        uses: ./.github/actions/install-deps
 
       - name: Build all packages
         run: npm run build
@@ -40,17 +40,16 @@ jobs:
         run: npm run format:check
         continue-on-error: true
 
-  # Warpline's vitest suite (packages/warpline/test/, 83 files) is NOT reachable
-  # from the `build` job: root `npm test` chains to it, but that job's matrix
-  # includes Node 18, which vitest 4 does not support, and its `npm test` leg
-  # also carries @a-company/paradigm. A warpline gate riding on that job would
-  # be permanently red for unrelated reasons and therefore ignored — which is
-  # the exact "wired to nothing" failure this job exists to close (panel B-1).
+  # Warpline's vitest suite (packages/warpline/test/) gets its OWN blocking job
+  # rather than riding the `build` job's `npm test` leg, which also carries
+  # @a-company/paradigm — a warpline gate mixed into that would be red for
+  # unrelated reasons and therefore ignored (the "wired to nothing" failure this
+  # job exists to close, panel B-1).
   #
-  # So warpline gets its own BLOCKING job, pinned to Node 20, with the same
-  # dependency build chain warpline-guard.yml already establishes. Unlike
-  # warpline-guard, this one is NOT continue-on-error: descriptors-frozen.test.ts
-  # and the rest of the F4 tripwires have to be able to fail a PR.
+  # Pinned to Node 20, with the same dependency build chain warpline-guard.yml
+  # establishes. Unlike warpline-guard, this one is NOT continue-on-error:
+  # descriptors-frozen.test.ts and the rest of the F4 tripwires have to be able
+  # to fail a PR.
   warpline:
     runs-on: ubuntu-latest
     name: Warpline tests
@@ -66,7 +65,7 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        uses: ./.github/actions/install-deps
 
       # Same chain as warpline-guard.yml: purpose-core → portal-core →
       # premise-core, then the engine itself.
@@ -100,11 +99,11 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 18
+          node-version: 20
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        uses: ./.github/actions/install-deps
 
       - name: Build
         run: npm run build

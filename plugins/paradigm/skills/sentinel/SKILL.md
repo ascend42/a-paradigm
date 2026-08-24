@@ -1,10 +1,7 @@
 ---
 name: sentinel
 description: Triage and manage incidents using Paradigm Sentinel. Use when the user says "check incidents", "triage errors", "sentinel status", "what errors happened", or when investigating production issues or test failures.
-context: fork
-agent: paradigm:reviewer
 allowed-tools: Read, Grep, Glob, Bash(curl *)
-argument-hint: "[incident-id or symbol]"
 ---
 
 # Sentinel Incident Triage

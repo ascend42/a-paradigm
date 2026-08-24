@@ -1,10 +1,7 @@
 ---
 name: ripple
 description: Analyze the impact of changing a symbol before modifying it. Use when the user says "what would break", "impact analysis", "ripple check", or before making changes to a core symbol.
-context: fork
-agent: paradigm:architect
 allowed-tools: Read, Grep, Glob
-argument-hint: "<symbol>"
 ---
 
 # Ripple Analysis — Impact Check

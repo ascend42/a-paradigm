@@ -1,8 +1,6 @@
 ---
 name: review
 description: Review recent changes for Paradigm compliance and code quality. Use when the user says "review my changes", "check my code", "am I good to commit", or after implementation before committing.
-context: fork
-agent: paradigm:reviewer
 allowed-tools: Read, Grep, Glob
 ---
 

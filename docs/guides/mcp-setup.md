@@ -164,16 +164,16 @@ The Claude Code plugin is the recommended install path. It configures MCP, enfor
 /plugin marketplace add ascend42/a-paradigm
 ```
 
-Restart Claude Code after installing. All 50+ Paradigm MCP tools will be available immediately in every project.
+Restart Claude Code after installing. All 150+ Paradigm MCP tools will be available immediately in every project.
 
 **What the plugin provides vs per-project setup:**
 
 | | Plugin | `paradigm mcp setup --client claude-code` |
 |---|---|---|
-| **MCP tools** | All 50+, globally for every project | Per-project config in `~/.claude/claude.json` |
+| **MCP tools** | All 150+, globally for every project | Per-project config in `~/.claude/claude.json` |
 | **Enforcement hooks** | Stop, PreToolUse, PostToolUse | Must run `paradigm hooks install --claude-code` separately |
 | **Skills** | `/paradigm:init`, `/paradigm:shift`, `/paradigm:scan`, etc. | Not included |
-| **Agents** | architect, builder, reviewer, tester, security, documentor, ftux (Nora), captain (Cid) | Not included |
+| **Agents** | architect, builder, reviewer, security, tester (5 bundled) | Not included |
 | **Updates** | Update plugin once | Re-run setup per project |
 
 Most teams use the plugin globally and `paradigm shift` for per-project context files (`.paradigm/`, `portal.yaml`, etc.).

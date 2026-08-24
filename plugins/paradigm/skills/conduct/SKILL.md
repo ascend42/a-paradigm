@@ -1,7 +1,6 @@
 ---
 name: conduct
 description: Register this Claude Code session with Paradigm Conductor. Use when the user says "conduct", "surface to conductor", "register with conductor", or wants this terminal visible in the Conductor overlay.
-argument-hint: "[optional label]"
 ---
 
 # Register with Paradigm Conductor

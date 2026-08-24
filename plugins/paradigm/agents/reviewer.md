@@ -7,7 +7,6 @@ description: >
   then code quality.
 tools: Read, Grep, Glob
 disallowedTools: Write, Edit, Bash, NotebookEdit
-permissionMode: plan
 maxTurns: 20
 ---
 

@@ -8,9 +8,12 @@ every project, automatically.
 
 ```
 /plugin marketplace add ascend42/a-paradigm
+/plugin install paradigm@a-paradigm
+/reload-plugins
 ```
 
-Restart Claude Code after installing. The MCP server and enforcement hooks start automatically.
+The `/reload-plugins` step is only needed if Claude Code prompts for it. The MCP
+server wires automatically on install, and the enforcement hooks start automatically.
 
 ## What You Get
 

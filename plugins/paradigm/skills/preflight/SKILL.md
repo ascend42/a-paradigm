@@ -1,10 +1,7 @@
 ---
 name: preflight
 description: Run pre-task compliance checks before starting implementation. Use when starting a new task, when the user says "preflight", "before I start", "what should I check", or proactively before complex tasks that affect 3+ files.
-context: fork
-agent: paradigm:architect
 allowed-tools: Read, Grep, Glob
-argument-hint: "[task description]"
 ---
 
 # Pre-Task Compliance Check

@@ -6,7 +6,6 @@ description: >
   Follows existing patterns, updates .purpose files alongside code,
   and uses the Paradigm logger instead of console.log.
 tools: Read, Grep, Glob, Edit, Write, Bash
-permissionMode: default
 maxTurns: 50
 ---
 

@@ -61,7 +61,7 @@
     "semantic-diff"
   ],
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   },
   "optionalDependencies": {
     "@anthropic-ai/sdk": "^0.120.0"

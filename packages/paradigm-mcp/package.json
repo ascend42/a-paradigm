@@ -42,9 +42,6 @@
     "typescript": "^5.0.0",
     "vitest": "^4.1.0"
   },
-  "publishConfig": {
-    "access": "public"
-  },
   "author": "ascend42",
   "license": "MIT",
   "repository": {
@@ -53,6 +50,6 @@
     "directory": "packages/paradigm-mcp"
   },
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   }
 }

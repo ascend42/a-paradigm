@@ -1,8 +1,6 @@
 ---
 name: handoff
 description: Prepare a context handoff summary for the next session or agent. Use when the user says "prepare handoff", "I'm done for now", "hand this off", or when context usage is high and work needs to continue later.
-context: fork
-agent: Explore
 allowed-tools: Read, Grep, Glob
 ---
 

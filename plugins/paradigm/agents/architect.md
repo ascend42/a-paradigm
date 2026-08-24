@@ -7,7 +7,6 @@ description: >
   Read-only — does not write implementation code.
 tools: Read, Grep, Glob, WebSearch, WebFetch
 disallowedTools: Write, Edit, Bash, NotebookEdit
-permissionMode: plan
 maxTurns: 30
 ---
 

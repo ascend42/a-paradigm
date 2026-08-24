@@ -29,6 +29,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # npm optional-deps bug (npm/cli#4828): a lockfile resolved on macOS omits
+      # the Linux-specific rollup binary, so tsup -> rollup crashes at build time
+      # ("Cannot find module @rollup/rollup-linux-x64-gnu"). Install the binary
+      # matching the resolved rollup version, without touching the manifest/lock.
+      - name: Work around npm optional-deps bug (rollup linux binary)
+        run: |
+          ver=$(node -p "require('./node_modules/rollup/package.json').version")
+          npm install --no-save --force "@rollup/rollup-linux-x64-gnu@${ver}" || true
+
       # Build the engine's workspace dependency chain, then the engine, then
       # the action bundle (purpose-core/portal-core → premise-core → warpline).
       - name: Build the engine + action

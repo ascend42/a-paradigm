@@ -1,7 +1,6 @@
 ---
 name: study-hall
 description: Autonomous self-study — each active agent follows its approved curriculum, drills against the scenario bank, and STAGES candidate learnings for the next gated class. Never certifies, never writes notebooks. Safe to run unattended on a schedule. Use when the user says "study hall", "let the agents study", "self-study", "run a study session", or schedules recurring learning.
-argument-hint: "[agent-id|all]"
 ---
 
 # Study Hall — autonomous staging (no teacher present)

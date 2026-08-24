@@ -1,10 +1,11 @@
 {
   "version": "1.0",
-  "updated": "2026-02-06",
+  "updated": "2026-08-24",
   "providers": {
     "anthropic": [
-      { "id": "claude-opus-4-6", "name": "Claude Opus 4.6", "provider": "anthropic", "family": "claude-4" },
-      { "id": "claude-sonnet-4-5-20250929", "name": "Claude Sonnet 4.5", "provider": "anthropic", "family": "claude-4" },
+      { "id": "claude-fable-5", "name": "Claude Fable 5", "provider": "anthropic", "family": "claude-5" },
+      { "id": "claude-opus-5", "name": "Claude Opus 5", "provider": "anthropic", "family": "claude-5" },
+      { "id": "claude-sonnet-5", "name": "Claude Sonnet 5", "provider": "anthropic", "family": "claude-5" },
       { "id": "claude-haiku-4-5-20251001", "name": "Claude Haiku 4.5", "provider": "anthropic", "family": "claude-4" }
     ],
     "openai": [

@@ -421,13 +421,13 @@ The `loadPortalConfigLegacy` back-compat shim introduced in v5.37.12 is removed 
 
 ---
 
-## 11. What's next (v6.1+)
+## 11. What's next
 
 - **Promotion pipelines** — notebook → project pack, decision cluster → path auto-draft, protocol → runbook. Reducing the authoring cost for content that already exists in other Paradigm surfaces.
 - **Compliance enforcement tooling** — `paradigm compliance audit`, retention workers, revocation workers, diploma invalidation on `policy_hash` drift. Schema landed in v5.39/v6.0 so the tooling can be added without another breaking change.
-- **Remote metrics opt-in** — v6.1 reads `metrics.remote_consent: pending` and prompts. Target endpoint is `nevr.land/telemetry`. Entirely opt-in.
-- **Claude University** — a separate site, not a Paradigm tenant. Tracking at `project_claude_learning_site.md`. The framework bits that make it feasible (pack discovery, timed quizzes, presentational credentials) ship in v6.0.
-- **Authoring UI for non-developers** — web CRUD for quizzes/paths, "suggest edit" PR flow. Conditional on v6.3 adoption data.
+- **Remote metrics opt-in** — reads `metrics.remote_consent: pending` and prompts. Target endpoint is `nevr.land/telemetry`. Entirely opt-in.
+- **Claude University** — a separate site, not a Paradigm tenant. Tracking at `project_claude_learning_site.md`. The framework bits that make it feasible (pack discovery, timed quizzes, presentational credentials) have shipped.
+- **Authoring UI for non-developers** — web CRUD for quizzes/paths, "suggest edit" PR flow. Conditional on adoption data.
 - **Glossary type, collapsing guide/runbook** — schema tidy-up deferred to avoid churn during the multi-tenant rollout.
 
 ---
@@ -437,7 +437,7 @@ The `loadPortalConfigLegacy` back-compat shim introduced in v5.37.12 is removed 
 - **Project owner adding compliance:** §1, §2.2, §3.3–3.4, §5.1–5.2, §6 (primary), §8
 - **First-party pack author:** §1, §2.1, §5, §6, §7 (primary), §8
 - **Discipline sub-pack creator:** §1, §2.2, §3.3, §4 (primary), §5, §7.1
-- **Section-aware pack author (v6.5+):** §1, §2.2, §4.5 (primary), §5.3, §7.1, §8
+- **Section-aware pack author:** §1, §2.2, §4.5 (primary), §5.3, §7.1, §8
 
 ---
 
