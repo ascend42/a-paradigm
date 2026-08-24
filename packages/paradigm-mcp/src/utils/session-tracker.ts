@@ -138,18 +138,26 @@ const MAX_BREADCRUMBS = 50;
 /** Path to breadcrumbs file (relative to project root) */
 const BREADCRUMBS_FILE = '.paradigm/session-breadcrumbs.json';
 
+/** Path to the ROTATED previous-session breadcrumbs (so recover reads the real
+ *  prior session, not the current one that clobbers BREADCRUMBS_FILE). */
+const PREVIOUS_BREADCRUMBS_FILE = '.paradigm/session-breadcrumbs.prev.json';
+
 /** Path to checkpoint file (relative to project root) */
 const CHECKPOINT_FILE = '.paradigm/session-checkpoint.json';
 
-/** Maximum age for checkpoints in milliseconds (7 days) */
-const CHECKPOINT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
+/** Maximum age for checkpoints in milliseconds (30 days). Was 7 — too short: a
+ *  fortnight-old checkpoint silently vanished from recovery, reading as "nothing
+ *  found" rather than "here is your last state, N days ago". */
+const CHECKPOINT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
 /**
  * Session tracker singleton
  */
-class SessionTracker {
+export class SessionTracker {
   private session: SessionStats;
   private rootDir: string | null = null;
+  /** Rotate the prior session's breadcrumbs at most once per process. */
+  private rotated = false;
   private _recovered: boolean = false;
   private lastLoreEntryId: string | null = null;
 
@@ -162,11 +170,49 @@ class SessionTracker {
    */
   setRootDir(rootDir: string): void {
     this.rootDir = rootDir;
+    // Preserve the PRIOR session's breadcrumbs ONCE per process, before this
+    // (freshly-empty) session overwrites BREADCRUMBS_FILE — otherwise
+    // loadPreviousSession returns the current empty session as the "previous"
+    // one (the "recover shows my own 0-minutes-ago session" bug).
+    if (!this.rotated) {
+      this.rotated = true;
+      this.rotatePreviousBreadcrumbs(rootDir);
+    }
     // Clear previous session's work log on new session start
     try {
       const { clearSessionWorkLog } = require('./session-work-log.js');
       clearSessionWorkLog(rootDir);
     } catch { /* non-fatal — session work log is optional */ }
+  }
+
+  /**
+   * Copy the on-disk breadcrumbs (from the LAST run) to the .prev file, so the
+   * current session can overwrite BREADCRUMBS_FILE without destroying the record
+   * loadPreviousSession needs. No-op if the on-disk session is already this one.
+   */
+  private rotatePreviousBreadcrumbs(rootDir: string): void {
+    const readJson = (p: string): PersistedSession | null => {
+      try { return fs.existsSync(p) ? (JSON.parse(fs.readFileSync(p, 'utf8')) as PersistedSession) : null; }
+      catch { return null; }
+    };
+    const writeJson = (p: string, data: PersistedSession): void => {
+      try {
+        const dir = path.dirname(p);
+        if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+        fs.writeFileSync(p, JSON.stringify(data, null, 2));
+      } catch { /* best-effort */ }
+    };
+    try {
+      // Global first (survives MCP restarts), then local.
+      let globalDir: string | null = null;
+      try { globalDir = getSessionDir(rootDir); } catch { globalDir = null; }
+      const globalCur = globalDir ? readJson(path.join(globalDir, 'breadcrumbs.json')) : null;
+      const localCur = readJson(path.join(rootDir, BREADCRUMBS_FILE));
+      const prior = globalCur ?? localCur;
+      if (!prior || prior.sessionId === this.session.sessionId) return; // nothing to preserve
+      if (globalDir) writeJson(path.join(globalDir, 'breadcrumbs.prev.json'), prior);
+      writeJson(path.join(rootDir, PREVIOUS_BREADCRUMBS_FILE), prior);
+    } catch { /* best-effort — rotation never blocks startup */ }
   }
 
   private createNewSession(): SessionStats {
@@ -269,28 +315,29 @@ class SessionTracker {
   loadPreviousSession(): PersistedSession | null {
     if (!this.rootDir) return null;
 
-    // Try global path first (survives MCP restarts)
-    try {
-      const globalSessionDir = getSessionDir(this.rootDir);
-      const globalPath = path.join(globalSessionDir, 'breadcrumbs.json');
-      if (fs.existsSync(globalPath)) {
-        const content = fs.readFileSync(globalPath, 'utf8');
-        return JSON.parse(content) as PersistedSession;
-      }
-    } catch {
-      // Fall through to local
-    }
+    const read = (p: string): PersistedSession | null => {
+      try { return fs.existsSync(p) ? (JSON.parse(fs.readFileSync(p, 'utf8')) as PersistedSession) : null; }
+      catch { return null; }
+    };
 
-    // Fallback to local path
-    try {
-      const filePath = path.join(this.rootDir, BREADCRUMBS_FILE);
-      if (!fs.existsSync(filePath)) return null;
+    let globalDir: string | null = null;
+    try { globalDir = getSessionDir(this.rootDir); } catch { globalDir = null; }
 
-      const content = fs.readFileSync(filePath, 'utf8');
-      return JSON.parse(content) as PersistedSession;
-    } catch {
-      return null;
+    // Preference order: the ROTATED prior-session file (global, then local) — the
+    // real previous session — then the live breadcrumbs file as a back-compat
+    // fallback. Never return the CURRENT session as "previous".
+    const candidates = [
+      globalDir ? path.join(globalDir, 'breadcrumbs.prev.json') : null,
+      path.join(this.rootDir, PREVIOUS_BREADCRUMBS_FILE),
+      globalDir ? path.join(globalDir, 'breadcrumbs.json') : null,
+      path.join(this.rootDir, BREADCRUMBS_FILE),
+    ].filter((p): p is string => p !== null);
+
+    for (const p of candidates) {
+      const session = read(p);
+      if (session && session.sessionId !== this.session.sessionId) return session;
     }
+    return null;
   }
 
   /**
@@ -467,7 +514,10 @@ class SessionTracker {
   private extractFilesFromBreadcrumbs(): string[] {
     const files = new Set<string>();
     for (const bc of this.session.breadcrumbs) {
-      // Extract file paths from summaries (simple heuristic)
+      // Extract file paths from summaries (simple heuristic). `summary` is
+      // optional on a breadcrumb — guard it (a summary-less breadcrumb used to
+      // crash persistBreadcrumbs with "Cannot read properties of undefined").
+      if (!bc.summary) continue;
       const matches = bc.summary.match(/\b[\w./]+\.(ts|js|tsx|jsx|py|go|rs|yaml|json|md)\b/g);
       if (matches) {
         for (const m of matches) {

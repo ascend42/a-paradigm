@@ -46,6 +46,59 @@ export function getGlobalDir(): string {
 }
 
 /**
+ * Resolve the project root robustly, so session state (checkpoints, breadcrumbs)
+ * hashes to a STABLE bucket regardless of the process's launch cwd.
+ *
+ * THE BUG THIS FIXES: the MCP server took `process.argv[2] || process.cwd()`, and
+ * the plugin manifest passes "." with no pinned cwd — so `resolve(".")` hashed
+ * whatever directory Claude Code happened to launch from (often NOT the project).
+ * Different launch contexts → different project hash → checkpoints written to and
+ * read from mismatched `~/.paradigm/sessions/{hash}/` buckets → recovery misses.
+ *
+ * Resolution order (first hit wins), all independent of a fragile cwd:
+ *   1. an explicit dir hint (argv) that is real and contains `.paradigm/`;
+ *   2. $PARADIGM_PROJECT_DIR, then $CLAUDE_PROJECT_DIR (Claude Code sets the latter
+ *      in the env of processes it spawns), when they contain `.paradigm/`;
+ *   3. walk UP from the hint (or cwd) to the nearest ancestor containing `.paradigm/`;
+ *   4. the first explicit candidate even without `.paradigm/` (a named project that
+ *      is simply not initialised yet beats a random cwd);
+ *   5. cwd — the last-resort fallback (previous behaviour).
+ */
+export function resolveProjectRoot(hint?: string): string {
+  const hasParadigm = (dir: string): boolean => {
+    try { return fs.existsSync(path.join(dir, '.paradigm')); } catch { return false; }
+  };
+
+  const explicit: string[] = [];
+  if (hint && hint !== '.') explicit.push(path.resolve(hint));
+  for (const env of [process.env.PARADIGM_PROJECT_DIR, process.env.CLAUDE_PROJECT_DIR]) {
+    if (env && env.trim()) explicit.push(path.resolve(env.trim()));
+  }
+
+  // (1)+(2): an explicit candidate that is actually a Paradigm project.
+  for (const c of explicit) {
+    if (hasParadigm(c)) return c;
+  }
+
+  // (3): walk up from the hint (or cwd) looking for `.paradigm/`.
+  const start = path.resolve(hint && hint !== '.' ? hint : process.cwd());
+  let dir = start;
+  // eslint-disable-next-line no-constant-condition
+  while (true) {
+    if (hasParadigm(dir)) return dir;
+    const parent = path.dirname(dir);
+    if (parent === dir) break; // reached filesystem root
+    dir = parent;
+  }
+
+  // (4): a named-but-uninitialised project beats a random cwd.
+  if (explicit.length) return explicit[0];
+
+  // (5): last resort — previous behaviour.
+  return process.cwd();
+}
+
+/**
  * Deterministic hash of a project's absolute root path.
  * Returns a 12-char hex string (truncated SHA-256).
  */
