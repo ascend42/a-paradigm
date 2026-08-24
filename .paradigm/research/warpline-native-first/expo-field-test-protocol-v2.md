@@ -1,6 +1,9 @@
 # Warpline Expo Field-Test Protocol — Pre-Registration v2
 
-Id: `expo-field-test-prereg-v2` · Status: **DRAFT — awaiting founder ratification + freeze.**
+Id: `expo-field-test-prereg-v2` · Status: **TEXT RATIFIED + LOCKED (TD-2026-08-24-012,
+founder, 2026-08-24). The amendment log is CLOSED — any text change requires a v3.**
+FREEZE (admissions count only after it) still awaits §C conditions (b) subject named in
+§A2 and (c) seed/corpus manifest hashes committed.
 Author: session 2026-08-23, under founder rulings TD-2026-08-23-042 (F1–F8) and the readiness
 panel (`field-test-readiness-2026-08-23.md`).
 
@@ -8,7 +11,7 @@ panel (`field-test-readiness-2026-08-23.md`).
 IMMUTABLE, exactly as its own rule requires: it is not edited; this document is the NEW
 pre-registration that supersedes it. v2 is a DELTA: every v1 section not amended below carries
 forward verbatim into v2's meaning. v2 FREEZES when all three hold: (a) the founder ratifies
-this text, (b) the subject app is named in §A2, (c) the seed/corpus manifests are sealed
+this text — DONE (TD-2026-08-24-012), (b) the subject app is named in §A2, (c) the seed/corpus manifests are sealed
 (hashes committed). No admission counts before the freeze; after it, changes require a v3.
 
 ---
