@@ -2976,6 +2976,49 @@ components:
     type: module
     tags: [warpline, native-first, phase-1, security]
 
+  keys:
+    description: >-
+      M3-lite I1+I2 (m3-integrity-design-2026-08-23.md §6 founder rulings,
+      TD-2026-08-23-136): Ed25519 agent signing keys for the strand-signature
+      epoch — node:crypto only, NO external deps, NO passphrase/scrypt/AES, NO
+      root key, NO git key witness; the human boundary stays PROCEDURAL
+      (HUMAN_ONLY_VERBS + tool-permission denies incl. .warpline/keys/** reads).
+      keyId = 'wlkey:v1:' + sha256 over the EXACT public-key PEM bytes node
+      exports (trailing newline trimmed — the same normalized string the key
+      file and registry store, so id and material cannot disagree). Signature
+      primitive (consumed by seal-time signing at I3): domain-separated over the
+      pickId — Ed25519(key, 'warpline:strand-sig:v1\n' + pickId), base64;
+      verifyPickIdSig NEVER throws on malformed input (false, fail closed).
+      CUSTODY mirrors #warplined-tokens: private half in
+      .warpline/keys/agents/<principal>.key (agentKey:v1 JSON, file 0600, dirs
+      0700, gitignored via .warpline/*); principal names pass the #fabric-refs
+      path-segment grammar (spliced into a filesystem path — traversal refused
+      fail-closed). loadAgentKey is FAIL-CLOSED (missing/garbled/wrong-schema/
+      swapped-principal → null, never a throw a caller might soften);
+      loadAgentKeyStrict throws precise messages for CLI surfaces. REGISTRY
+      (.warpline/keys/registry.jsonl, append-only keyRegistry:v1 rows, PUBLIC
+      material only): 'agent-key' rows re-mint by APPEND, latest row wins (token
+      re-mint semantics); readKeyRegistry skips malformed rows AND surfaces them
+      in a diagnostics list (a garbled row must never resolve to a usable key,
+      and never invisibly). ONE 'signed-from' row pins the signing-epoch
+      boundary — the fabric tip pickId at FIRST mint (read the way seal.ts reads
+      the tip: refs/heads/selvage, legacy ledger tail fallback; null = pinned at
+      genesis on an empty fabric, distinguished from unpinned by hasSignedFrom).
+      The FIRST row is authoritative forever, later signed-from rows IGNORED — a
+      movable boundary would let anyone un-sign history. CLI: `warpline key mint
+      <principal>` is HUMAN-class, gated in the command with the #agent-shell
+      credential ($WARPLINE_AGENT_ID → FORBIDDEN refusal:v1, the `branch
+      --protect` precedent) because key.mint is deliberately NOT a daemon verb
+      (no self-service minting surface — anti-sockpuppet) and HUMAN_ONLY_VERBS
+      is frozen to daemon verbs by descriptors-frozen + agent-shell-gate
+      invariants; `warpline key list` stays agent-readable (public material
+      only; flags rows whose private key file is gone). Strands at-or-before the
+      signed-from boundary stay valid unsigned PERMANENTLY (grandfathered, the
+      v1-anchor shape); seals after it require signatures once I3 lands —
+      advisory until then, and the mint output says so.
+    type: module
+    tags: [warpline, m3, integrity, security]
+
   warplined-descriptors:
     description: >-
       The CANONICAL verb descriptors (PW-5, mcp-skin-spec §4; Loid requirement

@@ -89,6 +89,7 @@ import { branchGraph, ancestorsOf, diffTrees, type BranchGraph, type GraphNode, 
 import { resolveSelector } from './fabric/select.js';
 import { parentsOf } from './fabric/dag.js';
 import { stake, stakeRecover, type StakeResult, type StakeRecoverResult } from './fabric/stake.js';
+import { mintAgentKey, listKeySummaries, keyRegistryPathOf } from './fabric/keys.js';
 import { STAKE_MARKER } from './fabric/stake-guard.js';
 import { existsSync } from 'node:fs';
 import { gitPath } from './git/git-exec.js';
@@ -1927,6 +1928,93 @@ refs
       } else {
         printRefSet(result);
       }
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+const keyCmd = program
+  .command('key')
+  .description(
+    'M3-lite signing keys (#keys). Ed25519 agent keys for the strand-signature epoch: the PRIVATE half lives in .warpline/keys/agents/<principal>.key (0600, gitignored, never leaves the box), the PUBLIC half in the append-only registry .warpline/keys/registry.jsonl. The FIRST mint ever pins `signed-from` — the fabric tip pickId that becomes the signing-epoch boundary (strands at-or-before it stay valid unsigned, permanently). NO passphrase, NO root key: the human boundary is PROCEDURAL (TD-2026-08-23-136).',
+  );
+
+keyCmd
+  .command('mint <principal>')
+  .description(
+    'Mint an Ed25519 signing key for a principal (HUMAN-class — the human\'s act, like daemon token minting; an agent shell is refused). Writes the 0600 key file, appends the public agent-key registry row, and — on the FIRST mint ever — pins `signed-from` at the current fabric tip (the signing-epoch boundary; it pins ONCE, later mints never move it). Re-minting a principal appends a new row; the LATEST row wins (rotation without a revocation ceremony). Seals after the signed-from boundary will REQUIRE signatures once seal-time signing (M3 I3) lands — until then the boundary is advisory.',
+  )
+  .option('--json', 'emit the mint result as JSON (public material + paths; the private key stays in the 0600 file)')
+  .action(async (principal: string, options: { json?: boolean }) => {
+    try {
+      const root = await resolveRoot();
+      // #keys minting is HUMAN-class (M3 design §3: key issuance is the human's
+      // act, like token minting) — enforced with the same #agent-shell credential
+      // the `branch --protect` gate uses, because `key.mint` is deliberately NOT
+      // a daemon verb (no self-service minting surface exists on the daemon,
+      // anti-sockpuppet) and so cannot ride HUMAN_ONLY_VERBS' derived CLI map.
+      if (shellPrincipal() === 'agent') {
+        throw new RefusedError(
+          refuse({ code: 'FORBIDDEN', retriable: 'never' }),
+          `warpline: key mint is a HUMAN-class act — an agent must never mint its own signing identity (anti-sockpuppet; Aegis §2.2). ` +
+            `This shell is an AGENT shell (WARPLINE_AGENT_ID set); escalate to a human. A human shell does not export it.`,
+        );
+      }
+      const result = mintAgentKey(root, principal);
+      if (options.json) {
+        // The PRIVATE key never rides stdout — the 0600 file is its only home.
+        const { privateKeyPem: _omitted, ...publicHalf } = result.key;
+        process.stdout.write(
+          JSON.stringify({ ...result, key: publicHalf }, null, 2) + '\n',
+        );
+      } else {
+        process.stdout.write(
+          `KEY MINTED  ${result.key.principal}\n` +
+            `  keyId   ${result.key.keyId}\n` +
+            `  file    ${result.keyPath}  (0600 — private half; never commit or ship it)\n` +
+            (result.signedFrom
+              ? `  signed-from pinned at ${result.signedFrom.signedFromPickId ?? '(genesis — empty fabric)'} — the signing-epoch boundary (first key; pins once)\n`
+              : '') +
+            `  note    seals after the signed-from boundary require signatures once seal-time signing (M3 I3) lands — advisory until then\n`,
+        );
+      }
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+keyCmd
+  .command('list')
+  .description('List registry key rows (public material only — never private keys). Shows each row\'s keyId, principal, mint time, whether its private key file is on this box, and the signed-from boundary. Agent-readable (a plain read).')
+  .option('--json', 'emit the registry summary as JSON')
+  .action(async (options: { json?: boolean }) => {
+    try {
+      const root = await resolveRoot();
+      const result = listKeySummaries(root);
+      if (options.json) {
+        process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+        return;
+      }
+      if (result.keys.length === 0 && result.signedFrom === null && result.malformed.length === 0) {
+        process.stdout.write('WARPLINE KEYS  (none minted — `warpline key mint <principal>`)\n');
+        return;
+      }
+      const lines = [`WARPLINE KEYS  (registry ${keyRegistryPathOf(root)})`];
+      for (const k of result.keys) {
+        lines.push(
+          `  ${k.keyId.slice(0, 'wlkey:v1:'.length + 8)}…  ${k.principal.padEnd(12)}  (${k.createdAt})` +
+            `${k.latest ? '' : '  [superseded]'}${k.keyFilePresent ? '' : '  [KEY FILE MISSING]'}`,
+        );
+      }
+      lines.push(
+        result.signedFrom
+          ? `  signed-from  ${result.signedFrom.signedFromPickId ?? '(genesis — empty fabric)'}  (pinned ${result.signedFrom.createdAt}; the signing-epoch boundary)`
+          : '  signed-from  (not pinned — no key has ever been minted)',
+      );
+      if (result.malformed.length) {
+        lines.push(`  MALFORMED  ${result.malformed.length} registry row(s) skipped fail-closed: ${result.malformed.map((m) => `line ${m.line} (${m.reason})`).join('; ')}`);
+      }
+      process.stdout.write(lines.join('\n') + '\n');
     } catch (err) {
       fail(err);
     }

@@ -463,6 +463,41 @@ export {
   type PrincipalKind,
   type TokenScope,
 } from './daemon/tokens.js';
+// M3-lite I1 (#keys): Ed25519 agent signing keys + the append-only public
+// registry with the pin-once signed-from epoch boundary (TD-2026-08-23-136 —
+// no passphrase, no root key; the human boundary stays procedural).
+export {
+  AGENT_KEY_SCHEMA,
+  KEY_REGISTRY_SCHEMA,
+  KEY_ID_PREFIX,
+  STRAND_SIG_DOMAIN,
+  isPrincipalName,
+  keysDirOf,
+  agentKeysDirOf,
+  agentKeyPathOf,
+  keyRegistryPathOf,
+  computeKeyId,
+  generateAgentKey,
+  signPickId,
+  verifyPickIdSig,
+  loadAgentKey,
+  loadAgentKeyStrict,
+  readKeyRegistry,
+  registryKeyFor,
+  signedFromOf,
+  hasSignedFrom,
+  mintAgentKey,
+  listKeySummaries,
+  type GeneratedAgentKey,
+  type AgentKeyFile,
+  type AgentKeyRegistryRow,
+  type SignedFromRegistryRow,
+  type KeyRegistryRow,
+  type KeyRegistryReadResult,
+  type MintAgentKeyResult,
+  type KeySummary,
+  type KeyListResult,
+} from './fabric/keys.js';
 export {
   socketPathOf,
   pidPathOf,
