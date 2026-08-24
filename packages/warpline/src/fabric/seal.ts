@@ -11,6 +11,8 @@ import type { WarpStore } from '../warp/store.js';
 import type { WarpState } from '../warp/warp-state.js';
 import { warplineDirOf, readFabric, readSelvage, appendStrand, writeSelvage } from './fabric.js';
 import { readRef, writeRef } from './refs.js';
+import { hasSignedFrom, loadAgentKey, signPickId } from './keys.js';
+import { refuse, RefusedError } from './refusal.js';
 import {
   computePickId,
   type Strand,
@@ -88,6 +90,62 @@ export interface SealInput {
   attests?: EpochAnchor;
 }
 
+/**
+ * M3-lite I3 — seal-time AGENT signing (m3-integrity-design-2026-08-23.md §3,
+ * under the §6 rulings). Called on the fully-built strand (pickId computed)
+ * IMMEDIATELY before it is appended, by EVERY seal site: `sealState` below (the
+ * shared v2 write path — pick/admit/resolve/anchor/recover) AND the three v3
+ * seal sites in native.ts (propose/weave/resolve — the daemon's write path,
+ * which seals via buildStrandV3 + appendStrand and does NOT flow through
+ * sealState).
+ *
+ * The class/epoch rules, in refusal order:
+ *   - HUMAN-CLASS (no authoredBy.agentId)  → returned UNTOUCHED, unsigned. The
+ *     human boundary is PROCEDURAL (TD-2026-08-23-136 Q1) — the verifier
+ *     exempts human-class strands.
+ *   - NO SIGNING EPOCH (no signed-from row) → returned UNTOUCHED. An epoch-less
+ *     repo behaves EXACTLY as before this increment, byte for byte.
+ *   - AGENT-CLASS, EPOCH PINNED → this seal is post-boundary BY CONSTRUCTION
+ *     (the signed-from row pinned the then-tip; every later seal is after it),
+ *     so the strand MUST carry a signature: load the principal's key
+ *     (fail-closed — a garbled/missing/swapped key file never resolves), sign
+ *     the pickId (domain-separated, keys.ts), attach `sig`.
+ *   - KEY UNRESOLVABLE → REFUSE the seal (refusal:v1, AUTH — the escalation is
+ *     the human's `warpline key mint`). Never seal unsigned past the boundary:
+ *     an unsigned agent strand there is exactly what verify flags sig-missing.
+ *
+ * `sig` is EXCLUDED from the pickId preimage (strand.ts — the signature is over
+ * the pickId; folding it in would be circular), so attaching it never perturbs
+ * the already-computed identity.
+ */
+export function signStrandForSeal(root: string, strand: Strand): Strand {
+  const agentId = strand.authoredBy?.agentId;
+  if (!agentId) return strand; // human-class — stays UNSIGNED (procedural boundary)
+  if (!hasSignedFrom(root)) return strand; // no signing epoch — pre-I3 behavior exactly
+  const key = loadAgentKey(root, agentId);
+  if (!key) {
+    throw new RefusedError(
+      refuse({
+        code: 'AUTH',
+        next: [{ verb: 'key.mint', params: { principal: agentId }, requires: [], principal: 'human' }],
+      }),
+      `warpline: seal refused — a signing epoch is pinned (signed-from) and this seal is agent-class, ` +
+        `but principal "${agentId}" has no usable signing key (missing, garbled, or swapped at ` +
+        `.warpline/keys/agents/${agentId}.key — the loader fails closed). ` +
+        `Mint one with \`warpline key mint ${agentId}\` (a HUMAN-class act), then retry.`,
+    );
+  }
+  return {
+    ...strand,
+    sig: {
+      keyId: key.keyId,
+      sigBase64: signPickId(key.privateKeyPem, strand.pickId),
+      principal: agentId,
+      schemaVersion: 'strandSig:v1',
+    },
+  };
+}
+
 /** Persist `state`, append its strand to the fabric, advance the selvage. */
 export function sealState(
   root: string,
@@ -156,7 +214,10 @@ export function sealState(
     ...(input.merge ? { merge: input.merge } : {}),
     ...(input.attests ? { attests: input.attests } : {}),
   };
-  const strand: Strand = { ...body, pickId: computePickId(body) };
+  // I3: sign BEFORE any ledger byte moves — agent-class + pinned epoch ⇒ sig
+  // attached (or the seal REFUSES on an unresolvable key); human-class and
+  // epoch-less seals pass through untouched. sig is outside the pickId preimage.
+  const strand: Strand = signStrandForSeal(root, { ...body, pickId: computePickId(body) });
   // CAS GUARDS FIRST — refuse if the tip moved off the parent the decision was
   // based on (a concurrent writer won the race). Checking BEFORE mutating the
   // ledger means a lost race throws cleanly with no orphan strand. Callers hold

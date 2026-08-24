@@ -42,6 +42,18 @@
  *                    legal, but surfaced). Refs mode only (V3.2).
  *   (3.7 nested-epoch anchor walk is V3.3.)
  *
+ * 5c. Signatures (M3-lite I4) — once a signing epoch is pinned (a `signed-from`
+ *     row in .warpline/keys/registry.jsonl), every AGENT-CLASS strand
+ *     (authoredBy.agentId set) sealed strictly AFTER the boundary must carry a
+ *     valid `sig`: present (sig-missing), well-formed and cryptographically
+ *     valid under the REGISTRY public key — never the key file — (sig-invalid),
+ *     signed by a key the registry knows FOR THAT PRINCIPAL (sig-key-unknown),
+ *     and self-consistent about who signed (sig-principal-mismatch). Exempt,
+ *     permanently: strands at-or-before the boundary (grandfathered, the v1
+ *     anchor pattern), human-class strands (the boundary is PROCEDURAL —
+ *     TD-2026-08-23-136 Q1), and EVERYTHING on an epoch-less repo. A signed-from
+ *     row naming a pickId absent from the fabric is registry-invalid (HARD).
+ *
  * 6. Stake journal (C-6) — every pickId a COMPLETED checkpoint attests must still
  *    be present in the ledger. The chain above authenticates that what is PRESENT
  *    is consistent; this is the only check that speaks to HOW MUCH SHOULD BE THERE.
@@ -61,6 +73,7 @@ import { findAnchor, computePrefixDigest, computeManifestDigest } from './anchor
 import { buildDag } from './dag.js';
 import { listRefs, readRef } from './refs.js';
 import { readStakeJournal } from './stake-journal.js';
+import { hasSignedFrom, signedFromOf, readKeyRegistry, verifyPickIdSig, type AgentKeyRegistryRow } from './keys.js';
 import { ObjectStore } from '../warp/object-store.js';
 import { WORKTREE_REF } from '../absorb.js';
 
@@ -87,6 +100,13 @@ export type FabricVerifyKind =
   | 'multiple-genesis'
   // refs kinds (V3.2, spec §3.5)
   | 'ref-unresolved'
+  // signature kinds (M3-lite I4 — agent-class strands after the signed-from boundary)
+  | 'sig-missing'
+  | 'sig-invalid'
+  | 'sig-key-unknown'
+  | 'sig-principal-mismatch'
+  /** the key registry's signed-from row names a pickId absent from the fabric. */
+  | 'registry-invalid'
   /**
    * C-6 — a COMPLETED stake checkpoint attests a pickId the ledger no longer
    * carries. Deliberately its OWN kind and not folded into chain-break: a
@@ -140,6 +160,23 @@ export interface FabricVerifyReport {
    * whose body moved is a HARD legacy-body-mismatch instead.
    */
   legacyUnverifiable: { count: number; pickIds: string[] };
+  /**
+   * The SIGNING summary (M3-lite I4). `epochPinned` = a signed-from row exists
+   * in the key registry (epoch-less repos report false and EVERY strand exempt —
+   * the CLI renders 'signing epoch: none'). `signedFromPickId` = the boundary
+   * pickId (null WITH epochPinned true = pinned at genesis on an empty fabric —
+   * every strand is post-boundary). Counts partition `checked`:
+   * `signed` (agent-class post-boundary, sig fully verified) + `exempt`
+   * (human-class, at-or-before the boundary, or all when no/unresolvable epoch)
+   * + `failed` (one of the sig-* / registry-invalid failures below).
+   */
+  signing: {
+    epochPinned: boolean;
+    signedFromPickId: string | null;
+    signed: number;
+    exempt: number;
+    failed: number;
+  };
   /**
    * The v1-prefix epoch anchor (spec §6). `present` = an anchor strand exists;
    * `ok` = the prefix + manifest authenticate against it. A fabric with v1 strands
@@ -432,6 +469,115 @@ export function verifyFabric(root: string, opts: VerifyOptions = {}): FabricVeri
     }
   }
 
+  // 5c. SIGNATURES (M3-lite I4) — the signing-epoch walk. Scope rules first
+  //     (they are what keep the 1251-test epoch-less world byte-identical):
+  //     no signed-from row ⇒ EVERY strand exempt, zero checks, zero failures.
+  //     With an epoch: resolve the boundary ONCE — a null signedFromPickId is
+  //     the genesis pin (empty fabric at first mint ⇒ every strand is
+  //     post-boundary); otherwise the boundary is the named strand's LINE INDEX
+  //     and a strand is post-boundary iff its index is STRICTLY greater
+  //     (at-or-before ⇒ grandfathered forever, the v1-anchor pattern). A
+  //     signed-from naming a pickId the fabric does not carry is
+  //     registry-invalid (HARD — the boundary itself is unverifiable, so every
+  //     per-strand check stands down rather than guess a boundary).
+  //
+  //     Per post-boundary AGENT-CLASS strand (human-class is exempt — the human
+  //     boundary is PROCEDURAL, TD-2026-08-23-136 Q1): the sig must be present,
+  //     shaped strandSig:v1, name the strand's own principal, resolve to an
+  //     agent-key row the REGISTRY holds for that principal (verification NEVER
+  //     uses the key file — a swapped key file signs with a keyId the registry
+  //     does not know, which is exactly sig-key-unknown), and verify under that
+  //     row's public key over the domain-separated pickId.
+  const epochPinned = hasSignedFrom(root);
+  const signedFromPickId = epochPinned ? signedFromOf(root) : null;
+  let sigSigned = 0;
+  let sigExempt = 0;
+  let sigFailed = 0;
+  if (!epochPinned) {
+    sigExempt = fabric.length; // signing epoch: none — the pre-M3 world, untouched
+  } else {
+    let boundaryIndex = -1; // genesis pin — every strand is post-boundary
+    let boundaryOk = true;
+    if (signedFromPickId !== null) {
+      boundaryIndex = fabric.findIndex((s) => s.pickId === signedFromPickId);
+      if (boundaryIndex === -1) {
+        boundaryOk = false;
+        failures.push({
+          seq: -1,
+          pickId: signedFromPickId,
+          kind: 'registry-invalid',
+          detail:
+            `the key registry's signed-from row pins the signing-epoch boundary at ${signedFromPickId}, ` +
+            `which resolves to NO strand in this fabric — the boundary is unverifiable (a truncated fabric ` +
+            `or a tampered/foreign registry). Per-strand signature checks stand down until the boundary resolves.`,
+        });
+      }
+    }
+    if (!boundaryOk) {
+      sigExempt = fabric.length; // the registry-invalid HARD failure already fails verify
+    } else {
+      const agentKeyRows = readKeyRegistry(root).rows.filter(
+        (r): r is AgentKeyRegistryRow => r.kind === 'agent-key',
+      );
+      for (let i = 0; i < fabric.length; i++) {
+        const s = fabric[i];
+        const agentId = s.authoredBy?.agentId;
+        if (!agentId || i <= boundaryIndex) {
+          sigExempt++; // human-class, or at-or-before the boundary (grandfathered)
+          continue;
+        }
+        const sigFail = (kind: FabricVerifyKind, detail: string): void => {
+          failures.push({ seq: s.seq ?? i, pickId: s.pickId, kind, detail });
+          sigFailed++;
+        };
+        const sig = s.sig;
+        if (!sig) {
+          sigFail(
+            'sig-missing',
+            `agent-class strand (authoredBy.agentId "${agentId}") sealed after the signing-epoch boundary carries no sig`,
+          );
+          continue;
+        }
+        if (
+          sig.schemaVersion !== 'strandSig:v1' ||
+          typeof sig.keyId !== 'string' ||
+          typeof sig.sigBase64 !== 'string' ||
+          typeof sig.principal !== 'string'
+        ) {
+          sigFail('sig-invalid', 'sig is not a well-formed strandSig:v1 record (malformed/foreign signature object)');
+          continue;
+        }
+        if (sig.principal !== agentId) {
+          sigFail(
+            'sig-principal-mismatch',
+            `sig.principal "${sig.principal}" != authoredBy.agentId "${agentId}" (a signature borrowed from another principal)`,
+          );
+          continue;
+        }
+        // The registry is the ONLY verification authority: any agent-key row for
+        // THIS principal with THIS keyId (re-mint appends — an older row stays
+        // valid for the strands it signed; rotation must not un-sign history).
+        const row = agentKeyRows.find((r) => r.principal === agentId && r.keyId === sig.keyId);
+        if (!row) {
+          sigFail(
+            'sig-key-unknown',
+            `sig.keyId ${sig.keyId} is not a registry agent-key for principal "${agentId}" ` +
+              `(a non-registry key — or a swapped key file; verification uses the REGISTRY public key, never the key file)`,
+          );
+          continue;
+        }
+        if (!verifyPickIdSig(row.publicKeyPem, s.pickId, sig.sigBase64)) {
+          sigFail(
+            'sig-invalid',
+            `sig does not verify under registry key ${sig.keyId} for principal "${agentId}" over pickId ${s.pickId} (forged/corrupted signature)`,
+          );
+          continue;
+        }
+        sigSigned++;
+      }
+    }
+  }
+
   // 6. Manifest membership sanity (HIGH-2 containment): every grandfather entry must
   //    correspond to an EXISTING v1 strand in this fabric. An unknown pickId is a
   //    stale/foreign allow-list entry; a v2 pickId in the list is an attempt to
@@ -696,6 +842,7 @@ export function verifyFabric(root: string, opts: VerifyOptions = {}): FabricVeri
     v3Dag: { count: v3Count, ok: v3DagOk },
     abandonedHeads,
     stakeJournal: { present: journal.present, attested: journal.attestations.length, missing: stakeMissing },
+    signing: { epochPinned, signedFromPickId, signed: sigSigned, exempt: sigExempt, failed: sigFailed },
     boundaryAnchored,
     legacyUnverifiable: { count: legacyPickIds.length, pickIds: legacyPickIds },
     anchor: { present: anchorStrands.length > 0, ok: anchorOk, corroboration },

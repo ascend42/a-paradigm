@@ -150,7 +150,7 @@ export {
   type MergeConflict,
   type MaterializeResult,
 } from './fabric/materialize.js';
-export { sealState, summarizeDelta, type SealInput } from './fabric/seal.js';
+export { sealState, summarizeDelta, signStrandForSeal, type SealInput } from './fabric/seal.js';
 // Phase C v3 — the KNOT council (human resolution of a genuine conflict).
 export { resolveKnot, type ResolveOptions, type ResolveResult } from './fabric/resolve.js';
 export type { KnotResolution } from './fabric/strand.js';

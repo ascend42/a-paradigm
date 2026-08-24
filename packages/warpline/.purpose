@@ -896,6 +896,18 @@ components:
       rest-spread) so a stray positional field can never move a v3 identity.
       buildStrandV3(input) is the only v3 constructor (pure — the default seal-path
       cutover is V3.3). A sealed v3 strand has ZERO post-seal-mutable fields.
+      SIGNING (M3-lite I3, TD-2026-08-23-136): an optional `sig`
+      {keyId, sigBase64, principal, schemaVersion:'strandSig:v1'} rides on
+      agent-class strands sealed after the signing-epoch boundary (#seal
+      signStrandForSeal; Ed25519 over the domain-separated pickId, #keys). sig
+      is EXCLUDED from the pickId preimage in BOTH sealing epochs of NECESSITY
+      (the signature is over the pickId — folding it in is circular): the v2
+      rule destructures it out of the `...rest` spread; the explicit v3 preimage
+      never picks it up. The retired v1 rule and computeLegacyBodyHash
+      deliberately do NOT exclude it — no v1/grandfathered strand can carry one
+      (pre-epoch by construction), so a grafted sig fails CLOSED
+      (pickId-mismatch / legacy-body-mismatch). Regression:
+      test/strand-sig-preimage.test.ts pins all three postures both ways.
     type: module
     components:
       - "#canonical-json"
@@ -918,12 +930,27 @@ components:
       pickId) advance together via #fabric-refs writeRef per-ref CAS; drifted tip
       pointers refuse the seal fail-closed. Unmigrated repos are byte-for-byte
       untouched (seal never creates refs/heads as a side effect).
+      SEAL-TIME AGENT SIGNING (M3-lite I3): signStrandForSeal(root, strand) —
+      called on the fully-built strand immediately before append by sealState
+      AND by the three v3 seal sites in #native-write-path (propose/weave/
+      resolve — the daemon's write path, which does NOT flow through sealState).
+      Human-class strands (no authoredBy.agentId) pass through UNSIGNED (the
+      procedural boundary, TD-2026-08-23-136 Q1); epoch-less repos (no
+      signed-from row, #keys hasSignedFrom) pass through byte-for-byte as
+      before; an agent-class seal with a pinned epoch is post-boundary BY
+      CONSTRUCTION and MUST sign — the principal's key loads fail-closed
+      (#keys loadAgentKey) and an unresolvable key REFUSES the seal with a
+      refusal:v1 AUTH whose next[] is the human's `key.mint` escalation (never
+      an unsigned agent seal past the boundary). sig is outside the pickId
+      preimage, so attaching it never perturbs the computed identity.
+      Tests: test/seal-sig.test.ts.
     type: module
     components:
       - "#sem-delta"
       - "#fabric"
       - "#fabric-lock"
       - "#fabric-refs"
+      - "#keys"
 
   grade:
     description: >-
@@ -1167,6 +1194,25 @@ components:
       check that failed on every repo not running the valve would be unshippable.
       Regression: test/stake-journal-truncation.test.ts (the reproduction + the
       three negative cases).
+      SIGNATURES (step 5c — M3-lite I4): once a signing epoch is pinned
+      (#keys signed-from), every AGENT-CLASS strand strictly AFTER the boundary
+      (boundary resolved ONCE by line index; a null signedFromPickId = genesis
+      pin, everything post-boundary) must carry a valid sig: absent →
+      sig-missing; malformed or cryptographically wrong under the REGISTRY
+      public key (NEVER the key file — a swapped key file signs with a keyId
+      the registry does not hold) → sig-invalid; keyId not a registry agent-key
+      row for that principal (ANY row for the principal counts — re-mint
+      appends, rotation must not un-sign history) → sig-key-unknown;
+      sig.principal != authoredBy.agentId → sig-principal-mismatch. A
+      signed-from row naming a pickId absent from the fabric → registry-invalid
+      (HARD, seq -1; per-strand checks stand down rather than guess a
+      boundary). EXEMPT permanently: strands at-or-before the boundary
+      (grandfathered, the v1-anchor shape), human-class strands (procedural
+      boundary, TD-2026-08-23-136 Q1), and EVERYTHING on an epoch-less repo
+      (the pre-M3 world — zero behavior change). Report adds
+      signing{epochPinned, signedFromPickId, signed, exempt, failed}; the CLI
+      prints "signing epoch: none" on unpinned repos. Tests:
+      test/verify-sig.test.ts.
     type: module
     components:
       - "#strand"
@@ -1176,6 +1222,7 @@ components:
       - "#stake-journal"
       - "#warp-store"
       - "#anchor"
+      - "#keys"
 
   fabric-repair:
     description: >-
@@ -2698,7 +2745,14 @@ components:
       strand (a v3 admission is a ref advance, not a re-seal). KNOT/DANGLE
       persist the #knot-payload (both sides' treeIds native) and refuse — the
       scratch ref keeps the durable work; resolveNative seals the council
-      resolution as a v3 weave carrying KnotResolution. EVERY refusing verdict
+      resolution as a v3 weave carrying KnotResolution. SEAL-TIME SIGNING
+      (M3-lite I3): all three v3 seal sites (propose scratch strand, admit
+      weave, resolve council weave) route the built strand through #seal
+      signStrandForSeal before appendStrand — this path does NOT flow through
+      sealState, so the shared helper is wired here explicitly; post-boundary
+      agent-class seals carry strandSig:v1 and an unresolvable key refuses
+      (refusal:v1 AUTH → key.mint escalation), surfacing through the daemon
+      error frame unchanged. EVERY refusing verdict
       (KNOT / DANGLE / CLAIM-BREACH / HELD, incl. the byte-conflict downgrade)
       carries the SAME #refusal object as the git-era gate, built by the shared
       exported builders with native-path ladders ({native:'true'}) —
@@ -3014,8 +3068,9 @@ components:
       invariants; `warpline key list` stays agent-readable (public material
       only; flags rows whose private key file is gone). Strands at-or-before the
       signed-from boundary stay valid unsigned PERMANENTLY (grandfathered, the
-      v1-anchor shape); seals after it require signatures once I3 lands —
-      advisory until then, and the mint output says so.
+      v1-anchor shape); seals after it REQUIRE signatures now that I3 is live
+      (#seal signStrandForSeal signs agent-class seals and refuses on an
+      unresolvable key; #fabric-verify enforces the sig-* rules at I4).
     type: module
     tags: [warpline, m3, integrity, security]
 

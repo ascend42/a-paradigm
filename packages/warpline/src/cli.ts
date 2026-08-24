@@ -1772,6 +1772,9 @@ fabric
               ? `  v3 dag     ${report.v3Dag.count} (${report.v3Dag.ok ? 'ok' : 'BROKEN'} — closure/causality/acyclicity)\n`
               : '') +
             `  boundary   ${report.boundaryAnchored ? 'anchored ✓' : 'not anchored'}\n` +
+            (report.signing.epochPinned
+              ? `  signing    epoch from ${report.signing.signedFromPickId ? report.signing.signedFromPickId.slice(0, 20) : '(genesis)'} — ${report.signing.signed} signed, ${report.signing.exempt} exempt\n`
+              : '  signing    epoch: none (no signed-from pinned — every strand exempt)\n') +
             anchorLine +
             (report.legacyUnverifiable.count
               ? `  legacy     ${report.legacyUnverifiable.count} grandfathered (unverifiable, sealed under a retired rule — TD-2026-07-01-202)\n`

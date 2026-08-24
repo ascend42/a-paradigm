@@ -61,7 +61,7 @@ import { readHead, DEFAULT_BRANCH } from './head.js';
 import { readScratch, writeScratchRef, clearScratch } from './scratch.js';
 import { guardedRestoreTree, assertDirtyFree } from './restore.js';
 import { withFabricLock } from './lock.js';
-import { summarizeDelta } from './seal.js';
+import { summarizeDelta, signStrandForSeal } from './seal.js';
 import { buildStrandV3, type Strand, type MergeRecipe, type KnotResolution } from './strand.js';
 import { parentsOf } from './dag.js';
 import {
@@ -410,18 +410,24 @@ export async function proposeNative(root: string, opts: ProposeNativeOptions): P
         return { noop: true, stateId: state.stateId, treeId: snap.treeId, base: basePickId, ...(claimId ? { claimId } : {}) };
       }
     }
-    const strand = buildStrandV3({
-      parents: basePickId ? [basePickId] : [],
-      stateId: state.stateId,
-      actor: opts.actor ?? opts.agentId,
-      authoredBy: { agentId: opts.agentId, ...(opts.sessionKey !== undefined ? { sessionKey: opts.sessionKey } : {}) },
-      intent: opts.intent,
-      recordedAt: now,
-      objectCount: state.objects.size,
-      delta: summarizeDelta(baseState, state),
-      provenance: { ref: refLabel, treeSha: null, gitCommit: null }, // git-null (I4)
-      binding: { treeId: snap.treeId, gitOid: snap.gitOid, treeSemantics: WORKTREE_SEMANTICS }, // bind-on-seal (v3 §1.1)
-    });
+    // M3 I3: agent-class seal — sign post-boundary (or refuse on a missing key);
+    // epoch-less repos pass through untouched. This is the daemon's write path,
+    // which does NOT flow through sealState — signing rides the shared helper.
+    const strand = signStrandForSeal(
+      root,
+      buildStrandV3({
+        parents: basePickId ? [basePickId] : [],
+        stateId: state.stateId,
+        actor: opts.actor ?? opts.agentId,
+        authoredBy: { agentId: opts.agentId, ...(opts.sessionKey !== undefined ? { sessionKey: opts.sessionKey } : {}) },
+        intent: opts.intent,
+        recordedAt: now,
+        objectCount: state.objects.size,
+        delta: summarizeDelta(baseState, state),
+        provenance: { ref: refLabel, treeSha: null, gitCommit: null }, // git-null (I4)
+        binding: { treeId: snap.treeId, gitOid: snap.gitOid, treeSemantics: WORKTREE_SEMANTICS }, // bind-on-seal (v3 §1.1)
+      }),
+    );
     store.putState(state);
     appendStrand(wdir, strand); // durable BEFORE judgment (D2)
     writeScratchRef(root, opts.agentId, strand.pickId); // only the scratch ref moves
@@ -904,19 +910,23 @@ export async function weaveTips(input: WeaveTipsInput): Promise<AdmitNativeResul
       });
     }
     const recipe: MergeRecipe = { algo: 'warpline-merge3-v1', base: baseTree, ours: oursTree, theirs: theirsTree, result: mat.resultTreeId };
-    const weave = buildStrandV3({
-      parents: [selvageTipId, scratchTipId], // primary = target history; ours = the admitted proposal
-      stateId: mat.state.stateId,
-      actor: opts.actor ?? opts.agentId,
-      authoredBy: { agentId: opts.agentId },
-      intent: opts.intent ?? `admit ${opts.agentId}`,
-      recordedAt: now,
-      objectCount: mat.state.objects.size,
-      delta: summarizeDelta(selvage, mat.state),
-      provenance: { ref: `refs/heads/${targetBranch}`, treeSha: null, gitCommit: null },
-      binding: { treeId: mat.resultTreeId, gitOid: null },
-      merge: recipe,
-    });
+    // M3 I3: agent-class weave — signed post-boundary (see propose's seal site).
+    const weave = signStrandForSeal(
+      root,
+      buildStrandV3({
+        parents: [selvageTipId, scratchTipId], // primary = target history; ours = the admitted proposal
+        stateId: mat.state.stateId,
+        actor: opts.actor ?? opts.agentId,
+        authoredBy: { agentId: opts.agentId },
+        intent: opts.intent ?? `admit ${opts.agentId}`,
+        recordedAt: now,
+        objectCount: mat.state.objects.size,
+        delta: summarizeDelta(selvage, mat.state),
+        provenance: { ref: `refs/heads/${targetBranch}`, treeSha: null, gitCommit: null },
+        binding: { treeId: mat.resultTreeId, gitOid: null },
+        merge: recipe,
+      }),
+    );
     store.putState(mat.state);
     appendStrand(wdir, weave);
     writeRef(wdir, targetBranch, weave.pickId, selvageTipId); // per-ref CAS
@@ -1218,19 +1228,26 @@ export async function resolveNative(root: string, opts: ResolveNativeOptions): P
       resolvedSymbols,
       ...(knotPayloadId ? { knotPayloadId } : {}),
     };
-    const strand = buildStrandV3({
-      parents: [selvageTipId, scratchTipId],
-      stateId: resolved.stateId,
-      actor: decidedBy,
-      authoredBy: { agentId: opts.agentId },
-      intent: `resolve knot — ${opts.reason}`,
-      recordedAt: now,
-      objectCount: resolved.objects.size,
-      delta: summarizeDelta(selvage, resolved),
-      provenance: { ref: 'refs/heads/selvage', treeSha: null, gitCommit: null },
-      resolves: resolution,
-      binding: { treeId: snap.treeId, gitOid: snap.gitOid, treeSemantics: WORKTREE_SEMANTICS },
-    });
+    // M3 I3: the resolution strand is agent-ATTRIBUTED (authoredBy.agentId names
+    // the agent whose proposal it settles), so post-boundary it is signed under
+    // that principal's key — resolve is a human-run verb on the same box, and
+    // the key resolves the same fail-closed way.
+    const strand = signStrandForSeal(
+      root,
+      buildStrandV3({
+        parents: [selvageTipId, scratchTipId],
+        stateId: resolved.stateId,
+        actor: decidedBy,
+        authoredBy: { agentId: opts.agentId },
+        intent: `resolve knot — ${opts.reason}`,
+        recordedAt: now,
+        objectCount: resolved.objects.size,
+        delta: summarizeDelta(selvage, resolved),
+        provenance: { ref: 'refs/heads/selvage', treeSha: null, gitCommit: null },
+        resolves: resolution,
+        binding: { treeId: snap.treeId, gitOid: snap.gitOid, treeSemantics: WORKTREE_SEMANTICS },
+      }),
+    );
     store.putState(resolved);
     appendStrand(wdir, strand);
     writeRef(wdir, 'selvage', strand.pickId, selvageTipId); // per-ref CAS

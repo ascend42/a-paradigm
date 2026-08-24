@@ -248,6 +248,31 @@ export interface Strand {
    * (rides the `...rest` spread), so editing/deleting the anchor breaks the chain.
    */
   attests?: EpochAnchor;
+  /**
+   * M3-lite I3 (m3-integrity-design-2026-08-23.md §3+§6) — the seal-time AGENT
+   * signature: Ed25519 over the domain-separated pickId
+   * (`'warpline:strand-sig:v1\n' + pickId`, keys.ts). Present ONLY on an
+   * agent-class strand (authoredBy.agentId set) sealed AFTER the signing-epoch
+   * boundary (the `signed-from` row in .warpline/keys/registry.jsonl).
+   * Human-class strands stay UNSIGNED — the human boundary is PROCEDURAL
+   * (founder ruling TD-2026-08-23-136 Q1).
+   *
+   * EXCLUDED from the pickId preimage in BOTH current sealing epochs, by
+   * necessity, not preference: the signature is computed OVER the pickId, so
+   * folding it back into the preimage would be circular (no strand could ever
+   * reproduce its own id). The v2 rule destructures `sig` out of its `...rest`
+   * spread; the founder-signed v3 preimage is EXPLICIT and never picks it up.
+   * The retired v1 rule deliberately does NOT exclude it — no v1 strand can
+   * legitimately carry a sig (v1 predates the signing epoch), so a grafted one
+   * breaks the self-hash and fails CLOSED. Verified by verifyFabric against
+   * the REGISTRY public key, never the key file (I4).
+   */
+  sig?: {
+    keyId: string; // 'wlkey:v1:…' — the signing key's registry identity
+    sigBase64: string; // Ed25519(STRAND_SIG_DOMAIN + pickId), base64
+    principal: string; // must equal authoredBy.agentId (verify: sig-principal-mismatch)
+    schemaVersion: 'strandSig:v1';
+  };
 }
 
 /** The strand minus its own content-address (what `pickId` is computed over). */
@@ -287,6 +312,10 @@ export function canonicalSafe(v: unknown): CanonicalValue {
 export function computePickId(body: StrandBody): string {
   // v1 legacy path — UNCHANGED self-hash. Lets `fabric verify` recompute every
   // historical strand byte-for-byte; v1 pickIds are immutable and never promoted.
+  // `sig` is deliberately NOT excluded here (I3 preimage audit): no v1 strand can
+  // legitimately carry one (v1 predates the signing epoch, and nothing seals v1
+  // today), so a sig GRAFTED onto a v1 strand lands in the preimage, breaks the
+  // self-hash, and fails CLOSED — the correct outcome for a forged field.
   if (body.schemaVersion < 2) {
     const { calibratedConfidence: _graded, binding: _bound, merge: _merge, ...identity } = body;
     const canon = canonicalSerialize(canonicalSafe(identity));
@@ -300,6 +329,9 @@ export function computePickId(body: StrandBody): string {
   // structurally); binding.treeId is mandatory-at-seal; calibratedConfidence does
   // not exist on the strand at all (§7). recordedAt stays IN (signed §9.5).
   // `attests` rides in when present (the v2-epoch anchor is chain-protected, §5).
+  // `sig` (I3) is SAFE BY CONSTRUCTION here: this preimage is explicit — a field
+  // not listed below can never leak into a v3 identity, and `sig` is not listed
+  // (it is a signature OVER the pickId; folding it in would be circular).
   if (body.schemaVersion >= 3) {
     const identity = {
       schemaVersion: body.schemaVersion,
@@ -324,7 +356,11 @@ export function computePickId(body: StrandBody): string {
   // agent attribution (authoredBy.agentId) + the merge second-parent/algo folded IN.
   // sessionKey, binding.gitOid, merge.{base,ours,theirs,result}, and
   // calibratedConfidence remain EXCLUDED (§1.1) — each is mutable/derivable post-seal.
-  const { calibratedConfidence: _c, binding, merge, authoredBy, ...rest } = body;
+  // `sig` (I3) is ALSO excluded — of necessity, not policy: the signature is
+  // computed OVER the pickId, so a preimage containing it is circular (the sealed
+  // strand could never reproduce its own id). Letting it ride the `...rest` spread
+  // would silently corrupt the identity of every signed v2 strand.
+  const { calibratedConfidence: _c, binding, merge, authoredBy, sig: _sig, ...rest } = body;
   const identity = {
     ...rest, // schemaVersion, seq, stateId, parentStateId, parentPickId, actor, intent,
     // recordedAt, objectCount, delta, provenance, resolves?, merged?, mergeParentPickId?
@@ -357,6 +393,10 @@ export function computePickIdWholeBody(body: StrandBody): string {
  * escapes pickId re-verification (its hashed byte was destroyed, §7.2) but NOT
  * body pinning — tampering its meaning now fails hard instead of hiding behind
  * the grandfather clause.
+ *
+ * `sig` (I3) is deliberately NOT excluded (same reasoning as the v1 pickId rule):
+ * every grandfathered strand is v1 and pre-signing-epoch, so none carries a sig —
+ * one grafted on changes the body hash and fails HARD (legacy-body-mismatch).
  */
 export function computeLegacyBodyHash(body: StrandBody): string {
   const { calibratedConfidence: _graded, binding: _bound, merge: _merge, ...identity } = body;
