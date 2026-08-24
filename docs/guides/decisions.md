@@ -148,7 +148,7 @@ paradigm migrate decisions --json      # JSON summary
 
 There is also a legacy `paradigm wisdom decide` ADR command — this writes to the wisdom store (`.paradigm/wisdom/decisions/`), which is **soft-deprecated as of v6.0** and slated for hard-removal in a future minor. New decisions should use `paradigm_decision_record` (MCP). Existing wisdom decisions are picked up by `paradigm migrate decisions`.
 
-Likely CLI additions for v6.x: `paradigm decision record` and `paradigm decision search`. Track in the v6.1+ roadmap.
+Possible future CLI additions: `paradigm decision record` and `paradigm decision search`.
 
 ## 6. Migrating from v5.x
 
@@ -210,7 +210,7 @@ What to use instead:
 |---|---|
 | `paradigm_lore_record({type:'decision'})` | `paradigm_decision_record(...)` |
 | `paradigm_assessment_record({type:'decision'})` | `paradigm_decision_record(...)` |
-| `paradigm_wisdom_record({type:'decision'})` | `paradigm_decision_record(...)` (still writes; will hard-error in v6.1+) |
+| `paradigm_wisdom_record({type:'decision'})` | `paradigm_decision_record(...)` (still writes; slated to hard-error in a future minor) |
 | Manual `.paradigm/decisions/TD-*.yaml` write | `paradigm_decision_record(...)` (gives you the companion lore for free) |
 | Narrative-only reference to a decision | `paradigm_lore_record({type:'insight', references:{decision_id:'TD-...'}})` |
 

@@ -5,7 +5,6 @@ description: >
   test suites, verify edge cases, check gate validations, and ensure code quality.
   Can read and write test files, and run test commands.
 tools: Read, Grep, Glob, Edit, Write, Bash
-permissionMode: default
 maxTurns: 30
 ---
 

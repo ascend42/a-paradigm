@@ -11,7 +11,7 @@ Complete guides and references for using Paradigm - the AI-native project struct
 ### Command Reference
 
 **Setup & Configuration:**
-- [`paradigm init`](./commands/init.md) - Initialize Paradigm in your project
+- [`paradigm shift`](./guides/quick-start.md) - Initialize and configure Paradigm in your project
 - [`paradigm sync`](./commands/sync.md) - Regenerate IDE instruction files
 - [`paradigm mcp setup`](./commands/mcp-setup.md) - Configure MCP for AI clients
 
@@ -25,13 +25,13 @@ Complete guides and references for using Paradigm - the AI-native project struct
 - [`paradigm doctor`](./commands/doctor.md) - Run health checks on Paradigm setup
 
 ### Concepts & Patterns
-- [Symbol System](../CLAUDE.md#symbol-system-v2) - Understanding #, $, ^, !, ~ symbols
+- [Symbol System](../CLAUDE.md#symbol-system) - Understanding #, $, ^, !, ~ symbols
 - [Paradigm Logger](../.paradigm/specs/logger.md) - Structured logging specification
-- [Purpose Files](../CONTRIBUTING.md#purpose-files) - Feature and component context files
+- [Purpose Files](./guides/quick-start.md) - Feature and component context files
 
 ### Guides
-- [Content Guide](./content-guide.md) - Writing effective Paradigm content
-- [Tutorial Project](./tutorial-project.md) - Learn by building
+- [Content Guide](./private/content-guide.md) - Writing effective Paradigm content
+- [Tutorial Project](./private/tutorial-project.md) - Learn by building
 
 ## 📖 Reading Order
 

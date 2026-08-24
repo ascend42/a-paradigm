@@ -37,8 +37,8 @@ Each IDE/platform maps tiers to available models via a resolution table:
 ```yaml
 # .paradigm/config.yaml or environment-specific config
 model-resolution:
-  tier-1: claude-opus-4-6        # Best reasoning available
-  tier-2: claude-sonnet-4-6      # Balanced
+  tier-1: claude-opus-5        # Best reasoning available
+  tier-2: claude-sonnet-5      # Balanced
   tier-3: claude-haiku-4-5       # Fast/cheap
 ```
 
@@ -47,14 +47,14 @@ Different environments ship different defaults:
 ```yaml
 # Claude Code (has full Anthropic access)
 model-resolution:
-  tier-1: claude-opus-4-6
-  tier-2: claude-sonnet-4-6
+  tier-1: claude-opus-5
+  tier-2: claude-sonnet-5
   tier-3: claude-haiku-4-5
 
 # Cursor (may have limited model access)
 model-resolution:
-  tier-1: claude-sonnet-4-6     # Opus may not be available
-  tier-2: claude-sonnet-4-6
+  tier-1: claude-sonnet-5     # Opus may not be available
+  tier-2: claude-sonnet-5
   tier-3: claude-haiku-4-5
 
 # OpenAI-only environment
@@ -71,9 +71,9 @@ model-resolution:
 
 # Budget-conscious
 model-resolution:
-  tier-1: claude-sonnet-4-6     # Use sonnet for everything
-  tier-2: claude-sonnet-4-6
-  tier-3: claude-sonnet-4-6
+  tier-1: claude-sonnet-5     # Use sonnet for everything
+  tier-2: claude-sonnet-5
+  tier-3: claude-sonnet-5
 ```
 
 ### Resolution Order
@@ -163,17 +163,17 @@ This asks 3 questions instead of N (one per agent). The tiers persist in config,
 ```typescript
 function detectEnvironment(): ModelResolution {
   if (process.env.CLAUDE_CODE) {
-    return { 'tier-1': 'claude-opus-4-6', 'tier-2': 'claude-sonnet-4-6', 'tier-3': 'claude-haiku-4-5' };
+    return { 'tier-1': 'claude-opus-5', 'tier-2': 'claude-sonnet-5', 'tier-3': 'claude-haiku-4-5' };
   }
   if (process.env.CURSOR_SESSION) {
     // Cursor may not expose opus — default tier-1 to sonnet
-    return { 'tier-1': 'claude-sonnet-4-6', 'tier-2': 'claude-sonnet-4-6', 'tier-3': 'claude-haiku-4-5' };
+    return { 'tier-1': 'claude-sonnet-5', 'tier-2': 'claude-sonnet-5', 'tier-3': 'claude-haiku-4-5' };
   }
   if (process.env.WINDSURF_SESSION) {
-    return { 'tier-1': 'claude-sonnet-4-6', 'tier-2': 'claude-sonnet-4-6', 'tier-3': 'claude-haiku-4-5' };
+    return { 'tier-1': 'claude-sonnet-5', 'tier-2': 'claude-sonnet-5', 'tier-3': 'claude-haiku-4-5' };
   }
   // Fallback: everything is tier-2
-  return { 'tier-1': 'claude-sonnet-4-6', 'tier-2': 'claude-sonnet-4-6', 'tier-3': 'claude-sonnet-4-6' };
+  return { 'tier-1': 'claude-sonnet-5', 'tier-2': 'claude-sonnet-5', 'tier-3': 'claude-sonnet-5' };
 }
 ```
 

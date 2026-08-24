@@ -1,8 +1,6 @@
 ---
 name: doctor
 description: Run a comprehensive health check on the Paradigm setup. Use when something seems wrong, after major changes, or when the user says "check paradigm health", "paradigm doctor", or "is paradigm set up correctly".
-context: fork
-agent: paradigm:reviewer
 allowed-tools: Read, Grep, Glob
 ---
 

@@ -1,7 +1,6 @@
 ---
 name: class
 description: Convene the Classroom — the gated, teacher-led learning term. Agents bring proposed learnings; peers refute them with test-case scenarios; you sign off, and survivors promote to notebooks (or get refined). Use when the user says "class", "hold class", "convene the classroom", "review what the agents learned", "let's do a learning term".
-argument-hint: "[roster|study|review|report] [agent-id]"
 ---
 
 # The Classroom — gated term (teacher in the loop)

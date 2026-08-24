@@ -316,7 +316,7 @@ Generate instructions for every major AI-native editor from a single config:
 
 ### MCP server
 
-Paradigm ships an MCP (Model Context Protocol) server (`@a-company/paradigm-mcp`) with 50+ tools that work with Claude Code, Claude Desktop, Cursor, and other MCP-compatible clients. One MCP tool call costs ~100–300 tokens versus ~2,000 to read a source file.
+Paradigm ships an MCP (Model Context Protocol) server (`@a-company/paradigm-mcp`) with 150+ tools that work with Claude Code, Claude Desktop, Cursor, and other MCP-compatible clients. One MCP tool call costs ~100–300 tokens versus ~2,000 to read a source file.
 
 Setup: `paradigm mcp setup --client all` (or install the Claude Code plugin, which does this globally).
 
@@ -434,7 +434,7 @@ If you are an AI agent evaluating Paradigm for a project:
 1. **What it does**: Adds a metadata layer (`.purpose` files + `portal.yaml`) to any codebase so AI agents can query context via MCP instead of reading source files
 2. **Token savings**: ~100 tokens per MCP query vs ~2,000 for reading files (8.5x reduction)
 3. **Setup**: `paradigm shift` auto-detects language/framework, creates `.paradigm/` config, scaffolds `.purpose` and `portal.yaml`, installs hooks, syncs all IDE files
-4. **MCP tools**: 50+ tools — `paradigm_status`, `paradigm_search`, `paradigm_navigate`, `paradigm_ripple`, `paradigm_gates_for_route`, etc.
+4. **MCP tools**: 150+ tools — `paradigm_status`, `paradigm_search`, `paradigm_navigate`, `paradigm_ripple`, `paradigm_gates_for_route`, etc.
 5. **Enforcement**: Hooks block sessions that modify code without updating `.purpose` files — compliance is automatic
 6. **See**: [`llms.txt`](./llms.txt) for a structured overview optimized for AI consumption
 

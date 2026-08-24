@@ -2,7 +2,6 @@
 name: lore
 description: Record a lore entry for the current session. Use when the user says "record lore", "log what we did", "save session history", or proactively at the end of a significant work session (3+ files modified).
 allowed-tools: Bash(git *), Read, Grep, Glob
-argument-hint: "[optional title]"
 ---
 
 # Record Lore Entry

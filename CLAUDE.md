@@ -1,6 +1,6 @@
 # a-paradigm - Claude Context
 
-> **Paradigm v2.0** | For Claude Code, Claude API, and Claude-native interfaces
+> **Paradigm** (symbol schema v2) | For Claude Code, Claude API, and Claude-native interfaces
 >
 > **Author:** Matt Canoy ([@ascend42](https://github.com/ascend42)) | **Repo:** [github.com/ascend42/a-paradigm](https://github.com/ascend42/a-paradigm) | **npm:** [@a-company/paradigm](https://www.npmjs.com/package/@a-company/paradigm) | **Plugin:** `paradigm` via Claude Code marketplace
 
@@ -16,7 +16,7 @@ All context, symbols, and specifications live in the .paradigm/ directory.
 .paradigm/config.yaml  → Project configuration
 .paradigm/specs/       → Detailed specifications
 .paradigm/docs/        → Commands, patterns, troubleshooting
-.cursorrules           → IDE instructions (if using Cursor)
+.cursor/rules/*.mdc    → IDE instructions (if using Cursor)
 portal.yaml            → Security/auth definitions
 .paradigm/lore/        → Project timeline and history
 ```
@@ -154,7 +154,7 @@ paradigm_task_create({
 })
 ```
 
-**Coming in v6.1:** soft-block primitive (`paradigm_propose_block` with `claimant: 'framework'`) will let agents surface framework bugs as soft-blocks that persist across sessions until upstream fixes. See `.paradigm/research/path-bug-and-agent-protocol-analysis.md` §3.
+**Soft-block primitive (shipped):** `paradigm_propose_block` with `claimant: 'framework'` lets agents surface framework bugs as soft-blocks that persist across sessions until upstream fixes. See `.paradigm/research/path-bug-and-agent-protocol-analysis.md` §3.
 
 **Domain ownership** (per agent-owned enforcement, TD-2026-04-25-417):
 - Compliance tool bugs (`paradigm_aspect_check`, `paradigm_drift_*`) → Rune triages
@@ -165,7 +165,7 @@ paradigm_task_create({
 
 **Calibration gate:** without writer file:line + reader file:line evidence, downgrade the report to a plain task (no `framework-bug` tag). Same evidentiary bar a human bug report would clear.
 
-## Agent-Owned Soft-Blocks (v6.1)
+## Agent-Owned Soft-Blocks
 
 When you (an archetype agent — Rune, Aegis, Jinx, etc.) detect a condition the user should resolve before continuing, call `paradigm_propose_block`. The Stop hook reads `.paradigm/remediations/` and will refuse-with-override on your next run if `severity: guard`.
 
@@ -182,7 +182,7 @@ When you (an archetype agent — Rune, Aegis, Jinx, etc.) detect a condition the
 
 **Severity guidance:**
 - `advise` — informational stderr line, no block. FYI-class findings.
-- `auto-author` — same as advise at v6.1; signals you intend to author the fix.
+- `auto-author` — same as advise; signals you intend to author the fix.
 - `guard` — hard block. Use sparingly. User must `paradigm override <id>` to proceed.
 
 **Example invocation** — Rune detects #payment-form imports stripe but lacks an aspect:
@@ -202,7 +202,7 @@ The user can:
 
 Override events written to `.paradigm/events/overrides.jsonl` for Loid's calibration pass — if you generate too many overrides, Loid will surface your block as noise. **Self-regulate.**
 
-**Coming in v6.2:** JSONLogic predicates for `unblock_hint` (auto-clears when condition met), per-archetype override-cluster auto-coaching, durable scope opt-out via `paradigm_optout_register`. v6.1 ships plain-string hints + manual override only.
+**Advanced controls:** JSONLogic predicates for `unblock_hint` (auto-clears when condition met), per-archetype override-cluster auto-coaching, and durable scope opt-out via `paradigm_optout_register` are available. Plain-string hints + manual override remain the baseline.
 
 ## On-Demand Guidance
 

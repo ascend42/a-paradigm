@@ -1,0 +1,21 @@
+name: Install dependencies
+description: >
+  npm ci plus a workaround for the npm optional-deps bug (npm/cli#4828). A
+  lockfile resolved on macOS omits the Linux-specific rollup binary, so
+  tsup -> rollup crashes at build time ("Cannot find module
+  @rollup/rollup-linux-x64-gnu"). We install the binary matching the resolved
+  rollup version, without touching the manifest/lock. Requires actions/checkout
+  to have run first (needs .github/actions on disk).
+
+runs:
+  using: composite
+  steps:
+    - name: Install dependencies
+      shell: bash
+      run: npm ci
+
+    - name: Work around npm optional-deps bug (rollup linux binary)
+      shell: bash
+      run: |
+        ver=$(node -p "require('./node_modules/rollup/package.json').version")
+        npm install --no-save --force "@rollup/rollup-linux-x64-gnu@${ver}" || true

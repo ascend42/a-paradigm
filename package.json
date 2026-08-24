@@ -1,6 +1,6 @@
 {
   "name": "paradigm",
-  "version": "1.4.0",
+  "version": "7.8.0",
   "description": "Unified developer tools ecosystem - Purpose, Portal, and Premise",
   "private": true,
   "workspaces": [

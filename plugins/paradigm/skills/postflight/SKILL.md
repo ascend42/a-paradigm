@@ -1,8 +1,6 @@
 ---
 name: postflight
 description: Run post-task compliance checks after finishing implementation. Use when done with a task, when the user says "postflight", "am I done", "check my work", or proactively before ending a session where source files were modified.
-context: fork
-agent: paradigm:reviewer
 allowed-tools: Read, Grep, Glob
 ---
 

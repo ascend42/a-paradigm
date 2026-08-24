@@ -1,7 +1,6 @@
 ---
 name: forage
 description: Send an agent on an EXPEDITION into the wild — Reddit, Medium, engineering blogs, Anthropic docs — to grow its knowledge around a topic. Returns CITED candidate learnings (never certifies), staged at the floor trust tier for the gated class to adjudicate. Use when the user says "forage", "send an expedition", "go research X", "have <agent> learn about Y in the wild", or schedules a breadth scout.
-argument-hint: "[agent-id] [topic] [--axis depth|breadth]"
 ---
 
 # Forage — expeditions into the wild (external knowledge)

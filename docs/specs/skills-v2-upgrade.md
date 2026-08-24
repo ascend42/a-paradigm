@@ -268,7 +268,9 @@ agent: Explore
 Prepare a handoff summary...
 ```
 
-### `/paradigm:graph`
+### Symbol graph (not shipped as a skill — use the `paradigm_graph_*` MCP tools)
+The graph capability was never packaged as a `/paradigm` skill; it lives in the
+`paradigm_graph_*` MCP tools (and the `paradigm graph` CLI). Historical proposal:
 ```yaml
 ---
 name: graph
@@ -383,7 +385,7 @@ Add new skills enabled by v2:
 ### Medium-term (Next Release Cycle)
 - Paradigm's custom agents (`.claude/agents/`) packaged with the plugin
 - Skill-scoped hooks for automatic session tracking
-- `/paradigm:batch` — leverage Claude Code's /batch for multi-package operations
+- Multi-package batch operations — the `paradigm_batch_*` MCP tools
 - Dynamic skill generation from `.purpose` files (auto-create review skills per component)
 
 ### Long-term (Paradigm v4 Vision)

@@ -1,10 +1,7 @@
 ---
 name: observe
 description: View live logs, metrics, and traces from Sentinel. Use when the user says "show logs", "check metrics", "view traces", "what's happening", or when monitoring application behavior.
-context: fork
-agent: Explore
 allowed-tools: Bash(curl *), Read
-argument-hint: "[service-name or symbol]"
 ---
 
 # Sentinel Observability

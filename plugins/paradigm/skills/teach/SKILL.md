@@ -1,7 +1,6 @@
 ---
 name: teach
 description: Teach an agent a new behavior or pattern. Writes a journal entry that promotes to the agent's notebook for future sessions. Use when the user says "teach", "train agent", "agent should know", "remember this for agent", or wants to give an agent specific instructions.
-argument-hint: "<agent-id> <instruction>"
 ---
 
 # Teach an Agent

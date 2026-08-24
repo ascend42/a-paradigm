@@ -1,7 +1,6 @@
 ---
 name: agents
 description: Manage your agent team — roster, onboard, bench/activate, detail, install from GitHub or nevr.land. Use when the user says "agents", "show my agents", "onboard agents", "install agent", "bench agent", or wants to manage their AI team.
-argument-hint: "[roster|onboard|bench <id>|activate <id>|show <id>|install <source>]"
 ---
 
 # Agent Team Management

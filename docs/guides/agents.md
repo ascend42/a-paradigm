@@ -1,7 +1,7 @@
 # Paradigm Agents Guide
 
 > Persistent AI agent identities — what they are, how to manage them, how they learn.
-> Reflects v6.0 surface (`paradigm agent` CLI + `paradigm_agent_*` MCP tools).
+> Covers the `paradigm agent` CLI + `paradigm_agent_*` MCP tools.
 
 ## 1. What an agent is
 
@@ -196,7 +196,7 @@ Three storage tiers feed the learning loop:
 2. **Journals** (per-agent, in `~/.paradigm/agents/<id>/journal/`) — what the agent learned this session. Includes `trigger` (correction_received, confidence_miss, pattern_discovered, etc.), `insight`, `transferable: bool`, `confidence_before/after`.
 3. **Notebooks** (`.paradigm/notebooks/<agent>/nb-*.yaml`) — promoted patterns the agent has applied with measurable results. Carries `appliedCount`, `successRate`, `scope` (`generalizable | project-specific | platform-specific`), `publishable: bool`.
 
-Promotion flow: lore entry → journal (postflight, when something was learned) → notebook (when `appliedCount` and `confidence` cross thresholds, with human approval gate per the v6.1 promotion-pipelines spec).
+Promotion flow: lore entry → journal (postflight, when something was learned) → notebook (when `appliedCount` and `confidence` cross thresholds, with human approval gate per the promotion-pipelines spec).
 
 `paradigm agent sync <id>` is the bootstrap path — it walks lore and seeds expertise. The continuous path is the postflight learning loop:
 
@@ -340,7 +340,7 @@ partners:
     share_notebooks: off             # off (default) | read | read-write
 ```
 
-`relation` is human-readable context shown in `agent get`. `share_notebooks` is reserved — at v6.0.3 it has no runtime effect; v6.1+ pair-learning will read it.
+`relation` is human-readable context shown in `agent get`. `share_notebooks` is reserved — it currently has no runtime effect; pair-learning will read it.
 
 ### Reciprocal vs pending
 
@@ -362,7 +362,7 @@ If a declared partner isn't installed locally:
 
 ### Pair notebook namespace (reserved)
 
-Each reciprocal pair has a canonical notebook path: `.paradigm/notebooks/_pairs/{a-b}/` (alphabetically sorted ids, regardless of who declared the pair). The directory is reserved at v6.0.3 — no learning entries are written there yet. v6.1+ pair-learning will use it so partner state lives next to the pair, not inside either agent's profile.
+Each reciprocal pair has a canonical notebook path: `.paradigm/notebooks/_pairs/{a-b}/` (alphabetically sorted ids, regardless of who declared the pair). The directory is reserved — no learning entries are written there yet. Pair-learning will use it so partner state lives next to the pair, not inside either agent's profile.
 
 ### Marketplace primitives (contracts-only)
 
@@ -412,7 +412,7 @@ Hand-editing the affected `.purpose`, `portal.yaml`, or other Paradigm-owned fil
 
 ### v6.1 escalation path
 
-When the soft-block primitive ships in v6.1 Sprint 1, framework bugs that actively mislead session decisions can additionally be surfaced via `paradigm_propose_block(claimant: 'framework', ...)`. The block persists across session resumes until upstream fixes (or the user overrides it locally). At that point the protocol becomes: file the framework-bug task (now) AND propose a soft-block (v6.1) when the bug blocks correctness, not just convenience.
+The soft-block primitive is available: framework bugs that actively mislead session decisions can additionally be surfaced via `paradigm_propose_block(claimant: 'framework', ...)`. The block persists across session resumes until upstream fixes (or the user overrides it locally). The protocol is: file the framework-bug task AND propose a soft-block when the bug blocks correctness, not just convenience.
 
 For the full team analysis behind this protocol — including the rejected-for-now tool-surface option (`paradigm_framework_issue`) and the calibration rationale — see `.paradigm/research/path-bug-and-agent-protocol-analysis.md`.
 
