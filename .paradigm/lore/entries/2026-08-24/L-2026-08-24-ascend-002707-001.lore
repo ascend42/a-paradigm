@@ -1,0 +1,37 @@
+id: L-2026-08-24-ascend-002707-001
+type: milestone
+timestamp: '2026-08-24T00:27:07.256Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Founder decision-dialogue session: all field-test gates ruled; M3-lite build begins'
+summary: 'The founder answered every open gate through interactive decision dialogues (TD-2026-08-23-042, TD-2026-08-23-136): M3-lite first (agent-key attribution + fsck + auto-resolve grants; human boundary PROCEDURAL — the founder questioned the passphrase ceremony, heard the honest "a disk key is agent-readable" explanation, and chose procedural, superseding TD-913(3)''s crypto clause); subject = a forthcoming NEW Expo app; pre-reg v2 drafted (A1–A11); agents pinned claude-opus-4-8; judge on the operator''s standard subscription (zero-arg SDK credential chain — shipped); corpus = public payloads stated. NEW PRODUCT REQUIREMENT surfaced by the founder: agents must be able to continue through KNOTs on long PRD-driven builds → designed as signed/issued AUTO-RESOLVE GRANTS (scoped, revocable, resolved-under-grant-G recorded), in M3, OFF for the run. Critical path is now: M3-lite I1–I7 (~20h) → v2 ratification + subject naming → prep → dry run → live block.'
+symbols_touched:
+  - '#strand'
+  - '#seal'
+  - '#verify'
+  - '#judge'
+  - '#warpline-cli'
+learnings:
+  - 'Decision dialogues work: seven gates + four design questions settled in two rounds where async docs sat unratified'
+  - When the founder asks 'why is this necessary', answer the mechanism honestly and re-open the design space — the procedural ruling AND the grant requirement both came from pushback, not menu picks
+  - 'Auto-resolve grants reconcile fail-closed with long-build autonomy: delegation is explicit, auditable, revocable — the thesis with a knob instead of a hole'
+tags:
+  - warpline
+  - field-test
+  - founder-gates
+  - M3-lite
+  - auto-resolve-grant
+  - arc:warpline
+  - decision-dialogues
+linked_tasks:
+  - T-2026-08-23-001
+  - T-2026-07-01-014
+linked_commits:
+  - df5d00d2
+  - ebf40a67
+git_context:
+  ref: ebf40a67a9f6f21f63f32de4283042202e4f2a06
+  branch: warpline-surfaces
+  dirty: true
