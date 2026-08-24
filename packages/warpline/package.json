@@ -1,6 +1,6 @@
 {
   "name": "@a-company/warpline",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Warpline — version control for meaning (experimental). The Convergence/Divergence Oracle plus a native hash-chained fabric: pick/admit/resolve multi-writer history, a content-addressed object store, and git-absent restore.",
   "type": "module",
   "main": "./dist/index.js",

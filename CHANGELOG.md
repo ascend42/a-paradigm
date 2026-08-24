@@ -5,6 +5,22 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.8.0] — 2026-08-24 — Warpline: field-test readiness (experimental, in progress)
+
+**Warpline is very much in progress** — an experimental package (`@a-company/warpline`, 0.2.0), bundled with the Paradigm CLI but not yet a finished product. This release merges a long-lived feature branch: the deterministic merge-adjudication substrate ("meaning judges, bytes execute, disagreement fails closed") reaches the point where a pre-registered field test *can be run* on a real app. Nothing here changes the Paradigm framework's own surfaces; treat every Warpline feature as a research instrument, not a stable API.
+
+### Added — Warpline
+- **M2.5 durable branches, merged by meaning** — branch/switch/checkout, multi-branch log/diff/show, protected `main` (anti agent-self-merge gate), merge-by-meaning that fails **closed** on blind classes. The founder's divergent-branch falsifier passes (config×code + no-shared-token invariant held, not silently sealed).
+- **Field-test run pipeline** (`warpline field oracle | cards | fallback | judge | join | score`) — the full harness for a pre-registered study: a CLEAN-seal green-gate oracle with the both-parents power rule, resolve-time blinded rating cards, a hash-chained tamper-evident denominator ledger with write-before-reveal + git-witnessed heads, a cold LLM-judge instrument (blocking twin-invariant + injection-corpus pre-flight, N=3 majority), and a §-by-§ falsifier report (two-denominator bounds, Wilson-gated seed calibration, honest INCONCLUSIVE/VOID defaults).
+- **M3-lite integrity** — Ed25519 **agent-signed strands** (signature bound into the pickId, human-gated key mint), `warpline fsck` (fabric + objects + refs + registry + signatures in one verb), and **auto-resolve grants** (`warpline grant auto-resolve`): a human-issued, scoped, expiring, revocable exception that lets agents continue through KNOTs on long autonomous builds — off by default. Adversary falsifier green. The human/agent boundary is enforced procedurally (permissions + gates); agent-to-agent attribution is cryptographic. Honest limits are documented, not hidden.
+- **Pre-app kit** — `warpline field seed corpus|planted|classify|verify` and `warpline field init-subject`, so an operator can seal the injection corpus + planted control and bootstrap a subject app; `field seed verify` runs the run's own loader as a pre-freeze proof.
+- **Operator runbook** (`docs/guides/warpline-field-test-runbook.md`) and the ratified, locked pre-registration v2.
+
+### Notes
+- **Experimental.** `@a-company/warpline` is 0.x; the interface will keep moving. The field test itself has not been run — the remaining steps require a subject app and are founder-gated (see the runbook's §C freeze checklist).
+- Also included from the branch: the Academy / Classroom experience (7.6.x–7.7.0 entries below) already merges to `main` with this release.
+- Still experimental surfaces report their own versions until a publish.
+
 ## [7.7.0] — 2026-06-25 — The Academy chrome: Roster · Rap Sheet · Agent Locker (experimental)
 
 The Academy was a single Term Board. This makes it a navigable surface — the gated-learning ledger you can actually read.
