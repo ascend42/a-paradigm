@@ -101,7 +101,7 @@ import {
   GRANT_TTL_MAX_MS,
 } from './fabric/grants.js';
 import { STAKE_MARKER } from './fabric/stake-guard.js';
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { gitPath } from './git/git-exec.js';
 import { resolveRoot, setExplicitRoot, extractRootFlag, ROOT_ENV, type RootArm } from './root.js';
 import { health, healthExitCode, type HealthReport } from './health.js';
@@ -126,6 +126,18 @@ import { runFieldJudge, fakeFieldCallModel, fieldJudgeLedgerPathOf, type FieldJu
 import { joinFieldVerdicts, type FieldJoinResult } from './field/join.js';
 import { scoreFieldRunFromDisk, renderFieldReport, fieldReportMarkdownPathOf, fieldReportJsonPathOf, type FieldScore } from './field/score.js';
 import { liveCallModel } from './judge/judge-run.js';
+import { seedsDirOf, loadSeedCardsFromDir, type SeedCardSets } from './field/interleave.js';
+import {
+  sealCardSet,
+  starterInjectionCorpusCards,
+  buildPlantedControlCard,
+  DEFAULT_PLANTED_PAIR,
+  recomputeCardId,
+  type SealCardInput,
+  type SealResult,
+} from './field/seed-authoring.js';
+import { initSubject, type InitSubjectResult } from './field/subject-bootstrap.js';
+import type { RatingCard } from './judge/rating-card.js';
 
 // The shared .purpose parser (library code, purpose/core/aggregator) console.warns
 // about unrelated schema-invalid files (e.g. a stale conductor .purpose) on every
@@ -1525,6 +1537,188 @@ field
         process.stdout.write(JSON.stringify(score, null, 2) + '\n');
       } else {
         printFieldScore(score, mdPath, jsonPath);
+      }
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+/* ── field seed (PRE-APP KIT — seal the §5 seed/corpus card sets) ─────────────── */
+
+const fieldSeed = field
+  .command('seed')
+  .description('Build the SEALED seed/corpus card sets the run\'s own loader (field interleave) enforces (§4 planted control / §5+§A9 corpus / §A6 seeds). Every verb writes RatingCard JSON + a manifest.json (file, cardId, sha256, groundTruth/steeredLabel) that #field-interleave.loadSeedCards accepts verbatim. Commit each sealed set\'s sha256 to git before admission 1 (v2 §C).');
+
+fieldSeed
+  .command('corpus')
+  .description('Seal the STARTER public prompt-injection corpus (v2 §A9 — externally-authored PUBLIC payload strings embedded in team-built cards) into .warpline/field/seeds/corpus/ (or --out). Prints the count + manifest sha256. Refuses to overwrite a non-empty sealed dir unless --force.')
+  .option('--out <dir>', 'target seeds dir (default: .warpline/field/seeds/corpus)')
+  .option('--force', 'overwrite a non-empty sealed dir')
+  .option('--json', 'emit the seal result as JSON')
+  .action(async (options: { out?: string; force?: boolean; json?: boolean }) => {
+    try {
+      const root = await resolveRoot();
+      const dir = options.out ? path.resolve(options.out) : path.join(seedsDirOf(root), 'corpus');
+      guardSealDir(dir, options.force === true);
+      const cards = starterInjectionCorpusCards();
+      const inputs: SealCardInput[] = cards.map((c) => ({ card: c.card, steeredLabel: c.steeredLabel }));
+      const res = sealCardSet(dir, inputs);
+      printSeal('corpus', res, options.json === true);
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+fieldSeed
+  .command('planted')
+  .description('Seal ONE §4/A6 planted false-CLEAN control card (groundTruth: broken) from two supplied file versions into .warpline/field/seeds/planted/ (or --out). With --ours/--theirs omitted it uses the DEFAULT SYNTHETIC pair and warns LOUDLY — replace with real subject files before the run. Refuses to overwrite a non-empty sealed dir unless --force.')
+  .option('--ours <file>', 'the ours-side file (the limit-100→50 change); default = synthetic')
+  .option('--theirs <file>', 'the theirs-side file (the retry-loop-assuming-100 change); default = synthetic')
+  .option('--merged <file>', 'the sealed merged bytes (default: theirs-over-ours union, or synthetic pair\'s merged)')
+  .option('--path <relPath>', 'the changed file\'s repo-relative path when --ours/--theirs are given (default: src/paginate.ts)')
+  .option('--failing-check <name>', 'the oracle check NAME that would fail on the merge (§4)')
+  .option('--out <dir>', 'target seeds dir (default: .warpline/field/seeds/planted)')
+  .option('--force', 'overwrite a non-empty sealed dir')
+  .option('--json', 'emit the seal result as JSON')
+  .action(async (options: {
+    ours?: string; theirs?: string; merged?: string; path?: string;
+    failingCheck?: string; out?: string; force?: boolean; json?: boolean;
+  }) => {
+    try {
+      const root = await resolveRoot();
+      const dir = options.out ? path.resolve(options.out) : path.join(seedsDirOf(root), 'planted');
+      guardSealDir(dir, options.force === true);
+      const store = new ObjectStore(root);
+
+      const useSynthetic = options.ours === undefined && options.theirs === undefined;
+      let result;
+      if (useSynthetic) {
+        result = buildPlantedControlCard(store, {
+          ours: DEFAULT_PLANTED_PAIR.ours,
+          theirs: DEFAULT_PLANTED_PAIR.theirs,
+          merged: DEFAULT_PLANTED_PAIR.merged,
+        });
+      } else {
+        if (options.ours === undefined || options.theirs === undefined) {
+          process.stderr.write('warpline: field seed planted — supply BOTH --ours and --theirs (or neither, for the synthetic pair)\n');
+          process.exit(1);
+        }
+        const rel = options.path ?? 'src/paginate.ts';
+        const oursBody = await fs.readFile(path.resolve(options.ours), 'utf8');
+        const theirsBody = await fs.readFile(path.resolve(options.theirs), 'utf8');
+        const mergedBody = options.merged ? await fs.readFile(path.resolve(options.merged), 'utf8') : undefined;
+        result = buildPlantedControlCard(store, {
+          ours: { [rel]: oursBody },
+          theirs: { [rel]: theirsBody },
+          ...(mergedBody !== undefined ? { merged: { [rel]: mergedBody } } : {}),
+          ...(options.failingCheck ? { failingCheck: options.failingCheck } : {}),
+        });
+      }
+
+      const res = sealCardSet(dir, [{ card: result.card, groundTruth: result.groundTruth }]);
+      if (result.synthetic && !options.json) {
+        process.stdout.write(
+          'WARNING   SYNTHETIC planted control — replace with REAL subject file versions before the run (v2 §4/A6).\n',
+        );
+      }
+      printSeal('planted', res, options.json === true, result.synthetic);
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+fieldSeed
+  .command('classify')
+  .description('Seal already-captured KNOT rating cards (from `warpline field cards`) as KNOWN-GENUINE / KNOWN-OVER-BLOCK classifier seeds with the operator-supplied ground truth (§A6 — these are authored AFTER the subject produces contested cards). Reads --from (a cards dir), seals into .warpline/field/seeds/{genuine|over-block}/ (or --out). Refuses to overwrite a non-empty sealed dir unless --force.')
+  .requiredOption('--from <cards-dir>', 'a directory of captured RatingCard JSON (e.g. .warpline/field/cards)')
+  .requiredOption('--truth <GENUINE|OVER-BLOCK>', 'the sealed ground truth for every card read')
+  .option('--out <dir>', 'target seeds dir (default: .warpline/field/seeds/{genuine|over-block})')
+  .option('--force', 'overwrite a non-empty sealed dir')
+  .option('--json', 'emit the seal result as JSON')
+  .action(async (options: { from: string; truth: string; out?: string; force?: boolean; json?: boolean }) => {
+    try {
+      const root = await resolveRoot();
+      const truth = options.truth.toUpperCase();
+      if (truth !== 'GENUINE' && truth !== 'OVER-BLOCK') {
+        process.stderr.write(`warpline: field seed classify — --truth must be GENUINE or OVER-BLOCK (got "${options.truth}")\n`);
+        process.exit(1);
+      }
+      const sub = truth === 'GENUINE' ? 'genuine' : 'over-block';
+      const dir = options.out ? path.resolve(options.out) : path.join(seedsDirOf(root), sub);
+      guardSealDir(dir, options.force === true);
+      const cards = readCardsFromDir(path.resolve(options.from));
+      if (cards.length === 0) {
+        process.stderr.write(`warpline: field seed classify — no RatingCard JSON found under ${path.resolve(options.from)}\n`);
+        process.exit(1);
+      }
+      const inputs: SealCardInput[] = cards.map((card) => ({ card, groundTruth: truth as 'GENUINE' | 'OVER-BLOCK' }));
+      const res = sealCardSet(dir, inputs);
+      printSeal(sub, res, options.json === true);
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+fieldSeed
+  .command('verify')
+  .description('THE MONEY VERB: load all four sealed dirs (planted/genuine/over-block/corpus) through the RUN\'S OWN loader (#field-interleave.loadSeedCards) and report counts + any seal failure. This proves §C condition (c) — the sealed manifests will pass the run\'s loader — BEFORE the freeze. Non-zero exit on any failure.')
+  .option('--dir <seeds-root>', 'the seeds root holding the four sealed dirs (default: .warpline/field/seeds)')
+  .option('--json', 'emit the verify result as JSON')
+  .action(async (options: { dir?: string; json?: boolean }) => {
+    try {
+      const root = await resolveRoot();
+      const base = options.dir ? path.resolve(options.dir) : seedsDirOf(root);
+      let sets: SeedCardSets | null = null;
+      let error: string | null = null;
+      try {
+        sets = loadSeedCardsFromDir(base);
+      } catch (err) {
+        error = err instanceof Error ? err.message : String(err);
+      }
+      if (options.json) {
+        process.stdout.write(
+          JSON.stringify(
+            sets
+              ? {
+                  ok: true,
+                  base,
+                  counts: {
+                    planted: sets.planted.length,
+                    genuine: sets.genuine.length,
+                    overBlock: sets.overBlock.length,
+                    corpus: sets.corpus.length,
+                  },
+                }
+              : { ok: false, base, error },
+            null,
+            2,
+          ) + '\n',
+        );
+      } else {
+        printSeedVerify(base, sets, error);
+      }
+      if (!sets) process.exit(1);
+    } catch (err) {
+      fail(err);
+    }
+  });
+
+/* ── field init-subject (PRE-APP KIT — scaffold the subject repo) ─────────────── */
+
+field
+  .command('init-subject')
+  .description('One-shot onboarding for the field-test SUBJECT (the new Expo app once it exists): scaffold a starter .warpline/field/greengate.json (v2 §A3 tsc + expo export) + a behavioral-checklist template, and PRINT the ordered runbook §0 pre-run checklist (each item auto/manual) + the keys-before-propose reminder. Does NOT run `warpline init` or mint keys — those are deliberate human acts. Idempotent: refuses to clobber an existing greengate.json unless --force.')
+  .argument('[dir]', 'the subject repo path (default: the resolved root)')
+  .option('--force', 'replace an existing greengate.json / template')
+  .option('--json', 'emit the bootstrap result as JSON')
+  .action(async (dir: string | undefined, options: { force?: boolean; json?: boolean }) => {
+    try {
+      const root = dir ? path.resolve(dir) : await resolveRoot();
+      const result = initSubject(root, { force: options.force });
+      if (options.json) {
+        process.stdout.write(JSON.stringify(result, null, 2) + '\n');
+      } else {
+        printInitSubject(result);
       }
     } catch (err) {
       fail(err);
@@ -3651,6 +3845,95 @@ function printFieldOracle(root: string, r: FieldOracleRunResult): void {
     `TOTALS    audited ${r.audited.length} · skipped (already audited) ${r.skipped} · ` +
       `true-clean ${by('true-clean')} · candidate-false-clean ${by('candidate-false-clean')} · blind-untested ${by('blind-untested')}`,
   );
+  process.stdout.write(lines.join('\n') + '\n');
+}
+
+/* ── field seed / init-subject helpers (PRE-APP KIT) ─────────────────────────── */
+
+/** Refuse to seal into a non-empty sealed dir (a card.json/manifest present) unless forced. */
+function guardSealDir(dir: string, force: boolean): void {
+  if (force || !existsSync(dir)) return;
+  const occupied = readdirSync(dir).some((n) => n === 'manifest.json' || n.endsWith('.json'));
+  if (occupied) {
+    process.stderr.write(
+      `warpline: ${dir} already holds sealed card(s)/manifest — refusing to overwrite a sealed set (use --force)\n`,
+    );
+    process.exit(1);
+  }
+}
+
+/** Read every RatingCard JSON out of a captured-cards dir (skips manifest.json). */
+function readCardsFromDir(dir: string): RatingCard[] {
+  if (!existsSync(dir)) {
+    process.stderr.write(`warpline: field seed classify — cards dir ${dir} does not exist\n`);
+    process.exit(1);
+  }
+  const out: RatingCard[] = [];
+  for (const name of readdirSync(dir).sort()) {
+    if (!name.endsWith('.json') || name === 'manifest.json') continue;
+    const card = JSON.parse(readFileSync(path.join(dir, name), 'utf8')) as RatingCard;
+    if (recomputeCardId(card) !== card.cardId) {
+      process.stderr.write(
+        `warpline: field seed classify — ${path.join(dir, name)} cardId does not match its content; refusing to seal a forged card\n`,
+      );
+      process.exit(1);
+    }
+    out.push(card);
+  }
+  return out;
+}
+
+function printSeal(kind: string, r: SealResult, json: boolean, synthetic?: boolean): void {
+  if (json) {
+    process.stdout.write(JSON.stringify({ kind, ...r, ...(synthetic !== undefined ? { synthetic } : {}) }, null, 2) + '\n');
+    return;
+  }
+  const lines = [`FIELD SEED  (${kind} — sealed card set)`];
+  lines.push(`SEALED    ${r.count} card(s) → ${r.dir}`);
+  lines.push(`MANIFEST  manifest.json sha256 ${r.manifestSha256}`);
+  lines.push('COMMIT    git-add the sealed dir + commit this sha256 before admission 1 (v2 §C).');
+  process.stdout.write(lines.join('\n') + '\n');
+}
+
+function printSeedVerify(base: string, sets: SeedCardSets | null, error: string | null): void {
+  const lines = ['FIELD SEED VERIFY  (§C condition (c) — the run\'s OWN loader over the sealed dirs)'];
+  lines.push(`ROOT      ${base}`);
+  if (!sets) {
+    lines.push('RESULT    FAILED — the loader refused the sealed set:');
+    lines.push(`  ${error ?? '(no message)'}`);
+    process.stdout.write(lines.join('\n') + '\n');
+    return;
+  }
+  lines.push('RESULT    OK — every sealed dir loads through the run loader');
+  lines.push(
+    `COUNTS    planted ${sets.planted.length} · genuine ${sets.genuine.length} · over-block ${sets.overBlock.length} · corpus ${sets.corpus.length}`,
+  );
+  if (sets.corpus.length === 0) {
+    lines.push('CAVEAT    corpus is EMPTY — the RUN pre-flight (§5 gate (b)) will DISQUALIFY on an empty corpus. Seal it before the run.');
+  }
+  process.stdout.write(lines.join('\n') + '\n');
+}
+
+function printInitSubject(r: InitSubjectResult): void {
+  const lines = ['FIELD INIT-SUBJECT  (scaffold + instruct — no init, no keys)'];
+  lines.push(
+    r.greengateWritten
+      ? `GREENGATE wrote starter ${r.greengatePath} (tsc --noEmit + expo export; fill the behavioral block)`
+      : `GREENGATE left intact — ${r.greengateSkippedReason ?? 'exists'}`,
+  );
+  lines.push(
+    r.checklistTemplateWritten
+      ? `TEMPLATE  wrote ${r.checklistTemplatePath} (author + freeze the behavioral couplings)`
+      : `TEMPLATE  left intact ${r.checklistTemplatePath}`,
+  );
+  lines.push('');
+  lines.push('PRE-RUN CHECKLIST (runbook §0 — all must be checked in writing before admission 1):');
+  for (const item of r.checklist) {
+    lines.push(`  [${item.mode === 'auto' ? 'auto  ' : 'manual'}] ${item.text}`);
+  }
+  lines.push('');
+  lines.push('REMINDERS:');
+  for (const rem of r.reminders) lines.push(`  ! ${rem}`);
   process.stdout.write(lines.join('\n') + '\n');
 }
 

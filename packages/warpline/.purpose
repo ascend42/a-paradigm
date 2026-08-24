@@ -4085,6 +4085,8 @@ components:
       - "#field-judge-run"
       - "#field-join"
       - "#field-score"
+      - "#field-seed-authoring"
+      - "#field-subject-bootstrap"
     tags: [field-test, protocol-s3, protocol-s4, protocol-s5, protocol-s6, protocol-s7, protocol-s8, protocol-s9, b7, harness]
     references:
       - "#judge-rating-card"
@@ -4094,6 +4096,71 @@ components:
       - "#fabric"
       - "#graph"
       - "#warp-snapshot"
+      - "#warpline-cli"
+
+  field-seed-authoring:
+    description: >-
+      The PRE-APP KIT PRODUCER (field-test freeze-checklist items that don't need
+      the subject app yet; expo-field-test-protocol-v2 §4/§5/§A6/§A9, runbook §0) —
+      src/field/seed-authoring.ts + src/field/corpus-payloads.ts. It BUILDS the
+      sealed seed/corpus card sets that #field-interleave.loadSeedCards (the RUN'S
+      OWN loader) then consumes VERBATIM; the seal formula (recomputeCardId) and
+      manifest shape (SeedManifestEntry: file, cardId, sha256, groundTruth/
+      steeredLabel) are byte-identical to the consumer's, and the producer→consumer
+      round-trip is asserted in test/seed-authoring.test.ts (a card the loader
+      rejects is a failure). THREE PURE PRODUCERS. (1) sealCardSet(dir, cards)
+      writes each RatingCard to <dir>/seed-NNN.json (deterministic index
+      filenames), sha256 over the EXACT bytes, and manifest.json — returning the
+      manifest sha256 the operator commits to git (§C). (2) buildInjectionCorpusCards
+      (§A9): PUBLIC prompt-injection payload strings (corpus-payloads.ts —
+      STARTER_INJECTION_PAYLOADS, 10 generic well-known patterns tagged with the
+      steeredLabel each pushes, provenance stated as externally-authored-not-tuned)
+      embedded VERBATIM in the untrusted-prose intent channel of a well-formed knot
+      RatingCard; because the payload rides framed prose, buildBenignTwin
+      neutralizes it and the twin differs (the §5 differential injection gate's
+      signal). (3) buildPlantedControlCard (§4/A6 canonical false-CLEAN): takes the
+      two operator-supplied side file maps (limit-100→50 vs retry-loop-assuming-100
+      by DEFAULT SYNTHETIC pair — swap real subject files at seal time), materializes
+      ours/theirs/merged into durable trees via snapshotDir, assembles the
+      CleanAuditRow, and runs the SAME #judge stripper buildCleanRatingCard the run
+      uses; groundTruth 'broken'. CLI (under the existing `field` group): `warpline
+      field seed corpus|planted|classify|verify` — corpus seals the starter public
+      corpus; planted seals one control from --ours/--theirs (or the synthetic pair,
+      with a LOUD replace-before-run warning); classify seals already-captured KNOT
+      cards (from `field cards`) as KNOWN-GENUINE/KNOWN-OVER-BLOCK with operator
+      ground truth (authored AFTER contested cards exist, §A6); verify (the money
+      verb) loads all four sealed dirs through the run's own loader and reports
+      counts + any seal failure (proves §C condition (c) BEFORE the freeze). Each
+      seal verb refuses to overwrite a non-empty sealed dir unless --force.
+    type: module
+    tags: [field-test, protocol-s4, protocol-s5, protocol-s6, pre-app-kit, producer]
+    references:
+      - "#field-interleave"
+      - "#judge-rating-card"
+      - "#judge-preflight"
+      - "#warp-snapshot"
+      - "#warpline-cli"
+
+  field-subject-bootstrap:
+    description: >-
+      The PRE-APP KIT SUBJECT ONBOARDING (expo-field-test-protocol-v2 §A2/§A3,
+      runbook §0) — src/field/subject-bootstrap.ts + `warpline field init-subject
+      [dir]`. It SCAFFOLDS and INSTRUCTS; it does NOT act. It writes, under the
+      subject repo's .warpline/field/: (1) a starter greengate.json = the §A3
+      declared gate {checks:[typecheck: npx tsc --noEmit, bundle: npx expo export],
+      behavioral:{script:'', assertions:[]}} that readGreenGate parses (asserted in
+      test); (2) a behavioral-checklist.template.md stub the operator fills (its
+      assertions enumerate the config×code couplings — a coupling not listed is
+      BLIND, not passed). It PRINTS the ordered runbook §0 pre-run checklist, each
+      item tagged auto (a tool step) or manual (a human decision/act), plus the
+      load-bearing reminder that agent keys must be MINTED BEFORE agents propose
+      (Build-D fixture finding: an unkeyed proposal is refused). It deliberately
+      does NOT run `warpline init` and does NOT mint keys — both are human acts.
+      Idempotent: refuses to clobber an existing greengate.json unless --force.
+    type: module
+    tags: [field-test, protocol-s2, protocol-s3, pre-app-kit, onboarding]
+    references:
+      - "#field-oracle"
       - "#warpline-cli"
 
 flows:

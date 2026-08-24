@@ -387,7 +387,16 @@ function loadSealedDir(
  * corpus — the correct fail-closed default, §5 gate (b)).
  */
 export function loadSeedCards(root: string): SeedCardSets {
-  const base = seedsDirOf(root);
+  return loadSeedCardsFromDir(seedsDirOf(root));
+}
+
+/**
+ * Same loader, addressed by the seeds ROOT directly (the four sealed dirs live
+ * under `base`). This is the ONE loader — `warpline field seed verify` calls it
+ * so the operator's pre-freeze check exercises the exact code path the run
+ * itself will use (a producer proving itself against a copy would prove nothing).
+ */
+export function loadSeedCardsFromDir(base: string): SeedCardSets {
   const planted = loadSealedDir(path.join(base, 'planted'), 'planted', ['broken'], false).map(
     ({ card, entry }): TaggedCard => ({
       card,
