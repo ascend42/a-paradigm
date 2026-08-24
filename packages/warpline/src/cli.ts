@@ -2105,6 +2105,11 @@ grantCmd
   .option('-m, --note <note>', 'why this grant exists (the audit record)')
   .option('--json', 'emit the issued grant row as JSON')
   .action(async (options: { branch?: string; ttl: string; note?: string; json?: boolean }) => {
+      if (options.branch !== undefined && options.branch !== 'selvage') {
+        process.stderr.write(
+          `warpline: warning — resolve currently lands only on "selvage"; a grant scoped to "${options.branch}" will never match at the gate (silently dead, fail-closed). Scope to selvage or omit --branch.\n`,
+        );
+      }
     try {
       const root = await resolveRoot();
       // Grant issuance is HUMAN-class (Q3 ruling: console/CLI human-class act,

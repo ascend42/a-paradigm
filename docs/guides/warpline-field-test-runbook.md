@@ -21,8 +21,11 @@ Tooling: the full `warpline field oracle|cards|fallback|judge|join|score` pipeli
       `warpline-multi-instance-demo.md` §A2); daemon up; one MCP token per instance.
 - [ ] **Habit (i) — MCP only, verified:** every agent's Warpline access is through the daemon
       MCP surface. Swarm agents' Claude Code tool permissions DENY `Bash(warpline*)`,
-      `Bash(node*cli.js*)`, raw `git` write commands, and ALL reads of `.warpline/keys/**`
-      (TD-2026-08-23-136 Q5 — agent-key attribution depends on it). The subject's
+      `Bash(node*cli.js*)`, raw `git` write commands, ALL reads of `.warpline/keys/**`
+      (TD-2026-08-23-136 Q5), and ALL WRITES to `.warpline/keys/**` AND
+      `.warpline/grants/**` (Aegis M3 review finding 1: grant rows and registry
+      appends are unkeyed — a self-issued grant or forged key row passes every
+      reader; the write-deny is the load-bearing authority boundary). The subject's
       `.claude/settings.local.json` currently pre-allows `git add/commit/push` — REMOVE for
       agent instances. `$WARPLINE_AGENT_ID` is self-asserted; permissions are the enforcement.
 - [ ] Agents launched with the pinned model: `claude --model claude-opus-4-8` (v2 §A1).

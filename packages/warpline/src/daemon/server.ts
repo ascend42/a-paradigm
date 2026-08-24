@@ -545,7 +545,15 @@ export async function startDaemon(root: string, opts: StartDaemonOptions = {}): 
           agentId,
           reason,
           decidedBy: who.principal, // server-stamped
-          ...(str(params, 'now') ? { now: str(params, 'now') } : {}),
+          // Aegis 2026-08-24: a GRANTED (agent-class) resolve gets a SERVER-stamped
+          // clock — recordedAt is the instant grantActiveAt adjudicates
+          // grant-violation against, so the granted writer may not supply it.
+          // Human-class calls keep the client override (test determinism).
+          ...(resolveGrantId
+            ? { now: new Date().toISOString() }
+            : str(params, 'now')
+              ? { now: str(params, 'now') }
+              : {}),
           // I6: threaded from the GATE (never a client param) — present only
           // when an agent-class call was admitted under an active grant, so the
           // resolution seal records underGrant (strand.ts).

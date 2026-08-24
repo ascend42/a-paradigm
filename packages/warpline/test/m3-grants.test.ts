@@ -176,6 +176,25 @@ describe('I6 — activeGrantFor (the gate query, every miss fails closed)', () =
   });
 });
 
+describe('I6 — over-cap grant span carries NO authority (Aegis review fix, 2026-08-24)', () => {
+  it('a self-consistent forged row with a 10-year span never matches — gate and history both', () => {
+    const issuedAt = '2026-08-01T00:00:00.000Z';
+    const g = forgeValidGrant(root, {
+      schemaVersion: 'grant:v1',
+      kind: 'grant',
+      scope: {},
+      ttl: { issuedAt, expiresAt: '2036-08-01T00:00:00.000Z' }, // 10 years — over the 7d cap
+      issuedBy: 'human',
+    });
+    // Gate: inside the pretended window, still no authority.
+    expect(activeGrantFor(root, { branch: 'selvage', now: '2026-08-02T00:00:00.000Z' })).toBeNull();
+    // History: a seal recorded inside the forged window still fails.
+    const check = grantActiveAt(root, g.grantId, { at: '2026-08-02T00:00:00.000Z', branch: 'selvage' });
+    expect(check.ok).toBe(false);
+    expect(check.reason).toMatch(/exceeds the 7-day cap/);
+  });
+});
+
 describe('I6 — grantActiveAt (the verify-side historical check)', () => {
   it('a strand sealed BEFORE the revocation instant was under grant; at/after it was not', () => {
     const { grant } = issueGrant(root, { now: T0 });

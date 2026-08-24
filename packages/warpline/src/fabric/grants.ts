@@ -331,6 +331,7 @@ export function activeGrantFor(root: string, query: ActiveGrantQuery): GrantRow 
     const issuedMs = parseIso(row.ttl.issuedAt);
     const expiresMs = parseIso(row.ttl.expiresAt);
     if (issuedMs === null || expiresMs === null) continue; // unreadable ttl → no authority
+    if (expiresMs - issuedMs > GRANT_TTL_MAX_MS) continue; // forged over-cap span → no authority (Aegis 2026-08-24)
     if (!(issuedMs <= nowMs && nowMs < expiresMs)) continue; // strict expiry
     if (row.scope.branch !== undefined && row.scope.branch !== query.branch) continue;
     if (row.scope.knotClass !== undefined && row.scope.knotClass !== 'any') continue; // fail closed
@@ -364,6 +365,9 @@ export function grantActiveAt(root: string, grantId: string, query: { at: string
   if (atMs === null) return { ok: false, reason: `recordedAt "${query.at}" is not a valid instant` };
   const issuedMs = parseIso(grant.ttl.issuedAt)!;
   const expiresMs = parseIso(grant.ttl.expiresAt)!;
+  if (expiresMs - issuedMs > GRANT_TTL_MAX_MS) {
+    return { ok: false, reason: `grant span ${grant.ttl.issuedAt}..${grant.ttl.expiresAt} exceeds the 7-day cap — an over-cap row carries no authority (forged or hand-widened)` };
+  }
   if (atMs < issuedMs) return { ok: false, reason: `sealed at ${query.at}, BEFORE the grant was issued (${grant.ttl.issuedAt})` };
   if (atMs >= expiresMs) return { ok: false, reason: `sealed at ${query.at}, at/after the grant's expiry (${grant.ttl.expiresAt} — expiry is strict)` };
   for (const row of rows) {
