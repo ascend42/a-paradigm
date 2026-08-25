@@ -3,7 +3,15 @@
     "paradigm": {
       "type": "stdio",
       "command": "npx",
-      "args": ["--package=@a-company/paradigm", "-y", "paradigm-mcp", "."]
+      "args": [
+        "--package=@a-company/paradigm",
+        "-y",
+        "paradigm-mcp",
+        "${CLAUDE_PROJECT_DIR}"
+      ],
+      "env": {
+        "CLAUDE_PROJECT_DIR": "${CLAUDE_PROJECT_DIR}"
+      }
     }
   }
 }

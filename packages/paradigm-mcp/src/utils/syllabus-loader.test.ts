@@ -55,6 +55,13 @@ function writeProjectNotebook(entry: NotebookEntry, agentId = AGENT): void {
   fs.writeFileSync(path.join(dir, `${entry.id}.yaml`), yaml.dump(entry, { lineWidth: 120, noRefs: true }));
 }
 
+/** ISO timestamp N days before now — keeps fixtures time-relative so the term
+ *  TTL (last_ratified + term_ttl_days) doesn't silently expire as real time
+ *  passes (this suite used hardcoded 2026-06 dates and rotted). */
+function daysAgo(n: number): string {
+  return new Date(Date.now() - n * 24 * 60 * 60 * 1000).toISOString();
+}
+
 function makeNotebook(overrides: Partial<NotebookEntry> = {}): NotebookEntry {
   return {
     id: overrides.id ?? NB_ID,
@@ -79,7 +86,7 @@ const baseSyllabus = (overrides: Record<string, unknown> = {}) => ({
   notebook_target: 'local' as const,
   approved_by: 'gate',
   term_ttl_days: 30,
-  last_ratified: '2026-06-01T00:00:00.000Z',
+  last_ratified: daysAgo(5), // recent: base is 'current' within term_ttl_days
   ...overrides,
 });
 
@@ -129,9 +136,9 @@ describe('validateSyllabus — status recomputation', () => {
   });
 
   it('stale when a referenced notebook was updated AFTER last_ratified', async () => {
-    // ratified 2026-06-01, notebook updated 2026-06-10 → stale.
-    writeProjectNotebook(makeNotebook({ updated: '2026-06-10T00:00:00.000Z' }));
-    await recordSyllabus(projectDir, baseSyllabus({ last_ratified: '2026-06-01T00:00:00.000Z' }));
+    // ratified 10d ago (within TTL), notebook updated 2d ago (AFTER ratification) → stale.
+    writeProjectNotebook(makeNotebook({ updated: daysAgo(2) }));
+    await recordSyllabus(projectDir, baseSyllabus({ last_ratified: daysAgo(10) }));
     const s = await loadLatestSyllabus(projectDir, AGENT);
     const v = validateSyllabus(projectDir, s!);
     expect(v.status).toBe('stale');

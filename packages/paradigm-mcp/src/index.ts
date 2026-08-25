@@ -26,6 +26,7 @@ import { registerResources } from './resources/index.js';
 import { registerTools } from './tools/index.js';
 import { rebuildStaticFiles } from './tools/reindex.js';
 import { getSessionTracker } from './utils/session-tracker.js';
+import { resolveProjectRoot } from './utils/global-store.js';
 import { autoRegisterWithConductor } from './utils/conductor-loader.js';
 import { log } from './utils/mcp-logger.js';
 import { setUniversityCoreLogger } from '@a-company/university-core';
@@ -38,8 +39,12 @@ setUniversityCoreLogger({
   warn: (message, data) => log.component('#university-loader').warn(message, data),
 });
 
-// Get project directory from args or use cwd
-const projectDir = process.argv[2] || process.cwd();
+// Resolve the project root robustly — NOT a bare `argv[2] || cwd()`. The plugin
+// manifest passes "." with no pinned cwd, so a naive resolve hashed the wrong
+// directory and scattered session state across launch contexts (see
+// resolveProjectRoot). This anchors on the nearest `.paradigm/` (or an explicit
+// PARADIGM_PROJECT_DIR / CLAUDE_PROJECT_DIR) so recovery is stable.
+const projectDir = resolveProjectRoot(process.argv[2]);
 
 // Server state
 let context: ProjectContext | null = null;
