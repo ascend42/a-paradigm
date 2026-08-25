@@ -5,6 +5,12 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.8.1] — 2026-08-25
+
+### Fixed
+- **Session checkpoint / recovery reliability (`#session-tracker`)** — `paradigm_session_checkpoint` / `paradigm_session_recover` scattered state across launch contexts, so checkpoints often failed to recover ("something around the Claude directory location", reported by multiple instances). Root cause: the MCP server derived the project root from `process.argv[2] || process.cwd()`, and the plugin manifest passed `"."` with no pinned cwd, so `resolve(".")` hashed whatever directory Claude Code launched from — different launch contexts hashed to different `~/.paradigm/sessions/{hash}/` buckets. New `resolveProjectRoot()` anchors the root independent of cwd (explicit hint → `$PARADIGM_PROJECT_DIR` / `$CLAUDE_PROJECT_DIR`, which Claude Code sets in every MCP server's env → walk up to the nearest `.paradigm/` → cwd last); the plugin `.mcp.json` now passes `${CLAUDE_PROJECT_DIR}`. Also: breadcrumb rotation so `session_recover` returns the real previous session instead of the current empty one; the checkpoint retention window widened 7 → 30 days (a fortnight-old checkpoint used to silently vanish); and a latent crash on summary-less breadcrumbs is guarded. 10 new tests.
+- **Syllabus validation fixtures were a time-bomb (`#syllabus`)** — hardcoded `2026-06-01` ratification dates + a 30-day TTL made four status tests fail once real time passed the TTL. Fixtures are now time-relative; `validateSyllabus` logic unchanged.
+
 ## [7.8.0] — 2026-08-24 — Warpline: field-test readiness (experimental, in progress)
 
 **Warpline is very much in progress** — an experimental package (`@a-company/warpline`, 0.2.0), bundled with the Paradigm CLI but not yet a finished product. This release merges a long-lived feature branch: the deterministic merge-adjudication substrate ("meaning judges, bytes execute, disagreement fails closed") reaches the point where a pre-registered field test *can be run* on a real app. Nothing here changes the Paradigm framework's own surfaces; treat every Warpline feature as a research instrument, not a stable API.
