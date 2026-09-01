@@ -1,0 +1,34 @@
+id: L-2026-09-01-ascend-081059-001
+type: agent-session
+timestamp: '2026-09-01T08:10:59.330Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Cid Debrief: Portable MCP-config PATH fix (7.8.2 addition), run architect+claude-code-guide→b'
+summary: 'Portable MCP-config PATH fix (7.8.2 addition), run architect+claude-code-guide→builder→tester, then founder-narrowed in review. Root cause: generated .mcp.json launches paradigm-mcp with a bare command that fails to resolve when Claude Code spawns it in a PATH-deficient (macOS GUI/non-login) context lacking /opt/homebrew/bin. Fix: new mcpServerEnv() helper emits an env.PATH APPEND form (${PATH}:/opt/homebrew/bin:...) that augments (never replaces) the inherited PATH. SCOPED TO CLAUDE CODE ONLY after review caught that the as-built version applied risky env to 4 clients whose ${VAR} expansion is unconfirmed (literal ${PATH} would destroy PATH; static list would regress nvm/Volta users). All other clients keep the bare command (no regression) pending expansion verification (follow-up T-2026-09-01-005). 93 adapter tests pass. Not yet committed at debrief time.'
+symbols_touched: []
+files_modified:
+  - packages/paradigm/src/core/ide-adapters/mcp-env.ts
+  - packages/paradigm/src/core/ide-adapters/mcp-env.test.ts
+  - packages/paradigm/src/core/ide-adapters/mcp-env.verify.test.ts
+  - packages/paradigm/src/core/ide-adapters/claude.ts
+  - packages/paradigm/src/core/ide-adapters/cursor.ts
+  - packages/paradigm/src/core/ide-adapters/types.ts
+  - packages/paradigm/src/commands/mcp/setup.ts
+  - CHANGELOG.md
+tags:
+  - arc:cid-debrief
+  - orch:orch-mcp-config-path-fix-2026-09-01
+meta:
+  orchestrationId: orch-mcp-config-path-fix-2026-09-01
+  coverageScore:
+    before: 0.5
+    after: 1
+  coverageAdded:
+    - packages/paradigm/src/commands/mcp
+  notes: 'Founder ruling in review: narrow PATH augmentation to Claude Code only (the sole client with confirmed .mcp.json ${VAR} expansion). Follow-up task T-2026-09-01-005 tracks verifying + safely extending to Cursor/Cline/Continue/Claude Desktop.'
+git_context:
+  ref: 57737f43a1b7bbc575d917b95327751073a5d183
+  branch: fix/session-recovery-and-adjustments
+  dirty: true

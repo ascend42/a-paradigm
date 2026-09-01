@@ -911,12 +911,20 @@ paradigm flow validate $task-creation
    * Generate MCP configuration for Cursor
    */
   generateMcpConfig(rootDir: string): McpConfig {
+    // Cursor's ${VAR} expansion in mcp env values is NOT confirmed. Neither env
+    // form is safe without it: an unexpanded literal `${PATH}` would DESTROY the
+    // PATH (append form), and a static absolute list would REPLACE the inherited
+    // PATH (regressing nvm/Volta users). So Cursor keeps the bare command — no
+    // env — until its expansion is verified (follow-up task). Only Claude Code
+    // (confirmed to expand ${VAR}) gets the safe append-form PATH augmentation.
+    const env = undefined;
     return {
       mcpServers: {
         paradigm: {
           command: 'paradigm-mcp',
           args: ['.'],
           cwd: rootDir,
+          ...(env ? { env } : {}),
         },
       },
     };

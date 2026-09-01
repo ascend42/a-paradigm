@@ -1,0 +1,12 @@
+# Auto-generated .purpose stub — created by Cid (captain debrief)
+# Delegate to Scribe (Documentor) for rich documentation
+name: mcp
+description: "TODO: describe what this directory/module does"
+context:
+  - "Stub created by Cid during coverage audit — update with real context"
+# Key files touched:
+# - setup.ts
+components:
+  mcp:
+    description: "TODO: describe this component"
+    tags: []

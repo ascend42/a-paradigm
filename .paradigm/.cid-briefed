@@ -1,22 +1,15 @@
 {
-  "timestamp": "2026-09-01T03:23:13.769Z",
-  "sessionId": "orch-mti16vae-hfi5",
+  "timestamp": "2026-09-01T08:11:00.026Z",
+  "sessionId": "orch-mcp-config-path-fix-2026-09-01",
   "touchedFiles": [
-    "packages/premise/core/src/symbol-index.ts",
-    "packages/premise/core/src/symbol-index.search.test.ts",
-    "packages/paradigm/src/commands/purpose/validate.ts",
-    "packages/paradigm/tests/purpose-validate-path.test.ts",
-    "packages/paradigm/src/commands/hooks/scripts/paradigm-common.sh",
-    "packages/paradigm/src/commands/hooks/scripts/claude-code-stop.sh",
-    "packages/paradigm/src/commands/hooks/generated-hooks.ts",
-    "packages/paradigm/tests/hooks-missing-cli.test.ts",
-    "packages/paradigm-mcp/src/utils/session-tracker.ts",
-    "packages/paradigm-mcp/src/tools/context.ts",
-    "packages/paradigm-mcp/src/tools/recovery-banner.test.ts",
-    "packages/paradigm-mcp/.purpose",
-    "plugins/paradigm/scripts/paradigm-common.sh",
-    "plugins/paradigm/scripts/paradigm-stop.sh",
-    "plugins/paradigm-cursor/scripts/paradigm-common.sh"
+    "packages/paradigm/src/core/ide-adapters/mcp-env.ts",
+    "packages/paradigm/src/core/ide-adapters/mcp-env.test.ts",
+    "packages/paradigm/src/core/ide-adapters/mcp-env.verify.test.ts",
+    "packages/paradigm/src/core/ide-adapters/claude.ts",
+    "packages/paradigm/src/core/ide-adapters/cursor.ts",
+    "packages/paradigm/src/core/ide-adapters/types.ts",
+    "packages/paradigm/src/commands/mcp/setup.ts",
+    "CHANGELOG.md"
   ],
   "coverageScore": 1
 }
