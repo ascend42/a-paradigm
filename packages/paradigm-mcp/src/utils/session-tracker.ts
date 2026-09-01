@@ -11,6 +11,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { execSync } from 'child_process';
 import { getSessionDir, writeProjectMeta } from './global-store.js';
 import { log } from './mcp-logger.js';
 
@@ -83,6 +84,7 @@ export interface SessionCheckpoint {
   symbolsTouched?: string[];
   decisions?: string[];
   recentBreadcrumbs?: SessionBreadcrumb[];  // last 10 for richer recovery
+  branch?: string;  // git branch the checkpoint was saved from (undefined if git errors / detached HEAD)
 }
 
 /**
@@ -365,15 +367,36 @@ export class SessionTracker {
       symbolsTouched: data.symbolsTouched,
       decisions: data.decisions,
       recentBreadcrumbs: this.session.breadcrumbs.slice(-10),
+      branch: this.detectGitBranch(),
     };
     const persisted = this.persistCheckpoint(checkpoint);
     return { checkpoint, persisted };
   }
 
   /**
+   * Best-effort read of the current git branch for checkpoint annotation.
+   * Returns undefined on any failure (no git, not a repo) or a detached HEAD
+   * (rev-parse reports the literal "HEAD"), so the recovery banner only shows a
+   * branch when there is a real named one to show.
+   */
+  private detectGitBranch(): string | undefined {
+    try {
+      const branch = execSync('git rev-parse --abbrev-ref HEAD', {
+        cwd: this.rootDir ?? undefined,
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore'],
+      }).trim();
+      if (!branch || branch === 'HEAD') return undefined;
+      return branch;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /**
    * Load the most recent checkpoint.
    * Prefers global path, falls back to local.
-   * Returns null for checkpoints older than 7 days.
+   * Returns null for checkpoints older than 30 days (CHECKPOINT_MAX_AGE_MS).
    */
   loadCheckpoint(): SessionCheckpoint | null {
     if (!this.rootDir) return null;
@@ -405,7 +428,7 @@ export class SessionTracker {
       }
     }
 
-    // Discard checkpoints older than 7 days
+    // Discard checkpoints older than 30 days (CHECKPOINT_MAX_AGE_MS)
     if (checkpoint && (Date.now() - checkpoint.timestamp) > CHECKPOINT_MAX_AGE_MS) {
       return null;
     }

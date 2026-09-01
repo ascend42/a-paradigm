@@ -1,0 +1,15 @@
+{
+  "timestamp": "2026-09-01T08:11:00.026Z",
+  "sessionId": "orch-mcp-config-path-fix-2026-09-01",
+  "touchedFiles": [
+    "packages/paradigm/src/core/ide-adapters/mcp-env.ts",
+    "packages/paradigm/src/core/ide-adapters/mcp-env.test.ts",
+    "packages/paradigm/src/core/ide-adapters/mcp-env.verify.test.ts",
+    "packages/paradigm/src/core/ide-adapters/claude.ts",
+    "packages/paradigm/src/core/ide-adapters/cursor.ts",
+    "packages/paradigm/src/core/ide-adapters/types.ts",
+    "packages/paradigm/src/commands/mcp/setup.ts",
+    "CHANGELOG.md"
+  ],
+  "coverageScore": 1
+}

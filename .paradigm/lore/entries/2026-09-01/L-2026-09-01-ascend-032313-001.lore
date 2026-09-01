@@ -1,0 +1,43 @@
+id: L-2026-09-01-ascend-032313-001
+type: agent-session
+timestamp: '2026-09-01T03:23:13.306Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Cid Debrief: Framework friction hotfix batch (field feedback from a consumer project, reprodu'
+summary: 'Framework friction hotfix batch (field feedback from a consumer project, reproduced live in a-paradigm), run architect→builder→tester. Fixed 3 confirmed framework bugs + 1 founder-ruled design change, all tests green: (#1) paradigm_search searchSymbols now tokenizes multi-word queries (was whole-query substring match → 0 results); single-token behavior unchanged. (#2) `paradigm purpose validate <file>` now accepts file paths / errors clearly (was silent "Found 0"). (#3) hook scripts distinguish missing-CLI from clean pass via single PARADIGM_BIN detection + loud banner + fail-closed block; hooks regenerated. (#4b, TD-2026-09-01-136) recovery banner annotates checkpoint source branch on mismatch; branch-blind recovery kept; stale "7 days" docstrings + .purpose aspect corrected to 30 days. NOTE: live MCP server serves pre-fix search until restarted.'
+symbols_touched: []
+files_modified:
+  - packages/premise/core/src/symbol-index.ts
+  - packages/premise/core/src/symbol-index.search.test.ts
+  - packages/paradigm/src/commands/purpose/validate.ts
+  - packages/paradigm/tests/purpose-validate-path.test.ts
+  - packages/paradigm/src/commands/hooks/scripts/paradigm-common.sh
+  - packages/paradigm/src/commands/hooks/scripts/claude-code-stop.sh
+  - packages/paradigm/src/commands/hooks/generated-hooks.ts
+  - packages/paradigm/tests/hooks-missing-cli.test.ts
+  - packages/paradigm-mcp/src/utils/session-tracker.ts
+  - packages/paradigm-mcp/src/tools/context.ts
+  - packages/paradigm-mcp/src/tools/recovery-banner.test.ts
+  - packages/paradigm-mcp/.purpose
+  - plugins/paradigm/scripts/paradigm-common.sh
+  - plugins/paradigm/scripts/paradigm-stop.sh
+  - plugins/paradigm-cursor/scripts/paradigm-common.sh
+tags:
+  - arc:cid-debrief
+  - orch:orch-mti16vae-hfi5
+meta:
+  orchestrationId: orch-mti16vae-hfi5
+  coverageScore:
+    before: 0.7
+    after: 1
+  coverageAdded:
+    - packages/premise/core/src
+    - packages/paradigm/src/commands/purpose
+    - plugins/paradigm-cursor/scripts
+  notes: 'Open low-priority follow-up (tester-recommended, not a blocker): dedup the missing-CLI double violation by gating the exit-127 compliance-run block on PARADIGM_AVAILABLE=true. Pending founder go. Batch committed on branch fix/session-recovery-and-adjustments (unmerged, carries 7.8.1).'
+git_context:
+  ref: f448624665ad89c0b526e68cfef39029a0f27818
+  branch: fix/session-recovery-and-adjustments
+  dirty: true

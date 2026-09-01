@@ -95,36 +95,75 @@ export function getSymbolsBySource(index: SymbolIndex, source: SourceType): Symb
  * Search symbols by query string
  */
 export function searchSymbols(index: SymbolIndex, query: string): SymbolEntry[] {
-  const lowerQuery = query.toLowerCase();
-  const results: SymbolEntry[] = [];
+  const tokens = query
+    .toLowerCase()
+    .split(/\s+/)
+    .filter((t) => t.length > 0);
+
+  // Empty query → no results.
+  if (tokens.length === 0) {
+    return [];
+  }
+
+  // Single-token query keeps the original behavior: a literal substring match
+  // across symbol / description / tags / componentType. No regression for
+  // hyphenated single-word queries like "session-tracker".
+  if (tokens.length === 1) {
+    const lowerQuery = tokens[0];
+    const results: SymbolEntry[] = [];
+
+    for (const entry of index.entries.values()) {
+      if (
+        entry.symbol.toLowerCase().includes(lowerQuery) ||
+        entry.description?.toLowerCase().includes(lowerQuery) ||
+        entry.tags?.some((tag) => tag.toLowerCase().includes(lowerQuery)) ||
+        entry.componentType?.toLowerCase().includes(lowerQuery)
+      ) {
+        results.push(entry);
+      }
+    }
+
+    return results;
+  }
+
+  // Multi-token query: build a per-entry haystack once and count how many of the
+  // query tokens appear in it. An entry matches when at least one token is present.
+  const scored: Array<{ entry: SymbolEntry; matchedTokens: number; nameMatch: boolean }> = [];
 
   for (const entry of index.entries.values()) {
-    // Match symbol name
-    if (entry.symbol.toLowerCase().includes(lowerQuery)) {
-      results.push(entry);
-      continue;
+    const symbolLower = entry.symbol.toLowerCase();
+    const haystack = [
+      symbolLower,
+      entry.description?.toLowerCase() ?? '',
+      (entry.tags ?? []).join(' ').toLowerCase(),
+      entry.componentType?.toLowerCase() ?? '',
+    ].join(' ');
+
+    let matchedTokens = 0;
+    let nameMatch = false;
+    for (const token of tokens) {
+      if (haystack.includes(token)) {
+        matchedTokens++;
+        if (symbolLower.includes(token)) {
+          nameMatch = true;
+        }
+      }
     }
 
-    // Match description
-    if (entry.description?.toLowerCase().includes(lowerQuery)) {
-      results.push(entry);
-      continue;
-    }
-
-    // Match tags
-    if (entry.tags?.some((tag) => tag.toLowerCase().includes(lowerQuery))) {
-      results.push(entry);
-      continue;
-    }
-
-    // Match component type
-    if (entry.componentType?.toLowerCase().includes(lowerQuery)) {
-      results.push(entry);
-      continue;
+    if (matchedTokens >= 1) {
+      scored.push({ entry, matchedTokens, nameMatch });
     }
   }
 
-  return results;
+  // Sort by matchedTokens desc; tie-break: symbol-name match first, then shorter
+  // symbol name.
+  scored.sort((a, b) => {
+    if (b.matchedTokens !== a.matchedTokens) return b.matchedTokens - a.matchedTokens;
+    if (a.nameMatch !== b.nameMatch) return a.nameMatch ? -1 : 1;
+    return a.entry.symbol.length - b.entry.symbol.length;
+  });
+
+  return scored.map((s) => s.entry);
 }
 
 /**

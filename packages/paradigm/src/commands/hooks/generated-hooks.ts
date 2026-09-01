@@ -45,10 +45,29 @@ AUTO_FIXED=""
 AUTO_FIX_COUNT=0
 PARADIGM_AUTO_FIX="\${PARADIGM_AUTO_FIX:-0}"
 
+# --- Resolve the paradigm CLI once (fail-closed on absence) ---
+# Every compliance check below runs through $PARADIGM_BIN. If NO real paradigm
+# CLI is resolvable, treat this as UNAVAILABLE (never a clean pass) and warn
+# loudly. The npx branch uses \`--no-install\` so npx never auto-installs the
+# unrelated public 'paradigm' registry package as a false positive.
+PARADIGM_BIN=""
+PARADIGM_AVAILABLE=false
+if command -v paradigm >/dev/null 2>&1; then
+  PARADIGM_BIN="paradigm"
+  PARADIGM_AVAILABLE=true
+elif command -v npx >/dev/null 2>&1 && npx --no-install paradigm --version >/dev/null 2>&1; then
+  PARADIGM_BIN="npx --no-install paradigm"
+  PARADIGM_AVAILABLE=true
+fi
+
+if [ "$PARADIGM_AVAILABLE" != "true" ]; then
+  printf '%s\\n' "[paradigm] WARNING: paradigm CLI not found — compliance checks were SKIPPED, this is NOT a clean pass. Install with 'npm i -g @a-company/paradigm' or add it as a devDependency." >&2
+fi
+
 # --- Load enforcement config ---
 ENFORCEMENT_MAP=""
-if command -v paradigm >/dev/null 2>&1; then
-  ENFORCEMENT_MAP=$(paradigm enforcement resolve --json 2>/dev/null) || true
+if [ "$PARADIGM_AVAILABLE" = "true" ]; then
+  ENFORCEMENT_MAP=$($PARADIGM_BIN enforcement resolve --json 2>/dev/null) || true
 fi
 
 # Helper: get severity for a check ID
@@ -74,6 +93,26 @@ if [ -n "$ENFORCEMENT_MAP" ]; then
   [ -n "$_ot" ] && ORCH_THRESHOLD="$_ot"
 fi
 
+# --- Missing-CLI enforcement (fail-closed) ---
+# When no paradigm CLI is resolvable, none of the compliance checks below can
+# run — a missing tool is NOT a clean pass. Record a blocking violation by
+# default, honoring the same 'portal-compliance' severity knob used for a failed
+# compliance-check run. Only an explicit 'off' fully suppresses it; anything
+# else downgrades to a non-blocking advisory. (With the CLI absent the
+# ENFORCEMENT_MAP is empty, so _check_severity returns the 'block' default.)
+if [ "$PARADIGM_AVAILABLE" != "true" ]; then
+  _SEV_PARADIGM_MISSING=$(_check_severity "portal-compliance" "block")
+  if [ "$_SEV_PARADIGM_MISSING" = "block" ]; then
+    VIOLATIONS="$VIOLATIONS
+  - paradigm CLI not found — compliance checks were SKIPPED (NOT a clean pass).
+    Install with 'npm i -g @a-company/paradigm' or add it as a devDependency."
+    VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
+  elif [ "$_SEV_PARADIGM_MISSING" != "off" ]; then
+    ADVISORY="$ADVISORY
+  - (warn) paradigm CLI not found — compliance checks were SKIPPED (NOT a clean pass)."
+  fi
+fi
+
 # --- Detect compliance archetype on roster (v6.0.4) ---
 # Sets HAS_COMPLIANCE_CLAIMANT=true iff .paradigm/roster.yaml has 'compliance'
 # under its 'active:' list (block- or inline-array form). Falls back to false on
@@ -94,8 +133,8 @@ fi
 # Single shell-out per stop-hook run. Helper outputs \`[]\` on every error path
 # (missing dir, parse failure, missing binary) so this never breaks the hook.
 _REMEDIATIONS_JSON="[]"
-if command -v paradigm >/dev/null 2>&1; then
-  _REMEDIATIONS_JSON=$(paradigm internal active-remediations --json 2>/dev/null) || _REMEDIATIONS_JSON="[]"
+if [ "$PARADIGM_AVAILABLE" = "true" ]; then
+  _REMEDIATIONS_JSON=$($PARADIGM_BIN internal active-remediations --json 2>/dev/null) || _REMEDIATIONS_JSON="[]"
   [ -z "$_REMEDIATIONS_JSON" ] && _REMEDIATIONS_JSON="[]"
 fi
 
@@ -554,21 +593,25 @@ fi
 # fall through to the habits-only branch.
 COMPLIANCE_RESULT=""
 COMPLIANCE_EXIT=0
-if command -v paradigm >/dev/null 2>&1; then
-  COMPLIANCE_RESULT=$(paradigm compliance-check --json --auto-heal --learn --trigger on-stop 2>/dev/null)
-  COMPLIANCE_EXIT=$?
-elif command -v npx >/dev/null 2>&1; then
-  COMPLIANCE_RESULT=$(npx paradigm compliance-check --json --auto-heal --learn --trigger on-stop 2>/dev/null)
+if [ "$PARADIGM_AVAILABLE" = "true" ]; then
+  COMPLIANCE_RESULT=$($PARADIGM_BIN compliance-check --json --auto-heal --learn --trigger on-stop 2>/dev/null)
   COMPLIANCE_EXIT=$?
 else
   # No binary available at all — mark as unavailable, not as silent success.
+  # (The npx-degrade branch is gone: it masked "not installed" as a run. The
+  # loud missing-CLI banner + fail-closed violation are emitted upfront.)
   COMPLIANCE_EXIT=127
 fi
 
 # Fail-closed: non-zero exit MUST block the stop hook. The prior behavior
 # silently dropped this signal via \`|| true\`.
+# Only fires when the CLI is PRESENT (catches a present-but-crashing CLI). The
+# absent-CLI case is already reported once, with an actionable install hint, by
+# the upfront missing-CLI enforcement block above — gating on PARADIGM_AVAILABLE
+# here avoids a redundant, misleading "run paradigm compliance-check manually"
+# violation when the CLI does not exist to run.
 _SEV_COMPLIANCE_RUN=$(_check_severity "portal-compliance" "block")
-if [ "$COMPLIANCE_EXIT" -ne 0 ] && [ "$_SEV_COMPLIANCE_RUN" != "off" ]; then
+if [ "$PARADIGM_AVAILABLE" = "true" ] && [ "$COMPLIANCE_EXIT" -ne 0 ] && [ "$_SEV_COMPLIANCE_RUN" != "off" ]; then
   if [ "$_SEV_COMPLIANCE_RUN" = "block" ]; then
     VIOLATIONS="$VIOLATIONS
   - paradigm compliance-check failed to run (exit $COMPLIANCE_EXIT).
@@ -1057,8 +1100,8 @@ fi
 if [ "$VIOLATION_COUNT" -gt 0 ]; then
   # Emit compliance-violation event (fire-and-forget, backgrounded)
   # NOTE: Could be absorbed into compliance-check command in a future iteration.
-  if command -v paradigm >/dev/null 2>&1; then
-    paradigm event emit --type compliance-violation --source stop-hook --severity error --context "Stop hook: $VIOLATION_COUNT violation(s)" &
+  if [ "$PARADIGM_AVAILABLE" = "true" ]; then
+    $PARADIGM_BIN event emit --type compliance-violation --source stop-hook --severity error --context "Stop hook: $VIOLATION_COUNT violation(s)" &
   fi
   echo "" >&2
   echo "Paradigm compliance check failed ($VIOLATION_COUNT violation(s)):" >&2
@@ -1097,8 +1140,8 @@ if [ -d ".paradigm/.graduation-failures" ]; then
     habit_id=$(basename "$fail_file")
     fail_count=$(wc -l < "$fail_file" | tr -d ' ')
     if [ "$fail_count" -ge 3 ]; then
-      if command -v paradigm >/dev/null 2>&1; then
-        paradigm graduate demote "$habit_id" --cooldown 14 2>/dev/null || true
+      if [ "$PARADIGM_AVAILABLE" = "true" ]; then
+        $PARADIGM_BIN graduate demote "$habit_id" --cooldown 14 2>/dev/null || true
       fi
       rm -f "$fail_file"
       echo "[paradigm] Auto-demoted '$habit_id' after $fail_count failures." >&2
@@ -1118,8 +1161,8 @@ rm -f ".paradigm/.orchestrated"
 # by age instead (PARADIGM_GATE_TTL_HOURS, default 4h).
 
 # Auto-run postflight learning if there are pending verdicts (fire-and-forget, non-blocking)
-if command -v paradigm >/dev/null 2>&1 && [ -f ".paradigm/events/verdicts.jsonl" ]; then
-  paradigm ambient postflight 2>/dev/null &
+if [ "$PARADIGM_AVAILABLE" = "true" ] && [ -f ".paradigm/events/verdicts.jsonl" ]; then
+  $PARADIGM_BIN ambient postflight 2>/dev/null &
 fi
 
 exit 0

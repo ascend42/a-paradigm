@@ -1,3 +1,5 @@
 {"timestamp":"2026-06-14T16:57:16Z","type":"edit-advisory","source":"team-gate","file":"captain.ts"}
 {"timestamp":"2026-06-15T01:56:36Z","type":"edit-advisory","source":"team-gate","file":"index.ts"}
 {"timestamp":"2026-06-15T17:03:11Z","type":"eligible","source":"prompt-gate","matched":"refactor"}
+{"timestamp":"2026-08-26T02:46:35Z","type":"bypass","source":"stop-hook","magnitude":3,"reasons":"3 source files","severity":"warn"}
+{"timestamp":"2026-09-01T03:27:35Z","type":"edit-advisory","source":"team-gate","file":"hooks-missing-cli.test.ts"}

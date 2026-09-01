@@ -11,6 +11,7 @@ import {
   generateConventions,
   generateCommitConvention,
 } from './base.js';
+import { mcpServerEnv } from './mcp-env.js';
 
 export class ClaudeAdapter implements IDEAdapter {
   readonly name = 'claude';
@@ -197,12 +198,16 @@ export class ClaudeAdapter implements IDEAdapter {
    * Generate MCP configuration for Claude
    */
   generateMcpConfig(rootDir: string): McpConfig {
+    // Claude Code expands ${VAR} in .mcp.json env values (guide-confirmed), so
+    // use the append form that preserves the inherited PATH.
+    const env = mcpServerEnv(true);
     return {
       mcpServers: {
         paradigm: {
           command: 'paradigm-mcp',
           args: ['.'],
           cwd: rootDir,
+          ...(env ? { env } : {}),
         },
       },
     };

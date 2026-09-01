@@ -11,6 +11,7 @@ import * as os from 'os';
 import chalk from 'chalk';
 import ora from 'ora';
 import { log } from '../../utils/logger.js';
+import { mcpServerEnv } from '../../core/ide-adapters/mcp-env.js';
 
 // Types
 export interface AIClient {
@@ -142,7 +143,16 @@ export function detectAllClients(): AIClient[] {
 // Config generation
 export function generateMCPConfig(client: AIClient, projectPath: string, projectName: string): McpConfigData {
   const serverName = projectName.toLowerCase().replace(/[^a-z0-9-]/g, '-');
-  
+
+  // PATH augmentation is applied ONLY to clients whose ${VAR} expansion is
+  // CONFIRMED — currently just Claude Code (guide-verified). For every other
+  // client, ${VAR} expansion is unconfirmed, so neither form is safe: an
+  // unexpanded literal `${PATH}` would DESTROY the inherited PATH (append form),
+  // and a static absolute list would REPLACE it (regressing nvm/Volta users whose
+  // node lives under $HOME). So those clients keep the bare command (today's
+  // behavior — no regression) until their expansion is verified (follow-up task).
+  const env = client.id === 'claude-code' ? mcpServerEnv(true) : undefined;
+
   if (client.id === 'continue') {
     // Continue has a different config format
     return {
@@ -154,6 +164,7 @@ export function generateMCPConfig(client: AIClient, projectPath: string, project
               command: 'paradigm-mcp',
               args: ['.'],
               cwd: projectPath,
+              ...(env ? { env } : {}),
             },
           },
         ],
@@ -168,6 +179,7 @@ export function generateMCPConfig(client: AIClient, projectPath: string, project
         command: 'paradigm-mcp',
         args: ['.'],
         cwd: projectPath,
+        ...(env ? { env } : {}),
       },
     },
   };
@@ -177,11 +189,11 @@ export function generateMCPConfig(client: AIClient, projectPath: string, project
 interface McpConfigData {
   experimental?: {
     modelContextProtocolServers?: Array<{
-      transport: { type: string; command: string; args: string[]; cwd?: string };
+      transport: { type: string; command: string; args: string[]; cwd?: string; env?: Record<string, string> };
     }>;
     [key: string]: unknown;
   };
-  mcpServers?: Record<string, { command: string; args: string[]; cwd?: string }>;
+  mcpServers?: Record<string, { command: string; args: string[]; cwd?: string; env?: Record<string, string> }>;
   [key: string]: unknown;
 }
 

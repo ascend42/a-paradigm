@@ -53,8 +53,8 @@ fi
 if [ "$VIOLATION_COUNT" -gt 0 ]; then
   # Emit compliance-violation event (fire-and-forget, backgrounded)
   # NOTE: Could be absorbed into compliance-check command in a future iteration.
-  if command -v paradigm >/dev/null 2>&1; then
-    paradigm event emit --type compliance-violation --source stop-hook --severity error --context "Stop hook: $VIOLATION_COUNT violation(s)" &
+  if [ "$PARADIGM_AVAILABLE" = "true" ]; then
+    $PARADIGM_BIN event emit --type compliance-violation --source stop-hook --severity error --context "Stop hook: $VIOLATION_COUNT violation(s)" &
   fi
   echo "" >&2
   echo "Paradigm compliance check failed ($VIOLATION_COUNT violation(s)):" >&2
@@ -93,8 +93,8 @@ if [ -d ".paradigm/.graduation-failures" ]; then
     habit_id=$(basename "$fail_file")
     fail_count=$(wc -l < "$fail_file" | tr -d ' ')
     if [ "$fail_count" -ge 3 ]; then
-      if command -v paradigm >/dev/null 2>&1; then
-        paradigm graduate demote "$habit_id" --cooldown 14 2>/dev/null || true
+      if [ "$PARADIGM_AVAILABLE" = "true" ]; then
+        $PARADIGM_BIN graduate demote "$habit_id" --cooldown 14 2>/dev/null || true
       fi
       rm -f "$fail_file"
       echo "[paradigm] Auto-demoted '$habit_id' after $fail_count failures." >&2
@@ -114,8 +114,8 @@ rm -f ".paradigm/.orchestrated"
 # by age instead (PARADIGM_GATE_TTL_HOURS, default 4h).
 
 # Auto-run postflight learning if there are pending verdicts (fire-and-forget, non-blocking)
-if command -v paradigm >/dev/null 2>&1 && [ -f ".paradigm/events/verdicts.jsonl" ]; then
-  paradigm ambient postflight 2>/dev/null &
+if [ "$PARADIGM_AVAILABLE" = "true" ] && [ -f ".paradigm/events/verdicts.jsonl" ]; then
+  $PARADIGM_BIN ambient postflight 2>/dev/null &
 fi
 
 exit 0

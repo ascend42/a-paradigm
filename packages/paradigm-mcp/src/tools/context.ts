@@ -6,6 +6,7 @@
  * a handoff is recommended.
  */
 
+import { execSync } from 'child_process';
 import type { ProjectContext } from '../utils/index-loader.js';
 import {
   getSessionTracker,
@@ -676,6 +677,24 @@ function loadRecoveryData(rootDir: string): RecoveryData {
 }
 
 /**
+ * Best-effort read of the current git branch for recovery-banner annotation.
+ * Returns undefined on any failure (no git, not a repo) or a detached HEAD.
+ */
+function detectCurrentBranch(rootDir: string): string | undefined {
+  try {
+    const branch = execSync('git rev-parse --abbrev-ref HEAD', {
+      cwd: rootDir,
+      encoding: 'utf8',
+      stdio: ['ignore', 'pipe', 'ignore'],
+    }).trim();
+    if (!branch || branch === 'HEAD') return undefined;
+    return branch;
+  } catch {
+    return undefined;
+  }
+}
+
+/**
  * Build a recovery preamble from checkpoint + handoff data.
  * Returns null if no recovery data is available.
  * Used by both auto-recovery (index.ts) and explicit paradigm_session_recover.
@@ -696,7 +715,17 @@ export async function buildRecoveryPreamble(rootDir: string): Promise<string | n
     const ageHours = Math.round(ageMs / 3600000);
     const ageStr = ageHours > 1 ? `${ageHours}h ago` : `${ageMinutes}m ago`;
 
-    lines.push(`Previous session was in "${checkpoint.phase}" phase (${ageStr}): ${checkpoint.context}`);
+    let phaseLine = `Previous session was in "${checkpoint.phase}" phase (${ageStr}): ${checkpoint.context}`;
+    // Annotate when the checkpoint was saved on a different branch than the one
+    // we are recovering on — checkpoints are cross-branch (never filtered), so
+    // the source branch is surfaced to avoid confusing recovery contexts.
+    if (checkpoint.branch) {
+      const currentBranch = detectCurrentBranch(rootDir);
+      if (currentBranch && currentBranch !== checkpoint.branch) {
+        phaseLine += ` (from branch ${checkpoint.branch} — you are now on ${currentBranch})`;
+      }
+    }
+    lines.push(phaseLine);
 
     if (checkpoint.modifiedFiles?.length) {
       lines.push(`Modified files: ${checkpoint.modifiedFiles.join(', ')}`);
