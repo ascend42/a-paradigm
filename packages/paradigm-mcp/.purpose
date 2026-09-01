@@ -577,20 +577,20 @@ aspects:
       MAX_BREADCRUMBS = 50. When adding a breadcrumb, if the array
       exceeds 50 entries the oldest are sliced off (FIFO). This bounds
       memory usage and file size for persisted breadcrumbs.
-  checkpoint-max-age-7d:
-    description: Session checkpoints older than 7 days are discarded on load
+  checkpoint-max-age-30d:
+    description: Session checkpoints older than 30 days are discarded on load
     tags:
       - persistence
       - recovery
     anchors:
-      - src/utils/session-tracker.ts:142-143
-      - src/utils/session-tracker.ts:352-355
+      - src/utils/session-tracker.ts:153
+      - src/utils/session-tracker.ts:431-432
     applies-to:
       - '#SessionTracker'
     enforcement: |
-      CHECKPOINT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000 (604800000ms).
+      CHECKPOINT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000 (2592000000ms).
       loadCheckpoint() returns null for any checkpoint whose timestamp
-      is older than 7 days. This prevents stale recovery data from
+      is older than 30 days. This prevents stale recovery data from
       confusing new sessions.
   default-model-sonnet:
     description: Session tracker defaults to claude-sonnet-4 for cost calculations

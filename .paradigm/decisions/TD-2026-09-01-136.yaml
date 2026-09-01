@@ -1,0 +1,35 @@
+id: TD-2026-09-01-136
+timestamp: '2026-09-01T03:03:24.378Z'
+title: Session-recovery stays branch-blind; recovery banner annotates source branch
+decision: >-
+  Session checkpoint recovery will NOT filter by git branch. Instead, add a `branch?` field to SessionCheckpoint
+  (populated via git rev-parse at saveCheckpoint) and have buildRecoveryPreamble annotate the recovery banner with the
+  checkpoint's source branch when it differs from the current branch (e.g. "from branch feature/x — you are now on
+  main").
+rationale: >-
+  Branch-aware filtering (option a) would force a multi-slot storage rewrite, because the single last-write-wins
+  checkpoint slot means switching branches would make recovery surface NOTHING right after a switch even when the prior
+  branch's work is the real last state — trading a false-positive surface for a false-negative recovery blackout, the
+  worse failure for a recovery tool. Option (b) hides nothing, costs one field + one git call + one banner string,
+  carries near-zero correctness risk, and makes cross-branch noise legible rather than eliminating it. Founder ruled (b)
+  after architect root-cause analysis.
+participants:
+  - id: architect
+    role: agent
+    stance: proposed
+  - id: ascend
+    role: human
+    stance: supported
+alternatives_considered:
+  - option: (a) Branch-aware recovery — only surface checkpoints from the current git branch
+    rejected_because: >-
+      Requires multi-slot storage rewrite; naive filter causes post-branch-switch recovery blackout (drops
+      legitimately-useful cross-branch checkpoints — hotfix off feature work, rebases, detached HEAD/CI). False-negative
+      is the more dangerous failure for a recovery tool.
+symbols_affected:
+  - '#session-tracker'
+status: active
+tags:
+  - framework-bug
+  - session-recovery
+  - hotfix-batch-2026-09

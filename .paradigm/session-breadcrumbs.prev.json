@@ -1,0 +1,45 @@
+{
+  "sessionId": "smt65z7mp",
+  "startTime": 1787511135841,
+  "lastActivity": 1787537504232,
+  "breadcrumbs": [
+    {
+      "timestamp": 1787537455318,
+      "action": "tool-call",
+      "tool": "paradigm_task_update",
+      "summary": "Updated task T-2026-08-23-001"
+    },
+    {
+      "timestamp": 1787537463755,
+      "action": "tool-call",
+      "tool": "paradigm_task_list",
+      "summary": "Listed tasks (status: active)"
+    },
+    {
+      "timestamp": 1787537504228,
+      "action": "tool-call",
+      "tool": "paradigm_task_update",
+      "summary": "Updated task T-2026-08-23-001"
+    },
+    {
+      "timestamp": 1787537563777,
+      "action": "tool-call",
+      "tool": "paradigm_session_checkpoint",
+      "summary": "Checkpoint: phase=complete, Field-test runway COMPLETE for everything not requiring the "
+    },
+    {
+      "timestamp": 1787546735881,
+      "action": "tool-call",
+      "tool": "paradigm_session_checkpoint",
+      "summary": "Checkpoint: phase=planning, Warpline arc DELIVERED + MERGED: PR #37 admin-merged to main"
+    },
+    {
+      "timestamp": 1787547887354,
+      "action": "tool-call",
+      "tool": "paradigm_session_checkpoint",
+      "summary": "Checkpoint: phase=complete, Two PRs to main this session-tail: #37 (Warpline arc, releas"
+    }
+  ],
+  "symbolsModified": [],
+  "filesExplored": []
+}

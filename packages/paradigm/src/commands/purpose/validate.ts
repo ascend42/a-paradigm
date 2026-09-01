@@ -3,9 +3,10 @@
  */
 
 import * as path from 'path';
+import * as fs from 'fs';
 import chalk from 'chalk';
 import ora from 'ora';
-import { getAllPurposeFiles, validatePurposeFile, formatValidationResult } from '@a-company/purpose-core';
+import { getAllPurposeFiles, parsePurposeFile, validatePurposeFile, formatValidationResult, type ParsedPurposeFile } from '@a-company/purpose-core';
 
 export async function purposeValidateCommand(targetPath: string) {
   const cwd = process.cwd();
@@ -16,7 +17,31 @@ export async function purposeValidateCommand(targetPath: string) {
   const spinner = ora('Finding purpose files...').start();
 
   try {
-    const files = await getAllPurposeFiles(absolutePath);
+    // Distinguish a single .purpose FILE from a directory to scan. getAllPurposeFiles
+    // globs '**/.purpose' with its argument as cwd — passing a file yields 0 matches,
+    // so a file path must be validated directly rather than globbed.
+    let stat: fs.Stats;
+    try {
+      stat = fs.statSync(absolutePath);
+    } catch {
+      spinner.fail('Validation failed');
+      console.log(chalk.red(`Error: path not found: ${path.relative(cwd, absolutePath) || absolutePath}\n`));
+      process.exit(1);
+    }
+
+    let files: ParsedPurposeFile[];
+    if (stat!.isDirectory()) {
+      files = await getAllPurposeFiles(absolutePath);
+    } else {
+      // Single file: it must be a .purpose file to validate.
+      if (path.basename(absolutePath) !== '.purpose') {
+        spinner.fail('Validation failed');
+        console.log(chalk.red(`Error: not a .purpose file: ${path.relative(cwd, absolutePath) || absolutePath}\n`));
+        process.exit(1);
+      }
+      const { data } = parsePurposeFile(absolutePath);
+      files = data ? [{ filePath: absolutePath, data }] : [];
+    }
     spinner.succeed(`Found ${files.length} purpose file(s)`);
 
     let hasErrors = false;
