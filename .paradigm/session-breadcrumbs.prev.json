@@ -1,45 +1,137 @@
 {
-  "sessionId": "smt65z7mp",
-  "startTime": 1787511135841,
-  "lastActivity": 1787537504232,
+  "sessionId": "smthyyvcx",
+  "startTime": 1788224956737,
+  "lastActivity": 1788374585820,
   "breadcrumbs": [
     {
-      "timestamp": 1787537455318,
+      "timestamp": 1788224998881,
       "action": "tool-call",
-      "tool": "paradigm_task_update",
-      "summary": "Updated task T-2026-08-23-001"
+      "tool": "paradigm_session_recover",
+      "summary": "session_recover"
     },
     {
-      "timestamp": 1787537463755,
+      "timestamp": 1788224999104,
       "action": "tool-call",
-      "tool": "paradigm_task_list",
-      "summary": "Listed tasks (status: active)"
+      "tool": "paradigm_status",
+      "summary": "Checked project status"
     },
     {
-      "timestamp": 1787537504228,
+      "timestamp": 1788225652677,
       "action": "tool-call",
-      "tool": "paradigm_task_update",
-      "summary": "Updated task T-2026-08-23-001"
+      "tool": "paradigm_search",
+      "symbol": "session recovery checkpoint",
+      "summary": "Searched for \"session recovery checkpoint\""
     },
     {
-      "timestamp": 1787537563777,
+      "timestamp": 1788225657797,
       "action": "tool-call",
-      "tool": "paradigm_session_checkpoint",
-      "summary": "Checkpoint: phase=complete, Field-test runway COMPLETE for everything not requiring the "
+      "tool": "paradigm_search",
+      "symbol": "session-tracker",
+      "summary": "Searched for \"session-tracker\""
     },
     {
-      "timestamp": 1787546735881,
+      "timestamp": 1788228064668,
       "action": "tool-call",
-      "tool": "paradigm_session_checkpoint",
-      "summary": "Checkpoint: phase=planning, Warpline arc DELIVERED + MERGED: PR #37 admin-merged to main"
+      "tool": "paradigm_orchestrate_inline",
+      "summary": "orchestrate_inline: plan"
     },
     {
-      "timestamp": 1787547887354,
+      "timestamp": 1788228689099,
       "action": "tool-call",
-      "tool": "paradigm_session_checkpoint",
-      "summary": "Checkpoint: phase=complete, Two PRs to main this session-tail: #37 (Warpline arc, releas"
+      "tool": "paradigm_orchestrate_inline",
+      "summary": "orchestrate_inline: execute"
+    },
+    {
+      "timestamp": 1788231804358,
+      "action": "tool-call",
+      "tool": "paradigm_decision_record",
+      "summary": "decision_record: Session-recovery stays branch-blind; recovery banner annotat"
+    },
+    {
+      "timestamp": 1788232371879,
+      "action": "tool-call",
+      "tool": "paradigm_search",
+      "symbol": "session recovery checkpoint",
+      "summary": "Searched for \"session recovery checkpoint\""
+    },
+    {
+      "timestamp": 1788232376483,
+      "action": "tool-call",
+      "tool": "paradigm_search",
+      "symbol": "session recovery",
+      "summary": "Searched for \"session recovery\""
+    },
+    {
+      "timestamp": 1788232376493,
+      "action": "tool-call",
+      "tool": "paradigm_search",
+      "symbol": "session",
+      "summary": "Searched for \"session\""
+    },
+    {
+      "timestamp": 1788232394635,
+      "action": "tool-call",
+      "tool": "paradigm_search",
+      "symbol": "recovery checkpoint",
+      "summary": "Searched for \"recovery checkpoint\""
+    },
+    {
+      "timestamp": 1788232993241,
+      "action": "tool-call",
+      "tool": "paradigm_captain_debrief",
+      "summary": "captain_debrief: orch-mti16vae-hfi5"
+    },
+    {
+      "timestamp": 1788232996129,
+      "action": "tool-call",
+      "tool": "paradigm_ambient_learn_postflight",
+      "summary": "ambient_learn_postflight: orch-mti16vae-hfi5"
+    },
+    {
+      "timestamp": 1788250242447,
+      "action": "tool-call",
+      "tool": "paradigm_task_create",
+      "summary": "Created task: \"Verify ${VAR} expansion in .mcp.json for Cursor / Cline / Co\""
+    },
+    {
+      "timestamp": 1788250259316,
+      "action": "tool-call",
+      "tool": "paradigm_captain_debrief",
+      "summary": "captain_debrief: orch-mcp-config-path-fix-2026-09-01"
+    },
+    {
+      "timestamp": 1788373359094,
+      "action": "tool-call",
+      "tool": "paradigm_task_create",
+      "summary": "Created task: \"Wire ParadigmFiles.meta in loadParadigmFiles (packages/parad\""
+    },
+    {
+      "timestamp": 1788373414806,
+      "action": "tool-call",
+      "tool": "paradigm_captain_debrief",
+      "summary": "captain_debrief: orch-headroom-adoption-2026-09-02"
+    },
+    {
+      "timestamp": 1788374585690,
+      "action": "tool-call",
+      "tool": "paradigm_task_done",
+      "summary": "Completed task T-2026-09-02-001"
+    },
+    {
+      "timestamp": 1788374585832,
+      "action": "tool-call",
+      "tool": "paradigm_task_done",
+      "summary": "Completed task T-2026-09-01-005"
     }
   ],
-  "symbolsModified": [],
-  "filesExplored": []
+  "symbolsModified": [
+    "session recovery checkpoint",
+    "session-tracker",
+    "session recovery",
+    "session",
+    "recovery checkpoint"
+  ],
+  "filesExplored": [
+    "mcp.json"
+  ]
 }

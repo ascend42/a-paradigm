@@ -141,6 +141,35 @@ describe('loadParadigmFiles', () => {
     expect(files!.docs.patterns).toBeDefined();
     expect(files!.docs.troubleshooting).toBeDefined();
   });
+
+  it('populates meta.symbolCount from the scan-index (volatile trailer, #cache-aligner)', () => {
+    const scanIndexContent = JSON.stringify({
+      $meta: { project: 'test' },
+      components: { '#a': {}, '#b': {}, '#c': {} }, // 3
+      features: {},
+      flows: { '$f': {} },                          // 1
+      state: {},
+      gates: { '^g': {} },                          // 1
+      signals: {},
+      aspects: { '~x': {}, '~y': {} },              // 2
+    });
+    const { rootDir, cleanup: c } = createTempProject({ withScanIndex: true, scanIndexContent });
+    cleanup = c;
+    const files = loadParadigmFiles(rootDir);
+    expect(files).not.toBeNull();
+    expect(files!.meta?.symbolCount).toBe(7);
+    // generatedAt is deliberately NOT populated (would churn CLAUDE.md every sync).
+    expect(files!.meta?.generatedAt).toBeUndefined();
+  });
+
+  it('omits meta when no scan-index is present (no crash)', () => {
+    const { rootDir, cleanup: c } = createTempProject();
+    cleanup = c;
+    const files = loadParadigmFiles(rootDir);
+    expect(files).not.toBeNull();
+    // No scan-index → symbolCount cannot be computed → meta stays undefined.
+    expect(files!.meta?.symbolCount).toBeUndefined();
+  });
 });
 
 describe('syncToIDE', () => {
