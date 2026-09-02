@@ -107,6 +107,21 @@ export type {
   SliceMode,
 } from './graph-slice.js';
 
+// Spill-and-handle — #spill (generic large-output primitive)
+export {
+  spillLargeOutput,
+  retrieveSpilled,
+  spillDirFor,
+  DEFAULT_SPILL_THRESHOLD,
+  DEFAULT_SPILL_PREVIEW,
+} from './spill.js';
+export type {
+  SpillOptions,
+  SpillResult,
+  RetrieveOptions,
+  RetrieveResult,
+} from './spill.js';
+
 // Classroom metrics — #classroom-metrics (the canonical repeat-failure-rate)
 export {
   readClassroomCertifications,

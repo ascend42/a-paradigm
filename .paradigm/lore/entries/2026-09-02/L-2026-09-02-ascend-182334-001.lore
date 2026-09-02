@@ -1,0 +1,49 @@
+id: L-2026-09-02-ascend-182334-001
+type: agent-session
+timestamp: '2026-09-02T18:23:34.826Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Cid Debrief: 7.8.3 — adopted Headroom-inspired ideas natively (assessment ran 3-lens team: Ar'
+summary: '7.8.3 — adopted Headroom-inspired ideas natively (assessment ran 3-lens team: Arky/Loid/Jinx, then 2 builders + 2 testers). (1) CLOSED the broken learning loop (T-2026-06-13-004): settleLeafTask fires the chain for parentless terminal tasks; postflight-liveness.jsonl + doctor ''Learning liveness'' line make broken≠healthy observable; floor-trust provisional intake preserves the Classroom gate. Falsifiable (revert→5/5 fail). Tester caught + we fixed a HOME-pollution defect (task-loader/task-settlement tests now isolate HOME). (2) spill-and-handle primitive + paradigm_retrieve tool closes the 4.4MB warpline admit dump (T-2026-07-17-009). (3) CacheAligner docgen rule: CLAUDE.md split into byte-stable HEAD + volatile TRAILER so paradigm sync stops busting the prompt cache. Compression engine deliberately NOT adopted (host-layer; fail-closed thesis). All suites green. Versions → 7.8.3 (paradigm+mcp+plugin), premise-core 3.8.2, warpline 0.2.1. Follow-up T-2026-09-02-001 (wire meta display).'
+symbols_touched: []
+files_modified:
+  - packages/paradigm-mcp/src/utils/task-loader.ts
+  - packages/paradigm-mcp/src/utils/task-settlement.ts
+  - packages/paradigm-mcp/src/utils/session-work-log.ts
+  - packages/paradigm-mcp/src/tools/ambient.ts
+  - packages/paradigm-mcp/src/utils/provisional-intake.ts
+  - packages/paradigm-mcp/src/utils/learning-loop-liveness.test.ts
+  - packages/paradigm/src/commands/doctor/index.ts
+  - packages/paradigm/src/commands/doctor/learning-liveness.test.ts
+  - packages/paradigm-mcp/src/utils/task-loader.test.ts
+  - packages/paradigm-mcp/src/utils/task-settlement.test.ts
+  - packages/paradigm-mcp/src/tools/symphony-flowback.test.ts
+  - packages/paradigm/src/commands/task/index.test.ts
+  - packages/premise/core/src/spill.ts
+  - packages/premise/core/src/index.ts
+  - packages/premise/core/src/spill.test.ts
+  - packages/paradigm-mcp/src/tools/spill.ts
+  - packages/paradigm-mcp/src/tools/index.ts
+  - packages/warpline/src/cli.ts
+  - packages/warpline/test/admit-changed-spill.test.ts
+  - packages/paradigm/src/core/ide-adapters/claude.ts
+  - packages/paradigm/src/core/ide-adapters/types.ts
+  - packages/paradigm/src/core/ide-adapters/claude-cache-aligner.test.ts
+  - packages/paradigm-mcp/src/resources/guidance.ts
+  - CHANGELOG.md
+tags:
+  - arc:cid-debrief
+  - orch:orch-headroom-adoption-2026-09-02
+meta:
+  orchestrationId: orch-headroom-adoption-2026-09-02
+  coverageScore:
+    before: 1
+    after: 1
+  coverageAdded: []
+  notes: 'Headroom assessment verdict: complement-in-tech, competitor-in-narrative; moat intact. Adopted 3 Paradigm-shaped ideas, delegated/declined the rest (compression engine, cross-agent memory, agent-wrap). Follow-up T-2026-09-02-001 (meta display wiring). Committed on a feature branch, not pushed.'
+git_context:
+  ref: a3eb7b6aa19da575197fc82ffcdbaa075036e13f
+  branch: fix/session-recovery-and-adjustments
+  dirty: true

@@ -11,3 +11,7 @@ components:
   src:
     description: "TODO: describe this component"
     tags: []
+  spill:
+    description: "Generic spill-and-handle large-output primitive — spillLargeOutput() writes over-threshold payloads to a spill dir and returns a bounded preview + handle; retrieveSpilled() rehydrates losslessly. Shared by paradigm-mcp (paradigm_retrieve) and warpline (admit changed-set)."
+    type: component
+    tags: [spill, primitive]

@@ -35,12 +35,24 @@ import {
 let root: string;
 const HUMAN = (): Claimant => ({ kind: 'human', ref: currentHumanRef() });
 
+let homeDir: string;
+let priorHome: string | undefined;
+
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'task-cli-test-'));
+  // Completing a standalone task now fires the leaf learning chain
+  // (T-2026-06-13-004), which writes journals under $HOME. Isolate it so the
+  // suite never pollutes the developer's real ~/.paradigm and stays fast.
+  homeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'task-cli-home-'));
+  priorHome = process.env.HOME;
+  process.env.HOME = homeDir;
 });
 
 afterEach(() => {
+  if (priorHome === undefined) delete process.env.HOME;
+  else process.env.HOME = priorHome;
   fs.rmSync(root, { recursive: true, force: true });
+  if (homeDir && fs.existsSync(homeDir)) fs.rmSync(homeDir, { recursive: true, force: true });
   vi.restoreAllMocks();
 });
 

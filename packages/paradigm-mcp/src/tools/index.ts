@@ -60,6 +60,7 @@ import { getProposeBlockToolsList, handleProposeBlockTool } from './propose-bloc
 import { getNotebookToolsList, handleNotebookTool } from './notebooks.js';
 import { getDocsToolsList, handleDocsTool } from './docs.js';
 import { getRippleToolsList, handleRippleTool } from './ripple.js';
+import { getSpillToolsList, handleSpillTool } from './spill.js';
 import { getCaptainToolsList, handleCaptainTool } from './captain.js';
 import { getStreamsToolsList, handleStreamsTool } from './streams.js';
 import { getAmbientToolsList, handleAmbientTool } from './ambient.js';
@@ -162,6 +163,12 @@ function buildRegistry(rootDir: string, reloadContext?: () => Promise<void>): To
       tier: 'core',
       getToolsList: getCaptainToolsList,
       handleTool: wrap(handleCaptainTool),
+    },
+    {
+      key: 'spill',
+      tier: 'core',
+      getToolsList: getSpillToolsList,
+      handleTool: wrap(handleSpillTool),
     },
   ]);
 

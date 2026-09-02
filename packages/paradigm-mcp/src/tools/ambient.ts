@@ -25,7 +25,9 @@ import {
   markVerdictsConsumed,
   readPendingIterationRevisions,
   markIterationRevisionsConsumed,
+  recordPostflightLiveness,
 } from '../utils/session-work-log.js';
+import { mineProvisionalCandidates } from '../utils/provisional-intake.js';
 import type { NominationUrgencyLevel } from '../types/ambient.js';
 import type { JournalTrigger } from '../types/knowledge-streams.js';
 
@@ -593,7 +595,32 @@ export async function runPostflightLearning(
     ? { certsSurvived: 0, entriesDecayed: 0 }
     : runDecayPass(rootDir);
 
+  // Provisional-candidate intake (T-2026-06-13-004): mine already-recorded
+  // failure signals (overrides, dismissed/revised verdicts) into FLOOR-TRUST
+  // provisional candidates staged for the Classroom gate — never written
+  // straight to notebooks. Best-effort, idempotent, runs regardless of whether
+  // there are pending verdicts to journal below.
+  if (!dryRun) {
+    try {
+      mineProvisionalCandidates(rootDir, projectName, (args.claimant as string) || 'orchestrator');
+    } catch {
+      // Non-fatal — provisional intake never breaks the postflight pass.
+    }
+  }
+
   if (verdictEntries.length === 0 && revisionEntries.length === 0) {
+    // LIVENESS INVARIANT (T-2026-06-13-004): the broken path must no longer be
+    // byte-identical to the healthy one. Leave a durable, distinguishable trace
+    // of WHY this pass wrote nothing so `paradigm doctor` can flag a flatline.
+    if (!dryRun) {
+      recordPostflightLiveness(rootDir, {
+        type: 'postflight-noop',
+        journalsWritten: 0,
+        promoted: 0,
+        reason: 'no-verdicts',
+        claimant: (args.claimant as string) || undefined,
+      });
+    }
     return {
       sessionEntries: allEntries.length,
       agentsProcessed: [],
@@ -782,6 +809,21 @@ export async function runPostflightLearning(
   }
   if (!dryRun && revisionEntries.length > 0) {
     markIterationRevisionsConsumed(rootDir, revisionEntries.map(r => r.id));
+  }
+
+  // LIVENESS INVARIANT (T-2026-06-13-004): record the outcome of a pass that HAD
+  // verdicts to process. `postflight-live` when it journaled; `postflight-noop`
+  // with reason `no-journals` when verdicts were present but none produced an
+  // entry (e.g. every trigger missed) — that path used to be indistinguishable
+  // from a healthy run too.
+  if (!dryRun) {
+    recordPostflightLiveness(rootDir, {
+      type: totalJournals > 0 ? 'postflight-live' : 'postflight-noop',
+      journalsWritten: totalJournals,
+      promoted: totalPromoted,
+      ...(totalJournals > 0 ? {} : { reason: 'no-journals' as const }),
+      claimant: (args.claimant as string) || undefined,
+    });
   }
 
   return {

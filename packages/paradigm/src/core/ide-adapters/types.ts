@@ -54,6 +54,22 @@ export interface ParadigmFiles {
       }>;
     };
   }>;
+  /**
+   * VOLATILE display metadata (#cache-aligner). These values change on version
+   * bumps / reindex / arc shifts and MUST be rendered only in the trailer of a
+   * generated context file, never in the KV-cacheable head. See
+   * `ClaudeAdapter.generate` and `.paradigm/docs/` docgen guidance.
+   */
+  meta?: {
+    /** Paradigm symbol-schema version string, e.g. "v2.0". */
+    paradigmVersion?: string;
+    /** Total symbol count at generation time. */
+    symbolCount?: number;
+    /** ISO timestamp the file was generated. */
+    generatedAt?: string;
+    /** Current arc / status one-liner (the classic volatile "current arc"). */
+    currentArc?: string;
+  };
 }
 
 /**

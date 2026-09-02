@@ -687,6 +687,41 @@ components:
 | Finishing any task | _(handled by stop hook)_ | Auto-checks compliance |`,
   },
 
+  'docgen': {
+    description: 'Context-file generation rules — the cache-aligner rule (keep volatile content out of the cached head)',
+    generate: () => `# Docgen: the Cache-Aligner Rule (#cache-aligner)
+
+A generated project \`CLAUDE.md\` sits in the host's STATIC system-prefix
+(KV-cache) region. \`paradigm sync\` rewrites it on every version bump / reindex.
+If VOLATILE content sits near the TOP, each rewrite changes the cached head and
+busts the whole project's prompt cache.
+
+## The rule
+
+**Keep volatile content OUT of the cacheable head. Put it in a TRAILER at the
+very bottom, below a stable marker.**
+
+- **Cacheable HEAD (byte-stable across syncs):** project name, the symbol-system
+  legend, conventions, commit convention, onboarding/enforcement/guidance
+  sections, config-driven directory structure. Nothing here may depend on a
+  version string, a symbol count, a timestamp, the roster, or the current arc.
+- **Volatile TRAILER (may change every sync):** version string, symbol counts,
+  generation timestamp, "current arc"/status, project overview prose, and
+  roster-dependent agent contributions.
+
+The two regions are separated by \`<!-- paradigm:volatile-trailer -->\` (an HTML
+comment — invisible when rendered, exact when split). \`ClaudeAdapter.headOf()\`
+returns everything above it; that head must be identical when only volatile
+inputs (\`files.meta.paradigmVersion\`, \`files.meta.symbolCount\`, …) change.
+
+## When editing a generator (\`packages/paradigm/src/core/ide-adapters/\`)
+
+- Never emit a version/count/date/arc above \`TRAILER_MARKER\`.
+- Relocate volatile content to the trailer — do NOT drop it.
+- New volatile display values go through \`ParadigmFiles.meta\`, rendered in the
+  trailer only.`,
+  },
+
 };
 
 /**

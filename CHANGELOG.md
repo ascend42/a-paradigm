@@ -5,6 +5,20 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.8.3] — 2026-09-02
+
+Ideas surfaced by a hard assessment of [Headroom](https://github.com/headroomlabs-ai/headroom) — adopted natively where they were Paradigm-shaped, delegated where they were host-layer. The compression engine itself was **not** adopted (host concern; a lossy black box in front of the deterministic meaning-graph would violate the fail-closed thesis).
+
+### Fixed
+- **The learning loop was silently broken — now closed and falsifiable (`#nomination-engine`, T-2026-06-13-004)** — the postflight learning chain (`recordWorkLog → runPostflightLearning → autoPromoteJournalEntries`) fired only from `settleParentIfComplete`, gated on a completed task having a `parentTaskId` with all siblings terminal. A **standalone/root task completion — the common case — fired nothing**, and `runPostflightLearning`'s zero-journal early-return was byte-identical to a healthy pass, so the broken loop was indistinguishable from a quiet one (it wrote 0 journals, invisibly). Now: (1) a new `settleLeafTask` runs the full chain for a parentless terminal leaf (mutually exclusive with the parent-settlement path — no double-fire); (2) a **liveness invariant** — every pass appends `postflight-live{journalsWritten}` or `postflight-noop{reason}` to `.paradigm/events/postflight-liveness.jsonl`, and `paradigm doctor` gained a "Learning liveness" line (journals-per-completion with a real denominator, flatline warning) so broken ≠ healthy is now observable; (3) session-mined failure signals (overrides, dismissed/revised verdicts) enter as **floor-trust provisional candidates** staged for the Classroom gate — never auto-promoted into notebooks. Falsifiable: reverting the wiring makes the guard tests 5/5 fail. Steals the *trigger discipline* (close at session boundary) from Headroom's `learn`; keeps Paradigm's *gate* (adjudicated promotion).
+- **`warpline admit` dumped a 4.4 MB uncapped change list (`#warpline-cli`, T-2026-07-17-009)** — the non-JSON `agentChanged`/`otherChanged` output printed the full array to stdout. A new generic **spill-and-handle** primitive (`spillLargeOutput` / `retrieveSpilled` in `@a-company/premise-core`, generalizing `graph_generate`'s spill-to-file pattern) now caps the inline list at 50 + total, spills the full set to `.paradigm/spill/{handle}.json`, and prints a handle. Lossless, retrieve-on-demand.
+
+### Added
+- **`paradigm_retrieve` MCP tool (`#paradigm-retrieve`)** — rehydrates any spilled large payload by handle (with offset/limit windowing and a path-traversal guard). The retrieve half of spill-and-handle; the deterministic, structured answer to Headroom's CCR for the non-graph payloads Paradigm's semantic projection can't bound.
+
+### Changed
+- **`CLAUDE.md` generation keeps a byte-stable cacheable head (`#mcp-config`)** — the generated project `CLAUDE.md` sits in the host's KV-cached system-prefix, but `paradigm sync` rewrote volatile content (version, symbol counts, timestamp, current arc) near the *top*, busting the whole project's prompt cache on every version bump / reindex. The generator now splits into a byte-stable HEAD (structure, legend, conventions) and a volatile TRAILER below a marker; volatile values are relocated, not lost. Adopts Headroom's CacheAligner principle (stable prefix, volatile-at-end) as an authoring rule; new `paradigm://guidance/docgen` topic documents it. (Follow-up T-2026-09-02-001 wires the loader to populate the trailer's new symbol-count/generated/arc display.)
+
 ## [7.8.2] — 2026-09-01
 
 ### Fixed

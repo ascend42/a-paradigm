@@ -18,6 +18,24 @@ export class ClaudeAdapter implements IDEAdapter {
   readonly displayName = 'Claude';
   readonly outputPath = 'CLAUDE.md';
 
+  /**
+   * Boundary between the KV-cacheable HEAD and the VOLATILE TRAILER of a
+   * generated CLAUDE.md (#cache-aligner). An HTML comment so it is invisible
+   * when the markdown renders, but an exact, greppable split point. Everything
+   * ABOVE it is byte-stable across `paradigm sync` runs; everything below may
+   * change on a version bump / reindex / arc update.
+   */
+  static readonly TRAILER_MARKER = '<!-- paradigm:volatile-trailer -->';
+
+  /**
+   * Return the cacheable head of a generated CLAUDE.md — everything before the
+   * volatile trailer marker. Exposed for cache-stability assertions.
+   */
+  static headOf(generated: string): string {
+    const idx = generated.indexOf(ClaudeAdapter.TRAILER_MARKER);
+    return idx === -1 ? generated : generated.slice(0, idx);
+  }
+
   detect(rootDir: string): boolean {
     // Check for existing CLAUDE.md
     if (fs.existsSync(path.join(rootDir, 'CLAUDE.md'))) {
@@ -31,20 +49,17 @@ export class ClaudeAdapter implements IDEAdapter {
     const { config, projectName } = files;
     const sections: string[] = [];
 
-    // Header
-    sections.push(`# ${projectName} - Claude Context`);
-    sections.push('');
-    sections.push('> **Paradigm v2.0** | For Claude Code, Claude API, and Claude-native interfaces');
-    sections.push('>');
-    sections.push('> **Author:** Matt Canoy ([@ascend42](https://github.com/ascend42)) | **Repo:** [github.com/ascend42/a-paradigm](https://github.com/ascend42/a-paradigm) | **npm:** [@a-company/paradigm](https://www.npmjs.com/package/@a-company/paradigm) | **Plugin:** `paradigm` via Claude Code marketplace');
-    sections.push('');
+    // ── CACHEABLE HEAD (#cache-aligner) ──────────────────────────────────────
+    // Everything from here to the TRAILER_MARKER MUST be byte-stable across
+    // `paradigm sync` runs so the host's KV cache over this file survives a
+    // version bump / reindex. That means: NO version strings, NO symbol counts,
+    // NO timestamps, NO "current arc" up here — those are volatile and live in
+    // the trailer at the very bottom. The only per-project variance permitted in
+    // the head is the project NAME (stable for the life of a project) and the
+    // project's own declared symbol legend/conventions (stable config).
 
-    // Project overview
-    sections.push('## Project Overview');
-    sections.push('');
-    if (config['agent-guidelines']?.overview) {
-      sections.push(config['agent-guidelines'].overview);
-    }
+    // Header — project name only (stable per project).
+    sections.push(`# ${projectName} - Claude Context`);
     sections.push('');
 
     // Quick orientation
@@ -154,28 +169,11 @@ export class ClaudeAdapter implements IDEAdapter {
     sections.push('| Navigation & task recipes | `paradigm://guidance/navigation` |');
     sections.push('| Component types & hierarchy | `paradigm://guidance/component-types` |');
     sections.push('| Troubleshooting | `paradigm://guidance/troubleshooting` |');
+    sections.push('| Docgen & the cache-aligner rule | `paradigm://guidance/docgen` |');
     sections.push('');
 
-    // Agent Contributions (from agent profiles with high-priority contributions)
-    if (files.agents?.length) {
-      const highPriority = files.agents.flatMap(a =>
-        (a.context?.contributions || [])
-          .filter(c => c.priority === 'high' && c.content)
-          .map(c => ({ agent: a.id, section: c.section, content: c.content! }))
-      );
-      if (highPriority.length > 0) {
-        sections.push('## Agent Contributions');
-        sections.push('');
-        for (const contrib of highPriority) {
-          sections.push(`### ${contrib.section} (${contrib.agent})`);
-          sections.push('');
-          sections.push(contrib.content);
-          sections.push('');
-        }
-      }
-    }
-
-    // Directory structure
+    // Directory structure — config-driven, stable across syncs, so it stays in
+    // the cacheable head (it does not change on a version bump / reindex).
     if (config['purpose-required']?.length) {
       sections.push('## Directory Structure');
       sections.push('');
@@ -184,6 +182,64 @@ export class ClaudeAdapter implements IDEAdapter {
         sections.push(`- \`${req.pattern}\``);
       }
       sections.push('');
+    }
+
+    // ── VOLATILE TRAILER (#cache-aligner) ────────────────────────────────────
+    // Everything below the marker is volatile: it changes on version bumps,
+    // reindex, roster shifts, or arc updates. Keeping it BELOW the stable head
+    // means those changes bust only the trailer's cache region, never the whole
+    // project prompt. Information is relocated here, never dropped.
+    sections.push(ClaudeAdapter.TRAILER_MARKER);
+    sections.push('');
+    sections.push('## Project Status & Metadata');
+    sections.push('');
+    sections.push(
+      `> **Paradigm ${files.meta?.paradigmVersion ?? 'v2.0'}** | For Claude Code, Claude API, and Claude-native interfaces`,
+    );
+    sections.push('>');
+    sections.push('> **Author:** Matt Canoy ([@ascend42](https://github.com/ascend42)) | **Repo:** [github.com/ascend42/a-paradigm](https://github.com/ascend42/a-paradigm) | **npm:** [@a-company/paradigm](https://www.npmjs.com/package/@a-company/paradigm) | **Plugin:** `paradigm` via Claude Code marketplace');
+    sections.push('');
+
+    // Project overview (the classic home of the volatile "current arc").
+    if (config['agent-guidelines']?.overview) {
+      sections.push('### Project Overview');
+      sections.push('');
+      sections.push(config['agent-guidelines'].overview);
+      sections.push('');
+    }
+    if (files.meta?.currentArc) {
+      sections.push('### Current Arc');
+      sections.push('');
+      sections.push(files.meta.currentArc);
+      sections.push('');
+    }
+
+    // Volatile counts / timestamp (only when supplied).
+    const statLines: string[] = [];
+    if (typeof files.meta?.symbolCount === 'number') statLines.push(`- **Symbols indexed:** ${files.meta.symbolCount}`);
+    if (files.meta?.generatedAt) statLines.push(`- **Generated:** ${files.meta.generatedAt}`);
+    if (statLines.length) {
+      sections.push(...statLines);
+      sections.push('');
+    }
+
+    // Agent Contributions (roster-dependent → volatile).
+    if (files.agents?.length) {
+      const highPriority = files.agents.flatMap(a =>
+        (a.context?.contributions || [])
+          .filter(c => c.priority === 'high' && c.content)
+          .map(c => ({ agent: a.id, section: c.section, content: c.content! }))
+      );
+      if (highPriority.length > 0) {
+        sections.push('### Agent Contributions');
+        sections.push('');
+        for (const contrib of highPriority) {
+          sections.push(`#### ${contrib.section} (${contrib.agent})`);
+          sections.push('');
+          sections.push(contrib.content);
+          sections.push('');
+        }
+      }
     }
 
     // Footer

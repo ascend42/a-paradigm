@@ -221,6 +221,49 @@ export async function settleParentIfComplete(
 }
 
 /**
+ * Leaf-level settlement — the decoupled trigger (T-2026-06-13-004).
+ *
+ * `settleParentIfComplete` only fires the learning chain for a task that has a
+ * `parentTaskId` AND whose whole sibling-set is terminal. The common case — a
+ * STANDALONE (parentless) task completing on its own — matched neither gate and
+ * fired NOTHING: no journal, no liveness record, silently. This closes that gap.
+ *
+ * A parentless terminal LEAF runs its own learning chain exactly once, stamping
+ * its own `settledAt` for idempotency (a re-open clears it, so a re-complete
+ * re-settles). Two deliberate guards keep this from double-firing the chain:
+ *
+ *   - Parented tasks are skipped here — their parent DAG owns settlement via
+ *     `settleParentIfComplete`, so a completion never runs the chain twice.
+ *   - A parentless task WITH children is a root/epic, NOT a leaf; its DAG settles
+ *     through `settleParentIfComplete` when the last child completes, so it is
+ *     skipped here too (and its own `settledAt` guard makes a later `done` a no-op).
+ */
+export async function settleLeafTask(rootDir: string, task: Task): Promise<void> {
+  if (!task) return;
+  if (task.parentTaskId) return;       // parented → parent DAG owns settlement
+  if (task.settledAt) return;          // idempotent
+  if (!isTaskTerminal(task)) return;   // only settle a terminal task
+
+  // A parentless task with children is a root/epic — not a leaf. Let the DAG
+  // settle it via settleParentIfComplete so the chain fires exactly once.
+  try {
+    const children = (await loadTasks(rootDir, { status: 'all', limit: 9999 }))
+      .filter(t => t.parentTaskId === task.id);
+    if (children.length > 0) return;
+  } catch {
+    // If the sibling read fails, treat it as a leaf (best-effort forward path).
+  }
+
+  const settledAs: SettledAs = task.crashed_at
+    ? 'crashed'
+    : task.status === 'shelved'
+    ? 'shelved'
+    : 'done';
+
+  await runSettlementChain(rootDir, task.id, settledAs, task);
+}
+
+/**
  * Run the wired learning chain for a settling parent, with each stage wrapped in
  * its own try/catch, record the per-stage liveness in a `finally` (so a mid-chain
  * throw still records WHICH stage died), then stamp `settledAt` (+ crash/orphan

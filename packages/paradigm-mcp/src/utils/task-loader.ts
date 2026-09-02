@@ -553,10 +553,22 @@ export async function updateTask(rootDir: string, taskId: string, partial: Parti
   //
   // Lazy/dynamic import breaks the task-settlement ⇄ task-loader cycle at
   // module-eval time (mirrors the autoPromoteJournalEntries pattern).
-  if (isTerminalStatus(updated.status) && updated.parentTaskId) {
+  //
+  // T-2026-06-13-004: the trigger is now decoupled from the parentTaskId gate.
+  // A parented task settles through its parent DAG (settleParentIfComplete); a
+  // STANDALONE/root task — the common case that previously fired NOTHING — runs
+  // its own leaf-level learning pass (settleLeafTask). The two are mutually
+  // exclusive (parented vs parentless) so a single completion never double-fires
+  // the chain.
+  if (isTerminalStatus(updated.status)) {
     try {
-      const { settleParentIfComplete } = await import('./task-settlement.js');
-      await settleParentIfComplete(rootDir, updated.parentTaskId, updated.id);
+      if (updated.parentTaskId) {
+        const { settleParentIfComplete } = await import('./task-settlement.js');
+        await settleParentIfComplete(rootDir, updated.parentTaskId, updated.id);
+      } else {
+        const { settleLeafTask } = await import('./task-settlement.js');
+        await settleLeafTask(rootDir, updated);
+      }
     } catch (err) {
       log.component('#task-loader').warn('Settlement after updateTask failed (non-fatal)', {
         taskId, parentTaskId: updated.parentTaskId,
