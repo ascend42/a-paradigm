@@ -38,15 +38,29 @@ import {
 // ────────────────────────────────────────────────────────
 
 let root: string;
+let homeDir: string;
+let priorHome: string | undefined;
 
 const ENTRIES = (r: string) => path.join(r, '.paradigm/tasks/entries');
 
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'task-loader-test-'));
+  // Isolate the learning chain's journal/notebook writes to a throwaway HOME.
+  // Completing a standalone terminal task now fires settleLeafTask →
+  // autoPromoteJournalEntries, which keys off process.env.HOME; without this,
+  // `npm test` would promote real ~/.paradigm journal entries into notebooks,
+  // bypassing the Classroom gate on a developer machine (T-2026-06-13-004).
+  homeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'task-loader-home-'));
+  priorHome = process.env.HOME;
+  process.env.HOME = homeDir;
 });
 
 afterEach(() => {
-  fs.rmSync(root, { recursive: true, force: true });
+  if (priorHome === undefined) delete process.env.HOME;
+  else process.env.HOME = priorHome;
+  for (const d of [root, homeDir]) {
+    if (d && fs.existsSync(d)) fs.rmSync(d, { recursive: true, force: true });
+  }
 });
 
 /** Write a raw task YAML into the date-partitioned store, bypassing createTask. */

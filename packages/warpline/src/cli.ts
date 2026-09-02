@@ -31,6 +31,7 @@ import { consolidate, type ConsolidateForecast } from './consolidate.js';
 import { lifeline, type Lifeline } from './lifeline.js';
 import type { ContractChangeset } from './sem-delta.js';
 import { changedSlotsOf } from './sem-delta.js';
+import { spillLargeOutput, spillDirFor } from '@a-company/premise-core';
 import * as path from 'node:path';
 import * as fs from 'node:fs/promises';
 import { realpathSync } from 'node:fs';
@@ -1010,7 +1011,7 @@ program
           process.stdout.write(JSON.stringify({ shadow: true, row, result }, null, 2) + '\n');
         } else {
           process.stdout.write(`SHADOW  observe-only — nothing sealed, selvage unmoved\n`);
-          printAdmit(agentId, result);
+          printAdmit(agentId, result, root);
           process.stdout.write(
             `shadow    ${row.status}${row.confidence ? ` (${row.confidence})` : ''}  wouldSeal=${row.wouldSeal}  ${row.durationMs}ms\n` +
               `          → row appended to .warpline/shadow/verdicts.jsonl\n`,
@@ -1043,7 +1044,7 @@ program
         if (options.json) {
           process.stdout.write(JSON.stringify(result, null, 2) + '\n');
         } else {
-          printAdmit(agentId, result);
+          printAdmit(agentId, result, root);
           if (result.sealed && result.restoredEntries !== undefined) {
             process.stdout.write(`restore   merged bytes written back to the worktree (${result.restoredEntries} entries, git absent)\n`);
           } else if (result.sealed && options.restore === false) {
@@ -1073,7 +1074,7 @@ program
       if (options.json) {
         process.stdout.write(JSON.stringify(result, null, 2) + '\n');
       } else {
-        printAdmit(agentId, result);
+        printAdmit(agentId, result, root);
       }
       process.exitCode = exitCodeForResult(result); // verdict-keyed (T-2026-07-21-006)
     } catch (err) {
@@ -1886,7 +1887,7 @@ program
       if (options.json) {
         process.stdout.write(JSON.stringify(result, null, 2) + '\n');
       } else {
-        printMerge(result);
+        printMerge(result, root);
       }
       // Verdict-keyed exit (T-2026-07-21-006): a HOLD/KNOT must not exit 0.
       process.exitCode = exitCodeForResult(result);
@@ -2862,11 +2863,12 @@ function printSwitch(r: SwitchResult): void {
   );
 }
 
-function printAdmit(agentId: string, r: AdmitResult): void {
-  process.stdout.write(admitReportLines(agentId, r).join('\n') + '\n');
+function printAdmit(agentId: string, r: AdmitResult, root?: string): void {
+  const spillDir = root ? spillDirFor(root) : undefined;
+  process.stdout.write(admitReportLines(agentId, r, { spillDir }).join('\n') + '\n');
 }
 
-function printMerge(r: MergeBranchResult): void {
+function printMerge(r: MergeBranchResult, root?: string): void {
   const lines: string[] = [];
   if (r.alreadyUpToDate) {
     lines.push(`MERGE  ${r.from} → ${r.into}  already up to date (nothing to fold)`);
@@ -2892,7 +2894,8 @@ function printMerge(r: MergeBranchResult): void {
   }
   // Otherwise the shared admit renderer speaks the verdict (CLEAN sealed / KNOT /
   // DANGLE), so merge and admit describe the SAME engine identically.
-  process.stdout.write(admitReportLines(`${r.from} → ${r.into}`, r).join('\n') + '\n');
+  const spillDir = root ? spillDirFor(root) : undefined;
+  process.stdout.write(admitReportLines(`${r.from} → ${r.into}`, r, { spillDir }).join('\n') + '\n');
 }
 
 /**
@@ -2902,7 +2905,46 @@ function printMerge(r: MergeBranchResult): void {
  * result and never mutates it: no line here touches `status`, `sealed`,
  * `confidence`, `knots`/`dangling` or the contested denominator.
  */
-export function admitReportLines(agentId: string, r: AdmitResult): string[] {
+/**
+ * Inline cap on the agent/other changed-symbol lists. A worktree `admit` can
+ * compute an enormous changed set (4.4 MB measured — T-2026-07-17-009); dumping
+ * the whole array onto the default surface is unusable. Above the cap we print
+ * a top-N sample + total, and — when a spill dir is available — spill the FULL
+ * set to `.paradigm/spill/` and print the `paradigm_retrieve` handle (#spill).
+ */
+const CHANGED_INLINE_CAP = 50;
+
+function renderChangedLine(
+  lines: string[],
+  label: string,
+  symbols: string[],
+  spillDir: string | undefined,
+  kind: string,
+): void {
+  if (!symbols.length) return;
+  if (symbols.length <= CHANGED_INLINE_CAP) {
+    lines.push(`${label}  ${symbols.join(', ')}`);
+    return;
+  }
+  const shown = symbols.slice(0, CHANGED_INLINE_CAP);
+  lines.push(`${label}  ${shown.join(', ')}`);
+  const rest = symbols.length - CHANGED_INLINE_CAP;
+  if (spillDir) {
+    // threshold: 0 forces a spill so a handle always exists once we cap.
+    const r = spillLargeOutput(symbols, { kind, dir: spillDir, threshold: 0 });
+    lines.push(
+      `  … ${rest} more of ${symbols.length} — full set spilled; \`paradigm_retrieve\` handle ${r.handle}  (${r.path})`,
+    );
+  } else {
+    lines.push(`  … ${rest} more of ${symbols.length} (full set not spilled — no project root)`);
+  }
+}
+
+export function admitReportLines(
+  agentId: string,
+  r: AdmitResult,
+  opts?: { spillDir?: string },
+): string[] {
   const d = r.decision;
   const lines: string[] = [];
   lines.push(`ADMIT  ${agentId}  →  ${d.status}`);
@@ -2983,8 +3025,8 @@ export function admitReportLines(agentId: string, r: AdmitResult): string[] {
     for (const p of stale) lines.push(`  · ${p}`);
     lines.push('  → re-run your package manager (e.g. `npm install`) to regenerate from the merged manifests.');
   }
-  if (d.agentChanged.length) lines.push(`agent changed  ${d.agentChanged.join(', ')}`);
-  if (d.otherChanged.length) lines.push(`others changed ${d.otherChanged.join(', ')}`);
+  renderChangedLine(lines, 'agent changed ', d.agentChanged, opts?.spillDir, 'admit-agent-changed');
+  renderChangedLine(lines, 'others changed', d.otherChanged, opts?.spillDir, 'admit-other-changed');
   if (r.claim && d.status !== 'CLAIM-BREACH') {
     const judged = r.claim.breach
       ? `BREACH accepted (excess: ${r.claim.excess.join(', ')})`

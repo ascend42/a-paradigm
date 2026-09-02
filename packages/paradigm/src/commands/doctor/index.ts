@@ -33,6 +33,40 @@ interface DoctorOptions {
   explain?: boolean;
 }
 
+/**
+ * Learning-liveness rollup (T-2026-06-13-004): journals-written over a REAL
+ * denominator of postflight passes (completions). A FLATLINE — 0 journals over
+ * at least FLATLINE_MIN_COMPLETIONS passes — is the falsifiable signal that the
+ * loop is turning but learning nothing. Pure + exported so it is unit-testable
+ * independent of the CLI.
+ */
+export interface LearningLivenessSummary {
+  /** Denominator: postflight passes observed in the window. Always ≥ 0, never null. */
+  completions: number;
+  /** Numerator: journals written across the window. */
+  journalsWritten: number;
+  /** True when completions ≥ FLATLINE_MIN and journalsWritten === 0. */
+  flatline: boolean;
+  /** The window size applied. */
+  windowSize: number;
+}
+
+const FLATLINE_MIN_COMPLETIONS = 5;
+
+export function summarizeLearningLiveness(
+  records: Array<{ journalsWritten?: number }>,
+  window = 20,
+): LearningLivenessSummary {
+  const win = records.slice(-window);
+  const completions = win.length;
+  const journalsWritten = win.reduce(
+    (n, r) => n + (typeof r.journalsWritten === 'number' ? r.journalsWritten : 0),
+    0,
+  );
+  const flatline = completions >= FLATLINE_MIN_COMPLETIONS && journalsWritten === 0;
+  return { completions, journalsWritten, flatline, windowSize: window };
+}
+
 export async function doctorCommand(options: DoctorOptions = {}): Promise<boolean> {
   const cwd = options.rootDir || process.cwd();
   const results: CheckResult[] = [];
@@ -847,6 +881,50 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
               name: 'Learning-loop liveness',
               status: 'ok',
               message: `${window.length} recent settlements, chain live`,
+            });
+          }
+        }
+      }
+    } catch {
+      // Probe read is advisory — never fail doctor on it.
+    }
+
+    // Learning liveness (T-2026-06-13-004): journals-written-per-N-completions
+    // with a REAL denominator. Every non-dry-run postflight pass appends one row
+    // to postflight-liveness.jsonl (postflight-live when it journaled;
+    // postflight-noop{reason} when it did not). A FLATLINE — 0 journals over N
+    // completions — means the loop is turning but learning nothing, and is
+    // surfaced as a warning. This is the observable that makes "broken ≠ healthy":
+    // before, a solo completion left no trace at all.
+    try {
+      const plPath = path.join(cwd, '.paradigm', 'events', 'postflight-liveness.jsonl');
+      if (fs.existsSync(plPath)) {
+        const records = fs.readFileSync(plPath, 'utf8')
+          .trim().split('\n').filter(l => l.trim())
+          .map(l => { try { return JSON.parse(l); } catch { return null; } })
+          .filter((r): r is { journalsWritten?: number } => r !== null);
+
+        if (records.length === 0) {
+          results.push({
+            name: 'Learning liveness',
+            status: 'info',
+            message: 'No postflight passes recorded yet (probe writes on each task completion)',
+          });
+        } else {
+          const s = summarizeLearningLiveness(records);
+          const ratio = `${s.journalsWritten} journals / ${s.completions} completions`;
+          if (s.flatline) {
+            results.push({
+              name: 'Learning liveness',
+              status: 'warn',
+              message: `FLATLINE: ${ratio} — the loop is turning but producing no learnings`,
+              fix: 'Inspect .paradigm/events/postflight-liveness.jsonl. Check verdicts are recorded (paradigm_ambient_engage) and that postflight is reached on completion.',
+            });
+          } else {
+            results.push({
+              name: 'Learning liveness',
+              status: 'ok',
+              message: `${ratio} over last ${s.completions} completion${s.completions === 1 ? '' : 's'}`,
             });
           }
         }

@@ -17,6 +17,7 @@ const SESSION_LOG_FILE = '.paradigm/events/session-log.jsonl';
 const SESSION_METRICS_FILE = '.paradigm/events/session-metrics.jsonl';
 const VERDICTS_LOG_FILE = '.paradigm/events/verdicts.jsonl';
 const ITERATION_REVISIONS_FILE = '.paradigm/events/iteration-revisions.jsonl';
+const POSTFLIGHT_LIVENESS_FILE = '.paradigm/events/postflight-liveness.jsonl';
 const MAX_ENTRIES = 200;
 
 // ── Types ────────────────────────────────────────────────────────────
@@ -216,6 +217,93 @@ export function clearSessionWorkLog(rootDir: string): void {
     }
   } catch {
     // Non-fatal
+  }
+}
+
+// ── Postflight Liveness ───────────────────────────────────────────────
+// The falsifiable liveness invariant for the learning loop (T-2026-06-13-004).
+//
+// Before this, the postflight pass returned a byte-identical result whether it
+// wrote journals (healthy) or silently early-returned 0 (broken) — nothing on
+// disk distinguished the two. Now EVERY non-dry-run postflight pass leaves one
+// durable row here: a `postflight-live` row when it journaled, or a
+// `postflight-noop` row carrying WHY it produced nothing. `paradigm doctor`
+// reads these to compute journals-per-completion over a real denominator and
+// flag a flatline (0 journals over N passes) — so "self-improving" is
+// observable, not asserted.
+
+export type PostflightLivenessReason =
+  | 'no-verdicts'        // no pending durable verdicts/revisions to learn from
+  | 'no-journals'        // verdicts present but none produced a journal entry
+  | 'consumed';          // verdicts already consumed by an earlier pass this window
+
+export interface PostflightLivenessRecord {
+  type: 'postflight-live' | 'postflight-noop';
+  ts: string;
+  /** Journals written by this pass (the health signal; 0 on a noop). */
+  journalsWritten: number;
+  /** Notebook promotions this pass. */
+  promoted: number;
+  /** Present only on a noop — the traceable reason it wrote nothing. */
+  reason?: PostflightLivenessReason;
+  /** Best-effort session identity so a flatline can be attributed to a run. */
+  sessionId: string;
+  /** Claimant/agent the pass ran for, when known. */
+  claimant?: string;
+}
+
+/**
+ * A best-effort, durable-enough session id. Prefers an explicit env id (set by
+ * the harness / hooks), else a stable per-process fallback. Never throws.
+ */
+export function resolveSessionId(): string {
+  const env = process.env.PARADIGM_SESSION_ID || process.env.CLAUDE_SESSION_ID;
+  if (env && env.trim()) return env.trim();
+  return `sp-${process.pid}`;
+}
+
+/**
+ * Append one postflight-liveness row. Non-fatal — a probe-write failure must
+ * never break the postflight pass it observes.
+ */
+export function recordPostflightLiveness(
+  rootDir: string,
+  record: Omit<PostflightLivenessRecord, 'ts' | 'sessionId'> & { sessionId?: string },
+): void {
+  try {
+    const filePath = path.join(rootDir, POSTFLIGHT_LIVENESS_FILE);
+    const dir = path.dirname(filePath);
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    const full: PostflightLivenessRecord = {
+      ts: new Date().toISOString(),
+      sessionId: record.sessionId ?? resolveSessionId(),
+      ...record,
+    };
+    fs.appendFileSync(filePath, JSON.stringify(full) + '\n', 'utf8');
+  } catch {
+    // Non-fatal — the probe is advisory.
+  }
+}
+
+/**
+ * Read postflight-liveness rows (oldest→newest as written). Used by the doctor
+ * learning-liveness metric. Never throws.
+ */
+export function readPostflightLiveness(rootDir: string): PostflightLivenessRecord[] {
+  try {
+    const filePath = path.join(rootDir, POSTFLIGHT_LIVENESS_FILE);
+    if (!fs.existsSync(filePath)) return [];
+    return fs.readFileSync(filePath, 'utf8')
+      .trim()
+      .split('\n')
+      .filter(line => line.trim())
+      .map(line => {
+        try { return JSON.parse(line) as PostflightLivenessRecord; }
+        catch { return null; }
+      })
+      .filter((e): e is PostflightLivenessRecord => e !== null && typeof e.journalsWritten === 'number');
+  } catch {
+    return [];
   }
 }
 

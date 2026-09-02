@@ -31,6 +31,8 @@ import {
 // ────────────────────────────────────────────────────────
 
 let root: string;
+let homeDir: string;
+let priorHome: string | undefined;
 
 const LIVENESS = (r: string) => path.join(r, '.paradigm/events/settlement-liveness.jsonl');
 
@@ -42,11 +44,22 @@ function readLiveness(r: string): Array<Record<string, unknown>> {
 
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'task-settlement-test-'));
+  // Isolate journal/notebook writes: the settlement chain calls
+  // autoPromoteJournalEntries, which keys off process.env.HOME. Without a
+  // throwaway HOME, `npm test` promotes real ~/.paradigm journal entries into
+  // notebooks, bypassing the Classroom gate on a developer machine.
+  homeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'task-settlement-home-'));
+  priorHome = process.env.HOME;
+  process.env.HOME = homeDir;
 });
 
 afterEach(() => {
   vi.restoreAllMocks();
-  if (root && fs.existsSync(root)) fs.rmSync(root, { recursive: true, force: true });
+  if (priorHome === undefined) delete process.env.HOME;
+  else process.env.HOME = priorHome;
+  for (const d of [root, homeDir]) {
+    if (d && fs.existsSync(d)) fs.rmSync(d, { recursive: true, force: true });
+  }
 });
 
 // ────────────────────────────────────────────────────────

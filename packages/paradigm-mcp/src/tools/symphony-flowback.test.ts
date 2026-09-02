@@ -27,6 +27,8 @@ import { createTask, loadTask } from '../utils/task-loader.js';
 import type { SymphonyMessage, MessageIntent } from '../utils/symphony-loader.js';
 
 let root: string;
+let homeDir: string;
+let priorHome: string | undefined;
 
 const LIVENESS = (r: string) =>
   path.join(r, '.paradigm/events/settlement-liveness.jsonl');
@@ -55,10 +57,20 @@ function note(
 
 beforeEach(() => {
   root = fs.mkdtempSync(path.join(os.tmpdir(), 'symphony-flowback-test-'));
+  // Isolate HOME: a standalone task completion now fires the leaf learning chain
+  // (T-2026-06-13-004), which writes journals under $HOME. Keep it off the real
+  // ~/.paradigm so the test stays hermetic AND fast (no real-corpus I/O).
+  homeDir = fs.mkdtempSync(path.join(os.tmpdir(), 'symphony-flowback-home-'));
+  priorHome = process.env.HOME;
+  process.env.HOME = homeDir;
 });
 
 afterEach(() => {
-  if (root && fs.existsSync(root)) fs.rmSync(root, { recursive: true, force: true });
+  if (priorHome === undefined) delete process.env.HOME;
+  else process.env.HOME = priorHome;
+  for (const d of [root, homeDir]) {
+    if (d && fs.existsSync(d)) fs.rmSync(d, { recursive: true, force: true });
+  }
 });
 
 describe('applyTaskStatusFlowBack — intent → local status mapping', () => {
