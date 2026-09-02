@@ -231,6 +231,27 @@ export function loadParadigmFiles(rootDir: string): ParadigmFiles | null {
     }
   }
 
+  // VOLATILE display metadata (#cache-aligner) — rendered only in CLAUDE.md's
+  // trailer, never its KV-cacheable head. We populate symbolCount (changes only
+  // on real symbol add/remove — meaningful, low git-churn) and deliberately omit
+  // generatedAt (a per-sync timestamp would rewrite the trailer on every sync,
+  // producing meaningless CLAUDE.md diffs) and currentArc (no canonical source).
+  // paradigmVersion is left to its schema-version default ("v2.0").
+  let meta: ParadigmFiles['meta'];
+  try {
+    const scanIndexPath = path.join(rootDir, '.paradigm', 'scan-index.json');
+    if (fs.existsSync(scanIndexPath)) {
+      const idx = JSON.parse(fs.readFileSync(scanIndexPath, 'utf8')) as Record<string, unknown>;
+      let count = 0;
+      for (const k of ['components', 'features', 'flows', 'state', 'gates', 'signals', 'aspects']) {
+        const v = idx[k];
+        if (Array.isArray(v)) count += v.length;
+        else if (v && typeof v === 'object') count += Object.keys(v as object).length;
+      }
+      if (count > 0) meta = { symbolCount: count };
+    }
+  } catch { /* non-fatal — omit symbolCount */ }
+
   return {
     config,
     specs,
@@ -238,6 +259,7 @@ export function loadParadigmFiles(rootDir: string): ParadigmFiles | null {
     projectName: path.basename(rootDir),
     workspace,
     agents,
+    ...(meta ? { meta } : {}),
   };
 }
 

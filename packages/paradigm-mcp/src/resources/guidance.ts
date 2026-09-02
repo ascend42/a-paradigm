@@ -607,10 +607,19 @@ Keep it lightweight: \`phase\` + \`context\` are required, everything else is op
 | Aspect anchors drifted | Run \`paradigm drift check --auto-heal\` |
 | Undeclared gates in code | Run \`paradigm portal check\` |
 | Purpose-required violation | Create .purpose files in directories matching config patterns |
+| "MCP server failed to connect" / \`paradigm-mcp\` not found | The client spawned the server in a PATH that lacks the global bin dir — see below |
+
+## MCP server won't connect ("paradigm-mcp not found")
+
+The generated \`.mcp.json\` launches the server with a bare \`command: "paradigm-mcp"\`, resolved via the PATH of the process the client uses to spawn it. On macOS, GUI/non-login launch contexts often omit \`/opt/homebrew/bin\` (or the npm-global bin dir), so the same repo connects from a terminal-launched client but fails elsewhere — surfacing as a cached "failed to connect."
+
+- **Claude Code** injects an \`env.PATH\` augmentation automatically (it expands \`\${VAR}\` in \`.mcp.json\`), so this is handled. If it still fails, restart the client to clear the cached failure.
+- **Cursor / Cline / Continue / Claude Desktop / VS Code** do **not** expand \`\${VAR}\` in the MCP \`env\` block (verified), so Paradigm cannot safely inject a PATH there — it leaves the bare command and relies on the inherited environment. If the server won't resolve, either (a) launch the client from a shell whose PATH includes the paradigm-mcp bin, or (b) edit that client's config \`command\` to an **absolute path** to \`paradigm-mcp\` (find it with \`which paradigm-mcp\`). Do NOT put \`\${PATH}\` in that client's \`env\` — it is taken literally and will break PATH.
+- Confirm the server itself is healthy: \`printf '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{}}\\n' | paradigm-mcp .\` should hand-shake in well under a second.
 
 ## Validation Commands
 
-- \`paradigm doctor\` — Health check for inconsistencies
+- \`paradigm doctor\` — Health check for inconsistencies (incl. Learning liveness)
 - \`paradigm scan\` — Rebuild index
 - \`paradigm portal check\` — Find undeclared gates
 - \`paradigm drift check\` — Detect aspect anchor drift`,

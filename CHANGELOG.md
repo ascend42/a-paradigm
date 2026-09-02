@@ -5,6 +5,16 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.8.4] — 2026-09-02
+
+Accessibility follow-ups from 7.8.3 — make the framework connect and display cleanly across setups.
+
+### Changed
+- **`CLAUDE.md` "Symbols indexed" now renders (`#cache-aligner`, T-2026-09-02-001)** — 7.8.3 moved volatile display to the trailer but left it unpopulated; `loadParadigmFiles` now fills `meta.symbolCount` from the scan-index. `generatedAt` is intentionally left unpopulated (a per-sync timestamp would dirty `CLAUDE.md` in git on every sync); `paradigmVersion` keeps its schema-version default.
+
+### Fixed
+- **MCP-connect troubleshooting for non-Claude-Code clients (`#mcp-config`, T-2026-09-01-005)** — verified against primary sources that **none** of Cursor / Cline / Continue / Claude Desktop / VS Code expand `${VAR}` inside the MCP `env` block, confirming 7.8.2's Claude-Code-only PATH augmentation is correct and cannot be safely extended (a literal `${PATH}` would break PATH on those clients). Added a `paradigm://guidance/troubleshooting` section explaining the macOS GUI/non-login PATH gap and the per-client fix (inherit the parent environment, or set an absolute-path `command` — never `${PATH}` in a non-expanding client's `env`).
+
 ## [7.8.3] — 2026-09-02
 
 Ideas surfaced by a hard assessment of [Headroom](https://github.com/headroomlabs-ai/headroom) — adopted natively where they were Paradigm-shaped, delegated where they were host-layer. The compression engine itself was **not** adopted (host concern; a lossy black box in front of the deterministic meaning-graph would violate the fail-closed thesis).
