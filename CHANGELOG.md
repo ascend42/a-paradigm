@@ -5,6 +5,11 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.8.5] — 2026-09-03
+
+### Fixed
+- **`npm install -g @a-company/paradigm` could 404 on `@a-company/warpline` (`#warpline-cli`)** — warpline was a **hard** dependency but is deliberately **excluded from the CLI bundle** (its code-lens pulls in `typescript`, whose dynamic `require('fs')` doesn't survive ESM bundling), so it had to resolve from the registry at install time. Whenever warpline wasn't published (or a version was missing), the entire CLI install failed with a fatal 404 — masked locally by `npm link`, which resolves warpline from the workspace. warpline is now an **`optionalDependency`**: npm tolerates a resolution failure and continues, and the CLI degrades gracefully (every `@a-company/warpline` import is a lazy, try/caught `import()` confined to the platform-server routes — the core CLI/MCP never load it). This includes everything from the unpublished 7.8.4 (CLAUDE.md `symbolCount` display + MCP-connect troubleshooting).
+
 ## [7.8.4] — 2026-09-02
 
 Accessibility follow-ups from 7.8.3 — make the framework connect and display cleanly across setups.
