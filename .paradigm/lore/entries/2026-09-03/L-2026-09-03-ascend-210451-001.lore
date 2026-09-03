@@ -1,0 +1,53 @@
+id: L-2026-09-03-ascend-210451-001
+type: milestone
+timestamp: '2026-09-03T21:04:51.067Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Framework hygiene + Headroom adoption + install fix (7.8.2→7.8.5)
+summary: 'Multi-release session: shipped 7.8.2 (five framework friction fixes), 7.8.3 (Headroom-assessment adoption — CLOSED the silently-broken learning loop, spill-and-handle + paradigm_retrieve, CacheAligner CLAUDE.md rule), 7.8.4 (accessibility follow-ups — CLAUDE.md symbolCount display + MCP-connect troubleshooting; never published), and 7.8.5 (fix a fatal npm-install E404 by making @a-company/warpline an optionalDependency). All work ran through the team (architect/builder/tester + adversary/learning-loop lenses) with independent re-verification catching real defects each round.'
+symbols_touched:
+  - '#nomination-engine'
+  - '#warpline-cli'
+  - '#paradigm-retrieve'
+  - '#mcp-config'
+  - '#cache-aligner'
+  - '#session-tracker'
+  - '#symbol-index'
+  - '#hooks'
+learnings:
+  - The learning loop was gated behind parentTaskId settlement + a verdict early-return with no liveness invariant — broken was byte-identical to healthy. Fix = settleLeafTask + postflight-liveness.jsonl + doctor metric. 'Steal Headroom's trigger, keep Paradigm's gate.'
+  - 'Headroom verdict: complement-in-tech, competitor-in-NARRATIVE. Moat intact. Do NOT adopt the compression engine (fail-closed thesis). The threat is the two front-page words: ''context-efficient'' + ''learning''.'
+  - 'npm install -g broke on @a-company/warpline 404: it was a HARD dep but EXCLUDED from the bundle (typescript/ESM) AND intermittently unpublished. npm link masked it. Fix = optionalDependency (npm tolerates the 404; code degrades gracefully via lazy try/caught imports).'
+  - 'No MCP client except Claude Code expands ${VAR} in the mcp env block (verified: Cursor/Cline/Continue/Claude Desktop/VS Code all don''t) — so the Claude-Code-only PATH augmentation is correct and cannot be safely extended.'
+  - Independent re-verification caught a real defect each round (HOME-pollution in loop-closure tests; the risky 4-client env scope). 'The team built it' is not a gate — falsifiers and independent verification are.
+verification:
+  status: pass
+  details:
+    build: pass (4 packages)
+    tests: pass (all affected suites green)
+    install: pass (clean tarball install exits 0)
+    published: 7.8.2/7.8.3 live; 7.8.5 pending user publish
+tags:
+  - release
+  - learning-loop
+  - headroom
+  - packaging
+  - accessibility
+linked_tasks:
+  - T-2026-06-13-004
+  - T-2026-07-17-009
+  - T-2026-09-01-005
+  - T-2026-09-02-001
+linked_commits:
+  - 57737f43
+  - a3eb7b6a
+  - 4d9d7033
+  - d4471197
+  - f7ac76ac
+confidence: 0.9
+git_context:
+  ref: 5235d8baae7cc03dcaf2714a6b032a6b02c6125e
+  branch: main
+  dirty: false
