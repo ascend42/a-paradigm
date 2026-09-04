@@ -297,6 +297,15 @@ When presenting agent responses, use the \`attribution\` field from orchestratio
 
 Do NOT combine or summarize multiple agents into one response. Each agent speaks for itself.
 
+## Native Agent Launch (Claude Code plugin)
+
+Execute-mode stage agents carry two launch hints:
+
+- \`subagentType\` — always \`general-purpose\`. The **portable default** for hosts without namespaced plugin agents (Cursor, CLI-only) and for any agent lacking a plugin definition. Spawns with full tool access.
+- \`nativeSubagentType\` — present ONLY for the five plugin-shipped roles (\`architect\`, \`builder\`, \`reviewer\`, \`security\`, \`tester\`), as \`paradigm:<role>\`. The paradigm Claude Code plugin ships these agents WITH real tool guardrails (architect/reviewer/security are read-only via \`disallowedTools\`).
+
+**Rule:** In Claude Code with the paradigm plugin installed, launch each stage with \`subagent_type\` = its \`nativeSubagentType\` when that field is present — this gives the agent its real role-scoped tool restrictions. Fall back to \`subagentType\` (general-purpose) when \`nativeSubagentType\` is absent or the host has no namespaced plugin agents. Archetypes (advocate, captain, compliance, etc.) have no plugin \`.md\`, so they carry no \`nativeSubagentType\` and always use the general-purpose fallback.
+
 ## Agent Roster
 
 | Agent | Model | Role |

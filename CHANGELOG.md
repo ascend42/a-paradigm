@@ -5,6 +5,11 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.8.6] — 2026-09-04
+
+### Fixed
+- **Orchestrated agents ran as generic `general-purpose`, losing their role guardrails (`#orchestrator`)** — `paradigm_orchestrate_inline` execute mode emitted `subagentType: 'general-purpose'` for every stage, so a launcher spawned each agent with **full tool access** — the plugin agents' role-scoped restrictions (architect / reviewer / security are read-only via `disallowedTools: Write, Edit, Bash`) were never enforced. Execute output now also carries a `nativeSubagentType` per stage — `paradigm:<role>` for the five plugin-shipped agents (architect, builder, reviewer, security, tester), omitted for archetypes with no plugin definition. Launchers in Claude Code use `nativeSubagentType` when present (real guardrails), falling back to the unchanged `general-purpose` default for portability (Cursor / CLI-only hosts) and for non-plugin agents. Updated `executionInstructions`, the `claudeCode` example, and `paradigm://guidance/orchestration`. Surfaced by @DChan0319 (PR #44) — this supersedes that PR's sync-to-global approach, which would have collided with Claude Code's native `paradigm:*` namespacing.
+
 ## [7.8.5] — 2026-09-03
 
 ### Fixed
