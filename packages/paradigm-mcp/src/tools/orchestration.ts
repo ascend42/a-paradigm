@@ -154,6 +154,15 @@ interface AgentPromptResult {
   prompt: string;
   taskDescription: string;
   subagentType: string;
+  /**
+   * Claude Code namespaced plugin-agent id (`paradigm:<role>`) when this agent's
+   * role is one of the five plugin-shipped agents (architect/builder/reviewer/
+   * security/tester). Launchers in Claude Code should prefer this over
+   * `subagentType` so the agent spawns with its real role-scoped tool guardrails.
+   * UNDEFINED for archetypes with no plugin .md — those fall back to `subagentType`
+   * (general-purpose), the portable default for Cursor / CLI-only hosts.
+   */
+  nativeSubagentType?: string;
   /** Display prefix for attributed responses: "[nickname (role)]" or "[role]" */
   attribution: string;
   focusAreas: {
@@ -179,6 +188,18 @@ interface AgentPromptResult {
 // ============================================================================
 
 const SYMBOL_PATTERN = /[@#$%^!?&~][a-zA-Z0-9_-]+/g;
+
+/**
+ * The five agents the paradigm Claude Code plugin ships at plugins/paradigm/agents/.
+ * Claude Code loads them namespaced as `paradigm:architect`, `paradigm:builder`, etc.,
+ * WITH real tool guardrails (architect/reviewer/security are read-only). When a stage
+ * agent's role name is in this set, execute-mode output carries a `nativeSubagentType`
+ * of `paradigm:<name>` so a launcher can spawn the agent with its role-scoped tool
+ * restrictions instead of the generic (full-access) `general-purpose` fallback.
+ * Any other role (archetypes like advocate/captain/compliance that have NO plugin .md)
+ * gets no `nativeSubagentType` and falls back to `general-purpose`.
+ */
+export const PLUGIN_AGENT_ROLES = new Set(['architect', 'builder', 'reviewer', 'security', 'tester']);
 
 // Legacy — kept for backward compat, prefer AGENT_TIERS + resolveModelForAgent()
 const DEFAULT_MODELS: Record<string, 'opus' | 'sonnet' | 'haiku'> = {
@@ -1570,6 +1591,7 @@ async function handleOrchestrateInline(
       'Agents within a stage can be run in parallel if your environment supports it',
       'Pass handoff context between stages',
       'Present each agent response as an attributed message using the attribution prefix (e.g., "[architect] Rate limiter should go before ^authenticated")',
+      'In Claude Code with the paradigm plugin installed, launch each stage with `subagent_type` = its `nativeSubagentType` when that field is present — this gives the agent its real role-scoped tool restrictions (e.g. read-only architect/reviewer/security). Fall back to `subagentType` (general-purpose) when `nativeSubagentType` is absent or the host has no namespaced plugin agents.',
       'Do NOT synthesize agent responses — show them as distinct contributions from each agent',
       'After all agents in a stage complete, reconcile their outputs before proceeding to the next stage',
     ],
@@ -1612,8 +1634,11 @@ async function handleOrchestrateInline(
       example: {
         description: stagePrompts[0]?.agents[0]?.taskDescription || 'Agent task',
         prompt: '(see agent prompts above)',
-        subagent_type: 'general-purpose',
+        // Prefer the stage's nativeSubagentType (e.g. "paradigm:architect") when present
+        // for role-scoped guardrails; fall back to general-purpose when it is absent.
+        subagent_type: stagePrompts[0]?.agents[0]?.nativeSubagentType || 'general-purpose',
       },
+      note: 'Set `subagent_type` to each stage agent\'s `nativeSubagentType` when that field is present (paradigm plugin installed) — this gives the agent its real role-scoped tool restrictions (read-only architect/reviewer/security). Fall back to `subagentType` (general-purpose) when `nativeSubagentType` is absent or the host has no namespaced plugin agents.',
       parallel: 'Launch multiple Task calls in one message for parallel stages',
     },
 
@@ -2461,7 +2486,7 @@ interface PromptBuildOptions {
   captainBrief?: string;
 }
 
-function buildAgentPromptInternal(options: PromptBuildOptions): AgentPromptResult {
+export function buildAgentPromptInternal(options: PromptBuildOptions): AgentPromptResult {
   const { agent, task, symbols, handoffContext, previousAgent } = options;
 
   const parts: string[] = [];
@@ -2561,7 +2586,12 @@ This structured output helps track progress and pass context between agents.`);
     model,
     prompt,
     taskDescription: `${agent.name}: ${task.slice(0, 50)}${task.length > 50 ? '...' : ''}`,
+    // Portable default — kept as-is for hosts without namespaced plugin agents
+    // (Cursor, CLI-only) and for any agent lacking a plugin definition.
     subagentType: 'general-purpose',
+    // Native Claude Code plugin id, present ONLY for the five plugin-shipped roles
+    // so a launcher can spawn them with their real role-scoped tool restrictions.
+    ...(PLUGIN_AGENT_ROLES.has(agent.name) ? { nativeSubagentType: `paradigm:${agent.name}` } : {}),
     attribution,
     focusAreas: agent.focus || { reads: ['**/*'], writes: ['**/*'] },
   };
