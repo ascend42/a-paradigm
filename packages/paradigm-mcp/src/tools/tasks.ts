@@ -3,8 +3,35 @@
  */
 
 import type { ProjectContext } from '../utils/index-loader.js';
-import { loadTasks, loadTask, createTask, updateTask, completeTask, shelveTask } from '../utils/task-loader.js';
-import type { Claimant, ExternalRef } from '../utils/task-loader.js';
+import { loadTasks, loadTask, createTask, updateTask, completeTask, shelveTask, legalTransitionsFrom } from '../utils/task-loader.js';
+import type { Claimant, ExternalRef, TaskStatus } from '../utils/task-loader.js';
+
+/**
+ * `updateTask`/`completeTask`/`shelveTask` collapse "task not found" and
+ * "illegal status transition" into the same falsy result (task-loader.ts's
+ * `updateTask`, by design — it does not throw). Left alone, every one of these
+ * MCP handlers reported an illegal transition as "Task X not found", which is
+ * actively misleading: the task exists, and the real reason (e.g. a `shelved`
+ * task can only legally move back to `open`, never straight to `done`) was
+ * invisible to the caller. This re-derives the real reason for the caller.
+ */
+async function explainTaskUpdateFailure(
+  rootDir: string,
+  id: string,
+  targetStatus?: TaskStatus,
+): Promise<string> {
+  const existing = await loadTask(rootDir, id);
+  if (!existing) {
+    return JSON.stringify({ error: `Task ${id} not found` });
+  }
+  if (targetStatus !== undefined && targetStatus !== existing.status) {
+    return JSON.stringify({
+      error: `Task ${id} is '${existing.status}' — cannot transition to '${targetStatus}'.`,
+      legalTransitions: legalTransitionsFrom(existing.status),
+    });
+  }
+  return JSON.stringify({ error: `Task ${id} not found` });
+}
 
 // ── Tool definitions ──────────────────────────────────────
 
@@ -200,7 +227,7 @@ export async function handleTasksTool(
 
       const ok = await updateTask(ctx.rootDir, id, partial as Partial<import('../utils/task-loader.js').Task>);
       if (!ok) {
-        return { handled: true, text: JSON.stringify({ error: `Task ${id} not found` }) };
+        return { handled: true, text: await explainTaskUpdateFailure(ctx.rootDir, id, partial.status as TaskStatus | undefined) };
       }
 
       const updated = await loadTask(ctx.rootDir, id);
@@ -211,7 +238,7 @@ export async function handleTasksTool(
       const id = args.id as string;
       const ok = await completeTask(ctx.rootDir, id);
       if (!ok) {
-        return { handled: true, text: JSON.stringify({ error: `Task ${id} not found` }) };
+        return { handled: true, text: await explainTaskUpdateFailure(ctx.rootDir, id, 'done') };
       }
 
       const task = await loadTask(ctx.rootDir, id);
@@ -229,7 +256,7 @@ export async function handleTasksTool(
       const id = args.id as string;
       const ok = await shelveTask(ctx.rootDir, id);
       if (!ok) {
-        return { handled: true, text: JSON.stringify({ error: `Task ${id} not found` }) };
+        return { handled: true, text: await explainTaskUpdateFailure(ctx.rootDir, id, 'shelved') };
       }
 
       const task = await loadTask(ctx.rootDir, id);

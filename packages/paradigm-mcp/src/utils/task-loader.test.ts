@@ -27,6 +27,7 @@ import {
   validateTaskDag,
   rebuildTaskIndex,
   assertTransition,
+  legalTransitionsFrom,
   normalizeTask,
   type Task,
   type TaskIndex,
@@ -367,6 +368,22 @@ describe('assertTransition', () => {
     expect(assertTransition('done', 'in-progress')).toBe(false); // reopen lands in open first
     expect(assertTransition('shelved', 'done')).toBe(false); // must reopen first
     expect(assertTransition('shelved', 'in-progress')).toBe(false);
+  });
+});
+
+describe('legalTransitionsFrom', () => {
+  it('matches assertTransition — every listed target is legal, every omitted one is not', () => {
+    const allStatuses: TaskStatus[] = ['open', 'in-progress', 'done', 'shelved'];
+    for (const from of allStatuses) {
+      const legal = legalTransitionsFrom(from);
+      for (const to of allStatuses) {
+        expect(legal.includes(to)).toBe(assertTransition(from, to) && from !== to);
+      }
+    }
+  });
+
+  it('a shelved task may only reopen — the case the MCP tool bug hid as "not found"', () => {
+    expect(legalTransitionsFrom('shelved')).toEqual(['open']);
   });
 });
 
