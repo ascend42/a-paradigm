@@ -219,15 +219,26 @@ export function generateTaskId(rootDir: string, dateStr: string): string {
  *
  * Returns true if the transition is legal. A no-op (from === to) is legal.
  */
+const STATUS_TRANSITIONS: Record<TaskStatus, TaskStatus[]> = {
+  'open': ['in-progress', 'done', 'shelved'],
+  'in-progress': ['done', 'open', 'shelved'],
+  'shelved': ['open'],
+  'done': ['open'],
+};
+
 export function assertTransition(from: TaskStatus, to: TaskStatus): boolean {
   if (from === to) return true;
-  const allowed: Record<TaskStatus, TaskStatus[]> = {
-    'open': ['in-progress', 'done', 'shelved'],
-    'in-progress': ['done', 'open', 'shelved'],
-    'shelved': ['open'],
-    'done': ['open'],
-  };
-  return (allowed[from] ?? []).includes(to);
+  return (STATUS_TRANSITIONS[from] ?? []).includes(to);
+}
+
+/**
+ * The statuses `from` may legally move to next — the same table `assertTransition`
+ * checks against, exposed so a caller can build an actionable error message (e.g.
+ * "task is shelved; legal transitions: open") instead of collapsing an illegal
+ * transition into an indistinguishable falsy result.
+ */
+export function legalTransitionsFrom(from: TaskStatus): TaskStatus[] {
+  return STATUS_TRANSITIONS[from] ?? [];
 }
 
 // ── Read operations ───────────────────────────────────────
