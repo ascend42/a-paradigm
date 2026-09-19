@@ -2,18 +2,18 @@
   "$meta": {
     "version": "1.0.0",
     "project": "a-paradigm",
-    "generatedAt": "2026-09-01T03:28:55.813Z",
+    "generatedAt": "2026-09-19T08:32:33.759Z",
     "paradigmVersion": "0.1.0",
     "sources": {
-      "purposeFiles": 92,
+      "purposeFiles": 95,
       "portalFiles": 3,
       "premiseFiles": 0
     },
     "componentTypes": {
-      "command": 107,
+      "command": 108,
       "config": 10,
       "manager": 6,
-      "engine": 12,
+      "engine": 15,
       "detector": 11,
       "provider": 7,
       "router": 3,
@@ -21,12 +21,12 @@
       "store": 20,
       "filter": 3,
       "service": 89,
-      "model": 14,
-      "utility": 58,
+      "model": 15,
+      "utility": 59,
       "feature": 1,
       "theme": 1,
       "controller": 1,
-      "tool": 43,
+      "tool": 44,
       "tool-group": 10,
       "util": 9,
       "loader": 24,
@@ -43,8 +43,8 @@
       "integration": 2,
       "types": 10,
       "command-group": 8,
-      "storage": 1,
-      "component": 13
+      "component": 14,
+      "storage": 1
     }
   },
   "components": {
@@ -7794,6 +7794,20 @@
       "related": [],
       "componentType": "service"
     },
+    "paradigm-retrieve": {
+      "id": "paradigm-retrieve",
+      "name": "Paradigm Retrieve",
+      "symbol": "#paradigm-retrieve",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/tools/.purpose",
+      "description": "Rehydrate a large payload SPILLED to .paradigm/spill/{handle}.json (the",
+      "visualTags": [],
+      "related": [
+        "#ToolHandlers"
+      ],
+      "componentType": "tool",
+      "parent": "#ToolHandlers"
+    },
     "paradigm-propose-block": {
       "id": "paradigm-propose-block",
       "name": "Paradigm Propose Block",
@@ -8519,7 +8533,7 @@
       "symbol": "#session-work-log",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "Session work log — JSONL append log capturing agent contributions and user verdicts during a session. Read by Maestro at postflight for targeted learning feedback. Bounded at 200 entries, cleared on session start. Also hosts the durable iteration-revision channel (readPendingIterationRevisions / markIterationRevisionsConsumed, IterationRevisionEntry) — agent belief-revisions from iteration loops, kept separate from the human-verdict channel and routed to the self_reflection journal trigger.",
+      "description": "Session work log — JSONL append log capturing agent contributions and user verdicts during a session. Read by Maestro at postflight for targeted learning feedback. Bounded at 200 entries, cleared on session start. Also hosts the durable iteration-revision channel (readPendingIterationRevisions / markIterationRevisionsConsumed, IterationRevisionEntry) — agent belief-revisions from iteration loops, kept separate from the human-verdict channel and routed to the self_reflection journal trigger. T-2026-06-13-004 adds the postflight-liveness channel (recordPostflightLiveness / readPostflightLiveness, PostflightLivenessRecord → .paradigm/events/postflight-liveness.jsonl) — every non-dry-run postflight pass appends one durable row (postflight-live when it journaled, postflight-noop{reason} when it did not) so a broken loop is no longer byte-identical to a healthy one (the falsifiable liveness invariant `paradigm doctor` reads).",
       "visualTags": [],
       "related": [
         "#activity-metrics"
@@ -8598,6 +8612,20 @@
       "visualTags": [],
       "related": [],
       "componentType": "utility"
+    },
+    "provisional-intake": {
+      "id": "provisional-intake",
+      "name": "Provisional Intake",
+      "symbol": "#provisional-intake",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "Provisional-candidate intake (T-2026-06-13-004) — the floor-trust session miner that lets the loop LEARN FROM FAILURE without breaching the classroom gate. mineProvisionalCandidates(rootDir, projectName, fallbackClaimant) reads already-recorded failure signals (overrides.jsonl, dismissed/revised durable verdicts) and stages each as a journal entry stamped provenance {source:external, trust:external} with the NON-promotable failure_analysis trigger, tagged provisional-candidate/floor-trust. Invoked once per session-boundary postflight pass; idempotent via .paradigm/events/provisional-mined.jsonl. Invisible to autoPromoteJournalEntries (which only promotes pattern_discovered/human_feedback) so nothing reaches a notebook or CLAUDE.md until the gated Classroom adjudicates it.",
+      "visualTags": [],
+      "related": [
+        "#journal-loader",
+        "#session-work-log"
+      ],
+      "componentType": "engine"
     },
     "orchestration-marker": {
       "id": "orchestration-marker",
@@ -9163,6 +9191,17 @@
       "componentType": "route",
       "parent": "#PlatformServer"
     },
+    "spill": {
+      "id": "spill",
+      "name": "Spill",
+      "symbol": "#spill",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/src/.purpose",
+      "description": "Generic spill-and-handle large-output primitive — spillLargeOutput() writes over-threshold payloads to a spill dir and returns a bounded preview + handle; retrieveSpilled() rehydrates losslessly. Shared by paradigm-mcp (paradigm_retrieve) and warpline (admit changed-set).",
+      "visualTags": [],
+      "related": [],
+      "componentType": "component"
+    },
     "content": {
       "id": "content",
       "name": "Content",
@@ -9318,6 +9357,19 @@
       ],
       "componentType": "utility"
     },
+    "check-15-memory-hygiene-nudge": {
+      "id": "check-15-memory-hygiene-nudge",
+      "name": "Check 15 Memory Hygiene Nudge",
+      "symbol": "#check-15-memory-hygiene-nudge",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/hooks/.purpose",
+      "description": "Memory Steward A3 (TD-2026-09-19-110) — Stop hook Check 15. Advisory-only\ncheap heuristic that nudges `paradigm memory review` when native Claude\nCode memory (outside the repo at $HOME/.claude/projects/<slug>/memory/)\nlooks due. Metadata only (entry count > 25, MEMORY.md bytes > 32768, days\nsince .paradigm/.memory-last-review > 30, or never-reviewed + entries > 15)\n— NO LLM, NO scan, NO content reads. Appends at most one line to ADVISORY;\nNEVER touches VIOLATIONS. Fail-open on missing HOME/dir/stat: emits nothing.\n",
+      "visualTags": [],
+      "related": [
+        "$HOME"
+      ],
+      "componentType": "utility"
+    },
     "active-remediations": {
       "id": "active-remediations",
       "name": "Active Remediations",
@@ -9462,6 +9514,27 @@
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/lore/.purpose",
       "description": "Migrate old assessment entries to lore with arc tags",
+      "visualTags": [],
+      "related": [],
+      "componentType": "command"
+    },
+    "mcp": {
+      "id": "mcp",
+      "name": "Mcp",
+      "symbol": "#mcp",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/mcp/.purpose",
+      "description": "TODO: describe this component",
+      "visualTags": [],
+      "related": []
+    },
+    "memory-cli": {
+      "id": "memory-cli",
+      "name": "Memory Cli",
+      "symbol": "#memory-cli",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/memory/.purpose",
+      "description": "The `paradigm memory` command group — review (batched digest with deterministic ids + idempotent advisory remediations + review stamp) and apply-by-id subcommands prune / route / merge / pin. Path-safe, fail-open. Down-ranks pinned entries (.paradigm/memory-pins.json) and never surfaces the MEMORY.md index.",
       "visualTags": [],
       "related": [],
       "componentType": "command"
@@ -9953,6 +10026,39 @@
       "visualTags": [],
       "related": [],
       "componentType": "utility"
+    },
+    "memory-steward-types": {
+      "id": "memory-steward-types",
+      "name": "Memory Steward Types",
+      "symbol": "#memory-steward-types",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/memory/.purpose",
+      "description": "Contract for the Steward — MemoryScore (scored ParsedMemoryEntry with age/type/graph breakdown + optional clusterId) and MemoryFinding (deduplicable prune/route/merge/pin suggestion with anti-nag expiresAt).",
+      "visualTags": [],
+      "related": [],
+      "componentType": "model"
+    },
+    "memory-steward-score": {
+      "id": "memory-steward-score",
+      "name": "Memory Steward Score",
+      "symbol": "#memory-steward-score",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/memory/.purpose",
+      "description": "scoreEntry composes a 0..1 staleness score from age (mtimeMs, normalized to a 90d horizon), per-type decay weight (project fast, feedback/reference/user slow), and graph-validity penalty. deriveFinding maps a score to a suggested action (provably-stale→prune, feedback→route:habits, project→route:task, reference+decision→route:decisions, near-dup→merge, durable→pin). Age/window constants re-defined locally to avoid a paradigm-mcp dependency.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "engine"
+    },
+    "memory-steward-cluster": {
+      "id": "memory-steward-cluster",
+      "name": "Memory Steward Cluster",
+      "symbol": "#memory-steward-cluster",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/memory/.purpose",
+      "description": "clusterEntries detects near-duplicate memory bodies via normalized-token Jaccard (threshold ~0.6) + union-find; assigns deterministic clusterIds to clustered entries (singletons omitted). Pure, no LLM.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "engine"
     },
     "claude-provider": {
       "id": "claude-provider",
@@ -13645,6 +13751,14 @@
       "symbol": "$roster-setup",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose",
       "description": "Referenced from #project-type",
+      "steps": []
+    },
+    "HOME": {
+      "id": "HOME",
+      "name": "HOME",
+      "symbol": "$HOME",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/hooks/.purpose",
+      "description": "Referenced from #check-15-memory-hygiene-nudge",
       "steps": []
     },
     "decision-exchange": {
@@ -19979,6 +20093,10 @@
       "category": "components",
       "id": "sync-layer"
     },
+    "#paradigm-retrieve": {
+      "category": "components",
+      "id": "paradigm-retrieve"
+    },
     "#paradigm-propose-block": {
       "category": "components",
       "id": "paradigm-propose-block"
@@ -20239,6 +20357,10 @@
       "category": "components",
       "id": "compliance-health"
     },
+    "#provisional-intake": {
+      "category": "components",
+      "id": "provisional-intake"
+    },
     "#orchestration-marker": {
       "category": "components",
       "id": "orchestration-marker"
@@ -20435,6 +20557,10 @@
       "category": "components",
       "id": "AgentCommandRoute"
     },
+    "#spill": {
+      "category": "components",
+      "id": "spill"
+    },
     "#content": {
       "category": "components",
       "id": "content"
@@ -20487,6 +20613,10 @@
       "category": "components",
       "id": "check-14-remediation-gate"
     },
+    "#check-15-memory-hygiene-nudge": {
+      "category": "components",
+      "id": "check-15-memory-hygiene-nudge"
+    },
     "#active-remediations": {
       "category": "components",
       "id": "active-remediations"
@@ -20538,6 +20668,14 @@
     "#lore-migrate-assessments-command": {
       "category": "components",
       "id": "lore-migrate-assessments-command"
+    },
+    "#mcp": {
+      "category": "components",
+      "id": "mcp"
+    },
+    "#memory-cli": {
+      "category": "components",
+      "id": "memory-cli"
     },
     "#NotebookCommands": {
       "category": "components",
@@ -20710,6 +20848,18 @@
     "#lore-resolve-author": {
       "category": "components",
       "id": "lore-resolve-author"
+    },
+    "#memory-steward-types": {
+      "category": "components",
+      "id": "memory-steward-types"
+    },
+    "#memory-steward-score": {
+      "category": "components",
+      "id": "memory-steward-score"
+    },
+    "#memory-steward-cluster": {
+      "category": "components",
+      "id": "memory-steward-cluster"
     },
     "#claude-provider": {
       "category": "components",
@@ -22938,6 +23088,10 @@
     "!override-event": {
       "category": "signals",
       "id": "override-event"
+    },
+    "$HOME": {
+      "category": "flows",
+      "id": "HOME"
     },
     "$decision-exchange": {
       "category": "flows",

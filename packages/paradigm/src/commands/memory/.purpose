@@ -1,0 +1,34 @@
+version: 2.0.0
+description: |
+  Memory Steward CLI (A2, TD-2026-09-19-110) — the `paradigm memory` command
+  group. A curation surface over Claude Code's NATIVE memory store
+  (~/.claude/projects/<slug>/memory/). NEVER auto-deletes.
+
+  Layers on A0 (premise-core #native-memory-scan: scanNativeMemory + path
+  resolution) and A1 (core/memory: scoreEntry / clusterEntries / deriveFinding,
+  pure). This dir adds the I/O + CLI.
+
+  Findings surface as advisory remediations (.paradigm/remediations/, claimant
+  'memory', severity 'advise') written DIRECTLY to the schema
+  internal/active-remediations.ts reads — the remediation id is DERIVED from the
+  entry path (rmd-mem-<hash>), so review is idempotent: a re-run overwrites (never
+  duplicates) and preserves the original `created`, capping one active remediation
+  per entry; resolved findings are archived to remediations/.archived/.
+
+  Routing reuses existing typed homes: lore → core/lore/storage.recordLore; task
+  → paradigm-mcp task-loader.createTask (relative-import precedent, same edge the
+  `paradigm task` CLI already builds); habits → a DISABLED .habit stub in
+  .paradigm/habits/ for human curation; decisions → a STUB decision YAML the user
+  completes (NO cross-package lift of paradigm-mcp's decision-loader).
+
+  All native-memory writes are path-safe (target must be inside the resolved
+  memory dir) and fail-open (never crash). Output via cli-output.ts helpers.
+components:
+  memory-cli:
+    description: The `paradigm memory` command group — review (batched digest with deterministic ids + idempotent advisory remediations + review stamp) and apply-by-id subcommands prune / route / merge / pin. Path-safe, fail-open. Down-ranks pinned entries (.paradigm/memory-pins.json) and never surfaces the MEMORY.md index.
+    type: command
+    tags:
+      - memory-steward
+      - cli
+      - curation
+    path: index.ts

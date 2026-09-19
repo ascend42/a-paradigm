@@ -1,0 +1,29 @@
+version: 2.0.0
+description: |
+  Memory Steward core (A1) — the pure scoring + clustering orchestrator over the
+  native Claude Code memory store parsed by @a-company/premise-core's
+  #native-memory-scan (A0). No I/O, no cross-package runtime dependency: consumes
+  ParsedMemoryEntry, produces MemoryScore / MemoryFinding. Design settled in
+  TD-2026-09-19-110. Hooks / CLI registration are a later pass.
+components:
+  memory-steward-types:
+    description: Contract for the Steward — MemoryScore (scored ParsedMemoryEntry with age/type/graph breakdown + optional clusterId) and MemoryFinding (deduplicable prune/route/merge/pin suggestion with anti-nag expiresAt).
+    type: model
+    tags:
+      - memory-steward
+      - types
+    path: types.ts
+  memory-steward-score:
+    description: scoreEntry composes a 0..1 staleness score from age (mtimeMs, normalized to a 90d horizon), per-type decay weight (project fast, feedback/reference/user slow), and graph-validity penalty. deriveFinding maps a score to a suggested action (provably-stale→prune, feedback→route:habits, project→route:task, reference+decision→route:decisions, near-dup→merge, durable→pin). Age/window constants re-defined locally to avoid a paradigm-mcp dependency.
+    type: engine
+    tags:
+      - memory-steward
+      - scoring
+    path: score.ts
+  memory-steward-cluster:
+    description: clusterEntries detects near-duplicate memory bodies via normalized-token Jaccard (threshold ~0.6) + union-find; assigns deterministic clusterIds to clustered entries (singletons omitted). Pure, no LLM.
+    type: engine
+    tags:
+      - memory-steward
+      - clustering
+    path: cluster.ts

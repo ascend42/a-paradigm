@@ -2,6 +2,8 @@ import { describe, it, expect, afterEach, vi, beforeEach } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { execFileSync } from 'child_process';
+import { fileURLToPath } from 'url';
 import { createTempProject } from '../../test-utils.js';
 
 let cleanup: (() => void) | undefined;
@@ -274,6 +276,186 @@ describe('Check 7 — Lore enforcement', () => {
     expect(commonContent).toContain('Check 7');
     expect(commonContent).toContain('LORE_RECORDED');
     expect(commonContent).toContain('paradigm_lore_record');
+  });
+});
+
+describe('Check 15 — Native memory hygiene nudge (advisory only, TD-2026-09-19-110)', () => {
+  // Check 15 lives in the shared paradigm-common.sh library. It is advisory-only:
+  // it appends AT MOST one line to ADVISORY and must NEVER touch VIOLATIONS.
+  // These tests EXECUTE the extracted block in isolation (POSIX sh) with a fake
+  // repo + fake HOME to assert behavior, not just presence.
+  const COMMON_SH = fileURLToPath(
+    new URL('./scripts/paradigm-common.sh', import.meta.url),
+  );
+
+  // Extract just the Check 15 block (between its opening and END markers).
+  function extractCheck15(): string {
+    const src = fs.readFileSync(COMMON_SH, 'utf8');
+    const start = src.indexOf('# --- Check 15:');
+    const endMarker = '# --- END Check 15 ---';
+    const end = src.indexOf(endMarker);
+    expect(start).toBeGreaterThanOrEqual(0);
+    expect(end).toBeGreaterThan(start);
+    return src.slice(start, end + endMarker.length);
+  }
+
+  // Run the extracted block with the given CWD/HOME, returning parsed results.
+  function runCheck15(cwd: string, home: string): {
+    rc: number;
+    violationCount: string;
+    violations: string;
+    advisory: string;
+  } {
+    const block = extractCheck15();
+    const harness = [
+      'VIOLATIONS=""',
+      'VIOLATION_COUNT=0',
+      'ADVISORY=""',
+      `CWD="${cwd}"`,
+      block,
+      'echo "RC=$?"',
+      'echo "VC=$VIOLATION_COUNT"',
+      'echo "VIOL_START"',
+      'printf "%s" "$VIOLATIONS"',
+      'echo ""',
+      'echo "VIOL_END"',
+      'echo "ADV_START"',
+      'printf "%s" "$ADVISORY"',
+      'echo ""',
+      'echo "ADV_END"',
+    ].join('\n');
+    const harnessPath = path.join(rootDir, 'check15-harness.sh');
+    fs.writeFileSync(harnessPath, harness, 'utf8');
+    const out = execFileSync('sh', [harnessPath], {
+      cwd,
+      env: { ...process.env, HOME: home },
+      encoding: 'utf8',
+    });
+    const rc = Number(/^RC=(\d+)$/m.exec(out)?.[1] ?? '0');
+    const violationCount = /^VC=(.*)$/m.exec(out)?.[1] ?? '';
+    const violations = out
+      .slice(out.indexOf('VIOL_START') + 'VIOL_START\n'.length, out.indexOf('VIOL_END'))
+      .trim();
+    const advisory = out
+      .slice(out.indexOf('ADV_START') + 'ADV_START\n'.length, out.indexOf('ADV_END'))
+      .trim();
+    return { rc, violationCount, violations, advisory };
+  }
+
+  // Build the native-memory dir for a repo at `cwd` under a fake `home`.
+  function memoryDir(cwd: string, home: string): string {
+    const slug = cwd.replace(/\//g, '-');
+    return path.join(home, '.claude', 'projects', slug, 'memory');
+  }
+
+  it('emits an advisory line when the entry-count threshold is crossed', () => {
+    const mem = memoryDir(rootDir, homeDir);
+    fs.mkdirSync(mem, { recursive: true });
+    // 30 entries (> 25) and never reviewed.
+    for (let i = 0; i < 30; i++) {
+      fs.writeFileSync(path.join(mem, `entry-${i}.md`), '', 'utf8');
+    }
+
+    const res = runCheck15(rootDir, homeDir);
+    expect(res.advisory).toMatch(
+      /^- \(memory\) 30 entries \/ never reviewed — run: paradigm memory review$/,
+    );
+    // Advisory-only: never blocks.
+    expect(res.rc).toBe(0);
+    expect(res.violationCount).toBe('0');
+    expect(res.violations).toBe('');
+  });
+
+  it('emits an advisory when MEMORY.md exceeds the byte-size threshold', () => {
+    const mem = memoryDir(rootDir, homeDir);
+    fs.mkdirSync(mem, { recursive: true });
+    // Few entries, but a large MEMORY.md (> 32768 bytes).
+    for (let i = 0; i < 5; i++) {
+      fs.writeFileSync(path.join(mem, `e-${i}.md`), '', 'utf8');
+    }
+    fs.writeFileSync(path.join(mem, 'MEMORY.md'), 'x'.repeat(40000), 'utf8');
+
+    const res = runCheck15(rootDir, homeDir);
+    expect(res.advisory).toContain('(memory) 5 entries');
+    expect(res.advisory).toContain('run: paradigm memory review');
+    expect(res.rc).toBe(0);
+    expect(res.violationCount).toBe('0');
+  });
+
+  it('emits an advisory when the review stamp is older than the day threshold', () => {
+    const mem = memoryDir(rootDir, homeDir);
+    fs.mkdirSync(mem, { recursive: true });
+    for (let i = 0; i < 3; i++) {
+      fs.writeFileSync(path.join(mem, `e-${i}.md`), '', 'utf8');
+    }
+    // Stamp exists but is ~60 days old.
+    const stamp = path.join(rootDir, '.paradigm', '.memory-last-review');
+    fs.writeFileSync(stamp, new Date().toISOString(), 'utf8');
+    const old = new Date(Date.now() - 60 * 86400 * 1000);
+    fs.utimesSync(stamp, old, old);
+
+    const res = runCheck15(rootDir, homeDir);
+    expect(res.advisory).toMatch(/\(memory\) 3 entries \/ \d+d since review/);
+    expect(res.rc).toBe(0);
+    expect(res.violationCount).toBe('0');
+  });
+
+  it('emits NOTHING (fail-open) and exits 0 when the memory dir is missing', () => {
+    // No memory dir created at all under homeDir.
+    const res = runCheck15(rootDir, homeDir);
+    expect(res.advisory).toBe('');
+    expect(res.rc).toBe(0);
+    expect(res.violationCount).toBe('0');
+  });
+
+  it('emits NOTHING when HOME is empty (fail-open)', () => {
+    const mem = memoryDir(rootDir, homeDir);
+    fs.mkdirSync(mem, { recursive: true });
+    for (let i = 0; i < 30; i++) {
+      fs.writeFileSync(path.join(mem, `entry-${i}.md`), '', 'utf8');
+    }
+    const res = runCheck15(rootDir, '');
+    expect(res.advisory).toBe('');
+    expect(res.rc).toBe(0);
+    expect(res.violationCount).toBe('0');
+  });
+
+  it('emits NOTHING on the common path (below all thresholds)', () => {
+    const mem = memoryDir(rootDir, homeDir);
+    fs.mkdirSync(mem, { recursive: true });
+    // 10 entries (<= 15) and never reviewed → quiet.
+    for (let i = 0; i < 10; i++) {
+      fs.writeFileSync(path.join(mem, `e-${i}.md`), '', 'utf8');
+    }
+    const res = runCheck15(rootDir, homeDir);
+    expect(res.advisory).toBe('');
+    expect(res.rc).toBe(0);
+    expect(res.violationCount).toBe('0');
+  });
+
+  it('never adds to the blocking/violation path even when nudging', () => {
+    const mem = memoryDir(rootDir, homeDir);
+    fs.mkdirSync(mem, { recursive: true });
+    for (let i = 0; i < 40; i++) {
+      fs.writeFileSync(path.join(mem, `entry-${i}.md`), '', 'utf8');
+    }
+    const res = runCheck15(rootDir, homeDir);
+    // Nudge present…
+    expect(res.advisory).toContain('(memory)');
+    // …but the block never touched VIOLATIONS / VIOLATION_COUNT / exit code.
+    expect(res.violations).toBe('');
+    expect(res.violationCount).toBe('0');
+    expect(res.rc).toBe(0);
+  });
+
+  it('the shared library contains the Check 15 block and never writes VIOLATIONS from it', () => {
+    const src = fs.readFileSync(COMMON_SH, 'utf8');
+    expect(src).toContain('# --- Check 15:');
+    expect(src).toContain('# --- END Check 15 ---');
+    // Structural guard: the Check 15 region must not mutate the blocking path.
+    const block = extractCheck15();
+    expect(block).not.toContain('VIOLATIONS=');
+    expect(block).not.toContain('VIOLATION_COUNT=');
   });
 });
 

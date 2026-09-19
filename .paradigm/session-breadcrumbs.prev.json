@@ -1,7 +1,7 @@
 {
   "sessionId": "smthyyvcx",
   "startTime": 1788224956737,
-  "lastActivity": 1788374585820,
+  "lastActivity": 1788469491416,
   "breadcrumbs": [
     {
       "timestamp": 1788224998881,
@@ -122,6 +122,18 @@
       "action": "tool-call",
       "tool": "paradigm_task_done",
       "summary": "Completed task T-2026-09-01-005"
+    },
+    {
+      "timestamp": 1788469491041,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: Framework hygiene + Headroom adoption + install fix (7.8.2→7"
+    },
+    {
+      "timestamp": 1788833492602,
+      "action": "tool-call",
+      "tool": "paradigm_session_checkpoint",
+      "summary": "Checkpoint: phase=complete, Shipped 7.8.2→7.8.6, all published to npm + merged to main +"
     }
   ],
   "symbolsModified": [

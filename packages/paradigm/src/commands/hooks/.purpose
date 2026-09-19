@@ -61,6 +61,22 @@ components:
       - remediation
       - soft-block
       - v6.1
+  check-15-memory-hygiene-nudge:
+    description: |
+      Memory Steward A3 (TD-2026-09-19-110) — Stop hook Check 15. Advisory-only
+      cheap heuristic that nudges `paradigm memory review` when native Claude
+      Code memory (outside the repo at $HOME/.claude/projects/<slug>/memory/)
+      looks due. Metadata only (entry count > 25, MEMORY.md bytes > 32768, days
+      since .paradigm/.memory-last-review > 30, or never-reviewed + entries > 15)
+      — NO LLM, NO scan, NO content reads. Appends at most one line to ADVISORY;
+      NEVER touches VIOLATIONS. Fail-open on missing HOME/dir/stat: emits nothing.
+    type: utility
+    file: scripts/paradigm-common.sh
+    tags:
+      - hooks
+      - memory-steward
+      - advisory
+      - loid
 
 aspects:
   ~stop-hook-8-compliance-checks:

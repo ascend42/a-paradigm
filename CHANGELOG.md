@@ -5,6 +5,19 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.9.0] — 2026-09-19
+
+The **Memory Steward** — Paradigm's native answer to the `MEMORY.md` junk drawer. Native Claude Code memory (`~/.claude/projects/<slug>/memory/`) accumulates stale statuses, tips, and rules with no typing, decay, or dedup — the "Obsidian second-brain" failure mode, inside Claude's own head. The Steward treats it as a curatable artifact, not a store: it scores every entry and surfaces what to prune/route/merge for **human decision — never auto-deleting** (Phase A; TD-2026-09-19-110, L-2026-09-19-ascend-074539-001).
+
+### Added
+- **`paradigm memory review` (`#memory-cli`, `#memory-scan`)** — scans native memory and scores each entry by age + type-decay + **graph-validity**: an entry referencing a symbol or file that no longer exists in the symbol graph is *provably* stale. This is the differentiator native memory can't do — staleness you can prove, not guess. Clusters near-duplicates and prints a batched digest with stable ids + apply commands. Supports `--json` and `--interactive`.
+- **Apply-by-id actions** — `prune` (path-safe archive), `route --to habits|decisions|task|lore`, `merge` (near-dups), `pin` (protect durable knowledge from decay). Prune is gated to status-type entries; durable guidance (tips/preferences/references) routes for a reference-update instead of being deleted.
+- **Advisory Stop-hook nudge (Check 15)** — a cheap, metadata-only heuristic (entry count / `MEMORY.md` size / days-since-review) appends one advisory line when review is due. Fail-open, never blocks, zero added tokens on the common path (the expensive scan runs only on explicit `paradigm memory review`).
+- Findings surface as `severity: advise` remediations (claimant `memory`), **idempotent** (path-derived ids, dedup by target) with a ~14-day self-clearing `expires_at` so ignored advice never nags. Owned by Loid (past-tense knowledge curation); no new agent, per TD-2026-06-14-467.
+
+### Fixed
+- **`@a-company/premise-core` did not re-export `CodeAnchor` / `AspectRelation` / `AspectSeverity` / `AspectCategory`** — the types were defined in `types.ts` but missing from the package index, so a clean rebuild broke `paradigm-mcp` / `paradigm` consumers importing them (masked only by a stale `dist/`). Now re-exported from the index.
+
 ## [7.8.6] — 2026-09-04
 
 ### Fixed
