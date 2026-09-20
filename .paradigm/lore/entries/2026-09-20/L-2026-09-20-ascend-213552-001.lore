@@ -1,0 +1,46 @@
+id: L-2026-09-20-ascend-213552-001
+type: insight
+timestamp: '2026-09-20T21:35:52.323Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Memory Steward Phase B — dry-run on real curated data caught unsafe autonomous demotion
+summary: 'Built Phase B (B1 CLAUDE.md source redirect + B2 `paradigm memory sync`). The pivotal moment: dry-running the first sync build against a COPY of the real 18KB hand-curated MEMORY.md revealed it would demote the user''s active, load-bearing sections — including the section literally marked "⭐ ACTIVE ARC START HERE" and "Release & Versioning Conventions" — and net-ADD 3KB via an over-eager projection. Unit tests (on synthetic fixtures) were all green and missed this entirely. Founder chose to rework B2 to advisory + strict guards.'
+symbols_touched:
+  - '#memory-steward-sync'
+  - '#memory-cli'
+  - '#claude-adapter'
+tags:
+  - memory-steward
+  - phase-b
+  - loid
+  - dry-run
+  - dogfood
+  - learning
+body: |-
+  ## The learning (why this matters for the loop)
+  Synthetic-fixture unit tests passed while the tool would have archived the user's most important active content. **Dogfooding against a COPY of real, hand-curated data is what caught it** — a class of false-positive fixtures can't represent. Generalizable rule: for any tool that transforms user-authored artifacts, a dry-run against real data is a required gate BEFORE trusting the test suite. (Reinforces feedback_recheck_reviewer_findings + the Phase A dogfood that caught the glob/prose false-positives.)
+
+  ## What went wrong in the first B2 build
+  - Demotion used a "shipped + dated-old keyword" heuristic + graph-staleness. On a curated file, active sections cite many historical dates/dead symbols → flagged stale. It demoted `## Release & Versioning Conventions` and `### ⭐ ACTIVE ARC ... START HERE` (Warpline).
+  - The projection injected 20 items (net +3KB) on an already-lean file, including circular re-injection of this session's own decision.
+
+  ## The rework (founder decision, ratified as Phase B direction)
+  Autonomous whole-file rewrite is too blunt for hand-curated content. Applied Phase A's "surface, human decides" principle to the whole file:
+  - Demotion ONLY: leaf `###`+ entries, no children, provably graph-stale, AND no active marker (⭐/START HERE/ACTIVE/IN PROGRESS/live/current/next/TODO/WIP/⚠/date within 180d), protection inherits down the subtree. NEVER `#`/`##`. Dropped the shipped-dated heuristic entirely.
+  - Projection OFF by default (`--projection` opt-in), compact (≤8, one line each ≤80 chars, deduped against existing file content).
+  - Default sync = advisory REPORT (writes nothing); `--write` = backup-first → atomic temp+rename → verbatim prose → demote-not-delete → fail-open.
+
+  ## Verified outcome
+  Default sync on the real copy: Δ0 bytes, 0 demotions (active sections protected). `--projection`: +712B / 8 deduped items (was +3KB/20). Real ~/.claude never touched. 48 memory tests green.
+
+  ## State
+  Phase A (5ec2240a, 7.9.0) + Phase B (483c9ab3) committed on branch feat/memory-steward. NOT pushed/published (founder's manual step). Phase C = Suite "Memory" UI (visual accept/reject of demotions + projection preview) — deferred. Follow-up T-2026-09-19-001 (.cursor hooks sync). B1 redirect wording lives in packages/paradigm/src/core/ide-adapters/claude.ts.
+linked_lore:
+  - L-2026-09-19-ascend-074539-001
+confidence: 0.9
+git_context:
+  ref: 483c9ab30c81ceb1baa71b3c54feadc3afaff6d9
+  branch: feat/memory-steward
+  dirty: true
