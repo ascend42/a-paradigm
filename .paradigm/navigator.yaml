@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-09-19T08:32:33.770Z'
+generated: '2026-09-20T21:35:04.563Z'
 structure: {}
 key_files:
   config:
@@ -848,6 +848,7 @@ symbols:
   '#purpose-component-memory-steward-types': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/memory/.purpose
   '#purpose-component-memory-steward-score': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/memory/.purpose
   '#purpose-component-memory-steward-cluster': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/memory/.purpose
+  '#purpose-component-memory-steward-sync': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/memory/.purpose
   '#purpose-component-claude-provider': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/providers/.purpose
   '#purpose-component-claude-code-provider': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/providers/.purpose
   '#purpose-component-claude-code-teams-provider': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/providers/.purpose
@@ -1562,6 +1563,7 @@ symbolsByComponentType:
     - '#background-orchestrator'
     - '#memory-steward-score'
     - '#memory-steward-cluster'
+    - '#memory-steward-sync'
   detector:
     - '#window-detector'
     - '#session-file-watcher'

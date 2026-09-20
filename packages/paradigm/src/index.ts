@@ -497,6 +497,18 @@ memoryCmd
     await pinCommand(id, options);
   });
 
+memoryCmd
+  .command('sync')
+  .description('Advisory report on leaning MEMORY.md: dedup + strictly-guarded demote of stale leaf blocks (writes nothing without --write)')
+  .option('-p, --project <path>', 'Project root (defaults to cwd)')
+  .option('--projection', 'Opt in to a compact, deduped curated projection block (OFF by default)')
+  .option('--write', 'Back up + atomically write the lean MEMORY.md (default: advisory report only)')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { syncCommand } = await import('./commands/memory/index.js');
+    await syncCommand(options);
+  });
+
 memoryCmd.action(() => {
   memoryCmd.outputHelp();
 });

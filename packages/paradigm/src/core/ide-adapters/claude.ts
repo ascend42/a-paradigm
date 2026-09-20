@@ -150,6 +150,21 @@ export class ClaudeAdapter implements IDEAdapter {
     sections.push('**Auth requires portal.yaml** if your code has JWT, role checks, ownership checks, or protected endpoints.');
     sections.push('');
 
+    // Native memory hygiene (Memory Steward B1) — stop native-memory dumping at
+    // the source. Durable facts belong in typed Paradigm stores; native MEMORY.md
+    // is ephemeral scratch the Steward keeps lean.
+    sections.push('### Native Memory Hygiene');
+    sections.push('');
+    sections.push('Do NOT dump durable facts into native memory (`~/.claude/.../MEMORY.md`). Route them to the typed store that owns them:');
+    sections.push('');
+    sections.push('- **What happened** → lore via `paradigm_lore_record`');
+    sections.push('- **A rule / tip / preference** → the habits system');
+    sections.push('- **The "why" behind a choice** → `paradigm_decision_record`');
+    sections.push('- **Status / plans / next steps** → tasks');
+    sections.push('');
+    sections.push('Native memory is for **ephemeral session scratch only**. The Steward (`paradigm memory review` / `paradigm memory sync`) keeps MEMORY.md lean — dedup, demote stale entries, project durable knowledge back in.');
+    sections.push('');
+
     // On-Demand Guidance (resource pointers)
     sections.push('## On-Demand Guidance');
     sections.push('');

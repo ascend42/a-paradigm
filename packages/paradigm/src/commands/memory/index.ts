@@ -847,3 +847,136 @@ async function runInteractive(rootDir: string, digest: Digest): Promise<void> {
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
 }
+
+// ── sync command (Memory Steward B2) ────────────────────────
+
+interface SyncCliOptions extends CommonOptions {
+  write?: boolean;
+  /**
+   * Opt IN to the curated projection block. OFF by default (default sync only
+   * leans — dedup + demote — and never net-adds a projection).
+   *
+   * NOTE: named `--projection`, NOT `--project`, because `-p, --project <path>`
+   * is the established project-root option across every `paradigm memory`
+   * subcommand. See the report in the handoff for this collision.
+   */
+  projection?: boolean;
+}
+
+/**
+ * `paradigm memory sync` — keep the whole native MEMORY.md lean WITHOUT losing
+ * hand-written content. ADVISORY by default: it prints a human report (size, the
+ * demotable leaf entries with their prune/route hints, dedup candidates, the
+ * unified diff, and — only with `--projection` — a projection preview) and writes
+ * NOTHING. `--write` backs up MEMORY.md first, then writes atomically; any error
+ * leaves the original intact. Projection is OFF unless `--projection` is passed.
+ */
+export async function syncCommand(options: SyncCliOptions = {}): Promise<void> {
+  const root = resolveRoot(options);
+  const wantProjection = options.projection === true;
+
+  let result: import('../../core/memory/sync.js').SyncResult;
+  try {
+    const { computeSync } = await import('../../core/memory/sync.js');
+    result = await computeSync(root, { project: wantProjection });
+  } catch (err) {
+    error(`memory sync failed: ${(err as Error).message}`);
+    process.exitCode = 1;
+    return;
+  }
+
+  if (options.json) {
+    json({
+      root,
+      memoryFile: result.memoryFile,
+      existed: result.existed,
+      changed: result.changed,
+      bytesBefore: result.bytesBefore,
+      bytesAfter: result.bytesAfter,
+      linesBefore: result.linesBefore,
+      linesAfter: result.linesAfter,
+      demoted: result.demoted,
+      deduped: result.deduped,
+      projectionEnabled: wantProjection,
+      projectionItems: result.projectionItems,
+      wrote: false,
+    });
+    if (options.write && result.existed && result.changed) {
+      await applyWrite(result, /* jsonMode */ true);
+    }
+    return;
+  }
+
+  if (!result.existed) {
+    warn('No native MEMORY.md found for this project; nothing to sync.');
+    return;
+  }
+
+  header(`Memory Steward — sync ${options.write ? '(write)' : '(advisory report)'}`);
+  kv('MEMORY.md', result.memoryFile);
+  kv('bytes', `${result.bytesBefore} → ${result.bytesAfter} (projected)`);
+  kv('lines', `${result.linesBefore} → ${result.linesAfter} (projected)`);
+  kv('demotable leaf entries', String(result.demoted.length));
+  kv('dedup candidates', String(result.deduped.length));
+  if (wantProjection) {
+    kv('projection items', String(result.projectionItems.length));
+  } else {
+    dim('projection: OFF (pass --projection to include a curated block)');
+  }
+
+  if (!result.changed) {
+    out('');
+    success('MEMORY.md is already lean; no changes.');
+    return;
+  }
+
+  if (result.demoted.length > 0) {
+    header('Demotable leaf entries (→ Archive on --write, NEVER deleted)');
+    for (const d of result.demoted) {
+      out(`  ${d.heading}`);
+      dim(`    ${d.reason}`);
+      dim(`    → ${d.applyHint}`);
+    }
+  }
+  if (result.deduped.length > 0) {
+    header('Dedup candidates (exact-duplicate blocks; first kept)');
+    for (const d of result.deduped) out(`  ${d.heading}`);
+  }
+  if (wantProjection && result.projectionItems.length > 0) {
+    header('Projection preview (curated block; --write to inject)');
+    for (const it of result.projectionItems) {
+      out(`  [${it.kind}] ${it.title}`);
+    }
+  }
+
+  if (!options.write) {
+    const { unifiedDiff } = await import('../../core/memory/sync.js');
+    header('Diff (advisory — pass --write to apply)');
+    out(unifiedDiff(result.before, result.after));
+    out('');
+    dim('Nothing was written. Re-run with --write to back up + apply.');
+    return;
+  }
+
+  await applyWrite(result, /* jsonMode */ false);
+}
+
+async function applyWrite(
+  result: import('../../core/memory/sync.js').SyncResult,
+  jsonMode: boolean,
+): Promise<void> {
+  try {
+    const { writeSyncResult } = await import('../../core/memory/sync.js');
+    const { backupPath } = writeSyncResult(result);
+    if (jsonMode) {
+      json({ wrote: true, backupPath, bytesAfter: result.bytesAfter });
+      return;
+    }
+    out('');
+    success(`Backed up → ${path.basename(backupPath)}`);
+    success(`Wrote lean MEMORY.md (${result.bytesBefore} → ${result.bytesAfter} bytes).`);
+  } catch (err) {
+    error(`memory sync write failed (original left intact): ${(err as Error).message}`);
+    process.exitCode = 1;
+  }
+}

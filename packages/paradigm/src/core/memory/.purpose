@@ -27,3 +27,27 @@ components:
       - memory-steward
       - clustering
     path: cluster.ts
+  memory-steward-sync:
+    description: >-
+      B2 sync engine (advisory + strictly guarded, reworked 2026-09-20 after a dry-run against a real
+      hand-curated MEMORY.md false-flagged active sections). computeSync (read-only) leans the native
+      MEMORY.md and reports what WOULD change. DEMOTION is drastically narrowed: a block is demotable
+      ONLY if it is a LEAF at heading level ≥3 (never a # title or ## section, never a node with child
+      subsections) AND provably graph-stale (cites symbols, all dead vs the live graph) AND carries NO
+      active-signal marker (⭐, START HERE, ACTIVE, IN PROGRESS, live, current, next, TODO, WIP, ⚠, or
+      any date within 180d of now, case-insensitive) AND has no active-marked ancestor (protection
+      inherits down the subtree). The old shipped+dated-old heuristic is REMOVED. PROJECTION is
+      OFF by default (opts.project) — a plain sync only leans; when opted in the managed block
+      (<!-- PARADIGM:BEGIN/END -->) is COMPACT (one terse `- [kind] title` line each, ≤80 chars),
+      CAPPED at 8 items, and DEDUPED against the current file (skip any item whose id/title already
+      appears — kills the circular re-injection case); 0 survivors → no block at all. Dedup of
+      exact-duplicate leaf blocks (keep first) is unchanged. writeSyncResult is the ONLY mutator:
+      backup-to-.bak FIRST, then atomic temp+rename, fail-open on any error (original untouched).
+      Deterministic (no timestamps in the managed block) → two syncs over unchanged inputs are
+      byte-identical. Includes a dependency-free unified-ish line diff for the advisory preview.
+    type: engine
+    tags:
+      - memory-steward
+      - sync
+      - native-first
+    path: sync.ts

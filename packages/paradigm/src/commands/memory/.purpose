@@ -23,9 +23,21 @@ description: |
 
   All native-memory writes are path-safe (target must be inside the resolved
   memory dir) and fail-open (never crash). Output via cli-output.ts helpers.
+
+  B2 adds the `sync` subcommand (advisory + strictly guarded, reworked
+  2026-09-20): ADVISORY by default — prints a human report (size before/(projected)
+  after, demotable leaf entries with prune/route hints, dedup candidates, unified
+  diff, and — only with --projection — a projection preview) and writes NOTHING.
+  Demotion is drastically narrowed (leaf ###+ only, provably graph-stale, no
+  active-signal marker / recent date, no active-marked ancestor). Projection is OFF
+  by default; opt in with --projection (compact, capped-at-8, deduped block).
+  NOTE: the projection flag is `--projection`, NOT `--project`, because
+  `-p, --project <path>` is the established project-root option on every memory
+  subcommand. `--write` backs up then writes atomically. `--json` reports what
+  would change (projectionEnabled + projectionItems).
 components:
   memory-cli:
-    description: The `paradigm memory` command group — review (batched digest with deterministic ids + idempotent advisory remediations + review stamp) and apply-by-id subcommands prune / route / merge / pin. Path-safe, fail-open. Down-ranks pinned entries (.paradigm/memory-pins.json) and never surfaces the MEMORY.md index.
+    description: The `paradigm memory` command group — review (batched digest with deterministic ids + idempotent advisory remediations + review stamp), apply-by-id subcommands prune / route / merge / pin, and sync (advisory report by default over a strictly-guarded lean rewrite; --projection opts into a compact/capped/deduped curated block; --write backs up + writes atomically; --json report). Path-safe, fail-open. Down-ranks pinned entries (.paradigm/memory-pins.json) and never surfaces the MEMORY.md index.
     type: command
     tags:
       - memory-steward

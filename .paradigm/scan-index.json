@@ -2,7 +2,7 @@
   "$meta": {
     "version": "1.0.0",
     "project": "a-paradigm",
-    "generatedAt": "2026-09-19T08:32:33.759Z",
+    "generatedAt": "2026-09-20T21:35:04.555Z",
     "paradigmVersion": "0.1.0",
     "sources": {
       "purposeFiles": 95,
@@ -13,7 +13,7 @@
       "command": 108,
       "config": 10,
       "manager": 6,
-      "engine": 15,
+      "engine": 16,
       "detector": 11,
       "provider": 7,
       "router": 3,
@@ -9534,7 +9534,7 @@
       "symbol": "#memory-cli",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/memory/.purpose",
-      "description": "The `paradigm memory` command group — review (batched digest with deterministic ids + idempotent advisory remediations + review stamp) and apply-by-id subcommands prune / route / merge / pin. Path-safe, fail-open. Down-ranks pinned entries (.paradigm/memory-pins.json) and never surfaces the MEMORY.md index.",
+      "description": "The `paradigm memory` command group — review (batched digest with deterministic ids + idempotent advisory remediations + review stamp), apply-by-id subcommands prune / route / merge / pin, and sync (advisory report by default over a strictly-guarded lean rewrite; --projection opts into a compact/capped/deduped curated block; --write backs up + writes atomically; --json report). Path-safe, fail-open. Down-ranks pinned entries (.paradigm/memory-pins.json) and never surfaces the MEMORY.md index.",
       "visualTags": [],
       "related": [],
       "componentType": "command"
@@ -9915,7 +9915,7 @@
       "symbol": "#claude-adapter",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/ide-adapters/.purpose",
-      "description": "Generate slim CLAUDE.md (~150 lines) with core identity, session lifecycle, on-demand guidance pointers to paradigm://guidance/{topic} MCP resources, and agent contributions section from high-priority .agent context",
+      "description": "Generate slim CLAUDE.md (~150 lines) with core identity, session lifecycle, on-demand guidance pointers to paradigm://guidance/{topic} MCP resources, a Native Memory Hygiene redirect (Memory Steward B1 — route durable facts to lore/habits/decisions/tasks, keep native MEMORY.md ephemeral), and agent contributions section from high-priority .agent context",
       "visualTags": [],
       "related": [
         "~ide-adapter-pattern"
@@ -10056,6 +10056,17 @@
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/memory/.purpose",
       "description": "clusterEntries detects near-duplicate memory bodies via normalized-token Jaccard (threshold ~0.6) + union-find; assigns deterministic clusterIds to clustered entries (singletons omitted). Pure, no LLM.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "engine"
+    },
+    "memory-steward-sync": {
+      "id": "memory-steward-sync",
+      "name": "Memory Steward Sync",
+      "symbol": "#memory-steward-sync",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/memory/.purpose",
+      "description": "B2 sync engine (advisory + strictly guarded, reworked 2026-09-20 after a dry-run against a real hand-curated MEMORY.md false-flagged active sections). computeSync (read-only) leans the native MEMORY.md and reports what WOULD change. DEMOTION is drastically narrowed: a block is demotable ONLY if it is a LEAF at heading level ≥3 (never a # title or ## section, never a node with child subsections) AND provably graph-stale (cites symbols, all dead vs the live graph) AND carries NO active-signal marker (⭐, START HERE, ACTIVE, IN PROGRESS, live, current, next, TODO, WIP, ⚠, or any date within 180d of now, case-insensitive) AND has no active-marked ancestor (protection inherits down the subtree). The old shipped+dated-old heuristic is REMOVED. PROJECTION is OFF by default (opts.project) — a plain sync only leans; when opted in the managed block (<!-- PARADIGM:BEGIN/END -->) is COMPACT (one terse `- [kind] title` line each, ≤80 chars), CAPPED at 8 items, and DEDUPED against the current file (skip any item whose id/title already appears — kills the circular re-injection case); 0 survivors → no block at all. Dedup of exact-duplicate leaf blocks (keep first) is unchanged. writeSyncResult is the ONLY mutator: backup-to-.bak FIRST, then atomic temp+rename, fail-open on any error (original untouched). Deterministic (no timestamps in the managed block) → two syncs over unchanged inputs are byte-identical. Includes a dependency-free unified-ish line diff for the advisory preview.",
       "visualTags": [],
       "related": [],
       "componentType": "engine"
@@ -20860,6 +20871,10 @@
     "#memory-steward-cluster": {
       "category": "components",
       "id": "memory-steward-cluster"
+    },
+    "#memory-steward-sync": {
+      "category": "components",
+      "id": "memory-steward-sync"
     },
     "#claude-provider": {
       "category": "components",
