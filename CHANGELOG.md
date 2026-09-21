@@ -23,6 +23,7 @@ The **Memory Steward** — Paradigm's native answer to the `MEMORY.md` junk draw
 
 ### Fixed
 - **`@a-company/premise-core` did not re-export `CodeAnchor` / `AspectRelation` / `AspectSeverity` / `AspectCategory`** — the types were defined in `types.ts` but missing from the package index, so a clean rebuild broke `paradigm-mcp` / `paradigm` consumers importing them (masked only by a stale `dist/`). Now re-exported from the index.
+- **Removed a mis-scoped "Pull Requests / `no-review` label" section from this repo's `CLAUDE.md`** — added in `bc133d17` (v7.5.0) from a relayed note about another project's CI reviewer; this repo has no such reviewer or label, and the note caused an agent to misreport PR #46's merge gate. Project-specific PR rules belong in that project's `.paradigm/config.yaml` `conventions:` list (rendered into CLAUDE.md / AGENTS.md / Cursor rules by `paradigm sync`), not in the framework repo's instructions.
 
 ## [7.8.6] — 2026-09-04
 
