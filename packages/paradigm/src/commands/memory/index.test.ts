@@ -21,6 +21,10 @@ import {
   routeCommand,
   mergeCommand,
   pinCommand,
+  applyPrune,
+  applyRoute,
+  applyMerge,
+  applyPin,
   archiveEntryFile,
   isInsideMemoryDir,
   loadPins,
@@ -329,6 +333,105 @@ describe('pinCommand', () => {
 
     const after = await buildDigest(tmpRoot);
     expect(after.items.find((i) => i.id === id)).toBeUndefined();
+  });
+});
+
+// ── return-shaped appliers (C2a) ───────────────────────────
+// These are the pure cores the Platform write router calls. They must report
+// success/failure ONLY through their return value — no output, no exit code —
+// and hold all path-safety / archive-not-delete / guards inside.
+
+describe('applyPrune', () => {
+  it('returns { ok:true, archived, file } and archives the entry on success', async () => {
+    const file = writeMemoryFile('stale.md', fm('Stale', 'project', 'only #ghost-symbol'));
+    const id = stableId(file);
+    const result = await applyPrune(tmpRoot, id);
+    expect(result.ok).toBe(true);
+    expect(result.archived).toBe('stale.md');
+    expect(result.file).toBe(file);
+    expect(fs.existsSync(file)).toBe(false);
+    expect(fs.existsSync(path.join(resolveMemoryDir(tmpRoot), '.archived', 'stale.md'))).toBe(true);
+  });
+
+  it('returns { ok:false, error } on a bad id and does NOT set process.exitCode', async () => {
+    const prevExit = process.exitCode;
+    const result = await applyPrune(tmpRoot, 'mem-deadbeef');
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/No memory entry matches/);
+    expect(process.exitCode).toBe(prevExit); // applier never touches exit code
+  });
+});
+
+describe('applyRoute', () => {
+  it('returns { ok:true, destination, archivedSource, file } routing to lore', async () => {
+    const file = writeMemoryFile('ref.md', fm('Durable', 'reference', 'stable knowledge here'));
+    const result = await applyRoute(tmpRoot, stableId(file), 'lore');
+    expect(result.ok).toBe(true);
+    expect(typeof result.destination).toBe('string');
+    expect(result.archivedSource).toBe(true);
+    expect(result.file).toBe(file);
+    expect(fs.existsSync(file)).toBe(false);
+  });
+
+  it('returns { ok:false, error } on an invalid target and leaves the source intact', async () => {
+    const file = writeMemoryFile('x.md', fm('X', 'feedback', 'body'));
+    const result = await applyRoute(tmpRoot, stableId(file), 'nowhere' as never);
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/--to must be one of/);
+    expect(fs.existsSync(file)).toBe(true);
+  });
+
+  it('returns { ok:false } on a bad id', async () => {
+    const result = await applyRoute(tmpRoot, 'mem-deadbeef', 'lore');
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/No memory entry matches/);
+  });
+});
+
+describe('applyMerge', () => {
+  it('returns { ok:true, primary, merged, archived[] } for same-cluster dups', async () => {
+    const a = writeMemoryFile('a.md', fm('A', 'feedback', 'always update the changelog and commit after each round'));
+    const b = writeMemoryFile('b.md', fm('B', 'feedback', 'always update the changelog and commit after every round'));
+    const result = await applyMerge(tmpRoot, [stableId(a), stableId(b)]);
+    expect(result.ok).toBe(true);
+    expect(result.primary).toBe(stableId(a));
+    expect(result.merged).toEqual([stableId(b)]);
+    expect(result.archived).toEqual([stableId(b)]);
+    expect(fs.existsSync(a)).toBe(true);
+    expect(fs.existsSync(b)).toBe(false);
+  });
+
+  it('returns { ok:false } when fewer than two ids are given', async () => {
+    const result = await applyMerge(tmpRoot, ['mem-only-one']);
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/at least two/);
+  });
+
+  it('returns { ok:false } for a cross-cluster merge (guard held inside)', async () => {
+    const a = writeMemoryFile('a.md', fm('A', 'feedback', 'shared alpha beta gamma delta epsilon zeta'));
+    const b = writeMemoryFile('b.md', fm('B', 'feedback', 'completely different words about oranges bananas'));
+    const result = await applyMerge(tmpRoot, [stableId(a), stableId(b)]);
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/not all in the same/);
+    expect(fs.existsSync(a)).toBe(true);
+    expect(fs.existsSync(b)).toBe(true);
+  });
+});
+
+describe('applyPin', () => {
+  it('returns { ok:true, pinned, file } and records the pin', async () => {
+    const file = writeMemoryFile('pref.md', fm('Pref', 'user', 'I like terse output'));
+    const result = await applyPin(tmpRoot, stableId(file));
+    expect(result.ok).toBe(true);
+    expect(result.pinned).toBe('pref.md');
+    expect(result.file).toBe(file);
+    expect(loadPins(tmpRoot).has(path.resolve(file))).toBe(true);
+  });
+
+  it('returns { ok:false } on a bad id', async () => {
+    const result = await applyPin(tmpRoot, 'mem-deadbeef');
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/No memory entry matches/);
   });
 });
 

@@ -2,10 +2,17 @@ version: 2.0.0
 
 gates:
   local-only:
-    description: Server binds to localhost only — no external access
+    description: >-
+      Local-only access. Enforced two ways — the socket binds loopback by default,
+      AND the #local-guard request middleware rejects 403 any state-changing
+      (POST/PUT/PATCH/DELETE) /api request whose Host is non-loopback or whose
+      (present) Origin is non-loopback (CSRF + DNS-rebinding guard). CORS reflects
+      only loopback origins (never wildcard). GET/HEAD reads are not gated.
     type: network
-    location: express-bind
-    check: req.hostname === 'localhost'
+    location: platform-server/local-guard.ts
+    check: >-
+      loopback Host ∈ {localhost,127.0.0.1,::1} AND (Origin absent OR loopback)
+      for POST/PUT/PATCH/DELETE on /api/*
     prizes: []
 
   authenticated-session:
@@ -434,6 +441,39 @@ routes:
   # Inbound two-way GitHub sync — pulls remote state, applies through the same
   # enforced writers. No client-supplied remote state.
   POST /api/tasks/sync:
+    - ^local-only
+    - ^write-capable
+
+  # ── Memory (Memory Steward ledger — READ-ONLY, Phase C1) ────────────
+  # Thin readers over the pure Memory Steward engines (buildDigest / computeSync).
+  # /review is the advisory hygiene digest; /sync is the lean-rewrite PREVIEW
+  # (computeSync is pure — the mutator writeSyncResult is NOT reachable here).
+  # C1 owns no write path; apply/write verbs arrive in C2/C3.
+  GET /api/memory/review:
+    - ^local-only
+    - ^read-only
+  GET /api/memory/sync:
+    - ^local-only
+    - ^read-only
+
+  # Memory WRITE verbs (Phase C2/C3) — each PROXIES the same return-shaped applier
+  # the CLI wrappers call (applyPrune/Route/Merge/Pin), so all path-safety
+  # (isInsideMemoryDir), archive-not-delete, and fail-open discipline live in ONE
+  # place. /sync/write is the gated lean-rewrite apply (backup-then-atomic on
+  # MEMORY.md). write-capable, local-only.
+  POST /api/memory/:id/prune:
+    - ^local-only
+    - ^write-capable
+  POST /api/memory/:id/route:
+    - ^local-only
+    - ^write-capable
+  POST /api/memory/merge:
+    - ^local-only
+    - ^write-capable
+  POST /api/memory/:id/pin:
+    - ^local-only
+    - ^write-capable
+  POST /api/memory/sync/write:
     - ^local-only
     - ^write-capable
 

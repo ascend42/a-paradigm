@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-09-20T21:35:04.563Z'
+generated: '2026-09-21T00:02:18.254Z'
 structure: {}
 key_files:
   config:
@@ -772,6 +772,7 @@ symbols:
   '#purpose-component-AgentPresenceManager': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/platform-server/ws/.purpose
   '#purpose-component-UserStateTracker': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/platform-server/ws/.purpose
   '#purpose-component-AgentCommandRoute': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/platform-server/.purpose
+  '#purpose-component-local-guard': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/platform-server/.purpose
   '#purpose-component-spill': /Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/src/.purpose
   '#purpose-component-content': /Users/ascend/Documents/GitHub/a-paradigm/packages/university/src/content/.purpose
   '#purpose-component-git': /Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/src/git/.purpose
@@ -872,6 +873,11 @@ symbols:
   '#purpose-component-atrium-graph-view': /Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/Sources/Conductor/UI/Views/.purpose
   '#purpose-component-mermaid-web-view': /Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/Sources/Conductor/UI/Views/.purpose
   '#purpose-component-DocsSection': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/docs/.purpose
+  '#purpose-component-MemorySection': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/memory/.purpose
+  '#purpose-component-LedgerGroup': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/memory/.purpose
+  '#purpose-component-LedgerRow': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/memory/.purpose
+  '#purpose-component-SyncPreviewPanel': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/memory/.purpose
+  '#purpose-component-memoryStore': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/memory/.purpose
   '#purpose-component-TasksSection': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/tasks/.purpose
   '#purpose-component-TaskCard': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/tasks/.purpose
   '#purpose-component-CalibrationBlock': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/tasks/.purpose
@@ -1402,6 +1408,7 @@ symbols:
   $purpose-ref-flow-agent-learning-loop: /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose
   '!purpose-ref-signal-agent-state-recorded': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose
   $purpose-ref-flow-roster-setup: /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose
+  ^purpose-ref-gate-local-only: /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/platform-server/.purpose
   '!purpose-ref-signal-compliance-violation': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/hooks/.purpose
   '!purpose-ref-signal-hook-installed': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/hooks/.purpose
   '!purpose-ref-signal-team-funnel': /Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/hooks/.purpose
@@ -1706,6 +1713,7 @@ symbolsByComponentType:
     - '#atrium-graph-view'
     - '#mermaid-web-view'
     - '#DocsSection'
+    - '#MemorySection'
     - '#TasksSection'
     - '#BoardView'
     - '#InboxView'
@@ -2145,6 +2153,7 @@ symbolsByComponentType:
     - '#plsat-migration-tests'
   state:
     - '#ConversationStore'
+    - '#memoryStore'
     - '#tasksStore'
   integration:
     - '#SymphonyEventBridge'
@@ -2169,8 +2178,13 @@ symbolsByComponentType:
     - '#NotebookCommands'
     - '#UniversityCommands'
     - '#util-namespace'
+  middleware:
+    - '#local-guard'
   component:
     - '#spill'
+    - '#LedgerGroup'
+    - '#LedgerRow'
+    - '#SyncPreviewPanel'
     - '#TaskCard'
     - '#CalibrationBlock'
     - '#TaskActions'

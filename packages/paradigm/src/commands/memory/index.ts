@@ -472,32 +472,82 @@ async function resolveEntry(rootDir: string, id: string): Promise<ParsedMemoryEn
 
 // ── apply: prune ────────────────────────────────────────────
 
-export async function pruneCommand(id: string, options: CommonOptions = {}): Promise<void> {
-  const root = resolveRoot(options);
+/**
+ * Return-shaped applier result contracts. These are the callable-from-anywhere
+ * cores (CLI wrapper + Platform write router both call them). An applier does NO
+ * console output and NEVER sets process.exitCode — it holds ALL path-safety
+ * (isInsideMemoryDir), archive-not-delete, and fail-open behavior inside, and
+ * reports success/failure purely through its return value.
+ */
+export interface ApplyPruneResult {
+  ok: boolean;
+  archived?: string;
+  file?: string;
+  error?: string;
+}
+
+export interface ApplyRouteResult {
+  ok: boolean;
+  destination?: string;
+  archivedSource?: boolean;
+  /** The source memory file that was routed (for the CLI's success/JSON echo). */
+  file?: string;
+  error?: string;
+}
+
+export interface ApplyMergeResult {
+  ok: boolean;
+  primary?: string;
+  /** Absolute path of the primary (for the CLI's success message). */
+  primaryFile?: string;
+  merged?: string[];
+  archived?: string[];
+  error?: string;
+}
+
+export interface ApplyPinResult {
+  ok: boolean;
+  pinned?: string;
+  /** The pinned memory file (for the CLI's JSON echo). */
+  file?: string;
+  error?: string;
+}
+
+/**
+ * Prune (archive-not-delete) a native-memory entry by id. Path-safe: refuses any
+ * file outside the resolved memory dir. Pure return shape — no output, no exit
+ * code.
+ */
+export async function applyPrune(root: string, id: string): Promise<ApplyPruneResult> {
   const memoryDir = resolveMemoryDir(root);
   const entry = await resolveEntry(root, id);
   if (!entry) {
-    error(`No memory entry matches id "${id}". Run \`paradigm memory review\` for current ids.`);
-    process.exitCode = 1;
-    return;
+    return { ok: false, error: `No memory entry matches id "${id}". Run \`paradigm memory review\` for current ids.` };
   }
   if (!isInsideMemoryDir(entry.file, memoryDir)) {
-    error(`Refusing to prune: ${entry.file} is outside the resolved memory dir.`);
-    process.exitCode = 1;
-    return;
+    return { ok: false, error: `Refusing to prune: ${entry.file} is outside the resolved memory dir.` };
   }
   const ok = archiveEntryFile(entry.file, memoryDir);
   if (!ok) {
-    error(`Could not archive ${entry.file} (already gone or unwritable).`);
+    return { ok: false, error: `Could not archive ${entry.file} (already gone or unwritable).` };
+  }
+  clearRemediationForEntry(root, entry.file);
+  return { ok: true, archived: path.basename(entry.file), file: entry.file };
+}
+
+export async function pruneCommand(id: string, options: CommonOptions = {}): Promise<void> {
+  const root = resolveRoot(options);
+  const result = await applyPrune(root, id);
+  if (!result.ok) {
+    error(result.error!);
     process.exitCode = 1;
     return;
   }
-  clearRemediationForEntry(root, entry.file);
   if (options.json) {
-    json({ id, action: 'prune', archived: true, file: entry.file });
+    json({ id, action: 'prune', archived: true, file: result.file });
     return;
   }
-  success(`Pruned (archived) ${path.basename(entry.file)} → ${ARCHIVED_DIRNAME}/`);
+  success(`Pruned (archived) ${path.basename(result.file!)} → ${ARCHIVED_DIRNAME}/`);
 }
 
 // ── apply: route ────────────────────────────────────────────
@@ -506,32 +556,31 @@ interface RouteOptions extends CommonOptions {
   to?: string;
 }
 
-export async function routeCommand(id: string, options: RouteOptions = {}): Promise<void> {
-  const root = resolveRoot(options);
+/**
+ * Route a native-memory entry into a typed home (lore/task/habits/decisions),
+ * then archive the source. Validates the target, enforces path-safety, and
+ * catches any writer throw — all reported through the return shape. No output,
+ * no exit code.
+ */
+export async function applyRoute(root: string, id: string, to: RouteTarget): Promise<ApplyRouteResult> {
   const memoryDir = resolveMemoryDir(root);
-  const to = (options.to || '').toLowerCase() as RouteTarget;
+  const target = (String(to || '')).toLowerCase() as RouteTarget;
 
-  if (!ROUTE_TARGETS.includes(to)) {
-    error(`--to must be one of: ${ROUTE_TARGETS.join(', ')}`);
-    process.exitCode = 1;
-    return;
+  if (!ROUTE_TARGETS.includes(target)) {
+    return { ok: false, error: `--to must be one of: ${ROUTE_TARGETS.join(', ')}` };
   }
 
   const entry = await resolveEntry(root, id);
   if (!entry) {
-    error(`No memory entry matches id "${id}". Run \`paradigm memory review\` for current ids.`);
-    process.exitCode = 1;
-    return;
+    return { ok: false, error: `No memory entry matches id "${id}". Run \`paradigm memory review\` for current ids.` };
   }
   if (!isInsideMemoryDir(entry.file, memoryDir)) {
-    error(`Refusing to route: ${entry.file} is outside the resolved memory dir.`);
-    process.exitCode = 1;
-    return;
+    return { ok: false, error: `Refusing to route: ${entry.file} is outside the resolved memory dir.` };
   }
 
   let destination: string;
   try {
-    switch (to) {
+    switch (target) {
       case 'lore':
         destination = await routeToLore(root, entry);
         break;
@@ -545,31 +594,40 @@ export async function routeCommand(id: string, options: RouteOptions = {}): Prom
         destination = routeToDecisionStub(root, entry);
         break;
       default:
-        error(`Unsupported route target: ${to}`);
-        process.exitCode = 1;
-        return;
+        return { ok: false, error: `Unsupported route target: ${target}` };
     }
   } catch (err) {
-    error(`Route to ${to} failed: ${(err as Error).message}`);
-    process.exitCode = 1;
-    return;
+    return { ok: false, error: `Route to ${target} failed: ${(err as Error).message}` };
   }
 
   const archived = archiveEntryFile(entry.file, memoryDir);
   clearRemediationForEntry(root, entry.file);
 
-  if (options.json) {
-    json({ id, action: `route:${to}`, destination, archivedSource: archived, file: entry.file });
+  return { ok: true, destination, archivedSource: archived, file: entry.file };
+}
+
+export async function routeCommand(id: string, options: RouteOptions = {}): Promise<void> {
+  const root = resolveRoot(options);
+  const to = (options.to || '').toLowerCase() as RouteTarget;
+  const result = await applyRoute(root, id, to);
+  if (!result.ok) {
+    error(result.error!);
+    process.exitCode = 1;
     return;
   }
-  success(`Routed ${path.basename(entry.file)} → ${to}: ${destination}`);
+
+  if (options.json) {
+    json({ id, action: `route:${to}`, destination: result.destination, archivedSource: result.archivedSource, file: result.file });
+    return;
+  }
+  success(`Routed ${path.basename(result.file!)} → ${to}: ${result.destination}`);
   if (to === 'decisions') {
     warn('Decision written as a STUB (status: proposed). Complete the decision/rationale fields before use.');
   }
   if (to === 'habits') {
     dim('Imported as a DISABLED .habit stub — enable it after a human review.');
   }
-  if (archived) dim(`Source archived → ${ARCHIVED_DIRNAME}/`);
+  if (result.archivedSource) dim(`Source archived → ${ARCHIVED_DIRNAME}/`);
 }
 
 function firstLine(body: string, max = 120): string {
@@ -690,14 +748,17 @@ export function routeToDecisionStub(rootDir: string, entry: ParsedMemoryEntry): 
 
 // ── apply: merge ────────────────────────────────────────────
 
-export async function mergeCommand(ids: string[], options: CommonOptions = {}): Promise<void> {
-  const root = resolveRoot(options);
+/**
+ * Merge same-cluster near-duplicates: append each dup's body into the primary,
+ * then archive the dups. Guards that ≥2 ids resolve, all share ONE cluster, and
+ * every file is inside the memory dir. Pure return shape — `archived` is the list
+ * of dup ids actually archived. No output, no exit code.
+ */
+export async function applyMerge(root: string, ids: string[]): Promise<ApplyMergeResult> {
   const memoryDir = resolveMemoryDir(root);
 
   if (!ids || ids.length < 2) {
-    error('merge needs at least two ids (a primary and one or more duplicates).');
-    process.exitCode = 1;
-    return;
+    return { ok: false, error: 'merge needs at least two ids (a primary and one or more duplicates).' };
   }
 
   let entries: ParsedMemoryEntry[] = [];
@@ -713,9 +774,7 @@ export async function mergeCommand(ids: string[], options: CommonOptions = {}): 
   for (const id of ids) {
     const e = byId.get(id);
     if (!e) {
-      error(`No memory entry matches id "${id}".`);
-      process.exitCode = 1;
-      return;
+      return { ok: false, error: `No memory entry matches id "${id}".` };
     }
     resolved.push(e);
   }
@@ -723,16 +782,12 @@ export async function mergeCommand(ids: string[], options: CommonOptions = {}): 
   // Guard: all must share ONE cluster (they must actually be near-duplicates).
   const clusterIds = new Set(resolved.map((e) => clusters.get(e.file)));
   if (clusterIds.size !== 1 || clusterIds.has(undefined)) {
-    error('Refusing to merge: the given ids are not all in the same near-duplicate cluster.');
-    process.exitCode = 1;
-    return;
+    return { ok: false, error: 'Refusing to merge: the given ids are not all in the same near-duplicate cluster.' };
   }
 
   for (const e of resolved) {
     if (!isInsideMemoryDir(e.file, memoryDir)) {
-      error(`Refusing to merge: ${e.file} is outside the resolved memory dir.`);
-      process.exitCode = 1;
-      return;
+      return { ok: false, error: `Refusing to merge: ${e.file} is outside the resolved memory dir.` };
     }
   }
 
@@ -751,56 +806,82 @@ export async function mergeCommand(ids: string[], options: CommonOptions = {}): 
       '\n';
     fs.writeFileSync(primary.file, merged, 'utf8');
   } catch (err) {
-    error(`Merge failed while writing primary: ${(err as Error).message}`);
-    process.exitCode = 1;
-    return;
+    return { ok: false, error: `Merge failed while writing primary: ${(err as Error).message}` };
   }
 
-  let archived = 0;
+  const archivedIds: string[] = [];
   for (const d of dups) {
-    if (archiveEntryFile(d.file, memoryDir)) archived++;
+    if (archiveEntryFile(d.file, memoryDir)) archivedIds.push(stableId(d.file));
     clearRemediationForEntry(root, d.file);
   }
   // The primary's finding (if any) is now resolved too.
   clearRemediationForEntry(root, primary.file);
 
+  return {
+    ok: true,
+    primary: stableId(primary.file),
+    primaryFile: primary.file,
+    merged: dups.map((d) => stableId(d.file)),
+    archived: archivedIds,
+  };
+}
+
+export async function mergeCommand(ids: string[], options: CommonOptions = {}): Promise<void> {
+  const root = resolveRoot(options);
+  const result = await applyMerge(root, ids);
+  if (!result.ok) {
+    error(result.error!);
+    process.exitCode = 1;
+    return;
+  }
+
   if (options.json) {
     json({
       action: 'merge',
-      primary: stableId(primary.file),
-      merged: dups.map((d) => stableId(d.file)),
-      archived,
+      primary: result.primary,
+      merged: result.merged,
+      archived: result.archived!.length,
     });
     return;
   }
-  success(`Merged ${dups.length} duplicate(s) into ${path.basename(primary.file)} (${archived} archived).`);
+  success(`Merged ${result.merged!.length} duplicate(s) into ${path.basename(result.primaryFile!)} (${result.archived!.length} archived).`);
 }
 
 // ── apply: pin ──────────────────────────────────────────────
 
-export async function pinCommand(id: string, options: CommonOptions = {}): Promise<void> {
-  const root = resolveRoot(options);
+/**
+ * Pin an entry so future reviews down-rank it. Persists the pin set; any write
+ * failure is reported through the return shape. No output, no exit code.
+ */
+export async function applyPin(root: string, id: string): Promise<ApplyPinResult> {
   const entry = await resolveEntry(root, id);
   if (!entry) {
-    error(`No memory entry matches id "${id}". Run \`paradigm memory review\` for current ids.`);
-    process.exitCode = 1;
-    return;
+    return { ok: false, error: `No memory entry matches id "${id}". Run \`paradigm memory review\` for current ids.` };
   }
   const pins = loadPins(root);
   pins.add(path.resolve(entry.file));
   try {
     savePins(root, pins);
   } catch (err) {
-    error(`Could not save pin: ${(err as Error).message}`);
+    return { ok: false, error: `Could not save pin: ${(err as Error).message}` };
+  }
+  clearRemediationForEntry(root, entry.file);
+  return { ok: true, pinned: path.basename(entry.file), file: entry.file };
+}
+
+export async function pinCommand(id: string, options: CommonOptions = {}): Promise<void> {
+  const root = resolveRoot(options);
+  const result = await applyPin(root, id);
+  if (!result.ok) {
+    error(result.error!);
     process.exitCode = 1;
     return;
   }
-  clearRemediationForEntry(root, entry.file);
   if (options.json) {
-    json({ id, action: 'pin', pinned: true, file: entry.file });
+    json({ id, action: 'pin', pinned: true, file: result.file });
     return;
   }
-  success(`Pinned ${path.basename(entry.file)} — future reviews will down-rank it.`);
+  success(`Pinned ${path.basename(result.file!)} — future reviews will down-rank it.`);
 }
 
 // ── interactive wrapper (optional) ──────────────────────────

@@ -2,10 +2,10 @@
   "$meta": {
     "version": "1.0.0",
     "project": "a-paradigm",
-    "generatedAt": "2026-09-20T21:35:04.555Z",
+    "generatedAt": "2026-09-21T00:02:18.239Z",
     "paradigmVersion": "0.1.0",
     "sources": {
-      "purposeFiles": 95,
+      "purposeFiles": 96,
       "portalFiles": 3,
       "premiseFiles": 0
     },
@@ -17,7 +17,7 @@
       "detector": 11,
       "provider": 7,
       "router": 3,
-      "view": 125,
+      "view": 126,
       "store": 20,
       "filter": 3,
       "service": 89,
@@ -39,11 +39,12 @@
       "module": 84,
       "cli": 1,
       "test": 8,
-      "state": 2,
+      "state": 3,
       "integration": 2,
       "types": 10,
       "command-group": 8,
-      "component": 14,
+      "middleware": 1,
+      "component": 17,
       "storage": 1
     }
   },
@@ -9191,6 +9192,21 @@
       "componentType": "route",
       "parent": "#PlatformServer"
     },
+    "local-guard": {
+      "id": "local-guard",
+      "name": "Local Guard",
+      "symbol": "#local-guard",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/platform-server/.purpose",
+      "description": "Request-time ^local-only enforcement — rejects 403 any state-changing (POST/PUT/PATCH/DELETE) /api request whose Host is non-loopback or whose (present) Origin is non-loopback; CSRF + DNS-rebinding guard. Also tightens CORS to reflect only loopback origins (no wildcard). Reads (GET/HEAD) pass untouched.",
+      "visualTags": [],
+      "related": [
+        "^local-only",
+        "#PlatformServer"
+      ],
+      "componentType": "middleware",
+      "parent": "#PlatformServer"
+    },
     "spill": {
       "id": "spill",
       "name": "Spill",
@@ -10355,6 +10371,61 @@
       "visualTags": [],
       "related": [],
       "componentType": "view"
+    },
+    "MemorySection": {
+      "id": "MemorySection",
+      "name": "MemorySection",
+      "symbol": "#MemorySection",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/memory/.purpose",
+      "description": "Memory Steward ledger section in the Platform UI (Phase C1 + C2/C3, TD-2026-09-20-669). Header band shows scanned/pinned/findings counts off the /api/memory/review digest. Two-column body: a Ledger (the advisory hygiene digest grouped by suggestion in the CLI's heading order — prune / merge / route:habits / route:task / route:decisions / route:lore / pin) beside the SyncPreviewPanel. fetchReview on mount. Surfaces the store's single last actionError as a dismissible inline banner above the ledger. Rows carry one-click apply buttons (C2) and the sync panel carries the gated --write apply (C3).",
+      "visualTags": [],
+      "related": [],
+      "componentType": "view"
+    },
+    "LedgerGroup": {
+      "id": "LedgerGroup",
+      "name": "LedgerGroup",
+      "symbol": "#LedgerGroup",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/memory/.purpose",
+      "description": "One suggestion bucket in the ledger. Renders the CLI's SUGGESTION_HEADINGS label (reused verbatim so the web ledger reads identically to `paradigm memory review`) + a count, then a column of LedgerRows. Self-hides when the bucket is empty.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "component"
+    },
+    "LedgerRow": {
+      "id": "LedgerRow",
+      "name": "LedgerRow",
+      "symbol": "#LedgerRow",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/memory/.purpose",
+      "description": "A single memory-entry finding — name, staleness score (0–1, color-ramped), graph-validity verdict, rationale, the equivalent applyCommand as a code chip, and (C2) a one-click apply button driven by the row's suggestion (prune → prune; route:* → route with the matching to; merge → merge the whole cluster; pin → pin) via store.applyRow. Prune confirms first (it archives a file). While any row action is in flight all buttons disable.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "component"
+    },
+    "SyncPreviewPanel": {
+      "id": "SyncPreviewPanel",
+      "name": "SyncPreviewPanel",
+      "symbol": "#SyncPreviewPanel",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/memory/.purpose",
+      "description": "The lean-rewrite PREVIEW off /api/memory/sync (computeSync is pure — no write). Shows bytesBefore→bytesAfter, lines, changed/already-lean status, demoted[] leaf entries (heading + reason + applyHint), deduped[] blocks, a projection checkbox that refetches with projection=true and lists projectionItems[], and the unified diff in a monospace scroll box. (C3) When the preview would change MEMORY.md it exposes an explicit \"Apply sync (--write)\" button that confirms, POSTs /api/memory/sync/write with the current projection toggle, and on success shows the backupPath + refetches the preview. Makes clear it writes MEMORY.md (backed up first).",
+      "visualTags": [],
+      "related": [],
+      "componentType": "component"
+    },
+    "memoryStore": {
+      "id": "memoryStore",
+      "name": "MemoryStore",
+      "symbol": "#memoryStore",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/memory/.purpose",
+      "description": "Zustand store for the Memory section (mirrors tasksStore's fetch/abort + runAction pattern). Holds the review digest + the sync preview (each with its own AbortController + loading/error state) and the projection toggle. fetchReview → GET /api/memory/review; fetchSync(projection) → GET /api/memory/sync?projection=. (C2/C3) applyRow(item) maps the suggestion → the matching write endpoint (prune/route/merge/pin), POSTs, and on success re-fetches BOTH review + sync; actionPendingId/actionError drive per-row pending + inline error. applySyncWrite() POSTs /api/memory/sync/write and holds syncWriting + syncWriteResult{ wrote, backupPath, bytesAfter }.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "state"
     },
     "TasksSection": {
       "id": "TasksSection",
@@ -13906,8 +13977,10 @@
       "symbol": "^local-only",
       "category": "gates",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm",
-      "description": "Server binds to localhost only — no external access",
-      "related": []
+      "description": "Local-only access. Enforced two ways — the socket binds loopback by default, AND the #local-guard request middleware rejects 403 any state-changing (POST/PUT/PATCH/DELETE) /api request whose Host is non-loopback or whose (present) Origin is non-loopback (CSRF + DNS-rebinding guard). CORS reflects only loopback origins (never wildcard). GET/HEAD reads are not gated.",
+      "related": [
+        "#local-guard"
+      ]
     },
     "rate-limited": {
       "id": "rate-limited",
@@ -20568,6 +20641,10 @@
       "category": "components",
       "id": "AgentCommandRoute"
     },
+    "#local-guard": {
+      "category": "components",
+      "id": "local-guard"
+    },
     "#spill": {
       "category": "components",
       "id": "spill"
@@ -20967,6 +21044,26 @@
     "#DocsSection": {
       "category": "components",
       "id": "DocsSection"
+    },
+    "#MemorySection": {
+      "category": "components",
+      "id": "MemorySection"
+    },
+    "#LedgerGroup": {
+      "category": "components",
+      "id": "LedgerGroup"
+    },
+    "#LedgerRow": {
+      "category": "components",
+      "id": "LedgerRow"
+    },
+    "#SyncPreviewPanel": {
+      "category": "components",
+      "id": "SyncPreviewPanel"
+    },
+    "#memoryStore": {
+      "category": "components",
+      "id": "memoryStore"
     },
     "#TasksSection": {
       "category": "components",
@@ -23088,6 +23185,10 @@
       "category": "flows",
       "id": "roster-setup"
     },
+    "^local-only": {
+      "category": "gates",
+      "id": "local-only"
+    },
     "!compliance-violation": {
       "category": "signals",
       "id": "compliance-violation"
@@ -23131,10 +23232,6 @@
     "~tokens": {
       "category": "aspects",
       "id": "tokens"
-    },
-    "^local-only": {
-      "category": "gates",
-      "id": "local-only"
     },
     "^rate-limited": {
       "category": "gates",

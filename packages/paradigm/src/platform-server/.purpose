@@ -25,6 +25,12 @@ components:
     type: route
     parent: '#PlatformServer'
     tags: [feature, agent-ui]
+  local-guard:
+    description: Request-time ^local-only enforcement — rejects 403 any state-changing (POST/PUT/PATCH/DELETE) /api request whose Host is non-loopback or whose (present) Origin is non-loopback; CSRF + DNS-rebinding guard. Also tightens CORS to reflect only loopback origins (no wildcard). Reads (GET/HEAD) pass untouched.
+    type: middleware
+    parent: '#PlatformServer'
+    gates: ['^local-only']
+    tags: [feature, server, security]
 flows:
   $platform-serve:
     description: paradigm serve → create Express app → mount routes → attach WS → serve SPA → listen

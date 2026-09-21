@@ -1,0 +1,59 @@
+version: 2.0.0
+components:
+  MemorySection:
+    description: >-
+      Memory Steward ledger section in the Platform UI (Phase C1 + C2/C3,
+      TD-2026-09-20-669). Header band shows scanned/pinned/findings counts off the
+      /api/memory/review digest. Two-column body: a Ledger (the advisory hygiene
+      digest grouped by suggestion in the CLI's heading order — prune / merge /
+      route:habits / route:task / route:decisions / route:lore / pin) beside the
+      SyncPreviewPanel. fetchReview on mount. Surfaces the store's single last
+      actionError as a dismissible inline banner above the ledger. Rows carry
+      one-click apply buttons (C2) and the sync panel carries the gated --write
+      apply (C3).
+    type: view
+    tags: [feature, memory, platform]
+  LedgerGroup:
+    description: >-
+      One suggestion bucket in the ledger. Renders the CLI's SUGGESTION_HEADINGS
+      label (reused verbatim so the web ledger reads identically to `paradigm
+      memory review`) + a count, then a column of LedgerRows. Self-hides when the
+      bucket is empty.
+    type: component
+    tags: [feature, memory, platform]
+  LedgerRow:
+    description: >-
+      A single memory-entry finding — name, staleness score (0–1, color-ramped),
+      graph-validity verdict, rationale, the equivalent applyCommand as a code
+      chip, and (C2) a one-click apply button driven by the row's suggestion
+      (prune → prune; route:* → route with the matching to; merge → merge the
+      whole cluster; pin → pin) via store.applyRow. Prune confirms first (it
+      archives a file). While any row action is in flight all buttons disable.
+    type: component
+    tags: [feature, memory, platform]
+  SyncPreviewPanel:
+    description: >-
+      The lean-rewrite PREVIEW off /api/memory/sync (computeSync is pure — no
+      write). Shows bytesBefore→bytesAfter, lines, changed/already-lean status,
+      demoted[] leaf entries (heading + reason + applyHint), deduped[] blocks, a
+      projection checkbox that refetches with projection=true and lists
+      projectionItems[], and the unified diff in a monospace scroll box. (C3) When
+      the preview would change MEMORY.md it exposes an explicit "Apply sync
+      (--write)" button that confirms, POSTs /api/memory/sync/write with the
+      current projection toggle, and on success shows the backupPath + refetches
+      the preview. Makes clear it writes MEMORY.md (backed up first).
+    type: component
+    tags: [feature, memory, platform]
+  memoryStore:
+    description: >-
+      Zustand store for the Memory section (mirrors tasksStore's fetch/abort +
+      runAction pattern). Holds the review digest + the sync preview (each with its
+      own AbortController + loading/error state) and the projection toggle.
+      fetchReview → GET /api/memory/review; fetchSync(projection) → GET
+      /api/memory/sync?projection=. (C2/C3) applyRow(item) maps the suggestion →
+      the matching write endpoint (prune/route/merge/pin), POSTs, and on success
+      re-fetches BOTH review + sync; actionPendingId/actionError drive per-row
+      pending + inline error. applySyncWrite() POSTs /api/memory/sync/write and
+      holds syncWriting + syncWriteResult{ wrote, backupPath, bytesAfter }.
+    type: state
+    tags: [feature, memory, platform, state]
