@@ -1,0 +1,58 @@
+id: L-2026-09-21-ascend-000314-001
+type: milestone
+timestamp: '2026-09-21T00:03:14.983Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Memory Steward complete — Phases A/B/C shipped on branch (7.9.0)
+summary: 'The full Memory Steward arc is built, tested, and committed on feat/memory-steward: Phase A (curate native MEMORY.md — review/prune/route/merge/pin + graph-validity staleness + advisory Stop-hook nudge), Phase B (B1 CLAUDE.md source redirect + B2 advisory-guarded `memory sync` that keeps the file lean without touching hand-curation), Phase C (Platform "Memory" ledger UI over the existing engines + the human visual accept-path). An Aegis pass on Phase C''s write endpoints caught a HIGH platform-wide CSRF (fixed with request-time ^local-only enforcement). Not pushed/published — founder''s manual step.'
+symbols_touched:
+  - '#memory-cli'
+  - '#memory-scan'
+  - '#memory-steward-sync'
+  - '#memory-section'
+  - '#memory-routes'
+  - '#memory-write-routes'
+  - '#local-guard'
+  - '#claude-adapter'
+  - '#platform-server'
+  - '#hooks'
+tags:
+  - memory-steward
+  - milestone
+  - 7.9.0
+  - loid
+  - phase-c
+  - security
+body: |-
+  ## The arc (all on branch feat/memory-steward, part of unreleased 7.9.0)
+  - **Phase A** (5ec2240a): premise-core `scanNativeMemory` + graph-validity (dead symbol = provably stale — the differentiator); CLI `paradigm memory review|prune|route|merge|pin`; advisory Stop-hook Check 15; self-clearing `advise` remediations. Bonus: fixed a latent premise-core type-export clean-build break. Owned by Loid, no new agent (TD-2026-06-14-467). Decision TD-2026-09-19-110.
+  - **Phase B** (483c9ab3): B1 CLAUDE.md "Native Memory Hygiene" redirect (stops junk at source); B2 `paradigm memory sync` — advisory by default, strict demotion guards (never `##`/active-marked, only genuinely graph-stale leaf `###`+), `--write` (backup→atomic→verbatim→demote-not-delete→fail-open), opt-in compact `--projection`.
+  - **Phase C** (64cd680b): Platform "Memory" section (ledger + sync-preview + one-click apply + visual "Apply sync") as a thin view over buildDigest/computeSync; C2a extracted return-shaped appliers (CLI byte-identical). Decision TD-2026-09-20-669.
+
+  ## Two dogfood/review saves that shaped the design (the reusable lesson)
+  1. Phase A dogfood on the real 57-entry dir: file-mention false positives (globs/prose-relative paths) were condemning good entries → symbols made the only prune authority; prune gated to status types.
+  2. Phase B dry-run on a COPY of the real 18KB MEMORY.md: autonomous demotion flagged the "⭐ START HERE" Warpline arc + Release Conventions → reworked to advisory + strict guards (founder call). Green unit tests missed both; real-data dry-run caught them. RULE: for any tool transforming user-authored artifacts, dry-run against real data before trusting the suite.
+  3. Phase C Aegis pass: HIGH platform-wide CSRF (ACAO:* + socket-bind-only ^local-only) — a browser page could POST to 127.0.0.1 and mutate ~/.claude. Fixed with request-time Host+Origin loopback enforcement (#local-guard); also closed the pre-existing tasks-write exposure.
+
+  ## Non-negotiable principle held throughout
+  Surface, human decides — NEVER auto-delete. "Lean" = dedup + demote-to-archive + human-gated prune. Real ~/.claude never touched during any dev/test (sandbox HOME + copies only).
+
+  ## State / open
+  - NOT pushed or published — founder runs `git push` + `npm publish` (7.9.0: paradigm 7.9.0, plugin.json 7.9.0, premise-core 3.9.0).
+  - Follow-ups: T-2026-09-19-001 (.cursor hooks generator sync), T-2026-09-20-001 (sync backup rotation + preview/write TOCTOU, low).
+  - Deferred: Phase C could gain live WS refresh (#memory-changed broadcast wired but UI not yet subscribing).
+  - Still open from session start: the dev-education content series (Map/Compass/Journal spine) + felt-pains dump.
+linked_lore:
+  - L-2026-09-19-ascend-074539-001
+  - L-2026-09-20-ascend-213552-001
+linked_commits:
+  - 5ec2240a
+  - 483c9ab3
+  - 64cd680b
+confidence: 0.9
+git_context:
+  ref: 64cd680b9c08592f0b0d8e81a2ca5d31160f571b
+  branch: feat/memory-steward
+  dirty: true
