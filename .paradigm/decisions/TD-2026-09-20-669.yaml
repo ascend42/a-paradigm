@@ -1,0 +1,50 @@
+id: TD-2026-09-20-669
+timestamp: '2026-09-20T23:32:12.603Z'
+title: 'Memory Steward Phase C: a Platform "Memory" section as a thin view over existing engines'
+decision: >-
+  Build the Phase C memory ledger as a new section in the in-package Paradigm Platform
+  (packages/paradigm/src/platform-server + platform-ui), following the Tasks section pattern. Read routes call
+  buildDigest/computeSync in-process (pure, no side effects — NOT reviewCommand, which writes remediations+stamp). Ship
+  in sub-phases: C1 read-only ledger + sync preview; C2 apply actions (prune/route/merge/pin) preceded by a mechanical
+  C2a extraction of return-shaped appliers from the CLI-shaped commands; C3 gated sync --write (the founder's visual
+  accept path). New routes get portal.yaml gates (reads ^local-only+^read-only, writes ^local-only+^write-capable,
+  prizes: [] each). No new memory engine logic.
+rationale: >-
+  The A/B engines already emit clean JSON and are exported in the same package as the platform-server, so Phase C is a
+  presentation+control surface, not new logic — minimizing risk and code. Reusing the Tasks section pattern (routes +
+  write-routes + Zustand store + section component) keeps it consistent. Splitting C2a (extraction) out isolates the
+  only engine-file edit for review. Human-in-the-loop (never auto-apply) preserves the whole design's 'surface, human
+  decides' ethos; the visual accept path directly answers the founder's Phase-B concern about demotions too risky to
+  automate.
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+  - id: opus
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: Call reviewCommand/CLI commands directly from Express routes
+    rejected_because: >-
+      reviewCommand has side effects (writes remediations+stamp); the apply commands are CLI-shaped (emit via
+      cli-output, set process.exitCode, return void) — pollutes server stdout, no capturable result. Use pure
+      buildDigest/computeSync for reads and the C2a return-shaped appliers for writes.
+  - option: Shell out to `paradigm memory ...` from the server
+    rejected_because: >-
+      Same-package in-process import is simpler, faster, and type-safe; shelling out adds process overhead + fragile
+      output parsing.
+  - option: Auto-apply sync from the UI
+    rejected_because: >-
+      Violates the surface-human-decides ethos; the whole point of the visual path is explicit human accept/reject of
+      demotions.
+symbols_affected:
+  - '#platform-server'
+  - '#memory-section'
+  - '#memory-routes'
+  - '#memory-cli'
+status: active
+tags:
+  - memory-steward
+  - phase-c
+  - platform
+  - renaissance

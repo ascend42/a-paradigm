@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-07-18T04:45:59.998Z'
+generated: '2026-09-21T00:02:18.448Z'
 protocols:
   - id: P-add-agent-provider
     name: Add an agent provider
@@ -273,7 +273,7 @@ protocols:
       - routes
   - id: P-add-skill
     name: Add a new skill
-    status: current
+    status: stale
     last_verified: '2026-03-08T06:07:47.140Z'
     trigger:
       - add skill
@@ -460,7 +460,7 @@ protocols:
       - calibration
   - id: P-record-lore
     name: Record a lore entry
-    status: current
+    status: stale
     last_verified: '2026-03-08T06:07:50.262Z'
     trigger:
       - record lore
@@ -521,6 +521,6 @@ protocols:
       - battle-test
 health:
   total: 39
-  current: 22
-  stale: 13
+  current: 20
+  stale: 15
   broken: 4

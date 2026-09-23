@@ -26,6 +26,9 @@ import { createClassroomRouter } from './routes/classroom.js';
 import { createTeamRouter } from './routes/team.js';
 import { createTasksRouter } from './routes/tasks.js';
 import { createTasksWriteRouter } from './routes/tasks-write.js';
+import { createMemoryRouter } from './routes/memory.js';
+import { createMemoryWriteRouter } from './routes/memory-write.js';
+import { corsMiddleware, localOnlyGuard } from './local-guard.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -85,7 +88,7 @@ function isPackageAvailable(packageName: string): boolean {
  * Resolve the set of enabled sections based on config and available packages
  */
 function resolveSections(options: PlatformServerOptions): Set<string> {
-  const always = ['overview', 'tasks', 'lore', 'graph', 'git', 'ambient', 'team', 'classroom'];
+  const always = ['overview', 'tasks', 'memory', 'lore', 'graph', 'git', 'ambient', 'team', 'classroom'];
   const requested = options.sections ?? [...always, 'sentinel', 'university', 'symphony', 'docs', 'warpline'];
 
   const enabled = new Set<string>();
@@ -132,19 +135,16 @@ export function createPlatformApp(options: PlatformServerOptions): Express {
   const app = express();
   const sections = resolveSections(options);
 
-  app.use(express.json());
+  // CORS — reflects only loopback origins (never wildcard). Runs first so even
+  // blocked responses carry the right headers.
+  app.use(corsMiddleware);
 
-  // CORS
-  app.use((_req: Request, res: Response, next: NextFunction) => {
-    res.header('Access-Control-Allow-Origin', '*');
-    res.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS');
-    res.header('Access-Control-Allow-Headers', 'Content-Type');
-    if (_req.method === 'OPTIONS') {
-      res.sendStatus(204);
-      return;
-    }
-    next();
-  });
+  // Request-time ^local-only guard (#local-guard). Mounted on /api BEFORE any
+  // router and BEFORE body parsing, so a cross-origin / non-local state-changing
+  // request is rejected 403 without its body ever being read. Reads pass.
+  app.use('/api', localOnlyGuard);
+
+  app.use(express.json());
 
   // === Lore routes (always mounted) ===
   app.use('/api/lore', createLoreRouter(options.projectDir));
@@ -257,6 +257,17 @@ export async function startPlatformServer(options: PlatformServerOptions): Promi
   // Mount Tasks WRITE routes (enforced action verbs — claim/start/done/block;
   // each proxies the same updateTask state-machine path the CLI/MCP use).
   app.use('/api/tasks', createTasksWriteRouter(options.projectDir, wsContext));
+
+  // Mount Memory routes (always available — the Memory Steward ledger, read-only
+  // over HTTP: /review advisory digest + /sync lean-rewrite preview. C1 owns no
+  // write path — apply/write verbs arrive in C2/C3).
+  app.use('/api/memory', createMemoryRouter(options.projectDir));
+
+  // Mount Memory WRITE routes (Phase C2/C3 — apply verbs + gated sync write).
+  // Each PROXIES the same return-shaped appliers the CLI wrappers call
+  // (applyPrune/Route/Merge/Pin), so all path-safety + archive-not-delete live in
+  // ONE place. Mounted AFTER the read router (order mirrors tasks).
+  app.use('/api/memory', createMemoryWriteRouter(options.projectDir, wsContext));
 
   // Background two-way GitHub sync poll. Every SYNC_POLL_MS, pull linked issues
   // and reconcile inbound through the SAME enforced writers (a poll never

@@ -18,7 +18,7 @@ components:
     aspects: ["~ide-adapter-pattern"]
 
   claude-adapter:
-    description: "Generate slim CLAUDE.md (~150 lines) with core identity, session lifecycle, on-demand guidance pointers to paradigm://guidance/{topic} MCP resources, and agent contributions section from high-priority .agent context"
+    description: "Generate slim CLAUDE.md (~150 lines) with core identity, session lifecycle, on-demand guidance pointers to paradigm://guidance/{topic} MCP resources, a Native Memory Hygiene redirect (Memory Steward B1 — route durable facts to lore/habits/decisions/tasks, keep native MEMORY.md ephemeral), and agent contributions section from high-priority .agent context"
     type: service
     path: claude.ts
     aspects: ["~ide-adapter-pattern"]

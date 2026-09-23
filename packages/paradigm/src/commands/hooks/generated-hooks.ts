@@ -38,6 +38,7 @@ export const COMMON_HOOK = `#!/bin/sh
 #  12. Graduation failure tracking (auto-demotion)
 #  13. Orchestration required for complex tasks
 #  14. Active remediations from agent-authored .paradigm/remediations/ (v6.1)
+#  15. Native memory hygiene nudge (advisory only, TD-2026-09-19-110)
 
 VIOLATIONS=""
 VIOLATION_COUNT=0
@@ -1029,6 +1030,71 @@ if [ "$_REMEDIATIONS_JSON" != "[]" ] && [ -n "$_REMEDIATIONS_JSON" ]; then
   done < "$_RMD_TMP"
   rm -f "$_RMD_TMP"
 fi
+
+# --- Check 15: Native memory hygiene nudge (advisory only, TD-2026-09-19-110) ---
+# Cheap O(1)/O(entries) heuristic that nudges \`paradigm memory review\` when the
+# native Claude Code memory store looks due for curation. This block is
+# ADVISORY ONLY — it appends AT MOST ONE line to ADVISORY and NEVER touches
+# VIOLATIONS / VIOLATION_COUNT, so it can never block a Stop.
+#
+# FAIL-OPEN on EVERYTHING (mirrors the _REMEDIATIONS_JSON="[]" discipline above):
+# empty $HOME, missing memory dir, a stat/find/date that errors, or any slug
+# surprise → emit NOTHING, never error. NO LLM, NO scan, NO file-content reads —
+# only filesystem metadata (byte size, entry count, stamp mtime). On the common
+# path (no threshold crossed) it emits nothing, adding zero tokens.
+#
+# Native memory lives OUTSIDE the repo at:
+#   $HOME/.claude/projects/<slug>/memory/
+# where <slug> = the absolute repo path ($CWD) with every '/' replaced by '-'.
+#
+# Tunable thresholds (edit these four vars to retune the nudge cadence):
+_MEM_MAX_ENTRIES=25    # nudge if memory/*.md count (excl. MEMORY.md) exceeds this
+_MEM_MAX_BYTES=32768   # nudge if MEMORY.md byte size exceeds this (32 KiB)
+_MEM_MAX_DAYS=30       # nudge if days-since-review exceeds this
+_MEM_NEVER_ENTRIES=15  # if never reviewed, nudge once entry count exceeds this
+if [ -n "$HOME" ] && [ -n "$CWD" ]; then
+  _mem_slug=$(printf %s "$CWD" | sed 's:/:-:g' 2>/dev/null)
+  _MEM_DIR="$HOME/.claude/projects/$_mem_slug/memory"
+  if [ -n "$_mem_slug" ] && [ -d "$_MEM_DIR" ]; then
+    # Entry count: memory/*.md excluding MEMORY.md (metadata only, O(entries)).
+    _mem_entries=$(find "$_MEM_DIR" -maxdepth 1 -type f -name '*.md' ! -name 'MEMORY.md' 2>/dev/null | wc -l | tr -d ' ')
+    [ -z "$_mem_entries" ] && _mem_entries=0
+    # MEMORY.md byte size — portable stat: BSD/macOS -f%z, GNU -c%s, wc -c fallback.
+    _mem_bytes=0
+    if [ -f "$_MEM_DIR/MEMORY.md" ]; then
+      _mem_bytes=$(stat -f%z "$_MEM_DIR/MEMORY.md" 2>/dev/null || stat -c%s "$_MEM_DIR/MEMORY.md" 2>/dev/null || wc -c < "$_MEM_DIR/MEMORY.md" 2>/dev/null | tr -d ' ')
+      [ -z "$_mem_bytes" ] && _mem_bytes=0
+    fi
+    # Days since review = now - mtime(.paradigm/.memory-last-review). Absent = never.
+    _mem_never=1
+    _mem_days=0
+    if [ -f ".paradigm/.memory-last-review" ]; then
+      _mem_never=0
+      _mem_mtime=$(stat -f%m ".paradigm/.memory-last-review" 2>/dev/null || stat -c%Y ".paradigm/.memory-last-review" 2>/dev/null)
+      _mem_now=$(date +%s 2>/dev/null)
+      if [ -n "$_mem_mtime" ] && [ -n "$_mem_now" ] && [ "$_mem_now" -ge "$_mem_mtime" ] 2>/dev/null; then
+        _mem_days=$(( (_mem_now - _mem_mtime) / 86400 ))
+      fi
+    fi
+    # Decide — every comparison guarded (2>/dev/null) so a non-numeric surprise
+    # simply fails the test rather than erroring out. At most one line emitted.
+    _mem_nudge=0
+    if [ "$_mem_entries" -gt "$_MEM_MAX_ENTRIES" ] 2>/dev/null; then _mem_nudge=1; fi
+    if [ "$_mem_bytes" -gt "$_MEM_MAX_BYTES" ] 2>/dev/null; then _mem_nudge=1; fi
+    if [ "$_mem_never" -eq 0 ] && [ "$_mem_days" -gt "$_MEM_MAX_DAYS" ] 2>/dev/null; then _mem_nudge=1; fi
+    if [ "$_mem_never" -eq 1 ] && [ "$_mem_entries" -gt "$_MEM_NEVER_ENTRIES" ] 2>/dev/null; then _mem_nudge=1; fi
+    if [ "$_mem_nudge" -eq 1 ]; then
+      if [ "$_mem_never" -eq 1 ]; then
+        _mem_since="never reviewed"
+      else
+        _mem_since="\${_mem_days}d since review"
+      fi
+      ADVISORY="$ADVISORY
+  - (memory) $_mem_entries entries / $_mem_since — run: paradigm memory review"
+    fi
+  fi
+fi
+# --- END Check 15 ---
 
 # --- Compliance snapshot (non-fatal, fire-and-forget) ---
 # Record this stop-hook run to .paradigm/events/compliance-history.jsonl for trend analysis.

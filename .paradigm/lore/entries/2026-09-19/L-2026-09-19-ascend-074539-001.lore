@@ -1,0 +1,62 @@
+id: L-2026-09-19-ascend-074539-001
+type: insight
+timestamp: '2026-09-19T07:45:39.896Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Memory Steward design — govern native MEMORY.md via Loid + advisory remediations
+summary: 'Design session addressing the native Claude Code MEMORY.md junk-drawer problem observed across multiple Paradigm projects: Opus instances dump stale statuses, tips, and rules with no typing, decay, or dedup. Reframed as "the Obsidian problem inside Claude''s own head" — same unstructured-dump failure Paradigm''s structure pillar already answers. Solution: demote MEMORY.md to a generated artifact, route each entry to its existing typed home (habits/tasks/decisions/lore), and add a memory-hygiene steward that surfaces (never auto-deletes) stale/misrouted entries for human decision over time.'
+symbols_touched:
+  - '#hooks'
+  - '#session-tracker'
+tags:
+  - memory-steward
+  - loid
+  - memory-hygiene
+  - design
+  - propose-block
+  - native-first
+body: |-
+  ## Problem
+  Native Claude Code MEMORY.md (harness-owned, at ~/.claude/projects/<slug>/memory/) accumulates junk across projects: stale project statuses ("current state 2026-08-23…"), tips/tricks, and rules — uncategorized, no time-decay, no dedup, no review surface. It's a lossy, uncurated lesser-version of Paradigm lore.
+
+  ## Core reframe
+  MEMORY.md is the "Obsidian second-brain" failure mode living inside Claude's own head — unstructured prose, no typing, no traversal, no decay. It becomes a junk drawer because it has no notion of ALTITUDE or DESTINATION: anything with nowhere else to go lands there. But the right homes already exist:
+  - rules/tips/tricks → habits / CLAUDE.md (paradigm_habits_*)
+  - project status → tasks + lore (paradigm_task_*, lore)
+  - durable "why" facts → decisions / wisdom (paradigm_decision_record, wisdom_*)
+  - session narrative → lore (paradigm_lore_record)
+
+  So this is a ROUTING + PROJECTION + CURATION problem, not a new-store problem.
+
+  ## Design principles
+  1. Don't fix MEMORY.md — DEMOTE it. Win condition = it becomes boring/generated (a compiled index/projection), never a hand-authored store. Same structure-over-prose thesis, turned inward.
+  2. Differentiated janitor = graph-validated staleness: a memory referencing a symbol/file that no longer exists is PROVABLY stale. Only Paradigm can do this (it has the symbol graph). Reuse lore_assess/lore_calibration relevance engine (age + last-referenced + type-decay + graph-validity).
+  3. Assistant, not janitor: surfaces for active human decisions over time, never auto-deletes.
+
+  ## Mechanism (maps to existing primitives)
+  - Use paradigm_propose_block with severity:'advise' (claimant = memory/loid) — persists in .paradigm/remediations/, surfaces on Stop hook WITHOUT blocking, inherits override/archive/calibration plumbing.
+  - Split TRIGGER from SCAN to control token cost: cheap heuristic check every Stop (file size / entry count / days-since-review, no LLM) that only emits a one-line nudge; expensive scan (scoring + graph-validation + dedup) runs on-demand via `paradigm memory review` or slow cadence (weekly / every N sessions). Never scan on every Stop.
+  - Human surface: batched digest (not 40 prompts), one-key actions: prune / pin-promote / route-to-{habits,decisions,task} / merge. Backlog drains at human's pace; Loid self-regulates against nag-loops.
+
+  ## Agent ownership
+  Fold into Loid (past-tense knowledge curation; already owns calibration + learning loop + lore_assess). NO new core agent — follows own precedent TD-2026-06-14-467 ("no new PM agent; assign by tense: Cid=present, Loid=past, Rune=symbol hygiene"). Pair with Rune (partners field) for the graph-validity overlap. Extract a dedicated steward later only if it proves to need its own voice.
+
+  ## Rollout options (ship in order)
+  A — Janitor + review surface (cheapest, ~80% of felt value): hook + `paradigm memory review`, scores + flags + clusters, never auto-deletes.
+  B — Projection: MEMORY.md generated from typed stores; agents redirected via CLAUDE.md to write to lore/habits/decisions.
+  C — Full ownership: paradigm_memory_* abstraction with lifecycle (active/stale/archived) + Suite "Memory" section for visual trimming (fits Renaissance arc).
+
+  ## Caveats
+  - Fighting the harness: the Claude Code system prompt actively tells every Opus to write MEMORY.md; can't reliably prevent per-session → curate-after (janitor-on-cadence) is the robust play.
+  - Global vs project scope: native memory has a user-level (~/.claude) tier not project-scoped; lore is project-scoped → need a global-habits/global-lore notion. Flag, don't block A.
+  - Ships once in framework, inherited by every project = the leverage for "grander scale."
+
+  ## Larger content context (same session, separate thread)
+  Also designed a dev-education content series (Patreon + socials): audience = devs adapting to AI-native era. Spine = STRUCTURE (.purpose) / SIGHT (graph+ripple) / MEMORY (lore+checkpoints) = "Map, Compass, Journal." Reusable hook formula: "[popular adjacent thing] gives [surface benefit] but lacks [structural property] so agents [fail specifically] — which is what [Paradigm mechanism] provides." Warpline deliberately held for Season 2 (no live field test yet — don't sell an unproven claim).
+confidence: 0.75
+git_context:
+  ref: 87dab8c2db4b64a5ba9870440028a9e938cbc4b3
+  branch: feat/memory-steward
+  dirty: true

@@ -440,6 +440,79 @@ scanCmd
     console.log('\nRun `paradigm scan auto --help` for options.\n');
   });
 
+// paradigm memory <subcommand>  (Memory Steward A2, TD-2026-09-19-110)
+const memoryCmd = program
+  .command('memory')
+  .description('Curate the native Claude Code memory store (review / prune / route / merge / pin)');
+
+memoryCmd
+  .command('review')
+  .description('Scan native memory and print a batched hygiene digest (refreshes advisory remediations)')
+  .option('-p, --project <path>', 'Project root (defaults to cwd)')
+  .option('-i, --interactive', 'Prompt to apply each finding')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { reviewCommand } = await import('./commands/memory/index.js');
+    await reviewCommand(options);
+  });
+
+memoryCmd
+  .command('prune <id>')
+  .description('Archive a flagged native-memory entry (by digest id)')
+  .option('-p, --project <path>', 'Project root (defaults to cwd)')
+  .option('--json', 'Output as JSON')
+  .action(async (id, options) => {
+    const { pruneCommand } = await import('./commands/memory/index.js');
+    await pruneCommand(id, options);
+  });
+
+memoryCmd
+  .command('route <id>')
+  .description('Route an entry to a typed home, then archive it (--to habits|decisions|task|lore)')
+  .requiredOption('--to <target>', 'Destination: habits | decisions | task | lore')
+  .option('-p, --project <path>', 'Project root (defaults to cwd)')
+  .option('--json', 'Output as JSON')
+  .action(async (id, options) => {
+    const { routeCommand } = await import('./commands/memory/index.js');
+    await routeCommand(id, options);
+  });
+
+memoryCmd
+  .command('merge <ids...>')
+  .description('Merge near-duplicate entries (same cluster) into the first id; archive the rest')
+  .option('-p, --project <path>', 'Project root (defaults to cwd)')
+  .option('--json', 'Output as JSON')
+  .action(async (ids, options) => {
+    const { mergeCommand } = await import('./commands/memory/index.js');
+    await mergeCommand(ids, options);
+  });
+
+memoryCmd
+  .command('pin <id>')
+  .description('Pin a durable entry so future reviews down-rank it')
+  .option('-p, --project <path>', 'Project root (defaults to cwd)')
+  .option('--json', 'Output as JSON')
+  .action(async (id, options) => {
+    const { pinCommand } = await import('./commands/memory/index.js');
+    await pinCommand(id, options);
+  });
+
+memoryCmd
+  .command('sync')
+  .description('Advisory report on leaning MEMORY.md: dedup + strictly-guarded demote of stale leaf blocks (writes nothing without --write)')
+  .option('-p, --project <path>', 'Project root (defaults to cwd)')
+  .option('--projection', 'Opt in to a compact, deduped curated projection block (OFF by default)')
+  .option('--write', 'Back up + atomically write the lean MEMORY.md (default: advisory report only)')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { syncCommand } = await import('./commands/memory/index.js');
+    await syncCommand(options);
+  });
+
+memoryCmd.action(() => {
+  memoryCmd.outputHelp();
+});
+
 // paradigm flow <subcommand>
 const flowCmd = program
   .command('flow')

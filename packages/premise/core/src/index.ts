@@ -88,6 +88,14 @@ export type {
 export { checkAspectAnchors } from './aspect-anchors.js';
 export type { AspectAnchorIssue } from './aspect-anchors.js';
 
+// Aspect + anchor core types (consumed by paradigm-mcp / paradigm CLI)
+export type {
+  CodeAnchor,
+  AspectRelation,
+  AspectSeverity,
+  AspectCategory,
+} from './types.js';
+
 // Graph-slice projector — #graph-slice-projector
 export {
   loadLiveGraph,
@@ -121,6 +129,22 @@ export type {
   RetrieveOptions,
   RetrieveResult,
 } from './spill.js';
+
+// Native memory scan — #native-memory-scan (Memory Steward A0: parse + graph-validity)
+export {
+  scanNativeMemory,
+  resolveMemorySlug,
+  resolveMemoryDir,
+  extractSymbolMentions,
+  extractFileMentions,
+} from './memory-scan.js';
+export type {
+  ParsedMemoryEntry,
+  MemoryEntryKind,
+  MemoryEntryType,
+  MemoryGraphValidity,
+  GraphValidityVerdict,
+} from './memory-scan.js';
 
 // Classroom metrics — #classroom-metrics (the canonical repeat-failure-rate)
 export {

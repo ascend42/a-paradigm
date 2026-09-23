@@ -1,0 +1,46 @@
+id: TD-2026-09-19-110
+timestamp: '2026-09-19T07:45:51.606Z'
+title: 'Memory Steward: demote MEMORY.md to a generated artifact governed by Loid via advisory remediations'
+decision: >-
+  Treat native Claude Code MEMORY.md as a build artifact/projection, not a store. Route memory to existing typed homes
+  (habits/tasks/decisions/lore). Add a memory-hygiene steward owned by Loid (no new agent) that surfaces
+  stale/misrouted/duplicate entries via paradigm_propose_block severity:'advise' for human decision over time — never
+  auto-deletes. Control token cost by splitting a cheap per-Stop heuristic trigger from an expensive on-demand/cadence
+  scan (`paradigm memory review`). Staleness is graph-validated (memory referencing dead symbols/files is provably
+  stale). Ship in order: A janitor+review surface → B projection → C full paradigm_memory_* ownership + Suite view.
+rationale: >-
+  MEMORY.md is the unstructured-dump failure mode Paradigm already solves elsewhere; the correct homes and the relevance
+  engine (lore_assess/calibration) already exist, so this is routing+projection+curation, not new stores.
+  Advisory-remediation reuse inherits persistence/override/calibration plumbing for free. Cheap-trigger/deferred-scan
+  directly addresses the founder's token-cost concern. Folding into Loid follows precedent TD-2026-06-14-467 (assign by
+  tense, don't add agents) and avoids subagent overspawn.
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+  - id: opus
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: Add a new dedicated memory-steward core agent
+    rejected_because: >-
+      Violates precedent TD-2026-06-14-467 (no new agent; assign by tense); Loid already owns past-tense knowledge
+      curation + calibration engine. Extract later only if it earns its own voice.
+  - option: Make MEMORY.md itself better (richer taxonomy in place)
+    rejected_because: Rebuilds lore in the wrong place with none of the tooling; the goal is to demote MEMORY.md, not enrich it.
+  - option: Hard-block bad memory writes via Stop hook (guard severity)
+    rejected_because: >-
+      Can't reliably prevent writes the harness system prompt actively instructs; blocking is hostile to flow.
+      Curate-after (advise severity) is the robust play.
+  - option: Scan on every Stop hook
+    rejected_because: Token-heavy; founder flagged cost. Cheap heuristic trigger + deferred scan preserves near-zero frequent-path cost.
+symbols_affected:
+  - '#hooks'
+  - '#session-tracker'
+status: active
+tags:
+  - memory-steward
+  - loid
+  - memory-hygiene
+  - native-first
+  - propose-block
