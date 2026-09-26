@@ -10,7 +10,7 @@ components:
     type: types
     tags: [university, schema]
   AgentTypes:
-    description: "Type definitions for persistent agent identity profiles — AgentProfile (with nickname for attributed responses), AgentPermissions, AgentExpertiseEntry, TransferablePattern, AgentProjectContext, plus v5.0 Renaissance extensions: AgentAttention, AgentLearning, AgentContext, AgentReporting, AgentCollaboration, AgentNomination. v6.0.3+ adds PartnerRef interface ({id, relation?, share_notebooks?: 'off'|'read'|'read-write'}) and partners?: PartnerRef[] field on AgentProfile (excluded from integrityHash)."
+    description: "Type definitions for persistent agent identity profiles — AgentProfile (with nickname for attributed responses), AgentPermissions, AgentExpertiseEntry, TransferablePattern, AgentProjectContext, plus v5.0 Renaissance extensions: AgentAttention, AgentLearning, AgentContext, AgentReporting, AgentCollaboration, AgentNomination. v6.0.3+ adds PartnerRef interface ({id, relation?, share_notebooks?: 'off'|'read'|'read-write'}) and partners?: PartnerRef[] field on AgentProfile (excluded from integrityHash). v7.9.1 widens AgentPersonality to KnownStyle/KnownRisk/KnownVerbosity | string (templates use ~25 styles; display-only), TransferablePattern gains deprecated pattern? alias with optional learnedIn/appliedIn, AgentProfile gains behaviors? (unread until skills Phase 1) and tags?, and exports KNOWN_AGENT_KEYS (mirrored in doctor #agent-audit)."
     type: types
     tags: [agent-identity, schema, permissions, attention, learning, collaboration, maestro, partners]
   NotebookTypes:

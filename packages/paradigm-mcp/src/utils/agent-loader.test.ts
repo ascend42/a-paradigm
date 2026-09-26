@@ -17,6 +17,7 @@ import {
   createAgentProfile,
   loadAllAgentProfiles,
   buildProfileEnrichment,
+  normalizeAgentProfile,
 } from './agent-loader.js';
 import type { AgentProfile } from '../types/agents.js';
 
@@ -389,5 +390,80 @@ describe('buildProfileEnrichment', () => {
     }));
     const text = buildProfileEnrichment(profile, [], notebooks);
     expect((text.match(/Entry \d/g) || []).length).toBeLessThanOrEqual(5);
+  });
+});
+
+// ────────────────────────────────────────────────────────
+// normalizeAgentProfile (Phase 0, TD-2026-09-26-846)
+// ────────────────────────────────────────────────────────
+
+describe('normalizeAgentProfile', () => {
+  it('maps legacy transferable[].pattern to id, drops pattern, injects no other defaults', () => {
+    const raw = {
+      ...makeProfile(),
+      transferable: [{ pattern: 'portal-gate-pattern', description: 'd', successRate: 0.9 }],
+    };
+    const p = normalizeAgentProfile(raw);
+    const t = p.transferable[0] as any;
+    expect(t.id).toBe('portal-gate-pattern');
+    expect('pattern' in t).toBe(false);
+    expect('learnedIn' in t).toBe(false);
+    expect('appliedIn' in t).toBe(false);
+  });
+
+  it('keeps an explicit id when both id and pattern are present', () => {
+    const raw = {
+      ...makeProfile(),
+      transferable: [{ id: 'real-id', pattern: 'legacy-alias', description: 'd', successRate: 0.9 }],
+    };
+    const t = normalizeAgentProfile(raw).transferable[0] as any;
+    expect(t.id).toBe('real-id');
+    expect('pattern' in t).toBe(false);
+  });
+
+  it('loads a legacy-pattern profile from disk and renders enrichment without "undefined"', () => {
+    const content = yaml.dump({
+      ...makeProfile({ id: 'legacy-agent' }),
+      transferable: [{ pattern: 'legacy-pattern', description: 'Legacy', successRate: 1 }],
+    });
+    fs.writeFileSync(path.join(tmpDir, '.paradigm', 'agents', 'legacy-agent.agent'), content, 'utf-8');
+    const loaded = loadAgentProfile(tmpDir, 'legacy-agent');
+    expect(loaded).not.toBeNull();
+    const text = buildProfileEnrichment(loaded!, []);
+    expect(text).toContain('legacy-pattern: 100% success');
+    expect(text).not.toContain('undefined');
+    expect(text).not.toContain('learned in');
+  });
+
+  it('renders a non-canonical personality style verbatim', () => {
+    const profile = makeProfile({ personality: { style: 'opinionated', risk: 'moderate', verbosity: 'thorough' } });
+    const text = buildProfileEnrichment(profile, []);
+    expect(text).toContain('**Style:** opinionated');
+  });
+
+  it('does not disturb integrityHash verification', () => {
+    const base = makeProfile({
+      permissions: { paths: { deny: ['secrets/**'] } },
+      transferable: [{ pattern: 'p1', description: 'd', successRate: 0.8 } as any],
+    });
+    base.integrityHash = computeIntegrityHash(base);
+    const normalized = normalizeAgentProfile(JSON.parse(JSON.stringify(base)));
+    expect(verifyIntegrity(normalized).valid).toBe(true);
+    expect(normalized.integrityHash).toBe(base.integrityHash);
+  });
+});
+
+describe('normalizeAgentProfile persistence', () => {
+  it('migrates pattern to id on save without persisting synthetic learnedIn/appliedIn', () => {
+    const content = yaml.dump({
+      ...makeProfile({ id: 'legacy-save' }),
+      transferable: [{ pattern: 'p-save', description: 'd', successRate: 0.9 }],
+    });
+    const file = path.join(tmpDir, '.paradigm', 'agents', 'legacy-save.agent');
+    fs.writeFileSync(file, content, 'utf-8');
+    const loaded = loadAgentProfile(tmpDir, 'legacy-save')!;
+    saveAgentProfile('legacy-save', loaded, 'project', tmpDir);
+    const saved = yaml.load(fs.readFileSync(file, 'utf-8')) as any;
+    expect(saved.transferable[0]).toEqual({ id: 'p-save', description: 'd', successRate: 0.9 });
   });
 });

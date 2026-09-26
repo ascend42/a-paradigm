@@ -122,6 +122,35 @@ export function listAllGlobalAgentIds(): string[] {
 }
 
 // ────────────────────────────────────────────────────────
+// Normalization
+// ────────────────────────────────────────────────────────
+
+/**
+ * Normalize legacy template fields on a freshly-parsed .agent profile.
+ *
+ * - `transferable[i].pattern` (the convention in ~35 bundled templates) is an
+ *   alias of `id`: `id ??= pattern`, then `pattern` is removed. Because loaded
+ *   profiles flow into saveAgentProfile, legacy `pattern:` is migrated to `id:`
+ *   on the profile's next save (intended migration).
+ * - No other defaults are injected — `learnedIn` / `appliedIn` stay absent when
+ *   absent, so nothing synthetic is persisted by save paths.
+ *
+ * Never touches id / role / permissions, so integrityHash is unaffected.
+ * TD-2026-09-26-846.
+ */
+export function normalizeAgentProfile(raw: any): AgentProfile {
+  if (!raw || typeof raw !== 'object') return raw as AgentProfile;
+  if (Array.isArray(raw.transferable)) {
+    for (const t of raw.transferable) {
+      if (!t || typeof t !== 'object') continue;
+      if (t.id == null && t.pattern != null) t.id = t.pattern;
+      delete t.pattern;
+    }
+  }
+  return raw as AgentProfile;
+}
+
+// ────────────────────────────────────────────────────────
 // Read Operations
 // ────────────────────────────────────────────────────────
 
@@ -134,7 +163,7 @@ export function loadAgentProfile(rootDir: string, agentId: string): AgentProfile
   if (fs.existsSync(projectPath)) {
     try {
       const content = fs.readFileSync(projectPath, 'utf-8');
-      const profile = yaml.load(content) as AgentProfile;
+      const profile = normalizeAgentProfile(yaml.load(content));
       if (profile) {
         const status = determineIntegrityStatus(profile);
         (profile as any).__integrityStatus = status;
@@ -151,13 +180,13 @@ export function loadAgentProfile(rootDir: string, agentId: string): AgentProfile
   if (fs.existsSync(globalPath)) {
     try {
       const content = fs.readFileSync(globalPath, 'utf-8');
-      const globalProfile = yaml.load(content) as AgentProfile;
+      const globalProfile = normalizeAgentProfile(yaml.load(content));
 
       // If both exist, deep-merge project over global
       if (fs.existsSync(projectPath)) {
         try {
           const projectContent = fs.readFileSync(projectPath, 'utf-8');
-          const projectProfile = yaml.load(projectContent) as Partial<AgentProfile>;
+          const projectProfile = normalizeAgentProfile(yaml.load(projectContent)) as Partial<AgentProfile>;
           const merged = deepMergeProfiles(globalProfile, projectProfile);
           const status = determineIntegrityStatus(merged);
           (merged as any).__integrityStatus = status;
@@ -220,7 +249,7 @@ export function loadAllAgentProfiles(rootDir: string): AgentProfile[] {
       for (const file of files) {
         try {
           const content = fs.readFileSync(path.join(GLOBAL_AGENTS_DIR, file), 'utf-8');
-          const profile = yaml.load(content) as AgentProfile;
+          const profile = normalizeAgentProfile(yaml.load(content));
           if (profile?.id) {
             const status = determineIntegrityStatus(profile);
             (profile as any).__integrityStatus = status;
@@ -243,7 +272,7 @@ export function loadAllAgentProfiles(rootDir: string): AgentProfile[] {
       for (const file of files) {
         try {
           const content = fs.readFileSync(path.join(projectDir, file), 'utf-8');
-          const projectProfile = yaml.load(content) as AgentProfile;
+          const projectProfile = normalizeAgentProfile(yaml.load(content));
           if (!projectProfile?.id) continue;
 
           const existing = profiles.get(projectProfile.id);
@@ -584,7 +613,10 @@ export function buildProfileEnrichment(
     parts.push('## Transferable Patterns');
     for (const p of patterns) {
       const appliedCount = p.appliedIn?.length || 0;
-      parts.push(`- ${p.id}: ${(p.successRate * 100).toFixed(0)}% success (learned in ${p.learnedIn}${appliedCount > 0 ? `, applied in ${appliedCount} projects` : ''})`);
+      const provenance: string[] = [];
+      if (p.learnedIn) provenance.push(`learned in ${p.learnedIn}`);
+      if (appliedCount > 0) provenance.push(`applied in ${appliedCount} projects`);
+      parts.push(`- ${p.id}: ${(p.successRate * 100).toFixed(0)}% success${provenance.length > 0 ? ` (${provenance.join(', ')})` : ''}`);
     }
     parts.push('');
   }

@@ -13,7 +13,7 @@ components:
     description: paradigm init — initialize Paradigm in a project
     type: command
   ScanCommand:
-    description: paradigm scan — rebuild symbol index
+    description: paradigm scan — rebuild symbol index. navigator.ts buildSymbolMap (exported) maps premise-core aggregator `filePath` to the project-relative containing directory (v7.9.1 fix — navigator.yaml had 0 symbol mappings because only path/directory were read)
     type: command
   DoctorCommand:
     description: paradigm doctor — health checks

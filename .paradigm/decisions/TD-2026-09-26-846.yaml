@@ -1,0 +1,57 @@
+id: TD-2026-09-26-846
+timestamp: '2026-09-26T00:28:08.240Z'
+title: Skills primitive + University overhaul + internals refactor arc (Phases 0–4)
+decision: >-
+  Add agent-owned skills as a first-class primitive (source ~/.paradigm/skills/<id>/SKILL.md, metadata.paradigm block,
+  one steward per skill, tool-version pins), design domain first. Project one-way to USER-GLOBAL
+  ~/.claude/skills/pdg-<id>/ by default (never write ~/.claude/skills/synced). Certification = Classroom (steward
+  proposes, peer refutes with executable scenario) + founder sign-off before projection. University KEEPS a thin human
+  track: packs become the shared distribution unit for skills+curricula, one Platform Academy UI, Classroom owns
+  certification. Arc scope = Phases 0–4: 0 unblock (single agent source of truth, loud undispatchable, .agent schema
+  bugs), 1 design skills, 2 University overhaul, 3 learning-store consolidation (~12→3), 4 MCP surface cut (139→≤40
+  tools).
+rationale: >-
+  Team audit (Arky, Mika, Loid, Cid, Rune, University audit) found one systemic failure: knowledge is authored but never
+  reaches a session — 367/378 notebook entries appliedCount 0, designer.agent behaviors: block read by no code,
+  transferable pattern: renders undefined, orchestration.ts:2213 silently drops Loid/Cid/Rune/Jinx (agents.yaml 11 vs
+  roster 26), Platform University route reads deleted courses/*.json, 0 University usage in 30d. Skills must be the
+  application path for existing knowledge, not another store.
+participants:
+  - id: ascend
+    role: human
+    stance: supported
+  - id: architect
+    role: agent
+    stance: proposed
+  - id: designer
+    role: agent
+    stance: proposed
+  - id: forge
+    role: agent
+    stance: proposed
+  - id: cid
+    role: agent
+    stance: proposed
+  - id: compliance
+    role: agent
+    stance: proposed
+alternatives_considered:
+  - option: Per-project .claude/skills projection
+    rejected_because: >-
+      Founder chose user-global so skills are available in every session; certification gate compensates for the blast
+      radius.
+  - option: Deprecate University or agents-only
+    rejected_because: Founder keeps a human education track.
+  - option: Phases 0–2 only
+    rejected_because: Founder chose the full arc; phases 3–4 share the migration with skills/University.
+symbols_affected:
+  - '#paradigm-mcp'
+  - '#university'
+  - '#classroom'
+  - '#orchestration'
+status: active
+tags:
+  - skills
+  - university
+  - refactor
+  - arc

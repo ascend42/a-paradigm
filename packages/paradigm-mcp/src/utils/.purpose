@@ -43,13 +43,29 @@ components:
       - symphony
       - networking
   agent-loader:
-    description: CRUD for .agent identity files — load/save profiles, expertise queries, auto-update from lore, merge with agents.yaml, sync from lore history, permission checking (path/tool), integrity hash computation/verification, integrity status at load time, prompt sanitization, permission constraint extraction, permission enforcement facade
+    description: CRUD for .agent identity files — load/save profiles, expertise queries, auto-update from lore, merge with agents.yaml, sync from lore history, permission checking (path/tool), integrity hash computation/verification, integrity status at load time, prompt sanitization, permission constraint extraction, permission enforcement facade. v7.9.1 normalizeAgentProfile runs after every profile yaml.load — legacy transferable[].pattern becomes id (explicit id wins; pattern removed; migrated to id on next save), no other defaults injected (learnedIn/appliedIn stay optional; enrichment omits learned-in when absent); never touches id/role/permissions so integrityHash is unaffected
     type: loader
     tags:
       - feature
       - agent-identity
       - permissions
       - security
+  agent-registry:
+    description: 'v7.9.1 (TD-2026-09-26-846) resolveDispatchableAgents(rootDir, opts?) — roster.yaml + loaded .agent profiles are authoritative for dispatch; .paradigm/agents.yaml is an optional overlay (role/focus/triggers/handoff_to/defaultModel/context/protocol override profile-derived values) and emits a one-time deprecation warning. Candidates = roster ids, else union(profile ids, agents.yaml ids). Benched profiles and roster members with neither profile nor agents.yaml entry are REPORTED as undispatchable, never dropped. Profile-derived definition: role = agents.yaml › ROLE_PROMPTS › profile.role; focus.reads = attention.paths; triggers = attention.concepts (keyword) + attention.symbols (symbol), tagged derived: true; handoff_to = partners › collaboration.with. Returns the parsed agents.yaml (manifest) for reuse and the orchestration block (default_mode, budget). Never deletes agents.yaml.'
+    type: loader
+    anchors:
+      - agent-registry.ts
+    tags:
+      - feature
+      - agent-identity
+      - orchestration
+  role-prompts:
+    description: ROLE_PROMPTS — battle-tested role prompts for the core agents, extracted from tools/orchestration.ts so #agent-registry can use them without a circular import
+    type: constant
+    anchors:
+      - role-prompts.ts
+    tags:
+      - orchestration
   notebook-loader:
     description: 'CRUD for agent notebook entries — load/save, search, promote from lore, increment applied count. The Classroom (TD-2026-06-19-007): reviseDown is the fail-side mutation (bumps appliedAndBrokeCount, lowers confidence, captures the "X except Y" refinement exception mechanically — prose authored at gated /paradigm:class refine, dedup by sourceFailureId); listAllAgentNotebookEntries + decayUnusedEntry are the decay-pass enumerate/mutate seams.'
     type: loader

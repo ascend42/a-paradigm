@@ -2,7 +2,7 @@
   "$meta": {
     "version": "1.0.0",
     "project": "a-paradigm",
-    "generatedAt": "2026-09-21T00:02:18.239Z",
+    "generatedAt": "2026-09-26T00:49:57.342Z",
     "paradigmVersion": "0.1.0",
     "sources": {
       "purposeFiles": 96,
@@ -22,14 +22,14 @@
       "filter": 3,
       "service": 89,
       "model": 15,
-      "utility": 59,
+      "utility": 60,
       "feature": 1,
       "theme": 1,
       "controller": 1,
       "tool": 44,
       "tool-group": 10,
       "util": 9,
-      "loader": 24,
+      "loader": 25,
       "app": 3,
       "schema": 4,
       "handler": 26,
@@ -42,6 +42,7 @@
       "state": 3,
       "integration": 2,
       "types": 10,
+      "constant": 1,
       "command-group": 8,
       "middleware": 1,
       "component": 17,
@@ -8206,9 +8207,11 @@
       "symbol": "#AgentTypes",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/types/.purpose",
-      "description": "Type definitions for persistent agent identity profiles — AgentProfile (with nickname for attributed responses), AgentPermissions, AgentExpertiseEntry, TransferablePattern, AgentProjectContext, plus v5.0 Renaissance extensions: AgentAttention, AgentLearning, AgentContext, AgentReporting, AgentCollaboration, AgentNomination. v6.0.3+ adds PartnerRef interface ({id, relation?, share_notebooks?: 'off'|'read'|'read-write'}) and partners?: PartnerRef[] field on AgentProfile (excluded from integrityHash).",
+      "description": "Type definitions for persistent agent identity profiles — AgentProfile (with nickname for attributed responses), AgentPermissions, AgentExpertiseEntry, TransferablePattern, AgentProjectContext, plus v5.0 Renaissance extensions: AgentAttention, AgentLearning, AgentContext, AgentReporting, AgentCollaboration, AgentNomination. v6.0.3+ adds PartnerRef interface ({id, relation?, share_notebooks?: 'off'|'read'|'read-write'}) and partners?: PartnerRef[] field on AgentProfile (excluded from integrityHash). v7.9.1 widens AgentPersonality to KnownStyle/KnownRisk/KnownVerbosity | string (templates use ~25 styles; display-only), TransferablePattern gains deprecated pattern? alias with optional learnedIn/appliedIn, AgentProfile gains behaviors? (unread until skills Phase 1) and tags?, and exports KNOWN_AGENT_KEYS (mirrored in doctor #agent-audit).",
       "visualTags": [],
-      "related": [],
+      "related": [
+        "#agent-audit"
+      ],
       "componentType": "types"
     },
     "NotebookTypes": {
@@ -8342,12 +8345,34 @@
       "symbol": "#agent-loader",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "CRUD for .agent identity files — load/save profiles, expertise queries, auto-update from lore, merge with agents.yaml, sync from lore history, permission checking (path/tool), integrity hash computation/verification, integrity status at load time, prompt sanitization, permission constraint extraction, permission enforcement facade",
+      "description": "CRUD for .agent identity files — load/save profiles, expertise queries, auto-update from lore, merge with agents.yaml, sync from lore history, permission checking (path/tool), integrity hash computation/verification, integrity status at load time, prompt sanitization, permission constraint extraction, permission enforcement facade. v7.9.1 normalizeAgentProfile runs after every profile yaml.load — legacy transferable[].pattern becomes id (explicit id wins; pattern removed; migrated to id on next save), no other defaults injected (learnedIn/appliedIn stay optional; enrichment omits learned-in when absent); never touches id/role/permissions so integrityHash is unaffected",
       "visualTags": [
         "spinner"
       ],
       "related": [],
       "componentType": "loader"
+    },
+    "agent-registry": {
+      "id": "agent-registry",
+      "name": "Agent Registry",
+      "symbol": "#agent-registry",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "v7.9.1 (TD-2026-09-26-846) resolveDispatchableAgents(rootDir, opts?) — roster.yaml + loaded .agent profiles are authoritative for dispatch; .paradigm/agents.yaml is an optional overlay (role/focus/triggers/handoff_to/defaultModel/context/protocol override profile-derived values) and emits a one-time deprecation warning. Candidates = roster ids, else union(profile ids, agents.yaml ids). Benched profiles and roster members with neither profile nor agents.yaml entry are REPORTED as undispatchable, never dropped. Profile-derived definition: role = agents.yaml › ROLE_PROMPTS › profile.role; focus.reads = attention.paths; triggers = attention.concepts (keyword) + attention.symbols (symbol), tagged derived: true; handoff_to = partners › collaboration.with. Returns the parsed agents.yaml (manifest) for reuse and the orchestration block (default_mode, budget). Never deletes agents.yaml.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "loader"
+    },
+    "role-prompts": {
+      "id": "role-prompts",
+      "name": "Role Prompts",
+      "symbol": "#role-prompts",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "ROLE_PROMPTS — battle-tested role prompts for the core agents, extracted from tools/orchestration.ts so",
+      "visualTags": [],
+      "related": [],
+      "componentType": "constant"
     },
     "notebook-loader": {
       "id": "notebook-loader",
@@ -8785,7 +8810,7 @@
       "symbol": "#ScanCommand",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/.purpose",
-      "description": "paradigm scan — rebuild symbol index",
+      "description": "paradigm scan — rebuild symbol index. navigator.ts buildSymbolMap (exported) maps premise-core aggregator `filePath` to the project-relative containing directory (v7.9.1 fix — navigator.yaml had 0 symbol mappings because only path/directory were read)",
       "visualTags": [],
       "related": [],
       "componentType": "command"
@@ -9317,6 +9342,17 @@
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/doctor/.purpose",
       "description": "7 context quality checks for AI instruction files (CLAUDE.md, .cursorrules, AGENTS.md)",
+      "visualTags": [],
+      "related": [],
+      "componentType": "utility"
+    },
+    "agent-audit": {
+      "id": "agent-audit",
+      "name": "Agent Audit",
+      "symbol": "#agent-audit",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/doctor/.purpose",
+      "description": "v7.9.1 (TD-2026-09-26-846) auditAgents(rootDir, {globalDir?}) — pure check behind doctor's \"Agent profile keys\" (warn on keys outside a local KNOWN_AGENT_KEYS copy; info when `behaviors:` is present but unread until skills Phase 1) and \"Roster dispatchability\" (warn on active roster ids with no project/global .agent and no agents.yaml entry, or benched on the roster; fix = paradigm agent sync-global or deactivate). Scans project .agent files plus roster-relevant global ones.",
       "visualTags": [],
       "related": [],
       "componentType": "utility"
@@ -20353,6 +20389,14 @@
       "category": "components",
       "id": "agent-loader"
     },
+    "#agent-registry": {
+      "category": "components",
+      "id": "agent-registry"
+    },
+    "#role-prompts": {
+      "category": "components",
+      "id": "role-prompts"
+    },
     "#notebook-loader": {
       "category": "components",
       "id": "notebook-loader"
@@ -20684,6 +20728,10 @@
     "#context-audit": {
       "category": "components",
       "id": "context-audit"
+    },
+    "#agent-audit": {
+      "category": "components",
+      "id": "agent-audit"
     },
     "#paradigm-hooks": {
       "category": "components",

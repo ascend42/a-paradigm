@@ -1,149 +1,35 @@
 {
-  "sessionId": "smthyyvcx",
-  "startTime": 1788224956737,
-  "lastActivity": 1788469491416,
+  "sessionId": "smuay7sub",
+  "startTime": 1789977212867,
+  "lastActivity": 1789977668353,
   "breadcrumbs": [
     {
-      "timestamp": 1788224998881,
+      "timestamp": 1789977247825,
       "action": "tool-call",
       "tool": "paradigm_session_recover",
       "summary": "session_recover"
     },
     {
-      "timestamp": 1788224999104,
-      "action": "tool-call",
-      "tool": "paradigm_status",
-      "summary": "Checked project status"
-    },
-    {
-      "timestamp": 1788225652677,
-      "action": "tool-call",
-      "tool": "paradigm_search",
-      "symbol": "session recovery checkpoint",
-      "summary": "Searched for \"session recovery checkpoint\""
-    },
-    {
-      "timestamp": 1788225657797,
-      "action": "tool-call",
-      "tool": "paradigm_search",
-      "symbol": "session-tracker",
-      "summary": "Searched for \"session-tracker\""
-    },
-    {
-      "timestamp": 1788228064668,
-      "action": "tool-call",
-      "tool": "paradigm_orchestrate_inline",
-      "summary": "orchestrate_inline: plan"
-    },
-    {
-      "timestamp": 1788228689099,
-      "action": "tool-call",
-      "tool": "paradigm_orchestrate_inline",
-      "summary": "orchestrate_inline: execute"
-    },
-    {
-      "timestamp": 1788231804358,
-      "action": "tool-call",
-      "tool": "paradigm_decision_record",
-      "summary": "decision_record: Session-recovery stays branch-blind; recovery banner annotat"
-    },
-    {
-      "timestamp": 1788232371879,
-      "action": "tool-call",
-      "tool": "paradigm_search",
-      "symbol": "session recovery checkpoint",
-      "summary": "Searched for \"session recovery checkpoint\""
-    },
-    {
-      "timestamp": 1788232376483,
-      "action": "tool-call",
-      "tool": "paradigm_search",
-      "symbol": "session recovery",
-      "summary": "Searched for \"session recovery\""
-    },
-    {
-      "timestamp": 1788232376493,
-      "action": "tool-call",
-      "tool": "paradigm_search",
-      "symbol": "session",
-      "summary": "Searched for \"session\""
-    },
-    {
-      "timestamp": 1788232394635,
-      "action": "tool-call",
-      "tool": "paradigm_search",
-      "symbol": "recovery checkpoint",
-      "summary": "Searched for \"recovery checkpoint\""
-    },
-    {
-      "timestamp": 1788232993241,
-      "action": "tool-call",
-      "tool": "paradigm_captain_debrief",
-      "summary": "captain_debrief: orch-mti16vae-hfi5"
-    },
-    {
-      "timestamp": 1788232996129,
-      "action": "tool-call",
-      "tool": "paradigm_ambient_learn_postflight",
-      "summary": "ambient_learn_postflight: orch-mti16vae-hfi5"
-    },
-    {
-      "timestamp": 1788250242447,
+      "timestamp": 1789977668270,
       "action": "tool-call",
       "tool": "paradigm_task_create",
-      "summary": "Created task: \"Verify ${VAR} expansion in .mcp.json for Cursor / Cline / Co\""
+      "summary": "Created task: \"Document config.yaml `conventions:` as THE home for project-\""
     },
     {
-      "timestamp": 1788250259316,
-      "action": "tool-call",
-      "tool": "paradigm_captain_debrief",
-      "summary": "captain_debrief: orch-mcp-config-path-fix-2026-09-01"
-    },
-    {
-      "timestamp": 1788373359094,
-      "action": "tool-call",
-      "tool": "paradigm_task_create",
-      "summary": "Created task: \"Wire ParadigmFiles.meta in loadParadigmFiles (packages/parad\""
-    },
-    {
-      "timestamp": 1788373414806,
-      "action": "tool-call",
-      "tool": "paradigm_captain_debrief",
-      "summary": "captain_debrief: orch-headroom-adoption-2026-09-02"
-    },
-    {
-      "timestamp": 1788374585690,
-      "action": "tool-call",
-      "tool": "paradigm_task_done",
-      "summary": "Completed task T-2026-09-02-001"
-    },
-    {
-      "timestamp": 1788374585832,
-      "action": "tool-call",
-      "tool": "paradigm_task_done",
-      "summary": "Completed task T-2026-09-01-005"
-    },
-    {
-      "timestamp": 1788469491041,
-      "action": "tool-call",
-      "tool": "paradigm_lore_record",
-      "summary": "lore_record: Framework hygiene + Headroom adoption + install fix (7.8.2→7"
-    },
-    {
-      "timestamp": 1788833492602,
+      "timestamp": 1789977676707,
       "action": "tool-call",
       "tool": "paradigm_session_checkpoint",
-      "summary": "Checkpoint: phase=complete, Shipped 7.8.2→7.8.6, all published to npm + merged to main +"
+      "summary": "Checkpoint: phase=complete, Darren/no-review investigation RESOLVED: not contamination. "
+    },
+    {
+      "timestamp": 1790379014722,
+      "action": "tool-call",
+      "tool": "paradigm_session_checkpoint",
+      "summary": "Checkpoint: phase=complete, Memory Steward 7.9.0 SHIPPED: PR #46 merged to main (f73b9ed"
     }
   ],
-  "symbolsModified": [
-    "session recovery checkpoint",
-    "session-tracker",
-    "session recovery",
-    "session",
-    "recovery checkpoint"
-  ],
+  "symbolsModified": [],
   "filesExplored": [
-    "mcp.json"
+    "config.yaml"
   ]
 }

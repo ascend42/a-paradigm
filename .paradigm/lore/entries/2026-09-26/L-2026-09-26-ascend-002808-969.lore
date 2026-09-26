@@ -1,0 +1,16 @@
+id: L-2026-09-26-ascend-002808-969
+type: insight
+timestamp: '2026-09-26T00:28:08.241Z'
+author: ascend
+title: Decision TD-2026-09-26-846 recorded
+summary: Companion lore entry for decision record TD-2026-09-26-846. See .paradigm/decisions/TD-2026-09-26-846.yaml.
+symbols_touched:
+  - '#paradigm-mcp'
+  - '#university'
+  - '#classroom'
+  - '#orchestration'
+references:
+  decision_id: TD-2026-09-26-846
+tags:
+  - companion-lore
+  - decision-reference

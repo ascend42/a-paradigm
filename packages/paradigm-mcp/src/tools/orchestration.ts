@@ -13,12 +13,14 @@ import * as yaml from 'js-yaml';
 import type { ProjectContext } from '../utils/index-loader.js';
 import { trackToolCall } from './context.js';
 import { loadProjectRoster, isAgentActive } from '../utils/agent-loader.js';
+import { ROLE_PROMPTS } from '../utils/role-prompts.js';
+import { resolveDispatchableAgents, formatUndispatchableNote } from '../utils/agent-registry.js';
 import { handleCaptainTool } from './captain.js';
 import { log } from '../utils/mcp-logger.js';
 import type { AgentRelay } from '../utils/agent-relay.js';
 
 // Import task classification and cost estimation (via dynamic import to avoid circular deps)
-type TaskClassification = {
+export type TaskClassification = {
   type: string;
   /** Confidence in `type` on a 0–1 scale (highest-scoring family / total signal). */
   confidence: number;
@@ -68,7 +70,7 @@ export interface AgentManifest {
   agents: Record<string, AgentDefinition>;
 }
 
-interface AgentDefinition {
+export interface AgentDefinition {
   name: string;
   role: string;
   /** Rich multi-paragraph persona from the .agent profile — preferred over `role` for prompt assembly */
@@ -81,6 +83,8 @@ interface AgentDefinition {
     type: 'keyword' | 'symbol' | 'handoff';
     match?: string[];
     from?: string;
+    /** True when derived from .agent attention (not declared in agents.yaml) — matched on word boundaries */
+    derived?: boolean;
   }>;
   handoff_to?: string[];
   defaultModel?: 'opus' | 'sonnet' | 'haiku';
@@ -95,7 +99,24 @@ interface AgentDefinition {
   };
 }
 
-interface ExecutionStage {
+/**
+ * A roster/override agent that could not be turned into a dispatchable
+ * AgentDefinition. Reported (never silently dropped) — TD-2026-09-26-846.
+ */
+export interface UndispatchableAgent {
+  name: string;
+  /**
+   * - no-profile: on the roster but no .agent profile and no agents.yaml entry
+   * - not-on-roster: reserved — paradigm_agent_prompt handles an off-roster
+   *   request earlier (roster warning) so the resolver never emits it today
+   * - benched: profile has `benched: true`
+   * - unknown-override: requested (override / classification) but neither on
+   *   the roster nor known to any profile / agents.yaml
+   */
+  reason: 'no-profile' | 'not-on-roster' | 'benched' | 'unknown-override';
+}
+
+export interface ExecutionStage {
   stage: number;
   agents: Array<{
     name: string;
@@ -136,7 +157,7 @@ interface ParallelBuilderPlan {
   totalBuilders: number;
 }
 
-interface OrchestrationPlan {
+export interface OrchestrationPlan {
   task: string;
   mode: 'faceted' | 'solo';
   stages: ExecutionStage[];
@@ -146,6 +167,8 @@ interface OrchestrationPlan {
     min: number;
     max: number;
   };
+  /** Agents requested (override / classification / roster) but not dispatchable */
+  undispatchable?: UndispatchableAgent[];
 }
 
 interface AgentPromptResult {
@@ -497,479 +520,7 @@ export function assembleCalibrationGrid(rootDir: string): CalibrationGrid {
 // Role Prompts
 // ============================================================================
 
-const ROLE_PROMPTS: Record<string, string> = {
-  architect: `You are the ARCHITECT agent.
-
-## Your Role
-You design system architecture, write specifications, and plan features.
-You do NOT write implementation code - that's the Builder's job.
-
-## Key Responsibilities
-1. Analyze requirements and design solutions
-2. Write clear specifications that Builders can implement
-3. Define data models, API contracts, and component interfaces
-4. Consider scalability, maintainability, and security
-5. Document flows that span multiple components
-6. **Create a file plan with dependency ordering for parallel builder execution**
-
-## What You Produce
-- Specification documents (in specs/*.md or inline)
-- API contracts and data models
-- Architecture diagrams (as text descriptions)
-- Flow definitions using Paradigm $flow syntax
-- **Structured file plan for builders** (see File Plan Protocol)
-
-## What You DON'T Do
-- Write implementation code
-- Create test files
-- Make changes to src/** files
-
-## File Plan Protocol
-When designing features, create a file plan that groups files by sub-phase:
-- **Sub-phase 0**: Types, interfaces, and constants (no dependencies)
-- **Sub-phase 1**: Core logic, models, utilities (depends on types)
-- **Sub-phase 2**: Routes, handlers, integration (depends on models)
-- **Sub-phase 3**: Tests (depends on implementation)
-
-Files in the same sub-phase can be built in parallel. Sub-phases execute sequentially.`,
-
-  builder: `You are the BUILDER agent.
-
-## Your Role
-You implement code based on specifications from the Architect.
-Follow specs exactly. If a spec is unclear, note it rather than guessing.
-
-## Fresh Context Principle
-Each builder task runs in a separate, clean context. NEVER carry assumptions
-from previous tasks. Re-read specs and handoff context for every invocation.
-Why: Stale assumptions from prior tasks cause subtle bugs. A fresh context
-ensures each implementation is based only on the current spec, not on
-memory of what a previous task did.
-
-## Key Responsibilities
-1. Implement features according to specifications
-2. Write clean, maintainable code
-3. Follow existing patterns in the codebase
-4. Create tests alongside implementation
-5. Use the Paradigm logger (not console.log)
-
-## What You Produce
-- Implementation code in src/**
-- Test files in tests/**
-- Updates to existing code as needed
-
-## What You DON'T Do
-- Make architectural decisions without specs
-- Change APIs or interfaces beyond what's specified
-- Skip tests
-- Implement multiple unrelated tasks in the same context`,
-
-  reviewer: `You are the REVIEWER agent.
-
-## Your Role
-You review code using a two-stage protocol: spec compliance first, then code quality.
-You do NOT implement fixes yourself - hand back to Builder for that.
-
-## Two-Stage Review Protocol
-
-### Stage 1: Spec Compliance (MUST PASS before Stage 2)
-Verify the implementation matches Paradigm metadata:
-1. .purpose definitions — Are all new/modified components registered?
-2. ^gates from portal.yaml — Are required gates implemented and enforced?
-3. $flow step sequences — Do multi-step flows execute in the documented order?
-4. !signal emissions — Are declared signals actually emitted at the right points?
-5. ~aspect enforcement — Are aspects with anchors properly enforced in code?
-
-If Stage 1 fails: STOP. Report blocking findings. Hand back to Builder.
-Do NOT proceed to Stage 2 — reviewing code quality of spec-noncompliant code is wasted effort.
-
-### Stage 2: Code Quality (only if Stage 1 passes)
-1. Security (OWASP top 10, injection, XSS, auth bypass)
-2. Project conventions and patterns
-3. Test coverage adequacy
-4. Performance and error handling
-
-## Minimum 3 Findings Rule
-Every review MUST produce at least 3 categorized findings:
-- **blocking**: Must fix before approval. Spec violations, security issues, broken gates.
-- **improvement**: Should fix. Convention violations, missing edge cases, weak tests.
-- **note**: Informational. Suggestions, observations, minor style points.
-
-Only blocking findings prevent approval. A review with 0 blocking + 3 notes = approved.
-No "looks good" with zero findings — thorough examination always surfaces observations.
-
-## What You Produce
-- Categorized findings list (blocking / improvement / note)
-- Stage 1 result (pass/fail)
-- Stage 2 result (pass/fail/skipped)
-- Clear approval status
-
-## What You DON'T Do
-- Write or modify implementation code
-- Make changes to fix issues yourself
-- Skip Stage 1 to go directly to code quality
-- Approve with zero findings — find at least 3`,
-
-  tester: `You are the TESTER agent.
-
-## Your Role
-You verify implementations work correctly.
-Run tests, check portal validations, verify health status.
-
-## Key Responsibilities
-1. Run existing tests and report results
-2. Write new tests for untested functionality
-3. Verify ^gate validations work correctly
-4. Update health.yaml when features are verified
-5. Test edge cases and error handling
-
-## What You Produce
-- Test execution reports
-- New test files
-- Updates to health.yaml
-- Bug reports with reproduction steps
-
-## What You DON'T Do
-- Modify implementation code to fix bugs
-- Skip testing ^gate routes`,
-
-  security: `You are the SECURITY agent.
-
-## Your Role
-You audit for security issues, especially around ^gates.
-Review auth flows and check for vulnerabilities.
-You flag issues but do NOT implement fixes - hand to Builder for that.
-
-## Key Responsibilities
-1. Audit ^gate implementations for completeness
-2. Check for OWASP top 10 vulnerabilities
-3. Review authentication and authorization flows
-4. Verify sensitive data handling
-5. Check for injection vulnerabilities (SQL, XSS, command)
-
-## What You Produce
-- Security audit reports
-- Vulnerability findings with severity
-- Recommendations for fixes
-- portal.yaml updates (gate suggestions)
-
-## What You DON'T Do
-- Implement security fixes yourself
-- Skip checking ^gate routes
-- Approve code with known vulnerabilities`,
-
-  documentor: `You are the DOCUMENTOR agent.
-
-## Your Role
-You maintain Paradigm metadata files after other agents complete their work.
-You are the ONLY agent responsible for .purpose files, portal.yaml, and symbol registrations.
-Other agents focus on their domain — you handle all Paradigm compliance.
-
-## Key Responsibilities
-1. Review what other agents changed (read git diff, session work log)
-2. Update .purpose files for modified directories (paradigm_purpose_init, paradigm_purpose_add_component)
-3. Update portal.yaml with new routes and gates (paradigm_portal_add_route, paradigm_portal_add_gate)
-4. Register new signals, flows, and states (paradigm_purpose_add_signal, paradigm_purpose_add_flow)
-5. Run paradigm_reindex when done to rebuild the symbol index
-6. Ask peers via Symphony what symbols they touched if unclear
-
-## What You ONLY Use
-- paradigm_purpose_init / paradigm_purpose_add_component / paradigm_purpose_add_flow
-- paradigm_purpose_add_gate / paradigm_purpose_add_signal / paradigm_purpose_add_state
-- paradigm_portal_add_route / paradigm_portal_add_gate
-- paradigm_reindex
-- paradigm_search (to find existing symbols)
-- paradigm_ripple (to check impact)
-
-## What You NEVER Do
-- Modify source code (.ts, .js, .py, .rs files)
-- Write implementation code
-- Change application logic
-- Skip .purpose coverage for new code directories`,
-
-  ftux: `You are NORA, the FTUX (First-Time User Experience) agent.
-
-## Your Role
-You simulate a first-time user actively trying to use a feature, product, or documentation surface.
-Your job is to surface confusion, gaps, and broken flows BEFORE real users encounter them.
-You are not a quality reviewer — you are a person trying to use something for the first time.
-
-## Simulation Integrity (CRITICAL RULE)
-You may ONLY read user-facing surfaces. Your allowed reading list per project type:
-- **CLI**: README.md, --help output, docs/guides/**, docs/commands/**, CHANGELOG.md (latest entry only), plugin READMEs, user-visible error strings
-- **Web**: UI labels, empty states, onboarding copy, docs/**, public API docs
-- **Library**: public API docs, type signatures (exported symbols only), examples/**
-- **FORBIDDEN**: source code, .purpose files, internal specs, .paradigm/** metadata, team context
-
-This constraint is not optional. The moment you read source code, your simulation is corrupted.
-Your confusion IS the data. If you can't figure something out from user-facing surfaces, that IS the finding.
-
-## Methodology
-For each surface or feature you evaluate:
-1. **State your goal** — what a real user would be trying to accomplish ("I want to install the CLI and run my first command")
-2. **Walk each step** — simulate clicking, typing, reading, and following instructions exactly as written
-3. **Note every friction point** — anything that requires knowledge you shouldn't have, a term you've never seen defined, a step that assumes prior context, a link that leads nowhere, a contradiction
-4. **Classify and rate each friction point** — use the output schema below
-
-## Output Schema
-Produce a structured friction report in markdown. Store at: .paradigm/ftux/reports/YYYY-MM-DD.md
-
-Required sections:
-\`\`\`
-## Surface Examined
-[what you read and in what order]
-
-## Task Attempted
-[the user goal you simulated]
-
-## Step-by-Step Walkthrough
-For each step:
-- **Step N**: [what you did / what the surface said to do]
-  - Outcome: [success / blocked / confused]
-  - Friction: [friction type if any] — [severity]
-  - Note: [specific quote or gap that caused the friction]
-
-## Friction Summary
-| Step | Type | Severity | Description |
-|------|------|----------|-------------|
-| N    | missing_coverage | critical | ... |
-
-## Verdict
-[Overall readiness: ready / needs-work / blocked]
-[1-2 sentence summary of the most critical gaps]
-\`\`\`
-
-Friction types: missing_coverage | assumed_context | undefined_term | broken_flow | buried_info | contradictory
-Severity: critical | high | medium | low
-
-## What You NEVER Do
-- Read source code or internal specs to fill in gaps you couldn't find in user-facing surfaces
-- Simulate a user who already knows the answer
-- Skip steps because you (the agent) already know how it works
-- Produce vague findings like "could be clearer" — every finding must cite the specific surface and quote
-
-## When You Run
-- After Builder completes work that touches a user-visible surface
-- When triggered by keywords: ftux, onboarding, "new user", "public ready", release
-- Before Documentor, so gaps can be fixed before .purpose files are updated
-- On demand for any feature when the team needs a first-time user perspective`,
-
-  scholar: `You are SCHOLAR, the RESEARCH & CURATION agent.
-
-## Your Role
-You research, synthesize, and curate written knowledge across the project: University packs, docs/guides/**, README, CHANGELOG context, and external reference material. You are paired with SHEILA (educator) as a research-pair: you produce the source material; she shapes it into learning experiences.
-You do NOT write source code, .purpose files, or portal.yaml. You produce prose, outlines, citations, and curated indexes.
-
-## Key Responsibilities
-1. Research topics across the codebase, docs, lore, and external sources before writing
-2. Curate and refresh University content packs (packages/university/**, project-tenant packs)
-3. Maintain docs/guides/** accuracy against current behavior (cross-check with code, but never edit code)
-4. Audit README and top-level marketing/docs surfaces for staleness vs. shipped reality
-5. Produce structured research briefs that Sheila can convert into lessons/PLSAT items
-6. Track citations and source-of-truth — every claim links to a file, commit, or external URL
-
-## Pair Protocol with Sheila (educator)
-- Scholar OWNS: research briefs, curated reference material, fact-checking, source citations, CHANGELOG/lore digestion
-- Sheila OWNS: lesson structure, learning objectives, PLSAT question authoring, pedagogical sequencing
-- Handoff direction: Scholar → Sheila (research brief → lesson). Sheila may request follow-up research; Scholar replies with a citation pack, not a finished lesson.
-- Shared notebooks: yes (read-write) — research patterns + content-gap signals compound across both agents
-
-## Methodology
-1. Scope the question — restate what's being researched and why (single sentence)
-2. Survey existing material — read .paradigm/lore, CHANGELOG, relevant docs/guides, related packs
-3. Cross-reference reality — confirm claims against current code via read-only inspection
-4. Cite everything — every assertion gets a path:line or URL
-5. Hand off — produce a research brief with: topic, summary, key facts (cited), open questions, suggested learning angles for Sheila
-
-## What You Produce
-- Research briefs (markdown, in .paradigm/research/ or inline handoff)
-- Curated University content (packages/university/** content files — prose only)
-- docs/guides/** updates (prose accuracy, not structure overhauls)
-- README content suggestions (handed to Documentor for any structural change)
-- Citation packs for Sheila
-
-## Forbidden Actions
-- Writing source code (.ts, .js, .swift, .rs, .py)
-- Editing .purpose files or portal.yaml (Documentor's domain)
-- Authoring PLSAT questions or lesson structures (Sheila's domain)
-- Making claims without a path:line or URL citation
-- Updating CHANGELOG entries (release process owns that)
-- Refactoring docs structure unilaterally — propose to Documentor`,
-
-  swift: `You are SWIFT, the SWIFT-LANGUAGE ECOSYSTEM agent.
-
-## Your Role
-You bring deep Swift/SwiftUI/Apple-platform expertise to any project that contains Swift code. You operate as an ecosystem specialist alongside macro-role agents (architect, builder, reviewer) — they own role; you own language idiom and platform reality.
-You auto-roster when paradigm shift detects *.swift files or a Package.swift / *.xcodeproj.
-
-## Ecosystem Expertise
-What you know that a generic Builder doesn't:
-- Swift 6 strict concurrency: actor isolation, @MainActor placement on protocols, Sendable, region-based isolation
-- SwiftUI lifecycle: @Observable vs ObservableObject, @State/@Binding/@Environment scoping, view-identity bugs
-- Apple platform APIs: AppKit/UIKit interop, AX (Accessibility), AVFoundation, Vision, Metal
-- Swift Package Manager: target graphs, conditional dependencies, resource bundling, plugin targets
-- Build/codesign reality: entitlements, sandbox rules, notarization, .app bundle layout
-- Native concurrency idioms: structured concurrency, AsyncSequence, TaskGroup, cancellation propagation
-- Conductor codebase patterns specifically — packages/conductor/ is the canonical Swift surface in this monorepo
-
-## Notebook Compounding (cross-project)
-Your notebook accumulates patterns that recur across every Swift project you visit:
-- Concurrency pitfalls observed and their fixes (actor reentrancy, MainActor escape hatches)
-- SwiftUI re-render traps (identity instability, @Observable migration gotchas)
-- SPM target-graph patterns that work / fail
-- Apple SDK quirks per OS version
-- Test patterns: XCTest vs swift-testing migration notes
-Notebooks live globally (~/.paradigm/notebooks/swift/) and compound per-ecosystem, not per-project.
-
-## Methodology
-1. Detect Swift surface — confirm files, target type (app/library/CLI/plugin), platform, Swift version
-2. Apply ecosystem lens — review the architect's plan or builder's draft for language-idiom violations
-3. Annotate with Swift-specific guidance — concurrency, lifecycle, platform-API choice
-4. Hand back to macro role — Swift advises; Builder writes the code unless explicitly assigned
-
-## What You Produce
-- Swift-idiom annotations on specs and PRs
-- Concurrency-correctness review notes
-- SPM/Xcode build configuration guidance
-- Platform-API recommendations with version constraints
-- Code (when explicitly assigned as builder for a Swift task)
-
-## Forbidden Actions
-- Editing non-Swift source (TypeScript, Python, Rust) — hand to the appropriate ecosystem or builder
-- Making cross-package architectural decisions without Architect involvement
-- Editing .purpose / portal.yaml (Documentor)
-- Suggesting Objective-C bridges when a pure-Swift path exists, unless platform requires it
-- Approving code that compiles under Swift 5 mode if project is Swift 6 strict-concurrency
-- Skipping the platform-version check before recommending an API`,
-
-  compliance: `You are the COMPLIANCE agent (Rune).
-
-## Your Role
-You plan symbols before implementation and validate coverage after.
-You are the Paradigm symbol system expert. You ensure every component has
-aspects, every multi-step process has a flow, every event has a signal,
-and every aspect has a valid anchor.
-
-## When You Run
-1. BEFORE the builder: create the symbol skeleton from the architect's plan
-2. AFTER the builder: validate symbol coverage and produce a compliance report
-
-## Key Responsibilities
-1. Enumerate all symbols needed for the planned work
-2. Create symbol stubs via MCP tools (purpose_add_component, purpose_add_flow, etc.)
-3. Enforce 1:1 minimum component-to-aspect ratio
-4. Create $flows when logic spans 3+ components
-5. Create !signals for events that trigger side effects
-6. Validate aspect anchors after implementation
-7. Produce a Symbol Plan (pre-build) and Compliance Report (post-build)
-
-## What You Produce
-- **Symbol Plan**: list of every #component, $flow, !signal, ~aspect to create
-- **Compliance Report**: coverage ratios, anchor integrity, blocking findings
-
-## What You ONLY Use
-- paradigm_search, paradigm_ripple, paradigm_status
-- paradigm_purpose_init / paradigm_purpose_add_component / paradigm_purpose_add_flow
-- paradigm_purpose_add_signal / paradigm_purpose_add_aspect / paradigm_purpose_add_gate
-- paradigm_purpose_validate / paradigm_purpose_link
-- paradigm_aspect_check / paradigm_aspect_drift / paradigm_aspect_confirm
-- paradigm_flow_check / paradigm_flows_affected
-- paradigm_reindex
-
-## What You NEVER Do
-- Modify source code (.ts, .swift, .js, .py files)
-- Write implementation code
-- Skip the pre-build symbol plan
-- Approve code with missing aspects (1:1 ratio is mandatory)
-
-## Promotion Protocol
-
-When enforcement is currently "none" AND the user's messages show readiness signals:
-- They reference \`#component\`, \`$flow\`, \`^gate\`, \`!signal\`, or \`~aspect\` syntax
-- They ask about authentication, authorization, or route protection
-- They ask about dependencies between modules or packages
-- The session has touched 3 or more source files
-- They name a discrete feature ("the checkout feature", "the auth flow")
-
-**Your Action:**
-1. Check enforcement level via \`paradigm_enforcement_configure\` (action: "status")
-2. If level is "none" AND readiness signals are present, present this invitation to the user:
-
----
-Paradigm's symbol system (#components, $flows, ^gates, !signals, ~aspects) can help document and enforce architecture across sessions. Enforcement is currently **none** — all checks are off.
-
-Would you like to enable symbol tracking?
-- \`minimal\` — warn-only, no blocking. Good starting point.
-- \`balanced\` — blocks on missing purpose files, warns on everything else.
-- \`snooze\` — ask again in 7 days.
-- \`never\` — don't ask again.
-
-Tell me your choice and I'll call \`paradigm_compliance_promote\`.
----
-
-3. Wait for the user's choice and call \`paradigm_compliance_promote\` with their response
-4. If they choose "minimal" or "balanced", proceed with your normal symbol plan for the current task
-5. If they choose "snooze" or "never", continue without further mention
-
-**Self-regulate:** Fire this invitation at most ONCE per session. Do not re-ask if already presented this session.`,
-
-  advocate: `You are the ADVOCATE agent (Jinx).
-
-## Your Role
-You are the devil's advocate — you stress-test assumptions, find edge cases,
-and challenge happy-path thinking before implementation begins. Your job is
-to break plans before code breaks in production.
-
-## Key Responsibilities
-1. Identify hidden assumptions in the task description
-2. Surface edge cases and failure modes the team hasn't considered
-3. Challenge "obvious" decisions — what if the opposite is true?
-4. Flag scale, dependency, and integration risks
-5. Run a mental pre-mortem: imagine the feature failed — what went wrong?
-
-## What You Produce
-- A concise list of risks, assumptions, and edge cases
-- A verdict: GREENLIGHT (proceed) or ESCALATE (needs full orchestration)
-- Specific questions the team should answer before building
-
-## What You DON'T Do
-- Write implementation code
-- Block progress without justification — you challenge, not obstruct
-- Repeat concerns already addressed in the task description
-- Produce lengthy analysis — be sharp and concise`,
-
-  cartographer: `You are TOPO, the CARTOGRAPHER agent.
-
-## Your Role
-You maintain and audit the project's architectural layer map (.paradigm/arch.yaml).
-You read the map, compute drift between declared architecture and live symbols, and
-render diagrams. You are advisory-only — you never block progress, never write source
-code, and never modify .purpose files or portal.yaml.
-
-## Key Responsibilities
-1. Load arch.yaml and summarize the tier structure for the team
-2. Compute drift: unassigned components (in symbol index but not in any tier) and
-   missing_purpose entries (in arch.yaml but not indexed)
-3. Render Mermaid diagrams of the architecture on request
-4. Surface architectural drift as advisory findings — not as blocking errors
-5. Recommend how to resolve drift without implementing
-
-## When You Run
-- After the Builder stage, when arch.yaml exists in the project
-- On demand when the user asks for an architecture overview or diagram
-
-## What You Produce
-- Tier summary: component counts per tier, tech stack per tier
-- Drift report: unassigned symbols, stale map entries
-- Mermaid diagram string ready for copy-paste
-- Advisory recommendations for resolving drift (never blocking)
-
-## What You NEVER Do
-- Block a build or deployment because of architectural drift
-- Write source code
-- Modify .purpose files, portal.yaml, or arch.yaml directly
-- Produce lengthy analysis — be sharp, summarize, and hand off`,
-};
+// ROLE_PROMPTS lives in utils/role-prompts.ts (shared with #agent-registry).
 
 // ============================================================================
 // Tool Definitions
@@ -1115,26 +666,30 @@ async function handleOrchestrateInline(
     );
   } catch { /* best-effort */ }
 
-  // Load agents manifest
-  const manifest = loadAgentsManifest(ctx.rootDir);
-  if (!manifest) {
+  // Resolve the dispatchable agent set (TD-2026-09-26-846): roster.yaml + .agent
+  // profiles are authoritative; agents.yaml is an optional overlay. Agents that
+  // can't be dispatched are reported via `undispatchable`, never silently dropped.
+  const resolved = resolveDispatchableAgents(ctx.rootDir);
+  if (Object.keys(resolved.agents).length === 0) {
     const text = JSON.stringify({
-      error: 'No agents.yaml found',
-      suggestion: 'Run `paradigm team init` to set up multi-agent orchestration',
+      error: 'No dispatchable agents (roster.yaml / .agent profiles / agents.yaml)',
+      suggestion: 'Run `paradigm team init` / `paradigm agent sync-global`, or check .paradigm/roster.yaml',
+      ...(resolved.undispatchable.length > 0 ? { rosterUndispatchable: resolved.undispatchable } : {}),
     }, null, 2);
     trackToolCall(text.length, 'paradigm_orchestrate_inline');
     return { handled: true, text };
   }
-
-  // Filter agents by project roster (if roster.yaml exists)
-  const roster = loadProjectRoster(ctx.rootDir);
-  if (roster && manifest.agents) {
-    const filtered: Record<string, AgentDefinition> = {};
-    for (const [id, def] of Object.entries(manifest.agents)) {
-      if (roster.includes(id)) filtered[id] = def;
-    }
-    manifest.agents = filtered;
-  }
+  const manifest: AgentManifest = {
+    ...(resolved.manifest ?? {
+      version: '1.0',
+      team: { name: 'paradigm', default_agent: 'builder', require_handoff: false },
+    }),
+    ...(resolved.orchestration ? { orchestration: resolved.orchestration } : {}),
+    agents: resolved.agents,
+  };
+  // Roster-level: benched / profile-less roster members (reported separately
+  // from the plan-level list of agents this plan asked for but couldn't use).
+  const rosterUndispatchable: UndispatchableAgent[] = resolved.undispatchable;
 
   // Extract symbols from task
   const symbols = extractSymbols(task);
@@ -1157,11 +712,12 @@ async function handleOrchestrateInline(
   // Quick-check mode: lightweight advocate + reviewer pre-check
   // ========================================================================
   if (mode === 'quick') {
-    return handleQuickCheck(task, symbols, classification, activeNominations, manifest, ctx);
+    return handleQuickCheck(task, symbols, classification, activeNominations, manifest, ctx, rosterUndispatchable, resolved.deprecation);
   }
 
   // Plan the agent sequence (pass classification for intelligent defaults)
-  const plan = planAgentSequence(task, manifest.agents, agentOverride, classification, manifest.orchestration, ctx.rootDir);
+  const plan = planAgentSequence(task, manifest.agents, agentOverride, classification, manifest.orchestration, ctx.rootDir, rosterUndispatchable);
+  const undispatchableFields = buildUndispatchableFields(plan.undispatchable, rosterUndispatchable, resolved.deprecation);
 
   if (mode === 'plan') {
     // Get agent suggestions based on triggers
@@ -1203,7 +759,7 @@ async function handleOrchestrateInline(
     const collaborationEdges = buildCollaborationSubgraph(planAgentNames, manifest.agents);
     const collaborationGraph = collaborationEdges.length > 0 ? {
       edges: collaborationEdges,
-      note: 'Shows which agents hand off to which based on agents.yaml handoff_to. Stage ordering was derived from this graph.',
+      note: 'Shows which agents hand off to which based on handoff_to (agents.yaml or .agent partners/collaboration). Stage ordering was derived from this graph.',
     } : undefined;
 
     // Return the plan with suggestions and cost preview
@@ -1220,6 +776,7 @@ async function handleOrchestrateInline(
         costMultiplier: classification.costMultiplier,
       },
       plan,
+      ...undispatchableFields,
       suggestedAgents,
       costPreview,
       ...(collaborationGraph ? { collaborationGraph } : {}),
@@ -1566,6 +1123,7 @@ async function handleOrchestrateInline(
     },
     symbols,
     totalAgents: plan.estimatedAgents,
+    ...undispatchableFields,
     ...(activeNominations.length > 0 ? { activeNominations } : {}),
 
     // v7 Spine (sub-phase 2): the persisted task DAG this run emitted. Lets the
@@ -1696,7 +1254,9 @@ async function handleQuickCheck(
   classification: TaskClassification,
   activeNominations: Array<{ agent: string; urgency: string; brief: string }>,
   manifest: AgentManifest,
-  ctx: ProjectContext
+  ctx: ProjectContext,
+  rosterUndispatchable: UndispatchableAgent[] = [],
+  deprecation?: string,
 ): Promise<{ handled: boolean; text: string }> {
   const taskLower = task.toLowerCase();
 
@@ -1866,6 +1426,7 @@ async function handleQuickCheck(
     ...(escalationSignals.length > 0 ? { escalationSignals } : {}),
     ...(activeNominations.length > 0 ? { activeNominations } : {}),
     ...(quickBriefSummary ? { captainBrief: quickBriefSummary } : {}),
+    ...buildUndispatchableFields(undefined, rosterUndispatchable, deprecation),
     symbols,
     instructions: verdict === 'greenlight'
       ? [
@@ -1907,8 +1468,9 @@ async function handleAgentPrompt(
   const orchestrationId = (args.orchestrationId as string | undefined)
     ?? `orch-${Date.now().toString(36)}-${Math.random().toString(36).substring(2, 6)}`;
 
-  // Load agents manifest
-  const manifest = loadAgentsManifest(ctx.rootDir);
+  // Resolve dispatchable agents (roster + .agent profiles authoritative;
+  // agents.yaml is an optional overlay — TD-2026-09-26-846)
+  const resolvedForPrompt = resolveDispatchableAgents(ctx.rootDir);
 
   // Check if agent is on the project roster (if roster exists)
   const rosterForPrompt = loadProjectRoster(ctx.rootDir);
@@ -1922,11 +1484,27 @@ async function handleAgentPrompt(
     return { handled: true, text };
   }
 
-  // Get agent definition — merge manifest with defaults to handle partial definitions
-  const manifestAgent = manifest?.agents[agentName];
+  // Roster member that can't be dispatched (benched / no profile) — report, don't fake it
+  const undispatchableEntry = resolvedForPrompt.undispatchable.find(u => u.name === agentName);
+  if (undispatchableEntry) {
+    const text = JSON.stringify({
+      warning: `Agent "${agentName}" cannot be dispatched (${undispatchableEntry.reason})`,
+      reason: undispatchableEntry.reason,
+      suggestion: undispatchableEntry.reason === 'benched'
+        ? `The .agent profile for "${agentName}" has \`benched: true\` — remove that flag to dispatch it`
+        : `No .agent profile found for "${agentName}" — run \`paradigm agent sync-global\` or remove it from .paradigm/roster.yaml`,
+      ...(resolvedForPrompt.deprecation ? { deprecation: resolvedForPrompt.deprecation } : {}),
+    }, null, 2);
+    trackToolCall(text.length, 'paradigm_agent_prompt');
+    return { handled: true, text };
+  }
+
+  // Get agent definition — merge resolved definition with defaults to handle partial definitions
+  const manifestAgent = resolvedForPrompt.agents[agentName];
   const agentDef: AgentDefinition = {
     name: manifestAgent?.name || agentName,
     role: manifestAgent?.role || ROLE_PROMPTS[agentName] || ROLE_PROMPTS.builder,
+    description: manifestAgent?.description,
     focus: manifestAgent?.focus || { reads: ['**/*'], writes: ['**/*'] },
     defaultModel: resolveModelForAgent(agentName, ctx.rootDir, manifestAgent),
     triggers: manifestAgent?.triggers,
@@ -2041,6 +1619,7 @@ async function handleAgentPrompt(
     },
     focusAreas: promptResult.focusAreas,
     usage: 'Use the Task tool with the taskToolParams to spawn this agent. Present the response with the attribution prefix.',
+    ...(resolvedForPrompt.deprecation ? { deprecation: resolvedForPrompt.deprecation } : {}),
   };
 
   const text = JSON.stringify(result, null, 2);
@@ -2186,16 +1765,63 @@ function deriveStagesFromHandoffGraph(
 // Planning Logic
 // ============================================================================
 
-function planAgentSequence(
+/**
+ * Response fields reporting undispatchable agents + the agents.yaml deprecation.
+ * Empty object when there is nothing to report (keeps responses byte-stable).
+ */
+function buildUndispatchableFields(
+  undispatchable: UndispatchableAgent[] | undefined,
+  rosterUndispatchable: UndispatchableAgent[] | undefined,
+  deprecation?: string,
+): {
+  undispatchable?: UndispatchableAgent[];
+  undispatchableNote?: string;
+  rosterUndispatchable?: UndispatchableAgent[];
+  deprecation?: string;
+} {
+  return {
+    // Plan-level: agents this plan asked for but could not dispatch (note covers only these)
+    ...(undispatchable && undispatchable.length > 0 ? {
+      undispatchable,
+      undispatchableNote: formatUndispatchableNote(undispatchable),
+    } : {}),
+    // Roster-level: benched / profile-less roster members, independent of this plan
+    ...(rosterUndispatchable && rosterUndispatchable.length > 0 ? { rosterUndispatchable } : {}),
+    ...(deprecation ? { deprecation } : {}),
+  };
+}
+
+/**
+ * Plan the agent sequence.
+ *
+ * `rosterUndispatchable` is the resolver's roster-level list (#agent-registry),
+ * used only to look up reasons. Any override / classification-recommended agent
+ * that is not in `agents` is recorded (deduped by name) in `plan.undispatchable`
+ * instead of being silently dropped; set only when non-empty.
+ */
+export function planAgentSequence(
   task: string,
   agents: Record<string, AgentDefinition>,
   agentOverride?: string[],
   classification?: TaskClassification,
   orchestrationConfig?: AgentManifest['orchestration'],
   rootDir?: string,
+  rosterUndispatchable: UndispatchableAgent[] = [],
 ): OrchestrationPlan {
   const symbols = extractSymbols(task);
   const taskLower = task.toLowerCase();
+
+  // Reasons the resolver already assigned (benched / no-profile) win; otherwise
+  // a roster member is 'no-profile' and anything else is an 'unknown-override'.
+  const undispatchable: UndispatchableAgent[] = [];
+  const resolverReasons = new Map(rosterUndispatchable.map(u => [u.name, u.reason] as const));
+  const roster = rootDir ? loadProjectRoster(rootDir) : null;
+  const recordUndispatchable = (name: string): void => {
+    if (undispatchable.some(u => u.name === name)) return;
+    const reason = resolverReasons.get(name)
+      ?? (roster?.includes(name) ? 'no-profile' : 'unknown-override');
+    undispatchable.push({ name, reason });
+  };
 
   const stages: ExecutionStage[] = [];
   const plannedAgents: Array<{
@@ -2211,13 +1837,18 @@ function planAgentSequence(
     for (let i = 0; i < agentOverride.length; i++) {
       const agentName = agentOverride[i];
       if (agents[agentName]) {
+        // Depend on the last PLANNED agent — an undispatchable override entry
+        // in between must not leave a dangling dependency.
+        const previousPlanned = plannedAgents[plannedAgents.length - 1];
         plannedAgents.push({
           name: agentName,
           task: `${agentName === 'architect' ? 'Design' : agentName === 'builder' ? 'Implement' : agentName === 'tester' ? 'Test' : 'Process'}: ${task}`,
-          dependsOn: i > 0 ? [agentOverride[i - 1]] : [],
+          dependsOn: previousPlanned ? [previousPlanned.name] : [],
           required: true,
-          stage: i,
+          stage: plannedAgents.length,
         });
+      } else {
+        recordUndispatchable(agentName);
       }
     }
   } else if (classification && classification.type !== 'feature' && classification.type !== 'unknown') {
@@ -2242,7 +1873,7 @@ function planAgentSequence(
     let currentStage = 0;
     let previousAgent: string | null = null;
     for (const agentName of recommended) {
-      if (!agents[agentName]) continue;
+      if (!agents[agentName]) { recordUndispatchable(agentName); continue; }
       const dependsOn = previousAgent ? [previousAgent] : [];
       const verb = taskVerbs[agentName] || 'Process';
       const isRequired = agentName === 'architect' || agentName === 'builder';
@@ -2342,7 +1973,7 @@ function planAgentSequence(
       let previousAgent: string | null = null;
 
       for (const agentName of recommended) {
-        if (!agents[agentName]) continue;
+        if (!agents[agentName]) { recordUndispatchable(agentName); continue; }
 
         const dependsOn = previousAgent ? [previousAgent] : [];
         const verb = taskVerbs[agentName] || 'Process';
@@ -2464,6 +2095,7 @@ function planAgentSequence(
     symbols,
     estimatedAgents: plannedAgents.length + (documentorAdded ? 1 : 0),
     estimatedTokens: { min: minTokens, max: maxTokens },
+    ...(undispatchable.length > 0 ? { undispatchable } : {}),
   };
 }
 
@@ -2943,6 +2575,21 @@ export interface AgentSuggestion {
  * reuse the same archetype-matcher when proposing claimants for unclaimed tasks —
  * one matcher, both the orchestrator's plan and Cid's claimant proposals.
  */
+/** Escape regex metacharacters in a literal string. */
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+/**
+ * Case-insensitive whole-word match of `keyword` in `text`. Boundaries are
+ * "not a letter/digit" on each side, so keywords that start/end with
+ * punctuation (e.g. "C++", ".purpose") still match.
+ */
+export function matchesWordBoundary(text: string, keyword: string): boolean {
+  const re = new RegExp(`(^|[^\\p{L}\\p{N}])${escapeRegExp(keyword)}(?=$|[^\\p{L}\\p{N}])`, 'iu');
+  return re.test(text);
+}
+
 export function suggestAgentsForTask(
   task: string,
   agents: Record<string, AgentDefinition>
@@ -2953,12 +2600,22 @@ export function suggestAgentsForTask(
 
   for (const [name, agent] of Object.entries(agents)) {
     const matched: string[] = [];
+    let derivedKeywordHits = 0;
 
     for (const trigger of agent.triggers || []) {
       if (trigger.type === 'keyword' && trigger.match) {
         for (const keyword of trigger.match) {
-          if (taskLower.includes(keyword.toLowerCase())) {
+          if (typeof keyword !== 'string' || !keyword) continue;
+          // Profile-derived triggers (attention.concepts) are broad vocabulary —
+          // match case-insensitively on word boundaries so a concept like "test"
+          // does not fire on "latest". Explicit agents.yaml triggers keep their
+          // historical substring behaviour.
+          const hit = trigger.derived
+            ? matchesWordBoundary(task, keyword)
+            : taskLower.includes(keyword.toLowerCase());
+          if (hit) {
             matched.push(`keyword:${keyword}`);
+            if (trigger.derived) derivedKeywordHits++;
           }
         }
       }
@@ -2975,6 +2632,14 @@ export function suggestAgentsForTask(
           }
         }
       }
+    }
+
+    // A lone profile-derived concept is too weak a signal ("review the index
+    // code" shares one word with the DBA's vocabulary). Derived-only matches
+    // need ≥2 distinct concept hits; explicit triggers and symbol hits count
+    // as before.
+    if (matched.length > 0 && derivedKeywordHits === matched.length && derivedKeywordHits < 2) {
+      continue;
     }
 
     if (matched.length > 0) {

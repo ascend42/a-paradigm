@@ -5,6 +5,27 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.9.1] — 2026-09-26
+
+**Dispatchability inversion** (Phase 0 of the skills arc — TD-2026-09-26-846, T-2026-09-26-001). `.paradigm/roster.yaml` + loaded `.agent` profiles are now **authoritative** for which agents the orchestrator can dispatch; `.paradigm/agents.yaml` becomes an optional overlay. Agents that can't be dispatched are reported, never silently dropped.
+
+### Fixed
+- **The orchestrator silently dropped roster agents absent from `agents.yaml` (`#orchestration`)** — dispatch loaded `agents.yaml` then filtered it by the roster, so any rostered agent without an `agents.yaml` entry (forge, cid, compliance, advocate, …) vanished from `agents` overrides and classification recommendations without a trace. The dispatch set is now resolved by the new `#agent-registry` from roster + profiles (agents.yaml fields still override profile-derived ones), growing this repo's dispatchable set from 11 to every rostered agent with a profile.
+- **Legacy `transferable[].pattern` normalized to `id` at load (`#agent-loader`)** — ~35 bundled templates use `- pattern:` instead of `id:`, which rendered as `undefined: … (learned in undefined)` in prompt enrichment. `normalizeAgentProfile` maps `pattern` → `id` (explicit `id` wins); legacy `pattern:` is migrated to `id:` on the profile's next save. No other defaults are injected — `learnedIn`/`appliedIn` stay optional and "learned in" is omitted from enrichment when absent. Bundled template sources are untouched; `id`/`role`/`permissions` are never modified, so integrity hashes still verify.
+- **`paradigm index` wrote `navigator.yaml` with 0 symbol mappings (`#scan-command`)** — `buildSymbolMap` read `symbol.path`/`symbol.directory`, but premise-core's aggregator emits `filePath`. Symbols now map to their project-relative containing directory (e.g. `packages/paradigm/src/commands/doctor/`) instead of nothing (previously-committed values were machine-specific absolute paths).
+- **Non-canonical personality values accepted** — templates use ~25 `style` values (`opinionated`, `pragmatic`, `confrontational`, …), `risk: moderate`, and `verbosity: precise|thorough|structured`. `AgentPersonality` fields are now `Known* | string` (display-only; no behaviour change).
+
+### Added
+- **`undispatchable` in `paradigm_orchestrate_inline` (plan / execute / quick) and `paradigm_agent_prompt`** — each entry is `{ name, reason: 'no-profile' | 'not-on-roster' | 'benched' | 'unknown-override' }` with a one-line `undispatchableNote` covering the agents *this plan* asked for; roster-level gaps (benched / profile-less roster members) are reported separately as `rosterUndispatchable`, and responses carry `deprecation` when `agents.yaml` was read. Override chains now depend on the last *planned* agent, so an undispatchable entry mid-list leaves no dangling dependency. `paradigm_agent_prompt` returns `{ warning, reason }` for a benched / profile-less roster member instead of faking a builder prompt.
+- **`#agent-registry` (`resolveDispatchableAgents`)** — role = agents.yaml › `ROLE_PROMPTS` › profile role; focus from `attention.paths`; triggers from `attention.concepts`/`symbols` (tagged `derived`, matched case-insensitively on word boundaries, and a lone derived concept hit is not enough to suggest an agent — explicit agents.yaml triggers keep substring matching); `handoff_to` from agents.yaml › `partners` › `collaboration.with`. `ROLE_PROMPTS` moved to `utils/role-prompts.ts` to avoid a circular import.
+- **`paradigm doctor` — "Agent profile keys" and "Roster dispatchability" (`#agent-audit`)** — warns on unknown top-level `.agent` keys, notes `behaviors:` (declared, unread until skills Phase 1), and warns on roster members with no project/global profile and no `agents.yaml` entry (e.g. cinematographer, composer, showrunner) or benched on the roster.
+- `AgentProfile` declares `behaviors?` and `tags?`; `KNOWN_AGENT_KEYS` exported from `types/agents.ts`.
+
+### Deprecated
+- **`.paradigm/agents.yaml` as an agent-definition source** — still read (back-compat overlay, one-time warning) and still the home of the `orchestration:` block (`default_mode`, `budget`). It is not deleted.
+
+Symbols: #orchestration, #agent-registry, #agent-loader, #agent-audit, #doctor-handler, #role-prompts, #AgentTypes, #scan-command
+
 ## [7.9.0] — 2026-09-19
 
 The **Memory Steward** — Paradigm's native answer to the `MEMORY.md` junk drawer. Native Claude Code memory (`~/.claude/projects/<slug>/memory/`) accumulates stale statuses, tips, and rules with no typing, decay, or dedup — the "Obsidian second-brain" failure mode, inside Claude's own head. The Steward treats it as a curatable artifact, not a store: it scores every entry and surfaces what to prune/route/merge for **human decision — never auto-deleting** (Phase A; TD-2026-09-19-110, L-2026-09-19-ascend-074539-001).

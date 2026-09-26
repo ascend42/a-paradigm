@@ -805,6 +805,51 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
       }
     }
 
+    // Agent profile keys + roster dispatchability (TD-2026-09-26-846)
+    try {
+      const { auditAgents } = await import('./agent-audit.js');
+      const audit = auditAgents(cwd);
+
+      if (audit.unknownKeys.length > 0) {
+        const detail = audit.unknownKeys
+          .map(u => `${path.basename(u.file)} (${u.keys.join(', ')})`)
+          .join('; ');
+        results.push({
+          name: 'Agent profile keys',
+          status: 'warn',
+          message: `Unknown keys in ${audit.unknownKeys.length} profile(s): ${detail}`,
+          fix: 'Remove or rename the unknown keys — they are ignored by the loader',
+        });
+      }
+      // Reported independently of the unknown-keys warning
+      if (audit.unreadKeys.length > 0) {
+        results.push({
+          name: 'Agent profile keys',
+          status: 'info',
+          message: `\`behaviors:\` present in ${audit.unreadKeys.length} profiles — unread until skills (Phase 1)`,
+        });
+      }
+      if (audit.unknownKeys.length === 0 && audit.unreadKeys.length === 0) {
+        results.push({ name: 'Agent profile keys', status: 'ok', message: 'All profile keys recognized' });
+      }
+
+      if (audit.rosterGaps.length > 0 || audit.benchedOnRoster.length > 0) {
+        const bits: string[] = [];
+        if (audit.rosterGaps.length > 0) bits.push(`no profile: ${audit.rosterGaps.join(', ')}`);
+        if (audit.benchedOnRoster.length > 0) bits.push(`benched: ${audit.benchedOnRoster.join(', ')}`);
+        results.push({
+          name: 'Roster dispatchability',
+          status: 'warn',
+          message: `${audit.rosterGaps.length + audit.benchedOnRoster.length} roster agent(s) cannot be dispatched — ${bits.join('; ')}`,
+          fix: '`paradigm agent sync-global` to install bundled profiles, or deactivate the agent (remove it from .paradigm/roster.yaml; clear `benched: true` on benched profiles)',
+        });
+      } else {
+        results.push({ name: 'Roster dispatchability', status: 'ok', message: 'Every roster agent is dispatchable' });
+      }
+    } catch {
+      // Agent audit is advisory — never fail doctor on it.
+    }
+
     // Team-invocation funnel (Pillar 0 telemetry: eligible → orchestrated/solo/bypass)
     try {
       const { summarizeTeamFunnel } = await import('../../core/team-funnel.js');
