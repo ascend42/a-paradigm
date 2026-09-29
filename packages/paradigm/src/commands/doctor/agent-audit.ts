@@ -23,7 +23,7 @@ export const KNOWN_AGENT_KEYS: readonly string[] = [
   'id', 'role', 'nickname', 'description', 'version', 'personality', 'expertise',
   'transferable', 'contexts', 'created', 'updated', 'permissions', 'integrityHash',
   'attention', 'learning', 'context', 'reporting', 'collaboration', 'nomination',
-  'benched', 'network', 'scopes', 'configurable', 'partners', 'behaviors', 'tags',
+  'benched', 'network', 'scopes', 'configurable', 'partners', 'behaviors', 'tags', 'skills',
   // Framework-written metadata not modeled on AgentProfile (registry install
   // provenance + the `protected` flag on core templates).
   'scope', 'registry', 'distribution', 'installedAt', 'protected',
@@ -39,6 +39,44 @@ export interface AgentAuditResult {
   rosterGaps: string[];
   /** Active roster ids whose resolved profile has `benched: true` */
   benchedOnRoster: string[];
+  /**
+   * `behaviors.<block>` entries still present in a profile whose content has
+   * been migrated to a skill (a skill's provenance.migratedFrom is
+   * `<file>.agent#behaviors.<block>`). Skills Phase 1.
+   */
+  migratedBehaviors: Array<{ file: string; block: string; skillId: string }>;
+}
+
+/**
+ * migratedFrom → skill id, scanned from project `.paradigm/skills/<id>/SKILL.md`
+ * and global skill sources. Parses frontmatter directly (no paradigm-mcp import).
+ */
+export function skillMigrations(rootDir: string, globalSkillsDir: string): Map<string, string> {
+  const map = new Map<string, string>();
+  for (const dir of [path.join(rootDir, '.paradigm', 'skills'), globalSkillsDir]) {
+    let entries: string[] = [];
+    try {
+      entries = fs.existsSync(dir) ? fs.readdirSync(dir) : [];
+    } catch {
+      continue;
+    }
+    for (const id of entries) {
+      try {
+        const file = path.join(dir, id, 'SKILL.md');
+        if (!fs.existsSync(file)) continue;
+        const m = /^---\r?\n([\s\S]*?)\r?\n---/.exec(fs.readFileSync(file, 'utf8'));
+        if (!m) continue;
+        const fm = yaml.load(m[1]) as { metadata?: { paradigm?: { id?: string; provenance?: { migratedFrom?: string } } } } | null;
+        const meta = fm?.metadata?.paradigm;
+        const from = meta?.provenance?.migratedFrom;
+        // Project scope is scanned first and wins.
+        if (typeof from === 'string' && !map.has(from)) map.set(from, meta?.id ?? id);
+      } catch {
+        // unparseable skill — ignored here (skill lint reports it)
+      }
+    }
+  }
+  return map;
 }
 
 function readYaml(file: string): Record<string, unknown> | null {
@@ -70,8 +108,10 @@ function listAgentFiles(dir: string): string[] {
  * global profiles relevant to this project (roster members, or all global
  * profiles when there is no roster).
  */
-export function auditAgents(rootDir: string, opts: { globalDir?: string } = {}): AgentAuditResult {
+export function auditAgents(rootDir: string, opts: { globalDir?: string; globalSkillsDir?: string } = {}): AgentAuditResult {
   const globalDir = opts.globalDir ?? path.join(os.homedir(), '.paradigm', 'agents');
+  const migrations = skillMigrations(rootDir, opts.globalSkillsDir ?? path.join(os.homedir(), '.paradigm', 'skills'));
+  const migratedBehaviors: AgentAuditResult['migratedBehaviors'] = [];
   const projectDir = path.join(rootDir, '.paradigm', 'agents');
 
   const rosterData = readYaml(path.join(rootDir, '.paradigm', 'roster.yaml'));
@@ -100,6 +140,13 @@ export function auditAgents(rootDir: string, opts: { globalDir?: string } = {}):
     const unknown = keys.filter(k => !known.has(k));
     if (unknown.length > 0) unknownKeys.push({ file, keys: unknown });
     if (UNREAD_KEYS.some(k => keys.includes(k))) unreadKeys.push({ file, keys: ['behaviors'] });
+    const behaviors = data.behaviors;
+    if (behaviors && typeof behaviors === 'object' && !Array.isArray(behaviors)) {
+      for (const block of Object.keys(behaviors)) {
+        const skillId = migrations.get(`${path.basename(file)}#behaviors.${block}`);
+        if (skillId) migratedBehaviors.push({ file, block, skillId });
+      }
+    }
   }
 
   const rosterGaps: string[] = [];
@@ -123,5 +170,5 @@ export function auditAgents(rootDir: string, opts: { globalDir?: string } = {}):
     if (benched === true) benchedOnRoster.push(id);
   }
 
-  return { unknownKeys, unreadKeys, rosterGaps, benchedOnRoster };
+  return { unknownKeys, unreadKeys, rosterGaps, benchedOnRoster, migratedBehaviors };
 }

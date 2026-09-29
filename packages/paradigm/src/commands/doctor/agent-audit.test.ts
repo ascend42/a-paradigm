@@ -82,3 +82,42 @@ describe('auditAgents', () => {
     expect(audit.rosterGaps).toEqual(['forge']);
   });
 });
+
+describe('auditAgents — skills (Phase 1)', () => {
+  function writeSkill(dir: string, id: string, migratedFrom?: string): void {
+    fs.mkdirSync(path.join(dir, id), { recursive: true });
+    const fm = { name: id, description: 'd', metadata: { paradigm: {
+      id, version: '0.1.0', steward: 'designer', trust: 'provisional',
+      provenance: { source: 'bundled', createdBy: 'designer', ...(migratedFrom ? { migratedFrom } : {}) },
+    } } };
+    fs.writeFileSync(path.join(dir, id, 'SKILL.md'), `---\n${yaml.dump(fm)}---\n# ${id}\n`, 'utf8');
+  }
+
+  it('accepts `skills` as a known profile key', () => {
+    const { rootDir, globalDir } = setup();
+    const skillsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'paradigm-global-skills-'));
+    cleanups.push(() => fs.rmSync(skillsDir, { recursive: true, force: true }));
+    writeAgent(path.join(rootDir, '.paradigm', 'agents'), 'designer', { skills: [{ id: 'ui-critique-loop', role: 'owns' }] });
+    const audit = auditAgents(rootDir, { globalDir, globalSkillsDir: skillsDir });
+    expect(audit.unknownKeys).toEqual([]);
+    expect(audit.migratedBehaviors).toEqual([]);
+  });
+
+  it('reports behaviors blocks migrated to a skill (project and global skill sources)', () => {
+    const { rootDir, globalDir } = setup();
+    const skillsDir = fs.mkdtempSync(path.join(os.tmpdir(), 'paradigm-global-skills-'));
+    cleanups.push(() => fs.rmSync(skillsDir, { recursive: true, force: true }));
+    writeSkill(skillsDir, 'ui-critique-loop', 'designer.agent#behaviors.review-checklist');
+    writeSkill(path.join(rootDir, '.paradigm', 'skills'), 'design-system-extract', 'designer.agent#behaviors.design-system-maintenance');
+    writeSkill(skillsDir, 'unrelated');
+    writeAgent(path.join(rootDir, '.paradigm', 'agents'), 'designer', {
+      behaviors: { 'review-checklist': 'x', 'design-system-maintenance': 'y', 'tool-fluency': 'z' },
+    });
+    const audit = auditAgents(rootDir, { globalDir, globalSkillsDir: skillsDir });
+    const found = audit.migratedBehaviors.map(m => `${m.block}->${m.skillId}`).sort();
+    expect(found).toEqual(['design-system-maintenance->design-system-extract', 'review-checklist->ui-critique-loop']);
+    // behaviors stays an UNREAD key (info), never unknown
+    expect(audit.unknownKeys).toEqual([]);
+    expect(audit.unreadKeys).toHaveLength(1);
+  });
+});

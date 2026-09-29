@@ -897,7 +897,7 @@ async function handleOrchestrateInline(
               pendingWork: agentProjectState.pendingWork,
               recentPatterns: agentProjectState.recentPatterns,
               sessionsOnProject: agentProjectState.sessionsOnProject,
-            } : undefined);
+            } : undefined, await resolveSkillsForEnrichment(profile, ctx.rootDir));
 
             // Append permission constraints if set
             if (profile.permissions) {
@@ -1570,7 +1570,7 @@ async function handleAgentPrompt(
         recentDecisions,
         journalInsights,
         pendingNominations,
-      });
+      }, undefined, await resolveSkillsForEnrichment(profile, ctx.rootDir));
 
       // Append permission constraints if set
       if (profile.permissions) {
@@ -3026,4 +3026,21 @@ function buildParallelBuilderPrompt(
   parts.push('4. End with the standard Agent Relay block');
 
   return parts.join('\n');
+}
+
+/**
+ * Skills Phase 1: resolve an agent's declared skills for buildProfileEnrichment.
+ * Non-fatal — enrichment proceeds without the section on any error.
+ */
+async function resolveSkillsForEnrichment(
+  profile: import('../types/agents.js').AgentProfile,
+  rootDir: string,
+): Promise<import('../types/skills.js').SkillSummary[] | undefined> {
+  if (!Array.isArray(profile.skills) || profile.skills.length === 0) return undefined;
+  try {
+    const { resolveAgentSkills } = await import('../utils/skill-loader.js');
+    return resolveAgentSkills(profile, { rootDir });
+  } catch {
+    return undefined;
+  }
 }

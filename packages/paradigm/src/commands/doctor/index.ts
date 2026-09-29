@@ -829,6 +829,13 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
           message: `\`behaviors:\` present in ${audit.unreadKeys.length} profiles — unread until skills (Phase 1)`,
         });
       }
+      for (const mb of audit.migratedBehaviors) {
+        results.push({
+          name: 'Agent profile keys',
+          status: 'info',
+          message: `${path.basename(mb.file)} \`behaviors.${mb.block}\` migrated to skill ${mb.skillId} — the block can be removed`,
+        });
+      }
       if (audit.unknownKeys.length === 0 && audit.unreadKeys.length === 0) {
         results.push({ name: 'Agent profile keys', status: 'ok', message: 'All profile keys recognized' });
       }

@@ -91,6 +91,21 @@ export interface AgentProfile {
   behaviors?: Record<string, string>;
   /** Free-form tags (discovery/grouping) */
   tags?: string[];
+
+  // ── Skills (Phase 1, T-2026-09-26-002) ──
+
+  /**
+   * Skills this agent stewards (`owns`) or consumes (`uses`). Resolved by
+   * #skill-loader resolveAgentSkills. Excluded from integrityHash (which only
+   * covers id / role / permissions).
+   */
+  skills?: AgentSkillRef[];
+}
+
+/** One `skills:` entry on an .agent profile. */
+export interface AgentSkillRef {
+  id: string;
+  role: 'owns' | 'uses';
 }
 
 /**
@@ -102,7 +117,7 @@ export const KNOWN_AGENT_KEYS: readonly string[] = [
   'id', 'role', 'nickname', 'description', 'version', 'personality', 'expertise',
   'transferable', 'contexts', 'created', 'updated', 'permissions', 'integrityHash',
   'attention', 'learning', 'context', 'reporting', 'collaboration', 'nomination',
-  'benched', 'network', 'scopes', 'configurable', 'partners', 'behaviors', 'tags',
+  'benched', 'network', 'scopes', 'configurable', 'partners', 'behaviors', 'tags', 'skills',
   // Framework-written metadata not modeled on AgentProfile: registry install
   // provenance (`paradigm agent install`, commands/agent/registry.ts) and the
   // `protected` flag on core templates (e.g. cid.agent).

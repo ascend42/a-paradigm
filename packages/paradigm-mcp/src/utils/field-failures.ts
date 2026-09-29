@@ -111,6 +111,15 @@ export interface ClassroomCertRow {
    * publishes as a cross-project sum (one contract — TD-2026-06-26-881 amend 1).
    */
   exercise?: ExerciseIntensity;
+  /**
+   * Skills Phase 1: what `entryId` names. Absent = 'notebook' (back-compat).
+   * Skill rows use entryId `skill:<id>@<version>`.
+   */
+  kind?: 'notebook' | 'skill';
+  /** Skills Phase 1: the human (founder) who approved the certification at the TTY. */
+  approvedBy?: string;
+  /** Skills Phase 1: the certified skill's contentHash (`sha256:<hex>`). */
+  contentHash?: string;
 }
 
 /**

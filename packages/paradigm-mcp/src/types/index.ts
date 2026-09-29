@@ -9,6 +9,7 @@ export * from './personas.js';
 export * from './agents.js';
 export * from './notebooks.js';
 export * from './docs.js';
+export * from './skills.js';
 
 // Re-export workspace types from the loader (canonical location)
 export type {

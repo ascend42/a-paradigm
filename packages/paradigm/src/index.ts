@@ -2750,6 +2750,106 @@ notebookCmd
     await notebookListCommand({});
   });
 
+// paradigm skill <command> — Agent-owned skills (Skills Phase 1, #skill-cli)
+const skillCmd = program
+  .command('skill')
+  .description('Agent-owned skills — lint, pin-check, certify and project SKILL.md sources');
+
+skillCmd
+  .command('list')
+  .alias('ls')
+  .description('List skills (id, version, steward, trust, status, scope)')
+  .option('--agent <id>', 'Only skills the agent stewards or declares')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { skillListCommand } = await import('./commands/skill/index.js');
+    await skillListCommand(options);
+  });
+
+skillCmd
+  .command('show <id>')
+  .description('Show frontmatter, resolved tool pins and cited notebooks')
+  .option('--tools <file>', 'tools/list JSON dump for third-party pin checks')
+  .option('--json', 'Output as JSON')
+  .action(async (id, options) => {
+    const { skillShowCommand } = await import('./commands/skill/index.js');
+    await skillShowCommand(id, options);
+  });
+
+skillCmd
+  .command('lint [id]')
+  .description('Lint one skill (or --all)')
+  .option('--all', 'Lint every skill')
+  .option('--json', 'Output as JSON')
+  .action(async (id, options) => {
+    const { skillLintCommand } = await import('./commands/skill/index.js');
+    await skillLintCommand(id, options);
+  });
+
+skillCmd
+  .command('check <id>')
+  .description('Check tool pins (paradigm_* against this server; third-party via --tools)')
+  .option('--tools <file>', 'tools/list JSON dump for third-party pin checks')
+  .option('--json', 'Output as JSON')
+  .action(async (id, options) => {
+    const { skillCheckCommand } = await import('./commands/skill/index.js');
+    await skillCheckCommand(id, options);
+  });
+
+skillCmd
+  .command('project [id]')
+  .description('Project a skill into ~/.claude/skills/pdg-<id>/ (certified only unless --allow-provisional)')
+  .option('--all', 'Project every skill')
+  .option('--target <target>', 'user (~/.claude/skills) or project (<root>/.claude/skills)', 'user')
+  .option('--allow-provisional', 'Allow provisional skills (adds a PROVISIONAL banner)')
+  .option('-n, --dry-run', 'Show what would be written without writing')
+  .option('--tools <file>', 'tools/list JSON dump for third-party pin checks')
+  .option('--json', 'Output as JSON')
+  .action(async (id, options) => {
+    const { skillProjectCommand } = await import('./commands/skill/index.js');
+    await skillProjectCommand(id, options);
+  });
+
+skillCmd
+  .command('adopt <id>')
+  .description('Pull downstream edits of a projected skill back into its source (patch bump, provisional)')
+  .option('--target <target>', 'user or project', 'user')
+  .option('-f, --force', 'Adopt even though the source changed since projection (downstream edits win)')
+  .option('--confirm-allowed-tools', 'Accept a downstream widening of allowed-tools (required without a TTY)')
+  .option('--json', 'Output as JSON')
+  .action(async (id, options) => {
+    const { skillAdoptCommand } = await import('./commands/skill/index.js');
+    await skillAdoptCommand(id, options);
+  });
+
+skillCmd
+  .command('certify <id>')
+  .description('Founder sign-off (interactive TTY only) — certify a skill against peer scenarios')
+  .option('--scenario <ids...>', 'Scenario id(s) to certify against (default: all)')
+  .option('--tools <file>', 'tools/list JSON dump for third-party pin checks')
+  .action(async (id, options) => {
+    const { skillCertifyCommand } = await import('./commands/skill/certify.js');
+    await skillCertifyCommand(id, options);
+  });
+
+skillCmd
+  .command('sync-global')
+  .description('Materialize the bundled seed skills into ~/.paradigm/skills/ (skips existing)')
+  .option('-f, --force', 'Overwrite existing global skills with the bundled version')
+  .option('-n, --dry-run', 'Show what would be added/skipped/overwritten without writing')
+  .action(async (options) => {
+    const { skillSyncGlobalCommand } = await import('./commands/skill/sync-global.js');
+    await skillSyncGlobalCommand(options);
+  });
+
+skillCmd
+  .command('record-usage', { hidden: true })
+  .description('Record a host Skill invocation from a PostToolUse hook payload on stdin (silent)')
+  .action(async () => {
+    const { skillRecordUsageCommand } = await import('./commands/skill/index.js');
+    await skillRecordUsageCommand();
+  });
+
 // paradigm agent <command> — Agent identity management
 const agentCmd = program
   .command('agent')

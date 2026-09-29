@@ -1,0 +1,62 @@
+version: 2.0.0
+description: |
+  Human-facing `paradigm skill` CLI (Skills Phase 1, T-2026-09-26-002). A thin
+  skin over paradigm-mcp's #skill-loader / #skill-projector / !skill-used
+  modules, imported by relative path (task-cli precedent). Agent-owned SKILL.md
+  sources live in <root>/.paradigm/skills/<id>/ (project) › ~/.paradigm/skills/<id>/
+  (global); projection is one-way into ~/.claude/skills/pdg-<id>/ (or
+  <root>/.claude/skills with --target project), certified-only unless
+  --allow-provisional. Output goes through cli-output.ts helpers.
+components:
+  skill-cli:
+    description: |
+      `paradigm skill` verbs — list [--agent] [--json] (id, version, steward,
+      trust, computed status, scope; `*` marks unverified third-party pins),
+      show <id> (frontmatter, resolved pins table, cited notebooks), lint
+      [<id>|--all] (exit 1 on errors), check <id> [--tools <tools/list dump>]
+      (paradigm_* pins hashed against listToolDefinitions()), project
+      [<id>|--all] [--target user|project] [--allow-provisional] [--dry-run]
+      [--tools], adopt <id> (downstream edits → source, patch+1, provisional),
+      certify <id> (see $skill-certification), sync-global [--force]
+      [--dry-run] (bundled templates/skills → ~/.paradigm/skills, skips
+      existing), and the hidden record-usage (reads a PostToolUse `Skill` hook
+      payload on stdin; silent, never fails) that appends !skill-used rows.
+    type: command
+    file: index.ts
+    tags:
+      - skills
+      - cli
+    signals:
+      - '!skill-used'
+  skill-sync-global:
+    description: 'resolveBundledSkillsDir() probes dist/ and src/ layouts for <packageRoot>/templates/skills (shipped via package.json files: templates). skillSyncGlobalCommand copies each bundled <id>/ dir into ~/.paradigm/skills/<id>/; an existing destination is skipped unless --force (user customizations are never destroyed by a normal sync).'
+    type: command
+    file: sync-global.ts
+    tags:
+      - skills
+  skill-certify:
+    description: 'CLI-only founder sign-off implementing $skill-certification. TTY gate first (process.stdin.isTTY), then evaluateCertification with lint + pins + scenarios (optionally --scenario filtered), then the founder (git user.name) types the skill id. Writes the certification block via applyCertification + writeSkill and appends a kind:skill row with appendClassroomCertification(buildSkillCertRow(...)). Never an MCP tool — agents cannot self-certify.'
+    type: command
+    file: certify.ts
+    tags:
+      - skills
+      - certification
+flows:
+  skill-certification:
+    description: |
+      $skill-certification — (1) steward proposes: trust provisional + lint
+      clean; (2) a PEER (≠ steward) authors a scenario in
+      .paradigm/curriculum/scenarios/ with `fixture:` (planted defect), a probe
+      {agent: <peer>, learning_ref: "skill:<id>@<ver>"} and expected.must:
+      survive; (3) the skill is run against the fixture and a human-confirmed
+      `survived` outcome is appended for term "skill:<id>@<ver>"; (4)
+      `paradigm skill certify` verifies all of it plus no stale pin and an
+      interactive TTY, and the founder types the id; (5) the SKILL.md gains
+      `certification` + trust certified (source of truth, GLOBAL, records
+      project); (6) a kind:skill classroom-certifications row is appended. The
+      key skill:<id>@<ver> is identical across probe, cert row and usage row.
+    steps:
+      - '#skill-cli'
+      - '#skill-loader'
+      - '#scenario-loader'
+      - '#classroom-certifications'

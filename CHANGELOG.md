@@ -5,6 +5,39 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.10.0] — 2026-09-28
+
+**Skills primitive** (Phase 1 of the skills arc, T-2026-09-26-002). Agents now own `SKILL.md` procedures, validated by one loader and projected one-way into the host's skills directory. Certification reuses the Classroom scenario bank, the certifications ledger and a TTY founder sign-off. No new MCP tools: the host `Skill` tool loads the bodies.
+
+### Added
+- **Skill sources + `#skill-loader`**: `SKILL.md` (agentskills.io / Claude Code format) with Paradigm metadata NESTED under `metadata.paradigm` (id, semver version, steward, triggers, trust `certified|provisional|external`, provenance, notebooks, protocols, tool pins, hosts, certification). Sources resolve from project `.paradigm/skills/<id>/` before global `~/.paradigm/skills/<id>/`. Status is computed, never stored: `ok | uncertified | stale | invalid`. The content hash covers the frontmatter (minus `certification`), the body, and `references/`, `assets/` and `scripts/`, so a certified skill whose content changes reads as `uncertified` (tamper-evident).
+- **Skill lint**: `SKILL_IS_PROTOCOL` (a step references a repo path), `SKILL_IS_NOTEBOOK` (body is too thin), `OWNED_SKILL_CAP` (a steward owns more than 5), missing notebook or protocol citations, an unresolved steward, and non-kebab names/ids or non-semver versions.
+- **Tool pins**: `paradigm_*` pins are sha256 hashes of the canonical `inputSchema` JSON, checked against the new exported `listToolDefinitions()` (every tool the server registers, regardless of tier). Host tools are pinned as `host`. Third-party MCP tools report `unknown` unless you pass a `tools/list` dump with `--tools`. A mismatch marks the skill `stale` and projection refuses.
+- **`#skill-projector`**: projects to `~/.claude/skills/pdg-<id>/`, or to `<root>/.claude/skills` with `--target project`. Only certified skills project by default. `--allow-provisional` adds a `PROVISIONAL — not certified.` banner. The projected `metadata` is FLATTENED to a string→string map (`paradigm-id`, `paradigm-version`, `paradigm-steward`, `paradigm-trust`, `paradigm-source`), and `certification` is dropped. A `.pdg-generated.json` sidecar marks ownership. Projection refuses anything under `~/.claude/skills/synced/`, any unmarked destination, and any destination edited downstream; writes are atomic. `adopt` pulls downstream edits back into the source as patch+1: the skill becomes provisional with `provenance.source: adopted`, the prior version is archived to `.versions/<ver>/`, and the metadata is un-flattened.
+- **`$skill-certification`**: `paradigm skill certify <id>` requires an interactive TTY, lint clean, no stale pins, and at least one scenario that has a `fixture:`, a NON-steward probe on `skill:<id>@<ver>`, `expected.must: survive`, and a human-confirmed survival for that exact key. The founder (git `user.name`) then types the skill id. The command writes the `certification` block (GLOBAL, records `project`) and appends a `kind: skill` row to the classroom certifications ledger. It is CLI-only, never an MCP tool.
+- **`paradigm skill` CLI (`#skill-cli`)**: `list`, `show`, `lint`, `check`, `project`, `adopt`, `certify`, `sync-global` (bundled `templates/skills` → `~/.paradigm/skills`, skips existing, `--force` replaces).
+- **`!skill-used`**: `.paradigm/events/skill-usage.jsonl` (pruned to 500 rows), keyed `skill:<id>@<ver>`, the same key as the scenario probe and the cert row. New Claude Code **PostToolUse `Skill` hook** (`paradigm-skill-used.sh`, in the plugin and in `paradigm hooks install --claude-code`) records invocations of `pdg-*` projections through the hidden `paradigm skill record-usage`. It is silent and always exits 0.
+- **"## Your Skills" in agent prompt enrichment** (`#agent-loader`, `#orchestration`): each line reads `<name> (<role>, <trust>): <description> — <path>`. Certified skills show to every agent. Provisional or uncertified skills show only to their steward, labelled. Stale or invalid skills are omitted.
+- **Three bundled seed skills** (provisional, `provenance.source: bundled`): `design-system-extract` and `ui-critique-loop` (steward designer), and `a11y-audit` (steward a11y, used by designer).
+- `AgentProfile.skills` (`[{id, role: owns|uses}]`, a known key, excluded from `integrityHash`); `Scenario.fixture`; `ClassroomCertRow.kind | approvedBy | contentHash` (additive).
+- **`paradigm doctor`**: prints an info line when a profile still carries a `behaviors.<block>` that a skill's `provenance.migratedFrom` names ("migrated to skill X").
+
+### Changed
+- Bundled `designer.agent`: the `design-system-maintenance` and `review-checklist` behaviors blocks moved into the `design-system-extract` and `ui-critique-loop` skills, and the profile now declares `skills:`. Bundled `a11y.agent` declares `skills:`. Existing global profiles are untouched, because `agent sync-global` skips existing files.
+
+### Security
+- **Skill id validation**: skill ids must be kebab-case everywhere they come in (CLI arguments, source directories, projected `pdg-<id>` names, hook payloads). Anything else is rejected before it can be joined into a path, so an id cannot traverse outside the skills directories.
+- **`scripts/` withheld for non-certified skills**: projection copies a skill's `scripts/` only when the skill is certified and hash-valid. A provisional skill projected with `--allow-provisional` gets its prose and `references/`, but no executables. `paradigm skill certify` lists every `scripts/` file (name, sha256, first 20 lines) before the founder confirms, so the sign-off covers what will run.
+- **Adopt `allowed-tools` guard**: `paradigm skill adopt` shows the diff. If the downstream edit widens `allowed-tools`, it asks for confirmation on a TTY; without a TTY it requires `--confirm-allowed-tools`. It also refuses when the source changed since projection unless `--force` is passed. The certification ledger is cross-checked against the SKILL.md `certification` block.
+- **Hook hardening**: the `Skill` PostToolUse hook only runs a `paradigm` that is already on PATH (the `npx --no-install` fallback was removed). When there isn't one, it exits 0 silently. The recorder prefers `CLAUDE_PROJECT_DIR` over the payload's `cwd`.
+- **Posture, stated plainly**: certification is drift-detection, not tamper-proof. Any local agent with shell access can forge it by editing SKILL.md, the scenario bank and the ledger. Cryptographic signing is a tracked follow-up. The TTY gate on `certify` is advisory: it stops an agent calling the CLI through a non-interactive tool, not a determined local process.
+
+### Notes
+- Scenarios have no runner, so the "executable" check is a human-confirmed attestation.
+- The seeds cite notebooks that live in `~/.paradigm/notebooks/<agent>/`, which is not bundled. On a machine without those notebooks, or without the steward `.agent` profiles (run `paradigm agent sync-global`), the seeds lint `invalid` and will not project.
+
+Symbols: #skill-loader, #skill-projector, #skill-cli, $skill-certification, !skill-used, #agent-loader, #agent-profiles, #orchestration, #agent-audit, #scenario-loader, #classroom-certifications, #paradigm-hooks
+
 ## [7.9.1] — 2026-09-26
 
 **Dispatchability inversion** (Phase 0 of the skills arc — TD-2026-09-26-846, T-2026-09-26-001). `.paradigm/roster.yaml` + loaded `.agent` profiles are now **authoritative** for which agents the orchestrator can dispatch; `.paradigm/agents.yaml` becomes an optional overlay. Agents that can't be dispatched are reported, never silently dropped.

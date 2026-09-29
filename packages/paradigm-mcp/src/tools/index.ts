@@ -533,6 +533,24 @@ function getInlineToolDefinitions() {
 /**
  * Register all MCP tools
  */
+/**
+ * Every tool definition this server can register — inline tools plus every
+ * registry module across all tiers (not just the active ones). Used by
+ * #skill-loader checkPins (`paradigm skill check`) to hash each paradigm_*
+ * tool's canonical inputSchema. Pure listing: no handlers run.
+ */
+export function listToolDefinitions(rootDir: string = process.cwd()): ToolDefinition[] {
+  const registry = buildRegistry(rootDir);
+  const seen = new Set<string>();
+  const out: ToolDefinition[] = [];
+  for (const t of [...(getInlineToolDefinitions() as ToolDefinition[]), ...registry.getAllTools()]) {
+    if (seen.has(t.name)) continue;
+    seen.add(t.name);
+    out.push(t);
+  }
+  return out;
+}
+
 export function registerTools(server: Server, getContext: () => ProjectContext, reloadContext?: () => Promise<void>) {
   // Build the tool registry with all modules organized by tier
   const ctx0 = getContext();

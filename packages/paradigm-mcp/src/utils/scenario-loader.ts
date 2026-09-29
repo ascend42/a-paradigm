@@ -61,6 +61,12 @@ export interface Scenario {
   /** Count of times a probe here broke again — the repeat-failure signal. */
   repeat_failures: number;
   status: ScenarioStatus;
+  /**
+   * Skills Phase 1 ($skill-certification): path to the planted-defect fixture
+   * a skill is run against. Required for a scenario to count toward
+   * `paradigm skill certify`; ignored by notebook assessment.
+   */
+  fixture?: string;
 }
 
 export interface ScenarioIndexEntry {

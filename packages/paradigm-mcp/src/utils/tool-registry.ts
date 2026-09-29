@@ -212,6 +212,13 @@ export class ToolRegistry {
   /**
    * Get all tools that should be listed for the current project state.
    */
+  /** Every tool of every registered module, regardless of tier/activation (skill pin checks). */
+  getAllTools(): ToolDefinition[] {
+    const tools: ToolDefinition[] = [];
+    for (const module of this.modules.values()) tools.push(...module.getToolsList());
+    return tools;
+  }
+
   getActiveTools(): ToolDefinition[] {
     const active = this.detectActiveFeatures();
     const tools: ToolDefinition[] = [];

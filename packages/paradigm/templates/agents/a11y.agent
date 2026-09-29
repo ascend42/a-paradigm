@@ -87,6 +87,9 @@ behaviors:
     with extension options. Forgiving input (accept multiple date formats, auto-format phone numbers). Progress
     indicators for multi-step flows. Undo for destructive actions (not just "Are you sure?"). No auto-play media.
     Reduced motion option. Focus on recognition over recall (dropdown > free text when possible).
+skills:
+  - id: a11y-audit
+    role: owns
 transferable:
   - pattern: native-over-aria
     description: >-

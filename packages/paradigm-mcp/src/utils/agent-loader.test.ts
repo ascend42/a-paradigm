@@ -445,8 +445,11 @@ describe('normalizeAgentProfile', () => {
     const base = makeProfile({
       permissions: { paths: { deny: ['secrets/**'] } },
       transferable: [{ pattern: 'p1', description: 'd', successRate: 0.8 } as any],
+      skills: [{ id: 'a11y-audit', role: 'uses' }],
     });
     base.integrityHash = computeIntegrityHash(base);
+    // Skills (Phase 1) are excluded from integrityHash.
+    expect(computeIntegrityHash({ ...base, skills: undefined })).toBe(base.integrityHash);
     const normalized = normalizeAgentProfile(JSON.parse(JSON.stringify(base)));
     expect(verifyIntegrity(normalized).valid).toBe(true);
     expect(normalized.integrityHash).toBe(base.integrityHash);

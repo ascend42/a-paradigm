@@ -25,6 +25,7 @@ import type {
   AgentPersonality,
   AgentProjectContext,
 } from '../types/agents.js';
+import type { SkillSummary } from '../types/skills.js';
 import { DEFAULT_PERSONALITIES, DEFAULT_ATTENTION, DEFAULT_COLLABORATION } from '../types/agents.js';
 
 // ────────────────────────────────────────────────────────
@@ -552,6 +553,28 @@ export function mergeAgentProfileWithManifest(
   };
 }
 
+/** "## Your Skills" lines — `- <name> (<role>, <trust>): <description> — <path>`. */
+function renderSkillLines(agentId: string, skills?: SkillSummary[]): string[] {
+  const lines: string[] = [];
+  for (const s of skills ?? []) {
+    if (s.status === 'stale' || s.status === 'invalid') continue;
+    const certified = s.trust === 'certified' && s.status === 'ok';
+    let label: string;
+    if (certified) {
+      label = 'certified';
+    } else if (s.steward === agentId) {
+      label = s.trust === 'certified'
+        ? 'UNCERTIFIED — content changed since sign-off, steward only'
+        : `${s.trust.toUpperCase()} — not certified, steward only`;
+    } else {
+      continue;
+    }
+    const desc = sanitizeForPrompt(s.description, { maxLength: 240 });
+    lines.push(`- ${s.name} (${s.role}, ${label}): ${desc} — ${s.path}`);
+  }
+  return lines;
+}
+
 /**
  * Build prompt enrichment text from agent profile for orchestration.
  */
@@ -569,7 +592,13 @@ export function buildProfileEnrichment(
     pendingWork?: string[];
     recentPatterns?: string[];
     sessionsOnProject?: number;
-  }
+  },
+  /**
+   * Skills Phase 1: pre-resolved summaries (resolveAgentSkills in #skill-loader).
+   * Stays pure — the caller resolves. Certified+ok shown to every agent;
+   * non-certified shown only to the steward (labelled); stale/invalid omitted.
+   */
+  skills?: SkillSummary[]
 ): string {
   const parts: string[] = [];
 
@@ -618,6 +647,16 @@ export function buildProfileEnrichment(
       if (appliedCount > 0) provenance.push(`applied in ${appliedCount} projects`);
       parts.push(`- ${p.id}: ${(p.successRate * 100).toFixed(0)}% success${provenance.length > 0 ? ` (${provenance.join(', ')})` : ''}`);
     }
+    parts.push('');
+  }
+
+  // Skills (Phase 1) — certified for all; provisional/uncertified only to the steward.
+  // resolveAgentSkills does NOT check pins, so 'stale' never arrives from orchestration;
+  // the stale/invalid filter only guards summaries supplied by other callers.
+  const skillLines = renderSkillLines(profile.id, skills);
+  if (skillLines.length > 0) {
+    parts.push('## Your Skills');
+    parts.push(...skillLines);
     parts.push('');
   }
 

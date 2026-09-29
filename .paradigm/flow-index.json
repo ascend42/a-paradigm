@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generatedAt": "2026-09-26T00:49:57.373Z",
+  "generatedAt": "2026-09-29T08:03:43.974Z",
   "flows": {
     "$mcp-startup": {
       "id": "$mcp-startup",
@@ -779,6 +779,33 @@
       ],
       "definedIn": "packages/paradigm/src/platform-server/.purpose"
     },
+    "$skill-certification": {
+      "id": "$skill-certification",
+      "description": "$skill-certification — (1) steward proposes: trust provisional + lint\nclean; (2) a PEER (≠ steward) authors a scenario in\n.paradigm/curriculum/scenarios/ with `fixture:` (planted defect), a probe\n{agent: <peer>, learning_ref: \"skill:<id>@<ver>\"} and expected.must:\nsurvive; (3) the skill is run against the fixture and a human-confirmed\n`survived` outcome is appended for term \"skill:<id>@<ver>\"; (4)\n`paradigm skill certify` verifies all of it plus no stale pin and an\ninteractive TTY, and the founder types the id; (5) the SKILL.md gains\n`certification` + trust certified (source of truth, GLOBAL, records\nproject); (6) a kind:skill classroom-certifications row is appended. The\nkey skill:<id>@<ver> is identical across probe, cert row and usage row.\n",
+      "steps": [
+        {
+          "id": "step-1",
+          "action": "#skill-cli",
+          "symbol": "#skill-cli"
+        },
+        {
+          "id": "step-2",
+          "action": "#skill-loader",
+          "symbol": "#skill-loader"
+        },
+        {
+          "id": "step-3",
+          "action": "#scenario-loader",
+          "symbol": "#scenario-loader"
+        },
+        {
+          "id": "step-4",
+          "action": "#classroom-certifications",
+          "symbol": "#classroom-certifications"
+        }
+      ],
+      "definedIn": "packages/paradigm/src/commands/skill/.purpose"
+    },
     "$symphony-send-flow": {
       "id": "$symphony-send-flow",
       "description": "Human types note -> built -> routed to agent inboxes",
@@ -1036,6 +1063,18 @@
     ],
     "#task-classifier": [
       "$agent-orchestration-flow"
+    ],
+    "#skill-cli": [
+      "$skill-certification"
+    ],
+    "#skill-loader": [
+      "$skill-certification"
+    ],
+    "#scenario-loader": [
+      "$skill-certification"
+    ],
+    "#classroom-certifications": [
+      "$skill-certification"
     ],
     "#symphony-send": [
       "$symphony-send-flow"

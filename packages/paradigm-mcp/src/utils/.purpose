@@ -43,7 +43,7 @@ components:
       - symphony
       - networking
   agent-loader:
-    description: CRUD for .agent identity files — load/save profiles, expertise queries, auto-update from lore, merge with agents.yaml, sync from lore history, permission checking (path/tool), integrity hash computation/verification, integrity status at load time, prompt sanitization, permission constraint extraction, permission enforcement facade. v7.9.1 normalizeAgentProfile runs after every profile yaml.load — legacy transferable[].pattern becomes id (explicit id wins; pattern removed; migrated to id on next save), no other defaults injected (learnedIn/appliedIn stay optional; enrichment omits learned-in when absent); never touches id/role/permissions so integrityHash is unaffected
+    description: CRUD for .agent identity files — load/save profiles, expertise queries, auto-update from lore, merge with agents.yaml, sync from lore history, permission checking (path/tool), integrity hash computation/verification, integrity status at load time, prompt sanitization, permission constraint extraction, permission enforcement facade. v7.9.1 normalizeAgentProfile runs after every profile yaml.load — legacy transferable[].pattern becomes id (explicit id wins; pattern removed; migrated to id on next save), no other defaults injected (learnedIn/appliedIn stay optional; enrichment omits learned-in when absent); never touches id/role/permissions so integrityHash is unaffected. Skills Phase 1 (v7.10.0): buildProfileEnrichment takes a 6th optional skills?: SkillSummary[] (stays pure; callers resolve via #skill-loader resolveAgentSkills) and renders a '## Your Skills' section after Transferable Patterns — certified+ok for every agent, non-certified only to the steward (labelled), stale/invalid omitted; AgentProfile.skills is excluded from integrityHash
     type: loader
     tags:
       - feature
@@ -96,7 +96,7 @@ components:
       - classroom
       - learning-loop
   tool-registry:
-    description: Tiered tool registration system — core/feature/advanced tiers with auto-detection
+    description: Tiered tool registration system — core/feature/advanced tiers with auto-detection. getAllTools() lists every module regardless of tier (backs listToolDefinitions for skill pin checks)
     type: loader
     tags:
       - feature
@@ -327,3 +327,22 @@ components:
     file: packages/paradigm-mcp/src/utils/calibration-aggregate.ts
     type: utility
     tags: [feature, calibration, learning-loop]
+  skill-loader:
+    description: 'Skills Phase 1 (T-2026-09-26-002) — the ONE loader/validator for agent-owned SKILL.md sources (project .paradigm/skills/<id> › global ~/.paradigm/skills/<id>; SkillEnv makes homedir/globalDir injectable). parseSkill/serializeSkill (round-trip), resolveSkill, listSkills(Detailed), lintSkill (SKILL_IS_PROTOCOL, SKILL_IS_NOTEBOOK, OWNED_SKILL_CAP, missing notebook/protocol, unresolved steward, kebab name, semver), computeContentHash (sha256 of canonical frontmatter minus certification + body + references/assets/scripts), checkPins (paradigm_* hashed against injected listToolDefinitions; host/* never checked; third-party unknown unless a tools/list dump is supplied), computeStatus (invalid › stale › ok › uncertified — never stored), resolveAgentSkills for enrichment, and the PURE $skill-certification verifier evaluateCertification (TTY, founder, lint, pins, ≥1 scenario with fixture + non-steward probe on skill:<id>@<ver> + human-confirmed survival) + applyCertification + buildSkillCertRow (kind skill ledger row). Imported by #skill-cli by relative path; certification is CLI-only (never an MCP tool). Fix pass: KEBAB id guard (isValidSkillId/assertSkillId) on every id that becomes a path; DIR_ID_MISMATCH + RESOURCE_SYMLINK lint errors; NOTEBOOK_MISSING warns for bundled; certification is drift-detection (not tamper-proof; signing = follow-up) — ok requires the SKILL.md block AND a matching kind skill ledger row (loadSkillCertLedger = project classroom ledger + global ~/.paradigm/events/skill-certifications.jsonl via appendGlobalSkillCertRow); evaluateCertification needs env, a resolvable non-steward probe agent and an existing fixture; listSkillScripts lists scripts/ with sha256 for certify; resolveAgentSkills uses cached structural lint only (no notebook scan, pins unchecked).'
+    type: loader
+    file: packages/paradigm-mcp/src/utils/skill-loader.ts
+    flows:
+      - $skill-certification
+    tags: [feature, skills, classroom]
+  skill-projector:
+    description: 'Skills Phase 1 — one-way projection of certified skill sources to ~/.claude/skills/pdg-<id>/ (or <root>/.claude/skills with target project). Gates: lint errors, stale pins, trust (only status ok; allowProvisional injects the PROVISIONAL banner). Rewrites name pdg-<id>, FLATTENS metadata.paradigm to a string map (paradigm-id/version/steward/trust/source), drops certification, writes .pdg-generated.json marker; refuses unmarked or downstream-drifted dests and HARD-REFUSES anything under ~/.claude/skills/synced/ (symlink-aware). Atomic temp-dir + rename; idempotent. adoptSkill pulls downstream edits back: patch+1, provisional, provenance adopted, certification dropped, prior archived to .versions/<ver>/, metadata un-flattened preserving source-only fields, re-projected under a fresh marker. Fix pass: scripts/ never projected for non-certified skills (marker.scriptsWithheld); any symlink in a projected dir = drift; dotfiles ignored in the drift hash; stale .pdg-*.tmp-* swept; synced/ checked first; adopt refuses source-changed (unless force) and widened allowed-tools (unless confirmAllowedTools), returns frontmatterDiff, validates semver before the .versions path, and lints before re-projecting (reprojected:false on errors).'
+    type: service
+    file: packages/paradigm-mcp/src/utils/skill-projector.ts
+    tags: [feature, skills]
+  skill-usage:
+    description: 'Skills Phase 1 — append-only .paradigm/events/skill-usage.jsonl (pruned to 500, modelled on appendFieldFailure). Rows carry entryId skill:<id>@<ver>, the same key as the scenario probe and the cert row. buildSkillUsageRow maps a host Skill invocation pdg-<id> to the skill id + version from the projection sidecar (for the PostToolUse Skill hook). Fix pass: KEBAB-validates the id, trusts only a marker whose skillId matches; resolveHookProjectDir prefers CLAUDE_PROJECT_DIR over payload cwd.'
+    type: service
+    file: packages/paradigm-mcp/src/utils/skill-usage.ts
+    signals:
+      - '!skill-used'
+    tags: [feature, skills, learning-loop]

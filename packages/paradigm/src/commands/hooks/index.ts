@@ -23,6 +23,7 @@ import {
   CLAUDE_CODE_NAVIGATE_REMIND_HOOK,
   CLAUDE_CODE_PROMPT_GATE_HOOK,
   CLAUDE_CODE_TEAM_GATE_HOOK,
+  CLAUDE_CODE_SKILL_USED_HOOK,
   CURSOR_SESSION_START_HOOK,
   CURSOR_STOP_HOOK,
   CURSOR_POSTWRITE_HOOK,
@@ -150,7 +151,7 @@ function cleanupProjectClaudeCodeHooks(rootDir: string): { cleaned: boolean; rem
   // Remove hook scripts
   const claudeHooksDir = path.join(rootDir, '.claude', 'hooks');
   if (fs.existsSync(claudeHooksDir)) {
-    for (const hookName of ['paradigm-common.sh', 'paradigm-stop.sh', 'paradigm-precommit.sh', 'paradigm-postwrite.sh', 'paradigm-navigate-remind.sh', 'paradigm-prompt-gate.sh', 'paradigm-team-gate.sh']) {
+    for (const hookName of ['paradigm-common.sh', 'paradigm-stop.sh', 'paradigm-precommit.sh', 'paradigm-postwrite.sh', 'paradigm-navigate-remind.sh', 'paradigm-prompt-gate.sh', 'paradigm-team-gate.sh', 'paradigm-skill-used.sh']) {
       const hookPath = path.join(claudeHooksDir, hookName);
       if (fs.existsSync(hookPath)) {
         fs.unlinkSync(hookPath);
@@ -372,6 +373,7 @@ export async function hooksInstallCommand(options: {
       { name: 'claude-code-navigate-remind', content: CLAUDE_CODE_NAVIGATE_REMIND_HOOK },
       { name: 'claude-code-prompt-gate', content: CLAUDE_CODE_PROMPT_GATE_HOOK },
       { name: 'claude-code-team-gate', content: CLAUDE_CODE_TEAM_GATE_HOOK },
+      { name: 'claude-code-skill-used', content: CLAUDE_CODE_SKILL_USED_HOOK },
       { name: 'cursor-session-start', content: CURSOR_SESSION_START_HOOK },
       { name: 'cursor-stop', content: CURSOR_STOP_HOOK },
       { name: 'cursor-precommit', content: CURSOR_PRECOMMIT_HOOK },
@@ -541,6 +543,7 @@ async function installClaudeCodeHooks(rootDir: string, force?: boolean): Promise
     { name: 'paradigm-navigate-remind.sh', content: CLAUDE_CODE_NAVIGATE_REMIND_HOOK },
     { name: 'paradigm-prompt-gate.sh', content: CLAUDE_CODE_PROMPT_GATE_HOOK },
     { name: 'paradigm-team-gate.sh', content: CLAUDE_CODE_TEAM_GATE_HOOK },
+    { name: 'paradigm-skill-used.sh', content: CLAUDE_CODE_SKILL_USED_HOOK },
   ];
 
   for (const hook of hookScripts) {
@@ -678,6 +681,17 @@ async function installClaudeCodeHooks(rootDir: string, force?: boolean): Promise
   );
   if (!hasParadigmPostwrite) {
     postToolUseHooks.push(postWriteHookEntry);
+  }
+  // PostToolUse `Skill` — !skill-used ledger for Paradigm projections (silent, never blocks)
+  if (!postToolUseHooks.some((h) => JSON.stringify(h).includes('paradigm-skill-used.sh'))) {
+    postToolUseHooks.push({
+      matcher: 'Skill',
+      hooks: [{
+        type: 'command',
+        command: `bash "$CLAUDE_PROJECT_DIR/.claude/hooks/paradigm-skill-used.sh"`,
+        timeout: 10,
+      }],
+    });
   }
   hooks.PostToolUse = postToolUseHooks;
 
@@ -1012,7 +1026,7 @@ export async function hooksStatusCommand(): Promise<void> {
     // Warn about stale project hooks that shadow the plugin
     const claudeHooksDir = path.join(rootDir, '.claude', 'hooks');
     const staleHooks: string[] = [];
-    for (const hookName of ['paradigm-common.sh', 'paradigm-stop.sh', 'paradigm-precommit.sh', 'paradigm-postwrite.sh', 'paradigm-navigate-remind.sh', 'paradigm-prompt-gate.sh', 'paradigm-team-gate.sh']) {
+    for (const hookName of ['paradigm-common.sh', 'paradigm-stop.sh', 'paradigm-precommit.sh', 'paradigm-postwrite.sh', 'paradigm-navigate-remind.sh', 'paradigm-prompt-gate.sh', 'paradigm-team-gate.sh', 'paradigm-skill-used.sh']) {
       if (fs.existsSync(path.join(claudeHooksDir, hookName))) {
         staleHooks.push(hookName);
       }

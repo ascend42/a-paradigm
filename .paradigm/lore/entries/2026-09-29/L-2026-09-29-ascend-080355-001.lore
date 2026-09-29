@@ -1,0 +1,54 @@
+id: L-2026-09-29-ascend-080355-001
+type: agent-session
+timestamp: '2026-09-29T08:03:55.486Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Skills arc Phase 1 — agent-owned skills primitive (7.10.0)
+summary: 'Shipped skills as a first-class primitive: agent-owned SKILL.md sources (~/.paradigm/skills, project override), `paradigm skill list|show|lint|check|project|adopt|certify|sync-global`, one-way projection to ~/.claude/skills/pdg-<id>/ with flat host metadata, Classroom-backed certification with founder TTY sign-off + global ledger, PostToolUse Skill usage hook, and 3 design seeds (design-system-extract, ui-critique-loop, a11y-audit) migrated from designer.agent''s never-read behaviors. Security review (Aegis) found path traversal (fixed) and forgeable certification — founder chose drift-detection now, signing follow-up T-2026-09-29-001.'
+symbols_touched:
+  - '#skill-loader'
+  - '#skill-projector'
+  - '#skill-cli'
+  - $skill-certification
+  - '!skill-used'
+  - '#agent-loader'
+  - '#agent-audit'
+  - '#orchestration'
+symbols_created:
+  - '#skill-loader'
+  - '#skill-projector'
+  - '#skill-cli'
+  - $skill-certification
+  - '!skill-used'
+decisions:
+  - id: D1
+    decision: Source keeps nested metadata.paradigm; projection flattens to paradigm-* string keys
+    rationale: Host convention (archify) is a flat string map; strict validators may reject nested objects.
+  - id: D2
+    decision: Certification is global; rows also written to ~/.paradigm/events/skill-certifications.jsonl
+    rationale: 'Founder: one sign-off certifies everywhere; classroom ledger is per-project so a global ledger is needed for cross-project status.'
+  - id: D3
+    decision: Certification posture = drift-detection, not tamper-proof; signing deferred
+    rationale: Founder choice 2026-09-29 after Aegis H2; tracked T-2026-09-29-001.
+learnings:
+  - Any id that reaches path.join must be validated at the lowest layer (loader/projector), not only in lint of the parsed meta — lint checked meta.id while the CLI argument drove the paths.
+  - Self-attested content hashes are drift detection, not tamper evidence; tamper evidence requires something the tamperer cannot rewrite.
+  - Splitting a Phase into core (mcp) + surface (CLI/seeds) builders with a written API contract avoided turn-limit truncation and allowed parallel fix passes.
+  - integration-build.test rebuilds dist and flakes under concurrent vitest/CLI use.
+verification:
+  status: pass
+  details:
+    build: pass
+    tests: paradigm-mcp 610/610; paradigm 629 pass 3 skipped
+    smoke: 'temp-HOME: refuse uncertified, traversal rejected, no-TTY certify refused, provisional projection flat metadata + scripts withheld'
+    security: Aegis H1 fixed; H2 minimum (ledger cross-check) + honest posture
+linked_tasks:
+  - T-2026-09-26-002
+  - T-2026-09-29-001
+confidence: 0.85
+git_context:
+  ref: 14de5df19453cd417e9aa2e81ce311c7833ab10b
+  branch: feat/skills-arc
+  dirty: true
