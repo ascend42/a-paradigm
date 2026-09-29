@@ -23,7 +23,7 @@ import * as path from 'path';
 import * as yaml from 'js-yaml';
 import { out, success, warn, error, dim, header } from '../utils/cli-output.js';
 
-interface MigrateDecisionsOptions {
+export interface MigrateDecisionsOptions {
   dryRun?: boolean;
   json?: boolean;
 }
@@ -59,7 +59,7 @@ interface LoreEntry {
   linked_lore?: string[];
 }
 
-interface MigrationResult {
+export interface MigrationResult {
   wisdomConverted: number;
   wisdomSkipped: number;
   loreConverted: number;
@@ -135,7 +135,8 @@ export async function migrateDecisionsCommand(options: MigrateDecisionsOptions =
 // Internals
 // ────────────────────────────────────────────────────────────────
 
-function loadAlreadyMigrated(decisionsDir: string): {
+/** Exported for `paradigm migrate learning-stores` (7.12.0). */
+export function loadAlreadyMigrated(decisionsDir: string): {
   wisdomIds: Set<string>;
   loreIds: Set<string>;
 } {
@@ -170,7 +171,8 @@ function loadAlreadyMigrated(decisionsDir: string): {
   return { wisdomIds, loreIds };
 }
 
-function migrateWisdomDecisions(
+/** Exported for `paradigm migrate learning-stores` (7.12.0). */
+export function migrateWisdomDecisions(
   rootDir: string,
   decisionsDir: string,
   alreadyMigrated: { wisdomIds: Set<string>; loreIds: Set<string> },
@@ -185,7 +187,7 @@ function migrateWisdomDecisions(
 
   let files: string[];
   try {
-    files = fs.readdirSync(wisdomDir).filter(f => f.endsWith('.yaml'));
+    files = fs.readdirSync(wisdomDir).filter(f => f.endsWith('.yaml') || f.endsWith('.yml'));
   } catch (err) {
     result.warnings.push(`wisdom dir read failed: ${(err as Error).message}`);
     return;

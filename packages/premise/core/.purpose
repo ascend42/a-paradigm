@@ -30,11 +30,17 @@ features:
       - '#graph-builder'
 components:
   aggregator:
-    description: '#aggregator: Main aggregation logic — includes duplicate symbol detection (reports symbols defined in 2+ files via AggregationResult.duplicateSymbols). DETERMINISM: the extract* helpers are last-write-wins keyed by symbol name, so the .purpose/portal discovery order decides which DUPLICATE wins. Discovery is sorted by repo-relative path (purpose-core findPurposeFiles depth-then-relpath; portal-core findGateFiles relpath) so resolution + downstream Merkle essences are stable across parses — load-bearing for the Loom Oracle (scan-index nondeterminism, T-2026-06-13-011).'
+    description: '#aggregator: Main aggregation logic — anchors: strings go through the shared #symbol-index parseAnchorString (heading/block section anchors since 7.12.0), and resolveReferences stringifies symbol data WITHOUT the anchors field so a section anchor like docs/x.md#setup never registers a reference to #setup — includes duplicate symbol detection (reports symbols defined in 2+ files via AggregationResult.duplicateSymbols). DETERMINISM: the extract* helpers are last-write-wins keyed by symbol name, so the .purpose/portal discovery order decides which DUPLICATE wins. Discovery is sorted by repo-relative path (purpose-core findPurposeFiles depth-then-relpath; portal-core findGateFiles relpath) so resolution + downstream Merkle essences are stable across parses — load-bearing for the Loom Oracle (scan-index nondeterminism, T-2026-06-13-011).'
   source-loader:
     description: '#source-loader: Loads symbols from .purpose and portal.yaml'
   symbol-index:
-    description: '#symbol-index: In-memory symbol index'
+    description: '#symbol-index: In-memory symbol index. Also home of the ONE shared anchor-string parser (7.12.0, D9): parseAnchorString (aggregator path; section anchors first, then the pre-7.12 line semantics byte-identical — "file.ts:15-20" still yields exactly {path, lines:[15,20], raw}), parseAnchor (same section-first fallthrough), parseSectionAnchor (Obsidian-compatible docs/x.md#Heading Text → kind heading, docs/x.md#^block-id → kind block, lines 0 = unresolved; the path part must end in a file extension so src/c#/x.cs:10 stays a line anchor, and a fragment containing '/' or ending in :N / :N-M is rejected so dir.name#x/Foo.ts:10 stays a line anchor) and resolveSectionAnchorLines (content + key → current 1-based inclusive range or null; heading = through the next same-or-higher heading, fenced pseudo-headings ignored, exact then case-insensitive match; block = contiguous paragraph ending at the inline ^id or preceding a standalone ^id line). SourceType gained ''frontmatter'' (no exhaustive switches exist; bySource is an open Map).'
+  frontmatter-parser:
+    description: '#frontmatter-parser: src/frontmatter.ts — the ONE YAML-frontmatter splitter (7.12.0, D8). parseFrontmatter(raw, {mode}) → {data, body, hasFrontmatter, error?} over FRONTMATTER_RE (LF + CRLF, closing fence then newline or EOF). lenient (default) never throws: no block → whole input is body; malformed YAML / non-mapping → data {} + error, body after the fence. strict throws FrontmatterError(reason missing|yaml|not-mapping) with CONTRACT messages "missing YAML frontmatter (--- … ---)", "frontmatter is not a YAML mapping", or the YAML parser message verbatim (surfaced unchanged by #skill-loader). Consumers: #native-memory-scan (lenient), #skill-loader splitFrontmatter (strict), docs-loader (lenient → null adapter). Follow-up: university-core loader + doctor agent-audit still hand-roll.'
+    file: packages/premise/core/src/frontmatter.ts
+    tags:
+      - parser
+      - frontmatter
   search-engine:
     description: '#search-engine: Symbol search functionality'
   reference-tracker:
@@ -89,7 +95,7 @@ aspects:
       - symbol-extraction
       - false-positives
     anchors:
-      - src/aggregator.ts:364-367
+      - src/aggregator.ts:371-374
     applies-to:
       - '#aggregator'
   ~symbol-ref-pattern-letter-guard:
@@ -98,18 +104,19 @@ aspects:
       - symbol-extraction
       - regex
     anchors:
-      - src/aggregator.ts:382-383
+      - src/aggregator.ts:391-393
     applies-to:
       - '#aggregator'
   ~anchor-parse-formats:
-    description: 'Code anchors support four formats: file.ts, file.ts:15, file.ts:15-20, file.ts:15,25,30'
+    description: 'Code anchors support four line formats: file.ts, file.ts:15, file.ts:15-20, file.ts:15,25,30 — plus (7.12.0) section anchors docs/x.md#Heading and docs/x.md#^block-id, parsed by the shared #symbol-index parseAnchorString'
     tags:
       - anchors
       - parsing
     anchors:
-      - src/aggregator.ts:335-358
+      - src/symbol-index.ts:429-462
     applies-to:
       - '#aggregator'
+      - '#symbol-index'
 flows:
   symbol-aggregation:
     description: Aggregate all symbols from .purpose and portal.yaml files into a unified index

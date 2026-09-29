@@ -41,7 +41,7 @@ export type AnySymbolType = SymbolType | LegacySymbolType;
 /**
  * Source type identifiers
  */
-export type SourceType = 'purpose' | 'portal' | 'premise';
+export type SourceType = 'purpose' | 'portal' | 'premise' | 'frontmatter';
 
 /**
  * Symbol prefix mapping (v2)
@@ -106,14 +106,26 @@ export interface Position {
 /**
  * Code anchor reference (v2)
  * Format: file.ts:15 (single line), file.ts:15-20 (range), file.ts:15,25,30 (multiple)
+ *
+ * Section anchors (7.12.0, Obsidian-compatible) — resolved to a line range at
+ * materialize time, so they survive line shifts:
+ *   docs/x.md#Heading Text   → kind 'heading', heading 'Heading Text'
+ *   docs/x.md#^block-id      → kind 'block',   block 'block-id'
+ * A ':' suffix still means lines. Section anchors carry `lines: 0` (unresolved).
  */
 export interface CodeAnchor {
   /** File path */
   path: string;
-  /** Line number(s) - can be single, range, or array */
+  /** Line number(s) - can be single, range, or array. 0 = unresolved section anchor. */
   lines: number | [number, number] | number[];
   /** Raw anchor string as defined */
   raw: string;
+  /** Anchor kind. Absent ≡ 'lines' (back-compat with pre-7.12 anchors). */
+  kind?: 'lines' | 'heading' | 'block';
+  /** Heading text for kind 'heading' (without the leading '#'). */
+  heading?: string;
+  /** Block id for kind 'block' (without the leading '^'). */
+  block?: string;
 }
 
 /**

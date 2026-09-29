@@ -533,6 +533,37 @@ const refreshHooks: MigrationStep = {
   },
 };
 
+// ─── 7.12.0 learning-store consolidation ───────────────────────────
+
+const learningStoresConsolidation: MigrationStep = {
+  id: 'learning-stores-7.12',
+  introducedIn: '7.12.0',
+  description: 'Consolidate learning stores (legacy wisdom decisions, "Work completed" nominations) — `paradigm migrate learning-stores`',
+  category: 'format',
+  auto: false,
+  async check(rootDir) {
+    const { learningStoresMigrationNeeded } = await import('../migrate-learning-stores.js');
+    const r = learningStoresMigrationNeeded(rootDir);
+    return r.needed
+      ? { needed: true, reason: 'Legacy learning-store data found', details: r.reasons }
+      : { needed: false, reason: 'Learning stores already consolidated' };
+  },
+  async apply(rootDir, opts) {
+    const { migrateLearningStores } = await import('../migrate-learning-stores.js');
+    const res = migrateLearningStores(rootDir, { dryRun: opts.dryRun });
+    if (opts.dryRun) {
+      return { status: 'skipped', message: res.steps.map(s => `${s.step}. ${s.summary}`).join('; ') };
+    }
+    if (res.warnings.length > 0) {
+      return { status: 'error', message: `learning-stores migration warnings: ${res.warnings.join('; ')}` };
+    }
+    return {
+      status: 'applied',
+      message: res.backupDir ? `Learning stores consolidated (backup: ${res.backupDir})` : 'Learning stores consolidated',
+    };
+  },
+};
+
 // ─── Migration registry (ordered) ──────────────────────────────────
 
 export const migrations: MigrationStep[] = [
@@ -560,6 +591,9 @@ export const migrations: MigrationStep[] = [
   // 3.19+ refinements
   migrateAssessmentsToLore,
   addComponentTypesConfig,
+
+  // 7.12.0
+  learningStoresConsolidation,
 
   // Evergreen
   syncTemplates,

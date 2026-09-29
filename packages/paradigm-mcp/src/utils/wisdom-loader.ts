@@ -5,7 +5,10 @@
  * - preferences.yaml: What TO do, indexed by symbol
  * - antipatterns.yaml: What NOT to do, with reasons
  * - expertise.yaml: Who knows what symbols
- * - decisions/*.yaml: ADR-style decision records
+ *
+ * Decisions are NOT read here (7.12.0, D2): the legacy `.paradigm/wisdom/decisions/`
+ * read path was removed. Canonical decisions live in `.paradigm/decisions/`
+ * (decision-loader.ts). Run `paradigm migrate learning-stores` to move leftovers.
  *
  * Features:
  * - Cache invalidation after recording new wisdom
@@ -17,7 +20,6 @@ import * as path from 'path';
 import * as yaml from 'js-yaml';
 import {
   loadGlobalAntipatterns,
-  loadGlobalDecisions,
   loadGlobalPreferences,
 } from './global-store.js';
 import { log } from './mcp-logger.js';
@@ -81,22 +83,19 @@ async function loadWisdomContextFresh(rootDir: string): Promise<WisdomContext> {
   const localExists = fs.existsSync(wisdomPath);
 
   // Load local wisdom
-  const [localPrefs, localAntipatterns, expertise, localDecisions] = localExists
+  const [localPrefs, localAntipatterns, expertise] = localExists
     ? await Promise.all([
         loadPreferences(wisdomPath),
         loadAntipatterns(wisdomPath),
         loadExpertise(wisdomPath),
-        loadDecisions(wisdomPath),
       ])
-    : [null, [] as WisdomAntipattern[], null, [] as WisdomDecision[]];
+    : [null, [] as WisdomAntipattern[], null];
 
   // Load global wisdom (best-effort)
   let globalAntipatterns: WisdomAntipattern[] = [];
-  let globalDecisions: WisdomDecision[] = [];
   let globalPrefs: WisdomPreferences | null = null;
   try {
     globalAntipatterns = loadGlobalAntipatterns();
-    globalDecisions = loadGlobalDecisions();
     globalPrefs = loadGlobalPreferences();
   } catch {
     // Global wisdom is optional
@@ -114,17 +113,10 @@ async function loadWisdomContextFresh(rootDir: string): Promise<WisdomContext> {
     }
   }
 
-  // Merge decisions: local wins on duplicate ID, add scope tag
-  const localDecIds = new Set(localDecisions.map(d => d.id));
-  const mergedDecisions: ScopedDecision[] = localDecisions.map(d => ({
-    ...d,
-    scope: 'project' as const,
-  }));
-  for (const gd of globalDecisions) {
-    if (!localDecIds.has(gd.id)) {
-      mergedDecisions.push({ ...gd, scope: 'global' as const });
-    }
-  }
+  // D2 (7.12.0): the legacy wisdom/decisions read path is gone (project AND
+  // global). `decisions` stays on WisdomContext for type compatibility but is
+  // always empty; the canonical store is .paradigm/decisions/ (decision-loader).
+  const mergedDecisions: ScopedDecision[] = [];
 
   // Merge preferences: global as base, local overrides per-symbol
   let mergedPrefs = localPrefs;
@@ -248,66 +240,6 @@ async function loadExpertise(wisdomPath: string): Promise<WisdomExpertise | null
   }
 }
 
-/**
- * Track whether the wisdom-decisions deprecation warning has already been
- * emitted for a given path in this process. Keeps log spam bounded to one
- * warning per wisdom dir per process lifetime.
- */
-const DEPRECATION_WARNED_PATHS = new Set<string>();
-
-/**
- * Load all decision files from decisions/
- *
- * v5.39.0 (sub-phase 1): emits a one-time deprecation warning when the
- * legacy `.paradigm/wisdom/decisions/` dir is still populated. The dir
- * content is still read so v5.x consumers continue working — the actual
- * migration to TD-streams ships in v6.0 via `paradigm migrate decisions`.
- */
-async function loadDecisions(wisdomPath: string): Promise<WisdomDecision[]> {
-  const decisionsPath = path.join(wisdomPath, 'decisions');
-
-  if (!fs.existsSync(decisionsPath)) {
-    return [];
-  }
-
-  const decisions: WisdomDecision[] = [];
-
-  try {
-    const files = fs.readdirSync(decisionsPath);
-
-    // Emit deprecation warning once per process per path, but only if the
-    // dir actually contains at least one .yaml file (empty dir is a no-op)
-    const hasDecisionFiles = files.some(f => f.endsWith('.yaml') || f.endsWith('.yml'));
-    if (hasDecisionFiles && !DEPRECATION_WARNED_PATHS.has(decisionsPath)) {
-      DEPRECATION_WARNED_PATHS.add(decisionsPath);
-      log.component('#wisdom-loader').warn(
-        'wisdom-decisions found; run `paradigm migrate decisions` in v6.0. In v5.39.0 wisdom-decisions are still read but will be migrated to TD-streams in v6.0.',
-      );
-    }
-
-    for (const file of files) {
-      if (!file.endsWith('.yaml') && !file.endsWith('.yml')) {
-        continue;
-      }
-
-      const filePath = path.join(decisionsPath, file);
-      try {
-        const content = fs.readFileSync(filePath, 'utf8');
-        const decision = yaml.load(content) as WisdomDecision;
-        decisions.push(decision);
-      } catch (error) {
-        log.component('#wisdom-loader').error(`Error parsing ${file}`, { error });
-      }
-    }
-  } catch (error) {
-    log.component('#wisdom-loader').error('Error reading decisions directory', { error });
-  }
-
-  // Sort by ID
-  decisions.sort((a, b) => a.id.localeCompare(b.id));
-
-  return decisions;
-}
 
 /**
  * Get wisdom for specific symbols
@@ -432,7 +364,10 @@ export async function recordAntipattern(
 }
 
 /**
- * Record a new decision
+ * Record a new decision into the LEGACY wisdom/decisions dir.
+ * @deprecated 7.12.0 — nothing reads this dir any more (D2). Use
+ * decision-loader.recordDecision (`.paradigm/decisions/`). Kept only for
+ * import compatibility; slated for removal.
  */
 export async function recordDecision(
   rootDir: string,

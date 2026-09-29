@@ -5,6 +5,38 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.12.0] — 2026-09-29
+
+**Learning-store consolidation + loop teeth** (Phase 3 of the skills arc, T-2026-09-26-004). The learning loop now has a real promotion gate and a liveness alarm that can actually see. Legacy stores are retired behind a backed-up, idempotent migration, and the Brain prerequisites (one frontmatter parser, heading/block anchors) land in premise-core.
+
+### Added
+- **`paradigm migrate learning-stores`** (`--dry-run`, `--apply`, `--json`): (1) backs up every original it will touch to `.paradigm/backups/learning-stores-<ts>/`, (2) converts legacy `.paradigm/wisdom/decisions/*.yaml` into the TD store (reusing the `migrate decisions` wisdom converter, idempotent via the `wisdom-decision:<id>` tag) and removes the empty dir, (3) moves unengaged "Work completed … — review outcome" nominations to `nominations-boilerplate.jsonl` in the backup, (4) reports habits whose patterns point at removed University paths (moves them only with `--apply`), (5) writes `.paradigm/migrations/learning-stores.done`. `--dry-run` writes nothing; a second run is a no-op. The global `~/.paradigm/wisdom/decisions` is reported, never touched. Also registered in `paradigm migrate` as `learning-stores-7.12` (not auto-applied).
+- **Learning-store registry** (`#learning-stores`, `listLearningStores`): a read-only facade naming every store with its class (`ledger` | `knowledge` | `pipeline` | `policy` | `native`), path, scope, owner and count. Loid's must-not-consolidate list stays as separate rows (journals vs notebooks; promotion-decisions / classroom-certifications / notebook-refs ledgers; decisions vs antipatterns). Claude Code native memory is registered read-only and never migrated.
+- **`paradigm doctor` learning-store census**: one line listing every non-empty store as `id[class]=count`, plus a warning when a legacy `.paradigm/wisdom/decisions/` is still present.
+- **Shared frontmatter parser in premise-core** (`parseFrontmatter(raw, { mode: 'lenient' | 'strict' })`, `FRONTMATTER_RE`): memory-scan, skill-loader's `splitFrontmatter` (same signature and error messages) and docs-loader now all use it.
+- **Heading and block anchors**: `docs/x.md#Heading Text` and `docs/x.md#^block-id` (Obsidian-compatible) alongside `path:15-20` line anchors. `CodeAnchor` gains optional `kind` / `heading` / `block`. The aspect graph resolves them to the section's current line range and stores `anchor_kind` / `anchor_key` (idempotent `ALTER TABLE`). A renamed or missing heading/block counts as drift.
+- **`SourceType` `'frontmatter'`**.
+- **`PROTOCOL_IS_SKILL` lint** (`lintProtocol` in `#protocol-loader`): warns when no protocol step names a repo path, since that is portable know-how and belongs in a skill. It is the reverse of `SKILL_IS_PROTOCOL` and reuses skill-loader's `repoPathTokens` detector. Warn only; protocol status is unchanged.
+
+### Changed
+- **Belief-delta promotion gate** (`decidePromotion`, `loadPromotionBands`): journal→notebook promotion is now decided by how much belief moved against the notebook prior (`notebookPrior`, never the journal's `confidence_before`). Order: no `confidence_after` → skip; `human_feedback` → floor only; below floor → skip; no prior → the old absolute 0.8 bar (`novelBar`, now the novel-concept fallback only); |delta| < epsilon → hold; delta ≥ deltaMin → promote; a regression is skipped. Bands are configurable in `config.yaml` under `learning.promotion.{floor, deltaMin, epsilon, novelBar}` (snake_case accepted). The defaults of 0.7 / 0.10 / 0.05 / 0.8 are uncalibrated. `/class` human certification (`gatedPromoteJournalEntry`) never passes through this gate.
+- **Promotion instrument rows** (`promotion-decisions.jsonl`) now record `gate: 'belief-delta-v1'`, `reason`, `floor` and a shadow `absoluteWouldPromote`. `PromotionDecision` / `PromotionGate` / `PromotionReason` are exported from `types/knowledge-streams.ts`.
+- **Learning liveness reads both probe files**: `summarizeLearningLiveness` works over the union of `postflight-liveness.jsonl` and `settlement-liveness.jsonl`. RED (error): 0 journals over ≥5 completions. AMBER: under 0.2 journals per completion over ≥10. "Probe silent" warning: ≥5 settlement rows but no postflight rows. No data is reported as NO DATA and is never green.
+- **`paradigm://wisdom/decisions` and `paradigm://wisdom/decision/{id}`** are now aliases of the canonical TD store (`.paradigm/decisions/`).
+- **Habits are classified as hook policy**, not a learning store. They stay separate from skills.
+
+### Removed
+- **"Work completed" nominations**: `work-completed` events stay in `stream.jsonl` but no longer produce nominations (`NON_NOMINATING_EVENT_TYPES`). Every one of them had been the same boilerplate.
+- **Legacy wisdom/decisions read path**: `wisdom-loader` no longer reads `.paradigm/wisdom/decisions/` (project or global). `WisdomContext.decisions` is always empty. `loadGlobalDecisions` is deprecated and kept only for the promote-to-global duplicate check.
+- **Stale `.paradigm/habits/university-content-sync.habit`**: its University paths were removed in 7.11.0.
+
+### Fixed
+- **Blind liveness alarm**: doctor used to read only `postflight-liveness.jsonl`, which was absent in practice, while `settlement-liveness.jsonl` held settlements with `journalsWritten: 0`. The flatline is now visible.
+- **`confidence_after ?? 0` artifact**: a missing `confidence_after` is recorded as `after: null` with reason `no-after`, not as a fabricated 0.
+
+### Versions
+- `@a-company/paradigm`, `@a-company/paradigm-mcp`, plugin → 7.12.0; `@a-company/premise-core` 3.9.0 → 3.10.0.
+
 ## [7.11.0] — 2026-09-29
 
 **University overhaul** (Phase 2 of the skills arc, T-2026-09-26-003). University content now lives in a Platform section called the **Academy**. Packs can ship skills. The MCP surface is down to two read-only tools, and pack discovery comes from one place (`@a-company/university-core`). The Academy is the University UI label; Classroom keeps curriculum, syllabus, scenario and certify. The CLI noun stays `paradigm university`.

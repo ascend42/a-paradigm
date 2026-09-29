@@ -71,7 +71,21 @@ export {
   getComponentsByType,
   getAllComponentTypes,
   getChildComponents,
+  parseAnchor,
+  parseAnchorString,
+  parseSectionAnchor,
+  resolveSectionAnchorLines,
 } from './symbol-index.js';
+
+// Shared frontmatter parser — #frontmatter-parser (D8, 7.12.0)
+export {
+  parseFrontmatter,
+  FrontmatterError,
+  FRONTMATTER_RE,
+  FRONTMATTER_MISSING_MESSAGE,
+  FRONTMATTER_NOT_MAPPING_MESSAGE,
+} from './frontmatter.js';
+export type { FrontmatterMode, FrontmatterResult } from './frontmatter.js';
 
 // Anchor path resolution
 export {

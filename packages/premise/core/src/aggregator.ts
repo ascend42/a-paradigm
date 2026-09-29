@@ -16,7 +16,6 @@ import {
 } from '@a-company/purpose-core';
 import { parseGateConfig, findGateFiles, type ParsedGateConfig, type Gate, type Flow } from '@a-company/portal-core';
 import type {
-  CodeAnchor,
   PremiseFile,
   SymbolEntry,
   SymbolType,
@@ -24,6 +23,7 @@ import type {
   AggregationResult,
   AggregationError,
 } from './types.js';
+import { parseAnchorString } from './symbol-index.js';
 
 /**
  * Aggregate all symbols from a premise configuration
@@ -364,35 +364,6 @@ function createFlowSymbol(flow: Flow, filePath: string): SymbolEntry {
   });
 }
 
-/**
- * Parse an anchor string into a CodeAnchor
- * Formats: "file.ts", "file.ts:15", "file.ts:15-20", "file.ts:15,25,30"
- */
-function parseAnchorString(raw: string): CodeAnchor {
-  const colonIndex = raw.lastIndexOf(':');
-  if (colonIndex === -1 || colonIndex === raw.length - 1) {
-    return { path: raw, lines: 0, raw };
-  }
-
-  const afterColon = raw.slice(colonIndex + 1);
-  const filePath = raw.slice(0, colonIndex);
-
-  // Check if it's a line reference (digits, dashes, commas)
-  if (!/^[\d,\- ]+$/.test(afterColon)) {
-    return { path: raw, lines: 0, raw };
-  }
-
-  if (afterColon.includes('-')) {
-    const [start, end] = afterColon.split('-').map(Number);
-    return { path: filePath, lines: [start, end], raw };
-  } else if (afterColon.includes(',')) {
-    const lines = afterColon.split(',').map(Number);
-    return { path: filePath, lines, raw };
-  } else {
-    return { path: filePath, lines: Number(afterColon), raw };
-  }
-}
-
 // Common framework aliases that look like symbols but aren't
 // SvelteKit: $lib, $env, $app, $service-worker
 // Vite: $virtual
@@ -410,7 +381,11 @@ function resolveReferences(symbols: SymbolEntry[]): void {
 
   for (const symbol of symbols) {
     // Find references in the data
-    const dataStr = JSON.stringify(symbol.data);
+    // `anchors` are code LOCATIONS, never symbol references — a section anchor
+    // like `docs/x.md#setup` must not register a reference to `#setup`.
+    const dataStr = JSON.stringify(symbol.data, (key, value) =>
+      key === 'anchors' ? undefined : value,
+    );
     // Match compound ideas (?@, ?#, etc.) OR single prefixes
     // This ensures ?@subscription matches as one symbol, not split into ? and @subscription
     // IMPORTANT: First char after prefix must be a letter to avoid false positives

@@ -365,6 +365,18 @@ migrateCmd
     await migrateDecisionsCommand(options);
   });
 
+// paradigm migrate learning-stores — 7.12.0 learning-store consolidation
+migrateCmd
+  .command('learning-stores')
+  .description('7.12.0: migrate legacy wisdom decisions, drop "Work completed" nominations, flag stale habits (backs up first)')
+  .option('--dry-run', 'Print the per-step plan without writing anything')
+  .option('--apply', 'Also move habits that reference removed University paths into the backup')
+  .option('--json', 'Emit the result as JSON')
+  .action(async (options) => {
+    const { migrateLearningStoresCommand } = await import('./commands/migrate-learning-stores.js');
+    await migrateLearningStoresCommand(options);
+  });
+
 // paradigm upgrade (deprecated — use `paradigm migrate`)
 program
   .command('upgrade [path]')

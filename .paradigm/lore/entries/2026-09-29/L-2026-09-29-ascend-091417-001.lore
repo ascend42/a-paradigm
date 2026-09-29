@@ -1,0 +1,37 @@
+id: L-2026-09-29-ascend-091417-001
+type: agent-session
+timestamp: '2026-09-29T09:14:17.587Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Skills arc Phase 3 — learning-store consolidation, belief-delta gate, Brain prereqs (7.12.0)
+summary: 'Gave the learning loop teeth and consolidated its stores without a rewrite: belief-delta promotion gate (floor 0.7/deltaMin 0.10/epsilon 0.05/novelBar 0.8, uncalibrated, shadow absoluteWouldPromote), notebook prior only, human promotions recorded as ''human''; "Work completed" boilerplate nominations stopped (43/43 moved to backup); legacy wisdom/decisions migrated and its read path removed; learning-store registry + doctor census in 3 conceptual classes; liveness alarm now reads settlement rows too and went RED on this repo (0 journals / 13 completions) — the loop was silently broken and is now visibly so. Brain prereqs landed: one shared premise-core frontmatter parser, SourceType ''frontmatter'', heading/block anchors with aspect-graph drift.'
+symbols_touched:
+  - '#nomination-engine'
+  - '#learning-stores'
+  - '#frontmatter-parser'
+  - '#aspect-graph'
+  - '#doctor'
+  - '#wisdom-loader'
+  - '#protocol-loader'
+  - '#symbol-index'
+learnings:
+  - 'The liveness alarm was blind because it read a probe file that never gets written — ''no data'' must never render green; FIRST RUN IS RED: 0 journals over 13 completions, and the postflight probe is not firing (open item).'
+  - Line-number anchors in .purpose drift silently under refactors; heading/block anchors are the durable alternative for docs, and this phase's own anchors had to be hand-corrected.
+  - PROTOCOL_IS_SKILL fired on 8/39 real protocols as false positives until declared step targets counted as repo paths — always run a new lint against real corpora before shipping.
+  - Band values are uncalibrated (3 decision rows, 2 artifacts); recalibrate at ≥50 priorFound rows.
+verification:
+  status: pass
+  details:
+    tests: premise-core 95, paradigm-mcp 629, paradigm 670 (+3 skipped)
+    migration: applied on repo; second run no-op
+    doctor: liveness RED (correct), census 23 stores
+linked_tasks:
+  - T-2026-09-26-004
+  - T-2026-06-13-004
+confidence: 0.8
+git_context:
+  ref: 65d4930e667471b2c32851dcc723dc5adda9357d
+  branch: feat/skills-arc
+  dirty: true

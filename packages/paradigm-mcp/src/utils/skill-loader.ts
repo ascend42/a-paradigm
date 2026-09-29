@@ -53,6 +53,7 @@ import * as path from 'path';
 import * as os from 'os';
 import * as crypto from 'crypto';
 import * as yaml from 'js-yaml';
+import { parseFrontmatter } from '@a-company/premise-core';
 import { log } from './mcp-logger.js';
 import type {
   SkillFile,
@@ -173,17 +174,15 @@ export class SkillParseError extends Error {
   }
 }
 
-const FRONTMATTER_RE = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)([\s\S]*)$/;
-
-/** Split a markdown file into raw frontmatter object + body. Throws on missing frontmatter. */
+/**
+ * Split a markdown file into raw frontmatter object + body. Throws on missing frontmatter.
+ * Thin strict wrapper over premise-core's shared #frontmatter-parser (D8, 7.12.0);
+ * error messages are unchanged ('missing YAML frontmatter (--- … ---)',
+ * 'frontmatter is not a YAML mapping', or the YAML parser's own message).
+ */
 export function splitFrontmatter(content: string): { data: Record<string, unknown>; body: string } {
-  const m = FRONTMATTER_RE.exec(content);
-  if (!m) throw new Error('missing YAML frontmatter (--- … ---)');
-  const data = yaml.load(m[1]);
-  if (!data || typeof data !== 'object' || Array.isArray(data)) {
-    throw new Error('frontmatter is not a YAML mapping');
-  }
-  return { data: data as Record<string, unknown>, body: m[2] };
+  const { data, body } = parseFrontmatter(content, { mode: 'strict' });
+  return { data, body };
 }
 
 function validateFrontmatter(data: Record<string, unknown>): string[] {

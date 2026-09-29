@@ -271,3 +271,49 @@ export interface DecisionFilter {
   dateTo?: string;
   limit?: number;
 }
+
+// ────────────────────────────────────────────────────────
+// Promotion instrument (promotion-decisions.jsonl)
+// ────────────────────────────────────────────────────────
+
+/**
+ * Which promotion gate produced a promotion-decisions.jsonl row.
+ * - 'absolute-0.8'     — legacy rows (pre-7.12.0): confidence_after >= 0.8
+ * - 'belief-delta-v1'  — 7.12.0+: belief-delta gate with configurable bands
+ */
+export type PromotionGate = 'absolute-0.8' | 'belief-delta-v1';
+
+/** Why the belief-delta gate decided the way it did. */
+export type PromotionReason =
+  | 'delta'
+  | 'novel'
+  | 'hold-silence'
+  | 'below-delta'
+  | 'below-floor'
+  | 'no-after'
+  | 'regressed'
+  | 'human';
+
+/**
+ * One row of .paradigm/events/promotion-decisions.jsonl — an append-only
+ * falsifiability instrument (never consolidated with other stores).
+ */
+export interface PromotionDecision {
+  ts: string;
+  agent: string;
+  concepts: string[];
+  before: number;
+  /** null when the journal entry carried no confidence_after (7.12.0+; legacy rows used `?? 0`). */
+  after: number | null;
+  /** null when `after` is null. */
+  delta: number | null;
+  promoted: boolean;
+  priorFound: boolean;
+  gate: PromotionGate;
+  /** The delta-gate floor in effect when recorded. */
+  floor?: number;
+  /** belief-delta-v1 only: which rule decided. */
+  reason?: PromotionReason;
+  /** belief-delta-v1 only: shadow verdict of the retired absolute >= 0.8 gate. */
+  absoluteWouldPromote?: boolean;
+}

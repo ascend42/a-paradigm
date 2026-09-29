@@ -292,7 +292,7 @@ components:
     description: Global brain utility (~/.paradigm/) for session persistence and cross-project wisdom
     type: store
     anchors:
-      - src/utils/global-store.ts:1-260
+      - src/utils/global-store.ts:1-349
     tags:
       - feature
       - persistence
@@ -316,7 +316,7 @@ components:
     description: Wisdom loader with global+local merge and scope tagging
     type: loader
     anchors:
-      - src/utils/wisdom-loader.ts:1-360
+      - src/utils/wisdom-loader.ts:1-400
     tags:
       - persistence
     components:
@@ -362,7 +362,7 @@ components:
   AspectGraph:
     description: SQLite graph engine for the Aspect Graph system (v3.5). Provides materialization from SymbolEntry[], weighted BFS ripple traversal, heatmap tracking, and drift detection for code anchors. Database stored at .paradigm/aspect-graph.db.
     anchors:
-      - src/utils/aspect-graph.ts:1-821
+      - src/utils/aspect-graph.ts:1-1468
     tags:
       - feature
       - aspect-graph
@@ -531,9 +531,9 @@ aspects:
       - performance
       - caching
     anchors:
-      - src/utils/wisdom-loader.ts:25-25
-      - src/utils/wisdom-loader.ts:56-58
-      - src/utils/wisdom-loader.ts:178-181
+      - src/utils/wisdom-loader.ts:27-27
+      - src/utils/wisdom-loader.ts:58-60
+      - src/utils/wisdom-loader.ts:170-173
     applies-to:
       - '#WisdomLoader'
     enforcement: |
@@ -721,11 +721,11 @@ aspects:
       - persistence
       - wisdom
     anchors:
-      - src/utils/wisdom-loader.ts:104-127
+      - src/utils/wisdom-loader.ts:104-114
     applies-to:
       - '#WisdomLoader'
     enforcement: |
-      loadWisdomContextFresh() merges antipatterns and decisions by ID.
+      loadWisdomContextFresh() merges antipatterns by ID (decisions: legacy read path removed in 7.12.0).
       Local entries are added first; global entries with the same ID are
       skipped. For preferences, local by_symbol entries take priority
       and global entries are merged only for symbols not in local.
@@ -736,7 +736,7 @@ aspects:
       - aspect-graph
       - traversal
     anchors:
-      - src/utils/aspect-graph.ts:472-473
+      - src/utils/aspect-graph.ts:586-587
     applies-to:
       - '#AspectGraph'
     enforcement: |
@@ -750,8 +750,8 @@ aspects:
       - aspect-graph
       - performance
     anchors:
-      - src/utils/aspect-graph.ts:477-477
-      - src/utils/aspect-graph.ts:489-489
+      - src/utils/aspect-graph.ts:591-591
+      - src/utils/aspect-graph.ts:603-603
     applies-to:
       - '#AspectGraph'
     enforcement: |
@@ -764,7 +764,7 @@ aspects:
       - aspect-graph
       - edges
     anchors:
-      - src/utils/aspect-graph.ts:322-326
+      - src/utils/aspect-graph.ts:432-441
     applies-to:
       - '#AspectGraph'
     enforcement: |
@@ -778,8 +778,8 @@ aspects:
       - aspect-graph
       - traversal
     anchors:
-      - src/utils/aspect-graph.ts:548-548
-      - src/utils/aspect-graph.ts:563-563
+      - src/utils/aspect-graph.ts:662-662
+      - src/utils/aspect-graph.ts:677-677
     applies-to:
       - '#AspectGraph'
     enforcement: |
@@ -793,7 +793,7 @@ aspects:
       - aspect-graph
       - heuristics
     anchors:
-      - src/utils/aspect-graph.ts:781-792
+      - src/utils/aspect-graph.ts:1429-1440
     applies-to:
       - '#AspectGraph'
     enforcement: |
@@ -806,7 +806,7 @@ aspects:
       - aspect-graph
       - heuristics
     anchors:
-      - src/utils/aspect-graph.ts:799-808
+      - src/utils/aspect-graph.ts:1447-1456
     applies-to:
       - '#AspectGraph'
     enforcement: |
@@ -818,8 +818,8 @@ aspects:
       - aspect-graph
       - data-integrity
     anchors:
-      - src/utils/aspect-graph.ts:653-720
-      - src/utils/aspect-graph.ts:754-774
+      - src/utils/aspect-graph.ts:770-1107
+      - src/utils/aspect-graph.ts:1111-1209
     applies-to:
       - '#AspectGraph'
     enforcement: |
@@ -834,7 +834,7 @@ aspects:
       - sqlite
       - resilience
     anchors:
-      - src/utils/aspect-graph.ts:193-198
+      - src/utils/aspect-graph.ts:254-259
       - src/utils/aspect-search.ts:114-124
     applies-to:
       - '#AspectGraph'

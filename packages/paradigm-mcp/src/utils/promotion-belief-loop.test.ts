@@ -4,7 +4,8 @@
  *       onto the notebook entry; a re-promote OVERWRITES (no max ratchet).
  *   (2) Instrument — autoPromoteJournalEntries appends a {before, after, delta,
  *       promoted} row to .paradigm/events/promotion-decisions.jsonl per candidate.
- *   (3) Gate is UNCHANGED — a 0.75 entry still does NOT promote, a 0.85 still does.
+ *   (3) 7.12.0 belief-delta gate — with NO prior the absolute 0.8 bar survives only
+ *       as the novel-concept fallback (novelBar); with a prior, the delta decides.
  *
  * Both the global notebook dir (os.homedir()) and the journal dir
  * (process.env.HOME) are steered to one mock-home temp dir so the require()-based
@@ -74,7 +75,7 @@ afterAll(() => {
 
 function makeJournalEntry(agentId: string, overrides: Partial<JournalEntry>): JournalEntry {
   return recordJournalEntry(agentId, {
-    trigger: 'pattern_discovered',
+    trigger: overrides.trigger ?? 'pattern_discovered',
     insight: overrides.insight ?? 'reuse the jwt middleware guard',
     confidence_after: overrides.confidence_after,
     project: overrides.project ?? 'test-proj',
@@ -158,8 +159,9 @@ describe('autoPromoteJournalEntries confidence loop (open-loop fix)', () => {
     expect(nb[0].confidence).toBe(0.95);
 
     // Second promotion of the SAME concept at a LOWER (but still promoting) value.
-    // Same first-concept slug → same deterministic notebook id → overwrite.
-    makeJournalEntry('kit', { confidence_after: 0.82, tags: ['jwt-guard'] });
+    // Under the 7.12.0 delta gate a lower value only promotes via human_feedback
+    // (floor-only). Same first-concept slug → same notebook id → overwrite.
+    makeJournalEntry('kit', { confidence_after: 0.82, tags: ['jwt-guard'], trigger: 'human_feedback' });
     autoPromoteJournalEntries(rootDir, 'kit');
 
     nb = loadNotebookEntries('kit', rootDir, { concepts: ['jwt-guard'] });
@@ -217,7 +219,10 @@ describe('promotion-decisions instrument', () => {
     expect(row.after).toBe(0.85);
     expect(row.delta).toBeCloseTo(0.35, 10);
     expect(row.promoted).toBe(true);
-    expect(row.gate).toBe('absolute-0.8');
+    expect(row.gate).toBe('belief-delta-v1');
+    expect(row.reason).toBe('novel');
+    expect(row.absoluteWouldPromote).toBe(true);
+    expect(row.floor).toBe(0.7);
     expect(typeof row.ts).toBe('string');
   });
 
@@ -247,8 +252,12 @@ describe('promotion-decisions instrument', () => {
     expect(second.priorFound).toBe(true);
     expect(second.before).toBe(0.9); // prior = max existing confidence
     expect(second.after).toBe(0.82);
-    expect(second.delta).toBeCloseTo(-0.08, 10); // delta can be negative; recorded, not gated
-    expect(second.promoted).toBe(true); // absolute gate still passes
+    expect(second.delta).toBeCloseTo(-0.08, 10);
+    // 7.12.0: the delta now GATES — a regression is not promoted, even though
+    // the retired absolute gate would have (shadow column).
+    expect(second.promoted).toBe(false);
+    expect(second.reason).toBe('regressed');
+    expect(second.absoluteWouldPromote).toBe(true);
   });
 });
 
@@ -256,8 +265,8 @@ describe('promotion-decisions instrument', () => {
 // Part 3 — absolute gate is UNCHANGED (regression lock for the deferral)
 // ────────────────────────────────────────────────────────
 
-describe('absolute promotion gate is unchanged (deferral regression lock)', () => {
-  it('does NOT promote a 0.75 entry', () => {
+describe('novel-concept fallback (no prior ⇒ absolute novelBar 0.8)', () => {
+  it('does NOT promote a novel 0.75 entry', () => {
     makeJournalEntry('kit', { confidence_after: 0.75, tags: ['below-bar'] });
 
     const res = autoPromoteJournalEntries(rootDir, 'kit');
@@ -272,7 +281,7 @@ describe('absolute promotion gate is unchanged (deferral regression lock)', () =
     expect(rows[0].promoted).toBe(false);
   });
 
-  it('DOES promote a 0.85 entry', () => {
+  it('DOES promote a novel 0.85 entry', () => {
     makeJournalEntry('kit', { confidence_after: 0.85, tags: ['above-bar'] });
 
     const res = autoPromoteJournalEntries(rootDir, 'kit');
@@ -285,10 +294,70 @@ describe('absolute promotion gate is unchanged (deferral regression lock)', () =
     expect(rows[0].promoted).toBe(true);
   });
 
-  it('promotes exactly at the 0.8 boundary (>= 0.8)', () => {
+  it('promotes a NOVEL concept exactly at the 0.8 boundary (>= novelBar)', () => {
     makeJournalEntry('kit', { confidence_after: 0.8, tags: ['on-bar'] });
 
     const res = autoPromoteJournalEntries(rootDir, 'kit');
     expect(res.promoted).toBe(1);
+  });
+});
+
+// ────────────────────────────────────────────────────────
+// Part 4 — belief-delta gate end-to-end (7.12.0, D6)
+// ────────────────────────────────────────────────────────
+
+describe('belief-delta gate (autoPromoteJournalEntries)', () => {
+  it('promotes a known concept whose belief ROSE by >= deltaMin, even below novelBar', () => {
+    addNotebookEntry('kit', {
+      context: 'c', snippet: 's', provenance: { source: 'lore', createdBy: 'kit' },
+      concepts: ['rising'], tags: [], confidence: 0.6,
+    }, 'global');
+    makeJournalEntry('kit', { confidence_after: 0.75, tags: ['rising'] });
+    const res = autoPromoteJournalEntries(rootDir, 'kit');
+    expect(res.promoted).toBe(1);
+    const row = readDecisions()[0];
+    expect(row.reason).toBe('delta');
+    expect(row.absoluteWouldPromote).toBe(false);
+  });
+
+  it('HOLDS a known concept whose belief did not move (silence is signal)', () => {
+    addNotebookEntry('kit', {
+      context: 'c', snippet: 's', provenance: { source: 'lore', createdBy: 'kit' },
+      concepts: ['steady'], tags: [], confidence: 0.9,
+    }, 'global');
+    makeJournalEntry('kit', { confidence_after: 0.92, tags: ['steady'] });
+    const res = autoPromoteJournalEntries(rootDir, 'kit');
+    expect(res.promoted).toBe(0);
+    expect(readDecisions()[0].reason).toBe('hold-silence');
+  });
+
+  it('records after:null / no-after instead of the old `?? 0` artifact', () => {
+    makeJournalEntry('kit', { confidence_after: undefined, tags: ['no-after'] });
+    const res = autoPromoteJournalEntries(rootDir, 'kit');
+    expect(res.promoted).toBe(0);
+    const row = readDecisions()[0];
+    expect(row.after).toBeNull();
+    expect(row.delta).toBeNull();
+    expect(row.reason).toBe('no-after');
+  });
+
+  it('stamps human_feedback certs certifiedBy:human, gate promotions certifiedBy:gate', () => {
+    makeJournalEntry('kit', { confidence_after: 0.72, tags: ['human-said'], trigger: 'human_feedback' });
+    makeJournalEntry('kit', { confidence_after: 0.85, tags: ['novel-thing'] });
+    expect(autoPromoteJournalEntries(rootDir, 'kit').promoted).toBe(2);
+    const certs = fs
+      .readFileSync(path.join(rootDir, '.paradigm', 'events', 'classroom-certifications.jsonl'), 'utf8')
+      .trim().split('\n').map(l => JSON.parse(l));
+    const by = Object.fromEntries(certs.map(c => [c.concepts[0], c.certifiedBy]));
+    expect(by['human-said']).toBe('human');
+    expect(by['novel-thing']).toBe('gate');
+  });
+
+  it('honours config.yaml learning.promotion bands', () => {
+    fs.mkdirSync(path.join(rootDir, '.paradigm'), { recursive: true });
+    fs.writeFileSync(path.join(rootDir, '.paradigm', 'config.yaml'),
+      'learning:\n  promotion:\n    novel_bar: 0.7\n');
+    makeJournalEntry('kit', { confidence_after: 0.75, tags: ['cfg-novel'] });
+    expect(autoPromoteJournalEntries(rootDir, 'kit').promoted).toBe(1);
   });
 });

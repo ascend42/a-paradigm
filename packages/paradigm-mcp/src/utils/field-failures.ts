@@ -87,7 +87,7 @@ export interface ClassroomCertRow {
   entryId: string;
   concepts: string[];
   confidenceAtCert: number;
-  certifiedBy: 'gate' | 'peer' | 'quorum';
+  certifiedBy: 'gate' | 'peer' | 'quorum' | 'human';
   outcome: 'pending' | 'survived' | 'overturned';
   /** Set when later-bound to `overturned`. */
   overturnedByFailureId?: string;

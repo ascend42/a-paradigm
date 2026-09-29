@@ -65,7 +65,7 @@ interface ClassroomCertRow {
   entryId?: string;
   concepts?: string[];
   confidenceAtCert?: number;
-  certifiedBy?: 'gate' | 'peer' | 'quorum';
+  certifiedBy?: 'gate' | 'peer' | 'quorum' | 'human';
   outcome?: 'pending' | 'survived' | 'overturned';
   overturnedByFailureId?: string;
   boundAt?: string;

@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-09-29T08:47:14.495Z'
+generated: '2026-09-29T09:14:04.542Z'
 structure: {}
 key_files:
   config:
@@ -117,9 +117,6 @@ symbols:
   '#purpose-feature-event-timeline': packages/portal/viewer/
   '#purpose-feature-test-checklist': packages/portal/viewer/
   '#purpose-feature-command-palette': packages/portal/viewer/
-  '#purpose-feature-symbol-aggregation': packages/premise/core/
-  '#purpose-feature-symbol-indexing': packages/premise/core/
-  '#purpose-feature-reference-tracking': packages/premise/core/
   '#purpose-feature-scan-index-generation': packages/probe/core/
   '#purpose-feature-probe-protocol': packages/probe/core/
   '#purpose-feature-purpose-parsing': packages/purpose/core/
@@ -344,7 +341,7 @@ symbols:
   '#purpose-component-symbol-counter': packages/paradigm/
   '#purpose-component-beacon-handler': packages/paradigm/
   '#purpose-component-constellation-handler': packages/paradigm/
-  '#purpose-component-graph-builder': packages/premise/core/
+  '#purpose-component-graph-builder': packages/paradigm/
   '#purpose-component-ripple-handler': packages/paradigm/
   '#purpose-component-impact-analyzer': packages/paradigm/
   '#purpose-component-echo-handler': packages/paradigm/
@@ -565,13 +562,6 @@ symbols:
   '#purpose-component-test-runner': packages/portal/viewer/
   '#purpose-component-palette-component': packages/portal/viewer/
   '#purpose-component-command-generator': packages/portal/viewer/
-  '#purpose-component-aggregator': packages/purpose/core/
-  '#purpose-component-source-loader': packages/premise/core/
-  '#purpose-component-symbol-index': packages/premise/core/
-  '#purpose-component-search-engine': packages/premise/core/
-  '#purpose-component-reference-tracker': packages/premise/core/
-  '#purpose-component-graph-slice-projector': packages/premise/core/
-  '#purpose-component-classroom-metrics': packages/premise/core/
   '#purpose-component-generator': packages/probe/core/
   '#purpose-component-component-scanner': packages/probe/core/
   '#purpose-component-protocol-handler': packages/probe/core/
@@ -579,6 +569,7 @@ symbols:
   '#purpose-component-purpose-parser': packages/purpose/core/
   '#purpose-component-zod-schemas': packages/purpose/core/
   '#purpose-component-schema-rules': packages/purpose/core/
+  '#purpose-component-aggregator': packages/purpose/core/
   '#purpose-component-symbol-extractor': packages/purpose/core/
   '#purpose-component-App': packages/sentinel/ui/
   '#purpose-component-Toolbar': packages/sentinel/ui/
@@ -706,9 +697,14 @@ symbols:
   '#purpose-component-consistency-tracker': packages/paradigm-mcp/src/utils/
   '#purpose-component-strict-mode': packages/paradigm-mcp/src/utils/
   '#purpose-component-wisdom-loader': packages/paradigm-mcp/src/utils/
+  '#purpose-component-learning-stores': packages/paradigm-mcp/src/utils/
+  '#purpose-component-protocol-loader': packages/paradigm-mcp/src/utils/
+  '#purpose-component-global-store': packages/paradigm-mcp/src/utils/
   '#purpose-component-arch-loader': packages/paradigm-mcp/src/utils/
   '#purpose-component-calibration-aggregate': packages/paradigm-mcp/src/utils/
   '#purpose-component-skill-loader': packages/paradigm-mcp/src/utils/
+  '#purpose-component-aspect-graph': packages/paradigm-mcp/src/utils/
+  '#purpose-component-docs-loader': packages/paradigm-mcp/src/utils/
   '#purpose-component-skill-projector': packages/paradigm-mcp/src/utils/
   '#purpose-component-skill-usage': packages/paradigm-mcp/src/utils/
   '#purpose-component-ServeCommand': packages/paradigm/src/commands/
@@ -719,6 +715,7 @@ symbols:
   '#purpose-component-GraphCommand': packages/paradigm/src/commands/
   '#purpose-component-MigrateCommand': packages/paradigm/src/commands/
   '#purpose-component-MigrateDecisionsCommand': packages/paradigm/src/commands/
+  '#purpose-component-MigrateLearningStoresCommand': packages/paradigm/src/commands/
   '#purpose-component-DocsServeCommand': packages/paradigm/src/commands/
   '#purpose-component-DocsBuildCommand': packages/paradigm/src/commands/
   '#purpose-component-GraduateCommand': packages/paradigm/src/commands/
@@ -921,7 +918,6 @@ symbols:
   ^purpose-gate-gate-check: packages/portal/sdk/
   ^purpose-gate-file-trust: packages/paradigm/src/commands/symphony/
   '#purpose-state-session': packages/portal/viewer/
-  '#purpose-state-index': packages/premise/core/
   $purpose-flow-claude-turn-exchange: packages/conductor/
   $purpose-flow-voice-to-dispatch: packages/conductor/
   $purpose-flow-eyebrow-voice-control: packages/conductor/
@@ -972,7 +968,6 @@ symbols:
   $purpose-flow-pick-flow: packages/warpline/
   $purpose-flow-weave-forecast: packages/warpline/
   $purpose-flow-portal-validation-flow: packages/portal/core/
-  $purpose-flow-symbol-aggregation: packages/premise/core/
   $purpose-flow-purpose-parsing: packages/purpose/core/
   $purpose-flow-load-symbols: packages/sentinel/ui/
   $purpose-flow-edit-symbol: packages/sentinel/ui/
@@ -1076,7 +1071,6 @@ symbols:
   '!purpose-signal-gate-denied': packages/portal/sdk/
   '!purpose-signal-decision-received': packages/portal/viewer/
   '!purpose-signal-session-started': packages/portal/viewer/
-  '!purpose-signal-aggregation-complete': packages/premise/core/
   '!purpose-signal-index-generated': packages/probe/core/
   '!purpose-signal-node-selected': packages/sentinel/ui/
   '!purpose-signal-node-moved': packages/sentinel/ui/
@@ -1271,9 +1265,6 @@ symbols:
   '@purpose-aspect-viewer-ws-port-42196': packages/portal/viewer/
   '@purpose-aspect-viewer-cors-wildcard': packages/portal/viewer/
   '@purpose-aspect-viewer-sdk-ui-client-routing': packages/portal/viewer/
-  '@purpose-aspect-symbol-blocklist-framework-aliases': packages/premise/core/
-  '@purpose-aspect-symbol-ref-pattern-letter-guard': packages/premise/core/
-  '@purpose-aspect-anchor-parse-formats': packages/premise/core/
   '@purpose-aspect-visual-tag-inference-patterns': packages/probe/core/
   '@purpose-aspect-scan-index-schema-version-1-0-0': packages/probe/core/
   '@purpose-aspect-purpose-schema-passthrough': packages/purpose/core/
@@ -1384,10 +1375,7 @@ symbols:
   '@purpose-ref-aspect-file-glob-discovery': packages/portal/core/
   '#purpose-ref-component-session.active': packages/portal/viewer/
   '#purpose-ref-component-session.entity': packages/portal/viewer/
-  '@purpose-ref-aspect-zod-validated': packages/premise/core/
-  '#purpose-ref-component-index.loaded': packages/premise/core/
-  '#purpose-ref-component-index.count': packages/premise/core/
-  $purpose-ref-flow-fleet-switch: packages/premise/core/
+  '@purpose-ref-aspect-zod-validated': packages/purpose/core/
   '#purpose-ref-component-ZoomControls': packages/sentinel/ui/
   '#purpose-ref-component-IntentBadge': packages/sentinel/ui/
   '#purpose-ref-component-ParticipantBadge': packages/sentinel/ui/
@@ -1403,6 +1391,7 @@ symbols:
   '!purpose-ref-signal-cid-postflight-self-healed': packages/paradigm-mcp/src/tools/
   $purpose-ref-flow-agent-learning-loop: packages/paradigm-mcp/src/utils/
   '!purpose-ref-signal-agent-state-recorded': packages/paradigm-mcp/src/utils/
+  '#purpose-ref-component-frontmatter-parser': packages/paradigm-mcp/src/utils/
   '!purpose-ref-signal-skill-used': packages/paradigm-mcp/src/utils/
   $purpose-ref-flow-roster-setup: packages/paradigm/src/core/
   ^purpose-ref-gate-local-only: packages/paradigm/src/platform-server/

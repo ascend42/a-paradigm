@@ -2,15 +2,15 @@
   "$meta": {
     "version": "1.0.0",
     "project": "a-paradigm",
-    "generatedAt": "2026-09-29T08:47:14.476Z",
+    "generatedAt": "2026-09-29T09:14:04.523Z",
     "paradigmVersion": "0.1.0",
     "sources": {
-      "purposeFiles": 98,
+      "purposeFiles": 97,
       "portalFiles": 2,
       "premiseFiles": 0
     },
     "componentTypes": {
-      "command": 111,
+      "command": 112,
       "config": 10,
       "manager": 6,
       "engine": 16,
@@ -18,18 +18,18 @@
       "provider": 7,
       "router": 13,
       "view": 109,
-      "store": 17,
+      "store": 18,
       "filter": 3,
       "service": 90,
       "model": 15,
-      "utility": 61,
+      "utility": 62,
       "feature": 1,
       "theme": 1,
       "controller": 1,
       "tool": 44,
       "tool-group": 10,
       "util": 9,
-      "loader": 24,
+      "loader": 25,
       "app": 2,
       "schema": 4,
       "handler": 26,
@@ -42,6 +42,7 @@
       "integration": 2,
       "types": 10,
       "constant": 1,
+      "registry": 1,
       "command-group": 8,
       "route": 3,
       "middleware": 1,
@@ -1010,49 +1011,6 @@
       "related": [
         "#palette-component",
         "#command-generator"
-      ]
-    },
-    "symbol-aggregation": {
-      "id": "symbol-aggregation",
-      "name": "Symbol Aggregation",
-      "symbol": "#symbol-aggregation",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
-      "description": "@symbol-aggregation: Aggregate symbols from all sources",
-      "visualTags": [],
-      "related": [
-        "~yaml-config-loading",
-        "~zod-validated",
-        "$symbol-aggregation",
-        "!aggregation-complete",
-        "#aggregator",
-        "#source-loader"
-      ]
-    },
-    "symbol-indexing": {
-      "id": "symbol-indexing",
-      "name": "Symbol Indexing",
-      "symbol": "#symbol-indexing",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
-      "description": "@symbol-indexing: Build searchable symbol index",
-      "visualTags": [],
-      "related": [
-        "#symbol-index",
-        "#search-engine"
-      ]
-    },
-    "reference-tracking": {
-      "id": "reference-tracking",
-      "name": "Reference Tracking",
-      "symbol": "#reference-tracking",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
-      "description": "@reference-tracking: Track symbol relationships",
-      "visualTags": [],
-      "related": [
-        "#reference-tracker",
-        "#graph-builder"
       ]
     },
     "scan-index-generation": {
@@ -3807,12 +3765,13 @@
       "name": "Graph Builder",
       "symbol": "#graph-builder",
       "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
-      "description": "#graph-builder: Builds relationship graph",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
+      "description": "Builds symbol relationship graph",
       "visualTags": [
         "chart"
       ],
-      "related": []
+      "related": [],
+      "componentType": "utility"
     },
     "ripple-handler": {
       "id": "ripple-handler",
@@ -6768,83 +6727,6 @@
       "related": [],
       "componentType": "utility"
     },
-    "aggregator": {
-      "id": "aggregator",
-      "name": "Aggregator",
-      "symbol": "#aggregator",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/purpose/core/.purpose",
-      "description": "#aggregator: Combines multiple .purpose files",
-      "visualTags": [],
-      "related": []
-    },
-    "source-loader": {
-      "id": "source-loader",
-      "name": "Source Loader",
-      "symbol": "#source-loader",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
-      "description": "#source-loader: Loads symbols from .purpose and portal.yaml",
-      "visualTags": [
-        "spinner"
-      ],
-      "related": []
-    },
-    "symbol-index": {
-      "id": "symbol-index",
-      "name": "Symbol Index",
-      "symbol": "#symbol-index",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
-      "description": "#symbol-index: In-memory symbol index",
-      "visualTags": [],
-      "related": []
-    },
-    "search-engine": {
-      "id": "search-engine",
-      "name": "Search Engine",
-      "symbol": "#search-engine",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
-      "description": "#search-engine: Symbol search functionality",
-      "visualTags": [],
-      "related": []
-    },
-    "reference-tracker": {
-      "id": "reference-tracker",
-      "name": "Reference Tracker",
-      "symbol": "#reference-tracker",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
-      "description": "#reference-tracker: Tracks references between symbols",
-      "visualTags": [],
-      "related": []
-    },
-    "graph-slice-projector": {
-      "id": "graph-slice-projector",
-      "name": "Graph Slice Projector",
-      "symbol": "#graph-slice-projector",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
-      "description": "#graph-slice-projector: Projects a BOUNDED, deterministic slice of the symbol graph centered on one symbol (src/graph-slice.ts). Shared by the `paradigm graph slice` CLI + `paradigm_graph_slice` MCP tool. Sources neighbors from a LIVE SymbolIndex (aggregateFromDirectory + buildSymbolIndex — the SAME live-parse pipeline `paradigm ripple` uses), NOT the stale scan-index/flow-index, so flow membership (e.g. #cockpit-view → $$fleet-switch) always surfaces. Unioned edges: getReferencesFrom → uses/gated-by/in-flow, getReferencesTo → used-by, flow membership → in-flow, flow co-members (flow mode) → uses. BFS to radius (1, max 3), DEGREE_CAP 8 with +N-more collapse, deterministic sort, fail-loud did-you-mean. Freshness is the live-parse timestamp, stale always false (sidesteps the scan-index determinism wart).",
-      "visualTags": [
-        "chart"
-      ],
-      "related": [
-        "#cockpit-view",
-        "$fleet-switch"
-      ]
-    },
-    "classroom-metrics": {
-      "id": "classroom-metrics",
-      "name": "Classroom Metrics",
-      "symbol": "#classroom-metrics",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
-      "description": "#classroom-metrics: The ONE canonical repeat-failure-rate rollup for the Classroom (TD-2026-06-19-007), src/classroom-metrics.ts. Both the paradigm_classroom_status MCP tool and `paradigm doctor` consume it (the CLI does NOT depend on paradigm-mcp; both depend on premise-core), so the formula lives here ONCE to avoid drift. computeRepeatFailureRate(certs) → overall + per-agent { resolved, overturned, rate } where rate = overturned/resolved (3dp), null until a cert resolves (survived|overturned; pending excluded). readClassroomCertifications/readFieldFailures read .paradigm/events/*.jsonl tolerantly (skip corrupt lines, never throw), mirroring graph-slice's .paradigm file access. The cert WRITER stays in paradigm-mcp/utils/field-failures.ts — only the read+rollup is shared.",
-      "visualTags": [],
-      "related": []
-    },
     "generator": {
       "id": "generator",
       "name": "Generator",
@@ -6920,6 +6802,16 @@
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/purpose/core/.purpose",
       "description": "#schema-rules: Rules for validating symbol references",
+      "visualTags": [],
+      "related": []
+    },
+    "aggregator": {
+      "id": "aggregator",
+      "name": "Aggregator",
+      "symbol": "#aggregator",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/purpose/core/.purpose",
+      "description": "#aggregator: Combines multiple .purpose files",
       "visualTags": [],
       "related": []
     },
@@ -7447,7 +7339,7 @@
       "symbol": "#WisdomResources",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/resources/.purpose",
-      "description": "Team wisdom — preferences, antipatterns, decisions, expertise",
+      "description": "Team wisdom — preferences, antipatterns, expertise. paradigm://wisdom/decisions and paradigm://wisdom/decision/{id} are ALIASES of the canonical TD store (.paradigm/decisions/) since 7.12.0 (D2) — the legacy wisdom/decisions dir is no longer read.",
       "visualTags": [],
       "related": [],
       "componentType": "service"
@@ -8272,7 +8164,7 @@
       "symbol": "#nomination-engine",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "Nomination engine — processes events into agent nominations and debates. Core loop: event → attention scoring → nomination → debate detection → surfacing. Includes learning feedback (threshold adjustment), journal-to-notebook auto-promotion (LEGACY autoPromoteJournalEntries — pattern_discovered + human_feedback triggers, confidence≥0.8 gate, certifiedBy:gate) AND the GATED single-entry path (gatedPromoteJournalEntry — driven by the /class sign-off, NO 0.8 gate, certifiedBy:peer|quorum, no promotion-decision instrument row; TD-2026-06-25-044 two-loops; shared markJournalPromoted helper), Neverland validation metrics, stale nomination expiry (7-day), reason storage on engage, Symphony relay forwarding, and surfacing config.",
+      "description": "Nomination engine — processes events into agent nominations and debates. Core loop: event → attention scoring → nomination → debate detection → surfacing. 7.12.0: `work-completed` events never nominate (NON_NOMINATING_EVENT_TYPES, D1 — they stay in stream.jsonl). Journal-to-notebook promotion (autoPromoteJournalEntries — pattern_discovered + human_feedback) is gated by the BELIEF-DELTA gate decidePromotion() with configurable bands loadPromotionBands() (config.yaml learning.promotion.{floor,deltaMin,epsilon,novelBar}; defaults 0.7/0.10/0.05/0.8, uncalibrated) — prior from notebookPrior (never journal confidence_before); absolute 0.8 survives only as the novel-concept fallback; human_feedback is floor-only; each candidate appends a promotion-decisions.jsonl row with gate:belief-delta-v1, reason, shadow absoluteWouldPromote, after:null when missing (kills the ?? 0 artifact); a small rise (epsilon <= delta < deltaMin) is reason below-delta, distinct from hold-silence (|delta| < epsilon); the shadow bar is LEGACY_ABSOLUTE_BAR; certifiedBy:gate, or certifiedBy:human for human_feedback promotions. The GATED single-entry path (gatedPromoteJournalEntry — /class sign-off, human ruling IS the gate, NEVER the delta gate, certifiedBy:peer|quorum, no instrument row; TD-2026-06-25-044), Neverland validation metrics, stale nomination expiry (7-day), reason storage on engage, Symphony relay forwarding, and surfacing config.",
       "visualTags": [],
       "related": [],
       "componentType": "engine"
@@ -8438,12 +8330,49 @@
       "symbol": "#wisdom-loader",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "Reads team wisdom from .paradigm/wisdom/ — preferences/antipatterns/expertise/decisions. 30s TTL cache, invalidated on writes. Global wisdom merged from ~/.paradigm/wisdom/ (local wins on id collision). v5.39.0 sub-phase 1: emits a one-time deprecation warning when .paradigm/wisdom/decisions/ still contains YAML files, pointing at `paradigm migrate decisions` (v6.0). Continues to read the directory — deprecation is additive; breaking removal is v6.0.",
+      "description": "Reads team wisdom from .paradigm/wisdom/ — preferences/antipatterns/expertise. 30s TTL cache, invalidated on writes. Global antipatterns/preferences merged from ~/.paradigm/wisdom/ (local wins on id collision). 7.12.0 (D2): the legacy wisdom/decisions read path is REMOVED (project and global) — WisdomContext.decisions is always []; canonical decisions live in .paradigm/decisions/ (#decision-loader); `paradigm migrate learning-stores` moves leftovers. recordDecision (legacy writer) is @deprecated.",
+      "visualTags": [
+        "spinner"
+      ],
+      "related": [
+        "#decision-loader"
+      ],
+      "componentType": "loader"
+    },
+    "learning-stores": {
+      "id": "learning-stores",
+      "name": "Learning Stores",
+      "symbol": "#learning-stores",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "Learning-stores registry (7.12.0, D5) — READ-ONLY facade listLearningStores(rootDir) naming every learning store with class (ledger|knowledge|pipeline|policy|native), path, scope, owner and a never-throwing count(). Classes follow the spec's three conceptual stores: ledger = lore (counts .lore/.yaml under lore/entries/<date>/), work-log, history, raw journals; knowledge = decisions, antipatterns, notebooks, protocols, skills, preferences; pipeline = event-stream, nominations, debates + the promotion-decisions / classroom-certifications / notebook-refs / liveness instruments. Encodes Loid's must-NOT-consolidate list as separate rows (journals vs notebooks; the instruments; decisions vs antipatterns). Habits = policy (hook policy, D3). Claude Code native memory registered read-only, never migrated. Used by the doctor census and migrate learning-stores.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "registry"
+    },
+    "protocol-loader": {
+      "id": "protocol-loader",
+      "name": "Protocol Loader",
+      "symbol": "#protocol-loader",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "Loads/validates .paradigm/protocols/*.protocol and rebuilds the protocol index. 7.12.0 (D4): lintProtocol emits PROTOCOL_IS_SKILL (warn only, never changes status; surfaced in validateProtocol issues) when no step names a repo path — the reverse of skill-loader's SKILL_IS_PROTOCOL, reusing its exported repoPathTokens detector.",
       "visualTags": [
         "spinner"
       ],
       "related": [],
       "componentType": "loader"
+    },
+    "global-store": {
+      "id": "global-store",
+      "name": "Global Store",
+      "symbol": "#global-store",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "Cross-project wisdom store at ~/.paradigm/wisdom/ (antipatterns, preferences, decisions). 7.12.0 (D2): loadGlobalDecisions is @deprecated and no longer part of the wisdom read path — retained only for the promote-to-global duplicate check in tools/wisdom.ts.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "store"
     },
     "arch-loader": {
       "id": "arch-loader",
@@ -8477,15 +8406,42 @@
       "symbol": "#skill-loader",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "Skills Phase 1 (T-2026-09-26-002) — the ONE loader/validator for agent-owned SKILL.md sources (project .paradigm/skills/<id> › global ~/.paradigm/skills/<id>; SkillEnv makes homedir/globalDir injectable). parseSkill/serializeSkill (round-trip), resolveSkill, listSkills(Detailed), lintSkill (SKILL_IS_PROTOCOL, SKILL_IS_NOTEBOOK, OWNED_SKILL_CAP, missing notebook/protocol, unresolved steward, kebab name, semver), computeContentHash (sha256 of canonical frontmatter minus certification + body + references/assets/scripts), checkPins (paradigm_* hashed against injected listToolDefinitions; host/* never checked; third-party unknown unless a tools/list dump is supplied), computeStatus (invalid › stale › ok › uncertified — never stored), resolveAgentSkills for enrichment, and the PURE $skill-certification verifier evaluateCertification (TTY, founder, lint, pins, ≥1 scenario with fixture + non-steward probe on skill:<id>@<ver> + human-confirmed survival) + applyCertification + buildSkillCertRow (kind skill ledger row). Imported by #skill-cli by relative path; certification is CLI-only (never an MCP tool). Fix pass: KEBAB id guard (isValidSkillId/assertSkillId) on every id that becomes a path; DIR_ID_MISMATCH + RESOURCE_SYMLINK lint errors; NOTEBOOK_MISSING warns for bundled; certification is drift-detection (not tamper-proof; signing = follow-up) — ok requires the SKILL.md block AND a matching kind skill ledger row (loadSkillCertLedger = project classroom ledger + global ~/.paradigm/events/skill-certifications.jsonl via appendGlobalSkillCertRow); evaluateCertification needs env, a resolvable non-steward probe agent and an existing fixture; listSkillScripts lists scripts/ with sha256 for certify; resolveAgentSkills uses cached structural lint only (no notebook scan, pins unchecked). v7.11 pack scope: third, lowest-precedence read-only scope `pack` (project › global › pack) from university-core discoverPacks skillDirs (SkillEnv.packSkillDirs injectable; only probed when <root>/.paradigm exists); parseSkill FORCES trust external + drops certification for scope pack; dir basename must equal meta.id; listPackSkills(env) → PackSkillEntry[] {packId, skill, scriptCount, shadowedBy?} (all pack skills incl. shadowed — backs Platform Academy /skills + pack_list); findPackSkill; importPackSkill(packId, id, {env, scope}) copies SKILL.md + resources (no symlinks/dotfiles) as trust provisional, provenance.source pack, upstream <pack>:<id>@<ver>, never overwrites; lint PACK_SHADOWED warn both directions; steward/protocol/notebook resolution downgraded to warn for pack scope; pack skills excluded from OWNED_SKILL_CAP. v7.11 fix pass: resolveSkill(id, env, {includePack}) — a project/global source that exists but fails to parse resolves to null (no fall-through to global/pack); resolveAgentSkills passes includePack:false so pack skills never reach agent prompts / Your Skills. importPackSkill takes expectedHash (refused content-changed on mismatch) and lstats each resource file right before copying (refused symlink).",
+      "description": "Skills Phase 1 (T-2026-09-26-002) — the ONE loader/validator for agent-owned SKILL.md sources (project .paradigm/skills/<id> › global ~/.paradigm/skills/<id>; SkillEnv makes homedir/globalDir injectable). parseSkill/serializeSkill (round-trip), resolveSkill, listSkills(Detailed), lintSkill (SKILL_IS_PROTOCOL, SKILL_IS_NOTEBOOK, OWNED_SKILL_CAP, missing notebook/protocol, unresolved steward, kebab name, semver), computeContentHash (sha256 of canonical frontmatter minus certification + body + references/assets/scripts), checkPins (paradigm_* hashed against injected listToolDefinitions; host/* never checked; third-party unknown unless a tools/list dump is supplied), computeStatus (invalid › stale › ok › uncertified — never stored), resolveAgentSkills for enrichment, and the PURE $skill-certification verifier evaluateCertification (TTY, founder, lint, pins, ≥1 scenario with fixture + non-steward probe on skill:<id>@<ver> + human-confirmed survival) + applyCertification + buildSkillCertRow (kind skill ledger row). Imported by #skill-cli by relative path; certification is CLI-only (never an MCP tool). Fix pass: KEBAB id guard (isValidSkillId/assertSkillId) on every id that becomes a path; DIR_ID_MISMATCH + RESOURCE_SYMLINK lint errors; NOTEBOOK_MISSING warns for bundled; certification is drift-detection (not tamper-proof; signing = follow-up) — ok requires the SKILL.md block AND a matching kind skill ledger row (loadSkillCertLedger = project classroom ledger + global ~/.paradigm/events/skill-certifications.jsonl via appendGlobalSkillCertRow); evaluateCertification needs env, a resolvable non-steward probe agent and an existing fixture; listSkillScripts lists scripts/ with sha256 for certify; resolveAgentSkills uses cached structural lint only (no notebook scan, pins unchecked). v7.11 pack scope: third, lowest-precedence read-only scope `pack` (project › global › pack) from university-core discoverPacks skillDirs (SkillEnv.packSkillDirs injectable; only probed when <root>/.paradigm exists); parseSkill FORCES trust external + drops certification for scope pack; dir basename must equal meta.id; listPackSkills(env) → PackSkillEntry[] {packId, skill, scriptCount, shadowedBy?} (all pack skills incl. shadowed — backs Platform Academy /skills + pack_list); findPackSkill; importPackSkill(packId, id, {env, scope}) copies SKILL.md + resources (no symlinks/dotfiles) as trust provisional, provenance.source pack, upstream <pack>:<id>@<ver>, never overwrites; lint PACK_SHADOWED warn both directions; steward/protocol/notebook resolution downgraded to warn for pack scope; pack skills excluded from OWNED_SKILL_CAP. v7.11 fix pass: resolveSkill(id, env, {includePack}) — a project/global source that exists but fails to parse resolves to null (no fall-through to global/pack); resolveAgentSkills passes includePack:false so pack skills never reach agent prompts / Your Skills. importPackSkill takes expectedHash (refused content-changed on mismatch) and lstats each resource file right before copying (refused symlink). v7.12 (D8): splitFrontmatter is a thin strict wrapper over premise-core #frontmatter-parser — same exported signature ({data, body}) and the same error strings, pinned by skill-loader-frontmatter.test.ts.",
       "visualTags": [
         "spinner"
       ],
       "related": [
         "$skill-certification",
-        "#skill-cli"
+        "#skill-cli",
+        "#frontmatter-parser"
       ],
       "componentType": "loader"
+    },
+    "aspect-graph": {
+      "id": "aspect-graph",
+      "name": "Aspect Graph",
+      "symbol": "#aspect-graph",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "SQLite aspect graph utils (.paradigm/aspect-graph.db): materializeAspects, ripple, heatmap, checkDrift. v7.12 (D9) section anchors: anchors table gains anchor_kind TEXT DEFAULT 'lines' + anchor_key TEXT via idempotent ALTER migrations (PRAGMA table_info guard + catch; safe twice, safe on pre-7.12 DBs). Heading/block anchors resolve to the section's CURRENT line range at materialize (premise-core resolveSectionAnchorLines; 0/0 when unresolvable) with baseline hashes; checkDrift re-resolves the KEY first then hashes the range — moved section = clean (row lines updated, .purpose untouched), whitespace = cosmetic, content change = modified, renamed/removed heading or block = missing (exists:true, drifted). No git line-shift or content-search heal for section anchors. Line anchors (anchor_kind lines) are byte-identical to before.",
+      "visualTags": [
+        "chart"
+      ],
+      "related": []
+    },
+    "docs-loader": {
+      "id": "docs-loader",
+      "name": "Docs Loader",
+      "symbol": "#docs-loader",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "Docs section loader (config, portal, university index, markdown guides). v7.12 (D8): its private parseFrontmatter is a null-returning adapter over premise-core #frontmatter-parser (lenient) — no block or malformed YAML → null; non-mapping → frontmatter {}; now also accepts CRLF and a closing fence at EOF.",
+      "visualTags": [
+        "spinner"
+      ],
+      "related": [
+        "#frontmatter-parser"
+      ]
     },
     "skill-projector": {
       "id": "skill-projector",
@@ -8561,9 +8517,11 @@
       "symbol": "#DoctorCommand",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/.purpose",
-      "description": "paradigm doctor — health checks",
+      "description": "paradigm doctor — health checks. 7.12.0 (D7): learning liveness reads the UNION of postflight-liveness.jsonl + settlement-liveness.jsonl (summarizeLearningLiveness levels red/amber/thin/green/nodata, never green on no data; \"probe silent\" warn when settlements exist but no postflight rows); learning-store census via #learning-stores; warns on leftover legacy .paradigm/wisdom/decisions/.",
       "visualTags": [],
-      "related": [],
+      "related": [
+        "#learning-stores"
+      ],
       "componentType": "command"
     },
     "GraphCommand": {
@@ -8597,6 +8555,17 @@
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/.purpose",
       "description": "paradigm migrate decisions — v6.0 decision-store consolidation: wisdom/decisions + lore(type=decision) → .paradigm/decisions/TD-*",
+      "visualTags": [],
+      "related": [],
+      "componentType": "command"
+    },
+    "MigrateLearningStoresCommand": {
+      "id": "MigrateLearningStoresCommand",
+      "name": "MigrateLearningStoresCommand",
+      "symbol": "#MigrateLearningStoresCommand",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/.purpose",
+      "description": "paradigm migrate learning-stores (7.12.0) — --dry-run plans every step with zero writes. Steps: (1) back up originals → .paradigm/backups/learning-stores-<ts>/, (2) legacy wisdom/decisions → TD store (reuses migrate-decisions wisdom converter) + rmdir, (3) unengaged \"Work completed\" nominations → backup nominations-boilerplate.jsonl, (4) habits referencing removed University paths — report only unless --apply, (5) marker .paradigm/migrations/learning-stores.done. Idempotent; global ~/.paradigm/wisdom/decisions reported, never touched. Also registered as migration learning-stores-7.12 (auto:false) in migrate/migrations.ts.",
       "visualTags": [],
       "related": [],
       "componentType": "command"
@@ -10797,15 +10766,6 @@
       "visualTags": [],
       "related": []
     },
-    "index": {
-      "id": "index",
-      "name": "Index",
-      "symbol": "#index",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
-      "visualTags": [],
-      "related": []
-    },
     "vision-gaze-provider.": {
       "id": "vision-gaze-provider.",
       "name": "Vision Gaze Provider.",
@@ -11507,30 +11467,6 @@
         "#session-management"
       ]
     },
-    "index.loaded": {
-      "id": "index.loaded",
-      "name": "Index.loaded",
-      "symbol": "#index.loaded",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
-      "description": "Referenced from #symbol-indexing",
-      "visualTags": [],
-      "related": [
-        "#symbol-indexing"
-      ]
-    },
-    "index.count": {
-      "id": "index.count",
-      "name": "Index.count",
-      "symbol": "#index.count",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
-      "description": "Referenced from #symbol-indexing",
-      "visualTags": [],
-      "related": [
-        "#symbol-indexing"
-      ]
-    },
     "ZoomControls": {
       "id": "ZoomControls",
       "name": "ZoomControls",
@@ -11607,6 +11543,18 @@
       "visualTags": [],
       "related": [
         "#ConversationView"
+      ]
+    },
+    "frontmatter-parser": {
+      "id": "frontmatter-parser",
+      "name": "Frontmatter Parser",
+      "symbol": "#frontmatter-parser",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
+      "description": "Referenced from #skill-loader",
+      "visualTags": [],
+      "related": [
+        "#skill-loader"
       ]
     },
     "fenced-block-parser": {
@@ -13286,51 +13234,6 @@
         }
       ]
     },
-    "symbol-aggregation": {
-      "id": "symbol-aggregation",
-      "name": "Symbol Aggregation",
-      "symbol": "$symbol-aggregation",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
-      "description": "Aggregate all symbols from .purpose and portal.yaml files into a unified index",
-      "steps": [
-        {
-          "id": "symbol-aggregation-step-0",
-          "name": "Find all .purpose files via glob",
-          "target": "#aggregator",
-          "order": 0
-        },
-        {
-          "id": "symbol-aggregation-step-1",
-          "name": "Parse each file with yaml + Zod validation",
-          "target": "#source-loader",
-          "order": 1
-        },
-        {
-          "id": "symbol-aggregation-step-2",
-          "name": "Extract components, gates, signals, flows, aspects",
-          "target": "#aggregator",
-          "order": 2
-        },
-        {
-          "id": "symbol-aggregation-step-3",
-          "name": "Build searchable in-memory index",
-          "target": "#symbol-index",
-          "order": 3
-        },
-        {
-          "id": "symbol-aggregation-step-4",
-          "name": "Resolve cross-file symbol references",
-          "target": "#reference-tracker",
-          "order": 4
-        },
-        {
-          "id": "symbol-aggregation-step-5",
-          "name": "Build relationship graph",
-          "target": "#graph-builder",
-          "order": 5
-        }
-      ]
-    },
     "purpose-parsing": {
       "id": "purpose-parsing",
       "name": "Purpose Parsing",
@@ -13847,14 +13750,6 @@
       "symbol": "$WARPLINE_F4_RUN_ID",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
       "description": "Referenced from #f4-trace",
-      "steps": []
-    },
-    "fleet-switch": {
-      "id": "fleet-switch",
-      "name": "Fleet Switch",
-      "symbol": "$fleet-switch",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
-      "description": "Referenced from #graph-slice-projector",
       "steps": []
     },
     "agent-learning-loop": {
@@ -14895,15 +14790,6 @@
       "category": "signals",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/viewer/.purpose",
       "description": "!session-started: New session tracking started",
-      "related": []
-    },
-    "aggregation-complete": {
-      "id": "aggregation-complete",
-      "name": "Aggregation Complete",
-      "symbol": "!aggregation-complete",
-      "category": "signals",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
-      "description": "!aggregation-complete: Symbol aggregation finished",
       "related": []
     },
     "index-generated": {
@@ -17282,39 +17168,6 @@
         "#websocket-server"
       ]
     },
-    "symbol-blocklist-framework-aliases": {
-      "id": "symbol-blocklist-framework-aliases",
-      "name": "Symbol Blocklist Framework Aliases",
-      "symbol": "~symbol-blocklist-framework-aliases",
-      "category": "aspects",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
-      "description": "$lib, $env, $app, $service-worker, $virtual, $schema, $ref, $id, $type are blocked from symbol extraction to avoid false positives from SvelteKit/Vite/JSON",
-      "related": [
-        "#aggregator"
-      ]
-    },
-    "symbol-ref-pattern-letter-guard": {
-      "id": "symbol-ref-pattern-letter-guard",
-      "name": "Symbol Ref Pattern Letter Guard",
-      "symbol": "~symbol-ref-pattern-letter-guard",
-      "category": "aspects",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
-      "description": "Cross-reference regex requires first char after prefix to be a letter (prevents matching $420, $0)",
-      "related": [
-        "#aggregator"
-      ]
-    },
-    "anchor-parse-formats": {
-      "id": "anchor-parse-formats",
-      "name": "Anchor Parse Formats",
-      "symbol": "~anchor-parse-formats",
-      "category": "aspects",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
-      "description": "Code anchors support four formats: file.ts, file.ts:15, file.ts:15-20, file.ts:15,25,30",
-      "related": [
-        "#aggregator"
-      ]
-    },
     "visual-tag-inference-patterns": {
       "id": "visual-tag-inference-patterns",
       "name": "Visual Tag Inference Patterns",
@@ -17779,10 +17632,10 @@
       "name": "Zod Validated",
       "symbol": "~zod-validated",
       "category": "aspects",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
-      "description": "Referenced from #symbol-aggregation",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/purpose/core/.purpose",
+      "description": "Referenced from #purpose-parsing",
       "related": [
-        "#symbol-aggregation"
+        "#purpose-parsing"
       ]
     },
     "prior": {
@@ -18081,18 +17934,6 @@
     "#command-palette": {
       "category": "components",
       "id": "command-palette"
-    },
-    "#symbol-aggregation": {
-      "category": "components",
-      "id": "symbol-aggregation"
-    },
-    "#symbol-indexing": {
-      "category": "components",
-      "id": "symbol-indexing"
-    },
-    "#reference-tracking": {
-      "category": "components",
-      "id": "reference-tracking"
     },
     "#scan-index-generation": {
       "category": "components",
@@ -19870,34 +19711,6 @@
       "category": "components",
       "id": "command-generator"
     },
-    "#aggregator": {
-      "category": "components",
-      "id": "aggregator"
-    },
-    "#source-loader": {
-      "category": "components",
-      "id": "source-loader"
-    },
-    "#symbol-index": {
-      "category": "components",
-      "id": "symbol-index"
-    },
-    "#search-engine": {
-      "category": "components",
-      "id": "search-engine"
-    },
-    "#reference-tracker": {
-      "category": "components",
-      "id": "reference-tracker"
-    },
-    "#graph-slice-projector": {
-      "category": "components",
-      "id": "graph-slice-projector"
-    },
-    "#classroom-metrics": {
-      "category": "components",
-      "id": "classroom-metrics"
-    },
     "#generator": {
       "category": "components",
       "id": "generator"
@@ -19925,6 +19738,10 @@
     "#schema-rules": {
       "category": "components",
       "id": "schema-rules"
+    },
+    "#aggregator": {
+      "category": "components",
+      "id": "aggregator"
     },
     "#symbol-extractor": {
       "category": "components",
@@ -20434,6 +20251,18 @@
       "category": "components",
       "id": "wisdom-loader"
     },
+    "#learning-stores": {
+      "category": "components",
+      "id": "learning-stores"
+    },
+    "#protocol-loader": {
+      "category": "components",
+      "id": "protocol-loader"
+    },
+    "#global-store": {
+      "category": "components",
+      "id": "global-store"
+    },
     "#arch-loader": {
       "category": "components",
       "id": "arch-loader"
@@ -20445,6 +20274,14 @@
     "#skill-loader": {
       "category": "components",
       "id": "skill-loader"
+    },
+    "#aspect-graph": {
+      "category": "components",
+      "id": "aspect-graph"
+    },
+    "#docs-loader": {
+      "category": "components",
+      "id": "docs-loader"
     },
     "#skill-projector": {
       "category": "components",
@@ -20485,6 +20322,10 @@
     "#MigrateDecisionsCommand": {
       "category": "components",
       "id": "MigrateDecisionsCommand"
+    },
+    "#MigrateLearningStoresCommand": {
+      "category": "components",
+      "id": "MigrateLearningStoresCommand"
     },
     "#DocsServeCommand": {
       "category": "components",
@@ -21294,10 +21135,6 @@
       "category": "components",
       "id": "session"
     },
-    "#index": {
-      "category": "components",
-      "id": "index"
-    },
     "$claude-turn-exchange": {
       "category": "flows",
       "id": "claude-turn-exchange"
@@ -21497,10 +21334,6 @@
     "$portal-validation-flow": {
       "category": "flows",
       "id": "portal-validation-flow"
-    },
-    "$symbol-aggregation": {
-      "category": "flows",
-      "id": "symbol-aggregation"
     },
     "$purpose-parsing": {
       "category": "flows",
@@ -21913,10 +21746,6 @@
     "!session-started": {
       "category": "signals",
       "id": "session-started"
-    },
-    "!aggregation-complete": {
-      "category": "signals",
-      "id": "aggregation-complete"
     },
     "!index-generated": {
       "category": "signals",
@@ -22694,18 +22523,6 @@
       "category": "aspects",
       "id": "viewer-sdk-ui-client-routing"
     },
-    "~symbol-blocklist-framework-aliases": {
-      "category": "aspects",
-      "id": "symbol-blocklist-framework-aliases"
-    },
-    "~symbol-ref-pattern-letter-guard": {
-      "category": "aspects",
-      "id": "symbol-ref-pattern-letter-guard"
-    },
-    "~anchor-parse-formats": {
-      "category": "aspects",
-      "id": "anchor-parse-formats"
-    },
     "~visual-tag-inference-patterns": {
       "category": "aspects",
       "id": "visual-tag-inference-patterns"
@@ -23150,18 +22967,6 @@
       "category": "aspects",
       "id": "zod-validated"
     },
-    "#index.loaded": {
-      "category": "components",
-      "id": "index.loaded"
-    },
-    "#index.count": {
-      "category": "components",
-      "id": "index.count"
-    },
-    "$fleet-switch": {
-      "category": "flows",
-      "id": "fleet-switch"
-    },
     "#ZoomControls": {
       "category": "components",
       "id": "ZoomControls"
@@ -23221,6 +23026,10 @@
     "!agent-state-recorded": {
       "category": "signals",
       "id": "agent-state-recorded"
+    },
+    "#frontmatter-parser": {
+      "category": "components",
+      "id": "frontmatter-parser"
     },
     "!skill-used": {
       "category": "signals",

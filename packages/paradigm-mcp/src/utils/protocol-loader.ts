@@ -11,6 +11,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
+import { repoPathTokens } from './skill-loader.js';
 
 const PROTOCOLS_DIR = '.paradigm/protocols';
 const INDEX_FILE = 'index.yaml';
@@ -344,7 +345,47 @@ export function validateProtocol(rootDir: string, protocol: Protocol): {
     }
   }
 
+  // D4 (7.12.0): reverse of skill-loader's SKILL_IS_PROTOCOL. A warn only —
+  // it never changes status.
+  for (const lint of lintProtocol(protocol)) {
+    issues.push(`${lint.code}: ${lint.message}`);
+  }
+
   return { status, issues };
+}
+
+export interface ProtocolLintIssue {
+  level: 'warn';
+  code: 'PROTOCOL_IS_SKILL';
+  message: string;
+}
+
+/**
+ * PROTOCOL_IS_SKILL (D4, 7.12.0) — the reverse of SKILL_IS_PROTOCOL. A protocol
+ * is a repo-specific recipe; if NO step names a repo path (a set target /
+ * template_from, or a path in reference / command / notes), it is portable know-how and
+ * belongs in a skill instead. Reuses skill-loader's exported repo-path detector
+ * (repoPathTokens) so both lints agree on what "a repo path" is.
+ */
+export function lintProtocol(protocol: Protocol): ProtocolLintIssue[] {
+  const steps = Array.isArray(protocol.steps) ? protocol.steps : [];
+  // `target` / `template_from` ARE repo paths by schema (the file a step
+  // creates or copies) — `portal.yaml` or `docs/x/{name}.md` count even though
+  // the free-text detector skips bare filenames and `{placeholder}` paths.
+  // Free-text fields go through the shared detector.
+  const isSet = (v: unknown) => typeof v === 'string' && v.trim().length > 0;
+  const namesRepoPath = steps.some(step =>
+    isSet(step.target) || isSet(step.template_from) ||
+    [step.reference, step.command, step.notes].some(
+      field => typeof field === 'string' && repoPathTokens(`- ${field}`).length > 0,
+    ),
+  );
+  if (namesRepoPath) return [];
+  return [{
+    level: 'warn',
+    code: 'PROTOCOL_IS_SKILL',
+    message: `Protocol ${protocol.id} names no repo path in any step — portable know-how belongs in a skill (paradigm skill create), not a protocol.`,
+  }];
 }
 
 /**

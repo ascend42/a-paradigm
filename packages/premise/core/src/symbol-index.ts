@@ -388,6 +388,147 @@ export function isLegacySymbol(symbol: string): boolean {
   return isLegacyPrefix(symbol[0]);
 }
 
+// ─── Section anchors (heading / block) — shared by aggregator + parseAnchor ───
+
+/** Path part of a section anchor must end in a file extension (guards `src/c#/x.cs:10`). */
+const SECTION_PATH_RE = /\.[A-Za-z0-9]+$/;
+/** A fragment ending in a line spec (`:10`, `:10-20`) belongs to a line anchor. */
+const SECTION_LINE_SUFFIX_RE = /:\d+(-\d+)?$/;
+/** Obsidian block ids: letters, digits, dashes. */
+const BLOCK_ID_RE = /^[A-Za-z0-9-]+$/;
+
+/**
+ * Parse an Obsidian-compatible SECTION anchor, or return null when `raw` is not
+ * one (callers then fall through to their line-anchor logic, unchanged):
+ *   docs/x.md#Heading Text  → { kind:'heading', heading:'Heading Text', lines:0 }
+ *   docs/x.md#^block-id     → { kind:'block',   block:'block-id',       lines:0 }
+ * `lines: 0` = unresolved; the aspect graph resolves the live range at
+ * materialize time. The '#' split happens on the FIRST '#', so a heading may
+ * itself contain ':' — but a fragment containing '/' or ENDING in `:N`/`:N-M`
+ * is rejected (it is a line anchor under a '#'-bearing directory).
+ */
+export function parseSectionAnchor(raw: string): CodeAnchor | null {
+  const hashIndex = raw.indexOf('#');
+  if (hashIndex <= 0) return null;
+  const filePath = raw.slice(0, hashIndex).trim();
+  const fragment = raw.slice(hashIndex + 1).trim();
+  if (!filePath || !fragment || !SECTION_PATH_RE.test(filePath)) return null;
+  // `dir.name#x/Foo.ts:10` is a LINE anchor whose directory contains '#':
+  // a fragment with a '/' or a trailing `:N` / `:N-M` is never a section.
+  if (fragment.includes('/') || SECTION_LINE_SUFFIX_RE.test(fragment)) return null;
+
+  if (fragment.startsWith('^')) {
+    const block = fragment.slice(1).trim();
+    if (!block || !BLOCK_ID_RE.test(block)) return null;
+    return { path: filePath, lines: 0, raw, kind: 'block', block };
+  }
+  const heading = fragment.replace(/^#+/, '').trim();
+  if (!heading) return null;
+  return { path: filePath, lines: 0, raw, kind: 'heading', heading };
+}
+
+/**
+ * THE shared anchor-string parser (aggregator path). Section anchors first,
+ * then the historical line semantics, byte-identical to pre-7.12:
+ * "file.ts" → lines 0, "file.ts:15", "file.ts:15-20", "file.ts:15,25,30";
+ * a non-numeric suffix keeps the whole string as the path.
+ */
+export function parseAnchorString(raw: string): CodeAnchor {
+  const section = parseSectionAnchor(raw);
+  if (section) return section;
+
+  const colonIndex = raw.lastIndexOf(':');
+  if (colonIndex === -1 || colonIndex === raw.length - 1) {
+    return { path: raw, lines: 0, raw };
+  }
+
+  const afterColon = raw.slice(colonIndex + 1);
+  const filePath = raw.slice(0, colonIndex);
+
+  // Check if it's a line reference (digits, dashes, commas)
+  if (!/^[\d,\- ]+$/.test(afterColon)) {
+    return { path: raw, lines: 0, raw };
+  }
+
+  if (afterColon.includes('-')) {
+    const [start, end] = afterColon.split('-').map(Number);
+    return { path: filePath, lines: [start, end], raw };
+  } else if (afterColon.includes(',')) {
+    const lines = afterColon.split(',').map(Number);
+    return { path: filePath, lines, raw };
+  } else {
+    return { path: filePath, lines: Number(afterColon), raw };
+  }
+}
+
+const ATX_HEADING_RE = /^ {0,3}(#{1,6})[ \t]+(.*?)(?:[ \t]+#+)?[ \t]*$/;
+const FENCE_RE = /^ {0,3}(```|~~~)/;
+
+/** A line that can continue a block upward: non-blank, not a heading, not a fence. */
+function isParagraphLine(line: string): boolean {
+  return line.trim() !== '' && !ATX_HEADING_RE.test(line) && !FENCE_RE.test(line);
+}
+
+/**
+ * Resolve a section anchor against file content to its CURRENT 1-based,
+ * inclusive line range, or null when the heading / block no longer exists.
+ *
+ * - heading: from the heading line to the line before the next heading of the
+ *   same or higher level (or EOF), trailing blank lines trimmed. Exact text
+ *   match first, then case-insensitive. Headings inside code fences are ignored.
+ * - block: the contiguous non-blank run ending at the line carrying `^id`
+ *   (inline suffix) — or, for a standalone `^id` line, the run just above it.
+ */
+export function resolveSectionAnchorLines(
+  content: string,
+  anchor: Pick<CodeAnchor, 'kind' | 'heading' | 'block'>,
+): { startLine: number; endLine: number } | null {
+  const lines = content.split(/\r?\n/);
+
+  if (anchor.kind === 'heading' && anchor.heading) {
+    const headings: Array<{ idx: number; level: number; text: string }> = [];
+    let inFence = false;
+    for (let i = 0; i < lines.length; i++) {
+      if (FENCE_RE.test(lines[i])) { inFence = !inFence; continue; }
+      if (inFence) continue;
+      const m = ATX_HEADING_RE.exec(lines[i]);
+      if (m) headings.push({ idx: i, level: m[1].length, text: m[2].trim() });
+    }
+    const want = anchor.heading.trim();
+    const hit = headings.find((h) => h.text === want)
+      ?? headings.find((h) => h.text.toLowerCase() === want.toLowerCase());
+    if (!hit) return null;
+    const next = headings.find((h) => h.idx > hit.idx && h.level <= hit.level);
+    let end = next ? next.idx - 1 : lines.length - 1;
+    while (end > hit.idx && lines[end].trim() === '') end--;
+    return { startLine: hit.idx + 1, endLine: end + 1 };
+  }
+
+  if (anchor.kind === 'block' && anchor.block) {
+    const id = anchor.block;
+    const standalone = new RegExp(`^\\s*\\^${id}\\s*$`);
+    const inline = new RegExp(`\\s\\^${id}\\s*$`);
+    for (let i = 0; i < lines.length; i++) {
+      if (standalone.test(lines[i])) {
+        let end = i - 1;
+        while (end >= 0 && lines[end].trim() === '') end--;
+        if (end < 0) return { startLine: i + 1, endLine: i + 1 };
+        let start = end;
+        while (start > 0 && isParagraphLine(lines[start - 1])) start--;
+        return { startLine: start + 1, endLine: i + 1 };
+      }
+      if (inline.test(lines[i])) {
+        let start = i;
+        while (start > 0 && isParagraphLine(lines[start - 1])) start--;
+        return { startLine: start + 1, endLine: i + 1 };
+      }
+    }
+    return null;
+  }
+
+  return null;
+}
+
 /**
  * Parse an anchor string into a CodeAnchor object
  *
@@ -397,6 +538,9 @@ export function isLegacySymbol(symbol: string): boolean {
  * - file.ts:15,25,30 (multiple lines)
  */
 export function parseAnchor(anchor: string): CodeAnchor | null {
+  const section = parseSectionAnchor(anchor);
+  if (section) return section;
+
   const colonIndex = anchor.lastIndexOf(':');
   if (colonIndex === -1) {
     // No line reference, just file path
