@@ -5,6 +5,7 @@
  * A thin skin over paradigm-mcp's #skill-loader / #skill-projector /
  * !skill-used modules, imported by relative path (same precedent as
  * commands/task/index.ts). Verbs: list, show, lint, check, project, adopt,
+ * import (v7.11 — pack skill → provisional project/global copy, TTY-gated),
  * plus the hidden `record-usage` used by the PostToolUse `Skill` hook.
  * `certify` lives in ./certify.ts (TTY-gated, $skill-certification) and
  * `sync-global` in ./sync-global.ts.
@@ -30,6 +31,8 @@ import {
   isValidSkillId,
   loadSkillCertLedger,
   listSkillScripts,
+  findPackSkill,
+  importPackSkill,
   type SkillEnv,
   type LintIssue,
   type PinReport,
@@ -150,6 +153,11 @@ export function agentSkillIds(agentId: string, env: SkillEnv): string[] {
   return [];
 }
 
+/** Scope column: `pack:<packId>` for pack skills, else the scope name. */
+function scopeLabel(skill: SkillFile): string {
+  return skill.scope === 'pack' ? `pack:${skill.packId ?? '?'}` : skill.scope;
+}
+
 // ── list ──────────────────────────────────────────────────
 
 export interface SkillListOptions extends SkillCommonOptions {
@@ -176,6 +184,7 @@ export async function skillListCommand(options: SkillListOptions = {}): Promise<
         trust: e.skill.metadata.paradigm.trust,
         status: e.status,
         scope: e.skill.scope,
+        ...(e.skill.packId ? { packId: e.skill.packId } : {}),
         pinsUnverified: e.pins.unverified,
         path: e.skill.dir,
       })),
@@ -194,9 +203,12 @@ export async function skillListCommand(options: SkillListOptions = {}): Promise<
       ['ID', 'VERSION', 'STEWARD', 'TRUST', 'STATUS', 'SCOPE'],
       ...evaluated.map(e => {
         const m = e.skill.metadata.paradigm;
-        return [m.id, m.version, m.steward, m.trust, e.status + (e.pins.unverified ? '*' : ''), e.skill.scope];
+        return [m.id, m.version, m.steward, m.trust, e.status + (e.pins.unverified ? '*' : ''), scopeLabel(e.skill)];
       }),
     ]);
+  }
+  if (evaluated.some(e => e.skill.scope === 'pack')) {
+    dim('pack skills are read-only and external — `paradigm skill import <pack>:<id>` to adopt one');
   }
   if (evaluated.some(e => e.pins.unverified)) {
     warn('* pins unverified — third-party tool pins cannot be checked without `paradigm skill check <id> --tools <file>`');
@@ -228,7 +240,7 @@ export async function skillShowCommand(id: string, options: SkillCommonOptions &
   kv('steward', m.steward);
   kv('trust', m.trust);
   kv('status', e.status);
-  kv('scope', `${skill.scope} (${skill.dir})`);
+  kv('scope', `${scopeLabel(skill)} (${skill.dir})`);
   kv('key', skillKey(m.id, m.version));
   kv('content hash', computeContentHash(skill));
   kv('provenance', [m.provenance.source, `by ${m.provenance.createdBy}`, m.provenance.migratedFrom ? `migrated from ${m.provenance.migratedFrom}` : '']
@@ -342,7 +354,7 @@ const PROJECT_FIX: Record<string, string> = {
   'not-found': '`paradigm skill list` to see available skills (or `paradigm skill sync-global`)',
   lint: '`paradigm skill lint <id>` and fix the errors',
   stale: '`paradigm skill check <id>` and re-pin the changed tools',
-  untrusted: 'certify it (`paradigm skill certify <id>`) or pass --allow-provisional',
+  untrusted: 'certify it (`paradigm skill certify <id>`) or pass --allow-provisional (pack skills: `paradigm skill import <pack>:<id>` first)',
   synced: 'never project into ~/.claude/skills/synced/ — choose another target',
   'not-ours': 'the destination was not created by Paradigm — move it aside first',
   drifted: 'the projection was edited downstream — `paradigm skill adopt <id>` to pull the edits back',
@@ -372,7 +384,10 @@ export async function skillProjectCommand(id: string | undefined, options: Skill
     return fail(`Could not read --tools file: ${(err as Error).message}`);
   }
   const paradigmTools = await loadParadigmTools(env.rootDir);
-  const ids = options.all ? listSkillsDetailed(env).skills.map(s => s.metadata.paradigm.id) : [id!];
+  // --all never includes pack skills (read-only, external — they never project).
+  const ids = options.all
+    ? listSkillsDetailed(env).skills.filter(s => s.scope !== 'pack').map(s => s.metadata.paradigm.id)
+    : [id!];
 
   const results = ids.map(sid => projectSkill(sid, {
     env, target, allowProvisional: !!options.allowProvisional, dryRun: !!options.dryRun, paradigmTools, externalTools,
@@ -503,6 +518,78 @@ export async function skillAdoptCommand(id: string, options: SkillAdoptOptions =
   }
   if (!r.ok) process.exitCode = 1;
   return r.ok;
+}
+
+// ── import (pack skill → provisional copy) ─────────────
+
+export interface SkillImportOptions extends SkillCommonOptions {
+  /** Import into ~/.paradigm/skills instead of the project. */
+  global?: boolean;
+}
+
+export interface ImportDeps {
+  tty?: boolean;
+  prompt?: (question: string) => Promise<string>;
+  /** Injected in tests (never touch the real home directory). */
+  homedir?: string;
+  globalDir?: string;
+}
+
+/**
+ * `paradigm skill import <packId>:<id> [--global]` — the ONLY way a pack skill
+ * leaves the read-only `pack` scope. Interactive TTY only: shows allowed-tools
+ * and the scripts/ list, requires the id typed back, then copies the skill as
+ * trust provisional / provenance.source pack. Returns true on import.
+ */
+export async function skillImportCommand(ref: string, options: SkillImportOptions = {}, deps: ImportDeps = {}): Promise<boolean> {
+  const m = /^([^:\s]+):([^:\s]+)$/.exec(ref ?? '');
+  if (!m) { fail(`Expected <pack-id>:<skill-id> (got "${ref}").`); return false; }
+  const [, packId, id] = m;
+  if (badId(id)) return false;
+
+  const tty = deps.tty ?? !!process.stdin.isTTY;
+  if (!tty) {
+    fail('`paradigm skill import` requires an interactive terminal (human confirmation). Refusing.');
+    log.command('skill-import').warn('Refused non-TTY import', { packId, id });
+    return false;
+  }
+
+  const env: SkillEnv = {
+    ...skillEnv(options),
+    ...(deps.homedir ? { homedir: deps.homedir } : {}),
+    ...(deps.globalDir ? { globalDir: deps.globalDir } : {}),
+  };
+  const entry = findPackSkill(packId, id, env);
+  if (!entry) { fail(`Pack skill "${packId}:${id}" not found (\`paradigm skill list\` shows pack skills).`); return false; }
+
+  const skill = entry.skill;
+  // Hash what the human reviews; importPackSkill refuses if the pack changes before the copy.
+  const expectedHash = computeContentHash(skill);
+  const scope = options.global ? 'global' : 'project';
+  header(`Import ${packId}:${id} @ ${skill.metadata.paradigm.version} → ${scope}`);
+  kv('description', skill.description.replace(/\s+/g, ' ').trim());
+  kv('allowed-tools', skill['allowed-tools'] ?? '(unset — host default)');
+  const scripts = listSkillScripts(skill);
+  if (scripts.length === 0) {
+    kv('scripts', '(none)');
+  } else {
+    warn(`scripts/ (${scripts.length}) — executables the skill ships:`);
+    for (const sc of scripts) out(`  ${sc.path}  ${sc.bytes}B  sha256:${sc.sha256.slice(0, 16)}`);
+  }
+  dim('The copy is trust provisional (provenance.source: pack); certify it before it projects without --allow-provisional.');
+
+  const answer = (await (deps.prompt ?? ttyQuestion)(`Type the skill id (${id}) to import it: `)).trim();
+  if (answer !== id) {
+    warn('Not confirmed — nothing imported.');
+    log.command('skill-import').info('Import not confirmed', { packId, id });
+    return false;
+  }
+
+  const r = importPackSkill(packId, id, { env, scope, expectedHash });
+  log.command('skill-import').info('Import', { packId, id, scope, ok: r.ok, refused: r.refused });
+  if (!r.ok) { fail(`${packId}:${id}: import refused (${r.refused}): ${r.message}`); return false; }
+  success(`${r.message} → ${r.dest}`);
+  return true;
 }
 
 // ── record-usage (hidden; PostToolUse `Skill` hook) ──────

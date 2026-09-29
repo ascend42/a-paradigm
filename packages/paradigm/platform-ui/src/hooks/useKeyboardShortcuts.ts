@@ -16,7 +16,7 @@ const SECTION_BY_INDEX: Record<string, SectionId> = {
   '3': 'graph',
   '4': 'git',
   '5': 'sentinel',
-  '6': 'university',
+  '6': 'academy',
   '7': 'symphony',
   '8': 'docs',
 };

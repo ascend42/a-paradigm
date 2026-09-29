@@ -10,6 +10,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { discoverPacks, countPackEntries } from '@a-company/university-core';
 
 // ────────────────────────────────────────────────────────
 // Feature Detection Cache
@@ -66,6 +67,21 @@ export interface ToolModule {
 // ────────────────────────────────────────────────────────
 
 /** Check if a directory exists relative to rootDir */
+/** True when any discovered pack has entries or ships skills. Never throws. */
+export function detectUniversityPacks(rootDir: string): boolean {
+  try {
+    // Discovery writes a cache under .paradigm/ — only probe Paradigm projects.
+    if (!fs.existsSync(path.join(rootDir, '.paradigm'))) return false;
+    if (discoverPacks(rootDir).some(p => countPackEntries(p.rootDir) > 0 || (p.skillDirs?.length ?? 0) > 0)) {
+      return true;
+    }
+    // v5 layout: implicit project pack (no pack.yaml) with content.
+    return countPackEntries(path.join(rootDir, '.paradigm', 'university')) > 0;
+  } catch {
+    return false;
+  }
+}
+
 function dirExists(rootDir: string, relPath: string): boolean {
   return fs.existsSync(path.join(rootDir, relPath));
 }
@@ -127,7 +143,10 @@ export const FEATURE_DETECTORS: Record<string, (rootDir: string) => boolean> = {
     const scoreDir = path.join(os.homedir(), '.paradigm', 'score');
     return fs.existsSync(scoreDir);
   },
-  university: (rootDir) => dirExists(rootDir, '.paradigm/university'),
+  // v7.11: pack-based — active only when a discovered pack has content or
+  // ships skills (an empty scaffolded .paradigm/university/ no longer counts).
+  // Fail-closed: any discovery error → inactive.
+  university: (rootDir) => detectUniversityPacks(rootDir),
   agents: (rootDir) => {
     const globalDir = path.join(os.homedir(), '.paradigm', 'agents');
     return dirExists(rootDir, '.paradigm/agents') || fs.existsSync(globalDir);

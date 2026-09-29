@@ -426,27 +426,65 @@ members:
   },
 
   'university': {
-    description: 'University — multi-tenant content-pack framework (v5.39.0 / v6.0)',
-    generate: () => `# Paradigm University (v5.39.0 / v6.0)
+    description: 'University — multi-tenant content packs (notes, quizzes, paths, pack skills) — v7.11',
+    generate: () => `# Paradigm University (v7.11)
 
-Multi-tenant content framework for onboarding, policies, quizzes, and
-compliance material. Packs live in one of three places:
+University owns **packs, paths, notes and quizzes**. Humans browse it in the
+Platform **Academy** section (\`paradigm platform\` → Academy;
+\`paradigm university serve\` redirects there). Classroom (agent curriculum,
+syllabus, scenarios, certification) is a separate system.
 
-1. **First-party** — \`node_modules/@a-company/university/\` (the default).
-2. **Project** — \`.paradigm/university/\` (your team's content).
-3. **External npm** — any package with \`paradigm.universityPack\` in its package.json.
+Packs are discovered from three places (later wins on id collision):
 
-## When to use it
+1. **First-party** — \`node_modules/@a-company/university/\`.
+2. **External npm** — any direct dep with \`paradigm.universityPack\` in package.json.
+3. **Project** — \`.paradigm/university/\` (+ discipline sub-packs).
 
-- Agent needs to add onboarding content to a project (\`paradigm_university_create\`).
-- User is authoring compliance policies or PLSAT-style quizzes.
-- Agent needs the recommended onboarding sequence for a student
-  (\`paradigm_university_onboard\`).
-- Agent needs to search existing content across packs
-  (\`paradigm_university_search\` / \`paradigm_university_pack_list\`).
+Discovery is single-sourced in \`@a-company/university-core\`.
 
-Skip for: one-off code docs (use \`.purpose\`), decisions
-(\`paradigm_decision_record\`), session history (\`paradigm_lore_record\`).
+## MCP tools (read-only, 2 tools)
+
+| Tool | Input | Output |
+|------|-------|--------|
+| \`paradigm_university_search\` | \`{ id?, type?, tag?, difficulty?, symbol?, query?, category?, track?, pack?, section?, limit? }\` | Without \`id\`: \`{ count, total, returned, truncated, pack, results: [{ id: "<pack-id>:<entry-id>", title, type, difficulty, tags, symbols, section }] }\`. With \`id\` (bare or \`<pack-id>:<entry-id>\`): the full entry (body / questions / steps). |
+| \`paradigm_university_pack_list\` | \`{ tenant_kind? }\` | \`{ packs: [{ id, name, version, tenant_kind, discipline?, entry_count, sections, skills: [{ id, version, trust }], path? }] }\` (\`path\` is project-relative; omitted for packs outside the project) |
+
+The tools are registered only when a discovered pack has content or ships
+skills (an empty scaffold does not count). Restart the MCP server after
+upgrading to see the 2-tool surface.
+
+Authoring and validation are **CLI-only** — the former
+\`paradigm_university_get|create|update|onboard|validate\` tools return
+\`{ error: "moved to CLI: paradigm university add|show|validate" }\`.
+
+## Pack skills (pack.yaml v2)
+
+\`\`\`yaml
+schema_version: '2'          # '1' is still accepted
+id: paradigm
+tenant_kind: first-party
+skills:
+  - path: skills/trace-debug  # relative dir containing SKILL.md
+\`\`\`
+
+Rules: explicit list only (no globs); relative, no \`..\`; realpath inside the
+pack root; no symlinks; the dir basename is the kebab-case skill id and must
+equal the SKILL.md \`metadata.paradigm.id\`. Violations are skipped with a
+logged warning, never fatal.
+
+Pack skills resolve as the lowest-precedence scope \`pack\`
+(project › global › pack) and are **always trust \`external\`** whatever
+their frontmatter says — they never project into \`.claude/skills\`. To use
+one, a human imports it:
+
+\`\`\`
+paradigm skill import <pack-id>:<skill-id> [--global]
+\`\`\`
+
+Import is interactive-TTY only: it shows the allowed-tools and every
+\`scripts/\` file, then copies the skill into project (or global) scope as
+trust \`provisional\` with \`provenance.source: pack\`. Certify it before it
+projects without \`--allow-provisional\`.
 
 ## Content types
 
@@ -454,77 +492,28 @@ Skip for: one-off code docs (use \`.purpose\`), decisions
 |------|--------|--------|
 | Note | \`N-\` | Markdown + YAML frontmatter |
 | Policy | \`P-\` | Markdown + YAML frontmatter (optional compliance fields) |
-| Quiz | \`Q-\` | YAML (PLSAT-style scenarios supported) |
+| Quiz | \`Q-\` | YAML (PLSAT-style scenarios supported) — graded client-side in Academy |
 | Learning Path | \`LP-\` | YAML — ordered/unordered steps |
-| Diploma | \`D-\` | YAML (auto-generated on quiz completion) |
 
-## MCP tools
+Entry ids are pack-scoped; the cross-pack address is \`<pack-id>:<entry-id>\`
+(e.g. \`paradigm:N-symbol-basics\`).
 
-| Tool | Input | Output |
-|------|-------|--------|
-| \`paradigm_university_search\` | \`{ type?, tag?, difficulty?, symbol?, query?, category?, track?, pack?, discipline?, limit? }\` | \`{ count, pack, results: [{ id: "<pack-id>:<entry-id>", title, type, difficulty, tags, symbols }] }\` |
-| \`paradigm_university_get\` | \`{ id: "<bare>" | "<pack-id>:<entry-id>", pack? }\` | Full entry (frontmatter + body for notes/policies; full quiz/path object) |
-| \`paradigm_university_create\` | \`{ type, title, body?, tags?, symbols?, difficulty?, estimatedMinutes?, prerequisites?, category?, pack?, passThreshold?, questions?, ordered?, steps? }\` | \`{ created, type, file }\` |
-| \`paradigm_university_update\` | \`{ id, pack?, title?, body?, tags?, symbols?, difficulty?, estimatedMinutes?, category? }\` | \`{ updated, type }\` |
-| \`paradigm_university_onboard\` | \`{ student?, pack? }\` | \`{ university, pack, student, recommended, completed, remaining }\` |
-| \`paradigm_university_validate\` | \`{ id?, pack?, deep? }\` | \`{ pack, status, totalContent, checked, issues: [{ contentId, severity, check, message, fix? }] }\` |
-| \`paradigm_university_pack_list\` | \`{ tenant_kind? }\` | \`{ packs: [{ id, name, version, tenant_kind, discipline?, entry_count, path }] }\` |
-
-All tools accept an optional \`pack\` argument. Default resolution: project
-pack if \`.paradigm/university/pack.yaml\` exists, else first-party.
-
-## Pack conventions
-
-A pack is a directory containing \`pack.yaml\` with required fields
-\`id\`, \`name\`, \`version\`, \`schema_version: "1"\`, \`tenant_kind\`
-(\`first-party | project | external\`). Optional fields: \`description\`,
-\`authors\`, \`license\`, \`origin_hint\`, \`content_types\`, \`disciplines\`,
-\`branding\`, \`theme\`, \`categories\`, \`compliance\`, \`dependencies\`.
-
-Entry IDs are pack-scoped. The canonical cross-pack address is
-\`<pack-id>:<entry-id>\` (e.g., \`paradigm:N-symbol-basics\`). Bare entry
-IDs resolve against the current pack context (\`pack\` arg or active
-project pack). Cross-pack references inside entry YAML **must** use the
-qualified form — the validator rejects bare cross-pack refs.
-
-## CLI surface (v5.39.0)
+## CLI surface
 
 \`\`\`
-paradigm university                                 # default teaching app
-paradigm university init                            # scaffold .paradigm/university/pack.yaml
-paradigm university init --discipline <name>        # scaffold sub-pack
-paradigm university list                            # list discovered packs
-paradigm university list --project                  # list entries in project pack
-paradigm university add <type> --title "..." [--pack | --project | --discipline]
-paradigm university show <id> [--pack | --project | --discipline]
+paradigm university init [--discipline <name>]     # scaffold a project pack
+paradigm university list [--project]               # packs / entries
+paradigm university add <type> --title "..."       # author content
+paradigm university show <id>
 paradigm university quiz <id>
-paradigm university status
 paradigm university validate [--deep]
-paradigm university serve --pack <id>               # launch specific pack's UI
+paradigm university serve                          # → Platform Academy
+paradigm skill import <pack>:<id> [--global]       # adopt a pack skill
 \`\`\`
-
-\`--pack\` / \`--project\` / \`--discipline\` selectors live on the
-subcommands (not on bare \`paradigm university\`).
-
-## Metrics (v5.39.0 / v6.0)
-
-Local-only count snapshots at \`.paradigm/university/.metrics/\`. Privacy
-rule: no titles, no bodies, no user identifiers — only counts + a
-\`sha256(projectRootPath + random_salt)\` project hash. Retention 90 days.
-No remote send; \`metrics.remote_consent: pending\` is seeded in
-\`.paradigm/config.yaml\` for v6.1 opt-in.
-
-## Compliance fields (optional, schema-only)
-
-Policies and diplomas accept \`policy_version\`, \`policy_hash\`,
-\`policy_versions[]\`, \`content_hashes[]\`. Schema is stable but **no
-enforcement tooling ships at v5.39.0 / v6.0** — no audit worker, no
-diploma invalidation, no retention enforcement. Enforcement is v6.x.
 
 ## Full guide
 
-See \`docs/guides/university.md\` for narrative, examples, audience
-tracks, migration notes, and the v6.3 sunset contract.`,
+See \`docs/guides/university.md\`.`,
   },
 
   'calibration': {

@@ -7,7 +7,7 @@ components:
     tags:
       - feature
   ShiftCommand:
-    description: paradigm shift — full project setup in one command
+    description: paradigm shift — full project setup in one command. 7.11.0 — no longer scaffolds .paradigm/university/ or writes a university metrics snapshot (packs are opt-in via `paradigm university init`).
     type: command
   InitCommand:
     description: paradigm init — initialize Paradigm in a project

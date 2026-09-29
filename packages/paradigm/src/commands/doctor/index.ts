@@ -618,7 +618,8 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
       }
     }
 
-    // Check university health
+    // Check university health (only when a project pack has content — a
+    // missing .paradigm/university/ is never a finding as of 7.11.0)
     const universityDir = path.join(cwd, '.paradigm', 'university');
     if (fs.existsSync(universityDir)) {
       try {
@@ -637,12 +638,9 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
         }
 
         if (contentCount === 0) {
-          results.push({
-            name: 'University content',
-            status: 'warn',
-            message: 'University directory exists but no content found',
-            fix: 'Add content: paradigm university add note --title "Getting Started"',
-          });
+          // 7.11.0: packs are opt-in. A missing or empty university dir (e.g.
+          // the pre-7.11 empty scaffold `paradigm shift` used to create) is
+          // not a finding — only real content gets validated below.
         } else {
           // Quick validation: check quiz answer validity
           const quizDir = path.join(contentDir, 'quizzes');
@@ -1278,14 +1276,6 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
     });
   }
 
-  // v6.0 (D7): capture a privacy-preserving university metrics snapshot.
-  // Non-fatal on any error — metrics never block doctor.
-  try {
-    const { captureSnapshot } = await import('../../core/university/metrics.js');
-    captureSnapshot(cwd);
-  } catch {
-    // non-fatal
-  }
 
   return healthy;
 }

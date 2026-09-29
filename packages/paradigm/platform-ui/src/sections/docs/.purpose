@@ -4,3 +4,7 @@ components:
     description: Documentation browser in Platform UI — sidebar navigation, symbol pages, flow diagrams, portal reference
     type: view
     tags: [feature, docs, platform]
+  renderMarkdown:
+    description: "Shared escape-first markdown renderer (renderMarkdown.ts, React-free; re-exported from DocsCustomPage) used by Docs pages and the Academy NoteView. Escapes & < > before emitting any tag and never builds attributes or links. v7.11 adds fenced ``` code blocks (<pre><code>, verbatim, no language attribute), - / * bullet lists and 1. numbered lists. Tested in renderMarkdown.test.ts (incl. <script> inside a code block stays escaped)."
+    type: utility
+    tags: [docs, academy, markdown, security, platform]

@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-09-29T08:03:43.960Z'
+generated: '2026-09-29T08:47:14.495Z'
 structure: {}
 key_files:
   config:
@@ -436,32 +436,13 @@ symbols:
   '#purpose-component-CoursePage': packages/site/
   '#purpose-component-LessonPage': packages/site/
   '#purpose-component-PlsatPage': packages/site/
-  '#purpose-component-university-loader': packages/university-core/
+  '#purpose-component-university-loader': packages/paradigm-mcp/src/utils/
   '#purpose-component-content-base-resolver': packages/university-core/
   '#purpose-component-pack-discovery': packages/university-core/
   '#purpose-component-pack-schema': packages/university-core/
   '#purpose-component-university-core-logger': packages/university-core/
-  '#purpose-component-university-server': packages/university/
-  '#purpose-component-courses-router': packages/university/
-  '#purpose-component-plsat-router': packages/university/
-  '#purpose-component-university-ui': packages/university/
-  '#purpose-component-home-view': packages/university/ui/
-  '#purpose-component-course-view': packages/university/ui/
-  '#purpose-component-quiz-view': packages/university/ui/
-  '#purpose-component-plsat-view': packages/university/
-  '#purpose-component-reference-view': packages/university/ui/
-  '#purpose-component-certificate-view': packages/university/ui/
-  '#purpose-component-progress-store': packages/university/
-  '#purpose-component-plsat-store': packages/university/
-  '#purpose-component-courses-store': packages/university/
-  '#purpose-component-university-seal': packages/university/
-  '#purpose-component-question-card': packages/university/ui/
-  '#purpose-component-plsat-timer': packages/university/
-  '#purpose-component-progress-ring': packages/university/ui/
-  '#purpose-component-university-header': packages/university/
-  '#purpose-component-section-nav': packages/university/ui/
-  '#purpose-component-section-view': packages/university/ui/
-  '#purpose-component-academia-theme': packages/university/
+  '#purpose-component-pack-discovery-tests': packages/university-core/
+  '#purpose-component-university-pack': packages/university/
   '#purpose-component-guard-report': packages/warpline-action/
   '#purpose-component-guard-render': packages/warpline-action/
   '#purpose-component-guard-main': packages/warpline-action/
@@ -492,7 +473,7 @@ symbols:
   '#purpose-component-predict': packages/warpline/
   '#purpose-component-justification': packages/warpline/
   '#purpose-component-strand': packages/warpline/
-  '#purpose-component-seal': packages/university/ui/
+  '#purpose-component-seal': packages/warpline/
   '#purpose-component-grade': packages/warpline/
   '#purpose-component-fabric-lock': packages/warpline/
   '#purpose-component-resolve': packages/warpline/
@@ -558,10 +539,8 @@ symbols:
   '#purpose-component-paradigm': plugins/paradigm/
   '#purpose-component-portal-writer-tests': packages/paradigm-mcp/tests/
   '#purpose-component-yaml-validator-tests': packages/paradigm-mcp/tests/
-  '#purpose-component-pack-loader-tests': packages/paradigm-mcp/tests/
   '#purpose-component-university-multi-tenant-tests': packages/paradigm-mcp/tests/
   '#purpose-component-decision-migration-tests': packages/paradigm-mcp/tests/
-  '#purpose-component-university-metrics-tests': packages/paradigm-mcp/tests/
   '#purpose-component-scripts': packages/paradigm/src/commands/hooks/scripts/
   '#purpose-component-src': packages/premise/core/src/
   '#purpose-component-portal-compliance-tests': packages/paradigm/tests/
@@ -577,7 +556,7 @@ symbols:
   '#purpose-component-portal-client': packages/portal/sdk/
   '#purpose-component-gate-client': packages/portal/sdk/
   '#purpose-component-websocket-server': packages/portal/viewer/
-  '#purpose-component-event-stream': packages/portal/viewer/
+  '#purpose-component-event-stream': packages/paradigm-mcp/src/utils/
   '#purpose-component-session-tracker': packages/portal/viewer/
   '#purpose-component-journey-recorder': packages/portal/viewer/
   '#purpose-component-timeline-component': packages/portal/viewer/
@@ -637,10 +616,6 @@ symbols:
   '#purpose-component-site-header': packages/site/src/
   '#purpose-component-symbol-badge': packages/site/src/
   '#purpose-component-plsat-migration-tests': packages/university/tests/
-  '#purpose-component-header': packages/university/ui/
-  '#purpose-component-timer': packages/university/ui/
-  '#purpose-component-courses-view': packages/university/ui/
-  '#purpose-component-plsatview': packages/university/ui/
   '#purpose-component-bench': packages/warpline/bench/
   '#purpose-component-test': packages/warpline/test/
   '#purpose-component-hooks': plugins/paradigm/hooks/
@@ -694,8 +669,48 @@ symbols:
   '#purpose-component-KnowledgeStreamTypes': packages/paradigm-mcp/src/types/
   '#purpose-component-DataPolicyTypes': packages/paradigm-mcp/src/types/
   '#purpose-component-CaptainTypes': packages/paradigm-mcp/src/types/
-  '#purpose-component-UniversityMetricsTypes': packages/paradigm-mcp/src/types/
   '#purpose-component-PackTypes': packages/paradigm-mcp/src/types/
+  '#purpose-component-symphony-loader': packages/paradigm-mcp/src/utils/
+  '#purpose-component-platform-bridge': packages/paradigm-mcp/src/utils/
+  '#purpose-component-symphony-peers': packages/paradigm/src/commands/symphony/
+  '#purpose-component-symphony-relay': packages/paradigm-mcp/src/utils/
+  '#purpose-component-agent-loader': packages/paradigm-mcp/src/utils/
+  '#purpose-component-agent-registry': packages/paradigm-mcp/src/utils/
+  '#purpose-component-role-prompts': packages/paradigm-mcp/src/utils/
+  '#purpose-component-notebook-loader': packages/paradigm-mcp/src/utils/
+  '#purpose-component-classroom-decay': packages/paradigm-mcp/src/utils/
+  '#purpose-component-classroom-fail-side': packages/paradigm-mcp/src/utils/
+  '#purpose-component-tool-registry': packages/paradigm-mcp/src/utils/
+  '#purpose-component-compliance-checker': packages/paradigm-mcp/src/utils/
+  '#purpose-component-DocsLoader': packages/paradigm-mcp/src/utils/
+  '#purpose-component-graduation-types': packages/paradigm-mcp/src/utils/
+  '#purpose-component-graduation-store': packages/paradigm-mcp/src/utils/
+  '#purpose-component-graduation-engine': packages/paradigm-mcp/src/utils/
+  '#purpose-component-aspect-fingerprint': packages/paradigm-mcp/src/utils/
+  '#purpose-component-data-policy-loader': packages/paradigm-mcp/src/utils/
+  '#purpose-component-work-log-loader': packages/paradigm-mcp/src/utils/
+  '#purpose-component-journal-loader': packages/paradigm-mcp/src/utils/
+  '#purpose-component-decision-loader': packages/paradigm-mcp/src/utils/
+  '#purpose-component-nomination-engine': packages/paradigm-mcp/src/utils/
+  '#purpose-component-session-work-log': packages/paradigm-mcp/src/utils/
+  '#purpose-component-agent-state': packages/paradigm-mcp/src/utils/
+  '#purpose-component-gap-narrator': packages/paradigm-mcp/src/utils/
+  '#purpose-component-activity-metrics': packages/paradigm-mcp/src/utils/
+  '#purpose-component-soft-provenance': packages/paradigm-mcp/src/utils/
+  '#purpose-component-outcome-reference-tracking': packages/paradigm-mcp/src/utils/
+  '#purpose-component-compliance-health': packages/paradigm-mcp/src/utils/
+  '#purpose-component-provisional-intake': packages/paradigm-mcp/src/utils/
+  '#purpose-component-orchestration-marker': packages/paradigm-mcp/src/utils/
+  '#purpose-component-yaml-validator': packages/paradigm-mcp/src/utils/
+  '#purpose-component-write-and-confirm': packages/paradigm-mcp/src/utils/
+  '#purpose-component-consistency-tracker': packages/paradigm-mcp/src/utils/
+  '#purpose-component-strict-mode': packages/paradigm-mcp/src/utils/
+  '#purpose-component-wisdom-loader': packages/paradigm-mcp/src/utils/
+  '#purpose-component-arch-loader': packages/paradigm-mcp/src/utils/
+  '#purpose-component-calibration-aggregate': packages/paradigm-mcp/src/utils/
+  '#purpose-component-skill-loader': packages/paradigm-mcp/src/utils/
+  '#purpose-component-skill-projector': packages/paradigm-mcp/src/utils/
+  '#purpose-component-skill-usage': packages/paradigm-mcp/src/utils/
   '#purpose-component-ServeCommand': packages/paradigm/src/commands/
   '#purpose-component-ShiftCommand': packages/paradigm/src/commands/
   '#purpose-component-InitCommand': packages/paradigm/src/commands/
@@ -734,7 +749,7 @@ symbols:
   '#purpose-component-PlatformWebSocket': packages/paradigm/src/platform-server/ws/
   '#purpose-component-AgentPresenceManager': packages/paradigm/src/platform-server/ws/
   '#purpose-component-UserStateTracker': packages/paradigm/src/platform-server/ws/
-  '#purpose-component-AgentCommandRoute': packages/paradigm/src/platform-server/
+  '#purpose-component-AgentCommandRoute': packages/paradigm/src/platform-server/routes/
   '#purpose-component-local-guard': packages/paradigm/src/platform-server/
   '#purpose-component-spill': packages/premise/core/src/
   '#purpose-component-content': packages/university/src/content/
@@ -788,7 +803,6 @@ symbols:
   '#purpose-component-symphony-threads': packages/paradigm/src/commands/symphony/
   '#purpose-component-symphony-resolve': packages/paradigm/src/commands/symphony/
   '#purpose-component-symphony-serve': packages/paradigm/src/commands/symphony/
-  '#purpose-component-symphony-peers': packages/paradigm/src/commands/symphony/
   '#purpose-component-symphony-peers-revoke': packages/paradigm/src/commands/symphony/
   '#purpose-component-symphony-peers-forget': packages/paradigm/src/commands/symphony/
   '#purpose-component-symphony-request': packages/paradigm/src/commands/symphony/
@@ -826,6 +840,17 @@ symbols:
   '#purpose-component-claude-cli-provider': packages/paradigm/src/core/providers/
   '#purpose-component-manual-provider': packages/paradigm/src/core/providers/
   '#purpose-component-UniversityStorage': packages/paradigm/src/core/university/
+  '#purpose-component-OverviewHandler': packages/paradigm/src/platform-server/routes/
+  '#purpose-component-GitRouter': packages/paradigm/src/platform-server/routes/
+  '#purpose-component-DocsRouter': packages/paradigm/src/platform-server/routes/
+  '#purpose-component-AmbientRouter': packages/paradigm/src/platform-server/routes/
+  '#purpose-component-TasksRouter': packages/paradigm/src/platform-server/routes/
+  '#purpose-component-TasksWriteRouter': packages/paradigm/src/platform-server/routes/
+  '#purpose-component-WarplineRouter': packages/paradigm/src/platform-server/routes/
+  '#purpose-component-AcademyRouter': packages/paradigm/src/platform-server/routes/
+  '#purpose-component-MemoryRouter': packages/paradigm/src/platform-server/routes/
+  '#purpose-component-MemoryWriteRouter': packages/paradigm/src/platform-server/routes/
+  '#purpose-component-ClassroomRouter': packages/paradigm/src/platform-server/routes/
   '#purpose-component-SymbolPage': packages/site/src/components/docs/
   '#purpose-component-FlowPage': packages/site/src/components/docs/
   '#purpose-component-PortalPage': packages/site/src/components/docs/
@@ -841,7 +866,15 @@ symbols:
   '#purpose-component-atrium-visual-canvas': packages/conductor/Sources/Conductor/UI/Views/
   '#purpose-component-atrium-graph-view': packages/conductor/Sources/Conductor/UI/Views/
   '#purpose-component-mermaid-web-view': packages/conductor/Sources/Conductor/UI/Views/
+  '#purpose-component-AcademySection': packages/paradigm/platform-ui/src/sections/academy/
+  '#purpose-component-PackList': packages/paradigm/platform-ui/src/sections/academy/
+  '#purpose-component-PathView': packages/paradigm/platform-ui/src/sections/academy/
+  '#purpose-component-NoteView': packages/paradigm/platform-ui/src/sections/academy/
+  '#purpose-component-QuizRunner': packages/paradigm/platform-ui/src/sections/academy/
+  '#purpose-component-PackSkills': packages/paradigm/platform-ui/src/sections/academy/
+  '#purpose-component-academyStore': packages/paradigm/platform-ui/src/sections/academy/
   '#purpose-component-DocsSection': packages/paradigm/platform-ui/src/sections/docs/
+  '#purpose-component-renderMarkdown': packages/paradigm/platform-ui/src/sections/docs/
   '#purpose-component-MemorySection': packages/paradigm/platform-ui/src/sections/memory/
   '#purpose-component-LedgerGroup': packages/paradigm/platform-ui/src/sections/memory/
   '#purpose-component-LedgerRow': packages/paradigm/platform-ui/src/sections/memory/
@@ -934,7 +967,6 @@ symbols:
   $purpose-flow-$homepage-experience: packages/site/
   $purpose-flow-$docs-site-integration: packages/site/
   $purpose-flow-$university-flow: packages/site/
-  $purpose-flow-$plsat-exam-flow: packages/university/
   $purpose-flow-oracle-run: packages/warpline/
   $purpose-flow-absorb-flow: packages/warpline/
   $purpose-flow-pick-flow: packages/warpline/
@@ -1036,8 +1068,6 @@ symbols:
   '!purpose-signal-note-received-live': packages/sentinel/ui/
   '!purpose-signal-!course-completed': packages/site/
   '!purpose-signal-!plsat-passed': packages/site/
-  '!purpose-signal-!plsat-completed': packages/university/
-  '!purpose-signal-!quiz-completed': packages/university/
   '!purpose-signal-parse-success': packages/purpose/core/
   '!purpose-signal-parse-error': packages/purpose/core/
   '!purpose-signal-validation-passed': packages/purpose/core/
@@ -1219,10 +1249,6 @@ symbols:
   '@purpose-aspect-zod-validated-sections': packages/university-core/
   '@purpose-aspect-content-base-dual-layout': packages/university-core/
   '@purpose-aspect-classifier-only-errors': packages/university-core/
-  '@purpose-aspect-plsat-pass-threshold-90pct': packages/university/
-  '@purpose-aspect-plsat-fisher-yates-shuffle': packages/university/
-  '@purpose-aspect-plsat-v3-variant-resolution': packages/university/
-  '@purpose-aspect-university-cors-wildcard': packages/university/
   '@purpose-aspect-read-only': packages/warpline/
   '@purpose-aspect-determinism': packages/warpline/
   '@purpose-aspect-meaning-coverage': packages/warpline/
@@ -1375,16 +1401,24 @@ symbols:
   '!purpose-ref-signal-session-insights-ready': packages/paradigm-mcp/src/tools/
   '!purpose-ref-signal-cid-claim-written': packages/paradigm-mcp/src/tools/
   '!purpose-ref-signal-cid-postflight-self-healed': packages/paradigm-mcp/src/tools/
+  $purpose-ref-flow-agent-learning-loop: packages/paradigm-mcp/src/utils/
+  '!purpose-ref-signal-agent-state-recorded': packages/paradigm-mcp/src/utils/
+  '!purpose-ref-signal-skill-used': packages/paradigm-mcp/src/utils/
   $purpose-ref-flow-roster-setup: packages/paradigm/src/core/
   ^purpose-ref-gate-local-only: packages/paradigm/src/platform-server/
-  '#purpose-ref-component-gap-narrator': packages/paradigm/src/commands/doctor/
-  '!purpose-ref-signal-skill-used': packages/paradigm/src/commands/hooks/
   '!purpose-ref-signal-compliance-violation': packages/paradigm/src/commands/hooks/
   '!purpose-ref-signal-hook-installed': packages/paradigm/src/commands/hooks/
   '!purpose-ref-signal-team-funnel': packages/paradigm/src/commands/hooks/
   '!purpose-ref-signal-override-event': packages/paradigm/src/commands/hooks/
   $purpose-ref-flow-HOME: packages/paradigm/src/commands/hooks/
   $purpose-ref-flow-skill-certification.: packages/paradigm/src/commands/skill/
+  '!purpose-ref-signal-ambient:event': packages/paradigm/src/platform-server/routes/
+  '!purpose-ref-signal-ambient:nomination': packages/paradigm/src/platform-server/routes/
+  ^purpose-ref-gate-write-capable.: packages/paradigm/src/platform-server/routes/
+  '!purpose-ref-signal-oracle-record-appended': packages/paradigm/src/platform-server/routes/
+  ^purpose-ref-gate-write-capable: packages/paradigm/src/platform-server/routes/
+  ^purpose-ref-gate-read-only.: packages/paradigm/src/platform-server/routes/
+  '!purpose-ref-signal-memory:changed': packages/paradigm/src/platform-server/routes/
   $purpose-ref-flow-decision-exchange: packages/conductor/Sources/Conductor/UI/Views/
   '#purpose-ref-component-fenced-block-parser': packages/conductor/Sources/Conductor/UI/Views/
   '#purpose-ref-component-agent-visual.': packages/conductor/Sources/Conductor/UI/Views/

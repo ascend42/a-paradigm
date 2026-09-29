@@ -13,9 +13,8 @@ components:
       pack-layout content (notes/, quizzes/, paths/) preserves question
       counts, answer keys, explanation text (whitespace-normalized),
       pass thresholds, time limits, and totalSlots. Also includes a smoke
-      test that the package pack.yaml parses and that the courses + plsat
-      Express routers return the same { courses[] } / { versions[] }
-      response shape consumed by the v5 UI.
+      test that the package pack.yaml parses and (7.11.0, server retired) that
+      university-core's loadPackIndex sees the stable 12-path set.
     type: test
     anchors:
       - plsat-migration.test.ts:1-500

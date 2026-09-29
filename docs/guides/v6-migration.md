@@ -157,7 +157,7 @@ Or via MCP:
 ```typescript
 paradigm_university_pack_list({})                              // list all packs
 paradigm_university_search({ pack: 'paradigm', type: 'note' }) // search a pack
-paradigm_university_get({ id: 'paradigm:N-symbol-basics' })    // fetch one entry
+paradigm_university_search({ id: 'paradigm:N-symbol-basics' }) // fetch one entry (v7.11+; was paradigm_university_get)
 ```
 
 Content layout, post-v6:
@@ -201,7 +201,7 @@ Strip the prefix for display if your UI expects bare ids:
 const display = entry.id.includes(':') ? entry.id.split(':')[1] : entry.id;
 ```
 
-Or accept the qualified form everywhere — `paradigm_university_get` happily takes either.
+Or accept the qualified form everywhere — `paradigm_university_search({ id })` (v7.11+; formerly `paradigm_university_get`) happily takes either.
 
 ---
 

@@ -1422,10 +1422,26 @@ function resolveContentFile(rootDir: string, id: string, ext: string, packRoot?:
   // first-party / non-project packs; fall back to the legacy `content/` dir.
   const contentDir = resolveContentBase(effectivePackRoot) ?? path.join(effectivePackRoot, CONTENT_DIR);
 
+  // Same containment rules as resolveSkillDirs: the file itself must not be a
+  // symlink, and its realpath must stay inside the pack root's realpath.
+  let rootReal: string | null = null;
+  try { rootReal = fs.realpathSync(effectivePackRoot); } catch { /* no pack root → nothing resolves */ }
+
   // Try each subdirectory
   for (const subdir of [NOTES_DIR, POLICIES_DIR, QUIZZES_DIR, PATHS_DIR]) {
     const filePath = path.join(contentDir, subdir, `${id}${ext}`);
-    if (fs.existsSync(filePath)) return filePath;
+    if (!fs.existsSync(filePath)) continue;
+    try {
+      if (fs.lstatSync(filePath).isSymbolicLink()) throw new Error('symlink');
+      const real = fs.realpathSync(filePath);
+      if (!rootReal || (real !== rootReal && !real.startsWith(rootReal + path.sep))) throw new Error('escapes pack root');
+    } catch (err) {
+      getUniversityCoreLogger().warn('content file rejected', {
+        subdir, reason: err instanceof Error ? err.message : 'unreadable',
+      });
+      continue;
+    }
+    return filePath;
   }
 
   return null;

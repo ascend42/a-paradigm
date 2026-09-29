@@ -7,7 +7,7 @@ const SECTION_ICONS: Record<string, string> = {
   graph: '◎',
   git: '⎇',
   sentinel: '◈',
-  university: '▣',
+  academy: '▣',
   symphony: '♪',
   docs: '☰',
   ambient: '◌',

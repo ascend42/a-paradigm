@@ -239,21 +239,23 @@ const SEED_HABITS: HabitDefinition[] = [
   {
     id: 'university-content-valid',
     name: 'University Content Valid',
-    description: 'Validate university content integrity when files in symbol-covered areas change',
+    // v7.11: validation moved to the CLI (`paradigm university validate`); the
+    // MCP tool is gone, so a tool-called check can never pass → disabled.
+    description: 'Validate university content integrity (CLI: paradigm university validate) when content changes',
     category: 'quality',
     trigger: 'on-stop',
     severity: 'advisory',
     check: { type: 'tool-called', params: { tools: ['paradigm_university_validate'] } },
-    enabled: true,
+    enabled: false,
   },
   {
     id: 'university-onboarded',
     name: 'University Onboarding',
-    description: 'Call paradigm_university_onboard at session start for project-specific learning content',
+    description: 'Call paradigm_university_search at session start for project-specific learning content',
     category: 'discovery',
     trigger: 'preflight',
     severity: 'advisory',
-    check: { type: 'tool-called', params: { tools: ['paradigm_university_onboard'] } },
+    check: { type: 'tool-called', params: { tools: ['paradigm_university_search'] } },
     enabled: false,
   },
   // ── Agent Orchestration Enforcement ──────────────────────────

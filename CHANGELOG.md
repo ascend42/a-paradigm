@@ -5,6 +5,41 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.11.0] — 2026-09-29
+
+**University overhaul** (Phase 2 of the skills arc, T-2026-09-26-003). University content now lives in a Platform section called the **Academy**. Packs can ship skills. The MCP surface is down to two read-only tools, and pack discovery comes from one place (`@a-company/university-core`). The Academy is the University UI label; Classroom keeps curriculum, syllabus, scenario and certify. The CLI noun stays `paradigm university`.
+
+### Added
+- **Platform Academy section (`#AcademySection`, `/api/academy`)**: a read-only view of every discovered pack. You pick a pack, then a learning path, then its steps. Notes render as markdown using the Platform's shared renderer. Quizzes are graded in the browser, and results are kept only in that browser's localStorage. A read-only pack-skills table labels each skill "external — not active". Routes (all GET, `^local-only` + `^read-only`): `/packs`, `/packs/:packId/paths`, `/paths/:id` (steps resolved to note/quiz titles), `/notes/:id`, `/quizzes/:id` (answers included for local grading), `/skills`, and `/search?q=&type=&pack=`. An unknown pack returns 404 and a malformed id returns 400. Content is loaded by id through the core loader, and no absolute paths are returned. A local `.paradigm/university/` that has content but no `pack.yaml` shows up as an implicit project pack. Keyboard shortcut `6` and the command palette point to the Academy, and old `/university` / `#university` links redirect there.
+- **pack.yaml v2 `skills:`** (`PACK_SCHEMA_VERSION` `'2'`; `'1'` is still accepted): an explicit list of `{ path }` skill directories. `resolveSkillDirs` checks that each path is relative, has no `..`, resolves inside the pack root, contains no symlinks, and has a kebab-case basename with a `SKILL.md`. Entries that fail are skipped with a classifier-only warning, never fatally. `PackLocation.skillDirs` is re-resolved on every discovery and never cached.
+- **Pack skill scope (`#skill-loader`)**: a third scope, `pack`, read-only and lowest precedence (project › global › pack). Pack skills are always loaded as `trust: external`, and any certification block is dropped. New `listPackSkills` (every pack skill, including shadowed ones, with `scriptCount` and `shadowedBy`), `findPackSkill` and `importPackSkill`. New lint `PACK_SHADOWED`, which warns in both directions. The projector refuses pack skills.
+- **`paradigm skill import <pack-id>:<skill-id> [--global]`**: works only on an interactive TTY. It shows the skill's `allowed-tools` and its `scripts/` files, then requires you to type the id back. It copies the skill as `trust: provisional` with `provenance.source: pack` and `upstream <pack>:<id>@<ver>`, and never overwrites an existing skill. `skill list` / `show` display `scope pack:<packId>`.
+
+### Changed
+- **University MCP tools cut from 7 to 2**: `paradigm_university_search` (a new `id` argument returns the full entry body, replacing `get`) and `paradigm_university_pack_list` (now lists `skills: [{id, version, trust}]` per pack). For one release, calls to the removed `get`, `create`, `update`, `onboard` and `validate` tools return `{error: "moved to CLI: paradigm university add|show|validate"}`. `paradigm_platform_navigate` accepts `academy`, with `university` kept as an alias.
+- **Pack discovery comes from one place, `@a-company/university-core`**: the MCP copies `utils/pack-loader.ts` and `utils/pack-schema.ts` were deleted, and their tests moved to `university-core/src/__tests__/pack-discovery.test.ts` (the SECRET_SENTINEL cases were kept). The drift guard stays in place.
+- **Pack-based University tool detection** (`detectUniversityPacks` in `#tool-registry`): the tools turn on only when a discovered pack has entries or skills, or when an implicit project pack has content. Detection fails closed, so an empty scaffold no longer turns the tools on.
+- **`paradigm university serve` redirects**: it prints "University moved to Platform → Academy", starts the Platform with only the Academy section, and opens `/academy`.
+- **Habits**: the onboarding habit now checks for `paradigm_university_search`. The validate habit is disabled, because validation is CLI-only now.
+- **`paradigm doctor`**: a missing or empty `.paradigm/university/` is no longer reported as a finding.
+- University guidance resource, `docs/guides/university.md` and `docs/guides/v6-migration.md` updated for the new surface.
+- The Classroom section's headings now read "The Classroom", so they no longer clash with the Academy.
+
+### Removed
+- **The standalone University UI and server**: `packages/university/ui/**`, `packages/university/src/server/**`, the `./server` export, the express/open/chalk dependencies, `portal.yaml`, and the CLI's `university-ui` / `university-content` asset copy step. `@a-company/university` is now just the first-party content pack (major bump).
+- **`/api/university`**, which included `/diplomas`. Diploma records are gone. The PLSAT remains as static quiz content in the paradigm pack.
+- **The `paradigm shift` University scaffold** (`.paradigm/university/{content,diplomas}` and its `config.yaml`) and **the University metrics snapshot** that shift and doctor wrote (`core/university/metrics.ts`). The config schema still accepts an existing `metrics:` block.
+- The unwired legacy `src/commands/university.ts`.
+- The paradigm-mcp metrics files `src/utils/university-metrics.ts`, `src/types/university-metrics.ts` and `tests/university-metrics.test.ts`. Nothing used them once shift stopped writing the snapshot.
+
+### Fixed
+- The Platform's University section was reading JSON course files that no longer exist, so it showed nothing. The Academy reads real pack content instead.
+
+### Notes
+- Restart your MCP servers to see the 2-tool University surface.
+
+Symbols: #AcademySection, #academyStore, #AcademyRouter, #skill-loader, #skill-projector, #skill-cli, #pack-discovery, #pack-schema, #tool-registry, #university-tools, #UniversityServe, #ShiftCommand, #doctor-handler, #university-pack
+
 ## [7.10.0] — 2026-09-28
 
 **Skills primitive** (Phase 1 of the skills arc, T-2026-09-26-002). Agents now own `SKILL.md` procedures, validated by one loader and projected one-way into the host's skills directory. Certification reuses the Classroom scenario bank, the certifications ledger and a TTY founder sign-off. No new MCP tools: the host `Skill` tool loads the bodies.

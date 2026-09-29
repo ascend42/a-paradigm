@@ -4,7 +4,11 @@
  * imports this module by relative path; it must stay free of MCP-server state.
  *
  * Sources: `<root>/.paradigm/skills/<id>/SKILL.md` (project) overrides
- * `<globalDir>/<id>/SKILL.md` (global, default `~/.paradigm/skills`).
+ * `<globalDir>/<id>/SKILL.md` (global, default `~/.paradigm/skills`), which
+ * overrides pack skills (v7.11, scope `pack`: dirs declared by a University
+ * pack.yaml v2 `skills:` list). Pack skills are read-only and ALWAYS
+ * trust:'external' regardless of frontmatter — projection refuses them; the
+ * only way out is `importPackSkill` (`paradigm skill import <pack>:<id>`).
  *
  * Exported API (all sync, all accept an injectable `SkillEnv` — tests never
  * touch the real home directory):
@@ -16,6 +20,8 @@
  *   resolveSkill(id, env)                    → SkillFile | null   (project › global)
  *   listSkills(env)                          → SkillFile[]        (merged, project wins)
  *   listSkillsDetailed(env)                  → { skills, invalid }
+ *   listPackSkills(env)                      → PackSkillEntry[]   (every pack skill, incl. shadowed)
+ *   importPackSkill(packId, id, opts)        → ImportResult       (copy → provisional, source pack)
  *   lintSkill(skill, env, opts?)             → LintIssue[]
  *   computeContentHash(skill)                → "sha256:<hex>"     (excludes `certification`)
  *   hashToolSchema(inputSchema)              → "sha256:<hex>"
@@ -60,6 +66,7 @@ import type {
 import type { AgentProfile } from '../types/agents.js';
 import type { Scenario } from './scenario-loader.js';
 import { readClassroomCertifications, type ClassroomCertRow } from './field-failures.js';
+import { discoverPacks } from '@a-company/university-core';
 
 // ────────────────────────────────────────────────────────
 // Constants / env
@@ -77,7 +84,7 @@ export const OWNED_SKILL_CAP = 5;
 const KEBAB = /^[a-z0-9]+(-[a-z0-9]+)*$/;
 const SEMVER = /^\d+\.\d+\.\d+(-[0-9A-Za-z.-]+)?(\+[0-9A-Za-z.-]+)?$/;
 const TRUSTS = ['certified', 'provisional', 'external'];
-const SOURCES = ['bundled', 'authored', 'adopted', 'registry'];
+const SOURCES = ['bundled', 'authored', 'adopted', 'registry', 'pack'];
 
 export interface SkillEnv {
   rootDir: string;
@@ -85,6 +92,27 @@ export interface SkillEnv {
   homedir?: string;
   /** Global skill sources. Defaults to `<homedir>/.paradigm/skills`. */
   globalDir?: string;
+  /**
+   * Pack skill dirs (each dir contains SKILL.md). Defaults to the validated
+   * `skillDirs` of `discoverPacks(rootDir)` (only when `<root>/.paradigm`
+   * exists; discovery failure → none). Inject in tests.
+   */
+  packSkillDirs?: Array<{ packId: string; dir: string }>;
+}
+
+/** Pack skill dirs in discovery order (first-party → npm → local). Never throws. */
+export function envPackSkillDirs(env: SkillEnv): Array<{ packId: string; dir: string }> {
+  if (env.packSkillDirs) return env.packSkillDirs;
+  try {
+    if (!fs.existsSync(path.join(env.rootDir, '.paradigm'))) return [];
+    return discoverPacks(env.rootDir).flatMap(p =>
+      (p.skillDirs ?? []).map(dir => ({ packId: p.manifest.id, dir })));
+  } catch (err) {
+    log.component('#skill-loader').warn('Pack discovery failed — no pack skills', {
+      error: err instanceof Error ? err.name : 'unknown',
+    });
+    return [];
+  }
 }
 
 export function envHome(env: SkillEnv): string {
@@ -214,6 +242,12 @@ export function parseSkill(content: string, dir: string, scope: SkillScope): Ski
     scope,
   };
   if (fm['allowed-tools'] !== undefined) skill['allowed-tools'] = fm['allowed-tools'];
+  if (scope === 'pack') {
+    // SECURITY: pack skills are ALWAYS external, whatever the frontmatter claims
+    // (a pack cannot self-certify or self-provision). Certification is dropped.
+    const { certification: _dropped, ...meta } = skill.metadata.paradigm;
+    skill.metadata = { paradigm: { ...meta, trust: 'external' } };
+  }
   return skill;
 }
 
@@ -263,8 +297,27 @@ function scopeDirs(env: SkillEnv): Array<{ dir: string; scope: SkillScope }> {
   ];
 }
 
-/** Resolve a skill source: project `.paradigm/skills/<id>` › global. Invalid sources are skipped (logged). */
-export function resolveSkill(id: string, env: SkillEnv): SkillFile | null {
+/** Load one pack skill dir (scope pack, trust forced external). Throws when dir basename ≠ meta.id. */
+function loadPackSkill(packId: string, dir: string): SkillFile {
+  const skill = loadSkillFromDir(dir, 'pack');
+  if (skill.metadata.paradigm.id !== path.basename(dir)) {
+    throw new SkillParseError(`pack skill dir "${path.basename(dir)}" does not match id "${skill.metadata.paradigm.id}"`, dir);
+  }
+  skill.packId = packId;
+  return skill;
+}
+
+export interface ResolveSkillOptions {
+  /** Consider pack skills (default true). Agent-prompt paths pass false — pack skills never surface there. */
+  includePack?: boolean;
+}
+
+/**
+ * Resolve a skill source: project `.paradigm/skills/<id>` › global › pack.
+ * A project/global source that exists but fails to parse resolves to null
+ * (no fall-through to a lower scope), matching listSkillsDetailed's invalid marking.
+ */
+export function resolveSkill(id: string, env: SkillEnv, opts: ResolveSkillOptions = {}): SkillFile | null {
   if (!isValidSkillId(id)) {
     log.component('#skill-loader').warn('Rejected invalid skill id', { id: String(id) });
     return null;
@@ -278,6 +331,19 @@ export function resolveSkill(id: string, env: SkillEnv): SkillFile | null {
       log.component('#skill-loader').warn('Skill source failed to parse', {
         id, scope, error: err instanceof Error ? err.message : String(err),
       });
+      return null;
+    }
+  }
+  if (opts.includePack === false) return null;
+  // Pack scope (lowest). Later-discovered packs win (pack-discovery precedence).
+  for (const { packId, dir } of [...envPackSkillDirs(env)].reverse()) {
+    if (path.basename(dir) !== id) continue;
+    try {
+      return loadPackSkill(packId, dir);
+    } catch (err) {
+      log.component('#skill-loader').warn('Pack skill failed to parse', {
+        id, packId, error: err instanceof Error ? err.message : String(err),
+      });
     }
   }
   return null;
@@ -288,13 +354,25 @@ export interface InvalidSkillSource {
   dir: string;
   scope: SkillScope;
   error: string;
+  packId?: string;
 }
 
-/** Every skill across scopes (project overrides global by dir name) + the sources that failed to parse. */
+/** Every skill across scopes (project › global › pack, by id) + the sources that failed to parse. */
 export function listSkillsDetailed(env: SkillEnv): { skills: SkillFile[]; invalid: InvalidSkillSource[] } {
   const byId = new Map<string, SkillFile>();
   const invalid = new Map<string, InvalidSkillSource>();
-  // Global first, project second so project wins.
+  // Pack first (lowest), in discovery order so later packs override earlier.
+  for (const { packId, dir } of envPackSkillDirs(env)) {
+    const name = path.basename(dir);
+    try {
+      byId.set(name, loadPackSkill(packId, dir));
+      invalid.delete(name);
+    } catch (err) {
+      byId.delete(name);
+      invalid.set(name, { id: name, dir, scope: 'pack', packId, error: err instanceof Error ? err.message : String(err) });
+    }
+  }
+  // Then global, then project so project wins.
   for (const { dir, scope } of scopeDirs(env).reverse()) {
     if (!fs.existsSync(dir)) continue;
     let names: string[] = [];
@@ -321,6 +399,151 @@ export function listSkillsDetailed(env: SkillEnv): { skills: SkillFile[]; invali
 
 export function listSkills(env: SkillEnv): SkillFile[] {
   return listSkillsDetailed(env).skills;
+}
+
+export interface PackSkillEntry {
+  packId: string;
+  /** Loaded with scope 'pack' — trust is ALWAYS 'external'. */
+  skill: SkillFile;
+  /** Number of files under scripts/ (bodies are never exposed here). */
+  scriptCount: number;
+  /** Set when a project/global skill with the same id overrides this one. */
+  shadowedBy?: 'project' | 'global';
+}
+
+/**
+ * Every skill shipped by a discovered pack (scope pack, trust external), in
+ * discovery order, INCLUDING ones shadowed by a project/global skill. Sources
+ * that fail to parse (or whose dir ≠ id) are skipped with a logged warning.
+ * Consumed by the Platform Academy `/skills` route and `paradigm skill import`.
+ */
+export function listPackSkills(env: SkillEnv): PackSkillEntry[] {
+  const out: PackSkillEntry[] = [];
+  for (const { packId, dir } of envPackSkillDirs(env)) {
+    let skill: SkillFile;
+    try {
+      skill = loadPackSkill(packId, dir);
+    } catch (err) {
+      log.component('#skill-loader').warn('Pack skill skipped', {
+        packId, id: path.basename(dir), error: err instanceof Error ? err.message : String(err),
+      });
+      continue;
+    }
+    const id = skill.metadata.paradigm.id;
+    let shadowedBy: 'project' | 'global' | undefined;
+    for (const { dir: scopeDir, scope } of scopeDirs(env)) {
+      if (fs.existsSync(path.join(scopeDir, id, SKILL_FILE))) { shadowedBy = scope as 'project' | 'global'; break; }
+    }
+    out.push({
+      packId,
+      skill,
+      scriptCount: skillResourceFiles(skill.dir).filter(rel => rel.startsWith('scripts/')).length,
+      ...(shadowedBy ? { shadowedBy } : {}),
+    });
+  }
+  return out;
+}
+
+export interface ImportPackSkillOptions {
+  env: SkillEnv;
+  /** Destination scope (default project). */
+  scope?: 'project' | 'global';
+  /** computeContentHash of the pack skill as reviewed (e.g. before a prompt). Mismatch → refused 'content-changed'. */
+  expectedHash?: string;
+}
+
+export type ImportRefusal = 'invalid-id' | 'pack-not-found' | 'not-found' | 'exists' | 'content-changed' | 'symlink';
+
+export interface ImportPackSkillResult {
+  ok: boolean;
+  packId: string;
+  skillId: string;
+  message: string;
+  refused?: ImportRefusal;
+  /** Destination skill dir (absolute). */
+  dest?: string;
+  /** The imported (provisional) skill when ok. */
+  skill?: SkillFile;
+  /** Files copied besides SKILL.md (references/ assets/ scripts/). */
+  files?: string[];
+}
+
+/** Locate a pack skill by `<packId>` + `<id>` (scope pack). */
+export function findPackSkill(packId: string, id: string, env: SkillEnv): PackSkillEntry | null {
+  if (!isValidSkillId(id)) return null;
+  return listPackSkills(env).find(e => e.packId === packId && e.skill.metadata.paradigm.id === id) ?? null;
+}
+
+/**
+ * Copy a pack skill into project (`<root>/.paradigm/skills/<id>`) or global
+ * scope as trust:'provisional', provenance.source:'pack',
+ * upstream `<packId>:<id>@<version>`. Never overwrites an existing source.
+ * Symlinks and dotfiles are never copied. The CLI gates this behind an
+ * interactive TTY confirmation — this function performs no prompt itself.
+ */
+export function importPackSkill(packId: string, id: string, opts: ImportPackSkillOptions): ImportPackSkillResult {
+  const base = { packId, skillId: id };
+  if (!isValidSkillId(id)) return { ...base, ok: false, refused: 'invalid-id', message: `invalid skill id "${id}"` };
+  const entries = listPackSkills(opts.env);
+  if (!entries.some(e => e.packId === packId)) {
+    return { ...base, ok: false, refused: 'pack-not-found', message: `no discovered pack "${packId}" ships skills` };
+  }
+  const entry = entries.find(e => e.packId === packId && e.skill.metadata.paradigm.id === id);
+  if (!entry) return { ...base, ok: false, refused: 'not-found', message: `pack "${packId}" has no skill "${id}"` };
+
+  const scope = opts.scope ?? 'project';
+  const root = scope === 'global' ? envGlobalDir(opts.env) : path.join(opts.env.rootDir, PROJECT_SKILLS_DIR);
+  const dest = path.join(root, id);
+  if (path.dirname(dest) !== root) return { ...base, ok: false, refused: 'invalid-id', message: `invalid skill id "${id}"` };
+  if (fs.existsSync(dest)) {
+    return { ...base, ok: false, refused: 'exists', dest, message: `a ${scope} skill "${id}" already exists at ${dest}` };
+  }
+
+  const src = entry.skill;
+  if (opts.expectedHash !== undefined && computeContentHash(src) !== opts.expectedHash) {
+    return { ...base, ok: false, refused: 'content-changed', message: `pack skill ${packId}:${id} changed since it was reviewed — re-run the import` };
+  }
+  const meta = src.metadata.paradigm;
+  const imported: SkillFile = {
+    ...src,
+    dir: dest,
+    scope,
+    metadata: {
+      paradigm: {
+        ...meta,
+        trust: 'provisional',
+        provenance: {
+          ...meta.provenance,
+          source: 'pack',
+          upstream: `${packId}:${id}@${meta.version}`,
+        },
+      },
+    },
+  };
+  delete imported.packId;
+  delete imported.metadata.paradigm.certification;
+
+  const files = skillResourceFiles(src.dir);
+  // lstat every source immediately before copying: a file swapped for a symlink since listing is refused.
+  const isPlainFile = (rel: string): boolean => {
+    try { return fs.lstatSync(path.join(src.dir, rel)).isFile(); } catch { return false; }
+  };
+  const bad = files.find(rel => !isPlainFile(rel));
+  if (bad !== undefined) {
+    return { ...base, ok: false, refused: 'symlink', message: `pack skill ${packId}:${id} has a non-regular file "${bad}" — refusing to import` };
+  }
+  writeSkill(imported);
+  for (const rel of files) {
+    if (!isPlainFile(rel)) {
+      fs.rmSync(dest, { recursive: true, force: true });
+      return { ...base, ok: false, refused: 'symlink', message: `pack skill ${packId}:${id} file "${rel}" changed to a non-regular file during import — refusing` };
+    }
+    const to = path.join(dest, rel);
+    fs.mkdirSync(path.dirname(to), { recursive: true });
+    fs.copyFileSync(path.join(src.dir, rel), to);
+  }
+  log.component('#skill-loader').info('Imported pack skill', { packId, id, scope, files: files.length });
+  return { ...base, ok: true, dest, skill: imported, files, message: `imported ${packId}:${id} → ${scope} (provisional)` };
 }
 
 // ────────────────────────────────────────────────────────
@@ -442,7 +665,8 @@ export interface LintIssue {
     | 'ID_NOT_KEBAB'
     | 'VERSION_NOT_SEMVER'
     | 'DIR_ID_MISMATCH'
-    | 'RESOURCE_SYMLINK';
+    | 'RESOURCE_SYMLINK'
+    | 'PACK_SHADOWED';
   message: string;
   /** 1-based body line, when applicable. */
   line?: number;
@@ -550,8 +774,20 @@ export function lintSkill(skill: SkillFile, env: SkillEnv, opts: LintOptions = {
 
   if (opts.structuralOnly) return issues;
 
-  // OWNED_SKILL_CAP
-  const all = opts.allSkills ?? listSkills(env);
+  // PACK_SHADOWED — a project/global source overrides a pack-shipped skill id
+  // (or, linting the pack skill itself, it is overridden). Warn only.
+  const packDirs = envPackSkillDirs(env).filter(p => path.basename(p.dir) === meta.id);
+  if (skill.scope === 'pack') {
+    const over = scopeDirs(env).find(({ dir }) => fs.existsSync(path.join(dir, meta.id, SKILL_FILE)));
+    if (over) {
+      issues.push({ level: 'warn', code: 'PACK_SHADOWED', message: `pack skill ${skill.packId ?? '?'}:${meta.id} is shadowed by a ${over.scope} skill` });
+    }
+  } else if (packDirs.length > 0) {
+    issues.push({ level: 'warn', code: 'PACK_SHADOWED', message: `${skill.scope} skill "${meta.id}" shadows pack skill ${packDirs.map(p => `${p.packId}:${meta.id}`).join(', ')}` });
+  }
+
+  // OWNED_SKILL_CAP (pack skills are not owned locally — excluded)
+  const all = (opts.allSkills ?? listSkills(env)).filter(s => s.scope !== 'pack');
   const owned = new Set(all.filter(s => s.metadata.paradigm.steward === meta.steward).map(s => s.metadata.paradigm.id));
   owned.add(meta.id);
   if (owned.size > OWNED_SKILL_CAP) {
@@ -564,17 +800,21 @@ export function lintSkill(skill: SkillFile, env: SkillEnv, opts: LintOptions = {
       issues.push({ level: 'error', code: 'NOTEBOOK_REF_MALFORMED', message: `notebook ref "${ref}" must be "<agent>/<nb-id>"` });
     } else if (!notebookExists(m[1], m[2], env)) {
       // Bundled seeds ship before the user's notebooks exist → warn, not error.
-      const level = meta.provenance?.source === 'bundled' ? 'warn' : 'error';
+      // Pack skills cite the pack author's notebooks → warn as well.
+      const level = meta.provenance?.source === 'bundled' || skill.scope === 'pack' ? 'warn' : 'error';
       issues.push({ level, code: 'NOTEBOOK_MISSING', message: `Notebook source missing: ${ref}` });
     }
   }
+  // Pack skills reference the PACK author's protocols/agents — unresolvable
+  // locally is expected, so these downgrade to warnings for scope 'pack'.
+  const resolutionLevel: 'error' | 'warn' = skill.scope === 'pack' ? 'warn' : 'error';
   for (const p of meta.protocols ?? []) {
     if (!fs.existsSync(path.join(env.rootDir, '.paradigm', 'protocols', `${p}.protocol`))) {
-      issues.push({ level: 'error', code: 'PROTOCOL_MISSING', message: `Protocol missing: ${p}` });
+      issues.push({ level: resolutionLevel, code: 'PROTOCOL_MISSING', message: `Protocol missing: ${p}` });
     }
   }
   if (!agentExists(meta.steward, env, opts.knownAgents)) {
-    issues.push({ level: 'error', code: 'STEWARD_UNRESOLVED', message: `steward "${meta.steward}" has no .agent profile (project or global)` });
+    issues.push({ level: resolutionLevel, code: 'STEWARD_UNRESOLVED', message: `steward "${meta.steward}" has no .agent profile (project or global)` });
   }
   return issues;
 }
@@ -744,7 +984,8 @@ export function resolveAgentSkills(profile: AgentProfile, env: SkillEnv): SkillS
   let ledger: ClassroomCertRow[] | undefined;
   for (const ref of refs) {
     if (!ref || typeof ref.id !== 'string') continue;
-    const skill = resolveSkill(ref.id, env);
+    // Pack skills (trust external) never surface in agent prompts — import them first.
+    const skill = resolveSkill(ref.id, env, { includePack: false });
     if (!skill) {
       log.component('#skill-loader').warn('Agent references unresolvable skill', { agent: profile.id, skill: ref.id });
       continue;

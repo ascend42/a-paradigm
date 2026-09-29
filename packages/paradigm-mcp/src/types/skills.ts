@@ -13,9 +13,15 @@
 
 export type SkillTrust = 'certified' | 'provisional' | 'external';
 
-export type SkillScope = 'project' | 'global' | 'bundled';
+/**
+ * Resolution scopes, highest precedence first: project › global › pack.
+ * `pack` (v7.11) = a skill shipped by a University content pack (pack.yaml v2
+ * `skills:`). Read-only, lowest precedence, ALWAYS trust:'external' — only
+ * `paradigm skill import` copies one into project/global scope.
+ */
+export type SkillScope = 'project' | 'global' | 'bundled' | 'pack';
 
-export type SkillProvenanceSource = 'bundled' | 'authored' | 'adopted' | 'registry';
+export type SkillProvenanceSource = 'bundled' | 'authored' | 'adopted' | 'registry' | 'pack';
 
 export interface SkillCertification {
   /** The human (founder) who confirmed at the TTY. */
@@ -68,6 +74,8 @@ export interface SkillFile extends SkillFrontmatter {
   /** Absolute skill directory (contains SKILL.md). */
   dir: string;
   scope: SkillScope;
+  /** Owning pack id — present only when scope === 'pack'. */
+  packId?: string;
 }
 
 /** 'ok' = certified + hash-valid; 'uncertified' = provisional/external/tampered; 'stale' = pin mismatch; 'invalid' = lint errors. */

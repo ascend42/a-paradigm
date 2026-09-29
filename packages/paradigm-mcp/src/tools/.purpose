@@ -157,7 +157,7 @@ components:
       - calibration
       - mcp
   UniversityTools:
-    description: 9 MCP tools for per-project university (search, get, create, update, quiz, submit, onboard, diplomas, validate)
+    description: 'v7.11: 2 read-only University MCP tools — paradigm_university_search (filters, or `id` → full entry body; absorbs get) and paradigm_university_pack_list (+ per-pack skills [{id,version,trust:external}] via #skill-loader listPackSkills). Removed get/create/update/onboard/validate return {error: moved to CLI: paradigm university add|show|validate} for one release. Pack discovery from @a-company/university-core. platform_navigate section enum gains academy (university = alias). pack_list returns a project-relative `path` (omitted for packs outside the project), never an absolute host path.'
     type: tool-group
     tags:
       - feature

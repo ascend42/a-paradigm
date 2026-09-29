@@ -579,7 +579,7 @@ export default function ClassroomSection() {
   if (loading || !status) {
     return (
       <div className="classroom">
-        <h1 className="classroom__title">The Academy</h1>
+        <h1 className="classroom__title">The Classroom</h1>
         <p style={{ color: 'var(--p-text-muted)' }}>Loading...</p>
       </div>
     );
@@ -588,7 +588,7 @@ export default function ClassroomSection() {
   if (!status.bootstrapped) {
     return (
       <div className="classroom">
-        <h1 className="classroom__title">The Academy</h1>
+        <h1 className="classroom__title">The Classroom</h1>
         <p className="classroom__subtitle">gated learning · the field is the examiner</p>
         <BootstrapDoorway />
       </div>
@@ -597,7 +597,7 @@ export default function ClassroomSection() {
 
   return (
     <div className="classroom">
-      <h1 className="classroom__title">The Academy</h1>
+      <h1 className="classroom__title">The Classroom</h1>
       <p className="classroom__subtitle">gated learning · the field is the examiner</p>
 
       <nav className="classroom__tabs" role="tablist">

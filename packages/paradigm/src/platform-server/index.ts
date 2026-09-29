@@ -28,6 +28,7 @@ import { createTasksRouter } from './routes/tasks.js';
 import { createTasksWriteRouter } from './routes/tasks-write.js';
 import { createMemoryRouter } from './routes/memory.js';
 import { createMemoryWriteRouter } from './routes/memory-write.js';
+import { createAcademyRouter } from './routes/academy.js';
 import { corsMiddleware, localOnlyGuard } from './local-guard.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -88,11 +89,13 @@ function isPackageAvailable(packageName: string): boolean {
  * Resolve the set of enabled sections based on config and available packages
  */
 function resolveSections(options: PlatformServerOptions): Set<string> {
-  const always = ['overview', 'tasks', 'memory', 'lore', 'graph', 'git', 'ambient', 'team', 'classroom'];
-  const requested = options.sections ?? [...always, 'sentinel', 'university', 'symphony', 'docs', 'warpline'];
+  const always = ['overview', 'tasks', 'memory', 'lore', 'graph', 'git', 'ambient', 'team', 'classroom', 'academy'];
+  const requested = options.sections ?? [...always, 'sentinel', 'symphony', 'docs', 'warpline'];
 
   const enabled = new Set<string>();
-  for (const section of requested) {
+  for (const raw of requested) {
+    // 7.11.0: 'university' is a legacy alias for the Academy section.
+    const section = raw === 'university' ? 'academy' : raw;
     if (always.includes(section)) {
       enabled.add(section);
       continue;
@@ -101,7 +104,7 @@ function resolveSections(options: PlatformServerOptions): Set<string> {
     if (section === 'warpline') {
       // The Warpline engine ships as a hard workspace dependency of the CLI and
       // is bundled into the dist (the router imports it in-process), so it is
-      // always present — always-enable, like `university`. If the engine import
+      // always present — always-enable, like `academy`. If the engine import
       // ever fails at mount time, the router mount in startPlatformServer is
       // try/caught and the section simply won't respond. Read-only Oracle/
       // forecast/diff over HTTP.
@@ -112,8 +115,6 @@ function resolveSections(options: PlatformServerOptions): Set<string> {
       if (fs.existsSync(sentinelRoutesPath)) {
         enabled.add(section);
       }
-    } else if (section === 'university') {
-      enabled.add(section);
     } else if (section === 'symphony') {
       // Check if Symphony mailbox directory exists
       const mailDir = path.join(process.env.HOME || '~', '.paradigm', 'score');
@@ -145,6 +146,10 @@ export function createPlatformApp(options: PlatformServerOptions): Express {
   app.use('/api', localOnlyGuard);
 
   app.use(express.json());
+
+  // === Academy routes (always mounted — read-only University packs: pack list,
+  // paths, notes, quizzes, pack skills, search; engine imports are lazy) ===
+  app.use('/api/academy', createAcademyRouter(options.projectDir));
 
   // === Lore routes (always mounted) ===
   app.use('/api/lore', createLoreRouter(options.projectDir));
@@ -348,17 +353,6 @@ export async function startPlatformServer(options: PlatformServerOptions): Promi
       log.component('platform-server').success('Docs routes mounted');
     } catch (err) {
       log.component('platform-server').warn('Docs routes failed to mount');
-    }
-  }
-
-  // Mount University routes if section is enabled
-  if (sections.has('university')) {
-    try {
-      const { createUniversityRouter } = await import('./routes/university.js');
-      app.use('/api/university', createUniversityRouter(options.projectDir));
-      log.component('platform-server').success('University routes mounted');
-    } catch (err) {
-      log.component('platform-server').warn('University routes failed to mount');
     }
   }
 

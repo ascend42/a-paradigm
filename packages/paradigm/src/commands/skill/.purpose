@@ -21,6 +21,12 @@ components:
       [--dry-run] (bundled templates/skills → ~/.paradigm/skills, skips
       existing), and the hidden record-usage (reads a PostToolUse `Skill` hook
       payload on stdin; silent, never fails) that appends !skill-used rows.
+      v7.11: import <pack-id>:<skill-id> [--global] — interactive-TTY only
+      (refuses non-TTY), prints allowed-tools + scripts/ list, requires the
+      id typed back, then #skill-loader importPackSkill (provisional, source
+      pack). list/show render scope `pack:<packId>`; project --all skips pack
+      skills (they never project).
+      v7.11 fix pass: import hashes the pack skill (computeContentHash) before the confirmation prompt and passes it as expectedHash, so a pack changed mid-prompt is refused (content-changed).
     type: command
     file: index.ts
     tags:

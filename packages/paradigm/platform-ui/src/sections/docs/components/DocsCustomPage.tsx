@@ -1,5 +1,6 @@
 import React from 'react';
 import type { PageData } from '../store/docsStore';
+import { renderMarkdown } from '../renderMarkdown';
 
 export function DocsCustomPage({ data }: { data: PageData }) {
   const d = data as any;
@@ -14,18 +15,5 @@ export function DocsCustomPage({ data }: { data: PageData }) {
   );
 }
 
-/** Simple markdown rendering — basic subset for docs pages */
-function renderMarkdown(md: string): string {
-  return md
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/^### (.+)$/gm, '<h3>$1</h3>')
-    .replace(/^## (.+)$/gm, '<h2>$1</h2>')
-    .replace(/^# (.+)$/gm, '<h1>$1</h1>')
-    .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
-    .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/\n\n/g, '</p><p>')
-    .replace(/^/, '<p>')
-    .replace(/$/, '</p>');
-}
+// Shared with the Academy NoteView; lives in a React-free module so it unit-tests in node.
+export { renderMarkdown };

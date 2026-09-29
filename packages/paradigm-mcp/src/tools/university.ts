@@ -1,18 +1,18 @@
 /**
- * University MCP Tools - Per-project knowledge base (v6.0 multi-tenant)
+ * University MCP Tools — read-only agent surface (v7.11: 7 → 2 tools)
  *
  * Tools:
- * - paradigm_university_search: Search content by type/tag/difficulty/symbol
- * - paradigm_university_get: Fetch content item by ID (full body)
- * - paradigm_university_create: Create note/policy/quiz/path
- * - paradigm_university_update: Update existing content
- * - paradigm_university_onboard: Get recommended onboarding sequence
- * - paradigm_university_validate: Validate content integrity
- * - paradigm_university_pack_list: List discovered content packs (v6.0)
+ * - paradigm_university_search: Search content by type/tag/difficulty/symbol,
+ *   or pass `id` (bare or <pack-id>:<entry-id>) to fetch one entry's full body
+ *   (absorbs the former paradigm_university_get).
+ * - paradigm_university_pack_list: List discovered content packs, incl. the
+ *   skills each pack ships (`skills: [{ id, version, trust }]` — always external).
  *
- * v5.39.0 additive: all existing tools accept optional `pack` arg. Search
- * results now return `id` as `<pack-id>:<entry-id>` (documented breaking
- * change per spec §4.1). `get`/`update` accept either bare or qualified form.
+ * Authoring/validation moved to the CLI (`paradigm university add|show|validate`).
+ * For one release the removed tool names (get/create/update/onboard/validate)
+ * still resolve to a `{ error: "moved to CLI: ..." }` response.
+ *
+ * Pack discovery is single-sourced in @a-company/university-core.
  */
 
 import type { ProjectContext } from '../utils/index-loader.js';
@@ -21,61 +21,36 @@ import {
   loadNote,
   loadQuiz,
   loadPath,
-  saveNote,
-  saveQuiz,
-  savePath,
-  rebuildUniversityIndex,
-  validateUniversityContent,
-  getOnboardingSequence,
-  loadUniversityConfig,
   resolveDefaultPackRoot,
   loadOrFabricatePackManifest,
   countPackEntries,
 } from '../utils/university-loader.js';
-import {
-  discoverPacks,
-  resolveEntryAddress,
-} from '../utils/pack-loader.js';
-import type {
-  UniversityFrontmatter,
-  UniversityQuiz,
-  LearningPath,
-  Difficulty,
-  PackLocation,
-} from '../types/university.js';
+import { discoverPacks, resolveEntryAddress } from '@a-company/university-core';
+import type { Difficulty, PackLocation } from '../types/university.js';
+import { listPackSkills } from '../utils/skill-loader.js';
 import { trackToolCall } from './context.js';
-import { execSync } from 'child_process';
-import * as os from 'os';
 import * as path from 'path';
 
-/** Resolve author for MCP-created content */
-function resolveAuthor(): string {
-  const envAuthor = process.env.PARADIGM_AUTHOR;
-  if (envAuthor) return sanitize(envAuthor);
-
-  try {
-    const gitName = execSync('git config user.name', { encoding: 'utf-8', timeout: 3000 }).trim();
-    if (gitName) return sanitize(gitName);
-  } catch {}
-
-  try {
-    const username = os.userInfo().username;
-    if (username) return sanitize(username);
-  } catch {}
-
-  return 'unknown';
+/** `{ path }` relative to the project root, or `{}` when the pack lives outside it. */
+function projectRelativePath(rootDir: string, packDir: string): { path?: string } {
+  const rel = path.relative(rootDir, packDir);
+  if (rel.startsWith('..') || path.isAbsolute(rel)) return {};
+  return { path: rel.split(path.sep).join('/') || '.' };
 }
 
-function sanitize(name: string): string {
-  return name.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/-+/g, '-').replace(/^-|-$/g, '').slice(0, 20) || 'unknown';
-}
+/** Tool names removed in v7.11 — calls get a moved-to-CLI error for one release. */
+export const REMOVED_UNIVERSITY_TOOLS: ReadonlyArray<string> = [
+  'paradigm_university_get',
+  'paradigm_university_create',
+  'paradigm_university_update',
+  'paradigm_university_onboard',
+  'paradigm_university_validate',
+];
 
-function todayStr(): string {
-  return new Date().toISOString().slice(0, 10);
-}
+export const MOVED_TO_CLI_ERROR = 'moved to CLI: paradigm university add|show|validate';
 
 // ─────────────────────────────────────────────────────────────
-// v6.0 pack-aware helpers
+// Pack-aware helpers
 // ─────────────────────────────────────────────────────────────
 
 /**
@@ -104,8 +79,6 @@ function resolveActivePack(
     if (match) {
       return { packId: match.manifest.id, packRoot: match.rootDir, packs };
     }
-    // Explicit pack not discovered. Fall through to implicit — the caller
-    // may have passed a bare pack-id that matches the implicit project pack.
   }
 
   const project = packs.find(p => p.manifest.tenant_kind === 'project');
@@ -118,7 +91,6 @@ function resolveActivePack(
     return { packId: firstParty.manifest.id, packRoot: firstParty.rootDir, packs };
   }
 
-  // Implicit project pack — fabricate an id from the directory.
   const packRoot = resolveDefaultPackRoot(rootDir);
   const manifest = loadOrFabricatePackManifest(packRoot);
   const packId = manifest?.id ?? 'project';
@@ -128,22 +100,12 @@ function resolveActivePack(
 const PROJECT_UNIVERSITY_SUBDIR = path.join('.paradigm', 'university');
 
 /**
- * C3a: is the write-target pack root the PROJECT university dir
- * (`<rootDir>/.paradigm/university`)? Only that pack owns a persisted
- * `index.yaml`; non-project packs (subdir packs like ai-literacy, first-party,
- * npm) scan-on-read and ship no index. Guarding the project-index rebuild on
- * this path equality (NOT on `tenant_kind`, since a subdir pack can also be
- * `tenant_kind: project`) prevents a misleading project-index churn when a
- * pack-scoped write lands elsewhere.
+ * Is the pack root the PROJECT university dir (`<rootDir>/.paradigm/university`)?
+ * Only that pack owns a persisted `index.yaml`. Retained for CLI/Platform callers.
  */
 export function isProjectUniversityRoot(rootDir: string, packRoot: string): boolean {
   return path.resolve(packRoot) === path.resolve(rootDir, PROJECT_UNIVERSITY_SUBDIR);
 }
-
-// countPackEntries unified onto @a-company/university-core (spec §4.4) — the MCP
-// + CLI probes were two copies of the same logic; core now owns the single
-// canonical definition (imported above via the university-loader shim), closing
-// T-2026-05-31-001 and preventing re-drift (§5.5 guard).
 
 /**
  * Get list of university tools with safety annotations
@@ -152,10 +114,14 @@ export function getUniversityToolsList() {
   return [
     {
       name: 'paradigm_university_search',
-      description: 'Search university content by type, tag, difficulty, or symbol. v6.0: result ids are <pack-id>:<entry-id> (minor-breaking). ~150 tokens.',
+      description: 'Search university content by type, tag, difficulty, or symbol; result ids are <pack-id>:<entry-id>. Pass `id` (bare or <pack-id>:<entry-id>) to fetch one entry with its full body/questions instead. ~150 tokens (~300 with id).',
       inputSchema: {
         type: 'object',
         properties: {
+          id: {
+            type: 'string',
+            description: 'Fetch ONE entry by id (bare N-foo or qualified paradigm:N-foo) — returns full content (body for notes/policies, questions for quizzes, steps for paths). Other filters are ignored.',
+          },
           type: {
             type: 'string',
             enum: ['note', 'policy', 'guide', 'runbook', 'quiz', 'path'],
@@ -207,183 +173,8 @@ export function getUniversityToolsList() {
       },
     },
     {
-      name: 'paradigm_university_get',
-      description: 'Fetch a content item by ID. Accepts bare id or <pack-id>:<entry-id>. Returns full content (body for notes/policies, questions for quizzes). ~300 tokens.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          id: {
-            type: 'string',
-            description: 'Content ID: bare (N-foo) or qualified (paradigm:N-foo)',
-          },
-          pack: {
-            type: 'string',
-            description: 'v6.0: disambiguate a bare id against a specific pack (optional)',
-          },
-        },
-        required: ['id'],
-      },
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-      },
-    },
-    {
-      name: 'paradigm_university_create',
-      description: 'Create a new university content item (note, policy, quiz, or path). v6.0: honors optional pack selector. ~100 tokens.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          type: {
-            type: 'string',
-            enum: ['note', 'policy', 'guide', 'runbook', 'quiz', 'path'],
-            description: 'Content type to create',
-          },
-          title: {
-            type: 'string',
-            description: 'Content title',
-          },
-          body: {
-            type: 'string',
-            description: 'Markdown body for notes/policies. Quiz/path YAML content for those types.',
-          },
-          tags: {
-            type: 'array',
-            items: { type: 'string' },
-            description: 'Tags for classification',
-          },
-          symbols: {
-            type: 'array',
-            items: { type: 'string' },
-            description: 'Paradigm symbols referenced by this content',
-          },
-          difficulty: {
-            type: 'string',
-            enum: ['beginner', 'intermediate', 'advanced'],
-            description: 'Difficulty level (default: beginner)',
-          },
-          estimatedMinutes: {
-            type: 'number',
-            description: 'Estimated reading/completion time in minutes',
-          },
-          prerequisites: {
-            type: 'array',
-            items: { type: 'string' },
-            description: 'IDs of prerequisite content items',
-          },
-          category: {
-            type: 'string',
-            description: 'Category ID for the content (default: project defaultCategory)',
-          },
-          // v6.0 pack selector
-          pack: {
-            type: 'string',
-            description: 'v6.0: target a specific pack by id (default: project pack)',
-          },
-          // Quiz-specific fields
-          passThreshold: {
-            type: 'number',
-            description: 'For quizzes: pass threshold 0.0-1.0 (default: 0.7)',
-          },
-          questions: {
-            type: 'array',
-            description: 'For quizzes: array of {id, question, choices: {A:..., B:...}, correct, explanation?}',
-          },
-          // Path-specific fields
-          ordered: {
-            type: 'boolean',
-            description: 'For learning paths: whether steps must be completed in order',
-          },
-          steps: {
-            type: 'array',
-            description: 'For learning paths: array of {content, required, passRequired?, note?}',
-          },
-        },
-        required: ['type', 'title'],
-      },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-      },
-    },
-    {
-      name: 'paradigm_university_update',
-      description: 'Update an existing content item. id accepts bare or <pack-id>:<entry-id>. ~100 tokens.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          id: {
-            type: 'string',
-            description: 'Content ID to update (bare or qualified)',
-          },
-          pack: {
-            type: 'string',
-            description: 'v6.0: disambiguate a bare id against a specific pack (optional)',
-          },
-          title: { type: 'string', description: 'New title' },
-          body: { type: 'string', description: 'New body content' },
-          tags: { type: 'array', items: { type: 'string' }, description: 'New tags' },
-          symbols: { type: 'array', items: { type: 'string' }, description: 'New symbols' },
-          difficulty: { type: 'string', enum: ['beginner', 'intermediate', 'advanced'] },
-          estimatedMinutes: { type: 'number' },
-          category: { type: 'string', description: 'Category ID for the content' },
-        },
-        required: ['id'],
-      },
-      annotations: {
-        readOnlyHint: false,
-        destructiveHint: false,
-      },
-    },
-    {
-      name: 'paradigm_university_onboard',
-      description: 'Get recommended onboarding sequence. v6.0: honors optional pack selector. ~200 tokens.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          student: {
-            type: 'string',
-            description: 'Student name to check completion (auto-resolved if omitted)',
-          },
-          pack: {
-            type: 'string',
-            description: 'v6.0: target a specific pack (default: project pack)',
-          },
-        },
-      },
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-      },
-    },
-    {
-      name: 'paradigm_university_validate',
-      description: 'Validate content integrity. v6.0: honors optional pack selector. ~200 tokens.',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          id: {
-            type: 'string',
-            description: 'Content ID to validate (bare or qualified; validates all if omitted)',
-          },
-          pack: {
-            type: 'string',
-            description: 'v6.0: target a specific pack (default: all packs)',
-          },
-          deep: {
-            type: 'boolean',
-            description: 'Enable deep cross-reference checks against scan-index (default: false)',
-          },
-        },
-      },
-      annotations: {
-        readOnlyHint: true,
-        destructiveHint: false,
-      },
-    },
-    {
       name: 'paradigm_university_pack_list',
-      description: 'v6.0: List discovered content packs with manifest metadata. ~200 tokens.',
+      description: 'List discovered content packs with manifest metadata, sections, and the skills each pack ships (always trust external — import with `paradigm skill import <pack>:<id>`). ~200 tokens.',
       inputSchema: {
         type: 'object',
         properties: {
@@ -426,10 +217,22 @@ export async function handleUniversityTool(
       ? packs.filter(p => p.manifest.tenant_kind === tenantFilter)
       : packs;
 
+    // Pack skills (scope pack — trust is ALWAYS external). Never script bodies.
+    const skillsByPack = new Map<string, Array<{ id: string; version: string; trust: string }>>();
+    try {
+      for (const e of listPackSkills({ rootDir: ctx.rootDir })) {
+        const list = skillsByPack.get(e.packId) ?? [];
+        list.push({ id: e.skill.metadata.paradigm.id, version: e.skill.metadata.paradigm.version, trust: e.skill.metadata.paradigm.trust });
+        skillsByPack.set(e.packId, list);
+      }
+    } catch {
+      // skills are additive — a failure never hides the pack list
+    }
+
     const result = {
       packs: filtered.map(p => {
         // v6.5: surface the pack's sections (always non-empty post-synthesis
-        // — pack-loader synthesizes a default `main` section when omitted).
+        // — pack discovery synthesizes a default `main` section when omitted).
         // Sort by (order, id) ascending so UI consumers get a deterministic
         // order without re-sorting.
         const sections = (p.manifest.sections ?? []).slice().sort((a, b) =>
@@ -445,7 +248,9 @@ export async function handleUniversityTool(
             : {}),
           entry_count: countPackEntries(p.rootDir),
           sections,
-          path: p.rootDir,
+          skills: skillsByPack.get(p.manifest.id) ?? [],
+          // Project-relative only — never an absolute host path. Omitted when outside the project.
+          ...projectRelativePath(ctx.rootDir, p.rootDir),
         };
       }),
     };
@@ -458,6 +263,25 @@ export async function handleUniversityTool(
   // ── Search ─────────────────────────────────────────────
   if (name === 'paradigm_university_search') {
     const requestedPack = args.pack as string | undefined;
+    const rawId = args.id as string | undefined;
+
+    // `id` → fetch ONE entry with full content (absorbs paradigm_university_get).
+    if (typeof rawId === 'string' && rawId.length > 0) {
+      let targetPack = requestedPack;
+      let entryId = rawId;
+      try {
+        const resolved = resolveEntryAddress(rawId, { activePack: requestedPack ?? '' });
+        entryId = resolved.entryId;
+        if (resolved.packId) targetPack = resolved.packId;
+      } catch {
+        entryId = rawId;
+      }
+      const { packId, packRoot } = resolveActivePack(ctx.rootDir, targetPack || undefined);
+      const text = JSON.stringify(getEntry(ctx.rootDir, packId, packRoot, entryId, rawId), null, 2);
+      trackToolCall(text.length, name);
+      return { handled: true, text };
+    }
+
     const { packId, packRoot } = resolveActivePack(ctx.rootDir, requestedPack);
 
     // v6.5: resolve the active pack's default-section id for synthesis on
@@ -511,299 +335,37 @@ export async function handleUniversityTool(
     return { handled: true, text };
   }
 
-  // ── Get ────────────────────────────────────────────────
-  if (name === 'paradigm_university_get') {
-    const rawId = args.id as string;
-    if (!rawId) return { handled: true, text: JSON.stringify({ error: 'id is required' }) };
-
-    const requestedPack = args.pack as string | undefined;
-    const { packId, packRoot } = resolveActivePack(ctx.rootDir, requestedPack);
-
-    let entryId: string;
-    try {
-      const resolved = resolveEntryAddress(rawId, { activePack: packId });
-      entryId = resolved.entryId;
-    } catch {
-      entryId = rawId;
-    }
-
-    // Try note/policy first
-    const note = loadNote(ctx.rootDir, entryId, packRoot);
-    if (note) {
-      const text = JSON.stringify({
-        id: note.frontmatter.id,
-        title: note.frontmatter.title,
-        type: note.frontmatter.type,
-        author: note.frontmatter.author,
-        created: note.frontmatter.created,
-        updated: note.frontmatter.updated,
-        tags: note.frontmatter.tags,
-        symbols: note.frontmatter.symbols,
-        difficulty: note.frontmatter.difficulty,
-        prerequisites: note.frontmatter.prerequisites,
-        body: note.body,
-      }, null, 2);
-      trackToolCall(text.length, name);
-      return { handled: true, text };
-    }
-
-    // Try quiz
-    const quiz = loadQuiz(ctx.rootDir, entryId, packRoot);
-    if (quiz) {
-      const text = JSON.stringify(quiz, null, 2);
-      trackToolCall(text.length, name);
-      return { handled: true, text };
-    }
-
-    // Try path
-    const lp = loadPath(ctx.rootDir, entryId, packRoot);
-    if (lp) {
-      const text = JSON.stringify(lp, null, 2);
-      trackToolCall(text.length, name);
-      return { handled: true, text };
-    }
-
-    const text = JSON.stringify({ error: `Content "${rawId}" not found` });
-    trackToolCall(text.length, name);
-    return { handled: true, text };
-  }
-
-  // ── Create ─────────────────────────────────────────────
-  if (name === 'paradigm_university_create') {
-    const contentType = args.type as string;
-    const title = args.title as string;
-
-    if (!contentType || !title) {
-      return { handled: true, text: JSON.stringify({ error: 'type and title are required' }) };
-    }
-
-    const requestedPack = args.pack as string | undefined;
-    const { packRoot } = resolveActivePack(ctx.rootDir, requestedPack);
-
-    const author = resolveAuthor();
-    const today = todayStr();
-    const slug = title.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40);
-
-    if (contentType === 'quiz') {
-      const id = `Q-${slug}`;
-      const quiz: UniversityQuiz = {
-        id,
-        title,
-        description: args.body as string || '',
-        author,
-        created: today,
-        updated: today,
-        tags: (args.tags as string[]) || [],
-        symbols: (args.symbols as string[]) || [],
-        difficulty: (args.difficulty as Difficulty) || 'beginner',
-        estimatedMinutes: args.estimatedMinutes as number | undefined,
-        passThreshold: (args.passThreshold as number) ?? 0.7,
-        questions: (args.questions as UniversityQuiz['questions']) || [],
-        ...(args.category ? { category: args.category as string } : {}),
-      };
-
-      saveQuiz(ctx.rootDir, quiz, packRoot);
-      // C3a: only rebuild the project index when the write target IS the
-      // project university dir. Non-project packs scan-on-read (no index.yaml).
-      if (isProjectUniversityRoot(ctx.rootDir, packRoot)) rebuildUniversityIndex(ctx.rootDir);
-
-      const text = JSON.stringify({ created: id, type: 'quiz', file: `content/quizzes/${id}.yaml` }, null, 2);
-      trackToolCall(text.length, name);
-      return { handled: true, text };
-    }
-
-    if (contentType === 'path') {
-      const id = `LP-${slug}`;
-      const lp: LearningPath = {
-        id,
-        title,
-        description: args.body as string || '',
-        author,
-        created: today,
-        updated: today,
-        tags: (args.tags as string[]) || [],
-        ordered: (args.ordered as boolean) ?? true,
-        steps: (args.steps as LearningPath['steps']) || [],
-        ...(args.category ? { category: args.category as string } : {}),
-      };
-
-      savePath(ctx.rootDir, lp, packRoot);
-      // C3a: only rebuild the project index when the write target IS the
-      // project university dir. Non-project packs scan-on-read (no index.yaml).
-      if (isProjectUniversityRoot(ctx.rootDir, packRoot)) rebuildUniversityIndex(ctx.rootDir);
-
-      const text = JSON.stringify({ created: id, type: 'path', file: `content/paths/${id}.yaml` }, null, 2);
-      trackToolCall(text.length, name);
-      return { handled: true, text };
-    }
-
-    // Note, policy, guide, runbook
-    const prefix = contentType === 'policy' ? 'P' : 'N';
-    const id = `${prefix}-${slug}`;
-    const frontmatter: UniversityFrontmatter = {
-      id,
-      title,
-      type: contentType as UniversityFrontmatter['type'],
-      author,
-      created: today,
-      updated: today,
-      tags: (args.tags as string[]) || [],
-      symbols: (args.symbols as string[]) || [],
-      difficulty: (args.difficulty as Difficulty) || 'beginner',
-      estimatedMinutes: args.estimatedMinutes as number | undefined,
-      prerequisites: (args.prerequisites as string[]) || [],
-      ...(args.category ? { category: args.category as string } : {}),
-    };
-
-    saveNote(ctx.rootDir, frontmatter, (args.body as string) || '', packRoot);
-    // C3a: only rebuild the project index when the write target IS the
-    // project university dir. Non-project packs scan-on-read (no index.yaml).
-    if (isProjectUniversityRoot(ctx.rootDir, packRoot)) rebuildUniversityIndex(ctx.rootDir);
-
-    const subdir = contentType === 'policy' ? 'policies' : 'notes';
-    const text = JSON.stringify({ created: id, type: contentType, file: `content/${subdir}/${id}.md` }, null, 2);
-    trackToolCall(text.length, name);
-    return { handled: true, text };
-  }
-
-  // ── Update ─────────────────────────────────────────────
-  if (name === 'paradigm_university_update') {
-    const rawId = args.id as string;
-    if (!rawId) return { handled: true, text: JSON.stringify({ error: 'id is required' }) };
-
-    const requestedPack = args.pack as string | undefined;
-    const { packId, packRoot } = resolveActivePack(ctx.rootDir, requestedPack);
-
-    let entryId: string;
-    try {
-      const resolved = resolveEntryAddress(rawId, { activePack: packId });
-      entryId = resolved.entryId;
-    } catch {
-      entryId = rawId;
-    }
-
-    const today = todayStr();
-
-    // Try note/policy
-    const note = loadNote(ctx.rootDir, entryId, packRoot);
-    if (note) {
-      const fm = { ...note.frontmatter };
-      if (args.title) fm.title = args.title as string;
-      if (args.tags) fm.tags = args.tags as string[];
-      if (args.symbols) fm.symbols = args.symbols as string[];
-      if (args.difficulty) fm.difficulty = args.difficulty as Difficulty;
-      if (args.estimatedMinutes !== undefined) fm.estimatedMinutes = args.estimatedMinutes as number;
-      if (args.category !== undefined) fm.category = args.category as string;
-      fm.updated = today;
-
-      const body = (args.body as string) ?? note.body;
-      saveNote(ctx.rootDir, fm, body, packRoot);
-      // C3a: only rebuild the project index when the write target IS the
-      // project university dir. Non-project packs scan-on-read (no index.yaml).
-      if (isProjectUniversityRoot(ctx.rootDir, packRoot)) rebuildUniversityIndex(ctx.rootDir);
-
-      const text = JSON.stringify({ updated: entryId, type: fm.type }, null, 2);
-      trackToolCall(text.length, name);
-      return { handled: true, text };
-    }
-
-    // Try quiz
-    const quiz = loadQuiz(ctx.rootDir, entryId, packRoot);
-    if (quiz) {
-      if (args.title) quiz.title = args.title as string;
-      if (args.tags) quiz.tags = args.tags as string[];
-      if (args.symbols) quiz.symbols = args.symbols as string[];
-      if (args.difficulty) quiz.difficulty = args.difficulty as Difficulty;
-      if (args.category !== undefined) quiz.category = args.category as string;
-      quiz.updated = today;
-
-      saveQuiz(ctx.rootDir, quiz, packRoot);
-      // C3a: only rebuild the project index when the write target IS the
-      // project university dir. Non-project packs scan-on-read (no index.yaml).
-      if (isProjectUniversityRoot(ctx.rootDir, packRoot)) rebuildUniversityIndex(ctx.rootDir);
-
-      const text = JSON.stringify({ updated: entryId, type: 'quiz' }, null, 2);
-      trackToolCall(text.length, name);
-      return { handled: true, text };
-    }
-
-    // Try path
-    const lp = loadPath(ctx.rootDir, entryId, packRoot);
-    if (lp) {
-      if (args.title) lp.title = args.title as string;
-      if (args.tags) lp.tags = args.tags as string[];
-      if (args.category !== undefined) lp.category = args.category as string;
-      lp.updated = today;
-
-      savePath(ctx.rootDir, lp, packRoot);
-      // C3a: only rebuild the project index when the write target IS the
-      // project university dir. Non-project packs scan-on-read (no index.yaml).
-      if (isProjectUniversityRoot(ctx.rootDir, packRoot)) rebuildUniversityIndex(ctx.rootDir);
-
-      const text = JSON.stringify({ updated: entryId, type: 'path' }, null, 2);
-      trackToolCall(text.length, name);
-      return { handled: true, text };
-    }
-
-    const text = JSON.stringify({ error: `Content "${rawId}" not found` });
-    trackToolCall(text.length, name);
-    return { handled: true, text };
-  }
-
-  // ── Onboard ────────────────────────────────────────────
-  if (name === 'paradigm_university_onboard') {
-    const student = (args.student as string) || resolveAuthor();
-    const requestedPack = args.pack as string | undefined;
-    const { packId, packRoot } = resolveActivePack(ctx.rootDir, requestedPack);
-
-    // C1.4: when a pack is explicitly requested, surface the PACK's display
-    // name (from its manifest) rather than the project config's branding, so a
-    // sections-only / first-party pack keeps its own identity. No-pack path →
-    // project branding, unchanged.
-    let universityName = loadUniversityConfig(ctx.rootDir).branding.name;
-    if (requestedPack) {
-      const manifest = loadOrFabricatePackManifest(packRoot);
-      if (manifest?.name) universityName = manifest.name;
-    }
-
-    const sequence = getOnboardingSequence(ctx.rootDir, student, requestedPack ? packRoot : undefined);
-
-    const text = JSON.stringify({
-      university: universityName,
-      pack: packId,
-      student,
-      ...sequence,
-    }, null, 2);
-
-    trackToolCall(text.length, name);
-    return { handled: true, text };
-  }
-
-  // ── Validate ───────────────────────────────────────────
-  if (name === 'paradigm_university_validate') {
-    const requestedPack = args.pack as string | undefined;
-    const { packId, packRoot } = resolveActivePack(ctx.rootDir, requestedPack);
-
-    const rawId = args.id as string | undefined;
-    let entryId: string | undefined = rawId;
-    if (rawId) {
-      try {
-        const resolved = resolveEntryAddress(rawId, { activePack: packId });
-        entryId = resolved.entryId;
-      } catch {
-        // fall through with raw id
-      }
-    }
-
-    const result = validateUniversityContent(ctx.rootDir, {
-      id: entryId,
-      deep: args.deep as boolean | undefined,
-    }, requestedPack ? packRoot : undefined);
-
-    const text = JSON.stringify({ pack: packId, ...result }, null, 2);
+  // ── Removed in v7.11 (one-release shim) ─────────────────
+  if (REMOVED_UNIVERSITY_TOOLS.includes(name)) {
+    const text = JSON.stringify({ error: MOVED_TO_CLI_ERROR });
     trackToolCall(text.length, name);
     return { handled: true, text };
   }
 
   return { handled: false, text: '' };
+}
+
+/** Full content for one entry (note/policy › quiz › path), or a not-found error. */
+function getEntry(rootDir: string, packId: string, packRoot: string, entryId: string, rawId: string): unknown {
+  const note = loadNote(rootDir, entryId, packRoot);
+  if (note) {
+    return {
+      id: `${packId}:${note.frontmatter.id}`,
+      title: note.frontmatter.title,
+      type: note.frontmatter.type,
+      author: note.frontmatter.author,
+      created: note.frontmatter.created,
+      updated: note.frontmatter.updated,
+      tags: note.frontmatter.tags,
+      symbols: note.frontmatter.symbols,
+      difficulty: note.frontmatter.difficulty,
+      prerequisites: note.frontmatter.prerequisites,
+      body: note.body,
+    };
+  }
+  const quiz = loadQuiz(rootDir, entryId, packRoot);
+  if (quiz) return { ...quiz, id: `${packId}:${quiz.id}`, type: 'quiz' };
+  const lp = loadPath(rootDir, entryId, packRoot);
+  if (lp) return { ...lp, id: `${packId}:${lp.id}`, type: 'path' };
+  return { error: `Content "${rawId}" not found` };
 }

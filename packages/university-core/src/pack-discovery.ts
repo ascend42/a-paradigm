@@ -44,6 +44,7 @@ import {
   SectionsArraySchema,
   SECTION_STYLES as SECTION_STYLE_VALUES,
   MAX_SECTIONS_PER_PACK,
+  PackSkillsArraySchema,
 } from './pack-schema.js';
 import { getUniversityCoreLogger } from './logger.js';
 
@@ -300,11 +301,148 @@ interface PackCacheFile {
  * this function does NOT dedupe by id (that's a resolution concern).
  */
 export function discoverPacks(projectRoot: string): PackLocation[] {
-  // Try cache fast path
+  // Try cache fast path. skillDirs are never cached — they are re-resolved
+  // (and re-validated against the filesystem) on every discovery.
   const cached = tryReadCache(projectRoot);
   if (cached) {
-    return cached;
+    return cached.map(withSkillDirs);
   }
+  return discoverPacksUncached(projectRoot).map(withSkillDirs);
+}
+
+/** Attach validated `skillDirs` when the manifest declares a `skills:` list. */
+function withSkillDirs(loc: PackLocation): PackLocation {
+  const raw = (loc.manifest as { skills?: unknown }).skills;
+  if (raw === undefined || raw === null) return loc;
+  const skillDirs = resolveSkillDirs(loc.rootDir, raw, loc.manifest.id);
+  return skillDirs.length > 0 ? { ...loc, skillDirs } : loc;
+}
+
+// ─────────────────────────────────────────────────────────────
+// v7.11: pack.yaml v2 `skills:` resolution
+// ─────────────────────────────────────────────────────────────
+
+const SKILL_DIR_BASENAME = /^[a-z0-9]+(-[a-z0-9]+)*$/;
+const SKILL_FILENAME = 'SKILL.md';
+
+function isSymlinkPath(p: string): boolean {
+  try { return fs.lstatSync(p).isSymbolicLink(); } catch { return false; }
+}
+
+/** True when any entry under `dir` (recursively, not followed) is a symlink. */
+function containsSymlink(dir: string): boolean {
+  const stack = [dir];
+  while (stack.length > 0) {
+    const cur = stack.pop()!;
+    let entries: fs.Dirent[];
+    try { entries = fs.readdirSync(cur, { withFileTypes: true }); } catch { continue; }
+    for (const e of entries) {
+      if (e.isSymbolicLink()) return true;
+      if (e.isDirectory()) stack.push(path.join(cur, e.name));
+    }
+  }
+  return false;
+}
+
+/**
+ * Minimal SKILL.md frontmatter read: `metadata.paradigm.id`, or null when the
+ * frontmatter is absent/unparseable/missing the id (callers fail closed).
+ */
+function readSkillFrontmatterId(skillFile: string): string | null {
+  try {
+    const text = fs.readFileSync(skillFile, 'utf8');
+    const m = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(text);
+    if (!m) return null;
+    const fm = yaml.load(m[1]) as { metadata?: { paradigm?: { id?: unknown } } } | null;
+    const id = fm?.metadata?.paradigm?.id;
+    return typeof id === 'string' ? id : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Resolve + validate a manifest's `skills:` list into absolute skill dirs.
+ *
+ * Rules (per entry, explicit list only — no globs):
+ *   - relative path, no `..` segment, not absolute
+ *   - basename is kebab-case (it becomes the skill id)
+ *   - realpath stays inside the pack root's realpath
+ *   - no symlink at any level from the pack root down to (and under) the dir
+ *   - the dir contains a regular-file SKILL.md
+ *
+ * Violations are SKIPPED with a logged warning — never fatal. Warnings carry
+ * only the entry index + a classifier reason; never the manifest content
+ * (SECRET_SENTINEL discipline).
+ */
+export function resolveSkillDirs(packRoot: string, rawSkills: unknown, packId?: string): string[] {
+  if (rawSkills === undefined || rawSkills === null) return [];
+  const logger = getUniversityCoreLogger();
+  const parsed = PackSkillsArraySchema.safeParse(rawSkills);
+  if (!parsed.success) {
+    const first = parsed.error.issues[0];
+    logger.warn('pack skills list invalid — skills ignored', {
+      packId,
+      detail: first ? `${first.path.join('.') || 'skills'}: ${first.message}` : 'schema validation failed',
+    });
+    return [];
+  }
+
+  let rootReal: string;
+  try {
+    rootReal = fs.realpathSync(packRoot);
+  } catch {
+    logger.warn('pack root unresolvable — skills ignored', { packId });
+    return [];
+  }
+
+  const out: string[] = [];
+  const seen = new Set<string>();
+  parsed.data.forEach((entry, index) => {
+    const skip = (reason: string): void => {
+      logger.warn('pack skill entry skipped', { packId, index, reason });
+    };
+    const rel = entry.path;
+    if (path.isAbsolute(rel) || /^[\\/]/.test(rel) || /^[A-Za-z]:/.test(rel)) return skip('absolute path');
+    const segments = rel.split(/[\\/]+/).filter(seg => seg.length > 0 && seg !== '.');
+    if (segments.length === 0) return skip('empty path');
+    if (segments.some(seg => seg === '..')) return skip('parent traversal');
+    const base = segments[segments.length - 1];
+    if (!SKILL_DIR_BASENAME.test(base)) return skip('basename not kebab-case');
+
+    // No symlink at any level between the pack root and the skill dir.
+    let cursor = packRoot;
+    for (const seg of segments) {
+      cursor = path.join(cursor, seg);
+      if (isSymlinkPath(cursor)) return skip('symlink in path');
+    }
+    const abs = path.join(packRoot, ...segments);
+    let real: string;
+    try {
+      if (!fs.statSync(abs).isDirectory()) return skip('not a directory');
+      real = fs.realpathSync(abs);
+    } catch {
+      return skip('missing directory');
+    }
+    if (real !== rootReal && !real.startsWith(rootReal + path.sep)) return skip('escapes pack root');
+    const skillFile = path.join(abs, SKILL_FILENAME);
+    try {
+      const st = fs.lstatSync(skillFile);
+      if (!st.isFile()) return skip('SKILL.md not a regular file');
+    } catch {
+      return skip('SKILL.md missing');
+    }
+    if (containsSymlink(abs)) return skip('symlink under skill dir');
+    // Count only what the skill loader will load: frontmatter id must equal the dir basename.
+    if (readSkillFrontmatterId(skillFile) !== base) return skip('SKILL.md id does not match directory');
+    if (seen.has(base)) return skip('duplicate skill id');
+    seen.add(base);
+    out.push(abs);
+  });
+  return out;
+}
+
+function discoverPacksUncached(projectRoot: string): PackLocation[] {
 
   const packs: PackLocation[] = [];
 

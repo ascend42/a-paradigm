@@ -30,6 +30,7 @@ import {
   skillProjectCommand,
   recordSkillUsageFromHook,
   skillAdoptCommand,
+  skillImportCommand,
 } from './index.js';
 import { skillCertifyCommand, previewSkillScripts, CERTIFICATION_POSTURE } from './certify.js';
 import { spawnSync } from 'child_process';
@@ -458,5 +459,60 @@ describe('skill adopt — diff, allowed-tools guard, --force', () => {
     expect(output).toMatch(/--force/);
     process.exitCode = undefined;
     expect(await skillAdoptCommand(ID, { project: root, target: 'project', force: true }, { tty: false })).toBe(true);
+  });
+});
+
+describe('paradigm skill import (pack skills)', () => {
+  function writePackSkill(): void {
+    const pack = path.join(root, '.paradigm', 'university');
+    const dir = path.join(pack, 'skills', 'trace-debug');
+    fs.mkdirSync(path.join(dir, 'scripts'), { recursive: true });
+    fs.writeFileSync(path.join(pack, 'pack.yaml'), yaml.dump({
+      id: 'proj-pack', name: 'P', version: '1.0.0', schema_version: '2', tenant_kind: 'project',
+      skills: [{ path: 'skills/trace-debug' }],
+    }));
+    const fm = { name: 'trace-debug', description: 'Trace debugging', 'allowed-tools': 'Read Bash',
+      metadata: { paradigm: { id: 'trace-debug', version: '1.0.0', steward: 'designer', trust: 'certified',
+        provenance: { source: 'authored', createdBy: 'pack-author' } } } };
+    fs.writeFileSync(path.join(dir, 'SKILL.md'), `---\n${yaml.dump(fm)}---\n# T\n1. a\n2. b\n3. c\n`);
+    fs.writeFileSync(path.join(dir, 'scripts', 'run.sh'), 'echo hi\n');
+  }
+
+  it('refuses when not on a TTY and writes nothing', async () => {
+    writePackSkill();
+    const ok = await skillImportCommand('proj-pack:trace-debug', { project: root }, { tty: false, homedir: home });
+    expect(ok).toBe(false);
+    expect(process.exitCode).toBe(1);
+    expect(fs.existsSync(path.join(root, '.paradigm', 'skills', 'trace-debug'))).toBe(false);
+  });
+
+  it('shows allowed-tools + scripts, requires the typed id, then writes provisional with source pack', async () => {
+    writePackSkill();
+    let asked = '';
+    const no = await skillImportCommand('proj-pack:trace-debug', { project: root }, {
+      tty: true, homedir: home, prompt: async q => { asked = q; return 'wrong'; },
+    });
+    expect(no).toBe(false);
+    expect(asked).toContain('trace-debug');
+    expect(output).toContain('Read Bash');
+    expect(output).toContain('scripts/run.sh');
+    const ok = await skillImportCommand('proj-pack:trace-debug', { project: root }, {
+      tty: true, homedir: home, prompt: async () => 'trace-debug',
+    });
+    expect(ok).toBe(true);
+    const imported = loadSkillFromDir(path.join(root, '.paradigm', 'skills', 'trace-debug'), 'project');
+    expect(imported.metadata.paradigm.trust).toBe('provisional');
+    expect(imported.metadata.paradigm.provenance.source).toBe('pack');
+  });
+
+  it('list shows pack scope', async () => {
+    writePackSkill();
+    await skillListCommand({ project: root });
+    expect(output).toContain('pack:proj-pack');
+  });
+
+  it('rejects a malformed ref', async () => {
+    expect(await skillImportCommand('no-colon', { project: root }, { tty: true, homedir: home })).toBe(false);
+    expect(process.exitCode).toBe(1);
   });
 });

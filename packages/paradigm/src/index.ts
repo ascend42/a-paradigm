@@ -2235,7 +2235,7 @@ universityCmd.enablePositionalOptions();
 
 universityCmd
   .command('serve')
-  .description('Launch Paradigm University learning platform')
+  .description('Open the Academy (University packs) in the Paradigm Platform')
   .option('-p, --port <port>', 'Port to run on', '3839')
   .option('--no-open', "Don't open browser automatically")
   .option('--pack <id>', 'v6.0: mount a specific content pack by id')
@@ -2830,6 +2830,16 @@ skillCmd
   .action(async (id, options) => {
     const { skillCertifyCommand } = await import('./commands/skill/certify.js');
     await skillCertifyCommand(id, options);
+  });
+
+skillCmd
+  .command('import <ref>')
+  .description('Import a pack skill (<pack-id>:<skill-id>) as a provisional project skill (interactive TTY only)')
+  .option('--global', 'Import into ~/.paradigm/skills instead of the project')
+  .option('--project <dir>', 'Project root (defaults to cwd)')
+  .action(async (ref, options) => {
+    const { skillImportCommand } = await import('./commands/skill/index.js');
+    await skillImportCommand(ref, options);
   });
 
 skillCmd

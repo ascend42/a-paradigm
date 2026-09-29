@@ -307,6 +307,10 @@ export function projectSkill(idOrSkill: string | SkillFile, opts: ProjectOptions
 
   const skill = typeof idOrSkill === 'string' ? resolveSkill(idOrSkill, env) : idOrSkill;
   if (!skill) return refuse('not-found', `skill "${id}" not found in project or global sources`);
+  // SECURITY: pack skills never project — they are read-only external sources.
+  if (skill.scope === 'pack') {
+    return refuse('untrusted', `pack skill "${id}" is external and never projects — \`paradigm skill import ${skill.packId ?? '<pack>'}:${id}\` first`);
+  }
   if (skill.metadata.paradigm.id !== id || path.basename(skill.dir) !== id) {
     return refuse('id-mismatch', `id "${id}", meta.id "${skill.metadata.paradigm.id}" and dir "${path.basename(skill.dir)}" must match`);
   }
@@ -483,7 +487,8 @@ export function adoptSkill(id: string, opts: AdoptOptions): AdoptResult {
   if (isUnderSynced(dest, envHome(env))) return refuse('not-ours', `refusing to touch ~/.claude/skills/synced/`);
 
   const source = resolveSkill(id, env);
-  if (!source) return refuse('not-found', `skill "${id}" not found in project or global sources`);
+  // Pack sources are read-only — adopt never writes into a pack.
+  if (!source || source.scope === 'pack') return refuse('not-found', `skill "${id}" not found in project or global sources`);
   if (source.metadata.paradigm.id !== id || path.basename(source.dir) !== id) {
     return refuse('id-mismatch', `id "${id}", meta.id "${source.metadata.paradigm.id}" and dir "${path.basename(source.dir)}" must match`);
   }

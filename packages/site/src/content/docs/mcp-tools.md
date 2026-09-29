@@ -68,9 +68,10 @@ Paradigm exposes 90+ MCP tools that AI agents can call for context-aware develop
 
 | Tool | Description | Tokens |
 |------|-------------|--------|
-| `paradigm_university_search` | Search learning content | ~150 |
-| `paradigm_university_onboard` | Get onboarding sequence | ~200 |
-| `paradigm_university_quiz` | Get quiz for taking | ~200 |
+| `paradigm_university_search` | Search pack content; pass `id` for the full entry | ~150 |
+| `paradigm_university_pack_list` | List packs, their content counts and pack skills | ~150 |
+
+Authoring, onboarding and quizzes moved to the CLI (`paradigm university add|show|quiz|validate`) and the Platform **Academy** section.
 
 ## Token Budget Tips
 

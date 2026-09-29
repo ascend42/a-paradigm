@@ -74,3 +74,22 @@ export const EntrySectionRefSchema = z
     order: z.number().int().min(0).max(9999).optional(),
   })
   .passthrough();
+
+// ─────────────────────────────────────────────────────────────
+// v7.11: pack.yaml v2 `skills:` list
+// ─────────────────────────────────────────────────────────────
+
+/** Hard cap on skills per pack (defence-in-depth against runaway manifests). */
+export const MAX_SKILLS_PER_PACK = 64;
+
+/** One `skills:` entry — a pack-root-relative skill directory. */
+export const PackSkillRefSchema = z
+  .object({
+    path: z.string().min(1).max(256),
+  })
+  .strict();
+
+/** Zod array schema for `skills:` with the per-pack cap. */
+export const PackSkillsArraySchema = z
+  .array(PackSkillRefSchema)
+  .max(MAX_SKILLS_PER_PACK, `skills must contain ≤${MAX_SKILLS_PER_PACK} entries`);

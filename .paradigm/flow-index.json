@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generatedAt": "2026-09-29T08:03:43.974Z",
+  "generatedAt": "2026-09-29T08:47:14.509Z",
   "flows": {
     "$mcp-startup": {
       "id": "$mcp-startup",
@@ -430,43 +430,6 @@
         }
       ],
       "definedIn": "packages/site/.purpose"
-    },
-    "$plsat-exam-flow": {
-      "id": "$plsat-exam-flow",
-      "description": "Full PLSAT exam lifecycle from intro through certification",
-      "steps": [
-        {
-          "id": "step-1",
-          "action": "Display intro, rules, and name input",
-          "symbol": "#plsat-view"
-        },
-        {
-          "id": "step-2",
-          "action": "Start 90-minute countdown",
-          "symbol": "#plsat-timer"
-        },
-        {
-          "id": "step-3",
-          "action": "Present 99 shuffled questions (with passage blocks for grouped questions)",
-          "symbol": "#question-card"
-        },
-        {
-          "id": "step-4",
-          "action": "Calculate score on submit or time-up",
-          "symbol": "#plsat-view"
-        },
-        {
-          "id": "step-5",
-          "action": "Persist certificate to LocalStorage",
-          "symbol": "#plsat-store"
-        },
-        {
-          "id": "step-6",
-          "action": "Display printable certificate if passed",
-          "symbol": "#certificate-view"
-        }
-      ],
-      "definedIn": "packages/university/.purpose"
     },
     "$oracle-run": {
       "id": "$oracle-run",
@@ -964,21 +927,6 @@
     ],
     "#ring-buffer": [
       "$event-ingestion"
-    ],
-    "#plsat-view": [
-      "$plsat-exam-flow"
-    ],
-    "#plsat-timer": [
-      "$plsat-exam-flow"
-    ],
-    "#question-card": [
-      "$plsat-exam-flow"
-    ],
-    "#plsat-store": [
-      "$plsat-exam-flow"
-    ],
-    "#certificate-view": [
-      "$plsat-exam-flow"
     ],
     "#git-exec": [
       "$oracle-run",

@@ -16,6 +16,7 @@ export type {
   PackCompliance,
   PackManifest,
   PackLocation,
+  PackSkillRef,
   // v6.5 sections
   Section,
   SectionStyle,
@@ -25,7 +26,13 @@ export type {
 export const PACK_MANIFEST_FILENAME = 'pack.yaml' as const;
 
 /** Current pack-manifest schema version. Bump when `pack.yaml` shape changes. */
-export const PACK_SCHEMA_VERSION = '1' as const;
+export const PACK_SCHEMA_VERSION = '2' as const;
+
+/**
+ * Manifest schema versions the loader accepts. '1' = pre-skills manifests
+ * (still fully supported); '2' = adds the optional `skills:` list.
+ */
+export const SUPPORTED_PACK_SCHEMA_VERSIONS: ReadonlyArray<string> = ['1', '2'];
 
 /**
  * The package.json field consulted during npm-pack discovery. Value is a

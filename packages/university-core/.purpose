@@ -28,15 +28,25 @@ features:
       - '#university-core-logger'
 components:
   university-loader:
-    description: '#university-loader: Canonical content read/write + index/search/onboard/validate'
+    description: '#university-loader: Canonical content read/write + index/search/onboard/validate. resolveContentFile rejects a content file that is a symlink or whose realpath escapes the pack root realpath (same rules as resolveSkillDirs); tested in src/__tests__/content-containment.test.ts'
   content-base-resolver:
     description: '#content-base-resolver: Dual-layout (content/ + src/content/) base probe, C4-aligned with countPackEntries'
   pack-discovery:
-    description: '#pack-discovery: Slim loadPackManifest/discoverPacks/normalizeSections/resolveEntryAddress using raw js-yaml'
+    description: '#pack-discovery: Slim loadPackManifest/discoverPacks/normalizeSections/resolveEntryAddress using raw js-yaml. Single source of pack discovery since v7.11 (the paradigm-mcp pack-loader duplicate was deleted). v7.11 pack.yaml v2 (PACK_SCHEMA_VERSION 2, 1 still accepted): resolveSkillDirs validates the explicit skills: list (relative, no .., realpath inside root, no symlinks at/under the dir, kebab basename, SKILL.md present, SKILL.md frontmatter metadata.paradigm.id === basename so skillCount matches what the skill loader loads) — violations skipped with classifier-only warnings, never fatal; discoverPacks attaches PackLocation.skillDirs (re-resolved on every call, never cached).'
   pack-schema:
-    description: '#pack-schema: Copied zod Section schema (Option B) for byte-identical section synthesis'
+    description: '#pack-schema: zod Section schema (canonical since v7.11 — the paradigm-mcp copy was deleted) + v7.11 PackSkillRefSchema/PackSkillsArraySchema (MAX_SKILLS_PER_PACK 64)'
   university-core-logger:
     description: '#university-core-logger: UniversityCoreLogger interface + setUniversityCoreLogger + NOOP default'
+  pack-discovery-tests:
+    description: '#pack-discovery-tests: Regression suite for pack discovery (moved from paradigm-mcp tests/pack-loader.test.ts in v7.11) — loadPackManifest / discoverPacks / resolveEntryAddress / resolveSkillDirs containment + frontmatter-id checks; SECURITY assertion that thrown errors never leak manifest content'
+    type: test
+    anchors:
+      - src/__tests__/pack-discovery.test.ts
+    tags:
+      - test
+      - regression
+      - security
+      - university
 aspects:
   ~zod-validated-sections:
     description: Section blocks validated/synthesized via the copied zod pack-schema; byte-identical to pack-loader output

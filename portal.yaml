@@ -445,6 +445,29 @@ routes:
     - ^write-capable
 
   # ── Memory (Memory Steward ledger — READ-ONLY, Phase C1) ────────────
+  # Academy (7.11.0) — read-only University packs over @a-company/university-core.
+  # :packId must be a discovered pack (404); ids ^[A-Za-z0-9-]+$ (400).
+  GET /api/academy/packs:
+    - ^local-only
+    - ^read-only
+  GET /api/academy/packs/:packId/paths:
+    - ^local-only
+    - ^read-only
+  GET /api/academy/packs/:packId/paths/:id:
+    - ^local-only
+    - ^read-only
+  GET /api/academy/packs/:packId/notes/:id:
+    - ^local-only
+    - ^read-only
+  GET /api/academy/packs/:packId/quizzes/:id:
+    - ^local-only
+    - ^read-only
+  GET /api/academy/packs/:packId/skills:
+    - ^local-only
+    - ^read-only
+  GET /api/academy/search:
+    - ^local-only
+    - ^read-only
   # Thin readers over the pure Memory Steward engines (buildDigest / computeSync).
   # /review is the advisory hygiene digest; /sync is the lean-rewrite PREVIEW
   # (computeSync is pure — the mutator writeSyncResult is NOT reachable here).
