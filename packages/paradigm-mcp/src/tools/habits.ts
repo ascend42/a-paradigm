@@ -550,7 +550,7 @@ function buildRecommendations(evaluation: EvaluationResult): string[] {
           recs.push(`Call paradigm_gates_for_route and update portal.yaml for new routes.`);
           break;
         case 'purpose-coverage':
-          recs.push(`Update .purpose files using paradigm_purpose_add_component.`);
+          recs.push(`Update .purpose files using paradigm_purpose({op:'add_component'}).`);
           break;
         case 'changelog-updated':
           recs.push(`Update CHANGELOG.md with the changes made in this phase.`);

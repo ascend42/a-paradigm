@@ -32,7 +32,7 @@ Before testing:
 4. Test `$flow` sequences execute in the documented order
 5. Verify `!signal` emissions occur at the right points
 6. Test edge cases and error handling
-7. Report test results via `paradigm_history_validate`
+7. Report test results via `paradigm_history` (op `validate`)
 
 ## Test Discovery
 
@@ -94,7 +94,7 @@ pytest tests/test_auth.py  # specific file
 After running tests, record the validation:
 
 ```
-paradigm_history_validate({
+paradigm_history({op:'validate',
   result: "pass",  // or "fail" or "partial"
   tests: {
     passed: 15,
@@ -109,7 +109,7 @@ paradigm_history_validate({
 - Test execution reports with pass/fail counts
 - New test files following existing patterns
 - Bug reports with reproduction steps (if tests fail)
-- Validation records via `paradigm_history_validate`
+- Validation records via `paradigm_history` (op `validate`)
 
 ## What You DON'T Do
 

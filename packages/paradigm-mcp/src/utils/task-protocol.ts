@@ -37,9 +37,9 @@ export function buildTaskProtocolPrompt(task: TaskPayload): string {
   lines.push('');
   lines.push('## Protocol');
   lines.push('');
-  lines.push('1. **Acknowledge** — Call `paradigm_symphony_send` with intent "task-ack" immediately');
+  lines.push('1. **Acknowledge** — Call `paradigm_symphony({op:\'send\'})` with intent "task-ack" immediately');
   lines.push('2. **Work** — Execute the task scope. Use paradigm tools normally.');
-  lines.push('3. **Report progress** — Every significant milestone, call `paradigm_symphony_send` with intent "progress" including percent complete and summary');
+  lines.push('3. **Report progress** — Every significant milestone, call `paradigm_symphony({op:\'send\'})` with intent "progress" including percent complete and summary');
   lines.push('4. **Request approval** — Before committing/pushing, send intent "approval-request" with your summary and wait for response');
   lines.push('5. **Complete** — After approval, send intent "task-complete" with final summary');
   lines.push('');

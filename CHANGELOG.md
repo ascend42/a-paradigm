@@ -5,6 +5,49 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.13.0] — 2026-09-29
+
+**MCP surface cut + incremental index** (Phase 4 of the skills arc, T-2026-09-26-005). The default `tools/list` goes from ~134 per-op tools (~30k tokens) to 32 tools (~7.7k tokens on this repo). Eleven anchors keep their names and 21 op families replace the rest. Every pre-7.13 name still works as a hidden alias until 7.15. The live symbol graph is now cached and reparses only the `.purpose` files that changed.
+
+### Changed
+- **Default tools: 134 → 32.** 11 anchors (`paradigm_status`, `search`, `related`, `ripple`, `navigate`, `gates_for_route`, `reindex`, `retrieve`, `tool_activate`, `propose_block`, `orchestrate_inline`) plus 21 op families: `paradigm_lore`, `purpose`, `wisdom`, `history`, `decision`, `journal`, `session`, `task`, `agent`, `protocol`, `aspect`, `tags`, `flow`, `graph`, `notebook`, `captain`, `pm`, `docs`, `ambient`, `compliance`, `authority`. Call them as `paradigm_<family>({op:'<op>', ...params})`. `paradigm_plugin_check` is now `paradigm_status({check:'plugins'})` and `paradigm_workspace_reindex` is now `paradigm_reindex({scope:'workspace'})`. `paradigm_tags` defaults to `op:'list'`, so old calls keep working.
+- **On-demand tier (12 tools):** `sentinel`, `symphony`, `classroom`, `habits`, `persona`, `university`, `assessment`, `conductor`, `platform`, `pipeline`, `graduation`, `test_fixtures`. They are listed only when named in `config.yaml` `mcp.tools.enable` or activated this session with `paradigm_tool_activate`. Detected features are no longer auto-listed. `paradigm_status` shows a hint for them instead.
+- **Handlers are unchanged.** A family call resolves `op` to the canonical legacy name and dispatches to the existing handler. That canonical name (for example `paradigm_lore_record`) is what gets written to breadcrumbs, `toolsCalled` and post-dispatch events, so habits, pm postflight and nominations behave as before. `tools/legacy-tool-map.ts` is the single source of truth for all 184 legacy names.
+- **Family schemas:** an `op` enum plus the union of the old tools' properties. Property descriptions are left out to stay within budget. Nested array-item and object shapes are kept (property names plus nested `required`, no descriptions), so array-of-object params such as lore `decisions` can be built correctly. To fit the budget, primitive leaf types inside nested objects and the `items` of plain string arrays are omitted; handlers still validate the full shape. The family description lists each op's params: `lore`, `purpose` and `task` list every param with required ones marked `*` and nested shapes inline (for example `record(title*,summary*,symbols_touched*,type,…,decisions[{id*,decision*,rationale*}],…)`). The other families list only required params. Family blurbs no longer repeat the op list. The default surface on this repo is ~7.7k tokens.
+- **Family calls validate `required` params; direct legacy calls never did.** The MCP SDK does not enforce `required`, so a pre-7.13 call that left out a required param reached the handler. A family call now returns a validation error that lists that op's params. The exception is params whose handler clearly supplies a default: `protocol` `record` treats `trigger`, `tags` and `steps` as optional (they default to `[]`). The lore, purpose, task, decision, journal, protocol and session handlers were audited. No other clear defaults were found, so the other required params are still enforced. Their handlers have no fallback, or they return their own guidance error (lore `delete` `confirm`, purpose `add_aspect` `anchors`). Hidden legacy aliases skip family validation and behave exactly as before.
+- **Anchor listings** are compacted: description ≤400 chars, property descriptions ≤80.
+- **Habits evaluation** now accepts family references (`paradigm_lore({op:'record'})`, `paradigm_lore.record`, or a bare family) as well as legacy names. `seed-habits.json` intentionally keeps legacy names because they are matched against `toolsCalled`.
+- **Reference rewrite (codemod):** `scripts/migrate-tool-names.mjs` is driven by the legacy map and is idempotent. It rewrote 585 references in 76 files (102 files changed in total, including regenerated hooks) across plugins, IDE adapters, hook scripts, role prompts, guidance and context resources, `.cursor`, protocols, agents, `CLAUDE.md`, `AGENTS.md` and user-facing docs. A grep test fails if a legacy name reappears on an agent-facing surface. Historical records (CHANGELOG, lore, history, docs/specs, docs/private) are allowlisted.
+- **Agent-facing runtime strings** (the lore/assessment `type:'decision'` rejection, compliance and pm suggestions, the Rune promotion prompt, the Symphony task protocol) now use the family form. The rejection envelope's `successor_tool` is now `paradigm_decision` with a new `successor_op: 'record'`.
+- **Conductor:** `getHistoryContext` now calls `paradigm_history` with `op:'context'`, and the related strings are updated.
+
+### Added
+- **`mcp.tools.enable: [...]`** (config.yaml): lists on-demand tools by default.
+- **`mcp.tools.legacy_listing: true`**: an escape hatch that relists the pre-7.13 per-op tools alongside the families.
+- **`notifications/tools/list_changed`**: the server declares `tools.listChanged` and `paradigm_tool_activate` sends the notification.
+- **Server `instructions`**: legacy `paradigm_<family>_<op>` = `paradigm_<family>({op:'<op>'})`.
+- **Deprecation breadcrumb**: every hidden-alias call writes a `tool-deprecated-alias` breadcrumb.
+- **`paradigm doctor` legacy-name audit**: flags legacy tool names in the user's `CLAUDE.md`, `AGENTS.md`, `.cursor/rules` and `.claude/settings.json` permission allowlists. Allowlist entries like `mcp__paradigm__paradigm_lore_record` no longer match anything. For permission hits it suggests the allowlist form (`mcp__paradigm__paradigm_lore`, keeping the server prefix the entry already uses), not call syntax.
+- **Incremental index:** a purpose-core `parse-cache` (abs path → mtime/size/sha1/parsed; fast path on mtime+size, hashing only when mtime changes) and a premise-core `getLiveIndex` / `invalidateLiveIndex`. Unchanged trees return the cached index and graph. On a change, only the changed files are reparsed, and the aggregate is rebuilt from cached parses in the same depth-then-path order, which keeps Loom Merkle determinism. `paradigm_reindex` invalidates the cache. `searchSymbols` precomputes lowercased haystacks.
+- **Recent-edit safety + bounded cache:** the parse cache and the live index content-hash any file whose mtime is within 2s of now, so a same-size edit inside one mtime tick is never served stale. The live index keeps at most 8 roots (LRU).
+- **`DEFAULT_PURPOSE_IGNORE`** (purpose-core) adds `.claude/**`, `**/.worktrees/**`, `.warpline/**`, `build`, `.build`, `coverage`, `.next`, `.turbo`, `Pods` and `DerivedData`.
+
+### Fixed
+- **`paradigm_tool_activate` could not surface tools** in Claude Code: the server never declared `listChanged` and never sent the notification.
+- **`aliases` leaked into `tools/list`**: it is intent-routing metadata and is now stripped from every listed definition.
+- **`paradigm_wisdom_promote` was declared twice.**
+- **`paradigm_assessment_*` tools were never registered.** The module is now registered and reachable as the on-demand `paradigm_assessment` family.
+- **Invalid premise-core `.purpose`.**
+
+### Performance
+- Cached live graph: warm `graph_slice` 16.7 ms; cold 43 ms (was 63 ms).
+
+### Deprecated
+- All `paradigm_<family>_<op>` names. They still dispatch as hidden aliases through 7.14 and will be removed in 7.15.
+
+### Versions
+- `@a-company/paradigm`, `@a-company/paradigm-mcp`, plugin → 7.13.0; `@a-company/premise-core` 3.10.0 → 3.11.0; `@a-company/purpose-core` 3.5.0 → 3.6.0. The Conductor build number comes from the commit count.
+
 ## [7.12.0] — 2026-09-29
 
 **Learning-store consolidation + loop teeth** (Phase 3 of the skills arc, T-2026-09-26-004). The learning loop now has a real promotion gate and a liveness alarm that can actually see. Legacy stores are retired behind a backed-up, idempotent migration, and the Brain prerequisites (one frontmatter parser, heading/block anchors) land in premise-core.

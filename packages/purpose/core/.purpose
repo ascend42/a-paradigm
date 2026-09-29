@@ -51,7 +51,25 @@ components:
   schema-rules:
     description: '#schema-rules: Rules for validating symbol references'
   aggregator:
-    description: '#aggregator: Combines multiple .purpose files'
+    description: '#aggregator: Combines multiple .purpose files. Exports DEFAULT_PURPOSE_IGNORE (7.13.0) — the discovery ignore list findPurposeFiles uses.'
+  purpose-parse-cache:
+    description: >-
+      #purpose-parse-cache: src/parse-cache.ts (7.13.0) — PurposeParseCache,
+      a per-file memo keyed by absolute path → {mtimeMs, size, sha1, data,
+      errors}. stat fast path (mtime+size equal and mtime older than
+      RECENT_MTIME_WINDOW_MS=2s → cached parse, no read; recent files are always
+      hashed so same-size edits in one mtime tick are caught); on a
+      stamp change the file is read + sha1-hashed and the parse reused when the
+      bytes are identical, else re-parsed with parseRawPurposeFileContent (the
+      exact post-read pipeline of parsePurposeFileDetailed). prune/invalidate
+      drop entries. parsePurposeFilesCached / getAllPurposeFilesCached keep the
+      input (findPurposeFiles) order — the cache never reorders. Returned data is
+      shared and read-only. Consumer: #live-index in premise-core.
+    file: packages/purpose/core/src/parse-cache.ts
+    tags:
+      - parser
+      - cache
+      - performance
   symbol-extractor:
     description: '#symbol-extractor: Extracts symbols from purpose data'
 signals:
@@ -88,17 +106,17 @@ aspects:
     severity: high
     tags: [aggregation, ordering, determinism]
     anchors:
-      - src/aggregator.ts:150-186
+      - src/aggregator.ts:178-212
     applies-to:
       - "#aggregator"
 
   ~purpose-glob-ignore-patterns:
-    description: "findPurposeFiles ignores node_modules, dist, and .git directories"
+    description: "findPurposeFiles ignores DEFAULT_PURPOSE_IGNORE: node_modules, dist, .git (historical) plus, since 7.13.0, .claude/**, **/.worktrees/**, .warpline/**, build, .build, coverage, .next, .turbo, Pods, DerivedData — so build artefacts / scratch checkouts carrying stale .purpose copies never win duplicate last-write-wins resolution"
     category: configuration
     severity: low
     tags: [discovery, glob]
     anchors:
-      - src/aggregator.ts:114-117
+      - src/aggregator.ts:147-176
     applies-to:
       - "#aggregator"
 

@@ -48,6 +48,11 @@ export {
   aggregateFromPremise,
   aggregateFromDirectory,
 } from './aggregator.js';
+export type { AggregateOptions } from './aggregator.js';
+
+// Live index — #live-index (incremental, cached live SymbolIndex)
+export { getLiveIndex, invalidateLiveIndex, liveIndexRootCount, LIVE_INDEX_MAX_ROOTS } from './live-index.js';
+export type { LiveIndex, LiveIndexCallStats } from './live-index.js';
 
 // Symbol Index
 export {
@@ -113,6 +118,7 @@ export type {
 // Graph-slice projector — #graph-slice-projector
 export {
   loadLiveGraph,
+  buildLiveGraph,
   projectGraphSlice,
   graphSliceFromRoot,
   sliceToMermaid,

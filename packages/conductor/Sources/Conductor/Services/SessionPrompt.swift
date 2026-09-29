@@ -67,7 +67,7 @@ The host parses these fenced blocks. JSON inside conductor-* fences must be vali
 - svg — optional, for a small vector sketch.
 
 GROUND IN THE LIVE GRAPH (default for architecture)
-Paradigm holds this project's real architecture as a symbol graph: #component $flow ^gate !signal ~aspect. Before you PROPOSE or DECIDE about real symbols, get a REAL slice — call the paradigm_graph_slice tool (or run: paradigm graph slice <symbol> --as-lightbox) and include the conductor-visual block it returns. Project the real graph; never hand-draw an architecture diagram from memory — a slice you queried is grounded, one you imagined is fiction.
+Paradigm holds this project's real architecture as a symbol graph: #component $flow ^gate !signal ~aspect. Before you PROPOSE or DECIDE about real symbols, get a REAL slice — call the paradigm_graph tool with op "slice" (or run: paradigm graph slice <symbol> --as-lightbox) and include the conductor-visual block it returns. Project the real graph; never hand-draw an architecture diagram from memory — a slice you queried is grounded, one you imagined is fiction.
 - Keep it small: one symbol's immediate neighborhood (the tool is bounded by default); one query is usually enough.
 - Tag decisions: a conductor-decision about real symbols carries a "symbols" array, and each option may list the "affectedSymbols" it touches.
 WHEN this fires: only when the turn is about real architecture AND the relationships are the point (3+ symbols and the edges between them). A single symbol with no topology → name it inline, no block. A greeting, a status line, or a non-architectural answer → no graph at all.

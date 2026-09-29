@@ -20,12 +20,12 @@ the Conductor macOS app can instantly discover this session. This enables:
 
 ## Step 1: Register
 
-Call `paradigm_conductor_register` with an optional label from the user's arguments.
+Call `paradigm_conductor` (op `register`) with an optional label from the user's arguments.
 
 If the user provided a label via arguments, use it: $ARGUMENTS
 
 ```
-paradigm_conductor_register({
+paradigm_conductor({op:'register',
   label: "optional label from user"
 })
 ```
@@ -38,7 +38,7 @@ branch, terminal, and PID.
 After registration, tell the user:
 - The session is now visible in Conductor
 - Show the PID and project directory
-- Mention they can unregister with `paradigm_conductor_unregister`
+- Mention they can unregister with `paradigm_conductor` (op `unregister`)
 - If Conductor isn't running, mention they can start it with `paradigm conductor`
 
 ## When to Suggest This

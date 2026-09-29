@@ -84,7 +84,7 @@ Symbols: #payment-form, #apple-pay-button, $checkout-flow, !payment-method-added
 
 **Before each task:** `paradigm_ripple` for impact, `paradigm_gates_for_route` for new endpoints
 
-**Resuming:** Call `paradigm_session_recover`
+**Resuming:** Call `paradigm_session` (op `recover`)
 
 **Tool names:** Paradigm tools are documented as `paradigm_status`, `paradigm_ripple`, etc. When loaded as a Claude Code plugin, the same tools may appear as `plugin_paradigm_paradigm_status`, `plugin_paradigm_paradigm_ripple`, etc. Both names refer to the same tool — use whichever appears in your available tool list.
 
@@ -94,7 +94,7 @@ Symbols: #payment-form, #apple-pay-button, $checkout-flow, !payment-method-added
 
 ## Before Implementing
 
-0. Call `paradigm_protocol_search` — if a protocol matches, follow it
+0. Call `paradigm_protocol` (op `search`) — if a protocol matches, follow it
 1. Complex task (3+ files)? → `paradigm_orchestrate_inline` mode="plan"
 2. Affects symbols? → `paradigm_ripple`
 3. Adds endpoints? → `paradigm_gates_for_route`
@@ -122,7 +122,7 @@ The stop hook **BLOCKS** if source files were modified without .purpose updates.
 - Add signal/event → add to `.purpose`
 - Add multi-step flow → document as `$flow`
 - Rename/delete symbol → update all references
-- Record lore via `paradigm_lore_record` for sessions modifying 3+ files
+- Record lore via `paradigm_lore` (op `record`) for sessions modifying 3+ files
 - Use Paradigm logger (`log.component()`, `log.gate()`, etc.) for library code — never raw console.log
 - Use `cli-output.ts` helpers for CLI command output (see `packages/paradigm/src/utils/cli-output.ts`)
 
@@ -139,7 +139,7 @@ If an MCP tool gives unexpected output and you can identify the cause is in fram
 
 **How to file (Option α, current):**
 ```
-paradigm_task_create({
+paradigm_task({op:'create',
   blurb: "FRAMEWORK BUG: <one-line summary>. Writer at <file:line>; reader at <file:line>; symptom: <what user/agent sees>",
   priority: "high",
   tags: ["framework-bug", "<#affected-tool>", "<archetype-domain>"]
@@ -149,7 +149,7 @@ paradigm_task_create({
 **Soft-block primitive (shipped):** `paradigm_propose_block` with `claimant: 'framework'` lets agents surface framework bugs as soft-blocks that persist across sessions until upstream fixes. See `.paradigm/research/path-bug-and-agent-protocol-analysis.md` §3.
 
 **Domain ownership** (per agent-owned enforcement, TD-2026-04-25-417):
-- Compliance tool bugs (`paradigm_aspect_check`, `paradigm_drift_*`) → Rune triages
+- Compliance tool bugs (`paradigm_aspect` (op `check`), `paradigm_drift_*`) → Rune triages
 - Security tool bugs (`paradigm_portal_*`) → Aegis triages
 - Learning tool bugs (`paradigm_notebook_*`) → Scholar/Loid co-triage
 - Navigation tool bugs (`paradigm_status`, `paradigm_navigate`) → Cid triages
@@ -222,7 +222,7 @@ Detailed guidance is available via MCP resources — load only what you need:
 | [`quick-start.md`](./docs/guides/quick-start.md) | First-time install + setup |
 | [`mcp-setup.md`](./docs/guides/mcp-setup.md) | MCP server configuration per IDE |
 | [`agents.md`](./docs/guides/agents.md) | Roster, onboard, bench/activate, install agents |
-| [`decisions.md`](./docs/guides/decisions.md) | `paradigm_decision_record` + the post-v6.0 decision store |
+| [`decisions.md`](./docs/guides/decisions.md) | `paradigm_decision` (op `record`) + the post-v6.0 decision store |
 | [`v6-migration.md`](./docs/guides/v6-migration.md) | Upgrading from v5.x; the six breaking changes |
 | [`university.md`](./docs/guides/university.md) | Multi-tenant content packs + PLSAT |
 | [`sentinel-upgrade.md`](./docs/guides/sentinel-upgrade.md) | Sentinel incident-tracking upgrade |

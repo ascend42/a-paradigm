@@ -40,3 +40,11 @@ components:
     tags:
       - doctor
       - agent-identity
+  legacy-names-audit:
+    description: 'v7.13.0 (T-2026-09-26-005, MCP surface cut) auditLegacyToolNames(rootDir) — scans CLAUDE.md, AGENTS.md, .cursor/rules/** and .claude/settings{,.local}.json permissions.{allow,deny,ask} for renamed pre-7.13 `paradigm_<family>_<op>` tool names (anchors and same-name entries excluded). Driven by #legacy-tool-map (single source of truth, imported from paradigm-mcp). Doctor renders "Legacy tool names (permissions)" warn (dead allowlist entries re-prompt) and "Legacy tool names" warn with the family({op}) replacement; ok when clean. Advisory — never fails doctor.'
+    type: utility
+    file: legacy-names-audit.ts
+    tags:
+      - doctor
+      - mcp-surface
+      - v7.13.0

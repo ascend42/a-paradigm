@@ -45,8 +45,8 @@ permissions:
       - 'portal.yaml'
   tools:
     allow:
-      - paradigm_arch_status
-      - paradigm_arch_diagram
+      - paradigm_graph (op: arch_status)
+      - paradigm_graph (op: arch_diagram)
       - paradigm_status
       - paradigm_search
       - paradigm_navigate

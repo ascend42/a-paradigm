@@ -34,10 +34,10 @@ This returns:
 
 ## Step 2: Flow Impact
 
-Call `paradigm_flows_affected` to see which flows break:
+Call `paradigm_flow` (op `affected`) to see which flows break:
 
 ```
-paradigm_flows_affected({ symbol: "$0" })
+paradigm_flow({op:'affected', symbol: "$0" })
 ```
 
 For each affected flow, note:
@@ -47,10 +47,10 @@ For each affected flow, note:
 
 ## Step 3: History & Fragility
 
-Call `paradigm_history_fragility` to check stability:
+Call `paradigm_history` (op `fragility`) to check stability:
 
 ```
-paradigm_history_fragility({ symbols: ["$0"] })
+paradigm_history({op:'fragility', symbols: ["$0"] })
 ```
 
 High fragility means this symbol changes often or has had recent failures.
@@ -58,10 +58,10 @@ Extra care needed.
 
 ## Step 4: Wisdom Check
 
-Call `paradigm_wisdom_context` for known patterns:
+Call `paradigm_wisdom` (op `context`) for known patterns:
 
 ```
-paradigm_wisdom_context({ symbols: ["$0"] })
+paradigm_wisdom({op:'context', symbols: ["$0"] })
 ```
 
 Surface any antipatterns or past decisions about this symbol.

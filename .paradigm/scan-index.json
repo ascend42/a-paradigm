@@ -2,34 +2,34 @@
   "$meta": {
     "version": "1.0.0",
     "project": "a-paradigm",
-    "generatedAt": "2026-09-29T09:14:04.523Z",
+    "generatedAt": "2026-09-29T09:39:23.955Z",
     "paradigmVersion": "0.1.0",
     "sources": {
-      "purposeFiles": 97,
+      "purposeFiles": 99,
       "portalFiles": 2,
       "premiseFiles": 0
     },
     "componentTypes": {
       "command": 112,
-      "config": 10,
+      "utility": 59,
+      "config": 11,
       "manager": 6,
-      "engine": 16,
+      "engine": 9,
       "detector": 11,
       "provider": 7,
       "router": 13,
       "view": 109,
-      "store": 18,
+      "store": 16,
       "filter": 3,
-      "service": 90,
-      "model": 15,
-      "utility": 62,
+      "service": 92,
+      "model": 16,
       "feature": 1,
       "theme": 1,
       "controller": 1,
       "tool": 44,
       "tool-group": 10,
       "util": 9,
-      "loader": 25,
+      "loader": 8,
       "app": 2,
       "schema": 4,
       "handler": 26,
@@ -39,10 +39,8 @@
       "module": 85,
       "cli": 1,
       "state": 4,
-      "integration": 2,
-      "types": 10,
-      "constant": 1,
-      "registry": 1,
+      "integration": 1,
+      "types": 9,
       "command-group": 8,
       "route": 3,
       "middleware": 1,
@@ -1013,6 +1011,49 @@
         "#command-generator"
       ]
     },
+    "symbol-aggregation": {
+      "id": "symbol-aggregation",
+      "name": "Symbol Aggregation",
+      "symbol": "#symbol-aggregation",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
+      "description": "@symbol-aggregation: Aggregate symbols from all sources",
+      "visualTags": [],
+      "related": [
+        "~yaml-config-loading",
+        "~zod-validated",
+        "$symbol-aggregation",
+        "!aggregation-complete",
+        "#aggregator",
+        "#source-loader"
+      ]
+    },
+    "symbol-indexing": {
+      "id": "symbol-indexing",
+      "name": "Symbol Indexing",
+      "symbol": "#symbol-indexing",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
+      "description": "@symbol-indexing: Build searchable symbol index",
+      "visualTags": [],
+      "related": [
+        "#symbol-index",
+        "#search-engine"
+      ]
+    },
+    "reference-tracking": {
+      "id": "reference-tracking",
+      "name": "Reference Tracking",
+      "symbol": "#reference-tracking",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
+      "description": "@reference-tracking: Track symbol relationships",
+      "visualTags": [],
+      "related": [
+        "#reference-tracker",
+        "#graph-builder"
+      ]
+    },
     "scan-index-generation": {
       "id": "scan-index-generation",
       "name": "Scan Index Generation",
@@ -1108,6 +1149,30 @@
       "description": "TODO: describe this component",
       "visualTags": [],
       "related": []
+    },
+    "migrate-tool-names": {
+      "id": "migrate-tool-names",
+      "name": "Migrate Tool Names",
+      "symbol": "#migrate-tool-names",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/scripts/.purpose",
+      "description": "v7.13.0 (T-2026-09-26-005) reference codemod for the MCP surface cut. Parses LEGACY_TOOL_MAP out of packages/paradigm-mcp/src/tools/legacy-tool-map.ts (#legacy-tool-map, never duplicated) and rewrites renamed legacy names in agent-facing surfaces (TARGETS; EXCLUDE = CHANGELOG, lore/history/events/reviews, docs/private+specs, *.test.*, seed-habits.json). Forms: call `x_op({` → `x({op:'op', `; wrapped `` `x_op` `` → `` `x` (op `op`) ``; bare → `x (op `op`)` (md) / `x (op: op)` (code/shell); `mcp__…__x_op` and allowed-tools/tools lines → family name (deduped). Idempotent. Dry run by default; `--write` applies. Guarded by packages/paradigm/src/__tests__/legacy-tool-names.test.ts.",
+      "visualTags": [],
+      "related": [
+        "#legacy-tool-map"
+      ],
+      "componentType": "utility"
+    },
+    "pre-publish-check": {
+      "id": "pre-publish-check",
+      "name": "Pre Publish Check",
+      "symbol": "#pre-publish-check",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/scripts/.purpose",
+      "description": "Pre-publish sanity checks run before npm publish.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "utility"
     },
     "guides": {
       "id": "guides",
@@ -3765,13 +3830,12 @@
       "name": "Graph Builder",
       "symbol": "#graph-builder",
       "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
-      "description": "Builds symbol relationship graph",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
+      "description": "#graph-builder: Builds relationship graph",
       "visualTags": [
         "chart"
       ],
-      "related": [],
-      "componentType": "utility"
+      "related": []
     },
     "ripple-handler": {
       "id": "ripple-handler",
@@ -4803,13 +4867,12 @@
       "name": "University Loader",
       "symbol": "#university-loader",
       "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "Per-project university loader — CRUD for notes/policies/quizzes/paths/diplomas, index rebuild, validation, symbol linking for ripple. v6.0 sub-phase 1: accepts optional packRoot on all CRUD fns, walks discipline sub-packs via discoverDisciplineSubPacks, preserves v5 behavior via loadOrFabricatePackManifest (implicit pack when pack.yaml absent), stamps pack_id on writes. Pack-selector fix: resolveContentBase probes content/ + src/content/ (shared with countPackEntries); scanPackEntries is the single frontmatter→entry mapper used by both rebuildUniversityIndex (project, writes index) and loadPackIndex (selected pack, in-memory scan, no write); searchContent/getOnboardingSequence/validateUniversityContent take optional trailing packRoot — when present they read the selected pack, when omitted they keep the byte-identical project path. Deep-validate symbol/staleness/coverage checks stay rootDir-relative (project owns symbol authority).",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university-core/.purpose",
+      "description": "#university-loader: Canonical content read/write + index/search/onboard/validate. resolveContentFile rejects a content file that is a symlink or whose realpath escapes the pack root realpath (same rules as resolveSkillDirs); tested in src/__tests__/content-containment.test.ts",
       "visualTags": [
         "spinner"
       ],
-      "related": [],
-      "componentType": "loader"
+      "related": []
     },
     "content-base-resolver": {
       "id": "content-base-resolver",
@@ -6631,11 +6694,11 @@
       "name": "Event Stream",
       "symbol": "#event-stream",
       "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "Ambient event stream — emit, store (JSONL), query, and attention-score events for ambient coordination. Append-only with automatic pruning.",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/viewer/.purpose",
+      "description": "#event-stream: Streams gate events to clients",
       "visualTags": [],
       "related": [],
-      "componentType": "engine"
+      "componentType": "service"
     },
     "session-tracker": {
       "id": "session-tracker",
@@ -6727,6 +6790,116 @@
       "related": [],
       "componentType": "utility"
     },
+    "aggregator": {
+      "id": "aggregator",
+      "name": "Aggregator",
+      "symbol": "#aggregator",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/purpose/core/.purpose",
+      "description": "#aggregator: Combines multiple .purpose files. Exports DEFAULT_PURPOSE_IGNORE (7.13.0) — the discovery ignore list findPurposeFiles uses.",
+      "visualTags": [],
+      "related": []
+    },
+    "source-loader": {
+      "id": "source-loader",
+      "name": "Source Loader",
+      "symbol": "#source-loader",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
+      "description": "#source-loader: Loads symbols from .purpose and portal.yaml",
+      "visualTags": [
+        "spinner"
+      ],
+      "related": []
+    },
+    "symbol-index": {
+      "id": "symbol-index",
+      "name": "Symbol Index",
+      "symbol": "#symbol-index",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
+      "description": "#symbol-index: In-memory symbol index. Also home of the ONE shared anchor-string parser (7.12.0, D9): parseAnchorString (aggregator path; section anchors first, then the pre-7.12 line semantics byte-identical — \"file.ts:15-20\" still yields exactly {path, lines:[15,20], raw}), parseAnchor (same section-first fallthrough), parseSectionAnchor (Obsidian-compatible docs/x.md#Heading Text → kind heading, docs/x.md#^block-id → kind block, lines 0 = unresolved; the path part must end in a file extension so src/c#/x.cs:10 stays a line anchor, and a fragment containing '/' or ending in :N / :N-M is rejected so dir.name#x/Foo.ts:10 stays a line anchor) and resolveSectionAnchorLines (content + key → current 1-based inclusive range or null; heading = through the next same-or-higher heading, fenced pseudo-headings ignored, exact then case-insensitive match; block = contiguous paragraph ending at the inline ^id or preceding a standalone ^id line). SourceType gained 'frontmatter' (no exhaustive switches exist; bySource is an open Map).",
+      "visualTags": [],
+      "related": [
+        "#Heading",
+        "^block-id",
+        "#x",
+        "^id"
+      ]
+    },
+    "frontmatter-parser": {
+      "id": "frontmatter-parser",
+      "name": "Frontmatter Parser",
+      "symbol": "#frontmatter-parser",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
+      "description": "#frontmatter-parser: src/frontmatter.ts — the ONE YAML-frontmatter splitter (7.12.0, D8). parseFrontmatter(raw, {mode}) → {data, body, hasFrontmatter, error?} over FRONTMATTER_RE (LF + CRLF, closing fence then newline or EOF). lenient (default) never throws: no block → whole input is body; malformed YAML / non-mapping → data {} + error, body after the fence. strict throws FrontmatterError(reason missing|yaml|not-mapping) with CONTRACT messages \"missing YAML frontmatter (--- … ---)\", \"frontmatter is not a YAML mapping\", or the YAML parser message verbatim (surfaced unchanged by #skill-loader). Consumers: #native-memory-scan (lenient), #skill-loader splitFrontmatter (strict), docs-loader (lenient → null adapter). Follow-up: university-core loader + doctor agent-audit still hand-roll.",
+      "visualTags": [],
+      "related": [
+        "#skill-loader",
+        "#native-memory-scan"
+      ]
+    },
+    "search-engine": {
+      "id": "search-engine",
+      "name": "Search Engine",
+      "symbol": "#search-engine",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
+      "description": "#search-engine: Symbol search functionality (searchSymbols in src/symbol-index.ts). Since 7.13.0 per-entry lowercased haystacks (symbol, description, tags, componentType, joined multi-token string) are memoized in a WeakMap keyed by SymbolIndex and revalidated against the entry source fields, so repeated searches over a cached #live-index index skip re-lowercasing. Substring semantics and ranking are unchanged.",
+      "visualTags": [],
+      "related": [
+        "#live-index"
+      ]
+    },
+    "live-index": {
+      "id": "live-index",
+      "name": "Live Index",
+      "symbol": "#live-index",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
+      "description": "#live-index: src/live-index.ts (7.13.0) — incremental in-process cache of the LIVE SymbolIndex. getLiveIndex(rootDir) globs .purpose (purpose-core findPurposeFiles) + portal.yaml (portal-core findGateFiles), stats every file, and returns the SAME cached index when the ordered (path, mtimeMs, size) lists are unchanged; otherwise re-parses only changed .purpose files via #purpose-parse-cache and re-aggregates the FULL set in discovery order through aggregateFromDirectory's AggregateOptions loader seams, so output equals a cold parse (order + duplicate last-write-wins, T-2026-06-13-011). Concurrent callers share one in-flight refresh. Files with mtime within 2s of now also carry a content sha1 in their stamp (same-size edits inside one mtime tick). At most LIVE_INDEX_MAX_ROOTS (8) roots are cached, LRU-evicted. invalidateLiveIndex(rootDir?) drops a root (paradigm_reindex calls it). Returned index/entry data are shared — read-only. Bench (report only): scripts/bench-live-index.mjs.",
+      "visualTags": [],
+      "related": [
+        "#purpose-parse-cache"
+      ]
+    },
+    "reference-tracker": {
+      "id": "reference-tracker",
+      "name": "Reference Tracker",
+      "symbol": "#reference-tracker",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
+      "description": "#reference-tracker: Tracks references between symbols",
+      "visualTags": [],
+      "related": []
+    },
+    "graph-slice-projector": {
+      "id": "graph-slice-projector",
+      "name": "Graph Slice Projector",
+      "symbol": "#graph-slice-projector",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
+      "description": "#graph-slice-projector: Projects a BOUNDED, deterministic slice of the symbol graph centered on one symbol (src/graph-slice.ts). Shared by the `paradigm graph slice` CLI + `paradigm_graph_slice` MCP tool. Sources neighbors from a LIVE SymbolIndex (aggregateFromDirectory + buildSymbolIndex — the SAME live-parse pipeline `paradigm ripple` uses), NOT the stale scan-index/flow-index, so flow membership (e.g. #cockpit-view → $$fleet-switch) always surfaces. Unioned edges: getReferencesFrom → uses/gated-by/in-flow, getReferencesTo → used-by, flow membership → in-flow, flow co-members (flow mode) → uses. BFS to radius (1, max 3), DEGREE_CAP 8 with +N-more collapse, deterministic sort, fail-loud did-you-mean. Freshness is the live-parse timestamp, stale always false (sidesteps the scan-index determinism wart). Since 7.13.0 loadLiveGraph delegates to #live-index and memoizes the LiveGraph per SymbolIndex (buildLiveGraph), so a warm call does no parsing.",
+      "visualTags": [
+        "chart"
+      ],
+      "related": [
+        "#cockpit-view",
+        "$fleet-switch",
+        "#live-index"
+      ]
+    },
+    "classroom-metrics": {
+      "id": "classroom-metrics",
+      "name": "Classroom Metrics",
+      "symbol": "#classroom-metrics",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
+      "description": "#classroom-metrics: The ONE canonical repeat-failure-rate rollup for the Classroom (TD-2026-06-19-007), src/classroom-metrics.ts. Both the paradigm_classroom_status MCP tool and `paradigm doctor` consume it (the CLI does NOT depend on paradigm-mcp; both depend on premise-core), so the formula lives here ONCE to avoid drift. computeRepeatFailureRate(certs) → overall + per-agent { resolved, overturned, rate } where rate = overturned/resolved (3dp), null until a cert resolves (survived|overturned; pending excluded). readClassroomCertifications/readFieldFailures read .paradigm/events/*.jsonl tolerantly (skip corrupt lines, never throw), mirroring graph-slice's .paradigm file access. The cert WRITER stays in paradigm-mcp/utils/field-failures.ts — only the read+rollup is shared.",
+      "visualTags": [],
+      "related": []
+    },
     "generator": {
       "id": "generator",
       "name": "Generator",
@@ -6805,15 +6978,17 @@
       "visualTags": [],
       "related": []
     },
-    "aggregator": {
-      "id": "aggregator",
-      "name": "Aggregator",
-      "symbol": "#aggregator",
+    "purpose-parse-cache": {
+      "id": "purpose-parse-cache",
+      "name": "Purpose Parse Cache",
+      "symbol": "#purpose-parse-cache",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/purpose/core/.purpose",
-      "description": "#aggregator: Combines multiple .purpose files",
+      "description": "#purpose-parse-cache: src/parse-cache.ts (7.13.0) — PurposeParseCache, a per-file memo keyed by absolute path → {mtimeMs, size, sha1, data, errors}. stat fast path (mtime+size equal and mtime older than RECENT_MTIME_WINDOW_MS=2s → cached parse, no read; recent files are always hashed so same-size edits in one mtime tick are caught); on a stamp change the file is read + sha1-hashed and the parse reused when the bytes are identical, else re-parsed with parseRawPurposeFileContent (the exact post-read pipeline of parsePurposeFileDetailed). prune/invalidate drop entries. parsePurposeFilesCached / getAllPurposeFilesCached keep the input (findPurposeFiles) order — the cache never reorders. Returned data is shared and read-only. Consumer: #live-index in premise-core.",
       "visualTags": [],
-      "related": []
+      "related": [
+        "#live-index"
+      ]
     },
     "symbol-extractor": {
       "id": "symbol-extractor",
@@ -7410,6 +7585,34 @@
       "related": [],
       "componentType": "service"
     },
+    "legacy-tool-map": {
+      "id": "legacy-tool-map",
+      "name": "Legacy Tool Map",
+      "symbol": "#legacy-tool-map",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/tools/.purpose",
+      "description": "7.13 single source of truth — every pre-7.13 paradigm_* tool name (184) mapped to its family op ({tool, op}) or anchor ({tool}, optional fixed args for folded tools like plugin_check → status check:plugins). No runtime imports; feeds hidden-alias dispatch, breadcrumb canonicalization, the reference codemod and the doctor legacy-name check. Aliases removed in 7.15.",
+      "visualTags": [],
+      "related": [
+        "#ToolHandlers"
+      ],
+      "componentType": "config",
+      "parent": "#ToolHandlers"
+    },
+    "tool-surface": {
+      "id": "tool-surface",
+      "name": "Tool Surface",
+      "symbol": "#tool-surface",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/tools/.purpose",
+      "description": "7.13 MCP surface (families.ts + buildToolSurface/listSurfaceTools/resolveToolCall in index.ts) — tools/list = 11 anchors + 21 op families; 12 on-demand tools listed only via config.yaml mcp.tools.enable or paradigm_tool_activate (sends notifications/tools/list_changed); mcp.tools.legacy_listing relists the per-op surface. Calls resolve to the CANONICAL LEGACY NAME before dispatch so handlers, breadcrumbs and toolsCalled are unchanged; deprecated alias calls write a tool-deprecated-alias breadcrumb. paradigm_status reports detected on-demand features as hints. Budget test: ≤40 tools, <8000 tokens.",
+      "visualTags": [],
+      "related": [
+        "#ToolHandlers"
+      ],
+      "componentType": "service",
+      "parent": "#ToolHandlers"
+    },
     "paradigm-retrieve": {
       "id": "paradigm-retrieve",
       "name": "Paradigm Retrieve",
@@ -7904,568 +8107,6 @@
       "visualTags": [],
       "related": [],
       "componentType": "types"
-    },
-    "symphony-loader": {
-      "id": "symphony-loader",
-      "name": "Symphony Loader",
-      "symbol": "#symphony-loader",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "The Score: file-based agent messaging — agent identity, JSONL parts, threads, file pipeline, trust config. ensureMailDirs renamed to ensureScoreDirs (deprecated alias retained). Ring 1 content filtering seam: isRing1Content, recordRing1Interception (audit trail), readOutboxRaw (unfiltered, relay-internal), readOutbox (filtered). SymphonyMessage.contentType field added.",
-      "visualTags": [
-        "spinner"
-      ],
-      "related": [],
-      "componentType": "loader"
-    },
-    "platform-bridge": {
-      "id": "platform-bridge",
-      "name": "Platform Bridge",
-      "symbol": "#platform-bridge",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "HTTP bridge for MCP → Platform server communication. Resolves port from config.yaml, resolves agent identity, sends POST to /api/platform/agent-command.",
-      "visualTags": [
-        "form"
-      ],
-      "related": [],
-      "componentType": "loader"
-    },
-    "symphony-peers": {
-      "id": "symphony-peers",
-      "name": "Symphony Peers",
-      "symbol": "#symphony-peers",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/symphony/.purpose",
-      "description": "List trusted remote peers and their agents",
-      "visualTags": [],
-      "related": [],
-      "componentType": "command"
-    },
-    "symphony-relay": {
-      "id": "symphony-relay",
-      "name": "Symphony Relay",
-      "symbol": "#symphony-relay",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "WebSocket relay engine for cross-machine Symphony networking — hub/spoke modes, outbox watcher, message routing, dedup, keepalive, auto-reconnect. Unsafe inline Ring 1 filter sites removed; delegates to symphony-loader for content filtering.",
-      "visualTags": [],
-      "related": [],
-      "componentType": "integration"
-    },
-    "agent-loader": {
-      "id": "agent-loader",
-      "name": "Agent Loader",
-      "symbol": "#agent-loader",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "CRUD for .agent identity files — load/save profiles, expertise queries, auto-update from lore, merge with agents.yaml, sync from lore history, permission checking (path/tool), integrity hash computation/verification, integrity status at load time, prompt sanitization, permission constraint extraction, permission enforcement facade. v7.9.1 normalizeAgentProfile runs after every profile yaml.load — legacy transferable[].pattern becomes id (explicit id wins; pattern removed; migrated to id on next save), no other defaults injected (learnedIn/appliedIn stay optional; enrichment omits learned-in when absent); never touches id/role/permissions so integrityHash is unaffected. Skills Phase 1 (v7.10.0): buildProfileEnrichment takes a 6th optional skills?: SkillSummary[] (stays pure; callers resolve via #skill-loader resolveAgentSkills) and renders a '## Your Skills' section after Transferable Patterns — certified+ok for every agent, non-certified only to the steward (labelled), stale/invalid omitted; AgentProfile.skills is excluded from integrityHash",
-      "visualTags": [
-        "spinner"
-      ],
-      "related": [
-        "#skill-loader"
-      ],
-      "componentType": "loader"
-    },
-    "agent-registry": {
-      "id": "agent-registry",
-      "name": "Agent Registry",
-      "symbol": "#agent-registry",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "v7.9.1 (TD-2026-09-26-846) resolveDispatchableAgents(rootDir, opts?) — roster.yaml + loaded .agent profiles are authoritative for dispatch; .paradigm/agents.yaml is an optional overlay (role/focus/triggers/handoff_to/defaultModel/context/protocol override profile-derived values) and emits a one-time deprecation warning. Candidates = roster ids, else union(profile ids, agents.yaml ids). Benched profiles and roster members with neither profile nor agents.yaml entry are REPORTED as undispatchable, never dropped. Profile-derived definition: role = agents.yaml › ROLE_PROMPTS › profile.role; focus.reads = attention.paths; triggers = attention.concepts (keyword) + attention.symbols (symbol), tagged derived: true; handoff_to = partners › collaboration.with. Returns the parsed agents.yaml (manifest) for reuse and the orchestration block (default_mode, budget). Never deletes agents.yaml.",
-      "visualTags": [],
-      "related": [],
-      "componentType": "loader"
-    },
-    "role-prompts": {
-      "id": "role-prompts",
-      "name": "Role Prompts",
-      "symbol": "#role-prompts",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "ROLE_PROMPTS — battle-tested role prompts for the core agents, extracted from tools/orchestration.ts so",
-      "visualTags": [],
-      "related": [],
-      "componentType": "constant"
-    },
-    "notebook-loader": {
-      "id": "notebook-loader",
-      "name": "Notebook Loader",
-      "symbol": "#notebook-loader",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "CRUD for agent notebook entries — load/save, search, promote from lore, increment applied count. The Classroom (TD-2026-06-19-007): reviseDown is the fail-side mutation (bumps appliedAndBrokeCount, lowers confidence, captures the \"X except Y\" refinement exception mechanically — prose authored at gated /paradigm:class refine, dedup by sourceFailureId); listAllAgentNotebookEntries + decayUnusedEntry are the decay-pass enumerate/mutate seams.",
-      "visualTags": [
-        "spinner"
-      ],
-      "related": [
-        "#soft-provenance"
-      ],
-      "componentType": "loader"
-    },
-    "classroom-decay": {
-      "id": "classroom-decay",
-      "name": "Classroom Decay",
-      "symbol": "#classroom-decay",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "The Classroom decay pass (TD-2026-06-19-007, Phase 2) — load-bearing for the metric, not cleanup. Flips pending certs aged past the SURVIVAL_WINDOW (14d) with no attributed break to outcome:survived (makes repeat-failure-rate's resolved denominator real instead of a structural 1.0); gently decays confidence of entries idle past IDLE_WINDOW (30d) with low appliedCount (silence is signal; never deletes). runDecayPass is best-effort/idempotent, wired into ambient postflight right after runFieldFailureReducer.",
-      "visualTags": [],
-      "related": [],
-      "componentType": "service"
-    },
-    "classroom-fail-side": {
-      "id": "classroom-fail-side",
-      "name": "Classroom Fail Side",
-      "symbol": "#classroom-fail-side",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "The Classroom fail-side event writers + reducer (TD-2026-06-19-007). field-failures.ts: append-only field-failures.jsonl + classroom-certifications.jsonl; overturnCertification (pending→overturned) and surviveCertification (pending→survived, decay-pass writer) — both idempotent, overturn wins. field-failure-reducer.ts: joins reviewer verdicts to notebook-refs by orchestrationId, revises down, back-binds certs, seeds field-failure scenarios.",
-      "visualTags": [],
-      "related": [],
-      "componentType": "service"
-    },
-    "tool-registry": {
-      "id": "tool-registry",
-      "name": "Tool Registry",
-      "symbol": "#tool-registry",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "Tiered tool registration system — core/feature/advanced tiers with auto-detection. getAllTools() lists every module regardless of tier (backs listToolDefinitions for skill pin checks). v7.11: university detection is pack-based (detectUniversityPacks — a discovered pack with entries or skillDirs, or an implicit v5 project pack with content; requires .paradigm; fail-closed false) — an empty scaffold no longer activates the tools.",
-      "visualTags": [],
-      "related": [],
-      "componentType": "loader"
-    },
-    "compliance-checker": {
-      "id": "compliance-checker",
-      "name": "Compliance Checker",
-      "symbol": "#compliance-checker",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "Shared compliance checking logic — purpose coverage, portal gates, aspect anchors, code quality",
-      "visualTags": [],
-      "related": [],
-      "componentType": "service"
-    },
-    "DocsLoader": {
-      "id": "DocsLoader",
-      "name": "DocsLoader",
-      "symbol": "#DocsLoader",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "Reads scan-index, .purpose files, portal.yaml, and flows.yaml to produce structured documentation page data",
-      "visualTags": [
-        "spinner"
-      ],
-      "related": [],
-      "componentType": "loader"
-    },
-    "graduation-types": {
-      "id": "graduation-types",
-      "name": "Graduation Types",
-      "symbol": "#graduation-types",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "Type definitions for the automation tier graduation system — GraduationState, GraduationConfig, GraduationTier, NON_GRADUATABLE_CHECK_TYPES",
-      "visualTags": [],
-      "related": [],
-      "componentType": "types"
-    },
-    "graduation-store": {
-      "id": "graduation-store",
-      "name": "Graduation Store",
-      "symbol": "#graduation-store",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "YAML read/write for .paradigm/graduation.yaml — state accessors, mutations, 30s cache",
-      "visualTags": [],
-      "related": [],
-      "componentType": "store"
-    },
-    "graduation-engine": {
-      "id": "graduation-engine",
-      "name": "Graduation Engine",
-      "symbol": "#graduation-engine",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "Core graduation logic — eligibility checking against practice events, graduate/demote actions, failure tracking",
-      "visualTags": [],
-      "related": [],
-      "componentType": "engine"
-    },
-    "aspect-fingerprint": {
-      "id": "aspect-fingerprint",
-      "name": "Aspect Fingerprint",
-      "symbol": "#aspect-fingerprint",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "Phase 3 content fingerprint search — Levenshtein distance, sliding window, structural hashing, cross-file search for relocated anchors",
-      "visualTags": [],
-      "related": [],
-      "componentType": "engine"
-    },
-    "data-policy-loader": {
-      "id": "data-policy-loader",
-      "name": "Data Policy Loader",
-      "symbol": "#data-policy-loader",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "Data policy loader — reads .paradigm/data-policy.yaml, merges with defaults, enforces trust rings, observation rules, content redaction, and per-agent overrides.",
-      "visualTags": [
-        "spinner"
-      ],
-      "related": [],
-      "componentType": "loader"
-    },
-    "work-log-loader": {
-      "id": "work-log-loader",
-      "name": "Work Log Loader",
-      "symbol": "#work-log-loader",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "Work Log CRUD — record/search/summarize what agents did. Date-partitioned YAML in .paradigm/work-log/{date}/",
-      "visualTags": [
-        "spinner"
-      ],
-      "related": [],
-      "componentType": "loader"
-    },
-    "journal-loader": {
-      "id": "journal-loader",
-      "name": "Journal Loader",
-      "symbol": "#journal-loader",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "Learning Journal CRUD — record/search/stats for agent learnings. Agent-private YAML in ~/.paradigm/agents/{id}/journal/",
-      "visualTags": [
-        "spinner"
-      ],
-      "related": [],
-      "componentType": "loader"
-    },
-    "decision-loader": {
-      "id": "decision-loader",
-      "name": "Decision Loader",
-      "symbol": "#decision-loader",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "Team Decisions CRUD — record/search/supersede institutional decisions. YAML in .paradigm/decisions/. v6.0 sub-phase 1: updateDecision accepts absorbed ADR fields (context/consequences/date/migrated_from/supersedes); supersedeDecision backfills supersedes[] on the new entry (D2 Loid addendum); exposes writeCompanionLoreEntry helper for D3 companion-lore writes (not yet wired — sub-phase 2 wires the tool handler).",
-      "visualTags": [
-        "spinner"
-      ],
-      "related": [],
-      "componentType": "loader"
-    },
-    "nomination-engine": {
-      "id": "nomination-engine",
-      "name": "Nomination Engine",
-      "symbol": "#nomination-engine",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "Nomination engine — processes events into agent nominations and debates. Core loop: event → attention scoring → nomination → debate detection → surfacing. 7.12.0: `work-completed` events never nominate (NON_NOMINATING_EVENT_TYPES, D1 — they stay in stream.jsonl). Journal-to-notebook promotion (autoPromoteJournalEntries — pattern_discovered + human_feedback) is gated by the BELIEF-DELTA gate decidePromotion() with configurable bands loadPromotionBands() (config.yaml learning.promotion.{floor,deltaMin,epsilon,novelBar}; defaults 0.7/0.10/0.05/0.8, uncalibrated) — prior from notebookPrior (never journal confidence_before); absolute 0.8 survives only as the novel-concept fallback; human_feedback is floor-only; each candidate appends a promotion-decisions.jsonl row with gate:belief-delta-v1, reason, shadow absoluteWouldPromote, after:null when missing (kills the ?? 0 artifact); a small rise (epsilon <= delta < deltaMin) is reason below-delta, distinct from hold-silence (|delta| < epsilon); the shadow bar is LEGACY_ABSOLUTE_BAR; certifiedBy:gate, or certifiedBy:human for human_feedback promotions. The GATED single-entry path (gatedPromoteJournalEntry — /class sign-off, human ruling IS the gate, NEVER the delta gate, certifiedBy:peer|quorum, no instrument row; TD-2026-06-25-044), Neverland validation metrics, stale nomination expiry (7-day), reason storage on engage, Symphony relay forwarding, and surfacing config.",
-      "visualTags": [],
-      "related": [],
-      "componentType": "engine"
-    },
-    "session-work-log": {
-      "id": "session-work-log",
-      "name": "Session Work Log",
-      "symbol": "#session-work-log",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "Session work log — JSONL append log capturing agent contributions and user verdicts during a session. Read by Maestro at postflight for targeted learning feedback. Bounded at 200 entries, cleared on session start. Also hosts the durable iteration-revision channel (readPendingIterationRevisions / markIterationRevisionsConsumed, IterationRevisionEntry) — agent belief-revisions from iteration loops, kept separate from the human-verdict channel and routed to the self_reflection journal trigger. T-2026-06-13-004 adds the postflight-liveness channel (recordPostflightLiveness / readPostflightLiveness, PostflightLivenessRecord → .paradigm/events/postflight-liveness.jsonl) — every non-dry-run postflight pass appends one durable row (postflight-live when it journaled, postflight-noop{reason} when it did not) so a broken loop is no longer byte-identical to a healthy one (the falsifiable liveness invariant `paradigm doctor` reads).",
-      "visualTags": [],
-      "related": [
-        "#activity-metrics"
-      ],
-      "componentType": "loader"
-    },
-    "agent-state": {
-      "id": "agent-state",
-      "name": "Agent State",
-      "symbol": "#agent-state",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "Per-project + global state tracking for agent continuity. Tracks last session summary, pending work, decisions, patterns, and career stats across sessions.",
-      "visualTags": [],
-      "related": [
-        "$agent-learning-loop",
-        "!agent-state-recorded"
-      ],
-      "componentType": "service"
-    },
-    "gap-narrator": {
-      "id": "gap-narrator",
-      "name": "Gap Narrator",
-      "symbol": "#gap-narrator",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "Human-readable narration engine for enforcement check gaps. Produces explanations and fix instructions for 13 check types (missing-purpose, missing-gates, aspect-drift, stale-purpose, unregistered-symbol, unregistered-event, missing-flow, uncovered-endpoint, uncovered-gate, uncovered-flow, undocumented-aspect, missing-tests, missing-lore). Used by doctor --explain and postflight report generation.",
-      "visualTags": [],
-      "related": [],
-      "componentType": "engine"
-    },
-    "activity-metrics": {
-      "id": "activity-metrics",
-      "name": "Activity Metrics",
-      "symbol": "#activity-metrics",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "Proxy metrics tracking for session activity. Records tool call count, payload size, and session duration per agent. No dollar figures or token counts. Types: ActivityMetric, SessionActivitySummary. Functions: recordActivityMetric(), getSessionActivitySummary(), clearActivityMetrics().",
-      "visualTags": [],
-      "related": [
-        "#session-work-log"
-      ],
-      "componentType": "service"
-    },
-    "soft-provenance": {
-      "id": "soft-provenance",
-      "name": "Soft Provenance",
-      "symbol": "#soft-provenance",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "Optional parentId and lineageType fields on NotebookEntry for tracking derivation chains without DAG validation. Enables notebook promotion lineage tracking (promoted-from-lore, derived-from-notebook, manual-input). Used by paradigm_notebook_add tool and prepareForPublish() ringfencing.",
-      "visualTags": [],
-      "related": [
-        "#notebook-loader"
-      ],
-      "componentType": "service"
-    },
-    "outcome-reference-tracking": {
-      "id": "outcome-reference-tracking",
-      "name": "Outcome Reference Tracking",
-      "symbol": "#outcome-reference-tracking",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "Records which notebook entries were loaded into agent prompts during orchestration. Pure data collection — no scoring or attribution.",
-      "visualTags": [],
-      "related": [],
-      "componentType": "utility"
-    },
-    "compliance-health": {
-      "id": "compliance-health",
-      "name": "Compliance Health",
-      "symbol": "#compliance-health",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "Tracks stop hook violation frequency over time and computes compliance trends (improving/stable/degrading). Powers Conductor health dot.",
-      "visualTags": [],
-      "related": [],
-      "componentType": "utility"
-    },
-    "provisional-intake": {
-      "id": "provisional-intake",
-      "name": "Provisional Intake",
-      "symbol": "#provisional-intake",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "Provisional-candidate intake (T-2026-06-13-004) — the floor-trust session miner that lets the loop LEARN FROM FAILURE without breaching the classroom gate. mineProvisionalCandidates(rootDir, projectName, fallbackClaimant) reads already-recorded failure signals (overrides.jsonl, dismissed/revised durable verdicts) and stages each as a journal entry stamped provenance {source:external, trust:external} with the NON-promotable failure_analysis trigger, tagged provisional-candidate/floor-trust. Invoked once per session-boundary postflight pass; idempotent via .paradigm/events/provisional-mined.jsonl. Invisible to autoPromoteJournalEntries (which only promotes pattern_discovered/human_feedback) so nothing reaches a notebook or CLAUDE.md until the gated Classroom adjudicates it.",
-      "visualTags": [],
-      "related": [
-        "#journal-loader",
-        "#session-work-log"
-      ],
-      "componentType": "engine"
-    },
-    "orchestration-marker": {
-      "id": "orchestration-marker",
-      "name": "Orchestration Marker",
-      "symbol": "#orchestration-marker",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "v7 \"Teeth\" T-005 — single best-effort writer of the .paradigm/.orchestrated enforcement marker that satisfies the Stop-hook orchestration-required gate. recordOrchestrationCompletion(rootDir, {verdicts, source}) writes { timestamp, type:orchestrated, verdicts, source }. Called ONLY from real completion signals (a chainLive settlement in task-settlement.ts, or a debrief with real agent verdicts in captain.ts) — never on orchestrate_inline tool entry. Enforcement now verifies completion (verdicts>0), not invocation. Write failures are logged and swallowed so settlement/debrief never break.",
-      "visualTags": [],
-      "related": [],
-      "componentType": "utility"
-    },
-    "yaml-validator": {
-      "id": "yaml-validator",
-      "name": "Yaml Validator",
-      "symbol": "#yaml-validator",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "Fail-closed YAML loader returning a discriminated union (missing/unparseable/invalid/ok). Classifies YAMLException by reason into duplicate-key/syntax/other; detail strings are redacted classifiers only — never file contents, gate names, or route paths. Optional zod schema validation. v5.37.12 security patch (2026-04-22 audit). v5.38.0 re-exports classifyYamlError from @a-company/portal-core (single source of truth) and honors PARADIGM_STRICT=1 by throwing on non-ok results.",
-      "visualTags": [],
-      "related": [],
-      "componentType": "utility"
-    },
-    "write-and-confirm": {
-      "id": "write-and-confirm",
-      "name": "Write And Confirm",
-      "symbol": "#write-and-confirm",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "v5.38.0 atomic-write + read-back verify wrapper for mutation handlers. Writes to .tmp sibling then renames; re-reads the file; runs verify callback; throws WriteVerificationError on failure. Returns WriteEnvelope with truncated HMAC (first 12 hex chars of HMAC-SHA256 keyed with per-install secret) and byte count. Applied to portal_add_gate, portal_add_route, purpose_add_component, purpose_link, purpose_remove. Logs redacted — no gate names or file paths in error surfaces.",
-      "visualTags": [],
-      "related": [],
-      "componentType": "utility"
-    },
-    "consistency-tracker": {
-      "id": "consistency-tracker",
-      "name": "Consistency Tracker",
-      "symbol": "#consistency-tracker",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "v5.38.0 round-trip consistency audit log. Records transformation CLASSES (prefix-stripped/array-coerced/default-applied/duplicate-key-detected/case-normalized) with fixed surface classifiers (portal.yaml/purpose.yaml) and counts — never gate names, route paths, or file contents. One injectable singleton per reindex pass; report rendered into paradigm_reindex envelope and .paradigm/manifest.consistency.json. Lossy transformations trigger strict-mode reindex failure.",
-      "visualTags": [],
-      "related": [],
-      "componentType": "engine"
-    },
-    "strict-mode": {
-      "id": "strict-mode",
-      "name": "Strict Mode",
-      "symbol": "#strict-mode",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "v5.38.0 PARADIGM_STRICT=1 env var gate. Default OFF; flip ON in v5.39.0 after field observation. In strict mode, safeLoad throws on any non-ok/non-missing result, reindex fails on lossy transformations, and writeAndConfirm verify failures are never downgraded.",
-      "visualTags": [],
-      "related": [],
-      "componentType": "utility"
-    },
-    "wisdom-loader": {
-      "id": "wisdom-loader",
-      "name": "Wisdom Loader",
-      "symbol": "#wisdom-loader",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "Reads team wisdom from .paradigm/wisdom/ — preferences/antipatterns/expertise. 30s TTL cache, invalidated on writes. Global antipatterns/preferences merged from ~/.paradigm/wisdom/ (local wins on id collision). 7.12.0 (D2): the legacy wisdom/decisions read path is REMOVED (project and global) — WisdomContext.decisions is always []; canonical decisions live in .paradigm/decisions/ (#decision-loader); `paradigm migrate learning-stores` moves leftovers. recordDecision (legacy writer) is @deprecated.",
-      "visualTags": [
-        "spinner"
-      ],
-      "related": [
-        "#decision-loader"
-      ],
-      "componentType": "loader"
-    },
-    "learning-stores": {
-      "id": "learning-stores",
-      "name": "Learning Stores",
-      "symbol": "#learning-stores",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "Learning-stores registry (7.12.0, D5) — READ-ONLY facade listLearningStores(rootDir) naming every learning store with class (ledger|knowledge|pipeline|policy|native), path, scope, owner and a never-throwing count(). Classes follow the spec's three conceptual stores: ledger = lore (counts .lore/.yaml under lore/entries/<date>/), work-log, history, raw journals; knowledge = decisions, antipatterns, notebooks, protocols, skills, preferences; pipeline = event-stream, nominations, debates + the promotion-decisions / classroom-certifications / notebook-refs / liveness instruments. Encodes Loid's must-NOT-consolidate list as separate rows (journals vs notebooks; the instruments; decisions vs antipatterns). Habits = policy (hook policy, D3). Claude Code native memory registered read-only, never migrated. Used by the doctor census and migrate learning-stores.",
-      "visualTags": [],
-      "related": [],
-      "componentType": "registry"
-    },
-    "protocol-loader": {
-      "id": "protocol-loader",
-      "name": "Protocol Loader",
-      "symbol": "#protocol-loader",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "Loads/validates .paradigm/protocols/*.protocol and rebuilds the protocol index. 7.12.0 (D4): lintProtocol emits PROTOCOL_IS_SKILL (warn only, never changes status; surfaced in validateProtocol issues) when no step names a repo path — the reverse of skill-loader's SKILL_IS_PROTOCOL, reusing its exported repoPathTokens detector.",
-      "visualTags": [
-        "spinner"
-      ],
-      "related": [],
-      "componentType": "loader"
-    },
-    "global-store": {
-      "id": "global-store",
-      "name": "Global Store",
-      "symbol": "#global-store",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "Cross-project wisdom store at ~/.paradigm/wisdom/ (antipatterns, preferences, decisions). 7.12.0 (D2): loadGlobalDecisions is @deprecated and no longer part of the wisdom read path — retained only for the promote-to-global duplicate check in tools/wisdom.ts.",
-      "visualTags": [],
-      "related": [],
-      "componentType": "store"
-    },
-    "arch-loader": {
-      "id": "arch-loader",
-      "name": "Arch Loader",
-      "symbol": "#arch-loader",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "Symbol architecture loader — reads and resolves project symbol graph for arch tools. Provides structured access to component hierarchy, flows, gates, and signals for the Atlas cartographer agent.",
-      "visualTags": [
-        "spinner"
-      ],
-      "related": [],
-      "componentType": "loader"
-    },
-    "calibration-aggregate": {
-      "id": "calibration-aggregate",
-      "name": "Calibration Aggregate",
-      "symbol": "#calibration-aggregate",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "Calibration aggregation (#calibration, T-011) — the MCP-side learned-table rebuild that both `paradigm calibrate` and the settlement chain call (aggregate-on-settle). aggregateActuals(lines) groups estimate-actuals by (archetype, taskType) into p10/p90 bands at n>=8; rebuildLearnedTable(rootDir) reads the actuals and writes token-estimates.json (best-effort, idempotent). Extracted from the CLI so the MCP settlement chain can close the calibration loop without importing the CLI package.",
-      "visualTags": [],
-      "related": [
-        "#calibration"
-      ],
-      "componentType": "utility"
-    },
-    "skill-loader": {
-      "id": "skill-loader",
-      "name": "Skill Loader",
-      "symbol": "#skill-loader",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "Skills Phase 1 (T-2026-09-26-002) — the ONE loader/validator for agent-owned SKILL.md sources (project .paradigm/skills/<id> › global ~/.paradigm/skills/<id>; SkillEnv makes homedir/globalDir injectable). parseSkill/serializeSkill (round-trip), resolveSkill, listSkills(Detailed), lintSkill (SKILL_IS_PROTOCOL, SKILL_IS_NOTEBOOK, OWNED_SKILL_CAP, missing notebook/protocol, unresolved steward, kebab name, semver), computeContentHash (sha256 of canonical frontmatter minus certification + body + references/assets/scripts), checkPins (paradigm_* hashed against injected listToolDefinitions; host/* never checked; third-party unknown unless a tools/list dump is supplied), computeStatus (invalid › stale › ok › uncertified — never stored), resolveAgentSkills for enrichment, and the PURE $skill-certification verifier evaluateCertification (TTY, founder, lint, pins, ≥1 scenario with fixture + non-steward probe on skill:<id>@<ver> + human-confirmed survival) + applyCertification + buildSkillCertRow (kind skill ledger row). Imported by #skill-cli by relative path; certification is CLI-only (never an MCP tool). Fix pass: KEBAB id guard (isValidSkillId/assertSkillId) on every id that becomes a path; DIR_ID_MISMATCH + RESOURCE_SYMLINK lint errors; NOTEBOOK_MISSING warns for bundled; certification is drift-detection (not tamper-proof; signing = follow-up) — ok requires the SKILL.md block AND a matching kind skill ledger row (loadSkillCertLedger = project classroom ledger + global ~/.paradigm/events/skill-certifications.jsonl via appendGlobalSkillCertRow); evaluateCertification needs env, a resolvable non-steward probe agent and an existing fixture; listSkillScripts lists scripts/ with sha256 for certify; resolveAgentSkills uses cached structural lint only (no notebook scan, pins unchecked). v7.11 pack scope: third, lowest-precedence read-only scope `pack` (project › global › pack) from university-core discoverPacks skillDirs (SkillEnv.packSkillDirs injectable; only probed when <root>/.paradigm exists); parseSkill FORCES trust external + drops certification for scope pack; dir basename must equal meta.id; listPackSkills(env) → PackSkillEntry[] {packId, skill, scriptCount, shadowedBy?} (all pack skills incl. shadowed — backs Platform Academy /skills + pack_list); findPackSkill; importPackSkill(packId, id, {env, scope}) copies SKILL.md + resources (no symlinks/dotfiles) as trust provisional, provenance.source pack, upstream <pack>:<id>@<ver>, never overwrites; lint PACK_SHADOWED warn both directions; steward/protocol/notebook resolution downgraded to warn for pack scope; pack skills excluded from OWNED_SKILL_CAP. v7.11 fix pass: resolveSkill(id, env, {includePack}) — a project/global source that exists but fails to parse resolves to null (no fall-through to global/pack); resolveAgentSkills passes includePack:false so pack skills never reach agent prompts / Your Skills. importPackSkill takes expectedHash (refused content-changed on mismatch) and lstats each resource file right before copying (refused symlink). v7.12 (D8): splitFrontmatter is a thin strict wrapper over premise-core #frontmatter-parser — same exported signature ({data, body}) and the same error strings, pinned by skill-loader-frontmatter.test.ts.",
-      "visualTags": [
-        "spinner"
-      ],
-      "related": [
-        "$skill-certification",
-        "#skill-cli",
-        "#frontmatter-parser"
-      ],
-      "componentType": "loader"
-    },
-    "aspect-graph": {
-      "id": "aspect-graph",
-      "name": "Aspect Graph",
-      "symbol": "#aspect-graph",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "SQLite aspect graph utils (.paradigm/aspect-graph.db): materializeAspects, ripple, heatmap, checkDrift. v7.12 (D9) section anchors: anchors table gains anchor_kind TEXT DEFAULT 'lines' + anchor_key TEXT via idempotent ALTER migrations (PRAGMA table_info guard + catch; safe twice, safe on pre-7.12 DBs). Heading/block anchors resolve to the section's CURRENT line range at materialize (premise-core resolveSectionAnchorLines; 0/0 when unresolvable) with baseline hashes; checkDrift re-resolves the KEY first then hashes the range — moved section = clean (row lines updated, .purpose untouched), whitespace = cosmetic, content change = modified, renamed/removed heading or block = missing (exists:true, drifted). No git line-shift or content-search heal for section anchors. Line anchors (anchor_kind lines) are byte-identical to before.",
-      "visualTags": [
-        "chart"
-      ],
-      "related": []
-    },
-    "docs-loader": {
-      "id": "docs-loader",
-      "name": "Docs Loader",
-      "symbol": "#docs-loader",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "Docs section loader (config, portal, university index, markdown guides). v7.12 (D8): its private parseFrontmatter is a null-returning adapter over premise-core #frontmatter-parser (lenient) — no block or malformed YAML → null; non-mapping → frontmatter {}; now also accepts CRLF and a closing fence at EOF.",
-      "visualTags": [
-        "spinner"
-      ],
-      "related": [
-        "#frontmatter-parser"
-      ]
-    },
-    "skill-projector": {
-      "id": "skill-projector",
-      "name": "Skill Projector",
-      "symbol": "#skill-projector",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "Skills Phase 1 — one-way projection of certified skill sources to ~/.claude/skills/pdg-<id>/ (or <root>/.claude/skills with target project). Gates: lint errors, stale pins, trust (only status ok; allowProvisional injects the PROVISIONAL banner). Rewrites name pdg-<id>, FLATTENS metadata.paradigm to a string map (paradigm-id/version/steward/trust/source), drops certification, writes .pdg-generated.json marker; refuses unmarked or downstream-drifted dests and HARD-REFUSES anything under ~/.claude/skills/synced/ (symlink-aware). Atomic temp-dir + rename; idempotent. adoptSkill pulls downstream edits back: patch+1, provisional, provenance adopted, certification dropped, prior archived to .versions/<ver>/, metadata un-flattened preserving source-only fields, re-projected under a fresh marker. Fix pass: scripts/ never projected for non-certified skills (marker.scriptsWithheld); any symlink in a projected dir = drift; dotfiles ignored in the drift hash; stale .pdg-*.tmp-* swept; synced/ checked first; adopt refuses source-changed (unless force) and widened allowed-tools (unless confirmAllowedTools), returns frontmatterDiff, validates semver before the .versions path, and lints before re-projecting (reprojected:false on errors). v7.11: projectSkill refuses scope pack (untrusted, hint `paradigm skill import <pack>:<id>`); adoptSkill never treats a pack source as writable (not-found).",
-      "visualTags": [],
-      "related": [],
-      "componentType": "service"
-    },
-    "skill-usage": {
-      "id": "skill-usage",
-      "name": "Skill Usage",
-      "symbol": "#skill-usage",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "Skills Phase 1 — append-only .paradigm/events/skill-usage.jsonl (pruned to 500, modelled on appendFieldFailure). Rows carry entryId skill:<id>@<ver>, the same key as the scenario probe and the cert row. buildSkillUsageRow maps a host Skill invocation pdg-<id> to the skill id + version from the projection sidecar (for the PostToolUse Skill hook). Fix pass: KEBAB-validates the id, trusts only a marker whose skillId matches; resolveHookProjectDir prefers CLAUDE_PROJECT_DIR over payload cwd.",
-      "visualTags": [],
-      "related": [
-        "!skill-used"
-      ],
-      "componentType": "service"
     },
     "ServeCommand": {
       "id": "ServeCommand",
@@ -9008,6 +8649,137 @@
       "related": [],
       "componentType": "model"
     },
+    "brain-types": {
+      "id": "brain-types",
+      "name": "Brain Types",
+      "symbol": "#brain-types",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/brain/.purpose",
+      "description": "Shared Brain types (gates, brain.yaml, index record, view, egress). Builder B codes against it.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "model"
+    },
+    "brain-config": {
+      "id": "brain-config",
+      "name": "Brain Config",
+      "symbol": "#brain-config",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/brain/.purpose",
+      "description": "brain.yaml load/save (fail-closed validation, tamper check), storage paths with injectable homedir, hard-blocks (refused even when allow-listed), glob matching, gate resolution (strictest zone wins; share human-only, case-sensitive; code may only append stricter zones), name-based zones, init/share/agent-access/list.",
+      "visualTags": [],
+      "related": [
+        "^brain-default-deny"
+      ],
+      "componentType": "service"
+    },
+    "brain-walk": {
+      "id": "brain-walk",
+      "name": "Brain Walk",
+      "symbol": "#brain-walk",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/brain/.purpose",
+      "description": "Hardened walk — lstat, never follows symlinks, refuses hard-blocked paths, skips dot-dirs/node_modules, max_files cap.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "service"
+    },
+    "brain-detect": {
+      "id": "brain-detect",
+      "name": "Brain Detect",
+      "symbol": "#brain-detect",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/brain/.purpose",
+      "description": "Local detectors run BEFORE persistence — PEM keys, AWS/GitHub/Slack/Anthropic/OpenAI key shapes, KEY/SECRET/TOKEN/PASSWORD assignments, Luhn card numbers, US SSN, passport MRZ → quarantined; Slack/Discord/WhatsApp/messages.json chat exports → third-party-data. Returns detector ids only.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "service"
+    },
+    "brain-parse": {
+      "id": "brain-parse",
+      "name": "Brain Parse",
+      "symbol": "#brain-parse",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/brain/.purpose",
+      "description": ".md/.txt metadata extraction via premise-core lenient parseFrontmatter — title, ATX headings, wikilinks (#heading, ^block, |alias, embeds), relative md links, frontmatter tags/aliases/relates. Bodies are never symbol-scanned; strings sanitized and capped.",
+      "visualTags": [],
+      "related": [
+        "#heading",
+        "^block"
+      ],
+      "componentType": "service"
+    },
+    "brain-index-store": {
+      "id": "brain-index-store",
+      "name": "Brain Index Store",
+      "symbol": "#brain-index-store",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/brain/.purpose",
+      "description": "MODULE-PRIVATE derived index + incremental scan (mtime+size+inode reuse, hash only changed, rename detection by inode/hash, atomic rewrite). Quarantined/third-party/skipped records keep only path+size. Only view.ts may import it (lint-tested).",
+      "visualTags": [],
+      "related": [],
+      "componentType": "service"
+    },
+    "brain-view": {
+      "id": "brain-view",
+      "name": "Brain View",
+      "symbol": "#brain-view",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/brain/.purpose",
+      "description": "THE gate choke point — openBrainView(rootHash, agent|owner). Filters before matching; agent sees only open files and only with agent_access: metadata, every respond() leak-checked and egress-logged (fail closed); owner sees open+private, sensitive gates only as {folder, gate, count}; hidden link targets render [private]; gate throw → quarantined. Also exports scanBrain/hasIndex.",
+      "visualTags": [],
+      "related": [
+        "^brain-default-deny",
+        "!brain-egress"
+      ],
+      "componentType": "service"
+    },
+    "brain-egress": {
+      "id": "brain-egress",
+      "name": "Brain Egress",
+      "symbol": "#brain-egress",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/brain/.purpose",
+      "description": "Append-only egress.log ({at, channel, op, fileIds, bytes, root}) + summary for the \"Nothing has left this Mac\" badge.",
+      "visualTags": [],
+      "related": [
+        "!brain-egress"
+      ],
+      "componentType": "service"
+    },
+    "brain-purge": {
+      "id": "brain-purge",
+      "name": "Brain Purge",
+      "symbol": "#brain-purge",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/brain/.purpose",
+      "description": "Forget this folder — archives egress.log to brains/_archive then removes the brain storage dir; never touches the user's folder.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "service"
+    },
+    "brain-atomic": {
+      "id": "brain-atomic",
+      "name": "Brain Atomic",
+      "symbol": "#brain-atomic",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/brain/.purpose",
+      "description": "Local atomic write helper (tmp + fsync + rename, 0600) and path containment check; no warpline dependency.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "utility"
+    },
+    "brain-leak-probe": {
+      "id": "brain-leak-probe",
+      "name": "Brain Leak Probe",
+      "symbol": "#brain-leak-probe",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/brain/.purpose",
+      "description": "Reusable leak-probe harness — sentinel corpus generator, ≥100 probe queries, findLeaks — for engine, MCP handler and Platform route tests.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "utility"
+    },
     "DocsCommands": {
       "id": "DocsCommands",
       "name": "DocsCommands",
@@ -9061,6 +8833,19 @@
       "description": "v7.9.1 (TD-2026-09-26-846) auditAgents(rootDir, {globalDir?}) — pure check behind doctor's \"Agent profile keys\" (warn on keys outside a local KNOWN_AGENT_KEYS copy; info when `behaviors:` is present but unread until skills Phase 1) and \"Roster dispatchability\" (warn on active roster ids with no project/global .agent and no agents.yaml entry, or benched on the roster; fix = paradigm agent sync-global or deactivate). Scans project .agent files plus roster-relevant global ones. v7.10.0 (Skills Phase 1): `skills` is a known key; skillMigrations() scans project + global SKILL.md provenance.migratedFrom and auditAgents returns migratedBehaviors, which doctor renders as info lines \"<file> `behaviors.<block>` migrated to skill <id>\".",
       "visualTags": [],
       "related": [],
+      "componentType": "utility"
+    },
+    "legacy-names-audit": {
+      "id": "legacy-names-audit",
+      "name": "Legacy Names Audit",
+      "symbol": "#legacy-names-audit",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/doctor/.purpose",
+      "description": "v7.13.0 (T-2026-09-26-005, MCP surface cut) auditLegacyToolNames(rootDir) — scans CLAUDE.md, AGENTS.md, .cursor/rules/** and .claude/settings{,.local}.json permissions.{allow,deny,ask} for renamed pre-7.13 `paradigm_<family>_<op>` tool names (anchors and same-name entries excluded). Driven by #legacy-tool-map (single source of truth, imported from paradigm-mcp). Doctor renders \"Legacy tool names (permissions)\" warn (dead allowlist entries re-prompt) and \"Legacy tool names\" warn with the family({op}) replacement; ok when clean. Advisory — never fails doctor.",
+      "visualTags": [],
+      "related": [
+        "#legacy-tool-map"
+      ],
       "componentType": "utility"
     },
     "skill-used-hook": {
@@ -9535,6 +9320,17 @@
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/symphony/.purpose",
       "description": "Start WebSocket relay server for cross-machine Symphony networking — pairing codes, message relay, auto-reconnect",
+      "visualTags": [],
+      "related": [],
+      "componentType": "command"
+    },
+    "symphony-peers": {
+      "id": "symphony-peers",
+      "name": "Symphony Peers",
+      "symbol": "#symphony-peers",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/symphony/.purpose",
+      "description": "List trusted remote peers and their agents",
       "visualTags": [],
       "related": [],
       "componentType": "command"
@@ -10766,6 +10562,15 @@
       "visualTags": [],
       "related": []
     },
+    "index": {
+      "id": "index",
+      "name": "Index",
+      "symbol": "#index",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
+      "visualTags": [],
+      "related": []
+    },
     "vision-gaze-provider.": {
       "id": "vision-gaze-provider.",
       "name": "Vision Gaze Provider.",
@@ -11467,6 +11272,92 @@
         "#session-management"
       ]
     },
+    "index.loaded": {
+      "id": "index.loaded",
+      "name": "Index.loaded",
+      "symbol": "#index.loaded",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
+      "description": "Referenced from #symbol-indexing",
+      "visualTags": [],
+      "related": [
+        "#symbol-indexing"
+      ]
+    },
+    "index.count": {
+      "id": "index.count",
+      "name": "Index.count",
+      "symbol": "#index.count",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
+      "description": "Referenced from #symbol-indexing",
+      "visualTags": [],
+      "related": [
+        "#symbol-indexing"
+      ]
+    },
+    "setup": {
+      "id": "setup",
+      "name": "Setup",
+      "symbol": "#setup",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
+      "description": "Referenced from #aggregator",
+      "visualTags": [],
+      "related": [
+        "#aggregator"
+      ]
+    },
+    "Heading": {
+      "id": "Heading",
+      "name": "Heading",
+      "symbol": "#Heading",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
+      "description": "Referenced from #symbol-index",
+      "visualTags": [],
+      "related": [
+        "#symbol-index"
+      ]
+    },
+    "x": {
+      "id": "x",
+      "name": "X",
+      "symbol": "#x",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
+      "description": "Referenced from #symbol-index",
+      "visualTags": [],
+      "related": [
+        "#symbol-index"
+      ]
+    },
+    "skill-loader": {
+      "id": "skill-loader",
+      "name": "Skill Loader",
+      "symbol": "#skill-loader",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
+      "description": "Referenced from #frontmatter-parser",
+      "visualTags": [
+        "spinner"
+      ],
+      "related": [
+        "#frontmatter-parser"
+      ]
+    },
+    "native-memory-scan": {
+      "id": "native-memory-scan",
+      "name": "Native Memory Scan",
+      "symbol": "#native-memory-scan",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
+      "description": "Referenced from #frontmatter-parser",
+      "visualTags": [],
+      "related": [
+        "#frontmatter-parser"
+      ]
+    },
     "ZoomControls": {
       "id": "ZoomControls",
       "name": "ZoomControls",
@@ -11545,16 +11436,40 @@
         "#ConversationView"
       ]
     },
-    "frontmatter-parser": {
-      "id": "frontmatter-parser",
-      "name": "Frontmatter Parser",
-      "symbol": "#frontmatter-parser",
+    "learning-stores": {
+      "id": "learning-stores",
+      "name": "Learning Stores",
+      "symbol": "#learning-stores",
       "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "Referenced from #skill-loader",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/.purpose",
+      "description": "Referenced from #DoctorCommand",
       "visualTags": [],
       "related": [
-        "#skill-loader"
+        "#DoctorCommand"
+      ]
+    },
+    "heading": {
+      "id": "heading",
+      "name": "Heading",
+      "symbol": "#heading",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/brain/.purpose",
+      "description": "Referenced from #brain-parse",
+      "visualTags": [],
+      "related": [
+        "#brain-parse"
+      ]
+    },
+    "gap-narrator": {
+      "id": "gap-narrator",
+      "name": "Gap Narrator",
+      "symbol": "#gap-narrator",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/doctor/.purpose",
+      "description": "Referenced from #doctor-handler",
+      "visualTags": [],
+      "related": [
+        "#doctor-handler"
       ]
     },
     "fenced-block-parser": {
@@ -13234,6 +13149,51 @@
         }
       ]
     },
+    "symbol-aggregation": {
+      "id": "symbol-aggregation",
+      "name": "Symbol Aggregation",
+      "symbol": "$symbol-aggregation",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
+      "description": "Aggregate all symbols from .purpose and portal.yaml files into a unified index",
+      "steps": [
+        {
+          "id": "symbol-aggregation-step-0",
+          "name": "Find all .purpose files via glob",
+          "target": "#aggregator",
+          "order": 0
+        },
+        {
+          "id": "symbol-aggregation-step-1",
+          "name": "Parse each file with yaml + Zod validation",
+          "target": "#source-loader",
+          "order": 1
+        },
+        {
+          "id": "symbol-aggregation-step-2",
+          "name": "Extract components, gates, signals, flows, aspects",
+          "target": "#aggregator",
+          "order": 2
+        },
+        {
+          "id": "symbol-aggregation-step-3",
+          "name": "Build searchable in-memory index",
+          "target": "#symbol-index",
+          "order": 3
+        },
+        {
+          "id": "symbol-aggregation-step-4",
+          "name": "Resolve cross-file symbol references",
+          "target": "#reference-tracker",
+          "order": 4
+        },
+        {
+          "id": "symbol-aggregation-step-5",
+          "name": "Build relationship graph",
+          "target": "#graph-builder",
+          "order": 5
+        }
+      ]
+    },
     "purpose-parsing": {
       "id": "purpose-parsing",
       "name": "Purpose Parsing",
@@ -13752,12 +13712,12 @@
       "description": "Referenced from #f4-trace",
       "steps": []
     },
-    "agent-learning-loop": {
-      "id": "agent-learning-loop",
-      "name": "Agent Learning Loop",
-      "symbol": "$agent-learning-loop",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "Referenced from #agent-state",
+    "fleet-switch": {
+      "id": "fleet-switch",
+      "name": "Fleet Switch",
+      "symbol": "$fleet-switch",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
+      "description": "Referenced from #graph-slice-projector",
       "steps": []
     },
     "roster-setup": {
@@ -13903,6 +13863,15 @@
       "description": "^gate-check: Internal gate for SDK validation",
       "related": []
     },
+    "brain-default-deny": {
+      "id": "brain-default-deny",
+      "name": "Brain Default Deny",
+      "symbol": "^brain-default-deny",
+      "category": "gates",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/brain/.purpose",
+      "description": "Brain files are private by default; agents see only human-shared (open) files and only when agent_access is metadata; sensitive zones are never shown by name.",
+      "related": []
+    },
     "file-trust": {
       "id": "file-trust",
       "name": "File Trust",
@@ -13911,6 +13880,28 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/symphony/.purpose",
       "description": "Trust config check on file requests — hard-deny list always blocks",
       "related": []
+    },
+    "block-id": {
+      "id": "block-id",
+      "name": "Block Id",
+      "symbol": "^block-id",
+      "category": "gates",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
+      "description": "Referenced from #symbol-index",
+      "related": [
+        "#symbol-index"
+      ]
+    },
+    "id": {
+      "id": "id",
+      "name": "Id",
+      "symbol": "^id",
+      "category": "gates",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
+      "description": "Referenced from #symbol-index",
+      "related": [
+        "#symbol-index"
+      ]
     },
     "local-only": {
       "id": "local-only",
@@ -13921,6 +13912,17 @@
       "description": "Local-only access. Enforced two ways — the socket binds loopback by default, AND the #local-guard request middleware rejects 403 any state-changing (POST/PUT/PATCH/DELETE) /api request whose Host is non-loopback or whose (present) Origin is non-loopback (CSRF + DNS-rebinding guard). CORS reflects only loopback origins (never wildcard). GET/HEAD reads are not gated.",
       "related": [
         "#local-guard"
+      ]
+    },
+    "block": {
+      "id": "block",
+      "name": "Block",
+      "symbol": "^block",
+      "category": "gates",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/brain/.purpose",
+      "description": "Referenced from #brain-parse",
+      "related": [
+        "#brain-parse"
       ]
     },
     "write-capable.": {
@@ -14792,6 +14794,15 @@
       "description": "!session-started: New session tracking started",
       "related": []
     },
+    "aggregation-complete": {
+      "id": "aggregation-complete",
+      "name": "Aggregation Complete",
+      "symbol": "!aggregation-complete",
+      "category": "signals",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
+      "description": "!aggregation-complete: Symbol aggregation finished",
+      "related": []
+    },
     "index-generated": {
       "id": "index-generated",
       "name": "Index Generated",
@@ -14844,6 +14855,15 @@
       "category": "signals",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/core/.purpose",
       "description": "Token or cost budget limit was reached",
+      "related": []
+    },
+    "brain-egress": {
+      "id": "brain-egress",
+      "name": "Brain Egress",
+      "symbol": "!brain-egress",
+      "category": "signals",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/brain/.purpose",
+      "description": "A Brain response left the machine (MCP/cloud) — recorded append-only in egress.log.",
       "related": []
     },
     "notebook-created": {
@@ -15124,26 +15144,15 @@
         "#CaptainTools"
       ]
     },
-    "agent-state-recorded": {
-      "id": "agent-state-recorded",
-      "name": "Agent State Recorded",
-      "symbol": "!agent-state-recorded",
-      "category": "signals",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "Referenced from #agent-state",
-      "related": [
-        "#agent-state"
-      ]
-    },
     "skill-used": {
       "id": "skill-used",
       "name": "Skill Used",
       "symbol": "!skill-used",
       "category": "signals",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/.purpose",
-      "description": "Referenced from #skill-usage",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/hooks/.purpose",
+      "description": "Referenced from #skill-used-hook",
       "related": [
-        "#skill-usage"
+        "#skill-used-hook"
       ]
     },
     "compliance-violation": {
@@ -17168,6 +17177,42 @@
         "#websocket-server"
       ]
     },
+    "symbol-blocklist-framework-aliases": {
+      "id": "symbol-blocklist-framework-aliases",
+      "name": "Symbol Blocklist Framework Aliases",
+      "symbol": "~symbol-blocklist-framework-aliases",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
+      "description": "$lib, $env, $app, $service-worker, $virtual, $schema, $ref, $id, $type are blocked from symbol extraction to avoid false positives from SvelteKit/Vite/JSON",
+      "related": [
+        "#aggregator"
+      ]
+    },
+    "symbol-ref-pattern-letter-guard": {
+      "id": "symbol-ref-pattern-letter-guard",
+      "name": "Symbol Ref Pattern Letter Guard",
+      "symbol": "~symbol-ref-pattern-letter-guard",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
+      "description": "Cross-reference regex requires first char after prefix to be a letter (prevents matching $420, $0)",
+      "related": [
+        "#aggregator"
+      ]
+    },
+    "anchor-parse-formats": {
+      "id": "anchor-parse-formats",
+      "name": "Anchor Parse Formats",
+      "symbol": "~anchor-parse-formats",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
+      "description": "Code anchors support four line formats: file.ts, file.ts:15, file.ts:15-20, file.ts:15,25,30 — plus (7.12.0) section anchors docs/x.md#Heading and docs/x.md#^block-id, parsed by the shared #symbol-index parseAnchorString",
+      "related": [
+        "#Heading",
+        "^block-id",
+        "#symbol-index",
+        "#aggregator"
+      ]
+    },
     "visual-tag-inference-patterns": {
       "id": "visual-tag-inference-patterns",
       "name": "Visual Tag Inference Patterns",
@@ -17218,7 +17263,7 @@
       "symbol": "~purpose-glob-ignore-patterns",
       "category": "aspects",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/purpose/core/.purpose",
-      "description": "findPurposeFiles ignores node_modules, dist, and .git directories",
+      "description": "findPurposeFiles ignores DEFAULT_PURPOSE_IGNORE: node_modules, dist, .git (historical) plus, since 7.13.0, .claude/**, **/.worktrees/**, .warpline/**, build, .build, coverage, .next, .turbo, Pods, DerivedData — so build artefacts / scratch checkouts carrying stale .purpose copies never win duplicate last-write-wins resolution",
       "related": [
         "#aggregator"
       ]
@@ -17632,10 +17677,10 @@
       "name": "Zod Validated",
       "symbol": "~zod-validated",
       "category": "aspects",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/purpose/core/.purpose",
-      "description": "Referenced from #purpose-parsing",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
+      "description": "Referenced from #symbol-aggregation",
       "related": [
-        "#purpose-parsing"
+        "#symbol-aggregation"
       ]
     },
     "prior": {
@@ -17935,6 +17980,18 @@
       "category": "components",
       "id": "command-palette"
     },
+    "#symbol-aggregation": {
+      "category": "components",
+      "id": "symbol-aggregation"
+    },
+    "#symbol-indexing": {
+      "category": "components",
+      "id": "symbol-indexing"
+    },
+    "#reference-tracking": {
+      "category": "components",
+      "id": "reference-tracking"
+    },
     "#scan-index-generation": {
       "category": "components",
       "id": "scan-index-generation"
@@ -17962,6 +18019,14 @@
     "#packages": {
       "category": "components",
       "id": "packages"
+    },
+    "#migrate-tool-names": {
+      "category": "components",
+      "id": "migrate-tool-names"
+    },
+    "#pre-publish-check": {
+      "category": "components",
+      "id": "pre-publish-check"
     },
     "#guides": {
       "category": "components",
@@ -19711,6 +19776,42 @@
       "category": "components",
       "id": "command-generator"
     },
+    "#aggregator": {
+      "category": "components",
+      "id": "aggregator"
+    },
+    "#source-loader": {
+      "category": "components",
+      "id": "source-loader"
+    },
+    "#symbol-index": {
+      "category": "components",
+      "id": "symbol-index"
+    },
+    "#frontmatter-parser": {
+      "category": "components",
+      "id": "frontmatter-parser"
+    },
+    "#search-engine": {
+      "category": "components",
+      "id": "search-engine"
+    },
+    "#live-index": {
+      "category": "components",
+      "id": "live-index"
+    },
+    "#reference-tracker": {
+      "category": "components",
+      "id": "reference-tracker"
+    },
+    "#graph-slice-projector": {
+      "category": "components",
+      "id": "graph-slice-projector"
+    },
+    "#classroom-metrics": {
+      "category": "components",
+      "id": "classroom-metrics"
+    },
     "#generator": {
       "category": "components",
       "id": "generator"
@@ -19739,9 +19840,9 @@
       "category": "components",
       "id": "schema-rules"
     },
-    "#aggregator": {
+    "#purpose-parse-cache": {
       "category": "components",
-      "id": "aggregator"
+      "id": "purpose-parse-cache"
     },
     "#symbol-extractor": {
       "category": "components",
@@ -19951,6 +20052,14 @@
       "category": "components",
       "id": "sync-layer"
     },
+    "#legacy-tool-map": {
+      "category": "components",
+      "id": "legacy-tool-map"
+    },
+    "#tool-surface": {
+      "category": "components",
+      "id": "tool-surface"
+    },
     "#paradigm-retrieve": {
       "category": "components",
       "id": "paradigm-retrieve"
@@ -20106,190 +20215,6 @@
     "#PackTypes": {
       "category": "components",
       "id": "PackTypes"
-    },
-    "#symphony-loader": {
-      "category": "components",
-      "id": "symphony-loader"
-    },
-    "#platform-bridge": {
-      "category": "components",
-      "id": "platform-bridge"
-    },
-    "#symphony-peers": {
-      "category": "components",
-      "id": "symphony-peers"
-    },
-    "#symphony-relay": {
-      "category": "components",
-      "id": "symphony-relay"
-    },
-    "#agent-loader": {
-      "category": "components",
-      "id": "agent-loader"
-    },
-    "#agent-registry": {
-      "category": "components",
-      "id": "agent-registry"
-    },
-    "#role-prompts": {
-      "category": "components",
-      "id": "role-prompts"
-    },
-    "#notebook-loader": {
-      "category": "components",
-      "id": "notebook-loader"
-    },
-    "#classroom-decay": {
-      "category": "components",
-      "id": "classroom-decay"
-    },
-    "#classroom-fail-side": {
-      "category": "components",
-      "id": "classroom-fail-side"
-    },
-    "#tool-registry": {
-      "category": "components",
-      "id": "tool-registry"
-    },
-    "#compliance-checker": {
-      "category": "components",
-      "id": "compliance-checker"
-    },
-    "#DocsLoader": {
-      "category": "components",
-      "id": "DocsLoader"
-    },
-    "#graduation-types": {
-      "category": "components",
-      "id": "graduation-types"
-    },
-    "#graduation-store": {
-      "category": "components",
-      "id": "graduation-store"
-    },
-    "#graduation-engine": {
-      "category": "components",
-      "id": "graduation-engine"
-    },
-    "#aspect-fingerprint": {
-      "category": "components",
-      "id": "aspect-fingerprint"
-    },
-    "#data-policy-loader": {
-      "category": "components",
-      "id": "data-policy-loader"
-    },
-    "#work-log-loader": {
-      "category": "components",
-      "id": "work-log-loader"
-    },
-    "#journal-loader": {
-      "category": "components",
-      "id": "journal-loader"
-    },
-    "#decision-loader": {
-      "category": "components",
-      "id": "decision-loader"
-    },
-    "#nomination-engine": {
-      "category": "components",
-      "id": "nomination-engine"
-    },
-    "#session-work-log": {
-      "category": "components",
-      "id": "session-work-log"
-    },
-    "#agent-state": {
-      "category": "components",
-      "id": "agent-state"
-    },
-    "#gap-narrator": {
-      "category": "components",
-      "id": "gap-narrator"
-    },
-    "#activity-metrics": {
-      "category": "components",
-      "id": "activity-metrics"
-    },
-    "#soft-provenance": {
-      "category": "components",
-      "id": "soft-provenance"
-    },
-    "#outcome-reference-tracking": {
-      "category": "components",
-      "id": "outcome-reference-tracking"
-    },
-    "#compliance-health": {
-      "category": "components",
-      "id": "compliance-health"
-    },
-    "#provisional-intake": {
-      "category": "components",
-      "id": "provisional-intake"
-    },
-    "#orchestration-marker": {
-      "category": "components",
-      "id": "orchestration-marker"
-    },
-    "#yaml-validator": {
-      "category": "components",
-      "id": "yaml-validator"
-    },
-    "#write-and-confirm": {
-      "category": "components",
-      "id": "write-and-confirm"
-    },
-    "#consistency-tracker": {
-      "category": "components",
-      "id": "consistency-tracker"
-    },
-    "#strict-mode": {
-      "category": "components",
-      "id": "strict-mode"
-    },
-    "#wisdom-loader": {
-      "category": "components",
-      "id": "wisdom-loader"
-    },
-    "#learning-stores": {
-      "category": "components",
-      "id": "learning-stores"
-    },
-    "#protocol-loader": {
-      "category": "components",
-      "id": "protocol-loader"
-    },
-    "#global-store": {
-      "category": "components",
-      "id": "global-store"
-    },
-    "#arch-loader": {
-      "category": "components",
-      "id": "arch-loader"
-    },
-    "#calibration-aggregate": {
-      "category": "components",
-      "id": "calibration-aggregate"
-    },
-    "#skill-loader": {
-      "category": "components",
-      "id": "skill-loader"
-    },
-    "#aspect-graph": {
-      "category": "components",
-      "id": "aspect-graph"
-    },
-    "#docs-loader": {
-      "category": "components",
-      "id": "docs-loader"
-    },
-    "#skill-projector": {
-      "category": "components",
-      "id": "skill-projector"
-    },
-    "#skill-usage": {
-      "category": "components",
-      "id": "skill-usage"
     },
     "#ServeCommand": {
       "category": "components",
@@ -20479,6 +20404,50 @@
       "category": "components",
       "id": "grid-preset"
     },
+    "#brain-types": {
+      "category": "components",
+      "id": "brain-types"
+    },
+    "#brain-config": {
+      "category": "components",
+      "id": "brain-config"
+    },
+    "#brain-walk": {
+      "category": "components",
+      "id": "brain-walk"
+    },
+    "#brain-detect": {
+      "category": "components",
+      "id": "brain-detect"
+    },
+    "#brain-parse": {
+      "category": "components",
+      "id": "brain-parse"
+    },
+    "#brain-index-store": {
+      "category": "components",
+      "id": "brain-index-store"
+    },
+    "#brain-view": {
+      "category": "components",
+      "id": "brain-view"
+    },
+    "#brain-egress": {
+      "category": "components",
+      "id": "brain-egress"
+    },
+    "#brain-purge": {
+      "category": "components",
+      "id": "brain-purge"
+    },
+    "#brain-atomic": {
+      "category": "components",
+      "id": "brain-atomic"
+    },
+    "#brain-leak-probe": {
+      "category": "components",
+      "id": "brain-leak-probe"
+    },
     "#DocsCommands": {
       "category": "components",
       "id": "DocsCommands"
@@ -20498,6 +20467,10 @@
     "#agent-audit": {
       "category": "components",
       "id": "agent-audit"
+    },
+    "#legacy-names-audit": {
+      "category": "components",
+      "id": "legacy-names-audit"
     },
     "#skill-used-hook": {
       "category": "components",
@@ -20662,6 +20635,10 @@
     "#symphony-serve": {
       "category": "components",
       "id": "symphony-serve"
+    },
+    "#symphony-peers": {
+      "category": "components",
+      "id": "symphony-peers"
     },
     "#symphony-peers-revoke": {
       "category": "components",
@@ -21127,6 +21104,10 @@
       "category": "gates",
       "id": "gate-check"
     },
+    "^brain-default-deny": {
+      "category": "gates",
+      "id": "brain-default-deny"
+    },
     "^file-trust": {
       "category": "gates",
       "id": "file-trust"
@@ -21134,6 +21115,10 @@
     "#session": {
       "category": "components",
       "id": "session"
+    },
+    "#index": {
+      "category": "components",
+      "id": "index"
     },
     "$claude-turn-exchange": {
       "category": "flows",
@@ -21334,6 +21319,10 @@
     "$portal-validation-flow": {
       "category": "flows",
       "id": "portal-validation-flow"
+    },
+    "$symbol-aggregation": {
+      "category": "flows",
+      "id": "symbol-aggregation"
     },
     "$purpose-parsing": {
       "category": "flows",
@@ -21747,6 +21736,10 @@
       "category": "signals",
       "id": "session-started"
     },
+    "!aggregation-complete": {
+      "category": "signals",
+      "id": "aggregation-complete"
+    },
     "!index-generated": {
       "category": "signals",
       "id": "index-generated"
@@ -21770,6 +21763,10 @@
     "!budget-exceeded": {
       "category": "signals",
       "id": "budget-exceeded"
+    },
+    "!brain-egress": {
+      "category": "signals",
+      "id": "brain-egress"
     },
     "!notebook-created": {
       "category": "signals",
@@ -22523,6 +22520,18 @@
       "category": "aspects",
       "id": "viewer-sdk-ui-client-routing"
     },
+    "~symbol-blocklist-framework-aliases": {
+      "category": "aspects",
+      "id": "symbol-blocklist-framework-aliases"
+    },
+    "~symbol-ref-pattern-letter-guard": {
+      "category": "aspects",
+      "id": "symbol-ref-pattern-letter-guard"
+    },
+    "~anchor-parse-formats": {
+      "category": "aspects",
+      "id": "anchor-parse-formats"
+    },
     "~visual-tag-inference-patterns": {
       "category": "aspects",
       "id": "visual-tag-inference-patterns"
@@ -22967,6 +22976,46 @@
       "category": "aspects",
       "id": "zod-validated"
     },
+    "#index.loaded": {
+      "category": "components",
+      "id": "index.loaded"
+    },
+    "#index.count": {
+      "category": "components",
+      "id": "index.count"
+    },
+    "#setup": {
+      "category": "components",
+      "id": "setup"
+    },
+    "#Heading": {
+      "category": "components",
+      "id": "Heading"
+    },
+    "^block-id": {
+      "category": "gates",
+      "id": "block-id"
+    },
+    "#x": {
+      "category": "components",
+      "id": "x"
+    },
+    "^id": {
+      "category": "gates",
+      "id": "id"
+    },
+    "#skill-loader": {
+      "category": "components",
+      "id": "skill-loader"
+    },
+    "#native-memory-scan": {
+      "category": "components",
+      "id": "native-memory-scan"
+    },
+    "$fleet-switch": {
+      "category": "flows",
+      "id": "fleet-switch"
+    },
     "#ZoomControls": {
       "category": "components",
       "id": "ZoomControls"
@@ -23019,21 +23068,9 @@
       "category": "signals",
       "id": "cid-postflight-self-healed"
     },
-    "$agent-learning-loop": {
-      "category": "flows",
-      "id": "agent-learning-loop"
-    },
-    "!agent-state-recorded": {
-      "category": "signals",
-      "id": "agent-state-recorded"
-    },
-    "#frontmatter-parser": {
+    "#learning-stores": {
       "category": "components",
-      "id": "frontmatter-parser"
-    },
-    "!skill-used": {
-      "category": "signals",
-      "id": "skill-used"
+      "id": "learning-stores"
     },
     "$roster-setup": {
       "category": "flows",
@@ -23042,6 +23079,22 @@
     "^local-only": {
       "category": "gates",
       "id": "local-only"
+    },
+    "#heading": {
+      "category": "components",
+      "id": "heading"
+    },
+    "^block": {
+      "category": "gates",
+      "id": "block"
+    },
+    "#gap-narrator": {
+      "category": "components",
+      "id": "gap-narrator"
+    },
+    "!skill-used": {
+      "category": "signals",
+      "id": "skill-used"
     },
     "!compliance-violation": {
       "category": "signals",

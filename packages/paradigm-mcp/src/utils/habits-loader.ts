@@ -12,6 +12,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
+import { canonicalizeToolRef } from './tool-family.js';
 
 // ═══════════════════════════════════════════════════════════════════
 // TYPES
@@ -251,7 +252,7 @@ const SEED_HABITS: HabitDefinition[] = [
   {
     id: 'university-onboarded',
     name: 'University Onboarding',
-    description: 'Call paradigm_university_search at session start for project-specific learning content',
+    description: "Call paradigm_university({op:'search'}) at session start for project-specific learning content",
     category: 'discovery',
     trigger: 'preflight',
     severity: 'advisory',
@@ -610,7 +611,12 @@ export function buildEvaluationContext(params: {
   gitClean?: boolean;
 }): EvaluationContext {
   return {
-    toolsCalled: params.toolsCalled || [],
+    // 7.13: normalize family forms (paradigm_lore({op:'record'})) to canonical
+    // legacy names; ambiguous bare family names are kept verbatim.
+    toolsCalled: (params.toolsCalled || []).flatMap((t) => {
+      const c = canonicalizeToolRef(t);
+      return c.length === 1 ? c : [t];
+    }),
     filesModified: params.filesModified || [],
     symbolsTouched: params.symbolsTouched || [],
     loreRecorded: params.loreRecorded || false,
@@ -643,7 +649,9 @@ function evalToolCalled(habit: HabitDefinition, ctx: EvaluationContext): HabitEv
   const required = habit.check.params.tools || [];
   if (required.length === 0) return { habit, result: 'followed', reason: 'No tools required' };
 
-  const called = required.filter((t) => ctx.toolsCalled.includes(t));
+  // 7.13: a habit may name a legacy tool, a family op, or a bare family
+  // (any op of it counts) — canonicalize the reference before matching.
+  const called = required.filter((t) => canonicalizeToolRef(t).some((c) => ctx.toolsCalled.includes(c)));
   if (called.length > 0) return { habit, result: 'followed', reason: `Called: ${called.join(', ')}`, evidence: called };
 
   if (ctx.filesModified.length === 0 && ctx.symbolsTouched.length === 0) {

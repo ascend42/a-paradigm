@@ -100,7 +100,7 @@ paradigm_flow_validate({ checkImplementation: true })
 | Tool | Purpose |
 |------|---------|
 | `paradigm_flow_validate` | Validate flow definitions |
-| `paradigm_flows_affected` | Check which flows are impacted by symbol changes |
+| `paradigm_flow` (op `affected`) | Check which flows are impacted by symbol changes |
 
 ## CLI Commands
 

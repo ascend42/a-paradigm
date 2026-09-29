@@ -5,7 +5,7 @@
 import CryptoKit
 import Foundation
 
-/// A session checkpoint written by `paradigm_session_checkpoint`.
+/// A session checkpoint written by `paradigm_session({op:'checkpoint'})`.
 struct SessionCheckpoint: Codable {
     let phase: String              // planning, implementing, validating, complete
     let context: String
@@ -33,7 +33,7 @@ struct SessionCheckpoint: Codable {
     }
 }
 
-/// A pending handoff written by `paradigm_handoff_prepare`.
+/// A pending handoff written by `paradigm_session({op:'handoff_prepare'})`.
 struct HandoffSummary: Codable {
     let id: String
     let timestamp: String          // ISO 8601

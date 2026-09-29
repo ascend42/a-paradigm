@@ -24,6 +24,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { loadProjectContext, type ProjectContext } from './utils/index-loader.js';
 import { registerResources } from './resources/index.js';
 import { registerTools } from './tools/index.js';
+import { SERVER_INSTRUCTIONS } from './tools/families.js';
 import { rebuildStaticFiles } from './tools/reindex.js';
 import { getSessionTracker } from './utils/session-tracker.js';
 import { resolveProjectRoot } from './utils/global-store.js';
@@ -101,8 +102,10 @@ async function main() {
     {
       capabilities: {
         resources: {},
-        tools: {},
+        // listChanged: paradigm_tool_activate sends notifications/tools/list_changed
+        tools: { listChanged: true },
       },
+      instructions: SERVER_INSTRUCTIONS,
     }
   );
 

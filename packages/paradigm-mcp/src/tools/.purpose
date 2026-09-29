@@ -3,6 +3,22 @@ description: |
   MCP tool handlers — dispatch layer for all paradigm_* tool calls.
   Each tool file exports getXToolsList() + handleXTool() functions.
 components:
+  legacy-tool-map:
+    description: '7.13 single source of truth — every pre-7.13 paradigm_* tool name (184) mapped to its family op ({tool, op}) or anchor ({tool}, optional fixed args for folded tools like plugin_check → status check:plugins). No runtime imports; feeds hidden-alias dispatch, breadcrumb canonicalization, the reference codemod and the doctor legacy-name check. Aliases removed in 7.15.'
+    type: config
+    parent: '#ToolHandlers'
+    tags:
+      - feature
+      - mcp
+      - tool-surface
+  tool-surface:
+    description: '7.13 MCP surface (families.ts + buildToolSurface/listSurfaceTools/resolveToolCall in index.ts) — tools/list = 11 anchors + 21 op families; 12 on-demand tools listed only via config.yaml mcp.tools.enable or paradigm_tool_activate (sends notifications/tools/list_changed); mcp.tools.legacy_listing relists the per-op surface. Calls resolve to the CANONICAL LEGACY NAME before dispatch so handlers, breadcrumbs and toolsCalled are unchanged; deprecated alias calls write a tool-deprecated-alias breadcrumb. paradigm_status reports detected on-demand features as hints. Budget test: ≤40 tools, <8000 tokens.'
+    type: service
+    parent: '#ToolHandlers'
+    tags:
+      - feature
+      - mcp
+      - tool-surface
   paradigm-retrieve:
     description: Rehydrate a large payload SPILLED to .paradigm/spill/{handle}.json (the #spill primitive) — full data on disk, bounded preview + handle inline; optional offset/limit windows for arrays
     type: tool

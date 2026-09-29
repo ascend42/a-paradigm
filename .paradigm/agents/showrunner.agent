@@ -73,12 +73,12 @@ permissions:
       - '.paradigm/film/**/out/**'
   tools:
     allow:
-      - paradigm_lore_search
-      - paradigm_decision_search
+      - paradigm_lore (op: search)
+      - paradigm_decision (op: search)
       - paradigm_search
-      - paradigm_history_context
-      - paradigm_journal_search
-      - paradigm_wisdom_context
+      - paradigm_history (op: context)
+      - paradigm_journal (op: search)
+      - paradigm_wisdom (op: context)
       - paradigm_navigate
       - Read
     deny: []

@@ -12,10 +12,10 @@ This is the **gated** Classroom — the *only* place a learning certifies. The m
 Pick the arm from the argument (default: walk `review` → `report`). **Step 0 runs first whenever the classroom is cold.**
 
 ## Step 0 — cold start: is there a classroom here yet?
-BEFORE any arm, check `paradigm_syllabus_list` (or `.paradigm/curriculum/`). If no syllabi exist, do NOT fall through to an empty review — run the **Orientation Term** (the guided cold-start that turns the machinery on experientially):
+BEFORE any arm, check `paradigm_classroom` (op `syllabus_list`) (or `.paradigm/curriculum/`). If no syllabi exist, do NOT fall through to an empty review — run the **Orientation Term** (the guided cold-start that turns the machinery on experientially):
 1. **Offer it as the teacher (Cid), not a wizard.** *"There's no classroom here yet — that's normal, this is a fresh project. Want a 5-minute Orientation Term? One agent, one thing, the team tries to break it, you sign off."*
 2. **Pick the student from real signal** — agents actually active in `nominations.jsonl` / the roster, not an alphabetical dump. Enroll ONE.
-3. **Seed the curriculum** (gate-zero exempt — hand-authored syllabi are allowed): `paradigm_syllabus_record` (the teacher proposes the SOURCES, the human approves once) + one breaking scenario via `paradigm_scenario_record` (offer a poison-pill template so the human isn't staring at a blank field — this teaches the core doctrine: refutation, not validation).
+3. **Seed the curriculum** (gate-zero exempt — hand-authored syllabi are allowed): `paradigm_classroom` (op `syllabus_record`) (the teacher proposes the SOURCES, the human approves once) + one breaking scenario via `paradigm_classroom` (op `scenario_record`) (offer a poison-pill template so the human isn't staring at a blank field — this teaches the core doctrine: refutation, not validation).
 4. **Stage one candidate** — a scoped `/paradigm:study-hall <agent>` drill against the new syllabus.
 5. **Run the gate (THE STAND, below) on that one candidate.** Guide toward `refine` — the most instructive first verdict (it shows the whole engine).
 6. **The promise:** *"<agent> now knows '<X> except <Y>.' Certified pending — the FIELD is the real exam. If it breaks in real work, I attribute it back here, revise it down, and bring it to you."* The cold-start is cured, not hidden — the Term Board is the default from now on.
@@ -26,14 +26,14 @@ BEFORE any arm, check `paradigm_syllabus_list` (or `.paradigm/curriculum/`). If 
 
 ## Arm: `study` — set an agent's curriculum
 For the chosen agent:
-1. Gather what to drill: the agent's notebook concepts (`paradigm_notebook_search`), relevant scenarios (`paradigm_scenario_list`), and any external sources the teacher approves.
-2. Write/refresh the syllabus: `paradigm_syllabus_record({ agent, sources, scope, success_criteria, notebook_target, term_ttl_days, approved_by: <human> })`. The teacher approves **sources once** (a durable curriculum), not facts each term.
+1. Gather what to drill: the agent's notebook concepts (`paradigm_notebook` (op `search`)), relevant scenarios (`paradigm_classroom` (op `scenario_list`)), and any external sources the teacher approves.
+2. Write/refresh the syllabus: `paradigm_classroom({op:'syllabus_record', agent, sources, scope, success_criteria, notebook_target, term_ttl_days, approved_by: <human> })`. The teacher approves **sources once** (a durable curriculum), not facts each term.
 
 ## Arm: `review` — THE STAND (the gate, de-anesthetized)
 For each staged candidate (study-hall journals, **foraged externals**, or learnings up for re-ratification), run it as attributed turns in a FIXED ORDER — **dissent first**, because concurrence anesthetizes:
 
 1. **The claim — one line.** The proposer states the learning + thin evidence (applied N×, held N×). No more; praise comes last, if at all.
-2. **The strongest breaking scenario, FIRST** — from a **cross-lens assessor** (a *different domain* than the learner; same-family peers share blind spots), who MUST author or pull a *breaking* scenario (`paradigm_scenario_record` / `paradigm_scenario_list`) and probe the learning. **No scenario, no assessment** — an assessment with no attached scenario is rejected. The advocate (Jinx) piles on or stands down. Record the outcome on the scenario.
+2. **The strongest breaking scenario, FIRST** — from a **cross-lens assessor** (a *different domain* than the learner; same-family peers share blind spots), who MUST author or pull a *breaking* scenario (`paradigm_classroom` (op `scenario_record`) / `paradigm_classroom` (op `scenario_list`)) and probe the learning. **No scenario, no assessment** — an assessment with no attached scenario is rejected. The advocate (Jinx) piles on or stands down. Record the outcome on the scenario.
 3. **One causal question, with a fork.** Present ONLY the dissent + the breaking scenarios (not "N concurred" — note the suppressed concurrences). Ask one: *does this hold BECAUSE of the rule, or were the cases easy?* — and offer the fork: **rule now, or interrogate an agent first.**
 4. **Interrogation (optional, on the record).** The human may `@<agent>` a direct question; the agent answers as a new attributed turn. A proposer that **concedes on the record** is the loop earning its keep — capture it.
 5. **Verdict (human):** `refine` (primary) / `promote` / `reject`.
@@ -49,9 +49,9 @@ A candidate with `provenance.source:'external'` (from `/paradigm:forage`) takes 
 - **Trust ceiling.** It promotes to **`provisional`**, never silently `certified`. The human MAY certify a strongly-sourced dossier (tier-A or multi-source corroboration) by **explicit ruling** — and even then it stays **field-watched** (a later break overturns it). A conflict with a SETTLED learning requires the human's explicit consent to put it on trial.
 
 ## Arm: `report` — close the term
-1. `paradigm_classroom_status` → per-agent + global **repeat-failure-rate** (team stronger ⇔ the same learning doesn't break twice). Also visible via `paradigm doctor`.
+1. `paradigm_classroom` (op `status`) → per-agent + global **repeat-failure-rate** (team stronger ⇔ the same learning doesn't break twice). Also visible via `paradigm doctor`.
 2. Surface bench/recruit proposals (e.g. an agent with N≥2 terms and no certified delta → bench candidate) — recommendations only, routed through `paradigm shift`.
-3. Record a lore report of the term (`paradigm_lore_record`, type `retro`).
+3. Record a lore report of the term (`paradigm_lore` (op `record`), type `retro`).
 
 ## Hard rules
 - This is the ONLY certifier. `/paradigm:study-hall` (internal) and `/paradigm:forage` (external/wild) may STAGE but never promote.

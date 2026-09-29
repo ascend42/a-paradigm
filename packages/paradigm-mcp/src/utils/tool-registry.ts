@@ -10,6 +10,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import * as yaml from 'js-yaml';
 import { discoverPacks, countPackEntries } from '@a-company/university-core';
 
 // ────────────────────────────────────────────────────────
@@ -160,6 +161,43 @@ export const FEATURE_DETECTORS: Record<string, (rootDir: string) => boolean> = {
 };
 
 // ────────────────────────────────────────────────────────
+// Listing helpers + MCP tools config (7.13)
+// ────────────────────────────────────────────────────────
+
+/**
+ * Strip server-internal fields (`aliases`) from a definition before it goes
+ * out on tools/list. `aliases` is intent-routing metadata, not MCP schema.
+ */
+export function toListedTool(def: ToolDefinition): ToolDefinition {
+  const { aliases: _aliases, ...rest } = def;
+  return rest;
+}
+
+export interface McpToolsConfig {
+  /** On-demand tools/families to list by default (config.yaml `mcp.tools.enable`) */
+  enable: string[];
+  /** Relist the pre-7.13 per-op surface alongside families (`mcp.tools.legacy_listing`) */
+  legacyListing: boolean;
+}
+
+/** Read `mcp.tools.{enable,legacy_listing}` from .paradigm/config.yaml. Never throws. */
+export function readMcpToolsConfig(rootDir: string): McpToolsConfig {
+  const result: McpToolsConfig = { enable: [], legacyListing: false };
+  try {
+    const configPath = path.join(rootDir, '.paradigm', 'config.yaml');
+    if (!fs.existsSync(configPath)) return result;
+    const doc = yaml.load(fs.readFileSync(configPath, 'utf-8')) as
+      { mcp?: { tools?: { enable?: unknown; legacy_listing?: unknown } } } | null;
+    const tools = doc?.mcp?.tools;
+    if (Array.isArray(tools?.enable)) result.enable = tools!.enable.map(String);
+    if (tools?.legacy_listing === true) result.legacyListing = true;
+  } catch {
+    // Malformed config → defaults
+  }
+  return result;
+}
+
+// ────────────────────────────────────────────────────────
 // Registry
 // ────────────────────────────────────────────────────────
 
@@ -234,8 +272,17 @@ export class ToolRegistry {
   /** Every tool of every registered module, regardless of tier/activation (skill pin checks). */
   getAllTools(): ToolDefinition[] {
     const tools: ToolDefinition[] = [];
-    for (const module of this.modules.values()) tools.push(...module.getToolsList());
+    for (const module of this.modules.values()) tools.push(...module.getToolsList().map(toListedTool));
     return tools;
+  }
+
+  /** Look up any registered tool definition by name (all tiers). */
+  getToolDefinition(name: string): ToolDefinition | undefined {
+    for (const module of this.modules.values()) {
+      const def = module.getToolsList().find(t => t.name === name);
+      if (def) return def;
+    }
+    return undefined;
   }
 
   getActiveTools(): ToolDefinition[] {
@@ -244,7 +291,7 @@ export class ToolRegistry {
 
     for (const [key, module] of this.modules) {
       if (active.has(key)) {
-        tools.push(...module.getToolsList());
+        tools.push(...module.getToolsList().map(toListedTool));
       }
     }
 
@@ -289,9 +336,14 @@ export class ToolRegistry {
   ): Promise<{ text: string; handled: boolean } | null> {
     const active = this.detectActiveFeatures();
 
-    for (const [key, module] of this.modules) {
-      if (!active.has(key)) continue;
+    // Active modules first; then inactive ones — hidden aliases / on-demand ops
+    // dispatch by name even when their module is not listed (7.13).
+    const ordered = [
+      ...[...this.modules].filter(([key]) => active.has(key)),
+      ...[...this.modules].filter(([key]) => !active.has(key)),
+    ];
 
+    for (const [key, module] of ordered) {
       try {
         const result = await module.handleTool(name, args, ctx, reload);
         if (result.handled) {

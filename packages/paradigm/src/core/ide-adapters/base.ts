@@ -276,8 +276,8 @@ export function generateNavigationSection(_config: ParadigmConfig): string {
   lines.push('');
   lines.push('| When | Tool | Purpose |');
   lines.push('|------|------|---------|');
-  lines.push('| Starting any task | `paradigm_pm_preflight` | Get compliance plan, affected symbols, required checks |');
-  lines.push('| Finishing any task | `paradigm_pm_postflight` | Check for violations: missing .purpose, missing gates |');
+  lines.push('| Starting any task | `paradigm_pm` (op `preflight`) | Get compliance plan, affected symbols, required checks |');
+  lines.push('| Finishing any task | `paradigm_pm` (op `postflight`) | Check for violations: missing .purpose, missing gates |');
   lines.push('');
 
   return lines.join('\n');
@@ -398,20 +398,20 @@ export function generateMcpToolReference(): string {
   lines.push('| `paradigm_ripple` | Dependency and impact analysis | Before modifying symbols |');
   lines.push('| `paradigm_related` | Direct relationships for a symbol | Understanding connections |');
   lines.push('| `paradigm_gates_for_route` | Suggest gates for an API endpoint | Adding API routes |');
-  lines.push('| `paradigm_wisdom_context` | Team preferences and antipatterns | Before implementing |');
-  lines.push('| `paradigm_history_fragility` | Stability warnings for symbols | Before modifying fragile areas |');
-  lines.push('| `paradigm_flow_check` | Validate flow definitions | Before/after implementing flows |');
-  lines.push('| `paradigm_flows_affected` | Flows impacted by symbol changes | After modifying symbols |');
+  lines.push('| `paradigm_wisdom` (op `context`) | Team preferences and antipatterns | Before implementing |');
+  lines.push('| `paradigm_history` (op `fragility`) | Stability warnings for symbols | Before modifying fragile areas |');
+  lines.push('| `paradigm_flow` (op `check`) | Validate flow definitions | Before/after implementing flows |');
+  lines.push('| `paradigm_flow` (op `affected`) | Flows impacted by symbol changes | After modifying symbols |');
   lines.push('| `paradigm_test_fixtures` | Get test data for validation | Writing tests |');
   lines.push('| `paradigm_orchestrate_inline` | Multi-agent task planning | Complex tasks (3+ files) |');
-  lines.push('| `paradigm_pm_preflight` | Pre-task compliance check | Starting any task |');
-  lines.push('| `paradigm_pm_postflight` | Post-task violation detection | Finishing any task |');
-  lines.push('| `paradigm_session_recover` | Load previous session breadcrumbs | Starting a new session |');
-  lines.push('| `paradigm_session_health` | Check context window usage | Every 10-15 tool calls |');
-  lines.push('| `paradigm_handoff_prepare` | Prepare session handoff summary | When context is high |');
+  lines.push('| `paradigm_pm` (op `preflight`) | Pre-task compliance check | Starting any task |');
+  lines.push('| `paradigm_pm` (op `postflight`) | Post-task violation detection | Finishing any task |');
+  lines.push('| `paradigm_session` (op `recover`) | Load previous session breadcrumbs | Starting a new session |');
+  lines.push('| `paradigm_session` (op `health`) | Check context window usage | Every 10-15 tool calls |');
+  lines.push('| `paradigm_session` (op `handoff_prepare`) | Prepare session handoff summary | When context is high |');
   lines.push('| `paradigm_reindex` | Rebuild static index files | After modifying .purpose files |');
-  lines.push('| `paradigm_session_checkpoint` | Save cognitive-transition checkpoint | Phase transitions |');
-  lines.push('| `paradigm_session_stats` | Current session token usage | Checking budget |');
+  lines.push('| `paradigm_session` (op `checkpoint`) | Save cognitive-transition checkpoint | Phase transitions |');
+  lines.push('| `paradigm_session` (op `stats`) | Current session token usage | Checking budget |');
   lines.push('');
   lines.push('**Rule**: Use MCP tools for discovery and validation, file reads for implementation.');
   lines.push('');
@@ -429,7 +429,7 @@ export function generateWorkflowProtocol(): string {
   lines.push('');
   lines.push('### Before Each Task');
   lines.push('');
-  lines.push('1. **Preflight**: Call `paradigm_pm_preflight` with your task description');
+  lines.push('1. **Preflight**: Call `paradigm_pm` (op `preflight`) with your task description');
   lines.push('   - Returns affected symbols, ripple analysis, required agents');
   lines.push('2. **Impact check**: Call `paradigm_ripple` for any symbols you\'ll modify');
   lines.push('3. **Gate check**: Call `paradigm_gates_for_route` before adding API endpoints');
@@ -437,10 +437,10 @@ export function generateWorkflowProtocol(): string {
   lines.push('');
   lines.push('### After Each Task');
   lines.push('');
-  lines.push('1. **Postflight**: Call `paradigm_pm_postflight` with modified files and symbols');
+  lines.push('1. **Postflight**: Call `paradigm_pm` (op `postflight`) with modified files and symbols');
   lines.push('   - Checks for missing .purpose files, unregistered routes, uncaptured wisdom');
   lines.push('2. **Reindex**: Call `paradigm_reindex` to rebuild static index files');
-  lines.push('3. **Validate flows**: Call `paradigm_flow_check` if you touched flow-related symbols');
+  lines.push('3. **Validate flows**: Call `paradigm_flow` (op `check`) if you touched flow-related symbols');
   lines.push('');
 
   return lines.join('\n');
@@ -456,12 +456,12 @@ export function generateHandoffProtocol(): string {
   lines.push('');
   lines.push('### Session Start (EVERY new session)');
   lines.push('');
-  lines.push('Call `paradigm_session_recover` to load previous session breadcrumbs.');
+  lines.push('Call `paradigm_session` (op `recover`) to load previous session breadcrumbs.');
   lines.push('Returns: symbols modified, files explored, recent actions, and suggestions.');
   lines.push('');
   lines.push('### Context Monitoring');
   lines.push('');
-  lines.push('Call `paradigm_session_health` every 10-15 tool calls to track context usage.');
+  lines.push('Call `paradigm_session` (op `health`) every 10-15 tool calls to track context usage.');
   lines.push('');
   lines.push('| Usage | Recommendation | Action |');
   lines.push('|-------|----------------|--------|');
@@ -472,7 +472,7 @@ export function generateHandoffProtocol(): string {
   lines.push('');
   lines.push('### Handoff Process');
   lines.push('');
-  lines.push('1. Call `paradigm_handoff_prepare` with summary, next steps, and target agent');
+  lines.push('1. Call `paradigm_session` (op `handoff_prepare`) with summary, next steps, and target agent');
   lines.push('2. User runs: `paradigm team handoff --to <agent> --summary "..."`');
   lines.push('3. New session accepts: `paradigm team accept <handoff-id>`');
   lines.push('');
@@ -502,7 +502,7 @@ export function generateCheckpointProtocol(): string {
   lines.push('### Usage');
   lines.push('');
   lines.push('```');
-  lines.push('paradigm_session_checkpoint({');
+  lines.push('paradigm_session({op:"checkpoint", ');
   lines.push('  phase: "implementing",');
   lines.push('  context: "Adding JWT auth middleware to /api/projects routes",');
   lines.push('  modifiedFiles: ["src/middleware/auth.ts", "src/routes/projects.ts"],');
@@ -531,9 +531,9 @@ export function generateHabitsSection(): string {
   lines.push('');
   lines.push('| Trigger | When | Tool |');
   lines.push('|---------|------|------|');
-  lines.push('| `preflight` | Before starting implementation | `paradigm_habits_check({ trigger: "preflight" })` |');
-  lines.push('| `postflight` | After completing implementation | `paradigm_habits_check({ trigger: "postflight" })` |');
-  lines.push('| `on-stop` | Before ending a session | `paradigm_habits_check({ trigger: "on-stop" })` |');
+  lines.push('| `preflight` | Before starting implementation | `paradigm_habits({op:"check", trigger: "preflight" })` |');
+  lines.push('| `postflight` | After completing implementation | `paradigm_habits({op:"check", trigger: "postflight" })` |');
+  lines.push('| `on-stop` | Before ending a session | `paradigm_habits({op:"check", trigger: "on-stop" })` |');
   lines.push('');
   lines.push('### Key Habit Categories');
   lines.push('');
@@ -544,7 +544,7 @@ export function generateHabitsSection(): string {
   lines.push('| Documentation | Update .purpose files for modified components |');
   lines.push('| Quality | Record lore for sessions modifying 3+ files |');
   lines.push('');
-  lines.push('Use `paradigm_practice_context` before modifying symbols to get habit-aware warnings.');
+  lines.push('Use `paradigm_habits` (op `practice_context`) before modifying symbols to get habit-aware warnings.');
   lines.push('');
 
   return lines.join('\n');
@@ -572,7 +572,7 @@ export function generateLoreSection(): string {
   lines.push('### Recording');
   lines.push('');
   lines.push('```');
-  lines.push('paradigm_lore_record({');
+  lines.push('paradigm_lore({op:"record", ');
   lines.push('  type: "agent-session",');
   lines.push('  title: "Short description of work done",');
   lines.push('  summary: "Detailed summary of changes...",');
@@ -580,7 +580,7 @@ export function generateLoreSection(): string {
   lines.push('})');
   lines.push('```');
   lines.push('');
-  lines.push('Use `paradigm_lore_timeline` at session start for project history orientation.');
+  lines.push('Use `paradigm_lore` (op `timeline`) at session start for project history orientation.');
   lines.push('');
 
   return lines.join('\n');
@@ -637,7 +637,7 @@ export function generateWorkspaceSection(files: ParadigmFiles): string {
   lines.push('| `paradigm_search` | `includeWorkspace: true` — search sibling indices |');
   lines.push('| `paradigm_ripple` | `includeWorkspace: true` — cross-project impact |');
   lines.push('| `paradigm_gates_for_route` | Automatic — learns from sibling portal.yaml |');
-  lines.push('| `paradigm_workspace_reindex` | Rebuild all member indices |');
+  lines.push('| `paradigm_reindex` (scope `workspace`) | Rebuild all member indices |');
   lines.push('');
   lines.push('Cross-project symbols are prefixed: ' +
     siblings.map(s => `\`${s.name}/#symbol\``).join(', '));

@@ -12,9 +12,9 @@ Paradigm tracks behavioral habits — repeatable practices that improve code qua
 
 | Trigger | When | Tool |
 |---------|------|------|
-| `preflight` | Before starting implementation | `paradigm_habits_check({ trigger: "preflight" })` |
-| `postflight` | After completing implementation | `paradigm_habits_check({ trigger: "postflight" })` |
-| `on-stop` | Before ending a session | `paradigm_habits_check({ trigger: "on-stop" })` |
+| `preflight` | Before starting implementation | `paradigm_habits({op:'check', trigger: "preflight" })` |
+| `postflight` | After completing implementation | `paradigm_habits({op:'check', trigger: "postflight" })` |
+| `on-stop` | Before ending a session | `paradigm_habits({op:'check', trigger: "on-stop" })` |
 
 ### Key Habit Categories
 
@@ -25,7 +25,7 @@ Paradigm tracks behavioral habits — repeatable practices that improve code qua
 | Documentation | Update .purpose files for modified components |
 | Quality | Record lore for sessions modifying 3+ files |
 
-Use `paradigm_practice_context` before modifying symbols to get habit-aware warnings.
+Use `paradigm_habits` (op `practice_context`) before modifying symbols to get habit-aware warnings.
 
 
 ## Lore Recording
@@ -44,7 +44,7 @@ Lore captures the project timeline — sessions, decisions, milestones, and inci
 ### Recording
 
 ```
-paradigm_lore_record({
+paradigm_lore({op:'record',
   type: "agent-session",
   title: "Short description of work done",
   summary: "Detailed summary of changes...",
@@ -52,7 +52,7 @@ paradigm_lore_record({
 })
 ```
 
-Use `paradigm_lore_timeline` at session start for project history orientation.
+Use `paradigm_lore` (op `timeline`) at session start for project history orientation.
 
 
 ## llms.txt

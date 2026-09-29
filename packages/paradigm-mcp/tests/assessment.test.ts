@@ -67,8 +67,9 @@ describe("paradigm_assessment_record({type:'decision'}) — v6.0 back-door closu
     expect(parsed.error).toBeDefined();
     // Same code as paradigm_lore_record — single source of truth.
     expect(parsed.error.code).toBe('lore_type_decision_removed');
-    expect(parsed.error.successor_tool).toBe('paradigm_decision_record');
-    expect(parsed.error.message).toContain('paradigm_decision_record');
+    expect(parsed.error.successor_tool).toBe('paradigm_decision');
+    expect(parsed.error.successor_op).toBe('record');
+    expect(parsed.error.message).toContain("paradigm_decision({op:'record'})");
     expect(parsed.error.removed_in).toBe('6.0.0');
   });
 

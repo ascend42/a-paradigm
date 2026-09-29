@@ -5,7 +5,7 @@
  * surfaces during doctor, postflight, and compliance review passes. Narrations
  * explain WHY a gap matters and HOW to fix it — not just what was detected.
  *
- * Used by: paradigm doctor --explain, paradigm_ambient_learn_postflight
+ * Used by: paradigm doctor --explain, paradigm_ambient (op: learn_postflight)
  */
 
 // ────────────────────────────────────────────────────────
@@ -68,7 +68,7 @@ const TEMPLATES: Record<CheckType, (result: CheckResult) => string> = {
     return (
       `${target} is missing a .purpose file. Without it, agents cannot discover what this directory contains or ` +
       `which components live here. The stop hook will block if source files were modified in a directory with no .purpose. ` +
-      `Fix: run paradigm_purpose_init for this directory, then add components with paradigm_purpose_add_component.`
+      `Fix: run paradigm_purpose (op: init) for this directory, then add components with paradigm_purpose (op: add_component).`
     );
   },
 
@@ -87,8 +87,8 @@ const TEMPLATES: Record<CheckType, (result: CheckResult) => string> = {
     return (
       `${target} appears to require authentication or authorization but has no gate declared in portal.yaml. ` +
       `Gates are how Paradigm tracks security enforcement — missing gates mean agents cannot verify that ` +
-      `the route is protected. Fix: add the gate to portal.yaml using paradigm_portal_add_route or ` +
-      `paradigm_purpose_add_component with the appropriate gates array.`
+      `the route is protected. Fix: add the gate to portal.yaml using paradigm_purpose (op: portal_add_route) or ` +
+      `paradigm_purpose (op: add_component) with the appropriate gates array.`
     );
   },
 
@@ -148,7 +148,7 @@ const TEMPLATES: Record<CheckType, (result: CheckResult) => string> = {
       `${target} appears in the codebase but is not listed in portal.yaml. All routes — protected ` +
       `or public — should be tracked in portal.yaml so the full API surface is visible to agents ` +
       `and reviewers. Uncovered routes are invisible to ripple analysis and gate audits. ` +
-      `Fix: add the route to portal.yaml with paradigm_portal_add_route.`
+      `Fix: add the route to portal.yaml with paradigm_purpose (op: portal_add_route).`
     );
   },
 

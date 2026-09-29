@@ -92,7 +92,76 @@ export function getSymbolsBySource(index: SymbolIndex, source: SourceType): Symb
 }
 
 /**
- * Search symbols by query string
+ * Precomputed lowercased search fields for one entry. The source references are
+ * kept so a cached haystack is reused ONLY while the entry's searchable fields
+ * are unchanged (entries are occasionally mutated in place, e.g. tags).
+ */
+interface SearchHaystack {
+  srcSymbol: string;
+  srcDescription: string | undefined;
+  srcTags: string[] | undefined;
+  srcTagCount: number;
+  srcComponentType: string | undefined;
+  symbol: string;
+  description: string | undefined;
+  tags: string[] | undefined;
+  componentType: string | undefined;
+  /** multi-token haystack — the exact string the uncached path built */
+  joined: string;
+}
+
+/** Per-index memo of per-entry haystacks (#search-engine). GC'd with the index. */
+const haystackCache = new WeakMap<SymbolIndex, Map<SymbolEntry, SearchHaystack>>();
+
+function haystackFor(index: SymbolIndex, entry: SymbolEntry): SearchHaystack {
+  let perIndex = haystackCache.get(index);
+  if (!perIndex) {
+    perIndex = new Map();
+    haystackCache.set(index, perIndex);
+  }
+  const hit = perIndex.get(entry);
+  if (
+    hit &&
+    hit.srcSymbol === entry.symbol &&
+    hit.srcDescription === entry.description &&
+    hit.srcTags === entry.tags &&
+    hit.srcTagCount === (entry.tags?.length ?? 0) &&
+    hit.srcComponentType === entry.componentType
+  ) {
+    return hit;
+  }
+  const symbol = entry.symbol.toLowerCase();
+  const description = entry.description?.toLowerCase();
+  const tags = entry.tags?.map((tag) => tag.toLowerCase());
+  const componentType = entry.componentType?.toLowerCase();
+  const hay: SearchHaystack = {
+    srcSymbol: entry.symbol,
+    srcDescription: entry.description,
+    srcTags: entry.tags,
+    srcTagCount: entry.tags?.length ?? 0,
+    srcComponentType: entry.componentType,
+    symbol,
+    description,
+    tags,
+    componentType,
+    joined: [
+      symbol,
+      description ?? '',
+      (entry.tags ?? []).join(' ').toLowerCase(),
+      componentType ?? '',
+    ].join(' '),
+  };
+  perIndex.set(entry, hay);
+  return hay;
+}
+
+/**
+ * Search symbols by query string.
+ *
+ * Lowercased per-entry haystacks are memoized per index (WeakMap), so repeated
+ * searches over the same (cached, #live-index) index skip re-lowercasing every
+ * description. Matching semantics are unchanged: plain substring tests over the
+ * same fields in the same order.
  */
 export function searchSymbols(index: SymbolIndex, query: string): SymbolEntry[] {
   const tokens = query
@@ -113,11 +182,12 @@ export function searchSymbols(index: SymbolIndex, query: string): SymbolEntry[] 
     const results: SymbolEntry[] = [];
 
     for (const entry of index.entries.values()) {
+      const hay = haystackFor(index, entry);
       if (
-        entry.symbol.toLowerCase().includes(lowerQuery) ||
-        entry.description?.toLowerCase().includes(lowerQuery) ||
-        entry.tags?.some((tag) => tag.toLowerCase().includes(lowerQuery)) ||
-        entry.componentType?.toLowerCase().includes(lowerQuery)
+        hay.symbol.includes(lowerQuery) ||
+        hay.description?.includes(lowerQuery) ||
+        hay.tags?.some((tag) => tag.includes(lowerQuery)) ||
+        hay.componentType?.includes(lowerQuery)
       ) {
         results.push(entry);
       }
@@ -126,18 +196,14 @@ export function searchSymbols(index: SymbolIndex, query: string): SymbolEntry[] 
     return results;
   }
 
-  // Multi-token query: build a per-entry haystack once and count how many of the
+  // Multi-token query: use the per-entry haystack and count how many of the
   // query tokens appear in it. An entry matches when at least one token is present.
   const scored: Array<{ entry: SymbolEntry; matchedTokens: number; nameMatch: boolean }> = [];
 
   for (const entry of index.entries.values()) {
-    const symbolLower = entry.symbol.toLowerCase();
-    const haystack = [
-      symbolLower,
-      entry.description?.toLowerCase() ?? '',
-      (entry.tags ?? []).join(' ').toLowerCase(),
-      entry.componentType?.toLowerCase() ?? '',
-    ].join(' ');
+    const hay = haystackFor(index, entry);
+    const symbolLower = hay.symbol;
+    const haystack = hay.joined;
 
     let matchedTokens = 0;
     let nameMatch = false;

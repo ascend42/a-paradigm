@@ -95,8 +95,15 @@ components:
       - feature
       - classroom
       - learning-loop
+  tool-family:
+    description: '7.13 defineFamily({name, description, ops}) — builds one listed tool whose schema is an op enum + compacted union of the legacy tools'' properties (property descriptions omitted for budget; nested item/object shapes kept as names + required; op signatures in the description: full for signatures:'full' families, required-only otherwise; HANDLER_DEFAULTED exempts handler-defaulted params from per-op validation), with runtime per-op required validation that echoes the op''s params. Also canonicalizeToolRef (legacy / family.op / family({op}) / bare family → canonical legacy names) used by habits evaluation, and compactDefinition for anchors.'
+    type: utility
+    tags:
+      - feature
+      - mcp
+      - tool-surface
   tool-registry:
-    description: 'Tiered tool registration system — core/feature/advanced tiers with auto-detection. getAllTools() lists every module regardless of tier (backs listToolDefinitions for skill pin checks). v7.11: university detection is pack-based (detectUniversityPacks — a discovered pack with entries or skillDirs, or an implicit v5 project pack with content; requires .paradigm; fail-closed false) — an empty scaffold no longer activates the tools.'
+    description: 'Tiered tool registration system — core/feature/advanced tiers with auto-detection. getAllTools() lists every module regardless of tier (backs listToolDefinitions for skill pin checks). v7.11: university detection is pack-based (detectUniversityPacks — a discovered pack with entries or skillDirs, or an implicit v5 project pack with content; requires .paradigm; fail-closed false) — an empty scaffold no longer activates the tools. v7.13: listed definitions strip `aliases`; dispatch falls through to inactive modules (hidden aliases); readMcpToolsConfig reads mcp.tools.enable / legacy_listing.'
     type: loader
     tags:
       - feature

@@ -145,6 +145,37 @@ export function aggregatePurposes(parsedFiles: ParsedPurposeFile[]): AggregatedP
 }
 
 /**
+ * Default ignore globs for .purpose discovery (relative to the search root).
+ *
+ * The first three are the historical set. The rest keep tool/build output and
+ * agent scratch checkouts out of the symbol graph: Claude Code worktrees
+ * (`.claude/**`), generic `.worktrees`, the Warpline object store, JS/Swift/iOS
+ * build output (build, .build, coverage, .next, .turbo, Pods, DerivedData).
+ * A `.purpose` copied into e.g. `.next/standalone/**` is a stale duplicate, and
+ * duplicates are resolved last-write-wins — so leaving them in made the WINNING
+ * definition depend on build artefacts.
+ *
+ * Note: glob runs with `dot: false`, so dot-directories are not traversed anyway;
+ * the dot entries are listed explicitly so the policy is legible and survives a
+ * future `dot: true`.
+ */
+export const DEFAULT_PURPOSE_IGNORE: readonly string[] = Object.freeze([
+  '**/node_modules/**',
+  '**/dist/**',
+  '**/.git/**',
+  '.claude/**',
+  '**/.worktrees/**',
+  '.warpline/**',
+  '**/build/**',
+  '**/.build/**',
+  '**/coverage/**',
+  '**/.next/**',
+  '**/.turbo/**',
+  '**/Pods/**',
+  '**/DerivedData/**',
+]);
+
+/**
  * Find all .purpose files in a directory tree, sorted by depth
  */
 export async function findPurposeFiles(rootDir: string): Promise<string[]> {
@@ -153,7 +184,7 @@ export async function findPurposeFiles(rootDir: string): Promise<string[]> {
   const files = await glob('**/.purpose', {
     cwd: absoluteRoot,
     absolute: true,
-    ignore: ['**/node_modules/**', '**/dist/**', '**/.git/**'],
+    ignore: [...DEFAULT_PURPOSE_IGNORE],
   });
 
   // Sort by depth (shallowest first for proper aggregation), then break ties by

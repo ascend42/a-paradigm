@@ -86,9 +86,10 @@ final class ParadigmMCPClient: ObservableObject {
             .filter { !$0.isEmpty }
     }
 
-    /// Call paradigm_history_context for recent history.
+    /// Call paradigm_history({op:'context'}) for recent history.
+    /// (7.13.0: was `paradigm_history_context`; the legacy name remains a hidden alias through 7.14.)
     func getHistoryContext() async throws -> String {
-        let response = try await callTool("paradigm_history_context", params: [:])
+        let response = try await callTool("paradigm_history", params: ["op": "context"])
         return response.resultText
     }
 

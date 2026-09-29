@@ -87,20 +87,20 @@ Paradigm provides MCP tools for token-efficient, always-fresh data. Prefer these
 | `paradigm_ripple` | Dependency and impact analysis | Before modifying symbols |
 | `paradigm_related` | Direct relationships for a symbol | Understanding connections |
 | `paradigm_gates_for_route` | Suggest gates for an API endpoint | Adding API routes |
-| `paradigm_wisdom_context` | Team preferences and antipatterns | Before implementing |
-| `paradigm_history_fragility` | Stability warnings for symbols | Before modifying fragile areas |
-| `paradigm_flow_check` | Validate flow definitions | Before/after implementing flows |
-| `paradigm_flows_affected` | Flows impacted by symbol changes | After modifying symbols |
+| `paradigm_wisdom` (op `context`) | Team preferences and antipatterns | Before implementing |
+| `paradigm_history` (op `fragility`) | Stability warnings for symbols | Before modifying fragile areas |
+| `paradigm_flow` (op `check`) | Validate flow definitions | Before/after implementing flows |
+| `paradigm_flow` (op `affected`) | Flows impacted by symbol changes | After modifying symbols |
 | `paradigm_test_fixtures` | Get test data for validation | Writing tests |
 | `paradigm_orchestrate_inline` | Multi-agent task planning | Complex tasks (3+ files) |
-| `paradigm_pm_preflight` | Pre-task compliance check | Starting any task |
-| `paradigm_pm_postflight` | Post-task violation detection | Finishing any task |
-| `paradigm_session_recover` | Load previous session breadcrumbs | Starting a new session |
-| `paradigm_session_health` | Check context window usage | Every 10-15 tool calls |
-| `paradigm_handoff_prepare` | Prepare session handoff summary | When context is high |
+| `paradigm_pm` (op `preflight`) | Pre-task compliance check | Starting any task |
+| `paradigm_pm` (op `postflight`) | Post-task violation detection | Finishing any task |
+| `paradigm_session` (op `recover`) | Load previous session breadcrumbs | Starting a new session |
+| `paradigm_session` (op `health`) | Check context window usage | Every 10-15 tool calls |
+| `paradigm_session` (op `handoff_prepare`) | Prepare session handoff summary | When context is high |
 | `paradigm_reindex` | Rebuild static index files | After modifying .purpose files |
-| `paradigm_session_checkpoint` | Save cognitive-transition checkpoint | Phase transitions |
-| `paradigm_session_stats` | Current session token usage | Checking budget |
+| `paradigm_session` (op `checkpoint`) | Save cognitive-transition checkpoint | Phase transitions |
+| `paradigm_session` (op `stats`) | Current session token usage | Checking budget |
 
 **Rule**: Use MCP tools for discovery and validation, file reads for implementation.
 
@@ -142,14 +142,14 @@ Before exploring this codebase:
 
 | When | Tool | Purpose |
 |------|------|---------|
-| Starting any task | `paradigm_pm_preflight` | Get compliance plan, affected symbols, required checks |
-| Finishing any task | `paradigm_pm_postflight` | Check for violations: missing .purpose, missing gates |
+| Starting any task | `paradigm_pm` (op `preflight`) | Get compliance plan, affected symbols, required checks |
+| Finishing any task | `paradigm_pm` (op `postflight`) | Check for violations: missing .purpose, missing gates |
 
 ## Workflow Protocol
 
 ### Before Each Task
 
-1. **Preflight**: Call `paradigm_pm_preflight` with your task description
+1. **Preflight**: Call `paradigm_pm` (op `preflight`) with your task description
    - Returns affected symbols, ripple analysis, required agents
 2. **Impact check**: Call `paradigm_ripple` for any symbols you'll modify
 3. **Gate check**: Call `paradigm_gates_for_route` before adding API endpoints
@@ -157,10 +157,10 @@ Before exploring this codebase:
 
 ### After Each Task
 
-1. **Postflight**: Call `paradigm_pm_postflight` with modified files and symbols
+1. **Postflight**: Call `paradigm_pm` (op `postflight`) with modified files and symbols
    - Checks for missing .purpose files, unregistered routes, uncaptured wisdom
 2. **Reindex**: Call `paradigm_reindex` to rebuild static index files
-3. **Validate flows**: Call `paradigm_flow_check` if you touched flow-related symbols
+3. **Validate flows**: Call `paradigm_flow` (op `check`) if you touched flow-related symbols
 
 ## Commit Messages
 
@@ -199,12 +199,12 @@ Symbols: #payment-form, #apple-pay-button, $checkout-flow, !payment-method-added
 
 ### Session Start (EVERY new session)
 
-Call `paradigm_session_recover` to load previous session breadcrumbs.
+Call `paradigm_session` (op `recover`) to load previous session breadcrumbs.
 Returns: symbols modified, files explored, recent actions, and suggestions.
 
 ### Context Monitoring
 
-Call `paradigm_session_health` every 10-15 tool calls to track context usage.
+Call `paradigm_session` (op `health`) every 10-15 tool calls to track context usage.
 
 | Usage | Recommendation | Action |
 |-------|----------------|--------|
@@ -215,7 +215,7 @@ Call `paradigm_session_health` every 10-15 tool calls to track context usage.
 
 ### Handoff Process
 
-1. Call `paradigm_handoff_prepare` with summary, next steps, and target agent
+1. Call `paradigm_session` (op `handoff_prepare`) with summary, next steps, and target agent
 2. User runs: `paradigm team handoff --to <agent> --summary "..."`
 3. New session accepts: `paradigm team accept <handoff-id>`
 
@@ -235,7 +235,7 @@ Save checkpoints when transitioning between workflow phases to enable crash reco
 ### Usage
 
 ```
-paradigm_session_checkpoint({
+paradigm_session({op:'checkpoint',
   phase: "implementing",
   context: "Adding JWT auth middleware to /api/projects routes",
   modifiedFiles: ["src/middleware/auth.ts", "src/routes/projects.ts"],
@@ -254,9 +254,9 @@ Paradigm tracks behavioral habits — repeatable practices that improve code qua
 
 | Trigger | When | Tool |
 |---------|------|------|
-| `preflight` | Before starting implementation | `paradigm_habits_check({ trigger: "preflight" })` |
-| `postflight` | After completing implementation | `paradigm_habits_check({ trigger: "postflight" })` |
-| `on-stop` | Before ending a session | `paradigm_habits_check({ trigger: "on-stop" })` |
+| `preflight` | Before starting implementation | `paradigm_habits({op:'check', trigger: "preflight" })` |
+| `postflight` | After completing implementation | `paradigm_habits({op:'check', trigger: "postflight" })` |
+| `on-stop` | Before ending a session | `paradigm_habits({op:'check', trigger: "on-stop" })` |
 
 ### Key Habit Categories
 
@@ -267,7 +267,7 @@ Paradigm tracks behavioral habits — repeatable practices that improve code qua
 | Documentation | Update .purpose files for modified components |
 | Quality | Record lore for sessions modifying 3+ files |
 
-Use `paradigm_practice_context` before modifying symbols to get habit-aware warnings.
+Use `paradigm_habits` (op `practice_context`) before modifying symbols to get habit-aware warnings.
 
 ## Lore Recording
 
@@ -285,7 +285,7 @@ Lore captures the project timeline — sessions, decisions, milestones, and inci
 ### Recording
 
 ```
-paradigm_lore_record({
+paradigm_lore({op:'record',
   type: "agent-session",
   title: "Short description of work done",
   summary: "Detailed summary of changes...",
@@ -293,7 +293,7 @@ paradigm_lore_record({
 })
 ```
 
-Use `paradigm_lore_timeline` at session start for project history orientation.
+Use `paradigm_lore` (op `timeline`) at session start for project history orientation.
 
 ## llms.txt
 

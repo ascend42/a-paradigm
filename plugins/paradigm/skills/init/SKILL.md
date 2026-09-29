@@ -86,4 +86,4 @@ Call `paradigm_status` again and report to the user:
 - If `npx` is not available, tell the user to install Node.js >= 18
 - If the init command fails, read the error output and help debug
 - If scan finds 0 symbols, suggest creating `.purpose` files manually using
-  `paradigm_purpose_init` and `paradigm_purpose_add_component`
+  `paradigm_purpose` (op `init`) and `paradigm_purpose` (op `add_component`)

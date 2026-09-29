@@ -50,8 +50,8 @@ fi
 # Build context string (escaped for JSON)
 CONTEXT="MANDATORY PARADIGM PROTOCOL — These rules are NON-NEGOTIABLE:\\n\\n"
 CONTEXT="${CONTEXT}Rule 1: SESSION BOOKENDS\\n"
-CONTEXT="${CONTEXT}  - FIRST action: Call paradigm_session_recover() to load previous session context\\n"
-CONTEXT="${CONTEXT}  - LAST action before finishing: Call paradigm_pm_postflight() with filesModified and symbolsTouched\\n\\n"
+CONTEXT="${CONTEXT}  - FIRST action: Call paradigm_session({op:'recover'}) to load previous session context\\n"
+CONTEXT="${CONTEXT}  - LAST action before finishing: Call paradigm_pm({op:'postflight'}) with filesModified and symbolsTouched\\n\\n"
 
 CONTEXT="${CONTEXT}Rule 2: .PURPOSE UPDATES\\n"
 CONTEXT="${CONTEXT}  - Every source file you modify MUST have a covering .purpose file\\n"
@@ -63,16 +63,16 @@ CONTEXT="${CONTEXT}  - Before modifying any existing symbol, call paradigm_rippl
 CONTEXT="${CONTEXT}  - This shows the blast radius — what else will break if you change it\\n\\n"
 
 CONTEXT="${CONTEXT}ESSENTIAL MCP TOOLS:\\n"
-CONTEXT="${CONTEXT}  paradigm_session_recover()          — Load previous session (call FIRST)\\n"
+CONTEXT="${CONTEXT}  paradigm_session({op:'recover'})          — Load previous session (call FIRST)\\n"
 CONTEXT="${CONTEXT}  paradigm_ripple({ symbol })          — Check impact before modifying\\n"
-CONTEXT="${CONTEXT}  paradigm_pm_postflight({ filesModified, symbolsTouched }) — Compliance check (call LAST)\\n"
-CONTEXT="${CONTEXT}  paradigm_purpose_add_component({ path, name, description }) — Register code units\\n"
+CONTEXT="${CONTEXT}  paradigm_pm({op:'postflight', filesModified, symbolsTouched }) — Compliance check (call LAST)\\n"
+CONTEXT="${CONTEXT}  paradigm_purpose({op:'add_component', path, name, description }) — Register code units\\n"
 CONTEXT="${CONTEXT}  paradigm_reindex()                   — Rebuild indexes after .purpose changes\\n"
-CONTEXT="${CONTEXT}  paradigm_lore_record({ type, title, summary, symbols_touched }) — Record session\\n"
+CONTEXT="${CONTEXT}  paradigm_lore({op:'record', type, title, summary, symbols_touched }) — Record session\\n"
 
 if [ "$HAS_PORTAL" = "true" ]; then
   CONTEXT="${CONTEXT}  paradigm_gates_for_route({ method, path }) — Get auth gate suggestions for endpoints\\n"
-  CONTEXT="${CONTEXT}  paradigm_portal_add_route({ method, path, gates }) — Register route with gates\\n"
+  CONTEXT="${CONTEXT}  paradigm_purpose({op:'portal_add_route', method, path, gates }) — Register route with gates\\n"
 fi
 
 CONTEXT="${CONTEXT}\\nTASK-SIZE TIERS:\\n"

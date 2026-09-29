@@ -13,6 +13,7 @@ import {
   extractSignals,
   extractAspects,
   extractSymbolReferences,
+  type ParsedPurposeFile,
 } from '@a-company/purpose-core';
 import { parseGateConfig, findGateFiles, type ParsedGateConfig, type Gate, type Flow } from '@a-company/portal-core';
 import type {
@@ -26,12 +27,29 @@ import type {
 import { parseAnchorString } from './symbol-index.js';
 
 /**
+ * Optional loader seams for aggregateFromPremise. Every hook defaults to the
+ * historical cold implementation, so omitting `options` is byte-identical to
+ * the pre-7.13 behavior. #live-index injects cached/pre-globbed loaders here so
+ * a warm rebuild re-aggregates the FULL, identically-ordered file set without
+ * re-reading unchanged files. Loaders must preserve discovery order.
+ */
+export interface AggregateOptions {
+  /** Replaces getAllPurposeFiles(sourcePath). */
+  loadPurposeFiles?: (sourcePath: string) => Promise<ParsedPurposeFile[]>;
+  /** Replaces findGateFiles(sourcePath) for directory portal sources. */
+  findPortalFiles?: (sourcePath: string) => Promise<string[]>;
+}
+
+/**
  * Aggregate all symbols from a premise configuration
  */
 export async function aggregateFromPremise(
   premiseFile: PremiseFile,
-  rootDir: string
+  rootDir: string,
+  options: AggregateOptions = {},
 ): Promise<AggregationResult> {
+  const loadPurposeFiles = options.loadPurposeFiles ?? getAllPurposeFiles;
+  const findPortalFiles = options.findPortalFiles ?? findGateFiles;
   const symbols: SymbolEntry[] = [];
   const errors: AggregationError[] = [];
   const purposeFiles: string[] = [];
@@ -42,7 +60,7 @@ export async function aggregateFromPremise(
     for (const source of premiseFile.sources.purpose) {
       const sourcePath = path.resolve(rootDir, source.path);
       try {
-        const parsed = await getAllPurposeFiles(sourcePath);
+        const parsed = await loadPurposeFiles(sourcePath);
         purposeFiles.push(...parsed.map((p) => p.filePath));
 
         // Extract features (v2: now #components with [feature] tag)
@@ -203,7 +221,7 @@ export async function aggregateFromPremise(
           gateConfig = await parseGateConfig(sourcePath);
           portalFiles.push(sourcePath);
         } else {
-          const files = await findGateFiles(sourcePath);
+          const files = await findPortalFiles(sourcePath);
           portalFiles.push(...files);
           if (files.length > 0) {
             gateConfig = await parseGateConfig(files[0]);
@@ -413,7 +431,10 @@ function resolveReferences(symbols: SymbolEntry[]): void {
 /**
  * Aggregate symbols from a directory without a .premise file
  */
-export async function aggregateFromDirectory(rootDir: string): Promise<AggregationResult> {
+export async function aggregateFromDirectory(
+  rootDir: string,
+  options: AggregateOptions = {},
+): Promise<AggregationResult> {
   // Create a default premise file configuration
   const premiseFile: PremiseFile = {
     version: '1.0.0',
@@ -433,5 +454,5 @@ export async function aggregateFromDirectory(rootDir: string): Promise<Aggregati
     },
   };
 
-  return aggregateFromPremise(premiseFile, rootDir);
+  return aggregateFromPremise(premiseFile, rootDir, options);
 }

@@ -279,7 +279,7 @@ PURPOSEEOF
     VIOLATIONS="$VIOLATIONS
   - These directories have modified source files but no .purpose file anywhere in their path:
    $DIRS_WITHOUT_PURPOSE
-    Create a .purpose file using paradigm_purpose_init + paradigm_purpose_add_component."
+    Create a .purpose file using paradigm_purpose (op: init) + paradigm_purpose (op: add_component)."
     VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
   else
     ADVISORY="$ADVISORY
@@ -572,7 +572,7 @@ LOREEOF
     elif [ "$_SEV" = "block" ]; then
       VIOLATIONS="$VIOLATIONS
   - You modified $SOURCE_COUNT source files but recorded no lore entry.
-    Record your session: paradigm_lore_record (MCP) or paradigm lore record (CLI).
+    Record your session: paradigm_lore (op: record) (MCP) or paradigm lore record (CLI).
     Include: type, title, summary, and symbols_touched."
       VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
     else
@@ -661,7 +661,7 @@ if [ -n "$COMPLIANCE_RESULT" ]; then
     if [ "$_SEV" = "block" ]; then
       VIOLATIONS="$VIOLATIONS
   - $DRIFTED_COUNT aspect anchor(s) have drifted (content genuinely changed).
-    Run paradigm_aspect_check to review. Update anchors in .purpose files."
+    Run paradigm_aspect (op: check) to review. Update anchors in .purpose files."
       VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
     else
       ADVISORY="$ADVISORY
@@ -702,7 +702,7 @@ if [ -n "$COMPLIANCE_RESULT" ]; then
         VIOLATIONS="$VIOLATIONS
   - $UNDECLARED gate(s) used in code but not declared in portal.yaml:
     $CLEAN_LIST
-    Add them to portal.yaml or use paradigm_portal_add_gate."
+    Add them to portal.yaml or use paradigm_purpose (op: portal_add_gate)."
         VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
       else
         ADVISORY="$ADVISORY
@@ -821,7 +821,7 @@ PURPOSEEOF
       VIOLATIONS="$VIOLATIONS
   - These directories match purpose-required patterns but have no .purpose file:
    $MISSING_REQUIRED
-    Create .purpose files: paradigm_purpose_init + paradigm_purpose_add_component."
+    Create .purpose files: paradigm_purpose (op: init) + paradigm_purpose (op: add_component)."
       VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
     else
       ADVISORY="$ADVISORY
@@ -871,7 +871,7 @@ if [ "$_SEV" != "off" ] && [ "$VIOLATION_COUNT" -gt 0 ] && [ -f ".paradigm/gradu
     if [ "$fail_count" -ge 3 ]; then
       ADVISORY="$ADVISORY
   - Graduated habit '$habit_id' has $fail_count failures — auto-demotion triggered.
-    Run paradigm_graduate_status to review tier changes."
+    Run paradigm_graduation (op: status) to review tier changes."
     elif [ "$fail_count" -ge 2 ]; then
       ADVISORY="$ADVISORY
   - Graduated habit '$habit_id' has $fail_count failures (demotion at 3).
@@ -1179,12 +1179,12 @@ if [ "$VIOLATION_COUNT" -gt 0 ]; then
   fi
   echo "" >&2
   echo "Run these MCP tools to fix:" >&2
-  echo "  1. paradigm_purpose_add_component — register new code units" >&2
-  echo "  2. paradigm_purpose_add_aspect — register cross-cutting concerns (with anchors)" >&2
-  echo "  3. paradigm_portal_add_route — register new endpoints with gates" >&2
+  echo "  1. paradigm_purpose (op: add_component) — register new code units" >&2
+  echo "  2. paradigm_purpose (op: add_aspect) — register cross-cutting concerns (with anchors)" >&2
+  echo "  3. paradigm_purpose (op: portal_add_route) — register new endpoints with gates" >&2
   echo "  4. paradigm_reindex — rebuild indexes after updates" >&2
-  echo "  5. paradigm_lore_record — record session lore entry" >&2
-  echo "  6. paradigm_habits_check — evaluate habit compliance" >&2
+  echo "  5. paradigm_lore (op: record) — record session lore entry" >&2
+  echo "  6. paradigm_habits (op: check) — evaluate habit compliance" >&2
   echo "" >&2
   echo "Tip: Set PARADIGM_AUTO_FIX=1 to auto-fix trivial violations (missing .purpose stubs, missing lore)." >&2
   echo "Help: See .paradigm/docs/troubleshooting.md for step-by-step resolution guides." >&2
@@ -1645,8 +1645,8 @@ fi
 # Build context string (escaped for JSON)
 CONTEXT="MANDATORY PARADIGM PROTOCOL — These rules are NON-NEGOTIABLE:\\\\n\\\\n"
 CONTEXT="\${CONTEXT}Rule 1: SESSION BOOKENDS\\\\n"
-CONTEXT="\${CONTEXT}  - FIRST action: Call paradigm_session_recover() to load previous session context\\\\n"
-CONTEXT="\${CONTEXT}  - LAST action before finishing: Call paradigm_pm_postflight() with filesModified and symbolsTouched\\\\n\\\\n"
+CONTEXT="\${CONTEXT}  - FIRST action: Call paradigm_session({op:'recover'}) to load previous session context\\\\n"
+CONTEXT="\${CONTEXT}  - LAST action before finishing: Call paradigm_pm({op:'postflight'}) with filesModified and symbolsTouched\\\\n\\\\n"
 
 CONTEXT="\${CONTEXT}Rule 2: .PURPOSE UPDATES\\\\n"
 CONTEXT="\${CONTEXT}  - Every source file you modify MUST have a covering .purpose file\\\\n"
@@ -1658,16 +1658,16 @@ CONTEXT="\${CONTEXT}  - Before modifying any existing symbol, call paradigm_ripp
 CONTEXT="\${CONTEXT}  - This shows the blast radius — what else will break if you change it\\\\n\\\\n"
 
 CONTEXT="\${CONTEXT}ESSENTIAL MCP TOOLS:\\\\n"
-CONTEXT="\${CONTEXT}  paradigm_session_recover()          — Load previous session (call FIRST)\\\\n"
+CONTEXT="\${CONTEXT}  paradigm_session({op:'recover'})          — Load previous session (call FIRST)\\\\n"
 CONTEXT="\${CONTEXT}  paradigm_ripple({ symbol })          — Check impact before modifying\\\\n"
-CONTEXT="\${CONTEXT}  paradigm_pm_postflight({ filesModified, symbolsTouched }) — Compliance check (call LAST)\\\\n"
-CONTEXT="\${CONTEXT}  paradigm_purpose_add_component({ path, name, description }) — Register code units\\\\n"
+CONTEXT="\${CONTEXT}  paradigm_pm({op:'postflight', filesModified, symbolsTouched }) — Compliance check (call LAST)\\\\n"
+CONTEXT="\${CONTEXT}  paradigm_purpose({op:'add_component', path, name, description }) — Register code units\\\\n"
 CONTEXT="\${CONTEXT}  paradigm_reindex()                   — Rebuild indexes after .purpose changes\\\\n"
-CONTEXT="\${CONTEXT}  paradigm_lore_record({ type, title, summary, symbols_touched }) — Record session\\\\n"
+CONTEXT="\${CONTEXT}  paradigm_lore({op:'record', type, title, summary, symbols_touched }) — Record session\\\\n"
 
 if [ "$HAS_PORTAL" = "true" ]; then
   CONTEXT="\${CONTEXT}  paradigm_gates_for_route({ method, path }) — Get auth gate suggestions for endpoints\\\\n"
-  CONTEXT="\${CONTEXT}  paradigm_portal_add_route({ method, path, gates }) — Register route with gates\\\\n"
+  CONTEXT="\${CONTEXT}  paradigm_purpose({op:'portal_add_route', method, path, gates }) — Register route with gates\\\\n"
 fi
 
 CONTEXT="\${CONTEXT}\\\\nTASK-SIZE TIERS:\\\\n"
@@ -1778,12 +1778,12 @@ if [ "$VIOLATION_COUNT" -gt 0 ]; then
   fi
   echo "" >&2
   echo "Run these MCP tools to fix:" >&2
-  echo "  1. paradigm_purpose_add_component — register new code units" >&2
-  echo "  2. paradigm_purpose_add_aspect — register cross-cutting concerns (with anchors)" >&2
-  echo "  3. paradigm_portal_add_route — register new endpoints with gates" >&2
+  echo "  1. paradigm_purpose (op: add_component) — register new code units" >&2
+  echo "  2. paradigm_purpose (op: add_aspect) — register cross-cutting concerns (with anchors)" >&2
+  echo "  3. paradigm_purpose (op: portal_add_route) — register new endpoints with gates" >&2
   echo "  4. paradigm_reindex — rebuild indexes after updates" >&2
-  echo "  5. paradigm_lore_record — record session lore entry" >&2
-  echo "  6. paradigm_habits_check — evaluate habit compliance" >&2
+  echo "  5. paradigm_lore (op: record) — record session lore entry" >&2
+  echo "  6. paradigm_habits (op: check) — evaluate habit compliance" >&2
   echo "" >&2
   echo "Tip: Set PARADIGM_AUTO_FIX=1 to auto-fix trivial violations (missing .purpose stubs, missing lore)." >&2
   echo "Help: See .paradigm/docs/troubleshooting.md for step-by-step resolution guides." >&2
@@ -2018,7 +2018,7 @@ elif [ "$UNCOVERED_COUNT" -le 4 ]; then
   echo "" >&2
   echo "[paradigm] Warning: $UNCOVERED_COUNT source files modified without .purpose coverage." >&2
   echo "  Update the nearest .purpose file before the stop hook blocks you." >&2
-  echo "  Use: paradigm_purpose_init + paradigm_purpose_add_component" >&2
+  echo "  Use: paradigm_purpose (op: init) + paradigm_purpose (op: add_component)" >&2
   exit 0
 else
   # Block — too many uncovered edits
@@ -2026,8 +2026,8 @@ else
   echo "[paradigm] BLOCKED: $UNCOVERED_COUNT source files modified without .purpose coverage." >&2
   echo "  You must update .purpose files before continuing." >&2
   echo "  Steps:" >&2
-  echo "    1. paradigm_purpose_init — create .purpose in uncovered directories" >&2
-  echo "    2. paradigm_purpose_add_component — register code units" >&2
+  echo "    1. paradigm_purpose (op: init) — create .purpose in uncovered directories" >&2
+  echo "    2. paradigm_purpose (op: add_component) — register code units" >&2
   echo "    3. paradigm_reindex — rebuild the index" >&2
   echo "  Then retry your edit." >&2
   exit 2
@@ -2143,7 +2143,7 @@ if [ -z "$found_purpose" ]; then
   file_dir=$(dirname "$REL_PATH")
   echo "" >&2
   echo "[paradigm] No .purpose file covers $file_dir/" >&2
-  echo "  Create one: paradigm_purpose_init + paradigm_purpose_add_component" >&2
+  echo "  Create one: paradigm_purpose (op: init) + paradigm_purpose (op: add_component)" >&2
   echo "  $PENDING_COUNT file(s) pending review. The stop hook WILL BLOCK." >&2
 elif [ "$PENDING_COUNT" -gt 0 ] && [ "$((PENDING_COUNT % 3))" -eq 0 ]; then
   echo "" >&2

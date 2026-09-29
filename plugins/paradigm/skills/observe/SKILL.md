@@ -11,10 +11,10 @@ and traces from running applications.
 
 ## Step 1: Check Connected Services
 
-Call `paradigm_sentinel_stats` to see which services are reporting:
+Call `paradigm_sentinel` (op `stats`) to see which services are reporting:
 
 ```
-paradigm_sentinel_stats({ period: "1h" })
+paradigm_sentinel({op:'stats', period: "1h" })
 ```
 
 This shows active services, log volume, and recent activity.
@@ -58,8 +58,8 @@ curl -s http://localhost:3838/api/traces/<traceId> | jq .
 When you find interesting log entries or errors:
 
 1. **Identify the symbol** from the log entry's `symbol` field
-2. **Check history**: `paradigm_history_context({ symbols: ["#the-symbol"] })`
-3. **Check fragility**: `paradigm_history_fragility({ symbols: ["#the-symbol"] })`
+2. **Check history**: `paradigm_history({op:'context', symbols: ["#the-symbol"] })`
+3. **Check fragility**: `paradigm_history({op:'fragility', symbols: ["#the-symbol"] })`
 4. **If it's an error**: Use `/paradigm:sentinel` to triage it as an incident
 
 ## Step 6: Open Dashboard

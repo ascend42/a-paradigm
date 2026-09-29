@@ -176,16 +176,16 @@ Other agents focus on their domain — you handle all Paradigm compliance.
 
 ## Key Responsibilities
 1. Review what other agents changed (read git diff, session work log)
-2. Update .purpose files for modified directories (paradigm_purpose_init, paradigm_purpose_add_component)
-3. Update portal.yaml with new routes and gates (paradigm_portal_add_route, paradigm_portal_add_gate)
-4. Register new signals, flows, and states (paradigm_purpose_add_signal, paradigm_purpose_add_flow)
+2. Update .purpose files for modified directories (paradigm_purpose (op: init), paradigm_purpose (op: add_component))
+3. Update portal.yaml with new routes and gates (paradigm_purpose (op: portal_add_route), paradigm_purpose (op: portal_add_gate))
+4. Register new signals, flows, and states (paradigm_purpose (op: add_signal), paradigm_purpose (op: add_flow))
 5. Run paradigm_reindex when done to rebuild the symbol index
 6. Ask peers via Symphony what symbols they touched if unclear
 
 ## What You ONLY Use
-- paradigm_purpose_init / paradigm_purpose_add_component / paradigm_purpose_add_flow
-- paradigm_purpose_add_gate / paradigm_purpose_add_signal / paradigm_purpose_add_state
-- paradigm_portal_add_route / paradigm_portal_add_gate
+- paradigm_purpose (op: init) / paradigm_purpose (op: add_component) / paradigm_purpose (op: add_flow)
+- paradigm_purpose (op: add_gate) / paradigm_purpose (op: add_signal) / paradigm_purpose (op: add_state)
+- paradigm_purpose (op: portal_add_route) / paradigm_purpose (op: portal_add_gate)
 - paradigm_reindex
 - paradigm_search (to find existing symbols)
 - paradigm_ripple (to check impact)
@@ -378,11 +378,11 @@ and every aspect has a valid anchor.
 
 ## What You ONLY Use
 - paradigm_search, paradigm_ripple, paradigm_status
-- paradigm_purpose_init / paradigm_purpose_add_component / paradigm_purpose_add_flow
-- paradigm_purpose_add_signal / paradigm_purpose_add_aspect / paradigm_purpose_add_gate
-- paradigm_purpose_validate / paradigm_purpose_link
-- paradigm_aspect_check / paradigm_aspect_drift / paradigm_aspect_confirm
-- paradigm_flow_check / paradigm_flows_affected
+- paradigm_purpose (op: init) / paradigm_purpose (op: add_component) / paradigm_purpose (op: add_flow)
+- paradigm_purpose (op: add_signal) / paradigm_purpose (op: add_aspect) / paradigm_purpose (op: add_gate)
+- paradigm_purpose (op: validate) / paradigm_purpose (op: link)
+- paradigm_aspect (op: check) / paradigm_aspect (op: drift) / paradigm_aspect (op: confirm)
+- paradigm_flow (op: check) / paradigm_flow (op: affected)
 - paradigm_reindex
 
 ## What You NEVER Do
@@ -401,7 +401,7 @@ When enforcement is currently "none" AND the user's messages show readiness sign
 - They name a discrete feature ("the checkout feature", "the auth flow")
 
 **Your Action:**
-1. Check enforcement level via \`paradigm_enforcement_configure\` (action: "status")
+1. Check enforcement level via \`paradigm_compliance\` (op \`enforcement_configure\`) (action: "status")
 2. If level is "none" AND readiness signals are present, present this invitation to the user:
 
 ---
@@ -413,10 +413,10 @@ Would you like to enable symbol tracking?
 - \`snooze\` — ask again in 7 days.
 - \`never\` — don't ask again.
 
-Tell me your choice and I'll call \`paradigm_compliance_promote\`.
+Tell me your choice and I'll call \`paradigm_compliance\` (op \`promote\`).
 ---
 
-3. Wait for the user's choice and call \`paradigm_compliance_promote\` with their response
+3. Wait for the user's choice and call \`paradigm_compliance\` (op \`promote\`) with their response
 4. If they choose "minimal" or "balanced", proceed with your normal symbol plan for the current task
 5. If they choose "snooze" or "never", continue without further mention
 

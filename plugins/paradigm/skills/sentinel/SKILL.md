@@ -11,10 +11,10 @@ errors, failures, and near-misses tracked across the project.
 
 ## Step 1: Get Overview
 
-Call `paradigm_sentinel_stats` to get the current health metrics:
+Call `paradigm_sentinel` (op `stats`) to get the current health metrics:
 
 ```
-paradigm_sentinel_stats({ period: "7d" })
+paradigm_sentinel({op:'stats', period: "7d" })
 ```
 
 This shows:
@@ -25,10 +25,10 @@ This shows:
 
 ## Step 2: Triage Open Incidents
 
-Call `paradigm_sentinel_triage` to list incidents that need attention:
+Call `paradigm_sentinel` (op `triage`) to list incidents that need attention:
 
 ```
-paradigm_sentinel_triage({ status: "open", limit: 10 })
+paradigm_sentinel({op:'triage', status: "open", limit: 10 })
 ```
 
 For each incident, note:
@@ -44,7 +44,7 @@ For the most critical incidents (or the one the user is asking about):
 
 1. **Get full details**:
    ```
-   paradigm_sentinel_show({
+   paradigm_sentinel({op:'show',
      incidentId: "INC-XXX",
      includeTimeline: true,
      includeSimilar: true
@@ -53,19 +53,19 @@ For the most critical incidents (or the one the user is asking about):
 
 2. **Check the affected symbol's history**:
    ```
-   paradigm_history_context({ symbols: ["#affected-component"] })
+   paradigm_history({op:'context', symbols: ["#affected-component"] })
    ```
    Look for recent changes that might have introduced the issue.
 
 3. **Check fragility**:
    ```
-   paradigm_history_fragility({ symbols: ["#affected-component"] })
+   paradigm_history({op:'fragility', symbols: ["#affected-component"] })
    ```
    High fragility means this symbol has a history of problems.
 
 4. **Check for patterns**:
    ```
-   paradigm_sentinel_patterns({ symbol: "#affected-component" })
+   paradigm_sentinel({op:'patterns', symbol: "#affected-component" })
    ```
    See if known failure patterns match this incident.
 
@@ -82,9 +82,9 @@ Based on the incident details:
    ```
 
 3. **Check the flow**: If the incident occurred during a multi-step flow,
-   call `paradigm_flows_affected` to understand the flow context.
+   call `paradigm_flow` (op `affected`) to understand the flow context.
 
-4. **Check wisdom**: Call `paradigm_wisdom_context` for the affected symbols —
+4. **Check wisdom**: Call `paradigm_wisdom` (op `context`) for the affected symbols —
    there might be known antipatterns or past decisions relevant to this issue.
 
 ## Step 5: Suggest Resolution
@@ -103,7 +103,7 @@ Based on the analysis, recommend a resolution strategy:
 If a new failure pattern was discovered:
 
 ```
-paradigm_sentinel_add_pattern({
+paradigm_sentinel({op:'add_pattern',
   id: "pattern-id",
   name: "Pattern Name",
   pattern: {
@@ -123,7 +123,7 @@ paradigm_sentinel_add_pattern({
 If the incident is resolved (or being resolved):
 
 ```
-paradigm_sentinel_resolve({
+paradigm_sentinel({op:'resolve',
   incidentId: "INC-XXX",
   notes: "Root cause: race condition in auth middleware. Fixed by adding mutex.",
   commitHash: "<commit-hash-if-available>"

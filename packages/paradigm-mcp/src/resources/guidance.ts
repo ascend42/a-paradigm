@@ -158,20 +158,20 @@ routes:
 
 | Before doing this... | Call this tool |
 |---------------------|----------------|
-| **Implementing a common pattern** | \`paradigm_protocol_search\` for existing protocol |
-| **Completed repeatable work** | \`paradigm_protocol_record\` to capture the pattern |
+| **Implementing a common pattern** | \`paradigm_protocol\` (op \`search\`) for existing protocol |
+| **Completed repeatable work** | \`paradigm_protocol\` (op \`record\`) to capture the pattern |
 | Modifying a symbol | \`paradigm_ripple\` with the symbol |
 | Understanding code | \`paradigm_navigate\` with explore intent |
 | Checking dependencies | \`paradigm_related\` for connections |
 | Getting oriented | \`paradigm_status\` for project overview |
 | **Adding API endpoint** | \`paradigm_gates_for_route\` for auth gates |
-| **Validating changes** | \`paradigm_flows_affected\` for flow impact |
+| **Validating changes** | \`paradigm_flow\` (op \`affected\`) for flow impact |
 | **Getting test data** | \`paradigm_test_fixtures\` for fixtures |
 | **Building a feature (3+ files)** | \`paradigm_orchestrate_inline\` mode="plan" |
 | **Task involves security + code** | \`paradigm_orchestrate_inline\` mode="plan" |
-| **Tracking work items** | \`paradigm_task_create\` / \`paradigm_task_list\` |
-| **Recording reflections** | \`paradigm_lore_record\` with \`arc:*\` tags |
-| **Sending message to agents** | \`paradigm_symphony_send\` to compose + route |
+| **Tracking work items** | \`paradigm_task\` (op \`create\`) / \`paradigm_task\` (op \`list\`) |
+| **Recording reflections** | \`paradigm_lore\` (op \`record\`) with \`arc:*\` tags |
+| **Sending message to agents** | \`paradigm_symphony\` (op \`send\`) to compose + route |
 | **Finishing work session** | \`paradigm_reindex\` to rebuild static index |
 | **Cross-project impact** | \`paradigm_ripple\` with \`includeWorkspace: true\` |
 
@@ -184,9 +184,9 @@ routes:
 | \`paradigm_navigate\` | ~200 | Finding code locations |
 | \`paradigm_ripple\` | ~300 | Before modifying symbols |
 | \`paradigm_gates_for_route\` | ~150 | Adding API endpoints |
-| \`paradigm_task_create\` | ~100 | Creating a work item |
-| \`paradigm_lore_record\` | ~150 | Adding a lore entry |
-| \`paradigm_symphony_peek\` | ~15 | Near-free inbox check |
+| \`paradigm_task\` (op \`create\`) | ~100 | Creating a work item |
+| \`paradigm_lore\` (op \`record\`) | ~150 | Adding a lore entry |
+| \`paradigm_symphony\` (op \`peek\`) | ~15 | Near-free inbox check |
 | \`response_format: 'concise'\` | ~50% fewer | On any tool that supports it |
 | File read (small) | ~500 | Need exact code |
 | File read (large) | ~2000+ | Prefer MCP; use sparingly |
@@ -199,7 +199,7 @@ routes:
 | Check impact | \`paradigm_ripple\` | Never |
 | Read implementation | MCP first | Then specific file |
 | Write code | N/A | Existing patterns |
-| Check team wisdom | \`paradigm_wisdom_context\` | Never |
+| Check team wisdom | \`paradigm_wisdom\` (op \`context\`) | Never |
 
 **Rule**: MCP for discovery, files for implementation.
 
@@ -257,20 +257,20 @@ flows:
 ## Flow-First Protocol
 
 1. **Define the flow first** — What gates, actions, and signals?
-2. **Validate** — Call \`paradigm_flow_check\` to check completeness
+2. **Validate** — Call \`paradigm_flow\` (op \`check\`) to check completeness
 3. **Implement** — Each step becomes a clear implementation target
 
 ## Flow Validation
 
 \`\`\`
-paradigm_flow_check({ flowId: "$task-creation" })   # Specific flow
-paradigm_flow_check({})                              # All flows
-paradigm_flow_check({ checkImplementation: true })   # Deep check
+paradigm_flow({op:'check', flowId: "$task-creation" })   # Specific flow
+paradigm_flow({op:'check'})                              # All flows
+paradigm_flow({op:'check', checkImplementation: true })   # Deep check
 \`\`\`
 
 After modifying symbols, check affected flows:
 \`\`\`
-paradigm_flows_affected({ symbol: "#tasks" })
+paradigm_flow({op:'affected', symbol: "#tasks" })
 \`\`\``,
   },
 
@@ -352,8 +352,8 @@ At session end (via postflight skill Step 8b):
    - Accepted → \`human_feedback\` trigger, high confidence, extractable pattern
    - Dismissed → \`correction_received\` trigger, low confidence, explains what was wrong
    - Revised → \`correction_received\` trigger, medium confidence, includes delta
-3. **Adjust thresholds** — \`paradigm_ambient_learn\` per agent
-4. **Promote to notebooks** — \`paradigm_ambient_promote\` auto-promotes high-confidence journal entries
+3. **Adjust thresholds** — \`paradigm_ambient\` (op \`learn\`) per agent
+4. **Promote to notebooks** — \`paradigm_ambient\` (op \`promote\`) auto-promotes high-confidence journal entries
 
 Journal entries with patterns flow through to notebooks, which appear in future \`buildProfileEnrichment()\` calls. This is how agents accumulate domain knowledge.
 
@@ -369,7 +369,7 @@ No configuration needed — the learning pipeline IS the training mechanism.
 
 ## Neverland Validation
 
-Track learning progress with \`paradigm_ambient_health\`:
+Track learning progress with \`paradigm_ambient\` (op \`health\`):
 - Per-agent: acceptance rate, threshold, expertise count, notebook count
 - Aggregate: average accept rate, total expertise, total notebooks
 - Health status: cold-start → accumulating → calibrating → mature
@@ -380,12 +380,12 @@ Track learning progress with \`paradigm_ambient_health\`:
 | Tool | Purpose |
 |------|---------|
 | \`paradigm_orchestrate_inline\` | Plan (mode=plan) or execute (mode=execute) multi-agent orchestration |
-| \`paradigm_agent_prompt\` | Get enriched prompt for a single agent |
-| \`paradigm_agent_list\` | List all agents with expertise + bench status |
-| \`paradigm_agent_bench\` | Bench an agent |
-| \`paradigm_agent_activate\` | Activate a benched agent |
-| \`paradigm_ambient_health\` | Neverland validation metrics |
-| \`paradigm_context_compose\` | Compose full ambient context for an agent |`,
+| \`paradigm_agent\` (op \`prompt\`) | Get enriched prompt for a single agent |
+| \`paradigm_agent\` (op \`list\`) | List all agents with expertise + bench status |
+| \`paradigm_agent\` (op \`bench\`) | Bench an agent |
+| \`paradigm_agent\` (op \`activate\`) | Activate a benched agent |
+| \`paradigm_ambient\` (op \`health\`) | Neverland validation metrics |
+| \`paradigm_ambient\` (op \`compose\`) | Compose full ambient context for an agent |`,
   },
 
   'workspaces': {
@@ -422,7 +422,7 @@ members:
 | \`paradigm_ripple\` | \`includeWorkspace: true\` | Cross-project impact analysis |
 | \`paradigm_navigate\` | Automatic | Falls back to siblings |
 | \`paradigm_gates_for_route\` | Automatic | Learns from sibling portal.yaml |
-| \`paradigm_workspace_reindex\` | N/A | Rebuild all member indices |`,
+| \`paradigm_reindex\` (scope \`workspace\`) | N/A | Rebuild all member indices |`,
   },
 
   'university': {
@@ -446,8 +446,8 @@ Discovery is single-sourced in \`@a-company/university-core\`.
 
 | Tool | Input | Output |
 |------|-------|--------|
-| \`paradigm_university_search\` | \`{ id?, type?, tag?, difficulty?, symbol?, query?, category?, track?, pack?, section?, limit? }\` | Without \`id\`: \`{ count, total, returned, truncated, pack, results: [{ id: "<pack-id>:<entry-id>", title, type, difficulty, tags, symbols, section }] }\`. With \`id\` (bare or \`<pack-id>:<entry-id>\`): the full entry (body / questions / steps). |
-| \`paradigm_university_pack_list\` | \`{ tenant_kind? }\` | \`{ packs: [{ id, name, version, tenant_kind, discipline?, entry_count, sections, skills: [{ id, version, trust }], path? }] }\` (\`path\` is project-relative; omitted for packs outside the project) |
+| \`paradigm_university\` (op \`search\`) | \`{ id?, type?, tag?, difficulty?, symbol?, query?, category?, track?, pack?, section?, limit? }\` | Without \`id\`: \`{ count, total, returned, truncated, pack, results: [{ id: "<pack-id>:<entry-id>", title, type, difficulty, tags, symbols, section }] }\`. With \`id\` (bare or \`<pack-id>:<entry-id>\`): the full entry (body / questions / steps). |
+| \`paradigm_university\` (op \`pack_list\`) | \`{ tenant_kind? }\` | \`{ packs: [{ id, name, version, tenant_kind, discipline?, entry_count, sections, skills: [{ id, version, trust }], path? }] }\` (\`path\` is project-relative; omitted for packs outside the project) |
 
 The tools are registered only when a discovered pack has content or ships
 skills (an empty scaffold does not count). Restart the MCP server after
@@ -527,7 +527,7 @@ Lore entries support a confidence-assessment loop for building reliability maps.
 Attach a confidence score (0.0-1.0) when recording lore:
 
 \`\`\`
-paradigm_lore_record({
+paradigm_lore({op:'record',
   title: "...", summary: "...", symbols_touched: [...],
   confidence: 0.85
 })
@@ -538,7 +538,7 @@ paradigm_lore_record({
 After the fact, humans assess whether the work was correct:
 
 \`\`\`
-paradigm_lore_assess({ id: "L-2026-03-15-...", verdict: "correct" })
+paradigm_lore({op:'assess', id: "L-2026-03-15-...", verdict: "correct" })
 \`\`\`
 
 Verdicts: \`correct\` (1.0), \`partial\` (0.5), \`incorrect\` (0.0).
@@ -547,7 +547,7 @@ The system computes \`assessment_delta = impliedScore - confidence\`.
 ## Querying Calibration
 
 \`\`\`
-paradigm_lore_calibration({ symbol: "#auth-middleware", groupBy: "symbol" })
+paradigm_lore({op:'calibration', symbol: "#auth-middleware", groupBy: "symbol" })
 \`\`\`
 
 Returns: accuracy rate, avg confidence, calibration score, verdict breakdown, and insights.
@@ -577,7 +577,7 @@ Save checkpoints when transitioning between workflow phases:
 ## Usage
 
 \`\`\`
-paradigm_session_checkpoint({
+paradigm_session({op:'checkpoint',
   phase: "implementing",
   context: "Adding JWT auth middleware",
   modifiedFiles: ["src/middleware/auth.ts"],
@@ -598,7 +598,7 @@ Keep it lightweight: \`phase\` + \`context\` are required, everything else is op
 | "Symbol not found" | Run \`paradigm scan\` to rebuild index |
 | "Navigator not found" | Run \`paradigm scan\` to generate navigator.yaml |
 | Empty search results | Check that .purpose files define symbols |
-| High context usage | Call \`paradigm_handoff_prepare\` |
+| High context usage | Call \`paradigm_session\` (op \`handoff_prepare\`) |
 | Gate suggestions missing | Check that portal.yaml exists and defines gates |
 | "Flow index not found" | Run \`paradigm scan\` and add flows to .purpose files |
 | "Fixtures not found" | Create \`.paradigm/fixtures.yaml\` with test data |
@@ -652,7 +652,7 @@ components:
 
 - \`paradigm_search\` accepts \`componentType\` filter to find all components of a given type
 - \`paradigm_status\` shows component type breakdown
-- \`paradigm_purpose_add_component\` accepts \`type\` and \`parent\` parameters`,
+- \`paradigm_purpose\` (op \`add_component\`) accepts \`type\` and \`parent\` parameters`,
   },
 
   'navigation': {
@@ -690,7 +690,7 @@ components:
 
 | When | Tool | Purpose |
 |------|------|---------|
-| Starting any task | \`paradigm_pm_preflight\` | Get compliance plan |
+| Starting any task | \`paradigm_pm\` (op \`preflight\`) | Get compliance plan |
 | Finishing any task | _(handled by stop hook)_ | Auto-checks compliance |`,
   },
 

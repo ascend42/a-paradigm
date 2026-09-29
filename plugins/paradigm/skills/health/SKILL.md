@@ -12,7 +12,7 @@ growth into one actionable dashboard.
 ## Step 1: Neverland Metrics
 
 ```
-paradigm_ambient_health({})
+paradigm_ambient({op:'health'})
 ```
 
 ## Step 2: Nomination Stats Per Agent
@@ -20,7 +20,7 @@ paradigm_ambient_health({})
 For each active agent from the Neverland response, get detailed stats:
 
 ```
-paradigm_ambient_learn({ agent: "<agent-id>", dry_run: true })
+paradigm_ambient({op:'learn', agent: "<agent-id>", dry_run: true })
 ```
 
 This returns stats without adjusting thresholds.
@@ -28,7 +28,7 @@ This returns stats without adjusting thresholds.
 ## Step 3: Agent Roster Context
 
 ```
-paradigm_agent_list({ scope: "all" })
+paradigm_agent({op:'list', scope: "all" })
 ```
 
 ## Step 4: Present Dashboard

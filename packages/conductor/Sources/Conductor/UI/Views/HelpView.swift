@@ -138,7 +138,7 @@ struct HelpView: View {
             ])
 
             sectionTitle("Actions")
-            keyValue("Resume", "Opens Terminal.app in the project directory. Claude auto-recovers your session context via paradigm_session_recover.")
+            keyValue("Resume", "Opens Terminal.app in the project directory. Claude auto-recovers your session context via paradigm_session({op:'recover'}).")
             keyValue("Open", "Same as Resume, but for projects without a checkpoint — starts fresh.")
             keyValue("Headless", "Spawns a background Claude process (no terminal window). Useful for automated tasks.")
             keyValue("Discard", "Removes the checkpoint so the next session starts clean.")

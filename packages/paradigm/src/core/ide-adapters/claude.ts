@@ -108,13 +108,13 @@ export class ClaudeAdapter implements IDEAdapter {
     sections.push('');
     sections.push('**Before each task:** `paradigm_ripple` for impact, `paradigm_gates_for_route` for new endpoints');
     sections.push('');
-    sections.push('**Resuming:** Call `paradigm_session_recover`');
+    sections.push('**Resuming:** Call `paradigm_session` (op `recover`)');
     sections.push('');
 
     // Before Implementing (compressed)
     sections.push('## Before Implementing');
     sections.push('');
-    sections.push('0. Call `paradigm_protocol_search` \u2014 if a protocol matches, follow it');
+    sections.push('0. Call `paradigm_protocol` (op `search`) \u2014 if a protocol matches, follow it');
     sections.push('1. Complex task (3+ files)? \u2192 `paradigm_orchestrate_inline` mode="plan"');
     sections.push('2. Affects symbols? \u2192 `paradigm_ripple`');
     sections.push('3. Adds endpoints? \u2192 `paradigm_gates_for_route`');
@@ -144,7 +144,7 @@ export class ClaudeAdapter implements IDEAdapter {
     sections.push('- Add signal/event \u2192 add to `.purpose`');
     sections.push('- Add multi-step flow \u2192 document as `$flow`');
     sections.push('- Rename/delete symbol \u2192 update all references');
-    sections.push('- Record lore via `paradigm_lore_record` for sessions modifying 3+ files');
+    sections.push('- Record lore via `paradigm_lore` (op `record`) for sessions modifying 3+ files');
     sections.push('- Use Paradigm logger (`log.component()`, `log.gate()`, etc.) \u2014 never raw console.log');
     sections.push('');
     sections.push('**Auth requires portal.yaml** if your code has JWT, role checks, ownership checks, or protected endpoints.');
@@ -157,9 +157,9 @@ export class ClaudeAdapter implements IDEAdapter {
     sections.push('');
     sections.push('Do NOT dump durable facts into native memory (`~/.claude/.../MEMORY.md`). Route them to the typed store that owns them:');
     sections.push('');
-    sections.push('- **What happened** → lore via `paradigm_lore_record`');
+    sections.push('- **What happened** → lore via `paradigm_lore` (op `record`)');
     sections.push('- **A rule / tip / preference** → the habits system');
-    sections.push('- **The "why" behind a choice** → `paradigm_decision_record`');
+    sections.push('- **The "why" behind a choice** → `paradigm_decision` (op `record`)');
     sections.push('- **Status / plans / next steps** → tasks');
     sections.push('');
     sections.push('Native memory is for **ephemeral session scratch only**. The Steward (`paradigm memory review` / `paradigm memory sync`) keeps MEMORY.md lean — dedup, demote stale entries, project durable knowledge back in.');

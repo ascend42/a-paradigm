@@ -1,0 +1,35 @@
+id: L-2026-09-29-ascend-093916-001
+type: agent-session
+timestamp: '2026-09-29T09:39:16.618Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Skills arc Phase 4 — MCP surface cut 134→32 tools + incremental index (7.13.0)
+summary: 'Default MCP tools/list cut from ~134 tools / ~30k tokens to 32 tools / ~7.7k tokens: 11 unchanged anchors + 21 verb-param families wrapping existing handlers unchanged; 184 legacy names kept as hidden aliases (until 7.15) with the canonical legacy name recorded in toolsCalled/breadcrumbs so coupled code keeps working; tool_activate now actually surfaces tools (listChanged); on-demand tier via mcp.tools.enable. Codemod rewrote 585 references in 76 files (idempotent, grep-test guarded); Conductor updated; doctor flags legacy names incl. permission allowlists. Incremental live index: warm graph_slice 16.7ms, cold 43ms (was 63ms), deterministic order preserved.'
+symbols_touched:
+  - '#tool-registry'
+  - '#tool-family'
+  - '#legacy-tool-map'
+  - '#live-index'
+  - '#purpose-parse-cache'
+  - '#doctor'
+  - '#conductor'
+learnings:
+  - Hidden MCP aliases don't help agents (models only call listed tools) — they only serve programmatic callers like Conductor; agent-facing references must be rewritten in the same PR.
+  - Recording the canonical legacy name at dispatch let habits/pm/seed-habits keep matching toolsCalled without touching them.
+  - Property descriptions cost ~2k tokens across families; per-op param signatures in the family description preserve op-accuracy within budget.
+  - A builder ran a repo-wide git stash mid-session while three others were editing — no loss this time, but builder prompts must forbid stash/restore outright.
+verification:
+  status: pass
+  details:
+    tests: purpose-core 11, premise-core 109, paradigm-mcp 683, paradigm 682 (+3 skipped)
+    live_mcp: 32 tools, ~7.7k tokens, listChanged true, family + alias + op errors verified
+    swift: Conductor swift build passes
+linked_tasks:
+  - T-2026-09-26-005
+confidence: 0.85
+git_context:
+  ref: 748aff50202ed432219f134381dcf5427704449e
+  branch: feat/skills-arc
+  dirty: true

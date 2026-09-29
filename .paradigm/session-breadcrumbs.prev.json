@@ -1,35 +1,161 @@
 {
-  "sessionId": "smuay7sub",
-  "startTime": 1789977212867,
-  "lastActivity": 1789977668353,
+  "sessionId": "smuhllzi9",
+  "startTime": 1790379302913,
+  "lastActivity": 1790673269672,
   "breadcrumbs": [
     {
-      "timestamp": 1789977247825,
+      "timestamp": 1790382488041,
       "action": "tool-call",
-      "tool": "paradigm_session_recover",
-      "summary": "session_recover"
+      "tool": "paradigm_decision_record",
+      "summary": "decision_record: Skills primitive + University overhaul + internals refactor "
     },
     {
-      "timestamp": 1789977668270,
+      "timestamp": 1790382494605,
       "action": "tool-call",
       "tool": "paradigm_task_create",
-      "summary": "Created task: \"Document config.yaml `conventions:` as THE home for project-\""
+      "summary": "Created task: \"ARC TD-2026-09-26-846 Phase 0 — UNBLOCK: single agent source\""
     },
     {
-      "timestamp": 1789977676707,
+      "timestamp": 1790382496938,
       "action": "tool-call",
-      "tool": "paradigm_session_checkpoint",
-      "summary": "Checkpoint: phase=complete, Darren/no-review investigation RESOLVED: not contamination. "
+      "tool": "paradigm_task_create",
+      "summary": "Created task: \"ARC TD-2026-09-26-846 Phase 1 — SKILLS primitive (design fir\""
     },
     {
-      "timestamp": 1790379014722,
+      "timestamp": 1790382499036,
       "action": "tool-call",
-      "tool": "paradigm_session_checkpoint",
-      "summary": "Checkpoint: phase=complete, Memory Steward 7.9.0 SHIPPED: PR #46 merged to main (f73b9ed"
+      "tool": "paradigm_task_create",
+      "summary": "Created task: \"ARC TD-2026-09-26-846 Phase 2 — UNIVERSITY overhaul (keep hu\""
+    },
+    {
+      "timestamp": 1790382500992,
+      "action": "tool-call",
+      "tool": "paradigm_task_create",
+      "summary": "Created task: \"ARC TD-2026-09-26-846 Phase 3 — LEARNING-STORE consolidation\""
+    },
+    {
+      "timestamp": 1790382502495,
+      "action": "tool-call",
+      "tool": "paradigm_task_create",
+      "summary": "Created task: \"ARC TD-2026-09-26-846 Phase 4 — MCP SURFACE cut: 139 tools /\""
+    },
+    {
+      "timestamp": 1790382519344,
+      "action": "tool-call",
+      "tool": "paradigm_orchestrate_inline",
+      "summary": "orchestrate_inline: plan"
+    },
+    {
+      "timestamp": 1790383568627,
+      "action": "tool-call",
+      "tool": "paradigm_task_create",
+      "summary": "Created task: \"captain.ts still resolves agents via loadAgentsManifest + su\""
+    },
+    {
+      "timestamp": 1790383953273,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: Skills arc Phase 0 — roster/profile-authoritative dispatch ("
+    },
+    {
+      "timestamp": 1790383963646,
+      "action": "tool-call",
+      "tool": "paradigm_task_update",
+      "summary": "Updated task T-2026-09-26-001"
+    },
+    {
+      "timestamp": 1790614505571,
+      "action": "tool-call",
+      "tool": "paradigm_task_create",
+      "summary": "Created task: \"IDEATION (founder, 2026-09-28): a more generalized problem t\""
+    },
+    {
+      "timestamp": 1790668614854,
+      "action": "tool-call",
+      "tool": "paradigm_task_create",
+      "summary": "Created task: \"Skill certification SIGNING (follow-up to 7.10.0, founder ch\""
+    },
+    {
+      "timestamp": 1790669035457,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: Skills arc Phase 1 — agent-owned skills primitive (7.10.0)"
+    },
+    {
+      "timestamp": 1790669047268,
+      "action": "tool-call",
+      "tool": "paradigm_task_update",
+      "summary": "Updated task T-2026-09-26-002"
+    },
+    {
+      "timestamp": 1790669626906,
+      "action": "tool-call",
+      "tool": "paradigm_decision_record",
+      "summary": "decision_record: Paradigm Brain (\"Obsidian Brain\"): adjacent document-corpus "
+    },
+    {
+      "timestamp": 1790669670010,
+      "action": "tool-call",
+      "tool": "paradigm_task_update",
+      "summary": "Updated task T-2026-09-26-004"
+    },
+    {
+      "timestamp": 1790669670084,
+      "action": "tool-call",
+      "tool": "paradigm_task_update",
+      "summary": "Updated task T-2026-09-26-005"
+    },
+    {
+      "timestamp": 1790669670098,
+      "action": "tool-call",
+      "tool": "paradigm_task_create",
+      "summary": "Created task: \"ARC TD-2026-09-26-846 Phase 5 — PARADIGM BRAIN MVP per docs/\""
+    },
+    {
+      "timestamp": 1790669670109,
+      "action": "tool-call",
+      "tool": "paradigm_task_update",
+      "summary": "Updated task T-2026-09-28-001"
+    },
+    {
+      "timestamp": 1790671704794,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: Skills arc Phase 2 — University → packs + Platform Academy ("
+    },
+    {
+      "timestamp": 1790671713256,
+      "action": "tool-call",
+      "tool": "paradigm_task_update",
+      "summary": "Updated task T-2026-09-26-003"
+    },
+    {
+      "timestamp": 1790673257577,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: Skills arc Phase 3 — learning-store consolidation, belief-de"
+    },
+    {
+      "timestamp": 1790673259397,
+      "action": "tool-call",
+      "tool": "paradigm_task_create",
+      "summary": "Created task: \"LEARNING LOOP still broken (found by 7.12.0 liveness alarm):\""
+    },
+    {
+      "timestamp": 1790673269618,
+      "action": "tool-call",
+      "tool": "paradigm_task_update",
+      "summary": "Updated task T-2026-09-26-004"
+    },
+    {
+      "timestamp": 1790673270305,
+      "action": "tool-call",
+      "tool": "paradigm_task_update",
+      "summary": "Updated task T-2026-06-13-004"
     }
   ],
   "symbolsModified": [],
   "filesExplored": [
-    "config.yaml"
+    "captain.ts"
   ]
 }

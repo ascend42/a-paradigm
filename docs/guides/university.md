@@ -198,7 +198,7 @@ paradigm university validate
 
 #### MCP integration
 
-`paradigm_university_search` accepts an optional `section: <id>` filter. `paradigm_university_pack_list` returns each pack's declared `sections[]` so agents can route queries appropriately. Cross-pack references continue to use `<pack-id>:<entry-id>` — sections are not part of the address space.
+`paradigm_university` (op `search`) accepts an optional `section: <id>` filter. `paradigm_university` (op `pack_list`) returns each pack's declared `sections[]` so agents can route queries appropriately. Cross-pack references continue to use `<pack-id>:<entry-id>` — sections are not part of the address space.
 
 ---
 
@@ -379,8 +379,8 @@ v7.11 cut the surface to **two read-only tools** (restart your MCP server after 
 
 | Tool | What it does |
 |------|--------------|
-| `paradigm_university_search` | Search entries by type, tag, difficulty, symbol, category, section, or free-text query (optional `pack`). Result ids are `<pack-id>:<entry-id>`. Pass `id` (bare or qualified) to fetch one entry's full content instead — body for notes/policies, questions for quizzes, steps for paths. |
-| `paradigm_university_pack_list` | List discovered packs with id, name, version, tenant_kind, discipline, entry_count, sections, `skills: [{ id, version, trust }]`, path. Optional `tenant_kind` filter. |
+| `paradigm_university` (op `search`) | Search entries by type, tag, difficulty, symbol, category, section, or free-text query (optional `pack`). Result ids are `<pack-id>:<entry-id>`. Pass `id` (bare or qualified) to fetch one entry's full content instead — body for notes/policies, questions for quizzes, steps for paths. |
+| `paradigm_university` (op `pack_list`) | List discovered packs with id, name, version, tenant_kind, discipline, entry_count, sections, `skills: [{ id, version, trust }]`, path. Optional `tenant_kind` filter. |
 
 Removed in v7.11 — authoring and validation are CLI-only: `paradigm_university_get` (use `search` with `id`), `_create`/`_update` (`paradigm university add`), `_onboard`, `_validate` (`paradigm university validate`). For one release, calls to the removed names return `{ "error": "moved to CLI: paradigm university add|show|validate" }`.
 

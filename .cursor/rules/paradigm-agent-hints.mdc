@@ -12,10 +12,10 @@ alwaysApply: true
 |---------------------|-------------------|
 | Modifying a symbol | `paradigm_ripple({ symbol: "#symbol" })` |
 | Debugging / searching | `paradigm_search({ query: "ERROR_CODE" })` |
-| Starting a session | `paradigm_session_recover()` |
+| Starting a session | `paradigm_session({op:'recover'})` |
 | Understanding relationships | `paradigm_navigate({ intent: "find", target: "#symbol" })` |
 | Getting oriented | `paradigm_status()` |
-| Checking impact on flows | `paradigm_flows_affected({ symbol: "#symbol" })` |
+| Checking impact on flows | `paradigm_flow({op:'affected', symbol: "#symbol" })` |
 | Adding API endpoints | `paradigm_gates_for_route({ method: "POST", path: "/api/resource" })` |
 
 ## Query Patterns
@@ -43,7 +43,7 @@ paradigm_ripple({ symbol: "^authenticated" })
 
 ```
 // Load previous session context (MUST do this at session start)
-paradigm_session_recover()
+paradigm_session({op:'recover'})
 
 // Quick project orientation
 paradigm_status()

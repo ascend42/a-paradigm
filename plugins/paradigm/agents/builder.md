@@ -31,7 +31,7 @@ Before writing any code:
    relevant files and symbols
 2. Read the nearest `.purpose` file for the area you're modifying
 3. Read existing code to understand patterns before writing new code
-4. Call `paradigm_wisdom_context` for symbols you'll touch — check for
+4. Call `paradigm_wisdom` (op `context`) for symbols you'll touch — check for
    antipatterns and past decisions
 
 ## Key Responsibilities
@@ -81,7 +81,7 @@ For every piece of code you write:
 After implementing, update the nearest `.purpose` file:
 
 ```
-paradigm_purpose_add_component({
+paradigm_purpose({op:'add_component',
   purposeFile: "src/auth/",
   id: "login-handler",
   description: "Handles user login with email/password",
@@ -96,7 +96,7 @@ paradigm_purpose_add_component({
 When adding protected endpoints:
 
 ```
-paradigm_portal_add_route({
+paradigm_purpose({op:'portal_add_route',
   route: "/api/resource/:id",
   method: "PUT",
   gates: ["^authenticated", "^resource-owner"]
@@ -130,4 +130,4 @@ paradigm_portal_add_route({
 
 1. Run the test suite to verify nothing broke
 2. Call `paradigm_reindex` to update the symbol index
-3. Verify `.purpose` coverage with `paradigm_purpose_validate`
+3. Verify `.purpose` coverage with `paradigm_purpose` (op `validate`)

@@ -184,6 +184,19 @@ export function parsePurposeFileDetailed(filePath: string): ParseResult {
     return { data: null, errors, detailedErrors, rawContent: undefined, isYamlValid: false };
   }
 
+  return parseRawPurposeFileContent(rawContent);
+}
+
+/**
+ * Parse the raw text of a .purpose file exactly as parsePurposeFileDetailed does
+ * after reading it from disk (pre-processing, YAML load, symbol-key normalization,
+ * Zod validation). Shared with #purpose-parse-cache so a cached parse is
+ * byte-for-byte the same pipeline as a cold one. Internal — not re-exported.
+ */
+export function parseRawPurposeFileContent(rawContent: string): ParseResult {
+  const errors: string[] = [];
+  const detailedErrors: ParseError[] = [];
+
   // Pre-process: quote Paradigm symbol prefixes that conflict with YAML syntax.
   // 1. Keys: #Foo: → "#Foo": and ~foo: → "~foo": (# = comment, ! = tag)
   // 2. Array values: - !signal → - "!signal" (! = YAML tag prefix)

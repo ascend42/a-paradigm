@@ -963,6 +963,38 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
       // Agent audit is advisory — never fail doctor on it.
     }
 
+    // Legacy MCP tool names (7.13.0 surface cut — aliases removed in 7.15)
+    try {
+      const { auditLegacyToolNames } = await import('./legacy-names-audit.js');
+      const legacy = auditLegacyToolNames(cwd);
+      const permHits = legacy.hits.filter(h => h.permission);
+      const textHits = legacy.hits.filter(h => !h.permission);
+      if (permHits.length > 0) {
+        const detail = permHits.slice(0, 5).map(h => `${h.legacy} → ${h.replacement}`).join('; ');
+        results.push({
+          name: 'Legacy tool names (permissions)',
+          status: 'warn',
+          message: `${permHits.length} legacy name(s) in .claude permission allowlists no longer match a listed tool: ${detail}${permHits.length > 5 ? '; …' : ''}`,
+          fix: 'Replace `mcp__paradigm__paradigm_<family>_<op>` entries with the family tool, e.g. `mcp__paradigm__paradigm_lore`',
+        });
+      }
+      if (textHits.length > 0) {
+        const files = [...new Set(textHits.map(h => h.file))];
+        const sample = textHits.slice(0, 3).map(h => `${h.legacy} → ${h.replacement}`).join('; ');
+        results.push({
+          name: 'Legacy tool names',
+          status: 'warn',
+          message: `${textHits.reduce((n, h) => n + h.count, 0)} pre-7.13 tool reference(s) in ${files.join(', ')} (hidden aliases until 7.15): ${sample}`,
+          fix: '`paradigm sync` to regenerate managed sections; hand-edit the rest to `paradigm_<family>({op:\'<op>\'})`',
+        });
+      }
+      if (legacy.hits.length === 0 && legacy.filesScanned > 0) {
+        results.push({ name: 'Legacy tool names', status: 'ok', message: 'No pre-7.13 tool names in agent instructions or permissions' });
+      }
+    } catch {
+      // Advisory — never fail doctor on it.
+    }
+
     // Team-invocation funnel (Pillar 0 telemetry: eligible → orchestrated/solo/bypass)
     try {
       const { summarizeTeamFunnel } = await import('../../core/team-funnel.js');

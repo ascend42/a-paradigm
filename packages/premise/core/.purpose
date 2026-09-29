@@ -34,7 +34,7 @@ components:
   source-loader:
     description: '#source-loader: Loads symbols from .purpose and portal.yaml'
   symbol-index:
-    description: '#symbol-index: In-memory symbol index. Also home of the ONE shared anchor-string parser (7.12.0, D9): parseAnchorString (aggregator path; section anchors first, then the pre-7.12 line semantics byte-identical — "file.ts:15-20" still yields exactly {path, lines:[15,20], raw}), parseAnchor (same section-first fallthrough), parseSectionAnchor (Obsidian-compatible docs/x.md#Heading Text → kind heading, docs/x.md#^block-id → kind block, lines 0 = unresolved; the path part must end in a file extension so src/c#/x.cs:10 stays a line anchor, and a fragment containing '/' or ending in :N / :N-M is rejected so dir.name#x/Foo.ts:10 stays a line anchor) and resolveSectionAnchorLines (content + key → current 1-based inclusive range or null; heading = through the next same-or-higher heading, fenced pseudo-headings ignored, exact then case-insensitive match; block = contiguous paragraph ending at the inline ^id or preceding a standalone ^id line). SourceType gained ''frontmatter'' (no exhaustive switches exist; bySource is an open Map).'
+    description: '#symbol-index: In-memory symbol index. Also home of the ONE shared anchor-string parser (7.12.0, D9): parseAnchorString (aggregator path; section anchors first, then the pre-7.12 line semantics byte-identical — "file.ts:15-20" still yields exactly {path, lines:[15,20], raw}), parseAnchor (same section-first fallthrough), parseSectionAnchor (Obsidian-compatible docs/x.md#Heading Text → kind heading, docs/x.md#^block-id → kind block, lines 0 = unresolved; the path part must end in a file extension so src/c#/x.cs:10 stays a line anchor, and a fragment containing ''/'' or ending in :N / :N-M is rejected so dir.name#x/Foo.ts:10 stays a line anchor) and resolveSectionAnchorLines (content + key → current 1-based inclusive range or null; heading = through the next same-or-higher heading, fenced pseudo-headings ignored, exact then case-insensitive match; block = contiguous paragraph ending at the inline ^id or preceding a standalone ^id line). SourceType gained ''frontmatter'' (no exhaustive switches exist; bySource is an open Map).'
   frontmatter-parser:
     description: '#frontmatter-parser: src/frontmatter.ts — the ONE YAML-frontmatter splitter (7.12.0, D8). parseFrontmatter(raw, {mode}) → {data, body, hasFrontmatter, error?} over FRONTMATTER_RE (LF + CRLF, closing fence then newline or EOF). lenient (default) never throws: no block → whole input is body; malformed YAML / non-mapping → data {} + error, body after the fence. strict throws FrontmatterError(reason missing|yaml|not-mapping) with CONTRACT messages "missing YAML frontmatter (--- … ---)", "frontmatter is not a YAML mapping", or the YAML parser message verbatim (surfaced unchanged by #skill-loader). Consumers: #native-memory-scan (lenient), #skill-loader splitFrontmatter (strict), docs-loader (lenient → null adapter). Follow-up: university-core loader + doctor agent-audit still hand-roll.'
     file: packages/premise/core/src/frontmatter.ts
@@ -42,7 +42,29 @@ components:
       - parser
       - frontmatter
   search-engine:
-    description: '#search-engine: Symbol search functionality'
+    description: '#search-engine: Symbol search functionality (searchSymbols in src/symbol-index.ts). Since 7.13.0 per-entry lowercased haystacks (symbol, description, tags, componentType, joined multi-token string) are memoized in a WeakMap keyed by SymbolIndex and revalidated against the entry source fields, so repeated searches over a cached #live-index index skip re-lowercasing. Substring semantics and ranking are unchanged.'
+  live-index:
+    description: >-
+      #live-index: src/live-index.ts (7.13.0) — incremental in-process cache of
+      the LIVE SymbolIndex. getLiveIndex(rootDir) globs .purpose
+      (purpose-core findPurposeFiles) + portal.yaml (portal-core findGateFiles),
+      stats every file, and returns the SAME cached index when the ordered
+      (path, mtimeMs, size) lists are unchanged; otherwise re-parses only changed
+      .purpose files via #purpose-parse-cache and re-aggregates the FULL set in
+      discovery order through aggregateFromDirectory's AggregateOptions loader
+      seams, so output equals a cold parse (order + duplicate last-write-wins,
+      T-2026-06-13-011). Concurrent callers share one in-flight refresh.
+      Files with mtime within 2s of now also carry a content sha1 in their stamp
+      (same-size edits inside one mtime tick). At most LIVE_INDEX_MAX_ROOTS (8)
+      roots are cached, LRU-evicted.
+      invalidateLiveIndex(rootDir?) drops a root (paradigm_reindex calls it).
+      Returned index/entry data are shared — read-only. Bench (report only):
+      scripts/bench-live-index.mjs.
+    file: packages/premise/core/src/live-index.ts
+    tags:
+      - index
+      - cache
+      - performance
   reference-tracker:
     description: '#reference-tracker: Tracks references between symbols'
   graph-builder:
@@ -60,6 +82,8 @@ components:
       mode) → uses. BFS to radius (1, max 3), DEGREE_CAP 8 with +N-more collapse,
       deterministic sort, fail-loud did-you-mean. Freshness is the live-parse
       timestamp, stale always false (sidesteps the scan-index determinism wart).
+      Since 7.13.0 loadLiveGraph delegates to #live-index and memoizes the
+      LiveGraph per SymbolIndex (buildLiveGraph), so a warm call does no parsing.
     tags:
       - graph
       - projection

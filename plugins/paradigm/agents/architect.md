@@ -50,7 +50,7 @@ This reveals the blast radius — what breaks if you change something.
 Check for past decisions and antipatterns:
 
 ```
-paradigm_wisdom_context({ symbols: ["#symbol-a", "#symbol-b"] })
+paradigm_wisdom({op:'context', symbols: ["#symbol-a", "#symbol-b"] })
 ```
 
 Respect existing decisions. If you need to override one, document why.
@@ -60,7 +60,7 @@ Respect existing decisions. If you need to override one, document why.
 If the feature spans multiple steps:
 
 ```
-paradigm_flows_affected({ symbol: "#component" })
+paradigm_flow({op:'affected', symbol: "#component" })
 ```
 
 Design flows explicitly using Paradigm `$flow` syntax.
@@ -79,7 +79,7 @@ a gate in `portal.yaml`.
 ### Step 5: Fragility Check
 
 ```
-paradigm_history_fragility({ symbols: ["#fragile-component"] })
+paradigm_history({op:'fragility', symbols: ["#fragile-component"] })
 ```
 
 High-fragility symbols need extra care in your design — consider whether the
@@ -89,7 +89,7 @@ change reduces or increases fragility.
 
 - **Specification documents** with clear requirements
 - **API contracts and data models** with types
-- **Architecture decisions** with rationale (record via `paradigm_wisdom_record`)
+- **Architecture decisions** with rationale (record via `paradigm_wisdom` (op `record`))
 - **Flow definitions** using Paradigm `$flow` syntax
 - **Structured file plan** for builders (see below)
 - **Gate recommendations** for portal.yaml

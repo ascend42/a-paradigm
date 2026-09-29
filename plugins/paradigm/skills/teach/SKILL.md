@@ -23,7 +23,7 @@ parse it directly. Otherwise, ask the user:
 ## Step 2: Verify Agent Exists
 
 ```
-paradigm_agent_get({ id: "<agent-id>" })
+paradigm_agent({op:'get', id: "<agent-id>" })
 ```
 
 If the agent doesn't exist, suggest creating it:
@@ -46,7 +46,7 @@ Example: User says "security, always check rate limiting on auth routes"
 ## Step 4: Record the Entry
 
 ```
-paradigm_journal_record({
+paradigm_journal({op:'record',
   agent: "<agent-id>",
   trigger: "human_feedback",
   insight: "<expanded instruction>",
@@ -69,7 +69,7 @@ Since this is a high-confidence human instruction (0.90 ≥ 0.80 threshold),
 trigger immediate promotion:
 
 ```
-paradigm_ambient_promote({ agent: "<agent-id>" })
+paradigm_ambient({op:'promote', agent: "<agent-id>" })
 ```
 
 Report whether the entry was promoted to the notebook.

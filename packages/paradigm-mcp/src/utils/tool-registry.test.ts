@@ -283,13 +283,15 @@ describe('ToolRegistry.dispatch', () => {
     expect(result).toBeNull();
   });
 
-  it('skips inactive modules', async () => {
+  it('dispatches inactive modules as hidden tools (7.13 aliases), never listing them', async () => {
     const registry = new ToolRegistry(tmpDir);
     registry.register(makeModule('inactive', 'feature', [makeTool('hidden_tool')], () => false));
 
     const result = await registry.dispatch('hidden_tool', {}, null);
 
-    expect(result).toBeNull();
+    expect(result?.handled).toBe(true);
+    expect(registry.getActiveTools().map(t => t.name)).not.toContain('hidden_tool');
+    expect(await registry.dispatch('no_such_tool', {}, null)).toBeNull();
   });
 
   it('returns error when handler throws', async () => {
