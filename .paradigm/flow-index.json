@@ -1,6 +1,6 @@
 {
   "version": "1.0",
-  "generatedAt": "2026-09-29T09:39:23.987Z",
+  "generatedAt": "2026-09-29T10:25:56.760Z",
   "flows": {
     "$mcp-startup": {
       "id": "$mcp-startup",
@@ -659,88 +659,6 @@
         }
       ],
       "definedIn": "packages/purpose/core/.purpose"
-    },
-    "$platform-serve": {
-      "id": "$platform-serve",
-      "description": "paradigm serve → create Express app → mount routes → attach WS → serve SPA → listen",
-      "steps": [
-        {
-          "id": "step-1",
-          "action": "Mount lore routes (/api/lore, /api/info, /api/sessions)"
-        },
-        {
-          "id": "step-2",
-          "action": "Mount graph routes (/api/symbols, /api/graphs)"
-        },
-        {
-          "id": "step-3",
-          "action": "Mount platform routes (/api/platform/health, /api/platform/sections, /api/platform/overview)"
-        },
-        {
-          "id": "step-4",
-          "action": "Mount git routes (/api/git/*)"
-        },
-        {
-          "id": "step-5",
-          "action": "Attach WebSocket server on /ws path"
-        },
-        {
-          "id": "step-6",
-          "action": "Mount agent command route (/api/platform/agent-command)"
-        },
-        {
-          "id": "step-7",
-          "action": "Serve platform-ui static files"
-        },
-        {
-          "id": "step-8",
-          "action": "SPA fallback for client-side routing"
-        },
-        {
-          "id": "step-9",
-          "action": "Mount warpline routes (/api/warpline/*) if warpline section enabled (read-only Oracle)"
-        },
-        {
-          "id": "step-10",
-          "action": "Mount sentinel bridge (/api/sentinel/*) if sentinel section enabled"
-        },
-        {
-          "id": "step-11",
-          "action": "Mount symphony routes (/api/symphony/*) if symphony section enabled"
-        }
-      ],
-      "definedIn": "packages/paradigm/src/platform-server/.purpose"
-    },
-    "$agent-command": {
-      "id": "$agent-command",
-      "description": "MCP tool → HTTP POST → server validates → WS broadcast → browser updates",
-      "steps": [
-        {
-          "id": "step-1",
-          "action": "MCP tool calls platform-bridge HTTP helper"
-        },
-        {
-          "id": "step-2",
-          "action": "POST /api/platform/agent-command with command + agentId + payload"
-        },
-        {
-          "id": "step-3",
-          "action": "Server registers agent presence if new"
-        },
-        {
-          "id": "step-4",
-          "action": "Server checks user mute state"
-        },
-        {
-          "id": "step-5",
-          "action": "Server broadcasts typed WS message to all browser clients"
-        },
-        {
-          "id": "step-6",
-          "action": "Browser agentStore processes message and updates UI"
-        }
-      ],
-      "definedIn": "packages/paradigm/src/platform-server/.purpose"
     },
     "$skill-certification": {
       "id": "$skill-certification",

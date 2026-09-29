@@ -19,6 +19,7 @@ const SECTION_BY_INDEX: Record<string, SectionId> = {
   '6': 'academy',
   '7': 'symphony',
   '8': 'docs',
+  '9': 'brain',
 };
 
 function isTypingTarget(el: Element | null): boolean {

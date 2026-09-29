@@ -2,7 +2,7 @@
   "$meta": {
     "version": "1.0.0",
     "project": "a-paradigm",
-    "generatedAt": "2026-09-29T09:39:23.955Z",
+    "generatedAt": "2026-09-29T10:25:56.730Z",
     "paradigmVersion": "0.1.0",
     "sources": {
       "purposeFiles": 99,
@@ -10,23 +10,23 @@
       "premiseFiles": 0
     },
     "componentTypes": {
-      "command": 112,
-      "utility": 59,
+      "command": 113,
+      "utility": 58,
       "config": 11,
       "manager": 6,
       "engine": 9,
       "detector": 11,
       "provider": 7,
-      "router": 13,
-      "view": 109,
+      "router": 15,
+      "view": 110,
       "store": 16,
       "filter": 3,
-      "service": 92,
-      "model": 16,
+      "service": 83,
+      "model": 15,
       "feature": 1,
       "theme": 1,
       "controller": 1,
-      "tool": 44,
+      "tool": 45,
       "tool-group": 10,
       "util": 9,
       "loader": 8,
@@ -38,13 +38,12 @@
       "test": 7,
       "module": 85,
       "cli": 1,
-      "state": 4,
+      "state": 5,
       "integration": 1,
       "types": 9,
       "command-group": 8,
       "route": 3,
-      "middleware": 1,
-      "component": 22,
+      "component": 28,
       "hook": 1,
       "storage": 1
     }
@@ -7613,6 +7612,22 @@
       "componentType": "service",
       "parent": "#ToolHandlers"
     },
+    "brain-mcp": {
+      "id": "brain-mcp",
+      "name": "Brain Mcp",
+      "symbol": "#brain-mcp",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/tools/.purpose",
+      "description": "7.14 paradigm_brain({op: status|search|stale}) — ON-DEMAND family listed ONLY while some brain has agent_access metadata (families.ts requires: brain-agent-access; config enable / tool_activate cannot override). Thin adapter over utils/brain: openBrainView(agent) only, metadata-only output (id, relpath, folder, kind, title, topics), headings wrapped as <untrusted_document_text>, every response through view.respond() (egress-logged, leak-checked; BrainLeakError → generic blocked). No confirm/write op; not mixed into paradigm_search. Every document-derived string (title, topics, relpath, folder, headings, cross-link relpath/target, brain name) is wrapped; stripEnvelope removes envelope-like tags case-/whitespace-/zero-width-/NFKC-tolerantly until stable; not-exported reason → unknown for agents.",
+      "visualTags": [],
+      "related": [
+        "#ToolHandlers",
+        "^brain-default-deny",
+        "!brain-egress"
+      ],
+      "componentType": "tool",
+      "parent": "#ToolHandlers"
+    },
     "paradigm-retrieve": {
       "id": "paradigm-retrieve",
       "name": "Paradigm Retrieve",
@@ -8505,80 +8520,6 @@
       "related": [],
       "componentType": "route"
     },
-    "PlatformServer": {
-      "id": "PlatformServer",
-      "name": "PlatformServer",
-      "symbol": "#PlatformServer",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/platform-server/.purpose",
-      "description": "Creates and starts the unified Express app with all route handlers and WebSocket",
-      "visualTags": [
-        "form"
-      ],
-      "related": [],
-      "componentType": "service"
-    },
-    "PlatformWebSocket": {
-      "id": "PlatformWebSocket",
-      "name": "PlatformWebSocket",
-      "symbol": "#PlatformWebSocket",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/platform-server/ws/.purpose",
-      "description": "WebSocket server with per-client channel subscriptions — broadcast() is channel-routed (channel = the segment before ':' in a message type; a client sends {type:'subscribe',channels:[...]} to narrow, default = all channels for backward compat), plus client tracking and reconnect handling",
-      "visualTags": [
-        "form"
-      ],
-      "related": [],
-      "componentType": "service"
-    },
-    "AgentPresenceManager": {
-      "id": "AgentPresenceManager",
-      "name": "AgentPresenceManager",
-      "symbol": "#AgentPresenceManager",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/platform-server/ws/.purpose",
-      "description": "Tracks connected agents by ID, auto-prunes after 2min idle, deterministic color assignment",
-      "visualTags": [],
-      "related": [],
-      "componentType": "service"
-    },
-    "UserStateTracker": {
-      "id": "UserStateTracker",
-      "name": "UserStateTracker",
-      "symbol": "#UserStateTracker",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/platform-server/ws/.purpose",
-      "description": "Accumulates user section/symbol/theme state and highlight/annotation state for observe tool",
-      "visualTags": [],
-      "related": [],
-      "componentType": "service"
-    },
-    "AgentCommandRoute": {
-      "id": "AgentCommandRoute",
-      "name": "AgentCommandRoute",
-      "symbol": "#AgentCommandRoute",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/platform-server/routes/.purpose",
-      "description": "POST /api/platform/agent-command — receives navigate/highlight/annotate/observe/clear commands, broadcasts via WS",
-      "visualTags": [],
-      "related": [],
-      "componentType": "route"
-    },
-    "local-guard": {
-      "id": "local-guard",
-      "name": "Local Guard",
-      "symbol": "#local-guard",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/platform-server/.purpose",
-      "description": "Request-time ^local-only enforcement — rejects 403 any state-changing (POST/PUT/PATCH/DELETE) /api request whose Host is non-loopback or whose (present) Origin is non-loopback; CSRF + DNS-rebinding guard. Also tightens CORS to reflect only loopback origins (no wildcard). Reads (GET/HEAD) pass untouched.",
-      "visualTags": [],
-      "related": [
-        "^local-only",
-        "#PlatformServer"
-      ],
-      "componentType": "middleware",
-      "parent": "#PlatformServer"
-    },
     "spill": {
       "id": "spill",
       "name": "Spill",
@@ -8649,136 +8590,18 @@
       "related": [],
       "componentType": "model"
     },
-    "brain-types": {
-      "id": "brain-types",
-      "name": "Brain Types",
-      "symbol": "#brain-types",
+    "brain-cli": {
+      "id": "brain-cli",
+      "name": "Brain Cli",
+      "symbol": "#brain-cli",
       "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/brain/.purpose",
-      "description": "Shared Brain types (gates, brain.yaml, index record, view, egress). Builder B codes against it.",
-      "visualTags": [],
-      "related": [],
-      "componentType": "model"
-    },
-    "brain-config": {
-      "id": "brain-config",
-      "name": "Brain Config",
-      "symbol": "#brain-config",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/brain/.purpose",
-      "description": "brain.yaml load/save (fail-closed validation, tamper check), storage paths with injectable homedir, hard-blocks (refused even when allow-listed), glob matching, gate resolution (strictest zone wins; share human-only, case-sensitive; code may only append stricter zones), name-based zones, init/share/agent-access/list.",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/brain/.purpose",
+      "description": "paradigm brain init|scan|suggest|confirm [--reject|--skip]|status [--acceptance]|share|unshare|access|suggestions|purge [--yes]|egress. Plain-language output via cli-output helpers. share and access metadata require a person at a TTY (injectable prompter for tests); purge needs --yes off-TTY; init on a TTY opens Platform. init on a TTY spawns `paradigm serve` detached and opens /brain, then returns; library INFO logs quieted unless LOG_LEVEL; --limit validated; scan explains unknown cross-links; paused-suggestions copy.",
       "visualTags": [],
       "related": [
         "^brain-default-deny"
       ],
-      "componentType": "service"
-    },
-    "brain-walk": {
-      "id": "brain-walk",
-      "name": "Brain Walk",
-      "symbol": "#brain-walk",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/brain/.purpose",
-      "description": "Hardened walk — lstat, never follows symlinks, refuses hard-blocked paths, skips dot-dirs/node_modules, max_files cap.",
-      "visualTags": [],
-      "related": [],
-      "componentType": "service"
-    },
-    "brain-detect": {
-      "id": "brain-detect",
-      "name": "Brain Detect",
-      "symbol": "#brain-detect",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/brain/.purpose",
-      "description": "Local detectors run BEFORE persistence — PEM keys, AWS/GitHub/Slack/Anthropic/OpenAI key shapes, KEY/SECRET/TOKEN/PASSWORD assignments, Luhn card numbers, US SSN, passport MRZ → quarantined; Slack/Discord/WhatsApp/messages.json chat exports → third-party-data. Returns detector ids only.",
-      "visualTags": [],
-      "related": [],
-      "componentType": "service"
-    },
-    "brain-parse": {
-      "id": "brain-parse",
-      "name": "Brain Parse",
-      "symbol": "#brain-parse",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/brain/.purpose",
-      "description": ".md/.txt metadata extraction via premise-core lenient parseFrontmatter — title, ATX headings, wikilinks (#heading, ^block, |alias, embeds), relative md links, frontmatter tags/aliases/relates. Bodies are never symbol-scanned; strings sanitized and capped.",
-      "visualTags": [],
-      "related": [
-        "#heading",
-        "^block"
-      ],
-      "componentType": "service"
-    },
-    "brain-index-store": {
-      "id": "brain-index-store",
-      "name": "Brain Index Store",
-      "symbol": "#brain-index-store",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/brain/.purpose",
-      "description": "MODULE-PRIVATE derived index + incremental scan (mtime+size+inode reuse, hash only changed, rename detection by inode/hash, atomic rewrite). Quarantined/third-party/skipped records keep only path+size. Only view.ts may import it (lint-tested).",
-      "visualTags": [],
-      "related": [],
-      "componentType": "service"
-    },
-    "brain-view": {
-      "id": "brain-view",
-      "name": "Brain View",
-      "symbol": "#brain-view",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/brain/.purpose",
-      "description": "THE gate choke point — openBrainView(rootHash, agent|owner). Filters before matching; agent sees only open files and only with agent_access: metadata, every respond() leak-checked and egress-logged (fail closed); owner sees open+private, sensitive gates only as {folder, gate, count}; hidden link targets render [private]; gate throw → quarantined. Also exports scanBrain/hasIndex.",
-      "visualTags": [],
-      "related": [
-        "^brain-default-deny",
-        "!brain-egress"
-      ],
-      "componentType": "service"
-    },
-    "brain-egress": {
-      "id": "brain-egress",
-      "name": "Brain Egress",
-      "symbol": "#brain-egress",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/brain/.purpose",
-      "description": "Append-only egress.log ({at, channel, op, fileIds, bytes, root}) + summary for the \"Nothing has left this Mac\" badge.",
-      "visualTags": [],
-      "related": [
-        "!brain-egress"
-      ],
-      "componentType": "service"
-    },
-    "brain-purge": {
-      "id": "brain-purge",
-      "name": "Brain Purge",
-      "symbol": "#brain-purge",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/brain/.purpose",
-      "description": "Forget this folder — archives egress.log to brains/_archive then removes the brain storage dir; never touches the user's folder.",
-      "visualTags": [],
-      "related": [],
-      "componentType": "service"
-    },
-    "brain-atomic": {
-      "id": "brain-atomic",
-      "name": "Brain Atomic",
-      "symbol": "#brain-atomic",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/brain/.purpose",
-      "description": "Local atomic write helper (tmp + fsync + rename, 0600) and path containment check; no warpline dependency.",
-      "visualTags": [],
-      "related": [],
-      "componentType": "utility"
-    },
-    "brain-leak-probe": {
-      "id": "brain-leak-probe",
-      "name": "Brain Leak Probe",
-      "symbol": "#brain-leak-probe",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/brain/.purpose",
-      "description": "Reusable leak-probe harness — sentinel corpus generator, ≥100 probe queries, findLeaks — for engine, MCP handler and Platform route tests.",
-      "visualTags": [],
-      "related": [],
-      "componentType": "utility"
+      "componentType": "command"
     },
     "DocsCommands": {
       "id": "DocsCommands",
@@ -9766,6 +9589,17 @@
       "related": [],
       "componentType": "storage"
     },
+    "AgentCommandRoute": {
+      "id": "AgentCommandRoute",
+      "name": "AgentCommandRoute",
+      "symbol": "#AgentCommandRoute",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/platform-server/routes/.purpose",
+      "description": "POST /api/platform/agent-command — receives navigate/highlight/annotate/observe/clear commands, broadcasts via WS",
+      "visualTags": [],
+      "related": [],
+      "componentType": "route"
+    },
     "OverviewHandler": {
       "id": "OverviewHandler",
       "name": "OverviewHandler",
@@ -9904,6 +9738,73 @@
         "^read-only"
       ],
       "componentType": "router"
+    },
+    "BrainRouter": {
+      "id": "BrainRouter",
+      "name": "BrainRouter",
+      "symbol": "#BrainRouter",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/platform-server/routes/.purpose",
+      "description": "/api/brain/* READ surface for the Platform Brain section (7.14.0). Every handler goes through the single #brain-view choke point openBrainView(rootHash, 'owner') — never the index or brain.yaml directly. GET /overview (brains list; badge from egressSummary — nothingLeft/count/bytes/last; recent egress rows as counts only; map = counts by type / size band / recency band over VISIBLE files; locked zones as {folder, gate, count} only — never filenames; banner = tamper copy when brain.yaml changed outside Paradigm, else null; paused = suggestions auto-paused; sets the HttpOnly SameSite=Strict brain_owner cookie — the owner token is never in a body), GET /health (computeHealth over the owner view → brokenLinks / looseNotes / sameName as plain {id,title,path} rows; links into hidden files are never 'broken'), GET /suggestions (paused flag + nextSuggestions — next ≤10 folder-first with a plain rationale string; also logs the batch to suggestions.jsonl like the CLI), GET /find?q= (view.search over title/heading/path/topic; q > 200 chars → 400; repeated q → 400; the query is NOT echoed back — reflection surface). ?brain=<rootHash> optional (invalid → 400, unknown → 404, default first brain). brainLocalGuard requires a loopback Host, an Origin (when present) EXACTLY equal to the Platform's own origin (Host port == socket port; other localhost ports refused), and Sec-Fetch-Site same-origin|none when present, on EVERY request including GETs; corsMiddleware sets ACAO on /api/brain only for the own origin. portal.yaml ^local-only + ^read-only + ^brain-default-deny.",
+      "visualTags": [],
+      "related": [
+        "#brain-view",
+        "^local-only",
+        "^read-only",
+        "^brain-default-deny"
+      ],
+      "componentType": "router"
+    },
+    "BrainWriteRouter": {
+      "id": "BrainWriteRouter",
+      "name": "BrainWriteRouter",
+      "symbol": "#BrainWriteRouter",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/platform-server/routes/.purpose",
+      "description": "/api/brain/verdict WRITE (7.14.0) — POST { suggestionId, verdict: accept|reject|skip, brain? } proxies the SAME recordVerdict the CLI `paradigm brain confirm` calls (accept → declared.yaml backup + atomic write; stale → 409; unknown id → 404). ^brain-owner-write: requires the brain_owner cookie equal (timing-safe) to the per-process owner token AND an Origin exactly equal to the Platform's own origin — otherwise 403 before the body is validated. Also exports brainLocalGuard + isSameOriginBrainRequest + setBrainOwnerCookie + pickBrain + getBrainOwnerToken shared with BrainRouter. Best-effort broadcasts brain:changed. portal.yaml ^local-only + ^write-capable + ^brain-owner-write + ^brain-default-deny.",
+      "visualTags": [],
+      "related": [
+        "^brain-owner-write",
+        "^local-only",
+        "^write-capable",
+        "^brain-default-deny"
+      ],
+      "componentType": "router"
+    },
+    "PlatformWebSocket": {
+      "id": "PlatformWebSocket",
+      "name": "PlatformWebSocket",
+      "symbol": "#PlatformWebSocket",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/platform-server/ws/.purpose",
+      "description": "WebSocket server with per-client channel subscriptions — broadcast() is channel-routed (channel = the segment before ':' in a message type; a client sends {type:'subscribe',channels:[...]} to narrow, default = all channels for backward compat), plus client tracking and reconnect handling",
+      "visualTags": [
+        "form"
+      ],
+      "related": [],
+      "componentType": "service"
+    },
+    "AgentPresenceManager": {
+      "id": "AgentPresenceManager",
+      "name": "AgentPresenceManager",
+      "symbol": "#AgentPresenceManager",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/platform-server/ws/.purpose",
+      "description": "Tracks connected agents by ID, auto-prunes after 2min idle, deterministic color assignment",
+      "visualTags": [],
+      "related": [],
+      "componentType": "service"
+    },
+    "UserStateTracker": {
+      "id": "UserStateTracker",
+      "name": "UserStateTracker",
+      "symbol": "#UserStateTracker",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/platform-server/ws/.purpose",
+      "description": "Accumulates user section/symbol/theme state and highlight/annotation state for observe tool",
+      "visualTags": [],
+      "related": [],
+      "componentType": "service"
     },
     "SymbolPage": {
       "id": "SymbolPage",
@@ -10165,6 +10066,107 @@
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/academy/.purpose",
       "description": "Zustand store for the Academy (mirrors memoryStore's fetch/abort pattern). Mirrors the /api/academy shapes: packs, selected pack's paths + skills, the open path, and the reading pane (note | quiz). Quiz results keyed `${packId}:${quizId}` persist to localStorage (`paradigm-academy-results`), every read/write wrapped in try/catch.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "state"
+    },
+    "BrainSection": {
+      "id": "BrainSection",
+      "name": "BrainSection",
+      "symbol": "#BrainSection",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/brain/.purpose",
+      "description": "Brain section in the Platform UI (7.14.0, T-2026-09-29-002). Header shows the folder name, last-looked time, a brain picker when there is more than one, and the PrivacyBadge. Two-column body: Map + Private & Locked on the left; Find, Suggestions and Health on the right. Empty state when no brain exists: \"Run `paradigm brain init <folder>` to get started\". Never shows symbol sigils, gate ids or config words — every internal term goes through labels.ts. Live refresh on brain:changed (forwarded as a brain-ws CustomEvent by useAgentEffects, debounced); never resets a suggestion batch in progress. Paused-vs-off suggestions copy via suggestionsOffCopy.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "view"
+    },
+    "PrivacyBadge": {
+      "id": "PrivacyBadge",
+      "name": "PrivacyBadge",
+      "symbol": "#PrivacyBadge",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/brain/.purpose",
+      "description": "\"Nothing has left this Mac\" (green) or \"N things shared → see what left\" (amber) which expands the recent egress rows (when, how many notes, to whom, bytes — never file names).",
+      "visualTags": [
+        "badge"
+      ],
+      "related": [],
+      "componentType": "component"
+    },
+    "BrainMapPanel": {
+      "id": "BrainMapPanel",
+      "name": "BrainMapPanel",
+      "symbol": "#BrainMapPanel",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/brain/.purpose",
+      "description": "Counts of browsable files by type, size band and last-changed band, with proportional bars.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "component"
+    },
+    "LockedPanel": {
+      "id": "LockedPanel",
+      "name": "LockedPanel",
+      "symbol": "#LockedPanel",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/brain/.purpose",
+      "description": "Private & Locked — a lock icon plus a count per locked folder and a plain kind label (Health records / Money & taxes / Other people's messages / Passwords & keys). Never filenames; the server only sends {folder, gate, count}.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "component"
+    },
+    "HealthPanel": {
+      "id": "HealthPanel",
+      "name": "HealthPanel",
+      "symbol": "#HealthPanel",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/brain/.purpose",
+      "description": "Three collapsible buckets — Broken links, Loose notes, Same-name notes — off /api/brain/health.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "component"
+    },
+    "SuggestionsPanel": {
+      "id": "SuggestionsPanel",
+      "name": "SuggestionsPanel",
+      "symbol": "#SuggestionsPanel",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/brain/.purpose",
+      "description": "Batched (≤10) suggested labels with the rationale beside each. Keyboard triage: A keep, R dismiss, S skip, ↑/↓ or j/k to move (ignored while typing). Each verdict POSTs /api/brain/verdict with the owner token and advances to the next undecided row; shows past acceptance when known.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "component"
+    },
+    "FindPanel": {
+      "id": "FindPanel",
+      "name": "FindPanel",
+      "symbol": "#FindPanel",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/brain/.purpose",
+      "description": "Search box (≤200 chars) over titles, headings, locations and topics of browsable notes via /api/brain/find; shows which field matched.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "component"
+    },
+    "brain-labels": {
+      "id": "brain-labels",
+      "name": "Brain Labels",
+      "symbol": "#brain-labels",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/brain/.purpose",
+      "description": "labels.ts — React-free plain-language label tables (gate → kind label, type/size/recency/match labels, badge text, plainText sigil stripper). Tested in labels.test.ts, which also scans the section's JSX text for sigils / config words.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "utility"
+    },
+    "brainStore": {
+      "id": "brainStore",
+      "name": "BrainStore",
+      "symbol": "#brainStore",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/brain/.purpose",
+      "description": "Zustand store for the Brain section (mirrors academyStore's getJson pattern). load(brain?) → GET /api/brain/overview (remembered brain in localStorage `paradigm-brain-selected`, try/catch wrapped; falls back to the default when the remembered one is gone), then health + suggestions. decide(verdict) POSTs /api/brain/verdict with credentials same-origin — the owner token rides only in the HttpOnly brain_owner cookie set by GET /overview (never readable from script). Overview carries banner (tamper copy or null) and paused. find(q) aborts the previous search and caps q at 200 chars.",
       "visualTags": [],
       "related": [],
       "componentType": "state"
@@ -11448,18 +11450,6 @@
         "#DoctorCommand"
       ]
     },
-    "heading": {
-      "id": "heading",
-      "name": "Heading",
-      "symbol": "#heading",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/brain/.purpose",
-      "description": "Referenced from #brain-parse",
-      "visualTags": [],
-      "related": [
-        "#brain-parse"
-      ]
-    },
     "gap-narrator": {
       "id": "gap-narrator",
       "name": "Gap Narrator",
@@ -11470,6 +11460,18 @@
       "visualTags": [],
       "related": [
         "#doctor-handler"
+      ]
+    },
+    "brain-view": {
+      "id": "brain-view",
+      "name": "Brain View",
+      "symbol": "#brain-view",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/platform-server/routes/.purpose",
+      "description": "Referenced from #BrainRouter",
+      "visualTags": [],
+      "related": [
+        "#BrainRouter"
       ]
     },
     "fenced-block-parser": {
@@ -13359,125 +13361,6 @@
       "description": "Page route: /learn",
       "steps": []
     },
-    "$platform-serve": {
-      "id": "$platform-serve",
-      "name": "$platform Serve",
-      "symbol": "$$platform-serve",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/platform-server/.purpose",
-      "description": "paradigm serve → create Express app → mount routes → attach WS → serve SPA → listen",
-      "steps": [
-        {
-          "id": "$platform-serve-step-0",
-          "name": "Step 1",
-          "order": 0
-        },
-        {
-          "id": "$platform-serve-step-1",
-          "name": "Step 2",
-          "order": 1
-        },
-        {
-          "id": "$platform-serve-step-2",
-          "name": "Step 3",
-          "order": 2
-        },
-        {
-          "id": "$platform-serve-step-3",
-          "name": "Step 4",
-          "order": 3
-        },
-        {
-          "id": "$platform-serve-step-4",
-          "name": "Step 5",
-          "order": 4
-        },
-        {
-          "id": "$platform-serve-step-5",
-          "name": "Step 6",
-          "order": 5
-        },
-        {
-          "id": "$platform-serve-step-6",
-          "name": "Step 7",
-          "order": 6
-        },
-        {
-          "id": "$platform-serve-step-7",
-          "name": "Step 8",
-          "order": 7
-        },
-        {
-          "id": "$platform-serve-step-8",
-          "name": "Step 9",
-          "order": 8
-        },
-        {
-          "id": "$platform-serve-step-9",
-          "name": "Step 10",
-          "order": 9
-        },
-        {
-          "id": "$platform-serve-step-10",
-          "name": "Step 11",
-          "order": 10
-        }
-      ]
-    },
-    "$agent-command": {
-      "id": "$agent-command",
-      "name": "$agent Command",
-      "symbol": "$$agent-command",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/platform-server/.purpose",
-      "description": "MCP tool → HTTP POST → server validates → WS broadcast → browser updates",
-      "steps": [
-        {
-          "id": "$agent-command-step-0",
-          "name": "Step 1",
-          "order": 0
-        },
-        {
-          "id": "$agent-command-step-1",
-          "name": "Step 2",
-          "order": 1
-        },
-        {
-          "id": "$agent-command-step-2",
-          "name": "Step 3",
-          "order": 2
-        },
-        {
-          "id": "$agent-command-step-3",
-          "name": "Step 4",
-          "order": 3
-        },
-        {
-          "id": "$agent-command-step-4",
-          "name": "Step 5",
-          "order": 4
-        },
-        {
-          "id": "$agent-command-step-5",
-          "name": "Step 6",
-          "order": 5
-        }
-      ]
-    },
-    "SentinelBridge": {
-      "id": "SentinelBridge",
-      "name": "SentinelBridge",
-      "symbol": "$SentinelBridge",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/platform-server/.purpose",
-      "description": "Dynamic import bridge — creates Express Router with all Sentinel routes, storage, and WS broadcast callbacks",
-      "steps": []
-    },
-    "SymphonyRouter": {
-      "id": "SymphonyRouter",
-      "name": "SymphonyRouter",
-      "symbol": "$SymphonyRouter",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/platform-server/.purpose",
-      "description": "REST endpoints for Symphony section — agents, threads, messages, file requests, and status via the Score mailbox",
-      "steps": []
-    },
     "$notebook-promote-flow": {
       "id": "$notebook-promote-flow",
       "name": "$notebook Promote Flow",
@@ -13863,15 +13746,6 @@
       "description": "^gate-check: Internal gate for SDK validation",
       "related": []
     },
-    "brain-default-deny": {
-      "id": "brain-default-deny",
-      "name": "Brain Default Deny",
-      "symbol": "^brain-default-deny",
-      "category": "gates",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/brain/.purpose",
-      "description": "Brain files are private by default; agents see only human-shared (open) files and only when agent_access is metadata; sensitive zones are never shown by name.",
-      "related": []
-    },
     "file-trust": {
       "id": "file-trust",
       "name": "File Trust",
@@ -13903,26 +13777,15 @@
         "#symbol-index"
       ]
     },
-    "local-only": {
-      "id": "local-only",
-      "name": "Local Only",
-      "symbol": "^local-only",
+    "brain-default-deny": {
+      "id": "brain-default-deny",
+      "name": "Brain Default Deny",
+      "symbol": "^brain-default-deny",
       "category": "gates",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm",
-      "description": "Local-only access. Enforced two ways — the socket binds loopback by default, AND the #local-guard request middleware rejects 403 any state-changing (POST/PUT/PATCH/DELETE) /api request whose Host is non-loopback or whose (present) Origin is non-loopback (CSRF + DNS-rebinding guard). CORS reflects only loopback origins (never wildcard). GET/HEAD reads are not gated.",
+      "description": "Paradigm Brain default-deny. Every Brain read goes through the single #brain-view choke point (openBrainView). Files are private unless a human shares them; sensitive zones (medical, financial, third-party-data, quarantined) are never listed — the owner sees only {folder, gate, count}. Filtering happens BEFORE any matching, so search/health/suggestions never see hidden records. Brain routes additionally require a loopback Host on GET (DNS-rebinding guard for private metadata).",
       "related": [
-        "#local-guard"
-      ]
-    },
-    "block": {
-      "id": "block",
-      "name": "Block",
-      "symbol": "^block",
-      "category": "gates",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/brain/.purpose",
-      "description": "Referenced from #brain-parse",
-      "related": [
-        "#brain-parse"
+        "#brain-view"
       ]
     },
     "write-capable.": {
@@ -13956,13 +13819,13 @@
         "#WarplineRouter"
       ]
     },
-    "rate-limited": {
-      "id": "rate-limited",
-      "name": "Rate Limited",
-      "symbol": "^rate-limited",
+    "local-only": {
+      "id": "local-only",
+      "name": "Local Only",
+      "symbol": "^local-only",
       "category": "gates",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm",
-      "description": "Route is rate-limited to prevent abuse",
+      "description": "Local-only access. Enforced two ways — the socket binds loopback by default, AND the #local-guard request middleware rejects 403 any state-changing (POST/PUT/PATCH/DELETE) /api request whose Host is non-loopback or whose (present) Origin is non-loopback (CSRF + DNS-rebinding guard). CORS reflects only loopback origins (never wildcard). GET/HEAD reads are not gated.",
       "related": []
     },
     "read-only": {
@@ -13972,6 +13835,35 @@
       "category": "gates",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm",
       "description": "Route only returns data — no side effects or state mutations",
+      "related": []
+    },
+    "brain-default-deny.": {
+      "id": "brain-default-deny.",
+      "name": "Brain Default Deny.",
+      "symbol": "^brain-default-deny.",
+      "category": "gates",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/platform-server/routes/.purpose",
+      "description": "Referenced from #BrainRouter",
+      "related": [
+        "#BrainRouter"
+      ]
+    },
+    "brain-owner-write": {
+      "id": "brain-owner-write",
+      "name": "Brain Owner Write",
+      "symbol": "^brain-owner-write",
+      "category": "gates",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm",
+      "description": "Brain owner write credential. POST /api/brain/verdict requires the per-process owner token in the HttpOnly SameSite=Strict `brain_owner` cookie (set by a same-origin GET /api/brain/overview, never in a response body) AND an Origin exactly equal to the Platform's own origin. Other localhost ports get no ACAO and a 403 on every /api/brain request.",
+      "related": []
+    },
+    "rate-limited": {
+      "id": "rate-limited",
+      "name": "Rate Limited",
+      "symbol": "^rate-limited",
+      "category": "gates",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm",
+      "description": "Route is rate-limited to prevent abuse",
       "related": []
     },
     "authenticated-session": {
@@ -14857,15 +14749,6 @@
       "description": "Token or cost budget limit was reached",
       "related": []
     },
-    "brain-egress": {
-      "id": "brain-egress",
-      "name": "Brain Egress",
-      "symbol": "!brain-egress",
-      "category": "signals",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/utils/brain/.purpose",
-      "description": "A Brain response left the machine (MCP/cloud) — recorded append-only in egress.log.",
-      "related": []
-    },
     "notebook-created": {
       "id": "notebook-created",
       "name": "Notebook Created",
@@ -15067,6 +14950,17 @@
         "#fabric-refs"
       ]
     },
+    "brain-egress": {
+      "id": "brain-egress",
+      "name": "Brain Egress",
+      "symbol": "!brain-egress",
+      "category": "signals",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/tools/.purpose",
+      "description": "Referenced from #brain-mcp",
+      "related": [
+        "#brain-mcp"
+      ]
+    },
     "symphony-status-flowback": {
       "id": "symphony-status-flowback",
       "name": "Symphony Status Flowback",
@@ -15241,6 +15135,17 @@
       "description": "Referenced from #MemoryWriteRouter",
       "related": [
         "#MemoryWriteRouter"
+      ]
+    },
+    "brain:changed": {
+      "id": "brain:changed",
+      "name": "Brain:changed",
+      "symbol": "!brain:changed",
+      "category": "signals",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/platform-server/routes/.purpose",
+      "description": "Referenced from #BrainWriteRouter",
+      "related": [
+        "#BrainWriteRouter"
       ]
     }
   },
@@ -20060,6 +19965,10 @@
       "category": "components",
       "id": "tool-surface"
     },
+    "#brain-mcp": {
+      "category": "components",
+      "id": "brain-mcp"
+    },
     "#paradigm-retrieve": {
       "category": "components",
       "id": "paradigm-retrieve"
@@ -20356,30 +20265,6 @@
       "category": "components",
       "id": "symbols-route"
     },
-    "#PlatformServer": {
-      "category": "components",
-      "id": "PlatformServer"
-    },
-    "#PlatformWebSocket": {
-      "category": "components",
-      "id": "PlatformWebSocket"
-    },
-    "#AgentPresenceManager": {
-      "category": "components",
-      "id": "AgentPresenceManager"
-    },
-    "#UserStateTracker": {
-      "category": "components",
-      "id": "UserStateTracker"
-    },
-    "#AgentCommandRoute": {
-      "category": "components",
-      "id": "AgentCommandRoute"
-    },
-    "#local-guard": {
-      "category": "components",
-      "id": "local-guard"
-    },
     "#spill": {
       "category": "components",
       "id": "spill"
@@ -20404,49 +20289,9 @@
       "category": "components",
       "id": "grid-preset"
     },
-    "#brain-types": {
+    "#brain-cli": {
       "category": "components",
-      "id": "brain-types"
-    },
-    "#brain-config": {
-      "category": "components",
-      "id": "brain-config"
-    },
-    "#brain-walk": {
-      "category": "components",
-      "id": "brain-walk"
-    },
-    "#brain-detect": {
-      "category": "components",
-      "id": "brain-detect"
-    },
-    "#brain-parse": {
-      "category": "components",
-      "id": "brain-parse"
-    },
-    "#brain-index-store": {
-      "category": "components",
-      "id": "brain-index-store"
-    },
-    "#brain-view": {
-      "category": "components",
-      "id": "brain-view"
-    },
-    "#brain-egress": {
-      "category": "components",
-      "id": "brain-egress"
-    },
-    "#brain-purge": {
-      "category": "components",
-      "id": "brain-purge"
-    },
-    "#brain-atomic": {
-      "category": "components",
-      "id": "brain-atomic"
-    },
-    "#brain-leak-probe": {
-      "category": "components",
-      "id": "brain-leak-probe"
+      "id": "brain-cli"
     },
     "#DocsCommands": {
       "category": "components",
@@ -20788,6 +20633,10 @@
       "category": "components",
       "id": "UniversityStorage"
     },
+    "#AgentCommandRoute": {
+      "category": "components",
+      "id": "AgentCommandRoute"
+    },
     "#OverviewHandler": {
       "category": "components",
       "id": "OverviewHandler"
@@ -20831,6 +20680,26 @@
     "#ClassroomRouter": {
       "category": "components",
       "id": "ClassroomRouter"
+    },
+    "#BrainRouter": {
+      "category": "components",
+      "id": "BrainRouter"
+    },
+    "#BrainWriteRouter": {
+      "category": "components",
+      "id": "BrainWriteRouter"
+    },
+    "#PlatformWebSocket": {
+      "category": "components",
+      "id": "PlatformWebSocket"
+    },
+    "#AgentPresenceManager": {
+      "category": "components",
+      "id": "AgentPresenceManager"
+    },
+    "#UserStateTracker": {
+      "category": "components",
+      "id": "UserStateTracker"
     },
     "#SymbolPage": {
       "category": "components",
@@ -20919,6 +20788,42 @@
     "#academyStore": {
       "category": "components",
       "id": "academyStore"
+    },
+    "#BrainSection": {
+      "category": "components",
+      "id": "BrainSection"
+    },
+    "#PrivacyBadge": {
+      "category": "components",
+      "id": "PrivacyBadge"
+    },
+    "#BrainMapPanel": {
+      "category": "components",
+      "id": "BrainMapPanel"
+    },
+    "#LockedPanel": {
+      "category": "components",
+      "id": "LockedPanel"
+    },
+    "#HealthPanel": {
+      "category": "components",
+      "id": "HealthPanel"
+    },
+    "#SuggestionsPanel": {
+      "category": "components",
+      "id": "SuggestionsPanel"
+    },
+    "#FindPanel": {
+      "category": "components",
+      "id": "FindPanel"
+    },
+    "#brain-labels": {
+      "category": "components",
+      "id": "brain-labels"
+    },
+    "#brainStore": {
+      "category": "components",
+      "id": "brainStore"
     },
     "#DocsSection": {
       "category": "components",
@@ -21103,10 +21008,6 @@
     "^gate-check": {
       "category": "gates",
       "id": "gate-check"
-    },
-    "^brain-default-deny": {
-      "category": "gates",
-      "id": "brain-default-deny"
     },
     "^file-trust": {
       "category": "gates",
@@ -21359,22 +21260,6 @@
     "$learn-page": {
       "category": "flows",
       "id": "learn-page"
-    },
-    "$$platform-serve": {
-      "category": "flows",
-      "id": "$platform-serve"
-    },
-    "$$agent-command": {
-      "category": "flows",
-      "id": "$agent-command"
-    },
-    "$SentinelBridge": {
-      "category": "flows",
-      "id": "SentinelBridge"
-    },
-    "$SymphonyRouter": {
-      "category": "flows",
-      "id": "SymphonyRouter"
     },
     "$$notebook-promote-flow": {
       "category": "flows",
@@ -21763,10 +21648,6 @@
     "!budget-exceeded": {
       "category": "signals",
       "id": "budget-exceeded"
-    },
-    "!brain-egress": {
-      "category": "signals",
-      "id": "brain-egress"
     },
     "!notebook-created": {
       "category": "signals",
@@ -23040,6 +22921,14 @@
       "category": "components",
       "id": "DecisionSummary"
     },
+    "^brain-default-deny": {
+      "category": "gates",
+      "id": "brain-default-deny"
+    },
+    "!brain-egress": {
+      "category": "signals",
+      "id": "brain-egress"
+    },
     "!symphony-status-flowback": {
       "category": "signals",
       "id": "symphony-status-flowback"
@@ -23075,18 +22964,6 @@
     "$roster-setup": {
       "category": "flows",
       "id": "roster-setup"
-    },
-    "^local-only": {
-      "category": "gates",
-      "id": "local-only"
-    },
-    "#heading": {
-      "category": "components",
-      "id": "heading"
-    },
-    "^block": {
-      "category": "gates",
-      "id": "block"
     },
     "#gap-narrator": {
       "category": "components",
@@ -23144,9 +23021,33 @@
       "category": "gates",
       "id": "read-only."
     },
+    "^local-only": {
+      "category": "gates",
+      "id": "local-only"
+    },
     "!memory:changed": {
       "category": "signals",
       "id": "memory:changed"
+    },
+    "#brain-view": {
+      "category": "components",
+      "id": "brain-view"
+    },
+    "^read-only": {
+      "category": "gates",
+      "id": "read-only"
+    },
+    "^brain-default-deny.": {
+      "category": "gates",
+      "id": "brain-default-deny."
+    },
+    "^brain-owner-write": {
+      "category": "gates",
+      "id": "brain-owner-write"
+    },
+    "!brain:changed": {
+      "category": "signals",
+      "id": "brain:changed"
     },
     "$decision-exchange": {
       "category": "flows",
@@ -23175,10 +23076,6 @@
     "^rate-limited": {
       "category": "gates",
       "id": "rate-limited"
-    },
-    "^read-only": {
-      "category": "gates",
-      "id": "read-only"
     },
     "^authenticated-session": {
       "category": "gates",

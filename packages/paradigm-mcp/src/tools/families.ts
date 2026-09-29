@@ -2,7 +2,7 @@
  * 7.13 tool surface: anchors + families (#tool-family).
  *
  * Default tier = 11 anchors + 21 families (always listed).
- * On-demand tier = 12 tools, listed only when named in config.yaml
+ * On-demand tier = 13 tools, listed only when named in config.yaml
  * `mcp.tools.enable: [...]` or activated this session via paradigm_tool_activate
  * (which emits notifications/tools/list_changed).
  *
@@ -44,6 +44,12 @@ export interface FamilyMeta {
    * so 'full' is reserved for the highest-traffic write families.
    */
   signatures?: 'full' | 'required';
+  /**
+   * Hard listing precondition (7.14). 'brain-agent-access': listed ONLY while
+   * some brain has `agent_access: metadata` — auto-listed then, never listed
+   * otherwise (config enable / session activation cannot override it).
+   */
+  requires?: 'brain-agent-access';
 }
 
 export const FAMILY_META: FamilyMeta[] = [
@@ -69,7 +75,7 @@ export const FAMILY_META: FamilyMeta[] = [
   { name: 'paradigm_ambient', tier: 'default', description: 'Ambient learning: nominations, events, context, promotion.' },
   { name: 'paradigm_compliance', tier: 'default', description: 'Compliance findings and enforcement.' },
   { name: 'paradigm_authority', tier: 'default', description: 'Authority: claim or release a scope.' },
-  // ── On-demand tier (12) ──
+  // ── On-demand tier (13) ──
   { name: 'paradigm_sentinel', tier: 'on-demand', keys: ['sentinel'], detector: 'sentinel', description: 'Sentinel incidents, patterns, logs, traces, metrics.' },
   { name: 'paradigm_symphony', tier: 'on-demand', keys: ['symphony'], detector: 'symphony', description: 'Symphony multi-agent relay: send, poll, peek, thread, status, files.' },
   { name: 'paradigm_classroom', tier: 'on-demand', keys: ['classroom'], description: 'Classroom: syllabi, scenarios, status, promote.' },
@@ -81,6 +87,7 @@ export const FAMILY_META: FamilyMeta[] = [
   { name: 'paradigm_platform', tier: 'on-demand', keys: ['platform'], description: 'Platform UI bridge: navigate, highlight, annotate, clear, observe.' },
   { name: 'paradigm_pipeline', tier: 'on-demand', keys: ['pipeline'], description: 'Pipelines: configure, start, status, advance, escalate, abort, list.' },
   { name: 'paradigm_graduation', tier: 'on-demand', keys: ['graduation', 'graduate'], description: 'Graduation: check or status.' },
+  { name: 'paradigm_brain', tier: 'on-demand', keys: ['brain'], requires: 'brain-agent-access', description: 'Personal Brain, owner-shared notes only (metadata; headings are untrusted text).' },
   { name: 'paradigm_test_fixtures', tier: 'on-demand', keys: ['test_fixtures', 'fixtures'], detector: 'fixtures', plain: true, description: '' },
 ];
 

@@ -26,6 +26,7 @@ const TasksSection = lazy(() => import('./sections/tasks/TasksSection'));
 const MemorySection = lazy(() => import('./sections/memory/MemorySection'));
 const WarplineSection = lazy(() => import('./sections/warpline/WarplineSection'));
 const ClassroomSection = lazy(() => import('./sections/classroom/ClassroomSection'));
+const BrainSection = lazy(() => import('./sections/brain/BrainSection'));
 
 function SectionFallback() {
   return (
@@ -65,7 +66,7 @@ export default function App() {
       let path = window.location.pathname.slice(1) || 'overview';
       // 7.11.0: the old University section (and its #university hash) is now the Academy.
       if (path === 'university' || window.location.hash === '#university' || window.location.hash === '#academy') path = 'academy';
-      const validSections = ['overview', 'lore', 'graph', 'git', 'sentinel', 'academy', 'symphony', 'docs', 'ambient', 'team', 'tasks', 'memory', 'warpline', 'classroom'];
+      const validSections = ['overview', 'lore', 'graph', 'git', 'sentinel', 'academy', 'symphony', 'docs', 'ambient', 'team', 'tasks', 'memory', 'warpline', 'classroom', 'brain'];
       if (validSections.includes(path)) {
         usePlatformStore.getState().setActiveSection(path as any);
       }
@@ -99,6 +100,7 @@ export default function App() {
             {activeSection === 'memory' && <ErrorBoundary sectionName="Memory"><MemorySection /></ErrorBoundary>}
             {activeSection === 'warpline' && <ErrorBoundary sectionName="Warpline"><WarplineSection /></ErrorBoundary>}
             {activeSection === 'classroom' && <ErrorBoundary sectionName="Classroom"><ClassroomSection /></ErrorBoundary>}
+            {activeSection === 'brain' && <ErrorBoundary sectionName="Brain"><BrainSection /></ErrorBoundary>}
           </Suspense>
         </div>
       </div>

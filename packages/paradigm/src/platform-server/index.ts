@@ -29,6 +29,8 @@ import { createTasksWriteRouter } from './routes/tasks-write.js';
 import { createMemoryRouter } from './routes/memory.js';
 import { createMemoryWriteRouter } from './routes/memory-write.js';
 import { createAcademyRouter } from './routes/academy.js';
+import { createBrainRouter } from './routes/brain.js';
+import { createBrainWriteRouter } from './routes/brain-write.js';
 import { corsMiddleware, localOnlyGuard } from './local-guard.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -89,7 +91,7 @@ function isPackageAvailable(packageName: string): boolean {
  * Resolve the set of enabled sections based on config and available packages
  */
 function resolveSections(options: PlatformServerOptions): Set<string> {
-  const always = ['overview', 'tasks', 'memory', 'lore', 'graph', 'git', 'ambient', 'team', 'classroom', 'academy'];
+  const always = ['overview', 'tasks', 'memory', 'lore', 'graph', 'git', 'ambient', 'team', 'classroom', 'academy', 'brain'];
   const requested = options.sections ?? [...always, 'sentinel', 'symphony', 'docs', 'warpline'];
 
   const enabled = new Set<string>();
@@ -273,6 +275,13 @@ export async function startPlatformServer(options: PlatformServerOptions): Promi
   // (applyPrune/Route/Merge/Pin), so all path-safety + archive-not-delete live in
   // ONE place. Mounted AFTER the read router (order mirrors tasks).
   app.use('/api/memory', createMemoryWriteRouter(options.projectDir, wsContext));
+
+  // Mount Brain routes (7.14.0 — Paradigm Brain owner view). Reads go through the
+  // single #brain-view choke point (openBrainView(…,'owner')); the write router
+  // records suggestion verdicts behind the ^brain-owner-write token. Both sit
+  // behind the global localOnlyGuard AND a brain-scoped loopback guard on reads.
+  app.use('/api/brain', createBrainRouter());
+  app.use('/api/brain', createBrainWriteRouter({}, wsContext));
 
   // Background two-way GitHub sync poll. Every SYNC_POLL_MS, pull linked issues
   // and reconcile inbound through the SAME enforced writers (a poll never

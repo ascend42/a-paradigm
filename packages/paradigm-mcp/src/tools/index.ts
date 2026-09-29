@@ -61,6 +61,7 @@ import { getPipelineToolsList, handlePipelineTool } from './pipeline.js';
 import { getConductorToolsList, handleConductorTool } from './conductor.js';
 import { getSymphonyToolsList, handleSymphonyTool } from './symphony.js';
 import { getUniversityToolsList, handleUniversityTool } from './university.js';
+import { getBrainToolsList, handleBrainTool, brainFamilyAvailable } from './brain.js';
 import { getPlatformToolsList, handlePlatformTool } from './platform.js';
 import { getAgentToolsList, handleAgentTool } from './agents.js';
 import { getAuthorityToolsList, handleAuthorityTool } from './authority.js';
@@ -279,6 +280,14 @@ function buildRegistry(rootDir: string, reloadContext?: () => Promise<void>): To
       tier: 'feature',
       getToolsList: getUniversityToolsList,
       handleTool: wrap(handleUniversityTool),
+    },
+    {
+      // 7.14 Brain: detected only while some brain opted into agent metadata access.
+      key: 'brain',
+      tier: 'feature',
+      getToolsList: getBrainToolsList,
+      handleTool: wrap(handleBrainTool),
+      detect: () => brainFamilyAvailable(),
     },
     {
       key: 'agents',
@@ -538,7 +547,7 @@ function getInlineToolDefinitions() {
       inputSchema: {
         type: 'object',
         properties: {
-          feature: { type: 'string', description: 'sentinel, symphony, classroom, habits, persona, university, assessment, conductor, platform, pipeline, graduation, test_fixtures' },
+          feature: { type: 'string', description: 'sentinel, symphony, classroom, habits, persona, university, assessment, conductor, platform, pipeline, graduation, test_fixtures, brain' },
         },
         required: ['feature'],
       },
@@ -613,7 +622,9 @@ export function listSurfaceTools(
   for (const meta of DEFAULT_FAMILIES) out.push(surface.families.get(meta.name)!.definition);
   const enabled = new Set(cfg.enable.map(k => findOnDemand(k)?.name).filter((n): n is string => !!n));
   for (const meta of ON_DEMAND) {
-    if (!enabled.has(meta.name) && !activated.has(meta.name)) continue;
+    if (meta.requires === 'brain-agent-access') {
+      if (!brainFamilyAvailable()) continue;
+    } else if (!enabled.has(meta.name) && !activated.has(meta.name)) continue;
     const def = onDemandDefinition(surface, meta.name);
     if (def) out.push(def);
   }
@@ -1403,6 +1414,19 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
         case 'paradigm_tool_activate': {
           const feature = String((args as { feature?: unknown }).feature ?? '');
           const meta = findOnDemand(feature);
+          if (meta && meta.requires === 'brain-agent-access') {
+            const available = brainFamilyAvailable();
+            const text = JSON.stringify({
+              action: 'tool_activate',
+              feature,
+              status: available ? 'already_active' : 'unavailable',
+              note: available
+                ? `${meta.name} is listed while a brain is shared with agents.`
+                : 'No brain is shared with agents. The owner can allow it with `paradigm brain access metadata`.',
+            }, null, 2);
+            trackToolCall(text.length, name);
+            return { content: [{ type: 'text', text }] };
+          }
           if (meta) {
             const enabledByConfig = readMcpToolsConfig(ctx.rootDir).enable.some(k => findOnDemand(k)?.name === meta.name);
             const already = activatedOnDemand.has(meta.name) || enabledByConfig;

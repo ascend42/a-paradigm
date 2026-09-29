@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-09-29T09:39:23.973Z'
+generated: '2026-09-29T10:25:56.747Z'
 structure: {}
 key_files:
   config:
@@ -638,6 +638,7 @@ symbols:
   '#purpose-component-sync-layer': packages/paradigm-mcp/src/sync/
   '#purpose-component-legacy-tool-map': packages/paradigm-mcp/src/tools/
   '#purpose-component-tool-surface': packages/paradigm-mcp/src/tools/
+  '#purpose-component-brain-mcp': packages/paradigm-mcp/src/tools/
   '#purpose-component-paradigm-retrieve': packages/paradigm-mcp/src/tools/
   '#purpose-component-paradigm-propose-block': packages/paradigm-mcp/src/tools/
   '#purpose-component-paradigm-authority-claim': packages/paradigm-mcp/src/tools/
@@ -712,29 +713,13 @@ symbols:
   '#purpose-component-authority-yaml-writer': packages/paradigm/src/core/
   '#purpose-component-graph-server': packages/paradigm/src/graph-server/
   '#purpose-component-symbols-route': packages/paradigm/src/graph-server/
-  '#purpose-component-PlatformServer': packages/paradigm/src/platform-server/
-  '#purpose-component-PlatformWebSocket': packages/paradigm/src/platform-server/ws/
-  '#purpose-component-AgentPresenceManager': packages/paradigm/src/platform-server/ws/
-  '#purpose-component-UserStateTracker': packages/paradigm/src/platform-server/ws/
-  '#purpose-component-AgentCommandRoute': packages/paradigm/src/platform-server/routes/
-  '#purpose-component-local-guard': packages/paradigm/src/platform-server/
   '#purpose-component-spill': packages/premise/core/src/
   '#purpose-component-content': packages/university/src/content/
   '#purpose-component-git': packages/warpline/src/git/
   '#purpose-component-lens': packages/warpline/src/lens/
   '#purpose-component-warp': packages/warpline/src/warp/
   '#purpose-component-grid-preset': packages/conductor/Sources/Conductor/Workspace/
-  '#purpose-component-brain-types': packages/paradigm-mcp/src/utils/brain/
-  '#purpose-component-brain-config': packages/paradigm-mcp/src/utils/brain/
-  '#purpose-component-brain-walk': packages/paradigm-mcp/src/utils/brain/
-  '#purpose-component-brain-detect': packages/paradigm-mcp/src/utils/brain/
-  '#purpose-component-brain-parse': packages/paradigm-mcp/src/utils/brain/
-  '#purpose-component-brain-index-store': packages/paradigm-mcp/src/utils/brain/
-  '#purpose-component-brain-view': packages/paradigm-mcp/src/utils/brain/
-  '#purpose-component-brain-egress': packages/paradigm-mcp/src/utils/brain/
-  '#purpose-component-brain-purge': packages/paradigm-mcp/src/utils/brain/
-  '#purpose-component-brain-atomic': packages/paradigm-mcp/src/utils/brain/
-  '#purpose-component-brain-leak-probe': packages/paradigm-mcp/src/utils/brain/
+  '#purpose-component-brain-cli': packages/paradigm/src/commands/brain/
   '#purpose-component-DocsCommands': packages/paradigm/src/commands/docs/
   '#purpose-component-#docs-scaffold': packages/paradigm/src/commands/docs/
   '#purpose-component-info-status': packages/paradigm/src/commands/doctor/
@@ -820,6 +805,7 @@ symbols:
   '#purpose-component-claude-cli-provider': packages/paradigm/src/core/providers/
   '#purpose-component-manual-provider': packages/paradigm/src/core/providers/
   '#purpose-component-UniversityStorage': packages/paradigm/src/core/university/
+  '#purpose-component-AgentCommandRoute': packages/paradigm/src/platform-server/routes/
   '#purpose-component-OverviewHandler': packages/paradigm/src/platform-server/routes/
   '#purpose-component-GitRouter': packages/paradigm/src/platform-server/routes/
   '#purpose-component-DocsRouter': packages/paradigm/src/platform-server/routes/
@@ -831,6 +817,11 @@ symbols:
   '#purpose-component-MemoryRouter': packages/paradigm/src/platform-server/routes/
   '#purpose-component-MemoryWriteRouter': packages/paradigm/src/platform-server/routes/
   '#purpose-component-ClassroomRouter': packages/paradigm/src/platform-server/routes/
+  '#purpose-component-BrainRouter': packages/paradigm/src/platform-server/routes/
+  '#purpose-component-BrainWriteRouter': packages/paradigm/src/platform-server/routes/
+  '#purpose-component-PlatformWebSocket': packages/paradigm/src/platform-server/ws/
+  '#purpose-component-AgentPresenceManager': packages/paradigm/src/platform-server/ws/
+  '#purpose-component-UserStateTracker': packages/paradigm/src/platform-server/ws/
   '#purpose-component-SymbolPage': packages/site/src/components/docs/
   '#purpose-component-FlowPage': packages/site/src/components/docs/
   '#purpose-component-PortalPage': packages/site/src/components/docs/
@@ -853,6 +844,15 @@ symbols:
   '#purpose-component-QuizRunner': packages/paradigm/platform-ui/src/sections/academy/
   '#purpose-component-PackSkills': packages/paradigm/platform-ui/src/sections/academy/
   '#purpose-component-academyStore': packages/paradigm/platform-ui/src/sections/academy/
+  '#purpose-component-BrainSection': packages/paradigm/platform-ui/src/sections/brain/
+  '#purpose-component-PrivacyBadge': packages/paradigm/platform-ui/src/sections/brain/
+  '#purpose-component-BrainMapPanel': packages/paradigm/platform-ui/src/sections/brain/
+  '#purpose-component-LockedPanel': packages/paradigm/platform-ui/src/sections/brain/
+  '#purpose-component-HealthPanel': packages/paradigm/platform-ui/src/sections/brain/
+  '#purpose-component-SuggestionsPanel': packages/paradigm/platform-ui/src/sections/brain/
+  '#purpose-component-FindPanel': packages/paradigm/platform-ui/src/sections/brain/
+  '#purpose-component-brain-labels': packages/paradigm/platform-ui/src/sections/brain/
+  '#purpose-component-brainStore': packages/paradigm/platform-ui/src/sections/brain/
   '#purpose-component-DocsSection': packages/paradigm/platform-ui/src/sections/docs/
   '#purpose-component-renderMarkdown': packages/paradigm/platform-ui/src/sections/docs/
   '#purpose-component-MemorySection': packages/paradigm/platform-ui/src/sections/memory/
@@ -899,7 +899,6 @@ symbols:
   ^purpose-gate-^file-request-allowed: packages/conductor/Sources/Conductor/Symphony/
   ^purpose-gate-api-authenticated: packages/sentinel/
   ^purpose-gate-gate-check: packages/portal/sdk/
-  ^purpose-gate-brain-default-deny: packages/paradigm-mcp/src/utils/brain/
   ^purpose-gate-file-trust: packages/paradigm/src/commands/symphony/
   '#purpose-state-session': packages/portal/viewer/
   '#purpose-state-index': packages/premise/core/
@@ -963,10 +962,6 @@ symbols:
   $purpose-flow-blog-page: packages/site/src/
   $purpose-flow-docs-[...slug]-page: packages/site/src/
   $purpose-flow-learn-page: packages/site/src/
-  $purpose-flow-$platform-serve: packages/paradigm/src/platform-server/
-  $purpose-flow-$agent-command: packages/paradigm/src/platform-server/
-  $purpose-flow-SentinelBridge: packages/paradigm/src/platform-server/
-  $purpose-flow-SymphonyRouter: packages/paradigm/src/platform-server/
   $purpose-flow-$notebook-promote-flow: packages/paradigm/src/commands/notebook/
   $purpose-flow-$review-flow: packages/paradigm/src/commands/review/
   $purpose-flow-skill-certification: packages/paradigm/src/commands/skill/
@@ -1064,7 +1059,6 @@ symbols:
   '!purpose-signal-filters-changed': packages/sentinel/ui/
   '!purpose-signal-symbol-updated': packages/sentinel/ui/
   '!purpose-signal-budget-exceeded': packages/paradigm/src/core/
-  '!purpose-signal-brain-egress': packages/paradigm-mcp/src/utils/brain/
   '!purpose-signal-notebook-created': packages/paradigm/src/commands/notebook/
   '!purpose-signal-notebook-promoted': packages/paradigm/src/commands/notebook/
   '!purpose-signal-review-complete': packages/paradigm/src/commands/review/
@@ -1383,6 +1377,8 @@ symbols:
   '#purpose-ref-component-NoteBubble': packages/sentinel/ui/
   '#purpose-ref-component-ThreadCard': packages/sentinel/ui/
   '#purpose-ref-component-DecisionSummary': packages/sentinel/ui/
+  ^purpose-ref-gate-brain-default-deny: packages/paradigm-mcp/src/tools/
+  '!purpose-ref-signal-brain-egress': packages/paradigm-mcp/src/tools/
   '!purpose-ref-signal-symphony-status-flowback': packages/paradigm-mcp/src/tools/
   '!purpose-ref-signal-cid-brief-produced': packages/paradigm-mcp/src/tools/
   '!purpose-ref-signal-cid-debrief-complete': packages/paradigm-mcp/src/tools/
@@ -1392,9 +1388,6 @@ symbols:
   '!purpose-ref-signal-cid-postflight-self-healed': packages/paradigm-mcp/src/tools/
   '#purpose-ref-component-learning-stores': packages/paradigm/src/commands/
   $purpose-ref-flow-roster-setup: packages/paradigm/src/core/
-  ^purpose-ref-gate-local-only: packages/paradigm/src/platform-server/
-  '#purpose-ref-component-heading': packages/paradigm-mcp/src/utils/brain/
-  ^purpose-ref-gate-block: packages/paradigm-mcp/src/utils/brain/
   '#purpose-ref-component-gap-narrator': packages/paradigm/src/commands/doctor/
   '!purpose-ref-signal-skill-used': packages/paradigm/src/commands/hooks/
   '!purpose-ref-signal-compliance-violation': packages/paradigm/src/commands/hooks/
@@ -1409,7 +1402,13 @@ symbols:
   '!purpose-ref-signal-oracle-record-appended': packages/paradigm/src/platform-server/routes/
   ^purpose-ref-gate-write-capable: packages/paradigm/src/platform-server/routes/
   ^purpose-ref-gate-read-only.: packages/paradigm/src/platform-server/routes/
+  ^purpose-ref-gate-local-only: packages/paradigm/src/platform-server/routes/
   '!purpose-ref-signal-memory:changed': packages/paradigm/src/platform-server/routes/
+  '#purpose-ref-component-brain-view': packages/paradigm/src/platform-server/routes/
+  ^purpose-ref-gate-read-only: packages/paradigm/src/platform-server/routes/
+  ^purpose-ref-gate-brain-default-deny.: packages/paradigm/src/platform-server/routes/
+  ^purpose-ref-gate-brain-owner-write: packages/paradigm/src/platform-server/routes/
+  '!purpose-ref-signal-brain:changed': packages/paradigm/src/platform-server/routes/
   $purpose-ref-flow-decision-exchange: packages/conductor/Sources/Conductor/UI/Views/
   '#purpose-ref-component-fenced-block-parser': packages/conductor/Sources/Conductor/UI/Views/
   '#purpose-ref-component-agent-visual.': packages/conductor/Sources/Conductor/UI/Views/
@@ -1422,3 +1421,5 @@ symbols:
   ^gate-read-only: ./
   ^gate-write-capable: ./
   ^gate-authenticated-session: ./
+  ^gate-brain-default-deny: ./
+  ^gate-brain-owner-write: ./

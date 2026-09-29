@@ -525,6 +525,98 @@ memoryCmd.action(() => {
   memoryCmd.outputHelp();
 });
 
+// paradigm brain <subcommand>  (Paradigm Brain MVP 7.14.0, TD-2026-09-29-204)
+const brainCmd = program
+  .command('brain')
+  .description('Structure for a personal folder: scan, private zones, topic suggestions (nothing leaves this Mac)');
+
+const brainTarget = (c: Command) =>
+  c.option('-f, --folder <path>', 'Folder the brain was created for')
+    .option('-b, --brain <id>', 'Brain id')
+    .option('--json', 'Output as JSON');
+
+brainCmd
+  .command('init <folder>')
+  .description('Allow-list a folder, lock private zones, and scan it (never writes inside the folder)')
+  .option('--workspace <file>', '.paradigm-workspace file for links from notes to code')
+  .option('--no-open', "Don't open Paradigm Platform afterwards")
+  .option('--json', 'Output as JSON')
+  .action(async (folder, options) => {
+    const { initCommand } = await import('./commands/brain/index.js');
+    await initCommand(folder, options);
+  });
+
+brainTarget(brainCmd.command('scan').description('Refresh the index and report link health (read-only on your files)'))
+  .action(async (options) => {
+    const { scanCommand } = await import('./commands/brain/index.js');
+    await scanCommand(options);
+  });
+
+brainTarget(brainCmd.command('suggest').description('Show the next topic suggestions (up to 10, folders first)'))
+  .option('--limit <n>', 'How many (max 10)')
+  .action(async (options) => {
+    const { suggestCommand } = await import('./commands/brain/index.js');
+    await suggestCommand(options);
+  });
+
+brainTarget(brainCmd.command('confirm <id>').description('Keep a suggestion (or --reject / --skip it)'))
+  .option('--reject', 'Not right')
+  .option('--skip', 'Decide later')
+  .action(async (id, options) => {
+    const { confirmCommand } = await import('./commands/brain/index.js');
+    await confirmCommand(id, options);
+  });
+
+brainTarget(brainCmd.command('status').description('Show brains, locked zones, sharing and what left this Mac'))
+  .option('--acceptance', 'Show suggestion acceptance')
+  .action(async (options) => {
+    const { statusCommand } = await import('./commands/brain/index.js');
+    await statusCommand(options);
+  });
+
+brainTarget(brainCmd.command('share <pattern>').description('Let agents see names/headings of matching files (asks for confirmation)'))
+  .action(async (pattern, options) => {
+    const { shareCommand } = await import('./commands/brain/index.js');
+    await shareCommand(pattern, options);
+  });
+
+brainTarget(brainCmd.command('unshare <pattern>').description('Stop sharing a pattern'))
+  .action(async (pattern, options) => {
+    const { unshareCommand } = await import('./commands/brain/index.js');
+    await unshareCommand(pattern, options);
+  });
+
+brainTarget(brainCmd.command('access <mode>').description('Agent access: off | metadata (asks for confirmation)'))
+  .action(async (mode, options) => {
+    const { accessCommand } = await import('./commands/brain/index.js');
+    await accessCommand(mode, options);
+  });
+
+brainTarget(brainCmd.command('suggestions <mode>').description('Suggestions: auto | on | off (auto turns off below 60% acceptance)'))
+  .action(async (mode, options) => {
+    const { suggestionsFlagCommand } = await import('./commands/brain/index.js');
+    await suggestionsFlagCommand(mode, options);
+  });
+
+brainTarget(brainCmd.command('purge').description('Forget this folder (your files are not touched)'))
+  .option('-y, --yes', 'Do not ask')
+  .option('--forget-log', 'Also delete the record of what left this computer (normally archived and kept)')
+  .action(async (options) => {
+    const { purgeCommand } = await import('./commands/brain/index.js');
+    await purgeCommand(options);
+  });
+
+brainTarget(brainCmd.command('egress').description('What left this computer'))
+  .option('--limit <n>', 'Rows to show (default 20)')
+  .action(async (options) => {
+    const { egressCommand } = await import('./commands/brain/index.js');
+    await egressCommand(options);
+  });
+
+brainCmd.action(() => {
+  brainCmd.outputHelp();
+});
+
 // paradigm flow <subcommand>
 const flowCmd = program
   .command('flow')

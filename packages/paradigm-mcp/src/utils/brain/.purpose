@@ -1,0 +1,108 @@
+version: 2.0.0
+description: |
+  Paradigm Brain MVP engine (7.14.0) — structure for amorphous personal folders.
+  Index, not store: metadata-only JSON index kept OUT of the user's folder under
+  <homedir>/.paradigm/brains/<sha256(realpath(root))[0:16]>/. Default-deny gates,
+  one view choke point, detectors before persistence, append-only egress log.
+components:
+  brain-types:
+    description: Shared Brain types (gates, brain.yaml, index record, view, egress). Builder B codes against it.
+    type: model
+    anchors:
+      - types.ts
+    tags: [feature, brain]
+  brain-config:
+    description: 'brain.yaml load/save (fail-closed validation, tamper check), storage paths with injectable homedir, hard-blocks (refused even when allow-listed), glob matching, gate resolution (strictest zone wins; share human-only, case-sensitive; code may only append stricter zones), name-based zones, init/share/agent-access/list. Aegis hardening: PARADIGM_BRAIN_HOME override (opts > env > os.homedir); realpathSync.native; hard-blocks compare case-folded + NFC paths against both the brain home and the OS home (and the path''s realpath); name zones match word TOKENS; saveBrainConfig records sha256 in .config-hash, saveBrainConfig writes .config-hash.pending → brain.yaml → rename, snapshots .config-lastgood.yaml while trusted; loadBrainConfig accepts hash or pending hash, re-checks after ~50ms, on mismatch/missing hash returns tampered:true, forces agent_access off, writes sticky .config-tampered + one egress {channel:config, op:tamper-detected}; setAgentAccess refuses a tampered config unless acknowledgeTamper (CLI shows reviewBrainConfig diff + TTY confirm); listBrains cached by stat signatures.'
+    type: service
+    anchors:
+      - config.ts
+    gates: ['^brain-default-deny']
+    tags: [feature, brain, security]
+  brain-walk:
+    description: Hardened walk — lstat, never follows symlinks, refuses hard-blocked paths, skips dot-dirs/node_modules, max_files cap. WalkEntry carries dev; readVerified opens O_RDONLY|O_NOFOLLOW, fstat-compares ino+dev to the walk entry and reads from the fd ('changed' → skipped changed-during-read).
+    type: service
+    anchors:
+      - walk.ts
+    tags: [feature, brain, security]
+  brain-detect:
+    description: Local detectors run BEFORE persistence — PEM keys, AWS/GitHub/Slack/Anthropic/OpenAI key shapes, KEY/SECRET/TOKEN/PASSWORD assignments, Luhn card numbers, US SSN, passport MRZ → quarantined; Slack/Discord/WhatsApp/messages.json chat exports → third-party-data. Returns detector ids only. ReDoS-hardened: secret-assignment is a hand-written separator/key-token/value scanner (placeholder check on value only); no nested quantifiers; per-line 4096-char overlapping windows; pre-emptive budgetMs (parse_ms) → DetectorTimeoutError → quarantined detector-timeout. Adds google-api-key, stripe-key, jwt, iban (mod-97). No BIP39.
+    type: service
+    anchors:
+      - detect.ts
+    tags: [feature, brain, security]
+  brain-parse:
+    description: .md/.txt metadata extraction via premise-core lenient parseFrontmatter — title, ATX headings, wikilinks (#heading, ^block, |alias, embeds), relative md links, frontmatter tags/aliases/relates. Bodies are never symbol-scanned; strings sanitized and capped.
+    type: service
+    anchors:
+      - parse.ts
+    tags: [feature, brain]
+  brain-index-store:
+    description: 'MODULE-PRIVATE derived index + incremental scan (mtime+size+inode reuse, hash only changed, rename detection by inode/hash, atomic rewrite). Quarantined/third-party/skipped records keep only path+size. Only view.ts may import it (lint-tested).'
+    type: service
+    anchors:
+      - index-store.ts
+    tags: [feature, brain, security]
+  brain-view:
+    description: 'THE gate choke point — openBrainView(rootHash, agent|owner). Filters before matching; agent sees only open files and only with agent_access: metadata, every respond() leak-checked and egress-logged (fail closed); owner sees open+private, sensitive gates only as {folder, gate, count}; hidden link targets render [private] for the owner, while for agents hidden and broken links are identical (missing, target [missing]); gate throw → quarantined. Also exports scanBrain/hasIndex.'
+    type: service
+    anchors:
+      - view.ts
+    gates: ['^brain-default-deny']
+    signals: ['!brain-egress']
+    tags: [feature, brain, security]
+  brain-egress:
+    description: Append-only egress.log ({at, channel, op, fileIds, bytes, root}) + summary for the "Nothing has left this Mac" badge.
+    type: service
+    anchors:
+      - egress.ts
+    signals: ['!brain-egress']
+    tags: [feature, brain, security]
+  brain-purge:
+    description: Forget this folder — archives egress.log to brains/_archive then removes the brain storage dir; never touches the user's folder. forgetLog option (CLI purge --forget-log) deletes egress.log and all earlier _archive copies for the id; default retention keeps archives indefinitely.
+    type: service
+    anchors:
+      - purge.ts
+    tags: [feature, brain, security]
+  brain-atomic:
+    description: Local atomic write helper (tmp + fsync + rename, 0600) and path containment check; no warpline dependency.
+    type: utility
+    anchors:
+      - atomic.ts
+    tags: [feature, brain]
+  brain-leak-probe:
+    description: Reusable leak-probe harness — sentinel corpus generator, ≥100 probe queries, findLeaks — for engine, MCP handler and Platform route tests.
+    type: utility
+    anchors:
+      - leak-probe.ts
+    tags: [feature, brain, security, testing]
+  brain-health:
+    description: Read-only doctor over a BrainView — broken links (missing only; hidden targets never listed), loose notes (no inbound, no outbound; a [private] link counts as a connection), same-name notes (shared filename OR shared normalized title, union-find chained, match filename|title|both). computeHealth(view) / brainHealth(rootHash, audience).
+    type: service
+    anchors:
+      - health.ts
+    tags: [feature, brain]
+  brain-suggest:
+    description: 'Deterministic topic suggester (heuristic@1) over the OWNER view — folder names (dates/numbering/stopwords stripped), shared frontmatter tags/aliases, title/heading n-grams in ≥3 files of a folder, wikilink hubs (in-degree ≥3); merged by label, folder scope first, ≤10/batch, plain rationale. suggestions.jsonl rows + verdicts; sourceHash staleness (stale cannot be accepted; an old reject stops suppressing; only open undecided rows are stale). Skip = not now: deferred to the back of the queue, never suppressed. Singular/plural near-duplicate labels for the same target collapse (higher score wins). Non-finite limit → default. Acceptance = accept/(accept+reject). Feature flag features.yaml suggestions auto|on|off (auto → off below 60% after ≥10 decided; state.paused marks the auto-pause).'
+    type: service
+    anchors:
+      - suggest.ts
+    tags: [feature, brain, learning]
+  brain-declared:
+    description: declared.yaml — the ONLY source of Brain symbols (components + relates, human provenance). Timestamped backup (last 10) + atomic write; never inside the user folder.
+    type: service
+    anchors:
+      - declared.ts
+    tags: [feature, brain]
+  brain-crosslink:
+    description: 'Brain→code cross-links with a staleness proof — frontmatter relates of visible files + declared relates, resolved against brain.yaml workspace members'' scan-index.json (exports-filtered). valid | provably-stale (member index loaded, symbol absent) | unknown (no workspace / member missing / index unreadable incl. no category maps or zero symbols / index-outdated when a member .purpose is newer than scan-index.json / not exported). Read-only.'
+    type: service
+    anchors:
+      - crosslink.ts
+    tags: [feature, brain]
+gates:
+  brain-default-deny:
+    description: Brain files are private by default; agents see only human-shared (open) files and only when agent_access is metadata; sensitive zones are never shown by name.
+    prizes: []
+signals:
+  brain-egress:
+    description: A Brain response left the machine (MCP/cloud) — recorded append-only in egress.log.

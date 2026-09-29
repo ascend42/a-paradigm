@@ -16,6 +16,7 @@ const SECTION_ICONS: Record<string, string> = {
   memory: '🗂',
   warpline: '⋈',
   classroom: '⌂',
+  brain: '◍',
   meetings: '●',
 };
 

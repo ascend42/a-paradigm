@@ -1,0 +1,71 @@
+version: 2.0.0
+description: Platform Brain section (7.14.0) — a non-developer's notes folder, organised locally. Plain vocabulary only.
+components:
+  BrainSection:
+    description: >-
+      Brain section in the Platform UI (7.14.0, T-2026-09-29-002). Header shows
+      the folder name, last-looked time, a brain picker when there is more than
+      one, and the PrivacyBadge. Two-column body: Map + Private & Locked on the
+      left; Find, Suggestions and Health on the right. Empty state when no brain
+      exists: "Run `paradigm brain init <folder>` to get started". Never shows
+      symbol sigils, gate ids or config words — every internal term goes through
+      labels.ts. Live refresh on brain:changed (forwarded as a brain-ws
+      CustomEvent by useAgentEffects, debounced); never resets a suggestion
+      batch in progress. Paused-vs-off suggestions copy via suggestionsOffCopy.
+    type: view
+    tags: [feature, brain, platform]
+  PrivacyBadge:
+    description: >-
+      "Nothing has left this Mac" (green) or "N things shared → see what left"
+      (amber) which expands the recent egress rows (when, how many notes,
+      to whom, bytes — never file names).
+    type: component
+    tags: [feature, brain, platform, privacy]
+  BrainMapPanel:
+    description: Counts of browsable files by type, size band and last-changed band, with proportional bars.
+    type: component
+    tags: [feature, brain, platform]
+  LockedPanel:
+    description: >-
+      Private & Locked — a lock icon plus a count per locked folder and a plain
+      kind label (Health records / Money & taxes / Other people's messages /
+      Passwords & keys). Never filenames; the server only sends {folder, gate, count}.
+    type: component
+    tags: [feature, brain, platform, privacy]
+  HealthPanel:
+    description: Three collapsible buckets — Broken links, Loose notes, Same-name notes — off /api/brain/health.
+    type: component
+    tags: [feature, brain, platform]
+  SuggestionsPanel:
+    description: >-
+      Batched (≤10) suggested labels with the rationale beside each. Keyboard
+      triage: A keep, R dismiss, S skip, ↑/↓ or j/k to move (ignored while
+      typing). Each verdict POSTs /api/brain/verdict with the owner token and
+      advances to the next undecided row; shows past acceptance when known.
+    type: component
+    tags: [feature, brain, platform]
+  FindPanel:
+    description: Search box (≤200 chars) over titles, headings, locations and topics of browsable notes via /api/brain/find; shows which field matched.
+    type: component
+    tags: [feature, brain, platform]
+  brain-labels:
+    description: >-
+      labels.ts — React-free plain-language label tables (gate → kind label,
+      type/size/recency/match labels, badge text, plainText sigil stripper).
+      Tested in labels.test.ts, which also scans the section's JSX text for
+      sigils / config words.
+    type: utility
+    tags: [feature, brain, platform, ux]
+  brainStore:
+    description: >-
+      Zustand store for the Brain section (mirrors academyStore's getJson
+      pattern). load(brain?) → GET /api/brain/overview (remembered brain in
+      localStorage `paradigm-brain-selected`, try/catch wrapped; falls back to
+      the default when the remembered one is gone), then health + suggestions.
+      decide(verdict) POSTs /api/brain/verdict with credentials same-origin —
+      the owner token rides only in the HttpOnly brain_owner cookie set by
+      GET /overview (never readable from script). Overview carries banner
+      (tamper copy or null) and paused. find(q)
+      aborts the previous search and caps q at 200 chars.
+    type: state
+    tags: [feature, brain, platform, state]

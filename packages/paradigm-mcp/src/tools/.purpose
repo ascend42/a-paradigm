@@ -19,6 +19,19 @@ components:
       - feature
       - mcp
       - tool-surface
+  brain-mcp:
+    description: '7.14 paradigm_brain({op: status|search|stale}) — ON-DEMAND family listed ONLY while some brain has agent_access metadata (families.ts requires: brain-agent-access; config enable / tool_activate cannot override). Thin adapter over utils/brain: openBrainView(agent) only, metadata-only output (id, relpath, folder, kind, title, topics), headings wrapped as <untrusted_document_text>, every response through view.respond() (egress-logged, leak-checked; BrainLeakError → generic blocked). No confirm/write op; not mixed into paradigm_search. Every document-derived string (title, topics, relpath, folder, headings, cross-link relpath/target, brain name) is wrapped; stripEnvelope removes envelope-like tags case-/whitespace-/zero-width-/NFKC-tolerantly until stable; not-exported reason → unknown for agents.'
+    type: tool
+    parent: '#ToolHandlers'
+    anchors:
+      - brain.ts
+    gates: ['^brain-default-deny']
+    signals: ['!brain-egress']
+    tags:
+      - feature
+      - mcp
+      - brain
+      - security
   paradigm-retrieve:
     description: Rehydrate a large payload SPILLED to .paradigm/spill/{handle}.json (the #spill primitive) — full data on disk, bounded preview + handle inline; optional offset/limit windows for arrays
     type: tool

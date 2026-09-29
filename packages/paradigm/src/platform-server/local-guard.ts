@@ -75,14 +75,48 @@ export function isLoopbackHost(headerValue: string | undefined | null): boolean 
 }
 
 /**
+ * The Platform's OWN origin for this request: `http://<Host>` where Host is
+ * loopback AND its port is the port this socket actually accepted on. Null
+ * when the Host is not loopback or names another port.
+ */
+export function ownOrigin(req: Request): string | null {
+  const host = req.headers.host;
+  if (!host || !isLoopbackHost(host)) return null;
+  const localPort = req.socket?.localPort;
+  const m = /:(\d+)$/.exec(host.trim());
+  const hostPort = m ? Number(m[1]) : 80;
+  if (typeof localPort === 'number' && hostPort !== localPort) return null;
+  return `http://${host.trim().toLowerCase()}`;
+}
+
+/** True iff the request carries an Origin that is EXACTLY the Platform's own origin. */
+export function isOwnOrigin(req: Request, origin: string | undefined = req.headers.origin): boolean {
+  if (!origin) return false;
+  const own = ownOrigin(req);
+  return own !== null && origin.trim().toLowerCase() === own;
+}
+
+/** Paths whose data is private to the Platform page itself (no cross-origin reads, even from loopback). */
+const SAME_ORIGIN_ONLY_PREFIXES = ['/api/brain'];
+
+function isSameOriginOnlyPath(req: Request): boolean {
+  const p = (req.originalUrl || req.url || '').split('?')[0];
+  return SAME_ORIGIN_ONLY_PREFIXES.some((pre) => p === pre || p.startsWith(`${pre}/`));
+}
+
+/**
  * Reflect the request Origin into Access-Control-Allow-Origin ONLY when it is a
  * loopback origin; otherwise omit ACAO entirely. Replaces the old wildcard `*`.
  * Defense-in-depth behind the request gate — the UI is same-origin so this never
  * affects it. Also short-circuits OPTIONS preflights with 204.
+ *
+ * /api/brain/* is stricter: ACAO is set only for the Platform's own exact
+ * origin (never another loopback port), so no other local page can read it.
  */
 export function corsMiddleware(req: Request, res: Response, next: NextFunction): void {
   const origin = req.headers.origin;
-  if (origin && isLoopbackHost(origin)) {
+  const allowed = isSameOriginOnlyPath(req) ? isOwnOrigin(req, origin) : !!origin && isLoopbackHost(origin);
+  if (origin && allowed) {
     res.header('Access-Control-Allow-Origin', origin);
     res.header('Vary', 'Origin');
   }
