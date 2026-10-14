@@ -2,6 +2,25 @@ version: 2.0.0
 description: |
   Utility modules for the MCP server — loaders, caches, and data access.
 components:
+  context-freshness:
+    description: >-
+      #context-freshness (7.15.0, TD-2026-10-13-661 Phase 1): the MCP server's ProjectContext is
+      backed by premise-core #live-index. index-loader.ts loadProjectContext uses getLiveIndex;
+      ensureFreshContext (called at every getContext() choke point: tools/index.ts CallTool,
+      resources/index.ts, resources/symbols.ts) swaps index/aggregation/gateConfig atomically
+      in place when files changed on disk, shares one in-flight refresh per context and
+      debounces checks (FRESHNESS_DEBOUNCE_MS = 500). Hand edits and git checkouts become visible
+      without paradigm_reindex. tool-cache.ts bindIndex clears the result cache when the index
+      changes, with a generation counter so late computes are not cached. Removed the dead
+      ensureFreshIndex/isContextStale TTL path. integrity-checker.ts counts only declared symbols
+      as defined and reports undeclared references (refType 'undeclared', warning, danglingCount
+      in the reindex summary).
+    type: loader
+    anchors:
+      - index-loader.ts
+      - tool-cache.ts
+      - integrity-checker.ts
+    tags: [live-index, freshness, integrity]
   symphony-loader:
     description: 'The Score: file-based agent messaging — agent identity, JSONL parts, threads, file pipeline, trust config. ensureMailDirs renamed to ensureScoreDirs (deprecated alias retained). Ring 1 content filtering seam: isRing1Content, recordRing1Interception (audit trail), readOutboxRaw (unfiltered, relay-internal), readOutbox (filtered). SymphonyMessage.contentType field added.'
     type: loader

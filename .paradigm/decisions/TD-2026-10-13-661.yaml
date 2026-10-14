@@ -1,0 +1,92 @@
+id: TD-2026-10-13-661
+timestamp: '2026-10-13T19:31:17.855Z'
+title: 'Symbol integrity release: fix identity, freshness and edges in place, no rewrite'
+decision: >-
+  Run a three-phase "symbol integrity" arc on the symbol/mapping layer, and do not rewrite it.
+
+  Phase 1 (7.15.x, correctness):
+
+  - Key the index by the canonical symbol and merge multi-source declarations into one entry.
+
+  - Reference-only stubs become declared:false and are flagged as dangling.
+
+  - The MCP ctx.index moves onto getLiveIndex, with a stat check on each call.
+
+  - Fix paradigm_reindex rebuilding twice from a stale aggregation.
+
+  - Detect within-category duplicate IDs, and normalize lookups by prefix and case.
+
+  - Each bug gets a regression test first.
+
+  Phase 2 (7.16, one model):
+
+  - A single ripple engine in premise-core; MCP and CLI become skins.
+
+  - Field-aware typed edges (gated-by / in-flow / emits / child-of / mentions); ripple excludes mentions by default.
+
+  - Optional renamed-from aliases.
+
+  Phase 3 (7.16, lean):
+
+  - The sql.js aspect DB stays in memory per process, and reads no longer export.
+
+  - Debounced, incremental rebuildStaticFiles.
+
+  - Collapse the overlapping scan-index, navigator and aspect derivatives.
+
+  - Delete dead paths: ensureFreshIndex/isContextStale, the aspect search-learning tables, heatmap, graph.ts
+  loadScanIndex.
+
+  - Investigate why paradigm doctor takes 75s.
+
+  Unchanged: .purpose and portal.yaml stay authored truth, the five prefixes stay, the 7.13 live index stays (wired in,
+  not replaced), and there are no embeddings (TD-2026-09-29-204).
+rationale: >-
+  A three-agent team review (architect, reliability reviewer, efficiency/usage) found the foundations sound: a
+  deterministic, .purpose-declared index that cold-parses in ~125ms. The defects are in identity, edges and freshness,
+  and several give silently wrong answers.
+
+  Two findings were verified independently by reproduction and code read:
+
+  (1) ripple reports 0 dependents and "safe to proceed" for portal gates referenced from .purpose. A purpose-ref stub is
+  created first, resolveReferences writes referencedBy onto the portal entry (Map, last wins), and getSymbol returns the
+  stub (linear scan, first wins).
+
+  (2) the MCP server serves its startup snapshot until an MCP write or reindex. The 7.13 getLiveIndex is consumed only
+  by graph-slice.
+
+  Usage logs show related, graph ops, retrieve and the aspect learning loop have zero use. A push-retrieval idea (from
+  an external knowledge-graph reel) is deferred until after Phases 1–2, because pushing from the current index would
+  inject stale or wrong context.
+participants:
+  - id: ascend
+    role: human
+    stance: supported
+  - id: architect
+    role: agent
+    stance: proposed
+  - id: reviewer
+    role: agent
+    stance: supported
+  - id: claude
+    role: agent
+    stance: proposed
+alternatives_considered:
+  - option: Full rewrite to a DB-first typed-table knowledge graph (Tier-1 KG pitch)
+    rejected_because: Abandons .purpose as authored truth; the parse is cheap; the defects are local to identity/edges/freshness
+  - option: Add embeddings/semantic search
+    rejected_because: Rejected in TD-2026-09-29-204; abandons the determinism moat
+  - option: Push-retrieval hook now
+    rejected_because: Would inject stale/wrong context until identity and freshness are fixed
+symbols_affected:
+  - '#premise-core'
+  - '#symbol-index'
+  - '#live-index'
+  - '#aspect-graph'
+  - '#paradigm-mcp'
+  - '#ripple'
+status: active
+tags:
+  - symbol-integrity
+  - architecture
+  - reliability

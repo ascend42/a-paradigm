@@ -2,8 +2,9 @@
  * Integrity Checker — Central utility for Paradigm symbol integrity validation
  *
  * Checks:
- *   1. Broken references (parent, flow, component refs to non-existent symbols)
- *   2. Duplicate symbol IDs across .purpose files
+ *   1. Broken references (parent, flow, component refs to non-existent symbols,
+ *      plus 'undeclared' — symbols only ever referenced, never declared)
+ *   2. Duplicate symbol declarations (incl. within-category, e.g. two .purpose files)
  *   3. Orphaned symbols (zero cross-references)
  *   4. Missing anchor files (for all symbol types, not just aspects)
  *   5. Anchor out-of-bounds (line ranges exceeding file length)
@@ -13,7 +14,13 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import type { AggregationResult, SymbolEntry, CodeAnchor } from '@a-company/premise-core';
+import {
+  findDuplicateDeclarations,
+  findDanglingReferences,
+  type AggregationResult,
+  type SymbolEntry,
+  type CodeAnchor,
+} from '@a-company/premise-core';
 
 // ============================================================================
 // Types
@@ -24,7 +31,8 @@ export interface IntegrityReport {
     from: string;
     to: string;
     file: string;
-    refType: 'parent' | 'flow' | 'component' | 'signal' | 'gate';
+    /** 'undeclared' = referenced but never declared anywhere (warning severity). */
+    refType: 'parent' | 'flow' | 'component' | 'signal' | 'gate' | 'undeclared';
   }>;
   duplicateSymbols: Array<{
     symbol: string;
@@ -105,7 +113,8 @@ function findBrokenReferences(
   symbols: SymbolEntry[],
 ): IntegrityReport['brokenReferences'] {
   const broken: IntegrityReport['brokenReferences'] = [];
-  const definedIds = new Set(symbols.map(s => s.symbol));
+  // Reference stubs (declared === false) are indexed but not DEFINED.
+  const definedIds = new Set(symbols.filter(s => s.declared !== false).map(s => s.symbol));
 
   for (const sym of symbols) {
     // Check parentSymbol reference
@@ -189,7 +198,22 @@ function findBrokenReferences(
     }
   }
 
-  // Deduplicate
+  // Undeclared references: a symbol that is referenced (e.g. a component's
+  // `gates: [^ghost]`) but declared nowhere. Warning severity.
+  const byName = new Map(symbols.map(s => [s.symbol, s]));
+  for (const dangling of findDanglingReferences(symbols)) {
+    for (const referrer of dangling.referencedBy) {
+      broken.push({
+        from: referrer,
+        to: dangling.symbol,
+        file: byName.get(referrer)?.filePath ?? dangling.filePath,
+        refType: 'undeclared',
+      });
+    }
+  }
+
+  // Deduplicate — first push wins, so an explicit flow/gate/parent refType
+  // is kept over the generic 'undeclared' for the same edge.
   const seen = new Set<string>();
   return broken.filter(b => {
     const key = `${b.from}->${b.to}@${b.file}`;
@@ -224,32 +248,9 @@ function normalizeSymbolRef(ref: string): string | null {
 function findDuplicateSymbols(
   symbols: SymbolEntry[],
 ): IntegrityReport['duplicateSymbols'] {
-  const bySymbol = new Map<string, Array<{ file: string; source: string }>>();
-
-  for (const sym of symbols) {
-    const entries = bySymbol.get(sym.symbol) || [];
-    const existing = entries.find(e => e.file === sym.filePath);
-    if (!existing) {
-      entries.push({ file: sym.filePath, source: sym.source });
-    }
-    bySymbol.set(sym.symbol, entries);
-  }
-
-  const duplicates: IntegrityReport['duplicateSymbols'] = [];
-  for (const [symbol, entries] of bySymbol) {
-    if (entries.length <= 1) continue;
-
-    // Don't flag .purpose + portal.yaml overlap for the same package —
-    // gates are expected to be declared in both files.
-    if (entries.length === 2) {
-      const sources = entries.map(e => e.source).sort();
-      if (sources[0] === 'portal' && sources[1] === 'purpose') continue;
-    }
-
-    duplicates.push({ symbol, files: entries.map(e => e.file) });
-  }
-
-  return duplicates;
+  // The aggregator merges every symbol to one canonical entry, so duplicates
+  // are read from its `sources` (portal.yaml + .purpose overlap is exempt).
+  return findDuplicateDeclarations(symbols);
 }
 
 // ============================================================================
@@ -262,6 +263,8 @@ function findOrphanedSymbols(
   const orphaned: IntegrityReport['orphanedSymbols'] = [];
 
   for (const sym of symbols) {
+    // Undeclared references are reported as broken references, not orphans.
+    if (sym.declared === false) continue;
     // True orphan = nothing references it AND it references nothing.
     // Symbols with outgoing refs but no incoming refs are tree roots
     // (features, top-level groupings) — structurally expected, not orphans.

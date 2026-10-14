@@ -1,0 +1,49 @@
+version: 1
+read: "The control room for an agent armada's source control: you and a dev team check in a few times a day to make the calls machines can't; calm, exact, a dark loom register where violet only ever means 'git is blind here'."
+source_of_truth: "docs/specs/warpline-design-system.md (tokens, type, components, the three system rules) is preserved as-is; this file records console decisions on top of it."
+dials: { layout: 3, motion: 4, density: 7, from: { session: 2026-10-14-warpline-console, board: intent-dials } }
+hierarchy:
+  levels: [org-dashboard, repo]
+  org: "repo cards with visibility, activity and needs-you counts; cross-repo needs-you list"
+  repo_tabs: [Inbox, Floor, Code, Offers, Tapestry, Runs, Releases, Fleet, Settings]
+  scope: v1
+  from: { session: 2026-10-14-warpline-console, board: repos-and-nav, note: "too generic of a style ... form and function i like so we can go with it for v1" }
+structure:
+  home: inbox
+  nav: [Inbox, Floor, Offers, Tapestry, Symbols, Fleet, Calibration]
+  live_band: { placement: above-inbox, sizes: [hidden, compact, expanded], default: compact }
+  floor: { section: true, same_motion_rule: true }
+  from: { session: 2026-10-14-warpline-console, board: console-structure }
+rules:
+  - id: motion-on-events-only
+    rule: "Live surfaces (band, Floor) move only when a pick is admitted, a KNOT forms, or a KNOT is resolved; no idle or ambient animation. Reduced motion: final state, no travel."
+    from: { session: 2026-10-14-warpline-console, board: console-structure, note: "only reall animate when changes come in and they get rectified" }
+  - id: live-band-resizable
+    rule: "The live band can be hidden, compact, or expanded (labelled lanes); the choice persists per viewer."
+    from: { session: 2026-10-14-warpline-console, board: console-structure, note: "maybe ways to makek the live larger or smaller" }
+  - id: decide-in-split-view
+    rule: "Decisions open in a split view: the ranked queue stays on the left, the selected KNOT or HELD item on the right; sealing advances to the next open item."
+    from: { session: 2026-10-14-warpline-console, board: decision-surface }
+  - id: roles-by-domain
+    rule: "Owner decides everything incl. gate/auth contracts; Developer decides KNOTs only in domains they own, others read-only with a stated reason; Observer is read-only; agents never sign in to the console (MCP/CLI only, visible on the Floor). Every decision requires a human key."
+    from: { session: 2026-10-14-warpline-console, board: access }
+  - id: one-meaning-per-hue
+    rule: "No new hue for human states. HELD = linen-50 outline + human mark; human principal = filled linen chip with mark; agent principal = outlined linen-400 chip. Amber stays branch A, teal branch B, violet git-blind conflict."
+    from: { session: 2026-10-14-warpline-console, board: human-states }
+  - id: density-control-room
+    rule: "Card padding 10x14, row gap 6, tally padding 10x14, main padding 18x20 (all on the 4px scale)."
+    from: { session: 2026-10-14-warpline-console, board: intent-dials }
+preserve:
+  - { what: system-rules, value: "seam violet only where git is blind; restraint is the default; no count animation (warpline-design-system.md:19-32)" }
+  - { what: tokens, value: "ink/linen/warp/weft/seam/clean/cut + Fraunces/Inter/JetBrains Mono" }
+  - { what: nomenclature, value: "PICK, WEAVE, KNOT, DECIDE, SELVAGE, TAPESTRY, OFFER, ENDORSEMENT (warpline-flows.md section 1)" }
+  - { what: api-routes, value: "/api/warpline/* and WS warpline:* events" }
+decisions:
+  - session: 2026-10-14-warpline-console
+    board: console-structure
+    choice: { home: inbox-first, live: "band + Floor section" }
+  - { session: 2026-10-14-warpline-console, board: decision-surface, choice: split }
+  - { session: 2026-10-14-warpline-console, board: access, choice: roles-by-domain }
+  - { session: 2026-10-14-warpline-console, board: intent-dials, choice: control-room }
+  - { session: 2026-10-14-warpline-console, board: human-states, choice: neutral-mark }
+  - { session: 2026-10-14-warpline-console, board: repos-and-nav, choice: two-levels, scope: v1 }

@@ -5,6 +5,33 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.15.0] — 2026-10-14
+
+**Symbol integrity, Phase 1** (T-2026-10-13-001, TD-2026-10-13-661). A three-agent review of the symbol layer found the deterministic core sound, but found that identity and freshness gave silently wrong answers. The worst case: `paradigm_ripple` reported **0 dependents and "safe to proceed" for a `portal.yaml` gate used by a `.purpose` component** (reproduced). This release fixes correctness only. Typed edges, one ripple engine and aliases are Phase 2 (T-2026-10-13-002); efficiency and cleanup are Phase 3 (T-2026-10-13-003).
+
+### Fixed
+- **One canonical entry per symbol** (#symbol-integrity, premise-core). Declarations of the same symbol from `.purpose`, `portal.yaml` and `.premise` now merge into one entry: portal wins for gates, and a real declaration beats a reference stub. All contributors are listed in `SymbolEntry.sources`. References are resolved over every contributor's data, so a merge never drops an edge. Portal gates now also reference the prize signals they award.
+- **`getSymbol` is O(1) and normalized.** The new `resolveSymbol` tries an exact match first, then case-insensitive, then an unambiguous bare name. An ambiguous bare name returns candidates, and `paradigm_ripple` reports `Ambiguous symbol` with the list. Ripple, `paradigm_related`, graph slices and the CLI ripple all traverse from the canonical symbol.
+- **Dangling references are reported.** Reference-only stubs carry `declared: false`. The integrity checker no longer counts them as defined and reports them as `undeclared` broken references. These are warnings: they appear in `danglingCount` but not in `issues`.
+- **Duplicate IDs are surfaced.** A component defined in two `.purpose` files used to lose one definition silently; it now appears in `duplicateSymbols` with both files. A portal gate plus a `.purpose` declaration is still exempt.
+- **The MCP server sees hand edits** (#context-freshness). The context is backed by the live index, and every tool call checks for changes on disk (debounced to 500 ms) and swaps index, aggregation and gate config atomically. Edits made with Edit/Write or by `git checkout` show up without `paradigm_reindex`. The search cache is cleared whenever the index changes.
+- **`paradigm_reindex` rebuilds once, from fresh data.** It used to write static files from the stale snapshot and then rebuild again in the background. Hints now say `paradigm_reindex` instead of `paradigm scan`.
+
+### Removed
+- The dead `ensureFreshIndex`/`isContextStale` 30 s TTL path (`index-loader.ts`), which had no callers.
+
+### Packages
+- `@a-company/paradigm` 7.15.0
+- `@a-company/paradigm-mcp` 7.15.0
+- plugin 7.15.0
+- `@a-company/premise-core` 3.12.0
+- `@a-company/purpose-core` 3.7.0 (an optional `onShadow` callback on the `extract*` functions)
+- `@a-company/warpline` 0.2.2 (`injectCodeUnits` registers through `addSymbolEntry`). No Warpline golden or hash changed.
+
+### Tests
+- premise-core 125, paradigm-mcp 762, paradigm 722 and purpose-core 11 pass.
+- Warpline passes 1329–1330 of 1333. The 1–2 failures are heavy real-repo tests timing out at 60 s under machine load; they fail identically without this change.
+
 ## [7.14.0] — 2026-09-29
 
 **Paradigm Brain MVP** (Phase 5 of the skills arc, T-2026-09-29-002, TD-2026-09-29-204). The Brain gives a personal folder (notes, an Obsidian vault, a folder of mixed files) structure without touching the folder. The index, labels and logs live in `~/.paradigm/brains/<sha256(realpath)[0:16]>/`, and nothing is ever written inside the folder. Everything is private by default. Agents see only files a person explicitly shares, and only after that person turns agent access on.

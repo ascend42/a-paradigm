@@ -220,3 +220,6 @@ packages/warpline/probe-*/
 
 # Paradigm migration backups (local-only originals)
 .paradigm/backups/
+
+# Atelier reference renders
+.atelier/sessions/*/refs/

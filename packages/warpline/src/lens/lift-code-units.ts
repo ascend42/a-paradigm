@@ -39,6 +39,7 @@
 
 import { createHash } from 'node:crypto';
 import {
+  addSymbolEntry,
   type SymbolEntry,
   type SymbolIndex,
 } from '@a-company/premise-core';
@@ -162,9 +163,10 @@ function toSymbolEntry(unit: CodeUnit): SymbolEntry {
 
 /**
  * Splice synthetic code-unit entries into the live `SymbolIndex` BEFORE
- * `computeEssences` runs (spec §2). Mirrors `buildSymbolIndex`'s wiring: the
- * main `entries` map (keyed by id) is what `getSymbol`/`getAllSymbols` read;
- * `byType`/`bySource` are kept consistent for any downstream consumer.
+ * `computeEssences` runs (spec §2). Goes through premise-core's
+ * `addSymbolEntry`, which keeps every secondary map consistent — `entries`
+ * (keyed by id), `byType`/`bySource`, and the `bySymbol`/`byNameLower` maps
+ * that `getSymbol` reads (Symbol Integrity Phase 1).
  *
  * Idempotent on the symbol key: a code-unit symbol already present is
  * overwritten (last-writer-wins on the deterministic id), so re-injecting the
@@ -172,26 +174,6 @@ function toSymbolEntry(unit: CodeUnit): SymbolEntry {
  */
 export function injectCodeUnits(index: SymbolIndex, units: CodeUnit[]): void {
   for (const unit of units) {
-    const entry = toSymbolEntry(unit);
-
-    index.entries.set(entry.id, entry);
-
-    const byType = index.byType.get(entry.type);
-    if (byType) {
-      const i = byType.findIndex((e) => e.id === entry.id);
-      if (i >= 0) byType[i] = entry;
-      else byType.push(entry);
-    } else {
-      index.byType.set(entry.type, [entry]);
-    }
-
-    const bySource = index.bySource.get(entry.source);
-    if (bySource) {
-      const i = bySource.findIndex((e) => e.id === entry.id);
-      if (i >= 0) bySource[i] = entry;
-      else bySource.push(entry);
-    } else {
-      index.bySource.set(entry.source, [entry]);
-    }
+    addSymbolEntry(index, toSymbolEntry(unit));
   }
 }

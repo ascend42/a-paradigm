@@ -1,0 +1,101 @@
+id: 2026-10-14-warpline-console
+verb: direct
+scope: "Warpline Console, the 'GitHub of Warpline': Judgment Console inbox, KNOT detail and resolve, OFFER/admission detail, Tapestry history, per-symbol meaning page, instances and principals, grades and calibration, plus the demo experience. Grows from the built Platform section (packages/paradigm/platform-ui/src/sections/warpline/)."
+depth: deep
+surface: terminal
+mode: preserve
+read: "The control room for an agent armada's source control: you and a dev team check in a few times a day to make the calls machines can't; calm, exact, a dark loom register where violet only ever means 'git is blind here'."
+audit:
+  dials: { layout: 3, motion: 3, density: 6 }
+  keep:
+    - "Three system rules (docs/specs/warpline-design-system.md:19-32): seam violet only where git is blind; restraint is the default; no count animation"
+    - "Token set: ink/linen ground, warp amber = branch A, weft teal = branch B, seam violet = conflict, clean = git's trap chip only"
+    - "Type pairing: Fraunces = meaning, Inter = chrome, JetBrains Mono = bytes"
+    - "Signature motion (seam pulse, knot cinch, dangle drift), gated on reduced motion (styles/warpline.css:190-334)"
+    - "Built components: chip, verdict card, meaning-vs-bytes split, 2x2 matrix, knot, dangle, ledger row, drill-over"
+  retire:
+    - "Viewer binds OracleRecord, one era stale; the console must bind KnotPayload / verdict JSON (forge spec §3)"
+  load_bearing:
+    - "/api/warpline/* routes (packages/paradigm/src/platform-server/routes/warpline.ts)"
+    - "WS event warpline:oracle-record-appended"
+    - "Nomenclature locked by flows §1: PICK, WEAVE, KNOT, DECIDE, SELVAGE, TAPESTRY, OFFER, ENDORSEMENT"
+  gates:
+    - "Roadmap hard stop: no console build begins while F4 (cold-agent legibility) is unmeasured; design is allowed, build is gated"
+    - "Forge spec G4: no forge-private storage; every screen field maps to a fabric record"
+started: 2026-10-14T00:00:00Z
+boards:
+  - id: console-structure
+    question: "How should the Warpline Console be organized at the top level?"
+    options:
+      - { id: inbox-first, label: "Inbox-first", recommended: true, why: "The human's job is deciding; forge spec section 2" }
+      - { id: repo-first, label: "Repo-first (GitHub-shaped)" }
+      - { id: live-floor, label: "Live floor (fleet-first)" }
+      - { id: inbox-plus-live-band, label: "Mix: Inbox home + live band + Floor section", composed_from: [inbox-first, live-floor] }
+    references_rendered: [inbox-first, repo-first, live-floor, inbox-plus-live-band]
+    decision:
+      kind: mix
+      choice: { home: inbox-first, live: live-floor, placement: "band above Inbox + Floor nav section" }
+      decided_by: creator
+      notes:
+        - "this is hard for me but is it mainly thinking through which to have as the iniital view? because i really like the live view but to only reall animate when changes come in and they get rectified etc but not the only view"
+        - "maybe ways to makek the live larger or smaller but overall lock it"
+  - id: decision-surface
+    question: "Where does a human actually decide a KNOT?"
+    options:
+      - { id: split, label: "Split view", recommended: true, why: "Queue stays visible; clear several in a row" }
+      - { id: full-page, label: "Full page" }
+      - { id: focus-mode, label: "Focus mode" }
+    references_rendered: [split, full-page, focus-mode]
+    decision: { kind: pick, choice: split, decided_by: creator, notes: [] }
+  - id: access
+    question: "Who sees and does what in the console?"
+    options:
+      - { id: roles-by-domain, label: "Roles by domain", recommended: true, why: "Aegis: deciding requires a human key in the domain's owner set" }
+      - { id: one-role, label: "One human role" }
+      - { id: role-led, label: "Role-led views" }
+    references_rendered: [roles-by-domain, one-role, role-led]
+    decision: { kind: pick, choice: roles-by-domain, decided_by: creator, notes: [] }
+  - id: intent-dials
+    question: "Where should the console sit on layout, motion and density?"
+    options:
+      - { id: control-room, label: "Control room 3-4-7", recommended: true, why: "Dense triage fits one screen; events have presence; creator leans livelier for demo-facing tools" }
+      - { id: calm-ledger, label: "Calm ledger 2-2-5" }
+      - { id: showroom, label: "Showroom 4-6-6" }
+    references_rendered: [control-room, calm-ledger, showroom]
+    decision: { kind: pick, choice: control-room, decided_by: creator, notes: [] }
+  - id: human-states
+    question: "How should 'needs a human' (HELD) and human vs agent principals look?"
+    options:
+      - { id: neutral-mark, label: "Neutral + human mark", recommended: true, why: "No new hue; every colour keeps one meaning" }
+      - { id: rose-hue, label: "New human hue #E58FA8" }
+      - { id: amber-held, label: "Amber for HELD", tells: ["semantic-color-collision: amber = branch A"] }
+    references_rendered: [neutral-mark, rose-hue, amber-held]
+    decision: { kind: pick, choice: neutral-mark, decided_by: creator, notes: [] }
+  - id: repos-and-nav
+    question: "With multiple repos and the new Code, Runs, Releases and Settings sections, how is the console organized?"
+    options:
+      - { id: switcher-grouped, label: "Switcher + grouped nav", recommended: true }
+      - { id: two-levels, label: "Two levels (org dashboard, then repo tabs)" }
+      - { id: cross-repo, label: "One cross-repo console" }
+    references_rendered: [switcher-grouped, two-levels, cross-repo]
+    decision:
+      kind: pick
+      choice: two-levels
+      decided_by: creator
+      scope: v1
+      notes:
+        - "generally i like two levels hierarchically but i think it's too generic of a style and design but form and function i like so we can go with it for v1"
+direction:
+  render: [refs/direction.html, refs/repos.html#two-levels]
+  approved: "starting version"
+  notes:
+    - "this is a great starting functional version but another aspect to this tool whenever it's deployed as a real source control is that we do need support for CI CD as well as other basic github related functions"
+  conflicts:
+    - "docs/specs/warpline-forge.md section 5 non-goals: no CI runner, no code-browsing surface beyond verdicts, no prose issue tracker (TD-151 retired only the repo-hosting freeze)"
+open_items:
+  - "v2 look: the two-level org/repo shell reads as generic GitHub; give it Warpline's own character (creator note on repos-and-nav)"
+  - "Failure colour for failed checks: every hue already has a meaning; needs its own board"
+  - "Offer review threads deferred (TD-2026-10-14-551)"
+closed: 2026-10-14
+summary: "Console direction approved as the starting version: org dashboard -> repo tabs (v1); inside a repo, Inbox home with a resizable live band (motion only on events) plus a Floor section; split-view decisions; roles by domain; Control room dials 3-4-7; neutral human states; Code, Runs, Releases and Settings pages per TD-2026-10-14-551."
+summary: null

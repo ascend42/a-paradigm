@@ -13,6 +13,10 @@ interface CacheEntry<T> {
 export class ToolCache {
   private cache = new Map<string, CacheEntry<unknown>>();
   private readonly ttlMs: number;
+  /** The symbol index cached results were computed against (see bindIndex). */
+  private boundIndex: object | null = null;
+  /** Bumped by clear(); a compute that straddles a clear must not repopulate. */
+  private generation = 0;
 
   constructor(ttlMs: number = 30_000) {
     this.ttlMs = ttlMs;
@@ -27,8 +31,13 @@ export class ToolCache {
       return existing.data as T;
     }
 
+    // A compute started against one index/generation may finish after
+    // bindIndex()/clear() moved on — return its result, but don't cache it.
+    const generation = this.generation;
     const data = await compute();
-    this.cache.set(key, { data, createdAt: Date.now() });
+    if (generation === this.generation) {
+      this.cache.set(key, { data, createdAt: Date.now() });
+    }
     return data;
   }
 
@@ -55,6 +64,19 @@ export class ToolCache {
    */
   clear(): void {
     this.cache.clear();
+    this.generation++;
+  }
+
+  /**
+   * Tie cached results to one symbol index. When the index object changes
+   * (the live index rebuilt after a file edit), every cached result may be
+   * stale, so the whole cache is dropped.
+   */
+  bindIndex(index: object): void {
+    if (index !== this.boundIndex) {
+      this.clear();
+      this.boundIndex = index;
+    }
   }
 
   /**

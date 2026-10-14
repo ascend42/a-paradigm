@@ -1,0 +1,53 @@
+id: L-2026-10-13-ascend-193148-001
+type: review
+timestamp: '2026-10-13T19:31:48.980Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Symbol layer team review: sound core, silent identity/freshness bugs → symbol integrity arc'
+summary: 'The founder asked whether the symbol and mapping layer needs a large-scale upgrade. Three agents reviewed it in parallel (architect, reliability reviewer, efficiency/usage). Verdict: no rewrite. The foundations are deterministic and cheap (~125ms cold parse, 1,377 symbols), but identity, edges and freshness carry silent-wrong-answer bugs. Two were reproduced and verified by the lead. This led to TD-2026-10-13-661 and tasks T-2026-10-13-001/002/003. The session started from an external "Tier-1 knowledge graph / push not pull" reel, audited in neurons and discarded; push retrieval is deferred until after Phases 1–2.'
+symbols_touched:
+  - '#premise-core'
+  - '#symbol-index'
+  - '#live-index'
+  - '#aspect-graph'
+  - '#paradigm-mcp'
+  - '#ripple'
+  - '#graph-slice'
+decisions:
+  - id: TD-2026-10-13-661
+    decision: Three-phase symbol integrity arc; no rewrite
+    rationale: Defects are local to identity/edges/freshness; the deterministic .purpose foundation is the moat
+learnings:
+  - 'VERIFIED: paradigm_ripple reports 0 dependents + ''safe to proceed'' for a portal.yaml gate referenced via a .purpose gates: list. aggregateFromDirectory emits both purpose-ref-gate-X (stub, first) and gate-X (portal). resolveReferences writes referencedBy onto the last (portal) entry; getSymbol returns the first (stub). Repro: a temp project with portal.yaml `gates: {authenticated: ...}` (gates are a MAP, not a list) plus a component `gates: [^authenticated]`.'
+  - 'VERIFIED: the MCP server''s ctx.index is a startup snapshot, refreshed only by purpose-portal writes and paradigm_reindex. getLiveIndex (7.13) has one consumer: graph-slice. Hand edits and git checkouts are invisible to search, ripple and navigate.'
+  - 'Reported by the reviewer, unreproduced: stubs mask dangling refs in the integrity checker; within-category duplicate IDs collapse silently (last wins); lookups are prefix/case-sensitive while search lowercases; several paths strip prefixes (#auth == ^auth); paradigm_reindex runs rebuildStaticFiles on the stale aggregation, then rebuilds again in the background.'
+  - Edges are untyped and come from a regex over JSON.stringify(entry.data), so prose mentions become dependencies. There are three ripple implementations (MCP BFS 3-5, CLI 1-hop with a dead --depth, aspect-graph BFS) and they disagree.
+  - 'Usage (216 sessions): related, graph ops and retrieve have 0 calls; the aspect search_log/search_weights/anchor_history tables have 0 rows; ripple has only 4 calls. Doctor takes 74.7s wall. 107/121 .purpose files parse, with 44 schema errors in 2 Conductor files.'
+  - 'Don''t: no embeddings (TD-2026-09-29-204), no DB-first authoring, keep the five prefixes, wire the live index in rather than replace it.'
+verification:
+  status: partial
+  details:
+    reproduced:
+      - gate-ripple-zero-dependents
+      - mcp-stale-snapshot (code read)
+    unreproduced:
+      - dangling-stub masking
+      - dup-id collapse
+      - reindex double rebuild
+tags:
+  - symbol-integrity
+  - team-review
+  - reliability
+  - efficiency
+linked_lore:
+  - L-2026-10-13-ascend-193117-741
+linked_tasks:
+  - T-2026-10-13-001
+  - T-2026-10-13-002
+  - T-2026-10-13-003
+git_context:
+  ref: bf68f0c685eb37ec1b636f70c539fbb13efd0b73
+  branch: feat/skills-arc
+  dirty: true

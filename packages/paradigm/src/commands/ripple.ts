@@ -123,16 +123,18 @@ function categorize(symbols: SymbolEntry[]): {
 function analyzeRipple(symbol: string, index: SymbolIndex): RippleResult | null {
   const entry = getSymbol(index, symbol);
   if (!entry) return null;
+  // Traverse on the canonical symbol — "Foo" / "foo" resolve to "#foo".
+  const canonical = entry.symbol;
   
   // Get direct relationships
-  const referencesTo = getReferencesTo(index, symbol);   // What references this
-  const referencesFrom = getReferencesFrom(index, symbol); // What this references
+  const referencesTo = getReferencesTo(index, canonical);   // What references this
+  const referencesFrom = getReferencesFrom(index, canonical); // What this references
   
   const toCategorized = categorize(referencesTo);
   const fromCategorized = categorize(referencesFrom);
   
   // Find flow memberships
-  const partOfFlows = findFlowMembership(symbol, index);
+  const partOfFlows = findFlowMembership(canonical, index);
   
   // Suggest test path
   const { testPath, testCommand } = suggestTestPath(entry.filePath);
@@ -209,7 +211,7 @@ export async function rippleCommand(symbolArg: string, targetPath?: string, opti
 
     spinner?.succeed('Impact analyzed');
     tracker.success('Ripple analysis complete', { 
-      symbol: symbolArg, 
+      symbol: ripple.symbol, 
       requires: ripple.requires.length, 
       requiredBy: ripple.requiredBy.length 
     });

@@ -390,12 +390,17 @@ function nodeLabel(symbol: string, entry?: SymbolEntry): string {
  */
 function normalizeSymbol(input: string, graph: LiveGraph): string | null {
   if (!input) return null;
-  if (getSymbol(graph.index, input)) return input;
+  // Canonical form (case / bare-name tolerant); the prefix loop below is the
+  // fallback for bare names resolveSymbol finds ambiguous.
+  const entry = getSymbol(graph.index, input);
+  if (entry) return entry.symbol;
 
   const bare = stripPrefix(input);
   for (const prefix of ['#', '$', '$$', '^', '!', '~']) {
-    const candidate = `${prefix}${bare}`;
-    if (getSymbol(graph.index, candidate)) return candidate;
+    // Return the RESOLVED symbol, not the guess — "#Foo" resolves to "#foo",
+    // and the BFS must seed on the canonical key.
+    const hit = getSymbol(graph.index, `${prefix}${bare}`);
+    if (hit) return hit.symbol;
   }
   return null;
 }

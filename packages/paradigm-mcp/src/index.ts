@@ -64,14 +64,19 @@ function getContext(): ProjectContext {
  * Reload project context after writes to .purpose or portal.yaml.
  * Called by purpose-portal tools after every successful mutation.
  * Also rebuilds static index files (scan-index.json, navigator.yaml, flow-index.json)
- * in the background so they stay in sync.
+ * in the background so they stay in sync — unless `rebuildStatic: false`
+ * (paradigm_reindex rebuilds them itself, once, from the returned context).
  */
-async function reloadContext(): Promise<void> {
-  context = await loadProjectContext(projectDir);
-  // Rebuild static files in background (non-blocking)
-  rebuildStaticFiles(projectDir, context).catch((err) => {
-    log.component('#paradigm-mcp').warn('Background reindex failed', { error: (err as Error).message });
-  });
+async function reloadContext(opts?: { rebuildStatic?: boolean }): Promise<ProjectContext> {
+  const fresh = await loadProjectContext(projectDir);
+  context = fresh;
+  if (opts?.rebuildStatic !== false) {
+    // Rebuild static files in background (non-blocking)
+    rebuildStaticFiles(projectDir, fresh).catch((err) => {
+      log.component('#paradigm-mcp').warn('Background reindex failed', { error: (err as Error).message });
+    });
+  }
+  return fresh;
 }
 
 /**

@@ -1,0 +1,67 @@
+id: TD-2026-10-14-551
+timestamp: '2026-10-14T05:37:31.420Z'
+title: >-
+  Warpline server ships as a real source-control host: built-in CI runner, code browser, refs/releases,
+  settings/webhooks, collaborators + public/private
+decision: >-
+  The first real Warpline server release includes these GitHub basics:
+
+  - A BUILT-IN CI runner from the start: the server schedules jobs in containers from a pipeline file. This replaces
+  "bring your own CI only".
+
+  - A code browser: files at any selvage or Offer state, with blame and meaning-vs-bytes honesty labels.
+
+  - Branches, tags and releases (BOLTs).
+
+  - Repo settings and outbound webhooks.
+
+  - Collaborators for access, and public vs private repositories.
+
+
+  This amends docs/specs/warpline-forge.md section 5. It retires the "no CI runner" and "no code-browsing surface"
+  non-goals. TD-2026-07-17-151 had already retired the repo-hosting freeze. "No prose-first issue tracker" stays. Offer
+  review threads are deferred: decisions keep their recorded reasons.
+
+
+  The console design direction (Atelier session 2026-10-14-warpline-console) is approved as the starting version:
+
+  - Inbox home with a resizable live band, plus a Floor section.
+
+  - KNOT decisions in a split view.
+
+  - Roles by domain.
+
+  - Control room dials (3-4-7).
+
+  - Neutral human states.
+rationale: >-
+  The founder wants Warpline deployed as a real source-control system for an armada of agents plus a human team, and
+  that needs CI/CD and basic forge functions. The founder chose a built-in runner over the staged bring-your-own-CI
+  recommendation. This makes the runner a security-critical subsystem (job isolation, secrets, untrusted code from
+  agents). It must be designed with Aegis before it is built.
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+  - id: luna
+    role: agent
+    stance: neutral
+  - id: claude
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: Bring-your-own CI, staged (witnesses first, small built-in runner later)
+    rejected_because: Founder chose built-in runner from the start
+  - option: External CI only, permanently (spec as written)
+    rejected_because: A real source-control host needs CI/CD
+symbols_affected:
+  - '#warpline'
+  - '#warpline-routes'
+  - '#warplined'
+status: active
+tags:
+  - warpline
+  - forge
+  - ci-cd
+  - atelier
+  - founder-direction
