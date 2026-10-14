@@ -201,6 +201,9 @@ export function ensureFreshContext(ctx: ProjectContext): Promise<ProjectContext>
       symbols: live.result.symbols.length,
       parsedFiles: live.stats.parsedFiles,
     });
+    // Keep flow-index.json / navigator.yaml / scan-index.json in step with
+    // the index tools now see (fire-and-forget, coalesced per root).
+    scheduleStaticRebuild(ctx);
     return ctx;
   })();
   inflightRefresh.set(ctx, refresh);
@@ -209,6 +212,65 @@ export function ensureFreshContext(ctx: ProjectContext): Promise<ProjectContext>
   };
   refresh.then(clear, clear);
   return refresh;
+}
+
+/**
+ * ensureFreshContext for choke points (tool calls, resource reads): a refresh
+ * failure is logged and the existing context is used — it never fails the call.
+ */
+export async function refreshContextSafely(ctx: ProjectContext): Promise<ProjectContext> {
+  try {
+    return await ensureFreshContext(ctx);
+  } catch (e) {
+    log.component('#index-loader').warn('Context refresh failed; using the existing index', {
+      error: (e as Error)?.message ?? String(e),
+    });
+    return ctx;
+  }
+}
+
+/** Per-root background static-file rebuild: the one running + the latest pending ctx. */
+const staticRebuilds = new Map<string, { running: Promise<void>; next: ProjectContext | null }>();
+
+/**
+ * Rebuild the static index files (scan-index.json, navigator.yaml,
+ * flow-index.json) in the background after a refresh. Coalesced: while one
+ * rebuild runs for a root, further requests collapse into ONE follow-up run
+ * with the latest context. Failures are logged, never thrown.
+ */
+function scheduleStaticRebuild(ctx: ProjectContext): void {
+  const root = ctx.rootDir;
+  const existing = staticRebuilds.get(root);
+  if (existing) {
+    existing.next = ctx;
+    return;
+  }
+  const state: { running: Promise<void>; next: ProjectContext | null } = { running: Promise.resolve(), next: null };
+  staticRebuilds.set(root, state);
+  state.running = (async () => {
+    let current: ProjectContext | null = ctx;
+    while (current) {
+      try {
+        // Dynamic import: reindex.ts imports this module.
+        const { rebuildStaticFiles } = await import('../tools/reindex.js');
+        await rebuildStaticFiles(root, current);
+      } catch (e) {
+        log.component('#index-loader').warn('Background static rebuild failed', {
+          error: (e as Error)?.message ?? String(e),
+        });
+      }
+      current = state.next;
+      state.next = null;
+    }
+    staticRebuilds.delete(root);
+  })();
+}
+
+/** Resolve once every scheduled background static rebuild has finished (tests, shutdown). */
+export async function flushStaticRebuilds(): Promise<void> {
+  while (staticRebuilds.size > 0) {
+    await Promise.all([...staticRebuilds.values()].map((s) => s.running));
+  }
 }
 
 /**

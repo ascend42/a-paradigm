@@ -14,7 +14,7 @@ import {
   getAllSymbols,
   type SymbolType,
 } from '@a-company/premise-core';
-import { ensureFreshContext, type ProjectContext } from '../utils/index-loader.js';
+import { refreshContextSafely, type ProjectContext } from '../utils/index-loader.js';
 import { toolCache } from '../utils/tool-cache.js';
 import { trackResourceRead } from '../tools/context.js';
 import { getGatesData, getFlowsData } from './gates.js';
@@ -118,7 +118,7 @@ export function registerResources(server: Server, getContext: () => ProjectConte
       }
       
       const ctx = getContext();
-      await ensureFreshContext(ctx);
+      await refreshContextSafely(ctx);
       toolCache.bindIndex(ctx.index);
       const resourcePath = uri.replace('paradigm://', '');
       

@@ -22,7 +22,7 @@ import {
   CallToolRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import {
-  getSymbol,
+  resolveSymbol,
   searchSymbols,
   getReferencesTo,
   getReferencesFrom,
@@ -30,7 +30,7 @@ import {
   getAllSymbols,
   getSymbolCounts,
 } from '@a-company/premise-core';
-import { ensureFreshContext, type ProjectContext, type ReloadContextFn } from '../utils/index-loader.js';
+import { refreshContextSafely, type ProjectContext, type ReloadContextFn } from '../utils/index-loader.js';
 import { ToolRegistry, type ToolModule, type ToolDefinition, toListedTool, readMcpToolsConfig, FEATURE_DETECTORS } from '../utils/tool-registry.js';
 import { defineFamily, familyOpsFromMap, isDeprecatedAlias, compactDefinition, ANCHOR_DESC_MAX, ANCHOR_PROP_DESC_MAX, type ToolFamily } from '../utils/tool-family.js';
 import { LEGACY_TOOL_MAP } from './legacy-tool-map.js';
@@ -750,7 +750,7 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
       // Symbol Integrity Phase 1: pick up .purpose/portal edits made outside
       // the MCP write tools (in place — same ctx object), and drop cached tool
       // results computed against a superseded index.
-      await ensureFreshContext(ctx);
+      await refreshContextSafely(ctx);
       toolCache.bindIndex(ctx.index);
 
       // Auto-recovery: on the first tool call of a new session, surface checkpoint/handoff data
@@ -885,7 +885,18 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
 
         case 'paradigm_related': {
           const { symbol } = args;
-          const entry = getSymbol(ctx.index, symbol as string);
+          // User-typed name: fuzzy (case / bare-name tolerant) resolution.
+          const { entry, candidates } = resolveSymbol(ctx.index, symbol as string);
+
+          if (!entry && candidates.length > 1) {
+            const text = JSON.stringify({
+              error: 'Ambiguous symbol',
+              symbol,
+              candidates: candidates.map(c => c.symbol),
+            }, null, 2);
+            trackToolCall(text.length, name);
+            return { content: [{ type: 'text', text }] };
+          }
 
           if (!entry) {
             // Fallback: grep for references when symbol isn't indexed

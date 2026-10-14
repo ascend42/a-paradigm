@@ -26,7 +26,7 @@ import type {
   AggregationError,
 } from './types.js';
 import { parseAnchorString } from './symbol-index.js';
-import { duplicateDeclarationFiles } from './integrity.js';
+import { findDuplicateDeclarations } from './integrity.js';
 
 /**
  * Optional loader seams for aggregateFromPremise. Every hook defaults to the
@@ -320,14 +320,10 @@ export async function aggregateFromPremise(
   // Resolve cross-references
   resolveReferences(canonical, donorData, awardEdges);
 
-  // Detect duplicate declarations (same symbol declared by 2+ contributors).
-  // Reference stubs are not declarations, so portal gate + `.purpose`
-  // reference no longer counts; within-category shadowing now does.
-  const duplicateSymbols: Array<{ symbol: string; files: string[] }> = [];
-  for (const sym of canonical) {
-    const files = duplicateDeclarationFiles(sym.sources);
-    if (files) duplicateSymbols.push({ symbol: sym.symbol, files });
-  }
+  // Detect duplicate declarations — the SAME rule integrity checks use
+  // (findDuplicateDeclarations, incl. the portal + .purpose exemption), so
+  // aggregation and `paradigm integrity` can never disagree.
+  const duplicateSymbols = findDuplicateDeclarations(canonical);
 
   return {
     symbols: canonical,

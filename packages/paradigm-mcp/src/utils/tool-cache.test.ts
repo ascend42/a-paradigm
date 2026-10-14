@@ -57,3 +57,29 @@ describe('ToolCache', () => {
     expect(cache.stats().size).toBe(0);
   });
 });
+
+describe('ToolCache — targeted invalidation races', () => {
+  it('invalidate(key) stops an in-flight compute from writing back', async () => {
+    const cache = new ToolCache(30_000);
+    const gate = deferred<string>();
+    const inflight = cache.getOrCompute('purpose:a', () => gate.promise);
+    cache.invalidate('purpose:a');
+    gate.resolve('stale');
+    expect(await inflight).toBe('stale');
+    expect(await cache.getOrCompute('purpose:a', () => 'fresh')).toBe('fresh');
+  });
+
+  it('invalidatePrefix() stops matching in-flight computes, leaves others', async () => {
+    const cache = new ToolCache(30_000);
+    const hit = deferred<string>();
+    const miss = deferred<string>();
+    const a = cache.getOrCompute('search:x', () => hit.promise);
+    const b = cache.getOrCompute('nav:y', () => miss.promise);
+    cache.invalidatePrefix('search:');
+    hit.resolve('stale');
+    miss.resolve('kept');
+    await Promise.all([a, b]);
+    expect(await cache.getOrCompute('search:x', () => 'fresh')).toBe('fresh');
+    expect(await cache.getOrCompute('nav:y', () => 'recomputed')).toBe('kept');
+  });
+});

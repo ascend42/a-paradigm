@@ -212,8 +212,15 @@ function findBrokenReferences(
     }
   }
 
-  // Deduplicate — first push wins, so an explicit flow/gate/parent refType
-  // is kept over the generic 'undeclared' for the same edge.
+  // A ref whose target is a reference stub is an undeclared reference — a
+  // WARNING (danglingCount), never a gate/signal/component/flow/parent error.
+  // Reclassify before dedup so the same edge collapses to 'undeclared'.
+  const stubs = new Set(findDanglingReferences(symbols).map(d => d.symbol));
+  for (const b of broken) {
+    if (stubs.has(b.to)) b.refType = 'undeclared';
+  }
+
+  // Deduplicate
   const seen = new Set<string>();
   return broken.filter(b => {
     const key = `${b.from}->${b.to}@${b.file}`;

@@ -13,8 +13,9 @@
  *     is marked `declared === false`; declared symbols are not.
  *  3. Within-category duplicates — two .purpose files defining the same
  *     component id are surfaced by aggregation, not silently collapsed.
- *  4. Lookup normalization — getSymbol tolerates case differences and bare
- *     (prefix-less) names when unambiguous; ambiguous bare names → undefined.
+ *  4. Lookup normalization — getSymbol is EXACT (edges, hashing); the
+ *     user-input resolver resolveSymbol tolerates case differences and bare
+ *     (prefix-less) names when unambiguous; ambiguous bare names → candidates.
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
@@ -22,7 +23,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
 import { aggregateFromDirectory } from './aggregator.js';
-import { buildSymbolIndex, getSymbol, getReferencesTo } from './symbol-index.js';
+import { buildSymbolIndex, getSymbol, getReferencesTo, resolveSymbol } from './symbol-index.js';
 import { findDuplicateDeclarations } from './integrity.js';
 import type { AggregationResult, SymbolIndex } from './types.js';
 
@@ -155,15 +156,25 @@ describe('within-category duplicates', () => {
 });
 
 describe('lookup normalization', () => {
-  it('resolves case-insensitive and bare unambiguous names', async () => {
+  it('resolveSymbol resolves case-insensitive and bare unambiguous names', async () => {
     write('portal.yaml', PORTAL_MAP);
     write('src/billing/.purpose', BILLING_PURPOSE);
     const { idx } = await load();
-    expect(getSymbol(idx, '^Authenticated')?.symbol).toBe('^authenticated');
-    expect(getSymbol(idx, 'authenticated')?.symbol).toBe('^authenticated');
+    expect(resolveSymbol(idx, '^Authenticated').entry?.symbol).toBe('^authenticated');
+    expect(resolveSymbol(idx, 'authenticated').entry?.symbol).toBe('^authenticated');
   });
 
-  it('returns undefined for an ambiguous bare name (#auth and ^auth)', async () => {
+  it('getSymbol stays EXACT — no case folding, no bare names', async () => {
+    write('src/foo/.purpose', 'version: "2.0"\ncomponents:\n  foo:\n    description: Foo\n');
+    const { idx } = await load();
+    expect(getSymbol(idx, '#foo')?.symbol).toBe('#foo');
+    expect(getSymbol(idx, '#Foo')).toBeUndefined();
+    expect(getSymbol(idx, 'foo')).toBeUndefined();
+    // ...edges resolve exactly too.
+    expect(getReferencesTo(idx, '#Foo')).toEqual([]);
+  });
+
+  it('resolveSymbol returns candidates for an ambiguous bare name (#auth and ^auth)', async () => {
     write(
       'src/auth/.purpose',
       [
@@ -181,7 +192,9 @@ describe('lookup normalization', () => {
     // Sanity: both exist under their prefixed names.
     expect(getSymbol(idx, '#auth')).toBeDefined();
     expect(getSymbol(idx, '^auth')).toBeDefined();
-    expect(getSymbol(idx, 'auth')).toBeUndefined();
+    const r = resolveSymbol(idx, 'auth');
+    expect(r.entry).toBeUndefined();
+    expect(r.candidates.map((c) => c.symbol).sort()).toEqual(['#auth', '^auth']);
   });
 });
 
@@ -303,5 +316,22 @@ describe('portal prize + .purpose signal exemption', () => {
     write('src/invite/.purpose', SIGNAL_PURPOSE);
     const { result } = await load();
     expect(findDuplicateDeclarations(result.symbols).map((d) => d.symbol)).toContain('!welcome');
+  });
+});
+
+describe('one duplicate rule (aggregation === integrity)', () => {
+  it('aggregation.duplicateSymbols applies the portal + .purpose exemption', async () => {
+    write('portal.yaml', PORTAL_MAP);
+    write(
+      'src/auth/.purpose',
+      'version: "2.0"\ngates:\n  authenticated:\n    description: Purpose-side gate\n',
+    );
+    write('src/a/.purpose', 'version: "2.0"\ncomponents:\n  foo:\n    description: A\n');
+    write('src/b/.purpose', 'version: "2.0"\ncomponents:\n  foo:\n    description: B\n');
+    const { result } = await load();
+    const fromAggregation = (result.duplicateSymbols ?? []).map((d) => d.symbol).sort();
+    expect(fromAggregation).not.toContain('^authenticated');
+    expect(fromAggregation).toContain('#foo');
+    expect(result.duplicateSymbols ?? []).toEqual(findDuplicateDeclarations(result.symbols));
   });
 });

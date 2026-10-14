@@ -12,7 +12,8 @@ import { log } from '../utils/logger.js';
 import {
   aggregateFromDirectory,
   buildSymbolIndex,
-  getSymbol,
+  resolveSymbol,
+  sourcesOf,
   getReferencesTo,
   getReferencesFrom,
   getSymbolsByType,
@@ -85,9 +86,20 @@ function findFlowMembership(
 }
 
 /**
+ * The file to anchor test suggestions on. A gate's canonical entry lives in
+ * portal.yaml, but the code it guards is next to the .purpose that also
+ * declares (or references) it — prefer that .purpose source when one exists.
+ */
+export function testAnchorPath(entry: SymbolEntry): string {
+  if (entry.source === 'purpose') return entry.filePath;
+  const purpose = sourcesOf(entry).find((s) => s.source === 'purpose');
+  return purpose?.filePath ?? entry.filePath;
+}
+
+/**
  * Suggest test path based on symbol path
  */
-function suggestTestPath(symbolPath: string): { testPath?: string; testCommand?: string } {
+export function suggestTestPath(symbolPath: string): { testPath?: string; testCommand?: string } {
   // Common patterns
   const dir = path.dirname(symbolPath);
 
@@ -118,11 +130,15 @@ function categorize(symbols: SymbolEntry[]): {
 }
 
 /**
- * Analyze ripple effects for a symbol
+ * Analyze ripple effects for a user-typed symbol. Resolution is fuzzy (case /
+ * bare-name tolerant); an ambiguous name yields `candidates`, not a result.
  */
-function analyzeRipple(symbol: string, index: SymbolIndex): RippleResult | null {
-  const entry = getSymbol(index, symbol);
-  if (!entry) return null;
+export function analyzeRipple(
+  symbol: string,
+  index: SymbolIndex,
+): { ripple?: RippleResult; candidates: string[] } {
+  const { entry, candidates } = resolveSymbol(index, symbol);
+  if (!entry) return { candidates: candidates.map((c) => c.symbol) };
   // Traverse on the canonical symbol — "Foo" / "foo" resolve to "#foo".
   const canonical = entry.symbol;
   
@@ -137,9 +153,9 @@ function analyzeRipple(symbol: string, index: SymbolIndex): RippleResult | null 
   const partOfFlows = findFlowMembership(canonical, index);
   
   // Suggest test path
-  const { testPath, testCommand } = suggestTestPath(entry.filePath);
+  const { testPath, testCommand } = suggestTestPath(testAnchorPath(entry));
   
-  return {
+  const ripple: RippleResult = {
     symbol: entry.symbol,
     type: entry.type,
     path: entry.filePath,
@@ -163,6 +179,7 @@ function analyzeRipple(symbol: string, index: SymbolIndex): RippleResult | null 
     testPath,
     testCommand,
   };
+  return { ripple, candidates: [entry.symbol] };
 }
 
 export async function rippleCommand(symbolArg: string, targetPath?: string, options: RippleOptions = {}) {
@@ -192,7 +209,21 @@ export async function rippleCommand(symbolArg: string, targetPath?: string, opti
     log.operation('aggregate').debug('Symbols aggregated for ripple', { symbol: symbolArg });
 
     // Analyze ripple
-    const ripple = analyzeRipple(symbolArg, index);
+    const { ripple, candidates } = analyzeRipple(symbolArg, index);
+
+    // Ambiguous name: list the candidates — it IS indexed, just not uniquely.
+    if (!ripple && candidates.length > 1) {
+      spinner?.fail(`Ambiguous symbol: ${symbolArg}`);
+      tracker.error('Ambiguous symbol', { symbol: symbolArg, candidates: candidates.length });
+      if (options.json) {
+        console.log(JSON.stringify({ error: 'Ambiguous symbol', symbol: symbolArg, candidates }, null, 2));
+      } else {
+        console.log(chalk.yellow('\n  Did you mean one of:'));
+        for (const c of candidates) console.log(chalk.gray(`    ${c}`));
+        console.log('');
+      }
+      process.exit(1);
+    }
 
     if (!ripple) {
       spinner?.fail(`Symbol not found: ${symbolArg}`);

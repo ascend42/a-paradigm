@@ -19,6 +19,7 @@ import {
   loadProjectContext,
   ensureFreshContext,
   resetFreshnessDebounce,
+  flushStaticRebuilds,
   FRESHNESS_DEBOUNCE_MS,
 } from './index-loader.js';
 
@@ -39,7 +40,9 @@ beforeEach(() => {
   write('portal.yaml', portal('first'));
 });
 
-afterEach(() => {
+afterEach(async () => {
+  // Refreshes schedule background static rebuilds into tmpRoot — let them land.
+  await flushStaticRebuilds();
   fs.rmSync(tmpRoot, { recursive: true, force: true });
 });
 
@@ -110,5 +113,41 @@ describe('ensureFreshContext', () => {
     resetFreshnessDebounce(tmpRoot);
     await ensureFreshContext(handBuilt);
     expect(handBuilt.index).toBe(ctx.index);
+  });
+});
+
+describe('ensureFreshContext — static files follow the refreshed index', () => {
+  const flowPurpose = (id: string) =>
+    `version: "2.0"\nflows:\n  ${id}:\n    description: ${id} flow\n    steps:\n      - component: "#alpha"\n        action: go\n`;
+  const flowIndex = () => fs.readFileSync(path.join(tmpRoot, '.paradigm', 'flow-index.json'), 'utf8');
+
+  it('rebuilds flow-index.json in the background after a refresh swaps the index', async () => {
+    const ctx = await loadProjectContext(tmpRoot);
+    write('src/flows/.purpose', flowPurpose('late-flow'));
+    resetFreshnessDebounce(tmpRoot);
+    await ensureFreshContext(ctx);
+    await flushStaticRebuilds();
+    expect(flowIndex()).toContain('late-flow');
+  });
+
+  it('coalesces bursts: the final static files reflect the LAST refresh', async () => {
+    const ctx = await loadProjectContext(tmpRoot);
+    for (const id of ['burst-one', 'burst-two', 'burst-three']) {
+      write('src/flows/.purpose', flowPurpose(id));
+      resetFreshnessDebounce(tmpRoot);
+      await ensureFreshContext(ctx);
+    }
+    await flushStaticRebuilds();
+    const text = flowIndex();
+    expect(text).toContain('burst-three');
+    expect(text).not.toContain('burst-one');
+  });
+
+  it('does not rebuild when nothing changed', async () => {
+    const ctx = await loadProjectContext(tmpRoot);
+    resetFreshnessDebounce(tmpRoot);
+    await ensureFreshContext(ctx);
+    await flushStaticRebuilds();
+    expect(fs.existsSync(path.join(tmpRoot, '.paradigm', 'flow-index.json'))).toBe(false);
   });
 });

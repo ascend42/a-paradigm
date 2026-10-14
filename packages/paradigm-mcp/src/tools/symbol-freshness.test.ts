@@ -21,7 +21,7 @@ import * as path from 'node:path';
 import { CallToolRequestSchema } from '@modelcontextprotocol/sdk/types.js';
 import { registerTools } from './index.js';
 import { invalidateFeatureCache } from '../utils/tool-registry.js';
-import { loadProjectContext, FRESHNESS_DEBOUNCE_MS, type ProjectContext } from '../utils/index-loader.js';
+import { loadProjectContext, flushStaticRebuilds, FRESHNESS_DEBOUNCE_MS, type ProjectContext } from '../utils/index-loader.js';
 
 let tmpRoot: string;
 
@@ -55,7 +55,8 @@ beforeEach(() => {
   write('src/early/.purpose', 'version: "2.0"\ncomponents:\n  early-bird:\n    description: Present at load\n');
 });
 
-afterEach(() => {
+afterEach(async () => {
+  await flushStaticRebuilds();
   fs.rmSync(tmpRoot, { recursive: true, force: true });
 });
 

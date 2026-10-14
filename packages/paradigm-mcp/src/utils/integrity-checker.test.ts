@@ -78,3 +78,43 @@ describe('checkIntegrity — undeclared references', () => {
     expect(report.duplicateSymbols.map((d) => d.symbol)).not.toContain('^authenticated');
   });
 });
+
+describe('checkIntegrity — flow refs to undeclared stubs are warnings', () => {
+  it("classifies a flow's gates/signals/components/steps that hit a stub as 'undeclared'", async () => {
+    write(
+      'src/checkout/.purpose',
+      [
+        'version: "2.0"',
+        'components:',
+        '  cart:',
+        '    description: Cart',
+        '    gates: [^ghost]',
+        '    signals: ["!phantom"]',
+        '    uses: ["#missing-part"]',
+        'flows:',
+        '  checkout:',
+        '    description: Checkout',
+        '    gates: [^ghost]',
+        '    signals: ["!phantom"]',
+        '    components: ["#missing-part"]',
+        '    steps:',
+        '      - component: "#missing-part"',
+        '        action: render',
+        '',
+      ].join('\n'),
+    );
+    const aggregation = await aggregateFromDirectory(tmpDir);
+    const report = checkIntegrity(aggregation, tmpDir);
+    const fromFlow = report.brokenReferences.filter((b) => b.from === '$checkout');
+    const stubTargets = new Set(
+      aggregation.symbols.filter((s) => (s as { declared?: boolean }).declared === false).map((s) => s.symbol),
+    );
+    const flowToStubs = fromFlow.filter((b) => stubTargets.has(b.to));
+    expect(flowToStubs.length, `brokenReferences was ${JSON.stringify(report.brokenReferences)}`).toBeGreaterThan(0);
+    for (const b of flowToStubs) expect(b.refType, JSON.stringify(b)).toBe('undeclared');
+    // Every edge to a stub, from anywhere, is a warning — never an error type.
+    for (const b of report.brokenReferences.filter((r) => stubTargets.has(r.to))) {
+      expect(b.refType, JSON.stringify(b)).toBe('undeclared');
+    }
+  });
+});

@@ -139,7 +139,8 @@ export function buildSymbolIndex(result: AggregationResult): SymbolIndex {
 }
 
 /**
- * Resolve a user-supplied symbol to its canonical entry:
+ * Resolve a USER-TYPED symbol to its canonical entry (input boundaries only —
+ * ripple, related, navigate, graph-slice roots; never edges):
  *  1. exact full-symbol hit ("^authenticated");
  *  2. prefixed, case-insensitive ("^Authenticated") — unique hit with that prefix;
  *  3. bare name ("authenticated") — unique hit across all prefixes.
@@ -182,11 +183,12 @@ export function sourcesOf(entry: SymbolEntry): SymbolSource[] {
 }
 
 /**
- * Get a symbol by its full symbol string (e.g., "#checkout"). Tolerates case
- * differences and unambiguous bare names via resolveSymbol.
+ * Get a symbol by its EXACT full symbol string (e.g., "#checkout"), O(1).
+ * Edge resolution and hashing depend on exactness — use resolveSymbol only
+ * where a person typed the name (case / bare-name tolerant, with candidates).
  */
 export function getSymbol(index: SymbolIndex, symbol: string): SymbolEntry | undefined {
-  return resolveSymbol(index, symbol).entry;
+  return index.bySymbol.get(symbol);
 }
 
 /**

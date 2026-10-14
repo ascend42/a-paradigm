@@ -11,10 +11,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 - **One canonical entry per symbol** (#symbol-integrity, premise-core). Declarations of the same symbol from `.purpose`, `portal.yaml` and `.premise` now merge into one entry: portal wins for gates, and a real declaration beats a reference stub. All contributors are listed in `SymbolEntry.sources`. References are resolved over every contributor's data, so a merge never drops an edge. Portal gates now also reference the prize signals they award.
-- **`getSymbol` is O(1) and normalized.** The new `resolveSymbol` tries an exact match first, then case-insensitive, then an unambiguous bare name. An ambiguous bare name returns candidates, and `paradigm_ripple` reports `Ambiguous symbol` with the list. Ripple, `paradigm_related`, graph slices and the CLI ripple all traverse from the canonical symbol.
+- **`getSymbol` is O(1) and exact.** Edge resolution (`getReferencesTo`/`From`) and Warpline also stay exact. Forgiving lookup is available through `resolveSymbol`: exact first, then case-insensitive, then an unambiguous bare name, otherwise a list of candidates. It is used only where a person types a name: MCP and CLI ripple, `paradigm_related`, navigate, and the root of a graph slice. An ambiguous name lists its candidates instead of reporting "not found".
 - **Dangling references are reported.** Reference-only stubs carry `declared: false`. The integrity checker no longer counts them as defined and reports them as `undeclared` broken references. These are warnings: they appear in `danglingCount` but not in `issues`.
 - **Duplicate IDs are surfaced.** A component defined in two `.purpose` files used to lose one definition silently; it now appears in `duplicateSymbols` with both files. A portal gate plus a `.purpose` declaration is still exempt.
 - **The MCP server sees hand edits** (#context-freshness). The context is backed by the live index, and every tool call checks for changes on disk (debounced to 500 ms) and swaps index, aggregation and gate config atomically. Edits made with Edit/Write or by `git checkout` show up without `paradigm_reindex`. The search cache is cleared whenever the index changes.
+- **Refreshes are safe.** A refresh failure logs a warning and the tool call continues with the current context, so it never fails a call, including `paradigm_reindex`. After a refresh, `flow-index.json`, `navigator.yaml` and `scan-index.json` are rebuilt in the background, coalesced. Targeted cache invalidations can no longer be overwritten by a slower, older result.
+- **One duplicate rule.** `AggregationResult.duplicateSymbols` and the integrity checker use the same rule. Undeclared references in flows count as warnings, not errors. CLI ripple suggests test paths from a gate's `.purpose` source.
 - **`paradigm_reindex` rebuilds once, from fresh data.** It used to write static files from the stale snapshot and then rebuild again in the background. Hints now say `paradigm_reindex` instead of `paradigm scan`.
 
 ### Removed
@@ -29,8 +31,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `@a-company/warpline` 0.2.2 (`injectCodeUnits` registers through `addSymbolEntry`). No Warpline golden or hash changed.
 
 ### Tests
-- premise-core 125, paradigm-mcp 762, paradigm 722 and purpose-core 11 pass.
-- Warpline passes 1329–1330 of 1333. The 1–2 failures are heavy real-repo tests timing out at 60 s under machine load; they fail identically without this change.
+- premise-core 127, paradigm-mcp 774, paradigm 725 and purpose-core 11 pass. A full parallel run also shows load-related flakes in `skill.test` and `platform-warpline-router`; both pass when run alone.
+- Warpline passes 1328–1330 of 1333. The 1–3 failures are 60 s timeouts in heavy real-repo tests under machine load. They pass in isolation and fail the same way without this change.
 
 ## [7.14.0] — 2026-09-29
 

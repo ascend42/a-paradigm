@@ -17,6 +17,11 @@ export class ToolCache {
   private boundIndex: object | null = null;
   /** Bumped by clear(); a compute that straddles a clear must not repopulate. */
   private generation = 0;
+  /**
+   * In-flight computes by key. invalidate()/invalidatePrefix() drop the token,
+   * so a compute that straddles a targeted invalidation can't write back.
+   */
+  private inflight = new Map<string, symbol>();
 
   constructor(ttlMs: number = 30_000) {
     this.ttlMs = ttlMs;
@@ -34,11 +39,17 @@ export class ToolCache {
     // A compute started against one index/generation may finish after
     // bindIndex()/clear() moved on — return its result, but don't cache it.
     const generation = this.generation;
-    const data = await compute();
-    if (generation === this.generation) {
-      this.cache.set(key, { data, createdAt: Date.now() });
+    const token = Symbol(key);
+    this.inflight.set(key, token);
+    try {
+      const data = await compute();
+      if (generation === this.generation && this.inflight.get(key) === token) {
+        this.cache.set(key, { data, createdAt: Date.now() });
+      }
+      return data;
+    } finally {
+      if (this.inflight.get(key) === token) this.inflight.delete(key);
     }
-    return data;
   }
 
   /**
@@ -46,6 +57,7 @@ export class ToolCache {
    */
   invalidate(key: string): void {
     this.cache.delete(key);
+    this.inflight.delete(key);
   }
 
   /**
@@ -57,6 +69,9 @@ export class ToolCache {
         this.cache.delete(key);
       }
     }
+    for (const key of this.inflight.keys()) {
+      if (key.startsWith(prefix)) this.inflight.delete(key);
+    }
   }
 
   /**
@@ -64,6 +79,7 @@ export class ToolCache {
    */
   clear(): void {
     this.cache.clear();
+    this.inflight.clear();
     this.generation++;
   }
 

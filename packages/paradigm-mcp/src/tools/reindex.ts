@@ -10,7 +10,7 @@ import * as path from 'path';
 import * as yaml from 'js-yaml';
 import { aggregateFromDirectory, invalidateLiveIndex, type AggregationResult, type FlowIndex, type TestableFlow, type FlowStep } from '@a-company/premise-core';
 import { generateScanIndex, serializeScanIndex } from '@a-company/probe-core';
-import { ensureFreshContext, resetFreshnessDebounce, type ProjectContext, type ReloadContextFn } from '../utils/index-loader.js';
+import { refreshContextSafely, resetFreshnessDebounce, type ProjectContext, type ReloadContextFn } from '../utils/index-loader.js';
 import { trackToolCall } from './context.js';
 import { toolCache } from '../utils/tool-cache.js';
 import { invalidateFeatureCache } from '../utils/tool-registry.js';
@@ -120,7 +120,17 @@ export async function handleReindexTool(
     // reload kicked off a second background rebuild).
     invalidateLiveIndex(ctx.rootDir);
     resetFreshnessDebounce(ctx.rootDir);
-    const fresh = (await reloadContext({ rebuildStatic: false })) ?? await ensureFreshContext(ctx);
+    // A reload/refresh failure must not fail the reindex: fall back to the
+    // context we already have and rebuild the static files from it.
+    let fresh: ProjectContext;
+    try {
+      fresh = (await reloadContext({ rebuildStatic: false })) ?? await refreshContextSafely(ctx);
+    } catch (e) {
+      log.component('#reindex').warn('Context reload failed; reindexing from the existing context', {
+        error: (e as Error)?.message ?? String(e),
+      });
+      fresh = ctx;
+    }
     const result = await rebuildStaticFiles(fresh.rootDir, fresh);
     toolCache.clear();
     invalidateFeatureCache();
