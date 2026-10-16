@@ -1,0 +1,138 @@
+id: L-2026-10-14-ascend-060023-001
+type: milestone
+timestamp: '2026-10-14T06:00:23.933Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Where things stand 2026-10-14: symbol integrity 7.15.0 shipped to branch; Warpline re-planned for the armada; console designed; server/runner designed'
+summary: |-
+  This was a long session. It started from two outside sources, a knowledge-graph reel (audited in neurons and discarded) and Anthropic's Scion article. It ended with:
+  (1) Symbol Integrity Phase 1 shipped as 7.15.0, commit 259b7903 on feat/symbol-integrity, pushed.
+  (2) Warpline re-prioritized for the founder's "armada" goal (many agent instances plus a dev team on one codebase), using a 4-agent team plus 3 Fable deep analyses.
+  (3) The Warpline Console designed in Atelier, approved as the starting version.
+  (4) The Warpline server, CI runner and hosting model designed.
+  (5) Founder decisions TD-2026-10-14-551 and TD-2026-10-14-735, with tasks T-2026-10-14-001/002/003.
+  Nothing about the server or console is built yet.
+symbols_touched:
+  - '#symbol-integrity'
+  - '#context-freshness'
+  - '#live-index'
+  - '#symbol-index'
+  - '#ripple'
+  - '#warpline'
+  - '#warplined'
+  - '#admit'
+  - '#stake'
+  - '#warpline-routes'
+symbols_created:
+  - '#symbol-integrity'
+  - '#context-freshness'
+commit: 259b7903
+decisions:
+  - id: TD-2026-10-13-661
+    decision: Symbol integrity arc, 3 phases, no rewrite
+    rationale: Core sound; identity/freshness gave silent wrong answers
+  - id: TD-2026-10-14-551
+    decision: 'Warpline server is a real source-control host: built-in CI runner, code browser, releases, settings/webhooks, collaborators, public/private; console direction approved'
+    rationale: 'Founder: deployed as real source control needs CI/CD and GitHub basics'
+  - id: TD-2026-10-14-735
+    decision: Advisory by default; replay + swarm evidence first; native-only projects with git milestone backups; S1/M0/S4/Paradigm-ids preconditions; humans sign with keys on shared fabrics; drop the 100-admission run; home-box runner (Aegis dissent)
+    rationale: Founder decision dialog after a 7-agent review
+learnings:
+  - 'The ''Guard 6.2%'' figure is the FLAG rate. Ground truth: 3 caught-later defects in 275 (~1.1%); merge-created defects 1/275 (0.36%), and Guard missed it while a blind LLM caught it. Never cite 6.2% as a defect rate.'
+  - 'This repo''s Warpline shadow stream: 118 rows since 2026-07-17, 0 KNOTs, 115 auto-seal. The denominator is empty; only concurrency (a swarm) fills it.'
+  - TD-2026-07-17-151 (native forge, git as checkpoint export, Guard Action = instrument) was nearly reversed by a team synthesis that never read it. Check standing founder directions before proposing a 'wedge'.
+  - Warpline is PUBLIC (a-paradigm repo is public; @a-company/warpline 0.2.1 is on npm). The founder chose to keep it in Paradigm.
+  - 'Paradigm multi-writer hazards: decision ids are random 1..999 and overwrite on collision; history ids are log line counts; tasks are gitignored; derived files are tracked. Fix ids (task T-2026-10-14-001d), not storage.'
+  - 'Warpline stableKey = SymbolEntry.id, which is name-derived, so it is not rename-stable. renamed-from aliases and field-typed edges are load-bearing for per-domain admission: pull symbol-integrity Phase 2 items 3 and 4 ahead of Warpline M1.'
+  - Architect and security disagreed on runner placement. The founder chose the home box; Aegis's controls are the floor.
+verification:
+  status: partial
+  details:
+    shipped: '7.15.0: premise-core 125/125, paradigm-mcp 762/762, paradigm 722 pass; warpline 1329-1330/1333 (load timeouts, identical without the change)'
+    designed_not_built: server, runner, console, demo
+tags:
+  - milestone
+  - arc:symbol-integrity
+  - arc:warpline-armada
+  - atelier
+  - where-things-stand
+body: |-
+  # Where things stand: 2026-10-14
+
+  ## Shipped
+  **7.15.0, Symbol Integrity Phase 1** (259b7903, branch feat/symbol-integrity, pushed; npm publish is the founder's).
+  - One canonical entry per symbol; references resolved over all contributors.
+  - Stubs are marked declared:false and reported as dangling.
+  - resolveSymbol gives O(1), normalized lookup.
+  - The MCP context is backed by the live index, with a debounced, atomic refresh. It needs an MCP restart to take effect.
+  - reindex reloads first and rebuilds once.
+
+  Phase 2 (T-2026-10-13-002) and Phase 3 (T-2026-10-13-003) are open. Phase 2's renamed-from aliases and typed edges are now prerequisites for Warpline per-domain admission.
+
+  ## Warpline plan (TD-2026-10-14-735)
+  - **Gate mode:** advisory by default. Fail closed only on gate, signal, aspect and pipeline contracts.
+  - **Native-only:** projects are native Warpline (beta, heavy logging). Git is a milestone backup via the stake valve.
+  - **Order:**
+    1. Preconditions (T-2026-10-14-001): S1 identity, M0 ledger out of git, S4 custodian, Paradigm collision-free ids.
+    2. Evidence (T-2026-10-14-002): outcome taxonomy, a 1,000-PR replay with pre-registered thresholds, a 2–3 agent shadow swarm.
+    3. Server v1 (T-2026-10-14-003).
+  - Expo is confirmation only. The 100-admission run is dropped.
+
+  ## Server design (Fable architect)
+  - **Process:** one warplined binary. It keeps its UDS listener and gains an HTTP/TLS face on handleRequest (server.ts:173).
+  - **Storage:** files stay the record, with a derived SQLite index. A server registry holds repos, collaborators, visibility, webhooks, secrets and jobs; it is NOT history. Amend G4 to read "no forge-private storage of history or judgment".
+  - **Repos:** each repo is one fabric at <dataRoot>/repos/<repoId>/.warpline. Agents run replica daemons, seal locally, and push bundles (the bundle protocol is new). admit and refs.advance run at home.
+  - **New verbs:** refs.advance, knots.open, dag.slice, meaning.blame, meaning.log, delta.classify, sync.*, and a typed events WS.
+
+  ## CI runner (Fable architect + Aegis)
+  - **Pipelines:** .warpline/pipelines.yaml, read from the tree at the stateId. Required checks live in protected.json v2, which is human-class.
+  - **Triggers:** admit (only when sealed, so a KNOT never runs), offer, ref.advance, release, schedule, manual.
+  - **Witnesses:** results are signed testWitness:v1 records with a runner key, stored as a sidecar.
+  - **Gated landing on protected refs:** seal, park in landing.jsonl, then refs.advance once required checks pass. CHECKS_FAILED refuses. An owner override is audited.
+  - **v1 placement (founder):** home box, rootless containers.
+  - **Aegis floor:**
+    - Offer builds get no secrets and no network.
+    - Changes to the pipeline file are gate-class, and protected runs use the base-ref pipeline.
+    - Cache keys are bound to stateId and trust tier.
+    - The runner key is separate from agent keys.
+    - Default-deny egress through a registry proxy.
+    - S4 must keep keys off any job-visible path.
+    - Revisit placement (gVisor or Firecracker on a separate host) before any public repo.
+
+  ## Console design (Atelier session 2026-10-14-warpline-console; .atelier/DESIGN.md)
+  - **Structure:** an org dashboard leads to repo tabs (v1; the founder finds the look too generic, a v2 item).
+  - **Inbox:** each repo opens on its Inbox, with a resizable live band that moves only on arrive, KNOT, or resolve. The Floor is its own tab.
+  - **Decisions:** split-view.
+  - **Access:** roles by domain (Owner, Developer, Observer). Agents never sign in.
+  - **Look:** Control room dials 3·4·7, neutral human states, all on the preserved Warpline system.
+  - **Open:** a failure colour, the v2 shell look, Offer threads.
+  - **Gate:** the console build waits on F4.
+
+  ## Demo
+  ledgerette: a small TypeScript service, 4 agents through MCP, and one scripted plain-git developer. It runs on its own fabric, unseeded, and counts as the swarm evidence arm (excluded from K3 and from the replay).
+
+  ## Shared docs
+  - Scion vs Warpline (Claude Docs): https://claude.ai/code/artifact/cbbee6f6-e1bd-4b5d-b161-123e74cb8ee7
+  - neurons: a:2026-10-14-docs-scion-vs-warpline-…; 8 neurons under ai/agents/source-control.
+
+  ## Open founder items
+  - npm publish of 7.15.0.
+  - PR #47 (skills arc) is still open.
+  - F4 ratification items (from older arcs).
+linked_lore:
+  - L-2026-10-13-ascend-193148-001
+  - L-2026-10-14-ascend-055927-922
+  - L-2026-10-14-ascend-053731-518
+linked_tasks:
+  - T-2026-10-13-001
+  - T-2026-10-13-002
+  - T-2026-10-13-003
+  - T-2026-10-14-001
+  - T-2026-10-14-002
+  - T-2026-10-14-003
+git_context:
+  ref: 259b79031d089a6e073d6554158a18d1d4f677b2
+  branch: feat/symbol-integrity
+  dirty: true
