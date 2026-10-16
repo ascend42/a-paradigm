@@ -1,5 +1,7 @@
 # Doodle — a shared, replayable scribble surface for a human and their agents
 
+Note (2026-10-16): spec v3.2 supersedes parts of this concept. The shell is a localhost GUI (P8-D50), so the GUI hosts the canvas directly; there is no separate gnomon-doodle client or second listener. See docs/specs/gnomon.md §12.7.
+
 Status: concept / ideation (not a build spec). Target: Gnomon 8.0 first-party mod + first-party surface. Companion to `gnome-persona.md` in this folder (the gnome is the hand; Doodle is the paper).
 Parent spec: `docs/specs/gnomon.md` (§2 topology, §3.2 kernel log, §4.1 envelope, §4.4 refs, §4.5 display-block, §4.10 voice events, §9.1 taxonomy, §9.3 redaction, §10 laws, §11 TUI, §12 mods, §14 voice, §16 Windows parity, §A accepted risks).
 Aesthetic decisions: `.atelier/sessions/2026-10-15-gnomon-aesthetic/session.yaml` (light = papercraft, dark = phosphor terminal; Workshop mod caps bob only while their session streams).

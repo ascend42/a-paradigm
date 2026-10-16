@@ -1,5 +1,7 @@
 # Gnome Persona — a dialog voice and a body for every Gnomon session
 
+Note (2026-10-16): spec v3.2 supersedes parts of this concept. The Tier 1 local restyle is dropped (P8-D52: no restyling, brevity by instruction), and the shell is a localhost GUI, not an in-terminal TUI (P8-D50), so the papercraft breeze, shadow and grain render in the GUI. See docs/specs/gnomon.md §12.6.
+
 Status: concept / ideation (not a build spec). Target: Gnomon 8.0 first-party mod on `mod-abi:v1`.
 Parent spec: `docs/specs/gnomon.md` (§4.5 display-block, §11 TUI, §12 mods, §14 voice, laws §10).
 Aesthetic decisions: `.atelier/sessions/2026-10-15-gnomon-aesthetic/session.yaml` (light = papercraft, dark = phosphor, Workshop mod with caps).
