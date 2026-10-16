@@ -1,0 +1,40 @@
+id: L-2026-10-16-ascend-043622-001
+type: human-note
+timestamp: '2026-10-16T04:36:22.975Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: '8.0 decision dialog: Heddle + Shuttle, tensions ratified, socket-only band, six laws, build proper first'
+summary: 'Founder decisions in the Atelier deep decision dialog (.atelier/sessions/2026-10-15-paradigm-8-spec). Board 1: Heddle + Shuttle. Board 2: all four converged positions ratified. Board 3: Shuttle band reads authenticated socket events only (Arky), overruling the files-first recommendation. Board 4: all six Heddle laws adopted. New principle: build the scalable, proper version first and iterate live with ample internal logs. Follow-ups: a full Atelier aesthetic session for the tool, and a local HTML pitch document.'
+symbols_touched:
+  - '#paradigm-harness'
+  - '#warpline'
+  - '#conductor'
+decisions:
+  - id: P8-D3
+    decision: 'Shape: Heddle + Shuttle (kernel daemon beneath Claude Code, starts on first use; Shuttle Mod band is its display)'
+    rationale: Whole team converged after ruflo; Shuttle alone needs a kernel feeding it.
+  - id: P8-D4
+    decision: 'Ratify: separate kernel log linked to fabric by causes[]; one logged pointer line at spawn (F4); kernel hsid with cc:<uuid> alias; delete Conductor''s Swift runner'
+    rationale: Fable and Arky converged; ruflo evidence (#3164 ledger timeouts, per-prompt injection cost, respawned ids).
+  - id: P8-D5
+    decision: Shuttle band reads authenticated kernel socket events only; no status files
+    rationale: 'Founder chose Arky''s position over the files-first recommendation: no forgeable display. Consequence: a spike proving a Mod can hold an outside connection moves into move 1.'
+  - id: P8-D6
+    decision: 'Adopt all six Heddle laws as invariants: no spawn without a permit; honesty is CI; tiny ABI; reversible by construction; nothing spends by default; trust posture'
+    rationale: Production evidence from ruflo users.
+  - id: P8-D7
+    decision: Build the scalable, proper version first; iterate live; ample internal logs
+    rationale: 'Founder: "i want us to aim to build the scalable, proper version of this first, we will just be testing and iterating on this live so we also need ample internal logs around it so we can iterate on it properly"'
+tags:
+  - paradigm-8
+  - harness
+  - decision
+  - atelier
+linked_lore:
+  - L-2026-10-16-ascend-042324-001
+git_context:
+  ref: 866992653ccebf42cb83cc1ed500625b763ec2e7
+  branch: ideate/paradigm-8
+  dirty: true

@@ -1,0 +1,32 @@
+id: L-2026-10-16-ascend-040054-001
+type: insight
+timestamp: '2026-10-16T04:00:54.600Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Fable vision: Heddle — the kernel Claude Code never had'
+summary: 'Fable''s divergent pass (.paradigm/research/paradigm-8/07-fable-vision.md) offers three shapes: A Heddle (daemon kernel beneath Claude Code, recommended), B distro on deepseek-harness, C pure Claude Code Mods overlay. Recommends A: "Claude Code is the shell; we ship the kernel it never had: one ledger, one identity, one scheduler, and every session Warpline-native from birth." Four tensions with Arky recorded for founder ruling. P8-R2 (spec-driven fleet build) not yet covered.'
+symbols_touched:
+  - '#paradigm-harness'
+  - '#warpline'
+learnings:
+  - 'In weaving, the harness is the frame of heddles that lifts warp threads so the weft can pass: ''Paradigm Harness'' is already Warpline vocabulary.'
+  - 'The harness is a deletion project before a build project: the kernel already exists three times in three languages.'
+  - 'Warpline and the harness are each other''s missing half: Warpline''s denominator is empty because one human edits serially; only an armada produces contested verdicts. The harness is Warpline''s instrument; Warpline is the harness''s merge law.'
+  - The landscape gap list equals deepseek-harness's explicit refusal list.
+  - '''Model-visible <=> logged'' and Warpline''s ''transfer != admission'' are the same law at two layers.'
+  - 'Odysseus''s teacher flywheel is Paradigm''s classroom with roles inverted: more supply, same gate.'
+  - Claude Code is the shell (bash); Conductor/constellation/Platform/Studio are terminal emulators and window managers; flow/constellation/atelier/Conductor are distros.
+tags:
+  - paradigm-8
+  - harness
+  - epiphany
+  - vision
+  - naming
+linked_lore:
+  - L-2026-10-16-ascend-040001-001
+git_context:
+  ref: 866992653ccebf42cb83cc1ed500625b763ec2e7
+  branch: ideate/paradigm-8
+  dirty: true

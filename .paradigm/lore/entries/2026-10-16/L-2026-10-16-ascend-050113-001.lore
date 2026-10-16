@@ -1,0 +1,33 @@
+id: L-2026-10-16-ascend-050113-001
+type: human-note
+timestamp: '2026-10-16T05:01:13.327Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: '8.0: git-mode oracle, learning-loop commitments, name reopened'
+summary: 'Git-mode contract nodes: tests + key-proven reviewer + clean merge with CI green. All four of Loid''s learning-loop requirements adopted (credit not popularity; day-one joinable learning logs; calibrated reviewer keyed by repo and mode; liveness gates plus a reader). Loid''s direct view saved (research 12) and her earlier inferred cards on the reference pages corrected. Name reopened: founder wants a name where purpose, paradigm, warpline, neurons, constellation and atelier intersect; Fable naming pass running.'
+symbols_touched:
+  - '#paradigm-harness'
+  - '#notebook-loader'
+decisions:
+  - id: P8-D10
+    decision: Git-mode contract nodes are certified by tests + key-proven reviewer + clean merge onto base with CI green
+    rationale: Warpline is opt-in per project; git mode needs an equivalent second check without semantic judgment.
+  - id: P8-D11
+    decision: 'Learning-loop commitments: credit not popularity; day-one joinable learning logs with denominators; calibrated reviewer keyed by (repo, mode); liveness gates (>=1 verdict/working day, >=1 tend/week) plus a reader in the band/inbox; the loop reads only the kernel log'
+    rationale: 'Loid: today''s loop is a popularity loop; injection dark since 2026-07-22; 6 founder verdicts ever; 200/200 debates and 5/5 certifications show uncalibrated judges pass everything.'
+learnings:
+  - 'Process correction: reference pages presented Claude''s inferences as Loid''s positions; she had taken none. Team viewpoint cards must cite a stated position or be labelled as inference.'
+tags:
+  - paradigm-8
+  - harness
+  - decision
+  - learning-loop
+  - naming
+linked_lore:
+  - L-2026-10-16-ascend-044318-001
+git_context:
+  ref: 866992653ccebf42cb83cc1ed500625b763ec2e7
+  branch: ideate/paradigm-8
+  dirty: true

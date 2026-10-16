@@ -1,0 +1,31 @@
+id: L-2026-10-16-ascend-042324-001
+type: insight
+timestamp: '2026-10-16T04:23:24.692Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Team converges after ruflo: Heddle + Shuttle, six laws, all four tensions resolved'
+summary: 'After the ruflo inspection, Fable and Arky re-assessed independently (.paradigm/research/paradigm-8/10, 11). Both drop Shuttle as a standalone shape (it is Heddle''s Mod display layer), demote Bolt to a backend adapter, and resolve all four prior tensions: separate kernel log with ref.foreign links to the fabric; one logged pointer line instead of Warpline teaching; kernel hsid with Claude uuid as alias; delete Conductor''s Swift runner. Budget fuse moves into move 1. One micro-tension remains: Mod band fed by status files first (Fable) vs authenticated socket events (Arky).'
+symbols_touched:
+  - '#paradigm-harness'
+  - '#warpline'
+  - '#conductor'
+learnings:
+  - ruflo is Heddle+Shuttle shipped wide and shallow; its persistent Mod panes all read daemon-written status files, proving a display overlay still needs a kernel feeding it.
+  - 'Six Heddle laws from production evidence: no spawn without a permit (budget fuse ON by default, fan-out visible); honesty is CI; tiny ABI (~12 kernel verbs); reversible by construction (install->uninstall leaves zero diff); nothing spends by default; trust posture (no postinstall, pinned deps, alpha never latest).'
+  - 'Spec-as-contract law (Arky): the kernel runs every oracle and logs the result under its own principal; an agent can claim a node but never certify it. A node without an oracle is a compile refusal.'
+  - 'Positioning: ''ruflo coordinates agents and counts their votes; Heddle adjudicates their work.'' Strike swarm/hive/queen vocabulary; it now signals theatre.'
+  - 'Paradigm already carries one ruflo disease: the notebook popularity loop presented as learning. Loid''s injected/credited split must ship in 8.0.'
+tags:
+  - paradigm-8
+  - harness
+  - epiphany
+  - convergence
+  - ruflo
+linked_lore:
+  - L-2026-10-16-ascend-042006-001
+git_context:
+  ref: 866992653ccebf42cb83cc1ed500625b763ec2e7
+  branch: ideate/paradigm-8
+  dirty: true

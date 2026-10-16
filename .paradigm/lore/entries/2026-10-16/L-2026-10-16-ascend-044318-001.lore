@@ -1,0 +1,33 @@
+id: L-2026-10-16-ascend-044318-001
+type: human-note
+timestamp: '2026-10-16T04:43:18.850Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: '8.0: three key-proven oracles; Warpline is opt-in per project'
+summary: 'Board 5: a contract node is certified by tests + Warpline admission + a reviewer agent whose key the kernel proves never signed a PICK for that node; disagreement becomes a KNOT. Founder note: a project must be declared a Warpline project; otherwise the harness runs on standard git, because the harness has value beyond Warpline.'
+symbols_touched:
+  - '#paradigm-harness'
+  - '#warpline'
+decisions:
+  - id: P8-D8
+    decision: 'Contract nodes certified by three oracles: tests, Warpline admission, and a key-proven reviewer who never built the node'
+    rationale: Build-proper-first puts identity/keys in the 8.0 kernel, so 'never built it' is provable in 8.0.
+  - id: P8-D9
+    decision: Warpline is opt-in per project; non-Warpline projects run on standard git with the rest of the harness unchanged
+    rationale: 'Founder: "the user still has to state if they are going to have the project as a warpline project otherwise it just functions as standard git as there are other functions to this tool beyond the warpline aspect that make it valuable"'
+learnings:
+  - 'Consequence of P8-D9: in git-mode projects the Warpline admission oracle has no equivalent, so contract certification there is tests + key-proven reviewer + a git-side check (clean merge onto the base branch with CI green); Warpline-native spawn duties apply only in Warpline projects.'
+tags:
+  - paradigm-8
+  - harness
+  - decision
+  - warpline
+  - spec-as-contract
+linked_lore:
+  - L-2026-10-16-ascend-043622-001
+git_context:
+  ref: 866992653ccebf42cb83cc1ed500625b763ec2e7
+  branch: ideate/paradigm-8
+  dirty: true
