@@ -1,0 +1,28 @@
+id: 2026-10-15-gnomon-aesthetic
+verb: direct
+scope: "The full aesthetic for Gnomon (Paradigm 8.0): identity/wordmark, the Shuttle band inside Claude Code, CLI voice, human inbox/console, kernel status views, and the pitch page that follows."
+depth: deep
+surface: terminal
+mode: greenfield
+preserve_from: [".atelier/design-system.yaml preserve list (Warpline system rules, tokens, nomenclature) applies inside Warpline surfaces"]
+read: "An instrument for one operator running an armada: glanced at many times a day in the Claude Code band, opened a few times a day to decide; exact, calm, quietly beautiful, a made object that reads a larger order."
+inputs:
+  - "Warpline loom: ink/linen ground, warp amber = branch A, weft teal = branch B, seam violet = git-blind only, Fraunces/Inter/JetBrains Mono, motion only on events"
+  - "Constellation observatory: #050505 ground, paper #f5f4f2, gold #d8a858 = decisions/Claude activity, star classes in cool blues, Space Grotesk/Inter/Geist Mono, register plain-instrument"
+  - "Open items from 2026-10-14-warpline-console: v2 look so the two-level shell doesn't read as generic GitHub; a failure colour"
+  - "Gnomon = sundial shadow-caster, carpenter's square, 'one who knows; judge; indicator'"
+started: 2026-10-15T00:00:00Z
+boards:
+  - id: world
+    question: "Which material world does Gnomon belong to?"
+    options:
+      - { id: shadow-instrument, label: "Shadow instrument", recommended: true, why: "The only world that is Gnomon's own; loom and sky live inside it" }
+      - { id: loom-ledger, label: "Loom ledger" }
+      - { id: observatory, label: "Observatory" }
+    references_rendered: [shadow-instrument, loom-ledger, observatory]
+    decision:
+      kind: pick
+      choice: shadow-instrument
+      decided_by: creator
+      notes:
+        - "the page has elements that all overlap (fixed: base .card grid collision)"

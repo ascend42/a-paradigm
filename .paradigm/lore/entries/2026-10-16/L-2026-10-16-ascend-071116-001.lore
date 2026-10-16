@@ -1,0 +1,33 @@
+id: L-2026-10-16-ascend-071116-001
+type: human-note
+timestamp: '2026-10-16T07:11:16.573Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: TUI renderer pi-tui, out-of-process mods, claude -p driver
+summary: Founder chose pi-tui as the TUI renderer, out-of-process mods, and the claude -p stream-json driver for Claude sessions, and asked whether that uses API credits or the subscription.
+symbols_touched:
+  - '#paradigm-harness'
+decisions:
+  - id: P8-D32
+    decision: 'TUI renderer: @earendil-works/pi-tui (MIT), with panes, virtualization and width-keyed line caches added'
+    rationale: Small, framework-free, proven; deepseek-harness's long-session lesson addressed up front.
+  - id: P8-D33
+    decision: 'Mods run out of process: one child per mod over JSON-RPC, views from a closed kit, declared effects enforced at the boundary, approvals only from kernel-signed cards'
+    rationale: No reference harness sandboxes mods; this keeps agent-written mods from touching the TUI or kernel.
+  - id: P8-D34
+    decision: Claude sessions driven by claude -p stream-json on the founder's subscription (add --include-partial-messages; plan mode and AskUserQuestion rendered as cards); preflight refuses if an API key would take precedence
+    rationale: One pinned driver shared with flow and constellation.
+tags:
+  - paradigm-8
+  - gnomon
+  - tui
+  - mods
+  - decision
+linked_lore:
+  - L-2026-10-16-ascend-070808-001
+git_context:
+  ref: 3b3523687a485bdcedfadc7070d5f33c2043ff97
+  branch: ideate/paradigm-8
+  dirty: true

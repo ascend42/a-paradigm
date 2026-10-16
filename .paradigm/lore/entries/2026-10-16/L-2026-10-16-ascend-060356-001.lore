@@ -1,0 +1,36 @@
+id: L-2026-10-16-ascend-060356-001
+type: human-note
+timestamp: '2026-10-16T06:03:56.635Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Gnomon spec v2 OPEN rulings; confirmation pass and aesthetic session next
+summary: 'Founder ruled on the spec v2 OPEN list: approve both Warpline asks (refs.watch verb, keyed-only resolve); the reviewer sandbox reaches Anthropic endpoints only; the technical OPENs (hook session_id, Mod outbound sockets, Linux anchor) are settled in Move 1; Arky + Aegis run a confirmation pass on v2 in parallel with the Atelier aesthetic session, which runs now, before Move 1, followed by the pitch.'
+symbols_touched:
+  - '#paradigm-harness'
+  - '#warpline'
+decisions:
+  - id: P8-D16
+    decision: 'Approve both Warpline changes for Gnomon: a refs.watch daemon verb and resolve served only to keyed principals'
+    rationale: Removes kernel fs-watch polling and closes Aegis H5 (env -u WARPLINE_AGENT_ID warpline resolve) at the engine.
+  - id: P8-D17
+    decision: 'Reviewer oracle sandbox network allowlist: Anthropic endpoints only'
+    rationale: The reviewer has no tools; minimum egress, minimum injection surface.
+  - id: P8-D18
+    decision: Technical OPENs (hook session_id, Mod outbound sockets, Linux anchor path) are settled empirically in Move 1 and written back into the spec
+    rationale: M1.0 spike and a hook probe answer them faster than speculation.
+  - id: P8-D19
+    decision: Atelier aesthetic session and pitch document run now, before Move 1; Arky + Aegis confirm v2 in parallel
+    rationale: 'Founder: "lets get dialog options for the choices then after we go into aesethic".'
+tags:
+  - paradigm-8
+  - gnomon
+  - spec
+  - decision
+linked_lore:
+  - L-2026-10-16-ascend-054302-001
+git_context:
+  ref: 3b3523687a485bdcedfadc7070d5f33c2043ff97
+  branch: ideate/paradigm-8
+  dirty: true

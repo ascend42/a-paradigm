@@ -1,0 +1,40 @@
+id: L-2026-10-16-ascend-070124-001
+type: insight
+timestamp: '2026-10-16T07:01:24.355Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Pivot: Gnomon''s own TUI becomes the shell for everything; modding is day one'
+summary: 'Asked how to prompt a local model day to day, the founder chose Gnomon''s own TUI, built from the references researched today, as the primary shell for both local and Claude sessions, with modding as a day-one capability any agent can maintain (extra views and tools). This reverses "Claude Code is the shell; don''t write one". Claude Code becomes a backend driven headless on the subscription. Also adopted: all seven QM team-readiness schema changes, and the key split with session sandbox.'
+symbols_touched:
+  - '#paradigm-harness'
+decisions:
+  - id: P8-D24
+    decision: Adopt all seven QM team-readiness schema changes in 8.0 (device keys under one principal, namespaced principal and log ids, signer on registry rows, org/team reserved in event and permit scopes, approval cards with requestedBy/approverPolicy/attended and the approver signed in, audience/sensitivity on events, hsid on the namespaced id)
+    rationale: Schema-only now; avoids version bumps on every contract in 8.1.
+  - id: P8-D25
+    decision: 'Split keys: root key in Keychain with a Touch ID prompt for rare registry/grant/config writes; approvals stay on the key file; kernel-spawned sessions run under a sandbox-exec profile denying ~/.gnomon/keys'
+    rationale: 'Aegis v2 check: near-free mitigation of the accepted signing risk.'
+  - id: P8-D26
+    decision: Gnomon ships its own TUI as the primary shell for local and Claude sessions, built from today's references; Claude Code becomes a headless backend; reverses 'Claude Code is the shell'
+    rationale: 'Founder: "Gnomon''s own TUI utilizing the references of repos we''ve researched today that do it" and "TUI for everything".'
+  - id: P8-D27
+    decision: 'Modding is a day-one capability: views and tools added as manifest packages that any agent can write and maintain, through the trust and audit queue'
+    rationale: 'Founder: "we make the modding aspect of Gnomon a day 1 thing that is easy for any agent to maintain and add extra views and tools"'
+learnings:
+  - 'Owning the shell moves Gnomon toward deepseek-harness and QM''s architecture (Claude Code driven headless via stream-json or the Agent SDK) while keeping the differentiators: kernel log, budget, adjudication, contracts, learning loop.'
+  - 'Odysseus is AGPL-3.0: design ideas only, no code lifted. deepseek-harness, ruflo and QM are MIT.'
+tags:
+  - paradigm-8
+  - gnomon
+  - epiphany
+  - tui
+  - mods
+  - decision
+linked_lore:
+  - L-2026-10-16-ascend-065405-001
+git_context:
+  ref: 3b3523687a485bdcedfadc7070d5f33c2043ff97
+  branch: ideate/paradigm-8
+  dirty: true

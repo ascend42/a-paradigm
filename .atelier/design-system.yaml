@@ -47,3 +47,14 @@ decisions:
   - { session: 2026-10-14-warpline-console, board: intent-dials, choice: control-room }
   - { session: 2026-10-14-warpline-console, board: human-states, choice: neutral-mark }
   - { session: 2026-10-14-warpline-console, board: repos-and-nav, choice: two-levels, scope: v1 }
+
+gnomon:
+  read: "An instrument for one operator running an armada: glanced at many times a day in the Claude Code band, opened a few times a day to decide; exact, calm, quietly beautiful, a made object that reads a larger order."
+  world:
+    choice: shadow-instrument
+    rules:
+      - "One raking light from the top left; surfaces carry a hard cast shadow as material, never as a state signal (Mika)"
+      - "The light edge on a surface is the gnomon's line: linen, never a hue"
+      - "Progress reads as a shadow sweeping a dial"
+      - "Warpline surfaces keep the loom (threads, selvage); Constellation views keep the sky; both sit under the one light"
+    from: { session: 2026-10-15-gnomon-aesthetic, board: world }
