@@ -1,0 +1,36 @@
+id: L-2026-10-16-ascend-170531-001
+type: human-note
+timestamp: '2026-10-16T17:05:31.816Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Gnomon look: papercraft light / phosphor dark; Workshop mod; tasteful reorganizable chrome'
+summary: 'Aesthetic session decisions. Iconography: the gnomon cap, alive, as a minimal optional Workshop mod with two zones: caps lined up in "needs you", and caps bobbing in "working" only while streaming. This is an informed override of motion-on-events, scoped to the mod. Style: after exploring neumorphism and six styles, the founder chose light mode = papercraft (Paper atelier, an override of the default-warm-paper tell) and dark mode = phosphor terminal, with an optional auto day/night swap; this supersedes Shadow instrument. Founder also asked for tasteful header, footer and sidebar use that shows what''s necessary, gives easy access to anything, and lets people reorganize. A real-world walkthrough mock (standard git flow on a-constellation, Warpline flow on a-paradigm) was built with layout presets and a command palette.'
+symbols_touched:
+  - '#paradigm-harness'
+decisions:
+  - id: P8-D40
+    decision: Light mode = papercraft (cut-paper sheets, grain, ink lines, folded paper caps, pressable ink keys); dark mode = phosphor terminal (mono, glow, bracketed keys, glyph caps); optional automatic day/night swap
+    rationale: 'Founder: "lets just have it as a light and dark mode with option for night/day swapping".'
+  - id: P8-D41
+    decision: 'Workshop is a minimal optional mod view (vertical sidebar or horizontal footer): needs-you queue plus a working zone where caps bob only while streaming; hat shape = work type, filled = Claude, outlined = local, soft hue = project (never text for sage), violet only for KNOT'
+    rationale: Founder iterations on the living-cap idea.
+  - id: P8-D42
+    decision: 'Chrome principle: header, footer, sidebars and mod slots show only what''s necessary, everything is reachable from a command palette, and users can reorganize (layout presets, move or hide the Workshop and band)'
+    rationale: 'Founder: "lets be tasteful with the header and footer and side bars / mod utilization so that people can see what is necessary/helpful, access anything easily, and can reorganize to their pref"'
+learnings:
+  - 'Measured: the original Shadow-instrument key edges were under 3:1; every style needs a key edge of at least 3:1.'
+  - 'Sage project hue measures 3.96:1 on paper: fine for cap fills, never for text.'
+tags:
+  - paradigm-8
+  - gnomon
+  - atelier
+  - aesthetic
+  - decision
+linked_lore:
+  - L-2026-10-16-ascend-073513-001
+git_context:
+  ref: 87f0f5a27e83a7aeed5f1b51d725fb6f7dd14a90
+  branch: ideate/paradigm-8
+  dirty: true

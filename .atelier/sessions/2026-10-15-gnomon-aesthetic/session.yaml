@@ -26,3 +26,49 @@ boards:
       decided_by: creator
       notes:
         - "the page has elements that all overlap (fixed: base .card grid collision)"
+  - id: iconography
+    question: "Mark & iconography: how far should the gnome go?"
+    options:
+      - { id: cap-gnomon, label: "Cap = gnomon", recommended: true }
+      - { id: sundial-only, label: "Sundial only" }
+      - { id: gnome-guild, label: "Gnome guild" }
+    references_rendered: [iconography, workshop, workshop-mod]
+    decision:
+      kind: mix
+      choice: "cap-gnomon, alive: Workshop as a minimal optional mod view (vertical sidebar or horizontal footer) with two zones: caps lined up in 'needs you' with their question; caps in 'working' bob only while their session streams; idle still; hat shape = work type, filled = Claude, outlined = local, soft hue = project, violet only for KNOT"
+      decided_by: creator
+      overrides:
+        - { rule: motion-on-events-only, scope: "workshop mod", reason: "creator wants caps visibly working; motion limited to sessions actively streaming" }
+      notes:
+        - "there is something to the idea of these little hats moving around as the running operations and them working taht acan be visualized, with shadows and them moving around in view like they are orchestratinig and working. maybe some soft hued colors, shaped hats for the type of work happening, colored differentiation per the project/flow they are grouped working on"
+        - "part of me feels this is disjointed in a way and i would want to see them just lined up for those that need answers and a separate space where they are just moving or bouncing around to show they are doing something and what they are doing. it should be a minimal optional mod view that could be skinny and vertical or short and horizontal"
+  - id: style
+    question: "Which style does Gnomon wear? (reopened world after neumorphism exploration)"
+    options: [shadow-instrument, soft-instrument, phosphor-terminal, blueprint, paper-atelier, glass-observatory]
+    references_rendered: [material, styles, papercraft]
+    decision:
+      kind: mix
+      choice: "light mode = papercraft (Paper atelier: cut-paper sheets, grain, ink lines, folded paper caps, pressable ink keys); dark mode = phosphor terminal (mono, glow, bracketed keys, glyph caps); optional automatic day/night swap"
+      decided_by: creator
+      supersedes: { board: world, choice: shadow-instrument }
+      overrides:
+        - { tell: default-warm-paper, scope: light mode, reason: "creator wants a papercraft feel" }
+      notes:
+        - "maybe not ust neumorphism but i want to explore other design styles for the tool instead of the current"
+        - "there is something super iteresing to the idea of paper atelier as i like the idea of a papercraft feel to the tool, i like it and phosphor terminal"
+        - "lets just have it as a light and dark mode with option for night/day swapping"
+      findings:
+        - "Current mock's key edges measured under 3:1; every style needs a >=3:1 key edge"
+        - "Sage project hue is 3.96:1 on paper: cap fills only, never text"
+  - id: decisions-and-navigation
+    question: "How do decisions and sessions live in the shell?"
+    references_rendered: [walkthrough]
+    decision:
+      kind: note
+      decided_by: creator
+      notes:
+        - "i like the idea of flying in pieces of paper and chips for decisions that pile up like a stack of decisions and maybe looking between them in case anohter decision matters to hit first, but in the chats it makes sense to see the decisions that pertain to that specific project, probably want a left side bar of active/past chats and making new sessions"
+        - "lets be tasteful with the header and footer and side bars / mod utilization so that people can see what is necessary/helpful, access anything easily, and can reorganize to their pref"
+status: paused
+paused_for: "deep UX-design research for the agent team and neurons (founder has links)"
+open_boards: [colour (soft project hues + failure colour), type (papercraft serif vs all-mono), motion (incl. paper fly-in for decisions), cli-voice, decision-stack + left session sidebar render]
