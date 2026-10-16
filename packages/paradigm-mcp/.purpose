@@ -152,7 +152,7 @@ components:
     description: Reindex tool that rebuilds scan-index.json, navigator.yaml, flow-index.json, and aspect-graph.db from .purpose files. Runs 11 pipeline steps including integrity checks, component anchor validation, purpose health scoring, and cross-file validation. Clears ToolCache on success.
     type: tool
     anchors:
-      - src/tools/reindex.ts:1-475
+      - src/tools/reindex.ts:1-920
     tags:
       - mcp
     signals:
@@ -325,7 +325,7 @@ components:
     description: Loads project symbol index using premise-core aggregator
     type: loader
     anchors:
-      - src/utils/index-loader.ts:1-150
+      - src/utils/index-loader.ts:1-320
     tags:
       - integration
     signals:
@@ -335,14 +335,14 @@ components:
     description: TTL-based cache for MCP tool results to avoid redundant recomputation within short windows
     type: utility
     anchors:
-      - src/utils/tool-cache.ts:1-69
+      - src/utils/tool-cache.ts:1-107
     tags:
       - performance
   IntegrityChecker:
     description: Central utility for Paradigm symbol integrity validation — broken references, duplicate symbols, orphaned symbols, missing anchors, anchor out-of-bounds, component anchor validation, and purpose file health scoring
     type: utility
     anchors:
-      - src/utils/integrity-checker.ts:1-400
+      - src/utils/integrity-checker.ts:1-585
     tags:
       - quality
       - validation
@@ -487,8 +487,8 @@ aspects:
       - performance
       - caching
     anchors:
-      - src/utils/tool-cache.ts:17-17
-      - src/utils/tool-cache.ts:68-69
+      - src/utils/tool-cache.ts:26-26
+      - src/utils/tool-cache.ts:106-107
     applies-to:
       - '#ToolCache'
       - '#CoreTools'
@@ -503,7 +503,7 @@ aspects:
       - caching
       - data-integrity
     anchors:
-      - src/tools/reindex.ts:97-98
+      - src/tools/reindex.ts:135-135
     applies-to:
       - '#ReindexTools'
       - '#ToolCache'
@@ -511,20 +511,31 @@ aspects:
       handleReindexTool calls toolCache.clear() after rebuildStaticFiles
       succeeds and reloadContext completes. This ensures no stale search
       or status results survive an index rebuild.
-  index-cache-ttl-30s:
-    description: ProjectContext index cache uses a 30-second TTL before considering re-aggregation
+  index-freshness-debounce:
+    description: ProjectContext stays fresh via the live index, refreshed in place at every tool/resource choke point with a 500ms per-root debounce
     tags:
       - performance
       - caching
     anchors:
-      - src/utils/index-loader.ts:23-23
-      - src/utils/index-loader.ts:97-100
+      - src/utils/index-loader.ts:157-163
+      - src/utils/index-loader.ts:178-215
+      - src/utils/index-loader.ts:221-230
+      - src/utils/index-loader.ts:241-267
     applies-to:
       - '#IndexLoader'
     enforcement: |
-      INDEX_CACHE_TTL_MS = 30 * 1000. isContextStale() returns true when
-      the context is older than this TTL. ensureFreshIndex() re-aggregates
-      if the index is empty or the cache has expired.
+      loadProjectContext builds on getLiveIndex (premise-core #live-index).
+      ensureFreshContext(ctx) refreshes a live context IN PLACE: within
+      FRESHNESS_DEBOUNCE_MS (500ms) of the last check for the root — and while
+      ctx still holds that check's index — it skips the glob+stat; otherwise it
+      consults getLiveIndex, and on a rebuilt index computes index, aggregation
+      and gateConfig first, then swaps them in one synchronous block.
+      Concurrent calls on one ctx share one in-flight refresh. A swap schedules
+      a coalesced, fire-and-forget rebuildStaticFiles so flow-index.json,
+      navigator.yaml and scan-index.json follow. Choke points call
+      refreshContextSafely, which logs and keeps the existing ctx on failure —
+      a refresh never fails a tool call. paradigm_reindex pairs
+      invalidateLiveIndex with resetFreshnessDebounce.
   wisdom-cache-ttl-30s:
     description: Wisdom context cache uses a 30-second TTL with invalidation on write
     tags:
@@ -1179,7 +1190,7 @@ aspects:
       - reindex
       - pipeline
     anchors:
-      - src/tools/reindex.ts:128-222
+      - src/tools/reindex.ts:229-492
     applies-to:
       - '#ReindexTools'
     enforcement: |
@@ -1194,7 +1205,7 @@ aspects:
       - reindex
       - resilience
     anchors:
-      - src/tools/reindex.ts:184-206
+      - src/tools/reindex.ts:290-313
     applies-to:
       - '#ReindexTools'
       - '#AspectGraph'

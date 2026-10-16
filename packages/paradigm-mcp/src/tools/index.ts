@@ -22,7 +22,7 @@ import {
   CallToolRequestSchema,
 } from '@modelcontextprotocol/sdk/types.js';
 import {
-  getSymbol,
+  resolveSymbol,
   searchSymbols,
   getReferencesTo,
   getReferencesFrom,
@@ -30,7 +30,7 @@ import {
   getAllSymbols,
   getSymbolCounts,
 } from '@a-company/premise-core';
-import type { ProjectContext } from '../utils/index-loader.js';
+import { refreshContextSafely, type ProjectContext, type ReloadContextFn } from '../utils/index-loader.js';
 import { ToolRegistry, type ToolModule, type ToolDefinition, toListedTool, readMcpToolsConfig, FEATURE_DETECTORS } from '../utils/tool-registry.js';
 import { defineFamily, familyOpsFromMap, isDeprecatedAlias, compactDefinition, ANCHOR_DESC_MAX, ANCHOR_PROP_DESC_MAX, type ToolFamily } from '../utils/tool-family.js';
 import { LEGACY_TOOL_MAP } from './legacy-tool-map.js';
@@ -100,10 +100,10 @@ import { emitAndProcess } from '../utils/nomination-engine.js';
  * The registry provides tiered listing via getActiveTools() and
  * Map-based dispatch via dispatch().
  */
-function buildRegistry(rootDir: string, reloadContext?: () => Promise<void>): ToolRegistry {
+function buildRegistry(rootDir: string, reloadContext?: ReloadContextFn): ToolRegistry {
   const registry = new ToolRegistry(rootDir);
 
-  const reload = reloadContext || (async () => {});
+  const reload: ReloadContextFn = reloadContext || (async () => {});
 
   // Helper: wrap a standard (name, args, ctx) handler into the ToolModule.handleTool shape
   const wrap = (
@@ -112,10 +112,11 @@ function buildRegistry(rootDir: string, reloadContext?: () => Promise<void>): To
     async (name, args, ctx) => handler(name, args, ctx as ProjectContext);
 
   // Helper: wrap handlers that also need the reload callback
+  const reloadVoid = async (): Promise<void> => { await reload(); };
   const wrapWithReload = (
     handler: (name: string, args: Record<string, unknown>, ctx: ProjectContext, reloadFn: () => Promise<void>) => Promise<{ handled: boolean; text: string }>,
   ): ToolModule['handleTool'] =>
-    async (name, args, ctx) => handler(name, args, ctx as ProjectContext, reload);
+    async (name, args, ctx) => handler(name, args, ctx as ProjectContext, reloadVoid);
 
   // ── Core tier (always loaded) ─────────────────────────
 
@@ -154,7 +155,8 @@ function buildRegistry(rootDir: string, reloadContext?: () => Promise<void>): To
       key: 'reindex',
       tier: 'core',
       getToolsList: getReindexToolsList,
-      handleTool: wrapWithReload(handleReindexTool),
+      // reindex needs the full ReloadContextFn (opts + returned context)
+      handleTool: async (name, args, ctx) => handleReindexTool(name, args, ctx as ProjectContext, reload),
     },
     {
       key: 'docs',
@@ -709,7 +711,7 @@ export function listToolDefinitions(rootDir: string = process.cwd()): ToolDefini
   return out;
 }
 
-export function registerTools(server: Server, getContext: () => ProjectContext, reloadContext?: () => Promise<void>) {
+export function registerTools(server: Server, getContext: () => ProjectContext, reloadContext?: ReloadContextFn) {
   // Build the tool registry with all modules organized by tier
   const ctx0 = getContext();
   const registry = buildRegistry(ctx0.rootDir, reloadContext);
@@ -745,6 +747,11 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
         );
       }
       const ctx = getContext();
+      // Symbol Integrity Phase 1: pick up .purpose/portal edits made outside
+      // the MCP write tools (in place — same ctx object), and drop cached tool
+      // results computed against a superseded index.
+      await refreshContextSafely(ctx);
+      toolCache.bindIndex(ctx.index);
 
       // Auto-recovery: on the first tool call of a new session, surface checkpoint/handoff data
       const tracker = getSessionTracker();
@@ -878,7 +885,18 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
 
         case 'paradigm_related': {
           const { symbol } = args;
-          const entry = getSymbol(ctx.index, symbol as string);
+          // User-typed name: fuzzy (case / bare-name tolerant) resolution.
+          const { entry, candidates } = resolveSymbol(ctx.index, symbol as string);
+
+          if (!entry && candidates.length > 1) {
+            const text = JSON.stringify({
+              error: 'Ambiguous symbol',
+              symbol,
+              candidates: candidates.map(c => c.symbol),
+            }, null, 2);
+            trackToolCall(text.length, name);
+            return { content: [{ type: 'text', text }] };
+          }
 
           if (!entry) {
             // Fallback: grep for references when symbol isn't indexed
@@ -894,7 +912,7 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
                   'Run `paradigm_search` with a partial name to find similar symbols',
                   'Check `.purpose` files for symbol definitions',
                   'Use `paradigm_status` to see available symbols by type',
-                  'The symbol may not be indexed yet - run `paradigm scan`',
+                  'The symbol may not be indexed yet - call paradigm_reindex',
                 ],
               }, null, 2);
               trackToolCall(text.length, name);
@@ -915,7 +933,7 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
               symbol,
               status: 'not-indexed',
               fallback: 'grep-search',
-              note: 'Approximate relationships from grep — run `paradigm scan` for accurate graph data.',
+              note: 'Approximate relationships from grep — call paradigm_reindex for accurate graph data.',
               usedBy: filesAffected.slice(0, 10).map(f => ({
                 file: f,
                 references: references.filter(r => r.filePath === f).length,
@@ -927,7 +945,7 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
                 purposeFileRefs: purposeRefs.length,
                 codeRefs: codeRefs.length,
               },
-              suggestion: 'Run `paradigm scan` to enable full relationship tracking',
+              suggestion: 'Call paradigm_reindex to enable full relationship tracking',
             }, null, 2);
             trackToolCall(text.length, name);
             return {
@@ -938,8 +956,9 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
             };
           }
 
-          const referencesTo = getReferencesTo(ctx.index, symbol);
-          const referencesFrom = getReferencesFrom(ctx.index, symbol);
+          // Canonical form — case / bare-name inputs resolve to the indexed symbol.
+          const referencesTo = getReferencesTo(ctx.index, entry.symbol);
+          const referencesFrom = getReferencesFrom(ctx.index, entry.symbol);
 
           const text = JSON.stringify({
             symbol: entry.symbol,

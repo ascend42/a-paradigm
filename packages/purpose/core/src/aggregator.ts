@@ -267,15 +267,24 @@ export async function getAllPurposeFiles(rootDir: string): Promise<ParsedPurpose
 }
 
 /**
+ * Called by the extract* functions just before a later definition overwrites
+ * an earlier one with the same id (last-wins). Lets callers surface
+ * within-category duplicates that the Map would otherwise hide.
+ */
+export type ShadowCallback = (id: string, shadowedFilePath: string, winnerFilePath: string) => void;
+
+/**
  * Extract all features from parsed purpose files
  */
-export function extractFeatures(parsedFiles: ParsedPurposeFile[]): Map<string, { item: PurposeItem; filePath: string }> {
+export function extractFeatures(parsedFiles: ParsedPurposeFile[], onShadow?: ShadowCallback): Map<string, { item: PurposeItem; filePath: string }> {
   const features = new Map<string, { item: PurposeItem; filePath: string }>();
 
   for (const { filePath, data } of parsedFiles) {
     // Handle both array and record formats
     const entries = normalizeItemsToEntries(data.features);
     for (const [id, item] of entries) {
+      const prior = features.get(id);
+      if (prior && onShadow) onShadow(id, prior.filePath, filePath);
       features.set(id, { item, filePath });
     }
   }
@@ -286,13 +295,15 @@ export function extractFeatures(parsedFiles: ParsedPurposeFile[]): Map<string, {
 /**
  * Extract all components from parsed purpose files
  */
-export function extractComponents(parsedFiles: ParsedPurposeFile[]): Map<string, { item: PurposeItem; filePath: string }> {
+export function extractComponents(parsedFiles: ParsedPurposeFile[], onShadow?: ShadowCallback): Map<string, { item: PurposeItem; filePath: string }> {
   const components = new Map<string, { item: PurposeItem; filePath: string }>();
 
   for (const { filePath, data } of parsedFiles) {
     // Handle both array and record formats
     const entries = normalizeItemsToEntries(data.components);
     for (const [id, item] of entries) {
+      const prior = components.get(id);
+      if (prior && onShadow) onShadow(id, prior.filePath, filePath);
       components.set(id, { item, filePath });
     }
   }
@@ -303,12 +314,14 @@ export function extractComponents(parsedFiles: ParsedPurposeFile[]): Map<string,
 /**
  * Extract all gates from parsed purpose files
  */
-export function extractGates(parsedFiles: ParsedPurposeFile[]): Map<string, { item: GateDefinition; filePath: string }> {
+export function extractGates(parsedFiles: ParsedPurposeFile[], onShadow?: ShadowCallback): Map<string, { item: GateDefinition; filePath: string }> {
   const gates = new Map<string, { item: GateDefinition; filePath: string }>();
 
   for (const { filePath, data } of parsedFiles) {
     if (data.gates) {
       for (const [id, item] of Object.entries(data.gates)) {
+        const prior = gates.get(id);
+        if (prior && onShadow) onShadow(id, prior.filePath, filePath);
         gates.set(id, { item, filePath });
       }
     }
@@ -320,12 +333,14 @@ export function extractGates(parsedFiles: ParsedPurposeFile[]): Map<string, { it
 /**
  * Extract all states from parsed purpose files
  */
-export function extractStates(parsedFiles: ParsedPurposeFile[]): Map<string, { item: StateDefinition; filePath: string }> {
+export function extractStates(parsedFiles: ParsedPurposeFile[], onShadow?: ShadowCallback): Map<string, { item: StateDefinition; filePath: string }> {
   const states = new Map<string, { item: StateDefinition; filePath: string }>();
 
   for (const { filePath, data } of parsedFiles) {
     if (data.states) {
       for (const [id, item] of Object.entries(data.states)) {
+        const prior = states.get(id);
+        if (prior && onShadow) onShadow(id, prior.filePath, filePath);
         states.set(id, { item, filePath });
       }
     }
@@ -350,7 +365,7 @@ export interface ExtractedFlow {
  * Extract all flows from parsed purpose files
  * Handles both array format [{name, steps}] and record format {flow-name: {description, gates}}
  */
-export function extractFlows(parsedFiles: ParsedPurposeFile[]): Map<string, { item: ExtractedFlow; filePath: string }> {
+export function extractFlows(parsedFiles: ParsedPurposeFile[], onShadow?: ShadowCallback): Map<string, { item: ExtractedFlow; filePath: string }> {
   const flows = new Map<string, { item: ExtractedFlow; filePath: string }>();
 
   for (const { filePath, data } of parsedFiles) {
@@ -358,6 +373,8 @@ export function extractFlows(parsedFiles: ParsedPurposeFile[]): Map<string, { it
       if (Array.isArray(data.flows)) {
         // Array format: [{ name, steps, description }]
         for (const flow of data.flows as FlowWithSteps[]) {
+          const prior = flows.get(flow.name);
+          if (prior && onShadow) onShadow(flow.name, prior.filePath, filePath);
           flows.set(flow.name, {
             item: {
               id: flow.name,
@@ -370,6 +387,8 @@ export function extractFlows(parsedFiles: ParsedPurposeFile[]): Map<string, { it
       } else {
         // Record format: { flow-name: { description, gates, signals } }
         for (const [id, flowDef] of Object.entries(data.flows as Record<string, FlowDefinition>)) {
+          const prior = flows.get(id);
+          if (prior && onShadow) onShadow(id, prior.filePath, filePath);
           flows.set(id, {
             item: {
               id,
@@ -392,12 +411,14 @@ export function extractFlows(parsedFiles: ParsedPurposeFile[]): Map<string, { it
 /**
  * Extract all signals from parsed purpose files
  */
-export function extractSignals(parsedFiles: ParsedPurposeFile[]): Map<string, { item: SignalDefinition; filePath: string }> {
+export function extractSignals(parsedFiles: ParsedPurposeFile[], onShadow?: ShadowCallback): Map<string, { item: SignalDefinition; filePath: string }> {
   const signals = new Map<string, { item: SignalDefinition; filePath: string }>();
 
   for (const { filePath, data } of parsedFiles) {
     if (data.signals) {
       for (const [id, item] of Object.entries(data.signals)) {
+        const prior = signals.get(id);
+        if (prior && onShadow) onShadow(id, prior.filePath, filePath);
         signals.set(id, { item, filePath });
       }
     }
@@ -409,12 +430,14 @@ export function extractSignals(parsedFiles: ParsedPurposeFile[]): Map<string, { 
 /**
  * Extract all aspects from parsed purpose files
  */
-export function extractAspects(parsedFiles: ParsedPurposeFile[]): Map<string, { item: AspectDefinition; filePath: string }> {
+export function extractAspects(parsedFiles: ParsedPurposeFile[], onShadow?: ShadowCallback): Map<string, { item: AspectDefinition; filePath: string }> {
   const aspects = new Map<string, { item: AspectDefinition; filePath: string }>();
 
   for (const { filePath, data } of parsedFiles) {
     if (data.aspects) {
       for (const [id, item] of Object.entries(data.aspects)) {
+        const prior = aspects.get(id);
+        if (prior && onShadow) onShadow(id, prior.filePath, filePath);
         aspects.set(id, { item, filePath });
       }
     }

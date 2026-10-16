@@ -11,6 +11,7 @@ import {
   isValidPrefix,
   isLegacyPrefix,
   type SymbolEntry,
+  type SymbolSource,
   type SymbolType,
   type LegacySymbolType,
   type SourceType,
@@ -27,8 +28,84 @@ export function createSymbolIndex(): SymbolIndex {
     entries: new Map(),
     byType: new Map(),
     bySource: new Map(),
+    bySymbol: new Map(),
+    byNameLower: new Map(),
     timestamp: 0,
   };
+}
+
+/** Lower-cased bare name (prefix stripped) — the byNameLower key. */
+function nameKey(symbol: string): string {
+  return symbol.slice(1).toLowerCase();
+}
+
+/**
+ * Wire one entry into bySymbol/byNameLower. bySymbol is first-wins so a
+ * lookup returns the same entry the historical linear scan over `entries`
+ * did; canonicalized aggregations have one entry per symbol anyway.
+ */
+function indexSymbolKeys(index: SymbolIndex, entry: SymbolEntry): void {
+  if (!index.bySymbol.has(entry.symbol)) {
+    index.bySymbol.set(entry.symbol, entry);
+  }
+  const key = nameKey(entry.symbol);
+  const list = index.byNameLower.get(key);
+  if (list) list.push(entry);
+  else index.byNameLower.set(key, [entry]);
+}
+
+/** Replace `prev` with `next` in a list in place, or append `next`. */
+function replaceOrPush(list: SymbolEntry[], prev: SymbolEntry | undefined, next: SymbolEntry): void {
+  const i = prev ? list.indexOf(prev) : -1;
+  if (i >= 0) list[i] = next;
+  else list.push(next);
+}
+
+/** Remove `entry` from a list in place (no-op when absent). */
+function removeFrom(list: SymbolEntry[] | undefined, entry: SymbolEntry): void {
+  if (!list) return;
+  const i = list.indexOf(entry);
+  if (i >= 0) list.splice(i, 1);
+}
+
+/**
+ * Add (or replace, keyed by id) one entry, keeping every secondary map —
+ * byType, bySource, bySymbol, byNameLower — consistent. Use this instead of
+ * `entries.set` when splicing synthetic entries into a built index.
+ */
+export function addSymbolEntry(index: SymbolIndex, entry: SymbolEntry): void {
+  const prev = index.entries.get(entry.id);
+  index.entries.set(entry.id, entry);
+
+  if (prev && prev.type !== entry.type) removeFrom(index.byType.get(prev.type), prev);
+  const byType = index.byType.get(entry.type);
+  if (byType) replaceOrPush(byType, prev && prev.type === entry.type ? prev : undefined, entry);
+  else index.byType.set(entry.type, [entry]);
+
+  if (prev && prev.source !== entry.source) removeFrom(index.bySource.get(prev.source), prev);
+  const bySource = index.bySource.get(entry.source);
+  if (bySource) replaceOrPush(bySource, prev && prev.source === entry.source ? prev : undefined, entry);
+  else index.bySource.set(entry.source, [entry]);
+
+  if (prev) {
+    removeFrom(index.byNameLower.get(nameKey(prev.symbol)), prev);
+    if (index.bySymbol.get(prev.symbol) === prev) {
+      index.bySymbol.delete(prev.symbol);
+      if (prev.symbol === entry.symbol) {
+        // Same slot: the replacement keeps the replaced entry's precedence.
+        index.bySymbol.set(entry.symbol, entry);
+      } else {
+        // Fall back to the next entry still carrying the old symbol, if any.
+        for (const e of index.entries.values()) {
+          if (e.symbol === prev.symbol && e !== entry) {
+            index.bySymbol.set(prev.symbol, e);
+            break;
+          }
+        }
+      }
+    }
+  }
+  indexSymbolKeys(index, entry);
 }
 
 /**
@@ -53,21 +130,65 @@ export function buildSymbolIndex(result: AggregationResult): SymbolIndex {
       index.bySource.set(symbol.source, []);
     }
     index.bySource.get(symbol.source)!.push(symbol);
+
+    // Add to bySymbol / byNameLower
+    indexSymbolKeys(index, symbol);
   }
 
   return index;
 }
 
 /**
- * Get a symbol by its full symbol string (e.g., "@checkout")
+ * Resolve a USER-TYPED symbol to its canonical entry (input boundaries only —
+ * ripple, related, navigate, graph-slice roots; never edges):
+ *  1. exact full-symbol hit ("^authenticated");
+ *  2. prefixed, case-insensitive ("^Authenticated") — unique hit with that prefix;
+ *  3. bare name ("authenticated") — unique hit across all prefixes.
+ * Anything else returns `entry: undefined` with the matches as `candidates`
+ * (several → ambiguous, none → unknown).
+ */
+export function resolveSymbol(
+  index: SymbolIndex,
+  q: string,
+): { entry?: SymbolEntry; candidates: SymbolEntry[] } {
+  const exact = index.bySymbol.get(q);
+  if (exact) return { entry: exact, candidates: [exact] };
+  if (!q) return { candidates: [] };
+
+  const prefixed = isValidPrefix(q[0]) || isLegacyPrefix(q[0]);
+  const matches = prefixed
+    ? (index.byNameLower.get(nameKey(q)) ?? []).filter((e) => e.symbol[0] === q[0])
+    : index.byNameLower.get(q.toLowerCase()) ?? [];
+  // Distinct symbols only — duplicate entries for one symbol are not ambiguity.
+  const distinct = new Map<string, SymbolEntry>();
+  for (const e of matches) {
+    const first = index.bySymbol.get(e.symbol) ?? e;
+    if (!distinct.has(e.symbol)) distinct.set(e.symbol, first);
+  }
+  const candidates = [...distinct.values()];
+  return candidates.length === 1 ? { entry: candidates[0], candidates } : { candidates };
+}
+
+/**
+ * Every contributor behind an entry — `entry.sources` when canonicalization
+ * merged 2+ contributors, otherwise the entry itself.
+ */
+export function sourcesOf(entry: SymbolEntry): SymbolSource[] {
+  return entry.sources ?? [{
+    id: entry.id,
+    source: entry.source,
+    filePath: entry.filePath,
+    declared: entry.declared !== false,
+  }];
+}
+
+/**
+ * Get a symbol by its EXACT full symbol string (e.g., "#checkout"), O(1).
+ * Edge resolution and hashing depend on exactness — use resolveSymbol only
+ * where a person typed the name (case / bare-name tolerant, with candidates).
  */
 export function getSymbol(index: SymbolIndex, symbol: string): SymbolEntry | undefined {
-  for (const entry of index.entries.values()) {
-    if (entry.symbol === symbol) {
-      return entry;
-    }
-  }
-  return undefined;
+  return index.bySymbol.get(symbol);
 }
 
 /**

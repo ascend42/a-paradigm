@@ -14,7 +14,7 @@
 
 import type { ProjectContext } from '../utils/index-loader.js';
 import {
-  getSymbol,
+  resolveSymbol,
   getReferencesTo,
   getReferencesFrom,
   getSymbolsByType,
@@ -93,7 +93,18 @@ export async function handleRippleTool(
     response_format?: 'concise' | 'detailed';
   };
 
-  const entry = getSymbol(ctx.index, symbol);
+  const { entry, candidates } = resolveSymbol(ctx.index, symbol);
+
+  // ── Ambiguous bare/case-folded name: make the caller pick ────────
+  if (!entry && candidates.length > 1) {
+    const text = JSON.stringify(
+      { error: 'Ambiguous symbol', symbol, candidates: candidates.map((c) => c.symbol) },
+      null,
+      2,
+    );
+    trackToolCall(text.length, name);
+    return { handled: true, text };
+  }
 
   // ── Fallback: grep when symbol is not indexed ────────
   if (!entry) {
@@ -102,12 +113,16 @@ export async function handleRippleTool(
     return { handled: true, text };
   }
 
+  // Everything below keys on the canonical symbol string, so "Foo" / "foo"
+  // inputs traverse the same graph as "#foo".
+  const canonical = entry.symbol;
+
   // ── BFS traversal with depth limit ──────────────────
   const maxDepth = Math.min(Math.max(depth || 3, 1), 5);
 
-  const directDeps = getReferencesTo(ctx.index, symbol);
+  const directDeps = getReferencesTo(ctx.index, canonical);
 
-  const visited = new Set<string>([symbol]);
+  const visited = new Set<string>([canonical]);
   const indirectByLevel: Map<number, string[]> = new Map();
 
   function collectIndirect(symbols: string[], currentDepth: number) {
@@ -141,14 +156,14 @@ export async function handleRippleTool(
   const allIndirectDeps = new Set<string>();
   for (const [, syms] of indirectByLevel) {
     for (const s of syms) {
-      if (s !== symbol && !directDeps.find((d) => d.symbol === s)) {
+      if (s !== canonical && !directDeps.find((d) => d.symbol === s)) {
         allIndirectDeps.add(s);
       }
     }
   }
 
   // What this symbol depends on
-  const dependsOn = getReferencesFrom(ctx.index, symbol);
+  const dependsOn = getReferencesFrom(ctx.index, canonical);
 
   const totalAffected = directDeps.length + allIndirectDeps.size;
   let impact: 'low' | 'medium' | 'high' = 'low';
@@ -168,7 +183,7 @@ export async function handleRippleTool(
   } | null = null;
 
   if (flowIndex) {
-    const flowSummary = getFlowImpactSummary(flowIndex, symbol);
+    const flowSummary = getFlowImpactSummary(flowIndex, canonical);
     if (flowSummary.totalFlows > 0) {
       if (flowSummary.impactLevel === 'high' && impact === 'low') {
         impact = 'medium';
@@ -193,7 +208,7 @@ export async function handleRippleTool(
 
   // ── Affected gates (^) ──────────────────────────────
   const allAffectedSymbols = new Set<string>([
-    symbol,
+    canonical,
     ...directDeps.map((d) => d.symbol),
     ...allIndirectDeps,
   ]);
@@ -270,7 +285,7 @@ export async function handleRippleTool(
 
   // ── Affected personas (non-fatal) ───────────────────
   try {
-    const personasAffected = await getAffectedPersonas(ctx.rootDir, symbol);
+    const personasAffected = await getAffectedPersonas(ctx.rootDir, canonical);
     if (personasAffected.length > 0) {
       response.personas_affected = personasAffected;
       if (personasAffected.length > 2 && impact === 'low') {
@@ -283,7 +298,7 @@ export async function handleRippleTool(
 
   // ── Affected university content (non-fatal) ─────────
   try {
-    const universityAffected = getAffectedUniversityContent(ctx.rootDir, symbol);
+    const universityAffected = getAffectedUniversityContent(ctx.rootDir, canonical);
     if (universityAffected.length > 0) {
       response.university_content_affected = universityAffected.map((c) => ({
         id: c.id,
@@ -298,7 +313,7 @@ export async function handleRippleTool(
 
   // ── Cross-project workspace impact ──────────────────
   if (includeWorkspace && ctx.workspace) {
-    const wsRipple = rippleWorkspace(ctx.workspace, symbol);
+    const wsRipple = rippleWorkspace(ctx.workspace, canonical);
     if (wsRipple.length > 0) {
       response.workspaceImpact = {
         siblings: wsRipple.map((r) => ({
@@ -350,7 +365,7 @@ function buildGrepFallback(rootDir: string, symbol: string): string {
         fallback: 'searched',
         referencesFound: 0,
         suggestion:
-          'Run `paradigm scan` to build the index, or check that .purpose files contain this symbol',
+          'Call paradigm_reindex to rebuild the index, or check that .purpose files contain this symbol',
       },
       null,
       2,
@@ -387,8 +402,8 @@ function buildGrepFallback(rootDir: string, symbol: string): string {
           preview: r.content.slice(0, 100),
         })),
       },
-      note: 'This is a fallback grep search. For accurate dependency analysis, run `paradigm scan` to index your project.',
-      suggestion: 'Run `paradigm scan` to enable full ripple analysis with dependency tracking',
+      note: 'This is a fallback grep search. For accurate dependency analysis, call paradigm_reindex to index your project.',
+      suggestion: 'Call paradigm_reindex to enable full ripple analysis with dependency tracking',
     },
     null,
     2,

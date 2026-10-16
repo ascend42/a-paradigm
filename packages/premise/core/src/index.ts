@@ -10,6 +10,7 @@ export type {
   SourceType,
   Position,
   SymbolEntry,
+  SymbolSource,
   PremiseSourceConfig,
   PremiseNode,
   PremiseConnection,
@@ -58,6 +59,9 @@ export type { LiveIndex, LiveIndexCallStats } from './live-index.js';
 export {
   createSymbolIndex,
   buildSymbolIndex,
+  addSymbolEntry,
+  resolveSymbol,
+  sourcesOf,
   getSymbol,
   getSymbolById,
   getSymbolsByType,
@@ -81,6 +85,10 @@ export {
   parseSectionAnchor,
   resolveSectionAnchorLines,
 } from './symbol-index.js';
+
+// Symbol integrity — duplicate declarations + dangling references (Phase 1)
+export { findDuplicateDeclarations, findDanglingReferences } from './integrity.js';
+export type { DuplicateDeclaration, DanglingReference } from './integrity.js';
 
 // Shared frontmatter parser — #frontmatter-parser (D8, 7.12.0)
 export {

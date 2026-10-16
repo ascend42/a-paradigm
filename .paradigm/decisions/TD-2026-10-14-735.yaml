@@ -1,0 +1,88 @@
+id: TD-2026-10-14-735
+timestamp: '2026-10-14T05:59:27.680Z'
+title: >-
+  Warpline armada decision dialog: advisory-by-default, evidence via replay+swarm, native-only with git milestone
+  backups, S1/M0/S4/Paradigm-ids first, signed humans, home-box runner
+decision: >-
+  1. **Gate mode:** advisory by default. Fail closed only on gate, signal, aspect and pipeline contract changes. The Day
+  30–90 evidence gates can promote blocking.
+
+  2. **Evidence:** run the 1,000-PR-merge replay first (6 TypeScript repos, 3 agent-heavy, thresholds pre-registered),
+  plus a 2–3 agent shadow swarm on this repo and later the ledgerette demo. The Expo field test becomes confirmation.
+
+  3. **Forge vs git:** a project set up as a Warpline project is tested and run as one. It is native-only, in beta, with
+  ample test data and logging. Git is attached only as a simple backup: checkpoint exports at big milestones, to recover
+  state if needed. This keeps TD-2026-07-17-151 and the stake valve.
+
+  4. **Preconditions** before any multi-instance run or shared server:
+     - S1 identity fix (principal comes from a key or token, never an env var)
+     - M0 ledger out of git-tracked files, sealed as a DAG
+     - S4 custodian separation of keys and tokens
+     - collision-free Paradigm ids for decisions, lore and history
+  5. **Human proof:** humans sign with a key on shared fabrics. A human root key signs the registry and grants, and
+  human decisions are signed. For shared fabrics this supersedes the procedural boundary of TD-2026-08-23-042; solo use
+  is unchanged.
+
+  6. **Drop the single-machine 100-admission run.** It measures the global lock being removed. The first trusted report
+  moves to swarm and ledgerette data.
+
+  7. **CI runner (v1):** runs on the home box in rootless containers. Network is off for Offer builds, and Offer builds
+  get no secrets.
+
+  8. **Push** feat/symbol-integrity (7.15.0).
+rationale: >-
+  These came from a founder decision dialog after a seven-agent review: Arky, Aegis, Jinx and Loid, a Fable second
+  opinion on Warpline, a Fable review of Paradigm at armada scale, and a Fable design of the server.
+
+
+  - Evidence is thin. Only 1 of 275 merges had a defect created by the merge (0.36%), and Guard missed it. Shadow
+  stream: 118 rows, 0 KNOTs.
+
+  - The armada goal needs concurrency without a global lock, authenticated principals, and a ledger outside git.
+
+  - The founder wants Warpline projects run natively in beta to generate test data, with git only as a milestone safety
+  net.
+
+
+  Aegis dissented on item 7. Their rule is that jobs must never run on the box holding keys, with gVisor sandboxes on a
+  separate Linux host. The founder accepted the home-box runner with its compensating controls: S4 moves keys and tokens
+  to a custodian volume agents can't read, Offer builds get no network and no secrets, and pipeline-file changes are
+  gate-class. Revisit runner placement before any public repo or untrusted contributors.
+participants:
+  - id: ascend
+    role: human
+    stance: proposed
+  - id: architect
+    role: agent
+    stance: supported
+  - id: security
+    role: agent
+    stance: dissented
+  - id: advocate
+    role: agent
+    stance: supported
+  - id: claude
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: Blocking by default
+    rejected_because: Evidence does not justify it yet; turns an armada into a queue
+  - option: Expo field test first
+    rejected_because: Slow, founder-gated, small n; replay + swarm answer the questions in weeks
+  - option: Git as authority / git as a door for developers
+    rejected_because: 'Founder: a Warpline project is run as one; git only as milestone backup'
+  - option: Separate Linux runner host with gVisor (Aegis)
+    rejected_because: Founder chose the simpler home-box v1 with compensating controls; revisit before public repos
+symbols_affected:
+  - '#warpline'
+  - '#warplined'
+  - '#admit'
+  - '#stake'
+  - '#symbol-integrity'
+status: active
+tags:
+  - warpline
+  - armada
+  - decision-dialog
+  - founder-direction
+  - security

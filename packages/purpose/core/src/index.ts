@@ -38,7 +38,7 @@ export {
 } from './parser.js';
 
 // Aggregator
-export type { ParsedPurposeFile, ExtractedFlow, ExtractedSymbolRef } from './aggregator.js';
+export type { ParsedPurposeFile, ExtractedFlow, ExtractedSymbolRef, ShadowCallback } from './aggregator.js';
 export {
   aggregatePurposes,
   findPurposeFiles,

@@ -43,6 +43,26 @@ components:
       - frontmatter
   search-engine:
     description: '#search-engine: Symbol search functionality (searchSymbols in src/symbol-index.ts). Since 7.13.0 per-entry lowercased haystacks (symbol, description, tags, componentType, joined multi-token string) are memoized in a WeakMap keyed by SymbolIndex and revalidated against the entry source fields, so repeated searches over a cached #live-index index skip re-lowercasing. Substring semantics and ranking are unchanged.'
+  symbol-integrity:
+    description: >-
+      #symbol-integrity (7.15.0, TD-2026-10-13-661 Phase 1): canonical symbol identity.
+      aggregator.ts canonicalizeSymbols merges every contributor of one symbol string into ONE
+      entry (portal wins for gates; real declarations beat reference stubs; ties keep last-wins),
+      records all contributors in SymbolEntry.sources, and marks reference-only stubs
+      declared:false. resolveReferences scans the winner AND every donor's data (dropping
+      `anchors` and `referencedFrom`), so no edge is lost in the merge; portal gates now reference
+      the prize signals they award. symbol-index.ts adds bySymbol/byNameLower maps, resolveSymbol
+      (exact -> case-insensitive -> unambiguous bare name, else candidates), addSymbolEntry and
+      sourcesOf; getSymbol is O(1). src/integrity.ts exports findDuplicateDeclarations (a
+      portal+purpose pair is exempt; a second .purpose declaration is flagged) and
+      findDanglingReferences. Fixes ripple reporting 0 dependents for portal gates referenced
+      from .purpose.
+    type: component
+    anchors:
+      - src/aggregator.ts
+      - src/symbol-index.ts
+      - src/integrity.ts
+    tags: [symbol-index, integrity]
   live-index:
     description: >-
       #live-index: src/live-index.ts (7.13.0) — incremental in-process cache of

@@ -10,7 +10,7 @@ import * as path from 'path';
 import * as yaml from 'js-yaml';
 import { aggregateFromDirectory, invalidateLiveIndex, type AggregationResult, type FlowIndex, type TestableFlow, type FlowStep } from '@a-company/premise-core';
 import { generateScanIndex, serializeScanIndex } from '@a-company/probe-core';
-import type { ProjectContext } from '../utils/index-loader.js';
+import { refreshContextSafely, resetFreshnessDebounce, type ProjectContext, type ReloadContextFn } from '../utils/index-loader.js';
 import { trackToolCall } from './context.js';
 import { toolCache } from '../utils/tool-cache.js';
 import { invalidateFeatureCache } from '../utils/tool-registry.js';
@@ -108,21 +108,38 @@ export async function handleReindexTool(
   name: string,
   _args: Record<string, unknown>,
   ctx: ProjectContext,
-  reloadContext: () => Promise<void>,
+  reloadContext: ReloadContextFn,
 ): Promise<{ handled: boolean; text: string }> {
   if (name !== 'paradigm_reindex') {
     return { handled: false, text: '' };
   }
 
   try {
-    const result = await rebuildStaticFiles(ctx.rootDir, ctx);
-    await reloadContext();
+    // Force a full re-parse FIRST, then rebuild static files ONCE from that
+    // fresh context (previously this rebuilt from the stale ctx and the
+    // reload kicked off a second background rebuild).
+    invalidateLiveIndex(ctx.rootDir);
+    resetFreshnessDebounce(ctx.rootDir);
+    // A reload/refresh failure must not fail the reindex: fall back to the
+    // context we already have and rebuild the static files from it.
+    let fresh: ProjectContext;
+    try {
+      fresh = (await reloadContext({ rebuildStatic: false })) ?? await refreshContextSafely(ctx);
+    } catch (e) {
+      log.component('#reindex').warn('Context reload failed; reindexing from the existing context', {
+        error: (e as Error)?.message ?? String(e),
+      });
+      fresh = ctx;
+    }
+    const result = await rebuildStaticFiles(fresh.rootDir, fresh);
     toolCache.clear();
     invalidateFeatureCache();
-    invalidateLiveIndex(ctx.rootDir);
 
-    // Return compact summary — full result is 80KB+ and destroys context windows
-    const issues = (result.integrityReport?.brokenReferences?.length || 0)
+    // Return compact summary — full result is 80KB+ and destroys context windows.
+    // Undeclared references are warnings: reported as danglingCount, not issues.
+    const brokenRefs = result.integrityReport?.brokenReferences ?? [];
+    const danglingCount = brokenRefs.filter((b) => b.refType === 'undeclared').length;
+    const issues = (brokenRefs.length - danglingCount)
       + (result.integrityReport?.duplicateSymbols?.length || 0)
       + (result.componentAnchorIssues || 0)
       + (result.crossFileIssues || 0);
@@ -141,6 +158,7 @@ export async function handleReindexTool(
       } : {}),
       ...(result.scenarioHealth ? { scenarios: result.scenarioHealth.total } : {}),
       ...(issues > 0 ? { issues } : {}),
+      ...(danglingCount > 0 ? { danglingCount } : {}),
     };
 
     // v5.38.0: consistency report — transformation CLASSES only, never content.

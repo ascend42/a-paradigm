@@ -148,6 +148,34 @@ describe('projectGraphSlice — resolution', () => {
     expect(withoutPrefix.root).toBe('#foo');
     expect(withPrefix.didYouMean).toBeUndefined();
   });
+
+  it('seeds on the canonical symbol when the prefix-loop fallback resolves a case variant', async () => {
+    // "Auth" is an ambiguous bare name (#auth and ^auth), so resolution falls
+    // through to the prefix loop, whose "#Auth" guess resolves case-
+    // insensitively to "#auth". The root must be the resolved key, not the guess.
+    fs.mkdirSync(path.join(tmpDir, 'src'), { recursive: true });
+    fs.writeFileSync(
+      path.join(tmpDir, 'src/.purpose'),
+      [
+        'version: "2.0"',
+        'components:',
+        '  auth:',
+        '    description: Auth module',
+        '    uses: ["#peer"]',
+        '  peer:',
+        '    description: Peer',
+        'gates:',
+        '  auth:',
+        '    description: Auth gate',
+        '',
+      ].join('\n'),
+    );
+    const graph = await loadLiveGraph(tmpDir);
+    const slice = projectGraphSlice(graph, { symbol: 'Auth' });
+    expect(slice.root).toBe('#auth');
+    expect(slice.nodes.map((n) => n.id)).toContain('#auth');
+    expect(slice.nodes.map((n) => n.id)).not.toContain('#Auth');
+  });
 });
 
 describe('did-you-mean (fail loud)', () => {

@@ -15,7 +15,7 @@ import type { Tool } from '@modelcontextprotocol/sdk/types.js';
 import type { ProjectContext } from '../utils/index-loader.js';
 import type { NavigateInput, NavigateResult, NavigatorConfig } from '../types/navigator.js';
 import { loadNavigatorContext, navigate, getSkipPatterns } from '../utils/navigator-loader.js';
-import { getSymbolsByType, getAllSymbols } from '@a-company/premise-core';
+import { getSymbolsByType, getAllSymbols, resolveSymbol } from '@a-company/premise-core';
 import { toolCache } from '../utils/tool-cache.js';
 import { searchWorkspace } from '../utils/workspace-loader.js';
 
@@ -145,6 +145,24 @@ export async function handleNavigateTool(
         2
       ),
     };
+  }
+
+  // "find" takes a user-typed symbol: canonicalize it ("Checkout" / "checkout"
+  // → "#checkout"); an ambiguous bare name lists candidates instead of a miss.
+  if (input.intent === 'find' && input.target) {
+    const { entry, candidates } = resolveSymbol(ctx.index, input.target);
+    if (entry) {
+      input.target = entry.symbol;
+    } else if (candidates.length > 1) {
+      return {
+        handled: true,
+        text: JSON.stringify(
+          { error: 'Ambiguous symbol', target: input.target, candidates: candidates.map((c) => c.symbol) },
+          null,
+          2,
+        ),
+      };
+    }
   }
 
   // Build cache key from input parameters

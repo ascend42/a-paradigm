@@ -168,6 +168,29 @@ export interface SymbolEntry {
   componentType?: string;
   /** Parent component symbol from .purpose parent field */
   parentSymbol?: string;
+  /**
+   * False only on reference stubs — a symbol that is referenced (e.g.
+   * `gates: [^ghost]`) but never declared anywhere. Absent ≡ declared.
+   */
+  declared?: boolean;
+  /**
+   * Every contributor that declared or referenced this symbol, set only when
+   * there are 2+ (canonicalization merged them into this one entry).
+   */
+  sources?: SymbolSource[];
+}
+
+/**
+ * One contributor to a canonical SymbolEntry (Symbol Integrity Phase 1).
+ * `shadowed` marks a .purpose definition that a later file with the same id
+ * overwrote (last-wins) before it ever became an entry.
+ */
+export interface SymbolSource {
+  id: string;
+  source: SourceType;
+  filePath: string;
+  declared: boolean;
+  shadowed?: boolean;
 }
 
 // ============================================
@@ -412,6 +435,10 @@ export interface SymbolIndex {
   byType: Map<SymbolType, SymbolEntry[]>;
   /** Entries by source */
   bySource: Map<SourceType, SymbolEntry[]>;
+  /** Canonical entry by full symbol string (e.g. "^authenticated") */
+  bySymbol: Map<string, SymbolEntry>;
+  /** Entries by lower-cased bare name (symbol without prefix) */
+  byNameLower: Map<string, SymbolEntry[]>;
   /** Last aggregation timestamp */
   timestamp: number;
 }

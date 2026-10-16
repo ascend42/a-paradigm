@@ -1,0 +1,15 @@
+id: L-2026-10-14-ascend-053731-518
+type: insight
+timestamp: '2026-10-14T05:37:31.424Z'
+author: ascend
+title: Decision TD-2026-10-14-551 recorded
+summary: Companion lore entry for decision record TD-2026-10-14-551. See .paradigm/decisions/TD-2026-10-14-551.yaml.
+symbols_touched:
+  - '#warpline'
+  - '#warpline-routes'
+  - '#warplined'
+references:
+  decision_id: TD-2026-10-14-551
+tags:
+  - companion-lore
+  - decision-reference

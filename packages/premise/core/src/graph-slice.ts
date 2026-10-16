@@ -37,6 +37,7 @@
 
 import {
   getSymbol,
+  resolveSymbol,
   getReferencesTo,
   getReferencesFrom,
   getSymbolsByType,
@@ -390,12 +391,18 @@ function nodeLabel(symbol: string, entry?: SymbolEntry): string {
  */
 function normalizeSymbol(input: string, graph: LiveGraph): string | null {
   if (!input) return null;
-  if (getSymbol(graph.index, input)) return input;
+  // A user-typed root: fuzzy (case / bare-name tolerant) resolution. The
+  // prefix loop below is the fallback for bare names resolveSymbol finds
+  // ambiguous. Neighbour lookups elsewhere stay exact (getSymbol).
+  const entry = resolveSymbol(graph.index, input).entry;
+  if (entry) return entry.symbol;
 
   const bare = stripPrefix(input);
   for (const prefix of ['#', '$', '$$', '^', '!', '~']) {
-    const candidate = `${prefix}${bare}`;
-    if (getSymbol(graph.index, candidate)) return candidate;
+    // Return the RESOLVED symbol, not the guess — "#Foo" resolves to "#foo",
+    // and the BFS must seed on the canonical key.
+    const hit = resolveSymbol(graph.index, `${prefix}${bare}`).entry;
+    if (hit) return hit.symbol;
   }
   return null;
 }

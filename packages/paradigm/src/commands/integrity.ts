@@ -1,8 +1,9 @@
 /**
  * paradigm integrity — Symbol integrity check
  *
- * Validates broken references, duplicate symbols, orphaned symbols,
- * and missing anchor files across the project's .purpose files.
+ * Validates broken references, duplicate symbols, undeclared references
+ * (warning), orphaned symbols, and missing anchor files across the
+ * project's .purpose files.
  *
  * Usage:
  *   paradigm integrity          Show integrity report
@@ -11,7 +12,13 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { aggregateFromDirectory, type SymbolEntry, type CodeAnchor } from '@a-company/premise-core';
+import {
+  aggregateFromDirectory,
+  findDuplicateDeclarations,
+  findDanglingReferences,
+  type SymbolEntry,
+  type CodeAnchor,
+} from '@a-company/premise-core';
 import chalk from 'chalk';
 
 interface IntegrityOptions {
@@ -26,13 +33,15 @@ export async function integrityCommand(options: IntegrityOptions = {}): Promise<
 
   // Run all checks
   const brokenRefs = findBrokenReferences(symbols);
-  const duplicates = findDuplicateSymbols(symbols);
+  const duplicates = findDuplicateDeclarations(symbols);
+  const undeclared = findUndeclaredReferences(symbols);
   const orphaned = findOrphanedSymbols(symbols);
   const missingAnchors = findMissingAnchors(symbols, cwd);
   const outOfBounds = findAnchorOutOfBounds(symbols, cwd);
 
   const brokenCount = brokenRefs.length;
   const duplicateCount = duplicates.length;
+  const undeclaredCount = undeclared.length;
   const orphanedCount = orphaned.length;
   const missingAnchorCount = missingAnchors.length;
   const outOfBoundsCount = outOfBounds.length;
@@ -41,12 +50,14 @@ export async function integrityCommand(options: IntegrityOptions = {}): Promise<
     const result = {
       brokenCount,
       duplicateCount,
+      undeclaredCount,
       orphanedCount,
       missingAnchors: missingAnchorCount,
       outOfBoundsAnchors: outOfBoundsCount,
       details: {
         brokenReferences: brokenRefs,
         duplicateSymbols: duplicates,
+        undeclaredReferences: undeclared,
         orphanedSymbols: orphaned.slice(0, 20),
         missingAnchorFiles: missingAnchors,
         anchorOutOfBounds: outOfBounds,
@@ -79,6 +90,19 @@ export async function integrityCommand(options: IntegrityOptions = {}): Promise<
     }
   } else {
     console.log(chalk.green('  ✓ No duplicate symbols'));
+  }
+
+  // Undeclared references — referenced but never declared (warning)
+  if (undeclaredCount > 0) {
+    console.log(chalk.yellow(`  ⚠ ${undeclaredCount} undeclared reference${undeclaredCount > 1 ? 's' : ''} (referenced but never declared)`));
+    for (const ref of undeclared.slice(0, 10)) {
+      console.log(chalk.gray(`    │ ${ref.from} → ${ref.to} in ${ref.file}`));
+    }
+    if (undeclaredCount > 10) {
+      console.log(chalk.gray(`    │ ... and ${undeclaredCount - 10} more`));
+    }
+  } else {
+    console.log(chalk.green('  ✓ No undeclared references'));
   }
 
   // Orphaned symbols (true isolates — no refs in or out)
@@ -137,7 +161,8 @@ interface BrokenRef {
 
 function findBrokenReferences(symbols: SymbolEntry[]): BrokenRef[] {
   const broken: BrokenRef[] = [];
-  const definedIds = new Set(symbols.map(s => s.symbol));
+  // Reference stubs (declared === false) are indexed but not defined.
+  const definedIds = new Set(symbols.filter(s => s.declared !== false).map(s => s.symbol));
 
   for (const sym of symbols) {
     if (sym.parentSymbol) {
@@ -159,33 +184,19 @@ function findBrokenReferences(symbols: SymbolEntry[]): BrokenRef[] {
   });
 }
 
-function findDuplicateSymbols(symbols: SymbolEntry[]): Array<{ symbol: string; files: string[] }> {
-  const bySymbol = new Map<string, Array<{ file: string; source: string }>>();
-  for (const sym of symbols) {
-    const entries = bySymbol.get(sym.symbol) || [];
-    if (!entries.find(e => e.file === sym.filePath)) {
-      entries.push({ file: sym.filePath, source: sym.source });
-    }
-    bySymbol.set(sym.symbol, entries);
-  }
-  const dupes: Array<{ symbol: string; files: string[] }> = [];
-  for (const [symbol, entries] of bySymbol) {
-    if (entries.length <= 1) continue;
-    // Don't flag .purpose + portal.yaml overlap — gates are expected in both
-    if (entries.length === 2) {
-      const sources = entries.map(e => e.source).sort();
-      if (sources[0] === 'portal' && sources[1] === 'purpose') continue;
-    }
-    dupes.push({ symbol, files: entries.map(e => e.file) });
-  }
-  return dupes;
+/** Referrer → undeclared symbol edges (shared helper from premise-core). */
+function findUndeclaredReferences(symbols: SymbolEntry[]): Array<{ from: string; to: string; file: string }> {
+  const byName = new Map(symbols.map(s => [s.symbol, s]));
+  return findDanglingReferences(symbols).flatMap(d =>
+    d.referencedBy.map(from => ({ from, to: d.symbol, file: byName.get(from)?.filePath ?? d.filePath })),
+  );
 }
 
 function findOrphanedSymbols(symbols: SymbolEntry[]): Array<{ symbol: string; file: string }> {
   // True orphan = nothing references it AND it references nothing.
   // Symbols with outgoing refs but no incoming are tree roots — not orphans.
   return symbols
-    .filter(s => s.referencedBy.length === 0 && s.references.length === 0)
+    .filter(s => s.declared !== false && s.referencedBy.length === 0 && s.references.length === 0)
     .map(s => ({ symbol: s.symbol, file: s.filePath }));
 }
 

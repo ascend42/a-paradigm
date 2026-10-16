@@ -19,12 +19,14 @@ import { parseGateConfig, findGateFiles, type ParsedGateConfig, type Gate, type 
 import type {
   PremiseFile,
   SymbolEntry,
+  SymbolSource,
   SymbolType,
   SourceType,
   AggregationResult,
   AggregationError,
 } from './types.js';
 import { parseAnchorString } from './symbol-index.js';
+import { findDuplicateDeclarations } from './integrity.js';
 
 /**
  * Optional loader seams for aggregateFromPremise. Every hook defaults to the
@@ -54,6 +56,12 @@ export async function aggregateFromPremise(
   const errors: AggregationError[] = [];
   const purposeFiles: string[] = [];
   const portalFiles: string[] = [];
+  // .purpose definitions a later file overwrote (last-wins) — they never become
+  // entries, but canonicalization lists them in `sources` so duplicates surface.
+  const shadowed: ShadowedSource[] = [];
+  // Structural edges no entry's data spells out with a symbol prefix — a
+  // portal gate awards its prizes by bare id (`prizes: [{ id: x }]`).
+  const awardEdges: Array<{ from: string; to: string }> = [];
 
   // Aggregate from Purpose sources
   if (premiseFile.sources.purpose) {
@@ -64,7 +72,7 @@ export async function aggregateFromPremise(
         purposeFiles.push(...parsed.map((p) => p.filePath));
 
         // Extract features (v2: now #components with [feature] tag)
-        const features = extractFeatures(parsed);
+        const features = extractFeatures(parsed, shadowCollector(shadowed, 'purpose-feature-', '#'));
         for (const [id, { item, filePath }] of features) {
           const featureTags = ['feature', ...(item.tags || [])];
           symbols.push(createSymbolEntry({
@@ -83,7 +91,7 @@ export async function aggregateFromPremise(
         }
 
         // Extract components
-        const components = extractComponents(parsed);
+        const components = extractComponents(parsed, shadowCollector(shadowed, 'purpose-component-', '#'));
         for (const [id, { item, filePath }] of components) {
           symbols.push(createSymbolEntry({
             id: `purpose-component-${id}`,
@@ -101,7 +109,7 @@ export async function aggregateFromPremise(
         }
 
         // Extract gates from purpose files
-        const gates = extractGates(parsed);
+        const gates = extractGates(parsed, shadowCollector(shadowed, 'purpose-gate-', '^'));
         for (const [id, { item, filePath }] of gates) {
           symbols.push(createSymbolEntry({
             id: `purpose-gate-${id}`,
@@ -115,7 +123,7 @@ export async function aggregateFromPremise(
         }
 
         // Extract states from purpose files (v2: now #components with [state] tag)
-        const states = extractStates(parsed);
+        const states = extractStates(parsed, shadowCollector(shadowed, 'purpose-state-', '#'));
         for (const [id, { item, filePath }] of states) {
           symbols.push(createSymbolEntry({
             id: `purpose-state-${id}`,
@@ -130,7 +138,7 @@ export async function aggregateFromPremise(
         }
 
         // Extract flows from purpose files (now supports both formats)
-        const flows = extractFlows(parsed);
+        const flows = extractFlows(parsed, shadowCollector(shadowed, 'purpose-flow-', '$'));
         for (const [id, { item, filePath }] of flows) {
           symbols.push(createSymbolEntry({
             id: `purpose-flow-${id}`,
@@ -144,7 +152,7 @@ export async function aggregateFromPremise(
         }
 
         // Extract signals from purpose files
-        const signals = extractSignals(parsed);
+        const signals = extractSignals(parsed, shadowCollector(shadowed, 'purpose-signal-', '!'));
         for (const [id, { item, filePath }] of signals) {
           symbols.push(createSymbolEntry({
             id: `purpose-signal-${id}`,
@@ -158,7 +166,7 @@ export async function aggregateFromPremise(
         }
 
         // Extract aspects from purpose files
-        const aspects = extractAspects(parsed);
+        const aspects = extractAspects(parsed, shadowCollector(shadowed, 'purpose-aspect-', '~', true));
         for (const [rawId, { item, filePath }] of aspects) {
           // Aspect keys are canonically BARE ('determinism:'); some .purpose files
           // declare them '~'-prefixed. Strip any leading '~' so the symbol is
@@ -197,6 +205,7 @@ export async function aggregateFromPremise(
               filePath: ref.filePath,
               data: { referencedFrom: ref.sourceSymbol },
               description: `Referenced from ${ref.sourceSymbol}`,
+              declared: false,
             }));
           }
         }
@@ -238,10 +247,15 @@ export async function aggregateFromPremise(
 
         // Extract gates
         for (const gate of gateConfig.gates) {
-          symbols.push(createGateSymbol(gate, sourcePath));
+          const gateEntry = createGateSymbol(gate, sourcePath);
+          symbols.push(gateEntry);
 
           // Extract signals (prizes) from gates
           for (const prize of gate.prizes) {
+            // Every awarding gate → its prize signal. Prize signals from
+            // several gates collapse into one canonical `!x`, which must stay
+            // connected to ALL of them.
+            awardEdges.push({ from: gateEntry.symbol, to: `!${prize.id}` });
             symbols.push(createSymbolEntry({
               id: `gate-signal-${gate.id}-${prize.id}`,
               symbol: `!${prize.id}`,
@@ -298,33 +312,151 @@ export async function aggregateFromPremise(
     }));
   }
 
-  // Resolve cross-references
-  resolveReferences(symbols);
+  // One canonical entry per symbol string (Symbol Integrity Phase 1)
+  // Losing contributors' data is kept on the side so their references survive.
+  const donorData = new Map<SymbolEntry, unknown[]>();
+  const canonical = canonicalizeSymbols(symbols, shadowed, donorData);
 
-  // Detect duplicate symbol IDs (same symbol defined in multiple files)
-  const symbolFileMap = new Map<string, string[]>();
-  for (const sym of symbols) {
-    const files = symbolFileMap.get(sym.symbol) || [];
-    if (!files.includes(sym.filePath)) {
-      files.push(sym.filePath);
-    }
-    symbolFileMap.set(sym.symbol, files);
-  }
-  const duplicateSymbols: Array<{ symbol: string; files: string[] }> = [];
-  for (const [symbol, files] of symbolFileMap) {
-    if (files.length > 1) {
-      duplicateSymbols.push({ symbol, files });
-    }
-  }
+  // Resolve cross-references
+  resolveReferences(canonical, donorData, awardEdges);
+
+  // Detect duplicate declarations — the SAME rule integrity checks use
+  // (findDuplicateDeclarations, incl. the portal + .purpose exemption), so
+  // aggregation and `paradigm integrity` can never disagree.
+  const duplicateSymbols = findDuplicateDeclarations(canonical);
 
   return {
-    symbols,
+    symbols: canonical,
     purposeFiles,
     portalFiles,
     errors,
     timestamp: Date.now(),
     ...(duplicateSymbols.length > 0 ? { duplicateSymbols } : {}),
   };
+}
+
+/** A shadowed .purpose definition, keyed by the symbol it would have produced. */
+interface ShadowedSource extends SymbolSource {
+  symbol: string;
+}
+
+/**
+ * Build the onShadow callback for one extract* call. `stripTilde` mirrors the
+ * aspect id normalization (bare vs '~'-prefixed keys).
+ */
+function shadowCollector(
+  out: ShadowedSource[],
+  idPrefix: string,
+  symbolPrefix: string,
+  stripTilde = false,
+): (id: string, shadowedFilePath: string) => void {
+  return (rawId, shadowedFilePath) => {
+    const id = stripTilde ? rawId.replace(/^~+/, '') : rawId;
+    out.push({
+      symbol: `${symbolPrefix}${id}`,
+      id: `${idPrefix}${id}`,
+      source: 'purpose',
+      filePath: shadowedFilePath,
+      declared: true,
+      shadowed: true,
+    });
+  };
+}
+
+/**
+ * Winner rank for canonicalization (higher wins). Gates are authored in
+ * portal.yaml; every other type is authored in .purpose. Stubs never win
+ * over a declaration.
+ */
+function canonicalRank(entry: SymbolEntry): number {
+  if (entry.declared === false) return 0;
+  const order: Record<string, number> = entry.type === 'gate'
+    ? { purpose: 1, premise: 2, portal: 3 }
+    : { portal: 1, premise: 2, purpose: 3 };
+  return order[entry.source] ?? 1;
+}
+
+/** Optional descriptive fields a winner inherits from lower-ranked declarations. */
+const FILLABLE_FIELDS = ['description', 'anchors', 'tags', 'position', 'componentType', 'parentSymbol'] as const;
+
+/**
+ * Collapse every group of entries sharing a symbol string into ONE canonical
+ * entry. The winner is the highest-ranked contributor (ties → last pushed,
+ * matching the historical Map last-wins); undefined descriptive fields are
+ * filled from the next-ranked declarations. `sources` lists every contributor
+ * (shadowed .purpose definitions included) when there are 2+. Each canonical
+ * entry is emitted at its group's first-occurrence index, so order stays
+ * deterministic. When `donorData` is given, it receives each merged winner's
+ * losing contributors' data (in rank order) for resolveReferences.
+ */
+export function canonicalizeSymbols(
+  symbols: SymbolEntry[],
+  shadowed: ShadowedSource[] = [],
+  donorData?: Map<SymbolEntry, unknown[]>,
+): SymbolEntry[] {
+  const groups = new Map<string, SymbolEntry[]>();
+  for (const sym of symbols) {
+    const group = groups.get(sym.symbol);
+    if (group) group.push(sym);
+    else groups.set(sym.symbol, [sym]);
+  }
+  const shadowedBySymbol = new Map<string, ShadowedSource[]>();
+  for (const sh of shadowed) {
+    const list = shadowedBySymbol.get(sh.symbol);
+    if (list) list.push(sh);
+    else shadowedBySymbol.set(sh.symbol, [sh]);
+  }
+
+  const out: SymbolEntry[] = [];
+  for (const [symbol, group] of groups) {
+    const extra = shadowedBySymbol.get(symbol) ?? [];
+    if (group.length === 1 && extra.length === 0) {
+      out.push(group[0]);
+      continue;
+    }
+
+    // Stable rank sort, descending; ties keep the LAST pushed entry first.
+    const ranked = group
+      .map((entry, i) => ({ entry, i, rank: canonicalRank(entry) }))
+      .sort((a, b) => b.rank - a.rank || b.i - a.i)
+      .map((r) => r.entry);
+    const winner = ranked[0];
+
+    // The losers' data is dropped from the entry but handed to
+    // resolveReferences, so references only a loser declared (a .purpose gate
+    // block when portal wins, portal flow steps when .purpose wins) survive.
+    // Stub data is only `referencedFrom`, which resolveReferences ignores.
+    if (donorData) {
+      const data = ranked.slice(1).filter((d) => d.declared !== false && d.data != null).map((d) => d.data);
+      if (data.length > 0) donorData.set(winner, data);
+    }
+
+    for (const donor of ranked.slice(1)) {
+      if (donor.declared === false) continue;
+      for (const field of FILLABLE_FIELDS) {
+        if (winner[field] === undefined && donor[field] !== undefined) {
+          (winner as unknown as Record<string, unknown>)[field] = donor[field];
+        }
+      }
+    }
+
+    // The canonical entry is undeclared only when every contributor is a stub.
+    if (group.every((e) => e.declared === false)) winner.declared = false;
+    else delete winner.declared;
+
+    const sources: SymbolSource[] = [
+      ...extra.map(({ symbol: _s, ...src }) => src),
+      ...group.map((e) => ({
+        id: e.id,
+        source: e.source,
+        filePath: e.filePath,
+        declared: e.declared !== false,
+      })),
+    ];
+    if (sources.length >= 2) winner.sources = sources;
+    out.push(winner);
+  }
+  return out;
 }
 
 /**
@@ -392,39 +524,58 @@ const SYMBOL_BLOCKLIST = new Set([
 ]);
 
 /**
- * Resolve cross-references between symbols
+ * Resolve cross-references between symbols.
+ *
+ * Each entry's references come from its own data plus, for a canonical entry,
+ * the data of every contributor it absorbed (`donorData`, winner first so
+ * unmerged entries keep their historical order). `extraEdges` adds structural
+ * edges no data spells out with a prefix (gate → awarded prize signal).
  */
-function resolveReferences(symbols: SymbolEntry[]): void {
+function resolveReferences(
+  symbols: SymbolEntry[],
+  donorData: Map<SymbolEntry, unknown[]> = new Map(),
+  extraEdges: Array<{ from: string; to: string }> = [],
+): void {
   const symbolMap = new Map(symbols.map((s) => [s.symbol, s]));
 
-  for (const symbol of symbols) {
-    // Find references in the data
-    // `anchors` are code LOCATIONS, never symbol references — a section anchor
-    // like `docs/x.md#setup` must not register a reference to `#setup`.
-    const dataStr = JSON.stringify(symbol.data, (key, value) =>
-      key === 'anchors' ? undefined : value,
-    );
-    // Match compound ideas (?@, ?#, etc.) OR single prefixes
-    // This ensures ?@subscription matches as one symbol, not split into ? and @subscription
-    // IMPORTANT: First char after prefix must be a letter to avoid false positives
-    // like $420 (prices), $0 (variables)
-    const refPattern = /(?:\?[@#$%~^!]|[@#$%~^!?])[a-zA-Z][\w-]*/g;
-    const matches = (dataStr.match(refPattern) || []).filter(m => !SYMBOL_BLOCKLIST.has(m));
-
-    for (const match of matches) {
-      if (match !== symbol.symbol && symbolMap.has(match)) {
-        // Add to references
-        if (!symbol.references.includes(match)) {
-          symbol.references.push(match);
-        }
-
-        // Add to referencedBy on target
-        const target = symbolMap.get(match);
-        if (target && !target.referencedBy.includes(symbol.symbol)) {
-          target.referencedBy.push(symbol.symbol);
-        }
-      }
+  const link = (source: SymbolEntry, match: string): void => {
+    if (match === source.symbol || !symbolMap.has(match)) return;
+    // Add to references
+    if (!source.references.includes(match)) {
+      source.references.push(match);
     }
+    // Add to referencedBy on target
+    const target = symbolMap.get(match);
+    if (target && !target.referencedBy.includes(source.symbol)) {
+      target.referencedBy.push(source.symbol);
+    }
+  };
+
+  for (const symbol of symbols) {
+    for (const data of [symbol.data, ...(donorData.get(symbol) ?? [])]) {
+      // Find references in the data
+      // `anchors` are code LOCATIONS, never symbol references — a section anchor
+      // like `docs/x.md#setup` must not register a reference to `#setup`.
+      // `referencedFrom` (on reference stubs) points BACK at the referrer — the
+      // referrer's own data already yields the forward edge, so scanning it
+      // would invent an inverted stub → referrer edge.
+      const dataStr = JSON.stringify(data, (key, value) =>
+        key === 'anchors' || key === 'referencedFrom' ? undefined : value,
+      );
+      // Match compound ideas (?@, ?#, etc.) OR single prefixes
+      // This ensures ?@subscription matches as one symbol, not split into ? and @subscription
+      // IMPORTANT: First char after prefix must be a letter to avoid false positives
+      // like $420 (prices), $0 (variables)
+      const refPattern = /(?:\?[@#$%~^!]|[@#$%~^!?])[a-zA-Z][\w-]*/g;
+      const matches = ((dataStr ?? '').match(refPattern) || []).filter(m => !SYMBOL_BLOCKLIST.has(m));
+
+      for (const match of matches) link(symbol, match);
+    }
+  }
+
+  for (const edge of extraEdges) {
+    const source = symbolMap.get(edge.from);
+    if (source) link(source, edge.to);
   }
 }
 

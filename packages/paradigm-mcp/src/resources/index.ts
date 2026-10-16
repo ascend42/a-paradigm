@@ -14,7 +14,8 @@ import {
   getAllSymbols,
   type SymbolType,
 } from '@a-company/premise-core';
-import type { ProjectContext } from '../utils/index-loader.js';
+import { refreshContextSafely, type ProjectContext } from '../utils/index-loader.js';
+import { toolCache } from '../utils/tool-cache.js';
 import { trackResourceRead } from '../tools/context.js';
 import { getGatesData, getFlowsData } from './gates.js';
 import { getWisdomResourcesList, handleWisdomResource } from './wisdom.js';
@@ -117,6 +118,8 @@ export function registerResources(server: Server, getContext: () => ProjectConte
       }
       
       const ctx = getContext();
+      await refreshContextSafely(ctx);
+      toolCache.bindIndex(ctx.index);
       const resourcePath = uri.replace('paradigm://', '');
       
       // paradigm://symbols - Overview of all symbols

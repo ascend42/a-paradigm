@@ -11,7 +11,8 @@ import {
   type SymbolIndex,
   type SymbolType,
 } from '@a-company/premise-core';
-import type { ProjectContext } from '../utils/index-loader.js';
+import { refreshContextSafely, type ProjectContext } from '../utils/index-loader.js';
+import { toolCache } from '../utils/tool-cache.js';
 
 /**
  * Register symbol resources with the MCP server
@@ -28,6 +29,8 @@ export function registerSymbolResources(server: Server, getContext: () => Projec
       }
       
       const ctx = getContext();
+      await refreshContextSafely(ctx);
+      toolCache.bindIndex(ctx.index);
       const path = uri.replace('paradigm://', '');
       
       // paradigm://symbols - Overview of all symbols
