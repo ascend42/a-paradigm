@@ -1,0 +1,39 @@
+id: L-2026-10-16-ascend-223456-001
+type: human-note
+timestamp: '2026-10-16T22:34:56.024Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Spec v3.2 reviewed; reload, launch, extension and sequencing rulings
+summary: 'Arky (research 24) and Aegis (25) reviewed spec v3.2. Aegis found the localhost surface holds against browser attackers but not against a sandboxed session: the launch token sits on argv and can be raced, and a cached "always" becomes permanent policy. The founder ruled on the four user-facing calls (P8-D54 to D57 below). Spec v3.3 applies every finding plus these rulings.'
+symbols_touched:
+  - '#paradigm-harness'
+decisions:
+  - id: P8-D54
+    decision: Page reload shows Reconnect; the kernel asks for Touch ID / Windows Hello and re-attaches that tab; no secret stored in the page
+    rationale: Founder choice; one tap per reload, nothing for extensions or injected scripts to read.
+  - id: P8-D55
+    decision: The CLI hands the launch token to the browser privately, never on a command line; sessions are denied loopback connects to the endpoint port and process info on other processes; a reused launch token is treated as theft
+    rationale: Closes Aegis C1 (launch-token race) with no UX change.
+  - id: P8-D56
+    decision: The desktop wrapper (Tauri) moves into Move 1 so daily use runs outside the browser; the browser stays available with a warning badge
+    rationale: Browser extensions with all-sites access can read the page and use the cached unlock.
+  - id: P8-D57
+    decision: Finish the Atelier aesthetic session before Move 1 starts; no alpha/beta/gamma checkpoint split
+    rationale: Founder declined Arky's checkpoint proposal; M1.10 needs final themes and contrast fixtures.
+learnings:
+  - 'Localhost web security has two adversaries: other websites in the browser (beaten by origin lock, Host allowlist, Sec-Fetch-Site) and local agent sessions running as the same user (needs OS-level denial of loopback and process listing, plus tokens never on argv).'
+  - Any 'remember this' decision taken under a cached unlock silently upgrades a short window into standing policy; standing grants need fresh presence.
+tags:
+  - paradigm-8
+  - gnomon
+  - spec
+  - security
+  - decision
+linked_lore:
+  - L-2026-10-16-ascend-214048-001
+git_context:
+  ref: 07433bc764448e506b82e9422f18967baf368e96
+  branch: ideate/paradigm-8
+  dirty: true

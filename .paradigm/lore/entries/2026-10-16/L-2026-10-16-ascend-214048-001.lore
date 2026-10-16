@@ -1,0 +1,27 @@
+id: L-2026-10-16-ascend-214048-001
+type: human-note
+timestamp: '2026-10-16T21:40:48.339Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Linked mods: pin and re-approve on change'
+summary: Founder chose the trust model for folder-linked mods.
+symbols_touched:
+  - '#paradigm-harness'
+decisions:
+  - id: P8-D53
+    decision: '`gnomon mod link <folder>` raises an install card showing the mod''s declared effects, then pins the folder''s package hash. Any change (an edit or a git pull) pauses the mod and raises a short re-approve card listing the changed files. Mods you are authoring may use a dev mode that re-pins on save, shown with a visible ''dev'' badge.'
+    rationale: A linked folder is live code; changes must never load silently.
+tags:
+  - paradigm-8
+  - gnomon
+  - mods
+  - security
+  - decision
+linked_lore:
+  - L-2026-10-16-ascend-214019-001
+git_context:
+  ref: 4ebae982a28a804953e3e4994f0c9d54308e372a
+  branch: ideate/paradigm-8
+  dirty: true
