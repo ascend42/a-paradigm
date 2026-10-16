@@ -1,0 +1,26 @@
+# Aegis — review of gnomon.md v3 (2026-10-16)
+
+v2-confirm defects: closed 4, 6, 8, 9 (7 closed pending M1.0 --setting-sources check); partial 1 (session key-deny escapable; Windows can't enforce), 2 (filters, merge drivers, global config), 3 (default-deny only on oracle profile), 5 (TTY'd processes evade the detector; line 782 overclaims billing detectability).
+
+Critical
+- C1 Local-runner tools run inside the key-holding daemon (78, 554, 639): pi-agent-core read/write/edit are in-process fs calls; a prompt-injected local model can read approve.key or write kernel.db. Fix: one runner child per local session under the session profile over stdio; test that a local session can't read ~/.gnomon/keys/approve.key.
+- C2 Root key not truly presence-bound (134, 621, 659, 812): Windows UserConsentVerifier is only a prompt (CredRead works for any same-user process); macOS Keychain userPresence needs the data-protection keychain → entitled signed binary, not node. Fix: non-exportable hardware key with presence per signature (Secure Enclave P-256 via signed helper; Windows KeyCredentialManager/TPM); registry accepts P-256 root rows. Until then line 812 is false.
+- C3 Mod effects enforced only at the RPC boundary (229, 540, 645): mod child is plain node under the allow-most session profile → can write ~/.claude/settings.json (apiKeyHelper), .git/hooks, shell rc, and reach the network; install card shows effects:[read] (law-2 break); `mod` profile class undefined in §15.5. Fix: default-deny mod profile (writes only ~/.gnomon/mods/<name>/, egress via proxy to granted hosts, no exec).
+High
+- H1 Session sandbox escapable (372, 639): osascript/open/launchctl (Windows schtasks, WMI) spawn outside sandbox and pgid, can read approve.key, and a Terminal TTY evades approval.suspect. Deny AppleEvents, LaunchServices, launchctl; run G-SBX-04..06 against the session profile; deny mic/camera (TCC inherited); deny writes under ~/.gnomon and to every Claude settings layer.
+- H2 Law 7 can switch mid-session (182–184): checks only at spawn/init; settings can be written while running. Deny those writes; watch settings layers; change → kill session + billing.api.refused.
+- H3 Law 7 scope only #claude-adapter (207): pi-ai cloud providers (local endpoint set to api.anthropic.com or LiteLLM bills credits) → loopback/LAN only in root-signed config; permit consumers unstated (311) → only #claude-adapter consumes Claude permits; mcp.json env blocks unscanned; mod/MCP egress can reach Anthropic API hosts; §13.2 base-URL probe sends the OAuth token to whatever listens → throwaway config + no Keychain, or drop from 8.0; scan any non-default *_BASE_URL; check managed-policy sources (MDM plist, HKLM, drop-ins, server-managed); api-token card key in keystore, injected into one process env only; residual: out-of-kernel claude + repo .env = visibility only.
+- H4 Git exec paths (186): smudge/clean filters, merge drivers, include/includeIf, unhashed ~/.gitconfig. Fix: GIT_CONFIG_GLOBAL=/dev/null, GIT_CONFIG_NOSYSTEM=1, GIT_ATTR_NOSYSTEM=1; refuse .git/config with filter.*, merge.*.driver, diff.*.textconv, include*; git always inside the sandbox.
+- H5 Mods can rewrite card display (268, 287): placement:replace on card.detail/status can alter approval text or hide API CREDITS ACTIVE. Kernel card bodies/status indicators unreplaceable; mod content fenced + labelled mod:<name>; decision keys reserved; strip C0/C1/OSC (incl. OSC 52, OSC 8) from block strings and transcripts.
+- H6 Mod pin covers only the manifest (274): hash the whole package tree.
+- H7 Windows named pipe (113, 657): net.createServer can't set DACL/FIRST_PIPE_INSTANCE; squatter relay. Create the pipe in a helper with DACL + first-instance; client checks owner via GetNamedPipeServerProcessId (also gives peer credentials).
+- H8 Windows sandbox can't deny key reads (637): WRITE_RESTRICTED only restricts writes; needs AppContainer/LowBox or a dedicated SID; report `partial` until proven; WFP needs admin.
+Medium
+- M1 Voice client holds the human device key: scope voice can never approve, run root verbs or decide cards by speech; speaker id is not authentication; "cannot forge another speaker's id" overclaims (client does diarization).
+- M2 Voice consent/retention (582, 161, 470): forward only the founder's enrolled turns by default; voiceprint location, secret label, deletion, enrolment consent; voice text as prunable blobs, not forever.
+- M3 Speech injection: require AEC or headphones for conversation mode; tag turns source: voice.
+- M4 Reviewer "Anthropic hosts only" (638) unenforceable by hostname in sandbox-exec → proxy.
+- M5 §5 verb matrix lacks a mod-principal column.
+Low: L1 `gnomon mod rollback` missing from human-only verbs; L2 "user-less child" (621) false.
+
+Approvals to the keystore: YES, partly, now. Presence-gated hardware key; the TUI unlocks once on attach, holds in memory, drops after 15 min idle; fresh prompt always for gate-class, install, knot resolve, verdict, fallback-cloud, budget resume; cached unlock for tool.permission, ask-user, plan; CLI approve without TUI prompts every time. Not a prompt on every decision (habituation; the OS prompt can't show the card). Removes the on-disk file C1/H1 escapes would read. Amends §A.1.
