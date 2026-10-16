@@ -1,0 +1,40 @@
+id: L-2026-10-16-ascend-210726-001
+type: human-note
+timestamp: '2026-10-16T21:07:26.853Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Gnomon mod idea: paper gnomes with bodies, emotes, and a dialog-box relay voice'
+summary: |-
+  Founder's new "rather huge" mod idea for Gnomon. Founder is reviewing REVIEW.html (95 items) in parallel. Fable is ideating the mod into a concept doc.
+
+  **Aesthetic.** Little paper triangles leaning slightly in a breeze, each with a diagonal shadow cast from top-left to bottom-right, with a soft, almost textured paper feel.
+
+  **Language style.** Gnomes speak in short dialog-box lines, like video-game dialog: brief Q&A and quick updates. The system keeps the raw completion and logs it. The relay that reaches the user always passes through a filter that restyles the message. The founder sees two benefits: it can save tokens, and it lets the user steer what comes next (next pieces, research, adjacent questions).
+
+  **Bodies.** Each gnome has a body plus a hat.
+  - Body shapes: short-to-tall rectangles, triangles, circles. Colours and shapes vary.
+  - Users customise the look in the mod, or by asking Claude to edit the mod while Gnomon is open.
+  - Each shape has an animation set: walking, waiting, yes, no, understood, sorry.
+  - Custom words or phrases in a response can trigger emotes.
+
+  **Framing.** "Eventually people will think of speaking and talking to their gnomon which is just a skin and protocol on their AI model."
+symbols_touched:
+  - '#paradigm-harness'
+decisions:
+  - id: P8-R5
+    decision: 'Requirement (ideation): a gnome persona mod with paper aesthetic (breeze-skewed triangles, top-left to bottom-right shadow, textured paper), body + hat customisable shapes and colours, animation sets (walk, wait, yes, no, understood, sorry), phrase-triggered emotes, and a dialog-box relay voice that restyles output into brief Q&A while the raw completion is kept and logged'
+    rationale: 'Founder: "gnomon''s need a ''language'' style ... the system tracks the completion and the raw but the relay always goes through this filter of changing the output message which can not only save tokens but also allow the user to direct the next pieces"'
+tags:
+  - paradigm-8
+  - gnomon
+  - mod
+  - persona
+  - ideation
+linked_lore:
+  - L-2026-10-16-ascend-172614-001
+git_context:
+  ref: eddf85fcd1dfdd1a63d23c5879183815e16588c6
+  branch: ideate/paradigm-8
+  dirty: true
