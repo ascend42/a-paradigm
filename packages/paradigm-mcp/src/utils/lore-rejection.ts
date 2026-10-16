@@ -15,6 +15,8 @@ export interface RejectionEnvelope {
   code: string;
   message: string;
   successor_tool?: string;
+  /** 7.13 family op for successor_tool (e.g. paradigm_decision + 'record') */
+  successor_op?: string;
   doc?: string;
   removed_in?: string;
 }
@@ -39,13 +41,14 @@ export const DECISION_REMOVED_ENVELOPE: RejectionEnvelope = {
   code: 'lore_type_decision_removed',
   message:
     "lore type 'decision' was removed in v6.0. " +
-    'Use paradigm_decision_record instead. ' +
+    "Use paradigm_decision({op:'record'}) instead. " +
     'The decision will be stored in .paradigm/decisions/ and a companion ' +
     "lore insight entry (type:'insight' with references.decision_id) will be " +
     'written automatically so the timeline stays complete. ' +
     'For narrative-only references, use ' +
-    "paradigm_lore_record({type:'insight', references:{decision_id}}).",
-  successor_tool: 'paradigm_decision_record',
+    "paradigm_lore({op:'record', type:'insight', references:{decision_id}}).",
+  successor_tool: 'paradigm_decision',
+  successor_op: 'record',
   doc: 'docs/private/plans/v6.0-decisions-locked.md',
   removed_in: '6.0.0',
 };

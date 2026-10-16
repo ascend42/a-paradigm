@@ -401,7 +401,7 @@ export function runPostflightCheck(
         type: 'unregistered-symbol',
         severity: 'error',
         message: `Symbol "${symbol}" is not registered in any .purpose file`,
-        suggestion: 'Add to nearest .purpose file using paradigm_purpose_add_component or paradigm_purpose_add_signal.',
+        suggestion: "Add to nearest .purpose file using paradigm_purpose({op:'add_component'}) or paradigm_purpose({op:'add_signal'}).",
       });
     }
   }

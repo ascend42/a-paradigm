@@ -115,6 +115,18 @@ export interface PackManifest {
   // an empty array, the loader synthesizes a single implicit `main` section
   // flagged `default: true`. See Section docstring for constraints.
   sections?: Section[];
+
+  // v7.11 (pack.yaml schema_version '2'): explicit list of skill directories
+  // shipped by the pack. Each `path` is relative to the pack root, contains a
+  // SKILL.md, and must stay inside the pack (no `..`, no symlinks). Pack
+  // skills are ALWAYS loaded as trust:'external' and never projected without
+  // an explicit `paradigm skill import`.
+  skills?: PackSkillRef[];
+}
+
+/** One `skills:` entry in pack.yaml v2 — a pack-root-relative skill dir. */
+export interface PackSkillRef {
+  path: string;
 }
 
 /**
@@ -126,6 +138,12 @@ export interface PackLocation {
   rootDir: string;
   source: 'first-party' | 'npm' | 'local';
   parentPackId?: string;  // for discipline sub-packs
+  /**
+   * v7.11: absolute, validated skill directories resolved from
+   * `manifest.skills` (pack-discovery resolveSkillDirs). Absent/empty when the
+   * pack ships no skills. Never persisted in the discovery cache.
+   */
+  skillDirs?: string[];
 }
 
 // ── Frontmatter (shared by notes and policies) ──────────

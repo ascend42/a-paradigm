@@ -123,17 +123,17 @@ describe('generateWorkflowProtocol', () => {
     const result = generateWorkflowProtocol();
     expect(result).toContain('### Before Each Task');
     expect(result).toContain('### After Each Task');
-    expect(result).toContain('paradigm_pm_preflight');
-    expect(result).toContain('paradigm_pm_postflight');
+    expect(result).toContain('`paradigm_pm` (op `preflight`)');
+    expect(result).toContain('`paradigm_pm` (op `postflight`)');
   });
 });
 
 describe('generateHandoffProtocol', () => {
   it('mentions session recovery', () => {
     const result = generateHandoffProtocol();
-    expect(result).toContain('paradigm_session_recover');
-    expect(result).toContain('paradigm_session_health');
-    expect(result).toContain('paradigm_handoff_prepare');
+    expect(result).toContain('`paradigm_session` (op `recover`)');
+    expect(result).toContain('`paradigm_session` (op `health`)');
+    expect(result).toContain('`paradigm_session` (op `handoff_prepare`)');
   });
 });
 
@@ -192,7 +192,7 @@ describe('generateCheckpointProtocol', () => {
     expect(result).toContain('implementing');
     expect(result).toContain('validating');
     expect(result).toContain('complete');
-    expect(result).toContain('paradigm_session_checkpoint');
+    expect(result).toContain('paradigm_session({op:"checkpoint"');
   });
 });
 
@@ -203,12 +203,12 @@ describe('generateHabitsSection', () => {
     expect(result).toContain('preflight');
     expect(result).toContain('postflight');
     expect(result).toContain('on-stop');
-    expect(result).toContain('paradigm_habits_check');
+    expect(result).toContain('paradigm_habits({op:"check"');
     expect(result).toContain('Discovery');
     expect(result).toContain('Security');
     expect(result).toContain('Documentation');
     expect(result).toContain('Quality');
-    expect(result).toContain('paradigm_practice_context');
+    expect(result).toContain('`paradigm_habits` (op `practice_context`)');
   });
 });
 
@@ -220,8 +220,8 @@ describe('generateLoreSection', () => {
     expect(result).toContain('decision');
     expect(result).toContain('milestone');
     expect(result).toContain('incident');
-    expect(result).toContain('paradigm_lore_record');
-    expect(result).toContain('paradigm_lore_timeline');
+    expect(result).toContain('paradigm_lore({op:"record"');
+    expect(result).toContain('`paradigm_lore` (op `timeline`)');
   });
 });
 

@@ -249,6 +249,11 @@ export function loadGlobalAntipatterns(): WisdomAntipattern[] {
 
 /**
  * Load global decisions from ~/.paradigm/wisdom/decisions/
+ *
+ * @deprecated 7.12.0 (D2) — removed from the wisdom read path; wisdom-loader no
+ * longer merges global decisions into WisdomContext. Retained ONLY for the
+ * promote-to-global duplicate check in tools/wisdom.ts. The global dir is
+ * reported (never touched) by `paradigm migrate learning-stores`.
  */
 export function loadGlobalDecisions(): WisdomDecision[] {
   const decisionsDir = path.join(getGlobalWisdomDir(), 'decisions');

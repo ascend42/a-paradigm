@@ -1225,13 +1225,16 @@ export async function assembleCaptainBoard(
  */
 export async function proposeClaimantFor(task: Task, rootDir: string): Promise<Claimant | undefined> {
   try {
-    const { suggestAgentsForTask, loadAgentsManifest } = await import('./orchestration.js');
-    const manifest = loadAgentsManifest(rootDir);
-    if (!manifest?.agents) return undefined;
+    const { suggestAgentsForTask } = await import('./orchestration.js');
+    const { resolveDispatchableAgents } = await import('../utils/agent-registry.js');
+    // Same dispatch set as the orchestrator (roster.yaml + .agent profiles),
+    // so the board never proposes an agent the orchestrator can't dispatch.
+    const { agents } = resolveDispatchableAgents(rootDir);
+    if (Object.keys(agents).length === 0) return undefined;
     // Match against blurb + symbol-bearing tags (gives the matcher both keyword
     // and symbol signal).
     const matchText = [task.blurb, ...(task.tags || [])].join(' ');
-    const suggestions = suggestAgentsForTask(matchText, manifest.agents);
+    const suggestions = suggestAgentsForTask(matchText, agents);
     if (suggestions.length === 0) return undefined;
     return { kind: 'archetype', ref: suggestions[0].name };
   } catch {

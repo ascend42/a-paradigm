@@ -59,12 +59,12 @@ Paradigm adds a metadata layer (\`.purpose\` files + \`portal.yaml\`) to any cod
 
 **Tool surface (50+ tools)**
 - Navigation: \`paradigm_status\`, \`paradigm_search\`, \`paradigm_navigate\`, \`paradigm_related\`
-- Impact: \`paradigm_ripple\`, \`paradigm_flows_affected\`
-- Authorization: \`paradigm_gates_for_route\`, \`paradigm_portal_add_gate\`
-- History: \`paradigm_history_context\`, \`paradigm_lore_record\`, \`paradigm_lore_search\`
-- Agents: \`paradigm_agent_list\`, \`paradigm_orchestrate_inline\`, \`paradigm_ambient_events\`
-- Compliance: \`paradigm_aspect_check\`, \`paradigm_protocol_search\`
-- Session: \`paradigm_session_health\`, \`paradigm_handoff_prepare\`
+- Impact: \`paradigm_ripple\`, \`paradigm_flow\` (op \`affected\`)
+- Authorization: \`paradigm_gates_for_route\`, \`paradigm_purpose\` (op \`portal_add_gate\`)
+- History: \`paradigm_history\` (op \`context\`), \`paradigm_lore\` (op \`record\`), \`paradigm_lore\` (op \`search\`)
+- Agents: \`paradigm_agent\` (op \`list\`), \`paradigm_orchestrate_inline\`, \`paradigm_ambient\` (op \`events\`)
+- Compliance: \`paradigm_aspect\` (op \`check\`), \`paradigm_protocol\` (op \`search\`)
+- Session: \`paradigm_session\` (op \`health\`), \`paradigm_session\` (op \`handoff_prepare\`)
 
 **Setup** (if not already initialized)
 Run \`paradigm shift\` — auto-detects language/framework, creates \`.paradigm/\` config, scaffolds \`.purpose\` and \`portal.yaml\`, installs hooks.
@@ -87,7 +87,7 @@ Run \`paradigm shift\` — auto-detects language/framework, creates \`.paradigm/
 1. **Get oriented**: Call \`paradigm_status\` to see project symbols and health
 2. **Find relevant code**: Call \`paradigm_navigate\` with intent "find" or "explore"
 3. **Before editing**: Call \`paradigm_ripple\` on symbols you'll modify
-4. **Check context**: Call \`paradigm_session_health\` every 10-15 tool calls
+4. **Check context**: Call \`paradigm_session\` (op \`health\`) every 10-15 tool calls
 
 ## Benefits
 
@@ -97,7 +97,7 @@ Run \`paradigm shift\` — auto-detects language/framework, creates \`.paradigm/
 
 ## Context Monitoring
 
-Call \`paradigm_session_health\` periodically to monitor session health:
+Call \`paradigm_session\` (op \`health\`) periodically to monitor session health:
 - **<50%**: Continue working
 - **50-70%**: Plan a stopping point
 - **70-85%**: Prepare handoff soon
@@ -108,13 +108,13 @@ Call \`paradigm_session_health\` periodically to monitor session health:
 | Category | Tools |
 |----------|-------|
 | Navigation | \`paradigm_status\`, \`paradigm_search\`, \`paradigm_navigate\`, \`paradigm_related\` |
-| Impact analysis | \`paradigm_ripple\`, \`paradigm_flows_affected\` |
-| Authorization | \`paradigm_gates_for_route\`, \`paradigm_portal_add_gate\` |
-| History & lore | \`paradigm_history_context\`, \`paradigm_lore_record\`, \`paradigm_lore_search\` |
-| Agent team | \`paradigm_agent_list\`, \`paradigm_orchestrate_inline\`, \`paradigm_captain_brief\` |
-| Compliance | \`paradigm_aspect_check\`, \`paradigm_protocol_search\`, \`paradigm_aspect_drift\` |
-| Session | \`paradigm_session_health\`, \`paradigm_handoff_prepare\`, \`paradigm_session_recover\` |
-| Architecture | \`paradigm_arch_status\`, \`paradigm_arch_diagram\` |
+| Impact analysis | \`paradigm_ripple\`, \`paradigm_flow\` (op \`affected\`) |
+| Authorization | \`paradigm_gates_for_route\`, \`paradigm_purpose\` (op \`portal_add_gate\`) |
+| History & lore | \`paradigm_history\` (op \`context\`), \`paradigm_lore\` (op \`record\`), \`paradigm_lore\` (op \`search\`) |
+| Agent team | \`paradigm_agent\` (op \`list\`), \`paradigm_orchestrate_inline\`, \`paradigm_captain\` (op \`brief\`) |
+| Compliance | \`paradigm_aspect\` (op \`check\`), \`paradigm_protocol\` (op \`search\`), \`paradigm_aspect\` (op \`drift\`) |
+| Session | \`paradigm_session\` (op \`health\`), \`paradigm_session\` (op \`handoff_prepare\`), \`paradigm_session\` (op \`recover\`) |
+| Architecture | \`paradigm_graph\` (op \`arch_status\`), \`paradigm_graph\` (op \`arch_diagram\`) |
 
 ---
 
@@ -143,7 +143,7 @@ Call \`paradigm_session_health\` periodically to monitor session health:
         },
         tokens: {
           estimatedMcpContribution: stats.totals.totalTokens,
-          note: 'Use paradigm_session_health tool for full analysis with handoff recommendations',
+          note: 'Use paradigm_session (op: health) tool for full analysis with handoff recommendations',
         },
       }, null, 2),
     };
@@ -164,14 +164,14 @@ Handoff is recommended when:
 
 ## How to Check
 
-Call the \`paradigm_session_health\` tool to get:
+Call the \`paradigm_session\` (op \`health\`) tool to get:
 - Current estimated context usage
 - Handoff recommendation
 - Session statistics
 
 ## How to Handoff
 
-1. **Prepare**: Call \`paradigm_handoff_prepare\` with:
+1. **Prepare**: Call \`paradigm_session\` (op \`handoff_prepare\`) with:
    - Summary of work done
    - List of next steps
    - Target agent role

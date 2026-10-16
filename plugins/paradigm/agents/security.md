@@ -24,7 +24,7 @@ Before auditing:
 2. Read `portal.yaml` to understand all defined gates and protected routes
 3. Call `paradigm_navigate` with `intent: "explore"` and `target: "auth"` to
    find authentication-related code
-4. Call `paradigm_wisdom_context` for auth-related symbols to check for
+4. Call `paradigm_wisdom` (op `context`) for auth-related symbols to check for
    known security antipatterns
 
 ## Key Responsibilities

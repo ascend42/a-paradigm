@@ -17,6 +17,8 @@ import {
   readClassroomCertifications,
   computeRepeatFailureRate,
 } from '@a-company/premise-core';
+// Relative-path import into bundled paradigm-mcp source (same pattern as core/task-bridge.ts).
+import { listLearningStores } from '../../../../paradigm-mcp/src/utils/learning-stores.js';
 
 interface CheckResult {
   name: string;
@@ -34,14 +36,45 @@ interface DoctorOptions {
 }
 
 /**
- * Learning-liveness rollup (T-2026-06-13-004): journals-written over a REAL
- * denominator of postflight passes (completions). A FLATLINE — 0 journals over
- * at least FLATLINE_MIN_COMPLETIONS passes — is the falsifiable signal that the
- * loop is turning but learning nothing. Pure + exported so it is unit-testable
- * independent of the CLI.
+ * Learning-liveness rollup (T-2026-06-13-004; D7 in 7.12.0): journals-written
+ * over a REAL denominator of completions, read from the UNION of both probe
+ * files — postflight-liveness.jsonl (one row per postflight pass) and
+ * settlement-liveness.jsonl (one row per task-DAG settlement). Before 7.12.0
+ * doctor read only the postflight file, which was absent in practice, so the
+ * alarm was blind while 13 settlements recorded journalsWritten:0.
+ *
+ * Levels (NO DATA IS NEVER GREEN):
+ *   red    — 0 journals over ≥ FLATLINE_MIN_COMPLETIONS completions (flatline)
+ *   amber  — journals/completions < AMBER_RATIO over ≥ AMBER_MIN_COMPLETIONS
+ *   nodata — no rows at all (alarm: the probe itself may be dead)
+ *   thin   — some rows but < FLATLINE_MIN_COMPLETIONS (too few to judge)
+ *   green  — otherwise
+ * Plus probeSilent: ≥ 5 settlement rows but ZERO postflight rows (the
+ * postflight probe never fires). Pure + exported for unit tests.
+ *
+ * NO DOUBLE COUNTING: a task-DAG settlement runs runPostflightLearning, so one
+ * completion can write BOTH a settlement row and a postflight row. Rows that
+ * share a task id across the two files collapse into one completion (journals =
+ * the max of the pair). Rows that cannot be paired — today postflight rows carry
+ * only a sessionId, never a task id — are counted as max(postflight,
+ * settlement) completions over each file's own window, never the sum; the
+ * journals numerator comes from that same dominant file (tie → postflight, the
+ * journal writer itself) so the ratio's numerator and denominator always come
+ * from one probe.
  */
+export interface LearningLivenessRecord {
+  journalsWritten?: number;
+  ts?: string;
+  /** Which probe file the row came from. Unset rows count as postflight. */
+  source?: 'postflight' | 'settlement';
+  /** Task/orchestration id when the row carries one (settlement: parentTaskId). */
+  taskId?: string;
+}
+
+export type LearningLivenessLevel = 'red' | 'amber' | 'nodata' | 'thin' | 'green';
+
 export interface LearningLivenessSummary {
-  /** Denominator: postflight passes observed in the window. Always ≥ 0, never null. */
+  /** Denominator: completions observed in the window. Always ≥ 0, never null. */
   completions: number;
   /** Numerator: journals written across the window. */
   journalsWritten: number;
@@ -49,22 +82,97 @@ export interface LearningLivenessSummary {
   flatline: boolean;
   /** The window size applied. */
   windowSize: number;
+  level: LearningLivenessLevel;
+  /** ≥ PROBE_SILENT_MIN settlement rows and no postflight rows (whole input, not windowed). */
+  probeSilent: boolean;
+  postflightRows: number;
+  settlementRows: number;
 }
 
 const FLATLINE_MIN_COMPLETIONS = 5;
+const AMBER_MIN_COMPLETIONS = 10;
+const AMBER_RATIO = 0.2;
+const PROBE_SILENT_MIN = 5;
 
 export function summarizeLearningLiveness(
-  records: Array<{ journalsWritten?: number }>,
+  records: LearningLivenessRecord[],
   window = 20,
 ): LearningLivenessSummary {
-  const win = records.slice(-window);
-  const completions = win.length;
-  const journalsWritten = win.reduce(
-    (n, r) => n + (typeof r.journalsWritten === 'number' ? r.journalsWritten : 0),
-    0,
-  );
+  const jw = (r: LearningLivenessRecord) => (typeof r.journalsWritten === 'number' ? r.journalsWritten : 0);
+  const sum = (rs: LearningLivenessRecord[]) => rs.reduce((n, r) => n + jw(r), 0);
+  const pfWin = records.filter(r => r.source !== 'settlement').slice(-window);
+  const stWin = records.filter(r => r.source === 'settlement').slice(-window);
+
+  // Pair rows that share a task id across the two files (one completion).
+  const stByKey = new Map<string, LearningLivenessRecord>();
+  for (const r of stWin) if (r.taskId) stByKey.set(r.taskId, r);
+  const pairedKeys = new Set<string>();
+  let pairedJournals = 0;
+  for (const r of pfWin) {
+    const st = r.taskId ? stByKey.get(r.taskId) : undefined;
+    if (st && r.taskId && !pairedKeys.has(r.taskId)) {
+      pairedKeys.add(r.taskId);
+      pairedJournals += Math.max(jw(r), jw(st));
+    }
+  }
+  const isPaired = (r: LearningLivenessRecord) => !!r.taskId && pairedKeys.has(r.taskId);
+  const pfRest = pfWin.filter(r => !isPaired(r));
+  const stRest = stWin.filter(r => !isPaired(r));
+  // Unpairable rows: max, not sum; numerator from the same dominant probe.
+  const rest = stRest.length > pfRest.length ? stRest : pfRest;
+  const completions = pairedKeys.size + rest.length;
+  const journalsWritten = pairedJournals + sum(rest);
   const flatline = completions >= FLATLINE_MIN_COMPLETIONS && journalsWritten === 0;
-  return { completions, journalsWritten, flatline, windowSize: window };
+  const postflightRows = records.filter(r => r.source === 'postflight').length;
+  const settlementRows = records.filter(r => r.source === 'settlement').length;
+  const probeSilent = settlementRows >= PROBE_SILENT_MIN && postflightRows === 0;
+
+  let level: LearningLivenessLevel;
+  if (completions === 0) level = 'nodata';
+  else if (flatline) level = 'red';
+  else if (completions >= AMBER_MIN_COMPLETIONS && journalsWritten / completions < AMBER_RATIO) level = 'amber';
+  else if (completions < FLATLINE_MIN_COMPLETIONS) level = 'thin';
+  else level = 'green';
+
+  return { completions, journalsWritten, flatline, windowSize: window, level, probeSilent, postflightRows, settlementRows };
+}
+
+function readJsonlRows(file: string): Array<Record<string, unknown>> {
+  if (!fs.existsSync(file)) return [];
+  return fs.readFileSync(file, 'utf8')
+    .split('\n').filter(l => l.trim())
+    .map(l => { try { return JSON.parse(l) as Record<string, unknown>; } catch { return null; } })
+    .filter((r): r is Record<string, unknown> => r !== null && typeof r === 'object');
+}
+
+/**
+ * Read BOTH liveness probe files and return the union, ordered by ts. A row
+ * without ts inherits the ts of the nearest preceding row in its OWN file
+ * ('' before the first), so it keeps its file position; ties break on
+ * postflight-first file order. That is a total order, so the comparator is
+ * consistent even when only some rows carry ts. Exported for tests.
+ */
+export function readLearningLivenessRecords(rootDir: string): LearningLivenessRecord[] {
+  const ev = path.join(rootDir, '.paradigm', 'events');
+  const tag = (source: 'postflight' | 'settlement') => (r: Record<string, unknown>): LearningLivenessRecord => ({
+    journalsWritten: typeof r.journalsWritten === 'number' ? r.journalsWritten : undefined,
+    ts: typeof r.ts === 'string' ? r.ts : undefined,
+    source,
+    taskId: ['taskId', 'parentTaskId', 'orchestrationId']
+      .map(k => r[k]).find((v): v is string => typeof v === 'string' && v.length > 0),
+  });
+  const withSortKey = (rows: LearningLivenessRecord[]) => {
+    let last = '';
+    return rows.map(r => ({ r, key: (last = r.ts ?? last) }));
+  };
+  const rows = [
+    ...withSortKey(readJsonlRows(path.join(ev, 'postflight-liveness.jsonl')).map(tag('postflight'))),
+    ...withSortKey(readJsonlRows(path.join(ev, 'settlement-liveness.jsonl')).map(tag('settlement'))),
+  ];
+  return rows
+    .map((x, i) => ({ ...x, i }))
+    .sort((a, b) => a.key.localeCompare(b.key) || a.i - b.i)
+    .map(x => x.r);
 }
 
 export async function doctorCommand(options: DoctorOptions = {}): Promise<boolean> {
@@ -618,7 +726,8 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
       }
     }
 
-    // Check university health
+    // Check university health (only when a project pack has content — a
+    // missing .paradigm/university/ is never a finding as of 7.11.0)
     const universityDir = path.join(cwd, '.paradigm', 'university');
     if (fs.existsSync(universityDir)) {
       try {
@@ -637,12 +746,9 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
         }
 
         if (contentCount === 0) {
-          results.push({
-            name: 'University content',
-            status: 'warn',
-            message: 'University directory exists but no content found',
-            fix: 'Add content: paradigm university add note --title "Getting Started"',
-          });
+          // 7.11.0: packs are opt-in. A missing or empty university dir (e.g.
+          // the pre-7.11 empty scaffold `paradigm shift` used to create) is
+          // not a finding — only real content gets validated below.
         } else {
           // Quick validation: check quiz answer validity
           const quizDir = path.join(contentDir, 'quizzes');
@@ -805,6 +911,90 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
       }
     }
 
+    // Agent profile keys + roster dispatchability (TD-2026-09-26-846)
+    try {
+      const { auditAgents } = await import('./agent-audit.js');
+      const audit = auditAgents(cwd);
+
+      if (audit.unknownKeys.length > 0) {
+        const detail = audit.unknownKeys
+          .map(u => `${path.basename(u.file)} (${u.keys.join(', ')})`)
+          .join('; ');
+        results.push({
+          name: 'Agent profile keys',
+          status: 'warn',
+          message: `Unknown keys in ${audit.unknownKeys.length} profile(s): ${detail}`,
+          fix: 'Remove or rename the unknown keys — they are ignored by the loader',
+        });
+      }
+      // Reported independently of the unknown-keys warning
+      if (audit.unreadKeys.length > 0) {
+        results.push({
+          name: 'Agent profile keys',
+          status: 'info',
+          message: `\`behaviors:\` present in ${audit.unreadKeys.length} profiles — unread until skills (Phase 1)`,
+        });
+      }
+      for (const mb of audit.migratedBehaviors) {
+        results.push({
+          name: 'Agent profile keys',
+          status: 'info',
+          message: `${path.basename(mb.file)} \`behaviors.${mb.block}\` migrated to skill ${mb.skillId} — the block can be removed`,
+        });
+      }
+      if (audit.unknownKeys.length === 0 && audit.unreadKeys.length === 0) {
+        results.push({ name: 'Agent profile keys', status: 'ok', message: 'All profile keys recognized' });
+      }
+
+      if (audit.rosterGaps.length > 0 || audit.benchedOnRoster.length > 0) {
+        const bits: string[] = [];
+        if (audit.rosterGaps.length > 0) bits.push(`no profile: ${audit.rosterGaps.join(', ')}`);
+        if (audit.benchedOnRoster.length > 0) bits.push(`benched: ${audit.benchedOnRoster.join(', ')}`);
+        results.push({
+          name: 'Roster dispatchability',
+          status: 'warn',
+          message: `${audit.rosterGaps.length + audit.benchedOnRoster.length} roster agent(s) cannot be dispatched — ${bits.join('; ')}`,
+          fix: '`paradigm agent sync-global` to install bundled profiles, or deactivate the agent (remove it from .paradigm/roster.yaml; clear `benched: true` on benched profiles)',
+        });
+      } else {
+        results.push({ name: 'Roster dispatchability', status: 'ok', message: 'Every roster agent is dispatchable' });
+      }
+    } catch {
+      // Agent audit is advisory — never fail doctor on it.
+    }
+
+    // Legacy MCP tool names (7.13.0 surface cut — aliases removed in 7.15)
+    try {
+      const { auditLegacyToolNames } = await import('./legacy-names-audit.js');
+      const legacy = auditLegacyToolNames(cwd);
+      const permHits = legacy.hits.filter(h => h.permission);
+      const textHits = legacy.hits.filter(h => !h.permission);
+      if (permHits.length > 0) {
+        const detail = permHits.slice(0, 5).map(h => `${h.legacy} → ${h.replacement}`).join('; ');
+        results.push({
+          name: 'Legacy tool names (permissions)',
+          status: 'warn',
+          message: `${permHits.length} legacy name(s) in .claude permission allowlists no longer match a listed tool: ${detail}${permHits.length > 5 ? '; …' : ''}`,
+          fix: 'Replace `mcp__paradigm__paradigm_<family>_<op>` entries with the family tool, e.g. `mcp__paradigm__paradigm_lore`',
+        });
+      }
+      if (textHits.length > 0) {
+        const files = [...new Set(textHits.map(h => h.file))];
+        const sample = textHits.slice(0, 3).map(h => `${h.legacy} → ${h.replacement}`).join('; ');
+        results.push({
+          name: 'Legacy tool names',
+          status: 'warn',
+          message: `${textHits.reduce((n, h) => n + h.count, 0)} pre-7.13 tool reference(s) in ${files.join(', ')} (hidden aliases until 7.15): ${sample}`,
+          fix: '`paradigm sync` to regenerate managed sections; hand-edit the rest to `paradigm_<family>({op:\'<op>\'})`',
+        });
+      }
+      if (legacy.hits.length === 0 && legacy.filesScanned > 0) {
+        results.push({ name: 'Legacy tool names', status: 'ok', message: 'No pre-7.13 tool names in agent instructions or permissions' });
+      }
+    } catch {
+      // Advisory — never fail doctor on it.
+    }
+
     // Team-invocation funnel (Pillar 0 telemetry: eligible → orchestrated/solo/bypass)
     try {
       const { summarizeTeamFunnel } = await import('../../core/team-funnel.js');
@@ -828,109 +1018,113 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
       // Telemetry is advisory — never fail doctor on it.
     }
 
-    // Learning-loop liveness (v7 §2.3): the falsifiable pipeline-liveness probe.
-    // Each task-DAG settlement appends one record to settlement-liveness.jsonl with
-    // per-stage ok|threw|skipped + chainLive. A severed chain (e.g. postflight
-    // commented out) flips chainLive:false and this check screams — that's the
-    // whole point: "self-improving" is now falsifiable, not asserted.
+    // Learning liveness — ONE check (T-2026-06-13-004, D7 7.12.0). Merges the
+    // older "Learning-loop liveness" chain probe (v7 §2.3: per-stage
+    // ok|threw|skipped + chainLive on each settlement row) with the journals-
+    // over-completions rollup read from BOTH probe files. They used to be two
+    // lines, so a FLATLINE ✗ printed right under a green "chain live" ✓. Now the
+    // chain state is a sub-detail and the status is the WORST of the two: a
+    // flatline can never display alongside a green liveness line. No data is an
+    // alarm, never green — a missing probe must not pass as healthy.
     try {
-      const livenessPath = path.join(cwd, '.paradigm', 'events', 'settlement-liveness.jsonl');
-      if (fs.existsSync(livenessPath)) {
-        const lines = fs.readFileSync(livenessPath, 'utf8')
-          .trim().split('\n').filter(l => l.trim());
-        const records = lines
-          .map(l => { try { return JSON.parse(l); } catch { return null; } })
-          .filter((r): r is { chainLive?: boolean; settledAs?: string; stages?: Record<string, string> } => r !== null);
-
-        if (records.length === 0) {
-          results.push({
-            name: 'Learning-loop liveness',
-            status: 'info',
-            message: 'No settlements recorded yet (probe writes on each task-DAG settlement)',
-          });
+      // Chain sub-detail from settlement rows (severed stages).
+      type Chain = { status: CheckResult['status']; text: string; fix?: string };
+      let chain: Chain | undefined;
+      const settlementRows = readJsonlRows(path.join(cwd, '.paradigm', 'events', 'settlement-liveness.jsonl')) as Array<{
+        chainLive?: boolean; stages?: Record<string, string>;
+      }>;
+      if (settlementRows.length > 0) {
+        const window = settlementRows.slice(-20);
+        const dead = window.filter(r => r.chainLive === false);
+        const dead5 = settlementRows.slice(-5).filter(r => r.chainLive === false);
+        // Name the failing stage(s) from the most recent dead record.
+        const lastDead = dead.length > 0 ? dead[dead.length - 1] : undefined;
+        const failingStages = lastDead?.stages
+          ? Object.entries(lastDead.stages).filter(([, v]) => v === 'threw').map(([k]) => k)
+          : [];
+        const stageNote = failingStages.length > 0 ? ` (stage: ${failingStages.join(', ')})` : '';
+        const chainFix = 'A settlement-chain stage is throwing. Inspect .paradigm/events/settlement-liveness.jsonl and the named stage.';
+        if (dead5.length >= 3) {
+          chain = { status: 'error', text: `DEAD CHAIN: ${dead5.length}/5 recent settlements severed${stageNote} — the learning loop is not closing`, fix: chainFix };
+        } else if (dead.length > 0) {
+          chain = { status: 'warn', text: `chain severed in ${dead.length}/${window.length} recent settlements${stageNote}`, fix: chainFix };
         } else {
-          const window = records.slice(-20);
-          const last5 = records.slice(-5);
-          const dead = window.filter(r => r.chainLive === false);
-          const dead5 = last5.filter(r => r.chainLive === false);
-
-          // Name the failing stage(s) from the most recent dead record.
-          const lastDead = dead.length > 0 ? dead[dead.length - 1] : undefined;
-          const failingStages = lastDead?.stages
-            ? Object.entries(lastDead.stages).filter(([, v]) => v === 'threw').map(([k]) => k)
-            : [];
-          const stageNote = failingStages.length > 0 ? ` (stage: ${failingStages.join(', ')})` : '';
-
-          if (dead5.length >= 3) {
-            // Loud dead-chain alarm: ≥3 of last 5 severed.
-            results.push({
-              name: 'Learning-loop liveness',
-              status: 'error',
-              message: `DEAD CHAIN: ${dead5.length}/5 recent settlements severed${stageNote} — the learning loop is not closing`,
-              fix: 'A settlement-chain stage is throwing. Inspect .paradigm/events/settlement-liveness.jsonl and the named stage.',
-            });
-          } else if (dead.length > 0) {
-            results.push({
-              name: 'Learning-loop liveness',
-              status: 'warn',
-              message: `${dead.length}/${window.length} recent settlements had a severed chain${stageNote}`,
-              fix: 'Inspect the named stage in .paradigm/events/settlement-liveness.jsonl.',
-            });
-          } else {
-            results.push({
-              name: 'Learning-loop liveness',
-              status: 'ok',
-              message: `${window.length} recent settlements, chain live`,
-            });
-          }
+          chain = { status: 'ok', text: `chain live (${window.length} recent settlements)` };
         }
+      }
+
+      const s = summarizeLearningLiveness(readLearningLivenessRecords(cwd));
+      const ratio = `${s.journalsWritten} journals / ${s.completions} completions`;
+      const src = `(postflight ${s.postflightRows}, settlement ${s.settlementRows} rows)`;
+      const fix = 'Inspect .paradigm/events/{postflight,settlement}-liveness.jsonl. Check verdicts are recorded (paradigm_ambient_engage) and that postflight journals on completion.';
+      let live: { status: CheckResult['status']; message: string; fix?: string };
+      switch (s.level) {
+        case 'nodata':
+          live = {
+            // Not 'ok' (never green), but not a doctor failure either — a fresh
+            // project legitimately has no completions yet.
+            status: 'info',
+            message: 'NO DATA: neither liveness probe has recorded a completion — the loop cannot be shown to be alive',
+            fix: 'Complete a task through the task DAG (settlement) or run postflight; if completions happen and this stays empty, a probe is dead.',
+          };
+          break;
+        case 'red':
+          live = { status: 'error', message: `FLATLINE: ${ratio} ${src} — the loop is turning but producing no learnings`, fix };
+          break;
+        case 'amber':
+          live = { status: 'warn', message: `LOW: ${ratio} ${src} — below ${AMBER_RATIO} journals per completion`, fix };
+          break;
+        case 'thin':
+          live = { status: 'info', message: `${ratio} ${src} — too few completions to judge (need ${FLATLINE_MIN_COMPLETIONS})` };
+          break;
+        default:
+          live = { status: 'ok', message: `${ratio} over last ${s.completions} completion${s.completions === 1 ? '' : 's'} ${src}` };
+      }
+
+      const rank: Record<CheckResult['status'], number> = { ok: 0, info: 1, missing: 2, warn: 3, error: 4 };
+      const chainWorse = !!chain && rank[chain.status] > rank[live.status];
+      const status = chainWorse ? chain!.status : live.status;
+      const message = chain?.status === 'error'
+        ? `${chain.text} · ${live.message}`
+        : chain ? `${live.message} · ${chain.text}` : live.message;
+      const checkFix = chainWorse ? chain!.fix : (live.fix ?? chain?.fix);
+      results.push({ name: 'Learning liveness', status, message, ...(checkFix ? { fix: checkFix } : {}) });
+      if (s.probeSilent) {
+        results.push({
+          name: 'Learning liveness probe',
+          status: 'warn',
+          message: `probe silent: ${s.settlementRows} settlement rows but 0 postflight-liveness rows — the postflight probe is not firing`,
+          fix: 'postflight-liveness.jsonl is written by runPostflightLearning on each non-dry-run pass; check it is reached.',
+        });
       }
     } catch {
       // Probe read is advisory — never fail doctor on it.
     }
 
-    // Learning liveness (T-2026-06-13-004): journals-written-per-N-completions
-    // with a REAL denominator. Every non-dry-run postflight pass appends one row
-    // to postflight-liveness.jsonl (postflight-live when it journaled;
-    // postflight-noop{reason} when it did not). A FLATLINE — 0 journals over N
-    // completions — means the loop is turning but learning nothing, and is
-    // surfaced as a warning. This is the observable that makes "broken ≠ healthy":
-    // before, a solo completion left no trace at all.
+    // Learning-store census (D5, 7.12.0): every store the registry knows, with
+    // class + count. Read-only; informational.
     try {
-      const plPath = path.join(cwd, '.paradigm', 'events', 'postflight-liveness.jsonl');
-      if (fs.existsSync(plPath)) {
-        const records = fs.readFileSync(plPath, 'utf8')
-          .trim().split('\n').filter(l => l.trim())
-          .map(l => { try { return JSON.parse(l); } catch { return null; } })
-          .filter((r): r is { journalsWritten?: number } => r !== null);
-
-        if (records.length === 0) {
-          results.push({
-            name: 'Learning liveness',
-            status: 'info',
-            message: 'No postflight passes recorded yet (probe writes on each task completion)',
-          });
-        } else {
-          const s = summarizeLearningLiveness(records);
-          const ratio = `${s.journalsWritten} journals / ${s.completions} completions`;
-          if (s.flatline) {
-            results.push({
-              name: 'Learning liveness',
-              status: 'warn',
-              message: `FLATLINE: ${ratio} — the loop is turning but producing no learnings`,
-              fix: 'Inspect .paradigm/events/postflight-liveness.jsonl. Check verdicts are recorded (paradigm_ambient_engage) and that postflight is reached on completion.',
-            });
-          } else {
-            results.push({
-              name: 'Learning liveness',
-              status: 'ok',
-              message: `${ratio} over last ${s.completions} completion${s.completions === 1 ? '' : 's'}`,
-            });
-          }
-        }
+      const stores = listLearningStores(cwd);
+      const parts = stores
+        .filter(st => st.count() > 0)
+        .map(st => `${st.id}[${st.class}]=${st.count()}`);
+      const empty = stores.length - parts.length;
+      results.push({
+        name: 'Learning stores',
+        status: 'info',
+        message: `${stores.length} registered · ${parts.join(', ') || 'all empty'}${empty > 0 ? ` · ${empty} empty` : ''}`,
+      });
+      const legacy = path.join(cwd, '.paradigm', 'wisdom', 'decisions');
+      if (fs.existsSync(legacy)) {
+        results.push({
+          name: 'Learning stores',
+          status: 'warn',
+          message: 'legacy .paradigm/wisdom/decisions/ still present — no longer read (7.12.0)',
+          fix: 'paradigm migrate learning-stores --dry-run, then paradigm migrate learning-stores',
+        });
       }
     } catch {
-      // Probe read is advisory — never fail doctor on it.
+      // Census is advisory.
     }
   }
 
@@ -1226,14 +1420,6 @@ export async function doctorCommand(options: DoctorOptions = {}): Promise<boolea
     });
   }
 
-  // v6.0 (D7): capture a privacy-preserving university metrics snapshot.
-  // Non-fatal on any error — metrics never block doctor.
-  try {
-    const { captureSnapshot } = await import('../../core/university/metrics.js');
-    captureSnapshot(cwd);
-  } catch {
-    // non-fatal
-  }
 
   return healthy;
 }

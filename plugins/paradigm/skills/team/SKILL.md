@@ -52,7 +52,7 @@ Team Activity — This Session
 Check if the postflight learning pass has run by looking for recent journal entries:
 
 ```
-paradigm_journal_search({ limit: 10 })
+paradigm_journal({op:'search', limit: 10 })
 ```
 
 If journal entries from today exist for contributing agents, summarize:
@@ -77,7 +77,7 @@ security: 1 journal entry (correction_received, confidence 0.4)
 
 Call Neverland metrics:
 ```
-paradigm_ambient_health({})
+paradigm_ambient({op:'health'})
 ```
 
 Present a compact health summary:

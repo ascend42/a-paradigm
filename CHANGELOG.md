@@ -5,6 +5,235 @@ All notable changes to Paradigm will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [7.14.0] — 2026-09-29
+
+**Paradigm Brain MVP** (Phase 5 of the skills arc, T-2026-09-29-002, TD-2026-09-29-204). The Brain gives a personal folder (notes, an Obsidian vault, a folder of mixed files) structure without touching the folder. The index, labels and logs live in `~/.paradigm/brains/<sha256(realpath)[0:16]>/`, and nothing is ever written inside the folder. Everything is private by default. Agents see only files a person explicitly shares, and only after that person turns agent access on.
+
+### Added
+- **`paradigm brain` CLI:** `init <folder>` allow-lists the folder, flags private zones, scans it and, on a terminal, opens Platform. The other commands are `scan` (index plus a read-only health report), `suggest` (the next ≤10 topic suggestions, folders first), `confirm <id> [--reject|--skip]`, `status [--acceptance]`, `share <pattern>` / `unshare`, `access off|metadata`, `suggestions auto|on|off`, `purge [--yes]` and `egress` (what left this computer). `share` and `access metadata` only work when a person confirms at a TTY. `purge` needs `--yes` when it is not run from a terminal.
+- **Engine** (`paradigm-mcp/src/utils/brain/`):
+  - **Scan:** a metadata-only JSON index (path, size, mtime, hash, title, headings, links, frontmatter tags/aliases/relates; no bodies). It is incremental by mtime+size+inode, hashes only changed files, detects renames by inode/hash and is rewritten atomically.
+  - **Walk:** uses lstat and never follows symlinks out of the root. Caps are 2 MB/file, 20k files and 200 ms parse time.
+  - **Parse:** reads `.md`/`.txt` only (lenient frontmatter, headings, `[[wikilinks]]` including `#heading`/`^block`, relative markdown links). No other file type is opened.
+- **Health** (`#brain-health`): reports broken links, loose notes and same-name notes over the gated view.
+- **Suggestions** (`#brain-suggest`, `heuristic@1`, deterministic, no model):
+  - **Heuristics:** folder names (dates, numbering and stopwords stripped), shared frontmatter tags/aliases, title/heading n-grams that recur in ≥3 files of a folder, and wikilink hubs (in-degree ≥3). Each suggestion comes with a plain rationale.
+  - **Staleness:** when a suggestion's `sourceHash` changes it is stale and cannot be accepted, and an old reject no longer suppresses it. Only open, undecided suggestions are reported stale.
+  - **Skip means "not now":** a skipped suggestion moves to the back of the queue and comes back once the others are decided. It is never hidden for good.
+  - **Acceptance** is measured as accept / (accept + reject).
+  - **Feature flag** (`features.yaml`, `auto|on|off`): in `auto`, suggestions switch off when acceptance is below 60% after ≥10 decisions. Scan, zones and health keep working.
+- **Declared labels** (`#brain-declared`): `declared.yaml` is the only source of Brain symbols. Every write makes a backup (the last 10 are kept) and then writes atomically. Obsidian `#tags` become tags and never become symbols, and document bodies are never symbol-scanned.
+- **Brain → code cross-links with a staleness proof** (`#brain-crosslink`): frontmatter `relates: ['member/#symbol']` and confirmed relates are resolved against a workspace member's `scan-index.json` after `exports` filtering. Each gets one of three verdicts:
+  - `valid`
+  - `provably-stale`: the member index loaded and the symbol is absent
+  - `unknown`: the member is missing, the index is unreadable (no symbol categories or zero symbols), the index is out of date (a member `.purpose` is newer than `scan-index.json`) or the symbol is not exported. The tool never calls a link stale without proof, and `paradigm brain scan` says how many links could not be checked.
+- **MCP:** `paradigm_brain({op: status|search|stale})` is an on-demand family. It is listed only while some brain has `agent_access: metadata`, and neither config enable nor `paradigm_tool_activate` can override that. Output is metadata only, and headings are wrapped as `<untrusted_document_text>`. It has no write op and is not mixed into `paradigm_search`. The default tool list is unchanged (32 tools).
+- **Platform Brain section:**
+  - **Routes:** `GET /api/brain/overview|health|suggestions|find` go through `openBrainView(…, 'owner')`. `POST /api/brain/verdict` calls the same `recordVerdict` as the CLI.
+  - **Section UI:** an egress badge ("Nothing has left this Mac"), a map by type/size/recency, a Private & Locked panel with counts only, health, keyboard-triaged suggestions (A/R/S) with the rationale beside each, and Find.
+- **Red-team corpus and harness:** injection text in headings and frontmatter, secrets in odd formats, card and MRZ numbers, a Slack DM export, symlink escapes and a fake `.kdbx`. Also a reusable leak-probe harness (≥100 queries) and a benchmark (1k files <2 s in CI, 3k with `BENCH=1`).
+
+### Security
+- **Default-deny gates:** the order is `open < private < {medical, financial, identity, third-party-data} < quarantined`, and the strictest zone wins. Name-based zones are Health, Medical, Tax(es), Bank(ing), Finance, Passport, IDs and Legal. Code may only add stricter zones. Only a human `share` can lower a gate, and share never lowers a sensitive zone.
+- **Hard blocks** apply even when a path is allow-listed: `~/Library`, `.ssh`, `.gnupg`, browser profiles, mail stores and password-manager exports.
+- **Local detectors run before anything is saved:** PEM keys, AWS/GitHub/Slack/Anthropic/OpenAI key shapes, `KEY|SECRET|TOKEN|PASSWORD=`, Luhn card numbers, US SSNs and passport MRZ lines. A hit quarantines the file and keeps only its path and size. Chat exports are marked `third-party-data`.
+- **Single choke point:** `view.ts` is the only reader of the index (a lint test enforces this). It filters before matching, so hidden records never affect counts, ordering or timing. Links to hidden files show as `[private]`. If gate resolution fails, the file is quarantined.
+- **Egress:** every agent response goes through `respond()`, which appends to `egress.log` and blocks any payload that references a gated path. `paradigm brain purge` archives the egress log and then removes the brain's storage. It never touches the user's folder.
+- **Platform:** every `/api/brain` request must have a loopback Host, and any `Origin` it sends must be exactly the Platform's own origin (`^local-only`). The verdict write also needs the owner credential (`^brain-owner-write`; see the hardening pass below).
+- **Leak probes:** zero gated or private sentinels leak across all probe queries through the view, the MCP handler, the Platform routes and the egress log.
+- **Hardening pass** (pre-ship security review):
+  - **ReDoS-safe detectors:** `secret-assignment` is now a hand-written scanner (find `:`/`=`, check the key token against an anchored `^[A-Za-z0-9_.-]{1,64}$` plus keyword segments, then require a value of at least 8 characters). Every other pattern was rewritten without nested quantifiers. Lines are scanned in 4096-character windows that overlap, so a secret deep in a long line is still found. A 2 MB `key_key_…` line went from about 28 minutes (quadratic; 64k chars took 1.7 s) to about 10 ms. `limits.parse_ms` is now a pre-emptive budget: a file that exhausts it is quarantined with `skipReason: detector-timeout`.
+  - **Case- and Unicode-safe hard blocks:** paths are resolved with `fs.realpathSync.native`. Hard blocks compare case-folded, NFC-normalized paths on every platform, and `isInside` folds on darwin/win32. Both the configured brain home and the OS home are blocked. So `~/library`, `~/.config/Google-Chrome` and NFD spellings are refused.
+  - **TOCTOU-safe reads:** files are opened with `O_RDONLY | O_NOFOLLOW`, then `fstat` checks that the inode and device match the walk entry, and the bytes are read from that fd. On a mismatch the file is skipped (`skipReason: changed-during-read`) and a log line is written.
+  - **Exact-origin Brain API and owner cookie:** `/api/brain/*` sets ACAO only for the Platform's own origin (the loopback Host whose port equals the socket's port). Any other `Origin`, including another localhost port, and any `Sec-Fetch-Site` other than `same-origin`/`none` gets a 403. `/overview` no longer returns `writeToken`. It sets an `HttpOnly; SameSite=Strict; Path=/api/brain` cookie named `brain_owner`. `POST /verdict` requires that cookie AND an `Origin` equal to the Platform's own origin. The `x-brain-token` header is gone.
+  - **Full injection envelope:** the MCP `paradigm_brain` output wraps every document-derived string (title, topics, relpath, folder, headings, cross-link relpath and target, brain folder name) as untrusted document text. Tags that look like the envelope are stripped case-insensitively and tolerantly (whitespace, `-`/`_`/space separators, attributes, zero-width characters, NFKC full-width `＜＞`, nested), repeating until stable. Agents see the cross-link reason `not-exported` as `unknown`. Agents also see links to hidden files exactly like broken links (`status: missing`, target `[missing]`, no heading or block). The owner still sees `[private]`.
+  - **`brain.yaml` tamper detection:** every Paradigm write records a sha256 in `<brain>/.config-hash`. If the hash doesn't match on load (or `.config-hash` is missing), `loadBrainConfig` returns `tampered: true`, forces `agent_access` to `off` in memory, writes a sticky `.config-tampered` marker and appends one egress event `{channel:'config', op:'tamper-detected'}`. That event does not count as "left this Mac". `paradigm brain status` and the Platform overview (`banner` field) show: "Settings changed outside Paradigm — agent access paused. Run `paradigm brain status` to review." The pause clears only when a person runs `paradigm brain access <off|metadata>` at a terminal. That command first shows a plain diff of shared patterns, zones, workspace and agent access between `.config-lastgood.yaml` (snapshotted on every trusted save, never while paused) and the current file, and asks the person to confirm. Off a terminal it refuses. The engine's `setAgentAccess` refuses a tampered config unless it is called with `acknowledgeTamper`. Saves are race-free: `.config-hash.pending` is written first, then `brain.yaml`, then the pending file is renamed to `.config-hash`. The loader accepts either hash and re-checks once after ~50 ms before pausing, so a concurrent save never reads as tampering. This is tamper *evidence* against careless or out-of-band edits. A local writer who recomputes the hash is not stopped; signing is a follow-up.
+  - **New detectors:** Google API keys (`AIza…`), Stripe live keys (`sk_live_…`), JWTs (`eyJ…` header and three base64url segments), and IBANs (country-length table plus mod-97). The placeholder check now looks at the value only. BIP39 seed phrases are NOT detected yet (the wordlist was not embedded).
+  - **Name zones match word tokens:** "Health Records", "Taxes 2024", "MedicalBills" and "my-bank" are all zoned. "Kids" and "Healthy Recipes" are not.
+  - **`paradigm brain purge --forget-log`** deletes the egress log instead of archiving it, and deletes every earlier archive for that brain. Retention: by default, `_archive/<id>-<timestamp>.egress.log` is kept indefinitely.
+  - **Leak guard and padding:** the agent leak guard compares hidden paths case-insensitively. Detectors collapse whitespace runs before windowing, so padding can't split a key from its value.
+  - **Owner cookie scope:** the cookie stops browser pages on other origins. Any local process can still get it with a no-Origin GET, which is within the threat model.
+  - **Test isolation:** the new `PARADIGM_BRAIN_HOME` env var overrides the brain home. The paradigm-mcp vitest `setupFiles` points it at an empty temp dir, so no test can see the real `~/.paradigm/brains`. `listBrains` is cached using stat signatures of the brains directory and each brain's config files.
+  - **Platform:** `/overview` and `/suggestions` now include `paused` (suggestions were auto-paused).
+
+### Fixed
+- **#captain board** proposes claimants from the same dispatch set as the orchestrator (`resolveDispatchableAgents`: roster.yaml + `.agent` profiles) instead of the legacy `agents.yaml`, so it never proposes an agent the orchestrator cannot dispatch (T-2026-09-26-006).
+- **Same-name notes** now also groups notes that share a title (frontmatter `title`, else the first H1 after frontmatter), compared case-insensitively and trimmed. `Home/Lease.md` and `Work/lease-copy.md`, both titled "Apartment Lease", used to report 0.
+- **Near-duplicate suggestions:** "Recipe" (n-gram) and "Recipes" (folder) for the same folder collapse to the higher-scoring one, and its evidence is kept.
+- **`paradigm brain suggest --limit abc`** now exits 1 with a message. The engine also treats a non-finite limit as the default instead of returning nothing.
+- **`paradigm brain init` on a terminal returns.** It starts the Platform in the background (or reuses one on port 3850), opens `http://localhost:3850/brain` and exits. `--no-open` still skips this.
+- **Quieter CLI:** brain commands no longer print library INFO log lines (`#brain-config INFO …`) unless `LOG_LEVEL` is set. The padlock emoji in the locked-zones list is replaced by the standard CLI bullet.
+- **Paused suggestions:** when `auto` mode has turned suggestions off, `status`, `suggest` and the Platform say "Suggestions paused (too many dismissed). Turn back on with `paradigm brain suggestions on`."
+- **Live Platform refresh:** the Brain section listens for `brain:changed` and refreshes the overview and health. It refreshes suggestions too, unless you are partway through a batch.
+
+### Changed
+- `workspace-loader.ts` now exports `buildIndexFromScanData`, which the cross-link resolver uses.
+- Versions: `@a-company/paradigm`, `@a-company/paradigm-mcp` and `plugin.json` → 7.14.0.
+
+## [7.13.0] — 2026-09-29
+
+**MCP surface cut + incremental index** (Phase 4 of the skills arc, T-2026-09-26-005). The default `tools/list` goes from ~134 per-op tools (~30k tokens) to 32 tools (~7.7k tokens on this repo). Eleven anchors keep their names and 21 op families replace the rest. Every pre-7.13 name still works as a hidden alias until 7.15. The live symbol graph is now cached and reparses only the `.purpose` files that changed.
+
+### Changed
+- **Default tools: 134 → 32.** 11 anchors (`paradigm_status`, `search`, `related`, `ripple`, `navigate`, `gates_for_route`, `reindex`, `retrieve`, `tool_activate`, `propose_block`, `orchestrate_inline`) plus 21 op families: `paradigm_lore`, `purpose`, `wisdom`, `history`, `decision`, `journal`, `session`, `task`, `agent`, `protocol`, `aspect`, `tags`, `flow`, `graph`, `notebook`, `captain`, `pm`, `docs`, `ambient`, `compliance`, `authority`. Call them as `paradigm_<family>({op:'<op>', ...params})`. `paradigm_plugin_check` is now `paradigm_status({check:'plugins'})` and `paradigm_workspace_reindex` is now `paradigm_reindex({scope:'workspace'})`. `paradigm_tags` defaults to `op:'list'`, so old calls keep working.
+- **On-demand tier (12 tools):** `sentinel`, `symphony`, `classroom`, `habits`, `persona`, `university`, `assessment`, `conductor`, `platform`, `pipeline`, `graduation`, `test_fixtures`. They are listed only when named in `config.yaml` `mcp.tools.enable` or activated this session with `paradigm_tool_activate`. Detected features are no longer auto-listed. `paradigm_status` shows a hint for them instead.
+- **Handlers are unchanged.** A family call resolves `op` to the canonical legacy name and dispatches to the existing handler. That canonical name (for example `paradigm_lore_record`) is what gets written to breadcrumbs, `toolsCalled` and post-dispatch events, so habits, pm postflight and nominations behave as before. `tools/legacy-tool-map.ts` is the single source of truth for all 184 legacy names.
+- **Family schemas:** an `op` enum plus the union of the old tools' properties. Property descriptions are left out to stay within budget. Nested array-item and object shapes are kept (property names plus nested `required`, no descriptions), so array-of-object params such as lore `decisions` can be built correctly. To fit the budget, primitive leaf types inside nested objects and the `items` of plain string arrays are omitted; handlers still validate the full shape. The family description lists each op's params: `lore`, `purpose` and `task` list every param with required ones marked `*` and nested shapes inline (for example `record(title*,summary*,symbols_touched*,type,…,decisions[{id*,decision*,rationale*}],…)`). The other families list only required params. Family blurbs no longer repeat the op list. The default surface on this repo is ~7.7k tokens.
+- **Family calls validate `required` params; direct legacy calls never did.** The MCP SDK does not enforce `required`, so a pre-7.13 call that left out a required param reached the handler. A family call now returns a validation error that lists that op's params. The exception is params whose handler clearly supplies a default: `protocol` `record` treats `trigger`, `tags` and `steps` as optional (they default to `[]`). The lore, purpose, task, decision, journal, protocol and session handlers were audited. No other clear defaults were found, so the other required params are still enforced. Their handlers have no fallback, or they return their own guidance error (lore `delete` `confirm`, purpose `add_aspect` `anchors`). Hidden legacy aliases skip family validation and behave exactly as before.
+- **Anchor listings** are compacted: description ≤400 chars, property descriptions ≤80.
+- **Habits evaluation** now accepts family references (`paradigm_lore({op:'record'})`, `paradigm_lore.record`, or a bare family) as well as legacy names. `seed-habits.json` intentionally keeps legacy names because they are matched against `toolsCalled`.
+- **Reference rewrite (codemod):** `scripts/migrate-tool-names.mjs` is driven by the legacy map and is idempotent. It rewrote 585 references in 76 files (102 files changed in total, including regenerated hooks) across plugins, IDE adapters, hook scripts, role prompts, guidance and context resources, `.cursor`, protocols, agents, `CLAUDE.md`, `AGENTS.md` and user-facing docs. A grep test fails if a legacy name reappears on an agent-facing surface. Historical records (CHANGELOG, lore, history, docs/specs, docs/private) are allowlisted.
+- **Agent-facing runtime strings** (the lore/assessment `type:'decision'` rejection, compliance and pm suggestions, the Rune promotion prompt, the Symphony task protocol) now use the family form. The rejection envelope's `successor_tool` is now `paradigm_decision` with a new `successor_op: 'record'`.
+- **Conductor:** `getHistoryContext` now calls `paradigm_history` with `op:'context'`, and the related strings are updated.
+
+### Added
+- **`mcp.tools.enable: [...]`** (config.yaml): lists on-demand tools by default.
+- **`mcp.tools.legacy_listing: true`**: an escape hatch that relists the pre-7.13 per-op tools alongside the families.
+- **`notifications/tools/list_changed`**: the server declares `tools.listChanged` and `paradigm_tool_activate` sends the notification.
+- **Server `instructions`**: legacy `paradigm_<family>_<op>` = `paradigm_<family>({op:'<op>'})`.
+- **Deprecation breadcrumb**: every hidden-alias call writes a `tool-deprecated-alias` breadcrumb.
+- **`paradigm doctor` legacy-name audit**: flags legacy tool names in the user's `CLAUDE.md`, `AGENTS.md`, `.cursor/rules` and `.claude/settings.json` permission allowlists. Allowlist entries like `mcp__paradigm__paradigm_lore_record` no longer match anything. For permission hits it suggests the allowlist form (`mcp__paradigm__paradigm_lore`, keeping the server prefix the entry already uses), not call syntax.
+- **Incremental index:** a purpose-core `parse-cache` (abs path → mtime/size/sha1/parsed; fast path on mtime+size, hashing only when mtime changes) and a premise-core `getLiveIndex` / `invalidateLiveIndex`. Unchanged trees return the cached index and graph. On a change, only the changed files are reparsed, and the aggregate is rebuilt from cached parses in the same depth-then-path order, which keeps Loom Merkle determinism. `paradigm_reindex` invalidates the cache. `searchSymbols` precomputes lowercased haystacks.
+- **Recent-edit safety + bounded cache:** the parse cache and the live index content-hash any file whose mtime is within 2s of now, so a same-size edit inside one mtime tick is never served stale. The live index keeps at most 8 roots (LRU).
+- **`DEFAULT_PURPOSE_IGNORE`** (purpose-core) adds `.claude/**`, `**/.worktrees/**`, `.warpline/**`, `build`, `.build`, `coverage`, `.next`, `.turbo`, `Pods` and `DerivedData`.
+
+### Fixed
+- **`paradigm_tool_activate` could not surface tools** in Claude Code: the server never declared `listChanged` and never sent the notification.
+- **`aliases` leaked into `tools/list`**: it is intent-routing metadata and is now stripped from every listed definition.
+- **`paradigm_wisdom_promote` was declared twice.**
+- **`paradigm_assessment_*` tools were never registered.** The module is now registered and reachable as the on-demand `paradigm_assessment` family.
+- **Invalid premise-core `.purpose`.**
+
+### Performance
+- Cached live graph: warm `graph_slice` 16.7 ms; cold 43 ms (was 63 ms).
+
+### Deprecated
+- All `paradigm_<family>_<op>` names. They still dispatch as hidden aliases through 7.14 and will be removed in 7.15.
+
+### Versions
+- `@a-company/paradigm`, `@a-company/paradigm-mcp`, plugin → 7.13.0; `@a-company/premise-core` 3.10.0 → 3.11.0; `@a-company/purpose-core` 3.5.0 → 3.6.0. The Conductor build number comes from the commit count.
+
+## [7.12.0] — 2026-09-29
+
+**Learning-store consolidation + loop teeth** (Phase 3 of the skills arc, T-2026-09-26-004). The learning loop now has a real promotion gate and a liveness alarm that can actually see. Legacy stores are retired behind a backed-up, idempotent migration, and the Brain prerequisites (one frontmatter parser, heading/block anchors) land in premise-core.
+
+### Added
+- **`paradigm migrate learning-stores`** (`--dry-run`, `--apply`, `--json`): (1) backs up every original it will touch to `.paradigm/backups/learning-stores-<ts>/`, (2) converts legacy `.paradigm/wisdom/decisions/*.yaml` into the TD store (reusing the `migrate decisions` wisdom converter, idempotent via the `wisdom-decision:<id>` tag) and removes the empty dir, (3) moves unengaged "Work completed … — review outcome" nominations to `nominations-boilerplate.jsonl` in the backup, (4) reports habits whose patterns point at removed University paths (moves them only with `--apply`), (5) writes `.paradigm/migrations/learning-stores.done`. `--dry-run` writes nothing; a second run is a no-op. The global `~/.paradigm/wisdom/decisions` is reported, never touched. Also registered in `paradigm migrate` as `learning-stores-7.12` (not auto-applied).
+- **Learning-store registry** (`#learning-stores`, `listLearningStores`): a read-only facade naming every store with its class (`ledger` | `knowledge` | `pipeline` | `policy` | `native`), path, scope, owner and count. Loid's must-not-consolidate list stays as separate rows (journals vs notebooks; promotion-decisions / classroom-certifications / notebook-refs ledgers; decisions vs antipatterns). Claude Code native memory is registered read-only and never migrated.
+- **`paradigm doctor` learning-store census**: one line listing every non-empty store as `id[class]=count`, plus a warning when a legacy `.paradigm/wisdom/decisions/` is still present.
+- **Shared frontmatter parser in premise-core** (`parseFrontmatter(raw, { mode: 'lenient' | 'strict' })`, `FRONTMATTER_RE`): memory-scan, skill-loader's `splitFrontmatter` (same signature and error messages) and docs-loader now all use it.
+- **Heading and block anchors**: `docs/x.md#Heading Text` and `docs/x.md#^block-id` (Obsidian-compatible) alongside `path:15-20` line anchors. `CodeAnchor` gains optional `kind` / `heading` / `block`. The aspect graph resolves them to the section's current line range and stores `anchor_kind` / `anchor_key` (idempotent `ALTER TABLE`). A renamed or missing heading/block counts as drift.
+- **`SourceType` `'frontmatter'`**.
+- **`PROTOCOL_IS_SKILL` lint** (`lintProtocol` in `#protocol-loader`): warns when no protocol step names a repo path, since that is portable know-how and belongs in a skill. It is the reverse of `SKILL_IS_PROTOCOL` and reuses skill-loader's `repoPathTokens` detector. Warn only; protocol status is unchanged.
+
+### Changed
+- **Belief-delta promotion gate** (`decidePromotion`, `loadPromotionBands`): journal→notebook promotion is now decided by how much belief moved against the notebook prior (`notebookPrior`, never the journal's `confidence_before`). Order: no `confidence_after` → skip; `human_feedback` → floor only; below floor → skip; no prior → the old absolute 0.8 bar (`novelBar`, now the novel-concept fallback only); |delta| < epsilon → hold; delta ≥ deltaMin → promote; a regression is skipped. Bands are configurable in `config.yaml` under `learning.promotion.{floor, deltaMin, epsilon, novelBar}` (snake_case accepted). The defaults of 0.7 / 0.10 / 0.05 / 0.8 are uncalibrated. `/class` human certification (`gatedPromoteJournalEntry`) never passes through this gate.
+- **Promotion instrument rows** (`promotion-decisions.jsonl`) now record `gate: 'belief-delta-v1'`, `reason`, `floor` and a shadow `absoluteWouldPromote`. `PromotionDecision` / `PromotionGate` / `PromotionReason` are exported from `types/knowledge-streams.ts`.
+- **Learning liveness reads both probe files**: `summarizeLearningLiveness` works over the union of `postflight-liveness.jsonl` and `settlement-liveness.jsonl`. RED (error): 0 journals over ≥5 completions. AMBER: under 0.2 journals per completion over ≥10. "Probe silent" warning: ≥5 settlement rows but no postflight rows. No data is reported as NO DATA and is never green.
+- **`paradigm://wisdom/decisions` and `paradigm://wisdom/decision/{id}`** are now aliases of the canonical TD store (`.paradigm/decisions/`).
+- **Habits are classified as hook policy**, not a learning store. They stay separate from skills.
+
+### Removed
+- **"Work completed" nominations**: `work-completed` events stay in `stream.jsonl` but no longer produce nominations (`NON_NOMINATING_EVENT_TYPES`). Every one of them had been the same boilerplate.
+- **Legacy wisdom/decisions read path**: `wisdom-loader` no longer reads `.paradigm/wisdom/decisions/` (project or global). `WisdomContext.decisions` is always empty. `loadGlobalDecisions` is deprecated and kept only for the promote-to-global duplicate check.
+- **Stale `.paradigm/habits/university-content-sync.habit`**: its University paths were removed in 7.11.0.
+
+### Fixed
+- **Blind liveness alarm**: doctor used to read only `postflight-liveness.jsonl`, which was absent in practice, while `settlement-liveness.jsonl` held settlements with `journalsWritten: 0`. The flatline is now visible.
+- **`confidence_after ?? 0` artifact**: a missing `confidence_after` is recorded as `after: null` with reason `no-after`, not as a fabricated 0.
+
+### Versions
+- `@a-company/paradigm`, `@a-company/paradigm-mcp`, plugin → 7.12.0; `@a-company/premise-core` 3.9.0 → 3.10.0.
+
+## [7.11.0] — 2026-09-29
+
+**University overhaul** (Phase 2 of the skills arc, T-2026-09-26-003). University content now lives in a Platform section called the **Academy**. Packs can ship skills. The MCP surface is down to two read-only tools, and pack discovery comes from one place (`@a-company/university-core`). The Academy is the University UI label; Classroom keeps curriculum, syllabus, scenario and certify. The CLI noun stays `paradigm university`.
+
+### Added
+- **Platform Academy section (`#AcademySection`, `/api/academy`)**: a read-only view of every discovered pack. You pick a pack, then a learning path, then its steps. Notes render as markdown using the Platform's shared renderer. Quizzes are graded in the browser, and results are kept only in that browser's localStorage. A read-only pack-skills table labels each skill "external — not active". Routes (all GET, `^local-only` + `^read-only`): `/packs`, `/packs/:packId/paths`, `/paths/:id` (steps resolved to note/quiz titles), `/notes/:id`, `/quizzes/:id` (answers included for local grading), `/skills`, and `/search?q=&type=&pack=`. An unknown pack returns 404 and a malformed id returns 400. Content is loaded by id through the core loader, and no absolute paths are returned. A local `.paradigm/university/` that has content but no `pack.yaml` shows up as an implicit project pack. Keyboard shortcut `6` and the command palette point to the Academy, and old `/university` / `#university` links redirect there.
+- **pack.yaml v2 `skills:`** (`PACK_SCHEMA_VERSION` `'2'`; `'1'` is still accepted): an explicit list of `{ path }` skill directories. `resolveSkillDirs` checks that each path is relative, has no `..`, resolves inside the pack root, contains no symlinks, and has a kebab-case basename with a `SKILL.md`. Entries that fail are skipped with a classifier-only warning, never fatally. `PackLocation.skillDirs` is re-resolved on every discovery and never cached.
+- **Pack skill scope (`#skill-loader`)**: a third scope, `pack`, read-only and lowest precedence (project › global › pack). Pack skills are always loaded as `trust: external`, and any certification block is dropped. New `listPackSkills` (every pack skill, including shadowed ones, with `scriptCount` and `shadowedBy`), `findPackSkill` and `importPackSkill`. New lint `PACK_SHADOWED`, which warns in both directions. The projector refuses pack skills.
+- **`paradigm skill import <pack-id>:<skill-id> [--global]`**: works only on an interactive TTY. It shows the skill's `allowed-tools` and its `scripts/` files, then requires you to type the id back. It copies the skill as `trust: provisional` with `provenance.source: pack` and `upstream <pack>:<id>@<ver>`, and never overwrites an existing skill. `skill list` / `show` display `scope pack:<packId>`.
+
+### Changed
+- **University MCP tools cut from 7 to 2**: `paradigm_university_search` (a new `id` argument returns the full entry body, replacing `get`) and `paradigm_university_pack_list` (now lists `skills: [{id, version, trust}]` per pack). For one release, calls to the removed `get`, `create`, `update`, `onboard` and `validate` tools return `{error: "moved to CLI: paradigm university add|show|validate"}`. `paradigm_platform_navigate` accepts `academy`, with `university` kept as an alias.
+- **Pack discovery comes from one place, `@a-company/university-core`**: the MCP copies `utils/pack-loader.ts` and `utils/pack-schema.ts` were deleted, and their tests moved to `university-core/src/__tests__/pack-discovery.test.ts` (the SECRET_SENTINEL cases were kept). The drift guard stays in place.
+- **Pack-based University tool detection** (`detectUniversityPacks` in `#tool-registry`): the tools turn on only when a discovered pack has entries or skills, or when an implicit project pack has content. Detection fails closed, so an empty scaffold no longer turns the tools on.
+- **`paradigm university serve` redirects**: it prints "University moved to Platform → Academy", starts the Platform with only the Academy section, and opens `/academy`.
+- **Habits**: the onboarding habit now checks for `paradigm_university_search`. The validate habit is disabled, because validation is CLI-only now.
+- **`paradigm doctor`**: a missing or empty `.paradigm/university/` is no longer reported as a finding.
+- University guidance resource, `docs/guides/university.md` and `docs/guides/v6-migration.md` updated for the new surface.
+- The Classroom section's headings now read "The Classroom", so they no longer clash with the Academy.
+
+### Removed
+- **The standalone University UI and server**: `packages/university/ui/**`, `packages/university/src/server/**`, the `./server` export, the express/open/chalk dependencies, `portal.yaml`, and the CLI's `university-ui` / `university-content` asset copy step. `@a-company/university` is now just the first-party content pack (major bump).
+- **`/api/university`**, which included `/diplomas`. Diploma records are gone. The PLSAT remains as static quiz content in the paradigm pack.
+- **The `paradigm shift` University scaffold** (`.paradigm/university/{content,diplomas}` and its `config.yaml`) and **the University metrics snapshot** that shift and doctor wrote (`core/university/metrics.ts`). The config schema still accepts an existing `metrics:` block.
+- The unwired legacy `src/commands/university.ts`.
+- The paradigm-mcp metrics files `src/utils/university-metrics.ts`, `src/types/university-metrics.ts` and `tests/university-metrics.test.ts`. Nothing used them once shift stopped writing the snapshot.
+
+### Fixed
+- The Platform's University section was reading JSON course files that no longer exist, so it showed nothing. The Academy reads real pack content instead.
+
+### Notes
+- Restart your MCP servers to see the 2-tool University surface.
+
+Symbols: #AcademySection, #academyStore, #AcademyRouter, #skill-loader, #skill-projector, #skill-cli, #pack-discovery, #pack-schema, #tool-registry, #university-tools, #UniversityServe, #ShiftCommand, #doctor-handler, #university-pack
+
+## [7.10.0] — 2026-09-28
+
+**Skills primitive** (Phase 1 of the skills arc, T-2026-09-26-002). Agents now own `SKILL.md` procedures, validated by one loader and projected one-way into the host's skills directory. Certification reuses the Classroom scenario bank, the certifications ledger and a TTY founder sign-off. No new MCP tools: the host `Skill` tool loads the bodies.
+
+### Added
+- **Skill sources + `#skill-loader`**: `SKILL.md` (agentskills.io / Claude Code format) with Paradigm metadata NESTED under `metadata.paradigm` (id, semver version, steward, triggers, trust `certified|provisional|external`, provenance, notebooks, protocols, tool pins, hosts, certification). Sources resolve from project `.paradigm/skills/<id>/` before global `~/.paradigm/skills/<id>/`. Status is computed, never stored: `ok | uncertified | stale | invalid`. The content hash covers the frontmatter (minus `certification`), the body, and `references/`, `assets/` and `scripts/`, so a certified skill whose content changes reads as `uncertified` (tamper-evident).
+- **Skill lint**: `SKILL_IS_PROTOCOL` (a step references a repo path), `SKILL_IS_NOTEBOOK` (body is too thin), `OWNED_SKILL_CAP` (a steward owns more than 5), missing notebook or protocol citations, an unresolved steward, and non-kebab names/ids or non-semver versions.
+- **Tool pins**: `paradigm_*` pins are sha256 hashes of the canonical `inputSchema` JSON, checked against the new exported `listToolDefinitions()` (every tool the server registers, regardless of tier). Host tools are pinned as `host`. Third-party MCP tools report `unknown` unless you pass a `tools/list` dump with `--tools`. A mismatch marks the skill `stale` and projection refuses.
+- **`#skill-projector`**: projects to `~/.claude/skills/pdg-<id>/`, or to `<root>/.claude/skills` with `--target project`. Only certified skills project by default. `--allow-provisional` adds a `PROVISIONAL — not certified.` banner. The projected `metadata` is FLATTENED to a string→string map (`paradigm-id`, `paradigm-version`, `paradigm-steward`, `paradigm-trust`, `paradigm-source`), and `certification` is dropped. A `.pdg-generated.json` sidecar marks ownership. Projection refuses anything under `~/.claude/skills/synced/`, any unmarked destination, and any destination edited downstream; writes are atomic. `adopt` pulls downstream edits back into the source as patch+1: the skill becomes provisional with `provenance.source: adopted`, the prior version is archived to `.versions/<ver>/`, and the metadata is un-flattened.
+- **`$skill-certification`**: `paradigm skill certify <id>` requires an interactive TTY, lint clean, no stale pins, and at least one scenario that has a `fixture:`, a NON-steward probe on `skill:<id>@<ver>`, `expected.must: survive`, and a human-confirmed survival for that exact key. The founder (git `user.name`) then types the skill id. The command writes the `certification` block (GLOBAL, records `project`) and appends a `kind: skill` row to the classroom certifications ledger. It is CLI-only, never an MCP tool.
+- **`paradigm skill` CLI (`#skill-cli`)**: `list`, `show`, `lint`, `check`, `project`, `adopt`, `certify`, `sync-global` (bundled `templates/skills` → `~/.paradigm/skills`, skips existing, `--force` replaces).
+- **`!skill-used`**: `.paradigm/events/skill-usage.jsonl` (pruned to 500 rows), keyed `skill:<id>@<ver>`, the same key as the scenario probe and the cert row. New Claude Code **PostToolUse `Skill` hook** (`paradigm-skill-used.sh`, in the plugin and in `paradigm hooks install --claude-code`) records invocations of `pdg-*` projections through the hidden `paradigm skill record-usage`. It is silent and always exits 0.
+- **"## Your Skills" in agent prompt enrichment** (`#agent-loader`, `#orchestration`): each line reads `<name> (<role>, <trust>): <description> — <path>`. Certified skills show to every agent. Provisional or uncertified skills show only to their steward, labelled. Stale or invalid skills are omitted.
+- **Three bundled seed skills** (provisional, `provenance.source: bundled`): `design-system-extract` and `ui-critique-loop` (steward designer), and `a11y-audit` (steward a11y, used by designer).
+- `AgentProfile.skills` (`[{id, role: owns|uses}]`, a known key, excluded from `integrityHash`); `Scenario.fixture`; `ClassroomCertRow.kind | approvedBy | contentHash` (additive).
+- **`paradigm doctor`**: prints an info line when a profile still carries a `behaviors.<block>` that a skill's `provenance.migratedFrom` names ("migrated to skill X").
+
+### Changed
+- Bundled `designer.agent`: the `design-system-maintenance` and `review-checklist` behaviors blocks moved into the `design-system-extract` and `ui-critique-loop` skills, and the profile now declares `skills:`. Bundled `a11y.agent` declares `skills:`. Existing global profiles are untouched, because `agent sync-global` skips existing files.
+
+### Security
+- **Skill id validation**: skill ids must be kebab-case everywhere they come in (CLI arguments, source directories, projected `pdg-<id>` names, hook payloads). Anything else is rejected before it can be joined into a path, so an id cannot traverse outside the skills directories.
+- **`scripts/` withheld for non-certified skills**: projection copies a skill's `scripts/` only when the skill is certified and hash-valid. A provisional skill projected with `--allow-provisional` gets its prose and `references/`, but no executables. `paradigm skill certify` lists every `scripts/` file (name, sha256, first 20 lines) before the founder confirms, so the sign-off covers what will run.
+- **Adopt `allowed-tools` guard**: `paradigm skill adopt` shows the diff. If the downstream edit widens `allowed-tools`, it asks for confirmation on a TTY; without a TTY it requires `--confirm-allowed-tools`. It also refuses when the source changed since projection unless `--force` is passed. The certification ledger is cross-checked against the SKILL.md `certification` block.
+- **Hook hardening**: the `Skill` PostToolUse hook only runs a `paradigm` that is already on PATH (the `npx --no-install` fallback was removed). When there isn't one, it exits 0 silently. The recorder prefers `CLAUDE_PROJECT_DIR` over the payload's `cwd`.
+- **Posture, stated plainly**: certification is drift-detection, not tamper-proof. Any local agent with shell access can forge it by editing SKILL.md, the scenario bank and the ledger. Cryptographic signing is a tracked follow-up. The TTY gate on `certify` is advisory: it stops an agent calling the CLI through a non-interactive tool, not a determined local process.
+
+### Notes
+- Scenarios have no runner, so the "executable" check is a human-confirmed attestation.
+- The seeds cite notebooks that live in `~/.paradigm/notebooks/<agent>/`, which is not bundled. On a machine without those notebooks, or without the steward `.agent` profiles (run `paradigm agent sync-global`), the seeds lint `invalid` and will not project.
+
+Symbols: #skill-loader, #skill-projector, #skill-cli, $skill-certification, !skill-used, #agent-loader, #agent-profiles, #orchestration, #agent-audit, #scenario-loader, #classroom-certifications, #paradigm-hooks
+
+## [7.9.1] — 2026-09-26
+
+**Dispatchability inversion** (Phase 0 of the skills arc — TD-2026-09-26-846, T-2026-09-26-001). `.paradigm/roster.yaml` + loaded `.agent` profiles are now **authoritative** for which agents the orchestrator can dispatch; `.paradigm/agents.yaml` becomes an optional overlay. Agents that can't be dispatched are reported, never silently dropped.
+
+### Fixed
+- **The orchestrator silently dropped roster agents absent from `agents.yaml` (`#orchestration`)** — dispatch loaded `agents.yaml` then filtered it by the roster, so any rostered agent without an `agents.yaml` entry (forge, cid, compliance, advocate, …) vanished from `agents` overrides and classification recommendations without a trace. The dispatch set is now resolved by the new `#agent-registry` from roster + profiles (agents.yaml fields still override profile-derived ones), growing this repo's dispatchable set from 11 to every rostered agent with a profile.
+- **Legacy `transferable[].pattern` normalized to `id` at load (`#agent-loader`)** — ~35 bundled templates use `- pattern:` instead of `id:`, which rendered as `undefined: … (learned in undefined)` in prompt enrichment. `normalizeAgentProfile` maps `pattern` → `id` (explicit `id` wins); legacy `pattern:` is migrated to `id:` on the profile's next save. No other defaults are injected — `learnedIn`/`appliedIn` stay optional and "learned in" is omitted from enrichment when absent. Bundled template sources are untouched; `id`/`role`/`permissions` are never modified, so integrity hashes still verify.
+- **`paradigm index` wrote `navigator.yaml` with 0 symbol mappings (`#scan-command`)** — `buildSymbolMap` read `symbol.path`/`symbol.directory`, but premise-core's aggregator emits `filePath`. Symbols now map to their project-relative containing directory (e.g. `packages/paradigm/src/commands/doctor/`) instead of nothing (previously-committed values were machine-specific absolute paths).
+- **Non-canonical personality values accepted** — templates use ~25 `style` values (`opinionated`, `pragmatic`, `confrontational`, …), `risk: moderate`, and `verbosity: precise|thorough|structured`. `AgentPersonality` fields are now `Known* | string` (display-only; no behaviour change).
+
+### Added
+- **`undispatchable` in `paradigm_orchestrate_inline` (plan / execute / quick) and `paradigm_agent_prompt`** — each entry is `{ name, reason: 'no-profile' | 'not-on-roster' | 'benched' | 'unknown-override' }` with a one-line `undispatchableNote` covering the agents *this plan* asked for; roster-level gaps (benched / profile-less roster members) are reported separately as `rosterUndispatchable`, and responses carry `deprecation` when `agents.yaml` was read. Override chains now depend on the last *planned* agent, so an undispatchable entry mid-list leaves no dangling dependency. `paradigm_agent_prompt` returns `{ warning, reason }` for a benched / profile-less roster member instead of faking a builder prompt.
+- **`#agent-registry` (`resolveDispatchableAgents`)** — role = agents.yaml › `ROLE_PROMPTS` › profile role; focus from `attention.paths`; triggers from `attention.concepts`/`symbols` (tagged `derived`, matched case-insensitively on word boundaries, and a lone derived concept hit is not enough to suggest an agent — explicit agents.yaml triggers keep substring matching); `handoff_to` from agents.yaml › `partners` › `collaboration.with`. `ROLE_PROMPTS` moved to `utils/role-prompts.ts` to avoid a circular import.
+- **`paradigm doctor` — "Agent profile keys" and "Roster dispatchability" (`#agent-audit`)** — warns on unknown top-level `.agent` keys, notes `behaviors:` (declared, unread until skills Phase 1), and warns on roster members with no project/global profile and no `agents.yaml` entry (e.g. cinematographer, composer, showrunner) or benched on the roster.
+- `AgentProfile` declares `behaviors?` and `tags?`; `KNOWN_AGENT_KEYS` exported from `types/agents.ts`.
+
+### Deprecated
+- **`.paradigm/agents.yaml` as an agent-definition source** — still read (back-compat overlay, one-time warning) and still the home of the `orchestration:` block (`default_mode`, `budget`). It is not deleted.
+
+Symbols: #orchestration, #agent-registry, #agent-loader, #agent-audit, #doctor-handler, #role-prompts, #AgentTypes, #scan-command
+
 ## [7.9.0] — 2026-09-19
 
 The **Memory Steward** — Paradigm's native answer to the `MEMORY.md` junk drawer. Native Claude Code memory (`~/.claude/projects/<slug>/memory/`) accumulates stale statuses, tips, and rules with no typing, decay, or dedup — the "Obsidian second-brain" failure mode, inside Claude's own head. The Steward treats it as a curatable artifact, not a store: it scores every entry and surfaces what to prune/route/merge for **human decision — never auto-deleting** (Phase A; TD-2026-09-19-110, L-2026-09-19-ascend-074539-001).

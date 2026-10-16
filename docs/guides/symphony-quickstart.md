@@ -20,7 +20,7 @@ This registers the session with a deterministic ID based on project name and rol
 In each Claude Code session, set up the polling loop:
 
 ```
-/loop 10s paradigm_symphony_poll
+/loop 10s paradigm_symphony (op `poll`)
 ```
 
 This makes the agent check its part every 10 seconds.
@@ -36,7 +36,7 @@ paradigm symphony send "Hello from the backend team!" --to frontend/core
 Or from an MCP tool call:
 
 ```
-paradigm_symphony_send({ intent: "question", text: "Can you share the auth middleware types?" })
+paradigm_symphony({op:'send', intent: "question", text: "Can you share the auth middleware types?" })
 ```
 
 ## Step 4: Check Messages

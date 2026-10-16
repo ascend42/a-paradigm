@@ -76,8 +76,8 @@ permissions:
   tools:
     allow:
       - paradigm_search
-      - paradigm_lore_search
-      - paradigm_wisdom_context
+      - paradigm_lore (op: search)
+      - paradigm_wisdom (op: context)
       - paradigm_navigate
       - Read
       - Bash

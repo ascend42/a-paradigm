@@ -6,14 +6,23 @@
  * - paradigm://wisdom/preferences/{symbol} - Symbol-specific preferences
  * - paradigm://wisdom/antipatterns - All antipatterns
  * - paradigm://wisdom/antipatterns/{symbol} - Symbol-specific antipatterns
- * - paradigm://wisdom/decisions - ADR index (summaries only)
- * - paradigm://wisdom/decision/{id} - Full ADR by ID
+ * - paradigm://wisdom/decisions - Decision index (summaries only) — ALIAS of the
+ *   canonical TD store (.paradigm/decisions/) since 7.12.0 (D2)
+ * - paradigm://wisdom/decision/{id} - Full decision by ID (TD store alias)
  * - paradigm://wisdom/expertise/{symbol} - Experts for a symbol
  */
 
 import type { ProjectContext } from '../utils/index-loader.js';
 import { ensureWisdom } from '../utils/index-loader.js';
 import { getSymbolWisdom, findExperts } from '../utils/wisdom-loader.js';
+import { loadDecisions, loadDecision } from '../utils/decision-loader.js';
+
+/** YYYY-MM-DD from a TD timestamp (js-yaml may hand back a Date). Never throws. */
+function isoDay(ts: unknown): string | undefined {
+  if (!ts) return undefined;
+  const d = ts instanceof Date ? ts : new Date(String(ts));
+  return Number.isNaN(d.getTime()) ? String(ts).split('T')[0] : d.toISOString().split('T')[0];
+}
 
 /**
  * Get list of wisdom resources
@@ -35,7 +44,7 @@ export function getWisdomResourcesList() {
     {
       uri: 'paradigm://wisdom/decisions',
       name: 'Wisdom - Decisions',
-      description: 'Architectural Decision Records (ADRs) index',
+      description: 'Team decisions index (alias of the canonical .paradigm/decisions/ store)',
       mimeType: 'application/json',
     },
   ];
@@ -124,21 +133,23 @@ export async function handleWisdomResource(
     };
   }
 
-  // paradigm://wisdom/decisions
+  // paradigm://wisdom/decisions — alias of the TD store (7.12.0, D2).
+  // The legacy .paradigm/wisdom/decisions/ read path is gone.
   if (resourcePath === 'wisdom/decisions') {
-    const wisdom = await ensureWisdom(ctx);
+    const decisions = loadDecisions(ctx.rootDir);
 
     return {
       handled: true,
       text: JSON.stringify(
         {
-          count: wisdom.decisions.length,
-          decisions: wisdom.decisions.map((d) => ({
+          count: decisions.length,
+          source: '.paradigm/decisions/',
+          decisions: decisions.map((d) => ({
             id: d.id,
             title: d.title,
             status: d.status,
-            date: d.date,
-            symbols: d.symbols,
+            date: isoDay(d.timestamp),
+            symbols: d.symbols_affected ?? [],
           })),
         },
         null,
@@ -147,11 +158,10 @@ export async function handleWisdomResource(
     };
   }
 
-  // paradigm://wisdom/decision/{id}
+  // paradigm://wisdom/decision/{id} — alias of the TD store (7.12.0, D2).
   if (resourcePath.startsWith('wisdom/decision/')) {
-    const id = resourcePath.replace('wisdom/decision/', '');
-    const wisdom = await ensureWisdom(ctx);
-    const decision = wisdom.decisions.find((d) => d.id === id);
+    const id = decodeURIComponent(resourcePath.replace('wisdom/decision/', ''));
+    const decision = loadDecision(ctx.rootDir, id);
 
     if (!decision) {
       return {
@@ -160,7 +170,7 @@ export async function handleWisdomResource(
           {
             error: 'Decision not found',
             id,
-            available: wisdom.decisions.map((d) => d.id),
+            available: loadDecisions(ctx.rootDir).map((d) => d.id),
           },
           null,
           2

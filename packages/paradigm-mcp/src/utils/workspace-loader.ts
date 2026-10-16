@@ -356,7 +356,7 @@ function normalizePath(p: string): string {
  * Build a SymbolIndex from scan-index.json data.
  * scan-index.json has a flat structure with categories as top-level keys.
  */
-function buildIndexFromScanData(scanData: Record<string, unknown>): SymbolIndex {
+export function buildIndexFromScanData(scanData: Record<string, unknown>): SymbolIndex {
   const categoryMap: Record<string, string> = {
     components: 'component',
     flows: 'flow',

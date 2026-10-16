@@ -12,6 +12,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
+import { parseFrontmatter as sharedParseFrontmatter, FRONTMATTER_NOT_MAPPING_MESSAGE } from '@a-company/premise-core';
 import type {
   DocsConfig,
   DocsManifest,
@@ -237,16 +238,17 @@ function loadUniversityIndex(rootDir: string): UniversityIndex | null {
 // HELPERS — markdown frontmatter
 // ═══════════════════════════════════════════════════════════════════
 
+/**
+ * Null-returning adapter over premise-core's shared #frontmatter-parser
+ * (lenient mode, D8 7.12.0): no fenced block or malformed YAML → null. A
+ * non-mapping block yields `frontmatter: {}` (previously a raw scalar/undefined
+ * leaked through). Now also accepts CRLF and a closing fence at EOF.
+ */
 function parseFrontmatter(content: string): { frontmatter: Record<string, unknown>; body: string } | null {
-  const match = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
-  if (!match) return null;
-
-  try {
-    const frontmatter = yaml.load(match[1]) as Record<string, unknown>;
-    return { frontmatter, body: match[2].trim() };
-  } catch {
-    return null;
-  }
+  const parsed = sharedParseFrontmatter(content, { mode: 'lenient' });
+  if (!parsed.hasFrontmatter) return null;
+  if (parsed.error && parsed.error !== FRONTMATTER_NOT_MAPPING_MESSAGE) return null;
+  return { frontmatter: parsed.data, body: parsed.body.trim() };
 }
 
 // ═══════════════════════════════════════════════════════════════════

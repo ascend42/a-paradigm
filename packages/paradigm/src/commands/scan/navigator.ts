@@ -109,6 +109,8 @@ interface SymbolInfo {
   type: string;
   path?: string;
   directory?: string;
+  /** Absolute source file the aggregator (premise-core) found the symbol in */
+  filePath?: string;
 }
 
 interface AggregationResult {
@@ -279,10 +281,10 @@ function buildSkipPatterns(rootDir: string): {
 /**
  * Build symbol to path mapping
  */
-function buildSymbolMap(
+export function buildSymbolMap(
   symbols: SymbolInfo[],
   purposeFiles: string[],
-  _rootDir: string
+  rootDir: string
 ): Record<string, string> {
   const symbolMap: Record<string, string> = {};
 
@@ -304,6 +306,16 @@ function buildSymbolMap(
       symbolMap[symbolId] = symbol.path;
     } else if (symbol.directory) {
       symbolMap[symbolId] = symbol.directory;
+    } else if (symbol.filePath) {
+      // premise-core's aggregator emits `filePath` (usually the source file,
+      // e.g. a .purpose; for portal gates it is the project directory itself),
+      // not path/directory — map it to the project-relative directory.
+      const isDir = (() => {
+        try { return fs.statSync(symbol.filePath!).isDirectory(); } catch { return false; }
+      })();
+      const dir = isDir ? symbol.filePath : path.dirname(symbol.filePath);
+      const rel = path.relative(rootDir, dir).split(path.sep).join('/');
+      symbolMap[symbolId] = rel ? `${rel}/` : './';
     } else {
       // Try to find associated purpose file
       // This is a heuristic - we look for purpose files that might contain this symbol

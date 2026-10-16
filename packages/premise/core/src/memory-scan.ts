@@ -27,8 +27,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import * as yaml from 'js-yaml';
 
+import { parseFrontmatter } from './frontmatter.js';
 import { isValidSymbol, parseSymbol } from './symbol-index.js';
 import { loadLiveGraph } from './graph-slice.js';
 
@@ -178,7 +178,9 @@ function parseEntryFile(
     return null; // unreadable → skip
   }
 
-  const { frontmatter, body } = splitFrontmatter(raw);
+  // FAIL-OPEN via the shared lenient parser: no/malformed frontmatter → {} and
+  // the body survives; never throws. (#frontmatter-parser, D8)
+  const { data: frontmatter, body } = parseFrontmatter(raw, { mode: 'lenient' });
 
   const name = readStringField(frontmatter, 'name');
   const description = readStringField(frontmatter, 'description');
@@ -206,40 +208,6 @@ function parseEntryFile(
     fileMentions,
     graphValidity,
   };
-}
-
-/**
- * Split leading YAML frontmatter (delimited by "---" lines) from the body.
- * FAIL-OPEN: if there is no frontmatter, or the YAML is malformed, the WHOLE
- * content is treated as body and frontmatter is an empty object — never throws.
- */
-function splitFrontmatter(raw: string): {
-  frontmatter: Record<string, unknown>;
-  body: string;
-} {
-  // Frontmatter must be the very first thing in the file.
-  if (!raw.startsWith('---')) {
-    return { frontmatter: {}, body: raw };
-  }
-
-  // Match: opening "---\n", captured block, closing "\n---" on its own line.
-  const match = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(raw);
-  if (!match) {
-    return { frontmatter: {}, body: raw };
-  }
-
-  const [, fmText, body] = match;
-  try {
-    const loaded = yaml.load(fmText);
-    const frontmatter =
-      loaded && typeof loaded === 'object' && !Array.isArray(loaded)
-        ? (loaded as Record<string, unknown>)
-        : {};
-    return { frontmatter, body: body ?? '' };
-  } catch {
-    // Malformed frontmatter → fail-open: keep body, drop frontmatter.
-    return { frontmatter: {}, body: body ?? '' };
-  }
 }
 
 function readStringField(fm: Record<string, unknown>, key: string): string {

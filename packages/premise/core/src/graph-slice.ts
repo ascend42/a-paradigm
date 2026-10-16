@@ -36,8 +36,6 @@
  */
 
 import {
-  aggregateFromDirectory,
-  buildSymbolIndex,
   getSymbol,
   getReferencesTo,
   getReferencesFrom,
@@ -46,6 +44,7 @@ import {
   type SymbolEntry,
   type SymbolIndex,
 } from './index.js';
+import { getLiveIndex } from './live-index.js';
 
 // ────────────────────────────────────────────────────────
 // Public contract
@@ -136,20 +135,33 @@ export interface LiveGraph {
 
 /**
  * Build the LiveGraph from a project root via the SAME live-parse pipeline as
- * `paradigm ripple`: aggregateFromDirectory → buildSymbolIndex. Async because
- * aggregation reads the filesystem.
+ * `paradigm ripple`: aggregateFromDirectory → buildSymbolIndex — now served by
+ * #live-index (getLiveIndex), which returns the cached SymbolIndex when no
+ * .purpose / portal file changed and otherwise re-parses only changed files and
+ * re-aggregates the full set in the same deterministic order. The LiveGraph
+ * built over an index is memoized per index object, so a warm call does no
+ * parsing and no flow-membership recomputation.
  *
  * Flow membership is precomputed exactly like ripple's findFlowMembership: a
  * flow's `data.sequence || data.gates || references` lists its member symbols.
- *
- * PERF: aggregateFromDirectory re-parses the whole project per call (the cost
- * ripple already pays). Acceptable for now. The MCP/cockpit-default path may want
- * a cached index later — don't build caching here.
  */
 export async function loadLiveGraph(rootDir: string): Promise<LiveGraph> {
-  const result = await aggregateFromDirectory(rootDir);
-  const index = buildSymbolIndex(result);
+  const live = await getLiveIndex(rootDir);
+  let graph = graphByIndex.get(live.index);
+  if (!graph) {
+    graph = buildLiveGraph(live.index, live.generatedAt);
+    graphByIndex.set(live.index, graph);
+  }
+  return graph;
+}
 
+const graphByIndex = new WeakMap<SymbolIndex, LiveGraph>();
+
+/**
+ * Derive a LiveGraph view (symbol list + both flow-membership maps) from a
+ * SymbolIndex. Pure; exported for callers that already hold an index.
+ */
+export function buildLiveGraph(index: SymbolIndex, generatedAt: string = new Date().toISOString()): LiveGraph {
   const allSymbols = getAllSymbols(index).map((e) => e.symbol);
 
   // Precompute flow membership in both directions so neighbor derivation is O(1).
@@ -173,7 +185,7 @@ export async function loadLiveGraph(rootDir: string): Promise<LiveGraph> {
     allSymbols,
     symbolFlows,
     flowMembers,
-    generatedAt: new Date().toISOString(),
+    generatedAt,
   };
 }
 

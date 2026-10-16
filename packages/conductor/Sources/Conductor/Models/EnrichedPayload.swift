@@ -18,7 +18,7 @@ struct EnrichedPayload {
     /// Recent git diff summary for the target project.
     var gitDiffSummary: String?
 
-    /// History context from paradigm_history_context.
+    /// History context from paradigm_history({op:'context'}).
     var historyContext: String?
 
     /// Whether context enrichment was applied.

@@ -1,0 +1,49 @@
+version: 2.0.0
+components:
+  AcademySection:
+    description: >-
+      Academy section in the Platform UI (7.11.0, T-2026-09-26-003) — the home of
+      University content packs, replacing the retired standalone University UI.
+      Three columns: pack list, then the selected pack's learning paths (or one
+      path's steps) plus its pack-skills table, then a reading pane that renders a
+      note or runs a quiz. Read-only: nothing is written server-side.
+    type: view
+    tags: [feature, university, academy, platform]
+  PackList:
+    description: Clickable list of discovered packs with id, tenant kind, per-type content counts and skill count.
+    type: component
+    tags: [feature, university, academy, platform]
+  PathView:
+    description: >-
+      PathList (a pack's learning paths) and PathView (one path's ordered steps,
+      resolved to note/quiz titles; notes and quizzes open in the reading pane;
+      plsat/missing steps are shown but not openable; local quiz results inline).
+    type: component
+    tags: [feature, university, academy, platform]
+  NoteView:
+    description: Renders a note's markdown body with the Platform's shared renderMarkdown (sections/docs/renderMarkdown.ts; HTML-escaped first; code fences + lists supported).
+    type: component
+    tags: [feature, university, academy, platform]
+  QuizRunner:
+    description: >-
+      Client-side quiz runner. Weighted score vs the quiz passThreshold, shows the
+      right answers + explanations after submit, supports retry. Results are
+      recorded through academyStore.recordResult (localStorage only).
+    type: component
+    tags: [feature, university, academy, platform]
+  PackSkills:
+    description: >-
+      Read-only table of skills a pack ships (/api/academy/packs/:packId/skills),
+      labelled "external — not active" with the `paradigm skill import` hint;
+      notes when a project/global copy shadows the pack skill.
+    type: component
+    tags: [feature, university, academy, platform, skills]
+  academyStore:
+    description: >-
+      Zustand store for the Academy (mirrors memoryStore's fetch/abort pattern).
+      Mirrors the /api/academy shapes: packs, selected pack's paths + skills, the
+      open path, and the reading pane (note | quiz). Quiz results keyed
+      `${packId}:${quizId}` persist to localStorage (`paradigm-academy-results`),
+      every read/write wrapped in try/catch.
+    type: state
+    tags: [feature, university, academy, platform, state]

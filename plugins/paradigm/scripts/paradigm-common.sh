@@ -273,7 +273,7 @@ PURPOSEEOF
     VIOLATIONS="$VIOLATIONS
   - These directories have modified source files but no .purpose file anywhere in their path:
    $DIRS_WITHOUT_PURPOSE
-    Create a .purpose file using paradigm_purpose_init + paradigm_purpose_add_component."
+    Create a .purpose file using paradigm_purpose (op: init) + paradigm_purpose (op: add_component)."
     VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
   else
     ADVISORY="$ADVISORY
@@ -566,7 +566,7 @@ LOREEOF
     elif [ "$_SEV" = "block" ]; then
       VIOLATIONS="$VIOLATIONS
   - You modified $SOURCE_COUNT source files but recorded no lore entry.
-    Record your session: paradigm_lore_record (MCP) or paradigm lore record (CLI).
+    Record your session: paradigm_lore (op: record) (MCP) or paradigm lore record (CLI).
     Include: type, title, summary, and symbols_touched."
       VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
     else
@@ -655,7 +655,7 @@ if [ -n "$COMPLIANCE_RESULT" ]; then
     if [ "$_SEV" = "block" ]; then
       VIOLATIONS="$VIOLATIONS
   - $DRIFTED_COUNT aspect anchor(s) have drifted (content genuinely changed).
-    Run paradigm_aspect_check to review. Update anchors in .purpose files."
+    Run paradigm_aspect (op: check) to review. Update anchors in .purpose files."
       VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
     else
       ADVISORY="$ADVISORY
@@ -696,7 +696,7 @@ if [ -n "$COMPLIANCE_RESULT" ]; then
         VIOLATIONS="$VIOLATIONS
   - $UNDECLARED gate(s) used in code but not declared in portal.yaml:
     $CLEAN_LIST
-    Add them to portal.yaml or use paradigm_portal_add_gate."
+    Add them to portal.yaml or use paradigm_purpose (op: portal_add_gate)."
         VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
       else
         ADVISORY="$ADVISORY
@@ -815,7 +815,7 @@ PURPOSEEOF
       VIOLATIONS="$VIOLATIONS
   - These directories match purpose-required patterns but have no .purpose file:
    $MISSING_REQUIRED
-    Create .purpose files: paradigm_purpose_init + paradigm_purpose_add_component."
+    Create .purpose files: paradigm_purpose (op: init) + paradigm_purpose (op: add_component)."
       VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
     else
       ADVISORY="$ADVISORY
@@ -865,7 +865,7 @@ if [ "$_SEV" != "off" ] && [ "$VIOLATION_COUNT" -gt 0 ] && [ -f ".paradigm/gradu
     if [ "$fail_count" -ge 3 ]; then
       ADVISORY="$ADVISORY
   - Graduated habit '$habit_id' has $fail_count failures — auto-demotion triggered.
-    Run paradigm_graduate_status to review tier changes."
+    Run paradigm_graduation (op: status) to review tier changes."
     elif [ "$fail_count" -ge 2 ]; then
       ADVISORY="$ADVISORY
   - Graduated habit '$habit_id' has $fail_count failures (demotion at 3).

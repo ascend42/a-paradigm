@@ -25,10 +25,10 @@ If no arguments were provided, summarize based on the project context above.
 
 ## Step 2: Run Pre-flight
 
-Call `paradigm_pm_preflight` with the task description:
+Call `paradigm_pm` (op `preflight`) with the task description:
 
 ```
-paradigm_pm_preflight({ task: "<task description>" })
+paradigm_pm({op:'preflight', task: "<task description>" })
 ```
 
 This returns:
@@ -46,15 +46,15 @@ For each affected symbol returned by preflight:
    paradigm_ripple({ symbol: "<symbol>", depth: 2 })
    ```
 
-2. Call `paradigm_wisdom_context` to check for team wisdom:
+2. Call `paradigm_wisdom` (op `context`) to check for team wisdom:
    ```
-   paradigm_wisdom_context({ symbols: ["<symbol1>", "<symbol2>"] })
+   paradigm_wisdom({op:'context', symbols: ["<symbol1>", "<symbol2>"] })
    ```
    This reveals antipatterns to avoid and past decisions to respect.
 
-3. Call `paradigm_history_fragility` to check stability:
+3. Call `paradigm_history` (op `fragility`) to check stability:
    ```
-   paradigm_history_fragility({ symbols: ["<symbol1>", "<symbol2>"] })
+   paradigm_history({op:'fragility', symbols: ["<symbol1>", "<symbol2>"] })
    ```
    Fragile symbols (many recent changes/failures) need extra care.
 
@@ -70,16 +70,16 @@ If the task involves API endpoints or user-facing features:
 
 If the task affects symbols involved in flows:
 
-1. Call `paradigm_flows_affected` for each affected symbol
+1. Call `paradigm_flow` (op `affected`) for each affected symbol
 2. List which flows will be impacted
 3. Note which flow steps need validation after implementation
 
 ## Step 6: Evaluate Preflight Habits
 
-Call `paradigm_habits_check` with the preflight trigger to check habit compliance:
+Call `paradigm_habits` (op `check`) with the preflight trigger to check habit compliance:
 
 ```
-paradigm_habits_check({
+paradigm_habits({op:'check',
   trigger: "preflight",
   symbolsTouched: ["#component-a", "#component-b"],
   taskDescription: "<task description>"

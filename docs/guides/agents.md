@@ -36,7 +36,7 @@ Profiles live in two places:
 | **security** | tier-1 | Audits for auth, secrets, injection, ownership checks. Reads `portal.yaml`. |
 | **tester** | tier-3 | Writes and runs tests. Methodical, conservative. |
 | **documentor** | tier-3 | Final orchestration stage. Updates `.purpose` files, `portal.yaml`, lore. Never touches source code. |
-| **Rune** (compliance) | tier-1 | Owns symbol/aspect enforcement. Graduates checks through a four-state promotion lifecycle: `candidate` → `active` → `enforcing` → `blocking`. Uses `paradigm_compliance_promote` to advance each concern. Rostered on by `paradigm shift`. |
+| **Rune** (compliance) | tier-1 | Owns symbol/aspect enforcement. Graduates checks through a four-state promotion lifecycle: `candidate` → `active` → `enforcing` → `blocking`. Uses `paradigm_compliance` (op `promote`) to advance each concern. Rostered on by `paradigm shift`. |
 
 ### Specialty agents
 
@@ -45,7 +45,7 @@ Profiles live in two places:
 | **ftux (Nora)** | tier-1 | First-time user experience simulator. Reads only user-facing surfaces (README, --help, error strings) — never source. Produces friction reports at `.paradigm/ftux/reports/YYYY-MM-DD.md`. Runs after builder when the task touches a user-visible surface, before documentor. |
 | **captain (Cid)** | tier-1 | Navigation + coverage captain. Briefs the team on what to read before a task; debriefs at the end on what was missed. |
 | **intelligence officer (Loid)** | tier-1 | Learning officer. Synthesizes patterns from postflight verdicts into agent journals → notebooks → wisdom. |
-| **Atlas** (cartographer) | tier-2 | Generates and maintains `arch.yaml` — a structured architectural map committed alongside `.purpose` files. Uses `paradigm_arch_status` and `paradigm_arch_diagram`. |
+| **Atlas** (cartographer) | tier-2 | Generates and maintains `arch.yaml` — a structured architectural map committed alongside `.purpose` files. Uses `paradigm_graph` (op `arch_status`) and `paradigm_graph` (op `arch_diagram`). |
 
 The full list of role tiers (architect, ftux, security, advocate, product, operations, sales, legal, ethicist, futurist all tier-1; many more tier-2 / tier-3) is at `packages/paradigm-mcp/src/tools/orchestration.ts:181`.
 
@@ -161,10 +161,10 @@ Claude Code users get a higher-level wrapper at `/paradigm:agents`, which combin
 - `roster` (default) — show active + benched with expertise summaries
 - `onboard` — check default agents (architect, builder, tester, reviewer, security, documentor) and create + sync any missing
 - `bench <id>`, `activate <id>` — wrap the CLI calls
-- `show <id>` — full agent detail (calls `paradigm_agent_get`)
+- `show <id>` — full agent detail (calls `paradigm_agent` (op `get`))
 - `install <source>` — accepts `github:user/repo[/path]` or `@namespace/name` (nevr.land)
 
-The skill checks `paradigm_ambient_health` first so it can show Neverland metrics (accept rate, threshold, notebook count) alongside the roster.
+The skill checks `paradigm_ambient` (op `health`) first so it can show Neverland metrics (accept rate, threshold, notebook count) alongside the roster.
 
 ## 6. Adoption contracts (advisory permissions)
 
@@ -213,17 +213,17 @@ All agent tools accept JSON args; ~50–200 token responses. Defined in `package
 
 | Tool | What it does |
 |------|--------------|
-| `paradigm_agent_list` | List all profiles. `scope: "all" \| "global" \| "project"`. Returns top expertise + state per agent. |
-| `paradigm_agent_get` | Full profile by id or nickname. Includes integrity check, transferable patterns, project contexts. |
-| `paradigm_agent_expertise` | Find best agents for a symbol. Returns ranked list with confidence + sessions. `response_format: "concise"` returns just the top agent. |
-| `paradigm_agent_bench` | Bench an agent (per-project). |
-| `paradigm_agent_activate` | Activate a benched agent (per-project). |
-| `paradigm_agent_prompt` | Fetch the role prompt for an agent. Used by orchestration to seed Task-tool contexts. Enum: `advocate, architect, builder, compliance, ftux, tester, reviewer, security, documentor`. |
+| `paradigm_agent` (op `list`) | List all profiles. `scope: "all" \| "global" \| "project"`. Returns top expertise + state per agent. |
+| `paradigm_agent` (op `get`) | Full profile by id or nickname. Includes integrity check, transferable patterns, project contexts. |
+| `paradigm_agent` (op `expertise`) | Find best agents for a symbol. Returns ranked list with confidence + sessions. `response_format: "concise"` returns just the top agent. |
+| `paradigm_agent` (op `bench`) | Bench an agent (per-project). |
+| `paradigm_agent` (op `activate`) | Activate a benched agent (per-project). |
+| `paradigm_agent` (op `prompt`) | Fetch the role prompt for an agent. Used by orchestration to seed Task-tool contexts. Enum: `advocate, architect, builder, compliance, ftux, tester, reviewer, security, documentor`. |
 
 Two related tools used during orchestration:
 
 - `paradigm_orchestrate_inline` — runs the multi-agent flow. In Claude Code, agents launch as isolated `Task` tool contexts (true multi-agent — separate memory per agent). In Cursor and other IDEs without Task tool support, agents run sequentially in the same context (sequential roleplay). Configured via `orchestration.default_mode` in `agents.yaml`, defaults to `faceted`.
-- `paradigm_ambient_health` — Neverland health (accept rate, notebook count, threshold drift) — surfaced by the `paradigm:agents` skill in its roster output.
+- `paradigm_ambient` (op `health`) — Neverland health (accept rate, notebook count, threshold drift) — surfaced by the `paradigm:agents` skill in its roster output.
 
 ## 9. Common workflows
 
@@ -382,7 +382,7 @@ When an agent encounters an MCP tool that misbehaves — write tool reports succ
 
 ### What it is
 
-A convention layered on the existing `paradigm_task_create` primitive. Agents file a high-priority task tagged `framework-bug` with two pieces of code-location evidence: a writer file:line and a reader file:line that demonstrate the divergent contract. Without that evidence, the report is downgraded to a plain task (no `framework-bug` tag). This is the same evidentiary bar a human bug report would clear.
+A convention layered on the existing `paradigm_task` (op `create`) primitive. Agents file a high-priority task tagged `framework-bug` with two pieces of code-location evidence: a writer file:line and a reader file:line that demonstrate the divergent contract. Without that evidence, the report is downgraded to a plain task (no `framework-bug` tag). This is the same evidentiary bar a human bug report would clear.
 
 ### When agents file these
 
@@ -394,11 +394,11 @@ The agent should continue the session, not block on the framework bug. The task 
 
 ### Triaging one in your task list
 
-When `paradigm_task_create` lands one of these in your local list, ownership follows the broken tool's domain:
+When `paradigm_task` (op `create`) lands one of these in your local list, ownership follows the broken tool's domain:
 
 | Tool domain | Triage owner |
 |-------------|--------------|
-| Compliance (`paradigm_aspect_check`, `paradigm_drift_*`) | Rune |
+| Compliance (`paradigm_aspect` (op `check`), `paradigm_drift_*`) | Rune |
 | Security (`paradigm_portal_*`, gate verification) | Aegis |
 | Learning (`paradigm_notebook_*`, nomination) | Scholar / Loid (paired) |
 | Navigation / coverage (`paradigm_status`, `paradigm_navigate`) | Cid |

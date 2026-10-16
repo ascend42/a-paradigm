@@ -1,11 +1,11 @@
 ---
-description: Session recovery and handoff - call paradigm_session_recover at session start, paradigm_session_health periodically during long sessions, paradigm_handoff_prepare when context is high.
+description: Session recovery and handoff - call paradigm_session (op `recover`) at session start, paradigm_session (op `health`) periodically during long sessions, paradigm_session (op `handoff_prepare`) when context is high.
 ---
 # Context Monitoring Protocol
 
 ## Session Start (EVERY new session)
 
-Call `paradigm_session_recover` to load previous session breadcrumbs.
+Call `paradigm_session` (op `recover`) to load previous session breadcrumbs.
 Returns: symbols modified, files explored, recent actions, and suggestions.
 
 ## Periodic Checks
@@ -13,7 +13,7 @@ Returns: symbols modified, files explored, recent actions, and suggestions.
 **Every 10-15 tool calls** (or when user asks about context), call:
 
 ```
-paradigm_session_health()
+paradigm_session({op:'health'})
 ```
 
 This returns a recommendation: `continue`, `consider-handoff`, `handoff-recommended`, or `handoff-urgent`.
@@ -35,7 +35,7 @@ This returns a recommendation: `continue`, `consider-handoff`, `handoff-recommen
 
 ## Handoff Process
 
-1. Call `paradigm_handoff_prepare` with:
+1. Call `paradigm_session` (op `handoff_prepare`) with:
    - Summary of work completed
    - List of next steps
    - Target agent role
@@ -54,7 +54,7 @@ This returns a recommendation: `continue`, `consider-handoff`, `handoff-recommen
 
 Get current stats anytime:
 ```
-paradigm_session_stats()
+paradigm_session({op:'stats'})
 ```
 
 ## Session Checkpoints
@@ -73,7 +73,7 @@ Save checkpoints when transitioning between workflow phases to enable crash reco
 ### Usage
 
 ```
-paradigm_session_checkpoint({
+paradigm_session({op:'checkpoint',
   phase: "implementing",
   context: "Adding JWT auth middleware to /api/projects routes",
   modifiedFiles: ["src/middleware/auth.ts", "src/routes/projects.ts"],

@@ -1,0 +1,12 @@
+id: L-2026-09-29-ascend-081346-928
+type: insight
+timestamp: '2026-09-29T08:13:46.916Z'
+author: ascend
+title: Decision TD-2026-09-29-204 recorded
+summary: Companion lore entry for decision record TD-2026-09-29-204. See .paradigm/decisions/TD-2026-09-29-204.yaml.
+symbols_touched: []
+references:
+  decision_id: TD-2026-09-29-204
+tags:
+  - companion-lore
+  - decision-reference

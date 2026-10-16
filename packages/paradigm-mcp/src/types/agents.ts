@@ -84,7 +84,45 @@ export interface AgentProfile {
 
   /** Reciprocal partner agents — excluded from integrityHash. See docs/guides/agents.md#partners */
   partners?: PartnerRef[];
+
+  // ── Skills precursor (Phase 0, TD-2026-09-26-846) ──
+
+  /** Named behavior descriptions from templates — unread until skills (Phase 1) */
+  behaviors?: Record<string, string>;
+  /** Free-form tags (discovery/grouping) */
+  tags?: string[];
+
+  // ── Skills (Phase 1, T-2026-09-26-002) ──
+
+  /**
+   * Skills this agent stewards (`owns`) or consumes (`uses`). Resolved by
+   * #skill-loader resolveAgentSkills. Excluded from integrityHash (which only
+   * covers id / role / permissions).
+   */
+  skills?: AgentSkillRef[];
 }
+
+/** One `skills:` entry on an .agent profile. */
+export interface AgentSkillRef {
+  id: string;
+  role: 'owns' | 'uses';
+}
+
+/**
+ * Every top-level key an .agent profile may declare. Used by `paradigm doctor`
+ * (packages/paradigm/src/commands/doctor/agent-audit.ts keeps a local copy —
+ * keep the two in sync).
+ */
+export const KNOWN_AGENT_KEYS: readonly string[] = [
+  'id', 'role', 'nickname', 'description', 'version', 'personality', 'expertise',
+  'transferable', 'contexts', 'created', 'updated', 'permissions', 'integrityHash',
+  'attention', 'learning', 'context', 'reporting', 'collaboration', 'nomination',
+  'benched', 'network', 'scopes', 'configurable', 'partners', 'behaviors', 'tags', 'skills',
+  // Framework-written metadata not modeled on AgentProfile: registry install
+  // provenance (`paradigm agent install`, commands/agent/registry.ts) and the
+  // `protected` flag on core templates (e.g. cid.agent).
+  'scope', 'registry', 'distribution', 'installedAt', 'protected',
+] as const;
 
 export interface PartnerRef {
   id: string;
@@ -103,10 +141,16 @@ export interface AgentNetwork {
   maxConcurrentInvocations?: number;
 }
 
+/** Canonical personality values. Bundled templates use many more (e.g. "pragmatic",
+ * "confrontational"); personality is display-only so any string is accepted. */
+export type KnownStyle = 'deliberate' | 'rapid' | 'exploratory' | 'methodical' | 'opinionated';
+export type KnownRisk = 'conservative' | 'balanced' | 'aggressive' | 'moderate';
+export type KnownVerbosity = 'minimal' | 'concise' | 'detailed' | 'precise' | 'thorough' | 'structured';
+
 export interface AgentPersonality {
-  style: 'deliberate' | 'rapid' | 'exploratory' | 'methodical';
-  risk: 'conservative' | 'balanced' | 'aggressive';
-  verbosity: 'minimal' | 'concise' | 'detailed';
+  style: KnownStyle | (string & {});
+  risk: KnownRisk | (string & {});
+  verbosity: KnownVerbosity | (string & {});
 }
 
 // ────────────────────────────────────────────────────────
@@ -133,10 +177,12 @@ export interface TransferablePattern {
   id: string;
   /** What this pattern does */
   description: string;
-  /** Project where first encountered */
-  learnedIn: string;
-  /** Projects where successfully applied */
-  appliedIn: string[];
+  /** @deprecated alias of id — legacy template convention, normalized to `id` at load */
+  pattern?: string;
+  /** Project where first encountered (normalized to 'unknown' when absent) */
+  learnedIn?: string;
+  /** Projects where successfully applied (normalized to [] when absent) */
+  appliedIn?: string[];
   /** Success rate 0.0-1.0 */
   successRate: number;
   /** Optional linked protocol ID */

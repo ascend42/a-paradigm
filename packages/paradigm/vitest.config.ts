@@ -8,6 +8,10 @@ export default defineConfig({
       'tests/**/*.test.ts',
       // Warpline viewer's pure binding/state layer (React-free, node-env safe).
       'platform-ui/src/sections/warpline/**/*.test.ts',
+      // Shared docs/Academy markdown renderer (React-free).
+      'platform-ui/src/sections/docs/renderMarkdown.test.ts',
+      // Brain section plain-language labels (React-free).
+      'platform-ui/src/sections/brain/**/*.test.ts',
     ],
   },
 });

@@ -1,0 +1,38 @@
+id: L-2026-09-29-ascend-102549-001
+type: agent-session
+timestamp: '2026-09-29T10:25:49.162Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Skills arc Phase 5 — Paradigm Brain MVP (7.14.0)
+summary: 'Shipped the Paradigm Brain MVP (TD-2026-09-29-204): structure for any folder of personal documents, for non-developers. Out-of-tree index (never writes into the user''s folder), md/txt only, local detectors (secrets, cards, SSN, MRZ, IBAN, JWT, cloud keys) before persistence, default-deny gates with one view choke point, egress log + purge, deterministic suggest→confirm, provable brain→code staleness via workspaces, on-demand paradigm_brain MCP family (metadata-only, enveloped), `paradigm brain` CLI and a plain-language Platform Brain section. Two Aegis passes: fixed a quadratic ReDoS (2MB line ~28min → 10ms), case/Unicode hard-block bypass, symlink TOCTOU, cross-origin localhost reads (exact-origin + HttpOnly owner cookie), incomplete injection envelope, and added brain.yaml tamper detection with race-safe saves and diff-before-acknowledge. Browser-verified: locked zones show counts only, gated content unsearchable, Keep writes declared.yaml out of tree.'
+symbols_touched:
+  - '#brain-view'
+  - '#brain-detect'
+  - '#brain-config'
+  - '#brain-cli'
+  - '#brain-section'
+  - '#paradigm-brain'
+  - '#captain'
+learnings:
+  - The ReDoS was invisible to code review and tests at small sizes — only timing a doubling series exposed the quadratic curve; always time n, 2n, 4n on detector regexes.
+  - Leak probes caught two real leaks the builders didn't anticipate (/find echoing q; link text naming a hidden note) — sentinel-based probes over every output surface are worth their cost.
+  - 'A loopback guard is not an origin boundary: any local dev server is ''localhost''. Exact origin + HttpOnly cookie is the minimum for a personal-data UI.'
+  - Tamper hashes introduce their own races with legitimate writers; write pending-hash first and re-check before pausing.
+  - BIP39 seed-phrase detection skipped (no vetted wordlist in repo) — follow-up.
+verification:
+  status: pass
+  details:
+    tests: purpose-core 11, premise-core 109, university-core 85, paradigm-mcp 750, paradigm 722 (+3), university 10 (+20)
+    browser: Brain section end-to-end on temp HOME
+    security: Aegis SHIP-WITH-FOLLOWUPS; follow-ups applied
+    swift: Conductor builds
+linked_tasks:
+  - T-2026-09-29-002
+  - T-2026-09-26-006
+confidence: 0.8
+git_context:
+  ref: 0fff1aee2478e053e0b87bbcda94ac421492d61e
+  branch: feat/skills-arc
+  dirty: true

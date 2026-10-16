@@ -7,16 +7,16 @@ components:
     tags:
       - feature
   ShiftCommand:
-    description: paradigm shift — full project setup in one command
+    description: paradigm shift — full project setup in one command. 7.11.0 — no longer scaffolds .paradigm/university/ or writes a university metrics snapshot (packs are opt-in via `paradigm university init`).
     type: command
   InitCommand:
     description: paradigm init — initialize Paradigm in a project
     type: command
   ScanCommand:
-    description: paradigm scan — rebuild symbol index
+    description: paradigm scan — rebuild symbol index. navigator.ts buildSymbolMap (exported) maps premise-core aggregator `filePath` to the project-relative containing directory (v7.9.1 fix — navigator.yaml had 0 symbol mappings because only path/directory were read)
     type: command
   DoctorCommand:
-    description: paradigm doctor — health checks
+    description: 'paradigm doctor — health checks. 7.12.0 (D7): learning liveness reads the UNION of postflight-liveness.jsonl + settlement-liveness.jsonl (summarizeLearningLiveness levels red/amber/thin/green/nodata, never green on no data; "probe silent" warn when settlements exist but no postflight rows); learning-store census via #learning-stores; warns on leftover legacy .paradigm/wisdom/decisions/.'
     type: command
   GraphCommand:
     description: paradigm graph — interactive symbol graph (standalone)
@@ -32,6 +32,14 @@ components:
       - migration
       - decisions
     file: packages/paradigm/src/commands/migrate-decisions.ts
+  MigrateLearningStoresCommand:
+    description: 'paradigm migrate learning-stores (7.12.0) — --dry-run plans every step with zero writes. Steps: (1) back up originals → .paradigm/backups/learning-stores-<ts>/, (2) legacy wisdom/decisions → TD store (reuses migrate-decisions wisdom converter) + rmdir, (3) unengaged "Work completed" nominations → backup nominations-boilerplate.jsonl, (4) habits referencing removed University paths — report only unless --apply, (5) marker .paradigm/migrations/learning-stores.done. Idempotent; global ~/.paradigm/wisdom/decisions reported, never touched. Also registered as migration learning-stores-7.12 (auto:false) in migrate/migrations.ts.'
+    type: command
+    tags:
+      - migration
+      - learning
+      - v7.12
+    file: packages/paradigm/src/commands/migrate-learning-stores.ts
   DocsServeCommand:
     description: paradigm docs serve — launches the Platform with docs section enabled
     type: command

@@ -70,7 +70,7 @@ export function getAssessmentToolsList() {
           body: { type: 'string', description: 'Full reflection — what happened, what was learned, what changed' },
           symbols: { type: 'array', items: { type: 'string' }, description: 'Symbols touched in this entry' },
           tags: { type: 'array', items: { type: 'string' } },
-          type: { type: 'string', enum: ['retro', 'insight', 'milestone'], description: "Entry type (default: retro). Note: 'decision' was removed in v6.0 — use paradigm_decision_record." },
+          type: { type: 'string', enum: ['retro', 'insight', 'milestone'], description: "Entry type (default: retro). Note: 'decision' was removed in v6.0 — use paradigm_decision({op:'record'})." },
           linked_lore: { type: 'array', items: { type: 'string' }, description: 'Lore entry IDs' },
           linked_tasks: { type: 'array', items: { type: 'string' }, description: 'Task IDs' },
           linked_commits: { type: 'array', items: { type: 'string' }, description: 'Commit hashes' },

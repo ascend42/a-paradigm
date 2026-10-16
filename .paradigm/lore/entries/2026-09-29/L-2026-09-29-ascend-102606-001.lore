@@ -1,0 +1,31 @@
+id: L-2026-09-29-ascend-102606-001
+type: milestone
+timestamp: '2026-09-29T10:26:06.399Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: MILESTONE — Skills + University + internals arc complete (7.9.1 → 7.14.0), PR-ready
+summary: 'All six phases of TD-2026-09-26-846 plus the founder''s Paradigm Brain (TD-2026-09-29-204) landed on feat/skills-arc in 7 commits: agent registry (no silent drops), skills primitive with design seeds, University→packs + Academy, learning-loop teeth + store consolidation, MCP surface 134→32 tools + incremental index, and the Brain MVP. Every phase ran architect spec → parallel builders → reviewer (+ Aegis where security-relevant) → fix pass → lore → commit. Not pushed; founder publishes.'
+symbols_touched:
+  - '#agent-registry'
+  - '#skill-loader'
+  - '#university'
+  - '#nomination-engine'
+  - '#tool-registry'
+  - '#paradigm-brain'
+learnings:
+  - 'Open follow-ups: T-2026-09-29-001 (skill cert signing), T-2026-09-29-003 (learning loop still produces 0 journals), Brain acceptance ≥60% must be measured on a real folder, BIP39 detector, legacy tool aliases removal in 7.15.0, `paradigm migrate tools --write` for third-party repos (7.13.1).'
+  - Builders hit the 50-turn cap on nearly every phase-sized task; disjoint file sets + marker files + explicit no-stash rules made parallel builds workable.
+linked_lore:
+  - L-2026-09-26-ascend-005233-001
+  - L-2026-09-29-ascend-080355-001
+  - L-2026-09-29-ascend-084824-001
+  - L-2026-09-29-ascend-091417-001
+  - L-2026-09-29-ascend-093916-001
+  - L-2026-09-29-ascend-102549-001
+confidence: 0.85
+git_context:
+  ref: 68e2ab96ea88a2130a81b21f6ee31e6de02ba27d
+  branch: feat/skills-arc
+  dirty: true

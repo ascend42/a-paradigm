@@ -16,9 +16,9 @@ Ask yourself: is the user trying to **find** an existing protocol, or **record**
 
 ### Finding a Protocol (before implementing)
 
-1. Call `paradigm_protocol_search` with the task description:
+1. Call `paradigm_protocol` (op `search`) with the task description:
    ```
-   paradigm_protocol_search({ task: "add a new settings page" })
+   paradigm_protocol({op:'search', task: "add a new settings page" })
    ```
 
 2. If a match is found:
@@ -39,9 +39,9 @@ Ask yourself: is the user trying to **find** an existing protocol, or **record**
    - Which commands did you run? (→ `run` steps)
    - What's the best exemplar file?
 
-2. Call `paradigm_protocol_record`:
+2. Call `paradigm_protocol` (op `record`):
    ```
-   paradigm_protocol_record({
+   paradigm_protocol({op:'record',
      name: "Add a new MCP tool",
      description: "Create a new tool file, loader, register in index.ts",
      trigger: ["add tool", "new mcp tool", "create tool"],
@@ -65,7 +65,7 @@ Ask yourself: is the user trying to **find** an existing protocol, or **record**
 
 If the user asks to check protocol health:
 ```
-paradigm_protocol_validate({})
+paradigm_protocol({op:'validate'})
 ```
 
 This checks all protocols for broken references, stale exemplars, and reports health.

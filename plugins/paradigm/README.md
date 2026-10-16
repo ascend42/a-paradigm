@@ -37,13 +37,13 @@ All tools are available immediately — no configuration needed:
 | Portal / Auth | `paradigm_portal_*`, `paradigm_gates_for_route` | Authorization gate management |
 | Wisdom | `paradigm_wisdom_*` (4 tools) | Team learning — antipatterns and decisions |
 | History | `paradigm_history_*` (4 tools) | Implementation tracking and fragility scores |
-| Flows | `paradigm_flows_affected`, `paradigm_flow_check` | Multi-step flow validation |
+| Flows | `paradigm_flow` (op `affected`), `paradigm_flow` (op `check`) | Multi-step flow validation |
 | Sentinel | `paradigm_sentinel_*` (18 tools) | Incident tracking and pattern detection |
 | Lore | `paradigm_lore_*` (8 tools) | Project timeline and session recording |
-| Orchestration | `paradigm_orchestrate_inline`, `paradigm_agent_prompt` | Multi-agent task coordination |
-| Governance | `paradigm_pm_preflight`, `paradigm_pm_postflight` | Pre/post-task compliance |
-| Tags | `paradigm_tags`, `paradigm_tags_suggest` | Symbol classification |
-| Context | `paradigm_session_health`, `paradigm_session_*`, `paradigm_handoff_prepare` | Session management |
+| Orchestration | `paradigm_orchestrate_inline`, `paradigm_agent` (op `prompt`) | Multi-agent task coordination |
+| Governance | `paradigm_pm` (op `preflight`), `paradigm_pm` (op `postflight`) | Pre/post-task compliance |
+| Tags | `paradigm_tags`, `paradigm_tags` (op `suggest`) | Symbol classification |
+| Context | `paradigm_session` (op `health`), `paradigm_session_*`, `paradigm_session` (op `handoff_prepare`) | Session management |
 | Index | `paradigm_reindex` | Rebuild symbol index |
 
 ### Skills (user-invoked)
@@ -162,12 +162,12 @@ For maintenance reference — which MCP tools each skill uses:
 |---|---|
 | `/paradigm:init` | `paradigm_status`, Bash (`npx @a-company/paradigm init`, `scan`) |
 | `/paradigm:scan` | `paradigm_reindex` |
-| `/paradigm:doctor` | `paradigm_status`, `paradigm_purpose_validate`, `paradigm_navigate` |
-| `/paradigm:lore` | `paradigm_lore_record`, Bash (`git diff --stat`) |
+| `/paradigm:doctor` | `paradigm_status`, `paradigm_purpose` (op `validate`), `paradigm_navigate` |
+| `/paradigm:lore` | `paradigm_lore` (op `record`), Bash (`git diff --stat`) |
 | `/paradigm:shift` | Bash (`npx @a-company/paradigm shift`) |
-| `/paradigm:preflight` | `paradigm_pm_preflight` |
-| `/paradigm:postflight` | `paradigm_pm_postflight` |
-| `/paradigm:sentinel` | `paradigm_sentinel_triage`, `paradigm_sentinel_stats` |
+| `/paradigm:preflight` | `paradigm_pm` (op `preflight`) |
+| `/paradigm:postflight` | `paradigm_pm` (op `postflight`) |
+| `/paradigm:sentinel` | `paradigm_sentinel` (op `triage`), `paradigm_sentinel` (op `stats`) |
 
 ## Recommended Agent Models
 

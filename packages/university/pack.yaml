@@ -14,7 +14,7 @@ version: 6.0.0
 schema_version: "1"
 
 tenant_kind: first-party
-description: Official Paradigm learning content — PARA 001-701 courses + PLSAT certification.
+description: Official Paradigm learning paths — PARA 001–701 plus the PLSAT practice exam.
 
 authors:
   - Paradigm team

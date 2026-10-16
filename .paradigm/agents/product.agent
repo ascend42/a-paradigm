@@ -58,9 +58,9 @@ permissions:
       - paradigm_status
       - paradigm_search
       - paradigm_navigate
-      - paradigm_docs_manifest
-      - paradigm_lore_search
-      - paradigm_decision_search
+      - paradigm_docs (op: manifest)
+      - paradigm_lore (op: search)
+      - paradigm_decision (op: search)
       - Read
     deny: []
 

@@ -5,7 +5,7 @@
 import AppKit
 import Foundation
 
-/// A session registration written by `paradigm_conductor_register`.
+/// A session registration written by `paradigm_conductor({op:'register'})`.
 struct RegisteredSession: Codable, Equatable {
     let pid: Int
     let parentPid: Int?

@@ -25,7 +25,7 @@
 #   5. Per-directory .purpose freshness (tracked via .pending-review)
 #   6. Aspect coverage advisory
 #   7. Lore entry expected for significant sessions (3+ source files)
-#   8. Blocking habits not satisfied (from paradigm_habits_check)
+#   8. Blocking habits not satisfied (from paradigm_habits (op: check))
 #   9. Purpose-required patterns from config.yaml
 #  10. Aspect drift detection with auto-heal
 #  11. Portal gate implementation compliance
@@ -112,7 +112,7 @@ PURPOSEEOF
     VIOLATIONS="$VIOLATIONS
   - These directories have modified source files but no .purpose file anywhere in their path:
    $DIRS_WITHOUT_PURPOSE
-    Create a .purpose file using paradigm_purpose_init + paradigm_purpose_add_component."
+    Create a .purpose file using paradigm_purpose (op: init) + paradigm_purpose (op: add_component)."
     VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
   fi
 fi
@@ -303,7 +303,7 @@ LOREEOF
     else
       VIOLATIONS="$VIOLATIONS
   - You modified $SOURCE_COUNT source files but recorded no lore entry.
-    Record your session: paradigm_lore_record (MCP) or paradigm lore record (CLI).
+    Record your session: paradigm_lore (op: record) (MCP) or paradigm lore record (CLI).
     Include: type, title, summary, and symbols_touched."
       VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
     fi
@@ -323,7 +323,7 @@ if [ -f ".paradigm/.habits-blocking" ]; then
   VIOLATIONS="$VIOLATIONS
   - Blocking habit(s) not satisfied:
     $HABITS_BLOCKING
-    Call paradigm_habits_check with trigger=\"on-stop\" after fixing the above."
+    Call paradigm_habits (op: check) with trigger=\"on-stop\" after fixing the above."
   VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
 fi
 
@@ -419,7 +419,7 @@ PURPOSEEOF
       VIOLATIONS="$VIOLATIONS
   - These directories match purpose-required patterns but have no .purpose file:
    $MISSING_REQUIRED
-    Create .purpose files: paradigm_purpose_init + paradigm_purpose_add_component."
+    Create .purpose files: paradigm_purpose (op: init) + paradigm_purpose (op: add_component)."
       VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
     fi
   fi
@@ -445,7 +445,7 @@ if [ -f ".paradigm/aspect-graph.db" ]; then
     if [ -n "$DRIFTED_COUNT" ] && [ "$DRIFTED_COUNT" -gt 0 ] 2>/dev/null; then
       VIOLATIONS="$VIOLATIONS
   - $DRIFTED_COUNT aspect anchor(s) have drifted (content genuinely changed).
-    Run paradigm_aspect_check to review. Update anchors in .purpose files."
+    Run paradigm_aspect (op: check) to review. Update anchors in .purpose files."
       VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
     fi
   fi
@@ -468,7 +468,7 @@ if [ -f "portal.yaml" ]; then
       VIOLATIONS="$VIOLATIONS
   - $UNDECLARED gate(s) used in code but not declared in portal.yaml:
     $UNDECLARED_LIST
-    Add them to portal.yaml or use paradigm_portal_add_gate."
+    Add them to portal.yaml or use paradigm_purpose (op: portal_add_gate)."
       VIOLATION_COUNT=$((VIOLATION_COUNT + 1))
     fi
   fi
@@ -513,7 +513,7 @@ if [ "$VIOLATION_COUNT" -gt 0 ] && [ -f ".paradigm/graduation.yaml" ]; then
     if [ "$fail_count" -ge 3 ]; then
       ADVISORY="$ADVISORY
   - Graduated habit '$habit_id' has $fail_count failures — auto-demotion triggered.
-    Run paradigm_graduate_status to review tier changes."
+    Run paradigm_graduation (op: status) to review tier changes."
     elif [ "$fail_count" -ge 2 ]; then
       ADVISORY="$ADVISORY
   - Graduated habit '$habit_id' has $fail_count failures (demotion at 3).

@@ -46,6 +46,11 @@ export function useAgentEffects() {
           if (msg.type?.startsWith('warpline:')) {
             window.dispatchEvent(new CustomEvent('warpline-ws', { detail: msg }));
           }
+          // Forward brain:* messages (brain:changed after a verdict / write) so
+          // the Brain section refreshes its overview, health and suggestions.
+          if (msg.type?.startsWith('brain:')) {
+            window.dispatchEvent(new CustomEvent('brain-ws', { detail: msg }));
+          }
         } catch {
           // Ignore malformed
         }
@@ -75,7 +80,7 @@ export function useAgentEffects() {
       const detail = (e as CustomEvent).detail;
       if (!detail) return;
 
-      const validSections: SectionId[] = ['overview', 'lore', 'graph', 'git', 'sentinel', 'university', 'symphony', 'docs', 'ambient', 'team'];
+      const validSections: SectionId[] = ['overview', 'lore', 'graph', 'git', 'sentinel', 'academy', 'symphony', 'docs', 'ambient', 'team'];
       if (detail.section && validSections.includes(detail.section)) {
         setActiveSection(detail.section);
       }

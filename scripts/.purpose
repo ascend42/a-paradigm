@@ -1,0 +1,15 @@
+version: 2.0.0
+description: Repo-level maintenance scripts (not shipped).
+components:
+  migrate-tool-names:
+    description: 'v7.13.0 (T-2026-09-26-005) reference codemod for the MCP surface cut. Parses LEGACY_TOOL_MAP out of packages/paradigm-mcp/src/tools/legacy-tool-map.ts (#legacy-tool-map, never duplicated) and rewrites renamed legacy names in agent-facing surfaces (TARGETS; EXCLUDE = CHANGELOG, lore/history/events/reviews, docs/private+specs, *.test.*, seed-habits.json). Forms: call `x_op({` → `x({op:''op'', `; wrapped `` `x_op` `` → `` `x` (op `op`) ``; bare → `x (op `op`)` (md) / `x (op: op)` (code/shell); `mcp__…__x_op` and allowed-tools/tools lines → family name (deduped). Idempotent. Dry run by default; `--write` applies. Guarded by packages/paradigm/src/__tests__/legacy-tool-names.test.ts.'
+    type: utility
+    file: migrate-tool-names.mjs
+    tags:
+      - codemod
+      - mcp-surface
+      - v7.13.0
+  pre-publish-check:
+    description: Pre-publish sanity checks run before npm publish.
+    type: utility
+    file: pre-publish-check.mjs

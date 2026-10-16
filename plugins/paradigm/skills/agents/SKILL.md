@@ -12,12 +12,12 @@ identities that carry expertise, notebooks, and learning across sessions.
 
 Get the current roster:
 ```
-paradigm_agent_list({ scope: "all" })
+paradigm_agent({op:'list', scope: "all" })
 ```
 
 Also check Neverland health:
 ```
-paradigm_ambient_health({})
+paradigm_ambient({op:'health'})
 ```
 
 ## Step 2: Determine Action
@@ -54,7 +54,7 @@ Check which default agents are missing and create + sync them:
 Default agents: architect, builder, tester, reviewer, security, documentor
 
 For each missing agent:
-1. Call `paradigm_agent_list` to see what exists
+1. Call `paradigm_agent` (op `list`) to see what exists
 2. For each missing: inform the user and suggest creating
 3. Create: `! paradigm agent create <id> --global`
 4. Sync: `! paradigm agent sync <id>`
@@ -65,7 +65,7 @@ Report what was created and synced.
 
 Bench an agent:
 ```
-paradigm_agent_bench({ id: "<agent-id>" })
+paradigm_agent({op:'bench', id: "<agent-id>" })
 ```
 
 Confirm with stats: "Benched architect (was at 55% accept rate, threshold 0.55)"
@@ -74,7 +74,7 @@ Confirm with stats: "Benched architect (was at 55% accept rate, threshold 0.55)"
 
 Activate a benched agent:
 ```
-paradigm_agent_activate({ id: "<agent-id>" })
+paradigm_agent({op:'activate', id: "<agent-id>" })
 ```
 
 Confirm: "Activated security — will be included in next orchestration"
@@ -83,7 +83,7 @@ Confirm: "Activated security — will be included in next orchestration"
 
 Get full agent detail:
 ```
-paradigm_agent_get({ id: "<agent-id>" })
+paradigm_agent({op:'get', id: "<agent-id>" })
 ```
 
 Present profile in a readable format:

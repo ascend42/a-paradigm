@@ -26,7 +26,7 @@ components:
     parent: '#PlatformServer'
     tags: [feature, agent-ui]
   local-guard:
-    description: Request-time ^local-only enforcement — rejects 403 any state-changing (POST/PUT/PATCH/DELETE) /api request whose Host is non-loopback or whose (present) Origin is non-loopback; CSRF + DNS-rebinding guard. Also tightens CORS to reflect only loopback origins (no wildcard). Reads (GET/HEAD) pass untouched.
+    description: Request-time ^local-only enforcement — rejects 403 any state-changing (POST/PUT/PATCH/DELETE) /api request whose Host is non-loopback or whose (present) Origin is non-loopback; CSRF + DNS-rebinding guard. Also tightens CORS to reflect only loopback origins (no wildcard). Reads (GET/HEAD) pass untouched. On /api/brain/* ACAO is set only for the Platform's own exact origin (ownOrigin/isOwnOrigin: loopback Host whose port equals the socket port).
     type: middleware
     parent: '#PlatformServer'
     gates: ['^local-only']
@@ -39,6 +39,7 @@ flows:
       - Mount graph routes (/api/symbols, /api/graphs)
       - Mount platform routes (/api/platform/health, /api/platform/sections, /api/platform/overview)
       - Mount git routes (/api/git/*)
+      - Mount brain routes (/api/brain/* — owner view via #brain-view; verdict behind ^brain-owner-write) after localOnlyGuard
       - Attach WebSocket server on /ws path
       - Mount agent command route (/api/platform/agent-command)
       - Serve platform-ui static files

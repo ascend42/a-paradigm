@@ -4,10 +4,10 @@
 
 ## TL;DR — the six v6.0 breaking changes
 
-1. **`LoreType.decision` removed.** `paradigm_lore_record({type:'decision'})` and `paradigm_assessment_record({type:'decision'})` now return a structured rejection envelope. CLI side throws the same migration message at the storage layer.
+1. **`LoreType.decision` removed.** `paradigm_lore({op:'record', type:'decision'})` and `paradigm_assessment({op:'record', type:'decision'})` now return a structured rejection envelope. CLI side throws the same migration message at the storage layer.
 2. **`loadPortalConfigLegacy` deleted.** The one-minor back-compat shim from v5.37.12 is gone. Use `loadPortalConfig` and switch on the `status` discriminator (`'missing' | 'unparseable' | 'ok'`).
 3. **Legacy University JSON content removed.** `@a-company/university/src/content/{courses,plsat}/*.json` are gone. Server routes read from the v6 pack layout (`content/{notes,quizzes,paths}/`). Use the pack-loader API.
-4. **`paradigm_university_search` result `id` format changed** to `<pack-id>:<entry-id>`. Strip the prefix for display if needed.
+4. **`paradigm_university` (op `search`) result `id` format changed** to `<pack-id>:<entry-id>`. Strip the prefix for display if needed.
 5. **Decision-store consolidation.** `paradigm migrate decisions` consolidates `wisdom/decisions/*.yaml` and `lore.type='decision'` into the canonical `.paradigm/decisions/TD-*.yaml` store.
 6. **Wisdom `type='decision'` soft-deprecated.** Still writes to disk in v6.0 with a deprecation warning; hard-error in a future minor.
 
@@ -23,8 +23,8 @@ Read on for the per-change details, migration shims, and an upgrade checklist.
 
 ```typescript
 // v5.x — worked
-paradigm_lore_record({ type: 'decision', summary: '...', decisions: [...] })
-paradigm_assessment_record({ type: 'decision', ... })
+paradigm_lore({op:'record', type: 'decision', summary: '...', decisions: [...] })
+paradigm_assessment({op:'record', type: 'decision', ... })
 ```
 
 ```typescript
@@ -32,8 +32,8 @@ paradigm_assessment_record({ type: 'decision', ... })
 {
   "error": {
     "code": "lore_type_decision_removed",
-    "message": "lore type 'decision' was removed in v6.0. Use paradigm_decision_record instead. ...",
-    "successor_tool": "paradigm_decision_record",
+    "message": "lore type 'decision' was removed in v6.0. Use paradigm_decision (op `record`) instead. ...",
+    "successor_tool": "paradigm_decision (op `record`)",
     "doc": "docs/private/plans/v6.0-decisions-locked.md",
     "removed_in": "6.0.0"
   }
@@ -44,10 +44,10 @@ CLI side: `paradigm lore record --type decision` is rejected at the storage laye
 
 **What to do**
 
-Use `paradigm_decision_record` instead. The decision lands in `.paradigm/decisions/TD-*.yaml` and a companion lore insight entry with `references.decision_id` is written automatically — the timeline stays complete:
+Use `paradigm_decision` (op `record`) instead. The decision lands in `.paradigm/decisions/TD-*.yaml` and a companion lore insight entry with `references.decision_id` is written automatically — the timeline stays complete:
 
 ```typescript
-paradigm_decision_record({
+paradigm_decision({op:'record',
   title: "Adopt fail-closed portal compliance",
   decision: "loadPortalConfig returns a discriminated union; unparseable fail-closes.",
   rationale: "Field reports of silent fail-open behavior on duplicate-key portal.yaml",
@@ -67,7 +67,7 @@ Full guide: [docs/guides/decisions.md](./decisions.md).
 Pre-v6 lore entries with `type='decision'` are auto-remapped to `type='insight'` on read by the `lore-loader` v1→v2 migration shim, with a `v6-migrated:from-decision` tag preserved. Find them later:
 
 ```typescript
-paradigm_lore_search({ tag: "v6-migrated:from-decision" })
+paradigm_lore({op:'search', tag: "v6-migrated:from-decision" })
 ```
 
 To finalize the migration (write proper TD-* entries and back-link them), run:
@@ -155,9 +155,9 @@ const notes = paradigm.entries.filter(e => e.type === 'note');
 Or via MCP:
 
 ```typescript
-paradigm_university_pack_list({})                              // list all packs
-paradigm_university_search({ pack: 'paradigm', type: 'note' }) // search a pack
-paradigm_university_get({ id: 'paradigm:N-symbol-basics' })    // fetch one entry
+paradigm_university({op:'pack_list'})                              // list all packs
+paradigm_university({op:'search', pack: 'paradigm', type: 'note' }) // search a pack
+paradigm_university({op:'search', id: 'paradigm:N-symbol-basics' }) // fetch one entry (v7.11+; was paradigm_university_get)
 ```
 
 Content layout, post-v6:
@@ -175,19 +175,19 @@ Full layout + pack-author flow in [University Guide](./university.md) §5–§7.
 
 ---
 
-## 4. `paradigm_university_search` result `id` format changed
+## 4. `paradigm_university` (op `search`) result `id` format changed
 
 **What changed**
 
 ```typescript
 // v5.x — bare ids
-paradigm_university_search({ query: "symbol" })
+paradigm_university({op:'search', query: "symbol" })
 // → entries: [{ id: "N-symbol-basics", ... }]
 ```
 
 ```typescript
 // v6.0 — qualified ids
-paradigm_university_search({ query: "symbol" })
+paradigm_university({op:'search', query: "symbol" })
 // → entries: [{ id: "paradigm:N-symbol-basics", ... }]
 ```
 
@@ -201,7 +201,7 @@ Strip the prefix for display if your UI expects bare ids:
 const display = entry.id.includes(':') ? entry.id.split(':')[1] : entry.id;
 ```
 
-Or accept the qualified form everywhere — `paradigm_university_get` happily takes either.
+Or accept the qualified form everywhere — `paradigm_university({op:'search', id })` (v7.11+; formerly `paradigm_university_get`) happily takes either.
 
 ---
 
@@ -239,7 +239,7 @@ Full coverage in [docs/guides/decisions.md](./decisions.md) §6.
 
 ```typescript
 // v5.39.0 — deprecation warning
-paradigm_wisdom_record({ type: 'decision', ... })  // still writes; warns
+paradigm_wisdom({op:'record', type: 'decision', ... })  // still writes; warns
 
 // v6.0.0 — still soft-deprecated, still writes, still warns
 // (not yet hard-error — that ships in a future minor)
@@ -251,7 +251,7 @@ Per D3 (v6.0 lock): lore was the documented three-way fracture offender (hard-re
 
 Migrate proactively even though it still works:
 
-1. Use `paradigm_decision_record` for new decisions
+1. Use `paradigm_decision` (op `record`) for new decisions
 2. Run `paradigm migrate decisions` to consolidate any existing wisdom decisions into `.paradigm/decisions/`
 
 The warning surface is at `packages/paradigm-mcp/src/tools/wisdom.ts:427,458,490` and `packages/paradigm-mcp/src/utils/wisdom-loader.ts:252` (one-time-per-session read-side warning).
@@ -276,9 +276,9 @@ Symmetric story for the other v5.38.0 hardening: `writeAndConfirm`'s atomic-writ
 
 Even if you skip v5.39.0, these arrive in v6.0:
 
-- **Multi-tenant University.** Three pack tenancies: `first-party` (installed npm packs), `project` (`.paradigm/university/`), `external`. New CLI selectors `--pack`, `--project`, `--discipline`. New `paradigm_university_pack_list` MCP tool.
+- **Multi-tenant University.** Three pack tenancies: `first-party` (installed npm packs), `project` (`.paradigm/university/`), `external`. New CLI selectors `--pack`, `--project`, `--discipline`. New `paradigm_university` (op `pack_list`) MCP tool.
 - **Privacy-preserving local metrics.** `.paradigm/university/.metrics/snapshot-YYYY-MM-DD.json`. Counts only — no titles, no content, no identifiers. 90-day local retention. `metrics.remote_consent: pending` seeded so v6.1 can prompt for opt-in without a schema migration.
-- **Companion-lore pattern.** `paradigm_decision_record` writes a companion lore insight entry with `references.decision_id` automatically.
+- **Companion-lore pattern.** `paradigm_decision` (op `record`) writes a companion lore insight entry with `references.decision_id` automatically.
 - **`TeamDecision` ADR fields.** `context`, `consequences`, `date`, `migrated_from`, `supersedes[]` (inverse of existing `superseded_by`).
 - **`LoreEntry.references`** — `{ decision_id?, wisdom_id?, notebook_id?, protocol_id? }`. Lore stays a timeline; canonical structured storage is in the referenced store.
 
@@ -311,10 +311,10 @@ paradigm lore list --tag v6-migrated:from-decision
 Then audit your own code:
 
 - [ ] Search for `loadPortalConfigLegacy` imports in your repo. Replace with `loadPortalConfig` + status switch (§2).
-- [ ] Search for `paradigm_lore_record({type:'decision'})` or `paradigm_assessment_record({type:'decision'})` call sites. Migrate to `paradigm_decision_record` (§1).
+- [ ] Search for `paradigm_lore({op:'record', type:'decision'})` or `paradigm_assessment({op:'record', type:'decision'})` call sites. Migrate to `paradigm_decision` (op `record`) (§1).
 - [ ] Search for direct imports of `@a-company/university/src/content/{courses,plsat}/*.json`. Migrate to the pack-loader API (§3).
-- [ ] Search consumer code that parses `paradigm_university_search` result ids. Strip the `<pack-id>:` prefix or accept the qualified form (§4).
-- [ ] Search for `paradigm_wisdom_record({type:'decision'})` call sites. Migrate to `paradigm_decision_record` even though wisdom still accepts it for one more release (§6).
+- [ ] Search consumer code that parses `paradigm_university` (op `search`) result ids. Strip the `<pack-id>:` prefix or accept the qualified form (§4).
+- [ ] Search for `paradigm_wisdom({op:'record', type:'decision'})` call sites. Migrate to `paradigm_decision` (op `record`) even though wisdom still accepts it for one more release (§6).
 
 ---
 
@@ -360,7 +360,7 @@ Or add Rune to your roster — he'll re-enable the checks he owns and graduate t
 
 Rune (compliance archetype) gained a four-state promotion lifecycle: `candidate` → `active` → `enforcing` → `blocking`. Rather than turning all compliance checks on at once, he graduates each one over time as project signals validate them.
 
-New MCP tool: **`paradigm_compliance_promote`** — advances a compliance concern's promotion state. This is Rune's tool; call it after verifying a concern is ready to enforce.
+New MCP tool: **`paradigm_compliance` (op `promote`)** — advances a compliance concern's promotion state. This is Rune's tool; call it after verifying a concern is ready to enforce.
 
 Add Rune to your roster:
 
@@ -370,7 +370,7 @@ paradigm shift   # detects your stack, adds Rune and other applicable archetypes
 
 ### v6.2.0 — Atlas agent + `arch.yaml`
 
-Atlas (cartographer archetype) joined the roster. He generates and maintains **`arch.yaml`** — a structured architectural map committed alongside `.purpose` files. New MCP tools: `paradigm_arch_status`, `paradigm_arch_diagram`.
+Atlas (cartographer archetype) joined the roster. He generates and maintains **`arch.yaml`** — a structured architectural map committed alongside `.purpose` files. New MCP tools: `paradigm_graph` (op `arch_status`), `paradigm_graph` (op `arch_diagram`).
 
 `arch.yaml` is a new artifact type. Commit it. No breaking change — purely additive.
 

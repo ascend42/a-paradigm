@@ -68,9 +68,10 @@ describe("paradigm_lore_record({type:'decision'}) — v6.0 hard rejection", () =
     expect(parsed.error).toBeDefined();
     expect(parsed.error.code).toBe('lore_type_decision_removed');
     // The literal successor tool name MUST be present so callers can retry.
-    expect(parsed.error.successor_tool).toBe('paradigm_decision_record');
+    expect(parsed.error.successor_tool).toBe('paradigm_decision');
+    expect(parsed.error.successor_op).toBe('record');
     // Message must mention the successor tool by name (machine-actionable).
-    expect(parsed.error.message).toContain('paradigm_decision_record');
+    expect(parsed.error.message).toContain("paradigm_decision({op:'record'})");
     // Removed-in field anchors the change to the v6.0 cut.
     expect(parsed.error.removed_in).toBe('6.0.0');
   });
@@ -117,6 +118,7 @@ describe("paradigm_lore_record({type:'decision'}) — v6.0 hard rejection", () =
     );
 
     const parsed = JSON.parse(result.text);
-    expect(parsed.error.successor_tool).toBe('paradigm_decision_record');
+    expect(parsed.error.successor_tool).toBe('paradigm_decision');
+    expect(parsed.error.successor_op).toBe('record');
   });
 });

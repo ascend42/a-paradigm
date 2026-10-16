@@ -47,8 +47,8 @@ List any decisions made during this session:
 
 If agents were used during this session (orchestration, subagents), summarize:
 1. Which agents contributed and what they did
-2. Any threshold adjustments from `paradigm_ambient_learn`
-3. Journal entries promoted to notebooks via `paradigm_ambient_promote`
+2. Any threshold adjustments from `paradigm_ambient` (op `learn`)
+3. Journal entries promoted to notebooks via `paradigm_ambient` (op `promote`)
 4. Agent acceptance/dismissal rates if available
 
 Include this in the handoff so the next session knows which agents are warmed up.
@@ -61,10 +61,10 @@ Include this in the handoff so the next session knows which agents are warmed up
 
 ## Step 5: Prepare Handoff
 
-Call `paradigm_handoff_prepare` with the gathered context:
+Call `paradigm_session` (op `handoff_prepare`) with the gathered context:
 
 ```
-paradigm_handoff_prepare({
+paradigm_session({op:'handoff_prepare',
   summary: "<what was done>",
   nextSteps: ["<step 1>", "<step 2>", ...],
   decisions: ["<decision 1>", "<decision 2>", ...],
@@ -100,5 +100,5 @@ Files to Review:
   - <files that need attention>
 
 To resume: The next session will automatically receive this
-context via paradigm_session_recover.
+context via paradigm_session (op `recover`).
 ```

@@ -1,0 +1,38 @@
+id: L-2026-09-26-ascend-005233-001
+type: agent-session
+timestamp: '2026-09-26T00:52:33.325Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Skills arc Phase 0 — roster/profile-authoritative dispatch (7.9.1)
+summary: 'Phase 0 of TD-2026-09-26-846: the orchestrator now resolves dispatchable agents from roster.yaml + .agent profiles via new #agent-registry; agents.yaml is a deprecated overlay. Undispatchable agents are reported (plan-level undispatchable + rosterUndispatchable), never silently dropped — Loid/Cid/Rune/Jinx are dispatchable for the first time. Also fixed legacy transferable pattern→id, widened personality types, added doctor agent-audit, and a pre-existing bug where `paradigm index` wrote navigator.yaml with 0 symbol mappings.'
+symbols_touched:
+  - '#orchestration'
+  - '#agent-loader'
+  - '#agent-registry'
+  - '#doctor'
+  - '#agent-audit'
+  - '#navigator'
+symbols_created:
+  - '#agent-registry'
+  - '#agent-audit'
+learnings:
+  - Derived triggers from free-text attention.concepts over-trigger under substring match (view⊂review, test⊂latest, ARR⊂array); word boundaries alone are insufficient — derived-only suggestions need ≥2 distinct hits.
+  - Load-time normalization leaks into user files via load→mutate→save paths; normalize only renames that are intended migrations, never inject defaults.
+  - navigator.ts expected symbol.path/directory while premise-core aggregator emits filePath — CLI `paradigm index` has been writing an empty navigator; the committed file came from a different generator with absolute paths.
+  - Subagent turn limits (builder 50, reviewer 20) truncate reports on Phase-sized work; resume with explicit 'deliver now' prompts.
+verification:
+  status: pass
+  details:
+    build: pass (paradigm-mcp, paradigm)
+    tests: paradigm-mcp 559/559; paradigm 596 pass 4 skipped
+    review: approve-with-fixes, all 9 findings applied
+linked_tasks:
+  - T-2026-09-26-001
+  - T-2026-09-26-006
+confidence: 0.85
+git_context:
+  ref: f73b9ed845bdfb1a1c968ef3eef9f8509517a842
+  branch: feat/skills-arc
+  dirty: true

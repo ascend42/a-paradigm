@@ -8,7 +8,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
-import { aggregateFromDirectory, type AggregationResult, type FlowIndex, type TestableFlow, type FlowStep } from '@a-company/premise-core';
+import { aggregateFromDirectory, invalidateLiveIndex, type AggregationResult, type FlowIndex, type TestableFlow, type FlowStep } from '@a-company/premise-core';
 import { generateScanIndex, serializeScanIndex } from '@a-company/probe-core';
 import type { ProjectContext } from '../utils/index-loader.js';
 import { trackToolCall } from './context.js';
@@ -119,6 +119,7 @@ export async function handleReindexTool(
     await reloadContext();
     toolCache.clear();
     invalidateFeatureCache();
+    invalidateLiveIndex(ctx.rootDir);
 
     // Return compact summary — full result is 80KB+ and destroys context windows
     const issues = (result.integrityReport?.brokenReferences?.length || 0)

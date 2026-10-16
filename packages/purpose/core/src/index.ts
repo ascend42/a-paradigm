@@ -45,6 +45,7 @@ export {
   collectPurposeChain,
   aggregateForPath,
   getAllPurposeFiles,
+  DEFAULT_PURPOSE_IGNORE,
   extractFeatures,
   extractComponents,
   extractGates,
@@ -54,6 +55,20 @@ export {
   extractAspects,
   extractSymbolReferences,
 } from './aggregator.js';
+
+// Parse cache (#purpose-parse-cache)
+export {
+  PurposeParseCache,
+  parsePurposeFilesCached,
+  getAllPurposeFilesCached,
+  isRecentMtime,
+  RECENT_MTIME_WINDOW_MS,
+} from './parse-cache.js';
+export type {
+  PurposeParseCacheEntry,
+  PurposeParseCacheStats,
+  CachedParseResult,
+} from './parse-cache.js';
 
 // Validator
 export {

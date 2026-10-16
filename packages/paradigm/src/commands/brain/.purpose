@@ -1,0 +1,13 @@
+version: 2.0.0
+description: |
+  `paradigm brain` CLI — Paradigm Brain MVP (7.14.0, TD-2026-09-29-204). Structure
+  for a personal folder without touching it; engine lives in
+  packages/paradigm-mcp/src/utils/brain (owner audience via openBrainView only).
+components:
+  brain-cli:
+    description: 'paradigm brain init|scan|suggest|confirm [--reject|--skip]|status [--acceptance]|share|unshare|access|suggestions|purge [--yes]|egress. Plain-language output via cli-output helpers. share and access metadata require a person at a TTY (injectable prompter for tests); purge needs --yes off-TTY; init on a TTY opens Platform. init on a TTY spawns `paradigm serve` detached and opens /brain, then returns; library INFO logs quieted unless LOG_LEVEL; --limit validated; scan explains unknown cross-links; paused-suggestions copy.'
+    type: command
+    anchors:
+      - index.ts
+    gates: ['^brain-default-deny']
+    tags: [feature, brain, cli]

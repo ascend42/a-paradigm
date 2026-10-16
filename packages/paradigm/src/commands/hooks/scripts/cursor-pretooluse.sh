@@ -129,7 +129,7 @@ elif [ "$UNCOVERED_COUNT" -le 4 ]; then
   echo "" >&2
   echo "[paradigm] Warning: $UNCOVERED_COUNT source files modified without .purpose coverage." >&2
   echo "  Update the nearest .purpose file before the stop hook blocks you." >&2
-  echo "  Use: paradigm_purpose_init + paradigm_purpose_add_component" >&2
+  echo "  Use: paradigm_purpose (op: init) + paradigm_purpose (op: add_component)" >&2
   exit 0
 else
   # Block — too many uncovered edits
@@ -137,8 +137,8 @@ else
   echo "[paradigm] BLOCKED: $UNCOVERED_COUNT source files modified without .purpose coverage." >&2
   echo "  You must update .purpose files before continuing." >&2
   echo "  Steps:" >&2
-  echo "    1. paradigm_purpose_init — create .purpose in uncovered directories" >&2
-  echo "    2. paradigm_purpose_add_component — register code units" >&2
+  echo "    1. paradigm_purpose (op: init) — create .purpose in uncovered directories" >&2
+  echo "    2. paradigm_purpose (op: add_component) — register code units" >&2
   echo "    3. paradigm_reindex — rebuild the index" >&2
   echo "  Then retry your edit." >&2
   exit 2

@@ -39,10 +39,10 @@ Based on the modified files:
 
 ## Step 3: Run Post-flight
 
-Call `paradigm_pm_postflight` with the gathered data:
+Call `paradigm_pm` (op `postflight`) with the gathered data:
 
 ```
-paradigm_pm_postflight({
+paradigm_pm({op:'postflight',
   filesModified: ["src/auth/login.ts", "src/api/routes.ts", ...],
   symbolsTouched: ["#login-handler", "#api-routes", "^authenticated"]
 })
@@ -56,7 +56,7 @@ This checks for:
 
 ## Step 4: Validate .purpose Files
 
-Call `paradigm_purpose_validate` to check all .purpose files are valid:
+Call `paradigm_purpose` (op `validate`) to check all .purpose files are valid:
 - Syntax correctness
 - Required fields present
 - References resolve
@@ -67,7 +67,7 @@ For each violation returned by postflight, provide a specific fix:
 
 **Missing .purpose file**:
 - Identify which directory needs one
-- Offer to create it: "Want me to run `paradigm_purpose_init` for `src/auth/`?"
+- Offer to create it: "Want me to run `paradigm_purpose` (op `init`) for `src/auth/`?"
 
 **Missing component registration**:
 - Identify the unregistered code

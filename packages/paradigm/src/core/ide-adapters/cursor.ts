@@ -196,7 +196,7 @@ export class CursorAdapter implements IDEAdapter {
       `## CRITICAL RULES (Non-Negotiable)
 
 1. **You MUST update the nearest \`.purpose\` file when you change behavior.** No exceptions.
-2. **You MUST call \`paradigm_session_recover\` at session start and \`paradigm_pm_postflight\` when finishing.** See \`paradigm-workflow.mdc\` for the full protocol.
+2. **You MUST call \`paradigm_session\` (op \`recover\`) at session start and \`paradigm_pm\` (op \`postflight\`) when finishing.** See \`paradigm-workflow.mdc\` for the full protocol.
 3. **You MUST call \`paradigm_ripple\` before modifying any documented symbol.** Check impact before changing code.
 
 Violating these rules means your changes are non-compliant. The \`paradigm-workflow.mdc\` file contains the complete workflow — follow it.\n\n` +
@@ -356,10 +356,10 @@ gate.allow('Access granted');
 |---------------------|-------------------|
 | Modifying a symbol | \`paradigm_ripple({ symbol: "#symbol" })\` |
 | Debugging / searching | \`paradigm_search({ query: "ERROR_CODE" })\` |
-| Starting a session | \`paradigm_session_recover()\` |
+| Starting a session | \`paradigm_session({op:'recover'})\` |
 | Understanding relationships | \`paradigm_navigate({ intent: "find", target: "#symbol" })\` |
 | Getting oriented | \`paradigm_status()\` |
-| Checking impact on flows | \`paradigm_flows_affected({ symbol: "#symbol" })\` |
+| Checking impact on flows | \`paradigm_flow({op:'affected', symbol: "#symbol" })\` |
 | Adding API endpoints | \`paradigm_gates_for_route({ method: "POST", path: "/api/resource" })\` |
 
 ## Query Patterns
@@ -387,7 +387,7 @@ paradigm_ripple({ symbol: "^authenticated" })
 
 \`\`\`
 // Load previous session context (MUST do this at session start)
-paradigm_session_recover()
+paradigm_session({op:'recover'})
 
 // Quick project orientation
 paradigm_status()
@@ -485,12 +485,12 @@ Always available in \`navigator.yaml\`:
    * Context monitoring rules - session management and handoff
    */
   private generateContextMdc(): string {
-    return frontmatter('Session recovery and handoff - call paradigm_session_recover at session start, paradigm_session_health periodically during long sessions, paradigm_handoff_prepare when context is high.') +
+    return frontmatter('Session recovery and handoff - call paradigm_session (op: recover) at session start, paradigm_session (op: health) periodically during long sessions, paradigm_session (op: handoff_prepare) when context is high.') +
       `# Context Monitoring Protocol
 
 ## Session Start (EVERY new session)
 
-Call \`paradigm_session_recover\` to load previous session breadcrumbs.
+Call \`paradigm_session\` (op \`recover\`) to load previous session breadcrumbs.
 Returns: symbols modified, files explored, recent actions, and suggestions.
 
 ## Periodic Checks
@@ -498,7 +498,7 @@ Returns: symbols modified, files explored, recent actions, and suggestions.
 **Every 10-15 tool calls** (or when user asks about context), call:
 
 \`\`\`
-paradigm_session_health()
+paradigm_session({op:'health'})
 \`\`\`
 
 This returns a recommendation: \`continue\`, \`consider-handoff\`, \`handoff-recommended\`, or \`handoff-urgent\`.
@@ -520,7 +520,7 @@ This returns a recommendation: \`continue\`, \`consider-handoff\`, \`handoff-rec
 
 ## Handoff Process
 
-1. Call \`paradigm_handoff_prepare\` with:
+1. Call \`paradigm_session\` (op \`handoff_prepare\`) with:
    - Summary of work completed
    - List of next steps
    - Target agent role
@@ -539,7 +539,7 @@ This returns a recommendation: \`continue\`, \`consider-handoff\`, \`handoff-rec
 
 Get current stats anytime:
 \`\`\`
-paradigm_session_stats()
+paradigm_session({op:'stats'})
 \`\`\`
 
 ${generateCheckpointProtocol()}`;
@@ -561,13 +561,13 @@ ${generateCheckpointProtocol()}`;
 
 ### Session Start
 \`\`\`
-paradigm_session_recover()
+paradigm_session({op:'recover'})
 \`\`\`
 Call this FIRST in every session. Returns previous context, modified symbols, and suggestions.
 
 ### Session End
 \`\`\`
-paradigm_pm_postflight({ summary: "what you did" })
+paradigm_pm({op:'postflight', summary: "what you did" })
 \`\`\`
 Call this LAST before finishing. Catches missing .purpose files, missing gates, and compliance gaps.
 
@@ -587,13 +587,13 @@ Not every task needs the full ceremony. Match your effort to the scope:
 
 ### Feature build (3+ files, new behavior)
 1. Session bookends
-2. \`paradigm_pm_preflight({ task: "description" })\` — get compliance plan
+2. \`paradigm_pm({op:'preflight', task: "description" })\` — get compliance plan
 3. \`paradigm_ripple\` for each symbol you'll modify
 4. Implement the feature
 5. Create/update \`.purpose\` files for new directories
 6. Update \`portal.yaml\` if adding protected routes
-7. \`paradigm_pm_postflight\` — verify compliance
-8. \`paradigm_lore_record\` — record what you learned
+7. \`paradigm_pm\` (op \`postflight\`) — verify compliance
+8. \`paradigm_lore\` (op \`record\`) — record what you learned
 
 ## The One Non-Negotiable Rule
 
@@ -602,20 +602,20 @@ Not every task needs the full ceremony. Match your effort to the scope:
 - Adding a feature? Create a \`.purpose\` in the feature directory.
 - Modifying a component? Update its \`.purpose\` description, gates, or signals.
 - Deleting code? Remove the symbol from \`.purpose\`.
-- Not sure? Run \`paradigm_pm_postflight\` — it will tell you what's missing.
+- Not sure? Run \`paradigm_pm\` (op \`postflight\`) — it will tell you what's missing.
 
 ## Essential MCP Tools (Use These, NOT CLI Commands)
 
 | Tool | When | Cost |
 |------|------|------|
-| \`paradigm_session_recover\` | Session start | ~100 tokens |
+| \`paradigm_session\` (op \`recover\`) | Session start | ~100 tokens |
 | \`paradigm_ripple\` | Before modifying any symbol | ~300 tokens |
 | \`paradigm_navigate\` | Finding code locations | ~200 tokens |
-| \`paradigm_pm_preflight\` | Before starting a feature (3+ files) | ~200 tokens |
-| \`paradigm_pm_postflight\` | After finishing any task | ~200 tokens |
+| \`paradigm_pm\` (op \`preflight\`) | Before starting a feature (3+ files) | ~200 tokens |
+| \`paradigm_pm\` (op \`postflight\`) | After finishing any task | ~200 tokens |
 | \`paradigm_reindex\` | After creating/modifying .purpose files | ~100 tokens |
 | \`paradigm_gates_for_route\` | Before adding API endpoints | ~150 tokens |
-| \`paradigm_lore_record\` | After completing a feature (record learnings) | ~100 tokens |
+| \`paradigm_lore\` (op \`record\`) | After completing a feature (record learnings) | ~100 tokens |
 
 ## Red Flags — STOP and Check
 
@@ -623,7 +623,7 @@ If you find yourself doing any of these, STOP:
 
 - **Modifying 3+ files without calling \`paradigm_ripple\`** → Check impact first
 - **Adding routes without checking \`paradigm_gates_for_route\`** → Get gate suggestions
-- **Finishing without running \`paradigm_pm_postflight\`** → You'll miss compliance gaps
+- **Finishing without running \`paradigm_pm\` (op \`postflight\`)** → You'll miss compliance gaps
 - **Creating directories without a \`.purpose\` file** → Every directory needs context
 `;
   }
@@ -750,7 +750,7 @@ ${terminalGuidance}
 4. **For true parallel execution**, suggest user runs:
    \`paradigm team orchestrate "task description"\`
 
-5. **Record history:** \`paradigm_history_record({ type: "implement", symbols: [...], description: "..." })\`
+5. **Record history:** \`paradigm_history({op:'record', type: "implement", symbols: [...], description: "..." })\`
 
 ## Available Agents
 
@@ -836,7 +836,7 @@ flows:
 
 2. **Validate before implementing:**
    \`\`\`
-   paradigm_flow_check({ flowId: "$task-creation" })
+   paradigm_flow({op:'check', flowId: "$task-creation" })
    \`\`\`
    - Ensures all gates are declared in portal.yaml
    - Checks for missing symbols
@@ -849,14 +849,14 @@ flows:
 
 ## Flow Validation
 
-Call \`paradigm_flow_check\` to check flows:
+Call \`paradigm_flow\` (op \`check\`) to check flows:
 
 \`\`\`
 // Validate specific flow
-paradigm_flow_check({ flowId: "$task-creation" })
+paradigm_flow({op:'check', flowId: "$task-creation" })
 
 // Validate all flows
-paradigm_flow_check({ checkImplementation: true })
+paradigm_flow({op:'check', checkImplementation: true })
 \`\`\`
 
 **What gets checked:**
@@ -884,8 +884,8 @@ paradigm_flow_check({ checkImplementation: true })
 
 | Tool | Purpose |
 |------|---------|
-| \`paradigm_flow_check\` | Validate flow definitions |
-| \`paradigm_flows_affected\` | Check which flows are impacted by symbol changes |
+| \`paradigm_flow\` (op \`check\`) | Validate flow definitions |
+| \`paradigm_flow\` (op \`affected\`) | Check which flows are impacted by symbol changes |
 
 ## CLI Commands
 

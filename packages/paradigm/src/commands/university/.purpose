@@ -23,12 +23,12 @@ components:
     tags: [university, cli, pack, v6.6.5]
   UniversityServe:
     description: >
-      Launch the learning platform. v6.6.5 (A1/A1b/A2): forwards the resolved
-      packRoot/packId to startServer so the server detects the SELECTED pack's
-      mode/branding/sections; resolves contentDir via the contains-content
-      dual-base probe; the subcommand --port wins via enablePositionalOptions().
+      7.11.0 redirect: the standalone University UI + server were retired.
+      Prints "University moved to Platform → Academy", starts the Platform with
+      sections ['academy'] on --port (default 3839) and opens /academy unless
+      --no-open. Pack selectors are accepted for compatibility and ignored.
     type: command
-    tags: [university, cli, serve, pack, v6.6.5]
+    tags: [university, cli, serve, academy]
   UniversityInit:
     description: Scaffold project-pack or discipline sub-pack pack.yaml. v6.5 emits a sections tip after scaffold.
     type: command

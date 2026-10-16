@@ -64,8 +64,8 @@ paradigm flow diagram $checkout-flow
 ```
 
 MCP tools (available to AI agents):
-- `paradigm_flow_check` — check flow completeness and broken references
-- `paradigm_flows_affected` — see which flows are impacted when you modify a symbol
+- `paradigm_flow` (op `check`) — check flow completeness and broken references
+- `paradigm_flow` (op `affected`) — see which flows are impacted when you modify a symbol
 
 ## Visualization
 

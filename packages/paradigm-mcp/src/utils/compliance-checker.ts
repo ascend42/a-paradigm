@@ -138,7 +138,7 @@ export function checkSpecCompliance(
         type: 'blocking',
         category: 'purpose-coverage',
         message: `Symbol "${symbol}" is not registered in any .purpose file`,
-        suggestion: 'Add to nearest .purpose file using paradigm_purpose_add_component.',
+        suggestion: "Add to nearest .purpose file using paradigm_purpose({op:'add_component'}).",
       });
     }
   }

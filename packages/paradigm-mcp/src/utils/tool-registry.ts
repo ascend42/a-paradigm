@@ -10,6 +10,8 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import * as yaml from 'js-yaml';
+import { discoverPacks, countPackEntries } from '@a-company/university-core';
 
 // ────────────────────────────────────────────────────────
 // Feature Detection Cache
@@ -66,6 +68,21 @@ export interface ToolModule {
 // ────────────────────────────────────────────────────────
 
 /** Check if a directory exists relative to rootDir */
+/** True when any discovered pack has entries or ships skills. Never throws. */
+export function detectUniversityPacks(rootDir: string): boolean {
+  try {
+    // Discovery writes a cache under .paradigm/ — only probe Paradigm projects.
+    if (!fs.existsSync(path.join(rootDir, '.paradigm'))) return false;
+    if (discoverPacks(rootDir).some(p => countPackEntries(p.rootDir) > 0 || (p.skillDirs?.length ?? 0) > 0)) {
+      return true;
+    }
+    // v5 layout: implicit project pack (no pack.yaml) with content.
+    return countPackEntries(path.join(rootDir, '.paradigm', 'university')) > 0;
+  } catch {
+    return false;
+  }
+}
+
 function dirExists(rootDir: string, relPath: string): boolean {
   return fs.existsSync(path.join(rootDir, relPath));
 }
@@ -127,7 +144,10 @@ export const FEATURE_DETECTORS: Record<string, (rootDir: string) => boolean> = {
     const scoreDir = path.join(os.homedir(), '.paradigm', 'score');
     return fs.existsSync(scoreDir);
   },
-  university: (rootDir) => dirExists(rootDir, '.paradigm/university'),
+  // v7.11: pack-based — active only when a discovered pack has content or
+  // ships skills (an empty scaffolded .paradigm/university/ no longer counts).
+  // Fail-closed: any discovery error → inactive.
+  university: (rootDir) => detectUniversityPacks(rootDir),
   agents: (rootDir) => {
     const globalDir = path.join(os.homedir(), '.paradigm', 'agents');
     return dirExists(rootDir, '.paradigm/agents') || fs.existsSync(globalDir);
@@ -139,6 +159,43 @@ export const FEATURE_DETECTORS: Record<string, (rootDir: string) => boolean> = {
     return dirExists(rootDir, '.paradigm/notebooks') || fs.existsSync(globalDir);
   },
 };
+
+// ────────────────────────────────────────────────────────
+// Listing helpers + MCP tools config (7.13)
+// ────────────────────────────────────────────────────────
+
+/**
+ * Strip server-internal fields (`aliases`) from a definition before it goes
+ * out on tools/list. `aliases` is intent-routing metadata, not MCP schema.
+ */
+export function toListedTool(def: ToolDefinition): ToolDefinition {
+  const { aliases: _aliases, ...rest } = def;
+  return rest;
+}
+
+export interface McpToolsConfig {
+  /** On-demand tools/families to list by default (config.yaml `mcp.tools.enable`) */
+  enable: string[];
+  /** Relist the pre-7.13 per-op surface alongside families (`mcp.tools.legacy_listing`) */
+  legacyListing: boolean;
+}
+
+/** Read `mcp.tools.{enable,legacy_listing}` from .paradigm/config.yaml. Never throws. */
+export function readMcpToolsConfig(rootDir: string): McpToolsConfig {
+  const result: McpToolsConfig = { enable: [], legacyListing: false };
+  try {
+    const configPath = path.join(rootDir, '.paradigm', 'config.yaml');
+    if (!fs.existsSync(configPath)) return result;
+    const doc = yaml.load(fs.readFileSync(configPath, 'utf-8')) as
+      { mcp?: { tools?: { enable?: unknown; legacy_listing?: unknown } } } | null;
+    const tools = doc?.mcp?.tools;
+    if (Array.isArray(tools?.enable)) result.enable = tools!.enable.map(String);
+    if (tools?.legacy_listing === true) result.legacyListing = true;
+  } catch {
+    // Malformed config → defaults
+  }
+  return result;
+}
 
 // ────────────────────────────────────────────────────────
 // Registry
@@ -212,13 +269,29 @@ export class ToolRegistry {
   /**
    * Get all tools that should be listed for the current project state.
    */
+  /** Every tool of every registered module, regardless of tier/activation (skill pin checks). */
+  getAllTools(): ToolDefinition[] {
+    const tools: ToolDefinition[] = [];
+    for (const module of this.modules.values()) tools.push(...module.getToolsList().map(toListedTool));
+    return tools;
+  }
+
+  /** Look up any registered tool definition by name (all tiers). */
+  getToolDefinition(name: string): ToolDefinition | undefined {
+    for (const module of this.modules.values()) {
+      const def = module.getToolsList().find(t => t.name === name);
+      if (def) return def;
+    }
+    return undefined;
+  }
+
   getActiveTools(): ToolDefinition[] {
     const active = this.detectActiveFeatures();
     const tools: ToolDefinition[] = [];
 
     for (const [key, module] of this.modules) {
       if (active.has(key)) {
-        tools.push(...module.getToolsList());
+        tools.push(...module.getToolsList().map(toListedTool));
       }
     }
 
@@ -263,9 +336,14 @@ export class ToolRegistry {
   ): Promise<{ text: string; handled: boolean } | null> {
     const active = this.detectActiveFeatures();
 
-    for (const [key, module] of this.modules) {
-      if (!active.has(key)) continue;
+    // Active modules first; then inactive ones — hidden aliases / on-demand ops
+    // dispatch by name even when their module is not listed (7.13).
+    const ordered = [
+      ...[...this.modules].filter(([key]) => active.has(key)),
+      ...[...this.modules].filter(([key]) => !active.has(key)),
+    ];
 
+    for (const [key, module] of ordered) {
       try {
         const result = await module.handleTool(name, args, ctx, reload);
         if (result.handled) {

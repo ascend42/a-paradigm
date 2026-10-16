@@ -17,6 +17,7 @@ import * as crypto from 'crypto';
 import { execSync } from 'child_process';
 import initSqlJs, { type Database, type SqlValue } from 'sql.js';
 import type { SymbolEntry, SymbolIndex } from '@a-company/premise-core';
+import { resolveSectionAnchorLines } from '@a-company/premise-core';
 import type {
   RippleNode,
   AspectRow,
@@ -32,6 +33,23 @@ export type { Database };
 
 /** Local alias -- CodeAnchor is defined in premise-core but not re-exported */
 type CodeAnchor = NonNullable<SymbolEntry['anchors']>[number];
+
+/**
+ * Anchor row incl. the 7.12.0 section-anchor columns (D9). Kept local so the
+ * shared AnchorRow type is untouched; both columns are NULL/'lines' on rows
+ * written before the migration.
+ */
+type AnchorRowWithKind = AnchorRow & {
+  anchor_kind?: string | null;
+  anchor_key?: string | null;
+};
+
+/** Section anchor (heading/block) → its resolution key; null for line anchors. */
+function sectionAnchorKey(anchor: CodeAnchor): { kind: 'heading' | 'block'; key: string } | null {
+  if (anchor.kind === 'heading' && anchor.heading) return { kind: 'heading', key: anchor.heading };
+  if (anchor.kind === 'block' && anchor.block) return { kind: 'block', key: anchor.block };
+  return null;
+}
 
 // ─── sql.js singleton ────────────────────────────────────────────────
 
@@ -139,7 +157,26 @@ const MIGRATIONS = [
     commit_hash TEXT,
     healed_at TEXT NOT NULL
   )`,
+
+  // 7.12.0 (D9): heading/block anchors. anchor_kind ∈ lines|heading|block,
+  // anchor_key = heading text / block id (NULL for line anchors). Idempotent via
+  // hasColumn() guard in openAspectGraph (plus the per-migration catch).
+  `ALTER TABLE anchors ADD COLUMN anchor_kind TEXT DEFAULT 'lines'`,
+  `ALTER TABLE anchors ADD COLUMN anchor_key TEXT`,
 ];
+
+/** Column-add migrations are skipped when the column already exists. */
+const ADD_COLUMN_RE = /^ALTER TABLE (\w+) ADD COLUMN (\w+)/;
+
+function hasColumn(db: Database, table: string, column: string): boolean {
+  try {
+    const res = db.exec(`PRAGMA table_info(${table})`);
+    const rows = res[0]?.values ?? [];
+    return rows.some((r) => r[1] === column);
+  } catch {
+    return false;
+  }
+}
 
 const FTS_SQL = `CREATE VIRTUAL TABLE IF NOT EXISTS aspects_fts USING fts5(id, description, enforcement, tags)`;
 
@@ -223,6 +260,8 @@ export async function openAspectGraph(rootDir: string): Promise<Database> {
 
   // Phase 3 migrations (safe: nullable columns, IF NOT EXISTS)
   for (const migration of MIGRATIONS) {
+    const addCol = ADD_COLUMN_RE.exec(migration);
+    if (addCol && hasColumn(db, addCol[1], addCol[2])) continue;
     try {
       db.run(migration);
     } catch {
@@ -339,12 +378,26 @@ export function materializeAspects(db: Database, symbols: SymbolEntry[], rootDir
     // INSERT anchors
     if (entry.anchors) {
       for (const anchor of entry.anchors) {
+        const section = sectionAnchorKey(anchor);
+        if (section) {
+          // Heading/block anchor: resolve to the section's CURRENT line range
+          // (0/0 when unresolvable — checkDrift reports it as drift).
+          const resolved = resolveSectionAnchorRange(anchor, entry.filePath, rootDir);
+          db.run(
+            `INSERT INTO anchors (aspect_id, file_path, start_line, end_line, content_hash, normalized_hash, materialized_at_commit, last_verified, original_content, anchor_kind, anchor_key)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+            [aspectId, anchor.path, resolved.startLine, resolved.endLine, resolved.exact, resolved.normalized,
+              headCommit, now, resolved.normalizedContent, section.kind, section.key]
+          );
+          continue;
+        }
+
         const { startLine, endLine } = resolveAnchorLines(anchor);
         const hashes = computeAnchorHash(anchor, null);
 
         db.run(
-          `INSERT INTO anchors (aspect_id, file_path, start_line, end_line, content_hash, normalized_hash, materialized_at_commit, last_verified, original_content)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO anchors (aspect_id, file_path, start_line, end_line, content_hash, normalized_hash, materialized_at_commit, last_verified, original_content, anchor_kind)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'lines')`,
           [aspectId, anchor.path, startLine, endLine, hashes.exact, hashes.normalized, headCommit, now, hashes.normalizedContent]
         );
       }
@@ -722,9 +775,9 @@ export function checkDrift(
   suggestThreshold: number = 0.7,
   healThreshold: number = 0.85,
 ): DriftResult[] {
-  const anchorRows: AnchorRow[] = aspectId
-    ? queryRows<AnchorRow>(db, 'SELECT * FROM anchors WHERE aspect_id = ?', [aspectId])
-    : queryRows<AnchorRow>(db, 'SELECT * FROM anchors');
+  const anchorRows: AnchorRowWithKind[] = aspectId
+    ? queryRows<AnchorRowWithKind>(db, 'SELECT * FROM anchors WHERE aspect_id = ?', [aspectId])
+    : queryRows<AnchorRowWithKind>(db, 'SELECT * FROM anchors');
 
   const results: DriftResult[] = [];
 
@@ -757,6 +810,13 @@ export function checkDrift(
         exists: false,
         drifted: true,
       });
+      continue;
+    }
+
+    // Heading/block anchors (D9): re-resolve the KEY first, then hash the range.
+    // A missing heading/block is drift — no git line-shift or content-search heal.
+    if ((anchor.anchor_kind === 'heading' || anchor.anchor_kind === 'block') && anchor.anchor_key) {
+      results.push(checkSectionAnchorDrift(db, anchor, absolutePath));
       continue;
     }
 
@@ -1044,6 +1104,108 @@ export function checkDrift(
   }
 
   return results;
+}
+
+// ─── Section anchors (heading / block, D9) ───────────────────────────
+
+function hashSlice(lines: string[], startLine: number, endLine: number): {
+  sliceContent: string; exact: string; normalized: string; normalizedContent: string;
+} {
+  const startIdx = Math.max(0, startLine - 1);
+  const endIdx = Math.min(lines.length, endLine);
+  const sliceContent = lines.slice(startIdx, endIdx).join('\n');
+  const normalizedContent = normalizeForHash(sliceContent);
+  return {
+    sliceContent,
+    exact: crypto.createHash('sha256').update(sliceContent).digest('hex'),
+    normalized: crypto.createHash('sha256').update(normalizedContent).digest('hex'),
+    normalizedContent,
+  };
+}
+
+/**
+ * Resolve a heading/block anchor to its current line range (+ baseline hashes)
+ * at materialize time. Unresolvable (no rootDir, missing file, missing section)
+ * → 0/0 with null hashes; checkDrift then reports it.
+ */
+function resolveSectionAnchorRange(
+  anchor: CodeAnchor,
+  definedIn: string,
+  rootDir?: string,
+): { startLine: number; endLine: number; exact: string | null; normalized: string | null; normalizedContent: string | null } {
+  const none = { startLine: 0, endLine: 0, exact: null, normalized: null, normalizedContent: null };
+  if (!rootDir) return none;
+  const purposeDir = definedIn
+    ? path.dirname(path.isAbsolute(definedIn) ? definedIn : path.resolve(rootDir, definedIn))
+    : rootDir;
+  const resolution = resolveAnchorPath(anchor.path, purposeDir, rootDir);
+  if (!resolution.exists) return none;
+  try {
+    const content = fs.readFileSync(resolution.resolvedPath, 'utf8');
+    const range = resolveSectionAnchorLines(content, anchor);
+    if (!range) return none;
+    const h = hashSlice(content.split('\n'), range.startLine, range.endLine);
+    return { ...range, exact: h.exact, normalized: h.normalized, normalizedContent: h.normalizedContent };
+  } catch {
+    return none;
+  }
+}
+
+/**
+ * Drift check for a heading/block anchor row: re-resolve the key against the
+ * live file, then hash the resolved range. The key is authoritative, so a
+ * section that merely MOVED is clean (row lines updated, .purpose untouched);
+ * a renamed/removed heading or block is drift (status 'missing', file exists).
+ */
+function checkSectionAnchorDrift(db: Database, anchor: AnchorRowWithKind, absolutePath: string): DriftResult {
+  const base = { aspectId: anchor.aspect_id, path: anchor.file_path };
+  try {
+    const content = fs.readFileSync(absolutePath, 'utf8');
+    const kind = anchor.anchor_kind as 'heading' | 'block';
+    const key = anchor.anchor_key as string;
+    const range = resolveSectionAnchorLines(content, kind === 'heading' ? { kind, heading: key } : { kind, block: key });
+
+    if (!range) {
+      db.run('UPDATE anchors SET drifted = 1 WHERE id = ?', [anchor.id]);
+      return {
+        ...base, startLine: anchor.start_line, endLine: anchor.end_line,
+        status: 'missing', resolvedBy: 'none', exists: true, drifted: true,
+      };
+    }
+
+    const h = hashSlice(content.split('\n'), range.startLine, range.endLine);
+    const clean = { ...base, startLine: range.startLine, endLine: range.endLine, exists: true, drifted: false };
+
+    if (anchor.content_hash == null && anchor.normalized_hash == null) {
+      db.run(
+        'UPDATE anchors SET start_line = ?, end_line = ?, content_hash = ?, normalized_hash = ?, original_content = ?, drifted = 0 WHERE id = ?',
+        [range.startLine, range.endLine, h.exact, h.normalized, h.normalizedContent, anchor.id],
+      );
+      return { ...clean, status: 'clean', resolvedBy: 'exact-hash' };
+    }
+    if (h.exact === anchor.content_hash) {
+      db.run('UPDATE anchors SET start_line = ?, end_line = ?, drifted = 0 WHERE id = ?', [range.startLine, range.endLine, anchor.id]);
+      return { ...clean, status: 'clean', resolvedBy: 'exact-hash' };
+    }
+    if (h.normalized === anchor.normalized_hash) {
+      db.run(
+        'UPDATE anchors SET start_line = ?, end_line = ?, content_hash = ?, drifted = 0 WHERE id = ?',
+        [range.startLine, range.endLine, h.exact, anchor.id],
+      );
+      return { ...clean, status: 'cosmetic', resolvedBy: 'normalized-hash' };
+    }
+
+    db.run('UPDATE anchors SET drifted = 1 WHERE id = ?', [anchor.id]);
+    return {
+      ...base, startLine: range.startLine, endLine: range.endLine,
+      status: 'modified', resolvedBy: 'none', exists: true, currentContent: h.sliceContent, drifted: true,
+    };
+  } catch {
+    return {
+      ...base, startLine: anchor.start_line, endLine: anchor.end_line,
+      status: 'modified', resolvedBy: 'none', exists: true, drifted: true,
+    };
+  }
 }
 
 // ─── Internal helpers ────────────────────────────────────────────────

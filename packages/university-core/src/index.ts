@@ -24,6 +24,7 @@ export type {
   Section,
   PackManifest,
   PackLocation,
+  PackSkillRef,
   UniversityFrontmatter,
   UniversityNote,
   QuizQuestion,
@@ -47,6 +48,7 @@ export type {
 export {
   PACK_MANIFEST_FILENAME,
   PACK_SCHEMA_VERSION,
+  SUPPORTED_PACK_SCHEMA_VERSIONS,
   PACKAGE_JSON_POINTER_FIELD,
   FIRST_PARTY_PACK_IDS,
 } from './types/pack.js';
@@ -60,6 +62,9 @@ export {
   SectionsArraySchema,
   PackManifestSectionsSchema,
   EntrySectionRefSchema,
+  MAX_SKILLS_PER_PACK,
+  PackSkillRefSchema,
+  PackSkillsArraySchema,
 } from './pack-schema.js';
 
 // ── Slim pack-discovery (§1.4) ───────────────────────────
@@ -71,6 +76,7 @@ export {
   SECTION_STYLES,
   discoverPacks,
   resolveEntryAddress,
+  resolveSkillDirs,
 } from './pack-discovery.js';
 export type {
   PackLoadErrorClass,

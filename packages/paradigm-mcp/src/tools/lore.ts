@@ -136,7 +136,7 @@ export function getLoreToolsList() {
     {
       name: 'paradigm_lore_record',
       description:
-        'Record a new lore entry (agent session, milestone, retro, insight, etc.). Call after completing significant work. Returns the created entry ID and file path. For decisions, use paradigm_decision_record (a companion lore insight is auto-written). ~100 tokens.',
+        'Record a new lore entry (agent session, milestone, retro, insight, etc.). Call after completing significant work. Returns the created entry ID and file path. For decisions, use paradigm_decision({op:\'record\'}) (a companion lore insight is auto-written). ~100 tokens.',
       inputSchema: {
         type: 'object',
         properties: {

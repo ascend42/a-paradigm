@@ -1,0 +1,47 @@
+id: TD-2026-09-29-204
+timestamp: '2026-09-29T08:13:46.914Z'
+title: 'Paradigm Brain ("Obsidian Brain"): adjacent document-corpus layer on the symbol-graph engine'
+decision: >-
+  Build a Brain as an ADJACENT layer, not user-authored .purpose: same engine (symbol graph, ^gates, deterministic
+  index, suggest→confirm), new authoring surface for any folder of mixed documents. Index-not-store; out-of-tree
+  sidecars (~/.paradigm/brains/<root>/), no writes into user folders by default (optional frontmatter write-back for
+  md). Three layers: deterministic local scan → declared (human-confirmed) → inferred (suggestions only; classifier =
+  certifiable skill). Body text never symbol-scanned. Privacy: brain.yaml default-deny roots, ^gates enforced in code,
+  local-only default, egress log, one-button forget. Non-developer UX: Platform section primary, plain vocabulary.
+  Sequencing: prerequisites (shared frontmatter parser, heading/block anchors, incremental index, SourceType
+  'frontmatter') fold into Phases 3–4; Brain = Phase 5 of TD-2026-09-26-846. Spec: docs/specs/brain.md.
+rationale: >-
+  Symbol prefixes collide with Markdown/Obsidian syntax (aggregator.ts:418 would read #tag/^block/$latex/~~strike~~ as
+  symbols); PDFs/docx cannot carry labels; non-developers won't tolerate sidecars or symbol jargon. Market research:
+  embedding tools drift and fail at scale, explicit-graph tools rely on unenforced discipline; white space = provable
+  staleness, link integrity under renames, declared-schema validation, provenance, sensitivity-as-structure — all native
+  Paradigm strengths.
+participants:
+  - id: ascend
+    role: human
+    stance: supported
+  - id: architect
+    role: agent
+    stance: proposed
+  - id: forge
+    role: agent
+    stance: supported
+  - id: security
+    role: agent
+    stance: supported
+  - id: designer
+    role: agent
+    stance: supported
+alternatives_considered:
+  - option: Extend .purpose per folder (Option A)
+    rejected_because: Labels orphan on moves, nobody writes .purpose for thousands of notes, PDFs/binaries unaddressed, dev-shaped.
+  - option: Frontmatter-native only (Option B)
+    rejected_because: Mixed folders (PDF/docx/images) can't carry frontmatter; writing into user files unacceptable by default.
+  - option: Embedding/RAG-first
+    rejected_because: Drifts, opaque, fails at scale (Smart Connections); abandons Paradigm's determinism moat.
+status: proposed
+tags:
+  - brain
+  - skills-arc
+  - phase-5
+  - privacy

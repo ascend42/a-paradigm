@@ -40,13 +40,13 @@ All tools are available via the MCP server — no configuration needed:
 | Portal / Auth | `paradigm_portal_*`, `paradigm_gates_for_route` | Authorization gate management |
 | Wisdom | `paradigm_wisdom_*` (4 tools) | Team learning — antipatterns and decisions |
 | History | `paradigm_history_*` (4 tools) | Implementation tracking and fragility scores |
-| Flows | `paradigm_flows_affected`, `paradigm_flow_check` | Multi-step flow validation |
+| Flows | `paradigm_flow` (op `affected`), `paradigm_flow` (op `check`) | Multi-step flow validation |
 | Sentinel | `paradigm_sentinel_*` (8 tools) | Incident tracking and pattern detection |
 | Lore | `paradigm_lore_*` (3 tools) | Project timeline and session recording |
-| Orchestration | `paradigm_orchestrate_inline`, `paradigm_agent_prompt` | Multi-agent task coordination |
-| Governance | `paradigm_pm_preflight`, `paradigm_pm_postflight` | Pre/post-task compliance |
-| Tags | `paradigm_tags`, `paradigm_tags_suggest` | Symbol classification |
-| Context | `paradigm_session_health`, `paradigm_session_*`, `paradigm_handoff_prepare` | Session management |
+| Orchestration | `paradigm_orchestrate_inline`, `paradigm_agent` (op `prompt`) | Multi-agent task coordination |
+| Governance | `paradigm_pm` (op `preflight`), `paradigm_pm` (op `postflight`) | Pre/post-task compliance |
+| Tags | `paradigm_tags`, `paradigm_tags` (op `suggest`) | Symbol classification |
+| Context | `paradigm_session` (op `health`), `paradigm_session_*`, `paradigm_session` (op `handoff_prepare`) | Session management |
 | Index | `paradigm_reindex` | Rebuild symbol index |
 
 ### Skills

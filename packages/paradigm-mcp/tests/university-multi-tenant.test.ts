@@ -34,7 +34,7 @@ import {
   discoverDisciplineSubPacks,
   resolveDefaultPackRoot,
 } from '../src/utils/university-loader.js';
-import { discoverPacks, resolveEntryAddress } from '../src/utils/pack-loader.js';
+import { discoverPacks, resolveEntryAddress } from '@a-company/university-core';
 
 function mktemp(): string {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'paradigm-multi-tenant-'));

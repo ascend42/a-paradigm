@@ -1,0 +1,41 @@
+id: L-2026-09-29-ascend-084824-001
+type: agent-session
+timestamp: '2026-09-29T08:48:24.814Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Skills arc Phase 2 — University → packs + Platform Academy (7.11.0)
+summary: 'University overhauled into a pack/distribution layer: pack.yaml v2 declares skills; new read-only `pack` skill scope with trust forced external and `paradigm skill import` (TTY, hash-checked) as the only exit; University MCP tools cut 7→2; duplicate pack-loader collapsed onto university-core; broken Platform University section replaced by a working Academy section (browser-verified); standalone University UI/server (~6.7k LOC) deleted, `university serve` redirects; shift no longer scaffolds or snapshots; orphaned metrics modules removed. Aegis approved after fixes (pack skills kept out of agent prompts, symlinked content rejected, import TOCTOU closed, search capped).'
+symbols_touched:
+  - '#university'
+  - '#academy'
+  - '#skill-loader'
+  - '#pack-discovery'
+  - '#platform-server'
+  - '#shift'
+  - '#doctor'
+decisions:
+  - id: D1
+    decision: PLSAT/diplomas stay static quiz content; no human cert rows
+    rationale: ClassroomCertRow is agent-calibration shaped (field-failure binding); human rows would be dead weight.
+  - id: D2
+    decision: Pack skills = lowest-precedence read-only scope, trust forced external, excluded from agent prompts
+    rationale: 'Supply-chain: third-party packs must never silently influence agents; import is the only exit.'
+learnings:
+  - Parallel builders with disjoint file sets still collide on shared-looking cleanup (Builder B git rm'd a file Builder A had edited, then restored from transcript) — tell builders explicitly never to delete files outside their set.
+  - A browser pass caught a markdown renderer that flattened code blocks/lists — reviewers reading code called it XSS-safe but missed that it was unusable.
+  - Builders consistently exhaust 50 turns on Phase-sized work; plan for one resume per builder.
+verification:
+  status: pass
+  details:
+    tests: university-core 85, paradigm-mcp 593, paradigm 658 (+3 skipped), university 10 (+20 skipped)
+    browser: Academy packs/paths/notes/quiz render, no console errors
+    security: Aegis approve; all findings fixed
+linked_tasks:
+  - T-2026-09-26-003
+confidence: 0.85
+git_context:
+  ref: 68fd67cb8541afbbbe4dfb12212c2fff711b2875
+  branch: feat/skills-arc
+  dirty: true

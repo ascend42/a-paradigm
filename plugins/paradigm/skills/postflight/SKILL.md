@@ -34,10 +34,10 @@ Based on the modified files:
 
 ## Step 3: Run Post-flight
 
-Call `paradigm_pm_postflight` with the gathered data:
+Call `paradigm_pm` (op `postflight`) with the gathered data:
 
 ```
-paradigm_pm_postflight({
+paradigm_pm({op:'postflight',
   filesModified: ["src/auth/login.ts", "src/api/routes.ts", ...],
   symbolsTouched: ["#login-handler", "#api-routes", "^authenticated"]
 })
@@ -51,7 +51,7 @@ This checks for:
 
 ## Step 4: Validate .purpose Files
 
-Call `paradigm_purpose_validate` to check all .purpose files are valid:
+Call `paradigm_purpose` (op `validate`) to check all .purpose files are valid:
 - Syntax correctness
 - Required fields present
 - References resolve
@@ -62,7 +62,7 @@ For each violation returned by postflight, provide a specific fix:
 
 **Missing .purpose file**:
 - Identify which directory needs one
-- Offer to create it: "Want me to run `paradigm_purpose_init` for `src/auth/`?"
+- Offer to create it: "Want me to run `paradigm_purpose` (op `init`) for `src/auth/`?"
 
 **Missing component registration**:
 - Identify the unregistered code
@@ -92,10 +92,10 @@ If any .purpose or portal.yaml files were modified:
 
 ## Step 8: Evaluate Habits
 
-Call `paradigm_habits_check` with the postflight trigger to evaluate habit compliance:
+Call `paradigm_habits` (op `check`) with the postflight trigger to evaluate habit compliance:
 
 ```
-paradigm_habits_check({
+paradigm_habits({op:'check',
   trigger: "postflight",
   filesModified: ["src/auth/login.ts", ...],
   symbolsTouched: ["#login-handler", ...],
@@ -127,13 +127,13 @@ For each agent that has entries in the session work log:
 
 ### 8b.3: Write Targeted Journal Entries
 
-For each agent with paired contribution-verdict data, call `paradigm_journal_record`
+For each agent with paired contribution-verdict data, call `paradigm_journal` (op `record`)
 with specific, contextual feedback. Be SPECIFIC — reference actual file names,
 symbol names, and what the change was. Do NOT write generic insights.
 
 **If verdict = accepted:**
 ```
-paradigm_journal_record({
+paradigm_journal({op:'record',
   agent: "{agent-id}",
   trigger: "human_feedback",
   insight: "User accepted {describe specific contribution}. {What this confirms about the agent's understanding}.",
@@ -152,7 +152,7 @@ paradigm_journal_record({
 
 **If verdict = dismissed:**
 ```
-paradigm_journal_record({
+paradigm_journal({op:'record',
   agent: "{agent-id}",
   trigger: "correction_received",
   insight: "User dismissed: {nomination brief}. Reason: {dismiss reason from verdict, or infer from context}. {What the agent should do differently next time}.",
@@ -171,7 +171,7 @@ paradigm_journal_record({
 
 **If verdict = revised (accepted but user changed something):**
 ```
-paradigm_journal_record({
+paradigm_journal({op:'record',
   agent: "{agent-id}",
   trigger: "correction_received",
   insight: "User accepted {agent}'s proposal but revised: {describe what changed}. {What this teaches about the correct approach}.",
@@ -204,12 +204,12 @@ For each contributing agent (or all agents if no work log):
 
 1. **Adjust attention thresholds**:
    ```
-   paradigm_ambient_learn({ agent: "{agent-id}" })
+   paradigm_ambient({op:'learn', agent: "{agent-id}" })
    ```
 
 2. **Promote journal patterns to notebooks**:
    ```
-   paradigm_ambient_promote({ agent: "{agent-id}" })
+   paradigm_ambient({op:'promote', agent: "{agent-id}" })
    ```
 
 ### 8b.5: Report Learning Results

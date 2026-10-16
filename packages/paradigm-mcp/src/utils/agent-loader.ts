@@ -25,6 +25,7 @@ import type {
   AgentPersonality,
   AgentProjectContext,
 } from '../types/agents.js';
+import type { SkillSummary } from '../types/skills.js';
 import { DEFAULT_PERSONALITIES, DEFAULT_ATTENTION, DEFAULT_COLLABORATION } from '../types/agents.js';
 
 // ────────────────────────────────────────────────────────
@@ -122,6 +123,35 @@ export function listAllGlobalAgentIds(): string[] {
 }
 
 // ────────────────────────────────────────────────────────
+// Normalization
+// ────────────────────────────────────────────────────────
+
+/**
+ * Normalize legacy template fields on a freshly-parsed .agent profile.
+ *
+ * - `transferable[i].pattern` (the convention in ~35 bundled templates) is an
+ *   alias of `id`: `id ??= pattern`, then `pattern` is removed. Because loaded
+ *   profiles flow into saveAgentProfile, legacy `pattern:` is migrated to `id:`
+ *   on the profile's next save (intended migration).
+ * - No other defaults are injected — `learnedIn` / `appliedIn` stay absent when
+ *   absent, so nothing synthetic is persisted by save paths.
+ *
+ * Never touches id / role / permissions, so integrityHash is unaffected.
+ * TD-2026-09-26-846.
+ */
+export function normalizeAgentProfile(raw: any): AgentProfile {
+  if (!raw || typeof raw !== 'object') return raw as AgentProfile;
+  if (Array.isArray(raw.transferable)) {
+    for (const t of raw.transferable) {
+      if (!t || typeof t !== 'object') continue;
+      if (t.id == null && t.pattern != null) t.id = t.pattern;
+      delete t.pattern;
+    }
+  }
+  return raw as AgentProfile;
+}
+
+// ────────────────────────────────────────────────────────
 // Read Operations
 // ────────────────────────────────────────────────────────
 
@@ -134,7 +164,7 @@ export function loadAgentProfile(rootDir: string, agentId: string): AgentProfile
   if (fs.existsSync(projectPath)) {
     try {
       const content = fs.readFileSync(projectPath, 'utf-8');
-      const profile = yaml.load(content) as AgentProfile;
+      const profile = normalizeAgentProfile(yaml.load(content));
       if (profile) {
         const status = determineIntegrityStatus(profile);
         (profile as any).__integrityStatus = status;
@@ -151,13 +181,13 @@ export function loadAgentProfile(rootDir: string, agentId: string): AgentProfile
   if (fs.existsSync(globalPath)) {
     try {
       const content = fs.readFileSync(globalPath, 'utf-8');
-      const globalProfile = yaml.load(content) as AgentProfile;
+      const globalProfile = normalizeAgentProfile(yaml.load(content));
 
       // If both exist, deep-merge project over global
       if (fs.existsSync(projectPath)) {
         try {
           const projectContent = fs.readFileSync(projectPath, 'utf-8');
-          const projectProfile = yaml.load(projectContent) as Partial<AgentProfile>;
+          const projectProfile = normalizeAgentProfile(yaml.load(projectContent)) as Partial<AgentProfile>;
           const merged = deepMergeProfiles(globalProfile, projectProfile);
           const status = determineIntegrityStatus(merged);
           (merged as any).__integrityStatus = status;
@@ -220,7 +250,7 @@ export function loadAllAgentProfiles(rootDir: string): AgentProfile[] {
       for (const file of files) {
         try {
           const content = fs.readFileSync(path.join(GLOBAL_AGENTS_DIR, file), 'utf-8');
-          const profile = yaml.load(content) as AgentProfile;
+          const profile = normalizeAgentProfile(yaml.load(content));
           if (profile?.id) {
             const status = determineIntegrityStatus(profile);
             (profile as any).__integrityStatus = status;
@@ -243,7 +273,7 @@ export function loadAllAgentProfiles(rootDir: string): AgentProfile[] {
       for (const file of files) {
         try {
           const content = fs.readFileSync(path.join(projectDir, file), 'utf-8');
-          const projectProfile = yaml.load(content) as AgentProfile;
+          const projectProfile = normalizeAgentProfile(yaml.load(content));
           if (!projectProfile?.id) continue;
 
           const existing = profiles.get(projectProfile.id);
@@ -523,6 +553,28 @@ export function mergeAgentProfileWithManifest(
   };
 }
 
+/** "## Your Skills" lines — `- <name> (<role>, <trust>): <description> — <path>`. */
+function renderSkillLines(agentId: string, skills?: SkillSummary[]): string[] {
+  const lines: string[] = [];
+  for (const s of skills ?? []) {
+    if (s.status === 'stale' || s.status === 'invalid') continue;
+    const certified = s.trust === 'certified' && s.status === 'ok';
+    let label: string;
+    if (certified) {
+      label = 'certified';
+    } else if (s.steward === agentId) {
+      label = s.trust === 'certified'
+        ? 'UNCERTIFIED — content changed since sign-off, steward only'
+        : `${s.trust.toUpperCase()} — not certified, steward only`;
+    } else {
+      continue;
+    }
+    const desc = sanitizeForPrompt(s.description, { maxLength: 240 });
+    lines.push(`- ${s.name} (${s.role}, ${label}): ${desc} — ${s.path}`);
+  }
+  return lines;
+}
+
 /**
  * Build prompt enrichment text from agent profile for orchestration.
  */
@@ -540,7 +592,13 @@ export function buildProfileEnrichment(
     pendingWork?: string[];
     recentPatterns?: string[];
     sessionsOnProject?: number;
-  }
+  },
+  /**
+   * Skills Phase 1: pre-resolved summaries (resolveAgentSkills in #skill-loader).
+   * Stays pure — the caller resolves. Certified+ok shown to every agent;
+   * non-certified shown only to the steward (labelled); stale/invalid omitted.
+   */
+  skills?: SkillSummary[]
 ): string {
   const parts: string[] = [];
 
@@ -584,8 +642,21 @@ export function buildProfileEnrichment(
     parts.push('## Transferable Patterns');
     for (const p of patterns) {
       const appliedCount = p.appliedIn?.length || 0;
-      parts.push(`- ${p.id}: ${(p.successRate * 100).toFixed(0)}% success (learned in ${p.learnedIn}${appliedCount > 0 ? `, applied in ${appliedCount} projects` : ''})`);
+      const provenance: string[] = [];
+      if (p.learnedIn) provenance.push(`learned in ${p.learnedIn}`);
+      if (appliedCount > 0) provenance.push(`applied in ${appliedCount} projects`);
+      parts.push(`- ${p.id}: ${(p.successRate * 100).toFixed(0)}% success${provenance.length > 0 ? ` (${provenance.join(', ')})` : ''}`);
     }
+    parts.push('');
+  }
+
+  // Skills (Phase 1) — certified for all; provisional/uncertified only to the steward.
+  // resolveAgentSkills does NOT check pins, so 'stale' never arrives from orchestration;
+  // the stale/invalid filter only guards summaries supplied by other callers.
+  const skillLines = renderSkillLines(profile.id, skills);
+  if (skillLines.length > 0) {
+    parts.push('## Your Skills');
+    parts.push(...skillLines);
     parts.push('');
   }
 

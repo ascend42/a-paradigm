@@ -254,7 +254,7 @@ describe('Check 7 — Lore enforcement', () => {
     const commonContent = fs.readFileSync(commonPath, 'utf8');
     expect(commonContent).toContain('Check 7');
     expect(commonContent).toContain('LORE_RECORDED');
-    expect(commonContent).toContain('paradigm_lore_record');
+    expect(commonContent).toContain('paradigm_lore (op: record)');
   });
 
   it('Cursor stop hook contains lore check', async () => {
@@ -275,7 +275,7 @@ describe('Check 7 — Lore enforcement', () => {
     const commonContent = fs.readFileSync(commonPath, 'utf8');
     expect(commonContent).toContain('Check 7');
     expect(commonContent).toContain('LORE_RECORDED');
-    expect(commonContent).toContain('paradigm_lore_record');
+    expect(commonContent).toContain('paradigm_lore (op: record)');
   });
 });
 

@@ -27,7 +27,7 @@ If Paradigm is not initialized, stop here and suggest `/paradigm:init`.
 
 ## Step 2: Validate .purpose Files
 
-Call `paradigm_purpose_validate` to check all `.purpose` files for:
+Call `paradigm_purpose` (op `validate`) to check all `.purpose` files for:
 - YAML syntax errors
 - Missing required fields
 - Invalid symbol references

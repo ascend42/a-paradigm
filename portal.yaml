@@ -36,6 +36,34 @@ gates:
     check: HTTP method is POST, PUT, PATCH, or DELETE
     prizes: []
 
+  brain-default-deny:
+    description: >-
+      Paradigm Brain default-deny. Every Brain read goes through the single
+      #brain-view choke point (openBrainView). Files are private unless a human
+      shares them; sensitive zones (medical, financial, third-party-data,
+      quarantined) are never listed — the owner sees only {folder, gate, count}.
+      Filtering happens BEFORE any matching, so search/health/suggestions never
+      see hidden records. Brain routes additionally require a loopback Host on
+      GET (DNS-rebinding guard for private metadata).
+    type: access
+    location: paradigm-mcp/src/utils/brain/view.ts + platform-server/routes/brain.ts
+    check: >-
+      openBrainView(rootHash, 'owner') only; locked zones → {folder, gate, count};
+      loopback Host on every /api/brain request
+    prizes: []
+
+  brain-owner-write:
+    description: >-
+      Brain owner write credential. POST /api/brain/verdict requires the
+      per-process owner token in the HttpOnly SameSite=Strict `brain_owner`
+      cookie (set by a same-origin GET /api/brain/overview, never in a response
+      body) AND an Origin exactly equal to the Platform's own origin. Other
+      localhost ports get no ACAO and a 403 on every /api/brain request.
+    type: access
+    location: platform-server/routes/brain-write.ts
+    check: timing-safe equal(x-brain-token, process owner token) AND ^local-only
+    prizes: []
+
 # ─── Platform Server Routes (/api/*) ────────────────────────────────
 # All routes bind to localhost only. The platform server must be running
 # (paradigm platform) which implies an active session context.
@@ -445,6 +473,29 @@ routes:
     - ^write-capable
 
   # ── Memory (Memory Steward ledger — READ-ONLY, Phase C1) ────────────
+  # Academy (7.11.0) — read-only University packs over @a-company/university-core.
+  # :packId must be a discovered pack (404); ids ^[A-Za-z0-9-]+$ (400).
+  GET /api/academy/packs:
+    - ^local-only
+    - ^read-only
+  GET /api/academy/packs/:packId/paths:
+    - ^local-only
+    - ^read-only
+  GET /api/academy/packs/:packId/paths/:id:
+    - ^local-only
+    - ^read-only
+  GET /api/academy/packs/:packId/notes/:id:
+    - ^local-only
+    - ^read-only
+  GET /api/academy/packs/:packId/quizzes/:id:
+    - ^local-only
+    - ^read-only
+  GET /api/academy/packs/:packId/skills:
+    - ^local-only
+    - ^read-only
+  GET /api/academy/search:
+    - ^local-only
+    - ^read-only
   # Thin readers over the pure Memory Steward engines (buildDigest / computeSync).
   # /review is the advisory hygiene digest; /sync is the lean-rewrite PREVIEW
   # (computeSync is pure — the mutator writeSyncResult is NOT reachable here).
@@ -534,6 +585,30 @@ routes:
   GET /api/classroom/refinements:
     - ^local-only
     - ^read-only
+
+  # ── Paradigm Brain (7.14.0) — owner view through the #brain-view choke point ──
+  # Every read calls openBrainView(rootHash, 'owner'); locked zones → counts only.
+  GET /api/brain/overview:
+    - ^local-only
+    - ^read-only
+    - ^brain-default-deny
+  GET /api/brain/health:
+    - ^local-only
+    - ^read-only
+    - ^brain-default-deny
+  GET /api/brain/suggestions:
+    - ^local-only
+    - ^read-only
+    - ^brain-default-deny
+  GET /api/brain/find:
+    - ^local-only
+    - ^read-only
+    - ^brain-default-deny
+  POST /api/brain/verdict:
+    - ^local-only
+    - ^write-capable
+    - ^brain-owner-write
+    - ^brain-default-deny
 
   # ── WebSocket ───────────────────────────────────────────────────────
   WS /ws:

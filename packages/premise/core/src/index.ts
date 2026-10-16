@@ -48,6 +48,11 @@ export {
   aggregateFromPremise,
   aggregateFromDirectory,
 } from './aggregator.js';
+export type { AggregateOptions } from './aggregator.js';
+
+// Live index — #live-index (incremental, cached live SymbolIndex)
+export { getLiveIndex, invalidateLiveIndex, liveIndexRootCount, LIVE_INDEX_MAX_ROOTS } from './live-index.js';
+export type { LiveIndex, LiveIndexCallStats } from './live-index.js';
 
 // Symbol Index
 export {
@@ -71,7 +76,21 @@ export {
   getComponentsByType,
   getAllComponentTypes,
   getChildComponents,
+  parseAnchor,
+  parseAnchorString,
+  parseSectionAnchor,
+  resolveSectionAnchorLines,
 } from './symbol-index.js';
+
+// Shared frontmatter parser — #frontmatter-parser (D8, 7.12.0)
+export {
+  parseFrontmatter,
+  FrontmatterError,
+  FRONTMATTER_RE,
+  FRONTMATTER_MISSING_MESSAGE,
+  FRONTMATTER_NOT_MAPPING_MESSAGE,
+} from './frontmatter.js';
+export type { FrontmatterMode, FrontmatterResult } from './frontmatter.js';
 
 // Anchor path resolution
 export {
@@ -99,6 +118,7 @@ export type {
 // Graph-slice projector — #graph-slice-projector
 export {
   loadLiveGraph,
+  buildLiveGraph,
   projectGraphSlice,
   graphSliceFromRoot,
   sliceToMermaid,

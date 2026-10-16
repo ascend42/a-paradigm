@@ -72,8 +72,8 @@ const probeSchema = z.object({
 }).passthrough();
 
 // v6.0 (D7): metrics — local snapshots opt-in seed + remote consent state.
-// Mirrors `MetricsConfig` in `core/paradigm-config.ts` and the shape written
-// by `seedMetricsConsent()` in `core/university/metrics.ts`.
+// Mirrors `MetricsConfig` in `core/paradigm-config.ts`. Still accepted for
+// existing configs; 7.11.0 removed the University metrics snapshot writer.
 const metricsSchema = z.object({
   remote_consent: z.enum(['pending', 'granted', 'declined']).optional(),
   local_snapshots_enabled: z.boolean().optional(),

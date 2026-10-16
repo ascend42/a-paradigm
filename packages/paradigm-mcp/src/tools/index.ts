@@ -1,6 +1,11 @@
 /**
  * MCP Tools - Actions AI can invoke on Paradigm data
  *
+ * 7.13 surface cut: tools/list = 11 anchors + 21 op families (+ on-demand
+ * families when enabled/activated). Every pre-7.13 name stays callable as a
+ * hidden alias (see legacy-tool-map.ts); family calls resolve to the canonical
+ * legacy name before dispatch, so handlers run unchanged.
+ *
  * Uses ToolRegistry for tiered tool listing and Map-based dispatch.
  * Inline tools (search, related, status, gates_for_route, plugin_check,
  * workspace_reindex, tool_activate) are handled directly in the switch statement.
@@ -26,7 +31,10 @@ import {
   getSymbolCounts,
 } from '@a-company/premise-core';
 import type { ProjectContext } from '../utils/index-loader.js';
-import { ToolRegistry, type ToolModule, type ToolDefinition } from '../utils/tool-registry.js';
+import { ToolRegistry, type ToolModule, type ToolDefinition, toListedTool, readMcpToolsConfig, FEATURE_DETECTORS } from '../utils/tool-registry.js';
+import { defineFamily, familyOpsFromMap, isDeprecatedAlias, compactDefinition, ANCHOR_DESC_MAX, ANCHOR_PROP_DESC_MAX, type ToolFamily } from '../utils/tool-family.js';
+import { LEGACY_TOOL_MAP } from './legacy-tool-map.js';
+import { ANCHOR_TOOLS, DEFAULT_FAMILIES, FAMILY_META, ON_DEMAND, findOnDemand } from './families.js';
 import { getWisdomToolsList, handleWisdomTool } from './wisdom.js';
 import { getHistoryToolsList, handleHistoryTool } from './history.js';
 import { getNavigateToolsList, handleNavigateTool } from './navigate.js';
@@ -53,6 +61,7 @@ import { getPipelineToolsList, handlePipelineTool } from './pipeline.js';
 import { getConductorToolsList, handleConductorTool } from './conductor.js';
 import { getSymphonyToolsList, handleSymphonyTool } from './symphony.js';
 import { getUniversityToolsList, handleUniversityTool } from './university.js';
+import { getBrainToolsList, handleBrainTool, brainFamilyAvailable } from './brain.js';
 import { getPlatformToolsList, handlePlatformTool } from './platform.js';
 import { getAgentToolsList, handleAgentTool } from './agents.js';
 import { getAuthorityToolsList, handleAuthorityTool } from './authority.js';
@@ -66,6 +75,7 @@ import { getStreamsToolsList, handleStreamsTool } from './streams.js';
 import { getAmbientToolsList, handleAmbientTool } from './ambient.js';
 import { getEnforcementToolsList, handleEnforcementTool } from './enforcement.js';
 import { getArchToolsList, handleArchTool } from './arch.js';
+import { getAssessmentToolsList, handleAssessmentTool } from './assessment.js';
 import { ARCH_FILE } from '../utils/arch-loader.js';
 import { getPluginUpdateNotice, schedulePluginUpdateCheck } from '../utils/plugin-update-checker.js';
 import { grepForReferences } from './fallback-grep.js';
@@ -272,6 +282,14 @@ function buildRegistry(rootDir: string, reloadContext?: () => Promise<void>): To
       handleTool: wrap(handleUniversityTool),
     },
     {
+      // 7.14 Brain: detected only while some brain opted into agent metadata access.
+      key: 'brain',
+      tier: 'feature',
+      getToolsList: getBrainToolsList,
+      handleTool: wrap(handleBrainTool),
+      detect: () => brainFamilyAvailable(),
+    },
+    {
       key: 'agents',
       tier: 'feature',
       getToolsList: getAgentToolsList,
@@ -318,6 +336,14 @@ function buildRegistry(rootDir: string, reloadContext?: () => Promise<void>): To
       detect: (rootDir: string) =>
         fs.existsSync(path.join(rootDir, '.paradigm', 'aspect-graph.db')) ||
         fs.existsSync(path.join(rootDir, '.paradigm', 'scan-index.json')),
+    },
+    {
+      // 7.13: was never registered (dead since its introduction); now reachable
+      // as the on-demand paradigm_assessment family / hidden aliases.
+      key: 'assessment',
+      tier: 'feature',
+      getToolsList: getAssessmentToolsList as () => ToolDefinition[],
+      handleTool: wrap(handleAssessmentTool),
     },
     {
       key: 'arch',
@@ -517,11 +543,11 @@ function getInlineToolDefinitions() {
     },
     {
       name: 'paradigm_tool_activate',
-      description: 'Activate an advanced-tier tool module for this session. Advanced tools are not loaded by default to reduce tool count. Call with a feature key to make its tools available. ~50 tokens.',
+      description: 'List an on-demand tool for this session (sends tools/list_changed). Persist via config.yaml mcp.tools.enable. ~50 tokens.',
       inputSchema: {
         type: 'object',
         properties: {
-          feature: { type: 'string', description: 'Feature key to activate (e.g., "graph", "heatmap", "pipeline", "conductor", "platform")' },
+          feature: { type: 'string', description: 'sentinel, symphony, classroom, habits, persona, university, assessment, conductor, platform, pipeline, graduation, test_fixtures, brain' },
         },
         required: ['feature'],
       },
@@ -530,24 +556,172 @@ function getInlineToolDefinitions() {
   ];
 }
 
+// ────────────────────────────────────────────────────────
+// 7.13 Surface: anchors + families (#tool-family)
+// ────────────────────────────────────────────────────────
+
+export interface ToolSurface {
+  /** Every pre-7.13 definition by legacy name (inline + all registry tiers) */
+  legacyDefs: Map<string, ToolDefinition>;
+  /** Op families by tool name */
+  families: Map<string, ToolFamily>;
+  /** Anchor definitions (status/reindex augmented with folded legacy tools) */
+  anchors: ToolDefinition[];
+}
+
+export function buildToolSurface(registry: ToolRegistry): ToolSurface {
+  const legacyDefs = new Map<string, ToolDefinition>();
+  for (const d of [...(getInlineToolDefinitions() as ToolDefinition[]), ...registry.getAllTools()]) {
+    if (!legacyDefs.has(d.name)) legacyDefs.set(d.name, d);
+  }
+  const opsByFamily = familyOpsFromMap();
+  const families = new Map<string, ToolFamily>();
+  for (const meta of FAMILY_META) {
+    if (meta.plain) continue;
+    const ops = opsByFamily.get(meta.name);
+    if (!ops) throw new Error(`Family ${meta.name} has no ops in LEGACY_TOOL_MAP`);
+    families.set(meta.name, defineFamily({ name: meta.name, description: meta.description, ops, defaultOp: meta.defaultOp, signatures: meta.signatures ?? 'required' }, legacyDefs));
+  }
+  const anchors: ToolDefinition[] = [];
+  for (const name of ANCHOR_TOOLS) {
+    const base = legacyDefs.get(name);
+    if (!base) throw new Error(`Anchor ${name} is not registered`);
+    const def = compactDefinition(base, ANCHOR_DESC_MAX, ANCHOR_PROP_DESC_MAX);
+    const schema = def.inputSchema as { properties?: Record<string, unknown> };
+    if (name === 'paradigm_status') {
+      def.inputSchema = { ...def.inputSchema, properties: { ...(schema.properties ?? {}), check: { type: 'string', enum: ['plugins'], description: 'plugins: check installed Claude Code plugins for updates' } } };
+    } else if (name === 'paradigm_reindex') {
+      def.inputSchema = { ...def.inputSchema, properties: { ...(schema.properties ?? {}), scope: { type: 'string', enum: ['project', 'workspace'], description: 'workspace: rebuild scan-index for every workspace member' } } };
+    }
+    anchors.push(def);
+  }
+  return { legacyDefs, families, anchors };
+}
+
+/** Definition for an on-demand entry (family or plain tool). */
+function onDemandDefinition(surface: ToolSurface, name: string): ToolDefinition | undefined {
+  const fam = surface.families.get(name);
+  if (fam) return fam.definition;
+  const plain = surface.legacyDefs.get(name);
+  return plain ? compactDefinition(plain, ANCHOR_DESC_MAX, ANCHOR_PROP_DESC_MAX) : undefined;
+}
+
+/**
+ * tools/list for the 7.13 surface: anchors + default families + on-demand
+ * entries that are config-enabled or session-activated. With
+ * `mcp.tools.legacy_listing: true` the pre-7.13 per-op tools are relisted too.
+ */
+export function listSurfaceTools(
+  surface: ToolSurface,
+  registry: ToolRegistry,
+  rootDir: string,
+  activated: ReadonlySet<string> = new Set(),
+): ToolDefinition[] {
+  const cfg = readMcpToolsConfig(rootDir);
+  const out: ToolDefinition[] = [...surface.anchors];
+  for (const meta of DEFAULT_FAMILIES) out.push(surface.families.get(meta.name)!.definition);
+  const enabled = new Set(cfg.enable.map(k => findOnDemand(k)?.name).filter((n): n is string => !!n));
+  for (const meta of ON_DEMAND) {
+    if (meta.requires === 'brain-agent-access') {
+      if (!brainFamilyAvailable()) continue;
+    } else if (!enabled.has(meta.name) && !activated.has(meta.name)) continue;
+    const def = onDemandDefinition(surface, meta.name);
+    if (def) out.push(def);
+  }
+  if (cfg.legacyListing) {
+    const seen = new Set(out.map(t => t.name));
+    for (const t of [...(getInlineToolDefinitions() as ToolDefinition[]), ...registry.getActiveTools()]) {
+      if (seen.has(t.name)) continue;
+      seen.add(t.name);
+      out.push(toListedTool(t));
+    }
+  }
+  return out;
+}
+
+export type ResolvedToolCall =
+  | { canonical: string; args: Record<string, unknown>; deprecatedAlias?: string }
+  | { error: string };
+
+/**
+ * Resolve a requested tool name to the CANONICAL LEGACY NAME the existing
+ * handlers (and breadcrumbs / toolsCalled) key on.
+ */
+export function resolveToolCall(surface: ToolSurface, name: string, args: Record<string, unknown>): ResolvedToolCall {
+  const fam = surface.families.get(name);
+  if (fam) {
+    const r = fam.resolve(args);
+    if ('error' in r) return r;
+    return { canonical: r.legacy, args: r.args };
+  }
+  // Anchors that absorbed a legacy tool via a fixed arg (status check:'plugins', reindex scope:'workspace')
+  for (const [legacy, target] of Object.entries(LEGACY_TOOL_MAP)) {
+    if (target.tool !== name || !target.args || legacy === name) continue;
+    const entries = Object.entries(target.args);
+    if (entries.every(([k, v]) => args[k] === v)) {
+      const rest = { ...args };
+      for (const [k] of entries) delete rest[k];
+      return { canonical: legacy, args: rest };
+    }
+  }
+  if (isDeprecatedAlias(name)) return { canonical: name, args, deprecatedAlias: name };
+  return { canonical: name, args };
+}
+
+/** Human-readable 7.13 form of a legacy name, e.g. "paradigm_lore({op:'record'})". */
+function modernForm(legacy: string): string {
+  const t = LEGACY_TOOL_MAP[legacy];
+  if (!t) return legacy;
+  const parts = [
+    ...(t.op ? [`op:'${t.op}'`] : []),
+    ...Object.entries(t.args ?? {}).map(([k, v]) => `${k}:'${v}'`),
+  ];
+  return parts.length ? `${t.tool}({${parts.join(', ')}})` : t.tool;
+}
+
 /**
  * Register all MCP tools
  */
+/**
+ * Every tool definition this server can register — inline tools plus every
+ * registry module across all tiers (not just the active ones). Used by
+ * #skill-loader checkPins (`paradigm skill check`) to hash each paradigm_*
+ * tool's canonical inputSchema. Pure listing: no handlers run.
+ */
+export function listToolDefinitions(rootDir: string = process.cwd()): ToolDefinition[] {
+  const registry = buildRegistry(rootDir);
+  const surface = buildToolSurface(registry);
+  const seen = new Set<string>();
+  const out: ToolDefinition[] = [];
+  const onDemand = ON_DEMAND.map(m => onDemandDefinition(surface, m.name)).filter((d): d is ToolDefinition => !!d);
+  // 7.13 surface first (anchors, families, on-demand), then every legacy definition.
+  for (const t of [
+    ...surface.anchors,
+    ...DEFAULT_FAMILIES.map(m => surface.families.get(m.name)!.definition),
+    ...onDemand,
+    ...(getInlineToolDefinitions() as ToolDefinition[]).map(toListedTool),
+    ...registry.getAllTools(),
+  ]) {
+    if (seen.has(t.name)) continue;
+    seen.add(t.name);
+    out.push(t);
+  }
+  return out;
+}
+
 export function registerTools(server: Server, getContext: () => ProjectContext, reloadContext?: () => Promise<void>) {
   // Build the tool registry with all modules organized by tier
   const ctx0 = getContext();
   const registry = buildRegistry(ctx0.rootDir, reloadContext);
+  const surface = buildToolSurface(registry);
+  /** On-demand tools activated this session via paradigm_tool_activate */
+  const activatedOnDemand = new Set<string>();
 
-  // List available tools — inline tools + registry-managed tools (tiered)
+  // List available tools — 7.13 surface (anchors + families + enabled on-demand)
   server.setRequestHandler(
     ListToolsRequestSchema,
     async () => {
-      return {
-        tools: [
-          ...getInlineToolDefinitions(),
-          ...registry.getActiveTools(),
-        ],
-      };
+      return { tools: listSurfaceTools(surface, registry, getContext().rootDir, activatedOnDemand) };
     }
   );
 
@@ -555,8 +729,21 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
   server.setRequestHandler(
     CallToolRequestSchema,
     async (request) => {
-      const { name, arguments: args } = request.params;
-      addToolBreadcrumb(name, (args ?? {}) as Record<string, unknown>);
+      const { name: requestedName, arguments: rawArgs } = request.params;
+      // 7.13: resolve family/anchor/alias → canonical legacy name. Breadcrumbs,
+      // toolsCalled and post-dispatch events all key on the canonical name.
+      const resolved = resolveToolCall(surface, requestedName, (rawArgs ?? {}) as Record<string, unknown>);
+      const resolveError = 'error' in resolved ? resolved.error : null;
+      const name = 'error' in resolved ? requestedName : resolved.canonical;
+      const args = ('error' in resolved ? (rawArgs ?? {}) : resolved.args) as Record<string, any>;
+      addToolBreadcrumb(name, args);
+      if (!('error' in resolved) && resolved.deprecatedAlias) {
+        getSessionTracker().addBreadcrumb(
+          'tool-deprecated-alias',
+          `Deprecated alias ${requestedName} → ${modernForm(requestedName)} (removed in 7.15)`,
+          { tool: name },
+        );
+      }
       const ctx = getContext();
 
       // Auto-recovery: on the first tool call of a new session, surface checkpoint/handoff data
@@ -572,7 +759,11 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
       }
 
       // Dispatch to tool handler; we'll prepend recovery preamble afterward
-      const toolResult = await (async () => {
+      const toolResult = await (async (): Promise<{ content: Array<{ type: string; text: string }>; isError?: boolean }> => {
+
+      if (resolveError) {
+        return { content: [{ type: 'text', text: JSON.stringify({ error: resolveError }, null, 2) }], isError: true };
+      }
 
       switch (name) {
         case 'paradigm_search': {
@@ -894,6 +1085,17 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
 
           // Trim for concise mode (post-cache to avoid cache key complexity)
           let statusText = text;
+          // 7.13: detected on-demand features are HINTS, never auto-listed.
+          const listedNow = new Set(listSurfaceTools(surface, registry, ctx.rootDir, activatedOnDemand).map(t => t.name));
+          const hints = ON_DEMAND
+            .filter(m => m.detector && !listedNow.has(m.name))
+            .filter(m => { try { return FEATURE_DETECTORS[m.detector!]?.(ctx.rootDir) === true; } catch { return false; } })
+            .map(m => `${m.keys![0]} detected; enable via paradigm_tool_activate({feature:'${m.keys![0]}'}) or config.yaml mcp.tools.enable`);
+          if (hints.length > 0 && statusResponseFormat !== 'concise') {
+            try {
+              statusText = JSON.stringify({ ...JSON.parse(text), hints }, null, 2);
+            } catch { /* keep text */ }
+          }
           if (statusResponseFormat === 'concise') {
             try {
               const parsed = JSON.parse(text);
@@ -1210,31 +1412,56 @@ export function registerTools(server: Server, getContext: () => ProjectContext, 
         }
 
         case 'paradigm_tool_activate': {
-          const feature = (args as { feature: string }).feature;
-          // Try activating an advanced-tier module via the registry
-          const activated = registry.activateAdvanced(feature);
-          if (activated) {
+          const feature = String((args as { feature?: unknown }).feature ?? '');
+          const meta = findOnDemand(feature);
+          if (meta && meta.requires === 'brain-agent-access') {
+            const available = brainFamilyAvailable();
             const text = JSON.stringify({
               action: 'tool_activate',
               feature,
-              status: 'activated',
-              toolsAdded: activated.map(t => t.name),
-              note: `Advanced module "${feature}" activated for this session. ${activated.length} tool(s) now available.`,
+              status: available ? 'already_active' : 'unavailable',
+              note: available
+                ? `${meta.name} is listed while a brain is shared with agents.`
+                : 'No brain is shared with agents. The owner can allow it with `paradigm brain access metadata`.',
             }, null, 2);
             trackToolCall(text.length, name);
             return { content: [{ type: 'text', text }] };
           }
-          // Feature not found or not advanced tier — check if it's already loaded
-          const info = registry.getRegistryInfo();
-          const isActive = info.activeFeatures.includes(feature);
+          if (meta) {
+            const enabledByConfig = readMcpToolsConfig(ctx.rootDir).enable.some(k => findOnDemand(k)?.name === meta.name);
+            const already = activatedOnDemand.has(meta.name) || enabledByConfig;
+            activatedOnDemand.add(meta.name);
+            // Keep the legacy advanced-tier bookkeeping in sync (conductor/platform/pipeline/graduation).
+            for (const k of meta.keys ?? []) registry.activateAdvanced(k);
+            if (!already) {
+              // Tell the host to re-fetch tools/list (Claude Code honours list_changed).
+              try { await server.sendToolListChanged(); } catch { /* not connected (tests) */ }
+            }
+            const fam = surface.families.get(meta.name);
+            const text = JSON.stringify({
+              action: 'tool_activate',
+              feature,
+              status: already ? 'already_active' : 'activated',
+              toolsAdded: already ? [] : [meta.name],
+              ...(fam ? { ops: Object.keys(fam.spec.ops) } : {}),
+              note: already
+                ? `${meta.name} is already listed.`
+                : `${meta.name} activated for this session; tools/list_changed sent. Persist via config.yaml mcp.tools.enable: [${meta.keys![0]}].`,
+            }, null, 2);
+            trackToolCall(text.length, name);
+            return { content: [{ type: 'text', text }] };
+          }
+          const isListed = surface.families.has(feature) || surface.families.has(`paradigm_${feature}`) ||
+            (ANCHOR_TOOLS as readonly string[]).includes(feature) || (ANCHOR_TOOLS as readonly string[]).includes(`paradigm_${feature}`);
+          const available = ON_DEMAND.filter(m => !activatedOnDemand.has(m.name)).map(m => m.keys![0]);
           const text = JSON.stringify({
             action: 'tool_activate',
             feature,
-            status: isActive ? 'already_active' : 'not_found',
-            note: isActive
-              ? `Module "${feature}" is already active (auto-detected or core tier).`
-              : `Module "${feature}" not found. Available advanced modules: ${info.availableAdvanced.join(', ') || '(none)'}`,
-            availableAdvanced: info.availableAdvanced,
+            status: isListed ? 'already_active' : 'not_found',
+            note: isListed
+              ? `"${feature}" is a default-tier tool and is always listed.`
+              : `"${feature}" not found. Available on-demand: ${available.join(', ') || '(none)'}`,
+            availableOnDemand: available,
           }, null, 2);
           trackToolCall(text.length, name);
           return { content: [{ type: 'text', text }] };

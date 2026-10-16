@@ -10,9 +10,13 @@ components:
     type: types
     tags: [university, schema]
   AgentTypes:
-    description: "Type definitions for persistent agent identity profiles — AgentProfile (with nickname for attributed responses), AgentPermissions, AgentExpertiseEntry, TransferablePattern, AgentProjectContext, plus v5.0 Renaissance extensions: AgentAttention, AgentLearning, AgentContext, AgentReporting, AgentCollaboration, AgentNomination. v6.0.3+ adds PartnerRef interface ({id, relation?, share_notebooks?: 'off'|'read'|'read-write'}) and partners?: PartnerRef[] field on AgentProfile (excluded from integrityHash)."
+    description: "Type definitions for persistent agent identity profiles — AgentProfile (with nickname for attributed responses), AgentPermissions, AgentExpertiseEntry, TransferablePattern, AgentProjectContext, plus v5.0 Renaissance extensions: AgentAttention, AgentLearning, AgentContext, AgentReporting, AgentCollaboration, AgentNomination. v6.0.3+ adds PartnerRef interface ({id, relation?, share_notebooks?: 'off'|'read'|'read-write'}) and partners?: PartnerRef[] field on AgentProfile (excluded from integrityHash). v7.9.1 widens AgentPersonality to KnownStyle/KnownRisk/KnownVerbosity | string (templates use ~25 styles; display-only), TransferablePattern gains deprecated pattern? alias with optional learnedIn/appliedIn, AgentProfile gains behaviors? (unread until skills Phase 1) and tags?, and exports KNOWN_AGENT_KEYS (mirrored in doctor #agent-audit). v7.10.0 adds skills?: AgentSkillRef[] ({id, role: owns|uses}) — in KNOWN_AGENT_KEYS, excluded from integrityHash."
     type: types
     tags: [agent-identity, schema, permissions, attention, learning, collaboration, maestro, partners]
+  SkillTypes:
+    description: "Skills Phase 1 (skills.ts) — SkillTrust, ParadigmSkillMeta (nested metadata.paradigm source form incl. provenance, tool pins, certification), SkillFile, computed SkillStatus, SkillSummary (enrichment), SkillUsageRow, ProjectedSkillMetadata (the flat string map projected files carry), ProjectionMarker (.pdg-generated.json)."
+    type: types
+    tags: [skills, schema]
   NotebookTypes:
     description: "Type definitions for agent notebook entries — NotebookEntry, NotebookProvenance"
     type: types
@@ -33,10 +37,6 @@ components:
     description: "Type definitions for Cid (Captain agent) — ContextBrief, DebriefReport, CidSessionMarker, CidBriefedMarker. ContextBrief is the structured pre-task map (territory, symbols, blastRadius, gates, protocol, warnings, coverage, loreRefs, renderedBrief). DebriefReport captures post-task coverage changes and lore recording."
     type: types
     tags: [captain, cid, orchestration, coverage, schema]
-  UniversityMetricsTypes:
-    description: "Type definitions for v6.0 University metrics snapshots — UniversityMetricsSnapshot. Local-only counters (pack counts, per-tenant-kind breakdown, project pack entry counts, disciplines, activity windows). No content bodies, no titles, hashed project salt only. Feeds the v6.3 sunset review."
-    type: types
-    tags: [university, metrics, telemetry, v6.0, schema]
   PackTypes:
     description: "Pack manifest constants and convenience re-exports — PACK_MANIFEST_FILENAME ('pack.yaml'), PACK_SCHEMA_VERSION ('1'), PACKAGE_JSON_POINTER_FIELD ('paradigm.universityPack'), FIRST_PARTY_PACK_IDS. Re-exports TenantKind, Origin, PackDependency, PackCompliance, PackManifest, PackLocation from university.ts."
     type: types

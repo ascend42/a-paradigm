@@ -13,10 +13,10 @@ import {
   extractSignals,
   extractAspects,
   extractSymbolReferences,
+  type ParsedPurposeFile,
 } from '@a-company/purpose-core';
 import { parseGateConfig, findGateFiles, type ParsedGateConfig, type Gate, type Flow } from '@a-company/portal-core';
 import type {
-  CodeAnchor,
   PremiseFile,
   SymbolEntry,
   SymbolType,
@@ -24,14 +24,32 @@ import type {
   AggregationResult,
   AggregationError,
 } from './types.js';
+import { parseAnchorString } from './symbol-index.js';
+
+/**
+ * Optional loader seams for aggregateFromPremise. Every hook defaults to the
+ * historical cold implementation, so omitting `options` is byte-identical to
+ * the pre-7.13 behavior. #live-index injects cached/pre-globbed loaders here so
+ * a warm rebuild re-aggregates the FULL, identically-ordered file set without
+ * re-reading unchanged files. Loaders must preserve discovery order.
+ */
+export interface AggregateOptions {
+  /** Replaces getAllPurposeFiles(sourcePath). */
+  loadPurposeFiles?: (sourcePath: string) => Promise<ParsedPurposeFile[]>;
+  /** Replaces findGateFiles(sourcePath) for directory portal sources. */
+  findPortalFiles?: (sourcePath: string) => Promise<string[]>;
+}
 
 /**
  * Aggregate all symbols from a premise configuration
  */
 export async function aggregateFromPremise(
   premiseFile: PremiseFile,
-  rootDir: string
+  rootDir: string,
+  options: AggregateOptions = {},
 ): Promise<AggregationResult> {
+  const loadPurposeFiles = options.loadPurposeFiles ?? getAllPurposeFiles;
+  const findPortalFiles = options.findPortalFiles ?? findGateFiles;
   const symbols: SymbolEntry[] = [];
   const errors: AggregationError[] = [];
   const purposeFiles: string[] = [];
@@ -42,7 +60,7 @@ export async function aggregateFromPremise(
     for (const source of premiseFile.sources.purpose) {
       const sourcePath = path.resolve(rootDir, source.path);
       try {
-        const parsed = await getAllPurposeFiles(sourcePath);
+        const parsed = await loadPurposeFiles(sourcePath);
         purposeFiles.push(...parsed.map((p) => p.filePath));
 
         // Extract features (v2: now #components with [feature] tag)
@@ -203,7 +221,7 @@ export async function aggregateFromPremise(
           gateConfig = await parseGateConfig(sourcePath);
           portalFiles.push(sourcePath);
         } else {
-          const files = await findGateFiles(sourcePath);
+          const files = await findPortalFiles(sourcePath);
           portalFiles.push(...files);
           if (files.length > 0) {
             gateConfig = await parseGateConfig(files[0]);
@@ -364,35 +382,6 @@ function createFlowSymbol(flow: Flow, filePath: string): SymbolEntry {
   });
 }
 
-/**
- * Parse an anchor string into a CodeAnchor
- * Formats: "file.ts", "file.ts:15", "file.ts:15-20", "file.ts:15,25,30"
- */
-function parseAnchorString(raw: string): CodeAnchor {
-  const colonIndex = raw.lastIndexOf(':');
-  if (colonIndex === -1 || colonIndex === raw.length - 1) {
-    return { path: raw, lines: 0, raw };
-  }
-
-  const afterColon = raw.slice(colonIndex + 1);
-  const filePath = raw.slice(0, colonIndex);
-
-  // Check if it's a line reference (digits, dashes, commas)
-  if (!/^[\d,\- ]+$/.test(afterColon)) {
-    return { path: raw, lines: 0, raw };
-  }
-
-  if (afterColon.includes('-')) {
-    const [start, end] = afterColon.split('-').map(Number);
-    return { path: filePath, lines: [start, end], raw };
-  } else if (afterColon.includes(',')) {
-    const lines = afterColon.split(',').map(Number);
-    return { path: filePath, lines, raw };
-  } else {
-    return { path: filePath, lines: Number(afterColon), raw };
-  }
-}
-
 // Common framework aliases that look like symbols but aren't
 // SvelteKit: $lib, $env, $app, $service-worker
 // Vite: $virtual
@@ -410,7 +399,11 @@ function resolveReferences(symbols: SymbolEntry[]): void {
 
   for (const symbol of symbols) {
     // Find references in the data
-    const dataStr = JSON.stringify(symbol.data);
+    // `anchors` are code LOCATIONS, never symbol references — a section anchor
+    // like `docs/x.md#setup` must not register a reference to `#setup`.
+    const dataStr = JSON.stringify(symbol.data, (key, value) =>
+      key === 'anchors' ? undefined : value,
+    );
     // Match compound ideas (?@, ?#, etc.) OR single prefixes
     // This ensures ?@subscription matches as one symbol, not split into ? and @subscription
     // IMPORTANT: First char after prefix must be a letter to avoid false positives
@@ -438,7 +431,10 @@ function resolveReferences(symbols: SymbolEntry[]): void {
 /**
  * Aggregate symbols from a directory without a .premise file
  */
-export async function aggregateFromDirectory(rootDir: string): Promise<AggregationResult> {
+export async function aggregateFromDirectory(
+  rootDir: string,
+  options: AggregateOptions = {},
+): Promise<AggregationResult> {
   // Create a default premise file configuration
   const premiseFile: PremiseFile = {
     version: '1.0.0',
@@ -458,5 +454,5 @@ export async function aggregateFromDirectory(rootDir: string): Promise<Aggregati
     },
   };
 
-  return aggregateFromPremise(premiseFile, rootDir);
+  return aggregateFromPremise(premiseFile, rootDir, options);
 }

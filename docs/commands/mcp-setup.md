@@ -23,7 +23,7 @@ Generates MCP configuration files for AI clients (Cursor, Claude Desktop, Contin
 - `paradigm_search` - Find symbols
 - `paradigm_related` - Dependency graph
 - `paradigm_navigate` - Codebase exploration
-- `paradigm_session_health` - Session health monitoring
+- `paradigm_session` (op `health`) - Session health monitoring
 
 ## Why You Need It
 
@@ -253,8 +253,8 @@ Once configured, AI agents can call:
   - `context` - Get context for task
 
 ### Session Management
-- `paradigm_session_health` - Monitor token usage
-- `paradigm_handoff_prepare` - Prepare context handoff
+- `paradigm_session` (op `health`) - Monitor token usage
+- `paradigm_session` (op `handoff_prepare`) - Prepare context handoff
 
 ## Checking MCP Status
 

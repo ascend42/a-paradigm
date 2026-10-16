@@ -35,7 +35,7 @@ Report to the user:
 If the scan found 0 symbols:
 - Check if `.purpose` files exist
 - If none exist, suggest initializing Paradigm first
-- If they exist but are empty, suggest populating them with `paradigm_purpose_add_component`
+- If they exist but are empty, suggest populating them with `paradigm_purpose` (op `add_component`)
 
 If symbols decreased significantly:
 - Warn the user that some symbols may have been lost

@@ -1,5 +1,14 @@
 version: 2.0.0
 components:
+  skill-used-hook:
+    description: 'v7.10.0 (Skills Phase 1) Claude Code PostToolUse hook (matcher: Skill) — scripts/claude-code-skill-used.sh, copied to the plugin as paradigm-skill-used.sh and installed by `paradigm hooks install --claude-code`. Pre-filters payloads without `pdg-`, then pipes the payload to the hidden `paradigm skill record-usage` verb, which appends a !skill-used row. Always exit 0, no output.'
+    type: hook
+    file: scripts/claude-code-skill-used.sh
+    signals:
+      - '!skill-used'
+    tags:
+      - hooks
+      - skills
   paradigm-hooks:
     description: CLI hook installer and enforcement scripts for Claude Code, Cursor, and git. Stop hook validates 13 compliance checks including .purpose freshness, portal.yaml coverage, aspect anchors, and lore recording. Supports PARADIGM_AUTO_FIX=1 for auto-fixing trivial violations (missing .purpose stubs, missing lore entries). Includes plugin version compatibility checking against semver ranges from hooks.json compatibleVersions field.
     type: command

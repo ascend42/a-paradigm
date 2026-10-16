@@ -114,6 +114,6 @@ export function buildAskText(): string {
     "- `snooze` — ask me again in 7 days.",
     "- `never` — don't ask again.",
     '',
-    'Call `paradigm_compliance_promote` with your choice, or just tell me which you prefer.',
+    "Call `paradigm_compliance({op:'promote'})` with your choice, or just tell me which you prefer.",
   ].join('\n');
 }

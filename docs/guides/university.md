@@ -4,10 +4,13 @@
 > v6.0 removed the v5 legacy content paths; v6.0.1 refreshed the course content
 > for v6 reality (LoreType taxonomy, agent roster, decision-store consolidation).
 > This guide stays current through subsequent v6.x patches.
+> **v7.11:** the standalone University web app is gone — humans browse packs in
+> the Platform **Academy** section; the MCP surface is 2 read-only tools;
+> packs can ship skills (pack.yaml v2).
 
 ## 1. What it is
 
-Paradigm University is a place to keep structured learning material next to your code. You write notes, quizzes, and checklists; the CLI serves them at `localhost:3839` and your AI agents read them through MCP. It runs locally — nothing is sent anywhere.
+Paradigm University is a place to keep structured learning material next to your code. You write notes, quizzes, learning paths, and checklists; you browse them in the Platform **Academy** section and your AI agents read them through MCP. It runs locally — nothing is sent anywhere.
 
 You can use material someone else wrote (installed from npm) or you can write your own for your project.
 
@@ -15,7 +18,7 @@ You can use material someone else wrote (installed from npm) or you can write yo
 
 ### 2.1 First-party packs (installed)
 
-Paradigm ships an official pack — [`@a-company/university`](https://www.npmjs.com/package/@a-company/university) — with PARA 001–701 courses and the PLSAT certification exam. Install it and run `paradigm university` and it's there. This is the default experience.
+Paradigm ships an official pack — [`@a-company/university`](https://www.npmjs.com/package/@a-company/university) — with PARA 001–901 content and the PLSAT practice exam (static quiz content — results stay in your browser; there are no diploma records). Install it, open Platform → Academy, and it's there. This is the default experience.
 
 Claude University is planned as a **separate project** (see `project_claude_learning_site.md`), not a tenant of Paradigm's University. It's mentioned here only so "first-party" doesn't sound like it means "Paradigm's content, and Paradigm's content only" — the framework is open for any author to publish a pack.
 
@@ -29,13 +32,14 @@ Both modes work side-by-side. The CLI will show you whichever packs it can find.
 
 ## 3. Quick start
 
-### 3.1 Launch the default teaching app
+### 3.1 Open the Academy
 
 ```bash
-paradigm university
+paradigm platform            # then pick "Academy" (keyboard: 6)
+paradigm university serve    # prints "University moved to Platform → Academy" and opens it
 ```
 
-Opens the Paradigm University app on `http://localhost:3839` using the installed first-party content (if any). Use `-p, --port <port>` to change the port and `--no-open` to suppress the browser.
+The Academy section lists every discovered pack, its learning paths, notes, quizzes (graded locally in the browser), and the skills the pack ships. It is read-only — author content with the CLI (§3.4).
 
 ### 3.2 See the packs that are installed
 
@@ -71,15 +75,15 @@ paradigm university add quiz --title "Portal gate basics"
 
 `add` honors the `--pack`, `--project`, and `--discipline` selectors; when no selector is passed it writes to the project pack. Full option list in the CLI source (`packages/paradigm/src/commands/university/add.ts`).
 
-### 3.5 Launch a specific pack
+### 3.5 Target a specific pack
 
 ```bash
-paradigm university serve --pack paradigm
-paradigm university serve --project
-paradigm university serve --project --discipline design
+paradigm university list --pack paradigm
+paradigm university show N-symbol-basics --project
+paradigm university validate --project --discipline design
 ```
 
-Selectors live on `serve` and the other subcommands — **not on the bare `paradigm university` command**. Bare `paradigm university` always opens the default app so muscle memory is preserved.
+Selectors (`--pack`, `--project`, `--discipline`) live on the subcommands. In the Academy, pick the pack from the pack list.
 
 ---
 
@@ -103,7 +107,7 @@ The sub-pack id defaults to `<parent-pack-id>-<name>` so it's globally unambiguo
 paradigm university add note --title "Brand voice" --discipline design
 ```
 
-The `--discipline` flag scopes the command to the sub-pack. `list`, `show`, `quiz`, `status`, `validate`, and `serve` all accept the same flag.
+The `--discipline` flag scopes the command to the sub-pack. `list`, `show`, `quiz`, `status`, and `validate` all accept the same flag.
 
 ### 4.4 Shared branding and theme
 
@@ -194,7 +198,7 @@ paradigm university validate
 
 #### MCP integration
 
-`paradigm_university_search` accepts an optional `section: <id>` filter. `paradigm_university_pack_list` returns each pack's declared `sections[]` so agents can route queries appropriately. Cross-pack references continue to use `<pack-id>:<entry-id>` — sections are not part of the address space.
+`paradigm_university` (op `search`) accepts an optional `section: <id>` filter. `paradigm_university` (op `pack_list`) returns each pack's declared `sections[]` so agents can route queries appropriately. Cross-pack references continue to use `<pack-id>:<entry-id>` — sections are not part of the address space.
 
 ---
 
@@ -216,9 +220,9 @@ YAML files at `.paradigm/university/content/paths/LP-<slug>.yaml`. A path is an 
 
 Paths are the canonical ordering for `track`-style sections (§4.5) — a track-section's progress ring counts steps in the path, not entries in the section.
 
-### 5.4 Diplomas (completion records)
+### 5.4 Pack skills (pack.yaml v2)
 
-Auto-generated at `.paradigm/university/diplomas/D-<date>-<student>-<slug>.yaml` when someone finishes a quiz via `paradigm university quiz <id>` or the web UI. They record the score, pass/fail, and timestamp. They're not content you author; they're the trail of what was completed.
+A pack can ship agent skills (`SKILL.md` directories). See §7.4. Diplomas (auto-generated completion records) were removed in v7.11 — quiz results in the Academy stay in the browser.
 
 ---
 
@@ -249,6 +253,8 @@ compliance:
 `severity` is `advisory | required | enforced` — informational only at v5.39/v6.0. `retention_years` and `revoke_on_change` are read by the schema today but no worker acts on them yet (see §6.4).
 
 ### 6.3 Diplomas with `policy_versions[]` and `content_hashes[]`
+
+*Schema-only as of v7.11 — Paradigm no longer generates diploma records; the fields remain for packs and tooling that produce their own.*
 
 Diplomas can record the version and hash of every entry that factored into the award:
 
@@ -290,12 +296,12 @@ Minimum viable manifest:
 id: acme-security-onboarding
 name: "Acme Security Onboarding"
 version: "0.1.0"
-schema_version: "1"
+schema_version: "2"        # "1" is still accepted (no skills: list)
 tenant_kind: external      # or: first-party | project
 description: "Security onboarding for Acme engineers."
 ```
 
-Required fields: `id`, `name`, `version`, `schema_version`, `tenant_kind`. Optional fields (branding, theme, content_types, disciplines, sections, compliance, dependencies) are documented in `packages/paradigm-mcp/src/types/pack.ts`. See §4.5 for the `sections` field reference.
+Required fields: `id`, `name`, `version`, `schema_version`, `tenant_kind`. Optional fields (branding, theme, content_types, disciplines, sections, skills, compliance, dependencies) are documented in `packages/university-core/src/types/university.ts`. See §4.5 for the `sections` field reference and §7.4 for `skills`.
 
 Use kebab-case for `id`. First-party packs use short names (`paradigm`). Third-party packs should use reverse-DNS or a scoped form (`@acme/security-onboarding`) so ids don't collide across the ecosystem. This is a convention, not a hard check.
 
@@ -337,21 +343,46 @@ dependencies:
     kind: required       # or: recommended
 ```
 
+### 7.4 Shipping skills (`skills:`)
+
+```yaml
+schema_version: '2'
+id: paradigm
+tenant_kind: first-party
+skills:
+  - path: skills/trace-debug   # relative dir containing SKILL.md
+```
+
+Rules — each violation skips that entry with a logged warning (never fatal, and the warning never echoes manifest content):
+
+- Explicit list only — no globs.
+- Relative paths only; no `..` segment; the realpath must stay inside the pack root.
+- No symlinks anywhere from the pack root down to (and inside) the skill dir.
+- The dir basename is the skill id: kebab-case, and equal to the SKILL.md `metadata.paradigm.id`.
+
+**Trust model.** Pack skills load as a third, lowest-precedence scope `pack` (project › global › pack). They are **always** `trust: external`, whatever the frontmatter says, and they never project into `.claude/skills`. `paradigm skill list` shows them with scope `pack:<pack-id>`. A project or global skill with the same id shadows the pack skill (`paradigm skill lint` warns `PACK_SHADOWED`).
+
+To use one, a human imports it:
+
+```bash
+paradigm skill import paradigm:trace-debug            # → .paradigm/skills/trace-debug
+paradigm skill import paradigm:trace-debug --global   # → ~/.paradigm/skills/trace-debug
+```
+
+Import requires an interactive terminal: it prints the skill's `allowed-tools` and every `scripts/` file (size + hash), asks you to type the id, then copies it as `trust: provisional` with `provenance.source: pack` and `provenance.upstream: <pack>:<id>@<version>`. It never overwrites an existing skill. Certify it (`paradigm skill certify`) before it projects without `--allow-provisional`.
+
 ---
 
 ## 8. MCP tools
 
-All University MCP tools accept an optional `pack` argument. Default resolution: project pack if present, else first-party.
+v7.11 cut the surface to **two read-only tools** (restart your MCP server after upgrading). Default pack resolution: project pack if present, else first-party. The tools are registered only when a discovered pack has content or ships skills.
 
 | Tool | What it does |
 |------|--------------|
-| `paradigm_university_search` | Search entries by type, tag, difficulty, symbol, category, or free-text query. Accepts `pack` and `discipline`. Result ids are returned in `<pack-id>:<entry-id>` form. |
-| `paradigm_university_get` | Fetch a full entry. Accepts bare id or `<pack-id>:<entry-id>`. |
-| `paradigm_university_create` | Create a note, policy, quiz, or path. Honors `pack`. |
-| `paradigm_university_update` | Update an existing entry. Honors `pack` to disambiguate bare ids. |
-| `paradigm_university_onboard` | Return the recommended onboarding sequence for a student. Honors `pack`. |
-| `paradigm_university_validate` | Validate pack integrity — broken path steps, bad quiz answer keys, missing titles. |
-| `paradigm_university_pack_list` | **New in v5.39.0.** List discovered packs with id, name, version, tenant_kind, discipline, entry_count, path. Optional `tenant_kind` filter. |
+| `paradigm_university` (op `search`) | Search entries by type, tag, difficulty, symbol, category, section, or free-text query (optional `pack`). Result ids are `<pack-id>:<entry-id>`. Pass `id` (bare or qualified) to fetch one entry's full content instead — body for notes/policies, questions for quizzes, steps for paths. |
+| `paradigm_university` (op `pack_list`) | List discovered packs with id, name, version, tenant_kind, discipline, entry_count, sections, `skills: [{ id, version, trust }]`, path. Optional `tenant_kind` filter. |
+
+Removed in v7.11 — authoring and validation are CLI-only: `paradigm_university_get` (use `search` with `id`), `_create`/`_update` (`paradigm university add`), `_onboard`, `_validate` (`paradigm university validate`). For one release, calls to the removed names return `{ "error": "moved to CLI: paradigm university add|show|validate" }`.
 
 ### 8.1 `<pack-id>:<entry-id>` addressing
 
@@ -359,45 +390,9 @@ Canonical cross-pack addressing uses a colon: `paradigm:N-symbol-basics`. A bare
 
 ---
 
-## 9. Metrics and the v6.3 sunset review
+## 9. Metrics
 
-### 9.1 What we count (local-only)
-
-v5.39.0 / v6.0 capture privacy-preserving count snapshots on lifecycle boundaries (`paradigm shift`, `paradigm doctor`, server start/stop, `paradigm university status`). Stored at `.paradigm/university/.metrics/snapshot-YYYY-MM-DD.json`, pruned after 90 days.
-
-A snapshot records: pack count by tenant_kind, project-pack entry counts by type, disciplines count, `last_modified_days_ago`, and 30-day activity deltas (quiz completions, entries created). Plus a hashed project salt — `sha256(projectRootPath + random_salt)` — so snapshots are unique per project but carry no identifying string.
-
-**No entry titles, no content bodies, no user identifiers, no remote send.** The `metrics.remote_consent` key is seeded to `pending` in `.paradigm/config.yaml` so v6.1 can prompt for opt-in without a config-schema migration.
-
-Configurable via:
-
-```yaml
-# .paradigm/config.yaml
-metrics:
-  remote_consent: pending          # pending | granted | declined
-  local_snapshots_enabled: true    # set to false to disable capture entirely
-```
-
-### 9.2 The v6.3 sunset contract
-
-v6.3 shipped May 2026 and triggered the first cross-adopter University metrics review to decide whether the per-project University primitive earned its keep. The contract: the project-pack primitive is a **candidate for consolidation** if **all four** of these hold at the review:
-
-1. **median project-pack entries < 3** (notes + policies + paths)
-2. **median `last_modified_days_ago` > 45**
-3. **median `quiz_completions_last_30d` < 1**
-4. **adopters_with_project_pack / total_adopters < 0.20** (adoption floor)
-
-AND-gate, deliberately conservative. A single noisy signal does not trigger sunset. "Consolidate" means collapsing project-authored content into wisdom + protocol primitives and retaining only first-party packs as the University surface — no content is lost, just routed.
-
-This is a **docs-only commitment** at v5.39.0 / v6.0. No enforcement code ships yet. The v6.3 review reads the metrics and decides.
-
-### 9.3 How to inspect locally
-
-```bash
-paradigm university status
-```
-
-Reads the latest snapshot for this project and shows per-pack entry counts and diploma totals.
+The v5.39–v7.10 local count snapshots (`.paradigm/university/.metrics/`, captured by `paradigm shift`) and the v6.3 sunset review they fed were retired in v7.11 along with the `shift` scaffold — `paradigm shift` no longer creates `.paradigm/university/`. `paradigm university status` still reports per-pack entry counts.
 
 ---
 
@@ -424,7 +419,7 @@ The `loadPortalConfigLegacy` back-compat shim introduced in v5.37.12 is removed 
 ## 11. What's next
 
 - **Promotion pipelines** — notebook → project pack, decision cluster → path auto-draft, protocol → runbook. Reducing the authoring cost for content that already exists in other Paradigm surfaces.
-- **Compliance enforcement tooling** — `paradigm compliance audit`, retention workers, revocation workers, diploma invalidation on `policy_hash` drift. Schema landed in v5.39/v6.0 so the tooling can be added without another breaking change.
+- **Compliance enforcement tooling** — `paradigm compliance audit`, retention workers, revocation workers, invalidation on `policy_hash` drift. Schema landed in v5.39/v6.0 so the tooling can be added without another breaking change.
 - **Remote metrics opt-in** — reads `metrics.remote_consent: pending` and prompts. Target endpoint is `nevr.land/telemetry`. Entirely opt-in.
 - **Claude University** — a separate site, not a Paradigm tenant. Tracking at `project_claude_learning_site.md`. The framework bits that make it feasible (pack discovery, timed quizzes, presentational credentials) have shipped.
 - **Authoring UI for non-developers** — web CRUD for quizzes/paths, "suggest edit" PR flow. Conditional on adoption data.
@@ -441,4 +436,4 @@ The `loadPortalConfigLegacy` back-compat shim introduced in v5.37.12 is removed 
 
 ---
 
-*Source of truth for the shipped surface: `packages/paradigm/src/commands/university/*.ts`, `packages/paradigm-mcp/src/tools/university.ts`, `packages/paradigm-mcp/src/utils/pack-loader.ts`, `packages/paradigm-mcp/src/utils/university-metrics.ts`, `packages/university/pack.yaml`. Decisions: `docs/private/plans/v6.0-decisions-locked.md`.*
+*Source of truth for the shipped surface: `packages/paradigm/src/commands/university/*.ts`, `packages/paradigm-mcp/src/tools/university.ts`, `packages/university-core/src/pack-discovery.ts`, `packages/paradigm-mcp/src/utils/skill-loader.ts` (pack skill scope), `packages/university/pack.yaml`. Decisions: `docs/private/plans/v6.0-decisions-locked.md`.*

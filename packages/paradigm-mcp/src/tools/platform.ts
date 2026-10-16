@@ -26,8 +26,8 @@ export function getPlatformToolsList() {
         properties: {
           section: {
             type: 'string',
-            enum: ['overview', 'lore', 'graph', 'sentinel', 'university', 'symphony'],
-            description: 'Section to navigate to',
+            enum: ['overview', 'lore', 'graph', 'sentinel', 'academy', 'university', 'symphony'],
+            description: 'Section to navigate to ("university" is a deprecated alias of "academy")',
           },
           symbol: {
             type: 'string',
@@ -169,7 +169,7 @@ export async function handlePlatformTool(
   switch (name) {
     case 'paradigm_platform_navigate': {
       const result = await sendAgentCommand(ctx.projectDir, 'navigate', {
-        section: args.section,
+        section: args.section === 'university' ? 'academy' : args.section,
         symbol: args.symbol,
         loreId: args.loreId,
       });

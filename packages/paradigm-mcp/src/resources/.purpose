@@ -26,7 +26,7 @@ components:
     type: service
     tags: [mcp, resources, specs]
   WisdomResources:
-    description: Team wisdom — preferences, antipatterns, decisions, expertise
+    description: 'Team wisdom — preferences, antipatterns, expertise. paradigm://wisdom/decisions and paradigm://wisdom/decision/{id} are ALIASES of the canonical TD store (.paradigm/decisions/) since 7.12.0 (D2) — the legacy wisdom/decisions dir is no longer read.'
     type: service
     tags: [mcp, resources, wisdom]
   HistoryResources:

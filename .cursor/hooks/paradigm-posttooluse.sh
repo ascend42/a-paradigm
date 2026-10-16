@@ -107,7 +107,7 @@ if [ -z "$found_purpose" ]; then
   file_dir=$(dirname "$REL_PATH")
   echo "" >&2
   echo "[paradigm] No .purpose file covers $file_dir/" >&2
-  echo "  Create one: paradigm_purpose_init + paradigm_purpose_add_component" >&2
+  echo "  Create one: paradigm_purpose (op: init) + paradigm_purpose (op: add_component)" >&2
   echo "  $PENDING_COUNT file(s) pending review. The stop hook WILL BLOCK." >&2
 elif [ "$PENDING_COUNT" -gt 0 ] && [ "$((PENDING_COUNT % 3))" -eq 0 ]; then
   echo "" >&2

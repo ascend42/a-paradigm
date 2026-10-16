@@ -47,7 +47,7 @@ This project runs on **macOS**. Use appropriate syntax:
 4. **For true parallel execution**, suggest user runs:
    `paradigm team orchestrate "task description"`
 
-5. **Record history:** `paradigm_history_record({ type: "implement", symbols: [...], description: "..." })`
+5. **Record history:** `paradigm_history({op:'record', type: "implement", symbols: [...], description: "..." })`
 
 ## Available Agents
 

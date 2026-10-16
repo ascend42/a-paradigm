@@ -81,12 +81,12 @@ if [ "$VIOLATION_COUNT" -gt 0 ]; then
   fi
   echo "" >&2
   echo "Run these MCP tools to fix:" >&2
-  echo "  1. paradigm_purpose_add_component — register new code units" >&2
-  echo "  2. paradigm_purpose_add_aspect — register cross-cutting concerns (with anchors)" >&2
-  echo "  3. paradigm_portal_add_route — register new endpoints with gates" >&2
+  echo "  1. paradigm_purpose (op: add_component) — register new code units" >&2
+  echo "  2. paradigm_purpose (op: add_aspect) — register cross-cutting concerns (with anchors)" >&2
+  echo "  3. paradigm_purpose (op: portal_add_route) — register new endpoints with gates" >&2
   echo "  4. paradigm_reindex — rebuild indexes after updates" >&2
-  echo "  5. paradigm_lore_record — record session lore entry" >&2
-  echo "  6. paradigm_habits_check — evaluate habit compliance" >&2
+  echo "  5. paradigm_lore (op: record) — record session lore entry" >&2
+  echo "  6. paradigm_habits (op: check) — evaluate habit compliance" >&2
   echo "" >&2
   echo "Tip: Set PARADIGM_AUTO_FIX=1 to auto-fix trivial violations (missing .purpose stubs, missing lore)." >&2
   echo "Help: See .paradigm/docs/troubleshooting.md for step-by-step resolution guides." >&2

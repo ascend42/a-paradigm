@@ -9,7 +9,7 @@ alwaysApply: true
 ## CRITICAL RULES (Non-Negotiable)
 
 1. **You MUST update the nearest `.purpose` file when you change behavior.** No exceptions.
-2. **You MUST call `paradigm_session_recover` at session start and `paradigm_pm_postflight` when finishing.** See `paradigm-workflow.mdc` for the full protocol.
+2. **You MUST call `paradigm_session` (op `recover`) at session start and `paradigm_pm` (op `postflight`) when finishing.** See `paradigm-workflow.mdc` for the full protocol.
 3. **You MUST call `paradigm_ripple` before modifying any documented symbol.** Check impact before changing code.
 
 Violating these rules means your changes are non-compliant. The `paradigm-workflow.mdc` file contains the complete workflow — follow it.

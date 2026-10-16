@@ -13,6 +13,7 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import * as yaml from 'js-yaml';
 import type {
   StreamEvent,
   Nomination,
@@ -29,6 +30,7 @@ import { loadJournalEntries } from './journal-loader.js';
 import { addNotebookEntry, normalizeConcept, notebookPrior } from './notebook-loader.js';
 import { appendClassroomCertification } from './field-failures.js';
 import { log } from './mcp-logger.js';
+import type { PromotionDecision, PromotionReason } from '../types/knowledge-streams.js';
 
 const EVENTS_DIR = '.paradigm/events';
 const NOMINATIONS_FILE = 'nominations.jsonl';
@@ -56,6 +58,9 @@ function generateDebateId(): string {
 
 // ── Event Processing ──
 
+/** Event types that stay in the stream but never produce nominations (D1, 7.12.0). */
+export const NON_NOMINATING_EVENT_TYPES: ReadonlySet<string> = new Set(['work-completed']);
+
 /**
  * Score an event against ALL agent attention patterns.
  * For agents above threshold, generate Nomination objects.
@@ -64,6 +69,13 @@ export function processEvent(
   rootDir: string,
   event: StreamEvent
 ): { nominations: Nomination[]; debates: Debate[] } {
+  // D1 (7.12.0): `work-completed` is a record of work that already happened —
+  // it stays in stream.jsonl for audit/learning, but never becomes a
+  // nomination (it produced 100% "Work completed … — review outcome" boilerplate).
+  if (NON_NOMINATING_EVENT_TYPES.has(event.type)) {
+    return { nominations: [], debates: [] };
+  }
+
   const profiles = loadAllAgentProfiles(rootDir);
   const policy = loadDataPolicy(rootDir);
   const scores: Array<{ profile: AgentProfile; score: AttentionScore }> = [];
@@ -178,8 +190,6 @@ function generateBrief(profile: AgentProfile, event: StreamEvent, score: Attenti
       return `${role}: Gate ${event.symbols?.join(', ') || ''} added — ${profile.id === 'security' ? 'verify enforcement points' : 'check downstream impact'}`;
     case 'decision-made':
       return `${role}: Decision recorded — ${event.context?.slice(0, 80) || 'review for alignment with project patterns'}`;
-    case 'work-completed':
-      return `${role}: Work completed on ${event.symbols?.join(', ') || event.context?.slice(0, 40) || 'task'} — review outcome`;
     case 'error-encountered':
       return `${role}: Error detected — ${event.context?.slice(0, 80) || 'investigate root cause'}`;
     default: {
@@ -282,37 +292,97 @@ function persistDebates(rootDir: string, debates: Debate[]): void {
 }
 
 /**
- * One recorded promotion decision — the instrument output (v7.1 r4).
- *
- * Captures what a hypothetical belief-delta gate WOULD have seen at the moment
- * a promotion decision was made, alongside the actual (unchanged) absolute gate
- * verdict. Stored append-only at .paradigm/events/promotion-decisions.jsonl so
- * the delta bands can be calibrated from a real histogram later. This is an
- * INSTRUMENT only — nothing reads it back to decide promotions.
- */
-/**
  * Belief-delta promotion bands (docs/specs/classroom-falsifiable-loop.md §3).
- * STARTING GUESSES — Loid calibrates these from the promotion-decisions.jsonl
- * histogram the instrument has been collecting. NOT YET ENFORCED: the gate still
- * uses absolute confidence_after >= 0.8 until sub-phase 2 flips it. Defined here
- * now (contracts-only) so the flip is a one-line change against named constants.
+ * STARTING GUESSES (Loid, UNCALIBRATED) — recalibrate from the
+ * promotion-decisions.jsonl histogram once >= 50 priorFound rows exist.
+ * Overridable per project via config.yaml `learning.promotion.*`.
  */
 export const PROMOTION_FLOOR = 0.7;      // after must clear this regardless of delta
 export const PROMOTION_DELTA_MIN = 0.1;  // promote when belief rose by ≥ this
 export const PROMOTION_DELTA_EPSILON = 0.05; // |delta| < this AND priorFound ⇒ HOLD (silence is signal)
+export const PROMOTION_NOVEL_BAR = 0.8;  // no prior ⇒ fall back to the old absolute bar
+/** The retired pre-7.12.0 absolute gate (confidence_after >= 0.8). Only used for the shadow column. */
+export const LEGACY_ABSOLUTE_BAR = 0.8;
 
-interface PromotionDecision {
-  ts: string;
-  agent: string;
-  concepts: string[];
-  before: number;
-  after: number;
-  delta: number;
-  promoted: boolean;
-  priorFound: boolean;
-  gate: string;
-  /** The delta-gate floor in effect when recorded (sub-phase 0 forward-compat). */
-  floor?: number;
+export interface PromotionBands {
+  floor: number;
+  deltaMin: number;
+  epsilon: number;
+  novelBar: number;
+}
+
+export const DEFAULT_PROMOTION_BANDS: PromotionBands = {
+  floor: PROMOTION_FLOOR,
+  deltaMin: PROMOTION_DELTA_MIN,
+  epsilon: PROMOTION_DELTA_EPSILON,
+  novelBar: PROMOTION_NOVEL_BAR,
+};
+
+/**
+ * Load promotion bands from .paradigm/config.yaml `learning.promotion.*`.
+ * Accepts camelCase (deltaMin, novelBar) or snake_case (delta_min, novel_bar).
+ * Missing / non-numeric / out-of-[0,1] values fall back to the defaults.
+ */
+export function loadPromotionBands(rootDir: string): PromotionBands {
+  const bands: PromotionBands = { ...DEFAULT_PROMOTION_BANDS };
+  try {
+    const configPath = path.join(rootDir, '.paradigm', 'config.yaml');
+    if (!fs.existsSync(configPath)) return bands;
+    const parsed = yaml.load(fs.readFileSync(configPath, 'utf8')) as
+      | { learning?: { promotion?: Record<string, unknown> } }
+      | null;
+    const promo = parsed?.learning?.promotion;
+    if (!promo || typeof promo !== 'object') return bands;
+    const pick = (...keys: string[]): number | undefined => {
+      for (const k of keys) {
+        const v = promo[k];
+        if (typeof v === 'number' && Number.isFinite(v) && v >= 0 && v <= 1) return v;
+      }
+      return undefined;
+    };
+    bands.floor = pick('floor') ?? bands.floor;
+    bands.deltaMin = pick('deltaMin', 'delta_min') ?? bands.deltaMin;
+    bands.epsilon = pick('epsilon') ?? bands.epsilon;
+    bands.novelBar = pick('novelBar', 'novel_bar') ?? bands.novelBar;
+  } catch {
+    // Malformed config — defaults.
+  }
+  return bands;
+}
+
+/**
+ * The belief-delta promotion gate (7.12.0, D6). Pure function — order matters:
+ *   1. after undefined            → skip  'no-after'  (kills the `?? 0` artifact)
+ *   2. trigger 'human_feedback'   → floor only, reason 'human' / 'below-floor'
+ *   3. after < floor              → skip  'below-floor'
+ *   4. no prior                   → after >= novelBar, reason 'novel'
+ *   5. |delta| < epsilon          → hold  'hold-silence' (silence is signal)
+ *   6. delta >= deltaMin          → promote 'delta'
+ *   7. delta <= -epsilon          → skip  'regressed' (the field-failure reducer handles it)
+ *      epsilon <= delta < deltaMin → skip 'below-delta' (rose, but not enough)
+ *
+ * `prior` MUST come from the notebook (notebookPrior), NEVER the journal's
+ * confidence_before (fabricated at write time).
+ */
+export function decidePromotion(
+  e: { after?: number; trigger: string },
+  prior: { value: number; found: boolean },
+  b: PromotionBands,
+): { promote: boolean; reason: PromotionReason } {
+  if (typeof e.after !== 'number' || !Number.isFinite(e.after)) {
+    return { promote: false, reason: 'no-after' };
+  }
+  const after = e.after;
+  if (e.trigger === 'human_feedback') {
+    return after >= b.floor ? { promote: true, reason: 'human' } : { promote: false, reason: 'below-floor' };
+  }
+  if (after < b.floor) return { promote: false, reason: 'below-floor' };
+  if (!prior.found) return { promote: after >= b.novelBar, reason: 'novel' };
+  const delta = after - prior.value;
+  if (Math.abs(delta) < b.epsilon) return { promote: false, reason: 'hold-silence' };
+  if (delta >= b.deltaMin) return { promote: true, reason: 'delta' };
+  if (delta < 0) return { promote: false, reason: 'regressed' };
+  return { promote: false, reason: 'below-delta' };
 }
 
 /**
@@ -959,7 +1029,8 @@ function detectLocalProject(rootDir: string): string {
  *   - 'correction_received' — about what NOT to do; less useful as notebook snippets
  *   - 'confidence_miss' — for confidence adjustment, not reusable knowledge
  *
- * Criteria: confidence_after >= 0.8 AND not already promoted (promoted_to_notebook is unset).
+ * Criteria: decidePromotion() (belief-delta gate, 7.12.0) AND not already promoted
+ * (promoted_to_notebook is unset).
  *
  * Returns the number of entries promoted.
  */
@@ -972,6 +1043,7 @@ export function autoPromoteJournalEntries(
   const feedbackEntries = loadJournalEntries(agentId, { trigger: 'human_feedback', limit: 100 });
   const journal = ([...patternEntries, ...feedbackEntries]) as Array<{
     id: string;
+    trigger?: string;
     insight: string;
     confidence_after?: number;
     promoted_to_notebook?: string;
@@ -981,6 +1053,7 @@ export function autoPromoteJournalEntries(
   }>;
 
   const promoted: Array<{ journalId: string; notebookId: string }> = [];
+  const bands = loadPromotionBands(rootDir);
 
   for (const entry of journal) {
     // Skip already-promoted entries — no instrument row, no decision to record.
@@ -992,13 +1065,11 @@ export function autoPromoteJournalEntries(
       .map(normalizeConcept)
       .filter(Boolean);
 
-    // ── INSTRUMENT (v7.1 r4): measure the belief delta, do NOT gate on it ──
-    // We record what a future delta-gate WOULD have seen, alongside the
-    // UNCHANGED absolute gate below. This collects real {before, after, delta,
-    // promoted} data so the bands can be set from a histogram later. The
-    // promote/skip decision is still the byte-identical absolute rule.
-    const after = entry.confidence_after ?? 0;
-    const wouldPromote = after >= 0.8; // mirrors the gate below; recorded, not enforced (NOT the `promoted` accumulator at :969)
+    // ── GATE (7.12.0, D6): belief-delta with configurable bands ──
+    // Prior comes from the NOTEBOOK (notebookPrior), never the journal's
+    // confidence_before. The absolute >= 0.8 rule survives only as the
+    // novel-concept fallback (novelBar) and as a shadow column on the row.
+    const after = typeof entry.confidence_after === 'number' ? entry.confidence_after : undefined;
     let before = 0.5;
     let priorFound = false;
     try {
@@ -1006,23 +1077,29 @@ export function autoPromoteJournalEntries(
       before = prior.value;
       priorFound = prior.found;
     } catch {
-      // Prior lookup is best-effort instrumentation; default to 0.5 on failure.
+      // Prior lookup is best-effort; default to 0.5 / not-found on failure.
     }
+    const decision = decidePromotion(
+      { after, trigger: entry.trigger ?? 'pattern_discovered' },
+      { value: before, found: priorFound },
+      bands,
+    );
     appendPromotionDecision(rootDir, {
       ts: new Date().toISOString(),
       agent: agentId,
       concepts,
       before,
-      after,
-      delta: after - before,
-      promoted: wouldPromote,
+      after: after ?? null,
+      delta: after === undefined ? null : after - before,
+      promoted: decision.promote,
       priorFound,
-      gate: 'absolute-0.8',
+      gate: 'belief-delta-v1',
+      floor: bands.floor,
+      reason: decision.reason,
+      absoluteWouldPromote: (after ?? 0) >= LEGACY_ABSOLUTE_BAR,
     });
 
-    // ── GATE (UNCHANGED): absolute confidence_after < 0.8 → skip ──
-    // Do NOT replace with the delta — this is the deferred, unfalsifiable gate.
-    if ((entry.confidence_after ?? 0) < 0.8) continue;
+    if (!decision.promote) continue;
 
     try {
       const { entry: nbEntry } = addNotebookEntry(
@@ -1067,7 +1144,9 @@ export function autoPromoteJournalEntries(
           entryId: nbEntry.id,
           concepts,
           confidenceAtCert: entry.confidence_after ?? 0.5,
-          certifiedBy: 'gate',
+          // human_feedback is floor-only (a human said it) — stamp it 'human',
+          // not 'gate', so the delta-gate's track record isn't credited with it.
+          certifiedBy: decision.reason === 'human' ? 'human' : 'gate',
           outcome: 'pending',
         });
       } catch { /* non-fatal — certification is an instrument, never blocks promotion */ }
@@ -1076,9 +1155,12 @@ export function autoPromoteJournalEntries(
       // Shared with gatedPromoteJournalEntry — byte-identical to the prior inline block.
       markJournalPromoted(agentId, entry.id, nbEntry.id);
     } catch (e) {
-      // eslint-disable-next-line no-console
-      console.error('PROMOTE_THREW', (e as Error).message);
       // Skip individual promotion failures
+      log.component('#nomination-engine').warn('journal promotion failed', {
+        agentId,
+        entryId: entry.id,
+        error: (e as Error).message,
+      });
     }
   }
 

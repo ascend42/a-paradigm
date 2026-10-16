@@ -475,89 +475,20 @@ describe('plsat-migration — pack manifest smoke', () => {
 });
 
 // ─────────────────────────────────────────────────────────────
-// Server route smoke: list+get response shape preserved
+// Pack content smoke (7.11.0: the standalone server was retired — the
+// Platform Academy reads this pack through @a-company/university-core)
 // ─────────────────────────────────────────────────────────────
 
-describe('plsat-migration — server route response shape smoke', () => {
-  it('courses router /api/courses returns v5-compatible { courses: [...] } shape', async () => {
-    const { createCoursesRouter } = await import('../src/server/routes/courses.js');
-    const router = createCoursesRouter(CONTENT_DIR);
-    expect(router).toBeDefined();
-
-    // Invoke the list handler via the router stack. Express routers are
-    // layered under router.stack — we can walk the first registered "get"
-    // at path "/" for the list handler.
-    const listLayer = (router as unknown as { stack: Array<{ route?: { path: string; methods: Record<string, boolean>; stack: Array<{ handle: Function }> } }> }).stack
-      .find(l => l.route && l.route.path === '/' && l.route.methods.get);
-    expect(listLayer).toBeDefined();
-
-    let responseBody: unknown;
-    let responseStatus = 200;
-    const fakeReq: { params: Record<string, string> } = { params: {} };
-    const fakeRes = {
-      json(body: unknown) { responseBody = body; return this; },
-      status(s: number) { responseStatus = s; return this; },
-    };
-    await new Promise<void>(resolve => {
-      listLayer!.route!.stack[0].handle(fakeReq, fakeRes, resolve);
-      // list handler is synchronous; resolve if it completed without calling next
-      setImmediate(resolve);
-    });
-
-    expect(responseStatus).toBe(200);
-    const body = responseBody as { courses: Array<{ id: string; title: string; lessons: unknown[] }> };
-    expect(body).toBeDefined();
-    expect(Array.isArray(body.courses)).toBe(true);
-    // v6.5: added LP-para-451.yaml + the LP-fieldnotes-authoring.yaml elective.
-    // v7.0: added LP-para-801.yaml (PARA 801 "Closing the Loop").
-    // v7.x: added LP-para-901.yaml (PARA 901 "The Academy — Gated Learning") — 12
-    // total first-party learning paths (11 para-NNN courses + 1 fieldnotes elective).
-    // Hard-coded count — if a course is added/removed later, update this test
-    // explicitly (don't soften to >=; first-party pack is a stable surface).
-    expect(body.courses.length).toBe(12);
-    for (const c of body.courses) {
-      // Course ids are either para-NNN courses or the kebab-case fieldnotes elective.
-      expect(c.id).toMatch(/^(para-\d{3}|[a-z][a-z0-9-]*)$/);
-      expect(typeof c.title).toBe('string');
-      expect(Array.isArray(c.lessons)).toBe(true);
-    }
-    // The para-NNN course track is the stable certifiable surface.
-    const paraCourses = body.courses.filter(c => /^para-\d{3}$/.test(c.id));
-    expect(paraCourses.length).toBe(11);
-  });
-
-  it('plsat router /api/plsat returns v5-compatible { versions: [...] } shape', async () => {
-    const { createPlsatRouter } = await import('../src/server/routes/plsat.js');
-    const router = createPlsatRouter(CONTENT_DIR);
-    expect(router).toBeDefined();
-
-    const listLayer = (router as unknown as { stack: Array<{ route?: { path: string; methods: Record<string, boolean>; stack: Array<{ handle: Function }> } }> }).stack
-      .find(l => l.route && l.route.path === '/' && l.route.methods.get);
-    expect(listLayer).toBeDefined();
-
-    let responseBody: unknown;
-    let responseStatus = 200;
-    const fakeReq: { params: Record<string, string> } = { params: {} };
-    const fakeRes = {
-      json(body: unknown) { responseBody = body; return this; },
-      status(s: number) { responseStatus = s; return this; },
-    };
-    await new Promise<void>(resolve => {
-      listLayer!.route!.stack[0].handle(fakeReq, fakeRes, resolve);
-      setImmediate(resolve);
-    });
-
-    expect(responseStatus).toBe(200);
-    const body = responseBody as { versions: Array<{ version: string; questionCount: number; timeLimit: number; passThreshold: number }> };
-    expect(Array.isArray(body.versions)).toBe(true);
-    // Two versions (v2, v3) should be discovered
-    expect(body.versions.length).toBe(2);
-    for (const v of body.versions) {
-      expect(typeof v.version).toBe('string');
-      expect(typeof v.questionCount).toBe('number');
-      expect(v.questionCount).toBeGreaterThan(0);
-      expect(typeof v.timeLimit).toBe('number');
-      expect(typeof v.passThreshold).toBe('number');
-    }
+describe('plsat-migration — pack content smoke via university-core', () => {
+  it('the first-party pack exposes the stable learning-path set', async () => {
+    const { loadPackIndex } = await import('@a-company/university-core');
+    const index = loadPackIndex(UNI_ROOT, UNI_ROOT);
+    const paths = index.entries.filter(e => e.type === 'path');
+    // 12 first-party learning paths (11 para-NNN courses + 1 fieldnotes
+    // elective). Hard-coded — update explicitly if a course is added/removed.
+    expect(paths.length).toBe(12);
+    const para = paths.filter(p => /^LP-para-\d{3}$/.test(p.id) || /^para-\d{3}$/.test(p.id));
+    expect(para.length).toBe(11);
+    expect(index.entries.some(e => e.type === 'quiz')).toBe(true);
   });
 });

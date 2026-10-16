@@ -1,149 +1,161 @@
 {
-  "sessionId": "smthyyvcx",
-  "startTime": 1788224956737,
-  "lastActivity": 1788469491416,
+  "sessionId": "smuhllzi9",
+  "startTime": 1790379302913,
+  "lastActivity": 1790673269672,
   "breadcrumbs": [
     {
-      "timestamp": 1788224998881,
+      "timestamp": 1790382488041,
       "action": "tool-call",
-      "tool": "paradigm_session_recover",
-      "summary": "session_recover"
+      "tool": "paradigm_decision_record",
+      "summary": "decision_record: Skills primitive + University overhaul + internals refactor "
     },
     {
-      "timestamp": 1788224999104,
+      "timestamp": 1790382494605,
       "action": "tool-call",
-      "tool": "paradigm_status",
-      "summary": "Checked project status"
+      "tool": "paradigm_task_create",
+      "summary": "Created task: \"ARC TD-2026-09-26-846 Phase 0 — UNBLOCK: single agent source\""
     },
     {
-      "timestamp": 1788225652677,
+      "timestamp": 1790382496938,
       "action": "tool-call",
-      "tool": "paradigm_search",
-      "symbol": "session recovery checkpoint",
-      "summary": "Searched for \"session recovery checkpoint\""
+      "tool": "paradigm_task_create",
+      "summary": "Created task: \"ARC TD-2026-09-26-846 Phase 1 — SKILLS primitive (design fir\""
     },
     {
-      "timestamp": 1788225657797,
+      "timestamp": 1790382499036,
       "action": "tool-call",
-      "tool": "paradigm_search",
-      "symbol": "session-tracker",
-      "summary": "Searched for \"session-tracker\""
+      "tool": "paradigm_task_create",
+      "summary": "Created task: \"ARC TD-2026-09-26-846 Phase 2 — UNIVERSITY overhaul (keep hu\""
     },
     {
-      "timestamp": 1788228064668,
+      "timestamp": 1790382500992,
+      "action": "tool-call",
+      "tool": "paradigm_task_create",
+      "summary": "Created task: \"ARC TD-2026-09-26-846 Phase 3 — LEARNING-STORE consolidation\""
+    },
+    {
+      "timestamp": 1790382502495,
+      "action": "tool-call",
+      "tool": "paradigm_task_create",
+      "summary": "Created task: \"ARC TD-2026-09-26-846 Phase 4 — MCP SURFACE cut: 139 tools /\""
+    },
+    {
+      "timestamp": 1790382519344,
       "action": "tool-call",
       "tool": "paradigm_orchestrate_inline",
       "summary": "orchestrate_inline: plan"
     },
     {
-      "timestamp": 1788228689099,
-      "action": "tool-call",
-      "tool": "paradigm_orchestrate_inline",
-      "summary": "orchestrate_inline: execute"
-    },
-    {
-      "timestamp": 1788231804358,
-      "action": "tool-call",
-      "tool": "paradigm_decision_record",
-      "summary": "decision_record: Session-recovery stays branch-blind; recovery banner annotat"
-    },
-    {
-      "timestamp": 1788232371879,
-      "action": "tool-call",
-      "tool": "paradigm_search",
-      "symbol": "session recovery checkpoint",
-      "summary": "Searched for \"session recovery checkpoint\""
-    },
-    {
-      "timestamp": 1788232376483,
-      "action": "tool-call",
-      "tool": "paradigm_search",
-      "symbol": "session recovery",
-      "summary": "Searched for \"session recovery\""
-    },
-    {
-      "timestamp": 1788232376493,
-      "action": "tool-call",
-      "tool": "paradigm_search",
-      "symbol": "session",
-      "summary": "Searched for \"session\""
-    },
-    {
-      "timestamp": 1788232394635,
-      "action": "tool-call",
-      "tool": "paradigm_search",
-      "symbol": "recovery checkpoint",
-      "summary": "Searched for \"recovery checkpoint\""
-    },
-    {
-      "timestamp": 1788232993241,
-      "action": "tool-call",
-      "tool": "paradigm_captain_debrief",
-      "summary": "captain_debrief: orch-mti16vae-hfi5"
-    },
-    {
-      "timestamp": 1788232996129,
-      "action": "tool-call",
-      "tool": "paradigm_ambient_learn_postflight",
-      "summary": "ambient_learn_postflight: orch-mti16vae-hfi5"
-    },
-    {
-      "timestamp": 1788250242447,
+      "timestamp": 1790383568627,
       "action": "tool-call",
       "tool": "paradigm_task_create",
-      "summary": "Created task: \"Verify ${VAR} expansion in .mcp.json for Cursor / Cline / Co\""
+      "summary": "Created task: \"captain.ts still resolves agents via loadAgentsManifest + su\""
     },
     {
-      "timestamp": 1788250259316,
-      "action": "tool-call",
-      "tool": "paradigm_captain_debrief",
-      "summary": "captain_debrief: orch-mcp-config-path-fix-2026-09-01"
-    },
-    {
-      "timestamp": 1788373359094,
-      "action": "tool-call",
-      "tool": "paradigm_task_create",
-      "summary": "Created task: \"Wire ParadigmFiles.meta in loadParadigmFiles (packages/parad\""
-    },
-    {
-      "timestamp": 1788373414806,
-      "action": "tool-call",
-      "tool": "paradigm_captain_debrief",
-      "summary": "captain_debrief: orch-headroom-adoption-2026-09-02"
-    },
-    {
-      "timestamp": 1788374585690,
-      "action": "tool-call",
-      "tool": "paradigm_task_done",
-      "summary": "Completed task T-2026-09-02-001"
-    },
-    {
-      "timestamp": 1788374585832,
-      "action": "tool-call",
-      "tool": "paradigm_task_done",
-      "summary": "Completed task T-2026-09-01-005"
-    },
-    {
-      "timestamp": 1788469491041,
+      "timestamp": 1790383953273,
       "action": "tool-call",
       "tool": "paradigm_lore_record",
-      "summary": "lore_record: Framework hygiene + Headroom adoption + install fix (7.8.2→7"
+      "summary": "lore_record: Skills arc Phase 0 — roster/profile-authoritative dispatch ("
     },
     {
-      "timestamp": 1788833492602,
+      "timestamp": 1790383963646,
       "action": "tool-call",
-      "tool": "paradigm_session_checkpoint",
-      "summary": "Checkpoint: phase=complete, Shipped 7.8.2→7.8.6, all published to npm + merged to main +"
+      "tool": "paradigm_task_update",
+      "summary": "Updated task T-2026-09-26-001"
+    },
+    {
+      "timestamp": 1790614505571,
+      "action": "tool-call",
+      "tool": "paradigm_task_create",
+      "summary": "Created task: \"IDEATION (founder, 2026-09-28): a more generalized problem t\""
+    },
+    {
+      "timestamp": 1790668614854,
+      "action": "tool-call",
+      "tool": "paradigm_task_create",
+      "summary": "Created task: \"Skill certification SIGNING (follow-up to 7.10.0, founder ch\""
+    },
+    {
+      "timestamp": 1790669035457,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: Skills arc Phase 1 — agent-owned skills primitive (7.10.0)"
+    },
+    {
+      "timestamp": 1790669047268,
+      "action": "tool-call",
+      "tool": "paradigm_task_update",
+      "summary": "Updated task T-2026-09-26-002"
+    },
+    {
+      "timestamp": 1790669626906,
+      "action": "tool-call",
+      "tool": "paradigm_decision_record",
+      "summary": "decision_record: Paradigm Brain (\"Obsidian Brain\"): adjacent document-corpus "
+    },
+    {
+      "timestamp": 1790669670010,
+      "action": "tool-call",
+      "tool": "paradigm_task_update",
+      "summary": "Updated task T-2026-09-26-004"
+    },
+    {
+      "timestamp": 1790669670084,
+      "action": "tool-call",
+      "tool": "paradigm_task_update",
+      "summary": "Updated task T-2026-09-26-005"
+    },
+    {
+      "timestamp": 1790669670098,
+      "action": "tool-call",
+      "tool": "paradigm_task_create",
+      "summary": "Created task: \"ARC TD-2026-09-26-846 Phase 5 — PARADIGM BRAIN MVP per docs/\""
+    },
+    {
+      "timestamp": 1790669670109,
+      "action": "tool-call",
+      "tool": "paradigm_task_update",
+      "summary": "Updated task T-2026-09-28-001"
+    },
+    {
+      "timestamp": 1790671704794,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: Skills arc Phase 2 — University → packs + Platform Academy ("
+    },
+    {
+      "timestamp": 1790671713256,
+      "action": "tool-call",
+      "tool": "paradigm_task_update",
+      "summary": "Updated task T-2026-09-26-003"
+    },
+    {
+      "timestamp": 1790673257577,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: Skills arc Phase 3 — learning-store consolidation, belief-de"
+    },
+    {
+      "timestamp": 1790673259397,
+      "action": "tool-call",
+      "tool": "paradigm_task_create",
+      "summary": "Created task: \"LEARNING LOOP still broken (found by 7.12.0 liveness alarm):\""
+    },
+    {
+      "timestamp": 1790673269618,
+      "action": "tool-call",
+      "tool": "paradigm_task_update",
+      "summary": "Updated task T-2026-09-26-004"
+    },
+    {
+      "timestamp": 1790673270305,
+      "action": "tool-call",
+      "tool": "paradigm_task_update",
+      "summary": "Updated task T-2026-06-13-004"
     }
   ],
-  "symbolsModified": [
-    "session recovery checkpoint",
-    "session-tracker",
-    "session recovery",
-    "session",
-    "recovery checkpoint"
-  ],
+  "symbolsModified": [],
   "filesExplored": [
-    "mcp.json"
+    "captain.ts"
   ]
 }

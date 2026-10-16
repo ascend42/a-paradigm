@@ -365,6 +365,18 @@ migrateCmd
     await migrateDecisionsCommand(options);
   });
 
+// paradigm migrate learning-stores — 7.12.0 learning-store consolidation
+migrateCmd
+  .command('learning-stores')
+  .description('7.12.0: migrate legacy wisdom decisions, drop "Work completed" nominations, flag stale habits (backs up first)')
+  .option('--dry-run', 'Print the per-step plan without writing anything')
+  .option('--apply', 'Also move habits that reference removed University paths into the backup')
+  .option('--json', 'Emit the result as JSON')
+  .action(async (options) => {
+    const { migrateLearningStoresCommand } = await import('./commands/migrate-learning-stores.js');
+    await migrateLearningStoresCommand(options);
+  });
+
 // paradigm upgrade (deprecated — use `paradigm migrate`)
 program
   .command('upgrade [path]')
@@ -511,6 +523,98 @@ memoryCmd
 
 memoryCmd.action(() => {
   memoryCmd.outputHelp();
+});
+
+// paradigm brain <subcommand>  (Paradigm Brain MVP 7.14.0, TD-2026-09-29-204)
+const brainCmd = program
+  .command('brain')
+  .description('Structure for a personal folder: scan, private zones, topic suggestions (nothing leaves this Mac)');
+
+const brainTarget = (c: Command) =>
+  c.option('-f, --folder <path>', 'Folder the brain was created for')
+    .option('-b, --brain <id>', 'Brain id')
+    .option('--json', 'Output as JSON');
+
+brainCmd
+  .command('init <folder>')
+  .description('Allow-list a folder, lock private zones, and scan it (never writes inside the folder)')
+  .option('--workspace <file>', '.paradigm-workspace file for links from notes to code')
+  .option('--no-open', "Don't open Paradigm Platform afterwards")
+  .option('--json', 'Output as JSON')
+  .action(async (folder, options) => {
+    const { initCommand } = await import('./commands/brain/index.js');
+    await initCommand(folder, options);
+  });
+
+brainTarget(brainCmd.command('scan').description('Refresh the index and report link health (read-only on your files)'))
+  .action(async (options) => {
+    const { scanCommand } = await import('./commands/brain/index.js');
+    await scanCommand(options);
+  });
+
+brainTarget(brainCmd.command('suggest').description('Show the next topic suggestions (up to 10, folders first)'))
+  .option('--limit <n>', 'How many (max 10)')
+  .action(async (options) => {
+    const { suggestCommand } = await import('./commands/brain/index.js');
+    await suggestCommand(options);
+  });
+
+brainTarget(brainCmd.command('confirm <id>').description('Keep a suggestion (or --reject / --skip it)'))
+  .option('--reject', 'Not right')
+  .option('--skip', 'Decide later')
+  .action(async (id, options) => {
+    const { confirmCommand } = await import('./commands/brain/index.js');
+    await confirmCommand(id, options);
+  });
+
+brainTarget(brainCmd.command('status').description('Show brains, locked zones, sharing and what left this Mac'))
+  .option('--acceptance', 'Show suggestion acceptance')
+  .action(async (options) => {
+    const { statusCommand } = await import('./commands/brain/index.js');
+    await statusCommand(options);
+  });
+
+brainTarget(brainCmd.command('share <pattern>').description('Let agents see names/headings of matching files (asks for confirmation)'))
+  .action(async (pattern, options) => {
+    const { shareCommand } = await import('./commands/brain/index.js');
+    await shareCommand(pattern, options);
+  });
+
+brainTarget(brainCmd.command('unshare <pattern>').description('Stop sharing a pattern'))
+  .action(async (pattern, options) => {
+    const { unshareCommand } = await import('./commands/brain/index.js');
+    await unshareCommand(pattern, options);
+  });
+
+brainTarget(brainCmd.command('access <mode>').description('Agent access: off | metadata (asks for confirmation)'))
+  .action(async (mode, options) => {
+    const { accessCommand } = await import('./commands/brain/index.js');
+    await accessCommand(mode, options);
+  });
+
+brainTarget(brainCmd.command('suggestions <mode>').description('Suggestions: auto | on | off (auto turns off below 60% acceptance)'))
+  .action(async (mode, options) => {
+    const { suggestionsFlagCommand } = await import('./commands/brain/index.js');
+    await suggestionsFlagCommand(mode, options);
+  });
+
+brainTarget(brainCmd.command('purge').description('Forget this folder (your files are not touched)'))
+  .option('-y, --yes', 'Do not ask')
+  .option('--forget-log', 'Also delete the record of what left this computer (normally archived and kept)')
+  .action(async (options) => {
+    const { purgeCommand } = await import('./commands/brain/index.js');
+    await purgeCommand(options);
+  });
+
+brainTarget(brainCmd.command('egress').description('What left this computer'))
+  .option('--limit <n>', 'Rows to show (default 20)')
+  .action(async (options) => {
+    const { egressCommand } = await import('./commands/brain/index.js');
+    await egressCommand(options);
+  });
+
+brainCmd.action(() => {
+  brainCmd.outputHelp();
 });
 
 // paradigm flow <subcommand>
@@ -2235,7 +2339,7 @@ universityCmd.enablePositionalOptions();
 
 universityCmd
   .command('serve')
-  .description('Launch Paradigm University learning platform')
+  .description('Open the Academy (University packs) in the Paradigm Platform')
   .option('-p, --port <port>', 'Port to run on', '3839')
   .option('--no-open', "Don't open browser automatically")
   .option('--pack <id>', 'v6.0: mount a specific content pack by id')
@@ -2748,6 +2852,116 @@ notebookCmd
   .action(async () => {
     const { notebookListCommand } = await import('./commands/notebook/index.js');
     await notebookListCommand({});
+  });
+
+// paradigm skill <command> — Agent-owned skills (Skills Phase 1, #skill-cli)
+const skillCmd = program
+  .command('skill')
+  .description('Agent-owned skills — lint, pin-check, certify and project SKILL.md sources');
+
+skillCmd
+  .command('list')
+  .alias('ls')
+  .description('List skills (id, version, steward, trust, status, scope)')
+  .option('--agent <id>', 'Only skills the agent stewards or declares')
+  .option('--json', 'Output as JSON')
+  .action(async (options) => {
+    const { skillListCommand } = await import('./commands/skill/index.js');
+    await skillListCommand(options);
+  });
+
+skillCmd
+  .command('show <id>')
+  .description('Show frontmatter, resolved tool pins and cited notebooks')
+  .option('--tools <file>', 'tools/list JSON dump for third-party pin checks')
+  .option('--json', 'Output as JSON')
+  .action(async (id, options) => {
+    const { skillShowCommand } = await import('./commands/skill/index.js');
+    await skillShowCommand(id, options);
+  });
+
+skillCmd
+  .command('lint [id]')
+  .description('Lint one skill (or --all)')
+  .option('--all', 'Lint every skill')
+  .option('--json', 'Output as JSON')
+  .action(async (id, options) => {
+    const { skillLintCommand } = await import('./commands/skill/index.js');
+    await skillLintCommand(id, options);
+  });
+
+skillCmd
+  .command('check <id>')
+  .description('Check tool pins (paradigm_* against this server; third-party via --tools)')
+  .option('--tools <file>', 'tools/list JSON dump for third-party pin checks')
+  .option('--json', 'Output as JSON')
+  .action(async (id, options) => {
+    const { skillCheckCommand } = await import('./commands/skill/index.js');
+    await skillCheckCommand(id, options);
+  });
+
+skillCmd
+  .command('project [id]')
+  .description('Project a skill into ~/.claude/skills/pdg-<id>/ (certified only unless --allow-provisional)')
+  .option('--all', 'Project every skill')
+  .option('--target <target>', 'user (~/.claude/skills) or project (<root>/.claude/skills)', 'user')
+  .option('--allow-provisional', 'Allow provisional skills (adds a PROVISIONAL banner)')
+  .option('-n, --dry-run', 'Show what would be written without writing')
+  .option('--tools <file>', 'tools/list JSON dump for third-party pin checks')
+  .option('--json', 'Output as JSON')
+  .action(async (id, options) => {
+    const { skillProjectCommand } = await import('./commands/skill/index.js');
+    await skillProjectCommand(id, options);
+  });
+
+skillCmd
+  .command('adopt <id>')
+  .description('Pull downstream edits of a projected skill back into its source (patch bump, provisional)')
+  .option('--target <target>', 'user or project', 'user')
+  .option('-f, --force', 'Adopt even though the source changed since projection (downstream edits win)')
+  .option('--confirm-allowed-tools', 'Accept a downstream widening of allowed-tools (required without a TTY)')
+  .option('--json', 'Output as JSON')
+  .action(async (id, options) => {
+    const { skillAdoptCommand } = await import('./commands/skill/index.js');
+    await skillAdoptCommand(id, options);
+  });
+
+skillCmd
+  .command('certify <id>')
+  .description('Founder sign-off (interactive TTY only) — certify a skill against peer scenarios')
+  .option('--scenario <ids...>', 'Scenario id(s) to certify against (default: all)')
+  .option('--tools <file>', 'tools/list JSON dump for third-party pin checks')
+  .action(async (id, options) => {
+    const { skillCertifyCommand } = await import('./commands/skill/certify.js');
+    await skillCertifyCommand(id, options);
+  });
+
+skillCmd
+  .command('import <ref>')
+  .description('Import a pack skill (<pack-id>:<skill-id>) as a provisional project skill (interactive TTY only)')
+  .option('--global', 'Import into ~/.paradigm/skills instead of the project')
+  .option('--project <dir>', 'Project root (defaults to cwd)')
+  .action(async (ref, options) => {
+    const { skillImportCommand } = await import('./commands/skill/index.js');
+    await skillImportCommand(ref, options);
+  });
+
+skillCmd
+  .command('sync-global')
+  .description('Materialize the bundled seed skills into ~/.paradigm/skills/ (skips existing)')
+  .option('-f, --force', 'Overwrite existing global skills with the bundled version')
+  .option('-n, --dry-run', 'Show what would be added/skipped/overwritten without writing')
+  .action(async (options) => {
+    const { skillSyncGlobalCommand } = await import('./commands/skill/sync-global.js');
+    await skillSyncGlobalCommand(options);
+  });
+
+skillCmd
+  .command('record-usage', { hidden: true })
+  .description('Record a host Skill invocation from a PostToolUse hook payload on stdin (silent)')
+  .action(async () => {
+    const { skillRecordUsageCommand } = await import('./commands/skill/index.js');
+    await skillRecordUsageCommand();
   });
 
 // paradigm agent <command> — Agent identity management

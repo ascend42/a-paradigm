@@ -23,7 +23,7 @@ Before reviewing:
 1. Call `paradigm_status` to understand the project context
 2. Read the `.purpose` files covering the modified code
 3. Read `portal.yaml` to understand gate requirements
-4. Call `paradigm_wisdom_context` for the affected symbols to check for
+4. Call `paradigm_wisdom` (op `context`) for the affected symbols to check for
    known antipatterns
 
 ## Two-Stage Review Protocol
