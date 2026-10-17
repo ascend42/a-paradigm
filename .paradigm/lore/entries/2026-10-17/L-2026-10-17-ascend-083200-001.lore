@@ -1,0 +1,55 @@
+id: L-2026-10-17-ascend-083200-001
+type: milestone
+timestamp: '2026-10-17T08:32:00.273Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'First M1.0 probe results on macOS: sandbox argv leak via sysmond, escapes found, Noise passes'
+summary: |-
+  First real probe results on macOS 15.7.3 arm64, Node 26.
+
+  p10m-sbx-deny-mac FAIL:
+  - The endpoint-port deny holds (curl, net, WS, ::1).
+  - The specified process-info deny does NOT hide other processes' argv: pgrep reads it via the root sysmond daemon over XPC. Fix: deny mach-lookup com.apple.sysmond.
+  - Same-user signals to the kernel are not covered by any rule.
+  - /bin/ps cannot run under any sandbox-exec profile (setuid).
+  - tmux and screen escapes reach the denied port; unix-socket denies close them.
+  - The LaunchServices `open` escape reaches the denied port, and no SBPL fix was found, so it is a residual.
+
+  p11-ws-framing PARTIAL: framing passes (9 API + 27 raw cases), throughput ~620-730 MB/s, but peak RSS is 200-248 MB against a 60 MB bar while phys_footprint is 39.8 MB. The criterion must name its metric.
+
+  p-noise-vectors PASS: 5 published cacophony/snow vectors (IK, XX, XXpsk3) over node:crypto only.
+
+  p01-claude-cli PARTIAL: claude 2.1.302 has all 12 flags; --setting-sources lists only user/project/local (no managed); live checks remain manual.
+
+  Spec corrections are owed for §11.2 2b(b), §15.1 row 19, §15.5, §16, G-SBX-08, §A.2, the P11 metric and the §3.3 managed layer. The founder's Mac ran throwaway .app registrations and a hidden Calculator launch once (cleaned up).
+symbols_touched:
+  - '#gnomon-probes'
+  - '#paradigm-harness'
+learnings:
+  - 'On macOS, process-info sandbox denies don''t hide the process table: entitled tools (pgrep) fetch it from the root sysmond daemon over XPC, so the mach-lookup for com.apple.sysmond must be denied too.'
+  - ps/getrusage RSS overstates Node memory on macOS (it keeps freed pages); use phys_footprint for memory budgets.
+verification:
+  status: partial
+  details:
+    pass:
+      - p-noise-vectors
+    partial:
+      - p11-ws-framing
+      - p01-claude-cli
+    fail:
+      - p10m-sbx-deny-mac
+tags:
+  - paradigm-8
+  - gnomon
+  - move-1
+  - probes
+  - security
+  - milestone
+linked_lore:
+  - L-2026-10-17-ascend-081146-001
+git_context:
+  ref: b40069784fe420648dfaff9d84e0836e6f42daf2
+  branch: feat/gnomon
+  dirty: true

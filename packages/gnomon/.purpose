@@ -45,6 +45,13 @@ components:
       ^[a-z0-9][a-z0-9-]*$ (no path traversal). p-harness is the self-test and
       its results are gitignored; real results are committed from hardware runs
       only. A `fail` on a ruling means a re-plan memo before dependent builds.
+      Unsigned macOS probes: p10m-sbx-deny-mac (S29-03/04 sandbox-exec session
+      denies + escape matrix), p11-ws-framing (RFC 6455 over node:http with a
+      forked server child, 27 Autobahn-style raw cases, 4 MiB throughput, RSS
+      and phys_footprint), p-noise-vectors (Noise IK/XX/XXpsk3 over node:crypto
+      against a verbatim cacophony/snow vector subset in vectors.json, G-LNK-11)
+      and p01-claude-cli (read-only `claude --version`/`--help` flag check;
+      live items pending-manual).
     path: probes/
     type: module
     tags: [gnomon, probes, m1.0]

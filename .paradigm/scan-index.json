@@ -2,7 +2,7 @@
   "$meta": {
     "version": "1.0.0",
     "project": "a-paradigm",
-    "generatedAt": "2026-10-17T08:04:57.554Z",
+    "generatedAt": "2026-10-17T08:31:59.949Z",
     "paradigmVersion": "0.1.0",
     "sources": {
       "purposeFiles": 103,
@@ -2695,7 +2695,7 @@
       "symbol": "#gnomon-probes",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose",
-      "description": "M1.0 probe harness (spec §19.1, research 29 §2). `node packages/gnomon/probes/run.mjs <id> [--out-dir d] [--timeout ms]` imports probes/<id>/probe.mjs (zero deps, no build), runs its default export with {id, platform, arch, probeDir, signal}, and writes a probeResult:v1 record to probes/results/<id>.<platform>.json. Throws and timeouts become verdict `fail`. Exit codes 0 pass / 1 fail / 2 partial / 64 usage. Probe ids match ^[a-z0-9][a-z0-9-]*$ (no path traversal). p-harness is the self-test and its results are gitignored; real results are committed from hardware runs only. A `fail` on a ruling means a re-plan memo before dependent builds.",
+      "description": "M1.0 probe harness (spec §19.1, research 29 §2). `node packages/gnomon/probes/run.mjs <id> [--out-dir d] [--timeout ms]` imports probes/<id>/probe.mjs (zero deps, no build), runs its default export with {id, platform, arch, probeDir, signal}, and writes a probeResult:v1 record to probes/results/<id>.<platform>.json. Throws and timeouts become verdict `fail`. Exit codes 0 pass / 1 fail / 2 partial / 64 usage. Probe ids match ^[a-z0-9][a-z0-9-]*$ (no path traversal). p-harness is the self-test and its results are gitignored; real results are committed from hardware runs only. A `fail` on a ruling means a re-plan memo before dependent builds. Unsigned macOS probes: p10m-sbx-deny-mac (S29-03/04 sandbox-exec session denies + escape matrix), p11-ws-framing (RFC 6455 over node:http with a forked server child, 27 Autobahn-style raw cases, 4 MiB throughput, RSS and phys_footprint), p-noise-vectors (Noise IK/XX/XXpsk3 over node:crypto against a verbatim cacophony/snow vector subset in vectors.json, G-LNK-11) and p01-claude-cli (read-only `claude --version`/`--help` flag check; live items pending-manual).",
       "visualTags": [],
       "related": [],
       "componentType": "module"
