@@ -7,5 +7,6 @@ export * from './signer.js';
 export * from './chain.js';
 export * from './anchor.js';
 export * from './anchor-policy.js';
+export * from './boot.js';
 export * from './redaction.js';
 export * from './kernel-log.js';

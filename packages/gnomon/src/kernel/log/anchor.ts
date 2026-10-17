@@ -21,12 +21,19 @@
  * and NOT fsynced per write — on
  * macOS node's fsync is F_FULLFSYNC (~5 ms, measured), which alone would
  * blow the 5 ms p99 append budget. It is fsynced at genesis, rotation and
- * close. After a crash the anchor may therefore LAG the db (never lead it:
- * the db commit is durable before the anchor is written); the log accepts a
- * lagging anchor only if the row at the anchor's seq has the anchor's hash
- * and the lag is within FILE_ANCHOR_MAX_LAG. The anchor written by a clean
- * close carries `closed: true`; any lag behind a closed anchor is
- * INTEGRITY_BROKEN{anchor-lag} (S33-07).
+ * close. After a process crash the anchor may therefore LAG the db (the
+ * commit's write() completed before the anchor was written); the log accepts
+ * a lagging anchor only if the row at the anchor's seq has the anchor's hash
+ * and the lag is within FILE_ANCHOR_MAX_LAG. After a POWER LOSS or panic an
+ * anchor CAN be ahead of the db (the drive cache writes back in any order;
+ * research 33 S33-10) — open reports that as INTEGRITY_BROKEN{truncated} and
+ * classifies the cause from the keystore anchor's `boot` (kernel-log.ts). The
+ * anchor written by a clean close carries `closed: true`; any lag behind a
+ * closed anchor is INTEGRITY_BROKEN{anchor-lag} (S33-07).
+ *
+ * `boot` (S33-10, P8-D83): every anchor records the boot session it was
+ * written in (boot.ts). Only the KEYSTORE copy (and its `closed`) is
+ * authoritative for classification; the file copy is informational.
  *
  * `AnchorStore.write` may return a Promise: the helper-backed keystore store
  * (P04) talks to the helper over XPC/IPC. The log serialises keystore writes
@@ -47,6 +54,8 @@ export interface HeadAnchor {
   at: string;
   /** Written only by a clean close (S33-07 clean-close marker); cleared durably on the next open. */
   closed?: true;
+  /** S33-10: boot session the anchor was written in (`kern.bootsessionuuid` / `boot_id` / `unknown`). Absent on pre-D83 anchors. */
+  boot?: string;
 }
 
 export type AnchorReadResult = { state: 'present'; head: HeadAnchor } | { state: 'absent' } | { state: 'unavailable'; why: string } | { state: 'malformed'; why: string };
@@ -69,7 +78,8 @@ function isHead(v: unknown): v is HeadAnchor {
     (h.seq as number) >= 0 &&
     typeof h.hash === 'string' &&
     typeof h.at === 'string' &&
-    (h.closed === undefined || h.closed === true)
+    (h.closed === undefined || h.closed === true) &&
+    (h.boot === undefined || typeof h.boot === 'string')
   );
 }
 

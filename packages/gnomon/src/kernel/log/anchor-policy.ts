@@ -1,7 +1,7 @@
 /**
  * @symbol #kernel-log
  *
- * #kernel-log (spec §3.2; research 33 S33-05..S33-07, P8-D82) — the head-anchor
+ * #kernel-log (spec §3.2; research 33 S33-05..S33-07, S33-10; P8-D82, P8-D83) — the head-anchor
  * WRITE POLICY: when the file anchor and the keystore anchor are written, which
  * kinds force both anchors before `append` resolves, and the lag bounds that
  * open() enforces. Pure constants and predicates; kernel-log.ts applies them.
@@ -33,9 +33,12 @@ export const FORCED_ANCHOR_ENVELOPE = 1 / 64;
 
 /**
  * S33-06 — the CRITICAL kinds (research 33, "The list"). A critical append
- * commits with F_FULLFSYNC, writes the file anchor and awaits the keystore
- * anchor, and only then resolves; no effect of the event may be released
- * before the promise resolves.
+ * commits (bulk durability — no F_FULLFSYNC since S33-10 / P8-D83), renames
+ * the file anchor in and awaits the keystore anchor, in that order, and only
+ * then resolves; no effect of the event may be released before the promise
+ * resolves. That is an ordering guarantee against a same-user process, not a
+ * power-loss guarantee (an anchor ahead of the db after a power loss is
+ * classified on open, kernel-log.ts).
  *
  * Deviations from the spec list, stated:
  *   - `manifest.*` "(decisions)": the whole manifest namespace is treated as

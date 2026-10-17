@@ -24,10 +24,14 @@
  *
  * CRASH SAFETY / FSYNC POLICY (stated, measured in test/kernel-log-posix):
  *   - durability 'process-crash' (default): WAL + `synchronous=FULL`, i.e.
- *     every commit fsync(2)s the WAL before append returns. Survives a kill -9
- *     of the daemon and an OS crash on hardware that honours fsync. On macOS
- *     fsync(2) does not flush the drive cache, so a POWER LOSS can drop the
- *     last commits; the anchor then disagrees and open reports it.
+ *     every commit fsync(2)s the WAL before append returns. A commit survives
+ *     a kill -9 of the daemon because its write() completed (the page cache
+ *     outlives the process); `synchronous=FULL` is what makes it survive an
+ *     OS crash on hardware that honours fsync (research 33 S33-10 correction
+ *     to S33-01). On macOS fsync(2) does not flush the drive cache, so a POWER
+ *     LOSS or panic can drop the last commits — and the cache may write back
+ *     out of order, so an anchor can end up AHEAD of the db; open reports
+ *     that as INTEGRITY_BROKEN{truncated} with a classified cause (below).
  *   - durability 'power-loss': additionally `fullfsync=1` (F_FULLFSYNC per
  *     commit). Measured ~10 ms p50 on an Apple SSD — above the M1.2 5 ms p99
  *     falsifier, so it is opt-in and named, not the default.
@@ -52,22 +56,75 @@
  *     1023 rows / 1 s, queued off the append path (serialised promise chain).
  *     Both durable at genesis, rotation and close; close marks the file
  *     anchor `closed: true` (the clean-close marker).
- *   - critical kinds (CRITICAL_ANCHOR_KINDS): that one transaction commits
- *     with F_FULLFSYNC — `PRAGMA fullfsync=ON` before BEGIN, OFF after COMMIT
- *     (in WAL + synchronous=FULL SQLite then syncs the WAL with
- *     SQLITE_SYNC_FULL ⇒ fcntl(F_FULLFSYNC) on Darwin; a no-op elsewhere) —
- *     then the file anchor is renamed in and the keystore write AWAITED
- *     before `append` resolves `{anchored: true}`. A power loss can then
- *     never leave an anchor ahead of the db, and an attacker who stops the
- *     kernel before the promise resolves erased an event with no effect yet.
- *     The critical file-anchor rename is not fsynced (the threat is a
- *     same-user process, which sees the rename; the keystore anchor is the
- *     custody anchor).
+ *   - critical kinds (CRITICAL_ANCHOR_KINDS; research 33 S33-10, P8-D83):
+ *     the commit uses the bulk durability (`synchronous=FULL`, NO `PRAGMA
+ *     fullfsync` — F_FULLFSYNC per commit failed the 25 ms critical budget,
+ *     probes/results/p-log-fsync-human-cadence.darwin.json), then the file
+ *     anchor is renamed in, then the keystore write is AWAITED, and only then
+ *     does `append` resolve `{anchored: true}`. This is an ORDERING guarantee
+ *     against a same-user process (no effect is released before the keystore
+ *     anchor exists, so an attacker who stops the kernel before the promise
+ *     resolves erased an event with no effect yet) — NOT a power-loss
+ *     guarantee: neither bulk nor critical anchors are prevented from being
+ *     durable ahead of a lost WAL tail. F_FULLFSYNC remains only under
+ *     durability 'power-loss' and at genesis, rotation and close.
+ *   - every anchor records `boot` (boot.ts); only the keystore copy (and its
+ *     `closed` marker) is authoritative.
  * On open: no db but a head anchor, a sealed segment or keys present ⇒
- * INTEGRITY_BROKEN (missing-db); an anchor ahead of the db ⇒ truncated; hash
- * ≠ row hash ⇒ anchor-mismatch; missing on an existing log ⇒ anchor-missing;
- * file-anchor lag > 63, or any lag behind a clean-close anchor ⇒ anchor-lag;
- * keystore lag > 1023 ⇒ a kernel-signed daemon.anchor.lag{rows, which} row.
+ * INTEGRITY_BROKEN (missing-db); an anchor ahead of the db ⇒ truncated, with
+ * `data.cause` (S33-10) `tamper` when the keystore anchor's boot equals this
+ * boot, or it was a clean close, or the boot cannot be compared, and
+ * `unclean-reboot` when the boot changed and the anchor was not a clean
+ * close. The cause names "power loss OR tampering", never proves either: a
+ * truncation made after a reboot but BEFORE the first open in the new boot
+ * is indistinguishable from a lost WAL tail (it reads `unclean-reboot`);
+ * every non-recovery open therefore re-stamps the keystore anchor with the
+ * current boot (S34-01) and gates the first append on that write, so a
+ * truncation after the daemon opened in this boot reads `tamper`. The cause
+ * never downgrades the verdict: `open` refuses both, and
+ * `openForRecovery` returns a log that refuses appends until
+ * `acknowledgeGap({presenceToken})` (presence-gated, unclean-reboot only)
+ * appends a kernel-signed daemon.log.gap{lostFrom, lostTo, lostHash,
+ * bootPrev, bootNow} and re-anchors. Hash ≠ row hash ⇒ anchor-mismatch;
+ * missing on an existing log ⇒ anchor-missing; file-anchor lag > 63, or any
+ * lag behind a clean-close anchor ⇒ anchor-lag; keystore lag > 1023 ⇒ a
+ * kernel-signed daemon.anchor.lag{rows, which} row. A clean-close KEYSTORE
+ * anchor (authoritative) with any lag is anchor-lag too (S34-05).
+ *
+ * ANCHOR FAULTS (S34-02): any failure after a critical row's COMMIT (file
+ * anchor, rotation, keystore reject or timeout — `keystoreTimeoutMs`, default
+ * 5 s, S34-11) rejects that append ENGINE{anchor-failed} and puts the log in
+ * an anchor-faulted state: bulk appends continue, CRITICAL appends first
+ * re-anchor the current head (file + awaited keystore) and are refused
+ * ENGINE{anchor-faulted} if that fails. Once both anchors succeed, one
+ * kernel-signed `daemon.anchor.failed{seq, kind}` marker is COMMITTED
+ * IMMEDIATELY in the failure path (S34-17 — committing needs no keystore), so
+ * the fault survives a close or a crash. PROJECTIONS MUST TREAT THAT SEQ AS
+ * NOT HAVING TAKEN EFFECT: the row is in the chain, but its effect was never
+ * released. The fault clears only when every failed row has its marker AND a
+ * head at or past every marker is anchored in both anchors (S34-19); close()
+ * records any pending markers before its closing anchors and reports the
+ * outcome. On OPEN, every critical row above the keystore anchor's seq with no
+ * marker (a crash between COMMIT and the keystore write) gets one before the
+ * log is usable. A failed open re-stamp (S34-01) enters the fault state with
+ * nothing to record. An interrupted acknowledgeGap (gap row committed, the
+ * keystore still at the lost head named by its payload) is re-anchored on
+ * open, not re-classified.
+ *
+ * KEYLESS LOGS (signer null) are NON-ROTATING and DIAGNOSTIC-ONLY: every
+ * kernel row the log writes itself (daemon.segment, daemon.anchor.lag,
+ * daemon.anchor.failed, daemon.log.gap) is signature-mandatory, so an append
+ * that would reach the segment boundary, or an open that would have to record
+ * one, is refused BEFORE any commit with FORBIDDEN{kernel-key-required}.
+ *
+ * KNOWN GAPS — FOUNDER DECISION PENDING:
+ *   (a) with the stub keystore (until M1.3) there is no authoritative boot,
+ *       so every truncation classifies `tamper` and cannot be acknowledged:
+ *       a known no-recovery window; the recovery path is the quarantine
+ *       command, task T-2026-10-17-009.
+ *   (b) the S33-07 file-anchor bound (lag > 63 ⇒ anchor-lag) is not
+ *       power-loss-safe: un-fsynced file-anchor renames can roll back after a
+ *       power cut, so a genuine power loss can trip it.
  *
  * SIGNATURES (§3.2, §3.1) — see signer.ts and chain.ts. Unsigned rows are
  * accepted only for the diagnostic namespaces; the mandatory list refuses
@@ -97,6 +154,7 @@ import {
   type Sensitivity,
 } from '@a-company/gnomon-contracts';
 import { FileAnchorStore, fsyncDir, HEAD_SCHEMA, KeystoreAnchorStore, type AnchorReadResult, type AnchorStore, type HeadAnchor } from './anchor.js';
+import { BOOT_UNKNOWN, normalizeBootId, readBootSession } from './boot.js';
 import {
   FILE_ANCHOR_MAX_LAG,
   FILE_ANCHOR_MAX_MS,
@@ -140,6 +198,14 @@ export interface KernelLogOptions {
   keysPresent?: boolean;
   /** Test seam for the keystore anchor (default: the PR-4 stub, `unavailable`). */
   keystoreAnchor?: AnchorStore;
+  /** Test seam for the boot session id (default: boot.ts `readBootSession()`, read once at open). */
+  bootSession?: string;
+  /** S34-23 test seam: file-anchor coalescing window in ms (default FILE_ANCHOR_MAX_MS). */
+  fileAnchorMaxMs?: number;
+  /** S34-11: per-write keystore anchor timeout, measured from DEQUEUE (default KEYSTORE_WRITE_TIMEOUT_MS). */
+  keystoreTimeoutMs?: number;
+  /** Earlier kernel key ids (rotated keys) accepted on kernel-principal rows at verify; the signer's own key is added. */
+  kernelKeyIds?: readonly string[];
   clock?: () => number;
   /** PASSIVE WAL checkpoint after this many ms without an append (default 250). */
   checkpointIdleMs?: number;
@@ -169,7 +235,62 @@ export interface AppendInput {
   signer?: Signer | null;
 }
 
-export type AnchorState = 'ok' | 'lagging-repaired' | 'created' | 'unavailable';
+export type AnchorState = 'ok' | 'lagging-repaired' | 'created' | 'unavailable' | 'ahead';
+
+/** S34-03: how a critical row was anchored — `file-only` while the keystore anchor is the unavailable stub (until M1.3). */
+export type Anchoring = 'both' | 'file-only';
+
+/** Default per-write keystore anchor timeout (S34-11). */
+export const KEYSTORE_WRITE_TIMEOUT_MS = 5_000;
+
+/** S33-10: why an anchor is ahead of the db. Classifies, never downgrades: both are INTEGRITY_BROKEN{truncated}. */
+export type TruncationCause = 'tamper' | 'unclean-reboot';
+
+/** An anchor ahead of the db (S33-10), as found on open. */
+export interface TruncationReport {
+  cause: TruncationCause;
+  /** Which anchor was ahead (the keystore anchor wins when both are). */
+  anchor: 'file' | 'keystore';
+  /** First and last lost seq; `lostHash` is the anchor's hash for row `lostTo`. */
+  lostFrom: number;
+  lostTo: number;
+  lostHash: string;
+  /** The authoritative (keystore) anchor's boot session, `unknown` if none/unreadable. */
+  bootPrev: string;
+  bootNow: string;
+  /** The authoritative anchor was written by a clean close. */
+  cleanClose: boolean;
+  /** Which anchors are ahead of the db (S34-04 / report nit). */
+  ahead: { file: boolean; keystore: boolean };
+  /**
+   * S34-04: only the FILE anchor leads while a keystore anchor is present and
+   * not ahead — the lead is unauthenticated (a same-user process can write the
+   * file anchor), so acknowledgeGap refuses FORBIDDEN{unauthenticated-lead}.
+   */
+  unauthenticatedLead: boolean;
+}
+
+/** Live integrity state (S34-14): `report.integrity` is the open-time snapshot, `log.integrity` is now. */
+export type LogIntegrity =
+  | { state: 'ok' }
+  | ({ state: 'truncated' } & TruncationReport)
+  | { state: 'anchor-faulted'; failed: FaultEntry[] };
+
+/** A critical row whose anchoring failed after COMMIT; `markerSeq` = its committed daemon.anchor.failed row. */
+export interface FaultEntry {
+  seq: number;
+  kind: string;
+  recorded: boolean;
+  markerSeq?: number;
+}
+
+/** What `close()` resolves to (S34-12): a failed clean-close keystore write is surfaced, never swallowed. */
+export interface CloseReport {
+  keystore: 'ok' | 'failed' | 'skipped-truncated';
+  error?: string;
+  /** S34-17: anchor-fault outcome — `recovered` = markers recorded and anchored by the closing anchors. */
+  fault: 'none' | 'recovered' | 'pending';
+}
 
 export interface OpenReport {
   logId: string;
@@ -180,13 +301,21 @@ export interface OpenReport {
   /** Rows the keystore anchor lagged by at open (> 1023 ⇒ a daemon.anchor.lag row was appended). */
   keystoreLag: number;
   anchors: { file: AnchorState; keystore: AnchorState };
+  /** The boot session this open recorded into every anchor (S33-10). */
+  boot: string;
+  /** `ok`, or (only via `openForRecovery`) the truncation the log refuses appends for. */
+  integrity: { state: 'ok' } | ({ state: 'truncated' } & TruncationReport);
 }
 
-/** What `append` resolves to. `anchored` = both anchors were written for this row before resolving (critical kinds, S33-06). */
+/**
+ * What `append` resolves to. `anchored` (S34-03): `false` for bulk rows; for
+ * critical kinds (S33-06) `'both'` = file + keystore anchors written before
+ * resolving, `'file-only'` = the keystore anchor is the unavailable stub.
+ */
 export interface AppendResult {
   seq: number;
   hash: string;
-  anchored: boolean;
+  anchored: false | Anchoring;
   event: EventV1;
 }
 
@@ -196,9 +325,13 @@ export interface AnchorStatus {
   forcedAnchorRate: number;
   /** false ⇒ forcedAnchorRate > 1/64: bulk p99 is outside the measured envelope; re-probe. */
   withinEnvelope: boolean;
-  /** Rows committed since the last file / keystore anchor write. */
+  /** Rows committed since the last file anchor write / the last CONFIRMED (resolved) keystore anchor write (S34-15). */
   fileLag: number;
   keystoreLag: number;
+  /** S34-03: `file-only` while the keystore anchor is unavailable (stub). */
+  anchoring: Anchoring;
+  /** S34-02: true while critical appends must re-anchor first (see `integrity`). */
+  faulted: boolean;
   fileAnchors: number;
   keystoreAnchors: number;
   forcedAnchors: number;
@@ -232,7 +365,9 @@ export type VerifyFailureCode =
   | 'meta'
   | 'segment-link'
   | 'segment-unsealed'
-  | 'anchor';
+  | 'anchor'
+  | 'kernel-key'
+  | 'reserved-binding';
 
 export interface VerifyFailure {
   code: VerifyFailureCode;
@@ -246,6 +381,13 @@ export interface VerifyReport {
   rows: number;
   segments: Array<{ segment: number; firstSeq: number; lastSeq: number; rows: number; ok: boolean }>;
   failures: VerifyFailure[];
+  /**
+   * S34-18: were kernel rows (reserved kinds, kernel principal) bound to the
+   * kernel identity? `not-checked` when verify ran without it (standalone
+   * verifyLog without kernelPrincipal/kernelKeyIds) — `ok` alone then says
+   * nothing about who wrote the log's own rows.
+   */
+  kernelBinding: 'ok' | 'failed' | 'not-checked';
   anchors: { file: 'ok' | 'lagging' | 'mismatch' | 'missing' | 'not-checked'; keystore: 'ok' | 'lagging' | 'unavailable' | 'mismatch' | 'not-checked' };
 }
 
@@ -334,6 +476,23 @@ export class KernelLog {
   readonly #keystoreAnchor: AnchorStore;
   readonly #keyRing: KeyRing;
   readonly #mono: () => string;
+  readonly #boot: string;
+  readonly #recovery: boolean;
+  /** S33-10: set while an anchor is ahead of the db (recovery mode); appends refuse until acknowledgeGap. */
+  #broken: TruncationReport | undefined;
+  /** acknowledgeGap: the gap row once appended, until both anchors succeed (S34-12). */
+  #gapRow: EventV1 | undefined;
+  /** S34-01: the open re-stamp of the keystore anchor; the first append waits for it. */
+  #ready: Promise<void> = Promise.resolve();
+  #readyDone = false;
+  #ksAvailable = false;
+  /** S34-15: seq of the last keystore write that RESOLVED (status keystoreLag is measured from it). */
+  #ksConfirmedSeq = 0;
+  /** S34-02: anchor fault state (critical appends re-anchor first). */
+  #fault: { failed: FaultEntry[] } | undefined;
+  /** S34-11 / round 3: a keystore write timed out and has not settled; new writes are refused (order preserved, no hang). */
+  #ksHung = false;
+  #closing: Promise<CloseReport> | undefined;
   #db!: DatabaseSync;
   #meta!: Meta;
   #tip!: Tip;
@@ -356,7 +515,7 @@ export class KernelLog {
   #ringForced = 0;
   readonly #counts = { fileAnchors: 0, keystoreAnchors: 0, forcedAnchors: 0, checkpoints: 0 };
 
-  private constructor(opts: KernelLogOptions) {
+  private constructor(opts: KernelLogOptions, recovery = false) {
     this.#opts = { segmentRows: DEFAULT_SEGMENT_ROWS, durability: 'process-crash', clock: Date.now, ...opts };
     if (!Number.isSafeInteger(this.#opts.segmentRows) || this.#opts.segmentRows < 3) throw new RangeError('segmentRows must be an integer >= 3');
     this.home = opts.home;
@@ -365,6 +524,9 @@ export class KernelLog {
     this.#keyRing = opts.keyRing ?? new KeyRing();
     if (opts.signer instanceof SoftwareEd25519Signer) this.#keyRing.addEd25519(opts.signer.publicKeyPem);
     this.#mono = monotonicUlidFactory({ clock: this.#opts.clock });
+    this.#boot = opts.bootSession !== undefined ? normalizeBootId(opts.bootSession) : readBootSession();
+    if (this.#boot === BOOT_UNKNOWN) this.#diag('boot.unknown', { platform: process.platform, injected: opts.bootSession !== undefined });
+    this.#recovery = recovery;
     const r = this.#openOrCreate();
     this.logId = this.#meta.log;
     this.report = { logId: this.logId, ...r };
@@ -373,6 +535,17 @@ export class KernelLog {
   /** Open (or, on a machine with no log, no anchor and no keys, create) the kernel log. */
   static open(opts: KernelLogOptions): KernelLog {
     return new KernelLog(opts);
+  }
+
+  /**
+   * S33-10 recovery open: like `open`, except that an anchor AHEAD of the db
+   * (INTEGRITY_BROKEN{truncated}) does not throw — the log opens with
+   * `report.integrity.state === 'truncated'`, refuses every append with the
+   * same refusal, writes no anchor (the keystore anchor is the evidence), and
+   * accepts only `acknowledgeGap`. Every other integrity failure still throws.
+   */
+  static openForRecovery(opts: KernelLogOptions): KernelLog {
+    return new KernelLog(opts, true);
   }
 
   get activePath(): string {
@@ -398,7 +571,7 @@ export class KernelLog {
     fs.mkdirSync(path.join(this.home, SEGMENTS_DIR), { recursive: true, mode: 0o700 });
     fs.rmSync(`${this.activePath}.new`, { force: true }); // an interrupted creation never became the log
     const sealed = listSealedSegments(this.home);
-    const anchorRead = this.#fileAnchor.read();
+    let anchorRead = this.#fileAnchor.read();
     let created = false;
     let recoveredRotation = false;
 
@@ -426,18 +599,40 @@ export class KernelLog {
     const anchors = { file: 'ok' as AnchorState, keystore: 'unavailable' as AnchorState };
     let anchorLag = 0;
     let keystoreLag = 0;
+    let ks = this.#keystoreAnchor.read();
+    this.#ksAvailable = ks.state !== 'unavailable';
+    const boot = this.#boot;
+    if (!created && ks.state === 'present') {
+      // Round 3 (reviewer A): an interrupted acknowledgeGap — re-anchor, never re-classify.
+      const acked = this.#interruptedAck(ks.head);
+      if (acked) {
+        this.#diag('log.gap.reanchored', { seq: acked.seq, lostTo: ks.head.seq });
+        if (anchorRead.state === 'present' && anchorRead.head.seq === ks.head.seq && anchorRead.head.hash === ks.head.hash) anchorRead = { state: 'present', head: acked };
+        ks = { state: 'present', head: acked };
+      }
+    }
+    if (!created) {
+      // S33-10: an anchor ahead of the db is checked first, so the authoritative (keystore) anchor classifies it.
+      const t = this.#truncation(anchorRead, ks);
+      if (t) {
+        if (!this.#recovery) throw truncatedRefusal(t, this.#tip.seq);
+        this.#broken = t;
+        this.#readyDone = true; // no re-stamp: the ahead anchor is the evidence
+        this.#diag('log.truncated', { ...t });
+        const recoveryAnchors = {
+          file: (t.ahead.file ? 'ahead' : 'ok') as AnchorState,
+          keystore: (ks.state === 'unavailable' ? 'unavailable' : t.ahead.keystore ? 'ahead' : 'ok') as AnchorState,
+        };
+        return { created, recoveredRotation, anchorLag, keystoreLag, anchors: recoveryAnchors, boot, integrity: { state: 'truncated', ...t } };
+      }
+    }
     if (created) {
       this.#fileAnchor.write(this.#headAnchor(), true);
       anchors.file = 'created';
     } else {
       // check the anchor against the db as found, BEFORE completing any rotation
       anchorLag = this.#checkAnchor(anchorRead, 'file');
-      if (anchorLag > 0 && anchorRead.state === 'present' && anchorRead.head.closed) {
-        throw logRefusal('INTEGRITY_BROKEN', 'anchor-lag', `the file anchor lags the log by ${anchorLag} rows after a clean close`, { anchor: 'file', lag: anchorLag, cleanClose: true });
-      }
-      if (anchorLag > FILE_ANCHOR_MAX_LAG) {
-        throw logRefusal('INTEGRITY_BROKEN', 'anchor-lag', `the file anchor lags the log by ${anchorLag} rows (bound ${FILE_ANCHOR_MAX_LAG})`, { anchor: 'file', lag: anchorLag, bound: FILE_ANCHOR_MAX_LAG });
-      }
+      this.#checkFileLag(anchorRead, anchorLag);
       if (anchorLag > 0) {
         anchors.file = 'lagging-repaired';
         this.#diag('anchor.lag.repaired', { lag: anchorLag });
@@ -451,23 +646,159 @@ export class KernelLog {
       this.#finishRotation();
       recoveredRotation = true;
     }
-    const ks = this.#keystoreAnchor.read();
     if (ks.state === 'unavailable') anchors.keystore = 'unavailable';
-    else if (ks.state === 'absent' && created) {
-      void this.#queueKeystore(true);
-      anchors.keystore = 'created';
-    } else {
+    else if (ks.state === 'absent' && created) anchors.keystore = 'created';
+    else {
       keystoreLag = this.#checkAnchor(ks, 'keystore'); // ahead ⇒ truncated
+      this.#checkKeystoreCloseLag(ks, keystoreLag);
       anchors.keystore = keystoreLag > 0 ? 'lagging-repaired' : 'ok';
+      // S34-17: critical rows above the keystore anchor whose anchoring never completed get their marker now.
+      const marked = ks.state === 'present' && keystoreLag > 0 ? this.#markUnanchoredCriticals(ks.head.seq) : 0;
       if (keystoreLag > KEYSTORE_ANCHOR_MAX_LAG) {
-        // S33-07: beyond the keystore cadence — record it (shown in status), signed by the kernel key when loaded.
-        this.#appendRow({ kind: 'daemon.anchor.lag', principal: this.#opts.kernelPrincipal, payload: { rows: keystoreLag, which: 'keystore' } }, false);
+        // S33-07: beyond the keystore cadence — record it (shown in status); kernel-signed (sig-mandatory, S34-06).
+        if (!this.#opts.signer) throw keyRequired('daemon.anchor.lag', `the keystore anchor lags by ${keystoreLag} rows (> ${KEYSTORE_ANCHOR_MAX_LAG})`);
+        this.#appendRow({ kind: 'daemon.anchor.lag', principal: this.#opts.kernelPrincipal, payload: { rows: keystoreLag, which: 'keystore' } });
         this.#diag('anchor.keystore.lag', { rows: keystoreLag });
-        this.#fileAnchor.write(this.#headAnchor(), true);
       }
-      if (keystoreLag > 0) void this.#queueKeystore(true);
+      if (marked > 0 || keystoreLag > KEYSTORE_ANCHOR_MAX_LAG) this.#fileAnchor.write(this.#headAnchor(), true);
     }
-    return { created, recoveredRotation, anchorLag, keystoreLag, anchors };
+    this.#ksConfirmedSeq = ks.state === 'present' ? Math.min(ks.head.seq, this.#tip.seq) : this.#tip.seq;
+    // S34-01: re-stamp the keystore anchor with THIS boot on every open (also
+    // repairs a lag and clears a clean-close marker). The first append waits
+    // for it; if it fails, the log is anchor-faulted (critical appends refuse
+    // until the head is re-anchored).
+    this.#ready = this.#queueKeystore(true);
+    this.#ready.then(
+      () => {
+        this.#readyDone = true;
+      },
+      (err: unknown) => {
+        this.#readyDone = true;
+        this.#fault ??= { failed: [] };
+        this.#diag('anchor.restamp.failed', { error: (err as Error)?.message ?? String(err) });
+      },
+    );
+    return { created, recoveredRotation, anchorLag, keystoreLag, anchors, boot, integrity: { state: 'ok' } };
+  }
+
+  /** File-anchor lag bounds (S33-07): > 63 rows, or any lag behind a clean-close FILE anchor (secondary to the keystore check). */
+  #checkFileLag(a: AnchorReadResult, lag: number): void {
+    if (lag > 0 && a.state === 'present' && a.head.closed) {
+      throw logRefusal('INTEGRITY_BROKEN', 'anchor-lag', `the file anchor lags the log by ${lag} rows after a clean close`, { anchor: 'file', lag, cleanClose: true });
+    }
+    if (lag > FILE_ANCHOR_MAX_LAG) {
+      throw logRefusal('INTEGRITY_BROKEN', 'anchor-lag', `the file anchor lags the log by ${lag} rows (bound ${FILE_ANCHOR_MAX_LAG})`, { anchor: 'file', lag, bound: FILE_ANCHOR_MAX_LAG });
+    }
+  }
+
+  /** S34-05: any lag behind a clean-close KEYSTORE anchor (the authoritative clean-close marker) ⇒ anchor-lag. */
+  #checkKeystoreCloseLag(a: AnchorReadResult, lag: number): void {
+    if (lag > 0 && a.state === 'present' && a.head.closed) {
+      throw logRefusal('INTEGRITY_BROKEN', 'anchor-lag', `the keystore anchor lags the log by ${lag} rows after a clean close`, { anchor: 'keystore', lag, cleanClose: true });
+    }
+  }
+
+  /**
+   * Round 3 (reviewer A): is the tip a kernel-signed `daemon.log.gap` whose
+   * payload names exactly the keystore anchor's head as the lost head
+   * (lostTo/lostHash)? Then acknowledgeGap committed the row but its anchor
+   * writes were interrupted: return the head to re-anchor at (the gap row).
+   */
+  #interruptedAck(k: HeadAnchor): HeadAnchor | undefined {
+    if (this.#tip.kind !== 'daemon.log.gap' || k.log !== this.#meta.log) return undefined;
+    const r = this.#db.prepare('SELECT envelope, hash, sig, principal FROM chain WHERE seq = ?').get(this.#tip.seq) as
+      | { envelope: string; hash: string; sig: string | null; principal: string }
+      | undefined;
+    if (!r?.sig || r.principal !== this.#opts.kernelPrincipal) return undefined;
+    const e = JSON.parse(r.envelope) as { keyId?: string; payload?: { lostTo?: unknown; lostHash?: unknown } };
+    if (!e.keyId || !this.#kernelKeyIds().includes(e.keyId)) return undefined;
+    if (this.#keyRing.verify(e.keyId, 'event', r.hash, Buffer.from(r.sig, 'base64')) !== 'ok') return undefined;
+    if (e.payload?.lostTo !== k.seq || e.payload?.lostHash !== k.hash) return undefined;
+    const { closed: _c, ...rest } = k;
+    return { ...rest, segment: this.#meta.segment, seq: this.#tip.seq, hash: this.#tip.hash, at: this.#tip.at, boot: this.#boot };
+  }
+
+  /** Kernel key ids for verify / binding checks: the configured rotated keys plus the signer's own. */
+  #kernelKeyIds(): string[] {
+    return [...(this.#opts.kernelKeyIds ?? []), ...(this.#opts.signer ? [this.#opts.signer.keyId] : [])];
+  }
+
+  /**
+   * S34-17 (open): every CRITICAL row above `ksSeq` (the keystore anchor) that
+   * has no `daemon.anchor.failed` marker never had its keystore write complete
+   * (crash between COMMIT and the write): its append never resolved, so its
+   * effect was never released. Record one kernel-signed marker per such row.
+   * Returns the number of markers appended.
+   */
+  #markUnanchoredCriticals(ksSeq: number): number {
+    const criticals: Array<{ seq: number; kind: string }> = [];
+    const marked = new Set<number>();
+    for (const seg of this.segments()) {
+      if (seg.lastSeq <= ksSeq) continue;
+      const db = seg.sealed ? new DatabaseSync(seg.file, { readOnly: true }) : this.#db;
+      try {
+        const it = db.prepare('SELECT seq, kind, envelope FROM chain WHERE seq > ? ORDER BY seq').iterate(ksSeq) as Iterable<{ seq: number; kind: string; envelope: string }>;
+        for (const r of it) {
+          if (r.kind === 'daemon.anchor.failed') {
+            const p = (JSON.parse(r.envelope) as { payload?: { seq?: unknown } }).payload;
+            if (Number.isSafeInteger(p?.seq)) marked.add(p!.seq as number);
+          } else if (isCriticalKind(r.kind, r.kind === 'session.inject' ? (JSON.parse(r.envelope) as { payload?: unknown }).payload : undefined)) {
+            criticals.push({ seq: r.seq, kind: r.kind });
+          }
+        }
+      } finally {
+        if (seg.sealed) db.close();
+      }
+    }
+    const missing = criticals.filter((c) => !marked.has(c.seq));
+    if (!missing.length) return 0;
+    if (!this.#opts.signer) throw keyRequired('daemon.anchor.failed', `${missing.length} critical row(s) above the keystore anchor need a daemon.anchor.failed marker`);
+    for (const c of missing) {
+      this.#appendRow({ kind: 'daemon.anchor.failed', principal: this.#opts.kernelPrincipal, payload: { seq: c.seq, kind: c.kind } });
+      this.#noteForced(false);
+    }
+    this.#diag('anchor.failed.marked-on-open', { seqs: missing.map((c) => c.seq) });
+    return missing.length;
+  }
+
+  /**
+   * S33-10: is an anchor ahead of the db? Returns the classified truncation or
+   * undefined. The cause is read ONLY from the keystore anchor: its `boot`
+   * and `closed`. A file anchor's `boot`/`closed` are never consulted (a
+   * same-user process can rewrite them). Without a comparable keystore boot
+   * (stub keystore, pre-D83 anchor, `unknown` boot) the cause falls closed to
+   * `tamper`.
+   *
+   * S34-04: every anchor that is NOT ahead gets the full #checkAnchor (and the
+   * lag bounds) first, so anchor-missing / anchor-mismatch (malformed, other
+   * log, forked hash) / anchor-lag still throw — in recovery mode too.
+   */
+  #truncation(file: AnchorReadResult, ks: AnchorReadResult): TruncationReport | undefined {
+    const ahead = (a: AnchorReadResult): HeadAnchor | undefined =>
+      a.state === 'present' && a.head.log === this.#meta.log && a.head.seq > this.#tip.seq ? a.head : undefined;
+    const ksAhead = ahead(ks);
+    const fileAhead = ahead(file);
+    if (!ksAhead && !fileAhead) return undefined;
+    if (!ksAhead) this.#checkKeystoreCloseLag(ks, this.#checkAnchor(ks, 'keystore'));
+    if (!fileAhead) this.#checkFileLag(file, this.#checkAnchor(file, 'file'));
+    const lost = (ksAhead ?? fileAhead)!;
+    const auth = ks.state === 'present' && ks.head.log === this.#meta.log ? ks.head : undefined;
+    const bootPrev = normalizeBootId(auth?.boot ?? '');
+    const bootNow = this.#boot;
+    const cleanClose = auth?.closed === true;
+    const rebooted = bootPrev !== BOOT_UNKNOWN && bootNow !== BOOT_UNKNOWN && bootPrev !== bootNow;
+    return {
+      cause: rebooted && !cleanClose ? 'unclean-reboot' : 'tamper',
+      anchor: ksAhead ? 'keystore' : 'file',
+      lostFrom: this.#tip.seq + 1,
+      lostTo: lost.seq,
+      lostHash: lost.hash,
+      bootPrev,
+      bootNow,
+      cleanClose,
+      ahead: { file: Boolean(fileAhead), keystore: Boolean(ksAhead) },
+      unauthenticatedLead: !ksAhead && ks.state === 'present',
+    };
   }
 
   #metaOf(file: string): Meta {
@@ -561,7 +892,7 @@ export class KernelLog {
   }
 
   #headAnchor(): HeadAnchor {
-    return { schemaVersion: HEAD_SCHEMA, log: this.#meta.log, segment: this.#meta.segment, seq: this.#tip.seq, hash: this.#tip.hash, at: this.#tip.at };
+    return { schemaVersion: HEAD_SCHEMA, log: this.#meta.log, segment: this.#meta.segment, seq: this.#tip.seq, hash: this.#tip.hash, at: this.#tip.at, boot: this.#boot };
   }
 
   /** Rename the file anchor in now (resets the coalescing window). */
@@ -576,40 +907,73 @@ export class KernelLog {
 
   /**
    * Queue a keystore anchor write of the current head. Writes are serialised
-   * so an older head never lands after a newer one. The returned promise
-   * rejects if THIS write fails (critical path); the chain itself swallows
-   * the failure into a diagnostic so bulk writes never surface unhandled.
+   * so an older head never lands after a newer one: the next write starts
+   * only when this one has actually SETTLED, even if its caller already gave
+   * up on it. The returned promise rejects if THIS write fails or does not
+   * settle within `keystoreTimeoutMs` of STARTING (S34-11; critical path);
+   * while a timed-out write is unsettled, new writes are refused at once
+   * (no hang, no reordering). The chain
+   * itself swallows the failure into a diagnostic so bulk writes never surface
+   * unhandled. The confirmed keystore seq (status keystoreLag) advances only
+   * when a write resolves (S34-15).
    */
-  #queueKeystore(durable: boolean): Promise<void> {
-    const h = this.#headAnchor();
-    this.#ksLag = 0;
-    this.#counts.keystoreAnchors++;
+  #queueKeystore(durable: boolean, closed = false): Promise<void> {
+    const h = closed ? { ...this.#headAnchor(), closed: true as const } : this.#headAnchor();
+    this.#ksLag = 0; // cadence counter only (rows since the last ENQUEUED write)
     if (this.#ksTimer) clearTimeout(this.#ksTimer);
     this.#ksTimer = undefined;
-    const p = this.#ksChain.then(() => this.#keystoreAnchor.write(h, durable));
-    this.#ksChain = p.then(
-      () => undefined,
-      (err: unknown) => this.#diag('anchor.keystore.failed', { seq: h.seq, error: (err as Error)?.message ?? String(err) }),
+    if (this.#ksHung) {
+      // a timed-out write is still in flight: queueing behind it would hang, racing it would break the order
+      const p = Promise.reject(new Error(`keystore anchor write for seq ${h.seq} refused: a previous keystore write timed out and is still unsettled`));
+      p.catch(() => undefined);
+      return p;
+    }
+    this.#counts.keystoreAnchors++;
+    const prev = this.#ksChain;
+    const write = prev.then(() => this.#keystoreAnchor.write(h, durable));
+    this.#ksChain = write.then(
+      () => {
+        this.#ksConfirmedSeq = h.seq;
+        this.#ksHung = false;
+      },
+      (err: unknown) => {
+        this.#ksHung = false;
+        this.#diag('anchor.keystore.failed', { seq: h.seq, error: (err as Error)?.message ?? String(err) });
+      },
     );
+    const ms = this.#opts.keystoreTimeoutMs ?? KEYSTORE_WRITE_TIMEOUT_MS;
+    const p = new Promise<void>((resolve, reject) => {
+      void prev.then(() => {
+        // the timeout runs from DEQUEUE (this write has started), not from enqueue
+        const timer = setTimeout(() => {
+          this.#ksHung = true;
+          reject(new Error(`keystore anchor write for seq ${h.seq} did not settle within ${ms} ms`));
+        }, ms);
+        timer.unref();
+        void write.then(resolve, reject).finally(() => clearTimeout(timer));
+      });
+    });
+    p.catch(() => undefined); // handled here; callers that await p still see the rejection
     return p;
   }
 
   /** Both anchors durably (genesis, rotation, close). */
   #writeAnchorsDurable(closed = false): Promise<void> {
     this.#writeFileAnchor(true, closed);
-    return this.#queueKeystore(true);
+    return this.#queueKeystore(true, closed);
   }
 
   /** S33-05: after a bulk row — coalesced file anchor (63 rows / 50 ms) and keystore anchor (1023 rows / 1 s). */
   #afterBulkRow(): void {
     const now = performance.now();
     if (this.#fileLag++ === 0) this.#fileSince = now;
-    if (this.#fileLag >= FILE_ANCHOR_MAX_LAG || now - this.#fileSince >= FILE_ANCHOR_MAX_MS) this.#writeFileAnchor(false);
+    const windowMs = this.#opts.fileAnchorMaxMs ?? FILE_ANCHOR_MAX_MS;
+    if (this.#fileLag >= FILE_ANCHOR_MAX_LAG || now - this.#fileSince >= windowMs) this.#writeFileAnchor(false);
     else if (!this.#fileTimer) {
       this.#fileTimer = setTimeout(() => {
         this.#fileTimer = undefined;
         if (!this.#closed && this.#fileLag > 0) this.#writeFileAnchor(false);
-      }, FILE_ANCHOR_MAX_MS);
+      }, windowMs);
       this.#fileTimer.unref();
     }
     if (this.#ksLag++ === 0) this.#ksSince = now;
@@ -640,50 +1004,136 @@ export class KernelLog {
   /** The `status.log` anchor block (S33-06/07). */
   get anchorStatus(): AnchorStatus {
     const rate = this.forcedAnchorRate;
-    return { forcedAnchorRate: rate, withinEnvelope: rate <= FORCED_ANCHOR_ENVELOPE, fileLag: this.#fileLag, keystoreLag: this.#ksLag, ...this.#counts };
+    return {
+      forcedAnchorRate: rate,
+      withinEnvelope: rate <= FORCED_ANCHOR_ENVELOPE,
+      fileLag: this.#fileLag,
+      keystoreLag: Math.max(0, this.#tip.seq - this.#ksConfirmedSeq),
+      anchoring: this.#anchoring,
+      faulted: this.#fault !== undefined,
+      ...this.#counts,
+    };
   }
 
   /* ── append ─────────────────────────────────────────────────────────────── */
+
+  /** S34-03: `both` when a keystore anchor store is present, `file-only` while it is the unavailable stub. */
+  get #anchoring(): Anchoring {
+    return this.#ksAvailable ? 'both' : 'file-only';
+  }
 
   /**
    * Append one event. The commit is durable per the durability policy before
    * the promise resolves — so a caller that must log BEFORE acting (L2,
    * `session.inject` before the child reads, G-LOG-03) sequences on it.
    *
-   * Critical kinds (CRITICAL_ANCHOR_KINDS, S33-06) commit with F_FULLFSYNC and
-   * resolve only after the file anchor is renamed in AND the keystore anchor
-   * write has completed: `{anchored: true}`. NO EFFECT of a critical event
-   * (tool release, card result, grant) may be released before this resolves.
-   * If the keystore write fails the promise rejects ENGINE{anchor-failed}: the
-   * row is committed but must be treated as not having happened.
+   * Critical kinds (CRITICAL_ANCHOR_KINDS, S33-06/S33-10) resolve only after
+   * the commit, the file-anchor rename and the keystore anchor write have
+   * completed, in that order: `{anchored: 'both' | 'file-only'}`. The commit
+   * uses the bulk durability (no F_FULLFSYNC, P8-D83): this orders the anchor
+   * before any effect against a same-user process; it is not a power-loss
+   * guarantee. NO EFFECT of a critical event (tool release, card result,
+   * grant) may be released before this resolves. Any failure after COMMIT
+   * rejects ENGINE{anchor-failed} (the row is committed but must be treated
+   * as not having happened) and faults the log (S34-02, header).
+   *
+   * The first append after open waits for the keystore re-stamp (S34-01).
    */
   async append(input: AppendInput): Promise<AppendResult> {
     if (this.#closed) throw logRefusal('ENGINE', 'closed', 'the kernel log is closed');
-    if (input.kind === 'daemon.segment') {
-      throw logRefusal('FORBIDDEN', 'reserved-kind', 'daemon.segment is written only by the log itself at rotation', { kind: input.kind });
+    if (this.#broken) throw truncatedRefusal(this.#broken, this.#tip.seq);
+    if (RESERVED_KINDS.includes(input.kind)) {
+      throw logRefusal('FORBIDDEN', 'reserved-kind', `${input.kind} is written only by the log itself`, { kind: input.kind });
+    }
+    if (!this.#readyDone) await this.#ready.catch(() => undefined);
+    if (this.#closed) throw logRefusal('ENGINE', 'closed', 'the kernel log is closed');
+    if (!this.#opts.signer && this.#tip.seq + 1 - this.#meta.baseSeq + 2 >= this.#opts.segmentRows) {
+      // S34-22: the row would reach the segment boundary and the daemon.segment row needs the kernel key — refuse BEFORE commit
+      throw keyRequired('daemon.segment', 'a keyless log is non-rotating: this append would reach the segment boundary');
     }
     const critical = isCriticalKind(input.kind, input.payload);
-    const e = this.#appendRow(input, critical);
-    this.#noteForced(critical);
-    let ks: Promise<void> | undefined;
-    if (critical) {
-      this.#counts.forcedAnchors++;
-      this.#writeFileAnchor(false);
-      ks = this.#queueKeystore(false);
-    } else this.#afterBulkRow();
-    this.#scheduleCheckpoint();
-    if (e.seq - this.#meta.baseSeq + 2 >= this.#opts.segmentRows) this.#rotate();
-    if (ks) {
+    if (critical && this.#fault) {
       try {
-        await ks;
+        await this.#recoverAnchors();
       } catch (err) {
-        throw logRefusal('ENGINE', 'anchor-failed', `keystore anchor write failed for critical row ${e.seq}: ${(err as Error)?.message ?? String(err)}`, { kind: e.kind, seq: e.seq });
+        throw logRefusal('ENGINE', 'anchor-faulted', `critical appends are refused until both anchors succeed for the head: ${(err as Error)?.message ?? String(err)}`, {
+          kind: input.kind,
+          failed: this.#fault?.failed.map((f) => f.seq) ?? [],
+        });
       }
     }
-    return { seq: e.seq, hash: e.hash, anchored: critical, event: e };
+    const e = this.#appendRow(input); // COMMIT has returned when this returns
+    this.#noteForced(critical);
+    if (!critical) {
+      this.#afterBulkRow();
+      this.#scheduleCheckpoint();
+      this.#maybeRotate();
+      return { seq: e.seq, hash: e.hash, anchored: false, event: e };
+    }
+    this.#counts.forcedAnchors++;
+    try {
+      this.#writeFileAnchor(false); // then the file-anchor rename
+      const ks = this.#queueKeystore(false); // then the keystore write (awaited below)
+      this.#scheduleCheckpoint();
+      this.#maybeRotate();
+      await ks;
+    } catch (err) {
+      (this.#fault ??= { failed: [] }).failed.push({ seq: e.seq, kind: e.kind, recorded: false });
+      try {
+        this.#recordPendingMarkers(); // S34-17: durable now — committing needs no keystore
+      } catch (mErr) {
+        this.#diag('anchor.failed.marker.deferred', { seq: e.seq, error: (mErr as Error)?.message ?? String(mErr) });
+      }
+      this.#diag('anchor.critical.failed', { seq: e.seq, kind: e.kind, error: (err as Error)?.message ?? String(err) });
+      throw logRefusal('ENGINE', 'anchor-failed', `anchoring failed after commit for critical row ${e.seq}: ${(err as Error)?.message ?? String(err)}`, { kind: e.kind, seq: e.seq });
+    }
+    return { seq: e.seq, hash: e.hash, anchored: this.#anchoring, event: e };
   }
 
-  #appendRow(input: AppendInput, fullfsync: boolean): EventV1 {
+  #maybeRotate(): void {
+    if (this.#tip.seq - this.#meta.baseSeq + 2 >= this.#opts.segmentRows) this.#rotate();
+  }
+
+  /** S34-17: commit a kernel-signed daemon.anchor.failed marker for every failed entry that has none yet. */
+  #recordPendingMarkers(): void {
+    const f = this.#fault;
+    if (!f) return;
+    const pending = f.failed.filter((x) => !x.recorded);
+    if (!pending.length) return;
+    if (!this.#opts.signer) throw keyRequired('daemon.anchor.failed', 'daemon.anchor.failed must be signed by the kernel key');
+    for (const x of pending) {
+      const m = this.#appendRow({ kind: 'daemon.anchor.failed', principal: this.#opts.kernelPrincipal, payload: { seq: x.seq, kind: x.kind } });
+      this.#noteForced(false);
+      x.recorded = true;
+      x.markerSeq = m.seq;
+    }
+    this.#scheduleCheckpoint();
+    this.#maybeRotate();
+  }
+
+  /** S34-19: the fault clears only when EVERY entry has a marker and both anchors cover a head at or past it. */
+  #clearFaultIfAnchored(anchoredSeq: number): void {
+    const f = this.#fault;
+    if (f && f.failed.every((x) => x.recorded && x.markerSeq !== undefined && x.markerSeq <= anchoredSeq)) this.#fault = undefined;
+  }
+
+  /**
+   * S34-02/S34-17: leave the anchor-faulted state — record any pending
+   * markers, then anchor the head in both anchors. Throws (state kept) if the
+   * anchors fail or a newer failure is still unanchored.
+   */
+  async #recoverAnchors(): Promise<void> {
+    if (!this.#fault) return;
+    this.#recordPendingMarkers();
+    this.#writeFileAnchor(false);
+    const anchoredSeq = this.#tip.seq;
+    await this.#queueKeystore(false);
+    this.#clearFaultIfAnchored(anchoredSeq);
+    if (this.#fault) throw new Error('anchor fault persists: a failed critical row is not yet recorded and anchored');
+    this.#diag('anchor.recovered', { anchoredSeq });
+  }
+
+  #appendRow(input: AppendInput): EventV1 {
     const kind = input.kind;
     const labels = resolveLabels(kind, input); // refuses unregistered kinds and relaxed labels
     assertOwner(kind, input.as ?? 'kernel');
@@ -730,9 +1180,8 @@ export class KernelLog {
     const errors = validateEventV1(event, { checkDefaultLabels: true });
     if (errors.length) throw logRefusal('BAD_REQUEST', 'bad-envelope', errors.join('; '), { kind });
 
-    // S33-06: F_FULLFSYNC for this one transaction (already on under 'power-loss').
-    const forceFull = fullfsync && this.#opts.durability !== 'power-loss';
-    if (forceFull) this.#db.exec('PRAGMA fullfsync=ON');
+    // P8-D83: every commit (bulk and critical) uses the connection's durability;
+    // F_FULLFSYNC only under durability 'power-loss' (set once in #attach).
     this.#db.exec('BEGIN IMMEDIATE');
     try {
       const cur = this.#tipStmt.get() as { seq: number; hash: string } | undefined;
@@ -746,8 +1195,6 @@ export class KernelLog {
     } catch (err) {
       if (this.#db.isTransaction) this.#db.exec('ROLLBACK');
       throw err;
-    } finally {
-      if (forceFull) this.#db.exec('PRAGMA fullfsync=OFF');
     }
     this.#tip = { seq, hash, kind, at: event.at };
     return event;
@@ -778,6 +1225,9 @@ export class KernelLog {
   /** Write both anchors for the current head now and wait for the keystore write (daemon shutdown paths, tests). */
   async flushAnchors(): Promise<void> {
     if (this.#closed) return this.#ksChain;
+    if (this.#broken) return; // the ahead anchor is the evidence: never overwritten before acknowledgeGap
+    if (!this.#readyDone) await this.#ready.catch(() => undefined);
+    if (this.#fault) return this.#recoverAnchors(); // S34-02: re-anchor and record failed critical rows
     this.#writeFileAnchor(false);
     await this.#queueKeystore(false);
   }
@@ -791,7 +1241,6 @@ export class KernelLog {
         principal: this.#opts.kernelPrincipal,
         payload: { segment: this.#meta.segment, next: this.#meta.segment + 1, firstSeq: this.#meta.baseSeq, lastSeq: this.#tip.seq + 1 },
       },
-      false,
     );
     this.#noteForced(false);
     // durable anchor AT the closing row before the rename, so a crash between
@@ -877,27 +1326,151 @@ export class KernelLog {
     }
   }
 
+  /* ── recovery (S33-10, P8-D83) ──────────────────────────────────────────── */
+
+  /** The truncation this (recovery-mode) log refuses appends for, if any. */
+  get truncation(): TruncationReport | undefined {
+    return this.#broken ? { ...this.#broken } : undefined;
+  }
+
+  /** S34-14: the LIVE integrity state (`report.integrity` is the open-time snapshot). */
+  get integrity(): LogIntegrity {
+    if (this.#broken) return { state: 'truncated', ...this.#broken };
+    if (this.#fault) return { state: 'anchor-faulted', failed: this.#fault.failed.map((x) => ({ ...x })) };
+    return { state: 'ok' };
+  }
+
+  /**
+   * Acknowledge rows lost to an UNCLEAN REBOOT (S33-10): appends one
+   * kernel-signed `daemon.log.gap{lostFrom, lostTo, lostHash, bootPrev,
+   * bootNow}` at the db tip, then writes both anchors durably and awaits the
+   * keystore write. Only when that write succeeds does the log leave recovery
+   * (S34-12); on failure it stays truncated, and a retry re-anchors the SAME
+   * gap row (no second row). A tip that is a daemon.segment closing row is
+   * rotated first (S34-13), so the gap row opens the next segment.
+   *
+   * PRESENCE IS A STUB SEAM: `presenceToken` must be a non-empty string, and
+   * nothing else is checked yet. M1.3 wires real presence (the signed helper's
+   * presence prompt, probes P04/P02) — until then this API must be reached
+   * only from a human-initiated path.
+   *
+   * Refused: no truncation (BAD_REQUEST{no-gap}); empty token
+   * (FORBIDDEN{presence-required}); only the file anchor leads while a
+   * keystore anchor is present (FORBIDDEN{unauthenticated-lead}, S34-04);
+   * cause `tamper` (FORBIDDEN{tamper} — same boot or after a clean close, no
+   * power loss can explain it); no kernel key (FORBIDDEN{unsigned-mandatory}).
+   */
+  async acknowledgeGap(input: { presenceToken: string }): Promise<AppendResult> {
+    if (this.#closed) throw logRefusal('ENGINE', 'closed', 'the kernel log is closed');
+    const t = this.#broken;
+    if (!t) throw logRefusal('BAD_REQUEST', 'no-gap', 'the log has no unacknowledged truncation');
+    if (typeof input?.presenceToken !== 'string' || input.presenceToken.trim() === '') {
+      throw logRefusal('FORBIDDEN', 'presence-required', 'acknowledging a log gap requires presence (stub seam until M1.3)');
+    }
+    if (t.unauthenticatedLead) {
+      throw logRefusal('FORBIDDEN', 'unauthenticated-lead', 'only the file anchor leads the db while the keystore anchor does not: the lead is unauthenticated and cannot be acknowledged', { ...t });
+    }
+    if (t.cause !== 'unclean-reboot') {
+      throw logRefusal('FORBIDDEN', 'tamper', 'an anchor ahead of the db in the same boot session (or after a clean close) is tamper, not an unclean reboot; it cannot be acknowledged', { ...t });
+    }
+    if (!this.#opts.signer) throw logRefusal('FORBIDDEN', 'unsigned-mandatory', 'daemon.log.gap must be signed by the kernel key', { kind: 'daemon.log.gap' });
+    if (!this.#gapRow) {
+      if (this.#tip.kind === 'daemon.segment') this.#finishRotation(); // S34-13
+      this.#gapRow = this.#appendRow({
+        kind: 'daemon.log.gap',
+        principal: this.#opts.kernelPrincipal,
+        signer: this.#opts.signer,
+        payload: { lostFrom: t.lostFrom, lostTo: t.lostTo, lostHash: t.lostHash, bootPrev: t.bootPrev, bootNow: t.bootNow },
+      });
+      this.#noteForced(true);
+      this.#counts.forcedAnchors++;
+      this.#scheduleCheckpoint();
+    }
+    const e = this.#gapRow;
+    try {
+      await this.#writeAnchorsDurable();
+    } catch (err) {
+      this.#diag('log.gap.anchor.failed', { seq: e.seq, error: (err as Error)?.message ?? String(err) });
+      throw logRefusal('ENGINE', 'anchor-failed', `anchoring failed for daemon.log.gap row ${e.seq} (still in recovery): ${(err as Error)?.message ?? String(err)}`, { kind: e.kind, seq: e.seq });
+    }
+    this.#broken = undefined; // S34-12: only after both anchors succeeded
+    this.#gapRow = undefined;
+    this.#diag('log.gap.acknowledged', { lostFrom: t.lostFrom, lostTo: t.lostTo, seq: e.seq });
+    return { seq: e.seq, hash: e.hash, anchored: this.#anchoring, event: e };
+  }
+
   /* ── verify ─────────────────────────────────────────────────────────────── */
 
   /** `gnomon log verify`: the full chain (every segment + both anchors), or one segment. */
   verify(opts: { segment?: number } = {}): VerifyReport {
-    return verifyLog(this.home, { keyRing: this.#keyRing, segment: opts.segment, keystoreAnchor: this.#keystoreAnchor });
+    const kernelKeyIds = this.#kernelKeyIds();
+    return verifyLog(this.home, { keyRing: this.#keyRing, segment: opts.segment, keystoreAnchor: this.#keystoreAnchor, kernelPrincipal: this.#opts.kernelPrincipal, kernelKeyIds });
   }
 
   /**
-   * Clean close: both anchors durably, the file anchor carrying the
-   * clean-close marker (S33-07), then a TRUNCATE checkpoint. The db work is
-   * synchronous; the returned promise settles when the keystore write does.
+   * Clean close: both anchors durably, carrying the clean-close marker
+   * (S33-07; the keystore copy is the authoritative one, S34-05), then a
+   * TRUNCATE checkpoint. The db work is synchronous; the returned promise
+   * resolves when the keystore write settles and REPORTS a failed write
+   * (S34-12) — `{keystore: 'failed', error}` — instead of swallowing it. A
+   * truncated (recovery-mode) log writes no anchor: `skipped-truncated`. An
+   * anchor-faulted log first commits any pending daemon.anchor.failed markers;
+   * `fault` reports whether the closing anchors cleared the fault (S34-17).
    */
-  close(): Promise<void> {
-    if (this.#closed) return this.#ksChain;
+  close(): Promise<CloseReport> {
+    if (this.#closing) return this.#closing;
     for (const t of [this.#idleTimer, this.#fileTimer, this.#ksTimer]) if (t) clearTimeout(t);
-    void this.#writeAnchorsDurable(true);
+    let ks: Promise<void> | undefined;
+    let syncErr: unknown;
+    const hadFault = this.#fault !== undefined;
+    const anchoredSeq = () => this.#tip.seq;
+    let headSeq = 0;
+    if (!this.#broken) {
+      try {
+        if (hadFault) this.#recordPendingMarkers(); // S34-17: the closing anchors then cover the markers
+        headSeq = anchoredSeq();
+        ks = this.#writeAnchorsDurable(true);
+      } catch (err) {
+        syncErr = err;
+      }
+    }
     this.#closed = true;
     this.#db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
     this.#db.close();
-    return this.#ksChain;
+    const faultOutcome = (): CloseReport['fault'] => (!hadFault && !this.#fault ? 'none' : this.#fault ? 'pending' : 'recovered');
+    const fail = (err: unknown): CloseReport => {
+      const error = (err as Error)?.message ?? String(err);
+      this.#diag('anchor.close.failed', { error });
+      return { keystore: 'failed', error, fault: faultOutcome() };
+    };
+    this.#closing =
+      syncErr !== undefined
+        ? Promise.resolve(fail(syncErr))
+        : ks
+          ? ks.then((): CloseReport => {
+              this.#clearFaultIfAnchored(headSeq);
+              return { keystore: 'ok', fault: faultOutcome() };
+            }, fail)
+          : Promise.resolve({ keystore: 'skipped-truncated', fault: faultOutcome() });
+    return this.#closing;
   }
+}
+
+/** Kinds only the log itself appends (rotation, open, recovery, anchor faults); verify binds them to the kernel identity (S34-18). */
+export const RESERVED_KINDS: readonly string[] = Object.freeze(['daemon.segment', 'daemon.log.gap', 'daemon.anchor.lag', 'daemon.anchor.failed']);
+
+/** S34-22: a kernel row is needed but the log has no kernel key (keyless logs are non-rotating, diagnostic-only). */
+function keyRequired(kind: string, why: string) {
+  return logRefusal('FORBIDDEN', 'kernel-key-required', `${why}; ${kind} must be signed by the kernel key and this log has none`, { kind });
+}
+
+/** INTEGRITY_BROKEN{truncated} with the S33-10 cause (both causes refuse). */
+function truncatedRefusal(t: TruncationReport, tipSeq: number) {
+  return logRefusal('INTEGRITY_BROKEN', 'truncated', `the ${t.anchor} anchor is at seq ${t.lostTo} but the log ends at ${tipSeq} (cause: ${t.cause})`, {
+    ...t,
+    anchorSeq: t.lostTo,
+    tipSeq,
+  });
 }
 
 /* ── payload checks (G-LOG-03: an inject row must say what was injected) ─── */
@@ -918,8 +1491,10 @@ const SHA256_TAGGED = /^sha256:[0-9a-f]{64}$/;
 
 export function verifyLog(
   home: string,
-  opts: { keyRing: KeyRing; segment?: number; keystoreAnchor?: AnchorStore },
+  opts: { keyRing: KeyRing; segment?: number; keystoreAnchor?: AnchorStore; kernelPrincipal?: string; kernelKeyIds?: readonly string[] },
 ): VerifyReport {
+  // S34-06: rows by the kernel principal must be signed by a kernel key (checked when the kernel key ids are known)
+  const kernel = opts.kernelPrincipal && opts.kernelKeyIds?.length ? { principal: opts.kernelPrincipal, keyIds: new Set(opts.kernelKeyIds) } : undefined;
   const failures: VerifyFailure[] = [];
   const fail = (f: VerifyFailure): void => {
     if (failures.length < 1000) failures.push(f);
@@ -927,7 +1502,7 @@ export function verifyLog(
   const files = listSealedSegments(home).map((s) => ({ ...s, sealed: true }));
   const active = path.join(home, ACTIVE_DB);
   if (fs.existsSync(active)) files.push({ segment: Number.NaN, file: active, sealed: false });
-  const report: VerifyReport = { ok: false, rows: 0, segments: [], failures, anchors: { file: 'not-checked', keystore: 'not-checked' } };
+  const report: VerifyReport = { ok: false, rows: 0, segments: [], failures, kernelBinding: kernel ? 'ok' : 'not-checked', anchors: { file: 'not-checked', keystore: 'not-checked' } };
 
   let logId: string | undefined;
   let expect: { seq: number; prev: string; segment: number } | undefined;
@@ -956,7 +1531,7 @@ export function verifyLog(
         }
       } else if (meta.segment !== opts.segment) continue;
 
-      const r = verifyRows(db, meta, opts.keyRing, fail);
+      const r = verifyRows(db, meta, opts.keyRing, fail, kernel);
       report.rows += r.rows;
       report.segments.push({ segment: meta.segment, firstSeq: meta.baseSeq, lastSeq: r.lastSeq, rows: r.rows, ok: r.ok });
       if (f.sealed && r.lastKind !== 'daemon.segment') fail({ code: 'segment-unsealed', segment: meta.segment, detail: 'sealed segment does not end with daemon.segment (truncated?)' });
@@ -989,6 +1564,7 @@ export function verifyLog(
       fail({ code: 'anchor', segment: Number.NaN, detail: `keystore anchor ${ks.state}` });
     }
   }
+  if (kernel && failures.some((f) => f.code === 'kernel-key' || f.code === 'reserved-binding')) report.kernelBinding = 'failed';
   report.ok = failures.length === 0;
   return report;
 }
@@ -998,6 +1574,7 @@ function verifyRows(
   meta: Meta,
   keyRing: KeyRing,
   fail: (f: VerifyFailure) => void,
+  kernel?: { principal: string; keyIds: ReadonlySet<string> },
 ): { rows: number; lastSeq: number; lastHash: string; lastKind: string | null; ok: boolean } {
   let expectSeq = meta.baseSeq;
   let prev = meta.basePrev;
@@ -1058,7 +1635,11 @@ function verifyRows(
       const v = keyRing.verify(keyId, 'event', r.hash, Buffer.from(r.sig, 'base64'));
       if (v === 'unknown-key') bad('unknown-key', r.seq, `signature by unknown key ${keyId || '(none)'}`);
       else if (v === 'bad') bad('sig', r.seq, 'signature does not verify');
-    } else if (!mayBeUnsigned(r.kind)) bad('unsigned', r.seq, `${r.kind} row is unsigned`);
+      if (kernel && r.principal === kernel.principal && !kernel.keyIds.has(keyId)) bad('kernel-key', r.seq, `kernel-principal row signed by ${keyId || '(none)'}, not a kernel key`);
+      else if (kernel && RESERVED_KINDS.includes(r.kind) && (r.principal !== kernel.principal || !kernel.keyIds.has(keyId))) {
+        bad('reserved-binding', r.seq, `${r.kind} must be appended by the kernel principal with a kernel key`);
+      }
+    } else if (!mayBeUnsigned(r.kind)) bad('unsigned', r.seq, `${r.kind} row is unsigned`); // mayBeUnsigned excludes the sig-mandatory kinds
     prev = r.hash;
   }
   return { rows, lastSeq: expectSeq - 1, lastHash: prev, lastKind, ok };

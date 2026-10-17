@@ -196,6 +196,14 @@ describe('event kinds and default labels (§9.1, S32 §6, G-LOG-09 contract half
     expect(EVENT_KINDS['daemon.anchor.lag']).toMatchObject({ kind: 'daemon.anchor.lag', owner: 'kernel', sensitivity: 'normal' });
     expect(EVENT_KINDS['daemon.anchor.lag']!.reserved).toBeUndefined();
   });
+  it('daemon.log.gap is registered kernel-owned, normal, unreserved (research 33 S33-10, P8-D83)', () => {
+    expect(EVENT_KINDS['daemon.log.gap']).toMatchObject({ kind: 'daemon.log.gap', owner: 'kernel', sensitivity: 'normal' });
+    expect(EVENT_KINDS['daemon.log.gap']!.reserved).toBeUndefined();
+  });
+  it('daemon.anchor.failed is registered kernel-owned, normal, unreserved (research 33 S34-02, P8-D83)', () => {
+    expect(EVENT_KINDS['daemon.anchor.failed']).toMatchObject({ kind: 'daemon.anchor.failed', owner: 'kernel', sensitivity: 'normal' });
+    expect(EVENT_KINDS['daemon.anchor.failed']!.reserved).toBeUndefined();
+  });
   it('M1.1 reservations are present and tagged', () => {
     expect(EVENT_KINDS['approval.voice.arm']!.reserved).toBe('M1.1:P8-D58');
     expect(EVENT_KINDS['request.voice.arm']!.reserved).toBe('M1.1:P8-D58');

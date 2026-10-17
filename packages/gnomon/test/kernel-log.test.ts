@@ -23,6 +23,7 @@ import {
   approveMessage,
   CRITICAL_ANCHOR_KINDS,
   FILE_ANCHOR_MAX_LAG,
+  FILE_ANCHOR_MAX_MS,
   isCriticalKind,
   KEYSTORE_ANCHOR_MAX_LAG,
   genesisPrev,
@@ -30,6 +31,8 @@ import {
   KeyRing,
   LogRefusal,
   projectForReader,
+  RESERVED_KINDS,
+  verifyLog,
   SIGNATURE_DOMAINS,
   signaturePreimage,
   SignerDomainError,
@@ -234,6 +237,59 @@ describe('#kernel-log signatures (§3.1 domains, §3.2, G-LOG-08)', () => {
     expect(log.verify().failures.map((f) => f.code)).toContain('unsigned');
   });
 
+  it('S34-06: the log integrity kinds are signature-mandatory and reserved to the log; stripped signatures fail verify', async () => {
+    const log = openLog(tmpHome(), {}, null);
+    for (const kind of ['daemon.log.gap', 'daemon.segment', 'daemon.anchor.lag', 'daemon.anchor.failed']) {
+      expect((await rejection(log.append({ kind, principal: KERNEL, payload: {} }))).reason, kind).toBe('reserved-kind');
+    }
+    expect((await rejection(log.append({ kind: 'socket.auth.theft', principal: KERNEL, payload: {} }))).reason).toBe('unsigned-mandatory');
+    const home = tmpHome();
+    const l2 = openLog(home, { segmentRows: 4 });
+    await l2.append({ kind: 'socket.auth.theft', principal: KERNEL, payload: {} }); // seq 1
+    await fill(l2, 2); // rows 2..3 + closing daemon.segment row 4 → sealed
+    expect(l2.verify().ok).toBe(true);
+    const db = attacker(path.join(home, 'log', 'segments', '000001.db'));
+    db.exec('UPDATE chain SET sig = NULL WHERE seq IN (1, 4)');
+    db.close();
+    const unsigned = l2.verify().failures.filter((f) => f.code === 'unsigned').map((f) => f.seq);
+    expect(unsigned).toEqual([1, 4]);
+  });
+
+  it('S34-06: a kernel-principal row must be signed by a kernel key (rotated keys via kernelKeyIds)', async () => {
+    const other = SoftwareEd25519Signer.generate();
+    const ring = new KeyRing();
+    ring.addEd25519(other.publicKeyPem); // known key, so this is not 'unknown-key'
+    const home = tmpHome();
+    const log = openLog(home, { keyRing: ring });
+    await log.append({ kind: 'session.open', principal: HUMAN, signer: other }); // not the kernel principal: fine
+    expect(log.verify().ok).toBe(true);
+    await log.append({ kind: 'session.open', principal: KERNEL, signer: other });
+    const v = log.verify();
+    expect(v.failures.map((f) => [f.code, f.seq])).toEqual([['kernel-key', 2]]);
+    await log.close();
+    const rotated = openLog(home, { keyRing: ring, kernelKeyIds: [other.keyId] });
+    expect(rotated.verify().ok).toBe(true);
+  });
+
+  it('S34-18: reserved-kind rows are bound to the kernel principal + key; standalone verify says kernelBinding not-checked', async () => {
+    const home = tmpHome();
+    const impostor = 'p:abcdefgh/impostor';
+    const l1 = KernelLog.open({ home, kernelPrincipal: impostor, signer: KERNEL_KEY, segmentRows: 4 });
+    await fill(l1, 3); // rows 1..3 + daemon.segment row 4 by the impostor principal
+    await l1.close();
+    const log = openLog(home, { segmentRows: 4 });
+    const v = log.verify();
+    expect(v.failures.map((f) => [f.code, f.seq])).toEqual([['reserved-binding', 4]]);
+    expect(v.kernelBinding).toBe('failed');
+    // a healthy log: bound ⇒ ok; the same home verified standalone ⇒ not-checked (never a silent pass)
+    const h2 = tmpHome();
+    const l2 = openLog(h2, { segmentRows: 4 });
+    await fill(l2, 3);
+    expect(l2.verify()).toMatchObject({ ok: true, kernelBinding: 'ok' });
+    expect(verifyLog(h2, { keyRing: l2.keyRing })).toMatchObject({ kernelBinding: 'not-checked' });
+    expect(RESERVED_KINDS).toEqual(['daemon.segment', 'daemon.log.gap', 'daemon.anchor.lag', 'daemon.anchor.failed']);
+  });
+
   it('event signatures are domain-separated and keyed by gkey:v1:<sha256(spki)>', async () => {
     const signer = SoftwareEd25519Signer.generate();
     expect(signer.keyId).toMatch(/^gkey:v1:[0-9a-f]{64}$/);
@@ -422,25 +478,32 @@ describe('#kernel-log anchors (G-LOG-06, G-LOG-07)', () => {
 });
 
 describe('#kernel-log anchor policy (research 33 S33-05..07, P8-D82)', () => {
-  it('S33-05: bulk rows coalesce the file anchor (≤ 63 rows behind); idle checkpoint and close catch it up', async () => {
+  it('S33-05: bulk rows coalesce the file anchor — the count trigger renames at the 63rd un-anchored row (deterministic window)', async () => {
     const home = tmpHome();
-    const log = openLog(home);
+    const log = openLog(home, { fileAnchorMaxMs: 3_600_000 }); // the time trigger cannot fire: the count trigger is asserted unconditionally
     await fill(log, 10);
-    expect(headOf(home).seq).toBe(0); // genesis anchor; 10 un-anchored rows, < 50 ms
+    expect(headOf(home).seq).toBe(0); // genesis anchor; 10 un-anchored rows
     await fill(log, FILE_ANCHOR_MAX_LAG - 10);
     expect(headOf(home).seq).toBe(FILE_ANCHOR_MAX_LAG); // the 63rd un-anchored row renames it in
+    expect(log.anchorStatus.fileAnchors).toBeLessThan(FILE_ANCHOR_MAX_LAG); // never a rename per commit
+    expect(log.anchorStatus.fileAnchors).toBe(1);
     await fill(log, 2);
     log.checkpoint();
-    expect(headOf(home).seq).toBe(FILE_ANCHOR_MAX_LAG + 2);
-    await fill(log, 1);
-    await new Promise((r) => setTimeout(r, 80)); // the 50 ms timer
-    expect(headOf(home).seq).toBe(FILE_ANCHOR_MAX_LAG + 3);
-    expect(log.anchorStatus.fileLag).toBe(0);
+    expect(headOf(home).seq).toBe(FILE_ANCHOR_MAX_LAG + 2); // the idle checkpoint catches it up
     await log.close();
-    expect(headOf(home)).toMatchObject({ seq: FILE_ANCHOR_MAX_LAG + 3, closed: true });
+    expect(headOf(home)).toMatchObject({ seq: FILE_ANCHOR_MAX_LAG + 2, closed: true });
     const again = openLog(home);
     expect(headOf(home).closed).toBeUndefined(); // the clean-close marker is cleared durably on open
     expect(again.report.anchorLag).toBe(0);
+  });
+
+  it('S33-05: the 50 ms timer path renames a pending file anchor without further appends', async () => {
+    const home = tmpHome();
+    const log = openLog(home);
+    await fill(log, 1);
+    await new Promise((r) => setTimeout(r, FILE_ANCHOR_MAX_MS + 30));
+    expect(headOf(home).seq).toBe(1);
+    expect(log.anchorStatus.fileLag).toBe(0);
   });
 
   it('G-LOG-06: file-anchor lag > 63 ⇒ INTEGRITY_BROKEN{anchor-lag}; lag of exactly 63 is a repairable crash lag', async () => {
@@ -539,7 +602,7 @@ describe('#kernel-log anchor policy (research 33 S33-05..07, P8-D82)', () => {
     const log = openLog(tmpHome());
     expect(log.forcedAnchorRate).toBe(0);
     await fill(log, 63);
-    expect((await log.append({ kind: 'config.loaded', principal: KERNEL, payload: { n: 1 } })).anchored).toBe(true);
+    expect((await log.append({ kind: 'config.loaded', principal: KERNEL, payload: { n: 1 } })).anchored).toBe('file-only');
     expect(log.forcedAnchorRate).toBeCloseTo(1 / 64, 10);
     expect(log.anchorStatus).toMatchObject({ withinEnvelope: true, forcedAnchors: 1 });
     await log.append({ kind: 'config.loaded', principal: KERNEL, payload: { n: 2 } });
@@ -590,7 +653,7 @@ describe('G-LOG-10: critical kinds are anchored before append resolves (S33-06)'
       const log = openLog(home, { keystoreAnchor: ks });
       await fill(log, 3);
       const r = await log.append({ kind, principal: KERNEL, session: HSID, payload });
-      expect(r.anchored, kind).toBe(true);
+      expect(r.anchored, kind).toBe('both');
       // "stop the kernel at the first instruction after append returns": nothing else runs; truncate one row.
       expect(headOf(home).seq, kind).toBe(r.seq);
       expect(ks.stored?.seq, kind).toBe(r.seq);
@@ -619,23 +682,203 @@ describe('G-LOG-10: critical kinds are anchored before append resolves (S33-06)'
       order.push('append-resolved');
       return x;
     });
-    expect(r).toMatchObject({ seq: 4, anchored: true });
+    expect(r).toMatchObject({ seq: 4, anchored: 'both' });
     expect(order).toEqual(['file-anchor@4', 'ks-write-done', 'append-resolved']);
     // a bulk append resolves without waiting for any anchor
     expect((await log.append({ kind: 'session.open', principal: KERNEL })).anchored).toBe(false);
   });
 
-  it('a failed keystore write rejects the critical append ENGINE{anchor-failed}; bulk failures only diagnose', async () => {
+  it('S33-10: the keystore write STARTS only after COMMIT returned (independent reader sees the row), and every anchor records boot', async () => {
+    const home = tmpHome();
+    const seen: Array<{ seq: number; committed: boolean; fileSeq: number }> = [];
+    const ks = memKeystore((h) => {
+      if (h.seq === 0) return; // genesis anchor: no row yet
+      // a separate connection sees only COMMITTED rows (WAL): the row must already be there when the write starts
+      const db = new DatabaseSync(path.join(home, 'kernel.db'), { readOnly: true });
+      try {
+        const row = db.prepare('SELECT hash FROM chain WHERE seq = ?').get(h.seq) as { hash: string } | undefined;
+        seen.push({ seq: h.seq, committed: row?.hash === h.hash, fileSeq: headOf(home).seq });
+      } finally {
+        db.close();
+      }
+    });
+    const log = openLog(home, { keystoreAnchor: ks, bootSession: 'C0FFEE00-0000-4000-8000-000000000001' });
+    await fill(log, 2);
+    for (const kind of ['approval.decide', 'key.rotate', 'config.loaded']) {
+      const r = await log.append({ kind, principal: KERNEL, payload: { t: kind } });
+      expect(r.anchored, kind).toBe('both');
+    }
+    expect(seen.map((s) => s.seq)).toEqual([3, 4, 5]);
+    for (const s of seen) {
+      expect(s.committed, `seq ${s.seq}`).toBe(true);
+      expect(s.fileSeq, `file anchor renamed before the keystore write (seq ${s.seq})`).toBe(s.seq);
+    }
+    expect(ks.stored).toMatchObject({ seq: 5, boot: 'C0FFEE00-0000-4000-8000-000000000001' });
+    expect(headOf(home)).toMatchObject({ seq: 5, boot: 'C0FFEE00-0000-4000-8000-000000000001' });
+    expect(log.report.boot).toBe('C0FFEE00-0000-4000-8000-000000000001');
+  });
+
+  it('S34-02: a failed keystore write rejects ENGINE{anchor-failed} and faults the log — bulk continues, critical refused until re-anchored, then ONE signed daemon.anchor.failed', async () => {
     const diags: string[] = [];
+    let down = false;
     const ks = memKeystore(() => {
-      throw new Error('helper gone');
+      if (down) throw new Error('helper gone');
     });
     const log = openLog(tmpHome(), { keystoreAnchor: ks, onDiagnostic: (d) => diags.push(d.what) });
+    await fill(log, 2);
+    down = true;
     const r = await rejection(log.append({ kind: 'key.rotate', principal: KERNEL, payload: {} }));
-    expect([r.refusal.code, r.reason]).toEqual(['ENGINE', 'anchor-failed']);
-    await log.append({ kind: 'session.open', principal: KERNEL });
+    expect([r.refusal.code, r.reason, r.refusal.data.seq]).toEqual(['ENGINE', 'anchor-failed', 3]);
+    // S34-17: the marker is committed IMMEDIATELY (seq 4) — durable without the keystore
+    expect(log.integrity).toEqual({ state: 'anchor-faulted', failed: [{ seq: 3, kind: 'key.rotate', recorded: true, markerSeq: 4 }] });
+    expect(log.anchorStatus.faulted).toBe(true);
+    expect((await log.append({ kind: 'session.open', principal: KERNEL })).seq).toBe(5); // bulk continues
+    const c = await rejection(log.append({ kind: 'config.loaded', principal: KERNEL, payload: {} }));
+    expect([c.refusal.code, c.reason]).toEqual(['ENGINE', 'anchor-faulted']);
+    expect(log.head().seq).toBe(5); // the refused critical committed nothing
+    down = false;
+    expect(await log.append({ kind: 'config.loaded', principal: KERNEL, payload: { n: 2 } })).toMatchObject({ seq: 6, anchored: 'both' });
+    const failed = [...log.read({ reader: { class: 'human' }, kinds: ['daemon.anchor.failed'] })];
+    expect(failed).toHaveLength(1);
+    expect(failed[0]!.view === 'full' && failed[0]!.event).toMatchObject({ seq: 4, payload: { seq: 3, kind: 'key.rotate' } });
+    expect(failed[0]!.view === 'full' && failed[0]!.event.sig).toBeTruthy();
+    expect(log.integrity).toEqual({ state: 'ok' });
+    expect(ks.stored?.seq).toBe(6);
+    expect(log.verify().ok).toBe(true);
     await log.close();
     expect(diags).toContain('anchor.keystore.failed');
+  });
+
+  it('S34-11: a keystore write that never settles times out the critical append; while it is unsettled new writes refuse at once; order kept', async () => {
+    let release: (() => void) | undefined;
+    const order: number[] = [];
+    const ks = memKeystore(async (h) => {
+      if (h.seq === 2 && !release) await new Promise<void>((r) => (release = r));
+      order.push(h.seq);
+    });
+    const log = openLog(tmpHome(), { keystoreAnchor: ks, keystoreTimeoutMs: 50 });
+    await fill(log, 1);
+    const r = await rejection(log.append({ kind: 'approval.decide', principal: KERNEL, payload: {} }));
+    expect([r.refusal.code, r.reason, r.refusal.data.seq]).toEqual(['ENGINE', 'anchor-failed', 2]);
+    expect(r.message).toMatch(/did not settle within 50 ms/);
+    expect(log.head().seq).toBe(3); // the daemon.anchor.failed marker, committed at once
+    // the hung write is still in flight: a re-anchor is refused immediately (no hang, no write racing it)
+    await expect(log.flushAnchors()).rejects.toThrow(/still unsettled/);
+    release!();
+    await new Promise<void>((r2) => setImmediate(r2));
+    await log.flushAnchors(); // now re-anchors the head (marker included) and clears the fault
+    expect(order).toEqual([0, 2, 3]); // re-stamp, the late write, the re-anchor — never out of order
+    expect(ks.stored?.seq).toBe(3);
+    expect(log.integrity).toEqual({ state: 'ok' });
+  });
+
+  it('S34-11 (round 3): the timeout runs from DEQUEUE — a write queued behind a slow one is not charged for the wait', async () => {
+    const ks = memKeystore(async (h) => {
+      if (h.seq >= 2) await new Promise((r2) => setTimeout(r2, 35));
+    });
+    const log = openLog(tmpHome(), { keystoreAnchor: ks, keystoreTimeoutMs: 50 });
+    await fill(log, 1);
+    // two critical writes queued together: the second settles ~70 ms after ENQUEUE but ~35 ms after it started
+    const [a, b] = await Promise.all([
+      log.append({ kind: 'approval.decide', principal: KERNEL, payload: { n: 1 } }),
+      log.append({ kind: 'approval.decide', principal: KERNEL, payload: { n: 2 } }),
+    ]);
+    expect([a.anchored, b.anchored]).toEqual(['both', 'both']);
+    expect(ks.stored?.seq).toBe(3);
+  });
+
+  it('S34-12: close() reports a failed clean-close keystore write instead of swallowing it', async () => {
+    let down = false;
+    const ks = memKeystore(() => {
+      if (down) throw new Error('helper gone');
+    });
+    const log = openLog(tmpHome(), { keystoreAnchor: ks });
+    await fill(log, 1);
+    down = true;
+    expect(await log.close()).toEqual({ keystore: 'failed', error: 'helper gone', fault: 'none' });
+    expect(await log.close()).toEqual({ keystore: 'failed', error: 'helper gone', fault: 'none' }); // idempotent
+    expect(await openLog(tmpHome(), { keystoreAnchor: memKeystore() }).close()).toEqual({ keystore: 'ok', fault: 'none' });
+  });
+
+  it('S34-17: the fault is durable — critical fails, bulk continues, close (helper still down), reopen ⇒ exactly ONE marker', async () => {
+    let down = false;
+    const ks = memKeystore(() => {
+      if (down) throw new Error('helper gone');
+    });
+    const home = tmpHome();
+    const log = openLog(home, { keystoreAnchor: ks });
+    await fill(log, 2);
+    down = true;
+    await rejection(log.append({ kind: 'approval.decide', principal: KERNEL, payload: {} })); // seq 3, marker 4
+    await fill(log, 2); // 5, 6
+    expect(await log.close()).toMatchObject({ keystore: 'failed', fault: 'pending' });
+    down = false;
+    const again = openLog(home, { keystoreAnchor: ks });
+    await again.flushAnchors();
+    const markers = [...again.read({ reader: { class: 'human' }, kinds: ['daemon.anchor.failed'] })];
+    expect(markers).toHaveLength(1);
+    expect(markers[0]!.view === 'full' && markers[0]!.event).toMatchObject({ seq: 4, payload: { seq: 3, kind: 'approval.decide' } });
+    expect(again.verify().ok).toBe(true);
+  });
+
+  it('S34-17: close() records and anchors a pending fault when the helper is back ⇒ fault recovered', async () => {
+    let down = false;
+    const ks = memKeystore(() => {
+      if (down) throw new Error('helper gone');
+    });
+    const log = openLog(tmpHome(), { keystoreAnchor: ks });
+    await log.flushAnchors(); // the open re-stamp has landed
+    down = true;
+    expect((await rejection(log.append({ kind: 'config.loaded', principal: KERNEL, payload: {} }))).reason).toBe('anchor-failed'); // seq 1, marker 2
+    down = false;
+    expect(log.integrity.state).toBe('anchor-faulted');
+    expect(await log.close()).toEqual({ keystore: 'ok', fault: 'recovered' });
+    expect(ks.stored).toMatchObject({ seq: 2, closed: true });
+  });
+
+  it('S34-17: crash-shaped — a critical row above the keystore anchor with no marker gets one on open, exactly once', async () => {
+    const ks = memKeystore();
+    const home = tmpHome();
+    const log = openLog(home, { keystoreAnchor: ks });
+    await fill(log, 2);
+    await log.flushAnchors(); // keystore @2
+    ks.frozen = true; // the keystore write of the critical row never lands (crash between COMMIT and the helper write)
+    await log.append({ kind: 'key.rotate', principal: KERNEL, payload: {} }); // seq 3
+    await fill(log, 1); // seq 4
+    await log.close(); // still frozen: the keystore never sees anything past seq 2
+    ks.frozen = false;
+    expect(ks.stored?.seq).toBe(2);
+    const again = openLog(home, { keystoreAnchor: ks });
+    const markers = () => [...again.read({ reader: { class: 'human' }, kinds: ['daemon.anchor.failed'] })];
+    expect(markers()).toHaveLength(1);
+    expect(markers()[0]!.view === 'full' && markers()[0]!.event).toMatchObject({ seq: 5, payload: { seq: 3, kind: 'key.rotate' } });
+    expect(markers()[0]!.view === 'full' && markers()[0]!.event.sig).toBeTruthy();
+    expect(again.verify().ok).toBe(true);
+    await again.close();
+    const third = openLog(home, { keystoreAnchor: ks });
+    expect([...third.read({ reader: { class: 'human' }, kinds: ['daemon.anchor.failed'] })]).toHaveLength(1);
+  });
+
+  it('S34-22: a keyless log is non-rotating — the boundary append is refused BEFORE commit; a keyless open that must record refuses too', async () => {
+    const home = tmpHome();
+    const log = openLog(home, { segmentRows: 4 }, null);
+    await log.append({ kind: 'daemon.start', principal: KERNEL });
+    await log.append({ kind: 'daemon.start', principal: KERNEL });
+    const r = await rejection(log.append({ kind: 'daemon.start', principal: KERNEL }));
+    expect([r.refusal.code, r.reason]).toEqual(['FORBIDDEN', 'kernel-key-required']);
+    expect(log.head().seq).toBe(2); // nothing committed-then-thrown
+    expect(log.verify().ok).toBe(true);
+    // open-time keystore lag > 1023 needs a kernel-signed daemon.anchor.lag
+    const home2 = tmpHome();
+    const ks = memKeystore();
+    const l2 = openLog(home2, { keystoreAnchor: ks });
+    await l2.flushAnchors();
+    ks.frozen = true;
+    await fill(l2, KEYSTORE_ANCHOR_MAX_LAG + 1);
+    await l2.close();
+    ks.frozen = false;
+    const k = refusalOf(() => openLog(home2, { keystoreAnchor: ks }, null));
+    expect([k.refusal.code, k.reason]).toEqual(['FORBIDDEN', 'kernel-key-required']);
   });
 });
 

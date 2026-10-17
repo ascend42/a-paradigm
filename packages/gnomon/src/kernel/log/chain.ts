@@ -55,8 +55,13 @@ export const SIG_MANDATORY_NAMESPACES = [
   'billing',
   'verdict',
 ] as const;
-/** Single kinds whose events MUST carry a signature (§3.2). */
-export const SIG_MANDATORY_KINDS = ['oracle.result'] as const;
+/**
+ * Single kinds whose events MUST carry a signature (§3.2), plus the
+ * integrity rows of the log itself (research 33 S34-06, P8-D83): a stripped
+ * signature on a gap / segment / lag / anchor-failure / socket-theft row would
+ * otherwise pass verify as a "diagnostic".
+ */
+export const SIG_MANDATORY_KINDS = ['oracle.result', 'daemon.log.gap', 'daemon.segment', 'daemon.anchor.lag', 'daemon.anchor.failed', 'socket.auth.theft'] as const;
 /** Diagnostics that MAY be unsigned (§3.2): the ONLY unsigned rows the log accepts. */
 export const DIAGNOSTIC_NAMESPACES = ['daemon', 'socket', 'schedule'] as const;
 
@@ -78,10 +83,11 @@ export function isDiagnostic(kind: string): boolean {
  * "kernel-appended events are signed by the kernel key" and "every event
  * appended by a keyed principal" is signed, so outside the three diagnostic
  * namespaces an unsigned row is refused at append and fails verify — a
- * superset of the mandatory list (G-LOG-08 tests the mandatory list).
+ * superset of the mandatory list (G-LOG-08 tests the mandatory list). The
+ * sig-mandatory diagnostic kinds (daemon.log.gap etc., S34-06) are excluded.
  */
 export function mayBeUnsigned(kind: string): boolean {
-  return isDiagnostic(kind);
+  return isDiagnostic(kind) && !isSigMandatory(kind);
 }
 
 /* ── labels (L6, S32 §6, G-LOG-09) ────────────────────────────────────────── */
@@ -140,7 +146,16 @@ export type LogRefusalReason =
   | 'segment-broken'
   | 'reader-unsupported'
   | 'reserved-kind'
-  | 'closed';
+  | 'closed'
+  /* S33-10 acknowledgeGap refusals (P8-D83) */
+  | 'no-gap'
+  | 'presence-required'
+  | 'tamper'
+  | 'unauthenticated-lead'
+  /* S34-02 anchor-fault state */
+  | 'anchor-faulted'
+  /* S34-22 keyless (non-rotating, diagnostic-only) logs */
+  | 'kernel-key-required';
 
 /** A refusal:v1 thrown by the log; `reason` is also in `refusal.data.reason`. */
 export class LogRefusal extends RefusedError {
