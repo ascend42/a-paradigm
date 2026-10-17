@@ -1,0 +1,43 @@
+id: L-2026-10-17-ascend-190536-001
+type: agent-session
+timestamp: '2026-10-17T19:05:36.883Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: D82 anchor policy implemented; critical-class fullfsync blows budget at sustained 1/64 (p99 490 ms)
+summary: |-
+  f7a1eb51 implements D82: coalesced anchors, critical fullfsync plus both anchors before append resolves, anchor-lag on open, daemon.anchor.lag. The contracts change moved clientApiId to sha256:71cee97c.
+
+  Tests: 123 contracts and 139 kernel pass. The builder's G-LOG-04 had a retry-until-pass loop; the orchestrator removed it. The falsifier now runs once in an isolated `npm run test:perf` pass (GNOMON_PERF=1, no file parallelism), and it passes at 10k rows.
+
+  Probe arm G at 1e6 rows: bulk p99 0.27 ms (0.089% over 5 ms, narrow pass). Critical p99 is 489.6 ms (p50 56 ms) against the 25 ms budget: F_FULLFSYNC at a sustained 1-in-64 rate is far costlier than research 33's ~10 ms assumption. That rate is far above human speed, so S33-06/08 need re-cutting: either the stress rate, the budget, or the mechanism (e.g. F_BARRIERFSYNC ordering instead of full durability for the critical commit).
+
+  Builder deviations to note in the spec:
+  - triggers at 63/1023 so a crash right after a trigger stays within the bound;
+  - the critical file-anchor rename is not fsynced;
+  - a power loss can push a coalesced file anchor past 63 rows and raise a false anchor-lag.
+symbols_touched:
+  - '#kernel-log'
+  - '#gnomon-probes'
+commit: f7a1eb51
+learnings:
+  - Never let a falsifier retry until it passes; isolate noisy perf falsifiers into their own serial run instead.
+  - F_FULLFSYNC under sustained load on APFS costs tens to hundreds of ms per call, not ~10 ms; budget durable commits at human cadence, not bulk cadence.
+verification:
+  status: partial
+  details:
+    bulk: pass at 1e6
+    critical: fail p99 489.6 ms vs 25 ms at 1/64 stress
+tags:
+  - paradigm-8
+  - gnomon
+  - kernel-log
+  - perf
+  - security
+linked_lore:
+  - L-2026-10-17-ascend-183438-001
+git_context:
+  ref: f7a1eb51bbda86178f0c67b76a6515d5883fef10
+  branch: feat/gnomon
+  dirty: true

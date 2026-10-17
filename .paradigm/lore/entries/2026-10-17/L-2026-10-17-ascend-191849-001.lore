@@ -1,0 +1,54 @@
+id: L-2026-10-17-ascend-191849-001
+type: insight
+timestamp: '2026-10-17T19:18:49.014Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Lessons adopted from 'How the Claude Code team does code review' (claude.dev, 2026-10-15)
+summary: |-
+  The founder shared Anthropic's Claude Code code-review post. It is captured in neurons as s:web-9a73944324 and digested into 10 neurons under r:ai/agents/code-review: n:review-as-risk-routing, n:human-time-guardrail-metric, n:verify-before-review, n:verified-review-findings, n:review-must-converge, n:risk-tier-set-by-change, n:incidents-as-reviewer-eval, n:review-md-and-fix-at-source, n:explainers-replace-diff-reading, n:approval-circuit-breaker.
+
+  It validates existing Gnomon/Paradigm choices:
+  - verify before claiming done (probes, file ground truth);
+  - verified findings (re-check reviewer claims);
+  - agent approval never counts as human, and approval is bound to content (contentHash);
+  - always-human sensitive paths (gate-class);
+  - noise scored by author response (Loid override calibration);
+  - incidents as eval (the Warpline outcome taxonomy);
+  - the merge queue gap (Warpline's semantic adjudication).
+
+  Adopted and scheduled:
+  - T-2026-10-17-003: per-PR fresh-context review in our build, with a 3-round cap and Aegis required on security PRs.
+  - T-004: spec v3.9 armada convergence rule, an evidence-driven gate-tightening circuit breaker, and test/risk/revert fields on briefs and cards.
+  - T-005: REVIEW.md generated from .purpose and aspects.
+  - T-006: auto-propose a fix-at-source on repeated findings.
+  - T-007: a staged npm `next` channel.
+
+  Also scheduled: T-008, the D83 kernel-log implementation (ordering-not-flush, boot-session classification, G-LOG-11) after the human-cadence probe.
+symbols_touched:
+  - '#paradigm-harness'
+  - '#kernel-log'
+learnings:
+  - Agent-author plus agent-reviewer loops need a hard round cap and diff-only re-review, or they churn on old code (Claude Code saw 50+ overnight rounds, 59% of repeat findings were pre-existing).
+  - Approval should be bound to the exact content, and an agent's approval must never fill a human slot; Gnomon's contentHash-bound, human-only approve already encodes this.
+tags:
+  - paradigm-8
+  - gnomon
+  - review
+  - process
+  - neurons
+  - insight
+linked_lore:
+  - L-2026-10-17-ascend-191448-001
+linked_tasks:
+  - T-2026-10-17-003
+  - T-2026-10-17-004
+  - T-2026-10-17-005
+  - T-2026-10-17-006
+  - T-2026-10-17-007
+  - T-2026-10-17-008
+git_context:
+  ref: 96303fdbebfc2abfe63096aff8985cdf4b6eacfb
+  branch: feat/gnomon
+  dirty: true
