@@ -1,12 +1,43 @@
-# Auto-generated .purpose stub — created by Cid (captain debrief)
-# Delegate to Scribe (Documentor) for rich documentation
-name: workflows
-description: "TODO: describe what this directory/module does"
-context:
-  - "Stub created by Cid during coverage audit — update with real context"
-# Key files touched:
-# - warpline-guard.yml
+version: "2.0"
+description: >-
+  GitHub Actions workflows for the monorepo. ci.yml builds and tests the 7.x
+  packages on Node 20/22 (plus a blocking Warpline job); release.yml runs
+  changesets on main; warpline-guard.yml is the advisory Warpline Guard
+  self-test; gnomon.yml is the Paradigm 8.0 Gnomon CI. All of them install
+  through .github/actions/install-deps.
+
 components:
-  workflows:
-    description: "TODO: describe this component"
-    tags: []
+  ci-workflow:
+    description: >-
+      ci.yml: root build + test + typecheck on Node 20/22 (ubuntu), a blocking
+      Warpline test job, and a publish dry run on PRs. Gnomon is not part of it
+      (G-MIG-01).
+    path: ci.yml
+    tags: [ci]
+
+  release-workflow:
+    description: release.yml — changesets version/publish on push to main.
+    path: release.yml
+    tags: [ci, release]
+
+  warpline-guard-workflow:
+    description: >-
+      warpline-guard.yml — advisory (continue-on-error) Warpline Guard
+      self-test on PRs; never blocks.
+    path: warpline-guard.yml
+    tags: [ci, warpline]
+
+  gnomon-ci:
+    description: >-
+      gnomon.yml (research 29 §3) — path-filtered on packages/gnomon*/** and
+      .github/**. Job `test`: macos-14 / windows-latest / ubuntu-latest on Node
+      24, fail-fast off, runs build:gnomon, test:gnomon (contracts, G-KRN-02,
+      G-SEC-01, G-WIN-05) and typecheck. Job `probes-ci`: macos-14 /
+      windows-latest, runs the probe harness self-test (p-harness) and uploads
+      probes/results/*.json as artifacts. Job `native`: unsigned swift build of
+      gnomon-helper on macos-14; cargo build of gnomon-wrapper on
+      windows-latest once its Cargo.toml exists. Intended to become a required
+      check once green.
+    path: gnomon.yml
+    tags: [ci, gnomon, paradigm-8, windows-parity]
+

@@ -1,10 +1,12 @@
 name: Install dependencies
 description: >
   npm ci plus a workaround for the npm optional-deps bug (npm/cli#4828). A
-  lockfile resolved on macOS omits the Linux-specific rollup binary, so
+  lockfile resolved on one OS omits the other platforms' rollup binaries, so
   tsup -> rollup crashes at build time ("Cannot find module
-  @rollup/rollup-linux-x64-gnu"). We install the binary matching the resolved
-  rollup version, without touching the manifest/lock. Requires actions/checkout
+  @rollup/rollup-<platform>-<arch>[-gnu|-musl|-msvc]"). We install the binary
+  matching the runner's process.platform/process.arch and the resolved rollup
+  version, without touching the manifest/lock. Works on Linux, macOS and
+  Windows runners (bash is available on all three). Requires actions/checkout
   to have run first (needs .github/actions on disk).
 
 runs:
@@ -14,8 +16,24 @@ runs:
       shell: bash
       run: npm ci
 
-    - name: Work around npm optional-deps bug (rollup linux binary)
+    - name: Work around npm optional-deps bug (rollup native binary)
       shell: bash
       run: |
+        pkg=$(node -e '
+          const { platform, arch } = process;
+          let suffix = "";
+          if (platform === "linux") {
+            const glibc = process.report?.getReport?.().header?.glibcVersionRuntime;
+            suffix = glibc ? "-gnu" : "-musl";
+          } else if (platform === "win32") {
+            suffix = "-msvc";
+          }
+          process.stdout.write(`@rollup/rollup-${platform}-${arch}${suffix}`);
+        ')
         ver=$(node -p "require('./node_modules/rollup/package.json').version")
-        npm install --no-save --force "@rollup/rollup-linux-x64-gnu@${ver}" || true
+        if [ -d "node_modules/${pkg}" ]; then
+          echo "${pkg} already present"
+        else
+          echo "installing ${pkg}@${ver}"
+          npm install --no-save --force "${pkg}@${ver}" || true
+        fi

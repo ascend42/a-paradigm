@@ -2,10 +2,10 @@
   "$meta": {
     "version": "1.0.0",
     "project": "a-paradigm",
-    "generatedAt": "2026-09-29T10:25:56.730Z",
+    "generatedAt": "2026-10-17T08:04:57.554Z",
     "paradigmVersion": "0.1.0",
     "sources": {
-      "purposeFiles": 99,
+      "purposeFiles": 103,
       "portalFiles": 2,
       "premiseFiles": 0
     },
@@ -26,6 +26,7 @@
       "feature": 1,
       "theme": 1,
       "controller": 1,
+      "module": 90,
       "tool": 45,
       "tool-group": 10,
       "util": 9,
@@ -36,14 +37,13 @@
       "installer": 1,
       "adapter": 1,
       "test": 7,
-      "module": 85,
       "cli": 1,
+      "component": 29,
       "state": 5,
       "integration": 1,
       "types": 9,
       "command-group": 8,
       "route": 3,
-      "component": 28,
       "hook": 1,
       "storage": 1
     }
@@ -852,7 +852,10 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/university-core/.purpose",
       "description": "#pack-discovery: Slim loadPackManifest/discoverPacks/normalizeSections/resolveEntryAddress using raw js-yaml. Single source of pack discovery since v7.11 (the paradigm-mcp pack-loader duplicate was deleted). v7.11 pack.yaml v2 (PACK_SCHEMA_VERSION 2, 1 still accepted): resolveSkillDirs validates the explicit skills: list (relative, no .., realpath inside root, no symlinks at/under the dir, kebab basename, SKILL.md present, SKILL.md frontmatter metadata.paradigm.id === basename so skillCount matches what the skill loader loads) — violations skipped with classifier-only warnings, never fatal; discoverPacks attaches PackLocation.skillDirs (re-resolved on every call, never cached).",
       "visualTags": [],
-      "related": []
+      "related": [
+        "~classifier-only-errors",
+        "#pack-schema"
+      ]
     },
     "logger-seam": {
       "id": "logger-seam",
@@ -2638,6 +2641,64 @@
       "visualTags": [],
       "related": [],
       "componentType": "view"
+    },
+    "gnomon-contracts": {
+      "id": "gnomon-contracts",
+      "name": "Gnomon Contracts",
+      "symbol": "#gnomon-contracts",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-contracts/.purpose",
+      "description": "Package entry (src/index.ts) plus schemas/. probeResult:v1 = {probe, os, osVersion, arch, toolVersions{node,...}, verdict pass|fail|partial, evidence{}, specRefs[], at}; schemas/probeResult.v1.schema.json is the JSON Schema, src/probe-result.ts the TS type plus a hand-written zero-dependency validator (validateProbeResultV1 / isProbeResultV1). A test keeps the schema's keys and enums in lockstep with the TS side.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "module"
+    },
+    "gnomon-helper": {
+      "id": "gnomon-helper",
+      "name": "Gnomon Helper",
+      "symbol": "#gnomon-helper",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-helper/.purpose",
+      "description": "Holds what the kernel must never hold: Secure Enclave / TPM keys with presence, Keychain / Credential Manager anchors and the kernel-key item, the Windows pipe with an owner-only DACL, job objects, the WFP port filter and the private launch-token URL hand-off. At PR-0 the darwin executable `gnomon-helper` only answers --version (exit 0) and refuses everything else (exit 2). CI builds it unsigned on macos-14; signing never runs in CI.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "module"
+    },
+    "gnomon-wrapper": {
+      "id": "gnomon-wrapper",
+      "name": "Gnomon Wrapper",
+      "symbol": "#gnomon-wrapper",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-wrapper/.purpose",
+      "description": "Will take the token, kernel public key and bundle hash on stdin, load http://127.0.0.1:<port> as its only origin, disable IPC for page content and verify serverSig natively. Not built yet; the gnomon.yml native job builds it on windows-latest once Cargo.toml exists.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "module"
+    },
+    "gnomon-kernel": {
+      "id": "gnomon-kernel",
+      "name": "Gnomon Kernel",
+      "symbol": "#gnomon-kernel",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose",
+      "description": "The kernel package. ZERO runtime deps (G-SEC-01): package.json has no `dependencies` key; @a-company/gnomon-contracts is a devDependency that tsup bundles. Import fence (G-KRN-02): every import under src/kernel/** is node:*, relative, or @a-company/gnomon-contracts, and dist/ holds no bare import. src/kernel/ has the thirteen §18 modules (identity, log, runner, supervisor, broker, budget, scheduler, manifest, refs, socket, web, sandbox, modhost) as empty directories at PR-0. Placeholder bins write to stdio directly: the kernel cannot depend on the Paradigm logger (zero deps); #kernel-log brings its own logging at M1.2.",
+      "visualTags": [],
+      "related": [
+        "#kernel-log",
+        "#gnomon-probes"
+      ],
+      "componentType": "module"
+    },
+    "gnomon-probes": {
+      "id": "gnomon-probes",
+      "name": "Gnomon Probes",
+      "symbol": "#gnomon-probes",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose",
+      "description": "M1.0 probe harness (spec §19.1, research 29 §2). `node packages/gnomon/probes/run.mjs <id> [--out-dir d] [--timeout ms]` imports probes/<id>/probe.mjs (zero deps, no build), runs its default export with {id, platform, arch, probeDir, signal}, and writes a probeResult:v1 record to probes/results/<id>.<platform>.json. Throws and timeouts become verdict `fail`. Exit codes 0 pass / 1 fail / 2 partial / 64 usage. Probe ids match ^[a-z0-9][a-z0-9-]*$ (no path traversal). p-harness is the self-test and its results are gitignored; real results are committed from hardware runs only. A `fail` on a ruling means a re-plan memo before dependent builds.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "module"
     },
     "paradigm-logger": {
       "id": "paradigm-logger",
@@ -6851,6 +6912,17 @@
         "#live-index"
       ]
     },
+    "symbol-integrity": {
+      "id": "symbol-integrity",
+      "name": "Symbol Integrity",
+      "symbol": "#symbol-integrity",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
+      "description": "#symbol-integrity (7.15.0, TD-2026-10-13-661 Phase 1): canonical symbol identity. aggregator.ts canonicalizeSymbols merges every contributor of one symbol string into ONE entry (portal wins for gates; real declarations beat reference stubs; ties keep last-wins), records all contributors in SymbolEntry.sources, and marks reference-only stubs declared:false. resolveReferences scans the winner AND every donor's data (dropping `anchors` and `referencedFrom`), so no edge is lost in the merge; portal gates now reference the prize signals they award. symbol-index.ts adds bySymbol/byNameLower maps, resolveSymbol (exact -> case-insensitive -> unambiguous bare name, else candidates), addSymbolEntry and sourcesOf; getSymbol is O(1). src/integrity.ts exports findDuplicateDeclarations (a portal+purpose pair is exempt; a second .purpose declaration is flagged) and findDanglingReferences. Fixes ripple reporting 0 dependents for portal gates referenced from .purpose.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "component"
+    },
     "live-index": {
       "id": "live-index",
       "name": "Live Index",
@@ -10581,9 +10653,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/.purpose",
       "description": "Referenced from #mediapipe-gaze-provider",
       "visualTags": [],
-      "related": [
-        "#mediapipe-gaze-provider"
-      ]
+      "related": []
     },
     "claude-stream-session.": {
       "id": "claude-stream-session.",
@@ -10593,9 +10663,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/.purpose",
       "description": "Referenced from #claude-stream-session",
       "visualTags": [],
-      "related": [
-        "#claude-stream-session"
-      ]
+      "related": []
     },
     "FF6B6B": {
       "id": "FF6B6B",
@@ -10605,9 +10673,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/.purpose",
       "description": "Referenced from #atrium-chorus",
       "visualTags": [],
-      "related": [
-        "#atrium-chorus"
-      ]
+      "related": []
     },
     "F2B765": {
       "id": "F2B765",
@@ -10617,9 +10683,17 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/.purpose",
       "description": "Referenced from #atrium-chorus",
       "visualTags": [],
-      "related": [
-        "#atrium-chorus"
-      ]
+      "related": []
+    },
+    "kernel-log": {
+      "id": "kernel-log",
+      "name": "Kernel Log",
+      "symbol": "#kernel-log",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose",
+      "description": "Referenced from #gnomon-kernel",
+      "visualTags": [],
+      "related": []
     },
     "upgrade-handler": {
       "id": "upgrade-handler",
@@ -10629,9 +10703,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
       "description": "Referenced from #upgrade-command",
       "visualTags": [],
-      "related": [
-        "#upgrade-command"
-      ]
+      "related": []
     },
     "markdown-generator": {
       "id": "markdown-generator",
@@ -10641,9 +10713,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
       "description": "Referenced from #beacon-command",
       "visualTags": [],
-      "related": [
-        "#beacon-command"
-      ]
+      "related": []
     },
     "graph-ui": {
       "id": "graph-ui",
@@ -10655,9 +10725,7 @@
       "visualTags": [
         "chart"
       ],
-      "related": [
-        "#graph-command"
-      ]
+      "related": []
     },
     "cursorrules-handler": {
       "id": "cursorrules-handler",
@@ -10667,9 +10735,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
       "description": "Referenced from #cursorrules-command",
       "visualTags": [],
-      "related": [
-        "#cursorrules-command"
-      ]
+      "related": []
     },
     "watch-handler": {
       "id": "watch-handler",
@@ -10679,9 +10745,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
       "description": "Referenced from #watch-command",
       "visualTags": [],
-      "related": [
-        "#watch-command"
-      ]
+      "related": []
     },
     "summary-handler": {
       "id": "summary-handler",
@@ -10691,9 +10755,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
       "description": "Referenced from #summary-command",
       "visualTags": [],
-      "related": [
-        "#summary-command"
-      ]
+      "related": []
     },
     "orchestration-acceptor": {
       "id": "orchestration-acceptor",
@@ -10703,9 +10765,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
       "description": "Referenced from #team-accept-command",
       "visualTags": [],
-      "related": [
-        "#team-accept-command"
-      ]
+      "related": []
     },
     "orchestration-differ": {
       "id": "orchestration-differ",
@@ -10715,9 +10775,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
       "description": "Referenced from #team-diff-command",
       "visualTags": [],
-      "related": [
-        "#team-diff-command"
-      ]
+      "related": []
     },
     "cursor-hooks-installer": {
       "id": "cursor-hooks-installer",
@@ -10727,9 +10785,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
       "description": "Referenced from #hooks-command",
       "visualTags": [],
-      "related": [
-        "#hooks-command"
-      ]
+      "related": []
     },
     "dream-aggregator": {
       "id": "dream-aggregator",
@@ -10739,9 +10795,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
       "description": "Referenced from #dream-aggregate-command",
       "visualTags": [],
-      "related": [
-        "#dream-aggregate-command"
-      ]
+      "related": []
     },
     "dream-snapshotter": {
       "id": "dream-snapshotter",
@@ -10751,9 +10805,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
       "description": "Referenced from #dream-snapshot-command",
       "visualTags": [],
-      "related": [
-        "#dream-snapshot-command"
-      ]
+      "related": []
     },
     "tutorial-handler": {
       "id": "tutorial-handler",
@@ -10763,9 +10815,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/.purpose",
       "description": "Referenced from #tutorial-command",
       "visualTags": [],
-      "related": [
-        "#tutorial-command"
-      ]
+      "related": []
     },
     "SchemaSelector": {
       "id": "SchemaSelector",
@@ -10777,9 +10827,7 @@
       "visualTags": [
         "input"
       ],
-      "related": [
-        "#EventsView"
-      ]
+      "related": []
     },
     "ScopeNavigator": {
       "id": "ScopeNavigator",
@@ -10791,9 +10839,7 @@
       "visualTags": [
         "nav"
       ],
-      "related": [
-        "#EventsView"
-      ]
+      "related": []
     },
     "CategoryFilters": {
       "id": "CategoryFilters",
@@ -10803,9 +10849,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
       "description": "Referenced from #EventsView",
       "visualTags": [],
-      "related": [
-        "#EventsView"
-      ]
+      "related": []
     },
     "EventTable": {
       "id": "EventTable",
@@ -10818,9 +10862,7 @@
         "list",
         "tab"
       ],
-      "related": [
-        "#EventsView"
-      ]
+      "related": []
     },
     "repo-lock.": {
       "id": "repo-lock.",
@@ -10830,9 +10872,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
       "description": "Referenced from #git-exec",
       "visualTags": [],
-      "related": [
-        "#git-exec"
-      ]
+      "related": []
     },
     "stake-guard.": {
       "id": "stake-guard.",
@@ -10842,9 +10882,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
       "description": "Referenced from #git-exec",
       "visualTags": [],
-      "related": [
-        "#git-exec"
-      ]
+      "related": []
     },
     "snapshot": {
       "id": "snapshot",
@@ -10854,9 +10892,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
       "description": "Referenced from #warpignore",
       "visualTags": [],
-      "related": [
-        "#warpignore"
-      ]
+      "related": []
     },
     "cfg": {
       "id": "cfg",
@@ -10866,9 +10902,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
       "description": "Referenced from #warpignore",
       "visualTags": [],
-      "related": [
-        "#warpignore"
-      ]
+      "related": []
     },
     "code": {
       "id": "code",
@@ -10878,9 +10912,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
       "description": "Referenced from #code-lens",
       "visualTags": [],
-      "related": [
-        "#code-lens"
-      ]
+      "related": []
     },
     "ordinal": {
       "id": "ordinal",
@@ -10890,9 +10922,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
       "description": "Referenced from #code-symbol",
       "visualTags": [],
-      "related": [
-        "#code-symbol"
-      ]
+      "related": []
     },
     "shadow": {
       "id": "shadow",
@@ -10902,9 +10932,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
       "description": "Referenced from #hazard",
       "visualTags": [],
-      "related": [
-        "#hazard"
-      ]
+      "related": []
     },
     "sem-delta.rippleFromContract": {
       "id": "sem-delta.rippleFromContract",
@@ -10914,9 +10942,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
       "description": "Referenced from #predict",
       "visualTags": [],
-      "related": [
-        "#predict"
-      ]
+      "related": []
     },
     "fabric-lock.": {
       "id": "fabric-lock.",
@@ -10926,9 +10952,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
       "description": "Referenced from #grade",
       "visualTags": [],
-      "related": [
-        "#grade"
-      ]
+      "related": []
     },
     "fabric-repair.": {
       "id": "fabric-repair.",
@@ -10938,9 +10962,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
       "description": "Referenced from #fabric",
       "visualTags": [],
-      "related": [
-        "#fabric"
-      ]
+      "related": []
     },
     "fabric-refs.": {
       "id": "fabric-refs.",
@@ -10950,9 +10972,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
       "description": "Referenced from #head",
       "visualTags": [],
-      "related": [
-        "#head"
-      ]
+      "related": []
     },
     "warplined-protocol": {
       "id": "warplined-protocol",
@@ -10962,9 +10982,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
       "description": "Referenced from #protected",
       "visualTags": [],
-      "related": [
-        "#protected"
-      ]
+      "related": []
     },
     "admit.": {
       "id": "admit.",
@@ -10974,9 +10992,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
       "description": "Referenced from #pick",
       "visualTags": [],
-      "related": [
-        "#pick"
-      ]
+      "related": []
     },
     "warpline-descriptors": {
       "id": "warpline-descriptors",
@@ -10986,9 +11002,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
       "description": "Referenced from #pick",
       "visualTags": [],
-      "related": [
-        "#pick"
-      ]
+      "related": []
     },
     "warp-durable.": {
       "id": "warp-durable.",
@@ -10998,9 +11012,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
       "description": "Referenced from #scratch",
       "visualTags": [],
-      "related": [
-        "#scratch"
-      ]
+      "related": []
     },
     "refusal.": {
       "id": "refusal.",
@@ -11010,9 +11022,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
       "description": "Referenced from #admit",
       "visualTags": [],
-      "related": [
-        "#admit"
-      ]
+      "related": []
     },
     "git-counterfactual.": {
       "id": "git-counterfactual.",
@@ -11022,9 +11032,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
       "description": "Referenced from #shadow-gate",
       "visualTags": [],
-      "related": [
-        "#shadow-gate"
-      ]
+      "related": []
     },
     "warplined-descriptors.": {
       "id": "warplined-descriptors.",
@@ -11034,9 +11042,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
       "description": "Referenced from #native-write-path",
       "visualTags": [],
-      "related": [
-        "#native-write-path"
-      ]
+      "related": []
     },
     "agent-shell.": {
       "id": "agent-shell.",
@@ -11046,9 +11052,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
       "description": "Referenced from #f4-cli-trace",
       "visualTags": [],
-      "related": [
-        "#f4-cli-trace"
-      ]
+      "related": []
     },
     "daemon-tokens": {
       "id": "daemon-tokens",
@@ -11058,9 +11062,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
       "description": "Referenced from #agent-shell",
       "visualTags": [],
-      "related": [
-        "#agent-shell"
-      ]
+      "related": []
     },
     "warpline-init": {
       "id": "warpline-init",
@@ -11070,9 +11072,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
       "description": "Referenced from #warpline-cli",
       "visualTags": [],
-      "related": [
-        "#warpline-cli"
-      ]
+      "related": []
     },
     "native-status": {
       "id": "native-status",
@@ -11082,9 +11082,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
       "description": "Referenced from #warpline-cli",
       "visualTags": [],
-      "related": [
-        "#warpline-cli"
-      ]
+      "related": []
     },
     "warpline-health.": {
       "id": "warpline-health.",
@@ -11094,9 +11092,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
       "description": "Referenced from #warpline-cli",
       "visualTags": [],
-      "related": [
-        "#warpline-cli"
-      ]
+      "related": []
     },
     "field-oracle": {
       "id": "field-oracle",
@@ -11108,9 +11104,7 @@
       "visualTags": [
         "input"
       ],
-      "related": [
-        "#field-harness"
-      ]
+      "related": []
     },
     "field-blind-class": {
       "id": "field-blind-class",
@@ -11122,9 +11116,7 @@
       "visualTags": [
         "input"
       ],
-      "related": [
-        "#field-harness"
-      ]
+      "related": []
     },
     "field-cards": {
       "id": "field-cards",
@@ -11137,9 +11129,7 @@
         "input",
         "card"
       ],
-      "related": [
-        "#field-harness"
-      ]
+      "related": []
     },
     "field-fallback": {
       "id": "field-fallback",
@@ -11151,9 +11141,7 @@
       "visualTags": [
         "input"
       ],
-      "related": [
-        "#field-harness"
-      ]
+      "related": []
     },
     "field-interleave": {
       "id": "field-interleave",
@@ -11165,9 +11153,7 @@
       "visualTags": [
         "input"
       ],
-      "related": [
-        "#field-harness"
-      ]
+      "related": []
     },
     "field-judge-run": {
       "id": "field-judge-run",
@@ -11179,9 +11165,7 @@
       "visualTags": [
         "input"
       ],
-      "related": [
-        "#field-harness"
-      ]
+      "related": []
     },
     "field-join": {
       "id": "field-join",
@@ -11193,9 +11177,7 @@
       "visualTags": [
         "input"
       ],
-      "related": [
-        "#field-harness"
-      ]
+      "related": []
     },
     "field-score": {
       "id": "field-score",
@@ -11207,9 +11189,7 @@
       "visualTags": [
         "input"
       ],
-      "related": [
-        "#field-harness"
-      ]
+      "related": []
     },
     "judge-ledger": {
       "id": "judge-ledger",
@@ -11219,9 +11199,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
       "description": "Referenced from #field-harness",
       "visualTags": [],
-      "related": [
-        "#field-harness"
-      ]
+      "related": []
     },
     "judge-runner": {
       "id": "judge-runner",
@@ -11231,9 +11209,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
       "description": "Referenced from #field-harness",
       "visualTags": [],
-      "related": [
-        "#field-harness"
-      ]
+      "related": []
     },
     "field-interleave.loadSeedCards": {
       "id": "field-interleave.loadSeedCards",
@@ -11246,9 +11222,7 @@
         "input",
         "card"
       ],
-      "related": [
-        "#field-seed-authoring"
-      ]
+      "related": []
     },
     "session.active": {
       "id": "session.active",
@@ -11258,9 +11232,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/viewer/.purpose",
       "description": "Referenced from #session-management",
       "visualTags": [],
-      "related": [
-        "#session-management"
-      ]
+      "related": []
     },
     "session.entity": {
       "id": "session.entity",
@@ -11270,9 +11242,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/viewer/.purpose",
       "description": "Referenced from #session-management",
       "visualTags": [],
-      "related": [
-        "#session-management"
-      ]
+      "related": []
     },
     "index.loaded": {
       "id": "index.loaded",
@@ -11282,9 +11252,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
       "description": "Referenced from #symbol-indexing",
       "visualTags": [],
-      "related": [
-        "#symbol-indexing"
-      ]
+      "related": []
     },
     "index.count": {
       "id": "index.count",
@@ -11294,9 +11262,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
       "description": "Referenced from #symbol-indexing",
       "visualTags": [],
-      "related": [
-        "#symbol-indexing"
-      ]
+      "related": []
     },
     "setup": {
       "id": "setup",
@@ -11306,9 +11272,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
       "description": "Referenced from #aggregator",
       "visualTags": [],
-      "related": [
-        "#aggregator"
-      ]
+      "related": []
     },
     "Heading": {
       "id": "Heading",
@@ -11318,9 +11282,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
       "description": "Referenced from #symbol-index",
       "visualTags": [],
-      "related": [
-        "#symbol-index"
-      ]
+      "related": []
     },
     "x": {
       "id": "x",
@@ -11330,9 +11292,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
       "description": "Referenced from #symbol-index",
       "visualTags": [],
-      "related": [
-        "#symbol-index"
-      ]
+      "related": []
     },
     "skill-loader": {
       "id": "skill-loader",
@@ -11344,9 +11304,7 @@
       "visualTags": [
         "spinner"
       ],
-      "related": [
-        "#frontmatter-parser"
-      ]
+      "related": []
     },
     "native-memory-scan": {
       "id": "native-memory-scan",
@@ -11356,9 +11314,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
       "description": "Referenced from #frontmatter-parser",
       "visualTags": [],
-      "related": [
-        "#frontmatter-parser"
-      ]
+      "related": []
     },
     "ZoomControls": {
       "id": "ZoomControls",
@@ -11368,9 +11324,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
       "description": "Referenced from #Toolbar",
       "visualTags": [],
-      "related": [
-        "#Toolbar"
-      ]
+      "related": []
     },
     "IntentBadge": {
       "id": "IntentBadge",
@@ -11382,9 +11336,7 @@
       "visualTags": [
         "badge"
       ],
-      "related": [
-        "#ConversationView"
-      ]
+      "related": []
     },
     "ParticipantBadge": {
       "id": "ParticipantBadge",
@@ -11396,9 +11348,7 @@
       "visualTags": [
         "badge"
       ],
-      "related": [
-        "#ConversationView"
-      ]
+      "related": []
     },
     "NoteBubble": {
       "id": "NoteBubble",
@@ -11408,9 +11358,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
       "description": "Referenced from #ConversationView",
       "visualTags": [],
-      "related": [
-        "#ConversationView"
-      ]
+      "related": []
     },
     "ThreadCard": {
       "id": "ThreadCard",
@@ -11422,9 +11370,7 @@
       "visualTags": [
         "card"
       ],
-      "related": [
-        "#ConversationView"
-      ]
+      "related": []
     },
     "DecisionSummary": {
       "id": "DecisionSummary",
@@ -11434,9 +11380,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/ui/.purpose",
       "description": "Referenced from #ConversationView",
       "visualTags": [],
-      "related": [
-        "#ConversationView"
-      ]
+      "related": []
     },
     "learning-stores": {
       "id": "learning-stores",
@@ -11446,9 +11390,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/.purpose",
       "description": "Referenced from #DoctorCommand",
       "visualTags": [],
-      "related": [
-        "#DoctorCommand"
-      ]
+      "related": []
     },
     "gap-narrator": {
       "id": "gap-narrator",
@@ -11458,9 +11400,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/doctor/.purpose",
       "description": "Referenced from #doctor-handler",
       "visualTags": [],
-      "related": [
-        "#doctor-handler"
-      ]
+      "related": []
     },
     "brain-view": {
       "id": "brain-view",
@@ -11470,9 +11410,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/platform-server/routes/.purpose",
       "description": "Referenced from #BrainRouter",
       "visualTags": [],
-      "related": [
-        "#BrainRouter"
-      ]
+      "related": []
     },
     "fenced-block-parser": {
       "id": "fenced-block-parser",
@@ -11482,9 +11420,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/Sources/Conductor/UI/Views/.purpose",
       "description": "Referenced from #agent-decision",
       "visualTags": [],
-      "related": [
-        "#agent-decision"
-      ]
+      "related": []
     },
     "agent-visual.": {
       "id": "agent-visual.",
@@ -11494,9 +11430,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/Sources/Conductor/UI/Views/.purpose",
       "description": "Referenced from #atrium-visual-canvas",
       "visualTags": [],
-      "related": [
-        "#atrium-visual-canvas"
-      ]
+      "related": []
     },
     "conductor-resources": {
       "id": "conductor-resources",
@@ -11506,9 +11440,7 @@
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/Sources/Conductor/UI/Views/.purpose",
       "description": "Referenced from #mermaid-web-view",
       "visualTags": [],
-      "related": [
-        "#mermaid-web-view"
-      ]
+      "related": []
     }
   },
   "features": {},
@@ -13762,9 +13694,7 @@
       "category": "gates",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
       "description": "Referenced from #symbol-index",
-      "related": [
-        "#symbol-index"
-      ]
+      "related": []
     },
     "id": {
       "id": "id",
@@ -13773,9 +13703,7 @@
       "category": "gates",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
       "description": "Referenced from #symbol-index",
-      "related": [
-        "#symbol-index"
-      ]
+      "related": []
     },
     "brain-default-deny": {
       "id": "brain-default-deny",
@@ -13795,9 +13723,7 @@
       "category": "gates",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/platform-server/routes/.purpose",
       "description": "Referenced from #TasksWriteRouter",
-      "related": [
-        "#TasksWriteRouter"
-      ]
+      "related": []
     },
     "write-capable": {
       "id": "write-capable",
@@ -13815,9 +13741,7 @@
       "category": "gates",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/platform-server/routes/.purpose",
       "description": "Referenced from #WarplineRouter",
-      "related": [
-        "#WarplineRouter"
-      ]
+      "related": []
     },
     "local-only": {
       "id": "local-only",
@@ -13844,9 +13768,7 @@
       "category": "gates",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/platform-server/routes/.purpose",
       "description": "Referenced from #BrainRouter",
-      "related": [
-        "#BrainRouter"
-      ]
+      "related": []
     },
     "brain-owner-write": {
       "id": "brain-owner-write",
@@ -14902,9 +14824,7 @@
       "category": "signals",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/.purpose",
       "description": "Referenced from #atrium-stop",
-      "related": [
-        "#atrium-stop"
-      ]
+      "related": []
     },
     "background-shell": {
       "id": "background-shell",
@@ -14913,9 +14833,7 @@
       "category": "signals",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/.purpose",
       "description": "Referenced from #atrium-shells",
-      "related": [
-        "#atrium-shells"
-      ]
+      "related": []
     },
     "claude-interrupt.": {
       "id": "claude-interrupt.",
@@ -14924,9 +14842,7 @@
       "category": "signals",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/.purpose",
       "description": "Referenced from #claude-stream-session",
-      "related": [
-        "#claude-stream-session"
-      ]
+      "related": []
     },
     "schema-registered": {
       "id": "schema-registered",
@@ -14935,9 +14851,7 @@
       "category": "signals",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
       "description": "Referenced from #SchemaRegistry",
-      "related": [
-        "#SchemaRegistry"
-      ]
+      "related": []
     },
     "isTmpResidue": {
       "id": "isTmpResidue",
@@ -14946,9 +14860,7 @@
       "category": "signals",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
       "description": "Referenced from #fabric-refs",
-      "related": [
-        "#fabric-refs"
-      ]
+      "related": []
     },
     "brain-egress": {
       "id": "brain-egress",
@@ -14957,9 +14869,7 @@
       "category": "signals",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/tools/.purpose",
       "description": "Referenced from #brain-mcp",
-      "related": [
-        "#brain-mcp"
-      ]
+      "related": []
     },
     "symphony-status-flowback": {
       "id": "symphony-status-flowback",
@@ -14968,9 +14878,7 @@
       "category": "signals",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/tools/.purpose",
       "description": "Referenced from #symphony-poll",
-      "related": [
-        "#symphony-poll"
-      ]
+      "related": []
     },
     "cid-brief-produced": {
       "id": "cid-brief-produced",
@@ -14979,9 +14887,7 @@
       "category": "signals",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/tools/.purpose",
       "description": "Referenced from #CaptainTools",
-      "related": [
-        "#CaptainTools"
-      ]
+      "related": []
     },
     "cid-debrief-complete": {
       "id": "cid-debrief-complete",
@@ -14990,9 +14896,7 @@
       "category": "signals",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/tools/.purpose",
       "description": "Referenced from #CaptainTools",
-      "related": [
-        "#CaptainTools"
-      ]
+      "related": []
     },
     "coverage-stub-created": {
       "id": "coverage-stub-created",
@@ -15001,9 +14905,7 @@
       "category": "signals",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/tools/.purpose",
       "description": "Referenced from #CaptainTools",
-      "related": [
-        "#CaptainTools"
-      ]
+      "related": []
     },
     "session-insights-ready": {
       "id": "session-insights-ready",
@@ -15012,9 +14914,7 @@
       "category": "signals",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/tools/.purpose",
       "description": "Referenced from #CaptainTools",
-      "related": [
-        "#CaptainTools"
-      ]
+      "related": []
     },
     "cid-claim-written": {
       "id": "cid-claim-written",
@@ -15023,9 +14923,7 @@
       "category": "signals",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/tools/.purpose",
       "description": "Referenced from #CaptainTools",
-      "related": [
-        "#CaptainTools"
-      ]
+      "related": []
     },
     "cid-postflight-self-healed": {
       "id": "cid-postflight-self-healed",
@@ -15034,9 +14932,7 @@
       "category": "signals",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/src/tools/.purpose",
       "description": "Referenced from #CaptainTools",
-      "related": [
-        "#CaptainTools"
-      ]
+      "related": []
     },
     "skill-used": {
       "id": "skill-used",
@@ -15045,9 +14941,7 @@
       "category": "signals",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/hooks/.purpose",
       "description": "Referenced from #skill-used-hook",
-      "related": [
-        "#skill-used-hook"
-      ]
+      "related": []
     },
     "compliance-violation": {
       "id": "compliance-violation",
@@ -15056,9 +14950,7 @@
       "category": "signals",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/hooks/.purpose",
       "description": "Referenced from #paradigm-hooks",
-      "related": [
-        "#paradigm-hooks"
-      ]
+      "related": []
     },
     "hook-installed": {
       "id": "hook-installed",
@@ -15067,9 +14959,7 @@
       "category": "signals",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/hooks/.purpose",
       "description": "Referenced from #paradigm-hooks",
-      "related": [
-        "#paradigm-hooks"
-      ]
+      "related": []
     },
     "team-funnel": {
       "id": "team-funnel",
@@ -15078,9 +14968,7 @@
       "category": "signals",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/hooks/.purpose",
       "description": "Referenced from #team-invocation-gates",
-      "related": [
-        "#team-invocation-gates"
-      ]
+      "related": []
     },
     "override-event": {
       "id": "override-event",
@@ -15089,9 +14977,7 @@
       "category": "signals",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/hooks/.purpose",
       "description": "Referenced from #check-14-remediation-gate",
-      "related": [
-        "#check-14-remediation-gate"
-      ]
+      "related": []
     },
     "ambient:event": {
       "id": "ambient:event",
@@ -15100,9 +14986,7 @@
       "category": "signals",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/platform-server/routes/.purpose",
       "description": "Referenced from #AmbientRouter",
-      "related": [
-        "#AmbientRouter"
-      ]
+      "related": []
     },
     "ambient:nomination": {
       "id": "ambient:nomination",
@@ -15111,9 +14995,7 @@
       "category": "signals",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/platform-server/routes/.purpose",
       "description": "Referenced from #AmbientRouter",
-      "related": [
-        "#AmbientRouter"
-      ]
+      "related": []
     },
     "oracle-record-appended": {
       "id": "oracle-record-appended",
@@ -15122,9 +15004,7 @@
       "category": "signals",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/platform-server/routes/.purpose",
       "description": "Referenced from #WarplineRouter",
-      "related": [
-        "#WarplineRouter"
-      ]
+      "related": []
     },
     "memory:changed": {
       "id": "memory:changed",
@@ -15133,9 +15013,7 @@
       "category": "signals",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/platform-server/routes/.purpose",
       "description": "Referenced from #MemoryWriteRouter",
-      "related": [
-        "#MemoryWriteRouter"
-      ]
+      "related": []
     },
     "brain:changed": {
       "id": "brain:changed",
@@ -15144,9 +15022,7 @@
       "category": "signals",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/platform-server/routes/.purpose",
       "description": "Referenced from #BrainWriteRouter",
-      "related": [
-        "#BrainWriteRouter"
-      ]
+      "related": []
     }
   },
   "aspects": {
@@ -15358,15 +15234,16 @@
         "#ToolCache"
       ]
     },
-    "index-cache-ttl-30s": {
-      "id": "index-cache-ttl-30s",
-      "name": "Index Cache Ttl 30s",
-      "symbol": "~index-cache-ttl-30s",
+    "index-freshness-debounce": {
+      "id": "index-freshness-debounce",
+      "name": "Index Freshness Debounce",
+      "symbol": "~index-freshness-debounce",
       "category": "aspects",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
-      "description": "ProjectContext index cache uses a 30-second TTL before considering re-aggregation",
+      "description": "ProjectContext stays fresh via the live index, refreshed in place at every tool/resource choke point with a 500ms per-root debounce",
       "related": [
-        "#IndexLoader"
+        "#IndexLoader",
+        "#live-index"
       ]
     },
     "wisdom-cache-ttl-30s": {
@@ -17507,9 +17384,7 @@
       "category": "aspects",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
       "description": "Referenced from #paradigm-logger",
-      "related": [
-        "#paradigm-logger"
-      ]
+      "related": []
     },
     "correlation-tracked": {
       "id": "correlation-tracked",
@@ -17518,9 +17393,7 @@
       "category": "aspects",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/logger/.purpose",
       "description": "Referenced from #correlation-tracker",
-      "related": [
-        "#correlation-tracker"
-      ]
+      "related": []
     },
     "mcp-tool-handler": {
       "id": "mcp-tool-handler",
@@ -17529,9 +17402,7 @@
       "category": "aspects",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm-mcp/.purpose",
       "description": "Referenced from #ToolHandlers",
-      "related": [
-        "#ToolHandlers"
-      ]
+      "related": []
     },
     "express-server": {
       "id": "express-server",
@@ -17540,9 +17411,7 @@
       "category": "aspects",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/sentinel/.purpose",
       "description": "Referenced from #SentinelServer",
-      "related": [
-        "#SentinelServer"
-      ]
+      "related": []
     },
     "N": {
       "id": "N",
@@ -17551,9 +17420,7 @@
       "category": "aspects",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/warpline/.purpose",
       "description": "Referenced from #reserved-names",
-      "related": [
-        "#reserved-names"
-      ]
+      "related": []
     },
     "yaml-config-loading": {
       "id": "yaml-config-loading",
@@ -17562,9 +17429,7 @@
       "category": "aspects",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose",
       "description": "Referenced from #portal-parsing",
-      "related": [
-        "#portal-parsing"
-      ]
+      "related": []
     },
     "file-glob-discovery": {
       "id": "file-glob-discovery",
@@ -17573,9 +17438,7 @@
       "category": "aspects",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/portal/core/.purpose",
       "description": "Referenced from #portal-validation",
-      "related": [
-        "#portal-validation"
-      ]
+      "related": []
     },
     "zod-validated": {
       "id": "zod-validated",
@@ -17584,9 +17447,7 @@
       "category": "aspects",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/premise/core/.purpose",
       "description": "Referenced from #symbol-aggregation",
-      "related": [
-        "#symbol-aggregation"
-      ]
+      "related": []
     },
     "prior": {
       "id": "prior",
@@ -17595,9 +17456,7 @@
       "category": "aspects",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/platform-ui/src/sections/tasks/.purpose",
       "description": "Referenced from #CalibrationBlock",
-      "related": [
-        "#CalibrationBlock"
-      ]
+      "related": []
     },
     "tokens": {
       "id": "tokens",
@@ -17606,9 +17465,7 @@
       "category": "aspects",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/conductor/Sources/Conductor/UI/Views/Cockpit/.purpose",
       "description": "Referenced from #session-row",
-      "related": [
-        "#session-row"
-      ]
+      "related": []
     }
   },
   "screens": {},
@@ -18412,6 +18269,26 @@
     "#atrium-textview": {
       "category": "components",
       "id": "atrium-textview"
+    },
+    "#gnomon-contracts": {
+      "category": "components",
+      "id": "gnomon-contracts"
+    },
+    "#gnomon-helper": {
+      "category": "components",
+      "id": "gnomon-helper"
+    },
+    "#gnomon-wrapper": {
+      "category": "components",
+      "id": "gnomon-wrapper"
+    },
+    "#gnomon-kernel": {
+      "category": "components",
+      "id": "gnomon-kernel"
+    },
+    "#gnomon-probes": {
+      "category": "components",
+      "id": "gnomon-probes"
     },
     "#paradigm-logger": {
       "category": "components",
@@ -19700,6 +19577,10 @@
     "#search-engine": {
       "category": "components",
       "id": "search-engine"
+    },
+    "#symbol-integrity": {
+      "category": "components",
+      "id": "symbol-integrity"
     },
     "#live-index": {
       "category": "components",
@@ -21789,9 +21670,9 @@
       "category": "aspects",
       "id": "tool-cache-clear-on-reindex"
     },
-    "~index-cache-ttl-30s": {
+    "~index-freshness-debounce": {
       "category": "aspects",
-      "id": "index-cache-ttl-30s"
+      "id": "index-freshness-debounce"
     },
     "~wisdom-cache-ttl-30s": {
       "category": "aspects",
@@ -22580,6 +22461,10 @@
     "#F2B765": {
       "category": "components",
       "id": "F2B765"
+    },
+    "#kernel-log": {
+      "category": "components",
+      "id": "kernel-log"
     },
     "~symbol-typed-logging": {
       "category": "aspects",

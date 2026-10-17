@@ -1,0 +1,21 @@
+version: "2.0"
+description: >-
+  Gnomon signed platform helper (docs/specs/gnomon.md §16, §18). npm shell
+  (private) that will hold prebuilt, signed binaries in bin/ with
+  checksums.json, verified by the kernel at start (G-HLP-01). darwin/ is a
+  SwiftPM package (swift-tools 5.9, macOS 14, same conventions as Conductor);
+  win32/ will be Rust (P8-D71) and is a README placeholder. PR-0 scaffold.
+
+components:
+  gnomon-helper:
+    description: >-
+      Holds what the kernel must never hold: Secure Enclave / TPM keys with
+      presence, Keychain / Credential Manager anchors and the kernel-key item,
+      the Windows pipe with an owner-only DACL, job objects, the WFP port
+      filter and the private launch-token URL hand-off. At PR-0 the darwin
+      executable `gnomon-helper` only answers --version (exit 0) and refuses
+      everything else (exit 2). CI builds it unsigned on macos-14; signing
+      never runs in CI.
+    path: darwin/Sources/gnomon-helper/
+    type: module
+    tags: [gnomon, helper, native, swift, paradigm-8, scaffold]

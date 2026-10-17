@@ -1,0 +1,52 @@
+version: "2.0"
+description: >-
+  Gnomon — the Paradigm 8.0 kernel (docs/specs/gnomon.md). One daemon per user
+  owning sessions, identity, the hash-chained log, approvals, the budget fuse
+  and the localhost web endpoint; bins gnomon, gnomond and gnomon-web. PR-0
+  SCAFFOLD (research 29 §1/§4): the §18 layout with a src/ prefix, placeholder
+  bins that print their version, the import fence, the zero-deps check, the
+  G-WIN-05 registry skeleton and the M1.0 probe harness. Node >= 24 for Gnomon
+  packages only; private and outside the root build/test scripts until the 8.0
+  cut (G-MIG-01) — use `npm run build:gnomon` / `npm run test:gnomon`. Will ship
+  later as a signed Node SEA (tsup emits one self-contained file per entry).
+
+components:
+  gnomon-kernel:
+    description: >-
+      The kernel package. ZERO runtime deps (G-SEC-01): package.json has no
+      `dependencies` key; @a-company/gnomon-contracts is a devDependency that
+      tsup bundles. Import fence (G-KRN-02): every import under src/kernel/**
+      is node:*, relative, or @a-company/gnomon-contracts, and dist/ holds no
+      bare import. src/kernel/ has the thirteen §18 modules (identity, log,
+      runner, supervisor, broker, budget, scheduler, manifest, refs, socket,
+      web, sandbox, modhost) as empty directories at PR-0. Placeholder bins
+      write to stdio directly: the kernel cannot depend on the Paradigm logger
+      (zero deps); #kernel-log brings its own logging at M1.2.
+    path: src/
+    type: module
+    tags: [gnomon, kernel, paradigm-8, scaffold]
+    components:
+      - "#gnomon-probes"
+    tests:
+      - test/fence.test.ts
+      - test/sec-01.test.ts
+      - test/platform-registry.test.ts
+      - test/version.test.ts
+    oracles: [G-KRN-02, G-SEC-01, G-WIN-05]
+
+  gnomon-probes:
+    description: >-
+      M1.0 probe harness (spec §19.1, research 29 §2). `node
+      packages/gnomon/probes/run.mjs <id> [--out-dir d] [--timeout ms]` imports
+      probes/<id>/probe.mjs (zero deps, no build), runs its default export with
+      {id, platform, arch, probeDir, signal}, and writes a probeResult:v1 record
+      to probes/results/<id>.<platform>.json. Throws and timeouts become verdict
+      `fail`. Exit codes 0 pass / 1 fail / 2 partial / 64 usage. Probe ids match
+      ^[a-z0-9][a-z0-9-]*$ (no path traversal). p-harness is the self-test and
+      its results are gitignored; real results are committed from hardware runs
+      only. A `fail` on a ruling means a re-plan memo before dependent builds.
+    path: probes/
+    type: module
+    tags: [gnomon, probes, m1.0]
+    tests:
+      - test/probe-harness.test.ts

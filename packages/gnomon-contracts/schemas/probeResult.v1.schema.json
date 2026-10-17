@@ -1,0 +1,55 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://paradigm.a-company.dev/gnomon/schemas/probeResult.v1.schema.json",
+  "title": "probeResult:v1",
+  "description": "Result of one Gnomon M1.0 probe run on one platform (spec §19.1 M1.0; research 29 §2). Written by packages/gnomon/probes/run.mjs to probes/results/<probe>.<os>.json. A `fail` on a ruling means a re-plan memo before any build that depends on it.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["probe", "os", "osVersion", "arch", "toolVersions", "verdict", "evidence", "specRefs", "at"],
+  "properties": {
+    "probe": {
+      "description": "Probe id; equals the directory name under probes/.",
+      "type": "string",
+      "pattern": "^[a-z0-9][a-z0-9-]*$"
+    },
+    "os": {
+      "description": "process.platform of the host that ran the probe.",
+      "type": "string",
+      "enum": ["darwin", "win32", "linux"]
+    },
+    "osVersion": {
+      "description": "Human OS version (e.g. macOS product version, Windows build).",
+      "type": "string",
+      "minLength": 1
+    },
+    "arch": {
+      "description": "process.arch of the host that ran the probe.",
+      "type": "string",
+      "minLength": 1
+    },
+    "toolVersions": {
+      "description": "Versions of every tool the verdict depends on (always includes node).",
+      "type": "object",
+      "required": ["node"],
+      "additionalProperties": { "type": "string" }
+    },
+    "verdict": {
+      "type": "string",
+      "enum": ["pass", "fail", "partial"]
+    },
+    "evidence": {
+      "description": "Probe-specific observations backing the verdict. Free-form object.",
+      "type": "object"
+    },
+    "specRefs": {
+      "description": "Spec anchors the probe bears on (sections, OPEN ids, oracle ids).",
+      "type": "array",
+      "items": { "type": "string", "minLength": 1 }
+    },
+    "at": {
+      "description": "ISO-8601 UTC timestamp of the run.",
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

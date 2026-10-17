@@ -1,0 +1,18 @@
+version: "2.0"
+description: >-
+  Gnomon wrapper — the Tauri 2 shell (Rust; WKWebView / WebView2) that is the
+  GUI's default surface (docs/specs/gnomon.md §11, §16, §18; M1.13, P8-D56).
+  PR-0 placeholder: README only, because no Rust toolchain was on the scaffold
+  machine. Probe P08 (PR-2) adds Cargo.toml, rust-toolchain.toml and the exact
+  Tauri pin.
+
+components:
+  gnomon-wrapper:
+    description: >-
+      Will take the token, kernel public key and bundle hash on stdin, load
+      http://127.0.0.1:<port> as its only origin, disable IPC for page content
+      and verify serverSig natively. Not built yet; the gnomon.yml native job
+      builds it on windows-latest once Cargo.toml exists.
+    path: README.md
+    type: module
+    tags: [gnomon, wrapper, tauri, rust, paradigm-8, placeholder]

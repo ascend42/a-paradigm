@@ -1,0 +1,23 @@
+version: "2.0"
+description: >-
+  Gnomon contracts — versioned TS types and JSON Schemas for the Gnomon
+  kernel's hard contracts (docs/specs/gnomon.md §4, §18). Zero runtime deps;
+  a community GUI depends on this package only. Contracts change additively or
+  with a version bump. PR-0 ships probeResult:v1 only; event:v1, ref:v1,
+  refusal:v1 and the gnomon-rpc:v1 hello shape arrive in PR-3. Private, Node
+  >= 24, outside the root build until the 8.0 cut.
+
+components:
+  gnomon-contracts:
+    description: >-
+      Package entry (src/index.ts) plus schemas/. probeResult:v1 = {probe, os,
+      osVersion, arch, toolVersions{node,...}, verdict pass|fail|partial,
+      evidence{}, specRefs[], at}; schemas/probeResult.v1.schema.json is the
+      JSON Schema, src/probe-result.ts the TS type plus a hand-written
+      zero-dependency validator (validateProbeResultV1 / isProbeResultV1). A
+      test keeps the schema's keys and enums in lockstep with the TS side.
+    path: src/
+    type: module
+    tags: [gnomon, contracts, json-schema, paradigm-8]
+    tests:
+      - test/probe-result.test.ts

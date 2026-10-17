@@ -1,0 +1,5 @@
+{
+  "schema": "gnomon-helper-checksums:v0",
+  "note": "PR-0 placeholder. Release builds record sha256 per prebuilt binary in bin/; the kernel verifies them at start (G-HLP-01).",
+  "binaries": {}
+}

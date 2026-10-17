@@ -1,0 +1,57 @@
+{
+  "name": "@a-company/gnomon",
+  "version": "8.0.0",
+  "private": true,
+  "description": "Gnomon \u2014 the Paradigm 8.0 kernel: one daemon per user owning sessions, identity, the hash-chained log, approvals and the localhost web endpoint (docs/specs/gnomon.md). ZERO runtime dependencies (G-SEC-01).",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "bin": {
+    "gnomon": "dist/cli/gnomon.js",
+    "gnomond": "dist/cli/gnomond.js",
+    "gnomon-web": "dist/transport/gnomon-web.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "probe": "node probes/run.mjs"
+  },
+  "devDependencies": {
+    "@a-company/gnomon-contracts": "1.0.0",
+    "@types/node": "^24.0.0",
+    "tsup": "^8.0.1",
+    "vitest": "^4.1.0"
+  },
+  "author": "ascend42",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ascend42/a-paradigm.git",
+    "directory": "packages/gnomon"
+  },
+  "bugs": {
+    "url": "https://github.com/ascend42/a-paradigm/issues"
+  },
+  "homepage": "https://github.com/ascend42/a-paradigm#readme",
+  "keywords": [
+    "paradigm",
+    "gnomon",
+    "kernel",
+    "daemon"
+  ],
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}

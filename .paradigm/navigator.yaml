@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-09-29T10:25:56.747Z'
+generated: '2026-10-17T08:04:57.584Z'
 structure: {}
 key_files:
   config:
@@ -105,7 +105,7 @@ symbols:
   '#purpose-feature-sweep-command': packages/paradigm/
   '#purpose-feature-pipeline-command': packages/paradigm/
   '#purpose-feature-content-loading': packages/university-core/
-  '#purpose-feature-pack-discovery': packages/university-core/
+  '#purpose-component-pack-discovery': packages/university-core/
   '#purpose-feature-logger-seam': packages/university-core/
   '#purpose-feature-portal-parsing': packages/portal/core/
   '#purpose-feature-portal-validation': packages/portal/core/
@@ -249,6 +249,11 @@ symbols:
   '#purpose-component-atrium-attachment': packages/conductor/
   '#purpose-component-atrium-voice': packages/conductor/
   '#purpose-component-atrium-textview': packages/conductor/
+  '#purpose-component-gnomon-contracts': packages/gnomon-contracts/
+  '#purpose-component-gnomon-helper': packages/gnomon-helper/
+  '#purpose-component-gnomon-wrapper': packages/gnomon-wrapper/
+  '#purpose-component-gnomon-kernel': packages/gnomon/
+  '#purpose-component-gnomon-probes': packages/gnomon/
   '#purpose-component-paradigm-logger': packages/logger/
   '#purpose-component-symbol-logger': packages/logger/
   '#purpose-component-formatter-pretty': packages/logger/
@@ -440,7 +445,6 @@ symbols:
   '#purpose-component-PlsatPage': packages/site/
   '#purpose-component-university-loader': packages/university-core/
   '#purpose-component-content-base-resolver': packages/university-core/
-  '#purpose-component-pack-discovery': packages/university-core/
   '#purpose-component-pack-schema': packages/university-core/
   '#purpose-component-university-core-logger': packages/university-core/
   '#purpose-component-pack-discovery-tests': packages/university-core/
@@ -572,6 +576,7 @@ symbols:
   '#purpose-component-symbol-index': packages/premise/core/
   '#purpose-component-frontmatter-parser': packages/premise/core/
   '#purpose-component-search-engine': packages/premise/core/
+  '#purpose-component-symbol-integrity': packages/premise/core/
   '#purpose-component-live-index': packages/premise/core/
   '#purpose-component-reference-tracker': packages/premise/core/
   '#purpose-component-graph-slice-projector': packages/premise/core/
@@ -897,7 +902,7 @@ symbols:
   ^purpose-gate-conductor-launched: packages/conductor/
   ^purpose-gate-^symphony-enabled: packages/conductor/Sources/Conductor/Symphony/
   ^purpose-gate-^file-request-allowed: packages/conductor/Sources/Conductor/Symphony/
-  ^purpose-gate-api-authenticated: packages/sentinel/
+  ^gate-api-authenticated: ./
   ^purpose-gate-gate-check: packages/portal/sdk/
   ^purpose-gate-file-trust: packages/paradigm/src/commands/symphony/
   '#purpose-state-session': packages/portal/viewer/
@@ -1094,7 +1099,7 @@ symbols:
   '@purpose-aspect-global-persistence': packages/paradigm-mcp/
   '@purpose-aspect-tool-cache-ttl-30s': packages/paradigm-mcp/
   '@purpose-aspect-tool-cache-clear-on-reindex': packages/paradigm-mcp/
-  '@purpose-aspect-index-cache-ttl-30s': packages/paradigm-mcp/
+  '@purpose-aspect-index-freshness-debounce': packages/paradigm-mcp/
   '@purpose-aspect-wisdom-cache-ttl-30s': packages/paradigm-mcp/
   '@purpose-aspect-flow-cache-ttl-30s': packages/paradigm-mcp/
   '@purpose-aspect-fixtures-cache-ttl-60s': packages/paradigm-mcp/
@@ -1292,6 +1297,7 @@ symbols:
   '!purpose-ref-signal-claude-interrupt.': packages/conductor/
   '#purpose-ref-component-FF6B6B': packages/conductor/
   '#purpose-ref-component-F2B765': packages/conductor/
+  '#purpose-ref-component-kernel-log': packages/gnomon/
   '@purpose-ref-aspect-symbol-typed-logging': packages/logger/
   '@purpose-ref-aspect-correlation-tracked': packages/logger/
   '@purpose-ref-aspect-mcp-tool-handler': packages/paradigm-mcp/
@@ -1377,7 +1383,7 @@ symbols:
   '#purpose-ref-component-NoteBubble': packages/sentinel/ui/
   '#purpose-ref-component-ThreadCard': packages/sentinel/ui/
   '#purpose-ref-component-DecisionSummary': packages/sentinel/ui/
-  ^purpose-ref-gate-brain-default-deny: packages/paradigm-mcp/src/tools/
+  ^gate-brain-default-deny: ./
   '!purpose-ref-signal-brain-egress': packages/paradigm-mcp/src/tools/
   '!purpose-ref-signal-symphony-status-flowback': packages/paradigm-mcp/src/tools/
   '!purpose-ref-signal-cid-brief-produced': packages/paradigm-mcp/src/tools/
@@ -1400,14 +1406,14 @@ symbols:
   '!purpose-ref-signal-ambient:nomination': packages/paradigm/src/platform-server/routes/
   ^purpose-ref-gate-write-capable.: packages/paradigm/src/platform-server/routes/
   '!purpose-ref-signal-oracle-record-appended': packages/paradigm/src/platform-server/routes/
-  ^purpose-ref-gate-write-capable: packages/paradigm/src/platform-server/routes/
+  ^gate-write-capable: ./
   ^purpose-ref-gate-read-only.: packages/paradigm/src/platform-server/routes/
-  ^purpose-ref-gate-local-only: packages/paradigm/src/platform-server/routes/
+  ^gate-local-only: ./
   '!purpose-ref-signal-memory:changed': packages/paradigm/src/platform-server/routes/
   '#purpose-ref-component-brain-view': packages/paradigm/src/platform-server/routes/
-  ^purpose-ref-gate-read-only: packages/paradigm/src/platform-server/routes/
+  ^gate-read-only: ./
   ^purpose-ref-gate-brain-default-deny.: packages/paradigm/src/platform-server/routes/
-  ^purpose-ref-gate-brain-owner-write: packages/paradigm/src/platform-server/routes/
+  ^gate-brain-owner-write: ./
   '!purpose-ref-signal-brain:changed': packages/paradigm/src/platform-server/routes/
   $purpose-ref-flow-decision-exchange: packages/conductor/Sources/Conductor/UI/Views/
   '#purpose-ref-component-fenced-block-parser': packages/conductor/Sources/Conductor/UI/Views/
@@ -1415,11 +1421,5 @@ symbols:
   '#purpose-ref-component-conductor-resources': packages/conductor/Sources/Conductor/UI/Views/
   '@purpose-ref-aspect-prior': packages/paradigm/platform-ui/src/sections/tasks/
   '@purpose-ref-aspect-tokens': packages/conductor/Sources/Conductor/UI/Views/Cockpit/
-  ^gate-local-only: ./
-  ^gate-api-authenticated: ./
   ^gate-rate-limited: ./
-  ^gate-read-only: ./
-  ^gate-write-capable: ./
   ^gate-authenticated-session: ./
-  ^gate-brain-default-deny: ./
-  ^gate-brain-owner-write: ./

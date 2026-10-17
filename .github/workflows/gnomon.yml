@@ -1,0 +1,122 @@
+# Gnomon (Paradigm 8.0) — PR-0 CI (research 29 §3; spec §16 rule, §19.1).
+# Platform-independent tests run on Windows from day one (A23-5). Gnomon stays
+# out of the root build/test scripts until the 8.0 cut (G-MIG-01), so this
+# workflow drives it through build:gnomon / test:gnomon on Node 24 only.
+# ci.yml is deliberately untouched.
+name: Gnomon
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'packages/gnomon*/**'
+      - '.github/**'
+  pull_request:
+    paths:
+      - 'packages/gnomon*/**'
+      - '.github/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: gnomon-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: test (${{ matrix.os }}, node ${{ matrix.node }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, windows-latest, ubuntu-latest]
+        node: [24]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ matrix.node }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node }}
+          cache: 'npm'
+
+      - name: Install dependencies
+        uses: ./.github/actions/install-deps
+
+      # test:gnomon rebuilds first: the G-KRN-02 dist scan fails loudly (never
+      # skips) when dist/ is missing.
+      - name: Build (@a-company/gnomon-contracts, @a-company/gnomon)
+        run: npm run build:gnomon
+
+      - name: Test (contracts, kernel fence G-KRN-02, G-SEC-01, G-WIN-05)
+        run: npm run test:gnomon
+
+      - name: Typecheck
+        run: |
+          npm run typecheck --workspace=@a-company/gnomon-contracts
+          npm run typecheck --workspace=@a-company/gnomon
+
+  # M1.0 probes runnable on hosted runners. PR-0 runs only the harness
+  # self-test; PR-2 adds P03 (win), P08, P09, P11, P12 and the P06 smoke.
+  # Results are uploaded as artifacts only — real results are committed from
+  # hardware runs (research 29 §3).
+  probes-ci:
+    name: probes (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, windows-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 24
+
+      # Zero deps, no build: run.mjs must work on a fresh checkout.
+      - name: Probe harness self-test (p-harness)
+        run: node packages/gnomon/probes/run.mjs p-harness
+
+      - name: Upload probe results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: probe-results-${{ matrix.os }}
+          path: packages/gnomon/probes/results/*.json
+          if-no-files-found: warn
+
+  native:
+    name: native (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-14, windows-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # Unsigned: signing identities and secrets never enter CI.
+      - name: Build gnomon-helper (darwin, unsigned)
+        if: runner.os == 'macOS'
+        working-directory: packages/gnomon-helper/darwin
+        run: |
+          swift build
+          .build/debug/gnomon-helper --version
+
+      # gnomon-wrapper has no Cargo.toml until probe P08 sets the Tauri pin
+      # (PR-2); build it only once the crate exists.
+      - name: Build gnomon-wrapper (Rust/Tauri)
+        if: runner.os == 'Windows' && hashFiles('packages/gnomon-wrapper/Cargo.toml') != ''
+        working-directory: packages/gnomon-wrapper
+        run: cargo build
+
+      - name: gnomon-wrapper not yet scaffolded
+        if: runner.os == 'Windows' && hashFiles('packages/gnomon-wrapper/Cargo.toml') == ''
+        shell: bash
+        run: echo "packages/gnomon-wrapper/Cargo.toml absent; P08 (PR-2) adds the crate and the Tauri pin."

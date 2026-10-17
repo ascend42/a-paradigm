@@ -1,0 +1,3 @@
+# Real probe results are committed from hardware runs only (research 29 §3).
+# The harness self-test result is local noise.
+p-harness.*.json
