@@ -14,7 +14,28 @@ import { ISO_DATE_TIME, SHA256_TAGGED, deepFreeze } from './internal.js';
 import { ID_PATTERNS, HSID_PATTERN, KEY_ID_PATTERN, REPO_SCOPE_PATTERN, CONTRACT_ID_PATTERN } from './ids.js';
 import { ANY_PRINCIPAL_PATTERN, DEVICE_ID_PATTERN } from './principal.js';
 import { REF_V1_JSON_PATTERN, REF_SCHEMES } from './ref.js';
-import { AUDIENCES, SENSITIVITIES, KIND_PATTERN, EVENT_KIND_NAMES, EVENT_V1_REQUIRED, OPEN_USERLAND_NAMESPACES } from './event.js';
+import {
+  AUDIENCES,
+  SENSITIVITIES,
+  KIND_PATTERN,
+  EVENT_KIND_NAMES,
+  EVENT_KINDS,
+  EVENT_V1_REQUIRED,
+  OPEN_USERLAND_NAMESPACES,
+  RESERVED_PAYLOAD_FIELDS,
+  SESSION_TAINTS,
+  APPROVAL_SUSPECT_REASONS,
+  RESERVED_KIND_PAYLOADS,
+} from './event.js';
+import {
+  RISK_TIERS,
+  AGENT_REVERT_HOWS,
+  KERNEL_REVERT_HOWS,
+  CHANGE_NOTE_LIMITS,
+  CHANGE_NOTE_AGENT_KEYS,
+  CHANGE_NOTE_KERNEL_KEYS,
+} from './change-note.js';
+import { FINDING_SEVERITIES, FINDING_RESPONSES, LINE_RANGE_PATTERN, REVIEW_FINDING_V1_KEYS } from './review-finding.js';
 import {
   REFUSAL_CODES,
   REFUSAL_GATES,
@@ -39,6 +60,8 @@ import {
   VOICE_MODES,
   HANDOFF_DIRECTIONS,
   CARD_V1_REQUIRED,
+  STRICTNESS_LEVELS,
+  RUN_MODES,
 } from './card.js';
 import { CLIENT_SURFACES, HELLO_RESULT_KEYS } from './rpc.js';
 
@@ -66,6 +89,13 @@ export const EVENT_V1_SCHEMA: Schema = deepFreeze({
   description: 'Gnomon kernel log envelope (spec §4.1). Labels default per kind (§9.1, x-gnomon-kinds).',
   'x-gnomon-kinds': [...EVENT_KIND_NAMES],
   'x-gnomon-open-namespaces': [...OPEN_USERLAND_NAMESPACES],
+  'x-gnomon-reserved-kinds': Object.fromEntries(
+    EVENT_KIND_NAMES.filter((k) => EVENT_KINDS[k]!.reserved).map((k) => [k, EVENT_KINDS[k]!.reserved]),
+  ),
+  'x-gnomon-reserved-payload-fields': RESERVED_PAYLOAD_FIELDS,
+  'x-gnomon-session-taints': [...SESSION_TAINTS],
+  'x-gnomon-suspect-reasons': [...APPROVAL_SUSPECT_REASONS],
+  'x-gnomon-reserved-kind-payloads': RESERVED_KIND_PAYLOADS,
   ...closedObj(
     {
       schemaVersion: { const: 'event:v1' },
@@ -174,6 +204,85 @@ export const REFUSAL_V1_SCHEMA: Schema = deepFreeze({
   ),
 });
 
+/* ── change-note:v1 and review-finding:v1 (§4.11, reserved M1.1, P8-D86–D88) ── */
+
+const bytesCapped = (max: number): Schema => ({ type: 'string', 'x-gnomon-max-utf8-bytes': max });
+const REF_STR = str(REF_V1_JSON_PATTERN);
+
+const AGENT_CLAIMS: Schema = {
+  ...closedObj(
+    {
+      testedHow: closedObj({ summary: bytesCapped(CHANGE_NOTE_LIMITS.summaryBytes), refs: arr(REF_STR) }, ['summary', 'refs']),
+      risk: closedObj(
+        { tier: enumOf(RISK_TIERS, true), why: bytesCapped(CHANGE_NOTE_LIMITS.whyBytes), blast: arr(str('^sym:.+$')) },
+        ['tier', 'why', 'blast'],
+      ),
+      revert: closedObj(
+        { how: enumOf(AGENT_REVERT_HOWS, true), steps: bytesCapped(CHANGE_NOTE_LIMITS.stepsBytes), reversible: { type: 'boolean' } },
+        ['how', 'steps', 'reversible'],
+      ),
+      draftedBy: str(ANY_PRINCIPAL_PATTERN),
+    },
+    CHANGE_NOTE_AGENT_KEYS,
+  ),
+  'x-gnomon-trust': 'untrusted: agent-claimed, sanitized (§4.5), never executed, never authority (B16)',
+};
+const KERNEL_PART: Schema = {
+  ...closedObj(
+    {
+      verified: closedObj({ n: { type: 'integer', minimum: 0 }, of: { type: 'integer', minimum: 0 } }, ['n', 'of']),
+      risk: closedObj(
+        { floor: enumOf(RISK_TIERS, true), effective: enumOf(RISK_TIERS, true), reasons: arr({ type: 'string' }) },
+        ['floor', 'effective', 'reasons'],
+      ),
+      revert: closedObj({ how: enumOf(KERNEL_REVERT_HOWS, true), ref: REF_STR }, ['how']),
+    },
+    CHANGE_NOTE_KERNEL_KEYS,
+  ),
+  'x-gnomon-trust': 'kernel-computed; never written by the agent',
+};
+
+/** Card form (cards, contract.built, brief:v1): both parts required. card:v1.note uses it inline. */
+const CHANGE_NOTE_CARD: Schema = closedObj({ agentClaims: AGENT_CLAIMS, kernel: KERNEL_PART }, ['agentClaims', 'kernel']);
+/** Claim form (contract.claim{note}): agentClaims only; `kernel: false` refuses the part even for a tolerant consumer. */
+const CHANGE_NOTE_CLAIM: Schema = closedObj({ agentClaims: AGENT_CLAIMS, kernel: false as unknown as Schema }, ['agentClaims']);
+
+export const CHANGE_NOTE_V1_SCHEMA: Schema = deepFreeze({
+  $schema: 'https://json-schema.org/draft/2020-12/schema',
+  $id: `${ID_BASE}change-note.v1.schema.json`,
+  title: 'change-note:v1',
+  description:
+    'Change note (spec §4.11, §3.4). Two forms: $defs/claim (contract.claim{note}: agentClaims only, never a kernel part) and $defs/card (cards, contract.built, brief:v1: agentClaims + kernel). agentClaims untrusted, kernel computed. Reserved M1.1 (P8-D86–D88).',
+  $defs: { claim: CHANGE_NOTE_CLAIM, card: CHANGE_NOTE_CARD },
+});
+
+const FINDING_LOCUS: Schema = closedObj(
+  { path: { type: 'string', minLength: 1 }, lines: str(LINE_RANGE_PATTERN), symbol: { type: 'string', minLength: 1 } },
+  ['path'],
+);
+
+export const REVIEW_FINDING_V1_SCHEMA: Schema = deepFreeze({
+  $schema: 'https://json-schema.org/draft/2020-12/schema',
+  $id: `${ID_BASE}review-finding.v1.schema.json`,
+  title: 'review-finding:v1',
+  description:
+    'Reviewer finding (spec §4.11, §7.3). severity pre-existing is kernel-set; fingerprint = sha256(class ‖ (symbol ?? path) ‖ overlapping line range). Reserved M1.1 (P8-D86–D88).',
+  'x-gnomon-responses': [...FINDING_RESPONSES],
+  ...closedObj(
+    {
+      fid: { type: 'string', minLength: 1 },
+      round: { type: 'integer', minimum: 1 },
+      class: { type: 'string', minLength: 1 },
+      severity: enumOf(FINDING_SEVERITIES, true),
+      locus: FINDING_LOCUS,
+      instances: arr(FINDING_LOCUS),
+      claim: { type: 'string' },
+      fingerprint: SHA,
+    },
+    REVIEW_FINDING_V1_KEYS,
+  ),
+});
+
 export const CARD_V1_SCHEMA: Schema = deepFreeze({
   $schema: 'https://json-schema.org/draft/2020-12/schema',
   $id: `${ID_BASE}card.v1.schema.json`,
@@ -236,6 +345,11 @@ export const CARD_V1_SCHEMA: Schema = deepFreeze({
         },
         required: ['armId', 'armClass', 'humanConnId', 'voiceConnId', 'turnId', 'speakerId', 'asrConfidence', 'mode'],
       },
+      note: CHANGE_NOTE_CARD,
+      strictness: closedObj(
+        { level: enumOf(STRICTNESS_LEVELS, true), mode: enumOf(RUN_MODES, true), reason: { type: 'string' } },
+        ['level', 'mode', 'reason'],
+      ),
       cli: { type: 'object' },
       timeoutAt: ISO,
     },
@@ -290,6 +404,8 @@ export const CONTRACT_SCHEMAS: Readonly<Record<string, Schema>> = Object.freeze(
   'refusal.v1.schema.json': REFUSAL_V1_SCHEMA,
   'card.v1.schema.json': CARD_V1_SCHEMA,
   'gnomon-rpc.v1.hello.schema.json': HELLO_V1_SCHEMA,
+  'review-finding.v1.schema.json': REVIEW_FINDING_V1_SCHEMA,
+  'change-note.v1.schema.json': CHANGE_NOTE_V1_SCHEMA,
 });
 
 /** How a schema file is serialized on disk (2-space JSON + newline). */

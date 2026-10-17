@@ -28,6 +28,28 @@ export const DEFAULT_AUDIENCE: Audience = 'private';
 /** session.inject origins (§3.2 L2, §9.1); `peer` reserved M1.1 (P8-R9). Additive. */
 export const INJECT_ORIGINS = ['kernel', 'client', 'peer'] as const;
 
+/** Session `taint` (§3.3 session record, §3.9, `session.tainted{taint}`); sticky once set. Reserved M1.1 (P8-R9). */
+export const SESSION_TAINTS = ['none', 'peer', 'peer-teammate'] as const;
+
+/**
+ * `approval.suspect{reason}` values the spec names literally (§3.4): the voice
+ * reasons (P8-D58) and `strictness-class` (P8-D86–D88). The TTY/ancestry/
+ * cached-beyond-class/connId reasons are described in prose without literal
+ * names and are not invented here. Additive.
+ */
+export const APPROVAL_SUSPECT_REASONS = [
+  'voice-unarmed',
+  'voice-unenrolled',
+  'voice-no-readback',
+  'voice-echo-overlap',
+  'voice-custody-client',
+  'strictness-class',
+] as const;
+
+/** Release tags for values reserved one release ahead (§4.9, A26-11). */
+export const RESERVATION_TAGS = ['M1.1:P8-D58', 'M1.1:P8-R9', 'M1.1:P8-D86-D88'] as const;
+export type ReservationTag = (typeof RESERVATION_TAGS)[number];
+
 export type KindOwner = 'kernel' | 'userland';
 
 export interface EventKindSpec {
@@ -37,13 +59,14 @@ export interface EventKindSpec {
   /** payload fields carrying a stricter label than the event (§9.1 / §9.3). */
   fieldLabels?: Readonly<Record<string, Sensitivity>>;
   /** release the value was reserved for (one release ahead, §4.9 / A26-11). */
-  reserved?: 'M1.1:P8-D58' | 'M1.1:P8-R9';
+  reserved?: ReservationTag;
 }
 
 const D58 = 'M1.1:P8-D58' as const;
 const R9 = 'M1.1:P8-R9' as const;
+const D86 = 'M1.1:P8-D86-D88' as const;
 
-type Row = [ns: string, owner: KindOwner, kinds: string, reserved?: typeof D58 | typeof R9];
+type Row = [ns: string, owner: KindOwner, kinds: string, reserved?: ReservationTag];
 
 /** §9.1, namespace by namespace. Kinds are the names before `{…}`. */
 const TABLE: Row[] = [
@@ -59,7 +82,7 @@ const TABLE: Row[] = [
   [
     'socket',
     'kernel',
-    'connect hello auth.ok auth.fail auth.theft auth.replay auth.reconnect.requested web.listen web.bundle.mismatch web.linger web.stop web.transport.exited gui.token.issued gui.session.ended subscription.dropped frame.dropped frame.refused',
+    'connect disconnect hello auth.ok auth.fail auth.theft auth.replay auth.reconnect.requested web.listen web.bundle.mismatch web.linger web.stop web.transport.exited gui.token.issued gui.session.ended subscription.dropped frame.dropped frame.refused',
   ],
   ['key', 'kernel', 'mint rotate registry.malformed registry.unsigned device.added device.revoked keystore.unavailable'],
   ['config', 'kernel', 'loaded unsigned prefs ignored'],
@@ -83,6 +106,9 @@ const TABLE: Row[] = [
   ],
   ['request', 'kernel', 'grant voice.arm voice.narrow', D58],
   ['request', 'kernel', 'brief.send cowork.allow link.revoke', R9],
+  // §3.4 strictness and run modes (P8-D86–D88): broker-only, kernel-signed (B11).
+  ['approval', 'kernel', 'strictness.raised strictness.proposed strictness.lowered strictness.held mode.set auto', D86],
+  ['request', 'kernel', 'strictness.set mode.set incident', D86],
   [
     'link',
     'kernel',
@@ -103,9 +129,13 @@ const TABLE: Row[] = [
     'session.start turn.user turn.agent deck focus tts.filtered bargein session.end share enrol forget',
   ],
   ['contract', 'kernel', 'registered claim claimed released built knot progress'],
+  // §7.3 review convergence (P8-D86–D88).
+  ['contract', 'kernel', 'review.returned review.capped review.extended review.restarted', D86],
   ['oracle', 'kernel', 'run result'],
   ['warpline', 'kernel', 'pick admit knot resolve selvage.moved'],
   ['merge', 'kernel', 'tree conflict ci landed'],
+  // §3.4 kernel-observed strictness signals (P8-D86–D88).
+  ['merge', 'kernel', 'reverted ref.rewritten', D86],
   ['gate-class', 'kernel', 'detected decided'],
   ['inject', 'userland', 'receipt'],
   ['paradigm', 'userland', 'doodle.exported event'],
@@ -116,6 +146,7 @@ const TABLE: Row[] = [
   ['decay', 'userland', 'writeback'],
   ['calibration', 'userland', 'contested reviewer'],
   ['verdict', 'kernel', 'founder'],
+  ['verdict', 'kernel', 'incident', D86],
   ['liveness', 'kernel', 'violation digest.consumed'],
   ['flow', 'userland', 'event'],
   ['neurons', 'userland', 'event'],
@@ -139,6 +170,10 @@ const FIELD_LABELS: Record<string, Record<string, Sensitivity>> = {
   'approval.request': { tool_input: 'sensitive' },
   'oracle.result': { evidence: 'sensitive' },
   'voice.turn.user': { audioRef: 'sensitive' },
+  // Aegis round 3 (P8-D86–D88): a worktree path and a commit trailer can carry
+  // project or agent-written detail; the rows stay private + normal.
+  'approval.auto': { path: 'sensitive' },
+  'merge.reverted': { trailer: 'sensitive' },
 };
 
 function build(): Readonly<Record<string, EventKindSpec>> {
@@ -158,6 +193,48 @@ function build(): Readonly<Record<string, EventKindSpec>> {
   }
   return Object.freeze(out);
 }
+
+/**
+ * Additive payload fields reserved on EXISTING kinds (§4.11, §9.1), keyed by
+ * kind, tagged with the release they were reserved for. Payloads are opaque to
+ * event:v1; this table is published in the event schema so clientApiId covers it.
+ */
+export const RESERVED_PAYLOAD_FIELDS: Readonly<Record<string, Readonly<Record<string, ReservationTag>>>> = Object.freeze({
+  'session.inject': Object.freeze({ peerRootKeyId: R9, briefId: R9 }),
+  'session.tainted': Object.freeze({ taint: R9 }),
+  'oracle.result': Object.freeze({ round: D86, range: D86, findings: D86 }),
+  'contract.knot': Object.freeze({ reopenOf: D86 }),
+  'contract.built': Object.freeze({ note: D86, responses: D86 }),
+  'verdict.founder': Object.freeze({ override: D86 }),
+  'session.open': Object.freeze({ runMode: D86 }),
+});
+
+/**
+ * Payload field names of the kinds reserved for P8-D86–D88, verbatim from §9.1
+ * (documentation published in the event schema, so clientApiId covers it; the
+ * payloads stay opaque to event:v1). None carries free text: `approval.auto`
+ * carries `inputHash`, never the tool input; `verdict.incident` and
+ * `request.incident` carry `refs[]` and `severity` only — so no field needs a
+ * sensitive label (§9.1 default `normal`).
+ */
+export const RESERVED_KIND_PAYLOADS: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  'approval.strictness.raised': ['repo', 'from', 'to', 'cause', 'signals', 'score', 'configHash'],
+  'approval.strictness.proposed': ['repo', 'from', 'to', 'evidence'],
+  'approval.strictness.lowered': ['repo', 'from', 'to', 'cardId', 'override'],
+  'approval.strictness.held': ['repo', 'level', 'reason'],
+  'approval.mode.set': ['scope', 'from', 'to', 'by', 'presence'],
+  'approval.auto': ['hsid', 'tool', 'path', 'inputHash', 'modeRef'],
+  'request.strictness.set': ['repo', 'to'],
+  'request.mode.set': ['repo', 'hsid', 'to'],
+  'request.incident': ['refs', 'severity'],
+  'contract.review.returned': ['nodeId', 'round', 'openFindings'],
+  'contract.review.capped': ['nodeId', 'rounds'],
+  'contract.review.extended': ['nodeId', 'cardId'],
+  'contract.review.restarted': ['nodeId', 'cardId'],
+  'merge.reverted': ['landedRef', 'nodeId', 'detectedBy', 'trailer'],
+  'merge.ref.rewritten': ['ref', 'kind'],
+  'verdict.incident': ['cardId', 'refs', 'severity'],
+});
 
 /** The frozen kind registry (§9.1). */
 export const EVENT_KINDS: Readonly<Record<string, EventKindSpec>> = build();

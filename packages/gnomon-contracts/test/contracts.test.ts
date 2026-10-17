@@ -12,6 +12,8 @@ import {
   validateEventV1,
   validateRefusalV1,
   validateCardV1,
+  validateChangeNoteV1,
+  validateReviewFindingV1,
   validateHelloParams,
   validateHelloResult,
   defaultLabelsFor,
@@ -85,9 +87,44 @@ const suites: Array<{
     name: 'card:v1',
     schema: () => S('card.v1.schema.json'),
     validate: (v) => validateCardV1(v),
-    good: [F.goodCard, F.heldVoiceCard, F.handoffCard],
-    bad: F.badCards,
-    tsOnly: ['held without heldUntil', 'handoff without direction'],
+    good: [F.goodCard, F.heldVoiceCard, F.handoffCard, F.reconsiderCard, F.strictnessCard, F.incidentCard],
+    bad: [...F.badCards, ...F.badCardsNoteFlags],
+    tsOnly: [
+      'held without heldUntil',
+      'handoff without direction',
+      'extend held on a permission card',
+      'agent tier below floor without claim-mismatch',
+      'reversible:false without irreversible',
+    ],
+  },
+  {
+    name: 'change-note:v1 (card form)',
+    schema: () => {
+      const s = S('change-note.v1.schema.json');
+      return { ...s.$defs.card, $defs: s.$defs };
+    },
+    validate: (v) => validateChangeNoteV1(v, { form: 'card' }),
+    good: [F.goodChangeNote],
+    bad: F.badChangeNotes,
+    tsOnly: F.changeNoteTsOnly.filter((l) => l !== 'card form without kernel'),
+  },
+  {
+    name: 'change-note:v1 (claim form)',
+    schema: () => {
+      const s = S('change-note.v1.schema.json');
+      return { ...s.$defs.claim, $defs: s.$defs };
+    },
+    validate: (v) => validateChangeNoteV1(v, { form: 'claim' }),
+    good: [F.claimFormChangeNote],
+    bad: F.badClaimNotes,
+  },
+  {
+    name: 'review-finding:v1',
+    schema: () => S('review-finding.v1.schema.json'),
+    validate: (v) => validateReviewFindingV1(v),
+    good: [F.goodFinding, { ...F.goodFinding, severity: 'pre-existing', instances: [] }],
+    bad: F.badFindings,
+    tsOnly: F.findingTsOnly,
   },
   {
     name: 'hello params',

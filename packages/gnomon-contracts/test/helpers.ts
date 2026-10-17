@@ -8,6 +8,9 @@
 type S = Record<string, any>;
 
 export function jsonSchemaErrors(schema: S, value: unknown, tolerant = false, root: S = schema, path = '$'): string[] {
+  // boolean schemas (2020-12): false rejects everything, true accepts everything — in every mode.
+  if ((schema as unknown) === false) return [`${path}: false schema`];
+  if ((schema as unknown) === true) return [];
   const errs: string[] = [];
   if (schema.$ref) {
     const target = (schema.$ref as string).replace(/^#\//, '').split('/').reduce((o: S, k: string) => o[k], root);

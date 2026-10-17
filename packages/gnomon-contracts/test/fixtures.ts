@@ -137,6 +137,11 @@ export const badCards: Array<[string, unknown]> = [
   ['held without heldUntil', { ...goodCard, state: 'held' }],
   ['handoff without direction', { ...goodCard, kind: 'handoff' }],
   ['asr out of range', { ...heldVoiceCard, voiceDecision: { ...heldVoiceCard.voiceDecision, asrConfidence: 2 } }],
+  ['strictness level unknown (strict)', { ...goodCard, strictness: { level: 'L4', mode: 'ask', reason: 'x' } }],
+  ['run mode bypass (strict)', { ...goodCard, strictness: { level: 'L0', mode: 'bypass', reason: 'x' } }],
+  ['extend held on a permission card', { ...goodCard, state: 'held', heldUntil: '2026-10-17T12:00:03Z', heldDecision: 'extend' }],
+  ['strictness missing reason', { ...goodCard, strictness: { level: 'L0', mode: 'ask' } }],
+  ['note with kernel field in agentClaims', { ...goodCard, note: { agentClaims: { verified: { n: 1, of: 1 } } } }],
 ];
 
 export const goodHello = {
@@ -150,4 +155,99 @@ export const badHellos: Array<[string, unknown]> = [
   ['no client', { clientApis: ['gnomon-rpc:v1'], features: [] }],
   ['bad api id', { ...goodHello, clientApis: ['gnomon rpc'] }],
   ['client without version', { ...goodHello, client: { name: 'x' } }],
+];
+
+/* ── M1.1 part 2 (spec v3.9 §4.11, P8-D86–D88) ─────────────────────────────── */
+
+export const goodAgentClaims = {
+  testedHow: { summary: 'unit + replay fixtures', refs: [`ev:${ULID}`, 'sym:#approval-broker'] },
+  risk: { tier: 'medium', why: 'touches the broker class table', blast: ['sym:#approval-broker'] },
+  revert: { how: 'auto', steps: 'git revert <sha>', reversible: true },
+  draftedBy: 'p:a1b2c3d4/session-tbm97kk4vsz44dzb',
+};
+export const goodChangeNote = {
+  agentClaims: goodAgentClaims,
+  kernel: {
+    verified: { n: 1, of: 2 },
+    risk: { floor: 'high', effective: 'high', reasons: ['gate-class path'] },
+    revert: { how: 'auto', ref: 'wl:pick/abc' },
+  },
+};
+/** The agent's form on contract.claim{op:'built', note}: agentClaims only. */
+export const claimFormChangeNote = { agentClaims: goodAgentClaims };
+
+export const badChangeNotes: Array<[string, unknown]> = [
+  ['missing agentClaims', { kernel: goodChangeNote.kernel }],
+  ['kernel field smuggled into agentClaims', { ...goodChangeNote, agentClaims: { ...goodAgentClaims, verified: { n: 2, of: 2 } } }],
+  ['unknown risk tier', { ...goodChangeNote, agentClaims: { ...goodAgentClaims, risk: { ...goodAgentClaims.risk, tier: 'none' } } }],
+  ['agent revert how', { ...goodChangeNote, agentClaims: { ...goodAgentClaims, revert: { ...goodAgentClaims.revert, how: 'exec' } } }],
+  ['kernel revert how command', { ...goodChangeNote, kernel: { ...goodChangeNote.kernel, revert: { how: 'command' } } }],
+  ['reversible not boolean', { ...goodChangeNote, agentClaims: { ...goodAgentClaims, revert: { ...goodAgentClaims.revert, reversible: 'no' } } }],
+  ['blast not a sym ref', { ...goodChangeNote, agentClaims: { ...goodAgentClaims, risk: { ...goodAgentClaims.risk, blast: ['src/x.ts'] } } }],
+  ['verified n negative', { ...goodChangeNote, kernel: { ...goodChangeNote.kernel, verified: { n: -1, of: 2 } } }],
+  // TS-only: semantic checks the JSON Schema cannot express.
+  ['card form without kernel', claimFormChangeNote],
+  ['summary over 1 KiB (UTF-8 bytes)', { ...goodChangeNote, agentClaims: { ...goodAgentClaims, testedHow: { summary: 'é'.repeat(513), refs: [] } } }],
+  ['verified n > of', { ...goodChangeNote, kernel: { ...goodChangeNote.kernel, verified: { n: 3, of: 2 } } }],
+  ['effective below floor', { ...goodChangeNote, kernel: { ...goodChangeNote.kernel, risk: { floor: 'high', effective: 'medium', reasons: [] } } }],
+  ['effective below agent tier', { ...goodChangeNote, kernel: { ...goodChangeNote.kernel, risk: { floor: 'low', effective: 'low', reasons: [] } } }],
+  ['effective above max(floor, agent tier) (strict equality)', { ...goodChangeNote, kernel: { ...goodChangeNote.kernel, risk: { floor: 'low', effective: 'high', reasons: [] } } }],
+];
+export const changeNoteTsOnly = [
+  'card form without kernel',
+  'summary over 1 KiB (UTF-8 bytes)',
+  'verified n > of',
+  'effective below floor',
+  'effective below agent tier',
+  'effective above max(floor, agent tier) (strict equality)',
+];
+
+export const goodFinding = {
+  fid: 'f-1',
+  round: 2,
+  class: 'missing-await',
+  severity: 'important',
+  locus: { path: 'src/kernel/broker.ts', lines: '40-52', symbol: '#approval-broker' },
+  instances: [{ path: 'src/kernel/fuse.ts', lines: '9' }],
+  claim: 'promise not awaited before the decision is signed',
+  fingerprint: H,
+};
+export const badFindings: Array<[string, unknown]> = [
+  ['round 0', { ...goodFinding, round: 0 }],
+  ['unknown severity', { ...goodFinding, severity: 'blocker' }],
+  ['locus without path', { ...goodFinding, locus: { lines: '1' } }],
+  ['bad line range', { ...goodFinding, locus: { path: 'a', lines: 'ten' } }],
+  ['fingerprint untagged', { ...goodFinding, fingerprint: 'abc' }],
+  ['missing instances', (({ instances: _i, ...r }) => r)(goodFinding)],
+  ['unknown field', { ...goodFinding, verdict: 'pass' }],
+  ['inverted line range', { ...goodFinding, locus: { path: 'a', lines: '9-3' } }],
+];
+export const findingTsOnly = ['inverted line range'];
+
+export const reconsiderCard = {
+  ...goodCard,
+  kind: 'reconsider',
+  flags: ['irreversible', 'claim-mismatch'],
+  note: goodChangeNote,
+  strictness: { level: 'L2', mode: 'ask', reason: 'fresh presence: repo at L2 — 3 reverts / 12 landed' },
+};
+export const strictnessCard = { ...goodCard, kind: 'strictness', strictness: { level: 'L1', mode: 'auto-edits', reason: 'loosen L1 → L0' } };
+export const incidentCard = { ...goodCard, kind: 'incident', state: 'decided', heldDecision: 'accept' };
+export const badClaimNotes: Array<[string, unknown]> = [
+  ['kernel part present', goodChangeNote],
+  ['missing agentClaims', {}],
+  ['unknown top-level field', { ...claimFormChangeNote, verified: { n: 1, of: 1 } }],
+];
+
+export const badCardsNoteFlags: Array<[string, unknown]> = [
+  ['agent tier below floor without claim-mismatch', { ...goodCard, kind: 'reconsider', note: goodChangeNote, flags: ['irreversible'] }],
+  [
+    'reversible:false without irreversible',
+    {
+      ...goodCard,
+      kind: 'reconsider',
+      flags: ['claim-mismatch'],
+      note: { ...goodChangeNote, agentClaims: { ...goodAgentClaims, revert: { ...goodAgentClaims.revert, reversible: false } } },
+    },
+  ],
 ];

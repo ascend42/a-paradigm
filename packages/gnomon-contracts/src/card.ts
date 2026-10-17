@@ -8,11 +8,15 @@
  *   P8-D58: kinds voice-arm/grant, state held, decision withdraw, flag
  *           voice-phrase, presence voice-armed, via voice, the voice/voiceDecision blocks.
  *   P8-R9:  kinds handoff/declassify/peer-pair, flag peer, via link.
+ *   P8-D86–D88 (§4.11): kinds reconsider/strictness/incident, decisions
+ *           extend/restart, flags irreversible/claim-mismatch, fields
+ *           note (change-note:v1) and strictness{level, mode, reason}.
  */
 
 import { Checker, isPlainObject, SHA256_TAGGED, type ValidateOptions } from './internal.js';
 import { ID_PATTERNS, HSID_PATTERN, CONTRACT_ID_PATTERN } from './ids.js';
 import { ANY_PRINCIPAL_PATTERN } from './principal.js';
+import { validateChangeNoteV1, changeNoteHasUnknownValue, RISK_TIERS, type ChangeNoteV1 } from './change-note.js';
 
 export const CARD_V1 = 'card:v1' as const;
 
@@ -35,13 +39,16 @@ export const CARD_KINDS = [
   'handoff',
   'declassify',
   'peer-pair',
+  'reconsider',
+  'strictness',
+  'incident',
 ] as const;
 export type CardKind = (typeof CARD_KINDS)[number];
 
 export const CARD_STATES = ['pending', 'held', 'decided', 'expired'] as const;
 export type CardState = (typeof CARD_STATES)[number];
 
-export const CARD_FLAGS = ['hidden-chars', 'bidi', 'voice-phrase', 'peer'] as const;
+export const CARD_FLAGS = ['hidden-chars', 'bidi', 'voice-phrase', 'peer', 'irreversible', 'claim-mismatch'] as const;
 export type CardFlag = (typeof CARD_FLAGS)[number];
 
 export const CARD_DECISIONS = [
@@ -58,6 +65,8 @@ export const CARD_DECISIONS = [
   'fallback-cloud',
   'use-api-token',
   'withdraw',
+  'extend',
+  'restart',
 ] as const;
 export type CardDecision = (typeof CARD_DECISIONS)[number];
 
@@ -69,6 +78,27 @@ export const VOICE_ARM_CLASSES = ['reversible', 'gate'] as const;
 export const VOICE_MODES = ['ptt', 'conversation'] as const;
 export const HANDOFF_DIRECTIONS = ['out', 'in'] as const;
 export const APPROVER_POLICY_KINDS = ['self'] as const;
+
+/**
+ * Strictness levels and run modes (§3.4, P8-D86–D88). Reserved M1.1; Move 1
+ * sessions run as `ask` at L0. ADDITIVE with FAIL-SAFE semantics (orchestrator
+ * ruling, round 2): an unknown level reads as L3 and an unknown mode as
+ * `manual` — the strictest known values, never a looser one (there is no
+ * bypass mode) — and a card carrying either is not decidable.
+ */
+export const STRICTNESS_LEVELS = ['L0', 'L1', 'L2', 'L3'] as const;
+export type StrictnessLevel = (typeof STRICTNESS_LEVELS)[number];
+export const RUN_MODES = ['manual', 'ask', 'auto-edits'] as const;
+export type RunMode = (typeof RUN_MODES)[number];
+export function failSafeStrictnessLevel(l: unknown): StrictnessLevel {
+  return (STRICTNESS_LEVELS as readonly unknown[]).includes(l) ? (l as StrictnessLevel) : 'L3';
+}
+export function failSafeRunMode(m: unknown): RunMode {
+  return (RUN_MODES as readonly unknown[]).includes(m) ? (m as RunMode) : 'manual';
+}
+
+/** Root-signed ~/.gnomon/config.yaml sections reserved M1.1 (§3.4, §4.11); ignored in project.yaml. */
+export const ROOT_CONFIG_RESERVED_SECTIONS = ['strictness', 'review'] as const;
 
 /** Signature domains (§3.1); the voice domain is reserved M1.1 (P8-D58). */
 export const APPROVE_SIG_DOMAIN = 'gnomon:approve:v1' as const;
@@ -89,7 +119,20 @@ export const CARD_RESERVED_VALUES = Object.freeze({
     flag: ['peer'],
     via: ['link'],
   }),
+  'M1.1:P8-D86-D88': Object.freeze({
+    kind: ['reconsider', 'strictness', 'incident'],
+    decision: ['extend', 'restart'],
+    flag: ['irreversible', 'claim-mismatch'],
+    field: ['note', 'strictness'],
+  }),
 });
+
+/** card.strictness (§3.4): the level, the run mode and the kernel's reason line. */
+export interface CardStrictness {
+  level: StrictnessLevel;
+  mode: RunMode;
+  reason: string;
+}
 
 export interface CardVoiceBlock {
   eligible: (typeof VOICE_ELIGIBILITY)[number];
@@ -146,6 +189,10 @@ export interface CardV1 {
   presence?: (typeof PRESENCE_VALUES)[number] | (string & {});
   via?: (typeof VIA_VALUES)[number] | (string & {});
   voiceDecision?: CardVoiceDecision;
+  /** change-note:v1 (§4.11), inside contentHash; agentClaims untrusted. Reserved M1.1 (P8-D86–D88). */
+  note?: ChangeNoteV1;
+  /** Reserved M1.1 (P8-D86–D88). */
+  strictness?: CardStrictness;
   cli?: { pid: number; ppid: number; pgid: number; tty: string | null } | { client: string; connId: string };
   timeoutAt?: string;
 }
@@ -175,6 +222,8 @@ export const CARD_V1_KEYS = [
   'presence',
   'via',
   'voiceDecision',
+  'note',
+  'strictness',
   'cli',
   'timeoutAt',
 ] as const;
@@ -192,11 +241,34 @@ export const CARD_V1_REQUIRED = [
 ] as const;
 
 /**
+ * Does the card carry a value this release does not know in a fail-safe field
+ * (strictness.level, strictness.mode, note tiers / revert hows)? Such a card
+ * validates tolerant (it renders) but is never decidable (round-2 ruling).
+ */
+export function hasUnknownFailSafeValue(card: Partial<Pick<CardV1, 'strictness' | 'note'>>): boolean {
+  const st = card.strictness as { level?: unknown; mode?: unknown } | undefined;
+  if (st && 'level' in st && !(STRICTNESS_LEVELS as readonly unknown[]).includes(st.level)) return true;
+  if (st && 'mode' in st && !(RUN_MODES as readonly unknown[]).includes(st.mode)) return true;
+  return changeNoteHasUnknownValue(card.note);
+}
+
+/** `extend` and `restart` are valid only on a `reconsider` card (§3.4, §7.3). */
+export const RECONSIDER_ONLY_DECISIONS: readonly string[] = Object.freeze(['extend', 'restart']);
+
+/**
  * Is the card decidable with this decision, from a client's point of view?
+ * When the card's kind is given, `extend`/`restart` need a `reconsider` card.
  * Unknown state ⇒ never (§4.9). `held` ⇒ only `withdraw` (§14.7). `withdraw`
  * is valid only on a held card.
  */
-export function isCardDecidable(card: Pick<CardV1, 'state'>, decision?: string): boolean {
+export function isCardDecidable(
+  card: Pick<CardV1, 'state'> & Partial<Pick<CardV1, 'kind' | 'strictness' | 'note'>>,
+  decision?: string,
+): boolean {
+  // extend/restart only on a card KNOWN to be a reconsider card (unknown/omitted kind ⇒ no).
+  if (decision !== undefined && RECONSIDER_ONLY_DECISIONS.includes(decision) && card.kind !== 'reconsider') return false;
+  // fail-safe: a value this release does not know in a fail-safe field ⇒ render, never decide.
+  if (hasUnknownFailSafeValue(card)) return false;
   if (card.state === 'pending') return decision !== 'withdraw';
   if (card.state === 'held') return decision === 'withdraw';
   return false;
@@ -248,6 +320,33 @@ export function validateCardV1(value: unknown, opts: ValidateOptions = {}): stri
     if ('mode' in d) c.additiveEnum('voiceDecision.mode', d.mode, VOICE_MODES);
     if ('asrConfidence' in d && (typeof d.asrConfidence !== 'number' || d.asrConfidence < 0 || d.asrConfidence > 1)) {
       c.fail('voiceDecision.asrConfidence', 'must be a number in [0,1]');
+    }
+  }
+  if ('note' in v) for (const e of validateChangeNoteV1(v.note, { mode: c.mode, form: 'card' })) c.fail('note', e);
+  if ('strictness' in v && c.obj('strictness', v.strictness)) {
+    const st = v.strictness;
+    c.closed('strictness', st, ['level', 'mode', 'reason']);
+    c.required('strictness', st, ['level', 'mode', 'reason']);
+    if ('level' in st) c.additiveEnum('strictness.level', st.level, STRICTNESS_LEVELS);
+    if ('mode' in st) c.additiveEnum('strictness.mode', st.mode, RUN_MODES);
+    if ('reason' in st) c.str('strictness.reason', st.reason);
+  }
+  if (c.mode === 'strict') {
+    // extend/restart only on reconsider (§3.4) — also as a held decision.
+    if (typeof v.heldDecision === 'string' && RECONSIDER_ONLY_DECISIONS.includes(v.heldDecision) && v.kind !== 'reconsider') {
+      c.fail('heldDecision', `${v.heldDecision} is valid only on a reconsider card`);
+    }
+    // Producer cross-field checks on the change note (§3.4; G-CHG-01, G-CHG-04).
+    const n = v.note as { agentClaims?: any; kernel?: any } | undefined;
+    const flags = Array.isArray(v.flags) ? (v.flags as unknown[]) : [];
+    const rank = (t: unknown) => (RISK_TIERS as readonly unknown[]).indexOf(t);
+    const agentTier = rank(n?.agentClaims?.risk?.tier);
+    const floor = rank(n?.kernel?.risk?.floor);
+    if (agentTier >= 0 && floor >= 0 && agentTier < floor && !flags.includes('claim-mismatch')) {
+      c.fail('flags', 'an agent tier below the kernel floor requires the claim-mismatch flag');
+    }
+    if (n?.agentClaims?.revert?.reversible === false && !flags.includes('irreversible')) {
+      c.fail('flags', 'revert.reversible:false requires the irreversible flag');
     }
   }
   if (v.state === 'held' && !('heldUntil' in v)) c.fail('heldUntil', 'required on a held card');

@@ -4,11 +4,17 @@
   "title": "event:v1",
   "description": "Gnomon kernel log envelope (spec §4.1). Labels default per kind (§9.1, x-gnomon-kinds).",
   "x-gnomon-kinds": [
+    "approval.auto",
     "approval.decide",
     "approval.expire",
+    "approval.mode.set",
     "approval.presence.denied",
     "approval.request",
     "approval.rule.learned",
+    "approval.strictness.held",
+    "approval.strictness.lowered",
+    "approval.strictness.proposed",
+    "approval.strictness.raised",
     "approval.suspect",
     "approval.unlock",
     "approval.unlock.dropped",
@@ -46,6 +52,10 @@
     "contract.progress",
     "contract.registered",
     "contract.released",
+    "contract.review.capped",
+    "contract.review.extended",
+    "contract.review.restarted",
+    "contract.review.returned",
     "daemon.anchor.failed",
     "daemon.anchor.lag",
     "daemon.exit",
@@ -107,6 +117,8 @@
     "merge.ci",
     "merge.conflict",
     "merge.landed",
+    "merge.ref.rewritten",
+    "merge.reverted",
     "merge.tree",
     "mod.dev.expired",
     "mod.effect.refused",
@@ -138,7 +150,10 @@
     "request.brief.send",
     "request.cowork.allow",
     "request.grant",
+    "request.incident",
     "request.link.revoke",
+    "request.mode.set",
+    "request.strictness.set",
     "request.voice.arm",
     "request.voice.narrow",
     "schedule.automation.due",
@@ -166,6 +181,7 @@
     "socket.auth.replay",
     "socket.auth.theft",
     "socket.connect",
+    "socket.disconnect",
     "socket.frame.dropped",
     "socket.frame.refused",
     "socket.gui.session.ended",
@@ -189,6 +205,7 @@
     "turn.steer",
     "turn.usage",
     "verdict.founder",
+    "verdict.incident",
     "voice.bargein",
     "voice.deck",
     "voice.enrol",
@@ -211,6 +228,189 @@
     "broke",
     "modns"
   ],
+  "x-gnomon-reserved-kinds": {
+    "approval.auto": "M1.1:P8-D86-D88",
+    "approval.mode.set": "M1.1:P8-D86-D88",
+    "approval.strictness.held": "M1.1:P8-D86-D88",
+    "approval.strictness.lowered": "M1.1:P8-D86-D88",
+    "approval.strictness.proposed": "M1.1:P8-D86-D88",
+    "approval.strictness.raised": "M1.1:P8-D86-D88",
+    "approval.voice.arm": "M1.1:P8-D58",
+    "approval.voice.disarm": "M1.1:P8-D58",
+    "approval.voice.handle.rotated": "M1.1:P8-D58",
+    "approval.voice.held": "M1.1:P8-D58",
+    "approval.voice.intent": "M1.1:P8-D58",
+    "approval.voice.policy.narrowed": "M1.1:P8-D58",
+    "approval.voice.refused": "M1.1:P8-D58",
+    "approval.voice.withdrawn": "M1.1:P8-D58",
+    "contract.review.capped": "M1.1:P8-D86-D88",
+    "contract.review.extended": "M1.1:P8-D86-D88",
+    "contract.review.restarted": "M1.1:P8-D86-D88",
+    "contract.review.returned": "M1.1:P8-D86-D88",
+    "link.auth.fail": "M1.1:P8-R9",
+    "link.brief.accepted": "M1.1:P8-R9",
+    "link.brief.declined": "M1.1:P8-R9",
+    "link.brief.drafted": "M1.1:P8-R9",
+    "link.brief.expired": "M1.1:P8-R9",
+    "link.brief.received": "M1.1:P8-R9",
+    "link.brief.sent": "M1.1:P8-R9",
+    "link.connect": "M1.1:P8-R9",
+    "link.declassified": "M1.1:P8-R9",
+    "link.disconnect": "M1.1:P8-R9",
+    "link.egress.refused": "M1.1:P8-R9",
+    "link.expired": "M1.1:P8-R9",
+    "link.frame.refused": "M1.1:P8-R9",
+    "link.msg.in": "M1.1:P8-R9",
+    "link.msg.out": "M1.1:P8-R9",
+    "link.pair.offered": "M1.1:P8-R9",
+    "link.paired": "M1.1:P8-R9",
+    "link.paused": "M1.1:P8-R9",
+    "link.rate": "M1.1:P8-R9",
+    "link.relay.unreachable": "M1.1:P8-R9",
+    "link.renewed": "M1.1:P8-R9",
+    "link.revoked": "M1.1:P8-R9",
+    "link.scan.hit": "M1.1:P8-R9",
+    "merge.ref.rewritten": "M1.1:P8-D86-D88",
+    "merge.reverted": "M1.1:P8-D86-D88",
+    "request.brief.send": "M1.1:P8-R9",
+    "request.cowork.allow": "M1.1:P8-R9",
+    "request.grant": "M1.1:P8-D58",
+    "request.incident": "M1.1:P8-D86-D88",
+    "request.link.revoke": "M1.1:P8-R9",
+    "request.mode.set": "M1.1:P8-D86-D88",
+    "request.strictness.set": "M1.1:P8-D86-D88",
+    "request.voice.arm": "M1.1:P8-D58",
+    "request.voice.narrow": "M1.1:P8-D58",
+    "verdict.incident": "M1.1:P8-D86-D88"
+  },
+  "x-gnomon-reserved-payload-fields": {
+    "session.inject": {
+      "peerRootKeyId": "M1.1:P8-R9",
+      "briefId": "M1.1:P8-R9"
+    },
+    "session.tainted": {
+      "taint": "M1.1:P8-R9"
+    },
+    "oracle.result": {
+      "round": "M1.1:P8-D86-D88",
+      "range": "M1.1:P8-D86-D88",
+      "findings": "M1.1:P8-D86-D88"
+    },
+    "contract.knot": {
+      "reopenOf": "M1.1:P8-D86-D88"
+    },
+    "contract.built": {
+      "note": "M1.1:P8-D86-D88",
+      "responses": "M1.1:P8-D86-D88"
+    },
+    "verdict.founder": {
+      "override": "M1.1:P8-D86-D88"
+    },
+    "session.open": {
+      "runMode": "M1.1:P8-D86-D88"
+    }
+  },
+  "x-gnomon-session-taints": [
+    "none",
+    "peer",
+    "peer-teammate"
+  ],
+  "x-gnomon-suspect-reasons": [
+    "voice-unarmed",
+    "voice-unenrolled",
+    "voice-no-readback",
+    "voice-echo-overlap",
+    "voice-custody-client",
+    "strictness-class"
+  ],
+  "x-gnomon-reserved-kind-payloads": {
+    "approval.strictness.raised": [
+      "repo",
+      "from",
+      "to",
+      "cause",
+      "signals",
+      "score",
+      "configHash"
+    ],
+    "approval.strictness.proposed": [
+      "repo",
+      "from",
+      "to",
+      "evidence"
+    ],
+    "approval.strictness.lowered": [
+      "repo",
+      "from",
+      "to",
+      "cardId",
+      "override"
+    ],
+    "approval.strictness.held": [
+      "repo",
+      "level",
+      "reason"
+    ],
+    "approval.mode.set": [
+      "scope",
+      "from",
+      "to",
+      "by",
+      "presence"
+    ],
+    "approval.auto": [
+      "hsid",
+      "tool",
+      "path",
+      "inputHash",
+      "modeRef"
+    ],
+    "request.strictness.set": [
+      "repo",
+      "to"
+    ],
+    "request.mode.set": [
+      "repo",
+      "hsid",
+      "to"
+    ],
+    "request.incident": [
+      "refs",
+      "severity"
+    ],
+    "contract.review.returned": [
+      "nodeId",
+      "round",
+      "openFindings"
+    ],
+    "contract.review.capped": [
+      "nodeId",
+      "rounds"
+    ],
+    "contract.review.extended": [
+      "nodeId",
+      "cardId"
+    ],
+    "contract.review.restarted": [
+      "nodeId",
+      "cardId"
+    ],
+    "merge.reverted": [
+      "landedRef",
+      "nodeId",
+      "detectedBy",
+      "trailer"
+    ],
+    "merge.ref.rewritten": [
+      "ref",
+      "kind"
+    ],
+    "verdict.incident": [
+      "cardId",
+      "refs",
+      "severity"
+    ]
+  },
   "type": "object",
   "properties": {
     "schemaVersion": {

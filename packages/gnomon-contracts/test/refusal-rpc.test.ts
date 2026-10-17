@@ -162,7 +162,9 @@ describe('refuse() / refusalOf() (Warpline semantics + Gnomon codes)', () => {
   });
   it('voice and link reasons are reserved (M1.1) and validate', () => {
     expect(VOICE_REFUSAL_REASONS).toContain('voice-off');
-    expect(VOICE_REFUSAL_REASONS).toHaveLength(25);
+    // 25 from §14.7 (P8-D58) + voice-strictness (§4.11, P8-D86–D88).
+    expect(VOICE_REFUSAL_REASONS).toHaveLength(26);
+    expect(VOICE_REFUSAL_REASONS).toContain('voice-strictness');
     expect(LINK_REFUSAL_REASONS).toContain('warpline-sync-absent');
     for (const reason of [...VOICE_REFUSAL_REASONS, ...LINK_REFUSAL_REASONS]) {
       expect(validateRefusalV1(refuse({ code: 'FORBIDDEN', gate: reason.startsWith('voice') ? 'voice' : 'link', data: { reason } }))).toEqual([]);

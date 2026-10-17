@@ -8,12 +8,16 @@ description: >-
   shipped probeResult:v1; PR-3 (research 29 §4) adds event:v1, ids/hsid,
   principals, ref:v1, refusal:v1, card:v1, the gnomon-rpc:v1 hello shape and
   the frozen client surface, with the P8-D58 (voice) and P8-R9 (linking)
-  values reserved for M1.1. Spec Appendix A names no contract-level nodes, so
+  values reserved for M1.1. M1.1 part 2 (spec v3.9 §4.11, §19.1 M1.1) reserves
+  the P8-D86–D88 values (strictness L0–L3, run modes, review convergence,
+  change notes) and adds review-finding:v1 and change-note:v1, moving
+  clientApiId once now so it does not move in Move 2; no closed enumeration
+  (refusal code, retriable, audience, sensitivity) gains a value. Spec Appendix A names no contract-level nodes, so
   every component below is a child of #gnomon-contracts named after the
   contract id it implements; the spec owners it serves are #identity,
   #kernel-log, #ref-resolver, #approval-broker, #socket, #peer-link and
   ~ample-internal-logs (all in packages/gnomon). Gates it encodes values for:
-  ^voice-armed (§14.7), ^peer-paired (§3.9). The spec declares no signals.
+  ^voice-armed (§14.7), ^peer-paired (§3.9), ^certified (§7.3 review cap). The spec declares no signals.
   Private, Node >= 24, outside the root build until the 8.0 cut.
 
 components:
@@ -28,22 +32,52 @@ components:
       (`npm run schemas`, scripts/write-schemas.mjs) and a test keeps them a
       byte-identical fixed point. src/internal.ts holds the shared pure helpers
       (Checker with strict|tolerant modes, UTF-8, synchronous SHA-256,
-      Crockford base32, canonical JSON, deepFreeze).
+      Crockford base32, canonical JSON, deepFreeze). Also home (no allowlisted
+      sub-component yet; spec Appendix A has no node) of the M1.1-reserved
+      (P8-D86–D88, §4.11) schemas: src/change-note.ts = change-note:v1 —
+      agentClaims{testedHow{summary ≤1 KiB, refs[]}, risk{tier low|medium|high,
+      why ≤512 B, blast[sym:]}, revert{how auto|command|manual, steps ≤1 KiB
+      never executed, reversible}, draftedBy} UNTRUSTED and kept structurally
+      apart from kernel{verified{n, of}, risk{floor, effective, reasons[]},
+      revert{how auto|none, ref?}} (B16); validateChangeNoteV1 needs an explicit
+      form (no default): claim (contract.claim{note}: agentClaims only, a
+      kernel part refused in every mode) or card (kernel required; strict:
+      effective = max(floor, agent tier)); schemas/change-note.v1.schema.json
+      publishes both as $defs/claim (kernel: false) and $defs/card, with
+      x-gnomon-trust per part; failSafe* readings and changeNoteHasUnknownValue.
+      src/review-finding.ts = review-finding:v1 {fid, round >= 1, class,
+      severity important|nit|pre-existing (kernel-set), locus{path, lines?,
+      symbol?}, instances[], claim, fingerprint}; `lines` = "n" or "from-to"
+      (spec gives no grammar; judgment call); FINDING_RESPONSES fixed|wrong|
+      intentional|immaterial + validateFindingResponses for
+      contract.claim{responses}; schemas/review-finding.v1.schema.json. Tiers,
+      hows, severities and responses are ADDITIVE with fail-safe readings
+      (unknown tier ⇒ high, agent revert how ⇒ manual, kernel revert how ⇒
+      none, severity ⇒ important, response ⇒ no answer; round-2 ruling). They serve #approval-broker and ^certified convergence.
     path: src/
     type: module
     tags: [gnomon, contracts, json-schema, paradigm-8]
     tests:
       - test/probe-result.test.ts
       - test/contracts.test.ts
+      - test/m1-1-reservations.test.ts
 
   contract-event-v1:
     description: >-
       event:v1 envelope (§4.1) — EventV1 type, validateEventV1/isEventV1
       (strict = registered kind + closed fields; tolerant = unknown kinds and
       fields accepted, opaqueEventView renders {kind, principal, at}),
-      schemas/event.v1.schema.json. The kind registry EVENT_KINDS (§9.1, 198
-      kinds, owner kernel|userland, M1.1 reservations tagged M1.1:P8-D58 /
-      M1.1:P8-R9) with per-kind default labels: audience private, sensitivity
+      schemas/event.v1.schema.json. The kind registry EVENT_KINDS (§9.1,
+      owner kernel|userland, M1.1 reservations tagged M1.1:P8-D58 /
+      M1.1:P8-R9 / M1.1:P8-D86-D88 — the last: approval.strictness.raised|
+      proposed|lowered|held, approval.mode.set, approval.auto,
+      contract.review.returned|capped|extended|restarted, merge.reverted,
+      merge.ref.rewritten, verdict.incident, request.strictness.set|mode.set|
+      incident, all kernel-owned, private + normal) with RESERVED_PAYLOAD_FIELDS
+      (oracle.result round/range/findings, contract.knot reopenOf,
+      contract.built note/responses, verdict.founder override, session.inject
+      briefId/peerRootKeyId, session.tainted taint), SESSION_TAINTS and
+      APPROVAL_SUSPECT_REASONS (voice-* and strictness-class), and per-kind default labels: audience private, sensitivity
       per §9.1 (session.inject, turn.event, voice.turn.* sensitive; voice.enrol
       secret; field labels approval.request.tool_input and oracle.result.evidence
       sensitive). defaultLabelsFor(kind) returns undefined for an unregistered
@@ -54,6 +88,7 @@ components:
     tags: [gnomon, contracts, event-v1, paradigm-8]
     tests:
       - test/contracts.test.ts
+      - test/m1-1-reservations.test.ts
 
   contract-ids:
     description: >-
@@ -78,7 +113,12 @@ components:
       p:<ns>/<name>@<rootKeyId8> (parsePrincipalId marks it foreign, never
       local); samePrincipal compares full rootKeyId + name and never ns;
       isLocalPrincipal, foreignDisplayId, nsFromRootPublicKey,
-      peerKernelPrincipal. Serves #identity and #peer-link (G-ID-08 contract
+      peerKernelPrincipal. Also the closed-kind row vocabularies of §3.1/§15.4:
+      REGISTRY_ROW_KINDS (kernel, link), GRANT_ROW_KINDS (incl. reserved
+      grant.voice-approvals, grant.peer), CAPABILITY_FORMS and
+      FIRST_PARTY_ONLY_CAPABILITIES (link:send, knowledge:federate),
+      GRANT_DERIVED_ONLY_CAPABILITIES (voice.approve:<class>) — not
+      clientApiId inputs. Serves #identity and #peer-link (G-ID-08 contract
       half).
     path: src/principal.ts
     type: module
@@ -104,9 +144,13 @@ components:
       refusal:v1 Gnomon superset (§4.6) — copied (not imported) from
       packages/warpline/src/fabric/refusal.ts: Warpline's 12 codes + BUDGET_DENIED,
       PERMIT_REQUIRED, CAS_LOST, BILLING_REFUSED, MODEL_UNAVAILABLE; gates + budget,
-      billing, model, voice, link; Retriability; next[] steps; verdict and
+      billing, model, voice, link, and reserved review, strictness (P8-D86–D88);
+      Retriability; next[] steps; verdict and
       contested[].rule widened to string|null; optional additive data{reason,
-      offered, cardId}; voice and link reason lists (M1.1); exit codes and the
+      offered, cardId}; voice and link reason lists (M1.1); reserved
+      review-cap, strictness-presence|paused|mode|evidence, voice-strictness,
+      note-missing with RESERVED_REASON_ROUTES naming each one's code and gate;
+      SOCKET_REASON_ROUTES for the reasons the M1.4 kernel socket emits; exit codes and the
       JSON-RPC code map (§4.9); refuse() single constructor, refusalOf()
       accessor (+ the JSON-RPC error depth), RefusedError, validateRefusalV1,
       schemas/refusal.v1.schema.json. G-CON-02 partial: every Warpline-shaped
@@ -117,12 +161,21 @@ components:
     tests:
       - test/refusal-rpc.test.ts
       - test/contracts.test.ts
+      - test/m1-1-reservations.test.ts
 
   contract-card-v1:
     description: >-
       card:v1 (§3.4, §14.7, §3.9) — kinds incl. reserved voice-arm, grant,
-      handoff, declassify, peer-pair; states incl. held; flags incl.
-      voice-phrase, peer; decisions incl. withdraw; presence incl. voice-armed;
+      handoff, declassify, peer-pair, reconsider, strictness, incident; states
+      incl. held; flags incl. voice-phrase, peer, irreversible, claim-mismatch;
+      decisions incl. withdraw, extend, restart (reconsider cards only);
+      fields note (change-note:v1, card form) and strictness{level L0-L3,
+      mode manual|ask|auto-edits, reason} — level and mode ADDITIVE with
+      fail-safe readings (unknown level ⇒ L3, mode ⇒ manual; no bypass mode);
+      hasUnknownFailSafeValue ⇒ the card renders but is never decidable;
+      strict producer checks: extend/restart (also as heldDecision) only on
+      reconsider, claim-mismatch flag when agent tier < floor, irreversible
+      flag when reversible:false (G-CHG-01/04); ROOT_CONFIG_RESERVED_SECTIONS; presence incl. voice-armed;
       via incl. voice, link; voice / voiceDecision blocks; signature domains
       gnomon:approve:v1 and gnomon:approve-voice:v1; CARD_RESERVED_VALUES;
       isCardDecidable (unknown state never decidable, held only withdraws);
@@ -133,6 +186,7 @@ components:
     tags: [gnomon, contracts, card-v1, paradigm-8]
     tests:
       - test/contracts.test.ts
+      - test/m1-1-reservations.test.ts
 
   contract-gnomon-rpc-v1:
     description: >-
@@ -140,7 +194,11 @@ components:
       validators, auth preimage helpers, negotiateHello (highest shared
       version, feature intersection, UNSUPPORTED{data:{offered[]}}); the frozen
       VERBS (12, with params, refusals and the §5 access matrix incl. the
-      all-refused peer column) and CLIENT_RELAYS (mod.view, mod.command);
+      all-refused peer column; session.open runMode?, contract.claim note? /
+      responses? + BAD_REQUEST, oracle.run FORBIDDEN per v3.9) and CLIENT_RELAYS
+      (mod.view, mod.command); VERB_PARAM_VALUES, RESERVED_CONTENT_PARTS
+      ({brief}), STATUS_RESERVED_FIELDS (links, strictness, review,
+      unobservedRefWrites) and FAIL_SAFE_VALUES (in clientApiId);
       ADDITIVE_ENUMS + renderEnumValue implement the compatible-additive rule;
       schemas/gnomon-rpc.v1.hello.schema.json. Serves #socket and #web-endpoint.
     path: src/rpc.ts
@@ -148,13 +206,16 @@ components:
     tags: [gnomon, contracts, gnomon-rpc-v1, paradigm-8]
     tests:
       - test/refusal-rpc.test.ts
+      - test/m1-1-reservations.test.ts
 
   contract-client-api-id:
     description: >-
       kitId and clientApiId (§12.3, §12.8). kitId = sha256(canonicalJson(kit:v1
       block list)); clientApiId = sha256(canonicalJson(CLIENT_API_DESCRIPTOR) +
       "\n" + kitId) where the descriptor = the 12 verbs + 2 relays, the JSON-RPC
-      code map, ADDITIVE_ENUMS and every published client JSON Schema; modAbiId
+      code map, ADDITIVE_ENUMS, every published client JSON Schema and the
+      non-schema M1.1 reservations (verb param values, content parts, status
+      fields); modAbiId
       is not an input. src/schemas.ts builds the schemas from the TS constants;
       schemas/client-api.ids.json pins the values per release.
     path: src/client-api.ts
@@ -163,3 +224,4 @@ components:
     tests:
       - test/refusal-rpc.test.ts
       - test/contracts.test.ts
+      - test/m1-1-reservations.test.ts

@@ -6,7 +6,9 @@
 
 import { Checker, deepFreeze, type ValidateOptions } from './internal.js';
 import { PRINCIPAL_KINDS } from './principal.js';
-import { CARD_KINDS, CARD_STATES, CARD_FLAGS, CARD_DECISIONS, PRESENCE_VALUES, VIA_VALUES } from './card.js';
+import { CARD_KINDS, CARD_STATES, CARD_FLAGS, CARD_DECISIONS, PRESENCE_VALUES, VIA_VALUES, RUN_MODES, STRICTNESS_LEVELS } from './card.js';
+import { FINDING_RESPONSES, FINDING_SEVERITIES } from './review-finding.js';
+import { RISK_TIERS, AGENT_REVERT_HOWS, KERNEL_REVERT_HOWS } from './change-note.js';
 import { REFUSAL_GATES, REFUSAL_REASONS, refuse, type Refusal, type RefusalCode } from './refusal.js';
 import { INJECT_ORIGINS } from './event.js';
 
@@ -47,7 +49,7 @@ export const VERBS: readonly VerbDescriptor[] = deepFreeze([
   },
   {
     n: 2, verb: 'session.open',
-    params: ['backend?', 'model', 'cwd', 'mode?', 'as?', 'goal?', 'contract?', 'alias?', 'derived?', 'permitId?', 'systemPrompt?', 'attended', 'brief?'],
+    params: ['backend?', 'model', 'cwd', 'mode?', 'runMode?', 'as?', 'goal?', 'contract?', 'alias?', 'derived?', 'permitId?', 'systemPrompt?', 'attended', 'brief?'],
     result: '{hsid, principalId, backend, state}',
     refusals: ['PERMIT_REQUIRED', 'BUDGET_DENIED', 'BILLING_REFUSED', 'MODEL_UNAVAILABLE', 'UNSUPPORTED', 'FORBIDDEN'], humanOnly: false,
     access: { human: 'yes', agent: 'permit', session: 'permit', mod: false, voice: false, readToken: false, peer: false },
@@ -85,12 +87,12 @@ export const VERBS: readonly VerbDescriptor[] = deepFreeze([
     access: { human: 'yes', agent: 'yes', session: false, mod: false, voice: false, readToken: false, peer: false },
   },
   {
-    n: 10, verb: 'contract.claim', params: ['contractId', 'nodeId', 'op', 'ttl?', 'expect?'], result: '{nodeId, status, by, seq, expiresAt?}',
-    refusals: ['CAS_LOST', 'NOT_FOUND'], humanOnly: false,
+    n: 10, verb: 'contract.claim', params: ['contractId', 'nodeId', 'op', 'ttl?', 'expect?', 'note?', 'responses?'], result: '{nodeId, status, by, seq, expiresAt?}',
+    refusals: ['CAS_LOST', 'NOT_FOUND', 'BAD_REQUEST'], humanOnly: false,
     access: { human: 'yes', agent: 'yes', session: 'yes', mod: false, voice: false, readToken: false, peer: false },
   },
   {
-    n: 11, verb: 'oracle.run', params: ['contractId', 'nodeId', 'oracle'], result: 'oracle:v1', refusals: ['PERMIT_REQUIRED', 'UNSUPPORTED', 'ENGINE'], humanOnly: false,
+    n: 11, verb: 'oracle.run', params: ['contractId', 'nodeId', 'oracle'], result: 'oracle:v1', refusals: ['PERMIT_REQUIRED', 'UNSUPPORTED', 'ENGINE', 'FORBIDDEN'], humanOnly: false,
     access: { human: 'yes', agent: 'requests', session: 'requests', mod: false, voice: false, readToken: false, peer: false },
   },
   {
@@ -113,6 +115,33 @@ export const CLIENT_RELAYS: readonly RelayDescriptor[] = deepFreeze([
   { relay: 'mod.command', params: ['name', 'commandId', 'args'], forwardsAs: 'command.run' },
 ] satisfies RelayDescriptor[]);
 export const RELAY_NAMES = Object.freeze(CLIENT_RELAYS.map((r) => r.relay)) as readonly string[];
+
+/**
+ * Typed values of verb params reserved M1.1 (§5, §4.11). `session.open.runMode`
+ * and `contract.claim.responses[].response` (P8-D86–D88); `contract.claim.note`
+ * is a change-note:v1 (claim form: agentClaims only).
+ */
+export const VERB_PARAM_VALUES = deepFreeze({
+  'session.open.runMode': [...RUN_MODES],
+  'contract.claim.note': ['change-note.v1.schema.json#/$defs/claim'],
+  'contract.claim.responses[].response': [...FINDING_RESPONSES],
+});
+
+/** Content parts of `session.send{content[]}` the spec names (§3.9: `{brief}`, human only). Reserved M1.1 (P8-R9). */
+export const RESERVED_CONTENT_PARTS = ['brief'] as const;
+
+/**
+ * Top-level `status` fields reserved M1.1 (§5): `links` (P8-R9, §3.9);
+ * `strictness`, `review`, `unobservedRefWrites` (P8-D86–D88, §3.4, §7.3).
+ * Shapes are the §5 prose; the full status:v1 result schema is not yet in
+ * this package, so the reservation is the field name plus its owner.
+ */
+export const STATUS_RESERVED_FIELDS = deepFreeze({
+  links: { reserved: 'M1.1:P8-R9', section: '§3.9' },
+  strictness: { reserved: 'M1.1:P8-D86-D88', section: '§3.4' },
+  review: { reserved: 'M1.1:P8-D86-D88', section: '§7.3' },
+  unobservedRefWrites: { reserved: 'M1.1:P8-D86-D88', section: '§3.4' },
+});
 
 /** The client-callable surface: 12 verbs + 2 relays (§5). */
 export const CLIENT_METHODS = Object.freeze([...VERB_NAMES, ...RELAY_NAMES]) as readonly string[];
@@ -137,7 +166,31 @@ export const ADDITIVE_ENUMS = deepFreeze({
   'refusal.gate': [...REFUSAL_GATES],
   'refusal.reason': [...REFUSAL_REASONS],
   'client.surface': [...CLIENT_SURFACES],
+  // P8-D86–D88, additive with fail-safe readings (FAIL_SAFE_VALUES).
+  'card.strictness.level': [...STRICTNESS_LEVELS],
+  'run.mode': [...RUN_MODES],
+  'risk.tier': [...RISK_TIERS],
+  'agentClaims.revert.how': [...AGENT_REVERT_HOWS],
+  'kernel.revert.how': [...KERNEL_REVERT_HOWS],
+  'finding.severity': [...FINDING_SEVERITIES],
+  'finding.response': [...FINDING_RESPONSES],
 });
+
+/**
+ * How a client READS an unknown value of a fail-safe additive enum: as the
+ * strictest known value (null = "no value": an unknown finding response is not
+ * an answer). A card carrying any such unknown value renders but is never
+ * decidable (`hasUnknownFailSafeValue`). Part of clientApiId.
+ */
+export const FAIL_SAFE_VALUES = deepFreeze({
+  'card.strictness.level': 'L3',
+  'run.mode': 'manual',
+  'risk.tier': 'high',
+  'agentClaims.revert.how': 'manual',
+  'kernel.revert.how': 'none',
+  'finding.severity': 'important',
+  'finding.response': null,
+} as const);
 export type AdditiveEnumName = keyof typeof ADDITIVE_ENUMS;
 
 export type EnumRendering = { known: true; value: string } | { known: false; opaque: string };

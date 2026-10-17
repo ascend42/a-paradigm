@@ -91,3 +91,73 @@ export function foreignDisplayId(p: PrincipalRef): string {
 export function peerKernelPrincipal(peerNs: string): string {
   return principalId(peerNs, 'kernel');
 }
+
+/* ── registry rows, grant rows, capabilities (§3.1, §15.4) ───────────────── */
+
+/**
+ * Key-registry row kinds the spec names literally (§3.1: `kind kernel`, `kind
+ * link`). The registry reader is CLOSED-kind (fail-closed, Warpline
+ * keys.ts:309-330): an unknown kind is never interpreted as a key, so these are
+ * the values #identity's reader must accept. `link` is reserved M1.1 (P8-R9).
+ * Root, device and agent key rows are described in §3.1 without a literal kind
+ * value and are left to #identity. Not part of clientApiId (no client reads the
+ * registry over gnomon-rpc:v1).
+ */
+export const REGISTRY_ROW_KINDS = ['kernel', 'link'] as const;
+
+/**
+ * Root-signed grant-row kinds in `~/.gnomon/grants.jsonl` (§15.4), closed-kind
+ * like the registry. `grant.voice-approvals` reserved M1.1 (P8-D58); `grant.peer`
+ * reserved M1.1 (P8-R9). Not part of clientApiId.
+ */
+export const GRANT_ROW_KINDS = [
+  'grant.capability',
+  'grant.bind',
+  'grant.trust',
+  'grant.install',
+  'grant.device',
+  'grant.voice',
+  'grant.egress',
+  'grant.voice-approvals',
+  'grant.peer',
+] as const;
+export type GrantRowKind = (typeof GRANT_ROW_KINDS)[number];
+
+/**
+ * Capability forms (§15.4); `<x>` marks a parameterised family. `voice.approve:<class>`
+ * reserved M1.1 (P8-D58, derived only from a grant.voice-approvals row);
+ * `link:send` reserved M1.1 (P8-R9, first-party only — never in a community manifest).
+ */
+export const CAPABILITY_FORMS = [
+  'log.append:<ns>.*',
+  'log.read',
+  'log.read:sensitive',
+  'turn.text:attached-session',
+  'ref.resolve',
+  'resolver:<scheme>',
+  'permit.reserve:<kind>',
+  'oracle:<type>',
+  'band:read',
+  'hook:<event>',
+  'mod:<effect>',
+  'voice',
+  'knowledge:provide',
+  'knowledge:federate',
+  'voice.approve:<class>',
+  'link:send',
+] as const;
+/** Capabilities a community (non-first-party) manifest may never name (§15.4). */
+export const FIRST_PARTY_ONLY_CAPABILITIES = ['knowledge:federate', 'link:send'] as const;
+/**
+ * Capabilities NO manifest may name, first-party included: derived only from a
+ * root-signed, human-only grant row (§14.7, §15.4: `voice.approve:<class>` comes
+ * only from `grant.voice-approvals`). Stricter than first-party-only, so it is
+ * listed here rather than in FIRST_PARTY_ONLY_CAPABILITIES.
+ */
+export const GRANT_DERIVED_ONLY_CAPABILITIES = ['voice.approve:<class>'] as const;
+
+/** Reserved one release ahead (§19.1 M1.1). */
+export const IDENTITY_RESERVED_VALUES = Object.freeze({
+  'M1.1:P8-D58': Object.freeze({ grant: ['grant.voice-approvals'], capability: ['voice.approve:<class>'] }),
+  'M1.1:P8-R9': Object.freeze({ principalKind: ['peer'], registry: ['link'], grant: ['grant.peer'], capability: ['link:send'] }),
+});

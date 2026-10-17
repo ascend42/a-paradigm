@@ -11,7 +11,8 @@
  *   - `contested[].rule` is `string | null` (Warpline's KnotRule values are legal);
  *   - five more codes (BUDGET_DENIED, PERMIT_REQUIRED, CAS_LOST, BILLING_REFUSED,
  *     MODEL_UNAVAILABLE) with their exit codes 6/2/7/8/9;
- *   - more gates: budget, billing, model, voice, link (claim already existed);
+ *   - more gates: budget, billing, model, voice, link (claim already existed),
+ *     and review, strictness (reserved M1.1, P8-D86–D88, §4.11);
  *   - an optional `data` object for refusal data (§4.9: `UNSUPPORTED{data:{offered[]}}`,
  *     `FORBIDDEN{data:{reason}}` for voice/link/presence reasons). Additive per §4.9.
  *
@@ -51,7 +52,17 @@ export const REFUSAL_CODES = [...WARPLINE_REFUSAL_CODES, ...GNOMON_ONLY_REFUSAL_
 export type RefusalCode = (typeof REFUSAL_CODES)[number];
 
 export const WARPLINE_REFUSAL_GATES = ['meaning', 'claim', 'trust', 'pick', 'transport', 'usage'] as const;
-export const REFUSAL_GATES = [...WARPLINE_REFUSAL_GATES, 'budget', 'billing', 'model', 'voice', 'link'] as const;
+export const REFUSAL_GATES = [
+  ...WARPLINE_REFUSAL_GATES,
+  'budget',
+  'billing',
+  'model',
+  'voice',
+  'link',
+  // reserved M1.1 (P8-D86–D88, §4.11): review-convergence cap and strictness levels/run modes.
+  'review',
+  'strictness',
+] as const;
 /** Additive enum (§4.9): a client renders an unknown gate opaquely. */
 export type RefusalGate = (typeof REFUSAL_GATES)[number];
 
@@ -96,6 +107,8 @@ export const VOICE_REFUSAL_REASONS = [
   'voice-focus',
   'voice-rate',
   'held',
+  // reserved M1.1 (P8-D86–D88, §4.11): the level's voice ceiling refused it (Arky's strictness-voice folds in here).
+  'voice-strictness',
 ] as const;
 
 /** Link refusal reasons (§4.6, §3.9), gate `link`. Reserved M1.1 (P8-R9). */
@@ -118,10 +131,94 @@ export const LINK_REFUSAL_REASONS = [
   'warpline-sync-absent',
 ] as const;
 
+/** Review-convergence refusal reasons (§7.3, §4.11), gate `review`. Reserved M1.1 (P8-D86–D88). */
+export const REVIEW_REFUSAL_REASONS = ['review-cap'] as const;
+
+/** Strictness refusal reasons (§3.4, §4.11), `FORBIDDEN` gate `strictness`. Reserved M1.1 (P8-D86–D88). */
+export const STRICTNESS_REFUSAL_REASONS = [
+  'strictness-presence',
+  'strictness-paused',
+  'strictness-mode',
+  'strictness-evidence',
+] as const;
+
+/** Change-note refusal reason (§3.4, §4.11): `BAD_REQUEST` (gate `usage`) on `contract.claim{op:'built'}`. Reserved M1.1. */
+export const CHANGE_NOTE_REFUSAL_REASONS = ['note-missing'] as const;
+
+/**
+ * Reasons the kernel socket emits today (M1.4: packages/gnomon/src/kernel/socket
+ * auth.ts, dispatch.ts, rpc.ts, server.ts, framing.ts, client.ts — read, not
+ * imported), routed to code + gate per §4.6/§4.9/§5. `malformed-<x>` =
+ * framing.ts's three decode failures. Orchestrator rulings (round 2): the
+ * socket code's `id`/`method`/`peer` are renamed `request-id`/`method-missing`/
+ * `peer-not-client`; `connection-closed` is client-local (client.ts synthesizes
+ * it, it never crosses the wire) and is NOT a wire reason; the
+ * not-implemented placeholders are kept as future-stable reasons.
+ */
+export const SOCKET_REASON_ROUTES: Readonly<Record<string, { code: RefusalCode; gate: RefusalGate }>> = Object.freeze({
+  // framing / request shape (server.ts, rpc.ts parseRequest) — BAD_REQUEST
+  'frame-too-large': { code: 'BAD_REQUEST', gate: 'usage' },
+  'malformed-utf8': { code: 'BAD_REQUEST', gate: 'usage' },
+  'malformed-json': { code: 'BAD_REQUEST', gate: 'usage' },
+  'malformed-not-object': { code: 'BAD_REQUEST', gate: 'usage' },
+  'jsonrpc-version': { code: 'BAD_REQUEST', gate: 'usage' },
+  'rpc-tag': { code: 'BAD_REQUEST', gate: 'usage' },
+  'request-id': { code: 'BAD_REQUEST', gate: 'usage' },
+  'method-missing': { code: 'BAD_REQUEST', gate: 'usage' },
+  // hello (auth.ts)
+  'hello-repeated': { code: 'BAD_REQUEST', gate: 'usage' },
+  'hello-params': { code: 'BAD_REQUEST', gate: 'usage' },
+  'no-shared-client-api': { code: 'UNSUPPORTED', gate: 'usage' },
+  // auth (auth.ts) — AUTH unless noted
+  'already-authenticated': { code: 'AUTH', gate: 'transport' },
+  'no-hello': { code: 'AUTH', gate: 'transport' },
+  'nonce-used': { code: 'AUTH', gate: 'transport' },
+  'nonce-expired': { code: 'AUTH', gate: 'transport' },
+  'auth-params': { code: 'AUTH', gate: 'transport' },
+  'token-not-implemented': { code: 'UNSUPPORTED', gate: 'usage' },
+  'web-auth-not-implemented': { code: 'UNSUPPORTED', gate: 'usage' },
+  'replayed-transcript': { code: 'AUTH', gate: 'transport' },
+  'foreign-principal': { code: 'AUTH', gate: 'transport' },
+  'root-unprovisioned': { code: 'AUTH', gate: 'transport' },
+  'unknown-device': { code: 'AUTH', gate: 'transport' },
+  'principal-mismatch': { code: 'AUTH', gate: 'transport' },
+  'peer-not-client': { code: 'AUTH', gate: 'transport' },
+  'bad-signature': { code: 'AUTH', gate: 'transport' },
+  // dispatch (dispatch.ts)
+  'unknown-verb': { code: 'UNKNOWN_VERB', gate: 'usage' },
+  unauthenticated: { code: 'AUTH', gate: 'transport' },
+  matrix: { code: 'FORBIDDEN', gate: 'transport' },
+  'not-implemented': { code: 'ENGINE', gate: 'transport' },
+  'log-write-failed': { code: 'ENGINE', gate: 'transport' },
+  // server internals (server.ts)
+  'response-too-large': { code: 'ENGINE', gate: 'transport' },
+  internal: { code: 'ENGINE', gate: 'transport' },
+});
+export const SOCKET_REFUSAL_REASONS = Object.freeze(Object.keys(SOCKET_REASON_ROUTES)) as readonly string[];
+
 /** Other named reasons the spec uses (§3.4: `FORBIDDEN{reason:'presence'}`). */
 export const OTHER_REFUSAL_REASONS = ['presence'] as const;
 /** Additive: a client renders an unknown reason opaquely. */
-export const REFUSAL_REASONS = [...VOICE_REFUSAL_REASONS, ...LINK_REFUSAL_REASONS, ...OTHER_REFUSAL_REASONS] as const;
+export const REFUSAL_REASONS = [
+  ...VOICE_REFUSAL_REASONS,
+  ...LINK_REFUSAL_REASONS,
+  ...REVIEW_REFUSAL_REASONS,
+  ...STRICTNESS_REFUSAL_REASONS,
+  ...CHANGE_NOTE_REFUSAL_REASONS,
+  ...OTHER_REFUSAL_REASONS,
+  ...(SOCKET_REFUSAL_REASONS as readonly string[]),
+] as readonly string[];
+
+/** Which gate (and code) each reserved P8-D86–D88 reason rides on (§4.11). */
+export const RESERVED_REASON_ROUTES: Readonly<Record<string, { code: RefusalCode; gate: RefusalGate }>> = Object.freeze({
+  'review-cap': { code: 'FORBIDDEN', gate: 'review' },
+  'strictness-presence': { code: 'FORBIDDEN', gate: 'strictness' },
+  'strictness-paused': { code: 'FORBIDDEN', gate: 'strictness' },
+  'strictness-mode': { code: 'FORBIDDEN', gate: 'strictness' },
+  'strictness-evidence': { code: 'FORBIDDEN', gate: 'strictness' },
+  'voice-strictness': { code: 'FORBIDDEN', gate: 'voice' },
+  'note-missing': { code: 'BAD_REQUEST', gate: 'usage' },
+});
 
 export interface RefusalContested {
   stableKey: string;

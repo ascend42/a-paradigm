@@ -11,8 +11,10 @@
  * kit change moves clientApiId), separated by "\n" so the boundary is
  * unambiguous. CLIENT_API_DESCRIPTOR is the frozen client surface: the 12
  * verbs + 2 relays (full descriptors), the JSON-RPC code map, the additive enum
- * table, and every client JSON Schema this package publishes (which embed the
- * event-kind registry, ref schemes, refusal/card enums and the hello shape).
+ * table, every client JSON Schema this package publishes (which embed the
+ * event-kind registry, ref schemes, refusal/card enums, the hello shape and
+ * review-finding:v1 / change-note:v1), and the M1.1 reservations that have no
+ * schema yet (verb param values, content parts, status fields).
  * A change to any of them moves clientApiId; `modAbiId` is NOT an input
  * (a mod-ABI change never churns clients, A24-2).
  *
@@ -22,7 +24,7 @@
  */
 
 import { canonicalJson, deepFreeze, hex, sha256 } from './internal.js';
-import { VERBS, CLIENT_RELAYS, ADDITIVE_ENUMS, GNOMON_RPC_V1 } from './rpc.js';
+import { VERBS, CLIENT_RELAYS, ADDITIVE_ENUMS, GNOMON_RPC_V1, FAIL_SAFE_VALUES, VERB_PARAM_VALUES, RESERVED_CONTENT_PARTS, STATUS_RESERVED_FIELDS } from './rpc.js';
 import { JSON_RPC_CODES } from './refusal.js';
 import { CONTRACT_SCHEMAS } from './schemas.js';
 
@@ -49,6 +51,11 @@ export const CLIENT_API_DESCRIPTOR = deepFreeze({
   jsonRpcCodes: JSON_RPC_CODES,
   additiveEnums: ADDITIVE_ENUMS,
   schemas: CONTRACT_SCHEMAS,
+  // M1.1 reservations that live outside a JSON Schema (§4.11, §19.1 M1.1).
+  verbParamValues: VERB_PARAM_VALUES,
+  contentParts: RESERVED_CONTENT_PARTS,
+  statusFields: STATUS_RESERVED_FIELDS,
+  failSafe: FAIL_SAFE_VALUES,
 });
 
 export function computeKitId(kit: unknown = KIT_V1_DESCRIPTOR): string {
