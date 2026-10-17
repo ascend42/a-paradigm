@@ -1,0 +1,22 @@
+id: L-2026-10-17-ascend-074909-001
+type: human-note
+timestamp: '2026-10-17T07:49:09.207Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Move 1 begins: feat/gnomon branched; Arky + Aegis planning kickoff and M1.0 probes'
+summary: 'The founder chose "branch + team plan". feat/gnomon was created from ideate/paradigm-8 at 9e99e8d7. The Workshop defaults to the footer, with the vertical placements as layout presets. Arky (research 29) is planning the package scaffold, the M1.0 probe breakdown, Windows CI from day one and the first PR-sized steps. Aegis (research 30) is planning the security-critical M1.0 probes with pass/fail criteria and spec fallbacks. Next: save both, get founder rulings on any blockers, then scaffold and run the probes.'
+symbols_touched:
+  - '#paradigm-harness'
+tags:
+  - paradigm-8
+  - gnomon
+  - move-1
+  - state
+linked_lore:
+  - L-2026-10-17-ascend-074722-001
+git_context:
+  ref: 9e99e8d727ecab3d636d7dc8463b789b4262302f
+  branch: feat/gnomon
+  dirty: true
