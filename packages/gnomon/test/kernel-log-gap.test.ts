@@ -403,9 +403,8 @@ describe('G-LOG-11: an anchor ahead of the db is classified, never downgraded (S
   });
 
   it('round 3 (reviewer A): an acknowledgeGap interrupted between the gap-row commit and the keystore write is re-anchored on open (one row lost)', async () => {
-    const { home, ks } = await crashedAfterCritical();
-    // re-shape to the ONE-row-lost case: restore rows 5..6, then lose only row 6
-    rmSync(home, { recursive: true, force: true });
+    // the ONE-row-lost case, built directly (deleting a still-open "crashed"
+    // log's home is refused on Windows, and that setup was unused)
     const h = tmpHome();
     const ks2 = memKeystore();
     const w = KernelLog.open(base(h, ks2, BOOT_A));
@@ -413,7 +412,6 @@ describe('G-LOG-11: an anchor ahead of the db is classified, never downgraded (S
     for (let i = 0; i < 5; i++) await w.append({ kind: 'session.open', principal: KERNEL, session: HSID, payload: { i } });
     const lost = await w.append({ kind: 'approval.decide', principal: KERNEL, payload: { decision: 'allow' } }); // seq 6
     loseTail(h, 5);
-    void ks;
     const rec = openLog(h, ks2, BOOT_B, true);
     expect(rec.report.integrity).toMatchObject({ state: 'truncated', cause: 'unclean-reboot', lostFrom: 6, lostTo: 6 });
     ks2.down = true; // interrupted: the gap row commits, the keystore write never lands
