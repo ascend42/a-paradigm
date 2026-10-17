@@ -1,0 +1,37 @@
+id: L-2026-10-17-ascend-084053-001
+type: human-note
+timestamp: '2026-10-17T08:40:53.681Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Founder approved live Claude-in-sandbox test on subscription; next steps owed to the founder listed
+summary: |-
+  The founder approved running the Claude-compat check on their subscription (two short turns). Method:
+  - The same `claude -p` turn runs unsandboxed as a control and under the hardened macOS session profile (§15.5 plus the sysmond mach-lookup deny and the tmux unix-socket deny).
+  - The model only runs check.sh; ground truth is the script's own out.txt.
+  - Criteria: Claude authenticates and answers; Bash can write in the workdir, spawn/kill a child, and run node. Under the sandbox, the stand-in endpoint port is unreachable, pgrep sees nothing, and the denied dir is unwritable.
+
+  Probe: packages/gnomon/probes/p10m-claude-compat.
+
+  Still owed by the founder:
+  - relay host (OPEN 16);
+  - whether the LaunchServices `open` escape is accepted as a residual covered by presence;
+  - the Developer ID provisioning profile for gnomon.helper;
+  - the App Store Connect API key plus `notarytool store-credentials gnomon-notary`;
+  - Windows PC setup (Hello, standard user, access).
+symbols_touched:
+  - '#gnomon-probes'
+  - '#paradigm-harness'
+tags:
+  - paradigm-8
+  - gnomon
+  - move-1
+  - probes
+  - state
+linked_lore:
+  - L-2026-10-17-ascend-083200-001
+git_context:
+  ref: 77357bc2118f63c0bbcbbfa0e3de23b9f36b5997
+  branch: feat/gnomon
+  dirty: true
