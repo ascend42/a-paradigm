@@ -69,6 +69,49 @@ boards:
       notes:
         - "i like the idea of flying in pieces of paper and chips for decisions that pile up like a stack of decisions and maybe looking between them in case anohter decision matters to hit first, but in the chats it makes sense to see the decisions that pertain to that specific project, probably want a left side bar of active/past chats and making new sessions"
         - "lets be tasteful with the header and footer and side bars / mod utilization so that people can see what is necessary/helpful, access anything easily, and can reorganize to their pref"
-status: paused
+  - id: colour
+    question: "How do project hues, failure and warning work across papercraft (day) and phosphor (night)?"
+    options:
+      - { id: pigment-set, label: "Pigment set", recommended: true, why: "keeps the soft project hues from the Workshop note while every text use passes AA through ink pairs" }
+      - { id: two-ink, label: "Two-ink restraint" }
+      - { id: sundial-wheel, label: "Sundial wheel" }
+    references_rendered: [colour]
+    decision: { kind: pick, choice: pigment-set, decided_by: creator }
+  - id: type
+    question: "How do papercraft (day) and phosphor (night) set text?"
+    options:
+      - { id: serif-day-mono-night, label: "Serif day, mono night", recommended: true, why: "each mode fully coherent" }
+      - { id: mono-spine, label: "Mono spine, both modes" }
+      - { id: one-sans, label: "One sans, both modes" }
+    references_rendered: [type]
+    decision: { kind: pick, choice: "mono-spine + JetBrains Mono everywhere", decided_by: creator, note: "departs from Luna's recommendation on both facets" }
+  - id: motion
+    question: "How do decisions, failures and the Workshop move?"
+    options:
+      - { id: paper-physics, label: "Paper physics, events only", recommended: true, why: "keeps the calm register while honouring the paper fly-in" }
+      - { id: ink-only, label: "Ink only" }
+      - { id: lively-workshop, label: "Lively workshop" }
+    references_rendered: [motion]
+    decision: { kind: pick, choice: lively-workshop, decided_by: creator }
+  - id: cli-voice
+    question: "How does gnomon talk in the terminal?"
+    options:
+      - { id: instrument-readout, label: "Instrument readout", recommended: true, why: "matches the instrument read and refusal:v1 next[] teaching" }
+      - { id: workshop-narrator, label: "Workshop narrator" }
+      - { id: ledger-log, label: "Ledger log" }
+    references_rendered: []
+    decision: { kind: pick, choice: instrument-readout, decided_by: creator }
+  - id: decision-stack-and-sidebar
+    question: "Where do the decision stack, chats and sessions live?"
+    options:
+      - { id: desk, label: "Desk", recommended: true, why: "chat, per-project cards and the global stack all visible at once; matches both decisions-and-navigation notes" }
+      - { id: inbox-first, label: "Inbox-first" }
+      - { id: overlay-stack, label: "Overlay stack" }
+    references_rendered: [layout]
+    decision: { kind: pick, choice: desk, decided_by: creator, notes: ["desk is totally it"] }
+status: closed
+closed: 2026-10-17
+direction: refs/direction.html
+direction_approved: "so far this looks right"
 paused_for: "deep UX-design research for the agent team and neurons (founder has links)"
-open_boards: [colour (soft project hues + failure colour), type (papercraft serif vs all-mono), motion (incl. paper fly-in for decisions), cli-voice, decision-stack + left session sidebar render]
+open_boards: []
