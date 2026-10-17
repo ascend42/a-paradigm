@@ -133,7 +133,7 @@ gnomon:
       left: "sessions: + New (⌘N), Active grouped with project swatch + state note (needs you / failed / streaming), Past collapsed"
       centre: "the chat: per-message timestamps, 'took Ns' durations, collapsible activity history; that project's pending cards pinned above the composer"
       right: "global decision stack as a paper pile, sorted by urgency; hover fans it out to compare and pick which to hit first"
-      footer: "Workshop mod: Needs you | Working caps"
+      footer: "Workshop mod: Needs you | Working caps (default placement: footer; vertical right/left edge available as layout presets; founder 2026-10-17, ref refs/workshop-placement.html)"
     rules:
       - "Every panel (sidebar, stack rail, Workshop) can be hidden or moved via ⊞ Layout; the choice persists per viewer"
       - "A card appears both in the global stack and pinned in its own session's chat; deciding it in either place removes it from both"
