@@ -232,13 +232,20 @@ components:
       boot, stub/absent/malformed/pre-D83/closed keystore, closed file anchor;
       pre-D83 ⇒ relax boot-unknown) refuses anchor-lag with `data.relax`
       naming why. The file anchor's own boot is never consulted. A relaxed
-      lag defers every open-time anchor write (file rewrite, rotation
-      completion, marker/keystore-lag re-anchor) until the signed row is
-      committed (evidence first). S34-24: keystore anchor ahead + any file
+      lag defers every open-time anchor write (file rewrite,
+      marker/keystore-lag re-anchor) until the signed row is committed
+      (evidence first); rotation completion runs first but writes no anchor. S34-24: keystore anchor ahead + any file
       lag ⇒ truncated (cause from the keystore boot); the file anchor still
       gets the hash and clean-close checks, only the > 63 bound is skipped,
       and its lag is TruncationReport.fileLag and daemon.log.gap.fileLag
-      (additive).
+      (additive). S34-30 CHECKS BEFORE WRITES: on open every integrity check
+      (file anchor + lag bounds / relax, keystore anchor + clean-close lag,
+      keyless refusals for the open-time marker / keystore-lag rows) runs
+      before the first anchor write, rotation completion or row append; a
+      crashed rotation is completed with NO anchor writes (the file rewrite
+      and the closing keystore re-stamp anchor the head), so a refused open
+      leaves both anchors byte-for-byte as found and no queued keystore write
+      lands after the throw.
       `forcedAnchorRate` / `anchorStatus` = status.log telemetry (forced
       anchors per row over the last 10⁴ rows; > 1/64 = outside the measured
       envelope). Open refuses INTEGRITY_BROKEN on missing-db (with anchor,
@@ -283,6 +290,7 @@ components:
       - test/kernel-log-posix.test.ts
       - test/kernel-log-gap.test.ts
       - test/kernel-log-crossboot.test.ts
+      - test/kernel-log-open-order.test.ts
       - test/boot-session.test.ts
       - test/durable-fs.test.ts
     oracles: [G-LOG-01, G-LOG-02, G-LOG-03, G-LOG-04, G-LOG-06, G-LOG-07, G-LOG-08, G-LOG-09, G-LOG-10, G-LOG-11]

@@ -119,6 +119,13 @@
  * that would reach the segment boundary, or an open that would have to record
  * one, is refused BEFORE any commit with FORBIDDEN{kernel-key-required}.
  *
+ * CHECKS BEFORE WRITES (S34-30): on open, every integrity check (file anchor
+ * + lag bounds, keystore anchor + clean-close lag, keyless refusals for the
+ * open-time rows) completes before the first anchor write, rotation
+ * completion or row append. Completing a crashed rotation on open writes no
+ * anchor (the file rewrite and the closing re-stamp anchor the head), so no
+ * queued keystore write can land after a refusal and overwrite the evidence.
+ *
  * KNOWN GAPS — DECIDED:
  *   (a) DECIDED P8-D84: accepted dev-only until T-2026-10-17-009. With the
  *       stub keystore (until M1.3) there is no authoritative boot, so every
@@ -144,8 +151,9 @@
  *       malformed; a pre-D83 anchor without boot (relax: boot-unknown);
  *       keystore closed; a file anchor marked closed with any lag. The file
  *       anchor's own `boot` is never consulted. A relaxed lag defers every
- *       open-time anchor write (file rewrite, rotation, marker/keystore-lag
- *       re-anchor) until the signed row is committed. S34-24: when the
+ *       open-time anchor write (file rewrite, marker/keystore-lag re-anchor)
+ *       until the signed row is committed; rotation completion runs before
+ *       the row but writes no anchor. S34-24: when the
  *       KEYSTORE anchor is ahead, the open classifies `truncated` (cause from
  *       the keystore boot) whatever the file lag: the file anchor still gets
  *       the hash and clean-close checks, only the > 63 bound is skipped, and
@@ -669,13 +677,43 @@ export class KernelLog {
         return { created, recoveredRotation, anchorLag, keystoreLag, anchors: recoveryAnchors, boot, integrity: { state: 'truncated', ...t } };
       }
     }
+    // S34-30: EVERY open-time integrity check runs BEFORE the first anchor
+    // write, rotation completion or row append, so a refusal leaves both
+    // anchors (the evidence) exactly as found — no write is queued that could
+    // land after the throw. Checks, in refusal-precedence order: the file
+    // anchor against the db as found (and its lag bounds / P8-D85 relax), the
+    // keystore anchor (hash at its seq, not ahead, clean-close lag), then the
+    // keyless refusals for the open-time rows (markers, keystore-lag row).
+    if (!created) {
+      anchorLag = this.#checkAnchor(anchorRead, 'file');
+      fileLagRelaxed = this.#checkFileLag(anchorRead, anchorLag, ks);
+    }
+    const ksChecked = ks.state !== 'unavailable' && !(ks.state === 'absent' && created);
+    if (ksChecked) {
+      keystoreLag = this.#checkAnchor(ks, 'keystore'); // ahead ⇒ truncated
+      this.#checkKeystoreCloseLag(ks, keystoreLag);
+    }
+    // S34-17: critical rows above the keystore anchor whose anchoring never completed (scan only; marked below).
+    const unmarked = ks.state === 'present' && keystoreLag > 0 ? this.#unanchoredCriticals(ks.head.seq) : [];
+    if (unmarked.length && !this.#opts.signer) {
+      throw keyRequired('daemon.anchor.failed', `${unmarked.length} critical row(s) above the keystore anchor need a daemon.anchor.failed marker`);
+    }
+    if (keystoreLag > KEYSTORE_ANCHOR_MAX_LAG && !this.#opts.signer) {
+      throw keyRequired('daemon.anchor.lag', `the keystore anchor lags by ${keystoreLag} rows (> ${KEYSTORE_ANCHOR_MAX_LAG})`);
+    }
+
+    /* ── every check passed: writes from here on ── */
+    if (this.#tip.kind === 'daemon.segment') {
+      // crashed after the closing row, before the rename: finish the rotation
+      // WITHOUT anchor writes (S34-30; P8-D85) — the file write below and the
+      // re-stamp at the end anchor the head.
+      this.#finishRotation(false);
+      recoveredRotation = true;
+    }
     if (created) {
       this.#fileAnchor.write(this.#headAnchor(), true);
       anchors.file = 'created';
     } else {
-      // check the anchor against the db as found, BEFORE completing any rotation
-      anchorLag = this.#checkAnchor(anchorRead, 'file');
-      fileLagRelaxed = this.#checkFileLag(anchorRead, anchorLag, ks);
       if (anchorLag > 0) {
         anchors.file = 'lagging-repaired';
         this.#diag('anchor.lag.repaired', { lag: anchorLag });
@@ -688,23 +726,13 @@ export class KernelLog {
       // never into a clean open with no row). The write after the row covers it.
       if (!fileLagRelaxed) this.#fileAnchor.write(this.#headAnchor(), true);
     }
-    if (this.#tip.kind === 'daemon.segment') {
-      // crashed after the closing row, before the rename: finish the rotation
-      // (P8-D85: without its anchor writes while a relaxed lag is unrecorded).
-      this.#finishRotation(!fileLagRelaxed);
-      recoveredRotation = true;
-    }
     if (ks.state === 'unavailable') anchors.keystore = 'unavailable';
     else if (ks.state === 'absent' && created) anchors.keystore = 'created';
     else {
-      keystoreLag = this.#checkAnchor(ks, 'keystore'); // ahead ⇒ truncated
-      this.#checkKeystoreCloseLag(ks, keystoreLag);
       anchors.keystore = keystoreLag > 0 ? 'lagging-repaired' : 'ok';
-      // S34-17: critical rows above the keystore anchor whose anchoring never completed get their marker now.
-      const marked = ks.state === 'present' && keystoreLag > 0 ? this.#markUnanchoredCriticals(ks.head.seq) : 0;
+      const marked = this.#markUnanchoredCriticals(unmarked);
       if (keystoreLag > KEYSTORE_ANCHOR_MAX_LAG) {
-        // S33-07: beyond the keystore cadence — record it (shown in status); kernel-signed (sig-mandatory, S34-06).
-        if (!this.#opts.signer) throw keyRequired('daemon.anchor.lag', `the keystore anchor lags by ${keystoreLag} rows (> ${KEYSTORE_ANCHOR_MAX_LAG})`);
+        // S33-07: beyond the keystore cadence — record it (shown in status); kernel-signed (sig-mandatory, S34-06; keyless refused above).
         this.#appendRow({ kind: 'daemon.anchor.lag', principal: this.#opts.kernelPrincipal, payload: { rows: keystoreLag, which: 'keystore' } });
         this.#diag('anchor.keystore.lag', { rows: keystoreLag });
       }
@@ -736,7 +764,7 @@ export class KernelLog {
     return { created, recoveredRotation, anchorLag, keystoreLag, anchors, boot, integrity: { state: 'ok' } };
   }
 
-  /** Any lag behind a clean-close FILE anchor ⇒ anchor-lag (secondary to the keystore check; never relaxed). */
+  /** Any lag behind a clean-close FILE anchor ⇒ anchor-lag (never relaxed). Inside #truncation it runs after the keystore check; on the main open path it runs before the keystore checks. */
   #checkFileCloseLag(a: AnchorReadResult, lag: number): void {
     if (lag > 0 && a.state === 'present' && a.head.closed) {
       throw logRefusal('INTEGRITY_BROKEN', 'anchor-lag', `the file anchor lags the log by ${lag} rows after a clean close`, { anchor: 'file', lag, cleanClose: true });
@@ -823,10 +851,11 @@ export class KernelLog {
    * S34-17 (open): every CRITICAL row above `ksSeq` (the keystore anchor) that
    * has no `daemon.anchor.failed` marker never had its keystore write complete
    * (crash between COMMIT and the write): its append never resolved, so its
-   * effect was never released. Record one kernel-signed marker per such row.
-   * Returns the number of markers appended.
+   * effect was never released. Returns those rows (a pure scan — S34-30: it
+   * runs with the open-time checks, before any write; #markUnanchoredCriticals
+   * records one kernel-signed marker per row afterwards).
    */
-  #markUnanchoredCriticals(ksSeq: number): number {
+  #unanchoredCriticals(ksSeq: number): Array<{ seq: number; kind: string }> {
     const criticals: Array<{ seq: number; kind: string }> = [];
     const marked = new Set<number>();
     for (const seg of this.segments()) {
@@ -846,7 +875,11 @@ export class KernelLog {
         if (seg.sealed) db.close();
       }
     }
-    const missing = criticals.filter((c) => !marked.has(c.seq));
+    return criticals.filter((c) => !marked.has(c.seq));
+  }
+
+  /** S34-17 (open, after every check passed): append one kernel-signed marker per row from #unanchoredCriticals. Returns the count. */
+  #markUnanchoredCriticals(missing: Array<{ seq: number; kind: string }>): number {
     if (!missing.length) return 0;
     if (!this.#opts.signer) throw keyRequired('daemon.anchor.failed', `${missing.length} critical row(s) above the keystore anchor need a daemon.anchor.failed marker`);
     for (const c of missing) {
