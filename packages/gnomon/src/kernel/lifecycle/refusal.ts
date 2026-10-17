@@ -1,4 +1,6 @@
 /**
+ * @symbol $daemon-lifecycle
+ *
  * $daemon-lifecycle (spec §2.4) — the lifecycle's local refusal error.
  *
  * A local, minimal shape on purpose: `refusal:v1` is being rewritten in

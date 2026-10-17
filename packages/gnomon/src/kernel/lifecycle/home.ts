@@ -1,4 +1,6 @@
 /**
+ * @symbol $daemon-lifecycle
+ *
  * $daemon-lifecycle (spec §2.4, M1.9 "home dir creation with the owner-only
  * ACL read back") — where the per-user kernel lives.
  *

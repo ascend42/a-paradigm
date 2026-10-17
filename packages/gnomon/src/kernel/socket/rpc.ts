@@ -1,4 +1,6 @@
 /**
+ * @symbol #socket
+ *
  * #socket (spec §4.9) — the minimal, LOCAL `gnomon-rpc:v1` frame shapes PR-5
  * needs. Deliberately not imported from @a-company/gnomon-contracts: the
  * contracts are being rewritten in parallel (PR-3); M1.4 swaps these for the

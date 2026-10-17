@@ -4,3 +4,4 @@
  */
 export { GNOMON_VERSION } from './version.js';
 export { KERNEL_MODULES, KERNEL_ALLOWED_PACKAGE, type KernelModule } from './kernel/index.js';
+export * as kernelLog from './kernel/log/index.js';

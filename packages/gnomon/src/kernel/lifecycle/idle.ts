@@ -1,4 +1,6 @@
 /**
+ * @symbol $daemon-lifecycle
+ *
  * $daemon-lifecycle (spec §2.4 rule 3) — idle exit. No live sessions ∧ no
  * subscribers ⇒ exit after `idleMs`. PR-5 has neither sessions nor mods nor
  * timers yet, so the holders are open #socket connections (a stand-in for

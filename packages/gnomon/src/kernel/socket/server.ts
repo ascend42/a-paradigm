@@ -1,4 +1,6 @@
 /**
+ * @symbol #socket
+ *
  * #socket (spec §4.9, §2.4 rule 1, G-DMN-02) — the unix-socket server.
  *
  * Binds under a 0177 umask, chmods 0600 and READS THE MODE BACK (owner, socket

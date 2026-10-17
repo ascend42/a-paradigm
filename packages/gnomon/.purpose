@@ -38,13 +38,22 @@ components:
       #approval-broker, M1.6). Lifecycle events are emitted to a callback using
       the spec §9.1 kinds daemon.start, daemon.exit{reason}, daemon.lock.refused
       (the kernel log takes them at M1.2); the spec declares no signals.
+      SYMBOL CONVENTION (P8-D81, test/symbols-drift.test.ts): every source
+      module names the symbol(s) it implements in its header (first 40 lines),
+      one `@symbol <id>` per line, using the spec Appendix A id verbatim where
+      the spec has one (e.g. `@symbol #kernel-log`, `@symbol $daemon-lifecycle`).
+      Every .ts under src/kernel/** must carry a tag; every tag must be
+      declared in a packages/gnomon*/.purpose; every declared symbol must be an
+      Appendix A node or be listed in test/symbol-allowlist.json with a reason.
     path: src/
     type: module
     tags: [gnomon, kernel, paradigm-8, scaffold]
     components:
       - "#gnomon-probes"
       - "#socket"
+      - "#kernel-log"
     tests:
+      - test/symbols-drift.test.ts
       - test/fence.test.ts
       - test/sec-01.test.ts
       - test/platform-registry.test.ts
@@ -103,6 +112,51 @@ components:
       - test/socket-server.test.ts
     oracles: [G-DMN-02]
 
+  kernel-log:
+    description: >-
+      #kernel-log (spec §3.2, M1.2; research 29 §4 PR-4) — the one
+      hash-chained, append-only, segmented kernel log. node:sqlite; active
+      segment <home>/kernel.db, sealed segments <home>/log/segments/NNNNNN.db
+      (0600, dirs 0700); `chain` table per §3.2 plus a write-once `meta`;
+      BEFORE UPDATE/DELETE triggers abort (L1). hash = sha256(canonical(envelope
+      minus hash, sig)), prev(1) = sha256("gnomon-log-genesis:" + logId), seq
+      computed inside the write txn and checked against the in-memory tip.
+      Envelope = contracts event:v1, validated strict with default-label check;
+      unregistered kinds refused (never guessed), labels tighten-only (L6),
+      kernel/userland ownership enforced (L7), daemon.segment reserved to the
+      log, session.inject must carry {origin, hash, bytes}. Signer seam
+      (signer.ts): Signer.sign(domain, message) prepends the §3.1 domain
+      (gnomon:event-sig:v1 etc.), key classes limited to their domains;
+      SoftwareEd25519Signer = the in-memory kernel key (keyId
+      gkey:v1:<sha256(spki PEM)>); root/approvals keys are hardware-only and
+      plug in after probes P04/P02; KeyRing verifies Ed25519 and P-256.
+      Unsigned rows only for daemon/socket/schedule; the §3.2 mandatory list
+      refuses unsigned (unsigned-mandatory). Segments rotate at 10⁶ rows with a
+      signed daemon.segment closing row and an unbroken chain across files;
+      crash mid-rotation is completed on open. Anchors: file <home>/head
+      (atomic tmp+rename; fsync only at genesis/rotation/close) and a
+      KeystoreAnchorStore SEAM that reports `unavailable` until the helper
+      exists. Open refuses INTEGRITY_BROKEN on missing-db (with anchor, sealed
+      segment or keys present), truncated, anchor-mismatch, anchor-missing;
+      a lagging anchor is accepted only as a chain prefix and repaired. Fsync
+      policy: WAL + synchronous=FULL (default 'process-crash'); 'power-loss'
+      adds fullfsync (~10 ms/commit on Apple SSD, above the 5 ms falsifier).
+      verify(): full chain (segment links, genesis, anchors) or one segment;
+      detects tamper, re-hash forgery, truncation, reorder, stripped or bad
+      signatures, unknown keys, relaxed labels. read(): §9.3 projection per
+      reader class (human, read-token, community-client, session, mod, peer;
+      agent/voice refuse UNSUPPORTED pending M1.7/M4.x). Not yet: async
+      hardware signers, helper anchor, blobs/TTL pruning, projections tables,
+      wiring $daemon-lifecycle events into the log.
+    path: src/kernel/log/
+    type: module
+    tags: [gnomon, kernel, log, paradigm-8, pr-4, m1.2]
+    aspects: ["~ample-internal-logs"]
+    tests:
+      - test/kernel-log.test.ts
+      - test/kernel-log-posix.test.ts
+    oracles: [G-LOG-01, G-LOG-02, G-LOG-03, G-LOG-04, G-LOG-06, G-LOG-07, G-LOG-08, G-LOG-09]
+
 flows:
   daemon-lifecycle:
     description: >-
@@ -120,3 +174,24 @@ flows:
     steps:
       - "#gnomon-kernel"
       - "#socket"
+
+aspects:
+  ~ample-internal-logs:
+    description: >-
+      ~ample-internal-logs (spec §9) — everything the kernel does is an event:v1
+      row in #kernel-log with the §9.1 default labels set by the appender
+      (audience private; turn.event bodies, session.inject bytes,
+      approval.request.tool_input, oracle evidence and voice text sensitive;
+      a kind without a default is refused, G-LOG-09), and every read goes
+      through the §9.3 redaction matrix (stubs {kind, hsid, at, hash} for
+      redacting readers, secret never to a read token, nothing to a peer).
+      PR-4 covers the label and read-projection halves; retention/TTL
+      pruning (§9.4), status metrics (§9.6) and the honesty CI (§9.7) follow.
+    category: observability
+    severity: high
+    tags: [gnomon, logging, redaction, paradigm-8]
+    anchors:
+      - src/kernel/log/chain.ts
+      - src/kernel/log/redaction.ts
+    applies-to:
+      - "#kernel-log"

@@ -1,4 +1,6 @@
 /**
+ * @symbol #gnomon-kernel
+ *
  * Gnomon kernel (spec §2.1, §3, §18). PR-0 scaffold: no primitives yet.
  *
  * IMPORT FENCE (G-KRN-02, test/fence.test.ts): every import under src/kernel/**

@@ -1,4 +1,6 @@
 /**
+ * @symbol $daemon-lifecycle
+ *
  * $daemon-lifecycle (spec §2.4 rule 2, §15.3, S-H3) — the clean re-exec env.
  *
  * The activator's environment never reaches the key-holding process: the

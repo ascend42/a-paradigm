@@ -1,4 +1,6 @@
 /**
+ * @symbol #socket
+ *
  * #socket (spec §4.9) — length-safe NDJSON framing for `gnomon-rpc:v1`.
  *
  * One JSON object per `\n`-terminated line, at most 4 MiB per frame; a longer

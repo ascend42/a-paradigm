@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-17T17:29:25.300Z'
+generated: '2026-10-17T18:03:13.121Z'
 structure: {}
 key_files:
   config:
@@ -263,6 +263,7 @@ symbols:
   '#purpose-component-gnomon-kernel': packages/gnomon/
   '#purpose-component-gnomon-probes': packages/gnomon/
   '#purpose-component-socket': packages/gnomon/
+  '#purpose-component-kernel-log': packages/gnomon/
   '#purpose-component-paradigm-logger': packages/logger/
   '#purpose-component-symbol-logger': packages/logger/
   '#purpose-component-formatter-pretty': packages/logger/
@@ -1099,6 +1100,7 @@ symbols:
   '@purpose-aspect-user-configurable': packages/conductor/
   '@purpose-aspect-jsonl-compatible': packages/conductor/Sources/Conductor/Symphony/
   '@purpose-aspect-file-safety': packages/conductor/Sources/Conductor/Symphony/
+  '@purpose-aspect-ample-internal-logs': packages/gnomon/
   '@purpose-aspect-log-level-env-resolution': packages/logger/
   '@purpose-aspect-format-auto-detection': packages/logger/
   '@purpose-aspect-symbol-auto-prefix-normalization': packages/logger/
@@ -1307,7 +1309,6 @@ symbols:
   '!purpose-ref-signal-claude-interrupt.': packages/conductor/
   '#purpose-ref-component-FF6B6B': packages/conductor/
   '#purpose-ref-component-F2B765': packages/conductor/
-  '#purpose-ref-component-kernel-log': packages/gnomon-contracts/
   '@purpose-ref-aspect-ample-internal-logs.': packages/gnomon-contracts/
   '#purpose-ref-component-identity.': packages/gnomon-contracts/
   '#purpose-ref-component-identity': packages/gnomon-contracts/

@@ -1,0 +1,17 @@
+{
+  "$comment": "P8-D81 symbol drift allowlist (test/symbols-drift.test.ts). A symbol declared in a packages/gnomon*/.purpose file that is NOT a spec Appendix A node (docs/specs/gnomon.md) must be listed here with a reason. Spec ids are never listed (the test refuses redundant entries), and an entry whose symbol is no longer declared anywhere fails as stale.",
+  "entries": [
+    { "symbol": "#gnomon-contracts", "reason": "package-level component of @a-company/gnomon-contracts; spec §18 names packages, not nodes" },
+    { "symbol": "#gnomon-helper", "reason": "package-level component of @a-company/gnomon-helper (the signed helper); spec §18 names packages, not nodes" },
+    { "symbol": "#gnomon-wrapper", "reason": "package-level component of @a-company/gnomon-wrapper; Appendix A notes: gnomon-wrapper is a package, not a symbol" },
+    { "symbol": "#gnomon-probes", "reason": "M1.0 probe harness (§19.1 probe table); Appendix A notes: the probe table names no node span on purpose" },
+    { "symbol": "#contract-event-v1", "reason": "contract sub-component of #gnomon-contracts; spec has no node" },
+    { "symbol": "#contract-ids", "reason": "contract sub-component of #gnomon-contracts; spec has no node" },
+    { "symbol": "#contract-principal", "reason": "contract sub-component of #gnomon-contracts; spec has no node" },
+    { "symbol": "#contract-ref-v1", "reason": "contract sub-component of #gnomon-contracts; spec has no node" },
+    { "symbol": "#contract-refusal-v1", "reason": "contract sub-component of #gnomon-contracts; spec has no node" },
+    { "symbol": "#contract-card-v1", "reason": "contract sub-component of #gnomon-contracts; spec has no node" },
+    { "symbol": "#contract-gnomon-rpc-v1", "reason": "contract sub-component of #gnomon-contracts; spec has no node" },
+    { "symbol": "#contract-client-api-id", "reason": "contract sub-component of #gnomon-contracts; spec has no node" }
+  ]
+}

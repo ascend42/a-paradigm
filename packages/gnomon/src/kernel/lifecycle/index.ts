@@ -1,3 +1,4 @@
+/** @symbol $daemon-lifecycle */
 /** $daemon-lifecycle (spec §2.4) — PR-5 core. */
 export * from './refusal.js';
 export * from './home.js';

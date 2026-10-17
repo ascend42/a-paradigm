@@ -1,4 +1,6 @@
 /**
+ * @symbol $daemon-lifecycle
+ *
  * $daemon-lifecycle (spec §2.4) — the PR-5 core: home (0700, read back) →
  * endpoint path (never /tmp) → O_EXCL pidfile lock → #socket at 0600 → idle
  * monitor. Exit paths (idle, signal) close the socket and release the lock

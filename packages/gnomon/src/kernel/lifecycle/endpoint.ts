@@ -1,4 +1,6 @@
 /**
+ * @symbol $daemon-lifecycle
+ *
  * $daemon-lifecycle (spec §2.4 rule 1) — the kernel endpoint path for #socket.
  *
  * `<home>/gnomon.sock`. When that overflows `sun_path`, Linux falls back to

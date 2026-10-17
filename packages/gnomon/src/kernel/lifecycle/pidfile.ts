@@ -1,4 +1,6 @@
 /**
+ * @symbol $daemon-lifecycle
+ *
  * $daemon-lifecycle (spec §2.4 rule 1, G-DMN-01) — one daemon per user.
  *
  * `<home>/gnomon.pid` holds `daemonPid:v1 {pid, startedAt, socketPath}` and is

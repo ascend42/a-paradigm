@@ -1,4 +1,6 @@
 /**
+ * @symbol #socket
+ *
  * #socket (spec §4.9) — a minimal one-shot `gnomon-rpc:v1` client for the CLI
  * (`gnomon daemon status|stop`) and tests. The published TS client is M1.12.
  */

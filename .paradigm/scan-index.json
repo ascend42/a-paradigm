@@ -2,7 +2,7 @@
   "$meta": {
     "version": "1.0.0",
     "project": "a-paradigm",
-    "generatedAt": "2026-10-17T17:29:25.286Z",
+    "generatedAt": "2026-10-17T18:03:13.107Z",
     "paradigmVersion": "0.1.0",
     "sources": {
       "purposeFiles": 103,
@@ -26,7 +26,7 @@
       "feature": 1,
       "theme": 1,
       "controller": 1,
-      "module": 99,
+      "module": 100,
       "tool": 45,
       "tool-group": 10,
       "util": 9,
@@ -2662,7 +2662,8 @@
       "description": "event:v1 envelope (§4.1) — EventV1 type, validateEventV1/isEventV1 (strict = registered kind + closed fields; tolerant = unknown kinds and fields accepted, opaqueEventView renders {kind, principal, at}), schemas/event.v1.schema.json. The kind registry EVENT_KINDS (§9.1, 198 kinds, owner kernel|userland, M1.1 reservations tagged M1.1:P8-D58 / M1.1:P8-R9) with per-kind default labels: audience private, sensitivity per §9.1 (session.inject, turn.event, voice.turn.* sensitive; voice.enrol secret; field labels approval.request.tool_input and oracle.result.evidence sensitive). defaultLabelsFor(kind) returns undefined for an unregistered kind so the kernel refuses rather than guesses (S32 §6, L6, G-LOG-09 contract half). Serves #kernel-log and ~ample-internal-logs.",
       "visualTags": [],
       "related": [
-        "#kernel-log"
+        "#kernel-log",
+        "~ample-internal-logs"
       ],
       "componentType": "module"
     },
@@ -2783,7 +2784,7 @@
       "symbol": "#gnomon-kernel",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose",
-      "description": "The kernel package. ZERO runtime deps (G-SEC-01): package.json has no `dependencies` key; @a-company/gnomon-contracts is a devDependency that tsup bundles. Import fence (G-KRN-02): every import under src/kernel/** is node:*, relative, or @a-company/gnomon-contracts, and dist/ holds no bare import. src/kernel/ has the thirteen §18 modules (identity, log, runner, supervisor, broker, budget, scheduler, manifest, refs, socket, web, sandbox, modhost) as empty directories at PR-0. Placeholder bins write to stdio directly: the kernel cannot depend on the Paradigm logger (zero deps); #kernel-log brings its own logging at M1.2. PR-5 adds src/kernel/lifecycle/ — the $daemon-lifecycle core (spec §2.4): home resolution (~/.gnomon; GNOMON_HOME is a test seam only, a detached daemon gets --home in argv) created 0700 with the mode read back; the endpoint path (<home>/gnomon.sock, $XDG_RUNTIME_DIR fallback on Linux on sun_path overflow, never /tmp, refuse if nothing fits; win32 refuses pending the P8-D78 parity phase); the O_EXCL daemonPid:v1 pidfile lock lifted from warpline lifecycle.ts (live holder refuses, dead holder cleaned by rename-and-inode-check and re-raced, empty file = racer mid-write); the clean re-exec env (PATH fixed pending root-signed config, HOME/USERPROFILE, LANG, LC_*; NODE_OPTIONS and GNOMON_* dropped); the idle-exit monitor (holders = open #socket connections until sessions/subscribers exist). bins: `gnomond [--foreground] [--home] [--idle-ms]`, `gnomon daemon status|stop|--detach` (stop refuses not-implemented pending #approval-broker, M1.6). Lifecycle events are emitted to a callback using the spec §9.1 kinds daemon.start, daemon.exit{reason}, daemon.lock.refused (the kernel log takes them at M1.2); the spec declares no signals.",
+      "description": "The kernel package. ZERO runtime deps (G-SEC-01): package.json has no `dependencies` key; @a-company/gnomon-contracts is a devDependency that tsup bundles. Import fence (G-KRN-02): every import under src/kernel/** is node:*, relative, or @a-company/gnomon-contracts, and dist/ holds no bare import. src/kernel/ has the thirteen §18 modules (identity, log, runner, supervisor, broker, budget, scheduler, manifest, refs, socket, web, sandbox, modhost) as empty directories at PR-0. Placeholder bins write to stdio directly: the kernel cannot depend on the Paradigm logger (zero deps); #kernel-log brings its own logging at M1.2. PR-5 adds src/kernel/lifecycle/ — the $daemon-lifecycle core (spec §2.4): home resolution (~/.gnomon; GNOMON_HOME is a test seam only, a detached daemon gets --home in argv) created 0700 with the mode read back; the endpoint path (<home>/gnomon.sock, $XDG_RUNTIME_DIR fallback on Linux on sun_path overflow, never /tmp, refuse if nothing fits; win32 refuses pending the P8-D78 parity phase); the O_EXCL daemonPid:v1 pidfile lock lifted from warpline lifecycle.ts (live holder refuses, dead holder cleaned by rename-and-inode-check and re-raced, empty file = racer mid-write); the clean re-exec env (PATH fixed pending root-signed config, HOME/USERPROFILE, LANG, LC_*; NODE_OPTIONS and GNOMON_* dropped); the idle-exit monitor (holders = open #socket connections until sessions/subscribers exist). bins: `gnomond [--foreground] [--home] [--idle-ms]`, `gnomon daemon status|stop|--detach` (stop refuses not-implemented pending #approval-broker, M1.6). Lifecycle events are emitted to a callback using the spec §9.1 kinds daemon.start, daemon.exit{reason}, daemon.lock.refused (the kernel log takes them at M1.2); the spec declares no signals. SYMBOL CONVENTION (P8-D81, test/symbols-drift.test.ts): every source module names the symbol(s) it implements in its header (first 40 lines), one `@symbol <id>` per line, using the spec Appendix A id verbatim where the spec has one (e.g. `@symbol #kernel-log`, `@symbol $daemon-lifecycle`). Every .ts under src/kernel/** must carry a tag; every tag must be declared in a packages/gnomon*/.purpose; every declared symbol must be an Appendix A node or be listed in test/symbol-allowlist.json with a reason.",
       "visualTags": [],
       "related": [
         "#kernel-log",
@@ -2817,6 +2818,20 @@
       "related": [
         "#approval-broker",
         "$daemon-lifecycle"
+      ],
+      "componentType": "module"
+    },
+    "kernel-log": {
+      "id": "kernel-log",
+      "name": "Kernel Log",
+      "symbol": "#kernel-log",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose",
+      "description": "#kernel-log (spec §3.2, M1.2; research 29 §4 PR-4) — the one hash-chained, append-only, segmented kernel log. node:sqlite; active segment <home>/kernel.db, sealed segments <home>/log/segments/NNNNNN.db (0600, dirs 0700); `chain` table per §3.2 plus a write-once `meta`; BEFORE UPDATE/DELETE triggers abort (L1). hash = sha256(canonical(envelope minus hash, sig)), prev(1) = sha256(\"gnomon-log-genesis:\" + logId), seq computed inside the write txn and checked against the in-memory tip. Envelope = contracts event:v1, validated strict with default-label check; unregistered kinds refused (never guessed), labels tighten-only (L6), kernel/userland ownership enforced (L7), daemon.segment reserved to the log, session.inject must carry {origin, hash, bytes}. Signer seam (signer.ts): Signer.sign(domain, message) prepends the §3.1 domain (gnomon:event-sig:v1 etc.), key classes limited to their domains; SoftwareEd25519Signer = the in-memory kernel key (keyId gkey:v1:<sha256(spki PEM)>); root/approvals keys are hardware-only and plug in after probes P04/P02; KeyRing verifies Ed25519 and P-256. Unsigned rows only for daemon/socket/schedule; the §3.2 mandatory list refuses unsigned (unsigned-mandatory). Segments rotate at 10⁶ rows with a signed daemon.segment closing row and an unbroken chain across files; crash mid-rotation is completed on open. Anchors: file <home>/head (atomic tmp+rename; fsync only at genesis/rotation/close) and a KeystoreAnchorStore SEAM that reports `unavailable` until the helper exists. Open refuses INTEGRITY_BROKEN on missing-db (with anchor, sealed segment or keys present), truncated, anchor-mismatch, anchor-missing; a lagging anchor is accepted only as a chain prefix and repaired. Fsync policy: WAL + synchronous=FULL (default 'process-crash'); 'power-loss' adds fullfsync (~10 ms/commit on Apple SSD, above the 5 ms falsifier). verify(): full chain (segment links, genesis, anchors) or one segment; detects tamper, re-hash forgery, truncation, reorder, stripped or bad signatures, unknown keys, relaxed labels. read(): §9.3 projection per reader class (human, read-token, community-client, session, mod, peer; agent/voice refuse UNSUPPORTED pending M1.7/M4.x). Not yet: async hardware signers, helper anchor, blobs/TTL pruning, projections tables, wiring $daemon-lifecycle events into the log.",
+      "visualTags": [],
+      "related": [
+        "$daemon-lifecycle",
+        "~ample-internal-logs"
       ],
       "componentType": "module"
     },
@@ -10805,16 +10820,6 @@
       "visualTags": [],
       "related": []
     },
-    "kernel-log": {
-      "id": "kernel-log",
-      "name": "Kernel Log",
-      "symbol": "#kernel-log",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-contracts/.purpose",
-      "description": "Referenced from #contract-event-v1",
-      "visualTags": [],
-      "related": []
-    },
     "identity.": {
       "id": "identity.",
       "name": "Identity.",
@@ -15332,6 +15337,17 @@
       "description": "Path traversal checks + trust deny-lists block dangerous file access (.env, .key, .pem, credentials, secrets)",
       "related": []
     },
+    "ample-internal-logs": {
+      "id": "ample-internal-logs",
+      "name": "Ample Internal Logs",
+      "symbol": "~ample-internal-logs",
+      "category": "aspects",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose",
+      "description": "~ample-internal-logs (spec §9) — everything the kernel does is an event:v1 row in #kernel-log with the §9.1 default labels set by the appender (audience private; turn.event bodies, session.inject bytes, approval.request.tool_input, oracle evidence and voice text sensitive; a kind without a default is refused, G-LOG-09), and every read goes through the §9.3 redaction matrix (stubs {kind, hsid, at, hash} for redacting readers, secret never to a read token, nothing to a peer). PR-4 covers the label and read-projection halves; retention/TTL pruning (§9.4), status metrics (§9.6) and the honesty CI (§9.7) follow.",
+      "related": [
+        "#kernel-log"
+      ]
+    },
     "log-level-env-resolution": {
       "id": "log-level-env-resolution",
       "name": "Log Level Env Resolution",
@@ -18559,6 +18575,10 @@
     "#socket": {
       "category": "components",
       "id": "socket"
+    },
+    "#kernel-log": {
+      "category": "components",
+      "id": "kernel-log"
     },
     "#paradigm-logger": {
       "category": "components",
@@ -21904,6 +21924,10 @@
       "category": "aspects",
       "id": "file-safety"
     },
+    "~ample-internal-logs": {
+      "category": "aspects",
+      "id": "ample-internal-logs"
+    },
     "~log-level-env-resolution": {
       "category": "aspects",
       "id": "log-level-env-resolution"
@@ -22735,10 +22759,6 @@
     "#F2B765": {
       "category": "components",
       "id": "F2B765"
-    },
-    "#kernel-log": {
-      "category": "components",
-      "id": "kernel-log"
     },
     "~ample-internal-logs.": {
       "category": "aspects",
