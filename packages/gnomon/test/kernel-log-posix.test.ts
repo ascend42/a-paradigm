@@ -34,7 +34,7 @@
  */
 import { spawn, spawnSync } from 'node:child_process';
 import { generateKeyPairSync } from 'node:crypto';
-import { mkdtempSync, rmSync, statSync } from 'node:fs';
+import { mkdtempSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -110,6 +110,29 @@ process.stdout.write(JSON.stringify({ rows: bulk.length + crit.length, seconds: 
 function childEnv(home: string, key: string, rows: number, mode: 'perf' | 'crash', crit = 0): NodeJS.ProcessEnv {
   return { ...process.env, GN_DIST_URL: DIST_URL, GN_HOME: home, GN_KEY: key, GN_ROWS: String(rows), GN_MODE: mode, GN_CRIT: String(crit) };
 }
+
+describe('#kernel-log refused opens release their handle', () => {
+  // Regression: a refused open leaked the active DatabaseSync handle (Windows CI
+  // run 39072993137: EPERM deleting the home after every refusal test). Counted
+  // via /dev/fd so it can fail on macOS/Linux too, where deleting an open file
+  // succeeds and the leak is otherwise invisible.
+  it('repeated INTEGRITY_BROKEN opens leave no extra file descriptors', async () => {
+    const home = tmpHome();
+    const signer = new SoftwareEd25519Signer(pem());
+    const log = KernelLog.open({ home, kernelPrincipal: KERNEL, signer });
+    for (let i = 0; i < 3; i++) await log.append({ kind: 'session.open', principal: KERNEL });
+    await log.close();
+    const headPath = path.join(home, 'head');
+    const head = JSON.parse(readFileSync(headPath, 'utf8')) as { hash: string };
+    writeFileSync(headPath, JSON.stringify({ ...head, hash: `sha256:${'0'.repeat(64)}` }));
+    const fds = () => readdirSync('/dev/fd').length;
+    const before = fds();
+    for (let i = 0; i < 10; i++) {
+      expect(() => KernelLog.open({ home, kernelPrincipal: KERNEL, signer })).toThrow();
+    }
+    expect(fds()).toBeLessThanOrEqual(before);
+  });
+});
 
 describe('#kernel-log file modes (owner-only, §15.2 custody posture)', () => {
   it('kernel.db, its WAL, the head anchor and the segment dir are owner-only', async () => {

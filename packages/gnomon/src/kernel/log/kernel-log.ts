@@ -558,7 +558,18 @@ export class KernelLog {
     this.#boot = opts.bootSession !== undefined ? normalizeBootId(opts.bootSession) : readBootSession();
     if (this.#boot === BOOT_UNKNOWN) this.#diag('boot.unknown', { platform: process.platform, injected: opts.bootSession !== undefined });
     this.#recovery = recovery;
-    const r = this.#openOrCreate();
+    let r: Omit<OpenReport, 'logId'>;
+    try {
+      r = this.#openOrCreate();
+    } catch (err) {
+      // A refused open must not leak the active database handle: Windows
+      // keeps an open file locked (EPERM on delete/rename), and a daemon
+      // retrying the open would accumulate handles on every OS.
+      if (this.#db?.isOpen) {
+        try { this.#db.close(); } catch { /* the refusal is the error that matters */ }
+      }
+      throw err;
+    }
     this.logId = this.#meta.log;
     this.report = { logId: this.logId, ...r };
   }
