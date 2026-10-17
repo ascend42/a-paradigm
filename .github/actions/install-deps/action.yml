@@ -32,6 +32,9 @@ runs:
           }
           process.stdout.write(`${platform}-${arch}${suffix}`);
         ')
+        # One npm install for all missing bindings: a second `--no-save` install
+        # prunes the extraneous package the first one added.
+        missing=()
         for spec in "rollup:@rollup/rollup-${triple}" "rolldown:@rolldown/binding-${triple}"; do
           host="${spec%%:*}"; pkg="${spec#*:}"
           if [ ! -f "node_modules/${host}/package.json" ]; then
@@ -42,7 +45,14 @@ runs:
           if [ -d "node_modules/${pkg}" ]; then
             echo "${pkg} already present"
           else
-            echo "installing ${pkg}@${ver}"
-            npm install --no-save --force "${pkg}@${ver}" || true
+            missing+=("${pkg}@${ver}")
           fi
         done
+        if [ ${#missing[@]} -gt 0 ]; then
+          echo "installing ${missing[*]}"
+          npm install --no-save --force "${missing[@]}" || true
+          for m in "${missing[@]}"; do
+            n="${m%@*}"
+            [ -d "node_modules/${n}" ] && echo "ok ${n}" || echo "::warning::${n} still missing"
+          done
+        fi
