@@ -1,13 +1,26 @@
 /** Shared helpers for the $daemon-lifecycle / #socket tests (PR-5). */
-import { mkdtempSync, realpathSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, statSync } from 'node:fs';
 import * as net from 'node:net';
 import * as os from 'node:os';
 import path from 'node:path';
 import { encodeFrame, NdjsonDecoder } from '../src/kernel/socket/index.js';
 
-/** A short temp GNOMON_HOME under realpath(os.tmpdir()) — never a literal /tmp path on macOS. */
+/**
+ * A private, short root for temp homes. macOS: realpath(os.tmpdir()) is the
+ * per-user 0700 dir. Linux CI: os.tmpdir() is world-writable /tmp, which the
+ * daemon (correctly, §2.4) refuses as a home — use ~/.cache/gnomon-test (0700).
+ */
+function privateTmpRoot(): string {
+  const t = realpathSync(os.tmpdir());
+  if ((statSync(t).mode & 0o002) === 0) return t;
+  const root = path.join(os.homedir(), '.cache', 'gnomon-test');
+  mkdirSync(root, { recursive: true, mode: 0o700 });
+  return realpathSync(root);
+}
+
+/** A short temp GNOMON_HOME under a private (non-world-writable) root — never under /tmp. */
 export function tempHome(prefix = 'gd-'): { home: string; cleanup: () => void } {
-  const root = mkdtempSync(path.join(realpathSync(os.tmpdir()), prefix));
+  const root = mkdtempSync(path.join(privateTmpRoot(), prefix));
   const home = path.join(root, 'h');
   return { home, cleanup: () => rmSync(root, { recursive: true, force: true }) };
 }

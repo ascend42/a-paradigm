@@ -4,3 +4,6 @@
 *.lore linguist-language=YAML
 *.agent linguist-language=YAML
 *.notebook linguist-language=YAML
+
+# Generated JSON Schemas are byte-compared against src/schemas.ts in tests; keep LF on every OS.
+packages/gnomon-contracts/schemas/*.json text eol=lf
