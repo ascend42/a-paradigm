@@ -27,7 +27,7 @@
     "test": "vitest run && npm run test:perf",
     "test:watch": "vitest",
     "probe": "node probes/run.mjs",
-    "test:perf": "GNOMON_PERF=1 vitest run --no-file-parallelism test/kernel-log-posix.test.ts -t G-LOG-04"
+    "test:perf": "node scripts/test-perf.mjs"
   },
   "devDependencies": {
     "@a-company/gnomon-contracts": "1.0.0",

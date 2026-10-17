@@ -45,6 +45,12 @@ components:
       Every .ts under src/kernel/** must carry a tag; every tag must be
       declared in a packages/gnomon*/.purpose; every declared symbol must be an
       Appendix A node or be listed in test/symbol-allowlist.json with a reason.
+      G-WIN-05 MARKER ENFORCEMENT (T-2026-10-17-011): vitest.config.ts excludes
+      every test file whose `// @gnomon-platform:` marker omits the running
+      process.platform (test/platform-registry.ts excludedTestFiles); each such
+      file has a registry row (sibling or n/a reason), and the registry test
+      proves per platform that the excluded set equals the rows that omit it,
+      and that each row's platforms equal its file's marker.
     path: src/
     type: module
     tags: [gnomon, kernel, paradigm-8, scaffold]
@@ -59,6 +65,7 @@ components:
       - test/platform-registry.test.ts
       - test/version.test.ts
       - test/daemon-lifecycle.test.ts
+      - test/home-resolution.test.ts
       - test/idle-exit.test.ts
       - test/reexec-env.test.ts
     oracles: [G-KRN-02, G-SEC-01, G-WIN-05, G-DMN-01, G-DMN-02]
@@ -254,6 +261,19 @@ components:
       agent/voice refuse UNSUPPORTED pending M1.7/M4.x). Not yet: async
       hardware signers, helper anchor, blobs/TTL pruning, projections tables,
       wiring $daemon-lifecycle events into the log.
+      Durable-write platform seam (anchor.ts fsyncFile / fsyncDir, the one
+      place a path is fsynced; T-2026-10-17-011): on win32 a file is reopened
+      'r+' because FlushFileBuffers needs a writable handle (a read-only one is
+      EPERM), and the directory fsync is skipped (Windows cannot open a
+      directory for flush). STATED RESIDUAL (spec §16, S34-26): on win32 a
+      rename is atomic but NOT durable at return — node's renameSync has no
+      MOVEFILE_WRITE_THROUGH, so a power cut can undo it; a durable Windows
+      rename is parity-phase work (P8-D78). macOS/Linux: the file is reopened
+      'r' and fsync(2)ed, the directory fsync(2)ed; an unsupported directory
+      fsync (EINVAL/ENOTSUP/EOPNOTSUPP/EISDIR/EBADF, isBenignDirFsyncError) is
+      a no-op and any other error (EIO, …) is rethrown (S34-28). `npm run
+      test:perf` = scripts/test-perf.mjs (cmd.exe-safe; --passWithNoTests on
+      win32 only, a missing perf file fails loudly elsewhere).
     path: src/kernel/log/
     type: module
     tags: [gnomon, kernel, log, paradigm-8, pr-4, m1.2, p8-d82, p8-d83, p8-d84, p8-d85]
@@ -263,6 +283,8 @@ components:
       - test/kernel-log-posix.test.ts
       - test/kernel-log-gap.test.ts
       - test/kernel-log-crossboot.test.ts
+      - test/boot-session.test.ts
+      - test/durable-fs.test.ts
     oracles: [G-LOG-01, G-LOG-02, G-LOG-03, G-LOG-04, G-LOG-06, G-LOG-07, G-LOG-08, G-LOG-09, G-LOG-10, G-LOG-11]
 
 flows:

@@ -138,14 +138,68 @@ export class KeystoreAnchorStore implements AnchorStore {
   }
 }
 
-/** fsync a directory so a rename inside it is durable (no-op where unsupported). */
+/*
+ * Durable-write platform seam (T-2026-10-17-011, Gnomon CI Windows hygiene).
+ * The ONE place the log decides how to fsync a PATH: every reopen-to-flush
+ * in #kernel-log goes through fsyncFile / fsyncDir. (FileAnchorStore.write
+ * fsyncs the handle it wrote through — opened 'w', so already writable.)
+ *
+ * Windows: node's fsync is FlushFileBuffers, which needs a handle opened with
+ * GENERIC_WRITE — on a read-only ('r') handle it fails ERROR_ACCESS_DENIED,
+ * surfaced as `EPERM: operation not permitted, fsync`. So a file is opened
+ * 'r+' there (the flush itself is unchanged). A DIRECTORY cannot be opened
+ * for a flush on Windows, so the directory fsync is skipped on win32 by
+ * design, not swallowed. STATED RESIDUAL (spec §16, S34-26): on win32 a
+ * rename is atomic but NOT durable when it returns — node's renameSync
+ * (MoveFileEx) does not pass MOVEFILE_WRITE_THROUGH, so a power cut can undo
+ * a rename that already returned. A durable rename on Windows is
+ * parity-phase work (P8-D78).
+ *
+ * macOS / Linux: a file is opened 'r' and fsync(2)ed (unchanged), and the
+ * directory is opened 'r' and fsync(2)ed so a rename inside it is durable.
+ * A directory fsync the filesystem does not SUPPORT (isBenignDirFsyncError)
+ * is a no-op; any other error (EIO, EACCES, ENOENT, …) is rethrown
+ * (S34-28 — previously every error was swallowed).
+ */
+const IS_WIN32 = process.platform === 'win32';
+
+/** fsync a file by path (Windows: an 'r+' handle, which FlushFileBuffers requires). */
+export function fsyncFile(file: string): void {
+  const fd = fs.openSync(file, IS_WIN32 ? 'r+' : 'r');
+  try {
+    fs.fsyncSync(fd);
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+/**
+ * Errors that mean "this filesystem does not support fsync on a directory"
+ * (Linux EINVAL on some FUSE/network mounts, ENOTSUP/EOPNOTSUPP, EISDIR, EBADF
+ * where a read-only directory handle cannot be flushed). Only these leave
+ * fsyncDir a no-op; the rename stays atomic.
+ */
+const BENIGN_DIR_FSYNC_CODES = new Set(['EINVAL', 'ENOTSUP', 'EOPNOTSUPP', 'EISDIR', 'EBADF']);
+
+/** True for an error that only says the directory fsync is unsupported (S34-28). */
+export function isBenignDirFsyncError(err: unknown): boolean {
+  const code = (err as NodeJS.ErrnoException | undefined)?.code;
+  return typeof code === 'string' && BENIGN_DIR_FSYNC_CODES.has(code);
+}
+
+/**
+ * fsync a directory so a rename inside it is durable. Skipped on win32 (see
+ * the seam note above). On POSIX an unsupported directory fsync is a no-op
+ * (isBenignDirFsyncError); every other error — EIO above all — is rethrown.
+ */
 export function fsyncDir(dir: string): void {
+  if (IS_WIN32) return;
   let fd: number | undefined;
   try {
     fd = fs.openSync(dir, 'r');
     fs.fsyncSync(fd);
-  } catch {
-    /* directories cannot be fsynced on every platform; the rename stays atomic */
+  } catch (err) {
+    if (!isBenignDirFsyncError(err)) throw err;
   } finally {
     if (fd !== undefined) fs.closeSync(fd);
   }

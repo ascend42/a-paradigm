@@ -178,7 +178,7 @@ import {
   type KindOwner,
   type Sensitivity,
 } from '@a-company/gnomon-contracts';
-import { FileAnchorStore, fsyncDir, HEAD_SCHEMA, KeystoreAnchorStore, type AnchorReadResult, type AnchorStore, type HeadAnchor } from './anchor.js';
+import { FileAnchorStore, fsyncDir, fsyncFile, HEAD_SCHEMA, KeystoreAnchorStore, type AnchorReadResult, type AnchorStore, type HeadAnchor } from './anchor.js';
 import { BOOT_UNKNOWN, normalizeBootId, readBootSession } from './boot.js';
 import {
   FILE_ANCHOR_MAX_LAG,
@@ -964,12 +964,7 @@ export class KernelLog {
       db.close();
     }
     fs.chmodSync(tmp, 0o600);
-    const fd = fs.openSync(tmp, 'r');
-    try {
-      fs.fsyncSync(fd);
-    } finally {
-      fs.closeSync(fd);
-    }
+    fsyncFile(tmp);
     fs.renameSync(tmp, this.activePath);
     fsyncDir(this.home);
   }
@@ -1351,12 +1346,7 @@ export class KernelLog {
     this.#db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
     this.#db.exec('PRAGMA journal_mode=DELETE');
     this.#db.close();
-    const fd = fs.openSync(this.activePath, 'r');
-    try {
-      fs.fsyncSync(fd);
-    } finally {
-      fs.closeSync(fd);
-    }
+    fsyncFile(this.activePath);
     const dest = path.join(this.home, SEGMENTS_DIR, segName(sealedMeta.segment));
     fs.renameSync(this.activePath, dest);
     fs.rmSync(`${this.activePath}-wal`, { force: true });

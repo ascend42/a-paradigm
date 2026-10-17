@@ -5,7 +5,8 @@
  * or memory > 150 MB by the per-OS metric of §16's memory row:
  * `phys_footprint` on macOS via /usr/bin/footprint, never RSS; `Pss` from
  * /proc/self/smaps_rollup on Linux CI). Windows (private bytes) is the parity
- * phase (P8-D78) — see platform-registry.ts.
+ * phase (P8-D78) — see platform-registry.ts. The boot-session reader test
+ * moved to test/boot-session.test.ts, which runs on every platform.
  *
  * G-LOG-04 as re-cut by research 33 S33-10 (P8-D83): the critical class
  * (config.loaded: bulk-durability commit, NO F_FULLFSYNC, then file anchor,
@@ -36,12 +37,14 @@ import { generateKeyPairSync } from 'node:crypto';
 import { mkdtempSync, rmSync, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import { FILE_ANCHOR_MAX_LAG, KernelLog, readBootSession, SoftwareEd25519Signer } from '../src/kernel/log/index.js';
+import { FILE_ANCHOR_MAX_LAG, KernelLog, SoftwareEd25519Signer } from '../src/kernel/log/index.js';
 import { PKG_ROOT } from './helpers.js';
 
 const KERNEL = 'p:abcdefgh/kernel';
-const DIST = path.join(PKG_ROOT, 'dist', 'index.js');
+// A file:// URL, never a bare path: on Windows `import('D:\\…')` is ERR_UNSUPPORTED_ESM_URL_SCHEME.
+const DIST_URL = pathToFileURL(path.join(PKG_ROOT, 'dist', 'index.js')).href;
 const homes: string[] = [];
 
 function tmpHome(): string {
@@ -62,7 +65,7 @@ function pem(): string {
 const CHILD = String.raw`
 import { execFileSync } from 'node:child_process';
 import { readFileSync, existsSync } from 'node:fs';
-const { kernelLog } = await import(process.env.GN_DIST);
+const { kernelLog } = await import(process.env.GN_DIST_URL);
 const signer = new kernelLog.SoftwareEd25519Signer(process.env.GN_KEY);
 const log = kernelLog.KernelLog.open({ home: process.env.GN_HOME, kernelPrincipal: '${KERNEL}', signer });
 const n = Number(process.env.GN_ROWS);
@@ -105,7 +108,7 @@ process.stdout.write(JSON.stringify({ rows: bulk.length + crit.length, seconds: 
 `;
 
 function childEnv(home: string, key: string, rows: number, mode: 'perf' | 'crash', crit = 0): NodeJS.ProcessEnv {
-  return { ...process.env, GN_DIST: DIST, GN_HOME: home, GN_KEY: key, GN_ROWS: String(rows), GN_MODE: mode, GN_CRIT: String(crit) };
+  return { ...process.env, GN_DIST_URL: DIST_URL, GN_HOME: home, GN_KEY: key, GN_ROWS: String(rows), GN_MODE: mode, GN_CRIT: String(crit) };
 }
 
 describe('#kernel-log file modes (owner-only, §15.2 custody posture)', () => {
@@ -121,18 +124,6 @@ describe('#kernel-log file modes (owner-only, §15.2 custody posture)', () => {
     expect(mode('log/segments')).toBe(0o700);
     expect(mode('log/segments/000001.db')).toBe(0o600);
     await log.close();
-  });
-});
-
-describe('#kernel-log boot session (S33-10, P8-D83)', () => {
-  it('reads kern.bootsessionuuid (macOS) / boot_id (Linux) once per process, zero deps', () => {
-    const boot = readBootSession();
-    expect(boot).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i);
-    expect(readBootSession()).toBe(boot);
-    const home = tmpHome();
-    const log = KernelLog.open({ home, kernelPrincipal: KERNEL, signer: SoftwareEd25519Signer.generate() });
-    expect(log.report.boot).toBe(boot);
-    void log.close();
   });
 });
 
@@ -168,11 +159,12 @@ describe('G-LOG-04 / M1.2 falsifier: p99 append and memory', () => {
   type Stats = { n: number; p50: number; p99: number; p999: number; max: number; over5: number; over5Frac: number };
   type PerfRun = { rows: number; seconds: number; bulk: Stats; critical: Stats; checkpoints: number; forcedAnchorRate: number; memory: { metric: string; mb: number | null }; rssMb: number };
 
-  // Runs only in the isolated perf pass (`npm run test:perf`, GNOMON_PERF=1,
+  // Runs only in the isolated perf pass (`npm run test:perf` — detected via
+  // npm_lifecycle_event so the script stays cmd.exe-safe — or GNOMON_PERF=1,
   // no file parallelism): inside the parallel suite other files' fsyncs contend
   // for the same SSD and the tail numbers measure the suite, not the log. One
   // attempt — a falsifier is never retried until it passes.
-  it.runIf(process.env.GNOMON_PERF === '1')('bulk p99 < 5 ms and ≤ 0.1 % over 5 ms, critical (1/s under bulk load) p99 < 25 ms, memory < 150 MB', async () => {
+  it.runIf(process.env.GNOMON_PERF === '1' || process.env.npm_lifecycle_event === 'test:perf')('bulk p99 < 5 ms and ≤ 0.1 % over 5 ms, critical (1/s under bulk load) p99 < 25 ms, memory < 150 MB', async () => {
     const rows = Number(process.env.GNOMON_LOG_PERF_ROWS ?? 10_000);
     const critN = Number(process.env.GNOMON_LOG_PERF_CRIT ?? 60);
     const res = spawnSync(process.execPath, ['--input-type=module', '-e', CHILD], {

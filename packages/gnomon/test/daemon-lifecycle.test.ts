@@ -5,6 +5,8 @@
  * G-DMN-02 (socket 0600, owner-only home, never under /tmp, sun_path overflow
  * rerouted to $XDG_RUNTIME_DIR on Linux or refused). Unix sockets only: the
  * Windows named pipe is the parity phase (P8-D78), see platform-registry.ts.
+ * The platform-independent pieces (home resolution, the win32 endpoint
+ * refusal) live in test/home-resolution.test.ts, which runs everywhere.
  */
 import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import { chmodSync, existsSync, lstatSync, mkdirSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
@@ -15,11 +17,9 @@ import {
   DAEMON_PIDFILE_SCHEMA,
   daemonState,
   ensureGnomonHome,
-  LifecycleRefusal,
   pidAlive,
   pidPathOf,
   readPidfile,
-  resolveGnomonHome,
   selectSocketPath,
   startDaemon,
   SUN_PATH_SAFE,
@@ -76,12 +76,6 @@ function exitOf(child: ChildProcess): Promise<number | null> {
 }
 
 describe('home resolution', () => {
-  it('honours an absolute GNOMON_HOME (test seam) and defaults to ~/.gnomon', () => {
-    expect(resolveGnomonHome({ env: { GNOMON_HOME: '/a/b' } })).toBe('/a/b');
-    expect(resolveGnomonHome({ env: {}, homedir: '/Users/q' })).toBe('/Users/q/.gnomon');
-    expect(() => resolveGnomonHome({ env: { GNOMON_HOME: 'rel/path' } })).toThrow(LifecycleRefusal);
-  });
-
   it('creates the home 0700 and tightens a wider one, reading the mode back', () => {
     const h = home();
     ensureGnomonHome(h);
@@ -231,10 +225,6 @@ describe('G-DMN-02 endpoint ACL and placement', () => {
       const r = selectSocketPath({ home: deep, platform: 'linux', env: { XDG_RUNTIME_DIR }, forbiddenRoots: ['/tmp', '/private/tmp'] });
       expect(r.ok, String(XDG_RUNTIME_DIR)).toBe(false);
     }
-  });
-
-  it('Windows refuses here: the named pipe is the parity phase (P8-D78)', () => {
-    expect(selectSocketPath({ home: 'C:\\Users\\x\\.gnomon', platform: 'win32', env: {} })).toMatchObject({ ok: false });
   });
 
   it('startDaemon refuses no-safe-endpoint without taking the lock', async () => {
