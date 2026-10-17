@@ -1,23 +1,165 @@
 version: "2.0"
 description: >-
-  Gnomon contracts — versioned TS types and JSON Schemas for the Gnomon
-  kernel's hard contracts (docs/specs/gnomon.md §4, §18). Zero runtime deps;
-  a community GUI depends on this package only. Contracts change additively or
-  with a version bump. PR-0 ships probeResult:v1 only; event:v1, ref:v1,
-  refusal:v1 and the gnomon-rpc:v1 hello shape arrive in PR-3. Private, Node
-  >= 24, outside the root build until the 8.0 cut.
+  Gnomon contracts — versioned TS types, hand-written zero-dependency
+  validators and JSON Schemas for the Gnomon kernel's hard contracts
+  (docs/specs/gnomon.md §4, §5, §9.1, §12.8, §18). Zero runtime deps and zero
+  imports (the kernel bundles it; platform-neutral, WebCrypto getRandomValues
+  only). Contracts change additively or with a version bump (§4.9). PR-0
+  shipped probeResult:v1; PR-3 (research 29 §4) adds event:v1, ids/hsid,
+  principals, ref:v1, refusal:v1, card:v1, the gnomon-rpc:v1 hello shape and
+  the frozen client surface, with the P8-D58 (voice) and P8-R9 (linking)
+  values reserved for M1.1. Spec Appendix A names no contract-level nodes, so
+  every component below is a child of #gnomon-contracts named after the
+  contract id it implements; the spec owners it serves are #identity,
+  #kernel-log, #ref-resolver, #approval-broker, #socket, #peer-link and
+  ~ample-internal-logs (all in packages/gnomon). Gates it encodes values for:
+  ^voice-armed (§14.7), ^peer-paired (§3.9). The spec declares no signals.
+  Private, Node >= 24, outside the root build until the 8.0 cut.
 
 components:
   gnomon-contracts:
     description: >-
-      Package entry (src/index.ts) plus schemas/. probeResult:v1 = {probe, os,
-      osVersion, arch, toolVersions{node,...}, verdict pass|fail|partial,
-      evidence{}, specRefs[], at}; schemas/probeResult.v1.schema.json is the
-      JSON Schema, src/probe-result.ts the TS type plus a hand-written
-      zero-dependency validator (validateProbeResultV1 / isProbeResultV1). A
-      test keeps the schema's keys and enums in lockstep with the TS side.
+      Package entry (src/index.ts, re-exports every module) plus schemas/.
+      probeResult:v1 = {probe, os, osVersion, arch, toolVersions{node,...},
+      verdict pass|fail|partial, evidence{}, specRefs[], at};
+      schemas/probeResult.v1.schema.json is its JSON Schema, src/probe-result.ts
+      the TS type plus validateProbeResultV1 / isProbeResultV1. The PR-3
+      schemas in schemas/ are GENERATED from src/schemas.ts
+      (`npm run schemas`, scripts/write-schemas.mjs) and a test keeps them a
+      byte-identical fixed point. src/internal.ts holds the shared pure helpers
+      (Checker with strict|tolerant modes, UTF-8, synchronous SHA-256,
+      Crockford base32, canonical JSON, deepFreeze).
     path: src/
     type: module
     tags: [gnomon, contracts, json-schema, paradigm-8]
     tests:
       - test/probe-result.test.ts
+      - test/contracts.test.ts
+
+  contract-event-v1:
+    description: >-
+      event:v1 envelope (§4.1) — EventV1 type, validateEventV1/isEventV1
+      (strict = registered kind + closed fields; tolerant = unknown kinds and
+      fields accepted, opaqueEventView renders {kind, principal, at}),
+      schemas/event.v1.schema.json. The kind registry EVENT_KINDS (§9.1, 198
+      kinds, owner kernel|userland, M1.1 reservations tagged M1.1:P8-D58 /
+      M1.1:P8-R9) with per-kind default labels: audience private, sensitivity
+      per §9.1 (session.inject, turn.event, voice.turn.* sensitive; voice.enrol
+      secret; field labels approval.request.tool_input and oracle.result.evidence
+      sensitive). defaultLabelsFor(kind) returns undefined for an unregistered
+      kind so the kernel refuses rather than guesses (S32 §6, L6, G-LOG-09
+      contract half). Serves #kernel-log and ~ample-internal-logs.
+    path: src/event.ts
+    type: module
+    tags: [gnomon, contracts, event-v1, paradigm-8]
+    tests:
+      - test/contracts.test.ts
+
+  contract-ids:
+    description: >-
+      Ids (§4.2, §3.1, S32-13) — ULID (ulid, monotonicUlidFactory with
+      in-ms increment and overflow refusal, isUlid, ulidTime) over
+      globalThis.crypto.getRandomValues; prefixed ULID ids ev/log/conn/card/arm/
+      permit:v1/brief/msg/ds (mintId, isId); hsid:v1 (mintHsid, non-monotonic so
+      hsid-short stays fully random), hsid:v1d derivation (deriveHsidV1d),
+      hsid-short = lowercase Crockford of the ULID's 80 random bits, 16 chars
+      (hsidShort); turn ids turn:<hsid>/<n> (turnId, parseTurnId); keyId,
+      repo-scope and contract-id patterns. Serves #identity.
+    path: src/ids.ts
+    type: module
+    tags: [gnomon, contracts, ids, paradigm-8]
+    tests:
+      - test/ids-principal-ref.test.ts
+
+  contract-principal:
+    description: >-
+      Principals (§3.1, S32-02, P8-D75) — PRINCIPAL_KINDS human|agent|session|
+      kernel|mod|voice|peer; p:<ns>/<name> and the foreign display form
+      p:<ns>/<name>@<rootKeyId8> (parsePrincipalId marks it foreign, never
+      local); samePrincipal compares full rootKeyId + name and never ns;
+      isLocalPrincipal, foreignDisplayId, nsFromRootPublicKey,
+      peerKernelPrincipal. Serves #identity and #peer-link (G-ID-08 contract
+      half).
+    path: src/principal.ts
+    type: module
+    tags: [gnomon, contracts, identity, paradigm-8]
+    tests:
+      - test/ids-principal-ref.test.ts
+
+  contract-ref-v1:
+    description: >-
+      ref:v1 grammar (§4.4, §3.7, §3.9) — scheme ":" id ["@" rev]; kernel and
+      package scheme lists, peer reserved (M1.1, P8-R9), voice dropped; aliases
+      # $ ^ ! ~ → sym:, TD-/L-/T- → td:/l:/t:; parseRef, formatRef, peerRef
+      (peer:<logId>/<ref>, never nested), validateRefV1, schemas/ref.v1.schema.json.
+      Serves #ref-resolver.
+    path: src/ref.ts
+    type: module
+    tags: [gnomon, contracts, ref-v1, paradigm-8]
+    tests:
+      - test/ids-principal-ref.test.ts
+
+  contract-refusal-v1:
+    description: >-
+      refusal:v1 Gnomon superset (§4.6) — copied (not imported) from
+      packages/warpline/src/fabric/refusal.ts: Warpline's 12 codes + BUDGET_DENIED,
+      PERMIT_REQUIRED, CAS_LOST, BILLING_REFUSED, MODEL_UNAVAILABLE; gates + budget,
+      billing, model, voice, link; Retriability; next[] steps; verdict and
+      contested[].rule widened to string|null; optional additive data{reason,
+      offered, cardId}; voice and link reason lists (M1.1); exit codes and the
+      JSON-RPC code map (§4.9); refuse() single constructor, refusalOf()
+      accessor (+ the JSON-RPC error depth), RefusedError, validateRefusalV1,
+      schemas/refusal.v1.schema.json. G-CON-02 partial: every Warpline-shaped
+      refusal validates.
+    path: src/refusal.ts
+    type: module
+    tags: [gnomon, contracts, refusal-v1, paradigm-8]
+    tests:
+      - test/refusal-rpc.test.ts
+      - test/contracts.test.ts
+
+  contract-card-v1:
+    description: >-
+      card:v1 (§3.4, §14.7, §3.9) — kinds incl. reserved voice-arm, grant,
+      handoff, declassify, peer-pair; states incl. held; flags incl.
+      voice-phrase, peer; decisions incl. withdraw; presence incl. voice-armed;
+      via incl. voice, link; voice / voiceDecision blocks; signature domains
+      gnomon:approve:v1 and gnomon:approve-voice:v1; CARD_RESERVED_VALUES;
+      isCardDecidable (unknown state never decidable, held only withdraws);
+      validateCardV1, schemas/card.v1.schema.json. Serves #approval-broker,
+      ^voice-armed and ^peer-paired.
+    path: src/card.ts
+    type: module
+    tags: [gnomon, contracts, card-v1, paradigm-8]
+    tests:
+      - test/contracts.test.ts
+
+  contract-gnomon-rpc-v1:
+    description: >-
+      gnomon-rpc:v1 (§4.9, §5, §12.3) — hello params/result types and
+      validators, auth preimage helpers, negotiateHello (highest shared
+      version, feature intersection, UNSUPPORTED{data:{offered[]}}); the frozen
+      VERBS (12, with params, refusals and the §5 access matrix incl. the
+      all-refused peer column) and CLIENT_RELAYS (mod.view, mod.command);
+      ADDITIVE_ENUMS + renderEnumValue implement the compatible-additive rule;
+      schemas/gnomon-rpc.v1.hello.schema.json. Serves #socket and #web-endpoint.
+    path: src/rpc.ts
+    type: module
+    tags: [gnomon, contracts, gnomon-rpc-v1, paradigm-8]
+    tests:
+      - test/refusal-rpc.test.ts
+
+  contract-client-api-id:
+    description: >-
+      kitId and clientApiId (§12.3, §12.8). kitId = sha256(canonicalJson(kit:v1
+      block list)); clientApiId = sha256(canonicalJson(CLIENT_API_DESCRIPTOR) +
+      "\n" + kitId) where the descriptor = the 12 verbs + 2 relays, the JSON-RPC
+      code map, ADDITIVE_ENUMS and every published client JSON Schema; modAbiId
+      is not an input. src/schemas.ts builds the schemas from the TS constants;
+      schemas/client-api.ids.json pins the values per release.
+    path: src/client-api.ts
+    type: module
+    tags: [gnomon, contracts, client-api, paradigm-8]
+    tests:
+      - test/refusal-rpc.test.ts
+      - test/contracts.test.ts

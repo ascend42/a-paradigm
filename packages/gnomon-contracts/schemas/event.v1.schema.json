@@ -1,0 +1,347 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ascend42/a-paradigm/packages/gnomon-contracts/schemas/event.v1.schema.json",
+  "title": "event:v1",
+  "description": "Gnomon kernel log envelope (spec §4.1). Labels default per kind (§9.1, x-gnomon-kinds).",
+  "x-gnomon-kinds": [
+    "approval.decide",
+    "approval.expire",
+    "approval.presence.denied",
+    "approval.request",
+    "approval.rule.learned",
+    "approval.suspect",
+    "approval.unlock",
+    "approval.unlock.dropped",
+    "approval.voice.arm",
+    "approval.voice.disarm",
+    "approval.voice.handle.rotated",
+    "approval.voice.held",
+    "approval.voice.intent",
+    "approval.voice.policy.narrowed",
+    "approval.voice.refused",
+    "approval.voice.withdrawn",
+    "billing.api.active",
+    "billing.api.card.requested",
+    "billing.api.ended",
+    "billing.api.refused",
+    "blob.pruned",
+    "budget.breaker.close",
+    "budget.breaker.open",
+    "budget.compute",
+    "budget.ladder",
+    "budget.pause",
+    "budget.resume",
+    "budget.usage",
+    "budget.window",
+    "calibration.contested",
+    "calibration.reviewer",
+    "config.ignored",
+    "config.loaded",
+    "config.prefs",
+    "config.unsigned",
+    "contract.built",
+    "contract.claim",
+    "contract.claimed",
+    "contract.knot",
+    "contract.progress",
+    "contract.registered",
+    "contract.released",
+    "daemon.exit",
+    "daemon.lock.refused",
+    "daemon.reexec",
+    "daemon.segment",
+    "daemon.start",
+    "decay.writeback",
+    "detector.event",
+    "digest.consumed",
+    "flow.event",
+    "gate-class.decided",
+    "gate-class.detected",
+    "inject.receipt",
+    "key.device.added",
+    "key.device.revoked",
+    "key.keystore.unavailable",
+    "key.mint",
+    "key.registry.malformed",
+    "key.registry.unsigned",
+    "key.rotate",
+    "link.auth.fail",
+    "link.brief.accepted",
+    "link.brief.declined",
+    "link.brief.drafted",
+    "link.brief.expired",
+    "link.brief.received",
+    "link.brief.sent",
+    "link.connect",
+    "link.declassified",
+    "link.disconnect",
+    "link.egress.refused",
+    "link.expired",
+    "link.frame.refused",
+    "link.msg.in",
+    "link.msg.out",
+    "link.pair.offered",
+    "link.paired",
+    "link.paused",
+    "link.rate",
+    "link.relay.unreachable",
+    "link.renewed",
+    "link.revoked",
+    "link.scan.hit",
+    "liveness.digest.consumed",
+    "liveness.violation",
+    "loop.closed",
+    "loop.open",
+    "loop.paused",
+    "loop.row",
+    "manifest.generate",
+    "manifest.installed",
+    "manifest.load",
+    "manifest.refuse",
+    "manifest.staged",
+    "manifest.uninstall",
+    "manifest.widened",
+    "merge.ci",
+    "merge.conflict",
+    "merge.landed",
+    "merge.tree",
+    "mod.dev.expired",
+    "mod.effect.refused",
+    "mod.health",
+    "mod.installed",
+    "mod.linked",
+    "mod.paused",
+    "mod.repinned",
+    "mod.rolled-back",
+    "mod.sandbox",
+    "mod.snapshot.refused",
+    "mod.stopped",
+    "mod.unlinked",
+    "mod.view.rendered",
+    "model.capabilities",
+    "model.fallback.decided",
+    "model.fallback.requested",
+    "model.probe",
+    "model.repair",
+    "neurons.event",
+    "oracle.result",
+    "oracle.run",
+    "paradigm.doodle.exported",
+    "paradigm.event",
+    "permit.deny",
+    "permit.grant",
+    "permit.release",
+    "permit.reserve",
+    "request.brief.send",
+    "request.cowork.allow",
+    "request.grant",
+    "request.link.revoke",
+    "request.voice.arm",
+    "request.voice.narrow",
+    "schedule.automation.due",
+    "schedule.dropped",
+    "schedule.due",
+    "schedule.tend.end",
+    "schedule.tend.start",
+    "session.alias",
+    "session.alias.rejected",
+    "session.exited",
+    "session.idle",
+    "session.inject",
+    "session.layers.changed",
+    "session.open",
+    "session.orphaned",
+    "session.refused",
+    "session.respawn",
+    "session.routed",
+    "session.sandbox",
+    "session.spawned",
+    "session.tainted",
+    "socket.auth.fail",
+    "socket.auth.ok",
+    "socket.auth.reconnect.requested",
+    "socket.auth.replay",
+    "socket.auth.theft",
+    "socket.connect",
+    "socket.frame.dropped",
+    "socket.frame.refused",
+    "socket.gui.session.ended",
+    "socket.gui.token.issued",
+    "socket.hello",
+    "socket.subscription.dropped",
+    "socket.web.bundle.mismatch",
+    "socket.web.linger",
+    "socket.web.listen",
+    "socket.web.stop",
+    "socket.web.transport.exited",
+    "tend.digest",
+    "tend.proposal.fate",
+    "tend.teacher.drafted",
+    "turn.ask-user",
+    "turn.event",
+    "turn.partial",
+    "turn.plan",
+    "turn.result",
+    "turn.sent",
+    "turn.steer",
+    "turn.usage",
+    "verdict.founder",
+    "voice.bargein",
+    "voice.deck",
+    "voice.enrol",
+    "voice.focus",
+    "voice.forget",
+    "voice.session.end",
+    "voice.session.start",
+    "voice.share",
+    "voice.tts.filtered",
+    "voice.turn.agent",
+    "voice.turn.user",
+    "warpline.admit",
+    "warpline.knot",
+    "warpline.pick",
+    "warpline.resolve",
+    "warpline.selvage.moved"
+  ],
+  "x-gnomon-open-namespaces": [
+    "credit",
+    "broke",
+    "modns"
+  ],
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "const": "event:v1"
+    },
+    "id": {
+      "type": "string",
+      "pattern": "^ev:[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+    },
+    "log": {
+      "type": "string",
+      "pattern": "^log:[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+    },
+    "seq": {
+      "type": "integer",
+      "minimum": 1
+    },
+    "at": {
+      "type": "string",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(\\.\\d+)?(Z|[+-]\\d{2}:\\d{2})$"
+    },
+    "principal": {
+      "type": "string",
+      "pattern": "^p:[0-9a-hjkmnp-tv-z]{8}\\/[a-z0-9][a-z0-9._-]{0,63}(@[0-9a-f]{8})?$"
+    },
+    "keyId": {
+      "type": "string",
+      "pattern": "^(gkey|gkey-p256|gkey-x25519):v1:[0-9a-f]{64}$"
+    },
+    "deviceId": {
+      "type": "string",
+      "pattern": "^dev:[0-9a-hjkmnp-tv-z]{8}\\/[A-Za-z0-9][A-Za-z0-9._-]{0,63}$"
+    },
+    "connId": {
+      "type": "string",
+      "pattern": "^conn:[0-7][0-9A-HJKMNP-TV-Z]{25}$"
+    },
+    "idem": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "session": {
+      "type": "string",
+      "pattern": "^hsid:(v1:[0-7][0-9A-HJKMNP-TV-Z]{25}|v1d:[0-9A-HJKMNP-TV-Z]{26})$"
+    },
+    "scope": {
+      "type": "object",
+      "properties": {
+        "org": {
+          "type": "null"
+        },
+        "team": {
+          "type": "null"
+        },
+        "repo": {
+          "type": "string",
+          "pattern": "^repo:[0-9a-f]{16}$"
+        },
+        "loop": {
+          "type": "string",
+          "pattern": "^loop:.+$"
+        },
+        "contract": {
+          "type": "string",
+          "pattern": "^contract:v1:[0-9a-f]{64}$"
+        }
+      },
+      "required": [
+        "org",
+        "team"
+      ],
+      "additionalProperties": false
+    },
+    "audience": {
+      "type": "string",
+      "enum": [
+        "private",
+        "team",
+        "org"
+      ]
+    },
+    "sensitivity": {
+      "type": "string",
+      "enum": [
+        "normal",
+        "sensitive",
+        "secret"
+      ]
+    },
+    "kind": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9-]*(\\.[a-z0-9][a-z0-9-]*)+$"
+    },
+    "causes": {
+      "type": "array",
+      "items": {
+        "type": "string",
+        "pattern": "^(ev|hsid|cc|gkey|dev|permit|card|contract|node|pev|peer|turn|spec|sym|wl|n|s|td|l|t|knot|doodle):[^\\s]+$"
+      }
+    },
+    "payload": {},
+    "ref": {
+      "type": "string",
+      "pattern": "^(ev|hsid|cc|gkey|dev|permit|card|contract|node|pev|peer|turn|spec|sym|wl|n|s|td|l|t|knot|doodle):[^\\s]+$"
+    },
+    "refHash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "prev": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "hash": {
+      "type": "string",
+      "pattern": "^sha256:[0-9a-f]{64}$"
+    },
+    "sig": {
+      "type": "string",
+      "minLength": 1
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "id",
+    "log",
+    "seq",
+    "at",
+    "principal",
+    "audience",
+    "sensitivity",
+    "kind",
+    "prev",
+    "hash"
+  ],
+  "additionalProperties": false
+}

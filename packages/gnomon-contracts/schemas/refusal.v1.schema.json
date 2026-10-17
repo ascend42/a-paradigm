@@ -1,0 +1,271 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/ascend42/a-paradigm/packages/gnomon-contracts/schemas/refusal.v1.schema.json",
+  "title": "refusal:v1",
+  "description": "Gnomon superset of Warpline refusal:v1 (spec §4.6). Every Warpline refusal validates (G-CON-02).",
+  "type": "object",
+  "properties": {
+    "schemaVersion": {
+      "const": "refusal:v1"
+    },
+    "code": {
+      "type": "string",
+      "enum": [
+        "GATE_REFUSED",
+        "CLAIM_BREACH",
+        "TRUST_HELD",
+        "STALE_BASE",
+        "INTEGRITY_BROKEN",
+        "AUTH",
+        "FORBIDDEN",
+        "BAD_REQUEST",
+        "UNKNOWN_VERB",
+        "NOT_FOUND",
+        "UNSUPPORTED",
+        "ENGINE",
+        "BUDGET_DENIED",
+        "PERMIT_REQUIRED",
+        "CAS_LOST",
+        "BILLING_REFUSED",
+        "MODEL_UNAVAILABLE"
+      ]
+    },
+    "verdict": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "gate": {
+      "type": "string",
+      "enum": [
+        "meaning",
+        "claim",
+        "trust",
+        "pick",
+        "transport",
+        "usage",
+        "budget",
+        "billing",
+        "model",
+        "voice",
+        "link"
+      ],
+      "x-gnomon-additive": true
+    },
+    "retriable": {
+      "type": "string",
+      "enum": [
+        "retry-identical",
+        "retry-corrected",
+        "retry-after-rebase",
+        "retry-after-resolve",
+        "retry-with-override",
+        "never"
+      ]
+    },
+    "contested": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "stableKey": {
+            "type": "string"
+          },
+          "symbol": {
+            "type": "string"
+          },
+          "rule": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "conflictingSlots": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "rank": {
+            "type": "string",
+            "enum": [
+              "direct",
+              "ripple"
+            ]
+          }
+        },
+        "required": [
+          "stableKey",
+          "symbol",
+          "rule",
+          "conflictingSlots",
+          "rank"
+        ],
+        "additionalProperties": false
+      },
+      "maxItems": 32
+    },
+    "contestedTotal": {
+      "type": "integer",
+      "minimum": 0
+    },
+    "pointers": {
+      "type": "object",
+      "properties": {
+        "knotPayloadId": {
+          "type": "string"
+        },
+        "proposedStateId": {
+          "type": "string"
+        },
+        "rebasedOnto": {
+          "type": "string"
+        },
+        "claimId": {
+          "type": "string"
+        },
+        "symbols": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [],
+      "additionalProperties": false
+    },
+    "next": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "verb": {
+            "type": "string",
+            "minLength": 1
+          },
+          "params": {
+            "type": "object",
+            "additionalProperties": {
+              "type": "string"
+            }
+          },
+          "requires": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          },
+          "principal": {
+            "type": "string",
+            "enum": [
+              "agent",
+              "human"
+            ]
+          }
+        },
+        "required": [
+          "verb",
+          "params",
+          "requires",
+          "principal"
+        ],
+        "additionalProperties": false
+      }
+    },
+    "override": {
+      "type": "object",
+      "properties": {
+        "flag": {
+          "type": "string",
+          "enum": [
+            "acceptBreach",
+            "acceptRisk"
+          ]
+        },
+        "principal": {
+          "const": "human"
+        }
+      },
+      "required": [
+        "flag",
+        "principal"
+      ],
+      "additionalProperties": false
+    },
+    "data": {
+      "type": "object",
+      "properties": {
+        "reason": {
+          "type": "string",
+          "enum": [
+            "voice-off",
+            "voice-not-armed",
+            "voice-custody",
+            "voice-peer",
+            "voice-surface",
+            "voice-conn",
+            "voice-project",
+            "voice-class",
+            "voice-hand-only",
+            "voice-ineligible",
+            "voice-target",
+            "voice-ambiguous",
+            "voice-handle",
+            "voice-stale-utterance",
+            "voice-grammar",
+            "voice-speaker",
+            "voice-echo",
+            "voice-playback",
+            "voice-readback-missing",
+            "voice-challenge",
+            "voice-confirm-expired",
+            "voice-route",
+            "voice-focus",
+            "voice-rate",
+            "held",
+            "link-unpaired",
+            "link-scope",
+            "link-expired",
+            "link-revoked",
+            "link-paused",
+            "link-rate",
+            "audience",
+            "sensitivity",
+            "secret-found",
+            "brief-replayed",
+            "brief-expired",
+            "brief-misaddressed",
+            "peer-always",
+            "peer-presence",
+            "peer-via",
+            "warpline-sync-absent",
+            "presence"
+          ],
+          "x-gnomon-additive": true
+        },
+        "offered": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "cardId": {
+          "type": "string"
+        }
+      }
+    }
+  },
+  "required": [
+    "schemaVersion",
+    "code",
+    "verdict",
+    "gate",
+    "retriable",
+    "contested",
+    "contestedTotal",
+    "pointers",
+    "next"
+  ],
+  "additionalProperties": false
+}

@@ -22,7 +22,8 @@
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "schemas": "npm run build && node scripts/write-schemas.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

@@ -1,11 +1,26 @@
 /**
  * @a-company/gnomon-contracts — the Gnomon kernel's versioned hard contracts
- * (spec §4, §18). Zero runtime dependencies. JSON Schemas live in ../schemas/.
+ * (spec §4, §18). Zero runtime dependencies, platform-neutral (no node:*).
+ * JSON Schemas live in ../schemas/ and are generated from src/schemas.ts.
  *
- * PR-0 ships only probeResult:v1; event:v1, ref:v1, refusal:v1 and the
- * gnomon-rpc:v1 `hello` shape land in PR-3 (research 29 §4).
+ * PR-0: probeResult:v1. PR-3 (research 29 §4): event:v1 + kind registry,
+ * ids (ULID, hsid, hsid-short, turn ids), principals, ref:v1, refusal:v1,
+ * card:v1, gnomon-rpc:v1 hello + negotiation + the compatible-additive rule,
+ * the frozen 12 verbs + 2 relays, kitId and clientApiId; the P8-D58 and P8-R9
+ * values reserved for M1.1.
  */
 
 export const CONTRACTS_PACKAGE = '@a-company/gnomon-contracts' as const;
 
 export * from './probe-result.js';
+export { isPlainObject, sha256, sha256Tagged, hex, crockford, canonicalJson, utf8 } from './internal.js';
+export type { ValidationMode, ValidateOptions } from './internal.js';
+export * from './ids.js';
+export * from './principal.js';
+export * from './ref.js';
+export * from './event.js';
+export * from './refusal.js';
+export * from './card.js';
+export * from './rpc.js';
+export * from './schemas.js';
+export * from './client-api.js';
