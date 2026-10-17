@@ -21,18 +21,38 @@ components:
       runner, supervisor, broker, budget, scheduler, manifest, refs, socket,
       web, sandbox, modhost) as empty directories at PR-0. Placeholder bins
       write to stdio directly: the kernel cannot depend on the Paradigm logger
-      (zero deps); #kernel-log brings its own logging at M1.2.
+      (zero deps); #kernel-log brings its own logging at M1.2. PR-5 adds
+      src/kernel/lifecycle/ — the $daemon-lifecycle core (spec §2.4): home
+      resolution (~/.gnomon; GNOMON_HOME is a test seam only, a detached daemon
+      gets --home in argv) created 0700 with the mode read back; the endpoint
+      path (<home>/gnomon.sock, $XDG_RUNTIME_DIR fallback on Linux on sun_path
+      overflow, never /tmp, refuse if nothing fits; win32 refuses pending the
+      P8-D78 parity phase); the O_EXCL daemonPid:v1 pidfile lock lifted from
+      warpline lifecycle.ts (live holder refuses, dead holder cleaned by
+      rename-and-inode-check and re-raced, empty file = racer mid-write); the
+      clean re-exec env (PATH fixed pending root-signed config, HOME/USERPROFILE,
+      LANG, LC_*; NODE_OPTIONS and GNOMON_* dropped); the idle-exit monitor
+      (holders = open #socket connections until sessions/subscribers exist).
+      bins: `gnomond [--foreground] [--home] [--idle-ms]`, `gnomon daemon
+      status|stop|--detach` (stop refuses not-implemented pending
+      #approval-broker, M1.6). Lifecycle events are emitted to a callback using
+      the spec §9.1 kinds daemon.start, daemon.exit{reason}, daemon.lock.refused
+      (the kernel log takes them at M1.2); the spec declares no signals.
     path: src/
     type: module
     tags: [gnomon, kernel, paradigm-8, scaffold]
     components:
       - "#gnomon-probes"
+      - "#socket"
     tests:
       - test/fence.test.ts
       - test/sec-01.test.ts
       - test/platform-registry.test.ts
       - test/version.test.ts
-    oracles: [G-KRN-02, G-SEC-01, G-WIN-05]
+      - test/daemon-lifecycle.test.ts
+      - test/idle-exit.test.ts
+      - test/reexec-env.test.ts
+    oracles: [G-KRN-02, G-SEC-01, G-WIN-05, G-DMN-01, G-DMN-02]
 
   gnomon-probes:
     description: >-
@@ -57,3 +77,46 @@ components:
     tags: [gnomon, probes, m1.0]
     tests:
       - test/probe-harness.test.ts
+
+  socket:
+    description: >-
+      #socket (spec §2.1, §4.9) — the kernel's gnomon-rpc:v1 endpoint. PR-5
+      core: unix-socket server bound under a 0177 umask, chmod 0600 and the
+      ACL read back (socket type, owner uid, mode) before serving; byte-based
+      NDJSON framing (4 MiB max frame, partial-line buffering that is UTF-8
+      safe across chunks, an oversize line discarded to its newline and
+      answered BAD_REQUEST once, malformed UTF-8/JSON/non-object lines refused
+      BAD_REQUEST, connection kept open); per-connection in-order replies;
+      local minimal frame/refusal shapes (contracts are rewritten in parallel —
+      no contract import) using the §4.9 code map. Verbs: `hello` answers a
+      refusal-shaped ENGINE not-implemented (M1.4 brings negotiation and
+      mutual auth), `daemon.status` and `daemon.stop` (refused pending
+      #approval-broker) are pre-ABI placeholders; anything else UNKNOWN_VERB.
+      Emits the §9.1 kinds socket.connect and socket.frame.refused{code} to a
+      callback; connect/disconnect drive $daemon-lifecycle idle accounting.
+      Windows named pipe: parity phase (P8-D78).
+    path: src/kernel/socket/
+    type: module
+    tags: [gnomon, kernel, socket, paradigm-8, pr-5]
+    tests:
+      - test/ndjson-framing.test.ts
+      - test/socket-server.test.ts
+    oracles: [G-DMN-02]
+
+flows:
+  daemon-lifecycle:
+    description: >-
+      $daemon-lifecycle (spec §2.4; PR-5 core of M1.9). (1) client activation —
+      `gnomon daemon --detach` re-execs gnomond with the clean env and home in
+      argv, then waits for the socket; (2) one per user — home 0700 read back,
+      endpoint path chosen (never /tmp), O_EXCL daemonPid:v1 pidfile acquired
+      (live holder refuses with daemon.lock.refused, dead holder reclaimed);
+      (3) #socket listens at 0600 and daemon.start is emitted; (4) idle exit —
+      no open connections for idleMs (default 10 min) ⇒ daemon.exit{reason:
+      'idle'}, socket closed, pidfile and socket released only if still ours;
+      SIGTERM/SIGINT take the same path with reason 'signal'. Not yet built:
+      sessions/subscribers/timers as holders, mod and transport-child stop,
+      orphan sweep, the Windows pipe.
+    steps:
+      - "#gnomon-kernel"
+      - "#socket"

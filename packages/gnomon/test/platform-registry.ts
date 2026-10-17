@@ -20,4 +20,9 @@ export interface PlatformRow {
   na?: string;
 }
 
-export const PLATFORM_REGISTRY: PlatformRow[] = [];
+export const PLATFORM_REGISTRY: PlatformRow[] = [
+  // PR-5 $daemon-lifecycle core + #socket, macOS-first (P8-D78).
+  { test: 'test/daemon-lifecycle.test.ts', platforms: ['darwin', 'linux'], na: 'Windows parity phase (P8-D78): unix-socket endpoint only; the named pipe via the signed helper waits for probe P03' },
+  { test: 'test/socket-server.test.ts', platforms: ['darwin', 'linux'], na: 'Windows parity phase (P8-D78): unix-socket endpoint only; the named pipe via the signed helper waits for probe P03' },
+  { test: 'test/idle-exit.test.ts', platforms: ['darwin', 'linux'], na: 'Windows parity phase (P8-D78): unix-socket endpoint only; the named pipe via the signed helper waits for probe P03' },
+];

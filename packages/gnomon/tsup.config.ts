@@ -19,4 +19,7 @@ export default defineConfig({
   // Ships later as a signed Node SEA; keep the output single-file per entry.
   splitting: false,
   noExternal: ['@a-company/gnomon-contracts'],
+  // Keep the `node:` prefix on built-ins (tsup strips it by default), so the
+  // G-KRN-02 dist scan can tell a built-in from a bare package import.
+  removeNodeProtocol: false,
 });
