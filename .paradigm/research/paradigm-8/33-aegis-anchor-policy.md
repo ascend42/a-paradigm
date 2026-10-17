@@ -74,3 +74,49 @@ So the stalling-state p99.9 floor is real across all arms in some runs, raw SQLi
 - Add arm G to `p-log-fsync` (D+E plus forced F_FULLFSYNC + anchor at 1/64) before G-LOG-04 is re-cut.
 - Add arm H (keystore via helper) once P04 lands.
 - Re-run at 10⁶ rows. B's slow rate grows with db size, so 3×10⁵ understates it.
+
+## Addendum — S33-10: critical-commit durability (D83)
+
+Evidence: arm G (`p-log-fsync-armG-1e6.darwin.json`) put critical commits at p50 56 ms, p99 490 ms and max 1.7 s, which fails the 25 ms budget. Bulk p99 stayed at 0.27 ms. The 1/s comparison sets the final numbers.
+
+**What each mechanism guarantees (Apple Silicon internal SSD, APFS):**
+
+| mechanism | process kill | kernel panic | power loss |
+|---|---|---|---|
+| commit, no extra flush (`synchronous=FULL` ⇒ fsync(2) on WAL) | safe (survives once write() returns) | probably safe; whether the SoC storage controller's cache survives a panic reset is unverified | neither durable nor ordered; the drive cache may write back in any order |
+| F_BARRIERFSYNC | safe | safe | ordered prefix, not durable. Upstream SQLite has no path to it, and libuv's `fs.fsync` uses F_FULLFSYNC first, so it is effectively unreachable |
+| F_FULLFSYNC | safe | safe | durable, and implies ordering |
+
+The commit already uses fsync(2), so "plain fsync" and "no extra flush" are the same arm for the commit.
+
+**Which threat this serves.** The S33-01..03 adversary is a same-user process. It reads the page cache, and it can SIGSTOP, kill and truncate. It cannot cut power or cause a panic. The rule "no effect before the anchor" is a **visibility ordering** property: the commit returns, then the keystore write is awaited, then the effect is released. Program order already provides this; no disk flush adds anything against this adversary.
+
+Power-loss correctness is a separate **consistency/availability** property: a durable anchor should never be ahead of the durable db. D82 never fully had it. Bulk keystore anchors (1/s, written after fsync(2)-only commits) can already persist ahead of a lost WAL tail, and F_FULLFSYNC on critical rows alone does not remove the false-`truncated` mode. Securityd's own flush might order our earlier WAL writes, but nothing guarantees it. Verify in P04.
+
+**Anchor durable, db commit lost.** After a power loss or panic the keystore anchor is at seq N, the db head is below N, and open reports `truncated`. A same-user attacker who kills the kernel, truncates, and waits for the next reboot produces the same on-disk state. **The cause can be classified but must never downgrade the verdict.**
+
+**Recommendation (P8-D83):**
+
+1. **Mechanism:** critical commits use the bulk durability (`synchronous=FULL`, no `PRAGMA fullfsync`). Sequence: commit, then file-anchor rename, then **awaited** keystore write, then release the effect. F_FULLFSYNC stays only under the opt-in `durability:'power-loss'`, plus genesis, rotation and close.
+   Decision rule: if the 1/s arm shows F_FULLFSYNC p99 < 25 ms, the stronger variant is acceptable *only* as "flush before every keystore write": one F_FULLFSYNC on any fd on the volume (it flushes the whole drive cache), run inside the serialised keystore writer for bulk and critical alike. Adding it only to critical rows costs latency and does not close the bulk false-alarm mode.
+2. **Open-path rules:**
+   - Every anchor records `boot` = `kern.bootsessionuuid` (helper-supplied boot id on Windows). Only the keystore copy is authoritative, because a same-user process can rewrite the file anchor.
+   - Keystore ahead of db, **same boot** ⇒ `INTEGRITY_BROKEN{truncated, cause:'tamper'}`. No power loss can have happened.
+   - Ahead, **different boot**, file anchor not `closed` ⇒ `INTEGRITY_BROKEN{truncated, cause:'unclean-reboot'}`. The log still refuses appends. Recovery is presence-gated and appends a kernel-signed `daemon.log.gap{lostFrom, lostTo, lostHash, bootPrev, bootNow}`.
+   - Ahead after a `closed` anchor ⇒ `tamper`. A clean close is durable.
+   - Optional: critical anchors carry `kind`, so the gap row can name what was lost.
+
+**§3.2, replacing the D82 critical sentence:** "For a critical kind (list), `append` resolves only after the commit, the file anchor and the keystore anchor have completed, in that order, and no effect of the event is released before then. This is an ordering guarantee against a same-user process, not a power-loss guarantee. Each anchor records the boot session. On open, a keystore anchor ahead of the db is `INTEGRITY_BROKEN{truncated}`, with `cause` `tamper` if the boot session is unchanged or the last anchor was a clean close, and `unclean-reboot` otherwise. Neither cause is accepted silently. Recovery requires presence and appends a signed `daemon.log.gap`."
+
+**Falsifiers:**
+- **G-LOG-04:** bulk clauses unchanged at 10⁶ rows. The critical class is measured at **1/s for ≥ 600 events**, interleaved with bulk background load: p99 < 25 ms; report p99.9 and max. The 1/64 sustained mix (arm G) stays as a reported stress figure, not asserted.
+- **G-LOG-10:** unchanged (the security property), plus one assertion: the keystore write starts only after COMMIT returns.
+- **G-LOG-11 (new), power-loss classification by fixtures:**
+  - (a) keystore ahead, same boot ⇒ `truncated/tamper`
+  - (b) ahead, different boot, not closed ⇒ `truncated/unclean-reboot`, appends refused
+  - (c) ahead, different boot, closed ⇒ `tamper`
+  - (d) a forged `boot` in the file anchor alone changes nothing
+  - (e) ack ⇒ exactly one signed `daemon.log.gap`, and the chain verifies across it
+  - Manual (release candidate): one hard power cut on a desktop Mac at 1/s critical load; record which cause is reported.
+
+**To verify before the spec adopts this:** panic survival of the storage-controller cache; securityd's flush behaviour (P04); libuv on Darwin using F_FULLFSYNC; `kern.bootsessionuuid` reachable without new deps (spawn `/usr/sbin/sysctl` once at open, or helper-supplied). Comment drift to fix with the change: the `kernel-log.ts` header (lines 60–62) claims a power loss can never leave an anchor ahead of the db, which is false for bulk keystore anchors. Minor correction to S33-01: surviving a kill comes from write() completing; `synchronous=FULL` matters for OS crashes.
