@@ -85,10 +85,12 @@
  * `openForRecovery` returns a log that refuses appends until
  * `acknowledgeGap({presenceToken})` (presence-gated, unclean-reboot only)
  * appends a kernel-signed daemon.log.gap{lostFrom, lostTo, lostHash,
- * bootPrev, bootNow} and re-anchors. Hash ≠ row hash ⇒ anchor-mismatch;
- * missing on an existing log ⇒ anchor-missing; file-anchor lag > 63, or any
- * lag behind a clean-close anchor ⇒ anchor-lag; keystore lag > 1023 ⇒ a
- * kernel-signed daemon.anchor.lag{rows, which} row. A clean-close KEYSTORE
+ * bootPrev, bootNow, fileLag} and re-anchors. Hash ≠ row hash ⇒ anchor-mismatch;
+ * missing on an existing log ⇒ anchor-missing; file-anchor lag > 63 (unless
+ * relaxed across a boot change, P8-D85 below, or classified truncated when
+ * the keystore anchor is ahead, S34-24), or any lag behind a
+ * clean-close anchor ⇒ anchor-lag; keystore lag > 1023 ⇒ a kernel-signed
+ * daemon.anchor.lag{rows, which} row. A clean-close KEYSTORE
  * anchor (authoritative) with any lag is anchor-lag too (S34-05).
  *
  * ANCHOR FAULTS (S34-02): any failure after a critical row's COMMIT (file
@@ -117,14 +119,37 @@
  * that would reach the segment boundary, or an open that would have to record
  * one, is refused BEFORE any commit with FORBIDDEN{kernel-key-required}.
  *
- * KNOWN GAPS — FOUNDER DECISION PENDING:
- *   (a) with the stub keystore (until M1.3) there is no authoritative boot,
- *       so every truncation classifies `tamper` and cannot be acknowledged:
- *       a known no-recovery window; the recovery path is the quarantine
- *       command, task T-2026-10-17-009.
- *   (b) the S33-07 file-anchor bound (lag > 63 ⇒ anchor-lag) is not
- *       power-loss-safe: un-fsynced file-anchor renames can roll back after a
- *       power cut, so a genuine power loss can trip it.
+ * KNOWN GAPS — DECIDED:
+ *   (a) DECIDED P8-D84: accepted dev-only until T-2026-10-17-009. With the
+ *       stub keystore (until M1.3) there is no authoritative boot, so every
+ *       truncation classifies `tamper` and cannot be acknowledged: a known
+ *       no-recovery window; the recovery path is the quarantine command,
+ *       task T-2026-10-17-009.
+ *   (b) DECIDED P8-D85: the S33-07 file-anchor bound (lag > 63 ⇒ anchor-lag)
+ *       is not power-loss-safe (un-fsynced file-anchor renames can roll back
+ *       after a power cut), so it is relaxed ACROSS A BOOT CHANGE only. At
+ *       open, after the truncation check, a file-anchor lag > 63 opens ONLY
+ *       if ALL hold: the keystore anchor is present with no `closed`; it
+ *       passes the full anchor check (hash matches at its seq, not ahead) and
+ *       is within its own lag bound or produces the existing keystore lag
+ *       row; bootPrev (the KEYSTORE anchor's recorded boot, normalised) and
+ *       bootNow are both known and differ; and the file anchor's hash still
+ *       matches the row at its seq (only the lag is relaxed; a mismatch still
+ *       refuses anchor-mismatch). When relaxed, a kernel-signed
+ *       `daemon.anchor.lag{rows, which: 'file', bootPrev, bootNow}` is
+ *       appended; a keyless log refuses FORBIDDEN{kernel-key-required}.
+ *       Everything else refuses INTEGRITY_BROKEN{anchor-lag} (with
+ *       `data.relax` naming why): same boot; either boot unknown; keystore
+ *       stub/unavailable (relax: keystore-unavailable), absent or
+ *       malformed; a pre-D83 anchor without boot (relax: boot-unknown);
+ *       keystore closed; a file anchor marked closed with any lag. The file
+ *       anchor's own `boot` is never consulted. A relaxed lag defers every
+ *       open-time anchor write (file rewrite, rotation, marker/keystore-lag
+ *       re-anchor) until the signed row is committed. S34-24: when the
+ *       KEYSTORE anchor is ahead, the open classifies `truncated` (cause from
+ *       the keystore boot) whatever the file lag: the file anchor still gets
+ *       the hash and clean-close checks, only the > 63 bound is skipped, and
+ *       its lag is reported as `fileLag` (also in daemon.log.gap).
  *
  * SIGNATURES (§3.2, §3.1) — see signer.ts and chain.ts. Unsigned rows are
  * accepted only for the diagnostic namespaces; the mandatory list refuses
@@ -263,6 +288,12 @@ export interface TruncationReport {
   /** Which anchors are ahead of the db (S34-04 / report nit). */
   ahead: { file: boolean; keystore: boolean };
   /**
+   * S34-24: rows the FILE anchor lags the db by while the keystore anchor is
+   * ahead (0 when the file anchor is ahead or exact). Not bounded by the > 63
+   * file-anchor bound here: the keystore anchor classifies the truncation.
+   */
+  fileLag: number;
+  /**
    * S34-04: only the FILE anchor leads while a keystore anchor is present and
    * not ahead — the lead is unauthenticated (a same-user process can write the
    * file anchor), so acknowledgeGap refuses FORBIDDEN{unauthenticated-lead}.
@@ -296,7 +327,7 @@ export interface OpenReport {
   logId: string;
   created: boolean;
   recoveredRotation: boolean;
-  /** Rows the file anchor lagged the db by at open (crash between commit and anchor write; ≤ 63 or refused). */
+  /** Rows the file anchor lagged the db by at open (crash between commit and anchor write; ≤ 63, or > 63 relaxed across a boot change with a daemon.anchor.lag{which: 'file'} row (P8-D85), or refused). */
   anchorLag: number;
   /** Rows the keystore anchor lagged by at open (> 1023 ⇒ a daemon.anchor.lag row was appended). */
   keystoreLag: number;
@@ -599,6 +630,7 @@ export class KernelLog {
     const anchors = { file: 'ok' as AnchorState, keystore: 'unavailable' as AnchorState };
     let anchorLag = 0;
     let keystoreLag = 0;
+    let fileLagRelaxed: { bootPrev: string; bootNow: string } | undefined;
     let ks = this.#keystoreAnchor.read();
     this.#ksAvailable = ks.state !== 'unavailable';
     const boot = this.#boot;
@@ -632,18 +664,23 @@ export class KernelLog {
     } else {
       // check the anchor against the db as found, BEFORE completing any rotation
       anchorLag = this.#checkAnchor(anchorRead, 'file');
-      this.#checkFileLag(anchorRead, anchorLag);
+      fileLagRelaxed = this.#checkFileLag(anchorRead, anchorLag, ks);
       if (anchorLag > 0) {
         anchors.file = 'lagging-repaired';
         this.#diag('anchor.lag.repaired', { lag: anchorLag });
       }
       // durable rewrite on every open: repairs a lag AND clears the clean-close
       // marker, so a crash later in this run is never read as a post-close lag.
-      this.#fileAnchor.write(this.#headAnchor(), true);
+      // P8-D85: NOT when the lag is relaxed — the lagging file anchor is the
+      // evidence until the signed daemon.anchor.lag{which: 'file'} row is
+      // committed (a crash before it must reopen into the same relaxation,
+      // never into a clean open with no row). The write after the row covers it.
+      if (!fileLagRelaxed) this.#fileAnchor.write(this.#headAnchor(), true);
     }
     if (this.#tip.kind === 'daemon.segment') {
-      // crashed after the closing row, before the rename: finish the rotation.
-      this.#finishRotation();
+      // crashed after the closing row, before the rename: finish the rotation
+      // (P8-D85: without its anchor writes while a relaxed lag is unrecorded).
+      this.#finishRotation(!fileLagRelaxed);
       recoveredRotation = true;
     }
     if (ks.state === 'unavailable') anchors.keystore = 'unavailable';
@@ -660,7 +697,14 @@ export class KernelLog {
         this.#appendRow({ kind: 'daemon.anchor.lag', principal: this.#opts.kernelPrincipal, payload: { rows: keystoreLag, which: 'keystore' } });
         this.#diag('anchor.keystore.lag', { rows: keystoreLag });
       }
-      if (marked > 0 || keystoreLag > KEYSTORE_ANCHOR_MAX_LAG) this.#fileAnchor.write(this.#headAnchor(), true);
+      // P8-D85: deferred to after the file-lag row when the lag is relaxed (evidence first).
+      if (!fileLagRelaxed && (marked > 0 || keystoreLag > KEYSTORE_ANCHOR_MAX_LAG)) this.#fileAnchor.write(this.#headAnchor(), true);
+    }
+    if (fileLagRelaxed) {
+      // P8-D85: a file-anchor lag > 63 across a boot change (a rolled-back rename after a power cut) — record it; kernel-signed.
+      this.#appendRow({ kind: 'daemon.anchor.lag', principal: this.#opts.kernelPrincipal, payload: { rows: anchorLag, which: 'file', ...fileLagRelaxed } });
+      this.#diag('anchor.file.lag.cross-boot', { rows: anchorLag, ...fileLagRelaxed });
+      this.#fileAnchor.write(this.#headAnchor(), true);
     }
     this.#ksConfirmedSeq = ks.state === 'present' ? Math.min(ks.head.seq, this.#tip.seq) : this.#tip.seq;
     // S34-01: re-stamp the keystore anchor with THIS boot on every open (also
@@ -681,14 +725,54 @@ export class KernelLog {
     return { created, recoveredRotation, anchorLag, keystoreLag, anchors, boot, integrity: { state: 'ok' } };
   }
 
-  /** File-anchor lag bounds (S33-07): > 63 rows, or any lag behind a clean-close FILE anchor (secondary to the keystore check). */
-  #checkFileLag(a: AnchorReadResult, lag: number): void {
+  /** Any lag behind a clean-close FILE anchor ⇒ anchor-lag (secondary to the keystore check; never relaxed). */
+  #checkFileCloseLag(a: AnchorReadResult, lag: number): void {
     if (lag > 0 && a.state === 'present' && a.head.closed) {
       throw logRefusal('INTEGRITY_BROKEN', 'anchor-lag', `the file anchor lags the log by ${lag} rows after a clean close`, { anchor: 'file', lag, cleanClose: true });
     }
-    if (lag > FILE_ANCHOR_MAX_LAG) {
-      throw logRefusal('INTEGRITY_BROKEN', 'anchor-lag', `the file anchor lags the log by ${lag} rows (bound ${FILE_ANCHOR_MAX_LAG})`, { anchor: 'file', lag, bound: FILE_ANCHOR_MAX_LAG });
+  }
+
+  /**
+   * File-anchor lag bounds (S33-07) on the main open path (after the
+   * truncation check): any lag behind a clean-close FILE anchor, or > 63 rows.
+   * P8-D85: a lag > 63 is relaxed across a boot change — returns the boot
+   * pair to record in a daemon.anchor.lag{which: 'file'} row.
+   */
+  #checkFileLag(a: AnchorReadResult, lag: number, ks: AnchorReadResult): { bootPrev: string; bootNow: string } | undefined {
+    this.#checkFileCloseLag(a, lag);
+    if (lag <= FILE_ANCHOR_MAX_LAG) return undefined;
+    const relax = this.#crossBootRelax(ks);
+    if (typeof relax !== 'string') {
+      if (!this.#opts.signer) throw keyRequired('daemon.anchor.lag', `the file anchor lags by ${lag} rows (> ${FILE_ANCHOR_MAX_LAG}) across a boot change`);
+      return relax;
     }
+    throw logRefusal('INTEGRITY_BROKEN', 'anchor-lag', `the file anchor lags the log by ${lag} rows (bound ${FILE_ANCHOR_MAX_LAG}; not relaxed: ${relax})`, {
+      anchor: 'file',
+      lag,
+      bound: FILE_ANCHOR_MAX_LAG,
+      relax,
+    });
+  }
+
+  /**
+   * P8-D85: may a file-anchor lag > 63 be relaxed? Only the KEYSTORE anchor
+   * is consulted (the file anchor's own `boot` never is): it must be present,
+   * not a clean close, pass the full anchor check (a mismatch / other log
+   * throws its own refusal; ahead cannot reach here — the truncation check
+   * ran first, S34-24), and record a known boot that differs from this known boot.
+   * Returns the boot pair, or the reason the bound stays strict.
+   */
+  #crossBootRelax(ks: AnchorReadResult): { bootPrev: string; bootNow: string } | string {
+    if (ks.state === 'unavailable') return 'keystore-unavailable';
+    if (ks.state !== 'present') return `keystore-${ks.state}`;
+    if (ks.head.closed) return 'keystore-closed';
+    if (ks.head.seq > this.#tip.seq) return 'keystore-ahead'; // defensive, unreachable: an ahead keystore anchor is classified by #truncation first
+    this.#checkAnchor(ks, 'keystore');
+    const bootPrev = normalizeBootId(ks.head.boot ?? '');
+    const bootNow = this.#boot;
+    if (bootPrev === BOOT_UNKNOWN || bootNow === BOOT_UNKNOWN) return 'boot-unknown';
+    if (bootPrev === bootNow) return 'same-boot';
+    return { bootPrev, bootNow };
   }
 
   /** S34-05: any lag behind a clean-close KEYSTORE anchor (the authoritative clean-close marker) ⇒ anchor-lag. */
@@ -715,6 +799,7 @@ export class KernelLog {
     if (this.#keyRing.verify(e.keyId, 'event', r.hash, Buffer.from(r.sig, 'base64')) !== 'ok') return undefined;
     if (e.payload?.lostTo !== k.seq || e.payload?.lostHash !== k.hash) return undefined;
     const { closed: _c, ...rest } = k;
+    // Re-stamped with the CURRENT boot: a following file-anchor lag > 63 then reads same-boot and refuses (P8-D85, fail-closed).
     return { ...rest, segment: this.#meta.segment, seq: this.#tip.seq, hash: this.#tip.hash, at: this.#tip.at, boot: this.#boot };
   }
 
@@ -780,7 +865,16 @@ export class KernelLog {
     const fileAhead = ahead(file);
     if (!ksAhead && !fileAhead) return undefined;
     if (!ksAhead) this.#checkKeystoreCloseLag(ks, this.#checkAnchor(ks, 'keystore'));
-    if (!fileAhead) this.#checkFileLag(file, this.#checkAnchor(file, 'file'));
+    // S34-24: here !fileAhead ⇒ the KEYSTORE anchor is ahead and classifies
+    // this as truncated. The file anchor still gets the full hash check and
+    // the clean-close check; only the > 63 bound is skipped (a rolled-back
+    // file rename is part of the same power cut) — its lag is reported as
+    // `fileLag` and recorded in daemon.log.gap.
+    let fileLag = 0;
+    if (!fileAhead) {
+      fileLag = this.#checkAnchor(file, 'file');
+      this.#checkFileCloseLag(file, fileLag);
+    }
     const lost = (ksAhead ?? fileAhead)!;
     const auth = ks.state === 'present' && ks.head.log === this.#meta.log ? ks.head : undefined;
     const bootPrev = normalizeBootId(auth?.boot ?? '');
@@ -797,6 +891,7 @@ export class KernelLog {
       bootNow,
       cleanClose,
       ahead: { file: Boolean(fileAhead), keystore: Boolean(ksAhead) },
+      fileLag,
       unauthenticatedLead: !ksAhead && ks.state === 'present',
     };
   }
@@ -1250,7 +1345,7 @@ export class KernelLog {
   }
 
   /** Seal the active segment (its last row is daemon.segment) and start the next. */
-  #finishRotation(): void {
+  #finishRotation(writeAnchors = true): void {
     const sealedMeta = this.#meta;
     const tip = this.#tip;
     this.#db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
@@ -1271,7 +1366,7 @@ export class KernelLog {
     this.#createSegment({ log: sealedMeta.log, segment: sealedMeta.segment + 1, baseSeq: tip.seq + 1, basePrev: tip.hash });
     this.#attach();
     this.#tip = { ...this.#tip, at: tip.at };
-    void this.#writeAnchorsDurable();
+    if (writeAnchors) void this.#writeAnchorsDurable();
     this.#diag('segment.sealed', { segment: sealedMeta.segment, lastSeq: tip.seq });
   }
 
@@ -1380,7 +1475,7 @@ export class KernelLog {
         kind: 'daemon.log.gap',
         principal: this.#opts.kernelPrincipal,
         signer: this.#opts.signer,
-        payload: { lostFrom: t.lostFrom, lostTo: t.lostTo, lostHash: t.lostHash, bootPrev: t.bootPrev, bootNow: t.bootNow },
+        payload: { lostFrom: t.lostFrom, lostTo: t.lostTo, lostHash: t.lostHash, bootPrev: t.bootPrev, bootNow: t.bootNow, fileLag: t.fileLag },
       });
       this.#noteForced(true);
       this.#counts.forcedAnchors++;

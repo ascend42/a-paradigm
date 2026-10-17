@@ -47,9 +47,12 @@ type Row = [ns: string, owner: KindOwner, kinds: string, reserved?: typeof D58 |
 
 /** §9.1, namespace by namespace. Kinds are the names before `{…}`. */
 const TABLE: Row[] = [
-  // daemon.anchor.lag{rows, which}: research 33 S33-07 (P8-D82) — keystore anchor lag > 1023 on open.
-  // daemon.log.gap{lostFrom, lostTo, lostHash, bootPrev, bootNow}: research 33 S33-10 (P8-D83) — presence-gated
-  // acknowledgement of rows lost to an unclean reboot (keystore anchor ahead of the db, boot session changed).
+  // daemon.anchor.lag{rows, which, bootPrev?, bootNow?}: research 33 S33-07 (P8-D82) — keystore anchor lag > 1023 on open
+  // (which: 'keystore'); P8-D85 — file-anchor lag > 63 relaxed across a boot change (which: 'file', with the
+  // keystore anchor's recorded boot as bootPrev and this boot as bootNow; additive).
+  // daemon.log.gap{lostFrom, lostTo, lostHash, bootPrev, bootNow, fileLag}: research 33 S33-10 (P8-D83) — presence-gated
+  // acknowledgement of rows lost to an unclean reboot (keystore anchor ahead of the db, boot session changed);
+  // fileLag (S34-24, P8-D85, additive) = rows the file anchor lagged the db by at open (0 if ahead or exact).
   // daemon.anchor.failed{seq, kind}: research 33 S34-02 (P8-D83) — a critical row whose anchoring failed after COMMIT;
   // projections treat that seq as not having taken effect.
   ['daemon', 'kernel', 'start exit lock.refused segment reexec anchor.lag log.gap anchor.failed'],

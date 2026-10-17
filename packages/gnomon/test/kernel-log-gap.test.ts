@@ -333,7 +333,7 @@ describe('G-LOG-11: an anchor ahead of the db is classified, never downgraded (S
     const ack = await log.acknowledgeGap({ presenceToken: 'stub-presence' });
     expect(ack).toMatchObject({ seq: 5, anchored: 'both' });
     expect(ack.event.kind).toBe('daemon.log.gap');
-    expect(ack.event.payload).toEqual({ lostFrom: 5, lostTo: 6, lostHash, bootPrev: BOOT_A, bootNow: BOOT_B });
+    expect(ack.event.payload).toEqual({ lostFrom: 5, lostTo: 6, lostHash, bootPrev: BOOT_A, bootNow: BOOT_B, fileLag: 0 });
     expect(ack.event.sig).toBeTruthy();
     expect(ack.event.keyId).toBe(KERNEL_KEY.keyId);
     // both anchors re-written at the gap row in this boot (keystore awaited)

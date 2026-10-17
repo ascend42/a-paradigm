@@ -168,7 +168,7 @@ components:
       writing no anchor; acknowledgeGap({presenceToken}) (presence = stub
       seam, non-empty token, real presence wired at M1.3; unclean-reboot
       only) appends one kernel-signed daemon.log.gap{lostFrom, lostTo,
-      lostHash, bootPrev, bootNow} (contracts kind added, reserved to the
+      lostHash, bootPrev, bootNow, fileLag} (contracts kind added, reserved to the
       log) and re-anchors durably; the chain verifies across it. ROUND-2
       HARDENING (research 33 S34-xx): every non-recovery open re-stamps the
       keystore anchor with the current boot and the first append waits for it
@@ -210,20 +210,38 @@ components:
       sides; `unknown` is not cached and emits onDiagnostic `boot.unknown`
       (S34-21). `fileAnchorMaxMs` test seam (S34-23). Keystore timeout runs
       from dequeue; while a timed-out write is unsettled new writes refuse at
-      once (order kept, no hang). KNOWN GAPS — FOUNDER DECISION PENDING: (a)
-      with the stub keystore (until M1.3) every truncation classifies `tamper`
-      and cannot be acknowledged — a no-recovery window; recovery path = the
-      quarantine command, task T-2026-10-17-009; (b) the S33-07 file-anchor
-      lag > 63 bound is not power-loss-safe (un-fsynced renames can roll back).
+      once (order kept, no hang). KNOWN GAPS — DECIDED: (a) P8-D84 —
+      accepted dev-only until T-2026-10-17-009: with the stub keystore (until
+      M1.3) every truncation classifies `tamper` and cannot be acknowledged —
+      a no-recovery window; recovery path = the quarantine command; (b) P8-D85
+      — the S33-07 file-anchor lag > 63 bound is not power-loss-safe
+      (un-fsynced renames can roll back), so at open, after the truncation
+      check, it is relaxed ONLY when the keystore anchor is present, not
+      closed, passes the full anchor check, and records a known boot that
+      differs from this known boot, and the file anchor's hash still matches
+      its row; a relaxed open appends a kernel-signed
+      daemon.anchor.lag{rows, which: 'file', bootPrev, bootNow} (keyless ⇒
+      FORBIDDEN{kernel-key-required}); every other case (same boot, unknown
+      boot, stub/absent/malformed/pre-D83/closed keystore, closed file anchor;
+      pre-D83 ⇒ relax boot-unknown) refuses anchor-lag with `data.relax`
+      naming why. The file anchor's own boot is never consulted. A relaxed
+      lag defers every open-time anchor write (file rewrite, rotation
+      completion, marker/keystore-lag re-anchor) until the signed row is
+      committed (evidence first). S34-24: keystore anchor ahead + any file
+      lag ⇒ truncated (cause from the keystore boot); the file anchor still
+      gets the hash and clean-close checks, only the > 63 bound is skipped,
+      and its lag is TruncationReport.fileLag and daemon.log.gap.fileLag
+      (additive).
       `forcedAnchorRate` / `anchorStatus` = status.log telemetry (forced
       anchors per row over the last 10⁴ rows; > 1/64 = outside the measured
       envelope). Open refuses INTEGRITY_BROKEN on missing-db (with anchor,
       sealed segment or keys present), truncated (either anchor ahead of the
       db, with the S33-10 cause), anchor-mismatch, anchor-missing, and anchor-lag (file anchor > 63
-      rows behind, or any lag behind a clean-close anchor); a smaller lag is
+      rows behind unless relaxed across a boot change per P8-D85, or any lag
+      behind a clean-close anchor); a smaller lag is
       accepted only as a chain prefix and repaired; keystore lag > 1023
       appends a kernel-signed daemon.anchor.lag{rows, which}
-      (contracts kind added). Fsync
+      (contracts kind added; bootPrev/bootNow additive for which: 'file'). Fsync
       policy: WAL + synchronous=FULL (default 'process-crash'); 'power-loss'
       adds fullfsync (~10 ms/commit on Apple SSD, above the 5 ms falsifier).
       G-LOG-04 (test:perf, one attempt): bulk p99 < 5 ms / ≤ 0.1 % over 5 ms,
@@ -238,12 +256,13 @@ components:
       wiring $daemon-lifecycle events into the log.
     path: src/kernel/log/
     type: module
-    tags: [gnomon, kernel, log, paradigm-8, pr-4, m1.2, p8-d82, p8-d83]
+    tags: [gnomon, kernel, log, paradigm-8, pr-4, m1.2, p8-d82, p8-d83, p8-d84, p8-d85]
     aspects: ["~ample-internal-logs"]
     tests:
       - test/kernel-log.test.ts
       - test/kernel-log-posix.test.ts
       - test/kernel-log-gap.test.ts
+      - test/kernel-log-crossboot.test.ts
     oracles: [G-LOG-01, G-LOG-02, G-LOG-03, G-LOG-04, G-LOG-06, G-LOG-07, G-LOG-08, G-LOG-09, G-LOG-10, G-LOG-11]
 
 flows:
