@@ -4,10 +4,11 @@ description: Composite GitHub Actions shared by the workflows in ../workflows.
 components:
   install-deps-action:
     description: >-
-      install-deps — npm ci plus the npm/cli#4828 workaround: installs
-      @rollup/rollup-<platform>-<arch>[-gnu|-musl|-msvc] derived from
-      process.platform/arch (glibc detected via process.report) at the resolved
-      rollup version, skipping when already present. Was hardcoded to
+      install-deps — npm ci plus the npm/cli#4828 workaround: installs the
+      native bindings @rollup/rollup-<triple> (tsup) and @rolldown/binding-<triple>
+      (vitest/vite), triple = <platform>-<arch>[-gnu|-musl|-msvc] derived from
+      process.platform/arch (glibc detected via process.report), at the resolved
+      host package version, skipping when already present or the host is absent. Was hardcoded to
       linux-x64-gnu, which breaks tsup on Windows/macOS runners resolved from a
       lockfile made on another OS. Used by ci.yml, release.yml and gnomon.yml.
     path: install-deps/action.yml

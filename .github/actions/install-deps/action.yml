@@ -16,10 +16,12 @@ runs:
       shell: bash
       run: npm ci
 
-    - name: Work around npm optional-deps bug (rollup native binary)
+    - name: Work around npm optional-deps bug (rollup + rolldown native binaries)
       shell: bash
       run: |
-        pkg=$(node -e '
+        # rollup (tsup) and rolldown (vitest/vite) ship per-platform native
+        # bindings as optional deps; a lockfile resolved on macOS omits the rest.
+        triple=$(node -e '
           const { platform, arch } = process;
           let suffix = "";
           if (platform === "linux") {
@@ -28,12 +30,19 @@ runs:
           } else if (platform === "win32") {
             suffix = "-msvc";
           }
-          process.stdout.write(`@rollup/rollup-${platform}-${arch}${suffix}`);
+          process.stdout.write(`${platform}-${arch}${suffix}`);
         ')
-        ver=$(node -p "require('./node_modules/rollup/package.json').version")
-        if [ -d "node_modules/${pkg}" ]; then
-          echo "${pkg} already present"
-        else
-          echo "installing ${pkg}@${ver}"
-          npm install --no-save --force "${pkg}@${ver}" || true
-        fi
+        for spec in "rollup:@rollup/rollup-${triple}" "rolldown:@rolldown/binding-${triple}"; do
+          host="${spec%%:*}"; pkg="${spec#*:}"
+          if [ ! -f "node_modules/${host}/package.json" ]; then
+            echo "${host} not installed; skipping ${pkg}"
+            continue
+          fi
+          ver=$(node -p "require('./node_modules/${host}/package.json').version")
+          if [ -d "node_modules/${pkg}" ]; then
+            echo "${pkg} already present"
+          else
+            echo "installing ${pkg}@${ver}"
+            npm install --no-save --force "${pkg}@${ver}" || true
+          fi
+        done
