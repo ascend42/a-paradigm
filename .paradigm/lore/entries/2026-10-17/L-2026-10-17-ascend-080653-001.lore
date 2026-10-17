@@ -1,0 +1,41 @@
+id: L-2026-10-17-ascend-080653-001
+type: human-note
+timestamp: '2026-10-17T08:06:53.836Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: Spec v3.5 and PR-0 landed; kernel-linking design (31/32) awaits founder rulings
+summary: |-
+  Spec v3.5 is written: K1–K8, D68–D72, and the merged 15-probe M1.0 table with a runs-on column. K7 judgment: a re-used launch token within its 60 s TTL is theft and revokes; after the TTL it is refused and logged only. PR-0 scaffold is committed at 3b93de64, green locally (56 tests, fence and SEC mutation-checked; Windows/Ubuntu CI unverified until pushed).
+
+  Kernel linking: Arky (31) and Aegis (32) agree on a separate gnomon-link:v1 peer protocol (peers never reach the 12 verbs), Noise over node:crypto with a new link key, root-presence pairing on both sides with SAS, handoff fencing (seal before the bundle leaves, custody epoch, cards re-raised on the target), pull-only co-work through a cowork mod with inject receipts, and egress by audience/sensitivity.
+
+  They differ on transport:
+  - Arky: outbound-only kernels with a self-hosted blind relay on the home server.
+  - Aegis: direct LAN allowed on named interfaces, mDNS as a hint only.
+
+  The earliest honest slice is M2.8, own-machines handoff, after Move 1 passes. Move 1 must reserve contract values and label sensitivity correctly from day one.
+
+  Founder questions: amend the §1 non-goals; relay host/overlay; teammate handoff and subscription (OPEN 7); Warpline-mode handoff.
+symbols_touched:
+  - '#paradigm-harness'
+  - '#gnomon-kernel'
+files_created:
+  - .paradigm/research/paradigm-8/31-arky-kernel-linking.md
+  - .paradigm/research/paradigm-8/32-aegis-kernel-linking.md
+files_modified:
+  - docs/specs/gnomon.md
+tags:
+  - paradigm-8
+  - gnomon
+  - spec
+  - linking
+  - move-1
+  - state
+linked_lore:
+  - L-2026-10-17-ascend-080105-001
+git_context:
+  ref: c94c1e729627644d08663d664630e450e7033e92
+  branch: feat/gnomon
+  dirty: true
