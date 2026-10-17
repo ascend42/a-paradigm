@@ -133,6 +133,8 @@ export type LogRefusalReason =
   | 'missing-db'
   | 'anchor-missing'
   | 'anchor-mismatch'
+  | 'anchor-lag'
+  | 'anchor-failed'
   | 'truncated'
   | 'tip-moved'
   | 'segment-broken'

@@ -46,6 +46,7 @@
     "contract.progress",
     "contract.registered",
     "contract.released",
+    "daemon.anchor.lag",
     "daemon.exit",
     "daemon.lock.refused",
     "daemon.reexec",

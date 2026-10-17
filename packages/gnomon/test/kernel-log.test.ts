@@ -8,6 +8,9 @@
  *   G-LOG-06 head ≠ anchor ⇒ INTEGRITY_BROKEN · G-LOG-07 missing db + keys ⇒
  *   refuse start · G-LOG-08 unsigned mandatory kind refused · G-LOG-09 every
  *   kind has a default label set by its appender (v3.6).
+ * Research 33 / P8-D82 (anchor policy): G-LOG-06 gains the bounded-lag and
+ * keystore-truncation cases; G-LOG-10 (critical kinds anchored before append
+ * resolves) is new. `append` is async: it resolves {seq, hash, anchored, event}.
  */
 import { generateKeyPairSync, sign as cryptoSign } from 'node:crypto';
 import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, truncateSync, writeFileSync, statSync } from 'node:fs';
@@ -18,6 +21,10 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { EVENT_KIND_NAMES, defaultLabelsFor, sha256Tagged } from '@a-company/gnomon-contracts';
 import {
   approveMessage,
+  CRITICAL_ANCHOR_KINDS,
+  FILE_ANCHOR_MAX_LAG,
+  isCriticalKind,
+  KEYSTORE_ANCHOR_MAX_LAG,
   genesisPrev,
   KernelLog,
   KeyRing,
@@ -53,8 +60,28 @@ function openLog(home: string, extra: Partial<KernelLogOptions> = {}, signer: Si
   return log;
 }
 
-function fill(log: KernelLog, n: number): void {
-  for (let i = 0; i < n; i++) log.append({ kind: 'session.open', principal: KERNEL, session: HSID, payload: { i } });
+async function fill(log: KernelLog, n: number): Promise<void> {
+  for (let i = 0; i < n; i++) await log.append({ kind: 'session.open', principal: KERNEL, session: HSID, payload: { i } });
+}
+
+/** Append and return the event (most tests only look at the row). */
+async function ev(log: KernelLog, input: Parameters<KernelLog['append']>[0]) {
+  return (await log.append(input)).event;
+}
+
+/** An in-memory keystore anchor (the P04 seam) with an optional write hook. */
+function memKeystore(onWrite?: (h: HeadAnchor) => void | Promise<void>): AnchorStore & { stored?: HeadAnchor; frozen: boolean } {
+  const ks: AnchorStore & { stored?: HeadAnchor; frozen: boolean } = {
+    name: 'keystore',
+    frozen: false,
+    read: () => (ks.stored ? { state: 'present', head: ks.stored } : { state: 'absent' }),
+    write: async (h) => {
+      if (ks.frozen) return;
+      await onWrite?.(h);
+      ks.stored = h;
+    },
+  };
+  return ks;
 }
 
 /** Raw writer that drops the append-only triggers — what a same-user attacker can do. */
@@ -63,6 +90,18 @@ function attacker(file: string): DatabaseSync {
   db.exec('DROP TRIGGER chain_no_update; DROP TRIGGER chain_no_delete;');
   return db;
 }
+
+async function rejection(p: Promise<unknown>): Promise<LogRefusal> {
+  try {
+    await p;
+  } catch (err) {
+    if (err instanceof LogRefusal) return err;
+    throw err;
+  }
+  throw new Error('expected a LogRefusal');
+}
+
+const headOf = (home: string): HeadAnchor => JSON.parse(readFileSync(path.join(home, 'head'), 'utf8')) as HeadAnchor;
 
 function refusalOf(fn: () => unknown): LogRefusal {
   try {
@@ -86,11 +125,11 @@ afterEach(() => {
 });
 
 describe('#kernel-log chain (§3.2 data model)', () => {
-  it('genesis prev is sha256("gnomon-log-genesis:" + logId) and every row chains', () => {
+  it('genesis prev is sha256("gnomon-log-genesis:" + logId) and every row chains', async () => {
     const log = openLog(tmpHome());
     expect(log.report.created).toBe(true);
-    const a = log.append({ kind: 'daemon.start', principal: KERNEL, signer: null });
-    const b = log.append({ kind: 'session.open', principal: KERNEL, session: HSID });
+    const a = await ev(log, { kind: 'daemon.start', principal: KERNEL, signer: null });
+    const b = await ev(log, { kind: 'session.open', principal: KERNEL, session: HSID });
     expect(a.seq).toBe(1);
     expect(a.prev).toBe(genesisPrev(log.logId));
     expect(a.prev).toBe(sha256Tagged(`gnomon-log-genesis:${log.logId}`));
@@ -102,10 +141,10 @@ describe('#kernel-log chain (§3.2 data model)', () => {
     expect(log.verify().ok).toBe(true);
   });
 
-  it('G-LOG-01: a flipped byte anywhere in a row is detected', () => {
+  it('G-LOG-01: a flipped byte anywhere in a row is detected', async () => {
     const home = tmpHome();
     const log = openLog(home);
-    fill(log, 5);
+    await fill(log, 5);
     const db = attacker(log.activePath);
     const row = db.prepare('SELECT envelope FROM chain WHERE seq = 3').get() as { envelope: string };
     const flipped = row.envelope.replace('"i":2', '"i":7');
@@ -117,9 +156,9 @@ describe('#kernel-log chain (§3.2 data model)', () => {
     expect(r.failures.map((f) => [f.code, f.seq])).toContainEqual(['hash', 3]);
   });
 
-  it('G-LOG-01: a re-hashed forgery still fails (signature, next prev)', () => {
+  it('G-LOG-01: a re-hashed forgery still fails (signature, next prev)', async () => {
     const log = openLog(tmpHome());
-    fill(log, 4);
+    await fill(log, 4);
     const db = attacker(log.activePath);
     const row = db.prepare('SELECT envelope FROM chain WHERE seq = 2').get() as { envelope: string };
     const forged = row.envelope.replace('"i":1', '"i":9');
@@ -130,10 +169,10 @@ describe('#kernel-log chain (§3.2 data model)', () => {
     expect(codes).toContain('prev@3');
   });
 
-  it('G-LOG-01: truncation (deleted tail) and reorder (swapped rows) are detected', () => {
+  it('G-LOG-01: truncation (deleted tail) and reorder (swapped rows) are detected', async () => {
     const home = tmpHome();
     const log = openLog(home);
-    fill(log, 6);
+    await fill(log, 6);
     log.close();
     let db = attacker(path.join(home, 'kernel.db'));
     db.exec('DELETE FROM chain WHERE seq = 6');
@@ -144,7 +183,7 @@ describe('#kernel-log chain (§3.2 data model)', () => {
 
     const home2 = tmpHome();
     const log2 = openLog(home2);
-    fill(log2, 6);
+    await fill(log2, 6);
     db = attacker(log2.activePath);
     const r3 = db.prepare('SELECT * FROM chain WHERE seq = 3').get() as Record<string, string | number | null>;
     const r4 = db.prepare('SELECT * FROM chain WHERE seq = 4').get() as Record<string, string | number | null>;
@@ -159,9 +198,9 @@ describe('#kernel-log chain (§3.2 data model)', () => {
     expect(codes).toContain('column-mismatch');
   });
 
-  it('G-LOG-02: UPDATE and DELETE on chain (and meta) abort', () => {
+  it('G-LOG-02: UPDATE and DELETE on chain (and meta) abort', async () => {
     const log = openLog(tmpHome());
-    fill(log, 2);
+    await fill(log, 2);
     const db = new DatabaseSync(log.activePath);
     expect(() => db.exec("UPDATE chain SET kind = 'x' WHERE seq = 1")).toThrow(/append-only/);
     expect(() => db.exec('DELETE FROM chain WHERE seq = 1')).toThrow(/append-only/);
@@ -173,33 +212,33 @@ describe('#kernel-log chain (§3.2 data model)', () => {
 });
 
 describe('#kernel-log signatures (§3.1 domains, §3.2, G-LOG-08)', () => {
-  it('G-LOG-08: an unsigned mandatory kind is refused; diagnostics may be unsigned', () => {
+  it('G-LOG-08: an unsigned mandatory kind is refused; diagnostics may be unsigned', async () => {
     const log = openLog(tmpHome(), {}, null);
     for (const kind of ['approval.decide', 'budget.usage', 'permit.grant', 'key.mint', 'manifest.load', 'config.loaded', 'billing.api.ended', 'verdict.founder', 'oracle.result']) {
-      const r = refusalOf(() => log.append({ kind, principal: KERNEL }));
+      const r = await rejection(log.append({ kind, principal: KERNEL }));
       expect(r.reason, kind).toBe('unsigned-mandatory');
       expect(r.refusal.code).toBe('FORBIDDEN');
     }
     // stricter than the list (kernel-appended events are signed by the kernel key, §3.2)
-    expect(refusalOf(() => log.append({ kind: 'session.open', principal: KERNEL })).reason).toBe('unsigned-kind');
-    for (const kind of ['daemon.start', 'socket.connect', 'schedule.due']) expect(log.append({ kind, principal: KERNEL }).sig).toBeUndefined();
+    expect((await rejection(log.append({ kind: 'session.open', principal: KERNEL }))).reason).toBe('unsigned-kind');
+    for (const kind of ['daemon.start', 'socket.connect', 'schedule.due']) expect((await ev(log, { kind, principal: KERNEL })).sig).toBeUndefined();
     expect(log.verify().ok).toBe(true);
   });
 
-  it('G-LOG-08: verify flags a mandatory row whose signature was stripped', () => {
+  it('G-LOG-08: verify flags a mandatory row whose signature was stripped', async () => {
     const log = openLog(tmpHome());
-    log.append({ kind: 'approval.decide', principal: KERNEL, payload: { decision: 'allow' } });
+    await log.append({ kind: 'approval.decide', principal: KERNEL, payload: { decision: 'allow' } });
     const db = attacker(log.activePath);
     db.exec('UPDATE chain SET sig = NULL WHERE seq = 1');
     db.close();
     expect(log.verify().failures.map((f) => f.code)).toContain('unsigned');
   });
 
-  it('event signatures are domain-separated and keyed by gkey:v1:<sha256(spki)>', () => {
+  it('event signatures are domain-separated and keyed by gkey:v1:<sha256(spki)>', async () => {
     const signer = SoftwareEd25519Signer.generate();
     expect(signer.keyId).toMatch(/^gkey:v1:[0-9a-f]{64}$/);
     const log = openLog(tmpHome(), {}, signer);
-    const e = log.append({ kind: 'session.open', principal: KERNEL, session: HSID });
+    const e = await ev(log, { kind: 'session.open', principal: KERNEL, session: HSID });
     expect(e.keyId).toBe(signer.keyId);
     const ring = new KeyRing();
     ring.addEd25519(signer.publicKeyPem);
@@ -215,7 +254,7 @@ describe('#kernel-log signatures (§3.1 domains, §3.2, G-LOG-08)', () => {
     expect(() => SoftwareEd25519Signer.generate('approvals')).toThrow(/hardware-only/);
   });
 
-  it('a P-256 (hardware-class) signer plugs into the seam and verifies; unknown keys are flagged', () => {
+  it('a P-256 (hardware-class) signer plugs into the seam and verifies; unknown keys are flagged', async () => {
     // TEST-ONLY software stand-in for the Secure Enclave approvals key (P04): the seam, not custody.
     const { privateKey, publicKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
     const ring = new KeyRing();
@@ -228,18 +267,18 @@ describe('#kernel-log signatures (§3.1 domains, §3.2, G-LOG-08)', () => {
     };
     const kernel = SoftwareEd25519Signer.generate();
     const log = openLog(tmpHome(), { keyRing: ring }, kernel);
-    const e = log.append({ kind: 'approval.decide', principal: HUMAN, payload: { decision: 'allow' }, signer: hw });
+    const e = await ev(log, { kind: 'approval.decide', principal: HUMAN, payload: { decision: 'allow' }, signer: hw });
     expect(e.keyId).toMatch(/^gkey-p256:v1:/);
     expect(log.verify().ok).toBe(true);
 
     const stranger = SoftwareEd25519Signer.generate('agent');
-    log.append({ kind: 'session.open', principal: 'p:abcdefgh/arky', signer: stranger });
+    await log.append({ kind: 'session.open', principal: 'p:abcdefgh/arky', signer: stranger });
     expect(log.verify().failures.map((f) => f.code)).toContain('unknown-key');
   });
 });
 
 describe('#kernel-log labels (L6, §9.1, G-LOG-09)', () => {
-  it('G-LOG-09: every registered kind has a default label; the S32 §6 kinds default sensitive', () => {
+  it('G-LOG-09: every registered kind has a default label; the S32 §6 kinds default sensitive', async () => {
     for (const kind of EVENT_KIND_NAMES) expect(defaultLabelsFor(kind), kind).toBeDefined();
     expect(defaultLabelsFor('session.inject')?.sensitivity).toBe('sensitive');
     expect(defaultLabelsFor('turn.event')?.sensitivity).toBe('sensitive');
@@ -247,45 +286,45 @@ describe('#kernel-log labels (L6, §9.1, G-LOG-09)', () => {
     expect(defaultLabelsFor('voice.turn.agent')?.sensitivity).toBe('sensitive');
   });
 
-  it('G-LOG-09: the appender sets the default; unregistered kinds and relaxed labels are refused', () => {
+  it('G-LOG-09: the appender sets the default; unregistered kinds and relaxed labels are refused', async () => {
     const log = openLog(tmpHome());
-    const inj = log.append({ kind: 'session.inject', principal: KERNEL, session: HSID, payload: { origin: 'kernel', hash: sha256Tagged('x'), bytes: 1 } });
+    const inj = await ev(log, { kind: 'session.inject', principal: KERNEL, session: HSID, payload: { origin: 'kernel', hash: sha256Tagged('x'), bytes: 1 } });
     expect([inj.audience, inj.sensitivity]).toEqual(['private', 'sensitive']);
-    expect([log.append({ kind: 'session.open', principal: KERNEL }).sensitivity]).toEqual(['normal']);
-    expect(refusalOf(() => log.append({ kind: 'session.made-up', principal: KERNEL })).reason).toBe('unregistered-kind');
-    expect(refusalOf(() => log.append({ kind: 'turn.event', principal: KERNEL, sensitivity: 'normal' })).reason).toBe('label-relaxed');
-    expect(refusalOf(() => log.append({ kind: 'session.open', principal: KERNEL, audience: 'team' })).reason).toBe('label-relaxed');
-    expect(log.append({ kind: 'session.open', principal: KERNEL, sensitivity: 'secret' }).sensitivity).toBe('secret');
+    expect([(await ev(log, { kind: 'session.open', principal: KERNEL })).sensitivity]).toEqual(['normal']);
+    expect((await rejection(log.append({ kind: 'session.made-up', principal: KERNEL }))).reason).toBe('unregistered-kind');
+    expect((await rejection(log.append({ kind: 'turn.event', principal: KERNEL, sensitivity: 'normal' }))).reason).toBe('label-relaxed');
+    expect((await rejection(log.append({ kind: 'session.open', principal: KERNEL, audience: 'team' }))).reason).toBe('label-relaxed');
+    expect((await ev(log, { kind: 'session.open', principal: KERNEL, sensitivity: 'secret' })).sensitivity).toBe('secret');
   });
 
-  it('L7: the kernel never writes a userland kind; daemon.segment is reserved to the log', () => {
+  it('L7: the kernel never writes a userland kind; daemon.segment is reserved to the log', async () => {
     const log = openLog(tmpHome());
-    expect(refusalOf(() => log.append({ kind: 'inject.receipt', principal: KERNEL })).reason).toBe('kind-owner');
-    expect(log.append({ kind: 'inject.receipt', principal: KERNEL, as: 'userland' }).kind).toBe('inject.receipt');
-    expect(refusalOf(() => log.append({ kind: 'session.open', principal: KERNEL, as: 'userland' })).reason).toBe('kind-owner');
-    expect(refusalOf(() => log.append({ kind: 'daemon.segment', principal: KERNEL })).reason).toBe('reserved-kind');
+    expect((await rejection(log.append({ kind: 'inject.receipt', principal: KERNEL }))).reason).toBe('kind-owner');
+    expect((await ev(log, { kind: 'inject.receipt', principal: KERNEL, as: 'userland' })).kind).toBe('inject.receipt');
+    expect((await rejection(log.append({ kind: 'session.open', principal: KERNEL, as: 'userland' }))).reason).toBe('kind-owner');
+    expect((await rejection(log.append({ kind: 'daemon.segment', principal: KERNEL }))).reason).toBe('reserved-kind');
   });
 
-  it('G-LOG-03 (log half): session.inject is committed before append returns and must name origin/hash/bytes', () => {
+  it('G-LOG-03 (log half): session.inject is committed before append returns and must name origin/hash/bytes', async () => {
     const log = openLog(tmpHome());
-    const e = log.append({ kind: 'session.inject', principal: KERNEL, session: HSID, payload: { origin: 'kernel', hash: sha256Tagged('ctx'), bytes: 3 } });
+    const e = await ev(log, { kind: 'session.inject', principal: KERNEL, session: HSID, payload: { origin: 'kernel', hash: sha256Tagged('ctx'), bytes: 3 } });
     // visible to a separate connection the moment append returns (durable commit, not a buffer)
     const db = new DatabaseSync(log.activePath, { readOnly: true });
     expect((db.prepare('SELECT hash FROM chain WHERE seq = ?').get(e.seq) as { hash: string }).hash).toBe(e.hash);
     db.close();
-    expect(refusalOf(() => log.append({ kind: 'session.inject', principal: KERNEL, payload: { origin: 'model', hash: sha256Tagged('x'), bytes: 1 } })).reason).toBe('bad-payload');
-    expect(refusalOf(() => log.append({ kind: 'session.inject', principal: KERNEL, payload: { origin: 'kernel', bytes: 1 } })).reason).toBe('bad-payload');
+    expect((await rejection(log.append({ kind: 'session.inject', principal: KERNEL, payload: { origin: 'model', hash: sha256Tagged('x'), bytes: 1 } }))).reason).toBe('bad-payload');
+    expect((await rejection(log.append({ kind: 'session.inject', principal: KERNEL, payload: { origin: 'kernel', bytes: 1 } }))).reason).toBe('bad-payload');
   });
 });
 
 describe('#kernel-log read projection (§9.3, ~ample-internal-logs)', () => {
-  it('filters by audience/sensitivity per reader class', () => {
+  it('filters by audience/sensitivity per reader class', async () => {
     const log = openLog(tmpHome());
-    log.append({ kind: 'session.inject', principal: KERNEL, session: HSID, payload: { origin: 'kernel', hash: sha256Tagged('ctx'), bytes: 3 } });
-    log.append({ kind: 'approval.request', principal: KERNEL, session: HSID, payload: { card: 'card:x', tool_input: { cmd: 'rm -rf /' } } });
-    log.append({ kind: 'session.open', principal: KERNEL, session: HSID, sensitivity: 'secret' });
-    log.append({ kind: 'session.idle', principal: KERNEL, sensitivity: 'sensitive' });
-    log.append({ kind: 'daemon.start', principal: KERNEL });
+    await log.append({ kind: 'session.inject', principal: KERNEL, session: HSID, payload: { origin: 'kernel', hash: sha256Tagged('ctx'), bytes: 3 } });
+    await log.append({ kind: 'approval.request', principal: KERNEL, session: HSID, payload: { card: 'card:x', tool_input: { cmd: 'rm -rf /' } } });
+    await log.append({ kind: 'session.open', principal: KERNEL, session: HSID, sensitivity: 'secret' });
+    await log.append({ kind: 'session.idle', principal: KERNEL, sensitivity: 'sensitive' });
+    await log.append({ kind: 'daemon.start', principal: KERNEL });
 
     const human = [...log.read({ reader: { class: 'human' } })];
     expect(human.map((v) => v.view)).toEqual(['full', 'full', 'full', 'full', 'full']);
@@ -307,9 +346,9 @@ describe('#kernel-log read projection (§9.3, ~ample-internal-logs)', () => {
     expect([...log.read({ reader: { class: 'human' }, kinds: ['daemon.start'] })].map((v) => v.seq)).toEqual([5]);
   });
 
-  it('projectForReader never mutates the chain row', () => {
+  it('projectForReader never mutates the chain row', async () => {
     const log = openLog(tmpHome());
-    const e = log.append({ kind: 'approval.request', principal: KERNEL, payload: { tool_input: { a: 1 } } });
+    const e = await ev(log, { kind: 'approval.request', principal: KERNEL, payload: { tool_input: { a: 1 } } });
     projectForReader(e, { class: 'read-token' });
     expect((e.payload as { tool_input: unknown }).tool_input).toEqual({ a: 1 });
     expect(log.verify().ok).toBe(true);
@@ -317,11 +356,11 @@ describe('#kernel-log read projection (§9.3, ~ample-internal-logs)', () => {
 });
 
 describe('#kernel-log anchors (G-LOG-06, G-LOG-07)', () => {
-  it('G-LOG-06: head ≠ anchor ⇒ INTEGRITY_BROKEN; the keystore anchor is an honest stub', () => {
+  it('G-LOG-06: head ≠ anchor ⇒ INTEGRITY_BROKEN; the keystore anchor is an honest stub', async () => {
     const home = tmpHome();
     const log = openLog(home);
     expect(log.report.anchors).toEqual({ file: 'created', keystore: 'unavailable' });
-    fill(log, 3);
+    await fill(log, 3);
     log.close();
     const head = JSON.parse(readFileSync(path.join(home, 'head'), 'utf8')) as HeadAnchor;
     expect(head.seq).toBe(3);
@@ -332,7 +371,7 @@ describe('#kernel-log anchors (G-LOG-06, G-LOG-07)', () => {
     expect(refusalOf(() => openLog(home)).reason).toBe('anchor-missing');
   });
 
-  it('G-LOG-06: a second (keystore-seam) anchor that disagrees also refuses', () => {
+  it('G-LOG-06: a second (keystore-seam) anchor that disagrees also refuses', async () => {
     const home = tmpHome();
     let stored: HeadAnchor | undefined;
     const ks: AnchorStore = {
@@ -344,19 +383,22 @@ describe('#kernel-log anchors (G-LOG-06, G-LOG-07)', () => {
     };
     const log = openLog(home, { keystoreAnchor: ks });
     expect(log.report.anchors.keystore).toBe('created');
-    fill(log, 2);
+    await fill(log, 2);
+    expect(log.verify().anchors.file).toBe('lagging'); // coalesced (S33-05): no rename per commit
+    await log.flushAnchors();
     expect(log.verify().anchors).toEqual({ file: 'ok', keystore: 'ok' });
     log.close();
     stored = { ...stored!, seq: 9 };
     expect(refusalOf(() => openLog(home, { keystoreAnchor: ks })).reason).toBe('truncated');
   });
 
-  it('a lagging anchor (crash between commit and anchor write) is accepted only as a prefix and repaired', () => {
+  it('a lagging anchor (crash between commit and anchor write) is accepted only as a prefix and repaired', async () => {
     const home = tmpHome();
     const log = openLog(home);
-    fill(log, 2);
+    await fill(log, 2);
+    log.checkpoint(); // an idle checkpoint renames the pending anchor in
     const head2 = readFileSync(path.join(home, 'head'), 'utf8');
-    fill(log, 2);
+    await fill(log, 2);
     log.close();
     writeFileSync(path.join(home, 'head'), head2);
     const again = openLog(home);
@@ -365,11 +407,11 @@ describe('#kernel-log anchors (G-LOG-06, G-LOG-07)', () => {
     expect(again.verify().ok).toBe(true);
   });
 
-  it('G-LOG-07: a missing db with keys (or any prior trace) refuses start; a clean machine creates genesis', () => {
+  it('G-LOG-07: a missing db with keys (or any prior trace) refuses start; a clean machine creates genesis', async () => {
     expect(refusalOf(() => openLog(tmpHome(), { keysPresent: true })).reason).toBe('missing-db');
     const home = tmpHome();
     const log = openLog(home);
-    fill(log, 1);
+    await fill(log, 1);
     log.close();
     rmSync(path.join(home, 'kernel.db'));
     rmSync(path.join(home, 'kernel.db-wal'), { force: true });
@@ -379,11 +421,229 @@ describe('#kernel-log anchors (G-LOG-06, G-LOG-07)', () => {
   });
 });
 
+describe('#kernel-log anchor policy (research 33 S33-05..07, P8-D82)', () => {
+  it('S33-05: bulk rows coalesce the file anchor (≤ 63 rows behind); idle checkpoint and close catch it up', async () => {
+    const home = tmpHome();
+    const log = openLog(home);
+    await fill(log, 10);
+    expect(headOf(home).seq).toBe(0); // genesis anchor; 10 un-anchored rows, < 50 ms
+    await fill(log, FILE_ANCHOR_MAX_LAG - 10);
+    expect(headOf(home).seq).toBe(FILE_ANCHOR_MAX_LAG); // the 63rd un-anchored row renames it in
+    await fill(log, 2);
+    log.checkpoint();
+    expect(headOf(home).seq).toBe(FILE_ANCHOR_MAX_LAG + 2);
+    await fill(log, 1);
+    await new Promise((r) => setTimeout(r, 80)); // the 50 ms timer
+    expect(headOf(home).seq).toBe(FILE_ANCHOR_MAX_LAG + 3);
+    expect(log.anchorStatus.fileLag).toBe(0);
+    await log.close();
+    expect(headOf(home)).toMatchObject({ seq: FILE_ANCHOR_MAX_LAG + 3, closed: true });
+    const again = openLog(home);
+    expect(headOf(home).closed).toBeUndefined(); // the clean-close marker is cleared durably on open
+    expect(again.report.anchorLag).toBe(0);
+  });
+
+  it('G-LOG-06: file-anchor lag > 63 ⇒ INTEGRITY_BROKEN{anchor-lag}; lag of exactly 63 is a repairable crash lag', async () => {
+    for (const [extra, ok] of [
+      [FILE_ANCHOR_MAX_LAG, true],
+      [FILE_ANCHOR_MAX_LAG + 1, false],
+    ] as const) {
+      const home = tmpHome();
+      const log = openLog(home);
+      await fill(log, 1);
+      log.checkpoint();
+      const head1 = readFileSync(path.join(home, 'head'), 'utf8');
+      await fill(log, extra);
+      await log.close();
+      writeFileSync(path.join(home, 'head'), head1); // as a crash after commit, before the rename, would leave it (no closed marker)
+      if (ok) {
+        const again = openLog(home);
+        expect(again.report.anchorLag).toBe(FILE_ANCHOR_MAX_LAG);
+        expect(again.report.anchors.file).toBe('lagging-repaired');
+      } else {
+        const r = refusalOf(() => openLog(home));
+        expect([r.refusal.code, r.reason]).toEqual(['INTEGRITY_BROKEN', 'anchor-lag']);
+      }
+    }
+  });
+
+  it('G-LOG-06: ANY file-anchor lag behind a clean-close anchor ⇒ INTEGRITY_BROKEN{anchor-lag}', async () => {
+    const home = tmpHome();
+    const log = openLog(home);
+    await fill(log, 3);
+    await log.close();
+    const closed3 = readFileSync(path.join(home, 'head'), 'utf8');
+    expect(JSON.parse(closed3)).toMatchObject({ seq: 3, closed: true });
+    const b = openLog(home);
+    await fill(b, 1);
+    await b.close();
+    writeFileSync(path.join(home, 'head'), closed3);
+    const r = refusalOf(() => openLog(home));
+    expect([r.refusal.code, r.reason]).toEqual(['INTEGRITY_BROKEN', 'anchor-lag']);
+    expect(r.refusal.data).toMatchObject({ lag: 1, cleanClose: true });
+  });
+
+  it('G-LOG-06: truncating below the keystore anchor ⇒ truncated, even when the file anchor was rewritten to match', async () => {
+    const home = tmpHome();
+    const ks = memKeystore();
+    const log = openLog(home, { keystoreAnchor: ks });
+    await fill(log, 6);
+    await log.close();
+    expect(ks.stored?.seq).toBe(6);
+    const db = attacker(path.join(home, 'kernel.db'));
+    const row5 = db.prepare('SELECT hash FROM chain WHERE seq = 5').get() as { hash: string };
+    db.exec('DELETE FROM chain WHERE seq = 6');
+    db.close();
+    // the same-user attacker of S33-01 rewrites the file anchor too (S33-02): only the keystore anchor stops it
+    const { closed: _closed, ...head } = headOf(home);
+    writeFileSync(path.join(home, 'head'), JSON.stringify({ ...head, seq: 5, hash: row5.hash }));
+    const r = refusalOf(() => openLog(home, { keystoreAnchor: ks }));
+    expect([r.refusal.code, r.reason]).toEqual(['INTEGRITY_BROKEN', 'truncated']);
+    expect(r.refusal.data).toMatchObject({ anchor: 'keystore' });
+  });
+
+  it('S33-07: keystore lag > 1023 on open appends a kernel-signed daemon.anchor.lag{rows, which}', async () => {
+    const home = tmpHome();
+    const ks = memKeystore();
+    const log = openLog(home, { keystoreAnchor: ks });
+    await fill(log, 2);
+    await log.flushAnchors();
+    ks.frozen = true; // the helper stops answering
+    await fill(log, KEYSTORE_ANCHOR_MAX_LAG + 1);
+    await log.close();
+    ks.frozen = false;
+    const again = openLog(home, { keystoreAnchor: ks });
+    expect(again.report.keystoreLag).toBe(KEYSTORE_ANCHOR_MAX_LAG + 1);
+    const rows = [...again.read({ reader: { class: 'human' }, kinds: ['daemon.anchor.lag'] })];
+    expect(rows).toHaveLength(1);
+    const lagRow = rows[0]!;
+    expect(lagRow.view === 'full' && lagRow.event.payload).toEqual({ rows: KEYSTORE_ANCHOR_MAX_LAG + 1, which: 'keystore' });
+    expect(lagRow.view === 'full' && lagRow.event.sig).toBeTruthy();
+    await again.flushAnchors();
+    expect(again.verify().ok).toBe(true);
+    // at or below the bound: repaired, no row
+    const home2 = tmpHome();
+    const ks2 = memKeystore();
+    const l2 = openLog(home2, { keystoreAnchor: ks2 });
+    await l2.flushAnchors();
+    ks2.frozen = true;
+    await fill(l2, 5);
+    await l2.close();
+    ks2.frozen = false;
+    const r2 = openLog(home2, { keystoreAnchor: ks2 });
+    expect([r2.report.keystoreLag, r2.report.anchors.keystore]).toEqual([5, 'lagging-repaired']);
+    expect([...r2.read({ reader: { class: 'human' }, kinds: ['daemon.anchor.lag'] })]).toEqual([]);
+  });
+
+  it('S33-06: forcedAnchorRate is critical rows / rows over the last ≤ 10⁴ rows', async () => {
+    const log = openLog(tmpHome());
+    expect(log.forcedAnchorRate).toBe(0);
+    await fill(log, 63);
+    expect((await log.append({ kind: 'config.loaded', principal: KERNEL, payload: { n: 1 } })).anchored).toBe(true);
+    expect(log.forcedAnchorRate).toBeCloseTo(1 / 64, 10);
+    expect(log.anchorStatus).toMatchObject({ withinEnvelope: true, forcedAnchors: 1 });
+    await log.append({ kind: 'config.loaded', principal: KERNEL, payload: { n: 2 } });
+    expect(log.anchorStatus.withinEnvelope).toBe(false);
+  });
+});
+
+describe('G-LOG-10: critical kinds are anchored before append resolves (S33-06)', () => {
+  const PEER_INJECT = { origin: 'peer', hash: sha256Tagged('peer-bytes'), bytes: 10 };
+  /** Every registered critical kind, plus session.inject{origin:'peer'}. */
+  const CRITICAL: Array<{ kind: string; payload: unknown }> = [
+    ...EVENT_KIND_NAMES.filter((k) => isCriticalKind(k)).map((kind) => ({ kind, payload: { t: kind } })),
+    { kind: 'session.inject', payload: PEER_INJECT },
+  ];
+
+  it('the list is the S33-06 list and classification is exact', () => {
+    expect(CRITICAL_ANCHOR_KINDS.ref).toMatch(/S33-06/);
+    for (const k of [
+      'approval.decide',
+      'approval.suspect',
+      'approval.presence.denied',
+      'approval.rule.learned',
+      'approval.voice.arm',
+      'approval.voice.disarm',
+      'key.mint',
+      'config.loaded',
+      'manifest.installed',
+      'billing.api.active',
+      'verdict.founder',
+      'link.paired',
+      'link.revoked',
+      'link.renewed',
+      'link.pair.offered',
+      'socket.auth.theft',
+    ]) {
+      expect(isCriticalKind(k), k).toBe(true);
+    }
+    for (const k of ['approval.request', 'permit.grant', 'budget.usage', 'session.open', 'link.msg.in', 'socket.auth.fail', 'daemon.start']) expect(isCriticalKind(k), k).toBe(false);
+    expect(isCriticalKind('session.inject', PEER_INJECT)).toBe(true);
+    expect(isCriticalKind('session.inject', { ...PEER_INJECT, origin: 'kernel' })).toBe(false);
+    expect(CRITICAL.length).toBeGreaterThan(20);
+  });
+
+  it('for each critical kind: after append resolves, truncating that one row ⇒ open reports truncated', async () => {
+    for (const { kind, payload } of CRITICAL) {
+      const home = tmpHome();
+      const ks = memKeystore();
+      const log = openLog(home, { keystoreAnchor: ks });
+      await fill(log, 3);
+      const r = await log.append({ kind, principal: KERNEL, session: HSID, payload });
+      expect(r.anchored, kind).toBe(true);
+      // "stop the kernel at the first instruction after append returns": nothing else runs; truncate one row.
+      expect(headOf(home).seq, kind).toBe(r.seq);
+      expect(ks.stored?.seq, kind).toBe(r.seq);
+      const db = attacker(path.join(home, 'kernel.db'));
+      db.prepare('DELETE FROM chain WHERE seq = ?').run(r.seq);
+      db.close();
+      const refused = refusalOf(() => KernelLog.open({ home, kernelPrincipal: KERNEL, signer: KERNEL_KEY, keystoreAnchor: ks }));
+      expect([refused.refusal.code, refused.reason], kind).toEqual(['INTEGRITY_BROKEN', 'truncated']);
+    }
+  });
+
+  it('both anchor writes complete before the critical append resolves (instrumented keystore store)', async () => {
+    const home = tmpHome();
+    const order: string[] = [];
+    let resolved = false;
+    const ks = memKeystore(async (h) => {
+      if (h.seq !== 4) return;
+      order.push(`file-anchor@${headOf(home).seq}`);
+      await new Promise((r) => setTimeout(r, 15)); // a slow helper round trip
+      order.push(resolved ? 'ks-write-after-resolve' : 'ks-write-done');
+    });
+    const log = openLog(home, { keystoreAnchor: ks });
+    await fill(log, 3);
+    const r = await log.append({ kind: 'approval.decide', principal: KERNEL, payload: { decision: 'allow' } }).then((x) => {
+      resolved = true;
+      order.push('append-resolved');
+      return x;
+    });
+    expect(r).toMatchObject({ seq: 4, anchored: true });
+    expect(order).toEqual(['file-anchor@4', 'ks-write-done', 'append-resolved']);
+    // a bulk append resolves without waiting for any anchor
+    expect((await log.append({ kind: 'session.open', principal: KERNEL })).anchored).toBe(false);
+  });
+
+  it('a failed keystore write rejects the critical append ENGINE{anchor-failed}; bulk failures only diagnose', async () => {
+    const diags: string[] = [];
+    const ks = memKeystore(() => {
+      throw new Error('helper gone');
+    });
+    const log = openLog(tmpHome(), { keystoreAnchor: ks, onDiagnostic: (d) => diags.push(d.what) });
+    const r = await rejection(log.append({ kind: 'key.rotate', principal: KERNEL, payload: {} }));
+    expect([r.refusal.code, r.reason]).toEqual(['ENGINE', 'anchor-failed']);
+    await log.append({ kind: 'session.open', principal: KERNEL });
+    await log.close();
+    expect(diags).toContain('anchor.keystore.failed');
+  });
+});
+
 describe('#kernel-log segments (L5, §9.4)', () => {
-  it('rotates at segmentRows with a daemon.segment closing row; the chain continues across files', () => {
+  it('rotates at segmentRows with a daemon.segment closing row; the chain continues across files', async () => {
     const home = tmpHome();
     const log = openLog(home, { segmentRows: 5 });
-    fill(log, 11); // 4 rows + closing row per sealed segment (rotation is eager)
+    await fill(log, 11); // 4 rows + closing row per sealed segment (rotation is eager)
     const segs = log.segments();
     expect(segs.map((s) => [s.segment, s.baseSeq, s.lastSeq, s.sealed])).toEqual([
       [1, 1, 5, true],
@@ -400,10 +660,10 @@ describe('#kernel-log segments (L5, §9.4)', () => {
     expect(log.verify({ segment: 2 }).segments.map((s) => s.segment)).toEqual([2]);
   });
 
-  it('segment verify and full verify detect a removed or tampered sealed segment', () => {
+  it('segment verify and full verify detect a removed or tampered sealed segment', async () => {
     const home = tmpHome();
     const log = openLog(home, { segmentRows: 4 });
-    fill(log, 9);
+    await fill(log, 9);
     const seg1 = path.join(home, 'log', 'segments', '000001.db');
     const db = attacker(seg1);
     db.exec("UPDATE chain SET at = '2020-01-01T00:00:00.000Z' WHERE seq = 2");
@@ -414,24 +674,24 @@ describe('#kernel-log segments (L5, §9.4)', () => {
     expect(log.verify().failures.map((f) => f.code)).toContain('segment-link');
   });
 
-  it('a crash mid-rotation is completed on open (both windows), never forked', () => {
+  it('a crash mid-rotation is completed on open (both windows), never forked', async () => {
     // window 1: sealed file renamed, new kernel.db not yet created
     const home = tmpHome();
     const log = openLog(home, { segmentRows: 4 });
-    fill(log, 3); // rows 1..3 + closing row 4 → rotated
+    await fill(log, 3); // rows 1..3 + closing row 4 → rotated
     log.close();
     for (const s of ['', '-wal', '-shm']) rmSync(path.join(home, `kernel.db${s}`), { force: true });
     const a = openLog(home, { segmentRows: 4 });
     expect(a.report.recoveredRotation).toBe(true);
     expect(a.head().segment).toBe(2);
-    fill(a, 1);
+    await fill(a, 1);
     expect(a.verify().failures).toEqual([]);
     a.close();
 
     // window 2: closing row committed in kernel.db, rename not done
     const home2 = tmpHome();
     const b = openLog(home2, { segmentRows: 4 });
-    fill(b, 3);
+    await fill(b, 3);
     b.close();
     for (const s of ['', '-wal', '-shm']) rmSync(path.join(home2, `kernel.db${s}`), { force: true });
     renameSync(path.join(home2, 'log', 'segments', '000001.db'), path.join(home2, 'kernel.db'));
@@ -441,7 +701,7 @@ describe('#kernel-log segments (L5, §9.4)', () => {
     expect(c.verify().ok).toBe(true);
 
     // a missing active segment AFTER rows were added to it is not a rotation window
-    fill(c, 1);
+    await fill(c, 1);
     c.close();
     for (const s of ['', '-wal', '-shm']) rmSync(path.join(home2, `kernel.db${s}`), { force: true });
     expect(refusalOf(() => openLog(home2, { segmentRows: 4 })).reason).toBe('missing-db');
@@ -461,12 +721,13 @@ describe('#kernel-log torn tail (crash safety)', () => {
     return dst;
   }
 
-  it('a torn last commit with a lagging anchor recovers to the last whole commit', () => {
+  it('a torn last commit with a lagging anchor recovers to the last whole commit', async () => {
     const src = tmpHome();
     const log = openLog(src);
-    fill(log, 9);
+    await fill(log, 9);
+    await log.flushAnchors();
     const head9 = readFileSync(path.join(src, 'head'), 'utf8');
-    fill(log, 1);
+    await fill(log, 1);
     const dst = tornCopy(src, head9);
     const r = openLog(dst, {}, SoftwareEd25519Signer.generate());
     expect(r.head().seq).toBe(9);
@@ -474,10 +735,11 @@ describe('#kernel-log torn tail (crash safety)', () => {
     expect(v).toBe(true);
   });
 
-  it('a torn tail behind a newer anchor is INTEGRITY_BROKEN{truncated}, never silently forked', () => {
+  it('a torn tail behind a newer anchor is INTEGRITY_BROKEN{truncated}, never silently forked', async () => {
     const src = tmpHome();
     const log = openLog(src);
-    fill(log, 10);
+    await fill(log, 10);
+    await log.flushAnchors();
     const head10 = readFileSync(path.join(src, 'head'), 'utf8');
     const dst = tornCopy(src, head10);
     const r = refusalOf(() => openLog(dst));

@@ -192,6 +192,10 @@ describe('event kinds and default labels (§9.1, S32 §6, G-LOG-09 contract half
     expect(defaultLabelsFor('modns.doodle.session.start', 'sensitive')!.sensitivity).toBe('sensitive');
     expect(isKnownKind('credit.outcome')).toBe(true);
   });
+  it('daemon.anchor.lag is registered kernel-owned, normal, unreserved (research 33 S33-07, P8-D82)', () => {
+    expect(EVENT_KINDS['daemon.anchor.lag']).toMatchObject({ kind: 'daemon.anchor.lag', owner: 'kernel', sensitivity: 'normal' });
+    expect(EVENT_KINDS['daemon.anchor.lag']!.reserved).toBeUndefined();
+  });
   it('M1.1 reservations are present and tagged', () => {
     expect(EVENT_KINDS['approval.voice.arm']!.reserved).toBe('M1.1:P8-D58');
     expect(EVENT_KINDS['request.voice.arm']!.reserved).toBe('M1.1:P8-D58');

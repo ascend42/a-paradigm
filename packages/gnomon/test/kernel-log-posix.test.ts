@@ -7,6 +7,12 @@
  * /proc/self/smaps_rollup on Linux CI). Windows (private bytes) is the parity
  * phase (P8-D78) — see platform-registry.ts.
  *
+ * G-LOG-04 as restated by research 33 S33-08 (P8-D82): appends with a
+ * critical kind (config.loaded: F_FULLFSYNC commit + both anchors before
+ * resolve) mixed in at 1/64. Asserted: bulk p99 < 5 ms AND ≤ 0.1 % of bulk
+ * appends over 5 ms; critical p99 < 25 ms. Recorded, never asserted: p99.9,
+ * max, checkpoint count (max reaches 13–529 ms in every probe arm).
+ *
  * Both process tests run the BUILT kernel (dist/index.js) in a child process,
  * so the memory number is a kernel-like process's, not the vitest worker's.
  * Scale with GNOMON_LOG_PERF_ROWS (default 10 000; the oracle's 10⁶ is a
@@ -19,7 +25,7 @@ import { mkdtempSync, rmSync, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { KernelLog, SoftwareEd25519Signer } from '../src/kernel/log/index.js';
+import { FILE_ANCHOR_MAX_LAG, KernelLog, SoftwareEd25519Signer } from '../src/kernel/log/index.js';
 import { PKG_ROOT } from './helpers.js';
 
 const KERNEL = 'p:abcdefgh/kernel';
@@ -49,15 +55,24 @@ const signer = new kernelLog.SoftwareEd25519Signer(process.env.GN_KEY);
 const log = kernelLog.KernelLog.open({ home: process.env.GN_HOME, kernelPrincipal: '${KERNEL}', signer });
 const n = Number(process.env.GN_ROWS);
 const mode = process.env.GN_MODE;
-const lat = new Float64Array(n);
+const bulk = [];
+const crit = [];
 for (let i = 0; mode === 'crash' || i < n; i++) {
+  const critical = mode === 'perf' && i % 64 === 63; // S33-08: critical kinds mixed in at 1/64
   const t = process.hrtime.bigint();
-  log.append({ kind: 'session.open', principal: '${KERNEL}', session: 'hsid:v1:01JABCDEFGHJKMNPQRSTVWXYZ0', payload: { i, note: 'x'.repeat(64) } });
-  if (mode === 'perf') lat[i] = Number(process.hrtime.bigint() - t) / 1e6;
+  if (critical) await log.append({ kind: 'config.loaded', principal: '${KERNEL}', payload: { i } });
+  else await log.append({ kind: 'session.open', principal: '${KERNEL}', session: 'hsid:v1:01JABCDEFGHJKMNPQRSTVWXYZ0', payload: { i, note: 'x'.repeat(64) } });
+  if (mode === 'perf') (critical ? crit : bulk).push(Number(process.hrtime.bigint() - t) / 1e6);
   if (mode === 'crash' && i === n) process.stdout.write('ready\n');
 }
-lat.sort();
-const q = (p) => lat[Math.min(lat.length - 1, Math.floor(p * lat.length))];
+const stats = (arr) => {
+  const s = Float64Array.from(arr).sort();
+  const q = (p) => s[Math.min(s.length - 1, Math.floor(p * s.length))];
+  let over5 = 0;
+  for (const v of s) if (v > 5) over5++;
+  return { n: s.length, p50: q(0.5), p99: q(0.99), p999: q(0.999), max: s[s.length - 1], over5, over5Frac: over5 / s.length };
+};
+const status = log.anchorStatus;
 let memory = { metric: 'none', mb: null };
 if (process.platform === 'darwin' && existsSync('/usr/bin/footprint')) {
   const out = execFileSync('/usr/bin/footprint', ['-p', String(process.pid)], { encoding: 'utf8' });
@@ -67,8 +82,8 @@ if (process.platform === 'darwin' && existsSync('/usr/bin/footprint')) {
   const m = /^Pss:\s+(\d+) kB/m.exec(readFileSync('/proc/self/smaps_rollup', 'utf8'));
   if (m) memory = { metric: 'Pss', mb: Number(m[1]) / 1024 };
 }
-log.close();
-process.stdout.write(JSON.stringify({ rows: n, p50: q(0.5), p99: q(0.99), max: lat[lat.length - 1], memory, rssMb: process.memoryUsage().rss / 1048576 }) + '\n');
+await log.close();
+process.stdout.write(JSON.stringify({ rows: n, bulk: stats(bulk), critical: stats(crit), checkpoints: status.checkpoints, forcedAnchorRate: status.forcedAnchorRate, memory, rssMb: process.memoryUsage().rss / 1048576 }) + '\n');
 `;
 
 function childEnv(home: string, key: string, rows: number, mode: 'perf' | 'crash'): NodeJS.ProcessEnv {
@@ -76,10 +91,10 @@ function childEnv(home: string, key: string, rows: number, mode: 'perf' | 'crash
 }
 
 describe('#kernel-log file modes (owner-only, §15.2 custody posture)', () => {
-  it('kernel.db, its WAL, the head anchor and the segment dir are owner-only', () => {
+  it('kernel.db, its WAL, the head anchor and the segment dir are owner-only', async () => {
     const home = tmpHome();
     const log = KernelLog.open({ home, kernelPrincipal: KERNEL, signer: SoftwareEd25519Signer.generate(), segmentRows: 4 });
-    for (let i = 0; i < 5; i++) log.append({ kind: 'daemon.start', principal: KERNEL });
+    for (let i = 0; i < 5; i++) await log.append({ kind: 'daemon.start', principal: KERNEL });
     const mode = (p: string) => statSync(path.join(home, p)).mode & 0o777;
     expect(mode('kernel.db')).toBe(0o600);
     expect(mode('kernel.db-wal')).toBe(0o600);
@@ -87,7 +102,7 @@ describe('#kernel-log file modes (owner-only, §15.2 custody posture)', () => {
     expect(mode('log')).toBe(0o700);
     expect(mode('log/segments')).toBe(0o700);
     expect(mode('log/segments/000001.db')).toBe(0o600);
-    log.close();
+    await log.close();
   });
 });
 
@@ -108,18 +123,26 @@ describe('#kernel-log crash safety (kill -9 mid-append)', () => {
     const signer = new SoftwareEd25519Signer(key);
     const log = KernelLog.open({ home, kernelPrincipal: KERNEL, signer });
     expect(log.head().seq).toBeGreaterThanOrEqual(301);
-    expect(log.report.anchorLag).toBeLessThanOrEqual(1);
+    expect(log.report.anchorLag).toBeLessThanOrEqual(FILE_ANCHOR_MAX_LAG); // coalesced anchor (S33-05/07)
     const v = log.verify();
     expect(v.failures).toEqual([]);
     expect(v.rows).toBe(log.head().seq);
-    log.append({ kind: 'daemon.start', principal: KERNEL });
+    await log.append({ kind: 'daemon.start', principal: KERNEL });
+    await log.flushAnchors();
     expect(log.verify().ok).toBe(true);
-    log.close();
+    await log.close();
   });
 });
 
 describe('G-LOG-04 / M1.2 falsifier: p99 append and memory', () => {
-  it('p99 append < 5 ms and memory < 150 MB (per-OS metric) over GNOMON_LOG_PERF_ROWS rows', () => {
+  type Stats = { n: number; p50: number; p99: number; p999: number; max: number; over5: number; over5Frac: number };
+  type PerfRun = { rows: number; bulk: Stats; critical: Stats; checkpoints: number; forcedAnchorRate: number; memory: { metric: string; mb: number | null }; rssMb: number };
+
+  // Runs only in the isolated perf pass (`npm run test:perf`, GNOMON_PERF=1,
+  // no file parallelism): inside the parallel suite other files' fsyncs contend
+  // for the same SSD and the tail numbers measure the suite, not the log. One
+  // attempt — a falsifier is never retried until it passes.
+  it.runIf(process.env.GNOMON_PERF === '1')('bulk p99 < 5 ms and ≤ 0.1 % over 5 ms, critical (1/64) p99 < 25 ms, memory < 150 MB over GNOMON_LOG_PERF_ROWS rows', async () => {
     const rows = Number(process.env.GNOMON_LOG_PERF_ROWS ?? 10_000);
     const res = spawnSync(process.execPath, ['--input-type=module', '-e', CHILD], {
       env: childEnv(tmpHome(), pem(), rows, 'perf'),
@@ -127,19 +150,16 @@ describe('G-LOG-04 / M1.2 falsifier: p99 append and memory', () => {
       timeout: 600_000,
     });
     expect(res.status, res.stderr).toBe(0);
-    const r = JSON.parse(res.stdout.trim().split('\n').pop()!) as {
-      rows: number;
-      p50: number;
-      p99: number;
-      max: number;
-      memory: { metric: string; mb: number | null };
-      rssMb: number;
-    };
+    const r = JSON.parse(res.stdout.trim().split('\n').pop()!) as PerfRun;
     // Recorded numbers (G-HON-07: method = hrtime around append() incl. sign + commit, in a child running dist/; machine = this host).
     console.info(`[#kernel-log perf] ${os.hostname()} ${process.platform}/${process.arch} node ${process.version}: ${JSON.stringify(r)}`);
     if (process.env.CI) return; // recorded only on shared runners
-    expect(r.p99).toBeLessThan(5);
-    expect(r.memory.mb, 'per-OS memory metric unavailable').not.toBeNull();
-    expect(r.memory.mb!).toBeLessThan(150);
-  }, 620_000);
+    expect(r!.bulk.p99).toBeLessThan(5);
+    expect(r!.bulk.over5Frac).toBeLessThanOrEqual(0.001);
+    expect(r!.critical.n).toBeGreaterThan(0);
+    expect(r!.critical.p99).toBeLessThan(25);
+    // p99.9, max and checkpoints are recorded above, not asserted (S33-08).
+    expect(r!.memory.mb, 'per-OS memory metric unavailable').not.toBeNull();
+    expect(r!.memory.mb!).toBeLessThan(150);
+  }, 1_900_000);
 });

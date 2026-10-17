@@ -47,7 +47,8 @@ type Row = [ns: string, owner: KindOwner, kinds: string, reserved?: typeof D58 |
 
 /** §9.1, namespace by namespace. Kinds are the names before `{…}`. */
 const TABLE: Row[] = [
-  ['daemon', 'kernel', 'start exit lock.refused segment reexec'],
+  // daemon.anchor.lag{rows, which}: research 33 S33-07 (P8-D82) — keystore anchor lag > 1023 on open.
+  ['daemon', 'kernel', 'start exit lock.refused segment reexec anchor.lag'],
   [
     'socket',
     'kernel',

@@ -79,7 +79,10 @@ components:
       forked server child, 27 Autobahn-style raw cases, 4 MiB throughput, RSS
       and phys_footprint), p-noise-vectors (Noise IK/XX/XXpsk3 over node:crypto
       against a verbatim cacophony/snow vector subset in vectors.json, G-LNK-11)
-      and p01-claude-cli (read-only `claude --version`/`--help` flag check;
+      p-log-fsync (kernel-log head-anchor fsync stalls, arms A-G; arm G =
+      the research 33 policy: coalesced anchor + forced fullfsync+anchor at
+      1/64, judged by the restated G-LOG-04; env P_LOG_FSYNC_ARMS accepts
+      A,E,G) and p01-claude-cli (read-only `claude --version`/`--help` flag check;
       live items pending-manual).
     path: probes/
     type: module
@@ -136,9 +139,30 @@ components:
       crash mid-rotation is completed on open. Anchors: file <home>/head
       (atomic tmp+rename; fsync only at genesis/rotation/close) and a
       KeystoreAnchorStore SEAM that reports `unavailable` until the helper
-      exists. Open refuses INTEGRITY_BROKEN on missing-db (with anchor, sealed
-      segment or keys present), truncated, anchor-mismatch, anchor-missing;
-      a lagging anchor is accepted only as a chain prefix and repaired. Fsync
+      exists (AnchorStore.write may be async; keystore writes are serialised).
+      ANCHOR POLICY (anchor-policy.ts; research 33 S33-05..07, P8-D82):
+      `append` is async and resolves {seq, hash, anchored, event}. Bulk rows
+      coalesce the file anchor (renamed when 63 rows are un-anchored or 50 ms
+      after the first, unref'd timer + inline check, and on checkpoint) and
+      queue the keystore anchor every 1023 rows / 1 s off the append path.
+      CRITICAL_ANCHOR_KINDS (approval.decide/suspect/presence.denied/
+      rule.learned/voice.arm/voice.disarm, key.*, grant.*, config.*,
+      manifest.*, billing.*, verdict.*, link pair/renew/revoke,
+      session.inject{origin:'peer'}, socket.auth.theft) commit with
+      `PRAGMA fullfsync=ON` for that one transaction, rename the file anchor
+      and AWAIT the keystore write before resolving {anchored: true}; no
+      effect may be released before that (a failed keystore write rejects
+      ENGINE{anchor-failed}). Close writes a durable anchor carrying the
+      clean-close marker `closed: true`; open rewrites it durably without.
+      `forcedAnchorRate` / `anchorStatus` = status.log telemetry (forced
+      anchors per row over the last 10⁴ rows; > 1/64 = outside the measured
+      envelope). Open refuses INTEGRITY_BROKEN on missing-db (with anchor,
+      sealed segment or keys present), truncated (either anchor ahead of the
+      db), anchor-mismatch, anchor-missing, and anchor-lag (file anchor > 63
+      rows behind, or any lag behind a clean-close anchor); a smaller lag is
+      accepted only as a chain prefix and repaired; keystore lag > 1023
+      appends a kernel-signed daemon.anchor.lag{rows, which}
+      (contracts kind added). Fsync
       policy: WAL + synchronous=FULL (default 'process-crash'); 'power-loss'
       adds fullfsync (~10 ms/commit on Apple SSD, above the 5 ms falsifier).
       verify(): full chain (segment links, genesis, anchors) or one segment;
@@ -155,7 +179,7 @@ components:
     tests:
       - test/kernel-log.test.ts
       - test/kernel-log-posix.test.ts
-    oracles: [G-LOG-01, G-LOG-02, G-LOG-03, G-LOG-04, G-LOG-06, G-LOG-07, G-LOG-08, G-LOG-09]
+    oracles: [G-LOG-01, G-LOG-02, G-LOG-03, G-LOG-04, G-LOG-06, G-LOG-07, G-LOG-08, G-LOG-09, G-LOG-10]
 
 flows:
   daemon-lifecycle:

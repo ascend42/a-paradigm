@@ -44,10 +44,30 @@
  *     transaction; the anchor check then either accepts a lagging anchor or
  *     reports `INTEGRITY_BROKEN{truncated}` — it never silently forks.
  *
- * ANCHORS (§3.2, G-LOG-06/07) — see anchor.ts. On open: no db but a head
- * anchor, a sealed segment or keys present ⇒ INTEGRITY_BROKEN (missing-db);
- * head ahead of the db ⇒ truncated; head hash ≠ row hash ⇒ anchor-mismatch;
- * head missing on an existing log ⇒ anchor-missing.
+ * ANCHORS (§3.2, G-LOG-06/07/10) — see anchor.ts; WHEN they are written is
+ * anchor-policy.ts (research 33 S33-05..07, P8-D82):
+ *   - bulk rows: the file anchor (tmp+rename) is coalesced — written when 63
+ *     rows are un-anchored or 50 ms after the first un-anchored row (inline
+ *     check + unref'd timer), and on checkpoint; the keystore anchor every
+ *     1023 rows / 1 s, queued off the append path (serialised promise chain).
+ *     Both durable at genesis, rotation and close; close marks the file
+ *     anchor `closed: true` (the clean-close marker).
+ *   - critical kinds (CRITICAL_ANCHOR_KINDS): that one transaction commits
+ *     with F_FULLFSYNC — `PRAGMA fullfsync=ON` before BEGIN, OFF after COMMIT
+ *     (in WAL + synchronous=FULL SQLite then syncs the WAL with
+ *     SQLITE_SYNC_FULL ⇒ fcntl(F_FULLFSYNC) on Darwin; a no-op elsewhere) —
+ *     then the file anchor is renamed in and the keystore write AWAITED
+ *     before `append` resolves `{anchored: true}`. A power loss can then
+ *     never leave an anchor ahead of the db, and an attacker who stops the
+ *     kernel before the promise resolves erased an event with no effect yet.
+ *     The critical file-anchor rename is not fsynced (the threat is a
+ *     same-user process, which sees the rename; the keystore anchor is the
+ *     custody anchor).
+ * On open: no db but a head anchor, a sealed segment or keys present ⇒
+ * INTEGRITY_BROKEN (missing-db); an anchor ahead of the db ⇒ truncated; hash
+ * ≠ row hash ⇒ anchor-mismatch; missing on an existing log ⇒ anchor-missing;
+ * file-anchor lag > 63, or any lag behind a clean-close anchor ⇒ anchor-lag;
+ * keystore lag > 1023 ⇒ a kernel-signed daemon.anchor.lag{rows, which} row.
  *
  * SIGNATURES (§3.2, §3.1) — see signer.ts and chain.ts. Unsigned rows are
  * accepted only for the diagnostic namespaces; the mandatory list refuses
@@ -77,6 +97,15 @@ import {
   type Sensitivity,
 } from '@a-company/gnomon-contracts';
 import { FileAnchorStore, fsyncDir, HEAD_SCHEMA, KeystoreAnchorStore, type AnchorReadResult, type AnchorStore, type HeadAnchor } from './anchor.js';
+import {
+  FILE_ANCHOR_MAX_LAG,
+  FILE_ANCHOR_MAX_MS,
+  FORCED_ANCHOR_ENVELOPE,
+  FORCED_ANCHOR_WINDOW,
+  isCriticalKind,
+  KEYSTORE_ANCHOR_MAX_LAG,
+  KEYSTORE_ANCHOR_MAX_MS,
+} from './anchor-policy.js';
 import {
   assertOwner,
   genesisPrev,
@@ -146,9 +175,34 @@ export interface OpenReport {
   logId: string;
   created: boolean;
   recoveredRotation: boolean;
-  /** Rows the file anchor lagged the db by at open (crash between commit and anchor write). */
+  /** Rows the file anchor lagged the db by at open (crash between commit and anchor write; ≤ 63 or refused). */
   anchorLag: number;
+  /** Rows the keystore anchor lagged by at open (> 1023 ⇒ a daemon.anchor.lag row was appended). */
+  keystoreLag: number;
   anchors: { file: AnchorState; keystore: AnchorState };
+}
+
+/** What `append` resolves to. `anchored` = both anchors were written for this row before resolving (critical kinds, S33-06). */
+export interface AppendResult {
+  seq: number;
+  hash: string;
+  anchored: boolean;
+  event: EventV1;
+}
+
+/** `status.log` anchor telemetry (S33-06). */
+export interface AnchorStatus {
+  /** Forced (critical) anchors per row over the last ≤ 10⁴ rows. */
+  forcedAnchorRate: number;
+  /** false ⇒ forcedAnchorRate > 1/64: bulk p99 is outside the measured envelope; re-probe. */
+  withinEnvelope: boolean;
+  /** Rows committed since the last file / keystore anchor write. */
+  fileLag: number;
+  keystoreLag: number;
+  fileAnchors: number;
+  keystoreAnchors: number;
+  forcedAnchors: number;
+  checkpoints: number;
 }
 
 export interface SegmentInfo {
@@ -192,7 +246,7 @@ export interface VerifyReport {
   rows: number;
   segments: Array<{ segment: number; firstSeq: number; lastSeq: number; rows: number; ok: boolean }>;
   failures: VerifyFailure[];
-  anchors: { file: 'ok' | 'lagging' | 'mismatch' | 'missing' | 'not-checked'; keystore: 'ok' | 'unavailable' | 'mismatch' | 'not-checked' };
+  anchors: { file: 'ok' | 'lagging' | 'mismatch' | 'missing' | 'not-checked'; keystore: 'ok' | 'lagging' | 'unavailable' | 'mismatch' | 'not-checked' };
 }
 
 const SCHEMA_SQL = `
@@ -288,6 +342,19 @@ export class KernelLog {
   #closed = false;
   #sinceCheckpoint = 0;
   #idleTimer: ReturnType<typeof setTimeout> | undefined;
+  /* anchor policy state (anchor-policy.ts) */
+  #fileLag = 0;
+  #fileSince = 0;
+  #fileTimer: ReturnType<typeof setTimeout> | undefined;
+  #ksLag = 0;
+  #ksSince = 0;
+  #ksTimer: ReturnType<typeof setTimeout> | undefined;
+  #ksChain: Promise<void> = Promise.resolve();
+  readonly #forcedRing = new Uint8Array(FORCED_ANCHOR_WINDOW);
+  #ringIdx = 0;
+  #ringFill = 0;
+  #ringForced = 0;
+  readonly #counts = { fileAnchors: 0, keystoreAnchors: 0, forcedAnchors: 0, checkpoints: 0 };
 
   private constructor(opts: KernelLogOptions) {
     this.#opts = { segmentRows: DEFAULT_SEGMENT_ROWS, durability: 'process-crash', clock: Date.now, ...opts };
@@ -358,17 +425,26 @@ export class KernelLog {
     this.#attach();
     const anchors = { file: 'ok' as AnchorState, keystore: 'unavailable' as AnchorState };
     let anchorLag = 0;
+    let keystoreLag = 0;
     if (created) {
       this.#fileAnchor.write(this.#headAnchor(), true);
       anchors.file = 'created';
     } else {
       // check the anchor against the db as found, BEFORE completing any rotation
       anchorLag = this.#checkAnchor(anchorRead, 'file');
+      if (anchorLag > 0 && anchorRead.state === 'present' && anchorRead.head.closed) {
+        throw logRefusal('INTEGRITY_BROKEN', 'anchor-lag', `the file anchor lags the log by ${anchorLag} rows after a clean close`, { anchor: 'file', lag: anchorLag, cleanClose: true });
+      }
+      if (anchorLag > FILE_ANCHOR_MAX_LAG) {
+        throw logRefusal('INTEGRITY_BROKEN', 'anchor-lag', `the file anchor lags the log by ${anchorLag} rows (bound ${FILE_ANCHOR_MAX_LAG})`, { anchor: 'file', lag: anchorLag, bound: FILE_ANCHOR_MAX_LAG });
+      }
       if (anchorLag > 0) {
         anchors.file = 'lagging-repaired';
-        this.#fileAnchor.write(this.#headAnchor(), true);
         this.#diag('anchor.lag.repaired', { lag: anchorLag });
       }
+      // durable rewrite on every open: repairs a lag AND clears the clean-close
+      // marker, so a crash later in this run is never read as a post-close lag.
+      this.#fileAnchor.write(this.#headAnchor(), true);
     }
     if (this.#tip.kind === 'daemon.segment') {
       // crashed after the closing row, before the rename: finish the rotation.
@@ -378,10 +454,20 @@ export class KernelLog {
     const ks = this.#keystoreAnchor.read();
     if (ks.state === 'unavailable') anchors.keystore = 'unavailable';
     else if (ks.state === 'absent' && created) {
-      this.#keystoreAnchor.write(this.#headAnchor(), true);
+      void this.#queueKeystore(true);
       anchors.keystore = 'created';
-    } else anchors.keystore = this.#checkAnchor(ks, 'keystore') > 0 ? 'lagging-repaired' : 'ok';
-    return { created, recoveredRotation, anchorLag, anchors };
+    } else {
+      keystoreLag = this.#checkAnchor(ks, 'keystore'); // ahead ⇒ truncated
+      anchors.keystore = keystoreLag > 0 ? 'lagging-repaired' : 'ok';
+      if (keystoreLag > KEYSTORE_ANCHOR_MAX_LAG) {
+        // S33-07: beyond the keystore cadence — record it (shown in status), signed by the kernel key when loaded.
+        this.#appendRow({ kind: 'daemon.anchor.lag', principal: this.#opts.kernelPrincipal, payload: { rows: keystoreLag, which: 'keystore' } }, false);
+        this.#diag('anchor.keystore.lag', { rows: keystoreLag });
+        this.#fileAnchor.write(this.#headAnchor(), true);
+      }
+      if (keystoreLag > 0) void this.#queueKeystore(true);
+    }
+    return { created, recoveredRotation, anchorLag, keystoreLag, anchors };
   }
 
   #metaOf(file: string): Meta {
@@ -478,30 +564,126 @@ export class KernelLog {
     return { schemaVersion: HEAD_SCHEMA, log: this.#meta.log, segment: this.#meta.segment, seq: this.#tip.seq, hash: this.#tip.hash, at: this.#tip.at };
   }
 
-  #writeAnchors(durable: boolean): void {
+  /** Rename the file anchor in now (resets the coalescing window). */
+  #writeFileAnchor(durable: boolean, closed = false): void {
     const h = this.#headAnchor();
-    this.#fileAnchor.write(h, durable);
-    this.#keystoreAnchor.write(h, durable);
+    this.#fileAnchor.write(closed ? { ...h, closed: true } : h, durable);
+    this.#fileLag = 0;
+    this.#counts.fileAnchors++;
+    if (this.#fileTimer) clearTimeout(this.#fileTimer);
+    this.#fileTimer = undefined;
+  }
+
+  /**
+   * Queue a keystore anchor write of the current head. Writes are serialised
+   * so an older head never lands after a newer one. The returned promise
+   * rejects if THIS write fails (critical path); the chain itself swallows
+   * the failure into a diagnostic so bulk writes never surface unhandled.
+   */
+  #queueKeystore(durable: boolean): Promise<void> {
+    const h = this.#headAnchor();
+    this.#ksLag = 0;
+    this.#counts.keystoreAnchors++;
+    if (this.#ksTimer) clearTimeout(this.#ksTimer);
+    this.#ksTimer = undefined;
+    const p = this.#ksChain.then(() => this.#keystoreAnchor.write(h, durable));
+    this.#ksChain = p.then(
+      () => undefined,
+      (err: unknown) => this.#diag('anchor.keystore.failed', { seq: h.seq, error: (err as Error)?.message ?? String(err) }),
+    );
+    return p;
+  }
+
+  /** Both anchors durably (genesis, rotation, close). */
+  #writeAnchorsDurable(closed = false): Promise<void> {
+    this.#writeFileAnchor(true, closed);
+    return this.#queueKeystore(true);
+  }
+
+  /** S33-05: after a bulk row — coalesced file anchor (63 rows / 50 ms) and keystore anchor (1023 rows / 1 s). */
+  #afterBulkRow(): void {
+    const now = performance.now();
+    if (this.#fileLag++ === 0) this.#fileSince = now;
+    if (this.#fileLag >= FILE_ANCHOR_MAX_LAG || now - this.#fileSince >= FILE_ANCHOR_MAX_MS) this.#writeFileAnchor(false);
+    else if (!this.#fileTimer) {
+      this.#fileTimer = setTimeout(() => {
+        this.#fileTimer = undefined;
+        if (!this.#closed && this.#fileLag > 0) this.#writeFileAnchor(false);
+      }, FILE_ANCHOR_MAX_MS);
+      this.#fileTimer.unref();
+    }
+    if (this.#ksLag++ === 0) this.#ksSince = now;
+    if (this.#ksLag >= KEYSTORE_ANCHOR_MAX_LAG || now - this.#ksSince >= KEYSTORE_ANCHOR_MAX_MS) void this.#queueKeystore(false);
+    else if (!this.#ksTimer) {
+      this.#ksTimer = setTimeout(() => {
+        this.#ksTimer = undefined;
+        if (!this.#closed && this.#ksLag > 0) void this.#queueKeystore(false);
+      }, KEYSTORE_ANCHOR_MAX_MS);
+      this.#ksTimer.unref();
+    }
+  }
+
+  #noteForced(forced: boolean): void {
+    const i = this.#ringIdx;
+    if (this.#ringFill === FORCED_ANCHOR_WINDOW) this.#ringForced -= this.#forcedRing[i]!;
+    else this.#ringFill++;
+    this.#forcedRing[i] = forced ? 1 : 0;
+    this.#ringForced += this.#forcedRing[i]!;
+    this.#ringIdx = (i + 1) % FORCED_ANCHOR_WINDOW;
+  }
+
+  /** S33-06 telemetry (`status.log.forcedAnchorRate`): forced anchors per row over the last ≤ 10⁴ rows. */
+  get forcedAnchorRate(): number {
+    return this.#ringFill === 0 ? 0 : this.#ringForced / this.#ringFill;
+  }
+
+  /** The `status.log` anchor block (S33-06/07). */
+  get anchorStatus(): AnchorStatus {
+    const rate = this.forcedAnchorRate;
+    return { forcedAnchorRate: rate, withinEnvelope: rate <= FORCED_ANCHOR_ENVELOPE, fileLag: this.#fileLag, keystoreLag: this.#ksLag, ...this.#counts };
   }
 
   /* ── append ─────────────────────────────────────────────────────────────── */
 
   /**
-   * Append one event. Returns only after the commit is durable per the
-   * durability policy — so a caller that must log BEFORE acting (L2,
-   * `session.inject` before the child reads, G-LOG-03) sequences on return.
+   * Append one event. The commit is durable per the durability policy before
+   * the promise resolves — so a caller that must log BEFORE acting (L2,
+   * `session.inject` before the child reads, G-LOG-03) sequences on it.
+   *
+   * Critical kinds (CRITICAL_ANCHOR_KINDS, S33-06) commit with F_FULLFSYNC and
+   * resolve only after the file anchor is renamed in AND the keystore anchor
+   * write has completed: `{anchored: true}`. NO EFFECT of a critical event
+   * (tool release, card result, grant) may be released before this resolves.
+   * If the keystore write fails the promise rejects ENGINE{anchor-failed}: the
+   * row is committed but must be treated as not having happened.
    */
-  append(input: AppendInput): EventV1 {
+  async append(input: AppendInput): Promise<AppendResult> {
     if (this.#closed) throw logRefusal('ENGINE', 'closed', 'the kernel log is closed');
     if (input.kind === 'daemon.segment') {
       throw logRefusal('FORBIDDEN', 'reserved-kind', 'daemon.segment is written only by the log itself at rotation', { kind: input.kind });
     }
-    const e = this.#appendRow(input);
+    const critical = isCriticalKind(input.kind, input.payload);
+    const e = this.#appendRow(input, critical);
+    this.#noteForced(critical);
+    let ks: Promise<void> | undefined;
+    if (critical) {
+      this.#counts.forcedAnchors++;
+      this.#writeFileAnchor(false);
+      ks = this.#queueKeystore(false);
+    } else this.#afterBulkRow();
+    this.#scheduleCheckpoint();
     if (e.seq - this.#meta.baseSeq + 2 >= this.#opts.segmentRows) this.#rotate();
-    return e;
+    if (ks) {
+      try {
+        await ks;
+      } catch (err) {
+        throw logRefusal('ENGINE', 'anchor-failed', `keystore anchor write failed for critical row ${e.seq}: ${(err as Error)?.message ?? String(err)}`, { kind: e.kind, seq: e.seq });
+      }
+    }
+    return { seq: e.seq, hash: e.hash, anchored: critical, event: e };
   }
 
-  #appendRow(input: AppendInput): EventV1 {
+  #appendRow(input: AppendInput, fullfsync: boolean): EventV1 {
     const kind = input.kind;
     const labels = resolveLabels(kind, input); // refuses unregistered kinds and relaxed labels
     assertOwner(kind, input.as ?? 'kernel');
@@ -548,6 +730,9 @@ export class KernelLog {
     const errors = validateEventV1(event, { checkDefaultLabels: true });
     if (errors.length) throw logRefusal('BAD_REQUEST', 'bad-envelope', errors.join('; '), { kind });
 
+    // S33-06: F_FULLFSYNC for this one transaction (already on under 'power-loss').
+    const forceFull = fullfsync && this.#opts.durability !== 'power-loss';
+    if (forceFull) this.#db.exec('PRAGMA fullfsync=ON');
     this.#db.exec('BEGIN IMMEDIATE');
     try {
       const cur = this.#tipStmt.get() as { seq: number; hash: string } | undefined;
@@ -561,10 +746,10 @@ export class KernelLog {
     } catch (err) {
       if (this.#db.isTransaction) this.#db.exec('ROLLBACK');
       throw err;
+    } finally {
+      if (forceFull) this.#db.exec('PRAGMA fullfsync=OFF');
     }
     this.#tip = { seq, hash, kind, at: event.at };
-    this.#writeAnchors(false);
-    this.#scheduleCheckpoint();
     return event;
   }
 
@@ -581,21 +766,37 @@ export class KernelLog {
     this.#idleTimer.unref();
   }
 
-  /** PASSIVE WAL checkpoint (never blocks on readers). */
+  /** PASSIVE WAL checkpoint (never blocks on readers); also renames in a pending file anchor (S33-05 "on idle checkpoint"). */
   checkpoint(): void {
     if (this.#closed) return;
     this.#db.exec('PRAGMA wal_checkpoint(PASSIVE)');
     this.#sinceCheckpoint = 0;
+    this.#counts.checkpoints++;
+    if (this.#fileLag > 0) this.#writeFileAnchor(false);
+  }
+
+  /** Write both anchors for the current head now and wait for the keystore write (daemon shutdown paths, tests). */
+  async flushAnchors(): Promise<void> {
+    if (this.#closed) return this.#ksChain;
+    this.#writeFileAnchor(false);
+    await this.#queueKeystore(false);
   }
 
   /* ── segments ───────────────────────────────────────────────────────────── */
 
   #rotate(): void {
-    this.#appendRow({
-      kind: 'daemon.segment',
-      principal: this.#opts.kernelPrincipal,
-      payload: { segment: this.#meta.segment, next: this.#meta.segment + 1, firstSeq: this.#meta.baseSeq, lastSeq: this.#tip.seq + 1 },
-    });
+    this.#appendRow(
+      {
+        kind: 'daemon.segment',
+        principal: this.#opts.kernelPrincipal,
+        payload: { segment: this.#meta.segment, next: this.#meta.segment + 1, firstSeq: this.#meta.baseSeq, lastSeq: this.#tip.seq + 1 },
+      },
+      false,
+    );
+    this.#noteForced(false);
+    // durable anchor AT the closing row before the rename, so a crash between
+    // rename and the new kernel.db is recognised as a rotation window on open.
+    this.#writeFileAnchor(true);
     this.#finishRotation();
   }
 
@@ -621,7 +822,7 @@ export class KernelLog {
     this.#createSegment({ log: sealedMeta.log, segment: sealedMeta.segment + 1, baseSeq: tip.seq + 1, basePrev: tip.hash });
     this.#attach();
     this.#tip = { ...this.#tip, at: tip.at };
-    this.#writeAnchors(true);
+    void this.#writeAnchorsDurable();
     this.#diag('segment.sealed', { segment: sealedMeta.segment, lastSeq: tip.seq });
   }
 
@@ -683,13 +884,19 @@ export class KernelLog {
     return verifyLog(this.home, { keyRing: this.#keyRing, segment: opts.segment, keystoreAnchor: this.#keystoreAnchor });
   }
 
-  close(): void {
-    if (this.#closed) return;
+  /**
+   * Clean close: both anchors durably, the file anchor carrying the
+   * clean-close marker (S33-07), then a TRUNCATE checkpoint. The db work is
+   * synchronous; the returned promise settles when the keystore write does.
+   */
+  close(): Promise<void> {
+    if (this.#closed) return this.#ksChain;
+    for (const t of [this.#idleTimer, this.#fileTimer, this.#ksTimer]) if (t) clearTimeout(t);
+    void this.#writeAnchorsDurable(true);
     this.#closed = true;
-    if (this.#idleTimer) clearTimeout(this.#idleTimer);
-    this.#writeAnchors(true);
     this.#db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
     this.#db.close();
+    return this.#ksChain;
   }
 }
 
@@ -776,6 +983,7 @@ export function verifyLog(
     const ks = (opts.keystoreAnchor ?? new KeystoreAnchorStore()).read();
     if (ks.state === 'unavailable') report.anchors.keystore = 'unavailable';
     else if (ks.state === 'present' && lastSegment && ks.head.seq === lastSegment.seq && ks.head.hash === lastSegment.hash) report.anchors.keystore = 'ok';
+    else if (ks.state === 'present' && lastSegment && ks.head.log === logId && ks.head.seq < lastSegment.seq) report.anchors.keystore = 'lagging'; // coalesced cadence (S33-05)
     else {
       report.anchors.keystore = 'mismatch';
       fail({ code: 'anchor', segment: Number.NaN, detail: `keystore anchor ${ks.state}` });

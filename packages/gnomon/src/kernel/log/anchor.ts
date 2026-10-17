@@ -4,10 +4,12 @@
  * #kernel-log (spec §3.2 "Signatures and anchors", §16 "Chain anchor" row,
  * G-LOG-06) — the chain-head anchors.
  *
- * After every commit the head `{log, segment, seq, hash, at}` is written to
- * TWO anchors: the file `<home>/head` and the OS keystore item `gnomon-head`
- * (Keychain generic password on macOS / Credential Manager generic credential
- * on Windows), the latter written by the signed helper with no presence.
+ * The head `{log, segment, seq, hash, at}` is written to TWO anchors: the file
+ * `<home>/head` and the OS keystore item `gnomon-head` (Keychain generic
+ * password on macOS / Credential Manager generic credential on Windows), the
+ * latter written by the signed helper with no presence. WHEN each is written
+ * (coalesced bulk cadence, forced for critical kinds, lag bounds on open) is
+ * the policy in anchor-policy.ts (research 33, P8-D82).
  *
  * PR-4 ships `FileAnchorStore`. `KeystoreAnchorStore` is the SEAM for the
  * helper-backed anchor: until the helper exists (probes P04/P02, M1.3) it
@@ -15,12 +17,20 @@
  * rather than pretending a second anchor exists.
  *
  * File anchor durability: written as tmp + rename (atomic: a reader sees the
- * old or the new head, never a torn one) and NOT fsynced per commit — on
+ * old or the new head, never a torn one; pwrite in place is rejected, S33-05)
+ * and NOT fsynced per write — on
  * macOS node's fsync is F_FULLFSYNC (~5 ms, measured), which alone would
  * blow the 5 ms p99 append budget. It is fsynced at genesis, rotation and
  * close. After a crash the anchor may therefore LAG the db (never lead it:
  * the db commit is durable before the anchor is written); the log accepts a
- * lagging anchor only if the row at the anchor's seq has the anchor's hash.
+ * lagging anchor only if the row at the anchor's seq has the anchor's hash
+ * and the lag is within FILE_ANCHOR_MAX_LAG. The anchor written by a clean
+ * close carries `closed: true`; any lag behind a closed anchor is
+ * INTEGRITY_BROKEN{anchor-lag} (S33-07).
+ *
+ * `AnchorStore.write` may return a Promise: the helper-backed keystore store
+ * (P04) talks to the helper over XPC/IPC. The log serialises keystore writes
+ * so a slow write can never land after (and roll back) a newer one.
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -35,6 +45,8 @@ export interface HeadAnchor {
   seq: number;
   hash: string;
   at: string;
+  /** Written only by a clean close (S33-07 clean-close marker); cleared durably on the next open. */
+  closed?: true;
 }
 
 export type AnchorReadResult = { state: 'present'; head: HeadAnchor } | { state: 'absent' } | { state: 'unavailable'; why: string } | { state: 'malformed'; why: string };
@@ -42,8 +54,8 @@ export type AnchorReadResult = { state: 'present'; head: HeadAnchor } | { state:
 export interface AnchorStore {
   readonly name: 'file' | 'keystore';
   read(): AnchorReadResult;
-  /** `durable` = fsync before returning (genesis, rotation, close). */
-  write(head: HeadAnchor, durable: boolean): void;
+  /** `durable` = fsync before returning (genesis, rotation, close). May be async (helper IPC, P04). */
+  write(head: HeadAnchor, durable: boolean): void | Promise<void>;
 }
 
 function isHead(v: unknown): v is HeadAnchor {
@@ -56,7 +68,8 @@ function isHead(v: unknown): v is HeadAnchor {
     Number.isSafeInteger(h.seq) &&
     (h.seq as number) >= 0 &&
     typeof h.hash === 'string' &&
-    typeof h.at === 'string'
+    typeof h.at === 'string' &&
+    (h.closed === undefined || h.closed === true)
   );
 }
 

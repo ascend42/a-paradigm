@@ -1,0 +1,228 @@
+{
+  "probe": "p-log-fsync",
+  "os": "darwin",
+  "osVersion": "macOS 15.7.3 (24.6.0)",
+  "arch": "arm64",
+  "toolVersions": {
+    "sqlite": "3.53.0",
+    "node": "v26.0.0"
+  },
+  "verdict": "pass",
+  "evidence": {
+    "n": 1000000,
+    "budgetMs": 5,
+    "tmpRoot": "<tmp>",
+    "dataVolume": "/dev/disk3s5 on /System/Volumes/Data (apfs, local, journaled, nobrowse, protect, root data)",
+    "cpus": "Apple M4",
+    "armsMeetingBudget": [
+      "A",
+      "E"
+    ],
+    "arms": {
+      "A": {
+        "arm": "A",
+        "desc": "raw SQLite (kernel-log pragmas) only",
+        "n": 1000000,
+        "wallS": 34.239,
+        "checkpoints": 50,
+        "total": {
+          "p50": 0.028,
+          "p90": 0.038,
+          "p99": 0.055,
+          "p999": 0.094,
+          "max": 76.438,
+          "over5ms": 57
+        },
+        "commit": {
+          "p50": 0.028,
+          "p90": 0.038,
+          "p99": 0.054,
+          "p999": 0.093,
+          "max": 47.197,
+          "over5ms": 7
+        },
+        "anchor": {
+          "p50": 0,
+          "p90": 0,
+          "p99": 0,
+          "p999": 0,
+          "max": 76.412,
+          "over5ms": 50
+        },
+        "slowPer50k": [
+          2,
+          4,
+          2,
+          3,
+          2,
+          3,
+          2,
+          3,
+          2,
+          3,
+          3,
+          5,
+          2,
+          3,
+          2,
+          4,
+          2,
+          5,
+          2,
+          3
+        ],
+        "firstSlowAt": 20000,
+        "slowDominatedBy": {
+          "commit": 7,
+          "anchor": 50
+        }
+      },
+      "E": {
+        "arm": "E",
+        "desc": "A + head tmp+rename on a 50 ms timer",
+        "n": 1000000,
+        "wallS": 48.915,
+        "checkpoints": 50,
+        "total": {
+          "p50": 0.03,
+          "p90": 0.042,
+          "p99": 0.079,
+          "p999": 7.609,
+          "max": 528.003,
+          "over5ms": 1427
+        },
+        "commit": {
+          "p50": 0.03,
+          "p90": 0.042,
+          "p99": 0.076,
+          "p999": 7.579,
+          "max": 116.055,
+          "over5ms": 1376
+        },
+        "anchor": {
+          "p50": 0,
+          "p90": 0,
+          "p99": 0,
+          "p999": 0.001,
+          "max": 527.936,
+          "over5ms": 52
+        },
+        "slowPer50k": [
+          3,
+          3,
+          2,
+          3,
+          2,
+          3,
+          3,
+          3,
+          2,
+          3,
+          2,
+          30,
+          85,
+          192,
+          185,
+          3,
+          304,
+          394,
+          5,
+          200
+        ],
+        "firstSlowAt": 19320,
+        "slowDominatedBy": {
+          "commit": 1376,
+          "anchor": 51
+        }
+      },
+      "G": {
+        "arm": "G",
+        "desc": "D+E coalesced anchor + forced fullfsync commit and anchor rename at 1/64 (research 33 policy)",
+        "n": 1000000,
+        "wallS": 1035.726,
+        "checkpoints": 50,
+        "total": {
+          "p50": 0.063,
+          "p90": 0.134,
+          "p99": 41.342,
+          "p999": 130.671,
+          "max": 1701.981,
+          "over5ms": 12602
+        },
+        "commit": {
+          "p50": 0.063,
+          "p90": 0.134,
+          "p99": 40.005,
+          "p999": 128.965,
+          "max": 1684.009,
+          "over5ms": 12237
+        },
+        "anchor": {
+          "p50": 0,
+          "p90": 0,
+          "p99": 0.681,
+          "p999": 1.854,
+          "max": 857.048,
+          "over5ms": 84
+        },
+        "slowPer50k": [
+          790,
+          784,
+          879,
+          866,
+          779,
+          790,
+          876,
+          966,
+          851,
+          605,
+          71,
+          42,
+          91,
+          42,
+          42,
+          798,
+          794,
+          881,
+          797,
+          858
+        ],
+        "firstSlowAt": 64,
+        "slowDominatedBy": {
+          "commit": 12565,
+          "anchor": 37
+        },
+        "bulk": {
+          "p50": 0.062,
+          "p90": 0.129,
+          "p99": 0.271,
+          "p999": 3.676,
+          "max": 857.104,
+          "over5ms": 879,
+          "n": 984375,
+          "over5Frac": 0.000892952380952381
+        },
+        "critical": {
+          "p50": 56.311,
+          "p90": 96.322,
+          "p99": 489.613,
+          "p999": 859.546,
+          "max": 1701.981,
+          "over5ms": 11723,
+          "n": 15625
+        },
+        "gLog04": {
+          "bulkP99Ok": true,
+          "bulkOver5Ok": true,
+          "criticalP99Ok": false
+        }
+      }
+    }
+  },
+  "specRefs": [
+    "§3.2",
+    "G-LOG-06",
+    "M1.2 append p99 <= 5 ms"
+  ],
+  "at": "2026-10-17T19:01:54.619Z"
+}
