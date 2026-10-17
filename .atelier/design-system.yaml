@@ -78,7 +78,7 @@ gnomon:
         sea-grey:   { fill: "#8FB0AE", ink: "#3F6664", night: "#A8CFCB" }
       semantic:
         failure: { day: "#B4382A", night: "#FF7A66" }
-        warning: { edge: { day: "#C98A12", night: "#FFC15A" }, ink: { day: "#6E4700", night: "#FFC15A" }, bg: { day: "#F6E3B8", night: "rgba(255,193,90,.10)" } }
+        warning: { edge: { day: "#A8730C", night: "#FFC15A" }, ink: { day: "#6E4700", night: "#FFC15A" }, bg: { day: "#F6E3B8", night: "rgba(255,193,90,.10)" } }
         knot:    { day: "#5B4FD6", night: "#A79CFF" }
     rules:
       - "Project hue fills never carry text; any text in a project hue uses its ink pair (>= 5.1:1 on sheet and ground); night hues pass as text (>= 8.6:1)"
