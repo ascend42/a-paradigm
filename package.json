@@ -18,7 +18,7 @@
     "build:packages": "npm run build --workspace=@a-company/portal-sdk && npm run build --workspace=@a-company/portal-manager && npm run build --workspace=@a-company/portal-viewer && npm run build --workspace=@a-company/premise-core && npm run build --workspace=@a-company/warpline && npm run build --workspace=@a-company/sentinel && npm run build --workspace=@a-company/paradigm-runtime && npm run build --workspace=@a-company/paradigm-mcp",
     "build:cli": "npm run build --workspace=@a-company/paradigm",
     "build:vscode": "npm run build --workspace=@a-company/paradigm-vscode",
-    "build:gnomon": "npm run build --workspace=@a-company/gnomon-contracts && npm run build --workspace=@a-company/gnomon-mod-sdk && npm run build --workspace=@a-company/gnomon",
+    "build:gnomon": "npm run build --workspace=@a-company/gnomon-contracts && npm run build --workspace=@a-company/gnomon-mod-sdk && npm run build --workspace=@a-company/gnomon && npm run build --workspace=@a-company/gnomon-local",
     "package:vscode": "cd packages/paradigm-vscode && npx vsce package",
     "dev:sentinel": "npm run dev:ui --workspace=@a-company/sentinel",
     "lint": "eslint packages --ext .ts,.tsx",
@@ -33,7 +33,7 @@
     "test": "npm run test:cli && npm run test:warpline",
     "test:cli": "npm run test --workspace=@a-company/paradigm",
     "test:warpline": "npm run build --workspace=@a-company/warpline && npm run test --workspace=@a-company/warpline",
-    "test:gnomon": "npm run build:gnomon && npm run test --workspace=@a-company/gnomon-contracts && npm run test --workspace=@a-company/gnomon-mod-sdk && npm run test --workspace=@a-company/gnomon",
+    "test:gnomon": "npm run build:gnomon && npm run test --workspace=@a-company/gnomon-contracts && npm run test --workspace=@a-company/gnomon-mod-sdk && npm run test --workspace=@a-company/gnomon-local && npm run test --workspace=@a-company/gnomon",
     "prepublishOnly": "node scripts/pre-publish-check.mjs"
   },
   "keywords": [

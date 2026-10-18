@@ -43,6 +43,10 @@
  *   staged: control message → close stdin → SIGTERM → SIGKILL on the group.
  * exit (any time, also before #wire): watch cleared, every permit released,
  *   the session moves to a bounded history.
+ * LOCAL (M1.8 slice 1): an open with model local|any or backend local goes to
+ *   #local-runner's lane (local-session.ts) — routing, the fallback card, the
+ *   local spawn; `any` routed to Claude comes back here. send/stop/status of
+ *   a local hsid are the lane's.
  * Mid-session watch (G-SUB-05): every `watchMs` the layers are re-hashed —
  *   ~/.claude.json only through its law-7 projection, so Claude's routine
  *   rewrites never fire — a change logs session.layers.changed{which} and a
@@ -70,6 +74,8 @@ import { commitPin, prepareClaude, readClaudePin } from '../runner/binary.js';
 import { buildClaudeArgv, cardKindOfTool, controlInterruptLine, LineSplitter, parseStreamLine, UsageMeter, userMessageLine, type SettingSource } from '../../adapters/claude-code/adapter.js';
 import { claudeCodePlatform, type ClaudeCodePlatformRow } from '../../platform/claude-code.js';
 import type { DarwinSessionExtras } from '../../platform/darwin/session-sbpl.js';
+import { LocalLane, type LocalLaneOptions } from './local-session.js';
+import type { LocalLaneConfig } from '../local/config.js';
 
 export const STDOUT_LINE_CAP = 4 * 1024 * 1024;
 export const STDERR_CAP = 64 * 1024;
@@ -111,6 +117,10 @@ export interface SupervisorOptions {
   macosMajor?: () => number | null;
   /** TEST RIG ONLY: the SIP probe (default: the platform's csrutil). Tests pass false to exercise the SIP refusal, true to run the rig on a SIP-off host. */
   sipEnabled?: () => boolean | null;
+  /** #local-runner (M1.8): the local lane's endpoints + runner; absent ⇒ model:local raises a fallback card */
+  local?: LocalLaneConfig;
+  /** TEST RIG ONLY: the local probe's fetch */
+  localProbeFetch?: LocalLaneOptions['probeFetch'];
 }
 
 export interface OpenRequest {
@@ -185,10 +195,17 @@ export class SessionSupervisor {
   readonly #history: Array<Record<string, unknown>> = [];
   readonly #usedTurnPermits = new Set<string>();
   readonly #platform: string;
+  readonly #local: LocalLane;
 
   constructor(o: SupervisorOptions) {
     this.#o = o;
     this.#platform = o.platform ?? process.platform;
+    this.#local = new LocalLane({
+      log: o.log, children: o.children, fuse: o.fuse, ...(o.broker ? { broker: o.broker } : {}), home: o.home, ...(o.userHome ? { userHome: o.userHome } : {}),
+      kernelPrincipal: o.kernelPrincipal, sock: o.sock, ...(o.env ? { env: o.env } : {}), ...(o.endpointPort ? { endpointPort: o.endpointPort } : {}),
+      ...(o.linkedFolders ? { linkedFolders: o.linkedFolders } : {}), platform: this.#platform, ...(o.macosMajor ? { macosMajor: o.macosMajor } : {}),
+      ...(o.sipEnabled ? { sipEnabled: o.sipEnabled } : {}), ...(o.local ? { config: o.local } : {}), ...(o.localProbeFetch ? { probeFetch: o.localProbeFetch } : {}),
+    });
   }
 
   #principalFor(hsid: string): string {
@@ -218,11 +235,16 @@ export class SessionSupervisor {
     return `${l}|${cj}`;
   }
 
-  async open(req: OpenRequest): Promise<{ hsid: string; principalId: string; backend: 'claude-code'; state: string; binaryPin?: string }> {
+  async open(req: OpenRequest): Promise<{ hsid: string; principalId: string; backend: 'claude-code' | 'local'; state: string; binaryPin?: string; model?: string }> {
     if (req.principalClass !== 'human' || req.attended !== true) {
       throw refused('FORBIDDEN', 'M1.7 slice 1 opens attended, human-started sessions only (agent/session/unattended opens wait for the broker decision, law 5)', { principalClass: req.principalClass });
     }
-    if (req.backend === 'local' || req.model === 'local') throw refused('UNSUPPORTED', 'local sessions are #local-runner (M1.8)', {});
+    // an explicit backend pins the route: claude-code never spawns gnomon-local (model local + claude-code ⇒ BAD_REQUEST in the lane)
+    if (req.backend === 'local' || req.model === 'local' || (req.model === 'any' && req.backend !== 'claude-code')) {
+      // §13.3: local ⇒ capable local or a fallback card; any ⇒ local if capable, else (null) Claude below
+      const local = await this.#local.open(req, (r) => this.open(r));
+      if (local) return local;
+    }
     if (typeof req.cwd !== 'string' || !path.isAbsolute(req.cwd) || !fs.existsSync(req.cwd) || !fs.statSync(req.cwd).isDirectory()) {
       throw refused('BAD_REQUEST', 'cwd must be an existing absolute directory', { reason: 'bad-params' });
     }
@@ -504,6 +526,7 @@ export class SessionSupervisor {
   }
 
   async send(principal: string, p: { hsid: string; text: string; permitId?: string }): Promise<{ turn: string }> {
+    if (this.#local.has(p.hsid)) return this.#local.send(principal, p);
     const s = this.#get(principal, p.hsid);
     if (s.state !== 'running' || s.child.exitCode !== null || s.child.signalCode !== null) throw refused('NOT_FOUND', 'the session is not running', { reason: 'not-found' });
     if (typeof p.text !== 'string' || p.text.length === 0) throw refused('BAD_REQUEST', 'send takes non-empty text', { reason: 'bad-params' });
@@ -541,6 +564,7 @@ export class SessionSupervisor {
   }
 
   async stop(principal: string, p: { hsid: string; interrupt?: boolean }): Promise<{ signals: string[]; exited: boolean }> {
+    if (this.#local.has(p.hsid)) return this.#local.stop(principal, p);
     const s = this.#get(principal, p.hsid);
     if (p.interrupt) {
       if (s.state === 'running') s.child.stdin?.write(controlInterruptLine());
@@ -581,11 +605,12 @@ export class SessionSupervisor {
     return [
       ...[...this.#sessions.values()].map((s) => ({ hsid: s.hsid, principalId: s.principalId, state: s.state, turns: s.turns, permitId: s.spawnPermit.permitId })),
       ...this.#history,
+      ...this.#local.status(),
     ];
   }
 
   /** One session's state (tests, status): running | stopping | exited | null. */
   stateOf(hsid: string): string | null {
-    return this.#sessions.get(hsid)?.state ?? (this.#history.some((h) => h.hsid === hsid) ? 'exited' : null);
+    return this.#sessions.get(hsid)?.state ?? (this.#history.some((h) => h.hsid === hsid) ? 'exited' : this.#local.stateOf(hsid));
   }
 }

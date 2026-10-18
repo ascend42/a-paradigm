@@ -83,9 +83,10 @@ describe.skipIf(!SANDBOX_OK)('M1.7 slice 1: who may open', () => {
     expect(e.refusal.code).toBe('FORBIDDEN');
     expect(r.kinds('session.spawned')).toEqual([]);
   });
-  it('a local backend is #local-runner (M1.8)', async () => {
+  it('a local backend is #local-runner (M1.8): unconfigured lane ⇒ fallback card + MODEL_UNAVAILABLE, claude never runs', async () => {
     const r = rig();
-    expect((await refusal(open(r.sup, { backend: 'local' }))).refusal.code).toBe('UNSUPPORTED');
+    expect((await refusal(open(r.sup, { backend: 'local' }))).refusal.code).toBe('MODEL_UNAVAILABLE');
+    expect(trace(w)).toEqual([]);
   });
 });
 
