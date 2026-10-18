@@ -275,10 +275,15 @@ describe('session.compacted (T-2026-10-18-016, P8-D93)', () => {
       { ...good, tokensAfter: -1 },
       { ...good, tokensBefore: 1.5 },
       { ...good, reason: '' },
+      { ...good, reason: 'because' },
       { ...good, hsid: 'x' },
       { ...good, turn: 'turn:x/1' },
       noReason,
     ]) expect(c.validateSessionCompactedPayload(bad).length, JSON.stringify(bad)).toBeGreaterThan(0);
     expect((c.EVENT_V1_SCHEMA as Record<string, unknown>)['x-gnomon-kind-payloads']).toEqual(c.KIND_PAYLOADS);
+    // Aegis r2: reason is a closed enum
+    expect(c.COMPACTION_REASONS).toEqual(['threshold', 'overflow', 'manual', 'unspecified']);
+    for (const reason of c.COMPACTION_REASONS) expect(c.validateSessionCompactedPayload({ ...good, reason })).toEqual([]);
+    expect((c.EVENT_V1_SCHEMA as Record<string, unknown>)['x-gnomon-compaction-reasons']).toEqual([...c.COMPACTION_REASONS]);
   });
 });

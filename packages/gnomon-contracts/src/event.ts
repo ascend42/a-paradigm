@@ -270,12 +270,16 @@ export const KIND_PAYLOADS: Readonly<Record<string, readonly string[]>> = Object
   'session.compacted': Object.freeze(['hsid', 'turn', 'reason', 'summaryHash', 'tokensBefore', 'tokensAfter']),
 });
 
+/** session.compacted reasons (Aegis, P8-D93): closed; a backend value outside it is recorded as `unspecified`. */
+export const COMPACTION_REASONS = ['threshold', 'overflow', 'manual', 'unspecified'] as const;
+export type CompactionReason = (typeof COMPACTION_REASONS)[number];
+
 export interface SessionCompactedPayload {
   hsid: string;
   /** The turn in flight when compaction ran (turn:<hsid>/<n>), or null before the first turn. */
   turn: string | null;
-  /** The backend's reason (e.g. `threshold`, `overflow`), 1..32 characters. */
-  reason: string;
+  /** Why the backend compacted (COMPACTION_REASONS). */
+  reason: CompactionReason;
   /** sha256:<hex> of the summary text (a sensitive FIELD: it confirms a guess at the summary). */
   summaryHash: string;
   tokensBefore: number;
@@ -291,7 +295,7 @@ export function validateSessionCompactedPayload(value: unknown): string[] {
   c.required('', value, keys);
   if ('hsid' in value) c.str('hsid', value.hsid, HSID_PATTERN, 'hsid');
   if ('turn' in value && value.turn !== null) c.str('turn', value.turn, TURN_ID_PATTERN, 'turn:<hsid>/<n> or null');
-  if ('reason' in value) c.str('reason', value.reason, /^.{1,32}$/s, '1..32 characters');
+  if ('reason' in value && !(COMPACTION_REASONS as readonly unknown[]).includes(value.reason)) c.fail('reason', `must be one of ${COMPACTION_REASONS.join('|')}`);
   if ('summaryHash' in value) c.str('summaryHash', value.summaryHash, SHA256_TAGGED, 'sha256:<hex>');
   for (const k of ['tokensBefore', 'tokensAfter'] as const) {
     if (k in value && (!Number.isSafeInteger(value[k]) || (value[k] as number) < 0)) c.fail(k, 'must be a non-negative integer');

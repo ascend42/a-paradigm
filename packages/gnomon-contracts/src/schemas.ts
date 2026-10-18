@@ -27,6 +27,7 @@ import {
   APPROVAL_SUSPECT_REASONS,
   RESERVED_KIND_PAYLOADS,
   KIND_PAYLOADS,
+  COMPACTION_REASONS,
 } from './event.js';
 import {
   RISK_TIERS,
@@ -98,6 +99,7 @@ export const EVENT_V1_SCHEMA: Schema = deepFreeze({
   'x-gnomon-suspect-reasons': [...APPROVAL_SUSPECT_REASONS],
   'x-gnomon-reserved-kind-payloads': RESERVED_KIND_PAYLOADS,
   'x-gnomon-kind-payloads': KIND_PAYLOADS,
+  'x-gnomon-compaction-reasons': [...COMPACTION_REASONS],
   ...closedObj(
     {
       schemaVersion: { const: 'event:v1' },
