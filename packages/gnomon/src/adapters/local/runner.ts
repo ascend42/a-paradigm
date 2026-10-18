@@ -31,7 +31,7 @@ export type LocalEvent =
   | { kind: 'start'; type: string }
   | { kind: 'compaction'; type: string; phase: 'start' | 'end'; reason: string | null; tokensBefore: number | null; tokensAfter: number | null; error: string | null }
   | { kind: 'end'; type: string; tokens: number | null; stopReason: string | null; error: string | null }
-  | { kind: 'response'; type: string; command: string | null; success: boolean | null }
+  | { kind: 'response'; type: string; command: string | null; success: boolean | null; error: string | null }
   | { kind: 'fatal'; type: string; error: string | null }
   | { kind: 'unknown'; type: string }
   | { kind: 'malformed'; type: 'malformed' };
@@ -83,7 +83,7 @@ export function parseLocalLine(line: string): LocalEvent {
     case 'agent_end':
       return { kind: 'end', type, tokens: tokensOf(e.usage), stopReason: s(e.stopReason, 32), error: s(e.error, 500) };
     case 'response':
-      return { kind: 'response', type, command: s(e.command, 32), success: b(e.success) };
+      return { kind: 'response', type, command: s(e.command, 32), success: b(e.success), error: s(e.error, 200) };
     case 'fatal':
       return { kind: 'fatal', type, error: s(e.error, 500) };
     default:

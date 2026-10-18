@@ -129,6 +129,8 @@ export function rpcSession(cfg: LocalSessionConfig, emit: Emit): { onLine: (line
         return;
       case 'steer':
         if (!msg) return no('message is required');
+        // round 2 (steer race): an idle agent refuses a steer — queued, it would leak into the NEXT turn
+        if (!agent.running) return no('agent is idle (nothing to steer)');
         agent.steer(msg);
         return ok();
       case 'follow_up':

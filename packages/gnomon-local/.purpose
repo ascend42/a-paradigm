@@ -20,7 +20,7 @@ components:
       Critical; history = system + summary + the longest safe tail within a
       quarter of the target, never an orphaned tool result; events
       compaction_start/_end; the summariser's usage is part of agent_end).
-      Deferred: JSONL session tree, bash/edit tools.
+      Round 2: rpc steer is refused while the agent is idle (never queued into the next turn). Deferred: JSONL session tree, bash/edit tools.
     path: src/
     type: module
     tags: [gnomon, local, paradigm-8, m1.8]

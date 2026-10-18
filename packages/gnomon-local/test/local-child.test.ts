@@ -188,6 +188,25 @@ describe('the streaming client and the agent loop (fake server)', () => {
   });
 });
 
+describe('round 2 (steer race): an idle agent refuses a steer instead of queueing it into the next turn', () => {
+  it('steer after agent_end ⇒ success:false; the next prompt carries no steer text', async () => {
+    srv = await fakeOpenAI({ script: [{ content: 'one' }, { content: 'two' }] });
+    const cwd = scratch();
+    const cfg = parseSessionConfig(JSON.stringify({ schemaVersion: 'gnomon-local-session:v1', session: 'hsid:v1:x', cwd, endpoint: { base: srv.base, model: 'm', compat: 'llama.cpp' }, capabilities: { tools: false, nCtx: 8192 }, surface: 'none' }));
+    const evs: Array<Record<string, unknown>> = [];
+    const { onLine, agent } = rpcSession(cfg, (e) => evs.push(e));
+    onLine('{"id":"1","type":"prompt","message":"first"}');
+    await new Promise((r) => setTimeout(r, 10));
+    while (agent.running) await new Promise((r) => setTimeout(r, 10));
+    onLine('{"id":"2","type":"steer","message":"LEAK"}');
+    expect(evs.at(-1)).toEqual({ type: 'response', id: '2', command: 'steer', success: false, error: 'agent is idle (nothing to steer)' });
+    onLine('{"id":"3","type":"prompt","message":"second"}');
+    await new Promise((r) => setTimeout(r, 10));
+    while (agent.running) await new Promise((r) => setTimeout(r, 10));
+    expect(JSON.stringify(srv.requests[1]!.messages)).not.toContain('LEAK');
+  });
+});
+
 describe('Aegis H1 (round 2): tools confine paths to the realpath\'d session roots', () => {
   const setup = () => {
     const root = scratch();

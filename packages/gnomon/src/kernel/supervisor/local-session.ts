@@ -477,6 +477,11 @@ export class LocalLane {
         if (head) await this.#o.fuse.release(head, s.owner).catch(() => undefined);
         return;
       }
+      case 'response':
+        // round 2 (steer race): the child refuses a steer that reaches it idle (it never queues it into the next
+        // turn); the kernel records the refusal against the session — a steer that did not land
+        if (ev.command === 'steer' && ev.success === false) await this.#o.log('turn.steer', { hsid: s.hsid, phase: 'refused', by: 'child', error: ev.error }, { session: s.hsid });
+        return;
       default:
         return; // responses, tool/turn markers, fatal, unknown and malformed lines: logged above, never acted on
     }
@@ -497,6 +502,9 @@ export class LocalLane {
     // refused. With no turn in flight there is nothing to steer: it is an ordinary send (a new permitted turn).
     if (p.steer === true && s.turnPermits.length > 0) {
       if (p.permitId !== undefined) throw refused('BAD_REQUEST', 'a steer joins the in-flight turn and takes no permit', { reason: 'bad-params' });
+      // round 2 (M2): the in-flight turn's permit must still be live — an expired one pays for nothing
+      const head = this.#o.fuse.permit(s.turnPermits[0]!);
+      if (!head || Date.parse(head.expiresAt) <= Date.now()) throw refused('PERMIT_REQUIRED', 'the in-flight turn\'s permit is gone or expired; a steer cannot ride it', {});
       const contentHash = sha(p.text);
       const turn = turnId(s.hsid, s.turns - s.turnPermits.length + 1);
       await this.#o.log('session.inject', { hsid: s.hsid, origin: 'client', hash: contentHash, bytes: p.text }, { session: s.hsid });

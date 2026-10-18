@@ -116,4 +116,76 @@ describe('LocalLane spawn (fake endpoint, unsandboxed test seam)', () => {
     await lane.stop(HUMAN, { hsid: s.hsid });
     expect(await waitFor(() => lane.stateOf(s.hsid) === 'exited', 5_000)).toBe(true);
   });
+  it('round 2 (M2): a steer whose in-flight turn permit has expired is refused PERMIT_REQUIRED; nothing is written', async () => {
+    root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'gnomon-lls-')));
+    const cwd = path.join(root, 'repo');
+    const home = path.join(root, 'gnomon-home');
+    fs.mkdirSync(cwd, { recursive: true });
+    fs.mkdirSync(home);
+    srv = await fakeOpenAI({ tools: true, script: [{ content: 'slow', delayMs: 1500 }] });
+    const rows: Array<{ kind: string; payload: Record<string, unknown> }> = [];
+    const log = async (kind: string, payload: Record<string, unknown>): Promise<void> => void rows.push({ kind, payload });
+    const real = new BudgetFuse({ kernel: SoftwareEd25519Signer.generate('kernel'), logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZZ', log, billing: { env: () => ({}), layers: () => [] } });
+    const expired = new Set<string>();
+    const fuse = {
+      reserve: (r: Parameters<BudgetFuse['reserve']>[0]) => real.reserve(r),
+      release: (id: string, p: string) => real.release(id, p),
+      recordStreamUsage: (e: Parameters<BudgetFuse['recordStreamUsage']>[0]) => real.recordStreamUsage(e),
+      permit: (id: string) => {
+        const pm = real.permit(id);
+        return pm && expired.has(id) ? { ...pm, expiresAt: new Date(Date.now() - 1000).toISOString() } : pm;
+      },
+    };
+    const children = new DaemonChildren({ append: log, control: processControlFor(process.platform), boot: 'boot-test', graceMs: 500 });
+    const lane = new LocalLane({
+      log, children, fuse: fuse as never, home, userHome: root, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(root, 'k.sock'),
+      config: { endpoints: [{ id: 'fake', base: srv.base, model: 'fake-qwen-7b-q4', compat: 'llama.cpp' }], runner: pinOf(path.dirname(CLI), 'cli.js') },
+      launchPlan: (i) => ({ command: i.binaryReal, args: i.argv, sandbox: 'partial', profile: 'test-unsandboxed', profileHash: 'sha256:test' }),
+    });
+    const s = (await lane.open({ principal: HUMAN, principalClass: 'human', attended: true, cwd, model: 'local' }, async () => null))!;
+    await lane.send(HUMAN, { hsid: s.hsid, text: 'go' });
+    const turnPermit = rows.find((r) => r.kind === 'turn.sent')!.payload.permitId as string;
+    expired.add(turnPermit);
+    await expect(lane.send(HUMAN, { hsid: s.hsid, text: 'late steer', steer: true })).rejects.toMatchObject({ refusal: { code: 'PERMIT_REQUIRED' } });
+    expect(rows.some((r) => r.kind === 'turn.steer')).toBe(false);
+    await lane.stop(HUMAN, { hsid: s.hsid });
+    expect(await waitFor(() => lane.stateOf(s.hsid) === 'exited', 5_000)).toBe(true);
+  });
+
+  it('round 2 (steer race): a steer that reaches an idle child is refused by the child and the kernel logs turn.steer{refused}', async () => {
+    root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'gnomon-lls-')));
+    const cwd = path.join(root, 'repo');
+    const home = path.join(root, 'gnomon-home');
+    const rt = path.join(root, 'fake-child');
+    fs.mkdirSync(cwd, { recursive: true });
+    fs.mkdirSync(home);
+    fs.mkdirSync(rt);
+    // a fake child that never ends its turn (the kernel keeps the turn in flight) but is idle for steering — the race, made deterministic
+    fs.writeFileSync(path.join(rt, 'cli.js'), [
+      "const out = (o) => process.stdout.write(JSON.stringify(o) + '\\n');",
+      "let buf = '';",
+      "process.stdin.on('data', (d) => { buf += d; let i; while ((i = buf.indexOf('\\n')) >= 0) { const c = JSON.parse(buf.slice(0, i)); buf = buf.slice(i + 1);",
+      "  if (c.type === 'prompt') out({ type: 'response', command: 'prompt', success: true });",
+      "  if (c.type === 'steer') out({ type: 'response', command: 'steer', success: false, error: 'agent is idle (nothing to steer)' });",
+      "} });",
+      "",
+    ].join('\n'));
+    srv = await fakeOpenAI({ tools: true });
+    const rows: Array<{ kind: string; payload: Record<string, unknown> }> = [];
+    const log = async (kind: string, payload: Record<string, unknown>): Promise<void> => void rows.push({ kind, payload });
+    const fuse = new BudgetFuse({ kernel: SoftwareEd25519Signer.generate('kernel'), logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZZ', log, billing: { env: () => ({}), layers: () => [] } });
+    const children = new DaemonChildren({ append: log, control: processControlFor(process.platform), boot: 'boot-test', graceMs: 500 });
+    const lane = new LocalLane({
+      log, children, fuse, home, userHome: root, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(root, 'k.sock'),
+      config: { endpoints: [{ id: 'fake', base: srv.base, model: 'fake-qwen-7b-q4', compat: 'llama.cpp' }], runner: pinOf(rt, 'cli.js') },
+      launchPlan: (i) => ({ command: i.binaryReal, args: i.argv, sandbox: 'partial', profile: 'test-unsandboxed', profileHash: 'sha256:test' }),
+    });
+    const s = (await lane.open({ principal: HUMAN, principalClass: 'human', attended: true, cwd, model: 'local' }, async () => null))!;
+    await lane.send(HUMAN, { hsid: s.hsid, text: 'go' });
+    expect(await lane.send(HUMAN, { hsid: s.hsid, text: 'steer it', steer: true })).toMatchObject({ steered: true });
+    expect(await waitFor(() => rows.some((r) => r.kind === 'turn.steer' && r.payload.phase === 'refused'), 5_000)).toBe(true);
+    expect(rows.find((r) => r.kind === 'turn.steer' && r.payload.phase === 'refused')!.payload).toMatchObject({ hsid: s.hsid, by: 'child', error: 'agent is idle (nothing to steer)' });
+    await lane.stop(HUMAN, { hsid: s.hsid });
+    expect(await waitFor(() => lane.stateOf(s.hsid) === 'exited', 5_000)).toBe(true);
+  });
 });
