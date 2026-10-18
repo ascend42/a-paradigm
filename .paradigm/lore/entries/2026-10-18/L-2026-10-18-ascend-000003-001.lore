@@ -1,0 +1,40 @@
+id: L-2026-10-18-ascend-000003-001
+type: agent-session
+timestamp: '2026-10-18T00:00:03.488Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: M1.1 reservations and M1.4 slice 1 (hello + mutual auth) landed after review
+summary: |-
+  M1.1 (b096b271): all spec v3.9 reservations are in gnomon-contracts (293 tests).
+  - change-note:v1 has claim and card forms;
+  - additive enums have fail-safes (unknown values render but are never decidable);
+  - sensitive field labels on approval.auto.path and merge.reverted.trailer;
+  - socket refusal reasons are routed;
+  - clientApiId is pinned at sha256:8e30f400.
+
+  M1.4 slice 1 (230 kernel tests):
+  - hello negotiation; serverSig over nonce+path+clientApi+features; client verify-before-auth; device-key auth against a root-signed registry behind a RootAuthority seam;
+  - single-use nonces, replay refusal, pre-auth deadlines/cap/backpressure/16 KiB frames, rate-limited pre-auth log rows;
+  - post-auth matrix with qualified access refused; a real status call (p99 0.23 ms);
+  - kernel-pub.jsonl so logs verify across restarts.
+
+  Reviews: M1.1 took 3 rounds. M1.4 took 3 rounds (reviewer approved in round 2; Aegis's condition was met in round 3, verified by the orchestrator). Follow-ups: T-016 (strict claim intake), T-017 (contracts preimages + §4.9; approve access at M1.6).
+symbols_touched:
+  - '#socket'
+  - '#identity'
+  - '#gnomon-contracts'
+  - $daemon-lifecycle
+tags:
+  - paradigm-8
+  - gnomon
+  - move-1
+  - build
+  - security
+linked_lore:
+  - L-2026-10-17-ascend-233047-001
+git_context:
+  ref: 6720c95b1ebb56dd837c471cd905cd9a4fd13735
+  branch: feat/gnomon
+  dirty: true

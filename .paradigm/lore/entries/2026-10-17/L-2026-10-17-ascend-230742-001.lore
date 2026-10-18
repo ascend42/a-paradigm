@@ -1,0 +1,35 @@
+id: L-2026-10-17-ascend-230742-001
+type: human-note
+timestamp: '2026-10-17T23:07:42.108Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'P8-D86..D88: tighten by cutting autonomy, start strict with one-click modes, loosen on evidence + Touch ID'
+summary: The founder resolved the research 35/36 divergence and both open questions. These rulings feed spec v3.9 part 2 and the M1.1 contract reservations (research 35 A35-20 + research 36 reserve list, merged).
+symbols_touched:
+  - '#approval-broker'
+  - '#gui'
+  - '#paradigm-harness'
+decisions:
+  - id: P8-D86
+    decision: Gate tightening cuts agent autonomy, not the founder's time (Aegis S35-07, CB4). Tightening means fewer agents in parallel, auto-merge off, cached-class decisions become fresh-presence for that repo, and voice narrowed (grant ∩ breaker); it never adds cards per decision. Extra verdicts only on high-risk / gate-class changes. Arky's 'verdict on every node at L2' is dropped.
+    rationale: 'Founder: more cards lead to rubber-stamping; spend autonomy, not attention.'
+  - id: P8-D87
+    decision: Repos whose reviewer is not yet calibrated start at strictness L1. Strictness and the related modes (manual / ask / auto-edits, akin to Claude Code's permission modes) are one-click in Gnomon (GUI control + command palette + per-repo/per-session), as easy as or easier than Claude Code's. Tightening is one click with no presence; loosening is one click plus the Touch ID prompt (D88).
+    rationale: 'Founder: yes start at L1, but changing strictness and modes like Claude Code''s edits/auto/manual must be as easy if not easier to click in Gnomon.'
+  - id: P8-D88
+    decision: Loosening requires positive evidence (survived merged work, oracle passes, never mere quiet time, S35-02) plus elapsed dwell, one level at a time, each step confirmed with fresh presence (Touch ID); going below what the evidence supports needs the root key and counts as an override.
+    rationale: Founder chose evidence + Touch ID.
+tags:
+  - paradigm-8
+  - gnomon
+  - decision
+  - approval
+  - gui
+linked_lore:
+  - L-2026-10-17-ascend-224918-001
+git_context:
+  ref: e89eaab02ef98fe67493af9d21f514571052fef3
+  branch: feat/gnomon
+  dirty: true

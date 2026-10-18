@@ -1,0 +1,32 @@
+id: L-2026-10-17-ascend-224918-001
+type: human-note
+timestamp: '2026-10-17T22:49:18.420Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Next wave dispatched: spec v3.9 part 1, T-004 design (Arky + Aegis), T-014 evidence-overwrite fix'
+summary: |-
+  The founder approved the next steps. Running in parallel:
+  - spec v3.9 part 1: D83-D85 and the built kernel-log behaviour, written into the spec; Windows residuals S34-27/28; probe and CI status;
+  - Arky (research 35) and Aegis (research 36): designs for T-004, covering the armada review-convergence cap, evidence-driven gate tightening (circuit breaker) and test/risk/revert fields on briefs and cards, plus contract reservations;
+  - a builder on T-014 (S34-30): a refused open must not let a queued anchor write overwrite keystore evidence, with a regression test and mutation check.
+
+  After these land: review rounds on T-014; spec v3.9 part 2 from research 35/36 plus founder rulings; then M1.4 (socket hello/auth) and M1.6 (approval broker). Still blocked on the founder: the gnomon.helper provisioning profile and the notarization API key (M1.3).
+symbols_touched:
+  - '#paradigm-harness'
+  - '#kernel-log'
+tags:
+  - paradigm-8
+  - gnomon
+  - move-1
+  - state
+linked_lore:
+  - L-2026-10-17-ascend-220955-001
+linked_tasks:
+  - T-2026-10-17-004
+  - T-2026-10-17-014
+git_context:
+  ref: 89adf3b51394062fc7b670507baca41218dd6048
+  branch: feat/gnomon
+  dirty: true
