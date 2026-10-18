@@ -38,20 +38,25 @@ export type SettingSource = (typeof SETTING_SOURCES)[number];
  * Gnomon-started session loads — and so whose hooks run inside it, with no
  * trust prompt in `-p` mode. A ROOT-SIGNED config switch
  * (`config.sessions.hooks`, budget/config.ts), never env/project/CLI:
- *   - `all` (DEFAULT, the slice-1 behaviour): user, project, local — your
- *     hooks AND any hooks committed in the repo's `.claude/settings.json`;
+ *   - `audited` (DEFAULT, founder ruling P8-D94): user only, plus the repo's
+ *     project/local hooks the KERNEL extracted and the human approved per
+ *     hook (kernel/supervisor/repo-hooks.ts), written into the session's own
+ *     policy.json (`--settings`); unapproved, denied or unsafe hooks never run;
+ *   - `all` (the slice-1 behaviour): user, project, local — your hooks AND
+ *     any hooks committed in the repo's `.claude/settings.json`, raw;
  *   - `user-only`: user — your own hooks, never the repo's;
  *   - `none`: no layer — only Gnomon's generated policy.json applies.
  * Managed settings load regardless (p01: outside the switch).
  */
-export const SESSION_HOOKS_MODES = Object.freeze(['all', 'user-only', 'none'] as const);
+export const SESSION_HOOKS_MODES = Object.freeze(['audited', 'all', 'user-only', 'none'] as const);
 export type SessionHooksMode = (typeof SESSION_HOOKS_MODES)[number];
-export const DEFAULT_SESSION_HOOKS: SessionHooksMode = 'all';
+export const DEFAULT_SESSION_HOOKS: SessionHooksMode = 'audited';
 
 export function settingSourcesFor(mode: SessionHooksMode): readonly SettingSource[] {
   switch (mode) {
     case 'all':
       return ['user', 'project', 'local'];
+    case 'audited': // the repo layers reach Claude only through the kernel's audited extract (P8-D94)
     case 'user-only':
       return ['user'];
     case 'none':

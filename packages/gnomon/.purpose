@@ -1298,6 +1298,16 @@ components:
   supervisor:
     description: >-
       #supervisor (spec §3.3, §6.1, §5 verbs 2-4; M1.7 slice 1) in
+      src/kernel/supervisor/. P8-D94 (M1.7 slice 2, founder ruling): repo-hooks.ts
+      extracts the repo's project/local hooks (strict; COMMAND_UNSAFE,
+      unknown keys, non-command types refused by id; symlinked/oversized/
+      unparseable layer or >64 hooks => none run), raises one gate-class
+      card per undecided hook (install-card rendering via wrappedBlock),
+      pins decisions to (repoKey, setHash) — read back by the daemon from
+      KERNEL-signed gate-class.decided rows only — and writes only approved
+      hooks into the session's policy.json under --setting-sources user
+      (hooks mode `audited`, the default). Pending cards bounded
+      (MAX_PENDING_HOOK_CARDS). Previously, in
       src/kernel/supervisor/. M1.8 slice 2: port.ts serves session.send{steer}
       (boolean; local sessions only, a Claude session refuses BAD_REQUEST);
       probeLocal() is the daemon-start local probe; the daemon passes the
@@ -1344,6 +1354,7 @@ components:
     tags: [gnomon, kernel, session, paradigm-8, m1.7]
     tests:
       - test/session-supervisor.test.ts
+      - test/repo-hooks.test.ts
     oracles: [G-RUN-03, G-SUB-05]
 
   local-runner:

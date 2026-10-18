@@ -58,8 +58,8 @@ export interface LoadedFuseConfig {
   fellBack: boolean;
   hash: string | null;
   /**
-   * T-2026-10-18-010 L4: `config.sessions.hooks` (SESSION_HOOKS_MODES). No
-   * config ever ⇒ DEFAULT_SESSION_HOOKS (`all`, the current behaviour). A
+   * T-2026-10-18-010 L4 / P8-D94: `config.sessions.hooks` (SESSION_HOOKS_MODES). No
+   * config ever ⇒ DEFAULT_SESSION_HOOKS (`audited`). A
    * signed config that cannot be applied after one was (rollback, missing,
    * unsigned) or an invalid `sessions` section ⇒ `none` (fail closed:
    * never wider than what the founder may have chosen), logged.

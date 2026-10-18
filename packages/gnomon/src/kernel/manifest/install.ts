@@ -233,6 +233,13 @@ function wrapLine(text: string, flags: Set<CardFlag>): string[] {
   return out;
 }
 
+/** The install-card rendering for any kernel card (P8-D94 repo hooks): each logical line sanitized and wrapped, never cut. */
+export function wrappedBlock(logical: readonly string[]): { block: Record<string, unknown>; flags: CardFlag[] } {
+  const flags = new Set<CardFlag>();
+  const children = logical.flatMap((l) => wrapLine(l, flags)).map((text) => ({ type: 'Text', text }));
+  return { block: { schemaVersion: 'display-block:v1', type: 'Box', children }, flags: [...flags].sort() };
+}
+
 /**
  * The install card's display block and the sanitizer flags of every line. mcp
  * servers and hooks run commands, so each entry is its OWN line (`mcp: …`,

@@ -199,14 +199,14 @@ describe('G-LAW-01b no setting changes the meter or law 7', () => {
     expect(ignored).toEqual([{ field: 'fuse', source: 'project.yaml' }, { field: 'budget', source: 'project.yaml' }, { field: 'strictness', source: 'project.yaml' }]);
   });
 
-  it('T-2026-10-18-010 L4: config.sessions.hooks — default all; user-only / none applied when signed; invalid or rollback ⇒ none (fail closed); unsigned first run ⇒ all', () => {
+  it('T-2026-10-18-010 L4: config.sessions.hooks — default audited (P8-D94); user-only / none / all applied when signed; invalid or rollback ⇒ none (fail closed); unsigned first run ⇒ audited', () => {
     const home = tmp();
     const root = new DevTestRootAuthority(DEV_TEST_ROOT_ACK);
     const rows: Array<Record<string, unknown>> = [];
     const emit = (_k: string, p: Record<string, unknown>) => void rows.push(p);
-    expect(loadFuseConfig(home, root).sessions).toEqual({ hooks: 'all' }); // no config ever: the current behaviour
+    expect(loadFuseConfig(home, root).sessions).toEqual({ hooks: 'audited' }); // no config ever: the founder's default (P8-D94)
     fs.writeFileSync(path.join(home, ROOT_CONFIG_FILE), JSON.stringify({ row: { schemaVersion: 'gnomon-root-config:v1', config: { sessions: { hooks: 'none' } } }, signer: 'x', sig: 'y' }));
-    expect(loadFuseConfig(home, root).sessions).toEqual({ hooks: 'all' }); // unsigned on a first run: defaults, never applied
+    expect(loadFuseConfig(home, root).sessions).toEqual({ hooks: 'audited' }); // unsigned on a first run: defaults, never applied
     writeSignedConfig(home, root, { sessions: { hooks: 'user-only' } }, 1);
     expect(loadFuseConfig(home, root, emit).sessions).toEqual({ hooks: 'user-only' });
     expect(rows.at(-1)).toMatchObject({ signed: true, sessions: { hooks: 'user-only' } });
@@ -222,9 +222,11 @@ describe('G-LAW-01b no setting changes the meter or law 7', () => {
     fs.rmSync(path.join(home, ROOT_CONFIG_FILE));
     expect(loadFuseConfig(home, root).sessions).toEqual({ hooks: 'none' }); // missing after a signed one
   });
-  it('T-2026-10-18-010 L4: parseSessionsSection + settingSourcesFor map the three modes', () => {
-    expect(parseSessionsSection(undefined)).toEqual({ hooks: 'all' });
-    expect(parseSessionsSection({})).toEqual({ hooks: 'all' });
+  it('T-2026-10-18-010 L4: parseSessionsSection + settingSourcesFor map the four modes', () => {
+    expect(parseSessionsSection(undefined)).toEqual({ hooks: 'audited' });
+    expect(parseSessionsSection({})).toEqual({ hooks: 'audited' });
+    expect(parseSessionsSection({ hooks: 'all' })).toEqual({ hooks: 'all' });
+    expect(settingSourcesFor('audited')).toEqual(['user']); // repo layers only through the kernel's audited extract
     expect(settingSourcesFor('all')).toEqual(['user', 'project', 'local']);
     expect(settingSourcesFor('user-only')).toEqual(['user']);
     expect(settingSourcesFor('none')).toEqual([]);

@@ -1,0 +1,173 @@
+/**
+ * @symbol #supervisor
+ *
+ * Audited repo hooks (P8-D94, founder ruling 2026-10-18; spec §3.3, §15.7;
+ * T-2026-10-18-010 L4). In the `audited` hooks mode a session loads only the
+ * USER settings layer (`--setting-sources user`); the repo's project and
+ * local layers (`<root>/.claude/settings.json`, `.claude/settings.local.json`)
+ * are never handed to Claude raw. The KERNEL extracts their `hooks`, and only
+ * the hooks the human approved are written into the session's own
+ * `policy.json` (`--settings`, which Claude loads whatever the setting sources
+ * are — `claude --help`, 2.1.302).
+ *
+ *   extractRepoHooks: strict parse, fail closed. A file that is a symlink,
+ *     over MAX_SETTINGS_BYTES, unparseable or not an object ⇒ the whole set is
+ *     `unreadable` (no repo hook runs). Each hook must be
+ *     `{type: 'command', command, timeout?}` in a group `{matcher?, hooks}`
+ *     under an event name /^[A-Za-z]{1,64}$/; any other shape, an unknown
+ *     key, or COMMAND_UNSAFE (a line separator, format or control character —
+ *     U+2028 included) in the event, matcher or command ⇒ that hook is
+ *     REFUSED: listed by id only, never approvable, never run. More than
+ *     MAX_REPO_HOOKS entries ⇒ the set is `too-many` (none run).
+ *   ids: hookId = sha256(canonical entry); setHash = sha256 over the sorted
+ *     hook ids + refused ids. Approvals are pinned to (repoKey, setHash): a
+ *     changed set re-raises every card and no old decision applies.
+ *   cards: one `gate-class` card PER HOOK (allow | deny — the only gate-class
+ *     decisions; a multi-select card would need a new decision shape and
+ *     move clientApiId). Allow-all / deny-all = deciding every card; per-hook
+ *     deny = denying that card. "Modify" is deny now, edit later (deferred).
+ *     Rendering = the install card's (wrappedBlock): a kernel-composed count
+ *     line first, one line for the hook, never cut. Approve needs presence
+ *     (M1.3): until a decision exists the hook does not run.
+ *   decisions: the card effect logs `gate-class.decided{what: 'repo-hook',
+ *     repoKey, setHash, hookId, decision}`; the daemon reads them back from
+ *     the chain counting only KERNEL-signed rows (principal + kernel keyId).
+ */
+import { createHash } from 'node:crypto';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { canonicalJson } from '@a-company/gnomon-contracts';
+import { COMMAND_UNSAFE } from '../manifest/manifest.js';
+import { wrappedBlock } from '../manifest/install.js';
+import { realpathLoose } from '../manifest/policy.js';
+
+export const REPO_HOOK_FILES = Object.freeze([
+  { source: 'project', rel: ['.claude', 'settings.json'] },
+  { source: 'local', rel: ['.claude', 'settings.local.json'] },
+] as const);
+export const MAX_SETTINGS_BYTES = 256 * 1024;
+export const MAX_REPO_HOOKS = 64;
+/** pending (raised, undecided) cards remembered per process; the oldest is forgotten past this (re-raised on the next open) */
+export const MAX_PENDING_HOOK_CARDS = 256;
+
+export interface RepoHook {
+  hookId: string;
+  source: 'project' | 'local';
+  event: string;
+  matcher: string | null;
+  command: string;
+  timeout: number | null;
+}
+
+export type RepoHookSet =
+  | { status: 'none'; repoKey: string; setHash: null; hooks: []; refused: [] }
+  | { status: 'ok'; repoKey: string; setHash: string; hooks: RepoHook[]; refused: string[] }
+  | { status: 'unreadable' | 'too-many'; repoKey: string; setHash: null; hooks: []; refused: []; why: string };
+
+const sha = (s: string): string => `sha256:${createHash('sha256').update(s, 'utf8').digest('hex')}`;
+const EVENT_RE = /^[A-Za-z]{1,64}$/;
+const isObj = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
+
+/** One key per repo root (realpath'd cwd + worktree). */
+export function repoKeyOf(roots: readonly string[]): string {
+  return sha(roots.map((r) => realpathLoose(r)).join('\u0000'));
+}
+
+/** Extract the repo hooks of the session roots (strict, fail closed). Pure but for reading the two settings files per root. */
+export function extractRepoHooks(roots: readonly string[]): RepoHookSet {
+  const repoKey = repoKeyOf(roots);
+  const hooks = new Map<string, RepoHook>();
+  const refused = new Set<string>();
+  let total = 0;
+  for (const root of roots) {
+    for (const f of REPO_HOOK_FILES) {
+      const file = path.join(realpathLoose(root), ...f.rel);
+      let st: fs.Stats;
+      try {
+        st = fs.lstatSync(file);
+      } catch {
+        continue; // no such layer
+      }
+      const unreadable = (why: string): RepoHookSet => ({ status: 'unreadable', repoKey, setHash: null, hooks: [], refused: [], why: `${f.source}: ${why}` });
+      if (!st.isFile()) return unreadable('not a regular file (a symlink or other)');
+      if (st.size > MAX_SETTINGS_BYTES) return unreadable(`over ${MAX_SETTINGS_BYTES} bytes`);
+      let doc: unknown;
+      try {
+        doc = JSON.parse(fs.readFileSync(file, 'utf8'));
+      } catch {
+        return unreadable('unparseable');
+      }
+      if (!isObj(doc)) return unreadable('not an object');
+      if (doc.hooks === undefined) continue;
+      if (!isObj(doc.hooks)) return unreadable('hooks is not an object');
+      for (const [event, groups] of Object.entries(doc.hooks)) {
+        if (!Array.isArray(groups)) {
+          total++;
+          refused.add(sha(canonicalJson({ source: f.source, event, groups })));
+          continue;
+        }
+        for (const g of groups as unknown[]) {
+          const gHooks = isObj(g) && Array.isArray(g.hooks) ? g.hooks : [g];
+          for (const h of gHooks) {
+            total++;
+            if (total > MAX_REPO_HOOKS) return { status: 'too-many', repoKey, setHash: null, hooks: [], refused: [], why: `more than ${MAX_REPO_HOOKS} repo hooks` };
+            const raw = sha(canonicalJson({ source: f.source, event, group: isObj(g) ? Object.fromEntries(Object.entries(g).filter(([k]) => k !== 'hooks')) : (g ?? null), hook: h ?? null }));
+            const matcher = isObj(g) ? g.matcher : undefined;
+            const ok =
+              EVENT_RE.test(event) && !COMMAND_UNSAFE.test(event) &&
+              isObj(g) && Object.keys(g).every((k) => k === 'matcher' || k === 'hooks') && Array.isArray(g.hooks) &&
+              (matcher === undefined || (typeof matcher === 'string' && matcher.length <= 1024 && !COMMAND_UNSAFE.test(matcher))) &&
+              isObj(h) && Object.keys(h).every((k) => k === 'type' || k === 'command' || k === 'timeout') &&
+              h.type === 'command' && typeof h.command === 'string' && h.command.length > 0 && h.command.length <= 8192 && !COMMAND_UNSAFE.test(h.command) &&
+              (h.timeout === undefined || (typeof h.timeout === 'number' && Number.isInteger(h.timeout) && h.timeout > 0 && h.timeout <= 3600));
+            if (!ok) {
+              refused.add(raw);
+              continue;
+            }
+            const entry = { source: f.source, event, matcher: (matcher as string | undefined) ?? null, command: h.command as string, timeout: (h.timeout as number | undefined) ?? null };
+            const hookId = sha(canonicalJson(entry));
+            hooks.set(hookId, { hookId, ...entry });
+          }
+        }
+      }
+    }
+  }
+  if (!hooks.size && !refused.size) return { status: 'none', repoKey, setHash: null, hooks: [], refused: [] };
+  const list = [...hooks.values()].sort((a, b) => (a.hookId < b.hookId ? -1 : 1));
+  const ref = [...refused].sort();
+  return { status: 'ok', repoKey, setHash: sha(canonicalJson({ hooks: list.map((h) => h.hookId), refused: ref })), hooks: list, refused: ref };
+}
+
+/** The approved hooks as a Claude settings `hooks` block (merged into the session's policy.json). */
+export function hooksBlock(approved: readonly RepoHook[]): Record<string, Array<{ matcher?: string; hooks: Array<{ type: 'command'; command: string; timeout?: number }> }>> {
+  const out: Record<string, Array<{ matcher?: string; hooks: Array<{ type: 'command'; command: string; timeout?: number }> }>> = {};
+  for (const h of approved) {
+    (out[h.event] ??= []).push({ ...(h.matcher !== null ? { matcher: h.matcher } : {}), hooks: [{ type: 'command', command: h.command, ...(h.timeout !== null ? { timeout: h.timeout } : {}) }] });
+  }
+  return out;
+}
+
+/** Merge two settings `hooks` blocks (generated first, then approved repo hooks). */
+export function mergeHooks(a: unknown, b: Record<string, unknown[]>): Record<string, unknown[]> {
+  const out: Record<string, unknown[]> = {};
+  if (isObj(a)) for (const [k, v] of Object.entries(a)) out[k] = Array.isArray(v) ? [...v] : [v];
+  for (const [k, v] of Object.entries(b)) out[k] = [...(out[k] ?? []), ...v];
+  return out;
+}
+
+/** The card for one hook: the install-card rendering (count line first, one line for the hook, never cut). */
+export function repoHookCard(set: Extract<RepoHookSet, { status: 'ok' }>, h: RepoHook, root: string): { detail: Record<string, unknown>; lines: string[]; block: Record<string, unknown> } {
+  const i = set.hooks.indexOf(h) + 1;
+  const lines = [
+    // kernel-composed, before any repo-controlled text: the count cannot be pushed off-screen
+    `runs commands: repo hook ${i} of ${set.hooks.length}${set.refused.length ? ` (${set.refused.length} more refused: unsafe or unsupported, never run)` : ''}`,
+    `repo: ${root}`,
+    `hooks: ${h.source}: ${h.event}${h.matcher !== null ? ` [${h.matcher}]` : ''}${h.timeout !== null ? ` (timeout ${h.timeout}s)` : ''}: ${h.command}`,
+    'allow: this hook runs in this repo\'s sessions until the hook set changes. deny: it never runs (edit-in-place is deferred).',
+  ];
+  return {
+    detail: { event: 'repo-hook', repoKey: set.repoKey, setHash: set.setHash, hookId: h.hookId, source: h.source, hookEvent: h.event, matcher: h.matcher, command: h.command, timeout: h.timeout },
+    lines,
+    block: wrappedBlock(lines).block,
+  };
+}

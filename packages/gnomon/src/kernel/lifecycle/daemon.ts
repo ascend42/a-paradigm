@@ -97,7 +97,6 @@ import { Scheduler } from '../scheduler/index.js';
 import { DaemonChildren, sweepOrphans } from './children.js';
 import { processControlFor } from './process-control.js';
 import { SessionSupervisor, createSessionPort } from '../supervisor/index.js';
-import { settingSourcesFor } from '../../adapters/claude-code/adapter.js';
 import { loadLocalConfig, LOCAL_CONFIG_FILE } from '../local/config.js';
 import { linkedFolders } from '../manifest/install.js';
 import { ModHost, type KernelCallRequest } from '../modhost/host.js';
@@ -522,8 +521,19 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
   const localCfg = loadLocalConfig(home, authority, (kind, payload) => void appendRow(kind, payload).catch(() => undefined), { chainHighWater: localHighWater });
   const supervisor = new SessionSupervisor({
     ...(localCfg.config ? { local: localCfg.config } : {}),
-    // T-2026-10-18-010 L4: whose hooks run inside sessions — the root-signed `config.sessions.hooks` (default `all`)
-    settingSources: settingSourcesFor(fuseCfg.sessions.hooks),
+    // T-2026-10-18-010 L4 / P8-D94: whose hooks run inside sessions — the root-signed `config.sessions.hooks` (default `audited`)
+    hooksMode: fuseCfg.sessions.hooks,
+    // P8-D94: per-hook decisions, read back from KERNEL-signed gate-class.decided rows only (the last one per hook wins)
+    repoHookDecisions: (repoKey, setHash) => {
+      const out = new Map<string, 'allow' | 'deny'>();
+      for (const v of log.read({ reader: { class: 'human' }, kinds: ['gate-class.decided'] })) {
+        if (v.view !== 'full' || v.event.principal !== kernelPrincipal || typeof v.event.keyId !== 'string' || !log.isKernelKey(v.event.keyId)) continue;
+        const p = v.event.payload as { what?: unknown; repoKey?: unknown; setHash?: unknown; hookId?: unknown; decision?: unknown } | undefined;
+        if (p?.what !== 'repo-hook' || p.repoKey !== repoKey || p.setHash !== setHash || typeof p.hookId !== 'string') continue;
+        out.set(p.hookId, p.decision === 'allow' ? 'allow' : 'deny');
+      }
+      return out;
+    },
     log: (kind, payload, ids = {}) => log.append({ kind, principal: kernelPrincipal, payload, ...(ids.session ? { session: ids.session } : {}) }).then(() => undefined),
     children,
     fuse,

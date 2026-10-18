@@ -4,6 +4,7 @@
 // stdin line to `trace.jsonl` in the same dir, and speaks the stream-json shapes p10m-claude-compat-generated
 // observed from Claude Code 2.1.302 (system.init, stream_event.*, assistant, user, rate_limit_event, result).
 import { appendFileSync, readFileSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import path from 'node:path';
 
 const dir = path.dirname(path.dirname(process.argv[2] ?? process.argv[1])); // the wrapper lives in <stub>/bin/
@@ -26,6 +27,23 @@ if (args[0] === 'auth') {
   process.exit(0);
 }
 trace({ t: 'argv', args, self, home: process.env.HOME, envKeys: Object.keys(process.env).sort(), pid: process.pid });
+// P8-D94: emulate Claude's SessionStart command hooks — from --settings, and from the repo's project/local
+// layers ONLY when --setting-sources names them (the semantics the audited mode relies on)
+{
+  const at = (f) => (args.indexOf(f) >= 0 ? args[args.indexOf(f) + 1] : undefined);
+  const sources = (at('--setting-sources') ?? '').split(',').filter(Boolean);
+  const files = [at('--settings'), ...(sources.includes('project') ? [path.join(process.cwd(), '.claude', 'settings.json')] : []), ...(sources.includes('local') ? [path.join(process.cwd(), '.claude', 'settings.local.json')] : [])];
+  for (const f of files) {
+    if (!f) continue;
+    let doc;
+    try { doc = JSON.parse(readFileSync(f, 'utf8')); } catch { continue; }
+    for (const g of doc?.hooks?.SessionStart ?? []) for (const h of g.hooks ?? []) {
+      if (h.type !== 'command') continue;
+      const r = spawnSync('/bin/sh', ['-c', h.command], { stdio: 'ignore', timeout: 5000 });
+      trace({ t: 'hook', event: 'SessionStart', command: h.command, from: f, status: r.status });
+    }
+  }
+}
 if (mode.exitAtStart !== undefined) process.exit(mode.exitAtStart);
 if (mode.ignoreTerm) process.on('SIGTERM', () => trace({ t: 'sigterm-ignored' }));
 const session = args[args.indexOf('--session-id') + 1] ?? 'none';

@@ -39,7 +39,7 @@ import { KernelLog } from '../src/kernel/log/index.js';
 /** capability, not platform: below the macOS floor or with SIP off every open is refused (asserted below) */
 const SANDBOX_OK = darwinFloor().ok;
 import { sessionWorld, setMode, trace, waitFor, type SessionWorld } from './session-helpers.js';
-import { settingSourcesFor } from '../src/adapters/claude-code/adapter.js';
+import type { SessionHooksMode } from '../src/adapters/claude-code/adapter.js';
 
 const HUMAN = 'p:abcdefgh/founder';
 let w: SessionWorld;
@@ -50,8 +50,8 @@ afterEach(async () => {
   w?.cleanup();
 });
 
-function rig(o: { local?: ConstructorParameters<typeof SessionSupervisor>[0]['local']; realLog?: KernelLog; billing?: BillingScanSource; watchMs?: number; failSandboxRow?: boolean; allowScripts?: boolean; macosMajor?: () => number | null; sipEnabled?: () => boolean | null; settingSources?: readonly ('user' | 'project' | 'local')[] } = {}) {
-  w = sessionWorld();
+function rig(o: { local?: ConstructorParameters<typeof SessionSupervisor>[0]['local']; realLog?: KernelLog; billing?: BillingScanSource; watchMs?: number; failSandboxRow?: boolean; allowScripts?: boolean; macosMajor?: () => number | null; sipEnabled?: () => boolean | null; hooksMode?: SessionHooksMode; keepWorld?: boolean } = {}) {
+  if (!o.keepWorld) w = sessionWorld();
   const rows: Array<{ kind: string; payload: Record<string, unknown> }> = [];
   const log = async (kind: string, payload: Record<string, unknown>, ids: { session?: string } = {}): Promise<void> => {
     if (o.failSandboxRow && kind === 'session.sandbox' && payload.profile) throw new Error('log append failed (test)');
@@ -63,7 +63,12 @@ function rig(o: { local?: ConstructorParameters<typeof SessionSupervisor>[0]['lo
   const children = new DaemonChildren({ append: log, control: processControlFor('darwin'), boot: 'boot-test', graceMs: 500 });
   const cards: Array<Record<string, unknown>> = [];
   const broker = { raise: async (i: Record<string, unknown>) => (cards.push(i), { cardId: `card:${cards.length}` }) } as unknown as Pick<ApprovalBroker, 'raise'>;
-  sup = new SessionSupervisor({ log, children, fuse, broker, home: w.home, userHome: w.userHome, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(w.home, 'gnomon.sock'), claudePath: w.claude, env: () => ({ HOME: '/not-the-scanned-home', PATH: '/usr/bin:/bin', ANTHROPIC_API_KEY: 'scrubbed-from-the-child' }), platform: 'darwin', watchMs: o.watchMs ?? 200, allowScripts: o.allowScripts ?? true, ...(o.macosMajor ? { macosMajor: o.macosMajor } : {}), ...(o.sipEnabled ? { sipEnabled: o.sipEnabled } : {}), ...(o.local ? { local: o.local } : {}), ...(o.settingSources ? { settingSources: o.settingSources } : {}) });
+  sup = new SessionSupervisor({ log, children, fuse, broker, home: w.home, userHome: w.userHome, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(w.home, 'gnomon.sock'), claudePath: w.claude, env: () => ({ HOME: '/not-the-scanned-home', PATH: '/usr/bin:/bin', ANTHROPIC_API_KEY: 'scrubbed-from-the-child' }), platform: 'darwin', watchMs: o.watchMs ?? 200, allowScripts: o.allowScripts ?? true, ...(o.macosMajor ? { macosMajor: o.macosMajor } : {}), ...(o.sipEnabled ? { sipEnabled: o.sipEnabled } : {}), ...(o.local ? { local: o.local } : {}), ...(o.hooksMode ? { hooksMode: o.hooksMode } : {}), repoHookDecisions: (repoKey, setHash) => {
+    // test stand-in for the daemon's chain read (kernel-signed gate-class.decided rows): the rig's own rows
+    const m = new Map<string, 'allow' | 'deny'>();
+    for (const x of rows.filter((y) => y.kind === 'gate-class.decided').map((y) => y.payload)) if (x.repoKey === repoKey && x.setHash === setHash) m.set(String(x.hookId), x.decision === 'allow' ? 'allow' : 'deny');
+    return m;
+  } });
   live.push(() => children.stopAll('test-end'));
   const kinds = (k: string) => rows.filter((r) => r.kind === k);
   const idx = (k: string) => rows.findIndex((r) => r.kind === k);
@@ -137,6 +142,99 @@ describe.skipIf(!SANDBOX_OK)('law 1 + law 7 + Aegis: no claude without a law-7-s
   });
 });
 
+describe.skipIf(!SANDBOX_OK)('P8-D94 audited repo hooks (fake claude runs SessionStart hooks; real profile)', () => {
+  const marker = () => path.join(w.stubDir, 'repo-hook-ran');
+  const ran = () => (fs.existsSync(marker()) ? fs.readFileSync(marker(), 'utf8').split('\n').filter(Boolean).length : 0);
+  const writeHooks = (command: string, file = 'settings.json') =>
+    fs.writeFileSync(path.join(w.cwd, '.claude', file), JSON.stringify({ hooks: { SessionStart: [{ hooks: [{ type: 'command', command }] }] } }));
+  const hookCmd = () => `echo ran >> "${marker()}"`;
+  const openAndWait = async (r: ReturnType<typeof rig>) => {
+    const before = trace(w).filter((t) => t.t === 'argv').length;
+    const s = await open(r.sup);
+    expect(await waitFor(() => trace(w).filter((t) => t.t === 'argv').length > before)).toBe(true);
+    await new Promise((res) => setTimeout(res, 300)); // the fake runs SessionStart hooks right after the argv row
+    await r.sup.stop(HUMAN, { hsid: s.hsid });
+    expect(await waitFor(() => r.sup.stateOf(s.hsid) === 'exited')).toBe(true);
+  };
+  const decide = async (r: ReturnType<typeof rig>, i: number, decision: 'allow' | 'deny') => {
+    await (r.cards[i]!.effect as (d: string, c: unknown) => Promise<void>)(decision, { token: null, rootSig: null, connId: 'c' });
+  };
+
+  it('a repo hook does not run before approval: --setting-sources user, one gate-class card, the session still opens', async () => {
+    const r = rig();
+    writeHooks(hookCmd());
+    await openAndWait(r);
+    expect(ran()).toBe(0);
+    expect(r.cards).toHaveLength(1);
+    expect(r.cards[0]).toMatchObject({ kind: 'gate-class', attended: true });
+    expect((r.cards[0]!.lines as string[])[0]).toMatch(/^runs commands: repo hook 1 of 1/);
+    expect((r.cards[0]!.lines as string[]).some((l) => l.includes(hookCmd()))).toBe(true);
+    const det = r.kinds('gate-class.detected').at(-1)!.payload;
+    expect(det).toMatchObject({ what: 'repo-hooks', status: 'ok', hooks: 1, run: 0 });
+    expect((det.pending as string[]).length).toBe(1);
+    // a second open while the card is pending does not raise another
+    await openAndWait(r);
+    expect(r.cards).toHaveLength(1);
+    expect(ran()).toBe(0);
+  }, 30_000);
+  it('an approved hook runs (through the kernel-written policy.json, not the raw layer); a denied hook never runs', async () => {
+    const r = rig();
+    writeHooks(hookCmd());
+    await openAndWait(r);
+    await decide(r, 0, 'allow');
+    expect(r.kinds('gate-class.decided').at(-1)!.payload).toMatchObject({ what: 'repo-hook', decision: 'allow' });
+    await openAndWait(r);
+    expect(ran()).toBe(1);
+    const hook = trace(w).filter((t) => t.t === 'hook').at(-1)!;
+    expect(String(hook.from)).toMatch(/policy\.json$/);
+    expect(r.cards).toHaveLength(1); // decided: no new card
+    // deny (a later decision for the same set wins)
+    await decide(r, 0, 'deny');
+    await openAndWait(r);
+    await openAndWait(r);
+    expect(ran()).toBe(1);
+    expect(r.cards).toHaveLength(1);
+  }, 30_000);
+  it('a changed hook set re-raises the card and the old approval does not apply', async () => {
+    const r = rig();
+    writeHooks(hookCmd());
+    await openAndWait(r);
+    await decide(r, 0, 'allow');
+    writeHooks(`${hookCmd()} # changed`);
+    await openAndWait(r);
+    expect(ran()).toBe(0);
+    expect(r.cards).toHaveLength(2);
+    expect((r.cards[1]!.detail as Record<string, unknown>).setHash).not.toBe((r.cards[0]!.detail as Record<string, unknown>).setHash);
+    // a hook added in the LOCAL layer also changes the set
+    await decide(r, 1, 'allow');
+    writeHooks('echo other', 'settings.local.json');
+    await openAndWait(r);
+    expect(ran()).toBe(0);
+    expect(r.cards.length).toBe(4);
+  }, 30_000);
+  it.each([
+    ['U+2028', `${'echo a'}\u2028echo b`],
+    ['a control character', 'echo a\u0007'],
+  ])('a hook carrying %s is refused: no card, never runs, listed by id only', async (_n, cmd) => {
+    const r = rig();
+    writeHooks(`${hookCmd()}${cmd}`);
+    await openAndWait(r);
+    expect(ran()).toBe(0);
+    expect(r.cards).toHaveLength(0);
+    const det = r.kinds('gate-class.detected').at(-1)!.payload;
+    expect(det).toMatchObject({ status: 'ok', hooks: 0, run: 0 });
+    expect((det.refused as string[]).length).toBe(1);
+    expect(JSON.stringify(det)).not.toContain('echo');
+  }, 30_000);
+  it('mode all loads the raw layer (the hook runs unaudited) — the explicit opt-out', async () => {
+    const r = rig({ hooksMode: 'all' });
+    writeHooks(hookCmd());
+    await openAndWait(r);
+    expect(ran()).toBe(1);
+    expect(r.cards).toHaveLength(0);
+  }, 30_000);
+});
+
 describe.skipIf(!SANDBOX_OK)('a session end to end (fake claude, real profile, real process group)', () => {
   it('spawns under the profile with the adapter argv and the allowlisted env; rows in order', async () => {
     const r = rig();
@@ -157,14 +255,16 @@ describe.skipIf(!SANDBOX_OK)('a session end to end (fake claude, real profile, r
     const pol = JSON.parse(fs.readFileSync(path.join(w.home, 'sessions', s.hsid.slice(18).toLowerCase(), 'policy.json'), 'utf8'));
     expect(pol.permissions.deny.length).toBeGreaterThan(5);
   });
-  it('T-2026-10-18-010 L4: the hooks switch reaches the argv — default user,project,local; user-only ⇒ user; none ⇒ empty; logged on session.sandbox', async () => {
-    for (const [mode, want] of [[undefined, 'user,project,local'], ['user-only', 'user'], ['none', '']] as const) {
-      const r = rig(mode ? { settingSources: settingSourcesFor(mode) } : {});
+  it('T-2026-10-18-010 L4: the hooks switch reaches the argv — default audited ⇒ user; all ⇒ user,project,local; user-only ⇒ user; none ⇒ empty; logged on session.sandbox', async () => {
+    for (const [mode, want] of [[undefined, 'user'], ['all', 'user,project,local'], ['user-only', 'user'], ['none', '']] as const) {
+      const r = rig(mode ? { hooksMode: mode } : {});
       await open(r.sup);
       expect(await waitFor(() => trace(w).some((t) => t.t === 'argv'))).toBe(true);
       const args = trace(w).find((t) => t.t === 'argv')!.args as string[];
       expect(args[args.indexOf('--setting-sources') + 1], String(mode)).toBe(want);
-      expect(r.kinds('session.sandbox').find((x) => x.payload.profile)!.payload.settingSources).toEqual(want ? want.split(',') : []);
+      const sb = r.kinds('session.sandbox').find((x) => x.payload.profile)!.payload;
+      expect(sb.settingSources).toEqual(want ? want.split(',') : []);
+      expect(sb.hooksMode).toBe(mode ?? 'audited');
       await r.children.stopAll('next');
       w.cleanup();
     }
