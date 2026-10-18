@@ -507,7 +507,7 @@ export class LocalLane {
       if (!head || Date.parse(head.expiresAt) <= Date.now()) throw refused('PERMIT_REQUIRED', 'the in-flight turn\'s permit is gone or expired; a steer cannot ride it', {});
       const contentHash = sha(p.text);
       const turn = turnId(s.hsid, s.turns - s.turnPermits.length + 1);
-      await this.#o.log('session.inject', { hsid: s.hsid, origin: 'client', hash: contentHash, bytes: p.text }, { session: s.hsid });
+      await this.#o.log('session.inject', { hsid: s.hsid, origin: 'client', hash: contentHash, bytes: Buffer.byteLength(p.text, 'utf8') }, { session: s.hsid });
       await this.#o.log('turn.steer', { hsid: s.hsid, turn, contentHash, permitId: s.turnPermits[0], backend: 'local' }, { session: s.hsid });
       s.child.stdin?.write(steerLine(p.text));
       return { turn, steered: true };
@@ -526,7 +526,7 @@ export class LocalLane {
     s.turnPermits.push(permit.permitId);
     const n = ++s.turns;
     const contentHash = sha(p.text);
-    await this.#o.log('session.inject', { hsid: s.hsid, origin: 'client', hash: contentHash, bytes: p.text }, { session: s.hsid });
+    await this.#o.log('session.inject', { hsid: s.hsid, origin: 'client', hash: contentHash, bytes: Buffer.byteLength(p.text, 'utf8') }, { session: s.hsid });
     await this.#o.log('turn.sent', { hsid: s.hsid, turn: turnId(s.hsid, n), permitId: permit.permitId, contentHash, backend: 'local' }, { session: s.hsid });
     s.child.stdin?.write(inFlight ? followUpLine(p.text) : promptLine(p.text));
     return { turn: turnId(s.hsid, n) };

@@ -559,7 +559,7 @@ export class SessionSupervisor {
     s.turnPermits.push(permit.permitId);
     const n = ++s.turns;
     const contentHash = sha(p.text);
-    await this.#o.log('session.inject', { hsid: s.hsid, origin: 'client', hash: contentHash, bytes: p.text }, { session: s.hsid });
+    await this.#o.log('session.inject', { hsid: s.hsid, origin: 'client', hash: contentHash, bytes: Buffer.byteLength(p.text, 'utf8') }, { session: s.hsid });
     await this.#o.log('turn.sent', { hsid: s.hsid, turn: turnId(s.hsid, n), permitId: permit.permitId, contentHash }, { session: s.hsid });
     s.child.stdin?.write(userMessageLine(p.text));
     return { turn: turnId(s.hsid, n) };

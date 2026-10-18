@@ -15,6 +15,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { fakeOpenAI, type FakeServer } from '../../gnomon-local/test/fake-openai.js';
 import { LocalLane } from '../src/kernel/supervisor/local-session.js';
 import { pinOf } from '../src/kernel/local/runner-pin.js';
+import { KernelLog } from '../src/kernel/log/index.js';
 import { BudgetFuse } from '../src/kernel/budget/fuse.js';
 import { SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
 import { DaemonChildren } from '../src/kernel/lifecycle/children.js';
@@ -187,5 +188,41 @@ describe('LocalLane spawn (fake endpoint, unsandboxed test seam)', () => {
     expect(rows.find((r) => r.kind === 'turn.steer' && r.payload.phase === 'refused')!.payload).toMatchObject({ hsid: s.hsid, by: 'child', error: 'agent is idle (nothing to steer)' });
     await lane.stop(HUMAN, { hsid: s.hsid });
     expect(await waitFor(() => lane.stateOf(s.hsid) === 'exited', 5_000)).toBe(true);
+  });
+  it('T-2026-10-18-019: session.send and a steer through a REAL KernelLog — session.inject carries byte counts, never the text', async () => {
+    root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'gnomon-lls-')));
+    const cwd = path.join(root, 'repo');
+    const home = path.join(root, 'gnomon-home');
+    const lh = path.join(root, 'log-home');
+    fs.mkdirSync(cwd, { recursive: true });
+    fs.mkdirSync(home);
+    fs.mkdirSync(lh);
+    srv = await fakeOpenAI({ tools: true, script: [{ toolCalls: [{ name: 'list_dir', arguments: '{}' }], delayMs: 600 }, { content: 'ok' }] });
+    const klog = KernelLog.open({ home: lh, kernelPrincipal: 'p:abcdefgh/kernel', signer: SoftwareEd25519Signer.generate() });
+    const rows: Array<{ kind: string; payload: Record<string, unknown> }> = [];
+    const log = async (kind: string, payload: Record<string, unknown>, ids: { session?: string } = {}): Promise<void> => {
+      await klog.append({ kind, principal: 'p:abcdefgh/kernel', payload, ...(ids.session ? { session: ids.session } : {}) });
+      rows.push({ kind, payload });
+    };
+    const fuse = new BudgetFuse({ kernel: SoftwareEd25519Signer.generate('kernel'), logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZZ', log, billing: { env: () => ({}), layers: () => [] } });
+    const children = new DaemonChildren({ append: log, control: processControlFor(process.platform), boot: 'boot-test', graceMs: 500 });
+    const lane = new LocalLane({
+      log, children, fuse, home, userHome: root, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(root, 'k.sock'),
+      config: { endpoints: [{ id: 'fake', base: srv.base, model: 'fake-qwen-7b-q4', compat: 'llama.cpp' }], runner: pinOf(path.dirname(CLI), 'cli.js') },
+      launchPlan: (i) => ({ command: i.binaryReal, args: i.argv, sandbox: 'partial', profile: 'test-unsandboxed', profileHash: 'sha256:test' }),
+    });
+    try {
+      const s = (await lane.open({ principal: HUMAN, principalClass: 'human', attended: true, cwd, model: 'local' }, async () => null))!;
+      await lane.send(HUMAN, { hsid: s.hsid, text: 'PLAIN-ONE ü' });
+      await lane.send(HUMAN, { hsid: s.hsid, text: 'PLAIN-STEER', steer: true });
+      expect(rows.filter((r) => r.kind === 'session.inject').map((r) => r.payload.bytes)).toEqual([Buffer.byteLength('PLAIN-ONE ü'), Buffer.byteLength('PLAIN-STEER')]);
+      expect(await waitFor(() => rows.some((r) => r.kind === 'turn.result'), 15_000)).toBe(true);
+      await lane.stop(HUMAN, { hsid: s.hsid });
+      expect(await waitFor(() => lane.stateOf(s.hsid) === 'exited', 5_000)).toBe(true);
+      const injects = rows.filter((r) => r.kind === 'session.inject').map((r) => JSON.stringify(r.payload)).join('');
+      expect(injects).not.toMatch(/PLAIN-/);
+    } finally {
+      await klog.close();
+    }
   });
 });
