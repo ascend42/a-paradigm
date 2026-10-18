@@ -2,8 +2,6 @@
   "$comment": "P8-D81 symbol drift allowlist (test/symbols-drift.test.ts). A symbol declared in a packages/gnomon*/.purpose file that is NOT a spec Appendix A node (docs/specs/gnomon.md) must be listed here with a reason. Spec ids are never listed (the test refuses redundant entries), and an entry whose symbol is no longer declared anywhere fails as stale.",
   "entries": [
     { "symbol": "#gnomon-contracts", "reason": "package-level component of @a-company/gnomon-contracts; spec §18 names packages, not nodes" },
-    { "symbol": "#gnomon-helper", "reason": "package-level component of @a-company/gnomon-helper (the signed helper); spec §18 names packages, not nodes" },
-    { "symbol": "#gnomon-helper-build", "reason": "build/sign/notarize scripts of @a-company/gnomon-helper (M1.3 slice 1); spec §18 names packages, not nodes" },
     { "symbol": "#gnomon-wrapper", "reason": "package-level component of @a-company/gnomon-wrapper; Appendix A notes: gnomon-wrapper is a package, not a symbol" },
     { "symbol": "#gnomon-local", "reason": "package-level component of @a-company/gnomon-local (the local-model session child, spec §13.1); spec names the executable, the node is #local-runner" },
     { "symbol": "#gnomon-probes", "reason": "M1.0 probe harness (§19.1 probe table); Appendix A notes: the probe table names no node span on purpose" },
