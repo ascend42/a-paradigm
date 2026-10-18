@@ -1,0 +1,26 @@
+id: L-2026-10-18-builder-164920-001
+type: insight
+timestamp: '2026-10-18T16:49:20.689Z'
+author: builder
+title: Command-running manifest fields refuse Zl Zp Cf and a kernel-composed command count leads the install card
+summary: Aegis round 2 C1 and C2 on fixes-015-017, plus T-017 interim spec honesty
+symbols_touched:
+  - '#manifest-loader'
+  - '#oracle-sandbox'
+  - '#web-endpoint'
+files_modified:
+  - packages/gnomon/src/kernel/manifest/manifest.ts
+  - packages/gnomon/src/kernel/manifest/install.ts
+  - packages/gnomon/test/approval-broker.test.ts
+  - docs/specs/gnomon.md
+  - packages/gnomon/.purpose
+commit: 3df5a36f
+learnings:
+  - refuse LS and PS at the producer because the sanitizer maps them to newline
+  - kernel-composed summary lines must precede manifest-controlled lines
+  - the spec loopback-only claim for the transport child was false on macOS
+body: 'Validator-side refusal keeps the 4.5 sanitizer vectors and clientApiId stable. Not done: optional args and manifest size caps, optional fixture-side kernel check for auth.device-refused.'
+git_context:
+  ref: 3df5a36f95bea9588e3f9319f4df79a2df02c470
+  branch: gnomon/fixes-015-017
+  dirty: false
