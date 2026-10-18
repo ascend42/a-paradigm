@@ -6,3 +6,4 @@ export * from './server.js';
 export * from './auth.js';
 export * from './dispatch.js';
 export * from './client.js';
+export * from './log-read.js';

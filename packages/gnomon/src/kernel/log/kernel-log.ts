@@ -48,6 +48,18 @@
  *     transaction; the anchor check then either accepts a lagging anchor or
  *     reports `INTEGRITY_BROKEN{truncated}` — it never silently forks.
  *
+ * READ SIDE (§9.3, M1.4 slice 2): readPage (cursor paging, every row
+ * re-hashed before projection, mismatches withheld), getById (ev: refs) and
+ * onCommit (tail observers for #socket subscriptions, called after COMMIT).
+ * releasedHead() bounds every read (D83 ordering). RESIDUAL UNTIL M1.3
+ * (round 3, documented not built): with the STUB keystore anchor, a critical
+ * row committed in a previous run whose anchoring never completed (crash
+ * between COMMIT and the file-anchor rename) and that open's marker pass does
+ * not classify is NOT held out of the released head on restart — this run
+ * sees it as released. Fail-closed handling (critical rows above the FILE
+ * anchor held until re-anchored or acknowledged when no keystore anchor
+ * exists) lands with the real keystore anchor in M1.3.
+ *
  * ANCHORS (§3.2, G-LOG-06/07/10) — see anchor.ts; WHEN they are written is
  * anchor-policy.ts (research 33 S33-05..07, P8-D82):
  *   - bulk rows: the file anchor (tmp+rename) is coalesced — written when 63
@@ -538,6 +550,15 @@ export class KernelLog {
   #insert!: StatementSync;
   #tipStmt!: StatementSync;
   #closed = false;
+  /** Read-side tail observers (M1.4 slice 2 subscriptions); called after COMMIT, never inside the transaction. */
+  readonly #commitListeners = new Set<(e: EventV1) => void>();
+  readonly #releaseListeners = new Set<(head: number) => void>();
+  /** Critical rows committed whose anchors have not resolved (released-head bound). */
+  readonly #pendingCritical = new Set<number>();
+  readonly #failedSeqs = new Set<number>();
+  #failedLoaded = false;
+  /** Sealed segments are immutable: their SegmentInfo is cached by file path. */
+  readonly #sealedInfo = new Map<string, SegmentInfo>();
   #sinceCheckpoint = 0;
   #idleTimer: ReturnType<typeof setTimeout> | undefined;
   /* anchor policy state (anchor-policy.ts) */
@@ -974,7 +995,7 @@ export class KernelLog {
     if (seq === this.#meta.baseSeq - 1) return this.#meta.basePrev;
     if (seq >= this.#meta.baseSeq) return (this.#db.prepare('SELECT hash FROM chain WHERE seq = ?').get(seq) as { hash: string } | undefined)?.hash;
     for (const s of listSealedSegments(this.home)) {
-      const info = segmentInfo(s.file, true);
+      const info = this.#sealedInfoOf(s.file);
       if (seq === info.baseSeq - 1) return info.basePrev;
       if (seq >= info.baseSeq && seq <= info.lastSeq) {
         const db = new DatabaseSync(s.file, { readOnly: true });
@@ -1196,7 +1217,7 @@ export class KernelLog {
         });
       }
     }
-    const e = this.#appendRow(input); // COMMIT has returned when this returns
+    const e = this.#appendRow(input, critical); // COMMIT has returned when this returns
     this.#noteForced(critical);
     if (!critical) {
       this.#afterBulkRow();
@@ -1219,8 +1240,10 @@ export class KernelLog {
         this.#diag('anchor.failed.marker.deferred', { seq: e.seq, error: (mErr as Error)?.message ?? String(mErr) });
       }
       this.#diag('anchor.critical.failed', { seq: e.seq, kind: e.kind, error: (err as Error)?.message ?? String(err) });
+      this.#resolveCritical(e.seq, false);
       throw logRefusal('ENGINE', 'anchor-failed', `anchoring failed after commit for critical row ${e.seq}: ${(err as Error)?.message ?? String(err)}`, { kind: e.kind, seq: e.seq });
     }
+    this.#resolveCritical(e.seq, true);
     return { seq: e.seq, hash: e.hash, anchored: this.#anchoring, event: e };
   }
 
@@ -1267,7 +1290,7 @@ export class KernelLog {
     this.#diag('anchor.recovered', { anchoredSeq });
   }
 
-  #appendRow(input: AppendInput): EventV1 {
+  #appendRow(input: AppendInput, critical = false): EventV1 {
     const kind = input.kind;
     const labels = resolveLabels(kind, input); // refuses unregistered kinds and relaxed labels
     assertOwner(kind, input.as ?? 'kernel');
@@ -1331,7 +1354,21 @@ export class KernelLog {
       throw err;
     }
     this.#tip = { seq, hash, kind, at: event.at };
+    if (critical) this.#pendingCritical.add(seq); // unreadable until its anchors resolve (released head)
+    if (kind === 'daemon.anchor.failed' && isPlainObject(input.payload) && typeof input.payload.seq === 'number') this.#failedSeqs.add(input.payload.seq);
+    this.#notifyCommit(event);
     return event;
+  }
+
+  /** Tail observers never break an append: a throwing listener is reported as a diagnostic. */
+  #notifyCommit(event: EventV1): void {
+    for (const l of this.#commitListeners) {
+      try {
+        l(event);
+      } catch (err) {
+        this.#diag('commit.listener.failed', { seq: event.seq, error: (err as Error)?.message ?? String(err) });
+      }
+    }
   }
 
   #scheduleCheckpoint(): void {
@@ -1428,31 +1465,245 @@ export class KernelLog {
    * redacting readers as `{kind, hsid, at, hash}` stubs.
    */
   *read(opts: { reader: ReaderClass; fromSeq?: number; toSeq?: number; kinds?: readonly string[]; limit?: number }): Generator<LogView> {
-    const from = opts.fromSeq ?? 1;
-    const to = opts.toSeq ?? Number.MAX_SAFE_INTEGER;
     const kinds = opts.kinds ? new Set(opts.kinds) : undefined;
+    const out: LogView[] = [];
+    let after = (opts.fromSeq ?? 1) - 1;
+    const to = opts.toSeq ?? Number.MAX_SAFE_INTEGER;
     let n = 0;
-    for (const seg of this.segments()) {
-      if (seg.lastSeq < from || seg.baseSeq > to) continue;
+    for (;;) {
+      out.length = 0;
+      const page = this.readPage({ reader: opts.reader, afterSeq: after, untilSeq: to, maxScan: 4096, kinds, visit: (v) => (out.push(v), true) });
+      for (const v of out) {
+        yield v;
+        if (opts.limit !== undefined && ++n >= opts.limit) return;
+      }
+      if (page.lastScanned <= after || page.caughtUp) return;
+      after = page.lastScanned;
+    }
+  }
+
+  /**
+   * RELEASED HEAD (D83 ordering, M1.4 slice 2 round 2): the highest seq with
+   * no unresolved critical row at or below it. A critical row is committed
+   * before its anchors resolve; until they do, neither it nor any later row
+   * is readable or streamed. It advances when the critical append's anchors
+   * resolve (success) or fail — a failed row is then FAILED: withheld from
+   * every read (its daemon.anchor.failed marker row is the visible record).
+   */
+  releasedHead(): number {
+    let min = Infinity;
+    for (const seq of this.#pendingCritical) if (seq < min) min = seq;
+    return min === Infinity ? this.#tip.seq : min - 1;
+  }
+
+  /** Seqs whose anchoring failed (markers in the log + failures this run). */
+  #failed(): ReadonlySet<number> {
+    if (!this.#failedLoaded) {
+      this.#failedLoaded = true;
+      for (const seg of this.#readSegments()) {
+        const db = seg.sealed ? new DatabaseSync(seg.file, { readOnly: true }) : this.#db;
+        try {
+          for (const r of db.prepare("SELECT envelope FROM chain WHERE kind = 'daemon.anchor.failed'").all() as Array<{ envelope: string }>) {
+            const seq = (JSON.parse(r.envelope) as { payload?: { seq?: unknown } }).payload?.seq;
+            if (typeof seq === 'number') this.#failedSeqs.add(seq);
+          }
+        } finally {
+          if (seg.sealed) db.close();
+        }
+      }
+    }
+    return this.#failedSeqs;
+  }
+
+  #resolveCritical(seq: number, ok: boolean): void {
+    if (!this.#pendingCritical.delete(seq)) return;
+    if (!ok) this.#failedSeqs.add(seq);
+    this.#notifyRelease();
+  }
+
+  #notifyRelease(): void {
+    const head = this.releasedHead();
+    for (const l of this.#releaseListeners) {
+      try {
+        l(head);
+      } catch (err) {
+        this.#diag('release.listener.failed', { head, error: (err as Error)?.message ?? String(err) });
+      }
+    }
+  }
+
+  /**
+   * M1.4 slice 2 read primitive (cursor paging + subscriptions). Scans rows
+   * with `afterSeq < seq <= min(untilSeq, releasedHead())` in seq order, at
+   * most `maxScan` of them. Per row: FAILED seqs (anchoring failed) are
+   * skipped; for a non-human reader the projection runs FIRST (a row the
+   * reader cannot see costs no hash and leaves no integrity signal); then the
+   * envelope is RE-HASHED against its stored hash, its seq/kind/id checked
+   * against the columns, and its `prev` checked against the previous row's
+   * hash (linkage across contiguous rows; the page start is checked against
+   * the stored hash of row afterSeq). A failing row is withheld from every
+   * reader and counted. RESIDUAL: a same-user writer who rewrites a row AND
+   * every later row's prev/hash consistently passes these checks — only
+   * signature verification (kernel key) would catch it; that writer can read
+   * kernel.db directly anyway, so it widens nothing for socket principals.
+   * `visit` returns false to stop AFTER consuming that row; `lastScanned` is
+   * the seq to resume after (stable: seqs are immutable).
+   */
+  readPage(opts: {
+    reader: ReaderClass;
+    afterSeq: number;
+    untilSeq?: number;
+    maxScan: number;
+    kinds?: ReadonlySet<string> | ((kind: string) => boolean);
+    match?: (v: LogView) => boolean;
+    visit: (v: LogView) => boolean;
+  }): { lastScanned: number; scanned: number; withheld: number; head: number; caughtUp: boolean } {
+    if (this.#closed) throw logRefusal('ENGINE', 'closed', 'the kernel log is closed');
+    const head = this.releasedHead();
+    const until = Math.min(opts.untilSeq ?? head, head);
+    const kindOk = typeof opts.kinds === 'function' ? opts.kinds : opts.kinds ? (k: string) => (opts.kinds as ReadonlySet<string>).has(k) : () => true;
+    const failed = this.#failed();
+    const human = opts.reader.class === 'human';
+    let last = opts.afterSeq;
+    let prevHash: string | undefined = last >= 0 ? this.#hashAt(last) : undefined;
+    let scanned = 0;
+    let withheld = 0;
+    let stopped = false;
+    const withhold = (seq: number, why: string): void => {
+      withheld++;
+      this.#diag('read.withheld', { seq, why });
+    };
+    for (const seg of this.#readSegments()) {
+      if (stopped || scanned >= opts.maxScan || last >= until) break;
+      if (seg.lastSeq <= last || seg.baseSeq > until) continue;
       const db = seg.sealed ? new DatabaseSync(seg.file, { readOnly: true }) : this.#db;
       try {
-        const it = db.prepare('SELECT envelope, hash, sig, kind FROM chain WHERE seq >= ? AND seq <= ? ORDER BY seq').iterate(from, to) as Iterable<{
-          envelope: string;
-          hash: string;
-          sig: string | null;
-          kind: string;
-        }>;
+        const it = db
+          .prepare('SELECT seq, id, envelope, hash, sig, kind, sensitivity FROM chain WHERE seq > ? AND seq <= ? ORDER BY seq LIMIT ?')
+          .iterate(last, until, opts.maxScan - scanned) as Iterable<{ seq: number; id: string; envelope: string; hash: string; sig: string | null; kind: string; sensitivity: string }>;
         for (const r of it) {
-          if (kinds && !kinds.has(r.kind)) continue;
-          const v = projectForReader(rowToEvent(r), opts.reader);
-          if (!v) continue;
-          yield v;
-          if (opts.limit !== undefined && ++n >= opts.limit) return;
+          scanned++;
+          const contiguous = r.seq === last + 1;
+          const expectPrev = contiguous ? prevHash : undefined;
+          last = r.seq;
+          prevHash = r.hash;
+          if (failed.has(r.seq)) continue; // anchoring failed: never effective
+          if (!kindOk(r.kind)) continue;
+          let e: EventV1;
+          try {
+            e = rowToEvent(r);
+          } catch {
+            withhold(r.seq, 'unparseable');
+            continue;
+          }
+          let v: LogView | undefined;
+          if (!human) {
+            v = projectForReader(e, opts.reader, r.sensitivity);
+            if (!v || (opts.match && !opts.match(v))) continue;
+          }
+          if (sha256TaggedFast(r.envelope) !== r.hash) {
+            withhold(r.seq, 'hash-mismatch');
+            continue;
+          }
+          if (e.seq !== r.seq || e.kind !== r.kind || e.id !== r.id) {
+            withhold(r.seq, 'column-mismatch');
+            continue;
+          }
+          if (expectPrev !== undefined && e.prev !== expectPrev) {
+            withhold(r.seq, 'prev-mismatch');
+            continue;
+          }
+          if (human) {
+            v = projectForReader(e, opts.reader, r.sensitivity);
+            if (!v || (opts.match && !opts.match(v))) continue;
+          }
+          if (!opts.visit(v!)) {
+            stopped = true;
+            break;
+          }
         }
       } finally {
         if (seg.sealed) db.close();
       }
     }
+    return { lastScanned: last, scanned, withheld, head, caughtUp: last >= until };
+  }
+
+  /**
+   * `ev:<ULID>` lookup (#ref-resolver, §3.7). `undefined` = no such row, the
+   * reader may not see it, it is above the released head, or its anchoring
+   * failed — one answer, no existence oracle. Visibility is decided BEFORE
+   * the hash check, so `'withheld'` (hash/column mismatch) is only ever
+   * returned for a row the reader could otherwise see.
+   */
+  getById(id: string, reader: ReaderClass): LogView | 'withheld' | undefined {
+    if (this.#closed) throw logRefusal('ENGINE', 'closed', 'the kernel log is closed');
+    const released = this.releasedHead();
+    const failed = this.#failed();
+    for (const seg of this.#readSegments().reverse()) {
+      const db = seg.sealed ? new DatabaseSync(seg.file, { readOnly: true }) : this.#db;
+      try {
+        const r = db.prepare('SELECT seq, id, envelope, hash, sig, kind, sensitivity FROM chain WHERE id = ?').get(id) as
+          | { seq: number; id: string; envelope: string; hash: string; sig: string | null; kind: string; sensitivity: string }
+          | undefined;
+        if (!r) continue;
+        if (r.seq > released || failed.has(r.seq)) return undefined;
+        let e: EventV1;
+        try {
+          e = rowToEvent(r);
+        } catch {
+          return reader.class === 'human' ? 'withheld' : undefined;
+        }
+        const v = projectForReader(e, reader, r.sensitivity);
+        if (!v) return undefined;
+        if (sha256TaggedFast(r.envelope) !== r.hash || e.id !== id || e.seq !== r.seq || e.kind !== r.kind) return 'withheld';
+        return v;
+      } finally {
+        if (seg.sealed) db.close();
+      }
+    }
+    return undefined;
+  }
+
+  /**
+   * Observe every committed row (read-side tail for #socket subscriptions).
+   * Called synchronously after COMMIT, in seq order, BEFORE the row is
+   * released (a committed critical row may still be unreadable); a listener
+   * must not append re-entrantly (defer) and its exceptions never reach the
+   * appender. Pair with onRelease to learn when rows become readable.
+   */
+  onCommit(listener: (e: EventV1) => void): () => void {
+    this.#commitListeners.add(listener);
+    return () => void this.#commitListeners.delete(listener);
+  }
+
+  /** Called with the new releasedHead() whenever a critical row's anchoring resolves (or fails). */
+  onRelease(listener: (head: number) => void): () => void {
+    this.#releaseListeners.add(listener);
+    return () => void this.#releaseListeners.delete(listener);
+  }
+
+  /** Sealed segments are immutable: their SegmentInfo is read once. */
+  #sealedInfoOf(file: string): SegmentInfo {
+    let info = this.#sealedInfo.get(file);
+    if (!info) this.#sealedInfo.set(file, (info = segmentInfo(file, true)));
+    return info;
+  }
+
+  /** segments() with the immutable sealed infos cached. */
+  #readSegments(): SegmentInfo[] {
+    const out = listSealedSegments(this.home).map((s) => this.#sealedInfoOf(s.file));
+    out.push({
+      segment: this.#meta.segment,
+      file: this.activePath,
+      baseSeq: this.#meta.baseSeq,
+      basePrev: this.#meta.basePrev,
+      lastSeq: this.#tip.seq,
+      lastHash: this.#tip.hash,
+      lastKind: this.#tip.kind,
+      sealed: false,
+    });
+    return out;
   }
 
   /* ── recovery (S33-10, P8-D83) ──────────────────────────────────────────── */

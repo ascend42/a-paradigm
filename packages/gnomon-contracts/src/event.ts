@@ -172,8 +172,15 @@ const FIELD_LABELS: Record<string, Record<string, Sensitivity>> = {
   'voice.turn.user': { audioRef: 'sensitive' },
   // Aegis round 3 (P8-D86–D88): a worktree path and a commit trailer can carry
   // project or agent-written detail; the rows stay private + normal.
-  'approval.auto': { path: 'sensitive' },
+  'approval.auto': { path: 'sensitive', inputHash: 'sensitive' },
   'merge.reverted': { trailer: 'sensitive' },
+  // M1.4 slice 2 round 3 (Aegis): digests of sensitive or low-entropy content are
+  // confirmation oracles for a dictionary guess, so a limited reader never gets them.
+  'turn.sent': { contentHash: 'sensitive' }, // digest of the prompt content
+  'approval.voice.arm': { phrasesHash: 'sensitive' }, // digest of short spoken phrases
+  'approval.voice.intent': { handleHash: 'sensitive', challengeHash: 'sensitive' }, // short voice handles/challenges (§14.7)
+  'link.msg.out': { hash: 'sensitive' }, // digest of a message body sent to a peer
+  'inject.receipt': { shas: 'sensitive', source_hash: 'sensitive', frozenSliceHash: 'sensitive' }, // digests of model-visible bytes
 };
 
 function build(): Readonly<Record<string, EventKindSpec>> {
@@ -213,9 +220,10 @@ export const RESERVED_PAYLOAD_FIELDS: Readonly<Record<string, Readonly<Record<st
  * Payload field names of the kinds reserved for P8-D86–D88, verbatim from §9.1
  * (documentation published in the event schema, so clientApiId covers it; the
  * payloads stay opaque to event:v1). None carries free text: `approval.auto`
- * carries `inputHash`, never the tool input; `verdict.incident` and
- * `request.incident` carry `refs[]` and `severity` only — so no field needs a
- * sensitive label (§9.1 default `normal`).
+ * carries `inputHash`, never the tool input (and `inputHash` is itself a
+ * sensitive FIELD label — a digest of the tool input confirms a guess);
+ * `verdict.incident` and `request.incident` carry `refs[]` and `severity`
+ * only (§9.1 default `normal`).
  */
 export const RESERVED_KIND_PAYLOADS: Readonly<Record<string, readonly string[]>> = Object.freeze({
   'approval.strictness.raised': ['repo', 'from', 'to', 'cause', 'signals', 'score', 'configHash'],

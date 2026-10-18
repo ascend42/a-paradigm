@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-18T00:00:00.177Z'
+generated: '2026-10-18T00:43:52.671Z'
 structure: {}
 key_files:
   config:
@@ -263,6 +263,7 @@ symbols:
   '#purpose-component-gnomon-kernel': packages/gnomon/
   '#purpose-component-gnomon-probes': packages/gnomon/
   '#purpose-component-socket': packages/gnomon/
+  '#purpose-component-ref-resolver': packages/gnomon/
   '#purpose-component-identity': packages/gnomon/
   '#purpose-component-kernel-log': packages/gnomon/
   '#purpose-component-paradigm-logger': packages/logger/
@@ -1321,6 +1322,7 @@ symbols:
   ^purpose-ref-gate-peer-paired.: packages/gnomon-contracts/
   '#purpose-ref-component-web-endpoint.': packages/gnomon-contracts/
   $purpose-ref-flow-XDG_RUNTIME_DIR: packages/gnomon/
+  '#purpose-ref-component-hashAt': packages/gnomon/
   '@purpose-ref-aspect-symbol-typed-logging': packages/logger/
   '@purpose-ref-aspect-correlation-tracked': packages/logger/
   '@purpose-ref-aspect-mcp-tool-handler': packages/paradigm-mcp/

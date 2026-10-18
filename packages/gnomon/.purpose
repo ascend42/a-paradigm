@@ -59,6 +59,7 @@ components:
       - "#socket"
       - "#kernel-log"
       - "#identity"
+      - "#ref-resolver"
     tests:
       - test/symbols-drift.test.ts
       - test/fence.test.ts
@@ -152,6 +153,53 @@ components:
       client refuses a hello whose clientApi/features it did not offer
       (hello-not-offered, client-local); RegistryCache parses the bytes it
       hashed. Windows named pipe: parity phase (P8-D78).
+      M1.4 SLICE 2 (log-read.ts): `log.read` and `ref.resolve` served for
+      authenticated principals, each handled EXPLICITLY per reader class
+      (never the generic 'full'): human → the §9.3 COMMUNITY-CLIENT projection
+      (full minus sensitive and secret, sensitive-column kinds as {kind, hsid,
+      at, hash} stubs, registered sensitive fields → {redacted, hash}) because
+      a first-party surface / log.read:sensitive grant cannot be proven on
+      the socket yet (result names projection + fullView.needs); mod → own
+      modns.<name>.* + granted kinds (none yet); agent → UNSUPPORTED Move 2;
+      voice → UNSUPPORTED Move 4; session → ENGINE not-implemented M1.7 (no
+      principal → hsid binding); read tokens do not exist yet. Pages:
+      {since, until?, kinds? (exact or ns.*), scope? {hsid, repo, loop,
+      contract} applied to the PROJECTED view (a stub never matches a
+      repo/loop/contract filter), limit? ≤ 1000} → {rows, next (last scanned
+      seq, stable cursor), head, caughtUp, projection, withheld}; ≤ 10 000
+      rows scanned and ~2 MiB per page, a row > 1 MiB becomes {view:
+      'oversize', kind, hash, bytes}. Subscriptions (follow: true): reply
+      {subscription, since, head, projection, backlogCap} written first
+      (ctx.afterReply), then backlog + live rows as `event` notifications
+      {subscription, row} in seq order, read lazily from the log; the pump
+      writes only under the connection's write high-water mark and resumes on
+      'drain'; per subscription a queue of undelivered post-subscribe seqs
+      (numbers only) — beyond 10 000 the subscription is dropped, the client
+      gets event{subscription, end{reason:'dropped', lag, since}} and the
+      kernel logs socket.subscription.dropped{subscription, lag, since} with
+      the connId (deferred, never inside a commit); ≤ 8 subscriptions per
+      connection, 256 per kernel; each holds the idle monitor ('subscriber');
+      subscriptions end with their connection. server.ts gains ctx.notify /
+      writableLength / writeHighWater / onDrain / afterReply; client.ts
+      RpcConnection.onNotification. status adds subscriptions{n,
+      onThisConnection, perConnectionMax, backlogCap}. ROUND 2: limited
+      views (community-client, mod, read-token) carry no hash/sig/prev,
+      redacted fields are {redacted: true} and stubs {kind, hsid?, at} (no
+      confirmation oracle; ref.resolve returns no hash to them); only rows at
+      or below the log's RELEASED head are read or streamed (failed critical
+      rows never); lag = committed head − cursor, a subscribe with head −
+      since > 10 000 is BAD_REQUEST{backlog-too-large} (page first); the
+      commit-path fan-out is one metadata check per subscriber (mayBeVisible
+      + kind filter; no projection, copy or hash — projection happens lazily
+      in the pump); writeHighWater is clamped to ≥ the socket's
+      writableHighWaterMark; an unencodable frame ends the subscription with
+      end{reason:'internal'}; follow on a JSON-RPC notification (no id) is
+      refused follow-needs-id; queued requests of a closed connection never
+      run (server `closed` flag) and dispatch refuses ENGINE{gone} for a
+      closed ctx, so zombie pre-auth entries cannot fill maxPreAuth. ROUND
+      3: limited views also drop idem and refHash; lag = min(seq, released
+      head) − cursor; subscribe admits at most cap/2 backlog measured
+      against the released head (page until caughtUp, then follow).
     path: src/kernel/socket/
     type: module
     tags: [gnomon, kernel, socket, paradigm-8, pr-5]
@@ -159,7 +207,30 @@ components:
       - test/ndjson-framing.test.ts
       - test/socket-server.test.ts
       - test/socket-auth.test.ts
-    oracles: [G-DMN-02, G-ABI-03]
+      - test/socket-log-read.test.ts
+    aspects: ["~ample-internal-logs"]
+    oracles: [G-DMN-02, G-ABI-02, G-ABI-03, G-ABI-05, G-SOCK-01]
+
+  ref-resolver:
+    description: >-
+      #ref-resolver (spec §3.7, §4.4, §5 verb 12; M1.4 slice 2) —
+      src/kernel/refs/resolve.ts, the kernel's read-only resolver for its
+      built-in schemes. Served: `ev:<ULID>` → {ref, target: the §9.3
+      projected view for the caller's reader class, hash}; every row is
+      re-hashed (mismatch ⇒ ENGINE{row-integrity}, withheld); a missing row
+      and an invisible one are the same NOT_FOUND (no existence oracle); an
+      @rev on an event is BAD_REQUEST. Validated then ENGINE{not-implemented,
+      milestone}: turn:<hsid>/<n> and hsid: (M1.7), cc (M1.7), gkey/dev
+      (M1.3), permit/card (M1.6), contract/node (M2.1), pev (Move 2 — the
+      spec names none). UNSUPPORTED: peer: (only a brief's copy, §3.9),
+      package schemes (no-resolver: userland), unknown schemes. Malformed
+      refs, dropped schemes (voice) and refs over 512 chars are BAD_REQUEST.
+    path: src/kernel/refs/
+    type: module
+    tags: [gnomon, kernel, refs, paradigm-8, m1.4]
+    tests:
+      - test/socket-log-read.test.ts
+    oracles: [G-ABI-02]
 
   identity:
     description: >-
@@ -336,7 +407,39 @@ components:
       detects tamper, re-hash forgery, truncation, reorder, stripped or bad
       signatures, unknown keys, relaxed labels. read(): §9.3 projection per
       reader class (human, read-token, community-client, session, mod, peer;
-      agent/voice refuse UNSUPPORTED pending M1.7/M4.x). Not yet: async
+      agent/voice refuse UNSUPPORTED pending M1.7/M4.x). M1.4 SLICE 2 READ
+      SIDE: projection uses the EFFECTIVE sensitivity = strictest of the
+      registered default, the envelope label and the stored column label (an
+      unknown label ranks secret) — labels never widen, and nothing in a
+      payload is consulted; readPage({reader, afterSeq, untilSeq?, maxScan,
+      kinds?, match?, visit}) re-hashes every envelope (mismatch or
+      seq/kind/id column disagreement ⇒ withheld + diagnostic read.withheld),
+      returns {lastScanned, scanned, withheld, head, caughtUp}; getById (the
+      UNIQUE id index) for ev: refs; onCommit(listener) — tail observers
+      called after COMMIT in seq order, exceptions reported as diagnostic
+      commit.listener.failed, never reaching the appender; sealed segment
+      infos cached (immutable). read() is now built on readPage. ROUND 2:
+      releasedHead() = highest seq with no unresolved critical row at or
+      below it (a critical row is pending from COMMIT until its anchors
+      resolve; failure ⇒ FAILED, withheld forever; failed seqs also loaded
+      from daemon.anchor.failed markers); readPage and getById never return
+      rows above it; onRelease(listener) wakes tails. readPage projects
+      BEFORE hashing for non-human readers, checks prev linkage across
+      contiguous rows (prev-mismatch ⇒ withheld) and states the residual (a
+      consistent same-user rewrite of a row and every later prev/hash passes
+      without signature verification). getById decides visibility before
+      the hash (row-integrity only for a row the reader could see).
+      Redaction: limited views drop hash/sig/prev, fields → {redacted: true},
+      stubs drop the envelope hash; mayBeVisible(e, reader) = metadata-only
+      visibility; projectionStats counter. ROUND 3: limited views drop idem
+      and refHash too (contracts FIELD_LABELS gain the content-digest audit:
+      approval.auto.inputHash, turn.sent.contentHash,
+      approval.voice.arm.phrasesHash, approval.voice.intent.handleHash /
+      challengeHash, link.msg.out.hash, inject.receipt.shas / source_hash /
+      frozenSliceHash); #hashAt uses the sealed-info cache. RESIDUAL until
+      M1.3 (header): with the stub keystore, a critical row left unanchored
+      by a crash in a previous run is not held out of the released head on
+      restart. Not yet: async
       hardware signers, helper anchor, blobs/TTL pruning, projections tables,
       wiring $daemon-lifecycle events into the log.
       Durable-write platform seam (anchor.ts fsyncFile / fsyncDir, the one
@@ -382,8 +485,10 @@ flows:
       closed before the lock is released); (4) idle exit —
       no open connections for idleMs (default 10 min) ⇒ daemon.exit{reason:
       'idle'}, socket closed, pidfile and socket released only if still ours;
-      SIGTERM/SIGINT take the same path with reason 'signal'. Not yet built:
-      sessions/subscribers/timers as holders, mod and transport-child stop,
+      SIGTERM/SIGINT take the same path with reason 'signal'. Since M1.4
+      slice 2 every log.read{follow} subscription is an idle holder
+      ('subscriber') and the hub is closed first at shutdown. Not yet built:
+      sessions/timers as holders, mod and transport-child stop,
       orphan sweep, the Windows pipe.
     steps:
       - "#gnomon-kernel"

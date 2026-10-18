@@ -36,11 +36,13 @@ import { KernelLog, KeyRing, SoftwareEd25519Signer, type Signer } from '../log/i
 import { readKernelPubs, recordKernelPub, UNPROVISIONED_NS, UnprovisionedRootAuthority, type RootAuthority } from '../identity/index.js';
 import {
   createKernelDispatcher,
+  SubscriptionHub,
   listenSocket,
   SocketAuthenticator,
   type SocketEvent,
   type SocketLogKind,
   type SocketServerHandle,
+  type SubscriptionStats,
 } from '../socket/index.js';
 import { selectSocketPath, type EndpointVia } from './endpoint.js';
 import { ensureGnomonHome } from './home.js';
@@ -60,6 +62,8 @@ export type DaemonEvent =
 export interface DaemonOptions {
   home: string;
   idleMs?: number;
+  /** Test seam: per-subscription undelivered-frame cap (default 10 000, §4.9). */
+  subscriptionBacklogCap?: number;
   platform?: NodeJS.Platform;
   env?: Readonly<Record<string, string | undefined>>;
   maxFrameBytes?: number;
@@ -103,6 +107,8 @@ export interface DaemonHandle {
   /** Write the coalesced diagnostic rows now (tests; also runs on the window timer and at shutdown). */
   flushDiagnostics(): Promise<void>;
   readonly server: SocketServerHandle;
+  /** log.read{follow} subscription telemetry (tests; status shows the counts). */
+  subscriptions(): SubscriptionStats;
   status(): DaemonStatus;
   /** Resolves once the daemon has fully stopped. */
   readonly exited: Promise<DaemonExitReason>;
@@ -221,6 +227,7 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
       idle.stop();
       emit({ kind: 'daemon.exit', reason });
       try {
+        hub.close();
         await server?.close();
         clearInterval(diagTimer);
         await flushDiagnostics();
@@ -254,8 +261,15 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
     trust: authority,
     ...(opts.clock ? { clock: opts.clock } : {}),
   });
+  const hub = new SubscriptionHub({
+    log,
+    holdIdle: () => idle.hold('subscriber'),
+    onDropped: (connId, payload) => void appendRow('socket.subscription.dropped', payload, { connId }).catch(() => undefined),
+    ...(opts.subscriptionBacklogCap !== undefined ? { backlogCap: opts.subscriptionBacklogCap } : {}),
+  });
   const dispatcher = createKernelDispatcher({
     authenticator,
+    reads: { log, hub },
     ...(opts.helloTimeoutMs !== undefined ? { helloTimeoutMs: opts.helloTimeoutMs } : {}),
     ...(opts.preAuthTimeoutMs !== undefined ? { preAuthTimeoutMs: opts.preAuthTimeoutMs } : {}),
     ...(opts.maxPreAuth !== undefined ? { maxPreAuth: opts.maxPreAuth } : {}),
@@ -313,5 +327,5 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
     kernelKeyCustody: 'partial',
     root: authority.state,
   });
-  return { pidfile, via: choice.via, log, kernelSigner, kernelPrincipal, flushDiagnostics, server: server!, status, exited, shutdown };
+  return { pidfile, via: choice.via, log, kernelSigner, kernelPrincipal, flushDiagnostics, server: server!, subscriptions: () => hub.stats(), status, exited, shutdown };
 }

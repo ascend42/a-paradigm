@@ -529,21 +529,26 @@ describe('event labels and payload docs (round 2)', () => {
     for (const banned of ['tool_input', 'input', 'toolInput', 'content']) expect(f).not.toContain(banned);
     expect(defaultLabelsFor('approval.auto')).toEqual({ audience: 'private', sensitivity: 'normal' });
     expect(f).toContain('path');
-    expect(EVENT_KINDS['approval.auto']!.fieldLabels).toEqual({ path: 'sensitive' });
+    expect(EVENT_KINDS['approval.auto']!.fieldLabels).toEqual({ path: 'sensitive', inputHash: 'sensitive' });
   });
   it('merge.reverted: row private + normal, field trailer sensitive (Aegis)', () => {
     expect(RESERVED_KIND_PAYLOADS['merge.reverted']).toContain('trailer');
     expect(defaultLabelsFor('merge.reverted')).toEqual({ audience: 'private', sensitivity: 'normal' });
     expect(EVENT_KINDS['merge.reverted']!.fieldLabels).toEqual({ trailer: 'sensitive' });
   });
-  it('the field-label table is exactly the §9.1 entries plus the two Aegis additions', () => {
+  it('the field-label table is exactly the §9.1 entries plus the Aegis additions (incl. the M1.4 round-3 content-digest audit)', () => {
     const labelled = Object.fromEntries(EVENT_KIND_NAMES.filter((k) => EVENT_KINDS[k]!.fieldLabels).map((k) => [k, EVENT_KINDS[k]!.fieldLabels]));
     expect(labelled).toEqual({
       'approval.request': { tool_input: 'sensitive' },
       'oracle.result': { evidence: 'sensitive' },
       'voice.turn.user': { audioRef: 'sensitive' },
-      'approval.auto': { path: 'sensitive' },
+      'approval.auto': { path: 'sensitive', inputHash: 'sensitive' },
       'merge.reverted': { trailer: 'sensitive' },
+      'turn.sent': { contentHash: 'sensitive' },
+      'approval.voice.arm': { phrasesHash: 'sensitive' },
+      'approval.voice.intent': { handleHash: 'sensitive', challengeHash: 'sensitive' },
+      'link.msg.out': { hash: 'sensitive' },
+      'inject.receipt': { shas: 'sensitive', source_hash: 'sensitive', frozenSliceHash: 'sensitive' },
     });
   });
   it('incident kinds carry no free-text field, so no sensitive field label is needed', () => {

@@ -391,9 +391,10 @@ describe('#kernel-log read projection (§9.3, ~ample-internal-logs)', () => {
     const token = [...log.read({ reader: { class: 'read-token' } })];
     expect(token.map((v) => v.seq)).toEqual([1, 2, 4, 5]); // secret never streamed
     expect(token[0]!.view).toBe('stub');
-    if (token[0]!.view === 'stub') expect(Object.keys(token[0]!.stub).sort()).toEqual(['at', 'hash', 'hsid', 'kind']);
+    if (token[0]!.view === 'stub') expect(Object.keys(token[0]!.stub).sort()).toEqual(['at', 'hsid', 'kind']); // M1.4 slice 2 round 2: limited stubs carry no hash (no confirmation oracle)
     const req = token[1]!;
-    expect(req.view === 'full' && (req.event.payload as Record<string, { redacted?: string }>).tool_input.redacted).toBe('sensitive');
+    expect(req.view === 'full' && (req.event.payload as Record<string, { redacted?: unknown }>).tool_input).toEqual({ redacted: true });
+    expect(req.view === 'full' && ['hash', 'sig', 'prev'].some((k) => Object.hasOwn(req.event, k))).toBe(false);
 
     const community = [...log.read({ reader: { class: 'community-client' } })];
     expect(community.map((v) => v.seq)).toEqual([1, 2, 5]); // minus sensitive and secret

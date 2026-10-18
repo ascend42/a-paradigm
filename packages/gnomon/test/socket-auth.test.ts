@@ -196,7 +196,7 @@ describe('device-key auth (§4.9 S-H4, §3.1)', () => {
     });
     const res = (st as { result: { verbs: Array<{ verb: string; available: boolean }>; relays: unknown[]; nextLegalVerbs: Array<{ verb: string }>; clients: unknown[]; log: { seq: number } } }).result;
     expect(res.verbs.map((v) => v.verb)).toEqual(CLIENT_METHODS.slice(0, 12));
-    expect(res.verbs.filter((v) => v.available).map((v) => v.verb)).toEqual(['status']);
+    expect(res.verbs.filter((v) => v.available).map((v) => v.verb)).toEqual(['status', 'log.read', 'ref.resolve']);
     expect(res.relays).toHaveLength(2);
     expect(res.nextLegalVerbs.map((v) => v.verb)).toEqual(['session.open', 'permit.reserve', 'status']);
     expect(res.clients).toEqual([{ connId: s.connId, principal: r.cred.principalId, surface: 'cli', client: { name: 'gnomon-test', version: '0.0.0' }, conformance: null }]);
@@ -313,12 +313,12 @@ describe('verb dispatch skeleton (§5)', () => {
     expect(await c.call('daemon.stop', {})).toMatchObject({ error: { code: -32601 } });
   });
 
-  it('after auth: the other 11 verbs + 2 relays refuse ENGINE not-implemented naming the milestone — or FORBIDDEN by the matrix', async () => {
+  it('after auth: the other 9 verbs + 2 relays (log.read / ref.resolve are served since M1.4 slice 2, test/socket-log-read.test.ts) refuse ENGINE not-implemented naming the milestone — or FORBIDDEN by the matrix', async () => {
     const r = await rig();
     const s = await connectGnomon({ socketPath: r.d.pidfile.socketPath, client: CLIENT, serverKey: r.pin, device: r.cred });
     cleanups.push(() => s.conn.close());
     const got: Record<string, unknown> = {};
-    for (const m of CLIENT_METHODS.filter((x) => x !== 'status')) {
+    for (const m of CLIENT_METHODS.filter((x) => x !== 'status' && x !== 'log.read' && x !== 'ref.resolve')) {
       const f = await s.conn.call(m, {});
       expect('error' in f).toBe(true);
       const e = (f as { error: { code: number; data: { data: { reason: string; milestone?: string } } } }).error;
@@ -329,13 +329,11 @@ describe('verb dispatch skeleton (§5)', () => {
       'session.send': [-32000, 'not-implemented', 'M1.7'],
       'session.stop': [-32000, 'not-implemented', 'M1.7'],
       'log.append': [-32000, 'not-implemented', 'M1.4'],
-      'log.read': [-32000, 'not-implemented', 'M1.4'],
       'permit.reserve': [-32000, 'not-implemented', 'M1.6'],
       approve: [-32000, 'not-implemented', 'M1.6'],
       'contract.register': [-32000, 'not-implemented', 'M2.1'],
       'contract.claim': [-32000, 'not-implemented', 'M2.2'],
       'oracle.run': [-32000, 'not-implemented', 'M2.3'],
-      'ref.resolve': [-32000, 'not-implemented', 'M1.4'],
       'mod.view': [-32000, 'not-implemented', 'M1.11'],
       'mod.command': [-32000, 'not-implemented', 'M1.11'],
     });

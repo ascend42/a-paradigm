@@ -14,10 +14,16 @@
  * no fake success. The surface is exactly the contracts' CLIENT_METHODS; no
  * verb exists to serve a client (M1.4 falsifier).
  *
- * Access qualifiers: only the plain `'yes'` of the matrix is served; any
- * qualified value (`'own view'`, `'redacted'`, `'own scope'`, …) needs a scoped
+ * Access qualifiers: only the plain `'yes'` of the matrix is served by the
+ * generic rule; any other qualified value (`'own view'`, …) needs a scoped
  * view that does not exist yet and is refused ENGINE{not-implemented} naming
- * its milestone — never the full view.
+ * its milestone — never the full view. M1.4 SLICE 2: `log.read` and
+ * `ref.resolve` are handled EXPLICITLY per reader class (log-read.ts
+ * readerFor: human → community-client projection until first-party proof,
+ * mod → own modns, agent/voice → UNSUPPORTED, session → not-implemented
+ * M1.7), pages and `follow` subscriptions via log-read.ts, refs via
+ * #ref-resolver (refs/resolve.ts). Without a `reads` source (unit rigs) both
+ * stay ENGINE not-implemented.
  *
  * Log-before-reply (chain write before side effect, §2.4 rule 4):
  * socket.hello and socket.auth.ok are written BEFORE the reply; if either
@@ -53,6 +59,8 @@ import {
 import type { ConnectionContext, RpcHandler } from './server.js';
 import { RpcRefusal, type RpcRequestFrame } from './rpc.js';
 import type { ConnAuthState, SocketAuthenticator } from './auth.js';
+import { resolveRef } from '../refs/resolve.js';
+import { asRpcRefusal, parseLogReadParams, readerFor, readOnePage, SUBSCRIPTION_BACKLOG_CAP, MAX_SUBSCRIPTIONS_PER_CONNECTION, type ReadLog, type SubscriptionHub } from './log-read.js';
 
 /** Where each not-yet-served method lands (spec §19). */
 export const VERB_MILESTONES: Readonly<Record<string, string>> = Object.freeze({
@@ -72,7 +80,9 @@ export const VERB_MILESTONES: Readonly<Record<string, string>> = Object.freeze({
   'mod.command': 'M1.11',
 });
 
-export const SERVED_METHODS: readonly string[] = Object.freeze(['status']);
+export const SERVED_METHODS: readonly string[] = Object.freeze(['status', 'log.read', 'ref.resolve']);
+/** Served only when the dispatcher has a log to read (the daemon always passes one). */
+const READ_METHODS: readonly string[] = Object.freeze(['log.read', 'ref.resolve']);
 
 /**
  * §5 next-legal-verbs table, verbatim order. `when` = every listed fact holds.
@@ -153,6 +163,8 @@ export interface DispatcherOptions {
   /** A pre-auth connection was closed by a deadline or the cap (for the coalesced counter). */
   onPreAuthClose?: (why: 'hello-timeout' | 'pre-auth-timeout' | 'pre-auth-cap') => void;
   status: KernelStatusSource;
+  /** The kernel log read side + the subscription hub (M1.4 slice 2). Absent ⇒ log.read/ref.resolve stay not-implemented. */
+  reads?: { log: ReadLog; hub: SubscriptionHub };
   /** Append a socket.* row to the kernel log; must reject if the row was not written. */
   log: (kind: SocketLogKind, payload: Record<string, unknown>, ids: { connId: string; deviceId?: string }) => Promise<void>;
 }
@@ -191,7 +203,7 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
     if (cls === 'agent' || cls === 'session') facts.add('agent|session');
     if (cls === 'voice') facts.add('!armed');
     const key = o.status.kernelKey();
-    const available = (m: string): boolean => SERVED_METHODS.includes(m);
+    const available = (m: string): boolean => SERVED_METHODS.includes(m) && (o.reads !== undefined || !READ_METHODS.includes(m));
     return {
       principal: s.principal,
       principalKind: s.principalKind,
@@ -214,6 +226,7 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       kernelKeySource: key.source,
       root: o.status.root(),
       web: { listening: false },
+      subscriptions: { n: o.reads?.hub.count() ?? 0, onThisConnection: o.reads?.hub.count(s.connId) ?? 0, perConnectionMax: MAX_SUBSCRIPTIONS_PER_CONNECTION, backlogCap: o.reads?.hub.cap ?? SUBSCRIPTION_BACKLOG_CAP },
       clients: [...conns.values()]
         .filter((c) => c.phase === 'authenticated')
         .map((c) => ({ connId: c.connId, principal: c.principal, surface: c.client?.surface ?? null, client: { name: c.client?.name, version: c.client?.version }, conformance: c.client?.conformance ?? null })),
@@ -221,6 +234,8 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
   };
 
   const handle: RpcHandler = async (frame: RpcRequestFrame, ctx: ConnectionContext) => {
+    // A request queued before the close must not re-create state for a gone connection (zombie pre-auth entries).
+    if (ctx.closed) throw new RpcRefusal('ENGINE', 'gone', 'the connection is closed');
     const s = stateOf(ctx.connId);
     const m = frame.method;
 
@@ -276,6 +291,23 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
     const verb = VERBS.find((v) => v.verb === m);
     const access: Access = verb ? verb.access[cls] : cls === 'peer' ? false : 'caller principal';
     if (access === false) throw new RpcRefusal('FORBIDDEN', 'matrix', `${m} is not callable by a ${cls} principal (§5)`, { verb: m, principalClass: cls });
+    if (READ_METHODS.includes(m)) {
+      const reads = o.reads;
+      if (!reads) throw new RpcRefusal('ENGINE', 'not-implemented', `${m} is not implemented yet (lands with ${VERB_MILESTONES[m]})`, { verb: m, milestone: VERB_MILESTONES[m] });
+      try {
+        if (m === 'log.read') {
+          const grant = readerFor(s); // explicit per-class policy: never the generic 'full' view
+          const params = parseLogReadParams(frame.params);
+          if (params.follow && !Object.hasOwn(frame, 'id')) throw new RpcRefusal('BAD_REQUEST', 'follow-needs-id', 'a subscription is opened by a request with an id (its reply names the subscription)');
+          return params.follow ? reads.hub.subscribe(ctx, grant, params) : readOnePage(reads.log, grant, params);
+        }
+        const r = resolveRef(frame.params, reads.log, () => readerFor(s).reader);
+        if (!r.ok) throw new RpcRefusal(r.code, r.reason, r.message, r.data);
+        return r.result;
+      } catch (err) {
+        throw asRpcRefusal(err);
+      }
+    }
     // TODO(M1.6, #approval-broker): `approve`'s human access value is the qualified string
     // 'presence per class; root key for use-api-token, install; …' — when approve is served it
     // must be handled EXPLICITLY here (presence class per §3.4), not refused by this generic rule.
@@ -313,6 +345,7 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       ]);
     },
     onDisconnect: (ctx) => {
+      o.reads?.hub.disconnect(ctx.connId);
       clearTimers(ctx.connId);
       conns.delete(ctx.connId);
     },

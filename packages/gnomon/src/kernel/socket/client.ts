@@ -106,12 +106,17 @@ export class RpcConnection {
   readonly #pending = new Map<RpcId, (f: RpcResponseFrame) => void>();
   #nextId = 1;
   #closed = false;
+  readonly #listeners = new Set<(method: string, params: unknown) => void>();
 
   private constructor(conn: net.Socket) {
     this.#conn = conn;
     conn.on('data', (chunk: Buffer) => {
       for (const item of this.#decoder.push(chunk)) {
         if (item.kind !== 'frame') continue;
+        if (!Object.hasOwn(item.value, 'id') && typeof item.value.method === 'string') {
+          for (const l of this.#listeners) l(item.value.method, item.value.params);
+          continue;
+        }
         const cb = this.#pending.get(item.value.id as RpcId);
         if (cb) {
           this.#pending.delete(item.value.id as RpcId);
@@ -133,6 +138,12 @@ export class RpcConnection {
       c.once('connect', () => resolve(new RpcConnection(c)));
       c.once('error', reject);
     });
+  }
+
+  /** Server notifications (no id), e.g. log.read{follow} `event` frames; returns an unsubscribe function. */
+  onNotification(fn: (method: string, params: unknown) => void): () => void {
+    this.#listeners.add(fn);
+    return () => void this.#listeners.delete(fn);
   }
 
   get closed(): boolean {

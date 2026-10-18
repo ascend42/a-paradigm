@@ -12,6 +12,12 @@
  * signatures (auth.ts, dispatch.ts) are the boundary. A handler refusal with
  * `closeAfter` is answered, then the connection is ended and every later frame
  * on it is ignored (§4.9: failed auth closes after one AUTH refusal).
+ *
+ * M1.4 slice 2: the context also exposes server→client NOTIFICATIONS
+ * (`notify`, used by log.read{follow} subscriptions), the connection's unsent
+ * byte count and high-water mark, a drain hook, and `afterReply` (run right
+ * after the current request's reply is written, so a subscription's first
+ * `event` can never overtake the reply that names it).
  */
 import * as fs from 'node:fs';
 import * as net from 'node:net';
@@ -19,7 +25,7 @@ import { monotonicUlidFactory, mintId } from '@a-company/gnomon-contracts';
 import { currentUid } from '../lifecycle/home.js';
 import { LifecycleRefusal } from '../lifecycle/refusal.js';
 import { encodeFrame, MAX_FRAME_BYTES, NdjsonDecoder } from './framing.js';
-import { errorFrame, parseRequest, refusalWith, resultFrame, RpcRefusal, type RpcRequestFrame, type RpcResponseFrame } from './rpc.js';
+import { errorFrame, notificationFrame, parseRequest, refusalWith, resultFrame, RpcRefusal, type RpcRequestFrame, type RpcResponseFrame } from './rpc.js';
 
 export const SOCKET_MODE = 0o600;
 
@@ -29,6 +35,18 @@ export interface ConnectionContext {
   close(): void;
   /** Lift the inbound frame limit from the pre-auth cap to the full limit (called on auth success). */
   authenticated(): void;
+  /** Write a JSON-RPC notification (no id). False if the connection is gone or closing; THROWS if the frame cannot be encoded (over the cap). */
+  notify(method: string, params: unknown): boolean;
+  /** True once the connection closed: queued work for it must not run (dispatch never re-creates its state). */
+  readonly closed: boolean;
+  /** Bytes written but not yet flushed to the peer (net.Socket.writableLength). */
+  writableLength(): number;
+  /** The connection's write high-water mark (bytes), never below the socket's own writableHighWaterMark (so 'drain' always follows a pause). */
+  readonly writeHighWater: number;
+  /** Call `fn` once on the next 'drain'; returns an unregister function. */
+  onDrain(fn: () => void): () => void;
+  /** Run `fn` right after the reply to the request being handled is written. */
+  afterReply(fn: () => void): void;
 }
 
 /** Inbound frame cap until the connection authenticates (Aegis round 3). */
@@ -104,6 +122,9 @@ export async function listenSocket(opts: SocketServerOptions): Promise<SocketSer
 
   const server = net.createServer((conn) => {
     let limit = Math.min(preAuthMax, maxFrameBytes);
+    let afterReply: Array<() => void> = [];
+    let closing = false;
+    let closed = false;
     const ctx: ConnectionContext = {
       connId: mintConnId(), // event:v1 connId = conn:<ULID>
       close: () => conn.destroy(),
@@ -111,6 +132,21 @@ export async function listenSocket(opts: SocketServerOptions): Promise<SocketSer
         limit = maxFrameBytes;
         decoder.setMaxFrameBytes(maxFrameBytes);
       },
+      notify: (method, params) => {
+        if (closing || conn.destroyed || !conn.writable) return false;
+        conn.write(encodeFrame(notificationFrame(method, params))); // throws over the outbound cap
+        return true;
+      },
+      get closed() {
+        return closed;
+      },
+      writableLength: () => conn.writableLength,
+      writeHighWater: Math.max(writeHighWater, conn.writableHighWaterMark),
+      onDrain: (fn) => {
+        conn.once('drain', fn);
+        return () => void conn.off('drain', fn);
+      },
+      afterReply: (fn) => void afterReply.push(fn),
     };
     sockets.add(conn);
     opts.onEvent?.({ kind: 'socket.connect', connId: ctx.connId });
@@ -158,7 +194,6 @@ export async function listenSocket(opts: SocketServerOptions): Promise<SocketSer
       conn.write(bytes);
       maybePause();
     };
-    let closing = false;
     const refuse = (reason: string, message: string): void => {
       const frame = errorFrame(null, refusalWith('BAD_REQUEST', reason, message));
       opts.onEvent?.({ kind: 'socket.frame.refused', connId: ctx.connId, code: frame.error.code, reason });
@@ -189,7 +224,7 @@ export async function listenSocket(opts: SocketServerOptions): Promise<SocketSer
           const req = parsed.frame;
           const isNotification = !Object.hasOwn(req, 'id');
           enqueue(async () => {
-            if (closing) return;
+            if (closing || closed) return; // never run a queued request for a connection that is gone
             let resp: RpcResponseFrame;
             let closeAfter = false;
             try {
@@ -200,6 +235,8 @@ export async function listenSocket(opts: SocketServerOptions): Promise<SocketSer
                 closeAfter = err.closeAfter;
               } else resp = errorFrame(req.id ?? null, refusalWith('ENGINE', 'internal', 'internal error'));
             }
+            const after = afterReply;
+            afterReply = [];
             if (closeAfter) {
               closing = true;
               send(resp); // answered even for a notification: the close needs its reason
@@ -207,6 +244,7 @@ export async function listenSocket(opts: SocketServerOptions): Promise<SocketSer
               return;
             }
             if (!isNotification) send(resp);
+            for (const fn of after) fn();
           });
         }
       }
@@ -215,6 +253,7 @@ export async function listenSocket(opts: SocketServerOptions): Promise<SocketSer
       /* peer went away mid-write */
     });
     conn.on('close', () => {
+      closed = true;
       decoder.end();
       sockets.delete(conn);
       opts.onEvent?.({ kind: 'socket.disconnect', connId: ctx.connId });

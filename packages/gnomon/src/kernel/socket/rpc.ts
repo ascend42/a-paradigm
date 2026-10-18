@@ -72,6 +72,18 @@ export class RpcRefusal extends Error {
   }
 }
 
+/** A server→client notification (JSON-RPC 2.0: no id), e.g. log.read{follow} `event` frames. */
+export interface RpcNotificationFrame {
+  jsonrpc: '2.0';
+  rpc: typeof GNOMON_RPC;
+  method: string;
+  params: unknown;
+}
+
+export function notificationFrame(method: string, params: unknown): RpcNotificationFrame {
+  return { jsonrpc: '2.0', rpc: GNOMON_RPC, method, params };
+}
+
 export function resultFrame(id: RpcId, result: unknown): RpcResultFrame {
   return { jsonrpc: '2.0', rpc: GNOMON_RPC, id, result };
 }
