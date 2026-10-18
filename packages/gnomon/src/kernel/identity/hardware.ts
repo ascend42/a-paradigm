@@ -1,0 +1,304 @@
+/**
+ * @symbol #identity
+ *
+ * #identity (spec §3.1 root key, approvals key, presence; §3.4 presence
+ * classes; M1.3 slice 1) — the kernel's hardware keys, held by the signed
+ * helper (`helper.ts`) in the Secure Enclave and NEVER in the kernel:
+ *
+ *   HardwareRootAuthority  RootAuthority over the helper's root key. Verifies
+ *                          with the pinned public key (no helper needed);
+ *                          signs with FRESH presence per signature (the
+ *                          helper's prompt, a new LAContext each time).
+ *                          `signRow` is synchronous (`gnomon-helper once`,
+ *                          for the CLI), `signRowAsync` uses the daemon's
+ *                          long-lived helper.
+ *   HelperApprovalsKey     ApprovalsKey whose decisionSig is MADE BY THE
+ *                          HELPER after presence: fresh (prompt; optionally
+ *                          kept as this connId's cached unlock, in the
+ *                          helper) or cached (the connId's unlock, no
+ *                          prompt). In the same touch the helper signs a
+ *                          kernel presence challenge, so the broker also gets
+ *                          a `helper-se` PresenceToken bound to the decision.
+ *   HelperPresenceProvider PresenceProvider for non-decision presence
+ *                          (fresh, approvals key, challenge only).
+ *
+ * EVERY helper signature is verified against the pinned public key before it
+ * is used; a helper (or an impostor on its pipe) that returns anything else
+ * gets a refusal, never a token (falsifiers in test/identity-hardware.test.ts).
+ * No private key material crosses the helper's pipe in either direction.
+ */
+import { createPublicKey, type KeyObject } from 'node:crypto';
+import { canonicalJson, nsFromRootPublicKey } from '@a-company/gnomon-contracts';
+import { KeyRing, p256KeyId, signaturePreimage, type SignatureDomain } from '../log/signer.js';
+import { beginHardwarePresence, completeHardwarePresence, PresenceToken, type PresenceBinding, type PresencePurpose } from './presence.js';
+import { RootUnavailableError, RootVerifier, rowMessage, type RootAuthority } from './root-authority.js';
+import { HELPER_SIGN_TIMEOUT_MS, HelperRefusal, HelperUnavailableError, type HelperOnceSync, type HelperReply, type HelperTransport } from './helper.js';
+
+/** The helper's prompt text is bounded (the helper refuses > 512 chars). */
+export const HELPER_REASON_MAX = 500;
+
+export function clampReason(s: string): string {
+  const a = Array.from(s.replace(/[\u0000-\u001f\u007f]/g, ' '));
+  return a.length <= HELPER_REASON_MAX ? a.join('') : `${a.slice(0, HELPER_REASON_MAX - 1).join('')}…`;
+}
+
+/** X9.63 uncompressed P-256 point (65 bytes, base64) → public KeyObject. Throws on anything else. */
+export function p256FromX963(b64: string): KeyObject {
+  const raw = Buffer.from(b64, 'base64');
+  if (raw.length !== 65 || raw[0] !== 0x04) throw new TypeError('#identity: not an uncompressed P-256 point');
+  return createPublicKey({ key: { kty: 'EC', crv: 'P-256', x: raw.subarray(1, 33).toString('base64url'), y: raw.subarray(33).toString('base64url') }, format: 'jwk' });
+}
+
+export function pemOf(key: KeyObject): string {
+  return key.export({ type: 'spki', format: 'pem' }).toString().replace(/\n+$/, '');
+}
+
+/** DER ECDSA-Sig-Value → IEEE-P1363 (r ‖ s, 64 bytes). Throws on malformed input. */
+export function derToP1363(der: Uint8Array): Buffer {
+  const b = Buffer.from(der);
+  let i = 0;
+  const need = (c: boolean): void => {
+    if (!c) throw new TypeError('#identity: malformed DER signature');
+  };
+  need(b[i++] === 0x30);
+  let len = b[i++]!;
+  if (len === 0x81) len = b[i++]!;
+  need(len === b.length - i);
+  const int = (): Buffer => {
+    need(b[i++] === 0x02);
+    const l = b[i++]!;
+    need(l > 0 && l <= 33 && i + l <= b.length);
+    let v = b.subarray(i, i + l);
+    i += l;
+    while (v.length > 32 && v[0] === 0) v = v.subarray(1);
+    need(v.length <= 32);
+    return Buffer.concat([Buffer.alloc(32 - v.length), v]);
+  };
+  const r = int();
+  const s = int();
+  need(i === b.length);
+  return Buffer.concat([r, s]);
+}
+
+/** The helper's `sigs[]`, converted and length-checked. */
+function sigsOf(reply: HelperReply, n: number): Buffer[] {
+  const sigs = reply.sigs;
+  if (!Array.isArray(sigs) || sigs.length !== n || !sigs.every((s) => typeof s === 'string')) throw new HelperUnavailableError('protocol', 'the helper returned the wrong number of signatures');
+  try {
+    return (sigs as string[]).map((s) => derToP1363(Buffer.from(s, 'base64')));
+  } catch {
+    throw new HelperUnavailableError('protocol', 'the helper returned a malformed signature');
+  }
+}
+
+const b64 = (domain: SignatureDomain, message: string): string => signaturePreimage(domain, message).toString('base64');
+
+/** Public identity of this Mac's hardware keys (`keys/identity.json`, written by `gnomon identity init`). */
+export interface HardwareKeys {
+  /** Key generation id (helper key tags `gnomon.<gen>.root|approvals`). */
+  gen: string;
+  rootPublicKeyPem: string;
+  approvalsPublicKeyPem: string;
+}
+
+/* ── root ──────────────────────────────────────────────────────────────── */
+
+export class HardwareRootAuthority implements RootAuthority {
+  readonly state = 'hardware' as const;
+  readonly rootKeyId: string;
+  readonly ns: string;
+  readonly gen: string;
+  readonly #verifier: RootVerifier;
+  readonly #ring = new KeyRing();
+  readonly #once: HelperOnceSync | null;
+  readonly #helper: HelperTransport | null;
+
+  constructor(keys: Pick<HardwareKeys, 'gen' | 'rootPublicKeyPem'>, via: { once?: HelperOnceSync; helper?: HelperTransport }) {
+    const key = createPublicKey(keys.rootPublicKeyPem);
+    this.#verifier = new RootVerifier(key);
+    this.rootKeyId = this.#ring.addP256(key);
+    this.ns = nsFromRootPublicKey(new Uint8Array(key.export({ type: 'spki', format: 'der' })));
+    this.gen = keys.gen;
+    this.#once = via.once ?? null;
+    this.#helper = via.helper ?? null;
+  }
+
+  verifyRow(signer: string, row: unknown, sigB64: string): boolean {
+    return this.#verifier.verifyRow(signer, row, sigB64);
+  }
+
+  #request(row: unknown): Record<string, unknown> {
+    const kind = row && typeof row === 'object' ? String((row as { schemaVersion?: unknown; kind?: unknown }).kind ?? (row as { schemaVersion?: unknown }).schemaVersion ?? 'row') : 'row';
+    return { op: 'sign', key: 'root', gen: this.gen, mode: 'fresh', reason: clampReason(`Gnomon: sign a ${kind} row with your root key (${canonicalJson(row).length} bytes)`), messages: [b64('row', rowMessage(row))] };
+  }
+
+  #accept(row: unknown, reply: HelperReply): { signer: string; sig: string } {
+    const [sig] = sigsOf(reply, 1);
+    const out = { signer: this.rootKeyId, sig: sig!.toString('base64') };
+    if (!this.verifyRow(out.signer, row, out.sig)) throw new RootUnavailableError('a root signature that verifies (the helper returned one that does not)');
+    return out;
+  }
+
+  /** Synchronous root signature (fresh presence; blocks while the prompt is up). The CLI path. */
+  signRow(row: unknown): { signer: string; sig: string } {
+    if (row === null) throw new RootUnavailableError('signing a null row');
+    if (!this.#once) throw new RootUnavailableError('a synchronous root signature (no one-shot helper here; use signRowAsync)');
+    try {
+      return this.#accept(row, this.#once(this.#request(row), HELPER_SIGN_TIMEOUT_MS));
+    } catch (e) {
+      throw rootError(e);
+    }
+  }
+
+  async signRowAsync(row: unknown): Promise<{ signer: string; sig: string }> {
+    if (!this.#helper) return this.signRow(row);
+    try {
+      return this.#accept(row, await this.#helper.request(this.#request(row), HELPER_SIGN_TIMEOUT_MS));
+    } catch (e) {
+      throw rootError(e);
+    }
+  }
+}
+
+function rootError(e: unknown): Error {
+  if (e instanceof RootUnavailableError) return e;
+  if (e instanceof HelperRefusal) return new RootUnavailableError(`the root key (helper: ${e.code})`);
+  if (e instanceof HelperUnavailableError) return new RootUnavailableError(`the root key (helper ${e.reason})`);
+  return new RootUnavailableError('the root key');
+}
+
+/* ── approvals ─────────────────────────────────────────────────────────── */
+
+export interface DecisionSignRequest {
+  connId: string;
+  approver: string;
+  /** approveMessage(cardId, decision, contentHash, approver) */
+  message: string;
+  mode: 'fresh' | 'cached';
+  /** fresh: the kernel-composed prompt text */
+  prompt?: string;
+  /** fresh: keep the evaluated context as this connection's cached unlock (in the helper) */
+  keepUnlock?: boolean;
+  /** fresh: the presence token to mint in the same touch */
+  presence?: { purpose: PresencePurpose; binding: PresenceBinding };
+}
+
+export interface DecisionSignResult {
+  decisionSig: string;
+  token: PresenceToken | null;
+  kept: boolean;
+}
+
+/** Thrown by signDecision when the human declined (FORBIDDEN presence). */
+export class HardwarePresenceDenied extends Error {
+  constructor(readonly why: string) {
+    super(`#identity: presence was not proved (${why})`);
+    this.name = 'HardwarePresenceDenied';
+  }
+}
+
+/** Thrown by a cached signDecision when the helper holds no unlock for the connection (exited, idle, screen lock). */
+export class HelperUnlockGone extends Error {
+  constructor() {
+    super('#identity: the helper holds no unlock for this connection');
+    this.name = 'HelperUnlockGone';
+  }
+}
+
+export class HelperApprovalsKey {
+  readonly keyId: string;
+  readonly principalId: string;
+  readonly gen: string;
+  readonly #ring = new KeyRing();
+  readonly #helper: HelperTransport;
+
+  /** `principalId` = the human the approvals key belongs to (its root-signed registry row). */
+  constructor(keys: Pick<HardwareKeys, 'gen' | 'approvalsPublicKeyPem'>, principalId: string, helper: HelperTransport) {
+    this.keyId = this.#ring.addP256(keys.approvalsPublicKeyPem);
+    this.principalId = principalId;
+    this.gen = keys.gen;
+    this.#helper = helper;
+  }
+
+  available(): boolean {
+    return this.#helper.alive;
+  }
+
+  /** ApprovalsKey.verify: only this key, only for its human. */
+  verify(approver: string, message: string, sigB64: string): 'ok' | 'bad' | 'unavailable' {
+    if (approver !== this.principalId || typeof sigB64 !== 'string') return 'bad';
+    return this.#ring.verify(this.keyId, 'approve', message, Buffer.from(sigB64, 'base64')) === 'ok' ? 'ok' : 'bad';
+  }
+
+  /** The helper signs the decision after presence (fresh) or under the connection's unlock (cached). */
+  async signDecision(req: DecisionSignRequest): Promise<DecisionSignResult> {
+    if (req.approver !== this.principalId) throw new HardwarePresenceDenied('the approver is not the human this approvals key belongs to');
+    const challenge = req.mode === 'fresh' && req.presence ? beginHardwarePresence(req.presence.purpose, req.presence.binding, req.connId) : null;
+    const messages = [b64('approve', req.message), ...(challenge ? [b64('presence', challenge.message)] : [])];
+    let reply: HelperReply;
+    try {
+      reply = await this.#helper.request(
+        {
+          op: 'sign',
+          key: 'approvals',
+          gen: this.gen,
+          mode: req.mode,
+          connId: req.connId,
+          ...(req.mode === 'fresh' ? { reason: clampReason(req.prompt ?? 'Gnomon: approve a decision'), keep: req.keepUnlock === true } : {}),
+          messages,
+        },
+        HELPER_SIGN_TIMEOUT_MS,
+      );
+    } catch (e) {
+      if (challenge) completeHardwarePresence(challenge.challengeId, this.keyId, new Uint8Array(0), this.#ring); // burn the challenge
+      if (e instanceof HelperRefusal && e.code === 'no-unlock') throw new HelperUnlockGone();
+      if (e instanceof HelperRefusal && e.code === 'presence-denied') throw new HardwarePresenceDenied('declined at the prompt');
+      throw e;
+    }
+    const sigs = sigsOf(reply, messages.length);
+    const decisionSig = sigs[0]!.toString('base64');
+    if (this.verify(req.approver, req.message, decisionSig) !== 'ok') {
+      if (challenge) completeHardwarePresence(challenge.challengeId, this.keyId, new Uint8Array(0), this.#ring);
+      throw new HardwarePresenceDenied('the helper returned a decisionSig that does not verify');
+    }
+    let token: PresenceToken | null = null;
+    if (challenge) {
+      const t = completeHardwarePresence(challenge.challengeId, this.keyId, sigs[1]!, this.#ring);
+      if (!PresenceToken.is(t)) throw new HardwarePresenceDenied(`presence attestation ${t}`);
+      token = t;
+    }
+    return { decisionSig, token, kept: reply.kept === true };
+  }
+
+  /** Drop a connection's unlock in the helper (idle, closed). Never throws. */
+  async dropUnlock(connId: string): Promise<void> {
+    if (!this.#helper.alive) return;
+    await this.#helper.request({ op: 'unlock.drop', connId }).catch(() => undefined);
+  }
+
+  /** A helper exit drops every unlock (§3.1 failure modes). */
+  onHelperExit(cb: () => void): void {
+    this.#helper.onExit(cb);
+  }
+
+  /** Fresh presence for a non-decision purpose (challenge only). */
+  async provePresence(purpose: PresencePurpose, binding: PresenceBinding, connId: string, prompt: string): Promise<PresenceToken> {
+    const c = beginHardwarePresence(purpose, binding, connId);
+    let reply: HelperReply;
+    try {
+      reply = await this.#helper.request({ op: 'sign', key: 'approvals', gen: this.gen, mode: 'fresh', connId, reason: clampReason(prompt), keep: false, messages: [b64('presence', c.message)] }, HELPER_SIGN_TIMEOUT_MS);
+    } catch (e) {
+      completeHardwarePresence(c.challengeId, this.keyId, new Uint8Array(0), this.#ring);
+      if (e instanceof HelperRefusal && e.code === 'presence-denied') throw new HardwarePresenceDenied('declined at the prompt');
+      throw e;
+    }
+    const t = completeHardwarePresence(c.challengeId, this.keyId, sigsOf(reply, 1)[0]!, this.#ring);
+    if (!PresenceToken.is(t)) throw new HardwarePresenceDenied(`presence attestation ${t}`);
+    return t;
+  }
+}
+
+/** p256KeyId of a PEM (identity.json readers). */
+export function p256KeyIdOfPem(pem: string): string {
+  return p256KeyId(createPublicKey(pem));
+}

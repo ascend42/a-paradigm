@@ -507,13 +507,44 @@ components:
       resolves; key.registry.malformed{file, reason}). Open questions (spec
       silent; most restrictive reading chosen): the CLI verb that mints, the
       revocation re-check period.
+      M1.3 slice 1 (hardware custody, the signed #gnomon-helper):
+      helper.ts — pinHelper resolves the path once (realpathSync.native),
+      refuses missing / non-executable / group- or world-writable files,
+      verifies `codesign --verify --strict` + HELPER_REQUIREMENT (Developer
+      ID Application, team SW4BMQ8PNL, identifier gnomon.helper), records
+      inode/size/mtime/sha256 and RE-CHECKS them synchronously before every
+      spawn; HelperProcess runs `gnomon-helper serve` (NDJSON, one request in
+      flight, ≤ 16 queued, 1 MiB lines, timeouts kill it; out-of-order or
+      oversized replies kill it — fail closed); SupervisedHelper restarts it
+      on demand; helperOnceSync runs `once` for synchronous root signatures.
+      The unsigned verifier exists only behind DEV_TEST_HELPER_ACK.
+      hardware.ts — HardwareRootAuthority (state `hardware`; verifies with
+      the pinned root; signRow sync via `once`, signRowAsync via the daemon's
+      helper; fresh presence per signature; a signature that does not verify
+      under the pinned root is refused); HelperApprovalsKey (ApprovalsKey
+      whose decisionSig the helper makes after presence: fresh, optionally
+      kept as the connId's cached unlock IN THE HELPER, or cached; the same
+      touch signs a kernel presence challenge so the broker gets a bound
+      `helper-se` PresenceToken; every helper signature verified before use;
+      approver must be the key's human). presence.ts — production mint =
+      hardware attestation: beginHardwarePresence (single-use challenge,
+      ≤ 64 outstanding, 120 s) / completeHardwarePresence (mints only on a
+      `gnomon:presence:v1` signature that verifies in the pinned ring).
+      provision.ts — <home>/keys/identity.json (identity:v1, public only:
+      gen, root key + ns, root-signed approvals binding to the human, device,
+      helperPath) and keys/identity.jsonl journal; openHardwareIdentity opens
+      it for gnomond only when the pinned helper confirms both SE public keys
+      and the binding verifies under the root, else the daemon refuses to
+      start (identity-<reason>), never a software root.
     path: src/kernel/identity/
     type: module
-    tags: [gnomon, kernel, identity, paradigm-8, m1.4]
+    tags: [gnomon, kernel, identity, paradigm-8, m1.4, m1.3]
     tests:
       - test/socket-auth.test.ts
       - test/presence.test.ts
       - test/socket-abi.test.ts
+      - test/identity-hardware.test.ts
+      - test/identity-helper-pin.test.ts
 
   dev-launch:
     description: >-
@@ -1154,6 +1185,19 @@ components:
       the card) is a one-row relay with no state of its own, documented
       here and in theft-card.ts rather than as a $flow node (a new spec
       node moves Appendix A's count; see lore).
+      M1.3 slice 1: with a helper-held approvals key (#identity
+      HelperApprovalsKey) an `approve` WITHOUT decisionSig has the helper
+      make it: a cached-class decision on a GUI connection with a live
+      unlock signs `cached` (no prompt; a helper that lost the unlock ⇒
+      approval.unlock.dropped{helper-lost} and a fresh touch); otherwise one
+      fresh touch signs the decision and the bound presence challenge,
+      keeping the unlock in the helper for cached-class GUI decisions only.
+      Unlock drops (idle, closed) propagate to the helper; a helper exit
+      drops every unlock (approval.unlock.dropped{helper-exit}). A helper
+      that is down or returns a signature that does not verify ⇒
+      UNSUPPORTED / FORBIDDEN presence, card stays pending. Root-class
+      decisions use the root's signRowAsync. A client-supplied decisionSig
+      is still verified as before. No new wire reason or event kind.
     path: src/kernel/broker/
     type: module
     tags: [gnomon, kernel, broker, approvals, presence, paradigm-8, m1.6]
@@ -1161,6 +1205,7 @@ components:
       - test/approval-broker.test.ts
       - test/socket-abi.test.ts
       - test/manifest-loader.test.ts
+      - test/identity-hardware.test.ts
     oracles: [G-BRK-01, G-BRK-02, G-BRK-03, G-BRK-05, G-ABI-02, G-SUB-02, G-SUB-03]
 
   budget-fuse:

@@ -71,6 +71,14 @@ export const SIGNATURE_DOMAINS = {
   presencePrompt: 'gnomon:presence-prompt:v1',
   /** #budget-fuse (M1.6): the kernel key signs every permit:v1 (§4.8 `sig`); kernel-internal domain. */
   permit: 'gnomon:permit:v1',
+  /**
+   * #identity (M1.3): a hardware presence attestation — the root or approvals
+   * key (Secure Enclave, behind the signed helper) signs a kernel challenge
+   * `<purpose>\n<bindingDigest>\n<connId>\n<challenge>` after the helper's
+   * presence prompt; the presence module mints a PresenceToken only on a
+   * verified one. Kernel-internal (not in clientApiId).
+   */
+  presence: 'gnomon:presence:v1',
 } as const;
 export type SignatureDomain = keyof typeof SIGNATURE_DOMAINS;
 
@@ -80,8 +88,8 @@ export type KeyClass = 'kernel' | 'root' | 'approvals' | 'device' | 'agent' | 'r
 /** Which domains each key class may sign (§3.1 "Signs:" per class). */
 export const DOMAINS_BY_KEY_CLASS: Readonly<Record<KeyClass, readonly SignatureDomain[]>> = Object.freeze({
   kernel: Object.freeze(['event', 'authServer', 'brief', 'cardAction', 'presencePrompt', 'permit'] as const),
-  root: Object.freeze(['row', 'event'] as const),
-  approvals: Object.freeze(['approve', 'approveVoice', 'event'] as const),
+  root: Object.freeze(['row', 'event', 'presence'] as const),
+  approvals: Object.freeze(['approve', 'approveVoice', 'event', 'presence'] as const),
   device: Object.freeze(['auth', 'event'] as const),
   agent: Object.freeze(['auth', 'event'] as const),
   /** A read token's key proves possession on `auth` and signs nothing else (no event, no device auth). */

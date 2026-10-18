@@ -6,3 +6,6 @@ export * from './registry.js';
 export * from './kernel-pub.js';
 export * from './presence.js';
 export * from './read-token.js';
+export * from './helper.js';
+export * from './hardware.js';
+export * from './provision.js';

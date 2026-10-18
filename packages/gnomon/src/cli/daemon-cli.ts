@@ -28,6 +28,7 @@ import {
   startDaemon,
 } from '../kernel/lifecycle/index.js';
 import { connectGnomon, ServerAuthError } from '../kernel/socket/index.js';
+import { IdentityError, openHardwareIdentity } from '../kernel/identity/index.js';
 import { refuse, refusalOf, RefusedError } from '@a-company/gnomon-contracts';
 import { GNOMON_VERSION } from '../version.js';
 import { existsSync } from 'node:fs';
@@ -100,9 +101,25 @@ export function daemonHomeOf(args: { home?: string }): string {
 /** `gnomond --foreground`: run until idle exit or a signal. */
 export async function runForeground(args: DaemonArgs): Promise<number> {
   if (refuseDevHome(daemonHomeOf(args))) return EXIT_REFUSED;
+  let opened: { helper: { close(): Promise<void> } } | null = null;
   try {
+    const home = daemonHomeOf(args);
+    // M1.3: a provisioned home (keys/identity.json) runs on its hardware root + approvals key behind the
+    // pinned signed helper; any failure to open it refuses to start (fail closed, never a software root)
+    let hw: Awaited<ReturnType<typeof openHardwareIdentity>>;
+    try {
+      hw = await openHardwareIdentity(home);
+    } catch (e) {
+      if (e instanceof IdentityError) {
+        process.stderr.write(`gnomond: the hardware identity of ${home} cannot be opened: ${e.message} [identity-${e.reason}]\n`);
+        return EXIT_REFUSED;
+      }
+      throw e;
+    }
+    opened = hw;
     const handle = await startDaemon({
-      home: daemonHomeOf(args),
+      home,
+      ...(hw ? { rootAuthority: hw.root, approvalsKey: hw.approvals, helper: hw.helper } : {}),
       idleMs: args.idleMs ?? DEFAULT_IDLE_EXIT_MS,
       onEvent: (e) => process.stderr.write(`${JSON.stringify(e)}\n`),
     });
@@ -115,6 +132,7 @@ export async function runForeground(args: DaemonArgs): Promise<number> {
     process.off('SIGINT', onSignal);
     return EXIT_OK;
   } catch (err) {
+    await opened?.helper.close().catch(() => undefined);
     if (isLifecycleRefusal(err)) {
       process.stderr.write(`${err.message} [${err.reason}]\n`);
       return EXIT_REFUSED;

@@ -96,6 +96,8 @@ export const PLATFORM_REGISTRY: PlatformRow[] = [
   // T-2026-10-17-009(a) quarantine: completing a quarantine records the kernel pub into an owner-only keys/ dir (POSIX modes in #identity).
   { test: 'test/kernel-log-quarantine.test.ts', platforms: ['darwin', 'linux'], na: 'Windows parity phase (P8-D78): owner-only keys/ is an ACL via the helper there, not a POSIX mode; the key-free quarantine logic (step list, keystore tripwire, Windows-valid evidence names) runs on every platform in test/kernel-log-quarantine-names.test.ts' },
   { test: 'test/log-cli-quarantine-posix.test.ts', platforms: ['darwin', 'linux'], na: 'Windows parity phase (P8-D78): completing a quarantine writes an owner-only keys/ dir (ACL via the helper there); the refusal/readout CLI cases run on every platform in test/log-cli.test.ts' },
+  // M1.3 #identity: pinning + running the signed helper (POSIX exec bits, a shebang fake helper, owner-only keys/).
+  { test: 'test/identity-helper-pin.test.ts', platforms: ['darwin', 'linux'], sibling: 'test/identity-hardware.test.ts', na: 'the key, presence and broker logic over the helper runs on every platform in the sibling (in-memory fake); the pin/spawn half needs POSIX exec bits and a shebang child; the Windows helper (Rust, P8-D71) is the parity phase (P8-D78)' },
   // T-2026-10-17-011: runs on ALL three platforms; marked only because it branches on process.platform.
   { test: 'test/boot-session.test.ts', platforms: ['darwin', 'linux', 'win32'], na: 'no sibling needed: one file asserts every platform inline — a UUID on macOS (kern.bootsessionuuid) / Linux (boot_id), `unknown` on win32 until the helper boot id of the parity phase (P8-D78, P8-D83)' },
 ];

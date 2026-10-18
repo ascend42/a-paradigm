@@ -73,6 +73,11 @@ export class UnlockStore {
     return left > 0 ? { state: 'cached', idleLeftMs: left } : null;
   }
 
+  /** Every connection holding an unlock (a helper exit drops them all). */
+  connIds(): string[] {
+    return [...this.#by.keys()];
+  }
+
   size(): number {
     return this.#by.size;
   }
