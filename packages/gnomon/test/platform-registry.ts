@@ -75,6 +75,9 @@ export const PLATFORM_REGISTRY: PlatformRow[] = [
   { test: 'test/web-sandbox.test.ts', platforms: ['darwin'], na: 'Windows parity phase (P8-D78): the restricted-token + job-object transport profile; linux has no transport profile in §15.5 (the endpoint refuses, asserted platform-independently in test/web-units.test.ts)' },
   // PR-4 #kernel-log, macOS-first (P8-D78): file modes, kill -9, p99 + per-OS memory metric.
   { test: 'test/kernel-log-posix.test.ts', platforms: ['darwin', 'linux'], na: 'Windows parity phase (P8-D78): owner-only ACLs instead of modes, and the private-bytes memory metric (§16 memory row) are measured there' },
+  // T-2026-10-17-009(a) quarantine: completing a quarantine records the kernel pub into an owner-only keys/ dir (POSIX modes in #identity).
+  { test: 'test/kernel-log-quarantine.test.ts', platforms: ['darwin', 'linux'], na: 'Windows parity phase (P8-D78): owner-only keys/ is an ACL via the helper there, not a POSIX mode; the key-free quarantine logic (step list, keystore tripwire, Windows-valid evidence names) runs on every platform in test/kernel-log-quarantine-names.test.ts' },
+  { test: 'test/log-cli-quarantine-posix.test.ts', platforms: ['darwin', 'linux'], na: 'Windows parity phase (P8-D78): completing a quarantine writes an owner-only keys/ dir (ACL via the helper there); the refusal/readout CLI cases run on every platform in test/log-cli.test.ts' },
   // T-2026-10-17-011: runs on ALL three platforms; marked only because it branches on process.platform.
   { test: 'test/boot-session.test.ts', platforms: ['darwin', 'linux', 'win32'], na: 'no sibling needed: one file asserts every platform inline — a UUID on macOS (kern.bootsessionuuid) / Linux (boot_id), `unknown` on win32 until the helper boot id of the parity phase (P8-D78, P8-D83)' },
 ];

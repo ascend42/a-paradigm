@@ -870,7 +870,9 @@ components:
       - test/durable-fs.test.ts
       - test/seams-fence.test.ts
       - test/kernel-log-quarantine.test.ts
+      - test/kernel-log-quarantine-names.test.ts
       - test/log-cli.test.ts
+      - test/log-cli-quarantine-posix.test.ts
     oracles: [G-LOG-01, G-LOG-02, G-LOG-03, G-LOG-04, G-LOG-06, G-LOG-07, G-LOG-08, G-LOG-09, G-LOG-10, G-LOG-11]
 
 flows:

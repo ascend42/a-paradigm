@@ -1,3 +1,4 @@
+// @gnomon-platform: darwin, linux
 /**
  * #kernel-log `gnomon log quarantine` (spec §19.1 release gate (a), §A.6;
  * P8-D84, P8-D89; T-2026-10-17-009(a), Aegis S34-07/08). The whole home moves
@@ -5,7 +6,13 @@
  * reserved daemon.log.quarantined naming the quarantined log id and head.
  * Crash injection at every step of the move (internal test entry); refused
  * while the daemon is running; never deletes; re-quarantine of a quarantined
- * home; evidence names valid on every platform. Platform-independent.
+ * home. Every case here builds or completes a quarantined home, which records
+ * the kernel pub into an owner-only `keys/` dir that #identity checks with
+ * POSIX modes; on Windows owner-only is an ACL via the helper of the Windows
+ * parity phase (P8-D78, spec §16), so this file is registered darwin/linux
+ * (test/platform-registry.ts). The platform-independent quarantine logic
+ * (the step list, the keystore tripwire, Windows-valid evidence names) runs
+ * everywhere in test/kernel-log-quarantine-names.test.ts.
  */
 import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
@@ -18,14 +25,11 @@ import { readKernelPubs, recordKernelPub } from '../src/kernel/identity/index.js
 import { acquireDaemonLock, DAEMON_PIDFILE_SCHEMA, pidPathOf, releaseDaemonLock } from '../src/kernel/lifecycle/index.js';
 import {
   completePendingQuarantine,
-  evidenceNameFor,
   FileAnchorStore,
-  KeystoreAnchorStore,
   KernelLog,
   KeyRing,
   LogRefusal,
   QUARANTINE_JOURNAL,
-  QUARANTINE_STEPS,
   quarantineLog,
   readQuarantineIdentity,
   SoftwareEd25519Signer,
@@ -267,10 +271,6 @@ describe('#kernel-log quarantine crash safety: a crash at any step leaves the ol
     expect(genesisRow(home).kind).toBe('daemon.log.quarantined');
     expect(completePendingQuarantine(home)).toEqual({ completed: null, abandoned: [], conflict: null, lockResidue: null });
   });
-
-  it('every step is covered', () => {
-    expect([...QUARANTINE_STEPS]).toEqual(['identity-read', 'staging-created', 'staged', 'evidence-renamed', 'moved', 'installed']);
-  });
 });
 
 /** A crash between the two renames: evidence + verified staging, no home. */
@@ -410,10 +410,6 @@ describe('#kernel-log quarantine: every head source, the lock, busy homes (round
 });
 
 describe('#kernel-log quarantine round 3: keystore tripwire, stale pidfile, lock residue, unreadable dbs, busy install', () => {
-  it('M1.3 TRIPWIRE (T-2026-10-18-007): the keystore anchor is still the stub; when it becomes real, re-check that quarantine never lets the per-user anchor speak for a staging/evidence/non-default home (OPEN 19)', () => {
-    expect(new KeystoreAnchorStore().read().state, 'KeystoreAnchorStore is real now: revisit verifiedQuarantineGenesis / readQuarantineIdentity per T-2026-10-18-007 and spec §22 OPEN 19').toBe('unavailable');
-  });
-
   it('a non-default home and an evidence dir never consult the keystore anchor', async () => {
     const { home } = await fixture(1);
     expect(readQuarantineIdentity(home)!.observed.map((o) => o.source)).not.toContain('keystore-anchor');
@@ -483,17 +479,5 @@ describe('#kernel-log quarantine round 3: keystore tripwire, stale pidfile, lock
     expect(existsSync(home)).toBe(false);
     expect(completePendingQuarantine(home).completed?.staging).toBe(staging);
     expect(genesisRow(home).kind).toBe('daemon.log.quarantined');
-  });
-});
-
-describe('#kernel-log quarantine evidence names are valid on every platform (Windows path rules)', () => {
-  it('stamp has no Windows-reserved character, no trailing dot/space; the evidence is a sibling of the home', () => {
-    const n = evidenceNameFor('.gnomon', new Date('2026-10-18T01:02:03.456Z'), 'deadbeef');
-    expect(n).toBe('.gnomon.quarantine-20261018T010203Z-deadbeef');
-    expect(n).not.toMatch(/[<>:"/\\|?*]/);
-    expect(n).not.toMatch(/[. ]$/);
-    expect(evidenceNameFor('gnomon', new Date()).length).toBeLessThan(64);
-    expect(() => evidenceNameFor('bad:name', new Date())).toThrow(RangeError);
-    expect(() => evidenceNameFor('trailing', new Date(), 'x.')).toThrow(RangeError);
   });
 });
