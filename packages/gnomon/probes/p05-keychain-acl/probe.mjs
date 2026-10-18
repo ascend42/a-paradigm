@@ -15,10 +15,14 @@
 //      by an unsigned binary (-34018); only the signed kernel SEA obtains the
 //      key over XPC — the XPC peer-requirement half needs the signed kernel SEA
 //      (M1.1) and is recorded pending.
-// Unattended (no TTY / GNOMON_PROBE_UNATTENDED=1): 3, 4 (forged item created
-// with `security add-generic-password -A`, which raises no dialog) and 5.
-// Interactive adds 1 and 2 (keychain dialogs). Every item and key it creates
-// is deleted before it returns.
+// Unattended (no TTY / GNOMON_PROBE_UNATTENDED=1): 3, 4 as the transplanted-
+// signature case (a valid custody signature copied onto different data, in an
+// item the helper itself plants — no dialog possible) and 5 (incl. an unsigned
+// bare SecItemAdd into the group ⇒ -34018).
+// Interactive adds 1, 2 and 4's attacker-shell case (`security
+// add-generic-password -A`; the helper's read of it stalled > 20 s on this Mac,
+// consistent with a keychain dialog, so it is founder-run). Every item and key
+// it creates is deleted before it returns, on Ctrl-C and on timeout too.
 import { randomBytes } from 'node:crypto';
 import { onAbort } from '../_shared/abort.mjs';
 import { ACCESS_GROUP, APP_ID, IDENTITY, ask, bindSignal, buildHelper, checkIdentity, checkProfile, helper, interactive, prerequisiteFailure, run, say } from '../_shared/signing.mjs';

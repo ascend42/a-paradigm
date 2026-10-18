@@ -202,7 +202,22 @@ export default async function probe(ctx) {
   const helperBin = path.join(work, 'launch-helper');
   bindSignal(ctx.signal);
   const done = onAbort(() => {
-    for (const p of LIVE) p.kill('SIGKILL');
+    // SIGINT first (sudo relays it to eslogger, which then releases its ES
+    // client cleanly), SIGKILL whatever is still alive after a short grace.
+    // Synchronous: this can run from a signal handler.
+    for (const p of LIVE) p.kill('SIGINT');
+    const alive = (p) => {
+      try {
+        process.kill(p.pid, 0);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    const deadline = Date.now() + 1500;
+    const pause = new Int32Array(new SharedArrayBuffer(4));
+    while ([...LIVE].some(alive) && Date.now() < deadline) Atomics.wait(pause, 0, 0, 50);
+    for (const p of LIVE) if (alive(p)) p.kill('SIGKILL');
     rmSync(work, { recursive: true, force: true });
   }, ctx.signal);
   try {

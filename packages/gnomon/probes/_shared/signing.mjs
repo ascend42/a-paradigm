@@ -11,6 +11,7 @@ import os from 'node:os';
 import path from 'node:path';
 import readline from 'node:readline';
 import { fileURLToPath } from 'node:url';
+import { runCleanups } from './abort.mjs';
 
 const SHARED = path.dirname(fileURLToPath(import.meta.url));
 export const TEAM = 'SW4BMQ8PNL';
@@ -193,25 +194,48 @@ export function bindSignal(signal) {
   abortSignal = signal ?? null;
 }
 
-/** Interactive prompt; resolves the trimmed answer, rejects on abort. Only call when stdin is a TTY. */
-export function ask(question) {
-  const rl = readline.createInterface({ input: process.stdin, output: process.stderr });
+/**
+ * Interactive prompt; resolves the trimmed answer. Only call when stdin is a TTY.
+ * - Ctrl-C at the prompt: on a TTY readline receives it as a keypress and
+ *   emits 'SIGINT' on the INTERFACE (process 'SIGINT' never fires), so we
+ *   handle it here: close, run the onAbort cleanups synchronously, exit 130.
+ * - Harness abort (ctx.signal) or the interface closing with no answer
+ *   (EOF, Ctrl-D): reject.
+ * `opts` ({input, output, exit, onInterface}) is a test seam only.
+ */
+export function ask(question, opts = {}) {
+  const rl = readline.createInterface({ input: opts.input ?? process.stdin, output: opts.output ?? process.stderr });
+  const exit = opts.exit ?? ((code) => process.exit(code));
   return new Promise((resolve, reject) => {
-    if (abortSignal?.aborted) {
+    let settled = false;
+    const settle = (fn, v) => {
+      if (settled) return;
+      settled = true;
+      abortSignal?.removeEventListener('abort', onAbortFn);
+      fn(v);
+    };
+    const onAbortFn = () => {
+      settle(reject, new Error('aborted'));
       rl.close();
-      reject(new Error('aborted'));
+    };
+    if (abortSignal?.aborted) {
+      onAbortFn();
       return;
     }
-    const onAbortFn = () => {
-      rl.close();
-      reject(new Error('aborted'));
-    };
     abortSignal?.addEventListener('abort', onAbortFn, { once: true });
-    rl.question(`\n${question}\n> `, (a) => {
-      abortSignal?.removeEventListener('abort', onAbortFn);
+    rl.on('SIGINT', () => {
+      settle(reject, new Error('interrupted'));
       rl.close();
-      resolve(a.trim());
+      (opts.output ?? process.stderr).write('\nCtrl-C: running probe cleanups…\n');
+      runCleanups();
+      exit(130);
     });
+    rl.on('close', () => settle(reject, new Error('prompt closed without an answer')));
+    rl.question(`\n${question}\n> `, (a) => {
+      settle(resolve, a.trim());
+      rl.close();
+    });
+    opts.onInterface?.(rl);
   });
 }
 

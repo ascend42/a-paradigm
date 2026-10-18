@@ -77,7 +77,14 @@ export default async function probe(ctx) {
   const expectFromChild = sha(Buffer.alloc(SIZE, 0x61));
   const peerSaw = [];
   let conns = 0;
+  let controlPhase = false;
+  let controlConns = 0;
   const peer = net.createServer((s) => {
+    if (controlPhase) {
+      controlConns++;
+      s.destroy();
+      return;
+    }
     const i = conns++;
     if (i === 0) {
       const h = createHash('sha256');
@@ -114,7 +121,24 @@ export default async function probe(ctx) {
   await new Promise((r) => unix.listen(sockPath, r));
   const lan = lanAddress();
   const profile = profileFor(null); // deny-default, NO network* allow
-  const child = spawn('/usr/bin/sandbox-exec', ['-p', profile, NODE, '-e', CHILD, String(P), String(Q), lan?.address ?? '', file, sockPath], {
+  const childArgs = ['-e', CHILD, String(P), String(Q), lan?.address ?? '', file, sockPath];
+
+  // Unsandboxed control: the same child code, same targets, no profile —
+  // proves every target IS reachable, so an EPERM below is the sandbox.
+  controlPhase = true;
+  const control = await new Promise((resolve) => {
+    const c = spawn(NODE, childArgs, { stdio: ['ignore', 'ignore', 'ignore', 'ipc'] });
+    const t = setTimeout(() => { c.kill('SIGKILL'); resolve({ error: 'TIMEOUT' }); }, 40_000);
+    c.on('message', (m) => {
+      if (m.cmd === 'ready') c.send({ cmd: 'denies' });
+      if (m.cmd === 'denies') { clearTimeout(t); c.kill('SIGKILL'); resolve(m.out); }
+    });
+  });
+  controlPhase = false;
+  const reachable = { samePeer: 'connected', otherPort: 'connected', otherHost: 'connected', udp: 'sent', listen: 'listening', unixSocket: 'connected', fileRead: 'read', homeList: 'listed', exec: 'ran' };
+  const controlOk = Object.entries(reachable).every(([k, v]) => control[k] === v || (k === 'otherHost' && control[k] === 'no-lan-ip'));
+
+  const child = spawn('/usr/bin/sandbox-exec', ['-p', profile, NODE, ...childArgs], {
     stdio: ['ignore', 'pipe', 'pipe', 'ipc'],
     env: { ...process.env, OPENSSL_CONF: '/dev/null' },
   });
@@ -159,13 +183,15 @@ export default async function probe(ctx) {
     // (iv) + (v): the child's own attempts
     child.send({ cmd: 'denies' });
     const d = (await next('denies', 40_000)).out ?? {};
-    const eperm = (v) => typeof v === 'string' && !['connected', 'listening', 'read', 'read-empty', 'listed', 'ran', 'sent', 'TIMEOUT'].includes(v);
+    // Exactly EPERM (the sandbox's answer); any other error is not evidence.
+    const eperm = (v) => v === 'EPERM';
     ev.iv_networkDenies = { results: { samePeer: d.samePeer, otherPort: d.otherPort, otherHost: d.otherHost, udp: d.udp, listen: d.listen, unixSocket: d.unixSocket } };
     ev.iv_networkDenies.ok = ['samePeer', 'otherPort', 'udp', 'listen', 'unixSocket'].every((k) => eperm(d[k])) && (d.otherHost === 'no-lan-ip' || eperm(d.otherHost));
     ev.v_otherDenies = { results: { fileRead: d.fileRead, homeList: d.homeList, exec: d.exec }, ok: ['fileRead', 'homeList', 'exec'].every((k) => eperm(d[k])) };
     ev.peerSaw = peerSaw;
     ev.peerConnections = conns;
-    const all = ev.i_fullDuplex.ok && ev.ii_peerCloseSeen && ev.iii_secondHandoff.ok && ev.iv_networkDenies.ok && ev.v_otherDenies.ok && conns === 2;
+    ev.unsandboxedControl = { results: control, peerConnectionsDuringControl: controlConns, ok: controlOk };
+    const all = controlOk && ev.i_fullDuplex.ok && ev.ii_peerCloseSeen && ev.iii_secondHandoff.ok && ev.iv_networkDenies.ok && ev.v_otherDenies.ok && conns === 2;
     return { verdict: all ? 'pass' : 'fail', evidence: ev, toolVersions: {} };
   } finally {
     child.kill('SIGKILL');
