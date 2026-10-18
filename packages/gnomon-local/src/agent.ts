@@ -24,6 +24,7 @@
  * profile denies writes under the Gnomon home, so the kernel would have to
  * read it from the child's stdout or a worktree path).
  */
+import { createHash } from 'node:crypto';
 import { buildRequest, type ChatMessage, type CompatProfile, type ToolSurface } from './compat.js';
 import { complete, type Completion } from './client.js';
 import { compactedHistory, DEFAULT_CONTEXT_TARGET, estimateTokens, isContextOverflow, normaliseSummary, summaryMessages } from './compaction.js';
@@ -108,10 +109,11 @@ export class Agent {
       total.input += c.usage.input;
       total.output += c.usage.output;
     }
-    const { messages, kept } = compactedHistory(this.#messages, normaliseSummary(c.content, target), Math.floor(target / 4));
+    const summary = normaliseSummary(c.content, target);
+    const { messages, kept } = compactedHistory(this.#messages, summary, Math.floor(target / 4));
     this.#messages.splice(0, this.#messages.length, ...messages);
     this.#compactions++;
-    this.#o.emit({ type: 'compaction_end', reason, tokensBefore, tokensAfter: estimateTokens(this.#messages), kept, usage: c.usage });
+    this.#o.emit({ type: 'compaction_end', reason, tokensBefore, tokensAfter: estimateTokens(this.#messages), kept, usage: c.usage, summaryHash: `sha256:${createHash('sha256').update(summary).digest('hex')}`, summaryBytes: Buffer.byteLength(summary, 'utf8') });
   }
 
   steer(text: string): void {

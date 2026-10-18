@@ -324,6 +324,8 @@ describe('session.send{steer} at the socket port', () => {
     expect(calls).toEqual([{ hsid: 'h', text: 'be brief', steer: true }, { hsid: 'h', text: 'x' }]);
   });
   it('the driver reads the child\'s compaction events (logged, never acted on)', () => {
-    expect(parseLocalLine('{"type":"compaction_end","reason":"threshold","tokensBefore":9000,"tokensAfter":700,"kept":2}')).toEqual({ kind: 'compaction', type: 'compaction_end', phase: 'end', reason: 'threshold', tokensBefore: 9000, tokensAfter: 700, error: null });
+    const h = `sha256:${'a'.repeat(64)}`;
+    expect(parseLocalLine(`{"type":"compaction_end","reason":"threshold","tokensBefore":9000,"tokensAfter":700,"kept":2,"summaryHash":"${h}","summaryBytes":812}`)).toEqual({ kind: 'compaction', type: 'compaction_end', phase: 'end', reason: 'threshold', tokensBefore: 9000, tokensAfter: 700, summaryHash: h, summaryBytes: 812, error: null });
+    expect(parseLocalLine('{"type":"compaction_end","summaryHash":"not-a-hash"}')).toMatchObject({ summaryHash: null });
   });
 });
