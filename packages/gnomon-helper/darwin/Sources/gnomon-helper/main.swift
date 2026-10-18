@@ -52,8 +52,10 @@ func signingInfo() -> Json {
 }
 
 let unlocks = Unlocks()
-/// Generations whose keys THIS process created (a failed provision may remove them without presence).
+/// Exactly the (key, gen) pairs THIS process created (a failed provision may remove those, and only
+/// those, without presence — Aegis round 3: a pair, never a whole generation).
 var createdHere = Set<String>()
+func createdKey(_ k: KeyClass, _ g: String) -> String { "\(k.rawValue).\(g)" }
 
 /// Aegis H2: a rotate statement — `gnomon:row-sig:v1\n` + canonical JSON
 /// {schemaVersion: gnomon-root-rotate:v1, fromGen, toGen, …} — signed (DER) by the root of fromGen.
@@ -84,7 +86,7 @@ func handle(_ req: Json) throws -> Json {
         let g = try generation(req)
         if listKeys().contains(where: { $0.gen != g }) { try checkRotate(req, toGen: g) }
         let pub = try createKey(k, g)
-        createdHere.insert(g)
+        createdHere.insert(createdKey(k, g))
         return ["publicKey": pub]
 
     case "key.public":
@@ -97,7 +99,7 @@ func handle(_ req: Json) throws -> Json {
         _ = nonce.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, 16, $0.baseAddress!) }
         let statement = Data("gnomon:key-delete:v1\n\(k.rawValue)\n\(g)\n\(nonce.base64EncodedString())".utf8)
         var out: Json = ["statement": statement.base64EncodedString()]
-        if !createdHere.contains(g) {
+        if !createdHere.contains(createdKey(k, g)) {
             // Aegis H2: fresh presence over a statement the HELPER composed; the root of gen signs it when it exists
             let ctx = try evaluatePresence(promptText(try reason(req), "Gnomon Helper: DELETE the \(k.rawValue) key of generation \(g) (\(digest12(statement)))"))
             defer { ctx.invalidate() }
@@ -109,6 +111,7 @@ func handle(_ req: Json) throws -> Json {
         }
         if k == .approvals { _ = unlocks.dropAll() }
         out["deleted"] = deleteKey(k, g)
+        createdHere.remove(createdKey(k, g))
         return out
 
     case "sign":

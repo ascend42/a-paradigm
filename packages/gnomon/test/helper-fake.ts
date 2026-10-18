@@ -114,13 +114,13 @@ export class FakeHelper implements HelperTransport {
         if (k) throw new HelperRefusal('exists', 'exists');
         const gen = String(req.gen);
         if ([...this.keys.keys()].some((t) => t.split('.')[0] !== gen)) this.#checkRotate(req, gen);
-        this.createdHere.add(gen);
+        this.createdHere.add(`${String(req.key)}.${gen}`); // round 3: the exact (key, gen) pair
         const { privateKey, publicKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
         this.keys.set(`${String(req.gen)}.${String(req.key)}`, { priv: privateKey, pub: publicKey });
         return { ok: true, publicKey: this.x963(req.key as 'root', String(req.gen)) };
       }
       case 'key.delete': {
-        if (!this.createdHere.has(String(req.gen))) {
+        if (!this.createdHere.has(`${String(req.key)}.${String(req.gen)}`)) {
           this.prompts.push(String(req.reason));
           this.shown.push(`${String(req.reason)}\nGnomon Helper: DELETE the ${String(req.key)} key of generation ${String(req.gen)}`);
           if (!this.#touch()) throw new HelperRefusal('presence-denied', 'cancelled');

@@ -128,6 +128,17 @@ describe('HardwareRootAuthority', () => {
     await expect(h.request({ op: 'sign', key: 'approvals', gen: GEN, mode: 'cached', connId: A, messages: [signaturePreimage('presence', 'm').toString('base64')] })).rejects.toMatchObject({ code: 'domain-refused' });
   });
 
+  it('falsifier (Aegis round 3): only the exact (key, gen) this helper process created is deletable without presence', async () => {
+    const h = new FakeHelper(null);
+    await h.request({ op: 'key.create', key: 'root', gen: 'mixd0001' });
+    // an approvals key of the SAME generation this process did not create (an earlier process made it)
+    h.keys.set('mixd0001.approvals', h.keys.get('mixd0001.root')!);
+    await h.request({ op: 'key.delete', key: 'approvals', gen: 'mixd0001', reason: 'x' });
+    expect(h.prompts.length).toBe(1); // presence
+    await h.request({ op: 'key.delete', key: 'root', gen: 'mixd0001', reason: 'x' });
+    expect(h.prompts.length).toBe(1); // created here: no presence
+  });
+
   it('the synchronous path (gnomon-helper once) signs through the same checks', () => {
     const h = new FakeHelper(GEN);
     // a synchronous stand-in for `once`: drive the fake's async reply through a precomputed signature
