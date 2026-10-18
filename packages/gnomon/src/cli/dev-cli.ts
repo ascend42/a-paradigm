@@ -159,6 +159,22 @@ export async function runDevUp(argv: readonly string[], io: DevCliIo, opts: DevC
     }
     throw e;
   }
+  // the stop path is armed FIRST, before anything else can throw or wait
+  let stopping = false;
+  let stopFailed = false;
+  let stopped: Promise<void> = Promise.resolve();
+  const stop = (): void => {
+    if (stopping) return;
+    stopping = true;
+    io.stdout.write('STOPPING  dev kernel\n');
+    stopped = k.stop().catch((e: unknown) => {
+      stopFailed = true;
+      refused(io.stderr, 'dev', 'stop-failed', e instanceof Error ? e.message : String(e), ['the kernel may still hold its pidfile; check `gnomon daemon status --home <home>`']);
+    });
+  };
+  const onSignal = (): void => stop();
+  process.once('SIGINT', onSignal);
+  process.once('SIGTERM', onSignal);
   io.stdout.write('UP  dev kernel (in this process)\n');
   readout(io.stdout, [
     ['home', k.dev.home],
@@ -167,21 +183,11 @@ export async function runDevUp(argv: readonly string[], io: DevCliIo, opts: DevC
     ['device', `${k.dev.device.deviceId} as ${k.client.principal ?? k.dev.device.principalId}`],
     ['approve', 'refused UNSUPPORTED until M1.3 (no presence, no approvals key)'],
   ]);
-  let stopping = false;
-  const stop = (): void => {
-    if (stopping) return;
-    stopping = true;
-    io.stdout.write('STOPPING  dev kernel\n');
-    void k.stop();
-  };
   try {
     await printLaunch(k, io);
   } catch (e) {
     refused(io.stderr, 'dev', 'web-launch', e instanceof Error ? e.message : String(e), ['the kernel stays up for socket clients; Ctrl-C to stop']);
   }
-  const onSignal = (): void => stop();
-  process.once('SIGINT', onSignal);
-  process.once('SIGTERM', onSignal);
   let rl: readline.Interface | null = null;
   if (io.stdin.isTTY === true) {
     rl = readline.createInterface({ input: io.stdin, terminal: false });
@@ -191,11 +197,12 @@ export async function runDevUp(argv: readonly string[], io: DevCliIo, opts: DevC
     });
   }
   const reason = await k.handle.exited;
+  await stopped; // a stop that rejects after the kernel exited is still reported
   rl?.close();
   process.off('SIGINT', onSignal);
   process.off('SIGTERM', onSignal);
   io.stdout.write(`DOWN  dev kernel (${reason})\n`);
-  return DEV_EXIT_OK;
+  return stopFailed ? DEV_EXIT_REFUSED : DEV_EXIT_OK;
 }
 
 export async function runDevCommand(argv: readonly string[], io: DevCliIo, opts: DevCliOptions & DevUpDeps = {}): Promise<number> {

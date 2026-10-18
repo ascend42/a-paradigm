@@ -229,3 +229,34 @@ describe('#dev-launch: production-home guard hardening (Aegis C1)', () => {
     expect(fs.existsSync(path.join(w.devHome, 'kernel.db'))).toBe(false);
   });
 });
+
+describe('#dev-launch: dev up shutdown', () => {
+  it('a failing stop is reported and returns 1, never an unhandled rejection; q on a TTY stops', async () => {
+    const w = world();
+    expect(await runDevCommand(['init', '--home', w.devHome], io(), { userHome: w.userHome, host: 'mac-1' })).toBe(0);
+    const unhandled: unknown[] = [];
+    const onUnhandled = (e: unknown): void => void unhandled.push(e);
+    process.on('unhandledRejection', onUnhandled);
+    try {
+      const start = async (o: DaemonOptions): Promise<DaemonHandle> => {
+        const h = await startDaemon(o);
+        return { ...h, shutdown: async (r) => (await h.shutdown(r), Promise.reject(new Error('shutdown boom (test)'))) };
+      };
+      const x = io();
+      const stdin = new PassThrough() as PassThrough & { isTTY?: boolean };
+      stdin.isTTY = true;
+      const run = runDevCommand(['up', '--home', w.devHome], { ...x, stdin }, { userHome: w.userHome, start });
+      const deadline = Date.now() + 15_000;
+      while (!x.o.join('').includes('gui ') && !x.e.join('').includes('web-launch') && Date.now() < deadline) await new Promise((r) => setTimeout(r, 25));
+      stdin.write('q\n');
+      expect(await run).toBe(1);
+      await new Promise((r) => setTimeout(r, 50));
+      expect(x.o.join('')).toContain('STOPPING  dev kernel');
+      expect(x.e.join('')).toContain('stop-failed');
+      expect(x.e.join('')).toContain('shutdown boom (test)');
+      expect(unhandled).toEqual([]);
+    } finally {
+      process.off('unhandledRejection', onUnhandled);
+    }
+  });
+});
