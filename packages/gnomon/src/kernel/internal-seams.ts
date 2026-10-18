@@ -1,6 +1,7 @@
 /**
  * @symbol #kernel-log
  * @symbol #identity
+ * @symbol #manifest-loader
  *
  * Internal seam channel (spec §19.1 release gate (c), P8-D84; task
  * T-2026-10-17-009(c), Aegis S34-10). The kernel's TEST SEAMS — the
@@ -11,8 +12,9 @@
  * (src/kernel/testing.ts).
  *
  * WHO MAY IMPORT THIS FILE (test/seams-fence.test.ts proves it on the source
- * import graph): kernel-log.ts and identity/presence.ts (to register) and
- * testing.ts (to read). Nothing reachable from a production entry (the
+ * import graph): kernel-log.ts, identity/presence.ts and manifest/install.ts
+ * (to register) and testing.ts (to read). The manifest slot holds the M1.5
+ * install-card decision and the rollback until the M1.6 broker owns cards. Nothing reachable from a production entry (the
  * package index, the gnomon / gnomond CLIs, gnomon-web) imports testing.ts,
  * and no index re-exports this file, so production code cannot open a log
  * with a substituted keystore anchor or boot id, open one for recovery, or
@@ -25,6 +27,8 @@
 import type { AnchorStore } from './log/anchor.js';
 import type { AppendResult, KernelLog, KernelLogOptions } from './log/kernel-log.js';
 import type { PresenceMethod, PresencePurpose, PresenceToken } from './identity/presence.js';
+import type { DecideOptions, StagedRecord } from './manifest/install.js';
+import type { GrantInstallRow } from './manifest/grants.js';
 
 /** The #kernel-log options that are test seams only (never on KernelLogOptions). */
 export interface KernelLogSeamOptions {
@@ -47,9 +51,20 @@ export interface PresenceSeams {
   mint(purpose: PresencePurpose, opts?: { method?: PresenceMethod; mintedAt?: number }): PresenceToken;
 }
 
+/**
+ * #manifest-loader decisions (M1.5): deciding an install card and the human
+ * rollback. The approval broker that owns card decisions is M1.6; until then
+ * these are reachable ONLY through the internal test entry.
+ */
+export interface ManifestSeams {
+  decideInstall(home: string, name: string, cardId: string, decision: 'install' | 'deny', opts: DecideOptions): StagedRecord;
+  rollbackMod(home: string, name: string, toPackageHash: string | undefined, opts: DecideOptions): GrantInstallRow;
+}
+
 interface Slots {
   log?: KernelLogSeams;
   presence?: PresenceSeams;
+  manifest?: ManifestSeams;
 }
 
 const slots: Slots = {};

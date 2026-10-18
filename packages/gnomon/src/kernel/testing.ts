@@ -1,6 +1,7 @@
 /**
  * @symbol #kernel-log
  * @symbol #identity
+ * @symbol #manifest-loader
  *
  * INTERNAL TEST ENTRY (spec §19.1 release gate (c), P8-D84; task
  * T-2026-10-17-009(c), Aegis S34-10). The one module that hands out the
@@ -9,7 +10,9 @@
  *     keystore anchor (`keystoreAnchor`) and boot session (`bootSession`), and
  *     the S33-10 recovery open;
  *   - acknowledgeGap: the presence-gated daemon.log.gap acknowledgement;
- *   - mintTestPresence: a PresenceToken with `method: 'test-seam'`.
+ *   - mintTestPresence: a PresenceToken with `method: 'test-seam'`;
+ *   - decideInstallCard / rollbackModSnapshot: the #manifest-loader install-card
+ *     decision and the human rollback (M1.5), until the M1.6 broker owns cards.
  *
  * NEVER IMPORTED BY PRODUCTION CODE. It is not a tsup entry and no index
  * re-exports it; test/seams-fence.test.ts proves that no file under src/
@@ -23,6 +26,9 @@
  */
 import type { AppendResult, KernelLog, KernelLogOptions } from './log/kernel-log.js';
 import './log/kernel-log.js'; // registers the 'log' seams (class static block)
+import './manifest/install.js'; // registers the 'manifest' seams (class static block)
+import type { DecideOptions, StagedRecord } from './manifest/install.js';
+import type { GrantInstallRow } from './manifest/grants.js';
 import { PresenceToken, type PresenceMethod, type PresencePurpose } from './identity/presence.js';
 import { seamsOf, type KernelLogSeamOptions } from './internal-seams.js';
 
@@ -60,6 +66,16 @@ export function acknowledgeGap(log: KernelLog, input: { presenceToken: PresenceT
 /** A test-seam PresenceToken (default purpose `log.gap.acknowledge`, minted now). */
 export function mintTestPresence(purpose: PresencePurpose = 'log.gap.acknowledge', opts: { method?: PresenceMethod; mintedAt?: number } = {}): PresenceToken {
   return seamsOf('presence').mint(purpose, opts);
+}
+
+/** Decide a staged #manifest-loader install card (the M1.6 broker owns this in production). */
+export function decideInstallCard(home: string, name: string, cardId: string, decision: 'install' | 'deny', opts: DecideOptions): StagedRecord {
+  return seamsOf('manifest').decideInstall(home, name, cardId, decision, opts);
+}
+
+/** The human rollback to a previously approved snapshot (`gnomon mod rollback`, human-only). */
+export function rollbackModSnapshot(home: string, name: string, toPackageHash: string | undefined, opts: DecideOptions): GrantInstallRow {
+  return seamsOf('manifest').rollbackMod(home, name, toPackageHash, opts);
 }
 
 export { PresenceToken };

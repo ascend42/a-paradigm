@@ -7,7 +7,8 @@
  * the built dist/ and the public runtime surface, that production entry
  * points (package index, gnomon, gnomond, gnomon-web) cannot reach them, and
  * that nothing in the CLI or the daemon names acknowledgeGap before presence
- * lands (M1.3).
+ * lands (M1.3), nor the #manifest-loader install-card decision / rollback
+ * before the approval broker lands (M1.6).
  */
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
@@ -21,11 +22,14 @@ import { extractSpecifiers, PKG_ROOT, rel, walk } from './helpers.js';
 const SRC = path.join(PKG_ROOT, 'src');
 const TEST_ENTRY = 'src/kernel/testing.ts';
 const CHANNEL = 'src/kernel/internal-seams.ts';
-const CHANNEL_IMPORTERS = ['src/kernel/identity/presence.ts', 'src/kernel/log/kernel-log.ts', TEST_ENTRY];
+const CHANNEL_IMPORTERS = ['src/kernel/identity/presence.ts', 'src/kernel/log/kernel-log.ts', 'src/kernel/manifest/install.ts', TEST_ENTRY];
 /** Files that may name the gated recovery API in code (the implementation, the channel, the test entry). */
 const MAY_NAME_RECOVERY = new Set(['src/kernel/log/kernel-log.ts', CHANNEL, TEST_ENTRY]);
 const GATED = /\b(acknowledgeGap|openForRecovery|openKernelLogForRecovery|seamsOf|mintTestPresence)\b/;
 /** CLI / daemon only: constructing KernelLog directly or casting it (the constructor-key bypass shape). */
+/** #manifest-loader (M1.5): the install-card decision and the rollback — the M1.6 broker owns them in production. */
+const GATED_MANIFEST = /\b(decideInstall|decideInstallCard|rollbackMod|rollbackModSnapshot|ManifestDecisions)\b/;
+const MAY_NAME_MANIFEST = new Set(['src/kernel/manifest/install.ts', CHANNEL, TEST_ENTRY]);
 const DIRECT_CONSTRUCT = /\bnew\s+(\(\s*)?KernelLog\b|\bKernelLog\s+as\b/;
 
 /** Strip block and line comments (string contents kept; good enough for identifier tripwires). */
@@ -120,6 +124,20 @@ describe('presence tripwire: the CLI and the daemon cannot reach acknowledgeGap 
     expect(hits).toEqual([]);
   });
 
+  it('#manifest-loader: only install.ts, the channel and the test entry name the install-card decision / rollback (M1.6 owns cards)', () => {
+    expect(GATED_MANIFEST.test(stripComments('decideInstallCard(home, n, id, "install", o)'))).toBe(true);
+    const hits = files.map(rel).filter((f) => !MAY_NAME_MANIFEST.has(f) && GATED_MANIFEST.test(stripComments(readFileSync(path.join(PKG_ROOT, f), 'utf8'))));
+    expect(hits).toEqual([]);
+  });
+
+  it('#manifest-loader: the public surface stages installs but exposes no decision, rollback or seam owner', () => {
+    expect(typeof pkg.manifestLoader.stageInstall).toBe('function');
+    for (const k of ['decideInstall', 'decideInstallCard', 'rollbackMod', 'rollbackModSnapshot', 'ManifestDecisions']) {
+      expect(Object.keys(pkg.manifestLoader)).not.toContain(k);
+      expect(Object.keys(pkg)).not.toContain(k);
+    }
+  });
+
   it('the public runtime surface has no recovery open, no acknowledgeGap and no seam keys', () => {
     const K = pkg.kernelLog.KernelLog as unknown as Record<string, unknown>;
     expect(K.openForRecovery).toBeUndefined();
@@ -167,7 +185,7 @@ describe('seam fence: dist/ (what ships)', () => {
   // presence register with it), but seamsOf — and its error string — is used
   // only by testing.ts, so it must be dropped from every production bundle.
   it('no built file contains the internal test entry or its exports', () => {
-    const marker = new RegExp(`${GNOMON_INTERNAL_TEST_ENTRY}|\\bmintTestPresence\\b|\\bopenKernelLogForRecovery\\b|\\bseamsOf\\b|is not registered \\(its owner module was not loaded\\)`);
+    const marker = new RegExp(`${GNOMON_INTERNAL_TEST_ENTRY}|\\bmintTestPresence\\b|\\bdecideInstallCard\\b|\\brollbackModSnapshot\\b|\\bopenKernelLogForRecovery\\b|\\bseamsOf\\b|is not registered \\(its owner module was not loaded\\)`);
     expect(distFiles.filter((f) => marker.test(readFileSync(f, 'utf8'))).map(rel)).toEqual([]);
   });
 
