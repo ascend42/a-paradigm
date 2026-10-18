@@ -6,7 +6,13 @@
  * T-2026-10-18-008). Generated from #manifest-loader's platform-neutral
  * SessionPolicy DATA (kernel/manifest/policy.ts) and the class → mechanism
  * table (platform/session-denies.ts): allow-default, then
- *   - `file-read*` deny on policy.denyRead, `file-write*` deny on
+ *   - `file-read*` deny on policy.denyRead (the whole Gnomon home included),
+ *     then `allow file-read*` on policy.allowRead (own session dir, the exec'd
+ *     binary copy, the runner copy), `allow file-read-metadata` on their
+ *     literal ancestors (realpath lstat's them), and `file-read*` deny again
+ *     on policy.denyReadAlways (keys, the kernel log) — last match wins
+ *     (T-2026-10-18-010);
+ *   - `file-write*` deny on
  *     policy.denyWrite + the T-008 git denies (a `.git` POINTER FILE literal,
  *     `<gitDir>/config.worktree`, `<commonDir>/modules/**​/{hooks,config,info}`
  *     by regex);
@@ -45,7 +51,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { realpathLoose, type PolicyPath, type SessionPolicy } from '../../kernel/manifest/policy.js';
 
-export const SESSION_PROFILE_VERSION = 2;
+export const SESSION_PROFILE_VERSION = 3;
 
 /** macOS major from which a relocated Apple platform binary is SIGKILLed (launch constraints; observed 15 yes, 14 no). */
 export const COPIED_PLATFORM_BINARY_KILLED_FROM_MACOS = 15;
@@ -144,6 +150,10 @@ export function sessionProfileSbpl(policy: SessionPolicy, x: DarwinSessionExtras
     '(allow default)',
   ];
   if (policy.denyRead.length) lines.push(`(deny file-read* ${policy.denyRead.map(filter).join(' ')})`);
+  // T-2026-10-18-010: SBPL's last matching rule wins — the carve-backs follow the home deny, and keys + the kernel log are re-denied after them
+  if (policy.allowRead.length) lines.push(`(allow file-read* ${policy.allowRead.map(filter).join(' ')})`);
+  if (policy.allowReadMetadata.length) lines.push(`(allow file-read-metadata ${policy.allowReadMetadata.map(filter).join(' ')})`);
+  if (policy.denyReadAlways.length) lines.push(`(deny file-read* ${policy.denyReadAlways.map(filter).join(' ')})`);
   lines.push(`(deny file-write* ${[...policy.denyWrite.map(filter), ...git.filters].join(' ')})`);
   for (const port of policy.denyLoopbackPorts) lines.push(`(deny network-outbound (remote ip "localhost:${port}"))`);
   if (policy.processInfo === 'deny-others') {

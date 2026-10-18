@@ -1221,6 +1221,13 @@ components:
       (from the M1.5 SessionPolicy + session-denies registry; T-008 git
       denies: .git pointer file, config.worktree, modules/**/{hooks,config,
       info}; launchers open/osascript/lsregister/launchctl by realpath),
+      SLICE 2 (T-2026-10-18-010): the WHOLE Gnomon home is read-denied
+      (keys/ incl. the device key, kernel.db*, log/** segments, every other
+      session dir, the pin); policy.ts homeReadable carves back only the
+      session's own sessions/<short> dir and the exec'd bin/ copy (or the
+      runners/<tree> copy), refusing anything outside HOME_READABLE_ROOTS
+      by realpath; SBPL order deny home, allow own, metadata on ancestors,
+      re-deny keys + kernel log (profile v3; test/session-sandbox EPERM rig).
       registered in src/kernel/sandbox/session.ts (no backend => refused
       sandbox-unavailable; status fidelity per platform, G-WIN-06).
       p10m-claude-compat-generated (probes/) re-ran real Claude Code 2.1.302

@@ -374,6 +374,8 @@ export class LocalLane {
         endpointPort: this.#o.endpointPort?.() ?? null,
         extraDenyWrite: [],
         localRunner: { node: pin.node, dir: pin.dir },
+        // T-2026-10-18-010: the home is read-denied; only this session's dir (local.yaml) and the staged runner copy are readable
+        homeReadable: [{ path: dir, match: 'subpath' }, { path: runner.copy, match: 'subpath' }],
       });
       fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
       const configPath = path.join(dir, 'local.yaml');

@@ -282,6 +282,8 @@ export class SessionSupervisor {
         extraDenyWrite: binaryDenies(row, userHome, bin.real, this.#o.claudePath),
         // round 3 (Aegis H1): a Claude session can no more swap the local runner's node or source than a local one
         ...(this.#o.local?.runner ? { localRunner: { node: this.#o.local.runner.node, dir: this.#o.local.runner.dir } } : {}),
+        // T-2026-10-18-010: the home is read-denied; only this session's dir and the private copy it execs are readable
+        homeReadable: [{ path: dir, match: 'subpath' }, { path: priv.exec, match: 'literal' }],
       });
       const parse = (rel: string): Record<string, unknown> => {
         const b = generated?.get(rel);

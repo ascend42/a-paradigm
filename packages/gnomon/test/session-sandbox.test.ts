@@ -45,6 +45,7 @@ let port = 0;
 let hits = 0;
 let out: Record<string, string> = {};
 let sock: net.Server | null = null;
+let homeSock: net.Server | null = null;
 let createdScreenDir = false;
 const LABEL = `com.gnomon.test.copied-launchctl.${process.pid}`;
 let MARKER = '';
@@ -75,6 +76,17 @@ beforeAll(async () => {
   fs.mkdirSync(path.join(w.userHome, '.local', 'bin'), { recursive: true });
   fs.symlinkSync(path.join(versions, '2.1.302'), path.join(w.userHome, '.local', 'bin', 'claude'));
   for (const d of ['.ssh', 'Library/LaunchAgents', '.config/git']) fs.mkdirSync(path.join(w.userHome, d), { recursive: true });
+  // T-2026-10-18-010: a populated Gnomon home — the kernel log, a sibling session, the pin, this session's own dir, the exec'd copy
+  for (const d of ['log/segments', 'sessions/own', 'sessions/sibling', 'bin']) fs.mkdirSync(path.join(w.home, ...d.split('/')), { recursive: true });
+  for (const f of ['kernel.db', 'kernel.db-wal', 'log/segments/000001.db', 'sessions/sibling/session.key', 'sessions/own/policy.json', 'claude-pin.json']) fs.writeFileSync(path.join(w.home, ...f.split('/')), 'x\n');
+  fs.writeFileSync(path.join(w.home, 'bin', 'claude-copy'), '#!/bin/sh\necho copy_ran\n', { mode: 0o755 });
+  fs.writeFileSync(path.join(w.cwd, 'README.md'), 'project\n');
+  homeSock = net.createServer((c) => {
+    c.on('error', () => undefined);
+    c.destroy();
+  }); // spawnSync blocks this loop: the check waits for 'connect' (the backlog), never for data
+  await new Promise<void>((r) => homeSock!.listen(path.join(w.home, 'gnomon.sock'), () => r()));
+  const own = path.join(w.home, 'sessions', 'own');
   const bd = binaryDenies({ knownBinaries: ['~/.local/bin/claude'], managedSettings: [], managedSettingsDirs: [], managedUnscannable: [], userClaudeDir: '.claude' }, w.userHome, path.join(versions, '2.1.302'));
   const script = path.join(w.root, 'check.sh');
   fs.writeFileSync(
@@ -107,13 +119,25 @@ ${copiedOsascript(w.root)}
 n=$(pgrep -fl . 2>/dev/null | wc -l | tr -d ' '); echo "pgrep_lines=$n"
 sleep 30 & C=$!; if kill $C 2>/dev/null; then wait $C 2>/dev/null; echo "child_spawn_kill=ok"; else echo "child_spawn_kill=fail"; fi
 /usr/bin/open -h >/dev/null 2>&1; echo "open_exit=$?"
+(cat "${w.home}/kernel.db") >/dev/null 2>&1 && echo "read_kernel_db=allowed" || echo "read_kernel_db=blocked"
+(cat "${w.home}/kernel.db-wal") >/dev/null 2>&1 && echo "read_kernel_wal=allowed" || echo "read_kernel_wal=blocked"
+(cat "${w.home}/log/segments/000001.db") >/dev/null 2>&1 && echo "read_segment=allowed" || echo "read_segment=blocked"
+(cat "${w.home}/sessions/sibling/session.key") >/dev/null 2>&1 && echo "read_sibling=allowed" || echo "read_sibling=blocked"
+(/bin/ls "${w.home}/sessions") >/dev/null 2>&1 && echo "list_sessions=allowed" || echo "list_sessions=blocked"
+(/bin/ls "${w.home}/keys") >/dev/null 2>&1 && echo "list_keys=allowed" || echo "list_keys=blocked"
+(cat "${w.home}/claude-pin.json") >/dev/null 2>&1 && echo "read_pin=allowed" || echo "read_pin=blocked"
+(cat "${own}/policy.json") >/dev/null 2>&1 && echo "read_own=ok" || echo "read_own=fail"
+"${process.execPath}" -e "try{require('fs').realpathSync('${own}/policy.json');console.log('realpath_own=ok')}catch(e){console.log('realpath_own='+e.code)}"
+"${w.home}/bin/claude-copy" 2>/dev/null | /usr/bin/grep -q copy_ran && echo "exec_copy=ok" || echo "exec_copy=fail"
+(cat "${w.cwd}/README.md") >/dev/null 2>&1 && echo "read_project=ok" || echo "read_project=fail"
+"${process.execPath}" -e "require('net').connect('${path.join(w.home, 'gnomon.sock')}').on('connect',()=>{console.log('home_sock=open');process.exit(0)}).on('error',e=>{console.log('home_sock='+e.code);process.exit(0)})"
 /usr/bin/osascript -e 'return 1' >/dev/null 2>&1; echo "osascript_exit=$?"
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -h >/dev/null 2>&1; echo "lsregister_exit=$?"
 /bin/launchctl list >/dev/null 2>&1; echo "launchctl_exit=$?"
 `,
     { mode: 0o755 },
   );
-  const plan = sessionLaunchPlan({ policy: worldPolicy(w, port, bd), binaryReal: '/bin/bash', argv: [script], extras: { uid: process.getuid!(), tmpdir: os.tmpdir(), home: w.userHome, roots: [w.cwd] } }, 'darwin');
+  const plan = sessionLaunchPlan({ policy: worldPolicy(w, port, bd, [{ path: own, match: 'subpath' }, { path: path.join(w.home, 'bin', 'claude-copy'), match: 'literal' }]), binaryReal: '/bin/bash', argv: [script], extras: { uid: process.getuid!(), tmpdir: os.tmpdir(), home: w.userHome, roots: [w.cwd] } }, 'darwin');
   const r = spawnSync(plan.command, plan.args, { encoding: 'utf8', env: { HOME: w.userHome, PATH: '/usr/bin:/bin:/usr/sbin:/sbin' }, timeout: 60_000 });
   out = Object.fromEntries(r.stdout.split('\n').filter((l) => l.includes('=')).map((l) => [l.slice(0, l.indexOf('=')), l.slice(l.indexOf('=') + 1)]));
 }, 90_000);
@@ -122,6 +146,7 @@ afterAll(async () => {
   spawnSync('/bin/launchctl', ['remove', LABEL]); // in case a submit ever got through
   server?.close();
   await new Promise<void>((r) => (sock ? sock.close(() => r()) : r()));
+  await new Promise<void>((r) => (homeSock ? homeSock.close(() => r()) : r()));
   fs.rmSync(sockPath, { force: true });
   if (createdScreenDir) fs.rmSync(screenDir, { recursive: true, force: true });
   w?.cleanup();
@@ -185,6 +210,12 @@ describe.skipIf(!SANDBOX_OK)('G-SBX-08 the generated session profile holds (darw
   });
   it('keys unreadable; ~/.gnomon, settings layers (incl. ~/.claude.json), CLAUDE*, linked folder and git hooks/config unwritable', () => {
     expect(out).toMatchObject({ read_keys: 'blocked', write_home: 'blocked', write_linked: 'blocked', write_user_claude: 'blocked', write_claude_json: 'blocked', write_project_claude: 'blocked', write_claude_md: 'blocked', write_git_hook: 'blocked', write_git_config: 'blocked' });
+  });
+  it('T-2026-10-18-010: keys, the kernel log (kernel.db, its WAL, sealed segments), a sibling session dir and the rest of the home are unreadable (EPERM)', () => {
+    expect(out).toMatchObject({ read_keys: 'blocked', list_keys: 'blocked', read_kernel_db: 'blocked', read_kernel_wal: 'blocked', read_segment: 'blocked', read_sibling: 'blocked', list_sessions: 'blocked', read_pin: 'blocked' });
+  });
+  it('T-2026-10-18-010: the session still reads its own dir (and realpaths it), execs its private copy, reads the project root and reaches GNOMON_SOCK', () => {
+    expect(out).toMatchObject({ read_own: 'ok', realpath_own: 'ok', exec_copy: 'ok', read_project: 'ok', home_sock: 'open' });
   });
   it('the endpoint port is denied, port+1 is not; the server saw nothing', () => {
     expect(out.port).toBe('EPERM');

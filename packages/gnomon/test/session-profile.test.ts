@@ -106,6 +106,67 @@ describe('G-SBX-08 (text) the generated session profile', () => {
   });
 });
 
+describe('T-2026-10-18-010 the Gnomon home is read-denied; only the session\'s own reads are carved back', () => {
+  const own = (x: SessionWorld) => path.join(x.home, 'sessions', 's1');
+  const readable = (x: SessionWorld) => [{ path: own(x), match: 'subpath' as const }, { path: path.join(x.home, 'bin', 'claude-abc'), match: 'literal' as const }];
+  it('policy: the whole home, keys and the kernel log (kernel.db*, log/**) are read-denied; keys + the kernel log re-denied after the allows', () => {
+    w = sessionWorld();
+    const p = worldPolicy(w, null, [], readable(w));
+    const has = (list: readonly { path: string; match: string }[], pth: string, m: string) => list.some((d) => d.path === pth && d.match === m);
+    expect(has(p.denyRead, w.home, 'subpath')).toBe(true);
+    expect(has(p.denyRead, path.join(w.home, 'kernel.db'), 'prefix')).toBe(true);
+    expect(has(p.denyRead, path.join(w.home, 'log'), 'subpath')).toBe(true);
+    expect(has(p.denyReadAlways, path.join(w.home, 'keys'), 'subpath')).toBe(true);
+    expect(has(p.denyReadAlways, path.join(w.home, 'kernel.db'), 'prefix')).toBe(true);
+    expect(has(p.denyReadAlways, path.join(w.home, 'log'), 'subpath')).toBe(true);
+    expect(p.allowRead.map((a) => `${a.match}:${a.path}`).sort()).toEqual([`literal:${path.join(w.home, 'bin', 'claude-abc')}`, `subpath:${own(w)}`].sort());
+    // metadata (realpath's lstat) on the literal ancestors only: never a subpath, never data
+    expect(p.allowReadMetadata.map((a) => a.path).sort()).toEqual([w.home, path.join(w.home, 'bin'), path.join(w.home, 'sessions')].sort());
+    expect(p.allowReadMetadata.every((a) => a.match === 'literal')).toBe(true);
+  });
+  it('profile text: deny home → allow own → metadata → re-deny keys + kernel log, in that order (SBPL: last match wins)', () => {
+    w = sessionWorld();
+    const sb = sessionProfileSbpl(worldPolicy(w, null, [], readable(w)), extras(w));
+    const iDeny = sb.indexOf(`(deny file-read* `);
+    const iAllow = sb.indexOf('(allow file-read* ');
+    expect(sb.slice(iAllow, sb.indexOf('\n', iAllow))).toContain(`(subpath "${own(w)}")`);
+    const iMeta = sb.indexOf('(allow file-read-metadata ');
+    const iRe = sb.lastIndexOf(`(deny file-read* `);
+    expect(sb.slice(iDeny, sb.indexOf('\n', iDeny))).toContain(`(subpath "${w.home}")`);
+    expect(iDeny).toBeGreaterThanOrEqual(0);
+    expect(iAllow).toBeGreaterThan(iDeny);
+    expect(iMeta).toBeGreaterThan(iAllow);
+    expect(iRe).toBeGreaterThan(iMeta);
+    expect(sb.slice(iRe, sb.indexOf('\n', iRe))).toContain(`(subpath "${path.join(w.home, 'keys')}")`);
+    expect(sb.slice(iRe, sb.indexOf('\n', iRe))).toContain(`(prefix "${path.join(w.home, 'kernel.db')}")`);
+  });
+  it.each([
+    ['keys/device.key', 'literal'],
+    ['keys', 'subpath'],
+    ['kernel.db', 'literal'],
+    ['log/segments', 'subpath'],
+    ['sessions', 'subpath'],
+    ['bin', 'subpath'],
+    ['claude-pin.json', 'literal'],
+    ['sessions/s1/../../keys', 'subpath'],
+    ['', 'subpath'],
+  ] as const)('a carve-back at <home>/%s (%s) refuses the policy (fail closed)', (rel, match) => {
+    w = sessionWorld();
+    expect(() => worldPolicy(w, null, [], [{ path: path.join(w.home, ...rel.split('/').filter(Boolean)), match }])).toThrow(/may read only inside/);
+  });
+  it('a carve-back outside the home refuses; an unknown match refuses', () => {
+    w = sessionWorld();
+    expect(() => worldPolicy(w, null, [], [{ path: w.cwd, match: 'subpath' }])).toThrow(/may read only inside/);
+    expect(() => worldPolicy(w, null, [], [{ path: own(w), match: 'prefix' as 'subpath' }])).toThrow(/literal\|subpath/);
+  });
+  it('a carve-back through a symlink is judged by its realpath (a link in sessions/ to keys/ refuses)', () => {
+    w = sessionWorld();
+    fs.mkdirSync(path.join(w.home, 'sessions'), { recursive: true });
+    fs.symlinkSync(path.join(w.home, 'keys'), path.join(w.home, 'sessions', 'evil'));
+    expect(() => worldPolicy(w, null, [], [{ path: path.join(w.home, 'sessions', 'evil'), match: 'subpath' }])).toThrow(/may read only inside/);
+  });
+});
+
 describe('the macOS floor (SESSION_SANDBOX_MIN_MACOS = 15; CI run 39100281741)', () => {
   it.each([14, 13, null])('darwin at macOS %s refuses sandbox-unavailable with the floor, never a weaker profile', (v) => {
     w = sessionWorld();
