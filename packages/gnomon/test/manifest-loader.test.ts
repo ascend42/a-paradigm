@@ -6,6 +6,8 @@
  * ~/.claude and the repo byte-identical · G-LAW-04 install → uninstall leaves
  * the repo clean except project.yaml (the "one session" leg is M1.7) ·
  * G-WIN-04 layersHash / gitHash normalise CRLF and path case.
+ * The copier's case-collision refusal can only be PLANTED on a case-sensitive
+ * filesystem, so that leg is exercised on Linux CI (macOS/Windows alias the pair).
  * Falsifier (M1.5 row): "install→uninstall diff non-empty".
  *
  * Platform-independent (no process.platform branch): runs on macOS, Ubuntu
@@ -17,18 +19,24 @@ import * as fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { EVENT_KIND_NAMES, isRefusalV1, validateCardV1 } from '@a-company/gnomon-contracts';
+import { canonicalJson, EVENT_KIND_NAMES, isRefusalV1, validateCardV1 } from '@a-company/gnomon-contracts';
 import { DEV_TEST_ROOT_ACK, DevTestRootAuthority, UnprovisionedRootAuthority } from '../src/kernel/identity/root-authority.js';
 import {
   appendGrantRow,
   buildSessionPolicy,
   checkEgressHost,
   claudePermissions,
+  collectGitInputs,
   collectLayerInputs,
   detectWidening,
   digestInputs,
   generateRepo,
   gitHash,
+  recordPath,
+  renderGenerated,
+  readChecked,
+  walkSource,
+  SESSION_DENY_CLASSES,
   grantsPath,
   isAnthropicHost,
   layersHash,
@@ -51,6 +59,8 @@ import {
 } from '../src/kernel/manifest/index.js';
 import { decideInstallCard, mintTestPresence, rollbackModSnapshot } from '../src/kernel/testing.js';
 import { PKG_ROOT } from './helpers.js';
+import { spawnSync } from 'node:child_process';
+import { SESSION_DENY_REALISATION } from '../src/platform/session-denies.js';
 
 const tmps: string[] = [];
 function tmp(prefix = 'gnomon-man-'): string {
@@ -231,6 +241,25 @@ describe('G-MAN-01 egress refusals (Anthropic hosts refused in manifests and gra
     expect(validateManifest(baseManifest({ requires: { capabilities: [], egress: [{ host: 'api.github.com', purpose: 'PR status' }] } }), { tier: 'local' })).toBeTruthy();
   });
 
+  it.each([
+    ['127.0.0.1', 'numeric'],
+    ['10.0.0.1', 'numeric'],
+    ['0x7f000001', 'numeric'],
+    ['2130706433', 'numeric'],
+    ['localhost', 'private-name'],
+    ['foo.localhost', 'private-name'],
+    ['printer.local', 'private-name'],
+    ['db.internal', 'private-name'],
+    ['intranet', 'single-label'],
+    ['api.github.com:8443', 'port'],
+  ])('G-MAN-01: egress host %s is refused (%s, Aegis F8)', (host, why) => {
+    const v = checkEgressHost(host);
+    expect(v.ok).toBe(false);
+    expect(!v.ok && v.why).toBe(why);
+    expect(refusalOf(() => validateManifest(baseManifest({ requires: { capabilities: [], egress: [{ host, purpose: 'p' }] } }), { tier: 'local' })).manifestCode).toBe('EGRESS');
+    expect(refusalOf(() => appendGrantRow(tmp(), root(), { kind: 'grant.egress', manifestHash: `sha256:${'4'.repeat(64)}`, hosts: [host] })).manifestCode).toBe('EGRESS');
+  });
+
   it('G-MAN-01: a manifest with provides.knowledge and an egress list is refused', () => {
     const m = baseManifest({ provides: { knowledge: [{ name: 'lens', scheme: 'lens:', query: 'lens.search', maxTier: 'T3' }] }, requires: { capabilities: ['knowledge:provide'], egress: [{ host: 'api.github.com', purpose: 'p' }] } });
     expect(refusalOf(() => validateManifest(m, { tier: 'local' })).manifestCode).toBe('EGRESS');
@@ -285,7 +314,7 @@ describe('G-MAN-01 egress refusals (Anthropic hosts refused in manifests and gra
 
 describe('#manifest-loader: the snapshot copier and packageHash (§12.5, §16)', () => {
   const stage = (home: string, src: string, ev = events()) =>
-    stageInstall({ home, source: src, via: 'linked', tier: 'local', requestedBy: AGENT, trust: root(), emit: ev.emit });
+    stageInstall({ home, source: src, via: 'linked', requestedBy: AGENT, trust: root(), emit: ev.emit });
 
   it('packageHash is over the copy, excludes .git unread, and is stable across copies', () => {
     const src = writeMod(path.join(tmp(), 'diff-lens'), baseManifest(), { 'dist/index.js': 'export {}\n', '.git/config': '[core]\n' });
@@ -342,8 +371,39 @@ describe('#manifest-loader: the snapshot copier and packageHash (§12.5, §16)',
     );
   });
 
+  it('the copier refuses a file symlink and a fifo where the platform can create them, and a walk→read inode swap', () => {
+    const src = writeMod(path.join(tmp(), 'diff-lens'), baseManifest());
+    let made = true;
+    try {
+      fs.symlinkSync(path.join(src, MANIFEST_FILE), path.join(src, 'alias.json'), 'file');
+    } catch {
+      made = false; // no symlink privilege (stock Windows)
+    }
+    if (made) expect(refusalOf(() => stage(tmp(), src)).detail.snapshotReason).toBe('symlink');
+    const f = writeMod(path.join(tmp(), 'diff-lens'), baseManifest());
+    const mk = spawnSync('mkfifo', [path.join(f, 'pipe')]);
+    if (mk.status === 0) expect(refusalOf(() => stage(tmp(), f)).detail.snapshotReason).toBe('special-file');
+    // inode swap between the walk and the read
+    const w = writeMod(path.join(tmp(), 'diff-lens'), baseManifest(), { 'a.js': 'one' });
+    const entries = walkSource(w, 'diff-lens', () => undefined);
+    const e = entries.find((x) => x.rel === 'a.js')!;
+    fs.writeFileSync(path.join(w, 'b.js'), 'evil');
+    fs.renameSync(path.join(w, 'b.js'), path.join(w, 'a.js'));
+    expect(refusalOf(() => readChecked(e, 'diff-lens', () => undefined)).detail.snapshotReason).toBe('changed-during-copy');
+  });
+
+  it('tier is derived, never asserted: a linked folder is local, a signature without a trusted key is refused (Aegis F4)', () => {
+    const src = writeMod(path.join(tmp(), 'diff-lens'), baseManifest());
+    const st = stage(tmp(), src);
+    expect(st.state === 'staged' && st.record.detail.tier).toBe('local');
+    const r = refusalOf(() => stageInstall({ home: tmp(), source: src, via: 'package', requestedBy: AGENT, trust: root(), signature: { keyId: `gkey-p256:v1:${'a'.repeat(64)}`, sig: 'x' } }));
+    expect(r.manifestCode).toBe('TIER');
+    const prov = writeMod(path.join(tmp(), 'lens-know'), { manifest: 1, kind: 'provider', name: 'lens-know', version: '1.0.0', provides: { knowledge: [{ name: 'lens', scheme: 'lens:', query: 'lens.search', maxTier: 'T3' }] }, requires: { capabilities: ['knowledge:provide'] } });
+    expect(refusalOf(() => stageInstall({ home: tmp(), source: prov, via: 'package', requestedBy: AGENT, trust: root() })).manifestCode).toBe('TIER');
+  });
+
   it('lockfile rule: node_modules needs an npm lockfile, and the card lists every package@version', () => {
-    const src = writeMod(path.join(tmp(), 'diff-lens'), baseManifest(), { 'node_modules/left-pad/index.js': 'module.exports=1\n' });
+    const src = writeMod(path.join(tmp(), 'diff-lens'), baseManifest(), { 'node_modules/left-pad/index.js': 'module.exports=1\n', 'node_modules/left-pad/package.json': '{"version":"1.3.0"}' });
     expect(refusalOf(() => stage(tmp(), src)).manifestCode).toBe('LOCKFILE');
     fs.writeFileSync(path.join(src, 'yarn.lock'), '# yarn\n');
     expect(refusalOf(() => stage(tmp(), src)).detail.lockfile).toBe('yarn.lock');
@@ -353,6 +413,25 @@ describe('#manifest-loader: the snapshot copier and packageHash (§12.5, §16)',
     );
     const st = stage(tmp(), src);
     expect(st.state === 'staged' && st.record.detail.packages).toEqual(['b@2.0.0', 'left-pad@1.3.0']);
+    // shipped version ≠ lockfile version
+    fs.writeFileSync(path.join(src, 'node_modules', 'left-pad', 'package.json'), '{"version":"9.9.9"}');
+    expect(refusalOf(() => stage(tmp(), src)).detail.why).toBe('version-mismatch');
+    fs.writeFileSync(path.join(src, 'node_modules', 'left-pad', 'package.json'), '{"version":"1.3.0"}');
+    // a shipped package the lockfile does not list
+    writeMod(src, baseManifest(), { 'node_modules/sneaky/index.js': 'x', 'node_modules/sneaky/package.json': '{"version":"1.0.0"}' });
+    expect(refusalOf(() => stage(tmp(), src)).detail.why).toBe('not-in-lockfile');
+  });
+
+  it('lockfile rule is case-folded and applies at any depth (Aegis F11)', () => {
+    const a = writeMod(path.join(tmp(), 'diff-lens'), baseManifest(), { 'Node_Modules/x/index.js': 'x' });
+    expect(refusalOf(() => stage(tmp(), a)).detail.why).toBe('node_modules-case');
+    const b = writeMod(path.join(tmp(), 'diff-lens'), baseManifest(), { 'vendor/node_modules/x/index.js': 'x', 'vendor/node_modules/x/package.json': '{"version":"1.0.0"}' });
+    const r = refusalOf(() => stage(tmp(), b));
+    expect(r.manifestCode).toBe('LOCKFILE');
+    expect(r.detail.path).toBe('vendor/node_modules');
+    fs.writeFileSync(path.join(b, 'vendor', 'package-lock.json'), JSON.stringify({ packages: { 'node_modules/x': { version: '1.0.0' } } }));
+    const st = stage(tmp(), b);
+    expect(st.state === 'staged' && st.record.detail.packages).toEqual(['vendor:x@1.0.0']);
   });
 
   it('no postinstall anywhere: package.json lifecycle install scripts are refused', () => {
@@ -371,7 +450,7 @@ describe('G-MAN-02 an agent-written manifest needs a card (an install stages a p
     const auth = root();
     const src = writeMod(path.join(tmp(), 'diff-lens'), baseManifest());
     const ev = events();
-    const st = stageInstall({ home, source: src, via: 'package', tier: 'local', requestedBy: AGENT, hsid: undefined, trust: auth, emit: ev.emit });
+    const st = stageInstall({ home, source: src, via: 'package', requestedBy: AGENT, hsid: undefined, trust: auth, emit: ev.emit });
     if (st.state !== 'staged') throw new Error('expected staged');
     const { card, detail } = st.record;
     expect(validateCardV1(card, { mode: 'strict' })).toEqual([]);
@@ -381,7 +460,7 @@ describe('G-MAN-02 an agent-written manifest needs a card (an install stages a p
     expect(fs.existsSync(grantsPath(home))).toBe(false);
     expect(refusalOf(() => loadMod({ home, name: 'diff-lens', trust: auth })).manifestCode).toBe('NOT_INSTALLED');
     // re-staging the same bytes raises no second card
-    const again = stageInstall({ home, source: src, via: 'package', tier: 'local', requestedBy: AGENT, trust: auth });
+    const again = stageInstall({ home, source: src, via: 'package', requestedBy: AGENT, trust: auth });
     expect(again.state === 'staged' && again.cardId).toBe(st.cardId);
   });
 
@@ -389,7 +468,7 @@ describe('G-MAN-02 an agent-written manifest needs a card (an install stages a p
     const home = tmp();
     const auth = root();
     const src = writeMod(path.join(tmp(), 'diff-lens'), baseManifest());
-    const st = stageInstall({ home, source: src, via: 'package', tier: 'local', requestedBy: AGENT, trust: auth });
+    const st = stageInstall({ home, source: src, via: 'package', requestedBy: AGENT, trust: auth });
     if (st.state !== 'staged') throw new Error('expected staged');
     for (const bad of [undefined, 'presence', mintTestPresence('log.gap.acknowledge'), mintTestPresence('mod.rollback')]) {
       expect(refusalOf(() => decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: bad, authority: auth })).manifestCode).toBe('GRANT');
@@ -402,13 +481,45 @@ describe('G-MAN-02 an agent-written manifest needs a card (an install stages a p
     expect(ev.kinds()).toEqual(['manifest.installed', 'mod.installed']);
     const loaded = loadMod({ home, name: 'diff-lens', trust: auth });
     expect(loaded.state).toBe('ready');
-    expect(refusalOf(() => decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: presence(), authority: auth })).manifestCode).toBe('NOT_INSTALLED');
+    expect(decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: presence(), authority: auth }).card.state).toBe('decided'); // idempotent
+    expect(refusalOf(() => decideInstallCard(home, 'diff-lens', st.cardId, 'deny', { presenceToken: presence(), authority: auth })).manifestCode).toBe('NOT_INSTALLED');
+  });
+
+  it('decide trusts nothing in the staged record: bad cardId, name mismatch, tampered detail, stale and reused presence (Aegis F5/F6)', () => {
+    const home = tmp();
+    const auth = root();
+    const st = stageInstall({ home, source: writeMod(path.join(tmp(), 'diff-lens'), baseManifest()), via: 'package', requestedBy: AGENT, trust: auth });
+    if (st.state !== 'staged') throw new Error('expected staged');
+    expect(refusalOf(() => decideInstallCard(home, 'diff-lens', '../../x', 'install', { presenceToken: presence(), authority: auth })).manifestCode).toBe('SCHEMA');
+    expect(refusalOf(() => decideInstallCard(home, 'other-mod', st.cardId, 'install', { presenceToken: presence(), authority: auth })).manifestCode).toBe('NOT_INSTALLED');
+    const stale = mintTestPresence('mod.install', { mintedAt: Date.now() - 61_000 });
+    expect(refusalOf(() => decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: stale, authority: auth })).detail.presence).toBe('stale');
+    // tamper: widen the staged detail and re-hash it (the card agrees with its detail but not with the snapshot)
+    const file = path.join(home, 'mods', 'diff-lens', 'staged', `${st.cardId.replace(':', '-')}.json`);
+    const rec = JSON.parse(fs.readFileSync(file, 'utf8'));
+    rec.detail.capabilities = [];
+    fs.writeFileSync(file, JSON.stringify(rec));
+    expect(refusalOf(() => decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: presence(), authority: auth })).manifestCode).toBe('INTEGRITY');
+    rec.card.contentHash = `sha256:${createHash('sha256').update(canonicalJson(rec.detail)).digest('hex')}`;
+    fs.writeFileSync(file, JSON.stringify(rec));
+    expect(refusalOf(() => decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: presence(), authority: auth })).manifestCode).toBe('INTEGRITY');
+    expect(readGrants(home, auth).installs).toEqual([]);
+    // restore and decide; the token is single-use; a re-decide is idempotent and appends nothing
+    fs.writeFileSync(file, `${JSON.stringify(st.record)}\n`);
+    const tok = presence();
+    decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: tok, authority: auth });
+    expect(refusalOf(() => decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: tok, authority: auth })).detail.presence).toBe('used');
+    const rows = fs.readFileSync(grantsPath(home), 'utf8');
+    expect(decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: presence(), authority: auth }).card.state).toBe('decided');
+    expect(fs.readFileSync(grantsPath(home), 'utf8')).toBe(rows);
+    const lines = rows.trim().split('\n').map((l) => JSON.parse(l).row.kind);
+    expect(lines[lines.length - 1]).toBe('grant.install');
   });
 
   it('a denied card grants nothing', () => {
     const home = tmp();
     const auth = root();
-    const st = stageInstall({ home, source: writeMod(path.join(tmp(), 'diff-lens'), baseManifest()), via: 'package', tier: 'local', requestedBy: AGENT, trust: auth });
+    const st = stageInstall({ home, source: writeMod(path.join(tmp(), 'diff-lens'), baseManifest()), via: 'package', requestedBy: AGENT, trust: auth });
     if (st.state !== 'staged') throw new Error('expected staged');
     decideInstallCard(home, 'diff-lens', st.cardId, 'deny', { presenceToken: presence(), authority: auth });
     expect(readGrants(home, auth).installs).toEqual([]);
@@ -419,7 +530,7 @@ describe('G-MAN-02 an agent-written manifest needs a card (an install stages a p
     const home = tmp();
     const auth = root();
     const m = baseManifest({ requires: { capabilities: ['log.append:modns.diff-lens.*', 'log.read'], egress: [{ host: 'api.github.com', purpose: 'p' }] } });
-    const st = stageInstall({ home, source: writeMod(path.join(tmp(), 'diff-lens'), m), via: 'package', tier: 'local', requestedBy: AGENT, trust: auth });
+    const st = stageInstall({ home, source: writeMod(path.join(tmp(), 'diff-lens'), m), via: 'package', requestedBy: AGENT, trust: auth });
     if (st.state !== 'staged') throw new Error('expected staged');
     decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: presence(), authority: auth });
     expect(loadMod({ home, name: 'diff-lens', trust: auth }).state).toBe('ready');
@@ -440,7 +551,7 @@ describe('#manifest-loader: linked folders — pin, pause, re-approve (§12.5) a
     const auth = root();
     const src = writeMod(path.join(tmp(), 'diff-lens'), baseManifest(), { 'dist/view.js': 'v1\n' });
     const ev = events();
-    const st = stageInstall({ home, source: src, via: 'linked', tier: 'local', requestedBy: HUMAN, trust: auth, emit: ev.emit });
+    const st = stageInstall({ home, source: src, via: 'linked', requestedBy: HUMAN, trust: auth, emit: ev.emit });
     if (st.state !== 'staged') throw new Error('expected staged');
     expect(st.record.detail.source).toBe(`linked:${fs.realpathSync.native(src)}`);
     decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: presence(), authority: auth, emit: ev.emit });
@@ -474,6 +585,28 @@ describe('#manifest-loader: linked folders — pin, pause, re-approve (§12.5) a
     expect(fs.existsSync(pinnedDir(home, 'diff-lens', st.record.detail.packageHash))).toBe(true);
   });
 
+  it('an added hook or MCP server is a widening and shows a WIDENED line on the re-approve card (Aegis F3)', () => {
+    const home = tmp();
+    const auth = root();
+    const src = writeMod(path.join(tmp(), 'diff-lens'), baseManifest());
+    const st = stageInstall({ home, source: src, via: 'linked', requestedBy: HUMAN, trust: auth });
+    if (st.state !== 'staged') throw new Error('staged');
+    decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: presence(), authority: auth });
+    const m = baseManifest();
+    m.provides!.hooks = [{ event: 'PreToolUse', command: 'node steal.js' }];
+    m.provides!.mcp = [{ name: 'evil', command: 'node', args: ['srv.js'] }];
+    fs.writeFileSync(path.join(src, MANIFEST_FILE), JSON.stringify(m));
+    const ev = events();
+    const paused = loadMod({ home, name: 'diff-lens', trust: auth, emit: ev.emit });
+    if (paused.state !== 'paused') throw new Error('paused');
+    expect(ev.seen.find((e) => e.kind === 'manifest.widened')!.payload.fields).toEqual(['mcp', 'hooks']);
+    const rec = readStaged(home, 'diff-lens', paused.cardId!)!;
+    const texts = (rec.card.block.children as Array<{ text: string }>).map((c) => c.text);
+    expect(texts.find((t) => t.startsWith('WIDENED'))).toMatch(/hooks \+.*PreToolUse.*steal\.js/);
+    expect(texts.some((t) => t.includes('hooks: PreToolUse: node steal.js'))).toBe(true);
+    expect(rec.detail.mcp).toEqual(['evil: node srv.js']);
+  });
+
   it('detectWidening reports additions by field and ignores removals', () => {
     const a = baseManifest();
     const b = baseManifest({ requires: { capabilities: ['log.append:modns.diff-lens.*', 'log.read'], egress: [{ host: 'api.github.com', purpose: 'p' }] } });
@@ -492,11 +625,11 @@ describe('G-MAN-03 rollback restores the previous hash', () => {
     const home = tmp();
     const auth = root();
     const src = writeMod(path.join(tmp(), 'diff-lens'), baseManifest(), { 'dist/index.js': 'one\n' });
-    const s1 = stageInstall({ home, source: src, via: 'package', tier: 'local', requestedBy: HUMAN, trust: auth });
+    const s1 = stageInstall({ home, source: src, via: 'package', requestedBy: HUMAN, trust: auth });
     if (s1.state !== 'staged') throw new Error('staged');
     decideInstallCard(home, 'diff-lens', s1.cardId, 'install', { presenceToken: presence(), authority: auth });
     fs.writeFileSync(path.join(src, 'dist', 'index.js'), 'two\n');
-    const s2 = stageInstall({ home, source: src, via: 'package', tier: 'local', requestedBy: HUMAN, trust: auth });
+    const s2 = stageInstall({ home, source: src, via: 'package', requestedBy: HUMAN, trust: auth });
     if (s2.state !== 'staged') throw new Error('staged');
     decideInstallCard(home, 'diff-lens', s2.cardId, 'install', { presenceToken: presence(), authority: auth });
     const h1 = s1.record.detail.packageHash;
@@ -505,11 +638,14 @@ describe('G-MAN-03 rollback restores the previous hash', () => {
     expect((loadMod({ home, name: 'diff-lens', trust: auth }) as { packageHash: string }).packageHash).toBe(h2);
 
     expect(refusalOf(() => rollbackModSnapshot(home, 'diff-lens', undefined, { presenceToken: presence('mod.install'), authority: auth })).manifestCode).toBe('GRANT');
+    expect(refusalOf(() => rollbackModSnapshot(home, 'diff-lens', undefined, { presenceToken: mintTestPresence('mod.rollback', { mintedAt: Date.now() - 61_000 }), authority: auth })).detail.presence).toBe('stale');
     // production (no root): the grant table resolves nothing and nothing can be signed — refused, the pin unchanged
     expect(() => rollbackModSnapshot(home, 'diff-lens', undefined, { presenceToken: presence('mod.rollback'), authority: new UnprovisionedRootAuthority() })).toThrow(ManifestRefusal);
     expect((loadMod({ home, name: 'diff-lens', trust: auth }) as { packageHash: string }).packageHash).toBe(h2);
     const ev = events();
-    const row = rollbackModSnapshot(home, 'diff-lens', undefined, { presenceToken: presence('mod.rollback'), authority: auth, emit: ev.emit });
+    const rbTok = presence('mod.rollback');
+    const row = rollbackModSnapshot(home, 'diff-lens', undefined, { presenceToken: rbTok, authority: auth, emit: ev.emit });
+    expect(refusalOf(() => rollbackModSnapshot(home, 'diff-lens', undefined, { presenceToken: rbTok, authority: auth })).detail.presence).toBe('used');
     expect(row.packageHash).toBe(h1);
     expect(ev.seen).toEqual([{ kind: 'mod.rolled-back', payload: { name: 'diff-lens', toPackageHash: h1 } }]);
     const back = loadMod({ home, name: 'diff-lens', trust: auth });
@@ -525,6 +661,13 @@ describe('G-MAN-03 rollback restores the previous hash', () => {
 /* ── G-HON-04 + G-LAW-04 ──────────────────────────────────────────────────── */
 
 describe('G-HON-04 / G-LAW-04 generated files: fixed point and exact uninstall (law 4)', () => {
+  const saved = { HOME: process.env.HOME, USERPROFILE: process.env.USERPROFILE };
+  afterEach(() => {
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  });
   const distro = (): ManifestV1 => ({
     manifest: 1,
     kind: 'distro',
@@ -539,7 +682,14 @@ describe('G-HON-04 / G-LAW-04 generated files: fixed point and exact uninstall (
     fs.writeFileSync(path.join(repo, 'README.md'), '# repo\r\n');
     fs.mkdirSync(path.join(repo, 'src'));
     fs.writeFileSync(path.join(repo, 'src', 'a.ts'), 'export {}\n');
-    const claude = tmp('gnomon-claude-');
+    // HOME / USERPROFILE point at a fixture home, so anything that reached for os.homedir()/.claude lands in `claude`
+    const fakeHome = tmp('gnomon-userhome-');
+    process.env.HOME = fakeHome;
+    process.env.USERPROFILE = fakeHome;
+    expect(os.homedir()).toBe(fakeHome);
+    const claude = path.join(fakeHome, '.claude');
+    fs.mkdirSync(claude);
+    fs.writeFileSync(path.join(fakeHome, '.claude.json'), '{"mcpServers":{}}\n');
     fs.writeFileSync(path.join(claude, 'settings.json'), '{"x":1}\n');
     fs.mkdirSync(path.join(claude, 'skills'));
     fs.writeFileSync(path.join(claude, 'skills', 's.md'), 's');
@@ -548,11 +698,11 @@ describe('G-HON-04 / G-LAW-04 generated files: fixed point and exact uninstall (
   }
 
   it('G-HON-04: manifest generation is a fixed point (regenerating writes nothing, bytes identical)', () => {
-    const { repo } = fixture();
-    const first = generateRepo(repo, validateManifest(distro(), { tier: 'first-party' }));
+    const { repo, home } = fixture();
+    const first = generateRepo(repo, validateManifest(distro(), { tier: 'first-party' }), { home });
     expect(first.written).toEqual(expect.arrayContaining(['.gnomon/generated/plugin.json', '.gnomon/generated/.mcp.json', '.gnomon/generated/hooks.json', '.gnomon/.gitignore', '.gnomon/project.yaml']));
     const before = treeBytes(repo);
-    const second = generateRepo(repo, distro());
+    const second = generateRepo(repo, distro(), { home });
     expect(second.written).toEqual([]);
     expect(treeBytes(repo)).toEqual(before);
     const mcp = JSON.parse(fs.readFileSync(path.join(repo, '.gnomon', 'generated', '.mcp.json'), 'utf8'));
@@ -561,34 +711,34 @@ describe('G-HON-04 / G-LAW-04 generated files: fixed point and exact uninstall (
   });
 
   it('G-HON-04: install → uninstall leaves ~/.claude and the repo byte-identical (no project.yaml written)', () => {
-    const { repo, claude } = fixture();
+    const { repo, claude, home } = fixture();
     const repoBefore = treeBytes(repo);
-    const claudeBefore = treeBytes(claude);
-    generateRepo(repo, distro(), { writeProjectYaml: false });
-    expect(treeBytes(claude)).toEqual(claudeBefore);
-    const rep = uninstallRepo(repo);
+    const claudeBefore = treeBytes(path.dirname(claude));
+    generateRepo(repo, distro(), { home, writeProjectYaml: false });
+    expect(treeBytes(path.dirname(claude))).toEqual(claudeBefore);
+    const rep = uninstallRepo(repo, { home });
     expect(rep.keptEdited).toEqual([]);
     expect(treeBytes(repo)).toEqual(repoBefore);
-    expect(treeBytes(claude)).toEqual(claudeBefore);
+    expect(treeBytes(path.dirname(claude))).toEqual(claudeBefore);
   });
 
   it('G-LAW-04 falsifier "install→uninstall diff non-empty": repo clean except the committed project.yaml, ~/.claude byte-identical, ~/.gnomon removed or its export path returned', () => {
     const { repo, claude, home } = fixture();
     const auth = root();
     const repoBefore = treeBytes(repo);
-    const claudeBefore = treeBytes(claude);
+    const claudeBefore = treeBytes(path.dirname(claude));
     // install: generated files + a staged and approved mod in the home dir
     const ev = events();
-    generateRepo(repo, distro(), { emit: ev.emit });
-    const st = stageInstall({ home, source: writeMod(path.join(tmp(), 'diff-lens'), baseManifest()), via: 'package', tier: 'local', requestedBy: HUMAN, trust: auth });
+    generateRepo(repo, distro(), { home, emit: ev.emit });
+    const st = stageInstall({ home, source: writeMod(path.join(tmp(), 'diff-lens'), baseManifest()), via: 'package', requestedBy: HUMAN, trust: auth });
     if (st.state !== 'staged') throw new Error('staged');
     decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: presence(), authority: auth });
     // uninstall
-    uninstallRepo(repo, { emit: ev.emit });
+    uninstallRepo(repo, { home, emit: ev.emit });
     const after = treeBytes(repo);
     const diff = Object.keys({ ...repoBefore, ...after }).filter((k) => repoBefore[k] !== after[k]).sort();
     expect(diff).toEqual(['.gnomon/', '.gnomon/project.yaml']);
-    expect(treeBytes(claude)).toEqual(claudeBefore);
+    expect(treeBytes(path.dirname(claude))).toEqual(claudeBefore);
     expect(uninstallHome(home, { mode: 'keep' })).toEqual({ removed: false, exportPath: home });
     expect(fs.existsSync(home)).toBe(true);
     expect(uninstallHome(home, { mode: 'remove' }).removed).toBe(true);
@@ -600,19 +750,62 @@ describe('G-HON-04 / G-LAW-04 generated files: fixed point and exact uninstall (
   it.todo('G-LAW-04: install → ONE SESSION → uninstall on macOS and Windows (the session leg needs #session-runner, M1.7)');
 
   it('uninstall never deletes a user-edited generated file; generate never overwrites a file that is not ours', () => {
-    const { repo } = fixture();
-    generateRepo(repo, distro());
+    const { repo, home } = fixture();
+    generateRepo(repo, distro(), { home });
     const hooks = path.join(repo, '.gnomon', 'generated', 'hooks.json');
     fs.writeFileSync(hooks, '{"mine":true}\n');
-    expect(refusalOf(() => generateRepo(repo, distro())).manifestCode).toBe('GENERATED');
-    const rep = uninstallRepo(repo);
+    expect(refusalOf(() => generateRepo(repo, distro(), { home })).manifestCode).toBe('GENERATED');
+    const rep = uninstallRepo(repo, { home });
     expect(rep.keptEdited).toEqual(['.gnomon/generated/hooks.json']);
     expect(fs.readFileSync(hooks, 'utf8')).toBe('{"mine":true}\n');
     const fresh = tmp('gnomon-repo-');
     fs.mkdirSync(path.join(fresh, '.gnomon', 'generated'), { recursive: true });
     fs.writeFileSync(path.join(fresh, '.gnomon', 'generated', 'plugin.json'), '{}');
-    expect(refusalOf(() => generateRepo(fresh, distro())).manifestCode).toBe('GENERATED');
-    expect(fs.readFileSync(path.join(fresh, '.gnomon', 'generated', 'plugin.json'), 'utf8')).toBe('{}');
+    expect(refusalOf(() => generateRepo(fresh, distro(), { home })).manifestCode).toBe('GENERATED');
+    // a marker-bearing file the kernel never recorded is not ours either (the repo is not an ownership anchor)
+    const forged = tmp('gnomon-repo-');
+    fs.mkdirSync(path.join(forged, '.gnomon', 'generated'), { recursive: true });
+    fs.writeFileSync(path.join(forged, '.gnomon', 'generated', 'plugin.json'), renderGenerated(distro()).get('.gnomon/generated/plugin.json')!);
+    expect(refusalOf(() => generateRepo(forged, distro(), { home })).manifestCode).toBe('GENERATED');
+  });
+
+  it('confinement: a recorded ../ path is never touched; a planted .gnomon/generated link and a dangling file link to ~/.claude are refused', () => {
+    const { repo, home, claude } = fixture();
+    generateRepo(repo, distro(), { home });
+    const outside = path.join(path.dirname(repo), `victim-${path.basename(repo)}.txt`);
+    fs.writeFileSync(outside, 'keep me');
+    tmps.push(outside);
+    const rp = recordPath(home, repo);
+    const rec = JSON.parse(fs.readFileSync(rp, 'utf8'));
+    const victimSha = createHash('sha256').update('keep me').digest('hex');
+    rec.files.push({ path: `../${path.basename(outside)}`, sha256: victimSha });
+    rec.createdDirs.push('..');
+    fs.writeFileSync(rp, JSON.stringify(rec));
+    const u = uninstallRepo(repo, { home });
+    expect(u.ignored).toEqual([`../${path.basename(outside)}`, '..']);
+    expect(fs.readFileSync(outside, 'utf8')).toBe('keep me');
+
+    // planted directory link: .gnomon/generated → ~/.claude
+    const r2 = tmp('gnomon-repo-');
+    fs.mkdirSync(path.join(r2, '.gnomon'));
+    fs.symlinkSync(claude, path.join(r2, '.gnomon', 'generated'), 'junction');
+    const before = treeBytes(claude);
+    expect(refusalOf(() => generateRepo(r2, distro(), { home })).detail.why).toMatch(/symlink or junction/);
+    expect(treeBytes(claude)).toEqual(before);
+
+    // dangling file link: .gnomon/generated/hooks.json → ~/.claude/settings.local.json (privileged on Windows: skipped there)
+    const r3 = tmp('gnomon-repo-');
+    fs.mkdirSync(path.join(r3, '.gnomon', 'generated'), { recursive: true });
+    let linked = true;
+    try {
+      fs.symlinkSync(path.join(claude, 'settings.local.json'), path.join(r3, '.gnomon', 'generated', 'hooks.json'), 'file');
+    } catch {
+      linked = false; // no symlink privilege (stock Windows): the junction case above covers the class
+    }
+    if (linked) {
+      expect(refusalOf(() => generateRepo(r3, distro(), { home })).detail.why).toMatch(/symlink or junction/);
+      expect(fs.existsSync(path.join(claude, 'settings.local.json'))).toBe(false);
+    }
   });
 });
 
@@ -631,13 +824,17 @@ describe('G-WIN-04 layersHash / gitHash normalise CRLF and path case', () => {
   });
 
   function layerTree(eol: string, upper: boolean) {
+    // only names the code ENUMERATES (readdir) vary in case; fixed names (.claude, CLAUDE.md, config) stay as spelled,
+    // so the test holds on case-sensitive filesystems too (Ubuntu CI)
     const cwd = tmp('gnomon-proj-');
-    const user = tmp('gnomon-user-');
-    const d = upper ? '.Claude' : '.claude';
+    const user = path.join(tmp('gnomon-user-'), '.claude');
+    fs.mkdirSync(user);
+    const d = '.claude';
     fs.mkdirSync(path.join(cwd, d));
     fs.writeFileSync(path.join(cwd, d, upper ? 'Settings.json' : 'settings.json'), `{${eol}"x":1${eol}}${eol}`);
     fs.writeFileSync(path.join(cwd, 'CLAUDE.md'), `rules${eol}`);
-    fs.writeFileSync(path.join(user, 'settings.json'), `{}${eol}`);
+    fs.writeFileSync(path.join(user, upper ? 'Settings.json' : 'settings.json'), `{}${eol}`);
+    fs.writeFileSync(path.join(path.dirname(user), '.claude.json'), `{"mcpServers":{}}${eol}`);
     fs.mkdirSync(path.join(user, 'skills'));
     fs.writeFileSync(path.join(user, 'skills', upper ? 'Alpha.md' : 'alpha.md'), 'x');
     const git = path.join(cwd, '.git');
@@ -695,7 +892,11 @@ describe('#manifest-loader: per-session policy data (§15.5 session profile; rea
     expect(has(p.denyRead, path.join(cwd, '.warpline', 'daemon-tokens.jsonl'), 'literal')).toBe(true);
     expect(has(p.denyRead, path.join(user, 'browser'), 'subpath')).toBe(true);
     expect(has(p.denyWrite, home, 'subpath')).toBe(true);
-    expect(has(p.denyWrite, path.join(user, 'settings'), 'prefix')).toBe(true);
+    expect(has(p.denyWrite, user, 'subpath')).toBe(true);
+    expect(has(p.denyWrite, path.join(path.dirname(user), '.claude.json'), 'literal')).toBe(true);
+    for (const g of ['hooks', 'info']) expect(has(p.denyWrite, path.join(cwd, '.git', g), 'subpath')).toBe(true);
+    expect(has(p.denyWrite, path.join(cwd, '.git', 'config'), 'literal')).toBe(true);
+    expect(p.denyClasses).toEqual([...SESSION_DENY_CLASSES]);
     expect(has(p.denyWrite, path.join(cwd, '.claude'), 'subpath')).toBe(true);
     expect(has(p.denyWrite, path.join(cwd, 'CLAUDE'), 'prefix')).toBe(true);
     expect(has(p.denyWrite, '/managed/managed-settings.json', 'literal')).toBe(true);
@@ -712,7 +913,31 @@ describe('#manifest-loader: per-session policy data (§15.5 session profile; rea
     expect(() => buildSessionPolicy({ home, cwd, userClaudeDir: user, managedSettingsPaths: [], linkedFolders: [], endpointPort: 70000 })).toThrow(/port/);
     const perms = claudePermissions(p).permissions.deny;
     expect(perms.some((r) => r.startsWith('Read(') && r.includes('keys/**'))).toBe(true);
-    expect(perms.some((r) => r.startsWith('Edit(') && r.endsWith('settings*)'))).toBe(true);
+    expect(perms.some((r) => r.startsWith('Edit(') && r.endsWith('.claude.json)'))).toBe(true);
+  });
+
+  it('every input layersHash and gitHash read is covered by a write deny (Aegis F2)', () => {
+    const home = tmp('gnomon-home-');
+    const cwd = tmp('gnomon-proj-');
+    const wt = tmp('gnomon-wt-');
+    const user = path.join(tmp('gnomon-user-'), '.claude');
+    for (const d of [path.join(user, 'skills'), path.join(user, 'agents'), path.join(cwd, '.claude', 'commands'), path.join(cwd, '.git', 'hooks'), path.join(wt, '.claude')]) fs.mkdirSync(d, { recursive: true });
+    for (const f of [path.join(user, 'settings.json'), path.join(user, 'settings.local.json'), path.join(user, 'CLAUDE.md'), path.join(path.dirname(user), '.claude.json'), path.join(cwd, '.claude', 'settings.json'), path.join(cwd, '.claude', 'commands', 'x.md'), path.join(cwd, 'CLAUDE.md'), path.join(cwd, 'CLAUDE.local.md'), path.join(cwd, '.git', 'config'), path.join(cwd, '.git', 'hooks', 'pre-commit'), path.join(wt, 'CLAUDE.md')]) fs.writeFileSync(f, 'x');
+    const managed = path.join(tmp('gnomon-managed-'), 'managed-settings.json');
+    const p = buildSessionPolicy({ home, cwd, worktree: wt, userClaudeDir: user, managedSettingsPaths: [managed], linkedFolders: [], endpointPort: null });
+    const covered = (abs: string): boolean => {
+      const r = realpathLoose(abs);
+      return p.denyWrite.some((d) => (d.match === 'literal' ? r === d.path : d.match === 'subpath' ? r === d.path || r.startsWith(d.path + path.sep) : r.startsWith(d.path)));
+    };
+    const inputs = [...collectLayerInputs({ cwd, worktree: wt, userClaudeDir: user, managedPaths: [managed] }), ...collectGitInputs(cwd).filter((i) => !i.key.startsWith('repo:'))];
+    expect(inputs.length).toBeGreaterThan(10);
+    expect(inputs.filter((i) => !i.abs || !covered(i.abs)).map((i) => i.key)).toEqual([]);
+  });
+
+  it('every platform-neutral deny class has a mechanism row for every platform (the platform registry)', () => {
+    for (const plat of ['darwin', 'win32', 'linux'] as const) {
+      expect(Object.keys(SESSION_DENY_REALISATION[plat]).sort()).toEqual([...SESSION_DENY_CLASSES].sort());
+    }
   });
 });
 

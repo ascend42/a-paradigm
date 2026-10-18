@@ -17,12 +17,24 @@
  *     `.warpline/daemon-tokens.jsonl`, `.warpline/daemon/mcp-tokens.json`,
  *     `.warpline/daemon/mcp.token`), plus the browser-profile and wrapper
  *     WebView directories the caller's platform names (S29-K7);
- *   - settings (write): `<home>/**`, every Claude settings layer — the user
- *     `settings*.json` (prefix), the managed files, project and worktree
- *     `.claude/**` and `CLAUDE*.md` (prefix);
+ *   - settings (write): `<home>/**`, every Claude settings layer — the WHOLE
+ *     user `~/.claude/**` (subpath; Aegis F2: skills, plugins, agents, commands
+ *     and hooks there all steer Claude) and `~/.claude.json` (literal: its
+ *     user-scope mcpServers run commands), the managed files, project and
+ *     worktree `.claude/**` and `CLAUDE*.md` (prefix); every input layersHash
+ *     reads is covered (test-proved);
+ *   - git (write, Aegis F9; a spec amendment to §15.5): `.git/hooks/**`,
+ *     `.git/config`, `.git/info/**` of the cwd and worktree (and the common
+ *     git dir of a linked worktree) — the gitHash inputs;
  *   - linked mod folders (write), the list regenerated at each spawn;
  *   - the web endpoint's port (outbound loopback), when the endpoint is up;
- *   - process information on other processes.
+ *   - process information on other processes;
+ *   - the platform-neutral DENY CLASSES §15.5 names beyond paths (Aegis F9):
+ *     terminal-multiplexer sockets (tmux, screen), the helper's IPC service
+ *     and the process-table service (sysmond), automation (AppleEvents),
+ *     the service manager (launchctl / schtasks), media devices (TCC mic and
+ *     camera), launchers. Each class maps to its platform mechanism in
+ *     src/platform/session-denies.ts (the platform registry); M1.7 realises it.
  * Paths are realpath'd (the longest existing prefix is resolved, the rest
  * appended): SBPL filters match resolved paths, and an unresolved path is a
  * deny that silently does not apply (§15.5 "Paths").
@@ -35,15 +47,20 @@ import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { canonicalJson } from '@a-company/gnomon-contracts';
+import { defaultClaudeJson, resolveGitDirs } from './layers.js';
 
 export const SESSION_POLICY_SCHEMA = 'gnomon-session-policy:v1' as const;
+
+/** §15.5 `session` denies that are not file paths (platform-neutral names). */
+export const SESSION_DENY_CLASSES = ['unix-socket:tmux', 'unix-socket:screen', 'ipc:helper-service', 'ipc:process-table-service', 'automation:apple-events', 'service-manager', 'media:microphone', 'media:camera', 'launchers', 'process-info:others', 'loopback:endpoint-port'] as const;
+export type SessionDenyClass = (typeof SESSION_DENY_CLASSES)[number];
 
 export type PathMatch = 'subpath' | 'literal' | 'prefix';
 export interface PolicyPath {
   path: string;
   match: PathMatch;
   /** why the deny exists (the §15.5 class) */
-  class: 'keys' | 'warpline-tokens' | 'browser-profile' | 'gnomon-home' | 'settings' | 'linked-folder';
+  class: 'keys' | 'warpline-tokens' | 'browser-profile' | 'gnomon-home' | 'settings' | 'linked-folder' | 'git';
 }
 
 export interface SessionPolicy {
@@ -57,6 +74,8 @@ export interface SessionPolicy {
   processInfo: 'deny-others';
   /** launcher escapes (open/osascript/lsregister on macOS; job limits on Windows) — realised by M1.7 */
   launchers: 'deny';
+  /** platform-neutral deny classes (SESSION_DENY_CLASSES); mapped per platform in src/platform/session-denies.ts */
+  denyClasses: SessionDenyClass[];
   /** the M1.7 step that turns this data into a platform profile */
   realisedBy: 'M1.7';
 }
@@ -72,6 +91,8 @@ export interface SessionPolicyInput {
   endpointPort: number | null;
   /** platform-specific browser profile + wrapper WebView data dirs (S29-K7) */
   browserProfileDirs?: readonly string[];
+  /** `~/.claude.json` (default: beside userClaudeDir) */
+  userClaudeJson?: string;
 }
 
 /** Realpath the longest existing prefix of `p` and append the rest. */
@@ -117,11 +138,17 @@ export function buildSessionPolicy(inp: SessionPolicyInput): SessionPolicy {
   const browsers = (inp.browserProfileDirs ?? []).map((d) => P(d, 'subpath', 'browser-profile'));
   const settings: PolicyPath[] = [
     P(path.join(home), 'subpath', 'gnomon-home'),
-    P(path.join(inp.userClaudeDir, 'settings'), 'prefix', 'settings'),
+    P(inp.userClaudeDir, 'subpath', 'settings'),
+    P(inp.userClaudeJson ?? defaultClaudeJson(inp.userClaudeDir), 'literal', 'settings'),
     ...inp.managedSettingsPaths.map((m) => P(m, 'literal', 'settings')),
     ...roots.flatMap((r) => [P(path.join(r, '.claude'), 'subpath', 'settings'), P(path.join(r, 'CLAUDE'), 'prefix', 'settings')]),
   ];
   const linked = inp.linkedFolders.map((f) => P(f, 'subpath', 'linked-folder'));
+  const gitDirs = roots.flatMap((r) => {
+    const d = resolveGitDirs(r);
+    return [...new Set([path.join(r, '.git'), ...(d ? [d.gitDir, d.commonDir] : [])])];
+  });
+  const git = gitDirs.flatMap((g) => [P(path.join(g, 'hooks'), 'subpath', 'git'), P(path.join(g, 'config'), 'literal', 'git'), P(path.join(g, 'info'), 'subpath', 'git')]);
   if (inp.endpointPort !== null && !(Number.isInteger(inp.endpointPort) && inp.endpointPort > 0 && inp.endpointPort < 65536)) {
     throw new TypeError(`#manifest-loader: endpoint port must be 1..65535 or null, got ${String(inp.endpointPort)}`);
   }
@@ -129,10 +156,11 @@ export function buildSessionPolicy(inp: SessionPolicyInput): SessionPolicy {
     schemaVersion: SESSION_POLICY_SCHEMA,
     profile: 'session',
     denyRead: uniq([...keys, ...browsers]),
-    denyWrite: uniq([...keys, ...settings, ...linked]),
+    denyWrite: uniq([...keys, ...settings, ...linked, ...git]),
     denyLoopbackPorts: inp.endpointPort === null ? [] : [inp.endpointPort],
     processInfo: 'deny-others',
     launchers: 'deny',
+    denyClasses: SESSION_DENY_CLASSES.filter((c) => c !== 'loopback:endpoint-port' || inp.endpointPort !== null),
     realisedBy: 'M1.7',
   };
 }

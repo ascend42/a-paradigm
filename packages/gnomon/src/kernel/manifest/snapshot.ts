@@ -25,8 +25,9 @@
  * re-checked by fstat (same dev/ino, still a single-link regular file), so a
  * swap between the walk and the read is refused, not followed.
  *
- * Lockfile rule (§12.5): a `node_modules/` at the package root needs an npm
- * lockfile (`package-lock.json` / `npm-shrinkwrap.json`), else
+ * Lockfile rule (§12.5, Aegis F11): every `node_modules/` at any depth (case-folded)
+ * needs an npm lockfile (`package-lock.json` / `npm-shrinkwrap.json`) beside it,
+ * every shipped package's package.json version must equal its lockfile entry, else
  * `manifest.refuse{code:'LOCKFILE'}`; the install card lists every
  * `package@version` from it. Other lockfile formats are refused (fail closed:
  * the card must be able to list every package without a parser dependency).
@@ -82,14 +83,14 @@ function refuseSnapshot(reason: SnapshotRefusalReason, relPath: string, name: st
   throw new ManifestRefusal('SNAPSHOT', `snapshot copier refused ${relPath} (${reason})`, { name, snapshotReason: reason, path: relPath });
 }
 
-interface WalkEntry {
+export interface WalkEntry {
   rel: string;
   abs: string;
   stat: fs.Stats;
 }
 
 /** Walk a source folder applying every copier refusal; returns regular files only. */
-function walkSource(root: string, name: string, emit: ManifestEventSink): WalkEntry[] {
+export function walkSource(root: string, name: string, emit: ManifestEventSink): WalkEntry[] {
   let realRoot: string;
   try {
     realRoot = fs.realpathSync.native(root);
@@ -129,7 +130,7 @@ function walkSource(root: string, name: string, emit: ManifestEventSink): WalkEn
 }
 
 /** Read one file once, refusing a swap since the walk (dev/ino/nlink/type re-checked by fstat). */
-function readChecked(e: WalkEntry, name: string, emit: ManifestEventSink): Buffer {
+export function readChecked(e: WalkEntry, name: string, emit: ManifestEventSink): Buffer {
   let fd: number;
   try {
     fd = fs.openSync(e.abs, fs.constants.O_RDONLY | O_NOFOLLOW);
@@ -149,28 +150,85 @@ function sha256Hex(b: Uint8Array): string {
   return createHash('sha256').update(b).digest('hex');
 }
 
-/** The lockfile rule and the package list (§12.5). */
-function lockfileRule(files: Map<string, Buffer>, hasNodeModules: boolean, name: string, emit: ManifestEventSink): { lockfile: string | null; packages: string[] } {
-  if (!hasNodeModules) return { lockfile: null, packages: [] };
-  const lock = NPM_LOCKFILES.find((f) => files.has(f));
-  if (!lock) {
-    const other = OTHER_LOCKFILES.find((f) => files.has(f));
-    emit('manifest.refuse', { name, code: 'LOCKFILE', ...(other ? { lockfile: other } : {}) });
-    throw new ManifestRefusal('LOCKFILE', other ? `node_modules with ${other}: only an npm lockfile can be listed on the card` : 'node_modules without a lockfile', { name, ...(other ? { lockfile: other } : {}) });
+/** Refuse with LOCKFILE (and log `manifest.refuse{code:'LOCKFILE'}`). */
+function refuseLock(name: string, emit: ManifestEventSink, msg: string, detail: Record<string, unknown>): never {
+  emit('manifest.refuse', { name, code: 'LOCKFILE', ...detail });
+  throw new ManifestRefusal('LOCKFILE', msg, { name, ...detail });
+}
+
+/** Package directory keys (relative to a lockfile root) that contain `restPath`: `node_modules/a`, `node_modules/@s/b`, `node_modules/a/node_modules/c`. */
+function packageDirsOf(restPath: string): string[] {
+  const segs = restPath.split('/');
+  const out: string[] = [];
+  for (let i = 0; i < segs.length; i++) {
+    if (segs[i] !== 'node_modules') continue;
+    const first = segs[i + 1];
+    if (first === undefined || first.startsWith('.')) continue;
+    const last = first.startsWith('@') ? i + 2 : i + 1;
+    if (last >= segs.length - 1) continue; // the segment is the file itself, not a directory
+    out.push(segs.slice(0, last + 1).join('/'));
   }
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(files.get(lock)!.toString('utf8'));
-  } catch {
-    emit('manifest.refuse', { name, code: 'LOCKFILE', lockfile: lock });
-    throw new ManifestRefusal('LOCKFILE', `${lock} does not parse`, { name, lockfile: lock });
+  return out;
+}
+
+/**
+ * The lockfile rule (§12.5, Aegis F11). Every `node_modules` directory, at any
+ * depth, needs an npm lockfile in the directory that holds it (nested
+ * `node_modules` inside a `node_modules` are covered by that lockfile's keys).
+ * Path segments are case-folded for the check: a segment that folds to
+ * `node_modules` but is not spelled exactly is refused (a case-insensitive
+ * filesystem would resolve it as `node_modules`). Every shipped package
+ * directory must carry a package.json whose version equals its lockfile entry.
+ */
+function lockfileRule(files: Map<string, Buffer>, name: string, emit: ManifestEventSink): { lockfile: string | null; packages: string[] } {
+  const roots = new Set<string>();
+  for (const rel of files.keys()) {
+    const segs = rel.split('/');
+    for (const seg of segs) {
+      if (seg !== 'node_modules' && seg.normalize('NFC').toLowerCase() === 'node_modules') refuseLock(name, emit, `${rel}: a node_modules spelled ${seg}`, { path: rel, why: 'node_modules-case' });
+    }
+    const i = segs.indexOf('node_modules');
+    if (i >= 0) roots.add(segs.slice(0, i).join('/'));
   }
-  const pk = (parsed as { packages?: Record<string, { version?: unknown }> }).packages;
-  const packages = Object.entries(pk ?? {})
-    .filter(([k]) => k.startsWith('node_modules/'))
-    .map(([k, v]) => `${k.slice(k.lastIndexOf('node_modules/') + 13)}@${typeof v?.version === 'string' ? v.version : '?'}`)
-    .sort();
-  return { lockfile: lock, packages };
+  if (roots.size === 0) return { lockfile: null, packages: [] };
+  const packages: string[] = [];
+  const locks: string[] = [];
+  for (const root of [...roots].sort()) {
+    const pre = root === '' ? '' : `${root}/`;
+    const lock = NPM_LOCKFILES.find((f) => files.has(pre + f));
+    if (!lock) {
+      const other = OTHER_LOCKFILES.find((f) => files.has(pre + f));
+      refuseLock(name, emit, other ? `node_modules with ${pre}${other}: only an npm lockfile can be listed on the card` : `${pre}node_modules without a lockfile`, { path: `${pre}node_modules`, ...(other ? { lockfile: pre + other } : {}) });
+    }
+    let pk: Record<string, { version?: unknown }> = {};
+    try {
+      pk = ((JSON.parse(files.get(pre + lock)!.toString('utf8')) as { packages?: Record<string, { version?: unknown }> }).packages ?? {}) as Record<string, { version?: unknown }>;
+    } catch {
+      refuseLock(name, emit, `${pre}${lock} does not parse`, { lockfile: pre + lock });
+    }
+    locks.push(pre + lock);
+    const dirs = new Set<string>();
+    for (const rel of files.keys()) if (rel.startsWith(`${pre}node_modules/`)) for (const d of packageDirsOf(rel.slice(pre.length))) dirs.add(d);
+    for (const d of [...dirs].sort()) {
+      const pj = files.get(`${pre}${d}/package.json`);
+      let version: unknown;
+      try {
+        version = pj ? (JSON.parse(pj.toString('utf8')) as { version?: unknown }).version : undefined;
+      } catch {
+        version = undefined;
+      }
+      if (typeof version !== 'string') refuseLock(name, emit, `${pre}${d} ships no readable package.json version`, { path: pre + d, why: 'missing-package-json' });
+      const entry = pk[d];
+      if (!entry) refuseLock(name, emit, `${pre}${d} is not in ${pre}${lock}`, { path: pre + d, why: 'not-in-lockfile' });
+      if (entry.version !== version) refuseLock(name, emit, `${pre}${d} ships ${String(version)} but ${pre}${lock} pins ${String(entry.version)}`, { path: pre + d, why: 'version-mismatch' });
+    }
+    for (const [k, v] of Object.entries(pk)) {
+      if (!k.startsWith('node_modules/')) continue;
+      const id = `${k.slice(k.lastIndexOf('node_modules/') + 13)}@${typeof v?.version === 'string' ? v.version : '?'}`;
+      packages.push(root === '' ? id : `${root}:${id}`);
+    }
+  }
+  return { lockfile: locks.join(','), packages: packages.sort() };
 }
 
 function postinstallRule(files: Map<string, Buffer>, name: string, emit: ManifestEventSink): void {
@@ -201,8 +259,7 @@ export function hashSourceTree(root: string, name: string, emit: ManifestEventSi
     bytes.set(e.rel, b);
     files.push({ path: e.rel, sha256: sha256Hex(b), size: b.length });
   }
-  const hasNodeModules = entries.some((e) => e.rel.startsWith('node_modules/'));
-  const { lockfile, packages } = lockfileRule(bytes, hasNodeModules, name, emit);
+  const { lockfile, packages } = lockfileRule(bytes, name, emit);
   postinstallRule(bytes, name, emit);
   return { files: files.sort((a, b) => (a.path < b.path ? -1 : 1)), packageHash: computePackageHash(files), packages, lockfile, bytes };
 }

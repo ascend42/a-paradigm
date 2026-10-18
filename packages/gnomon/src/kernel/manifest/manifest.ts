@@ -362,7 +362,7 @@ export function validateManifest(value: unknown, opts: ValidateManifestOptions):
       closed(o, ['host', 'purpose'], `requires.egress[${i}]`);
       str(o.purpose, `requires.egress[${i}].purpose`);
       const v = checkEgressHost(o.host);
-      if (!v.ok) fail('EGRESS', v.why === 'anthropic' ? `egress to an Anthropic API host is refused (${v.host})` : `egress host ${v.host} is not a host`, { host: v.host, why: v.why });
+      if (!v.ok) fail('EGRESS', v.why === 'anthropic' ? `egress to an Anthropic API host is refused (${v.host})` : `egress host ${v.host} is refused (${v.why})`, { host: v.host, why: v.why });
     });
   }
   return value as ManifestV1;
@@ -370,7 +370,8 @@ export function validateManifest(value: unknown, opts: ValidateManifestOptions):
 
 /* ── manifest widening (§3.6, §12.5) ──────────────────────────────────────── */
 
-export const WIDENING_FIELDS = ['effects', 'egress', 'capabilities', 'events', 'tools', 'views', 'commands', 'keybindings', 'knowledge'] as const;
+/** §12.5's list plus `mcp` and `hooks` (Aegis F3): both run commands, so an addition is always a widening. */
+export const WIDENING_FIELDS = ['effects', 'egress', 'capabilities', 'events', 'tools', 'views', 'commands', 'keybindings', 'knowledge', 'mcp', 'hooks'] as const;
 export type WideningField = (typeof WIDENING_FIELDS)[number];
 
 export interface WideningEntry {
@@ -391,6 +392,8 @@ function surface(m: ManifestV1 | null): Record<WideningField, Set<string>> {
     commands: new Set((p.commands ?? []).map((c) => c.id)),
     keybindings: new Set((p.keybindings ?? []).map((k) => `${k.key.trim().toLowerCase()}→${k.command}`)),
     knowledge: new Set((p.knowledge ?? []).map((k) => `${k.name}|${k.scheme}|${k.query}|${k.maxTier}`)),
+    mcp: new Set((p.mcp ?? []).map((s) => canonicalJson([s.name, s.command, s.args ?? []]))),
+    hooks: new Set((p.hooks ?? []).map((h) => canonicalJson([h.event, h.command]))),
   };
 }
 

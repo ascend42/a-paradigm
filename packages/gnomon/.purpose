@@ -424,6 +424,29 @@ components:
       overwrites a file that is not ours; uninstallRepo removes exactly the
       ledger's unedited files and the dirs it created (project.yaml stays);
       uninstallHome removes ~/.gnomon or returns it as the export path.
+      ROUND 2 (review + Aegis F1–F11): generate.ts confines every path to the
+      fixed generated set under <repo>/.gnomon (lstat each component, refuse
+      links/junctions, realpath inside .gnomon, temp file O_EXCL|O_NOFOLLOW +
+      rename) and keys ownership on the manifestHash marker plus the
+      kernel-held record <home>/generated/<sha256(realpath repo)>.json (the
+      repo holds no ledger); the session policy write-denies the whole
+      ~/.claude/** and ~/.claude.json (both also hashed into layersHash — a
+      gap in spec §3.3/§15.5 to amend) and .git/hooks|config|info (gitHash
+      inputs; §15.5 amendment), and carries the platform-neutral deny classes
+      (tmux/screen sockets, helper IPC, sysmond, AppleEvents, service
+      manager, mic/camera, launchers) mapped per platform in
+      src/platform/session-denies.ts; widening covers mcp and hooks and the
+      card lists commands, keybindings, knowledge, mcp, hooks and opaque
+      array counts; the lockfile rule is case-folded, applies at any depth
+      and cross-checks shipped package.json versions; the tier is derived
+      (linked ⇒ local, first-party only from a bundled packageHash allowlist,
+      empty for now; a signed claim is refused until trusted keys exist);
+      decideInstall validates the cardId, recomputes contentHash, re-derives
+      the detail from the pinned snapshot, appends grant.install LAST and is
+      idempotent; egress refuses ports, numeric hosts, single labels and
+      local/private names; symlinked layers hash the target bytes and
+      .claude/worktrees/ is excluded. The case-collision oracle is
+      exercised on Linux CI (a case-insensitive FS cannot hold the pair).
       Events: §9.1 kinds only (manifest.*, mod.*); the spec declares no
       signals. Refusals are refusal:v1 with data.manifestCode (not
       data.reason, which would move clientApiId).

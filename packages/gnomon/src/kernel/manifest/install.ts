@@ -13,6 +13,13 @@
  * `grant.install` row (grants.ts), and what loads is decided only from those
  * rows. An agent-written manifest therefore always needs a card (G-MAN-02).
  *
+ * TIER IS DERIVED, never asserted by the caller (Aegis F4): a linked folder is
+ * `local` unless a signature over the manifestHash verifies against a trusted
+ * key (none exist yet, so a signed claim is refused TIER); `first-party` only
+ * when the packageHash is in the kernel's bundled allowlist
+ * (FIRST_PARTY_PACKAGE_HASHES, empty until packages/gnomon-mods ships); every
+ * other package is `local`.
+ *
  * THE DECISION IS NOT A PRODUCTION API YET. The approval broker that decides
  * cards (fresh presence, root key, kernel-signed actions) is M1.6. Until then
  * `decideInstall` and `rollbackMod` are module-private and registered ONLY on
@@ -46,6 +53,21 @@ import { ManifestRefusal, noEvents, type ManifestEventSink } from './refusal.js'
 import { computePackageHash, diffTrees, hashPinnedTree, hashSourceTree, modDir, pinnedDir, removeTree, snapshotFolder, type TreeDiff, type TreeFile } from './snapshot.js';
 
 export const STAGED_RECORD_SCHEMA = 'gnomon-staged-install:v1' as const;
+const CARD_ID = /^card:[0-9A-HJKMNP-TV-Z]{26}$/;
+
+/** packageHashes of the first-party mods the kernel bundles (packages/gnomon-mods, Move 3). Empty until then. */
+export const FIRST_PARTY_PACKAGE_HASHES: ReadonlySet<string> = new Set<string>();
+/** Keys trusted to sign community manifests (`signed:<gkey>` tier). None in 8.0 Move 1. */
+export const TRUSTED_MANIFEST_KEYS: ReadonlySet<string> = new Set<string>();
+
+/** Derive the trust tier from provenance (never from the caller or the manifest). */
+export function deriveTier(packageHash: string, signature?: { keyId: string; sig: string }): TrustTier {
+  if (signature) {
+    // no trusted manifest keys exist yet: a signed claim cannot verify, so it is refused rather than downgraded silently
+    if (!TRUSTED_MANIFEST_KEYS.has(signature.keyId)) throw new ManifestRefusal('TIER', `manifest signature by ${signature.keyId} does not verify against a trusted key`, { keyId: signature.keyId });
+  }
+  return FIRST_PARTY_PACKAGE_HASHES.has(packageHash) ? 'first-party' : 'local';
+}
 
 export type InstallSource = 'package' | `linked:${string}`;
 
@@ -66,6 +88,13 @@ export interface InstallCardDetail {
   views: string[];
   readPaths: string[];
   packages: string[];
+  commands: string[];
+  keybindings: string[];
+  knowledge: string[];
+  mcp: string[];
+  hooks: string[];
+  /** counts of the opaque provides arrays (skills, agents, bands, steps, resolvers, blocks, oracles) */
+  opaque: Record<string, number>;
   /** the effective pin this card would replace, or null for a first install */
   replaces: { packageHash: string; manifestHash: string } | null;
   widened: WideningEntry[];
@@ -87,8 +116,8 @@ export interface StageOptions {
   /** the package path or the linked folder */
   source: string;
   via: 'package' | 'linked';
-  /** provenance tier (the grant.trust row written on approval) */
-  tier: TrustTier;
+  /** a signature over the manifestHash claiming the `signed:<gkey>` tier (refused until trusted keys exist) */
+  signature?: { keyId: string; sig: string };
   /** the principal that staged it (an agent session principal for agent-written mods) */
   requestedBy: string;
   hsid?: string;
@@ -127,10 +156,19 @@ function sha(s: string): string {
   return `sha256:${createHash('sha256').update(s, 'utf8').digest('hex')}`;
 }
 
-function surfaceOf(m: ManifestV1): Pick<InstallCardDetail, 'effects' | 'egress' | 'capabilities' | 'events' | 'tools' | 'views'> {
+type Surface = Pick<InstallCardDetail, 'effects' | 'egress' | 'capabilities' | 'events' | 'tools' | 'views' | 'commands' | 'keybindings' | 'knowledge' | 'mcp' | 'hooks' | 'opaque'>;
+function surfaceOf(m: ManifestV1): Surface {
   const p = m.provides ?? {};
   const eg = m.requires?.egress;
+  const opaque: Record<string, number> = {};
+  for (const k of ['skills', 'agents', 'bands', 'steps', 'resolvers', 'blocks', 'oracles'] as const) if (p[k]?.length) opaque[k] = p[k]!.length;
   return {
+    commands: (p.commands ?? []).map((c) => c.id).sort(),
+    keybindings: (p.keybindings ?? []).map((k) => `${k.key}→${k.command}`).sort(),
+    knowledge: (p.knowledge ?? []).map((k) => `${k.name} ${k.scheme} ${k.query} ≤${k.maxTier}`).sort(),
+    mcp: (p.mcp ?? []).map((s) => `${s.name}: ${[s.command, ...(s.args ?? [])].join(' ')}`).sort(),
+    hooks: (p.hooks ?? []).map((h) => `${h.event}: ${h.command}`).sort(),
+    opaque,
     effects: [...new Set((p.tools ?? []).flatMap((t) => t.effects))].sort(),
     egress: Array.isArray(eg) ? eg.map((e) => e.host).sort() : [],
     capabilities: [...(m.requires?.capabilities ?? [])].sort(),
@@ -151,6 +189,9 @@ function blockFor(d: InstallCardDetail): Record<string, unknown> {
       line(`effects: ${d.effects.join(', ') || 'none'} · egress: ${d.egress.join(', ') || 'none'}`),
       line(`capabilities: ${d.capabilities.join(', ') || 'none'} · read paths: ${d.readPaths.join(', ') || 'none'}`),
       line(`events: ${d.events.join(', ') || 'none'} · tools: ${d.tools.join(', ') || 'none'} · views: ${d.views.join(', ') || 'none'}`),
+      line(`commands: ${d.commands.join(', ') || 'none'} · keybindings: ${d.keybindings.join(', ') || 'none'} · knowledge: ${d.knowledge.join(', ') || 'none'}`),
+      line(`mcp: ${d.mcp.join('; ') || 'none'} · hooks: ${d.hooks.join('; ') || 'none'}`),
+      ...(Object.keys(d.opaque).length ? [line(`also ships: ${Object.entries(d.opaque).map(([k, n]) => `${k} ×${n}`).join(', ')}`)] : []),
       ...(d.packages.length ? [line(`packages: ${d.packages.join(', ')}`)] : []),
       ...(d.widened.length && d.replaces ? [line(`WIDENED: ${d.widened.map((w) => `${w.field} +${w.added.join(' +')}`).join('; ')}`)] : []),
       ...(d.replaces ? [line(`files: +${d.files.added.length} ~${d.files.changed.length} -${d.files.removed.length}`)] : []),
@@ -169,6 +210,7 @@ function writeStaged(home: string, rec: StagedRecord): void {
 }
 
 export function readStaged(home: string, name: string, cardId: string): StagedRecord | null {
+  if (!CARD_ID.test(cardId) || !/^[a-z][a-z0-9-]{0,63}$/.test(name)) return null;
   try {
     const r = JSON.parse(fs.readFileSync(stagedPath(home, name, cardId), 'utf8')) as StagedRecord;
     return r.schemaVersion === STAGED_RECORD_SCHEMA ? r : null;
@@ -213,10 +255,12 @@ export function stageInstall(opts: StageOptions): StageResult {
   const name0 = sourceName(opts.source);
   const snap = snapshotFolder(opts.home, opts.source, name0, emit);
   let manifest: ManifestV1;
+  let tier: TrustTier;
   try {
+    tier = opts.via === 'linked' && !opts.signature ? 'local' : deriveTier(snap.packageHash, opts.signature);
     const raw = readManifestFile(snap.dir, name0, emit);
     try {
-      manifest = validateManifest(raw, { tier: opts.tier });
+      manifest = validateManifest(raw, { tier });
     } catch (err) {
       if (err instanceof ManifestRefusal) emit('manifest.refuse', { name: name0, code: err.manifestCode, ...err.detail });
       throw err;
@@ -243,7 +287,7 @@ export function stageInstall(opts: StageOptions): StageResult {
     kind: manifest.kind,
     version: manifest.version,
     source,
-    tier: opts.tier,
+    tier,
     manifestHash: mh,
     packageHash: snap.packageHash,
     ...surfaceOf(manifest),
@@ -284,24 +328,48 @@ export interface DecideOptions {
   now?: Date;
 }
 
-/** Decide a staged install card (M1.6's broker will own this; seam-only until then). */
+/**
+ * Decide a staged install card (M1.6's broker will own this; seam-only until
+ * then). Nothing in the staged record is trusted (Aegis F5): the cardId is
+ * checked, the card's contentHash is recomputed from the detail, and the
+ * detail's security surface is RE-DERIVED from the pinned snapshot and
+ * compared; the manifest is re-validated (egress, capabilities, tier).
+ * grant.install is appended LAST, so a crash before it leaves supporting rows
+ * that grant nothing on their own; a re-decide of a card whose grant.install
+ * already exists completes idempotently without new rows.
+ */
 function decideInstall(home: string, name: string, cardId: string, decision: 'install' | 'deny', opts: DecideOptions): StagedRecord {
   const emit = opts.emit ?? noEvents;
   const now = opts.now ?? new Date();
+  if (typeof cardId !== 'string' || !CARD_ID.test(cardId)) throw new ManifestRefusal('SCHEMA', 'cardId must be card:<ULID>', { cardId: String(cardId) });
+  if (typeof name !== 'string' || !/^[a-z][a-z0-9-]{0,63}$/.test(name)) throw new ManifestRefusal('SCHEMA', 'malformed mod name', { name: String(name) });
   const verdict = consumePresence(opts.presenceToken, 'mod.install', now.getTime());
   if (verdict !== 'ok') throw new ManifestRefusal('GRANT', `install decision needs fresh presence (${verdict})`, { name, cardId, presence: verdict });
   const rec = readStaged(home, name, cardId);
-  if (!rec || rec.card.state !== 'pending') throw new ManifestRefusal('NOT_INSTALLED', `no pending install card ${cardId} for ${name}`, { name, cardId });
-  if (decision === 'install') {
-    const files = hashPinnedTree(pinnedDir(home, name, rec.detail.packageHash));
-    if (computePackageHash(files) !== rec.detail.packageHash) throw new ManifestRefusal('INTEGRITY', `pinned snapshot of ${name} no longer hashes to ${rec.detail.packageHash}`, { name });
-    const { manifestHash: mh, packageHash, source, tier, capabilities, readPaths } = rec.detail;
-    appendGrantRow(home, opts.authority, { kind: 'grant.install', name, manifestHash: mh, packageHash, cardId, source }, now);
+  if (!rec || rec.card.cardId !== cardId || rec.detail.name !== name) throw new ManifestRefusal('NOT_INSTALLED', `no install card ${cardId} for ${name}`, { name, cardId });
+  const already = readGrants(home, opts.authority).installs.find((r) => r.cardId === cardId && r.packageHash === rec.detail.packageHash);
+  if (rec.card.state !== 'pending') {
+    if (rec.decision?.decision === decision) return rec; // idempotent re-decide
+    throw new ManifestRefusal('NOT_INSTALLED', `install card ${cardId} is already decided`, { name, cardId });
+  }
+  if (sha(canonicalJson(rec.detail)) !== rec.card.contentHash) throw new ManifestRefusal('INTEGRITY', `install card ${cardId}: contentHash does not match its detail`, { name, cardId });
+  if (decision === 'install' && !already) {
+    const dir = pinnedDir(home, name, rec.detail.packageHash);
+    if (computePackageHash(fs.existsSync(dir) ? hashPinnedTree(dir) : []) !== rec.detail.packageHash) throw new ManifestRefusal('INTEGRITY', `pinned snapshot of ${name} no longer hashes to ${rec.detail.packageHash}`, { name });
+    const tier = rec.detail.source.startsWith('linked:') ? 'local' : deriveTier(rec.detail.packageHash);
+    const manifest = validateManifest(JSON.parse(fs.readFileSync(path.join(dir, MANIFEST_FILE), 'utf8')), { tier });
+    const mh = manifestHash(manifest);
+    const surf = surfaceOf(manifest);
+    const claimed = canonicalJson({ mh: rec.detail.manifestHash, tier: rec.detail.tier, name: rec.detail.name, ...pick(rec.detail) });
+    const derived = canonicalJson({ mh, tier, name: manifest.name, ...pick({ ...rec.detail, ...surf }) });
+    if (claimed !== derived) throw new ManifestRefusal('INTEGRITY', `install card ${cardId} does not match its pinned snapshot`, { name, cardId });
+    const { packageHash, source, readPaths } = rec.detail;
     appendGrantRow(home, opts.authority, { kind: 'grant.trust', manifestHash: mh, tier }, now);
-    if (capabilities.length) {
-      appendGrantRow(home, opts.authority, { kind: 'grant.capability', manifestHash: mh, capabilities, ...(readPaths.length ? { read: readPaths } : {}) }, now);
+    if (surf.capabilities.length) {
+      appendGrantRow(home, opts.authority, { kind: 'grant.capability', manifestHash: mh, capabilities: surf.capabilities, ...(readPaths.length ? { read: readPaths } : {}) }, now);
     }
-    if (rec.detail.egress.length) appendGrantRow(home, opts.authority, { kind: 'grant.egress', manifestHash: mh, hosts: rec.detail.egress }, now);
+    if (surf.egress.length) appendGrantRow(home, opts.authority, { kind: 'grant.egress', manifestHash: mh, hosts: surf.egress }, now);
+    appendGrantRow(home, opts.authority, { kind: 'grant.install', name, manifestHash: mh, packageHash, cardId, source }, now); // LAST
     emit('manifest.installed', { name, manifestHash: mh, packageHash, cardId, source });
     emit('mod.installed', { name, packageHash, ...(rec.detail.replaces ? { replaces: rec.detail.replaces.packageHash } : {}) });
     if (source.startsWith('linked:') && !rec.detail.replaces) emit('mod.linked', { name, path: source.slice(7), packageHash });
@@ -311,6 +379,11 @@ function decideInstall(home: string, name: string, cardId: string, decision: 'in
   return decided;
 }
 
+/** The security-relevant detail fields re-derived on decide. */
+function pick(d: Surface & { packageHash: string }): Record<string, unknown> {
+  return { packageHash: d.packageHash, effects: d.effects, egress: d.egress, capabilities: d.capabilities, events: d.events, tools: d.tools, views: d.views, commands: d.commands, keybindings: d.keybindings, knowledge: d.knowledge, mcp: d.mcp, hooks: d.hooks, opaque: d.opaque };
+}
+
 /**
  * Human-only rollback: re-pin a previous APPROVED snapshot (an earlier
  * grant.install row for the mod), never an unapproved one; keeps the link.
@@ -318,6 +391,7 @@ function decideInstall(home: string, name: string, cardId: string, decision: 'in
 function rollbackMod(home: string, name: string, toPackageHash: string | undefined, opts: DecideOptions): GrantInstallRow {
   const emit = opts.emit ?? noEvents;
   const now = opts.now ?? new Date();
+  if (typeof name !== 'string' || !/^[a-z][a-z0-9-]{0,63}$/.test(name)) throw new ManifestRefusal('SCHEMA', 'malformed mod name', { name: String(name) });
   const verdict = consumePresence(opts.presenceToken, 'mod.rollback', now.getTime());
   if (verdict !== 'ok') throw new ManifestRefusal('GRANT', `rollback needs fresh presence (${verdict})`, { name, presence: verdict });
   const grants = readGrants(home, opts.authority);
@@ -386,7 +460,7 @@ export function loadMod(opts: LoadOptions): LoadResult {
       emit('mod.paused', { name: row.name, reason: 'changed', files: listed });
       let cardId: string | null = null;
       try {
-        const st = stageInstall({ home: opts.home, source: folder, via: 'linked', tier: tier ?? 'local', requestedBy: opts.kernelPrincipal ?? 'p:00000000/kernel', trust: opts.trust, emit });
+        const st = stageInstall({ home: opts.home, source: folder, via: 'linked', requestedBy: opts.kernelPrincipal ?? 'p:00000000/kernel', trust: opts.trust, emit });
         if (st.state === 'staged') cardId = st.cardId;
       } catch (err) {
         if (!(err instanceof ManifestRefusal)) throw err; // copier/manifest refusal: logged, mod stays paused on its snapshot

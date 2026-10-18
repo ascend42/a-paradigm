@@ -10,6 +10,14 @@
  * `:port` are stripped, and a WILDCARD that could match an Anthropic host
  * (`*`, `*.com`, `*.anthropic.com`) is refused as well. Malformed hosts
  * (empty, whitespace, a scheme, a path, `@`) are refused as not-a-host.
+ *
+ * Also refused (Aegis F8): any port (`host:443` — the egress proxy decides
+ * ports, a grant names hosts only); numeric hosts in any form (an all-numeric
+ * last label covers dotted-quad and decimal, a `0x…`/octal label the hex and
+ * octal forms); single-label names; and local/private names (`localhost`,
+ * `*.localhost`, `.local`, `.internal`, `.lan`, `.home.arpa`, `.localdomain`).
+ * The resolved-IP check against Anthropic and private ranges is the egress
+ * proxy's (M1.7); this is the name-level gate.
  */
 
 /** Registrable domains whose hosts are Anthropic API / product endpoints. */
@@ -59,12 +67,20 @@ export function isAnthropicHost(raw: unknown): boolean {
   return false;
 }
 
-export type EgressVerdict = { ok: true; host: string } | { ok: false; host: string; why: 'anthropic' | 'not-a-host' };
+export type EgressRefusalWhy = 'anthropic' | 'not-a-host' | 'port' | 'numeric' | 'single-label' | 'private-name';
+export type EgressVerdict = { ok: true; host: string } | { ok: false; host: string; why: EgressRefusalWhy };
+
+export const PRIVATE_NAME_SUFFIXES = Object.freeze(['localhost', 'local', 'internal', 'lan', 'home.arpa', 'localdomain', 'intranet', 'corp']);
 
 /** Check one egress host. */
 export function checkEgressHost(raw: unknown): EgressVerdict {
   const h = normalizeHost(raw);
   if (h === null) return { ok: false, host: String(raw), why: 'not-a-host' };
   if (isAnthropicHost(h)) return { ok: false, host: h, why: 'anthropic' };
+  if (/:\d+$/.test(String(raw).trim())) return { ok: false, host: h, why: 'port' };
+  const labels = h.split('.');
+  if (/^(0x[0-9a-f]+|\d+)$/.test(labels[labels.length - 1]!)) return { ok: false, host: h, why: 'numeric' };
+  if (labels.length < 2 || (labels.length === 2 && labels[0] === '*')) return { ok: false, host: h, why: labels[labels.length - 1] === 'localhost' ? 'private-name' : 'single-label' };
+  if (PRIVATE_NAME_SUFFIXES.some((s) => h === s || h.endsWith(`.${s}`))) return { ok: false, host: h, why: 'private-name' };
   return { ok: true, host: h };
 }

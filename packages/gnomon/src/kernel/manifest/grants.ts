@@ -135,7 +135,7 @@ export function checkGrantRow(row: unknown): string | null {
       if (!strArr(row.hosts) || row.hosts.length === 0) return 'hosts';
       for (const h of row.hosts) {
         const v = checkEgressHost(h);
-        if (!v.ok) return v.why === 'anthropic' ? 'egress-anthropic' : 'egress-host';
+        if (!v.ok) return `egress-${v.why}`;
       }
       return null;
     case 'grant.bind':

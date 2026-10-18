@@ -6,9 +6,12 @@
  *
  *   layersHash — every Claude settings layer the kernel can see: the managed
  *     files (their paths come from the platform, passed in by the caller), the
- *     user layer (`~/.claude/settings*.json`, `~/.claude/CLAUDE.md`, and the
- *     NAME listing of `skills/`, `plugins/`, `agents/`, `commands/`), the
- *     project layer (`<cwd>/.claude/**`, `CLAUDE.md`, `CLAUDE.local.md`) and
+ *     user layer (`~/.claude/settings*.json`, `~/.claude/CLAUDE.md`, the NAME
+ *     listing of `skills/`, `plugins/`, `agents/`, `commands/`, and
+ *     `~/.claude.json` — its user-scope mcpServers run commands; the spec's
+ *     §3.3/§15.5 lists omit it, a gap to amend), the project layer
+ *     (`<cwd>/.claude/**` minus `.claude/worktrees/`, `CLAUDE.md`,
+ *     `CLAUDE.local.md`) and
  *     the worktree layer (the same set under the worktree).
  *   gitHash — `.git/config`, `.git/hooks/**`, `.git/info/**` (in the common
  *     git dir; a linked worktree's `.git` file is followed, and its
@@ -23,7 +26,8 @@
  *     same. Two inputs that fold to one key are both kept, ordered by content
  *     hash, so the digest never depends on the original case or on readdir order.
  *   - absent files are hashed as `null`, so removing a layer changes the hash.
- * Symlinks are not followed: a link contributes `symlink:<target>` as content.
+ * A symlink contributes `symlink:<target>\n` followed by the TARGET's bytes
+ * (when it is a readable file), so retargeting and editing the target both move the hash.
  *
  *   digest = "sha256:" + hex(sha256(canonicalJson({ schema, entries: [[key, sha256hex | null], …] })))
  */
@@ -40,6 +44,8 @@ export interface HashInput {
   key: string;
   /** null = absent. */
   bytes: Uint8Array | null;
+  /** The absolute path read (not hashed; lets the policy test prove every layer is write-denied). */
+  abs?: string;
 }
 
 /** CRLF → LF (A23-4). */
@@ -73,16 +79,28 @@ export function digestInputs(schema: string, inputs: readonly HashInput[]): stri
 function readInput(scope: string, rel: string, abs: string): HashInput {
   try {
     const st = fs.lstatSync(abs);
-    if (st.isSymbolicLink()) return { key: `${scope}:${rel}`, bytes: new TextEncoder().encode(`symlink:${fs.readlinkSync(abs)}`) };
-    if (st.isFile()) return { key: `${scope}:${rel}`, bytes: fs.readFileSync(abs) };
-    return { key: `${scope}:${rel}`, bytes: new TextEncoder().encode(`not-a-file:${st.isDirectory() ? 'dir' : 'special'}`) };
+    if (st.isSymbolicLink()) {
+      const head = new TextEncoder().encode(`symlink:${fs.readlinkSync(abs)}\n`);
+      let target: Uint8Array = new Uint8Array(0);
+      try {
+        if (fs.statSync(abs).isFile()) target = fs.readFileSync(abs);
+      } catch {
+        target = new Uint8Array(0); // dangling: the link text alone
+      }
+      const b = new Uint8Array(head.length + target.length);
+      b.set(head);
+      b.set(target, head.length);
+      return { key: `${scope}:${rel}`, bytes: b, abs };
+    }
+    if (st.isFile()) return { key: `${scope}:${rel}`, bytes: fs.readFileSync(abs), abs };
+    return { key: `${scope}:${rel}`, bytes: new TextEncoder().encode(`not-a-file:${st.isDirectory() ? 'dir' : 'special'}`), abs };
   } catch {
-    return { key: `${scope}:${rel}`, bytes: null };
+    return { key: `${scope}:${rel}`, bytes: null, abs };
   }
 }
 
 /** Every file under `rootAbs/relDir` (recursive, links not followed); a missing dir yields one absent marker. */
-function readTree(scope: string, rootAbs: string, relDir: string): HashInput[] {
+function readTree(scope: string, rootAbs: string, relDir: string, skip: (rel: string) => boolean = () => false): HashInput[] {
   const out: HashInput[] = [];
   const visit = (abs: string, rel: string): void => {
     let names: string[];
@@ -94,6 +112,7 @@ function readTree(scope: string, rootAbs: string, relDir: string): HashInput[] {
     for (const n of names) {
       const a = path.join(abs, n);
       const r = `${rel}/${n}`;
+      if (skip(r)) continue;
       let st: fs.Stats;
       try {
         st = fs.lstatSync(a);
@@ -105,7 +124,7 @@ function readTree(scope: string, rootAbs: string, relDir: string): HashInput[] {
     }
   };
   const start = path.join(rootAbs, ...relDir.split('/'));
-  if (!fs.existsSync(start)) return [{ key: `${scope}:${relDir}/`, bytes: null }];
+  if (!fs.existsSync(start)) return [{ key: `${scope}:${relDir}/`, bytes: null, abs: start }];
   visit(start, relDir);
   return out;
 }
@@ -114,14 +133,15 @@ function readTree(scope: string, rootAbs: string, relDir: string): HashInput[] {
 function listing(scope: string, rootAbs: string, relDir: string): HashInput {
   try {
     const names = fs.readdirSync(path.join(rootAbs, relDir)).map((n) => n.normalize('NFC').toLowerCase()).sort();
-    return { key: `${scope}:${relDir}/`, bytes: new TextEncoder().encode(names.join('\n')) };
+    return { key: `${scope}:${relDir}/`, bytes: new TextEncoder().encode(names.join('\n')), abs: path.join(rootAbs, relDir) };
   } catch {
-    return { key: `${scope}:${relDir}/`, bytes: null };
+    return { key: `${scope}:${relDir}/`, bytes: null, abs: path.join(rootAbs, relDir) };
   }
 }
 
 function projectLayer(scope: string, root: string): HashInput[] {
-  return [...readTree(scope, root, '.claude'), readInput(scope, 'CLAUDE.md', path.join(root, 'CLAUDE.md')), readInput(scope, 'CLAUDE.local.md', path.join(root, 'CLAUDE.local.md'))];
+  // `.claude/worktrees/` holds Claude's own worktrees (whole checkouts), not settings
+  return [...readTree(scope, root, '.claude', (r) => r.toLowerCase() === '.claude/worktrees'), readInput(scope, 'CLAUDE.md', path.join(root, 'CLAUDE.md')), readInput(scope, 'CLAUDE.local.md', path.join(root, 'CLAUDE.local.md'))];
 }
 
 export interface LayersInput {
@@ -133,6 +153,12 @@ export interface LayersInput {
   userClaudeDir: string;
   /** Managed settings files (platform-specific paths, from the caller / root-signed config). */
   managedPaths: readonly string[];
+  /** `~/.claude.json` (default: beside userClaudeDir). */
+  userClaudeJson?: string;
+}
+
+export function defaultClaudeJson(userClaudeDir: string): string {
+  return path.join(path.dirname(userClaudeDir), '.claude.json');
 }
 
 /** The inputs of `layersHash` (exposed for tests and for `session.layers.changed{which}`). */
@@ -149,6 +175,8 @@ export function collectLayerInputs(inp: LayersInput): HashInput[] {
   for (const n of settings.length ? settings : ['settings.json']) user.push(readInput('user', n, path.join(u, n)));
   user.push(readInput('user', 'CLAUDE.md', path.join(u, 'CLAUDE.md')));
   for (const d of ['skills', 'plugins', 'agents', 'commands']) user.push(listing('user', u, d));
+  const cj = inp.userClaudeJson ?? defaultClaudeJson(u);
+  user.push(readInput('user', '.claude.json', cj));
   const managed = inp.managedPaths.map((p) => readInput('managed', p, p));
   const worktree = inp.worktree && path.resolve(inp.worktree) !== path.resolve(inp.cwd) ? projectLayer('worktree', inp.worktree) : [];
   return [...managed, ...user, ...projectLayer('project', inp.cwd), ...worktree];
