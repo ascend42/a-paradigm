@@ -1,0 +1,26 @@
+id: L-2026-10-18-builder-164242-001
+type: insight
+timestamp: '2026-10-18T16:42:42.194Z'
+author: builder
+title: 'M1.8 slice 2: compaction re-derived in gnomon-local with normalised fixed headings'
+summary: Threshold compaction when estimated history + reply budget exceeds contextTarget (min(~8k, n_ctx)); one compact-and-retry on a context-overflow 400/413; the summary is normalised to exactly Goal/Constraints/Progress/Decisions/Next/Critical so the shape never depends on the model; tail keeps a quarter of the target from a safe boundary
+symbols_touched:
+  - '#gnomon-local'
+files_modified:
+  - packages/gnomon-local/src/agent.ts
+  - packages/gnomon-local/src/rpc.ts
+files_created:
+  - packages/gnomon-local/src/compaction.ts
+  - packages/gnomon-local/test/compaction.test.ts
+commit: 77e59cf3
+learnings:
+  - Token estimate is chars/4 + 4 per message and deterministic
+  - The summary is merged into a leading user message so strict chat templates keep alternating roles
+  - Summariser usage folds into agent_end so the kernel meter charges it as the run's remainder
+tags:
+  - decision
+body: 'Zero-dep design kept; the gnomon-local-without-pi question is still pending founder ratification and was not resolved. JSONL session tree deferred: the session profile denies writes under the Gnomon home.'
+git_context:
+  ref: 77e59cf30ba18c55d5a3277738748b5d62c3c5ba
+  branch: gnomon/m18-slice2
+  dirty: true
