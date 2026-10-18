@@ -1,0 +1,31 @@
+id: L-2026-10-18-ascend-064859-001
+type: milestone
+timestamp: '2026-10-18T06:48:59.355Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Gnomon Move 1: M1.4–M1.9, M1.11 slice 1, M1.8 slice 1, M1.7 slice 1 landed (CI green ×8)'
+summary: 'Session 2026-10-17/18 orchestration: every milestone built by a builder, reviewed by a fresh reviewer + Aegis (≤3 rounds), merged with CI green on macOS 14/15, Ubuntu, Windows. Landed: M1.4 (PoP read tokens, G-ABI/G-SOCK, #web-endpoint), M1.5 #manifest-loader, M1.6 slice 1 broker + fuse (then P8-D92 meter), M1.7 slice 1 session runner (claude private-copy pin, generated SBPL, macOS 15 + SIP floor, AppleEvent mach-lookup deny), M1.8 slice 1 local lane (path confinement, LAN-only endpoints), M1.9 scheduler + boot/startTime-witnessed orphan sweep, M1.11 slice 1 mod host (default-deny profile, host-only state.db, egress proxy), T-009(a)(c), M1.0 probes, portal-compliance scanner fix. Founder rulings P8-D89..D92. Open for founder: T-2026-10-18-011 (AppleEvent self-built sender unproven), -012 (TCC inheritance), pi deviation, hooks in sessions, notary, disk.'
+symbols_touched:
+  - '#socket'
+  - '#web-endpoint'
+  - '#manifest-loader'
+  - '#approval-broker'
+  - '#budget-fuse'
+  - '#session-runner'
+  - '#supervisor'
+  - '#claude-adapter'
+  - '#local-runner'
+  - '#scheduler'
+  - '#mod-host'
+  - '#kernel-log'
+tags:
+  - paradigm-8
+  - gnomon
+  - move-1
+  - milestone
+git_context:
+  ref: 481489f9a6648e3ecc13738361172b3f9f0c52c3
+  branch: feat/gnomon
+  dirty: true
