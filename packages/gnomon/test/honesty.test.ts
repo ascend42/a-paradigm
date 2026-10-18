@@ -82,16 +82,31 @@ describe('honesty CI falsifiers: every rule fails on a planted violation', () =>
   });
   it('G-HON-07 (docs)', () => {
     expect(scanLatencyDocs(f('Append is fast: p99 0.4 ms.', 'README.md'))).toHaveLength(1);
-    expect(scanLatencyDocs(f('measured p99 0.4 ms over 10000 events on the founder\'s Mac (M2, test:perf)', 'README.md'))).toEqual([]);
+    // round 2, B2 falsifiers: a table row, a line with no keyword, a vague "host"
+    expect(scanLatencyDocs(f('| append | 0.4 ms | 1.2 ms |', 'README.md'))).toHaveLength(2);
+    expect(scanLatencyDocs(f('Appends take 0.4 ms each.', 'README.md'))).toHaveLength(1);
+    expect(scanLatencyDocs(f('p99 0.4 ms when the host runs', 'README.md'))).toHaveLength(1);
+    expect(scanLatencyDocs(f('measured p99 0.4 ms on a fast machine', 'README.md'))).toHaveLength(1); // a machine word, not a concrete one, and no named method
+    // passes: named method + concrete machine, sentence-wide in prose and row-wide in a table
+    expect(scanLatencyDocs(f("p99 0.4 ms over 10000 appends on the founder's Apple M4 (macOS 15, test:perf).", 'README.md'))).toEqual([]);
+    expect(scanLatencyDocs(f('| append p99 | 0.4 ms | test:perf | darwin-arm64 |', 'README.md'))).toEqual([]);
+    // a wrapped paragraph keeps its sentence: the machine on the next line still counts
+    expect(scanLatencyDocs(f('p99 0.4 ms over 10000 appends\non macOS 15 arm64.', 'README.md'))).toEqual([]);
+    // budgets and configured intervals are exempt (the BUDGET EXEMPTION, pending ratification)
     expect(scanLatencyDocs(f('the budget is p99 < 5 ms', 'README.md'))).toEqual([]);
+    expect(scanLatencyDocs(f('renamed 50 ms after the first row; a 500 ms debounce', 'README.md'))).toEqual([]);
   });
   it('G-HON-03 / G-HON-07 (status): a bare count, a subset past its denominator, an unprovenanced latency', () => {
     expect(checkStatusNumbers({ cardsPending: 3 }).map((x) => x.rule)).toEqual(['G-HON-03']);
     expect(checkStatusNumbers({ cards: { n: 1, pendingForYou: 2 } }).map((x) => x.detail)).toEqual(['2 exceeds its denominator cards.n = 1']);
     expect(checkStatusNumbers({ cards: { pendingForYou: 0 } })).toHaveLength(1);
     expect(checkStatusNumbers({ drops: { n: 5, of: 2 } })).toHaveLength(1);
+    // round 2: an {n} without of is a gauge only where STATUS_NUMBERS declares one
+    expect(checkStatusNumbers({ widgets: { n: 2 } }).map((x) => x.detail)).toEqual(['an {n} without of must be declared a gauge in STATUS_NUMBERS']);
+    expect(checkStatusNumbers({ widgets: { n: 2 } }, { 'widgets.n': 'gauge' })).toEqual([]);
     expect(checkStatusNumbers({ append: { p99Ms: 0.4 } }, { 'append.p99Ms': 'latency' }).map((x) => x.rule)).toEqual(['G-HON-07']);
     expect(checkStatusNumbers({ append: { p99Ms: 0.4, method: 'hrtime over 10⁴ appends', machine: 'darwin-arm64' } }, { 'append.p99Ms': 'latency' })).toEqual([]);
     expect(checkStatusNumbers({ unlocks: { n: 2 }, clientConformance: { n: 0, of: 1 }, log: { seq: 9 } })).toEqual([]);
+    expect(checkStatusNumbers({ unlocks: { n: 2 } }, {})).toHaveLength(1);
   });
 });

@@ -138,7 +138,10 @@ components:
       gauge, ordinal, limit, duration, latency (needs sibling method + machine)
       or subset-of-<path> (must not exceed its denominator); checkStatusNumbers
       returns every bare or unprovenanced number, so a new status number
-      cannot ship undeclared.
+      cannot ship undeclared. Round 2: an {n} without of passes only at a
+      path declared gauge. Tagged #socket (the declarations live beside the
+      status verb) AND #client-conformance (the check is the honesty CI gate's;
+      no kernel code calls it).
     description: >-
       #socket (spec §2.1, §4.9, §5) — the kernel's gnomon-rpc:v1 endpoint.
       PR-5 core: unix-socket server bound under a 0177 umask, chmod 0600 and
@@ -746,7 +749,8 @@ components:
       appends a kernel-signed daemon.anchor.lag{rows, which}
       (contracts kind added; bootPrev/bootNow additive for which: 'file'). Fsync
       policy: WAL + synchronous=FULL (default 'process-crash'); 'power-loss'
-      adds fullfsync (~10 ms/commit on Apple SSD, above the 5 ms falsifier).
+      adds fullfsync per commit, which costs more than the 5 ms falsifier allows
+      (the M1.2 figure carries no recorded method or machine, so no number here).
       G-LOG-04 (test:perf, one attempt): bulk p99 < 5 ms / ≤ 0.1 % over 5 ms,
       critical at 1/s under bulk load (60 events in the unit pass) p99 <
       25 ms; the ≥ 600-event 1/s oracle is the manual 10⁶ probe run.
@@ -948,7 +952,11 @@ components:
       (Math.random outside ids, simulated/simulation, sleep()/delay(),
       hardcoded gains, mechanism words the code lacks), G-HON-05 no
       Task-steering descriptions, G-HON-06 unscoped guard names refused,
-      G-HON-07 measured latencies in package docs name method + machine; the
+      G-HON-07 (round 2, B2): every ms/µs number in package docs — prose,
+      wrapped paragraphs and Markdown table cells, keyword or not — names a
+      concrete machine (chip, versioned OS or arch) and a named method in its
+      sentence or table row, unless it is a budget, bound or configured
+      interval (the BUDGET EXEMPTION, pending founder ratification); the
       live status of a spawned kernel (device + read-token views) passes
       checkStatusNumbers (#socket) in test/m112-conformance.test.ts.
     tags: [gnomon, m1.12, client, conformance, honesty-ci]

@@ -1,5 +1,12 @@
 /**
  * @symbol #socket
+ * @symbol #client-conformance
+ *
+ * Two owners on purpose: the DECLARATIONS are #socket's (status is the
+ * socket's `status` verb, so whoever adds a status number declares it here, in
+ * the kernel, beside the dispatcher); the CHECK serves #client-conformance's
+ * honesty CI gate (test/honesty.test.ts, the live-status check in
+ * test/m112-conformance.test.ts). Nothing in the kernel calls the check.
  *
  * #socket status numbers (spec §9.1 "every number ships as {n, of}; a bare
  * count in a result or block fails CI" — G-HON-03; §9.6; G-HON-07; M1.12
@@ -29,6 +36,15 @@ export type StatusNumberClass = 'gauge' | 'ordinal' | 'limit' | 'duration' | 'la
 
 /** Paths are dotted from the status root; `*` matches one object key, `[]` one array element. */
 export const STATUS_NUMBERS: Readonly<Record<string, StatusNumberClass>> = Object.freeze({
+  'sessions.n': 'gauge',
+  'cards.n': 'gauge',
+  'subscriptions.n': 'gauge',
+  'budget.permits.n': 'gauge', // open permits: the whole set
+  'budget.quotaErrors.n': 'gauge', // every quota error since start: the whole set (a counter)
+  'web.guiSessions.n': 'gauge',
+  'unlocks.n': 'gauge', // spec §9.6 unlocks{n}
+  'mods.running.n': 'gauge',
+  'mods.paused.n': 'gauge',
   'daemon.pid': 'ordinal',
   'daemon.connections': 'gauge', // the whole set of socket connections, named in place of {n}
   'daemon.idleMs': 'limit',
@@ -78,17 +94,19 @@ export function checkStatusNumbers(status: unknown, registry: Readonly<Record<st
     }
     if (typeof v !== 'number') return;
     if (key === 'of' && parent && typeof parent.n === 'number') return;
-    if (key === 'n') {
-      if (parent && typeof parent.of === 'number' && v > parent.of) out.push({ path: p, rule: 'G-HON-03', detail: `n ${v} exceeds of ${parent.of}` });
-      return; // a gauge, or the numerator of {n, of}
+    if (key === 'n' && parent && typeof parent.of === 'number') {
+      if (v > parent.of) out.push({ path: p, rule: 'G-HON-03', detail: `n ${v} exceeds of ${parent.of}` });
+      return; // the numerator of {n, of}
     }
     const entry = Object.entries(registry).find(([pat]) => matches(pat, p));
     if (!entry) {
-      out.push({ path: p, rule: 'G-HON-03', detail: 'a bare number: ship it as {n, of} or {n}, or declare what it is in STATUS_NUMBERS' });
+      out.push({ path: p, rule: 'G-HON-03', detail: key === 'n' ? 'an {n} without of must be declared a gauge in STATUS_NUMBERS' : 'a bare number: ship it as {n, of}, or declare what it is in STATUS_NUMBERS' });
       return;
     }
     const cls = entry[1];
-    if (cls === 'latency') {
+    if (key === 'n' && cls !== 'gauge') {
+      out.push({ path: p, rule: 'G-HON-03', detail: 'an {n} without of must be declared a gauge in STATUS_NUMBERS' });
+    } else if (cls === 'latency') {
       if (!parent || typeof parent.method !== 'string' || !parent.method || typeof parent.machine !== 'string' || !parent.machine) {
         out.push({ path: p, rule: 'G-HON-07', detail: 'a latency number must name its measurement method and machine (sibling method, machine)' });
       }
