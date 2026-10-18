@@ -1052,6 +1052,21 @@ components:
       under the GENERATED profile with the adapter argv: PASS, with writes to
       the whole ~/.claude/** and ~/.claude.json denied and NO per-session
       CLAUDE_CONFIG_DIR (a custom CLAUDE_CONFIG_DIR loses subscription auth).
+      ROUND 2 (Aegis H1/M1/M2/L2): binary.ts pins the claude sha256 in
+      <home>/claude-pin.json on first use (logged session.sandbox{phase:
+      'binary-pin'}); another hash is claude_binary_changed until an explicit
+      repinClaudeBinary (CLI/test seam until the gate-class card); the kernel
+      executes only a private copy <home>/bin/claude-<sha> written from the
+      same verified buffer, and preflight --version / auth status run that
+      copy UNDER the session profile. The profile also write-denies the
+      binary realpath, its versions dir and every known-location link
+      (supervisor binaryDenies) and the user persistence paths
+      (policy.ts PERSISTENCE_PATHS: LaunchAgents, shell rc files, git config,
+      ~/.ssh); shortcuts/automator join the launcher exec denies; copied
+      Apple launchers die by launch constraints (137, spec §A.2(iv)). Law 7
+      also flags ~/.claude.json primaryApiKey / customApiKeyResponses.approved
+      and forceLoginMethod 'console' (billing.ts). The p10m re-run with the
+      private copy and the new denies: PASS.
     path: src/kernel/runner/
     type: module
     tags: [gnomon, kernel, session, law-7, paradigm-8, m1.7]
@@ -1086,7 +1101,16 @@ components:
       SIGTERM -> SIGKILL on the group). Mid-session watch (G-SUB-05):
       layersHash + gitHash polled every 500 ms; a law-7 hit stops the session
       within 2 s. port.ts: the dispatcher's session port (human class only);
-      daemon.ts wires it.
+      daemon.ts wires it. ROUND 2: the exit listener is attached synchronously
+      at spawn (an early-exiting child is cleaned up: watch cleared, permits
+      released, moved to a bounded history); one catch from reserve to track
+      releases the permit, kills a stray child, removes the session dir;
+      layers hashed before the law-7 scan and re-checked right before spawn;
+      child HOME forced to the scanned user home; caller turn permits must be
+      live, unexpired, subscription and single-use; turn permits FIFO; the
+      watch hashes ~/.claude.json only through its law-7 projection;
+      stdout paused above a queue high-water mark and lines over 64 KiB
+      logged as {lineHash, bytes}; init without apiKeySource logged absent.
     path: src/kernel/supervisor/
     type: module
     tags: [gnomon, kernel, session, paradigm-8, m1.7]

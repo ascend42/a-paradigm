@@ -15,7 +15,7 @@
       "deniesHold": true,
       "execDenied": true
     },
-    "ms": 7172,
+    "ms": 7826,
     "exit": {
       "code": 0,
       "sig": null,
@@ -30,8 +30,8 @@
       "type": "result",
       "subtype": "success",
       "isError": false,
-      "tokens": 56909,
-      "costUsd": 0.154356,
+      "tokens": 57053,
+      "costUsd": 0.15645119999999998,
       "permissionDenials": 0,
       "quota": false
     },
@@ -66,13 +66,17 @@
       "osascript_exit": "126",
       "lsregister_exit": "126",
       "launchctl_exit": "126",
+      "write_claude_binary": "blocked",
+      "write_zshrc": "blocked",
+      "copied_launchctl_exit": "137",
       "python": "py_ok"
     },
     "endpointHitsDuringRun": 0,
-    "profileHash": "sha256:51c76b607a77f6017c59b4eb678122a9c891072472cf81765b36402c00ea9003",
-    "profile": ";; gnomon session profile v1 (spec §15.5) — generated from gnomon-session-policy:v1, every path realpath'd\n(version 1)\n(allow default)\n(deny file-read* (literal \"<tmp>/gnomon-home/head\") (subpath \"<tmp>/gnomon-home/keys\") (subpath \"<tmp>/gnomon-home/link\") (subpath \"<tmp>/gnomon-home/warpline\") (literal \"<tmp>/work/.warpline/daemon-tokens.jsonl\") (literal \"<tmp>/work/.warpline/daemon/mcp-tokens.json\") (literal \"<tmp>/work/.warpline/daemon/mcp.token\") (subpath \"<tmp>/work/.warpline/keys\"))\n(deny file-write* (subpath \"~/.claude\") (literal \"~/.claude.json\") (subpath \"<tmp>/gnomon-home\") (literal \"<tmp>/gnomon-home/head\") (subpath \"<tmp>/gnomon-home/keys\") (subpath \"<tmp>/gnomon-home/link\") (subpath \"<tmp>/gnomon-home/warpline\") (subpath \"<tmp>/linked-mod\") (subpath \"<tmp>/work/.claude\") (literal \"<tmp>/work/.git/config\") (subpath \"<tmp>/work/.git/hooks\") (subpath \"<tmp>/work/.git/info\") (literal \"<tmp>/work/.warpline/daemon-tokens.jsonl\") (literal \"<tmp>/work/.warpline/daemon/mcp-tokens.json\") (literal \"<tmp>/work/.warpline/daemon/mcp.token\") (subpath \"<tmp>/work/.warpline/keys\") (prefix \"<tmp>/work/CLAUDE\"))\n(deny network-outbound (remote ip \"localhost:53031\"))\n(deny process-info*)\n(allow process-info* (target self))\n(deny sysctl-read (sysctl-name-prefix \"kern.proc\"))\n(deny mach-lookup (global-name \"com.apple.sysmond\"))\n(deny network-outbound (remote unix-socket (subpath \"/private/tmp/tmux-501\")))\n(deny network-outbound (remote unix-socket (subpath \"/private/var/folders/gq/nt2kdpsj39dc8vpq6cfzx8gw0000gn/T/.screen\")) (remote unix-socket (subpath \"/private/tmp/screens\")) (remote unix-socket (subpath \"~/.screen\")))\n(deny appleevent-send)\n(deny device-microphone)\n(deny device-camera)\n(deny process-exec (literal \"/usr/bin/open\") (literal \"/usr/bin/osascript\") (literal \"/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister\") (literal \"/bin/launchctl\"))\n",
+    "profileHash": "sha256:9110109784052cb3b8bfbeb4dafc7eb31b9da660f501c847f97f6749d1f73852",
+    "profile": ";; gnomon session profile v1 (spec §15.5) — generated from gnomon-session-policy:v1, every path realpath'd\n(version 1)\n(allow default)\n(deny file-read* (literal \"<tmp>/gnomon-home/head\") (subpath \"<tmp>/gnomon-home/keys\") (subpath \"<tmp>/gnomon-home/link\") (subpath \"<tmp>/gnomon-home/warpline\") (literal \"<tmp>/work/.warpline/daemon-tokens.jsonl\") (literal \"<tmp>/work/.warpline/daemon/mcp-tokens.json\") (literal \"<tmp>/work/.warpline/daemon/mcp.token\") (subpath \"<tmp>/work/.warpline/keys\"))\n(deny file-write* (literal \"~/.bash_profile\") (literal \"~/.bashrc\") (subpath \"~/.claude\") (literal \"~/.claude.json\") (subpath \"~/.config/git\") (literal \"~/.gitconfig\") (literal \"~/.local/bin/claude\") (subpath \"~/.local/share/claude/versions\") (literal \"~/.local/share/claude/versions/2.1.302\") (literal \"~/.profile\") (subpath \"~/.ssh\") (literal \"~/.zlogin\") (literal \"~/.zprofile\") (literal \"~/.zshenv\") (literal \"~/.zshrc\") (subpath \"~/Library/LaunchAgents\") (literal \"/opt/homebrew/bin/claude\") (subpath \"<tmp>/gnomon-home\") (literal \"<tmp>/gnomon-home/head\") (subpath \"<tmp>/gnomon-home/keys\") (subpath \"<tmp>/gnomon-home/link\") (subpath \"<tmp>/gnomon-home/warpline\") (subpath \"<tmp>/linked-mod\") (subpath \"<tmp>/work/.claude\") (literal \"<tmp>/work/.git/config\") (subpath \"<tmp>/work/.git/hooks\") (subpath \"<tmp>/work/.git/info\") (literal \"<tmp>/work/.warpline/daemon-tokens.jsonl\") (literal \"<tmp>/work/.warpline/daemon/mcp-tokens.json\") (literal \"<tmp>/work/.warpline/daemon/mcp.token\") (subpath \"<tmp>/work/.warpline/keys\") (prefix \"<tmp>/work/CLAUDE\") (literal \"/usr/local/bin/claude\"))\n(deny network-outbound (remote ip \"localhost:54186\"))\n(deny process-info*)\n(allow process-info* (target self))\n(deny sysctl-read (sysctl-name-prefix \"kern.proc\"))\n(deny mach-lookup (global-name \"com.apple.sysmond\"))\n(deny network-outbound (remote unix-socket (subpath \"/private/tmp/tmux-501\")))\n(deny network-outbound (remote unix-socket (subpath \"/private/var/folders/gq/nt2kdpsj39dc8vpq6cfzx8gw0000gn/T/.screen\")) (remote unix-socket (subpath \"/private/tmp/screens\")) (remote unix-socket (subpath \"~/.screen\")))\n(deny appleevent-send)\n(deny device-microphone)\n(deny device-camera)\n(deny process-exec (literal \"/usr/bin/open\") (literal \"/usr/bin/osascript\") (literal \"/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister\") (literal \"/bin/launchctl\") (literal \"/usr/bin/shortcuts\") (literal \"/usr/bin/automator\"))\n",
     "notes": [
       "claude ran with the adapter argv (stream-json) and NO per-session CLAUDE_CONFIG_DIR: a custom CLAUDE_CONFIG_DIR loses subscription auth (auth status: loggedIn false, authMethod none — the OAuth keychain item is keyed by the config dir), so it is not used.",
+      "round 2: claude ran as a PRIVATE COPY under <gnomon home>/bin with the binary, versions dir, known-location links and user persistence paths (rc files, ~/.ssh, LaunchAgents, git config) write-denied.",
       "ps is not tested (setuid; fails under any sandbox-exec profile).",
       "Ground truth is out.txt written by check.sh, not the model reply."
     ]
@@ -86,5 +90,5 @@
     "G-SBX-08",
     "T-2026-10-18-008"
   ],
-  "at": "2026-10-18T04:41:55.932Z"
+  "at": "2026-10-18T05:03:57.084Z"
 }

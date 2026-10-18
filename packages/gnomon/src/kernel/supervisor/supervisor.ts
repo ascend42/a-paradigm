@@ -5,50 +5,52 @@
  * @symbol ^subscription-only
  *
  * #supervisor + #session-runner (spec §3.3, §6.1, §5 verbs 2–4, §9.1
- * session.* / turn.*, §10 laws 1 and 7; M1.7 SLICE 1). The ONE place a
- * `claude -p` process is started. Slice 1 serves ATTENDED, HUMAN-started
- * Claude Code sessions only (an agent/session/unattended open is refused
- * FORBIDDEN; the scheduler's run step still refuses, M1.9).
+ * session.* / turn.*, §10 laws 1 and 7; M1.7 SLICE 1, round 2). The ONE
+ * place a `claude -p` process is started. Slice 1 serves ATTENDED,
+ * HUMAN-started Claude Code sessions only (an agent/session/unattended open
+ * is refused FORBIDDEN; the scheduler's run step still refuses, M1.9).
  *
- * open(): session.open → preflight (claude by explicit path / known
- *   locations, never PATH; realpath + sha; version ≥ 2.1.288; `auth status`
- *   = claude.ai/firstParty) → session dir `<home>/sessions/<hsid-short>/`
- *   with policy.json (claudePermissions of the M1.5 SessionPolicy + the
- *   verified generated hooks) and mcp.json (the verified generated servers;
- *   T-008: bytes re-verified against the kernel-held record, never the
- *   repo's on trust) → the child env (allowlist + scrub) → LAW 7 per spawn
- *   (T-009/Aegis C5): every layer the child reads for THIS cwd, the session's
- *   own files and the child env (preflight.ts law7Layers) — a hit is
- *   billing.api.refused{where} + session.refused{code:'api_billing_refused'}
- *   and BILLING_REFUSED, before any permit → permit.reserve{session.spawn,
- *   backend:'claude-code', kernelSpawn} (the fuse runs its own law-7 scan) →
- *   assertClaudePermit (Aegis: claude never runs without a law-7-scanned
- *   claude-code session.spawn permit for THIS hsid, live in the fuse) → the
- *   generated `session` profile (sandbox/session.ts; no backend ⇒ refused,
- *   never unsandboxed) → children.intend (session.spawned{intent} BEFORE the
- *   fork) → spawn detached (own pgid) → children.track (running row with boot
- *   + start-time witness) → session.sandbox{…hashes}.
- * stdout: every line is a `turn.event` BEFORE anything acts on it (S2);
- *   usage only from stream events → turn.usage/turn.result → the fuse's
- *   recordStreamUsage against the SPAWN permit (UsageMeter: no double
- *   count); AskUserQuestion / ExitPlanMode ⇒ `ask-user` / `plan` cards via
- *   the broker + turn.ask-user / turn.plan; `init.apiKeySource ≠ none` kills
- *   the group; quota errors are recorded (P8-D92). Lines over 4 MiB dropped
- *   (turn.event{type:'dropped'}); stderr capped at 64 KiB.
- * send(): a `turn` permit (the caller's, validated, or reserved by the
- *   kernel for the owner — law 7 scanned again, per spawn layers too) →
- *   session.inject{origin:'client'} → turn.sent → the stream-json user line.
+ * open(): session.open → the child env (allowlist + scrub, HOME forced to the
+ *   scanned user home) → claude resolved by explicit path / known locations
+ *   (never PATH) → PINNED + PRIVATELY COPIED (runner/binary.ts, Aegis H1: the
+ *   pin is logged; a different hash is claude_binary_changed; the kernel only
+ *   ever executes `<home>/bin/claude-<sha>`, which sessions cannot write) →
+ *   policy (M1.5 SessionPolicy + the binary's paths/links/versions dir and the
+ *   user persistence paths write-denied) → policy.json + mcp.json from the
+ *   generated plugin bytes verified against the kernel-held record (T-008) →
+ *   preflight `--version` / `auth status` run UNDER the session profile →
+ *   layersHash/gitHash → LAW 7 per spawn (T-009/Aegis C5; a hit is
+ *   billing.api.refused + session.refused{api_billing_refused},
+ *   BILLING_REFUSED, before any permit) → permit.reserve{session.spawn,
+ *   claude-code, kernelSpawn} → assertClaudePermit → profile plan → the
+ *   layers re-hashed right before spawn (a change re-runs law 7) →
+ *   children.intend (intent row BEFORE the fork) → spawn detached with the
+ *   exit listener attached SYNCHRONOUSLY → children.track. One catch from the
+ *   permit to track releases the permit, kills a stray child, removes the
+ *   session dir and logs session.refused{code}.
+ * stdout: every line is a `turn.event` BEFORE anything acts on it (S2) — a
+ *   line over 64 KiB is logged as {lineHash, bytes}; while the log queue is
+ *   above its high-water mark stdout is PAUSED (backpressure, Aegis M3).
+ *   Usage only from stream events → turn.usage/turn.result → the fuse's
+ *   recordStreamUsage against the SPAWN permit (no double count);
+ *   AskUserQuestion / ExitPlanMode ⇒ `ask-user` / `plan` cards via the broker;
+ *   `init.apiKeySource ≠ none` kills the group (absent is logged `absent`).
+ * send(): a `turn` permit — the caller's (live, unexpired, subscription,
+ *   claude-code, this session, never used before) or kernel-reserved — law 7
+ *   re-run → session.inject{client} → turn.sent → the user line. Turn
+ *   permits are FIFO: each result releases the head only.
  * stop(): `interrupt` = the control_request line only (A23-4); otherwise
- *   staged: control message → close stdin → SIGTERM → SIGKILL on the group
- *   (DaemonChildren.stop) and the permits released.
- * Mid-session watch (G-SUB-05): layersHash + gitHash are re-read every
- *   `watchMs` (default 500 ms); a change logs session.layers.changed{which}
- *   and re-runs the law-7 scan — a hit stops the session (interrupt then
- *   staged stop) and logs billing.api.refused. The non-law-7 change's
- *   gate-class card is slice 2.
+ *   staged: control message → close stdin → SIGTERM → SIGKILL on the group.
+ * exit (any time, also before #wire): watch cleared, every permit released,
+ *   the session moves to a bounded history.
+ * Mid-session watch (G-SUB-05): every `watchMs` the layers are re-hashed —
+ *   ~/.claude.json only through its law-7 projection, so Claude's routine
+ *   rewrites never fire — a change logs session.layers.changed{which} and a
+ *   law-7 hit stops the session. The non-law-7 change's gate-class card is
+ *   slice 2.
  */
 import { createHash, randomUUID } from 'node:crypto';
-import { spawn, type ChildProcess } from 'node:child_process';
+import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -56,19 +58,27 @@ import { hsidShort, mintHsid, refuse, RefusedError, turnId, type RefusalCode } f
 import type { DaemonChildren } from '../lifecycle/children.js';
 import type { BudgetFuse, PermitV1 } from '../budget/fuse.js';
 import type { ApprovalBroker } from '../broker/broker.js';
-import { buildSessionPolicy, claudePermissions, policyHash, type SessionPolicy } from '../manifest/policy.js';
+import { buildSessionPolicy, claudePermissions, policyHash, realpathLoose, type PolicyPath, type SessionPolicy } from '../manifest/policy.js';
 import { layersHash, gitHash, defaultClaudeJson } from '../manifest/layers.js';
 import { verifiedGenerated } from '../manifest/generate.js';
 import { ManifestRefusal } from '../manifest/refusal.js';
 import { sessionLaunchPlan } from '../sandbox/session.js';
 import { LifecycleRefusal } from '../lifecycle/refusal.js';
 import { buildSessionEnv } from '../runner/env.js';
-import { claudeAuthOk, claudeVersion, law7Layers, law7Scan, managedFiles, PreflightRefusal, resolveClaudeBinary, type SessionRefusalCode } from '../runner/preflight.js';
+import { claudeAuthOk, claudeJsonProjection, claudeVersion, law7Layers, law7Scan, managedFiles, PreflightRefusal, realLoose, resolveClaudeBinary, type ClaudeRun, type Law7Input, type SessionRefusalCode } from '../runner/preflight.js';
+import { privateClaude } from '../runner/binary.js';
 import { buildClaudeArgv, cardKindOfTool, controlInterruptLine, LineSplitter, parseStreamLine, UsageMeter, userMessageLine, type SettingSource } from '../../adapters/claude-code/adapter.js';
 import { claudeCodePlatform, type ClaudeCodePlatformRow } from '../../platform/claude-code.js';
+import type { DarwinSessionExtras } from '../../platform/darwin/session-sbpl.js';
 
 export const STDOUT_LINE_CAP = 4 * 1024 * 1024;
 export const STDERR_CAP = 64 * 1024;
+/** A turn.event carries the full line only up to this size; above it {lineHash, bytes} (Aegis M3). */
+export const EVENT_LINE_CAP = 64 * 1024;
+/** Backpressure: pause stdout above this many queued log writes, resume below the low mark. */
+export const QUEUE_HIGH = 256;
+export const QUEUE_LOW = 32;
+export const HISTORY_CAP = 32;
 
 export type SupervisorLog = (kind: string, payload: Record<string, unknown>, ids?: { session?: string }) => Promise<void>;
 
@@ -77,9 +87,9 @@ export interface SupervisorOptions {
   children: Pick<DaemonChildren, 'intend' | 'track' | 'stop'>;
   fuse: Pick<BudgetFuse, 'reserve' | 'release' | 'recordStreamUsage' | 'quotaError' | 'permit'>;
   broker?: Pick<ApprovalBroker, 'raise'>;
-  /** the Gnomon home (session dirs live in <home>/sessions/) */
+  /** the Gnomon home (session dirs, the claude pin and its private copy) */
   home: string;
-  /** the user's home (the ~/.claude layers) */
+  /** the user's home (the ~/.claude layers); the child's HOME is forced to it */
   userHome?: string;
   /** the kernel principal `p:<ns>/kernel` (session principals are `p:<ns>/s-<hsid-short>`) */
   kernelPrincipal: string;
@@ -115,12 +125,13 @@ interface Session {
   cwd: string;
   worktree?: string;
   child: ChildProcess;
+  exited: Promise<void>;
   spawnPermit: PermitV1;
-  turnPermits: Set<string>;
-  binarySha256: string;
-  layersHash: string;
+  /** FIFO: the head is the turn the next result closes */
+  turnPermits: string[];
+  watchHash: string;
   gitHash: string;
-  layerInput: Parameters<typeof law7Layers>[0];
+  layerInput: Law7Input;
   env: Record<string, string>;
   state: 'running' | 'stopping' | 'exited';
   turns: number;
@@ -146,9 +157,26 @@ function refused(code: RefusalCode, message: string, data: Record<string, unknow
 
 const sha = (s: string | Buffer): string => `sha256:${createHash('sha256').update(s).digest('hex')}`;
 
+/** Aegis H1: every path a session could use to swap the binary the kernel runs next — write-denied. */
+export function binaryDenies(row: ClaudeCodePlatformRow, userHome: string, sourceReal: string, explicit?: string): PolicyPath[] {
+  const expand = (p: string): string => (p.startsWith('~/') ? path.join(userHome, p.slice(2)) : p);
+  const linkLiteral = (p: string): string => path.join(realpathLoose(path.dirname(p)), path.basename(p)); // the link itself, parent resolved
+  const out: PolicyPath[] = [
+    { path: realpathLoose(sourceReal), match: 'literal', class: 'binary' },
+    { path: realpathLoose(path.dirname(sourceReal)), match: 'subpath', class: 'binary' },
+  ];
+  for (const c of [...row.knownBinaries.map(expand), ...(explicit ? [explicit] : [])]) {
+    if (!path.isAbsolute(c)) continue;
+    out.push({ path: linkLiteral(c), match: 'literal', class: 'binary' }, { path: realpathLoose(c), match: 'literal', class: 'binary' });
+  }
+  return out;
+}
+
 export class SessionSupervisor {
   readonly #o: SupervisorOptions;
   readonly #sessions = new Map<string, Session>();
+  readonly #history: Array<Record<string, unknown>> = [];
+  readonly #usedTurnPermits = new Set<string>();
   readonly #platform: string;
 
   constructor(o: SupervisorOptions) {
@@ -176,8 +204,11 @@ export class SessionSupervisor {
     if (Date.parse(permit.expiresAt) <= Date.now()) throw refused('PERMIT_REQUIRED', 'the spawn permit expired', {});
   }
 
-  #row(): ClaudeCodePlatformRow | null {
-    return claudeCodePlatform(this.#platform);
+  #watchHashOf(inp: Law7Input): string {
+    const roots = [inp.cwd, ...(inp.worktree ? [inp.worktree] : [])];
+    const l = layersHash({ cwd: inp.cwd, ...(inp.worktree ? { worktree: inp.worktree } : {}), userClaudeDir: inp.userClaudeDir, managedPaths: managedFiles(inp.row), userClaudeJson: path.join(inp.userClaudeDir, '.gnomon-watch-excludes-claude-json') });
+    const cj = claudeJsonProjection(inp.userClaudeJson, roots.flatMap((r) => [path.resolve(r), realLoose(r)]));
+    return `${l}|${cj}`;
   }
 
   async open(req: OpenRequest): Promise<{ hsid: string; principalId: string; backend: 'claude-code'; state: string }> {
@@ -193,155 +224,181 @@ export class SessionSupervisor {
     const uuid = randomUUID();
     const userHome = this.#o.userHome ?? os.homedir();
     await this.#o.log('session.open', { hsid, principalId, by: req.principal, cwd: req.cwd, worktree: req.worktree ?? null, backend: 'claude-code', model: req.model ?? 'claude', attended: true, uuid }, { session: hsid });
-    const row = this.#row();
+    const row = claudeCodePlatform(this.#platform);
     if (!row) return this.#refuse(hsid, 'spawn_failed', `no Claude Code platform row for ${this.#platform}`);
-    // preflight: binary, version, subscription auth — with the child's own env
-    const baseEnv = this.#o.env?.() ?? process.env;
-    const short = hsidShort(hsid);
-    const dir = path.join(this.#o.home, 'sessions', short);
-    const { env, envKeys } = buildSessionEnv({ from: baseEnv, hsid, sock: this.#o.sock, sessionKeyPath: path.join(dir, 'session.key') });
-    let bin;
-    let version: string;
+    const dir = path.join(this.#o.home, 'sessions', hsidShort(hsid));
+    // reviewer 9: the child's HOME IS the user home whose layers were scanned
+    const { env, envKeys } = buildSessionEnv({ from: { ...(this.#o.env?.() ?? process.env), HOME: userHome }, hsid, sock: this.#o.sock, sessionKeyPath: path.join(dir, 'session.key') });
+    let permit: PermitV1 | null = null;
+    let child: ChildProcess | null = null;
+    let tracked = false;
     try {
-      bin = resolveClaudeBinary({ ...(this.#o.claudePath ? { explicit: this.#o.claudePath } : {}), row, home: userHome });
-      version = claudeVersion(bin.real, env);
-      claudeAuthOk(bin.real, env);
-    } catch (err) {
-      if (err instanceof PreflightRefusal) return this.#refuse(hsid, err.code, err.message, err.data);
-      throw err;
-    }
-    // the session's own files: policy.json + mcp.json from verified generated bytes (T-008)
-    const userClaudeDir = path.join(userHome, row.userClaudeDir);
-    const userClaudeJson = defaultClaudeJson(userClaudeDir);
-    const managed = managedFiles(row);
-    let policy: SessionPolicy;
-    let generated: Map<string, Buffer> | null;
-    try {
-      generated = verifiedGenerated(req.cwd, { home: this.#o.home });
-      policy = buildSessionPolicy({
+      const bin = resolveClaudeBinary({ ...(this.#o.claudePath ? { explicit: this.#o.claudePath } : {}), row, home: userHome });
+      const priv = privateClaude(this.#o.home, bin.real);
+      await this.#o.log('session.sandbox', { hsid, phase: 'binary-pin', pin: priv.pin, binarySha256: `sha256:${priv.sha256}`, source: bin.real }, { session: hsid });
+      const userClaudeDir = path.join(userHome, row.userClaudeDir);
+      const userClaudeJson = defaultClaudeJson(userClaudeDir);
+      const managed = managedFiles(row);
+      const generated = verifiedGenerated(req.cwd, { home: this.#o.home });
+      const policy: SessionPolicy = buildSessionPolicy({
         home: this.#o.home,
         cwd: req.cwd,
         ...(req.worktree ? { worktree: req.worktree } : {}),
         userClaudeDir,
         userClaudeJson,
+        userHome,
         managedSettingsPaths: managed,
         linkedFolders: this.#o.linkedFolders?.() ?? [],
         endpointPort: this.#o.endpointPort?.() ?? null,
+        extraDenyWrite: binaryDenies(row, userHome, bin.real, this.#o.claudePath),
       });
-    } catch (err) {
-      if (err instanceof ManifestRefusal || err instanceof TypeError) return this.#refuse(hsid, 'spawn_failed', err.message);
-      throw err;
-    }
-    const parse = (rel: string): Record<string, unknown> => {
-      const b = generated?.get(rel);
-      if (!b) return {};
+      const parse = (rel: string): Record<string, unknown> => {
+        const b = generated?.get(rel);
+        if (!b) return {};
+        try {
+          return JSON.parse(b.toString('utf8')) as Record<string, unknown>;
+        } catch {
+          return {};
+        }
+      };
+      const hooksJson = parse('.gnomon/generated/hooks.json');
+      const mcpJson = parse('.gnomon/generated/.mcp.json');
+      fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+      const policyPath = path.join(dir, 'policy.json');
+      const mcpConfigPath = path.join(dir, 'mcp.json');
+      fs.writeFileSync(policyPath, `${JSON.stringify({ ...claudePermissions(policy), ...(hooksJson.hooks ? { hooks: hooksJson.hooks } : {}) }, null, 2)}\n`, { mode: 0o600 });
+      fs.writeFileSync(mcpConfigPath, `${JSON.stringify({ mcpServers: (mcpJson.mcpServers as Record<string, unknown> | undefined) ?? {} }, null, 2)}\n`, { mode: 0o600 });
+      const extras: DarwinSessionExtras = { uid: process.getuid?.() ?? 0, tmpdir: os.tmpdir(), home: userHome, roots: [req.cwd, ...(req.worktree ? [req.worktree] : [])] };
+      // Aegis H1: preflight runs the PRIVATE copy under the session profile, never unsandboxed
+      const run: ClaudeRun = (args) => {
+        const p = sessionLaunchPlan({ policy, binaryReal: priv.exec, argv: args, extras }, this.#platform);
+        const r = spawnSync(p.command, p.args, { cwd: req.cwd, env, encoding: 'utf8', timeout: 15_000, stdio: ['ignore', 'pipe', 'pipe'] });
+        return { status: r.status, stdout: r.stdout ?? '' };
+      };
+      const version = claudeVersion(run);
+      claudeAuthOk(run);
+      // Aegis L1: hash first, then scan; re-checked right before the spawn
+      const layerInput: Law7Input = { row, cwd: req.cwd, ...(req.worktree ? { worktree: req.worktree } : {}), userClaudeDir, userClaudeJson, policyPath, mcpConfigPath };
+      const lHash = layersHash({ cwd: req.cwd, ...(req.worktree ? { worktree: req.worktree } : {}), userClaudeDir, managedPaths: managed, userClaudeJson });
+      const gHash = gitHash(req.worktree ?? req.cwd);
+      let wHash = this.#watchHashOf(layerInput);
+      const scan = async (): Promise<void> => {
+        const hits = law7Scan(env, law7Layers(layerInput));
+        if (!hits.length) return;
+        await this.#o.log('billing.api.refused', { hsid, where: hits.map((h) => h.where), keys: hits.map((h) => h.key) }, { session: hsid }).catch(() => undefined);
+        throw new PreflightRefusal('api_billing_refused', 'an API-billing path is set in a layer this session would read (law 7)', { hits: hits.map((h) => ({ where: h.where, key: h.key })) });
+      };
+      await scan();
       try {
-        return JSON.parse(b.toString('utf8')) as Record<string, unknown>;
-      } catch {
-        return {};
+        permit = await this.#o.fuse.reserve({ principal: req.principal, principalClass: req.principalClass, attended: true, kind: 'session.spawn', backend: 'claude-code', model: req.model ?? 'claude', scope: { user: req.principal, session: hsid }, kernelSpawn: { hsid } });
+      } catch (err) {
+        if (err instanceof RefusedError && err.refusal.code === 'BILLING_REFUSED') throw new PreflightRefusal('api_billing_refused', err.message, { where: 'fuse' });
+        throw err;
       }
-    };
-    const hooksJson = parse('.gnomon/generated/hooks.json');
-    const mcpJson = parse('.gnomon/generated/.mcp.json');
-    fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-    const policyPath = path.join(dir, 'policy.json');
-    const mcpConfigPath = path.join(dir, 'mcp.json');
-    fs.writeFileSync(policyPath, `${JSON.stringify({ ...claudePermissions(policy), ...(hooksJson.hooks ? { hooks: hooksJson.hooks } : {}) }, null, 2)}\n`, { mode: 0o600 });
-    fs.writeFileSync(mcpConfigPath, `${JSON.stringify({ mcpServers: (mcpJson.mcpServers as Record<string, unknown> | undefined) ?? {} }, null, 2)}\n`, { mode: 0o600 });
-    // LAW 7 per spawn (T-009 / Aegis C5): before any permit
-    const layerInput = { row, cwd: req.cwd, ...(req.worktree ? { worktree: req.worktree } : {}), userClaudeDir, userClaudeJson, policyPath, mcpConfigPath };
-    const hits = law7Scan(env, law7Layers(layerInput));
-    if (hits.length) {
-      await this.#o.log('billing.api.refused', { hsid, where: hits.map((h) => h.where), keys: hits.map((h) => h.key) }, { session: hsid }).catch(() => undefined);
-      return this.#refuse(hsid, 'api_billing_refused', 'an API-billing path is set in a layer this session would read (law 7)', { hits: hits.map((h) => ({ where: h.where, key: h.key })) });
-    }
-    const lHash = layersHash({ cwd: req.cwd, ...(req.worktree ? { worktree: req.worktree } : {}), userClaudeDir, managedPaths: managed, userClaudeJson });
-    const gHash = gitHash(req.worktree ?? req.cwd);
-    // law 1 + law 7 in the fuse
-    let permit: PermitV1;
-    try {
-      permit = await this.#o.fuse.reserve({ principal: req.principal, principalClass: req.principalClass, attended: true, kind: 'session.spawn', backend: 'claude-code', model: req.model ?? 'claude', scope: { user: req.principal, session: hsid }, kernelSpawn: { hsid } });
+      this.assertClaudePermit(permit, hsid);
+      if (permit.billing !== 'subscription') throw new PreflightRefusal('api_billing_refused', 'api-token billing is not wired into the session spawn yet (M1.7 slice 2)', { billing: permit.billing });
+      const argv = buildClaudeArgv({ uuid, policyPath, mcpConfigPath, settingSources: this.#o.settingSources ?? ['user', 'project', 'local'], ...(req.systemPrompt !== undefined ? { appendSystemPrompt: req.systemPrompt } : {}), ...(req.model && req.model !== 'claude' && req.model !== 'any' ? { model: req.model } : {}) });
+      const plan = sessionLaunchPlan({ policy, binaryReal: priv.exec, argv, extras }, this.#platform);
+      // Aegis L1: anything changed between the scan and now ⇒ scan again (a hit refuses)
+      const wNow = this.#watchHashOf(layerInput);
+      if (wNow !== wHash || gitHash(req.worktree ?? req.cwd) !== gHash) {
+        await this.#o.log('session.layers.changed', { hsid, which: ['settings-or-git'], phase: 'pre-spawn' }, { session: hsid });
+        await scan();
+        wHash = wNow;
+      }
+      const intent = await this.#o.children.intend({ kind: 'session', hsid });
+      child = spawn(plan.command, plan.args, { cwd: req.cwd, env, detached: true, stdio: ['pipe', 'pipe', 'pipe'] });
+      // reviewer (blocking): the exit listener is attached SYNCHRONOUSLY, before any await
+      const c = child;
+      const exited = new Promise<void>((r) => c.once('exit', () => r()));
+      const spawnError = await new Promise<Error | null>((resolve) => {
+        c.once('error', (e) => resolve(e));
+        c.once('spawn', () => resolve(null));
+      });
+      if (spawnError) throw new PreflightRefusal('spawn_failed', `spawn failed: ${spawnError.message}`);
+      await this.#o.children.track({ kind: 'session', child: c, hsid, intent });
+      tracked = true;
+      const s: Session = {
+        hsid, principalId, owner: req.principal, cwd: req.cwd, ...(req.worktree ? { worktree: req.worktree } : {}), child: c, exited, spawnPermit: permit, turnPermits: [],
+        watchHash: wHash, gitHash: gHash, layerInput, env, state: 'running', turns: 0, seq: 0, meter: new UsageMeter(), stderrBytes: 0, watch: null,
+      };
+      this.#sessions.set(hsid, s);
+      await this.#o.log('session.sandbox', {
+        hsid, sandbox: plan.sandbox, profile: 'session', profileHash: plan.profileHash, policyHash: policyHash(policy), layersHash: lHash, gitHash: gHash,
+        binarySha256: `sha256:${priv.sha256}`, exec: priv.exec, version, envKeys, permitId: permit.permitId, generated: generated ? [...generated.keys()] : [],
+      }, { session: hsid });
+      this.#wire(s);
+      return { hsid, principalId, backend: 'claude-code', state: s.state };
     } catch (err) {
-      if (err instanceof RefusedError && err.refusal.code === 'BILLING_REFUSED') await this.#o.log('session.refused', { hsid, code: 'api_billing_refused', where: 'fuse' }, { session: hsid }).catch(() => undefined);
-      throw err;
-    }
-    const releaseSpawn = (): Promise<void> => this.#o.fuse.release(permit.permitId, permit.principal).catch(() => undefined);
-    this.assertClaudePermit(permit, hsid);
-    if (permit.billing !== 'subscription') {
-      await releaseSpawn();
-      return this.#refuse(hsid, 'api_billing_refused', 'api-token billing is not wired into the session spawn yet (M1.7 slice 2)', { billing: permit.billing });
-    }
-    const argv = buildClaudeArgv({ uuid, policyPath, mcpConfigPath, settingSources: this.#o.settingSources ?? ['user', 'project', 'local'], ...(req.systemPrompt !== undefined ? { appendSystemPrompt: req.systemPrompt } : {}), ...(req.model && req.model !== 'claude' && req.model !== 'any' ? { model: req.model } : {}) });
-    let plan;
-    try {
-      plan = sessionLaunchPlan({ policy, binaryReal: bin.real, argv, extras: { uid: process.getuid?.() ?? 0, tmpdir: os.tmpdir(), home: userHome, roots: [req.cwd, ...(req.worktree ? [req.worktree] : [])] } }, this.#platform);
-    } catch (err) {
-      await releaseSpawn();
+      if (!tracked) {
+        // reviewer 6: one path from reserve to track — nothing leaks
+        if (child && child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+        if (permit) await this.#o.fuse.release(permit.permitId, permit.principal).catch(() => undefined);
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+      if (err instanceof PreflightRefusal) return this.#refuse(hsid, err.code, err.message, err.data);
       if (err instanceof LifecycleRefusal) return this.#refuse(hsid, 'spawn_failed', err.message, { sandbox: 'unavailable' });
-      throw err;
-    }
-    const intent = await this.#o.children.intend({ kind: 'session', hsid });
-    const child = spawn(plan.command, plan.args, { cwd: req.cwd, env, detached: true, stdio: ['pipe', 'pipe', 'pipe'] });
-    const spawnError = await new Promise<Error | null>((resolve) => {
-      child.once('error', (e) => resolve(e));
-      child.once('spawn', () => resolve(null));
-    });
-    if (spawnError) {
-      await releaseSpawn();
-      return this.#refuse(hsid, 'spawn_failed', `spawn failed: ${spawnError.message}`);
-    }
-    try {
-      await this.#o.children.track({ kind: 'session', child, hsid, intent });
-    } catch (err) {
-      child.kill('SIGKILL');
-      await releaseSpawn();
+      if (err instanceof ManifestRefusal || err instanceof TypeError) return this.#refuse(hsid, 'spawn_failed', err.message);
+      if (err instanceof RefusedError) {
+        await this.#o.log('session.refused', { hsid, code: 'spawn_failed', refusal: err.refusal.code }, { session: hsid }).catch(() => undefined);
+        throw err;
+      }
       return this.#refuse(hsid, 'spawn_failed', (err as Error).message);
     }
-    const s: Session = {
-      hsid, principalId, owner: req.principal, cwd: req.cwd, ...(req.worktree ? { worktree: req.worktree } : {}), child, spawnPermit: permit, turnPermits: new Set(),
-      binarySha256: bin.sha256, layersHash: lHash, gitHash: gHash, layerInput, env, state: 'running', turns: 0, seq: 0, meter: new UsageMeter(), stderrBytes: 0, watch: null,
-    };
-    this.#sessions.set(hsid, s);
-    await this.#o.log('session.sandbox', {
-      hsid, sandbox: plan.sandbox, profile: 'session', profileHash: plan.profileHash, policyHash: policyHash(policy), layersHash: lHash, gitHash: gHash,
-      binarySha256: `sha256:${bin.sha256}`, version, envKeys, permitId: permit.permitId, generated: generated ? [...generated.keys()] : [],
-    }, { session: hsid });
-    this.#wire(s);
-    return { hsid, principalId, backend: 'claude-code', state: 'running' };
   }
 
   #wire(s: Session): void {
     const split = new LineSplitter(STDOUT_LINE_CAP);
     let chain: Promise<void> = Promise.resolve();
+    let pending = 0;
+    const out = s.child.stdout;
     const queue = (f: () => Promise<void>): void => {
-      chain = chain.then(f).catch(() => undefined);
+      pending++;
+      if (pending > QUEUE_HIGH && out && !out.isPaused()) out.pause(); // Aegis M3: backpressure
+      chain = chain
+        .then(f)
+        .catch(() => undefined)
+        .then(() => {
+          pending--;
+          if (pending < QUEUE_LOW && out?.isPaused() && s.state !== 'exited') out.resume();
+        });
     };
-    s.child.stdout?.setEncoding('utf8');
-    s.child.stdout?.on('data', (chunk: string) => {
+    out?.setEncoding('utf8');
+    out?.on('data', (chunk: string) => {
       split.push(chunk, (line) => queue(() => this.#onLine(s, line)), (bytes) => queue(() => this.#o.log('turn.event', { hsid: s.hsid, type: 'dropped', bytes, seq: ++s.seq }, { session: s.hsid })));
     });
     s.child.stderr?.on('data', (b: Buffer) => {
-      s.stderrBytes += b.length; // capped: counted, never buffered past STDERR_CAP
+      s.stderrBytes += b.length; // capped: counted, never buffered
     });
     s.child.stdin?.on('error', () => undefined);
-    s.child.once('exit', () => {
-      queue(async () => {
-        s.state = 'exited';
-        if (s.watch) clearInterval(s.watch);
-        for (const p of [s.spawnPermit.permitId, ...s.turnPermits]) await this.#o.fuse.release(p, s.owner).catch(() => undefined);
-        s.turnPermits.clear();
-        if (s.stderrBytes > STDERR_CAP) await this.#o.log('turn.event', { hsid: s.hsid, type: 'stderr.capped', bytes: s.stderrBytes, seq: ++s.seq }, { session: s.hsid }).catch(() => undefined);
-      });
-    });
+    void s.exited.then(() => queue(() => this.#onExit(s)));
     const ms = this.#o.watchMs ?? 500;
     s.watch = setInterval(() => queue(() => this.#watch(s)), ms);
     s.watch.unref();
   }
 
+  async #onExit(s: Session): Promise<void> {
+    if (s.state === 'exited') return;
+    s.state = 'exited';
+    if (s.watch) clearInterval(s.watch);
+    s.watch = null;
+    for (const p of [s.spawnPermit.permitId, ...s.turnPermits]) await this.#o.fuse.release(p, s.owner).catch(() => undefined);
+    s.turnPermits = [];
+    if (s.stderrBytes > STDERR_CAP) await this.#o.log('turn.event', { hsid: s.hsid, type: 'stderr.capped', bytes: s.stderrBytes, seq: ++s.seq }, { session: s.hsid }).catch(() => undefined);
+    this.#sessions.delete(s.hsid);
+    this.#history.push({ hsid: s.hsid, principalId: s.principalId, state: 'exited', turns: s.turns, code: s.child.exitCode, signal: s.child.signalCode });
+    while (this.#history.length > HISTORY_CAP) this.#history.shift();
+  }
+
   async #onLine(s: Session, line: string): Promise<void> {
     const ev = parseStreamLine(line);
-    // S2: every driver event is a turn.event before anything acts on it
-    await this.#o.log('turn.event', { hsid: s.hsid, type: ev.type, seq: ++s.seq, line }, { session: s.hsid });
+    const bytes = Buffer.byteLength(line);
+    // S2: every driver event is a turn.event before anything acts on it; big lines by hash (Aegis M3)
+    await this.#o.log('turn.event', {
+      hsid: s.hsid, type: ev.type, seq: ++s.seq,
+      ...(bytes > EVENT_LINE_CAP ? { lineHash: sha(line), bytes } : { line }),
+      ...(ev.kind === 'init' ? { apiKeySource: ev.apiKeySource ?? 'absent' } : {}),
+    }, { session: s.hsid });
     const usage = async (source: 'turn.usage' | 'turn.result', tokens: number, extra: Record<string, unknown> = {}): Promise<void> => {
       if (source === 'turn.usage' && tokens <= 0) return;
       await this.#o.log(source, { hsid: s.hsid, usage: { tokens }, ...extra }, { session: s.hsid });
@@ -373,8 +430,8 @@ export class SessionSupervisor {
         return;
       case 'result': {
         await usage('turn.result', s.meter.result(ev.tokens), { cost: ev.costUsd, permission_denials: ev.permissionDenials, subtype: ev.subtype, isError: ev.isError });
-        for (const p of s.turnPermits) await this.#o.fuse.release(p, s.owner).catch(() => undefined);
-        s.turnPermits.clear();
+        const head = s.turnPermits.shift(); // reviewer 7: FIFO — this result closes the oldest turn only
+        if (head) await this.#o.fuse.release(head, s.owner).catch(() => undefined);
         if (ev.quota) await this.#o.fuse.quotaError(s.hsid);
         return;
       }
@@ -385,16 +442,14 @@ export class SessionSupervisor {
 
   async #watch(s: Session): Promise<void> {
     if (s.state !== 'running') return;
-    const inp = s.layerInput;
-    const managed = managedFiles(inp.row);
-    const l = layersHash({ cwd: inp.cwd, ...(inp.worktree ? { worktree: inp.worktree } : {}), userClaudeDir: inp.userClaudeDir, managedPaths: managed, userClaudeJson: inp.userClaudeJson });
+    const w = this.#watchHashOf(s.layerInput);
     const g = gitHash(s.worktree ?? s.cwd);
-    const which = [...(l !== s.layersHash ? ['settings'] : []), ...(g !== s.gitHash ? ['git'] : [])];
+    const which = [...(w !== s.watchHash ? ['settings'] : []), ...(g !== s.gitHash ? ['git'] : [])];
     if (!which.length) return;
-    s.layersHash = l;
+    s.watchHash = w;
     s.gitHash = g;
     await this.#o.log('session.layers.changed', { hsid: s.hsid, which }, { session: s.hsid });
-    const hits = law7Scan(s.env, law7Layers(inp));
+    const hits = law7Scan(s.env, law7Layers(s.layerInput));
     if (hits.length) {
       await this.#o.log('billing.api.refused', { hsid: s.hsid, where: hits.map((h) => h.where), keys: hits.map((h) => h.key), midSession: true }, { session: s.hsid });
       await this.#stopSession(s, 'law-7-layer-changed');
@@ -409,9 +464,8 @@ export class SessionSupervisor {
 
   async send(principal: string, p: { hsid: string; text: string; permitId?: string }): Promise<{ turn: string }> {
     const s = this.#get(principal, p.hsid);
-    if (s.state !== 'running') throw refused('NOT_FOUND', 'the session is not running', { reason: 'not-found' });
+    if (s.state !== 'running' || s.child.exitCode !== null || s.child.signalCode !== null) throw refused('NOT_FOUND', 'the session is not running', { reason: 'not-found' });
     if (typeof p.text !== 'string' || p.text.length === 0) throw refused('BAD_REQUEST', 'send takes non-empty text', { reason: 'bad-params' });
-    // law 7 again for the turn, over this session's layers
     const hits = law7Scan(s.env, law7Layers(s.layerInput));
     if (hits.length) {
       await this.#o.log('billing.api.refused', { hsid: s.hsid, where: hits.map((h) => h.where), keys: hits.map((h) => h.key) }, { session: s.hsid });
@@ -420,19 +474,23 @@ export class SessionSupervisor {
     let permit: PermitV1 | undefined;
     if (p.permitId !== undefined) {
       permit = this.#o.fuse.permit(p.permitId);
-      if (!permit || permit.kind !== 'turn' || permit.backend !== 'claude-code' || permit.principal !== principal || (permit.hsid !== null && permit.hsid !== s.hsid)) {
-        throw refused('PERMIT_REQUIRED', 'session.send needs a live claude-code turn permit of yours for this session', {});
+      // reviewer 9: live, unexpired, subscription, claude-code, this session, never used before
+      if (
+        !permit || permit.kind !== 'turn' || permit.backend !== 'claude-code' || permit.principal !== principal || (permit.hsid !== null && permit.hsid !== s.hsid) ||
+        permit.billing !== 'subscription' || Date.parse(permit.expiresAt) <= Date.now() || this.#usedTurnPermits.has(permit.permitId)
+      ) {
+        throw refused('PERMIT_REQUIRED', 'session.send needs a live, unused claude-code subscription turn permit of yours for this session', {});
       }
     } else {
       permit = await this.#o.fuse.reserve({ principal, principalClass: 'human', attended: true, kind: 'turn', backend: 'claude-code', scope: { user: principal, session: s.hsid } });
     }
-    s.turnPermits.add(permit.permitId);
+    this.#usedTurnPermits.add(permit.permitId);
+    s.turnPermits.push(permit.permitId);
     const n = ++s.turns;
-    const line = userMessageLine(p.text);
     const contentHash = sha(p.text);
     await this.#o.log('session.inject', { hsid: s.hsid, origin: 'client', hash: contentHash, bytes: p.text }, { session: s.hsid });
     await this.#o.log('turn.sent', { hsid: s.hsid, turn: turnId(s.hsid, n), permitId: permit.permitId, contentHash }, { session: s.hsid });
-    s.child.stdin?.write(line);
+    s.child.stdin?.write(userMessageLine(p.text));
     return { turn: turnId(s.hsid, n) };
   }
 
@@ -440,7 +498,7 @@ export class SessionSupervisor {
     const s = this.#get(principal, p.hsid);
     if (p.interrupt) {
       if (s.state === 'running') s.child.stdin?.write(controlInterruptLine());
-      return { signals: ['control_request:interrupt'], exited: s.state === 'exited' };
+      return { signals: ['control_request:interrupt'], exited: false };
     }
     return this.#stopSession(s, 'session.stop');
   }
@@ -461,8 +519,16 @@ export class SessionSupervisor {
     return { signals, exited: !survivors };
   }
 
-  /** status.sessions */
+  /** status.sessions: live sessions + a bounded history of exited ones */
   status(): Array<Record<string, unknown>> {
-    return [...this.#sessions.values()].map((s) => ({ hsid: s.hsid, principalId: s.principalId, state: s.state, turns: s.turns, permitId: s.spawnPermit.permitId }));
+    return [
+      ...[...this.#sessions.values()].map((s) => ({ hsid: s.hsid, principalId: s.principalId, state: s.state, turns: s.turns, permitId: s.spawnPermit.permitId })),
+      ...this.#history,
+    ];
+  }
+
+  /** One session's state (tests, status): running | stopping | exited | null. */
+  stateOf(hsid: string): string | null {
+    return this.#sessions.get(hsid)?.state ?? (this.#history.some((h) => h.hsid === hsid) ? 'exited' : null);
   }
 }

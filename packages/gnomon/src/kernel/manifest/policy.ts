@@ -60,7 +60,7 @@ export interface PolicyPath {
   path: string;
   match: PathMatch;
   /** why the deny exists (the §15.5 class) */
-  class: 'keys' | 'warpline-tokens' | 'browser-profile' | 'gnomon-home' | 'settings' | 'linked-folder' | 'git';
+  class: 'keys' | 'warpline-tokens' | 'browser-profile' | 'gnomon-home' | 'settings' | 'linked-folder' | 'git' | 'binary' | 'persistence';
 }
 
 export interface SessionPolicy {
@@ -93,7 +93,33 @@ export interface SessionPolicyInput {
   browserProfileDirs?: readonly string[];
   /** `~/.claude.json` (default: beside userClaudeDir) */
   userClaudeJson?: string;
+  /**
+   * M1.7 (Aegis M2): the user's home — its persistence paths are write-denied
+   * (PERSISTENCE_PATHS: LaunchAgents, shell rc files, git config, ~/.ssh).
+   */
+  userHome?: string;
+  /**
+   * M1.7 (Aegis H1): extra write denies the supervisor computes, ALREADY
+   * resolved (a symlink's own path must stay literal: the claude binary's
+   * known-location links, its realpath and its versions dir).
+   */
+  extraDenyWrite?: readonly PolicyPath[];
 }
+
+/** Aegis M2: user persistence paths a session may not write (relative to the user's home). */
+export const PERSISTENCE_PATHS: ReadonlyArray<{ rel: string; match: PathMatch }> = Object.freeze([
+  { rel: 'Library/LaunchAgents', match: 'subpath' },
+  { rel: '.zshrc', match: 'literal' },
+  { rel: '.zprofile', match: 'literal' },
+  { rel: '.zshenv', match: 'literal' },
+  { rel: '.zlogin', match: 'literal' },
+  { rel: '.bashrc', match: 'literal' },
+  { rel: '.bash_profile', match: 'literal' },
+  { rel: '.profile', match: 'literal' },
+  { rel: '.gitconfig', match: 'literal' },
+  { rel: '.config/git', match: 'subpath' },
+  { rel: '.ssh', match: 'subpath' },
+]);
 
 /** Realpath the longest existing prefix of `p` and append the rest. */
 export function realpathLoose(p: string): string {
@@ -144,6 +170,8 @@ export function buildSessionPolicy(inp: SessionPolicyInput): SessionPolicy {
     ...roots.flatMap((r) => [P(path.join(r, '.claude'), 'subpath', 'settings'), P(path.join(r, 'CLAUDE'), 'prefix', 'settings')]),
   ];
   const linked = inp.linkedFolders.map((f) => P(f, 'subpath', 'linked-folder'));
+  const persistence = inp.userHome ? PERSISTENCE_PATHS.map((x) => P(path.join(inp.userHome!, ...x.rel.split('/')), x.match, 'persistence')) : [];
+  const extra = (inp.extraDenyWrite ?? []).map((x) => ({ ...x }));
   const gitDirs = roots.flatMap((r) => {
     const d = resolveGitDirs(r);
     return [...new Set([path.join(r, '.git'), ...(d ? [d.gitDir, d.commonDir] : [])])];
@@ -156,7 +184,7 @@ export function buildSessionPolicy(inp: SessionPolicyInput): SessionPolicy {
     schemaVersion: SESSION_POLICY_SCHEMA,
     profile: 'session',
     denyRead: uniq([...keys, ...browsers]),
-    denyWrite: uniq([...keys, ...settings, ...linked, ...git]),
+    denyWrite: uniq([...keys, ...settings, ...linked, ...git, ...persistence, ...extra]),
     denyLoopbackPorts: inp.endpointPort === null ? [] : [inp.endpointPort],
     processInfo: 'deny-others',
     launchers: 'deny',

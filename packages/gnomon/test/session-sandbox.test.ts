@@ -18,6 +18,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { sessionLaunchPlan } from '../src/kernel/sandbox/session.js';
+import { binaryDenies } from '../src/kernel/supervisor/supervisor.js';
 import { sessionWorld, worldPolicy, type SessionWorld } from './session-helpers.js';
 
 let w: SessionWorld;
@@ -44,6 +45,14 @@ beforeAll(async () => {
   }
   sock = net.createServer((c) => c.end('s'));
   await new Promise<void>((r) => sock!.listen(sockPath, () => r()));
+  // a fake native install: ~/.local/bin/claude -> ~/.local/share/claude/versions/2.1.302 (Aegis H1)
+  const versions = path.join(w.userHome, '.local', 'share', 'claude', 'versions');
+  fs.mkdirSync(versions, { recursive: true });
+  fs.writeFileSync(path.join(versions, '2.1.302'), '#!/bin/sh\n', { mode: 0o755 });
+  fs.mkdirSync(path.join(w.userHome, '.local', 'bin'), { recursive: true });
+  fs.symlinkSync(path.join(versions, '2.1.302'), path.join(w.userHome, '.local', 'bin', 'claude'));
+  for (const d of ['.ssh', 'Library/LaunchAgents', '.config/git']) fs.mkdirSync(path.join(w.userHome, d), { recursive: true });
+  const bd = binaryDenies({ knownBinaries: ['~/.local/bin/claude'], managedSettings: [], managedSettingsDirs: [], managedUnscannable: [], userClaudeDir: '.claude' }, w.userHome, path.join(versions, '2.1.302'));
   const script = path.join(w.root, 'check.sh');
   fs.writeFileSync(
     script,
@@ -62,6 +71,16 @@ echo hi > ./wrote.txt 2>/dev/null && echo "write_work=ok" || echo "write_work=fa
 "${process.execPath}" -e "require('net').connect(${port},'127.0.0.1').on('connect',()=>{console.log('port=open');process.exit(0)}).on('error',e=>{console.log('port='+e.code);process.exit(0)})"
 "${process.execPath}" -e "require('net').connect(${port + 1},'127.0.0.1').on('connect',()=>{console.log('port1=open');process.exit(0)}).on('error',e=>{console.log('port1='+e.code);process.exit(0)})"
 "${process.execPath}" -e "require('net').connect('${sockPath}').on('connect',()=>{console.log('screen_sock=open');process.exit(0)}).on('error',e=>{console.log('screen_sock='+e.code);process.exit(0)})"
+(echo x >> "${path.join(versions, '2.1.302')}") 2>/dev/null && echo "write_binary=allowed" || echo "write_binary=blocked"
+(echo x > "${path.join(versions, '9.9.9')}") 2>/dev/null && echo "write_versions=allowed" || echo "write_versions=blocked"
+(/bin/rm -f "${path.join(w.userHome, '.local', 'bin', 'claude')}") 2>/dev/null && [ -L "${path.join(w.userHome, '.local', 'bin', 'claude')}" ] && echo "unlink_link=blocked" || { [ -L "${path.join(w.userHome, '.local', 'bin', 'claude')}" ] && echo "unlink_link=blocked" || echo "unlink_link=allowed"; }
+(echo x >> "${w.userHome}/.zshrc") 2>/dev/null && echo "write_zshrc=allowed" || echo "write_zshrc=blocked"
+(echo x > "${w.userHome}/.ssh/authorized_keys") 2>/dev/null && echo "write_ssh=allowed" || echo "write_ssh=blocked"
+(echo x > "${w.userHome}/Library/LaunchAgents/x.plist") 2>/dev/null && echo "write_launchagent=allowed" || echo "write_launchagent=blocked"
+(echo x > "${w.userHome}/.gitconfig") 2>/dev/null && echo "write_gitconfig=allowed" || echo "write_gitconfig=blocked"
+/bin/cp /bin/launchctl "${w.root}/lc" 2>/dev/null; "${w.root}/lc" list >/dev/null 2>&1; echo "copied_launchctl_exit=$?"
+/bin/cp /usr/bin/osascript "${w.root}/osa" 2>/dev/null; "${w.root}/osa" -e 'return 1' >/dev/null 2>&1; echo "copied_osascript_exit=$?"
+/bin/cp /usr/bin/open "${w.root}/op" 2>/dev/null; "${w.root}/op" -h >/dev/null 2>&1; echo "copied_open_exit=$?"
 n=$(pgrep -fl . 2>/dev/null | wc -l | tr -d ' '); echo "pgrep_lines=$n"
 sleep 30 & C=$!; if kill $C 2>/dev/null; then wait $C 2>/dev/null; echo "child_spawn_kill=ok"; else echo "child_spawn_kill=fail"; fi
 /usr/bin/open -h >/dev/null 2>&1; echo "open_exit=$?"
@@ -71,7 +90,7 @@ sleep 30 & C=$!; if kill $C 2>/dev/null; then wait $C 2>/dev/null; echo "child_s
 `,
     { mode: 0o755 },
   );
-  const plan = sessionLaunchPlan({ policy: worldPolicy(w, port), binaryReal: '/bin/bash', argv: [script], extras: { uid: process.getuid!(), tmpdir: os.tmpdir(), home: w.userHome, roots: [w.cwd] } }, 'darwin');
+  const plan = sessionLaunchPlan({ policy: worldPolicy(w, port, bd), binaryReal: '/bin/bash', argv: [script], extras: { uid: process.getuid!(), tmpdir: os.tmpdir(), home: w.userHome, roots: [w.cwd] } }, 'darwin');
   const r = spawnSync(plan.command, plan.args, { encoding: 'utf8', env: { HOME: w.userHome, PATH: '/usr/bin:/bin:/usr/sbin:/sbin' }, timeout: 60_000 });
   out = Object.fromEntries(r.stdout.split('\n').filter((l) => l.includes('=')).map((l) => [l.slice(0, l.indexOf('=')), l.slice(l.indexOf('=') + 1)]));
 }, 90_000);
@@ -85,6 +104,15 @@ afterAll(async () => {
 });
 
 describe('G-SBX-08 the generated session profile holds (darwin)', () => {
+  it('Aegis H1: the claude binary, its versions dir and its known-location link cannot be replaced', () => {
+    expect(out).toMatchObject({ write_binary: 'blocked', write_versions: 'blocked', unlink_link: 'blocked' });
+  });
+  it('Aegis M2: shell rc, ~/.ssh, LaunchAgents and ~/.gitconfig are unwritable', () => {
+    expect(out).toMatchObject({ write_zshrc: 'blocked', write_ssh: 'blocked', write_launchagent: 'blocked', write_gitconfig: 'blocked' });
+  });
+  it('Aegis M1: COPIED launchers do not run (macOS launch constraints SIGKILL a relocated platform binary: 137)', () => {
+    for (const k of ['copied_launchctl_exit', 'copied_osascript_exit', 'copied_open_exit']) expect(out[k], k).toBe('137');
+  });
   it('the session still works: worktree writes, child spawn and kill', () => {
     expect(out.write_work).toBe('ok');
     expect(out.child_spawn_kill).toBe('ok');

@@ -86,6 +86,6 @@ describe('G-ADP-01 transcript replay (Claude Code 2.1.302 shapes, p10m-claude-co
     s.push('789abcdef', (l) => got.push(l), (b) => dropped.push(b));
     s.push('xyz\n{"b":2}\n', (l) => got.push(l), (b) => dropped.push(b));
     expect(got).toEqual(['{"a":1}', '{"b":2}']);
-    expect(dropped.length).toBe(2);
+    expect(dropped).toEqual([19]); // reported once, with the whole line's size
   });
 });

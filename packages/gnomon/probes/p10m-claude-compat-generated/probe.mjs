@@ -11,7 +11,7 @@
 // Requires `npm run build` (dist/). Writes nothing under ~/.claude except one probe file the check tries to
 // create (removed afterwards if the deny failed).
 import { spawn } from 'node:child_process';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
@@ -51,7 +51,15 @@ export default async function probe() {
     const linked = path.join(root, 'linked-mod');
     for (const d of [home, path.join(home, 'keys'), work, path.join(work, '.claude'), linked]) mkdirSync(d, { recursive: true });
     writeFileSync(path.join(home, 'keys', 'device.key'), 'secret');
-    const policy = g.manifestLoader.buildSessionPolicy({ home, cwd: work, userClaudeDir: claudeDir, managedSettingsPaths: [], linkedFolders: [linked], endpointPort: port });
+    // round 2 (Aegis H1/M2): the kernel runs a PRIVATE COPY of the verified claude bytes from <home>/bin (write-denied),
+    // and the profile write-denies the binary, its versions dir, its known-location links and the persistence paths
+    const claudeReal = realpathSync(CLAUDE);
+    mkdirSync(path.join(home, 'bin'), { recursive: true });
+    const privateCopy = path.join(home, 'bin', 'claude-probe');
+    copyFileSync(claudeReal, privateCopy);
+    chmodSync(privateCopy, 0o500);
+    const extraDenyWrite = g.binaryDenies(g.CLAUDE_CODE_PLATFORMS.darwin, os.homedir(), claudeReal);
+    const policy = g.manifestLoader.buildSessionPolicy({ home, cwd: work, userClaudeDir: claudeDir, userHome: os.homedir(), managedSettingsPaths: [], linkedFolders: [linked], endpointPort: port, extraDenyWrite });
     const perms = g.manifestLoader.claudePermissions(policy);
     const policyPath = path.join(root, 'policy.json');
     const mcpPath = path.join(root, 'mcp.json');
@@ -73,11 +81,14 @@ n=$(pgrep -fl . 2>/dev/null | wc -l | tr -d ' '); echo "pgrep_lines=$n"
 /usr/bin/osascript -e 'return 1' >/dev/null 2>&1; echo "osascript_exit=$?"
 /System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister -h >/dev/null 2>&1; echo "lsregister_exit=$?"
 /bin/launchctl list >/dev/null 2>&1; echo "launchctl_exit=$?"
+(echo x >> "${claudeReal}") 2>/dev/null && echo "write_claude_binary=allowed" || echo "write_claude_binary=blocked"
+(echo x >> "$HOME/.zshrc") 2>/dev/null && echo "write_zshrc=allowed" || echo "write_zshrc=blocked"
+/bin/cp /bin/launchctl ./lc 2>/dev/null; ./lc list >/dev/null 2>&1; echo "copied_launchctl_exit=$?"
 python3 -c "print('py_ok')" 2>/dev/null | sed 's/^/python=/' || echo "python=fail"
 } 2>&1 | tee out.txt
 `);
     const argv = g.claudeAdapter.buildClaudeArgv({ uuid: randomUUID(), policyPath, mcpConfigPath: mcpPath, settingSources: ['user', 'project', 'local'], extra: ['--max-turns', '8'] });
-    const plan = g.sessionSandbox.sessionLaunchPlan({ policy, binaryReal: realpathSync(CLAUDE), argv, extras: { uid: process.getuid(), tmpdir: os.tmpdir(), home: os.homedir(), roots: [work] } });
+    const plan = g.sessionSandbox.sessionLaunchPlan({ policy, binaryReal: privateCopy, argv, extras: { uid: process.getuid(), tmpdir: os.tmpdir(), home: os.homedir(), roots: [work] } });
     const t0 = Date.now();
     const lines = [];
     const exit = await new Promise((resolve) => {
@@ -108,9 +119,9 @@ python3 -c "print('py_ok')" 2>/dev/null | sed 's/^/python=/' || echo "python=fai
     if (userClaudeWritten) rmSync(claudeProbeFile, { force: true });
     const claudeWorks = exit.code === 0 && result !== null && result.isError === false && Object.keys(c).length > 0;
     const bashWorks = c.write_work === 'ok' && c.child_spawn_kill === 'ok' && /^v\d/.test(c.node ?? '');
-    const execDenied = ['open_exit', 'osascript_exit', 'lsregister_exit', 'launchctl_exit'].every((k) => c[k] !== undefined && c[k] !== '0');
+    const execDenied = ['open_exit', 'osascript_exit', 'lsregister_exit', 'launchctl_exit', 'copied_launchctl_exit'].every((k) => c[k] !== undefined && c[k] !== '0');
     const deniesHold = hits === 0 && (c.port_http ?? '').startsWith('000') && c.write_linked === 'blocked' && c.write_user_claude === 'blocked' && !userClaudeWritten &&
-      c.write_project_claude === 'blocked' && c.read_keys === 'blocked' && Number(c.pgrep_lines ?? '1') === 0 && execDenied;
+      c.write_project_claude === 'blocked' && c.read_keys === 'blocked' && c.write_claude_binary === 'blocked' && c.write_zshrc === 'blocked' && Number(c.pgrep_lines ?? '1') === 0 && execDenied;
     const verdict = claudeWorks && bashWorks && deniesHold ? 'pass' : claudeWorks ? 'partial' : 'fail';
     return {
       verdict,
@@ -128,6 +139,7 @@ python3 -c "print('py_ok')" 2>/dev/null | sed 's/^/python=/' || echo "python=fai
         profile: plan.profile.replaceAll(root, '<tmp>').replaceAll(os.homedir(), '~'),
         notes: [
           'claude ran with the adapter argv (stream-json) and NO per-session CLAUDE_CONFIG_DIR: a custom CLAUDE_CONFIG_DIR loses subscription auth (auth status: loggedIn false, authMethod none — the OAuth keychain item is keyed by the config dir), so it is not used.',
+          'round 2: claude ran as a PRIVATE COPY under <gnomon home>/bin with the binary, versions dir, known-location links and user persistence paths (rc files, ~/.ssh, LaunchAgents, git config) write-denied.',
           'ps is not tested (setuid; fails under any sandbox-exec profile).',
           'Ground truth is out.txt written by check.sh, not the model reply.',
         ],

@@ -7,7 +7,7 @@
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { buildSessionPolicy, type SessionPolicy } from '../src/kernel/manifest/policy.js';
+import { buildSessionPolicy, type PolicyPath, type SessionPolicy } from '../src/kernel/manifest/policy.js';
 import { PKG_ROOT } from './helpers.js';
 
 export interface SessionWorld {
@@ -31,8 +31,9 @@ export function sessionWorld(): SessionWorld {
   for (const d of [path.join(home, 'keys'), path.join(userHome, '.claude'), path.join(cwd, '.claude'), path.join(cwd, '.git', 'hooks'), linked, stubDir]) fs.mkdirSync(d, { recursive: true });
   fs.writeFileSync(path.join(home, 'keys', 'device.key'), 'secret');
   fs.writeFileSync(path.join(cwd, '.git', 'config'), '[core]\n');
-  const claude = path.join(stubDir, 'claude');
-  fs.writeFileSync(claude, `#!/bin/sh\nexec "${process.execPath}" "${path.join(PKG_ROOT, 'test', 'fixtures', 'fake-claude.mjs')}" "${claude}" "$@"\n`, { mode: 0o755 });
+  const claude = path.join(stubDir, 'bin', 'claude'); // its dir is write-denied in a session (Aegis H1): trace/mode live one level up
+  fs.mkdirSync(path.dirname(claude));
+  fs.writeFileSync(claude, `#!/bin/sh\nexec "${process.execPath}" "${path.join(PKG_ROOT, 'test', 'fixtures', 'fake-claude.mjs')}" "${claude}" "$0" "$@"\n`, { mode: 0o755 });
   return { root, home, userHome, cwd, linked, stubDir, claude, cleanup: () => fs.rmSync(root, { recursive: true, force: true }) };
 }
 
@@ -48,8 +49,8 @@ export function trace(w: SessionWorld): Array<Record<string, unknown>> {
   }
 }
 
-export function worldPolicy(w: SessionWorld, endpointPort: number | null = null): SessionPolicy {
-  return buildSessionPolicy({ home: w.home, cwd: w.cwd, userClaudeDir: path.join(w.userHome, '.claude'), managedSettingsPaths: [], linkedFolders: [w.linked], endpointPort });
+export function worldPolicy(w: SessionWorld, endpointPort: number | null = null, extraDenyWrite: readonly PolicyPath[] = []): SessionPolicy {
+  return buildSessionPolicy({ home: w.home, cwd: w.cwd, userClaudeDir: path.join(w.userHome, '.claude'), userHome: w.userHome, managedSettingsPaths: [], linkedFolders: [w.linked], endpointPort, extraDenyWrite });
 }
 
 export async function waitFor(cond: () => boolean, ms = 5_000, step = 20): Promise<boolean> {

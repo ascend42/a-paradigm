@@ -23,6 +23,12 @@
  * matches resolved paths and an unresolved path is a deny that silently does
  * not apply (p10m). A path SBPL cannot express (a quote, backslash or
  * newline) refuses the whole profile (fail closed).
+ * COPIES of these launchers do not run at all: macOS (13+) launch
+ * constraints SIGKILL an Apple platform binary started from another path,
+ * sandboxed or not (measured 2026-10-17, darwin 24.6: cp /bin/launchctl,
+ * /usr/bin/osascript, /usr/bin/open, also re-signed ad hoc ⇒ exit 137) —
+ * test/session-sandbox.test.ts asserts it; a self-built LaunchServices
+ * launcher stays the accepted residual (§A.2(i)).
  * Not realised here (reported by sessionDenyCoverage): the helper's XPC
  * service name (`ipc:helper-service` — the helper is M1.3; no name yet).
  */
@@ -37,6 +43,8 @@ export const DARWIN_LAUNCHERS = Object.freeze([
   '/usr/bin/osascript',
   '/System/Library/Frameworks/CoreServices.framework/Frameworks/LaunchServices.framework/Support/lsregister',
   '/bin/launchctl',
+  '/usr/bin/shortcuts',
+  '/usr/bin/automator',
 ]);
 
 export interface DarwinSessionExtras {

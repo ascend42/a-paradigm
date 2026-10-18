@@ -9,3 +9,5 @@ export * as manifestLoader from './kernel/manifest/index.js';
 // M1.7 slice 1: the session profile + adapter, for the p10m-claude-compat re-run against the GENERATED profile
 export * as sessionSandbox from './kernel/sandbox/session.js';
 export * as claudeAdapter from './adapters/claude-code/adapter.js';
+export { binaryDenies } from './kernel/supervisor/supervisor.js';
+export { CLAUDE_CODE_PLATFORMS } from './platform/claude-code.js';

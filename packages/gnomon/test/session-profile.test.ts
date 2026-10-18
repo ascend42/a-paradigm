@@ -12,6 +12,8 @@ import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { sessionProfileSbpl, extraGitDenies, DARWIN_LAUNCHERS, SbplError } from '../src/platform/darwin/session-sbpl.js';
 import { sessionLaunchPlan, sessionSandboxFidelity } from '../src/kernel/sandbox/session.js';
+import { binaryDenies } from '../src/kernel/supervisor/supervisor.js';
+import { PERSISTENCE_PATHS } from '../src/kernel/manifest/policy.js';
 import { LifecycleRefusal } from '../src/kernel/lifecycle/refusal.js';
 import { sessionWorld, worldPolicy, type SessionWorld } from './session-helpers.js';
 
@@ -41,6 +43,26 @@ describe('G-SBX-08 (text) the generated session profile', () => {
     expect(sb).toContain('(deny appleevent-send)');
     for (const l of DARWIN_LAUNCHERS.slice(0, 2)) expect(sb).toContain(`(literal "${l}")`);
     expect(sb).toContain('/Support/lsregister")'); // realpath'd (on macOS through the framework's Versions/A links)
+  });
+  it('Aegis M2: the user persistence paths are write-denied', () => {
+    w = sessionWorld();
+    const sb = sessionProfileSbpl(worldPolicy(w), extras(w));
+    for (const p of PERSISTENCE_PATHS) expect(sb).toContain(`(${p.match} "${path.join(w.userHome, ...p.rel.split('/'))}")`);
+  });
+  it('Aegis H1: the binary realpath, its versions dir and every known-location link (unresolved) are write-denied', () => {
+    w = sessionWorld();
+    const versions = path.join(w.userHome, '.local', 'share', 'claude', 'versions');
+    fs.mkdirSync(versions, { recursive: true });
+    fs.writeFileSync(path.join(versions, '2.1.302'), 'bin');
+    fs.mkdirSync(path.join(w.userHome, '.local', 'bin'), { recursive: true });
+    fs.symlinkSync(path.join(versions, '2.1.302'), path.join(w.userHome, '.local', 'bin', 'claude'));
+    const row = { knownBinaries: ['~/.local/bin/claude', '/opt/homebrew/bin/claude'], managedSettings: [], managedSettingsDirs: [], managedUnscannable: [], userClaudeDir: '.claude' };
+    const d = binaryDenies(row, w.userHome, path.join(versions, '2.1.302'));
+    const sb = sessionProfileSbpl(worldPolicy(w, null, d), extras(w));
+    expect(sb).toContain(`(literal "${path.join(versions, '2.1.302')}")`);
+    expect(sb).toContain(`(subpath "${versions}")`);
+    expect(sb).toContain(`(literal "${path.join(w.userHome, '.local', 'bin', 'claude')}")`); // the link itself
+    expect(sb).toContain('(literal "/opt/homebrew/bin/claude")');
   });
   it('no endpoint ⇒ no port deny', () => {
     w = sessionWorld();

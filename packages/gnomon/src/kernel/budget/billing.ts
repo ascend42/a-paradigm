@@ -68,6 +68,11 @@ export function scanApiBilling(src: BillingScanSource, opts: { ignoreEnv?: reado
     if (l.kind === 'settings') {
       hits.push(...envHits(l.where, j.env));
       if ('apiKeyHelper' in j && j.apiKeyHelper) hits.push({ where: l.where, key: 'apiKeyHelper' });
+      // M1.7 (Aegis L2): a console login forced, or an API key stored/approved in ~/.claude.json
+      if (j.forceLoginMethod === 'console') hits.push({ where: l.where, key: 'forceLoginMethod' });
+      if (typeof j.primaryApiKey === 'string' && j.primaryApiKey) hits.push({ where: l.where, key: 'primaryApiKey' });
+      const approved = (j.customApiKeyResponses as { approved?: unknown } | undefined)?.approved;
+      if (Array.isArray(approved) && approved.length) hits.push({ where: l.where, key: 'customApiKeyResponses.approved' });
     } else {
       const servers = (j.mcpServers ?? {}) as Record<string, unknown>;
       for (const [name, srv] of Object.entries(servers)) {

@@ -93,6 +93,19 @@ describe('G-SUB-01 law 7 per spawn: every key in every layer ⇒ api_billing_ref
     W(p, v);
     expect(law7Scan({}, law7Layers(w.input)).length).toBe(1);
   });
+  it.each([
+    ['primaryApiKey', { primaryApiKey: 'sk-x' }],
+    ['customApiKeyResponses.approved', { customApiKeyResponses: { approved: ['abc'], rejected: [] } }],
+  ])('Aegis L2: ~/.claude.json %s is a hit', (key, v) => {
+    const w = world();
+    W(w.input.userClaudeJson, v);
+    expect(law7Scan({}, law7Layers(w.input)).map((h) => h.key)).toEqual([key]);
+  });
+  it('Aegis L2: forceLoginMethod console in a settings layer is a hit', () => {
+    const w = world();
+    W(path.join(w.cwd, '.claude', 'settings.json'), { forceLoginMethod: 'console' });
+    expect(law7Scan({}, law7Layers(w.input)).map((h) => h.key)).toEqual(['forceLoginMethod']);
+  });
   it('another project in ~/.claude.json is not this spawn\'s layer', () => {
     const w = world();
     W(w.input.userClaudeJson, { projects: { '/elsewhere': { mcpServers: { s: { env: { ANTHROPIC_API_KEY: 'k' } } } } } });

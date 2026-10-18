@@ -6,24 +6,33 @@
 import { appendFileSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
-const dir = path.dirname(process.argv[2] ?? process.argv[1]);
-const args = process.argv.slice(3);
+const dir = path.dirname(path.dirname(process.argv[2] ?? process.argv[1])); // the wrapper lives in <stub>/bin/
+const self = process.argv[3];
+const args = process.argv.slice(4);
 let mode = {};
 try { mode = JSON.parse(readFileSync(path.join(dir, 'mode.json'), 'utf8')); } catch { mode = {}; }
 const trace = (o) => { try { appendFileSync(path.join(dir, 'trace.jsonl'), `${JSON.stringify(o)}\n`); } catch { /* sandboxed away */ } };
 const out = (o) => process.stdout.write(`${typeof o === 'string' ? o : JSON.stringify(o)}\n`);
 
-if (args[0] === '--version') { out(`${mode.version ?? '2.1.302'} (Claude Code)`); process.exit(0); }
+if (args[0] === '--version') {
+  let probe = null;
+  if (mode.probeWrite) { try { appendFileSync(mode.probeWrite, 'x'); probe = 'allowed'; } catch { probe = 'blocked'; } }
+  trace({ t: 'version', self, probe });
+  out(`${mode.version ?? '2.1.302'} (Claude Code)`);
+  process.exit(0);
+}
 if (args[0] === 'auth') {
   out(JSON.stringify(mode.auth ?? { loggedIn: true, authMethod: 'claude.ai', apiProvider: 'firstParty', subscriptionType: 'max' }));
   process.exit(0);
 }
-trace({ t: 'argv', args, envKeys: Object.keys(process.env).sort(), pid: process.pid });
+trace({ t: 'argv', args, self, home: process.env.HOME, envKeys: Object.keys(process.env).sort(), pid: process.pid });
+if (mode.exitAtStart !== undefined) process.exit(mode.exitAtStart);
 if (mode.ignoreTerm) process.on('SIGTERM', () => trace({ t: 'sigterm-ignored' }));
 const session = args[args.indexOf('--session-id') + 1] ?? 'none';
 out({ type: 'system', subtype: 'hook_started', hook: 'x', futureField: { a: 1 } });
-out({ type: 'system', subtype: 'init', session_id: session, model: 'fake-model', apiKeySource: mode.apiKeySource ?? 'none', tools: ['Bash'], brandNewField: true });
+out({ type: 'system', subtype: 'init', session_id: session, model: 'fake-model', apiKeySource: 'apiKeySource' in mode ? mode.apiKeySource : 'none', tools: ['Bash'], brandNewField: true });
 for (const l of mode.extraLines ?? []) out(l);
+if (mode.bigLine) out({ type: 'assistant', message: { id: 'big', content: [{ type: 'text', text: 'x'.repeat(mode.bigLine) }] } });
 let n = 0;
 let buf = '';
 process.stdin.setEncoding('utf8');

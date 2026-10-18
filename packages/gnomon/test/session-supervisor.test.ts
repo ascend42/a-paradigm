@@ -29,6 +29,7 @@ import { processControlFor } from '../src/kernel/lifecycle/process-control.js';
 import { SessionSupervisor } from '../src/kernel/supervisor/supervisor.js';
 import type { ApprovalBroker } from '../src/kernel/broker/broker.js';
 import { recordPath } from '../src/kernel/manifest/generate.js';
+import { readClaudePin, repinClaudeBinary } from '../src/kernel/runner/binary.js';
 import { sessionWorld, setMode, trace, waitFor, type SessionWorld } from './session-helpers.js';
 
 const HUMAN = 'p:abcdefgh/founder';
@@ -48,7 +49,7 @@ function rig(o: { billing?: BillingScanSource; watchMs?: number } = {}) {
   const children = new DaemonChildren({ append: log, control: processControlFor('darwin'), boot: 'boot-test', graceMs: 500 });
   const cards: Array<Record<string, unknown>> = [];
   const broker = { raise: async (i: Record<string, unknown>) => (cards.push(i), { cardId: `card:${cards.length}` }) } as unknown as Pick<ApprovalBroker, 'raise'>;
-  sup = new SessionSupervisor({ log, children, fuse, broker, home: w.home, userHome: w.userHome, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(w.home, 'gnomon.sock'), claudePath: w.claude, env: () => ({ HOME: w.userHome, PATH: '/usr/bin:/bin', ANTHROPIC_API_KEY: 'scrubbed-from-the-child' }), platform: 'darwin', watchMs: o.watchMs ?? 200 });
+  sup = new SessionSupervisor({ log, children, fuse, broker, home: w.home, userHome: w.userHome, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(w.home, 'gnomon.sock'), claudePath: w.claude, env: () => ({ HOME: '/not-the-scanned-home', PATH: '/usr/bin:/bin', ANTHROPIC_API_KEY: 'scrubbed-from-the-child' }), platform: 'darwin', watchMs: o.watchMs ?? 200 });
   live.push(() => children.stopAll('test-end'));
   const kinds = (k: string) => rows.filter((r) => r.kind === k);
   const idx = (k: string) => rows.findIndex((r) => r.kind === k);
@@ -134,7 +135,7 @@ describe('a session end to end (fake claude, real profile, real process group)',
     expect(spawned).toEqual(['intent', 'running']);
     expect(r.idx('session.open')).toBeLessThan(r.idx('permit.grant'));
     expect(r.idx('permit.grant')).toBeLessThan(r.idx('session.spawned'));
-    const sb = r.kinds('session.sandbox')[0]!.payload;
+    const sb = r.kinds('session.sandbox').find((x) => x.payload.profile)!.payload;
     expect(sb).toMatchObject({ sandbox: 'full', profile: 'session' });
     expect(String(sb.profileHash)).toMatch(/^sha256:/);
     // the session's policy.json mirrors the denies (Claude's own rules, defence in depth)
@@ -152,7 +153,7 @@ describe('a session end to end (fake claude, real profile, real process group)',
     expect(r.idx('turn.event')).toBeLessThan(r.idx('turn.usage'));
     const charged = r.kinds('budget.usage').filter((x) => !x.payload.malformed && !x.payload.overPermit).reduce((a, x) => a + (x.payload.tokens as number), 0);
     expect(charged).toBe(10 + 25 + 100); // result total, never double counted
-    const spawnPermit = r.kinds('session.sandbox')[0]!.payload.permitId;
+    const spawnPermit = r.kinds('session.sandbox').find((x) => x.payload.profile)!.payload.permitId;
     expect(new Set(r.kinds('budget.usage').map((x) => x.payload.permitId))).toEqual(new Set([spawnPermit]));
     expect(r.cards).toHaveLength(1);
     expect(r.cards[0]).toMatchObject({ kind: 'ask-user', hsid: s.hsid, attended: true });
@@ -230,7 +231,106 @@ describe('T-008 generated plugin bytes are verified at spawn against the kernel-
   });
 });
 
+describe('round 2: reviewer + Aegis conditions', () => {
+  it('BLOCKING: a claude that exits at startup is cleaned up (permit released, watch cleared, state exited)', async () => {
+    const r = rig();
+    setMode(w, { exitAtStart: 2 });
+    const s = await open(r.sup);
+    expect(await waitFor(() => r.sup.stateOf(s.hsid) === 'exited')).toBe(true);
+    const spawnPermit = r.kinds('session.sandbox').find((x) => x.payload.permitId)!.payload.permitId;
+    expect(r.kinds('permit.release').map((x) => x.payload.permitId)).toContain(spawnPermit);
+    fs.writeFileSync(path.join(w.cwd, '.claude', 'settings.json'), '{}');
+    await new Promise((res) => setTimeout(res, 500));
+    expect(r.kinds('session.layers.changed')).toEqual([]); // the watch is gone
+    expect((await refusal(r.sup.send(HUMAN, { hsid: s.hsid, text: 'x' }))).refusal.code).toBe('NOT_FOUND');
+  });
+  it('H1(b): the binary is pinned on first use (logged); a different hash is claude_binary_changed until an explicit re-pin', async () => {
+    const r = rig();
+    const s = await open(r.sup);
+    expect(r.kinds('session.sandbox')[0]!.payload).toMatchObject({ phase: 'binary-pin', pin: 'first-use' });
+    await r.sup.stop(HUMAN, { hsid: s.hsid });
+    fs.appendFileSync(w.claude, '# swapped by a session\n');
+    const e = await refusal(open(r.sup));
+    expect(e.refusal.data).toMatchObject({ session: 'claude_binary_changed' });
+    expect(r.kinds('session.spawned').filter((x) => x.payload.phase === 'intent')).toHaveLength(1);
+    const { createHash } = await import('node:crypto');
+    repinClaudeBinary(w.home, createHash('sha256').update(fs.readFileSync(w.claude)).digest('hex'), w.claude);
+    expect(readClaudePin(w.home)!.by).toBe('repin');
+    expect((await open(r.sup)).state).toBe('running');
+  });
+  it('H1(c)(d): preflight runs the PRIVATE copy under the session profile; the session runs the copy too', async () => {
+    const r = rig();
+    setMode(w, { probeWrite: path.join(w.home, 'preflight-wrote-here') });
+    await open(r.sup);
+    expect(await waitFor(() => trace(w).some((t) => t.t === 'argv'))).toBe(true);
+    const v = trace(w).find((t) => t.t === 'version')!;
+    expect(v.probe).toBe('blocked'); // under the profile: <home>/** is unwritable
+    expect(String(v.self).startsWith(path.join(w.home, 'bin', 'claude-'))).toBe(true);
+    expect(String(trace(w).find((t) => t.t === 'argv')!.self).startsWith(path.join(w.home, 'bin', 'claude-'))).toBe(true);
+    expect(fs.existsSync(path.join(w.home, 'preflight-wrote-here'))).toBe(false);
+  });
+  it('reviewer 9: the child HOME is the scanned user home, whatever the daemon env says', async () => {
+    const r = rig();
+    await open(r.sup);
+    expect(await waitFor(() => trace(w).some((t) => t.t === 'argv'))).toBe(true);
+    expect(trace(w).find((t) => t.t === 'argv')!.home).toBe(w.userHome);
+  });
+  it('Aegis M3: a line over 64 KiB is logged by hash + size, never in full', async () => {
+    const r = rig();
+    setMode(w, { bigLine: 70_000 });
+    await open(r.sup);
+    expect(await waitFor(() => r.kinds('turn.event').some((x) => typeof x.payload.lineHash === 'string'))).toBe(true);
+    const big = r.kinds('turn.event').find((x) => typeof x.payload.lineHash === 'string')!.payload;
+    expect(big.line).toBeUndefined();
+    expect(big.bytes as number).toBeGreaterThan(70_000);
+  });
+  it('reviewer 7: turn permits are FIFO — each result releases the head only', async () => {
+    const r = rig();
+    const s = await open(r.sup);
+    await r.sup.send(HUMAN, { hsid: s.hsid, text: 'one' });
+    await r.sup.send(HUMAN, { hsid: s.hsid, text: 'two' });
+    expect(await waitFor(() => r.kinds('turn.result').length === 2)).toBe(true);
+    const sent = r.kinds('turn.sent').map((x) => x.payload.permitId);
+    const released = r.kinds('permit.release').map((x) => x.payload.permitId).filter((id) => sent.includes(id));
+    expect(released).toEqual(sent);
+  });
+  it('reviewer 9: a caller turn permit is single-use', async () => {
+    const r = rig();
+    const s = await open(r.sup);
+    const t = await r.fuse.reserve({ principal: HUMAN, principalClass: 'human', attended: true, kind: 'turn', backend: 'claude-code', scope: { user: HUMAN, session: s.hsid } });
+    await r.sup.send(HUMAN, { hsid: s.hsid, text: 'one', permitId: t.permitId });
+    expect((await refusal(r.sup.send(HUMAN, { hsid: s.hsid, text: 'two', permitId: t.permitId }))).refusal.code).toBe('PERMIT_REQUIRED');
+  });
+  it('reviewer 8: Claude\'s routine ~/.claude.json rewrites do not fire session.layers.changed; its mcpServers do', async () => {
+    const r = rig({ watchMs: 100 });
+    await open(r.sup);
+    fs.writeFileSync(path.join(w.userHome, '.claude.json'), JSON.stringify({ numStartups: 7, tipsHistory: { a: 1 } }));
+    await new Promise((res) => setTimeout(res, 500));
+    expect(r.kinds('session.layers.changed')).toEqual([]);
+    fs.writeFileSync(path.join(w.userHome, '.claude.json'), JSON.stringify({ numStartups: 8, mcpServers: { s: { command: 'x' } } }));
+    expect(await waitFor(() => r.kinds('session.layers.changed').length === 1, 2_000)).toBe(true);
+  });
+  it('reviewer 6 + note: a refused open leaks nothing — permit released, session dir removed', async () => {
+    const r = rig();
+    await r.children.stopAll('shutdown'); // intend() now throws: the daemon is stopping
+    const e = await refusal(open(r.sup));
+    expect(e.refusal.data).toMatchObject({ session: 'spawn_failed' });
+    const granted = r.kinds('permit.grant').map((x) => (x.payload.permit as { permitId: string }).permitId);
+    expect(granted).toHaveLength(1);
+    expect(r.kinds('permit.release').map((x) => x.payload.permitId)).toEqual(granted);
+    expect(fs.readdirSync(path.join(w.home, 'sessions'))).toEqual([]);
+  });
+  it('note: init without apiKeySource is logged `absent`', async () => {
+    const r = rig();
+    setMode(w, { apiKeySource: null });
+    await open(r.sup);
+    expect(await waitFor(() => r.kinds('turn.event').some((x) => x.payload.type === 'system.init'))).toBe(true);
+    expect(r.kinds('turn.event').find((x) => x.payload.type === 'system.init')!.payload.apiKeySource).toBe('absent');
+  });
+});
+
 describe('M1.7 slice 2 (deferred)', () => {
+  it.todo('Aegis M3 optional per-session byte cap on stdout (slice 2)');
   it.todo('G-SUB-05 non-law-7 layer change ⇒ gate-class card (slice 2); fs.watch/ReadDirectoryChangesW instead of the 500 ms hash poll');
   it.todo('G-RUN-05 idle respawn with --resume charged as a launch (a session.spawn permit), crash cap 3/10 min, claude_binary_changed on respawn wired');
   it.todo('ask-user / plan card decisions written back to the child (answer / approve-plan) — needs the broker decision path to the session (slice 2)');

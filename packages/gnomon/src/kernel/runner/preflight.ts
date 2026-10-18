@@ -78,14 +78,20 @@ export function compareVersions(a: string, b: string): number {
   return 0;
 }
 
-function run(bin: string, args: string[], env: Record<string, string>): { status: number | null; stdout: string } {
-  const r = spawnSync(bin, args, { env, encoding: 'utf8', timeout: 15_000, stdio: ['ignore', 'pipe', 'pipe'] });
-  return { status: r.status, stdout: r.stdout ?? '' };
+/** How preflight runs the binary: the supervisor passes a runner that executes the PRIVATE copy under the session profile (Aegis H1). */
+export type ClaudeRun = (args: string[]) => { status: number | null; stdout: string };
+
+/** A plain runner (spawnSync, given env) — the supervisor wraps it in the session profile. */
+export function spawnRunner(command: string, prefix: string[], env: Record<string, string>): ClaudeRun {
+  return (args) => {
+    const r = spawnSync(command, [...prefix, ...args], { env, encoding: 'utf8', timeout: 15_000, stdio: ['ignore', 'pipe', 'pipe'] });
+    return { status: r.status, stdout: r.stdout ?? '' };
+  };
 }
 
 /** `<bin> --version` ≥ the floor; returns the version. */
-export function claudeVersion(bin: string, env: Record<string, string>, min: string = CLAUDE_MIN_VERSION): string {
-  const r = run(bin, ['--version'], env);
+export function claudeVersion(run: ClaudeRun, min: string = CLAUDE_MIN_VERSION): string {
+  const r = run(['--version']);
   const m = /(\d+\.\d+\.\d+)/.exec(r.stdout);
   if (r.status !== 0 || !m) throw new PreflightRefusal('claude_version', 'claude --version gave no version');
   if (compareVersions(m[1]!, min) < 0) throw new PreflightRefusal('claude_version', `claude ${m[1]} is older than ${min}`, { version: m[1], min });
@@ -93,8 +99,8 @@ export function claudeVersion(bin: string, env: Record<string, string>, min: str
 }
 
 /** `<bin> auth status` must say subscription auth (claude.ai, firstParty). */
-export function claudeAuthOk(bin: string, env: Record<string, string>): void {
-  const r = run(bin, ['auth', 'status', '--json'], env);
+export function claudeAuthOk(run: ClaudeRun): void {
+  const r = run(['auth', 'status', '--json']);
   let j: Record<string, unknown> | null = null;
   try {
     j = JSON.parse(r.stdout) as Record<string, unknown>;
@@ -145,7 +151,11 @@ function claudeJsonLayers(file: string, cwds: string[]): SettingsLayer[] {
   }
   if (j === null || typeof j !== 'object') return [{ where: 'claude-json', json: undefined, kind: 'mcp' }];
   const o = j as Record<string, unknown>;
-  const out: SettingsLayer[] = [{ where: 'claude-json', json: { mcpServers: o.mcpServers ?? {} }, kind: 'mcp' }];
+  const out: SettingsLayer[] = [
+    { where: 'claude-json', json: { mcpServers: o.mcpServers ?? {} }, kind: 'mcp' },
+    // Aegis L2: a stored or approved API key in ~/.claude.json bills credits
+    { where: 'claude-json', json: { primaryApiKey: o.primaryApiKey, customApiKeyResponses: o.customApiKeyResponses, forceLoginMethod: o.forceLoginMethod }, kind: 'settings' },
+  ];
   const projects = o.projects && typeof o.projects === 'object' ? (o.projects as Record<string, unknown>) : {};
   for (const c of new Set(cwds)) {
     const p = projects[c];
@@ -158,13 +168,40 @@ function claudeJsonLayers(file: string, cwds: string[]): SettingsLayer[] {
   return out;
 }
 
-const realLoose = (p: string): string => {
+export const realLoose = (p: string): string => {
   try {
     return fs.realpathSync.native(p);
   } catch {
     return path.resolve(p);
   }
 };
+
+/**
+ * Reviewer (round 2): the law-7 PROJECTION of ~/.claude.json the mid-session
+ * watch hashes — mcpServers, projects.<cwd>.{mcpServers, env}, primaryApiKey,
+ * customApiKeyResponses, forceLoginMethod — so Claude's routine rewrites of the
+ * rest of the file never fire session.layers.changed.
+ */
+export function claudeJsonProjection(file: string, cwds: readonly string[]): string {
+  let text: string;
+  try {
+    text = fs.readFileSync(file, 'utf8');
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code !== 'ENOENT') return 'unreadable';
+    text = '{}'; // absent projects like an empty file: creating it with routine state is not a law-7 change
+  }
+  let o: Record<string, unknown>;
+  try {
+    const j = JSON.parse(text) as unknown;
+    if (j === null || typeof j !== 'object') return 'not-an-object';
+    o = j as Record<string, unknown>;
+  } catch {
+    return 'unparseable';
+  }
+  const projects = o.projects && typeof o.projects === 'object' ? (o.projects as Record<string, Record<string, unknown> | undefined>) : {};
+  const per = [...new Set(cwds)].sort().map((c) => [c, projects[c]?.mcpServers ?? null, projects[c]?.env ?? null]);
+  return createHash('sha256').update(JSON.stringify([o.mcpServers ?? null, o.primaryApiKey ?? null, o.customApiKeyResponses ?? null, o.forceLoginMethod ?? null, per])).digest('hex');
+}
 
 /** Every settings/mcp layer the child claude reads for this spawn (see header). */
 export function law7Layers(i: Law7Input): SettingsLayer[] {

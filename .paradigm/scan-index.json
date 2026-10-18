@@ -2,7 +2,7 @@
   "$meta": {
     "version": "1.0.0",
     "project": "agent-ab3f9edd4e2b5cd30",
-    "generatedAt": "2026-10-18T04:46:49.597Z",
+    "generatedAt": "2026-10-18T05:03:27.503Z",
     "paradigmVersion": "0.1.0",
     "sources": {
       "purposeFiles": 102,
@@ -26,7 +26,7 @@
       "feature": 1,
       "theme": 1,
       "controller": 1,
-      "module": 108,
+      "module": 110,
       "tool": 45,
       "tool-group": 10,
       "util": 9,
@@ -2796,7 +2796,10 @@
         "#web-endpoint",
         "#oracle-sandbox",
         "#manifest-loader",
-        "#scheduler"
+        "#scheduler",
+        "#session-runner",
+        "#supervisor",
+        "#claude-adapter"
       ],
       "componentType": "module"
     },
@@ -2943,6 +2946,41 @@
         "#approval-broker"
       ],
       "componentType": "module"
+    },
+    "session-runner": {
+      "id": "session-runner",
+      "name": "Session Runner",
+      "symbol": "#session-runner",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/.claude/worktrees/agent-ab3f9edd4e2b5cd30/packages/gnomon/.purpose",
+      "description": "#session-runner (spec §3.3 Preflight/Environment, §3.4 law 7, §16; M1.7 slice 1) in src/kernel/runner/. preflight.ts: the claude binary by explicit path (root-signed config) else the platform registry's known locations (src/platform/claude-code.ts), NEVER PATH (p01); realpath + sha256; claude_binary_changed on a changed sha; version >= 2.1.288; `auth status` = claude.ai/firstParty. law7Layers: EVERY layer the child reads for THIS spawn's cwd (T-009 / Aegis C5) — managed sources per OS (+ managed-settings.d/*.json; unscannable sources such as Windows policy keys are hits), user settings*.json, project + worktree .claude/settings(.local).json and .mcp.json, ~/.claude.json mcpServers AND projects.<cwd>.mcpServers, the session's own policy.json/mcp.json — scanned over the CHILD env (scanApiBilling). env.ts: allowlist + scrub + GNOMON_HSID/SOCK/SESSION_KEY, envKeys names only (G-RUN-02). The darwin `session` profile generator is src/platform/darwin/session-sbpl.ts (from the M1.5 SessionPolicy + session-denies registry; T-008 git denies: .git pointer file, config.worktree, modules/**/{hooks,config, info}; launchers open/osascript/lsregister/launchctl by realpath), registered in src/kernel/sandbox/session.ts (no backend => refused sandbox-unavailable; status fidelity per platform, G-WIN-06). p10m-claude-compat-generated (probes/) re-ran real Claude Code 2.1.302 under the GENERATED profile with the adapter argv: PASS, with writes to the whole ~/.claude/** and ~/.claude.json denied and NO per-session CLAUDE_CONFIG_DIR (a custom CLAUDE_CONFIG_DIR loses subscription auth).",
+      "visualTags": [],
+      "related": [],
+      "componentType": "module"
+    },
+    "supervisor": {
+      "id": "supervisor",
+      "name": "Supervisor",
+      "symbol": "#supervisor",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/.claude/worktrees/agent-ab3f9edd4e2b5cd30/packages/gnomon/.purpose",
+      "description": "#supervisor (spec §3.3, §6.1, §5 verbs 2-4; M1.7 slice 1) in src/kernel/supervisor/. The one place `claude -p` starts. Slice 1: ATTENDED HUMAN-started Claude Code sessions only (others FORBIDDEN; the scheduler run step still refuses). open: session.open -> preflight -> session dir policy.json/mcp.json from generated plugin bytes VERIFIED against the kernel-held record (T-008, manifest/generate.ts verifiedGenerated) -> per-spawn law-7 scan (hit => billing.api.refused + session.refused{api_billing_refused}, BILLING_REFUSED, before any permit) -> permit.reserve{session.spawn, claude-code, kernelSpawn} -> assertClaudePermit (Aegis: never claude without a live law-7-scanned claude-code session.spawn permit for this hsid) -> generated session profile -> DaemonChildren.intend (intent row BEFORE fork) -> spawn detached -> track (boot + start-time witness) -> session.sandbox{hashes}. stdout: every line a turn.event first (S2); usage only from stream events against the SPAWN permit (fuse.recordStreamUsage); ask-user / plan cards via the broker; init.apiKeySource != none kills the group; quota recorded (P8-D92 tracking-only fuse). send: a turn permit (caller's validated or kernel-reserved), law 7 re-scanned, session.inject{client} -> turn.sent -> stream-json user line. stop: interrupt = control_request only; else staged (control message, stdin close, DaemonChildren.stop SIGTERM -> SIGKILL on the group). Mid-session watch (G-SUB-05): layersHash + gitHash polled every 500 ms; a law-7 hit stops the session within 2 s. port.ts: the dispatcher's session port (human class only); daemon.ts wires it.",
+      "visualTags": [],
+      "related": [],
+      "componentType": "module"
+    },
+    "claude-adapter": {
+      "id": "claude-adapter",
+      "name": "Claude Adapter",
+      "symbol": "#claude-adapter",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/.claude/worktrees/agent-ab3f9edd4e2b5cd30/packages/paradigm/src/core/ide-adapters/.purpose",
+      "description": "Generate slim CLAUDE.md (~150 lines) with core identity, session lifecycle, on-demand guidance pointers to paradigm://guidance/{topic} MCP resources, a Native Memory Hygiene redirect (Memory Steward B1 — route durable facts to lore/habits/decisions/tasks, keep native MEMORY.md ephemeral), and agent contributions section from high-priority .agent context",
+      "visualTags": [],
+      "related": [
+        "~ide-adapter-pattern"
+      ],
+      "componentType": "service"
     },
     "paradigm-logger": {
       "id": "paradigm-logger",
@@ -9653,19 +9691,6 @@
       ],
       "componentType": "service"
     },
-    "claude-adapter": {
-      "id": "claude-adapter",
-      "name": "Claude Adapter",
-      "symbol": "#claude-adapter",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/.claude/worktrees/agent-ab3f9edd4e2b5cd30/packages/paradigm/src/core/ide-adapters/.purpose",
-      "description": "Generate slim CLAUDE.md (~150 lines) with core identity, session lifecycle, on-demand guidance pointers to paradigm://guidance/{topic} MCP resources, a Native Memory Hygiene redirect (Memory Steward B1 — route durable facts to lore/habits/decisions/tasks, keep native MEMORY.md ephemeral), and agent contributions section from high-priority .agent context",
-      "visualTags": [],
-      "related": [
-        "~ide-adapter-pattern"
-      ],
-      "componentType": "service"
-    },
     "copilot-adapter": {
       "id": "copilot-adapter",
       "name": "Copilot Adapter",
@@ -14022,10 +14047,12 @@
       "symbol": "^subscription-only",
       "category": "gates",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/.claude/worktrees/agent-ab3f9edd4e2b5cd30/packages/gnomon/.purpose",
-      "description": "^subscription-only (spec §10 law 7, D35): no kernel-spawned Claude process bills API credits — #budget-fuse refuses permit.reserve {session.spawn|turn, claude-code} BILLING_REFUSED on any API-billing path the law-7 scan finds; the only API path is the per-use root-signed api-token card of #approval-broker, injected into exactly one child, with the API CREDITS ACTIVE indicator and billing.api.active rows. The per-claude-version scan list and mid-session watch are M1.7.",
+      "description": "^subscription-only (spec §10 law 7, D35): no kernel-spawned Claude process bills API credits — #budget-fuse refuses permit.reserve {session.spawn|turn, claude-code} BILLING_REFUSED on any API-billing path the law-7 scan finds; the only API path is the per-use root-signed api-token card of #approval-broker, injected into exactly one child, with the API CREDITS ACTIVE indicator and billing.api.active rows. M1.7 slice 1: #session-runner scans every layer the child reads per spawn cwd before any permit, #supervisor refuses claude without a law-7-scanned claude-code spawn permit and watches the layers mid-session (G-SUB-01, G-SUB-05).",
       "related": [
         "#budget-fuse",
-        "#approval-broker"
+        "#approval-broker",
+        "#session-runner",
+        "#supervisor"
       ]
     },
     "api-authenticated": {
@@ -18779,6 +18806,18 @@
       "category": "components",
       "id": "scheduler"
     },
+    "#session-runner": {
+      "category": "components",
+      "id": "session-runner"
+    },
+    "#supervisor": {
+      "category": "components",
+      "id": "supervisor"
+    },
+    "#claude-adapter": {
+      "category": "components",
+      "id": "claude-adapter"
+    },
     "#paradigm-logger": {
       "category": "components",
       "id": "paradigm-logger"
@@ -20918,10 +20957,6 @@
     "#cursor-adapter": {
       "category": "components",
       "id": "cursor-adapter"
-    },
-    "#claude-adapter": {
-      "category": "components",
-      "id": "claude-adapter"
     },
     "#copilot-adapter": {
       "category": "components",
