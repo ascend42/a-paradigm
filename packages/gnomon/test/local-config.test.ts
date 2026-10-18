@@ -26,6 +26,8 @@ import { buildSessionPolicy, localRunnerDenies } from '../src/kernel/manifest/po
 const pinOfNode = (node: string): Pick<LocalRunnerPin, 'node' | 'nodeSha256'> => ({ node, nodeSha256: sha256File(node) });
 import type { SessionLaunchInput } from '../src/kernel/sandbox/session.js';
 
+const jsonInner = (p: string): string => JSON.stringify(p).slice(1, -1);
+
 const RUNNER_SRC = "import './lib.js';\n";
 /** A tiny runner tree (entry + a sibling module) and its pin as it is on disk. */
 function runnerTree(dir: string): LocalRunnerPin {
@@ -369,8 +371,8 @@ describe('round 2 (M3): roots are resolved once; a symlink swapped after the che
     expect(String((e as Error).message)).toMatch(/moved between the check and the spawn/);
     const ra = fs.realpathSync.native(a);
     expect(cfgRoots).toEqual([ra]);
-    expect(JSON.stringify(plans[0]!.policy)).toContain(path.join(ra, '.git'));
-    expect(JSON.stringify(plans[0]!.policy)).not.toContain(fs.realpathSync.native(b));
+    expect(JSON.stringify(plans[0]!.policy)).toContain(jsonInner(path.join(ra, '.git'))); // JSON-escaped: Windows backslashes double
+    expect(JSON.stringify(plans[0]!.policy)).not.toContain(jsonInner(fs.realpathSync.native(b)));
     expect(plans[0]!.extras.roots).toEqual([ra]);
     expect(rows.find((r) => r.kind === 'session.open')!.payload.roots).toEqual([ra]);
     expect(rows.some((r) => r.kind === 'session.refused' && r.payload.code === 'spawn_failed')).toBe(true);
