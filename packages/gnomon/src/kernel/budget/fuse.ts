@@ -4,8 +4,8 @@
  * #budget-fuse — a METER, not a fuse (spec §3.4, §4.8, §10 laws 1 and 7, as
  * amended by founder ruling P8-D92 "track everything, enforce nothing").
  *
- * ENFORCES ONLY LAW 7. `permit.reserve{kind: session.spawn | turn}` for
- * `backend: claude-code` runs the billing scan (billing.ts) and is refused
+ * ENFORCES ONLY LAW 7. `permit.reserve` of every kind except
+ * `tool.permission` (which starts no process) for `backend: claude-code` runs the billing scan (billing.ts) and is refused
  * BILLING_REFUSED on any API-billing path, unless the kernel's own spawn of
  * the session holds an active per-use api-token card (then
  * `billing: api-token:<cardId>`, the scan still run with only the injected
@@ -47,7 +47,8 @@ import { DEFAULT_FUSE, type FuseConfig, type ScopeName } from './config.js';
 export const PERMIT_KINDS = Object.freeze(['session.spawn', 'turn', 'tool.permission', 'tend.llm', 'oracle.reviewer', 'teacher.draft', 'mod.spend'] as const);
 export type PermitKind = (typeof PERMIT_KINDS)[number];
 export const RUNGS = Object.freeze([0.5, 0.75, 0.9, 1]);
-const LAW7_KINDS: readonly string[] = ['session.spawn', 'turn'];
+/** Law 7 runs for EVERY claude-code permit kind that can start or drive a Claude process; only tool.permission starts none (Aegis L1). */
+const LAW7_EXEMPT_KINDS: readonly string[] = ['tool.permission'];
 
 export type FuseLog = (kind: string, payload: Record<string, unknown>, ids?: { session?: string; connId?: string }) => Promise<void>;
 
@@ -182,7 +183,7 @@ export class BudgetFuse {
     const backend = req.backend ?? 'claude-code';
     // law 7 — the ONE enforced rule (P8-D92): no API-billing path for a kernel-spawned Claude session
     let billing = backend === 'local' ? 'local' : 'subscription';
-    if (backend === 'claude-code' && LAW7_KINDS.includes(req.kind)) {
+    if (backend === 'claude-code' && !LAW7_EXEMPT_KINDS.includes(req.kind)) {
       const token = req.kernelSpawn && req.kind === 'session.spawn' ? (this.#o.apiTokens?.billingForKernelSpawn(req.kernelSpawn.hsid, req.principal) ?? null) : null;
       if (token) billing = token;
       // under an api-token the scan still runs; only the injected key is ignored
@@ -195,7 +196,7 @@ export class BudgetFuse {
     }
     const now = this.#clock();
     const day = this.#dayKey();
-    const ladder: Record<string, number | null> = { user: null, repo: null, loop: null, session: null, machine: null, subscriptionWindow: this.#windowUsed() / this.#cfg.subscription.windowTokens };
+    const ladder: Record<string, number | null> = { user: null, repo: null, loop: null, session: null, subscriptionWindow: this.#windowUsed() / this.#cfg.subscription.windowTokens };
     for (const [name, id] of [['user', req.scope.user], ['repo', req.scope.repo], ['loop', req.scope.loop], ['session', req.scope.session]] as Array<[ScopeName, string | undefined]>) {
       if (id) ladder[name] = (this.#day.get(`${day}|tokens|${name}|${id}`) ?? 0) / this.#cfg.tokens[name];
     }
@@ -299,7 +300,7 @@ export class BudgetFuse {
     if (h.permit.billing.startsWith('api-token:') && h.permit.hsid) await this.#o.apiTokens?.onTurn(h.permit.hsid);
     if (!h.over && (h.used.tokens > h.permit.limits.tokens || h.used.usd > h.permit.limits.usd)) {
       h.over = true; // informational (P8-D92): recorded once, nothing is killed
-      await this.#o.log('budget.usage', { permitId: ev.permitId, hsid: h.permit.hsid, overPermit: true, used: { tokens: h.used.tokens, usd: h.used.usd }, limits: { tokens: h.permit.limits.tokens, usd: h.permit.limits.usd } });
+      await this.#o.log('budget.usage', { permitId: ev.permitId, hsid: h.permit.hsid, overPermit: true, used: { tokens: h.used.tokens, usd: h.used.usd }, limits: { tokens: h.permit.limits.tokens, usd: h.permit.limits.usd } }, h.permit.hsid ? { session: h.permit.hsid } : {});
     }
   }
 

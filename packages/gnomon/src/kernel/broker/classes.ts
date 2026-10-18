@@ -46,7 +46,8 @@ export const KIND_DECISIONS: Readonly<Record<CardKind, Readonly<Partial<Record<C
 });
 
 /** Kinds the M1.6 broker raises (the rest are classed for their milestones, never raised here). */
-export const M16_RAISABLE_KINDS: readonly CardKind[] = Object.freeze(['permission', 'budget', 'gate-class', 'install', 'fallback', 'ask-user', 'plan', 'api-token'] as CardKind[]);
+/** P8-D92: the meter raises no `budget` card, so `budget` is not among them (it stays a spec card kind). */
+export const M16_RAISABLE_KINDS: readonly CardKind[] = Object.freeze(['permission', 'gate-class', 'install', 'fallback', 'ask-user', 'plan', 'api-token'] as CardKind[]);
 
 /** Decisions that create a standing rule (B8: never under a cached unlock, never under an arm). */
 export const STANDING_DECISIONS: readonly string[] = Object.freeze(['always', 'install']);

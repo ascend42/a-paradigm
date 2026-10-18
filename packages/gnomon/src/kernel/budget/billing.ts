@@ -3,7 +3,7 @@
  * @symbol ^subscription-only
  *
  * Law 7 inside the broker (spec §3.4 "Law 7 inside the broker", §10 law 7,
- * D35, S22-H2/H3). `permit.reserve{kind: session.spawn | turn}` for
+ * D35, S22-H2/H3). `permit.reserve` of every kind but `tool.permission` (Aegis L1) for
  * `backend: claude-code` is refused BILLING_REFUSED when the scan finds an
  * API-billing path in the env the child would get, any settings layer's `env`
  * block or `apiKeyHelper`, an `mcp.json` server env block, or any

@@ -950,7 +950,7 @@ components:
     description: >-
       #budget-fuse as a METER (spec §3.4, §4.8, §10 laws 1/7; §19.1 M1.6;
       founder ruling P8-D92 "track everything, enforce nothing"). Only law 7
-      is enforced: permit.reserve{session.spawn|turn} on claude-code runs the
+      is enforced: permit.reserve of every kind but tool.permission (Aegis L1) on claude-code runs the
       billing scan (env, settings env blocks, apiKeyHelper, mcp.json env
       blocks, any *_BASE_URL incl. loopback; unreadable layers are hits) and
       refuses BILLING_REFUSED, unless the kernel's own spawn of the card's

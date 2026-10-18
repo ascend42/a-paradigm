@@ -109,7 +109,29 @@ describe('law 7 inside the broker (BILLING_REFUSED)', () => {
 });
 
 
+describe('Aegis L1: law 7 for every claude-code permit kind except tool.permission', () => {
+  for (const kind of ['session.spawn', 'turn', 'tend.llm', 'oracle.reviewer', 'teacher.draft', 'mod.spend']) {
+    it(`${kind} on claude-code with an API key in env ⇒ BILLING_REFUSED`, async () => {
+      const r = rig({ billing: { env: () => ({ ANTHROPIC_API_KEY: 'sk' }), layers: () => [] } });
+      expect((await refusal(r.fuse.reserve(spawn({ kind })))).code).toBe('BILLING_REFUSED');
+      expect(r.kinds('billing.api.refused')).toHaveLength(1);
+    });
+  }
+  it('tool.permission starts no process: granted without a scan', async () => {
+    const r = rig({ billing: { env: () => ({ ANTHROPIC_API_KEY: 'sk' }), layers: () => [] } });
+    await expect(r.fuse.reserve(spawn({ kind: 'tool.permission' }))).resolves.toMatchObject({ decision: 'allow' });
+  });
+});
+
 describe('law 7 under an api-token', () => {
+  it('a HUMAN permit.reserve naming the api-token hsid in scope.session WITHOUT kernelSpawn bills the subscription (never api credits)', async () => {
+    const HS = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZZ';
+    const tokens = { billingForKernelSpawn: (h: string, p: string) => (h === HS && p === HUMAN ? 'api-token:card:01HZZZZZZZZZZZZZZZZZZZZZZZ' : null), onTurn: async () => undefined };
+    const fuse = new BudgetFuse({ kernel: SoftwareEd25519Signer.generate('kernel'), logId: 'log:x', log: async () => undefined, billing: clean, apiTokens: tokens });
+    await expect(fuse.reserve({ principal: HUMAN, principalClass: 'human', attended: true, kind: 'session.spawn', scope: { user: HUMAN, session: HS }, backend: 'claude-code' })).resolves.toMatchObject({ billing: 'subscription' });
+    await expect(fuse.reserve({ principal: HUMAN, principalClass: 'human', attended: true, kind: 'session.spawn', scope: { user: HUMAN, session: HS }, backend: 'claude-code', kernelSpawn: { hsid: HS } })).resolves.toMatchObject({ billing: 'api-token:card:01HZZZZZZZZZZZZZZZZZZZZZZZ' });
+  });
+
   it('under an api-token the law-7 scan still runs, ignoring only the injected key', async () => {
     const HS = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZZ';
     const tokens = { billingForKernelSpawn: (h: string, p: string) => (h === HS && p === HUMAN ? 'api-token:card:01HZZZZZZZZZZZZZZZZZZZZZZZ' : null) };

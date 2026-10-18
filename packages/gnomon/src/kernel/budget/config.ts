@@ -132,11 +132,18 @@ export function loadFuseConfig(home: string, root: RootAuthority, emit: ConfigEv
   const hash = `sha256:${hex(sha256(canonicalJson(doc.row)))}`;
   const version = doc.row!.version ?? 0;
   if (typeof version !== 'number' || !Number.isInteger(version) || version < 0 || version < seen) return fallBack('older', hash, version);
-  if (version > sidecar) fs.writeFileSync(seenFile, `${JSON.stringify({ version })}\n`, { mode: 0o600 });
   const merged = mergeFuse(doc.row!.config?.fuse);
   if (!merged) {
     emit('config.loaded', { hash, signed: true, version, highWater: seen, fallback: 'defaults', why: 'invalid' });
     return defaults(true, hash);
+  }
+  // only a validated config advances the high-water mark; a failed sidecar write is logged, never thrown (the chain row still carries the version)
+  if (version > sidecar) {
+    try {
+      fs.writeFileSync(seenFile, `${JSON.stringify({ version })}\n`, { mode: 0o600 });
+    } catch (err) {
+      emit('config.loaded', { hash, signed: true, version, sidecarWrite: 'failed', error: err instanceof Error ? err.message.slice(0, 200) : 'write failed' });
+    }
   }
   emit('config.loaded', { hash, signed: true, version, highWater: seen });
   return { config: merged, signed: true, fellBack: false, hash };
