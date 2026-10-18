@@ -29,6 +29,9 @@ import {
   type Signer,
 } from '../src/kernel/log/index.js';
 
+// 1024+ fsync'd commits: ~0.2 s on macOS, >30 s on Windows CI (FlushFileBuffers per commit).
+const SLOW_FSYNC_TIMEOUT = 240_000; // a ceiling, not a budget: same on every OS (no platform branch, G-WIN-05)
+
 const KERNEL = 'p:abcdefgh/kernel';
 const KERNEL_KEY = SoftwareEd25519Signer.generate();
 const BOOT = 'AAAAAAAA-0000-4000-8000-00000000000A';
@@ -203,7 +206,7 @@ describe('#kernel-log S34-30: every open-time integrity check runs before any an
     expect(ks.writes).toBe(writesBefore);
     expect(ks.bytes).toBe(ksBefore);
     expect(readFileSync(headFile(home)).equals(fileBefore)).toBe(true); // was rewritten before the refusal pre-S34-30
-  });
+  }, SLOW_FSYNC_TIMEOUT);
 
   it('a fresh log facing a keystore anchor of another log refuses before writing a file anchor', async () => {
     const other = tmpHome();

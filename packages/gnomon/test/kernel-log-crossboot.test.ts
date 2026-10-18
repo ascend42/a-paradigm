@@ -309,7 +309,7 @@ describe('P8-D85: file-anchor lag > 63 is relaxed only across a boot change, aut
     expect(lag.every((e) => Boolean(e.sig))).toBe(true);
     await log.flushAnchors();
     expect(log.verify().ok).toBe(true);
-  });
+  }, SLOW_FSYNC_TIMEOUT);
 
   it('(10) different boot with the keystore anchor AHEAD ⇒ still the truncation path, never relaxed', async () => {
     // keystore ahead, file anchor within bound ⇒ truncated / unclean-reboot
@@ -352,7 +352,7 @@ describe('P8-D85: file-anchor lag > 63 is relaxed only across a boot change, aut
     const cc = await ksAheadFileLagging();
     writeFileSync(headFile(cc.home), JSON.stringify({ ...fileHead(cc.home), closed: true }));
     expect(refusalOf(() => openLog(cc.home, cc.ks, BOOT_B)).refusal.data).toMatchObject({ anchor: 'file', cleanClose: true });
-  });
+  }, SLOW_FSYNC_TIMEOUT);
 
   it('evidence first: a failure between the relax decision and the signed row never reopens clean with no row', async () => {
     // (a) keystore lag > 1023 too: the keystore-lag row commits, then the file-lag row's signature fails

@@ -600,7 +600,7 @@ describe('#kernel-log anchor policy (research 33 S33-05..07, P8-D82)', () => {
     const r2 = openLog(home2, { keystoreAnchor: ks2 });
     expect([r2.report.keystoreLag, r2.report.anchors.keystore]).toEqual([5, 'lagging-repaired']);
     expect([...r2.read({ reader: { class: 'human' }, kinds: ['daemon.anchor.lag'] })]).toEqual([]);
-  });
+  }, SLOW_FSYNC_TIMEOUT);
 
   it('S33-06: forcedAnchorRate is critical rows / rows over the last ≤ 10⁴ rows', async () => {
     const log = openLog(tmpHome());
@@ -667,7 +667,7 @@ describe('G-LOG-10: critical kinds are anchored before append resolves (S33-06)'
       const refused = refusalOf(() => KernelLog.open({ home, kernelPrincipal: KERNEL, signer: KERNEL_KEY, keystoreAnchor: ks }));
       expect([refused.refusal.code, refused.reason], kind).toEqual(['INTEGRITY_BROKEN', 'truncated']);
     }
-  });
+  }, SLOW_FSYNC_TIMEOUT);
 
   it('both anchor writes complete before the critical append resolves (instrumented keystore store)', async () => {
     const home = tmpHome();
