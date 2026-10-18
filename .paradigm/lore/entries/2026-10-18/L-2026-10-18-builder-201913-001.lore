@@ -1,0 +1,17 @@
+id: L-2026-10-18-builder-201913-001
+type: insight
+timestamp: '2026-10-18T20:19:13.099Z'
+author: builder
+title: 'Session log reads: own hsid only, never voice audioRef'
+summary: 'T-010 confidentiality: the projection already limited a session reader to its own hsid rows (G-ABI-05 matrix). Reading §9.3 found one unimplemented cell: voice.turn.*.audioRef is never for a session, even its own. Implemented as a limited view (field redacted, no hash/sig, no confirmation oracle). Socket-level principal->hsid binding remains M1.7 todo (session principals not yet authenticated on the socket).'
+symbols_touched:
+  - '#kernel-log'
+commit: da667183
+tags:
+  - decision
+  - gnomon
+  - m1.7
+git_context:
+  ref: 6ffa897e44992c263e69041db5392e7f89b87b47
+  branch: gnomon/m17-slice2
+  dirty: true
