@@ -1,0 +1,26 @@
+id: L-2026-10-18-ascend-021733-001
+type: agent-session
+timestamp: '2026-10-18T02:17:33.221Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-4-6
+title: 'Web endpoint review: /blob becomes POST; transport-child compromise residual'
+summary: 'M1.4 #web-endpoint review. Aegis ruling adopted over the reviewer''s GET-exemption alternative: /blob/<sha> and /diag are POST, rule 3 (exact Origin on every non-static route) unchanged, GUI uses fetch with referrerPolicy ''same-origin'' (the page''s no-referrer policy otherwise makes Origin null — latent /diag bug). Read tokens refused on the web endpoint (one-live-connection rule). New §A residual: a compromised transport child yields a human-class GUI session, bounded by the sandbox, 12 h cap and revoke-all. Verified C1 (unchecked child records crash the daemon; no uncaughtException handler) and C2 (node runtime read grant could cover $HOME and the kernel key).'
+symbols_touched:
+  - '#web-endpoint'
+  - '#socket'
+  - '#gui'
+decisions:
+  - id: P8-D89b
+    decision: /blob and /diag are POST; the one-origin rule 3 keeps no exceptions; the GUI fetches with referrerPolicy same-origin
+    rationale: 'Fetch omits Origin on same-origin GET and sends Origin: null under no-referrer; exempting GET would put an exception into the one-origin rule (Aegis)'
+tags:
+  - paradigm-8
+  - gnomon
+  - m1.4
+  - security
+git_context:
+  ref: fab77dd6c44218b45754f224f3bff289dacf88ff
+  branch: feat/gnomon
+  dirty: true
