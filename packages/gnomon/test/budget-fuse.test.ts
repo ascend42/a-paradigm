@@ -1,8 +1,8 @@
 /**
- * #budget-fuse (spec §3.4, §4.8, §10 laws 1 and 7; §19.1 M1.6): G-LAW-01,
- * G-LAW-01b, G-BUD-01..03, G-SUB-04 and law 7 inside the broker.
- * Falsifier: the fuse or law 7 bypassed by any setting for kernel-spawned
- * sessions. Platform-independent: in-process, temp dirs only.
+ * #budget-fuse as a METER (spec §3.4, §4.8, §10 laws 1 and 7; §19.1 M1.6;
+ * P8-D92 "track everything, enforce nothing"): G-LAW-01, G-LAW-01b,
+ * G-BUD-01..03, G-SUB-04 and law 7 inside the broker. Falsifier: law 7
+ * bypassed by any setting for kernel-spawned sessions. Platform-independent: in-process, temp dirs only.
  */
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -22,7 +22,6 @@ import {
   type BillingScanSource,
   type ReserveRequest,
 } from '../src/kernel/budget/index.js';
-import { ApprovalBroker } from '../src/kernel/broker/index.js';
 import { KeyRing, SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
 import { DEV_TEST_ROOT_ACK, DevTestRootAuthority } from '../src/kernel/identity/root-authority.js';
 import { removeTree } from '../src/kernel/manifest/index.js';
@@ -41,22 +40,18 @@ afterEach(() => {
 
 const clean: BillingScanSource = { env: () => ({ PATH: '/usr/bin', HOME: '/home/x' }), layers: () => [] };
 
-function rig(o: { config?: typeof DEFAULT_FUSE; corrupt?: boolean; billing?: BillingScanSource; onBreach?: (b: unknown) => void; withBroker?: boolean } = {}) {
+function rig(o: { config?: typeof DEFAULT_FUSE; billing?: BillingScanSource } = {}) {
   const rows: Array<{ kind: string; payload: Record<string, unknown> }> = [];
   const log = async (kind: string, payload: Record<string, unknown>) => void rows.push({ kind, payload });
   const kernel = SoftwareEd25519Signer.generate('kernel');
-  const broker = o.withBroker ? new ApprovalBroker({ kernel, kernelPrincipal: 'p:abcdefgh/kernel', log }) : undefined;
   const fuse = new BudgetFuse({
     kernel,
     logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZZ',
     log,
     ...(o.config ? { config: o.config } : {}),
-    ...(o.corrupt ? { corrupt: true } : {}),
     billing: o.billing ?? clean,
-    ...(broker ? { broker } : {}),
-    ...(o.onBreach ? { onBreach: o.onBreach as never } : {}),
   });
-  return { fuse, rows, kernel, broker, kinds: (k: string) => rows.filter((r) => r.kind === k) };
+  return { fuse, rows, kernel, kinds: (k: string) => rows.filter((r) => r.kind === k) };
 }
 
 const spawn = (over: Partial<ReserveRequest> = {}): ReserveRequest => ({ principal: AGENT, principalClass: 'agent', attended: false, kind: 'session.spawn', scope: { user: 'p:abcdefgh/*', repo: 'repo:a' }, backend: 'claude-code', ...over });
@@ -71,82 +66,6 @@ async function refusal(p: Promise<unknown>) {
   expect(validateRefusalV1(r)).toEqual([]);
   return r;
 }
-
-describe('G-LAW-01 no spawn without a permit', () => {
-  it('5-session fan-out with user limit 3 ⇒ 3 permit.grant, 2 permit.deny; permits are kernel-signed permit:v1', async () => {
-    const cfg = structuredClone(DEFAULT_FUSE);
-    cfg.concurrent.user = 3;
-    const r = rig({ config: cfg });
-    // the attended human's fan-out (the armada keeps one user slot free for the human, Aegis N1 — see below)
-    const H = { principal: AGENT, principalClass: 'human', attended: true, scope: { user: 'p:abcdefgh/*' } };
-    const out = await Promise.allSettled([1, 2, 3, 4, 5].map(() => r.fuse.reserve(spawn(H))));
-    expect(out.filter((x) => x.status === 'fulfilled')).toHaveLength(3);
-    expect(r.kinds('permit.grant')).toHaveLength(3);
-    expect(r.kinds('permit.deny')).toHaveLength(2);
-    const denied = out.find((x) => x.status === 'rejected') as PromiseRejectedResult;
-    expect((denied.reason as RefusedError).refusal).toMatchObject({ code: 'BUDGET_DENIED', data: { dimension: 'concurrent', scope: 'user' } });
-    const permit = (out[0] as PromiseFulfilledResult<Awaited<ReturnType<typeof r.fuse.reserve>>>).value;
-    expect(permit).toMatchObject({ schemaVersion: 'permit:v1', decision: 'allow', billing: 'subscription', kind: 'session.spawn' });
-    expect(permit.permitId).toMatch(/^permit:v1:[0-9A-HJKMNP-TV-Z]{26}$/);
-    const ring = new KeyRing();
-    ring.addEd25519(r.kernel.publicKeyPem);
-    const { sig, ...unsigned } = permit;
-    expect(ring.verify(r.kernel.keyId, 'permit', canonicalJson(unsigned), Buffer.from(sig, 'base64'))).toBe('ok');
-    await r.fuse.release(permit.permitId, AGENT);
-    await expect(r.fuse.reserve(spawn(H))).resolves.toMatchObject({ decision: 'allow' });
-    // the armada fan-out against the same limit: min(cap − 1, ⌊0.7·cap⌋) = 2
-    const a = rig({ config: cfg });
-    const armada = await Promise.allSettled([1, 2, 3, 4, 5].map(() => a.fuse.reserve(spawn())));
-    expect(armada.filter((x) => x.status === 'fulfilled')).toHaveLength(2);
-  });
-});
-
-describe('G-LAW-01b no setting disables the fuse or law 7 for kernel-spawned sessions', () => {
-  it('env names (fuzzed), an unsigned config, another root’s config and project.yaml keys change nothing', async () => {
-    const home = tmp();
-    const root = new DevTestRootAuthority(DEV_TEST_ROOT_ACK);
-    const saved = { ...process.env };
-    try {
-      for (const n of ['GNOMON_FUSE', 'GNOMON_FUSE_OFF', 'GNOMON_BUDGET_DISABLE', 'GNOMON_NO_FUSE', 'GNOMON_LAW7', 'GNOMON_ALLOW_API', 'FUSE_LIMIT_TOKENS', 'GNOMON_CONCURRENT_USER']) process.env[n] = '0';
-      process.env.GNOMON_CONCURRENT_USER = '999';
-      fs.writeFileSync(path.join(home, ROOT_CONFIG_FILE), JSON.stringify({ row: { schemaVersion: 'gnomon-root-config:v1', config: { fuse: { concurrent: { user: 999 } } } }, signer: 'x', sig: 'y' }));
-      const unsigned = loadFuseConfig(home, root);
-      expect(unsigned).toMatchObject({ signed: false, corrupt: false });
-      expect(unsigned.config).toEqual(DEFAULT_FUSE);
-      const other = new DevTestRootAuthority(DEV_TEST_ROOT_ACK);
-      writeSignedConfig(home, other, { fuse: { concurrent: { user: 999 } } });
-      expect(loadFuseConfig(home, root).config).toEqual(DEFAULT_FUSE);
-      // the fuse and the law-7 scan read no env var of their own: an API key anywhere still refuses
-      const r = rig({ config: loadFuseConfig(home, root).config });
-      const hu = (repo: string) => spawn({ principal: HUMAN, principalClass: 'human', attended: true, scope: { user: HUMAN, repo }, limits: { tokens: 1000 } });
-      for (let i = 0; i < DEFAULT_FUSE.concurrent.user; i++) await r.fuse.reserve(hu(`repo:${i}`));
-      expect((await refusal(r.fuse.reserve(hu('repo:x')))).code).toBe('BUDGET_DENIED');
-    } finally {
-      for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k];
-      Object.assign(process.env, saved);
-    }
-    const repo = tmp();
-    fs.mkdirSync(path.join(repo, '.gnomon'));
-    fs.writeFileSync(path.join(repo, '.gnomon', 'project.yaml'), 'name: x\nfuse:\n  concurrent: 99\nbudget: off\nstrictness:\n  baseline: L0\n');
-    const ignored: Array<Record<string, unknown>> = [];
-    expect(ignoredProjectKeys(repo, (_k, p) => void ignored.push(p))).toEqual(['fuse', 'budget', 'strictness']);
-    expect(ignored).toEqual([{ field: 'fuse', source: 'project.yaml' }, { field: 'budget', source: 'project.yaml' }, { field: 'strictness', source: 'project.yaml' }]);
-  });
-
-  it('only a config signed by THIS root applies; a signed invalid value makes the fuse corrupt (deny), never looser', async () => {
-    const home = tmp();
-    const root = new DevTestRootAuthority(DEV_TEST_ROOT_ACK);
-    writeSignedConfig(home, root, { fuse: { concurrent: { user: 1 } } });
-    expect(loadFuseConfig(home, root)).toMatchObject({ signed: true, corrupt: false, config: { concurrent: { user: 1 } } });
-    for (const bad of [{ concurrent: { user: -1 } }, { concurrent: { user: 'inf' } }, { off: true }, { subscription: { humanReserve: 0 } }]) {
-      writeSignedConfig(home, root, { fuse: bad });
-      const l = loadFuseConfig(home, root);
-      expect(l.corrupt).toBe(true);
-      const r = rig({ config: l.config, corrupt: l.corrupt });
-      expect((await refusal(r.fuse.reserve(spawn()))).data).toMatchObject({ dimension: 'corrupt-state' });
-    }
-  });
-});
 
 describe('law 7 inside the broker (BILLING_REFUSED)', () => {
   const layer = (where: string, json: unknown, kind: 'settings' | 'mcp' = 'settings') => ({ env: () => ({}), layers: () => [{ where, json, kind }] });
@@ -189,14 +108,8 @@ describe('law 7 inside the broker (BILLING_REFUSED)', () => {
   });
 });
 
-describe('round 2: api-token billing only on the kernel spawn path; headroom; expiry; config rollback', () => {
-  it('a caller-named scope.session never selects api-token billing; agents cannot name repo/loop/session (M1.7 binds them)', async () => {
-    for (const k of ['session', 'repo', 'loop']) expect(() => parseReserveParams(AGENT, 'agent', { kind: 'session.spawn', scope: { [k]: 'x' } })).toThrow(RefusedError);
-    const scan: BillingScanSource = { env: () => ({ ANTHROPIC_API_KEY: 'sk' }), layers: () => [] };
-    const r = rig({ billing: scan });
-    expect((await refusal(r.fuse.reserve(spawn({ scope: { user: 'p:abcdefgh/*', session: 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZZ' } })))).code).toBe('BILLING_REFUSED');
-  });
 
+describe('law 7 under an api-token', () => {
   it('under an api-token the law-7 scan still runs, ignoring only the injected key', async () => {
     const HS = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZZ';
     const tokens = { billingForKernelSpawn: (h: string, p: string) => (h === HS && p === HUMAN ? 'api-token:card:01HZZZZZZZZZZZZZZZZZZZZZZZ' : null) };
@@ -207,46 +120,135 @@ describe('round 2: api-token billing only on the kernel spawn path; headroom; ex
     expect((await refusal(mk({ ANTHROPIC_BASE_URL: 'http://x' }).reserve(req))).code).toBe('BILLING_REFUSED');
   });
 
-  it('day caps count outstanding headroom and clamp new limits; expired permits do not hold concurrency', async () => {
-    const cfg = structuredClone(DEFAULT_FUSE);
-    cfg.tokens.user = 1000;
-    cfg.concurrent.user = 1;
-    const now = { t: Date.UTC(2026, 9, 18, 12) };
-    const kernel = SoftwareEd25519Signer.generate('kernel');
-    const fuse = new BudgetFuse({ kernel, logId: 'log:x', log: async () => undefined, config: cfg, billing: clean, clock: () => now.t, permitTtlMs: 60_000 });
-    const human = (kind: string) => ({ principal: HUMAN, principalClass: 'human', attended: true, kind, scope: { user: HUMAN }, backend: 'claude-code' as const, limits: { tokens: 700 } });
-    const a = await fuse.reserve(human('turn'));
-    const b = await fuse.reserve(human('turn'));
-    expect(a.limits.tokens).toBe(700);
-    expect(b.limits.tokens).toBe(300); // clamped to what is left of the day
-    expect((await refusal(fuse.reserve(human('turn')))).data).toMatchObject({ dimension: 'tokens' });
-    await fuse.reserve(human('session.spawn')).catch(() => undefined);
-    now.t += 61_000; // every permit expired
-    await expect(fuse.reserve(human('session.spawn'))).resolves.toMatchObject({ decision: 'allow' });
+});
+
+describe('G-LAW-01 no spawn without a permit — every reserve is granted and attributed (P8-D92)', () => {
+  it('a 5-session fan-out ⇒ 5 kernel-signed permit.grant, 0 denies, each attributed to its user', async () => {
+    const r = rig();
+    const out = await Promise.all([1, 2, 3, 4, 5].map((i) => r.fuse.reserve(spawn({ scope: { user: HUMAN, repo: `repo:${i}` }, attributed: 'root-human' }))));
+    expect(out.every((p) => p.decision === 'allow')).toBe(true);
+    expect(r.kinds('permit.grant')).toHaveLength(5);
+    expect(r.kinds('permit.deny')).toHaveLength(0);
+    expect(r.kinds('permit.reserve').map((x) => [x.payload.user, x.payload.attributed, x.payload.armada])).toEqual(Array(5).fill([HUMAN, 'root-human', true]));
+    const ring = new KeyRing();
+    ring.addEd25519(r.kernel.publicKeyPem);
+    const { sig, ...unsigned } = out[0]!;
+    expect(out[0]!.permitId).toMatch(/^permit:v1:[0-9A-HJKMNP-TV-Z]{26}$/);
+    expect(ring.verify(r.kernel.keyId, 'permit', canonicalJson(unsigned), Buffer.from(sig, 'base64'))).toBe('ok');
   });
 
-  it('a signed config older than the newest applied one is a rollback ⇒ corrupt (deny)', () => {
+  it('nothing is rationed: past every reference amount, a quota error, an over-permit turn and a full window, reserves still grant; rungs are informational rows', async () => {
+    const cfg = structuredClone(DEFAULT_FUSE);
+    cfg.tokens.user = 1000;
+    cfg.subscription.windowTokens = 1000;
+    const r = rig({ config: cfg });
+    const p = await r.fuse.reserve(spawn({ kind: 'turn', limits: { tokens: 100 } }));
+    await r.fuse.recordStreamUsage({ source: 'turn.usage', permitId: p.permitId, tokens: 1500 });
+    await r.fuse.quotaError(null);
+    for (let i = 0; i < 20; i++) await expect(r.fuse.reserve(spawn({ kind: 'turn' }))).resolves.toMatchObject({ decision: 'allow' });
+    expect(r.kinds('permit.deny')).toHaveLength(0);
+    expect(r.kinds('budget.ladder').filter((x) => x.payload.scope === 'user' && x.payload.dimension === 'tokens').map((x) => x.payload.rung)).toEqual([0.5, 0.75, 0.9, 1]);
+    expect(r.kinds('budget.ladder').every((x) => x.payload.informational === true)).toBe(true);
+    expect(r.kinds('budget.usage').filter((x) => x.payload.overPermit)).toHaveLength(1); // G-BUD-03: informational
+    expect(r.kinds('budget.window').map((x) => x.payload.quotaError)).toEqual([true]);
+    for (const k of ['budget.pause', 'budget.breaker.open', 'approval.request']) expect(r.kinds(k)).toHaveLength(0); // no pause, no breaker, no budget card
+  });
+});
+
+describe('G-LAW-01b no setting changes the meter or law 7', () => {
+  it('fuzzed env names and project.yaml keys change nothing; an API key in env still refuses', async () => {
+    const saved = { ...process.env };
+    try {
+      for (const n of ['GNOMON_FUSE_OFF', 'GNOMON_LAW7', 'GNOMON_ALLOW_API', 'GNOMON_BILLING', 'GNOMON_NO_LAW7']) process.env[n] = '1';
+      const r = rig({ billing: { env: () => ({ ANTHROPIC_API_KEY: 'sk' }), layers: () => [] } });
+      expect((await refusal(r.fuse.reserve(spawn()))).code).toBe('BILLING_REFUSED');
+    } finally {
+      for (const k of Object.keys(process.env)) if (!(k in saved)) delete process.env[k];
+      Object.assign(process.env, saved);
+    }
+    const repo = tmp();
+    fs.mkdirSync(path.join(repo, '.gnomon'));
+    fs.writeFileSync(path.join(repo, '.gnomon', 'project.yaml'), 'name: x\nfuse:\n  off: true\nbudget: off\nstrictness:\n  baseline: L0\n');
+    const ignored: Array<Record<string, unknown>> = [];
+    expect(ignoredProjectKeys(repo, (_k, p) => void ignored.push(p))).toEqual(['fuse', 'budget', 'strictness']);
+    expect(ignored).toEqual([{ field: 'fuse', source: 'project.yaml' }, { field: 'budget', source: 'project.yaml' }, { field: 'strictness', source: 'project.yaml' }]);
+  });
+
+  it('config: only THIS root’s signed rows apply; unsigned, another root, invalid, older or missing-after-signed fall back to defaults with a logged row; version + hash on every config.loaded', () => {
     const home = tmp();
     const root = new DevTestRootAuthority(DEV_TEST_ROOT_ACK);
     const rows: Array<Record<string, unknown>> = [];
-    writeSignedConfig(home, root, { fuse: { concurrent: { user: 2 } } }, 5);
-    expect(loadFuseConfig(home, root, (_k, p) => void rows.push(p))).toMatchObject({ corrupt: false, config: { concurrent: { user: 2 } } });
-    expect(rows.at(-1)).toMatchObject({ signed: true, version: 5, hash: expect.stringMatching(/^sha256:/) }); // N2: version + hash on every config.loaded
-    writeSignedConfig(home, root, { fuse: { concurrent: { user: 50 } } }, 4);
-    expect(loadFuseConfig(home, root).corrupt).toBe(true);
+    const emit = (_k: string, p: Record<string, unknown>) => void rows.push(p);
+    fs.writeFileSync(path.join(home, ROOT_CONFIG_FILE), JSON.stringify({ row: { schemaVersion: 'gnomon-root-config:v1', config: { fuse: { tokens: { user: 9 } } } }, signer: 'x', sig: 'y' }));
+    expect(loadFuseConfig(home, root).config).toEqual(DEFAULT_FUSE);
+    writeSignedConfig(home, new DevTestRootAuthority(DEV_TEST_ROOT_ACK), { fuse: { tokens: { user: 9 } } });
+    expect(loadFuseConfig(home, root).config).toEqual(DEFAULT_FUSE);
+    writeSignedConfig(home, root, { fuse: { tokens: { user: 9 } } }, 5);
+    expect(loadFuseConfig(home, root, emit)).toMatchObject({ fellBack: false, config: { tokens: { user: 9 } } });
+    expect(rows.at(-1)).toMatchObject({ signed: true, version: 5, hash: expect.stringMatching(/^sha256:/) });
+    for (const bad of [{ concurrent: { user: 1 } }, { tokens: { user: -1 } }, { breakerMs: 1 }]) {
+      writeSignedConfig(home, root, { fuse: bad }, 6);
+      expect(loadFuseConfig(home, root, emit)).toMatchObject({ fellBack: true, config: DEFAULT_FUSE });
+      expect(rows.at(-1)).toMatchObject({ fallback: 'defaults', why: 'invalid' });
+    }
+    writeSignedConfig(home, root, { fuse: { tokens: { user: 9 } } }, 4);
+    expect(loadFuseConfig(home, root, emit)).toMatchObject({ fellBack: true });
+    expect(rows.at(-1)).toMatchObject({ fallback: 'defaults', why: 'older' });
+    fs.rmSync(path.join(home, 'config.seen.json'));
+    expect(loadFuseConfig(home, root, emit, { chainHighWater: 7 })).toMatchObject({ fellBack: true }); // the chain's mark wins over a rewound sidecar
+    fs.rmSync(path.join(home, ROOT_CONFIG_FILE));
+    expect(loadFuseConfig(home, root, emit, { chainHighWater: 7 })).toMatchObject({ fellBack: true });
+    expect(rows.at(-1)).toMatchObject({ why: 'missing' });
+  });
+});
+
+describe('tracking (P8-D92)', () => {
+  it('P8-D91: human and agent spend land in ONE user bucket; spend is broken down by repo, session, model and backend; local sessions record model + projects', async () => {
+    const r = rig();
+    const userOf = () => HUMAN;
+    const h = parseReserveParams(HUMAN, 'human', { kind: 'turn', model: 'claude-opus', scope: { repo: 'repo:a' } }, userOf);
+    const a = parseReserveParams(AGENT, 'agent', { kind: 'turn', model: 'claude-opus' }, userOf);
+    if (h.op !== 'reserve' || a.op !== 'reserve') throw new Error('expected reserve');
+    expect(a.req).toMatchObject({ scope: { user: HUMAN }, attributed: 'root-human' });
+    const hp = await r.fuse.reserve(h.req);
+    const ap = await r.fuse.reserve(a.req);
+    await r.fuse.recordStreamUsage({ source: 'turn.usage', permitId: hp.permitId, tokens: 600, usd: 0.5 });
+    await r.fuse.recordStreamUsage({ source: 'turn.result', permitId: ap.permitId, tokens: 400 });
+    const HS = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZZ';
+    const lp = await r.fuse.reserve({ principal: HUMAN, principalClass: 'human', attended: true, kind: 'session.spawn', backend: 'local', model: 'qwen3-8b', scope: { user: HUMAN, repo: 'repo:b', session: HS } });
+    await r.fuse.recordStreamUsage({ source: 'turn.usage', permitId: lp.permitId, tokens: 50 });
+    expect(r.fuse.spent('user', HUMAN)).toBe(1050);
+    const st = r.fuse.status() as { mode: string; enforced: string[]; spend: Record<string, Record<string, { tokens: number }>>; local: unknown[]; subscriptionWindow: { used: { n: number } } };
+    expect(st).toMatchObject({ mode: 'meter', enforced: ['law-7'] });
+    expect(st.spend.byUser[HUMAN]!.tokens).toBe(1050);
+    expect(st.spend.byRepo['repo:a']!.tokens).toBe(600);
+    expect(st.spend.byModel['claude-opus']!.tokens).toBe(1000);
+    expect(st.spend.byBackend).toMatchObject({ 'claude-code': { tokens: 1000 }, local: { tokens: 50 } });
+    expect(st.spend.bySession[HS]!.tokens).toBe(50);
+    expect(st.local).toEqual([{ session: HS, model: 'qwen3-8b', repos: ['repo:b'], tokens: 50 }]);
+    expect(st.subscriptionWindow.used.n).toBe(1000); // G-SUB-04: measured and shown, never a reserve
   });
 
-  it('Aegis N2: the chain high-water mark wins over a rewound sidecar; missing or unsigned config after it ⇒ corrupt', () => {
-    const home = tmp();
-    const root = new DevTestRootAuthority(DEV_TEST_ROOT_ACK);
-    writeSignedConfig(home, root, { fuse: { concurrent: { user: 50 } } }, 3);
-    fs.rmSync(path.join(home, 'config.seen.json'), { force: true }); // the sidecar is rewound
-    expect(loadFuseConfig(home, root, undefined, { chainHighWater: 7 }).corrupt).toBe(true); // older than the chain says
-    fs.rmSync(path.join(home, ROOT_CONFIG_FILE));
-    expect(loadFuseConfig(home, root, undefined, { chainHighWater: 7 }).corrupt).toBe(true); // missing after a signed one existed
-    fs.writeFileSync(path.join(home, ROOT_CONFIG_FILE), JSON.stringify({ row: { schemaVersion: 'gnomon-root-config:v1', version: 9, config: {} }, signer: 'x', sig: 'y' }));
-    expect(loadFuseConfig(home, root, undefined, { chainHighWater: 7 }).corrupt).toBe(true); // unsigned
-    expect(loadFuseConfig(home, root, undefined, { chainHighWater: 0 }).corrupt).toBe(false); // a fresh home: defaults
+  it('G-BUD-01: usage only from stream events — reserve params carry no usage; a non-stream source is logged and dropped', async () => {
+    for (const k of ['usage', 'spent', 'tokensUsed']) expect(() => parseReserveParams(AGENT, 'agent', { kind: 'turn', [k]: 0 }, () => HUMAN)).toThrow(RefusedError);
+    for (const k of ['repo', 'loop', 'session', 'machine']) expect(() => parseReserveParams(AGENT, 'agent', { kind: 'turn', scope: { [k]: 'x' } }, () => HUMAN)).toThrow(RefusedError); // the kernel binds them
+    expect(() => parseReserveParams(AGENT, 'agent', { kind: 'turn' })).toThrow(RefusedError); // no resolvable human
+    const r = rig();
+    const p = await r.fuse.reserve(spawn());
+    await r.fuse.recordStreamUsage({ source: 'client-claim' as never, permitId: p.permitId, tokens: 99 });
+    expect(r.fuse.spent('user', 'p:abcdefgh/*')).toBe(0);
+  });
+
+  it('G-BUD-02: malformed usage (NaN, negative, infinite USD, unknown permit) is logged and dropped; tracking continues and reserves still grant', async () => {
+    const r = rig();
+    const p = await r.fuse.reserve(spawn());
+    for (const ev of [{ tokens: Number.NaN }, { tokens: -1 }, { tokens: 1, usd: Number.POSITIVE_INFINITY }, { tokens: 1, permitId: 'permit:v1:01HZZZZZZZZZZZZZZZZZZZZZZZ' }]) {
+      await r.fuse.recordStreamUsage({ source: 'turn.usage', permitId: p.permitId, ...ev } as never);
+    }
+    expect(r.kinds('budget.usage').filter((x) => x.payload.malformed)).toHaveLength(4);
+    await r.fuse.recordStreamUsage({ source: 'turn.usage', permitId: p.permitId, tokens: 10 });
+    expect(r.fuse.spent('user', 'p:abcdefgh/*')).toBe(10);
+    await expect(r.fuse.reserve(spawn())).resolves.toMatchObject({ decision: 'allow' });
   });
 
   it('release twice concurrently: one release row', async () => {
@@ -256,149 +258,7 @@ describe('round 2: api-token billing only on the kernel spawn path; headroom; ex
     expect(out.filter((x) => x.status === 'fulfilled')).toHaveLength(1);
     expect(r.kinds('permit.release')).toHaveLength(1);
   });
-});
 
-describe('P8-D91 one user bucket for the human and their agents', () => {
-  it('human + agent reserves both count against one user-rung day limit', async () => {
-    const cfg = structuredClone(DEFAULT_FUSE);
-    cfg.tokens.user = 1000;
-    const r = rig({ config: cfg });
-    const userOf = () => HUMAN; // the daemon: the root's human principal before M1.7
-    const h = parseReserveParams(HUMAN, 'human', { kind: 'turn', limits: { tokens: 600 } }, userOf);
-    const a = parseReserveParams(AGENT, 'agent', { kind: 'turn', limits: { tokens: 600 } }, userOf);
-    if (h.op !== 'reserve' || a.op !== 'reserve') throw new Error('expected reserve');
-    expect(a.req.scope.user).toBe(HUMAN);
-    const hp = await r.fuse.reserve(h.req);
-    await r.fuse.recordStreamUsage({ source: 'turn.usage', permitId: hp.permitId, tokens: 600 });
-    const ap = await r.fuse.reserve(a.req);
-    expect(ap.limits.tokens).toBe(100); // the shared bucket, minus the human's 30 % (N1): 700 − 600
-    await r.fuse.recordStreamUsage({ source: 'turn.usage', permitId: ap.permitId, tokens: 100 });
-    expect((await refusal(r.fuse.reserve(a.req))).data).toMatchObject({ dimension: 'tokens', scope: 'user' });
-    const hp2 = await r.fuse.reserve(h.req); // the human keeps the last 300
-    expect(hp2.limits.tokens).toBe(300);
-    expect(r.kinds('permit.reserve').map((x) => [x.payload.user, x.payload.attributed ?? null])).toEqual([[HUMAN, null], [HUMAN, 'root-human'], [HUMAN, 'root-human'], [HUMAN, null]]); // N4
-  });
-});
-
-describe('G-BUD-01..03', () => {
-  it('G-BUD-01: usage only from stream events — permit.reserve params carry no usage; a non-stream source is refused as corrupt', async () => {
-    for (const k of ['usage', 'spent', 'tokensUsed']) expect(() => parseReserveParams(AGENT, 'agent', { kind: 'turn', [k]: 0 })).toThrow(RefusedError);
-    expect(() => parseReserveParams(AGENT, 'agent', { kind: 'turn', scope: { user: 'p:abcdefgh/other' } }, () => HUMAN)).toThrow(RefusedError); // the user rung is the human the caller runs for
-    expect(() => parseReserveParams(AGENT, 'agent', { kind: 'turn' })).toThrow(RefusedError); // no resolvable human ⇒ refused
-    expect(parseReserveParams(HUMAN, 'human', { kind: 'turn', scope: { repo: 'repo:a' } })).toMatchObject({ op: 'reserve', req: { attended: true, scope: { user: HUMAN, repo: 'repo:a' } } });
-    const r = rig();
-    const p = await r.fuse.reserve(spawn());
-    await r.fuse.recordStreamUsage({ source: 'turn.usage', permitId: p.permitId, tokens: 100 });
-    expect(r.kinds('budget.usage')).toHaveLength(1);
-    expect(r.fuse.corrupt).toBe(false);
-    await r.fuse.recordStreamUsage({ source: 'client-claim' as never, permitId: p.permitId, tokens: 0 });
-    expect(r.fuse.corrupt).toBe(true);
-  });
-
-  it('G-BUD-02: corrupt state ⇒ deny (malformed usage: NaN, negative, unknown permit)', async () => {
-    for (const ev of [{ tokens: Number.NaN }, { tokens: -1 }, { tokens: 1, usd: Number.POSITIVE_INFINITY }, { tokens: 1, permitId: 'permit:v1:01HZZZZZZZZZZZZZZZZZZZZZZZ' }]) {
-      const r = rig();
-      const p = await r.fuse.reserve(spawn());
-      await r.fuse.recordStreamUsage({ source: 'turn.usage', permitId: p.permitId, ...ev } as never);
-      expect((await refusal(r.fuse.reserve(spawn({ scope: { user: 'p:abcdefgh/*', repo: 'repo:b' } })))).data).toMatchObject({ dimension: 'corrupt-state' });
-    }
-  });
-
-  it('G-BUD-03: a mid-turn breach pauses the session and calls onBreach once (the supervisor kills the pgid, M1.7); ladder rungs announced once per scope per day', async () => {
-    const breaches: unknown[] = [];
-    const r = rig({ onBreach: (b) => breaches.push(b) });
-    const p = await r.fuse.reserve(spawn({ scope: { user: 'p:abcdefgh/*', repo: 'repo:a', session: 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZZ' }, limits: { tokens: 1000 } }));
-    await r.fuse.recordStreamUsage({ source: 'turn.usage', permitId: p.permitId, tokens: 900 });
-    expect(breaches).toEqual([]);
-    await r.fuse.recordStreamUsage({ source: 'turn.result', permitId: p.permitId, tokens: 200 });
-    await r.fuse.recordStreamUsage({ source: 'turn.result', permitId: p.permitId, tokens: 200 });
-    expect(breaches).toEqual([{ permitId: p.permitId, hsid: 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZZ', dimension: 'tokens' }]);
-    expect(r.kinds('budget.pause').map((x) => x.payload.reason)).toEqual(['breach']);
-    const sessionRungs = r.kinds('budget.ladder').filter((x) => x.payload.scope === 'session' && x.payload.dimension === 'tokens').map((x) => x.payload.rung);
-    expect(sessionRungs).toEqual([]); // 1 300 of the 400 000 session day budget: below the first rung
-  });
-
-  it.todo('G-BUD-03 the breach kills the session’s process group (job object on Windows) within the turn — M1.7 (#supervisor)');
-});
-
-describe('G-SUB-04 subscription windows: the armada pauses at the threshold, the human keeps a permit', () => {
-  it('70 % of the window used ⇒ agent/unattended denied with ONE budget card; an attended human still gets a permit; resume unpauses', async () => {
-    const cfg = structuredClone(DEFAULT_FUSE);
-    cfg.subscription.windowTokens = 1000;
-    const r = rig({ config: cfg, withBroker: true });
-    const p = await r.fuse.reserve(spawn({ kind: 'turn' }));
-    await r.fuse.recordStreamUsage({ source: 'turn.usage', permitId: p.permitId, tokens: 700 });
-    const x = await refusal(r.fuse.reserve(spawn({ kind: 'turn' })));
-    expect(x).toMatchObject({ code: 'BUDGET_DENIED', data: { dimension: 'subscription-window', reservedForHuman: 0.3 } });
-    await refusal(r.fuse.reserve(spawn({ kind: 'turn', principal: HUMAN, principalClass: 'human', attended: false }))); // unattended human work is armada
-    await expect(r.fuse.reserve({ principal: HUMAN, principalClass: 'human', attended: true, kind: 'turn', scope: { user: HUMAN }, backend: 'claude-code', limits: { tokens: 100 } })).resolves.toMatchObject({ decision: 'allow' });
-    expect(r.broker!.cards().filter((c) => c.kind === 'budget')).toHaveLength(1);
-    expect(r.kinds('budget.pause').map((y) => y.payload.scope)).toEqual(['armada']);
-    await r.fuse.resume(HUMAN);
-    expect(r.kinds('budget.resume').at(-1)!.payload).toMatchObject({ by: HUMAN, allowance: { windowMs: cfg.subscription.windowMs } }); // a logged one-window allowance
-    const allowed = await r.fuse.reserve(spawn({ kind: 'turn' }));
-    expect(allowed.limits.tokens).toBe(200); // the allowance: the human's 30 % for one window, minus what is committed (N3)
-    expect(r.kinds('budget.resume').at(-1)!.payload.allowance).toMatchObject({ note: expect.stringContaining('30 %') });
-    expect(r.fuse.status()).toMatchObject({ subscriptionWindow: { used: { n: 700 } } }); // resume never erases the window
-    await r.fuse.recordStreamUsage({ source: 'turn.usage', permitId: allowed.permitId, tokens: 200 });
-    expect((await refusal(r.fuse.reserve(spawn({ kind: 'turn' })))).data).toMatchObject({ allowance: true }); // never a permit with limits ≤ 0
-  });
-
-  it('no pause/unpause churn: 69 % used + a live permit’s headroom ⇒ three armada reserves, exactly ONE budget card; the pause clears and a re-crossing raises a NEW card; a late resume of the withdrawn card grants nothing', async () => {
-    const cfg = structuredClone(DEFAULT_FUSE);
-    cfg.subscription.windowTokens = 1000;
-    const r = rig({ config: cfg, withBroker: true });
-    const p = await r.fuse.reserve(spawn({ kind: 'turn' })); // clamped to the 700 armada share
-    await r.fuse.recordStreamUsage({ source: 'turn.usage', permitId: p.permitId, tokens: 690 }); // 69 %, 10 still committed
-    for (let i = 0; i < 3; i++) await refusal(r.fuse.reserve(spawn({ kind: 'turn' })));
-    const cards = () => r.broker!.cards().filter((c) => c.kind === 'budget');
-    expect(cards()).toHaveLength(1);
-    expect(r.kinds('budget.pause')).toHaveLength(1);
-    const first = cards()[0]!;
-    await r.fuse.release(p.permitId, AGENT); // the headroom frees: under the threshold again
-    const q = await r.fuse.reserve(spawn({ kind: 'turn' }));
-    expect(q.limits.tokens).toBe(10);
-    expect(r.broker!.card(first.cardId)!.state).toBe('expired'); // withdrawn when the pause cleared
-    expect(await r.broker!.decisionOf(first.cardId)).toBe('withdrawn');
-    await r.fuse.recordStreamUsage({ source: 'turn.usage', permitId: q.permitId, tokens: 10 });
-    await refusal(r.fuse.reserve(spawn({ kind: 'turn' })));
-    expect(cards()).toHaveLength(2); // the re-crossing raised a new card
-    expect(r.kinds('budget.resume').filter((x) => x.payload.allowance)).toHaveLength(0); // nothing granted an allowance
-  });
-
-  it('Aegis N1: an agent cannot lock the human out — local turn permits stop at 70 % of the user day; local spawns stop at the armada slot cap; the human still gets both', async () => {
-    const r = rig();
-    const agentTurn = () => r.fuse.reserve(spawn({ kind: 'turn', backend: 'local' }));
-    let n = 0;
-    for (;;) {
-      try {
-        await agentTurn();
-        n++;
-      } catch {
-        break;
-      }
-      if (n > 50) throw new Error('no cap');
-    }
-    expect(n * DEFAULT_FUSE.tokens.session).toBeLessThanOrEqual(DEFAULT_FUSE.tokens.user * 0.7);
-    await expect(r.fuse.reserve({ principal: HUMAN, principalClass: 'human', attended: true, kind: 'turn', scope: { user: 'p:abcdefgh/*' }, backend: 'local' })).resolves.toMatchObject({ decision: 'allow' });
-    const s = rig();
-    expect(() => parseReserveParams(AGENT, 'agent', { kind: 'session.spawn', backend: 'local', scope: { machine: 'dev:abcdefgh/m1' } }, () => HUMAN)).toThrow(RefusedError); // the kernel binds machine
-    const spawns = await Promise.allSettled([1, 2, 3, 4].map(() => s.fuse.reserve(spawn({ backend: 'local', scope: { user: 'p:abcdefgh/*' } }))));
-    expect(spawns.filter((x) => x.status === 'fulfilled').length).toBeLessThan(DEFAULT_FUSE.concurrent.user);
-    await expect(s.fuse.reserve({ principal: HUMAN, principalClass: 'human', attended: true, kind: 'session.spawn', scope: { user: 'p:abcdefgh/*', machine: 'dev:abcdefgh/m2' }, backend: 'local' })).resolves.toMatchObject({ decision: 'allow' });
-  });
-
-  it('quota.error opens the breaker for 60 min (or a human resume)', async () => {
-    const r = rig();
-    await r.fuse.quotaError(null);
-    expect((await refusal(r.fuse.reserve(spawn()))).data).toMatchObject({ dimension: 'breaker' });
-    await r.fuse.resume(HUMAN);
-    await expect(r.fuse.reserve(spawn())).resolves.toMatchObject({ decision: 'allow' });
-    expect(r.kinds('budget.breaker.close')).toHaveLength(1);
-  });
-
-  it.todo('subscription window shape learned from turn.usage/turn.result and rate-limit headers / quota.error — M1.7 (#claude-adapter)');
-  it.todo('compute dimension: CPU seconds per hour and wall time per local turn enforced on local sessions — M1.8 (#local-runner, G-LAW-01c)');
-  it.todo('day windows from the chain’s last event time (S-L2) wired to #kernel-log head time — next M1.6 slice (the daemon passes the wall clock today)');
-  it.todo('DEFERRED: rebuild the day and window counters from budget.usage rows at boot (today in memory; a restart forgets the day) — next M1.6 slice with S-L2');
+  it.todo('rebuild the day and window counters from budget.usage rows at boot (today in memory; a restart forgets the day) — next slice, with S-L2 (the chain’s last event time)');
+  it.todo('subscription window shape learned from turn.usage/turn.result and rate-limit headers — M1.7 (#claude-adapter)');
 });

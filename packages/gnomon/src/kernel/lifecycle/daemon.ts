@@ -441,10 +441,7 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
     logId: log.head().log,
     log: brokerLog,
     config: fuseCfg.config,
-    corrupt: fuseCfg.corrupt,
-    broker,
     apiTokens,
-    kernelPrincipal,
     // law 7 scan: the env a child would inherit and the user settings layer; the versioned per-OS
     // managed-policy list and the mid-session watch are M1.7 (#claude-adapter, G-SUB-01/05)
     billing: {

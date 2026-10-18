@@ -1,23 +1,26 @@
 /**
  * @symbol #budget-fuse
  *
- * #budget-fuse configuration (spec §3.4 "The fuse — four dimensions", S16-6,
- * G-LAW-01b). Defaults are ON. They are tunable ONLY by a root-signed config
- * in the home the daemon reads; no env var, project file or CLI flag changes
- * them — this module takes no env and no argv at all. An unsigned, badly
- * signed or unparseable config is NOT applied (defaults stand,
- * `config.unsigned`); a root-signed config with an invalid value makes the
- * fuse corrupt, and a corrupt fuse denies (B5). A `fuse`/`budget`/
- * `strictness`/`review` key in `.gnomon/project.yaml` is ignored and logged
- * `config.ignored{field, source:'project.yaml'}`.
+ * #budget-fuse configuration — a METER's display settings (spec §3.4 as
+ * amended by P8-D92 "track everything, enforce nothing"). The config holds
+ * only tracking/display keys: the per-scope token and USD reference amounts
+ * the informational ladder rungs (50/75/90/100 %) are measured against, and
+ * the subscription window's shape for the status display. Nothing here
+ * denies a spend; law 7 (billing.ts) is not configurable at all.
  *
- * The founder-interactive share of a subscription window is FIXED at 30 %
- * until the window shape is learned (OPEN 6): not a config value.
+ * Tunable ONLY by a root-signed config in the home the daemon reads; no env
+ * var, project file or CLI flag changes it (this module takes no env and no
+ * argv). An unsigned, badly signed, unparseable, older (rollback) or invalid
+ * config falls back to the defaults and is LOGGED (`config.unsigned` /
+ * `config.loaded{fallback}`); it never stops tracking. Every config.loaded row
+ * carries version + hash; the version high-water mark is the max of the
+ * sidecar and the last signed `config.loaded{version}` on the hash-chained
+ * log (Aegis N2). A `fuse`/`budget`/`strictness`/`review` key in
+ * `.gnomon/project.yaml` is ignored and logged `config.ignored`.
  *
  * Wire form: `<home>/config.signed.json` = `{row: {schemaVersion:
- * 'gnomon-root-config:v1', config: {fuse: …}}, signer, sig}` (the JSON
- * subset of the spec's root-signed `config.yaml`; the kernel has no YAML
- * parser, zero deps).
+ * 'gnomon-root-config:v1', version, config: {fuse: …}}, signer, sig}` (the
+ * JSON subset of the spec's root-signed `config.yaml`; zero deps).
  */
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -26,30 +29,23 @@ import type { RootAuthority } from '../identity/root-authority.js';
 
 export const ROOT_CONFIG_FILE = 'config.signed.json';
 export const ROOT_CONFIG_SCHEMA = 'gnomon-root-config:v1' as const;
-/** The highest root-config `version` this home has applied (rollback refusal). */
+/** The highest root-config `version` this home has applied (rollback detection). */
 export const CONFIG_SEEN_FILE = 'config.seen.json';
-/** OPEN 6: fixed until the window shape is learned. */
-export const HUMAN_RESERVE = 0.3;
 
 export type ScopeName = 'user' | 'repo' | 'loop' | 'session';
 
 export interface FuseConfig {
+  /** reference amounts per scope per UTC day: the ladder rungs are fractions of these (informational) */
   tokens: Record<ScopeName, number>;
   usd: Record<ScopeName, number>;
-  /** concurrent session.spawn permits per scope */
-  concurrent: Record<ScopeName, number>;
-  compute: { concurrentLocalPerMachine: number; cpuSecondsPerHour: number; wallSecondsPerLocalTurn: number };
+  /** the subscription window's shape for the status display (measured, never a threshold) */
   subscription: { windowMs: number; windowTokens: number };
-  breakerMs: number;
 }
 
 export const DEFAULT_FUSE: FuseConfig = Object.freeze({
   tokens: { user: 5_000_000, repo: 2_000_000, loop: 1_000_000, session: 400_000 },
   usd: { user: 50, repo: 20, loop: 10, session: 4 },
-  concurrent: { user: 4, repo: 4, loop: 2, session: 1 },
-  compute: { concurrentLocalPerMachine: 2, cpuSecondsPerHour: 3_600, wallSecondsPerLocalTurn: 600 },
   subscription: { windowMs: 5 * 60 * 60_000, windowTokens: 2_000_000 },
-  breakerMs: 60 * 60_000,
 }) as FuseConfig;
 
 export type ConfigEvent = (kind: 'config.loaded' | 'config.unsigned' | 'config.ignored', payload: Record<string, unknown>) => void;
@@ -57,8 +53,8 @@ export type ConfigEvent = (kind: 'config.loaded' | 'config.unsigned' | 'config.i
 export interface LoadedFuseConfig {
   config: FuseConfig;
   signed: boolean;
-  /** a root-signed config with an invalid value: the fuse denies (B5) */
-  corrupt: boolean;
+  /** the config on disk could not be applied (unsigned after a signed one, older, invalid): defaults, logged */
+  fellBack: boolean;
   hash: string | null;
 }
 
@@ -68,15 +64,14 @@ function positive(v: unknown): v is number {
   return typeof v === 'number' && Number.isFinite(v) && v > 0;
 }
 
-/** Merge a signed fuse section over the defaults; returns null on any invalid value. */
+/** Merge a signed fuse section over the defaults; null on any unknown key or invalid value. */
 export function mergeFuse(section: unknown): FuseConfig | null {
   if (section === undefined) return structuredClone(DEFAULT_FUSE);
   if (section === null || typeof section !== 'object' || Array.isArray(section)) return null;
   const s = section as Record<string, unknown>;
   const out = structuredClone(DEFAULT_FUSE);
-  const known = new Set(['tokens', 'usd', 'concurrent', 'compute', 'subscription', 'breakerMs']);
-  if (Object.keys(s).some((k) => !known.has(k))) return null;
-  for (const dim of ['tokens', 'usd', 'concurrent'] as const) {
+  if (Object.keys(s).some((k) => !['tokens', 'usd', 'subscription'].includes(k))) return null;
+  for (const dim of ['tokens', 'usd'] as const) {
     const d = s[dim];
     if (d === undefined) continue;
     if (d === null || typeof d !== 'object') return null;
@@ -85,31 +80,18 @@ export function mergeFuse(section: unknown): FuseConfig | null {
       out[dim][k as ScopeName] = v;
     }
   }
-  for (const grp of ['compute', 'subscription'] as const) {
-    const d = s[grp];
-    if (d === undefined) continue;
-    if (d === null || typeof d !== 'object') return null;
-    for (const [k, v] of Object.entries(d)) {
-      if (!(k in out[grp]) || !positive(v)) return null; // humanReserve is not a key: fixed (OPEN 6)
-      (out[grp] as Record<string, number>)[k] = v;
+  const sub = s.subscription;
+  if (sub !== undefined) {
+    if (sub === null || typeof sub !== 'object') return null;
+    for (const [k, v] of Object.entries(sub)) {
+      if (!(k in out.subscription) || !positive(v)) return null;
+      (out.subscription as Record<string, number>)[k] = v;
     }
-  }
-  if (s.breakerMs !== undefined) {
-    if (!positive(s.breakerMs)) return null;
-    out.breakerMs = s.breakerMs;
   }
   return out;
 }
 
-/** Load the fuse config of `home`: only a row signed by `root` is applied. */
-/**
- * Load the fuse config of `home`: only a row signed by `root` is applied.
- * ROLLBACK (Aegis N2): the high-water version is the max of the sidecar and
- * `chainHighWater` (the last signed `config.loaded{version}` on the
- * hash-chained log, which a sidecar edit cannot rewind). Once it is > 0 a
- * missing, unsigned or older config makes the fuse corrupt (deny), never the
- * looser defaults. Every config.loaded row carries version + hash.
- */
+/** Load the meter config of `home`: only a row signed by `root` is applied; anything else falls back to defaults, logged. */
 export function loadFuseConfig(home: string, root: RootAuthority, emit: ConfigEvent = () => undefined, opts: { chainHighWater?: number } = {}): LoadedFuseConfig {
   const file = path.join(home, ROOT_CONFIG_FILE);
   const seenFile = path.join(home, CONFIG_SEEN_FILE);
@@ -121,39 +103,43 @@ export function loadFuseConfig(home: string, root: RootAuthority, emit: ConfigEv
   }
   const chain = opts.chainHighWater ?? 0;
   const seen = Math.max(sidecar, chain);
-  const rollback = (why: string, hash: string | null, version: unknown): LoadedFuseConfig => {
-    emit('config.loaded', { hash, signed: false, corrupt: true, version: typeof version === 'number' ? version : null, highWater: seen, why, ...(sidecar !== chain && opts.chainHighWater !== undefined ? { sidecar, chain } : {}) });
-    return { config: structuredClone(DEFAULT_FUSE), signed: false, corrupt: true, hash };
+  const defaults = (signed: boolean, hash: string | null): LoadedFuseConfig => ({ config: structuredClone(DEFAULT_FUSE), signed, fellBack: true, hash });
+  const fallBack = (why: string, hash: string | null, version: unknown): LoadedFuseConfig => {
+    emit('config.loaded', { hash, signed: false, fallback: 'defaults', version: typeof version === 'number' ? version : null, highWater: seen, why, ...(opts.chainHighWater !== undefined && sidecar !== chain ? { sidecar, chain } : {}) });
+    return defaults(false, hash);
   };
   let raw: string;
   try {
     raw = fs.readFileSync(file, 'utf8');
   } catch {
-    if (seen > 0) return rollback('missing', null, null);
-    return { config: structuredClone(DEFAULT_FUSE), signed: false, corrupt: false, hash: null };
+    if (seen > 0) return fallBack('missing', null, null);
+    return { config: structuredClone(DEFAULT_FUSE), signed: false, fellBack: false, hash: null };
   }
-  let doc: { row?: { schemaVersion?: unknown; config?: { fuse?: unknown } }; signer?: unknown; sig?: unknown };
+  let doc: { row?: { schemaVersion?: unknown; version?: unknown; config?: { fuse?: unknown } }; signer?: unknown; sig?: unknown };
   try {
     doc = JSON.parse(raw) as typeof doc;
   } catch {
-    if (seen > 0) return rollback('unparseable', null, null);
+    if (seen > 0) return fallBack('unparseable', null, null);
     emit('config.unsigned', { file: ROOT_CONFIG_FILE, why: 'unparseable' });
-    return { config: structuredClone(DEFAULT_FUSE), signed: false, corrupt: false, hash: null };
+    return defaults(false, null);
   }
   const ok = doc?.row?.schemaVersion === ROOT_CONFIG_SCHEMA && typeof doc.signer === 'string' && typeof doc.sig === 'string' && root.verifyRow(doc.signer, doc.row, doc.sig);
   if (!ok) {
-    if (seen > 0) return rollback('unsigned', null, null);
+    if (seen > 0) return fallBack('unsigned', null, null);
     emit('config.unsigned', { file: ROOT_CONFIG_FILE, why: 'signature' });
-    return { config: structuredClone(DEFAULT_FUSE), signed: false, corrupt: false, hash: null };
+    return defaults(false, null);
   }
   const hash = `sha256:${hex(sha256(canonicalJson(doc.row)))}`;
-  // version counter (Aegis C7): a signed config older than the newest one this home has applied is a rollback ⇒ corrupt (deny)
-  const version = (doc.row as { version?: unknown }).version ?? 0;
-  if (typeof version !== 'number' || !Number.isInteger(version) || version < 0 || version < seen) return rollback('older', hash, version);
+  const version = doc.row!.version ?? 0;
+  if (typeof version !== 'number' || !Number.isInteger(version) || version < 0 || version < seen) return fallBack('older', hash, version);
   if (version > sidecar) fs.writeFileSync(seenFile, `${JSON.stringify({ version })}\n`, { mode: 0o600 });
   const merged = mergeFuse(doc.row!.config?.fuse);
-  emit('config.loaded', { hash, signed: true, version, highWater: seen, ...(merged ? {} : { corrupt: true }) });
-  return merged ? { config: merged, signed: true, corrupt: false, hash } : { config: structuredClone(DEFAULT_FUSE), signed: true, corrupt: true, hash };
+  if (!merged) {
+    emit('config.loaded', { hash, signed: true, version, highWater: seen, fallback: 'defaults', why: 'invalid' });
+    return defaults(true, hash);
+  }
+  emit('config.loaded', { hash, signed: true, version, highWater: seen });
+  return { config: merged, signed: true, fellBack: false, hash };
 }
 
 /** Write a root-signed config (the `gnomon config` root act; tests). Throws RootUnavailableError without a root. */
@@ -163,7 +149,7 @@ export function writeSignedConfig(home: string, root: RootAuthority, config: Rec
   fs.writeFileSync(path.join(home, ROOT_CONFIG_FILE), `${JSON.stringify({ row, signer, sig })}\n`, { mode: 0o600 });
 }
 
-/** Keys of `.gnomon/project.yaml` the fuse and strictness never read (logged, ignored). */
+/** Keys of `.gnomon/project.yaml` the meter and strictness never read (logged, ignored). */
 export const PROJECT_IGNORED_KEYS = Object.freeze(['fuse', 'budget', 'strictness', 'review']);
 
 export function ignoredProjectKeys(repoRoot: string, emit: ConfigEvent = () => undefined): string[] {

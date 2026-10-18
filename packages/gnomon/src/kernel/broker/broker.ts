@@ -294,15 +294,6 @@ export class ApprovalBroker {
     return out;
   }
 
-  /** The kernel retires a card nobody needs to decide any more (e.g. the budget pause cleared): expired, outcome `withdrawn`. */
-  async withdrawByKernel(cardId: string, why: string): Promise<void> {
-    const r = this.#cards.get(cardId);
-    if (!r || r.outcome || r.card.state !== 'pending') return;
-    await this.#o.log('approval.expire', { cardId, kind: r.card.kind, into: 'withdrawn', why }, r.card.hsid ? { session: r.card.hsid } : {});
-    r.card = { ...r.card, state: 'expired' };
-    this.#settle(r, 'withdrawn');
-  }
-
   /** A connection closed: its cached unlock is gone (never usable from another connection). */
   async connectionClosed(connId: string): Promise<void> {
     if (this.unlocks.drop(connId)) await this.#o.log('approval.unlock.dropped', { connId, reason: 'closed' }, { connId }).catch(() => undefined);
