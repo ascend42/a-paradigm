@@ -72,7 +72,8 @@
  * (ModHost.stopAll, so no restart races the sweep) BEFORE the children sweep.
  */
 import * as nodeOs from 'node:os';
-import { ApprovalBroker } from '../broker/broker.js';
+import { ApprovalBroker, type ApprovalsKey } from '../broker/broker.js';
+import type { HelperTransport } from '../identity/helper.js';
 import { readRegistry } from '../identity/registry.js';
 import { ApiTokenBilling } from '../broker/api-token.js';
 import { createApprovalPort } from '../broker/port.js';
@@ -137,8 +138,12 @@ export interface DaemonOptions {
   onEvent?: (event: DaemonEvent) => void;
   /** Kernel key seam (software Ed25519; default: ephemeral per start). Keystore custody is M1.3. */
   kernelSigner?: Signer;
-  /** Root seam (default: UnprovisionedRootAuthority). Tests pass a DevTestRootAuthority. */
+  /** Root seam (default: UnprovisionedRootAuthority). Tests pass a DevTestRootAuthority; gnomond passes the HardwareRootAuthority of a provisioned home (M1.3). */
   rootAuthority?: RootAuthority;
+  /** M1.3: the approvals key (HelperApprovalsKey behind the signed helper). Default: none (approve refuses UNSUPPORTED presence). */
+  approvalsKey?: ApprovalsKey & { onHelperExit?(cb: () => void): void };
+  /** M1.3: the helper child the keys live behind; closed (EOF: every unlock dies) at shutdown. */
+  helper?: HelperTransport;
   /** Test seam: the auth clock (nonce expiry). */
   clock?: () => number;
   /** Coalesced diagnostic row window (default 10 s). */
@@ -376,6 +381,7 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
         await appendRow('daemon.exit', { reason, liveChildren }).catch(() => undefined);
         await Promise.allSettled([...pendingRows]);
         await log.close();
+        await opts.helper?.close().catch(() => undefined);
       } finally {
         releaseDaemonLock(home, pidfile);
         resolveExited(reason);
@@ -480,8 +486,11 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
     kernelPrincipal,
     log: brokerLog,
     root: authority,
+    ...(opts.approvalsKey ? { approvals: opts.approvalsKey } : {}),
     guiSessions: () => ((web?.status() as { guiSessions?: { n?: number } } | undefined)?.guiSessions?.n ?? 0),
   });
+  // §3.1 failure modes: a helper exit drops every cached unlock; the next decision on each connection prompts again
+  opts.approvalsKey?.onHelperExit?.(() => void broker.helperExited());
   const apiTokens = new ApiTokenBilling(broker, brokerLog);
   // N2: the rollback high-water mark comes from the hash-chained log (the last signed config.loaded{version})
   let chainHighWater = 0;

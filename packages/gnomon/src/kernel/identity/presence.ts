@@ -18,16 +18,20 @@
  * A token is bound to one purpose, single-use, and fresh for
  * PRESENCE_TOKEN_TTL_MS; `consumePresence` checks all three and burns it.
  *
- * PRESENCE HAS NOT LANDED. Real presence is the signed helper's prompt
- * (Touch ID / Windows Hello; probes P04/P02, M1.3). Until then
- * `requestPresence` refuses UNSUPPORTED{presence-unavailable, milestone
- * M1.3}, so no production path can obtain a token. The only mint is the
- * internal test seam (internal-seams.ts, read only by src/kernel/testing.ts),
- * whose tokens say `method: 'test-seam'`.
+ * PRESENCE (M1.3 slice 1): the production mint is a HARDWARE ATTESTATION —
+ * beginHardwarePresence opens a single-use kernel challenge, the signed
+ * helper shows its Touch ID / password prompt and signs the challenge with a
+ * Secure Enclave key, and completeHardwarePresence mints a `helper-se` token
+ * only when that signature verifies against a pinned public key. Without a
+ * helper `requestPresence` still refuses UNSUPPORTED{presence-unavailable}.
+ * The internal test seam (internal-seams.ts, read only by
+ * src/kernel/testing.ts) mints `method: 'test-seam'` tokens.
  */
+import { randomBytes } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 import { canonicalJson, hex, refuse, RefusedError, sha256 } from '@a-company/gnomon-contracts';
 import { registerSeams } from '../internal-seams.js';
+import type { KeyRing } from '../log/signer.js';
 
 /**
  * The actions a presence token can authorize (one purpose per token).
@@ -37,8 +41,12 @@ import { registerSeams } from '../internal-seams.js';
 export const PRESENCE_PURPOSES = ['log.gap.acknowledge', 'mod.install', 'mod.rollback', 'approval.decide'] as const;
 export type PresencePurpose = (typeof PRESENCE_PURPOSES)[number];
 
-/** How presence was proved. M1.3 adds the helper's methods; `test-seam` is the internal test mint. */
-export type PresenceMethod = 'test-seam';
+/**
+ * How presence was proved. `helper-se` (M1.3): the signed helper's Touch ID /
+ * password prompt, attested by a Secure Enclave signature over a kernel
+ * challenge (completeHardwarePresence); `test-seam` is the internal test mint.
+ */
+export type PresenceMethod = 'test-seam' | 'helper-se';
 
 /** A token older than this is stale (presence must be fresh for the action it authorizes). */
 export const PRESENCE_TOKEN_TTL_MS = 60_000;
@@ -136,6 +144,14 @@ export class PresenceToken {
     return 'ok';
   }
 
+  /**
+   * PRODUCTION MINT (M1.3): only for a hardware attestation that verifies.
+   * Called by completeHardwarePresence after it consumed the challenge.
+   */
+  static fromAttestation(purpose: PresencePurpose, binding: string): PresenceToken {
+    return new PresenceToken(MINT_KEY, purpose, 'helper-se', Date.now(), trustedNow(), binding);
+  }
+
   static {
     registerSeams('presence', {
       mint: (purpose, opts = {}) =>
@@ -160,6 +176,75 @@ export function consumeBoundPresence(token: unknown, purpose: PresencePurpose, b
 /** Check presence for `purpose` and burn the token when it is usable. Never throws. */
 export function consumePresence(token: unknown, purpose: PresencePurpose, now: number = Date.now()): PresenceVerdict {
   return PresenceToken.consume(token, purpose, now);
+}
+
+/* ── hardware presence (M1.3): challenge → helper prompt + SE signature → token ── */
+
+/** A challenge lives this long (the human has this long to touch). */
+export const PRESENCE_CHALLENGE_TTL_MS = 120_000;
+/** Outstanding challenges at once (bounded: an attacker-growable map). */
+export const MAX_PRESENCE_CHALLENGES = 64;
+
+interface Challenge {
+  purpose: PresencePurpose;
+  digest: string;
+  connId: string;
+  message: string;
+  issuedAt: number;
+}
+const challenges = new Map<string, Challenge>();
+
+function sweepChallenges(now: number): void {
+  for (const [id, c] of challenges) if (now - c.issuedAt > PRESENCE_CHALLENGE_TTL_MS) challenges.delete(id);
+}
+
+/** The `presence`-domain message a hardware key signs for one challenge. */
+export function presenceMessage(purpose: string, bindingDigest: string, connId: string, challenge: string): string {
+  return [purpose, bindingDigest, connId, challenge].join('\n');
+}
+
+/**
+ * Open a single-use presence challenge for (purpose, binding, connId). The
+ * returned `message` is what the hardware key signs (domain
+ * `gnomon:presence:v1`) after the helper's prompt. Refuses when
+ * MAX_PRESENCE_CHALLENGES are outstanding.
+ */
+export function beginHardwarePresence(purpose: PresencePurpose, binding: PresenceBinding, connId: string): { challengeId: string; message: string } {
+  if (!(PRESENCE_PURPOSES as readonly string[]).includes(purpose)) throw new TypeError(`#identity: unknown presence purpose ${String(purpose)}`);
+  const now = trustedNow();
+  sweepChallenges(now);
+  if (challenges.size >= MAX_PRESENCE_CHALLENGES) {
+    throw new RefusedError(refuse({ code: 'FORBIDDEN', data: { reason: 'presence' } }), '#identity: too many presence challenges outstanding');
+  }
+  const challengeId = randomBytes(24).toString('base64url');
+  const digest = presenceBindingDigest(binding);
+  const message = presenceMessage(purpose, digest, connId, challengeId);
+  challenges.set(challengeId, { purpose, digest, connId, message, issuedAt: now });
+  return { challengeId, message };
+}
+
+/** Why a hardware attestation minted no token. */
+export type AttestationVerdict = 'unknown-challenge' | 'stale-challenge' | 'bad-signature';
+
+/**
+ * Close a challenge with the hardware signature (IEEE-P1363) by `keyId`,
+ * verified in `ring` (the kernel's pinned root/approvals public keys). The
+ * challenge is consumed whatever the outcome (single use); a token is minted
+ * ONLY when the signature verifies over that challenge's message.
+ */
+export function completeHardwarePresence(challengeId: string, keyId: string, sig: Uint8Array, ring: KeyRing): PresenceToken | AttestationVerdict {
+  const c = challenges.get(challengeId);
+  if (!c) return 'unknown-challenge';
+  challenges.delete(challengeId);
+  if (trustedNow() - c.issuedAt > PRESENCE_CHALLENGE_TTL_MS) return 'stale-challenge';
+  if (ring.verify(keyId, 'presence', c.message, sig) !== 'ok') return 'bad-signature';
+  return PresenceToken.fromAttestation(c.purpose, c.digest);
+}
+
+/** Outstanding challenges (tests: the bound holds). */
+export function outstandingPresenceChallenges(): number {
+  sweepChallenges(trustedNow());
+  return challenges.size;
 }
 
 /**

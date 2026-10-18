@@ -1,0 +1,20 @@
+id: L-2026-10-18-builder-210356-001
+type: insight
+timestamp: '2026-10-18T21:03:56.988Z'
+author: builder
+title: 'M1.3 round 2 (H1): separate the probe helper by identifier and group, pin production by a version floor; the team wildcard limits what code can separate'
+summary: 'The probe helper now signs as gnomon.probe into SW4BMQ8PNL.gnomon.probe and refuses production names; production keys moved to SW4BMQ8PNL.gnomon.prod and the build signs exactly that group. The kernel pins identifier+team plus info protocol and MIN_HELPER_VERSION, checked on the running child after a pid code-sign check; a CDHash allowlist was rejected because timestamped signatures change it every founder build. Residual: the Developer ID profile grants SW4BMQ8PNL.*, so any team-signed binary with that profile can claim .prod; real separation needs its own App ID and profile for the production helper.'
+symbols_touched:
+  - '#gnomon-helper'
+  - '#gnomon-probes'
+  - '#identity'
+commit: '103e0431'
+tags:
+  - decision
+  - gnomon
+  - m1.3
+  - security
+git_context:
+  ref: 93ab4b2f784eecf8cbd970e6764e416f74f40042
+  branch: gnomon/m13-slice1
+  dirty: false

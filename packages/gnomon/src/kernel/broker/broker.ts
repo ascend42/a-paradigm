@@ -58,6 +58,7 @@ import { approveMessage, type KeyRing, type Signer } from '../log/signer.js';
 import { consumeBoundPresence, PresenceToken, presenceBindingDigest, requestPresence, type PresenceBinding, type PresencePurpose } from '../identity/presence.js';
 import type { RootAuthority } from '../identity/root-authority.js';
 import { RootUnavailableError } from '../identity/root-authority.js';
+import { HardwarePresenceDenied, HelperUnlockGone, type DecisionSignRequest, type DecisionSignResult } from '../identity/hardware.js';
 import { baseClass, validDecisions, type DecisionClass } from './classes.js';
 import { blockOf, composePresencePrompt, contentHashOf, signActions, type SignedPresencePrompt } from './card.js';
 import { UnlockStore } from './unlock.js';
@@ -107,6 +108,16 @@ export interface ApprovalsKey {
    * before M1.3) sees the presence refusal, not BAD_REQUEST (T-2026-10-18-018 (2)).
    */
   available?(): boolean;
+  /**
+   * M1.3: a HELPER-HELD approvals key makes the decisionSig itself, after
+   * presence (identity/hardware.ts HelperApprovalsKey). When present and the
+   * caller sent no decisionSig, the broker asks it to sign: `cached` under the
+   * connection's unlock (held in the helper), else `fresh` with the
+   * kernel-signed prompt, minting the bound PresenceToken in the same touch.
+   */
+  signDecision?(req: DecisionSignRequest): Promise<DecisionSignResult>;
+  /** Drop a connection's unlock where the key lives (the helper). */
+  dropUnlock?(connId: string): Promise<void>;
 }
 export const NO_APPROVALS_KEY: ApprovalsKey = Object.freeze({ verify: () => 'unavailable' as const, available: () => false });
 
@@ -295,6 +306,7 @@ export class ApprovalBroker {
     }
     for (const connId of this.unlocks.idle()) {
       this.unlocks.drop(connId);
+      await this.#approvals.dropUnlock?.(connId).catch(() => undefined);
       await this.#o.log('approval.unlock.dropped', { connId, reason: 'idle' }, { connId });
     }
     return out;
@@ -302,7 +314,17 @@ export class ApprovalBroker {
 
   /** A connection closed: its cached unlock is gone (never usable from another connection). */
   async connectionClosed(connId: string): Promise<void> {
-    if (this.unlocks.drop(connId)) await this.#o.log('approval.unlock.dropped', { connId, reason: 'closed' }, { connId }).catch(() => undefined);
+    if (this.unlocks.drop(connId)) {
+      await this.#approvals.dropUnlock?.(connId).catch(() => undefined);
+      await this.#o.log('approval.unlock.dropped', { connId, reason: 'closed' }, { connId }).catch(() => undefined);
+    }
+  }
+
+  /** The helper exited: every unlock it held is gone (§3.1 failure modes); the next decision on each connection prompts again. */
+  async helperExited(): Promise<void> {
+    for (const connId of this.unlocks.connIds()) {
+      if (this.unlocks.drop(connId)) await this.#o.log('approval.unlock.dropped', { connId, reason: 'helper-exit' }, { connId }).catch(() => undefined);
+    }
   }
 
   #settle(r: CardRecord, outcome: string): void {
@@ -359,10 +381,16 @@ export class ApprovalBroker {
     //    answered FIRST, so a decision with no decisionSig (the GUI has no signing path yet) sees the
     //    presence refusal the human can act on, not BAD_REQUEST (T-2026-10-18-018 item 2)
     if (this.#approvals.available?.() === false) throw fail('UNSUPPORTED', 'presence', 'the approvals key lives behind the signed helper (M1.3); no software fallback', { milestone: 'M1.3', cardId });
-    if (typeof p.decisionSig !== 'string' || p.decisionSig.length === 0 || p.decisionSig.length > 1024) throw fail('BAD_REQUEST', 'bad-params', 'decisionSig is required (approvals key over cardId, decision, contentHash, approver)');
-    const v = this.#approvals.verify(ctx.principal, approveMessage({ cardId, decision, cardContentHash: card.contentHash, approverPrincipalId: ctx.principal }), p.decisionSig);
-    if (v === 'unavailable') throw fail('UNSUPPORTED', 'presence', 'the approvals key lives behind the signed helper (M1.3); no software fallback', { milestone: 'M1.3', cardId });
-    if (v !== 'ok') throw fail('AUTH', 'bad-signature', 'decisionSig does not verify for this card, decision and approver', { cardId });
+    const message = approveMessage({ cardId, decision, cardContentHash: card.contentHash, approverPrincipalId: ctx.principal });
+    // M1.3: no decisionSig from the caller + a helper-held key => the helper signs it after presence (step 4)
+    const helperSigns = p.decisionSig === undefined && typeof this.#approvals.signDecision === 'function' && cls !== 'none';
+    let decisionSig = typeof p.decisionSig === 'string' ? p.decisionSig : '';
+    if (!helperSigns) {
+      if (typeof p.decisionSig !== 'string' || p.decisionSig.length === 0 || p.decisionSig.length > 1024) throw fail('BAD_REQUEST', 'bad-params', 'decisionSig is required (approvals key over cardId, decision, contentHash, approver)');
+      const v = this.#approvals.verify(ctx.principal, message, p.decisionSig);
+      if (v === 'unavailable') throw fail('UNSUPPORTED', 'presence', 'the approvals key lives behind the signed helper (M1.3); no software fallback', { milestone: 'M1.3', cardId });
+      if (v !== 'ok') throw fail('AUTH', 'bad-signature', 'decisionSig does not verify for this card, decision and approver', { cardId });
+    }
 
     // 4. presence per class
     const isCli = ctx.credential !== 'gui'; // Aegis C1: the credential decides, never the self-declared surface
@@ -371,8 +399,46 @@ export class ApprovalBroker {
     };
     let presence: 'fresh' | 'cached' | 'cli';
     let token: PresenceToken | null = null;
+    let helperCached = false;
+    if (helperSigns && cls === 'cached' && !isCli && (await this.#useUnlock(ctx.connId)) === 'ok') {
+      try {
+        decisionSig = (await this.#approvals.signDecision!({ connId: ctx.connId, approver: ctx.principal, message, mode: 'cached' })).decisionSig;
+        helperCached = true;
+      } catch (err) {
+        // the helper lost the unlock (exit, idle, screen lock): drop ours too and take fresh presence below
+        if (!(err instanceof HelperUnlockGone)) throw this.#helperFailure(err, cardId);
+        this.unlocks.drop(ctx.connId);
+        await this.#o.log('approval.unlock.dropped', { connId: ctx.connId, reason: 'helper-lost' }, { connId: ctx.connId });
+      }
+    }
     if (cls === 'none') {
       presence = 'fresh'; // unreachable in M1.6 (no held cards); withdraw takes no presence
+    } else if (helperCached) {
+      presence = 'cached';
+    } else if (helperSigns) {
+      const hadUnlock = this.unlocks.has(ctx.connId);
+      const keep = cls === 'cached' && !isCli;
+      const prompt = this.#promptOf(r, decision, ctx, cls);
+      let res: DecisionSignResult;
+      try {
+        res = await this.#approvals.signDecision!({ connId: ctx.connId, approver: ctx.principal, message, mode: 'fresh', prompt: prompt.text, keepUnlock: keep, presence: { purpose: r.presence?.purpose ?? 'approval.decide', binding: this.#binding(r, decision) } });
+      } catch (err) {
+        if (err instanceof HardwarePresenceDenied) throw await this.#presenceDenied(card, ctx, err.why, hadUnlock);
+        throw this.#helperFailure(err, cardId);
+      }
+      if (!res.token) throw await this.#presenceDenied(card, ctx, 'no presence attestation', hadUnlock);
+      token = res.token;
+      decisionSig = res.decisionSig;
+      presence = isCli ? 'cli' : 'fresh';
+      if (!r.presence?.consumedByEffect) {
+        const used = consumeBoundPresence(token, r.presence?.purpose ?? 'approval.decide', this.#binding(r, decision));
+        if (used !== 'ok') throw await this.#presenceDenied(card, ctx, `presence token ${used}`, hadUnlock);
+      }
+      if (keep && res.kept && !this.unlocks.has(ctx.connId)) {
+        live();
+        this.unlocks.open(ctx.connId);
+        await this.#o.log('approval.unlock', { connId: ctx.connId, cardId }, { connId: ctx.connId });
+      }
     } else if (cls === 'cached' && !isCli && (await this.#useUnlock(ctx.connId)) === 'ok') {
       presence = 'cached';
     } else {
@@ -394,7 +460,8 @@ export class ApprovalBroker {
       const root = this.#o.root;
       if (!root) throw new RootUnavailableError(`the ${decision} decision`);
       try {
-        rootSig = root.signRow({ schemaVersion: 'gnomon-root-decision:v1', cardId, decision, contentHash: card.contentHash, approver: ctx.principal });
+        const row = { schemaVersion: 'gnomon-root-decision:v1', cardId, decision, contentHash: card.contentHash, approver: ctx.principal };
+        rootSig = root.signRowAsync ? await root.signRowAsync(row) : root.signRow(row);
       } catch (err) {
         if (err instanceof RootUnavailableError) throw err;
         throw fail('UNSUPPORTED', 'root-unprovisioned', 'the root key could not sign the decision', { cardId });
@@ -411,7 +478,7 @@ export class ApprovalBroker {
     if (r.outcome || r.card.state !== 'pending' || !isCardDecidable(r.card, decision)) throw fail('BAD_REQUEST', 'bad-params', `card ${cardId} is no longer pending`, { cardId, state: String(r.card.state) });
     await this.#o.log(
       'approval.decide',
-      { cardId, decision, by: ctx.principal, decisionSig: p.decisionSig, presence, via, connId: ctx.connId, cli, contentHash: card.contentHash, ...(rootSig ? { rootSig } : {}), ...(p.note ? { note: p.note } : {}) },
+      { cardId, decision, by: ctx.principal, decisionSig, presence, via, connId: ctx.connId, cli, contentHash: card.contentHash, ...(rootSig ? { rootSig } : {}), ...(p.note ? { note: p.note } : {}) },
       { connId: ctx.connId, ...(card.hsid ? { session: card.hsid } : {}) },
     );
     if (decision === 'always') await this.#o.log('approval.rule.learned', { cardId, tool: r.tool ?? null, matchExact: true, presence }, { connId: ctx.connId });
@@ -426,7 +493,7 @@ export class ApprovalBroker {
         throw err;
       }
     }
-    r.card = { ...card, state: 'decided', decidedBy: ctx.principal, decidedAt: new Date(now).toISOString(), decisionSig: p.decisionSig, presence, via, cli };
+    r.card = { ...card, state: 'decided', decidedBy: ctx.principal, decidedAt: new Date(now).toISOString(), decisionSig, presence, via, cli };
     this.#settle(r, decision);
     return r.card;
   }
@@ -448,6 +515,26 @@ export class ApprovalBroker {
     if (!r) throw fail('NOT_FOUND', 'not-found', `no card ${cardId}`);
     const binding = this.#binding(r, decision);
     return { purpose: r.presence?.purpose ?? 'approval.decide', binding, digest: presenceBindingDigest(binding) };
+  }
+
+  /** The kernel-signed prompt for (card, decision) on this connection. */
+  #promptOf(r: CardRecord, decision: string, ctx: DecideContext, cls: DecisionClass): SignedPresencePrompt {
+    const reason =
+      decision === 'always'
+        ? 'fresh presence: always is a standing rule'
+        : cls === 'root'
+          ? 'fresh presence and the root key'
+          : cls === 'cached'
+            ? 'presence unlocks this connection for 15 min'
+            : `fresh presence: ${String(r.card.kind)}`;
+    return composePresencePrompt(this.#o.kernel, r.card, { decision, connId: ctx.connId, guiSessions: this.#o.guiSessions?.() ?? 0, reason });
+  }
+
+  /** A helper that is missing, unsigned, exited or answering nonsense: UNSUPPORTED presence (fail closed, no software fallback). */
+  #helperFailure(err: unknown, cardId: string): RefusedError {
+    if (err instanceof RefusedError) return err;
+    void this.#o.log('approval.presence.denied', { cardId, why: 'unavailable', milestone: 'M1.3' }).catch(() => undefined);
+    return fail('UNSUPPORTED', 'presence', `the signed helper could not sign the decision (${err instanceof Error ? err.message.slice(0, 160) : 'helper error'}); there is no software fallback`, { cardId });
   }
 
   async #prove(r: CardRecord, decision: string, ctx: DecideContext, cls: DecisionClass, hadUnlock: boolean): Promise<PresenceToken> {

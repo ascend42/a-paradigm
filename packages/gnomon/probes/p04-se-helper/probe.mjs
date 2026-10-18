@@ -2,10 +2,10 @@
 // cached unlock; K2, K5). FOUNDER-RUN for the Touch ID half.
 //   node packages/gnomon/probes/run.mjs p04-se-helper --timeout 1800000
 // Claims:
-//   a. a `.app`-bundled helper (bundle id gnomon.helper, hardened runtime,
+//   a. a `.app`-bundled helper (bundle id gnomon.probe, hardened runtime,
 //      embedded Developer ID provisioning profile, Developer ID signature) can
 //      create a Secure Enclave P-256 key (kSecAttrTokenIDSecureEnclave, access
-//      group SW4BMQ8PNL.gnomon, .privateKeyUsage + .userPresence);
+//      group SW4BMQ8PNL.gnomon.probe, .privateKeyUsage + .userPresence);
 //   b. the same code UNSIGNED gets errSecMissingEntitlement (-34018) or
 //      errSecItemNotFound (-25300);
 //   c. one evaluated LAContext signs N times with no further prompt

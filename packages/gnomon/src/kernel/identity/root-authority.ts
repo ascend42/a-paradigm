@@ -14,6 +14,8 @@
  *     authenticate and no client can verify `serverSig` against a registered
  *     kernel key. That is the honest production posture before M1.3 — never a
  *     software fallback (§3.1 failure modes).
+ *   - `HardwareRootAuthority` (identity/hardware.ts, M1.3): the Secure Enclave
+ *     root behind the signed helper, provisioned by `gnomon identity init`.
  *   - `DevTestRootAuthority`: a SOFTWARE P-256 key in memory, constructible
  *     only by code that passes the literal acknowledgement `DEV_TEST_ROOT_ACK`.
  *     No env var or flag selects it (§15.3: the daemon reads no `GNOMON_*`),
@@ -61,6 +63,8 @@ export interface RootAuthority {
   verifyRow(signer: string, row: unknown, sigB64: string): boolean;
   /** Sign a registry row; throws RootUnavailableError when there is no usable root. */
   signRow(row: unknown): { signer: string; sig: string };
+  /** Asynchronous form (M1.3 hardware root: the daemon's helper, so a presence prompt never blocks the event loop). */
+  signRowAsync?(row: unknown): Promise<{ signer: string; sig: string }>;
 }
 
 export function rowMessage(row: unknown): string {

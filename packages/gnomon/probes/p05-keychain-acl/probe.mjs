@@ -11,7 +11,7 @@
 //      carries a signature by an SE custody key (no presence) that a same-user
 //      attacker cannot produce;
 //   5. the D68 design: a data-protection item in the entitlement-gated access
-//      group SW4BMQ8PNL.gnomon is invisible to `security` and cannot be written
+//      group SW4BMQ8PNL.gnomon.probe is invisible to `security` and cannot be written
 //      by an unsigned binary (-34018); only the signed kernel SEA obtains the
 //      key over XPC — the XPC peer-requirement half needs the signed kernel SEA
 //      (M1.1) and is recorded pending.

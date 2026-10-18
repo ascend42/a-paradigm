@@ -4,10 +4,12 @@
  * ($daemon-lifecycle, spec §2.4); T-2026-10-17-009(a) adds `gnomon log
  * quarantine` (#kernel-log, log-cli.ts); M1.12 adds `gnomon replay` (replay-cli.ts);
  * #dev-launch adds `gnomon dev init|up` (dev-cli.ts, DEV ONLY until M1.3);
+ * M1.3 slice 1 adds `gnomon identity init|status` (identity-cli.ts);
  * every other verb is still the placeholder.
  */
 import { gnomondEntryFrom, runDaemonCommand } from './daemon-cli.js';
 import { runDevCommand } from './dev-cli.js';
+import { runIdentityCommand } from './identity-cli.js';
 import { runLogCommand } from './log-cli.js';
 import { runPlaceholderBin } from './placeholder.js';
 import { runReplayCommand } from './replay-cli.js';
@@ -48,6 +50,17 @@ if (argv[0] === 'daemon') {
 } else if (argv[0] === 'dev') {
   // #dev-launch: `gnomon dev init|up` — DEV ONLY, unsigned dogfood path until M1.3 (dev-cli.ts)
   runDevCommand(argv.slice(1), { stdin: process.stdin, stdout: process.stdout, stderr: process.stderr }).then(
+    (code) => {
+      process.exitCode = code;
+    },
+    (err: unknown) => {
+      process.stderr.write(`gnomon: ${err instanceof Error ? err.message : String(err)}\n`);
+      process.exitCode = 70;
+    },
+  );
+} else if (argv[0] === 'identity') {
+  // M1.3 slice 1: `gnomon identity init | status` (#identity, identity-cli.ts) — provisions the hardware root
+  runIdentityCommand(argv.slice(1), { stdin: process.stdin, stdout: process.stdout, stderr: process.stderr }).then(
     (code) => {
       process.exitCode = code;
     },

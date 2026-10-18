@@ -160,6 +160,17 @@ export function resolveRegistryText(text: string, trust: RowVerifier): ResolvedR
 
 function appendRow(home: string, authority: RootAuthority, row: RegistryRow): RegistryRow {
   const signed = authority.signRow(row); // throws RootUnavailableError (UNSUPPORTED, M1.3) without a root
+  appendSignedRegistryRow(home, row, signed);
+  return row;
+}
+
+/**
+ * Append a row someone already signed (M1.3 `gnomon identity init` signs the
+ * device row first and appends it only after identity.json is written, so a
+ * failed first init leaves no orphan row — reviewer R3). The signature is
+ * not checked here: the reader verifies every row against the trust set.
+ */
+export function appendSignedRegistryRow(home: string, row: RegistryRow, signed: { signer: string; sig: string }): void {
   ensureKeysDir(home);
   const fd = fs.openSync(registryPath(home), fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_APPEND, 0o600);
   try {
@@ -168,7 +179,6 @@ function appendRow(home: string, authority: RootAuthority, row: RegistryRow): Re
   } finally {
     fs.closeSync(fd);
   }
-  return row;
 }
 
 /** Register a device key under a principal of the root's ns (root-signed row). */
@@ -178,7 +188,13 @@ export function registerDevice(
   d: { host: string; name: string; principalKind?: PrincipalKind; publicKeyPem: string; now?: Date },
 ): DeviceEntry {
   if (authority.ns === null) authority.signRow(null); // refuses with the M1.3 refusal
-  const ns = authority.ns!;
+  const row = deviceRowFor(authority.ns!, d);
+  appendRow(home, authority, row);
+  return { deviceId: row.deviceId!, principalId: row.principalId!, principalKind: row.principalKind!, keyId: row.keyId, publicKeyPem: row.publicKeyPem };
+}
+
+/** The device row `registerDevice` would sign (validated; throws TypeError on an invalid row). */
+export function deviceRowFor(ns: string, d: { host: string; name: string; principalKind?: PrincipalKind; publicKeyPem: string; now?: Date }): RegistryRow {
   const row: RegistryRow = {
     schemaVersion: REGISTRY_ROW_SCHEMA,
     kind: 'device',
@@ -191,8 +207,7 @@ export function registerDevice(
   };
   const bad = checkRow(row, ns);
   if (bad) throw new TypeError(`#identity: refusing to register an invalid device row (${bad})`);
-  appendRow(home, authority, row);
-  return { deviceId: row.deviceId!, principalId: row.principalId!, principalKind: row.principalKind!, keyId: row.keyId, publicKeyPem: row.publicKeyPem };
+  return row;
 }
 
 /** Register the kernel key's public half (root-signed row; §3.1 "Its registry row … is root-signed"). */

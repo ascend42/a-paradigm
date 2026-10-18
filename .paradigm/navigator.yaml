@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-18T21:11:05.387Z'
+generated: '2026-10-18T21:14:39.164Z'
 structure: {}
 key_files:
   config:
@@ -260,6 +260,7 @@ symbols:
   '#purpose-component-contract-client-api-id': packages/gnomon-contracts/
   '#purpose-component-gui': packages/gnomon-gui/
   '#purpose-component-gnomon-helper': packages/gnomon-helper/
+  '#purpose-component-gnomon-helper-build': packages/gnomon-helper/
   '#purpose-component-gnomon-local': packages/gnomon-local/
   '#purpose-component-gnomon-mod-sdk': packages/gnomon-mod-sdk/
   '#purpose-component-gnomon-wrapper': packages/gnomon-wrapper/

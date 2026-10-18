@@ -1,7 +1,11 @@
 // Gnomon probe helper stub — P00 (signed stub), P04 / S29-01 (Secure Enclave),
 // P05 / S29-02 (keychain ACL + integrity). NOT the product helper
-// (packages/gnomon-helper): a throwaway with the same identity shape —
-// bundle id gnomon.helper, team SW4BMQ8PNL, access group SW4BMQ8PNL.gnomon —
+// (packages/gnomon-helper) and deliberately unable to pass for it (Aegis H1):
+// bundle id gnomon.probe (the kernel pins identifier gnomon.helper), team
+// SW4BMQ8PNL, its own access group SW4BMQ8PNL.gnomon.probe (production keys
+// live in SW4BMQ8PNL.gnomon.prod), and it refuses any tag or service that
+// names a production item (`gnomon.<gen>.root|approvals`, `gnomon-kernel-key`,
+// anything starting `gnomon.`) —
 // built by _shared/signing.mjs into a .app with the Developer ID provisioning
 // profile embedded, hardened runtime, Developer ID signature.
 //
@@ -25,7 +29,7 @@ import Foundation
 import LocalAuthentication
 import Security
 
-let accessGroup = "SW4BMQ8PNL.gnomon"
+let accessGroup = "SW4BMQ8PNL.gnomon.probe"
 
 func emit(_ d: [String: Any], code: Int32? = nil) -> Never {
     let data = try! JSONSerialization.data(withJSONObject: d, options: [.sortedKeys])
@@ -96,6 +100,9 @@ func itemQuery(_ service: String, _ account: String, dp: Bool) -> [String: Any] 
 }
 
 let args = Array(CommandLine.arguments.dropFirst())
+/// Aegis H1: never touch a production-shaped item, whatever group this binary was signed into.
+func isProductionName(_ s: String) -> Bool { s.hasPrefix("gnomon.") || s.hasPrefix("gnomon-kernel") || s.hasPrefix("gnomon-link") }
+if args.dropFirst().contains(where: isProductionName) { emit(["ok": false, "error": "PRODUCTION_NAME", "note": "the probe helper refuses production tags and services (Aegis H1)"], code: 65) }
 if isSandboxed() { emit(["ok": false, "error": "SANDBOXED", "note": "the helper refuses to run sandboxed (P8-D68)"], code: 3) }
 guard let cmd = args.first else { emit(["ok": false, "error": "usage"], code: 64) }
 
