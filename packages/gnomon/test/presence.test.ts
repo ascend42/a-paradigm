@@ -5,6 +5,7 @@
  * private mint key), purpose-bound, single-use and fresh. Production cannot
  * obtain one before M1.3 (`requestPresence` refuses).
  */
+import { existsSync } from 'node:fs';
 import path from 'node:path';
 import ts from 'typescript';
 import { describe, expect, it } from 'vitest';
@@ -80,7 +81,8 @@ describe('#identity PresenceToken (type level)', () => {
     moduleResolution: ts.ModuleResolutionKind.Bundler,
     lib: ['lib.es2023.d.ts'],
     types: ['node'],
-    typeRoots: [path.resolve(PKG_ROOT, '..', '..', 'node_modules', '@types')],
+    // the package's own @types first (CI may not hoist), the workspace root as a fallback
+    typeRoots: [path.join(PKG_ROOT, 'node_modules', '@types'), path.resolve(PKG_ROOT, '..', '..', 'node_modules', '@types')].filter((d) => existsSync(d)),
     skipLibCheck: true,
   };
   const diagnosticsOf = (stripExpectErrors: boolean): readonly ts.Diagnostic[] => {

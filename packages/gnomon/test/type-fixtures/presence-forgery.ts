@@ -28,7 +28,7 @@ class Fake {
 export const f: PresenceToken = new Fake();
 
 // @ts-expect-error the constructor is private to the presence module
-export const n = new PresenceToken();
+export const n = new PresenceToken(Symbol() as never, 'log.gap.acknowledge', 'test-seam', 0);
 
 // @ts-expect-error acknowledgeGap takes a PresenceToken, not a string
 export const g = acknowledgeGap(log, { presenceToken: 'stub-presence' });

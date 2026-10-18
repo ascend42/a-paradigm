@@ -25,6 +25,8 @@ const CHANNEL_IMPORTERS = ['src/kernel/identity/presence.ts', 'src/kernel/log/ke
 /** Files that may name the gated recovery API in code (the implementation, the channel, the test entry). */
 const MAY_NAME_RECOVERY = new Set(['src/kernel/log/kernel-log.ts', CHANNEL, TEST_ENTRY]);
 const GATED = /\b(acknowledgeGap|openForRecovery|openKernelLogForRecovery|seamsOf|mintTestPresence)\b/;
+/** CLI / daemon only: constructing KernelLog directly or casting it (the constructor-key bypass shape). */
+const DIRECT_CONSTRUCT = /\bnew\s+(\(\s*)?KernelLog\b|\bKernelLog\s+as\b/;
 
 /** Strip block and line comments (string contents kept; good enough for identifier tripwires). */
 export function stripComments(src: string): string {
@@ -32,13 +34,26 @@ export function stripComments(src: string): string {
 }
 
 const files = walk(SRC, (f) => /\.ts$/.test(f) && !f.endsWith('.d.ts'));
-/** rel(src file) → rel(resolved relative imports), `.js` specifiers mapped to their `.ts` source. */
+const keys = new Set(files.map(rel));
+/** Relative specifiers that resolve to no src file (an unresolved edge would silently drop out of a closure). */
+const unresolved: string[] = [];
+/** Resolve a relative specifier to a graph key: `.js` → `.ts`, then as written, `+ .ts`, `/index.ts`. */
+function resolveSpec(from: string, spec: string): string | undefined {
+  const base = rel(path.resolve(path.dirname(from), spec));
+  const candidates = [base.replace(/\.js$/, '.ts'), base, `${base}.ts`, `${base}/index.ts`];
+  return candidates.find((c) => keys.has(c));
+}
+/** rel(src file) → rel(resolved relative imports). */
 const graph = new Map<string, string[]>(
   files.map((f) => [
     rel(f),
     extractSpecifiers(readFileSync(f, 'utf8'))
       .filter((s) => s.startsWith('./') || s.startsWith('../'))
-      .map((s) => rel(path.resolve(path.dirname(f), s.replace(/\.js$/, '.ts')))),
+      .flatMap((s) => {
+        const r = resolveSpec(f, s);
+        if (r === undefined) unresolved.push(`${rel(f)}: ${s}`);
+        return r === undefined ? [] : [r];
+      }),
   ]),
 );
 
@@ -65,6 +80,10 @@ describe('seam fence: the internal test entry is unreachable from production (so
     expect(PROD_ENTRIES).not.toContain(TEST_ENTRY);
   });
 
+  it('every relative import under src/ resolves to a src file (no edge can silently drop out of a closure)', () => {
+    expect(unresolved).toEqual([]);
+  });
+
   it('no file under src/ imports the internal test entry', () => {
     expect([...graph].filter(([, deps]) => deps.includes(TEST_ENTRY)).map(([f]) => f)).toEqual([]);
   });
@@ -82,6 +101,9 @@ describe('seam fence: the internal test entry is unreachable from production (so
 
 describe('presence tripwire: the CLI and the daemon cannot reach acknowledgeGap before presence lands (M1.3)', () => {
   it('self-test: the scanner sees code, ignores comments', () => {
+    expect(DIRECT_CONSTRUCT.test('new (KernelLog as any)(o, s, true)')).toBe(true);
+    expect(DIRECT_CONSTRUCT.test('const l = new KernelLog(o)')).toBe(true);
+    expect(DIRECT_CONSTRUCT.test('KernelLog.open(o)')).toBe(false);
     expect(GATED.test(stripComments('await log.acknowledgeGap({ presenceToken })'))).toBe(true);
     expect(GATED.test(stripComments('const x = 1; // acknowledgeGap later\n/* openForRecovery */'))).toBe(false);
   });
@@ -90,6 +112,7 @@ describe('presence tripwire: the CLI and the daemon cannot reach acknowledgeGap 
     const scoped = files.map(rel).filter((f) => f.startsWith('src/cli/') || f.startsWith('src/kernel/lifecycle/'));
     expect(scoped.length).toBeGreaterThan(3);
     expect(scoped.filter((f) => GATED.test(stripComments(readFileSync(path.join(PKG_ROOT, f), 'utf8'))))).toEqual([]);
+    expect(scoped.filter((f) => DIRECT_CONSTRUCT.test(stripComments(readFileSync(path.join(PKG_ROOT, f), 'utf8'))))).toEqual([]);
   });
 
   it('no other src file names it either (only kernel-log.ts, the channel and the test entry)', () => {
@@ -114,6 +137,22 @@ describe('presence tripwire: the CLI and the daemon cannot reach acknowledgeGap 
     }
     expect(existsSync(path.join(PKG_ROOT, 'never-created'))).toBe(false);
   });
+
+  it('the private constructor cannot be called with seams + recovery by a cast (module-private construct key)', () => {
+    const home = path.join(PKG_ROOT, 'never-created');
+    const fake = { name: 'keystore', read: () => ({ state: 'absent' }), write: () => undefined };
+    const Ctor = KernelLog as unknown as new (...a: unknown[]) => KernelLog;
+    const opts = { home, kernelPrincipal: 'p:abcdefgh/kernel', signer: SoftwareEd25519Signer.generate() };
+    expect(() => new Ctor(opts, { keystoreAnchor: fake, bootSession: 'x' }, true)).toThrow(/constructed only by KernelLog.open/);
+    expect(() => new Ctor(Symbol('gnomon.kernel-log.construct'), opts, { keystoreAnchor: fake }, true)).toThrow(/constructed only by KernelLog.open/);
+    expect(() => Reflect.construct(Ctor, [undefined, opts, {}, true])).toThrow(TypeError);
+    expect(existsSync(home)).toBe(false);
+  });
+
+  it('verifyLog refuses the keystoreAnchor seam at runtime (always the kernel\'s own store)', () => {
+    const fake = { name: 'keystore', read: () => ({ state: 'absent' }), write: () => undefined };
+    expect(() => pkg.kernelLog.verifyLog(path.join(PKG_ROOT, 'never-created'), { keyRing: new pkg.kernelLog.KeyRing(), keystoreAnchor: fake } as never)).toThrow(/test seam/);
+  });
 });
 
 describe('seam fence: dist/ (what ships)', () => {
@@ -124,8 +163,11 @@ describe('seam fence: dist/ (what ships)', () => {
     expect(distFiles.length).toBeGreaterThan(0);
   });
 
+  // Relies on tsup tree-shaking: internal-seams.ts IS bundled (kernel-log and
+  // presence register with it), but seamsOf — and its error string — is used
+  // only by testing.ts, so it must be dropped from every production bundle.
   it('no built file contains the internal test entry or its exports', () => {
-    const marker = new RegExp(`${GNOMON_INTERNAL_TEST_ENTRY}|\\bmintTestPresence\\b|\\bopenKernelLogForRecovery\\b|\\bseamsOf\\b`);
+    const marker = new RegExp(`${GNOMON_INTERNAL_TEST_ENTRY}|\\bmintTestPresence\\b|\\bopenKernelLogForRecovery\\b|\\bseamsOf\\b|is not registered \\(its owner module was not loaded\\)`);
     expect(distFiles.filter((f) => marker.test(readFileSync(f, 'utf8'))).map(rel)).toEqual([]);
   });
 
@@ -139,5 +181,11 @@ describe('seam fence: dist/ (what ships)', () => {
     expect(opts).toContain('kernelPrincipal');
     expect(opts).not.toMatch(/\b(keystoreAnchor|bootSession)\??:/);
     expect(dts).not.toMatch(/^\s*(static\s+)?(openForRecovery|acknowledgeGap)\s*\(/m);
+    const vopts = /interface VerifyLogOptions \{[\s\S]*?\n\}/.exec(dts)?.[0] ?? '';
+    expect(vopts).toContain('keyRing');
+    expect(vopts).not.toMatch(/\bkeystoreAnchor\??:/);
+    const vsig = /declare function verifyLog\([^)]*\)/.exec(dts)?.[0] ?? '';
+    expect(vsig).toContain('VerifyLogOptions');
+    expect(vsig).not.toMatch(/keystoreAnchor/);
   });
 });

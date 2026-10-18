@@ -229,12 +229,24 @@ import { registerSeams, type KernelLogSeamOptions } from '../internal-seams.js';
 
 /**
  * T-2026-10-17-009(c): option keys that are TEST SEAMS. They are not on
- * KernelLogOptions; `KernelLog.open` refuses them at runtime too, so a
- * JavaScript caller (or a spread of a wider object) cannot slip a substituted
- * keystore anchor or boot id past the type. Tests pass them through the
- * internal test entry (src/kernel/testing.ts).
+ * KernelLogOptions (nor on verifyLog's options), and both refuse them at
+ * runtime, so a JavaScript caller (or a spread of a wider object) cannot slip
+ * a substituted keystore anchor or boot id past the type. The constructor's
+ * seam and recovery parameters are reachable only with CONSTRUCT_KEY, held by
+ * `KernelLog.open` and the registered seam closures: a cast call of the
+ * private constructor throws. Tests pass the seams through the internal test
+ * entry (src/kernel/testing.ts).
  */
 const SEAM_OPTION_KEYS = ['keystoreAnchor', 'bootSession'] as const;
+
+/** Module-private: the KernelLog constructor refuses any caller without it (TS `private` is type-only). */
+const CONSTRUCT_KEY: unique symbol = Symbol('gnomon.kernel-log.construct');
+
+function refuseSeamKeys(opts: object, where: string): void {
+  for (const k of SEAM_OPTION_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(opts, k)) throw new TypeError(`#kernel-log: ${where}: ${k} is a test seam, reachable only through the internal test entry (T-2026-10-17-009)`);
+  }
+}
 
 export const DEFAULT_SEGMENT_ROWS = 1_000_000;
 export const SEGMENT_SCHEMA = 'gnomonLogSegment:v1' as const;
@@ -586,10 +598,9 @@ export class KernelLog {
   #ringForced = 0;
   readonly #counts = { fileAnchors: 0, keystoreAnchors: 0, forcedAnchors: 0, checkpoints: 0 };
 
-  private constructor(opts: KernelLogOptions, seams: KernelLogSeamOptions = {}, recovery = false) {
-    for (const k of SEAM_OPTION_KEYS) {
-      if (Object.prototype.hasOwnProperty.call(opts, k)) throw new TypeError(`#kernel-log: ${k} is a test seam, reachable only through the internal test entry (T-2026-10-17-009)`);
-    }
+  private constructor(key: typeof CONSTRUCT_KEY, opts: KernelLogOptions, seams: KernelLogSeamOptions = {}, recovery = false) {
+    if (key !== CONSTRUCT_KEY) throw new TypeError('#kernel-log: KernelLog is constructed only by KernelLog.open (or the internal test entry)');
+    refuseSeamKeys(opts, 'KernelLog.open');
     this.#opts = { segmentRows: DEFAULT_SEGMENT_ROWS, durability: 'process-crash', clock: Date.now, ...opts };
     if (!Number.isSafeInteger(this.#opts.segmentRows) || this.#opts.segmentRows < 3) throw new RangeError('segmentRows must be an integer >= 3');
     this.home = opts.home;
@@ -623,7 +634,7 @@ export class KernelLog {
    * builds itself and the boot session is read from the OS.
    */
   static open(opts: KernelLogOptions): KernelLog {
-    return new KernelLog(opts);
+    return new KernelLog(CONSTRUCT_KEY, opts);
   }
 
   /*
@@ -641,8 +652,8 @@ export class KernelLog {
    */
   static {
     registerSeams('log', {
-      open: (opts, seams) => new KernelLog(opts, seams),
-      openForRecovery: (opts, seams) => new KernelLog(opts, seams, true),
+      open: (opts, seams) => new KernelLog(CONSTRUCT_KEY, opts, seams),
+      openForRecovery: (opts, seams) => new KernelLog(CONSTRUCT_KEY, opts, seams, true),
       acknowledgeGap: (log, input) => log.#acknowledgeGap(input),
     });
   }
@@ -1759,7 +1770,9 @@ export class KernelLog {
    *
    * PRESENCE: `presenceToken` must be a PresenceToken minted by the presence
    * module (identity/presence.ts) for `log.gap.acknowledge`, unused and
-   * fresh; it is burned here. Until real presence lands (the signed helper's
+   * fresh; it is burned here — at the presence check, so a refusal later in
+   * this method (tamper, unauthenticated lead, anchor failure) still consumes
+   * it and a retry needs fresh presence (M1.3 UX: re-prompt per attempt). Until real presence lands (the signed helper's
    * prompt, M1.3) no production path can mint one, and this method is
    * reachable only through the internal test entry (registered seam above).
    *
@@ -1815,7 +1828,7 @@ export class KernelLog {
   /** `gnomon log verify`: the full chain (every segment + both anchors), or one segment. */
   verify(opts: { segment?: number } = {}): VerifyReport {
     const kernelKeyIds = this.#kernelKeyIds();
-    return verifyLog(this.home, { keyRing: this.#keyRing, segment: opts.segment, keystoreAnchor: this.#keystoreAnchor, kernelPrincipal: this.#opts.kernelPrincipal, kernelKeyIds });
+    return verifyLogWith(this.home, { keyRing: this.#keyRing, segment: opts.segment, kernelPrincipal: this.#opts.kernelPrincipal, kernelKeyIds }, this.#keystoreAnchor);
   }
 
   /**
@@ -1900,10 +1913,28 @@ function checkPayload(kind: string, payload: unknown): void {
 const SENS = SENSITIVITIES as readonly string[];
 const SHA256_TAGGED = /^sha256:[0-9a-f]{64}$/;
 
+export interface VerifyLogOptions {
+  keyRing: KeyRing;
+  segment?: number;
+  kernelPrincipal?: string;
+  kernelKeyIds?: readonly string[];
+}
+
 export function verifyLog(
   home: string,
-  opts: { keyRing: KeyRing; segment?: number; keystoreAnchor?: AnchorStore; kernelPrincipal?: string; kernelKeyIds?: readonly string[] },
+  opts: VerifyLogOptions,
 ): VerifyReport {
+  refuseSeamKeys(opts, 'verifyLog');
+  return verifyLogWith(home, opts, new KeystoreAnchorStore());
+}
+
+/**
+ * The verify body. The keystore anchor store is a parameter, not an option:
+ * the public verifyLog always reads the kernel's own store; KernelLog#verify
+ * passes the store the log was opened with (a test seam only via the
+ * internal test entry).
+ */
+function verifyLogWith(home: string, opts: VerifyLogOptions, keystoreAnchor: AnchorStore): VerifyReport {
   // S34-06: rows by the kernel principal must be signed by a kernel key (checked when the kernel key ids are known)
   const kernel = opts.kernelPrincipal && opts.kernelKeyIds?.length ? { principal: opts.kernelPrincipal, keyIds: new Set(opts.kernelKeyIds) } : undefined;
   const failures: VerifyFailure[] = [];
@@ -1966,7 +1997,7 @@ export function verifyLog(
         fail({ code: 'anchor', segment: h.segment, detail: `file anchor seq ${h.seq} does not match the chain tip ${lastSegment.seq}` });
       } else report.anchors.file = h.seq === lastSegment.seq ? 'ok' : 'lagging';
     }
-    const ks = (opts.keystoreAnchor ?? new KeystoreAnchorStore()).read();
+    const ks = keystoreAnchor.read();
     if (ks.state === 'unavailable') report.anchors.keystore = 'unavailable';
     else if (ks.state === 'present' && lastSegment && ks.head.seq === lastSegment.seq && ks.head.hash === lastSegment.hash) report.anchors.keystore = 'ok';
     else if (ks.state === 'present' && lastSegment && ks.head.log === logId && ks.head.seq < lastSegment.seq) report.anchors.keystore = 'lagging'; // coalesced cadence (S33-05)

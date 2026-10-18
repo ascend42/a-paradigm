@@ -466,7 +466,11 @@ components:
       a no-op and any other error (EIO, …) is rethrown (S34-28).
       SEAM HARDENING (T-2026-10-17-009(c), Aegis S34-10, §19.1 release gate):
       `keystoreAnchor` and `bootSession` are no longer KernelLogOptions keys
-      (KernelLog.open refuses them at runtime with a TypeError), and the
+      (KernelLog.open refuses them at runtime with a TypeError; the private
+      constructor demands a module-private construct key held only by open
+      and the registered seam closures, so a cast call throws; verifyLog has
+      no keystoreAnchor option and always reads the kernel's own store, and
+      refuses the key at runtime), and the
       recovery open and acknowledgeGap are no longer public members. The log
       registers them once (class static block) with the internal seam
       channel src/kernel/internal-seams.ts, read only by the internal test
