@@ -14,6 +14,7 @@ import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { fakeOpenAI, type FakeServer } from '../../gnomon-local/test/fake-openai.js';
 import { LocalLane } from '../src/kernel/supervisor/local-session.js';
+import { pinOf } from '../src/kernel/local/runner-pin.js';
 import { BudgetFuse } from '../src/kernel/budget/fuse.js';
 import { SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
 import { DaemonChildren } from '../src/kernel/lifecycle/children.js';
@@ -47,7 +48,7 @@ describe('LocalLane spawn (fake endpoint, unsandboxed test seam)', () => {
     const children = new DaemonChildren({ append: log, control: processControlFor(process.platform), boot: 'boot-test', graceMs: 500 });
     const lane = new LocalLane({
       log, children, fuse, home, userHome: root, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(root, 'k.sock'),
-      config: { endpoints: [{ id: 'fake', base: srv.base, model: 'fake-qwen-7b-q4', compat: 'llama.cpp' }], runner: { command: process.execPath, args: [CLI] } },
+      config: { endpoints: [{ id: 'fake', base: srv.base, model: 'fake-qwen-7b-q4', compat: 'llama.cpp' }], runner: pinOf(path.dirname(CLI), 'cli.js') },
       launchPlan: (i) => ({ command: i.binaryReal, args: i.argv, sandbox: 'partial', profile: 'test-unsandboxed', profileHash: 'sha256:test' }),
     });
     const s = await lane.open({ principal: HUMAN, principalClass: 'human', attended: true, cwd, model: 'local' }, async () => {
@@ -91,7 +92,7 @@ describe('LocalLane spawn (fake endpoint, unsandboxed test seam)', () => {
     const children = new DaemonChildren({ append: log, control: processControlFor(process.platform), boot: 'boot-test', graceMs: 500 });
     const lane = new LocalLane({
       log, children, fuse, home, userHome: root, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(root, 'k.sock'),
-      config: { endpoints: [{ id: 'fake', base: srv.base, model: 'fake-qwen-7b-q4', compat: 'llama.cpp' }], runner: { command: process.execPath, args: [CLI] } },
+      config: { endpoints: [{ id: 'fake', base: srv.base, model: 'fake-qwen-7b-q4', compat: 'llama.cpp' }], runner: pinOf(path.dirname(CLI), 'cli.js') },
       launchPlan: (i) => ({ command: i.binaryReal, args: i.argv, sandbox: 'partial', profile: 'test-unsandboxed', profileHash: 'sha256:test' }),
     });
     const s = (await lane.open({ principal: HUMAN, principalClass: 'human', attended: true, cwd, model: 'local' }, async () => null))!;

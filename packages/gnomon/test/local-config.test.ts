@@ -7,14 +7,13 @@
  * Platform-independent: nothing here reaches a spawn (the routes refuse, or
  * the run stops at the launch plan / intend seam).
  */
-import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { RefusedError } from '@a-company/gnomon-contracts';
 import { fakeOpenAI, type FakeServer } from '../../gnomon-local/test/fake-openai.js';
-import { assertRunnerPin, loadLocalConfig, LOCAL_CONFIG_FILE, parseLocalLaneConfig, writeSignedLocalConfig } from '../src/kernel/local/config.js';
+import { loadLocalConfig, LOCAL_CONFIG_FILE, parseLocalLaneConfig, writeSignedLocalConfig } from '../src/kernel/local/config.js';
 import { LocalLane } from '../src/kernel/supervisor/local-session.js';
 import { createSessionPort } from '../src/kernel/supervisor/port.js';
 import type { SessionSupervisor } from '../src/kernel/supervisor/supervisor.js';
@@ -22,8 +21,19 @@ import { BudgetFuse } from '../src/kernel/budget/fuse.js';
 import { SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
 import { DEV_TEST_ROOT_ACK, DevTestRootAuthority } from '../src/kernel/identity/root-authority.js';
 import { parseLocalLine } from '../src/adapters/local/runner.js';
+import { pinOf, prepareRunner, type LocalRunnerPin } from '../src/kernel/local/runner-pin.js';
+
+const RUNNER_SRC = "import './lib.js';\n";
+/** A tiny runner tree (entry + a sibling module) and its pin as it is on disk. */
+function runnerTree(dir: string): LocalRunnerPin {
+  fs.mkdirSync(dir, { recursive: true });
+  fs.writeFileSync(path.join(dir, 'cli.js'), RUNNER_SRC);
+  fs.writeFileSync(path.join(dir, 'lib.js'), 'export const ok = 1;\n');
+  return pinOf(dir, 'cli.js');
+}
 
 const HUMAN = 'p:abcdefgh/founder';
+const FAKE_PIN = { node: process.execPath, nodeSha256: '0'.repeat(64), dir: '/x/gnomon-local/dist', treeSha256: '0'.repeat(64), entry: 'cli.js' };
 const servers: FakeServer[] = [];
 let tmp: string | null = null;
 afterEach(async () => {
@@ -38,7 +48,7 @@ const fake = async (o: Parameters<typeof fakeOpenAI>[0]): Promise<FakeServer> =>
   return s;
 };
 
-function lane(home: string, config: ConstructorParameters<typeof LocalLane>[0]['config']) {
+function lane(home: string, config: ConstructorParameters<typeof LocalLane>[0]['config'], onPlan?: (i: { binaryReal: string; argv: string[] }) => void) {
   const rows: Array<{ kind: string; payload: Record<string, unknown> }> = [];
   const log = async (kind: string, payload: Record<string, unknown>): Promise<void> => void rows.push({ kind, payload });
   const fuse = new BudgetFuse({ kernel: SoftwareEd25519Signer.generate('kernel'), logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZZ', log, billing: { env: () => ({}), layers: () => [] } });
@@ -50,6 +60,7 @@ function lane(home: string, config: ConstructorParameters<typeof LocalLane>[0]['
     log, children: children as never, fuse, broker: broker as never, home, userHome: path.join(home, '..', 'userhome'), kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(home, 'k.sock'),
     // the test-rig launch seam: never a real sandbox here, and the run stops at intend
     launchPlan: (i) => {
+      onPlan?.(i);
       sessionCfgs.push(JSON.parse(fs.readFileSync(i.argv[i.argv.indexOf('--config') + 1]!, 'utf8')) as Record<string, unknown>);
       return { command: i.binaryReal, args: i.argv, sandbox: 'partial', profile: 'test', profileHash: 'sha256:test' };
     },
@@ -59,7 +70,7 @@ function lane(home: string, config: ConstructorParameters<typeof LocalLane>[0]['
 }
 
 describe('root-signed local.signed.json (only a root-verified row is applied; anything else is NO config, logged)', () => {
-  const local = { endpoints: [{ id: 'llama', base: 'http://127.0.0.1:8080', model: 'qwen', compat: 'llama.cpp' }], runner: { command: process.execPath, args: ['/x/gnomon-local/dist/cli.js'] }, contextTarget: 4096 };
+  const local = { endpoints: [{ id: 'llama', base: 'http://127.0.0.1:8080', model: 'qwen', compat: 'llama.cpp' }], runner: FAKE_PIN, contextTarget: 4096 };
 
   it('signed ⇒ applied, logged with file + version; the sidecar records the version', () => {
     const home = scratch();
@@ -68,7 +79,7 @@ describe('root-signed local.signed.json (only a root-verified row is applied; an
     const ev: Array<[string, Record<string, unknown>]> = [];
     const r = loadLocalConfig(home, root, (k, p) => ev.push([k, p]));
     expect(r).toMatchObject({ signed: true, fellBack: false, version: 3, config: { endpoints: [{ id: 'llama' }], contextTarget: 4096 } });
-    expect(ev).toEqual([['config.loaded', expect.objectContaining({ file: LOCAL_CONFIG_FILE, signed: true, version: 3, endpoints: ['llama'], runner: { command: process.execPath, pinned: false } })]]);
+    expect(ev).toEqual([['config.loaded', expect.objectContaining({ file: LOCAL_CONFIG_FILE, signed: true, version: 3, endpoints: ['llama'], runner: { node: process.execPath, dir: '/x/gnomon-local/dist', treeSha256: '0'.repeat(64) } })]]);
     expect(JSON.parse(fs.readFileSync(path.join(home, 'local.seen.json'), 'utf8'))).toEqual({ version: 3 });
   });
 
@@ -108,7 +119,11 @@ describe('root-signed local.signed.json (only a root-verified row is applied; an
     for (const bad of [
       { ...local, apiKey: 'x' },
       { ...local, runner: { command: 'node' } },
-      { ...local, runner: { command: process.execPath, sha256: 'abc' } },
+      { ...local, runner: { node: process.execPath, dir: '/x/dist', entry: 'cli.js' } },
+      { ...local, runner: { ...FAKE_PIN, treeSha256: undefined } },
+      { ...local, runner: { ...FAKE_PIN, nodeSha256: 'abc' } },
+      { ...local, runner: { ...FAKE_PIN, entry: '../cli.js' } },
+      { ...local, runner: { ...FAKE_PIN, dir: 'relative/dist' } },
       { endpoints: [local.endpoints[0], local.endpoints[0]] },
       { endpoints: [{ ...local.endpoints[0], headers: { authorization: 'Bearer x' } }] },
       { endpoints: 'llama' },
@@ -130,37 +145,69 @@ describe('root-signed local.signed.json (only a root-verified row is applied; an
   });
 });
 
-describe('the runner pin (law 7 / S8, positive half)', () => {
-  it('a matching sha256 passes; a changed entry file refuses PERMIT_REQUIRED{runner-pin-mismatch}; CRLF bytes are bytes', () => {
-    const d = scratch();
-    const entry = path.join(d, 'cli.js');
-    fs.writeFileSync(entry, 'console.log(1)\n');
-    const pin = createHash('sha256').update(fs.readFileSync(entry)).digest('hex');
-    expect(() => assertRunnerPin({ command: process.execPath, args: [entry], sha256: pin })).not.toThrow();
-    expect(() => assertRunnerPin({ command: process.execPath, args: [entry], sha256: pin.toUpperCase() })).not.toThrow();
-    fs.writeFileSync(entry, 'console.log(1)\r\n');
-    try {
-      assertRunnerPin({ command: process.execPath, args: [entry], sha256: pin });
-      expect.unreachable();
-    } catch (err) {
-      expect((err as RefusedError).refusal).toMatchObject({ code: 'PERMIT_REQUIRED', data: { why: 'runner-pin-mismatch' } });
-    }
-    expect(() => assertRunnerPin({ command: process.execPath, args: [path.join(d, 'missing.js')], sha256: pin })).toThrow(/pin/);
-    expect(() => assertRunnerPin({ command: process.execPath, args: [entry] })).not.toThrow();
+describe('the runner pin (round 2, Aegis H1): mandatory, the whole tree + node, and only the verified HOME COPY runs', () => {
+  it('an unpinned runner makes the config invalid (no local config)', () => {
+    expect(parseLocalLaneConfig({ endpoints: [], runner: { node: process.execPath, dir: '/x/dist', entry: 'cli.js' } })).toBeNull();
+    expect(parseLocalLaneConfig({ endpoints: [], runner: { command: process.execPath, args: ['/x/cli.js'], sha256: '0'.repeat(64) } })).toBeNull();
+    expect(parseLocalLaneConfig({ endpoints: [], runner: FAKE_PIN })).toMatchObject({ runner: FAKE_PIN });
   });
 
-  it('a mismatched pin refuses before any permit or spawn row', async () => {
+  it('a swapped sibling module, a swapped node, a symlink in the tree each refuse PERMIT_REQUIRED{runner-pin-mismatch}; nothing staged', () => {
     const home = scratch();
-    const cwd = path.join(home, '..', `repo-${path.basename(home)}`);
-    fs.mkdirSync(cwd, { recursive: true });
-    try {
-      const srv = await fake({ tools: true });
-      const { l, rows } = lane(path.join(home, 'gh'), { endpoints: [{ id: 'f', base: srv.base, model: 'm', compat: 'llama.cpp' }], runner: { command: process.execPath, args: [path.join(home, 'nope.js')], sha256: '0'.repeat(64) } });
-      await expect(l.open({ principal: HUMAN, principalClass: 'human', attended: true, cwd, model: 'local' }, async () => null)).rejects.toMatchObject({ refusal: { code: 'PERMIT_REQUIRED' } });
-      expect(rows.some((r) => r.kind.startsWith('permit.') || r.kind === 'session.open')).toBe(false);
-    } finally {
-      fs.rmSync(cwd, { recursive: true, force: true });
-    }
+    const pin = runnerTree(path.join(home, 'src-rt'));
+    const gh = path.join(home, 'gh');
+    fs.writeFileSync(path.join(pin.dir, 'lib.js'), 'export const evil = 1;\n'); // a sibling the entry imports
+    const why = (p: typeof pin): unknown => {
+      try {
+        prepareRunner(gh, p);
+        return 'ok';
+      } catch (err) {
+        return (err as RefusedError).refusal;
+      }
+    };
+    expect(why(pin)).toMatchObject({ code: 'PERMIT_REQUIRED', data: { why: 'runner-pin-mismatch', part: 'tree' } });
+    expect(fs.readdirSync(path.join(gh, 'runners'))).toEqual([]);
+    fs.writeFileSync(path.join(pin.dir, 'lib.js'), 'export const ok = 1;\n');
+    fs.symlinkSync(path.join(pin.dir, 'cli.js'), path.join(pin.dir, 'alias.js'));
+    expect(why(pin)).toMatchObject({ data: { part: 'tree' } });
+    fs.rmSync(path.join(pin.dir, 'alias.js'));
+    expect(why({ ...pin, nodeSha256: 'f'.repeat(64) })).toMatchObject({ data: { part: 'node' } });
+    expect(why(pin)).toBe('ok');
+    // once staged, the COPY is what runs: a later swap in the source does not reach it
+    fs.writeFileSync(path.join(pin.dir, 'lib.js'), 'export const evil = 2;\n');
+    expect(why(pin)).toBe('ok');
+    expect(fs.readFileSync(path.join(gh, 'runners', pin.treeSha256, 'lib.js'), 'utf8')).toBe('export const ok = 1;\n');
+  });
+
+  it('the exec path is the home copy: binaryReal is the realpath of node, argv[0] the realpath of the COPIED entry; editing the source after staging changes nothing', async () => {
+    const home = scratch();
+    const cwd = path.join(home, 'repo');
+    fs.mkdirSync(cwd);
+    const srv = await fake({ tools: true });
+    const pin = runnerTree(path.join(home, 'src-rt'));
+    const gh = path.join(home, 'gh');
+    const plans: Array<{ binaryReal: string; argv: string[] }> = [];
+    const { l } = lane(gh, { endpoints: [{ id: 'f', base: srv.base, model: 'm', compat: 'llama.cpp' }], runner: pin }, (i) => plans.push(i));
+    await l.open({ principal: HUMAN, principalClass: 'human', attended: true, cwd, model: 'local' }, async () => null).catch(() => undefined);
+    const copy = fs.realpathSync.native(path.join(gh, 'runners', pin.treeSha256));
+    expect(plans).toHaveLength(1);
+    expect(plans[0]!.binaryReal).toBe(fs.realpathSync.native(process.execPath));
+    expect(plans[0]!.argv[0]).toBe(path.join(copy, 'cli.js'));
+    expect(fs.readFileSync(plans[0]!.argv[0]!, 'utf8')).toBe(RUNNER_SRC);
+    // a session rewrites the SOURCE runner: the next open refuses (the copy is re-verified against the pin, the source re-staged only if it matches)
+    fs.writeFileSync(path.join(pin.dir, 'cli.js'), 'process.exit(0)\n');
+    fs.rmSync(copy, { recursive: true, force: true });
+    await expect(l.open({ principal: HUMAN, principalClass: 'human', attended: true, cwd, model: 'local' }, async () => null)).rejects.toMatchObject({ refusal: { code: 'PERMIT_REQUIRED' } });
+  });
+
+  it('a mismatched pin refuses before any permit or session row', async () => {
+    const home = scratch();
+    const cwd = path.join(home, 'repo');
+    fs.mkdirSync(cwd);
+    const srv = await fake({ tools: true });
+    const { l, rows } = lane(path.join(home, 'gh'), { endpoints: [{ id: 'f', base: srv.base, model: 'm', compat: 'llama.cpp' }], runner: { ...runnerTree(path.join(home, 'rt')), treeSha256: '0'.repeat(64) } });
+    await expect(l.open({ principal: HUMAN, principalClass: 'human', attended: true, cwd, model: 'local' }, async () => null)).rejects.toMatchObject({ refusal: { code: 'PERMIT_REQUIRED' } });
+    expect(rows.some((r) => r.kind.startsWith('permit.') || r.kind === 'session.open')).toBe(false);
   });
 });
 
@@ -171,7 +218,7 @@ describe('per-task endpoint choice: the first endpoint in signed order that is c
     fs.mkdirSync(cwd);
     const a = await fake({ tools: false });
     const b = await fake({ tools: true, nCtx: 16384 });
-    const { l, rows, cards, sessionCfgs } = lane(path.join(home, 'gh'), { endpoints: [{ id: 'a', base: a.base, model: 'm', compat: 'llama.cpp' }, { id: 'b', base: b.base, model: 'm', compat: 'ollama' }], runner: { command: process.execPath, args: ['/x/gnomon-local/dist/cli.js'] } });
+    const { l, rows, cards, sessionCfgs } = lane(path.join(home, 'gh'), { endpoints: [{ id: 'a', base: a.base, model: 'm', compat: 'llama.cpp' }, { id: 'b', base: b.base, model: 'm', compat: 'ollama' }], runner: runnerTree(path.join(home, 'rt')) });
     await l.open({ principal: HUMAN, principalClass: 'human', attended: true, cwd, model: 'local' }, async () => null).catch(() => undefined);
     expect(cards).toEqual([]);
     expect(rows.filter((r) => r.kind === 'model.probe').map((r) => r.payload.endpoint)).toEqual(['a', 'b']);
@@ -187,7 +234,7 @@ describe('per-task endpoint choice: the first endpoint in signed order that is c
     const home = scratch();
     const a = await fake({ tools: false });
     const b = await fake({ tools: true, nCtx: 2048 });
-    const { l, cards } = lane(path.join(home, 'gh'), { endpoints: [{ id: 'a', base: a.base, model: 'm', compat: 'llama.cpp' }, { id: 'b', base: b.base, model: 'm', compat: 'llama.cpp' }], runner: { command: process.execPath, args: ['/x/cli.js'] } });
+    const { l, cards } = lane(path.join(home, 'gh'), { endpoints: [{ id: 'a', base: a.base, model: 'm', compat: 'llama.cpp' }, { id: 'b', base: b.base, model: 'm', compat: 'llama.cpp' }], runner: FAKE_PIN });
     await expect(l.open({ principal: HUMAN, principalClass: 'human', attended: true, cwd: home, model: 'local' }, async () => null)).rejects.toMatchObject({ refusal: { code: 'MODEL_UNAVAILABLE', data: { why: 'no-tools' } } });
     expect(cards).toHaveLength(1);
   });
@@ -209,7 +256,7 @@ describe('round 3 R2, widened in slice 2: a root INSIDE the Gnomon home is refus
     const home = scratch();
     fs.mkdirSync(path.join(home, 'keys'));
     const srv = await fake({ tools: true });
-    const { l, rows } = lane(home, { endpoints: [{ id: 'f', base: srv.base, model: 'm', compat: 'llama.cpp' }], runner: { command: process.execPath, args: ['/x/gnomon-local/dist/cli.js'] } });
+    const { l, rows } = lane(home, { endpoints: [{ id: 'f', base: srv.base, model: 'm', compat: 'llama.cpp' }], runner: FAKE_PIN });
     const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'gnomon-lcfg-out-'));
     try {
       for (const over of [{ cwd: path.join(home, 'keys') }, { cwd: outside, worktree: path.join(home, 'keys') }]) {

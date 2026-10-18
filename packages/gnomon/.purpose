@@ -1222,9 +1222,12 @@ components:
       unparseable, invalid or older than the sidecar/chain high-water mark =>
       NO local config, logged config.unsigned / config.loaded{file,
       fallback:'none'}; a signed public endpoint is applied and refuses every
-      open BILLING_REFUSED), wired by the daemon; runner.sha256 pins the
-      runner's entry file at every spawn (PERMIT_REQUIRED
-      runner-pin-mismatch); per-task endpoint choice = first endpoint in
+      open BILLING_REFUSED), wired by the daemon; round 2 (Aegis H1): the
+      runner pin is MANDATORY (node + nodeSha256, package dir + treeSha256,
+      entry) — runner-pin.ts copies the tree into <home>/runners/<treeSha256>/,
+      hashes the COPY, verifies node and execs <realpath node> <realpath
+      copied entry> (PERMIT_REQUIRED runner-pin-mismatch{part}); residual:
+      node is verified then exec'd in place (Homebrew node loads ../lib); per-task endpoint choice = first endpoint in
       signed order capable for the floor; probeAll at daemon start records
       model.probe/model.capabilities; roots inside the Gnomon home refused;
       the child gets contextTarget min(~8k, n_ctx); session.send{steer} with a

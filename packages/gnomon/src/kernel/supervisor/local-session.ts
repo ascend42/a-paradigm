@@ -68,7 +68,8 @@ import { claudeCodePlatform } from '../../platform/claude-code.js';
 import type { DarwinSessionExtras } from '../../platform/darwin/session-sbpl.js';
 import { LineSplitter } from '../../adapters/claude-code/adapter.js';
 import { abortLine, buildLocalArgv, followUpLine, LocalUsageMeter, parseLocalLine, promptLine, steerLine } from '../../adapters/local/runner.js';
-import { assertNotClaude, assertRunnerPin, DEFAULT_CONTEXT_TARGET, DEFAULT_CTX_FLOOR, LOCAL_COMPAT_NAMES, validateLocalEndpoints, type LocalLaneConfig } from '../local/config.js';
+import { prepareRunner } from '../local/runner-pin.js';
+import { assertNotClaude, DEFAULT_CONTEXT_TARGET, DEFAULT_CTX_FLOOR, LOCAL_COMPAT_NAMES, validateLocalEndpoints, type LocalLaneConfig } from '../local/config.js';
 import { classifyEndpoint } from '../local/endpoint.js';
 import { probeLocalEndpoint, type LocalCapabilities, type ProbeFetch } from '../local/probe.js';
 import { capability, routeModel, type DeclaredModel } from '../local/routing.js';
@@ -276,9 +277,10 @@ export class LocalLane {
   }
 
   async #spawn(req: LocalOpenRequest, declared: DeclaredModel, reason: string, tools: 'native' | 'text', ep: LocalLaneConfig['endpoints'][number], base: string, caps: LocalCapabilities, cfg: LocalLaneConfig): Promise<{ hsid: string; principalId: string; backend: 'local'; state: string; model: string }> {
-    const runner = cfg.runner!;
-    assertNotClaude(runner); // before any row: claude never runs under a local permit
-    assertRunnerPin(runner); // a root-signed sha256 pin, when present, holds at every spawn
+    const pin = cfg.runner!;
+    // before any row: claude never runs under a local permit (source paths), then the MANDATORY pin (round 2, Aegis H1):
+    // the tree is copied into <home>/runners/<treeSha256>/ and the COPY is hashed; node is verified; we exec the copy
+    assertNotClaude({ command: pin.node, args: [path.join(pin.dir, ...pin.entry.split('/'))] });
     if (typeof req.cwd !== 'string' || !path.isAbsolute(req.cwd) || !fs.existsSync(req.cwd) || !fs.statSync(req.cwd).isDirectory()) {
       throw refused('BAD_REQUEST', 'cwd must be an existing absolute directory', { reason: 'bad-params' });
     }
@@ -304,6 +306,14 @@ export class LocalLane {
         }
       }
     }
+    let runner: ReturnType<typeof prepareRunner>;
+    try {
+      runner = prepareRunner(this.#o.home, pin);
+    } catch (err) {
+      if (err instanceof RefusedError) throw err;
+      throw refused('UNSUPPORTED', `the pinned runner could not be staged: ${(err as Error).message.slice(0, 200)}`, { session: 'spawn_failed' });
+    }
+    assertNotClaude({ command: runner.command, args: [runner.entry] });
     const hsid = mintHsid();
     const principalId = `${this.#o.kernelPrincipal.replace(/\/kernel$/, '')}/s-${hsidShort(hsid)}`;
     const model = caps.model ?? ep.model;
@@ -354,7 +364,7 @@ export class LocalLane {
       };
       fs.writeFileSync(configPath, `${JSON.stringify(sessionCfg, null, 2)}\n`, { mode: 0o600 });
       const extras: DarwinSessionExtras = { uid: process.getuid?.() ?? 0, tmpdir: os.tmpdir(), home: userHome, roots: [req.cwd, ...(req.worktree ? [req.worktree] : [])] };
-      const launch: SessionLaunchInput = { policy, binaryReal: runner.command, argv: [...(runner.args ?? []), ...buildLocalArgv({ configPath, hsid })], extras };
+      const launch: SessionLaunchInput = { policy, binaryReal: runner.command, argv: [runner.entry, ...buildLocalArgv({ configPath, hsid })], extras };
       const plan = this.#o.launchPlan ? this.#o.launchPlan(launch) : sessionLaunchPlan(launch, this.#platform, this.#o.macosMajor, this.#o.sipEnabled);
       const intent = await this.#o.children.intend({ kind: 'local-runner', hsid });
       child = spawn(plan.command, plan.args, { cwd: req.worktree ?? req.cwd, env, detached: true, stdio: ['pipe', 'pipe', 'ignore'] });
@@ -371,7 +381,7 @@ export class LocalLane {
       this.#sessions.set(hsid, s);
       live = s;
       this.#wire(s);
-      await this.#o.log('session.sandbox', { hsid, sandbox: plan.sandbox, profile: 'session', profileHash: plan.profileHash, policyHash: policyHash(policy), backend: 'local', runner: runner.command, envKeys, permitId: permit.permitId }, { session: hsid });
+      await this.#o.log('session.sandbox', { hsid, sandbox: plan.sandbox, profile: 'session', profileHash: plan.profileHash, policyHash: policyHash(policy), backend: 'local', runner: runner.command, runnerEntry: runner.entry, runnerTree: pin.treeSha256, envKeys, permitId: permit.permitId }, { session: hsid });
       return { hsid, principalId, backend: 'local', state: s.state, model };
     } catch (err) {
       if (tracked && child) {

@@ -24,6 +24,7 @@ import { BudgetFuse } from '../src/kernel/budget/fuse.js';
 import { SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
 
 const HUMAN = 'p:abcdefgh/founder';
+const FAKE_PIN = { node: process.execPath, nodeSha256: '0'.repeat(64), dir: '/x/gnomon-local/dist', treeSha256: '0'.repeat(64), entry: 'cli.js' };
 let srv: FakeServer | null = null;
 afterEach(async () => {
   await srv?.close();
@@ -130,7 +131,7 @@ describe('§13.2 probe + §13.3 routing (fake endpoint)', () => {
 
   it('G-LCL-02: an incapable endpoint ⇒ a fallback card + MODEL_UNAVAILABLE{cardId}, and no spawn', async () => {
     srv = await fakeOpenAI({ tools: false });
-    const { l, rows, cards } = lane({ endpoints: [{ id: 'llama', base: srv.base, model: 'm', compat: 'llama.cpp' }], runner: { command: process.execPath, args: ['/x/cli.js'] } });
+    const { l, rows, cards } = lane({ endpoints: [{ id: 'llama', base: srv.base, model: 'm', compat: 'llama.cpp' }], runner: FAKE_PIN });
     const e = (await l.open(req('local'), async () => null).catch((x: unknown) => x)) as RefusedError;
     expect(e.refusal.code).toBe('MODEL_UNAVAILABLE');
     expect(e.refusal.data).toMatchObject({ cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZ1', why: 'no-tools' });
@@ -205,7 +206,7 @@ describe('G-LAW-01c / G-LCL-04 (P8-D92 meter): local sessions get compute permit
 describe('round 3 (R2): session roots are never /, the user home, or an ancestor of the Gnomon home; worktree validated', () => {
   it('refuses BAD_REQUEST before any permit', async () => {
     srv = await fakeOpenAI({ tools: true });
-    const { l, rows } = lane({ endpoints: [{ id: 'f', base: srv.base, model: 'm', compat: 'llama.cpp' }], runner: { command: process.execPath, args: ['/x/gnomon-local/dist/cli.js'] } });
+    const { l, rows } = lane({ endpoints: [{ id: 'f', base: srv.base, model: 'm', compat: 'llama.cpp' }], runner: FAKE_PIN });
     for (const over of [{ cwd: '/' }, { cwd: os.homedir() }, { cwd: process.cwd(), worktree: 'relative/wt' }, { cwd: process.cwd(), worktree: '/' }]) {
       await expect(l.open({ ...req('local'), ...over }, async () => null), JSON.stringify(over)).rejects.toMatchObject({ refusal: { code: 'BAD_REQUEST' } });
     }

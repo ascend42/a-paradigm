@@ -25,20 +25,22 @@
  * (config.unsigned / config.loaded{file, fallback:'none'}). A structurally
  * valid config naming a public endpoint or a cloud compat is APPLIED and
  * then refuses every local open BILLING_REFUSED (G-SUB-06 is per open, so a
- * poisoned config is visible, not silently dropped). The runner is a
- * root-signed absolute path (§2.4: backend binaries come from root-signed
- * config); `runner.sha256` pins its entry file (args[0] when present, else
- * the command), checked at every spawn (assertRunnerPin). No env var,
+ * poisoned config is visible, not silently dropped). The runner is
+ * root-signed (§2.4: backend binaries come from root-signed config) and its
+ * pin is MANDATORY (round 2, Aegis H1): node + nodeSha256, the package dir +
+ * treeSha256 and the entry; the kernel execs only a verified copy under
+ * `<home>/runners/` (runner-pin.ts). An unpinned runner makes the whole
+ * config invalid (no local config, logged). No env var,
  * project file or CLI flag names an endpoint or the runner.
  * The per-session file the kernel hands the child is written as JSON (the
  * JSON subset of YAML 1.2).
  */
-import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { canonicalJson, hex, refuse, RefusedError, sha256 } from '@a-company/gnomon-contracts';
 import { classifyEndpoint, type EndpointVerdict } from './endpoint.js';
 import type { RootAuthority } from '../identity/root-authority.js';
+import type { LocalRunnerPin } from './runner-pin.js';
 
 /** The local transports the child's compat allowlist names (no cloud provider; parity-tested against gnomon-local). */
 export const LOCAL_COMPAT_NAMES = Object.freeze(['llama.cpp', 'ollama', 'lm-studio', 'vllm', 'mlx-lm']);
@@ -61,14 +63,12 @@ export interface LocalRunnerCommand {
   command: string;
   /** leading args (e.g. the gnomon-local dist/cli.js) */
   args?: string[];
-  /** hex sha256 of the runner's entry file (args[0] when present, else command); checked at every spawn */
-  sha256?: string;
 }
 
 export interface LocalLaneConfig {
   endpoints: LocalEndpointConfig[];
   /** the gnomon-local runner; absent ⇒ the lane can route and raise fallback cards but never spawns */
-  runner?: LocalRunnerCommand;
+  runner?: LocalRunnerPin;
   /** the task floor for n_ctx (§13.3 "ctx ≥ task floor"; default 8192, the ~8k working target) */
   ctxFloor?: number;
   maxSteps?: number;
@@ -109,7 +109,7 @@ const real = (p: string): string => {
 /**
  * Law 7 / S8 mirror: the local runner is never `claude` — by command or any argument, checked on the path AS
  * GIVEN and on its REALPATH (a symlink named gnomon-local pointing at claude is refused), and any path with an
- * `@anthropic-ai/claude-code` segment (Aegis L3). Slice 2: a positive pin of the runner (hash, like the claude pin).
+ * `@anthropic-ai/claude-code` segment (Aegis L3). The positive pin is runner-pin.ts (round 2, mandatory).
  */
 export function assertNotClaude(r: LocalRunnerCommand): void {
   for (const p of [r.command, ...(r.args ?? [])].flatMap((x) => [x, real(x)])) {
@@ -120,18 +120,6 @@ export function assertNotClaude(r: LocalRunnerCommand): void {
   if (!path.isAbsolute(r.command)) throw refused('PERMIT_REQUIRED', 'the local runner is resolved by absolute path, never PATH', { why: 'runner-not-absolute' });
 }
 
-/** Law 7 / S8 mirror, positive half: a pinned runner's entry file hashes to the root-signed sha256 (realpath'd). */
-export function assertRunnerPin(r: LocalRunnerCommand): void {
-  if (r.sha256 === undefined) return;
-  const entry = real(r.args?.[0] ?? r.command);
-  let got: string | null = null;
-  try {
-    got = createHash('sha256').update(fs.readFileSync(entry)).digest('hex');
-  } catch {
-    got = null;
-  }
-  if (got !== r.sha256.toLowerCase()) throw refused('PERMIT_REQUIRED', 'the local runner does not match its root-signed sha256 pin', { why: 'runner-pin-mismatch' });
-}
 
 export const LOCAL_CONFIG_FILE = 'local.signed.json';
 export const LOCAL_CONFIG_SCHEMA = 'gnomon-root-local:v1' as const;
@@ -163,13 +151,15 @@ export function parseLocalLaneConfig(raw: unknown): LocalLaneConfig | null {
     ids.add(e.id);
     endpoints.push({ id: e.id, base: e.base, model: e.model, compat: e.compat, ...(e.surface !== undefined ? { surface: e.surface as ToolSurface } : {}), ...(e.textTools !== undefined ? { textTools: e.textTools } : {}) });
   }
-  let runner: LocalRunnerCommand | undefined;
+  let runner: LocalRunnerPin | undefined;
   if (raw.runner !== undefined) {
+    // round 2 (Aegis H1): every pin field is mandatory — an unpinned runner is an invalid config
     const r = raw.runner;
-    if (!isObj(r) || !onlyKeys(r, ['command', 'args', 'sha256']) || !str(r.command, 4096) || !path.isAbsolute(r.command)) return null;
-    if (r.args !== undefined && (!Array.isArray(r.args) || r.args.length > 8 || !r.args.every((a) => str(a, 4096)))) return null;
-    if (r.sha256 !== undefined && (typeof r.sha256 !== 'string' || !/^[0-9a-f]{64}$/i.test(r.sha256))) return null;
-    runner = { command: r.command, ...(r.args !== undefined ? { args: [...(r.args as string[])] } : {}), ...(r.sha256 !== undefined ? { sha256: r.sha256 } : {}) };
+    const hex64 = (v: unknown): v is string => typeof v === 'string' && /^[0-9a-f]{64}$/i.test(v);
+    if (!isObj(r) || !onlyKeys(r, ['node', 'nodeSha256', 'dir', 'treeSha256', 'entry'])) return null;
+    if (!str(r.node, 4096) || !path.isAbsolute(r.node) || !str(r.dir, 4096) || !path.isAbsolute(r.dir) || !hex64(r.nodeSha256) || !hex64(r.treeSha256)) return null;
+    if (!str(r.entry, 512) || r.entry.startsWith('/') || /^[A-Za-z]:/.test(r.entry) || r.entry.split(/[\\/]/).some((c) => c === '..' || c === '')) return null;
+    runner = { node: r.node, nodeSha256: r.nodeSha256.toLowerCase(), dir: r.dir, treeSha256: r.treeSha256.toLowerCase(), entry: r.entry };
   }
   for (const [k, max] of [['ctxFloor', 1 << 21], ['maxSteps', 128], ['maxTokens', 32768], ['contextTarget', 131072]] as const) {
     if (raw[k] !== undefined && !posInt(raw[k], max)) return null;
@@ -244,7 +234,7 @@ export function loadLocalConfig(home: string, root: Pick<RootAuthority, 'verifyR
       emit('config.loaded', { file: LOCAL_CONFIG_FILE, hash, signed: true, version, sidecarWrite: 'failed', error: err instanceof Error ? err.message.slice(0, 200) : 'write failed' });
     }
   }
-  emit('config.loaded', { file: LOCAL_CONFIG_FILE, hash, signed: true, version, highWater: seen, endpoints: config.endpoints.map((e) => e.id), runner: config.runner ? { command: config.runner.command, pinned: config.runner.sha256 !== undefined } : null });
+  emit('config.loaded', { file: LOCAL_CONFIG_FILE, hash, signed: true, version, highWater: seen, endpoints: config.endpoints.map((e) => e.id), runner: config.runner ? { node: config.runner.node, dir: config.runner.dir, treeSha256: config.runner.treeSha256 } : null });
   return { config, signed: true, fellBack: false, hash, version };
 }
 
