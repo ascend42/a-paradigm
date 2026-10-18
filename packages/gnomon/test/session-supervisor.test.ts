@@ -30,6 +30,8 @@ import { SessionSupervisor } from '../src/kernel/supervisor/supervisor.js';
 import type { ApprovalBroker } from '../src/kernel/broker/broker.js';
 import { recordPath } from '../src/kernel/manifest/generate.js';
 import { readClaudePin, repinClaudeBinary } from '../src/kernel/runner/binary.js';
+import { runSessionCommand } from '../src/cli/session-cli.js';
+import { PassThrough } from 'node:stream';
 import { sessionWorld, setMode, trace, waitFor, type SessionWorld } from './session-helpers.js';
 
 const HUMAN = 'p:abcdefgh/founder';
@@ -41,15 +43,18 @@ afterEach(async () => {
   w?.cleanup();
 });
 
-function rig(o: { billing?: BillingScanSource; watchMs?: number } = {}) {
+function rig(o: { billing?: BillingScanSource; watchMs?: number; failSandboxRow?: boolean; allowScripts?: boolean } = {}) {
   w = sessionWorld();
   const rows: Array<{ kind: string; payload: Record<string, unknown> }> = [];
-  const log = async (kind: string, payload: Record<string, unknown>): Promise<void> => void rows.push({ kind, payload });
+  const log = async (kind: string, payload: Record<string, unknown>): Promise<void> => {
+    if (o.failSandboxRow && kind === 'session.sandbox' && payload.profile) throw new Error('log append failed (test)');
+    rows.push({ kind, payload });
+  };
   const fuse = new BudgetFuse({ kernel: SoftwareEd25519Signer.generate('kernel'), logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZZ', log, billing: o.billing ?? { env: () => ({}), layers: () => [] } });
   const children = new DaemonChildren({ append: log, control: processControlFor('darwin'), boot: 'boot-test', graceMs: 500 });
   const cards: Array<Record<string, unknown>> = [];
   const broker = { raise: async (i: Record<string, unknown>) => (cards.push(i), { cardId: `card:${cards.length}` }) } as unknown as Pick<ApprovalBroker, 'raise'>;
-  sup = new SessionSupervisor({ log, children, fuse, broker, home: w.home, userHome: w.userHome, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(w.home, 'gnomon.sock'), claudePath: w.claude, env: () => ({ HOME: '/not-the-scanned-home', PATH: '/usr/bin:/bin', ANTHROPIC_API_KEY: 'scrubbed-from-the-child' }), platform: 'darwin', watchMs: o.watchMs ?? 200 });
+  sup = new SessionSupervisor({ log, children, fuse, broker, home: w.home, userHome: w.userHome, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(w.home, 'gnomon.sock'), claudePath: w.claude, env: () => ({ HOME: '/not-the-scanned-home', PATH: '/usr/bin:/bin', ANTHROPIC_API_KEY: 'scrubbed-from-the-child' }), platform: 'darwin', watchMs: o.watchMs ?? 200, allowScripts: o.allowScripts ?? true });
   live.push(() => children.stopAll('test-end'));
   const kinds = (k: string) => rows.filter((r) => r.kind === k);
   const idx = (k: string) => rows.findIndex((r) => r.kind === k);
@@ -251,12 +256,16 @@ describe('round 2: reviewer + Aegis conditions', () => {
     await r.sup.stop(HUMAN, { hsid: s.hsid });
     fs.appendFileSync(w.claude, '# swapped by a session\n');
     const e = await refusal(open(r.sup));
-    expect(e.refusal.data).toMatchObject({ session: 'claude_binary_changed' });
+    expect(e.refusal.data).toMatchObject({ session: 'claude_binary_changed', next: 'gnomon session repin-claude' });
     expect(r.kinds('session.spawned').filter((x) => x.payload.phase === 'intent')).toHaveLength(1);
     const { createHash } = await import('node:crypto');
     repinClaudeBinary(w.home, createHash('sha256').update(fs.readFileSync(w.claude)).digest('hex'), w.claude);
     expect(readClaudePin(w.home)!.by).toBe('repin');
     expect((await open(r.sup)).state).toBe('running');
+    const pinRows = r.kinds('session.sandbox').filter((x) => x.payload.phase === 'binary-pin');
+    expect(pinRows.at(-1)!.payload).toMatchObject({ by: 'repin' });
+    expect(pinRows.at(-1)!.payload.to).toBe(readClaudePin(w.home)!.sha256);
+    expect(readClaudePin(w.home)!.logged).toBe(true);
   });
   it('H1(c)(d): preflight runs the PRIVATE copy under the session profile; the session runs the copy too', async () => {
     const r = rig();
@@ -326,6 +335,62 @@ describe('round 2: reviewer + Aegis conditions', () => {
     await open(r.sup);
     expect(await waitFor(() => r.kinds('turn.event').some((x) => x.payload.type === 'system.init'))).toBe(true);
     expect(r.kinds('turn.event').find((x) => x.payload.type === 'system.init')!.payload.apiKeySource).toBe('absent');
+  });
+});
+
+describe('round 3', () => {
+  it('1: a result written right before exit is recorded; its turn permit is released once', async () => {
+    const r = rig();
+    setMode(w, { resultThenExit: true });
+    const s = await open(r.sup);
+    await r.sup.send(HUMAN, { hsid: s.hsid, text: 'bye' });
+    expect(await waitFor(() => r.sup.stateOf(s.hsid) === 'exited')).toBe(true);
+    expect(r.kinds('turn.result')).toHaveLength(1);
+    const turnPermit = r.kinds('turn.sent')[0]!.payload.permitId;
+    expect(r.kinds('permit.release').filter((x) => x.payload.permitId === turnPermit)).toHaveLength(1);
+  });
+  it('2: a failure after track (the session.sandbox row fails) stops the group and releases the spawn permit', async () => {
+    const r = rig({ failSandboxRow: true });
+    await expect(open(r.sup)).rejects.toThrow();
+    expect(await waitFor(() => r.kinds('session.exited').length === 1)).toBe(true);
+    const granted = r.kinds('permit.grant').map((x) => (x.payload.permit as { permitId: string }).permitId);
+    expect(await waitFor(() => r.kinds('permit.release').length === granted.length)).toBe(true);
+  });
+  it('3 (N1): no pin is written when the sandboxed preflight fails; a first-use pin is shown in the open reply and status', async () => {
+    let r = rig();
+    setMode(w, { version: '2.1.100' });
+    await refusal(open(r.sup));
+    expect(readClaudePin(w.home)).toBeNull();
+    r = rig();
+    const s = await open(r.sup);
+    expect(s.binaryPin).toMatch(/^first-use pin [0-9a-f]{64} from /);
+    expect(r.sup.pinStatus()).toMatchObject({ by: 'first-use' });
+  });
+  it('3: `gnomon session repin-claude` needs a terminal and the typed last 8 of the new sha', async () => {
+    rig();
+    const io = (typed: string, tty = true) => {
+      const stdin = Object.assign(new PassThrough(), { isTTY: tty });
+      let out = '';
+      let err = '';
+      stdin.end(`${typed}\n`);
+      return { io: { stdin, stdout: { isTTY: tty, write: (x: string) => (out += x) }, stderr: { write: (x: string) => (err += x) } }, out: () => out, err: () => err };
+    };
+    const notty = io('x', false);
+    expect(await runSessionCommand(['repin-claude', '--home', w.home, '--claude', w.claude], notty.io)).toBe(1);
+    expect(notty.err()).toContain('interactive terminal');
+    const wrong = io('nope');
+    expect(await runSessionCommand(['repin-claude', '--home', w.home, '--claude', w.claude], wrong.io)).toBe(1);
+    expect(readClaudePin(w.home)).toBeNull();
+    const { createHash } = await import('node:crypto');
+    const sha = createHash('sha256').update(fs.readFileSync(w.claude)).digest('hex');
+    const ok = io(sha.slice(-8));
+    expect(await runSessionCommand(['repin-claude', '--home', w.home, '--claude', w.claude], ok.io)).toBe(0);
+    expect(readClaudePin(w.home)).toMatchObject({ sha256: sha, by: 'repin', logged: false });
+  });
+  it('4: a script binary is refused claude_binary_unsupported (the daemon never allows scripts)', async () => {
+    const r = rig({ allowScripts: false });
+    expect((await refusal(open(r.sup))).refusal.data).toMatchObject({ session: 'claude_binary_unsupported', kind: 'script' });
+    expect(r.kinds('permit.grant')).toEqual([]);
   });
 });
 

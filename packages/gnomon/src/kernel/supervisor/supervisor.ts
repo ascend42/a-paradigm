@@ -50,7 +50,7 @@
  *   slice 2.
  */
 import { createHash, randomUUID } from 'node:crypto';
-import { spawn, spawnSync, type ChildProcess } from 'node:child_process';
+import { spawn, type ChildProcess } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
@@ -66,7 +66,7 @@ import { sessionLaunchPlan } from '../sandbox/session.js';
 import { LifecycleRefusal } from '../lifecycle/refusal.js';
 import { buildSessionEnv } from '../runner/env.js';
 import { claudeAuthOk, claudeJsonProjection, claudeVersion, law7Layers, law7Scan, managedFiles, PreflightRefusal, realLoose, resolveClaudeBinary, type ClaudeRun, type Law7Input, type SessionRefusalCode } from '../runner/preflight.js';
-import { privateClaude } from '../runner/binary.js';
+import { commitPin, prepareClaude, readClaudePin } from '../runner/binary.js';
 import { buildClaudeArgv, cardKindOfTool, controlInterruptLine, LineSplitter, parseStreamLine, UsageMeter, userMessageLine, type SettingSource } from '../../adapters/claude-code/adapter.js';
 import { claudeCodePlatform, type ClaudeCodePlatformRow } from '../../platform/claude-code.js';
 import type { DarwinSessionExtras } from '../../platform/darwin/session-sbpl.js';
@@ -105,6 +105,8 @@ export interface SupervisorOptions {
   /** --setting-sources (explicit; default user,project,local — p01) */
   settingSources?: readonly SettingSource[];
   watchMs?: number;
+  /** TEST RIG ONLY (the fake claude is a #! wrapper): accept a script binary. The daemon never sets it. */
+  allowScripts?: boolean;
 }
 
 export interface OpenRequest {
@@ -149,6 +151,7 @@ const WIRE: Record<SessionRefusalCode, RefusalCode> = {
   bad_message: 'BAD_REQUEST',
   session_busy: 'UNSUPPORTED',
   api_billing_refused: 'BILLING_REFUSED',
+  claude_binary_unsupported: 'UNSUPPORTED',
 };
 
 function refused(code: RefusalCode, message: string, data: Record<string, unknown> = {}): RefusedError {
@@ -206,12 +209,12 @@ export class SessionSupervisor {
 
   #watchHashOf(inp: Law7Input): string {
     const roots = [inp.cwd, ...(inp.worktree ? [inp.worktree] : [])];
-    const l = layersHash({ cwd: inp.cwd, ...(inp.worktree ? { worktree: inp.worktree } : {}), userClaudeDir: inp.userClaudeDir, managedPaths: managedFiles(inp.row), userClaudeJson: path.join(inp.userClaudeDir, '.gnomon-watch-excludes-claude-json') });
+    const l = layersHash({ cwd: inp.cwd, ...(inp.worktree ? { worktree: inp.worktree } : {}), userClaudeDir: inp.userClaudeDir, managedPaths: managedFiles(inp.row), excludeClaudeJson: true });
     const cj = claudeJsonProjection(inp.userClaudeJson, roots.flatMap((r) => [path.resolve(r), realLoose(r)]));
     return `${l}|${cj}`;
   }
 
-  async open(req: OpenRequest): Promise<{ hsid: string; principalId: string; backend: 'claude-code'; state: string }> {
+  async open(req: OpenRequest): Promise<{ hsid: string; principalId: string; backend: 'claude-code'; state: string; binaryPin?: string }> {
     if (req.principalClass !== 'human' || req.attended !== true) {
       throw refused('FORBIDDEN', 'M1.7 slice 1 opens attended, human-started sessions only (agent/session/unattended opens wait for the broker decision, law 5)', { principalClass: req.principalClass });
     }
@@ -232,10 +235,10 @@ export class SessionSupervisor {
     let permit: PermitV1 | null = null;
     let child: ChildProcess | null = null;
     let tracked = false;
+    let live: Session | null = null;
     try {
       const bin = resolveClaudeBinary({ ...(this.#o.claudePath ? { explicit: this.#o.claudePath } : {}), row, home: userHome });
-      const priv = privateClaude(this.#o.home, bin.real);
-      await this.#o.log('session.sandbox', { hsid, phase: 'binary-pin', pin: priv.pin, binarySha256: `sha256:${priv.sha256}`, source: bin.real }, { session: hsid });
+      const priv = await prepareClaude(this.#o.home, bin.real, { allowScripts: this.#o.allowScripts === true });
       const userClaudeDir = path.join(userHome, row.userClaudeDir);
       const userClaudeJson = defaultClaudeJson(userClaudeDir);
       const managed = managedFiles(row);
@@ -270,13 +273,30 @@ export class SessionSupervisor {
       fs.writeFileSync(mcpConfigPath, `${JSON.stringify({ mcpServers: (mcpJson.mcpServers as Record<string, unknown> | undefined) ?? {} }, null, 2)}\n`, { mode: 0o600 });
       const extras: DarwinSessionExtras = { uid: process.getuid?.() ?? 0, tmpdir: os.tmpdir(), home: userHome, roots: [req.cwd, ...(req.worktree ? [req.worktree] : [])] };
       // Aegis H1: preflight runs the PRIVATE copy under the session profile, never unsandboxed
-      const run: ClaudeRun = (args) => {
-        const p = sessionLaunchPlan({ policy, binaryReal: priv.exec, argv: args, extras }, this.#platform);
-        const r = spawnSync(p.command, p.args, { cwd: req.cwd, env, encoding: 'utf8', timeout: 15_000, stdio: ['ignore', 'pipe', 'pipe'] });
-        return { status: r.status, stdout: r.stdout ?? '' };
-      };
-      const version = claudeVersion(run);
-      claudeAuthOk(run);
+      const run: ClaudeRun = (args) =>
+        new Promise((resolve) => {
+          const p = sessionLaunchPlan({ policy, binaryReal: priv.exec, argv: args, extras }, this.#platform);
+          const ch = spawn(p.command, p.args, { cwd: req.cwd, env, stdio: ['ignore', 'pipe', 'ignore'] });
+          let stdout = '';
+          const t = setTimeout(() => ch.kill('SIGKILL'), 15_000);
+          ch.stdout?.setEncoding('utf8');
+          ch.stdout?.on('data', (d: string) => {
+            if (stdout.length < 1 << 20) stdout += d;
+          });
+          ch.once('error', () => {
+            clearTimeout(t);
+            resolve({ status: null, stdout });
+          });
+          ch.once('close', (code) => {
+            clearTimeout(t);
+            resolve({ status: code, stdout });
+          });
+        });
+      const version = await claudeVersion(run);
+      await claudeAuthOk(run);
+      // Aegis N1: trust on first use — the pin is written only after the sandboxed preflight passed
+      commitPin(this.#o.home, priv);
+      await this.#o.log('session.sandbox', { hsid, phase: 'binary-pin', pin: priv.pin, by: priv.pin === 'repin' ? 'repin' : priv.pin === 'first-use' ? 'first-use' : 'pinned', ...(priv.repin ? { from: priv.repin.from, to: priv.repin.to } : {}), binarySha256: `sha256:${priv.sha256}`, source: bin.real }, { session: hsid });
       // Aegis L1: hash first, then scan; re-checked right before the spawn
       const layerInput: Law7Input = { row, cwd: req.cwd, ...(req.worktree ? { worktree: req.worktree } : {}), userClaudeDir, userClaudeJson, policyPath, mcpConfigPath };
       const lHash = layersHash({ cwd: req.cwd, ...(req.worktree ? { worktree: req.worktree } : {}), userClaudeDir, managedPaths: managed, userClaudeJson });
@@ -308,9 +328,13 @@ export class SessionSupervisor {
       }
       const intent = await this.#o.children.intend({ kind: 'session', hsid });
       child = spawn(plan.command, plan.args, { cwd: req.cwd, env, detached: true, stdio: ['pipe', 'pipe', 'pipe'] });
-      // reviewer (blocking): the exit listener is attached SYNCHRONOUSLY, before any await
+      // the exit/close listeners are attached SYNCHRONOUSLY, before any await. 'exit' only lets paused stdout
+      // drain; the release path runs on 'close' (after stdout ended), so a result written just before exit is recorded
       const c = child;
-      const exited = new Promise<void>((r) => c.once('exit', () => r()));
+      c.once('exit', () => {
+        if (c.stdout?.isPaused()) c.stdout.resume();
+      });
+      const exited = new Promise<void>((r) => c.once('close', () => r()));
       const spawnError = await new Promise<Error | null>((resolve) => {
         c.once('error', (e) => resolve(e));
         c.once('spawn', () => resolve(null));
@@ -323,16 +347,28 @@ export class SessionSupervisor {
         watchHash: wHash, gitHash: gHash, layerInput, env, state: 'running', turns: 0, seq: 0, meter: new UsageMeter(), stderrBytes: 0, watch: null,
       };
       this.#sessions.set(hsid, s);
+      live = s;
+      this.#wire(s); // round 3: wired BEFORE any further await — a failing row below still cleans up through the exit path
       await this.#o.log('session.sandbox', {
         hsid, sandbox: plan.sandbox, profile: 'session', profileHash: plan.profileHash, policyHash: policyHash(policy), layersHash: lHash, gitHash: gHash,
         binarySha256: `sha256:${priv.sha256}`, exec: priv.exec, version, envKeys, permitId: permit.permitId, generated: generated ? [...generated.keys()] : [],
       }, { session: hsid });
-      this.#wire(s);
-      return { hsid, principalId, backend: 'claude-code', state: s.state };
+      return { hsid, principalId, backend: 'claude-code', state: s.state, ...(priv.pin === 'first-use' ? { binaryPin: `first-use pin ${priv.sha256} from ${priv.source}` } : {}) };
     } catch (err) {
+      if (tracked && child) {
+        // round 3: a failure after track — stop the group; the wired exit path releases the permits
+        await this.#o.children.stop(child, 'open-failed').catch(() => undefined);
+        if (live) await live.exited.catch(() => undefined);
+      }
       if (!tracked) {
         // reviewer 6: one path from reserve to track — nothing leaks
-        if (child && child.exitCode === null && child.signalCode === null) child.kill('SIGKILL');
+        if (child?.pid !== undefined && child.exitCode === null && child.signalCode === null) {
+          try {
+            process.kill(-child.pid, 'SIGKILL'); // round 3: the whole group, not just the leader
+          } catch {
+            child.kill('SIGKILL');
+          }
+        }
         if (permit) await this.#o.fuse.release(permit.permitId, permit.principal).catch(() => undefined);
         fs.rmSync(dir, { recursive: true, force: true });
       }
@@ -354,7 +390,8 @@ export class SessionSupervisor {
     const out = s.child.stdout;
     const queue = (f: () => Promise<void>): void => {
       pending++;
-      if (pending > QUEUE_HIGH && out && !out.isPaused()) out.pause(); // Aegis M3: backpressure
+      const exitedNow = s.child.exitCode !== null || s.child.signalCode !== null; // after exit, never pause: the pipe must drain
+      if (pending > QUEUE_HIGH && out && !out.isPaused() && !exitedNow) out.pause(); // Aegis M3: backpressure
       chain = chain
         .then(f)
         .catch(() => undefined)
@@ -471,6 +508,11 @@ export class SessionSupervisor {
       await this.#o.log('billing.api.refused', { hsid: s.hsid, where: hits.map((h) => h.where), keys: hits.map((h) => h.key) }, { session: s.hsid });
       throw refused('BILLING_REFUSED', 'an API-billing path appeared in a layer this session reads (law 7)', { session: 'api_billing_refused' });
     }
+    // round 3: prune used ids whose permits have expired (an expired permit is refused by the checks below anyway)
+    for (const id of this.#usedTurnPermits) {
+      const u = this.#o.fuse.permit(id);
+      if (!u || Date.parse(u.expiresAt) <= Date.now()) this.#usedTurnPermits.delete(id);
+    }
     let permit: PermitV1 | undefined;
     if (p.permitId !== undefined) {
       permit = this.#o.fuse.permit(p.permitId);
@@ -517,6 +559,12 @@ export class SessionSupervisor {
     const survivors = await this.#o.children.stop(s.child, reason);
     signals.push('group:staged');
     return { signals, exited: !survivors };
+  }
+
+  /** status.claudePin: the trust-on-first-use pin (spec §3.3) */
+  pinStatus(): Record<string, unknown> | null {
+    const p = readClaudePin(this.#o.home);
+    return p ? { sha256: p.sha256, source: p.source, by: p.by, pinnedAt: p.pinnedAt, line: `${p.by} pin ${p.sha256} from ${p.source}` } : null;
   }
 
   /** status.sessions: live sessions + a bounded history of exited ones */

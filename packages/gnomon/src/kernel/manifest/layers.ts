@@ -155,6 +155,8 @@ export interface LayersInput {
   managedPaths: readonly string[];
   /** `~/.claude.json` (default: beside userClaudeDir). */
   userClaudeJson?: string;
+  /** M1.7: leave ~/.claude.json out (the mid-session watch hashes only its law-7 projection). */
+  excludeClaudeJson?: boolean;
 }
 
 export function defaultClaudeJson(userClaudeDir: string): string {
@@ -176,7 +178,7 @@ export function collectLayerInputs(inp: LayersInput): HashInput[] {
   user.push(readInput('user', 'CLAUDE.md', path.join(u, 'CLAUDE.md')));
   for (const d of ['skills', 'plugins', 'agents', 'commands']) user.push(listing('user', u, d));
   const cj = inp.userClaudeJson ?? defaultClaudeJson(u);
-  user.push(readInput('user', '.claude.json', cj));
+  if (!inp.excludeClaudeJson) user.push(readInput('user', '.claude.json', cj));
   const managed = inp.managedPaths.map((p) => readInput('managed', p, p));
   const worktree = inp.worktree && path.resolve(inp.worktree) !== path.resolve(inp.cwd) ? projectLayer('worktree', inp.worktree) : [];
   return [...managed, ...user, ...projectLayer('project', inp.cwd), ...worktree];

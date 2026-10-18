@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-18T05:03:27.518Z'
+generated: '2026-10-18T05:13:36.906Z'
 structure: {}
 key_files:
   config:
@@ -1333,6 +1333,7 @@ symbols:
   $purpose-ref-flow-HOME: packages/gnomon/
   '#purpose-ref-component-state': packages/gnomon/
   '#purpose-ref-component-hashAt': packages/gnomon/
+  '#purpose-ref-component-wire': packages/gnomon/
   '@purpose-ref-aspect-symbol-typed-logging': packages/logger/
   '@purpose-ref-aspect-correlation-tracked': packages/logger/
   '@purpose-ref-aspect-mcp-tool-handler': packages/paradigm-mcp/

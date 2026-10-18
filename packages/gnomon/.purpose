@@ -1067,6 +1067,15 @@ components:
       also flags ~/.claude.json primaryApiKey / customApiKeyResponses.approved
       and forceLoginMethod 'console' (billing.ts). The p10m re-run with the
       private copy and the new denies: PASS.
+      ROUND 3: trust on first use — the pin is written only after the
+      sandboxed preflight passes (N1); the copy (not the source) is hashed,
+      streamed, and not re-hashed when size+mtime match the pin record;
+      script installs (#!, the npm cli.js) are refused
+      claude_binary_unsupported; `gnomon session repin-claude`
+      (src/cli/session-cli.ts: TTY + typed last 8 of the new sha, daemon
+      stopped) writes a re-pin the supervisor logs session.sandbox{binary-pin,
+      by:'repin', from, to} at the next open; PERSISTENCE_PATHS adds
+      .bash_login, .zlogout, ~/.config/fish.
     path: src/kernel/runner/
     type: module
     tags: [gnomon, kernel, session, law-7, paradigm-8, m1.7]
@@ -1111,6 +1120,12 @@ components:
       watch hashes ~/.claude.json only through its law-7 projection;
       stdout paused above a queue high-water mark and lines over 64 KiB
       logged as {lineHash, bytes}; init without apiKeySource logged absent.
+      ROUND 3: 'exit' only resumes paused stdout; the release path runs on
+      'close' so a result written just before exit is recorded; #wire runs
+      before the post-track log row, and a failure after track stops the
+      group (the exit path releases the permits); a stray child before track
+      is SIGKILLed as a group; preflight spawns are async; used turn-permit
+      ids are pruned on expiry; status shows the claude pin.
     path: src/kernel/supervisor/
     type: module
     tags: [gnomon, kernel, session, paradigm-8, m1.7]

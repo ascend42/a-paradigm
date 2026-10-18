@@ -32,7 +32,7 @@ import { fileLayers, scanApiBilling, type BillingHit, type SettingsLayer } from 
 import { CLAUDE_MIN_VERSION, type ClaudeCodePlatformRow } from '../../platform/claude-code.js';
 
 /** §3.3 closed refusal codes (flow's, preserved) + law 7. */
-export const SESSION_REFUSAL_CODES = Object.freeze(['claude_version', 'not_subscription_auth', 'spawn_failed', 'claude_binary_changed', 'bad_message', 'session_busy', 'api_billing_refused'] as const);
+export const SESSION_REFUSAL_CODES = Object.freeze(['claude_version', 'not_subscription_auth', 'spawn_failed', 'claude_binary_changed', 'bad_message', 'session_busy', 'api_billing_refused', 'claude_binary_unsupported'] as const);
 export type SessionRefusalCode = (typeof SESSION_REFUSAL_CODES)[number];
 
 export class PreflightRefusal extends Error {
@@ -79,19 +79,19 @@ export function compareVersions(a: string, b: string): number {
 }
 
 /** How preflight runs the binary: the supervisor passes a runner that executes the PRIVATE copy under the session profile (Aegis H1). */
-export type ClaudeRun = (args: string[]) => { status: number | null; stdout: string };
+export type ClaudeRun = (args: string[]) => Promise<{ status: number | null; stdout: string }>;
 
 /** A plain runner (spawnSync, given env) — the supervisor wraps it in the session profile. */
 export function spawnRunner(command: string, prefix: string[], env: Record<string, string>): ClaudeRun {
-  return (args) => {
+  return async (args) => {
     const r = spawnSync(command, [...prefix, ...args], { env, encoding: 'utf8', timeout: 15_000, stdio: ['ignore', 'pipe', 'pipe'] });
     return { status: r.status, stdout: r.stdout ?? '' };
   };
 }
 
 /** `<bin> --version` ≥ the floor; returns the version. */
-export function claudeVersion(run: ClaudeRun, min: string = CLAUDE_MIN_VERSION): string {
-  const r = run(['--version']);
+export async function claudeVersion(run: ClaudeRun, min: string = CLAUDE_MIN_VERSION): Promise<string> {
+  const r = await run(['--version']);
   const m = /(\d+\.\d+\.\d+)/.exec(r.stdout);
   if (r.status !== 0 || !m) throw new PreflightRefusal('claude_version', 'claude --version gave no version');
   if (compareVersions(m[1]!, min) < 0) throw new PreflightRefusal('claude_version', `claude ${m[1]} is older than ${min}`, { version: m[1], min });
@@ -99,8 +99,8 @@ export function claudeVersion(run: ClaudeRun, min: string = CLAUDE_MIN_VERSION):
 }
 
 /** `<bin> auth status` must say subscription auth (claude.ai, firstParty). */
-export function claudeAuthOk(run: ClaudeRun): void {
-  const r = run(['auth', 'status', '--json']);
+export async function claudeAuthOk(run: ClaudeRun): Promise<void> {
+  const r = await run(['auth', 'status', '--json']);
   let j: Record<string, unknown> | null = null;
   try {
     j = JSON.parse(r.stdout) as Record<string, unknown>;

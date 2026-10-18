@@ -2,27 +2,38 @@
  * @symbol #session-runner
  *
  * The claude binary, pinned and privately copied (spec §3.3 Preflight
- * "refuse changed binary"; Aegis H1, M1.7 round 2). A session must never be
- * able to swap the binary the kernel runs next:
+ * "refuse changed binary"; Aegis H1/N1, M1.7 rounds 2–3). A session must
+ * never be able to swap the binary the kernel runs next.
  *
- *   pin — `<home>/claude-pin.json` holds the expected sha256. First use pins
- *     it (the supervisor logs the pin); any other hash afterwards is refused
- *     `claude_binary_changed`. A human re-pins EXPLICITLY (repinClaudeBinary:
- *     the CLI / test seam until the M1.6 gate-class card exists); nothing
- *     re-pins on its own.
- *   private copy — the verified bytes (hashed from the SAME buffer that is
- *     written) go to `<home>/bin/claude-<sha>` (dir 0700, file 0500), which
- *     the `session` profile write-denies (all of `<home>/**`). The kernel
- *     executes that copy — preflight included — so there is no window between
- *     hashing the source and executing it. The copy is re-hashed before each
- *     use; a mismatch is refused.
+ *   TRUST ON FIRST USE: `<home>/claude-pin.json` holds the expected sha256.
+ *     The first open whose sandboxed preflight PASSES pins it (commitPin, the
+ *     supervisor logs `session.sandbox{phase:'binary-pin', by:'first-use'}`).
+ *     Any other hash afterwards is refused `claude_binary_changed`; the human
+ *     re-pins with `gnomon session repin-claude` (attended CLI: a terminal, a
+ *     typed confirmation and a stopped daemon, until M1.3 presence). The
+ *     re-pin record carries `{from, to, logged:false}`; the supervisor logs it
+ *     `session.sandbox{phase:'binary-pin', by:'repin', from, to}` at the next
+ *     open and marks it logged.
+ *   PRIVATE COPY: the source is copied to `<home>/bin/` (dir 0700, file 0500;
+ *     the `session` profile write-denies all of `<home>/**`) and the COPY is
+ *     hashed — the bytes hashed are the bytes executed, preflight included.
+ *     The copy is not re-hashed when its size and mtime match the pin record.
+ *     Hashing streams (no event-loop stall on a 200 MB binary).
+ *   KIND: only a self-contained native executable (Mach-O, ELF, PE) is
+ *     accepted. A script (`#!`, e.g. the npm-installed cli.js with vendor/
+ *     siblings) is refused `claude_binary_unsupported` — copying one file of a
+ *     package would run without its siblings. `allowScripts` exists for the
+ *     test rig's fake claude only (a kernel construction option, never wired
+ *     by the daemon).
  */
 import { createHash } from 'node:crypto';
+import { createReadStream } from 'node:fs';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { PreflightRefusal } from './preflight.js';
 
 export const CLAUDE_PIN_SCHEMA = 'gnomon-claude-pin:v1' as const;
+export const REPIN_COMMAND = 'gnomon session repin-claude';
 
 export interface ClaudePin {
   schemaVersion: typeof CLAUDE_PIN_SCHEMA;
@@ -30,9 +41,14 @@ export interface ClaudePin {
   source: string;
   pinnedAt: string;
   by: 'first-use' | 'repin';
+  /** a re-pin: the previous sha */
+  from?: string | null;
+  /** the re-pin row has been written to the log */
+  logged?: boolean;
+  /** the private copy's identity (skip re-hashing when both match) */
+  copy?: { path: string; size: number; mtimeMs: number };
 }
 
-const sha = (b: Buffer): string => createHash('sha256').update(b).digest('hex');
 export const pinPath = (home: string): string => path.join(home, 'claude-pin.json');
 
 export function readClaudePin(home: string): ClaudePin | null {
@@ -44,62 +60,94 @@ export function readClaudePin(home: string): ClaudePin | null {
   }
 }
 
-function writePin(home: string, pin: ClaudePin): void {
+export function writeClaudePin(home: string, pin: ClaudePin): void {
   fs.mkdirSync(home, { recursive: true, mode: 0o700 });
-  const tmp = `${pinPath(home)}.tmp-${process.pid}`;
+  const tmp = `${pinPath(home)}.tmp-${process.pid}-${Date.now()}`;
   fs.writeFileSync(tmp, `${JSON.stringify(pin, null, 2)}\n`, { mode: 0o600 });
   fs.renameSync(tmp, pinPath(home));
 }
 
-/** The explicit human re-pin (CLI / test seam until the gate-class card, M1.6). */
+/** The re-pin the CLI writes (attended human; logged by the supervisor at the next open). */
 export function repinClaudeBinary(home: string, sha256: string, source: string): ClaudePin {
   if (!/^[0-9a-f]{64}$/.test(sha256)) throw new TypeError('#session-runner: a pin is a sha256 hex digest');
-  const pin: ClaudePin = { schemaVersion: CLAUDE_PIN_SCHEMA, sha256, source, pinnedAt: new Date().toISOString(), by: 'repin' };
-  writePin(home, pin);
+  const prev = readClaudePin(home);
+  const pin: ClaudePin = { schemaVersion: CLAUDE_PIN_SCHEMA, sha256, source, pinnedAt: new Date().toISOString(), by: 'repin', from: prev?.sha256 ?? null, logged: false };
+  writeClaudePin(home, pin);
   return pin;
 }
 
-export interface PrivateClaude {
+export async function sha256File(p: string): Promise<string> {
+  const h = createHash('sha256');
+  for await (const chunk of createReadStream(p)) h.update(chunk as Buffer);
+  return h.digest('hex');
+}
+
+export type BinaryKind = 'native' | 'script' | 'unknown';
+
+/** Mach-O (incl. fat), ELF, PE ⇒ native; `#!` ⇒ script. */
+export function binaryKind(p: string): BinaryKind {
+  const fd = fs.openSync(p, 'r');
+  try {
+    const b = Buffer.alloc(4);
+    fs.readSync(fd, b, 0, 4, 0);
+    const hex = b.toString('hex');
+    if (['feedface', 'feedfacf', 'cefaedfe', 'cffaedfe', 'cafebabe', 'bebafeca', '7f454c46'].includes(hex) || hex.startsWith('4d5a')) return 'native';
+    if (hex.startsWith('2321')) return 'script';
+    return 'unknown';
+  } finally {
+    fs.closeSync(fd);
+  }
+}
+
+export interface PreparedClaude {
   /** the private copy the kernel executes */
   exec: string;
   sha256: string;
-  pin: 'first-use' | 'match';
+  source: string;
+  pin: 'first-use' | 'match' | 'repin';
+  /** a re-pin waiting for its log row */
+  repin?: { from: string | null; to: string };
 }
 
-/** Read the source ONCE, check/establish the pin, write (or reuse) the private copy, re-verify it. */
-export function privateClaude(home: string, sourceReal: string): PrivateClaude {
-  const bytes = fs.readFileSync(sourceReal);
-  const digest = sha(bytes);
-  const pin = readClaudePin(home);
-  let state: PrivateClaude['pin'] = 'match';
-  if (!pin) {
-    writePin(home, { schemaVersion: CLAUDE_PIN_SCHEMA, sha256: digest, source: sourceReal, pinnedAt: new Date().toISOString(), by: 'first-use' });
-    state = 'first-use';
-  } else if (pin.sha256 !== digest) {
-    throw new PreflightRefusal('claude_binary_changed', 'the claude binary differs from the pinned sha256 (a human re-pins explicitly)', { expected: pin.sha256, found: digest });
+/**
+ * Copy the source to a private file, hash THE COPY, check kind and pin.
+ * Writes no pin: commitPin does, after the sandboxed preflight passed (N1).
+ */
+export async function prepareClaude(home: string, sourceReal: string, opts: { allowScripts?: boolean } = {}): Promise<PreparedClaude> {
+  const kind = binaryKind(sourceReal);
+  if (kind !== 'native' && !(kind === 'script' && opts.allowScripts)) {
+    throw new PreflightRefusal('claude_binary_unsupported', `the claude at ${sourceReal} is not a self-contained native executable (${kind}); install the native build (an npm cli.js needs its package)`, { kind });
   }
+  const pin = readClaudePin(home);
   const dir = path.join(home, 'bin');
   fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
-  const exec = path.join(dir, `claude-${digest.slice(0, 32)}`);
-  let ok = false;
-  try {
-    ok = sha(fs.readFileSync(exec)) === digest;
-  } catch {
-    ok = false;
-  }
-  if (!ok) {
-    const tmp = `${exec}.tmp-${process.pid}-${Date.now()}`;
-    const fd = fs.openSync(tmp, fs.constants.O_WRONLY | fs.constants.O_CREAT | fs.constants.O_EXCL | (fs.constants.O_NOFOLLOW ?? 0), 0o700);
-    try {
-      fs.writeSync(fd, bytes);
-      fs.fsyncSync(fd);
-    } finally {
-      fs.closeSync(fd);
+  // fast path: the pinned private copy is unchanged on disk (size + mtime), and the source still hashes to the pin
+  if (pin?.copy && fs.existsSync(pin.copy.path)) {
+    const st = fs.statSync(pin.copy.path);
+    if (st.size === pin.copy.size && st.mtimeMs === pin.copy.mtimeMs && (await sha256File(sourceReal)) === pin.sha256) {
+      return { exec: pin.copy.path, sha256: pin.sha256, source: sourceReal, pin: pin.by === 'repin' && !pin.logged ? 'repin' : 'match', ...(pin.by === 'repin' && !pin.logged ? { repin: { from: pin.from ?? null, to: pin.sha256 } } : {}) };
     }
-    fs.chmodSync(tmp, 0o500);
-    fs.rmSync(exec, { force: true });
-    fs.renameSync(tmp, exec);
-    if (sha(fs.readFileSync(exec)) !== digest) throw new PreflightRefusal('claude_binary_changed', 'the private claude copy does not hash to the verified bytes', {});
   }
-  return { exec, sha256: digest, pin: state };
+  const tmp = path.join(dir, `.claude-tmp-${process.pid}-${Date.now()}`);
+  await fs.promises.copyFile(sourceReal, tmp, fs.constants.COPYFILE_EXCL);
+  await fs.promises.chmod(tmp, 0o500);
+  const digest = await sha256File(tmp); // the bytes hashed are the bytes executed
+  if (pin && pin.sha256 !== digest) {
+    await fs.promises.rm(tmp, { force: true });
+    throw new PreflightRefusal('claude_binary_changed', `the claude binary differs from the pinned sha256 — a human re-pins with \`${REPIN_COMMAND}\``, { expected: pin.sha256, found: digest, next: REPIN_COMMAND });
+  }
+  const exec = path.join(dir, `claude-${digest.slice(0, 32)}`);
+  await fs.promises.rm(exec, { force: true });
+  await fs.promises.rename(tmp, exec);
+  const state: PreparedClaude['pin'] = !pin ? 'first-use' : pin.by === 'repin' && !pin.logged ? 'repin' : 'match';
+  return { exec, sha256: digest, source: sourceReal, pin: state, ...(state === 'repin' ? { repin: { from: pin!.from ?? null, to: digest } } : {}) };
+}
+
+/** After the sandboxed preflight passed: write the first-use pin / mark a re-pin logged; record the copy's identity. */
+export function commitPin(home: string, p: PreparedClaude): void {
+  const prev = readClaudePin(home);
+  const st = fs.statSync(p.exec);
+  const copy = { path: p.exec, size: st.size, mtimeMs: st.mtimeMs };
+  if (!prev) writeClaudePin(home, { schemaVersion: CLAUDE_PIN_SCHEMA, sha256: p.sha256, source: p.source, pinnedAt: new Date().toISOString(), by: 'first-use', copy });
+  else writeClaudePin(home, { ...prev, logged: true, copy });
 }

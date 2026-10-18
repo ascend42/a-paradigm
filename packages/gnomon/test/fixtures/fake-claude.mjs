@@ -59,6 +59,7 @@ process.stdin.on('data', (c) => {
     out({ type: 'assistant', message: { id, content: [{ type: 'text', text: 'hi' }], usage: { input_tokens: 10, output_tokens: 5 } } });
     out({ type: 'assistant', message: { id, content: tool, usage: { input_tokens: 10, output_tokens: 20, cache_read_input_tokens: 100 } } });
     out({ type: 'rate_limit_event', rate_limit_info: { status: 'allowed' } });
+    if (mode.resultThenExit) { out({ type: 'result', subtype: 'success', is_error: false, usage: { input_tokens: 10, output_tokens: 25, cache_read_input_tokens: 100 }, permission_denials: [] }); process.exit(0); }
     out({ type: 'result', subtype: 'success', is_error: false, num_turns: 1, total_cost_usd: 0.01, usage: { input_tokens: 10, output_tokens: 25, cache_read_input_tokens: 100 }, permission_denials: [], result: 'ok' });
   }
 });
