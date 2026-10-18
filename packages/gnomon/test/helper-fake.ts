@@ -65,9 +65,22 @@ export class FakeHelper implements HelperTransport {
   }
 
   async request(req: Record<string, unknown>): Promise<HelperReply> {
+    return this.handle(req);
+  }
+
+  /** Synchronous form (stands in for `gnomon-helper once`). */
+  handle(req: Record<string, unknown>): HelperReply {
     if (!this.#alive) throw new HelperUnavailableError('exited', 'fake helper is down');
     const k = this.keys.get(`${String(req.gen)}.${String(req.key)}`);
     switch (req.op) {
+      case 'key.create': {
+        if (k) throw new HelperRefusal('exists', 'exists');
+        const { privateKey, publicKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+        this.keys.set(`${String(req.gen)}.${String(req.key)}`, { priv: privateKey, pub: publicKey });
+        return { ok: true, publicKey: this.x963(req.key as 'root', String(req.gen)) };
+      }
+      case 'key.delete':
+        return { ok: true, deleted: this.keys.delete(`${String(req.gen)}.${String(req.key)}`) };
       case 'key.public':
         if (!k) throw new HelperRefusal('not-found', 'no key');
         return { ok: true, publicKey: this.x963(req.key as 'root', String(req.gen)) };

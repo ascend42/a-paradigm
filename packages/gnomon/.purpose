@@ -536,6 +536,16 @@ components:
       it for gnomond only when the pinned helper confirms both SE public keys
       and the binding verifies under the root, else the daemon refuses to
       start (identity-<reason>), never a software root.
+      cli/identity-cli.ts — `gnomon identity init` provisions the real root
+      once (refused from a kernel-spawned shell, while the daemon runs, and
+      when identity.json exists unless `--rotate` on a TTY with the typed
+      confirmation, logged to stderr and a journal line signed by the OLD
+      root; old registry moved aside as evidence, old SE keys retired):
+      pins the helper, creates root + approvals in the SE under a fresh
+      generation, two root signatures with presence (approvals binding,
+      device row), identity.json last; a failure deletes the keys it made.
+      `gnomon identity status`. Founder hardware test:
+      GNOMON_HW_TESTS=1 test/identity-hw.test.ts (it.todo in CI).
     path: src/kernel/identity/
     type: module
     tags: [gnomon, kernel, identity, paradigm-8, m1.4, m1.3]
@@ -545,6 +555,8 @@ components:
       - test/socket-abi.test.ts
       - test/identity-hardware.test.ts
       - test/identity-helper-pin.test.ts
+      - test/identity-cli.test.ts
+      - test/identity-hw.test.ts
 
   dev-launch:
     description: >-
