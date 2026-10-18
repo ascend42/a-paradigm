@@ -111,6 +111,23 @@ describe('hello negotiation (§4.9)', () => {
     expect(errReason(again)).toBe('hello-repeated');
   });
 
+  it('T-2026-10-18-016 r2: a hello with a missing, short or non-base64url clientNonce is BAD_REQUEST hello-params; the connection may then hello correctly', async () => {
+    const r = await rig();
+    const c = await RpcConnection.open(r.d.pidfile.socketPath);
+    cleanups.push(() => c.close());
+    for (const params of [
+      { clientApis: ['gnomon-rpc:v1'], features: [], client: CLIENT },
+      { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: 'short', client: CLIENT },
+      { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: `${TEST_CLIENT_NONCE.slice(0, 40)}+/=`, client: CLIENT },
+      { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: 42, client: CLIENT },
+    ]) {
+      const resp = await c.call('hello', params);
+      expect(resp, JSON.stringify(params.clientNonce)).toMatchObject({ error: { code: -32600, data: { code: 'BAD_REQUEST', data: { reason: 'hello-params' } } } });
+    }
+    const ok = (await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: TEST_CLIENT_NONCE, client: CLIENT })) as { result: HelloResult };
+    expect(ok.result.clientNonce).toBe(TEST_CLIENT_NONCE);
+  });
+
   it('version mismatch: UNSUPPORTED (-32005) with data.offered[]; the connection may retry', async () => {
     const r = await rig();
     const c = await RpcConnection.open(r.d.pidfile.socketPath);
