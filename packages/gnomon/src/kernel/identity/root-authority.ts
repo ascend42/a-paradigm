@@ -16,8 +16,11 @@
  *     software fallback (§3.1 failure modes).
  *   - `DevTestRootAuthority`: a SOFTWARE P-256 key in memory, constructible
  *     only by code that passes the literal acknowledgement `DEV_TEST_ROOT_ACK`.
- *     No env var, flag or file selects it (§15.3: the daemon reads no
- *     `GNOMON_*`); `gnomond` never constructs it. It exists so tests can drive
+ *     No env var or flag selects it (§15.3: the daemon reads no `GNOMON_*`),
+ *     and no file does for the daemon: `gnomond` never constructs it and
+ *     refuses a dev home. The ONE file exception is honoured only by the
+ *     `gnomon` CLI's `dev up` (#dev-launch): a DEV home's ack-bearing marker
+ *     plus its 0600 root key file. It exists so tests can drive
  *     the full mutual-auth path, and so `gnomon dev up` (#dev-launch, the
  *     unsigned dogfood path until M1.3) can run a kernel IN ITS OWN PROCESS on
  *     a separate, marked DEV home — never `~/.gnomon`. Everything it touches reports

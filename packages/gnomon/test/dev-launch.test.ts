@@ -17,6 +17,7 @@ import { DEV_HOME_MARKER, DEV_ROOT_KEY_FILE, DevHomeRefusal, loadDevHome, looksL
 import { runDevCommand, startDevKernel, type DevCliIo } from '../src/cli/dev-cli.js';
 import type { DaemonHandle, DaemonOptions } from '../src/kernel/lifecycle/index.js';
 import { tempHome } from './daemon-helpers.js';
+import { PKG_ROOT } from './helpers.js';
 import { PassThrough } from 'node:stream';
 import { vi } from 'vitest';
 import { activateDetached, runForeground } from '../src/cli/daemon-cli.js';
@@ -282,5 +283,20 @@ describe('#dev-launch: an interrupted dev init', () => {
     // following the hint works
     fs.rmSync(w.devHome, { recursive: true, force: true });
     expect(await runDevCommand(['init', '--home', w.devHome], io(), { userHome: w.userHome, host: 'mac-1' })).toBe(0);
+  });
+});
+
+describe('#dev-launch: the production CLI passes no start seam (Aegis)', () => {
+  it('gnomon.ts calls runDevCommand with argv and stdio only: no opts, no start, no test entry', () => {
+    const src = fs.readFileSync(path.join(PKG_ROOT, 'src', 'cli', 'gnomon.ts'), 'utf8');
+    const uses = src.split('\n').filter((l) => /\brunDevCommand\(/.test(l));
+    expect(uses).toHaveLength(1);
+    expect(uses[0]!.trim()).toBe('runDevCommand(argv.slice(1), { stdin: process.stdin, stdout: process.stdout, stderr: process.stderr }).then(');
+    for (const f of ['gnomon.ts', 'dev-cli.ts', 'dev-home.ts']) {
+      const t = fs.readFileSync(path.join(PKG_ROOT, 'src', 'cli', f), 'utf8');
+      expect(t, f).not.toMatch(/testing\.js|startDaemonForTest|internal-seams|seamsOf/);
+    }
+    // dev-cli's default start is the production startDaemon
+    expect(fs.readFileSync(path.join(PKG_ROOT, 'src', 'cli', 'dev-cli.ts'), 'utf8')).toContain('const start = opts.start ?? startDaemon;');
   });
 });

@@ -35,7 +35,6 @@ import {
   DevTestRootAuthority,
   ensureKeysDir,
   keysDir,
-  loadDeviceKey,
   readRegistry,
   registerDevice,
   registerKernelKey,
@@ -300,11 +299,14 @@ export function loadDevHome(home: string, opts: DevHomeOptions = {}): LoadedDevH
   if (reg.rejected.length > 0) throw damaged(`${reg.rejected.length} registry row(s) do not verify against the dev root (${[...new Set(reg.rejected.map((r) => r.reason))].join(', ')})`);
   if (reg.kernelKeys.get(kernel.keyId) !== kernel.publicKeyPem) throw damaged('the kernel key has no registry row');
   const dev = reg.devices.get(record.deviceId);
+  // the device key is read ONCE, through the owner-only check, and those same bytes are both verified and handed out
+  let devicePem: string;
   let deviceSigner: SoftwareEd25519Signer;
   try {
-    deviceSigner = loadDeviceKey(home);
-  } catch {
-    throw damaged('the device key does not load');
+    devicePem = readOwnerOnly(deviceKeyPath(home));
+    deviceSigner = new SoftwareEd25519Signer(devicePem, 'device');
+  } catch (e) {
+    throw damaged(e instanceof DevHomeRefusal ? e.message : 'the device key does not load');
   }
   if (!dev || dev.principalKind !== 'human' || dev.principalId !== record.principalId || dev.keyId !== deviceSigner.keyId) throw damaged('the device has no matching human registry row');
   return {
@@ -313,7 +315,7 @@ export function loadDevHome(home: string, opts: DevHomeOptions = {}): LoadedDevH
     root,
     kernel,
     kernelKey: { keyId: kernel.keyId, publicKeyPem: kernel.publicKeyPem },
-    device: { kind: 'device', deviceId: dev.deviceId, principalId: dev.principalId, privateKeyPem: fs.readFileSync(deviceKeyPath(home), 'utf8') },
+    device: { kind: 'device', deviceId: dev.deviceId, principalId: dev.principalId, privateKeyPem: devicePem },
   };
 }
 
