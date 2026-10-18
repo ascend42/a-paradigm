@@ -29,6 +29,12 @@
  *      (log-before-effect); `always` appends `approval.rule.learned`;
  *      `approval.suspect` rows carry connId and client provenance.
  *
+ * `approval.decide` is a RECORD, never authority: the effect (grant rows,
+ * activation) is the authority; an effect that fails after the row is
+ * written is recorded `approval.suspect{why:'effect-failed'}` and the card
+ * stays pending (`approval.effect.failed` would be the honest kind; adding it
+ * moves clientApiId — reported).
+ *
  * Silence never allows (B6, G-BRK-01): `tool.permission` cards expire into
  * deny; `fallback` and `api-token` cards never expire; `decisionOf` of a
  * card the broker does not hold is `deny`.
@@ -145,8 +151,17 @@ export interface DecideContext {
   principal: string;
   /** dispatch matrix class: human | agent | session | mod | voice | readToken | peer */
   principalClass: string;
-  /** hello client.surface (browser | wrapper | cli | conductor | …) */
+  /** hello client.surface (browser | wrapper | cli | conductor | …): SELF-DECLARED, display only, never a security input */
   surface: string | null;
+  /**
+   * How the connection authenticated (Aegis C1): only `gui` (a launch-token
+   * GUI session of #web-endpoint) is an attached GUI that may hold a cached
+   * unlock; every other credential is treated as a CLI invocation (prompts
+   * every time, provenance + suspect rows).
+   */
+  credential: 'gui' | 'device' | 'read-token' | string;
+  /** Is the connection still open? Checked before an unlock opens and before approval.decide (default: live). */
+  isLive?: () => boolean;
 }
 
 interface CardRecord {
@@ -264,7 +279,8 @@ export class ApprovalBroker {
     const now = this.#clock();
     const out: string[] = [];
     for (const r of this.#cards.values()) {
-      if (r.card.state !== 'pending' || !r.card.timeoutAt || Date.parse(r.card.timeoutAt) > now) continue;
+      if (r.card.state !== 'pending' || r.outcome || !r.card.timeoutAt || Date.parse(r.card.timeoutAt) > now) continue;
+      if (this.#deciding.has(r.card.cardId)) continue; // a decision is in flight: it settles the card (or the next sweep expires it)
       const into = 'deny'; // never into allow (B6); tool.permission expires into deny
       await this.#o.log('approval.expire', { cardId: r.card.cardId, kind: r.card.kind, into }, r.card.hsid ? { session: r.card.hsid } : {});
       r.card = { ...r.card, state: 'expired' };
@@ -284,6 +300,7 @@ export class ApprovalBroker {
   }
 
   #settle(r: CardRecord, outcome: string): void {
+    if (r.outcome) return; // one terminal outcome per card
     r.outcome = outcome;
     for (const w of r.waiters.splice(0)) w(outcome);
   }
@@ -339,12 +356,15 @@ export class ApprovalBroker {
     if (v !== 'ok') throw fail('AUTH', 'bad-signature', 'decisionSig does not verify for this card, decision and approver', { cardId });
 
     // 4. presence per class
-    const isCli = ctx.surface === 'cli';
+    const isCli = ctx.credential !== 'gui'; // Aegis C1: the credential decides, never the self-declared surface
+    const live = (): void => {
+      if (ctx.isLive && !ctx.isLive()) throw fail('ENGINE', 'gone', 'the connection closed during the decision', { cardId });
+    };
     let presence: 'fresh' | 'cached' | 'cli';
     let token: PresenceToken | null = null;
     if (cls === 'none') {
       presence = 'fresh'; // unreachable in M1.6 (no held cards); withdraw takes no presence
-    } else if (cls === 'cached' && !isCli && this.unlocks.use(ctx.connId) === 'ok') {
+    } else if (cls === 'cached' && !isCli && (await this.#useUnlock(ctx.connId)) === 'ok') {
       presence = 'cached';
     } else {
       const hadUnlock = this.unlocks.has(ctx.connId);
@@ -355,6 +375,7 @@ export class ApprovalBroker {
         if (used !== 'ok') throw await this.#presenceDenied(card, ctx, `presence token ${used}`, hadUnlock);
       }
       if (cls === 'cached' && !isCli && !this.unlocks.has(ctx.connId)) {
+        live();
         this.unlocks.open(ctx.connId);
         await this.#o.log('approval.unlock', { connId: ctx.connId, cardId }, { connId: ctx.connId });
       }
@@ -373,9 +394,12 @@ export class ApprovalBroker {
 
     // 5. log, then effect, then state (log-before-effect)
     const now = this.#clock();
-    const via = isCli ? 'cli' : ctx.surface === 'browser' ? 'gui' : ctx.surface === 'wrapper' ? 'wrapper' : 'client';
+    const via = isCli ? 'cli' : 'gui'; // from the credential (Aegis C1)
     const prov = isCli ? (this.#o.provenanceOf?.(ctx.connId) ?? null) : null;
-    const cli = isCli ? (prov ?? { client: 'cli', connId: ctx.connId }) : { client: ctx.surface ?? 'unknown', connId: ctx.connId };
+    const cli = isCli ? (prov ?? { client: 'cli', connId: ctx.connId }) : { client: 'gui', connId: ctx.connId };
+    // re-check after the last await (expiry, a racing decision, a closed connection): exactly one terminal row
+    live();
+    if (r.outcome || r.card.state !== 'pending' || !isCardDecidable(r.card, decision)) throw fail('BAD_REQUEST', 'bad-params', `card ${cardId} is no longer pending`, { cardId, state: String(r.card.state) });
     await this.#o.log(
       'approval.decide',
       { cardId, decision, by: ctx.principal, decisionSig: p.decisionSig, presence, via, connId: ctx.connId, cli, contentHash: card.contentHash, ...(rootSig ? { rootSig } : {}), ...(p.note ? { note: p.note } : {}) },
@@ -385,10 +409,24 @@ export class ApprovalBroker {
     for (const why of this.#suspicions(ctx, isCli, prov, presence, cls)) {
       await this.#o.log('approval.suspect', { cardId, connId: ctx.connId, why, provenance: cli }, { connId: ctx.connId });
     }
-    if (r.effect) await r.effect(decision, { token, rootSig, connId: ctx.connId });
+    if (r.effect) {
+      try {
+        await r.effect(decision, { token, rootSig, connId: ctx.connId });
+      } catch (err) {
+        await this.#o.log('approval.suspect', { cardId, connId: ctx.connId, why: 'effect-failed', decision, error: err instanceof Error ? err.message.slice(0, 200) : 'effect failed' }, { connId: ctx.connId }).catch(() => undefined);
+        throw err;
+      }
+    }
     r.card = { ...card, state: 'decided', decidedBy: ctx.principal, decidedAt: new Date(now).toISOString(), decisionSig: p.decisionSig, presence, via, cli };
     this.#settle(r, decision);
     return r.card;
+  }
+
+  /** Use this connection's unlock; an idle one is dropped and logged (approval.unlock.dropped{idle}). */
+  async #useUnlock(connId: string): Promise<'ok' | 'none' | 'idle'> {
+    const u = this.unlocks.use(connId);
+    if (u === 'idle') await this.#o.log('approval.unlock.dropped', { connId, reason: 'idle' }, { connId });
+    return u;
   }
 
   #binding(r: CardRecord, decision: string): PresenceBinding {

@@ -144,8 +144,8 @@ function treeBytes(root: string): Record<string, string> {
 const root = () => new DevTestRootAuthority(DEV_TEST_ROOT_ACK);
 const presence = (purpose: 'mod.install' | 'mod.rollback' = 'mod.install') => mintTestPresence(purpose);
 /** A mod.install token BOUND to the staged card's {cardId, contentHash} (T-2026-10-18-008). */
-const bound = (home: string, name: string, cardId: string) =>
-  mintTestPresence('mod.install', { bind: installPresenceBinding(cardId, readStaged(home, name, cardId)?.card.contentHash ?? 'none') });
+const bound = (home: string, name: string, cardId: string, decision: 'install' | 'deny' = 'install') =>
+  mintTestPresence('mod.install', { bind: installPresenceBinding(cardId, readStaged(home, name, cardId)?.card.contentHash ?? 'none', decision) });
 const rbBound = (name: string, to: string | undefined) => mintTestPresence('mod.rollback', { bind: rollbackPresenceBinding(name, to) });
 
 /* ── validation ───────────────────────────────────────────────────────────── */
@@ -491,7 +491,7 @@ describe('G-MAN-02 an agent-written manifest needs a card (an install stages a p
     const loaded = loadMod({ home, name: 'diff-lens', trust: auth });
     expect(loaded.state).toBe('ready');
     expect(decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: bound(home, 'diff-lens', st.cardId), authority: auth }).card.state).toBe('decided'); // idempotent
-    expect(refusalOf(() => decideInstallCard(home, 'diff-lens', st.cardId, 'deny', { presenceToken: bound(home, 'diff-lens', st.cardId), authority: auth })).manifestCode).toBe('NOT_INSTALLED');
+    expect(refusalOf(() => decideInstallCard(home, 'diff-lens', st.cardId, 'deny', { presenceToken: bound(home, 'diff-lens', st.cardId, 'deny'), authority: auth })).manifestCode).toBe('NOT_INSTALLED');
   });
 
   it('decide trusts nothing in the staged record: bad cardId, name mismatch, tampered detail, stale and reused presence (Aegis F5/F6)', () => {
@@ -501,7 +501,7 @@ describe('G-MAN-02 an agent-written manifest needs a card (an install stages a p
     if (st.state !== 'staged') throw new Error('expected staged');
     expect(refusalOf(() => decideInstallCard(home, 'diff-lens', '../../x', 'install', { presenceToken: bound(home, 'diff-lens', '../../x'), authority: auth })).manifestCode).toBe('SCHEMA');
     expect(refusalOf(() => decideInstallCard(home, 'other-mod', st.cardId, 'install', { presenceToken: bound(home, 'other-mod', st.cardId), authority: auth })).manifestCode).toBe('NOT_INSTALLED');
-    const stale = mintTestPresence('mod.install', { ageMs: 61_000, bind: installPresenceBinding(st.cardId, readStaged(home, 'diff-lens', st.cardId)!.card.contentHash) });
+    const stale = mintTestPresence('mod.install', { ageMs: 61_000, bind: installPresenceBinding(st.cardId, readStaged(home, 'diff-lens', st.cardId)!.card.contentHash, 'install') });
     expect(refusalOf(() => decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: stale, authority: auth })).detail.presence).toBe('stale');
     // tamper: widen the staged detail and re-hash it (the card agrees with its detail but not with the snapshot)
     const file = path.join(home, 'mods', 'diff-lens', 'staged', `${st.cardId.replace(':', '-')}.json`);
@@ -530,7 +530,7 @@ describe('G-MAN-02 an agent-written manifest needs a card (an install stages a p
     const auth = root();
     const st = stageInstall({ home, source: writeMod(path.join(tmp(), 'diff-lens'), baseManifest()), via: 'package', requestedBy: AGENT, trust: auth });
     if (st.state !== 'staged') throw new Error('expected staged');
-    decideInstallCard(home, 'diff-lens', st.cardId, 'deny', { presenceToken: bound(home, 'diff-lens', st.cardId), authority: auth });
+    decideInstallCard(home, 'diff-lens', st.cardId, 'deny', { presenceToken: bound(home, 'diff-lens', st.cardId, 'deny'), authority: auth });
     expect(readGrants(home, auth).installs).toEqual([]);
     expect(refusalOf(() => loadMod({ home, name: 'diff-lens', trust: auth })).manifestCode).toBe('NOT_INSTALLED');
   });

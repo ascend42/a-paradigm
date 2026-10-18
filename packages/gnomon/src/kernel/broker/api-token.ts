@@ -36,6 +36,7 @@ export const API_TOKEN_MAX_MS = 12 * 60 * 60_000;
 
 interface Active {
   cardId: string;
+  requestedBy: string;
   hsid: string;
   until: number;
   token: string | null;
@@ -75,19 +76,24 @@ export class ApiTokenBilling {
         if (decision !== 'use-api-token') return;
         const token = await this.#keystore.fetch(card.cardId);
         const until = this.#clock() + ttl;
-        this.#active.set(r.hsid, { cardId: card.cardId, hsid: r.hsid, until, token, injected: false });
+        // the row first (Aegis C7): an activation never exists without its billing.api.active
         await this.#log('billing.api.active', { hsid: r.hsid, until: new Date(until).toISOString(), cardId: card.cardId }, { session: r.hsid });
+        this.#active.set(r.hsid, { cardId: card.cardId, requestedBy: r.principal, hsid: r.hsid, until, token, injected: false });
       },
     });
     await this.#log('billing.api.card.requested', { cardId: card.cardId, hsid: r.hsid }, { session: r.hsid });
     return card;
   }
 
-  /** The billing an hsid may use: `api-token:<cardId>` while active, else null (subscription). */
-  billingFor(hsid: string | undefined): string | null {
-    if (!hsid) return null;
+  /**
+   * The billing the KERNEL's own spawn of `hsid` for `principal` may use
+   * (Aegis C3): `api-token:<cardId>` only for the card's own hsid, requested by
+   * that principal, before its single injection; else null (subscription).
+   * Never consulted for a caller-named scope.session.
+   */
+  billingForKernelSpawn(hsid: string, principal: string): string | null {
     const a = this.#active.get(hsid);
-    return a && a.until > this.#clock() ? `api-token:${a.cardId}` : null;
+    return a && !a.injected && a.requestedBy === principal && a.until > this.#clock() ? `api-token:${a.cardId}` : null;
   }
 
   /** Inject the token into exactly one child's env (single use); null if none active or already injected. */

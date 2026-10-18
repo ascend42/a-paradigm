@@ -28,7 +28,7 @@ export interface InstallCardOptions {
 }
 
 export async function raiseInstallCard(broker: ApprovalBroker, o: InstallCardOptions): Promise<CardV1> {
-  const { record, detail, block, contentHash } = rederiveInstallDetail(o.home, o.name, o.cardId);
+  const { record, detail, lines, detailHash } = rederiveInstallDetail(o.home, o.name, o.cardId);
   if (record.card.state !== 'pending') throw fail('BAD_REQUEST', 'bad-params', `install card ${o.cardId} is already decided`, { cardId: o.cardId });
   return broker.raise({
     kind: 'install',
@@ -37,10 +37,9 @@ export async function raiseInstallCard(broker: ApprovalBroker, o: InstallCardOpt
     ...(record.card.hsid ? { hsid: record.card.hsid } : {}),
     attended: record.card.attended,
     detail: detail as unknown as Record<string, unknown>,
-    lines: [],
-    block,
-    contentHash,
-    presence: { purpose: 'mod.install', binding: () => installPresenceBinding(o.cardId, contentHash), consumedByEffect: true },
+    // rendered by the broker's sanitizer (flags enter contentHash, Aegis C4); presence binds the detail hash + decision
+    lines,
+    presence: { purpose: 'mod.install', binding: (decision) => installPresenceBinding(o.cardId, detailHash, decision === 'install' ? 'install' : 'deny'), consumedByEffect: true },
     effect: (decision, ctx) => {
       decideInstall(o.home, o.name, o.cardId, decision === 'install' ? 'install' : 'deny', { presenceToken: ctx.token, authority: o.authority, ...(o.emit ? { emit: o.emit } : {}) });
     },

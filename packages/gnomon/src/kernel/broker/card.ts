@@ -6,6 +6,10 @@
  * record"). Everything a human sees is composed HERE from the broker's own
  * record — never from a requester's rendering:
  *
+ *   - DEVIATION (recorded, reviewer 3): §4.5 lets the sanitizer strip; for
+ *     zero-width/bidi we ESCAPE instead of strip so the human sees something
+ *     was there. Tag characters (U+E0000 to U+E007F) are STRIPPED (they spell
+ *     hidden ASCII) and flag hidden-chars; C0 and C1 controls are escaped;
  *   - lines are sanitized: hidden characters (zero-width, soft hyphen, BOM)
  *     and bidi controls are replaced by visible `\u{…}` escapes and set the
  *     `hidden-chars` / `bidi` flags (§4.5);
@@ -24,8 +28,13 @@ import { canonicalJson, hex, sha256, type CardFlag, type CardV1 } from '@a-compa
 import type { KeyRing, Signer } from '../log/signer.js';
 import { validDecisions } from './classes.js';
 
-const BIDI = /[‪-‮⁦-⁩‎‏؜]/gu;
-const HIDDEN = /[​-‍⁠-⁤﻿­᠎]/gu;
+const BIDI = /[\u202A-\u202E\u2066-\u2069\u200E\u200F\u061C]/gu;
+const HIDDEN = /[\u200B-\u200D\u2060-\u2064\uFEFF\u00AD\u180E]/gu;
+/** Unicode tag characters (U+E0000 to U+E007F): invisible ASCII smuggling, STRIPPED and flagged hidden-chars. */
+const TAGS = /[\u{E0000}-\u{E007F}]/gu;
+/** C0 and C1 controls (U+0080 to U+009F incl. U+009B CSI) except tab and newline: escaped visibly. */
+// eslint-disable-next-line no-control-regex
+const CONTROLS = /[\u0000-\u0008\u000B-\u001F\u007F-\u009F]/g;
 const MAX_LINE = 512;
 
 export function sha256Hex(s: string): string {
@@ -43,8 +52,10 @@ export function sanitizeLine(text: string): { text: string; flags: CardFlag[] } 
   if (HIDDEN.test(out)) flags.push('hidden-chars');
   HIDDEN.lastIndex = 0;
   out = out.replace(HIDDEN, esc);
-  // eslint-disable-next-line no-control-regex
-  out = out.replace(/[\u0000-\u0008\u000B-\u001F\u007F]/g, (c) => esc(c));
+  if (TAGS.test(out) && !flags.includes('hidden-chars')) flags.push('hidden-chars');
+  TAGS.lastIndex = 0;
+  out = out.replace(TAGS, '');
+  out = out.replace(CONTROLS, (c) => esc(c));
   if (out.length > MAX_LINE) out = `${out.slice(0, MAX_LINE - 1)}…`;
   return { text: out, flags };
 }

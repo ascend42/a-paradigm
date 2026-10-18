@@ -926,7 +926,16 @@ components:
       ended / refused and the status indicator API CREDITS ACTIVE. port.ts —
       the #socket port: approve, permit.reserve (+ release), connection close,
       status cards / budget / billing, guiSessions[].unlock. The spec declares
-      no signals; events are §9.1 approval.* / billing.* kinds.
+      no signals; events are §9.1 approval.* / billing.* kinds. Round 2
+      (Aegis C1): GUI vs CLI is decided by the authenticated credential (only
+      a launch-token GUI session may hold an unlock), never by the hello
+      surface; expiry skips a card being decided and the decision re-checks
+      the card and the connection after its last await (one terminal row);
+      the sanitizer strips tag characters and escapes C0/C1 controls; the
+      install card is rendered by the broker from re-derived lines, readPaths
+      and linked source validated, presence bound to the decision; effect
+      failures are recorded approval.suspect{why:effect-failed}
+      (approval.decide is a record, never authority).
     path: src/kernel/broker/
     type: module
     tags: [gnomon, kernel, broker, approvals, presence, paradigm-8, m1.6]
@@ -961,7 +970,18 @@ components:
       only via recordStreamUsage(turn.usage|turn.result), malformed ⇒ corrupt;
       ladder rungs 50/75/90/100 once per scope per day; a mid-turn breach ⇒
       budget.pause + onBreach (the M1.7 supervisor kills the pgid).
-      parseReserveParams — the caller's own user scope, no usage params.
+      parseReserveParams — no usage params; the user rung is the human the
+      caller runs for (P8-D91: one bucket for the human and their agents;
+      before M1.7 an agent is attributed to the root's human principal, the
+      founder, since 8.0 is single-human); an agent may not name
+      repo/loop/session (the kernel binds them, M1.7). Round 2: day caps and
+      the window count outstanding permit headroom and clamp new limits;
+      expired permits free concurrency; api-token billing only on the kernel
+      spawn path for the card's own hsid and requester, once, with the law-7
+      scan still run (only the injected key ignored); resume is a logged
+      one-window allowance; root config carries a version counter (older ⇒
+      corrupt). Day/window counters are in memory (rebuild at boot deferred
+      beside S-L2).
     path: src/kernel/budget/
     type: module
     tags: [gnomon, kernel, budget, fuse, law-7, paradigm-8, m1.6]

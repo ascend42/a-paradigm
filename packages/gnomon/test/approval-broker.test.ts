@@ -80,7 +80,8 @@ function rig(o: { presence?: PresenceProvider; now?: { t: number }; root?: DevTe
   return { broker, rows, ring, sig: ak.sig, now, kinds: () => rows.map((r) => r.kind) };
 }
 
-const H = (connId = 'conn:01HZZZZZZZZZZZZZZZZZZZZZZA', surface: string | null = 'browser') => ({ connId, principal: HUMAN, principalClass: 'human', surface });
+/** A human connection; `credential: 'gui'` = a launch-token GUI session (the only class that may hold an unlock, Aegis C1). */
+const H = (connId = 'conn:01HZZZZZZZZZZZZZZZZZZZZZZA', surface: string | null = 'browser', credential = 'gui') => ({ connId, principal: HUMAN, principalClass: 'human', surface, credential });
 const permission = (b: ApprovalBroker, lines = ['Bash: rm -rf build/']) => b.raise({ kind: 'permission', requestedBy: AGENT, attended: true, detail: { tool: 'Bash', input: 'rm -rf build/' }, lines, tool: 'Bash', toolInput: { command: 'rm -rf build/' } });
 
 async function refusal(p: Promise<unknown>): Promise<{ code: string; gate: string; reason?: string; data: Record<string, unknown> }> {
@@ -110,6 +111,13 @@ describe('#approval-broker cards (§3.4 card:v1)', () => {
     const r = rig();
     const c = await permission(r.broker, ['rm‮-rf​ /']);
     expect(c.flags).toEqual(['bidi', 'hidden-chars']);
+    // tag characters are stripped and flag hidden-chars; C1 controls (incl. CSI U+009B) are escaped like C0
+    const t = await permission(r.broker, [`ok${String.fromCodePoint(0xe0041, 0xe0042)} ${String.fromCharCode(0x9b)}31m ${String.fromCharCode(0x85)}x`]);
+    expect(t.flags).toEqual(['hidden-chars']);
+    const text = JSON.stringify(t.block);
+    expect(text).not.toMatch(/[\u{E0000}-\u{E007F}\u0080-\u009F]/u);
+    expect(text).toContain('\\\\u{9B}');
+    expect(text).toContain('\\\\u{85}');
     expect(JSON.stringify(c.block)).not.toMatch(/[‮​]/);
     expect(JSON.stringify(c.block)).toContain('\\\\u{202E}');
   });
@@ -251,7 +259,7 @@ describe('G-BRK-05 presence classes and the per-connection cached unlock', () =>
     expect(await refusal(r.broker.approve(H(A), { cardId: c3.cardId, decision: 'allow', decisionSig: r.sig(c3.cardId, 'allow', c3.contentHash) }))).toMatchObject({ reason: 'presence' });
     touch = true;
     const cli = 'conn:01HZZZZZZZZZZZZZZZZZZZZZZC';
-    const d = await r.broker.approve(H(cli, 'cli'), { cardId: c3.cardId, decision: 'allow', decisionSig: r.sig(c3.cardId, 'allow', c3.contentHash) });
+    const d = await r.broker.approve(H(cli, 'cli', 'device'), { cardId: c3.cardId, decision: 'allow', decisionSig: r.sig(c3.cardId, 'allow', c3.contentHash) });
     expect(d).toMatchObject({ presence: 'cli', via: 'cli' });
     expect(r.broker.unlocks.state(cli)).toBeNull();
     expect(r.rows.filter((x) => x.kind === 'approval.suspect').map((x) => x.payload.why)).toContain('cli-provenance-unknown');
@@ -277,9 +285,52 @@ describe('G-BRK-05 presence classes and the per-connection cached unlock', () =>
     const c = await permission(r.broker);
     const sig = r.sig(c.cardId, 'allow', c.contentHash);
     await r.broker.approve(H(), { cardId: c.cardId, decision: 'allow', decisionSig: sig });
-    expect(r.rows.find((x) => x.kind === 'approval.decide')!.payload).toMatchObject({ cardId: c.cardId, decision: 'allow', by: HUMAN, decisionSig: sig, presence: 'fresh', via: 'gui', connId: H().connId, cli: { client: 'browser', connId: H().connId } });
+    expect(r.rows.find((x) => x.kind === 'approval.decide')!.payload).toMatchObject({ cardId: c.cardId, decision: 'allow', by: HUMAN, decisionSig: sig, presence: 'fresh', via: 'gui', connId: H().connId, cli: { client: 'gui', connId: H().connId } });
     expect(await refusal(r.broker.approve(H(), { cardId: c.cardId, decision: 'allow', decisionSig: sig }))).toMatchObject({ code: 'BAD_REQUEST' }); // decided: not decidable again
     expect(await refusal(r.broker.approve(H(), { cardId: c.cardId, decision: 'install', decisionSig: sig }))).toMatchObject({ code: 'BAD_REQUEST' });
+  });
+});
+
+describe('Aegis C1: the credential, not the self-declared surface, decides GUI vs CLI', () => {
+  it('a device-key connection claiming surface browser gets no unlock and is recorded via cli with a suspect row', async () => {
+    const r = rig({ presence: touching() });
+    const c = await permission(r.broker);
+    const conn = 'conn:01HZZZZZZZZZZZZZZZZZZZZZZD';
+    const d = await r.broker.approve(H(conn, 'browser', 'device'), { cardId: c.cardId, decision: 'allow', decisionSig: r.sig(c.cardId, 'allow', c.contentHash) });
+    expect(d).toMatchObject({ presence: 'cli', via: 'cli' });
+    expect(r.broker.unlocks.state(conn)).toBeNull();
+    expect(r.kinds()).not.toContain('approval.unlock');
+    expect(r.rows.filter((x) => x.kind === 'approval.suspect').map((x) => x.payload.why)).toContain('cli-provenance-unknown');
+  });
+
+  it('a closed connection never opens an unlock nor appends approval.decide', async () => {
+    const r = rig({ presence: touching() });
+    const c = await permission(r.broker);
+    const x = await refusal(r.broker.approve({ ...H(), isLive: () => false }, { cardId: c.cardId, decision: 'allow', decisionSig: r.sig(c.cardId, 'allow', c.contentHash) }));
+    expect(x).toMatchObject({ code: 'ENGINE', reason: 'gone' });
+    expect(r.kinds()).not.toContain('approval.decide');
+    expect(r.kinds()).not.toContain('approval.unlock');
+  });
+});
+
+describe('expiry vs an in-flight decision', () => {
+  it('the clock passes the timeout while presence is being proved: exactly one terminal row', async () => {
+    const now = { t: Date.UTC(2026, 9, 18, 12) };
+    let broker: ApprovalBroker | undefined;
+    const slow: PresenceProvider = {
+      prove: async (req) => {
+        now.t += 11 * 60_000; // past the permission timeout
+        expect(await broker!.expireDue()).toEqual([]); // the sweep skips a card being decided
+        return mintTestPresence(req.purpose, { bind: req.binding });
+      },
+    };
+    const r = rig({ presence: slow, now });
+    broker = r.broker;
+    const c = await permission(r.broker);
+    await r.broker.approve(H(), { cardId: c.cardId, decision: 'allow', decisionSig: r.sig(c.cardId, 'allow', c.contentHash) });
+    await r.broker.expireDue();
+    expect(r.kinds().filter((k) => k === 'approval.decide' || k === 'approval.expire')).toEqual(['approval.decide']);
+    expect(await r.broker.decisionOf(c.cardId)).toBe('allow');
   });
 });
 
@@ -305,8 +356,8 @@ describe('install card under the broker (T-2026-10-18-008)', () => {
     if (st.state !== 'staged') throw new Error('expected staged');
     const r = rig({ presence: touching(), root: auth });
     const card = await raiseInstallCard(r.broker, { home, name: 'diff-lens', cardId: st.cardId, authority: auth });
-    expect(card.contentHash).toBe(st.record.card.contentHash);
     expect(validateCardV1(card)).toEqual([]);
+    expect(JSON.stringify(card.block)).toContain('diff-lens'); // rendered by the broker from the re-derived lines
     const d = await r.broker.approve(H(), { cardId: card.cardId, decision: 'install', decisionSig: r.sig(card.cardId, 'install', card.contentHash) });
     expect(d.state).toBe('decided');
     expect(r.rows.find((x) => x.kind === 'approval.decide')!.payload.rootSig).toBeDefined();
@@ -352,9 +403,13 @@ describe('G-SUB-02 / G-SUB-03 the per-use api-token card', () => {
     expect(billing.status()).toMatchObject({ mode: 'subscription', indicator: null });
     await r.broker.approve(H(), { cardId: card.cardId, decision: 'use-api-token', decisionSig: r.sig(card.cardId, 'use-api-token', card.contentHash) });
     expect(billing.status()).toMatchObject({ mode: 'api-token', indicator: 'API CREDITS ACTIVE' });
-    expect(billing.billingFor(HSID)).toBe(`api-token:${card.cardId}`);
+    expect(billing.billingForKernelSpawn(HSID, AGENT)).toBeNull(); // bound to card.requestedBy
+    expect(billing.billingForKernelSpawn('hsid:v1:01HYYYYYYYYYYYYYYYYYYYYYYY', HUMAN)).toBeNull(); // only the card's own hsid
+    expect(billing.billingForKernelSpawn(HSID, HUMAN)).toBe(`api-token:${card.cardId}`);
     expect(billing.takeEnvFor(HSID, { PATH: '/bin' })).toEqual({ PATH: '/bin', ANTHROPIC_API_KEY: 'sk-test-token' });
     expect(billing.takeEnvFor(HSID, { PATH: '/bin' })).toBeNull(); // exactly one child
+    expect(billing.billingForKernelSpawn(HSID, HUMAN)).toBeNull(); // the single injection ends api billing for later spawns
+    expect(billing.status().indicator).toBe('API CREDITS ACTIVE'); // the indicator stays for the card's validity
     await billing.onTurn(HSID);
     expect(r.kinds().filter((k) => k === 'billing.api.active')).toHaveLength(2);
     r.now.t += 30 * 60_000 + 1;

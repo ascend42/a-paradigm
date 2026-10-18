@@ -182,10 +182,84 @@ describe('law 7 inside the broker (BILLING_REFUSED)', () => {
   });
 });
 
+describe('round 2: api-token billing only on the kernel spawn path; headroom; expiry; config rollback', () => {
+  it('a caller-named scope.session never selects api-token billing; agents cannot name repo/loop/session (M1.7 binds them)', async () => {
+    for (const k of ['session', 'repo', 'loop']) expect(() => parseReserveParams(AGENT, 'agent', { kind: 'session.spawn', scope: { [k]: 'x' } })).toThrow(RefusedError);
+    const scan: BillingScanSource = { env: () => ({ ANTHROPIC_API_KEY: 'sk' }), layers: () => [] };
+    const r = rig({ billing: scan });
+    expect((await refusal(r.fuse.reserve(spawn({ scope: { user: 'p:abcdefgh/*', session: 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZZ' } })))).code).toBe('BILLING_REFUSED');
+  });
+
+  it('under an api-token the law-7 scan still runs, ignoring only the injected key', async () => {
+    const HS = 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZZ';
+    const tokens = { billingForKernelSpawn: (h: string, p: string) => (h === HS && p === HUMAN ? 'api-token:card:01HZZZZZZZZZZZZZZZZZZZZZZZ' : null) };
+    const mk = (env: Record<string, string>) =>
+      new BudgetFuse({ kernel: SoftwareEd25519Signer.generate('kernel'), logId: 'log:x', log: async () => undefined, billing: { env: () => env, layers: () => [] }, apiTokens: tokens as never });
+    const req = { principal: HUMAN, principalClass: 'human', attended: true, kind: 'session.spawn', scope: { user: HUMAN }, backend: 'claude-code' as const, kernelSpawn: { hsid: HS } };
+    await expect(mk({ ANTHROPIC_API_KEY: 'sk' }).reserve(req)).resolves.toMatchObject({ billing: 'api-token:card:01HZZZZZZZZZZZZZZZZZZZZZZZ' });
+    expect((await refusal(mk({ ANTHROPIC_BASE_URL: 'http://x' }).reserve(req))).code).toBe('BILLING_REFUSED');
+  });
+
+  it('day caps count outstanding headroom and clamp new limits; expired permits do not hold concurrency', async () => {
+    const cfg = structuredClone(DEFAULT_FUSE);
+    cfg.tokens.user = 1000;
+    cfg.concurrent.user = 1;
+    const now = { t: Date.UTC(2026, 9, 18, 12) };
+    const kernel = SoftwareEd25519Signer.generate('kernel');
+    const fuse = new BudgetFuse({ kernel, logId: 'log:x', log: async () => undefined, config: cfg, billing: clean, clock: () => now.t, permitTtlMs: 60_000 });
+    const human = (kind: string) => ({ principal: HUMAN, principalClass: 'human', attended: true, kind, scope: { user: HUMAN }, backend: 'claude-code' as const, limits: { tokens: 700 } });
+    const a = await fuse.reserve(human('turn'));
+    const b = await fuse.reserve(human('turn'));
+    expect(a.limits.tokens).toBe(700);
+    expect(b.limits.tokens).toBe(300); // clamped to what is left of the day
+    expect((await refusal(fuse.reserve(human('turn')))).data).toMatchObject({ dimension: 'tokens' });
+    await fuse.reserve(human('session.spawn')).catch(() => undefined);
+    now.t += 61_000; // every permit expired
+    await expect(fuse.reserve(human('session.spawn'))).resolves.toMatchObject({ decision: 'allow' });
+  });
+
+  it('a signed config older than the newest applied one is a rollback ⇒ corrupt (deny)', () => {
+    const home = tmp();
+    const root = new DevTestRootAuthority(DEV_TEST_ROOT_ACK);
+    writeSignedConfig(home, root, { fuse: { concurrent: { user: 2 } } }, 5);
+    expect(loadFuseConfig(home, root)).toMatchObject({ corrupt: false, config: { concurrent: { user: 2 } } });
+    writeSignedConfig(home, root, { fuse: { concurrent: { user: 50 } } }, 4);
+    expect(loadFuseConfig(home, root).corrupt).toBe(true);
+  });
+
+  it('release twice concurrently: one release row', async () => {
+    const r = rig();
+    const p = await r.fuse.reserve(spawn());
+    const out = await Promise.allSettled([r.fuse.release(p.permitId, AGENT), r.fuse.release(p.permitId, AGENT)]);
+    expect(out.filter((x) => x.status === 'fulfilled')).toHaveLength(1);
+    expect(r.kinds('permit.release')).toHaveLength(1);
+  });
+});
+
+describe('P8-D91 one user bucket for the human and their agents', () => {
+  it('human + agent reserves both count against one user-rung day limit', async () => {
+    const cfg = structuredClone(DEFAULT_FUSE);
+    cfg.tokens.user = 1000;
+    const r = rig({ config: cfg });
+    const userOf = () => HUMAN; // the daemon: the root's human principal before M1.7
+    const h = parseReserveParams(HUMAN, 'human', { kind: 'turn', limits: { tokens: 600 } }, userOf);
+    const a = parseReserveParams(AGENT, 'agent', { kind: 'turn', limits: { tokens: 600 } }, userOf);
+    if (h.op !== 'reserve' || a.op !== 'reserve') throw new Error('expected reserve');
+    expect(a.req.scope.user).toBe(HUMAN);
+    const hp = await r.fuse.reserve(h.req);
+    await r.fuse.recordStreamUsage({ source: 'turn.usage', permitId: hp.permitId, tokens: 600 });
+    const ap = await r.fuse.reserve(a.req);
+    expect(ap.limits.tokens).toBe(400); // what the human left in the shared day bucket
+    await r.fuse.recordStreamUsage({ source: 'turn.usage', permitId: ap.permitId, tokens: 400 });
+    expect((await refusal(r.fuse.reserve(h.req))).data).toMatchObject({ dimension: 'tokens', scope: 'user' });
+  });
+});
+
 describe('G-BUD-01..03', () => {
   it('G-BUD-01: usage only from stream events — permit.reserve params carry no usage; a non-stream source is refused as corrupt', async () => {
     for (const k of ['usage', 'spent', 'tokensUsed']) expect(() => parseReserveParams(AGENT, 'agent', { kind: 'turn', [k]: 0 })).toThrow(RefusedError);
-    expect(() => parseReserveParams(AGENT, 'agent', { kind: 'turn', scope: { user: HUMAN } })).toThrow(RefusedError); // the user rung is the caller's
+    expect(() => parseReserveParams(AGENT, 'agent', { kind: 'turn', scope: { user: 'p:abcdefgh/other' } }, () => HUMAN)).toThrow(RefusedError); // the user rung is the human the caller runs for
+    expect(() => parseReserveParams(AGENT, 'agent', { kind: 'turn' })).toThrow(RefusedError); // no resolvable human ⇒ refused
     expect(parseReserveParams(HUMAN, 'human', { kind: 'turn', scope: { repo: 'repo:a' } })).toMatchObject({ op: 'reserve', req: { attended: true, scope: { user: HUMAN, repo: 'repo:a' } } });
     const r = rig();
     const p = await r.fuse.reserve(spawn());
@@ -236,8 +310,12 @@ describe('G-SUB-04 subscription windows: the armada pauses at the threshold, the
     expect(r.broker!.cards().filter((c) => c.kind === 'budget')).toHaveLength(1);
     expect(r.kinds('budget.pause').map((y) => y.payload.scope)).toEqual(['armada']);
     await r.fuse.resume(HUMAN);
+    expect(r.kinds('budget.resume').at(-1)!.payload).toMatchObject({ by: HUMAN, allowance: { windowMs: cfg.subscription.windowMs } }); // a logged one-window allowance
     await expect(r.fuse.reserve(spawn({ kind: 'turn' }))).resolves.toMatchObject({ decision: 'allow' });
+    expect(r.fuse.status()).toMatchObject({ subscriptionWindow: { used: { n: 700 } } }); // resume never erases the window
   });
+
+  it.todo('the armada pause clears when the rolling window falls under the threshold and a re-crossing raises a new card — exercised with the S-L2 chain clock (next slice)');
 
   it('quota.error opens the breaker for 60 min (or a human resume)', async () => {
     const r = rig();
@@ -251,4 +329,5 @@ describe('G-SUB-04 subscription windows: the armada pauses at the threshold, the
   it.todo('subscription window shape learned from turn.usage/turn.result and rate-limit headers / quota.error — M1.7 (#claude-adapter)');
   it.todo('compute dimension: CPU seconds per hour and wall time per local turn enforced on local sessions — M1.8 (#local-runner, G-LAW-01c)');
   it.todo('day windows from the chain’s last event time (S-L2) wired to #kernel-log head time — next M1.6 slice (the daemon passes the wall clock today)');
+  it.todo('DEFERRED: rebuild the day and window counters from budget.usage rows at boot (today in memory; a restart forgets the day) — next M1.6 slice with S-L2');
 });

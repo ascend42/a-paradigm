@@ -26,6 +26,8 @@ import type { RootAuthority } from '../identity/root-authority.js';
 
 export const ROOT_CONFIG_FILE = 'config.signed.json';
 export const ROOT_CONFIG_SCHEMA = 'gnomon-root-config:v1' as const;
+/** The highest root-config `version` this home has applied (rollback refusal). */
+export const CONFIG_SEEN_FILE = 'config.seen.json';
 /** OPEN 6: fixed until the window shape is learned. */
 export const HUMAN_RESERVE = 0.3;
 
@@ -121,14 +123,28 @@ export function loadFuseConfig(home: string, root: RootAuthority, emit: ConfigEv
     return { config: structuredClone(DEFAULT_FUSE), signed: false, corrupt: false, hash: null };
   }
   const hash = `sha256:${hex(sha256(canonicalJson(doc.row)))}`;
+  // version counter (Aegis C7): a signed config older than the newest one this home has applied is a rollback ⇒ corrupt (deny)
+  const version = (doc.row as { version?: unknown }).version ?? 0;
+  const seenFile = path.join(home, CONFIG_SEEN_FILE);
+  let seen = 0;
+  try {
+    seen = Number((JSON.parse(fs.readFileSync(seenFile, 'utf8')) as { version?: unknown }).version ?? 0);
+  } catch {
+    seen = 0;
+  }
+  if (typeof version !== 'number' || !Number.isInteger(version) || version < 0 || version < seen) {
+    emit('config.loaded', { hash, signed: true, corrupt: true, version: String(version), seen });
+    return { config: structuredClone(DEFAULT_FUSE), signed: true, corrupt: true, hash };
+  }
+  if (version > seen) fs.writeFileSync(seenFile, `${JSON.stringify({ version })}\n`, { mode: 0o600 });
   const merged = mergeFuse(doc.row!.config?.fuse);
   emit('config.loaded', { hash, signed: true, ...(merged ? {} : { corrupt: true }) });
   return merged ? { config: merged, signed: true, corrupt: false, hash } : { config: structuredClone(DEFAULT_FUSE), signed: true, corrupt: true, hash };
 }
 
 /** Write a root-signed config (the `gnomon config` root act; tests). Throws RootUnavailableError without a root. */
-export function writeSignedConfig(home: string, root: RootAuthority, config: Record<string, unknown>): void {
-  const row = { schemaVersion: ROOT_CONFIG_SCHEMA, config };
+export function writeSignedConfig(home: string, root: RootAuthority, config: Record<string, unknown>, version = 0): void {
+  const row = { schemaVersion: ROOT_CONFIG_SCHEMA, version, config };
   const { signer, sig } = root.signRow(row);
   fs.writeFileSync(path.join(home, ROOT_CONFIG_FILE), `${JSON.stringify({ row, signer, sig })}\n`, { mode: 0o600 });
 }

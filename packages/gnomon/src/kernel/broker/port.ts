@@ -9,7 +9,7 @@
 import { RootUnavailableError } from '../identity/root-authority.js';
 import { RefusedError } from '@a-company/gnomon-contracts';
 import type { ApprovalBroker, DecideContext } from './broker.js';
-import { parseReserveParams, type BudgetFuse } from '../budget/fuse.js';
+import { parseReserveParams, type BudgetFuse, type UserOf } from '../budget/fuse.js';
 
 export interface ApprovalPort {
   approve(ctx: DecideContext, params: unknown): Promise<unknown>;
@@ -27,11 +27,11 @@ function asRefused(err: unknown): unknown {
   return err;
 }
 
-export function createApprovalPort(p: { broker: ApprovalBroker; fuse: BudgetFuse; extraStatus?: () => Record<string, unknown> }): ApprovalPort {
+export function createApprovalPort(p: { broker: ApprovalBroker; fuse: BudgetFuse; extraStatus?: () => Record<string, unknown>; userOf?: UserOf }): ApprovalPort {
   return {
     approve: (ctx, params) => p.broker.approve(ctx, params).catch((e: unknown) => Promise.reject(asRefused(e))),
     reserve: async (ctx, params) => {
-      const parsed = parseReserveParams(ctx.principal, ctx.principalClass, params);
+      const parsed = parseReserveParams(ctx.principal, ctx.principalClass, params, p.userOf);
       if (parsed.op === 'release') {
         await p.fuse.release(parsed.permitId, ctx.principal);
         return { released: parsed.permitId };

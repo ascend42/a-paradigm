@@ -464,7 +464,7 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       if (cls === 'voice') throw asRpcRefusal(voiceApproveRefusal()); // every form, before any port (G-ABI-02 voice row)
       if (cls === 'human' && o.approvals) {
         try {
-          return await o.approvals.approve({ connId: s.connId, principal: s.principal!, principalClass: cls, surface: s.client?.surface ?? null }, frame.params);
+          return await o.approvals.approve({ connId: s.connId, principal: s.principal!, principalClass: cls, surface: s.client?.surface ?? null, credential: s.credential ?? 'device', isLive: () => !ctx.closed && conns.get(s.connId) === s }, frame.params);
         } catch (err) {
           throw asRpcRefusal(err);
         }
@@ -475,7 +475,7 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
     }
     if (m === 'permit.reserve' && (cls === 'human' || cls === 'agent') && o.approvals) {
       try {
-        return await o.approvals.reserve({ connId: s.connId, principal: s.principal!, principalClass: cls, surface: s.client?.surface ?? null }, frame.params);
+        return await o.approvals.reserve({ connId: s.connId, principal: s.principal!, principalClass: cls, surface: s.client?.surface ?? null, credential: s.credential ?? 'device' }, frame.params);
       } catch (err) {
         throw asRpcRefusal(err);
       }

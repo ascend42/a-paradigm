@@ -341,8 +341,8 @@ export interface DecideOptions {
  * already exists completes idempotently without new rows.
  */
 /** What a `mod.install` presence token is bound to (T-2026-10-18-008): the card and the hash of the detail it shows. */
-export function installPresenceBinding(cardId: string, contentHash: string): Readonly<Record<string, string>> {
-  return { action: 'mod.install', cardId, contentHash };
+export function installPresenceBinding(cardId: string, contentHash: string, decision: 'install' | 'deny'): Readonly<Record<string, string>> {
+  return { action: 'mod.install', cardId, contentHash, decision };
 }
 
 /** What a `mod.rollback` presence token is bound to: the mod and the snapshot it re-pins (`(previous)` = the one before the current pin). */
@@ -357,7 +357,7 @@ export function rollbackPresenceBinding(name: string, toPackageHash: string | un
  * from what the snapshot derives, or when the snapshot no longer hashes to its
  * packageHash. Read-only.
  */
-export function rederiveInstallDetail(home: string, name: string, cardId: string): { record: StagedRecord; detail: InstallCardDetail; block: Record<string, unknown>; contentHash: string } {
+export function rederiveInstallDetail(home: string, name: string, cardId: string): { record: StagedRecord; detail: InstallCardDetail; lines: string[]; detailHash: string } {
   if (typeof cardId !== 'string' || !CARD_ID.test(cardId)) throw new ManifestRefusal('SCHEMA', 'cardId must be card:<ULID>', { cardId: String(cardId) });
   if (typeof name !== 'string' || !/^[a-z][a-z0-9-]{0,63}$/.test(name)) throw new ManifestRefusal('SCHEMA', 'malformed mod name', { name: String(name) });
   const rec = readStaged(home, name, cardId);
@@ -371,7 +371,23 @@ export function rederiveInstallDetail(home: string, name: string, cardId: string
   const derived: InstallCardDetail = { ...rec.detail, ...surf, name: manifest.name, kind: manifest.kind, version: manifest.version, tier, manifestHash: mh };
   const claimed = canonicalJson({ mh: rec.detail.manifestHash, tier: rec.detail.tier, name: rec.detail.name, ...pick(rec.detail) });
   if (claimed !== canonicalJson({ mh, tier, name: manifest.name, ...pick(derived) })) throw new ManifestRefusal('INTEGRITY', `install card ${cardId} does not match its pinned snapshot`, { name, cardId });
-  return { record: rec, detail: derived, block: blockFor(derived), contentHash: sha(canonicalJson(derived)) };
+  // Aegis C4: readPaths and source are not trusted from the staged file either
+  if (derived.readPaths.length && !derived.capabilities.includes('knowledge:provide')) throw new ManifestRefusal('INTEGRITY', `install card ${cardId}: read paths without knowledge:provide`, { name, cardId });
+  for (const p of derived.readPaths) {
+    if (typeof p !== 'string' || !path.isAbsolute(p) || path.normalize(p) !== p || p.split(/[\\/]/).includes('..')) throw new ManifestRefusal('INTEGRITY', `install card ${cardId}: read path ${String(p).slice(0, 80)} is not an absolute normalized path`, { name, cardId });
+  }
+  if (derived.source !== 'package') {
+    const src = derived.source.startsWith('linked:') ? derived.source.slice(7) : '';
+    let linkedHash: string | null = null;
+    try {
+      linkedHash = src && path.isAbsolute(src) ? hashSourceTree(src, name, noEvents).packageHash : null;
+    } catch {
+      linkedHash = null;
+    }
+    if (linkedHash !== derived.packageHash) throw new ManifestRefusal('INTEGRITY', `install card ${cardId}: the linked source no longer hashes to the snapshot`, { name, cardId });
+  }
+  const block = blockFor(derived) as { children: Array<{ text: string }> };
+  return { record: rec, detail: derived, lines: block.children.map((c) => c.text), detailHash: sha(canonicalJson(derived)) };
 }
 
 /**
@@ -389,7 +405,7 @@ export function decideInstall(home: string, name: string, cardId: string, decisi
   if (!rec || rec.card.cardId !== cardId || rec.detail.name !== name) throw new ManifestRefusal('NOT_INSTALLED', `no install card ${cardId} for ${name}`, { name, cardId });
   if (sha(canonicalJson(rec.detail)) !== rec.card.contentHash) throw new ManifestRefusal('INTEGRITY', `install card ${cardId}: contentHash does not match its detail`, { name, cardId });
   // bound presence (T-2026-10-18-008): the token names this card and the hash of THIS detail; trusted clock
-  const verdict = consumeBoundPresence(opts.presenceToken, 'mod.install', installPresenceBinding(cardId, rec.card.contentHash));
+  const verdict = consumeBoundPresence(opts.presenceToken, 'mod.install', installPresenceBinding(cardId, rec.card.contentHash, decision));
   if (verdict !== 'ok') throw new ManifestRefusal('GRANT', `install decision needs fresh presence (${verdict})`, { name, cardId, presence: verdict });
   const already = readGrants(home, opts.authority).installs.find((r) => r.cardId === cardId && r.packageHash === rec.detail.packageHash);
   if (rec.card.state !== 'pending') {

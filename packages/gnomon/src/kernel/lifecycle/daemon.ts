@@ -48,6 +48,7 @@
  */
 import * as nodeOs from 'node:os';
 import { ApprovalBroker } from '../broker/broker.js';
+import { readRegistry } from '../identity/registry.js';
 import { ApiTokenBilling } from '../broker/api-token.js';
 import { createApprovalPort } from '../broker/port.js';
 import { BudgetFuse } from '../budget/fuse.js';
@@ -398,7 +399,13 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
       layers: () => fileLayers([{ where: 'user-settings', path: path.join(nodeOs.homedir(), '.claude', 'settings.json'), kind: 'settings' }]),
     },
   });
-  const approvals = createApprovalPort({ broker, fuse, extraStatus: () => ({ billing: apiTokens.status() }) });
+  // P8-D91: an agent's spend lands in its human's user bucket. Its parent is not known at dispatch before
+  // M1.7, so it is attributed to the root's human principal (8.0 is single-human: the founder).
+  const founder = (): string | null => {
+    const humans = [...readRegistry(home, authority).devices.values()].filter((d) => d.principalKind === 'human').map((d) => d.principalId).sort();
+    return humans[0] ?? null;
+  };
+  const approvals = createApprovalPort({ broker, fuse, extraStatus: () => ({ billing: apiTokens.status() }), userOf: (_p, cls) => (cls === 'agent' ? founder() : null) });
   const brokerTimer = setInterval(() => {
     void broker.expireDue().catch(() => undefined);
     void apiTokens.sweep().catch(() => undefined);

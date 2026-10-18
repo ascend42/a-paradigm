@@ -51,8 +51,10 @@ function envHits(where: string, env: unknown): BillingHit[] {
 }
 
 /** Scan the env + layers; empty = subscription-only holds. */
-export function scanApiBilling(src: BillingScanSource): BillingHit[] {
-  const hits: BillingHit[] = [...envHits('env', src.env())];
+export function scanApiBilling(src: BillingScanSource, opts: { ignoreEnv?: readonly string[] } = {}): BillingHit[] {
+  const env = { ...src.env() };
+  for (const k of opts.ignoreEnv ?? []) delete env[k]; // the one injected API_TOKEN_ENV under an api-token card; every other path still refuses
+  const hits: BillingHit[] = [...envHits('env', env)];
   for (const l of src.layers()) {
     if (l.json === undefined) {
       hits.push({ where: l.where, key: '(unreadable)' });
