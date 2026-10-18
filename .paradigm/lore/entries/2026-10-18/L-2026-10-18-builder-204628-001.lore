@@ -1,0 +1,19 @@
+id: L-2026-10-18-builder-204628-001
+type: insight
+timestamp: '2026-10-18T20:46:28.416Z'
+author: builder
+title: 'p10m-repo-surfaces: --setting-sources user hides every repo surface; --settings hooks fire'
+summary: 'Real claude 2.1.302 under the generated session profile: with --setting-sources user no repo hook fired (project settings, skill frontmatter, agent frontmatter) and the repo''s skills, agents, slash commands and CLAUDE.md @imports did not load; kernel --settings UserPromptSubmit/PreToolUse hooks fired. SessionStart fired in neither arm under -p stream-json (control arm loaded every layer). Consequence: audited sessions lose project CLAUDE.md and repo skills/agents/commands — a product question for the founder.'
+symbols_touched:
+  - '#supervisor'
+  - '#claude-adapter'
+commit: 81d18f24
+tags:
+  - decision
+  - gnomon
+  - m1.7
+  - p8-d94
+git_context:
+  ref: 1a39430031f74253480c7795bab3450e60794d51
+  branch: gnomon/m17-slice2
+  dirty: false
