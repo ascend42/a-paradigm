@@ -15,11 +15,12 @@ import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
 import { readKernelPubs, recordKernelPub } from '../src/kernel/identity/index.js';
-import { acquireDaemonLock, pidPathOf, releaseDaemonLock } from '../src/kernel/lifecycle/index.js';
+import { acquireDaemonLock, DAEMON_PIDFILE_SCHEMA, pidPathOf, releaseDaemonLock } from '../src/kernel/lifecycle/index.js';
 import {
   completePendingQuarantine,
   evidenceNameFor,
   FileAnchorStore,
+  KeystoreAnchorStore,
   KernelLog,
   KeyRing,
   LogRefusal,
@@ -230,10 +231,10 @@ describe('#kernel-log quarantine crash safety: a crash at any step leaves the ol
     expect(tree(at.evidence!)).toEqual(before);
     expect(existsSync(path.join(at.staging!, QUARANTINE_JOURNAL))).toBe(true);
     const p = completePendingQuarantine(home);
-    expect(p).toEqual({ completed: { staging: at.staging, evidence: at.evidence, newLog: expect.any(String) }, abandoned: [], conflict: null });
+    expect(p).toEqual({ completed: { staging: at.staging, evidence: at.evidence, newLog: expect.any(String) }, abandoned: [], conflict: null, lockResidue: null });
     expect(genesisRow(home).payload.evidencePath).toBe(at.evidence);
     expect(verifyHome(home)).toMatchObject({ ok: true, kernelBinding: 'ok' });
-    expect(completePendingQuarantine(home)).toEqual({ completed: null, abandoned: [], conflict: null });
+    expect(completePendingQuarantine(home)).toEqual({ completed: null, abandoned: [], conflict: null, lockResidue: null });
   });
 
   it('crash after moved, then a re-run: it completes the interrupted quarantine and says so (no second move)', async () => {
@@ -264,11 +265,11 @@ describe('#kernel-log quarantine crash safety: a crash at any step leaves the ol
     const { home } = await fixture();
     await expect(quarantineWithSteps(opts(home), crashAt('installed'))).rejects.toThrow();
     expect(genesisRow(home).kind).toBe('daemon.log.quarantined');
-    expect(completePendingQuarantine(home)).toEqual({ completed: null, abandoned: [], conflict: null });
+    expect(completePendingQuarantine(home)).toEqual({ completed: null, abandoned: [], conflict: null, lockResidue: null });
   });
 
   it('every step is covered', () => {
-    expect([...QUARANTINE_STEPS]).toEqual(['identity-read', 'staging-created', 'staged', 'moved', 'installed']);
+    expect([...QUARANTINE_STEPS]).toEqual(['identity-read', 'staging-created', 'staged', 'evidence-renamed', 'moved', 'installed']);
   });
 });
 
@@ -295,7 +296,7 @@ describe('#kernel-log quarantine: the unsigned journal is checked before an inst
       path.join(staging, QUARANTINE_JOURNAL),
       JSON.stringify({ schemaVersion: 'gnomonQuarantineJournal:v1', home, evidence: '/', staging, quarantinedLog: 'log:x', newLog: 'log:y', at: '' }),
     );
-    expect(completePendingQuarantine(home)).toEqual({ completed: null, abandoned: [staging], conflict: null });
+    expect(completePendingQuarantine(home)).toEqual({ completed: null, abandoned: [staging], conflict: null, lockResidue: null });
     expect(existsSync(home)).toBe(false);
   });
 
@@ -304,7 +305,7 @@ describe('#kernel-log quarantine: the unsigned journal is checked before an inst
     const real = path.join(c.parent, 'real-staging');
     renameSync(c.staging, real);
     symlinkSync(real, c.staging, 'junction');
-    expect(completePendingQuarantine(c.home)).toEqual({ completed: null, abandoned: [c.staging], conflict: null });
+    expect(completePendingQuarantine(c.home)).toEqual({ completed: null, abandoned: [c.staging], conflict: null, lockResidue: null });
     expect(existsSync(c.home)).toBe(false);
   });
 
@@ -313,7 +314,7 @@ describe('#kernel-log quarantine: the unsigned journal is checked before an inst
     const jf = path.join(c.staging, QUARANTINE_JOURNAL);
     const j = JSON.parse(readFileSync(jf, 'utf8')) as Record<string, unknown>;
     writeFileSync(jf, JSON.stringify({ ...j, newLog: 'log:01JAAAAAAAAAAAAAAAAAAAAAAA' }));
-    expect(completePendingQuarantine(c.home)).toEqual({ completed: null, abandoned: [c.staging], conflict: null });
+    expect(completePendingQuarantine(c.home)).toEqual({ completed: null, abandoned: [c.staging], conflict: null, lockResidue: null });
     expect(existsSync(c.home)).toBe(false);
   });
 
@@ -404,6 +405,83 @@ describe('#kernel-log quarantine: every head source, the lock, busy homes (round
       if (s === 'moved') expect(completePendingQuarantine(home).completed).not.toBeNull(); // a daemon start
     });
     expect(r).toMatchObject({ outcome: 'quarantined', installedBy: 'another-process' });
+    expect(genesisRow(home).kind).toBe('daemon.log.quarantined');
+  });
+});
+
+describe('#kernel-log quarantine round 3: keystore tripwire, stale pidfile, lock residue, unreadable dbs, busy install', () => {
+  it('M1.3 TRIPWIRE (T-2026-10-18-007): the keystore anchor is still the stub; when it becomes real, re-check that quarantine never lets the per-user anchor speak for a staging/evidence/non-default home (OPEN 19)', () => {
+    expect(new KeystoreAnchorStore().read().state, 'KeystoreAnchorStore is real now: revisit verifiedQuarantineGenesis / readQuarantineIdentity per T-2026-10-18-007 and spec §22 OPEN 19').toBe('unavailable');
+  });
+
+  it('a non-default home and an evidence dir never consult the keystore anchor', async () => {
+    const { home } = await fixture(1);
+    expect(readQuarantineIdentity(home)!.observed.map((o) => o.source)).not.toContain('keystore-anchor');
+    const r = await quarantineLog(opts(home));
+    expect(readQuarantineIdentity(r.evidencePath, { keystore: false })!.observed.map((o) => o.source)).toEqual(['db', 'file-anchor']);
+  });
+
+  it("a dead daemon's stale pidfile is deleted from the evidence by the lock, but its bytes are kept in the journal", async () => {
+    const { home } = await fixture(1);
+    const stale = `${JSON.stringify({ schemaVersion: DAEMON_PIDFILE_SCHEMA, pid: 2147483646, startedAt: '2026-10-18T00:00:00.000Z', socketPath: path.join(home, 'gnomon.sock') })}\n`;
+    writeFileSync(pidPathOf(home), stale);
+    const before = tree(home);
+    const r = await quarantineLog(opts(home));
+    const j = JSON.parse(readFileSync(path.join(home, QUARANTINE_JOURNAL), 'utf8')) as { stalePidfile?: string };
+    expect(Buffer.from(j.stalePidfile!, 'base64').toString('utf8')).toBe(stale);
+    const { [path.basename(pidPathOf(home))]: _gone, ...rest } = before;
+    expect(tree(r.evidencePath)).toEqual(rest);
+  });
+
+  it('a crash between the step-4 rename and the lock release leaves our pidfile in the evidence; completePendingQuarantine reports it as lockResidue', async () => {
+    const { home } = await fixture(1);
+    let at: { staging?: string; evidence?: string } = {};
+    let lockBytes: Buffer | undefined;
+    await expect(
+      quarantineWithSteps(opts(home), (s, a) => {
+        if (s === 'evidence-renamed') {
+          at = a;
+          lockBytes = readFileSync(pidPathOf(a.evidence!));
+          throw new Error('crash');
+        }
+      }),
+    ).rejects.toThrow();
+    writeFileSync(pidPathOf(at.evidence!), lockBytes!); // a real crash never ran the release
+    const p = completePendingQuarantine(home);
+    expect(p.completed?.staging).toBe(at.staging);
+    expect(p.lockResidue).toBe(pidPathOf(at.evidence!));
+    expect(existsSync(pidPathOf(at.evidence!))).toBe(true); // reported, never deleted
+  });
+
+  it('a db that cannot be copied is reported unreadable (not silently dropped); the file anchor still names the head', async () => {
+    const { parent, home } = await fixture(2);
+    renameSync(path.join(home, 'kernel.db'), path.join(parent, 'aside.db'));
+    mkdirSync(path.join(home, 'kernel.db')); // a directory where the db should be: the copy fails
+    const id = readQuarantineIdentity(home)!;
+    expect(id.unreadable).toEqual([{ source: 'db', reason: expect.stringMatching(/^copy failed: E[A-Z]+$/) }]);
+    expect(id).toMatchObject({ source: 'file-anchor', head: { seq: 2 } });
+  });
+
+  it('EPERM/EBUSY on the step-5 install refuses ENGINE install-busy (retry); the pending install then finishes', async () => {
+    const { home } = await fixture(1);
+    let staging = '';
+    const e = await refusal(
+      quarantineWithSteps(
+        opts(home),
+        (s, a) => {
+          if (a.staging) staging = a.staging;
+        },
+        {
+          rename: (a, b) => {
+            if (a === staging && b === home) throw Object.assign(new Error('busy'), { code: 'EBUSY' });
+            fs.renameSync(a, b);
+          },
+        },
+      ),
+    );
+    expect([e.refusal.code, e.reason]).toEqual(['ENGINE', 'install-busy']);
+    expect(existsSync(home)).toBe(false);
+    expect(completePendingQuarantine(home).completed?.staging).toBe(staging);
     expect(genesisRow(home).kind).toBe('daemon.log.quarantined');
   });
 });

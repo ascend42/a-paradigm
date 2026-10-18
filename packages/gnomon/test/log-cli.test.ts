@@ -143,4 +143,14 @@ describe('gnomon log quarantine (CLI)', () => {
       db.close();
     }
   });
+
+  it('an unreadable db is shown in the readout as unreadable (copy failed …)', async () => {
+    const h = await home();
+    const { renameSync } = await import('node:fs');
+    renameSync(path.join(h, 'kernel.db'), path.join(path.dirname(h), 'aside.db'));
+    mkdirSync(path.join(h, 'kernel.db'));
+    const t = io(true, 'nope');
+    await runLogCommand(['quarantine', '--home', h], t);
+    expect(t.out()).toMatch(/ {4}db +unreadable \(copy failed: E[A-Z]+\)/);
+  });
 });

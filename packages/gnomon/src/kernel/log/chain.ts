@@ -163,6 +163,8 @@ export type LogRefusalReason =
   | 'daemon-running'
   | 'quarantine-pending'
   | 'home-busy'
+  | 'install-busy'
+  | 'no-space'
   | 'not-interactive'
   | 'not-confirmed';
 

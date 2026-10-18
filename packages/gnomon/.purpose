@@ -563,7 +563,17 @@ components:
       plain dirs owned by this uid (no symlink/junction), the evidence holds
       the journal's quarantinedLog, and the staging log's row 1 is a verified
       daemon.log.quarantined matching newLog / evidencePath / quarantinedLog;
-      anything else is abandoned (reported, never deleted). An interrupted
+      anything else is abandoned (reported, never deleted). These checks stop
+      accidents and planted junk; they are NOT authenticity (the journal is
+      unsigned and the staging keys are its own) — that waits for M1.3. The
+      staging genesis is checked on rows/chain/signature only, never via
+      verifyLog (which reads the per-user keystore anchor; M1.3 tripwire test
+      → T-2026-10-18-007), and the keystore anchor is consulted only for the
+      default home (spec §22 OPEN 19). Unreadable dbs are reported
+      (`unreadable: copy failed: CODE`), ENOSPC refuses no-space; EPERM/EBUSY
+      on the install refuses install-busy (retry; the pending install
+      finishes). A crash between the step-4 rename and the lock release
+      leaves our pidfile in the evidence, reported as lockResidue. An interrupted
       install is reported as outcome completed-pending (CLI: COMPLETED).
       Refuses daemon-running, not-a-home, nothing-to-quarantine,
       quarantine-pending, home-busy (EPERM/EBUSY/EACCES on the move),
@@ -575,8 +585,9 @@ components:
       NO PROOF OF PRESENCE — an interactive TTY + typed last 8 chars of the
       log id, passable by any same-user process owning a terminal, until
       presence lands at M1.3; at M1.3 the keystore anchor item must move with
-      the evidence; a stale pidfile of a dead daemon is replaced by the lock
-      (the only change to the old home).
+      the evidence; a stale pidfile of a dead daemon is DELETED from the
+      evidence by the lock acquisition, its bytes kept in the journal
+      (stalePidfile, base64) — the only change to the old home.
       `npm run
       test:perf` = scripts/test-perf.mjs (cmd.exe-safe; --passWithNoTests on
       win32 only, a missing perf file fails loudly elsewhere).

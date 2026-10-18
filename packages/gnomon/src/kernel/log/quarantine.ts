@@ -18,12 +18,16 @@
  *
  * IDENTITY (round 2, Aegis 1 / reviewer 4). Every head source is read — the
  * active db tip, the newest sealed segment tip, the file anchor and (when one
- * exists) the keystore anchor — and the HIGHEST seq is the quarantined head,
+ * exists, and ONLY for the default home: the keystore items are per OS user,
+ * not per home, spec §22 OPEN 19) the keystore anchor — and the HIGHEST seq
+ * is the quarantined head,
  * so a truncated db (anchor ahead) is never hidden behind the genesis row.
  * Every observed head is reported (and recorded in the journal) with a
  * `disagree` flag. Databases are read from COPIES (kernel.db + -wal, never
  * -shm) in a private scratch dir that is removed afterwards, because even a
- * read-only open of a WAL database writes its -shm.
+ * read-only open of a WAL database writes its -shm. A copy or open that fails
+ * is reported as `unreadable` (never silently dropped); ENOSPC refuses
+ * ENGINE{no-space}.
  *
  * CRASH SAFETY (each step is a crash point; tests inject a crash at each):
  *   1. take the daemon lock; read the identity;
@@ -39,18 +43,27 @@
  * A crash between 4 and 5 leaves the evidence and a complete staging dir and
  * no home: `completePendingQuarantine` (run first by every quarantine, by the
  * CLI and by `startDaemon` before it creates a home) finishes step 5 — only
- * after checking the journal against the filesystem and the staging log's
- * signed genesis row (round 2, Aegis 2): the journal is unsigned, so anything
- * that does not match is abandoned, never installed. Abandoned staging dirs
- * are reported, never deleted.
+ * after cross-checking the journal against the filesystem and the staging
+ * log's signed genesis row (round 2, Aegis 2). The journal is unsigned and
+ * the staging keys are its own: these checks stop accidents and planted junk,
+ * they do NOT authenticate a staging home against a same-user forger (that
+ * waits for M1.3's hardware-held kernel key). Anything that does not match is
+ * abandoned, never installed. Abandoned staging dirs are reported, never
+ * deleted. A step-5 rename that fails EPERM/EBUSY (a Windows race with a
+ * concurrent completePendingQuarantine) refuses ENGINE{install-busy}: retry,
+ * the pending install will finish.
  *
  * LOCK (round 2, reviewer 5). Steps 1–4 hold the daemon pidfile lock
  * (acquireDaemonLock), so no daemon can start in the home while it is moved.
  * The lock file lands in the evidence with the rename and is released (its
  * own pidfile, nothing else) through the evidence path, so the evidence is
- * byte-identical to the home as found. A STALE pidfile of a dead daemon is
- * replaced by the lock — the only change the quarantine ever makes to the
- * old home.
+ * byte-identical to the home as found. CRASH WINDOW: a crash between the
+ * step-4 rename and that release leaves OUR pidfile (socketPath
+ * `<staging>/no-socket`) in the evidence; completePendingQuarantine reports it
+ * as `lockResidue` (never deletes it). A STALE pidfile of a dead daemon is
+ * removed by the lock acquisition, so it is DELETED from the evidence — its
+ * bytes are kept in the journal (`stalePidfile`, base64) first. That is the
+ * only change the quarantine ever makes to the old home.
  *
  * REFUSALS (in-process, CLI only): FORBIDDEN{daemon-running};
  * BAD_REQUEST{not-a-home}; BAD_REQUEST{nothing-to-quarantine};
@@ -72,11 +85,11 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { FileAnchorStore, fsyncDir, fsyncFile, KeystoreAnchorStore } from './anchor.js';
-import { logRefusal } from './chain.js';
-import { ACTIVE_DB, KernelLog, listSealedSegments, QUARANTINE_GENESIS_KIND, verifyLog, type QuarantinedPayload } from './kernel-log.js';
+import { genesisPrev, logRefusal, sha256TaggedFast } from './chain.js';
+import { ACTIVE_DB, KernelLog, listSealedSegments, QUARANTINE_GENESIS_KIND, type QuarantinedPayload } from './kernel-log.js';
 import { KeyRing, SoftwareEd25519Signer, type Signer } from './signer.js';
 import { readKernelPubs, recordKernelPub } from '../identity/kernel-pub.js';
-import { currentUid } from '../lifecycle/home.js';
+import { currentUid, resolveGnomonHome } from '../lifecycle/home.js';
 import { acquireDaemonLock, daemonState, pidPathOf, readPidfile, type DaemonPidfile } from '../lifecycle/pidfile.js';
 import { LifecycleRefusal } from '../lifecycle/refusal.js';
 import { registerSeams } from '../internal-seams.js';
@@ -85,7 +98,7 @@ export const QUARANTINE_JOURNAL = 'quarantine-journal.json';
 export const QUARANTINE_JOURNAL_SCHEMA = 'gnomonQuarantineJournal:v1' as const;
 
 /** Crash points of the move, in order (the test seam injects a crash after each). */
-export const QUARANTINE_STEPS = ['identity-read', 'staging-created', 'staged', 'moved', 'installed'] as const;
+export const QUARANTINE_STEPS = ['identity-read', 'staging-created', 'staged', 'evidence-renamed', 'moved', 'installed'] as const;
 export type QuarantineStep = (typeof QUARANTINE_STEPS)[number];
 
 export interface QuarantineOptions {
@@ -120,6 +133,8 @@ export interface QuarantineIdentity {
   observed: ObservedHead[];
   /** The sources disagree (seq, hash or log id): e.g. a truncated db behind its anchor. */
   disagree: boolean;
+  /** Sources present but unreadable (copy or open failed) — shown, never silently dropped. */
+  unreadable: Array<{ source: 'db' | 'segment'; reason: string }>;
 }
 
 export type QuarantineReport =
@@ -153,6 +168,8 @@ export interface PendingQuarantine {
   abandoned: string[];
   /** A valid journal names this home while the home AND its evidence both exist. */
   conflict: string | null;
+  /** Our own lock pidfile left in the evidence by a crash between the step-4 rename and its release (reported, never deleted). */
+  lockResidue: string | null;
 }
 
 interface Journal {
@@ -163,6 +180,8 @@ interface Journal {
   staging: string;
   quarantinedLog: string;
   observedHeads: ObservedHead[];
+  /** A stale (dead daemon's) pidfile found in the home, base64 — the lock acquisition deletes it from the evidence. */
+  stalePidfile?: string;
   newLog: string;
   at: string;
 }
@@ -206,20 +225,37 @@ function plainOwnedDir(p: string): boolean {
   }
 }
 
-/** Row 1 of `home`'s log, if it is a verified daemon.log.quarantined (signature, chain, kernel binding to its own recorded keys). */
+/**
+ * Row 1 of `home`'s log, if it is a verified daemon.log.quarantined: segment
+ * 1 meta, the row's envelope re-hashed, its prev the genesis prev, its log
+ * id the meta's, signed by a key recorded in the home, by the kernel
+ * principal (`p:<ns>/kernel`). Rows and chain only — NOT verifyLog, which
+ * also reads the per-user keystore anchor: once that is real (M1.3,
+ * T-2026-10-18-007) it names the user's live log, never a staging home.
+ */
 function verifiedQuarantineGenesis(home: string): { log: string; payload: QuarantinedPayload } | undefined {
-  const row = withDbCopy(path.join(home, ACTIVE_DB), (db) => {
+  const read = withDbCopy(path.join(home, ACTIVE_DB), (db) => {
     const meta = Object.fromEntries((db.prepare('SELECT k, v FROM meta').all() as Array<{ k: string; v: string }>).map((r) => [r.k, r.v]));
-    const r = db.prepare('SELECT seq, kind, principal, envelope FROM chain WHERE seq = 1').get() as { seq: number; kind: string; principal: string; envelope: string } | undefined;
-    return r && meta.log ? { log: meta.log, kind: r.kind, principal: r.principal, payload: (JSON.parse(r.envelope) as { payload: QuarantinedPayload }).payload } : undefined;
+    const r = db.prepare('SELECT seq, kind, principal, envelope, hash, sig FROM chain WHERE seq = 1').get() as
+      | { seq: number; kind: string; principal: string; envelope: string; hash: string; sig: string | null }
+      | undefined;
+    return r && meta.log && meta.segment === '1' && meta.base_seq === '1' && meta.base_prev === genesisPrev(meta.log) ? { log: meta.log, ...r } : undefined;
   });
-  if (!row || row.kind !== QUARANTINE_GENESIS_KIND) return undefined;
+  const row = read?.ok ? read.value : undefined;
+  if (!row || row.kind !== QUARANTINE_GENESIS_KIND || !row.sig || !/^p:[^/]+\/kernel$/.test(row.principal)) return undefined;
+  if (sha256TaggedFast(row.envelope) !== row.hash) return undefined;
+  let env: { log?: unknown; seq?: unknown; kind?: unknown; principal?: unknown; prev?: unknown; keyId?: unknown; payload?: QuarantinedPayload };
+  try {
+    env = JSON.parse(row.envelope) as typeof env;
+  } catch {
+    return undefined;
+  }
+  if (env.log !== row.log || env.seq !== 1 || env.kind !== row.kind || env.principal !== row.principal || env.prev !== genesisPrev(row.log) || typeof env.keyId !== 'string' || !env.payload) return undefined;
   const pubs = readKernelPubs(home);
-  if (!pubs.length) return undefined;
+  if (!pubs.some((k) => k.keyId === env.keyId)) return undefined;
   const ring = new KeyRing();
   for (const k of pubs) ring.addEd25519(k.publicKeyPem);
-  const v = verifyLog(home, { keyRing: ring, kernelPrincipal: row.principal, kernelKeyIds: pubs.map((k) => k.keyId) });
-  return v.ok && v.kernelBinding === 'ok' ? { log: row.log, payload: row.payload } : undefined;
+  return ring.verify(env.keyId, 'event', row.hash, Buffer.from(row.sig, 'base64')) === 'ok' ? { log: row.log, payload: env.payload } : undefined;
 }
 
 /** Why a journal-bearing staging dir may NOT be installed (undefined = it may). */
@@ -230,7 +266,7 @@ function journalProblem(h: string, staging: string, j: Journal): string | undefi
   const evidence = path.resolve(j.evidence);
   if (path.dirname(evidence) !== parent || !evidencePattern(path.basename(h)).test(path.basename(evidence))) return 'evidence is not a quarantine sibling of the home';
   if (!plainOwnedDir(staging) || !plainOwnedDir(evidence)) return 'staging or evidence is not a plain directory owned by this user';
-  if (readQuarantineIdentity(evidence)?.log !== j.quarantinedLog) return 'the evidence is not the quarantined log the journal names';
+  if (readQuarantineIdentity(evidence, { keystore: false })?.log !== j.quarantinedLog) return 'the evidence is not the quarantined log the journal names';
   const g = verifiedQuarantineGenesis(staging);
   if (!g) return 'the staging log has no verified daemon.log.quarantined genesis';
   if (g.log !== j.newLog || g.payload.evidencePath !== evidence || g.payload.quarantinedLog !== j.quarantinedLog) return 'the staging genesis does not match the journal';
@@ -244,7 +280,7 @@ function journalProblem(h: string, staging: string, j: Journal): string | undefi
 export function completePendingQuarantine(home: string): PendingQuarantine {
   const h = path.resolve(home);
   const parent = path.dirname(h);
-  const out: PendingQuarantine = { completed: null, abandoned: [], conflict: null };
+  const out: PendingQuarantine = { completed: null, abandoned: [], conflict: null, lockResidue: null };
   if (!fs.existsSync(parent)) return out;
   const re = new RegExp(`^${escapeRe(path.basename(h))}\\.quarantine-\\d{8}T\\d{6}Z-[0-9a-f]+\\.new$`);
   for (const name of fs.readdirSync(parent).filter((n) => re.test(n)).sort()) {
@@ -262,31 +298,56 @@ export function completePendingQuarantine(home: string): PendingQuarantine {
       fs.renameSync(staging, h);
       fsyncDir(parent);
       out.completed = { staging, evidence: path.resolve(j.evidence), newLog: j.newLog };
+      const pf = readPidfile(j.evidence);
+      if (pf && pf.socketPath === path.join(staging, 'no-socket')) out.lockResidue = pidPathOf(j.evidence);
     } else out.conflict ??= staging;
   }
   return out;
 }
 
-/** Copy a db (+ its -wal, never -shm) into a private scratch dir, run `fn` on the copy, remove the copy. */
-function withDbCopy<T>(file: string, fn: (db: DatabaseSync) => T): T | undefined {
+type DbRead<T> = { ok: true; value: T | undefined } | { ok: false; reason: string };
+
+const noSpace = (file: string) =>
+  logRefusal('ENGINE', 'no-space', `no space to copy ${file} for a read-only look (ENOSPC); nothing was moved`, { file });
+
+/**
+ * Copy a db (+ its -wal, never -shm) into a private scratch dir, run `fn` on
+ * the copy, remove the copy. `undefined` = no such file; a failed copy or
+ * open is `{ok: false, reason}`; ENOSPC throws ENGINE{no-space}.
+ */
+function withDbCopy<T>(file: string, fn: (db: DatabaseSync) => T | undefined): DbRead<T> | undefined {
   if (!fs.existsSync(file)) return undefined;
-  const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'gnomon-qread-'));
+  let scratch: string;
+  try {
+    scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'gnomon-qread-'));
+  } catch (err) {
+    if ((err as NodeJS.ErrnoException).code === 'ENOSPC') throw noSpace(file);
+    return { ok: false, reason: `copy failed: ${(err as NodeJS.ErrnoException).code ?? 'error'}` };
+  }
   let db: DatabaseSync | undefined;
   try {
     const copy = path.join(scratch, 'copy.db');
-    fs.copyFileSync(file, copy);
-    if (fs.existsSync(`${file}-wal`)) fs.copyFileSync(`${file}-wal`, `${copy}-wal`);
-    db = new DatabaseSync(copy);
-    return fn(db);
-  } catch {
-    return undefined;
+    try {
+      fs.copyFileSync(file, copy);
+      if (fs.existsSync(`${file}-wal`)) fs.copyFileSync(`${file}-wal`, `${copy}-wal`);
+    } catch (err) {
+      const code = (err as NodeJS.ErrnoException).code ?? 'error';
+      if (code === 'ENOSPC') throw noSpace(file);
+      return { ok: false, reason: `copy failed: ${code}` };
+    }
+    try {
+      db = new DatabaseSync(copy);
+      return { ok: true, value: fn(db) };
+    } catch (err) {
+      return { ok: false, reason: `unreadable copy: ${(err as NodeJS.ErrnoException).code ?? (err as Error).message}` };
+    }
   } finally {
     db?.close();
     fs.rmSync(scratch, { recursive: true, force: true }); // our own copy, never the evidence
   }
 }
 
-function dbHead(file: string, source: 'db' | 'segment'): ObservedHead | undefined {
+function dbHead(file: string, source: 'db' | 'segment'): DbRead<ObservedHead> | undefined {
   return withDbCopy(file, (db) => {
     const meta = Object.fromEntries((db.prepare('SELECT k, v FROM meta').all() as Array<{ k: string; v: string }>).map((r) => [r.k, r.v]));
     if (!meta.log || !meta.segment || !meta.base_seq || !meta.base_prev) return undefined;
@@ -296,22 +357,35 @@ function dbHead(file: string, source: 'db' | 'segment'): ObservedHead | undefine
   });
 }
 
-/** The quarantined log's id and head from every source, without writing anything in the home. */
-export function readQuarantineIdentity(home: string): QuarantineIdentity | undefined {
+/**
+ * The quarantined log's id and head from every source, without writing
+ * anything in the home. The keystore anchor is per OS USER, not per home
+ * (spec §22 OPEN 19): it is consulted only for the default home (`keystore`
+ * defaults to `home` === resolveGnomonHome()) — never for an evidence dir or
+ * a non-default --home, where it would speak for a different log.
+ */
+export function readQuarantineIdentity(home: string, opts: { keystore?: boolean } = {}): QuarantineIdentity | undefined {
   const observed: ObservedHead[] = [];
-  const db = dbHead(path.join(home, ACTIVE_DB), 'db');
-  if (db) observed.push(db);
+  const unreadable: QuarantineIdentity['unreadable'] = [];
+  const take = (r: DbRead<ObservedHead> | undefined, source: 'db' | 'segment'): void => {
+    if (!r) return;
+    if (!r.ok) unreadable.push({ source, reason: r.reason });
+    else if (r.value) observed.push(r.value);
+  };
+  take(dbHead(path.join(home, ACTIVE_DB), 'db'), 'db');
   const sealed = listSealedSegments(home);
-  const seg = sealed.length ? dbHead(sealed[sealed.length - 1]!.file, 'segment') : undefined;
-  if (seg) observed.push(seg);
+  if (sealed.length) take(dbHead(sealed[sealed.length - 1]!.file, 'segment'), 'segment');
   const fa = new FileAnchorStore(home).read();
   if (fa.state === 'present') observed.push({ source: 'file-anchor', log: fa.head.log, seq: fa.head.seq, hash: fa.head.hash, segment: fa.head.segment });
-  const ks = new KeystoreAnchorStore().read(); // the stub until M1.3 (`unavailable`)
-  if (ks.state === 'present') observed.push({ source: 'keystore-anchor', log: ks.head.log, seq: ks.head.seq, hash: ks.head.hash, segment: ks.head.segment });
+  const useKeystore = opts.keystore ?? path.resolve(home) === path.resolve(resolveGnomonHome());
+  if (useKeystore) {
+    const ks = new KeystoreAnchorStore().read(); // the stub until M1.3 (`unavailable`)
+    if (ks.state === 'present') observed.push({ source: 'keystore-anchor', log: ks.head.log, seq: ks.head.seq, hash: ks.head.hash, segment: ks.head.segment });
+  }
   if (!observed.length) return undefined;
   const top = observed.reduce((a, b) => (b.seq > a.seq ? b : a)); // ties keep the earlier (db first)
   const disagree = observed.some((o) => o.log !== top.log || o.seq !== top.seq || o.hash !== top.hash);
-  return { log: top.log, head: { seq: top.seq, hash: top.hash, segment: top.segment }, source: top.source, observed, disagree };
+  return { log: top.log, head: { seq: top.seq, hash: top.hash, segment: top.segment }, source: top.source, observed, disagree, unreadable };
 }
 
 function writeJournal(staging: string, j: Journal): void {
@@ -383,6 +457,15 @@ async function quarantineLogWith(
   while (fs.existsSync(evidence) || fs.existsSync(`${evidence}.new`));
   const staging = `${evidence}.new`;
 
+  // a dead daemon's pidfile is deleted by the lock acquisition: keep its bytes for the journal first
+  let stalePidfile: string | undefined;
+  if (ds.state === 'stale') {
+    try {
+      stalePidfile = fs.readFileSync(pidPathOf(home)).toString('base64');
+    } catch {
+      /* no pidfile (a stale socket only) */
+    }
+  }
   let lock: DaemonPidfile;
   try {
     // a socket path that cannot exist: the lock must never unlink a socket in the evidence
@@ -420,6 +503,7 @@ async function quarantineLogWith(
       staging,
       quarantinedLog: quarantined.log,
       observedHeads: quarantined.observed,
+      ...(stalePidfile !== undefined ? { stalePidfile } : {}),
       newLog: newLogId,
       at: new Date(clock()).toISOString(),
     });
@@ -436,13 +520,18 @@ async function quarantineLogWith(
     }
     lockAt = evidence;
     fsyncDir(parent);
+    onStep('evidence-renamed', { staging, evidence }); // crash window: our pidfile is in the evidence until the release below
     releaseLockAt(evidence, lock);
     onStep('moved', { staging, evidence });
     let installedBy: 'this' | 'another-process' = 'this';
     try {
       fsOps.rename(staging, home);
     } catch (err) {
-      if ((err as NodeJS.ErrnoException).code !== 'ENOENT' || readQuarantineIdentity(home)?.log !== newLogId) throw err;
+      const code = (err as NodeJS.ErrnoException).code ?? '';
+      if (code === 'EPERM' || code === 'EBUSY') {
+        throw logRefusal('ENGINE', 'install-busy', `installing the new home failed (${code}), likely a concurrent pending install; retry — the pending install will finish`, { staging, evidence, code });
+      }
+      if (code !== 'ENOENT' || readQuarantineIdentity(home, { keystore: false })?.log !== newLogId) throw err;
       installedBy = 'another-process'; // a daemon start ran completePendingQuarantine in the gap
     }
     fsyncDir(parent);

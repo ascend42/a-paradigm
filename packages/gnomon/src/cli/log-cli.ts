@@ -104,6 +104,10 @@ export async function runLogCommand(argv: readonly string[], io: LogCliIo): Prom
   try {
     pending = completePendingQuarantine(home);
   } catch (err) {
+    if (err instanceof LogRefusal && err.reason === 'no-space') {
+      refused(io.stderr, err.refusal.code, err.reason, err.message.replace(/^#kernel-log: /, ''), ['free disk space, then re-run']);
+      return LOG_EXIT_REFUSED;
+    }
     refused(io.stderr, 'ENGINE', 'quarantine-pending', `could not complete an interrupted quarantine: ${(err as Error).message}`, QNEXT);
     return LOG_EXIT_REFUSED;
   }
@@ -112,7 +116,7 @@ export async function runLogCommand(argv: readonly string[], io: LogCliIo): Prom
     return LOG_EXIT_REFUSED;
   }
   if (pending.completed) {
-    completed(io, home, pending.completed.evidence, pending.completed.newLog);
+    completed(io, home, pending.completed.evidence, pending.completed.newLog, pending.lockResidue);
     return LOG_EXIT_OK;
   }
   const sock = selectSocketPath({ home });
@@ -125,7 +129,16 @@ export async function runLogCommand(argv: readonly string[], io: LogCliIo): Prom
     ]);
     return LOG_EXIT_REFUSED;
   }
-  const id = readQuarantineIdentity(home);
+  let id: ReturnType<typeof readQuarantineIdentity>;
+  try {
+    id = readQuarantineIdentity(home);
+  } catch (err) {
+    if (err instanceof LogRefusal) {
+      refused(io.stderr, err.refusal.code, err.reason, err.message.replace(/^#kernel-log: /, ''), err.reason === 'no-space' ? ['free disk space, then re-run'] : []);
+      return LOG_EXIT_REFUSED;
+    }
+    throw err;
+  }
   if (!id) {
     refused(io.stderr, 'BAD_REQUEST', 'nothing-to-quarantine', `no kernel log (db, sealed segment or head anchor) in ${home}`, [
       'check --home: gnomon log quarantine --home <the home that refuses to open>',
@@ -139,6 +152,7 @@ export async function runLogCommand(argv: readonly string[], io: LogCliIo): Prom
     ['log', id.log],
     ['head', `seq ${id.head.seq}  segment ${id.head.segment}  ${id.head.hash}  (highest of ${id.observed.length}: ${id.source})`],
     ...id.observed.map((o) => [`  ${o.source}`, `seq ${o.seq}  segment ${o.segment}  ${o.hash}${o.log !== id.log ? `  log ${o.log}` : ''}`] as const),
+    ...id.unreadable.map((u) => [`  ${u.source}`, `unreadable (${u.reason})`] as const),
     ['evidence', `${path.basename(home)}.quarantine-<stamp>  (beside ${home})`],
     ['gate', 'interactive confirmation only — no proof of presence (presence lands at M1.3)'],
   ]);
@@ -170,7 +184,11 @@ export async function runLogCommand(argv: readonly string[], io: LogCliIo): Prom
       const next =
         err.reason === 'home-busy'
           ? ['close whatever holds a file in the home open (an editor, a shell cd, another gnomon), then re-run']
-          : err.reason === 'daemon-running'
+          : err.reason === 'install-busy'
+            ? ['re-run gnomon log quarantine: the pending install will finish']
+            : err.reason === 'no-space'
+              ? ['free disk space, then re-run']
+              : err.reason === 'daemon-running'
             ? ['wait for the daemon to idle out, then re-run', 'gnomon daemon status']
             : err.reason === 'quarantine-pending'
               ? QNEXT
@@ -182,12 +200,13 @@ export async function runLogCommand(argv: readonly string[], io: LogCliIo): Prom
   }
 }
 
-function completed(io: LogCliIo, home: string, evidence: string, newLog: string): void {
+function completed(io: LogCliIo, home: string, evidence: string, newLog: string, lockResidue: string | null = null): void {
   heading(io.stdout, 'completed', 'interrupted quarantine installed');
   readout(io.stdout, [
     ['home', home],
     ['evidence', `${path.basename(evidence)}  (${evidence})`],
     ['new log', newLog],
+    ...(lockResidue ? ([['lock residue', `${lockResidue} (this quarantine's own pidfile, left by a crash; harmless)`]] as const) : []),
   ]);
   io.stdout.write('  next: re-run `gnomon log quarantine` only if the NEW home must be quarantined too\n');
 }
