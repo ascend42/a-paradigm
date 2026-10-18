@@ -18,6 +18,9 @@
  * GUARDS (each has a falsifier in test/up-cli.test.ts), in this order, on a
  * home resolved ONCE (lstat: a plain directory, never a symlink; then
  * realpath) and never from GNOMON_HOME (like gnomond, §2.4 rule 1):
+ *   - FIRST, before any home is read: a non-empty NODE_OPTIONS or any node
+ *     interpreter flag (process.execArgv) → `unsafe-env` (Aegis C1; refused,
+ *     not re-executed: gnomond's clean re-exec would have dropped them);
  *   - no home / a symlink / not a directory: `unprovisioned` / `unsafe-home`;
  *   - a DEV-ONLY marked home: `dev-home` (the #dev-launch tripwire's marker);
  *   - a kernel already running on it (pidfile holder alive, or the socket
@@ -39,7 +42,7 @@ import * as path from 'node:path';
 import { GNOMON_VERSION } from '../version.js';
 import { refused } from './readout.js';
 import { isDevHome } from './dev-home.js';
-import { attachInProcess, serveInProcess, type InProcessKernel, type LaunchTtyIo } from './launch-tty.js';
+import { attachInProcess, serveInProcess, unsafeRuntime, type InProcessKernel, type LaunchTtyIo, type RuntimeFacts } from './launch-tty.js';
 import { canConnectSocket, daemonState, isLifecycleRefusal, resolveGnomonHome, selectSocketPath, startDaemon, type DaemonHandle, type DaemonOptions } from '../kernel/lifecycle/index.js';
 import {
   IdentityError,
@@ -74,6 +77,8 @@ export interface UpDeps {
   /** The user's home (default os.homedir()); `~/.gnomon` lives in it. */
   userHome?: string;
   idleMs?: number;
+  /** The env / execArgv the unsafe-env guard reads (default this process's). */
+  runtime?: RuntimeFacts;
 }
 
 export class UpRefusal extends Error {
@@ -212,6 +217,9 @@ export async function runUpCommand(argv: readonly string[], io: LaunchTtyIo, dep
       return UP_EXIT_USAGE;
     }
   }
+  // Aegis C1: before any home is read or the helper opens, the process that will hold the keys must be clean
+  const unsafe = unsafeRuntime(deps.runtime);
+  if (unsafe) return report(io, new UpRefusal('unsafe-env', unsafe, ['unset NODE_OPTIONS, and run plain `node <clone>/packages/gnomon/dist/cli/gnomon.js up` with no node flags']));
   let k: UpKernel;
   try {
     const { home, isDefault } = resolveUpHome(given, deps.userHome);

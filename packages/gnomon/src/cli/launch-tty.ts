@@ -30,6 +30,26 @@ export interface LaunchTtyIo {
   stderr: Out;
 }
 
+/** The Node runtime the in-process kernel would inherit: the env and the interpreter flags of THIS process. */
+export interface RuntimeFacts {
+  env: Readonly<Record<string, string | undefined>>;
+  execArgv: readonly string[];
+}
+
+/**
+ * Aegis C1 (round 2): an in-process kernel holds the keys in THIS Node process, which gnomond's clean
+ * re-exec (§2.4 rule 2) would have scrubbed. So refuse, rather than inherit, anything that loads code
+ * or opens a debugger in it: a non-empty NODE_OPTIONS, and ANY interpreter flag (process.execArgv —
+ * --inspect*, --require, --import, --loader, …). Returns the refusal message, or null when clean.
+ * Refusing (not re-executing) is deliberate: no second process ever holds the helper or the keys.
+ */
+export function unsafeRuntime(r: RuntimeFacts = { env: process.env, execArgv: process.execArgv }): string | null {
+  const why: string[] = [];
+  if (r.env.NODE_OPTIONS !== undefined && r.env.NODE_OPTIONS.trim() !== '') why.push('NODE_OPTIONS is set');
+  if (r.execArgv.length > 0) why.push(`node was started with interpreter flags (${r.execArgv.length})`);
+  return why.length ? `${why.join('; ')}: the kernel would run them inside the process that holds its keys` : null;
+}
+
 /** A kernel running in THIS process, with the CLI's own device connection held open. */
 export interface InProcessKernel {
   readonly handle: DaemonHandle;

@@ -27,6 +27,8 @@ import { FakeHelper } from './helper-fake.js';
 import { PKG_ROOT } from './helpers.js';
 
 const DEV = acceptUnsignedHelperForTests(DEV_TEST_HELPER_ACK);
+/** A clean runtime for the unsafe-env guard (vitest's own worker runs with interpreter flags). */
+const CLEAN = { env: {}, execArgv: [] as string[] };
 const cleanups: Array<() => unknown> = [];
 afterEach(async () => {
   while (cleanups.length) await cleanups.pop()!();
@@ -77,6 +79,7 @@ function upDeps(fake: FakeHelper, uh: string, extra: Partial<UpDeps> = {}) {
   const n = { helper: 0, kernel: 0, closed: 0 };
   const deps: UpDeps = {
     userHome: uh,
+    runtime: CLEAN,
     verifier: DEV,
     startHelper: () => (n.helper++, fake.revive(), view(fake, () => void n.closed++)),
     start: async (o: DaemonOptions) => (n.kernel++, startDaemon(o)),
@@ -94,6 +97,36 @@ async function provisioned(): Promise<{ uh: string; home: string; fake: FakeHelp
 }
 
 describe('#gnomon-up refusals (each guard falsified)', () => {
+  it('FALSIFIER (Aegis C1): NODE_OPTIONS or any node interpreter flag refuses unsafe-env before the helper opens', async () => {
+    const { uh, home, fake } = await provisioned();
+    for (const runtime of [
+      { env: { NODE_OPTIONS: '--require /tmp/evil.js' }, execArgv: [] },
+      { env: {}, execArgv: ['--inspect'] },
+      { env: {}, execArgv: ['--inspect-brk=0'] },
+      { env: {}, execArgv: ['--require', '/tmp/evil.js'] },
+      { env: {}, execArgv: ['--import', 'data:text/javascript,0'] },
+    ]) {
+      const { deps, n } = upDeps(fake, uh, { runtime });
+      const x = io();
+      expect(await runUpCommand(['--home', home], x, deps)).toBe(1);
+      expect(x.e.join('')).toContain('REFUSED  UP  unsafe-env');
+      expect(x.e.join('')).not.toContain('evil.js'); // the flag values are never echoed
+      expect(n).toEqual({ helper: 0, kernel: 0, closed: 0 });
+    }
+    // an empty / whitespace NODE_OPTIONS is not a flag
+    const { deps } = upDeps(fake, uh, { runtime: { env: { NODE_OPTIONS: ' ' }, execArgv: [] }, start: async () => { throw new Error('reached start (test)'); } });
+    await expect(runUpCommand(['--home', home], io(), deps)).rejects.toThrow('reached start (test)');
+    // and the real vitest worker (it runs with interpreter flags) is refused by the default facts
+    if (process.execArgv.length > 0) {
+      const { deps: d2, n } = upDeps(fake, uh);
+      delete d2.runtime;
+      const y = io();
+      expect(await runUpCommand(['--home', home], y, d2)).toBe(1);
+      expect(y.e.join('')).toContain('unsafe-env');
+      expect(n.helper).toBe(0);
+    }
+  });
+
   it('FALSIFIER: an unprovisioned home is refused — missing, empty, and with no identity.json; nothing starts', async () => {
     const uh = userHome();
     const fake = new FakeHelper(null);

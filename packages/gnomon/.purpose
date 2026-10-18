@@ -680,7 +680,10 @@ components:
       `gnomon open` against a running gnomond — that needs a new wire verb
       and moves clientApiId. GUARDS on a home resolved once (lstat plain
       directory, then realpath), each with a falsifier in
-      test/up-cli.test.ts: missing home / no identity.json → unprovisioned;
+      test/up-cli.test.ts: FIRST (Aegis C1, also in dev up) a non-empty
+      NODE_OPTIONS or any node interpreter flag (process.execArgv) →
+      unsafe-env — refused, not re-executed, so no second process holds
+      the helper; missing home / no identity.json → unprovisioned;
       symlink / non-directory → unsafe-home; DEV-ONLY marker → dev-home; a
       live pidfile holder or an answering socket → daemon-running (and the
       O_EXCL lock as backstop); any IdentityError → identity-<reason> (fail

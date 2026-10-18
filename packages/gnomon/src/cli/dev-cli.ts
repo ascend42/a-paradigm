@@ -13,7 +13,7 @@ import { GNOMON_VERSION } from '../version.js';
 import { readout, refused } from './readout.js';
 import { DevHomeRefusal, defaultDevHome, loadDevHome, provisionDevHome, type DevHomeOptions, type LoadedDevHome } from './dev-home.js';
 import { isLifecycleRefusal, startDaemon, type DaemonHandle, type DaemonOptions } from '../kernel/lifecycle/index.js';
-import { attachInProcess, serveInProcess, type InProcessKernel, type LaunchTtyIo } from './launch-tty.js';
+import { attachInProcess, serveInProcess, unsafeRuntime, type InProcessKernel, type LaunchTtyIo, type RuntimeFacts } from './launch-tty.js';
 
 export type DevCliIo = LaunchTtyIo;
 
@@ -87,6 +87,8 @@ export interface DevUpDeps {
   /** How the kernel is started (default startDaemon; the smoke test passes the internal test entry's daemon). */
   start?: (opts: DaemonOptions) => Promise<DaemonHandle>;
   idleMs?: number;
+  /** The env / execArgv the unsafe-env guard reads (default this process's). */
+  runtime?: RuntimeFacts;
 }
 
 /**
@@ -110,6 +112,12 @@ export async function runDevUp(argv: readonly string[], io: DevCliIo, opts: DevC
     return DEV_EXIT_USAGE;
   }
   io.stdout.write(DEV_BANNER);
+  // Aegis C1 (the same rule as gnomon up): the kernel runs in THIS process, so the process must be clean
+  const unsafe = unsafeRuntime(opts.runtime);
+  if (unsafe) {
+    refused(io.stderr, 'dev', 'unsafe-env', unsafe, ['unset NODE_OPTIONS, and run plain `node <clone>/packages/gnomon/dist/cli/gnomon.js dev up` with no node flags']);
+    return DEV_EXIT_REFUSED;
+  }
   let k: DevKernel;
   try {
     k = await startDevKernel(parsed.home, opts);

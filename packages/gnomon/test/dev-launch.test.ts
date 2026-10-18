@@ -22,6 +22,8 @@ import { PassThrough } from 'node:stream';
 import { vi } from 'vitest';
 import { activateDetached, runForeground } from '../src/cli/daemon-cli.js';
 
+/** A clean runtime for the unsafe-env guard (vitest's own worker runs with interpreter flags). */
+const CLEAN = { env: {}, execArgv: [] as string[] };
 const cleanups: Array<() => void | Promise<void>> = [];
 afterEach(async () => {
   while (cleanups.length) await cleanups.pop()!();
@@ -135,10 +137,10 @@ describe('#dev-launch: gnomon dev up', () => {
     let started = 0;
     const start = async (o: DaemonOptions): Promise<DaemonHandle> => (started++, startDaemon(o));
     const x = io();
-    expect(await runDevCommand(['up', '--home', w.devHome], x, { userHome: w.userHome, start })).toBe(1);
+    expect(await runDevCommand(['up', '--home', w.devHome], x, { userHome: w.userHome, start, runtime: CLEAN })).toBe(1);
     expect(x.e.join('')).toContain('not-a-dev-home');
     const y = io();
-    expect(await runDevCommand(['up', '--home', w.prodHome], y, { userHome: w.userHome, start })).toBe(1);
+    expect(await runDevCommand(['up', '--home', w.prodHome], y, { userHome: w.userHome, start, runtime: CLEAN })).toBe(1);
     expect(y.e.join('')).toContain('production-home');
     expect(started).toBe(0);
   });
@@ -160,7 +162,7 @@ describe('#dev-launch: gnomon dev up', () => {
     let h: DaemonHandle | null = null;
     const start = async (o: DaemonOptions): Promise<DaemonHandle> => (h = await startDaemon(o));
     const x = io();
-    const run = runDevCommand(['up', '--home', w.devHome], x, { userHome: w.userHome, start });
+    const run = runDevCommand(['up', '--home', w.devHome], x, { userHome: w.userHome, start, runtime: CLEAN });
     const deadline = Date.now() + 15_000;
     while (!x.o.join('').includes('gui ') && !x.e.join('').includes('web-launch') && Date.now() < deadline) await new Promise((r) => setTimeout(r, 25));
     await h!.shutdown('signal');
@@ -246,7 +248,7 @@ describe('#dev-launch: dev up shutdown', () => {
       const x = io();
       const stdin = new PassThrough() as PassThrough & { isTTY?: boolean };
       stdin.isTTY = true;
-      const run = runDevCommand(['up', '--home', w.devHome], { ...x, stdin }, { userHome: w.userHome, start });
+      const run = runDevCommand(['up', '--home', w.devHome], { ...x, stdin }, { userHome: w.userHome, start, runtime: CLEAN });
       const deadline = Date.now() + 15_000;
       while (!x.o.join('').includes('gui ') && !x.e.join('').includes('web-launch') && Date.now() < deadline) await new Promise((r) => setTimeout(r, 25));
       stdin.write('q\n');
@@ -258,6 +260,33 @@ describe('#dev-launch: dev up shutdown', () => {
       expect(unhandled).toEqual([]);
     } finally {
       process.off('unhandledRejection', onUnhandled);
+    }
+  });
+});
+
+describe('#dev-launch: dev up refuses an unsafe runtime (Aegis C1, the gnomon up rule)', () => {
+  it('FALSIFIER: NODE_OPTIONS or any node interpreter flag refuses unsafe-env; the kernel never starts', async () => {
+    const w = world();
+    expect(await runDevCommand(['init', '--home', w.devHome], io(), { userHome: w.userHome, host: 'mac-1' })).toBe(0);
+    let started = 0;
+    const start = async (o: DaemonOptions): Promise<DaemonHandle> => (started++, startDaemon(o));
+    for (const runtime of [
+      { env: { NODE_OPTIONS: '--require /tmp/x.js' }, execArgv: [] },
+      { env: {}, execArgv: ['--inspect=0'] },
+      { env: {}, execArgv: ['--import', 'data:text/javascript,0'] },
+    ]) {
+      const x = io();
+      expect(await runDevCommand(['up', '--home', w.devHome], x, { userHome: w.userHome, start, runtime })).toBe(1);
+      expect(x.e.join('')).toContain('REFUSED  DEV  unsafe-env');
+      expect(x.e.join('')).not.toContain('/tmp/x.js');
+    }
+    expect(started).toBe(0);
+    // and the real vitest worker (it runs with interpreter flags) is refused by the default facts
+    if (process.execArgv.length > 0) {
+      const y = io();
+      expect(await runDevCommand(['up', '--home', w.devHome], y, { userHome: w.userHome, start })).toBe(1);
+      expect(y.e.join('')).toContain('unsafe-env');
+      expect(started).toBe(0);
     }
   });
 });
@@ -275,7 +304,7 @@ describe('#dev-launch: an interrupted dev init', () => {
     expect(fs.existsSync(path.join(w.devHome, DEV_HOME_MARKER))).toBe(false);
     let started = 0;
     const y = io();
-    expect(await runDevCommand(['up', '--home', w.devHome], y, { userHome: w.userHome, start: async (o) => (started++, startDaemon(o)) })).toBe(1);
+    expect(await runDevCommand(['up', '--home', w.devHome], y, { userHome: w.userHome, runtime: CLEAN, start: async (o) => (started++, startDaemon(o)) })).toBe(1);
     expect(y.e.join('')).toContain('not-a-dev-home');
     expect(y.e.join('')).toContain('interrupted');
     expect(y.e.join('')).toContain(hint);
