@@ -15,9 +15,17 @@ import { runCleanups } from './abort.mjs';
 
 const SHARED = path.dirname(fileURLToPath(import.meta.url));
 export const TEAM = 'SW4BMQ8PNL';
-export const BUNDLE_ID = 'gnomon.helper';
-export const APP_ID = `${TEAM}.${BUNDLE_ID}`;
-export const ACCESS_GROUP = `${TEAM}.gnomon`;
+// Aegis H1 (M1.3 round 2): the probe helper is NOT the production helper. It
+// signs as identifier `gnomon.probe` (so it never satisfies the kernel's
+// HELPER_REQUIREMENT, identifier "gnomon.helper") and uses its own keychain
+// access group `SW4BMQ8PNL.gnomon.probe` (production keys live in
+// `SW4BMQ8PNL.gnomon.prod`). The App ID entitlement must match the one
+// provisioning profile the founder has (SW4BMQ8PNL.gnomon.helper); see
+// packages/gnomon-helper/README.md for the separate-App-ID question.
+export const BUNDLE_ID = 'gnomon.probe';
+export const PROFILE_APP_ID = `${TEAM}.gnomon.helper`;
+export const APP_ID = PROFILE_APP_ID;
+export const ACCESS_GROUP = `${TEAM}.gnomon.probe`;
 export const IDENTITY = `Developer ID Application: Matthew Canoy (${TEAM})`;
 export const PROFILE_PATH = path.join(os.homedir(), '.config/gnomon-signing/gnomon-helper.provisionprofile');
 export const NOTARY_PROFILE = 'gnomon-notary';
@@ -110,8 +118,8 @@ const INFO_PLIST = (exe) => `<?xml version="1.0" encoding="UTF-8"?>
 <plist version="1.0"><dict>
   <key>CFBundleIdentifier</key><string>${BUNDLE_ID}</string>
   <key>CFBundleExecutable</key><string>${exe}</string>
-  <key>CFBundleName</key><string>Gnomon Helper</string>
-  <key>CFBundleDisplayName</key><string>Gnomon Helper</string>
+  <key>CFBundleName</key><string>Gnomon Probe Helper</string>
+  <key>CFBundleDisplayName</key><string>Gnomon Probe Helper</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleShortVersionString</key><string>0.0.0-probe</string>
   <key>CFBundleVersion</key><string>1</string>
@@ -131,8 +139,8 @@ const ENTITLEMENTS = `<?xml version="1.0" encoding="UTF-8"?>
 
 /**
  * Build steps (also the documented manual recipe, probes/README.md):
- *   1. xcrun swiftc -O _shared/helper/ProbeHelper.swift -o <app>/Contents/MacOS/gnomon-helper
- *   2. Info.plist (CFBundleIdentifier gnomon.helper) + Contents/embedded.provisionprofile
+ *   1. xcrun swiftc -O _shared/helper/ProbeHelper.swift -o <app>/Contents/MacOS/gnomon-probe-helper
+ *   2. Info.plist (CFBundleIdentifier gnomon.probe) + Contents/embedded.provisionprofile
  *   3. codesign --force --options runtime --timestamp --entitlements helper.entitlements
  *        --sign "Developer ID Application: Matthew Canoy (SW4BMQ8PNL)" <app>
  *   4. codesign --verify --strict --deep -vv <app>
@@ -149,14 +157,14 @@ export function buildHelper({ embedProfile = true, sign = true } = {}) {
   const app = path.join(dir, 'GnomonHelperProbe.app');
   const macos = path.join(app, 'Contents/MacOS');
   mkdirSync(macos, { recursive: true });
-  const exe = path.join(macos, 'gnomon-helper');
+  const exe = path.join(macos, 'gnomon-probe-helper');
   const steps = {};
   let t = Date.now();
   execFileSync('/usr/bin/xcrun', ['swiftc', '-O', src, '-o', exe], { stdio: ['ignore', 'pipe', 'pipe'], timeout: 300_000 });
   steps.swiftcMs = Date.now() - t;
-  const unsigned = path.join(dir, 'gnomon-helper-unsigned');
+  const unsigned = path.join(dir, 'gnomon-probe-helper-unsigned');
   copyFileSync(exe, unsigned);
-  writeFileSync(path.join(app, 'Contents/Info.plist'), INFO_PLIST('gnomon-helper'));
+  writeFileSync(path.join(app, 'Contents/Info.plist'), INFO_PLIST('gnomon-probe-helper'));
   const entFile = path.join(dir, 'helper.entitlements');
   writeFileSync(entFile, embedProfile ? ENTITLEMENTS : '<?xml version="1.0" encoding="UTF-8"?>\n<plist version="1.0"><dict/></plist>\n');
   if (embedProfile) copyFileSync(PROFILE_PATH, path.join(app, 'Contents/embedded.provisionprofile'));

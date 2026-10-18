@@ -24,3 +24,21 @@ node packages/gnomon-helper/scripts/notarize-darwin.mjs           # optional: no
 ```
 
 Output: `bin/darwin/GnomonHelper.app` (gitignored) and its sha256 in `checksums.json`.
+
+## Keychain separation (Aegis H1, M1.3 round 2)
+
+| Binary | Code identifier | Keychain access group | Passes the kernel pin? |
+|---|---|---|---|
+| production helper (`GnomonHelper.app`) | `gnomon.helper` | `SW4BMQ8PNL.gnomon.prod` only | yes (requirement + `info` version floor) |
+| probe helper (`GnomonHelperProbe.app`, P00/P04/P05) | `gnomon.probe` | `SW4BMQ8PNL.gnomon.probe` only | no (identifier), and it refuses production tags and services |
+
+What code can and cannot do: both binaries embed the one Developer ID
+provisioning profile (App ID `SW4BMQ8PNL.gnomon.helper`). That profile grants
+`keychain-access-groups = SW4BMQ8PNL.*` (the team wildcard), so ANY binary the
+team signs with it may claim ANY team group in its entitlements, `.prod`
+included. The groups above separate the binaries we build; they do not stop a
+future team-signed binary from claiming `.prod`. Real separation needs the
+production helper on its own App ID with its own profile, and no other team
+binary signed with that profile. `build-darwin.mjs` signs with exactly
+`SW4BMQ8PNL.gnomon.prod`, refuses any other signed group list, and records
+`groupGrant: explicit | team-wildcard` in `checksums.json`.

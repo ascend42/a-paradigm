@@ -1,7 +1,9 @@
 // gnomon-helper (darwin) — Secure Enclave keys behind presence (spec §3.1;
 // recipe proven by probe P04: bundle id gnomon.helper, team SW4BMQ8PNL,
 // access group SW4BMQ8PNL.gnomon, embedded Developer ID provisioning
-// profile, hardened runtime).
+// profile, hardened runtime). Production keys live in their OWN access group
+// SW4BMQ8PNL.gnomon.prod (Aegis H1): the probe helper (identifier
+// gnomon.probe) is signed into SW4BMQ8PNL.gnomon.probe and never lists this one.
 //
 //   root       SE P-256, .privateKeyUsage + .userPresence; FRESH presence per
 //              signature (a new LAContext, evaluated, then invalidated).
@@ -16,7 +18,7 @@ import Foundation
 import LocalAuthentication
 import Security
 
-let accessGroup = "SW4BMQ8PNL.gnomon"
+let accessGroup = "SW4BMQ8PNL.gnomon.prod"
 
 func tag(_ key: KeyClass, _ gen: String) -> Data { Data("gnomon.\(gen).\(key.rawValue)".utf8) }
 

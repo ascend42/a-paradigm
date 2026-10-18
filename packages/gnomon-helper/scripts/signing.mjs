@@ -19,7 +19,8 @@ import { fileURLToPath } from 'node:url';
 export const TEAM = 'SW4BMQ8PNL';
 export const BUNDLE_ID = 'gnomon.helper';
 export const APP_ID = `${TEAM}.${BUNDLE_ID}`;
-export const ACCESS_GROUP = `${TEAM}.gnomon`;
+/** Production keys only (Aegis H1): the probe helper uses `${TEAM}.gnomon.probe`, never this group. */
+export const ACCESS_GROUP = `${TEAM}.gnomon.prod`;
 export const APP_NAME = 'GnomonHelper.app';
 export const EXE_NAME = 'gnomon-helper';
 export const PROFILE_PATH = path.join(os.homedir(), '.config/gnomon-signing/gnomon-helper.provisionprofile');
@@ -75,9 +76,15 @@ export function checkProfile(file = PROFILE_PATH) {
   const expiresRaw = x('ExpirationDate', 'raw');
   const expires = expiresRaw ? new Date(expiresRaw) : null;
   if (appId !== APP_ID) fail(`the profile is for ${appId ?? '(none)'}, not ${APP_ID}`);
-  if (!groups.some((g) => g === ACCESS_GROUP || g === `${TEAM}.*`)) fail(`the profile does not grant the keychain access group ${ACCESS_GROUP}`);
+  // Aegis H1 (d): never sign for the team wildcard. The entitlements we sign with name ONLY ${ACCESS_GROUP};
+  // the profile must allow it, explicitly (preferred) or through the team wildcard, which Developer ID
+  // profiles always carry — recorded as groupGrant so the build output says which one it was.
+  const explicit = groups.includes(ACCESS_GROUP);
+  const wildcard = groups.includes(`${TEAM}.*`);
+  if (!explicit && !wildcard) fail(`the profile does not grant the keychain access group ${ACCESS_GROUP}`);
+  if (!explicit) process.stderr.write(`gnomon-helper build: WARNING the profile grants keychain groups only through the team wildcard ${TEAM}.*; any binary this team signs with a profile may claim ${ACCESS_GROUP} (see README: separate App ID)\n`);
   if (expires && !(expires > new Date())) fail(`the profile expired at ${expires.toISOString()}`);
-  return { path: file, appId, groups, expires: expires?.toISOString() ?? null, sha256: createHash('sha256').update(readFileSync(file)).digest('hex') };
+  return { path: file, appId, groups, groupGrant: explicit ? 'explicit' : 'team-wildcard', expires: expires?.toISOString() ?? null, sha256: createHash('sha256').update(readFileSync(file)).digest('hex') };
 }
 
 export function sha256File(file) {

@@ -50,10 +50,12 @@ prompt-free half and records `partial`.
   policy is the exception, because removing it needs sudo; the probe prints
   the exact `sudo rm` line instead.
   The helper is `_shared/helper/ProbeHelper.swift`, built into
-  `GnomonHelperProbe.app` (bundle id `gnomon.helper`, App ID
-  `SW4BMQ8PNL.gnomon.helper`, access group `SW4BMQ8PNL.gnomon`) in a temp dir.
+  `GnomonHelperProbe.app` (bundle id `gnomon.probe` — never `gnomon.helper`, so it
+  cannot pass the kernel's helper pin — App ID entitlement `SW4BMQ8PNL.gnomon.helper`
+  from the one profile, access group `SW4BMQ8PNL.gnomon.probe`; it refuses production
+  tags and services, Aegis H1) in a temp dir.
   The build steps:
-  1. `xcrun swiftc -O _shared/helper/ProbeHelper.swift -o <app>/Contents/MacOS/gnomon-helper`
+  1. `xcrun swiftc -O _shared/helper/ProbeHelper.swift -o <app>/Contents/MacOS/gnomon-probe-helper`
   2. Write `Info.plist`, then copy the profile to `Contents/embedded.provisionprofile`.
   3. `codesign --force --options runtime --timestamp --entitlements helper.entitlements --sign "Developer ID Application: Matthew Canoy (SW4BMQ8PNL)" <app>`
   4. `codesign --verify --strict --deep -vv <app>`

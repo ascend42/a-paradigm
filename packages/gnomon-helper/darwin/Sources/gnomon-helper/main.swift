@@ -25,7 +25,7 @@
 import Foundation
 import Security
 
-let gnomonHelperVersion = "1.1.0"
+let gnomonHelperVersion = "1.2.0"
 
 typealias SandboxCheck = @convention(c) (pid_t, UnsafePointer<CChar>?, Int32) -> Int32
 func isSandboxed() -> Bool {

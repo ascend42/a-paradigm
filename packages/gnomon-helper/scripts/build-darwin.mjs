@@ -95,6 +95,10 @@ if (!unsigned) {
   if (v.status !== 0) fail(`codesign --verify --strict failed: ${v.stderr.slice(0, 600)}`);
   const req = run('/usr/bin/codesign', ['--verify', '--strict', `-R=${HELPER_REQUIREMENT}`, app]);
   if (req.status !== 0) fail(`the signed helper does not satisfy the kernel's requirement: ${req.stderr.slice(0, 600)}`);
+  // the signed entitlements must name exactly the production group (never the wildcard, never the probe group)
+  const entOut = run('/usr/bin/codesign', ['-d', '--entitlements', '-', '--xml', app]).stdout;
+  const signedGroups = [...(entOut.match(/<key>keychain-access-groups<\/key>\s*<array>([\s\S]*?)<\/array>/)?.[1] ?? '').matchAll(/<string>([^<]*)<\/string>/g)].map((m) => m[1]);
+  if (signedGroups.length !== 1 || signedGroups[0] !== ACCESS_GROUP) fail(`the signed keychain-access-groups are ${JSON.stringify(signedGroups)}, want exactly ["${ACCESS_GROUP}"]`);
   const d = run('/usr/bin/codesign', ['-d', '-vv', app]).stderr;
   signing = {
     signed: true,
@@ -103,6 +107,8 @@ if (!unsigned) {
     identifier: /Identifier=(\S+)/.exec(d)?.[1] ?? null,
     profileSha256: profile.sha256.slice(0, 16),
     profileExpires: profile.expires,
+    accessGroup: ACCESS_GROUP,
+    groupGrant: profile.groupGrant,
   };
 }
 
