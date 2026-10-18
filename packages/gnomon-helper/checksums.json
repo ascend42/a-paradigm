@@ -3,14 +3,16 @@
   "note": "sha256 per built helper executable; written by scripts/build-darwin.mjs. The kernel pins the executable by its code-signing requirement and this sha256 at spawn (G-HLP-01).",
   "binaries": {
     "bin/darwin/GnomonHelper.app/Contents/MacOS/gnomon-helper": {
-      "sha256": "0665e63eea97dd6ffd820d40e02efdb5f9ddb2b4b88948b29fa3176c02e46d9f",
-      "version": "1.1.0",
+      "sha256": "bdd2656e173c09fb7fc86329a2ca9a7b10cd7185083441e38832b5b569ddc848",
+      "version": "1.2.0",
       "signed": true,
       "identity": "Developer ID Application: Matthew Canoy (SW4BMQ8PNL)",
       "team": "SW4BMQ8PNL",
       "identifier": "gnomon.helper",
       "profileSha256": "04a610410ce3928e",
-      "profileExpires": "2044-10-13T01:08:39.000Z"
+      "profileExpires": "2044-10-13T01:08:39.000Z",
+      "accessGroup": "SW4BMQ8PNL.gnomon.prod",
+      "groupGrant": "team-wildcard"
     }
   }
 }

@@ -77,6 +77,33 @@ func createKey(_ key: KeyClass, _ gen: String) throws -> String {
     return try publicKeyB64(priv)
 }
 
+/// Every production key in the access group: (gen, key) parsed from tags `gnomon.<gen>.<root|approvals>`.
+func listKeys() -> [(gen: String, key: KeyClass)] {
+    let q: Json = [kSecClass as String: kSecClassKey,
+                   kSecAttrKeyType as String: kSecAttrKeyTypeECSECPrimeRandom,
+                   kSecAttrAccessGroup as String: accessGroup,
+                   kSecUseDataProtectionKeychain as String: true,
+                   kSecReturnAttributes as String: true,
+                   kSecMatchLimit as String: kSecMatchLimitAll]
+    var items: CFTypeRef?
+    guard SecItemCopyMatching(q as CFDictionary, &items) == errSecSuccess, let arr = items as? [Json] else { return [] }
+    var out: [(gen: String, key: KeyClass)] = []
+    for a in arr {
+        guard let t = a[kSecAttrApplicationTag as String] as? Data else { continue }
+        let parts = String(decoding: t, as: UTF8.self).split(separator: ".")
+        guard parts.count == 3, parts[0] == "gnomon", let k = KeyClass(rawValue: String(parts[2])) else { continue }
+        out.append((gen: String(parts[1]), key: k))
+    }
+    return out
+}
+
+/// Verify a DER ECDSA signature by the PUBLIC half of (key, gen) — no presence needed.
+func verifyBy(_ key: KeyClass, _ gen: String, message: Data, signature: Data) -> Bool {
+    guard let priv = try? loadPrivateKey(key, gen, context: nil), let pub = SecKeyCopyPublicKey(priv) else { return false }
+    var err: Unmanaged<CFError>?
+    return SecKeyVerifySignature(pub, .ecdsaSignatureMessageX962SHA256, message as CFData, signature as CFData, &err)
+}
+
 func deleteKey(_ key: KeyClass, _ gen: String) -> Bool {
     let st = SecItemDelete(keyQuery(key, gen) as CFDictionary)
     return st == errSecSuccess

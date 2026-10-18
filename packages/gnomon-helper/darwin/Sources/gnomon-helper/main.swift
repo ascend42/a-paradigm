@@ -12,9 +12,16 @@
 //
 // Ops (Protocol.swift for the wire format and bounds):
 //   info
-//   key.create  {key, gen}                    → {publicKey}   (refuses `exists`)
+//   key.list                                  → {keys: [{gen, key}]}
+//   key.create  {key, gen, rotate?}           → {publicKey}   (refuses `exists`; refuses `other-generation`
+//                                               when a key of another gen exists, unless `rotate` carries
+//                                               {fromGen, statement, sig}: a gnomon-root-rotate:v1 row naming
+//                                               toGen = gen, signed by the root of fromGen — Aegis H2)
 //   key.public  {key, gen}                    → {publicKey}   (`not-found`)
-//   key.delete  {key, gen}                    → {deleted}
+//   key.delete  {key, gen, reason}            → {deleted, statement, sig?}  FRESH presence over a
+//                                               helper-composed delete statement, signed by the root of
+//                                               gen when it exists (H2); no presence only for a gen this
+//                                               process created itself (failed-provision cleanup)
 //   sign        {key, gen, mode: fresh|cached, connId?, keep?, reason, messages[]}
 //                                             → {sigs[], kept}
 //   unlock.drop {connId}                      → {dropped}
@@ -45,6 +52,23 @@ func signingInfo() -> Json {
 }
 
 let unlocks = Unlocks()
+/// Generations whose keys THIS process created (a failed provision may remove them without presence).
+var createdHere = Set<String>()
+
+/// Aegis H2: a rotate statement — `gnomon:row-sig:v1\n` + canonical JSON
+/// {schemaVersion: gnomon-root-rotate:v1, fromGen, toGen, …} — signed (DER) by the root of fromGen.
+func checkRotate(_ req: Json, toGen: String) throws {
+    guard let r = req["rotate"] as? Json else { throw HelperError("other-generation", "keys of another generation exist; creating new ones needs a rotate statement signed by the old root") }
+    let fromGen = try generation(["gen": r["fromGen"] as Any])
+    guard let st = (r["statement"] as? String).flatMap({ Data(base64Encoded: $0) }), st.count <= Bounds.maxMessageBytes,
+          let sig = (r["sig"] as? String).flatMap({ Data(base64Encoded: $0) }) else { throw bad("rotate needs {fromGen, statement, sig}") }
+    let prefix = Data("gnomon:row-sig:v1\n".utf8)
+    guard st.starts(with: prefix), let obj = try? JSONSerialization.jsonObject(with: st.subdata(in: prefix.count..<st.count)) as? Json,
+          obj["schemaVersion"] as? String == "gnomon-root-rotate:v1", obj["fromGen"] as? String == fromGen, obj["toGen"] as? String == toGen else {
+        throw HelperError("rotate-refused", "the rotate statement does not name this generation change")
+    }
+    guard verifyBy(.root, fromGen, message: st, signature: sig) else { throw HelperError("rotate-refused", "the rotate statement is not signed by the root of \(fromGen)") }
+}
 
 func handle(_ req: Json) throws -> Json {
     let op = try str(req, "op")
@@ -52,8 +76,16 @@ func handle(_ req: Json) throws -> Json {
     case "info":
         return ["version": gnomonHelperVersion, "protocol": helperProtocol, "pid": Int(getpid()), "sandboxed": false, "signing": signingInfo(), "unlocks": unlocks.count]
 
+    case "key.list":
+        return ["keys": listKeys().map { ["gen": $0.gen, "key": $0.key.rawValue] }]
+
     case "key.create":
-        return ["publicKey": try createKey(try keyClass(req), try generation(req))]
+        let k = try keyClass(req)
+        let g = try generation(req)
+        if listKeys().contains(where: { $0.gen != g }) { try checkRotate(req, toGen: g) }
+        let pub = try createKey(k, g)
+        createdHere.insert(g)
+        return ["publicKey": pub]
 
     case "key.public":
         return ["publicKey": try publicKeyB64(try loadPrivateKey(try keyClass(req), try generation(req), context: nil))]
@@ -61,26 +93,42 @@ func handle(_ req: Json) throws -> Json {
     case "key.delete":
         let k = try keyClass(req)
         let g = try generation(req)
+        var nonce = Data(count: 16)
+        _ = nonce.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, 16, $0.baseAddress!) }
+        let statement = Data("gnomon:key-delete:v1\n\(k.rawValue)\n\(g)\n\(nonce.base64EncodedString())".utf8)
+        var out: Json = ["statement": statement.base64EncodedString()]
+        if !createdHere.contains(g) {
+            // Aegis H2: fresh presence over a statement the HELPER composed; the root of gen signs it when it exists
+            let ctx = try evaluatePresence(promptText(try reason(req), "Gnomon Helper: DELETE the \(k.rawValue) key of generation \(g) (\(digest12(statement)))"))
+            defer { ctx.invalidate() }
+            if let root = try? loadPrivateKey(.root, g, context: ctx) {
+                var err: Unmanaged<CFError>?
+                guard let sig = SecKeyCreateSignature(root, .ecdsaSignatureMessageX962SHA256, statement as CFData, &err) as Data? else { throw cfError(err, "sign") }
+                out["sig"] = sig.base64EncodedString()
+            }
+        }
         if k == .approvals { _ = unlocks.dropAll() }
-        return ["deleted": deleteKey(k, g)]
+        out["deleted"] = deleteKey(k, g)
+        return out
 
     case "sign":
         let k = try keyClass(req)
         let g = try generation(req)
-        let msgs = try messages(req, for: k)
         let mode = try str(req, "mode")
+        let msgs = try messages(req, for: k, cached: mode == "cached")
         let conn = try connId(req)
-        let keep = (req["keep"] as? Bool) ?? false
+        let keep = try optBool(req, "keep")
+        let line = helperLine(key: k, messages: msgs)
         switch (k, mode) {
         case (.root, "fresh"):
             // presence PER SIGNATURE: a new context, evaluated, used once, invalidated
             guard !keep else { throw bad("the root key never keeps an unlock") }
-            let ctx = try evaluatePresence(try reason(req))
+            let ctx = try evaluatePresence(promptText(try reason(req), line))
             defer { ctx.invalidate() }
             return ["sigs": try signAll(try loadPrivateKey(k, g, context: ctx), msgs), "kept": false]
         case (.approvals, "fresh"):
             if keep && conn == nil { throw bad("keep needs a connId") }
-            let ctx = try evaluatePresence(try reason(req))
+            let ctx = try evaluatePresence(promptText(try reason(req), line))
             let sigs: [String]
             do {
                 sigs = try signAll(try loadPrivateKey(k, g, context: ctx), msgs)
@@ -91,7 +139,7 @@ func handle(_ req: Json) throws -> Json {
             var kept = false
             if keep, let c = conn { kept = unlocks.put(c, gen: g, ctx: ctx) }
             if !kept { ctx.invalidate() }
-            return ["sigs": sigs, "kept": kept]
+            return ["sigs": sigs, "kept": kept, "shown": line]
         case (.approvals, "cached"):
             guard let c = conn else { throw bad("a cached sign needs a connId") }
             guard let ctx = unlocks.use(c, gen: g) else { throw HelperError("no-unlock", "no live unlock for this connection") }
