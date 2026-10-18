@@ -82,11 +82,22 @@ describe('client display rules (\u00a74.5 sanitizer + Unicode)', () => {
     expect(sanitizeDisplayText('\u001b]0;a\u009db\u0007c')).toEqual({ text: '⟨ESC⟩]0;ac', flags: ['hidden-chars'] });
   });
 
-  it('Aegis R2-2 timing falsifier: 200k unterminated introducers sanitize in < 100 ms (linear)', () => {
-    for (const s of ['\u009d'.repeat(200_000), `${'\u001b]'.repeat(200_000)}text`]) {
-      const t0 = performance.now();
-      sanitizeDisplayText(s);
-      expect(performance.now() - t0).toBeLessThan(100);
+  it('Aegis R2-2 timing falsifier: unterminated introducers sanitize in linear time (8× input ⇒ well under 64×)', () => {
+    // A ratio, not a wall-clock budget: CI runners differ ~2× in speed, quadratic growth does not hide in a ratio
+    const best = (s: string): number => {
+      let min = Infinity;
+      for (let i = 0; i < 3; i++) {
+        const t0 = performance.now();
+        sanitizeDisplayText(s);
+        min = Math.min(min, performance.now() - t0);
+      }
+      return Math.max(min, 0.05);
+    };
+    for (const unit of ['\u009d', '\u001b]']) {
+      const small = best(`${unit.repeat(25_000)}text`);
+      const large = best(`${unit.repeat(200_000)}text`);
+      expect(large / small).toBeLessThan(24);
+      expect(large).toBeLessThan(2_000);
     }
   });
 

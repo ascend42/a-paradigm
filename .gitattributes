@@ -7,3 +7,6 @@
 
 # Generated JSON Schemas are byte-compared against src/schemas.ts in tests; keep LF on every OS.
 packages/gnomon-contracts/schemas/*.json text eol=lf
+
+# Normative conformance vectors are compared byte-for-byte on every OS
+packages/gnomon-contracts/conformance/*.json text eol=lf
