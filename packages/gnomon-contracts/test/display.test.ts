@@ -162,7 +162,7 @@ describe('conformance catalog (\u00a712.8, G-CLI-02)', () => {
 describe('additive only: clientApiId did not move (\u00a712.8)', () => {
   it('the pin still equals the computed id', () => {
     expect(JSON.parse(read('../schemas/client-api.ids.json')).clientApiId).toBe(CLIENT_API_ID);
-    expect(CLIENT_API_ID).toBe('sha256:fd576e6d7ee15cd7f7481768d085117c1e22b37902d93821a11359736c98e0fd');
+    expect(CLIENT_API_ID).toBe('sha256:f998e8a87d892666e30cd4ced040bb9266a6ff87da703b2b728c9f16fc7c3714');
   });
 
   it('client-types cover exactly the 12 verbs + 2 relays', () => {

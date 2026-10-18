@@ -165,6 +165,7 @@
     "schedule.tend.start",
     "session.alias",
     "session.alias.rejected",
+    "session.compacted",
     "session.exited",
     "session.idle",
     "session.inject",
@@ -426,6 +427,16 @@
     ],
     "key.token.revoked": [
       "tokenId"
+    ]
+  },
+  "x-gnomon-kind-payloads": {
+    "session.compacted": [
+      "hsid",
+      "turn",
+      "reason",
+      "summaryHash",
+      "tokensBefore",
+      "tokensAfter"
     ]
   },
   "type": "object",

@@ -21,6 +21,8 @@ import { BudgetFuse } from '../src/kernel/budget/fuse.js';
 import { SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
 import { DEV_TEST_ROOT_ACK, DevTestRootAuthority } from '../src/kernel/identity/root-authority.js';
 import { parseLocalLine } from '../src/adapters/local/runner.js';
+import { compactedPayloadOf } from '../src/kernel/supervisor/local-session.js';
+import { mintHsid, turnId, validateSessionCompactedPayload } from '@a-company/gnomon-contracts';
 import { pinOf, prepareRunner, sha256File, type LocalRunnerPin } from '../src/kernel/local/runner-pin.js';
 import { buildSessionPolicy, localRunnerDenies } from '../src/kernel/manifest/policy.js';
 const pinOfNode = (node: string): Pick<LocalRunnerPin, 'node' | 'nodeSha256'> => ({ node, nodeSha256: sha256File(node) });
@@ -404,5 +406,15 @@ describe('session.send{steer} at the socket port', () => {
     const h = `sha256:${'a'.repeat(64)}`;
     expect(parseLocalLine(`{"type":"compaction_end","reason":"threshold","tokensBefore":9000,"tokensAfter":700,"kept":2,"summaryHash":"${h}","summaryBytes":812}`)).toEqual({ kind: 'compaction', type: 'compaction_end', phase: 'end', reason: 'threshold', tokensBefore: 9000, tokensAfter: 700, summaryHash: h, summaryBytes: 812, error: null });
     expect(parseLocalLine('{"type":"compaction_end","summaryHash":"not-a-hash"}')).toMatchObject({ summaryHash: null });
+    // T-2026-10-18-016 (P8-D93): only a successful compaction_end with its numbers maps onto session.compacted
+    const hsid = mintHsid();
+    const end = parseLocalLine(`{"type":"compaction_end","reason":"threshold","tokensBefore":9000,"tokensAfter":700,"kept":2,"summaryHash":"${h}","summaryBytes":812}`);
+    const row = compactedPayloadOf(hsid, turnId(hsid, 2), end);
+    expect(row).toEqual({ hsid, turn: turnId(hsid, 2), reason: 'threshold', summaryHash: h, tokensBefore: 9000, tokensAfter: 700 });
+    expect(validateSessionCompactedPayload(row)).toEqual([]);
+    expect(compactedPayloadOf(hsid, null, parseLocalLine(`{"type":"compaction_end","tokensBefore":9000,"tokensAfter":700,"summaryHash":"${h}"}`))).toMatchObject({ reason: 'unspecified', turn: null });
+    expect(compactedPayloadOf(hsid, null, parseLocalLine('{"type":"compaction_start","reason":"threshold"}'))).toBeNull();
+    expect(compactedPayloadOf(hsid, null, parseLocalLine(`{"type":"compaction_end","error":"boom","tokensBefore":1,"tokensAfter":1,"summaryHash":"${h}"}`))).toBeNull();
+    expect(compactedPayloadOf(hsid, null, parseLocalLine('{"type":"compaction_end","summaryHash":"not-a-hash","tokensBefore":1,"tokensAfter":1}'))).toBeNull();
   });
 });

@@ -258,3 +258,27 @@ describe('auth preimages bind the negotiated hello (M1.4 slice 3, T-2026-10-17-0
     expect(c.RESERVED_KIND_PAYLOADS['daemon.log.quarantined']).toEqual(['quarantinedLog', 'quarantinedHead', 'evidencePath', 'authorizedBy']);
   });
 });
+
+describe('session.compacted (T-2026-10-18-016, P8-D93)', () => {
+  it('is a kernel-owned normal kind with summaryHash a sensitive field; its payload is closed and typed; the schema publishes the field list', async () => {
+    const c = await import('../src/index.js');
+    expect(c.EVENT_KINDS['session.compacted']).toEqual({ kind: 'session.compacted', owner: 'kernel', sensitivity: 'normal', fieldLabels: { summaryHash: 'sensitive' } });
+    expect(c.KIND_PAYLOADS['session.compacted']).toEqual(['hsid', 'turn', 'reason', 'summaryHash', 'tokensBefore', 'tokensAfter']);
+    const hsid = c.mintHsid();
+    const good = { hsid, turn: c.turnId(hsid, 3), reason: 'threshold', summaryHash: `sha256:${'a'.repeat(64)}`, tokensBefore: 9000, tokensAfter: 700 };
+    expect(c.validateSessionCompactedPayload(good)).toEqual([]);
+    expect(c.validateSessionCompactedPayload({ ...good, turn: null })).toEqual([]);
+    const { reason: _r, ...noReason } = good;
+    for (const bad of [
+      { ...good, extra: 1 },
+      { ...good, summaryHash: 'nope' },
+      { ...good, tokensAfter: -1 },
+      { ...good, tokensBefore: 1.5 },
+      { ...good, reason: '' },
+      { ...good, hsid: 'x' },
+      { ...good, turn: 'turn:x/1' },
+      noReason,
+    ]) expect(c.validateSessionCompactedPayload(bad).length, JSON.stringify(bad)).toBeGreaterThan(0);
+    expect((c.EVENT_V1_SCHEMA as Record<string, unknown>)['x-gnomon-kind-payloads']).toEqual(c.KIND_PAYLOADS);
+  });
+});

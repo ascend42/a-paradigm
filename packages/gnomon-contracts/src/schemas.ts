@@ -26,6 +26,7 @@ import {
   SESSION_TAINTS,
   APPROVAL_SUSPECT_REASONS,
   RESERVED_KIND_PAYLOADS,
+  KIND_PAYLOADS,
 } from './event.js';
 import {
   RISK_TIERS,
@@ -96,6 +97,7 @@ export const EVENT_V1_SCHEMA: Schema = deepFreeze({
   'x-gnomon-session-taints': [...SESSION_TAINTS],
   'x-gnomon-suspect-reasons': [...APPROVAL_SUSPECT_REASONS],
   'x-gnomon-reserved-kind-payloads': RESERVED_KIND_PAYLOADS,
+  'x-gnomon-kind-payloads': KIND_PAYLOADS,
   ...closedObj(
     {
       schemaVersion: { const: 'event:v1' },

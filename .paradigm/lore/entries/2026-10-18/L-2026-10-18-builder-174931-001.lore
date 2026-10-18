@@ -1,0 +1,25 @@
+id: L-2026-10-18-builder-174931-001
+type: insight
+timestamp: '2026-10-18T17:49:31.926Z'
+author: builder
+title: 'Hello clientNonce: serverSig binds a nonce the CLIENT chose'
+summary: Before T-016 serverSig covered only a server-chosen nonce, so a same-user process could record one genuine hello and replay it from a squatted endpoint. Now hello carries a required clientNonce (base64url 16..64 bytes, clients send 32), the result echoes it, and authServerMessage = nonce, clientNonce, endpointPath, clientApi, canonical(features). Every client (TS, CLI connectGnomon, GUI) refuses a non-echo (client-nonce-mismatch, client-local) and verifies over the nonce it SENT, never the echoed field. Domain stays gnomon:auth-server:v1 (pre-freeze; line count differs). Conformance case (c) now replays a real recorded hello verbatim and echo-rewritten; falsifier = a client that trusts the echoed nonce.
+symbols_touched:
+  - '#socket'
+  - '#gnomon-ts-client'
+  - '#gui'
+  - '#client-conformance'
+  - '#gnomon-contracts'
+tags:
+  - decision
+  - gnomon
+  - security
+  - P8-D93
+linked_commits:
+  - cf148e6b
+  - 1500288b
+confidence: 0.9
+git_context:
+  ref: 1500288bea1a91411760b92d4beaf5704ea50460
+  branch: gnomon/t016-api-bump
+  dirty: true

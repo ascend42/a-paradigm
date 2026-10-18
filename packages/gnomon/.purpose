@@ -640,7 +640,10 @@ components:
       Envelope = contracts event:v1, validated strict with default-label check;
       unregistered kinds refused (never guessed), labels tighten-only (L6),
       kernel/userland ownership enforced (L7), daemon.segment reserved to the
-      log, session.inject must carry {origin, hash, bytes}. Signer seam
+      log, session.inject must carry {origin, hash, bytes}; session.compacted
+      (T-2026-10-18-016, P8-D93) must pass contracts
+      validateSessionCompactedPayload (closed, typed) else bad-payload; replay
+      folds its summaryHash as a RECORDED host hash. Signer seam
       (signer.ts): Signer.sign(domain, message) prepends the §3.1 domain
       (gnomon:event-sig:v1 etc.), key classes limited to their domains;
       SoftwareEd25519Signer = the in-memory kernel key (keyId
@@ -1305,6 +1308,10 @@ components:
   local-runner:
     description: >-
       #local-runner (spec §13, §3.3, §6.1 step 2; M1.8 slice 1). Kernel side:
+      local-session.ts maps a SUCCESSFUL compaction_end (summaryHash + both
+      token counts, no error) onto the typed session.compacted{hsid, turn,
+      reason, summaryHash, tokensBefore, tokensAfter} row (compactedPayloadOf;
+      T-2026-10-18-016, P8-D93) after the raw turn.event line, which stays;
       src/kernel/local/endpoint.ts (loopback/LAN rule on the normalised host;
       hostnames, Anthropic hosts, link-local/metadata, public, userinfo,
       forbidden web-endpoint port refused — G-SUB-06 BILLING_REFUSED via

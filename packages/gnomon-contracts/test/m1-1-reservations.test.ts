@@ -245,7 +245,8 @@ const COVERAGE: Record<string, Entry> = {
 
 /** Update ONLY on a deliberate client-API change (and record it in the review). */
 // Moved once by P8-D89 (M1.4 slice 3, T-2026-10-18-002): was sha256:8e30f400…3014.
-const PINNED_CLIENT_API_ID = 'sha256:fd576e6d7ee15cd7f7481768d085117c1e22b37902d93821a11359736c98e0fd';
+// Moved once by P8-D93 (T-2026-10-18-016: hello clientNonce + session.compacted): was sha256:fd576e6d…e0fd.
+const PINNED_CLIENT_API_ID = 'sha256:f998e8a87d892666e30cd4ced040bb9266a6ff87da703b2b728c9f16fc7c3714';
 
 const EXPECTED_GAPS = ['permit.log', 'brief:v1', 'cowork.msg:v1', 'gnomon-link:v1', 'linkApiId'];
 
@@ -592,6 +593,7 @@ describe('event labels and payload docs (round 2)', () => {
       'link.msg.out': { hash: 'sensitive' },
       'inject.receipt': { shas: 'sensitive', source_hash: 'sensitive', frozenSliceHash: 'sensitive' },
       'daemon.log.quarantined': { evidencePath: 'sensitive' }, // P8-D89 reservation (a local path)
+      'session.compacted': { summaryHash: 'sensitive' }, // P8-D93: digest of model-written summary text
     });
   });
   it('incident kinds carry no free-text field, so no sensitive field label is needed', () => {

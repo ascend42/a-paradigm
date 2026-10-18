@@ -91,7 +91,11 @@ components:
 
   contract-event-v1:
     description: >-
-      event:v1 envelope (§4.1) — P8-D89 (M1.4): reserves daemon.log.quarantined
+      event:v1 envelope (§4.1) — P8-D93 (T-2026-10-18-016): kernel-owned
+      session.compacted{hsid, turn, reason, summaryHash, tokensBefore,
+      tokensAfter} (summaryHash a sensitive field), KIND_PAYLOADS (published as
+      x-gnomon-kind-payloads) and validateSessionCompactedPayload. P8-D89
+      (M1.4): reserves daemon.log.quarantined
       (evidencePath a sensitive field) and adds key.token.revoked{tokenId},
       tag M1.4:P8-D89. EventV1 type, validateEventV1/isEventV1
       (strict = registered kind + closed fields; tolerant = unknown kinds and
@@ -259,7 +263,9 @@ components:
 
   contract-client-api-id:
     description: >-
-      kitId and clientApiId (§12.3, §12.8). kitId = sha256(canonicalJson(kit:v1
+      kitId and clientApiId (§12.3, §12.8). P8-D93 moved clientApiId once
+      (hello clientNonce + session.compacted): sha256:fd576e6d… →
+      sha256:f998e8a8…3714; kitId unchanged. kitId = sha256(canonicalJson(kit:v1
       block list)); clientApiId = sha256(canonicalJson(CLIENT_API_DESCRIPTOR) +
       "\n" + kitId) where the descriptor = the 12 verbs + 2 relays, the JSON-RPC
       code map, ADDITIVE_ENUMS, every published client JSON Schema and the

@@ -54,7 +54,7 @@ import { spawn, type ChildProcess } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
-import { hsidShort, mintHsid, refuse, RefusedError, turnId } from '@a-company/gnomon-contracts';
+import { hsidShort, mintHsid, refuse, RefusedError, turnId, type SessionCompactedPayload } from '@a-company/gnomon-contracts';
 import type { DaemonChildren } from '../lifecycle/children.js';
 import type { BudgetFuse, PermitV1 } from '../budget/fuse.js';
 import type { ApprovalBroker } from '../broker/broker.js';
@@ -151,6 +151,17 @@ export function repoIdOf(cwd: string): string {
     /* keep cwd */
   }
   return `path:${createHash('sha256').update(real).digest('hex').slice(0, 16)}`;
+}
+
+/**
+ * The typed session.compacted payload for a local runner compaction event
+ * (T-2026-10-18-016, P8-D93), or null when the event is not a successful
+ * compaction_end carrying its summary hash and both token counts.
+ */
+export function compactedPayloadOf(hsid: string, turn: string | null, ev: ReturnType<typeof parseLocalLine>): SessionCompactedPayload | null {
+  if (ev.kind !== 'compaction' || ev.phase !== 'end' || ev.error !== null) return null;
+  if (ev.summaryHash === null || ev.tokensBefore === null || ev.tokensAfter === null) return null;
+  return { hsid, turn, reason: ev.reason && ev.reason.length > 0 ? ev.reason : 'unspecified', summaryHash: ev.summaryHash, tokensBefore: ev.tokensBefore, tokensAfter: ev.tokensAfter };
 }
 
 export class LocalLane {
@@ -469,6 +480,15 @@ export class LocalLane {
       case 'partial':
         await this.#o.log('turn.partial', { hsid: s.hsid, bytes: ev.bytes }, { session: s.hsid });
         return;
+      case 'compaction': {
+        // T-2026-10-18-016 (P8-D93): a SUCCESSFUL compaction_end is also a typed session.compacted row; the raw
+        // turn.event line above stays the evidence (S2). A start, a failed end or an end without its numbers is
+        // only the turn.event.
+        const inFlight = s.turnPermits.length > 0 ? s.turns - s.turnPermits.length + 1 : s.turns;
+        const row = compactedPayloadOf(s.hsid, inFlight > 0 ? turnId(s.hsid, inFlight) : null, ev);
+        if (row) await this.#o.log('session.compacted', { ...row }, { session: s.hsid });
+        return;
+      }
       case 'message':
         // a message without usage is recorded as such (never silently zero)
         if (ev.tokens === null) await this.#o.log('turn.usage', { hsid: s.hsid, usage: null, backend: 'local' }, { session: s.hsid });

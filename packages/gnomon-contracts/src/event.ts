@@ -13,7 +13,7 @@
  */
 
 import { Checker, ISO_DATE_TIME, SHA256_TAGGED, type ValidateOptions } from './internal.js';
-import { ID_PATTERNS, HSID_PATTERN, KEY_ID_PATTERN, REPO_SCOPE_PATTERN, CONTRACT_ID_PATTERN } from './ids.js';
+import { ID_PATTERNS, HSID_PATTERN, KEY_ID_PATTERN, REPO_SCOPE_PATTERN, CONTRACT_ID_PATTERN, TURN_ID_PATTERN } from './ids.js';
 import { ANY_PRINCIPAL_PATTERN, DEVICE_ID_PATTERN } from './principal.js';
 import { validateRefV1 } from './ref.js';
 
@@ -98,6 +98,10 @@ const TABLE: Row[] = [
     'kernel',
     'open alias alias.rejected refused spawned inject tainted idle respawn exited orphaned routed sandbox layers.changed',
   ],
+  // session.compacted{hsid, turn, reason, summaryHash, tokensBefore, tokensAfter}: T-2026-10-18-016 (P8-D93) — a
+  // backend finished compacting the session's context (the local runner's successful compaction_end, §13). Typed
+  // so clients need not parse the raw turn.event line; validated at append (validateSessionCompactedPayload).
+  ['session', 'kernel', 'compacted'],
   ['turn', 'kernel', 'sent event usage result partial steer ask-user plan'],
   // §9.1 lists permit/budget as one row; split by the names the spec uses
   // elsewhere (permit.grant §3.3 S1, budget.usage §3.3 S3).
@@ -189,6 +193,7 @@ const FIELD_LABELS: Record<string, Record<string, Sensitivity>> = {
   'link.msg.out': { hash: 'sensitive' }, // digest of a message body sent to a peer
   'inject.receipt': { shas: 'sensitive', source_hash: 'sensitive', frozenSliceHash: 'sensitive' }, // digests of model-visible bytes
   'daemon.log.quarantined': { evidencePath: 'sensitive' }, // a local filesystem path (P8-D89)
+  'session.compacted': { summaryHash: 'sensitive' }, // digest of model-written summary text (P8-D93)
 };
 
 function build(): Readonly<Record<string, EventKindSpec>> {
@@ -256,6 +261,43 @@ export const RESERVED_KIND_PAYLOADS: Readonly<Record<string, readonly string[]>>
   'daemon.log.quarantined': ['quarantinedLog', 'quarantinedHead', 'evidencePath', 'authorizedBy'],
   'key.token.revoked': ['tokenId'],
 });
+
+/**
+ * Payload fields of BUILT kinds whose payload the kernel validates at append
+ * (published in the event schema, so clientApiId covers them). P8-D93.
+ */
+export const KIND_PAYLOADS: Readonly<Record<string, readonly string[]>> = Object.freeze({
+  'session.compacted': Object.freeze(['hsid', 'turn', 'reason', 'summaryHash', 'tokensBefore', 'tokensAfter']),
+});
+
+export interface SessionCompactedPayload {
+  hsid: string;
+  /** The turn in flight when compaction ran (turn:<hsid>/<n>), or null before the first turn. */
+  turn: string | null;
+  /** The backend's reason (e.g. `threshold`, `overflow`), 1..32 characters. */
+  reason: string;
+  /** sha256:<hex> of the summary text (a sensitive FIELD: it confirms a guess at the summary). */
+  summaryHash: string;
+  tokensBefore: number;
+  tokensAfter: number;
+}
+
+/** Closed check of a session.compacted payload (T-2026-10-18-016, P8-D93). Returns errors; [] = valid. */
+export function validateSessionCompactedPayload(value: unknown): string[] {
+  const c = new Checker('strict');
+  if (!c.obj('', value)) return c.errors;
+  const keys = KIND_PAYLOADS['session.compacted']!;
+  c.closed('', value, keys);
+  c.required('', value, keys);
+  if ('hsid' in value) c.str('hsid', value.hsid, HSID_PATTERN, 'hsid');
+  if ('turn' in value && value.turn !== null) c.str('turn', value.turn, TURN_ID_PATTERN, 'turn:<hsid>/<n> or null');
+  if ('reason' in value) c.str('reason', value.reason, /^.{1,32}$/s, '1..32 characters');
+  if ('summaryHash' in value) c.str('summaryHash', value.summaryHash, SHA256_TAGGED, 'sha256:<hex>');
+  for (const k of ['tokensBefore', 'tokensAfter'] as const) {
+    if (k in value && (!Number.isSafeInteger(value[k]) || (value[k] as number) < 0)) c.fail(k, 'must be a non-negative integer');
+  }
+  return c.errors;
+}
 
 /** The frozen kind registry (§9.1). */
 export const EVENT_KINDS: Readonly<Record<string, EventKindSpec>> = build();
