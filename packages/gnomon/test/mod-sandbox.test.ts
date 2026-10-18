@@ -115,6 +115,51 @@ describe.skipIf(!floor.ok)('Aegis round 2 F1: the mod-writable dirs cannot steer
   });
 });
 
+describe.skipIf(!floor.ok)('Aegis round 3: hardlinks and the restart leg', () => {
+  it('C1: a sandboxed child cannot hardlink a keys/ file, a $HOME file or ../state.db into state/ (EPERM)', async () => {
+    const r = rig();
+    cleanups.push(r.cleanup);
+    install(r, writeModFolder(path.join(r.root, 'src', 'probe'), probeManifest()));
+    const keysFile = path.join(r.home, 'keys', 'fake-key.txt');
+    fs.mkdirSync(path.dirname(keysFile), { recursive: true, mode: 0o700 });
+    fs.writeFileSync(keysFile, 'harmless test key');
+    const homeFile = path.join(homedir(), `.gnomon-m111-link-test-${process.pid}.txt`);
+    fs.writeFileSync(homeFile, 'harmless test file');
+    cleanups.push(async () => fs.rmSync(homeFile, { force: true }));
+    const { h } = host(r);
+    cleanups.push(() => h.stopAll());
+    expect(await h.start('probe')).toMatchObject({ state: 'running', sandbox: 'full' });
+    const w = (input: Record<string, unknown>) => h.callTool('probe', 'probe.write', input);
+    expect(await w({ op: 'state.set', value: 1 })).toMatchObject({ ok: true }); // state.db exists
+    const modRoot = path.join(r.home, 'mods', 'probe');
+    const sources = [keysFile, homeFile, path.join(modRoot, 'state.db')];
+    for (const [i, from] of sources.entries()) {
+      const res = (await w({ op: 'link', from, to: path.join(modRoot, 'state', `x${i}`) })) as { ok: boolean; code?: string };
+      expect(res, from).toEqual({ ok: false, code: 'EPERM' });
+      expect(fs.existsSync(path.join(modRoot, 'state', `x${i}`))).toBe(false);
+    }
+  });
+
+  it('C2: state/ swapped for a symlink while running ⇒ the supervised restart after a crash refuses SANDBOX', async () => {
+    const r = rig();
+    cleanups.push(r.cleanup);
+    install(r, writeModFolder(path.join(r.root, 'src', 'probe'), probeManifest()));
+    const { h } = host(r);
+    cleanups.push(() => h.stopAll());
+    await h.start('probe');
+    const modRoot = path.join(r.home, 'mods', 'probe');
+    const fakeHome = path.join(r.root, 'fakehome');
+    fs.mkdirSync(fakeHome);
+    fs.rmSync(path.join(modRoot, 'state'), { recursive: true });
+    fs.symlinkSync(fakeHome, path.join(modRoot, 'state'));
+    await expect(h.callTool('probe', 'probe.read', { op: 'crash' })).rejects.toMatchObject({ modCode: 'CRASHED' });
+    await new Promise((res) => setTimeout(res, 1_000));
+    expect(h.running()).toEqual([]);
+    expect(r.events.some((e) => e.kind === 'mod.health' && e.payload.why === 'sandbox-unavailable')).toBe(true);
+    expect(fs.readdirSync(fakeHome)).toEqual([]);
+  });
+});
+
 describe.skipIf(floor.ok)('below the floor the mod host refuses (never a weaker profile)', () => {
   it('start refuses SANDBOX', async () => {
     const r = rig();

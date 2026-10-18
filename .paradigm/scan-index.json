@@ -2,10 +2,10 @@
   "$meta": {
     "version": "1.0.0",
     "project": "agent-aae96ad6a145932e3",
-    "generatedAt": "2026-10-18T06:12:46.221Z",
+    "generatedAt": "2026-10-18T06:29:43.142Z",
     "paradigmVersion": "0.1.0",
     "sources": {
-      "purposeFiles": 102,
+      "purposeFiles": 103,
       "portalFiles": 2,
       "premiseFiles": 0
     },
@@ -2765,6 +2765,16 @@
       "related": [],
       "componentType": "module"
     },
+    "gnomon-mod-sdk": {
+      "id": "gnomon-mod-sdk",
+      "name": "Gnomon Mod Sdk",
+      "symbol": "#gnomon-mod-sdk",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/.claude/worktrees/agent-aae96ad6a145932e3/packages/gnomon-mod-sdk/.purpose",
+      "description": "The mod SDK package: serveMod speaks JSON-RPC 2.0 NDJSON on stdio (init echoes MOD_ABI_ID; view.render/command.run/tool.call handlers get an AbortSignal honouring cancel and the host-stamped relayedFor; api state.get/set, kernel.call, stderr log, egress CONNECT via the host's loopback proxy). Example mod example/hello (view, command, tools, state).",
+      "visualTags": [],
+      "related": []
+    },
     "gnomon-wrapper": {
       "id": "gnomon-wrapper",
       "name": "Gnomon Wrapper",
@@ -2983,6 +2993,18 @@
         "~ide-adapter-pattern"
       ],
       "componentType": "service"
+    },
+    "mod-host": {
+      "id": "mod-host",
+      "name": "Mod Host",
+      "symbol": "#mod-host",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/.claude/worktrees/agent-aae96ad6a145932e3/packages/gnomon/.purpose",
+      "description": "#mod-host (spec §3.8, §12.1-§12.3, §15.5 row mod; §19.1 M1.11 slice 1) in src/kernel/modhost/. host.ts ModHost - one child per mod, started ONLY via #manifest-loader loadMod (root-signed grant.install, snapshot integrity, manifestHash, grants; a changed linked folder pauses and stages the re-approve card instead of loading, G-MOD-08); effects in force = union of tool effects, capped at read while grant.install{dev} is live, an expired dev period pauses (mod.dev.expired, fail closed); spawns node <index.mjs|index.js> from the pinned snapshot under the default-deny mod profile (sandbox/mod.ts registry + platform/darwin/mod-sbpl.ts; same floor as sessions: macOS 15+ and SIP; other platforms refuse sandbox-unavailable), env GNOMON_MOD_NAME + GNOMON_EGRESS_PROXY only; tracked by DaemonChildren kind mod IN MEMORY (no mod.spawned/mod.exited kind: adding one moves clientApiId); init must echo mod-abi:v1 and MOD_ABI_ID. channel.ts - JSON-RPC 2.0 NDJSON over stdio (1 MiB frames, stderr tail). Calls serialized per mod so mod->host requests are attributed exactly; effects.ts enforces state.get=read, state.set=write, kernel.call by verb (approve never, log.append only own declared modns, session.send only inside a tool call with the caller hsid) => FORBIDDEN + mod.effect.refused. Timeout => cancel{cancelToken}, unhonoured => restart; crash => mod.health{ok:false} + restart (cap 3/10 min). block.ts closed kit:v1 gate (256 KiB / 2000 nodes, sanitizeLine, Button command id only, Image alt + sha256 blob, Canvas names a ds). relayView/relayCommand stamp relayedFor from the caller. egress-proxy.ts per-mod loopback CONNECT proxy (443 only; granted declared hosts; IP literals, private names, Anthropic hosts, private resolutions and calls lacking network refused). state.ts per-mod KV <home>/mods/<name>/state.db (sibling of state/, never granted; O_NOFOLLOW reads, random O_EXCL tmp; JSON in slice 1). Round 2 (Aegis): state/ and blobs/ must be real dirs at their expected paths before every profile build; tunnels closed at call end; proxy head deadline, connection cap, idle timeout, resolve-check-connect, wider non-public ranges; explicit verb-effect table; session.send pinned to the caller hsid, permitId stripped; channel caps in-flight mod requests at 16 with backpressure. Test seams (unsandboxed launcher, egress dialer) only via kernel/testing.ts createModHostForTest. Slice 2: socket relays and kernel.call wiring, folder watch, dev-mode cards, gnomon-mods MCP bridge, gnomon mod CLI, Tier 0 templates, workshop, daemon wiring.",
+      "visualTags": [],
+      "related": [
+        "#manifest-loader"
+      ]
     },
     "paradigm-logger": {
       "id": "paradigm-logger",
@@ -18766,6 +18788,10 @@
       "category": "components",
       "id": "gnomon-helper"
     },
+    "#gnomon-mod-sdk": {
+      "category": "components",
+      "id": "gnomon-mod-sdk"
+    },
     "#gnomon-wrapper": {
       "category": "components",
       "id": "gnomon-wrapper"
@@ -18829,6 +18855,10 @@
     "#claude-adapter": {
       "category": "components",
       "id": "claude-adapter"
+    },
+    "#mod-host": {
+      "category": "components",
+      "id": "mod-host"
     },
     "#paradigm-logger": {
       "category": "components",

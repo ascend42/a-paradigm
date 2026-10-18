@@ -11,12 +11,16 @@
  */
 import * as fs from 'node:fs';
 import * as net from 'node:net';
+import type { ChildProcess } from 'node:child_process';
+import { EventEmitter } from 'node:events';
+import { PassThrough, Writable } from 'node:stream';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { isRefusalV1, MOD_ABI_ID } from '@a-company/gnomon-contracts';
 import { ModRefusal, sanitizeModBlock, EgressProxy, isNonPublicAddress } from '../src/kernel/modhost/index.js';
 import { modLaunchPlan } from '../src/kernel/sandbox/mod.js';
-import { unsandboxedModLauncher } from '../src/kernel/testing.js';
+import { createModHostForTest, unsandboxedModLauncher } from '../src/kernel/testing.js';
+import { ModChannel } from '../src/kernel/modhost/channel.js';
 import { EXAMPLE_MOD, host, install, PROBE_SOURCE, probeManifest, rig, writeModFolder, type Rig } from './mod-helpers.js';
 import { appendGrantRow, effectiveInstall, readGrants } from '../src/kernel/manifest/index.js';
 
@@ -286,6 +290,62 @@ describe('round 2 (Aegis F2, reviewer #5)', () => {
     expect(h.restarts('probe')).toBe(3);
     expect(h.running()).toEqual([]);
     expect(r.events.some((e) => e.kind === 'mod.health' && e.payload.why === 'restart-cap')).toBe(true);
+  });
+});
+
+describe('round 3 (reviewer)', () => {
+  it('a child that cannot be tracked is killed and the start refused CRASHED', async () => {
+    const r = rig();
+    cleanups.push(r.cleanup);
+    install(r, writeModFolder(path.join(r.root, 'src', 'probe'), probeManifest()));
+    let pid: number | undefined;
+    const children = {
+      track: async (i: { child: ChildProcess }) => {
+        pid = i.child.pid;
+        throw new Error('no');
+      },
+      stop: async () => false,
+    };
+    const h = createModHostForTest({ home: r.home, trust: r.auth, children: children as never, emit: (kind, payload) => r.events.push({ kind, payload }) }, { launcher: unsandboxedModLauncher });
+    expect((await refused(h.start('probe'))).modCode).toBe('CRASHED');
+    expect(h.running()).toEqual([]);
+    await new Promise((res) => setTimeout(res, 200));
+    expect(() => process.kill(pid!, 0)).toThrow();
+  });
+
+  it('stopAll waits for an in-flight start: no child outlives it', async () => {
+    const r = rig();
+    cleanups.push(r.cleanup);
+    install(r, writeModFolder(path.join(r.root, 'src', 'probe'), probeManifest()));
+    const { h, children } = host(r, { launcher: unsandboxedModLauncher });
+    const p = h.start('probe').catch((e: unknown) => e);
+    await h.stopAll();
+    await p;
+    expect(h.running()).toEqual([]);
+    expect(children.live()).toBe(0);
+  });
+
+  it('a mod flooding state.get gets at most 16 requests in flight; the rest are refused BUSY', async () => {
+    const { h } = await started();
+    const out = (await h.callTool('probe', 'probe.read', { op: 'flood' })) as { ok: number; busy: number };
+    expect(out.ok + out.busy).toBe(40);
+    expect(out.busy).toBeGreaterThan(0);
+    expect(out.ok).toBeGreaterThanOrEqual(16);
+  });
+
+  it('backpressure: while the mod stdin does not drain, the host stops reading its stdout (one drain listener)', async () => {
+    const stdin = new Writable({ highWaterMark: 1, write: (_c, _e, cb) => setTimeout(cb, 50) });
+    const stdout = new PassThrough();
+    const child = Object.assign(new EventEmitter(), { stdin, stdout, stderr: new PassThrough() }) as unknown as ChildProcess;
+    const ch = new ModChannel(child, async () => ({ value: 1 }));
+    for (let i = 1; i <= 3; i++) stdout.write(`${JSON.stringify({ jsonrpc: '2.0', id: i, method: 'state.get', params: { key: 'k' } })}\n`);
+    await new Promise((res) => setImmediate(res));
+    await new Promise((res) => setImmediate(res));
+    expect(stdout.isPaused()).toBe(true);
+    expect(stdin.listenerCount('drain')).toBeLessThanOrEqual(2); // ours (one) + the stream's own
+    await new Promise((res) => setTimeout(res, 400));
+    expect(stdout.isPaused()).toBe(false);
+    ch.close(new Error('done'));
   });
 });
 

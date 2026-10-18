@@ -397,7 +397,7 @@ export class ModHost {
     throw new ModRefusal('NOT_RUNNING', `${name} is not running`, { name });
   }
 
-  /** Serialize host → mod calls per mod (exact effect attribution). */
+  /** Serialize host → mod calls per mod: a mod → host request is judged by the call in force when it ARRIVES (call-id binding is slice 2). */
   #enqueue<T>(name: string, fn: () => Promise<T>): Promise<T> {
     const prev = this.#queues.get(name) ?? Promise.resolve();
     const next = prev.then(fn, fn);

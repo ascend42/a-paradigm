@@ -45,6 +45,7 @@ export class ModChannel {
   #stderr = '';
   #closed = false;
   #inflight = 0;
+  #paused = false;
   protocolErrors = 0;
 
   constructor(child: ChildProcess, onRequest: RequestHandler) {
@@ -71,9 +72,13 @@ export class ModChannel {
     if (this.#closed) return;
     try {
       // backpressure: while the mod is not draining its stdin, stop reading its stdout (it cannot flood the host's memory)
-      if (!this.#child.stdin!.write(encodeFrame({ jsonrpc: '2.0', ...msg }))) {
+      if (!this.#child.stdin!.write(encodeFrame({ jsonrpc: '2.0', ...msg })) && !this.#paused) {
+        this.#paused = true; // one 'drain' listener at a time
         this.#child.stdout!.pause();
-        this.#child.stdin!.once('drain', () => this.#child.stdout!.resume());
+        this.#child.stdin!.once('drain', () => {
+          this.#paused = false;
+          this.#child.stdout!.resume();
+        });
       }
     } catch {
       this.protocolErrors++;
@@ -86,7 +91,7 @@ export class ModChannel {
       const params = msg.params && typeof msg.params === 'object' && !Array.isArray(msg.params) ? (msg.params as Record<string, unknown>) : {};
       if (typeof id !== 'number' && typeof id !== 'string') return; // mod → host notifications: none in mod-abi:v1
       if (this.#inflight >= MAX_MOD_INFLIGHT) {
-        this.#write({ id, error: errorObject(new ModRefusal('STATE', `more than ${MAX_MOD_INFLIGHT} mod → host requests in flight`)) });
+        this.#write({ id, error: errorObject(new ModRefusal('BUSY', `more than ${MAX_MOD_INFLIGHT} mod → host requests in flight`)) });
         return;
       }
       this.#inflight++;

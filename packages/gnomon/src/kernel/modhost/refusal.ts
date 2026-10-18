@@ -28,6 +28,7 @@ export const MOD_REFUSAL_CODES = [
   'MOD_ERROR', // the mod answered the call with an error
   'BLOCK', // a rendered block outside kit:v1, or over 256 KiB / 2 000 nodes (§12.2 BAD_REQUEST)
   'STATE', // state.get/state.set outside the size caps or key shape
+  'BUSY', // more than MAX_MOD_INFLIGHT mod → host requests in flight (retry later)
   'NOT_IMPLEMENTED', // a kernel.call with no kernel port wired yet (the socket bridge is slice 2)
 ] as const;
 export type ModRefusalCode = (typeof MOD_REFUSAL_CODES)[number];
@@ -46,6 +47,7 @@ const ROUTE: Record<ModRefusalCode, { code: RefusalCode; gate: RefusalGate }> = 
   MOD_ERROR: { code: 'ENGINE', gate: 'transport' },
   BLOCK: { code: 'BAD_REQUEST', gate: 'usage' },
   STATE: { code: 'BAD_REQUEST', gate: 'usage' },
+  BUSY: { code: 'ENGINE', gate: 'transport' },
   NOT_IMPLEMENTED: { code: 'ENGINE', gate: 'transport' },
 };
 

@@ -39,6 +39,8 @@ const run = async (input, api) => {
   if (input.op === 'egress') return attempt(async () => { const s = await api.egress(input.host, 443); s.destroy(); return 'tunnel'; });
   if (input.op === 'hold') return attempt(async () => { held = await api.egress(input.host, 443); held.on('error', () => {}); return 'held'; });
   if (input.op === 'held') return { ok: true, v: held ? String(held.destroyed || held.readableEnded) : 'none' };
+  if (input.op === 'link') return attempt(() => fs.linkSync(input.from, input.to));
+  if (input.op === 'flood') { const rs = await Promise.allSettled(Array.from({ length: 40 }, () => api.state.get('k'))); return { ok: rs.filter((x) => x.status === 'fulfilled').length, busy: rs.filter((x) => x.status === 'rejected').length }; }
   if (input.op === 'hang') return new Promise(() => {});
   if (input.op === 'crash') process.exit(3);
   return null;

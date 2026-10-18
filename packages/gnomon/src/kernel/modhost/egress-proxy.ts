@@ -18,7 +18,8 @@
  *     grant rows; G-MAN-01);
  *   - a host outside the allowlist (`ungranted`);
  *   - any tunnel opened while the mod's call in force lacks `network`
- *     (`effect`; the host serializes calls, so "in force" is exact);
+ *     (`effect`; "in force" = the call in force when the CONNECT arrives —
+ *     calls are serialized; call-id binding is slice 2);
  *   - a granted name that RESOLVES to a loopback, private, link-local or
  *     unspecified address (`private-address`: DNS cannot be used to reach the
  *     kernel's own endpoints or the LAN).
