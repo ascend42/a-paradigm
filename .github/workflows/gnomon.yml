@@ -30,7 +30,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [macos-14, windows-latest, ubuntu-latest]
+        # macos-15: the session profile's floor (SESSION_SANDBOX_MIN_MACOS); macos-14 exercises the floor refusal
+        os: [macos-14, macos-15, windows-latest, ubuntu-latest]
         node: [24]
     steps:
       - name: Checkout

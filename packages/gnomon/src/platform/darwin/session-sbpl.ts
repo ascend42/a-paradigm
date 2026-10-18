@@ -45,6 +45,13 @@ export const SESSION_PROFILE_VERSION = 1;
 
 /** macOS major from which a relocated Apple platform binary is SIGKILLed (launch constraints; observed 15 yes, 14 no). */
 export const COPIED_PLATFORM_BINARY_KILLED_FROM_MACOS = 15;
+/**
+ * The session profile's macOS floor (P8 note, CI run 39100281741): below 15 a
+ * relocated platform binary is not SIGKILLed, and on macos-14 a copied
+ * osascript reached System Events from inside the profile. The darwin
+ * session backend REFUSES below this major (fail closed).
+ */
+export const SESSION_SANDBOX_MIN_MACOS = 15;
 
 export const DARWIN_LAUNCHERS = Object.freeze([
   '/usr/bin/open',

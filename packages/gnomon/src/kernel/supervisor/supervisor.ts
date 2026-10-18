@@ -62,7 +62,7 @@ import { buildSessionPolicy, claudePermissions, policyHash, realpathLoose, type 
 import { layersHash, gitHash, defaultClaudeJson } from '../manifest/layers.js';
 import { verifiedGenerated } from '../manifest/generate.js';
 import { ManifestRefusal } from '../manifest/refusal.js';
-import { sessionLaunchPlan } from '../sandbox/session.js';
+import { sessionLaunchPlan, sessionSandboxFidelity } from '../sandbox/session.js';
 import { LifecycleRefusal } from '../lifecycle/refusal.js';
 import { buildSessionEnv } from '../runner/env.js';
 import { claudeAuthOk, claudeJsonProjection, claudeVersion, law7Layers, law7Scan, managedFiles, PreflightRefusal, realLoose, resolveClaudeBinary, type ClaudeRun, type Law7Input, type SessionRefusalCode } from '../runner/preflight.js';
@@ -107,6 +107,8 @@ export interface SupervisorOptions {
   watchMs?: number;
   /** TEST RIG ONLY (the fake claude is a #! wrapper): accept a script binary. The daemon never sets it. */
   allowScripts?: boolean;
+  /** TEST RIG ONLY: the OS version probe (default: the platform's sw_vers). Tests pass a LOWER version to exercise the floor refusal. */
+  macosMajor?: () => number | null;
 }
 
 export interface OpenRequest {
@@ -275,7 +277,7 @@ export class SessionSupervisor {
       // Aegis H1: preflight runs the PRIVATE copy under the session profile, never unsandboxed
       const run: ClaudeRun = (args) =>
         new Promise((resolve) => {
-          const p = sessionLaunchPlan({ policy, binaryReal: priv.exec, argv: args, extras }, this.#platform);
+          const p = sessionLaunchPlan({ policy, binaryReal: priv.exec, argv: args, extras }, this.#platform, this.#o.macosMajor);
           const ch = spawn(p.command, p.args, { cwd: req.cwd, env, stdio: ['ignore', 'pipe', 'ignore'] });
           let stdout = '';
           const t = setTimeout(() => ch.kill('SIGKILL'), 15_000);
@@ -318,7 +320,7 @@ export class SessionSupervisor {
       this.assertClaudePermit(permit, hsid);
       if (permit.billing !== 'subscription') throw new PreflightRefusal('api_billing_refused', 'api-token billing is not wired into the session spawn yet (M1.7 slice 2)', { billing: permit.billing });
       const argv = buildClaudeArgv({ uuid, policyPath, mcpConfigPath, settingSources: this.#o.settingSources ?? ['user', 'project', 'local'], ...(req.systemPrompt !== undefined ? { appendSystemPrompt: req.systemPrompt } : {}), ...(req.model && req.model !== 'claude' && req.model !== 'any' ? { model: req.model } : {}) });
-      const plan = sessionLaunchPlan({ policy, binaryReal: priv.exec, argv, extras }, this.#platform);
+      const plan = sessionLaunchPlan({ policy, binaryReal: priv.exec, argv, extras }, this.#platform, this.#o.macosMajor);
       // Aegis L1: anything changed between the scan and now ⇒ scan again (a hit refuses)
       const wNow = this.#watchHashOf(layerInput);
       if (wNow !== wHash || gitHash(req.worktree ?? req.cwd) !== gHash) {
@@ -373,7 +375,7 @@ export class SessionSupervisor {
         fs.rmSync(dir, { recursive: true, force: true });
       }
       if (err instanceof PreflightRefusal) return this.#refuse(hsid, err.code, err.message, err.data);
-      if (err instanceof LifecycleRefusal) return this.#refuse(hsid, 'spawn_failed', err.message, { sandbox: 'unavailable' });
+      if (err instanceof LifecycleRefusal) return this.#refuse(hsid, 'spawn_failed', err.message, { sandbox: 'unavailable', ...err.detail });
       if (err instanceof ManifestRefusal || err instanceof TypeError) return this.#refuse(hsid, 'spawn_failed', err.message);
       if (err instanceof RefusedError) {
         await this.#o.log('session.refused', { hsid, code: 'spawn_failed', refusal: err.refusal.code }, { session: hsid }).catch(() => undefined);
@@ -559,6 +561,11 @@ export class SessionSupervisor {
     const survivors = await this.#o.children.stop(s.child, reason);
     signals.push('group:staged');
     return { signals, exited: !survivors };
+  }
+
+  /** status.sessionSandbox: the session profile's fidelity here (`unavailable` below the macOS floor, with the reason) */
+  sandboxStatus(): Record<string, unknown> {
+    return sessionSandboxFidelity(this.#platform, this.#o.macosMajor);
   }
 
   /** status.claudePin: the trust-on-first-use pin (spec §3.3) */

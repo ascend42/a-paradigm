@@ -99,6 +99,19 @@ describe('G-SBX-08 (text) the generated session profile', () => {
   });
 });
 
+describe('the macOS floor (SESSION_SANDBOX_MIN_MACOS = 15; CI run 39100281741)', () => {
+  it.each([14, 13, null])('darwin at macOS %s refuses sandbox-unavailable with the floor, never a weaker profile', (v) => {
+    w = sessionWorld();
+    try {
+      sessionLaunchPlan({ policy: worldPolicy(w), binaryReal: '/bin/true', argv: [], extras: extras(w) }, 'darwin', () => v);
+      expect.unreachable();
+    } catch (e) {
+      expect((e as LifecycleRefusal).reason).toBe('sandbox-unavailable');
+      expect((e as LifecycleRefusal).detail).toMatchObject({ floor: 'macos', have: v, need: 15 });
+    }
+  });
+});
+
 describe('G-WIN-06 the platform registry: no backend ⇒ refused, status partial', () => {
   it.each(['win32', 'linux'])('%s refuses sandbox-unavailable (never an unsandboxed spawn)', (p) => {
     w = sessionWorld();
@@ -113,7 +126,9 @@ describe('G-WIN-06 the platform registry: no backend ⇒ refused, status partial
   it('status: win32 partial, linux partial (classes none), darwin partial (screen/launchers/service-manager by analogy)', () => {
     expect(sessionSandboxFidelity('win32').fidelity).toBe('partial');
     expect(sessionSandboxFidelity('linux').fidelity).toBe('partial');
-    expect(sessionSandboxFidelity('darwin').fidelity).toBe('partial');
+    expect(sessionSandboxFidelity('darwin', () => 15).fidelity).toBe('partial');
+    expect(sessionSandboxFidelity('darwin', () => 14)).toMatchObject({ fidelity: 'unavailable', reason: 'macos-floor', have: 14, need: 15 });
+    expect(sessionSandboxFidelity('darwin', () => null)).toMatchObject({ fidelity: 'unavailable', reason: 'macos-floor' });
     expect(sessionSandboxFidelity('aix').fidelity).toBe('none');
   });
 });

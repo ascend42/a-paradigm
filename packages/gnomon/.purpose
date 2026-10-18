@@ -1076,6 +1076,13 @@ components:
       stopped) writes a re-pin the supervisor logs session.sandbox{binary-pin,
       by:'repin', from, to} at the next open; PERSISTENCE_PATHS adds
       .bash_login, .zlogout, ~/.config/fish.
+      macOS FLOOR (P8 note, CI run 39100281741): SESSION_SANDBOX_MIN_MACOS = 15
+      (platform/darwin/session-sbpl.ts, read via platform/darwin/macos.ts
+      sw_vers); below it the darwin session backend refuses
+      sandbox-unavailable {floor:macos, have, need} and status shows the
+      session sandbox unavailable — on macos-14 a copied osascript reached
+      System Events from inside the profile. CI tests macos-15 (enforcement)
+      and macos-14 (floor refusal).
     path: src/kernel/runner/
     type: module
     tags: [gnomon, kernel, session, law-7, paradigm-8, m1.7]

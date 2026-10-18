@@ -32,6 +32,10 @@ import { recordPath } from '../src/kernel/manifest/generate.js';
 import { readClaudePin, repinClaudeBinary } from '../src/kernel/runner/binary.js';
 import { runSessionCommand } from '../src/cli/session-cli.js';
 import { PassThrough } from 'node:stream';
+import { darwinFloor } from '../src/kernel/sandbox/session.js';
+
+/** capability, not platform: below the macOS floor every open is refused (asserted below) */
+const SANDBOX_OK = darwinFloor().ok;
 import { sessionWorld, setMode, trace, waitFor, type SessionWorld } from './session-helpers.js';
 
 const HUMAN = 'p:abcdefgh/founder';
@@ -43,7 +47,7 @@ afterEach(async () => {
   w?.cleanup();
 });
 
-function rig(o: { billing?: BillingScanSource; watchMs?: number; failSandboxRow?: boolean; allowScripts?: boolean } = {}) {
+function rig(o: { billing?: BillingScanSource; watchMs?: number; failSandboxRow?: boolean; allowScripts?: boolean; macosMajor?: () => number | null } = {}) {
   w = sessionWorld();
   const rows: Array<{ kind: string; payload: Record<string, unknown> }> = [];
   const log = async (kind: string, payload: Record<string, unknown>): Promise<void> => {
@@ -54,7 +58,7 @@ function rig(o: { billing?: BillingScanSource; watchMs?: number; failSandboxRow?
   const children = new DaemonChildren({ append: log, control: processControlFor('darwin'), boot: 'boot-test', graceMs: 500 });
   const cards: Array<Record<string, unknown>> = [];
   const broker = { raise: async (i: Record<string, unknown>) => (cards.push(i), { cardId: `card:${cards.length}` }) } as unknown as Pick<ApprovalBroker, 'raise'>;
-  sup = new SessionSupervisor({ log, children, fuse, broker, home: w.home, userHome: w.userHome, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(w.home, 'gnomon.sock'), claudePath: w.claude, env: () => ({ HOME: '/not-the-scanned-home', PATH: '/usr/bin:/bin', ANTHROPIC_API_KEY: 'scrubbed-from-the-child' }), platform: 'darwin', watchMs: o.watchMs ?? 200, allowScripts: o.allowScripts ?? true });
+  sup = new SessionSupervisor({ log, children, fuse, broker, home: w.home, userHome: w.userHome, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(w.home, 'gnomon.sock'), claudePath: w.claude, env: () => ({ HOME: '/not-the-scanned-home', PATH: '/usr/bin:/bin', ANTHROPIC_API_KEY: 'scrubbed-from-the-child' }), platform: 'darwin', watchMs: o.watchMs ?? 200, allowScripts: o.allowScripts ?? true, ...(o.macosMajor ? { macosMajor: o.macosMajor } : {}) });
   live.push(() => children.stopAll('test-end'));
   const kinds = (k: string) => rows.filter((r) => r.kind === k);
   const idx = (k: string) => rows.findIndex((r) => r.kind === k);
@@ -68,7 +72,7 @@ async function refusal(p: Promise<unknown>): Promise<RefusedError> {
   return e as RefusedError;
 }
 
-describe('M1.7 slice 1: who may open', () => {
+describe.skipIf(!SANDBOX_OK)('M1.7 slice 1: who may open', () => {
   it.each([
     ['agent', true],
     ['session', true],
@@ -85,7 +89,7 @@ describe('M1.7 slice 1: who may open', () => {
   });
 });
 
-describe('law 1 + law 7 + Aegis: no claude without a law-7-scanned claude-code permit', () => {
+describe.skipIf(!SANDBOX_OK)('law 1 + law 7 + Aegis: no claude without a law-7-scanned claude-code permit', () => {
   it('a fuse law-7 refusal ⇒ BILLING_REFUSED, no intent row, the fake claude never ran', async () => {
     const r = rig({ billing: { env: () => ({ ANTHROPIC_API_KEY: 'k' }), layers: () => [] } });
     const e = await refusal(open(r.sup));
@@ -127,7 +131,7 @@ describe('law 1 + law 7 + Aegis: no claude without a law-7-scanned claude-code p
   });
 });
 
-describe('a session end to end (fake claude, real profile, real process group)', () => {
+describe.skipIf(!SANDBOX_OK)('a session end to end (fake claude, real profile, real process group)', () => {
   it('spawns under the profile with the adapter argv and the allowlisted env; rows in order', async () => {
     const r = rig();
     const s = await open(r.sup);
@@ -219,7 +223,7 @@ describe('a session end to end (fake claude, real profile, real process group)',
   });
 });
 
-describe('T-008 generated plugin bytes are verified at spawn against the kernel-held record', () => {
+describe.skipIf(!SANDBOX_OK)('T-008 generated plugin bytes are verified at spawn against the kernel-held record', () => {
   it('a repo file that differs from the record refuses the spawn; no process starts', async () => {
     const r = rig();
     const rel = '.gnomon/generated/.mcp.json';
@@ -236,7 +240,7 @@ describe('T-008 generated plugin bytes are verified at spawn against the kernel-
   });
 });
 
-describe('round 2: reviewer + Aegis conditions', () => {
+describe.skipIf(!SANDBOX_OK)('round 2: reviewer + Aegis conditions', () => {
   it('BLOCKING: a claude that exits at startup is cleaned up (permit released, watch cleared, state exited)', async () => {
     const r = rig();
     setMode(w, { exitAtStart: 2 });
@@ -338,7 +342,7 @@ describe('round 2: reviewer + Aegis conditions', () => {
   });
 });
 
-describe('round 3', () => {
+describe.skipIf(!SANDBOX_OK)('round 3', () => {
   it('1: a result written right before exit is recorded; its turn permit is released once', async () => {
     const r = rig();
     setMode(w, { resultThenExit: true });
@@ -391,6 +395,19 @@ describe('round 3', () => {
     const r = rig({ allowScripts: false });
     expect((await refusal(open(r.sup))).refusal.data).toMatchObject({ session: 'claude_binary_unsupported', kind: 'script' });
     expect(r.kinds('permit.grant')).toEqual([]);
+  });
+});
+
+describe('the macOS floor (every darwin host)', () => {
+  it('below macOS 15 an open is refused sandbox-unavailable (floor macos): no spawn, no pin, permit released, status unavailable', async () => {
+    const r = rig({ macosMajor: () => 14 });
+    const e = await refusal(open(r.sup));
+    expect(e.refusal.code).toBe('UNSUPPORTED');
+    expect(e.refusal.data).toMatchObject({ session: 'spawn_failed', sandbox: 'unavailable', floor: 'macos', have: 14, need: 15 });
+    expect(r.kinds('session.refused')[0]!.payload).toMatchObject({ code: 'spawn_failed', floor: 'macos' });
+    expect(r.kinds('session.spawned')).toEqual([]);
+    expect(trace(w).filter((t) => t.t === 'argv' || t.t === 'version')).toEqual([]);
+    expect(r.sup.sandboxStatus()).toMatchObject({ fidelity: 'unavailable', reason: 'macos-floor' });
   });
 });
 

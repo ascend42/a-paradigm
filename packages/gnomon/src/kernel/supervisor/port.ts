@@ -70,6 +70,6 @@ export function createSessionPort(sup: SessionSupervisor): SessionPort {
       if (p.interrupt !== undefined && typeof p.interrupt !== 'boolean') throw bad('interrupt must be a boolean');
       return sup.stop(ctx.principal, { hsid: p.hsid, ...(p.interrupt === true ? { interrupt: true } : {}) });
     },
-    status: () => ({ sessions: sup.status(), claudePin: sup.pinStatus() }),
+    status: () => ({ sessions: sup.status(), claudePin: sup.pinStatus(), sessionSandbox: sup.sandboxStatus() }),
   };
 }

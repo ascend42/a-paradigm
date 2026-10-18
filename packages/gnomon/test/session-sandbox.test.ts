@@ -20,6 +20,11 @@ import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { sessionLaunchPlan } from '../src/kernel/sandbox/session.js';
 import { binaryDenies } from '../src/kernel/supervisor/supervisor.js';
 import { COPIED_PLATFORM_BINARY_KILLED_FROM_MACOS } from '../src/platform/darwin/session-sbpl.js';
+import { darwinFloor } from '../src/kernel/sandbox/session.js';
+import { LifecycleRefusal } from '../src/kernel/lifecycle/refusal.js';
+
+/** capability, not platform: below the macOS floor the backend refuses and the enforcement suite cannot run */
+const SANDBOX_OK = darwinFloor().ok;
 import { sessionWorld, worldPolicy, type SessionWorld } from './session-helpers.js';
 
 let w: SessionWorld;
@@ -36,6 +41,7 @@ const screenDir = path.join(fs.realpathSync(os.tmpdir()), '.screen');
 const sockPath = path.join(screenDir, `gnomon-test-${process.pid}`);
 
 beforeAll(async () => {
+  if (!SANDBOX_OK) return;
   w = sessionWorld();
   MARKER = path.join(w.root, 'launchd-job-ran');
   server = http.createServer((_q, s) => {
@@ -109,7 +115,21 @@ afterAll(async () => {
   w?.cleanup();
 });
 
-describe('G-SBX-08 the generated session profile holds (darwin)', () => {
+describe.runIf(!SANDBOX_OK)('below the macOS floor', () => {
+  it('the session backend refuses sandbox-unavailable (floor macos) — no weaker profile', () => {
+    const x = sessionWorld();
+    try {
+      sessionLaunchPlan({ policy: worldPolicy(x), binaryReal: '/bin/true', argv: [], extras: { uid: process.getuid!(), tmpdir: os.tmpdir(), home: x.userHome, roots: [x.cwd] } }, 'darwin');
+      expect.unreachable();
+    } catch (e) {
+      expect((e as LifecycleRefusal).detail).toMatchObject({ floor: 'macos', need: 15 });
+    } finally {
+      x.cleanup();
+    }
+  });
+});
+
+describe.skipIf(!SANDBOX_OK)('G-SBX-08 the generated session profile holds (darwin, macOS 15+)', () => {
   it('Aegis H1: the claude binary, its versions dir and its known-location link cannot be replaced', () => {
     expect(out).toMatchObject({ write_binary: 'blocked', write_versions: 'blocked', unlink_link: 'blocked' });
   });
@@ -118,9 +138,9 @@ describe('G-SBX-08 the generated session profile holds (darwin)', () => {
   });
   it('Aegis M1: a COPIED launchctl cannot submit a job and a COPIED osascript cannot send an AppleEvent (every macOS)', async () => {
     await new Promise((r) => setTimeout(r, 1_000));
-    expect(out.copied_launchctl_exit).not.toBe('0');
-    expect(fs.existsSync(MARKER)).toBe(false); // launchd never ran the job
-    expect(out.copied_osascript_exit).not.toBe('0');
+    expect(out.copied_launchctl_exit, 'a copied launchctl SUBMITTED a job from inside the session profile').not.toBe('0');
+    expect(fs.existsSync(MARKER), 'launchd RAN the job a copied launchctl submitted').toBe(false);
+    expect(out.copied_osascript_exit, 'a copied osascript SENT an AppleEvent (System Events) from inside the session profile').not.toBe('0');
   });
   it(`Aegis M1: from macOS ${COPIED_PLATFORM_BINARY_KILLED_FROM_MACOS} copies are SIGKILLed by launch constraints (137); below it a copied open is the §A.2(i) residual`, () => {
     if (macosMajor >= COPIED_PLATFORM_BINARY_KILLED_FROM_MACOS) {
