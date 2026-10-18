@@ -126,6 +126,9 @@ sleep 30 & C=$!; if kill $C 2>/dev/null; then wait $C 2>/dev/null; echo "child_s
 (/bin/ls "${w.home}/sessions") >/dev/null 2>&1 && echo "list_sessions=allowed" || echo "list_sessions=blocked"
 (/bin/ls "${w.home}/keys") >/dev/null 2>&1 && echo "list_keys=allowed" || echo "list_keys=blocked"
 (cat "${w.home}/claude-pin.json") >/dev/null 2>&1 && echo "read_pin=allowed" || echo "read_pin=blocked"
+/bin/ln "${w.home}/keys/device.key" "${w.cwd}/k" 2>/dev/null && echo "hardlink_ln=ok" || echo "hardlink_ln=fail"
+(cat "${w.cwd}/k") 2>/dev/null | /usr/bin/grep -q secret && echo "hardlink_key=allowed" || echo "hardlink_key=blocked"
+/bin/ln "${w.home}/kernel.db" "${w.cwd}/kdb" 2>/dev/null; (cat "${w.cwd}/kdb") >/dev/null 2>&1 && echo "hardlink_db=allowed" || echo "hardlink_db=blocked"
 (cat "${own}/policy.json") >/dev/null 2>&1 && echo "read_own=ok" || echo "read_own=fail"
 "${process.execPath}" -e "try{require('fs').realpathSync('${own}/policy.json');console.log('realpath_own=ok')}catch(e){console.log('realpath_own='+e.code)}"
 "${w.home}/bin/claude-copy" 2>/dev/null | /usr/bin/grep -q copy_ran && echo "exec_copy=ok" || echo "exec_copy=fail"
@@ -213,6 +216,11 @@ describe.skipIf(!SANDBOX_OK)('G-SBX-08 the generated session profile holds (darw
   });
   it('T-2026-10-18-010: keys, the kernel log (kernel.db, its WAL, sealed segments), a sibling session dir and the rest of the home are unreadable (EPERM)', () => {
     expect(out).toMatchObject({ read_keys: 'blocked', list_keys: 'blocked', read_kernel_db: 'blocked', read_kernel_wal: 'blocked', read_segment: 'blocked', read_sibling: 'blocked', list_sessions: 'blocked', read_pin: 'blocked' });
+  });
+  it('Aegis C4: a HARDLINK of a key (or kernel.db) into the worktree cannot be read (it fails at the ln or the cat)', ({ annotate }) => {
+    void annotate(`hardlink_ln=${out.hardlink_ln}`);
+    expect(out.hardlink_key).toBe('blocked');
+    expect(out.hardlink_db).toBe('blocked');
   });
   it('T-2026-10-18-010: the session still reads its own dir (and realpaths it), execs its private copy, reads the project root and reaches GNOMON_SOCK', () => {
     expect(out).toMatchObject({ read_own: 'ok', realpath_own: 'ok', exec_copy: 'ok', read_project: 'ok', home_sock: 'open' });
