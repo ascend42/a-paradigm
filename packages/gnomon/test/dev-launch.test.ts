@@ -18,6 +18,8 @@ import { runDevCommand, startDevKernel, type DevCliIo } from '../src/cli/dev-cli
 import type { DaemonHandle, DaemonOptions } from '../src/kernel/lifecycle/index.js';
 import { tempHome } from './daemon-helpers.js';
 import { PassThrough } from 'node:stream';
+import { vi } from 'vitest';
+import { activateDetached, runForeground } from '../src/cli/daemon-cli.js';
 
 const cleanups: Array<() => void | Promise<void>> = [];
 afterEach(async () => {
@@ -168,5 +170,62 @@ describe('#dev-launch: gnomon dev up', () => {
     expect(all).not.toMatch(/#launch=/);
     expect(all).not.toMatch(/(?<![A-Za-z0-9_-])[A-Za-z0-9_-]{43}(?![A-Za-z0-9_-])/);
     expect(looksLikeKeyMaterial(all)).toBe(false);
+  });
+});
+
+describe('#dev-launch: production-home guard hardening (Aegis C1)', () => {
+  it('FALSIFIER: a symlinked dev home is refused: into ~/.gnomon as production-home, elsewhere as unsafe-home', async () => {
+    const w = world();
+    fs.mkdirSync(w.prodHome, { mode: 0o700 });
+    const link = path.join(w.userHome, 'link-to-prod');
+    fs.symlinkSync(w.prodHome, link);
+    const x = io();
+    expect(await runDevCommand(['init', '--home', link], x, { userHome: w.userHome })).toBe(1);
+    expect(x.e.join('')).toContain('production-home');
+    const other = path.join(w.userHome, 'real-dir');
+    fs.mkdirSync(other, { mode: 0o700 });
+    const link2 = path.join(w.userHome, 'link-to-other');
+    fs.symlinkSync(other, link2);
+    const y = io();
+    expect(await runDevCommand(['init', '--home', link2], y, { userHome: w.userHome })).toBe(1);
+    expect(y.e.join('')).toContain('unsafe-home');
+    expect(fs.readdirSync(other)).toEqual([]);
+    expect(fs.readdirSync(w.prodHome)).toEqual([]);
+  });
+
+  it('FALSIFIER: a DANGLING ~/.gnomon symlink makes its target the production home', async () => {
+    const w = world();
+    const target = path.join(w.userHome, 'future-prod');
+    fs.symlinkSync(target, w.prodHome);
+    const x = io();
+    expect(await runDevCommand(['init', '--home', target], x, { userHome: w.userHome })).toBe(1);
+    expect(x.e.join('')).toContain('production-home');
+    expect(fs.existsSync(target)).toBe(false);
+  });
+
+  it('FALSIFIER: on darwin ~/.GNOMON is refused even when ~/.gnomon does not exist (case-insensitive APFS)', async () => {
+    const w = world();
+    const upper = path.join(w.userHome, '.GNOMON');
+    const x = io();
+    expect(await runDevCommand(['init', '--home', upper], x, { userHome: w.userHome, platform: 'darwin' })).toBe(1);
+    expect(x.e.join('')).toContain('production-home');
+    expect(fs.existsSync(upper)).toBe(false);
+  });
+
+  it('TRIPWIRE: gnomond (foreground and detaching) refuses, loudly, a home holding the DEV-ONLY marker; no daemon starts', async () => {
+    const w = world();
+    expect(await runDevCommand(['init', '--home', w.devHome], io(), { userHome: w.userHome, host: 'mac-1' })).toBe(0);
+    const err: string[] = [];
+    const spy = vi.spyOn(process.stderr, 'write').mockImplementation((c: string | Uint8Array) => (err.push(String(c)), true));
+    try {
+      expect(await runForeground({ foreground: true, home: w.devHome, idleMs: 1000 })).toBe(1);
+      expect(await activateDetached({ foreground: false, home: w.devHome }, path.join(w.userHome, 'no-such-gnomond.js'))).toBe(1);
+    } finally {
+      spy.mockRestore();
+    }
+    expect(err.join('')).toContain('REFUSED  GNOMOND  dev-home');
+    expect(err.filter((l) => l.includes('dev-home')).length).toBeGreaterThanOrEqual(2);
+    expect(fs.existsSync(path.join(w.devHome, 'gnomon.pid'))).toBe(false);
+    expect(fs.existsSync(path.join(w.devHome, 'kernel.db'))).toBe(false);
   });
 });

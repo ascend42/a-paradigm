@@ -528,7 +528,12 @@ components:
       LAST. Refuses (falsifiers in test/dev-launch.test.ts): the production
       home ~/.gnomon, anything inside or containing it (production-home); a
       home holding a registry it did not write (production-root); any other
-      non-empty unmarked home (home-not-empty). Loading (dev up) refuses a
+      non-empty unmarked home (home-not-empty). The production-home check
+      (Aegis C1) covers ~/.gnomon lexically and realpath'd, its symlink target
+      (dangling included), and on darwin compares case-folded (~/.GNOMON); a
+      symlinked dev home is refused (unsafe-home). TRIPWIRE: gnomond (both
+      paths) and `gnomon daemon start` refuse loudly a home holding the marker
+      (daemon-cli.ts refuseDevHome). Loading (dev up) refuses a
       home without the ack-bearing marker (not-a-dev-home) and one whose keys
       do not match the marker or whose registry has ANY rejected row
       (dev-home-damaged). gnomond and a bare startDaemon never read these

@@ -30,6 +30,21 @@ import {
 import { connectGnomon, ServerAuthError } from '../kernel/socket/index.js';
 import { refuse, refusalOf, RefusedError } from '@a-company/gnomon-contracts';
 import { GNOMON_VERSION } from '../version.js';
+import { existsSync } from 'node:fs';
+import { DEV_HOME_MARKER } from './dev-home.js';
+
+/**
+ * #dev-launch tripwire: gnomond (foreground or detaching) and `gnomon daemon start` refuse,
+ * loudly, a home that holds the DEV-ONLY marker. A dev home runs only under `gnomon dev up`,
+ * in the CLI's own process; the production daemon never runs on dev keys.
+ */
+export function refuseDevHome(home: string, err: { write(s: string): unknown } = process.stderr): boolean {
+  if (!existsSync(path.join(home, DEV_HOME_MARKER))) return false;
+  err.write(
+    `REFUSED  GNOMOND  dev-home\n  ${home} is a DEV-ONLY home (${DEV_HOME_MARKER}): the production daemon never runs on dev keys.\n  next: gnomon dev up --home ${home}   (DEV ONLY, unsigned, until M1.3)\n`,
+  );
+  return true;
+}
 
 export const EXIT_OK = 0;
 export const EXIT_REFUSED = 1;
@@ -84,6 +99,7 @@ export function daemonHomeOf(args: { home?: string }): string {
 
 /** `gnomond --foreground`: run until idle exit or a signal. */
 export async function runForeground(args: DaemonArgs): Promise<number> {
+  if (refuseDevHome(daemonHomeOf(args))) return EXIT_REFUSED;
   try {
     const handle = await startDaemon({
       home: daemonHomeOf(args),
@@ -113,6 +129,7 @@ export async function runForeground(args: DaemonArgs): Promise<number> {
  */
 export async function activateDetached(args: DaemonArgs, gnomondEntry: string, resolveHome: (a: { home?: string }) => string = homeOf): Promise<number> {
   const home = resolveHome(args);
+  if (refuseDevHome(home)) return EXIT_REFUSED;
   const sock = socketOf(home);
   if (!sock) {
     process.stderr.write('gnomond: no safe endpoint path for this home [no-safe-endpoint]\n');

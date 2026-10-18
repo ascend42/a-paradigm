@@ -89,6 +89,8 @@ export interface LoadedDevHome {
 export interface DevHomeOptions {
   /** The user's home (the production home is `<userHome>/.gnomon`); default os.homedir(). */
   userHome?: string;
+  /** Path case-folding follows the platform (darwin folds); default process.platform. */
+  platform?: string;
 }
 
 /** `~/.gnomon-dev`: the default DEV home. */
@@ -118,18 +120,55 @@ function realLoose(p: string): string {
 
 const within = (inner: string, outer: string): boolean => inner === outer || inner.startsWith(outer.endsWith(path.sep) ? outer : `${outer}${path.sep}`);
 
-/** Refuse the production home (and anything inside it or containing it). */
+/**
+ * Every spelling of the production home that must be refused: `<userHome>/.gnomon` lexically and
+ * realpath'd, and, when it is a symlink (dangling included), its link target lexically and realpath'd.
+ */
+function productionHomes(userHome: string): string[] {
+  const raw = path.join(userHome, '.gnomon');
+  const out = new Set<string>([path.resolve(raw), realLoose(raw)]);
+  let st: fs.Stats | null = null;
+  try {
+    st = fs.lstatSync(raw);
+  } catch {
+    st = null;
+  }
+  if (st?.isSymbolicLink()) {
+    const target = path.resolve(path.dirname(raw), fs.readlinkSync(raw));
+    out.add(target);
+    out.add(realLoose(target));
+  }
+  return [...out];
+}
+
+/**
+ * Refuse the production home (and anything inside it or containing it). On darwin the
+ * comparison is case-folded (APFS is case-insensitive by default), so `~/.GNOMON` is refused
+ * even before `~/.gnomon` exists.
+ */
 export function refuseProductionHome(home: string, opts: DevHomeOptions = {}): string {
   if (!path.isAbsolute(home)) throw new DevHomeRefusal('unsafe-home', `--home must be an absolute path`, ['gnomon dev init --home /absolute/path']);
-  const real = realLoose(home);
-  const prod = realLoose(path.join(opts.userHome ?? os.homedir(), '.gnomon'));
-  if (within(real, prod) || within(prod, real)) {
+  const fold = (opts.platform ?? process.platform) === 'darwin' ? (p: string): string => p.toLowerCase() : (p: string): string => p;
+  const mine = [path.resolve(home), realLoose(home)].map(fold);
+  const prods = productionHomes(opts.userHome ?? os.homedir()).map(fold);
+  if (mine.some((m) => prods.some((q) => within(m, q) || within(q, m)))) {
     throw new DevHomeRefusal('production-home', `${home} is (or holds) the production Gnomon home; the dev path never touches it`, [
       `use the default dev home: gnomon dev init   (${DEV_HOME_DIRNAME} in your home)`,
       'or name another one: gnomon dev init --home /absolute/dev/path',
     ]);
   }
-  return real;
+  return realLoose(home);
+}
+
+/** A dev home is a plain directory, never a symlink. */
+function refuseSymlinkHome(home: string): void {
+  let st: fs.Stats | null = null;
+  try {
+    st = fs.lstatSync(home);
+  } catch {
+    return;
+  }
+  if (st.isSymbolicLink()) throw new DevHomeRefusal('unsafe-home', `${home} is a symlink; a dev home must be a plain directory`, ['name the real directory with --home']);
 }
 
 /** Read an owner-only regular file inside the owner-only keys dir (the device-key posture). */
@@ -179,6 +218,7 @@ export function isDevHome(home: string): boolean {
  */
 export function provisionDevHome(home: string, opts: DevHomeOptions & { host?: string; now?: Date } = {}): { created: boolean; loaded: LoadedDevHome } {
   refuseProductionHome(home, opts);
+  refuseSymlinkHome(home);
   if (isDevHome(home)) return { created: false, loaded: loadDevHome(home, opts) };
   if (fs.existsSync(home)) {
     const st = fs.lstatSync(home);
@@ -220,6 +260,7 @@ export function provisionDevHome(home: string, opts: DevHomeOptions & { host?: s
 /** `gnomon dev up`: load and verify a DEV home (fail closed). */
 export function loadDevHome(home: string, opts: DevHomeOptions = {}): LoadedDevHome {
   refuseProductionHome(home, opts);
+  refuseSymlinkHome(home);
   let record: DevHomeRecord;
   try {
     record = JSON.parse(fs.readFileSync(markerPath(home), 'utf8')) as DevHomeRecord;
