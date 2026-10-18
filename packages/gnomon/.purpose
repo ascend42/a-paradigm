@@ -1250,7 +1250,18 @@ components:
       status.modAbiId, stopAll before the children sweep at every exit;
       folder watch on a running linked mod (fs.watch recursive, .git
       ignored, 500 ms debounce => stop{changed} + loadMod pause + re-approve
-      card). Slice 3: spend from the caller permit, dev-mode cards/re-pin,
+      card). Round 2 (review + Aegis): own-modns appends go as:'userland'
+      under the mod principal, kernel-key-signed as an attestation
+      (attributed by principal, never keyId; spec §3.2 L7); relay admission
+      ModHost.admit (name/id shapes refused BAD_REQUEST in dispatch; an
+      uninstalled name NOT_INSTALLED with manifest.refuse folded past 8 per
+      10 s; paused answered from memory; relay starts count against
+      RESTART_CAP; DOWN until an operator start); per-mod append budget (20
+      rows/s, 64 KiB per call) and 8 mod->host requests in flight per mod;
+      status.mods full to the human class only, counts otherwise; watcher
+      unarmed on exit/timeout/pause/cap and re-armed on a successful start;
+      a lost mod.paused / mod.effect.refused row surfaces as
+      daemon.mod.row.unrecorded. Slice 3: spend from the caller permit, dev-mode cards/re-pin,
       gnomon-mods MCP bridge, gnomon mod CLI, /blob (C4), Tier 0, workshop.
     tags: [kernel, mods, sandbox, M1.11]
 flows:

@@ -98,7 +98,7 @@ import { DaemonChildren, sweepOrphans } from './children.js';
 import { processControlFor } from './process-control.js';
 import { SessionSupervisor, createSessionPort } from '../supervisor/index.js';
 import { linkedFolders } from '../manifest/install.js';
-import { ModHost } from '../modhost/host.js';
+import { ModHost, type KernelCallRequest } from '../modhost/host.js';
 import { createModKernelCall, createModRelayPort } from '../modhost/bridge.js';
 
 export type DaemonExitReason = 'idle' | 'signal' | 'error';
@@ -108,6 +108,8 @@ export type DaemonEvent =
   | { kind: 'daemon.start'; pid: number; socketPath: string; via: EndpointVia; idleMs: number }
   | { kind: 'daemon.exit'; reason: DaemonExitReason }
   | { kind: 'daemon.lock.refused'; reason: string; holderPid?: number }
+  /** N3: a security-relevant mod row (mod.paused, mod.effect.refused) could not be written to the chain. */
+  | { kind: 'daemon.mod.row.unrecorded'; rowKind: string; name: string | null; error: string }
   /** A read-token revocation could not be written to the chain twice; it stays pending and is retried on the token timer. */
   | { kind: 'daemon.token.revocation.unrecorded'; tokenId: string; error: string }
   | SocketEvent;
@@ -186,6 +188,8 @@ export interface DaemonHandle {
   readonly children: DaemonChildren;
   /** #mod-host (M1.11): mods started on first relay, stopped at every exit. */
   readonly mods: ModHost;
+  /** The exact kernel.call function the mod host uses (bridge.ts createModKernelCall over this daemon's dispatcher and log). */
+  readonly modKernelCall: (req: KernelCallRequest) => Promise<unknown>;
   /** The unix-socket dispatcher (its `callAs` is the mods' kernel.call). */
   readonly dispatcher: Pick<KernelDispatcher, 'callAs' | 'clients'>;
   /** #scheduler (log-derived timers, automations). */
@@ -510,16 +514,23 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
     home,
     trust: authority,
     children,
-    emit: (kind, payload) => void appendRow(kind, payload).catch(() => undefined),
+    emit: (kind, payload) =>
+      void appendRow(kind, payload).catch((err: unknown) => {
+        // N3: a lost pause / refusal row surfaces on the diag channel (as recordRevocation does)
+        if (kind === 'mod.paused' || kind === 'mod.effect.refused') emit({ kind: 'daemon.mod.row.unrecorded', rowKind: kind, name: typeof payload.name === 'string' ? payload.name : null, error: err instanceof Error ? err.message : String(err) });
+      }),
     kernelPrincipal,
     ...(opts.platform ? { platform: opts.platform } : {}),
-    kernelCall: createModKernelCall({
+    kernelCall: (req) => modKernelCall(req),
+  });
+  const modKernelCall = createModKernelCall({
       callAs: (principal, verb, params) => dispatcher.callAs(principal, verb, params),
       append: async (row) => {
-        const r = await log.append({ kind: row.kind, principal: row.principal, payload: row.payload, ...(row.audience ? { audience: row.audience } : {}), ...(row.sensitivity ? { sensitivity: row.sensitivity } : {}) });
+        // B1: modns.* is userland-owned (L7) ⇒ appended `as: 'userland'` under the MOD principal; the kernel key signs it as an
+        // attestation that the kernel accepted a mod-originated row — readers attribute it by principal, never by keyId
+        const r = await log.append({ kind: row.kind, principal: row.principal, payload: row.payload, as: 'userland', ...(row.audience ? { audience: row.audience } : {}), ...(row.sensitivity ? { sensitivity: row.sensitivity } : {}) });
         return { seq: r.seq };
       },
-    }),
   });
   const dispatcherCommon = {
     mods: createModRelayPort(mods),
@@ -645,6 +656,7 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
     web: () => web,
     children,
     mods,
+    modKernelCall,
     dispatcher,
     scheduler,
     orphanSweep,

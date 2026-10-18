@@ -24,10 +24,23 @@
  *     own view; log.read = own modns through readerFor; ref.resolve; the
  *     session.send cell needs session principals, M1.7, and refuses so).
  *
+ * APPEND BUDGET (Aegis F2): per mod, at most MOD_APPEND_ROWS_PER_SEC rows in
+ * any 1 s window and MOD_APPEND_BYTES_PER_CALL payload bytes per bound call
+ * (the callId; requests with none share a per-second idle window); beyond
+ * either ⇒ LOG (BAD_REQUEST) and no row. The host additionally caps a mod's
+ * in-flight mod → host requests (host.ts MAX_MOD_HOST_INFLIGHT).
+ *
+ * SIGNER (B1): the row is appended as a USERLAND row (`as: 'userland'`, L7 —
+ * modns.* is userland-owned) under the MOD's principal and is signed by the
+ * kernel key as an attestation that the kernel accepted a mod-originated
+ * row. Readers and verifiers attribute it by `principal`, never by keyId.
+ *
  * `createModRelayPort` — the client relays `mod.view` / `mod.command`
- * (§12.3) served for the dispatcher: the mod is started on first use (from
- * its pinned snapshot, under loadMod's rules), and `relayedFor` comes from
- * the dispatcher — the caller's authenticated connection — never the input.
+ * (§12.3) served for the dispatcher: admission is ModHost.admit (F1: an
+ * uninstalled name is refused without loadMod, a paused one from memory, a
+ * mod out of restarts is DOWN, relay starts count against RESTART_CAP), and
+ * `relayedFor` comes from the dispatcher — the caller's authenticated
+ * connection — never the input.
  */
 import { canonicalJson, AUDIENCES, SENSITIVITIES } from '@a-company/gnomon-contracts';
 import type { ModHost, KernelCallRequest, RenderResult } from './host.js';
@@ -35,6 +48,10 @@ import { ModRefusal } from './refusal.js';
 
 /** A mod-appended payload's cap (canonical JSON bytes). */
 export const MOD_APPEND_MAX_BYTES = 16 * 1024;
+
+/** Aegis F2: per-mod append budget. */
+export const MOD_APPEND_ROWS_PER_SEC = 20;
+export const MOD_APPEND_BYTES_PER_CALL = 64 * 1024;
 
 /** The append fields a mod may supply; every other field is dropped (Aegis C2). */
 export const MOD_APPEND_FIELDS = Object.freeze(['kind', 'payload', 'audience', 'sensitivity'] as const);
@@ -74,10 +91,25 @@ export function clampModAppend(name: string, principal: string, params: Record<s
   return row;
 }
 
-export function createModKernelCall(ports: ModKernelPorts): (req: KernelCallRequest) => Promise<unknown> {
+export function createModKernelCall(ports: ModKernelPorts, opts: { now?: () => number } = {}): (req: KernelCallRequest) => Promise<unknown> {
+  const now = opts.now ?? Date.now;
+  const rows = new Map<string, number[]>(); // name → append times in the last second
+  const bytes = new Map<string, number>(); // `${name}|${callKey}` → payload bytes appended
   return async (req) => {
     if (req.verb === 'log.append') {
-      const r = await ports.append(clampModAppend(req.name, req.principal, req.params));
+      const row = clampModAppend(req.name, req.principal, req.params);
+      const t = now();
+      const recent = (rows.get(req.name) ?? []).filter((x) => t - x < 1_000);
+      if (recent.length >= MOD_APPEND_ROWS_PER_SEC) throw new ModRefusal('LOG', `${req.name} exceeded ${MOD_APPEND_ROWS_PER_SEC} appends per second`, { name: req.name, budget: 'rows' });
+      const key = `${req.name}|${req.callId ?? `idle:${Math.floor(t / 1_000)}`}`;
+      const size = Buffer.byteLength(canonicalJson(row.payload), 'utf8');
+      const used = bytes.get(key) ?? 0;
+      if (used + size > MOD_APPEND_BYTES_PER_CALL) throw new ModRefusal('LOG', `${req.name} exceeded ${MOD_APPEND_BYTES_PER_CALL} appended bytes in this call`, { name: req.name, budget: 'bytes' });
+      recent.push(t);
+      rows.set(req.name, recent);
+      if (bytes.size > 256) bytes.clear(); // bounded: old call windows are dead
+      bytes.set(key, used + size);
+      const r = await ports.append(row);
       return { seq: r.seq };
     }
     return ports.callAs(req.principal, req.verb, req.params);
@@ -88,14 +120,12 @@ export function createModKernelCall(ports: ModKernelPorts): (req: KernelCallRequ
 export interface ModRelays {
   view(relayedFor: { principal: string; connId: string }, req: { name: string; viewId: string; input: unknown }): Promise<RenderResult>;
   command(relayedFor: { principal: string; connId: string }, req: { name: string; commandId: string; args: unknown }): Promise<unknown>;
-  status(): Record<string, unknown>;
+  /** full for the human class; counts only for every other caller (F4) */
+  status(full: boolean): Record<string, unknown>;
 }
 
 export function createModRelayPort(host: ModHost): ModRelays {
-  const ensure = async (name: string): Promise<void> => {
-    const s = await host.start(name);
-    if (s.state === 'paused') throw new ModRefusal('PAUSED', `${name} is paused until a card decides (§12.5)`, { name, why: s.why, cardId: s.cardId });
-  };
+  const ensure = (name: string): Promise<void> => host.admit(name);
   return {
     view: async (rf, req) => {
       await ensure(req.name);
@@ -105,6 +135,9 @@ export function createModRelayPort(host: ModHost): ModRelays {
       await ensure(req.name);
       return { result: await host.relayCommand({ name: req.name, commandId: req.commandId, args: req.args, principal: rf.principal, connId: rf.connId }) };
     },
-    status: () => host.status(),
+    status: (full) => {
+      const st = host.status() as { modAbiId: string; running: unknown[]; paused: unknown[] };
+      return full ? st : { modAbiId: st.modAbiId, running: { n: st.running.length }, paused: { n: st.paused.length } };
+    },
   };
 }

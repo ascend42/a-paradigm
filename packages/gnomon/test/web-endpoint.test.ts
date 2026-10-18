@@ -14,7 +14,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { UnprovisionedRootAuthority } from '../src/kernel/identity/index.js';
 import { LifecycleRefusal } from '../src/kernel/lifecycle/refusal.js';
 import { SoftwareEd25519Signer } from '../src/kernel/log/index.js';
-import { createKernelDispatcher, SocketAuthenticator, verifyServerHello } from '../src/kernel/socket/index.js';
+import { createKernelDispatcher, SocketAuthenticator, verifyServerHello, type ModRelayPort } from '../src/kernel/socket/index.js';
 import { createWebEndpointForTest, unsandboxedLauncher } from '../src/kernel/testing.js';
 import { materializePlaceholderBundle, PLACEHOLDER_BUNDLE_HASH, PLACEHOLDER_FILES, type BlobSource, type WebEndpoint, type WebEndpointSeams } from '../src/kernel/web/index.js';
 import { encodeClientFrame, OP } from '../src/transport/ws-codec.js';
@@ -41,7 +41,7 @@ interface Row {
 }
 const HUMAN = { connId: 'conn:01JTESTASKER0000000000000', phase: 'authenticated' as const, credential: 'device' as const, principalKind: 'human' as const, principal: 'p:00000000/founder', deviceId: 'dev:00000000/mac-1' };
 
-async function rig(o: { lingerMs?: number; authDeadlineMs?: number; maxConnections?: number; blobs?: BlobSource; bundle?: { dir: string; hash: string }; now?: { t: number }; launcher?: WebEndpointSeams['launcher'] } = {}) {
+async function rig(o: { lingerMs?: number; authDeadlineMs?: number; maxConnections?: number; blobs?: BlobSource; bundle?: { dir: string; hash: string }; now?: { t: number }; launcher?: WebEndpointSeams['launcher']; mods?: ModRelayPort } = {}) {
   const t = tempHome('gw-');
   cleanups.push(t.cleanup);
   mkdirSync(t.home, { recursive: true, mode: 0o700 });
@@ -65,6 +65,7 @@ async function rig(o: { lingerMs?: number; authDeadlineMs?: number; maxConnectio
         createKernelDispatcher({
           authenticator: new SocketAuthenticator({ home: t.home, endpointPath, kernelSigner: kernel, trust }),
           web,
+          ...(o.mods ? { mods: o.mods } : {}),
           log: (k, p, ids) => log(k, p, ids),
           status: { daemon: () => ({}), log: () => ({}), kernelKey: () => ({ keyId: kernel.keyId, custody: 'partial', source: 'test' }), root: () => ({ state: 'unprovisioned', rootKeyId: null }), web: () => ep.status() },
         }),
@@ -476,6 +477,32 @@ setInterval(() => undefined, 1000);`;
     const { ep } = await rig({ launcher: (input) => ({ ...unsandboxedLauncher({ ...input, scriptPath: fake }), args: [fake] }) });
     await expect(ep.ensureListening()).rejects.toMatchObject({ reason: 'web-transport-failed' });
     expect(ep.listening).toBe(false);
+  });
+});
+
+describe('#mod-host relays on a GUI connection (M1.11 slice 2, I3)', () => {
+  it('mod.command is refused (no gesture proof yet) and status reports it available:false; mod.view is served with relayedFor from the GUI connection', async () => {
+    const seen: unknown[] = [];
+    const mods: ModRelayPort = {
+      view: async (rf, req) => (seen.push({ rf, req }), { label: 'mod:probe' }),
+      command: async () => {
+        throw new Error('must not be reached');
+      },
+      status: (full) => ({ full }),
+    };
+    const { ep } = await rig({ mods });
+    const grant = await ep.requestLaunch(HUMAN);
+    const { ws, auth } = await attach(ep, grant.launchToken);
+    const connId = (auth.result as { connId: string }).connId;
+    ws.sendJson(rpc(3, 'status', {}));
+    const st = (await ws.nextJson()).result as { relays: Array<{ relay: string; available: boolean }>; mods: unknown };
+    expect(st.relays).toEqual([expect.objectContaining({ relay: 'mod.view', available: true }), expect.objectContaining({ relay: 'mod.command', available: false })]);
+    expect(st.mods).toEqual({ full: true }); // GUI = the human class
+    ws.sendJson(rpc(4, 'mod.command', { name: 'probe', commandId: 'probe.who', args: {} }));
+    expect(await ws.nextJson()).toMatchObject({ error: { data: { code: 'ENGINE', data: { reason: 'not-implemented', milestone: 'M1.10' } } } });
+    ws.sendJson(rpc(5, 'mod.view', { name: 'probe', viewId: 'probe.view', input: {}, relayedFor: { principal: 'p:evil/x', connId: 'z' } }));
+    expect(await ws.nextJson()).toMatchObject({ result: { label: 'mod:probe' } });
+    expect(seen).toEqual([{ rf: { principal: HUMAN.principal, connId }, req: { name: 'probe', viewId: 'probe.view', input: {} } }]);
   });
 });
 

@@ -273,12 +273,22 @@ export interface DispatcherOptions {
 export interface ModRelayPort {
   view(relayedFor: { principal: string; connId: string }, req: { name: string; viewId: string; input: unknown }): Promise<unknown>;
   command(relayedFor: { principal: string; connId: string }, req: { name: string; commandId: string; args: unknown }): Promise<unknown>;
-  status(): Record<string, unknown>;
+  /** full for the human class; counts only otherwise (F4) */
+  status(full: boolean): Record<string, unknown>;
 }
+
+/** Relay admission (F1): a mod name, and a view / command id (manifest DOTTED_ID, ≤ 128). */
+export const RELAY_MOD_NAME = /^[a-z][a-z0-9-]{0,63}$/;
+export const RELAY_ID = /^(?=.{1,128}$)[a-z][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)*$/;
 
 export interface KernelDispatcher {
   handle: RpcHandler;
-  /** A mod's `kernel.call`: the post-auth dispatch run as a connection-less mod principal (§12.3). */
+  /**
+   * A mod's `kernel.call`: the post-auth dispatch run as a connection-less mod
+   * principal (§12.3). The `principal` is TRUSTED — it is supplied only by
+   * ModHost (`p:<ns>/mod-<name>` of the child it spawned), never by a mod or
+   * a client; no other caller may pass one.
+   */
   callAs(principal: string, verb: string, params: Record<string, unknown>): Promise<unknown>;
   onConnect(ctx: ConnectionContext): void;
   onDisconnect(ctx: ConnectionContext): void;
@@ -334,7 +344,7 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
         .map((v) => ({ verb: v, available: available(v.split(' ')[0]!) })),
       verbs: VERBS.map((v) => ({ verb: v.verb, access: v.access[cls], available: available(v.verb), milestone: VERB_MILESTONES[v.verb] })),
       relays: CLIENT_RELAYS.map((r) => ({ relay: r.relay, access: accessOf(r.relay, cls), available: relayAvailable(r.relay, s), milestone: VERB_MILESTONES[r.relay] })),
-      ...(o.mods ? { mods: o.mods.status() } : {}),
+      ...(o.mods ? { mods: o.mods.status(cls === 'human') } : {}), // F4: full to the human class only
       daemon: o.status.daemon(),
       log: o.status.log(),
       sessions: { n: 0 },
@@ -539,8 +549,10 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
     // M1.11 slice 2: the client relays, relayedFor stamped from THIS connection
     if (RELAY_NAMES.includes(m) && o.mods) {
       const p = frame.params;
-      const ok = p !== null && typeof p === 'object' && !Array.isArray(p) && typeof (p as Record<string, unknown>).name === 'string' && typeof (p as Record<string, unknown>)[m === 'mod.view' ? 'viewId' : 'commandId'] === 'string';
-      if (!ok) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `${m} params are {name, ${m === 'mod.view' ? 'viewId, input' : 'commandId, args'}}`, { verb: m });
+      const pr = p !== null && typeof p === 'object' && !Array.isArray(p) ? (p as Record<string, unknown>) : null;
+      const id = pr?.[m === 'mod.view' ? 'viewId' : 'commandId'];
+      const ok = pr !== null && typeof pr.name === 'string' && RELAY_MOD_NAME.test(pr.name) && typeof id === 'string' && RELAY_ID.test(id);
+      if (!ok) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `${m} params are {name: a mod name, ${m === 'mod.view' ? 'viewId: a view id, input' : 'commandId: a command id, args'}}`, { verb: m });
       if (m === 'mod.command' && s.credential === 'gui') {
         throw new RpcRefusal('ENGINE', 'not-implemented', 'mod.command from a GUI needs a user gesture (§11.5); the gesture proof lands with the GUI (M1.10)', { verb: m, milestone: 'M1.10' });
       }

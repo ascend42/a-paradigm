@@ -109,6 +109,12 @@ export const DEFAULT_CANCEL_GRACE_MS = 1_000;
 export const RESTART_CAP = Object.freeze({ n: 3, windowMs: 10 * 60_000 });
 /** §12.5: a linked folder's change is acted on after this quiet period. */
 export const FOLDER_DEBOUNCE_MS = 500;
+/** mod → host requests one mod may have in flight in the host at once (all methods; beyond ⇒ BUSY). */
+export const MAX_MOD_HOST_INFLIGHT = 8;
+/** Relay misses (an uninstalled name): individual manifest.refuse rows per window before folding. */
+export const RELAY_MISS_ROWS_PER_WINDOW = 8;
+export const RELAY_MISS_WINDOW_MS = 10_000;
+const MOD_NAME = /^[a-z][a-z0-9-]{0,63}$/;
 
 export interface ModChildrenPort {
   track(input: TrackInput): Promise<void>;
@@ -122,6 +128,8 @@ export interface KernelCallRequest {
   params: Record<string, unknown>;
   /** the caller's hsid (a tool call from a session), attached for the confused-deputy guard */
   hsid?: string;
+  /** the bound host → mod call (absent ⇒ idle); the bridge's per-call append budget keys on it */
+  callId?: string;
 }
 
 export interface ModHostOptions {
@@ -192,6 +200,10 @@ export class ModHost {
   readonly #stderr = new Map<string, string>();
   readonly #starting = new Map<string, Promise<ModStartResult>>();
   readonly #watchers = new Map<string, { close(): void }>();
+  /** mods out of restarts: refused DOWN to relays until an operator start() */
+  readonly #down = new Set<string>();
+  readonly #inflight = new Map<string, number>();
+  readonly #misses = { windowStart: 0, individual: 0, folded: new Map<string, number>(), timer: undefined as NodeJS.Timeout | undefined };
   #closed = false;
   #seams: ModHostSeams = {};
 
@@ -270,11 +282,87 @@ export class ModHost {
   async #onFolderChanged(name: string): Promise<void> {
     if (this.#closed || !this.#running.has(name)) return;
     await this.stop(name, 'changed');
-    await this.start(name).catch(() => undefined); // a refused start is already logged
+    await this.#launch(name).catch(() => undefined); // a refused start is already logged
   }
 
-  /** Start (or return) the child for `name`. Paused mods return their pause; nothing from a changed tree loads. */
+  /** Start (or return) the child for `name` — the OPERATOR path: it also lifts a restart-cap `down`. Paused mods return their pause; nothing from a changed tree loads. */
   start(name: string): Promise<ModStartResult> {
+    this.#down.delete(name);
+    return this.#launch(name);
+  }
+
+  /**
+   * Relay admission (F1): a relay never makes the host do work for a name it
+   * has no business starting. Running ⇒ go. Paused ⇒ PAUSED straight from
+   * memory (no loadMod: only a card decision or a watcher event re-runs it).
+   * Down (restart cap) ⇒ DOWN until an operator start(). Not installed ⇒
+   * NOT_INSTALLED with a folded manifest.refuse row (≤ 8 per 10 s window,
+   * the rest counted). A relay-triggered start counts against RESTART_CAP.
+   */
+  async admit(name: string): Promise<void> {
+    if (typeof name !== 'string' || !MOD_NAME.test(name)) throw new ModRefusal('NOT_INSTALLED', 'malformed mod name', { reason: 'not-found' });
+    if (this.#running.has(name)) return;
+    const p = this.#paused.get(name);
+    if (p) throw new ModRefusal('PAUSED', `${name} is paused until a card decides (§12.5)`, { name, why: p.why, cardId: p.cardId });
+    if (this.#down.has(name) || this.restarts(name) >= RESTART_CAP.n) {
+      this.#down.add(name);
+      throw new ModRefusal('DOWN', `${name} is down (restart cap ${RESTART_CAP.n} per ${RESTART_CAP.windowMs / 60_000} min); an operator start brings it back`, { name });
+    }
+    if (!effectiveInstall(readGrants(this.#o.home, this.#o.trust), name)) {
+      this.#relayMiss(name);
+      throw new ModRefusal('NOT_INSTALLED', `${name} is not installed`, { name, reason: 'not-found' });
+    }
+    if (!this.#starting.has(name)) {
+      const now = this.#now();
+      const recent = (this.#restarts.get(name) ?? []).filter((t) => now - t < RESTART_CAP.windowMs);
+      recent.push(now);
+      this.#restarts.set(name, recent);
+    }
+    const s = await this.#launch(name);
+    if (s.state === 'paused') throw new ModRefusal('PAUSED', `${name} is paused until a card decides (§12.5)`, { name, why: s.why, cardId: s.cardId });
+  }
+
+  #relayMiss(name: string): void {
+    const m = this.#misses;
+    const now = this.#now();
+    if (now - m.windowStart >= RELAY_MISS_WINDOW_MS) {
+      this.#flushMisses();
+      m.windowStart = now;
+      m.individual = 0;
+    }
+    if (m.individual < RELAY_MISS_ROWS_PER_WINDOW) {
+      m.individual++;
+      this.#emit('manifest.refuse', { name, code: 'NOT_INSTALLED', via: 'relay' });
+      return;
+    }
+    m.folded.set(name, (m.folded.get(name) ?? 0) + 1);
+    if (!m.timer) {
+      m.timer = setTimeout(() => this.#flushMisses(), RELAY_MISS_WINDOW_MS);
+      m.timer.unref();
+    }
+  }
+
+  /** Write the folded relay-miss counter row now (also on its window timer and at stopAll). */
+  flushRelayMisses(): void {
+    this.#flushMisses();
+  }
+
+  #flushMisses(): void {
+    const m = this.#misses;
+    clearTimeout(m.timer);
+    m.timer = undefined;
+    if (m.folded.size === 0) return;
+    const byName = Object.fromEntries(m.folded);
+    this.#emit('manifest.refuse', { code: 'NOT_INSTALLED', via: 'relay', coalesced: true, count: Object.values(byName).reduce((a, b) => a + b, 0), byName });
+    m.folded.clear();
+  }
+
+  /** Names a relay is refused DOWN for (inspect / tests). */
+  down(): string[] {
+    return [...this.#down].sort();
+  }
+
+  #launch(name: string): Promise<ModStartResult> {
     const live = this.#running.get(name);
     if (live) return Promise.resolve(this.#runningResult(live));
     const inflight = this.#starting.get(name);
@@ -292,6 +380,7 @@ export class ModHost {
     if (this.#closed) throw new ModRefusal('NOT_RUNNING', 'the mod host is stopping', { name });
     const loaded = loadMod({ home: this.#o.home, name, trust: this.#o.trust, emit: this.#emit, ...(this.#o.kernelPrincipal ? { kernelPrincipal: this.#o.kernelPrincipal } : {}) });
     if (loaded.state === 'paused') {
+      this.#unwatch(name);
       const p = { state: 'paused' as const, name, why: 'changed' as const, cardId: loaded.cardId, files: loaded.files };
       this.#paused.set(name, p);
       return p;
@@ -302,6 +391,7 @@ export class ModHost {
     if (row.dev) {
       if (Date.parse(row.dev.until) > this.#now()) dev = true;
       else {
+        this.#unwatch(name);
         this.#emit('mod.dev.expired', { name });
         const p = { state: 'paused' as const, name, why: 'dev-expired' as const, cardId: null };
         this.#paused.set(name, p);
@@ -392,7 +482,7 @@ export class ModHost {
         throw new ModRefusal('ABI', `${name} answered abi ${String(init?.abi)} / modAbiId ${String(init?.modAbiId)}; the host speaks ${MOD_ABI_V1} ${MOD_ABI_ID}`, { name });
       }
       this.#emit('mod.health', { name, ok: true });
-      if (linked.length) this.#watch(name, linked[0]!);
+      if (linked.length) this.#watch(name, linked[0]!); // re-armed on every successful start
       return this.#runningResult(r);
     } catch (err) {
       if (!running) await proxy?.close();
@@ -404,6 +494,7 @@ export class ModHost {
   async #onExit(r: Running, code: number | null, signal: NodeJS.Signals | null): Promise<void> {
     this.#stderr.set(r.name, r.channel.stderrTail);
     if (this.#running.get(r.name) === r) this.#running.delete(r.name);
+    if (!this.#running.has(r.name)) this.#unwatch(r.name); // I1: a successful restart re-arms it
     await r.proxy?.close();
     if (r.stopping || this.#closed) return;
     this.#emit('mod.health', { name: r.name, ok: false, code, signal });
@@ -411,12 +502,14 @@ export class ModHost {
     const recent = (this.#restarts.get(r.name) ?? []).filter((t) => now - t < RESTART_CAP.windowMs);
     if (recent.length >= RESTART_CAP.n) {
       this.#restarts.set(r.name, recent);
+      this.#down.add(r.name);
+      this.#unwatch(r.name);
       this.#emit('mod.health', { name: r.name, ok: false, why: 'restart-cap' });
-      return; // out of restarts: down until started again
+      return; // out of restarts: down until an operator starts it
     }
     recent.push(now);
     this.#restarts.set(r.name, recent);
-    await this.start(r.name).catch(() => undefined); // a failed restart (paused, sandbox, abi) is already logged
+    await this.#launch(r.name).catch(() => undefined); // a failed restart (paused, sandbox, abi) is already logged
   }
 
   /** Restarts recorded in the current window (inspect / tests). */
@@ -457,6 +550,7 @@ export class ModHost {
   async stopAll(reason = 'shutdown'): Promise<void> {
     this.#closed = true;
     for (const n of [...this.#watchers.keys()]) this.#unwatch(n);
+    this.#flushMisses();
     await Promise.allSettled([...this.#starting.values()]); // reviewer #2: an in-flight start finishes (or refuses) before the sweep
     await Promise.all([...this.#running.keys()].map((n) => this.stop(n, reason)));
   }
@@ -506,6 +600,7 @@ export class ModHost {
       // §12.3: cancel not honoured ⇒ the child is restarted
       r.stopping = true;
       this.#running.delete(r.name);
+      this.#unwatch(r.name);
       this.#emit('mod.health', { name: r.name, ok: false, why: 'cancel-timeout' });
       await this.#o.children.stop(r.child, 'cancel-timeout');
       r.channel.close(new ModRefusal('TIMEOUT', 'restarted after an unhonoured cancel', { name: r.name }));
@@ -515,8 +610,11 @@ export class ModHost {
       if (recent.length < RESTART_CAP.n) {
         recent.push(now);
         this.#restarts.set(r.name, recent);
-        await this.start(r.name).catch(() => undefined);
-      } else this.#emit('mod.health', { name: r.name, ok: false, why: 'restart-cap' });
+        await this.#launch(r.name).catch(() => undefined);
+      } else {
+        this.#down.add(r.name);
+        this.#emit('mod.health', { name: r.name, ok: false, why: 'restart-cap' });
+      }
     }
     throw new ModRefusal('TIMEOUT', `${r.name} did not answer within ${ms} ms${honoured ? '' : ' (cancel not honoured: restarted)'}`, { name: r.name, honoured });
   }
@@ -607,6 +705,19 @@ export class ModHost {
   async #onModRequest(name: string, method: string, params: Record<string, unknown>): Promise<unknown> {
     const r = this.#running.get(name);
     if (!r) throw new ModRefusal('NOT_RUNNING', `${name} is not running`, { name });
+    const n = this.#inflight.get(name) ?? 0;
+    if (n >= MAX_MOD_HOST_INFLIGHT) throw new ModRefusal('BUSY', `${name} has ${MAX_MOD_HOST_INFLIGHT} mod → host requests in the host already`, { name });
+    this.#inflight.set(name, n + 1);
+    try {
+      return await this.#serveModRequest(r, name, method, params);
+    } finally {
+      const left = (this.#inflight.get(name) ?? 1) - 1;
+      if (left > 0) this.#inflight.set(name, left);
+      else this.#inflight.delete(name);
+    }
+  }
+
+  async #serveModRequest(r: Running, name: string, method: string, params: Record<string, unknown>): Promise<unknown> {
     let effect: ToolEffect;
     let ctx: CallContext = { kind: 'idle' };
     try {
@@ -630,7 +741,8 @@ export class ModHost {
           delete vp.permitId;
         }
         if (!this.#o.kernelCall) throw new ModRefusal('NOT_IMPLEMENTED', 'kernel.call is not wired to the kernel yet (M1.11 slice 2)', { name, verb });
-        return { result: await this.#o.kernelCall({ name, principal: this.#principal(name), verb, params: vp, ...(hsid ? { hsid } : {}) }) };
+        const callId = typeof params.callId === 'string' ? params.callId : undefined;
+        return { result: await this.#o.kernelCall({ name, principal: this.#principal(name), verb, params: vp, ...(hsid ? { hsid } : {}), ...(callId ? { callId } : {}) }) };
       }
     } catch (err) {
       if (err instanceof ModRefusal && (err.modCode === 'EFFECT' || err.modCode === 'APPROVE' || err.modCode === 'VERB' || err.modCode === 'CALL')) {

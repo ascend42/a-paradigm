@@ -14,7 +14,7 @@
  * `gnomon mod inspect` (§12.4). The channel never throws on child output.
  */
 import type { ChildProcess } from 'node:child_process';
-import { jsonRpcCodeFor, type Refusal } from '@a-company/gnomon-contracts';
+import { jsonRpcCodeFor, RefusedError, type Refusal } from '@a-company/gnomon-contracts';
 import { encodeFrame, NdjsonDecoder } from '../socket/framing.js';
 import { ModRefusal } from './refusal.js';
 
@@ -136,7 +136,8 @@ export class ModChannel {
 }
 
 function errorObject(err: unknown): RpcErrorObject {
-  if (err instanceof ModRefusal) {
+  if (err instanceof ModRefusal || err instanceof RefusedError) {
+    // a refusal:v1 is data, never a stack (e.g. the log's label-relaxed for a mod append)
     const r: Refusal = err.refusal;
     return { code: jsonRpcCodeFor(r.code), message: err.message, data: r };
   }

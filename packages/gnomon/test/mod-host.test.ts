@@ -325,12 +325,12 @@ describe('round 3 (reviewer)', () => {
     expect(children.live()).toBe(0);
   });
 
-  it('a mod flooding state.get gets at most 16 requests in flight; the rest are refused BUSY', async () => {
+  it('a mod flooding state.get gets at most 8 requests in flight in the host (16 on the channel); the rest are refused BUSY', async () => {
     const { h } = await started();
     const out = (await h.callTool('probe', 'probe.read', { op: 'flood' })) as { ok: number; busy: number };
     expect(out.ok + out.busy).toBe(40);
     expect(out.busy).toBeGreaterThan(0);
-    expect(out.ok).toBeGreaterThanOrEqual(16);
+    expect(out.ok).toBeGreaterThanOrEqual(8);
   });
 
   it('backpressure: while the mod stdin does not drain, the host stops reading its stdout (one drain listener)', async () => {
@@ -385,6 +385,77 @@ describe('folder watch (G-MOD-08, slice 2)', () => {
     expect(r.events.find((e) => e.kind === 'mod.stopped' && e.payload.reason === 'changed')).toBeTruthy();
     expect(kinds(r)).toContain('mod.paused');
     expect(h.status()).toMatchObject({ paused: [expect.objectContaining({ name: 'probe', why: 'changed' })] });
+    expect(h.watching()).toEqual([]);
+  });
+});
+
+describe('relay admission (Aegis F1) and in-flight cap (F2), round 2', () => {
+  it('an uninstalled name is refused NOT_INSTALLED without loadMod; misses beyond 8 per window fold into one counter row', async () => {
+    const r = rig();
+    cleanups.push(r.cleanup);
+    const { h } = host(r, { launcher: unsandboxedModLauncher });
+    cleanups.push(() => h.stopAll());
+    for (let i = 0; i < 11; i++) {
+      const e = await refused(h.admit(`ghost-${i % 2}`));
+      expect(e.modCode).toBe('NOT_INSTALLED');
+      expect(e.refusal).toMatchObject({ code: 'NOT_FOUND', data: { modCode: 'NOT_INSTALLED', reason: 'not-found' } });
+    }
+    h.flushRelayMisses();
+    const rows = r.events.filter((e) => e.kind === 'manifest.refuse');
+    expect(rows.filter((e) => !e.payload.coalesced).length).toBe(8);
+    expect(rows.filter((e) => e.payload.coalesced)).toEqual([{ kind: 'manifest.refuse', payload: expect.objectContaining({ count: 3, via: 'relay' }) }]);
+    expect(kinds(r)).not.toContain('manifest.load');
+  });
+
+  it('a paused mod is answered from memory (no loadMod, no second card); a relay start counts against RESTART_CAP; DOWN until an operator start', async () => {
+    const { r, h, folder } = await started({ linked: true });
+    await h.stop('probe');
+    fs.appendFileSync(path.join(folder, 'index.mjs'), '\n// edited\n');
+    expect(await h.start('probe')).toMatchObject({ state: 'paused' });
+    const staged = r.events.filter((e) => e.kind === 'manifest.staged').length;
+    for (let i = 0; i < 3; i++) expect((await refused(h.admit('probe'))).modCode).toBe('PAUSED');
+    expect(r.events.filter((e) => e.kind === 'manifest.staged').length).toBe(staged);
+
+    const { h: h2 } = await started();
+    await h2.stop('probe');
+    await h2.admit('probe'); // a relay-triggered start
+    expect(h2.restarts('probe')).toBe(1);
+    for (let i = 0; i < 2; i++) {
+      await refused(h2.callTool('probe', 'probe.read', { op: 'crash' }));
+      await new Promise((res) => setTimeout(res, 700));
+    }
+    await refused(h2.callTool('probe', 'probe.read', { op: 'crash' }));
+    await new Promise((res) => setTimeout(res, 500));
+    expect(h2.running()).toEqual([]);
+    const down = await refused(h2.admit('probe'));
+    expect(down.modCode).toBe('DOWN');
+    expect(h2.down()).toEqual(['probe']);
+    expect(await h2.start('probe')).toMatchObject({ state: 'running' }); // the operator path lifts it
+    expect(h2.down()).toEqual([]);
+  });
+
+  it('F2: a mod has at most 8 mod → host requests in flight in the host; the rest are refused BUSY', async () => {
+    const r = rig();
+    cleanups.push(r.cleanup);
+    install(r, writeModFolder(path.join(r.root, 'src', 'probe'), probeManifest()));
+    const { h } = host(r, { launcher: unsandboxedModLauncher }, { kernelCall: () => new Promise((res) => setTimeout(() => res({ ok: 1 }), 300)) });
+    cleanups.push(() => h.stopAll());
+    await h.start('probe');
+    expect(await h.callTool('probe', 'probe.read', { op: 'kflood' })).toEqual({ ok: 8, busy: 12 });
+  });
+
+  it('I1: watching() tells the truth across a crash restart and the restart cap', async () => {
+    const { h } = await started({ linked: true });
+    expect(h.watching()).toEqual(['probe']);
+    await refused(h.callTool('probe', 'probe.read', { op: 'crash' }));
+    for (let i = 0; i < 20 && h.running().length === 0; i++) await new Promise((res) => setTimeout(res, 100));
+    expect(h.running()).toEqual(['probe']);
+    expect(h.watching()).toEqual(['probe']); // re-armed by the successful restart
+    for (let i = 0; i < 3; i++) {
+      await refused(h.callTool('probe', 'probe.read', { op: 'crash' }));
+      await new Promise((res) => setTimeout(res, 700));
+    }
+    expect(h.running()).toEqual([]);
     expect(h.watching()).toEqual([]);
   });
 });
