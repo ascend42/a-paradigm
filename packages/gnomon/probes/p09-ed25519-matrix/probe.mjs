@@ -35,7 +35,11 @@ export default async function probe(ctx) {
   vm.runInThisContext(testSrc, { filename: 'ed25519-test.js' });
   const node = await globalThis.p09Ed25519Test();
 
-  const safariHtmlInSync = read('safari.html').toString() === renderSafariHtml();
+  // Content drift only: a Windows checkout (core.autocrlf) hands safari.html and
+  // ed25519-test.js over with CRLF, which is not drift (run 39091956873: every
+  // engine passed on win32 yet the verdict failed on this check alone).
+  const lf = (s) => s.replace(/\r\n/g, '\n');
+  const safariHtmlInSync = lf(read('safari.html').toString()) === lf(renderSafariHtml());
 
   const { engines, missing } = findEngines();
   const server = await startServer({

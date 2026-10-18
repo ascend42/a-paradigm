@@ -86,4 +86,9 @@ should be rejected, `✕`) and `empty-msg` (TEST 1, an empty message). If the
 engine has no Ed25519, the line reads `ed25519 ✕ unsupported (<error>) · FAIL`.
 
 `safari.html` is generated from `ed25519-test.js` by `make-safari-html.mjs`.
-The probe fails if the two drift.
+The probe fails if the two drift. The check compares content with line endings
+normalized (CRLF to LF): on a Windows checkout git hands both files over with
+CRLF, which is not drift. Run 39091956873 (windows-latest) recorded `fail` on
+this check alone while Node, Chrome, Edge and Firefox all passed every gating
+check; that was a harness bug, not an engine finding, so no engine falls back
+to the bundled pure-JS verifier on that evidence.
