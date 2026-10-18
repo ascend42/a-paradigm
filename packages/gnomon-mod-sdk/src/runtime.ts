@@ -79,15 +79,25 @@ export function serveMod(def: ModDefinition, io: Io = { input: process.stdin, ou
       send({ id, method, params });
     });
 
-  const api: ModApi = {
-    state: {
-      get: async (key) => ((await call('state.get', { key })) as { value?: unknown })?.value,
-      set: async (key, value) => void (await call('state.set', { key, value })),
-    },
-    kernel: async (verb, params = {}) => ((await call('kernel.call', { verb, params })) as { result?: unknown })?.result,
-    log: (m) => void io.error.write(`${m}\n`),
-    egress: (host, port = 443) => egressConnect(io.env.GNOMON_EGRESS_PROXY, host, port),
+  /**
+   * The api handed to one call: every mod → host request ECHOES that call's
+   * host-minted `callId` (M1.11 slice 2), so the host judges it against that
+   * call's effects and refuses it once the call has ended. The event api
+   * carries none (judged idle: read only).
+   */
+  const apiFor = (callId: string | null): ModApi => {
+    const bound = (params: Record<string, unknown>): Record<string, unknown> => (callId ? { ...params, callId } : params);
+    return {
+      state: {
+        get: async (key) => ((await call('state.get', bound({ key }))) as { value?: unknown })?.value,
+        set: async (key, value) => void (await call('state.set', bound({ key, value }))),
+      },
+      kernel: async (verb, params = {}) => ((await call('kernel.call', bound({ verb, params }))) as { result?: unknown })?.result,
+      log: (m) => void io.error.write(`${m}\n`),
+      egress: (host, port = 443) => egressConnect(io.env.GNOMON_EGRESS_PROXY, host, port),
+    };
   };
+  const api = apiFor(null);
 
   const handle = async (method: string, p: Record<string, unknown>): Promise<unknown> => {
     switch (method) {
@@ -105,21 +115,22 @@ export function serveMod(def: ModDefinition, io: Io = { input: process.stdin, ou
         const token = typeof p.cancelToken === 'string' ? p.cancelToken : null;
         const ac = new AbortController();
         if (token) inflight.set(token, ac);
+        const callApi = apiFor(typeof p.callId === 'string' ? p.callId : null);
         try {
           const base: CallContext = { signal: ac.signal, ...(p.relayedFor ? { relayedFor: p.relayedFor as RelayedFor } : {}) };
           if (method === 'view.render') {
             const fn = def.views?.[String(p.viewId)];
             if (!fn) throw new ModCallError(-32601, `no view ${String(p.viewId)}`);
-            return { block: await fn(p.input, { ...base, width: Number(p.width ?? 80), prefs: (p.prefs as ViewContext['prefs']) ?? {} }, api) };
+            return { block: await fn(p.input, { ...base, width: Number(p.width ?? 80), prefs: (p.prefs as ViewContext['prefs']) ?? {} }, callApi) };
           }
           if (method === 'tool.call') {
             const fn = def.tools?.[String(p.name)];
             if (!fn) throw new ModCallError(-32601, `no tool ${String(p.name)}`);
-            return { result: await fn(p.input, base, api) };
+            return { result: await fn(p.input, base, callApi) };
           }
           const fn = def.commands?.[String(p.commandId)];
           if (!fn) throw new ModCallError(-32601, `no command ${String(p.commandId)}`);
-          return { result: await fn(p.args, base, api) };
+          return { result: await fn(p.args, base, callApi) };
         } finally {
           if (token) inflight.delete(token);
         }

@@ -25,6 +25,16 @@
  * a client carries the host-stamped relayedFor"); absent when the host itself
  * renders (fixtures, Tier 0 templates).
  *
+ * CALL-ID BINDING (M1.11 slice 2, Aegis): every host → mod `view.render`,
+ * `command.run` and `tool.call` carries a host-minted `callId`; a mod → host
+ * request made on behalf of that call ECHOES it (the SDK does so for the api
+ * it hands each handler). The host judges the request against THAT call's
+ * effects only while the call is in force: a `callId` naming another or an
+ * ended call is refused (FORBIDDEN, data.modCode `CALL`); a request without
+ * one is judged as idle (`read` only, which only narrows). Adding `callId`
+ * moved modAbiId (a mod-RPC change moves only modAbiId, §12.3) — clientApiId
+ * is unchanged.
+ *
  * WIRE: JSON-RPC 2.0, one object per `\n`-terminated line on the child's
  * stdin (host → mod) and stdout (mod → host); stderr is the child's log,
  * captured by the host as a tail (`gnomon mod inspect`, §12.4).
@@ -64,13 +74,13 @@ export const MOD_ABI_LIFECYCLE: readonly ModRpcDescriptor[] = deepFreeze([
 
 export const MOD_ABI_RPCS: readonly ModRpcDescriptor[] = deepFreeze([
   { method: 'health', direction: 'host->mod', form: 'request', params: [], result: ['ok', 'abi'], effect: null },
-  { method: 'view.render', direction: 'host->mod', form: 'request', params: ['viewId', 'input', 'width', 'prefs', 'cancelToken', 'relayedFor'], result: ['block'], effect: null },
-  { method: 'command.run', direction: 'host->mod', form: 'request', params: ['commandId', 'args', 'relayedFor'], result: ['result'], effect: null },
-  { method: 'tool.call', direction: 'host->mod', form: 'request', params: ['name', 'input', 'cancelToken'], result: ['result'], effect: null },
+  { method: 'view.render', direction: 'host->mod', form: 'request', params: ['viewId', 'input', 'width', 'prefs', 'cancelToken', 'callId', 'relayedFor'], result: ['block'], effect: null },
+  { method: 'command.run', direction: 'host->mod', form: 'request', params: ['commandId', 'args', 'callId', 'relayedFor'], result: ['result'], effect: null },
+  { method: 'tool.call', direction: 'host->mod', form: 'request', params: ['name', 'input', 'cancelToken', 'callId'], result: ['result'], effect: null },
   { method: 'event', direction: 'host->mod', form: 'notification', params: ['event'], result: [], effect: null },
-  { method: 'state.get', direction: 'mod->host', form: 'request', params: ['key'], result: ['value'], effect: 'read' },
-  { method: 'state.set', direction: 'mod->host', form: 'request', params: ['key', 'value'], result: [], effect: 'write' },
-  { method: 'kernel.call', direction: 'mod->host', form: 'request', params: ['verb', 'params'], result: ['result'], effect: 'by-verb' },
+  { method: 'state.get', direction: 'mod->host', form: 'request', params: ['key', 'callId'], result: ['value'], effect: 'read' },
+  { method: 'state.set', direction: 'mod->host', form: 'request', params: ['key', 'value', 'callId'], result: [], effect: 'write' },
+  { method: 'kernel.call', direction: 'mod->host', form: 'request', params: ['verb', 'params', 'callId'], result: ['result'], effect: 'by-verb' },
 ] satisfies ModRpcDescriptor[]);
 
 /** Law 3 (§10): ≤ 8 RPCs. A test holds this bound. */

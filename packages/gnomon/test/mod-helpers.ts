@@ -25,7 +25,11 @@ import * as net from 'node:net';
 import { serveMod } from './gnomon-mod-sdk.mjs';
 const attempt = async (f) => { try { const v = await f(); return { ok: true, v: v === undefined ? null : String(v).slice(0, 64) }; } catch (e) { return { ok: false, code: e && (e.code || e.message) } } };
 let held = null;
+let kept = null;
 const run = async (input, api) => {
+  if (input.op === 'keep') { kept = api; return { ok: true, v: 'kept' }; }
+  if (input.op === 'stale') return attempt(() => kept.state.set('k', 9));
+  if (input.op === 'stale.get') return attempt(async () => JSON.stringify(await kept.state.get('k')));
   if (input.op === 'state.set') return attempt(() => api.state.set('k', input.value ?? 1));
   if (input.op === 'state.get') return attempt(async () => JSON.stringify(await api.state.get('k')));
   if (input.op === 'approve') return attempt(() => api.kernel('approve', {}));
@@ -41,6 +45,8 @@ const run = async (input, api) => {
   if (input.op === 'held') return { ok: true, v: held ? String(held.destroyed || held.readableEnded) : 'none' };
   if (input.op === 'link') return attempt(() => fs.linkSync(input.from, input.to));
   if (input.op === 'flood') { const rs = await Promise.allSettled(Array.from({ length: 40 }, () => api.state.get('k'))); return { ok: rs.filter((x) => x.status === 'fulfilled').length, busy: rs.filter((x) => x.status === 'rejected').length }; }
+  if (input.op === 'aloop') { let n = 0; for (let i = 0; i < (input.n ?? 1000); i++) { try { await api.kernel(input.verb ?? 'approve', {}); } catch { n++; } } return { refused: n }; }
+  if (input.op === 'kflood') { const rs = await Promise.allSettled(Array.from({ length: 20 }, () => api.kernel('status', {}))); return { ok: rs.filter((x) => x.status === 'fulfilled').length, busy: rs.filter((x) => x.status === 'rejected').length }; }
   if (input.op === 'hang') return new Promise(() => {});
   if (input.op === 'crash') process.exit(3);
   return null;

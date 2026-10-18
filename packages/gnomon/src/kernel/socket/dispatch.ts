@@ -77,6 +77,21 @@
  * `session.stop` from a HUMAN principal go to the session port (attended,
  * human-started Claude Code sessions only); every other class keeps the
  * matrix's answer (not-implemented until session principals land).
+ *
+ * M1.11 slice 2 #mod-host: the client relays `mod.view` / `mod.command`
+ * (§12.3) go to the `mods` port for every class the matrix lets call them
+ * ("caller principal"; read tokens and peers are FORBIDDEN), with
+ * `relayedFor{principal, connId}` stamped HERE from the authenticated
+ * connection — never from params. `mod.command` from a GUI connection needs a
+ * user gesture (§11.5) that no GUI can prove yet ⇒ ENGINE{not-implemented,
+ * M1.10}. `callAs(principal, verb, params)` is the mod's `kernel.call`: the
+ * same post-auth dispatch run as a connection-less mod principal (matrix
+ * class `mod`): status = own view (served), log.read pages through
+ * readerFor (own modns; `follow` needs a connection ⇒ BAD_REQUEST
+ * bad-follow), ref.resolve, and every other cell keeps its answer. The relays
+ * are not reachable through callAs (`mod.command` through kernel.call is for
+ * `knowledge:federate` holders, §8.10, not built) and log.append is the mod
+ * host's own path (modhost/bridge.ts).
  */
 import {
   CLIENT_API_ID,
@@ -117,6 +132,7 @@ import type { ConnAuthState, SocketAuthenticator, WebAuthHook } from './auth.js'
 import { resolveRef } from '../refs/resolve.js';
 import { refuseAppend, type AppendClass } from './log-append.js';
 import type { SessionPort } from '../supervisor/port.js';
+import { MOD_ABI_ID } from '@a-company/gnomon-contracts';
 
 const SESSION_METHODS: readonly string[] = ['session.open', 'session.send', 'session.stop'];
 import { voiceApproveRefusal } from '../broker/broker.js';
@@ -266,12 +282,33 @@ export interface DispatcherOptions {
   approvals?: ApprovalPort;
   /** #supervisor (M1.7 slice 1): session.open/send/stop for a HUMAN principal. Absent ⇒ they stay not-implemented. */
   sessions?: SessionPort;
+  /** #mod-host (M1.11 slice 2): the client relays. Absent ⇒ mod.view / mod.command stay not-implemented. */
+  mods?: ModRelayPort;
   /** Append a socket.* row to the kernel log; must reject if the row was not written. */
   log: (kind: SocketLogKind, payload: Record<string, unknown>, ids: { connId: string; deviceId?: string }) => Promise<void>;
 }
 
+/** The mod host's side of the client relays (modhost/bridge.ts createModRelayPort). */
+export interface ModRelayPort {
+  view(relayedFor: { principal: string; connId: string }, req: { name: string; viewId: string; input: unknown }): Promise<unknown>;
+  command(relayedFor: { principal: string; connId: string }, req: { name: string; commandId: string; args: unknown }): Promise<unknown>;
+  /** full for the human class; counts only otherwise (F4) */
+  status(full: boolean): Record<string, unknown>;
+}
+
+/** Relay admission (F1): a mod name, and a view / command id (manifest DOTTED_ID, ≤ 128). */
+export const RELAY_MOD_NAME = /^[a-z][a-z0-9-]{0,63}$/;
+export const RELAY_ID = /^(?=.{1,128}$)[a-z][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)*$/;
+
 export interface KernelDispatcher {
   handle: RpcHandler;
+  /**
+   * A mod's `kernel.call`: the post-auth dispatch run as a connection-less mod
+   * principal (§12.3). The `principal` is TRUSTED — it is supplied only by
+   * ModHost (`p:<ns>/mod-<name>` of the child it spawned), never by a mod or
+   * a client; no other caller may pass one.
+   */
+  callAs(principal: string, verb: string, params: Record<string, unknown>): Promise<unknown>;
   onConnect(ctx: ConnectionContext): void;
   onDisconnect(ctx: ConnectionContext): void;
   /** Authenticated connections (status `clients`). */
@@ -319,13 +356,15 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       clientApiId: CLIENT_API_ID,
       kitId: KIT_ID,
       abiId: ABI_ID,
+      modAbiId: MOD_ABI_ID,
       credential: s.credential ?? 'device',
       ...(s.credential === 'read-token' ? { token: { tokenId: s.tokenId, expiresAt: s.tokenExpiresAt } } : {}),
       nextLegalVerbs: nextLegalVerbs(facts)
         .filter((v) => accessOf(v.split(' ')[0]!, cls) !== false) // legal for THIS class only
         .map((v) => ({ verb: v, available: available(v.split(' ')[0]!) })),
       verbs: VERBS.map((v) => ({ verb: v.verb, access: v.access[cls], available: available(v.verb), milestone: VERB_MILESTONES[v.verb] })),
-      relays: CLIENT_RELAYS.map((r) => ({ relay: r.relay, access: accessOf(r.relay, cls), available: false, milestone: VERB_MILESTONES[r.relay] })),
+      relays: CLIENT_RELAYS.map((r) => ({ relay: r.relay, access: accessOf(r.relay, cls), available: relayAvailable(r.relay, s), milestone: VERB_MILESTONES[r.relay] })),
+      ...(o.mods ? { mods: o.mods.status(cls === 'human') } : {}), // F4: full to the human class only
       daemon: o.status.daemon(),
       log: o.status.log(),
       sessions: { n: 0 },
@@ -349,6 +388,9 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       clientConformance: { n: authed.filter((c) => declaredConformance(c.client?.conformance)).length, of: authed.length, label: 'declared' },
     };
   };
+
+  const relayAvailable = (relay: string, s: ConnAuthState): boolean =>
+    o.mods !== undefined && accessOf(relay, matrixClassOf(s)) !== false && !(relay === 'mod.command' && s.credential === 'gui');
 
   const recheckMs = o.tokenRecheckMs ?? TOKEN_RECHECK_MS;
   /** A read-token connection whose token died: log (best-effort), then close. Returns the refusal to answer with. */
@@ -476,6 +518,11 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       if (dead) throw tokenDead(s, ctx, dead, false);
     }
 
+    return serve(s, m, frame, ctx);
+  };
+
+  /** The post-auth dispatch: the §5 matrix, then each served cell (shared by the socket and a mod's kernel.call). */
+  const serve = async (s: ConnAuthState, m: string, frame: RpcRequestFrame, ctx: ConnectionContext): Promise<unknown> => {
     const cls = matrixClassOf(s);
     const access: Access = accessOf(m, cls);
     if (access === false) throw new RpcRefusal('FORBIDDEN', 'matrix', `${m} is not callable by a ${cls} principal (§5)`, { verb: m, principalClass: cls });
@@ -526,6 +573,24 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
         throw asRpcRefusal(err);
       }
     }
+    // M1.11 slice 2: the client relays, relayedFor stamped from THIS connection
+    if (RELAY_NAMES.includes(m) && o.mods) {
+      const p = frame.params;
+      const pr = p !== null && typeof p === 'object' && !Array.isArray(p) ? (p as Record<string, unknown>) : null;
+      const id = pr?.[m === 'mod.view' ? 'viewId' : 'commandId'];
+      const ok = pr !== null && typeof pr.name === 'string' && RELAY_MOD_NAME.test(pr.name) && typeof id === 'string' && RELAY_ID.test(id);
+      if (!ok) throw new RpcRefusal('BAD_REQUEST', 'bad-params', `${m} params are {name: a mod name, ${m === 'mod.view' ? 'viewId: a view id, input' : 'commandId: a command id, args'}}`, { verb: m });
+      if (m === 'mod.command' && s.credential === 'gui') {
+        throw new RpcRefusal('ENGINE', 'not-implemented', 'mod.command from a GUI needs a user gesture (§11.5); the gesture proof lands with the GUI (M1.10)', { verb: m, milestone: 'M1.10' });
+      }
+      const q = p as Record<string, unknown>;
+      const relayedFor = { principal: s.principal!, connId: s.connId };
+      try {
+        return await (m === 'mod.view' ? o.mods.view(relayedFor, { name: String(q.name), viewId: String(q.viewId), input: q.input ?? null }) : o.mods.command(relayedFor, { name: String(q.name), commandId: String(q.commandId), args: q.args ?? null }));
+      } catch (err) {
+        throw asRpcRefusal(err);
+      }
+    }
     if (access !== 'yes' && SERVED_METHODS.includes(m)) {
       const milestone = SCOPED_VIEW_MILESTONES[cls] ?? VERB_MILESTONES[m];
       throw new RpcRefusal('ENGINE', 'not-implemented', `${m} for a ${cls} principal is scoped (${String(access)}); the scoped view lands with ${milestone}`, {
@@ -546,8 +611,26 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
     throw new RpcRefusal('ENGINE', 'not-implemented', `${m} is not implemented yet (lands with ${VERB_MILESTONES[m]})`, { verb: m, milestone: VERB_MILESTONES[m] });
   };
 
+  /** A mod's kernel.call (§12.3): matrix class `mod`, no connection (so no subscription), relays and log.append excluded. */
+  const callAs = async (principal: string, verb: string, params: Record<string, unknown>): Promise<unknown> => {
+    if (!VERB_NAMES.includes(verb)) throw new RpcRefusal('UNKNOWN_VERB', 'unknown-verb', `unknown verb ${JSON.stringify(verb.slice(0, 64))}`);
+    const s: ConnAuthState = { connId: `kernel.call:${principal}`, phase: 'authenticated', principal, principalKind: 'mod', credential: 'device' };
+    if (verb === 'status') {
+      // the mod column's `own view`: who it is, the ids, and what it may call — nothing about other principals
+      return { principal, principalKind: 'mod', clientApiId: CLIENT_API_ID, kitId: KIT_ID, abiId: ABI_ID, modAbiId: MOD_ABI_ID, verbs: VERBS.map((v) => ({ verb: v.verb, access: v.access.mod })) };
+    }
+    if (verb === 'log.read' && params !== null && typeof params === 'object' && (params as { follow?: unknown }).follow) {
+      throw new RpcRefusal('BAD_REQUEST', 'bad-follow', 'a mod reads pages through kernel.call; a follow subscription needs a connection');
+    }
+    if (verb === 'log.append') throw new RpcRefusal('FORBIDDEN', 'modns-not-own', 'a mod appends through the mod host only (its own declared modns.<name>.* kinds)', { verb, principalClass: 'mod' });
+    const frame = { jsonrpc: '2.0', rpc: 'gnomon-rpc:v1', id: 0, method: verb, params } as unknown as RpcRequestFrame;
+    const ctx = { connId: s.connId, closed: false, close: () => undefined, authenticated: () => undefined } as unknown as ConnectionContext;
+    return serve(s, verb, frame, ctx);
+  };
+
   return {
     handle,
+    callAs,
     onConnect: (ctx) => {
       if (preAuthCount() >= maxPreAuth) {
         o.onPreAuthClose?.('pre-auth-cap');

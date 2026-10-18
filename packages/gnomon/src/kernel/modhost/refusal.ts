@@ -29,7 +29,11 @@ export const MOD_REFUSAL_CODES = [
   'BLOCK', // a rendered block outside kit:v1, or over 256 KiB / 2 000 nodes (§12.2 BAD_REQUEST)
   'STATE', // state.get/state.set outside the size caps or key shape
   'BUSY', // more than MAX_MOD_INFLIGHT mod → host requests in flight (retry later)
-  'NOT_IMPLEMENTED', // a kernel.call with no kernel port wired yet (the socket bridge is slice 2)
+  'NOT_IMPLEMENTED', // a kernel.call with no kernel port wired (unit rigs; the daemon always wires one)
+  'CALL', // a mod → host request echoing a callId that is not the call in force (M1.11 slice 2)
+  'NOT_INSTALLED', // a relay naming a mod with no effective grant.install (no loadMod is run for it)
+  'DOWN', // the mod is out of restarts (RESTART_CAP); refused until an operator start()
+  'LOG', // a log.append through kernel.call whose payload is not an object or exceeds the cap (Aegis C2)
 ] as const;
 export type ModRefusalCode = (typeof MOD_REFUSAL_CODES)[number];
 
@@ -49,6 +53,10 @@ const ROUTE: Record<ModRefusalCode, { code: RefusalCode; gate: RefusalGate }> = 
   STATE: { code: 'BAD_REQUEST', gate: 'usage' },
   BUSY: { code: 'ENGINE', gate: 'transport' },
   NOT_IMPLEMENTED: { code: 'ENGINE', gate: 'transport' },
+  CALL: { code: 'FORBIDDEN', gate: 'trust' },
+  LOG: { code: 'BAD_REQUEST', gate: 'usage' },
+  NOT_INSTALLED: { code: 'NOT_FOUND', gate: 'usage' },
+  DOWN: { code: 'ENGINE', gate: 'transport' },
 };
 
 export class ModRefusal extends RefusedError {

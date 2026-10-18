@@ -16,7 +16,7 @@ import { EventEmitter } from 'node:events';
 import { PassThrough, Writable } from 'node:stream';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { isRefusalV1, MOD_ABI_ID } from '@a-company/gnomon-contracts';
+import { isRefusalV1, MOD_ABI_ID, RefusedError, refuse } from '@a-company/gnomon-contracts';
 import { ModRefusal, sanitizeModBlock, EgressProxy, isNonPublicAddress } from '../src/kernel/modhost/index.js';
 import { modLaunchPlan } from '../src/kernel/sandbox/mod.js';
 import { createModHostForTest, unsandboxedModLauncher } from '../src/kernel/testing.js';
@@ -325,12 +325,12 @@ describe('round 3 (reviewer)', () => {
     expect(children.live()).toBe(0);
   });
 
-  it('a mod flooding state.get gets at most 16 requests in flight; the rest are refused BUSY', async () => {
+  it('a mod flooding state.get gets at most 8 requests in flight in the host (16 on the channel); the rest are refused BUSY', async () => {
     const { h } = await started();
     const out = (await h.callTool('probe', 'probe.read', { op: 'flood' })) as { ok: number; busy: number };
     expect(out.ok + out.busy).toBe(40);
     expect(out.busy).toBeGreaterThan(0);
-    expect(out.ok).toBeGreaterThanOrEqual(16);
+    expect(out.ok).toBeGreaterThanOrEqual(8);
   });
 
   it('backpressure: while the mod stdin does not drain, the host stops reading its stdout (one drain listener)', async () => {
@@ -359,15 +359,167 @@ describe('the mod profile registry (G-WIN-05)', () => {
   });
 });
 
-describe('M1.11 slice 2 (named, not built)', () => {
-  it.todo('slice 2: relays + kernel.call wired through the socket dispatcher (mod principal, scopes intersected, spend from the caller permit; G-ABI-02 mod column)');
-  it.todo('slice 2: folder watch (fs.watch, 500 ms debounce) pausing a RUNNING linked mod + mod.repinned / rollback re-pin (G-MOD-08)');
-  it.todo('slice 2: dev mode cards, 8 h expiry scheduling, cwd/worktree exclusion, widening card in dev mode, dev badge (G-MOD-09, G-MOD-11)');
-  it.todo('slice 2: gnomon-mods MCP bridge per session writing inject.receipt (§3.8)');
-  it.todo('slice 2: gnomon mod new|types|test|inspect|install|link|unlink|dev|diff|rollback + fixtures→golden renders (G-MOD-04)');
-  it.todo('slice 2: kit Image via /blob and Canvas host-owned surface in the GUI; overlay rules for card.*/status.mod (G-MOD-06, G-MOD-07, G-MOD-10)');
-  it.todo('slice 2 (Aegis C2): log.append through kernel.call clamps payload fields/size and labels per the manifest');
-  it.todo('slice 2 (Aegis C4): /blob serving opens blobs/ files O_NOFOLLOW and re-hashes before serving');
-  it.todo('slice 2: bind each mod → host request to its call id (SDK echoes it; mismatch refused)');
-  it.todo('slice 2: host-filled Tier 0 persona templates; #workshop-mod (G-WSP-01); ModHost wired into startDaemon + idle exit');
+describe('call-id binding (M1.11 slice 2, Aegis)', () => {
+  it('a request echoing an ENDED call is refused CALL even when the call in force would allow it; mod.effect.refused{why:call-id}', async () => {
+    const { r, h } = await started();
+    expect(await h.callTool('probe', 'probe.write', { op: 'keep' })).toEqual({ ok: true, v: 'kept' });
+    // the kept api echoes the write call's id; that call has ended, and a later write tool is in force
+    expect(await h.callTool('probe', 'probe.write', { op: 'stale' })).toMatchObject({ ok: false });
+    expect(await h.callTool('probe', 'probe.read', { op: 'stale.get' })).toMatchObject({ ok: false });
+    const refusedRows = r.events.filter((e) => e.kind === 'mod.effect.refused' && e.payload.why === 'call-id');
+    expect(refusedRows.length).toBe(2);
+    expect(refusedRows[0]!.payload).toMatchObject({ name: 'probe', method: 'state.set', effect: 'call-id' });
+    // the live call's own id still works
+    expect(await h.callTool('probe', 'probe.write', {})).toMatchObject({ ok: true });
+  });
+});
+
+describe('folder watch (G-MOD-08, slice 2)', () => {
+  it('an edit to a RUNNING linked mod\'s folder stops it within the debounce and pauses it with a re-approve card', async () => {
+    const { r, h, folder } = await started({ linked: true });
+    expect(h.watching()).toEqual(['probe']);
+    fs.appendFileSync(path.join(folder, 'index.mjs'), '\n// edited while running\n');
+    for (let i = 0; i < 40 && h.running().length; i++) await new Promise((res) => setTimeout(res, 100));
+    for (let i = 0; i < 20 && !kinds(r).includes('mod.paused'); i++) await new Promise((res) => setTimeout(res, 100));
+    expect(h.running()).toEqual([]);
+    expect(r.events.find((e) => e.kind === 'mod.stopped' && e.payload.reason === 'changed')).toBeTruthy();
+    expect(kinds(r)).toContain('mod.paused');
+    expect(h.status()).toMatchObject({ paused: [expect.objectContaining({ name: 'probe', why: 'changed' })] });
+    expect(h.watching()).toEqual([]);
+  });
+});
+
+describe('relay admission (Aegis F1) and in-flight cap (F2), round 2', () => {
+  it('an uninstalled name is refused NOT_INSTALLED without loadMod; misses beyond 8 per window fold into one counter row', async () => {
+    const r = rig();
+    cleanups.push(r.cleanup);
+    const { h } = host(r, { launcher: unsandboxedModLauncher });
+    cleanups.push(() => h.stopAll());
+    for (let i = 0; i < 11; i++) {
+      const e = await refused(h.admit(`ghost-${i % 2}`));
+      expect(e.modCode).toBe('NOT_INSTALLED');
+      expect(e.refusal).toMatchObject({ code: 'NOT_FOUND', data: { modCode: 'NOT_INSTALLED', reason: 'not-found' } });
+    }
+    h.flushRelayMisses();
+    const rows = r.events.filter((e) => e.kind === 'manifest.refuse');
+    expect(rows.filter((e) => !e.payload.coalesced).length).toBe(8);
+    expect(rows.filter((e) => e.payload.coalesced)).toEqual([{ kind: 'manifest.refuse', payload: expect.objectContaining({ count: 3, via: 'relay' }) }]);
+    expect(kinds(r)).not.toContain('manifest.load');
+  });
+
+  it('a paused mod is answered from memory (no loadMod, no second card); a relay start counts against RESTART_CAP; DOWN until an operator start', async () => {
+    const { r, h, folder } = await started({ linked: true });
+    await h.stop('probe');
+    fs.appendFileSync(path.join(folder, 'index.mjs'), '\n// edited\n');
+    expect(await h.start('probe')).toMatchObject({ state: 'paused' });
+    const staged = r.events.filter((e) => e.kind === 'manifest.staged').length;
+    for (let i = 0; i < 3; i++) expect((await refused(h.admit('probe'))).modCode).toBe('PAUSED');
+    expect(r.events.filter((e) => e.kind === 'manifest.staged').length).toBe(staged);
+
+    const { h: h2 } = await started();
+    await h2.stop('probe');
+    await h2.admit('probe'); // a relay-triggered start
+    expect(h2.restarts('probe')).toBe(1);
+    for (let i = 0; i < 2; i++) {
+      await refused(h2.callTool('probe', 'probe.read', { op: 'crash' }));
+      await new Promise((res) => setTimeout(res, 700));
+    }
+    await refused(h2.callTool('probe', 'probe.read', { op: 'crash' }));
+    await new Promise((res) => setTimeout(res, 500));
+    expect(h2.running()).toEqual([]);
+    const down = await refused(h2.admit('probe'));
+    expect(down.modCode).toBe('DOWN');
+    expect(h2.down()).toEqual(['probe']);
+    expect(await h2.start('probe')).toMatchObject({ state: 'running' }); // the operator path lifts it
+    expect(h2.down()).toEqual([]);
+  });
+
+  it('F2: a mod has at most 8 mod → host requests in flight in the host; the rest are refused BUSY', async () => {
+    const r = rig();
+    cleanups.push(r.cleanup);
+    install(r, writeModFolder(path.join(r.root, 'src', 'probe'), probeManifest()));
+    const { h } = host(r, { launcher: unsandboxedModLauncher }, { kernelCall: () => new Promise((res) => setTimeout(() => res({ ok: 1 }), 300)) });
+    cleanups.push(() => h.stopAll());
+    await h.start('probe');
+    expect(await h.callTool('probe', 'probe.read', { op: 'kflood' })).toEqual({ ok: 8, busy: 12 });
+  });
+
+  it('I1: watching() tells the truth across a crash restart and the restart cap', async () => {
+    const { h } = await started({ linked: true });
+    const until = async (f: () => boolean, ms = 8_000) => {
+      for (let t = 0; t < ms && !f(); t += 50) await new Promise((res) => setTimeout(res, 50));
+    };
+    expect(h.watching()).toEqual(['probe']);
+    await refused(h.callTool('probe', 'probe.read', { op: 'crash' }));
+    await until(() => h.restarts('probe') === 1 && h.running().length === 1 && h.watching().length === 1);
+    expect(h.running()).toEqual(['probe']);
+    expect(h.watching()).toEqual(['probe']); // re-armed by the successful restart
+    for (let n = 2; n <= 4; n++) {
+      await until(() => h.running().length === 1);
+      await refused(h.callTool('probe', 'probe.read', { op: 'crash' }));
+      await until(() => (n <= 3 ? h.restarts('probe') === n && h.running().length === 1 : h.down().includes('probe')));
+    }
+    expect(h.running()).toEqual([]);
+    expect(h.watching()).toEqual([]);
+  }, 30_000);
+});
+
+describe('round 3 (Aegis R2-1, R2-2, low)', () => {
+  it('R2-1: a 1000-request refusal loop writes at most 8 individual mod.effect.refused rows + 1 coalesced row', async () => {
+    const { r, h } = await started();
+    expect(await h.callTool('probe', 'probe.read', { op: 'aloop', n: 1000 }, { timeoutMs: 20_000 })).toEqual({ refused: 1000 });
+    await h.stop('probe'); // stop flushes the fold
+    const rows = r.events.filter((e) => e.kind === 'mod.effect.refused');
+    expect(rows.filter((e) => !e.payload.coalesced)).toHaveLength(8);
+    const co = rows.filter((e) => e.payload.coalesced);
+    expect(co).toHaveLength(1);
+    expect(co[0]!.payload).toMatchObject({ name: 'probe', count: 992, byKey: { 'approve||approve': 992 }, otherKeys: 0, distinct: 1 });
+  }, 30_000);
+
+  it('R2-2: 10 000 rotating relay-miss names fold into one coalesced row under 4 KiB (16 keys + otherNames + distinct)', async () => {
+    const r = rig();
+    cleanups.push(r.cleanup);
+    const { h } = host(r, { launcher: unsandboxedModLauncher });
+    cleanups.push(() => h.stopAll());
+    for (let i = 0; i < 10_000; i++) await h.admit(`n${i}`).catch(() => undefined);
+    h.flushRelayMisses();
+    const co = r.events.filter((e) => e.kind === 'manifest.refuse' && e.payload.coalesced);
+    expect(co).toHaveLength(1);
+    const p = co[0]!.payload as { count: number; byName: Record<string, number>; otherNames: number; distinct: number; distinctCapped?: boolean };
+    expect(p.count).toBe(10_000 - 8);
+    expect(Object.keys(p.byName)).toHaveLength(16);
+    expect(p.otherNames).toBe(10_000 - 8 - 16);
+    expect(p.distinct).toBe(1024);
+    expect(p.distinctCapped).toBe(true);
+    expect(Buffer.byteLength(JSON.stringify(p))).toBeLessThan(4096);
+  }, 60_000);
+
+  it('Aegis low: a kernel-side refusal reaches the mod with its code and reason only — never its message or wrapped data', async () => {
+    const written: string[] = [];
+    const stdin = new Writable({ write: (c, _e, cb) => (written.push(String(c)), cb()) });
+    const stdout = new PassThrough();
+    const child = Object.assign(new EventEmitter(), { stdin, stdout, stderr: new PassThrough() }) as unknown as ChildProcess;
+    const ch = new ModChannel(child, async () => {
+      throw new RefusedError(refuse({ code: 'ENGINE', data: { reason: 'anchor-failed', path: '/Users/secret/.gnomon/keys', error: 'EACCES /Users/secret' } }), 'anchor write failed at /Users/secret/.gnomon/anchor: EACCES');
+    });
+    stdout.write(`${JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'kernel.call', params: { verb: 'log.append', params: {} } })}\n`);
+    for (let i = 0; i < 20 && !written.length; i++) await new Promise((res) => setTimeout(res, 10));
+    const reply = JSON.parse(written[0]!) as { error: { message: string; data: { code: string; data: Record<string, unknown> } } };
+    expect(reply.error.message).toBe('refused ENGINE (anchor-failed)');
+    expect(reply.error.data).toMatchObject({ code: 'ENGINE', data: { reason: 'anchor-failed' } });
+    expect(JSON.stringify(reply)).not.toContain('secret');
+    ch.close(new Error('done'));
+  });
+});
+
+describe('M1.11 slice 3 (named, not built)', () => {
+  it.todo('slice 3: spend from the caller permit and session principals for kernel.call session.send (M1.7 session principals; G-ABI-02 mod column)');
+  it.todo('slice 3: mod.repinned (dev re-pin) and the rollback re-pin of a running mod (G-MOD-08)');
+  it.todo('slice 3: dev mode cards, 8 h expiry scheduling, cwd/worktree exclusion, widening card in dev mode, dev badge (G-MOD-09, G-MOD-11)');
+  it.todo('slice 3: gnomon-mods MCP bridge per session writing inject.receipt (§3.8)');
+  it.todo('slice 3: gnomon mod new|types|test|inspect|install|link|unlink|dev|diff|rollback + fixtures→golden renders (G-MOD-04)');
+  it.todo('slice 3: kit Image via /blob and Canvas host-owned surface in the GUI; overlay rules for card.*/status.mod (G-MOD-06, G-MOD-07, G-MOD-10)');
+  it.todo('slice 3 (Aegis C4): /blob serving opens blobs/ files O_NOFOLLOW and re-hashes before serving');
+  it.todo('slice 3: mod.command relay from a GUI needs a provable user gesture (§11.5; M1.10)');
+  it.todo('slice 3: host-filled Tier 0 persona templates; #workshop-mod (G-WSP-01)');
 });
