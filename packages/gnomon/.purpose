@@ -1220,7 +1220,10 @@ components:
       actions (permission slice cards: allow|deny, no always); approve
       refuses any other decision bad-params; expire(cardId, why) logs
       approval.expire{into:'deny', why}; noteOf; suspect (approval.suspect
-      from kernel observation). classes.ts — valid decisions per card kind and the
+      from kernel observation). Aegis A3: approve claims the decision
+      synchronously after its last re-check (CardRecord.claim); expire()
+      refuses a claimed card and defers while #deciding (applied in
+      approve's finally if the decision did not settle). classes.ts — valid decisions per card kind and the
       BASE presence class of each (cached: allow/deny on permission, answer,
       approve-plan, reject on plan/reconsider/inbound handoff, deny on
       strictness, incident; fresh: everything else the spec names, incl.
@@ -1522,7 +1525,17 @@ components:
       'cancelled'), duplicate requestId (both + approval.suspect), exit/stop
       (expire 'session-exited', nothing written). Every answer is logged
       session.inject{origin:'kernel', hash, bytes} first. A permit never
-      means allow (P8-D92). P8-D94 / G-SUB-07 (M1.7 slice 2, founder
+      means allow (P8-D92). ROUND 2 (Aegis): the card block is wrappedBlock
+      (never cut); every input field shown (key=value); MultiEdit per edit,
+      NotebookEdit source in full, Write the only excerpt; auto-deny
+      sandbox-escape / bad-input / too-large; deniedWrite case-folds on
+      darwin+win32; policy.json permissions.ask for ALWAYS_ASK_TOOLS;
+      control_request turn.event rows hash-only; a malformed body under a
+      valid id is denied, a bad id logs approval.suspect
+      malformed-permission-request; the ungated-tool-use detector
+      (tool_result of a gated tool with no request); pending entries carry
+      closedWhy (the expire why); repo-hook cards for PreToolUse /
+      PermissionRequest carry TOOL_APPROVAL_WARNING. P8-D94 / G-SUB-07 (M1.7 slice 2, founder
       ruling): repo-hooks.ts extracts the repo's project/local hooks (strict;
       O_NOFOLLOW + fstat; events allow-listed to CLAUDE_HOOK_EVENTS;
       COMMAND_UNSAFE, unknown keys, non-command types refused by id;

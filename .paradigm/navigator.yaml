@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-18T22:30:15.209Z'
+generated: '2026-10-18T22:30:57.073Z'
 structure: {}
 key_files:
   config:
@@ -1345,6 +1345,7 @@ symbols:
   $purpose-ref-flow-HOME: packages/gnomon/
   '#purpose-ref-component-state': packages/gnomon/
   '#purpose-ref-component-hashAt': packages/gnomon/
+  '#purpose-ref-component-deciding': packages/gnomon/
   $purpose-ref-flow-flow: packages/gnomon/
   '#purpose-ref-component-wire': packages/gnomon/
   '@purpose-ref-aspect-symbol-typed-logging': packages/logger/
