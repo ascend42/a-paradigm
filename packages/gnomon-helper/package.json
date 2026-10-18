@@ -8,7 +8,9 @@
     "checksums.json"
   ],
   "scripts": {
-    "build:darwin": "cd darwin && swift build -c release"
+    "build:darwin": "node scripts/build-darwin.mjs",
+    "build:darwin:unsigned": "node scripts/build-darwin.mjs --unsigned",
+    "notarize:darwin": "node scripts/notarize-darwin.mjs"
   },
   "author": "ascend42",
   "license": "MIT",

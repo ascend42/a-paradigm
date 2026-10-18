@@ -1,5 +1,16 @@
 {
-  "schema": "gnomon-helper-checksums:v0",
-  "note": "PR-0 placeholder. Release builds record sha256 per prebuilt binary in bin/; the kernel verifies them at start (G-HLP-01).",
-  "binaries": {}
+  "schema": "gnomon-helper-checksums:v1",
+  "note": "sha256 per built helper executable; written by scripts/build-darwin.mjs. The kernel pins the executable by its code-signing requirement and this sha256 at spawn (G-HLP-01).",
+  "binaries": {
+    "bin/darwin/GnomonHelper.app/Contents/MacOS/gnomon-helper": {
+      "sha256": "a4cd54408c72a0f3c54598dd82d4dff054084675e509c295f9029e3966016436",
+      "version": "1.1.0",
+      "signed": true,
+      "identity": "Developer ID Application: Matthew Canoy (SW4BMQ8PNL)",
+      "team": "SW4BMQ8PNL",
+      "identifier": "gnomon.helper",
+      "profileSha256": "04a610410ce3928e",
+      "profileExpires": "2044-10-13T01:08:39.000Z"
+    }
+  }
 }

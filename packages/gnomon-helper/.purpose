@@ -1,21 +1,42 @@
 version: "2.0"
 description: >-
-  Gnomon signed platform helper (docs/specs/gnomon.md §16, §18). npm shell
-  (private) that will hold prebuilt, signed binaries in bin/ with
-  checksums.json, verified by the kernel at start (G-HLP-01). darwin/ is a
-  SwiftPM package (swift-tools 5.9, macOS 14, same conventions as Conductor);
-  win32/ will be Rust (P8-D71) and is a README placeholder. PR-0 scaffold.
+  Gnomon signed platform helper (docs/specs/gnomon.md §3.1, §16, §18). npm
+  shell (private) holding the built, signed binaries in bin/ (gitignored build
+  output) with checksums.json, verified by the kernel at spawn (G-HLP-01).
+  darwin/ is a SwiftPM package (swift-tools 5.9, macOS 14); scripts/ builds
+  the signed .app (Developer ID identity looked up in the keychain, the
+  provisioning profile embedded from ~/.config/gnomon-signing) and optionally
+  notarizes it (keychain profile gnomon-notary). win32/ will be Rust (P8-D71).
 
 components:
   gnomon-helper:
     description: >-
-      Holds what the kernel must never hold: Secure Enclave / TPM keys with
-      presence, Keychain / Credential Manager anchors and the kernel-key item,
-      the Windows pipe with an owner-only DACL, job objects, the WFP port
-      filter and the private launch-token URL hand-off. At PR-0 the darwin
-      executable `gnomon-helper` only answers --version (exit 0) and refuses
-      everything else (exit 2). CI builds it unsigned on macos-14; signing
-      never runs in CI.
+      Holds what the kernel must never hold. M1.3 slice 1: the root and
+      approvals P-256 keys in the Secure Enclave (access group
+      SW4BMQ8PNL.gnomon, .privateKeyUsage + .userPresence), a sign API over
+      stdin/stdout (`serve` NDJSON loop, `once` for one request) speaking
+      gnomon-helper:v1 — info, key.create/public/delete, sign (root: fresh
+      presence per signature; approvals: fresh, or a per-connection cached
+      unlock held here keyed by connId, bounded to 32, dropped after 15 idle
+      minutes, on unlock.drop and on exit), unlock.drop(-all). Each key signs
+      only its own domain prefixes (root: row-sig, presence; approvals:
+      approve, presence). Inputs bounded before any key is touched. Refuses
+      to run sandboxed (P8-D68). Never prints key material. Later: the
+      kernel-key keystore item, the keystore log anchor, XPC under launchd,
+      the Windows pipe, job objects, WFP, launch-token hand-off.
     path: darwin/Sources/gnomon-helper/
     type: module
-    tags: [gnomon, helper, native, swift, paradigm-8, scaffold]
+    tags: [gnomon, helper, native, swift, paradigm-8, secure-enclave, m1.3]
+  gnomon-helper-build:
+    description: >-
+      scripts/build-darwin.mjs (swift build -c release → GnomonHelper.app,
+      Info.plist bundle id gnomon.helper, embedded profile, entitlements,
+      codesign --options runtime --timestamp with the one Developer ID
+      Application identity of team SW4BMQ8PNL found in the keychain, verify
+      --strict and against HELPER_REQUIREMENT, sha256 into checksums.json);
+      --unsigned for CI. scripts/notarize-darwin.mjs (ditto, notarytool
+      submit --keychain-profile gnomon-notary --wait, stapler) is optional and
+      founder-run, never run by tests.
+    path: scripts/
+    type: module
+    tags: [gnomon, helper, signing, build, m1.3]
