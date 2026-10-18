@@ -545,9 +545,6 @@ components:
       mints a fresh one (Reconnect is UNSUPPORTED until M1.3), q / Ctrl-C stop
       the kernel. The CLI's device connection is held open, so the kernel does
       not idle out while dev up runs.
-    path: src/cli/
-    type: cli
-    tags: [gnomon, dev-only, dogfood, identity, paradigm-8]
       SMOKE (test/dev-launch-session.test.ts, darwin): dev init → startDevKernel
       → launch URL → a second device client → session.open on the FAKE claude
       under the real session profile → session.send → turn.result, with no
@@ -558,6 +555,9 @@ components:
       billing source. A socket device connection is a community-client reader,
       so turn.event (the reply text) reaches it as {kind, hsid} stubs; the
       GUI's launch-token session is the first-party surface that sees it.
+    path: src/cli/
+    type: cli
+    tags: [gnomon, dev-only, dogfood, identity, paradigm-8]
     tests:
       - test/dev-launch.test.ts
       - test/dev-launch-session.test.ts
