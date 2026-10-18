@@ -20,7 +20,7 @@ import { runIdentityCommand, type IdentityDeps } from '../src/cli/identity-cli.j
 import { resolveUpHome, runUpCommand, startUpKernel, type UpDeps } from '../src/cli/up-cli.js';
 import { runDevCommand } from '../src/cli/dev-cli.js';
 import { looksLikeKeyMaterial } from '../src/cli/dev-home.js';
-import { acceptUnsignedHelperForTests, deviceKeyPath, DEV_TEST_HELPER_ACK, readIdentity, writeNewDeviceKey, type HelperTransport } from '../src/kernel/identity/index.js';
+import { acceptUnsignedHelperForTests, DeviceKeyError, deviceKeyPath, DEV_TEST_HELPER_ACK, loadDeviceCredential, readIdentity, writeNewDeviceKey, type HelperTransport } from '../src/kernel/identity/index.js';
 import { startDaemon, type DaemonHandle, type DaemonOptions } from '../src/kernel/lifecycle/index.js';
 import { removeTree } from '../src/kernel/manifest/index.js';
 import { FakeHelper } from './helper-fake.js';
@@ -204,6 +204,23 @@ describe('#gnomon-up refusals (each guard falsified)', () => {
     expect(n.kernel).toBe(0);
     expect(n.helper).toBeGreaterThan(0);
     expect(n.closed).toBe(n.helper);
+  });
+
+  it('FALSIFIER: a symlinked or group-readable device key is refused by loadDeviceCredential (O_NOFOLLOW + fstat on the read fd)', async () => {
+    const { uh, home } = await provisioned();
+    const real = path.join(uh, 'elsewhere.key');
+    fs.copyFileSync(deviceKeyPath(home), real);
+    fs.chmodSync(real, 0o600);
+    fs.rmSync(deviceKeyPath(home));
+    fs.symlinkSync(real, deviceKeyPath(home));
+    expect(() => loadDeviceCredential(home)).toThrow(DeviceKeyError);
+    expect(() => loadDeviceCredential(home)).toThrow(/not a regular file/);
+    fs.rmSync(deviceKeyPath(home));
+    fs.copyFileSync(real, deviceKeyPath(home));
+    fs.chmodSync(deviceKeyPath(home), 0o640);
+    expect(() => loadDeviceCredential(home)).toThrow(/not owner-only/);
+    fs.chmodSync(deviceKeyPath(home), 0o600);
+    expect(loadDeviceCredential(home).signer.keyClass).toBe('device');
   });
 
   it('the default home is <userHome>/.gnomon and GNOMON_HOME is never read', () => {
