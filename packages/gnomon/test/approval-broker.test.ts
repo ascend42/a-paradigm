@@ -9,7 +9,8 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { generateKeyPairSync, sign as cryptoSign } from 'node:crypto';
 import { afterEach, describe, expect, it } from 'vitest';
-import { RefusedError, validateCardV1, validateRefusalV1 } from '@a-company/gnomon-contracts';
+import { buildDisplayVectors, RefusedError, sanitizeDisplayText, validateCardV1, validateRefusalV1 } from '@a-company/gnomon-contracts';
+import { sanitizeLine } from '../src/kernel/broker/card.js';
 import {
   ApprovalBroker,
   ApiTokenBilling,
@@ -107,19 +108,31 @@ describe('#approval-broker cards (§3.4 card:v1)', () => {
     expect(r.rows[0]!.payload).toMatchObject({ tool_input: { command: 'rm -rf build/' } });
   });
 
-  it('hidden characters and bidi controls are escaped visibly and flag the card (§4.5)', async () => {
+  it('cards use the ONE published §4.5 sanitizer: bidi as visible glyphs, hidden characters and controls stripped, escapes removed and flagged', async () => {
     const r = rig();
     const c = await permission(r.broker, ['rm\u202E-rf\u200B /']);
-    expect(c.flags).toEqual(['bidi', 'hidden-chars']);
-    // tag characters are stripped and flag hidden-chars; C1 controls (incl. CSI U+009B) are escaped like C0
+    expect(c.flags).toEqual(['bidi', 'hidden-chars']); // card.flags are sorted (broker canonical order)
+    const shown = (c.block as { children: Array<{ text: string }> }).children[0]!.text;
+    expect(shown).toBe('rm\u27e8RLO\u27e9-rf /');
+    expect(shown).toBe(sanitizeDisplayText('rm\u202E-rf\u200B /').text);
+    // tag characters stripped; C1 controls (incl. CSI U+009B and its sequence) removed and flagged
     const t = await permission(r.broker, [`ok${String.fromCodePoint(0xe0041, 0xe0042)} ${String.fromCharCode(0x9b)}31m ${String.fromCharCode(0x85)}x`]);
     expect(t.flags).toEqual(['hidden-chars']);
-    const text = JSON.stringify(t.block);
-    expect(text).not.toMatch(/[\u{E0000}-\u{E007F}\u0080-\u009F]/u);
-    expect(text).toContain('\\\\u{9B}');
-    expect(text).toContain('\\\\u{85}');
+    expect((t.block as { children: Array<{ text: string }> }).children[0]!.text).toBe('ok  x');
+    expect(JSON.stringify(t.block)).not.toMatch(/[\u{E0000}-\u{E007F}\u0080-\u009F]/u);
+    // terminal escapes (OSC 52 clipboard) are removed whole and flagged
+    const o = await permission(r.broker, ['\u001b]52;c;ZWNobyBwd25lZA==\u0007safe']);
+    expect((o.block as { children: Array<{ text: string }> }).children[0]!.text).toBe('safe');
+    expect(o.flags).toEqual(['hidden-chars']);
     expect(JSON.stringify(c.block)).not.toMatch(/[\u202E\u200B]/);
-    expect(JSON.stringify(c.block)).toContain('\\\\u{202E}');
+  });
+
+  it('every kernel card line reproduces the normative display vectors (one sanitizer, §4.5)', () => {
+    for (const v of buildDisplayVectors().sanitize) expect(sanitizeLine(v.input)).toEqual({ text: v.text, flags: v.flags });
+    const long = '\u{1F44D}'.repeat(600);
+    const capped = sanitizeLine(long).text;
+    expect(Array.from(capped)).toHaveLength(512);
+    expect(capped).not.toMatch(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])/);
   });
 
   it('the presence prompt is composed from the card record and signed by the kernel key', async () => {

@@ -101,6 +101,9 @@ export const DISPLAY_SANITIZE_INPUTS: readonly string[] = Object.freeze([
   // Aegis round 3 R2-1: VS runs decided on the output; a mark is no VS base
   'a\ufe00\u200b\ufe01\u200b\ufe02',
   'e\u0301\ufe0f',
+  // T-2026-10-18-013: only VS15/VS16 are silent; FE00–FE0D are kept but flagged
+  'text\ufe0e',
+  'a\ufe03b',
   // R2-2: an 8-bit introducer inside a string sequence ends the outer candidate
   '\u001b]0;a\u009db\u0007c',
 ]);

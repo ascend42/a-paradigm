@@ -1,0 +1,213 @@
+/**
+ * @symbol #client-conformance
+ *
+ * #client-conformance runner (spec §12.8, §19.1 M1.12, G-CLI-02): drives a
+ * client through the driver protocol (driver.ts) against a LIVE kernel and
+ * runs every `CONFORMANCE_CHECKS` entry whose status is `run`; `slice-2`
+ * entries are reported `todo`, never as a pass. The report carries
+ * `conformanceReportHash`, which is what a client declares in
+ * `hello{client.conformance}` (status labels it `declared`, never `passed`).
+ *
+ * The fixture is the kernel side the runner needs and a client never has:
+ * a registered and an unregistered device key, a read token, the pinned kernel
+ * key plus another key, and an observer counting `socket.auth.*` rows (to
+ * prove a client sent NO auth to a server it could not verify).
+ */
+import {
+  CLIENT_API_ID,
+  CONFORMANCE_CHECKS,
+  CONFORMANCE_SUITE,
+  CONFORMANCE_VERSION,
+  GNOMON_RPC_V1,
+  KIT_ID,
+  buildDisplayVectors,
+  canonicalJson,
+  conformanceReportHash,
+  type ConformanceCheckResult,
+  type ConformanceReport,
+} from '@a-company/gnomon-contracts';
+import type { Driver, DriverResponse } from './driver.js';
+
+export interface DeviceCredentialWire {
+  kind: 'device';
+  principalId: string;
+  deviceId: string;
+  privateKeyPem: string;
+}
+
+export interface ConformanceFixture {
+  socketPath: string;
+  endpointPath?: string;
+  kernelKey: { keyId: string; publicKeyPem: string };
+  /** A valid Ed25519 key that is NOT the kernel's. */
+  otherKey: { keyId: string; publicKeyPem: string };
+  device: DeviceCredentialWire;
+  /** A well-formed device credential absent from the root-signed registry. */
+  unregisteredDevice: DeviceCredentialWire;
+  readToken: string;
+  /** Number of socket.auth.* rows in the kernel log now (observer). */
+  authRows(): Promise<number> | number;
+}
+
+export interface RunOptions {
+  client: { name: string; version: string; language?: string };
+}
+
+class CheckFailed extends Error {}
+function must(cond: unknown, detail: string): asserts cond {
+  if (!cond) throw new CheckFailed(detail);
+}
+
+type Check = (d: Driver, f: ConformanceFixture, c: RunOptions['client']) => Promise<void>;
+
+const CLIENT_INFO = (c: RunOptions['client']) => ({ name: c.name, version: c.version, surface: 'cli' });
+
+async function connect(d: Driver, f: ConformanceFixture, c: RunOptions['client'], extra: Record<string, unknown> = {}): Promise<DriverResponse> {
+  return d.request({ op: 'connect', socketPath: f.socketPath, ...(f.endpointPath ? { endpointPath: f.endpointPath } : {}), client: CLIENT_INFO(c), ...extra });
+}
+async function authed(d: Driver, f: ConformanceFixture, c: RunOptions['client']): Promise<string> {
+  const r = await connect(d, f, c, { kernelKey: f.kernelKey, credential: f.device });
+  must(r.ok, `device connect failed: ${JSON.stringify(r.error)}`);
+  return String(r.conn);
+}
+const refusedAs = (r: DriverResponse, code: string, reason?: string): boolean => !r.ok && r.error?.kind === 'refused' && r.error.code === code && (reason === undefined || r.error.reason === reason);
+
+const CHECKS: Record<string, Check> = {
+  async 'hello.negotiate'(d, f, c) {
+    const r = await connect(d, f, c, { kernelKey: f.kernelKey });
+    must(r.ok, `hello failed: ${JSON.stringify(r.error)}`);
+    const h = r.hello as Record<string, unknown>;
+    must(h.clientApi === GNOMON_RPC_V1, `clientApi ${String(h.clientApi)}`);
+    must(h.clientApiId === CLIENT_API_ID && h.kitId === KIT_ID, 'clientApiId / kitId differ from the package');
+    await d.request({ op: 'close', conn: r.conn });
+  },
+  async 'hello.unsupported'(d, f, c) {
+    const r = await connect(d, f, c, { clientApis: ['gnomon-rpc:v9'] });
+    must(refusedAs(r, 'UNSUPPORTED'), `expected UNSUPPORTED, got ${JSON.stringify(r.error ?? r.hello)}`);
+  },
+  async 'hello.server-sig'(d, f, c) {
+    const r = await connect(d, f, c, { kernelKey: f.kernelKey });
+    must(r.ok && r.serverVerified === true, 'serverSig was not verified against the pinned key');
+    await d.request({ op: 'close', conn: r.conn });
+  },
+  async 'hello.server-sig-mismatch'(d, f, c) {
+    const before = await f.authRows();
+    const r = await connect(d, f, c, { kernelKey: f.otherKey, credential: f.device });
+    must(!r.ok && r.error?.kind === 'client', `a hello signed by another key was not refused locally: ${JSON.stringify(r.error ?? 'connected')}`);
+    await new Promise((res) => setTimeout(res, 50));
+    must((await f.authRows()) === before, 'an auth was sent to an unverified server');
+  },
+  async 'auth.device'(d, f, c) {
+    const r = await connect(d, f, c, { kernelKey: f.kernelKey, credential: f.device });
+    must(r.ok && r.principal === f.device.principalId && typeof r.connId === 'string', `device auth failed: ${JSON.stringify(r.error)}`);
+    const st = await d.request({ op: 'call', conn: r.conn, method: 'status', params: {} });
+    must(st.ok && (st.result as { principal?: string }).principal === f.device.principalId, 'status does not name the device principal');
+    await d.request({ op: 'close', conn: r.conn });
+  },
+  async 'auth.device-refused'(d, f, c) {
+    const r = await connect(d, f, c, { kernelKey: f.kernelKey, credential: f.unregisteredDevice });
+    must(refusedAs(r, 'AUTH'), `expected one AUTH refusal, got ${JSON.stringify(r.error ?? 'connected')}`);
+  },
+  async 'auth.read-token'(d, f, c) {
+    const r = await connect(d, f, c, { kernelKey: f.kernelKey, credential: { kind: 'read-token', token: f.readToken } });
+    must(r.ok, `read-token auth failed: ${JSON.stringify(r.error)}`);
+    const st = await d.request({ op: 'call', conn: r.conn, method: 'status', params: {} });
+    must(st.ok, 'status refused to a read token');
+    const w = await d.request({ op: 'call', conn: r.conn, method: 'log.append', params: { kind: 'request.grant', payload: {} } });
+    must(refusedAs(w, 'FORBIDDEN'), `a write verb was not FORBIDDEN to a read token: ${JSON.stringify(w.error ?? w.result)}`);
+    await d.request({ op: 'close', conn: r.conn });
+  },
+  async 'auth.before-auth'(d, f, c) {
+    const r = await connect(d, f, c, { kernelKey: f.kernelKey });
+    must(r.ok, 'hello failed');
+    const s = await d.request({ op: 'call', conn: r.conn, method: 'status', params: {} });
+    must(refusedAs(s, 'AUTH', 'unauthenticated'), `expected AUTH{unauthenticated}, got ${JSON.stringify(s.error ?? s.result)}`);
+    const cl = await d.request({ op: 'closed', conn: r.conn, timeoutMs: 1000 });
+    must(cl.ok && cl.closed === true, 'the connection stayed open');
+    await d.request({ op: 'close', conn: r.conn });
+  },
+  async 'refusal.unknown-verb'(d, f, c) {
+    const conn = await authed(d, f, c);
+    const r = await d.request({ op: 'call', conn, method: 'no.such.verb', params: {} });
+    must(refusedAs(r, 'UNKNOWN_VERB'), `expected UNKNOWN_VERB, got ${JSON.stringify(r.error ?? r.result)}`);
+    await d.request({ op: 'close', conn });
+  },
+  async 'refusal.bad-request'(d, f, c) {
+    const conn = await authed(d, f, c);
+    const r = await d.request({ op: 'call', conn, method: 'log.read', params: { since: 'yesterday' } });
+    must(refusedAs(r, 'BAD_REQUEST'), `expected BAD_REQUEST, got ${JSON.stringify(r.error ?? r.result)}`);
+    await d.request({ op: 'close', conn });
+  },
+  async 'subscribe.since'(d, f, c) {
+    const conn = await authed(d, f, c);
+    const page = await d.request({ op: 'call', conn, method: 'log.read', params: { limit: 1 } });
+    must(page.ok, `log.read page refused: ${JSON.stringify(page.error)}`);
+    const head = Number((page.result as { head: number }).head);
+    const since = Math.max(0, head - 3);
+    const sub = await d.request({ op: 'subscribe', conn, params: { since } });
+    must(sub.ok, `subscribe refused: ${JSON.stringify(sub.error)}`);
+    // a second client connecting makes live rows (socket.hello / socket.auth.ok)
+    const other = await authed(d, f, c);
+    const ev = await d.request({ op: 'events', conn, subscription: (sub.result as { subscription: string }).subscription, n: head - since + 1, timeoutMs: 3000 });
+    const seqs = ((ev.rows ?? []) as Array<{ seq: number }>).map((x) => x.seq);
+    must(seqs.length > 0 && seqs[0]! > since, `no backlog after since=${since}`);
+    must(seqs.every((s, i) => i === 0 || s > seqs[i - 1]!), `rows out of seq order: ${seqs.join(',')}`);
+    must(seqs.some((s) => s > head), 'no live row arrived after the backlog');
+    await d.request({ op: 'close', conn: other });
+    await d.request({ op: 'close', conn });
+  },
+  async 'display.sanitize'(d) {
+    for (const v of buildDisplayVectors().sanitize) {
+      const r = await d.request({ op: 'sanitize', input: v.input });
+      must(r.ok && r.text === v.text && canonicalJson(r.flags) === canonicalJson(v.flags), `vector ${JSON.stringify(v.input)}: ${JSON.stringify({ text: r.text, flags: r.flags })}`);
+    }
+  },
+  async 'display.event-rows'(d) {
+    for (const v of buildDisplayVectors().rows) {
+      const r = await d.request({ op: 'row', event: v.event });
+      must(r.ok && canonicalJson(r.row) === canonicalJson(v.row), `row ${v.event.kind}: ${JSON.stringify(r.row)}`);
+    }
+  },
+  async 'display.denominator'(d) {
+    for (const v of buildDisplayVectors().denominators) {
+      const r = await d.request({ op: 'denominator', value: v.value });
+      must(r.ok && (r.text ?? null) === v.text, `denominator ${JSON.stringify(v.value)}: ${JSON.stringify(r.text)}`);
+    }
+  },
+  async 'conformance.declared'(d, f, c) {
+    const tuple = { suite: CONFORMANCE_SUITE, version: CONFORMANCE_VERSION, reportHash: `sha256:${'0'.repeat(64)}` };
+    const r = await d.request({ op: 'connect', socketPath: f.socketPath, ...(f.endpointPath ? { endpointPath: f.endpointPath } : {}), client: { ...CLIENT_INFO(c), conformance: tuple }, kernelKey: f.kernelKey, credential: f.device });
+    must(r.ok, `connect with a declared tuple failed: ${JSON.stringify(r.error)}`);
+    const st = await d.request({ op: 'call', conn: r.conn, method: 'status', params: {} });
+    const mine = ((st.result as { clients?: Array<{ connId: string; conformance: unknown }> }).clients ?? []).find((x) => x.connId === r.connId);
+    must(mine && canonicalJson(mine.conformance) === canonicalJson({ ...tuple, label: 'declared' }), `status.clients[] does not label the tuple declared: ${JSON.stringify(mine)}`);
+    await d.request({ op: 'close', conn: r.conn });
+  },
+};
+
+/** Run every `run` check against `driver`; `slice-2` checks are `todo`. */
+export async function runConformance(driver: Driver, fixture: ConformanceFixture, o: RunOptions): Promise<ConformanceReport> {
+  const checks: ConformanceCheckResult[] = [];
+  for (const spec of CONFORMANCE_CHECKS) {
+    if (spec.status !== 'run') {
+      checks.push({ id: spec.id, result: 'todo' });
+      continue;
+    }
+    const fn = CHECKS[spec.id];
+    if (!fn) {
+      checks.push({ id: spec.id, result: 'fail', detail: 'the runner has no implementation for this run check' });
+      continue;
+    }
+    try {
+      await fn(driver, fixture, o.client);
+      checks.push({ id: spec.id, result: 'pass' });
+    } catch (err) {
+      checks.push({ id: spec.id, result: 'fail', detail: err instanceof Error ? err.message : String(err) });
+    }
+  }
+  const body = { suite: CONFORMANCE_SUITE, version: CONFORMANCE_VERSION, client: o.client, checks } as const;
+  return { ...body, pass: checks.every((c) => c.result !== 'fail'), reportHash: conformanceReportHash(body) };
+}
+
+/** The check ids the runner implements (so a test can prove every `run` check has one). */
+export const RUNNER_CHECK_IDS: readonly string[] = Object.freeze(Object.keys(CHECKS));

@@ -287,6 +287,7 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
     if (cls === 'agent' || cls === 'session') facts.add('agent|session');
     if (cls === 'voice') facts.add('!armed');
     const key = o.status.kernelKey();
+    const authed = [...conns.values()].filter((c) => c.phase === 'authenticated');
     const available = (m: string): boolean =>
       (SERVED_METHODS.includes(m) && (o.reads !== undefined || !READ_METHODS.includes(m))) || (o.approvals !== undefined && ((m === 'approve' && cls === 'human') || (m === 'permit.reserve' && (cls === 'human' || cls === 'agent')))) || (o.sessions !== undefined && cls === 'human' && SESSION_METHODS.includes(m));
     return {
@@ -317,9 +318,16 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       root: o.status.root(),
       web: o.status.web?.() ?? { listening: false },
       subscriptions: { n: o.reads?.hub.count() ?? 0, onThisConnection: o.reads?.hub.count(s.connId) ?? 0, perConnectionMax: MAX_SUBSCRIPTIONS_PER_CONNECTION, backlogCap: o.reads?.hub.cap ?? SUBSCRIPTION_BACKLOG_CAP },
-      clients: [...conns.values()]
-        .filter((c) => c.phase === 'authenticated')
-        .map((c) => ({ connId: c.connId, principal: c.principal, surface: c.client?.surface ?? null, client: { name: c.client?.name, version: c.client?.version }, conformance: c.client?.conformance ?? null })),
+      clients: authed.map((c) => ({
+        connId: c.connId,
+        principal: c.principal,
+        surface: c.client?.surface ?? null,
+        client: { name: c.client?.name, version: c.client?.version },
+        // §12.8 honest limit: what the client DECLARED in hello, labelled `declared`, never `passed`
+        conformance: c.client?.conformance ? { ...c.client.conformance, label: 'declared' } : null,
+      })),
+      // G-OBS-01 / G-HON-03: {n, of} — clients that declared a conformance tuple, of authenticated clients
+      clientConformance: { n: authed.filter((c) => c.client?.conformance).length, of: authed.length, label: 'declared' },
     };
   };
 

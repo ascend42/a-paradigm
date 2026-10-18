@@ -26,9 +26,12 @@
  *      U+2060–U+2064, U+FEFF, U+00AD, U+180E, U+034F, U+115F, U+1160,
  *      U+3164, U+FFA0; variation selectors U+FE00–U+FE0F are KEPT after a
  *      base that can take one (letter, number, symbol, punctuation — never a mark;
- *      decided on the OUTPUT: the last EMITTED character, which is no VS)
- *      and stripped + flagged at the start, after any other character, or
- *      as the second and later of a run; U+2028 / U+2029 become `\n` (flag);
+ *      decided on the OUTPUT: the last EMITTED character, which is no VS) —
+ *      only U+FE0E / U+FE0F are kept WITHOUT a flag; a kept U+FE00–U+FE0D
+ *      flags `hidden-chars` (T-2026-10-18-013: the unflagged side channel is
+ *      1 bit/char, not 4) — and stripped + flagged at the start, after any
+ *      other character, or as the second and later of a run; U+2028 /
+ *      U+2029 become `\n` (flag);
  *   3. bidi controls U+202A–U+202E, U+2066–U+2069 and the marks U+200E,
  *      U+200F, U+061C are REPLACED by a visible glyph (`⟨RLO⟩`, …), flag
  *      `bidi` (LRM/RLM in Arabic or Hebrew text therefore badge: accepted);
@@ -119,6 +122,9 @@ export function sanitizeDisplayText(input: string): SanitizedText {
       if (last !== undefined && !isVs(last.codePointAt(0)!) && VS_BASE.test(last)) {
         out += ch;
         last = ch;
+        // only VS15/VS16 (text/emoji presentation) are kept silently; FE00–FE0D
+        // are kept but flagged, so an unflagged VS carries at most 1 bit (§4.5)
+        if (cp < 0xfe0e) hidden = true;
       } else hidden = true;
     } else if (cp === 0x2028 || cp === 0x2029) {
       hidden = true;

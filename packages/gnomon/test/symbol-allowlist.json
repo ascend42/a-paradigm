@@ -1,6 +1,8 @@
 {
   "$comment": "P8-D81 symbol drift allowlist (test/symbols-drift.test.ts). A symbol declared in a packages/gnomon*/.purpose file that is NOT a spec Appendix A node (docs/specs/gnomon.md) must be listed here with a reason. Spec ids are never listed (the test refuses redundant entries), and an entry whose symbol is no longer declared anywhere fails as stale.",
   "entries": [
+    { "symbol": "#gnomon-ts-client", "reason": "M1.12 slice 2 client package component (src/clients/ts); spec §12.8 names the client surface, not a §2 node — Appendix A id pending a §2 entry (T-2026-10-18-013 slice 3)" },
+    { "symbol": "#client-conformance", "reason": "M1.12 slice 2 conformance runner + driver protocol (src/clients/conformance); spec §12.8 names the suite, not a §2 node — Appendix A id pending a §2 entry (T-2026-10-18-013 slice 3)" },
     { "symbol": "#gnomon-contracts", "reason": "package-level component of @a-company/gnomon-contracts; spec §18 names packages, not nodes" },
     { "symbol": "#gnomon-helper", "reason": "package-level component of @a-company/gnomon-helper (the signed helper); spec §18 names packages, not nodes" },
     { "symbol": "#gnomon-wrapper", "reason": "package-level component of @a-company/gnomon-wrapper; Appendix A notes: gnomon-wrapper is a package, not a symbol" },

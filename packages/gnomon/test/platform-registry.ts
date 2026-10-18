@@ -72,6 +72,7 @@ export const PLATFORM_REGISTRY: PlatformRow[] = [
   { test: 'test/idle-exit.test.ts', platforms: ['darwin', 'linux'], na: 'Windows parity phase (P8-D78): unix-socket endpoint only; the named pipe via the signed helper waits for probe P03' },
   { test: 'test/socket-auth.test.ts', platforms: ['darwin', 'linux'], na: 'Windows parity phase (P8-D78): unix-socket endpoint and POSIX device-key modes only; the pipe (P03) and owner-only ACLs come there' },
   { test: 'test/socket-abi.test.ts', platforms: ['darwin', 'linux'], na: 'Windows parity phase (P8-D78): read tokens and the G-ABI/G-SOCK suites over the unix-socket endpoint with POSIX device-key and token-file modes; the pipe (P03) comes there' },
+  { test: 'test/m112-conformance.test.ts', platforms: ['darwin', 'linux'], na: 'Windows parity phase (P8-D78): the published TS client and the conformance runner against a live kernel over the unix-socket endpoint with POSIX device-key modes; the pipe (P03) comes there (the display vectors run everywhere in gnomon-contracts)' },
   { test: 'test/socket-log-read.test.ts', platforms: ['darwin', 'linux'], na: 'Windows parity phase (P8-D78): log.read / subscriptions / ref.resolve over the unix-socket endpoint with POSIX device-key modes; the pipe (P03) comes there' },
   // M1.4 #web-endpoint: the darwin `transport` sandbox profile + the daemon `gnomon open` path (unix socket).
   // M1.7 #session-runner / #supervisor: the darwin `session` profile (sandbox-exec) and the fake-claude session rig (POSIX sh wrapper, process groups).

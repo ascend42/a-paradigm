@@ -16,16 +16,19 @@ describe('M1.12 slice 1 — the kernel bundles the published client rules', () =
   });
 });
 
-describe('M1.12 slice 2 (deferred)', () => {
-  it.todo('slice 2: TS client src/clients/ts (hello/serverSig, device + read-token PoP auth, 12 verbs + 2 relays typed, subscriptions) built on gnomon-contracts only');
-  it.todo('slice 2: conformance runner + driver protocol against a spawned kernel; TS client passes (G-CLI-02)');
-  it.todo('slice 2: Python client parity (pure-Python Ed25519; python3 has no cryptography module here) passes the same run checks; byte-identical display vectors (falsifier: two UIs disagree)');
-  it.todo('slice 2: G-CLI-03 a forged approval.request (bad kernel sig) never renders as a card');
-  it.todo('slice 2: G-CLI-01 constellation + flow on the kernel; G-RUN-04 HeadlessRunner retired');
-  it.todo('slice 2: `gnomon replay` deterministic re-projection; divergence ⇒ refused (G-KRN-01)');
-  it.todo('slice 2: generated docs/specs/gnomon-client-api.md fixed point (G-HON-04 rule)');
-  it.todo('slice 2: status.clients[] labelled declared + clients{n, declaredConformant}; §9.6 metrics (G-OBS-01)');
-  it.todo('slice 2: log.read:sensitive grant for community device keys (§9.3 community-client row, G-SEC-02)');
-  it.todo('slice 2: honesty CI G-HON-02 (fabrication grep), G-HON-03 (denominators in status), G-HON-05..07');
-  it.todo('slice 2: Paradigm logger port for library code (kernel has zero deps, G-SEC-01: an injected ParadigmLogger-shaped port)');
+// Slice 2 LANDED (test/m112-conformance.test.ts, test/approval-broker.test.ts): kernel cards use the one
+// §4.5 sanitizer; the TS client (G-CLI-02 TS half); the conformance runner + driver protocol; status
+// labels declared conformance + clientConformance{n, of} (G-OBS-01 part). Named remainder:
+describe('M1.12 slice 3 (deferred)', () => {
+  it.todo('slice 3: `gnomon replay <home> [--expect <hash>]` — verifyLog + deterministic fold → projection hash; divergence ⇒ refused (G-KRN-01)');
+  it.todo('slice 3: Python client parity (pure-Python Ed25519 RFC 8032; python3 has no cryptography module here) via SubprocessDriver; byte-identical display vectors (falsifier: two UIs disagree)');
+  it.todo('slice 3: G-CLI-03 a forged approval.request (bad kernel sig) never renders as a card — needs the §12.8 proposal ratified first');
+  it.todo('slice 3: G-CLI-01 constellation + flow on the kernel; G-RUN-04 HeadlessRunner retired');
+  it.todo('slice 3: generated docs/specs/gnomon-client-api.md fixed point (G-HON-04 rule)');
+  it.todo('slice 3: remaining §9.6 metrics (G-OBS-01) beyond clientConformance{n, of}');
+  it.todo('slice 3: log.read:sensitive grant for community device keys (§9.3 community-client row, G-SEC-02)');
+  it.todo('slice 3: honesty CI G-HON-02 (fabrication grep), G-HON-03 (denominators in status), G-HON-05..07');
+  it.todo('slice 3: conformance runner checks auth.launch-token, auth.reconnect, subscribe.dropped, cards.*, kit.image-canvas (catalogued slice-2)');
+  it.todo('slice 3: kernel socket/client.ts (CLI) delegating to src/clients/ts, one client implementation');
+  it.todo('slice 3: Appendix A ids for #gnomon-ts-client / #client-conformance (allowlisted for now)');
 });

@@ -22,6 +22,9 @@ import {
 
 const read = (rel: string): string => readFileSync(fileURLToPath(new URL(rel, import.meta.url)), 'utf8');
 
+/** A kept U+FE00–U+FE0D stays visible-but-flagged on every pass (§4.5, T-2026-10-18-013); nothing else re-flags. */
+const reflag = (t: string): string[] => (/[\uFE00-\uFE0D]/.test(t) ? ['hidden-chars'] : []);
+
 describe('client display rules (\u00a74.5 sanitizer + Unicode)', () => {
   it('conformance/display.v1.json is the byte-identical fixed point of buildDisplayVectors', () => {
     expect(read('../conformance/display.v1.json')).toBe(serializeDisplayVectors(buildDisplayVectors()));
@@ -62,6 +65,14 @@ describe('client display rules (\u00a74.5 sanitizer + Unicode)', () => {
     expect(sanitizeDisplayText('é️')).toEqual({ text: 'é', flags: ['hidden-chars'] });
   });
 
+  it('T-2026-10-18-013 residual: only VS15/VS16 are kept unflagged; a kept U+FE00–U+FE0D flags hidden-chars (1 bit/char side channel)', () => {
+    expect(sanitizeDisplayText('x\ufe0e')).toEqual({ text: 'x\ufe0e', flags: [] });
+    expect(sanitizeDisplayText('\u2764\ufe0f')).toEqual({ text: '\u2764\ufe0f', flags: [] });
+    for (let cp = 0xfe00; cp <= 0xfe0d; cp++) {
+      expect(sanitizeDisplayText(`a${String.fromCharCode(cp)}`)).toEqual({ text: `a${String.fromCharCode(cp)}`, flags: ['hidden-chars'] });
+    }
+  });
+
   it('Aegis R2-1: idempotent on adversarial inputs (seeded mix of every rule class)', () => {
     const pool = ['a', 'Z', '1', '#', '❤', '\u{1F44D}', '́', '︀', '️', '​', '⁠', '\u{E0041}', '\u{E0100}', 'ㅤ', '‮', '‎', ' ', '\u001b', '\u001b[', '\u001b]', '\u0007', '\u009c', '\u009d', '\u009b', '\r', '\n', '\t', '\ud800', '\udc00', '\u0085', '\u007f', '\\', '_', ']', 'P'];
     let seed = 0x9e3779b9;
@@ -74,7 +85,7 @@ describe('client display rules (\u00a74.5 sanitizer + Unicode)', () => {
       const len = next() % 24;
       for (let j = 0; j < len; j++) s += pool[next() % pool.length];
       const once = sanitizeDisplayText(s).text;
-      expect(sanitizeDisplayText(once), JSON.stringify(s)).toEqual({ text: once, flags: [] });
+      expect(sanitizeDisplayText(once), JSON.stringify(s)).toEqual({ text: once, flags: reflag(once) });
     }
   });
 
@@ -109,8 +120,11 @@ describe('client display rules (\u00a74.5 sanitizer + Unicode)', () => {
     expect(Object.keys(BIDI_GLYPHS)).toHaveLength(12);
   });
 
-  it('is idempotent on every vector (a second pass changes nothing and raises no flag)', () => {
-    for (const v of buildDisplayVectors().sanitize) expect(sanitizeDisplayText(v.text)).toEqual({ text: v.text, flags: [] });
+  it('is idempotent on every vector (a second pass changes nothing; it re-raises only the flag of a kept U+FE00–U+FE0D)', () => {
+    for (const v of buildDisplayVectors().sanitize) {
+      expect(sanitizeDisplayText(v.text)).toEqual({ text: v.text, flags: reflag(v.text) });
+      if (reflag(v.text).length) expect(v.flags).toContain('hidden-chars');
+    }
   });
 
   it('opaque rows: modns.* and kinds newer than the package render as {kind, principal, at}, never dropped', () => {

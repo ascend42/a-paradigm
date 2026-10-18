@@ -265,6 +265,18 @@
       ]
     },
     {
+      "input": "text\ufe0e",
+      "text": "text\ufe0e",
+      "flags": []
+    },
+    {
+      "input": "a\ufe03b",
+      "text": "a\ufe03b",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
       "input": "\u001b]0;a\u009db\u0007c",
       "text": "\u27e8ESC\u27e9]0;ac",
       "flags": [

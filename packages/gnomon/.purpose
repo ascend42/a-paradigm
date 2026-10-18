@@ -879,6 +879,34 @@ components:
       - test/log-cli-quarantine-posix.test.ts
     oracles: [G-LOG-01, G-LOG-02, G-LOG-03, G-LOG-04, G-LOG-06, G-LOG-07, G-LOG-08, G-LOG-09, G-LOG-10, G-LOG-11]
 
+  gnomon-ts-client:
+    description: >-
+      #gnomon-ts-client (spec §4.9, §5, §12.8; §19.1 M1.12 slice 2).
+      src/clients/ts/ — the published TypeScript client, built ONLY on
+      @a-company/gnomon-contracts + node:* (fenced by test/m112-conformance):
+      hello with serverSig verified against the PINNED kernel key before any
+      credential is sent; device-key auth (gnomon:auth:v1) or read-token proof
+      of possession (gnomon:auth-token:v1); call() typed for the 12 verbs + 2
+      relays (ClientMethodParams/Results); refusals reject with RefusedError;
+      subscribe() = log.read{follow} with rows in seq order and a visible end;
+      logging through an injected ClientLogPort (Paradigm-logger shaped).
+      Re-exports the one §4.5 sanitizer for UIs.
+    tags: [gnomon, m1.12, client]
+    oracles: [G-CLI-02]
+
+  client-conformance:
+    description: >-
+      #client-conformance (spec §12.8, G-CLI-02; M1.12 slice 2).
+      src/clients/conformance/ — driver.ts: the language-neutral JSON-lines
+      driver protocol (connect/call/subscribe/events/closed/close/sanitize/
+      row/denominator), TsClientDriver (in-process, JSON round-tripped) and
+      SubprocessDriver (any language over stdio); runner.ts: runs every
+      CONFORMANCE_CHECKS `run` check against a live kernel, `slice-2` checks
+      reported todo, report + conformanceReportHash. status.clients[] labels a
+      declared tuple `declared` and reports clientConformance{n, of} (G-OBS-01).
+    tags: [gnomon, m1.12, client, conformance]
+    oracles: [G-CLI-02, G-OBS-01]
+
   approval-broker:
     description: >-
       #approval-broker (spec §3.4, §5 verb 8, §3.1 approvals key; §19.1 M1.6).

@@ -6,13 +6,13 @@
  * record"). Everything a human sees is composed HERE from the broker's own
  * record — never from a requester's rendering:
  *
- *   - DEVIATION (recorded, reviewer 3): §4.5 lets the sanitizer strip; for
- *     zero-width/bidi we ESCAPE instead of strip so the human sees something
- *     was there. Tag characters (U+E0000 to U+E007F) are STRIPPED (they spell
- *     hidden ASCII) and flag hidden-chars; C0 and C1 controls are escaped;
- *   - lines are sanitized: hidden characters (zero-width, soft hyphen, BOM)
- *     and bidi controls are replaced by visible `\u{…}` escapes and set the
- *     `hidden-chars` / `bidi` flags (§4.5);
+ *   - every line passes the ONE published sanitizer, @a-company/gnomon-contracts
+ *     `sanitizeDisplayText` (§4.5 normative, conformance/display.v1.json):
+ *     terminal escapes removed, bidi controls shown as `⟨RLO⟩`-style glyphs,
+ *     hidden characters and controls stripped, flags `hidden-chars` / `bidi`.
+ *     The earlier `\u{…}` escape DEVIATION (reviewer 3) is retired
+ *     (M1.12 slice 2): a kernel card and a conformant client draw the same
+ *     text, so two UIs cannot disagree on a card;
  *   - `contentHash` = sha256(canonical {kind, requestedBy, hsid, detail,
  *     flags}) — the decision signature covers what was shown;
  *   - `actions[]` = one entry per valid decision, each signed by the kernel
@@ -24,40 +24,22 @@
  *     renders it in M1.3 (natively, or in a helper window on Windows, chosen
  *     by the M1.0 probe — passed in, never branched on here).
  */
-import { canonicalJson, hex, sha256, type CardFlag, type CardV1 } from '@a-company/gnomon-contracts';
+import { canonicalJson, hex, sanitizeDisplayText, sha256, type CardFlag, type CardV1 } from '@a-company/gnomon-contracts';
 import type { KeyRing, Signer } from '../log/signer.js';
 import { validDecisions } from './classes.js';
 
-const BIDI = /[\u202A-\u202E\u2066-\u2069\u200E\u200F\u061C]/gu;
-const HIDDEN = /[\u200B-\u200D\u2060-\u2064\uFEFF\u00AD\u180E]/gu;
-/** Unicode tag characters (U+E0000 to U+E007F): invisible ASCII smuggling, STRIPPED and flagged hidden-chars. */
-const TAGS = /[\u{E0000}-\u{E007F}]/gu;
-/** C0 and C1 controls (U+0080 to U+009F incl. U+009B CSI) except tab and newline: escaped visibly. */
-// eslint-disable-next-line no-control-regex
-const CONTROLS = /[\u0000-\u0008\u000B-\u001F\u007F-\u009F]/g;
 const MAX_LINE = 512;
 
 export function sha256Hex(s: string): string {
   return `sha256:${hex(sha256(s))}`;
 }
 
-/** Sanitize one display line (§4.5): visible escapes for hidden/bidi characters, control characters dropped, length capped. */
+/** Sanitize one display line (§4.5) with the published contracts sanitizer, then cap its length by code points (never splitting a pair). */
 export function sanitizeLine(text: string): { text: string; flags: CardFlag[] } {
-  const flags: CardFlag[] = [];
-  const esc = (ch: string) => `\\u{${ch.codePointAt(0)!.toString(16).toUpperCase()}}`;
-  let out = String(text);
-  if (BIDI.test(out)) flags.push('bidi');
-  BIDI.lastIndex = 0;
-  out = out.replace(BIDI, esc);
-  if (HIDDEN.test(out)) flags.push('hidden-chars');
-  HIDDEN.lastIndex = 0;
-  out = out.replace(HIDDEN, esc);
-  if (TAGS.test(out) && !flags.includes('hidden-chars')) flags.push('hidden-chars');
-  TAGS.lastIndex = 0;
-  out = out.replace(TAGS, '');
-  out = out.replace(CONTROLS, (c) => esc(c));
-  if (out.length > MAX_LINE) out = `${out.slice(0, MAX_LINE - 1)}…`;
-  return { text: out, flags };
+  const s = sanitizeDisplayText(String(text));
+  const cps = Array.from(s.text);
+  const out = cps.length > MAX_LINE ? `${cps.slice(0, MAX_LINE - 1).join('')}…` : s.text;
+  return { text: out, flags: s.flags };
 }
 
 /** A display-block:v1 Box of Text lines, plus the sanitizer's flags. */
