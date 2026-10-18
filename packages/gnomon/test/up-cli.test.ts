@@ -26,6 +26,7 @@ import { startDaemon, type DaemonHandle, type DaemonOptions } from '../src/kerne
 import { removeTree } from '../src/kernel/manifest/index.js';
 import { FakeHelper } from './helper-fake.js';
 import { PKG_ROOT } from './helpers.js';
+import { privateTmpRoot } from './daemon-helpers.js';
 
 const DEV = acceptUnsignedHelperForTests(DEV_TEST_HELPER_ACK);
 /** A clean runtime for the unsafe-env guard (vitest's own worker runs with interpreter flags). */
@@ -37,7 +38,7 @@ afterEach(async () => {
 
 /** A private user home (short path: the socket must fit sun_path) whose `.gnomon` is the production home. */
 function userHome(): string {
-  const d = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'gu-')));
+  const d = fs.realpathSync.native(fs.mkdtempSync(path.join(privateTmpRoot(), 'gu-'))); // never world-writable /tmp (Linux CI): the daemon refuses it
   cleanups.push(() => removeTree(d));
   return d;
 }

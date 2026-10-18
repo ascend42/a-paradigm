@@ -10,7 +10,7 @@ import { encodeFrame, NdjsonDecoder } from '../src/kernel/socket/index.js';
  * per-user 0700 dir. Linux CI: os.tmpdir() is world-writable /tmp, which the
  * daemon (correctly, §2.4) refuses as a home — use ~/.cache/gnomon-test (0700).
  */
-function privateTmpRoot(): string {
+export function privateTmpRoot(): string {
   const t = realpathSync(os.tmpdir());
   if ((statSync(t).mode & 0o002) === 0) return t;
   const root = path.join(os.homedir(), '.cache', 'gnomon-test');
