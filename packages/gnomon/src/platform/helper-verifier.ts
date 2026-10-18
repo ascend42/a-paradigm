@@ -33,7 +33,8 @@ const darwinCodesign: PlatformHelperVerifier = Object.freeze({
     return r.status === 0;
   },
   verifyPid(pid: number, requirement: string): boolean {
-    const r = spawnSync('/usr/bin/codesign', ['--verify', `-R=${requirement}`, String(pid)], { encoding: 'utf8', timeout: 30_000 });
+    // cwd '/' (Aegis round 3): a bare numeric argument must never resolve to a file named <pid> in the cwd
+    const r = spawnSync('/usr/bin/codesign', ['--verify', `-R=${requirement}`, String(pid)], { encoding: 'utf8', timeout: 30_000, cwd: '/' });
     return r.status === 0;
   },
 });
