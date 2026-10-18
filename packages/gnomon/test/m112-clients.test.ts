@@ -30,5 +30,4 @@ describe('M1.12 slice 3 (deferred)', () => {
   it.todo('slice 3: honesty CI G-HON-02 (fabrication grep), G-HON-03 (denominators in status), G-HON-05..07');
   it.todo('slice 3: conformance runner checks auth.launch-token, auth.reconnect, subscribe.dropped, cards.*, kit.image-canvas (catalogued slice-2)');
   it.todo('slice 3: kernel socket/client.ts (CLI) delegating to src/clients/ts, one client implementation');
-  it.todo('slice 3: Appendix A ids for #gnomon-ts-client / #client-conformance (allowlisted for now)');
 });

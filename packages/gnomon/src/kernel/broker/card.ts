@@ -129,7 +129,7 @@ export function composePresencePrompt(
     kind: String(card.kind),
     decision: f.decision,
     requestedBy: card.requestedBy,
-    summary: `${card.contentHash.slice(7, 19)}${typeof first === 'string' ? ` ${first.slice(0, 120)}` : ''}`,
+    summary: `${card.contentHash.slice(7, 19)}${typeof first === 'string' ? ` ${Array.from(first).slice(0, 120).join('')}` : ''}`,
     contentHash: card.contentHash,
     connId: f.connId,
     guiSessions: { n: f.guiSessions },

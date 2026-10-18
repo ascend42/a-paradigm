@@ -122,7 +122,7 @@ describe('#approval-broker cards (§3.4 card:v1)', () => {
     expect(JSON.stringify(t.block)).not.toMatch(/[\u{E0000}-\u{E007F}\u0080-\u009F]/u);
     // terminal escapes (OSC 52 clipboard) are removed whole and flagged
     const o = await permission(r.broker, ['\u001b]52;c;ZWNobyBwd25lZA==\u0007safe']);
-    expect((o.block as { children: Array<{ text: string }> }).children[0]!.text).toBe('safe');
+    expect((o.block as { children: Array<{ text: string }> }).children[0]!.text).toBe('⟨OSC⟩52;c;ZWNobyBwd25lZA==⟨ST⟩safe'); // payload visible (Aegis M2)
     expect(o.flags).toEqual(['hidden-chars']);
     expect(JSON.stringify(c.block)).not.toMatch(/[\u202E\u200B]/);
   });

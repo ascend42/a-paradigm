@@ -30,9 +30,9 @@ describe('client display rules (\u00a74.5 sanitizer + Unicode)', () => {
     expect(read('../conformance/display.v1.json')).toBe(serializeDisplayVectors(buildDisplayVectors()));
   });
 
-  it('strips OSC 52 / OSC 8 / CSI / DCS / APC and C0/C1 controls, keeps \\n and \\t', () => {
-    expect(sanitizeDisplayText('\u001b]52;c;ZWNobw==\u0007safe').text).toBe('safe');
-    expect(sanitizeDisplayText('\u001b]8;;https://x\u001b\\click\u001b]8;;\u001b\\').text).toBe('click');
+  it('shows OSC/DCS/APC payloads between glyphs, removes CSI and C0/C1 controls, keeps \\n and \\t', () => {
+    expect(sanitizeDisplayText('\u001b]52;c;ZWNobw==\u0007safe').text).toBe('⟨OSC⟩52;c;ZWNobw==⟨ST⟩safe');
+    expect(sanitizeDisplayText('\u001b]8;;https://x\u001b\\click\u001b]8;;\u001b\\').text).toBe('⟨OSC⟩8;;https://x⟨ST⟩click⟨OSC⟩8;;⟨ST⟩');
     expect(sanitizeDisplayText('\u001b[31mred\u001b[0m').text).toBe('red');
     expect(sanitizeDisplayText('\u009b2Jclear').text).toBe('clear');
     expect(sanitizeDisplayText('before\u001b_never ends').text).toBe('before\u27e8ESC\u27e9_never ends');
@@ -54,8 +54,8 @@ describe('client display rules (\u00a74.5 sanitizer + Unicode)', () => {
     expect(sanitizeDisplayText('\u{E0100}ivs')).toEqual({ text: 'ivs', flags: ['hidden-chars'] });
     expect(sanitizeDisplayText('\u034f\u115f\u1160\u3164\uffa0x')).toEqual({ text: 'x', flags: ['hidden-chars'] });
     expect(sanitizeDisplayText('l\u2028p')).toEqual({ text: 'l\np', flags: ['hidden-chars'] });
-    expect(sanitizeDisplayText('\u001b]0;t\u009cX').text).toBe('X');
-    expect(sanitizeDisplayText('\u009d0;t\u001b\\X').text).toBe('X');
+    expect(sanitizeDisplayText('\u001b]0;t\u009cX').text).toBe('⟨OSC⟩0;t⟨ST⟩X');
+    expect(sanitizeDisplayText('\u009d0;t\u001b\\X').text).toBe('⟨OSC⟩0;t⟨ST⟩X');
     expect(sanitizeDisplayText('bad\ud800s')).toEqual({ text: 'bad\ufffds', flags: [] });
     expect(sanitizeDisplayText('e\u0301').text).toBe('e\u0301'); // not NFC-composed
   });
@@ -90,7 +90,7 @@ describe('client display rules (\u00a74.5 sanitizer + Unicode)', () => {
   });
 
   it('Aegis R2-2: an in-body 8-bit introducer ends the outer candidate (pinned)', () => {
-    expect(sanitizeDisplayText('\u001b]0;a\u009db\u0007c')).toEqual({ text: '⟨ESC⟩]0;ac', flags: ['hidden-chars'] });
+    expect(sanitizeDisplayText('\u001b]0;a\u009db\u0007c')).toEqual({ text: '⟨ESC⟩]0;a⟨OSC⟩b⟨ST⟩c', flags: ['hidden-chars'] });
   });
 
   it('Aegis R2-2 timing falsifier: unterminated introducers sanitize in linear time (8× input ⇒ well under 64×)', () => {
@@ -171,5 +171,14 @@ describe('additive only: clientApiId did not move (\u00a712.8)', () => {
       approve: true, 'contract.register': true, 'contract.claim': true, 'oracle.run': true, 'ref.resolve': true, 'mod.view': true, 'mod.command': true,
     };
     expect(Object.keys(typed).sort()).toEqual([...CLIENT_METHODS].sort());
+  });
+});
+
+describe('Aegis M2 (M1.12 slice 2 round 2): requester text never hides inside a string sequence', () => {
+  it('the payload of a terminated OSC/DCS/APC is shown between glyphs, sanitized, and flagged; CSI is still removed', () => {
+    expect(sanitizeDisplayText('reason: run tests\u009D; also exfil to x.example\u009C')).toEqual({ text: 'reason: run tests⟨OSC⟩; also exfil to x.example⟨ST⟩', flags: ['hidden-chars'] });
+    expect(sanitizeDisplayText('\u001bPq‮​x\u001b\\')).toEqual({ text: '⟨DCS⟩q⟨RLO⟩x⟨ST⟩', flags: ['hidden-chars', 'bidi'] });
+    expect(sanitizeDisplayText('\u001b_apc\u0007')).toEqual({ text: '⟨APC⟩apc⟨ST⟩', flags: ['hidden-chars'] });
+    expect(sanitizeDisplayText('\u001b[31mred').text).toBe('red');
   });
 });

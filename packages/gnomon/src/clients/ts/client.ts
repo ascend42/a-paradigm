@@ -104,6 +104,17 @@ function readTokenKey(token: string): { tokenId: string; key: KeyObject } {
   return { tokenId: `rtk:${m[1]}`, key: createPrivateKey({ key: Buffer.concat([ED25519_PKCS8_PREFIX, seed]), format: 'der', type: 'pkcs8' }) };
 }
 
+function deviceKey(pem: string): KeyObject {
+  let k: KeyObject;
+  try {
+    k = createPrivateKey(pem);
+  } catch {
+    throw new ClientAuthError('bad-credential', 'the device key is not a PKCS#8 PEM private key');
+  }
+  if (k.asymmetricKeyType !== 'ed25519') throw new ClientAuthError('bad-credential', 'the device key is not Ed25519');
+  return k;
+}
+
 /** A refusal frame's error, as the contracts `RefusedError` (an invalid refusal is reported as ENGINE, never trusted). */
 function refusedFrom(error: { code?: unknown; message?: unknown; data?: unknown }): RefusedError {
   const data = isRefusalV1(error.data) ? (error.data as Refusal) : refuse({ code: 'ENGINE', data: { reason: 'invalid-refusal', rpcCode: error.code as number } });
@@ -166,8 +177,10 @@ export class GnomonClient {
   /** hello → serverSig verified against the pin → auth (if a credential is given). Never sends a credential to an unverified server. */
   static async connect(o: ConnectOptions): Promise<GnomonClient> {
     // credential shape is checked before any connection exists
+    const cred = o.credential as { kind?: unknown } | undefined;
+    if (cred !== undefined && cred.kind !== 'read-token' && cred.kind !== 'device') throw new ClientAuthError('bad-credential', 'a credential is {kind: device} or {kind: read-token}');
     const token = o.credential?.kind === 'read-token' ? readTokenKey(o.credential.token) : undefined;
-    const device = o.credential?.kind === 'device' ? { ...o.credential, key: createPrivateKey(o.credential.privateKeyPem) } : undefined;
+    const device = o.credential?.kind === 'device' ? { ...o.credential, key: deviceKey(o.credential.privateKeyPem) } : undefined;
     const sock = await new Promise<net.Socket>((resolve, reject) => {
       const s = net.connect(o.socketPath);
       s.once('connect', () => resolve(s));
@@ -178,6 +191,7 @@ export class GnomonClient {
       const offeredApis = o.clientApis ?? [GNOMON_RPC_V1];
       const offeredFeatures = o.features ?? [];
       c.hello = (await c.#request('hello', { clientApis: offeredApis, features: offeredFeatures, client: o.client })) as HelloResult;
+      if (validateHelloResult(c.hello).length) throw new ClientAuthError('bad-hello', 'hello result does not validate');
       if (!offeredApis.includes(c.hello.clientApi) || !Array.isArray(c.hello.features) || c.hello.features.some((f) => !offeredFeatures.includes(f))) {
         throw new ClientAuthError('hello-not-offered', 'hello chose a clientApi or feature this client did not offer');
       }
@@ -228,10 +242,18 @@ export class GnomonClient {
     const entry = { h, cursor: params.since ?? 0 };
     // bound SYNCHRONOUSLY when the reply frame is read: the kernel writes the reply first, and
     // event frames in the same chunk are dispatched before an awaiting caller resumes
-    const r = (await this.#request('log.read', { ...params, follow: true }, (result) => {
-      const sub = (result as { subscription?: unknown }).subscription;
-      if (typeof sub === 'string') this.#subs.set(sub, entry);
-    })) as LogSubscribeResult;
+    let r: LogSubscribeResult;
+    try {
+      r = (await this.#request('log.read', { ...params, follow: true }, (result) => {
+        const sub = (result as { subscription?: unknown }).subscription;
+        if (typeof sub === 'string') this.#subs.set(sub, entry);
+      })) as LogSubscribeResult;
+    } catch (err) {
+      // no cancel verb exists (§4.9: a subscription ends with its connection): a subscribe that timed out may
+      // still be live server-side, so the only way to end it is to close the connection
+      if ((err as { code?: string }).code === 'ETIMEDOUT') await this.close();
+      throw err;
+    }
     return Object.assign(r, { cursor: () => entry.cursor });
   }
 
@@ -267,6 +289,13 @@ export class GnomonClient {
     this.#buf = this.#buf.length ? Buffer.concat([this.#buf, chunk]) : chunk;
     let nl: number;
     while ((nl = this.#buf.indexOf(0x0a)) >= 0) {
+      if (nl > MAX_FRAME_BYTES) {
+        // checked BEFORE parsing: an oversize frame is never handed to JSON.parse
+        this.#log?.warn('oversize frame: closing', { bytes: nl });
+        this.#buf = Buffer.alloc(0);
+        this.#sock.destroy();
+        return;
+      }
       const line = this.#buf.subarray(0, nl).toString('utf8');
       this.#buf = this.#buf.subarray(nl + 1);
       let f: unknown;

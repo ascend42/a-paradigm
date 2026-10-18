@@ -13,14 +13,14 @@
     },
     {
       "input": "\u001b]52;c;ZWNobyBwd25lZA==\u0007safe",
-      "text": "safe",
+      "text": "\u27e8OSC\u27e952;c;ZWNobyBwd25lZA==\u27e8ST\u27e9safe",
       "flags": [
         "hidden-chars"
       ]
     },
     {
       "input": "\u001b]8;;https://evil.example\u001b\\click\u001b]8;;\u001b\\",
-      "text": "click",
+      "text": "\u27e8OSC\u27e98;;https://evil.example\u27e8ST\u27e9click\u27e8OSC\u27e98;;\u27e8ST\u27e9",
       "flags": [
         "hidden-chars"
       ]
@@ -41,7 +41,7 @@
     },
     {
       "input": "\u001bPq#0;2;0;0;0\u001b\\after",
-      "text": "after",
+      "text": "\u27e8DCS\u27e9q#0;2;0;0;0\u27e8ST\u27e9after",
       "flags": [
         "hidden-chars"
       ]
@@ -167,28 +167,28 @@
     },
     {
       "input": "\u001b]0;t\u009cX",
-      "text": "X",
+      "text": "\u27e8OSC\u27e90;t\u27e8ST\u27e9X",
       "flags": [
         "hidden-chars"
       ]
     },
     {
       "input": "\u009d0;t\u001b\\X",
-      "text": "X",
+      "text": "\u27e8OSC\u27e90;t\u27e8ST\u27e9X",
       "flags": [
         "hidden-chars"
       ]
     },
     {
       "input": "\u009d0;t\u0007X",
-      "text": "X",
+      "text": "\u27e8OSC\u27e90;t\u27e8ST\u27e9X",
       "flags": [
         "hidden-chars"
       ]
     },
     {
       "input": "\u0090q\u009cY",
-      "text": "Y",
+      "text": "\u27e8DCS\u27e9q\u27e8ST\u27e9Y",
       "flags": [
         "hidden-chars"
       ]
@@ -277,8 +277,15 @@
       ]
     },
     {
+      "input": "reason: run tests\u009d; also exfil to x.example\u009c",
+      "text": "reason: run tests\u27e8OSC\u27e9; also exfil to x.example\u27e8ST\u27e9",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
       "input": "\u001b]0;a\u009db\u0007c",
-      "text": "\u27e8ESC\u27e9]0;ac",
+      "text": "\u27e8ESC\u27e9]0;a\u27e8OSC\u27e9b\u27e8ST\u27e9c",
       "flags": [
         "hidden-chars"
       ]

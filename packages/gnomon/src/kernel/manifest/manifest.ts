@@ -188,8 +188,12 @@ function obj(v: unknown, where: string): Record<string, unknown> {
   if (!isPlainObject(v)) fail('SCHEMA', `${where} must be an object`, { field: where });
   return v as Record<string, unknown>;
 }
+/** C0 (incl. ESC), DEL and C1 controls: never legitimate in a manifest string, and they would reach install cards (Aegis M2). */
+// eslint-disable-next-line no-control-regex
+const CONTROL_CHARS = /[\u0000-\u001F\u007F-\u009F]/;
 function str(v: unknown, where: string, re?: RegExp): string {
   if (typeof v !== 'string' || v.length === 0 || v.length > 512) fail('SCHEMA', `${where} must be a non-empty string`, { field: where });
+  if (CONTROL_CHARS.test(v as string)) fail('SCHEMA', `${where} contains a control character`, { field: where });
   if (re && !re.test(v as string)) fail('SCHEMA', `${where} is malformed`, { field: where, value: v });
   return v as string;
 }
@@ -256,7 +260,7 @@ export function validateManifest(value: unknown, opts: ValidateManifestOptions):
     str(o.name, `provides.mcp[${i}].name`, NAME_PATTERN);
     str(o.command, `provides.mcp[${i}].command`);
     arr(o.args, `provides.mcp[${i}].args`).forEach((a, j) => {
-      if (typeof a !== 'string') fail('SCHEMA', `provides.mcp[${i}].args[${j}] must be a string`);
+      if (typeof a !== 'string' || CONTROL_CHARS.test(a)) fail('SCHEMA', `provides.mcp[${i}].args[${j}] must be a string without control characters`);
     });
   });
   arr(provides.hooks, 'provides.hooks').forEach((e, i) => {

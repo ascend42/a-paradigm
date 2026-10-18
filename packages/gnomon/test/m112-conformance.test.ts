@@ -25,7 +25,9 @@ import { deviceKeyPath } from '../src/kernel/identity/device-key.js';
 import { startDaemon } from '../src/kernel/lifecycle/index.js';
 import { SoftwareEd25519Signer } from '../src/kernel/log/index.js';
 import { ClientAuthError, GnomonClient, ed25519KeyIdOf, type ClientLogPort } from '../src/clients/ts/index.js';
-import { TsClientDriver } from '../src/clients/conformance/driver.js';
+import * as net from 'node:net';
+import { SubprocessDriver, TsClientDriver } from '../src/clients/conformance/driver.js';
+import { declaredConformance } from '../src/kernel/socket/dispatch.js';
 import { RUNNER_CHECK_IDS, runConformance, type ConformanceFixture } from '../src/clients/conformance/runner.js';
 import { extractSpecifiers, PKG_ROOT, walk } from './helpers.js';
 import { tempHome } from './daemon-helpers.js';
@@ -158,6 +160,105 @@ describe('#client-conformance falsifiers (the runner can fail)', () => {
     expect(report.pass).toBe(false);
     expect(report.checks.find((c) => c.id === 'display.sanitize')?.result).toBe('fail');
     expect(report.checks.find((c) => c.id === 'hello.server-sig-mismatch')?.result).toBe('fail');
+  });
+
+  it('B1: a keyId-only client (checks serverKeyId, never the signature) fails hello.server-sig-mismatch', async () => {
+    const f = await kernelRig();
+    const inner = new TsClientDriver();
+    cleanups.push(() => inner.stop());
+    /** hello, then auth with whatever the client has — after checking only that serverKeyId equals the pinned keyId. */
+    const keyIdOnly = async (socketPath: string, keyId: string): Promise<boolean> => {
+      const sock = net.connect(socketPath);
+      await new Promise((res, rej) => sock.once('connect', res).once('error', rej));
+      const frames: Array<Record<string, unknown>> = [];
+      let buf = '';
+      sock.on('data', (ch) => {
+        buf += ch.toString('utf8');
+        let nl: number;
+        while ((nl = buf.indexOf('\n')) >= 0) {
+          frames.push(JSON.parse(buf.slice(0, nl)));
+          buf = buf.slice(nl + 1);
+        }
+      });
+      sock.write(`${JSON.stringify({ jsonrpc: '2.0', rpc: 'gnomon-rpc:v1', id: 1, method: 'hello', params: { clientApis: ['gnomon-rpc:v1'], features: [], client: CLIENT } })}\n`);
+      while (!frames.length) await new Promise((r) => setTimeout(r, 10));
+      const ok = (frames[0]!.result as { serverKeyId?: string } | undefined)?.serverKeyId === keyId;
+      if (ok) sock.write(`${JSON.stringify({ jsonrpc: '2.0', rpc: 'gnomon-rpc:v1', id: 2, method: 'auth', params: { principal: f.device.principalId, deviceId: f.device.deviceId, sig: 'AAAA' } })}\n`);
+      await new Promise((r) => setTimeout(r, 30));
+      sock.destroy();
+      return ok;
+    };
+    const lying = {
+      language: 'typescript',
+      stop: () => inner.stop(),
+      request: async (r: Parameters<TsClientDriver['request']>[0]) => {
+        if (r.op === 'connect' && r.credential && r.kernelKey) {
+          const ok = await keyIdOnly(String(r.socketPath), (r.kernelKey as { keyId: string }).keyId);
+          return ok ? { id: r.id, ok: true, conn: 'x', serverVerified: true } : { id: r.id, ok: false, error: { kind: 'client' as const, reason: 'server-key-mismatch', message: 'keyId differs' } };
+        }
+        return inner.request(r);
+      },
+    };
+    const report = await runConformance(lying, f, { client: { name: 'keyid-only', version: '0' } });
+    expect(report.checks.find((c) => c.id === 'hello.server-sig-mismatch')?.result).toBe('fail');
+    expect(report.pass).toBe(false);
+  });
+
+  it('B2: a client that drops backlog rows fails subscribe.since', async () => {
+    const f = await kernelRig();
+    const inner = new TsClientDriver();
+    cleanups.push(() => inner.stop());
+    const dropping = {
+      language: 'typescript',
+      stop: () => inner.stop(),
+      request: async (r: Parameters<TsClientDriver['request']>[0]) => {
+        const res = await inner.request(r);
+        if (r.op === 'events' && Array.isArray(res.rows)) return { ...res, rows: (res.rows as unknown[]).slice(2) };
+        return res;
+      },
+    };
+    const report = await runConformance(dropping, f, { client: { name: 'dropper', version: '0' } });
+    expect(report.checks.find((c) => c.id === 'subscribe.since')?.result).toBe('fail');
+    expect(report.pass).toBe(false);
+  });
+});
+
+describe('Aegis M1: status reports only what was declared, labelled declared', () => {
+  it('declaredConformance copies {suite, version, reportHash} only, sanitizes and caps, voids a bad hash', () => {
+    const h = `sha256:${'a'.repeat(64)}`;
+    expect(declaredConformance({ suite: 's', version: '1', reportHash: h, result: 'passed', verifiedBy: 'gnomon-kernel' })).toEqual({ suite: 's', version: '1', reportHash: h, label: 'declared' });
+    expect(declaredConformance({ suite: 's‮', version: 'x'.repeat(500), reportHash: h })).toEqual({ suite: 's⟨RLO⟩', version: 'x'.repeat(64), reportHash: h, label: 'declared' });
+    expect(declaredConformance({ suite: 's', version: '1', reportHash: 'passed' })).toBeNull();
+    expect(declaredConformance('passed')).toBeNull();
+  });
+
+  it('a forged {result: passed, verifiedBy: gnomon-kernel} in hello never reaches status', async () => {
+    const f = await kernelRig();
+    const forged = { suite: 'gnomon-client-conformance', version: '1', reportHash: `sha256:${'b'.repeat(64)}`, result: 'passed', verifiedBy: 'gnomon-kernel' };
+    const c = await GnomonClient.connect({ socketPath: f.socketPath, client: { ...CLIENT, conformance: forged } as never, kernelKey: f.kernelKey, credential: f.device }).catch((e: unknown) => e);
+    if (c instanceof GnomonClient) {
+      cleanups.push(() => c.close());
+      const st = await c.call('status', {});
+      const mine = st.clients.find((x) => x.connId === c.connId)!;
+      expect(mine.conformance).toEqual({ suite: forged.suite, version: '1', reportHash: forged.reportHash, label: 'declared' });
+      expect(JSON.stringify(st)).not.toContain('verifiedBy');
+    } else {
+      expect(c).toMatchObject({ refusal: { code: 'BAD_REQUEST' } }); // refused at hello: equally never reported
+    }
+  });
+});
+
+describe('client credential and hello hygiene', () => {
+  it('an unknown credential kind or a malformed device PEM is bad-credential before any connection', async () => {
+    await expect(GnomonClient.connect({ socketPath: '/nonexistent', client: CLIENT, credential: { kind: 'bearer' } as never })).rejects.toMatchObject({ reason: 'bad-credential' });
+    await expect(GnomonClient.connect({ socketPath: '/nonexistent', client: CLIENT, credential: { kind: 'device', principalId: 'p', deviceId: 'd', privateKeyPem: 'not a pem' } })).rejects.toMatchObject({ reason: 'bad-credential' });
+  });
+
+  it('SubprocessDriver: a missing driver binary answers driver errors instead of crashing', async () => {
+    const d = new SubprocessDriver('none', '/nonexistent/driver-binary', []);
+    const r = await d.request({ op: 'sanitize', input: 'x' });
+    expect(r).toMatchObject({ ok: false, error: { kind: 'driver' } });
+    await d.stop();
   });
 });
 

@@ -87,11 +87,30 @@ import {
   VERBS,
   canonicalJson,
   hex,
+  sanitizeDisplayText,
   sha256,
   type Access,
   type PrincipalKind,
   type VerbDescriptor,
 } from '@a-company/gnomon-contracts';
+
+const REPORT_HASH = /^sha256:[0-9a-f]{64}$/;
+const MAX_CONFORMANCE_FIELD = 64;
+
+/**
+ * §12.8 honest limit (Aegis M1): what a client DECLARED in hello, copied
+ * field by field — only {suite, version, reportHash} plus `label: 'declared'`,
+ * never any other key a client sent (no `result: 'passed'`, no `verifiedBy`).
+ * suite/version are sanitized (§4.5) and capped; a reportHash that is not
+ * `sha256:<64 hex>` makes the declaration void (null).
+ */
+export function declaredConformance(v: unknown): { suite: string; version: string; reportHash: string; label: 'declared' } | null {
+  if (!v || typeof v !== 'object' || Array.isArray(v)) return null;
+  const { suite, version, reportHash } = v as Record<string, unknown>;
+  if (typeof suite !== 'string' || typeof version !== 'string' || typeof reportHash !== 'string' || !REPORT_HASH.test(reportHash)) return null;
+  const clean = (s: string): string => Array.from(sanitizeDisplayText(s).text).slice(0, MAX_CONFORMANCE_FIELD).join('');
+  return { suite: clean(suite), version: clean(version), reportHash, label: 'declared' };
+}
 import type { ConnectionContext, RpcHandler } from './server.js';
 import { RpcRefusal, type RpcRequestFrame } from './rpc.js';
 import type { ConnAuthState, SocketAuthenticator, WebAuthHook } from './auth.js';
@@ -324,10 +343,10 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
         surface: c.client?.surface ?? null,
         client: { name: c.client?.name, version: c.client?.version },
         // §12.8 honest limit: what the client DECLARED in hello, labelled `declared`, never `passed`
-        conformance: c.client?.conformance ? { ...c.client.conformance, label: 'declared' } : null,
+        conformance: declaredConformance(c.client?.conformance),
       })),
       // G-OBS-01 / G-HON-03: {n, of} — clients that declared a conformance tuple, of authenticated clients
-      clientConformance: { n: authed.filter((c) => c.client?.conformance).length, of: authed.length, label: 'declared' },
+      clientConformance: { n: authed.filter((c) => declaredConformance(c.client?.conformance)).length, of: authed.length, label: 'declared' },
     };
   };
 

@@ -147,19 +147,32 @@ export class TsClientDriver implements Driver {
   }
 }
 
-/** A driver in another process (any language): JSON lines on its stdin/stdout. */
+
+/** A driver in another process (any language): JSON lines on its stdin/stdout; stderr is drained (bounded) for diagnostics. */
 export class SubprocessDriver implements Driver {
   readonly #p: ChildProcessWithoutNullStreams;
   readonly #wait = new Map<number, (r: DriverResponse) => void>();
+  readonly #timeoutMs: number;
   #buf = '';
   #n = 0;
+  #dead: string | null = null;
+  /** The last 8 KiB of the driver's stderr. */
+  stderr = '';
 
   constructor(
     readonly language: string,
     command: string,
     args: readonly string[],
+    opts: { timeoutMs?: number } = {},
   ) {
+    this.#timeoutMs = opts.timeoutMs ?? 10_000;
     this.#p = spawn(command, [...args], { stdio: ['pipe', 'pipe', 'pipe'] });
+    this.#p.on('error', (err) => this.#fail(`driver failed to start: ${err.message}`)); // ENOENT etc.
+    this.#p.stdin.on('error', () => undefined); // EPIPE after the driver died
+    this.#p.stderr.setEncoding('utf8');
+    this.#p.stderr.on('data', (chunk: string) => {
+      this.stderr = (this.stderr + chunk).slice(-8192);
+    });
     this.#p.stdout.setEncoding('utf8');
     this.#p.stdout.on('data', (chunk: string) => {
       this.#buf += chunk;
@@ -170,31 +183,47 @@ export class SubprocessDriver implements Driver {
         if (!line.trim()) continue;
         try {
           const r = JSON.parse(line) as DriverResponse;
-          this.#wait.get(r.id as number)?.(r);
+          const cb = this.#wait.get(r.id as number);
           this.#wait.delete(r.id as number);
+          cb?.(r);
         } catch {
           /* a non-JSON line from the driver is ignored */
         }
       }
     });
-    this.#p.on('exit', () => {
-      for (const cb of this.#wait.values()) cb({ ok: false, error: { kind: 'driver', message: 'driver exited' } });
-      this.#wait.clear();
-    });
+    this.#p.on('exit', (code, signal) => this.#fail(`driver exited (${signal ?? code})`));
+  }
+
+  #fail(message: string): void {
+    this.#dead ??= message;
+    for (const cb of this.#wait.values()) cb({ ok: false, error: { kind: 'driver', message } });
+    this.#wait.clear();
   }
 
   request(req: DriverRequest): Promise<DriverResponse> {
+    if (this.#dead) return Promise.resolve({ ok: false, error: { kind: 'driver', message: this.#dead } });
     const id = ++this.#n;
     return new Promise((resolve) => {
-      this.#wait.set(id, resolve);
+      const t = setTimeout(() => {
+        this.#wait.delete(id);
+        resolve({ id, ok: false, error: { kind: 'driver', message: `driver did not answer ${req.op} within ${this.#timeoutMs} ms` } });
+      }, this.#timeoutMs);
+      this.#wait.set(id, (r) => {
+        clearTimeout(t);
+        resolve(r);
+      });
       this.#p.stdin.write(`${JSON.stringify({ ...req, id })}\n`);
     });
   }
 
   stop(): Promise<void> {
-    if (this.#p.exitCode !== null) return Promise.resolve();
+    if (this.#p.exitCode !== null || this.#p.signalCode !== null || this.#p.pid === undefined) return Promise.resolve();
     return new Promise((res) => {
-      this.#p.once('exit', () => res());
+      const t = setTimeout(() => this.#p.kill('SIGKILL'), 5000);
+      this.#p.once('exit', () => {
+        clearTimeout(t);
+        res();
+      });
       this.#p.stdin.end();
     });
   }

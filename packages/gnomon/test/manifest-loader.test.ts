@@ -194,6 +194,17 @@ describe('#manifest-loader: manifest:v1 validation (§4.3, §12)', () => {
     expect(refusalOf(() => validateManifest(bad, { tier: 'local' })).manifestCode).toBe('SCHEMA');
   });
 
+  it('Aegis M2: C0/ESC/C1 controls in mcp, hooks and commands strings are refused SCHEMA (they would reach install cards)', () => {
+    for (const provides of [
+      { mcp: [{ name: 'x', command: 'run\u001b]0;hidden\u0007', args: [] }] },
+      { mcp: [{ name: 'x', command: 'run', args: ['a\u009db\u009c'] }] },
+      { hooks: [{ event: 'Stop', command: 'echo\u009d hidden\u009c' }] },
+      { commands: [{ id: 'lens.go', title: 'Go\u001b[2J' }] },
+    ]) {
+      expect(refusalOf(() => validateManifest(baseManifest({ provides }), { tier: 'local' })).manifestCode).toBe('SCHEMA');
+    }
+  });
+
   it('mod fields: effects, append-only card/status slots, modns events, reserved keys, command-bound keybindings', () => {
     const p = baseManifest().provides!;
     const cases: Array<[unknown, string]> = [

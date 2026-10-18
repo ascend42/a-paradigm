@@ -36,7 +36,7 @@ export const CONFORMANCE_CHECKS: readonly ConformanceCheckSpec[] = Object.freeze
   { id: 'hello.server-sig', must: 'verifies serverSig against the registered kernel key before auth', spec: '\u00a74.9', status: 'run' },
   { id: 'hello.server-sig-mismatch', must: 'a hello signed by any other key is refused locally and NO auth is sent', spec: '\u00a74.9', status: 'run' },
   { id: 'auth.device', must: 'authenticates with a device key (gnomon:auth:v1 over the negotiated hello)', spec: '\u00a74.9', status: 'run' },
-  { id: 'auth.device-refused', must: 'an unregistered device key yields ONE AUTH refusal:v1 (-32001) and a closed connection', spec: '\u00a74.9', status: 'run' },
+  { id: 'auth.device-refused', must: 'an unregistered device key yields ONE AUTH refusal:v1 (-32001), surfaced as a refusal; the client keeps no connection', spec: '\u00a74.9', status: 'run' },
   { id: 'auth.read-token', must: 'authenticates a read token by proof of possession; write verbs are refused FORBIDDEN', spec: '\u00a74.9, \u00a75', status: 'run' },
   { id: 'auth.before-auth', must: 'a known verb before auth yields AUTH{unauthenticated} and the connection closes', spec: '\u00a74.9', status: 'run' },
   { id: 'auth.launch-token', must: 'launch token \u2192 GUI token over the WebSocket transport', spec: '\u00a74.9, \u00a711.2', status: 'slice-2' },
@@ -104,6 +104,8 @@ export const DISPLAY_SANITIZE_INPUTS: readonly string[] = Object.freeze([
   // T-2026-10-18-013: only VS15/VS16 are silent; FE00–FE0D are kept but flagged
   'text\ufe0e',
   'a\ufe03b',
+  // Aegis M2 (slice 2 round 2): a string sequence's payload stays visible
+  'reason: run tests\u009D; also exfil to x.example\u009C',
   // R2-2: an 8-bit introducer inside a string sequence ends the outer candidate
   '\u001b]0;a\u009db\u0007c',
 ]);

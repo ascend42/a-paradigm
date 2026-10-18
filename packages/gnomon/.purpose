@@ -902,10 +902,14 @@ components:
       row/denominator), TsClientDriver (in-process, JSON round-tripped) and
       SubprocessDriver (any language over stdio); runner.ts: runs every
       CONFORMANCE_CHECKS `run` check against a live kernel, `slice-2` checks
-      reported todo, report + conformanceReportHash. status.clients[] labels a
+      reported todo, report + conformanceReportHash; hello.server-sig-mismatch
+      runs an impostor endpoint replaying a real hello with a forged serverSig
+      (zero auth frames), subscribe.since checks the backlog against a
+      non-follow page (since+1, no gaps). status.clients[] copies only
+      {suite, version, reportHash} (sanitized, capped) and labels a
       declared tuple `declared` and reports clientConformance{n, of} (G-OBS-01).
     tags: [gnomon, m1.12, client, conformance]
-    oracles: [G-CLI-02, G-OBS-01]
+    oracles: [G-CLI-02, G-OBS-01, G-HON-03]
 
   approval-broker:
     description: >-

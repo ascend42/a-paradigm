@@ -26,6 +26,11 @@ import {
   type ConformanceCheckResult,
   type ConformanceReport,
 } from '@a-company/gnomon-contracts';
+import { randomBytes } from 'node:crypto';
+import { mkdtempSync, rmSync } from 'node:fs';
+import * as net from 'node:net';
+import { tmpdir } from 'node:os';
+import path from 'node:path';
 import type { Driver, DriverResponse } from './driver.js';
 
 export interface DeviceCredentialWire {
@@ -51,6 +56,45 @@ export interface ConformanceFixture {
 
 export interface RunOptions {
   client: { name: string; version: string; language?: string };
+}
+
+/** A fake endpoint that answers hello with `hello` (a real one, re-signed by nobody) and counts auth frames. */
+async function impostor(hello: Record<string, unknown>): Promise<{ path: string; authFrames: () => number; close: () => Promise<void> }> {
+  const dir = mkdtempSync(path.join(tmpdir(), 'gimp-'));
+  const sockPath = path.join(dir, 's');
+  let auths = 0;
+  const forged = { ...hello, serverSig: randomBytes(64).toString('base64') };
+  const server = net.createServer((sock) => {
+    let buf = '';
+    sock.on('error', () => undefined);
+    sock.on('data', (chunk) => {
+      buf += chunk.toString('utf8');
+      let nl: number;
+      while ((nl = buf.indexOf('\n')) >= 0) {
+        const line = buf.slice(0, nl);
+        buf = buf.slice(nl + 1);
+        try {
+          const f = JSON.parse(line) as { id: number; method: string };
+          if (f.method === 'auth') auths++;
+          if (f.method === 'hello') sock.write(`${JSON.stringify({ jsonrpc: '2.0', rpc: 'gnomon-rpc:v1', id: f.id, result: forged })}\n`);
+        } catch {
+          /* ignored */
+        }
+      }
+    });
+  });
+  await new Promise<void>((res) => server.listen(sockPath, res));
+  return {
+    path: sockPath,
+    authFrames: () => auths,
+    close: () =>
+      new Promise<void>((res) => {
+        server.close(() => {
+          rmSync(dir, { recursive: true, force: true });
+          res();
+        });
+      }),
+  };
 }
 
 class CheckFailed extends Error {}
@@ -91,11 +135,28 @@ const CHECKS: Record<string, Check> = {
     await d.request({ op: 'close', conn: r.conn });
   },
   async 'hello.server-sig-mismatch'(d, f, c) {
+    // (a) a pin naming the kernel's keyId but another key's PEM: a keyId-only client would trust it
     const before = await f.authRows();
-    const r = await connect(d, f, c, { kernelKey: f.otherKey, credential: f.device });
-    must(!r.ok && r.error?.kind === 'client', `a hello signed by another key was not refused locally: ${JSON.stringify(r.error ?? 'connected')}`);
+    const a = await connect(d, f, c, { kernelKey: { keyId: f.kernelKey.keyId, publicKeyPem: f.otherKey.publicKeyPem }, credential: f.device });
+    must(!a.ok && a.error?.kind === 'client', `a pin whose PEM is not the kernel's was trusted: ${JSON.stringify(a.error ?? 'connected')}`);
+    // (b) another key altogether
+    const b = await connect(d, f, c, { kernelKey: f.otherKey, credential: f.device });
+    must(!b.ok && b.error?.kind === 'client', `a hello signed by another key was not refused locally: ${JSON.stringify(b.error ?? 'connected')}`);
     await new Promise((res) => setTimeout(res, 50));
     must((await f.authRows()) === before, 'an auth was sent to an unverified server');
+    // (c) an impostor that replays a REAL hello (the kernel's keyId) with a forged serverSig: zero auth frames
+    const real = await connect(d, f, c, { kernelKey: f.kernelKey });
+    must(real.ok, 'hello failed');
+    await d.request({ op: 'close', conn: real.conn });
+    const fake = await impostor(real.hello as Record<string, unknown>);
+    try {
+      const r = await d.request({ op: 'connect', socketPath: fake.path, endpointPath: f.endpointPath ?? f.socketPath, client: CLIENT_INFO(c), kernelKey: f.kernelKey, credential: f.device });
+      await new Promise((res) => setTimeout(res, 50));
+      must(!r.ok && r.error?.kind === 'client', `a forged serverSig was accepted: ${JSON.stringify(r.error ?? 'connected')}`);
+      must(fake.authFrames() === 0, `${fake.authFrames()} auth frame(s) reached an impostor`);
+    } finally {
+      await fake.close();
+    }
   },
   async 'auth.device'(d, f, c) {
     const r = await connect(d, f, c, { kernelKey: f.kernelKey, credential: f.device });
@@ -140,19 +201,25 @@ const CHECKS: Record<string, Check> = {
   },
   async 'subscribe.since'(d, f, c) {
     const conn = await authed(d, f, c);
-    const page = await d.request({ op: 'call', conn, method: 'log.read', params: { limit: 1 } });
-    must(page.ok, `log.read page refused: ${JSON.stringify(page.error)}`);
-    const head = Number((page.result as { head: number }).head);
-    const since = Math.max(0, head - 3);
+    const probe = await d.request({ op: 'call', conn, method: 'log.read', params: { limit: 1 } });
+    must(probe.ok, `log.read page refused: ${JSON.stringify(probe.error)}`);
+    const since = Math.max(0, Number((probe.result as { head: number }).head) - 4);
+    // the oracle: a non-follow page from the same since names exactly the backlog the subscription must deliver
+    const page = await d.request({ op: 'call', conn, method: 'log.read', params: { since, limit: 1000 } });
+    must(page.ok, 'log.read page refused');
+    const pr = page.result as { rows: Array<{ seq: number }>; head: number };
+    const expected = pr.rows.map((x) => x.seq);
+    must(expected.length > 0 && expected[0] === since + 1, `the oracle page does not start at since+1: ${expected.join(',')}`);
     const sub = await d.request({ op: 'subscribe', conn, params: { since } });
     must(sub.ok, `subscribe refused: ${JSON.stringify(sub.error)}`);
-    // a second client connecting makes live rows (socket.hello / socket.auth.ok)
-    const other = await authed(d, f, c);
-    const ev = await d.request({ op: 'events', conn, subscription: (sub.result as { subscription: string }).subscription, n: head - since + 1, timeoutMs: 3000 });
+    const other = await authed(d, f, c); // a second client makes live rows
+    const ev = await d.request({ op: 'events', conn, subscription: (sub.result as { subscription: string }).subscription, n: expected.length + 1, timeoutMs: 3000 });
     const seqs = ((ev.rows ?? []) as Array<{ seq: number }>).map((x) => x.seq);
-    must(seqs.length > 0 && seqs[0]! > since, `no backlog after since=${since}`);
-    must(seqs.every((s, i) => i === 0 || s > seqs[i - 1]!), `rows out of seq order: ${seqs.join(',')}`);
-    must(seqs.some((s) => s > head), 'no live row arrived after the backlog');
+    const backlog = seqs.filter((x) => x <= pr.head);
+    must(canonicalJson(backlog) === canonicalJson(expected.filter((x) => x <= pr.head)), `backlog ${backlog.join(',')} != page ${expected.join(',')}`);
+    must(seqs[0] === since + 1, `first row ${seqs[0]} is not since+1 (${since + 1})`);
+    must(seqs.every((x, i) => i === 0 || x === seqs[i - 1]! + 1), `rows out of order or with gaps: ${seqs.join(',')}`);
+    must(seqs.some((x) => x > pr.head), 'no live row arrived after the backlog');
     await d.request({ op: 'close', conn: other });
     await d.request({ op: 'close', conn });
   },

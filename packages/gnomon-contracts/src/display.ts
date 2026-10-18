@@ -12,13 +12,18 @@
  * THE RULES (§4.5, Aegis round 2), applied in this order. No Unicode
  * normalisation (no NFC/NFKC) is applied, ever.
  *   0. lone surrogates become U+FFFD (visible, no flag);
- *   1. TERMINATED terminal escape sequences are removed whole and flag
- *      `hidden-chars`: OSC / DCS / SOS / PM / APC (7-bit ESC-introduced or
- *      8-bit C1), terminated by BEL, ESC \ or 8-bit ST (U+009C), the body
+ *   1. TERMINATED terminal escape sequences flag `hidden-chars`. A STRING
+ *      sequence — OSC / DCS / SOS / PM / APC (7-bit ESC-introduced or
+ *      8-bit C1) — is NOT removed: its introducer and terminator become the
+ *      glyphs `⟨OSC⟩` `⟨DCS⟩` `⟨SOS⟩` `⟨PM⟩` `⟨APC⟩` … `⟨ST⟩` and its payload
+ *      stays VISIBLE between them (rules 2-4 apply to the payload), so
+ *      requester text never hides inside one (Aegis M2, M1.12 slice 2).
+ *      Terminated by BEL, ESC \ or 8-bit ST (U+009C), the body
  *      holding none of those three nor an 8-bit string
  *      introducer (U+0090, U+0098, U+009D-U+009F): linear, and an in-body
- *      introducer ends the outer candidate; CSI (7- or 8-bit) with its final byte;
- *      any other ESC sequence except a string or CSI introducer. An ESC that
+ *      introducer ends the outer candidate. REMOVED whole (they carry no
+ *      text): CSI (7- or 8-bit) with its final byte; any other ESC sequence
+ *      except a string or CSI introducer. An ESC that
  *      starts no terminated sequence (an UNTERMINATED one) becomes the visible
  *      glyph `⟨ESC⟩` (flag) and the tail stays visible — never swallowed;
  *   2. STRIPPED, flag `hidden-chars`: tag characters U+E0000–U+E007F,
@@ -37,7 +42,9 @@
  *      `bidi` (LRM/RLM in Arabic or Hebrew text therefore badge: accepted);
  *   4. every remaining C0/C1 control and DEL is removed, flag `hidden-chars`,
  *      except `\n` and `\t` (kept) and CR (removed without a flag: CRLF text).
- * Flags are reported in the fixed order [hidden-chars, bidi]. Idempotent.
+ * Flags are reported in the fixed order [hidden-chars, bidi]. The TEXT is
+ * idempotent; the flags are too, except that a kept U+FE00-U+FE0D re-flags
+ * hidden-chars on every pass.
  */
 
 import { opaqueEventView, isKnownKind, EVENT_KINDS, type EventV1 } from './event.js';
@@ -58,6 +65,21 @@ export const BIDI_GLYPHS: Readonly<Record<number, string>> = Object.freeze({
   0x200f: '\u27e8RLM\u27e9',
   0x061c: '\u27e8ALM\u27e9',
 });
+/** The glyph a terminated string sequence's introducer shows as (rule 1), keyed by its last code unit (7-bit final or 8-bit C1). */
+export const STRING_GLYPHS: Readonly<Record<number, string>> = Object.freeze({
+  0x5d: '⟨OSC⟩',
+  0x9d: '⟨OSC⟩',
+  0x50: '⟨DCS⟩',
+  0x90: '⟨DCS⟩',
+  0x58: '⟨SOS⟩',
+  0x98: '⟨SOS⟩',
+  0x5e: '⟨PM⟩',
+  0x9e: '⟨PM⟩',
+  0x5f: '⟨APC⟩',
+  0x9f: '⟨APC⟩',
+});
+/** What a string sequence's terminator (BEL, ESC \, 8-bit ST) shows as (rule 1). */
+export const ST_GLYPH = '⟨ST⟩';
 /** What an unterminated escape introducer shows as (rule 1). */
 export const ESC_GLYPH = '\u27e8ESC\u27e9';
 
@@ -80,7 +102,7 @@ const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[
 /* eslint-disable no-control-regex */
 const TERMINATED = new RegExp(
   [
-    '(?:\\x1B[\\]PX^_]|[\\x9D\\x90\\x98\\x9E\\x9F])[^\\x07\\x1B\\x9C\\x90\\x98\\x9D\\x9E\\x9F]*(?:\\x07|\\x1B\\\\|\\x9C)', // string sequences
+    '(\\x1B[\\]PX^_]|[\\x9D\\x90\\x98\\x9E\\x9F])([^\\x07\\x1B\\x9C\\x90\\x98\\x9D\\x9E\\x9F]*)(?:\\x07|\\x1B\\\\|\\x9C)', // string sequences: payload shown
     '(?:\\x1B\\[|\\x9B)[\\x30-\\x3F]*[\\x20-\\x2F]*[\\x40-\\x7E]', // CSI
     '\\x1B[\\x20-\\x2F]*[\\x30-\\x4F\\x51-\\x57\\x59\\x5A\\x5C\\x60-\\x7E]', // other ESC (never a string/CSI introducer)
   ].join('|'),
@@ -99,14 +121,16 @@ export interface SanitizedText {
   flags: CardFlag[];
 }
 
-/** Apply the \u00a74.5 rules to one string (see the header). Idempotent; no normalisation. */
+/** Apply the \u00a74.5 rules to one string (see the header). Text idempotent (a kept U+FE00-U+FE0D re-flags); no normalisation. */
 export function sanitizeDisplayText(input: string): SanitizedText {
   let hidden = false;
   let bidi = false;
   let s = String(input).replace(LONE_SURROGATE, '\ufffd');
-  s = s.replace(TERMINATED, () => {
+  s = s.replace(TERMINATED, (_m: string, intro: string | undefined, body: string | undefined) => {
     hidden = true;
-    return '';
+    // a string sequence's payload stays VISIBLE between glyphs (rules 2-4 still apply to it below);
+    // CSI and other ESC sequences carry no text and are removed
+    return intro === undefined ? '' : `${STRING_GLYPHS[intro.charCodeAt(intro.length - 1)]}${body ?? ''}${ST_GLYPH}`;
   });
   let out = '';
   let last: string | undefined; // last emitted code point
