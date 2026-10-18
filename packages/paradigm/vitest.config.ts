@@ -12,6 +12,8 @@ export default defineConfig({
       'platform-ui/src/sections/docs/renderMarkdown.test.ts',
       // Brain section plain-language labels (React-free).
       'platform-ui/src/sections/brain/**/*.test.ts',
+      // Sentinel incident triage copy and rules (React-free).
+      'platform-ui/src/sections/sentinel/**/*.test.ts',
     ],
   },
 });
