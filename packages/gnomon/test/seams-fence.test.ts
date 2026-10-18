@@ -21,7 +21,7 @@ import { extractSpecifiers, PKG_ROOT, rel, walk } from './helpers.js';
 const SRC = path.join(PKG_ROOT, 'src');
 const TEST_ENTRY = 'src/kernel/testing.ts';
 const CHANNEL = 'src/kernel/internal-seams.ts';
-const CHANNEL_IMPORTERS = ['src/kernel/identity/presence.ts', 'src/kernel/log/kernel-log.ts', TEST_ENTRY];
+const CHANNEL_IMPORTERS = ['src/kernel/identity/presence.ts', 'src/kernel/log/kernel-log.ts', 'src/kernel/log/quarantine.ts', TEST_ENTRY];
 /** Files that may name the gated recovery API in code (the implementation, the channel, the test entry). */
 const MAY_NAME_RECOVERY = new Set(['src/kernel/log/kernel-log.ts', CHANNEL, TEST_ENTRY]);
 const GATED = /\b(acknowledgeGap|openForRecovery|openKernelLogForRecovery|seamsOf|mintTestPresence)\b/;

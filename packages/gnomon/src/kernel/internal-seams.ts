@@ -11,7 +11,7 @@
  * (src/kernel/testing.ts).
  *
  * WHO MAY IMPORT THIS FILE (test/seams-fence.test.ts proves it on the source
- * import graph): kernel-log.ts and identity/presence.ts (to register) and
+ * import graph): kernel-log.ts, log/quarantine.ts and identity/presence.ts (to register) and
  * testing.ts (to read). Nothing reachable from a production entry (the
  * package index, the gnomon / gnomond CLIs, gnomon-web) imports testing.ts,
  * and no index re-exports this file, so production code cannot open a log
@@ -25,6 +25,7 @@
 import type { AnchorStore } from './log/anchor.js';
 import type { AppendResult, KernelLog, KernelLogOptions } from './log/kernel-log.js';
 import type { PresenceMethod, PresencePurpose, PresenceToken } from './identity/presence.js';
+import type { QuarantineOptions, QuarantineReport, QuarantineStep } from './log/quarantine.js';
 
 /** The #kernel-log options that are test seams only (never on KernelLogOptions). */
 export interface KernelLogSeamOptions {
@@ -47,9 +48,15 @@ export interface PresenceSeams {
   mint(purpose: PresencePurpose, opts?: { method?: PresenceMethod; mintedAt?: number }): PresenceToken;
 }
 
+export interface QuarantineSeams {
+  /** `quarantineLog` with a hook after each crash point (tests inject a crash by throwing). */
+  quarantineWithSteps(opts: QuarantineOptions, onStep: (step: QuarantineStep, at: { staging?: string; evidence?: string }) => void): Promise<QuarantineReport>;
+}
+
 interface Slots {
   log?: KernelLogSeams;
   presence?: PresenceSeams;
+  quarantine?: QuarantineSeams;
 }
 
 const slots: Slots = {};

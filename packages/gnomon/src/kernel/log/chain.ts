@@ -61,7 +61,7 @@ export const SIG_MANDATORY_NAMESPACES = [
  * signature on a gap / segment / lag / anchor-failure / socket-theft row would
  * otherwise pass verify as a "diagnostic".
  */
-export const SIG_MANDATORY_KINDS = ['oracle.result', 'daemon.log.gap', 'daemon.segment', 'daemon.anchor.lag', 'daemon.anchor.failed', 'socket.auth.theft'] as const;
+export const SIG_MANDATORY_KINDS = ['oracle.result', 'daemon.log.gap', 'daemon.log.quarantined', 'daemon.segment', 'daemon.anchor.lag', 'daemon.anchor.failed', 'socket.auth.theft'] as const;
 /** Diagnostics that MAY be unsigned (§3.2): the ONLY unsigned rows the log accepts. */
 export const DIAGNOSTIC_NAMESPACES = ['daemon', 'socket', 'schedule'] as const;
 
@@ -155,7 +155,15 @@ export type LogRefusalReason =
   /* S34-02 anchor-fault state */
   | 'anchor-faulted'
   /* S34-22 keyless (non-rotating, diagnostic-only) logs */
-  | 'kernel-key-required';
+  | 'kernel-key-required'
+  /* T-2026-10-17-009(a) `gnomon log quarantine` (in-process / CLI only, never on the wire) */
+  | 'not-genesis'
+  | 'not-a-home'
+  | 'nothing-to-quarantine'
+  | 'daemon-running'
+  | 'quarantine-pending'
+  | 'not-interactive'
+  | 'not-confirmed';
 
 /** A refusal:v1 thrown by the log; `reason` is also in `refusal.data.reason`. */
 export class LogRefusal extends RefusedError {

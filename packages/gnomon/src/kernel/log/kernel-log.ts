@@ -637,6 +637,33 @@ export class KernelLog {
     return new KernelLog(CONSTRUCT_KEY, opts);
   }
 
+  /**
+   * T-2026-10-17-009(a) — the successor log of a quarantined home. `opts.home`
+   * must hold NO log (no db, no anchor, no segment): the log is created and
+   * its genesis row (seq 1) is the kernel-signed reserved
+   * `daemon.log.quarantined{quarantinedLog, quarantinedHead, evidencePath,
+   * authorizedBy}`, then both anchors are written durably. This is the ONLY
+   * way that kind is appended (append() refuses it as reserved, and verify
+   * flags it anywhere but seq 1), so it can never be appended to, or
+   * downgrade, an existing log. Refused: an existing log
+   * (BAD_REQUEST{not-genesis}); no kernel key (FORBIDDEN{kernel-key-required}).
+   * The caller (quarantine.ts) closes the returned log.
+   */
+  static async createQuarantineSuccessor(opts: KernelLogOptions, payload: QuarantinedPayload): Promise<KernelLog> {
+    if (!opts.signer) throw keyRequired(QUARANTINE_GENESIS_KIND, 'the quarantine successor genesis must be signed');
+    const log = new KernelLog(CONSTRUCT_KEY, opts);
+    if (!log.report.created || log.#tip.seq !== 0) {
+      await log.close();
+      throw logRefusal('BAD_REQUEST', 'not-genesis', 'a quarantine successor is created only in an empty home: daemon.log.quarantined is a genesis row', { home: opts.home });
+    }
+    if (!log.#readyDone) await log.#ready.catch(() => undefined);
+    log.#appendRow({ kind: QUARANTINE_GENESIS_KIND, principal: opts.kernelPrincipal, payload: { ...payload, quarantinedHead: { ...payload.quarantinedHead } } });
+    log.#noteForced(true);
+    log.#counts.forcedAnchors++;
+    await log.#writeAnchorsDurable();
+    return log;
+  }
+
   /*
    * INTERNAL SEAMS (T-2026-10-17-009(c), Aegis S34-10): the keystore-anchor
    * and boot-session overrides, the S33-10 recovery open and the gap
@@ -1881,7 +1908,19 @@ export class KernelLog {
 }
 
 /** Kinds only the log itself appends (rotation, open, recovery, anchor faults); verify binds them to the kernel identity (S34-18). */
-export const RESERVED_KINDS: readonly string[] = Object.freeze(['daemon.segment', 'daemon.log.gap', 'daemon.anchor.lag', 'daemon.anchor.failed']);
+export const RESERVED_KINDS: readonly string[] = Object.freeze(['daemon.segment', 'daemon.log.gap', 'daemon.anchor.lag', 'daemon.anchor.failed', 'daemon.log.quarantined']);
+
+/** T-2026-10-17-009(a): the reserved kind that may only be a log's GENESIS row (seq 1): the successor of a quarantined home. */
+export const QUARANTINE_GENESIS_KIND = 'daemon.log.quarantined' as const;
+
+/** daemon.log.quarantined payload (contracts RESERVED_KIND_PAYLOADS, P8-D89). `evidencePath` is a sensitive field label. */
+export interface QuarantinedPayload {
+  quarantinedLog: string;
+  quarantinedHead: { seq: number; hash: string; segment: number };
+  evidencePath: string;
+  /** How the human was proved: `interactive-confirm` (a TTY confirmation) until presence lands (M1.3). */
+  authorizedBy: 'interactive-confirm';
+}
 
 /** S34-22: a kernel row is needed but the log has no kernel key (keyless logs are non-rotating, diagnostic-only). */
 function keyRequired(kind: string, why: string) {
@@ -2081,6 +2120,7 @@ function verifyRows(
       else if (kernel && RESERVED_KINDS.includes(r.kind) && (r.principal !== kernel.principal || !kernel.keyIds.has(keyId))) {
         bad('reserved-binding', r.seq, `${r.kind} must be appended by the kernel principal with a kernel key`);
       }
+      if (r.kind === QUARANTINE_GENESIS_KIND && (r.seq !== 1 || meta.segment !== 1)) bad('reserved-binding', r.seq, `${r.kind} is only ever a log's genesis row (seq 1)`);
     } else if (!mayBeUnsigned(r.kind)) bad('unsigned', r.seq, `${r.kind} row is unsigned`); // mayBeUnsigned excludes the sig-mandatory kinds
     prev = r.hash;
   }

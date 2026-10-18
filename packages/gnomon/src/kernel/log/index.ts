@@ -10,3 +10,4 @@ export * from './anchor-policy.js';
 export * from './boot.js';
 export * from './redaction.js';
 export * from './kernel-log.js';
+export * from './quarantine.js';

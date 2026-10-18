@@ -538,7 +538,29 @@ components:
       the test entry; no src/cli or $daemon-lifecycle file (nor any other src
       file but the owners) names acknowledgeGap / openForRecovery; dist/
       carries no test-entry marker and its KernelLog / KernelLogOptions types
-      expose no seam. `npm run
+      expose no seam.
+      QUARANTINE (T-2026-10-17-009(a), P8-D89, quarantine.ts + src/cli/log-cli.ts):
+      `gnomon log quarantine [--home]` moves the whole home aside intact to the
+      sibling <home>.quarantine-<YYYYMMDDTHHMMSSZ>-<hex> (Windows-safe name)
+      and installs a new home whose log's genesis (seq 1) is the reserved,
+      kernel-signed daemon.log.quarantined{quarantinedLog,
+      quarantinedHead{seq, hash, segment}, evidencePath, authorizedBy}
+      (KernelLog.createQuarantineSuccessor is the only writer; append refuses
+      it; verify flags it anywhere but seq 1 and binds it to the kernel key).
+      Identity read without writing (db `immutable=1` when no -wal; else the
+      newest sealed segment, else the file anchor). Crash-safe: build in
+      <evidence>.new, journal, rename home→evidence, rename staging→home;
+      completePendingQuarantine (run by every quarantine and by startDaemon
+      before it creates a home) finishes an interrupted install; abandoned
+      staging is reported, never deleted. Refuses daemon-running (pidfile; the
+      CLI also probes the socket), not-a-home, nothing-to-quarantine,
+      quarantine-pending, kernel-key-required. RESIDUALS: the human gate is an
+      interactive TTY + typed last 8 chars of the log id
+      (authorizedBy 'interactive-confirm') until presence lands at M1.3 — a
+      same-user process owning a terminal can pass it; at M1.3 the keystore
+      anchor item must move with the evidence; the CLI signs the genesis with
+      an ephemeral key under p:00000000/kernel (a provisioned root ns differs).
+      `npm run
       test:perf` = scripts/test-perf.mjs (cmd.exe-safe; --passWithNoTests on
       win32 only, a missing perf file fails loudly elsewhere).
     path: src/kernel/log/
@@ -554,6 +576,8 @@ components:
       - test/boot-session.test.ts
       - test/durable-fs.test.ts
       - test/seams-fence.test.ts
+      - test/kernel-log-quarantine.test.ts
+      - test/log-cli.test.ts
     oracles: [G-LOG-01, G-LOG-02, G-LOG-03, G-LOG-04, G-LOG-06, G-LOG-07, G-LOG-08, G-LOG-09, G-LOG-10, G-LOG-11]
 
 flows:

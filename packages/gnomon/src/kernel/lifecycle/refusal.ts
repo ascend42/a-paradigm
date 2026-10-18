@@ -13,7 +13,8 @@ export type LifecycleRefusalReason =
   | 'unsafe-home'
   | 'no-safe-endpoint'
   | 'endpoint-busy'
-  | 'endpoint-acl';
+  | 'endpoint-acl'
+  | 'quarantine-pending';
 
 export class LifecycleRefusal extends Error {
   readonly reason: LifecycleRefusalReason;
