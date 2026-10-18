@@ -1,0 +1,19 @@
+id: L-2026-10-18-builder-203217-002
+type: milestone
+timestamp: '2026-10-18T20:32:17.531Z'
+author: builder
+title: 'M1.7 slice 2: session read-deny, log confidentiality, audited repo hooks'
+summary: Sessions cannot read the Gnomon home (keys, kernel.db, segments, sibling sessions) except their own dir and exec'd copy; session readers never see voice audioRef; whose-hooks switch with audited (P8-D94) as default. Commits 591acfc4, 4b90cb16, 0ae7a13d, 9a7f16e6.
+symbols_touched:
+  - '#session-runner'
+  - '#supervisor'
+  - '#claude-adapter'
+  - '#kernel-log'
+commit: 9a7f16e6
+tags:
+  - gnomon
+  - m1.7
+git_context:
+  ref: 9a7f16e64c0f0b19341881f2d43dd7471e53f1d4
+  branch: gnomon/m17-slice2
+  dirty: true
