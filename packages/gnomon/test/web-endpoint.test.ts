@@ -41,13 +41,16 @@ interface Row {
 }
 const HUMAN = { connId: 'conn:01JTESTASKER0000000000000', phase: 'authenticated' as const, credential: 'device' as const, principalKind: 'human' as const, principal: 'p:00000000/founder', deviceId: 'dev:00000000/mac-1' };
 
-async function rig(o: { handoffAckMs?: number; lingerMs?: number; authDeadlineMs?: number; maxConnections?: number; blobs?: BlobSource; bundle?: { dir: string; hash: string }; now?: { t: number }; launcher?: WebEndpointSeams['launcher']; mods?: ModRelayPort } = {}) {
+async function rig(o: { logDelay?: { kind: string; ms: number }; handoffAckMs?: number; lingerMs?: number; authDeadlineMs?: number; maxConnections?: number; blobs?: BlobSource; bundle?: { dir: string; hash: string }; now?: { t: number }; launcher?: WebEndpointSeams['launcher']; mods?: ModRelayPort } = {}) {
   const t = tempHome('gw-');
   cleanups.push(t.cleanup);
   mkdirSync(t.home, { recursive: true, mode: 0o700 });
   const kernel = SoftwareEd25519Signer.generate('kernel');
   const rows: Row[] = [];
-  const log = async (kind: string, payload: Record<string, unknown>, ids: Row['ids'] = {}) => void rows.push({ kind, payload, ids });
+  const log = async (kind: string, payload: Record<string, unknown>, ids: Row['ids'] = {}) => {
+    if (o.logDelay?.kind === kind) await sleep(o.logDelay.ms); // a slow log write (the exit-log race, round 3)
+    rows.push({ kind, payload, ids });
+  };
   const trust = new UnprovisionedRootAuthority();
   let ep!: WebEndpoint;
   ep = createWebEndpointForTest(
@@ -544,7 +547,7 @@ process.stdin.once('data', () => {
   ready();
   if (mode === 'user-msg') setTimeout(() => process.send('hi'), 50);
   if (mode === 'internal-msg') setTimeout(() => process.send({ cmd: 'NODE_EVIL' }), 50);
-  if (mode === 'stall') setTimeout(() => { const e = Date.now() + 20000; while (Date.now() < e); }, 50);
+  if (mode === 'stall') setImmediate(() => { const e = Date.now() + 30000; while (Date.now() < e); });
 });
 process.stdin.on('end', () => { if (mode !== 'late-ready' || n === 0) process.exit(0); });
 `;
@@ -598,9 +601,13 @@ process.stdin.on('end', () => { if (mode !== 'late-ready' || n === 0) process.ex
     const { ep, rows } = await fakeRig('stall', { handoffAckMs: 300 });
     await ep.ensureListening();
     const pid = ep.childPid()!;
-    await sleep(150); // the child is now busy and reads no IPC: no ACK
-    void dial(ep.port);
-    await until(() => exited(rows) >= 1);
+    // keep dialing until the watchdog fires: on a slow runner the first hand-off may land before the busy loop
+    const end = Date.now() + 15_000;
+    while (exited(rows) === 0 && Date.now() < end) {
+      void dial(ep.port);
+      await sleep(200);
+    }
+    expect(exited(rows)).toBeGreaterThanOrEqual(1);
     expect(() => process.kill(pid, 0)).toThrow();
   });
 
@@ -663,5 +670,58 @@ process.stdin.on('end', () => { if (mode !== 'late-ready' || n === 0) process.ex
     expect(rows.filter((r) => r.kind === 'socket.web.stop')).toHaveLength(1);
     expect(rows.filter((r) => r.kind === 'socket.web.listen')).toHaveLength(1); // the first start only
     expect(() => process.kill(respawned!, 0)).toThrow();
+  });
+});
+
+describe('round 3: unsolicited ACKs and a stop() during the exit-log write (T-2026-10-18-020)', () => {
+  const FAKE = `const [hash, mode] = process.argv.slice(2);
+const ready = () => process.stdout.write(JSON.stringify({ t: 'ready', bundleHash: hash, files: 1 }) + '\\n');
+process.on('message', (m, s) => {
+  if (m !== 'conn' || !s) return;
+  s.end('HTTP/1.0 200 OK\\r\\nContent-Length: 2\\r\\n\\r\\nok');
+  if (mode === 'ack-double') setTimeout(() => process.send({ cmd: 'NODE_HANDLE_ACK' }), 20); // one more ACK than hand-offs
+});
+process.stdin.once('data', () => {
+  ready();
+  if (mode === 'ack-unsolicited') setTimeout(() => process.send({ cmd: 'NODE_HANDLE_ACK' }), 50); // nothing in flight
+});
+process.stdin.on('end', () => process.exit(0));
+`;
+  async function fakeRig(mode: string, extra: { logDelay?: { kind: string; ms: number } } = {}) {
+    const t = tempHome('gu-');
+    cleanups.push(t.cleanup);
+    mkdirSync(t.home, { recursive: true, mode: 0o700 });
+    const fake = path.join(t.home, 'fake-ack.cjs');
+    writeFileSync(fake, FAKE);
+    return rig({ ...extra, launcher: (input) => ({ ...unsandboxedLauncher({ ...input, scriptPath: fake }), args: [fake, GUI_BUNDLE_HASH, mode] }) });
+  }
+  const exited = (rows: Row[]) => rows.filter((r) => r.kind === 'socket.web.transport.exited').length;
+  const get = (port: number) => rawHttp(port, 'GET', '/', GOOD(port));
+
+  it.each(['ack-unsolicited', 'ack-double'])('%s: the kernel survives (no ERR_INTERNAL_ASSERTION) and the child is killed', async (mode) => {
+    const { ep, rows } = await fakeRig(mode);
+    await ep.ensureListening();
+    const pid = ep.childPid()!;
+    if (mode === 'ack-double') expect((await get(ep.port)).body.toString()).toBe('ok');
+    await until(() => exited(rows) >= 1);
+    expect(() => process.kill(pid, 0)).toThrow();
+    // the kernel is alive and supervising: the child was restarted and the same port serves
+    await until(() => ep.listening && ep.childPid() !== pid, 10_000);
+    expect(rows.find((r) => r.kind === 'socket.web.transport.exited')?.payload).toMatchObject({ signal: 'SIGKILL' });
+  });
+
+  it('a stop() while the exit-log row is being written cancels the respawn and is recorded', async () => {
+    const { ep, rows } = await fakeRig('normal', { logDelay: { kind: 'socket.web.transport.exited', ms: 500 } });
+    await ep.ensureListening();
+    process.kill(ep.childPid()!, 'SIGKILL');
+    await until(() => ep.childPid() === null); // #onChildExit is now awaiting the slow exit-log write
+    await ep.stop('test');
+    await sleep(1500);
+    expect(exited(rows)).toBe(1);
+    expect(ep.listening).toBe(false);
+    expect(ep.childPid()).toBeNull();
+    expect(ep.listenAddress()).toBeNull();
+    expect(rows.filter((r) => r.kind === 'socket.web.listen')).toHaveLength(1);
+    expect(rows.filter((r) => r.kind === 'socket.web.stop').map((r) => r.payload)).toEqual([{ reason: 'test' }]);
   });
 });

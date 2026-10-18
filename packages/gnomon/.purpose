@@ -328,7 +328,13 @@ components:
       ACK watchdog (handoffAckMs, default 5 s, ACKs seen via the undocumented
       'internalMessage' NODE_HANDLE_ACK, FIFO) SIGKILLs a stalled child;
       any user IPC message and any internal one but NODE_HANDLE_ACK kills the
-      child and closes an attached handle. Residual: Node's fd-3 JSON-line
+      child and closes an attached handle; an UNSOLICITED NODE_HANDLE_ACK
+      (none in flight, or one more than sent) would make Node's own handler
+      throw ERR_INTERNAL_ASSERTION in the daemon, so a prependListener
+      (relies on the Node internal _handleQueue) gives Node an empty queue
+      and kills the child (round 3); a failed send forgets its watchdog
+      entry; a stop() during the exit-log write cancels the respawn and
+      writes its stop row. Residual: Node's fd-3 JSON-line
       reader is unbounded (DoS-only, §A.7). A start that began before a
       stop() (stop generation counter) kills its child and never listens or
       writes a second socket.web.stop row; listenAddress() exposes the bound

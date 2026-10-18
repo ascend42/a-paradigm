@@ -225,6 +225,8 @@ export class WebEndpoint {
   #unacked: Array<{ socket: net.Socket; timer: NodeJS.Timeout }> = [];
   /** Bumped by every stop(): a start that began before it must not open the endpoint after it. */
   #stops = 0;
+  /** >0 while #onChildExit awaits its exit-log row (a stop() then must cancel the respawn). */
+  #exiting = 0;
   #port = 0;
   #dispatcher: KernelDispatcher | null = null;
   #state: 'stopped' | 'starting' | 'listening' = 'stopped';
@@ -335,12 +337,17 @@ export class WebEndpoint {
   /** Stop the endpoint and end its child (daemon exit, linger expiry). */
   async stop(reason: string): Promise<void> {
     if (this.#state === 'stopped' && !this.#child) {
-      // already down (restart cap, failed respawn): never leave a timer behind
+      // already down (restart cap, failed respawn) or between a child's exit and its respawn: never leave a timer
+      // behind, and make the pending respawn see the stop (it checks #stops after its exit-log await)
+      this.#stops++;
+      const wasRestarting = this.#exiting > 0 && this.#stopReason === null;
+      this.#stopReason = reason;
       this.#closeListener();
       if (this.#sweep) clearInterval(this.#sweep);
       if (this.#linger) clearTimeout(this.#linger);
       this.#sweep = null;
       this.#linger = null;
+      if (wasRestarting) await this.#o.log('socket.web.stop', { reason }).catch(() => undefined);
       return;
     }
     this.#stops++;
@@ -404,13 +411,21 @@ export class WebEndpoint {
       if (this.#child === child) child.kill('SIGKILL');
     }, this.#o.handoffAckMs ?? WEB_HANDOFF_ACK_MS);
     timer.unref();
-    this.#unacked.push({ socket, timer });
+    const entry = { socket, timer };
+    this.#unacked.push(entry);
+    // a send that failed will never be ACKed: forget it, so its timer cannot later kill a healthy child (Aegis R2-2)
+    const failed = (): void => {
+      const i = this.#unacked.indexOf(entry);
+      if (i !== -1) this.#unacked.splice(i, 1);
+      clearTimeout(timer);
+      socket.destroy();
+    };
     try {
       child.send(WEB_CONN_MESSAGE, socket, (err) => {
-        if (err) socket.destroy();
+        if (err) failed();
       });
     } catch {
-      socket.destroy();
+      failed();
     }
   }
 
@@ -462,7 +477,22 @@ export class WebEndpoint {
     // internal, which never reaches 'message') arrive only here. Guarded: anything but a well-formed
     // NODE_HANDLE_ACK kills the child; the ACK feeds the watchdog. A Node that stopped emitting it would surface
     // as watchdog kills of a healthy child (test/web-endpoint.test.ts asserts ACKs are seen).
+    // An UNSOLICITED NODE_HANDLE_ACK (none in flight, or one more than were sent) makes Node's own internalMessage
+    // handler — registered before ours — throw ERR_INTERNAL_ASSERTION on its null `_handleQueue`, which would take the
+    // daemon down (Aegis round 3, reproduced on Node 26). So this listener goes FIRST (prependListener): on such an
+    // ACK it gives Node an empty queue to flush and kills the child. `_handleQueue` is a Node INTERNAL
+    // (lib/internal/child_process.js): if a Node release renames it, Array.isArray is false and every ACK — even a
+    // solicited one — kills the child, which fails closed and fails the healthy-child canary test loudly.
+    child.prependListener('internalMessage', (m: unknown) => {
+      if (typeof m !== 'object' || m === null || (m as { cmd?: unknown }).cmd !== 'NODE_HANDLE_ACK') return;
+      const internals = child as unknown as { _handleQueue?: unknown };
+      if (!Array.isArray(internals._handleQueue) || this.#child !== child || this.#unacked.length === 0) {
+        internals._handleQueue = [];
+        child.kill('SIGKILL');
+      }
+    });
     child.on('internalMessage', (m: unknown, h: unknown) => {
+      if (child.killed) return closeHandle(h); // already condemned (an unsolicited ACK above)
       if (this.#child === child && h === undefined && typeof m === 'object' && m !== null && (m as { cmd?: unknown }).cmd === 'NODE_HANDLE_ACK') return this.#onHandoffAck();
       closeHandle(h);
       child.kill('SIGKILL');
@@ -587,7 +617,14 @@ export class WebEndpoint {
     for (const c of [...this.#ws.values()]) this.#dropConn(c, 'transport-exited');
     const now = this.#now();
     while (this.#restarts.length && now - this.#restarts[0]! > WEB_RESTART_CAP.windowMs) this.#restarts.shift();
-    await this.#o.log('socket.web.transport.exited', { code, signal, restartsInWindow: this.#restarts.length }).catch(() => undefined);
+    const stops = this.#stops;
+    this.#exiting++;
+    try {
+      await this.#o.log('socket.web.transport.exited', { code, signal, restartsInWindow: this.#restarts.length }).catch(() => undefined);
+    } finally {
+      this.#exiting--;
+    }
+    if (this.#stops !== stops) return; // stop() ran during the exit-log write: no respawn
     if (!wasListening) return;
     if (this.#restarts.length >= WEB_RESTART_CAP.max) return this.#down('transport-restart-cap');
     this.#restarts.push(now);
