@@ -25,9 +25,9 @@ import {
   type AnchorReadResult,
   type AnchorStore,
   type HeadAnchor,
-  type KernelLogOptions,
   type Signer,
 } from '../src/kernel/log/index.js';
+import { openKernelLog, type KernelLogTestOptions } from '../src/kernel/testing.js';
 
 // 1024+ fsync'd commits: ~0.2 s on macOS, >30 s on Windows CI (FlushFileBuffers per commit).
 const SLOW_FSYNC_TIMEOUT = 240_000; // a ceiling, not a budget: same on every OS (no platform branch, G-WIN-05)
@@ -71,7 +71,7 @@ function countingKeystore(): CountingKs {
   return ks;
 }
 
-const opts = (home: string, ks: AnchorStore, signer: Signer | null = KERNEL_KEY, extra: Partial<KernelLogOptions> = {}): KernelLogOptions => ({
+const opts = (home: string, ks: AnchorStore, signer: Signer | null = KERNEL_KEY, extra: Partial<KernelLogTestOptions> = {}): KernelLogTestOptions => ({
   home,
   kernelPrincipal: KERNEL,
   signer,
@@ -119,7 +119,7 @@ describe('#kernel-log S34-30: every open-time integrity check runs before any an
     const SEG = 4;
     const home = tmpHome();
     const ks = countingKeystore();
-    const l1 = KernelLog.open(opts(home, ks, KERNEL_KEY, { segmentRows: SEG }));
+    const l1 = openKernelLog(opts(home, ks, KERNEL_KEY, { segmentRows: SEG }));
     await fill(l1, SEG - 1); // rows 1..3 + the closing daemon.segment row 4 → rotated
     await l1.close();
 
@@ -140,7 +140,7 @@ describe('#kernel-log S34-30: every open-time integrity check runs before any an
     const writesBefore = ks.writes;
     const fileBefore = readFileSync(headFile(home));
 
-    const r = refusalOf(() => KernelLog.open(opts(home, ks, KERNEL_KEY, { segmentRows: SEG })));
+    const r = refusalOf(() => openKernelLog(opts(home, ks, KERNEL_KEY, { segmentRows: SEG })));
     expect(r.reason).toBe('anchor-mismatch');
     expect(r.refusal.data).toMatchObject({ anchor: 'keystore', seq: SEG });
 
@@ -153,7 +153,7 @@ describe('#kernel-log S34-30: every open-time integrity check runs before any an
     expect(rowsOf(path.join(home, 'kernel.db')).at(-1)).toMatchObject({ seq: SEG, kind: 'daemon.segment' });
 
     // a second refused open reads the same evidence and refuses the same way
-    expect(refusalOf(() => KernelLog.open(opts(home, ks, KERNEL_KEY, { segmentRows: SEG }))).reason).toBe('anchor-mismatch');
+    expect(refusalOf(() => openKernelLog(opts(home, ks, KERNEL_KEY, { segmentRows: SEG }))).reason).toBe('anchor-mismatch');
     await drain();
     expect(ks.bytes).toBe(ksBefore);
   });
@@ -162,7 +162,7 @@ describe('#kernel-log S34-30: every open-time integrity check runs before any an
     const SEG = 4;
     const home = tmpHome();
     const ks = countingKeystore();
-    const l1 = KernelLog.open(opts(home, ks, KERNEL_KEY, { segmentRows: SEG }));
+    const l1 = openKernelLog(opts(home, ks, KERNEL_KEY, { segmentRows: SEG }));
     await fill(l1, SEG - 1);
     await l1.close();
     const sealed = path.join(home, 'log', 'segments', '000001.db');
@@ -170,7 +170,7 @@ describe('#kernel-log S34-30: every open-time integrity check runs before any an
     renameSync(sealed, path.join(home, 'kernel.db'));
     const writesBefore = ks.writes;
 
-    const l2 = KernelLog.open(opts(home, ks, KERNEL_KEY, { segmentRows: SEG }));
+    const l2 = openKernelLog(opts(home, ks, KERNEL_KEY, { segmentRows: SEG }));
     opened.push(l2);
     expect(l2.report.recoveredRotation).toBe(true);
     expect(existsSync(sealed)).toBe(true);
@@ -184,7 +184,7 @@ describe('#kernel-log S34-30: every open-time integrity check runs before any an
   it('a keyless open that would need a keystore-lag row refuses kernel-key-required with both anchors untouched', async () => {
     const home = tmpHome();
     const ks = countingKeystore();
-    const l1 = KernelLog.open(opts(home, ks));
+    const l1 = openKernelLog(opts(home, ks));
     await fill(l1, 1);
     await l1.flushAnchors();
     ks.frozen = true; // the keystore anchor stays at seq 1 (never stores again)
@@ -200,7 +200,7 @@ describe('#kernel-log S34-30: every open-time integrity check runs before any an
     const fileBefore = readFileSync(headFile(home));
     const writesBefore = ks.writes;
 
-    const r = refusalOf(() => KernelLog.open(opts(home, ks, null)));
+    const r = refusalOf(() => openKernelLog(opts(home, ks, null)));
     expect([r.refusal.code, r.reason]).toEqual(['FORBIDDEN', 'kernel-key-required']);
     await drain();
     expect(ks.writes).toBe(writesBefore);
@@ -211,14 +211,14 @@ describe('#kernel-log S34-30: every open-time integrity check runs before any an
   it('a fresh log facing a keystore anchor of another log refuses before writing a file anchor', async () => {
     const other = tmpHome();
     const ks = countingKeystore();
-    const lo = KernelLog.open(opts(other, ks));
+    const lo = openKernelLog(opts(other, ks));
     await fill(lo, 1);
     await lo.close();
     const ksBefore = ks.bytes;
     const writesBefore = ks.writes;
 
     const home = tmpHome();
-    const r = refusalOf(() => KernelLog.open(opts(home, ks)));
+    const r = refusalOf(() => openKernelLog(opts(home, ks)));
     expect(r.reason).toBe('anchor-mismatch');
     await drain();
     expect(existsSync(headFile(home))).toBe(false);

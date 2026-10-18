@@ -33,6 +33,7 @@
     "@a-company/gnomon-contracts": "1.0.0",
     "@types/node": "^24.0.0",
     "tsup": "^8.0.1",
+    "typescript": "^5.9.3",
     "vitest": "^4.1.0"
   },
   "author": "ascend42",

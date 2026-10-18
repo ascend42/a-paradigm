@@ -97,7 +97,11 @@
  * `openForRecovery` returns a log that refuses appends until
  * `acknowledgeGap({presenceToken})` (presence-gated, unclean-reboot only)
  * appends a kernel-signed daemon.log.gap{lostFrom, lostTo, lostHash,
- * bootPrev, bootNow, fileLag} and re-anchors. Hash ≠ row hash ⇒ anchor-mismatch;
+ * bootPrev, bootNow, fileLag} and re-anchors. Both are INTERNAL SEAMS until
+ * presence lands (T-2026-10-17-009(c)): registered with internal-seams.ts and
+ * reachable only through the internal test entry, like the keystoreAnchor
+ * and bootSession overrides; `presenceToken` is a branded PresenceToken
+ * (identity/presence.ts). test/seams-fence.test.ts is the tripwire. Hash ≠ row hash ⇒ anchor-mismatch;
  * missing on an existing log ⇒ anchor-missing; file-anchor lag > 63 (unless
  * relaxed across a boot change, P8-D85 below, or classified truncated when
  * the keystore anchor is ahead, S34-24), or any lag behind a
@@ -220,6 +224,29 @@ import {
 } from './chain.js';
 import { projectForReader, type LogView, type ReaderClass } from './redaction.js';
 import { KeyRing, SoftwareEd25519Signer, type Signer } from './signer.js';
+import { consumePresence, type PresenceToken } from '../identity/presence.js';
+import { registerSeams, type KernelLogSeamOptions } from '../internal-seams.js';
+
+/**
+ * T-2026-10-17-009(c): option keys that are TEST SEAMS. They are not on
+ * KernelLogOptions (nor on verifyLog's options), and both refuse them at
+ * runtime, so a JavaScript caller (or a spread of a wider object) cannot slip
+ * a substituted keystore anchor or boot id past the type. The constructor's
+ * seam and recovery parameters are reachable only with CONSTRUCT_KEY, held by
+ * `KernelLog.open` and the registered seam closures: a cast call of the
+ * private constructor throws. Tests pass the seams through the internal test
+ * entry (src/kernel/testing.ts).
+ */
+const SEAM_OPTION_KEYS = ['keystoreAnchor', 'bootSession'] as const;
+
+/** Module-private: the KernelLog constructor refuses any caller without it (TS `private` is type-only). */
+const CONSTRUCT_KEY: unique symbol = Symbol('gnomon.kernel-log.construct');
+
+function refuseSeamKeys(opts: object, where: string): void {
+  for (const k of SEAM_OPTION_KEYS) {
+    if (Object.prototype.hasOwnProperty.call(opts, k)) throw new TypeError(`#kernel-log: ${where}: ${k} is a test seam, reachable only through the internal test entry (T-2026-10-17-009)`);
+  }
+}
 
 export const DEFAULT_SEGMENT_ROWS = 1_000_000;
 export const SEGMENT_SCHEMA = 'gnomonLogSegment:v1' as const;
@@ -241,10 +268,6 @@ export interface KernelLogOptions {
   durability?: Durability;
   /** Keys exist on this machine (M1.3 supplies it): a missing db is then INTEGRITY_BROKEN, never a fresh genesis. */
   keysPresent?: boolean;
-  /** Test seam for the keystore anchor (default: the PR-4 stub, `unavailable`). */
-  keystoreAnchor?: AnchorStore;
-  /** Test seam for the boot session id (default: boot.ts `readBootSession()`, read once at open). */
-  bootSession?: string;
   /** S34-23 test seam: file-anchor coalescing window in ms (default FILE_ANCHOR_MAX_MS). */
   fileAnchorMaxMs?: number;
   /** S34-11: per-write keystore anchor timeout, measured from DEQUEUE (default KEYSTORE_WRITE_TIMEOUT_MS). */
@@ -575,17 +598,19 @@ export class KernelLog {
   #ringForced = 0;
   readonly #counts = { fileAnchors: 0, keystoreAnchors: 0, forcedAnchors: 0, checkpoints: 0 };
 
-  private constructor(opts: KernelLogOptions, recovery = false) {
+  private constructor(key: typeof CONSTRUCT_KEY, opts: KernelLogOptions, seams: KernelLogSeamOptions = {}, recovery = false) {
+    if (key !== CONSTRUCT_KEY) throw new TypeError('#kernel-log: KernelLog is constructed only by KernelLog.open (or the internal test entry)');
+    refuseSeamKeys(opts, 'KernelLog.open');
     this.#opts = { segmentRows: DEFAULT_SEGMENT_ROWS, durability: 'process-crash', clock: Date.now, ...opts };
     if (!Number.isSafeInteger(this.#opts.segmentRows) || this.#opts.segmentRows < 3) throw new RangeError('segmentRows must be an integer >= 3');
     this.home = opts.home;
     this.#fileAnchor = new FileAnchorStore(opts.home);
-    this.#keystoreAnchor = opts.keystoreAnchor ?? new KeystoreAnchorStore();
+    this.#keystoreAnchor = seams.keystoreAnchor ?? new KeystoreAnchorStore();
     this.#keyRing = opts.keyRing ?? new KeyRing();
     if (opts.signer instanceof SoftwareEd25519Signer) this.#keyRing.addEd25519(opts.signer.publicKeyPem);
     this.#mono = monotonicUlidFactory({ clock: this.#opts.clock });
-    this.#boot = opts.bootSession !== undefined ? normalizeBootId(opts.bootSession) : readBootSession();
-    if (this.#boot === BOOT_UNKNOWN) this.#diag('boot.unknown', { platform: process.platform, injected: opts.bootSession !== undefined });
+    this.#boot = seams.bootSession !== undefined ? normalizeBootId(seams.bootSession) : readBootSession();
+    if (this.#boot === BOOT_UNKNOWN) this.#diag('boot.unknown', { platform: process.platform, injected: seams.bootSession !== undefined });
     this.#recovery = recovery;
     let r: Omit<OpenReport, 'logId'>;
     try {
@@ -603,20 +628,34 @@ export class KernelLog {
     this.report = { logId: this.logId, ...r };
   }
 
-  /** Open (or, on a machine with no log, no anchor and no keys, create) the kernel log. */
+  /**
+   * Open (or, on a machine with no log, no anchor and no keys, create) the
+   * kernel log. Production only: the keystore anchor is the store the kernel
+   * builds itself and the boot session is read from the OS.
+   */
   static open(opts: KernelLogOptions): KernelLog {
-    return new KernelLog(opts);
+    return new KernelLog(CONSTRUCT_KEY, opts);
   }
 
-  /**
-   * S33-10 recovery open: like `open`, except that an anchor AHEAD of the db
+  /*
+   * INTERNAL SEAMS (T-2026-10-17-009(c), Aegis S34-10): the keystore-anchor
+   * and boot-session overrides, the S33-10 recovery open and the gap
+   * acknowledgement are registered here and reachable only through the
+   * internal test entry (src/kernel/testing.ts) until presence lands (M1.3).
+   *
+   * Recovery open: like `open`, except that an anchor AHEAD of the db
    * (INTEGRITY_BROKEN{truncated}) does not throw — the log opens with
    * `report.integrity.state === 'truncated'`, refuses every append with the
    * same refusal, writes no anchor (the keystore anchor is the evidence), and
-   * accepts only `acknowledgeGap`. Every other integrity failure still throws.
+   * accepts only the gap acknowledgement. Every other integrity failure
+   * still throws.
    */
-  static openForRecovery(opts: KernelLogOptions): KernelLog {
-    return new KernelLog(opts, true);
+  static {
+    registerSeams('log', {
+      open: (opts, seams) => new KernelLog(CONSTRUCT_KEY, opts, seams),
+      openForRecovery: (opts, seams) => new KernelLog(CONSTRUCT_KEY, opts, seams, true),
+      acknowledgeGap: (log, input) => log.#acknowledgeGap(input),
+    });
   }
 
   get activePath(): string {
@@ -1729,23 +1768,28 @@ export class KernelLog {
    * gap row (no second row). A tip that is a daemon.segment closing row is
    * rotated first (S34-13), so the gap row opens the next segment.
    *
-   * PRESENCE IS A STUB SEAM: `presenceToken` must be a non-empty string, and
-   * nothing else is checked yet. M1.3 wires real presence (the signed helper's
-   * presence prompt, probes P04/P02) — until then this API must be reached
-   * only from a human-initiated path.
+   * PRESENCE: `presenceToken` must be a PresenceToken minted by the presence
+   * module (identity/presence.ts) for `log.gap.acknowledge`, unused and
+   * fresh; it is burned here — at the presence check, so a refusal later in
+   * this method (tamper, unauthenticated lead, anchor failure) still consumes
+   * it and a retry needs fresh presence (M1.3 UX: re-prompt per attempt). Until real presence lands (the signed helper's
+   * prompt, M1.3) no production path can mint one, and this method is
+   * reachable only through the internal test entry (registered seam above).
    *
-   * Refused: no truncation (BAD_REQUEST{no-gap}); empty token
-   * (FORBIDDEN{presence-required}); only the file anchor leads while a
+   * Refused: no truncation (BAD_REQUEST{no-gap}); not usable presence
+   * (FORBIDDEN{presence-required}, `data.presence` = the verdict: not-a-token,
+   * wrong-purpose, stale, used); only the file anchor leads while a
    * keystore anchor is present (FORBIDDEN{unauthenticated-lead}, S34-04);
    * cause `tamper` (FORBIDDEN{tamper} — same boot or after a clean close, no
    * power loss can explain it); no kernel key (FORBIDDEN{unsigned-mandatory}).
    */
-  async acknowledgeGap(input: { presenceToken: string }): Promise<AppendResult> {
+  async #acknowledgeGap(input: { presenceToken: PresenceToken }): Promise<AppendResult> {
     if (this.#closed) throw logRefusal('ENGINE', 'closed', 'the kernel log is closed');
     const t = this.#broken;
     if (!t) throw logRefusal('BAD_REQUEST', 'no-gap', 'the log has no unacknowledged truncation');
-    if (typeof input?.presenceToken !== 'string' || input.presenceToken.trim() === '') {
-      throw logRefusal('FORBIDDEN', 'presence-required', 'acknowledging a log gap requires presence (stub seam until M1.3)');
+    const presence = consumePresence(input?.presenceToken, 'log.gap.acknowledge', this.#opts.clock());
+    if (presence !== 'ok') {
+      throw logRefusal('FORBIDDEN', 'presence-required', `acknowledging a log gap requires fresh presence for it (${presence})`, { presence });
     }
     if (t.unauthenticatedLead) {
       throw logRefusal('FORBIDDEN', 'unauthenticated-lead', 'only the file anchor leads the db while the keystore anchor does not: the lead is unauthenticated and cannot be acknowledged', { ...t });
@@ -1784,7 +1828,7 @@ export class KernelLog {
   /** `gnomon log verify`: the full chain (every segment + both anchors), or one segment. */
   verify(opts: { segment?: number } = {}): VerifyReport {
     const kernelKeyIds = this.#kernelKeyIds();
-    return verifyLog(this.home, { keyRing: this.#keyRing, segment: opts.segment, keystoreAnchor: this.#keystoreAnchor, kernelPrincipal: this.#opts.kernelPrincipal, kernelKeyIds });
+    return verifyLogWith(this.home, { keyRing: this.#keyRing, segment: opts.segment, kernelPrincipal: this.#opts.kernelPrincipal, kernelKeyIds }, this.#keystoreAnchor);
   }
 
   /**
@@ -1869,10 +1913,28 @@ function checkPayload(kind: string, payload: unknown): void {
 const SENS = SENSITIVITIES as readonly string[];
 const SHA256_TAGGED = /^sha256:[0-9a-f]{64}$/;
 
+export interface VerifyLogOptions {
+  keyRing: KeyRing;
+  segment?: number;
+  kernelPrincipal?: string;
+  kernelKeyIds?: readonly string[];
+}
+
 export function verifyLog(
   home: string,
-  opts: { keyRing: KeyRing; segment?: number; keystoreAnchor?: AnchorStore; kernelPrincipal?: string; kernelKeyIds?: readonly string[] },
+  opts: VerifyLogOptions,
 ): VerifyReport {
+  refuseSeamKeys(opts, 'verifyLog');
+  return verifyLogWith(home, opts, new KeystoreAnchorStore());
+}
+
+/**
+ * The verify body. The keystore anchor store is a parameter, not an option:
+ * the public verifyLog always reads the kernel's own store; KernelLog#verify
+ * passes the store the log was opened with (a test seam only via the
+ * internal test entry).
+ */
+function verifyLogWith(home: string, opts: VerifyLogOptions, keystoreAnchor: AnchorStore): VerifyReport {
   // S34-06: rows by the kernel principal must be signed by a kernel key (checked when the kernel key ids are known)
   const kernel = opts.kernelPrincipal && opts.kernelKeyIds?.length ? { principal: opts.kernelPrincipal, keyIds: new Set(opts.kernelKeyIds) } : undefined;
   const failures: VerifyFailure[] = [];
@@ -1935,7 +1997,7 @@ export function verifyLog(
         fail({ code: 'anchor', segment: h.segment, detail: `file anchor seq ${h.seq} does not match the chain tip ${lastSegment.seq}` });
       } else report.anchors.file = h.seq === lastSegment.seq ? 'ok' : 'lagging';
     }
-    const ks = (opts.keystoreAnchor ?? new KeystoreAnchorStore()).read();
+    const ks = keystoreAnchor.read();
     if (ks.state === 'unavailable') report.anchors.keystore = 'unavailable';
     else if (ks.state === 'present' && lastSegment && ks.head.seq === lastSegment.seq && ks.head.hash === lastSegment.hash) report.anchors.keystore = 'ok';
     else if (ks.state === 'present' && lastSegment && ks.head.log === logId && ks.head.seq < lastSegment.seq) report.anchors.keystore = 'lagging'; // coalesced cadence (S33-05)

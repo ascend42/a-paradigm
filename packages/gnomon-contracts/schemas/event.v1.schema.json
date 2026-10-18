@@ -61,6 +61,7 @@
     "daemon.exit",
     "daemon.lock.refused",
     "daemon.log.gap",
+    "daemon.log.quarantined",
     "daemon.reexec",
     "daemon.segment",
     "daemon.start",
@@ -78,6 +79,7 @@
     "key.registry.malformed",
     "key.registry.unsigned",
     "key.rotate",
+    "key.token.revoked",
     "link.auth.fail",
     "link.brief.accepted",
     "link.brief.declined",
@@ -247,6 +249,8 @@
     "contract.review.extended": "M1.1:P8-D86-D88",
     "contract.review.restarted": "M1.1:P8-D86-D88",
     "contract.review.returned": "M1.1:P8-D86-D88",
+    "daemon.log.quarantined": "M1.4:P8-D89",
+    "key.token.revoked": "M1.4:P8-D89",
     "link.auth.fail": "M1.1:P8-R9",
     "link.brief.accepted": "M1.1:P8-R9",
     "link.brief.declined": "M1.1:P8-R9",
@@ -308,6 +312,10 @@
     },
     "session.open": {
       "runMode": "M1.1:P8-D86-D88"
+    },
+    "key.registry.malformed": {
+      "file": "M1.4:P8-D89",
+      "reason": "M1.4:P8-D89"
     }
   },
   "x-gnomon-session-taints": [
@@ -409,6 +417,15 @@
       "cardId",
       "refs",
       "severity"
+    ],
+    "daemon.log.quarantined": [
+      "quarantinedLog",
+      "quarantinedHead",
+      "evidencePath",
+      "authorizedBy"
+    ],
+    "key.token.revoked": [
+      "tokenId"
     ]
   },
   "type": "object",

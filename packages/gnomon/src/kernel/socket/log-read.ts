@@ -20,8 +20,10 @@
  *     UNSUPPORTED{reader-unsupported, Move 4} (§9.3: refuse rather than guess).
  *   - session → ENGINE{not-implemented, M1.7}: its view is "own hsid" and the
  *     principal → hsid binding arrives with the session runner.
- *   - read token: tokens do not exist on the socket yet (auth refuses
- *     `{token}`); peer: refused by the matrix before reaching here.
+ *   - read token (M1.4 slice 3) → the §9.3 READ-TOKEN projection (full minus
+ *     `secret`; sensitive-column kinds as stubs; registered sensitive fields
+ *     `{redacted: true}`; no hash/sig/prev), whatever the token's principal;
+ *     peer: refused by the matrix before reaching here.
  *
  * PAGES: `{since?, until?, kinds?, scope?, limit?}` (`until`/`limit` are
  * optional params added under the compatible-additive rule) → `{rows, next,
@@ -98,7 +100,14 @@ export interface ReaderGrant {
   fullView?: { needs: string };
 }
 
-export function readerFor(s: Pick<ConnAuthState, 'principal' | 'principalKind'>): ReaderGrant {
+/** The `<name>` of a mod principal `p:<ns>/mod-<name>`, or undefined. */
+export function modNameOf(principal: string | undefined): string | undefined {
+  return /^p:[^/]+\/mod-([a-z0-9][a-z0-9-]{0,63})$/.exec(principal ?? '')?.[1];
+}
+
+export function readerFor(s: Pick<ConnAuthState, 'principal' | 'principalKind' | 'credential'>): ReaderGrant {
+  // A read-token connection reads as the §9.3 read-token row whatever its principal's kind (M1.4 slice 3).
+  if (s.credential === 'read-token') return { reader: { class: 'read-token' }, projection: 'read-token' };
   switch (s.principalKind) {
     case 'human':
       return {
@@ -107,7 +116,7 @@ export function readerFor(s: Pick<ConnAuthState, 'principal' | 'principalKind'>)
         fullView: { needs: 'a first-party surface proof (GUI launch token / wrapper) or a log.read:sensitive device grant; neither exists on the socket yet' },
       };
     case 'mod': {
-      const name = /^p:[^/]+\/mod-([a-z0-9][a-z0-9-]{0,63})$/.exec(s.principal ?? '')?.[1];
+      const name = modNameOf(s.principal);
       if (!name) throw new RpcRefusal('FORBIDDEN', 'mod-principal-name', 'a mod principal is p:<ns>/mod-<name> (§5)');
       return { reader: { class: 'mod', name, grantedKinds: [] }, projection: 'mod' };
     }

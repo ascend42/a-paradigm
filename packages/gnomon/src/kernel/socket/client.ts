@@ -4,12 +4,16 @@
  * #socket (spec §4.9) — the kernel-side `gnomon-rpc:v1` client helpers for the
  * CLI and tests: a one-shot `rpcCall`, and (M1.4) `connectGnomon` — hello,
  * serverSig verified against the registry's kernel key BEFORE auth, then
- * device-key auth. The published TS client is M1.12.
+ * device-key auth, or (M1.4 slice 3, P8-D89a) a read token's proof of
+ * possession {tokenId, sig} — the seed never leaves this process, and the
+ * proof is sent only after the server is verified. The published TS client is
+ * M1.12.
  */
 import * as net from 'node:net';
 import { encodeFrame, NdjsonDecoder } from './framing.js';
 import {
   CLIENT_API_ID,
+  authTokenMessage,
   JSON_RPC_CODES,
   RefusedError,
   refuse,
@@ -18,6 +22,7 @@ import {
   type HelloResult,
 } from '@a-company/gnomon-contracts';
 import { KeyRing, type Signer } from '../log/signer.js';
+import { parseReadToken } from '../identity/read-token.js';
 import { clientAuthMessage, serverSigMessage } from './auth.js';
 import { requestFrame, type RpcErrorFrame, type RpcId, type RpcResponseFrame } from './rpc.js';
 
@@ -199,6 +204,8 @@ export interface ConnectOptions {
   serverKey?: ServerKeyPin;
   /** Authenticate with this device key after the server is verified. */
   device?: DeviceCredential;
+  /** Or authenticate with a read token string (status, log.read, ref.resolve only): proof of possession, never sent itself. Never with `device`. */
+  readToken?: string;
 }
 
 export interface GnomonSession {
@@ -209,10 +216,15 @@ export interface GnomonSession {
   clientApiIdMatches: boolean;
   principal?: string;
   connId?: string;
+  /** Read-token sessions: when the token (and so this connection) ends. */
+  expiresAt?: string;
 }
 
 /** hello (+ serverSig check) (+ auth). Throws RefusedError / ServerAuthError; never sends auth to an unverified server. */
 export async function connectGnomon(o: ConnectOptions): Promise<GnomonSession> {
+  // validate the options before any connection exists
+  if (o.device && o.readToken !== undefined) throw new TypeError('gnomon-rpc: authenticate with a device key OR a read token, not both');
+  const token = o.readToken !== undefined ? parseReadToken(o.readToken) : undefined;
   const endpointPath = o.endpointPath ?? o.socketPath;
   const conn = await RpcConnection.open(o.socketPath);
   try {
@@ -231,6 +243,17 @@ export async function connectGnomon(o: ConnectOptions): Promise<GnomonSession> {
       serverVerified = true;
     }
     const session: GnomonSession = { conn, hello, serverVerified, clientApiIdMatches: hello.clientApiId === CLIENT_API_ID };
+    if (token) {
+      // the proof goes only to a server that proved it holds the kernel key (§4.9)
+      if (!serverVerified) throw new ServerAuthError('unverified-server', 'refusing to authenticate a read token to an unverified server (no registered kernel key)');
+      const msg = authTokenMessage(hello.nonce, hello.serverKeyId, token.tokenId, endpointPath, { clientApi: hello.clientApi, features: hello.features });
+      const a = await conn.call('auth', { tokenId: token.tokenId, sig: Buffer.from(token.signer.sign('authToken', msg)).toString('base64') });
+      if ('error' in a) throw new RefusedError(a.error.data, a.error.message);
+      const r = a.result as { principal: string; connId: string; expiresAt: string };
+      session.principal = r.principal;
+      session.connId = r.connId;
+      session.expiresAt = r.expiresAt;
+    }
     if (o.device) {
       if (!serverVerified) throw new ServerAuthError('unverified-server', 'refusing to authenticate to an unverified server (no registered kernel key)');
       const a = await conn.call('auth', { principal: o.device.principalId, deviceId: o.device.deviceId, sig: signAuth(o.device, hello, endpointPath) });

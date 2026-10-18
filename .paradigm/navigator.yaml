@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-18T00:43:52.671Z'
+generated: '2026-10-18T01:44:16.722Z'
 structure: {}
 key_files:
   config:
@@ -1322,6 +1322,8 @@ symbols:
   ^purpose-ref-gate-peer-paired.: packages/gnomon-contracts/
   '#purpose-ref-component-web-endpoint.': packages/gnomon-contracts/
   $purpose-ref-flow-XDG_RUNTIME_DIR: packages/gnomon/
+  '#purpose-ref-component-web-endpoint': packages/gnomon/
+  '#purpose-ref-component-state': packages/gnomon/
   '#purpose-ref-component-hashAt': packages/gnomon/
   '@purpose-ref-aspect-symbol-typed-logging': packages/logger/
   '@purpose-ref-aspect-correlation-tracked': packages/logger/

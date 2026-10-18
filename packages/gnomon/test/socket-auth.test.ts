@@ -154,7 +154,7 @@ describe('serverSig — the kernel proves itself before auth is sent', () => {
     expect(() => r.d.kernelSigner.sign('auth', 'x')).toThrow(/may not sign/);
   });
 
-  it('connectGnomon never sends auth to an unverified server', async () => {
+  it('G-SOCK-02: connectGnomon never sends auth to an unverified server', async () => {
     const r = await rig();
     const wrongPin = { keyId: SoftwareEd25519Signer.generate().keyId, publicKeyPem: SoftwareEd25519Signer.generate().publicKeyPem };
     await expect(connectGnomon({ socketPath: r.d.pidfile.socketPath, client: CLIENT, serverKey: wrongPin, device: r.cred })).rejects.toThrow(ServerAuthError);
@@ -165,7 +165,7 @@ describe('serverSig — the kernel proves itself before auth is sent', () => {
 });
 
 describe('device-key auth (§4.9 S-H4, §3.1)', () => {
-  it('a registered device authenticates; status is served for real, < 50 ms (G-ABI-03)', async () => {
+  it('G-ABI-03: a registered device authenticates; status is served for real, < 50 ms', async () => {
     const r = await rig();
     const s = await connectGnomon({ socketPath: r.d.pidfile.socketPath, client: CLIENT, serverKey: r.pin, device: r.cred });
     cleanups.push(() => s.conn.close());
@@ -297,20 +297,28 @@ describe('device-key auth (§4.9 S-H4, §3.1)', () => {
     expect(errReason(await c.call('auth', { deviceId: r.cred.deviceId }))).toBe('auth-params');
     const t = await RpcConnection.open(r.d.pidfile.socketPath);
     await t.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], client: CLIENT });
-    expect(await t.call('auth', { token: 'x' })).toMatchObject({ error: { code: -32005, data: { data: { reason: 'token-not-implemented' } } } });
+    // read tokens are proof of possession since M1.4 slice 3 (socket-abi.test.ts): a bearer {token} is never accepted
+    expect(await t.call('auth', { token: 'x' })).toMatchObject({ error: { code: -32001, data: { data: { reason: 'auth-params' } } } });
   });
 });
 
 describe('verb dispatch skeleton (§5)', () => {
-  it('unauthenticated callers get only hello/auth; every other method is AUTH (connection kept)', async () => {
+  it('G-SOCK-01: unauthenticated callers get only hello/auth; any other known method is AUTH and closes the connection (before and after hello); unknown names are UNKNOWN_VERB', async () => {
     const r = await rig();
+    for (const m of CLIENT_METHODS) {
+      const c = await RpcConnection.open(r.d.pidfile.socketPath);
+      cleanups.push(() => c.close());
+      expect(errReason(await c.call(m, {}))).toBe('unauthenticated');
+      expect(errReason(await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], client: CLIENT }))).toBe('connection-closed');
+      expect(c.closed).toBe(true);
+    }
     const c = await RpcConnection.open(r.d.pidfile.socketPath);
     cleanups.push(() => c.close());
-    for (const m of CLIENT_METHODS) expect(errReason(await c.call(m, {}))).toBe('unauthenticated');
+    expect(await c.call('daemon.stop', {})).toMatchObject({ error: { code: -32601 } }); // unknown: refused, connection kept
     await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], client: CLIENT });
     expect(await c.call('status', {})).toMatchObject({ error: { code: -32001, data: { code: 'AUTH', data: { reason: 'unauthenticated' } } } });
-    expect(c.closed).toBe(false);
-    expect(await c.call('daemon.stop', {})).toMatchObject({ error: { code: -32601 } });
+    expect(errReason(await c.call('status', {}))).toBe('connection-closed');
+    expect(c.closed).toBe(true);
   });
 
   it('after auth: the other 9 verbs + 2 relays (log.read / ref.resolve are served since M1.4 slice 2, test/socket-log-read.test.ts) refuse ENGINE not-implemented naming the milestone — or FORBIDDEN by the matrix', async () => {
@@ -328,7 +336,7 @@ describe('verb dispatch skeleton (§5)', () => {
       'session.open': [-32000, 'not-implemented', 'M1.7'],
       'session.send': [-32000, 'not-implemented', 'M1.7'],
       'session.stop': [-32000, 'not-implemented', 'M1.7'],
-      'log.append': [-32000, 'not-implemented', 'M1.4'],
+      'log.append': [-32600, 'bad-kind', undefined], // the ownership gate (M1.4 slice 3, socket-abi.test.ts G-SOCK-04)
       'permit.reserve': [-32000, 'not-implemented', 'M1.6'],
       approve: [-32000, 'not-implemented', 'M1.6'],
       'contract.register': [-32000, 'not-implemented', 'M2.1'],
@@ -524,7 +532,8 @@ describe('round 2: log-before-reply, scoped access, pre-auth limits, flow contro
       const r = await rig({ daemon });
       const c = await rawConnect(r.d.pidfile.socketPath);
       cleanups.push(c.close);
-      c.send(Buffer.concat(Array.from({ length: 60 }, (_, i) => encodeFrame(requestFrame(i, 'status')))));
+      // unknown names: answered without closing (a known verb before auth closes, G-SOCK-01)
+      c.send(Buffer.concat(Array.from({ length: 60 }, (_, i) => encodeFrame(requestFrame(i, 'no.such')))));
       const got = await c.next(60, 5000);
       expect(got.map((f) => f.id)).toEqual(Array.from({ length: 60 }, (_, i) => i));
       expect(r.d.server.stats().pauses).toBeGreaterThan(0);

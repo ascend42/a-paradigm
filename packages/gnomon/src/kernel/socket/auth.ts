@@ -14,8 +14,9 @@
  *
  * DEVIATION (round 2, downgrade-proofing): both preimages extend the §4.9
  * text with the NEGOTIATED clientApi and features, so a relay that rewrites
- * the hello offer cannot pick a version neither signature covers. The spec
- * and contracts' authServerPreimage/authClientPreimage need the same change.
+ * the hello offer cannot pick a version neither signature covers. The
+ * contracts carry it since M1.4 slice 3 (authServerMessage/authClientMessage);
+ * the spec §4.9 text still needs the same change (T-2026-10-17-017).
  *
  * The nonce is per connection, single-use (ANY auth attempt consumes it) and
  * valid 30 s. The device must resolve in the ROOT-signed registry (registry.ts,
@@ -25,8 +26,27 @@
  * digest of its signature: presenting it again — on this or another
  * connection — is `socket.auth.replay`, and fails anyway because each
  * connection's nonce differs. Every failure is AUTH and closes the connection
- * after the one refusal (dispatch.ts). `{token}` (read tokens), `{launchToken}`
- * and `{reconnect}` (the web endpoint) are later M1.4 slices: UNSUPPORTED.
+ * after the one refusal (dispatch.ts). `{launchToken}` and `{reconnect}` (the
+ * web endpoint) are a later M1.4 slice: UNSUPPORTED.
+ *
+ * READ TOKENS (M1.4 slice 3, P8-D89a: proof of possession):
+ * `auth {tokenId, sig}` — exactly those keys — after a hello on this
+ * connection and inside its nonce TTL. sig is the token's own Ed25519 key over
+ * `gnomon:auth-token:v1` + contracts authTokenMessage(nonce, serverKeyId,
+ * tokenId, endpointPath, negotiated hello); the kernel verifies it against the
+ * public key in the ROOT-signed token file (identity/read-token.ts). The token
+ * seed never crosses the wire, so a relay that cannot sign as the kernel sees
+ * only a signature bound to a nonce and an endpoint path it cannot reuse.
+ * Unknown, expired, not yet valid, revoked (sticky), bad signature, replayed,
+ * already live on another connection (one at a time), untrusted token file
+ * or root-unprovisioned ⇒ AUTH + close. Success binds the connection to the
+ * token's principal with `credential: 'read-token'`: matrix class
+ * `readToken` (§5: status, log.read, ref.resolve only) whatever that
+ * principal's kind. Rows name the token only by `tokenId`.
+ *
+ * The preimages come from gnomon-contracts (authServerMessage /
+ * authClientMessage with the negotiated hello — T-2026-10-17-017), so kernel
+ * and clients sign one definition.
  */
 import { createHash, randomBytes } from 'node:crypto';
 import {
@@ -34,7 +54,8 @@ import {
   DEVICE_ID_PATTERN,
   GNOMON_RPC_V1,
   KIT_ID,
-  canonicalJson,
+  authClientMessage,
+  authServerMessage,
   negotiateHello,
   parsePrincipalId,
   validateHelloParams,
@@ -43,6 +64,7 @@ import {
   type PrincipalKind,
 } from '@a-company/gnomon-contracts';
 import { RegistryCache, type RowVerifier } from '../identity/registry.js';
+import { ReadTokenStore, type ReadTokenResolution, type ReadTokenStoreOptions } from '../identity/read-token.js';
 import { KeyRing, type Signer } from '../log/signer.js';
 import { refusalWith, type RefusalWithMessage } from './rpc.js';
 
@@ -64,21 +86,23 @@ export interface ConnAuthState {
   features?: string[];
   client?: HelloParams['client'];
   principal?: string;
+  /** The device principal's kind; absent on a read-token connection (a token is not a principal kind). */
   principalKind?: PrincipalKind;
+  /** How the connection authenticated: a device key (the principal's own class) or a read token (class `readToken`). */
+  credential?: 'device' | 'read-token';
   deviceId?: string;
   keyId?: string;
+  tokenId?: string;
+  tokenExpiresAt?: string;
+  tokenExpiresAtMs?: number;
 }
 
-// TODO(orchestrator ruling, M1.4 round 3): the clientApi + canonical(features) lines below are a
-// deliberate extension of the §4.9 preimages (downgrade-proofing). The coordinator will update
-// gnomon-contracts authServerPreimage/authClientPreimage and spec §4.9 in a follow-up; until then
-// these helpers, not the contracts ones, define what the kernel signs and verifies.
-/** serverSig message (after the signer's `gnomon:auth-server:v1\n` domain prefix). */
+/** serverSig message (after the signer's `gnomon:auth-server:v1\n` domain prefix) — the contracts definition. */
 export function serverSigMessage(nonce: string, endpointPath: string, clientApi: string, features: readonly string[]): string {
-  return `${nonce}\n${endpointPath}\n${clientApi}\n${canonicalJson([...features])}`;
+  return authServerMessage(nonce, endpointPath, { clientApi, features });
 }
 
-/** Client auth message (after the signer's `gnomon:auth:v1\n` domain prefix). */
+/** Client auth message (after the signer's `gnomon:auth:v1\n` domain prefix) — the contracts definition. */
 export function clientAuthMessage(
   nonce: string,
   serverKeyId: string,
@@ -88,14 +112,20 @@ export function clientAuthMessage(
   clientApi: string,
   features: readonly string[],
 ): string {
-  return `${nonce}\n${serverKeyId}\n${principalId}\n${deviceId}\n${endpointPath}\n${clientApi}\n${canonicalJson([...features])}`;
+  return authClientMessage(nonce, serverKeyId, principalId, deviceId, endpointPath, { clientApi, features });
 }
 
 export type HelloOutcome = { ok: true; result: HelloResult } | ({ ok: false; offered?: string[] } & RefusalWithMessage);
 
 export type AuthOutcome =
-  | { ok: true; principal: string; principalKind: PrincipalKind; deviceId: string; keyId: string }
-  | ({ ok: false; reason: string; replay: boolean; deviceId?: string; principalClaimed?: string } & RefusalWithMessage);
+  | { ok: true; credential: 'device'; principal: string; principalKind: PrincipalKind; deviceId: string; keyId: string }
+  | { ok: true; credential: 'read-token'; principal: string; tokenId: string; expiresAt: string }
+  | ({ ok: false; reason: string; replay: boolean; deviceId?: string; principalClaimed?: string; tokenId?: string } & RefusalWithMessage);
+
+export interface AuthenticateOptions {
+  /** Is this token already bound to another live connection? (one live connection per token) */
+  tokenInUse?: (tokenId: string) => boolean;
+}
 
 export interface AuthenticatorOptions {
   home: string;
@@ -104,6 +134,8 @@ export interface AuthenticatorOptions {
   trust: RowVerifier;
   clock?: () => number;
   nonceTtlMs?: number;
+  /** Sticky revocations from the chain and the store's diagnostics hooks (daemon.ts). */
+  readTokens?: ReadTokenStoreOptions;
 }
 
 const isObj = (v: unknown): v is Record<string, unknown> => v !== null && typeof v === 'object' && !Array.isArray(v);
@@ -114,16 +146,33 @@ export class SocketAuthenticator {
   readonly #ttl: number;
   readonly #accepted = new Map<string, number>(); // sha256(sig) → accepted at
   readonly #registry: RegistryCache;
+  readonly #tokens: ReadTokenStore;
 
   constructor(o: AuthenticatorOptions) {
     this.#o = o;
     this.#registry = new RegistryCache(o.home, o.trust);
+    this.#tokens = new ReadTokenStore(o.home, o.trust, o.readTokens);
     this.#now = o.clock ?? Date.now;
     this.#ttl = o.nonceTtlMs ?? NONCE_TTL_MS;
   }
 
   get serverKeyId(): string {
     return this.#o.kernelSigner.keyId;
+  }
+
+  /** The auth clock (nonce and token expiry). */
+  now(): number {
+    return this.#now();
+  }
+
+  /** Re-read the token file now (daemon start and its slow timer: records pending revocations). */
+  refreshTokens(): void {
+    this.#tokens.get();
+  }
+
+  /** Re-check a live read-token connection's token (expiry, revocation). */
+  checkToken(tokenId: string): ReadTokenResolution {
+    return this.#tokens.check(tokenId, this.#now());
   }
 
   hello(conn: ConnAuthState, params: unknown): HelloOutcome {
@@ -160,13 +209,14 @@ export class SocketAuthenticator {
     };
   }
 
-  authenticate(conn: ConnAuthState, params: unknown): AuthOutcome {
-    const fail = (reason: string, message: string, extra: { replay?: boolean; deviceId?: string; principalClaimed?: string; code?: 'AUTH' | 'UNSUPPORTED'; data?: Record<string, unknown> } = {}): AuthOutcome => ({
+  authenticate(conn: ConnAuthState, params: unknown, opts: AuthenticateOptions = {}): AuthOutcome {
+    const fail = (reason: string, message: string, extra: { replay?: boolean; deviceId?: string; principalClaimed?: string; tokenId?: string; code?: 'AUTH' | 'UNSUPPORTED'; data?: Record<string, unknown> } = {}): AuthOutcome => ({
       ok: false,
       reason,
       replay: extra.replay ?? false,
       ...(extra.deviceId ? { deviceId: extra.deviceId } : {}),
       ...(extra.principalClaimed ? { principalClaimed: extra.principalClaimed } : {}),
+      ...(extra.tokenId ? { tokenId: extra.tokenId } : {}),
       ...refusalWith(extra.code ?? 'AUTH', reason, message, extra.data),
     });
     if (conn.phase === 'authenticated') return fail('already-authenticated', 'this connection is already authenticated; its nonce is spent', { replay: true });
@@ -179,7 +229,7 @@ export class SocketAuthenticator {
     conn.nonceAt = undefined;
     if (this.#now() - nonceAt > this.#ttl) return fail('nonce-expired', `the hello nonce is valid ${this.#ttl / 1000} s`);
     if (!isObj(params)) return fail('auth-params', 'auth params must be an object');
-    if ('token' in params) return fail('token-not-implemented', 'read-token auth lands later in M1.4', { code: 'UNSUPPORTED', data: { milestone: 'M1.4' } });
+    if ('tokenId' in params || 'token' in params) return this.#authToken(conn, nonce, params, opts, fail);
     if ('launchToken' in params || 'reconnect' in params) {
       return fail('web-auth-not-implemented', 'GUI launch/reconnect auth arrives with #web-endpoint (M1.4)', { code: 'UNSUPPORTED', data: { milestone: 'M1.4' } });
     }
@@ -211,9 +261,48 @@ export class SocketAuthenticator {
     conn.phase = 'authenticated';
     conn.principal = dev.principalId;
     conn.principalKind = dev.principalKind;
+    conn.credential = 'device';
     conn.deviceId = dev.deviceId;
     conn.keyId = dev.keyId;
-    return { ok: true, principal: dev.principalId, principalKind: dev.principalKind, deviceId: dev.deviceId, keyId: dev.keyId };
+    return { ok: true, credential: 'device', principal: dev.principalId, principalKind: dev.principalKind, deviceId: dev.deviceId, keyId: dev.keyId };
+  }
+
+  /** `auth {tokenId, sig}`: the nonce is already consumed and in date (authenticate). */
+  #authToken(
+    conn: ConnAuthState,
+    nonce: string,
+    params: Record<string, unknown>,
+    opts: AuthenticateOptions,
+    fail: (reason: string, message: string, extra?: { tokenId?: string; replay?: boolean; data?: Record<string, unknown> }) => AuthOutcome,
+  ): AuthOutcome {
+    const keys = Object.keys(params).sort();
+    // a bearer `{token}` (the seed) is never accepted: proof of possession only
+    if (keys.length !== 2 || keys[0] !== 'sig' || keys[1] !== 'tokenId') return fail('auth-params', 'read-token auth is exactly {tokenId, sig}; the token itself never travels');
+    const r = this.#tokens.verify(params.tokenId, params.sig, { nonce, serverKeyId: this.serverKeyId, endpointPath: this.#o.endpointPath, negotiated: { clientApi: conn.clientApi!, features: conn.features ?? [] } }, this.#now());
+    if (!r.ok) {
+      if (r.reason === 'root-unprovisioned') return fail('root-unprovisioned', 'no root key: read tokens cannot resolve until #identity M1.3', { data: { milestone: 'M1.3' } });
+      const why: Record<string, string> = {
+        'unknown-token': 'not a read token this kernel issued',
+        'token-expired': 'the read token has expired',
+        'token-revoked': 'the read token was revoked',
+        'token-not-yet-valid': 'the read token is not valid yet',
+        'token-store-untrusted': 'the read-token file is not an append-only extension of what the kernel saw; no token resolves',
+      };
+      return fail(r.reason, why[r.reason]!, r.tokenId ? { tokenId: r.tokenId } : {});
+    }
+    const digest = createHash('sha256').update(Buffer.from(params.sig as string, 'base64')).digest('hex');
+    this.#prune();
+    if (this.#accepted.has(digest)) return fail('replayed-transcript', 'this auth transcript was already accepted once', { tokenId: r.tokenId, replay: true });
+    if (opts.tokenInUse?.(r.tokenId)) return fail('token-in-use', 'this read token is bound to another live connection (one at a time)', { tokenId: r.tokenId });
+    this.#accepted.set(digest, this.#now());
+    conn.phase = 'authenticated';
+    conn.credential = 'read-token';
+    conn.principal = r.principalId;
+    conn.principalKind = undefined;
+    conn.tokenId = r.tokenId;
+    conn.tokenExpiresAt = r.expiresAt;
+    conn.tokenExpiresAtMs = r.expiresAtMs;
+    return { ok: true, credential: 'read-token', principal: r.principalId, tokenId: r.tokenId, expiresAt: r.expiresAt };
   }
 
   #prune(): void {

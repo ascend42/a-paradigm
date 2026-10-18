@@ -225,6 +225,45 @@ components:
       3: limited views also drop idem and refHash; lag = min(seq, released
       head) − cursor; subscribe admits at most cap/2 backlog measured
       against the released head (page until caughtUp, then follow).
+      M1.4 SLICE 3 (round 2: P8-D89 / D89a): read tokens are PROOF OF
+      POSSESSION — auth {tokenId, sig} (exactly those keys, after hello, inside
+      the nonce TTL), sig = the token's Ed25519 key over gnomon:auth-token:v1 +
+      contracts authTokenMessage(nonce, serverKeyId, tokenId, endpointPath,
+      negotiated hello), verified against the public key in #identity's
+      root-signed token file; a bearer {token} is auth-params; the seed never
+      crosses the wire. The connection binds to the token's principal with
+      credential 'read-token' and matrix class readToken: status, log.read
+      (the §9.3 read-token projection), ref.resolve; every other verb and both
+      relays FORBIDDEN{matrix}. Unknown / expired / not-yet-valid / revoked
+      (sticky) / bad or replayed proof / in use (one live connection per
+      token) / untrusted token file ⇒ AUTH + close; the token is re-checked on
+      every call, at its expiry and every 5 s; a dead token closes the
+      connection with a best-effort socket.disconnect{reason, tokenId}. A
+      connection that closes during the awaited auth.ok write is refused
+      ENGINE{gone} and gets no timers or lifted cap (timerCount() for tests).
+      Rows carry only tokenId. connectGnomon({readToken}) validates options
+      before connecting and proves possession only to a verified server.
+      G-SOCK-01: a known verb before auth is AUTH and CLOSES the connection.
+      log-append.ts — the §5 namespace-ownership gate (G-SOCK-04): unknown and
+      kernel-owned kinds FORBIDDEN{kernel-owned} for every class, the human
+      request.* exception too (needs: first-party human-class connection,
+      unprovable until #web-endpoint); voice request.voice.arm and voice.*
+      ENGINE Move 4; userland kinds FORBIDDEN{ungranted, M1.5 — grant.bind
+      needs M1.3 grants over M1.5 manifests} for human/agent; a mod's own
+      modns ENGINE M1.11, else modns-not-own; nothing is ever appended in M1.4.
+      status adds credential, token{tokenId, expiresAt}, relay access, and
+      nextLegalVerbs filtered to the caller's class. Preimages come from
+      contracts (T-2026-10-17-017). abiId pinned in test/abi.ids.json
+      (G-ABI-04). Suites: test/socket-abi.test.ts (G-ABI-01..05 incl. a literal
+      §5 matrix fixture and the userland-namespace list, G-SOCK-02..04, the
+      auth race; todos naming later milestones). ROUND 3: the PoP is verified
+      before any token state is told (no valid proof ⇒ uniform unknown-token,
+      no tokenId on the row); the daemon re-reads the token file at start and
+      every 60 s (tokenRefreshMs) so revocations reach the chain with no live
+      token connection, retrying a failed key.token.revoked write and keeping
+      it pending (daemon.token.revocation.unrecorded event) — never dropped;
+      every reason the kernel sends is registered (test/refusal-reasons.test.ts
+      scans socket/, refs/, redaction.ts).
     path: src/kernel/socket/
     type: module
     tags: [gnomon, kernel, socket, paradigm-8, pr-5]
@@ -233,8 +272,10 @@ components:
       - test/socket-server.test.ts
       - test/socket-auth.test.ts
       - test/socket-log-read.test.ts
+      - test/socket-abi.test.ts
+      - test/refusal-reasons.test.ts
     aspects: ["~ample-internal-logs"]
-    oracles: [G-DMN-02, G-ABI-02, G-ABI-03, G-ABI-05, G-SOCK-01]
+    oracles: [G-DMN-02, G-ABI-01, G-ABI-02, G-ABI-03, G-ABI-04, G-ABI-05, G-SOCK-01, G-SOCK-02, G-SOCK-03, G-SOCK-04]
 
   ref-resolver:
     description: >-
@@ -282,12 +323,39 @@ components:
       (<home>/keys/kernel-pub.jsonl, 0600), loaded into the log's key ring and
       kernelKeyIds so verify works across restarts; same-user writable and not
       root-signed, so across restarts kernel signatures prove nothing against
-      a same-user forger until M1.3 (custody partial).
+      a same-user forger until M1.3 (custody partial). presence.ts
+      (T-2026-10-17-009(c), Aegis S34-10) — PresenceToken, a branded type
+      minted only by this module: private constructor guarded by a
+      module-private mint key, a `#state` private field and a `unique symbol`
+      brand (nominal by type; `PresenceToken.is` is a `#state in v` runtime
+      brand check no copy, prototype object or Proxy passes); bound to one
+      purpose (`log.gap.acknowledge`), single-use and fresh for 60 s
+      (`consumePresence` → ok | not-a-token | wrong-purpose | stale | used).
+      `requestPresence` refuses UNSUPPORTED{presence-unavailable, M1.3} until
+      the signed helper's prompt exists; the only mint before then is the
+      internal test seam (method `test-seam`).
+      read-token.ts (M1.4 slice 3, P8-D89a) — <home>/keys/read-tokens.jsonl,
+      append-only root-signed rows {op: mint, tokenId rtk:<26>, keyId,
+      publicKeyPem, principalId (root ns, not kernel, not foreign), createdAt,
+      expiresAt (default 1 h, ≤ 24 h)} and {op: revoke, tokenId}; PUBLIC keys
+      only. mintReadToken (library only: no verb, no argv; now within 5 min of
+      the real clock and clamped to it, so expiresAt ≤ real now + ttl) returns grt:v1:<id>.<seed> once; parseReadToken gives
+      the client a readToken-class signer that signs only gnomon:auth-token:v1.
+      ReadTokenStore: fail-closed reader; not valid before createdAt − 60 s;
+      revocations STICKY for its life and seeded from key.token.revoked rows
+      on the chain (daemon.ts records each newly seen revoke); the file must
+      grow append-only — shrinking or a lost/rewritten line, or more than
+      1 MiB / 10 000 rows, makes it untrusted for the store's life (nothing
+      resolves; key.registry.malformed{file, reason}). Open questions (spec
+      silent; most restrictive reading chosen): the CLI verb that mints, the
+      revocation re-check period.
     path: src/kernel/identity/
     type: module
     tags: [gnomon, kernel, identity, paradigm-8, m1.4]
     tests:
       - test/socket-auth.test.ts
+      - test/presence.test.ts
+      - test/socket-abi.test.ts
 
   kernel-log:
     description: >-
@@ -338,10 +406,10 @@ components:
       with data.cause `tamper` (same boot, clean close, or no comparable
       keystore boot — fails closed) or `unclean-reboot` (boot changed, not a
       clean close); a forged file-anchor boot/closed changes nothing.
-      KernelLog.openForRecovery opens such a log refusing every append and
-      writing no anchor; acknowledgeGap({presenceToken}) (presence = stub
-      seam, non-empty token, real presence wired at M1.3; unclean-reboot
-      only) appends one kernel-signed daemon.log.gap{lostFrom, lostTo,
+      The recovery open (an internal seam, see SEAM HARDENING) opens such a
+      log refusing every append and writing no anchor; acknowledgeGap
+      ({presenceToken}) (a branded PresenceToken, identity/presence.ts;
+      unclean-reboot only) appends one kernel-signed daemon.log.gap{lostFrom, lostTo,
       lostHash, bootPrev, bootNow, fileLag} (contracts kind added, reserved to the
       log) and re-anchors durably; the chain verifies across it. ROUND-2
       HARDENING (research 33 S34-xx): every non-recovery open re-stamps the
@@ -477,7 +545,25 @@ components:
       rename is parity-phase work (P8-D78). macOS/Linux: the file is reopened
       'r' and fsync(2)ed, the directory fsync(2)ed; an unsupported directory
       fsync (EINVAL/ENOTSUP/EOPNOTSUPP/EISDIR/EBADF, isBenignDirFsyncError) is
-      a no-op and any other error (EIO, …) is rethrown (S34-28). `npm run
+      a no-op and any other error (EIO, …) is rethrown (S34-28).
+      SEAM HARDENING (T-2026-10-17-009(c), Aegis S34-10, §19.1 release gate):
+      `keystoreAnchor` and `bootSession` are no longer KernelLogOptions keys
+      (KernelLog.open refuses them at runtime with a TypeError; the private
+      constructor demands a module-private construct key held only by open
+      and the registered seam closures, so a cast call throws; verifyLog has
+      no keystoreAnchor option and always reads the kernel's own store, and
+      refuses the key at runtime), and the
+      recovery open and acknowledgeGap are no longer public members. The log
+      registers them once (class static block) with the internal seam
+      channel src/kernel/internal-seams.ts, read only by the internal test
+      entry src/kernel/testing.ts (openKernelLog, openKernelLogForRecovery,
+      acknowledgeGap, mintTestPresence). test/seams-fence.test.ts proves: no
+      src file imports the test entry; only presence.ts, kernel-log.ts and
+      testing.ts import the channel; the closure of every tsup entry excludes
+      the test entry; no src/cli or $daemon-lifecycle file (nor any other src
+      file but the owners) names acknowledgeGap / openForRecovery; dist/
+      carries no test-entry marker and its KernelLog / KernelLogOptions types
+      expose no seam. `npm run
       test:perf` = scripts/test-perf.mjs (cmd.exe-safe; --passWithNoTests on
       win32 only, a missing perf file fails loudly elsewhere).
     path: src/kernel/log/
@@ -492,6 +578,7 @@ components:
       - test/kernel-log-open-order.test.ts
       - test/boot-session.test.ts
       - test/durable-fs.test.ts
+      - test/seams-fence.test.ts
     oracles: [G-LOG-01, G-LOG-02, G-LOG-03, G-LOG-04, G-LOG-06, G-LOG-07, G-LOG-08, G-LOG-09, G-LOG-10, G-LOG-11]
 
 flows:

@@ -232,3 +232,26 @@ describe('clientApiId / kitId (§12.3, §12.8)', () => {
     expect(computeClientApiId(reordered)).toBe(CLIENT_API_ID);
   });
 });
+
+describe('auth preimages bind the negotiated hello (M1.4 slice 3, T-2026-10-17-017, P8-D89a)', () => {
+  it('server, device and read-token messages append clientApi + canonical features; there is no unbound form; the three domains differ', async () => {
+    const c = await import('../src/index.js');
+    const n = { clientApi: 'gnomon-rpc:v1', features: ['b', 'a'] };
+    expect(c.authServerMessage('N', '/s', n)).toBe('N\n/s\ngnomon-rpc:v1\n["b","a"]');
+    expect(c.authServerPreimage('N', '/s', n)).toBe('gnomon:auth-server:v1\nN\n/s\ngnomon-rpc:v1\n["b","a"]');
+    expect(c.authClientMessage('N', 'k', 'p', 'd', '/s', n)).toBe('N\nk\np\nd\n/s\ngnomon-rpc:v1\n["b","a"]');
+    expect(c.authClientPreimage('N', 'k', 'p', 'd', '/s', n)).toBe(`gnomon:auth:v1\n${c.authClientMessage('N', 'k', 'p', 'd', '/s', n)}`);
+    expect(c.authTokenMessage('N', 'k', 'rtk:X', '/s', n)).toBe('N\nk\nrtk:X\n/s\ngnomon-rpc:v1\n["b","a"]');
+    expect(c.authTokenPreimage('N', 'k', 'rtk:X', '/s', n)).toBe(`gnomon:auth-token:v1\n${c.authTokenMessage('N', 'k', 'rtk:X', '/s', n)}`);
+    expect(new Set([c.AUTH_SERVER_DOMAIN, c.AUTH_CLIENT_DOMAIN, c.AUTH_TOKEN_DOMAIN]).size).toBe(3);
+    expect(c.authServerPreimage.length).toBe(3); // negotiated is required
+  });
+
+  it('P8-D89: the slice-3 socket reasons and the client-local hello-not-offered are registered; log.append lists ENGINE', async () => {
+    const c = await import('../src/index.js');
+    for (const r of ['kernel-owned', 'ungranted', 'modns-not-own', 'bad-kind', 'unknown-token', 'token-expired', 'token-revoked', 'token-in-use', 'token-not-yet-valid', 'token-store-untrusted', 'gone', 'hello-not-offered']) expect(c.REFUSAL_REASONS, r).toContain(r);
+    expect(c.VERBS.find((v) => v.verb === 'log.append')!.refusals).toEqual(['FORBIDDEN', 'BAD_REQUEST', 'ENGINE']);
+    expect(c.EVENT_KINDS['daemon.log.quarantined']).toMatchObject({ owner: 'kernel', sensitivity: 'normal', reserved: 'M1.4:P8-D89', fieldLabels: { evidencePath: 'sensitive' } });
+    expect(c.RESERVED_KIND_PAYLOADS['daemon.log.quarantined']).toEqual(['quarantinedLog', 'quarantinedHead', 'evidencePath', 'authorizedBy']);
+  });
+});

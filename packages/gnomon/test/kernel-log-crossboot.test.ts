@@ -24,9 +24,9 @@ import {
   SoftwareEd25519Signer,
   type AnchorStore,
   type HeadAnchor,
-  type KernelLogOptions,
   type Signer,
 } from '../src/kernel/log/index.js';
+import { openKernelLog, openKernelLogForRecovery, acknowledgeGap, mintTestPresence, type KernelLogTestOptions } from '../src/kernel/testing.js';
 
 // 1024+ fsync'd commits: ~0.2 s on macOS, >30 s on Windows CI (FlushFileBuffers per commit).
 const SLOW_FSYNC_TIMEOUT = 240_000; // a ceiling, not a budget: same on every OS (no platform branch, G-WIN-05)
@@ -70,7 +70,7 @@ function memKeystore(): MemKs {
   return ks;
 }
 
-const base = (home: string, ks: AnchorStore, bootSession: string, signer: Signer | null = KERNEL_KEY): KernelLogOptions => ({
+const base = (home: string, ks: AnchorStore, bootSession: string, signer: Signer | null = KERNEL_KEY): KernelLogTestOptions => ({
   home,
   kernelPrincipal: KERNEL,
   signer,
@@ -80,7 +80,7 @@ const base = (home: string, ks: AnchorStore, bootSession: string, signer: Signer
 });
 
 function openLog(home: string, ks: AnchorStore, bootSession: string, signer: Signer | null = KERNEL_KEY): KernelLog {
-  const log = KernelLog.open(base(home, ks, bootSession, signer));
+  const log = openKernelLog(base(home, ks, bootSession, signer));
   opened.push(log);
   return log;
 }
@@ -112,7 +112,7 @@ async function rolledBackFileAnchor(opts: { lag?: number; ks?: AnchorStore & { s
   const lag = opts.lag ?? LAG;
   const home = tmpHome();
   const ks = opts.ks ?? memKeystore();
-  const l1 = KernelLog.open(base(home, ks, BOOT_A));
+  const l1 = openKernelLog(base(home, ks, BOOT_A));
   await fill(l1, 1);
   l1.checkpoint(); // file anchor durable at seq 1
   await l1.flushAnchors();
@@ -134,7 +134,7 @@ async function rolledBackFileAnchor(opts: { lag?: number; ks?: AnchorStore & { s
 async function ksAheadFileLagging(): Promise<{ home: string; ks: MemKs }> {
   const home = tmpHome();
   const ks = memKeystore();
-  const l = KernelLog.open(base(home, ks, BOOT_A));
+  const l = openKernelLog(base(home, ks, BOOT_A));
   opened.push(l); // "dies" without close
   await fill(l, 1);
   l.checkpoint();
@@ -315,7 +315,7 @@ describe('P8-D85: file-anchor lag > 63 is relaxed only across a boot change, aut
     // keystore ahead, file anchor within bound ⇒ truncated / unclean-reboot
     const home = tmpHome();
     const ks = memKeystore();
-    const l1 = KernelLog.open(base(home, ks, BOOT_A));
+    const l1 = openKernelLog(base(home, ks, BOOT_A));
     opened.push(l1); // "dies" without close
     await fill(l1, 6);
     await l1.flushAnchors();
@@ -338,10 +338,10 @@ describe('P8-D85: file-anchor lag > 63 is relaxed only across a boot change, aut
     expect([st.reason, st.refusal.data.cause, st.refusal.data.fileLag]).toEqual(['truncated', 'tamper', LAG + 1]);
     // recovery + acknowledgeGap records fileLag in daemon.log.gap; the chain verifies
     const rec = await ksAheadFileLagging();
-    const rl = KernelLog.openForRecovery(base(rec.home, rec.ks, BOOT_B));
+    const rl = openKernelLogForRecovery(base(rec.home, rec.ks, BOOT_B));
     opened.push(rl);
     expect(rl.report.integrity).toMatchObject({ state: 'truncated', cause: 'unclean-reboot', fileLag: LAG + 1 });
-    const ack = await rl.acknowledgeGap({ presenceToken: 'stub-presence' });
+    const ack = await acknowledgeGap(rl, { presenceToken: mintTestPresence() });
     expect(ack.event.payload).toMatchObject({ bootPrev: BOOT_A, bootNow: BOOT_B, fileLag: LAG + 1 });
     expect(fileHead(rec.home).seq).toBe(ack.seq);
     expect(rl.verify().ok).toBe(true);
@@ -372,7 +372,7 @@ describe('P8-D85: file-anchor lag > 63 is relaxed only across a boot change, aut
     const home = tmpHome();
     const ks = memKeystore();
     const seg = LAG + 8; // closing row seq
-    const l1 = KernelLog.open({ ...base(home, ks, BOOT_A), segmentRows: seg });
+    const l1 = openKernelLog({ ...base(home, ks, BOOT_A), segmentRows: seg });
     await fill(l1, 1);
     l1.checkpoint();
     await l1.flushAnchors();
@@ -393,10 +393,10 @@ describe('P8-D85: file-anchor lag > 63 is relaxed only across a boot change, aut
     renameSync(path.join(home, 'log', 'segments', '000001.db'), path.join(home, 'kernel.db'));
     ks.stored = { ...ks.stored!, segment: 1, seq: closing.seq, hash: closing.hash, closed: undefined } as HeadAnchor; // anchored at the closing row, boot A
     writeFileSync(headFile(home), head1);
-    expect(() => KernelLog.open({ ...base(home, ks, BOOT_B, failingSigner(1)), segmentRows: seg })).toThrow('injected signer failure');
+    expect(() => openKernelLog({ ...base(home, ks, BOOT_B, failingSigner(1)), segmentRows: seg })).toThrow('injected signer failure');
     expect(fileHead(home).seq).toBe(1);
     expect(ks.stored).toMatchObject({ seq: closing.seq, boot: BOOT_A });
-    const r = KernelLog.open({ ...base(home, ks, BOOT_B), segmentRows: seg });
+    const r = openKernelLog({ ...base(home, ks, BOOT_B), segmentRows: seg });
     opened.push(r);
     expect(r.report.anchorLag).toBe(seg - 1);
     expect(lagRows(r).map((e) => e.payload)).toEqual([{ rows: seg - 1, which: 'file', bootPrev: BOOT_A, bootNow: BOOT_B }]);

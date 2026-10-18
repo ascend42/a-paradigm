@@ -64,7 +64,9 @@ components:
 
   contract-event-v1:
     description: >-
-      event:v1 envelope (§4.1) — EventV1 type, validateEventV1/isEventV1
+      event:v1 envelope (§4.1) — P8-D89 (M1.4): reserves daemon.log.quarantined
+      (evidencePath a sensitive field) and adds key.token.revoked{tokenId},
+      tag M1.4:P8-D89. EventV1 type, validateEventV1/isEventV1
       (strict = registered kind + closed fields; tolerant = unknown kinds and
       fields accepted, opaqueEventView renders {kind, principal, at}),
       schemas/event.v1.schema.json. The kind registry EVENT_KINDS (§9.1,
@@ -141,7 +143,17 @@ components:
 
   contract-refusal-v1:
     description: >-
-      refusal:v1 Gnomon superset (§4.6) — copied (not imported) from
+      refusal:v1 Gnomon superset (§4.6) — P8-D89 (M1.4 slice 3) registers the
+      read-token reasons (unknown-token, token-expired, token-revoked,
+      token-in-use, token-not-yet-valid, token-store-untrusted), gone, the
+      log.append ownership reasons (kernel-owned, ungranted, modns-not-own,
+      bad-kind, bad-params), the slice-2 log.read / ref.resolve reasons
+      (follow-needs-id, backlog-too-large, bad-since/until/limit/follow/kinds/
+      scope, since-ahead, subscription-cap, mod-principal-name,
+      reader-unsupported, bad-ref, rev-not-applicable, unknown-scheme,
+      peer-ref, no-resolver, not-found, row-integrity, closed) and
+      CLIENT_LOCAL_REFUSAL_REASONS
+      (hello-not-offered); log.append's verb refusals gain ENGINE. copied (not imported) from
       packages/warpline/src/fabric/refusal.ts: Warpline's 12 codes + BUDGET_DENIED,
       PERMIT_REQUIRED, CAS_LOST, BILLING_REFUSED, MODEL_UNAVAILABLE; gates + budget,
       billing, model, voice, link, and reserved review, strictness (P8-D86–D88);
@@ -191,7 +203,11 @@ components:
   contract-gnomon-rpc-v1:
     description: >-
       gnomon-rpc:v1 (§4.9, §5, §12.3) — hello params/result types and
-      validators, auth preimage helpers, negotiateHello (highest shared
+      validators, auth preimage helpers (authServerMessage / authClientMessage /
+      authTokenMessage + their *Preimage forms, all binding the negotiated
+      clientApi + canonical features; no unbound form; AUTH_TOKEN_DOMAIN
+      gnomon:auth-token:v1 for read-token proof of possession — M1.4 slice 3,
+      T-2026-10-17-017, P8-D89a), negotiateHello (highest shared
       version, feature intersection, UNSUPPORTED{data:{offered[]}}); the frozen
       VERBS (12, with params, refusals and the §5 access matrix incl. the
       all-refused peer column; session.open runMode?, contract.claim note? /

@@ -4,7 +4,7 @@
  * surface: 12 kernel verbs + 2 client relays.
  */
 
-import { Checker, deepFreeze, type ValidateOptions } from './internal.js';
+import { Checker, canonicalJson, deepFreeze, type ValidateOptions } from './internal.js';
 import { PRINCIPAL_KINDS } from './principal.js';
 import { CARD_KINDS, CARD_STATES, CARD_FLAGS, CARD_DECISIONS, PRESENCE_VALUES, VIA_VALUES, RUN_MODES, STRICTNESS_LEVELS } from './card.js';
 import { FINDING_RESPONSES, FINDING_SEVERITIES } from './review-finding.js';
@@ -65,7 +65,7 @@ export const VERBS: readonly VerbDescriptor[] = deepFreeze([
   },
   {
     n: 5, verb: 'log.append', params: ['kind', 'payload?', 'ref?', 'causes?', 'scope?', 'idem?', 'audience?', 'sensitivity?'], result: '{id, seq, hash}',
-    refusals: ['FORBIDDEN', 'BAD_REQUEST'], humanOnly: false,
+    refusals: ['FORBIDDEN', 'BAD_REQUEST', 'ENGINE'], humanOnly: false,
     access: { human: 'granted kinds + request.* (first-party human-class connections)', agent: 'granted kinds', session: false, mod: 'modns.<name>.* only', voice: 'voice.* + request.voice.arm', readToken: false, peer: false },
   },
   {
@@ -241,11 +241,47 @@ export const HELLO_RESULT_KEYS = ['clientApi', 'features', 'nonce', 'serverKeyId
 /** Server-signature domain for hello and the auth preimages (§4.9). */
 export const AUTH_SERVER_DOMAIN = 'gnomon:auth-server:v1' as const;
 export const AUTH_CLIENT_DOMAIN = 'gnomon:auth:v1' as const;
-export function authServerPreimage(nonce: string, endpointPath: string): string {
-  return `${AUTH_SERVER_DOMAIN}\n${nonce}\n${endpointPath}`;
+/** Read-token proof-of-possession domain (§4.9 read tokens, P8-D89a): never verifies as device auth, nor the reverse. */
+export const AUTH_TOKEN_DOMAIN = 'gnomon:auth-token:v1' as const;
+
+/**
+ * The negotiated hello outcome every auth signature binds (M1.4 downgrade-
+ * proofing, T-2026-10-17-017): a relay that rewrites the hello offer cannot
+ * pick a clientApi or feature set no signature covers. The kernel signs and
+ * verifies exactly these messages; there is no unbound form.
+ */
+export interface NegotiatedHello {
+  clientApi: string;
+  features: readonly string[];
 }
-export function authClientPreimage(nonce: string, serverKeyId: string, principalId: string, deviceId: string, endpointPath: string): string {
-  return `${AUTH_CLIENT_DOMAIN}\n${nonce}\n${serverKeyId}\n${principalId}\n${deviceId}\n${endpointPath}`;
+
+function negotiatedLines(n: NegotiatedHello): string {
+  return `\n${n.clientApi}\n${canonicalJson([...n.features])}`;
+}
+
+/** serverSig message after the domain line: nonce, endpoint path, the negotiated clientApi and canonical features. */
+export function authServerMessage(nonce: string, endpointPath: string, negotiated: NegotiatedHello): string {
+  return `${nonce}\n${endpointPath}${negotiatedLines(negotiated)}`;
+}
+
+/** Device-key auth message after the domain line. */
+export function authClientMessage(nonce: string, serverKeyId: string, principalId: string, deviceId: string, endpointPath: string, negotiated: NegotiatedHello): string {
+  return `${nonce}\n${serverKeyId}\n${principalId}\n${deviceId}\n${endpointPath}${negotiatedLines(negotiated)}`;
+}
+
+/** Read-token auth message after the domain line: the device shape with the tokenId in the principal/device slots' place. */
+export function authTokenMessage(nonce: string, serverKeyId: string, tokenId: string, endpointPath: string, negotiated: NegotiatedHello): string {
+  return `${nonce}\n${serverKeyId}\n${tokenId}\n${endpointPath}${negotiatedLines(negotiated)}`;
+}
+
+export function authServerPreimage(nonce: string, endpointPath: string, negotiated: NegotiatedHello): string {
+  return `${AUTH_SERVER_DOMAIN}\n${authServerMessage(nonce, endpointPath, negotiated)}`;
+}
+export function authClientPreimage(nonce: string, serverKeyId: string, principalId: string, deviceId: string, endpointPath: string, negotiated: NegotiatedHello): string {
+  return `${AUTH_CLIENT_DOMAIN}\n${authClientMessage(nonce, serverKeyId, principalId, deviceId, endpointPath, negotiated)}`;
+}
+export function authTokenPreimage(nonce: string, serverKeyId: string, tokenId: string, endpointPath: string, negotiated: NegotiatedHello): string {
+  return `${AUTH_TOKEN_DOMAIN}\n${authTokenMessage(nonce, serverKeyId, tokenId, endpointPath, negotiated)}`;
 }
 
 export function validateHelloParams(value: unknown, opts: ValidateOptions = {}): string[] {

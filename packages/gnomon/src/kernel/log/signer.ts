@@ -57,12 +57,14 @@ export const SIGNATURE_DOMAINS = {
   auth: 'gnomon:auth:v1',
   /** #socket serverSig (§4.9): `gnomon:auth-server:v1\n<nonce>\n<endpointPath>`, kernel key only. */
   authServer: 'gnomon:auth-server:v1',
+  /** Read-token proof of possession (§4.9, P8-D89a): the token's own Ed25519 key only. */
+  authToken: 'gnomon:auth-token:v1',
   brief: 'gnomon:brief:v1',
 } as const;
 export type SignatureDomain = keyof typeof SIGNATURE_DOMAINS;
 
 /** §3.1 key classes that sign (the link key never signs; X25519, Noise only). */
-export type KeyClass = 'kernel' | 'root' | 'approvals' | 'device' | 'agent';
+export type KeyClass = 'kernel' | 'root' | 'approvals' | 'device' | 'agent' | 'readToken';
 
 /** Which domains each key class may sign (§3.1 "Signs:" per class). */
 export const DOMAINS_BY_KEY_CLASS: Readonly<Record<KeyClass, readonly SignatureDomain[]>> = Object.freeze({
@@ -71,6 +73,8 @@ export const DOMAINS_BY_KEY_CLASS: Readonly<Record<KeyClass, readonly SignatureD
   approvals: Object.freeze(['approve', 'approveVoice', 'event'] as const),
   device: Object.freeze(['auth', 'event'] as const),
   agent: Object.freeze(['auth', 'event'] as const),
+  /** A read token's key proves possession on `auth` and signs nothing else (no event, no device auth). */
+  readToken: Object.freeze(['authToken'] as const),
 });
 
 export type KeyCustody = 'software' | 'hardware';
