@@ -108,6 +108,18 @@ import {
   type PrincipalKind,
   type VerbDescriptor,
 } from '@a-company/gnomon-contracts';
+import type { ConnectionContext, RpcHandler } from './server.js';
+import { RpcRefusal, type RpcRequestFrame } from './rpc.js';
+import type { ConnAuthState, SocketAuthenticator, WebAuthHook } from './auth.js';
+import { resolveRef } from '../refs/resolve.js';
+import { refuseAppend, type AppendClass } from './log-append.js';
+import type { SessionPort } from '../supervisor/port.js';
+import { MOD_ABI_ID } from '@a-company/gnomon-contracts';
+
+const SESSION_METHODS: readonly string[] = ['session.open', 'session.send', 'session.stop'];
+import { voiceApproveRefusal } from '../broker/broker.js';
+import type { ApprovalPort } from '../broker/port.js';
+import { asRpcRefusal, parseLogReadParams, readerFor, readOnePage, SUBSCRIPTION_BACKLOG_CAP, MAX_SUBSCRIPTIONS_PER_CONNECTION, type ReadLog, type SubscriptionHub } from './log-read.js';
 
 const REPORT_HASH = /^sha256:[0-9a-f]{64}$/;
 const MAX_CONFORMANCE_FIELD = 64;
@@ -126,18 +138,6 @@ export function declaredConformance(v: unknown): { suite: string; version: strin
   const clean = (s: string): string => Array.from(sanitizeDisplayText(s).text).slice(0, MAX_CONFORMANCE_FIELD).join('');
   return { suite: clean(suite), version: clean(version), reportHash, label: 'declared' };
 }
-import type { ConnectionContext, RpcHandler } from './server.js';
-import { RpcRefusal, type RpcRequestFrame } from './rpc.js';
-import type { ConnAuthState, SocketAuthenticator, WebAuthHook } from './auth.js';
-import { resolveRef } from '../refs/resolve.js';
-import { refuseAppend, type AppendClass } from './log-append.js';
-import type { SessionPort } from '../supervisor/port.js';
-import { MOD_ABI_ID } from '@a-company/gnomon-contracts';
-
-const SESSION_METHODS: readonly string[] = ['session.open', 'session.send', 'session.stop'];
-import { voiceApproveRefusal } from '../broker/broker.js';
-import type { ApprovalPort } from '../broker/port.js';
-import { asRpcRefusal, parseLogReadParams, readerFor, readOnePage, SUBSCRIPTION_BACKLOG_CAP, MAX_SUBSCRIPTIONS_PER_CONNECTION, type ReadLog, type SubscriptionHub } from './log-read.js';
 
 /** Where each not-yet-served method lands (spec §19). */
 export const VERB_MILESTONES: Readonly<Record<string, string>> = Object.freeze({

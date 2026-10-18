@@ -44,7 +44,8 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { createHash } from 'node:crypto';
-import { canonicalJson, mintId, validateCardV1, type CardV1 } from '@a-company/gnomon-contracts';
+import { canonicalJson, mintId, sanitizeDisplayText, validateCardV1, type CardFlag, type CardV1 } from '@a-company/gnomon-contracts';
+import { MAX_LINE } from '../broker/card.js';
 import type { RootAuthority } from '../identity/root-authority.js';
 import type { RowVerifier } from '../identity/registry.js';
 import { consumeBoundPresence } from '../identity/presence.js';
@@ -180,25 +181,63 @@ function surfaceOf(m: ManifestV1): Surface {
   };
 }
 
-function blockFor(d: InstallCardDetail): Record<string, unknown> {
-  const line = (text: string) => ({ type: 'Text', text });
-  return {
-    schemaVersion: 'display-block:v1',
-    type: 'Box',
-    children: [
-      line(`${d.replaces ? 'Re-approve' : 'Install'} mod ${d.name} ${d.version} (${d.kind}) from ${d.source}, tier ${d.tier}`),
-      line(`packageHash ${d.packageHash}`),
-      line(`effects: ${d.effects.join(', ') || 'none'} · egress: ${d.egress.join(', ') || 'none'}`),
-      line(`capabilities: ${d.capabilities.join(', ') || 'none'} · read paths: ${d.readPaths.join(', ') || 'none'}`),
-      line(`events: ${d.events.join(', ') || 'none'} · tools: ${d.tools.join(', ') || 'none'} · views: ${d.views.join(', ') || 'none'}`),
-      line(`commands: ${d.commands.join(', ') || 'none'} · keybindings: ${d.keybindings.join(', ') || 'none'} · knowledge: ${d.knowledge.join(', ') || 'none'}`),
-      line(`mcp: ${d.mcp.join('; ') || 'none'} · hooks: ${d.hooks.join('; ') || 'none'}`),
-      ...(Object.keys(d.opaque).length ? [line(`also ships: ${Object.entries(d.opaque).map(([k, n]) => `${k} ×${n}`).join(', ')}`)] : []),
-      ...(d.packages.length ? [line(`packages: ${d.packages.join(', ')}`)] : []),
-      ...(d.widened.length && d.replaces ? [line(`WIDENED: ${d.widened.map((w) => `${w.field} +${w.added.join(' +')}`).join('; ')}`)] : []),
-      ...(d.replaces ? [line(`files: +${d.files.added.length} ~${d.files.changed.length} -${d.files.removed.length}`)] : []),
-    ],
-  };
+/** The prefix of a wrapped line's continuation. */
+export const INSTALL_CONTINUATION = '  ↳ ';
+
+/**
+ * One logical card line as display lines that are NEVER cut (T-2026-10-18-015
+ * item 2): the text is sanitized here (§4.5, the same published sanitizer the
+ * broker applies; it is idempotent on its own output, so the broker's pass
+ * changes nothing) and its flags are collected, then it is wrapped by code
+ * points into lines of at most MAX_LINE (card.ts), continuations prefixed
+ * `  ↳ `. A wrap never puts a variation selector at the start of a line (a
+ * re-sanitize would strip it there). No cap on the number of lines: the card
+ * is bounded by the same manifest the full detail (inside contentHash)
+ * already carries, so nothing on an install card is hidden by truncation.
+ */
+function wrapLine(text: string, flags: Set<CardFlag>): string[] {
+  const s = sanitizeDisplayText(text);
+  for (const f of s.flags) flags.add(f);
+  const cps = Array.from(s.text);
+  if (cps.length <= MAX_LINE) return [s.text];
+  const isVs = (ch: string | undefined): boolean => ch !== undefined && ch.codePointAt(0)! >= 0xfe00 && ch.codePointAt(0)! <= 0xfe0f;
+  const out: string[] = [];
+  const contLen = Array.from(INSTALL_CONTINUATION).length;
+  let i = 0;
+  while (i < cps.length) {
+    const room = out.length === 0 ? MAX_LINE : MAX_LINE - contLen;
+    let end = Math.min(cps.length, i + room);
+    while (end < cps.length && end > i + 1 && isVs(cps[end])) end--;
+    out.push(`${out.length === 0 ? '' : INSTALL_CONTINUATION}${cps.slice(i, end).join('')}`);
+    i = end;
+  }
+  return out;
+}
+
+/**
+ * The install card's display block and the sanitizer flags of every line. mcp
+ * servers and hooks run commands, so each entry is its OWN line (`mcp: …`,
+ * `hooks: …`): a long mcp argument list can no longer push a hook past a
+ * line cap (T-2026-10-18-015 item 2).
+ */
+export function blockFor(d: InstallCardDetail): { block: Record<string, unknown>; flags: CardFlag[] } {
+  const flags = new Set<CardFlag>();
+  const logical = [
+    `${d.replaces ? 'Re-approve' : 'Install'} mod ${d.name} ${d.version} (${d.kind}) from ${d.source}, tier ${d.tier}`,
+    `packageHash ${d.packageHash}`,
+    `effects: ${d.effects.join(', ') || 'none'} · egress: ${d.egress.join(', ') || 'none'}`,
+    `capabilities: ${d.capabilities.join(', ') || 'none'} · read paths: ${d.readPaths.join(', ') || 'none'}`,
+    `events: ${d.events.join(', ') || 'none'} · tools: ${d.tools.join(', ') || 'none'} · views: ${d.views.join(', ') || 'none'}`,
+    `commands: ${d.commands.join(', ') || 'none'} · keybindings: ${d.keybindings.join(', ') || 'none'} · knowledge: ${d.knowledge.join(', ') || 'none'}`,
+    ...(d.mcp.length ? d.mcp.map((m) => `mcp: ${m}`) : ['mcp: none']),
+    ...(d.hooks.length ? d.hooks.map((h) => `hooks: ${h}`) : ['hooks: none']),
+    ...(Object.keys(d.opaque).length ? [`also ships: ${Object.entries(d.opaque).map(([k, n]) => `${k} ×${n}`).join(', ')}`] : []),
+    ...(d.packages.length ? [`packages: ${d.packages.join(', ')}`] : []),
+    ...(d.widened.length && d.replaces ? [`WIDENED: ${d.widened.map((w) => `${w.field} +${w.added.join(' +')}`).join('; ')}`] : []),
+    ...(d.replaces ? [`files: +${d.files.added.length} ~${d.files.changed.length} -${d.files.removed.length}`] : []),
+  ];
+  const children = logical.flatMap((l) => wrapLine(l, flags)).map((text) => ({ type: 'Text', text }));
+  return { block: { schemaVersion: 'display-block:v1', type: 'Box', children }, flags: [...flags].sort() };
 }
 
 function stagedPath(home: string, name: string, cardId: string): string {
@@ -301,6 +340,7 @@ export function stageInstall(opts: StageOptions): StageResult {
     stagedBy: opts.requestedBy,
     ...(opts.hsid ? { hsid: opts.hsid } : {}),
   };
+  const shown = blockFor(detail);
   const card: CardV1 = {
     schemaVersion: 'card:v1',
     cardId: mintId('card'),
@@ -309,8 +349,9 @@ export function stageInstall(opts: StageOptions): StageResult {
     ...(opts.hsid ? { hsid: opts.hsid } : {}),
     attended: opts.attended ?? false,
     approverPolicy: { kind: 'self' },
-    block: blockFor(detail),
+    block: shown.block,
     contentHash: sha(canonicalJson(detail)),
+    ...(shown.flags.length ? { flags: shown.flags } : {}),
     actions: [], // kernel-signed actions are the broker's (M1.6)
     state: 'pending',
   };
@@ -357,7 +398,7 @@ export function rollbackPresenceBinding(name: string, toPackageHash: string | un
  * from what the snapshot derives, or when the snapshot no longer hashes to its
  * packageHash. Read-only.
  */
-export function rederiveInstallDetail(home: string, name: string, cardId: string): { record: StagedRecord; detail: InstallCardDetail; lines: string[]; detailHash: string } {
+export function rederiveInstallDetail(home: string, name: string, cardId: string): { record: StagedRecord; detail: InstallCardDetail; lines: string[]; flags: CardFlag[]; detailHash: string } {
   if (typeof cardId !== 'string' || !CARD_ID.test(cardId)) throw new ManifestRefusal('SCHEMA', 'cardId must be card:<ULID>', { cardId: String(cardId) });
   if (typeof name !== 'string' || !/^[a-z][a-z0-9-]{0,63}$/.test(name)) throw new ManifestRefusal('SCHEMA', 'malformed mod name', { name: String(name) });
   const rec = readStaged(home, name, cardId);
@@ -386,8 +427,9 @@ export function rederiveInstallDetail(home: string, name: string, cardId: string
     }
     if (linkedHash !== derived.packageHash) throw new ManifestRefusal('INTEGRITY', `install card ${cardId}: the linked source no longer hashes to the snapshot`, { name, cardId });
   }
-  const block = blockFor(derived) as { children: Array<{ text: string }> };
-  return { record: rec, detail: derived, lines: block.children.map((c) => c.text), detailHash: sha(canonicalJson(derived)) };
+  const shown = blockFor(derived);
+  const children = (shown.block as { children: Array<{ text: string }> }).children;
+  return { record: rec, detail: derived, lines: children.map((c) => c.text), flags: shown.flags, detailHash: sha(canonicalJson(derived)) };
 }
 
 /**

@@ -58,10 +58,21 @@ export interface RunOptions {
   client: { name: string; version: string; language?: string };
 }
 
-/** A fake endpoint that answers hello with `hello` (a real one, re-signed by nobody) and counts auth frames. */
+/**
+ * A fake endpoint that answers hello with the kernel's own hello fields and a
+ * FORGED serverSig (64 random bytes), and counts the auth frames it receives.
+ * It is NOT a replay of a real signed hello: replaying a genuine serverSig
+ * against a fresh nonce is the open T-2026-10-18-016 gap.
+ *
+ * POSIX: a socket file in a private temp dir. Windows: a named pipe with a
+ * random name (a pipe path is not a filesystem entry, so there is no dir).
+ * A listen failure (EADDRINUSE, EACCES, …) rejects, so the check FAILS with
+ * that error instead of crashing the runner.
+ */
 async function impostor(hello: Record<string, unknown>): Promise<{ path: string; authFrames: () => number; close: () => Promise<void> }> {
-  const dir = mkdtempSync(path.join(tmpdir(), 'gimp-'));
-  const sockPath = path.join(dir, 's');
+  const win = process.platform === 'win32';
+  const dir = win ? null : mkdtempSync(path.join(tmpdir(), 'gimp-'));
+  const sockPath = dir ? path.join(dir, 's') : `\\\\.\\pipe\\gnomon-impostor-${randomBytes(12).toString('hex')}`;
   let auths = 0;
   const forged = { ...hello, serverSig: randomBytes(64).toString('base64') };
   const server = net.createServer((sock) => {
@@ -83,14 +94,29 @@ async function impostor(hello: Record<string, unknown>): Promise<{ path: string;
       }
     });
   });
-  await new Promise<void>((res) => server.listen(sockPath, res));
+  const cleanup = (): void => {
+    if (dir) rmSync(dir, { recursive: true, force: true });
+  };
+  try {
+    await new Promise<void>((res, rej) => {
+      server.once('error', rej);
+      server.listen(sockPath, () => {
+        server.off('error', rej);
+        res();
+      });
+    });
+  } catch (err) {
+    cleanup();
+    throw new CheckFailed(`the impostor endpoint could not listen on ${sockPath}: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  server.on('error', () => undefined); // after listen: a late server error never crashes the runner
   return {
     path: sockPath,
     authFrames: () => auths,
     close: () =>
       new Promise<void>((res) => {
         server.close(() => {
-          rmSync(dir, { recursive: true, force: true });
+          cleanup();
           res();
         });
       }),
@@ -144,7 +170,8 @@ const CHECKS: Record<string, Check> = {
     must(!b.ok && b.error?.kind === 'client', `a hello signed by another key was not refused locally: ${JSON.stringify(b.error ?? 'connected')}`);
     await new Promise((res) => setTimeout(res, 50));
     must((await f.authRows()) === before, 'an auth was sent to an unverified server');
-    // (c) an impostor that replays a REAL hello (the kernel's keyId) with a forged serverSig: zero auth frames
+    // (c) an impostor that copies the real hello's fields (the kernel's keyId) with a FORGED (random) serverSig:
+    //     zero auth frames. This is not a replay of a genuinely signed hello; that case is the open T-2026-10-18-016 gap.
     const real = await connect(d, f, c, { kernelKey: f.kernelKey });
     must(real.ok, 'hello failed');
     await d.request({ op: 'close', conn: real.conn });
@@ -168,6 +195,12 @@ const CHECKS: Record<string, Check> = {
   async 'auth.device-refused'(d, f, c) {
     const r = await connect(d, f, c, { kernelKey: f.kernelKey, credential: f.unregisteredDevice });
     must(refusedAs(r, 'AUTH'), `expected one AUTH refusal, got ${JSON.stringify(r.error ?? 'connected')}`);
+    // "the client keeps no connection": a refusal carries no live handle; if the driver hands one back, it must be closed
+    if (r.conn !== undefined && r.conn !== null) {
+      const cl = await d.request({ op: 'closed', conn: r.conn, timeoutMs: 1000 });
+      must(cl.ok && cl.closed === true, 'the client kept a live connection after the AUTH refusal');
+      await d.request({ op: 'close', conn: r.conn });
+    }
   },
   async 'auth.read-token'(d, f, c) {
     const r = await connect(d, f, c, { kernelKey: f.kernelKey, credential: { kind: 'read-token', token: f.readToken } });
@@ -199,6 +232,15 @@ const CHECKS: Record<string, Check> = {
     must(refusedAs(r, 'BAD_REQUEST'), `expected BAD_REQUEST, got ${JSON.stringify(r.error ?? r.result)}`);
     await d.request({ op: 'close', conn });
   },
+  /**
+   * Contiguity (`seqs[i] === seqs[i-1] + 1`, first row = since + 1) holds only
+   * because the fixture's device principal has FULL visibility of the log:
+   * every seq is delivered to it. A restricted principal (a projection, a mod's
+   * own modns, a read token over a redacted view) legitimately sees gaps; a
+   * runner for such a principal must compare the subscription against the
+   * oracle page from the same `since` (the backlog check below) and must not
+   * assert contiguity.
+   */
   async 'subscribe.since'(d, f, c) {
     const conn = await authed(d, f, c);
     const probe = await d.request({ op: 'call', conn, method: 'log.read', params: { limit: 1 } });

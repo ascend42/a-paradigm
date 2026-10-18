@@ -519,7 +519,13 @@ components:
       linked) raises a PENDING card:v1 kind install with its detail (name,
       source, tier, effects, egress, capabilities, events, tools, views, read
       paths, package@version list, widening, file diff, stagedBy) and signs
-      nothing (manifest.staged); loadMod loads only from a pinned snapshot
+      nothing (manifest.staged). The card's lines put every mcp server and
+      every hook on its OWN line and are sanitized and WRAPPED by code points
+      under the broker's MAX_LINE (continuations `  ↳ `), never cut, so a long
+      mcp argument list cannot push a hook out of sight; the sanitizer flags
+      travel with the lines (blockFor → rederiveInstallDetail → the broker),
+      and contentHash still covers the full detail (T-2026-10-18-015 item 2);
+      loadMod loads only from a pinned snapshot
       under a root-signed grant.install, re-hashes it (INTEGRITY), checks
       grants, and for a linked folder re-hashes the source: a change pauses
       the mod (mod.paused) and stages one re-approve card (manifest.widened
@@ -908,9 +914,19 @@ components:
       SubprocessDriver (any language over stdio); runner.ts: runs every
       CONFORMANCE_CHECKS `run` check against a live kernel, `slice-2` checks
       reported todo, report + conformanceReportHash; hello.server-sig-mismatch
-      runs an impostor endpoint replaying a real hello with a forged serverSig
-      (zero auth frames), subscribe.since checks the backlog against a
-      non-follow page (since+1, no gaps). status.clients[] copies only
+      runs an impostor endpoint that copies the real hello's fields with a
+      FORGED (random) serverSig (zero auth frames) — not a replay of a
+      genuinely signed hello, which is the open T-2026-10-18-016 gap; the
+      impostor listens on a private socket file (POSIX) or a random named
+      pipe (Windows) and a listen error fails the check instead of crashing
+      the runner. auth.device-refused also requires that the client keeps no
+      live connection after the AUTH refusal. subscribe.since checks the
+      backlog against a non-follow page (since+1, no gaps); contiguity
+      assumes the fixture's full-visibility principal, a restricted principal
+      must use the oracle-page comparison only. Falsifiers (T-2026-10-18-015):
+      a client that checks the pin's PEM hash and keyId but never serverSig
+      fails only hello.server-sig-mismatch, at case (c); a client that keeps a
+      connection after the refusal fails auth.device-refused. status.clients[] copies only
       {suite, version, reportHash} (sanitized, capped) and labels a
       declared tuple `declared` and reports clientConformance{n, of} (G-OBS-01).
     tags: [gnomon, m1.12, client, conformance]
@@ -933,7 +949,11 @@ components:
       from the card record (kind, requester, contentHash summary, connId, open
       GUI sessions {n}, the class reason) and signed by the kernel key (domain
       gnomon:presence-prompt:v1); verifyPresencePrompt checks text = the
-      record's composition. unlock.ts — per-connection cached unlock keyed by
+      record's composition. Line cap MAX_LINE (512 code points, exported for
+      #manifest-loader's install-card wrapping); the presence summary takes
+      the first line's first 120 code points, never splitting a surrogate
+      pair. install-card.ts passes the install card's pre-sanitized lines
+      together with their sanitizer flags. unlock.ts — per-connection cached unlock keyed by
       connId, created only by a fresh presence on that connection, never for a
       CLI connection, dropped on close (approval.unlock.dropped{reason:closed})
       or after 15 min idle (reason idle), never usable from another

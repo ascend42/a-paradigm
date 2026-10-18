@@ -28,7 +28,8 @@ import { canonicalJson, hex, sanitizeDisplayText, sha256, type CardFlag, type Ca
 import type { KeyRing, Signer } from '../log/signer.js';
 import { validDecisions } from './classes.js';
 
-const MAX_LINE = 512;
+/** The display cap of one card line, in code points (install.ts wraps security lines under it, so they are never cut). */
+export const MAX_LINE = 512;
 
 export function sha256Hex(s: string): string {
   return `sha256:${hex(sha256(s))}`;

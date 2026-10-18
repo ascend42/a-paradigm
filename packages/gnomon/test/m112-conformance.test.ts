@@ -6,7 +6,8 @@
  * Every CONFORMANCE_CHECKS `run` check passes; `slice-2` checks are `todo`.
  */
 import { generateKeyPairSync } from 'node:crypto';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -202,6 +203,114 @@ describe('#client-conformance falsifiers (the runner can fail)', () => {
     const report = await runConformance(lying, f, { client: { name: 'keyid-only', version: '0' } });
     expect(report.checks.find((c) => c.id === 'hello.server-sig-mismatch')?.result).toBe('fail');
     expect(report.pass).toBe(false);
+  });
+
+  it('T-2026-10-18-015 item 4: a client that checks the pinned PEM hash and keyId but never verifies serverSig fails ONLY hello.server-sig-mismatch, at case (c)', async () => {
+    const f = await kernelRig();
+    const inner = new TsClientDriver();
+    cleanups.push(() => inner.stop());
+    /** hello on a raw socket; true when serverKeyId equals the pin's keyId AND the pin's PEM hashes to that keyId. serverSig is never looked at. */
+    const pinOnly = async (socketPath: string, pin: { keyId: string; publicKeyPem: string }): Promise<{ ok: boolean; send: (frame: unknown) => void; done: () => void }> => {
+      const sock = net.connect(socketPath);
+      await new Promise((res, rej) => sock.once('connect', res).once('error', rej));
+      sock.on('error', () => undefined);
+      const frames: Array<Record<string, unknown>> = [];
+      let buf = '';
+      sock.on('data', (ch) => {
+        buf += ch.toString('utf8');
+        let nl: number;
+        while ((nl = buf.indexOf('\n')) >= 0) {
+          frames.push(JSON.parse(buf.slice(0, nl)));
+          buf = buf.slice(nl + 1);
+        }
+      });
+      sock.write(`${JSON.stringify({ jsonrpc: '2.0', rpc: 'gnomon-rpc:v1', id: 1, method: 'hello', params: { clientApis: ['gnomon-rpc:v1'], features: [], client: CLIENT } })}\n`);
+      while (!frames.length) await new Promise((r) => setTimeout(r, 10));
+      const serverKeyId = (frames[0]!.result as { serverKeyId?: string } | undefined)?.serverKeyId;
+      const ok = serverKeyId === pin.keyId && ed25519KeyIdOf(pin.publicKeyPem) === pin.keyId;
+      return { ok, send: (frame) => sock.write(`${JSON.stringify(frame)}\n`), done: () => sock.destroy() };
+    };
+    const noSig = {
+      language: 'typescript',
+      stop: () => inner.stop(),
+      request: async (r: Parameters<TsClientDriver['request']>[0]) => {
+        if (r.op === 'connect' && r.credential && r.kernelKey) {
+          const pin = r.kernelKey as { keyId: string; publicKeyPem: string };
+          const h = await pinOnly(String(r.socketPath), pin);
+          if (!h.ok) {
+            h.done();
+            return { id: r.id, ok: false, error: { kind: 'client' as const, reason: 'server-key-mismatch', message: 'pin check failed' } };
+          }
+          if (String(r.socketPath) === f.socketPath) {
+            // against the real kernel the signature is genuine, so skipping its check changes nothing: behave as the real client
+            h.done();
+            return inner.request(r);
+          }
+          // any other server: authenticates without ever checking serverSig
+          h.send({ jsonrpc: '2.0', rpc: 'gnomon-rpc:v1', id: 2, method: 'auth', params: { principal: f.device.principalId, deviceId: f.device.deviceId, sig: 'AAAA' } });
+          await new Promise((res) => setTimeout(res, 30));
+          h.done();
+          return { id: r.id, ok: true, conn: 'x', serverVerified: true };
+        }
+        return inner.request(r);
+      },
+    };
+    const report = await runConformance(noSig, f, { client: { name: 'pin-only', version: '0' } });
+    const failed = report.checks.filter((c) => c.result === 'fail');
+    expect(failed.map((c) => c.id)).toEqual(['hello.server-sig-mismatch']);
+    expect(failed[0]!.detail).toMatch(/forged serverSig was accepted/); // (a) and (b) passed; (c) caught it
+    expect(report.pass).toBe(false);
+  });
+
+  it('T-2026-10-18-015 item 6: a client that keeps a live connection after the AUTH refusal fails auth.device-refused', async () => {
+    const f = await kernelRig();
+    const inner = new TsClientDriver();
+    cleanups.push(() => inner.stop());
+    const keeper = {
+      language: 'typescript',
+      stop: () => inner.stop(),
+      request: async (r: Parameters<TsClientDriver['request']>[0]) => {
+        const res = await inner.request(r);
+        if (r.op === 'connect' && (r.credential as { deviceId?: string } | undefined)?.deviceId === f.unregisteredDevice.deviceId) {
+          // surfaces the refusal but hands back a still-open (hello-only) connection
+          const kept = await inner.request({ ...r, credential: undefined });
+          return { ...res, conn: kept.conn };
+        }
+        return res;
+      },
+    };
+    const report = await runConformance(keeper, f, { client: { name: 'keeper', version: '0' } });
+    const c = report.checks.find((x) => x.id === 'auth.device-refused')!;
+    expect(c.result).toBe('fail');
+    expect(c.detail).toMatch(/kept a live connection/);
+    expect(report.pass).toBe(false);
+  });
+
+  it('T-2026-10-18-015 item 5: an impostor that cannot listen fails hello.server-sig-mismatch with the listen error; the runner does not crash', async () => {
+    const f = await kernelRig();
+    const driver = new TsClientDriver();
+    cleanups.push(() => driver.stop());
+    const before = readdirSync(tmpdir()).filter((n) => n.startsWith('gimp-'));
+    // the impostor's listen() emits 'error' (as EADDRINUSE / EACCES would); without a listener that is an uncaught exception
+    const orig = net.Server.prototype.listen;
+    net.Server.prototype.listen = function (this: net.Server, ...a: unknown[]) {
+      if (typeof a[0] === 'string' && a[0].includes('gimp-')) {
+        process.nextTick(() => this.emit('error', Object.assign(new Error('listen EACCES (injected)'), { code: 'EACCES' })));
+        return this;
+      }
+      return (orig as (...x: unknown[]) => net.Server).apply(this, a);
+    } as typeof orig;
+    let report;
+    try {
+      report = await runConformance(driver, f, { client: { name: 'ts', version: '0' } });
+    } finally {
+      net.Server.prototype.listen = orig;
+    }
+    // the impostor's temp dir was removed on the failure path
+    expect(readdirSync(tmpdir()).filter((n) => n.startsWith('gimp-'))).toEqual(before);
+    const failed = report.checks.filter((c) => c.result === 'fail');
+    expect(failed.map((c) => c.id)).toEqual(['hello.server-sig-mismatch']);
+    expect(failed[0]!.detail).toMatch(/impostor endpoint could not listen/);
   });
 
   it('B2: a client that drops backlog rows fails subscribe.since', async () => {
