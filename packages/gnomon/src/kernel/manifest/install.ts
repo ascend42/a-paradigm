@@ -225,6 +225,8 @@ export function blockFor(d: InstallCardDetail): { block: Record<string, unknown>
   const logical = [
     `${d.replaces ? 'Re-approve' : 'Install'} mod ${d.name} ${d.version} (${d.kind}) from ${d.source}, tier ${d.tier}`,
     `packageHash ${d.packageHash}`,
+    // kernel-composed, before any manifest-controlled line (Aegis round 2 C2): the count cannot be pushed off-screen
+    `runs commands: ${d.mcp.length} mcp server(s), ${d.hooks.length} hook(s)`,
     `effects: ${d.effects.join(', ') || 'none'} · egress: ${d.egress.join(', ') || 'none'}`,
     `capabilities: ${d.capabilities.join(', ') || 'none'} · read paths: ${d.readPaths.join(', ') || 'none'}`,
     `events: ${d.events.join(', ') || 'none'} · tools: ${d.tools.join(', ') || 'none'} · views: ${d.views.join(', ') || 'none'}`,

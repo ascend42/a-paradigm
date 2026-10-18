@@ -351,7 +351,10 @@ components:
       both clear the timers); 2-min linger after the last GUI session
       (socket.web.linger, socket.web.stop{no-sessions}). Production spawn
       only through the platform's `transport` sandbox profile
-      (#oracle-sandbox); the unsandboxed child exists only via the internal
+      (#oracle-sandbox; interim residual T-2026-10-18-017: on macOS that
+      profile lets the child listen on every configured interface, LAN
+      included, until the kernel-accept handoff P14b-web
+      T-2026-10-18-020 lands); the unsandboxed child exists only via the internal
       seam `web` (testing.ts createWebEndpointForTest). Event kinds emitted
       (§9.1 socket namespace): socket.web.listen, socket.web.bundle.mismatch,
       socket.web.linger, socket.web.stop, socket.web.transport.exited,
@@ -394,9 +397,13 @@ components:
       every address configured on this host's interfaces — the LAN address
       and the 0.0.0.0 / :: wildcards included, an unconfigured 127.0.0.2
       denied — so the profile is NOT loopback-only (the child's own code binds
-      127.0.0.1; a compromised child could listen on the LAN). Not
-      expressible in SBPL; fd-passing does not help (listen() on an inherited
-      fd is re-checked by network-inbound). Profile unchanged pending Aegis.
+      127.0.0.1; a compromised child could listen on the LAN and be used as a
+      remote channel to the GUI sessions it relays). Not expressible in SBPL;
+      fd-passing does not help (listen() on an inherited fd is re-checked by
+      network-inbound). Profile unchanged; spec §A.7 and the §15.5 transport
+      row record it as an interim residual. Revisit trigger: the
+      kernel-accept handoff (P14b-web, T-2026-10-18-020), required before
+      Move 1 exit.
       The one-off macos-14 `listen EPERM 127.0.0.1` was not reproduced (0 of
       170 runs); web-sandbox.test.ts retries ONLY the loopback-listen leg (≤3,
       each failure annotated), never the denials, never in the kernel.
@@ -530,7 +537,11 @@ components:
       linked) raises a PENDING card:v1 kind install with its detail (name,
       source, tier, effects, egress, capabilities, events, tools, views, read
       paths, package@version list, widening, file diff, stagedBy) and signs
-      nothing (manifest.staged). The card's lines put every mcp server and
+      nothing (manifest.staged). The kernel-composed line `runs commands: N
+      mcp server(s), M hook(s)` follows the packageHash line, before any
+      manifest-controlled line (Aegis round 2 C2); mcp.command, mcp.args,
+      hooks.command and hooks.event refuse SCHEMA on C0/C1, Zl, Zp and Cf
+      (U+2028/U+2029 would otherwise draw a fake card line, C1). The card's lines put every mcp server and
       every hook on its OWN line and are sanitized and WRAPPED by code points
       under the broker's MAX_LINE (continuations `  ↳ `), never cut, so a long
       mcp argument list cannot push a hook out of sight; the sanitizer flags

@@ -191,6 +191,20 @@ function obj(v: unknown, where: string): Record<string, unknown> {
 /** C0 (incl. ESC), DEL and C1 controls: never legitimate in a manifest string, and they would reach install cards (Aegis M2). */
 // eslint-disable-next-line no-control-regex
 const CONTROL_CHARS = /[\u0000-\u001F\u007F-\u009F]/;
+/**
+ * The stricter class for every COMMAND-RUNNING field (mcp.command, mcp.args,
+ * hooks.command, hooks.event; Aegis round 2 C1): C0/C1 plus Zl (U+2028), Zp
+ * (U+2029) and Cf (format characters: bidi controls, zero-widths, tags). The
+ * §4.5 sanitizer turns LS/PS into a newline, so one in a hook command could
+ * draw a fake install-card line; here they are refused SCHEMA instead.
+ */
+// eslint-disable-next-line no-control-regex
+const COMMAND_UNSAFE = /[\u0000-\u001F\u007F-\u009F\p{Zl}\p{Zp}\p{Cf}]/u;
+function cmdStr(v: unknown, where: string): string {
+  const s = str(v, where);
+  if (COMMAND_UNSAFE.test(s)) fail('SCHEMA', `${where} contains a line separator, format or control character`, { field: where });
+  return s;
+}
 function str(v: unknown, where: string, re?: RegExp): string {
   if (typeof v !== 'string' || v.length === 0 || v.length > 512) fail('SCHEMA', `${where} must be a non-empty string`, { field: where });
   if (CONTROL_CHARS.test(v as string)) fail('SCHEMA', `${where} contains a control character`, { field: where });
@@ -258,16 +272,16 @@ export function validateManifest(value: unknown, opts: ValidateManifestOptions):
     const o = obj(e, `provides.mcp[${i}]`);
     closed(o, ['name', 'command', 'args'], `provides.mcp[${i}]`);
     str(o.name, `provides.mcp[${i}].name`, NAME_PATTERN);
-    str(o.command, `provides.mcp[${i}].command`);
+    cmdStr(o.command, `provides.mcp[${i}].command`);
     arr(o.args, `provides.mcp[${i}].args`).forEach((a, j) => {
-      if (typeof a !== 'string' || CONTROL_CHARS.test(a)) fail('SCHEMA', `provides.mcp[${i}].args[${j}] must be a string without control characters`);
+      if (typeof a !== 'string' || COMMAND_UNSAFE.test(a)) fail('SCHEMA', `provides.mcp[${i}].args[${j}] must be a string without line separator, format or control characters`, { field: `provides.mcp[${i}].args[${j}]` });
     });
   });
   arr(provides.hooks, 'provides.hooks').forEach((e, i) => {
     const o = obj(e, `provides.hooks[${i}]`);
     closed(o, ['event', 'command'], `provides.hooks[${i}]`);
-    str(o.event, `provides.hooks[${i}].event`);
-    str(o.command, `provides.hooks[${i}].command`);
+    cmdStr(o.event, `provides.hooks[${i}].event`);
+    cmdStr(o.command, `provides.hooks[${i}].command`);
   });
 
   const toolNames = new Set<string>();
