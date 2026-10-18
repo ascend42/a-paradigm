@@ -27,6 +27,13 @@
  * signature over the nonce IT sent: a replayed hello carries another
  * connection's clientNonce and fails (client-nonce-mismatch / bad-server-sig).
  *
+ * RESIDUAL (Aegis, P8-D93): clientNonce closes replay of a recorded hello. It
+ * does not bind the transport. A same-uid or root process that can rename the
+ * kernel's unix socket and listen at its path can relay a live hello+auth and
+ * hold a connection authenticated as the victim (frames carry no MAC). The web
+ * port is narrower: the relay must present the identical host:port. Tracked:
+ * T-2026-10-18-024.
+ *
  * The nonce is per connection, single-use (ANY auth attempt consumes it) and
  * valid 30 s. The device must resolve in the ROOT-signed registry (registry.ts,
  * cached by size+mtime+sha256 so a new row applies at once; revocation is M1.3),
