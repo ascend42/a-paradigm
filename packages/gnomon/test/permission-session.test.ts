@@ -38,10 +38,13 @@ afterEach(async () => {
   w?.cleanup();
 });
 
-function rig(o: { now?: { t: number } } = {}) {
+function rig(o: { now?: { t: number }; slowRequestMs?: number } = {}) {
   w = sessionWorld();
   const rows: Array<{ kind: string; payload: Record<string, unknown> }> = [];
-  const log = async (kind: string, payload: Record<string, unknown>): Promise<void> => void rows.push({ kind, payload });
+  const log = async (kind: string, payload: Record<string, unknown>): Promise<void> => {
+    if (o.slowRequestMs && kind === 'approval.request') await new Promise((res) => setTimeout(res, o.slowRequestMs));
+    rows.push({ kind, payload });
+  };
   const kernel = SoftwareEd25519Signer.generate('kernel');
   const fuse = new BudgetFuse({ kernel, logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZZ', log, billing: { env: () => ({}), layers: () => [] } });
   const children = new DaemonChildren({ append: log, control: processControlFor('darwin'), boot: 'boot-test', graceMs: 500 });
@@ -89,8 +92,11 @@ describe('falsifier 1+2: the argv and the parser (pure)', () => {
   it('2. the p01b can_use_tool line parses; malformed ones are `malformed`', () => {
     expect(parseStreamLine(P01B_WRITE)).toEqual({ kind: 'permission-request', type: 'control_request.can_use_tool', requestId: '857b22d1-db20-4b71-8de6-fc3477cc5f56', toolName: 'Write', toolUseId: 'toolu_016PKTnQ2gaLTRJXrsPhywSC', input: { file_path: '/tmp/w/marker.txt', content: 'hello' } });
     const o = JSON.parse(P01B_WRITE);
-    for (const bad of [{ ...o, request_id: undefined }, { ...o, request_id: 'has space' }, { ...o, request: { ...o.request, tool_name: undefined } }, { ...o, request: { ...o.request, input: [1] } }, { ...o, request: { ...o.request, tool_use_id: 7 } }]) {
-      expect(parseStreamLine(JSON.stringify(bad)).kind).toBe('malformed');
+    // a bad id cannot be answered: `malformed`
+    for (const bad of [{ ...o, request_id: undefined }, { ...o, request_id: 'has space' }]) expect(parseStreamLine(JSON.stringify(bad)).kind).toBe('malformed');
+    // Aegis A5: a good id with a bad body is `permission-malformed` (answered deny)
+    for (const bad of [{ ...o, request: { ...o.request, tool_name: undefined } }, { ...o, request: { ...o.request, input: [1] } }, { ...o, request: { ...o.request, tool_use_id: 7 } }]) {
+      expect(parseStreamLine(JSON.stringify(bad))).toEqual({ kind: 'permission-malformed', type: 'control_request.can_use_tool', requestId: o.request_id });
     }
     expect(parseStreamLine('{"type":"control_cancel_request","request_id":"r1"}')).toEqual({ kind: 'control-cancel', type: 'control_cancel_request', requestId: 'r1' });
     expect(parseStreamLine('{"type":"control_request","request_id":"r2","request":{"subtype":"brand_new"}}')).toMatchObject({ kind: 'control-request-unknown', subtype: 'brand_new', requestId: 'r2' });
@@ -119,15 +125,31 @@ describe('falsifier 1+2: the argv and the parser (pure)', () => {
 });
 
 describe.skipIf(!SANDBOX_OK)('P8-D96 falsifiers end to end (fake claude, real profile, real broker)', () => {
-  it('2. a malformed can_use_tool line gets no response; an unknown subtype gets an error response', async () => {
+  it('2. a bad-id can_use_tool line is unanswerable ⇒ approval.suspect; a good id with a bad body ⇒ deny (A5); an unknown subtype ⇒ error', async () => {
     const r = rig();
     const o = JSON.parse(P01B_WRITE);
-    await r.open([{ line: { ...o, request_id: 'bad id!' } }, { line: { type: 'control_request', request_id: 'unk-1', request: { subtype: 'brand_new' } } }], { hold: true });
+    await r.open([
+      { line: { ...o, request_id: 'bad id!' } },
+      { line: { ...o, request_id: 'mal-1', request: { ...o.request, input: 'not an object' } } },
+      { line: { type: 'control_request', request_id: 'unk-1', request: { subtype: 'brand_new' } } },
+    ], { hold: true });
     expect(await waitFor(() => r.answers().some((a) => a.id === 'unk-1'))).toBe(true);
     expect(r.answers().find((a) => a.id === 'unk-1')).toMatchObject({ subtype: 'error' });
+    expect(r.answers().find((a) => a.id === 'mal-1')).toMatchObject({ subtype: 'success', behavior: 'deny' });
     await new Promise((res) => setTimeout(res, 200));
-    expect(r.answers().map((a) => a.id)).toEqual(['unk-1']);
+    expect(r.answers().map((a) => a.id)).toEqual(['mal-1', 'unk-1']);
+    expect(r.kinds('approval.suspect').map((x) => x.payload.why)).toEqual(['malformed-permission-request']);
     expect(r.broker.cards()).toEqual([]);
+  });
+
+  it('a stop while the card is being raised expires it `session-exited`, not `answered` (reviewer 10)', async () => {
+    const r = rig({ slowRequestMs: 400 });
+    const s = await r.open([writeReq('sr-1')], { hold: true });
+    expect(await waitFor(() => r.rows.some((x) => x.kind === 'turn.event' && String(x.payload.type) === 'control_request.can_use_tool'))).toBe(true);
+    await r.sup.stop(HUMAN, { hsid: s.hsid });
+    expect(await waitFor(() => r.kinds('approval.expire').length === 1, 3000)).toBe(true);
+    expect(r.kinds('approval.expire')[0]!.payload).toMatchObject({ why: 'session-exited', into: 'deny' });
+    expect(r.pending()).toEqual([]);
   });
 
   it('Aegis C2: the generated policy.json asks for every writing/running/fetching tool (an allow rule elsewhere cannot skip the card)', async () => {

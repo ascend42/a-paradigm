@@ -33,7 +33,9 @@
  *     tool_name, input, tool_use_id, …}}` ⇒ `permission-request`;
  *     `control_cancel_request{request_id}` ⇒ `control-cancel`; any other
  *     control_request subtype ⇒ `control-request-unknown`. A can_use_tool line
- *     missing a field is `malformed` (never answered). stdin answers:
+ *     with a valid request id but a bad body is `permission-malformed`
+ *     (answered deny); one with a bad id is `malformed` (cannot be answered;
+ *     the supervisor logs approval.suspect). stdin answers:
  *     permissionAllowLine / permissionDenyLine / controlErrorLine. None of them
  *     ever carries `updatedPermissions`, and Claude's `permission_suggestions`
  *     are never read: every rule lives in the kernel log.
@@ -189,6 +191,7 @@ export type AdapterEvent =
   | { kind: 'control'; type: string; subtype: string | null; requestId: string | null }
   | { kind: 'permission-request'; type: 'control_request.can_use_tool'; requestId: string; toolName: string; toolUseId: string | null; input: Record<string, unknown> }
   | { kind: 'control-cancel'; type: 'control_cancel_request'; requestId: string }
+  | { kind: 'permission-malformed'; type: 'control_request.can_use_tool'; requestId: string }
   | { kind: 'control-request-unknown'; type: string; subtype: string; requestId: string | null }
   | { kind: 'unknown'; type: string }
   | { kind: 'malformed'; type: string; bytes: number };
@@ -264,9 +267,10 @@ export function parseStreamLine(line: string): AdapterEvent {
         const input = obj(r?.input);
         const toolName = str(r?.tool_name);
         const toolUseId = r?.tool_use_id === undefined ? null : str(r?.tool_use_id);
-        // malformed ⇒ never answered (fail closed: the tool does not run)
-        if (requestId === null || !REQUEST_ID.test(requestId) || toolName === null || toolName === '' || toolName.length > 256 || input === null || (r?.tool_use_id !== undefined && toolUseId === null)) {
-          return { kind: 'malformed', type: 'control_request.can_use_tool', bytes: Buffer.byteLength(line) };
+        // Aegis A5: a bad request id cannot be answered (`malformed`); a good id with a bad body is answered deny
+        if (requestId === null || !REQUEST_ID.test(requestId)) return { kind: 'malformed', type: 'control_request.can_use_tool', bytes: Buffer.byteLength(line) };
+        if (toolName === null || toolName === '' || toolName.length > 256 || input === null || (r?.tool_use_id !== undefined && toolUseId === null)) {
+          return { kind: 'permission-malformed', type: 'control_request.can_use_tool', requestId };
         }
         return { kind: 'permission-request', type: 'control_request.can_use_tool', requestId, toolName, toolUseId, input };
       }

@@ -185,6 +185,8 @@ interface PendingPermission {
   inputHash: string;
   toolName: string;
   toolUseId: string | null;
+  /** why the entry was closed before its card existed (a cancel / duplicate / exit during the raise): the expire `why` */
+  closedWhy?: string;
 }
 
 const WIRE: Record<SessionRefusalCode, RefusalCode> = {
@@ -585,10 +587,27 @@ export class SessionSupervisor {
       case 'permission-request':
         await this.#onPermission(s, ev);
         return;
+      case 'permission-malformed': {
+        // Aegis A5: a good id with a bad body is denied, never left hanging; one pending under that id is denied with it
+        const dup = s.pending.get(ev.requestId);
+        if (dup) {
+          s.pending.delete(ev.requestId);
+          dup.closedWhy = 'duplicate-request-id';
+          await this.#o.broker?.suspect?.('duplicate-request-id', { hsid: s.hsid, requestId: ev.requestId, cardId: dup.cardId }, s.hsid).catch(() => undefined);
+          if (dup.cardId) await this.#o.broker?.expire?.(dup.cardId, 'duplicate-request-id').catch(() => false);
+        }
+        await this.#write(s, permissionDenyLine(ev.requestId, 'Denied: the permission request was malformed.'), { answer: 'deny', requestId: ev.requestId, why: 'malformed' });
+        return;
+      }
+      case 'malformed':
+        // Aegis A5: a can_use_tool line whose id cannot be answered
+        if (ev.type === 'control_request.can_use_tool') await this.#o.broker?.suspect?.('malformed-permission-request', { hsid: s.hsid, bytes: ev.bytes }, s.hsid).catch(() => undefined);
+        return;
       case 'control-cancel': {
         const e = s.pending.get(ev.requestId);
         if (!e) return; // an unknown requestId is never answered
         s.pending.delete(ev.requestId);
+        e.closedWhy = 'cancelled';
         if (e.cardId) await this.#o.broker?.expire?.(e.cardId, 'cancelled').catch(() => false);
         return;
       }
@@ -607,6 +626,7 @@ export class SessionSupervisor {
     if (dup) {
       // a requestId reused while pending: deny both, never pick one
       s.pending.delete(requestId);
+      dup.closedWhy = 'duplicate-request-id';
       await this.#o.broker?.suspect?.('duplicate-request-id', { hsid: s.hsid, requestId, cardId: dup.cardId }, s.hsid).catch(() => undefined);
       if (dup.cardId) await this.#o.broker?.expire?.(dup.cardId, 'duplicate-request-id').catch(() => false);
       await this.#write(s, permissionDenyLine(requestId, 'Denied: the permission request id was reused.'), { answer: 'deny', requestId, why: 'duplicate-request-id' });
@@ -636,7 +656,7 @@ export class SessionSupervisor {
     }
     if (s.pending.get(requestId) !== entry) {
       // answered (duplicate, exit) while the raise was in flight: the card must not stay decidable
-      await b.expire?.(cardId, 'answered').catch(() => false);
+      await b.expire?.(cardId, entry.closedWhy ?? 'answered').catch(() => false);
       return;
     }
     entry.cardId = cardId;
@@ -669,6 +689,7 @@ export class SessionSupervisor {
   async #expirePending(s: Session, why: string): Promise<void> {
     const all = [...s.pending.values()];
     s.pending.clear();
+    for (const e of all) e.closedWhy = why;
     for (const e of all) if (e.cardId) await this.#o.broker?.expire?.(e.cardId, why).catch(() => false);
   }
 
