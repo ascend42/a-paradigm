@@ -68,6 +68,17 @@ describe('history surgery', () => {
     expect(tight.messages[1]!.content.endsWith('Continue from Next.')).toBe(true);
     expect(tight.kept).toBe(0);
   });
+  it('round 2: text-tool mode — the kept tail never starts at a <tool_result> user message', () => {
+    const h: ChatMessage[] = [sys, { role: 'user', content: 'task' }, { role: 'assistant', content: '<tool_call>{"name":"list_dir","arguments":{}}</tool_call>' }, { role: 'user', content: '<tool_result name="list_dir">\na\n</tool_result>' }];
+    const fitsOnlyResult = estimateTokens([h[3]!]);
+    const t = compactedHistory(h, 'S', fitsOnlyResult);
+    expect(t.kept).toBe(0);
+    expect(t.messages.map((m) => m.role)).toEqual(['system', 'user']);
+    const all = compactedHistory(h, 'S', 10_000);
+    expect(all.kept).toBe(3);
+    expect(all.messages.map((m) => m.role)).toEqual(['system', 'user', 'assistant', 'user']);
+    expect(all.messages[1]!.content.startsWith(SUMMARY_OPEN)).toBe(true);
+  });
   it('the summariser transcript is bounded and keeps the task', () => {
     const h: ChatMessage[] = [sys, { role: 'user', content: 'THE TASK' }, ...Array.from({ length: 200 }, (_, i): ChatMessage => ({ role: i % 2 ? 'user' : 'assistant', content: `m${i} ${'y'.repeat(3000)}` }))];
     const m = summaryMessages(h, 8192);
@@ -117,6 +128,39 @@ describe('the agent keeps its history under the working target', () => {
     // the summariser's usage is part of the run's total (tracked, P8-D92)
     expect(evs.at(-1)).toMatchObject({ type: 'agent_end', stopReason: 'stop', usage: { input: 300, output: 60 } });
     expect(srv.requests).toHaveLength(3);
+  });
+
+  it('round 2 headroom: the budget is 0.85 × target minus the native tools schema (compacts below the raw target)', async () => {
+    const cwd = scratch();
+    // ~ 0.80 × target of history: under the raw target, over the 0.85-minus-schema budget
+    fs.writeFileSync(path.join(cwd, 'mid.txt'), 'q'.repeat(13000));
+    srv = await fakeOpenAI({ script: [{ toolCalls: [{ name: 'read_file', arguments: '{"path":"mid.txt"}' }] }, { content: '## Goal\nx' }, { content: 'Done.' }] });
+    const evs: Array<Record<string, unknown>> = [];
+    await new Agent({ base: srv.base, model: 'm', profile: COMPAT_ALLOWLIST['llama.cpp']!, nativeTools: true, surface: 'full', cwd, roots: [cwd], maxSteps: 6, maxTokens: 256, contextTarget: 4096, emit: (e) => evs.push(e) }).prompt('read it');
+    const before = evs.find((e) => e.type === 'compaction_start')!.tokensBefore as number;
+    expect(before + 256).toBeLessThan(4096);
+    expect(evs.at(-1)).toMatchObject({ type: 'agent_end', stopReason: 'stop' });
+  });
+
+  it('round 2: at most one compaction per step — an overflow right after a threshold compaction is a clear error', async () => {
+    const cwd = scratch();
+    fs.writeFileSync(path.join(cwd, 'big.txt'), 'z'.repeat(6000));
+    srv = await fakeOpenAI({ script: [{ toolCalls: [{ name: 'read_file', arguments: '{"path":"big.txt"}' }] }, { content: '## Goal\nx' }, { httpStatus: 400, httpError: 'context size exceeded' }, { content: 'never' }] });
+    const evs: Array<Record<string, unknown>> = [];
+    await agent(cwd, evs, 1024).prompt('read it');
+    expect(evs.filter((e) => e.type === 'compaction_start')).toHaveLength(1);
+    expect(evs.at(-1)).toMatchObject({ type: 'agent_end', stopReason: 'error' });
+    expect(String(evs.at(-1)!.error)).toMatch(/after this step's compaction/);
+    expect(srv.requests).toHaveLength(3);
+  });
+
+  it('round 2: still over the budget after compaction (a huge system prompt) ends with a clear error, not a loop', async () => {
+    const cwd = scratch();
+    srv = await fakeOpenAI({ script: [{ toolCalls: [{ name: 'list_dir', arguments: '{}' }] }, { content: '## Goal\nx' }, { content: 'never' }] });
+    const evs: Array<Record<string, unknown>> = [];
+    await new Agent({ base: srv.base, model: 'm', profile: COMPAT_ALLOWLIST['llama.cpp']!, nativeTools: true, surface: 'full', cwd, roots: [cwd], maxSteps: 6, maxTokens: 256, contextTarget: 1024, systemPrompt: 's'.repeat(6000), emit: (e) => evs.push(e) }).prompt('go');
+    expect(evs.at(-1)).toMatchObject({ type: 'agent_end', stopReason: 'error' });
+    expect(String(evs.at(-1)!.error)).toMatch(/still over the context budget after compaction/);
   });
 
   it('overflow: a request refused as too long is compacted and retried once', async () => {

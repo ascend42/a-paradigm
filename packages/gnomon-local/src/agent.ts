@@ -30,6 +30,10 @@ import { complete, type Completion } from './client.js';
 import { compactedHistory, DEFAULT_CONTEXT_TARGET, estimateTokens, isContextOverflow, normaliseSummary, summaryMessages } from './compaction.js';
 import { parseTextToolCalls, repairArguments, textToolPrompt } from './repair.js';
 import { runTool, TOOLS } from './tools.js';
+import { surfaceTools } from './compat.js';
+
+/** round 2: the history budget is 85 % of the target minus the native tools schema the request also carries */
+export const TARGET_HEADROOM = 0.85;
 
 export type Emit = (ev: Record<string, unknown>) => void;
 
@@ -82,6 +86,12 @@ export class Agent {
 
   get #target(): number {
     return this.#o.contextTarget ?? DEFAULT_CONTEXT_TARGET;
+  }
+
+  /** tokens the history + reply may use: target × 0.85 minus the tools schema sent natively */
+  get #budget(): number {
+    const schema = this.#o.nativeTools ? Math.ceil(JSON.stringify(surfaceTools(TOOLS, this.#o.surface)).length / 4) : 0;
+    return Math.floor(this.#target * TARGET_HEADROOM) - schema;
   }
 
   #request(): Promise<Completion> {
@@ -152,13 +162,20 @@ export class Agent {
         const turn = ++this.#turn;
         this.#o.emit({ type: 'turn_start', turn });
         // ~8k working target: compact before a request that would not fit (there must be history to compact)
-        if (this.#messages.length > 2 && estimateTokens(this.#messages) + this.#o.maxTokens > this.#target) await this.#compact('threshold', total);
+        // round 2: at most ONE compaction per step; still over the budget after it ⇒ a clear error, never a loop
+        let compacted = false;
+        if (this.#messages.length > 2 && estimateTokens(this.#messages) + this.#o.maxTokens > this.#budget) {
+          await this.#compact('threshold', total);
+          compacted = true;
+          if (estimateTokens(this.#messages) + this.#o.maxTokens > this.#budget) throw new Error(`history is still over the context budget after compaction (${estimateTokens(this.#messages)} + ${this.#o.maxTokens} > ${this.#budget} tokens)`);
+        }
         let c: Completion;
         try {
           c = await this.#request();
         } catch (err) {
-          // one compact-and-retry when the endpoint refuses the prompt as too long; a second overflow is an error
+          // one compact-and-retry when the endpoint refuses the prompt as too long (not if this step already compacted)
           if (this.#aborted || !isContextOverflow(err)) throw err;
+          if (compacted) throw new Error(`the endpoint still refuses the prompt as too long after this step's compaction: ${(err as Error).message.slice(0, 200)}`);
           await this.#compact('overflow', total);
           c = await this.#request();
         }

@@ -124,7 +124,8 @@ export function compactedHistory(history: readonly ChatMessage[], summary: strin
   for (let i = rest.length - 1; i >= 0; i--) {
     sum += estimateTokens([rest[i]!]);
     if (sum > tailTokens) break;
-    if (rest[i]!.role === 'user' || rest[i]!.role === 'assistant') start = i;
+    // a text-tool result is a user message: never start the tail there (its <tool_call> would be lost)
+    if ((rest[i]!.role === 'user' && !rest[i]!.content.startsWith('<tool_result')) || rest[i]!.role === 'assistant') start = i;
   }
   const tail = rest.slice(start);
   const kept = tail.length;
