@@ -1079,7 +1079,17 @@ components:
       only {n, pendingForYou: 0, held}; theft-card.ts — a logged
       socket.auth.theft (#socket dispatch → port.authTheft) raises ONE
       fresh-presence gate-class card per revoked connId naming it, no
-      timeout, no effect (the revocation stands either way).
+      timeout, no effect (the revocation stands either way). Round 2
+      (Aegis C2): the card's promise is stored before the raise awaits
+      (concurrent theft rows for one connId raise one card), at most
+      MAX_OPEN_THEFT_CARDS (8) theft cards are open — past that a theft
+      coalesces into the newest open card — a failed raise is forgotten so
+      the next theft row retries, and #socket raises only after the
+      socket.auth.theft row was written. The path #web-endpoint (revokes,
+      reports theft) → #socket (writes the row) → #approval-broker (raises
+      the card) is a one-row relay with no state of its own, documented
+      here and in theft-card.ts rather than as a $flow node (a new spec
+      node moves Appendix A's count; see lore).
     path: src/kernel/broker/
     type: module
     tags: [gnomon, kernel, broker, approvals, presence, paradigm-8, m1.6]

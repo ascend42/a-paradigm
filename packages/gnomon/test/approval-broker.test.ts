@@ -18,6 +18,8 @@ import {
   approvalsKeyFrom,
   PresenceDenied,
   raiseTheftCard,
+  MAX_OPEN_THEFT_CARDS,
+  type TheftCards,
   raiseInstallCard,
   verifyActions,
   verifyPresencePrompt,
@@ -605,7 +607,7 @@ describe('M1.6 slice 2 — broker residuals', () => {
   it('socket.auth.theft raises ONE fresh-presence gate-class card naming the revoked connection; it never expires and neither decision restores anything', async () => {
     const seen: Array<{ text: string; connId: string }> = [];
     const r = rig({ presence: touching(seen) });
-    const raised = new Map<string, string>();
+    const raised: TheftCards = new Map();
     const card = await raiseTheftCard(r.broker, KERNEL, { connId: THIEF, revokedConnId: VICTIM, surface: 'browser' }, raised);
     expect(validateCardV1(card, { mode: 'strict' })).toEqual([]);
     expect(card).toMatchObject({ kind: 'gate-class', requestedBy: KERNEL, attended: true, state: 'pending' });
@@ -626,6 +628,38 @@ describe('M1.6 slice 2 — broker residuals', () => {
     expect(r.kinds()).toContain('approval.decide');
     await r.broker.expireDue();
     expect(r.kinds()).not.toContain('approval.expire');
+  });
+
+  it('Aegis C2: concurrent theft rows for one revoked connection raise ONE card; past the ceiling thefts coalesce into the newest open card', async () => {
+    const r = rig({ presence: touching() });
+    const raised: TheftCards = new Map();
+    const same = await Promise.all([1, 2, 3, 4].map(() => raiseTheftCard(r.broker, KERNEL, { connId: THIEF, revokedConnId: VICTIM }, raised)));
+    expect(new Set(same.map((c) => c.cardId)).size).toBe(1);
+    expect(r.kinds().filter((k) => k === 'approval.request')).toHaveLength(1);
+    // a flood of distinct revoked connections, all concurrent: never more than the ceiling open
+    const conn = (i: number) => `conn:01HZZZZZZZZZZZZZZZZZZZZ${String(i).padStart(3, '0').replace(/0/g, 'A').replace(/1/g, 'B').replace(/2/g, 'C').replace(/3/g, 'D').replace(/4/g, 'E').replace(/5/g, 'F').replace(/6/g, 'G').replace(/7/g, 'H').replace(/8/g, 'J').replace(/9/g, 'K')}`;
+    const flood = await Promise.all(Array.from({ length: 30 }, (_, i) => raiseTheftCard(r.broker, KERNEL, { connId: THIEF, revokedConnId: conn(i) }, raised)));
+    const open = () => r.broker.cards().filter((c) => c.kind === 'gate-class' && c.state === 'pending');
+    expect(open()).toHaveLength(MAX_OPEN_THEFT_CARDS);
+    expect(new Set(flood.map((c) => c.cardId)).size).toBe(MAX_OPEN_THEFT_CARDS - 1); // VICTIM's card is the first of the 8
+    // deciding one frees a slot: the next new theft raises a new card
+    const first = open()[0]!;
+    await r.broker.approve(H(), { cardId: first.cardId, decision: 'allow', decisionSig: r.sig(first.cardId, 'allow', first.contentHash) });
+    const next = await raiseTheftCard(r.broker, KERNEL, { connId: THIEF, revokedConnId: 'conn:01HZZZZZZZZZZZZZZZZZZZZZZW' }, raised);
+    expect(flood.map((c) => c.cardId)).not.toContain(next.cardId);
+    expect(open()).toHaveLength(MAX_OPEN_THEFT_CARDS);
+  });
+
+  it('a theft card whose approval.request row fails is not remembered: the next theft row raises it', async () => {
+    let failing = true;
+    const kernel = SoftwareEd25519Signer.generate('kernel');
+    const broker = new ApprovalBroker({ kernel, kernelPrincipal: KERNEL, log: async () => { if (failing) throw new Error('log refused'); } });
+    const raised: TheftCards = new Map();
+    await expect(raiseTheftCard(broker, KERNEL, { connId: THIEF, revokedConnId: VICTIM }, raised)).rejects.toThrow('log refused');
+    await Promise.resolve();
+    expect(raised.has(VICTIM)).toBe(false);
+    failing = false;
+    await expect(raiseTheftCard(broker, KERNEL, { connId: THIEF, revokedConnId: VICTIM }, raised)).resolves.toMatchObject({ kind: 'gate-class' });
   });
 
   it('the theft card refuses ids that are not connections, and production refuses its decision until M1.3', async () => {

@@ -9,7 +9,7 @@
 import { RootUnavailableError } from '../identity/root-authority.js';
 import { RefusedError } from '@a-company/gnomon-contracts';
 import type { ApprovalBroker, DecideContext } from './broker.js';
-import { raiseTheftCard, type AuthTheft } from './theft-card.js';
+import { raiseTheftCard, type AuthTheft, type TheftCards } from './theft-card.js';
 import { parseReserveParams, type BudgetFuse, type UserOf } from '../budget/fuse.js';
 
 export interface ApprovalPort {
@@ -31,7 +31,7 @@ function asRefused(err: unknown): unknown {
 }
 
 export function createApprovalPort(p: { broker: ApprovalBroker; fuse: BudgetFuse; kernelPrincipal: string; extraStatus?: () => Record<string, unknown>; userOf?: UserOf }): ApprovalPort {
-  const theftCards = new Map<string, string>();
+  const theftCards: TheftCards = new Map();
   return {
     approve: (ctx, params) => p.broker.approve(ctx, params).catch((e: unknown) => Promise.reject(asRefused(e))),
     reserve: async (ctx, params) => {
