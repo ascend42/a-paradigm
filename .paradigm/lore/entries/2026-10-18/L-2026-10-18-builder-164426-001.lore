@@ -1,0 +1,23 @@
+id: L-2026-10-18-builder-164426-001
+type: milestone
+timestamp: '2026-10-18T16:44:26.984Z'
+author: builder
+title: 'M1.12 slice 3 subset landed: replay, client-API doc, honesty CI'
+summary: 'Commit 1cc743bc: gnomon replay (G-KRN-01), the generated client-API doc fixed point (G-HON-04 rule) and honesty CI (G-HON-02, 03, 05, 06, 07) with falsifiers. Suites: gnomon 943 passed, 4 skipped, 64 todo; contracts 319; mod-sdk 3; local 72; tsc clean for gnomon and contracts. Deferred: the Python client, the CLI delegating to the TS client, G-CLI-03 (awaiting founder ratification), G-CLI-01/G-RUN-04, the remaining §9.6 metrics, log.read:sensitive, the catalogued slice-2 conformance checks, and G-HON-07 over the design spec.'
+symbols_touched:
+  - '#kernel-log'
+  - '#gnomon-contracts'
+  - '#client-conformance'
+  - '#socket'
+commit: 1cc743bc
+learnings:
+  - Narrowing to a coherent subset let it ship fully tested
+  - ''
+linked_lore:
+  - L-2026-10-18-builder-164404-001
+  - L-2026-10-18-builder-164405-001
+  - L-2026-10-18-builder-164405-002
+git_context:
+  ref: 1cc743bce3ceab38fd4fcfffb25ea63a7c8e9d61
+  branch: gnomon/m112-slice3
+  dirty: false
