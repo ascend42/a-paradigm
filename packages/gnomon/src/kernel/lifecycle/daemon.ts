@@ -101,6 +101,8 @@ import { loadLocalConfig, LOCAL_CONFIG_FILE } from '../local/config.js';
 import { linkedFolders } from '../manifest/install.js';
 import { ModHost, type KernelCallRequest } from '../modhost/host.js';
 import { createModKernelCall, createModRelayPort } from '../modhost/bridge.js';
+import type { BillingScanSource } from '../budget/billing.js';
+import { registerSeams } from '../internal-seams.js';
 
 export type DaemonExitReason = 'idle' | 'signal' | 'error';
 
@@ -206,7 +208,24 @@ export function kernelPrincipalOf(authority: Pick<RootAuthority, 'ns'> = new Unp
   return `p:${authority.ns ?? UNPROVISIONED_NS}/kernel`;
 }
 
+/**
+ * TEST SEAMS (internal-seams.ts slot `daemon`, read only by src/kernel/testing.ts):
+ * the supervisor's test-rig options (a fake `#!` claude, its path, a throwaway
+ * user home and env) and the fuse's law-7 billing scan source. Production
+ * (`startDaemon`, gnomond, `gnomon dev up`) never passes any of them.
+ */
+export interface DaemonSeams {
+  supervisor?: { claudePath?: string; allowScripts?: boolean; userHome?: string; env?: () => Readonly<Record<string, string | undefined>> };
+  billing?: BillingScanSource;
+}
+
+registerSeams('daemon', { start: (opts, seams) => startDaemonWith(opts, seams) });
+
 export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
+  return startDaemonWith(opts, {});
+}
+
+async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise<DaemonHandle> {
   const emit = (e: DaemonEvent): void => opts.onEvent?.(e);
   const idleMs = opts.idleMs ?? DEFAULT_IDLE_EXIT_MS;
   // T-2026-10-17-009(a): finish a quarantine interrupted between its two
@@ -481,7 +500,7 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
     },
     // law 7 scan: the env a child would inherit and the user settings layer; the versioned per-OS
     // managed-policy list and the mid-session watch are M1.7 (#claude-adapter, G-SUB-01/05)
-    billing: {
+    billing: seams.billing ?? {
       env: () => ({ ...process.env }),
       layers: () => fileLayers([{ where: 'user-settings', path: path.join(nodeOs.homedir(), '.claude', 'settings.json'), kind: 'settings' }]),
     },
@@ -521,6 +540,7 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
   const localCfg = loadLocalConfig(home, authority, (kind, payload) => void appendRow(kind, payload).catch(() => undefined), { chainHighWater: localHighWater });
   const supervisor = new SessionSupervisor({
     ...(localCfg.config ? { local: localCfg.config } : {}),
+    ...(seams.supervisor ?? {}),
     log: (kind, payload, ids = {}) => log.append({ kind, principal: kernelPrincipal, payload, ...(ids.session ? { session: ids.session } : {}) }).then(() => undefined),
     children,
     fuse,

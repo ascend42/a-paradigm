@@ -22,7 +22,7 @@ import { extractSpecifiers, PKG_ROOT, rel, walk } from './helpers.js';
 const SRC = path.join(PKG_ROOT, 'src');
 const TEST_ENTRY = 'src/kernel/testing.ts';
 const CHANNEL = 'src/kernel/internal-seams.ts';
-const CHANNEL_IMPORTERS = ['src/kernel/identity/presence.ts', 'src/kernel/log/kernel-log.ts', 'src/kernel/log/quarantine.ts', 'src/kernel/manifest/install.ts', 'src/kernel/modhost/host.ts', 'src/kernel/web/endpoint.ts', TEST_ENTRY]; // modhost (M1.11): the unsandboxed mod launcher + egress dialer
+const CHANNEL_IMPORTERS = ['src/kernel/identity/presence.ts', 'src/kernel/log/kernel-log.ts', 'src/kernel/log/quarantine.ts', 'src/kernel/manifest/install.ts', 'src/kernel/modhost/host.ts', 'src/kernel/web/endpoint.ts', 'src/kernel/lifecycle/daemon.ts', TEST_ENTRY]; // daemon (#dev-launch smoke): the fake-claude supervisor rig; modhost (M1.11): the unsandboxed mod launcher + egress dialer
 /** Files that may name the gated recovery API in code (the implementation, the channel, the test entry). */
 const MAY_NAME_RECOVERY = new Set(['src/kernel/log/kernel-log.ts', CHANNEL, TEST_ENTRY]);
 const GATED = /\b(acknowledgeGap|openForRecovery|openKernelLogForRecovery|seamsOf|mintTestPresence)\b/;

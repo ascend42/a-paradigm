@@ -548,8 +548,19 @@ components:
     path: src/cli/
     type: cli
     tags: [gnomon, dev-only, dogfood, identity, paradigm-8]
+      SMOKE (test/dev-launch-session.test.ts, darwin): dev init → startDevKernel
+      → launch URL → a second device client → session.open on the FAKE claude
+      under the real session profile → session.send → turn.result, with no
+      approval card on the path. The one seam is the internal-seams `daemon`
+      slot (lifecycle/daemon.ts registers it; only testing.ts's
+      startDaemonForTest reads it): the supervisor's test-rig options (script
+      claude, its path, a throwaway user home and env) and the fuse's law-7
+      billing source. A socket device connection is a community-client reader,
+      so turn.event (the reply text) reaches it as {kind, hsid} stubs; the
+      GUI's launch-token session is the first-party surface that sees it.
     tests:
       - test/dev-launch.test.ts
+      - test/dev-launch-session.test.ts
 
   manifest-loader:
     description: >-

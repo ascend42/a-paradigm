@@ -67,6 +67,10 @@ the port and no token.
   it enforces.
 - Read-only tools that Claude Code allows without asking (Read, Grep, Glob)
   can run.
+- The reply text is shown in the **GUI**, which is a first-party surface. A plain
+  socket client (a script using the TS client with the device key) reads
+  `turn.event` rows as `{kind, hsid}` stubs only (the community-client
+  projection, §9.3).
 
 ## What is refused until M1.3
 

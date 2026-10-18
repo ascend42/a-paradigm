@@ -18,6 +18,9 @@
  *   - decideInstallCard / rollbackModSnapshot: the #manifest-loader install-card
  *     decision and the human rollback (M1.5), until the M1.6 broker owns cards.
  *   - quarantineWithSteps: `gnomon log quarantine` with crash injection.
+ *   - startDaemonForTest: a daemon whose supervisor runs the FAKE claude (a `#!`
+ *     script, a throwaway user home and env) and whose law-7 billing source is
+ *     substituted (#dev-launch smoke test).
  *   - createModHostForTest: a #mod-host whose children run WITHOUT the `mod`
  *     profile (unsandboxedModLauncher) and/or with a substituted egress dialer.
  *
@@ -44,6 +47,8 @@ import { WebEndpoint, type WebEndpointOptions, type WebEndpointSeams } from './w
 import type { ChildLaunchPlan, TransportLaunchInput } from './sandbox/transport.js';
 import { ModHost, type ModHostOptions, type ModHostSeams } from './modhost/host.js'; // registers the 'modhost' seams
 import type { ModLaunchInput } from './sandbox/mod.js';
+import { type DaemonHandle, type DaemonOptions, type DaemonSeams } from './lifecycle/daemon.js';
+import './lifecycle/daemon.js'; // registers the 'daemon' seam
 
 /** Marker string: test/seams-fence.test.ts asserts it never appears in dist/. */
 export const GNOMON_INTERNAL_TEST_ENTRY = 'gnomon:internal-test-entry:v1' as const;
@@ -128,4 +133,9 @@ export function unsandboxedModLauncher(input: ModLaunchInput): ChildLaunchPlan {
 export function createModHostForTest(opts: ModHostOptions, seams: ModHostSeams = {}): ModHost {
   void ModHost; // keep the owner module loaded (its static block registers the seam)
   return seamsOf('modhost').create(opts, seams);
+}
+
+/** A daemon with the supervisor test rig and a substituted billing source (never production). */
+export function startDaemonForTest(opts: DaemonOptions, seams: DaemonSeams): Promise<DaemonHandle> {
+  return seamsOf('daemon').start(opts, seams);
 }
