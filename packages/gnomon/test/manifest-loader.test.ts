@@ -385,7 +385,8 @@ describe('#manifest-loader: the snapshot copier and packageHash (§12.5, §16)',
     // Capability is what the filesystem made, not mkfifo's exit code: Git for
     // Windows ships an MSYS mkfifo that exits 0 and leaves a REGULAR file on
     // NTFS (no fifo exists to refuse, and a regular file is rightly copied).
-    if (mk.status === 0 && fs.lstatSync(path.join(f, 'pipe')).isFIFO()) expect(refusalOf(() => stage(tmp(), f)).detail.snapshotReason).toBe('special-file');
+    // MSYS mkfifo on Windows exits 0 and makes a plain file or nothing at all: judge by what exists
+    if (mk.status === 0 && fs.lstatSync(path.join(f, 'pipe'), { throwIfNoEntry: false })?.isFIFO()) expect(refusalOf(() => stage(tmp(), f)).detail.snapshotReason).toBe('special-file');
     // inode swap between the walk and the read
     const w = writeMod(path.join(tmp(), 'diff-lens'), baseManifest(), { 'a.js': 'one' });
     const entries = walkSource(w, 'diff-lens', () => undefined);
