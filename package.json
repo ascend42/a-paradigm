@@ -33,7 +33,7 @@
     "test": "npm run test:cli && npm run test:warpline",
     "test:cli": "npm run test --workspace=@a-company/paradigm",
     "test:warpline": "npm run build --workspace=@a-company/warpline && npm run test --workspace=@a-company/warpline",
-    "test:gnomon": "npm run build:gnomon && npm run test --workspace=@a-company/gnomon-contracts && npm run test --workspace=@a-company/gnomon-mod-sdk && npm run test --workspace=@a-company/gnomon-local && npm run test --workspace=@a-company/gnomon",
+    "test:gnomon": "npm run build:gnomon && npm run test --workspace=@a-company/gnomon-contracts && npm run test --workspace=@a-company/gnomon-mod-sdk && npm run test --workspace=@a-company/gnomon-local && npm run test --workspace=@a-company/gnomon-gui && npm run test --workspace=@a-company/gnomon",
     "prepublishOnly": "node scripts/pre-publish-check.mjs"
   },
   "keywords": [

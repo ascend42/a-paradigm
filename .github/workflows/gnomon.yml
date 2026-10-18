@@ -60,6 +60,7 @@ jobs:
         run: |
           npm run typecheck --workspace=@a-company/gnomon-contracts
           npm run typecheck --workspace=@a-company/gnomon
+          npm run typecheck --workspace=@a-company/gnomon-gui
 
   # M1.0 probes runnable on hosted runners. PR-0 runs only the harness
   # self-test; PR-2 adds P03 (win), P08, P09, P11, P12 and the P06 smoke.

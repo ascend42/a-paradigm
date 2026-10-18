@@ -1,0 +1,66 @@
+<!doctype html>
+<html lang="en" data-theme="day" data-motion="full">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="referrer" content="no-referrer">
+<title>Gnomon</title>
+<script src="/boot.js"></script>
+<link rel="stylesheet" href="/styles.css">
+<script src="/app.js" defer></script>
+</head>
+<body>
+<div id="gnomon" class="shell">
+<header class="chrome">
+<span class="wordmark">Gnomon</span>
+<span id="conn" class="readout kernel-owned" aria-live="polite">connecting</span>
+<span id="risk" class="badge risk kernel-owned" hidden title="A browser extension with all-sites access can read this page, the launch fragment and this connection's cached unlock. The desktop wrapper has no extensions.">browser · extension risk</span>
+<span class="spacer"></span>
+<span id="inbox" class="readout" title="global inbox: all projects">0 pending</span>
+<button id="palette-btn" class="key" type="button" title="Command palette">⌘K</button>
+</header>
+<div id="notice" class="notice" hidden></div>
+<main class="desk">
+<nav id="pane-sessions" class="pane sessions" aria-label="sessions">
+<div class="pane-head"><span class="title">sessions</span><button id="new-session" class="key" type="button" title="New session (⌘N)">+ new</button></div>
+<div id="session-search-wrap"><input id="session-search" class="field" type="search" placeholder="search sessions" aria-label="search sessions"></div>
+<div id="session-list" class="list"></div>
+</nav>
+<section id="pane-transcript" class="pane transcript" aria-label="transcript">
+<div class="pane-head"><span id="transcript-title" class="title">kernel feed</span><span id="transcript-count" class="meta"></span></div>
+<div id="viewport" class="viewport" tabindex="0"><div id="spacer" class="spacer-v"></div></div>
+<div id="pinned" class="pinned" aria-label="this project's pending cards"></div>
+<form id="composer" class="composer" autocomplete="off">
+<textarea id="composer-text" class="field" rows="2" placeholder="Write to the focused session. Enter sends, Shift+Enter is a newline." aria-label="composer"></textarea>
+<div class="composer-foot"><span id="composer-mode" class="meta">no session focused</span><button class="key" type="submit">send</button></div>
+</form>
+</section>
+<aside id="pane-stack" class="pane stack" aria-label="decision stack">
+<div class="pane-head"><span class="title">decisions</span><button id="stack-scope" class="key" type="button">all projects</button></div>
+<div id="stack" class="pile"></div>
+</aside>
+</main>
+<footer id="pane-shuttle" class="shuttle" aria-label="Shuttle view"></footer>
+<div id="reconnect" class="overlay" hidden>
+<div class="sheet-card">
+<p id="reconnect-why" class="meta">This page has no GUI session.</p>
+<button id="reconnect-btn" class="key" type="button">Reconnect</button>
+</div>
+</div>
+<div id="palette" class="overlay" hidden>
+<div class="sheet-card palette-card" role="dialog" aria-label="command palette">
+<input id="palette-input" class="field" type="text" placeholder="command or verb" aria-label="command">
+<div id="palette-list" class="list" role="listbox"></div>
+</div>
+</div>
+<div id="new-session-dialog" class="overlay" hidden>
+<form id="new-session-form" class="sheet-card" autocomplete="off">
+<p class="title">new session</p>
+<label class="meta">cwd <input id="ns-cwd" class="field" type="text" required placeholder="/absolute/path/to/project"></label>
+<label class="meta">model <select id="ns-model" class="field"><option value="claude">claude</option><option value="local">local</option><option value="any">any</option></select></label>
+<div class="composer-foot"><button id="ns-cancel" class="key" type="button">cancel</button><button class="key" type="submit">open</button></div>
+</form>
+</div>
+</div>
+</body>
+</html>

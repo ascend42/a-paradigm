@@ -13,6 +13,8 @@ import {
   LAUNCH_TOKEN_TTL_MS,
   PLACEHOLDER_BUNDLE_HASH,
   placeholderFiles,
+  GUI_BUNDLE_HASH,
+  guiBundleFiles,
   routeHttp,
   securityHeaders,
   sniffRaster,
@@ -219,6 +221,26 @@ describe('G-WEB-08 bundle pin', () => {
     const html = placeholderFiles().get('index.html')!.toString();
     expect(html).not.toMatch(/<script(?![^>]*\bsrc=)[^>]*>/);
     for (const v of placeholderFiles().values()) expect(v.toString()).not.toMatch(/\beval\(|data:|new Function/);
+  });
+  it('M1.10: the #gui pin literal equals the tree hash of the embedded GUI bytes; any byte change moves it', () => {
+    expect(GUI_BUNDLE_HASH).toBe('sha256:49e0895a75c18e22f4ad94d0cfe1fabb6c6c8de11cac318e7b18d217c55a07a9');
+    expect(treeHashOf(guiBundleFiles())).toBe(GUI_BUNDLE_HASH);
+    const f = guiBundleFiles();
+    f.set('app.js', Buffer.concat([f.get('app.js')!, Buffer.from(' ')]));
+    expect(treeHashOf(f)).not.toBe(GUI_BUNDLE_HASH);
+    expect([...guiBundleFiles().keys()].sort()).toEqual(['app.js', 'boot.js', 'index.html', 'styles.css']);
+  });
+  it('M1.10: the #gui bundle has no inline script, no eval, no data: URL, no HTML sinks and no remote load (rule-6 CSP)', () => {
+    const files = guiBundleFiles();
+    const html = files.get('index.html')!.toString();
+    expect(html).not.toMatch(/<script(?![^>]*\bsrc=)[^>]*>/);
+    expect(html).not.toMatch(/<style|\sstyle=|\son[a-z]+=/i);
+    expect(html.indexOf('/boot.js')).toBeLessThan(html.indexOf('/app.js')); // fragment read-and-clear runs first
+    for (const [n, v] of files) {
+      const s = v.toString();
+      expect(s, n).not.toMatch(/\beval\(|new Function|data:[a-z]+\/|innerHTML|outerHTML|insertAdjacentHTML|document\.write/);
+      expect(s, n).not.toMatch(/(src|href)\s*=\s*["']?https?:|@import|url\(\s*["']?https?:/);
+    }
   });
 });
 

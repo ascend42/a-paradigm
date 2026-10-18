@@ -1,0 +1,298 @@
+/**
+ * #gui M1.10 slice 1 unit tests (spec §11, §4.5). Pure functions in node; the
+ * DOM renderer runs against a tiny fake document (no jsdom in the repo). The
+ * end-to-end client ⇄ real #web-endpoint test is
+ * packages/gnomon/test/gui-endpoint.test.ts.
+ */
+import { execFileSync } from 'node:child_process';
+import { generateKeyPairSync, sign, webcrypto } from 'node:crypto';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { authServerPreimage, hex, sha256 } from '@a-company/gnomon-contracts';
+import { describe, expect, it } from 'vitest';
+import { gnomonPost, refusalFromError } from '../src/core/client.js';
+import { applyPreset, filterCommands, GUI_COMMANDS, paletteEntries, parseLayout, PRESETS, resolveMotion, resolveTheme, serializeLayout, togglePane } from '../src/core/commands.js';
+import { decidePin, parseLaunchFragment } from '../src/core/launch.js';
+import { cardFlags, renderBlock, renderCard, type MiniDoc, type MiniEl } from '../src/core/render.js';
+import { sanitizeText } from '../src/core/sanitize.js';
+import { keyIdOfSpki, verifiedDecisions, verifyServerSig } from '../src/core/server-sig.js';
+import { GuiStore, rowSummary, type Row } from '../src/core/store.js';
+import { HeightIndex, visibleRange, WidthCache } from '../src/core/virtual.js';
+
+const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
+const REPO = path.resolve(ROOT, '..', '..');
+const subtle = webcrypto.subtle as unknown as SubtleCrypto;
+
+/* ── fake DOM: text nodes and elements only; no markup parser exists here ── */
+class FText {
+  constructor(readonly data: string) {}
+}
+class FEl implements MiniEl {
+  className = '';
+  readonly attrs = new Map<string, string>();
+  readonly children: Array<FEl | FText> = [];
+  constructor(readonly tag: string) {}
+  appendChild(c: unknown): unknown {
+    this.children.push(c as FEl | FText);
+    return c;
+  }
+  setAttribute(n: string, v: string): void {
+    this.attrs.set(n, v);
+  }
+  get text(): string {
+    return this.children.map((c) => (c instanceof FText ? c.data : c.text)).join('');
+  }
+  all(): FEl[] {
+    return [this, ...this.children.flatMap((c) => (c instanceof FEl ? c.all() : []))];
+  }
+}
+const fdoc: MiniDoc = { createElement: (t) => new FEl(t), createTextNode: (s) => new FText(s) };
+
+describe('§4.5 sanitizer (G-GUI-07, G-GUI-11)', () => {
+  it('strips C0/C1 controls except \\n \\t, and CSI / OSC 52 / OSC 8 / DCS / APC / PM sequences whole', () => {
+    const s = 'a\x1b[31mred\x1b[0m\x1b]52;c;ZXZpbA==\x07b\x1b]8;;https://x.example\x1b\\link\x1b]8;;\x1b\\\x1bPq#0;\x1b\\c\x1b_apc\x9c\x1b^pm\x1b\\d\x00\x08\r\x7f\x85e\n\tf\x9b2Jg\x9d0;t\x07h';
+    const r = sanitizeText(s);
+    expect(r.text).toBe('aredblinkcde\n\tfgh');
+    expect(r.flags).toEqual([]);
+    expect(r.controlsRemoved).toBeGreaterThan(10);
+  });
+  it('an unterminated OSC is removed to the end', () => {
+    expect(sanitizeText('ok\x1b]0;title never ends').text).toBe('ok');
+  });
+  it('bidi controls render as visible glyphs and flag bidi; tag and zero-width characters are stripped and flag hidden-chars', () => {
+    const r = sanitizeText('a‮evil‬ b⁦x⁩ c​d‍⁠﻿' + String.fromCodePoint(0xe0041, 0xe007f) + 'e');
+    expect(r.text).toBe('a⟨RLO⟩evil⟨PDF⟩ b⟨LRI⟩x⟨PDI⟩ cde');
+    expect(r.flags.sort()).toEqual(['bidi', 'hidden-chars']);
+  });
+  it('is idempotent and never throws on non-strings', () => {
+    for (const x of ['\x1b[1mz‮', 42, null, undefined, { a: 1 }]) {
+      const once = sanitizeText(x).text;
+      expect(sanitizeText(once).text).toBe(once.replace(/⟨[A-Z]+⟩/g, (m) => m));
+    }
+  });
+});
+
+describe('DOM-text rendering (G-GUI-07): markup in a block string is text, never code', () => {
+  it('script/HTML in every kit block lands as text nodes; no element the string names is created', () => {
+    const evil = '<img src=x onerror=alert(1)><script>alert(2)</script>';
+    const tree = { block: 'kit.Box', children: [
+      { block: 'kit.Text', data: { text: evil } }, { block: 'kit.Markdown', data: { text: `# t\n${evil}` } },
+      { block: 'kit.List', data: { items: [evil] } }, { block: 'kit.Table', data: { columns: [evil], rows: [[evil]] } },
+      { block: 'kit.Diff', data: { text: evil } }, { block: 'kit.Image', data: { alt: evil } }, { block: 'kit.Button', data: { command: 'theme.day', label: evil } },
+      { block: 'evil.Unknown', data: { text: evil } }, { type: 'Text', text: evil },
+    ] };
+    const el = renderBlock({ doc: fdoc }, tree) as FEl;
+    const tags = new Set(el.all().map((e) => e.tag));
+    expect(tags.has('img')).toBe(false);
+    expect(tags.has('script')).toBe(false);
+    expect(el.text.split(evil).length - 1).toBeGreaterThanOrEqual(8);
+    expect(el.text).toContain('[block evil.Unknown]'); // unknown block: opaque, never dropped
+    for (const e of el.all()) for (const k of e.attrs.keys()) expect(k).not.toMatch(/^on|^href$|^src$|^style$/);
+  });
+  it('a kernel card shows kind, requester, flags beside the keys, the contentHash line; keys only for verified actions on a decidable card', () => {
+    const block = { type: 'Box', children: [{ type: 'Text', text: 'run rm ‮-rf' }] };
+    const flags = cardFlags({ block }, []);
+    expect(flags).toEqual(['bidi']);
+    const v = { cardId: 'card:01J', kind: 'permission', requestedBy: 'p:x/s-1', hsid: null, repo: 'repo:a', state: 'pending', contentHash: 'sha256:' + 'a'.repeat(64), flags, decisions: ['allow', 'deny'], decidable: true };
+    const el = renderCard({ doc: fdoc }, v, block) as FEl;
+    expect(el.all().filter((e) => e.attrs.has('data-decision')).map((e) => e.attrs.get('data-decision'))).toEqual(['allow', 'deny']);
+    expect(el.text).toContain('⟨RLO⟩');
+    expect(el.text).toContain('contentHash sha256:');
+    expect(el.all().some((e) => e.className.includes('flag-bidi'))).toBe(true);
+    const none = renderCard({ doc: fdoc }, { ...v, state: 'mystery', decidable: false }, block) as FEl;
+    expect(none.all().filter((e) => e.attrs.has('data-decision'))).toHaveLength(0);
+  });
+  it('src/ has no HTML sinks, eval, inline handlers or remote loads (scan)', () => {
+    const files: string[] = [];
+    const walk = (d: string): void => {
+      for (const n of readdirSync(d)) {
+        const p = path.join(d, n);
+        if (statSync(p).isDirectory()) walk(p);
+        else files.push(p);
+      }
+    };
+    walk(path.join(ROOT, 'src'));
+    walk(path.join(ROOT, 'static'));
+    for (const f of files) {
+      const s = readFileSync(f, 'utf8').replace(/^\s*(\*|\/\/).*$/gm, '');
+      expect(s, f).not.toMatch(/\.innerHTML|\.outerHTML|insertAdjacentHTML|document\.write|\beval\(|new Function|setAttribute\(\s*['"]on/);
+      expect(s, f).not.toMatch(/https?:\/\/(?!127\.0\.0\.1)/);
+    }
+  });
+});
+
+describe('launch fragment and key pin (§11.2 rule 2, §4.9)', () => {
+  it('parses exactly #launch=<b64url>&k=<b64url>', () => {
+    expect(parseLaunchFragment('#launch=abc_-1&k=MCow')).toEqual({ launchToken: 'abc_-1', kernelPublicKey: 'MCow' });
+    for (const bad of ['', '#', '#launch=a', '#k=a&launch=b&x=c', '#launch=a&launch=b&k=c', '#launch=a b&k=c', '#launch=<x>&k=c']) expect(parseLaunchFragment(bad)).toBeNull();
+  });
+  it('boot.js reads and clears the fragment with history.replaceState before app.js, and hands it over once', () => {
+    const src = readFileSync(path.join(ROOT, 'static', 'boot.js'), 'utf8');
+    const replaced: string[] = [];
+    const g: Record<string, unknown> = {};
+    const fn = new (Object.getPrototypeOf(function () {}).constructor)('location', 'history', 'globalThis', src);
+    fn({ hash: '#launch=t&k=K', pathname: '/', search: '' }, { replaceState: (_a: unknown, _b: unknown, u: string) => replaced.push(u) }, g);
+    expect(replaced).toEqual(['/']);
+    const take = g.gnomonTakeLaunch as () => string;
+    expect(take()).toBe('#launch=t&k=K');
+    expect(g.gnomonTakeLaunch).toBeUndefined();
+    expect(take()).toBe('');
+    const html = readFileSync(path.join(ROOT, 'static', 'index.html'), 'utf8');
+    expect(html.indexOf('/boot.js')).toBeLessThan(html.indexOf('/app.js'));
+  });
+  it('pin decisions: fragment pins; a changed fragment key re-pins visibly; Reconnect verifies against the pin; no pin, no fragment ⇒ refuse', () => {
+    expect(decidePin('K1', null)).toEqual({ ok: true, verifyWith: 'K1', store: 'K1', notice: null });
+    expect(decidePin('K1', 'K1')).toEqual({ ok: true, verifyWith: 'K1', store: null, notice: null });
+    const ch = decidePin('K2', 'K1');
+    expect(ch.ok && ch.store === 'K2' && ch.notice).toBeTruthy();
+    expect(decidePin(null, 'K1')).toEqual({ ok: true, verifyWith: 'K1', store: null, notice: null });
+    expect(decidePin(null, null).ok).toBe(false);
+  });
+});
+
+describe('WebCrypto Ed25519 serverSig (G-GUI-03 minimum, S25-M4)', () => {
+  const kp = generateKeyPairSync('ed25519');
+  const spki = kp.publicKey.export({ type: 'spki', format: 'der' }) as Buffer;
+  const pem = (kp.publicKey.export({ type: 'spki', format: 'pem' }) as string).replace(/\n+$/, '');
+  const keyId = `gkey:v1:${hex(sha256(pem))}`;
+  const path0 = 'ws://127.0.0.1:4000/rpc';
+  const hello = (sigOver = path0) => {
+    const nonce = 'n-1';
+    const sig = sign(null, Buffer.from(authServerPreimage(nonce, sigOver, { clientApi: 'gnomon-rpc:v1', features: [] })), kp.privateKey).toString('base64');
+    return { clientApi: 'gnomon-rpc:v1', features: [], nonce, serverKeyId: keyId, serverSig: sig, clientApiId: 'x', kitId: 'y' };
+  };
+  it('keyIdOfSpki rebuilds the kernel keyId from the SPKI', () => {
+    expect(keyIdOfSpki(new Uint8Array(spki))).toBe(keyId);
+  });
+  it('verifies a genuine hello; refuses a signature over another endpoint, a foreign key, a missing WebCrypto', async () => {
+    const k = spki.toString('base64url');
+    expect(await verifyServerSig(subtle, k, hello(), path0)).toEqual({ ok: true });
+    expect((await verifyServerSig(subtle, k, hello('ws://127.0.0.1:4001/rpc'), path0)) as { reason?: string }).toMatchObject({ ok: false, reason: 'bad-server-sig' });
+    const other = (generateKeyPairSync('ed25519').publicKey.export({ type: 'spki', format: 'der' }) as Buffer).toString('base64url');
+    expect(await verifyServerSig(subtle, other, hello(), path0)).toMatchObject({ ok: false, reason: 'key-id-mismatch' });
+    expect(await verifyServerSig(undefined, k, hello(), path0)).toMatchObject({ ok: false, reason: 'webcrypto-ed25519-unavailable' });
+  });
+  it('card decision keys only for actions whose kernel signature verifies', async () => {
+    const card = { cardId: 'card:01J', contentHash: 'sha256:00' };
+    const s = (d: string) => sign(null, Buffer.from(`gnomon:card-action:v1\n${card.cardId}\n${d}\n${card.contentHash}`), kp.privateKey).toString('base64');
+    const actions = [{ decision: 'allow', sig: s('allow') }, { decision: 'deny', sig: s('allow') }, { decision: 'always' }];
+    expect(await verifiedDecisions(subtle, spki.toString('base64url'), { ...card, actions })).toEqual(['allow']);
+  });
+});
+
+describe('/diag and /blob are POST, X-Gnomon-Token, referrerPolicy same-origin (P8-D89b)', () => {
+  it('gnomonPost sends exactly that init', async () => {
+    const seen: Array<[string, RequestInit]> = [];
+    const f = (async (u: string, i: RequestInit) => (seen.push([u, i]), new Response(null, { status: 204 }))) as unknown as typeof fetch;
+    await gnomonPost(f, '/diag', 'tok', 'hi');
+    expect(seen[0]).toEqual(['/diag', { method: 'POST', referrerPolicy: 'same-origin', credentials: 'omit', cache: 'no-store', headers: { 'X-Gnomon-Token': 'tok' }, body: 'hi' }]);
+  });
+  it('a refusal reads as CODE, reason, message, next', () => {
+    expect(refusalFromError({ code: -32005, message: 'needs presence', data: { code: 'UNSUPPORTED', data: { reason: 'web-auth-not-implemented' }, next: [{ verb: 'approve', principal: 'human' }] } })).toEqual({ code: 'UNSUPPORTED', reason: 'web-auth-not-implemented', message: 'needs presence', next: ['approve (human)'], data: { reason: 'web-auth-not-implemented' } });
+  });
+});
+
+describe('store: sessions, transcript, decision stack (G-GUI-09)', () => {
+  const req = (seq: number, cardId: string, repo: string, hsid?: string): Row => ({ seq, kind: 'approval.request', scope: { repo }, ...(hsid ? { session: hsid } : {}), payload: { card: { cardId, kind: 'permission', state: 'pending', ...(hsid ? { hsid } : {}) }, flags: [] } });
+  it('deciding a later card leaves earlier ones pending; per-project filtering; at-most-once per seq', () => {
+    const s = new GuiStore();
+    s.apply([req(1, 'c1', 'repo:a'), req(2, 'c2', 'repo:b'), req(3, 'c3', 'repo:a'), req(3, 'dup', 'repo:a')]);
+    expect(s.stack().map((c) => c.cardId)).toEqual(['c1', 'c2', 'c3']);
+    s.apply([{ seq: 4, kind: 'approval.decide', payload: { cardId: 'c3', decision: 'allow' } }]);
+    expect(s.stack().map((c) => c.cardId)).toEqual(['c1', 'c2']);
+    expect(s.stack('repo:a').map((c) => c.cardId)).toEqual(['c1']);
+    s.apply([{ seq: 5, kind: 'approval.expire', payload: { cardId: 'c1' } }]);
+    expect(s.stack().map((c) => c.cardId)).toEqual(['c2']);
+  });
+  it('sessions group by project with pending counts; transcript keeps stubs as stubs', () => {
+    const s = new GuiStore();
+    s.apply([{ seq: 1, kind: 'session.open', session: 'hsid:v1:A', scope: { repo: 'repo:a' }, payload: { hsid: 'hsid:v1:A', backend: 'local', state: 'open' } }, req(2, 'c1', 'repo:a', 'hsid:v1:A'), { seq: 3, kind: 'turn.event', session: 'hsid:v1:A' }]);
+    expect(s.groups()).toMatchObject([{ repo: 'repo:a', sessions: [{ hsid: 'hsid:v1:A', backend: 'local', pending: 1 }] }]);
+    expect(s.transcript('hsid:v1:A').map((r) => r.kind)).toEqual(['session.open', 'approval.request', 'turn.event']);
+    expect(rowSummary(s.transcript('hsid:v1:A')[2]!)).toContain('withheld');
+  });
+});
+
+describe('virtualized transcript (G-GUI-01 unit proxy)', () => {
+  it('offsets and row lookup stay exact under measurement; widths cache separately', () => {
+    const h = new HeightIndex(20);
+    h.push(10);
+    h.set(3, 50);
+    expect(h.offsetOf(4)).toBe(110);
+    expect(h.indexAt(109)).toBe(3);
+    expect(h.indexAt(110)).toBe(4);
+    const w = new WidthCache(20);
+    w.save(800, h);
+    expect(w.restore(800, 12).offsetOf(4)).toBe(110);
+    expect(w.restore(400, 12).offsetOf(4)).toBe(80);
+  });
+  it('200k rows: visible-range work per scroll/keystroke stays far under the 50 ms budget', () => {
+    const h = new HeightIndex(22);
+    h.push(200_000);
+    const t0 = performance.now();
+    for (let i = 0; i < 1000; i++) {
+      const r = visibleRange(h, (i * 7919) % h.total(), 900);
+      h.set(r.start, 22 + (i % 3));
+    }
+    const per = (performance.now() - t0) / 1000;
+    expect(per).toBeLessThan(1);
+  });
+  it.todo('M1.10 slice 2 (G-GUI-01 falsifier): a 200k-event session in the wrapper, Chromium and Safari/Edge: keystroke-to-paint < 50 ms, attach < 2 s, method stated (G-HON-07) — needs a headless browser (no Playwright in the repo)');
+});
+
+describe('chrome: palette, presets, themes (G-GUI-08, §11.3)', () => {
+  it('every GUI command id is reachable from the palette; verbs come from status.verbs', () => {
+    const all = paletteEntries({ verbs: [{ verb: 'status', available: true }, { verb: 'approve', available: false, milestone: 'M1.3' }] });
+    for (const c of GUI_COMMANDS) expect(filterCommands(all, c.id)[0]!.id).toBe(c.id);
+    expect(all.find((c) => c.id === 'verb.approve')).toMatchObject({ available: false, why: 'lands M1.3' });
+  });
+  it('presets round-trip and cannot hide the transcript; the extension-risk badge is not a pane', () => {
+    for (const n of Object.keys(PRESETS)) expect(parseLayout(serializeLayout(applyPreset(n)))).toEqual(applyPreset(n));
+    expect(togglePane(applyPreset('desk'), 'transcript').visible.transcript).toBe(true);
+    const html = readFileSync(path.join(ROOT, 'static', 'index.html'), 'utf8');
+    expect(html).toMatch(/id="risk" class="badge risk kernel-owned"/);
+    expect(html.indexOf('id="risk"')).toBeLessThan(html.indexOf('<main')); // header chrome, outside every pane
+  });
+  it('theme auto follows the OS; reduced motion from the OS or in-app', () => {
+    expect([resolveTheme('auto', true), resolveTheme('auto', false), resolveTheme('day', true)]).toEqual(['night', 'day', 'day']);
+    expect([resolveMotion('system', true), resolveMotion('reduce', false), resolveMotion('system', false)]).toEqual(['reduced', 'reduced', 'full']);
+  });
+  it.todo('M1.10 slice 2: theme choice and layout presets round-trip through the kernel per device (config.prefs, signed by the device key); mod commands in the palette (M1.11 relays)');
+});
+
+describe('G-GUI-10 contrast: the CSS tokens are the fixtures, and the fixtures pass', () => {
+  const css = readFileSync(path.join(ROOT, 'static', 'styles.css'), 'utf8');
+  const fx = JSON.parse(readFileSync(path.join(REPO, 'docs', 'specs', 'gnomon-fixtures', 'contrast.json'), 'utf8')) as { themes: Record<string, { surfaces: Record<string, string>; text: Record<string, string>; nonText: Record<string, string> }> };
+  const tokens = (theme: string): Record<string, string> => {
+    const m = new RegExp(theme === 'day' ? String.raw`:root,\s*\[data-theme="day"\]\s*\{([^}]*)\}` : String.raw`\[data-theme="night"\]\s*\{([^}]*)\}`).exec(css)!;
+    return Object.fromEntries([...m[1]!.matchAll(/--([a-z0-9-]+):\s*([^;]+);/g)].map((x) => [x[1]!, x[2]!.trim().toUpperCase()]));
+  };
+  const MAP: Record<string, [string, string]> = { ground: ['surfaces', 'ground'], sheet: ['surfaces', 'sheet'], ink: ['text', 'ink'], ink2: ['text', 'ink2'], sec: ['text', 'sec'], fail: ['text', 'fail'], 'warn-ink': ['text', 'warnInk'], knot: ['text', 'knot'], 'key-edge': ['nonText', 'keyEdge'], 'warn-edge': ['nonText', 'warnEdge'], 'fail-edge': ['nonText', 'failEdge'], 'knot-edge': ['nonText', 'knotEdge'] };
+  it.each(['day', 'night'])('%s tokens equal contrast.json', (theme) => {
+    const t = tokens(theme);
+    for (const [v, [grp, key]] of Object.entries(MAP)) expect(t[v], `${theme} --${v}`).toBe((fx.themes[theme] as unknown as Record<string, Record<string, string>>)[grp]![key]!.toUpperCase());
+  });
+  it('`color:` only ever takes a text token (project hues are fills, never text)', () => {
+    const TEXT = new Set(['ink', 'ink2', 'sec', 'fail', 'warn-ink', 'knot']);
+    for (const m of css.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/(?<![-a-z])color:\s*([^;}]+)/g)) {
+      const v = /^var\(--([a-z0-9-]+)\)$/.exec(m[1]!.trim());
+      expect(v && TEXT.has(v[1]!), `color: ${m[1]}`).toBe(true);
+    }
+  });
+  it('check-contrast.mjs passes', () => {
+    expect(execFileSync(process.execPath, [path.join(REPO, 'docs', 'specs', 'gnomon-fixtures', 'check-contrast.mjs')], { encoding: 'utf8' })).toContain('all pairs pass');
+  });
+});
+
+describe('deferred to M1.10 slice 2', () => {
+  it.todo('G-GUI-03 browser matrix: Safari/Chrome/Firefox (macOS), Edge/Chrome/Firefox (Windows), both WebViews render every fixture; the bundled pure-JS Ed25519 fallback verifier');
+  it.todo('G-GUI-02: 60 s socket+input silence ⇒ zero DOM mutations, no running animation (MutationObserver in a real engine)');
+  it.todo('G-GUI-04: no write verb without a user gesture — browser harness (slice 1 gates approve/send/open on trusted DOM events only)');
+  it.todo('G-GUI-05: close mid-turn, reopen, Reconnect, no event lost (needs #identity M1.3 presence for Reconnect)');
+  it.todo('G-GUI-06: cached unlock 15 min idle expiry per connection (M1.3)');
+  it.todo('swap the in-bundle client for the published @a-company/gnomon-client (#client-ts, M1.12)');
+  it.todo('bundled JetBrains Mono / Fraunces font files (law 6); streaming Markdown renderer with raw HTML disabled; kit.Diff per-hunk; kit.Image via POST /blob + blob: URL');
+  it.todo('React renderer (spec §11.1) when the Doodle canvas lands (§12.7); composer history, kill ring, undo, paste collapse, ⇧Tab run mode, Esc interrupt');
+  it.todo('strictness/run-mode header control (G-STR-09), voice-arm indicator (G-GUI-13), wrapper surface detection');
+});

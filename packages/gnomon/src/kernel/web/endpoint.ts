@@ -60,7 +60,7 @@ import { decodeLine, encodeFrame, NdjsonDecoder } from '../socket/framing.js';
 import { errorFrame, notificationFrame, parseRequest, refusalWith, resultFrame, RpcRefusal, type RpcResponseFrame } from '../socket/rpc.js';
 import type { ConnectionContext } from '../socket/server.js';
 import { PRE_AUTH_MAX_FRAME_BYTES } from '../socket/server.js';
-import { materializePlaceholderBundle, PLACEHOLDER_BUNDLE_HASH } from './bundle.js';
+import { GUI_BUNDLE_HASH, materializeGuiBundle } from './gui-pin.js';
 import { GuiAccess, type GuiSession, type LaunchBinding } from './launch.js';
 import {
   CHANNEL_MAX_RECORD_BYTES,
@@ -191,7 +191,7 @@ export class WebEndpoint {
     });
   }
 
-  /** Production: the platform's transport sandbox and the pinned placeholder bundle. */
+  /** Production: the platform's transport sandbox and the pinned #gui bundle. */
   static create(opts: WebEndpointOptions): WebEndpoint {
     return new WebEndpoint(opts, {});
   }
@@ -202,7 +202,7 @@ export class WebEndpoint {
     this.access = new GuiAccess(this.#now);
     const platform = opts.platform ?? process.platform;
     this.#launcher = seams.launcher ?? ((input) => transportLaunchPlan(input, platform));
-    this.#bundle = seams.bundle ?? { dir: '', hash: PLACEHOLDER_BUNDLE_HASH };
+    this.#bundle = seams.bundle ?? { dir: '', hash: GUI_BUNDLE_HASH };
   }
 
   get listening(): boolean {
@@ -311,7 +311,7 @@ export class WebEndpoint {
     this.#state = 'starting';
     const scriptPath = this.#o.scriptPath ?? defaultChildScript();
     if (!scriptPath) throw new LifecycleRefusal('web-transport-failed', 'the gnomon-web transport child is not built (dist/transport/gnomon-web.js)');
-    const bundleDir = this.#bundle.dir || materializePlaceholderBundle(this.#o.home);
+    const bundleDir = this.#bundle.dir || materializeGuiBundle(this.#o.home);
     const plan = this.#launcher({ scriptPath, bundleDir, protectedDirs: [this.#o.home], forbiddenTrees: [path.join(this.#o.home, 'keys')] });
     this.#plan = plan;
     const child = spawn(plan.command, plan.args, { stdio: ['pipe', 'pipe', 'pipe'], env: plan.env, windowsHide: true });
