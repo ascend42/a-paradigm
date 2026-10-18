@@ -16,3 +16,6 @@ packages/gnomon-gui/static/* text eol=lf
 packages/gnomon-gui/src/** text eol=lf
 packages/gnomon/src/kernel/web/gui-bundle.ts text eol=lf
 packages/gnomon-contracts/src/** text eol=lf
+
+# The generated client-API doc is a byte-compared fixed point (G-HON-04 rule) on every OS
+docs/specs/gnomon-client-api.md text eol=lf

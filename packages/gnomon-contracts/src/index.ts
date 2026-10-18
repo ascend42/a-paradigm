@@ -31,4 +31,5 @@ export * from './client-api.js';
 export * from './mod-abi.js';
 export * from './display.js';
 export * from './conformance.js';
+export * from './client-api-doc.js';
 export type * from './client-types.js';
