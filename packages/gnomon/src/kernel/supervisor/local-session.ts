@@ -68,7 +68,7 @@ import { claudeCodePlatform } from '../../platform/claude-code.js';
 import type { DarwinSessionExtras } from '../../platform/darwin/session-sbpl.js';
 import { LineSplitter } from '../../adapters/claude-code/adapter.js';
 import { abortLine, buildLocalArgv, followUpLine, LocalUsageMeter, parseLocalLine, promptLine, steerLine } from '../../adapters/local/runner.js';
-import { prepareRunner } from '../local/runner-pin.js';
+import { prepareRunner, verifyNode } from '../local/runner-pin.js';
 import { assertNotClaude, DEFAULT_CONTEXT_TARGET, DEFAULT_CTX_FLOOR, LOCAL_COMPAT_NAMES, validateLocalEndpoints, type LocalLaneConfig } from '../local/config.js';
 import { classifyEndpoint } from '../local/endpoint.js';
 import { probeLocalEndpoint, type LocalCapabilities, type ProbeFetch } from '../local/probe.js';
@@ -356,6 +356,7 @@ export class LocalLane {
         linkedFolders: this.#o.linkedFolders?.() ?? [],
         endpointPort: this.#o.endpointPort?.() ?? null,
         extraDenyWrite: [],
+        localRunner: { node: pin.node, dir: pin.dir },
       });
       fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
       const configPath = path.join(dir, 'local.yaml');
@@ -383,6 +384,8 @@ export class LocalLane {
       if (realRoot(req.cwd) !== cwdReal || (req.worktree !== undefined && realRoot(req.worktree) !== wtReal)) {
         throw refused('BAD_REQUEST', 'a session root moved between the check and the spawn', { reason: 'bad-params' });
       }
+      // round 3 (Aegis H1, node half): node is re-hashed HERE, synchronously, with no await before spawn
+      if (verifyNode(pin) !== runner.command) throw refused('PERMIT_REQUIRED', 'the node binary changed between staging and spawn', { why: 'runner-pin-mismatch', part: 'node' });
       child = spawn(plan.command, plan.args, { cwd: wtReal ?? cwdReal, env, detached: true, stdio: ['pipe', 'pipe', 'ignore'] });
       const c = child;
       const exited = new Promise<void>((r) => c.once('close', () => r()));

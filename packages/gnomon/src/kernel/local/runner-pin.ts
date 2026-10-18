@@ -19,10 +19,16 @@
  * session profile (§15.5), so a copy that verified stays what it was — it
  * is re-verified on every spawn anyway. The child is exec'd as
  * `<realpath node> <realpath copied entry> …`.
- * RESIDUAL (reported): node is verified by sha256 immediately before spawn
- * but exec'd IN PLACE — Homebrew's node is a 68 KB launcher that loads
+ * node is NOT copied: Homebrew's node is a 68 KB launcher that loads
  * `@loader_path/../lib/libnode.dylib`, so copying the binary alone breaks
- * it, and its dylibs are not pinned. A single-file SEA runner closes this.
+ * it. Instead (round 3): prepareRunner verifies node's sha256 at staging,
+ * and the lane re-hashes it (verifyNode) synchronously right before
+ * spawn() — no await between that check and the exec; and EVERY session
+ * profile (Claude and local) denies writes to node, its install prefix
+ * (bin/ + lib/) and the pinned source dir (policy.ts localRunnerDenies), so
+ * no session can swap them. Residual: node's dylibs are not hashed (a
+ * process outside every session can still change them); the long-term fix
+ * is a single-file SEA runner, tracked as a task.
  */
 import { createHash, randomBytes } from 'node:crypto';
 import * as fs from 'node:fs';
@@ -94,6 +100,24 @@ export function pinOf(dir: string, entry: string, node: string = process.execPat
   return { node, nodeSha256: sha256File(node), dir, treeSha256: treeHash(dir), entry };
 }
 
+/** Realpath node and hash it against the pin; returns the realpath (synchronous: the lane calls it right before spawn). */
+export function verifyNode(pin: Pick<LocalRunnerPin, 'node' | 'nodeSha256'>): string {
+  let node: string;
+  try {
+    node = fs.realpathSync.native(pin.node);
+  } catch {
+    throw pinRefused('node', 'the pinned node binary is missing');
+  }
+  let got: string | null = null;
+  try {
+    got = sha256File(node);
+  } catch {
+    got = null;
+  }
+  if (got !== pin.nodeSha256.toLowerCase()) throw pinRefused('node', 'the node binary does not match its root-signed sha256 pin');
+  return node;
+}
+
 /**
  * Verify and stage the runner: copy `dir` into `<home>/runners/<treeSha256>/` (atomic rename), hash the COPY,
  * verify node; returns the realpaths to exec. Any mismatch refuses PERMIT_REQUIRED{runner-pin-mismatch, part}.
@@ -129,25 +153,19 @@ export function prepareRunner(home: string, pin: LocalRunnerPin): { command: str
       }
       // what is hashed is what runs: the COPY, never the source after the check
       if (!verify(tmp)) throw pinRefused('tree', 'the runner package does not match its root-signed tree hash');
-      fs.renameSync(tmp, dest);
+      try {
+        fs.renameSync(tmp, dest);
+      } catch (err) {
+        // a concurrent open staged the same tree first: fine iff what is there verifies
+        const code = (err as NodeJS.ErrnoException).code;
+        if (!((code === 'EEXIST' || code === 'ENOTEMPTY') && verify(dest))) throw err;
+      }
     } finally {
       fs.rmSync(tmp, { recursive: true, force: true });
     }
   }
   const entry = path.join(dest, ...pin.entry.split('/'));
   if (!fs.existsSync(entry)) throw pinRefused('entry', 'the runner entry is not in the pinned tree');
-  let node: string;
-  try {
-    node = fs.realpathSync.native(pin.node);
-  } catch {
-    throw pinRefused('node', 'the pinned node binary is missing');
-  }
-  let got: string | null = null;
-  try {
-    got = sha256File(node);
-  } catch {
-    got = null;
-  }
-  if (got !== pin.nodeSha256.toLowerCase()) throw pinRefused('node', 'the node binary does not match its root-signed sha256 pin');
+  const node = verifyNode(pin);
   return { command: node, entry: fs.realpathSync.native(entry), copy: fs.realpathSync.native(dest) };
 }

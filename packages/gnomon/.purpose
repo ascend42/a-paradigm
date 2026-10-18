@@ -1227,7 +1227,7 @@ components:
       entry) — runner-pin.ts copies the tree into <home>/runners/<treeSha256>/,
       hashes the COPY, verifies node and execs <realpath node> <realpath
       copied entry> (PERMIT_REQUIRED runner-pin-mismatch{part}); residual:
-      node is verified then exec'd in place (Homebrew node loads ../lib); round 2 (M3): roots resolved ONCE by native realpath (fail closed) and only the resolved paths reach the policy, child config, darwin extras, repo id and spawn cwd; re-checked right before spawn; per-task endpoint choice = first endpoint in
+      node is not copied (Homebrew node loads ../lib) — round 3: EVERY session profile (Claude and local) denies writes to node, its install prefix and the pinned source dir (policy.ts localRunnerDenies, fed from the loaded local config), and node is re-hashed synchronously right before spawn; a concurrent staging rename (EEXIST/ENOTEMPTY) is success iff the dest verifies; round 2 (M3): roots resolved ONCE by native realpath (fail closed) and only the resolved paths reach the policy, child config, darwin extras, repo id and spawn cwd; re-checked right before spawn; per-task endpoint choice = first endpoint in
       signed order capable for the floor; probeAll at daemon start records
       model.probe/model.capabilities; roots inside the Gnomon home refused;
       the child gets contextTarget min(~8k, n_ctx); session.send{steer} with a

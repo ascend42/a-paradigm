@@ -280,6 +280,8 @@ export class SessionSupervisor {
         linkedFolders: this.#o.linkedFolders?.() ?? [],
         endpointPort: this.#o.endpointPort?.() ?? null,
         extraDenyWrite: binaryDenies(row, userHome, bin.real, this.#o.claudePath),
+        // round 3 (Aegis H1): a Claude session can no more swap the local runner's node or source than a local one
+        ...(this.#o.local?.runner ? { localRunner: { node: this.#o.local.runner.node, dir: this.#o.local.runner.dir } } : {}),
       });
       const parse = (rel: string): Record<string, unknown> => {
         const b = generated?.get(rel);

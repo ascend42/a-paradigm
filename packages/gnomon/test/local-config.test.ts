@@ -21,7 +21,9 @@ import { BudgetFuse } from '../src/kernel/budget/fuse.js';
 import { SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
 import { DEV_TEST_ROOT_ACK, DevTestRootAuthority } from '../src/kernel/identity/root-authority.js';
 import { parseLocalLine } from '../src/adapters/local/runner.js';
-import { pinOf, prepareRunner, type LocalRunnerPin } from '../src/kernel/local/runner-pin.js';
+import { pinOf, prepareRunner, sha256File, type LocalRunnerPin } from '../src/kernel/local/runner-pin.js';
+import { buildSessionPolicy, localRunnerDenies } from '../src/kernel/manifest/policy.js';
+const pinOfNode = (node: string): Pick<LocalRunnerPin, 'node' | 'nodeSha256'> => ({ node, nodeSha256: sha256File(node) });
 import type { SessionLaunchInput } from '../src/kernel/sandbox/session.js';
 
 const RUNNER_SRC = "import './lib.js';\n";
@@ -209,6 +211,67 @@ describe('the runner pin (round 2, Aegis H1): mandatory, the whole tree + node, 
     const { l, rows } = lane(path.join(home, 'gh'), { endpoints: [{ id: 'f', base: srv.base, model: 'm', compat: 'llama.cpp' }], runner: { ...runnerTree(path.join(home, 'rt')), treeSha256: '0'.repeat(64) } });
     await expect(l.open({ principal: HUMAN, principalClass: 'human', attended: true, cwd, model: 'local' }, async () => null)).rejects.toMatchObject({ refusal: { code: 'PERMIT_REQUIRED' } });
     expect(rows.some((r) => r.kind.startsWith('permit.') || r.kind === 'session.open')).toBe(false);
+  });
+});
+
+describe('round 3 (Aegis H1, node half): every session profile denies writes to node, its prefix and the runner source; node is re-hashed right before spawn', () => {
+  it('buildSessionPolicy with a local runner denies node (literal), its install prefix and the source dir; a prefix at or above the user home narrows to node\'s dir', () => {
+    const home = scratch();
+    const prefix = path.join(home, 'nodeinst');
+    fs.mkdirSync(path.join(prefix, 'bin'), { recursive: true });
+    fs.mkdirSync(path.join(prefix, 'lib'));
+    const node = path.join(prefix, 'bin', 'node');
+    fs.writeFileSync(node, 'fake node');
+    const dir = path.join(home, 'src-rt');
+    fs.mkdirSync(dir);
+    const base = { home: path.join(home, 'gh'), cwd: home, userClaudeDir: path.join(home, 'uh', '.claude'), userHome: path.join(home, 'uh'), managedSettingsPaths: [], linkedFolders: [], endpointPort: null };
+    const pol = buildSessionPolicy({ ...base, localRunner: { node, dir } });
+    expect(pol.denyWrite).toEqual(expect.arrayContaining([
+      { path: fs.realpathSync.native(node), match: 'literal', class: 'binary' },
+      { path: fs.realpathSync.native(prefix), match: 'subpath', class: 'binary' },
+      { path: fs.realpathSync.native(dir), match: 'subpath', class: 'binary' },
+    ]));
+    expect(buildSessionPolicy(base).denyWrite.some((d) => d.path === fs.realpathSync.native(prefix))).toBe(false);
+    // node in ~/bin: the prefix would be the user home — narrowed to ~/bin
+    const uh = path.join(home, 'uh');
+    fs.mkdirSync(path.join(uh, 'bin'), { recursive: true });
+    fs.writeFileSync(path.join(uh, 'bin', 'node'), 'x');
+    const narrowed = localRunnerDenies({ node: path.join(uh, 'bin', 'node'), dir }, uh).map((d) => d.path);
+    expect(narrowed).toContain(fs.realpathSync.native(path.join(uh, 'bin')));
+    expect(narrowed).not.toContain(fs.realpathSync.native(uh));
+  });
+
+  it('the local lane\'s profile (built with the loaded config) carries those denies', async () => {
+    const home = scratch();
+    const cwd = path.join(home, 'repo');
+    fs.mkdirSync(cwd);
+    const srv = await fake({ tools: true });
+    const pin = runnerTree(path.join(home, 'src-rt'));
+    const plans: SessionLaunchInput[] = [];
+    const { l } = lane(path.join(home, 'gh'), { endpoints: [{ id: 'f', base: srv.base, model: 'm', compat: 'llama.cpp' }], runner: pin }, (i) => plans.push(i));
+    await l.open({ principal: HUMAN, principalClass: 'human', attended: true, cwd, model: 'local' }, async () => null).catch(() => undefined);
+    const nodeReal = fs.realpathSync.native(process.execPath);
+    const denies = plans[0]!.policy.denyWrite.map((d) => d.path);
+    expect(denies).toContain(nodeReal);
+    expect(denies).toContain(path.dirname(path.dirname(nodeReal)));
+    expect(denies).toContain(fs.realpathSync.native(pin.dir));
+  });
+
+  it('a node binary swapped after staging and before spawn makes the open refuse PERMIT_REQUIRED{part:node}', async () => {
+    const home = scratch();
+    const cwd = path.join(home, 'repo');
+    fs.mkdirSync(cwd);
+    const fakeNode = path.join(home, 'nodeinst', 'bin', 'node');
+    fs.mkdirSync(path.dirname(fakeNode), { recursive: true });
+    fs.writeFileSync(fakeNode, 'pinned bytes');
+    const srv = await fake({ tools: true });
+    const pin = { ...runnerTree(path.join(home, 'src-rt')), ...pinOfNode(fakeNode) };
+    const { l, rows } = lane(path.join(home, 'gh'), { endpoints: [{ id: 'f', base: srv.base, model: 'm', compat: 'llama.cpp' }], runner: pin }, () => {
+      fs.writeFileSync(fakeNode, 'swapped bytes'); // after prepareRunner verified it
+    }, async () => 'intent');
+    const e = (await l.open({ principal: HUMAN, principalClass: 'human', attended: true, cwd, model: 'local' }, async () => null).catch((x: unknown) => x)) as RefusedError;
+    expect(e.refusal).toMatchObject({ code: 'PERMIT_REQUIRED', data: { why: 'runner-pin-mismatch', part: 'node' } });
+    expect(rows.some((r) => r.kind === 'session.refused' && r.payload.code === 'spawn_failed')).toBe(true);
   });
 });
 

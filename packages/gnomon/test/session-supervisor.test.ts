@@ -49,7 +49,7 @@ afterEach(async () => {
   w?.cleanup();
 });
 
-function rig(o: { realLog?: KernelLog; billing?: BillingScanSource; watchMs?: number; failSandboxRow?: boolean; allowScripts?: boolean; macosMajor?: () => number | null; sipEnabled?: () => boolean | null } = {}) {
+function rig(o: { local?: ConstructorParameters<typeof SessionSupervisor>[0]['local']; realLog?: KernelLog; billing?: BillingScanSource; watchMs?: number; failSandboxRow?: boolean; allowScripts?: boolean; macosMajor?: () => number | null; sipEnabled?: () => boolean | null } = {}) {
   w = sessionWorld();
   const rows: Array<{ kind: string; payload: Record<string, unknown> }> = [];
   const log = async (kind: string, payload: Record<string, unknown>, ids: { session?: string } = {}): Promise<void> => {
@@ -62,7 +62,7 @@ function rig(o: { realLog?: KernelLog; billing?: BillingScanSource; watchMs?: nu
   const children = new DaemonChildren({ append: log, control: processControlFor('darwin'), boot: 'boot-test', graceMs: 500 });
   const cards: Array<Record<string, unknown>> = [];
   const broker = { raise: async (i: Record<string, unknown>) => (cards.push(i), { cardId: `card:${cards.length}` }) } as unknown as Pick<ApprovalBroker, 'raise'>;
-  sup = new SessionSupervisor({ log, children, fuse, broker, home: w.home, userHome: w.userHome, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(w.home, 'gnomon.sock'), claudePath: w.claude, env: () => ({ HOME: '/not-the-scanned-home', PATH: '/usr/bin:/bin', ANTHROPIC_API_KEY: 'scrubbed-from-the-child' }), platform: 'darwin', watchMs: o.watchMs ?? 200, allowScripts: o.allowScripts ?? true, ...(o.macosMajor ? { macosMajor: o.macosMajor } : {}), ...(o.sipEnabled ? { sipEnabled: o.sipEnabled } : {}) });
+  sup = new SessionSupervisor({ log, children, fuse, broker, home: w.home, userHome: w.userHome, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(w.home, 'gnomon.sock'), claudePath: w.claude, env: () => ({ HOME: '/not-the-scanned-home', PATH: '/usr/bin:/bin', ANTHROPIC_API_KEY: 'scrubbed-from-the-child' }), platform: 'darwin', watchMs: o.watchMs ?? 200, allowScripts: o.allowScripts ?? true, ...(o.macosMajor ? { macosMajor: o.macosMajor } : {}), ...(o.sipEnabled ? { sipEnabled: o.sipEnabled } : {}), ...(o.local ? { local: o.local } : {}) });
   live.push(() => children.stopAll('test-end'));
   const kinds = (k: string) => rows.filter((r) => r.kind === k);
   const idx = (k: string) => rows.findIndex((r) => r.kind === k);
@@ -169,6 +169,20 @@ describe.skipIf(!SANDBOX_OK)('a session end to end (fake claude, real profile, r
     await r.sup.send(HUMAN, { hsid: s.hsid, text });
     expect(r.kinds('session.inject')[0]!.payload.bytes).toBe(Buffer.byteLength(text, 'utf8'));
     expect(fs.readdirSync(lh, { recursive: true }).map(String).some((f) => fs.statSync(path.join(lh, f)).isFile() && fs.readFileSync(path.join(lh, f), 'utf8').includes('SECRET-PLAINTEXT'))).toBe(false);
+  });
+  it('round 3 (Aegis H1, node half): a CLAUDE session profile denies writes to the local runner node, its prefix and the source dir', async () => {
+    const extra = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'gnomon-rt-'));
+    live.push(async () => fs.rmSync(extra, { recursive: true, force: true }));
+    const node = path.join(extra, 'nodeinst', 'bin', 'node');
+    fs.mkdirSync(path.dirname(node), { recursive: true });
+    fs.writeFileSync(node, 'x');
+    const dir = path.join(extra, 'src-rt');
+    fs.mkdirSync(dir);
+    const r = rig({ local: { endpoints: [], runner: { node, nodeSha256: '0'.repeat(64), dir, treeSha256: '0'.repeat(64), entry: 'cli.js' } } });
+    const s = await open(r.sup);
+    const pol = fs.readFileSync(path.join(w.home, 'sessions', fs.readdirSync(path.join(w.home, 'sessions'))[0]!, 'policy.json'), 'utf8');
+    for (const p of [node, path.join(extra, 'nodeinst'), dir]) expect(pol, p).toContain(p);
+    expect(s.backend).toBe('claude-code');
   });
   it('S2 + usage: turn.event before usage; tokens charged once against the spawn permit; ask-user card raised', async () => {
     const r = rig();
