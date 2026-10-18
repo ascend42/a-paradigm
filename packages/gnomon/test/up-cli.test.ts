@@ -18,6 +18,7 @@ import { PassThrough } from 'node:stream';
 import { afterEach, describe, expect, it } from 'vitest';
 import { runIdentityCommand, type IdentityDeps } from '../src/cli/identity-cli.js';
 import { resolveUpHome, runUpCommand, startUpKernel, type UpDeps } from '../src/cli/up-cli.js';
+import { STOP_SIGNALS } from '../src/cli/launch-tty.js';
 import { runDevCommand } from '../src/cli/dev-cli.js';
 import { looksLikeKeyMaterial } from '../src/cli/dev-home.js';
 import { acceptUnsignedHelperForTests, DeviceKeyError, deviceKeyPath, DEV_TEST_HELPER_ACK, loadDeviceCredential, readIdentity, writeNewDeviceKey, type HelperTransport } from '../src/kernel/identity/index.js';
@@ -262,9 +263,11 @@ describe('#gnomon-up runs on the hardware identity', () => {
     const run = runUpCommand(['--home', home], x, deps);
     const deadline = Date.now() + 15_000;
     while (!x.o.join('').includes('gui ') && !x.e.join('').includes('web-launch') && Date.now() < deadline) await new Promise((r) => setTimeout(r, 25));
+    expect(h!.web()).toBeNull(); // no TTY ⇒ nothing minted: no web endpoint, no launch token
     await h!.shutdown('signal');
     expect(await run).toBe(0);
     const all = x.o.join('') + x.e.join('');
+    expect(all).toContain('gui     not started');
     expect(all).toContain('UP  kernel (in this process)');
     expect(all).toContain('DOWN  kernel');
     expect(all).toMatch(/root\s+hardware /);
@@ -274,6 +277,32 @@ describe('#gnomon-up runs on the hardware identity', () => {
     expect(all).not.toContain('DEV ONLY');
     expect(n.helper).toBeGreaterThan(0);
     expect(n.closed).toBe(n.helper);
+  });
+});
+
+describe('#gnomon-up: signals', () => {
+  it('SIGINT / SIGTERM / SIGHUP stay handled while stopping: repeats are ignored, one stop, handlers removed after', async () => {
+    const { uh, home, fake } = await provisioned();
+    let h: DaemonHandle | null = null;
+    const { deps } = upDeps(fake, uh, { start: async (o) => (h = await startDaemon(o)) });
+    const before = Object.fromEntries(STOP_SIGNALS.map((s) => [s, process.listeners(s)]));
+    const x = io();
+    const run = runUpCommand(['--home', home], x, deps);
+    const deadline = Date.now() + 15_000;
+    while (!x.o.join('').includes('gui ') && Date.now() < deadline) await new Promise((r) => setTimeout(r, 25));
+    // ours = the listeners added by the run (invoked directly: process.emit would also reach the test runner's own)
+    const ours = Object.fromEntries(STOP_SIGNALS.map((s) => [s, process.listeners(s).filter((l) => !before[s]!.includes(l))]));
+    for (const s of STOP_SIGNALS) expect(ours[s]!.length, s).toBe(1);
+    (ours.SIGINT![0] as () => void)();
+    (ours.SIGINT![0] as () => void)(); // a second Ctrl-C while stopping
+    (ours.SIGHUP![0] as () => void)();
+    (ours.SIGTERM![0] as () => void)();
+    for (const s of STOP_SIGNALS) expect(process.listeners(s).includes(ours[s]![0]!), `${s} still handled while stopping`).toBe(true);
+    expect(await run).toBe(0);
+    expect(x.o.join('').split('STOPPING  kernel').length - 1).toBe(1);
+    expect(x.o.join('')).toContain('DOWN  kernel (signal)');
+    for (const s of STOP_SIGNALS) expect(process.listeners(s).includes(ours[s]![0]!), `${s} removed`).toBe(false);
+    expect(h).not.toBeNull();
   });
 });
 

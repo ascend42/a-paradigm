@@ -8,9 +8,13 @@
  *
  * ONE copy of the launch rules:
  *   - the launch URL (it carries a single-use, 60 s token) is printed ONLY
- *     to an interactive terminal: never to a pipe, a file or a log;
+ *     to an interactive terminal: never to a pipe, a file or a log — and the
+ *     TTY is checked BEFORE minting, so without one no endpoint starts and
+ *     no token exists;
  *   - the stop path is armed before anything else can throw or wait;
- *     SIGINT / SIGTERM / `q` stop; any other line on a TTY mints a fresh URL;
+ *     SIGINT / SIGTERM / SIGHUP / `q` stop, and the handlers stay installed
+ *     while stopping (a repeat is ignored, never the default kill); any
+ *     other line on a TTY mints a fresh URL;
  *   - a failing stop is reported (exit 1), never an unhandled rejection.
  * Each caller decides its own home and identity guards before it gets here;
  * nothing in this module chooses a home, a root or a key. Writes plain text
@@ -87,14 +91,18 @@ export async function attachInProcess(handle: DaemonHandle, o: { home: string; c
 
 /** Print a launch URL — only to an interactive terminal: the token never lands in a pipe, a file or a log. */
 export async function printLaunch(k: Pick<InProcessKernel, 'launch'>, io: LaunchTtyIo, keysHint: string): Promise<boolean> {
-  const g = await k.launch();
+  // checked BEFORE minting: with nothing to show it on, no endpoint is started and no token exists
   if (io.stdout.isTTY !== true) {
-    io.stdout.write(`  gui     listening on 127.0.0.1:${g.port}; the launch URL is printed only to an interactive terminal (it carries a single-use token)\n`);
+    io.stdout.write('  gui     not started: the launch URL is printed only to an interactive terminal (it carries a single-use token)\n');
     return false;
   }
+  const g = await k.launch();
   io.stdout.write(`\n  open this in your browser within 60 s (single use):\n\n  ${g.url}\n\n  ${keysHint}\n`);
   return true;
 }
+
+/** The signals that stop an in-process kernel (SIGHUP: the terminal went away). */
+export const STOP_SIGNALS: readonly NodeJS.Signals[] = Object.freeze(['SIGINT', 'SIGTERM', 'SIGHUP']);
 
 export interface ServeOptions {
   /** The refusal code word (`dev`, `up`). */
@@ -126,9 +134,10 @@ export async function serveInProcess(k: InProcessKernel, io: LaunchTtyIo, o: Ser
       refused(io.stderr, o.code, 'stop-failed', e instanceof Error ? e.message : String(e), ['the kernel may still hold its pidfile; check `gnomon daemon status --home <home>`']);
     });
   };
+  // kept installed for the whole run: a repeat while stopping is ignored (stop() is idempotent), never the
+  // default kill that would skip the child sweep and the helper close; SIGHUP (terminal closed) stops the same way
   const onSignal = (): void => stop();
-  process.once('SIGINT', onSignal);
-  process.once('SIGTERM', onSignal);
+  for (const s of STOP_SIGNALS) process.on(s, onSignal);
   io.stdout.write(`UP  ${o.noun} (in this process)\n`);
   readout(io.stdout, o.rows);
   try {
@@ -147,8 +156,7 @@ export async function serveInProcess(k: InProcessKernel, io: LaunchTtyIo, o: Ser
   const reason = await k.handle.exited;
   await stopped; // a stop that rejects after the kernel exited is still reported
   rl?.close();
-  process.off('SIGINT', onSignal);
-  process.off('SIGTERM', onSignal);
+  for (const s of STOP_SIGNALS) process.off(s, onSignal);
   io.stdout.write(`DOWN  ${o.noun} (${reason})\n`);
   return stopFailed ? 1 : 0;
 }
