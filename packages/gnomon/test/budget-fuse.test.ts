@@ -19,6 +19,7 @@ import {
   ROOT_CONFIG_FILE,
   scanApiBilling,
   writeSignedConfig,
+  parseSessionsSection,
   type BillingScanSource,
   type FuseRow,
   type ReserveRequest,
@@ -26,6 +27,7 @@ import {
 import { KeyRing, SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
 import { DEV_TEST_ROOT_ACK, DevTestRootAuthority } from '../src/kernel/identity/root-authority.js';
 import { removeTree } from '../src/kernel/manifest/index.js';
+import { settingSourcesFor } from '../src/adapters/claude-code/adapter.js';
 
 const HUMAN = 'p:abcdefgh/matt';
 const AGENT = 'p:abcdefgh/builder';
@@ -195,6 +197,44 @@ describe('G-LAW-01b no setting changes the meter or law 7', () => {
     const ignored: Array<Record<string, unknown>> = [];
     expect(ignoredProjectKeys(repo, (_k, p) => void ignored.push(p))).toEqual(['fuse', 'budget', 'strictness']);
     expect(ignored).toEqual([{ field: 'fuse', source: 'project.yaml' }, { field: 'budget', source: 'project.yaml' }, { field: 'strictness', source: 'project.yaml' }]);
+  });
+
+  it('T-2026-10-18-010 L4: config.sessions.hooks — default audited (P8-D94); user-only / none / all applied when signed; invalid or rollback ⇒ none (fail closed); unsigned first run ⇒ audited', () => {
+    const home = tmp();
+    const root = new DevTestRootAuthority(DEV_TEST_ROOT_ACK);
+    const rows: Array<Record<string, unknown>> = [];
+    const emit = (_k: string, p: Record<string, unknown>) => void rows.push(p);
+    expect(loadFuseConfig(home, root).sessions).toEqual({ hooks: 'audited' }); // no config ever: the founder's default (P8-D94)
+    fs.writeFileSync(path.join(home, ROOT_CONFIG_FILE), JSON.stringify({ row: { schemaVersion: 'gnomon-root-config:v1', config: { sessions: { hooks: 'none' } } }, signer: 'x', sig: 'y' }));
+    expect(loadFuseConfig(home, root).sessions).toEqual({ hooks: 'audited' }); // unsigned on a first run: defaults, never applied
+    writeSignedConfig(home, root, { sessions: { hooks: 'user-only' } }, 1);
+    expect(loadFuseConfig(home, root, emit).sessions).toEqual({ hooks: 'user-only' });
+    expect(rows.at(-1)).toMatchObject({ signed: true, sessions: { hooks: 'user-only' } });
+    writeSignedConfig(home, root, { sessions: { hooks: 'none' } }, 2);
+    expect(loadFuseConfig(home, root).sessions).toEqual({ hooks: 'none' });
+    for (const bad of [{ hooks: 'project' }, { hooks: true }, { hooks: 'all', extra: 1 }, 'all', null]) {
+      writeSignedConfig(home, root, { sessions: bad }, 3);
+      expect(loadFuseConfig(home, root, emit).sessions, JSON.stringify(bad)).toEqual({ hooks: 'none' });
+      expect(rows.at(-1)).toMatchObject({ why: 'invalid', sessions: { hooks: 'none' } });
+    }
+    // Aegis low: an invalid FUSE section beside a valid sessions section ⇒ none too
+    writeSignedConfig(home, root, { fuse: { breakerMs: 1 }, sessions: { hooks: 'all' } }, 4);
+    expect(loadFuseConfig(home, root, emit).sessions).toEqual({ hooks: 'none' });
+    expect(rows.at(-1)).toMatchObject({ why: 'invalid', sessions: { hooks: 'none' } });
+    writeSignedConfig(home, root, { sessions: { hooks: 'all' } }, 0); // older than the high-water mark
+    expect(loadFuseConfig(home, root).sessions).toEqual({ hooks: 'none' });
+    fs.rmSync(path.join(home, ROOT_CONFIG_FILE));
+    expect(loadFuseConfig(home, root).sessions).toEqual({ hooks: 'none' }); // missing after a signed one
+  });
+  it('T-2026-10-18-010 L4: parseSessionsSection + settingSourcesFor map the four modes', () => {
+    expect(parseSessionsSection(undefined)).toEqual({ hooks: 'audited' });
+    expect(parseSessionsSection({})).toEqual({ hooks: 'audited' });
+    expect(parseSessionsSection({ hooks: 'all' })).toEqual({ hooks: 'all' });
+    expect(settingSourcesFor('audited')).toEqual(['user']); // repo layers only through the kernel's audited extract
+    expect(settingSourcesFor('all')).toEqual(['user', 'project', 'local']);
+    expect(settingSourcesFor('user-only')).toEqual(['user']);
+    expect(settingSourcesFor('none')).toEqual([]);
+    expect(() => settingSourcesFor('project' as never)).toThrow(TypeError);
   });
 
   it('config: only THIS root’s signed rows apply; unsigned, another root, invalid, older or missing-after-signed fall back to defaults with a logged row; version + hash on every config.loaded', () => {

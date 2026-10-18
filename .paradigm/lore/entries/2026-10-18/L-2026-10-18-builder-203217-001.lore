@@ -1,0 +1,19 @@
+id: L-2026-10-18-builder-203217-001
+type: insight
+timestamp: '2026-10-18T20:32:17.266Z'
+author: builder
+title: P8-D94 built as one gate-class card per hook
+summary: 'Per-hook deny with only the existing gate-class allow/deny decisions (no clientApiId move) means one card per hook; allow-all/deny-all = deciding every card. Approved set pinned to (repoKey, setHash); decisions read back only from kernel-signed gate-class.decided rows. Mechanism: --setting-sources user + approved hooks merged into the session policy.json (--settings); claude --help 2.1.302 documents --settings as applying regardless of sources, but hook firing from --settings is not yet probed (p01 re-run residual).'
+symbols_touched:
+  - '#supervisor'
+  - '#claude-adapter'
+commit: 9a7f16e6
+tags:
+  - decision
+  - gnomon
+  - m1.7
+  - p8-d94
+git_context:
+  ref: 9a7f16e64c0f0b19341881f2d43dd7471e53f1d4
+  branch: gnomon/m17-slice2
+  dirty: false

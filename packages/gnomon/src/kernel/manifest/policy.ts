@@ -11,6 +11,15 @@
  * `SessionPolicy` as its input and re-runs p10m against the generated profile.
  *
  * Every M1.5 deny is here, on EVERY mode:
+ *   - home reads (M1.7 slice 2, T-2026-10-18-010): the WHOLE Gnomon home is
+ *     read-denied — keys/ (device key, keystore files), the kernel log
+ *     (`kernel.db*`, `log/**`, also denied by name), every other session's
+ *     dir, the claude pin, generated plugins. `allowRead` carves back only
+ *     `homeReadable` (the session's own dir, the exec'd `<home>/bin` copy,
+ *     the pinned runner copy; each strictly inside HOME_READABLE_ROOTS, else
+ *     the policy refuses), `allowReadMetadata` the literal ancestors realpath
+ *     lstat's, and `denyReadAlways` re-denies keys + the kernel log after the
+ *     allows;
  *   - keys (read + write): `<home>/keys/**` (link key pins included),
  *     `<home>/warpline/**`, `<home>/link/**`, `<home>/head`, and the Warpline
  *     token files of the cwd and the worktree (`.warpline/keys/**`,
@@ -60,13 +69,24 @@ export interface PolicyPath {
   path: string;
   match: PathMatch;
   /** why the deny exists (the §15.5 class) */
-  class: 'keys' | 'warpline-tokens' | 'browser-profile' | 'gnomon-home' | 'settings' | 'linked-folder' | 'git' | 'binary' | 'persistence';
+  class: 'keys' | 'kernel-log' | 'warpline-tokens' | 'browser-profile' | 'gnomon-home' | 'settings' | 'linked-folder' | 'git' | 'binary' | 'persistence';
 }
 
 export interface SessionPolicy {
   schemaVersion: typeof SESSION_POLICY_SCHEMA;
   profile: 'session';
   denyRead: PolicyPath[];
+  /**
+   * M1.7 slice 2 (T-2026-10-18-010): the ONLY reads carved back out of the
+   * read-denied Gnomon home — the session's own dir, the binary the kernel
+   * execs from `<home>/bin`, the pinned runner copy. Never under keys/,
+   * the kernel log, or another session's dir (buildSessionPolicy refuses).
+   */
+  allowRead: PolicyPath[];
+  /** metadata only (lstat, for realpath) on the literal ancestors of allowRead inside the home; no listing, no data */
+  allowReadMetadata: PolicyPath[];
+  /** re-denied AFTER allowRead (belt and braces: keys + the kernel log stay unreadable whatever is allowed) */
+  denyReadAlways: PolicyPath[];
   denyWrite: PolicyPath[];
   /** outbound loopback connects refused to these ports (the web endpoint) */
   denyLoopbackPorts: number[];
@@ -110,7 +130,23 @@ export interface SessionPolicyInput {
    * pinned runner source dir, so no running session can swap what the next local session execs.
    */
   localRunner?: { node: string; dir: string };
+  /**
+   * M1.7 slice 2 (T-2026-10-18-010): what the session may READ inside the
+   * read-denied Gnomon home. Each entry must sit strictly inside one of
+   * HOME_READABLE_ROOTS (`sessions/<short>/…`, `bin/<file>`,
+   * `runners/<tree>/…`); anything else refuses the policy (fail closed).
+   */
+  homeReadable?: ReadonlyArray<{ path: string; match: 'literal' | 'subpath' }>;
 }
+
+/** The only top-level home entries a session may be granted a read under (one level below them, never the root itself). */
+export const HOME_READABLE_ROOTS = Object.freeze(['sessions', 'bin', 'runners']);
+
+/** The kernel log files inside the home (spec §3.2; kernel-log.ts ACTIVE_DB + SEGMENTS_DIR): read-denied by name too. */
+export const KERNEL_LOG_PATHS: ReadonlyArray<{ rel: string; match: PathMatch }> = Object.freeze([
+  { rel: 'kernel.db', match: 'prefix' }, // kernel.db, -wal, -shm, -journal
+  { rel: 'log', match: 'subpath' }, // log/segments/**, quarantine
+]);
 
 /** The write denies for the local runner's node install and source dir (realpath'd; a prefix that is /, the user home or above it narrows to node's own dir). */
 export function localRunnerDenies(r: { node: string; dir: string }, userHome?: string): PolicyPath[] {
@@ -198,6 +234,23 @@ export function buildSessionPolicy(inp: SessionPolicyInput): SessionPolicy {
     ...inp.managedSettingsPaths.map((m) => P(m, 'literal', 'settings')),
     ...roots.flatMap((r) => [P(path.join(r, '.claude'), 'subpath', 'settings'), P(path.join(r, 'CLAUDE'), 'prefix', 'settings')]),
   ];
+  // T-2026-10-18-010: the WHOLE Gnomon home is read-denied (keys, the kernel log, other sessions, the device key,
+  // the pin, generated plugins…); the session's own reads are carved back explicitly and checked here
+  const homeReal = realpathLoose(home);
+  const kernelLog = KERNEL_LOG_PATHS.map((x) => P(path.join(home, x.rel), x.match, 'kernel-log'));
+  const allowRead: PolicyPath[] = [];
+  const meta = new Set<string>();
+  for (const a of inp.homeReadable ?? []) {
+    if (a.match !== 'literal' && a.match !== 'subpath') throw new TypeError(`#manifest-loader: homeReadable match must be literal|subpath, got ${String(a.match)}`);
+    const real = realpathLoose(a.path);
+    const rel = path.relative(homeReal, real);
+    const parts = rel.split(path.sep);
+    if (!rel || path.isAbsolute(rel) || parts[0] === '..' || parts.length < 2 || !HOME_READABLE_ROOTS.includes(parts[0]!) || parts.some((x) => x === '' || x === '.' || x === '..')) {
+      throw new TypeError(`#manifest-loader: a session may read only inside ${HOME_READABLE_ROOTS.map((r) => `${r}/<x>`).join(', ')} of the Gnomon home (got ${JSON.stringify(rel)})`);
+    }
+    allowRead.push({ path: real, match: a.match, class: 'gnomon-home' });
+    for (let i = 0; i < parts.length; i++) meta.add(path.join(homeReal, ...parts.slice(0, i))); // the home itself and every ancestor below it
+  }
   const linked = inp.linkedFolders.map((f) => P(f, 'subpath', 'linked-folder'));
   const persistence = inp.userHome ? PERSISTENCE_PATHS.map((x) => P(path.join(inp.userHome!, ...x.rel.split('/')), x.match, 'persistence')) : [];
   const extra = [...(inp.extraDenyWrite ?? []), ...(inp.localRunner ? localRunnerDenies(inp.localRunner, inp.userHome) : [])].map((x) => ({ ...x }));
@@ -212,7 +265,10 @@ export function buildSessionPolicy(inp: SessionPolicyInput): SessionPolicy {
   return {
     schemaVersion: SESSION_POLICY_SCHEMA,
     profile: 'session',
-    denyRead: uniq([...keys, ...browsers]),
+    denyRead: uniq([...keys, ...browsers, ...kernelLog, P(home, 'subpath', 'gnomon-home')]),
+    allowRead: uniq(allowRead),
+    allowReadMetadata: uniq([...meta].map((m) => ({ path: m, match: 'literal' as const, class: 'gnomon-home' as const }))),
+    denyReadAlways: uniq([...keys.filter((k) => k.class === 'keys'), ...kernelLog]),
     denyWrite: uniq([...keys, ...settings, ...linked, ...git, ...persistence, ...extra]),
     denyLoopbackPorts: inp.endpointPort === null ? [] : [inp.endpointPort],
     processInfo: 'deny-others',

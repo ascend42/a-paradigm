@@ -685,7 +685,10 @@ components:
       #kernel-log (spec §3.2, M1.2; research 29 §4 PR-4) — the one
       hash-chained, append-only, segmented kernel log. node:sqlite; active
       segment <home>/kernel.db, sealed segments <home>/log/segments/NNNNNN.db
-      (0600, dirs 0700); `chain` table per §3.2 plus a write-once `meta`;
+      (0600, dirs 0700; read-denied to every session by the session
+      profile, T-2026-10-18-010); a session reader (redaction.ts) sees only
+      its own hsid rows at every label, and voice.turn.*.audioRef never
+      (SESSION_NEVER_FIELDS, limited view); `chain` table per §3.2 plus a write-once `meta`;
       BEFORE UPDATE/DELETE triggers abort (L1). hash = sha256(canonical(envelope
       minus hash, sig)), prev(1) = sha256("gnomon-log-genesis:" + logId), seq
       computed inside the write txn and checked against the in-memory tip.
@@ -1273,6 +1276,13 @@ components:
       (from the M1.5 SessionPolicy + session-denies registry; T-008 git
       denies: .git pointer file, config.worktree, modules/**/{hooks,config,
       info}; launchers open/osascript/lsregister/launchctl by realpath),
+      SLICE 2 (T-2026-10-18-010): the WHOLE Gnomon home is read-denied
+      (keys/ incl. the device key, kernel.db*, log/** segments, every other
+      session dir, the pin); policy.ts homeReadable carves back only the
+      session's own sessions/<short> dir and the exec'd bin/ copy (or the
+      runners/<tree> copy), refusing anything outside HOME_READABLE_ROOTS
+      by realpath; SBPL order deny home, allow own, metadata on ancestors,
+      re-deny keys + kernel log (profile v3; test/session-sandbox EPERM rig).
       registered in src/kernel/sandbox/session.ts (no backend => refused
       sandbox-unavailable; status fidelity per platform, G-WIN-06).
       p10m-claude-compat-generated (probes/) re-ran real Claude Code 2.1.302
@@ -1340,7 +1350,20 @@ components:
   supervisor:
     description: >-
       #supervisor (spec §3.3, §6.1, §5 verbs 2-4; M1.7 slice 1) in
-      src/kernel/supervisor/. M1.8 slice 2: port.ts serves session.send{steer}
+      src/kernel/supervisor/. P8-D94 / G-SUB-07 (M1.7 slice 2, founder
+      ruling): repo-hooks.ts extracts the repo's project/local hooks (strict;
+      O_NOFOLLOW + fstat; events allow-listed to CLAUDE_HOOK_EVENTS;
+      COMMAND_UNSAFE, unknown keys, non-command types refused by id;
+      symlinked/oversized/unparseable layer or >64 hooks => none run; roots
+      deduped by realpath), raises one gate-class card per undecided hook
+      (install-card rendering via wrappedBlock, with the kernel warning line
+      REPO_HOOK_WARNING), pins decisions to (repoKey, setHash) — read back
+      by repoHookDecisionsFrom from KERNEL-signed gate-class.decided rows
+      only (allow|deny; a withdraw records nothing) — and writes only
+      approved hooks into the session's policy.json under
+      --setting-sources user (hooks mode `audited`, the default; probe
+      p10m-repo-surfaces). Pending cards bounded (MAX_PENDING_HOOK_CARDS).
+      M1.8 slice 2: port.ts serves session.send{steer}
       (boolean; local sessions only, a Claude session refuses BAD_REQUEST);
       probeLocal() is the daemon-start local probe; the daemon passes the
       root-signed local config. The one place `claude -p` starts. Slice 1:
@@ -1386,7 +1409,8 @@ components:
     tags: [gnomon, kernel, session, paradigm-8, m1.7]
     tests:
       - test/session-supervisor.test.ts
-    oracles: [G-RUN-03, G-SUB-05]
+      - test/repo-hooks.test.ts
+    oracles: [G-RUN-03, G-SUB-05, G-SUB-07]
 
   local-runner:
     description: >-
@@ -1443,7 +1467,12 @@ components:
   claude-adapter:
     description: >-
       #claude-adapter (spec §2.2, §3.3; M1.7 slice 1) in
-      src/adapters/claude-code/adapter.ts: the §3.3 argv with FORBIDDEN_FLAGS
+      src/adapters/claude-code/adapter.ts. SLICE 2 (T-2026-10-18-010 L4):
+      SESSION_HOOKS_MODES all|user-only|none and settingSourcesFor(mode) ->
+      --setting-sources; the mode is the root-signed config.sessions.hooks
+      (budget/config.ts parseSessionsSection; default all; rollback/invalid
+      after a signed config => none), wired by the daemon into #supervisor
+      and logged as session.sandbox.settingSources. The §3.3 argv with FORBIDDEN_FLAGS
       throwing (G-RUN-01, also --flag=value and extras); stream-json parse,
       TOLERANT (unknown fields ignored, unknown types `unknown`, non-objects
       `malformed` — the falsifier); UsageMeter charges each message id once

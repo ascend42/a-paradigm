@@ -113,6 +113,18 @@ function limitedView(e: EventV1): ProjectedEvent {
 }
 
 /**
+ * §9.3 cells a SESSION reader never sees in its own rows (T-2026-10-18-010):
+ * `voice.turn.*.audioRef`. Such a row is projected as a limited view (the
+ * field `{redacted: true}`, no hash/sig/prev/idem/refHash — no confirmation
+ * oracle). Every other own-hsid row is full.
+ */
+export const SESSION_NEVER_FIELDS: ReadonlyArray<{ kind: (k: string) => boolean; field: string }> = Object.freeze([{ kind: (k: string) => k.startsWith('voice.turn.'), field: 'audioRef' }]);
+
+function hasField(p: unknown, f: string): boolean {
+  return !!p && typeof p === 'object' && Object.hasOwn(p, f) && (p as Record<string, unknown>)[f] !== undefined;
+}
+
+/**
  * Could `reader` see this row at all? Metadata only (kind, labels, session) —
  * no projection, no copy, no hash: the subscription fan-out on the commit path
  * uses it to decide whether to wake a pump. Over-approximates nothing that
@@ -159,6 +171,14 @@ export function projectForReader(e: EventV1, reader: ReaderClass, storedLabel?: 
     }
     case 'session': {
       if (e.session !== reader.hsid) return undefined;
+      // §9.3 session row: voice.turn.*.audioRef is `never`, even in its own hsid (T-2026-10-18-010) — a limited view of that row
+      const never = SESSION_NEVER_FIELDS.filter((f) => f.kind(e.kind) && hasField(e.payload, f.field));
+      if (never.length) {
+        const v = limitedView(e);
+        const payload = { ...(v.payload as Record<string, unknown>) };
+        for (const f of never) payload[f.field] = { redacted: true } satisfies RedactedField;
+        return { seq, view: 'full', event: { ...v, payload } };
+      }
       return { seq, view: 'full', event: e };
     }
     case 'mod': {

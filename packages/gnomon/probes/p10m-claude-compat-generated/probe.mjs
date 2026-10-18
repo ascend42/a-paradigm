@@ -59,7 +59,7 @@ export default async function probe() {
     copyFileSync(claudeReal, privateCopy);
     chmodSync(privateCopy, 0o500);
     const extraDenyWrite = g.binaryDenies(g.CLAUDE_CODE_PLATFORMS.darwin, os.homedir(), claudeReal);
-    const policy = g.manifestLoader.buildSessionPolicy({ home, cwd: work, userClaudeDir: claudeDir, userHome: os.homedir(), managedSettingsPaths: [], linkedFolders: [linked], endpointPort: port, extraDenyWrite });
+    const policy = g.manifestLoader.buildSessionPolicy({ home, cwd: work, userClaudeDir: claudeDir, userHome: os.homedir(), managedSettingsPaths: [], linkedFolders: [linked], endpointPort: port, extraDenyWrite, homeReadable: [{ path: privateCopy, match: 'literal' }] }); // T-2026-10-18-010: the home is read-denied but the exec'd copy
     const perms = g.manifestLoader.claudePermissions(policy);
     const policyPath = path.join(root, 'policy.json');
     const mcpPath = path.join(root, 'mcp.json');

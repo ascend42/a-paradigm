@@ -26,6 +26,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { canonicalJson, hex, sha256 } from '@a-company/gnomon-contracts';
 import type { RootAuthority } from '../identity/root-authority.js';
+import { DEFAULT_SESSION_HOOKS, SESSION_HOOKS_MODES, type SessionHooksMode } from '../../adapters/claude-code/adapter.js';
 
 export const ROOT_CONFIG_FILE = 'config.signed.json';
 export const ROOT_CONFIG_SCHEMA = 'gnomon-root-config:v1' as const;
@@ -56,6 +57,24 @@ export interface LoadedFuseConfig {
   /** the config on disk could not be applied (unsigned after a signed one, older, invalid): defaults, logged */
   fellBack: boolean;
   hash: string | null;
+  /**
+   * T-2026-10-18-010 L4 / P8-D94: `config.sessions.hooks` (SESSION_HOOKS_MODES). No
+   * config ever ⇒ DEFAULT_SESSION_HOOKS (`audited`). A
+   * signed config that cannot be applied after one was (rollback, missing,
+   * unsigned) or an invalid `sessions` section ⇒ `none` (fail closed:
+   * never wider than what the founder may have chosen), logged.
+   */
+  sessions: { hooks: SessionHooksMode };
+}
+
+/** Parse the root config's `sessions` section; null on any unknown key or value. */
+export function parseSessionsSection(section: unknown): { hooks: SessionHooksMode } | null {
+  if (section === undefined) return { hooks: DEFAULT_SESSION_HOOKS };
+  if (section === null || typeof section !== 'object' || Array.isArray(section)) return null;
+  const s = section as Record<string, unknown>;
+  if (Object.keys(s).some((k) => k !== 'hooks')) return null;
+  if (s.hooks === undefined) return { hooks: DEFAULT_SESSION_HOOKS };
+  return typeof s.hooks === 'string' && (SESSION_HOOKS_MODES as readonly string[]).includes(s.hooks) ? { hooks: s.hooks as SessionHooksMode } : null;
 }
 
 const SCOPES: ScopeName[] = ['user', 'repo', 'loop', 'session'];
@@ -103,7 +122,8 @@ export function loadFuseConfig(home: string, root: RootAuthority, emit: ConfigEv
   }
   const chain = opts.chainHighWater ?? 0;
   const seen = Math.max(sidecar, chain);
-  const defaults = (signed: boolean, hash: string | null): LoadedFuseConfig => ({ config: structuredClone(DEFAULT_FUSE), signed, fellBack: true, hash });
+  // a fallback AFTER a signed config was seen ⇒ sessions `none` (fail closed); first-run defaults ⇒ DEFAULT_SESSION_HOOKS
+  const defaults = (signed: boolean, hash: string | null): LoadedFuseConfig => ({ config: structuredClone(DEFAULT_FUSE), signed, fellBack: true, hash, sessions: { hooks: seen > 0 ? 'none' : DEFAULT_SESSION_HOOKS } });
   const fallBack = (why: string, hash: string | null, version: unknown): LoadedFuseConfig => {
     emit('config.loaded', { hash, signed: false, fallback: 'defaults', version: typeof version === 'number' ? version : null, highWater: seen, why, ...(opts.chainHighWater !== undefined && sidecar !== chain ? { sidecar, chain } : {}) });
     return defaults(false, hash);
@@ -113,9 +133,9 @@ export function loadFuseConfig(home: string, root: RootAuthority, emit: ConfigEv
     raw = fs.readFileSync(file, 'utf8');
   } catch {
     if (seen > 0) return fallBack('missing', null, null);
-    return { config: structuredClone(DEFAULT_FUSE), signed: false, fellBack: false, hash: null };
+    return { config: structuredClone(DEFAULT_FUSE), signed: false, fellBack: false, hash: null, sessions: { hooks: DEFAULT_SESSION_HOOKS } };
   }
-  let doc: { row?: { schemaVersion?: unknown; version?: unknown; config?: { fuse?: unknown } }; signer?: unknown; sig?: unknown };
+  let doc: { row?: { schemaVersion?: unknown; version?: unknown; config?: { fuse?: unknown; sessions?: unknown } }; signer?: unknown; sig?: unknown };
   try {
     doc = JSON.parse(raw) as typeof doc;
   } catch {
@@ -133,9 +153,11 @@ export function loadFuseConfig(home: string, root: RootAuthority, emit: ConfigEv
   const version = doc.row!.version ?? 0;
   if (typeof version !== 'number' || !Number.isInteger(version) || version < 0 || version < seen) return fallBack('older', hash, version);
   const merged = mergeFuse(doc.row!.config?.fuse);
-  if (!merged) {
-    emit('config.loaded', { hash, signed: true, version, highWater: seen, fallback: 'defaults', why: 'invalid' });
-    return defaults(true, hash);
+  const sessions = parseSessionsSection(doc.row!.config?.sessions);
+  if (!merged || !sessions) {
+    emit('config.loaded', { hash, signed: true, version, highWater: seen, fallback: 'defaults', why: 'invalid', sessions: { hooks: 'none' } });
+    // Aegis low: an invalid fuse OR sessions section ⇒ sessions `none` too (fail closed, never the default)
+    return { ...defaults(true, hash), sessions: { hooks: 'none' } };
   }
   // only a validated config advances the high-water mark; a failed sidecar write is logged, never thrown (the chain row still carries the version)
   if (version > sidecar) {
@@ -145,8 +167,8 @@ export function loadFuseConfig(home: string, root: RootAuthority, emit: ConfigEv
       emit('config.loaded', { hash, signed: true, version, sidecarWrite: 'failed', error: err instanceof Error ? err.message.slice(0, 200) : 'write failed' });
     }
   }
-  emit('config.loaded', { hash, signed: true, version, highWater: seen });
-  return { config: merged, signed: true, fellBack: false, hash };
+  emit('config.loaded', { hash, signed: true, version, highWater: seen, sessions });
+  return { config: merged, signed: true, fellBack: false, hash, sessions };
 }
 
 /** Write a root-signed config (the `gnomon config` root act; tests). Throws RootUnavailableError without a root. */

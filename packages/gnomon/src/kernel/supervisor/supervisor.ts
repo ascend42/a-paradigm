@@ -71,10 +71,11 @@ import { LifecycleRefusal } from '../lifecycle/refusal.js';
 import { buildSessionEnv } from '../runner/env.js';
 import { claudeAuthOk, claudeJsonProjection, claudeVersion, law7Layers, law7Scan, managedFiles, PreflightRefusal, realLoose, resolveClaudeBinary, type ClaudeRun, type Law7Input, type SessionRefusalCode } from '../runner/preflight.js';
 import { commitPin, prepareClaude, readClaudePin } from '../runner/binary.js';
-import { buildClaudeArgv, cardKindOfTool, controlInterruptLine, LineSplitter, parseStreamLine, UsageMeter, userMessageLine, type SettingSource } from '../../adapters/claude-code/adapter.js';
+import { buildClaudeArgv, DEFAULT_SESSION_HOOKS, settingSourcesFor, type SessionHooksMode, cardKindOfTool, controlInterruptLine, LineSplitter, parseStreamLine, UsageMeter, userMessageLine } from '../../adapters/claude-code/adapter.js';
 import { claudeCodePlatform, type ClaudeCodePlatformRow } from '../../platform/claude-code.js';
 import type { DarwinSessionExtras } from '../../platform/darwin/session-sbpl.js';
 import { LocalLane, type LocalLaneOptions } from './local-session.js';
+import { extractRepoHooks, hooksBlock, mergeHooks, MAX_PENDING_HOOK_CARDS, MAX_REFUSED_LOGGED, repoHookCard, type RepoHook } from './repo-hooks.js';
 import type { LocalLaneConfig } from '../local/config.js';
 
 export const STDOUT_LINE_CAP = 4 * 1024 * 1024;
@@ -108,8 +109,10 @@ export interface SupervisorOptions {
   endpointPort?: () => number | null;
   linkedFolders?: () => string[];
   platform?: string;
-  /** --setting-sources (explicit; default user,project,local — p01) */
-  settingSources?: readonly SettingSource[];
+  /** whose hooks run (T-2026-10-18-010 L4, P8-D94): the root-signed `config.sessions.hooks` mode; default `audited` */
+  hooksMode?: SessionHooksMode;
+  /** P8-D94: the human's per-hook decisions for (repoKey, setHash), read back from KERNEL-signed gate-class.decided rows; absent ⇒ none (no repo hook runs) */
+  repoHookDecisions?: (repoKey: string, setHash: string) => ReadonlyMap<string, 'allow' | 'deny'>;
   watchMs?: number;
   /** TEST RIG ONLY (the fake claude is a #! wrapper): accept a script binary. The daemon never sets it. */
   allowScripts?: boolean;
@@ -194,6 +197,8 @@ export class SessionSupervisor {
   readonly #sessions = new Map<string, Session>();
   readonly #history: Array<Record<string, unknown>> = [];
   readonly #usedTurnPermits = new Set<string>();
+  /** P8-D94: raised, undecided repo-hook cards by repoKey|setHash|hookId (bounded: MAX_PENDING_HOOK_CARDS) */
+  readonly #pendingHookCards = new Map<string, string>();
   readonly #platform: string;
   readonly #local: LocalLane;
 
@@ -282,6 +287,8 @@ export class SessionSupervisor {
         extraDenyWrite: binaryDenies(row, userHome, bin.real, this.#o.claudePath),
         // round 3 (Aegis H1): a Claude session can no more swap the local runner's node or source than a local one
         ...(this.#o.local?.runner ? { localRunner: { node: this.#o.local.runner.node, dir: this.#o.local.runner.dir } } : {}),
+        // T-2026-10-18-010: the home is read-denied; only this session's dir and the private copy it execs are readable
+        homeReadable: [{ path: dir, match: 'subpath' }, { path: priv.exec, match: 'literal' }],
       });
       const parse = (rel: string): Record<string, unknown> => {
         const b = generated?.get(rel);
@@ -297,7 +304,11 @@ export class SessionSupervisor {
       fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
       const policyPath = path.join(dir, 'policy.json');
       const mcpConfigPath = path.join(dir, 'mcp.json');
-      fs.writeFileSync(policyPath, `${JSON.stringify({ ...claudePermissions(policy), ...(hooksJson.hooks ? { hooks: hooksJson.hooks } : {}) }, null, 2)}\n`, { mode: 0o600 });
+      const hooksMode = this.#o.hooksMode ?? DEFAULT_SESSION_HOOKS;
+      // P8-D94: in `audited` mode only the repo hooks the human approved reach Claude, through policy.json
+      const approved = hooksMode === 'audited' ? await this.#auditRepoHooks(hsid, req) : [];
+      const hooks = approved.length ? mergeHooks(hooksJson.hooks, hooksBlock(approved)) : hooksJson.hooks;
+      fs.writeFileSync(policyPath, `${JSON.stringify({ ...claudePermissions(policy), ...(hooks ? { hooks } : {}) }, null, 2)}\n`, { mode: 0o600 });
       fs.writeFileSync(mcpConfigPath, `${JSON.stringify({ mcpServers: (mcpJson.mcpServers as Record<string, unknown> | undefined) ?? {} }, null, 2)}\n`, { mode: 0o600 });
       const extras: DarwinSessionExtras = { uid: process.getuid?.() ?? 0, tmpdir: os.tmpdir(), home: userHome, roots: [req.cwd, ...(req.worktree ? [req.worktree] : [])] };
       // Aegis H1: preflight runs the PRIVATE copy under the session profile, never unsandboxed
@@ -345,7 +356,8 @@ export class SessionSupervisor {
       }
       this.assertClaudePermit(permit, hsid);
       if (permit.billing !== 'subscription') throw new PreflightRefusal('api_billing_refused', 'api-token billing is not wired into the session spawn yet (M1.7 slice 2)', { billing: permit.billing });
-      const argv = buildClaudeArgv({ uuid, policyPath, mcpConfigPath, settingSources: this.#o.settingSources ?? ['user', 'project', 'local'], ...(req.systemPrompt !== undefined ? { appendSystemPrompt: req.systemPrompt } : {}), ...(req.model && req.model !== 'claude' && req.model !== 'any' ? { model: req.model } : {}) });
+      const settingSources = settingSourcesFor(hooksMode);
+      const argv = buildClaudeArgv({ uuid, policyPath, mcpConfigPath, settingSources, ...(req.systemPrompt !== undefined ? { appendSystemPrompt: req.systemPrompt } : {}), ...(req.model && req.model !== 'claude' && req.model !== 'any' ? { model: req.model } : {}) });
       const plan = sessionLaunchPlan({ policy, binaryReal: priv.exec, argv, extras }, this.#platform, this.#o.macosMajor, this.#o.sipEnabled);
       // Aegis L1: anything changed between the scan and now ⇒ scan again (a hit refuses)
       const wNow = this.#watchHashOf(layerInput);
@@ -379,7 +391,7 @@ export class SessionSupervisor {
       this.#wire(s); // round 3: wired BEFORE any further await — a failing row below still cleans up through the exit path
       await this.#o.log('session.sandbox', {
         hsid, sandbox: plan.sandbox, profile: 'session', profileHash: plan.profileHash, policyHash: policyHash(policy), layersHash: lHash, gitHash: gHash,
-        binarySha256: `sha256:${priv.sha256}`, exec: priv.exec, version, envKeys, permitId: permit.permitId, generated: generated ? [...generated.keys()] : [],
+        binarySha256: `sha256:${priv.sha256}`, exec: priv.exec, version, envKeys, hooksMode, settingSources: [...settingSources], repoHooksApproved: approved.map((h) => h.hookId), permitId: permit.permitId, generated: generated ? [...generated.keys()] : [],
       }, { session: hsid });
       return { hsid, principalId, backend: 'claude-code', state: s.state, ...(priv.pin === 'first-use' ? { binaryPin: `first-use pin ${priv.sha256} from ${priv.source}` } : {}) };
     } catch (err) {
@@ -409,6 +421,56 @@ export class SessionSupervisor {
       }
       return this.#refuse(hsid, 'spawn_failed', (err as Error).message);
     }
+  }
+
+  /**
+   * P8-D94: extract the repo's hooks, apply the human's per-hook decisions pinned to this set's hash, and raise one
+   * gate-class card per undecided hook. Returns the approved hooks only. Fail closed: no decision source, an
+   * unreadable or oversized set, a refused hook or a failed raise ⇒ that hook (or the set) does not run.
+   */
+  async #auditRepoHooks(hsid: string, req: OpenRequest): Promise<RepoHook[]> {
+    const roots = [req.cwd, ...(req.worktree ? [req.worktree] : [])];
+    const set = extractRepoHooks(roots);
+    if (set.status === 'none') return [];
+    if (set.status !== 'ok') {
+      await this.#o.log('gate-class.detected', { what: 'repo-hooks', hsid, repoKey: set.repoKey, status: set.status, why: set.why, run: 0 }, { session: hsid });
+      return [];
+    }
+    const decided = this.#o.repoHookDecisions?.(set.repoKey, set.setHash) ?? new Map<string, 'allow' | 'deny'>();
+    const approved = set.hooks.filter((h) => decided.get(h.hookId) === 'allow');
+    const pending = set.hooks.filter((h) => !decided.has(h.hookId));
+    const cards: string[] = [];
+    for (const h of pending) {
+      const key = `${set.repoKey}|${set.setHash}|${h.hookId}`;
+      const open = this.#pendingHookCards.get(key);
+      if (open) {
+        cards.push(open);
+        continue;
+      }
+      if (!this.#o.broker) continue;
+      const c = repoHookCard(set, h, roots.join(' + '));
+      try {
+        const card = await this.#o.broker.raise({
+          kind: 'gate-class', requestedBy: this.#o.kernelPrincipal, hsid, attended: true, detail: c.detail, lines: c.lines, block: c.block,
+          effect: async (decision) => {
+            this.#pendingHookCards.delete(key);
+            // only an explicit allow or deny is recorded: any other outcome (withdraw) leaves the hook undecided (re-raised next open)
+            if (decision !== 'allow' && decision !== 'deny') return;
+            await this.#o.log('gate-class.decided', { what: 'repo-hook', repoKey: set.repoKey, setHash: set.setHash, hookId: h.hookId, decision });
+          },
+        });
+        this.#pendingHookCards.set(key, card.cardId);
+        while (this.#pendingHookCards.size > MAX_PENDING_HOOK_CARDS) this.#pendingHookCards.delete(this.#pendingHookCards.keys().next().value!);
+        cards.push(card.cardId);
+      } catch {
+        /* fail closed: the hook stays unapproved; the next open raises again */
+      }
+    }
+    await this.#o.log('gate-class.detected', {
+      what: 'repo-hooks', hsid, repoKey: set.repoKey, setHash: set.setHash, status: 'ok', hooks: set.hooks.length, refused: set.refused.slice(0, MAX_REFUSED_LOGGED), refusedCount: set.refused.length,
+      approved: approved.map((h) => h.hookId), denied: set.hooks.filter((h) => decided.get(h.hookId) === 'deny').map((h) => h.hookId), pending: pending.map((h) => h.hookId), cards, run: approved.length,
+    }, { session: hsid });
+    return approved;
   }
 
   #wire(s: Session): void {

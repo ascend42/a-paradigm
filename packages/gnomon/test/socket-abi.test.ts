@@ -58,6 +58,7 @@ import {
 } from '../src/kernel/identity/index.js';
 import { startDaemon, type DaemonHandle, type DaemonOptions } from '../src/kernel/lifecycle/index.js';
 import { projectForReader, SoftwareEd25519Signer, type LogView } from '../src/kernel/log/index.js';
+import { mayBeVisible } from '../src/kernel/log/redaction.js';
 import {
   ABI_ID,
   NEXT_LEGAL_TABLE,
@@ -642,7 +643,8 @@ describe('G-ABI-05 redaction matrix: every (reader class, kind) pair', () => {
       case 'community-client':
         return eff === 2 ? 'none' : column ? 'stub' : eff === 1 ? 'none' : 'limited';
       case 'session':
-        return sameSession ? 'full' : 'none';
+        // §9.3: voice.turn.*.audioRef is never shown to a session, even its own (T-2026-10-18-010)
+        return sameSession ? (kind.startsWith('voice.turn.') && Object.hasOwn(EVENT_KINDS[kind]!.fieldLabels ?? {}, 'audioRef') ? 'limited' : 'full') : 'none';
       case 'mod':
         return column || eff !== 0 ? 'none' : 'limited';
       case 'peer':
@@ -651,6 +653,22 @@ describe('G-ABI-05 redaction matrix: every (reader class, kind) pair', () => {
         return 'throws'; // agent (Move 2), voice (Move 4): refused rather than guessed
     }
   }
+
+  it('T-2026-10-18-010 a session reader sees ONLY its own hsid rows, every label, and never voice.turn.*.audioRef', () => {
+    const mk = (kind: string, session: string | undefined, sensitivity: string, payload: Res): EventV1 => ({ ...base, id: 'ev:1', seq: 1, kind, ...(session ? { session } : {}), sensitivity, payload }) as unknown as EventV1;
+    const me = { class: 'session', hsid: HSID } as const;
+    // another session's inject text, approval tool_input and a kernel row with no hsid: invisible
+    expect(projectForReader(mk('session.inject', OTHER_HSID, 'sensitive', { text: 'SECRET' }), me)).toBeUndefined();
+    expect(projectForReader(mk('approval.request', OTHER_HSID, 'normal', { tool_input: 'SECRET' }), me)).toBeUndefined();
+    expect(projectForReader(mk('daemon.start', undefined, 'normal', {}), me)).toBeUndefined();
+    expect(mayBeVisible(mk('session.inject', OTHER_HSID, 'sensitive', {}), me)).toBe(false);
+    // its own rows: full, at every label
+    for (const l of ['normal', 'sensitive', 'secret']) expect(projectForReader(mk('turn.event', HSID, l, { line: 'x' }), me)?.view).toBe('full');
+    const own = projectForReader(mk('voice.turn.user', HSID, 'sensitive', { audioRef: 'blob:abc', text: 't' }), me) as { event: Res };
+    expect((own.event.payload as Res).audioRef).toEqual({ redacted: true });
+    for (const k of ['hash', 'sig', 'prev', 'idem', 'refHash']) expect(own.event).not.toHaveProperty(k);
+    expect(JSON.stringify(own)).not.toContain('blob:abc');
+  });
 
   it('the named §9.3 columns are registry columns: session.inject, turn.event, voice.turn.* kinds; tool_input, evidence, audioRef fields', () => {
     for (const k of ['session.inject', 'turn.event', 'voice.turn.user', 'voice.turn.agent']) expect(RANK[EVENT_KINDS[k]!.sensitivity], k).toBeGreaterThanOrEqual(1);

@@ -32,6 +32,40 @@ export const FORBIDDEN_FLAGS = Object.freeze(['--dangerously-skip-permissions', 
 export const SETTING_SOURCES = Object.freeze(['user', 'project', 'local'] as const);
 export type SettingSource = (typeof SETTING_SOURCES)[number];
 
+/**
+ * "Your hooks inside sessions" (founder decision OPEN, T-2026-10-18-010 L4;
+ * docs/private/gnomon-founder-steps.html): which Claude settings layers a
+ * Gnomon-started session loads — and so whose hooks run inside it, with no
+ * trust prompt in `-p` mode. A ROOT-SIGNED config switch
+ * (`config.sessions.hooks`, budget/config.ts), never env/project/CLI:
+ *   - `audited` (DEFAULT, founder ruling P8-D94): user only, plus the repo's
+ *     project/local hooks the KERNEL extracted and the human approved per
+ *     hook (kernel/supervisor/repo-hooks.ts), written into the session's own
+ *     policy.json (`--settings`); unapproved, denied or unsafe hooks never run;
+ *   - `all` (the slice-1 behaviour): user, project, local — your hooks AND
+ *     any hooks committed in the repo's `.claude/settings.json`, raw;
+ *   - `user-only`: user — your own hooks, never the repo's;
+ *   - `none`: no layer — only Gnomon's generated policy.json applies.
+ * Managed settings load regardless (p01: outside the switch).
+ */
+export const SESSION_HOOKS_MODES = Object.freeze(['audited', 'all', 'user-only', 'none'] as const);
+export type SessionHooksMode = (typeof SESSION_HOOKS_MODES)[number];
+export const DEFAULT_SESSION_HOOKS: SessionHooksMode = 'audited';
+
+export function settingSourcesFor(mode: SessionHooksMode): readonly SettingSource[] {
+  switch (mode) {
+    case 'all':
+      return ['user', 'project', 'local'];
+    case 'audited': // the repo layers reach Claude only through the kernel's audited extract (P8-D94)
+    case 'user-only':
+      return ['user'];
+    case 'none':
+      return [];
+    default:
+      throw new TypeError(`#claude-adapter: unknown session hooks mode ${String(mode)}`);
+  }
+}
+
 export class ForbiddenFlagError extends Error {
   readonly flag: string;
   constructor(flag: string) {

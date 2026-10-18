@@ -103,6 +103,7 @@ import { Scheduler } from '../scheduler/index.js';
 import { DaemonChildren, sweepOrphans } from './children.js';
 import { processControlFor } from './process-control.js';
 import { SessionSupervisor, createSessionPort } from '../supervisor/index.js';
+import { repoHookDecisionsFrom } from '../supervisor/repo-hooks.js';
 import { loadLocalConfig, LOCAL_CONFIG_FILE } from '../local/config.js';
 import { linkedFolders } from '../manifest/install.js';
 import { ModHost, type KernelCallRequest } from '../modhost/host.js';
@@ -546,6 +547,18 @@ async function startDaemonWith(opts: DaemonOptions, seams: DaemonSeams): Promise
   const localCfg = loadLocalConfig(home, authority, (kind, payload) => void appendRow(kind, payload).catch(() => undefined), { chainHighWater: localHighWater });
   const supervisor = new SessionSupervisor({
     ...(localCfg.config ? { local: localCfg.config } : {}),
+    // T-2026-10-18-010 L4 / P8-D94: whose hooks run inside sessions — the root-signed `config.sessions.hooks` (default `audited`)
+    hooksMode: fuseCfg.sessions.hooks,
+    // P8-D94: per-hook decisions, read back from KERNEL-signed gate-class.decided rows only (the last one per hook wins)
+    repoHookDecisions: (repoKey, setHash) =>
+      repoHookDecisionsFrom(
+        (function* () {
+          for (const v of log.read({ reader: { class: 'human' }, kinds: ['gate-class.decided'] })) if (v.view === 'full') yield { principal: v.event.principal, keyId: v.event.keyId, payload: v.event.payload };
+        })(),
+        { principal: kernelPrincipal, isKernelKey: (k) => log.isKernelKey(k) },
+        repoKey,
+        setHash,
+      ),
     ...(seams.supervisor ?? {}),
     log: (kind, payload, ids = {}) => log.append({ kind, principal: kernelPrincipal, payload, ...(ids.session ? { session: ids.session } : {}) }).then(() => undefined),
     children,

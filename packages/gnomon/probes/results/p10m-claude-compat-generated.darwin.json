@@ -15,7 +15,7 @@
       "deniesHold": true,
       "execDenied": true
     },
-    "ms": 7368,
+    "ms": 11079,
     "exit": {
       "code": 0,
       "sig": null,
@@ -30,8 +30,8 @@
       "type": "result",
       "subtype": "success",
       "isError": false,
-      "tokens": 56969,
-      "costUsd": 0.1552356,
+      "tokens": 57177,
+      "costUsd": 0.1581476,
       "permissionDenials": 0,
       "quota": false
     },
@@ -43,6 +43,7 @@
       "user",
       "stream_event.message_start",
       "stream_event.content_block_start",
+      "system.thinking_tokens",
       "stream_event.content_block_delta",
       "assistant",
       "stream_event.content_block_stop",
@@ -72,8 +73,8 @@
       "python": "py_ok"
     },
     "endpointHitsDuringRun": 0,
-    "profileHash": "sha256:405bc1efc0abb2f751b67e6b33ae2a3d52bf33f3313d6ffc03505bb31c341ee8",
-    "profile": ";; gnomon session profile v2 (spec §15.5) — generated from gnomon-session-policy:v1, every path realpath'd\n(version 1)\n(allow default)\n(deny file-read* (literal \"<tmp>/gnomon-home/head\") (subpath \"<tmp>/gnomon-home/keys\") (subpath \"<tmp>/gnomon-home/link\") (subpath \"<tmp>/gnomon-home/warpline\") (literal \"<tmp>/work/.warpline/daemon-tokens.jsonl\") (literal \"<tmp>/work/.warpline/daemon/mcp-tokens.json\") (literal \"<tmp>/work/.warpline/daemon/mcp.token\") (subpath \"<tmp>/work/.warpline/keys\"))\n(deny file-write* (literal \"~/.bash_login\") (literal \"~/.bash_profile\") (literal \"~/.bashrc\") (subpath \"~/.claude\") (literal \"~/.claude.json\") (subpath \"~/.config/fish\") (subpath \"~/.config/git\") (literal \"~/.gitconfig\") (literal \"~/.local/bin/claude\") (subpath \"~/.local/share/claude/versions\") (literal \"~/.local/share/claude/versions/2.1.302\") (literal \"~/.profile\") (subpath \"~/.ssh\") (literal \"~/.zlogin\") (literal \"~/.zlogout\") (literal \"~/.zprofile\") (literal \"~/.zshenv\") (literal \"~/.zshrc\") (subpath \"~/Library/LaunchAgents\") (literal \"/opt/homebrew/bin/claude\") (subpath \"<tmp>/gnomon-home\") (literal \"<tmp>/gnomon-home/head\") (subpath \"<tmp>/gnomon-home/keys\") (subpath \"<tmp>/gnomon-home/link\") (subpath \"<tmp>/gnomon-home/warpline\") (subpath \"<tmp>/linked-mod\") (subpath \"<tmp>/work/.claude\") (literal \"<tmp>/work/.git/config\") (subpath \"<tmp>/work/.git/hooks\") (subpath \"<tmp>/work/.git/info\") (literal \"<tmp>/work/.warpline/daemon-tokens.jsonl\") (literal \"<tmp>/work/.warpline/daemon/mcp-tokens.json\") (literal \"<tmp>/work/.warpline/daemon/mcp.token\") (subpath \"<tmp>/work/.warpline/keys\") (prefix \"<tmp>/work/CLAUDE\") (literal \"/usr/local/bin/claude\"))\n(deny network-outbound (remote ip \"localhost:55098\"))\n(deny process-info*)\n(allow process-info* (target self))\n(deny sysctl-read (sysctl-name-prefix \"kern.proc\"))\n(deny mach-lookup (global-name \"com.apple.sysmond\"))\n(deny network-outbound (remote unix-socket (subpath \"/private/tmp/tmux-501\")))\n(deny network-outbound (remote unix-socket (subpath \"/private/var/folders/gq/nt2kdpsj39dc8vpq6cfzx8gw0000gn/T/.screen\")) (remote unix-socket (subpath \"/private/tmp/screens\")) (remote unix-socket (subpath \"~/.screen\")))\n(deny appleevent-send)\n(deny mach-lookup (global-name \"com.apple.coreservices.appleevents\"))\n(deny device-microphone)\n(deny device-camera)\n(deny process-exec (literal \"/usr/bin/open\") (literal \"/usr/bin/osascript\") (literal \"/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister\") (literal \"/bin/launchctl\") (literal \"/usr/bin/shortcuts\") (literal \"/usr/bin/automator\"))\n",
+    "profileHash": "sha256:f0ef3fdfdd469e9914d583f2ab8778f40085c53df615840135ac14d8b89f1341",
+    "profile": ";; gnomon session profile v3 (spec §15.5) — generated from gnomon-session-policy:v1, every path realpath'd\n(version 1)\n(allow default)\n(deny file-read* (subpath \"<tmp>/gnomon-home\") (literal \"<tmp>/gnomon-home/head\") (prefix \"<tmp>/gnomon-home/kernel.db\") (subpath \"<tmp>/gnomon-home/keys\") (subpath \"<tmp>/gnomon-home/link\") (subpath \"<tmp>/gnomon-home/log\") (subpath \"<tmp>/gnomon-home/warpline\") (literal \"<tmp>/work/.warpline/daemon-tokens.jsonl\") (literal \"<tmp>/work/.warpline/daemon/mcp-tokens.json\") (literal \"<tmp>/work/.warpline/daemon/mcp.token\") (subpath \"<tmp>/work/.warpline/keys\"))\n(allow file-read* (literal \"<tmp>/gnomon-home/bin/claude-probe\"))\n(allow file-read-metadata (literal \"<tmp>/gnomon-home\") (literal \"<tmp>/gnomon-home/bin\"))\n(deny file-read* (literal \"<tmp>/gnomon-home/head\") (prefix \"<tmp>/gnomon-home/kernel.db\") (subpath \"<tmp>/gnomon-home/keys\") (subpath \"<tmp>/gnomon-home/link\") (subpath \"<tmp>/gnomon-home/log\") (subpath \"<tmp>/gnomon-home/warpline\"))\n(deny file-write* (literal \"~/.bash_login\") (literal \"~/.bash_profile\") (literal \"~/.bashrc\") (subpath \"~/.claude\") (literal \"~/.claude.json\") (subpath \"~/.config/fish\") (subpath \"~/.config/git\") (literal \"~/.gitconfig\") (literal \"~/.local/bin/claude\") (subpath \"~/.local/share/claude/versions\") (literal \"~/.local/share/claude/versions/2.1.302\") (literal \"~/.profile\") (subpath \"~/.ssh\") (literal \"~/.zlogin\") (literal \"~/.zlogout\") (literal \"~/.zprofile\") (literal \"~/.zshenv\") (literal \"~/.zshrc\") (subpath \"~/Library/LaunchAgents\") (literal \"/opt/homebrew/bin/claude\") (subpath \"<tmp>/gnomon-home\") (literal \"<tmp>/gnomon-home/head\") (subpath \"<tmp>/gnomon-home/keys\") (subpath \"<tmp>/gnomon-home/link\") (subpath \"<tmp>/gnomon-home/warpline\") (subpath \"<tmp>/linked-mod\") (subpath \"<tmp>/work/.claude\") (literal \"<tmp>/work/.git/config\") (subpath \"<tmp>/work/.git/hooks\") (subpath \"<tmp>/work/.git/info\") (literal \"<tmp>/work/.warpline/daemon-tokens.jsonl\") (literal \"<tmp>/work/.warpline/daemon/mcp-tokens.json\") (literal \"<tmp>/work/.warpline/daemon/mcp.token\") (subpath \"<tmp>/work/.warpline/keys\") (prefix \"<tmp>/work/CLAUDE\") (literal \"/usr/local/bin/claude\"))\n(deny network-outbound (remote ip \"localhost:59435\"))\n(deny process-info*)\n(allow process-info* (target self))\n(deny sysctl-read (sysctl-name-prefix \"kern.proc\"))\n(deny mach-lookup (global-name \"com.apple.sysmond\"))\n(deny network-outbound (remote unix-socket (subpath \"/private/tmp/tmux-501\")))\n(deny network-outbound (remote unix-socket (subpath \"/private/var/folders/gq/nt2kdpsj39dc8vpq6cfzx8gw0000gn/T/.screen\")) (remote unix-socket (subpath \"/private/tmp/screens\")) (remote unix-socket (subpath \"~/.screen\")))\n(deny appleevent-send)\n(deny mach-lookup (global-name \"com.apple.coreservices.appleevents\"))\n(deny device-microphone)\n(deny device-camera)\n(deny process-exec (literal \"/usr/bin/open\") (literal \"/usr/bin/osascript\") (literal \"/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister\") (literal \"/bin/launchctl\") (literal \"/usr/bin/shortcuts\") (literal \"/usr/bin/automator\"))\n",
     "notes": [
       "claude ran with the adapter argv (stream-json) and NO per-session CLAUDE_CONFIG_DIR: a custom CLAUDE_CONFIG_DIR loses subscription auth (auth status: loggedIn false, authMethod none — the OAuth keychain item is keyed by the config dir), so it is not used.",
       "round 2: claude ran as a PRIVATE COPY under <gnomon home>/bin with the binary, versions dir, known-location links and user persistence paths (rc files, ~/.ssh, LaunchAgents, git config) write-denied.",
@@ -92,5 +93,5 @@
     "G-SBX-08",
     "T-2026-10-18-008"
   ],
-  "at": "2026-10-18T05:53:45.078Z"
+  "at": "2026-10-18T20:35:09.489Z"
 }
