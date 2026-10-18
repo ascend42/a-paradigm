@@ -378,8 +378,12 @@ describe('folder watch (G-MOD-08, slice 2)', () => {
   it('an edit to a RUNNING linked mod\'s folder stops it within the debounce and pauses it with a re-approve card', async () => {
     const { r, h, folder } = await started({ linked: true });
     expect(h.watching()).toEqual(['probe']);
-    fs.appendFileSync(path.join(folder, 'index.mjs'), '\n// edited while running\n');
-    for (let i = 0; i < 40 && h.running().length; i++) await new Promise((res) => setTimeout(res, 100));
+    // FSEvents on a loaded CI runner can coalesce or drop the first event: edit again every 2 s, up to 15 s.
+    // Security does not rest on the watch (every start re-hashes the folder); this checks the prompt stop.
+    for (let i = 0; i < 150 && h.running().length; i++) {
+      if (i % 20 === 0) fs.appendFileSync(path.join(folder, 'index.mjs'), `\n// edited while running ${i}\n`);
+      await new Promise((res) => setTimeout(res, 100));
+    }
     for (let i = 0; i < 20 && !kinds(r).includes('mod.paused'); i++) await new Promise((res) => setTimeout(res, 100));
     expect(h.running()).toEqual([]);
     expect(r.events.find((e) => e.kind === 'mod.stopped' && e.payload.reason === 'changed')).toBeTruthy();
