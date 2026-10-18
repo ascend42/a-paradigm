@@ -466,3 +466,45 @@ describe('v5.38.0: PARADIGM_STRICT=1 flag', () => {
     expect(isStrictMode()).toBe(false);
   });
 });
+
+describe('gate reference scan scope (stop-hook false positives, 2026-10-18)', () => {
+  const rootPortal = 'version: "2.0"\ngates:\n  real:\n    description: x\n    prizes: []\n';
+  const write = (rel: string, body: string) => {
+    fs.mkdirSync(path.dirname(path.join(tmpDir, rel)), { recursive: true });
+    fs.writeFileSync(path.join(tmpDir, rel), body);
+  };
+
+  it('skips agent worktrees and build output that hold copies of .purpose files', async () => {
+    write('portal.yaml', rootPortal);
+    write('.purpose', 'components:\n  a:\n    gates: [^real]\n');
+    write('.claude/worktrees/agent-x/pkg/.purpose', 'components:\n  a:\n    gates: [^worktree-only]\n');
+    write('site/.next/standalone/pkg/.purpose', 'components:\n  a:\n    gates: [^build-only]\n');
+    const report = await checkPortalCompliance(tmpDir);
+    expect(report.usedButUndeclared).toEqual([]);
+  });
+
+  it('counts a gate declared in a nested portal.yaml or a .purpose gates: section as declared', async () => {
+    write('portal.yaml', rootPortal);
+    write('pkg/portal.yaml', 'version: "2.0"\ngates:\n  nested-portal:\n    description: x\n    prizes: []\nroutes:\n  "GET /x": [^nested-portal]\n');
+    write('app/.purpose', '#app:\n  description: v2 symbol keys are not plain YAML\n^caret-declared:\n  description: x\n');
+    write('svc/.purpose', 'flows:\n  f:\n    steps:\n      - \'^plain-declared\'\ngates:\n  plain-declared:\n    description: x\n');
+    write('use/.purpose', 'components:\n  u:\n    gates: [^caret-declared]\n');
+    const report = await checkPortalCompliance(tmpDir);
+    expect(report.usedButUndeclared).toEqual([]);
+  });
+
+  it('does not read a caret inside a token (anchor syntax) or a decorator example in docs as a gate', async () => {
+    write('portal.yaml', rootPortal);
+    write('.purpose', 'components:\n  a:\n    description: links like file.md#^block-id and a^b\n');
+    write('docs/README.md', '@' + "Gate('docs-example')\n"); // split so this source file is not itself a match
+    const report = await checkPortalCompliance(tmpDir);
+    expect(report.usedButUndeclared).toEqual([]);
+  });
+
+  it('still reports a genuinely undeclared gate', async () => {
+    write('portal.yaml', rootPortal);
+    write('.purpose', 'components:\n  a:\n    gates: [^missing-gate]\n');
+    const report = await checkPortalCompliance(tmpDir);
+    expect(report.usedButUndeclared).toEqual(['missing-gate']);
+  });
+});

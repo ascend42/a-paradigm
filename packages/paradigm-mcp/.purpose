@@ -461,7 +461,7 @@ aspects:
       - '#CoreTools'
     enforcement: |
       paradigm_search type enum: ['component', 'flow', 'gate', 'signal', 'aspect']
-      paradigm_status counts: #components, $flows, ^gates, !signals, ~aspects
+      paradigm_status counts: #components, $flows, gates (^), !signals, ~aspects
   global-persistence:
     description: Session and wisdom data dual-written to both local project and global ~/.paradigm/ directories
     tags:
@@ -1094,7 +1094,7 @@ aspects:
       - '#OrchestrationTools'
     enforcement: |
       The reviewer role prompt defines a two-stage protocol: Stage 1 checks
-      spec compliance (.purpose, ^gates, $flows, !signals, ~aspects).
+      spec compliance (.purpose, gates (^), $flows, !signals, ~aspects).
       Stage 1 must pass before Stage 2 (code quality). Every review must
       produce at least 3 categorized findings (blocking/improvement/note).
       "No looks good with zero findings."

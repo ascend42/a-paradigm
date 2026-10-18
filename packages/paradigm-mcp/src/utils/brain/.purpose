@@ -31,7 +31,7 @@ components:
       - detect.ts
     tags: [feature, brain, security]
   brain-parse:
-    description: .md/.txt metadata extraction via premise-core lenient parseFrontmatter — title, ATX headings, wikilinks (#heading, ^block, |alias, embeds), relative md links, frontmatter tags/aliases/relates. Bodies are never symbol-scanned; strings sanitized and capped.
+    description: .md/.txt metadata extraction via premise-core lenient parseFrontmatter — title, ATX headings, wikilinks (#heading, caret block refs, |alias, embeds), relative md links, frontmatter tags/aliases/relates. Bodies are never symbol-scanned; strings sanitized and capped.
     type: service
     anchors:
       - parse.ts
