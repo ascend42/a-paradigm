@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-18T08:01:27.242Z'
+generated: '2026-10-18T16:31:59.896Z'
 structure: {}
 key_files:
   config:
@@ -258,6 +258,7 @@ symbols:
   '#purpose-component-contract-card-v1': packages/gnomon-contracts/
   '#purpose-component-contract-gnomon-rpc-v1': packages/gnomon-contracts/
   '#purpose-component-contract-client-api-id': packages/gnomon-contracts/
+  '#purpose-component-gui': packages/gnomon-gui/
   '#purpose-component-gnomon-helper': packages/gnomon-helper/
   '#purpose-component-gnomon-local': packages/gnomon-local/
   '#purpose-component-gnomon-mod-sdk': packages/gnomon-mod-sdk/
@@ -1335,6 +1336,8 @@ symbols:
   ^gate-voice-armed: ./
   ^purpose-ref-gate-peer-paired.: packages/gnomon-contracts/
   '#purpose-ref-component-web-endpoint.': packages/gnomon-contracts/
+  '#purpose-ref-component-launch': packages/gnomon-gui/
+  '#purpose-ref-component-client-ts': packages/gnomon-gui/
   $purpose-ref-flow-XDG_RUNTIME_DIR: packages/gnomon/
   $purpose-ref-flow-RUNNER_TEMP: packages/gnomon/
   $purpose-ref-flow-HOME: packages/gnomon/

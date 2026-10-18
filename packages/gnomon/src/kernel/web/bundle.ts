@@ -17,9 +17,12 @@
  * files or more than MAX_BUNDLE_BYTES bytes ⇒ the tree does not hash (fail
  * closed).
  *
- * UNTIL M1.10 (the real `@a-company/gnomon-gui` bundle) and the root-signed
- * config (`gnomon gui pin`, after #identity M1.3), the kernel pins the
- * built-in PLACEHOLDER bundle by the literal PLACEHOLDER_BUNDLE_HASH below
+ * Since M1.10 slice 1 the endpoint pins the built-in #gui bundle
+ * (`@a-company/gnomon-gui`, embedded as opaque base64 bytes in the generated
+ * gui-bundle.ts) by GUI_BUNDLE_HASH; until the root-signed config
+ * (`gnomon gui pin`, after #identity M1.3) that literal is the pin. The
+ * PLACEHOLDER bundle below stays as a minimal fixture bundle, pinned by the
+ * literal PLACEHOLDER_BUNDLE_HASH
  * (test/web-units.test.ts proves the literal equals the hash of the bytes).
  * It is materialized under `<home>/gui/` (0700) at endpoint start and hashed by
  * the child, so a same-user write between the two is caught as a mismatch.
@@ -117,3 +120,4 @@ export function materializePlaceholderBundle(home: string): string {
   for (const [name, bytes] of placeholderFiles()) writeFileSync(path.join(dir, name), bytes, { mode: 0o600 });
   return dir;
 }
+

@@ -1,0 +1,26 @@
+id: L-2026-10-18-builder-162752-001
+type: insight
+timestamp: '2026-10-18T16:27:52.205Z'
+author: builder
+title: 'Decision: approve does not take contentHash in v1 because it would move clientApiId'
+summary: Reviewer C4 asked to send contentHash in approve. The broker's APPROVE_KEYS is closed and approve's params are in the VERBS descriptor hashed into clientApiId, so adding contentHash would move clientApiId; stopped per the coordinator's rule. The GUI keys its verified-action cache by (cardId, contentHash) instead, and decisionSig already binds card.contentHash kernel-side.
+symbols_touched:
+  - '#gui'
+  - '#approval-broker'
+files_modified:
+  - packages/gnomon-gui/src/ui/app.ts
+commit: 673456ae
+learnings:
+  - 'Check the descriptor before treating a param as additive: a closed param list in clientApiId makes it a v2-class change'
+  - decisionSig over cardId+decision+contentHash+approver already prevents approving a stale card body
+tags:
+  - decision
+  - gnomon
+  - m1-10
+  - c4
+  - client-api
+body: M1.10 made no change to broker/card.ts or broker.ts, so the parallel T-015 edits to card.ts (sanitizeLine, presence summary) merge cleanly. A future contentHash? param needs a planned descriptor change and clientApiId move owned by the contracts lane.
+git_context:
+  ref: 673456ae5eddef4e805e743fc5401a00f27e4927
+  branch: gnomon/m110-gui
+  dirty: true

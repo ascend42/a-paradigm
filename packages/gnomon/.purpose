@@ -308,7 +308,8 @@ components:
       ACAO, the rule-6 CSP/COOP/CORP/nosniff/no-referrer on every response,
       no-store on non-static; traversal refused; /blob raster-only by content
       sniffing and verified content hash, GUI token in X-Gnomon-Token; /diag
-      ≤ 64 KiB to <home>/logs/gui.log; /blob and /diag are POST (a
+      ≤ 64 KiB to <home>/logs/gui.log after redactDiagText (32-byte
+      base64url tokens ⟨redacted⟩, contracts display sanitizer, Aegis C5); /blob and /diag are POST (a
       same-origin GET carries no Origin; the page sends them with
       referrerPolicy same-origin), GET/HEAD 405; /rpc and /diag match
       exactly, only /blob/ is a prefix; no HTTP RPC. Every child record is
@@ -338,9 +339,12 @@ components:
       and is refused UNSUPPORTED web-auth-not-implemented {milestone M1.3,
       cause presence-unavailable} until the signed helper's presence. GUI
       sessions live as long as their socket (≤ 12 h; revoke-all; daemon
-      exit). Bundle pin (bundle.ts): gnomon-bundle-tree:v1 hash; until
-      M1.10/M1.3 the placeholder bundle pinned by the PLACEHOLDER_BUNDLE_HASH
-      literal, materialized under <home>/gui/; a mismatch logs
+      exit). Bundle pin (bundle.ts): gnomon-bundle-tree:v1 hash; since
+      M1.10 slice 1 the #gui bundle (packages/gnomon-gui, embedded as opaque
+      base64 in the GENERATED gui-bundle.ts, read by gui-pin.ts outside the child closure) pinned by the GUI_BUNDLE_HASH
+      literal until the root-signed `gnomon gui pin` (M1.3), materialized
+      under <home>/gui/bundle/ (the placeholder bundle stays a fixture);
+      a mismatch logs
       socket.web.bundle.mismatch and never opens. Supervision: restart cap
       3/10 min (socket.web.transport.exited, then socket.web.stop
       {transport-restart-cap}; a failed respawn ⇒ {transport-restart-failed};
@@ -360,6 +364,7 @@ components:
     tests:
       - test/web-units.test.ts
       - test/web-endpoint.test.ts
+      - test/gui-endpoint.test.ts
       - test/web-child.test.ts
       - test/web-sandbox.test.ts
       - test/seams-fence.test.ts

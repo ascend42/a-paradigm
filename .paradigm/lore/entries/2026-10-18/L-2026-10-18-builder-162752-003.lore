@@ -1,0 +1,28 @@
+id: L-2026-10-18-builder-162752-003
+type: insight
+timestamp: '2026-10-18T16:27:52.472Z'
+author: builder
+title: 'Decision: one sanitizer; the GUI renders through gnomon-contracts display.ts'
+summary: Slice 1 shipped its own sanitize.ts; M1.12 slice 2 made gnomon-contracts sanitizeDisplayText the one sanitizer with conformance/display.v1.json. The GUI copy was deleted; render.ts uses sanitizeDisplayText and BIDI_GLYPHS, the conformance vectors run through the render path, and a fence test forbids any sanitizer in packages/gnomon-gui/src.
+symbols_touched:
+  - '#gui'
+  - '#web-endpoint'
+files_modified:
+  - packages/gnomon-gui/src/core/render.ts
+  - packages/gnomon-gui/src/ui/app.ts
+  - packages/gnomon-gui/test/gui.test.ts
+  - packages/gnomon/src/kernel/web/endpoint.ts
+commit: 673456ae
+learnings:
+  - Two sanitizers diverge (slice 1 stripped OSC bodies whole; contracts shows them as glyphs)
+  - Test a consumer through the shared conformance vectors rather than re-testing the rules
+  - The /diag gui.log path reuses the same sanitizer after token redaction
+tags:
+  - decision
+  - gnomon
+  - m1-10
+  - aegis-c1
+git_context:
+  ref: 673456ae5eddef4e805e743fc5401a00f27e4927
+  branch: gnomon/m110-gui
+  dirty: true

@@ -1,0 +1,55 @@
+version: "2.0"
+description: >-
+  @a-company/gnomon-gui (spec §11; M1.10 slice 1) - the single-page app the
+  kernel's loopback #web-endpoint serves as a hash-pinned bundle. Dependency
+  light (no framework yet; React arrives with the Doodle canvas, §12.7);
+  everything self-hosted, no runtime CDN loads (rule-6 CSP). scripts/build.mjs
+  bundles src/main.ts with esbuild (gnomon-contracts inlined) into
+  dist/bundle/{index.html, boot.js, styles.css, app.js}, hashes the tree
+  (gnomon-bundle-tree:v1) and with --embed writes the generated
+  packages/gnomon/src/kernel/web/gui-bundle.ts (opaque base64 + pin literal);
+  --check (first step of `npm test`) fails when that file is stale.
+
+components:
+  gui:
+    description: >-
+      #gui (spec §11.1-§11.5, §4.5). static/boot.js reads the launch fragment
+      (#launch=<token>&k=<spki>) and clears it with history.replaceState
+      before any other script, handing it to app.js once. core/launch.ts
+      decides the key pin (localStorage holds only the kernel public key;
+      a changed fragment key re-pins visibly; Reconnect verifies against the
+      pin; none ⇒ refuse). core/server-sig.ts verifies hello.serverSig with
+      WebCrypto Ed25519 over authServerPreimage and binds serverKeyId; card
+      decision keys only for kernel-signed actions that verify. core/client.ts
+      is a MINIMAL in-bundle gnomon-rpc:v1 client on gnomon-contracts (hello,
+      sig check, auth {launchToken}|{reconnect}, calls, notifications,
+      gnomonPost for POST /diag and /blob with X-Gnomon-Token and
+      referrerPolicy same-origin; per-call timeout; id:null error frames
+      surface as a notice + /diag) - swapped for the published #client-ts
+      (M1.12) in slice 2. The GUI defines NO sanitizer (Aegis C1): every
+      string goes through gnomon-contracts sanitizeDisplayText (display.ts,
+      tested with conformance/display.v1.json through the render path, plus
+      a fence test); core/render.ts renders the closed kit and kernel cards
+      as DOM TEXT NODES only (no innerHTML); a block kit.Button is not a
+      decision key and is live only for BLOCK_SAFE_COMMANDS (never diag.send
+      or gui.reconnect). Card decision keys only for kernel-signed actions
+      whose keyId is the hello's serverKeyId, cached per (cardId,
+      contentHash) and cleared when the verify key changes. A re-pin is a
+      sticky kernel-owned notice with old/new keyIds and a /diag line.
+      core/store.ts reduces log.read rows into sessions by project, per-hsid
+      transcripts and the decision stack (order independent, per-project
+      filter); core/virtual.ts is the Fenwick-tree virtualized transcript
+      with per-width height caches; core/commands.ts the palette, layout
+      presets and theme/motion resolution. ui/app.ts wires the page: launch,
+      Reconnect, backlog paging + follow subscription, sessions sidebar with
+      new session (session.open), composer (session.send), decision stack
+      (approve on trusted gestures; refusals shown verbatim until M1.3
+      presence), Shuttle view, the kernel-owned extension-risk badge,
+      papercraft day / phosphor night / auto themes and reduced motion.
+    path: src/
+    type: module
+    tags: [gnomon, gui, paradigm-8, m1-10]
+    tests:
+      - test/gui.test.ts
+      - ../gnomon/test/gui-endpoint.test.ts
+      - ../gnomon/test/web-units.test.ts

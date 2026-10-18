@@ -16,7 +16,7 @@ import { LifecycleRefusal } from '../src/kernel/lifecycle/refusal.js';
 import { SoftwareEd25519Signer } from '../src/kernel/log/index.js';
 import { createKernelDispatcher, SocketAuthenticator, verifyServerHello, type ModRelayPort } from '../src/kernel/socket/index.js';
 import { createWebEndpointForTest, unsandboxedLauncher } from '../src/kernel/testing.js';
-import { materializePlaceholderBundle, PLACEHOLDER_BUNDLE_HASH, PLACEHOLDER_FILES, type BlobSource, type WebEndpoint, type WebEndpointSeams } from '../src/kernel/web/index.js';
+import { GUI_BUNDLE_HASH, guiBundleFiles, materializePlaceholderBundle, PLACEHOLDER_BUNDLE_HASH, type BlobSource, type WebEndpoint, type WebEndpointSeams } from '../src/kernel/web/index.js';
 import { encodeClientFrame, OP } from '../src/transport/ws-codec.js';
 import { PKG_ROOT } from './helpers.js';
 import { tempHome } from './daemon-helpers.js';
@@ -92,7 +92,7 @@ describe('G-WEB-01 bind: 127.0.0.1 literal only, ephemeral port', () => {
     const { ep, rows } = await rig();
     await ep.ensureListening();
     expect(ep.port).toBeGreaterThan(0);
-    expect(rows.find((r) => r.kind === 'socket.web.listen')?.payload).toMatchObject({ port: ep.port, bundleHash: PLACEHOLDER_BUNDLE_HASH, sandbox: 'none' });
+    expect(rows.find((r) => r.kind === 'socket.web.listen')?.payload).toMatchObject({ port: ep.port, bundleHash: GUI_BUNDLE_HASH, sandbox: 'none' });
     const v6 = await new Promise<string>((res) => {
       const s = net.connect({ host: '::1', port: ep.port });
       s.on('connect', () => (s.destroy(), res('connected')));
@@ -148,7 +148,7 @@ describe('G-WEB-06 HTTP surface: headers, CSP, no cookies, traversal, raster-onl
     const port = ep.port;
     const r = await rawHttp(port, 'GET', '/', { Host: `127.0.0.1:${port}`, Cookie: 'a=b' });
     expect(r.status).toBe(200);
-    expect(r.body.toString()).toBe(PLACEHOLDER_FILES['index.html']);
+    expect(r.body.equals(guiBundleFiles().get('index.html')!)).toBe(true);
     expect(r.headers['content-type']).toBe('text/html; charset=utf-8');
     expect(r.headers['content-security-policy']).toContain("frame-ancestors 'none'");
     expect(r.headers).toMatchObject({ 'cross-origin-opener-policy': 'same-origin', 'cross-origin-resource-policy': 'same-origin', 'x-content-type-options': 'nosniff', 'referrer-policy': 'no-referrer' });
@@ -156,8 +156,8 @@ describe('G-WEB-06 HTTP surface: headers, CSP, no cookies, traversal, raster-onl
     for (const target of ['/../../etc/passwd', '/%2e%2e/%2e%2e/etc/passwd', '/nope.js']) expect((await rawHttp(port, 'GET', target, { Host: `127.0.0.1:${port}` })).status).toBe(404);
     expect((await rawHttp(port, 'GET', '/', { Host: `localhost:${port}` })).status).toBe(421);
     // a same-user write into the served dir after start changes nothing served (bytes come from the hashed snapshot)
-    appendFileSync(path.join(home, 'gui', 'placeholder', 'app.js'), 'alert(1)');
-    expect((await rawHttp(port, 'GET', '/app.js', { Host: `127.0.0.1:${port}` })).body.toString()).toBe(PLACEHOLDER_FILES['app.js']);
+    appendFileSync(path.join(home, 'gui', 'bundle', 'app.js'), 'alert(1)');
+    expect((await rawHttp(port, 'GET', '/app.js', { Host: `127.0.0.1:${port}` })).body.equals(guiBundleFiles().get('app.js')!)).toBe(true);
     const rpcGet = await rawHttp(port, 'GET', '/rpc', GOOD(port));
     expect(rpcGet.status).toBe(426);
     expect(rpcGet.headers['cache-control']).toBe('no-store');
@@ -190,6 +190,14 @@ describe('G-WEB-06 HTTP surface: headers, CSP, no cookies, traversal, raster-onl
     const d = await rawHttp(port, 'POST', '/diag', { ...GOOD(port), 'X-Gnomon-Token': guiToken }, Buffer.from('boom: <b>x</b>'));
     expect(d.status).toBe(204);
     expect(readFileSync(path.join(home, 'logs', 'gui.log'), 'utf8')).toContain('boom: <b>x</b>');
+    // C5: tokens are redacted and terminal escapes neutralized before gui.log; 64-hex hashes survive
+    const leak = `token ${guiToken} esc \x1b]52;c;ZXZpbA==\x07 hash ${'a'.repeat(64)}`;
+    expect((await rawHttp(port, 'POST', '/diag', { ...GOOD(port), 'X-Gnomon-Token': guiToken }, Buffer.from(leak))).status).toBe(204);
+    const logged = readFileSync(path.join(home, 'logs', 'gui.log'), 'utf8');
+    expect(logged).not.toContain(String(guiToken));
+    expect(logged).toContain('⟨redacted⟩');
+    expect(logged).not.toContain('\\u001b');
+    expect(logged).toContain('a'.repeat(64));
     expect((await rawHttp(port, 'POST', '/diag', { ...GOOD(port), 'X-Gnomon-Token': guiToken }, Buffer.alloc(64 * 1024 + 1))).status).toBe(413);
     expect((await rawHttp(port, 'GET', '/diag', { ...GOOD(port), 'X-Gnomon-Token': guiToken })).status).toBe(405);
     expect((await rawHttp(port, 'GET', `/blob/${sha(png)}`, { ...GOOD(port), 'X-Gnomon-Token': guiToken })).status).toBe(405); // POST only
@@ -250,7 +258,7 @@ describe('G-WEB-05 launch token → GUI token; theft inside the TTL; replay afte
     const { ep, rows, kernel } = await rig();
     const grant = await ep.requestLaunch(HUMAN);
     expect(grant.url).toBe(`http://127.0.0.1:${ep.port}/#launch=${grant.launchToken}&k=${grant.kernelPublicKey}`);
-    expect(grant.bundleHash).toBe(PLACEHOLDER_BUNDLE_HASH);
+    expect(grant.bundleHash).toBe(GUI_BUNDLE_HASH);
     const { ws, hello, auth } = await attach(ep, grant.launchToken, 'wrapper');
     expect(() => verifyServerHello(hello.result as never, ep.endpointPath, { keyId: kernel.keyId, publicKeyPem: kernel.publicKeyPem })).not.toThrow();
     const res = auth.result as { guiToken: string; principal: string; connId: string };
@@ -459,7 +467,7 @@ setInterval(() => undefined, 1000);`;
       const fake = path.join(t.home, 'fake-child.mjs');
       writeFileSync(fake, FAKE);
       const { ep, rows } = await rig({
-        launcher: (input) => ({ ...unsandboxedLauncher({ ...input, scriptPath: fake }), args: [fake, JSON.stringify(bad), PLACEHOLDER_BUNDLE_HASH] }),
+        launcher: (input) => ({ ...unsandboxedLauncher({ ...input, scriptPath: fake }), args: [fake, JSON.stringify(bad), GUI_BUNDLE_HASH] }),
       });
       await ep.ensureListening();
       const pid = ep.childPid()!;

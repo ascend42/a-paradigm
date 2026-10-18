@@ -1,0 +1,202 @@
+/**
+ * @symbol #gui
+ *
+ * #gui DOM-text rendering (spec §4.5, §11.1; `G-GUI-07`, `G-GUI-11`). The
+ * ONLY way kernel, card, block or model text reaches the page: every string
+ * is sanitized by THE one sanitizer, `@a-company/gnomon-contracts`
+ * `sanitizeDisplayText` (display.ts, conformance/display.v1.json — the GUI
+ * defines none of its own, Aegis C1) and appended as a TEXT NODE. This module never
+ * assigns `innerHTML` / `outerHTML`, never calls `insertAdjacentHTML` or
+ * `document.write`, never sets an `on*` attribute or an `href`/`src` from data
+ * (test/no-markup.test.ts scans the whole src tree for those sinks).
+ *
+ * Blocks (`display-block:v1`, the closed kit): Box Text List Table Markdown
+ * Diff Progress Button Image Canvas. A block carries no actions; `kit.Button`
+ * names only a command id (dispatched to the palette, never to a verb).
+ * Markdown renders as preformatted text in slice 1 (raw HTML disabled by
+ * construction); the streaming Markdown renderer is slice 2. `kit.Image`
+ * shows its `alt` until the /blob fetch lands (slice 2); `kit.Canvas` is
+ * host-owned (Doodle, §12.7). An unknown block renders opaquely as
+ * `[block <name>]` with its strings as text — never dropped.
+ *
+ * Kernel cards (`inbox.card` regions): kind, requester, session, the body
+ * block, flags as visible badges beside the decision keys, and the
+ * `contentHash` summary line — rendered by the GUI core, never by a mod.
+ */
+import { BIDI_GLYPHS, sanitizeDisplayText } from '@a-company/gnomon-contracts';
+import { BLOCK_SAFE_COMMANDS } from './commands.js';
+
+/** Legend for the `bidi` card badge: the glyphs the contracts sanitizer shows in place of bidi controls. */
+export const BIDI_LEGEND = Object.values(BIDI_GLYPHS).join(' ');
+
+/** The display text of any value: strings through the contracts sanitizer; others stringified first. */
+export function displayText(v: unknown): string {
+  return sanitizeDisplayText(typeof v === 'string' ? v : v === null || v === undefined ? '' : String(v)).text;
+}
+
+/** Union of the sanitizer flags over every string (keys included) of a JSON-like value (a card body, a block tree). */
+export function flagsOf(value: unknown, acc: Set<string> = new Set(), depth = 0): Set<string> {
+  if (depth > 64) return acc;
+  if (typeof value === 'string') for (const f of sanitizeDisplayText(value).flags) acc.add(f);
+  else if (Array.isArray(value)) for (const v of value) flagsOf(v, acc, depth + 1);
+  else if (value && typeof value === 'object')
+    for (const [k, v] of Object.entries(value)) {
+      flagsOf(k, acc, depth + 1);
+      flagsOf(v, acc, depth + 1);
+    }
+  return acc;
+}
+
+/** The DOM surface this module uses (a real Document in the page; a fake in node tests). */
+export interface MiniDoc {
+  createElement(tag: string): MiniEl;
+  createTextNode(text: string): unknown;
+}
+export interface MiniEl {
+  appendChild(child: unknown): unknown;
+  setAttribute(name: string, value: string): void;
+  className: string;
+}
+
+const ALLOWED_TAGS = new Set(['div', 'span', 'p', 'pre', 'ul', 'li', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'button', 'progress', 'header', 'section', 'strong', 'code', 'kbd', 'small']);
+const SAFE_ATTR = /^(class|role|title|aria-[a-z-]+|data-[a-z-]+|value|max|tabindex|type)$/;
+
+/** Element with sanitized text children. Attributes are allowlisted and never URL/handler-bearing. */
+export function h(doc: MiniDoc, tag: string, attrs: Record<string, string> | null, ...children: Array<MiniEl | string | null | undefined | false>): MiniEl {
+  if (!ALLOWED_TAGS.has(tag)) throw new Error(`render: tag ${tag} is not allowed`);
+  const el = doc.createElement(tag);
+  if (attrs) {
+    for (const [k, v] of Object.entries(attrs)) {
+      if (k === 'class') el.className = v;
+      else if (SAFE_ATTR.test(k)) el.setAttribute(k, displayText(v));
+      else throw new Error(`render: attribute ${k} is not allowed`);
+    }
+  }
+  for (const c of children) {
+    if (c === null || c === undefined || c === false) continue;
+    el.appendChild(typeof c === 'string' ? doc.createTextNode(displayText(c)) : c);
+  }
+  return el;
+}
+
+/** Text node of a sanitized string. */
+export function text(doc: MiniDoc, s: unknown): unknown {
+  return doc.createTextNode(displayText(s));
+}
+
+const KIT = ['Box', 'Text', 'List', 'Table', 'Markdown', 'Diff', 'Progress', 'Button', 'Image', 'Canvas'] as const;
+
+/** The block name of a node: `block` or `type`, with or without the `kit.` prefix (the broker writes `{type:'Box'}`). */
+export function blockName(node: Record<string, unknown>): string {
+  const raw = typeof node.block === 'string' ? node.block : typeof node.type === 'string' ? node.type : '';
+  return raw.startsWith('kit.') ? raw.slice(4) : raw;
+}
+
+const str = (v: unknown): string => (typeof v === 'string' ? v : v === undefined || v === null ? '' : typeof v === 'object' ? JSON.stringify(v) : String(v));
+
+export interface RenderCtx {
+  doc: MiniDoc;
+  /** kit.Button → palette command id (never a verb). */
+  onCommand?: (commandId: string) => void;
+  depth?: number;
+}
+
+/** Render one display-block node (any depth ≤ 32). */
+export function renderBlock(ctx: RenderCtx, node: unknown): MiniEl {
+  const { doc } = ctx;
+  const depth = ctx.depth ?? 0;
+  if (!node || typeof node !== 'object' || Array.isArray(node)) return h(doc, 'span', { class: 'blk blk-text' }, str(node));
+  const n = node as Record<string, unknown>;
+  const data = (n.data && typeof n.data === 'object' ? n.data : n) as Record<string, unknown>;
+  const kids = Array.isArray(n.children) ? n.children : [];
+  const child = (c: unknown): MiniEl => (depth >= 32 ? h(doc, 'span', { class: 'blk' }, '…') : renderBlock({ ...ctx, depth: depth + 1 }, c));
+  const name = blockName(n);
+  switch (name) {
+    case 'Box':
+      return h(doc, 'div', { class: 'blk blk-box' }, ...kids.map(child));
+    case 'Text':
+      return h(doc, 'p', { class: 'blk blk-text' }, str(data.text));
+    case 'List': {
+      const items = Array.isArray(data.items) ? data.items : kids;
+      return h(doc, 'ul', { class: 'blk blk-list' }, ...items.map((it) => h(doc, 'li', null, typeof it === 'object' && it !== null ? child(it) : str(it))));
+    }
+    case 'Table': {
+      const cols = Array.isArray(data.columns) ? data.columns : [];
+      const rows = Array.isArray(data.rows) ? data.rows : [];
+      return h(
+        doc,
+        'table',
+        { class: 'blk blk-table' },
+        h(doc, 'thead', null, h(doc, 'tr', null, ...cols.map((c) => h(doc, 'th', null, str(c))))),
+        h(doc, 'tbody', null, ...rows.map((r) => h(doc, 'tr', null, ...(Array.isArray(r) ? r : [r]).map((c) => h(doc, 'td', null, str(c)))))),
+      );
+    }
+    case 'Markdown':
+      return h(doc, 'pre', { class: 'blk blk-md' }, str(data.text ?? data.markdown));
+    case 'Diff':
+      return h(doc, 'pre', { class: 'blk blk-diff' }, str(data.text ?? data.diff ?? data.hunks));
+    case 'Progress': {
+      const value = Number(data.value);
+      const max = Number(data.max ?? 1);
+      return h(doc, 'div', { class: 'blk blk-progress' }, h(doc, 'progress', { value: String(Number.isFinite(value) ? value : 0), max: String(Number.isFinite(max) && max > 0 ? max : 1) }), str(data.label));
+    }
+    case 'Button': {
+      // C6: a block button is styled apart from kernel decision keys (no `key` class) and is live only for a safe command
+      const cmd = str(data.command);
+      if (!BLOCK_SAFE_COMMANDS.has(cmd)) return h(doc, 'span', { class: 'blk blk-button-inert', title: 'this command is not available to a block' }, `[${str(data.label ?? cmd)}]`);
+      return h(doc, 'button', { class: 'blk blk-button', type: 'button', 'data-command': cmd }, str(data.label ?? cmd));
+    }
+    case 'Image':
+      return h(doc, 'div', { class: 'blk blk-image', role: 'img', 'aria-label': str(data.alt) }, `[image] ${str(data.alt)}`);
+    case 'Canvas':
+      return h(doc, 'div', { class: 'blk blk-canvas' }, `[canvas ${str(data.ds)}] rendered by the host surface`);
+    default:
+      // unknown (or a kernel card block nested as a child): opaque label + its strings as text, never dropped
+      return h(doc, 'div', { class: 'blk blk-opaque' }, `[block ${name || '?'}] `, ...kids.map(child), typeof data.text === 'string' ? data.text : null);
+  }
+}
+
+export const KIT_BLOCKS: readonly string[] = KIT;
+
+export interface CardView {
+  cardId: string;
+  kind: string;
+  requestedBy: string;
+  hsid: string | null;
+  repo: string | null;
+  state: string;
+  contentHash: string;
+  flags: string[];
+  /** decisions whose kernel signature verified; [] ⇒ no decision keys */
+  decisions: string[];
+  decidable: boolean;
+}
+
+/** Flags the GUI shows for a card: the kernel's `flags[]` plus any the sanitizer finds in the body (union, never fewer). */
+export function cardFlags(card: Record<string, unknown>, kernelFlags: readonly string[]): string[] {
+  const s = new Set<string>(kernelFlags);
+  for (const f of flagsOf(card.block)) s.add(f);
+  return [...s].sort();
+}
+
+/** The kernel-owned card region. Decision keys only for verified actions on a decidable card. */
+export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl {
+  const { doc } = ctx;
+  const keys = v.decidable && v.decisions.length ? v.decisions : [];
+  return h(
+    doc,
+    'section',
+    { class: `card kind-${v.kind.replace(/[^a-z0-9-]/g, '')}`, role: 'group', 'data-card-id': v.cardId, 'aria-label': `${v.kind} card` },
+    h(doc, 'header', { class: 'card-head' }, h(doc, 'strong', { class: 'card-kind' }, v.kind), h(doc, 'small', { class: 'meta' }, ` ${v.requestedBy}${v.hsid ? ` · ${v.hsid}` : ''}${v.repo ? ` · ${v.repo}` : ''}`)),
+    h(doc, 'div', { class: 'card-body kernel-owned' }, renderBlock(ctx, block)),
+    h(
+      doc,
+      'div',
+      { class: 'card-keys' },
+      ...v.flags.map((f) => h(doc, 'span', { class: `badge flag flag-${f.replace(/[^a-z0-9-]/g, '')}`, title: f === 'bidi' ? `card flag: bidi — shown as ${BIDI_LEGEND}` : `card flag: ${f}` }, f)),
+      ...keys.map((d) => h(doc, 'button', { class: 'key', type: 'button', 'data-decision': d, 'data-card-id': v.cardId }, d)),
+      keys.length ? null : h(doc, 'small', { class: 'meta' }, v.decidable ? 'no verified decision keys' : `not decidable here (state ${v.state})`),
+    ),
+    h(doc, 'small', { class: 'meta content-hash' }, `contentHash ${v.contentHash.slice(0, 23)}…`),
+  );
+}

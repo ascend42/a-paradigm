@@ -2,10 +2,10 @@
   "$meta": {
     "version": "1.0.0",
     "project": "a-paradigm",
-    "generatedAt": "2026-10-18T08:01:27.227Z",
+    "generatedAt": "2026-10-18T16:31:59.882Z",
     "paradigmVersion": "0.1.0",
     "sources": {
-      "purposeFiles": 105,
+      "purposeFiles": 106,
       "portalFiles": 2,
       "premiseFiles": 0
     },
@@ -26,7 +26,7 @@
       "feature": 1,
       "theme": 1,
       "controller": 1,
-      "module": 112,
+      "module": 113,
       "tool": 45,
       "tool-group": 10,
       "util": 9,
@@ -2764,6 +2764,20 @@
       "related": [],
       "componentType": "module"
     },
+    "gui": {
+      "id": "gui",
+      "name": "Gui",
+      "symbol": "#gui",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose",
+      "description": "#gui (spec §11.1-§11.5, §4.5). static/boot.js reads the launch fragment (#launch=<token>&k=<spki>) and clears it with history.replaceState before any other script, handing it to app.js once. core/launch.ts decides the key pin (localStorage holds only the kernel public key; a changed fragment key re-pins visibly; Reconnect verifies against the pin; none ⇒ refuse). core/server-sig.ts verifies hello.serverSig with WebCrypto Ed25519 over authServerPreimage and binds serverKeyId; card decision keys only for kernel-signed actions that verify. core/client.ts is a MINIMAL in-bundle gnomon-rpc:v1 client on gnomon-contracts (hello, sig check, auth {launchToken}|{reconnect}, calls, notifications, gnomonPost for POST /diag and /blob with X-Gnomon-Token and referrerPolicy same-origin; per-call timeout; id:null error frames surface as a notice + /diag) - swapped for the published #client-ts (M1.12) in slice 2. The GUI defines NO sanitizer (Aegis C1): every string goes through gnomon-contracts sanitizeDisplayText (display.ts, tested with conformance/display.v1.json through the render path, plus a fence test); core/render.ts renders the closed kit and kernel cards as DOM TEXT NODES only (no innerHTML); a block kit.Button is not a decision key and is live only for BLOCK_SAFE_COMMANDS (never diag.send or gui.reconnect). Card decision keys only for kernel-signed actions whose keyId is the hello's serverKeyId, cached per (cardId, contentHash) and cleared when the verify key changes. A re-pin is a sticky kernel-owned notice with old/new keyIds and a /diag line. core/store.ts reduces log.read rows into sessions by project, per-hsid transcripts and the decision stack (order independent, per-project filter); core/virtual.ts is the Fenwick-tree virtualized transcript with per-width height caches; core/commands.ts the palette, layout presets and theme/motion resolution. ui/app.ts wires the page: launch, Reconnect, backlog paging + follow subscription, sessions sidebar with new session (session.open), composer (session.send), decision stack (approve on trusted gestures; refusals shown verbatim until M1.3 presence), Shuttle view, the kernel-owned extension-risk badge, papercraft day / phosphor night / auto themes and reduced motion.",
+      "visualTags": [],
+      "related": [
+        "#launch",
+        "#client-ts"
+      ],
+      "componentType": "module"
+    },
     "gnomon-helper": {
       "id": "gnomon-helper",
       "name": "Gnomon Helper",
@@ -2868,9 +2882,10 @@
       "symbol": "#web-endpoint",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose",
-      "description": "#web-endpoint (spec §2.1, §4.9 WebSocket paragraph, §11.2, §15.5 `transport`, §2.4 linger; M1.4). The kernel half (src/kernel/web/) and the `gnomon-web` transport child (src/transport/). The CHILD parses bytes only: node:http on the 127.0.0.1 literal (ephemeral port), the RFC 6455 upgrade and zero-dep framing (ws-codec.ts: text only — binary 1003; no fragmentation — FIN=0/continuation 1009; no extension ever negotiated — RSV bits 1002; masking required 1002; invalid UTF-8 1007; >4 MiB 1009 from the header; close mirrored; pings every 30 s, closes after 2 missed pongs), and static serving of the bundle bytes it hashed at start (held in memory). It forwards {rid, method, path, headers} / {rid, data} records over stdio (protocol.ts) and writes back only what the kernel says; its import closure is framing + channel + bundle hash (test/seams-fence.test.ts). The KERNEL decides every rule (rules.ts): Host = 127.0.0.1:<port> else 421 (host) before routing; Origin = http://127.0.0.1:<port> on every upgrade and non-static request else 403 (origin); Sec-Fetch-Site same-origin|none else 403; no cookies, no ACAO, the rule-6 CSP/COOP/CORP/nosniff/no-referrer on every response, no-store on non-static; traversal refused; /blob raster-only by content sniffing and verified content hash, GUI token in X-Gnomon-Token; /diag ≤ 64 KiB to <home>/logs/gui.log; /blob and /diag are POST (a same-origin GET carries no Origin; the page sends them with referrerPolicy same-origin), GET/HEAD 405; /rpc and /diag match exactly, only /blob/ is a prefix; no HTTP RPC. Every child record is validated against the closed shape set (protocol.ts validateChildRecord) and the child is SIGKILLed on the first violation or on any throw in record handling (Aegis C1); a compromised child is a compromise of the GUI sessions it relays (spec §A.7). Child-written 503/404 carry the rule-6 default headers. Per connection: the child starts at a 16 KiB inbound cap, raised by a kernel `limit` record on authentication; unsent bytes are reported as pressure/drain (the dispatcher's writableLength/onDrain are per connection) and over 8 MiB the child closes 1008; more than 32 queued requests close 1008. Read tokens do not authenticate on the web endpoint (Aegis C3). WebSocket: hello then auth within 5 s else 1008, frames before auth never dispatched as verbs; ≤ 64 live (non-closing) connections, at the cap the oldest live unauthenticated one is closed (1013), never an authenticated GUI one (503 instead); ≤ 5 auth attempts/min/connection. Its own dispatcher (authenticator signs ws://127.0.0.1:<port>/rpc) with a `web` auth hook (launch.ts): a single-use 60 s launch token minted in-process for an authenticated human device connection (DaemonHandle.requestWebLaunch — §5 names no verb for `gnomon open`), exchanged for a 32-byte GUI token held as a digest; a second presentation inside the TTL is theft (refused, the consuming session revoked, socket.auth.theft + socket.gui.session.ended {theft}); after the TTL a replay (socket.auth.replay only); both answer `replayed-transcript`. Reconnect logs socket.auth.reconnect.requested and is refused UNSUPPORTED web-auth-not-implemented {milestone M1.3, cause presence-unavailable} until the signed helper's presence. GUI sessions live as long as their socket (≤ 12 h; revoke-all; daemon exit). Bundle pin (bundle.ts): gnomon-bundle-tree:v1 hash; until M1.10/M1.3 the placeholder bundle pinned by the PLACEHOLDER_BUNDLE_HASH literal, materialized under <home>/gui/; a mismatch logs socket.web.bundle.mismatch and never opens. Supervision: restart cap 3/10 min (socket.web.transport.exited, then socket.web.stop {transport-restart-cap}; a failed respawn ⇒ {transport-restart-failed}; both clear the timers); 2-min linger after the last GUI session (socket.web.linger, socket.web.stop{no-sessions}). Production spawn only through the platform's `transport` sandbox profile (#oracle-sandbox); the unsandboxed child exists only via the internal seam `web` (testing.ts createWebEndpointForTest). Event kinds emitted (§9.1 socket namespace): socket.web.listen, socket.web.bundle.mismatch, socket.web.linger, socket.web.stop, socket.web.transport.exited, socket.gui.token.issued, socket.gui.session.ended, socket.auth.theft, socket.auth.replay, socket.auth.reconnect.requested, socket.auth.fail {origin|host|sec-fetch-site|gui-token}. The spec declares no signals.",
+      "description": "#web-endpoint (spec §2.1, §4.9 WebSocket paragraph, §11.2, §15.5 `transport`, §2.4 linger; M1.4). The kernel half (src/kernel/web/) and the `gnomon-web` transport child (src/transport/). The CHILD parses bytes only: node:http on the 127.0.0.1 literal (ephemeral port), the RFC 6455 upgrade and zero-dep framing (ws-codec.ts: text only — binary 1003; no fragmentation — FIN=0/continuation 1009; no extension ever negotiated — RSV bits 1002; masking required 1002; invalid UTF-8 1007; >4 MiB 1009 from the header; close mirrored; pings every 30 s, closes after 2 missed pongs), and static serving of the bundle bytes it hashed at start (held in memory). It forwards {rid, method, path, headers} / {rid, data} records over stdio (protocol.ts) and writes back only what the kernel says; its import closure is framing + channel + bundle hash (test/seams-fence.test.ts). The KERNEL decides every rule (rules.ts): Host = 127.0.0.1:<port> else 421 (host) before routing; Origin = http://127.0.0.1:<port> on every upgrade and non-static request else 403 (origin); Sec-Fetch-Site same-origin|none else 403; no cookies, no ACAO, the rule-6 CSP/COOP/CORP/nosniff/no-referrer on every response, no-store on non-static; traversal refused; /blob raster-only by content sniffing and verified content hash, GUI token in X-Gnomon-Token; /diag ≤ 64 KiB to <home>/logs/gui.log after redactDiagText (32-byte base64url tokens ⟨redacted⟩, contracts display sanitizer, Aegis C5); /blob and /diag are POST (a same-origin GET carries no Origin; the page sends them with referrerPolicy same-origin), GET/HEAD 405; /rpc and /diag match exactly, only /blob/ is a prefix; no HTTP RPC. Every child record is validated against the closed shape set (protocol.ts validateChildRecord) and the child is SIGKILLed on the first violation or on any throw in record handling (Aegis C1); a compromised child is a compromise of the GUI sessions it relays (spec §A.7). Child-written 503/404 carry the rule-6 default headers. Per connection: the child starts at a 16 KiB inbound cap, raised by a kernel `limit` record on authentication; unsent bytes are reported as pressure/drain (the dispatcher's writableLength/onDrain are per connection) and over 8 MiB the child closes 1008; more than 32 queued requests close 1008. Read tokens do not authenticate on the web endpoint (Aegis C3). WebSocket: hello then auth within 5 s else 1008, frames before auth never dispatched as verbs; ≤ 64 live (non-closing) connections, at the cap the oldest live unauthenticated one is closed (1013), never an authenticated GUI one (503 instead); ≤ 5 auth attempts/min/connection. Its own dispatcher (authenticator signs ws://127.0.0.1:<port>/rpc) with a `web` auth hook (launch.ts): a single-use 60 s launch token minted in-process for an authenticated human device connection (DaemonHandle.requestWebLaunch — §5 names no verb for `gnomon open`), exchanged for a 32-byte GUI token held as a digest; a second presentation inside the TTL is theft (refused, the consuming session revoked, socket.auth.theft + socket.gui.session.ended {theft}); after the TTL a replay (socket.auth.replay only); both answer `replayed-transcript`. Reconnect logs socket.auth.reconnect.requested and is refused UNSUPPORTED web-auth-not-implemented {milestone M1.3, cause presence-unavailable} until the signed helper's presence. GUI sessions live as long as their socket (≤ 12 h; revoke-all; daemon exit). Bundle pin (bundle.ts): gnomon-bundle-tree:v1 hash; since M1.10 slice 1 the #gui bundle (packages/gnomon-gui, embedded as opaque base64 in the GENERATED gui-bundle.ts, read by gui-pin.ts outside the child closure) pinned by the GUI_BUNDLE_HASH literal until the root-signed `gnomon gui pin` (M1.3), materialized under <home>/gui/bundle/ (the placeholder bundle stays a fixture); a mismatch logs socket.web.bundle.mismatch and never opens. Supervision: restart cap 3/10 min (socket.web.transport.exited, then socket.web.stop {transport-restart-cap}; a failed respawn ⇒ {transport-restart-failed}; both clear the timers); 2-min linger after the last GUI session (socket.web.linger, socket.web.stop{no-sessions}). Production spawn only through the platform's `transport` sandbox profile (#oracle-sandbox); the unsandboxed child exists only via the internal seam `web` (testing.ts createWebEndpointForTest). Event kinds emitted (§9.1 socket namespace): socket.web.listen, socket.web.bundle.mismatch, socket.web.linger, socket.web.stop, socket.web.transport.exited, socket.gui.token.issued, socket.gui.session.ended, socket.auth.theft, socket.auth.replay, socket.auth.reconnect.requested, socket.auth.fail {origin|host|sec-fetch-site|gui-token}. The spec declares no signals.",
       "visualTags": [],
       "related": [
+        "#gui",
         "#oracle-sandbox"
       ],
       "componentType": "module"
@@ -11071,6 +11086,26 @@
       "visualTags": [],
       "related": []
     },
+    "launch": {
+      "id": "launch",
+      "name": "Launch",
+      "symbol": "#launch",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose",
+      "description": "Referenced from #gui",
+      "visualTags": [],
+      "related": []
+    },
+    "client-ts": {
+      "id": "client-ts",
+      "name": "Client Ts",
+      "symbol": "#client-ts",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-gui/.purpose",
+      "description": "Referenced from #gui",
+      "visualTags": [],
+      "related": []
+    },
     "state": {
       "id": "state",
       "name": "State",
@@ -18842,6 +18877,10 @@
       "category": "components",
       "id": "contract-client-api-id"
     },
+    "#gui": {
+      "category": "components",
+      "id": "gui"
+    },
     "#gnomon-helper": {
       "category": "components",
       "id": "gnomon-helper"
@@ -23149,6 +23188,14 @@
     "#web-endpoint.": {
       "category": "components",
       "id": "web-endpoint."
+    },
+    "#launch": {
+      "category": "components",
+      "id": "launch"
+    },
+    "#client-ts": {
+      "category": "components",
+      "id": "client-ts"
     },
     "$XDG_RUNTIME_DIR": {
       "category": "flows",
