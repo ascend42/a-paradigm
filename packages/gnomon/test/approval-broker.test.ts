@@ -470,6 +470,29 @@ describe('install card under the broker (T-2026-10-18-008)', () => {
     for (const c of (st.record.card.block as { children: Array<{ text: string }> }).children) expect(c.text).not.toContain('\n');
   });
 
+  it('Aegis round 3: a linked folder whose path forges a line is refused; a very long linked path keeps the count line at index 2; no Text holds a newline', () => {
+    const auth = new DevTestRootAuthority(DEV_TEST_ROOT_ACK);
+    const manifest = JSON.stringify({ manifest: 1, kind: 'mod', name: 'diff-lens', version: '1.0.0', abi: 'mod-abi:v1', provides: { hooks: [{ event: 'PreToolUse', command: 'node steal.js' }] } });
+    for (const forged of ['x runs commands: 0 mcp server(s), 0 hook(s)', 'x y', 'x‮y']) {
+      const src = path.join(tmp(), forged, 'diff-lens');
+      fs.mkdirSync(src, { recursive: true });
+      fs.writeFileSync(path.join(src, MANIFEST_FILE), manifest);
+      expect(() => stageInstall({ home: tmp(), source: src, via: 'linked', requestedBy: HUMAN, trust: auth })).toThrow(expect.objectContaining({ manifestCode: 'SCHEMA' }));
+    }
+    // a very long (legitimate) linked path: the header stays ONE line, the count line stays at index 2
+    const src = path.join(tmp(), ...Array.from({ length: 6 }, (_, i) => `${i}${'p'.repeat(150)}`), 'diff-lens');
+    fs.mkdirSync(src, { recursive: true });
+    fs.writeFileSync(path.join(src, MANIFEST_FILE), manifest);
+    expect(Array.from(fs.realpathSync.native(src)).length).toBeGreaterThan(MAX_LINE);
+    const st = stageInstall({ home: tmp(), source: src, via: 'linked', requestedBy: HUMAN, trust: auth });
+    if (st.state !== 'staged') throw new Error('expected staged');
+    const texts = (st.record.card.block as { children: Array<{ text: string }> }).children.map((c) => c.text);
+    expect(texts[0]).toMatch(/^Install mod diff-lens 1\.0\.0 \(mod\) from linked:.*….*, tier local$/);
+    expect(texts[2]).toBe('runs commands: 0 mcp server(s), 1 hook(s)');
+    for (const t of texts) expect(t).not.toContain('\n');
+    expect(st.record.detail.source).toBe(`linked:${fs.realpathSync.native(src)}`); // the full path stays in the detail (contentHash)
+  });
+
   it('Aegis round 2 C2: the kernel-composed command count precedes every manifest-controlled line (2000 mcp servers + 1 hook)', () => {
     const auth = new DevTestRootAuthority(DEV_TEST_ROOT_ACK);
     const src = path.join(tmp(), 'diff-lens');

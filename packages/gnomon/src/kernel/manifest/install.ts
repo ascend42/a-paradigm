@@ -51,7 +51,7 @@ import type { RowVerifier } from '../identity/registry.js';
 import { consumeBoundPresence } from '../identity/presence.js';
 import { registerSeams } from '../internal-seams.js';
 import { appendGrantRow, checkAgainstGrants, effectiveInstall, readGrants, type GrantInstallRow } from './grants.js';
-import { detectWidening, MANIFEST_FILE, manifestHash, validateManifest, type ManifestV1, type TrustTier, type WideningEntry } from './manifest.js';
+import { COMMAND_UNSAFE, detectWidening, MANIFEST_FILE, manifestHash, validateManifest, type ManifestV1, type TrustTier, type WideningEntry } from './manifest.js';
 import { ManifestRefusal, noEvents, type ManifestEventSink } from './refusal.js';
 import { computePackageHash, diffTrees, hashPinnedTree, hashSourceTree, modDir, pinnedDir, removeTree, snapshotFolder, type TreeDiff, type TreeFile } from './snapshot.js';
 
@@ -181,6 +181,25 @@ function surfaceOf(m: ManifestV1): Surface {
   };
 }
 
+/** Middle-truncate by code points for DISPLAY only (the detail, inside contentHash, keeps the full value). */
+function midTrunc(s: string, max: number): string {
+  const cps = Array.from(s);
+  if (cps.length <= max) return s;
+  const head = Math.ceil((max - 1) / 2);
+  return `${cps.slice(0, head).join('')}…${cps.slice(cps.length - (max - 1 - head)).join('')}`;
+}
+
+/**
+ * The header line, always ONE display line (Aegis round 3): the version and the
+ * linked source path are middle-truncated for display so the header never
+ * wraps and the kernel-composed count line stays at index 2.
+ */
+function headerLine(d: InstallCardDetail): string {
+  const compose = (src: string) => `${d.replaces ? 'Re-approve' : 'Install'} mod ${d.name} ${midTrunc(d.version, 64)} (${d.kind}) from ${src}, tier ${d.tier}`;
+  const budget = Math.max(16, MAX_LINE - Array.from(compose('')).length);
+  return compose(midTrunc(d.source, budget));
+}
+
 /** The prefix of a wrapped line's continuation. */
 export const INSTALL_CONTINUATION = '  ↳ ';
 
@@ -223,7 +242,7 @@ function wrapLine(text: string, flags: Set<CardFlag>): string[] {
 export function blockFor(d: InstallCardDetail): { block: Record<string, unknown>; flags: CardFlag[] } {
   const flags = new Set<CardFlag>();
   const logical = [
-    `${d.replaces ? 'Re-approve' : 'Install'} mod ${d.name} ${d.version} (${d.kind}) from ${d.source}, tier ${d.tier}`,
+    headerLine(d),
     `packageHash ${d.packageHash}`,
     // kernel-composed, before any manifest-controlled line (Aegis round 2 C2): the count cannot be pushed off-screen
     `runs commands: ${d.mcp.length} mcp server(s), ${d.hooks.length} hook(s)`,
@@ -296,6 +315,19 @@ export function stageInstall(opts: StageOptions): StageResult {
   const emit = opts.emit ?? noEvents;
   const now = opts.now ?? new Date();
   const name0 = sourceName(opts.source);
+  // a linked source path reaches the card header: refuse line separators, format and control characters (Aegis round 3)
+  if (opts.via === 'linked') {
+    let real = '';
+    try {
+      real = fs.realpathSync.native(opts.source);
+    } catch {
+      real = '';
+    }
+    if (COMMAND_UNSAFE.test(real)) {
+      emit('manifest.refuse', { name: name0, code: 'SCHEMA', field: 'source' });
+      throw new ManifestRefusal('SCHEMA', 'the linked folder path contains a line separator, format or control character', { name: name0, field: 'source' });
+    }
+  }
   const snap = snapshotFolder(opts.home, opts.source, name0, emit);
   let manifest: ManifestV1;
   let tier: TrustTier;
@@ -421,6 +453,7 @@ export function rederiveInstallDetail(home: string, name: string, cardId: string
   }
   if (derived.source !== 'package') {
     const src = derived.source.startsWith('linked:') ? derived.source.slice(7) : '';
+    if (COMMAND_UNSAFE.test(src)) throw new ManifestRefusal('INTEGRITY', `install card ${cardId}: the linked source path contains a line separator, format or control character`, { name, cardId });
     let linkedHash: string | null = null;
     try {
       linkedHash = src && path.isAbsolute(src) ? hashSourceTree(src, name, noEvents).packageHash : null;

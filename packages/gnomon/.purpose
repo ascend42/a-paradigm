@@ -541,7 +541,11 @@ components:
       mcp server(s), M hook(s)` follows the packageHash line, before any
       manifest-controlled line (Aegis round 2 C2); mcp.command, mcp.args,
       hooks.command and hooks.event refuse SCHEMA on C0/C1, Zl, Zp and Cf
-      (U+2028/U+2029 would otherwise draw a fake card line, C1). The card's lines put every mcp server and
+      (U+2028/U+2029 would otherwise draw a fake card line, C1); a linked
+      source whose realpath has such a character is refused SCHEMA at stage
+      and INTEGRITY at re-derivation, and the header is one display line
+      (version and source middle-truncated for display; contentHash keeps
+      the full detail), so the count line is always index 2 (Aegis round 3). The card's lines put every mcp server and
       every hook on its OWN line and are sanitized and WRAPPED by code points
       under the broker's MAX_LINE (continuations `  ↳ `), never cut, so a long
       mcp argument list cannot push a hook out of sight; the sanitizer flags

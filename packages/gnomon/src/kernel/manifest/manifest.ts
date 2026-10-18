@@ -199,7 +199,7 @@ const CONTROL_CHARS = /[\u0000-\u001F\u007F-\u009F]/;
  * draw a fake install-card line; here they are refused SCHEMA instead.
  */
 // eslint-disable-next-line no-control-regex
-const COMMAND_UNSAFE = /[\u0000-\u001F\u007F-\u009F\p{Zl}\p{Zp}\p{Cf}]/u;
+export const COMMAND_UNSAFE = /[\u0000-\u001F\u007F-\u009F\p{Zl}\p{Zp}\p{Cf}]/u;
 function cmdStr(v: unknown, where: string): string {
   const s = str(v, where);
   if (COMMAND_UNSAFE.test(s)) fail('SCHEMA', `${where} contains a line separator, format or control character`, { field: where });
