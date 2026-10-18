@@ -1,0 +1,58 @@
+{
+  "probe": "p00-sign-notary",
+  "os": "darwin",
+  "osVersion": "macOS 15.7.3 (24.6.0)",
+  "arch": "arm64",
+  "toolVersions": {
+    "xcode": "Xcode 26.2",
+    "node": "v26.0.0"
+  },
+  "verdict": "pass",
+  "evidence": {
+    "identity": {
+      "present": true,
+      "identity": "Developer ID Application: Matthew Canoy (SW4BMQ8PNL)"
+    },
+    "notary": {
+      "answered": true,
+      "submissions": 0
+    },
+    "stub": {
+      "swiftcMs": 2389,
+      "codesign": {
+        "status": 0,
+        "ms": 178,
+        "timedOut": false,
+        "stderr": "/var/folders/gq/nt2kdpsj39dc8vpq6cfzx8gw0000gn/T/gnomon-probe-helper-ea5c331e816e/GnomonHelperProbe.app: replacing existing signature"
+      },
+      "verifyStrict": {
+        "ok": true,
+        "output": "/var/folders/gq/nt2kdpsj39dc8vpq6cfzx8gw0000gn/T/gnomon-probe-helper-ea5c331e816e/GnomonHelperProbe.app: valid on disk\n/var/folders/gq/nt2kdpsj39dc8vpq6cfzx8gw0000gn/T/gnomon-probe-helper-ea5c331e816e/GnomonHelperProbe.app: satisfies its Designated Requirement"
+      },
+      "details": [
+        "Identifier=gnomon.helper",
+        "Format=app bundle with Mach-O thin (arm64)",
+        "CodeDirectory flags=0x10000(runtime) hashes=34+7 location=embedded",
+        "Authority=Developer ID Application: Matthew Canoy (SW4BMQ8PNL)",
+        "Authority=Developer ID Certification Authority",
+        "Authority=Apple Root CA",
+        "Timestamp=Oct 18, 2026 at 1:11:39 PM",
+        "TeamIdentifier=SW4BMQ8PNL",
+        "Runtime Version=26.2.0"
+      ],
+      "signedEntitlements": [],
+      "spctl": {
+        "status": 3,
+        "output": "/var/folders/gq/nt2kdpsj39dc8vpq6cfzx8gw0000gn/T/gnomon-probe-helper-ea5c331e816e/GnomonHelperProbe.app: rejected\nsource=Unnotarized Developer ID\norigin=Developer ID Application: Matthew Canoy (SW4BMQ8PNL)"
+      }
+    },
+    "notarize": "not requested (set P00_SUBMIT=1)"
+  },
+  "specRefs": [
+    "§19.1 M1.0 P00",
+    "OPEN 1",
+    "P8-D70",
+    "G-HLP-01"
+  ],
+  "at": "2026-10-18T20:11:39.826Z"
+}
