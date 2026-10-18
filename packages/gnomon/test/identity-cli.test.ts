@@ -159,6 +159,20 @@ describe('gnomon identity init', () => {
     expect(readRegistry(home, (await opened(home, fake))!.root).devices.size).toBe(1);
   });
 
+  it('rotate offers to purge the old generation in the same run (one touch per key); declining keeps it', async () => {
+    const home = tmp();
+    const fake = new FakeHelper(null);
+    expect((await run(home, fake)).code).toBe(0);
+    const old = readIdentity(home)!;
+    const r = await run(home, fake, ['--rotate'], { confirm: async () => 'rotate', confirmPurge: async () => 'purge' });
+    expect(r.json()).toMatchObject({ retiredGen: old.gen, purgedOld: ['approvals', 'root'] });
+    expect(fake.keys.has(`${old.gen}.root`)).toBe(false);
+    const mid = readIdentity(home)!;
+    const r2 = await run(home, fake, ['--rotate'], { confirm: async () => 'rotate', confirmPurge: async () => 'no' });
+    expect(r2.json()).toMatchObject({ retiredGen: mid.gen, purge: `gnomon identity purge-keys --gen ${mid.gen}` });
+    expect(fake.keys.has(`${mid.gen}.root`)).toBe(true);
+  });
+
   it('falsifier (H4): rotate refuses when the old root is not in the Secure Enclave (no unsigned rotation)', async () => {
     const home = tmp();
     const fake = new FakeHelper(null);

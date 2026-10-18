@@ -81,6 +81,8 @@ export interface IdentityDeps {
   /** the typed confirmation for --rotate / --recover (default: read a line from stdin on a TTY) */
   confirm?: () => Promise<string>;
   isTty?: boolean;
+  /** after a successful rotate: the answer to "purge the old generation now?" (default: read a line on a TTY) */
+  confirmPurge?: () => Promise<string>;
   /** install the SIGINT handler (default true; tests pass false and drive `interrupt`) */
   handleSignals?: boolean;
   /** tests: report an interrupt at the next step boundary */
@@ -370,6 +372,26 @@ export async function runIdentityCommand(argv: readonly string[], io: IdentityIo
       io.stderr.write(`${JSON.stringify({ logged: 'identity.recover', lost: existing!.rootKeyId, newRoot: root.rootKeyId, newNamespace: root.ns, signedByLostRoot: false })}\n`);
     }
     appendIdentityJournal(home, { op: mode === 'init' ? 'init' : mode === 'rotate' ? 'rotated' : 'recovered', gen, rootKeyId: root.rootKeyId, approvalsKeyId: row.keyId, principalId, deviceId: rec.deviceId, at: rec.createdAt });
+    // Aegis round 3 (optional): offer to retire the old generation's keys in the same run. Never automatic:
+    // each delete is a fresh touch, and a decline or failure leaves the rotate itself done.
+    let purgedOld: string[] | null = null;
+    if (mode === 'rotate' && (deps.confirmPurge || (deps.isTty ?? io.stdin.isTTY === true))) {
+      io.stderr.write(`Delete the OLD generation ${existing!.gen} from the Secure Enclave now (one touch per key)? Type "purge" to delete, anything else to keep it:\n> `);
+      const ans = await (deps.confirmPurge ?? (() => readLine(io.stdin)))();
+      if (ans === 'purge') {
+        purgedOld = [];
+        for (const k of ['approvals', 'root'] as const) {
+          try {
+            io.stderr.write(`Touch ID: delete the old ${k} key of generation ${existing!.gen}\n`);
+            await helper.request({ op: 'key.delete', key: k, gen: existing!.gen, reason: `Gnomon: delete the old ${k} key of generation ${existing!.gen}` }, 120_000);
+            purgedOld.push(k);
+          } catch {
+            break; // reported: the remaining key stays, purge-keys can remove it later
+          }
+        }
+        appendIdentityJournal(home, { op: 'purge', gen: existing!.gen, deleted: purgedOld, at: new Date().toISOString() });
+      }
+    }
     say(io, {
       provisioned: true,
       home,
@@ -381,7 +403,7 @@ export async function runIdentityCommand(argv: readonly string[], io: IdentityIo
       helper: pin.exe,
       deviceKey: deviceKeyPath(home),
       mode,
-      ...(mode === 'rotate' ? { retiredGen: existing!.gen, purge: `gnomon identity purge-keys --gen ${existing!.gen}` } : {}),
+      ...(mode === 'rotate' ? { retiredGen: existing!.gen, ...(purgedOld?.length === 2 ? { purgedOld } : { purge: `gnomon identity purge-keys --gen ${existing!.gen}`, ...(purgedOld ? { purgedOld } : {}) }) } : {}),
     });
     return EXIT_OK;
   } catch (e) {
