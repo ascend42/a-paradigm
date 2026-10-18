@@ -703,7 +703,7 @@ process.stdin.on('end', () => process.exit(0));
     await ep.ensureListening();
     const pid = ep.childPid()!;
     if (mode === 'ack-double') expect((await get(ep.port)).body.toString()).toBe('ok');
-    await until(() => exited(rows) >= 1);
+    await until(() => exited(rows) >= 1, 10_000); // a loaded runner can take seconds to spawn and kill the child
     expect(() => process.kill(pid, 0)).toThrow();
     // the kernel is alive and supervising: the child was restarted and the same port serves
     await until(() => ep.listening && ep.childPid() !== pid, 10_000);
