@@ -15,7 +15,9 @@
  *   1. TERMINATED terminal escape sequences are removed whole and flag
  *      `hidden-chars`: OSC / DCS / SOS / PM / APC (7-bit ESC-introduced or
  *      8-bit C1), terminated by BEL, ESC \ or 8-bit ST (U+009C), the body
- *      holding none of those three; CSI (7- or 8-bit) with its final byte;
+ *      holding none of those three nor an 8-bit string
+ *      introducer (U+0090, U+0098, U+009D-U+009F): linear, and an in-body
+ *      introducer ends the outer candidate; CSI (7- or 8-bit) with its final byte;
  *      any other ESC sequence except a string or CSI introducer. An ESC that
  *      starts no terminated sequence (an UNTERMINATED one) becomes the visible
  *      glyph `⟨ESC⟩` (flag) and the tail stays visible — never swallowed;
@@ -23,7 +25,8 @@
  *      variation selectors supplement U+E0100–U+E01EF, U+200B–U+200D,
  *      U+2060–U+2064, U+FEFF, U+00AD, U+180E, U+034F, U+115F, U+1160,
  *      U+3164, U+FFA0; variation selectors U+FE00–U+FE0F are KEPT after a
- *      base that can take one (letter, number, symbol, punctuation, mark)
+ *      base that can take one (letter, number, symbol, punctuation — never a mark;
+ *      decided on the OUTPUT: the last EMITTED character, which is no VS)
  *      and stripped + flagged at the start, after any other character, or
  *      as the second and later of a run; U+2028 / U+2029 become `\n` (flag);
  *   3. bidi controls U+202A–U+202E, U+2066–U+2069 and the marks U+200E,
@@ -74,14 +77,14 @@ const LONE_SURROGATE = /[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[
 /* eslint-disable no-control-regex */
 const TERMINATED = new RegExp(
   [
-    '(?:\\x1B[\\]PX^_]|[\\x9D\\x90\\x98\\x9E\\x9F])[^\\x07\\x1B\\x9C]*(?:\\x07|\\x1B\\\\|\\x9C)', // string sequences
+    '(?:\\x1B[\\]PX^_]|[\\x9D\\x90\\x98\\x9E\\x9F])[^\\x07\\x1B\\x9C\\x90\\x98\\x9D\\x9E\\x9F]*(?:\\x07|\\x1B\\\\|\\x9C)', // string sequences
     '(?:\\x1B\\[|\\x9B)[\\x30-\\x3F]*[\\x20-\\x2F]*[\\x40-\\x7E]', // CSI
     '\\x1B[\\x20-\\x2F]*[\\x30-\\x4F\\x51-\\x57\\x59\\x5A\\x5C\\x60-\\x7E]', // other ESC (never a string/CSI introducer)
   ].join('|'),
   'g',
 );
 /* eslint-enable no-control-regex */
-const VS_BASE = /^[\p{L}\p{N}\p{S}\p{P}\p{M}]$/u;
+const VS_BASE = /^[\p{L}\p{N}\p{S}\p{P}]$/u;
 
 const inStrip = (cp: number): boolean => HIDDEN_STRIP_RANGES.some(([a, b]) => cp >= a && cp <= b);
 const isVs = (cp: number): boolean => cp >= 0xfe00 && cp <= 0xfe0f;
@@ -104,11 +107,8 @@ export function sanitizeDisplayText(input: string): SanitizedText {
   });
   let out = '';
   let last: string | undefined; // last emitted code point
-  let prevVs = false; // the previous INPUT code point was a variation selector
   for (const ch of s) {
     const cp = ch.codePointAt(0)!;
-    const wasVs = prevVs;
-    prevVs = isVs(cp);
     if (cp === 0x1b) {
       hidden = true;
       out += ESC_GLYPH;
@@ -116,7 +116,7 @@ export function sanitizeDisplayText(input: string): SanitizedText {
     } else if (inStrip(cp)) {
       hidden = true;
     } else if (isVs(cp)) {
-      if (!wasVs && last !== undefined && VS_BASE.test(last)) {
+      if (last !== undefined && !isVs(last.codePointAt(0)!) && VS_BASE.test(last)) {
         out += ch;
         last = ch;
       } else hidden = true;

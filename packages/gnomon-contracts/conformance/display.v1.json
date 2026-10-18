@@ -249,6 +249,27 @@
       "flags": [
         "hidden-chars"
       ]
+    },
+    {
+      "input": "a\ufe00\u200b\ufe01\u200b\ufe02",
+      "text": "a\ufe00",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "e\u0301\ufe0f",
+      "text": "e\u0301",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "\u001b]0;a\u009db\u0007c",
+      "text": "\u27e8ESC\u27e9]0;ac",
+      "flags": [
+        "hidden-chars"
+      ]
     }
   ],
   "rows": [

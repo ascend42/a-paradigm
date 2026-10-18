@@ -57,6 +57,39 @@ describe('client display rules (\u00a74.5 sanitizer + Unicode)', () => {
     expect(sanitizeDisplayText('e\u0301').text).toBe('e\u0301'); // not NFC-composed
   });
 
+  it('Aegis R2-1: a VS run broken by stripped characters collapses to one VS; a mark is no VS base', () => {
+    expect(sanitizeDisplayText('a︀​︁​︂')).toEqual({ text: 'a︀', flags: ['hidden-chars'] });
+    expect(sanitizeDisplayText('é️')).toEqual({ text: 'é', flags: ['hidden-chars'] });
+  });
+
+  it('Aegis R2-1: idempotent on adversarial inputs (seeded mix of every rule class)', () => {
+    const pool = ['a', 'Z', '1', '#', '❤', '\u{1F44D}', '́', '︀', '️', '​', '⁠', '\u{E0041}', '\u{E0100}', 'ㅤ', '‮', '‎', ' ', '\u001b', '\u001b[', '\u001b]', '\u0007', '\u009c', '\u009d', '\u009b', '\r', '\n', '\t', '\ud800', '\udc00', '\u0085', '\u007f', '\\', '_', ']', 'P'];
+    let seed = 0x9e3779b9;
+    const next = (): number => {
+      seed = (Math.imul(seed, 1664525) + 1013904223) >>> 0;
+      return seed;
+    };
+    for (let i = 0; i < 3000; i++) {
+      let s = '';
+      const len = next() % 24;
+      for (let j = 0; j < len; j++) s += pool[next() % pool.length];
+      const once = sanitizeDisplayText(s).text;
+      expect(sanitizeDisplayText(once), JSON.stringify(s)).toEqual({ text: once, flags: [] });
+    }
+  });
+
+  it('Aegis R2-2: an in-body 8-bit introducer ends the outer candidate (pinned)', () => {
+    expect(sanitizeDisplayText('\u001b]0;a\u009db\u0007c')).toEqual({ text: '⟨ESC⟩]0;ac', flags: ['hidden-chars'] });
+  });
+
+  it('Aegis R2-2 timing falsifier: 200k unterminated introducers sanitize in < 100 ms (linear)', () => {
+    for (const s of ['\u009d'.repeat(200_000), `${'\u001b]'.repeat(200_000)}text`]) {
+      const t0 = performance.now();
+      sanitizeDisplayText(s);
+      expect(performance.now() - t0).toBeLessThan(100);
+    }
+  });
+
   it('bidi controls become visible glyphs (flag bidi); zero-width and tag characters are stripped (flag hidden-chars)', () => {
     expect(sanitizeDisplayText('invoice\u202etxt.exe')).toEqual({ text: 'invoice\u27e8RLO\u27e9txt.exe', flags: ['bidi'] });
     expect(sanitizeDisplayText('ap\u200bprove')).toEqual({ text: 'approve', flags: ['hidden-chars'] });

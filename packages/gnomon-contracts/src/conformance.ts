@@ -98,6 +98,11 @@ export const DISPLAY_SANITIZE_INPUTS: readonly string[] = Object.freeze([
   '\u{E0100}ivs',
   '\u034f\u115f\u1160\u3164\uffa0x',
   'line\u2028sep\u2029par',
+  // Aegis round 3 R2-1: VS runs decided on the output; a mark is no VS base
+  'a\ufe00\u200b\ufe01\u200b\ufe02',
+  'e\u0301\ufe0f',
+  // R2-2: an 8-bit introducer inside a string sequence ends the outer candidate
+  '\u001b]0;a\u009db\u0007c',
 ]);
 
 export const DISPLAY_ROW_INPUTS: ReadonlyArray<{ kind: string; principal: string; at: string }> = Object.freeze([

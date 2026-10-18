@@ -59,7 +59,7 @@ components:
       client-side §4.5 rules as amended by Aegis round 2: terminated escape
       sequences removed whole, an unterminated ESC shown as ⟨ESC⟩ with its
       tail visible; zero-width, tag, VS-supplement and filler characters
-      stripped, misplaced U+FE00–FE0F stripped, U+2028/2029 ⇒ \n, all ⇒
+      stripped, misplaced U+FE00–FE0F (decided on the output, never after a mark) stripped, U+2028/2029 ⇒ \n, all ⇒
       hidden-chars; bidi controls and marks ⇒ visible glyphs ⇒ bidi; remaining
       C0/C1 removed ⇒ hidden-chars, CR unflagged; lone surrogates ⇒ U+FFFD; no
       normalisation; idempotent; display.v1.json normative), eventRow (opaque
