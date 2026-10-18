@@ -3,7 +3,10 @@
  *
  * #web-endpoint (spec §2.1, §4.9 WebSocket paragraph, §11.2 rule 1b) — the
  * kernel ⇄ `gnomon-web` transport-child channel: NDJSON records over the
- * child's stdio. ZERO imports on purpose: the child imports this file, and its
+ * child's stdio, plus the IPC channel (stdio fd 3) that carries ONLY the
+ * connected sockets the kernel accepted (`subprocess.send('conn', socket)`;
+ * WEB_CONN_MESSAGE). The child listens on nothing (§15.5, T-2026-10-18-020).
+ * ZERO imports on purpose: the child imports this file, and its
  * import closure must reach no key, no log and no kernel state.
  *
  * Division of labour (A24-1). The child parses bytes — HTTP requests, the
@@ -15,7 +18,7 @@
  * to write.
  *
  * Child → kernel (stdout):
- *   ready     {port, bundleHash, files}         listening on 127.0.0.1:<port>, bundle hashed + loaded
+ *   ready     {bundleHash, files}               bundle hashed + loaded; handed sockets are served from now on
  *   http      {rid, method, path, headers, body?, bodyOver?}
  *   upgrade   {rid, method, path, headers}
  *   frame     {rid, data}                       one complete, valid UTF-8 text frame (base64 of its bytes)
@@ -24,7 +27,7 @@
  *   drain     {rid}                             …and drained again
  *   fatal     {why}                             the child cannot continue (it exits next)
  * Kernel → child (stdin):
- *   config    {bundleDir, port, pingMs, missedPongs, maxFrameBytes, preAuthMaxFrameBytes,
+ *   config    {bundleDir, pingMs, missedPongs, maxFrameBytes, preAuthMaxFrameBytes,
  *              maxBodyBytes, maxSocketBuffer, writeHighWater, defaultHeaders}   first record, once
  *
  * The kernel VALIDATES every child record (validateChildRecord): a record
@@ -39,7 +42,9 @@
  *   shutdown  {}
  */
 
-export const WEB_CHANNEL = 'gnomon-web:v1' as const;
+export const WEB_CHANNEL = 'gnomon-web:v2' as const;
+/** The IPC message that carries one connected socket from the kernel's 127.0.0.1 listener to the child. */
+export const WEB_CONN_MESSAGE = 'conn' as const;
 
 /** One JSON-RPC message per unfragmented text frame, at most 4 MiB (§4.9). */
 export const WS_MAX_FRAME_BYTES = 4 * 1024 * 1024;
@@ -60,7 +65,7 @@ export const WS_WRITE_HIGH_WATER = 1024 * 1024;
 export type HeaderMap = Record<string, string>;
 
 export type ChildRecord =
-  | { t: 'ready'; port: number; bundleHash: string; files: number }
+  | { t: 'ready'; bundleHash: string; files: number }
   | { t: 'http'; rid: number; method: string; path: string; headers: HeaderMap; body?: string; bodyOver?: boolean }
   | { t: 'upgrade'; rid: number; method: string; path: string; headers: HeaderMap }
   | { t: 'frame'; rid: number; data: string }
@@ -72,8 +77,6 @@ export type ChildRecord =
 export interface ChildConfig {
   t: 'config';
   bundleDir: string;
-  /** 0 = OS-chosen ephemeral port; a restart asks for the previous port first. */
-  port: number;
   pingMs: number;
   missedPongs: number;
   maxFrameBytes: number;
@@ -140,7 +143,7 @@ export function validateChildRecord(v: unknown, limits: { maxFrameBytes: number;
   if (!isObj(v) || typeof v.t !== 'string') return null;
   switch (v.t) {
     case 'ready':
-      return exactKeys(v, ['t', 'port', 'bundleHash', 'files']) && isInt(v.port, 1, 65535) && isStr(v.bundleHash, 80) && isInt(v.files, 0, 1_000_000) ? (v as ChildRecord) : null;
+      return exactKeys(v, ['t', 'bundleHash', 'files']) && isStr(v.bundleHash, 80) && isInt(v.files, 0, 1_000_000) ? (v as ChildRecord) : null;
     case 'http':
       return exactKeys(v, ['t', 'rid', 'method', 'path', 'headers'], ['body', 'bodyOver']) &&
         isRid(v.rid) &&

@@ -455,7 +455,7 @@ describe('rule 7 auth deadline, rule 8 connection cap, §2.4 linger', () => {
 describe('a compromised child cannot crash or steer the kernel (Aegis C1)', () => {
   const FAKE = `const bad = JSON.parse(process.argv[2]); let sent = false;
 process.stdin.on('data', () => { if (sent) return; sent = true;
-  process.stdout.write(JSON.stringify({ t: 'ready', port: 1, bundleHash: process.argv[3], files: 2 }) + '\\n');
+  process.stdout.write(JSON.stringify({ t: 'ready', bundleHash: process.argv[3], files: 2 }) + '\\n');
   setTimeout(() => process.stdout.write(JSON.stringify(bad) + '\\n'), 50); });
 setInterval(() => undefined, 1000);`;
   it.each([{ t: 'http', rid: 1 }, { t: 'frame', rid: 1, data: 42 }, { t: 'upgrade', rid: -1, method: 'GET', path: '/rpc', headers: {} }, { t: 'nope' }, { t: 'closed', rid: 1, code: 'x', why: 1 }])(
@@ -476,12 +476,12 @@ setInterval(() => undefined, 1000);`;
       await ep.stop('test');
     },
   );
-  it('a ready record out of shape (port 0) never opens the endpoint', async () => {
+  it('a ready record out of shape (it names a port: the child listens on nothing) never opens the endpoint', async () => {
     const t = tempHome('gf-');
     cleanups.push(t.cleanup);
     mkdirSync(t.home, { recursive: true, mode: 0o700 });
     const fake = path.join(t.home, 'fake-ready.mjs');
-    writeFileSync(fake, `process.stdin.once('data', () => process.stdout.write(JSON.stringify({ t: 'ready', port: 0, bundleHash: 'x', files: 1 }) + '\\n')); setInterval(() => undefined, 1000);`);
+    writeFileSync(fake, `process.stdin.once('data', () => process.stdout.write(JSON.stringify({ t: 'ready', port: 1, bundleHash: 'x', files: 1 }) + '\\n')); setInterval(() => undefined, 1000);`);
     const { ep } = await rig({ launcher: (input) => ({ ...unsandboxedLauncher({ ...input, scriptPath: fake }), args: [fake] }) });
     await expect(ep.ensureListening()).rejects.toMatchObject({ reason: 'web-transport-failed' });
     expect(ep.listening).toBe(false);

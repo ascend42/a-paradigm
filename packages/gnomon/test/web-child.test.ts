@@ -3,11 +3,14 @@
  * and 6; Aegis C6): per-connection backpressure (`pressure` → 1008 past
  * 8 MiB unsent; `drain` when the reader resumes, then the stream continues)
  * and the child's own 503 when the kernel never answers, carrying the rule-6
- * default headers. Drives dist/transport/gnomon-web.js directly over stdio.
+ * default headers. Drives dist/transport/gnomon-web.js directly over stdio;
+ * the fake kernel listens on 127.0.0.1 and hands each accepted socket over
+ * the IPC channel, as endpoint.ts does (the child listens on nothing, §15.5).
  * Platform-independent.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
+import * as net from 'node:net';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { NdjsonDecoder } from '../src/kernel/socket/framing.js';
@@ -28,8 +31,11 @@ async function fakeKernel(extra: { answerTimeoutMs?: number } = {}) {
   cleanups.push(t.cleanup);
   mkdirSync(t.home, { recursive: true, mode: 0o700 });
   const bundleDir = materializePlaceholderBundle(t.home);
-  const child: ChildProcess = spawn(process.execPath, [CHILD], { stdio: ['pipe', 'pipe', 'inherit'] });
+  const child: ChildProcess = spawn(process.execPath, [CHILD], { stdio: ['pipe', 'pipe', 'inherit', 'ipc'] });
   cleanups.push(() => child.kill('SIGKILL'));
+  const listener = net.createServer({ pauseOnConnect: true }, (s) => child.send('conn', s));
+  await new Promise<void>((r) => listener.listen(0, '127.0.0.1', r));
+  cleanups.push(() => listener.close());
   child.stdin!.on('error', () => undefined); // the killed child's pipe
   const recs: ChildRecord[] = [];
   const dec = new NdjsonDecoder(16 * 1024 * 1024);
@@ -38,7 +44,7 @@ async function fakeKernel(extra: { answerTimeoutMs?: number } = {}) {
   });
   const send = (r: KernelRecord) => child.stdin!.write(`${JSON.stringify(r)}\n`);
   send({
-    t: 'config', bundleDir, port: 0, pingMs: 60_000, missedPongs: 2, maxFrameBytes: 4 * 1024 * 1024, preAuthMaxFrameBytes: 16 * 1024,
+    t: 'config', bundleDir, pingMs: 60_000, missedPongs: 2, maxFrameBytes: 4 * 1024 * 1024, preAuthMaxFrameBytes: 16 * 1024,
     maxBodyBytes: 64 * 1024, maxSocketBuffer: 8 * 1024 * 1024, writeHighWater: 1024 * 1024, defaultHeaders: childDefaultHeaders(), ...extra,
   });
   const wait = async <T extends ChildRecord['t']>(t: T, ms = 10_000): Promise<Extract<ChildRecord, { t: T }>> => {
@@ -50,8 +56,8 @@ async function fakeKernel(extra: { answerTimeoutMs?: number } = {}) {
       await new Promise((r) => setTimeout(r, 10));
     }
   };
-  const ready = await wait('ready');
-  return { port: ready.port, send, wait, recs };
+  await wait('ready');
+  return { port: (listener.address() as net.AddressInfo).port, send, wait, recs };
 }
 
 const MiB = Buffer.alloc(1024 * 1024, 0x61).toString('base64');

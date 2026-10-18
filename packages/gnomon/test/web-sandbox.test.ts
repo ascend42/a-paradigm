@@ -66,17 +66,9 @@ describe('the darwin transport profile (§15.5)', () => {
     expect(() => transportProfileSbpl({ nodeReal: '/opt/x/bin/node', scriptReal: script, bundleReal: bundle, protectedDirs: [t.home], forbiddenTrees: [path.join(t.home, 'keys')] })).not.toThrow(); // <home>/gui is fine
   });
 
-  /*
-   * T-2026-10-18-017: `listen EPERM 127.0.0.1` was seen ONCE on GitHub macos-14 and not reproduced (0 of 170 runs
-   * locally, macOS 15.7.3, sequential and 10-way concurrent). SBPL only accepts `*` or `localhost` as the host of a
-   * network address (`127.0.0.1:*` is a compile error), and `localhost` in a `local` filter matches the addresses
-   * configured on this host's interfaces at check time (127.0.0.1, ::1, the LAN address, the wildcards; an
-   * unconfigured 127.0.0.2 is denied) — interface-state-dependent, not DNS-dependent. The suspected flake mechanism is
-   * that dynamic evaluation on a CI VM; it is unproven. So the TEST (never the kernel) retries ONLY the loopback-listen
-   * leg, at most 3 attempts, recording every failed attempt as a test annotation; every DENY assertion must hold on
-   * every attempt, so a retry can never mask a denial regression.
-   */
-  it('a probe under the generated profile: bundle readable, loopback listen ok; home read, outbound connect and exec denied', async ({ annotate }) => {
+  // T-2026-10-18-020: the child listens on nothing, so the loopback listen is now DENIED like every other socket
+  // (the T-2026-10-18-017 flake, a sometimes-EPERM loopback listen, has no allow left to flake on: no retry).
+  it('a probe under the generated profile: bundle readable; home read, outbound connect, exec and even a loopback listen denied', async () => {
     const t = tempHome('gs-');
     cleanups.push(t.cleanup);
     mkdirSync(t.home, { recursive: true, mode: 0o700 });
@@ -93,25 +85,16 @@ try { fs.readFileSync(bundle + '/index.html'); r.bundle = 'ok'; } catch (e) { r.
 try { fs.readFileSync(secret); r.secret = 'READ'; } catch (e) { r.secret = e.code; }
 try { const c = cp.spawnSync('/bin/echo', ['x']); r.exec = c.error ? c.error.code : 'RAN'; } catch (e) { r.exec = e.code ?? 'threw'; }
 r.out = await new Promise((res) => { const s = net.connect({ host: '127.0.0.1', port: Number(port) }); s.on('connect', () => (s.destroy(), res('CONNECTED'))); s.on('error', (e) => res(e.code)); });
-const srv = http.createServer(); srv.once('error', (e) => { r.listen = e.code; r.listenError = { syscall: e.syscall, address: e.address, message: e.message }; process.stdout.write(JSON.stringify(r)); });
-srv.listen(0, '127.0.0.1', () => { r.listen = 'ok'; srv.close(); process.stdout.write(JSON.stringify(r)); });`,
+const srv = http.createServer(); srv.once('error', (e) => { r.listen = e.code; process.stdout.write(JSON.stringify(r)); });
+srv.listen(0, '127.0.0.1', () => { r.listen = 'LISTENING'; srv.close(); process.stdout.write(JSON.stringify(r)); });`,
     );
     const target = net.createServer().listen(0, '127.0.0.1');
     await new Promise((r) => target.once('listening', r));
     cleanups.push(() => target.close());
     const plan = transportLaunchPlan({ scriptPath: probe, bundleDir: dir });
-    const MAX_ATTEMPTS = 3;
-    let last: Record<string, unknown> = {};
-    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      const run = spawnSync(plan.command, [...plan.args, realpathSync(dir), secret, String((target.address() as net.AddressInfo).port)], { env: plan.env, encoding: 'utf8', timeout: 20_000 });
-      expect(run.stderr).toBe('');
-      last = JSON.parse(run.stdout) as Record<string, unknown>;
-      // the denials are asserted on EVERY attempt: never retried
-      expect({ bundle: last.bundle, secret: last.secret, exec: last.exec, out: last.out }).toEqual({ bundle: 'ok', secret: 'EPERM', exec: 'EPERM', out: 'EPERM' });
-      if (last.listen === 'ok') break;
-      await annotate(`T-2026-10-18-017 loopback listen failed on attempt ${attempt}/${MAX_ATTEMPTS}: ${JSON.stringify({ listen: last.listen, listenError: last.listenError, profileHash: plan.profileHash })}`, 'warning');
-    }
-    expect(last).toEqual({ bundle: 'ok', secret: 'EPERM', exec: 'EPERM', out: 'EPERM', listen: 'ok' });
+    const run = spawnSync(plan.command, [...plan.args, realpathSync(dir), secret, String((target.address() as net.AddressInfo).port)], { env: plan.env, encoding: 'utf8', timeout: 20_000 });
+    expect(run.stderr).toBe('');
+    expect(JSON.parse(run.stdout)).toEqual({ bundle: 'ok', secret: 'EPERM', exec: 'EPERM', out: 'EPERM', listen: 'EPERM' });
   });
 
   // T-2026-10-18-017 finding for Aegis: `(local ip "localhost:*")` is NOT loopback-only — under the generated

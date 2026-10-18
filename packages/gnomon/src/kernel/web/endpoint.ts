@@ -10,9 +10,19 @@
  * authenticator signs the endpoint path `ws://127.0.0.1:<port>/rpc`.
  *
  * Lifecycle: started by the first launch request (`gnomon open`); the child
- * reports its port and the tree hash of the bundle it loaded; a hash that is
- * not the pin ⇒ socket.web.bundle.mismatch and the endpoint does not open
- * (rule 1a). A child that exits is restarted (cap 3 per 10 min; then
+ * reports the tree hash of the bundle it loaded; a hash that is not the pin ⇒
+ * socket.web.bundle.mismatch and the endpoint does not open (rule 1a).
+ *
+ * Listener (§11.2 rule 1, §15.5 `transport`, T-2026-10-18-020): the KERNEL
+ * listens on the IPv4 literal 127.0.0.1 on an OS-chosen ephemeral port, with
+ * `pauseOnConnect`, and hands each accepted socket — unread — to the child
+ * with `subprocess.send('conn', socket)` over the child's IPC channel; its own
+ * copy closes on send. Accept-and-forward only: the kernel never reads a byte
+ * of a connection, so the child stays the only HTTP/WebSocket parser (A24-1).
+ * The child opens, binds and listens on no socket (its profile has no
+ * network-* rule; probe P14b-web). The listener outlives a child restart, so
+ * the port survives it; a connection accepted while no child is serving is
+ * closed. stop() and the restart-cap / failed-respawn paths close it. A child that exits is restarted (cap 3 per 10 min; then
  * socket.web.stop{reason:'transport-restart-cap'}; a respawn that fails ⇒
  * socket.web.stop{reason:'transport-restart-failed'}); every GUI connection it
  * carried ends, so each page shows Reconnect (rule 1b). After the last GUI
@@ -48,6 +58,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createHash, createPublicKey } from 'node:crypto';
 import { appendFileSync, chmodSync, existsSync, mkdirSync, statSync } from 'node:fs';
+import * as net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { mintId, monotonicUlidFactory, sanitizeDisplayText } from '@a-company/gnomon-contracts';
@@ -67,6 +78,7 @@ import {
   encodeRecord,
   HTTP_MAX_BODY_BYTES,
   validateChildRecord,
+  WEB_CONN_MESSAGE,
   WS_MAX_FRAME_BYTES,
   WS_MAX_SOCKET_BUFFER,
   WS_PRE_AUTH_MAX_FRAME_BYTES,
@@ -189,6 +201,7 @@ export class WebEndpoint {
   readonly #nextUlid = monotonicUlidFactory();
   #child: ChildProcess | null = null;
   #plan: ChildLaunchPlan | null = null;
+  #listener: net.Server | null = null;
   #port = 0;
   #dispatcher: KernelDispatcher | null = null;
   #state: 'stopped' | 'starting' | 'listening' = 'stopped';
@@ -248,7 +261,7 @@ export class WebEndpoint {
   async ensureListening(): Promise<void> {
     if (this.#state === 'listening') return;
     if (this.#starting) return this.#starting;
-    this.#starting = this.#spawn(0).finally(() => (this.#starting = null));
+    this.#starting = this.#spawn().finally(() => (this.#starting = null));
     return this.#starting;
   }
 
@@ -293,6 +306,7 @@ export class WebEndpoint {
   async stop(reason: string): Promise<void> {
     if (this.#state === 'stopped' && !this.#child) {
       // already down (restart cap, failed respawn): never leave a timer behind
+      this.#closeListener();
       if (this.#sweep) clearInterval(this.#sweep);
       if (this.#linger) clearTimeout(this.#linger);
       this.#sweep = null;
@@ -306,6 +320,7 @@ export class WebEndpoint {
     this.#linger = null;
     this.#sweep = null;
     for (const c of [...this.#ws.values()]) this.#dropConn(c, reason);
+    this.#closeListener();
     const child = this.#child;
     this.#child = null;
     if (child) {
@@ -321,14 +336,61 @@ export class WebEndpoint {
 
   /* ── child supervision ─────────────────────────────────────────────── */
 
-  async #spawn(preferPort: number): Promise<void> {
+  /**
+   * The kernel's listener: 127.0.0.1 (IPv4 literal, never a name, never a wildcard), the OS-chosen port.
+   * Each connection is handed to the serving child unread; the kernel's copy closes on send.
+   */
+  async #listen(): Promise<number> {
+    const server = net.createServer({ pauseOnConnect: true }, (socket) => this.#handOff(socket));
+    server.on('error', () => undefined); // after listen: an accept error never takes the daemon down
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen({ host: '127.0.0.1', port: 0, exclusive: true }, () => {
+        server.off('error', reject);
+        resolve();
+      });
+    }).catch((err: NodeJS.ErrnoException) => {
+      throw new LifecycleRefusal('web-transport-failed', `the kernel cannot listen on 127.0.0.1: ${err.code ?? err.message}`);
+    });
+    const a = server.address();
+    if (a === null || typeof a === 'string' || a.address !== '127.0.0.1') {
+      server.close();
+      throw new LifecycleRefusal('web-transport-failed', 'the web listener is not bound to 127.0.0.1');
+    }
+    this.#listener = server;
+    return a.port;
+  }
+
+  /** Accept-and-forward (A24-1): the kernel never reads the socket; it goes to the serving child or is closed. */
+  #handOff(socket: net.Socket): void {
+    socket.on('error', () => socket.destroy());
+    const child = this.#child;
+    if (this.#state !== 'listening' || !child || !child.connected) return void socket.destroy();
+    try {
+      child.send(WEB_CONN_MESSAGE, socket, (err) => {
+        if (err) socket.destroy();
+      });
+    } catch {
+      socket.destroy();
+    }
+  }
+
+  #closeListener(): void {
+    const l = this.#listener;
+    this.#listener = null;
+    l?.close();
+  }
+
+  async #spawn(): Promise<void> {
     this.#state = 'starting';
     const scriptPath = this.#o.scriptPath ?? defaultChildScript();
     if (!scriptPath) throw new LifecycleRefusal('web-transport-failed', 'the gnomon-web transport child is not built (dist/transport/gnomon-web.js)');
     const bundleDir = this.#bundle.dir || materializeGuiBundle(this.#o.home);
     const plan = this.#launcher({ scriptPath, bundleDir, protectedDirs: [this.#o.home], forbiddenTrees: [path.join(this.#o.home, 'keys')] });
     this.#plan = plan;
-    const child = spawn(plan.command, plan.args, { stdio: ['pipe', 'pipe', 'pipe'], env: plan.env, windowsHide: true });
+    // fd 3 = the IPC channel: it carries only the connected sockets the kernel hands over (WEB_CONN_MESSAGE)
+    const child = spawn(plan.command, plan.args, { stdio: ['pipe', 'pipe', 'pipe', 'ipc'], env: plan.env, windowsHide: true });
+    child.on('message', () => child.kill('SIGKILL')); // the child never speaks on the IPC channel: one that does is not ours (Aegis C1)
     this.#child = child;
     let stderrTail = '';
     child.stderr!.on('data', (c: Buffer) => (stderrTail = (stderrTail + c.toString('utf8')).slice(-2048)));
@@ -367,7 +429,7 @@ export class WebEndpoint {
       if (this.#child === child) void this.#onChildExit(code, signal);
     });
     this.#send(
-      { t: 'config', bundleDir, port: preferPort, pingMs: this.#o.pingMs ?? WS_PING_MS, missedPongs: this.#o.missedPongs ?? WS_MISSED_PONGS, maxFrameBytes: WS_MAX_FRAME_BYTES,
+      { t: 'config', bundleDir, pingMs: this.#o.pingMs ?? WS_PING_MS, missedPongs: this.#o.missedPongs ?? WS_MISSED_PONGS, maxFrameBytes: WS_MAX_FRAME_BYTES,
         preAuthMaxFrameBytes: WS_PRE_AUTH_MAX_FRAME_BYTES,
         maxBodyBytes: HTTP_MAX_BODY_BYTES,
         maxSocketBuffer: WS_MAX_SOCKET_BUFFER,
@@ -397,7 +459,14 @@ export class WebEndpoint {
       await this.#o.log('socket.web.bundle.mismatch', { expected: this.#bundle.hash, got: String(r.bundleHash).slice(0, 80) }).catch(() => undefined);
       throw new LifecycleRefusal('web-bundle-mismatch', 'the GUI bundle does not match its pin; the endpoint does not open (§11.2 rule 1a)', { expected: this.#bundle.hash });
     }
-    this.#port = r.port;
+    try {
+      if (!this.#listener) this.#port = await this.#listen(); // a restarted child keeps the kernel's listener, and so the port
+    } catch (err) {
+      this.#child = null;
+      this.#state = 'stopped';
+      child.kill('SIGKILL');
+      throw err;
+    }
     const web: WebAuthHook = (conn, params) => this.#webAuth(conn, params);
     this.#dispatcher = this.#o.dispatcher(this.endpointPath, web);
     this.#state = 'listening';
@@ -408,7 +477,7 @@ export class WebEndpoint {
       }, 60_000);
       this.#sweep.unref();
     }
-    await this.#o.log('socket.web.listen', { port: r.port, bundleHash: r.bundleHash, files: r.files, sandbox: plan.sandbox, profileHash: plan.profileHash, pid: child.pid ?? null });
+    await this.#o.log('socket.web.listen', { port: this.#port, bundleHash: r.bundleHash, files: r.files, sandbox: plan.sandbox, profileHash: plan.profileHash, pid: child.pid ?? null });
     this.#lingerCheck();
   }
 
@@ -423,7 +492,7 @@ export class WebEndpoint {
     if (!wasListening) return;
     if (this.#restarts.length >= WEB_RESTART_CAP.max) return this.#down('transport-restart-cap');
     this.#restarts.push(now);
-    this.#starting = this.#spawn(this.#port)
+    this.#starting = this.#spawn()
       .catch(() => this.#down('transport-restart-failed'))
       .finally(() => (this.#starting = null));
     await this.#starting;
@@ -433,6 +502,7 @@ export class WebEndpoint {
   async #down(reason: string): Promise<void> {
     this.#stopReason = reason;
     this.#state = 'stopped';
+    this.#closeListener();
     if (this.#linger) clearTimeout(this.#linger);
     if (this.#sweep) clearInterval(this.#sweep);
     this.#linger = null;

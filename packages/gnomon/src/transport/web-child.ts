@@ -18,11 +18,13 @@
  * a connection whose unsent bytes pass `maxSocketBuffer` (8 MiB) is closed
  * 1008 (backpressure).
  *
- * Bind: 127.0.0.1 only (an IPv4 literal; no option widens it, §11.2 rule 1),
- * the OS-chosen ephemeral port unless the kernel asks for the previous port
- * after a restart. The bundle is hashed and loaded into memory BEFORE the
- * listen, and served from that memory, so the bytes served are the bytes
- * hashed (`G-WEB-08`). No token ever reaches this process on argv, env or
+ * No socket of its own (§15.5, T-2026-10-18-020): the child opens, binds and
+ * listens on nothing — its profile has no network-* rule. The KERNEL listens
+ * on 127.0.0.1 and hands each accepted, unread socket over the IPC channel
+ * (`io.onSocket`); the child serves it like an accepted connection. Sockets
+ * handed before `ready` are destroyed. The bundle is hashed and loaded into
+ * memory BEFORE `ready`, and served from that memory, so the bytes served are
+ * the bytes hashed (`G-WEB-08`). No token ever reaches this process on argv, env or
  * stdin config; it sees the WebSocket frames it relays and never interprets
  * them (A24-1).
  */
@@ -58,6 +60,8 @@ export interface WebChildIo {
   input: NodeJS.ReadableStream;
   output: NodeJS.WritableStream;
   exit: (code: number) => void;
+  /** Registers the receiver of connected sockets the kernel hands over (the IPC channel); the child listens on nothing. */
+  onSocket: (accept: (socket: Duplex) => void) => void;
 }
 
 const STATUS_TEXT: Record<number, string> = { 400: 'Bad Request', 403: 'Forbidden', 404: 'Not Found', 421: 'Misdirected Request', 426: 'Upgrade Required', 503: 'Service Unavailable' };
@@ -291,19 +295,14 @@ export function runWebChild(io: WebChildIo): void {
     s.requestTimeout = 30_000;
     s.on('upgrade', onUpgrade);
     s.on('clientError', (_err, socket) => socket.destroy());
-    const listen = (port: number): void => {
-      s.once('error', (err: NodeJS.ErrnoException) => {
-        if (err.code === 'EADDRINUSE' && port !== 0) return listen(0); // previous port taken: a new ephemeral one
-        fatal(`listen: ${err.code ?? err.message}`);
-      });
-      s.listen({ host: '127.0.0.1', port, exclusive: true }, () => {
-        const a = s.address();
-        if (a === null || typeof a === 'string' || a.address !== '127.0.0.1') return fatal('listen: not bound to 127.0.0.1');
-        emit({ t: 'ready', port: a.port, bundleHash: bundle!.hash, files: bundle!.files.size });
-      });
-    };
-    listen(cfg.port);
+    emit({ t: 'ready', bundleHash: bundle!.hash, files: bundle!.files.size });
   };
+
+  io.onSocket((socket) => {
+    // a handed socket is served exactly like an accepted connection; none before ready, none after the end
+    if (ended || server === null) return void socket.destroy();
+    server.emit('connection', socket);
+  });
 
   io.input.on('data', (chunk: Buffer) => {
     for (const item of decoder.push(chunk)) {

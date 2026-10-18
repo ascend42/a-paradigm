@@ -254,7 +254,7 @@ describe('child records are validated strictly (Aegis C1)', () => {
   const L = { maxFrameBytes: 4 * 1024 * 1024, maxBodyBytes: 64 * 1024 };
   it('the closed shapes pass', () => {
     for (const r of [
-      { t: 'ready', port: 1, bundleHash: 'sha256:x', files: 2 },
+      { t: 'ready', bundleHash: 'sha256:x', files: 2 },
       { t: 'http', rid: 1, method: 'GET', path: '/', headers: { host: 'h' } },
       { t: 'http', rid: 2, method: 'POST', path: '/diag', headers: {}, body: 'eA==', bodyOver: true },
       { t: 'upgrade', rid: 3, method: 'GET', path: '/rpc', headers: {} },
@@ -278,8 +278,8 @@ describe('child records are validated strictly (Aegis C1)', () => {
     { t: 'http', rid: 1, method: 'GET', path: '/', headers: [] },
     { t: 'http', rid: 1, method: 'G'.repeat(17), path: '/', headers: {} },
     { t: 'http', rid: 1, method: 'GET', path: 'x'.repeat(8193), headers: {} },
-    { t: 'ready', port: 0, bundleHash: 'x', files: 1 },
-    { t: 'ready', port: 70000, bundleHash: 'x', files: 1 },
+    { t: 'ready', port: 1, bundleHash: 'x', files: 1 }, // the child reports no port: the kernel listens (§15.5)
+    { t: 'ready', bundleHash: 'x', files: -1 },
     { t: 'closed', rid: 1, code: '1000', why: '' },
     { t: 'nope' },
     { t: 'constructor' },
