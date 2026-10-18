@@ -1,0 +1,90 @@
+{
+  "probe": "p10m-claude-compat-generated",
+  "os": "darwin",
+  "osVersion": "macOS 15.7.3 (24.6.0)",
+  "arch": "arm64",
+  "toolVersions": {
+    "node": "v26.0.0"
+  },
+  "verdict": "pass",
+  "evidence": {
+    "claudeBinary": "~/.local/bin/claude",
+    "criteria": {
+      "claudeWorks": true,
+      "bashWorks": true,
+      "deniesHold": true,
+      "execDenied": true
+    },
+    "ms": 7172,
+    "exit": {
+      "code": 0,
+      "sig": null,
+      "stderrTail": ""
+    },
+    "init": {
+      "apiKeySource": "none",
+      "model": "claude-opus-5-5"
+    },
+    "result": {
+      "kind": "result",
+      "type": "result",
+      "subtype": "success",
+      "isError": false,
+      "tokens": 56909,
+      "costUsd": 0.154356,
+      "permissionDenials": 0,
+      "quota": false
+    },
+    "eventKinds": [
+      "system.hook_started",
+      "system.hook_response",
+      "system.init",
+      "system.status",
+      "user",
+      "stream_event.message_start",
+      "stream_event.content_block_start",
+      "stream_event.content_block_delta",
+      "assistant",
+      "stream_event.content_block_stop",
+      "stream_event.message_delta",
+      "stream_event.message_stop",
+      "rate_limit_event",
+      "result"
+    ],
+    "check": {
+      "node": "v26.0.0",
+      "git": "git version 2.50.1 (Apple Git-155)",
+      "write_work": "ok",
+      "write_linked": "blocked",
+      "write_user_claude": "blocked",
+      "write_project_claude": "blocked",
+      "read_keys": "blocked",
+      "child_spawn_kill": "ok",
+      "port_http": "000 curl_exit=7",
+      "pgrep_lines": "0",
+      "open_exit": "126",
+      "osascript_exit": "126",
+      "lsregister_exit": "126",
+      "launchctl_exit": "126",
+      "python": "py_ok"
+    },
+    "endpointHitsDuringRun": 0,
+    "profileHash": "sha256:51c76b607a77f6017c59b4eb678122a9c891072472cf81765b36402c00ea9003",
+    "profile": ";; gnomon session profile v1 (spec §15.5) — generated from gnomon-session-policy:v1, every path realpath'd\n(version 1)\n(allow default)\n(deny file-read* (literal \"<tmp>/gnomon-home/head\") (subpath \"<tmp>/gnomon-home/keys\") (subpath \"<tmp>/gnomon-home/link\") (subpath \"<tmp>/gnomon-home/warpline\") (literal \"<tmp>/work/.warpline/daemon-tokens.jsonl\") (literal \"<tmp>/work/.warpline/daemon/mcp-tokens.json\") (literal \"<tmp>/work/.warpline/daemon/mcp.token\") (subpath \"<tmp>/work/.warpline/keys\"))\n(deny file-write* (subpath \"~/.claude\") (literal \"~/.claude.json\") (subpath \"<tmp>/gnomon-home\") (literal \"<tmp>/gnomon-home/head\") (subpath \"<tmp>/gnomon-home/keys\") (subpath \"<tmp>/gnomon-home/link\") (subpath \"<tmp>/gnomon-home/warpline\") (subpath \"<tmp>/linked-mod\") (subpath \"<tmp>/work/.claude\") (literal \"<tmp>/work/.git/config\") (subpath \"<tmp>/work/.git/hooks\") (subpath \"<tmp>/work/.git/info\") (literal \"<tmp>/work/.warpline/daemon-tokens.jsonl\") (literal \"<tmp>/work/.warpline/daemon/mcp-tokens.json\") (literal \"<tmp>/work/.warpline/daemon/mcp.token\") (subpath \"<tmp>/work/.warpline/keys\") (prefix \"<tmp>/work/CLAUDE\"))\n(deny network-outbound (remote ip \"localhost:53031\"))\n(deny process-info*)\n(allow process-info* (target self))\n(deny sysctl-read (sysctl-name-prefix \"kern.proc\"))\n(deny mach-lookup (global-name \"com.apple.sysmond\"))\n(deny network-outbound (remote unix-socket (subpath \"/private/tmp/tmux-501\")))\n(deny network-outbound (remote unix-socket (subpath \"/private/var/folders/gq/nt2kdpsj39dc8vpq6cfzx8gw0000gn/T/.screen\")) (remote unix-socket (subpath \"/private/tmp/screens\")) (remote unix-socket (subpath \"~/.screen\")))\n(deny appleevent-send)\n(deny device-microphone)\n(deny device-camera)\n(deny process-exec (literal \"/usr/bin/open\") (literal \"/usr/bin/osascript\") (literal \"/System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister\") (literal \"/bin/launchctl\"))\n",
+    "notes": [
+      "claude ran with the adapter argv (stream-json) and NO per-session CLAUDE_CONFIG_DIR: a custom CLAUDE_CONFIG_DIR loses subscription auth (auth status: loggedIn false, authMethod none — the OAuth keychain item is keyed by the config dir), so it is not used.",
+      "ps is not tested (setuid; fails under any sandbox-exec profile).",
+      "Ground truth is out.txt written by check.sh, not the model reply."
+    ]
+  },
+  "specRefs": [
+    "§15.5 session profile",
+    "§19.1 M1.7",
+    "P8-D80",
+    "G-SBX-04",
+    "G-SBX-06",
+    "G-SBX-08",
+    "T-2026-10-18-008"
+  ],
+  "at": "2026-10-18T04:41:55.932Z"
+}

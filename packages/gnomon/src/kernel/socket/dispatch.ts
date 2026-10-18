@@ -72,6 +72,11 @@
  * goes to the fuse; the session class ("own scope") needs session principals
  * (M1.7). Without an `approvals` port (unit rigs) both stay not-implemented.
  * A closed connection drops its cached unlock.
+ *
+ * M1.7 #supervisor (slice 1): `session.open`, `session.send` and
+ * `session.stop` from a HUMAN principal go to the session port (attended,
+ * human-started Claude Code sessions only); every other class keeps the
+ * matrix's answer (not-implemented until session principals land).
  */
 import {
   CLIENT_API_ID,
@@ -92,6 +97,9 @@ import { RpcRefusal, type RpcRequestFrame } from './rpc.js';
 import type { ConnAuthState, SocketAuthenticator, WebAuthHook } from './auth.js';
 import { resolveRef } from '../refs/resolve.js';
 import { refuseAppend, type AppendClass } from './log-append.js';
+import type { SessionPort } from '../supervisor/port.js';
+
+const SESSION_METHODS: readonly string[] = ['session.open', 'session.send', 'session.stop'];
 import { voiceApproveRefusal } from '../broker/broker.js';
 import type { ApprovalPort } from '../broker/port.js';
 import { asRpcRefusal, parseLogReadParams, readerFor, readOnePage, SUBSCRIPTION_BACKLOG_CAP, MAX_SUBSCRIPTIONS_PER_CONNECTION, type ReadLog, type SubscriptionHub } from './log-read.js';
@@ -237,6 +245,8 @@ export interface DispatcherOptions {
   web?: WebAuthHook;
   /** #approval-broker + #budget-fuse (M1.6). Absent ⇒ approve / permit.reserve stay not-implemented. */
   approvals?: ApprovalPort;
+  /** #supervisor (M1.7 slice 1): session.open/send/stop for a HUMAN principal. Absent ⇒ they stay not-implemented. */
+  sessions?: SessionPort;
   /** Append a socket.* row to the kernel log; must reject if the row was not written. */
   log: (kind: SocketLogKind, payload: Record<string, unknown>, ids: { connId: string; deviceId?: string }) => Promise<void>;
 }
@@ -278,7 +288,7 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
     if (cls === 'voice') facts.add('!armed');
     const key = o.status.kernelKey();
     const available = (m: string): boolean =>
-      (SERVED_METHODS.includes(m) && (o.reads !== undefined || !READ_METHODS.includes(m))) || (o.approvals !== undefined && ((m === 'approve' && cls === 'human') || (m === 'permit.reserve' && (cls === 'human' || cls === 'agent'))));
+      (SERVED_METHODS.includes(m) && (o.reads !== undefined || !READ_METHODS.includes(m))) || (o.approvals !== undefined && ((m === 'approve' && cls === 'human') || (m === 'permit.reserve' && (cls === 'human' || cls === 'agent')))) || (o.sessions !== undefined && cls === 'human' && SESSION_METHODS.includes(m));
     return {
       principal: s.principal,
       principalKind: s.principalKind,
@@ -476,6 +486,15 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
     if (m === 'permit.reserve' && (cls === 'human' || cls === 'agent') && o.approvals) {
       try {
         return await o.approvals.reserve({ connId: s.connId, principal: s.principal!, principalClass: cls, surface: s.client?.surface ?? null, credential: s.credential ?? 'device' }, frame.params);
+      } catch (err) {
+        throw asRpcRefusal(err);
+      }
+    }
+    // M1.7 slice 1: session.open/send/stop for a human principal (attended, human-started sessions only)
+    if (SESSION_METHODS.includes(m) && cls === 'human' && o.sessions) {
+      const sctx = { principal: s.principal!, principalClass: cls };
+      try {
+        return await (m === 'session.open' ? o.sessions.open(sctx, frame.params) : m === 'session.send' ? o.sessions.send(sctx, frame.params) : o.sessions.stop(sctx, frame.params));
       } catch (err) {
         throw asRpcRefusal(err);
       }

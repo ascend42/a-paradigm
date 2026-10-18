@@ -1,0 +1,244 @@
+/**
+ * #supervisor + #session-runner + #claude-adapter end to end with a FAKE
+ * claude (test/fixtures/fake-claude.mjs) under the REAL generated `session`
+ * profile (darwin sandbox-exec) and real process groups (spec §3.3, §6.1;
+ * M1.7 slice 1). Never the real claude binary, never Anthropic.
+ *
+ *   law 1 + Aegis: claude never starts without a law-7-scanned claude-code
+ *     session.spawn permit for the hsid (a fuse refusal ⇒ no intent row, no
+ *     process); session.spawned{intent} precedes the running row (M1.9);
+ *   law 7 per spawn (T-009 / Aegis C5): a project-layer hit refuses BEFORE
+ *     permit.reserve; G-SUB-05: a settings layer written mid-session stops
+ *     the session within 2 s with billing.api.refused;
+ *   S2: every stdout line is a turn.event before turn.usage / budget.usage;
+ *   usage from stream events only, no double count; ask-user card;
+ *   G-RUN-03: interrupt = the control_request line; stop kills the group,
+ *     also when the child ignores SIGTERM;
+ *   T-008: generated plugin bytes are verified against the kernel-held record.
+ */
+// @gnomon-platform: darwin
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
+import { RefusedError } from '@a-company/gnomon-contracts';
+import { BudgetFuse } from '../src/kernel/budget/fuse.js';
+import type { BillingScanSource } from '../src/kernel/budget/billing.js';
+import { SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
+import { DaemonChildren } from '../src/kernel/lifecycle/children.js';
+import { processControlFor } from '../src/kernel/lifecycle/process-control.js';
+import { SessionSupervisor } from '../src/kernel/supervisor/supervisor.js';
+import type { ApprovalBroker } from '../src/kernel/broker/broker.js';
+import { recordPath } from '../src/kernel/manifest/generate.js';
+import { sessionWorld, setMode, trace, waitFor, type SessionWorld } from './session-helpers.js';
+
+const HUMAN = 'p:abcdefgh/founder';
+let w: SessionWorld;
+let sup: SessionSupervisor | null = null;
+const live: Array<() => Promise<unknown>> = [];
+afterEach(async () => {
+  for (const f of live.splice(0)) await f().catch(() => undefined);
+  w?.cleanup();
+});
+
+function rig(o: { billing?: BillingScanSource; watchMs?: number } = {}) {
+  w = sessionWorld();
+  const rows: Array<{ kind: string; payload: Record<string, unknown> }> = [];
+  const log = async (kind: string, payload: Record<string, unknown>): Promise<void> => void rows.push({ kind, payload });
+  const fuse = new BudgetFuse({ kernel: SoftwareEd25519Signer.generate('kernel'), logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZZ', log, billing: o.billing ?? { env: () => ({}), layers: () => [] } });
+  const children = new DaemonChildren({ append: log, control: processControlFor('darwin'), boot: 'boot-test', graceMs: 500 });
+  const cards: Array<Record<string, unknown>> = [];
+  const broker = { raise: async (i: Record<string, unknown>) => (cards.push(i), { cardId: `card:${cards.length}` }) } as unknown as Pick<ApprovalBroker, 'raise'>;
+  sup = new SessionSupervisor({ log, children, fuse, broker, home: w.home, userHome: w.userHome, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(w.home, 'gnomon.sock'), claudePath: w.claude, env: () => ({ HOME: w.userHome, PATH: '/usr/bin:/bin', ANTHROPIC_API_KEY: 'scrubbed-from-the-child' }), platform: 'darwin', watchMs: o.watchMs ?? 200 });
+  live.push(() => children.stopAll('test-end'));
+  const kinds = (k: string) => rows.filter((r) => r.kind === k);
+  const idx = (k: string) => rows.findIndex((r) => r.kind === k);
+  return { rows, fuse, children, cards, sup, kinds, idx };
+}
+
+const open = (s: SessionSupervisor, over: Record<string, unknown> = {}) => s.open({ principal: HUMAN, principalClass: 'human', attended: true, cwd: w.cwd, ...over });
+async function refusal(p: Promise<unknown>): Promise<RefusedError> {
+  const e = await p.then(() => undefined, (x: unknown) => x);
+  expect(e).toBeInstanceOf(RefusedError);
+  return e as RefusedError;
+}
+
+describe('M1.7 slice 1: who may open', () => {
+  it.each([
+    ['agent', true],
+    ['session', true],
+    ['human', false],
+  ])('%s attended=%s is FORBIDDEN (attended human-started only)', async (cls, attended) => {
+    const r = rig();
+    const e = await refusal(r.sup.open({ principal: HUMAN, principalClass: cls, attended, cwd: w.cwd }));
+    expect(e.refusal.code).toBe('FORBIDDEN');
+    expect(r.kinds('session.spawned')).toEqual([]);
+  });
+  it('a local backend is #local-runner (M1.8)', async () => {
+    const r = rig();
+    expect((await refusal(open(r.sup, { backend: 'local' }))).refusal.code).toBe('UNSUPPORTED');
+  });
+});
+
+describe('law 1 + law 7 + Aegis: no claude without a law-7-scanned claude-code permit', () => {
+  it('a fuse law-7 refusal ⇒ BILLING_REFUSED, no intent row, the fake claude never ran', async () => {
+    const r = rig({ billing: { env: () => ({ ANTHROPIC_API_KEY: 'k' }), layers: () => [] } });
+    const e = await refusal(open(r.sup));
+    expect(e.refusal.code).toBe('BILLING_REFUSED');
+    expect(r.kinds('session.spawned')).toEqual([]);
+    expect(trace(w).filter((t) => t.t === 'argv')).toEqual([]);
+  });
+  it('T-009 per-cwd scan: a project settings.local.json key refuses BEFORE permit.reserve', async () => {
+    const r = rig();
+    fs.writeFileSync(path.join(w.cwd, '.claude', 'settings.local.json'), JSON.stringify({ env: { ANTHROPIC_BASE_URL: 'http://127.0.0.1:9' } }));
+    const e = await refusal(open(r.sup));
+    expect(e.refusal.code).toBe('BILLING_REFUSED');
+    expect(r.kinds('permit.reserve')).toEqual([]);
+    expect(r.kinds('billing.api.refused')[0]!.payload.where).toEqual(['project:.claude/settings.local.json']);
+    expect(r.kinds('session.refused')[0]!.payload.code).toBe('api_billing_refused');
+  });
+  it('a ~/.claude.json projects.<cwd>.mcpServers env block refuses', async () => {
+    const r = rig();
+    fs.writeFileSync(path.join(w.userHome, '.claude.json'), JSON.stringify({ projects: { [w.cwd]: { mcpServers: { s: { command: 'x', env: { ANTHROPIC_API_KEY: 'k' } } } } } }));
+    expect((await refusal(open(r.sup))).refusal.code).toBe('BILLING_REFUSED');
+  });
+  it('assertClaudePermit refuses a turn, a local or a foreign-hsid permit', async () => {
+    const r = rig();
+    const turn = await r.fuse.reserve({ principal: HUMAN, principalClass: 'human', attended: true, kind: 'turn', backend: 'claude-code', scope: { user: HUMAN, session: 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZZ' } });
+    expect(() => r.sup.assertClaudePermit(turn, 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZZ')).toThrow(RefusedError);
+    const local = await r.fuse.reserve({ principal: HUMAN, principalClass: 'human', attended: true, kind: 'session.spawn', backend: 'local', scope: { user: HUMAN, session: 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZZ' } });
+    expect(() => r.sup.assertClaudePermit(local, 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZZ')).toThrow(RefusedError);
+    const ok = await r.fuse.reserve({ principal: HUMAN, principalClass: 'human', attended: true, kind: 'session.spawn', backend: 'claude-code', scope: { user: HUMAN, session: 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZZ' } });
+    expect(() => r.sup.assertClaudePermit(ok, 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZY')).toThrow(RefusedError);
+    expect(() => r.sup.assertClaudePermit({ ...ok, sig: 'forged' }, 'hsid:v1:01HZZZZZZZZZZZZZZZZZZZZZZZ')).toThrow(RefusedError);
+  });
+  it('preflight: an old claude ⇒ claude_version; non-subscription auth ⇒ not_subscription_auth', async () => {
+    let r = rig();
+    setMode(w, { version: '2.1.100' });
+    expect((await refusal(open(r.sup))).refusal.data).toMatchObject({ session: 'claude_version' });
+    r = rig();
+    setMode(w, { auth: { loggedIn: true, authMethod: 'api-key', apiProvider: 'firstParty' } });
+    expect((await refusal(open(r.sup))).refusal.data).toMatchObject({ session: 'not_subscription_auth' });
+  });
+});
+
+describe('a session end to end (fake claude, real profile, real process group)', () => {
+  it('spawns under the profile with the adapter argv and the allowlisted env; rows in order', async () => {
+    const r = rig();
+    const s = await open(r.sup);
+    expect(s.state).toBe('running');
+    expect(await waitFor(() => trace(w).some((t) => t.t === 'argv'))).toBe(true);
+    const argv = trace(w).find((t) => t.t === 'argv')!;
+    expect(argv.args).toContain('--strict-mcp-config');
+    expect((argv.envKeys as string[]).includes('ANTHROPIC_API_KEY')).toBe(false);
+    const spawned = r.kinds('session.spawned').map((x) => x.payload.phase);
+    expect(spawned).toEqual(['intent', 'running']);
+    expect(r.idx('session.open')).toBeLessThan(r.idx('permit.grant'));
+    expect(r.idx('permit.grant')).toBeLessThan(r.idx('session.spawned'));
+    const sb = r.kinds('session.sandbox')[0]!.payload;
+    expect(sb).toMatchObject({ sandbox: 'full', profile: 'session' });
+    expect(String(sb.profileHash)).toMatch(/^sha256:/);
+    // the session's policy.json mirrors the denies (Claude's own rules, defence in depth)
+    const pol = JSON.parse(fs.readFileSync(path.join(w.home, 'sessions', s.hsid.slice(18).toLowerCase(), 'policy.json'), 'utf8'));
+    expect(pol.permissions.deny.length).toBeGreaterThan(5);
+  });
+  it('S2 + usage: turn.event before usage; tokens charged once against the spawn permit; ask-user card raised', async () => {
+    const r = rig();
+    setMode(w, { tool: 'AskUserQuestion' });
+    const s = await open(r.sup);
+    const { turn } = await r.sup.send(HUMAN, { hsid: s.hsid, text: 'hello' });
+    expect(turn).toBe(`turn:${s.hsid}/1`);
+    expect(await waitFor(() => r.kinds('turn.result').length === 1)).toBe(true);
+    expect(r.idx('session.inject')).toBeLessThan(r.idx('turn.sent'));
+    expect(r.idx('turn.event')).toBeLessThan(r.idx('turn.usage'));
+    const charged = r.kinds('budget.usage').filter((x) => !x.payload.malformed && !x.payload.overPermit).reduce((a, x) => a + (x.payload.tokens as number), 0);
+    expect(charged).toBe(10 + 25 + 100); // result total, never double counted
+    const spawnPermit = r.kinds('session.sandbox')[0]!.payload.permitId;
+    expect(new Set(r.kinds('budget.usage').map((x) => x.payload.permitId))).toEqual(new Set([spawnPermit]));
+    expect(r.cards).toHaveLength(1);
+    expect(r.cards[0]).toMatchObject({ kind: 'ask-user', hsid: s.hsid, attended: true });
+    expect(r.kinds('turn.ask-user')[0]!.payload.cardId).toBe('card:1');
+    expect(r.kinds('permit.grant').map((x) => (x.payload.permit as { kind: string }).kind)).toEqual(['session.spawn', 'turn']);
+  });
+  it('G-RUN-03 interrupt is the control_request line; stop kills the group and releases the permits', async () => {
+    const r = rig();
+    const s = await open(r.sup);
+    const i = await r.sup.stop(HUMAN, { hsid: s.hsid, interrupt: true });
+    expect(i.signals).toEqual(['control_request:interrupt']);
+    expect(await waitFor(() => trace(w).some((t) => t.t === 'stdin' && (t.m as { type: string }).type === 'control_request'))).toBe(true);
+    const st = await r.sup.stop(HUMAN, { hsid: s.hsid });
+    expect(st.exited).toBe(true);
+    expect(await waitFor(() => r.kinds('session.exited').length === 1 && r.kinds('permit.release').length >= 1)).toBe(true);
+  });
+  it('G-RUN-03 a child that ignores SIGTERM and stdin end is SIGKILLed with its group', async () => {
+    const r = rig();
+    setMode(w, { ignoreTerm: true, ignoreStdinEnd: true });
+    const s = await open(r.sup);
+    expect(await waitFor(() => trace(w).some((t) => t.t === 'argv'))).toBe(true);
+    const st = await r.sup.stop(HUMAN, { hsid: s.hsid });
+    expect(st.exited).toBe(true);
+    expect(await waitFor(() => r.kinds('session.exited').length === 1)).toBe(true);
+    expect(r.kinds('session.exited')[0]!.payload.signal).toBe('SIGKILL');
+  });
+  it('init.apiKeySource ≠ none kills the group and logs billing.api.refused', async () => {
+    const r = rig();
+    setMode(w, { apiKeySource: 'ANTHROPIC_API_KEY' });
+    await open(r.sup);
+    expect(await waitFor(() => r.kinds('session.exited').length === 1)).toBe(true);
+    expect(r.kinds('billing.api.refused')[0]!.payload.where).toEqual(['init.apiKeySource']);
+  });
+  it('tolerant: unknown types/fields and malformed lines are logged turn.events, never acted on', async () => {
+    const r = rig();
+    setMode(w, { extraLines: ['{"type":"from_the_future","x":1}', 'not json at all', '{"type":"assistant","message":{"content":[]},"novel":{"a":[1]}}'] });
+    await open(r.sup);
+    expect(await waitFor(() => r.kinds('turn.event').some((x) => x.payload.type === 'malformed'))).toBe(true);
+    expect(r.kinds('turn.event').map((x) => x.payload.type)).toEqual(expect.arrayContaining(['from_the_future', 'malformed', 'assistant']));
+    expect(r.kinds('session.exited')).toEqual([]);
+  });
+  it('G-SUB-05 a settings layer written mid-session with an API key ⇒ stopped within 2 s, billing.api.refused', async () => {
+    const r = rig({ watchMs: 200 });
+    await open(r.sup);
+    expect(await waitFor(() => trace(w).some((t) => t.t === 'argv'))).toBe(true);
+    const t0 = Date.now();
+    fs.writeFileSync(path.join(w.cwd, '.claude', 'settings.json'), JSON.stringify({ env: { ANTHROPIC_API_KEY: 'k' } }));
+    expect(await waitFor(() => r.kinds('session.exited').length === 1, 2_000)).toBe(true);
+    expect(Date.now() - t0).toBeLessThan(2_000);
+    expect(r.kinds('session.layers.changed')[0]!.payload.which).toEqual(['settings']);
+    expect(r.kinds('billing.api.refused').some((x) => x.payload.midSession === true)).toBe(true);
+  });
+  it('a non-owner cannot send or stop (NOT_FOUND)', async () => {
+    const r = rig();
+    const s = await open(r.sup);
+    expect((await refusal(r.sup.send('p:abcdefgh/other', { hsid: s.hsid, text: 'x' }))).refusal.code).toBe('NOT_FOUND');
+    expect((await refusal(r.sup.stop('p:abcdefgh/other', { hsid: s.hsid }))).refusal.code).toBe('NOT_FOUND');
+  });
+});
+
+describe('T-008 generated plugin bytes are verified at spawn against the kernel-held record', () => {
+  it('a repo file that differs from the record refuses the spawn; no process starts', async () => {
+    const r = rig();
+    const rel = '.gnomon/generated/.mcp.json';
+    const body = `${JSON.stringify({ _gnomon: { generatedBy: 'gnomon', manifestHash: 'sha256:x', doNotEdit: true }, mcpServers: {} })}\n`;
+    fs.mkdirSync(path.join(w.cwd, '.gnomon', 'generated'), { recursive: true });
+    fs.writeFileSync(path.join(w.cwd, rel), body.replace('{}', '{"evil":{"command":"/bin/sh"}}'));
+    const { createHash } = await import('node:crypto');
+    const rp = recordPath(w.home, w.cwd);
+    fs.mkdirSync(path.dirname(rp), { recursive: true });
+    fs.writeFileSync(rp, JSON.stringify({ schemaVersion: 'gnomon-generated-record:v1', repo: w.cwd, manifestHash: 'sha256:x', files: [{ path: rel, sha256: createHash('sha256').update(body).digest('hex') }], createdDirs: [] }));
+    const e = await refusal(open(r.sup));
+    expect(e.refusal.data).toMatchObject({ session: 'spawn_failed' });
+    expect(r.kinds('session.spawned')).toEqual([]);
+  });
+});
+
+describe('M1.7 slice 2 (deferred)', () => {
+  it.todo('G-SUB-05 non-law-7 layer change ⇒ gate-class card (slice 2); fs.watch/ReadDirectoryChangesW instead of the 500 ms hash poll');
+  it.todo('G-RUN-05 idle respawn with --resume charged as a launch (a session.spawn permit), crash cap 3/10 min, claude_binary_changed on respawn wired');
+  it.todo('ask-user / plan card decisions written back to the child (answer / approve-plan) — needs the broker decision path to the session (slice 2)');
+  it.todo('api-token billing (billing.api.active per turn, G-SUB-03) injected into exactly one session child (slice 2; refused today)');
+  it.todo('session principals (p:<ns>/s-<short>) authenticated on the socket: session.send/stop for agent/session classes, permit.reserve "own scope"');
+  it.todo('the gnomon-mods MCP bridge spawned beside the session under the same profile (M1.11)');
+  it.todo('§15.5 gate-class card to accept a partial session profile (Windows parity phase, G-WIN-06 refusal half)');
+  it.todo('G-ADP-01 nightly replay of RECORDED (not synthetic) transcripts per claude version; G-ADP-02 for gnomon-local (M1.8)');
+  it.todo('the helper XPC service mach-lookup deny (ipc:helper-service) once the helper exists (M1.3)');
+  it.todo('git hardening for kernel git calls (S16-2) — the `git` sandbox class (M2)');
+});

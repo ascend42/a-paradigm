@@ -64,6 +64,9 @@ components:
       - "#oracle-sandbox"
       - "#manifest-loader"
       - "#scheduler"
+      - "#session-runner"
+      - "#supervisor"
+      - "#claude-adapter"
     tests:
       - test/symbols-drift.test.ts
       - test/fence.test.ts
@@ -1024,6 +1027,91 @@ components:
       - test/scheduler-daemon.test.ts
     oracles: [G-SCH-01, G-LAW-05, G-LAW-05b]
 
+  session-runner:
+    description: >-
+      #session-runner (spec §3.3 Preflight/Environment, §3.4 law 7, §16;
+      M1.7 slice 1) in src/kernel/runner/. preflight.ts: the claude binary by
+      explicit path (root-signed config) else the platform registry's known
+      locations (src/platform/claude-code.ts), NEVER PATH (p01); realpath +
+      sha256; claude_binary_changed on a changed sha; version >= 2.1.288;
+      `auth status` = claude.ai/firstParty. law7Layers: EVERY layer the child
+      reads for THIS spawn's cwd (T-009 / Aegis C5) — managed sources per OS
+      (+ managed-settings.d/*.json; unscannable sources such as Windows policy
+      keys are hits), user settings*.json, project + worktree
+      .claude/settings(.local).json and .mcp.json, ~/.claude.json mcpServers
+      AND projects.<cwd>.mcpServers, the session's own policy.json/mcp.json —
+      scanned over the CHILD env (scanApiBilling). env.ts: allowlist + scrub +
+      GNOMON_HSID/SOCK/SESSION_KEY, envKeys names only (G-RUN-02). The
+      darwin `session` profile generator is src/platform/darwin/session-sbpl.ts
+      (from the M1.5 SessionPolicy + session-denies registry; T-008 git
+      denies: .git pointer file, config.worktree, modules/**/{hooks,config,
+      info}; launchers open/osascript/lsregister/launchctl by realpath),
+      registered in src/kernel/sandbox/session.ts (no backend => refused
+      sandbox-unavailable; status fidelity per platform, G-WIN-06).
+      p10m-claude-compat-generated (probes/) re-ran real Claude Code 2.1.302
+      under the GENERATED profile with the adapter argv: PASS, with writes to
+      the whole ~/.claude/** and ~/.claude.json denied and NO per-session
+      CLAUDE_CONFIG_DIR (a custom CLAUDE_CONFIG_DIR loses subscription auth).
+    path: src/kernel/runner/
+    type: module
+    tags: [gnomon, kernel, session, law-7, paradigm-8, m1.7]
+    tests:
+      - test/session-preflight.test.ts
+      - test/session-profile.test.ts
+      - test/session-sandbox.test.ts
+    oracles: [G-SUB-01, G-RUN-02, G-RUN-06, G-SBX-04, G-SBX-05, G-SBX-06, G-SBX-08, G-WIN-06]
+
+  supervisor:
+    description: >-
+      #supervisor (spec §3.3, §6.1, §5 verbs 2-4; M1.7 slice 1) in
+      src/kernel/supervisor/. The one place `claude -p` starts. Slice 1:
+      ATTENDED HUMAN-started Claude Code sessions only (others FORBIDDEN;
+      the scheduler run step still refuses). open: session.open -> preflight
+      -> session dir policy.json/mcp.json from generated plugin bytes
+      VERIFIED against the kernel-held record (T-008, manifest/generate.ts
+      verifiedGenerated) -> per-spawn law-7 scan (hit => billing.api.refused +
+      session.refused{api_billing_refused}, BILLING_REFUSED, before any
+      permit) -> permit.reserve{session.spawn, claude-code, kernelSpawn} ->
+      assertClaudePermit (Aegis: never claude without a live law-7-scanned
+      claude-code session.spawn permit for this hsid) -> generated session
+      profile -> DaemonChildren.intend (intent row BEFORE fork) -> spawn
+      detached -> track (boot + start-time witness) -> session.sandbox{hashes}.
+      stdout: every line a turn.event first (S2); usage only from stream
+      events against the SPAWN permit (fuse.recordStreamUsage); ask-user /
+      plan cards via the broker; init.apiKeySource != none kills the group;
+      quota recorded (P8-D92 tracking-only fuse). send: a turn permit (caller's
+      validated or kernel-reserved), law 7 re-scanned, session.inject{client}
+      -> turn.sent -> stream-json user line. stop: interrupt = control_request
+      only; else staged (control message, stdin close, DaemonChildren.stop
+      SIGTERM -> SIGKILL on the group). Mid-session watch (G-SUB-05):
+      layersHash + gitHash polled every 500 ms; a law-7 hit stops the session
+      within 2 s. port.ts: the dispatcher's session port (human class only);
+      daemon.ts wires it.
+    path: src/kernel/supervisor/
+    type: module
+    tags: [gnomon, kernel, session, paradigm-8, m1.7]
+    tests:
+      - test/session-supervisor.test.ts
+    oracles: [G-RUN-03, G-SUB-05]
+
+  claude-adapter:
+    description: >-
+      #claude-adapter (spec §2.2, §3.3; M1.7 slice 1) in
+      src/adapters/claude-code/adapter.ts: the §3.3 argv with FORBIDDEN_FLAGS
+      throwing (G-RUN-01, also --flag=value and extras); stream-json parse,
+      TOLERANT (unknown fields ignored, unknown types `unknown`, non-objects
+      `malformed` — the falsifier); UsageMeter charges each message id once
+      and the result only its remainder; 4 MiB line cap; the stdin user and
+      control_request interrupt lines. fixtures/2.1.302-turn.jsonl replays
+      the shapes p10m-claude-compat-generated observed (G-ADP-01, synthetic;
+      recorded nightly replay is slice 2).
+    path: src/adapters/claude-code/
+    type: module
+    tags: [gnomon, adapter, stream-json, paradigm-8, m1.7]
+    tests:
+      - test/claude-adapter.test.ts
+    oracles: [G-RUN-01, G-ADP-01]
+
 flows:
   daemon-lifecycle:
     description: >-
@@ -1101,7 +1189,10 @@ gates:
       path the law-7 scan finds; the only API path is the per-use root-signed
       api-token card of #approval-broker, injected into exactly one child,
       with the API CREDITS ACTIVE indicator and billing.api.active rows.
-      The per-claude-version scan list and mid-session watch are M1.7.
+      M1.7 slice 1: #session-runner scans every layer the child reads per
+      spawn cwd before any permit, #supervisor refuses claude without a
+      law-7-scanned claude-code spawn permit and watches the layers
+      mid-session (G-SUB-01, G-SUB-05).
     tags: [gnomon, law-7, billing, paradigm-8, m1.6]
     oracles: [G-SUB-02, G-SUB-03, G-SUB-04]
 

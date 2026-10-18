@@ -6,3 +6,6 @@ export { GNOMON_VERSION } from './version.js';
 export { KERNEL_MODULES, KERNEL_ALLOWED_PACKAGE, type KernelModule } from './kernel/index.js';
 export * as kernelLog from './kernel/log/index.js';
 export * as manifestLoader from './kernel/manifest/index.js';
+// M1.7 slice 1: the session profile + adapter, for the p10m-claude-compat re-run against the GENERATED profile
+export * as sessionSandbox from './kernel/sandbox/session.js';
+export * as claudeAdapter from './adapters/claude-code/adapter.js';

@@ -176,6 +176,13 @@ export class DaemonChildren {
     });
   }
 
+  /** Stop ONE tracked child (staged, as stopAll) and await its exit; true when something of its group survived (M1.7 session.stop). */
+  async stop(child: ChildProcess, reason: string): Promise<boolean> {
+    const t = [...this.#live].find((x) => x.input.child === child);
+    if (!t) return false;
+    return this.#stop(t, reason);
+  }
+
   /** Stop every child and await each exit (idle exit, shutdown). Returns leaders still alive + groups with surviving members. */
   async stopAll(reason: string): Promise<number> {
     this.#closed = true;

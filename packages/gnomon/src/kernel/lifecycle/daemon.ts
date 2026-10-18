@@ -84,6 +84,8 @@ import { LifecycleRefusal } from './refusal.js';
 import { Scheduler } from '../scheduler/index.js';
 import { DaemonChildren, sweepOrphans } from './children.js';
 import { processControlFor } from './process-control.js';
+import { SessionSupervisor, createSessionPort } from '../supervisor/index.js';
+import { linkedFolders } from '../manifest/install.js';
 
 export type DaemonExitReason = 'idle' | 'signal' | 'error';
 
@@ -461,7 +463,31 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
     void apiTokens.sweep().catch(() => undefined);
   }, 5_000);
   brokerTimer.unref();
+  // #supervisor (M1.7 slice 1): attended, human-started Claude Code sessions. The claude binary comes from the
+  // platform's known locations (never PATH, p01) until the root-signed config names one.
+  const supervisor = new SessionSupervisor({
+    log: (kind, payload, ids = {}) => log.append({ kind, principal: kernelPrincipal, payload, ...(ids.session ? { session: ids.session } : {}) }).then(() => undefined),
+    children,
+    fuse,
+    broker,
+    home,
+    kernelPrincipal,
+    sock: choice.path,
+    endpointPort: () => {
+      const st = web?.status() as { listening?: boolean; port?: number } | undefined;
+      return st?.listening && typeof st.port === 'number' ? st.port : null;
+    },
+    linkedFolders: () => {
+      try {
+        return linkedFolders(home, authority);
+      } catch {
+        return [];
+      }
+    },
+  });
+  const sessions = createSessionPort(supervisor);
   const dispatcherCommon = {
+    sessions,
     approvals,
     reads: { log, hub },
     ...(opts.helloTimeoutMs !== undefined ? { helloTimeoutMs: opts.helloTimeoutMs } : {}),
