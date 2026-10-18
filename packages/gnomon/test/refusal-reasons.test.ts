@@ -74,7 +74,7 @@ const PLACEHOLDERS: Record<string, string> = {
 /** client.ts is the CLIENT side: its reasons are synthesized locally, never sent by the kernel. */
 const CLIENT_FILE = path.join(SRC, 'socket', 'client.ts');
 // src/kernel/web/** (#web-endpoint, M1.4): its auth hook and WebSocket replies reach GUI clients.
-const wireFiles = [...tsFiles(path.join(SRC, 'socket')).filter((f) => f !== CLIENT_FILE), ...tsFiles(path.join(SRC, 'refs')), ...tsFiles(path.join(SRC, 'web')), path.join(SRC, 'log', 'redaction.ts')];
+const wireFiles = [...tsFiles(path.join(SRC, 'socket')).filter((f) => f !== CLIENT_FILE), ...tsFiles(path.join(SRC, 'refs')), ...tsFiles(path.join(SRC, 'web')), ...tsFiles(path.join(SRC, 'broker')), ...tsFiles(path.join(SRC, 'budget')), path.join(SRC, 'log', 'redaction.ts')]; // broker/budget: approve + permit.reserve (M1.6)
 
 describe('refusal reasons on the wire are registered (P8-D89)', () => {
   const sent = reasonsIn(wireFiles);

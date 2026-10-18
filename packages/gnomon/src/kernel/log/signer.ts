@@ -60,6 +60,16 @@ export const SIGNATURE_DOMAINS = {
   /** Read-token proof of possession (§4.9, P8-D89a): the token's own Ed25519 key only. */
   authToken: 'gnomon:auth-token:v1',
   brief: 'gnomon:brief:v1',
+  /**
+   * #approval-broker (M1.6): the kernel key signs `card.actions[]` and the
+   * presence-prompt record (§3.1 kernel key "Signs:"). The spec names no
+   * domain string for either; these two are kernel-internal (not in
+   * clientApiId) and keep both apart from event signatures.
+   */
+  cardAction: 'gnomon:card-action:v1',
+  presencePrompt: 'gnomon:presence-prompt:v1',
+  /** #budget-fuse (M1.6): the kernel key signs every permit:v1 (§4.8 `sig`); kernel-internal domain. */
+  permit: 'gnomon:permit:v1',
 } as const;
 export type SignatureDomain = keyof typeof SIGNATURE_DOMAINS;
 
@@ -68,7 +78,7 @@ export type KeyClass = 'kernel' | 'root' | 'approvals' | 'device' | 'agent' | 'r
 
 /** Which domains each key class may sign (§3.1 "Signs:" per class). */
 export const DOMAINS_BY_KEY_CLASS: Readonly<Record<KeyClass, readonly SignatureDomain[]>> = Object.freeze({
-  kernel: Object.freeze(['event', 'authServer', 'brief'] as const),
+  kernel: Object.freeze(['event', 'authServer', 'brief', 'cardAction', 'presencePrompt', 'permit'] as const),
   root: Object.freeze(['row', 'event'] as const),
   approvals: Object.freeze(['approve', 'approveVoice', 'event'] as const),
   device: Object.freeze(['auth', 'event'] as const),

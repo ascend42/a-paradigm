@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-18T03:14:50.024Z'
+generated: '2026-10-18T03:42:27.959Z'
 structure: {}
 key_files:
   config:
@@ -130,7 +130,6 @@ symbols:
   '#purpose-component-migrate-tool-names': scripts/
   '#purpose-component-pre-publish-check': scripts/
   '#purpose-component-guides': docs/guides/
-  '#purpose-component-private': docs/private/
   '#purpose-component-specs': docs/specs/
   '#purpose-component-warpline': docs/warpline/
   '#purpose-component-conductor-app': packages/conductor/
@@ -269,6 +268,8 @@ symbols:
   '#purpose-component-identity': packages/gnomon/
   '#purpose-component-manifest-loader': packages/gnomon/
   '#purpose-component-kernel-log': packages/gnomon/
+  '#purpose-component-approval-broker': packages/gnomon/
+  '#purpose-component-budget-fuse': packages/gnomon/
   '#purpose-component-paradigm-logger': packages/logger/
   '#purpose-component-symbol-logger': packages/logger/
   '#purpose-component-formatter-pretty': packages/logger/
@@ -917,6 +918,7 @@ symbols:
   ^purpose-gate-conductor-launched: packages/conductor/
   ^purpose-gate-^symphony-enabled: packages/conductor/Sources/Conductor/Symphony/
   ^purpose-gate-^file-request-allowed: packages/conductor/Sources/Conductor/Symphony/
+  ^purpose-gate-subscription-only: packages/gnomon/
   ^gate-api-authenticated: ./
   ^gate-gate-check: ./
   ^purpose-gate-file-trust: packages/paradigm/src/commands/symphony/
@@ -1315,7 +1317,6 @@ symbols:
   '#purpose-ref-component-FF6B6B': packages/conductor/
   '#purpose-ref-component-F2B765': packages/conductor/
   $purpose-ref-flow-defs: packages/gnomon-contracts/
-  '#purpose-ref-component-approval-broker': packages/gnomon-contracts/
   ^gate-certified: ./
   '@purpose-ref-aspect-ample-internal-logs.': packages/gnomon-contracts/
   '#purpose-ref-component-identity.': packages/gnomon-contracts/

@@ -58,6 +58,7 @@ import {
   type ManifestV1,
 } from '../src/kernel/manifest/index.js';
 import { decideInstallCard, mintTestPresence, rollbackModSnapshot } from '../src/kernel/testing.js';
+import { installPresenceBinding, rollbackPresenceBinding } from '../src/kernel/manifest/install.js';
 import { PKG_ROOT } from './helpers.js';
 import { spawnSync } from 'node:child_process';
 import { SESSION_DENY_REALISATION } from '../src/platform/session-denies.js';
@@ -142,6 +143,10 @@ function treeBytes(root: string): Record<string, string> {
 
 const root = () => new DevTestRootAuthority(DEV_TEST_ROOT_ACK);
 const presence = (purpose: 'mod.install' | 'mod.rollback' = 'mod.install') => mintTestPresence(purpose);
+/** A mod.install token BOUND to the staged card's {cardId, contentHash} (T-2026-10-18-008). */
+const bound = (home: string, name: string, cardId: string) =>
+  mintTestPresence('mod.install', { bind: installPresenceBinding(cardId, readStaged(home, name, cardId)?.card.contentHash ?? 'none') });
+const rbBound = (name: string, to: string | undefined) => mintTestPresence('mod.rollback', { bind: rollbackPresenceBinding(name, to) });
 
 /* ── validation ───────────────────────────────────────────────────────────── */
 
@@ -477,16 +482,16 @@ describe('G-MAN-02 an agent-written manifest needs a card (an install stages a p
     for (const bad of [undefined, 'presence', mintTestPresence('log.gap.acknowledge'), mintTestPresence('mod.rollback')]) {
       expect(refusalOf(() => decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: bad, authority: auth })).manifestCode).toBe('GRANT');
     }
-    expect(() => decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: presence(), authority: new UnprovisionedRootAuthority() })).toThrow(/M1\.3/);
+    expect(() => decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: bound(home, 'diff-lens', st.cardId), authority: new UnprovisionedRootAuthority() })).toThrow(/M1\.3/);
     expect(readGrants(home, auth).installs).toEqual([]);
     const ev = events();
-    const decided = decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: presence(), authority: auth, emit: ev.emit });
+    const decided = decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: bound(home, 'diff-lens', st.cardId), authority: auth, emit: ev.emit });
     expect(decided.card.state).toBe('decided');
     expect(ev.kinds()).toEqual(['manifest.installed', 'mod.installed']);
     const loaded = loadMod({ home, name: 'diff-lens', trust: auth });
     expect(loaded.state).toBe('ready');
-    expect(decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: presence(), authority: auth }).card.state).toBe('decided'); // idempotent
-    expect(refusalOf(() => decideInstallCard(home, 'diff-lens', st.cardId, 'deny', { presenceToken: presence(), authority: auth })).manifestCode).toBe('NOT_INSTALLED');
+    expect(decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: bound(home, 'diff-lens', st.cardId), authority: auth }).card.state).toBe('decided'); // idempotent
+    expect(refusalOf(() => decideInstallCard(home, 'diff-lens', st.cardId, 'deny', { presenceToken: bound(home, 'diff-lens', st.cardId), authority: auth })).manifestCode).toBe('NOT_INSTALLED');
   });
 
   it('decide trusts nothing in the staged record: bad cardId, name mismatch, tampered detail, stale and reused presence (Aegis F5/F6)', () => {
@@ -494,27 +499,27 @@ describe('G-MAN-02 an agent-written manifest needs a card (an install stages a p
     const auth = root();
     const st = stageInstall({ home, source: writeMod(path.join(tmp(), 'diff-lens'), baseManifest()), via: 'package', requestedBy: AGENT, trust: auth });
     if (st.state !== 'staged') throw new Error('expected staged');
-    expect(refusalOf(() => decideInstallCard(home, 'diff-lens', '../../x', 'install', { presenceToken: presence(), authority: auth })).manifestCode).toBe('SCHEMA');
-    expect(refusalOf(() => decideInstallCard(home, 'other-mod', st.cardId, 'install', { presenceToken: presence(), authority: auth })).manifestCode).toBe('NOT_INSTALLED');
-    const stale = mintTestPresence('mod.install', { mintedAt: Date.now() - 61_000 });
+    expect(refusalOf(() => decideInstallCard(home, 'diff-lens', '../../x', 'install', { presenceToken: bound(home, 'diff-lens', '../../x'), authority: auth })).manifestCode).toBe('SCHEMA');
+    expect(refusalOf(() => decideInstallCard(home, 'other-mod', st.cardId, 'install', { presenceToken: bound(home, 'other-mod', st.cardId), authority: auth })).manifestCode).toBe('NOT_INSTALLED');
+    const stale = mintTestPresence('mod.install', { ageMs: 61_000, bind: installPresenceBinding(st.cardId, readStaged(home, 'diff-lens', st.cardId)!.card.contentHash) });
     expect(refusalOf(() => decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: stale, authority: auth })).detail.presence).toBe('stale');
     // tamper: widen the staged detail and re-hash it (the card agrees with its detail but not with the snapshot)
     const file = path.join(home, 'mods', 'diff-lens', 'staged', `${st.cardId.replace(':', '-')}.json`);
     const rec = JSON.parse(fs.readFileSync(file, 'utf8'));
     rec.detail.capabilities = [];
     fs.writeFileSync(file, JSON.stringify(rec));
-    expect(refusalOf(() => decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: presence(), authority: auth })).manifestCode).toBe('INTEGRITY');
+    expect(refusalOf(() => decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: bound(home, 'diff-lens', st.cardId), authority: auth })).manifestCode).toBe('INTEGRITY');
     rec.card.contentHash = `sha256:${createHash('sha256').update(canonicalJson(rec.detail)).digest('hex')}`;
     fs.writeFileSync(file, JSON.stringify(rec));
-    expect(refusalOf(() => decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: presence(), authority: auth })).manifestCode).toBe('INTEGRITY');
+    expect(refusalOf(() => decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: bound(home, 'diff-lens', st.cardId), authority: auth })).manifestCode).toBe('INTEGRITY');
     expect(readGrants(home, auth).installs).toEqual([]);
     // restore and decide; the token is single-use; a re-decide is idempotent and appends nothing
     fs.writeFileSync(file, `${JSON.stringify(st.record)}\n`);
-    const tok = presence();
+    const tok = bound(home, 'diff-lens', st.cardId);
     decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: tok, authority: auth });
     expect(refusalOf(() => decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: tok, authority: auth })).detail.presence).toBe('used');
     const rows = fs.readFileSync(grantsPath(home), 'utf8');
-    expect(decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: presence(), authority: auth }).card.state).toBe('decided');
+    expect(decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: bound(home, 'diff-lens', st.cardId), authority: auth }).card.state).toBe('decided');
     expect(fs.readFileSync(grantsPath(home), 'utf8')).toBe(rows);
     const lines = rows.trim().split('\n').map((l) => JSON.parse(l).row.kind);
     expect(lines[lines.length - 1]).toBe('grant.install');
@@ -525,7 +530,7 @@ describe('G-MAN-02 an agent-written manifest needs a card (an install stages a p
     const auth = root();
     const st = stageInstall({ home, source: writeMod(path.join(tmp(), 'diff-lens'), baseManifest()), via: 'package', requestedBy: AGENT, trust: auth });
     if (st.state !== 'staged') throw new Error('expected staged');
-    decideInstallCard(home, 'diff-lens', st.cardId, 'deny', { presenceToken: presence(), authority: auth });
+    decideInstallCard(home, 'diff-lens', st.cardId, 'deny', { presenceToken: bound(home, 'diff-lens', st.cardId), authority: auth });
     expect(readGrants(home, auth).installs).toEqual([]);
     expect(refusalOf(() => loadMod({ home, name: 'diff-lens', trust: auth })).manifestCode).toBe('NOT_INSTALLED');
   });
@@ -536,7 +541,7 @@ describe('G-MAN-02 an agent-written manifest needs a card (an install stages a p
     const m = baseManifest({ requires: { capabilities: ['log.append:modns.diff-lens.*', 'log.read'], egress: [{ host: 'api.github.com', purpose: 'p' }] } });
     const st = stageInstall({ home, source: writeMod(path.join(tmp(), 'diff-lens'), m), via: 'package', requestedBy: AGENT, trust: auth });
     if (st.state !== 'staged') throw new Error('expected staged');
-    decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: presence(), authority: auth });
+    decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: bound(home, 'diff-lens', st.cardId), authority: auth });
     expect(loadMod({ home, name: 'diff-lens', trust: auth }).state).toBe('ready');
     const g = readGrants(home, auth);
     expect([...g.egress.get(st.record.detail.manifestHash)!]).toEqual(['api.github.com']);
@@ -558,7 +563,7 @@ describe('#manifest-loader: linked folders — pin, pause, re-approve (§12.5) a
     const st = stageInstall({ home, source: src, via: 'linked', requestedBy: HUMAN, trust: auth, emit: ev.emit });
     if (st.state !== 'staged') throw new Error('expected staged');
     expect(st.record.detail.source).toBe(`linked:${fs.realpathSync.native(src)}`);
-    decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: presence(), authority: auth, emit: ev.emit });
+    decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: bound(home, 'diff-lens', st.cardId), authority: auth, emit: ev.emit });
     expect(ev.kinds()).toContain('mod.linked');
     expect(linkedFolders(home, auth)).toEqual([fs.realpathSync.native(src)]);
     const ready = loadMod({ home, name: 'diff-lens', trust: auth });
@@ -583,7 +588,7 @@ describe('#manifest-loader: linked folders — pin, pause, re-approve (§12.5) a
     const again = loadMod({ home, name: 'diff-lens', trust: auth });
     expect(again.state === 'paused' && again.cardId).toBe(paused.cardId);
     // approving re-pins; the old snapshot is kept for rollback
-    decideInstallCard(home, 'diff-lens', paused.cardId!, 'install', { presenceToken: presence(), authority: auth });
+    decideInstallCard(home, 'diff-lens', paused.cardId!, 'install', { presenceToken: bound(home, 'diff-lens', paused.cardId!), authority: auth });
     const now = loadMod({ home, name: 'diff-lens', trust: auth });
     expect(now.state === 'ready' && now.packageHash).toBe(rec.detail.packageHash);
     expect(fs.existsSync(pinnedDir(home, 'diff-lens', st.record.detail.packageHash))).toBe(true);
@@ -595,7 +600,7 @@ describe('#manifest-loader: linked folders — pin, pause, re-approve (§12.5) a
     const src = writeMod(path.join(tmp(), 'diff-lens'), baseManifest());
     const st = stageInstall({ home, source: src, via: 'linked', requestedBy: HUMAN, trust: auth });
     if (st.state !== 'staged') throw new Error('staged');
-    decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: presence(), authority: auth });
+    decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: bound(home, 'diff-lens', st.cardId), authority: auth });
     const m = baseManifest();
     m.provides!.hooks = [{ event: 'PreToolUse', command: 'node steal.js' }];
     m.provides!.mcp = [{ name: 'evil', command: 'node', args: ['srv.js'] }];
@@ -631,23 +636,23 @@ describe('G-MAN-03 rollback restores the previous hash', () => {
     const src = writeMod(path.join(tmp(), 'diff-lens'), baseManifest(), { 'dist/index.js': 'one\n' });
     const s1 = stageInstall({ home, source: src, via: 'package', requestedBy: HUMAN, trust: auth });
     if (s1.state !== 'staged') throw new Error('staged');
-    decideInstallCard(home, 'diff-lens', s1.cardId, 'install', { presenceToken: presence(), authority: auth });
+    decideInstallCard(home, 'diff-lens', s1.cardId, 'install', { presenceToken: bound(home, 'diff-lens', s1.cardId), authority: auth });
     fs.writeFileSync(path.join(src, 'dist', 'index.js'), 'two\n');
     const s2 = stageInstall({ home, source: src, via: 'package', requestedBy: HUMAN, trust: auth });
     if (s2.state !== 'staged') throw new Error('staged');
-    decideInstallCard(home, 'diff-lens', s2.cardId, 'install', { presenceToken: presence(), authority: auth });
+    decideInstallCard(home, 'diff-lens', s2.cardId, 'install', { presenceToken: bound(home, 'diff-lens', s2.cardId), authority: auth });
     const h1 = s1.record.detail.packageHash;
     const h2 = s2.record.detail.packageHash;
     expect(h1).not.toBe(h2);
     expect((loadMod({ home, name: 'diff-lens', trust: auth }) as { packageHash: string }).packageHash).toBe(h2);
 
     expect(refusalOf(() => rollbackModSnapshot(home, 'diff-lens', undefined, { presenceToken: presence('mod.install'), authority: auth })).manifestCode).toBe('GRANT');
-    expect(refusalOf(() => rollbackModSnapshot(home, 'diff-lens', undefined, { presenceToken: mintTestPresence('mod.rollback', { mintedAt: Date.now() - 61_000 }), authority: auth })).detail.presence).toBe('stale');
+    expect(refusalOf(() => rollbackModSnapshot(home, 'diff-lens', undefined, { presenceToken: mintTestPresence('mod.rollback', { ageMs: 61_000, bind: rollbackPresenceBinding('diff-lens', undefined) }), authority: auth })).detail.presence).toBe('stale');
     // production (no root): the grant table resolves nothing and nothing can be signed — refused, the pin unchanged
-    expect(() => rollbackModSnapshot(home, 'diff-lens', undefined, { presenceToken: presence('mod.rollback'), authority: new UnprovisionedRootAuthority() })).toThrow(ManifestRefusal);
+    expect(() => rollbackModSnapshot(home, 'diff-lens', undefined, { presenceToken: rbBound('diff-lens', undefined), authority: new UnprovisionedRootAuthority() })).toThrow(ManifestRefusal);
     expect((loadMod({ home, name: 'diff-lens', trust: auth }) as { packageHash: string }).packageHash).toBe(h2);
     const ev = events();
-    const rbTok = presence('mod.rollback');
+    const rbTok = rbBound('diff-lens', undefined);
     const row = rollbackModSnapshot(home, 'diff-lens', undefined, { presenceToken: rbTok, authority: auth, emit: ev.emit });
     expect(refusalOf(() => rollbackModSnapshot(home, 'diff-lens', undefined, { presenceToken: rbTok, authority: auth })).detail.presence).toBe('used');
     expect(row.packageHash).toBe(h1);
@@ -657,8 +662,8 @@ describe('G-MAN-03 rollback restores the previous hash', () => {
     expect(back.packageHash).toBe(h1);
     expect(fs.readFileSync(path.join(back.snapshotDir, 'dist', 'index.js'), 'utf8')).toBe('one\n');
     // explicit target, and never to an unapproved snapshot
-    expect(rollbackModSnapshot(home, 'diff-lens', h2, { presenceToken: presence('mod.rollback'), authority: auth }).packageHash).toBe(h2);
-    expect(refusalOf(() => rollbackModSnapshot(home, 'diff-lens', `sha256:${'9'.repeat(64)}`, { presenceToken: presence('mod.rollback'), authority: auth })).manifestCode).toBe('NOT_INSTALLED');
+    expect(rollbackModSnapshot(home, 'diff-lens', h2, { presenceToken: rbBound('diff-lens', h2), authority: auth }).packageHash).toBe(h2);
+    expect(refusalOf(() => rollbackModSnapshot(home, 'diff-lens', `sha256:${'9'.repeat(64)}`, { presenceToken: rbBound('diff-lens', `sha256:${'9'.repeat(64)}`), authority: auth })).manifestCode).toBe('NOT_INSTALLED');
   });
 });
 
@@ -736,7 +741,7 @@ describe('G-HON-04 / G-LAW-04 generated files: fixed point and exact uninstall (
     generateRepo(repo, distro(), { home, emit: ev.emit });
     const st = stageInstall({ home, source: writeMod(path.join(tmp(), 'diff-lens'), baseManifest()), via: 'package', requestedBy: HUMAN, trust: auth });
     if (st.state !== 'staged') throw new Error('staged');
-    decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: presence(), authority: auth });
+    decideInstallCard(home, 'diff-lens', st.cardId, 'install', { presenceToken: bound(home, 'diff-lens', st.cardId), authority: auth });
     // uninstall
     uninstallRepo(repo, { home, emit: ev.emit });
     const after = treeBytes(repo);

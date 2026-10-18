@@ -20,7 +20,9 @@
  * (FIRST_PARTY_PACKAGE_HASHES, empty until packages/gnomon-mods ships); every
  * other package is `local`.
  *
- * THE DECISION IS NOT A PRODUCTION API YET. The approval broker that decides
+ * M1.6: the decision is owned by #approval-broker (broker/install-card.ts),
+ * with presence BOUND to {cardId, contentHash}. Historical (M1.5):
+ * THE DECISION WAS NOT A PRODUCTION API. The approval broker that decides
  * cards (fresh presence, root key, kernel-signed actions) is M1.6. Until then
  * `decideInstall` and `rollbackMod` are module-private and registered ONLY on
  * the internal seam channel (internal-seams.ts), read only by the internal test
@@ -45,7 +47,7 @@ import { createHash } from 'node:crypto';
 import { canonicalJson, mintId, validateCardV1, type CardV1 } from '@a-company/gnomon-contracts';
 import type { RootAuthority } from '../identity/root-authority.js';
 import type { RowVerifier } from '../identity/registry.js';
-import { consumePresence } from '../identity/presence.js';
+import { consumeBoundPresence } from '../identity/presence.js';
 import { registerSeams } from '../internal-seams.js';
 import { appendGrantRow, checkAgainstGrants, effectiveInstall, readGrants, type GrantInstallRow } from './grants.js';
 import { detectWidening, MANIFEST_FILE, manifestHash, validateManifest, type ManifestV1, type TrustTier, type WideningEntry } from './manifest.js';
@@ -338,21 +340,62 @@ export interface DecideOptions {
  * that grant nothing on their own; a re-decide of a card whose grant.install
  * already exists completes idempotently without new rows.
  */
-function decideInstall(home: string, name: string, cardId: string, decision: 'install' | 'deny', opts: DecideOptions): StagedRecord {
+/** What a `mod.install` presence token is bound to (T-2026-10-18-008): the card and the hash of the detail it shows. */
+export function installPresenceBinding(cardId: string, contentHash: string): Readonly<Record<string, string>> {
+  return { action: 'mod.install', cardId, contentHash };
+}
+
+/** What a `mod.rollback` presence token is bound to: the mod and the snapshot it re-pins (`(previous)` = the one before the current pin). */
+export function rollbackPresenceBinding(name: string, toPackageHash: string | undefined): Readonly<Record<string, string>> {
+  return { action: 'mod.rollback', name, toPackageHash: toPackageHash ?? '(previous)' };
+}
+
+/**
+ * Re-derive an install card's detail from the PINNED SNAPSHOT (T-2026-10-18-008,
+ * M1.6): the broker renders the card from this, never from the writable staged
+ * file. Throws INTEGRITY when the staged detail's security surface differs
+ * from what the snapshot derives, or when the snapshot no longer hashes to its
+ * packageHash. Read-only.
+ */
+export function rederiveInstallDetail(home: string, name: string, cardId: string): { record: StagedRecord; detail: InstallCardDetail; block: Record<string, unknown>; contentHash: string } {
+  if (typeof cardId !== 'string' || !CARD_ID.test(cardId)) throw new ManifestRefusal('SCHEMA', 'cardId must be card:<ULID>', { cardId: String(cardId) });
+  if (typeof name !== 'string' || !/^[a-z][a-z0-9-]{0,63}$/.test(name)) throw new ManifestRefusal('SCHEMA', 'malformed mod name', { name: String(name) });
+  const rec = readStaged(home, name, cardId);
+  if (!rec || rec.card.cardId !== cardId || rec.detail.name !== name) throw new ManifestRefusal('NOT_INSTALLED', `no install card ${cardId} for ${name}`, { name, cardId });
+  const dir = pinnedDir(home, name, rec.detail.packageHash);
+  if (computePackageHash(fs.existsSync(dir) ? hashPinnedTree(dir) : []) !== rec.detail.packageHash) throw new ManifestRefusal('INTEGRITY', `pinned snapshot of ${name} no longer hashes to ${rec.detail.packageHash}`, { name });
+  const tier = rec.detail.source.startsWith('linked:') ? 'local' : deriveTier(rec.detail.packageHash);
+  const manifest = validateManifest(JSON.parse(fs.readFileSync(path.join(dir, MANIFEST_FILE), 'utf8')), { tier });
+  const mh = manifestHash(manifest);
+  const surf = surfaceOf(manifest);
+  const derived: InstallCardDetail = { ...rec.detail, ...surf, name: manifest.name, kind: manifest.kind, version: manifest.version, tier, manifestHash: mh };
+  const claimed = canonicalJson({ mh: rec.detail.manifestHash, tier: rec.detail.tier, name: rec.detail.name, ...pick(rec.detail) });
+  if (claimed !== canonicalJson({ mh, tier, name: manifest.name, ...pick(derived) })) throw new ManifestRefusal('INTEGRITY', `install card ${cardId} does not match its pinned snapshot`, { name, cardId });
+  return { record: rec, detail: derived, block: blockFor(derived), contentHash: sha(canonicalJson(derived)) };
+}
+
+/**
+ * The install-card decision. Production reaches it ONLY through
+ * #approval-broker (broker/install-card.ts, M1.6), which supplies a presence
+ * token BOUND to `{cardId, contentHash}` of the detail it rendered; tests
+ * reach it through the internal test entry.
+ */
+export function decideInstall(home: string, name: string, cardId: string, decision: 'install' | 'deny', opts: DecideOptions): StagedRecord {
   const emit = opts.emit ?? noEvents;
   const now = opts.now ?? new Date();
   if (typeof cardId !== 'string' || !CARD_ID.test(cardId)) throw new ManifestRefusal('SCHEMA', 'cardId must be card:<ULID>', { cardId: String(cardId) });
   if (typeof name !== 'string' || !/^[a-z][a-z0-9-]{0,63}$/.test(name)) throw new ManifestRefusal('SCHEMA', 'malformed mod name', { name: String(name) });
-  const verdict = consumePresence(opts.presenceToken, 'mod.install', now.getTime());
-  if (verdict !== 'ok') throw new ManifestRefusal('GRANT', `install decision needs fresh presence (${verdict})`, { name, cardId, presence: verdict });
   const rec = readStaged(home, name, cardId);
   if (!rec || rec.card.cardId !== cardId || rec.detail.name !== name) throw new ManifestRefusal('NOT_INSTALLED', `no install card ${cardId} for ${name}`, { name, cardId });
+  if (sha(canonicalJson(rec.detail)) !== rec.card.contentHash) throw new ManifestRefusal('INTEGRITY', `install card ${cardId}: contentHash does not match its detail`, { name, cardId });
+  // bound presence (T-2026-10-18-008): the token names this card and the hash of THIS detail; trusted clock
+  const verdict = consumeBoundPresence(opts.presenceToken, 'mod.install', installPresenceBinding(cardId, rec.card.contentHash));
+  if (verdict !== 'ok') throw new ManifestRefusal('GRANT', `install decision needs fresh presence (${verdict})`, { name, cardId, presence: verdict });
   const already = readGrants(home, opts.authority).installs.find((r) => r.cardId === cardId && r.packageHash === rec.detail.packageHash);
   if (rec.card.state !== 'pending') {
     if (rec.decision?.decision === decision) return rec; // idempotent re-decide
     throw new ManifestRefusal('NOT_INSTALLED', `install card ${cardId} is already decided`, { name, cardId });
   }
-  if (sha(canonicalJson(rec.detail)) !== rec.card.contentHash) throw new ManifestRefusal('INTEGRITY', `install card ${cardId}: contentHash does not match its detail`, { name, cardId });
   if (decision === 'install' && !already) {
     const dir = pinnedDir(home, name, rec.detail.packageHash);
     if (computePackageHash(fs.existsSync(dir) ? hashPinnedTree(dir) : []) !== rec.detail.packageHash) throw new ManifestRefusal('INTEGRITY', `pinned snapshot of ${name} no longer hashes to ${rec.detail.packageHash}`, { name });
@@ -388,11 +431,11 @@ function pick(d: Surface & { packageHash: string }): Record<string, unknown> {
  * Human-only rollback: re-pin a previous APPROVED snapshot (an earlier
  * grant.install row for the mod), never an unapproved one; keeps the link.
  */
-function rollbackMod(home: string, name: string, toPackageHash: string | undefined, opts: DecideOptions): GrantInstallRow {
+export function rollbackMod(home: string, name: string, toPackageHash: string | undefined, opts: DecideOptions): GrantInstallRow {
   const emit = opts.emit ?? noEvents;
   const now = opts.now ?? new Date();
   if (typeof name !== 'string' || !/^[a-z][a-z0-9-]{0,63}$/.test(name)) throw new ManifestRefusal('SCHEMA', 'malformed mod name', { name: String(name) });
-  const verdict = consumePresence(opts.presenceToken, 'mod.rollback', now.getTime());
+  const verdict = consumeBoundPresence(opts.presenceToken, 'mod.rollback', rollbackPresenceBinding(name, toPackageHash));
   if (verdict !== 'ok') throw new ManifestRefusal('GRANT', `rollback needs fresh presence (${verdict})`, { name, presence: verdict });
   const grants = readGrants(home, opts.authority);
   const rows = grants.installs.filter((r) => r.name === name);

@@ -196,7 +196,7 @@ describe('device-key auth (§4.9 S-H4, §3.1)', () => {
     });
     const res = (st as { result: { verbs: Array<{ verb: string; available: boolean }>; relays: unknown[]; nextLegalVerbs: Array<{ verb: string }>; clients: unknown[]; log: { seq: number } } }).result;
     expect(res.verbs.map((v) => v.verb)).toEqual(CLIENT_METHODS.slice(0, 12));
-    expect(res.verbs.filter((v) => v.available).map((v) => v.verb)).toEqual(['status', 'log.read', 'ref.resolve']);
+    expect(res.verbs.filter((v) => v.available).map((v) => v.verb)).toEqual(['status', 'log.read', 'permit.reserve', 'approve', 'ref.resolve']); // approve + permit.reserve served since M1.6
     expect(res.relays).toHaveLength(2);
     expect(res.nextLegalVerbs.map((v) => v.verb)).toEqual(['session.open', 'permit.reserve', 'status']);
     expect(res.clients).toEqual([{ connId: s.connId, principal: r.cred.principalId, surface: 'cli', client: { name: 'gnomon-test', version: '0.0.0' }, conformance: null }]);
@@ -337,8 +337,8 @@ describe('verb dispatch skeleton (§5)', () => {
       'session.send': [-32000, 'not-implemented', 'M1.7'],
       'session.stop': [-32000, 'not-implemented', 'M1.7'],
       'log.append': [-32600, 'bad-kind', undefined], // the ownership gate (M1.4 slice 3, socket-abi.test.ts G-SOCK-04)
-      'permit.reserve': [-32000, 'not-implemented', 'M1.6'],
-      approve: [-32000, 'not-implemented', 'M1.6'],
+      'permit.reserve': [-32600, 'bad-params', undefined], // served since M1.6 (#budget-fuse): {} has no kind
+      approve: [-32600, 'bad-params', undefined], // served since M1.6 (#approval-broker): {} has no cardId
       'contract.register': [-32000, 'not-implemented', 'M2.1'],
       'contract.claim': [-32000, 'not-implemented', 'M2.2'],
       'oracle.run': [-32000, 'not-implemented', 'M2.3'],

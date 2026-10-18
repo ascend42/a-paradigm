@@ -73,7 +73,10 @@ export function acknowledgeGap(log: KernelLog, input: { presenceToken: PresenceT
 }
 
 /** A test-seam PresenceToken (default purpose `log.gap.acknowledge`, minted now). */
-export function mintTestPresence(purpose: PresencePurpose = 'log.gap.acknowledge', opts: { method?: PresenceMethod; mintedAt?: number } = {}): PresenceToken {
+export function mintTestPresence(
+  purpose: PresencePurpose = 'log.gap.acknowledge',
+  opts: { method?: PresenceMethod; mintedAt?: number; bind?: Readonly<Record<string, string>>; ageMs?: number } = {},
+): PresenceToken {
   return seamsOf('presence').mint(purpose, opts);
 }
 

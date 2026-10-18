@@ -29,7 +29,8 @@ const GATED = /\b(acknowledgeGap|openForRecovery|openKernelLogForRecovery|seamsO
 /** CLI / daemon only: constructing KernelLog directly or casting it (the constructor-key bypass shape). */
 /** #manifest-loader (M1.5): the install-card decision and the rollback — the M1.6 broker owns them in production. */
 const GATED_MANIFEST = /\b(decideInstall|decideInstallCard|rollbackMod|rollbackModSnapshot|ManifestDecisions)\b/;
-const MAY_NAME_MANIFEST = new Set(['src/kernel/manifest/install.ts', CHANNEL, TEST_ENTRY]);
+// M1.6 (T-2026-10-18-008): the broker owns the install-card decision in production (bound mod.install presence)
+const MAY_NAME_MANIFEST = new Set(['src/kernel/manifest/install.ts', 'src/kernel/broker/install-card.ts', CHANNEL, TEST_ENTRY]);
 const DIRECT_CONSTRUCT = /\bnew\s+(\(\s*)?KernelLog\b|\bKernelLog\s+as\b/;
 
 /** Strip block and line comments (string contents kept; good enough for identifier tripwires). */

@@ -54,7 +54,8 @@ export interface KernelLogSeams {
 
 export interface PresenceSeams {
   /** Mint a presence token without a human (tests only, until the helper's presence prompt, M1.3). */
-  mint(purpose: PresencePurpose, opts?: { method?: PresenceMethod; mintedAt?: number }): PresenceToken;
+  /** `bind` = the decision it authorizes (bound presence); `ageMs` backdates it on the kernel-trusted clock (staleness tests). */
+  mint(purpose: PresencePurpose, opts?: { method?: PresenceMethod; mintedAt?: number; bind?: Readonly<Record<string, string>>; ageMs?: number }): PresenceToken;
 }
 
 /** #web-endpoint: construct an endpoint with a substituted launcher (the unsandboxed child, tests on every OS) or bundle pin. */

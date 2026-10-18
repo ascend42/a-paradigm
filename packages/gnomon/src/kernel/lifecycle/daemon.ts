@@ -46,6 +46,13 @@
  * Not yet here: sessions, mods, timers, orphan sweep and an approved `stop`
  * (#approval-broker, M1.6).
  */
+import * as nodeOs from 'node:os';
+import { ApprovalBroker } from '../broker/broker.js';
+import { ApiTokenBilling } from '../broker/api-token.js';
+import { createApprovalPort } from '../broker/port.js';
+import { BudgetFuse } from '../budget/fuse.js';
+import { loadFuseConfig } from '../budget/config.js';
+import { fileLayers } from '../budget/billing.js';
 import * as path from 'node:path';
 import { completePendingQuarantine, KernelLog, KeyRing, SoftwareEd25519Signer, type Signer } from '../log/index.js';
 import { readKernelPubs, recordKernelPub, UNPROVISIONED_NS, UnprovisionedRootAuthority, type RootAuthority } from '../identity/index.js';
@@ -277,6 +284,7 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
         await server?.close();
         clearInterval(diagTimer);
         clearInterval(tokenTimer);
+        clearInterval(brokerTimer);
         await flushDiagnostics();
         await appendRow('daemon.exit', { reason }).catch(() => undefined);
         await Promise.allSettled([...pendingRows]);
@@ -355,9 +363,49 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
     log: () => ({ ...log.head() }),
     kernelKey: () => ({ keyId: kernelSigner.keyId, custody: 'partial' as const, source: kernelKeySource }),
     root: () => ({ state: authority.state, rootKeyId: authority.rootKeyId }),
-    web: () => web?.status() ?? { listening: false },
+    web: () => {
+      const st = (web?.status() ?? { listening: false }) as Record<string, unknown> & { guiSessions?: { n: number; sessions: Array<Record<string, unknown> & { connId: string }> } };
+      if (!st.guiSessions) return st;
+      return { ...st, guiSessions: { ...st.guiSessions, sessions: st.guiSessions.sessions.map((g) => ({ ...g, unlock: approvals.unlockOf(g.connId) })) } };
+    },
   };
+  // #approval-broker + #budget-fuse (M1.6). Production: no presence prompt, no approvals key and no keystore
+  // until the signed helper (M1.3), so every presence-taking decision and every api-token activation refuses.
+  const brokerLog = (kind: string, payload: Record<string, unknown>, ids: { connId?: string; session?: string } = {}): Promise<void> =>
+    log.append({ kind, principal: kernelPrincipal, payload, ...(ids.connId ? { connId: ids.connId } : {}) }).then(() => undefined);
+  const broker = new ApprovalBroker({
+    kernel: kernelSigner,
+    kernelPrincipal,
+    log: brokerLog,
+    root: authority,
+    guiSessions: () => ((web?.status() as { guiSessions?: { n?: number } } | undefined)?.guiSessions?.n ?? 0),
+  });
+  const apiTokens = new ApiTokenBilling(broker, brokerLog);
+  const fuseCfg = loadFuseConfig(home, authority, (kind, payload) => void appendRow(kind, payload).catch(() => undefined));
+  const fuse = new BudgetFuse({
+    kernel: kernelSigner,
+    logId: log.head().log,
+    log: brokerLog,
+    config: fuseCfg.config,
+    corrupt: fuseCfg.corrupt,
+    broker,
+    apiTokens,
+    kernelPrincipal,
+    // law 7 scan: the env a child would inherit and the user settings layer; the versioned per-OS
+    // managed-policy list and the mid-session watch are M1.7 (#claude-adapter, G-SUB-01/05)
+    billing: {
+      env: () => ({ ...process.env }),
+      layers: () => fileLayers([{ where: 'user-settings', path: path.join(nodeOs.homedir(), '.claude', 'settings.json'), kind: 'settings' }]),
+    },
+  });
+  const approvals = createApprovalPort({ broker, fuse, extraStatus: () => ({ billing: apiTokens.status() }) });
+  const brokerTimer = setInterval(() => {
+    void broker.expireDue().catch(() => undefined);
+    void apiTokens.sweep().catch(() => undefined);
+  }, 5_000);
+  brokerTimer.unref();
   const dispatcherCommon = {
+    approvals,
     reads: { log, hub },
     ...(opts.helloTimeoutMs !== undefined ? { helloTimeoutMs: opts.helloTimeoutMs } : {}),
     ...(opts.preAuthTimeoutMs !== undefined ? { preAuthTimeoutMs: opts.preAuthTimeoutMs } : {}),
@@ -426,6 +474,7 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
   } catch (err) {
     clearInterval(diagTimer);
     clearInterval(tokenTimer);
+    clearInterval(brokerTimer);
     await log.close().catch(() => undefined);
     releaseDaemonLock(home, pidfile);
     throw err;

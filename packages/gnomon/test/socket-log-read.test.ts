@@ -167,7 +167,7 @@ describe('G-ABI-02 rows: status, log.read, ref.resolve for every constructible p
     const s = await session(r);
     const st = ok(await s.conn.call('status', {}));
     const verbs = st.verbs as Array<{ verb: string; available: boolean }>;
-    expect(verbs.filter((v) => v.available).map((v) => v.verb)).toEqual(['status', 'log.read', 'ref.resolve']);
+    expect(verbs.filter((v) => v.available).map((v) => v.verb)).toEqual(['status', 'log.read', 'permit.reserve', 'approve', 'ref.resolve']); // approve + permit.reserve served since M1.6
     expect(st.subscriptions).toEqual({ n: 0, onThisConnection: 0, perConnectionMax: 8, backlogCap: SUBSCRIPTION_BACKLOG_CAP });
   });
 });

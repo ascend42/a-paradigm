@@ -61,6 +61,17 @@
  * 30 s nonce TTL) is closed; at most `maxPreAuth` (64) unauthenticated
  * connections exist at once — the next one is closed on connect. Closures are
  * counted for the coalesced diagnostic row (daemon.ts), not logged one by one.
+ *
+ * M1.6 #approval-broker + #budget-fuse: `approve` and `permit.reserve` are
+ * handled EXPLICITLY (T-2026-10-17-017), never by the generic qualified-
+ * access rule: `approve` from the voice principal is FORBIDDEN gate voice
+ * `voice-off` in every form (no arm can exist before Move 4, G-ABI-02 voice
+ * row); from the human it goes to the broker, which applies the presence
+ * class of §3.4 ("presence per class; root key for use-api-token, install;
+ * withdraw on held cards"). `permit.reserve` for the human and agent classes
+ * goes to the fuse; the session class ("own scope") needs session principals
+ * (M1.7). Without an `approvals` port (unit rigs) both stay not-implemented.
+ * A closed connection drops its cached unlock.
  */
 import {
   CLIENT_API_ID,
@@ -81,6 +92,8 @@ import { RpcRefusal, type RpcRequestFrame } from './rpc.js';
 import type { ConnAuthState, SocketAuthenticator, WebAuthHook } from './auth.js';
 import { resolveRef } from '../refs/resolve.js';
 import { refuseAppend, type AppendClass } from './log-append.js';
+import { voiceApproveRefusal } from '../broker/broker.js';
+import type { ApprovalPort } from '../broker/port.js';
 import { asRpcRefusal, parseLogReadParams, readerFor, readOnePage, SUBSCRIPTION_BACKLOG_CAP, MAX_SUBSCRIPTIONS_PER_CONNECTION, type ReadLog, type SubscriptionHub } from './log-read.js';
 
 /** Where each not-yet-served method lands (spec §19). */
@@ -96,6 +109,7 @@ export const VERB_MILESTONES: Readonly<Record<string, string>> = Object.freeze({
   'log.read': 'M1.4',
   'permit.reserve': 'M1.6',
   approve: 'M1.6',
+  // (the session class's permit.reserve, "own scope", lands with session principals in M1.7)
   'contract.register': 'M2.1',
   'contract.claim': 'M2.2',
   'oracle.run': 'M2.3',
@@ -221,6 +235,8 @@ export interface DispatcherOptions {
   reads?: { log: ReadLog; hub: SubscriptionHub };
   /** The web endpoint's launch/reconnect auth handler (#web-endpoint dispatcher only). */
   web?: WebAuthHook;
+  /** #approval-broker + #budget-fuse (M1.6). Absent ⇒ approve / permit.reserve stay not-implemented. */
+  approvals?: ApprovalPort;
   /** Append a socket.* row to the kernel log; must reject if the row was not written. */
   log: (kind: SocketLogKind, payload: Record<string, unknown>, ids: { connId: string; deviceId?: string }) => Promise<void>;
 }
@@ -261,7 +277,8 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
     if (cls === 'agent' || cls === 'session') facts.add('agent|session');
     if (cls === 'voice') facts.add('!armed');
     const key = o.status.kernelKey();
-    const available = (m: string): boolean => SERVED_METHODS.includes(m) && (o.reads !== undefined || !READ_METHODS.includes(m));
+    const available = (m: string): boolean =>
+      (SERVED_METHODS.includes(m) && (o.reads !== undefined || !READ_METHODS.includes(m))) || (o.approvals !== undefined && ((m === 'approve' && cls === 'human') || (m === 'permit.reserve' && (cls === 'human' || cls === 'agent'))));
     return {
       principal: s.principal,
       principalKind: s.principalKind,
@@ -282,7 +299,8 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       daemon: o.status.daemon(),
       log: o.status.log(),
       sessions: { n: 0 },
-      cards: { n: 0, pendingForYou: 0 },
+      cards: o.approvals?.cards(cls) ?? { n: 0, pendingForYou: 0 },
+      ...(o.approvals ? o.approvals.status() : {}),
       kernelKeyId: key.keyId,
       kernelKeyCustody: key.custody,
       kernelKeySource: key.source,
@@ -441,9 +459,27 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
         throw asRpcRefusal(err);
       }
     }
-    // TODO(M1.6, #approval-broker): `approve`'s human access value is the qualified string
-    // 'presence per class; root key for use-api-token, install; …' — when approve is served it
-    // must be handled EXPLICITLY here (presence class per §3.4), not refused by this generic rule.
+    // M1.6 (T-2026-10-17-017): approve's qualified human value and permit.reserve, handled explicitly.
+    if (m === 'approve') {
+      if (cls === 'voice') throw asRpcRefusal(voiceApproveRefusal()); // every form, before any port (G-ABI-02 voice row)
+      if (cls === 'human' && o.approvals) {
+        try {
+          return await o.approvals.approve({ connId: s.connId, principal: s.principal!, principalClass: cls, surface: s.client?.surface ?? null }, frame.params);
+        } catch (err) {
+          throw asRpcRefusal(err);
+        }
+      }
+    }
+    if (m === 'permit.reserve' && cls === 'session') {
+      throw new RpcRefusal('ENGINE', 'not-implemented', 'permit.reserve for a session principal is scoped (own scope); session principals land with M1.7', { verb: m, access: String(access), milestone: 'M1.7' });
+    }
+    if (m === 'permit.reserve' && (cls === 'human' || cls === 'agent') && o.approvals) {
+      try {
+        return await o.approvals.reserve({ connId: s.connId, principal: s.principal!, principalClass: cls, surface: s.client?.surface ?? null }, frame.params);
+      } catch (err) {
+        throw asRpcRefusal(err);
+      }
+    }
     if (access !== 'yes' && SERVED_METHODS.includes(m)) {
       const milestone = SCOPED_VIEW_MILESTONES[cls] ?? VERB_MILESTONES[m];
       throw new RpcRefusal('ENGINE', 'not-implemented', `${m} for a ${cls} principal is scoped (${String(access)}); the scoped view lands with ${milestone}`, {
@@ -486,6 +522,7 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
     },
     onDisconnect: (ctx) => {
       o.reads?.hub.disconnect(ctx.connId);
+      o.approvals?.connectionClosed(ctx.connId);
       clearTimers(ctx.connId);
       conns.delete(ctx.connId);
     },

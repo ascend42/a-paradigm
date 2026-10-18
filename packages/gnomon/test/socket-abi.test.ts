@@ -563,13 +563,16 @@ describe('G-ABI-02 matrix total: every principal class × every verb and both re
         else {
           expect(got, `${cls} × ${meth}`).not.toBe('FORBIDDEN:matrix');
           // a refusal of an allowed cell names its milestone, or is a params / ownership / resolver answer
-          if (got !== 'served') expect(got, `${cls} × ${meth}`).toMatch(/@|^BAD_REQUEST:|^FORBIDDEN:(kernel-owned|ungranted|modns-not-own|mod-principal-name)|^UNSUPPORTED:no-resolver/);
+          if (got !== 'served') expect(got, `${cls} × ${meth}`).toMatch(/@|^BAD_REQUEST:|^FORBIDDEN:(kernel-owned|ungranted|modns-not-own|mod-principal-name|voice-off)|^UNSUPPORTED:no-resolver/);
         }
       }
     }
     for (const cls of ['agent', 'session', 'mod', 'readToken']) expect(table[cls]!.approve).toBe('FORBIDDEN:matrix');
-    expect(table.human!.approve).toBe('ENGINE:not-implemented@M1.6');
-    expect(table.voice!.approve).toBe('ENGINE:not-implemented@M1.6'); // voice-intent form: M1.6 makes every form FORBIDDEN (no arm can exist)
+    expect(table.human!.approve).toBe('BAD_REQUEST:bad-params'); // served since M1.6: {} names no card
+    expect(table.voice!.approve).toBe('FORBIDDEN:voice-off'); // voice-intent row: every form FORBIDDEN in M1.6 (no arm can exist)
+    expect(table.human!['permit.reserve']).toBe('BAD_REQUEST:bad-params');
+    expect(table.agent!['permit.reserve']).toBe('BAD_REQUEST:bad-params');
+    expect(table.session!['permit.reserve']).toBe('ENGINE:not-implemented@M1.7'); // own scope: session principals land in M1.7
     expect(VERBS.filter((v) => v.humanOnly).map((v) => v.verb)).toEqual(['approve']);
   }, 30_000);
 
@@ -587,8 +590,8 @@ describe('G-ABI-02 matrix total: every principal class × every verb and both re
     await expect(connectGnomon({ socketPath: r.d.pidfile.socketPath, client: CLIENT, serverKey: r.pin, device: foreign })).rejects.toMatchObject({ refusal: { code: 'AUTH', data: { reason: 'foreign-principal' } } });
   });
 
-  it.todo('G-ABI-02 voice-intent row (toggles off, unarmed, wrong connection, unsupervised client, class/repo outside the grant, hand-only kind ⇒ refused): every approve form FORBIDDEN in M1.6, the armed rows in Move 4 (M4.5)');
-  it.todo('G-ABI-02 human approve presence classes, root key for use-api-token/install, withdraw on held cards — M1.6 (#approval-broker)');
+  it.todo('G-ABI-02 voice-intent row, armed cases (unarmed, wrong connection, unsupervised client, class/repo outside the grant, hand-only kind) — Move 4 (M4.5/M4.6); M1.6 refuses every form (test/approval-broker.test.ts)');
+  it.todo('G-ABI-02 withdraw on held cards — Move 4 (M4.5: held cards exist only under a voice arm); presence classes + root key are in test/approval-broker.test.ts');
   it.todo('G-ABI-02 session/agent own-subtree and permit cells (session.*, permit.reserve) — M1.6/M1.7; contract.* and oracle.run — M2.1–M2.3');
   it.todo('G-ABI-02 mod cells (status own view, log.read granted kinds, session.send via kernel.call) and both relays with relayedFor — M1.11 (#mod-host)');
 });
