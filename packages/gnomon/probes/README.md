@@ -22,6 +22,7 @@ The Windows halves belong to the Windows parity phase (P8-D78).
 | `p12-excalidraw-csp` | The pinned Excalidraw, bundled with esbuild in a temp dir and loaded under the §11.2 CSP: mount, scene, PNG/SVG export, every CSP violation, size and parse time. Needs network for `npm install`. |
 | `p14-link-outbound` | A default-deny `sandbox-exec` `link` profile: one allowed outbound TCP, with every other path refused. SBPL accepts only `*` or `localhost` as the host. |
 | `p14b-link-fdpass` | The kernel dials the peer and hands the connected socket to a deny-default child that has no `network*` allow (`subprocess.send(msg, socket)`). Checks: 4 MiB both ways, the peer's close, a redial hand-off, and every child-originated connect/UDP/listen/unix/file/exec refused. |
+| `p14b-web-handoff` | The inbound twin of P14b (T-2026-10-18-020): the kernel listens on `127.0.0.1` and hands each accepted socket to a deny-default transport child with no `network-*` rule. Checks: 4 MiB both ways, the client's close, 5 repeated hand-offs, and EPERM for every child bind/listen (0.0.0.0, ::, en0, 127.0.0.1, ::1, no host), UDP bind, outbound TCP and unix connect. |
 
 Engines are driven by "open this URL" only. Each page POSTs its report to the
 probe's own loopback server, so the probes need no CDP and no Playwright.
