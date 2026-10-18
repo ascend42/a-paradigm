@@ -1,0 +1,28 @@
+id: L-2026-10-18-builder-165939-001
+type: insight
+timestamp: '2026-10-18T16:59:39.132Z'
+author: builder
+title: 'M1.8 slice 2 round 2: the local runner pin covers the whole tree + node, and only a verified home copy runs'
+summary: runner = {node, nodeSha256, dir, treeSha256, entry}, all mandatory; prepareRunner copies the tree into <home>/runners/<treeSha256>/ FIRST and hashes the COPY, verifies node, execs <realpath node> <realpath copied entry>; sessions cannot write the home (session profile), so a swapped source module never reaches a later session
+symbols_touched:
+  - '#local-runner'
+  - ^subscription-only
+files_modified:
+  - packages/gnomon/src/kernel/local/config.ts
+  - packages/gnomon/src/kernel/supervisor/local-session.ts
+files_created:
+  - packages/gnomon/src/kernel/local/runner-pin.ts
+commit: 868ad44f
+learnings:
+  - Hash the copy
+  - 'not the source: that removes the tree TOCTOU entirely'
+  - Tree hash = sha256 over sorted rel\0sha lines; symlinks and special files refuse
+  - Homebrew node is a 68 KB launcher loading @loader_path/../lib/libnode.dylib so it cannot be copied alone; node is verified then exec'd in place and its dylibs are unpinned (residual; a SEA runner closes it)
+tags:
+  - decision
+  - aegis-h1
+body: 'Aegis H1: extraDenyWrite was [] and the pin optional, so a session could rewrite the runner the next local session execs. Now an unpinned runner is an invalid config (no local config, logged).'
+git_context:
+  ref: cda4df73669691191dc37a00a11fe19b400a34df
+  branch: gnomon/m18-slice2
+  dirty: false
