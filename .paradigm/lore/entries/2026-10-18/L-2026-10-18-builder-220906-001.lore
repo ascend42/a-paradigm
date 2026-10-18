@@ -1,0 +1,19 @@
+id: L-2026-10-18-builder-220906-001
+type: milestone
+timestamp: '2026-10-18T22:09:06.375Z'
+author: builder
+title: 'Gnomon permission channel built: Edit/Write/Bash prompts are GUI cards; Touch ID allow runs the tool'
+summary: 'p01b probe (pass) + adapter/permission.ts/broker/supervisor on gnomon/permission-channel. 13 falsifiers in test/permission-session.test.ts (plus 8b self-exit), every guard mutation-checked (19 mutations killed). up-launch-session gains the end-to-end: GUI allow => one fresh presence => the fake claude Write runs. Full gnomon suites green; clientApiId unmoved. Residuals: allow rules / PreToolUse allow hooks bypass the card (p01b h/i); AskUserQuestion picker deferred; ExitPlanMode carries no plan text in 2.1.302; a malformed request is never answered (claude waits).'
+symbols_touched:
+  - '#supervisor'
+  - '#claude-adapter'
+  - '#approval-broker'
+tags:
+  - decision
+  - gnomon
+  - p8-d96
+  - milestone
+git_context:
+  ref: c0eaad48c486c47985f7dff4ae3846f1b51f646e
+  branch: gnomon/permission-channel
+  dirty: true

@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-18T22:00:21.306Z'
+generated: '2026-10-18T22:09:16.407Z'
 structure: {}
 key_files:
   config:
@@ -271,6 +271,7 @@ symbols:
   '#purpose-component-ref-resolver': packages/gnomon/
   '#purpose-component-identity': packages/gnomon/
   '#purpose-component-dev-launch': packages/gnomon/
+  '#purpose-component-gnomon-up': packages/gnomon/
   '#purpose-component-manifest-loader': packages/gnomon/
   '#purpose-component-kernel-log': packages/gnomon/
   '#purpose-component-gnomon-ts-client': packages/gnomon/

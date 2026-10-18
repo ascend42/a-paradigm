@@ -110,6 +110,7 @@ process.stdin.on('data', (c) => {
         if (!perm.open.has(reqId)) perm.open.set(reqId, { tool: r.tool, input: r.input, toolUseId });
         out({ type: 'control_request', request_id: reqId, request: { subtype: 'can_use_tool', tool_name: r.tool, display_name: r.tool, input: r.input, permission_suggestions: [{ type: 'addRules', rules: [{ toolName: r.tool }], behavior: 'allow', destination: 'localSettings' }], tool_use_id: toolUseId } });
       }
+      if (mode.permissionAsk.exitAfterMs !== undefined) setTimeout(() => { trace({ t: 'self-exit' }); process.exit(0); }, mode.permissionAsk.exitAfterMs);
       if (mode.permissionAsk.hold) continue;
       perm.turnDone = () => {
         out({ type: 'result', subtype: 'success', is_error: false, num_turns: 1, usage: { input_tokens: 1, output_tokens: 1 }, permission_denials: perm.denied.splice(0), result: 'ok' });
