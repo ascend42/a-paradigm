@@ -26,7 +26,7 @@ afterEach(async () => {
   while (cleanups.length) await cleanups.pop()!();
 });
 
-async function fakeKernel(extra: { answerTimeoutMs?: number } = {}) {
+async function fakeKernel(extra: { answerTimeoutMs?: number; headersTimeoutMs?: number; requestTimeoutMs?: number } = {}) {
   const t = tempHome('gc-');
   cleanups.push(t.cleanup);
   mkdirSync(t.home, { recursive: true, mode: 0o700 });
@@ -124,5 +124,75 @@ describe("the child's own 503 carries the rule-6 default headers", () => {
     const ws = await wsConnect(k.port);
     expect(ws.status).toBe(503);
     expect(ws.headers['content-security-policy']).toBe(childDefaultHeaders()['content-security-policy']);
+  });
+});
+
+/*
+ * Round 2 (blocking): an http.Server that never listen()s does not run Node's headersTimeout/requestTimeout checker
+ * (it starts on 'listening'), so the child bounds every handed socket itself.
+ */
+describe('slowloris: a handed socket is bounded per socket (the child never listens)', () => {
+  const closedWithin = (sock: net.Socket): Promise<number> => {
+    const t0 = Date.now();
+    return new Promise((r) => sock.once('close', () => r(Date.now() - t0)));
+  };
+  const open = (port: number): Promise<net.Socket> =>
+    new Promise((r, j) => {
+      const c = net.connect({ host: '127.0.0.1', port });
+      c.once('connect', () => r(c));
+      c.once('error', j);
+    });
+
+  it('a partial request line is closed within about headersTimeout', async () => {
+    const k = await fakeKernel({ headersTimeoutMs: 500 });
+    const c = await open(k.port);
+    cleanups.push(() => c.destroy());
+    c.on('error', () => undefined);
+    const closed = closedWithin(c);
+    c.write('GET / HTTP/1.1\r\n');
+    const ms = await closed;
+    expect(ms).toBeGreaterThanOrEqual(400);
+    expect(ms).toBeLessThan(4000);
+    expect(k.recs.some((r) => r.t === 'http')).toBe(false); // never forwarded
+  });
+
+  it('trickled header bytes do not extend the deadline', async () => {
+    const k = await fakeKernel({ headersTimeoutMs: 500 });
+    const c = await open(k.port);
+    cleanups.push(() => c.destroy());
+    c.on('error', () => undefined);
+    const closed = closedWithin(c);
+    c.write('GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n');
+    const drip = setInterval(() => c.writable && c.write('X-A: b\r\n'), 100);
+    const ms = await closed;
+    clearInterval(drip);
+    expect(ms).toBeLessThan(4000);
+  });
+
+  it('keep-alive: after a served request, a partial next request is closed too; a slow body is bounded by requestTimeout', async () => {
+    const k = await fakeKernel({ headersTimeoutMs: 500, requestTimeoutMs: 700 });
+    const c = await open(k.port);
+    cleanups.push(() => c.destroy());
+    c.on('error', () => undefined);
+    let got = '';
+    c.on('data', (d: Buffer) => (got += d.toString('latin1')));
+    c.write(`GET / HTTP/1.1\r\nHost: 127.0.0.1:${k.port}\r\n\r\n`);
+    const h = await k.wait('http');
+    k.send({ t: 'respond', rid: h.rid, status: 204, headers: {} });
+    const end = Date.now() + 5000;
+    while (!got.includes(' 204 ') && Date.now() < end) await new Promise((r) => setTimeout(r, 10));
+    expect(got).toContain(' 204 ');
+    const closed = closedWithin(c);
+    c.write('GET / HT');
+    expect(await closed).toBeLessThan(4000);
+    // a body that never completes after its headers
+    const d = await open(k.port);
+    cleanups.push(() => d.destroy());
+    d.on('error', () => undefined);
+    const dClosed = closedWithin(d);
+    d.write(`POST /diag HTTP/1.1\r\nHost: 127.0.0.1:${k.port}\r\nContent-Length: 100\r\n\r\nabc`);
+    const ms = await dClosed;
+    expect(ms).toBeGreaterThanOrEqual(600);
+    expect(ms).toBeLessThan(4000);
   });
 });

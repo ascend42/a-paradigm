@@ -88,6 +88,10 @@ export interface ChildConfig {
   defaultHeaders: HeaderMap;
   /** How long the child waits for the kernel's answer to a request before its own 503 (default 10 s). */
   answerTimeoutMs?: number;
+  /** Per handed socket: complete request headers within this long, else it is destroyed (default 10 s). */
+  headersTimeoutMs?: number;
+  /** Per request: a complete body within this long after its headers (default 30 s). */
+  requestTimeoutMs?: number;
 }
 
 export type KernelRecord =

@@ -45,6 +45,10 @@ import { acceptKey, closeFrame, CLOSE_CODES, encodeWsFrame, FrameDecoder, OP } f
 
 /** A request the kernel did not answer in this long is answered 503 by the child. */
 export const KERNEL_ANSWER_TIMEOUT_MS = 10_000;
+/** A handed socket must deliver complete request headers within this long (slowloris bound, enforced per socket). */
+export const HEADERS_TIMEOUT_MS = 10_000;
+/** …and a complete request body within this long after its headers. */
+export const REQUEST_TIMEOUT_MS = 30_000;
 
 interface WsConn {
   socket: Duplex & { writableLength?: number };
@@ -291,16 +295,48 @@ export function runWebChild(io: WebChildIo): void {
     }
     const s = http.createServer({ maxHeaderSize: 16 * 1024 }, onRequest);
     server = s;
-    s.headersTimeout = 10_000;
-    s.requestTimeout = 30_000;
+    // Node enforces headersTimeout/requestTimeout only for a server that LISTENED (its connection checker starts on
+    // 'listening'); this one never listens, so the same bounds are per-socket deadlines below (slowloris, round 2).
+    s.headersTimeout = cfg.headersTimeoutMs ?? HEADERS_TIMEOUT_MS;
+    s.requestTimeout = cfg.requestTimeoutMs ?? REQUEST_TIMEOUT_MS;
+    s.on('request', (req: http.IncomingMessage, res: http.ServerResponse) => {
+      const sock = req.socket;
+      arm(sock, s.requestTimeout); // headers are in: the rest of the request (the body) has its own bound
+      req.on('end', () => disarm(sock));
+      // keep-alive: the next request's headers are bounded again from the moment this response is written
+      res.on('finish', () => {
+        if (!sock.destroyed) arm(sock, s.headersTimeout);
+      });
+    });
+    s.on('upgrade', (_req: http.IncomingMessage, socket: Duplex) => disarm(socket)); // the kernel's answer timer and the WS ping take over
     s.on('upgrade', onUpgrade);
     s.on('clientError', (_err, socket) => socket.destroy());
     emit({ t: 'ready', bundleHash: bundle!.hash, files: bundle!.files.size });
   };
 
+  // Per-socket deadline: a handed socket whose request headers are not complete within headersTimeout (or whose
+  // body is not complete within requestTimeout) is destroyed.
+  const deadlines = new WeakMap<Duplex, NodeJS.Timeout>();
+  const disarm = (socket: Duplex): void => {
+    const t = deadlines.get(socket);
+    if (t) clearTimeout(t);
+    deadlines.delete(socket);
+  };
+  const arm = (socket: Duplex, ms: number): void => {
+    disarm(socket);
+    const t = setTimeout(() => {
+      deadlines.delete(socket);
+      socket.destroy();
+    }, ms);
+    t.unref();
+    deadlines.set(socket, t);
+  };
+
   io.onSocket((socket) => {
     // a handed socket is served exactly like an accepted connection; none before ready, none after the end
     if (ended || server === null) return void socket.destroy();
+    arm(socket, server.headersTimeout);
+    socket.once('close', () => disarm(socket));
     server.emit('connection', socket);
   });
 
