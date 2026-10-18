@@ -295,4 +295,23 @@ describe('gnomon identity purge-keys', () => {
     expect(fake.prompts.length).toBe(2);
     expect(fake.keys.has(`${live.gen}.root`)).toBe(false);
   });
+
+  it('falsifier (reviewer round 3): refuses on a malformed identity.json, from a kernel-spawned shell, and while the daemon runs', async () => {
+    const home = tmp();
+    const fake = new FakeHelper('old00001');
+    fs.mkdirSync(path.join(home, 'keys'), { recursive: true, mode: 0o700 });
+    fs.writeFileSync(identityPath(home), '{not json', { mode: 0o600 });
+    const o = io();
+    expect(await runIdentityCommand(['purge-keys', '--home', home, '--gen', 'old00001', '--helper', exe(tmp())], o.io, deps(fake))).toBe(1);
+    expect(o.errJson().reason).toBe('identity-malformed');
+    const o2 = io();
+    expect(await runIdentityCommand(['purge-keys', '--home', tmp(), '--gen', 'old00001', '--helper', exe(tmp())], o2.io, deps(fake, { env: { GNOMON_HSID: 'hs:x' } }))).toBe(1);
+    expect(o2.errJson().reason).toBe('forbidden');
+    const running = tmp();
+    fs.writeFileSync(path.join(running, 'gnomon.pid'), JSON.stringify({ schemaVersion: 'daemonPid:v1', pid: process.pid, startedAt: new Date().toISOString(), socketPath: path.join(running, 'gnomon.sock') }));
+    const o3 = io();
+    expect(await runIdentityCommand(['purge-keys', '--home', running, '--gen', 'old00001', '--helper', exe(tmp())], o3.io, deps(fake))).toBe(1);
+    expect(o3.errJson().reason).toBe('daemon-running');
+    expect(fake.keys.size).toBe(2);
+  });
 });

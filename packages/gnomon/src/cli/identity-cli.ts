@@ -434,12 +434,17 @@ async function purgeKeys(argv: readonly string[], io: IdentityIo, deps: Identity
     io.stderr.write(`gnomon identity: ${typeof args === 'string' ? args : 'purge-keys needs --gen <gen>'}\n${USAGE}`);
     return EXIT_USAGE;
   }
-  const home = args.home ?? resolveGnomonHome({ env: deps.env ?? process.env });
-  let existing: IdentityRecord | null = null;
+  const env = deps.env ?? process.env;
+  // the same refusals as init (reviewer round 3): kernel-spawned shell (hygiene), a running daemon, a malformed record
+  if (env.GNOMON_HSID) return refused(io, 'forbidden', 'gnomon identity purge-keys is a human-only verb; it is refused from a kernel-spawned shell');
+  const home = args.home ?? resolveGnomonHome({ env });
+  if (daemonState(home).state === 'running') return refused(io, 'daemon-running', 'stop the daemon first');
+  let existing: IdentityRecord | null;
   try {
     existing = readIdentity(home);
-  } catch {
-    existing = null;
+  } catch (e) {
+    // a record we cannot read might name the generation asked for: never purge blind
+    return refused(io, 'identity-malformed', e instanceof Error ? e.message : 'identity.json is unreadable', { path: identityPath(home) });
   }
   if (existing?.gen === args.gen) return refused(io, 'in-use', `generation ${args.gen} is this home's live identity; rotate or recover instead`);
   let pin: PinnedHelper;
