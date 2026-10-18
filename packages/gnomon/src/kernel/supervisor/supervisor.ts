@@ -525,9 +525,11 @@ export class SessionSupervisor {
     return s;
   }
 
-  async send(principal: string, p: { hsid: string; text: string; permitId?: string }): Promise<{ turn: string }> {
+  async send(principal: string, p: { hsid: string; text: string; permitId?: string; steer?: boolean }): Promise<{ turn: string; steered?: boolean }> {
     if (this.#local.has(p.hsid)) return this.#local.send(principal, p);
     const s = this.#get(principal, p.hsid);
+    // M1.8 slice 2 serves steer on local sessions only; Claude's mid-turn steer is not built (refused, never ignored)
+    if (p.steer === true) throw refused('BAD_REQUEST', 'session.send{steer} is served for local sessions only', { reason: 'bad-params' });
     if (s.state !== 'running' || s.child.exitCode !== null || s.child.signalCode !== null) throw refused('NOT_FOUND', 'the session is not running', { reason: 'not-found' });
     if (typeof p.text !== 'string' || p.text.length === 0) throw refused('BAD_REQUEST', 'send takes non-empty text', { reason: 'bad-params' });
     const hits = law7Scan(s.env, law7Layers(s.layerInput));
@@ -587,6 +589,11 @@ export class SessionSupervisor {
     const survivors = await this.#o.children.stop(s.child, reason);
     signals.push('group:staged');
     return { signals, exited: !survivors };
+  }
+
+  /** #local-runner's daemon-start probe of every configured local endpoint (model.probe / model.capabilities rows). */
+  probeLocal(): Promise<Array<{ endpoint: string; ok: boolean }>> {
+    return this.#local.probeAll();
   }
 
   /** status.sessionSandbox: the session profile's fidelity here (`unavailable` below the macOS floor or with SIP off, with the reason) */

@@ -97,6 +97,7 @@ import { Scheduler } from '../scheduler/index.js';
 import { DaemonChildren, sweepOrphans } from './children.js';
 import { processControlFor } from './process-control.js';
 import { SessionSupervisor, createSessionPort } from '../supervisor/index.js';
+import { loadLocalConfig, LOCAL_CONFIG_FILE } from '../local/config.js';
 import { linkedFolders } from '../manifest/install.js';
 import { ModHost, type KernelCallRequest } from '../modhost/host.js';
 import { createModKernelCall, createModRelayPort } from '../modhost/bridge.js';
@@ -457,8 +458,9 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
   // N2: the rollback high-water mark comes from the hash-chained log (the last signed config.loaded{version})
   let chainHighWater = 0;
   for (const v of log.read({ reader: { class: 'human' }, kinds: ['config.loaded'] })) {
-    const p = v.view === 'full' ? (v.event.payload as { signed?: unknown; version?: unknown } | undefined) : undefined;
-    if (p?.signed === true && typeof p.version === 'number' && p.version > chainHighWater) chainHighWater = p.version;
+    const p = v.view === 'full' ? (v.event.payload as { file?: unknown; signed?: unknown; version?: unknown } | undefined) : undefined;
+    // M1.8 slice 2: rows naming another file (local.signed.json) carry THAT file's version, never the meter config's
+    if (p?.file === undefined && p?.signed === true && typeof p.version === 'number' && p.version > chainHighWater) chainHighWater = p.version;
   }
   const fuseCfg = loadFuseConfig(home, authority, (kind, payload) => void appendRow(kind, payload).catch(() => undefined), { chainHighWater });
   const fuse = new BudgetFuse({
@@ -488,7 +490,16 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
   brokerTimer.unref();
   // #supervisor (M1.7 slice 1): attended, human-started Claude Code sessions. The claude binary comes from the
   // platform's known locations (never PATH, p01) until the root-signed config names one.
+  // #local-runner (M1.8 slice 2): the root-signed local lane config; its rollback high-water mark is the last
+  // signed config.loaded{file: local.signed.json, version} on the chain. Anything unsigned ⇒ no local config.
+  let localHighWater = 0;
+  for (const v of log.read({ reader: { class: 'human' }, kinds: ['config.loaded'] })) {
+    const p = v.view === 'full' ? (v.event.payload as { file?: unknown; signed?: unknown; version?: unknown } | undefined) : undefined;
+    if (p?.file === LOCAL_CONFIG_FILE && p.signed === true && typeof p.version === 'number' && p.version > localHighWater) localHighWater = p.version;
+  }
+  const localCfg = loadLocalConfig(home, authority, (kind, payload) => void appendRow(kind, payload).catch(() => undefined), { chainHighWater: localHighWater });
   const supervisor = new SessionSupervisor({
+    ...(localCfg.config ? { local: localCfg.config } : {}),
     log: (kind, payload, ids = {}) => log.append({ kind, principal: kernelPrincipal, payload, ...(ids.session ? { session: ids.session } : {}) }).then(() => undefined),
     children,
     fuse,
@@ -623,6 +634,8 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
   }
 
   emit({ kind: 'daemon.start', pid: pidfile.pid, socketPath: pidfile.socketPath, via: choice.via, idleMs });
+  // §13.2: probe every configured local endpoint once at start (background; never blocks serving, never throws)
+  if (localCfg.config?.endpoints.length) void supervisor.probeLocal().catch(() => undefined);
   await appendRow('daemon.start', {
     pid: pidfile.pid,
     socketPath: pidfile.socketPath,

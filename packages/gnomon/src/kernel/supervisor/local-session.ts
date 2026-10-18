@@ -36,11 +36,18 @@
  *   (follow_up while a turn is in flight). stop(): interrupt = the `abort`
  *   command; otherwise abort + stdin close + the staged group stop.
  *
- * DEFERRED (slice 2, reported): unattended local automations (law 5; the
- * scheduler still refuses), root-signed local.yaml, per-task endpoint choice
- * (slice 1 uses the first configured endpoint), the probe on daemon start
- * (`gnomon probe local`), the claude estimate on the card (null: no per-task
- * estimator yet), session.send{steer}.
+ * SLICE 2: the config is the root-signed local.signed.json (config.ts,
+ *   loaded by the daemon); per-task endpoint choice = the first endpoint in
+ *   config order capable for the task's floor; probeAll() at daemon start
+ *   records model.probe/model.capabilities; the runner's sha256 pin is
+ *   checked at every spawn; roots inside the Gnomon home are refused; the
+ *   child gets contextTarget (min(~8k, n_ctx)) for compaction;
+ *   send{steer:true} with a turn in flight writes the steer line under that
+ *   turn's permit (session.inject + turn.steer), idle it is a normal send.
+ * DEFERRED (reported): unattended local automations (law 5; the scheduler
+ * still refuses), the claude estimate on the card (null: no per-task
+ * estimator yet), the darwin sandboxed e2e rig (G-LCL-06, G-LAW-01c with 6
+ * children), `gnomon probe local` as a CLI verb.
  */
 import { createHash } from 'node:crypto';
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -60,8 +67,9 @@ import { managedFiles } from '../runner/preflight.js';
 import { claudeCodePlatform } from '../../platform/claude-code.js';
 import type { DarwinSessionExtras } from '../../platform/darwin/session-sbpl.js';
 import { LineSplitter } from '../../adapters/claude-code/adapter.js';
-import { abortLine, buildLocalArgv, followUpLine, LocalUsageMeter, parseLocalLine, promptLine } from '../../adapters/local/runner.js';
-import { assertNotClaude, DEFAULT_CTX_FLOOR, validateLocalEndpoints, type LocalLaneConfig } from '../local/config.js';
+import { abortLine, buildLocalArgv, followUpLine, LocalUsageMeter, parseLocalLine, promptLine, steerLine } from '../../adapters/local/runner.js';
+import { assertNotClaude, assertRunnerPin, DEFAULT_CONTEXT_TARGET, DEFAULT_CTX_FLOOR, LOCAL_COMPAT_NAMES, validateLocalEndpoints, type LocalLaneConfig } from '../local/config.js';
+import { classifyEndpoint } from '../local/endpoint.js';
 import { probeLocalEndpoint, type LocalCapabilities, type ProbeFetch } from '../local/probe.js';
 import { capability, routeModel, type DeclaredModel } from '../local/routing.js';
 
@@ -177,6 +185,22 @@ export class LocalLane {
   }
 
   /**
+   * The daemon-start probe (§13.2 "records model.probe + model.capabilities for each configured endpoint"): every
+   * endpoint that passes the loopback/LAN rule is probed once (cached for the next open); a refused one is skipped
+   * here and refused at open (G-SUB-06). Never throws.
+   */
+  async probeAll(): Promise<Array<{ endpoint: string; ok: boolean }>> {
+    const out: Array<{ endpoint: string; ok: boolean }> = [];
+    for (const ep of this.#o.config?.endpoints ?? []) {
+      const v = classifyEndpoint(ep.base, this.#forbiddenPorts());
+      if (!v.ok || !LOCAL_COMPAT_NAMES.includes(ep.compat)) continue;
+      const caps = await this.#probe({ id: ep.id, base: v.base, model: ep.model }).catch(() => null);
+      out.push({ endpoint: ep.id, ok: caps?.ok === true });
+    }
+    return out;
+  }
+
+  /**
    * Route and (when local) spawn. Returns null when the declared model is `any` and Claude was chosen
    * (the supervisor's Claude path runs next). `openClaude` is the fallback-cloud card's effect.
    */
@@ -192,9 +216,22 @@ export class LocalLane {
       if (err instanceof RefusedError) await this.#o.log('session.refused', { hsid: null, code: 'local_endpoint_refused', refusal: err.refusal.code, ...(err.refusal.data ?? {}) }).catch(() => undefined);
       throw err;
     }
-    const first = eps[0];
-    const caps = first ? await this.#probe({ id: first.ep.id, base: first.v.base, model: first.ep.model }) : null;
-    const cap = capability(caps, cfg.ctxFloor ?? DEFAULT_CTX_FLOOR, first?.ep.textTools === true);
+    // per-task endpoint choice (slice 2): the FIRST endpoint, in root-signed config order, that is capable for this
+    // task's floor; none capable ⇒ the first endpoint's reason (no endpoint at all ⇒ no-endpoint)
+    const floor = cfg.ctxFloor ?? DEFAULT_CTX_FLOOR;
+    let first: (typeof eps)[number] | undefined;
+    let caps: LocalCapabilities | null = null;
+    let cap: ReturnType<typeof capability> = capability(null, floor, false);
+    for (const e of eps) {
+      const c = await this.#probe({ id: e.ep.id, base: e.v.base, model: e.ep.model });
+      const k = capability(c, floor, e.ep.textTools === true);
+      if (!first || k.capable) {
+        first = e;
+        caps = c;
+        cap = k;
+      }
+      if (k.capable) break;
+    }
     let route = routeModel(declared, cap, cfg.runner !== undefined);
     // an explicit backend pins the route: backend:'local' never falls through to Claude (reviewer, round 2)
     if (route.chosen === 'claude' && req.backend === 'local') route = { chosen: 'fallback', reason: route.reason };
@@ -241,6 +278,7 @@ export class LocalLane {
   async #spawn(req: LocalOpenRequest, declared: DeclaredModel, reason: string, tools: 'native' | 'text', ep: LocalLaneConfig['endpoints'][number], base: string, caps: LocalCapabilities, cfg: LocalLaneConfig): Promise<{ hsid: string; principalId: string; backend: 'local'; state: string; model: string }> {
     const runner = cfg.runner!;
     assertNotClaude(runner); // before any row: claude never runs under a local permit
+    assertRunnerPin(runner); // a root-signed sha256 pin, when present, holds at every spawn
     if (typeof req.cwd !== 'string' || !path.isAbsolute(req.cwd) || !fs.existsSync(req.cwd) || !fs.statSync(req.cwd).isDirectory()) {
       throw refused('BAD_REQUEST', 'cwd must be an existing absolute directory', { reason: 'bad-params' });
     }
@@ -251,7 +289,7 @@ export class LocalLane {
     {
       const rp = (p: string): string => {
         try {
-          return fs.realpathSync(p);
+          return fs.realpathSync.native(p); // native: 8.3 short names expand on Windows
         } catch {
           return path.resolve(p);
         }
@@ -259,8 +297,10 @@ export class LocalLane {
       const gh = rp(this.#o.home);
       const uh = rp(this.#o.userHome ?? os.homedir());
       for (const r of [req.cwd, ...(req.worktree ? [req.worktree] : [])].map(rp)) {
-        if (r === path.parse(r).root || r === uh || gh === r || gh.startsWith(r.endsWith(path.sep) ? r : r + path.sep)) {
-          throw refused('BAD_REQUEST', 'a session root may not be /, the user home, or the Gnomon home or an ancestor of it', { reason: 'bad-params' });
+        const under = (a: string, b: string): boolean => a.startsWith(b.endsWith(path.sep) ? b : b + path.sep);
+        // slice 2: a root INSIDE the Gnomon home (keys/, sessions/) is refused too — the tools would otherwise confine to it
+        if (r === path.parse(r).root || r === uh || gh === r || under(gh, r) || under(r, gh)) {
+          throw refused('BAD_REQUEST', 'a session root may not be /, the user home, or the Gnomon home, an ancestor of it or a path inside it', { reason: 'bad-params' });
         }
       }
     }
@@ -307,6 +347,8 @@ export class LocalLane {
         surface: ep.surface ?? 'compact',
         maxSteps: cfg.maxSteps ?? 16,
         maxTokens: cfg.maxTokens ?? 1024,
+        // the compaction working target: ~8k, never above what the endpoint holds
+        contextTarget: Math.min(cfg.contextTarget ?? DEFAULT_CONTEXT_TARGET, caps.nCtx ?? DEFAULT_CONTEXT_TARGET),
         forbiddenPorts: this.#forbiddenPorts(),
         ...(req.systemPrompt !== undefined ? { systemPrompt: req.systemPrompt } : {}),
       };
@@ -420,10 +462,22 @@ export class LocalLane {
     return s;
   }
 
-  async send(principal: string, p: { hsid: string; text: string; permitId?: string }): Promise<{ turn: string }> {
+  async send(principal: string, p: { hsid: string; text: string; permitId?: string; steer?: boolean }): Promise<{ turn: string; steered?: boolean }> {
     const s = this.#get(principal, p.hsid);
     if (s.state !== 'running' || s.child.exitCode !== null || s.child.signalCode !== null) throw refused('NOT_FOUND', 'the session is not running', { reason: 'not-found' });
     if (typeof p.text !== 'string' || p.text.length === 0) throw refused('BAD_REQUEST', 'send takes non-empty text', { reason: 'bad-params' });
+    // session.send{steer} (slice 2, §11.5): mid-turn text the child reads at its next step. It joins the IN-FLIGHT
+    // turn, whose permit already pays for it (law 1: no new turn.sent, so no new permit); a permitId with steer is
+    // refused. With no turn in flight there is nothing to steer: it is an ordinary send (a new permitted turn).
+    if (p.steer === true && s.turnPermits.length > 0) {
+      if (p.permitId !== undefined) throw refused('BAD_REQUEST', 'a steer joins the in-flight turn and takes no permit', { reason: 'bad-params' });
+      const contentHash = sha(p.text);
+      const turn = turnId(s.hsid, s.turns - s.turnPermits.length + 1);
+      await this.#o.log('session.inject', { hsid: s.hsid, origin: 'client', hash: contentHash, bytes: p.text }, { session: s.hsid });
+      await this.#o.log('turn.steer', { hsid: s.hsid, turn, contentHash, permitId: s.turnPermits[0], backend: 'local' }, { session: s.hsid });
+      s.child.stdin?.write(steerLine(p.text));
+      return { turn, steered: true };
+    }
     let permit: PermitV1 | undefined;
     if (p.permitId !== undefined) {
       permit = this.#o.fuse.permit(p.permitId);

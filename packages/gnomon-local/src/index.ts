@@ -10,4 +10,5 @@ export { complete, EndpointRefused, type Completion } from './client.js';
 export { repairArguments, parseTextToolCalls, textToolPrompt } from './repair.js';
 export { TOOLS, runTool, insideRoots, isDotGit, PATH_CASE_INSENSITIVE } from './tools.js';
 export { Agent } from './agent.js';
+export { COMPACTION_HEADINGS, DEFAULT_CONTEXT_TARGET, compactedHistory, estimateTokens, isContextOverflow, normaliseSummary, summaryMessages } from './compaction.js';
 export { parseSessionConfig, rpcSession, ConfigError, type LocalSessionConfig } from './rpc.js';

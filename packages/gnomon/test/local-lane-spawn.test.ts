@@ -78,4 +78,41 @@ describe('LocalLane spawn (fake endpoint, unsandboxed test seam)', () => {
     expect((fuse.status() as { permits: { n: number } }).permits.n).toBe(0);
     expect(rows.some((r) => JSON.stringify(r.payload).includes('claude-code') && r.kind === 'permit.grant')).toBe(false);
   });
+  it('slice 2 session.send{steer}: mid-turn text joins the in-flight turn under its permit and reaches the next step; idle steer is a send', async () => {
+    root = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'gnomon-lls-')));
+    const cwd = path.join(root, 'repo');
+    const home = path.join(root, 'gnomon-home');
+    fs.mkdirSync(cwd, { recursive: true });
+    fs.mkdirSync(home);
+    srv = await fakeOpenAI({ tools: true, script: [{ toolCalls: [{ name: 'list_dir', arguments: '{}' }], delayMs: 600 }, { content: 'Brief.' }, { content: 'Again.' }] });
+    const rows: Array<{ kind: string; payload: Record<string, unknown> }> = [];
+    const log = async (kind: string, payload: Record<string, unknown>): Promise<void> => void rows.push({ kind, payload });
+    const fuse = new BudgetFuse({ kernel: SoftwareEd25519Signer.generate('kernel'), logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZZ', log, billing: { env: () => ({}), layers: () => [] } });
+    const children = new DaemonChildren({ append: log, control: processControlFor(process.platform), boot: 'boot-test', graceMs: 500 });
+    const lane = new LocalLane({
+      log, children, fuse, home, userHome: root, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(root, 'k.sock'),
+      config: { endpoints: [{ id: 'fake', base: srv.base, model: 'fake-qwen-7b-q4', compat: 'llama.cpp' }], runner: { command: process.execPath, args: [CLI] } },
+      launchPlan: (i) => ({ command: i.binaryReal, args: i.argv, sandbox: 'partial', profile: 'test-unsandboxed', profileHash: 'sha256:test' }),
+    });
+    const s = (await lane.open({ principal: HUMAN, principalClass: 'human', attended: true, cwd, model: 'local' }, async () => null))!;
+    const t1 = await lane.send(HUMAN, { hsid: s.hsid, text: 'look around' });
+    expect(await waitFor(() => srv!.requests.some((r) => !(Array.isArray(r.tools) && JSON.stringify(r.tools).includes('get_time'))), 10_000)).toBe(true);
+    const st = await lane.send(HUMAN, { hsid: s.hsid, text: 'be brief', steer: true });
+    expect(st).toEqual({ turn: t1.turn, steered: true });
+    await expect(lane.send(HUMAN, { hsid: s.hsid, text: 'x', steer: true, permitId: 'permit:nope' })).rejects.toMatchObject({ refusal: { code: 'BAD_REQUEST' } });
+    expect(await waitFor(() => rows.some((r) => r.kind === 'turn.result'), 15_000)).toBe(true);
+    const steer = rows.find((r) => r.kind === 'turn.steer')!.payload;
+    const sent = rows.filter((r) => r.kind === 'turn.sent');
+    expect(sent).toHaveLength(1);
+    expect(steer).toMatchObject({ hsid: s.hsid, turn: t1.turn, permitId: sent[0]!.payload.permitId, backend: 'local' });
+    const agentReqs = srv.requests.filter((r) => !JSON.stringify(r.tools ?? []).includes('get_time'));
+    expect((agentReqs[1]!.messages as Array<{ content: string }>).at(-1)!.content).toBe('be brief');
+    // idle: nothing to steer ⇒ an ordinary permitted send
+    const t2 = await lane.send(HUMAN, { hsid: s.hsid, text: 'once more', steer: true });
+    expect(t2.steered).toBeUndefined();
+    expect(rows.filter((r) => r.kind === 'turn.sent')).toHaveLength(2);
+    expect(await waitFor(() => rows.filter((r) => r.kind === 'turn.result').length === 2, 15_000)).toBe(true);
+    await lane.stop(HUMAN, { hsid: s.hsid });
+    expect(await waitFor(() => lane.stateOf(s.hsid) === 'exited', 5_000)).toBe(true);
+  });
 });

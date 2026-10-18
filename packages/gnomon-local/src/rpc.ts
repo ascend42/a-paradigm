@@ -10,7 +10,8 @@
  *                 and agent events: model_capabilities, agent_start,
  *                 turn_start, message_update{delta}, message_end{message,
  *                 usage}, model_repair, tool_execution_start/_end, turn_end,
- *                 agent_end{stopReason, usage}; `fatal{error}` before exit.
+ *                 compaction_start/_end (slice 2), agent_end{stopReason,
+ *                 usage}; `fatal{error}` before exit.
  *
  * The session config is the kernel-written `local.yaml` (the JSON subset of
  * YAML: every JSON document is YAML 1.2), validated strictly; an endpoint
@@ -33,6 +34,8 @@ export interface LocalSessionConfig {
   surface: ToolSurface;
   maxSteps: number;
   maxTokens: number;
+  /** the working context target (tokens) compaction keeps the history under (§13.1 ~8k; default 8192) */
+  contextTarget: number;
   forbiddenPorts: number[];
   systemPrompt?: string;
 }
@@ -80,6 +83,7 @@ export function parseSessionConfig(text: string): LocalSessionConfig {
     surface,
     maxSteps: int(c.maxSteps, 16, 128),
     maxTokens: int(c.maxTokens, 1024, 32768),
+    contextTarget: Math.max(int(c.contextTarget, 8192, 131072), 1024),
     forbiddenPorts,
     ...(typeof c.systemPrompt === 'string' ? { systemPrompt: c.systemPrompt } : {}),
   };
@@ -97,11 +101,12 @@ export function rpcSession(cfg: LocalSessionConfig, emit: Emit): { onLine: (line
     roots: cfg.roots,
     maxSteps: cfg.maxSteps,
     maxTokens: cfg.maxTokens,
+    contextTarget: cfg.contextTarget,
     forbiddenPorts: cfg.forbiddenPorts,
     ...(cfg.systemPrompt !== undefined ? { systemPrompt: cfg.systemPrompt } : {}),
     emit,
   });
-  emit({ type: 'model_capabilities', backend: 'local', model: cfg.endpoint.model, compat: cfg.endpoint.compat, tools: cfg.capabilities.tools, ctx: cfg.capabilities.nCtx, surface: cfg.surface, textTools: !cfg.capabilities.tools && cfg.surface !== 'none' });
+  emit({ type: 'model_capabilities', backend: 'local', model: cfg.endpoint.model, compat: cfg.endpoint.compat, tools: cfg.capabilities.tools, ctx: cfg.capabilities.nCtx, surface: cfg.surface, textTools: !cfg.capabilities.tools && cfg.surface !== 'none', contextTarget: cfg.contextTarget });
   const onLine = (line: string): void => {
     let cmd: Record<string, unknown>;
     try {

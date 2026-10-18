@@ -1150,7 +1150,10 @@ components:
   supervisor:
     description: >-
       #supervisor (spec §3.3, §6.1, §5 verbs 2-4; M1.7 slice 1) in
-      src/kernel/supervisor/. The one place `claude -p` starts. Slice 1:
+      src/kernel/supervisor/. M1.8 slice 2: port.ts serves session.send{steer}
+      (boolean; local sessions only, a Claude session refuses BAD_REQUEST);
+      probeLocal() is the daemon-start local probe; the daemon passes the
+      root-signed local config. The one place `claude -p` starts. Slice 1:
       ATTENDED HUMAN-started Claude Code sessions only (others FORBIDDEN;
       the scheduler run step still refuses). open: session.open -> preflight
       -> session dir policy.json/mcp.json from generated plugin bytes
@@ -1214,14 +1217,30 @@ components:
       permit recorded with model + repo (P8-D92 meter, never capped) ->
       session profile -> intend/track kind local-runner; stdout turn.event
       first, model.capabilities/model.repair, usage against the spawn
-      permit). Round 2: tools confined to realpath roots (no .git, no symlink final component), probe bodies capped 1 MiB, configured model id preferred, assertNotClaude on realpaths + @anthropic-ai/claude-code, explicit backend pins the route, launchPlan TEST-RIG seam (test/local-lane-spawn.test.ts). Slice 2: darwin e2e rig (G-LCL-01 fake half, G-LCL-06, 6-child
-      G-LAW-01c), root-signed local.yaml, gnomon probe local, compaction,
-      daemon config wiring, attended local automations.
+      permit). Round 2: tools confined to realpath roots (no .git, no symlink final component), probe bodies capped 1 MiB, configured model id preferred, assertNotClaude on realpaths + @anthropic-ai/claude-code, explicit backend pins the route, launchPlan TEST-RIG seam (test/local-lane-spawn.test.ts). Slice 2: config.ts loadLocalConfig reads the ROOT-SIGNED
+      <home>/local.signed.json (schema gnomon-root-local:v1; unsigned, tampered,
+      unparseable, invalid or older than the sidecar/chain high-water mark =>
+      NO local config, logged config.unsigned / config.loaded{file,
+      fallback:'none'}; a signed public endpoint is applied and refuses every
+      open BILLING_REFUSED), wired by the daemon; runner.sha256 pins the
+      runner's entry file at every spawn (PERMIT_REQUIRED
+      runner-pin-mismatch); per-task endpoint choice = first endpoint in
+      signed order capable for the floor; probeAll at daemon start records
+      model.probe/model.capabilities; roots inside the Gnomon home refused;
+      the child gets contextTarget min(~8k, n_ctx); session.send{steer} with a
+      turn in flight writes the steer line under that turn's permit
+      (session.inject + turn.steer, no new permit), idle it is a plain send;
+      Claude sessions refuse steer BAD_REQUEST. Deferred: darwin sandboxed
+      e2e rig (G-LCL-01 fake half, G-LCL-06, 6-child G-LAW-01c), gnomon probe
+      local CLI verb, the claude estimate on the card, attended/unattended
+      local automations (law 5).
     path: src/kernel/local/
     type: module
     tags: [gnomon, kernel, local, paradigm-8, m1.8]
     tests:
       - test/local-runner.test.ts
+      - test/local-config.test.ts
+      - test/local-lane-spawn.test.ts
     oracles: [G-SUB-06, G-LCL-02, G-LCL-03, G-ADP-02, G-LAW-01c]
 
   claude-adapter:
