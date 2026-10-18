@@ -70,13 +70,14 @@ function tmpHome(): string {
   return h;
 }
 
-type MemKs = AnchorStore & { stored?: HeadAnchor; writes: number };
+type MemKs = AnchorStore & { stored?: HeadAnchor; writes: number; down?: boolean };
 function memKeystore(): MemKs {
   const ks: MemKs = {
     name: 'keystore',
     writes: 0,
     read: () => (ks.stored ? { state: 'present', head: ks.stored } : { state: 'absent' }),
     write: async (h) => {
+      if (ks.down) throw new Error('helper gone');
       ks.writes++;
       ks.stored = h;
     },
@@ -237,6 +238,51 @@ describe('#kernel-log rotation faults', () => {
     expect(rowsOf(sealed1(home)).map((x) => x.kind)).toEqual(['session.open', 'session.open', 'approval.decide', 'daemon.segment']);
     expect(rowsOf(activeDb(home))).toEqual([]);
     expect(l2.verify().ok).toBe(true);
+  });
+
+  it('round 3: close() of an anchor-faulted log whose pending marker reaches the boundary and halts RETURNS its report (never throws)', async () => {
+    const SEG = 4;
+    const home = tmpHome();
+    const ks = memKeystore();
+    // signatures: row 1 (#1), critical row 2 (#2), its immediate marker (#3 — fails ⇒ the marker stays pending)
+    const log = openKernelLog(base(home, ks, BOOT_A, SEG, failingSigner(3)));
+    await fill(log, 1);
+    await log.flushAnchors(); // keystore anchor at seq 1
+    ks.down = true;
+    expect((await rejection(log.append({ kind: 'approval.decide', principal: KERNEL, payload: { decision: 'allow' } }))).reason).toBe('anchor-failed');
+    expect(log.integrity).toMatchObject({ state: 'anchor-faulted', failed: [{ seq: 2, recorded: false }] });
+    // close: the pending marker (row 3) brings the segment to its boundary ⇒ closing row 4 ⇒ the seal halts
+    fault.armed = true;
+    const report = await log.close();
+    expect(fault.hits).toBe(1);
+    expect(report.keystore).toBe('failed');
+    expect(report.error).toMatch(/rotation of segment 1 failed after the closing row was committed/);
+    fault.armed = false;
+    ks.down = false;
+    expect(rowsOf(sealed1(home)).map((x) => x.kind)).toEqual(['session.open', 'approval.decide', 'daemon.anchor.failed', 'daemon.segment']);
+    // reopen completes the rotation; the critical row has its marker (no new one), verify ok
+    const l2 = openKernelLog(base(home, ks, BOOT_A, SEG));
+    opened.push(l2);
+    expect(l2.report).toMatchObject({ recoveredRotation: true });
+    expect(rowsOf(activeDb(home))).toEqual([]);
+    expect(l2.verify().ok).toBe(true);
+  });
+
+  it('round 3: a critical append that re-anchors a faulted log and halts in that rotation refuses rotation-failed (not anchor-faulted)', async () => {
+    const SEG = 4;
+    const home = tmpHome();
+    const ks = memKeystore();
+    const log = openKernelLog(base(home, ks, BOOT_A, SEG, failingSigner(3)));
+    await fill(log, 1);
+    await log.flushAnchors();
+    ks.down = true;
+    await rejection(log.append({ kind: 'approval.decide', principal: KERNEL, payload: { decision: 'allow' } }));
+    ks.down = false;
+    fault.armed = true;
+    const r = await rejection(log.append({ kind: 'approval.decide', principal: KERNEL, payload: { decision: 'deny' } }));
+    expect([r.refusal.code, r.reason]).toEqual(['ENGINE', 'rotation-failed']);
+    fault.armed = false;
+    expect((await log.close()).keystore).toBe('failed');
   });
 
   it('round 2: a failure BEFORE the db is closed (the durable closing-row file anchor) halts too — no row is ever appended after daemon.segment', async () => {

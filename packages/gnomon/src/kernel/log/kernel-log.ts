@@ -135,8 +135,9 @@
  * anchor (authoritative) with any lag is anchor-lag too (S34-05).
  *
  * ANCHOR FAULTS (S34-02): any failure after a critical row's COMMIT (file
- * anchor, rotation, keystore reject or timeout — `keystoreTimeoutMs`, default
- * 5 s, S34-11) rejects that append ENGINE{anchor-failed} and puts the log in
+ * anchor, keystore reject or timeout — `keystoreTimeoutMs`, default 5 s,
+ * S34-11; NOT rotation: a critical append rotates only after its anchors
+ * settled, round 2 of T-2026-10-17-013(a), see append) rejects that append ENGINE{anchor-failed} and puts the log in
  * an anchor-faulted state: bulk appends continue, CRITICAL appends first
  * re-anchor the current head (file + awaited keystore) and are refused
  * ENGINE{anchor-faulted} if that fails. Once both anchors succeed, one
@@ -1361,7 +1362,9 @@ export class KernelLog {
       try {
         await this.#recoverAnchors();
       } catch (err) {
-        throw logRefusal('ENGINE', 'anchor-faulted', `critical appends are refused until both anchors succeed for the head: ${(err as Error)?.message ?? String(err)}`, {
+        if (this.#halted) throw this.#halted; // the re-anchor's marker reached the boundary and the rotation halted
+        throw logRefusal('ENGINE', 'anchor-faulted',
+ `critical appends are refused until both anchors succeed for the head: ${(err as Error)?.message ?? String(err)}`, {
           kind: input.kind,
           failed: this.#fault?.failed.map((f) => f.seq) ?? [],
         });
@@ -1372,6 +1375,8 @@ export class KernelLog {
     if (!critical) {
       this.#afterBulkRow();
       this.#scheduleCheckpoint();
+      // a halt here rejects ENGINE{rotation-failed} although this bulk row IS
+      // committed — harmless for bulk kinds (no effect is gated on them).
       this.#maybeRotate();
       return { seq: e.seq, hash: e.hash, anchored: false, event: e };
     }
@@ -1400,6 +1405,8 @@ export class KernelLog {
     // marker on reopen). The row here IS committed and anchored, so the result
     // stands: a halt is surfaced by the next append / close (ENGINE{rotation-failed}),
     // and a closing-row failure before its commit leaves the boundary for the next append.
+    // That deferral (rotation.deferred) can leave a segment with segmentRows + 1
+    // or more rows; verify does not bound segment size (only seq / prev / seal links).
     try {
       this.#maybeRotate();
     } catch (err) {
@@ -1620,9 +1627,11 @@ export class KernelLog {
   }
 
   /**
-   * T-2026-10-17-013(a): a rotation failed with the active db closed. The
-   * instance cannot append or read any more (no db handle; a half-built
-   * kernel.db may be open), so it is CLOSED: timers are stopped (no
+   * T-2026-10-17-013(a): a rotation failed after the closing row was
+   * committed (the db may still be open, or already closed, or a half-built
+   * kernel.db may be open — any open handle is closed here). The instance
+   * must not append after daemon.segment nor read a half-sealed state, so it
+   * is CLOSED: timers are stopped (no
    * checkpoint fires on a closed handle), append / acknowledgeGap refuse
    * with the returned ENGINE{rotation-failed}, reads refuse `closed`, close()
    * reports it. The on-disk state is a rotation window; reopen completes it.
@@ -1633,7 +1642,7 @@ export class KernelLog {
       try { this.#db.close(); } catch { /* the rotation failure is the error that matters */ }
     }
     for (const t of [this.#idleTimer, this.#fileTimer, this.#ksTimer]) if (t) clearTimeout(t);
-    this.#halted = logRefusal('ENGINE', 'rotation-failed', `rotation of segment ${segment} failed after the active segment was closed (instance halted; reopen completes the rotation): ${error}`, {
+    this.#halted = logRefusal('ENGINE', 'rotation-failed', `rotation of segment ${segment} failed after the closing row was committed (instance halted; reopen completes the rotation): ${error}`, {
       segment,
       closingSeq,
     });
@@ -2029,6 +2038,11 @@ export class KernelLog {
       } catch (err) {
         syncErr = err;
       }
+    }
+    const halted = this.#halted as Error | undefined; // may be set by the marker commit above (TS narrowed it at the top)
+    if (halted) {
+      // round 3: the pending markers reached the segment boundary and that rotation halted (db already closed) — report, never throw
+      return (this.#closing = Promise.resolve({ keystore: 'failed', error: halted.message, fault: this.#fault ? 'pending' : 'none' }));
     }
     this.#closed = true;
     this.#db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
