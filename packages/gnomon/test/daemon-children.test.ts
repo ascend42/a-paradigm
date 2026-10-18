@@ -16,6 +16,7 @@ import { daemonHomeOf } from '../src/cli/daemon-cli.js';
 import { DaemonChildren, PROCESS_CONTROL, processControlFor, sweepOrphans, type GroupProbe, type ProcessControl } from '../src/kernel/lifecycle/index.js';
 
 const K = 'p:ab12/kernel';
+const UNPROV = 'p:00000000/kernel';
 const BOOT = 'boot-A';
 const kids: ChildProcess[] = [];
 afterEach(() => {
@@ -173,7 +174,7 @@ describe('G-DMN-04 orphan sweep (fake process control)', () => {
       { kind: 'session.spawned', principal: K, payload: { phase: 'intent', spawnId: 'sp-j', hsid: 'j', boot: BOOT } }, // crash in the spawn gap
     ];
     const out: Array<Record<string, unknown>> = [];
-    const r = await sweepOrphans({ rows, kernelPrincipal: K, boot: BOOT, control, append: async (kind, payload) => void (out.push({ kind, ...payload }), order.push(`row:${String(payload.pgid)}`)), pollMs: 1 });
+    const r = await sweepOrphans({ rows, kernelPrincipals: [UNPROV, K], boot: BOOT, control, append: async (kind, payload) => void (out.push({ kind, ...payload }), order.push(`row:${String(payload.pgid)}`)), pollMs: 1 });
     expect(r).toEqual({ orphans: 7, stopped: 1 });
     expect(out.map((o) => [o.hsid, o.probe, o.action, o.detail])).toEqual([
       ['a', 'alive', 'stop', undefined],
@@ -188,9 +189,15 @@ describe('G-DMN-04 orphan sweep (fake process control)', () => {
     expect(order.indexOf('row:101')).toBeLessThan(order.indexOf('signal:101'));
   });
 
+  it('principal continuity: spawn rows from before root provisioning (p:00000000/kernel) are still swept (M1.3)', async () => {
+    const control = fakeControl({ 401: 'alive' }, { 401: 't:401' });
+    const r = await sweepOrphans({ rows: [spawned('pre', 401, {}, UNPROV)], kernelPrincipals: [UNPROV, K], boot: BOOT, control, append: async () => undefined, pollMs: 1 });
+    expect(r).toEqual({ orphans: 1, stopped: 1 });
+  });
+
   it('an unknown boot session never signals', async () => {
     const control = fakeControl({ 201: 'alive' }, { 201: 't:201' });
-    const r = await sweepOrphans({ rows: [spawned('k', 201, { boot: 'unknown' })], kernelPrincipal: K, boot: 'unknown', control, append: async () => undefined });
+    const r = await sweepOrphans({ rows: [spawned('k', 201, { boot: 'unknown' })], kernelPrincipals: [UNPROV, K], boot: 'unknown', control, append: async () => undefined });
     expect(r).toEqual({ orphans: 1, stopped: 0 });
     expect(control.signals).toEqual([]);
   });
@@ -198,7 +205,7 @@ describe('G-DMN-04 orphan sweep (fake process control)', () => {
   it('counts an orphan as stopped only when its group is gone', async () => {
     const control = fakeControl({ 301: 'alive' }, { 301: 't:301' });
     control.signalGroup = (pgid, sig) => (control.signals.push(`${pgid}:${sig}`), true); // the group will not die
-    const r = await sweepOrphans({ rows: [spawned('z', 301)], kernelPrincipal: K, boot: BOOT, control, append: async () => undefined, graceMs: 50, pollMs: 5 });
+    const r = await sweepOrphans({ rows: [spawned('z', 301)], kernelPrincipals: [UNPROV, K], boot: BOOT, control, append: async () => undefined, graceMs: 50, pollMs: 5 });
     expect(r).toEqual({ orphans: 1, stopped: 0 });
     expect(control.signals).toEqual(['301:SIGTERM', '301:SIGKILL']);
   });

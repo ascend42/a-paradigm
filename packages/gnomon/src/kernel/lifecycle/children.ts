@@ -31,7 +31,9 @@
  * never signalled. Orphans are stopped in parallel; `stopped` counts only
  * groups that are gone.
  *
- * RESIDUAL (reported): §9.1 has no `mod.spawned` / `mod.exited` kind (adding
+ * RESIDUALS (reported): a group whose leader died while members live has no
+ * matching start-time witness, so it is recorded `unattributable` and not
+ * signalled (the safe direction). §9.1 has no `mod.spawned` / `mod.exited` kind (adding
  * one moves clientApiId), so a mod child orphaned by a daemon crash is not
  * swept; mod children are tracked in memory and stopped at every exit.
  */
@@ -138,6 +140,8 @@ export class DaemonChildren {
     if (session && isLive(input.child) && this.#o.control.probeGroup(pid) === 'gone') {
       throw new Error(`a ${input.kind} child must be spawned detached (its own process group) so it can be stopped as a group`);
     }
+    // read the witness NOW, before any await: a reaped-and-reused pid can never be recorded as this child
+    const startTime = session ? this.#o.control.startTime(pid) : null;
     let spawnId: string | null = null;
     if (session) spawnId = (input.intent ?? (await this.intend({ kind: input.kind as SessionChildKind, ...(input.hsid ? { hsid: input.hsid } : {}) }))).spawnId;
     const t: Tracked = { input, pid, exited: exitedPromise(input.child) };
@@ -152,7 +156,7 @@ export class DaemonChildren {
         pid,
         pgid: pid,
         boot: this.#o.boot,
-        startTime: this.#o.control.startTime(pid),
+        startTime,
       });
     }
     void t.exited.then(async () => {
@@ -231,7 +235,8 @@ interface OpenSpawn {
 /** G-DMN-04: kernel-written `session.spawned` without an end row ⇒ record, then stop only what is provably ours. */
 export async function sweepOrphans(opts: {
   rows: Iterable<OrphanRow>;
-  kernelPrincipal: string;
+  /** Every kernel principal this home has used (p:00000000/kernel before root provisioning, p:<rootns>/kernel after, M1.3). */
+  kernelPrincipals: readonly string[];
   boot: string;
   append: Append;
   control: ProcessControl;
@@ -243,7 +248,7 @@ export async function sweepOrphans(opts: {
   const idOf = (p: Record<string, unknown>): string =>
     typeof p.spawnId === 'string' ? `s:${p.spawnId}` : typeof p.hsid === 'string' ? `h:${p.hsid}` : `p:${String(p.pid)}`;
   for (const r of opts.rows) {
-    if (r.principal !== opts.kernelPrincipal) continue;
+    if (r.principal === undefined || !opts.kernelPrincipals.includes(r.principal)) continue;
     const p = (r.payload ?? {}) as Record<string, unknown>;
     if (r.kind === 'session.spawned') {
       const pid = typeof p.pid === 'number' ? p.pid : null;

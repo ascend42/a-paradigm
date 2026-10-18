@@ -15,6 +15,7 @@ const H = 3_600_000;
 const MIN = 60_000;
 const T0 = Date.parse('2026-10-17T00:00:00.000Z');
 const K = 'p:ab12/kernel';
+const UNPROV = 'p:00000000/kernel';
 const iso = (ms: number): string => new Date(ms).toISOString();
 
 class MemLog implements SchedulerLog {
@@ -63,7 +64,7 @@ class Clock {
 }
 
 function setup(automations: unknown[], clock = new Clock(), log = new MemLog(clock)) {
-  const s = new Scheduler({ log, kernelPrincipal: K, automations, now: () => clock.now, arm: clock.arm, holdIdle: clock.holdIdle });
+  const s = new Scheduler({ log, kernelPrincipals: [UNPROV, K], automations, now: () => clock.now, arm: clock.arm, holdIdle: clock.holdIdle });
   return { s, log, clock };
 }
 
@@ -149,6 +150,16 @@ describe('G-SCH-01 timers rebuild from the log after a restart', () => {
     expect(s.timers()[0]!.lastFiredAt).toBeUndefined();
     await clock.advance(s, 6 * MIN);
     expect(log.all.filter((r) => r.kind === 'schedule.automation.due' && r.at === iso(T0 + 5 * MIN))).toHaveLength(1);
+  });
+
+  it('principal continuity: due rows written under p:00000000/kernel before root provisioning still count (M1.3)', async () => {
+    const clock = new Clock();
+    const log = new MemLog(clock);
+    const a = { id: 'prov', model: 'any', trigger: { at: iso(T0 - MIN) } };
+    log.all.push({ kind: 'schedule.automation.due', principal: UNPROV, at: iso(T0 - MIN), payload: { key: 'automation:prov', dueAt: iso(T0 - MIN) } });
+    const { s } = setup([a], clock, log);
+    await s.start();
+    expect(log.all.filter((r) => r.kind === 'schedule.automation.due')).toHaveLength(1); // not refired
   });
 
   it('a timer due while the daemon was down fires on activation, attended and late; misses coalesce', async () => {

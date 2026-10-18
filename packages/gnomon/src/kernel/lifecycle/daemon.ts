@@ -202,6 +202,8 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
   const kernelKeySource = opts.kernelSigner ? 'supplied-software' : 'ephemeral-software';
   const authority = opts.rootAuthority ?? new UnprovisionedRootAuthority();
   const kernelPrincipal = kernelPrincipalOf(authority);
+  /** Principal continuity across root provisioning (M1.3): rows written before it carry the unprovisioned kernel principal. */
+  const kernelPrincipals = [...new Set([kernelPrincipalOf(new UnprovisionedRootAuthority()), kernelPrincipal])];
   let log: KernelLog;
   try {
     const pem = (kernelSigner as Partial<SoftwareEd25519Signer>).publicKeyPem;
@@ -325,7 +327,7 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
       append: (kind, payload) => appendRow(kind, payload),
       rows: (kinds) => fullRows(kinds),
     },
-    kernelPrincipal,
+    kernelPrincipals,
     holdIdle: () => idle.hold('timer'),
     ...(opts.automations ? { automations: opts.automations } : {}),
     ...(opts.schedulerNow ? { now: opts.schedulerNow } : {}),
@@ -455,7 +457,7 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
     // §2.4 rule 4: before serving anyone, stop what a crashed daemon left running
     orphanSweep = await sweepOrphans({
       rows: fullRows(['session.spawned', 'session.exited', 'session.orphaned']),
-      kernelPrincipal,
+      kernelPrincipals,
       boot,
       append: (kind, payload) => appendRow(kind, payload),
       control,

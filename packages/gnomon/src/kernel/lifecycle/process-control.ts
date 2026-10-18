@@ -17,7 +17,10 @@
  * `startTime(pid)` is the group leader's start-time witness (macOS `ps -o
  * lstart=` by absolute path; Linux field 22 of /proc/<pid>/stat), recorded in
  * `session.spawned` so a recycled pid is never mistaken for the child the row
- * names. null = no witness ⇒ the orphan sweep never signals.
+ * names. null = no witness ⇒ the orphan sweep never signals. `ps` runs with
+ * TZ=UTC so the witness does not move with the system timezone. COST: on macOS
+ * each read forks /bin/ps — call it only at track() and in the start-up
+ * sweep, never on a hot path.
  */
 import { spawnSync } from 'node:child_process';
 import { readFileSync } from 'node:fs';
@@ -39,7 +42,7 @@ function errno(err: unknown): string | undefined {
 
 function darwinStartTime(pid: number): string | null {
   if (!Number.isInteger(pid) || pid <= 1) return null;
-  const r = spawnSync('/bin/ps', ['-o', 'lstart=', '-p', String(pid)], { encoding: 'utf8', env: { LC_ALL: 'C', PATH: '/usr/bin:/bin' }, timeout: 5_000 });
+  const r = spawnSync('/bin/ps', ['-o', 'lstart=', '-p', String(pid)], { encoding: 'utf8', env: { LC_ALL: 'C', TZ: 'UTC', PATH: '/usr/bin:/bin' }, timeout: 5_000 });
   const out = r.status === 0 ? r.stdout.trim() : '';
   return out ? `lstart:${out}` : null;
 }

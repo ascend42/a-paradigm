@@ -29,7 +29,9 @@
  *   instant is within `horizonMs` the scheduler holds the daemon open
  *   (`holdIdle`), and releases the hold when nothing is due that soon.
  * - Each wake is capped at 60 s, so a wall-clock jump or a host sleep is
- *   noticed within a minute. A failed append releases the hold and retries.
+ *   noticed within a minute. A failed append releases the hold and retries;
+ *   a retry after a partial failure can write a second `coalesced` drop row
+ *   for the same span (benign: drop rows never feed the rebuild).
  * - stop() is a latch (a later start() is a no-op) and returns the in-flight
  *   tick, which the daemon awaits before stopping children.
  *
@@ -80,8 +82,8 @@ export interface AutomationFire {
 
 export interface SchedulerOptions {
   log: SchedulerLog;
-  /** The kernel principal: the only writer whose due rows rebuild timers. */
-  kernelPrincipal: string;
+  /** Every kernel principal this home has used (unprovisioned p:00000000/kernel and the current one, M1.3): the only writers whose due rows rebuild timers. */
+  kernelPrincipals: readonly string[];
   /** Raw `automation:v1` records (validated here; root-signed config supplies them in production). */
   automations?: readonly unknown[];
   now?: () => number;
@@ -130,7 +132,7 @@ export class Scheduler {
     this.#activatedAt = this.#now();
     const fired = new Map<string, number>();
     for (const r of this.#o.log.rows([DUE])) {
-      if (r.principal !== this.#o.kernelPrincipal) continue;
+      if (r.principal === undefined || !this.#o.kernelPrincipals.includes(r.principal)) continue;
       const p = r.payload as { key?: unknown; dueAt?: unknown } | undefined;
       if (typeof p?.key !== 'string' || typeof p.dueAt !== 'string') continue;
       const ms = Date.parse(p.dueAt);

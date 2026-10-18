@@ -171,12 +171,12 @@ describe('§2.4 rule 3 idle exit with timers and children', () => {
 
   it('a live session holds idle exit; shutdown stops it and a SIGTERM-ignoring grandchild in its group, then daemon.exit with no live child', async () => {
     const h = home();
-    const d = await daemon(h, { idleMs: 100, childGraceMs: 500 });
     const grand = "process.on('SIGTERM',()=>{});console.log('ready');setInterval(()=>{},1000)";
     const s = detached(
       `const c=require('child_process').spawn(process.execPath,['-e',${JSON.stringify(grand)}],{stdio:['ignore','pipe','ignore']});c.stdout.on('data',d=>{if(String(d).includes('ready'))console.log('ready')});setInterval(()=>{},1000)`,
     );
-    await ready(s);
+    await ready(s); // before the daemon starts: a slow fork under load must not race its 100 ms idle exit
+    const d = await daemon(h, { idleMs: 100, childGraceMs: 500 });
     const intent = await d.children.intend({ kind: 'session', hsid: 'h-live' });
     await d.children.track({ kind: 'session', child: s, hsid: 'h-live', intent });
     let exited = false;
