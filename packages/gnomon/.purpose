@@ -710,7 +710,13 @@ components:
       instance — closed, timers stopped, append / acknowledgeGap refuse
       ENGINE{rotation-failed} (in-process reason; reads refuse `closed`),
       close() reports keystore 'failed' and writes no anchor; reopen
-      completes the rotation. S34-29 (documented): a genesis fsyncDir(home)
+      completes the rotation. Round 2: the halt starts at the closing-row
+      commit (durable file anchor, TRUNCATE checkpoint, journal switch), so
+      no row ever follows daemon.segment; a critical append rotates only
+      after its anchors settled and resolves anchored even if the rotation
+      then halts (surfaced on the next call / close). Stated residual: a
+      rotation halt inside acknowledgeGap after the seal rename turns the
+      acknowledgeable truncation into missing-db (fail-closed; quarantine). S34-29 (documented): a genesis fsyncDir(home)
       failure leaves kernel.db without a head file ⇒ anchor-missing on every
       later open; manual wipe / quarantine, never auto-recreated.
       `forcedAnchorRate` / `anchorStatus` = status.log telemetry (forced

@@ -21,13 +21,13 @@
  *     segment and appends the relaxed daemon.anchor.lag row there first, the
  *     file anchor second. Same boot / keyless refuse with nothing written.
  */
-import { existsSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, mkdtempSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { FILE_ANCHOR_MAX_LAG, KernelLog, LogRefusal, SoftwareEd25519Signer, type AnchorStore, type HeadAnchor, type Signer } from '../src/kernel/log/index.js';
-import { openKernelLog, type KernelLogTestOptions } from '../src/kernel/testing.js';
+import { acknowledgeGap, mintTestPresence, openKernelLog, openKernelLogForRecovery, type KernelLogTestOptions } from '../src/kernel/testing.js';
 
 const fault = vi.hoisted(() => ({ armed: false, hits: 0 }));
 vi.mock('../src/kernel/log/anchor.js', async (importOriginal) => {
@@ -213,6 +213,82 @@ describe('#kernel-log rotation faults', () => {
     expect(l2.head()).toMatchObject({ segment: 2, seq: SEG });
     await fill(l2, 1);
     expect(l2.verify().ok).toBe(true);
+  });
+
+  it('round 2: a CRITICAL append whose rotation halts resolves anchored (row committed + anchored); the halt surfaces on the next call', async () => {
+    const SEG = 4;
+    const home = tmpHome();
+    const ks = memKeystore();
+    const log = openKernelLog(base(home, ks, BOOT_A, SEG));
+    await fill(log, 2);
+    fault.armed = true;
+    const r = await log.append({ kind: 'approval.decide', principal: KERNEL, payload: { decision: 'allow' } }); // row 3 → closing row 4 → seal fails
+    expect(r).toMatchObject({ seq: 3, anchored: 'both' });
+    expect(fault.hits).toBe(1);
+    fault.armed = false;
+    expect(log.integrity).toEqual({ state: 'ok' }); // no anchor fault: the critical row's anchors succeeded before the rotation
+    expect((await rejection(log.append({ kind: 'session.open', principal: KERNEL, payload: { i: 9 } }))).reason).toBe('rotation-failed');
+    expect((await log.close()).keystore).toBe('failed');
+    expect(ks.stored).toMatchObject({ seq: 3, hash: r.hash }); // the keystore anchored the critical row; the rotation wrote none
+    // reopen: the rotation completes; the critical row is committed, anchored and needs no daemon.anchor.failed marker
+    const l2 = openKernelLog(base(home, ks, BOOT_A, SEG));
+    opened.push(l2);
+    expect(l2.report).toMatchObject({ recoveredRotation: true });
+    expect(rowsOf(sealed1(home)).map((x) => x.kind)).toEqual(['session.open', 'session.open', 'approval.decide', 'daemon.segment']);
+    expect(rowsOf(activeDb(home))).toEqual([]);
+    expect(l2.verify().ok).toBe(true);
+  });
+
+  it('round 2: a failure BEFORE the db is closed (the durable closing-row file anchor) halts too — no row is ever appended after daemon.segment', async () => {
+    const SEG = 4;
+    const home = tmpHome();
+    const ks = memKeystore();
+    // no coalesced file-anchor write or idle checkpoint between the injection and the rotation
+    const log = openKernelLog({ ...base(home, ks, BOOT_A, SEG), fileAnchorMaxMs: 600_000, checkpointIdleMs: 600_000 });
+    await fill(log, 2);
+    await log.flushAnchors();
+    mkdirSync(path.join(home, 'head.tmp')); // the head anchor's tmp path is a directory: the durable write fails (every OS)
+    const r = await rejection(log.append({ kind: 'session.open', principal: KERNEL, payload: { i: 3 } }));
+    expect([r.refusal.code, r.reason]).toEqual(['ENGINE', 'rotation-failed']);
+    expect((await rejection(log.append({ kind: 'session.open', principal: KERNEL, payload: { i: 4 } }))).reason).toBe('rotation-failed');
+    await drain();
+    expect((await log.close()).keystore).toBe('failed');
+    rmSync(path.join(home, 'head.tmp'), { recursive: true });
+    // kernel.db still holds segment 1 ending at the closing row (window 2), nothing after it
+    expect(rowsOf(activeDb(home)).at(-1)).toMatchObject({ seq: SEG, kind: 'daemon.segment' });
+    const l2 = openKernelLog(base(home, ks, BOOT_A, SEG));
+    opened.push(l2);
+    expect(l2.report).toMatchObject({ recoveredRotation: true });
+    expect(l2.head()).toMatchObject({ segment: 2, seq: SEG });
+    expect(l2.verify().ok).toBe(true);
+  });
+
+  it('round 2: a rotation halt inside acknowledgeGap (stated residual): rotation-failed, the keystore evidence untouched, reopen refuses missing-db', async () => {
+    const SEG = 4;
+    const home = tmpHome();
+    const ks = memKeystore();
+    const log = openKernelLog(base(home, ks, BOOT_A, SEG));
+    await fill(log, 4); // rows 1..3 + closing row 4, row 5 in segment 2
+    await log.flushAnchors();
+    const at5 = { ...ks.stored! };
+    await log.close();
+    ks.stored = at5; // the power cut: keystore @5 (boot A, not closed)
+    for (const s of ['', '-wal', '-shm']) rmSync(`${activeDb(home)}${s}`, { force: true });
+    renameSync(sealed1(home), activeDb(home)); // segment 2 lost; segment 1 back in kernel.db
+    const rec = openKernelLogForRecovery(base(home, ks, BOOT_B, SEG));
+    expect(rec.report.integrity).toMatchObject({ state: 'truncated', cause: 'unclean-reboot', lostFrom: 5, lostTo: 5 });
+    const writesBefore = ks.writes;
+    fault.armed = true;
+    const r = await rejection(acknowledgeGap(rec, { presenceToken: mintTestPresence() }));
+    expect(r.reason).toBe('rotation-failed');
+    fault.armed = false;
+    await drain();
+    expect(ks.writes).toBe(writesBefore);
+    expect(ks.stored).toEqual(at5); // the ahead keystore anchor (the evidence) was never rewritten
+    expect((await rejection(acknowledgeGap(rec, { presenceToken: mintTestPresence() }))).reason).toBe('rotation-failed');
+    expect((await rec.close()).keystore).toBe('failed');
+    expect(existsSync(activeDb(home))).toBe(false);
+    expect(refusalOf(() => openKernelLogForRecovery(base(home, ks, BOOT_B, SEG))).reason).toBe('missing-db'); // fail-closed; quarantine recovers
   });
 
   it('T-015(2): window-2 completion with a lagging file anchor rewrites it BEFORE sealing — a crash after the seal rename reopens as a rotation window', async () => {

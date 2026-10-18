@@ -101,7 +101,14 @@
  * That is fail-closed and is never auto-recreated (a missing anchor over an
  * existing db is exactly what a same-user deletion leaves); recovery is a
  * manual wipe of the never-used home (it holds no row) or the quarantine
- * command. An anchor ahead of the db ⇒ truncated, with
+ * command. STATED RESIDUAL (round 2): acknowledgeGap rotates first when the
+ * db tip is a daemon.segment closing row (S34-13); a rotation HALT there
+ * after the seal rename leaves no kernel.db while the keystore anchor still
+ * names the lost head (the evidence is never rewritten before the gap row),
+ * so the next open refuses missing-db instead of reopening the
+ * acknowledgeable truncation (unless the file anchor sits exactly at the
+ * closing row: then it reopens as the same truncation). Fail-closed; the quarantine command recovers. An anchor ahead of the db ⇒ truncated, with
+
  * `data.cause` (S33-10) `tamper` when the keystore anchor's boot equals this
  * boot, or it was a clean close, or the boot cannot be compared, and
  * `unclean-reboot` when the boot changed and the anchor was not a clean
@@ -1373,7 +1380,6 @@ export class KernelLog {
       this.#writeFileAnchor(false); // then the file-anchor rename
       const ks = this.#queueKeystore(false); // then the keystore write (awaited below)
       this.#scheduleCheckpoint();
-      this.#maybeRotate();
       await ks;
     } catch (err) {
       (this.#fault ??= { failed: [] }).failed.push({ seq: e.seq, kind: e.kind, recorded: false });
@@ -1387,6 +1393,18 @@ export class KernelLog {
       throw logRefusal('ENGINE', 'anchor-failed', `anchoring failed after commit for critical row ${e.seq}: ${(err as Error)?.message ?? String(err)}`, { kind: e.kind, seq: e.seq });
     }
     this.#resolveCritical(e.seq, true);
+    // Round 2 (T-2026-10-17-013(a)): rotate only AFTER the anchor outcome has
+    // settled. A rotation failure inside the anchoring try used to reject
+    // anchor-failed while the marker commit failed on the closed db and the
+    // queued keystore write still landed (a committed, anchored row with no
+    // marker on reopen). The row here IS committed and anchored, so the result
+    // stands: a halt is surfaced by the next append / close (ENGINE{rotation-failed}),
+    // and a closing-row failure before its commit leaves the boundary for the next append.
+    try {
+      this.#maybeRotate();
+    } catch (err) {
+      this.#diag(this.#halted ? 'rotation.halted.after-critical' : 'rotation.deferred', { seq: e.seq, error: (err as Error)?.message ?? String(err) });
+    }
     return { seq: e.seq, hash: e.hash, anchored: this.#anchoring, event: e };
   }
 
@@ -1557,24 +1575,33 @@ export class KernelLog {
       },
     );
     this.#noteForced(false);
+    // Round 2: from the closing-row COMMIT on, every failure halts — the
+    // instance is never left open with its tip on daemon.segment (a later
+    // bulk append would add rows after the closing row).
     // durable anchor AT the closing row before the rename, so a crash between
     // rename and the new kernel.db is recognised as a rotation window on open.
-    this.#writeFileAnchor(true);
+    try {
+      this.#writeFileAnchor(true);
+    } catch (err) {
+      throw this.#halt(this.#meta.segment, this.#tip.seq, err);
+    }
     this.#finishRotation();
   }
 
   /**
    * Seal the active segment (its last row is daemon.segment) and start the
-   * next. T-2026-10-17-013(a): once the active db is closed, any failure
-   * halts the instance (#halt) and throws ENGINE{rotation-failed}.
+   * next. T-2026-10-17-013(a): any failure from its first step on (the
+   * TRUNCATE checkpoint, the journal-mode switch, close, fsync, the seal
+   * rename, the next kernel.db) halts the instance (#halt) and throws
+   * ENGINE{rotation-failed}.
    */
   #finishRotation(writeAnchors = true): void {
     const sealedMeta = this.#meta;
     const tip = this.#tip;
-    this.#db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
-    this.#db.exec('PRAGMA journal_mode=DELETE');
-    this.#db.close();
     try {
+      this.#db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+      this.#db.exec('PRAGMA journal_mode=DELETE');
+      this.#db.close();
       fsyncFile(this.activePath);
       const dest = path.join(this.home, SEGMENTS_DIR, segName(sealedMeta.segment));
       fs.renameSync(this.activePath, dest);
