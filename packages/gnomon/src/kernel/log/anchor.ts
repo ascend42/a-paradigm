@@ -149,7 +149,7 @@ export class KeystoreAnchorStore implements AnchorStore {
  * surfaced as `EPERM: operation not permitted, fsync`. So a file is opened
  * 'r+' there (the flush itself is unchanged). A DIRECTORY cannot be opened
  * for a flush on Windows, so the directory fsync is skipped on win32 by
- * design, not swallowed. STATED RESIDUAL (spec §16, S34-26): on win32 a
+ * design, not swallowed. STATED RESIDUAL (spec §16, S34-27): on win32 a
  * rename is atomic but NOT durable when it returns — node's renameSync
  * (MoveFileEx) does not pass MOVEFILE_WRITE_THROUGH, so a power cut can undo
  * a rename that already returned. A durable rename on Windows is

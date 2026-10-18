@@ -154,6 +154,8 @@ export type LogRefusalReason =
   | 'unauthenticated-lead'
   /* S34-02 anchor-fault state */
   | 'anchor-faulted'
+  /* T-2026-10-17-013(a): a rotation failed after the active db was closed (in-process; the instance is halted) */
+  | 'rotation-failed'
   /* S34-22 keyless (non-rotating, diagnostic-only) logs */
   | 'kernel-key-required'
   /* T-2026-10-17-009(a) `gnomon log quarantine` (in-process / CLI only, never on the wire) */

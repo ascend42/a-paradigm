@@ -396,10 +396,15 @@ describe('G-LOG-11: an anchor ahead of the db is classified, never downgraded (S
     opened.push(rec);
     expect(rec.report.integrity).toMatchObject({ state: 'truncated', cause: 'unclean-reboot', lostFrom: 5, lostTo: 5 });
     expect(rec.head()).toMatchObject({ segment: 1, seq: 4 });
+    const writesBefore = ks.writes.length;
     const ack = await acknowledgeGap(rec, { presenceToken: mintTestPresence() });
     expect(ack).toMatchObject({ seq: 5 });
     expect(rec.head()).toMatchObject({ segment: 2, seq: 5 });
+    // T-2026-10-17-015(3): the rotation writes no anchor of its own — ONE keystore write, at the gap row
+    // (a write of the closing row 4 would have overwritten the ahead keystore anchor before the gap row existed)
+    expect(ks.writes.slice(writesBefore).map((h) => h.seq)).toEqual([5]);
     expect(rec.verify().failures).toEqual([]);
+
   });
 
   it('round 3 (reviewer A): an acknowledgeGap interrupted between the gap-row commit and the keystore write is re-anchored on open (one row lost)', async () => {

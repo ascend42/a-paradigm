@@ -20,7 +20,16 @@
  * prev is the closing row's hash — the chain runs on unbroken across files.
  * A crash anywhere in rotation is completed on the next open (closing row
  * present ⇒ finish the rename; sealed segment present and no kernel.db ⇒
- * create the next segment iff the anchor agrees).
+ * create the next segment iff the file anchor agrees with the closing row,
+ * or (S34-25) lags it relaxably across a boot change — P8-D85 below).
+ * ROTATION FAILURE (T-2026-10-17-013(a)): once sealing has closed the active
+ * db, any failure (fsync / fsyncDir EIO, the seal rename, creating the next
+ * kernel.db) HALTS the instance: it is closed, append and acknowledgeGap
+ * refuse ENGINE{rotation-failed} (reads refuse `closed`), and close() writes
+ * no anchor and reports `keystore: 'failed'` with that error. The disk holds
+ * a rotation window (the durable file anchor at the closing row is written
+ * before sealing starts, or the open path's checks re-run): reopening is the
+ * recovery and completes the rotation.
  *
  * CRASH SAFETY / FSYNC POLICY (stated, measured in test/kernel-log-posix):
  *   - durability 'process-crash' (default): WAL + `synchronous=FULL`, i.e.
@@ -82,8 +91,17 @@
  *     durability 'power-loss' and at genesis, rotation and close.
  *   - every anchor records `boot` (boot.ts); only the keystore copy (and its
  *     `closed` marker) is authoritative.
- * On open: no db but a head anchor, a sealed segment or keys present ⇒
- * INTEGRITY_BROKEN (missing-db); an anchor ahead of the db ⇒ truncated, with
+ * On open: no db but a head anchor, a keystore anchor (present or malformed;
+ * read BEFORE anything is created, S34-31, so the refusal writes no file), a
+ * sealed segment or keys present ⇒ INTEGRITY_BROKEN (missing-db), except the
+ * rotation window above. KNOWN DOUBLE FAULT (S34-29): genesis renames
+ * kernel.db in and fsyncs the home BEFORE the first head file; if that
+ * fsyncDir(home) fails (EIO) the open throws with kernel.db present and no
+ * head file, and every later open refuses INTEGRITY_BROKEN{anchor-missing}.
+ * That is fail-closed and is never auto-recreated (a missing anchor over an
+ * existing db is exactly what a same-user deletion leaves); recovery is a
+ * manual wipe of the never-used home (it holds no row) or the quarantine
+ * command. An anchor ahead of the db ⇒ truncated, with
  * `data.cause` (S33-10) `tamper` when the keystore anchor's boot equals this
  * boot, or it was a clean close, or the boot cannot be compared, and
  * `unclean-reboot` when the boot changed and the anchor was not a clean
@@ -169,7 +187,17 @@
  *       anchor's own `boot` is never consulted. A relaxed lag defers every
  *       open-time anchor write (file rewrite, marker/keystore-lag re-anchor)
  *       until the signed row is committed; rotation completion runs before
- *       the row but writes no anchor. S34-24: when the
+ *       the row but writes no anchor. S34-25: a crash inside that rotation
+ *       completion, between the seal rename and the new kernel.db, leaves the
+ *       lagging file anchor and no active db. That state is accepted as a
+ *       rotation window iff the same relaxation holds against the sealed
+ *       closing row (file-anchor hash matches its sealed row and lags it by
+ *       > 63; keystore anchor present, not closed, hash-checked against the
+ *       sealed rows, not ahead; both boots known and different; a kernel key —
+ *       keyless refuses FORBIDDEN{kernel-key-required} before any write): the
+ *       segment is created, the full checks re-run, the relaxed row is
+ *       appended in the new segment FIRST and the file anchor rewritten
+ *       SECOND. Anything else there refuses missing-db. S34-24: when the
  *       KEYSTORE anchor is ahead, the open classifies `truncated` (cause from
  *       the keystore boot) whatever the file lag: the file anchor still gets
  *       the hash and clean-close checks, only the > 63 bound is skipped, and
@@ -567,6 +595,8 @@ export class KernelLog {
   /** S34-11 / round 3: a keystore write timed out and has not settled; new writes are refused (order preserved, no hang). */
   #ksHung = false;
   #closing: Promise<CloseReport> | undefined;
+  /** T-2026-10-17-013(a): a rotation failed after the active db was closed — the instance is halted (closed); this is the refusal. */
+  #halted: Error | undefined;
   #db!: DatabaseSync;
   #meta!: Meta;
   #tip!: Tip;
@@ -709,18 +739,25 @@ export class KernelLog {
     fs.rmSync(`${this.activePath}.new`, { force: true }); // an interrupted creation never became the log
     const sealed = listSealedSegments(this.home);
     let anchorRead = this.#fileAnchor.read();
+    // S34-31: the keystore anchor is read BEFORE the create branch, so a
+    // surviving keystore anchor in a home with no db refuses before any file
+    // (a kernel.db with a new log id) is written.
+    let ks = this.#keystoreAnchor.read();
+    this.#ksAvailable = ks.state !== 'unavailable';
     let created = false;
     let recoveredRotation = false;
 
     if (!fs.existsSync(this.activePath)) {
       const last = sealed.length ? segmentInfo(sealed[sealed.length - 1]!.file, true) : undefined;
-      if (last && last.lastKind === 'daemon.segment' && this.#anchorAgrees(anchorRead, last.lastSeq, last.lastHash)) {
-        this.#createSegment({ log: this.#metaOf(last.file).log, segment: last.segment + 1, baseSeq: last.lastSeq + 1, basePrev: last.lastHash });
+      const closing = last && last.lastKind === 'daemon.segment' ? last : undefined;
+      if (closing && (this.#anchorAgrees(anchorRead, closing.lastSeq, closing.lastHash) || this.#relaxedRotationWindow(anchorRead, ks, closing))) {
+        this.#createSegment({ log: this.#metaOf(closing.file).log, segment: closing.segment + 1, baseSeq: closing.lastSeq + 1, basePrev: closing.lastHash });
         recoveredRotation = true;
-        this.#diag('rotation.recovered', { segment: last.segment + 1 });
-      } else if (anchorRead.state !== 'absent' || sealed.length > 0 || this.#opts.keysPresent) {
-        throw logRefusal('INTEGRITY_BROKEN', 'missing-db', 'kernel.db is missing but the log existed (anchor, sealed segment or keys present)', {
+        this.#diag('rotation.recovered', { segment: closing.segment + 1 });
+      } else if (anchorRead.state !== 'absent' || sealed.length > 0 || this.#opts.keysPresent || ks.state === 'present' || ks.state === 'malformed') {
+        throw logRefusal('INTEGRITY_BROKEN', 'missing-db', 'kernel.db is missing but the log existed (anchor, keystore anchor, sealed segment or keys present)', {
           anchor: anchorRead.state,
+          keystoreAnchor: ks.state,
           sealedSegments: sealed.length,
           keysPresent: Boolean(this.#opts.keysPresent),
         });
@@ -737,8 +774,6 @@ export class KernelLog {
     let anchorLag = 0;
     let keystoreLag = 0;
     let fileLagRelaxed: { bootPrev: string; bootNow: string } | undefined;
-    let ks = this.#keystoreAnchor.read();
-    this.#ksAvailable = ks.state !== 'unavailable';
     const boot = this.#boot;
     if (!created && ks.state === 'present') {
       // Round 3 (reviewer A): an interrupted acknowledgeGap — re-anchor, never re-classify.
@@ -790,13 +825,6 @@ export class KernelLog {
     }
 
     /* ── every check passed: writes from here on ── */
-    if (this.#tip.kind === 'daemon.segment') {
-      // crashed after the closing row, before the rename: finish the rotation
-      // WITHOUT anchor writes (S34-30; P8-D85) — the file write below and the
-      // re-stamp at the end anchor the head.
-      this.#finishRotation(false);
-      recoveredRotation = true;
-    }
     if (created) {
       this.#fileAnchor.write(this.#headAnchor(), true);
       anchors.file = 'created';
@@ -807,11 +835,24 @@ export class KernelLog {
       }
       // durable rewrite on every open: repairs a lag AND clears the clean-close
       // marker, so a crash later in this run is never read as a post-close lag.
+      // T-2026-10-17-015(2): it runs BEFORE a crashed rotation is completed
+      // (every check has passed), so a crash between the seal rename and the
+      // new kernel.db leaves the file anchor AT the closing row — a rotation
+      // window the next open completes, never missing-db.
       // P8-D85: NOT when the lag is relaxed — the lagging file anchor is the
       // evidence until the signed daemon.anchor.lag{which: 'file'} row is
       // committed (a crash before it must reopen into the same relaxation,
-      // never into a clean open with no row). The write after the row covers it.
+      // never into a clean open with no row; a crash inside the rotation
+      // below reopens through the S34-25 window). The write after the row covers it.
       if (!fileLagRelaxed) this.#fileAnchor.write(this.#headAnchor(), true);
+    }
+    if (this.#tip.kind === 'daemon.segment') {
+      // crashed after the closing row, before the rename: finish the rotation
+      // WITHOUT anchor writes (S34-30; P8-D85) — the file write above (or,
+      // when relaxed, the one after the row) and the re-stamp at the end
+      // anchor the head.
+      this.#finishRotation(false);
+      recoveredRotation = true;
     }
     if (ks.state === 'unavailable') anchors.keystore = 'unavailable';
     else if (ks.state === 'absent' && created) anchors.keystore = 'created';
@@ -1040,6 +1081,37 @@ export class KernelLog {
     return a.state === 'present' && a.head.seq === seq && a.head.hash === hash;
   }
 
+  /**
+   * S34-25 (T-2026-10-17-012): no kernel.db, the last sealed segment ends with
+   * its daemon.segment closing row, and the file anchor LAGS that row by more
+   * than 63 — the residue of a relaxed (P8-D85) open whose rotation
+   * completion crashed between the seal rename and the new kernel.db. A pure
+   * check run before any write: the relaxation #crossBootRelax grants,
+   * evaluated against the sealed rows (no db is attached yet). True ⇒ the
+   * caller creates the next segment and the main path re-runs every check,
+   * appends the relaxed row in the new segment and only then rewrites the
+   * file anchor. False ⇒ the caller refuses missing-db. A keyless log that
+   * would qualify refuses FORBIDDEN{kernel-key-required} here, before the
+   * segment is created.
+   */
+  #relaxedRotationWindow(a: AnchorReadResult, ks: AnchorReadResult, closing: SegmentInfo): boolean {
+    if (a.state !== 'present' || ks.state !== 'present') return false;
+    const log = this.#metaOf(closing.file).log;
+    const f = a.head;
+    const k = ks.head;
+    if (f.log !== log || k.log !== log || f.closed || k.closed) return false;
+    if (f.seq >= closing.lastSeq || closing.lastSeq - f.seq <= FILE_ANCHOR_MAX_LAG) return false;
+    if (k.seq > closing.lastSeq) return false; // an anchor ahead of every row is not this window
+    const hashAt = (seq: number): string | undefined => (seq === closing.lastSeq ? closing.lastHash : this.#sealedHashAt(seq));
+    if (hashAt(f.seq) !== f.hash || hashAt(k.seq) !== k.hash) return false;
+    const bootPrev = normalizeBootId(k.boot ?? '');
+    if (bootPrev === BOOT_UNKNOWN || this.#boot === BOOT_UNKNOWN || bootPrev === this.#boot) return false;
+    if (!this.#opts.signer) {
+      throw keyRequired('daemon.anchor.lag', `the file anchor lags the sealed closing row by ${closing.lastSeq - f.seq} rows (> ${FILE_ANCHOR_MAX_LAG}) across a boot change`);
+    }
+    return true;
+  }
+
   /** Returns the anchor lag (0 = equal); throws INTEGRITY_BROKEN on any disagreement. */
   #checkAnchor(a: AnchorReadResult, which: 'file' | 'keystore'): number {
     if (a.state === 'unavailable') return 0;
@@ -1060,6 +1132,11 @@ export class KernelLog {
     if (seq === this.#tip.seq) return this.#tip.hash;
     if (seq === this.#meta.baseSeq - 1) return this.#meta.basePrev;
     if (seq >= this.#meta.baseSeq) return (this.#db.prepare('SELECT hash FROM chain WHERE seq = ?').get(seq) as { hash: string } | undefined)?.hash;
+    return this.#sealedHashAt(seq);
+  }
+
+  /** Hash of row `seq` (or a segment's base prev) in the SEALED segments only — usable before a db is attached (S34-25). */
+  #sealedHashAt(seq: number): string | undefined {
     for (const s of listSealedSegments(this.home)) {
       const info = this.#sealedInfoOf(s.file);
       if (seq === info.baseSeq - 1) return info.basePrev;
@@ -1261,13 +1338,13 @@ export class KernelLog {
    * The first append after open waits for the keystore re-stamp (S34-01).
    */
   async append(input: AppendInput): Promise<AppendResult> {
-    if (this.#closed) throw logRefusal('ENGINE', 'closed', 'the kernel log is closed');
+    if (this.#closed) throw this.#halted ?? logRefusal('ENGINE', 'closed', 'the kernel log is closed');
     if (this.#broken) throw truncatedRefusal(this.#broken, this.#tip.seq);
     if (RESERVED_KINDS.includes(input.kind)) {
       throw logRefusal('FORBIDDEN', 'reserved-kind', `${input.kind} is written only by the log itself`, { kind: input.kind });
     }
     if (!this.#readyDone) await this.#ready.catch(() => undefined);
-    if (this.#closed) throw logRefusal('ENGINE', 'closed', 'the kernel log is closed');
+    if (this.#closed) throw this.#halted ?? logRefusal('ENGINE', 'closed', 'the kernel log is closed');
     if (!this.#opts.signer && this.#tip.seq + 1 - this.#meta.baseSeq + 2 >= this.#opts.segmentRows) {
       // S34-22: the row would reach the segment boundary and the daemon.segment row needs the kernel key — refuse BEFORE commit
       throw keyRequired('daemon.segment', 'a keyless log is non-rotating: this append would reach the segment boundary');
@@ -1486,25 +1563,56 @@ export class KernelLog {
     this.#finishRotation();
   }
 
-  /** Seal the active segment (its last row is daemon.segment) and start the next. */
+  /**
+   * Seal the active segment (its last row is daemon.segment) and start the
+   * next. T-2026-10-17-013(a): once the active db is closed, any failure
+   * halts the instance (#halt) and throws ENGINE{rotation-failed}.
+   */
   #finishRotation(writeAnchors = true): void {
     const sealedMeta = this.#meta;
     const tip = this.#tip;
     this.#db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
     this.#db.exec('PRAGMA journal_mode=DELETE');
     this.#db.close();
-    fsyncFile(this.activePath);
-    const dest = path.join(this.home, SEGMENTS_DIR, segName(sealedMeta.segment));
-    fs.renameSync(this.activePath, dest);
-    fs.rmSync(`${this.activePath}-wal`, { force: true });
-    fs.rmSync(`${this.activePath}-shm`, { force: true });
-    fsyncDir(path.dirname(dest));
-    fsyncDir(this.home);
-    this.#createSegment({ log: sealedMeta.log, segment: sealedMeta.segment + 1, baseSeq: tip.seq + 1, basePrev: tip.hash });
-    this.#attach();
+    try {
+      fsyncFile(this.activePath);
+      const dest = path.join(this.home, SEGMENTS_DIR, segName(sealedMeta.segment));
+      fs.renameSync(this.activePath, dest);
+      fs.rmSync(`${this.activePath}-wal`, { force: true });
+      fs.rmSync(`${this.activePath}-shm`, { force: true });
+      fsyncDir(path.dirname(dest));
+      fsyncDir(this.home);
+      this.#createSegment({ log: sealedMeta.log, segment: sealedMeta.segment + 1, baseSeq: tip.seq + 1, basePrev: tip.hash });
+      this.#attach();
+    } catch (err) {
+      throw this.#halt(sealedMeta.segment, tip.seq, err);
+    }
     this.#tip = { ...this.#tip, at: tip.at };
     if (writeAnchors) void this.#writeAnchorsDurable();
     this.#diag('segment.sealed', { segment: sealedMeta.segment, lastSeq: tip.seq });
+  }
+
+  /**
+   * T-2026-10-17-013(a): a rotation failed with the active db closed. The
+   * instance cannot append or read any more (no db handle; a half-built
+   * kernel.db may be open), so it is CLOSED: timers are stopped (no
+   * checkpoint fires on a closed handle), append / acknowledgeGap refuse
+   * with the returned ENGINE{rotation-failed}, reads refuse `closed`, close()
+   * reports it. The on-disk state is a rotation window; reopen completes it.
+   */
+  #halt(segment: number, closingSeq: number, err: unknown): Error {
+    const error = (err as Error)?.message ?? String(err);
+    if (this.#db?.isOpen) {
+      try { this.#db.close(); } catch { /* the rotation failure is the error that matters */ }
+    }
+    for (const t of [this.#idleTimer, this.#fileTimer, this.#ksTimer]) if (t) clearTimeout(t);
+    this.#halted = logRefusal('ENGINE', 'rotation-failed', `rotation of segment ${segment} failed after the active segment was closed (instance halted; reopen completes the rotation): ${error}`, {
+      segment,
+      closingSeq,
+    });
+    this.#closed = true;
+    this.#diag('rotation.failed', { segment, closingSeq, error });
+    return this.#halted;
   }
 
   /** Every segment, sealed first, then the active one. */
@@ -1811,7 +1919,7 @@ export class KernelLog {
    * power loss can explain it); no kernel key (FORBIDDEN{unsigned-mandatory}).
    */
   async #acknowledgeGap(input: { presenceToken: PresenceToken }): Promise<AppendResult> {
-    if (this.#closed) throw logRefusal('ENGINE', 'closed', 'the kernel log is closed');
+    if (this.#closed) throw this.#halted ?? logRefusal('ENGINE', 'closed', 'the kernel log is closed');
     const t = this.#broken;
     if (!t) throw logRefusal('BAD_REQUEST', 'no-gap', 'the log has no unacknowledged truncation');
     const presence = consumePresence(input?.presenceToken, 'log.gap.acknowledge', this.#opts.clock());
@@ -1826,7 +1934,11 @@ export class KernelLog {
     }
     if (!this.#opts.signer) throw logRefusal('FORBIDDEN', 'unsigned-mandatory', 'daemon.log.gap must be signed by the kernel key', { kind: 'daemon.log.gap' });
     if (!this.#gapRow) {
-      if (this.#tip.kind === 'daemon.segment') this.#finishRotation(); // S34-13
+      // S34-13; T-2026-10-17-015(3): no anchor write here — the durable write
+      // below anchors the gap row, and an anchor of the closing row queued now
+      // would overwrite the ahead keystore anchor (the evidence) before the
+      // gap row is committed.
+      if (this.#tip.kind === 'daemon.segment') this.#finishRotation(false);
       this.#gapRow = this.#appendRow({
         kind: 'daemon.log.gap',
         principal: this.#opts.kernelPrincipal,
@@ -1870,6 +1982,12 @@ export class KernelLog {
    */
   close(): Promise<CloseReport> {
     if (this.#closing) return this.#closing;
+    if (this.#halted) {
+      // T-2026-10-17-013(a): no db, no anchor write — the rotation window on disk is the state the next open completes
+      const fault: CloseReport['fault'] = this.#fault ? 'pending' : 'none';
+      return (this.#closing = Promise.resolve({ keystore: 'failed', error: this.#halted.message, fault }));
+    }
+
     for (const t of [this.#idleTimer, this.#fileTimer, this.#ksTimer]) if (t) clearTimeout(t);
     let ks: Promise<void> | undefined;
     let syncErr: unknown;

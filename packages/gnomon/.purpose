@@ -693,7 +693,26 @@ components:
       crashed rotation is completed with NO anchor writes (the file rewrite
       and the closing keystore re-stamp anchor the head), so a refused open
       leaves both anchors byte-for-byte as found and no queued keystore write
-      lands after the throw.
+      lands after the throw. OPEN-PATH FOLLOW-UPS (T-2026-10-17-012/013/015):
+      S34-31 the keystore anchor is read before the create branch — a home
+      with no db but a present/malformed keystore anchor refuses missing-db
+      with no file written; the durable file-anchor rewrite runs BEFORE a
+      crashed rotation is completed (non-relaxed), so a crash after the seal
+      rename reopens as a rotation window; S34-25 a relaxed (P8-D85) open
+      whose rotation crashed after the seal rename (lagging file anchor, no
+      kernel.db) is accepted iff the same relaxation holds against the sealed
+      closing row (pure pre-check, keyless refuses kernel-key-required), the
+      segment is created and the relaxed row appended there first, the file
+      anchor second; acknowledgeGap completes a rotation with no anchor write
+      of its own (the closing row never overwrites the ahead keystore
+      anchor). ROTATION FAILURE (T-013(a)): any failure after the active db
+      is closed (fsync/fsyncDir EIO, seal rename, next kernel.db) halts the
+      instance — closed, timers stopped, append / acknowledgeGap refuse
+      ENGINE{rotation-failed} (in-process reason; reads refuse `closed`),
+      close() reports keystore 'failed' and writes no anchor; reopen
+      completes the rotation. S34-29 (documented): a genesis fsyncDir(home)
+      failure leaves kernel.db without a head file ⇒ anchor-missing on every
+      later open; manual wipe / quarantine, never auto-recreated.
       `forcedAnchorRate` / `anchorStatus` = status.log telemetry (forced
       anchors per row over the last 10⁴ rows; > 1/64 = outside the measured
       envelope). Open refuses INTEGRITY_BROKEN on missing-db (with anchor,
@@ -839,6 +858,8 @@ components:
       - test/kernel-log-gap.test.ts
       - test/kernel-log-crossboot.test.ts
       - test/kernel-log-open-order.test.ts
+      - test/kernel-log-rotation-fault.test.ts
+
       - test/boot-session.test.ts
       - test/durable-fs.test.ts
       - test/seams-fence.test.ts
