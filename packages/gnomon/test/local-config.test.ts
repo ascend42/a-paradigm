@@ -22,6 +22,7 @@ import { SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
 import { DEV_TEST_ROOT_ACK, DevTestRootAuthority } from '../src/kernel/identity/root-authority.js';
 import { parseLocalLine } from '../src/adapters/local/runner.js';
 import { pinOf, prepareRunner, type LocalRunnerPin } from '../src/kernel/local/runner-pin.js';
+import type { SessionLaunchInput } from '../src/kernel/sandbox/session.js';
 
 const RUNNER_SRC = "import './lib.js';\n";
 /** A tiny runner tree (entry + a sibling module) and its pin as it is on disk. */
@@ -48,14 +49,14 @@ const fake = async (o: Parameters<typeof fakeOpenAI>[0]): Promise<FakeServer> =>
   return s;
 };
 
-function lane(home: string, config: ConstructorParameters<typeof LocalLane>[0]['config'], onPlan?: (i: { binaryReal: string; argv: string[] }) => void) {
+function lane(home: string, config: ConstructorParameters<typeof LocalLane>[0]['config'], onPlan?: (i: SessionLaunchInput) => void, intend?: () => Promise<unknown>) {
   const rows: Array<{ kind: string; payload: Record<string, unknown> }> = [];
   const log = async (kind: string, payload: Record<string, unknown>): Promise<void> => void rows.push({ kind, payload });
   const fuse = new BudgetFuse({ kernel: SoftwareEd25519Signer.generate('kernel'), logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZZ', log, billing: { env: () => ({}), layers: () => [] } });
   const cards: Array<Record<string, unknown>> = [];
   const sessionCfgs: Array<Record<string, unknown>> = [];
   const broker = { raise: async (i: Record<string, unknown>) => (cards.push(i), { cardId: `card:01HZZZZZZZZZZZZZZZZZZZZZZ${cards.length}` }) };
-  const children = { intend: async () => { throw new Error('intend reached (test stop)'); }, track: async () => undefined, stop: async () => false };
+  const children = { intend: intend ?? (async () => { throw new Error('intend reached (test stop)'); }), track: async () => undefined, stop: async () => false };
   const l = new LocalLane({
     log, children: children as never, fuse, broker: broker as never, home, userHome: path.join(home, '..', 'userhome'), kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(home, 'k.sock'),
     // the test-rig launch seam: never a real sandbox here, and the run stops at intend
@@ -186,7 +187,7 @@ describe('the runner pin (round 2, Aegis H1): mandatory, the whole tree + node, 
     const srv = await fake({ tools: true });
     const pin = runnerTree(path.join(home, 'src-rt'));
     const gh = path.join(home, 'gh');
-    const plans: Array<{ binaryReal: string; argv: string[] }> = [];
+    const plans: SessionLaunchInput[] = [];
     const { l } = lane(gh, { endpoints: [{ id: 'f', base: srv.base, model: 'm', compat: 'llama.cpp' }], runner: pin }, (i) => plans.push(i));
     await l.open({ principal: HUMAN, principalClass: 'human', attended: true, cwd, model: 'local' }, async () => null).catch(() => undefined);
     const copy = fs.realpathSync.native(path.join(gh, 'runners', pin.treeSha256));
@@ -266,6 +267,48 @@ describe('round 3 R2, widened in slice 2: a root INSIDE the Gnomon home is refus
       fs.rmSync(outside, { recursive: true, force: true });
     }
     expect(rows.some((r) => r.kind.startsWith('permit.'))).toBe(false);
+  });
+});
+
+describe('round 2 (M3): roots are resolved once; a symlink swapped after the check never moves the policy root', () => {
+  it('policy, child config, darwin extras and cwd use the resolved root; a swap before spawn refuses', async () => {
+    const home = scratch();
+    const a = path.join(home, 'repo-a');
+    const b = path.join(home, 'repo-b');
+    fs.mkdirSync(a);
+    fs.mkdirSync(b);
+    const link = path.join(home, 'link');
+    fs.symlinkSync(a, link);
+    const srv = await fake({ tools: true });
+    const plans: SessionLaunchInput[] = [];
+    let cfgRoots: unknown = null;
+    const { l, rows } = lane(path.join(home, 'gh'), { endpoints: [{ id: 'f', base: srv.base, model: 'm', compat: 'llama.cpp' }], runner: runnerTree(path.join(home, 'rt')) }, (i) => {
+      plans.push(i);
+      cfgRoots = (JSON.parse(fs.readFileSync(i.argv[i.argv.indexOf('--config') + 1]!, 'utf8')) as { roots: unknown }).roots;
+      // the attacker swaps the symlink after the check
+      fs.rmSync(link);
+      fs.symlinkSync(b, link);
+    }, async () => 'intent');
+    const e = await l.open({ principal: HUMAN, principalClass: 'human', attended: true, cwd: link, model: 'local' }, async () => null).catch((x: unknown) => x);
+    expect((e as RefusedError).refusal).toMatchObject({ code: 'BAD_REQUEST' });
+    expect(String((e as Error).message)).toMatch(/moved between the check and the spawn/);
+    const ra = fs.realpathSync.native(a);
+    expect(cfgRoots).toEqual([ra]);
+    expect(JSON.stringify(plans[0]!.policy)).toContain(path.join(ra, '.git'));
+    expect(JSON.stringify(plans[0]!.policy)).not.toContain(fs.realpathSync.native(b));
+    expect(plans[0]!.extras.roots).toEqual([ra]);
+    expect(rows.find((r) => r.kind === 'session.open')!.payload.roots).toEqual([ra]);
+    expect(rows.some((r) => r.kind === 'session.refused' && r.payload.code === 'spawn_failed')).toBe(true);
+  });
+  it('a root that cannot be resolved refuses (fail closed, never path.resolve)', async () => {
+    const home = scratch();
+    const dangling = path.join(home, 'dangling');
+    fs.mkdirSync(path.join(home, 'gone'));
+    fs.symlinkSync(path.join(home, 'gone'), dangling);
+    const srv = await fake({ tools: true });
+    const { l } = lane(path.join(home, 'gh'), { endpoints: [{ id: 'f', base: srv.base, model: 'm', compat: 'llama.cpp' }], runner: FAKE_PIN });
+    fs.rmSync(path.join(home, 'gone'), { recursive: true });
+    await expect(l.open({ principal: HUMAN, principalClass: 'human', attended: true, cwd: dangling, model: 'local' }, async () => null)).rejects.toMatchObject({ refusal: { code: 'BAD_REQUEST' } });
   });
 });
 

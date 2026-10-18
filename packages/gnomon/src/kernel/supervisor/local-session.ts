@@ -287,18 +287,30 @@ export class LocalLane {
     if (req.worktree !== undefined && (typeof req.worktree !== 'string' || !path.isAbsolute(req.worktree) || !fs.existsSync(req.worktree) || !fs.statSync(req.worktree).isDirectory())) {
       throw refused('BAD_REQUEST', 'worktree must be an existing absolute directory', { reason: 'bad-params' });
     }
+    // round 2 (M3): the roots are resolved ONCE (native realpath, fail closed) and only the resolved paths flow into the
+    // policy, the child's config, the darwin extras and the spawn cwd; they are re-checked right before spawn
+    const realRoot = (p: string): string => {
+      try {
+        return fs.realpathSync.native(p); // native: 8.3 short names expand on Windows
+      } catch {
+        throw refused('BAD_REQUEST', 'a session root could not be resolved', { reason: 'bad-params' });
+      }
+    };
+    const cwdReal = realRoot(req.cwd);
+    const wtReal = req.worktree !== undefined ? realRoot(req.worktree) : undefined;
+    const rootsReal = [cwdReal, ...(wtReal ? [wtReal] : [])];
     // round 3 (R2): a tool root is never /, the user's home, or the Gnomon home or any ancestor of it
     {
       const rp = (p: string): string => {
         try {
-          return fs.realpathSync.native(p); // native: 8.3 short names expand on Windows
+          return fs.realpathSync.native(p);
         } catch {
-          return path.resolve(p);
+          return path.resolve(p); // the homes need not exist yet; they are never roots
         }
       };
       const gh = rp(this.#o.home);
       const uh = rp(this.#o.userHome ?? os.homedir());
-      for (const r of [req.cwd, ...(req.worktree ? [req.worktree] : [])].map(rp)) {
+      for (const r of rootsReal) {
         const under = (a: string, b: string): boolean => a.startsWith(b.endsWith(path.sep) ? b : b + path.sep);
         // slice 2: a root INSIDE the Gnomon home (keys/, sessions/) is refused too — the tools would otherwise confine to it
         if (r === path.parse(r).root || r === uh || gh === r || under(gh, r) || under(r, gh)) {
@@ -317,9 +329,9 @@ export class LocalLane {
     const hsid = mintHsid();
     const principalId = `${this.#o.kernelPrincipal.replace(/\/kernel$/, '')}/s-${hsidShort(hsid)}`;
     const model = caps.model ?? ep.model;
-    const repo = repoIdOf(req.cwd);
+    const repo = repoIdOf(cwdReal);
     const userHome = this.#o.userHome ?? os.homedir();
-    await this.#o.log('session.open', { hsid, principalId, by: req.principal, cwd: req.cwd, worktree: req.worktree ?? null, backend: 'local', model, declaredModel: declared, endpoint: ep.id, attended: true }, { session: hsid });
+    await this.#o.log('session.open', { hsid, principalId, by: req.principal, cwd: req.cwd, worktree: req.worktree ?? null, roots: rootsReal, backend: 'local', model, declaredModel: declared, endpoint: ep.id, attended: true }, { session: hsid });
     await this.#o.log('session.routed', { hsid, declared, chosen: 'local', reason, tools }, { session: hsid });
     const dir = path.join(this.#o.home, 'sessions', hsidShort(hsid));
     const { env, envKeys } = buildSessionEnv({ from: { ...(this.#o.env?.() ?? process.env), HOME: userHome }, hsid, sock: this.#o.sock, sessionKeyPath: path.join(dir, 'session.key') });
@@ -335,8 +347,8 @@ export class LocalLane {
       // the SAME session profile as claude -p (§15.5): keys/warpline/link/head unreadable, settings layers + linked mods unwritable
       const policy: SessionPolicy = buildSessionPolicy({
         home: this.#o.home,
-        cwd: req.cwd,
-        ...(req.worktree ? { worktree: req.worktree } : {}),
+        cwd: cwdReal,
+        ...(wtReal ? { worktree: wtReal } : {}),
         userClaudeDir,
         userClaudeJson: defaultClaudeJson(userClaudeDir),
         userHome,
@@ -350,8 +362,8 @@ export class LocalLane {
       const sessionCfg = {
         schemaVersion: 'gnomon-local-session:v1',
         session: hsid,
-        cwd: req.worktree ?? req.cwd,
-        roots: [req.cwd, ...(req.worktree ? [req.worktree] : [])],
+        cwd: wtReal ?? cwdReal,
+        roots: rootsReal,
         endpoint: { base, model, compat: ep.compat },
         capabilities: { tools: tools === 'native', nCtx: caps.nCtx },
         surface: ep.surface ?? 'compact',
@@ -363,11 +375,15 @@ export class LocalLane {
         ...(req.systemPrompt !== undefined ? { systemPrompt: req.systemPrompt } : {}),
       };
       fs.writeFileSync(configPath, `${JSON.stringify(sessionCfg, null, 2)}\n`, { mode: 0o600 });
-      const extras: DarwinSessionExtras = { uid: process.getuid?.() ?? 0, tmpdir: os.tmpdir(), home: userHome, roots: [req.cwd, ...(req.worktree ? [req.worktree] : [])] };
+      const extras: DarwinSessionExtras = { uid: process.getuid?.() ?? 0, tmpdir: os.tmpdir(), home: userHome, roots: rootsReal };
       const launch: SessionLaunchInput = { policy, binaryReal: runner.command, argv: [runner.entry, ...buildLocalArgv({ configPath, hsid })], extras };
       const plan = this.#o.launchPlan ? this.#o.launchPlan(launch) : sessionLaunchPlan(launch, this.#platform, this.#o.macosMajor, this.#o.sipEnabled);
       const intent = await this.#o.children.intend({ kind: 'local-runner', hsid });
-      child = spawn(plan.command, plan.args, { cwd: req.worktree ?? req.cwd, env, detached: true, stdio: ['pipe', 'pipe', 'ignore'] });
+      // re-check (M3): a root swapped since the check refuses; nothing between here and spawn awaits
+      if (realRoot(req.cwd) !== cwdReal || (req.worktree !== undefined && realRoot(req.worktree) !== wtReal)) {
+        throw refused('BAD_REQUEST', 'a session root moved between the check and the spawn', { reason: 'bad-params' });
+      }
+      child = spawn(plan.command, plan.args, { cwd: wtReal ?? cwdReal, env, detached: true, stdio: ['pipe', 'pipe', 'ignore'] });
       const c = child;
       const exited = new Promise<void>((r) => c.once('close', () => r()));
       const spawnError = await new Promise<Error | null>((resolve) => {
