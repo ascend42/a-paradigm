@@ -130,6 +130,15 @@ describe.skipIf(!SANDBOX_OK)('P8-D96 falsifiers end to end (fake claude, real pr
     expect(r.broker.cards()).toEqual([]);
   });
 
+  it('Aegis C2: the generated policy.json asks for every writing/running/fetching tool (an allow rule elsewhere cannot skip the card)', async () => {
+    const r = rig();
+    await r.open([], { hold: true });
+    const dir = path.join(w.home, 'sessions', fs.readdirSync(path.join(w.home, 'sessions'))[0]!);
+    const pol = JSON.parse(fs.readFileSync(path.join(dir, 'policy.json'), 'utf8')) as { permissions: { ask: string[]; deny: string[] } };
+    expect(pol.permissions.ask).toEqual(['Bash', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'WebFetch', 'PowerShell']);
+    expect(pol.permissions.deny.length).toBeGreaterThan(0);
+  });
+
   it('3. allow: the card gates, the marker is written, updatedInput hashes to the card inputHash, the answer follows approval.decide', async () => {
     const r = rig();
     const s = await r.open([writeReq('w-1')]);

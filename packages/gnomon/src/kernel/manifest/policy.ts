@@ -289,10 +289,17 @@ function rule(tool: 'Read' | 'Edit', p: PolicyPath): string {
   return `${tool}(${abs}${p.match === 'subpath' ? '/**' : p.match === 'prefix' ? '*' : ''})`;
 }
 
-/** The `policy.json` permissions block mirroring the sandbox denies (§6.1 step 6). */
-export function claudePermissions(p: SessionPolicy): { permissions: { deny: string[] } } {
+/**
+ * P8-D96 (Aegis C2, probe p01b (h)): every tool that writes, runs or fetches is ALWAYS asked. An `allow` rule in
+ * any loaded settings layer would otherwise run it with no can_use_tool request (no card); `ask` wins over `allow`,
+ * so the request reaches the kernel and the card stays the gate. `deny` still wins over `ask`.
+ */
+export const ALWAYS_ASK_TOOLS = Object.freeze(['Bash', 'Edit', 'Write', 'MultiEdit', 'NotebookEdit', 'WebFetch', 'PowerShell']);
+
+/** The `policy.json` permissions block: the sandbox deny mirror (§6.1 step 6) and the always-ask tools (P8-D96). */
+export function claudePermissions(p: SessionPolicy): { permissions: { deny: string[]; ask: string[] } } {
   const deny = new Set<string>();
   for (const d of p.denyRead) deny.add(rule('Read', d));
   for (const d of p.denyWrite) deny.add(rule('Edit', d));
-  return { permissions: { deny: [...deny].sort() } };
+  return { permissions: { deny: [...deny].sort(), ask: [...ALWAYS_ASK_TOOLS] } };
 }
