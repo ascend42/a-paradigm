@@ -446,7 +446,7 @@ describe('relay admission (Aegis F1) and in-flight cap (F2), round 2', () => {
 
   it('I1: watching() tells the truth across a crash restart and the restart cap', async () => {
     const { h } = await started({ linked: true });
-    const until = async (f: () => boolean, ms = 8_000) => {
+    const until = async (f: () => boolean, ms = 20_000) => {
       for (let t = 0; t < ms && !f(); t += 50) await new Promise((res) => setTimeout(res, 50));
     };
     expect(h.watching()).toEqual(['probe']);
@@ -461,7 +461,7 @@ describe('relay admission (Aegis F1) and in-flight cap (F2), round 2', () => {
     }
     expect(h.running()).toEqual([]);
     expect(h.watching()).toEqual([]);
-  }, 30_000);
+  }, 120_000); // four crash/respawn cycles: windows-latest spawns node far slower than macOS
 });
 
 describe('round 3 (Aegis R2-1, R2-2, low)', () => {
