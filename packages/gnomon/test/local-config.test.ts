@@ -414,6 +414,12 @@ describe('session.send{steer} at the socket port', () => {
     expect(validateSessionCompactedPayload(row)).toEqual([]);
     expect(compactedPayloadOf(hsid, null, parseLocalLine(`{"type":"compaction_end","tokensBefore":9000,"tokensAfter":700,"summaryHash":"${h}"}`))).toMatchObject({ reason: 'unspecified', turn: null });
     expect(compactedPayloadOf(hsid, null, parseLocalLine('{"type":"compaction_start","reason":"threshold"}'))).toBeNull();
+    // reviewer r2: token counts must be safe non-negative integers, else null (the append never throws)
+    const base = { kind: 'compaction', type: 'compaction_end', phase: 'end', reason: 'threshold', summaryHash: h, summaryBytes: 1, error: null } as const;
+    for (const [tokensBefore, tokensAfter] of [[1.5, 1], [9, -1], [Number.NaN, 1], [9, Number.POSITIVE_INFINITY], [2 ** 53, 1]] as const) {
+      expect(compactedPayloadOf(hsid, null, { ...base, tokensBefore, tokensAfter }), `${tokensBefore}/${tokensAfter}`).toBeNull();
+    }
+    expect(compactedPayloadOf(hsid, null, { ...base, tokensBefore: 0, tokensAfter: 0 })).toMatchObject({ tokensBefore: 0, tokensAfter: 0 });
     // Aegis r2: the reason enum is closed; an unknown runner reason is recorded as unspecified
     expect(compactedPayloadOf(hsid, null, parseLocalLine(`{"type":"compaction_end","reason":"overflow","tokensBefore":9,"tokensAfter":1,"summaryHash":"${h}"}`))).toMatchObject({ reason: 'overflow' });
     expect(compactedPayloadOf(hsid, null, parseLocalLine(`{"type":"compaction_end","reason":"cosmic-ray","tokensBefore":9,"tokensAfter":1,"summaryHash":"${h}"}`))).toMatchObject({ reason: 'unspecified' });

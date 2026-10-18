@@ -156,11 +156,15 @@ export function repoIdOf(cwd: string): string {
 /**
  * The typed session.compacted payload for a local runner compaction event
  * (T-2026-10-18-016, P8-D93), or null when the event is not a successful
- * compaction_end carrying its summary hash and both token counts.
+ * compaction_end carrying its summary hash and both token counts as safe
+ * non-negative integers (anything else stays only the raw turn.event).
  */
 export function compactedPayloadOf(hsid: string, turn: string | null, ev: ReturnType<typeof parseLocalLine>): SessionCompactedPayload | null {
   if (ev.kind !== 'compaction' || ev.phase !== 'end' || ev.error !== null) return null;
   if (ev.summaryHash === null || ev.tokensBefore === null || ev.tokensAfter === null) return null;
+  // reviewer r2: only safe non-negative integers, so the typed append can never throw on the runner's numbers
+  const count = (n: number): boolean => Number.isSafeInteger(n) && n >= 0;
+  if (!count(ev.tokensBefore) || !count(ev.tokensAfter)) return null;
   // Aegis r2: a closed reason enum; anything the runner says outside it is recorded as `unspecified`
   const reason: CompactionReason = (COMPACTION_REASONS as readonly string[]).includes(ev.reason ?? '') ? (ev.reason as CompactionReason) : 'unspecified';
   return { hsid, turn, reason, summaryHash: ev.summaryHash, tokensBefore: ev.tokensBefore, tokensAfter: ev.tokensAfter };
