@@ -111,6 +111,23 @@ describe('HardwareRootAuthority', () => {
     expect(() => new HardwareRootAuthority({ gen: GEN, rootPublicKeyPem: h2.publicPem('root') }, {}).signRow({ a: 1 })).toThrow(RootUnavailableError);
   });
 
+  it('H3: the root prompt names the digest the helper line shows, also for a long caller text; digestFor gives the CLI the same value', async () => {
+    const h = new FakeHelper(GEN);
+    const root = new HardwareRootAuthority({ gen: GEN, rootPublicKeyPem: h.publicPem('root') }, { helper: h });
+    const row = { schemaVersion: 'gnomon-root-decision:v1', cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZZ', contentHash: 'sha256:ab', note: 'x'.repeat(900) };
+    await root.signRowAsync(row);
+    const d = root.digestFor(row);
+    expect(h.prompts[0]!.endsWith(`[check ${d}]`)).toBe(true);
+    expect(h.prompts[0]!.length).toBeLessThanOrEqual(500);
+    expect(h.shown[0]!.endsWith(d)).toBe(true);
+  });
+
+  it('M1: the root never signs a presence attestation (helper and kernel both refuse the domain)', async () => {
+    const h = new FakeHelper(GEN);
+    await expect(h.request({ op: 'sign', key: 'root', gen: GEN, mode: 'fresh', reason: 'x', messages: [signaturePreimage('presence', 'm').toString('base64')] })).rejects.toMatchObject({ code: 'domain-refused' });
+    await expect(h.request({ op: 'sign', key: 'approvals', gen: GEN, mode: 'cached', connId: A, messages: [signaturePreimage('presence', 'm').toString('base64')] })).rejects.toMatchObject({ code: 'domain-refused' });
+  });
+
   it('the synchronous path (gnomon-helper once) signs through the same checks', () => {
     const h = new FakeHelper(GEN);
     // a synchronous stand-in for `once`: drive the fake's async reply through a precomputed signature
@@ -180,7 +197,11 @@ describe('HelperApprovalsKey', () => {
     const message = approveMessage({ cardId: 'card:X', decision: 'allow', cardContentHash: 'sha256:aa', approverPrincipalId: HUMAN });
     const bind = { action: 'approval.decide', cardId: 'card:X', contentHash: 'sha256:aa', decision: 'allow' };
     const r = await approvals.signDecision({ connId: A, approver: HUMAN, message, mode: 'fresh', prompt: 'Gnomon: allow', keepUnlock: true, presence: { purpose: 'approval.decide', binding: bind } });
-    expect(helper.prompts).toEqual(['Gnomon: allow']);
+    expect(helper.prompts.length).toBe(1);
+    // H3: the kernel's text carries the same digests the helper's own line shows
+    const check = /\[check ([0-9a-f]{12}) ([0-9a-f]{12})\]$/.exec(helper.prompts[0]!)!;
+    expect(helper.prompts[0]!.startsWith('Gnomon: allow')).toBe(true);
+    expect(helper.shown[0]!.endsWith(`${check[1]} ${check[2]}`)).toBe(true);
     expect(approvals.verify(HUMAN, message, r.decisionSig)).toBe('ok');
     expect(approvals.verify('p:abcdefgh/other', message, r.decisionSig)).toBe('bad');
     expect(consumeBoundPresence(r.token, 'approval.decide', bind)).toBe('ok');

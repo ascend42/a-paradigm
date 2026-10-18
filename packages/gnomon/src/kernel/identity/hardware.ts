@@ -27,7 +27,7 @@
  * gets a refusal, never a token (falsifiers in test/identity-hardware.test.ts).
  * No private key material crosses the helper's pipe in either direction.
  */
-import { createPublicKey, type KeyObject } from 'node:crypto';
+import { createHash, createPublicKey, type KeyObject } from 'node:crypto';
 import { canonicalJson, nsFromRootPublicKey } from '@a-company/gnomon-contracts';
 import { KeyRing, p256KeyId, signaturePreimage, type SignatureDomain } from '../log/signer.js';
 import { beginHardwarePresence, completeHardwarePresence, PresenceToken, type PresenceBinding, type PresencePurpose } from './presence.js';
@@ -93,6 +93,23 @@ function sigsOf(reply: HelperReply, n: number): Buffer[] {
 
 const b64 = (domain: SignatureDomain, message: string): string => signaturePreimage(domain, message).toString('base64');
 
+/**
+ * Aegis H3: the digest the helper's OWN prompt line shows for each message it
+ * signs — sha256 of the exact bytes, first 12 hex. The kernel puts the same
+ * value in its text and the CLI prints it, so the human can match them.
+ */
+export function helperDigest(messageB64: string): string {
+  return createHash('sha256').update(Buffer.from(messageB64, 'base64')).digest('hex').slice(0, 12);
+}
+
+/** The kernel's text with the digests the helper line must show. */
+function withCheck(text: string, messages: readonly string[]): string {
+  const check = ` [check ${messages.map(helperDigest).join(' ')}]`;
+  const room = HELPER_REASON_MAX - check.length;
+  const t = Array.from(clampReason(text));
+  return `${t.length <= room ? t.join('') : `${t.slice(0, room - 1).join('')}…`}${check}`; // the check is never clipped
+}
+
 /** Public identity of this Mac's hardware keys (`keys/identity.json`, written by `gnomon identity init`). */
 export interface HardwareKeys {
   /** Key generation id (helper key tags `gnomon.<gen>.root|approvals`). */
@@ -129,7 +146,31 @@ export class HardwareRootAuthority implements RootAuthority {
 
   #request(row: unknown): Record<string, unknown> {
     const kind = row && typeof row === 'object' ? String((row as { schemaVersion?: unknown; kind?: unknown }).kind ?? (row as { schemaVersion?: unknown }).schemaVersion ?? 'row') : 'row';
-    return { op: 'sign', key: 'root', gen: this.gen, mode: 'fresh', reason: clampReason(`Gnomon: sign a ${kind} row with your root key (${canonicalJson(row).length} bytes)`), messages: [b64('row', rowMessage(row))] };
+    const messages = [b64('row', rowMessage(row))];
+    return { op: 'sign', key: 'root', gen: this.gen, mode: 'fresh', reason: withCheck(`Gnomon: sign a ${kind} row with your root key (${canonicalJson(row).length} bytes)`, messages), messages };
+  }
+
+  /** The digest the helper's prompt line will show for `row` (the CLI prints it before the touch, H3). */
+  digestFor(row: unknown): string {
+    return helperDigest(b64('row', rowMessage(row)));
+  }
+
+  /**
+   * Sign a rotate statement for the helper (Aegis H2): the exact preimage and
+   * the helper's DER signature, which a later key.create presents to the
+   * helper; the P1363 form is verified here first.
+   */
+  async signForHelper(row: unknown): Promise<{ statement: string; sig: string }> {
+    if (!this.#helper) throw new RootUnavailableError('a statement for the helper (no helper)');
+    const req = this.#request(row);
+    let reply: HelperReply;
+    try {
+      reply = await this.#helper.request(req, HELPER_SIGN_TIMEOUT_MS);
+    } catch (e) {
+      throw rootError(e);
+    }
+    this.#accept(row, reply);
+    return { statement: (req.messages as string[])[0]!, sig: String((reply.sigs as string[])[0]) };
   }
 
   #accept(row: unknown, reply: HelperReply): { signer: string; sig: string } {
@@ -244,7 +285,7 @@ export class HelperApprovalsKey {
           gen: this.gen,
           mode: req.mode,
           connId: req.connId,
-          ...(req.mode === 'fresh' ? { reason: clampReason(req.prompt ?? 'Gnomon: approve a decision'), keep: req.keepUnlock === true } : {}),
+          ...(req.mode === 'fresh' ? { reason: withCheck(req.prompt ?? 'Gnomon: approve a decision', messages), keep: req.keepUnlock === true } : {}),
           messages,
         },
         HELPER_SIGN_TIMEOUT_MS,
@@ -286,7 +327,8 @@ export class HelperApprovalsKey {
     const c = beginHardwarePresence(purpose, binding, connId);
     let reply: HelperReply;
     try {
-      reply = await this.#helper.request({ op: 'sign', key: 'approvals', gen: this.gen, mode: 'fresh', connId, reason: clampReason(prompt), keep: false, messages: [b64('presence', c.message)] }, HELPER_SIGN_TIMEOUT_MS);
+      const messages = [b64('presence', c.message)];
+      reply = await this.#helper.request({ op: 'sign', key: 'approvals', gen: this.gen, mode: 'fresh', connId, reason: withCheck(prompt, messages), keep: false, messages }, HELPER_SIGN_TIMEOUT_MS);
     } catch (e) {
       completeHardwarePresence(c.challengeId, this.keyId, new Uint8Array(0), this.#ring);
       if (e instanceof HelperRefusal && e.code === 'presence-denied') throw new HardwarePresenceDenied('declined at the prompt');
