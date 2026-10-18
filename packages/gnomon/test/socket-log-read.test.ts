@@ -40,7 +40,7 @@ import {
   type RpcResponseFrame,
   type ServerKeyPin,
 } from '../src/kernel/socket/index.js';
-import { rawConnect, sleep, tempHome } from './daemon-helpers.js';
+import { rawConnect, sleep, tempHome, TEST_CLIENT_NONCE } from './daemon-helpers.js';
 
 const cleanups: Array<() => void | Promise<void>> = [];
 afterEach(async () => {
@@ -82,7 +82,7 @@ async function session(r: Rig): Promise<GnomonSession> {
 async function rawAuthed(r: Rig) {
   const c = await rawConnect(r.d.pidfile.socketPath);
   cleanups.push(() => c.close());
-  c.send(requestFrame(1, 'hello', { clientApis: ['gnomon-rpc:v1'], features: [], client: CLIENT }));
+  c.send(requestFrame(1, 'hello', { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: TEST_CLIENT_NONCE, client: CLIENT }));
   const [h] = await c.next(1);
   const hello = (h as { result: HelloResult }).result;
   c.send(requestFrame(2, 'auth', { principal: r.cred.principalId, deviceId: r.cred.deviceId, sig: signAuth(r.cred, hello, r.d.pidfile.socketPath) }));
@@ -841,7 +841,7 @@ describe('pre-existing (round 2): dispatch never re-creates state for a closed c
       Object.assign(c, { close: () => void (c.closedByServer = true), authenticated: () => undefined, notify: () => false, writableLength: () => 0, writeHighWater: 1, onDrain: () => () => undefined, afterReply: () => undefined });
       return c;
     };
-    const hello = requestFrame(1, 'hello', { clientApis: ['gnomon-rpc:v1'], features: [], client: CLIENT });
+    const hello = requestFrame(1, 'hello', { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: TEST_CLIENT_NONCE, client: CLIENT });
     for (let i = 0; i < 5; i++) {
       const ctx = mkCtx(`conn:Z${i}`);
       dispatcher.onConnect(ctx);

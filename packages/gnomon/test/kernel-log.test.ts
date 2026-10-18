@@ -374,6 +374,16 @@ describe('#kernel-log labels (L6, §9.1, G-LOG-09)', () => {
     expect((await rejection(log.append({ kind: 'session.inject', principal: KERNEL, payload: { origin: 'model', hash: sha256Tagged('x'), bytes: 1 } }))).reason).toBe('bad-payload');
     expect((await rejection(log.append({ kind: 'session.inject', principal: KERNEL, payload: { origin: 'kernel', bytes: 1 } }))).reason).toBe('bad-payload');
   });
+
+  it('T-2026-10-18-016 (P8-D93): session.compacted is typed — a closed payload is appended, anything else is bad-payload', async () => {
+    const log = openLog(tmpHome());
+    const good = { hsid: HSID, turn: `turn:${HSID}/1`, reason: 'threshold', summaryHash: sha256Tagged('summary'), tokensBefore: 9000, tokensAfter: 700 };
+    const e = await ev(log, { kind: 'session.compacted', principal: KERNEL, session: HSID, payload: good });
+    expect(e.sensitivity).toBe('normal');
+    for (const bad of [{ ...good, line: 'raw' }, { ...good, summaryHash: 'x' }, { ...good, tokensAfter: -1 }, { hsid: HSID }]) {
+      expect((await rejection(log.append({ kind: 'session.compacted', principal: KERNEL, session: HSID, payload: bad }))).reason).toBe('bad-payload');
+    }
+  });
 });
 
 describe('#kernel-log read projection (§9.3, ~ample-internal-logs)', () => {

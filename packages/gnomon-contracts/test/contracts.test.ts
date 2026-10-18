@@ -133,7 +133,7 @@ const suites: Array<{
       return { ...s.$defs.params, $defs: s.$defs };
     },
     validate: (v) => validateHelloParams(v),
-    good: [F.goodHello, { clientApis: ['gnomon-rpc:v2', 'gnomon-rpc:v1'], features: [], client: { name: 'c', version: '1' } }],
+    good: [F.goodHello, { clientApis: ['gnomon-rpc:v2', 'gnomon-rpc:v1'], features: [], clientNonce: F.CLIENT_NONCE, client: { name: 'c', version: '1' } }],
     bad: F.badHellos,
   },
 ];
@@ -155,10 +155,15 @@ describe('G-CON-01: fixtures validate, malformed are rejected', () => {
   }
 
   it('hello result', () => {
-    const r = { clientApi: 'gnomon-rpc:v1', features: [], nonce: 'n', serverKeyId: 'gkey:v1:x', serverSig: 's', clientApiId: CLIENT_API_ID, kitId: KIT_ID };
+    const r = { clientApi: 'gnomon-rpc:v1', features: [], nonce: 'n', clientNonce: F.CLIENT_NONCE, serverKeyId: 'gkey:v1:x', serverSig: 's', clientApiId: CLIENT_API_ID, kitId: KIT_ID };
     expect(validateHelloResult(r)).toEqual([]);
+    const s = S('gnomon-rpc.v1.hello.schema.json');
+    expect(jsonSchemaErrors({ ...s.$defs.result, $defs: s.$defs }, r)).toEqual([]);
     expect(validateHelloResult({ ...r, clientApi: 'http' }).length).toBeGreaterThan(0);
     expect(validateHelloResult({ ...r, nonce: undefined }).length).toBeGreaterThan(0);
+    // T-2026-10-18-016: the echo is required and has the clientNonce shape
+    expect(validateHelloResult({ ...r, clientNonce: undefined }).length).toBeGreaterThan(0);
+    expect(validateHelloResult({ ...r, clientNonce: 'x' }).length).toBeGreaterThan(0);
   });
 });
 

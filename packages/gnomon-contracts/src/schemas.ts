@@ -26,6 +26,8 @@ import {
   SESSION_TAINTS,
   APPROVAL_SUSPECT_REASONS,
   RESERVED_KIND_PAYLOADS,
+  KIND_PAYLOADS,
+  COMPACTION_REASONS,
 } from './event.js';
 import {
   RISK_TIERS,
@@ -63,7 +65,7 @@ import {
   STRICTNESS_LEVELS,
   RUN_MODES,
 } from './card.js';
-import { CLIENT_SURFACES, HELLO_RESULT_KEYS } from './rpc.js';
+import { CLIENT_NONCE_PATTERN_SOURCE, CLIENT_SURFACES, HELLO_RESULT_KEYS } from './rpc.js';
 
 type Schema = Record<string, unknown>;
 const ID_BASE = 'https://github.com/ascend42/a-paradigm/packages/gnomon-contracts/schemas/';
@@ -96,6 +98,8 @@ export const EVENT_V1_SCHEMA: Schema = deepFreeze({
   'x-gnomon-session-taints': [...SESSION_TAINTS],
   'x-gnomon-suspect-reasons': [...APPROVAL_SUSPECT_REASONS],
   'x-gnomon-reserved-kind-payloads': RESERVED_KIND_PAYLOADS,
+  'x-gnomon-kind-payloads': KIND_PAYLOADS,
+  'x-gnomon-compaction-reasons': [...COMPACTION_REASONS],
   ...closedObj(
     {
       schemaVersion: { const: 'event:v1' },
@@ -361,12 +365,13 @@ export const HELLO_V1_SCHEMA: Schema = deepFreeze({
   $schema: 'https://json-schema.org/draft/2020-12/schema',
   $id: `${ID_BASE}gnomon-rpc.v1.hello.schema.json`,
   title: 'gnomon-rpc:v1 hello',
-  description: 'hello params and result (spec §4.9). Highest shared clientApi wins; none ⇒ UNSUPPORTED{data:{offered[]}}.',
+  description: 'hello params and result (spec §4.9). Highest shared clientApi wins; none ⇒ UNSUPPORTED{data:{offered[]}}. The result echoes clientNonce and serverSig covers it (T-2026-10-18-016).',
   $defs: {
     params: closedObj(
       {
         clientApis: arr(str('^[a-z][a-z0-9-]*:v[1-9][0-9]*$'), { minItems: 1 }),
         features: arr({ type: 'string' }),
+        clientNonce: str(CLIENT_NONCE_PATTERN_SOURCE),
         client: closedObj(
           {
             name: { type: 'string', minLength: 1 },
@@ -380,13 +385,14 @@ export const HELLO_V1_SCHEMA: Schema = deepFreeze({
           ['name', 'version'],
         ),
       },
-      ['clientApis', 'features', 'client'],
+      ['clientApis', 'features', 'clientNonce', 'client'],
     ),
     result: closedObj(
       {
         clientApi: str('^gnomon-rpc:v[1-9][0-9]*$'),
         features: arr({ type: 'string' }),
         nonce: { type: 'string', minLength: 1 },
+        clientNonce: str(CLIENT_NONCE_PATTERN_SOURCE),
         serverKeyId: { type: 'string', minLength: 1 },
         serverSig: { type: 'string', minLength: 1 },
         clientApiId: { type: 'string', minLength: 1 },

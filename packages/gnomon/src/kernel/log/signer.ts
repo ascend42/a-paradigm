@@ -16,7 +16,7 @@
  * (`sha256:<hex>`), so the signature commits to the whole envelope.
  *
  * Each key class may sign only its own domains (§3.1): the kernel key signs
- * events, `hello` serverSig (`gnomon:auth-server:v1`, M1.4 — never the client
+ * events, `hello` serverSig (`gnomon:auth-server:v2`, M1.4 — never the client
  * `gnomon:auth:v1` domain, so the kernel is no signing oracle for client
  * transcripts) and briefs; the root key signs rows
  * (registry, grants, config, install); the approvals key signs decisions.
@@ -46,7 +46,7 @@ import {
   verify as cryptoVerify,
   type KeyObject,
 } from 'node:crypto';
-import { KEY_ID_PATTERN } from '@a-company/gnomon-contracts';
+import { AUTH_CLIENT_DOMAIN, AUTH_SERVER_DOMAIN, AUTH_TOKEN_DOMAIN, KEY_ID_PATTERN } from '@a-company/gnomon-contracts';
 
 /** The §3.1 signature domains (the prefix before the first `\n`). */
 export const SIGNATURE_DOMAINS = {
@@ -54,11 +54,12 @@ export const SIGNATURE_DOMAINS = {
   row: 'gnomon:row-sig:v1',
   approve: 'gnomon:approve:v1',
   approveVoice: 'gnomon:approve-voice:v1',
-  auth: 'gnomon:auth:v1',
-  /** #socket serverSig (§4.9): `gnomon:auth-server:v1\n<nonce>\n<endpointPath>`, kernel key only. */
-  authServer: 'gnomon:auth-server:v1',
+  /** The three auth domains come FROM the contracts constants (P8-D93 round 3): one definition, in clientApiId. */
+  auth: AUTH_CLIENT_DOMAIN,
+  /** #socket serverSig (§4.9): `gnomon:auth-server:v2\n` + contracts authServerMessage (nonce, clientNonce, endpointPath, negotiated hello; v2 since P8-D93), kernel key only. */
+  authServer: AUTH_SERVER_DOMAIN,
   /** Read-token proof of possession (§4.9, P8-D89a): the token's own Ed25519 key only. */
-  authToken: 'gnomon:auth-token:v1',
+  authToken: AUTH_TOKEN_DOMAIN,
   brief: 'gnomon:brief:v1',
   /**
    * #approval-broker (M1.6): the kernel key signs `card.actions[]` and the

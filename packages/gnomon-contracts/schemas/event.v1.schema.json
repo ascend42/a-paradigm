@@ -165,6 +165,7 @@
     "schedule.tend.start",
     "session.alias",
     "session.alias.rejected",
+    "session.compacted",
     "session.exited",
     "session.idle",
     "session.inject",
@@ -428,6 +429,22 @@
       "tokenId"
     ]
   },
+  "x-gnomon-kind-payloads": {
+    "session.compacted": [
+      "hsid",
+      "turn",
+      "reason",
+      "summaryHash",
+      "tokensBefore",
+      "tokensAfter"
+    ]
+  },
+  "x-gnomon-compaction-reasons": [
+    "threshold",
+    "overflow",
+    "manual",
+    "unspecified"
+  ],
   "type": "object",
   "properties": {
     "schemaVersion": {

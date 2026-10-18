@@ -61,3 +61,6 @@ export async function rawConnect(socketPath: string): Promise<{
 }
 
 export const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+/** A fixed hello clientNonce for raw-hello tests (T-2026-10-18-016): 32 bytes, base64url. Real clients draw a fresh one per hello. */
+export const TEST_CLIENT_NONCE = 'q2Nh3ZUc0kPq6vBv8w1mEa1tYxQnJw7oZrF5K9dL2sM';

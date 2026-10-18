@@ -72,7 +72,7 @@ import {
   type RpcResponseFrame,
   type ServerKeyPin,
 } from '../src/kernel/socket/index.js';
-import { sleep, tempHome } from './daemon-helpers.js';
+import { sleep, tempHome, TEST_CLIENT_NONCE } from './daemon-helpers.js';
 import { PKG_ROOT } from './helpers.js';
 
 const cleanups: Array<() => void | Promise<void>> = [];
@@ -141,7 +141,7 @@ async function asToken(r: Rig, token: string): Promise<GnomonSession> {
 async function helloThenAuth(r: Rig, params: unknown): Promise<{ c: RpcConnection; resp: RpcResponseFrame }> {
   const c = await RpcConnection.open(r.d.pidfile.socketPath);
   cleanups.push(() => c.close());
-  await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], client: CLIENT });
+  await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: TEST_CLIENT_NONCE, client: CLIENT });
   return { c, resp: await c.call('auth', params) };
 }
 
@@ -155,7 +155,7 @@ function tokenProof(token: string, hello: HelloResult, endpointPath: string): { 
 async function helloOn(r: Rig): Promise<{ c: RpcConnection; hello: HelloResult }> {
   const c = await RpcConnection.open(r.d.pidfile.socketPath);
   cleanups.push(() => c.close());
-  const h = await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], client: CLIENT });
+  const h = await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: TEST_CLIENT_NONCE, client: CLIENT });
   return { c, hello: (h as { result: HelloResult }).result };
 }
 
@@ -391,7 +391,7 @@ describe('read tokens (§4.9 auth {token}, §5 read-token column, §9.3 read-tok
     cleanups.push(() => d.shutdown('signal'));
     const c = await RpcConnection.open(d.pidfile.socketPath);
     cleanups.push(() => c.close());
-    await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], client: CLIENT });
+    await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: TEST_CLIENT_NONCE, client: CLIENT });
     expect(errOf(await c.call('auth', { tokenId: 'rtk:' + '0'.repeat(26), sig: 'AA==' }))).toMatchObject({ c: 'AUTH', reason: 'root-unprovisioned', milestone: 'M1.3' });
   });
 
@@ -794,7 +794,7 @@ describe('auth race (reviewer #4)', () => {
     const srv = await listenSocket({ socketPath: sock, handle: dispatcher.handle, onConnect: dispatcher.onConnect, onDisconnect: dispatcher.onDisconnect });
     cleanups.push(() => srv.close());
     const c = await RpcConnection.open(sock);
-    const h = (await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], client: CLIENT })) as { result: HelloResult };
+    const h = (await c.call('hello', { clientApis: ['gnomon-rpc:v1'], features: [], clientNonce: TEST_CLIENT_NONCE, client: CLIENT })) as { result: HelloResult };
     const pending = c.call('auth', tokenProof(m.token, h.result, sock)).catch(() => undefined);
     await inWrite;
     await c.close();

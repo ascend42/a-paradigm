@@ -59,22 +59,24 @@ export interface RunOptions {
 }
 
 /**
- * A fake endpoint that answers hello with the kernel's own hello fields and a
- * FORGED serverSig (64 random bytes), and counts the auth frames it receives.
- * It is NOT a replay of a real signed hello: replaying a genuine serverSig
- * against a fresh nonce is the open T-2026-10-18-016 gap.
+ * A fake endpoint that REPLAYS a real recorded hello result — the kernel's
+ * genuine serverSig included — to whoever connects, and counts the auth
+ * frames it receives (T-2026-10-18-016). `verbatim` sends it unchanged (its
+ * clientNonce is the recording connection's); `echo-rewrite` sets clientNonce
+ * to the one the victim just sent, so an echo-only check passes and only the
+ * signature, which covers the recorded nonce, can catch it. A conformant
+ * client refuses both: the signature is over another connection's nonce.
  *
  * POSIX: a socket file in a private temp dir. Windows: a named pipe with a
  * random name (a pipe path is not a filesystem entry, so there is no dir).
  * A listen failure (EADDRINUSE, EACCES, …) rejects, so the check FAILS with
  * that error instead of crashing the runner.
  */
-async function impostor(hello: Record<string, unknown>): Promise<{ path: string; authFrames: () => number; close: () => Promise<void> }> {
+async function impostor(hello: Record<string, unknown>, mode: 'verbatim' | 'echo-rewrite'): Promise<{ path: string; authFrames: () => number; close: () => Promise<void> }> {
   const win = process.platform === 'win32';
   const dir = win ? null : mkdtempSync(path.join(tmpdir(), 'gimp-'));
   const sockPath = dir ? path.join(dir, 's') : `\\\\.\\pipe\\gnomon-impostor-${randomBytes(12).toString('hex')}`;
   let auths = 0;
-  const forged = { ...hello, serverSig: randomBytes(64).toString('base64') };
   const server = net.createServer((sock) => {
     let buf = '';
     sock.on('error', () => undefined);
@@ -85,9 +87,12 @@ async function impostor(hello: Record<string, unknown>): Promise<{ path: string;
         const line = buf.slice(0, nl);
         buf = buf.slice(nl + 1);
         try {
-          const f = JSON.parse(line) as { id: number; method: string };
+          const f = JSON.parse(line) as { id: number; method: string; params?: { clientNonce?: unknown } };
           if (f.method === 'auth') auths++;
-          if (f.method === 'hello') sock.write(`${JSON.stringify({ jsonrpc: '2.0', rpc: 'gnomon-rpc:v1', id: f.id, result: forged })}\n`);
+          if (f.method === 'hello') {
+            const replayed = mode === 'echo-rewrite' ? { ...hello, clientNonce: f.params?.clientNonce } : hello;
+            sock.write(`${JSON.stringify({ jsonrpc: '2.0', rpc: 'gnomon-rpc:v1', id: f.id, result: replayed })}\n`);
+          }
         } catch {
           /* ignored */
         }
@@ -170,19 +175,22 @@ const CHECKS: Record<string, Check> = {
     must(!b.ok && b.error?.kind === 'client', `a hello signed by another key was not refused locally: ${JSON.stringify(b.error ?? 'connected')}`);
     await new Promise((res) => setTimeout(res, 50));
     must((await f.authRows()) === before, 'an auth was sent to an unverified server');
-    // (c) an impostor that copies the real hello's fields (the kernel's keyId) with a FORGED (random) serverSig:
-    //     zero auth frames. This is not a replay of a genuinely signed hello; that case is the open T-2026-10-18-016 gap.
+    // (c) T-2026-10-18-016: an impostor REPLAYS a real recorded hello (genuine serverSig, the kernel's keyId) on
+    //     the same endpoint path — verbatim, then with clientNonce rewritten to the victim's. The signature
+    //     covers the recording connection's clientNonce, so a conformant client refuses both: zero auth frames.
     const real = await connect(d, f, c, { kernelKey: f.kernelKey });
     must(real.ok, 'hello failed');
     await d.request({ op: 'close', conn: real.conn });
-    const fake = await impostor(real.hello as Record<string, unknown>);
-    try {
-      const r = await d.request({ op: 'connect', socketPath: fake.path, endpointPath: f.endpointPath ?? f.socketPath, client: CLIENT_INFO(c), kernelKey: f.kernelKey, credential: f.device });
-      await new Promise((res) => setTimeout(res, 50));
-      must(!r.ok && r.error?.kind === 'client', `a forged serverSig was accepted: ${JSON.stringify(r.error ?? 'connected')}`);
-      must(fake.authFrames() === 0, `${fake.authFrames()} auth frame(s) reached an impostor`);
-    } finally {
-      await fake.close();
+    for (const mode of ['verbatim', 'echo-rewrite'] as const) {
+      const fake = await impostor(real.hello as Record<string, unknown>, mode);
+      try {
+        const r = await d.request({ op: 'connect', socketPath: fake.path, endpointPath: f.endpointPath ?? f.socketPath, client: CLIENT_INFO(c), kernelKey: f.kernelKey, credential: f.device });
+        await new Promise((res) => setTimeout(res, 50));
+        must(!r.ok && r.error?.kind === 'client', `a replayed hello (${mode}) was accepted: ${JSON.stringify(r.error ?? 'connected')}`);
+        must(fake.authFrames() === 0, `${fake.authFrames()} auth frame(s) reached an impostor replaying a hello (${mode})`);
+      } finally {
+        await fake.close();
+      }
     }
   },
   async 'auth.device'(d, f, c) {

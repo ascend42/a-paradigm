@@ -11,10 +11,11 @@
  * The transport is injected (a browser WebSocket in the page, a raw RFC 6455
  * socket in the endpoint integration test). Order is the endpoint's rule 7:
  * `hello` first, `auth` second; `serverSig` is verified between them and on a
- * failure NOTHING more is sent.
+ * failure NOTHING more is sent. Each hello carries a fresh `clientNonce`
+ * (T-2026-10-18-016) that the result must echo and serverSig must cover.
  */
 import { CLIENT_API_ID, type HelloResult } from '@a-company/gnomon-contracts';
-import { verifyServerSig, type SigVerdict } from './server-sig.js';
+import { newClientNonce, verifyServerSig, type SigVerdict } from './server-sig.js';
 
 export const RPC = 'gnomon-rpc:v1' as const;
 export const GUI_CLIENT = Object.freeze({ name: 'gnomon-gui', version: '8.0.0-m1.10.1' });
@@ -194,14 +195,17 @@ export class GnomonClient {
    * hello → verify serverSig (WebCrypto, against `verifyKey`) → auth. On a
    * signature failure the socket is closed and nothing else is sent.
    */
-  async connect(o: { surface: 'browser' | 'wrapper'; endpointPath: string; verifyKey: string; auth: AuthForm; subtle: SubtleCrypto | undefined }): Promise<ConnectOutcome> {
+  async connect(o: { surface: 'browser' | 'wrapper'; endpointPath: string; verifyKey: string; auth: AuthForm; subtle: SubtleCrypto | undefined; rng?: (b: Uint8Array) => Uint8Array }): Promise<ConnectOutcome> {
     let hello: HelloResult;
+    let clientNonce: string;
     try {
-      hello = await this.call<HelloResult>('hello', { clientApis: [RPC], features: [], client: { ...GUI_CLIENT, surface: o.surface } });
+      // inside the try (Aegis r2): an engine without getRandomValues fails the hello stage visibly, never throws out of connect
+      clientNonce = newClientNonce(o.rng);
+      hello = await this.call<HelloResult>('hello', { clientApis: [RPC], features: [], clientNonce, client: { ...GUI_CLIENT, surface: o.surface } });
     } catch (err) {
       return { ok: false, stage: 'hello', ...(err instanceof RpcError ? { refusal: err.refusal } : {}), message: err instanceof Error ? err.message : 'hello failed' };
     }
-    const sig = await verifyServerSig(o.subtle, o.verifyKey, hello, o.endpointPath);
+    const sig = await verifyServerSig(o.subtle, o.verifyKey, hello, o.endpointPath, clientNonce);
     if (!sig.ok) {
       this.close();
       return { ok: false, stage: 'server-sig', sig, message: sig.message };

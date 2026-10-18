@@ -3,10 +3,16 @@
  *
  * #gui serverSig verification with WebCrypto Ed25519 (spec §4.9 mutual auth,
  * §11.2 rule 2, S25-M4; `G-GUI-03`). The page verifies the kernel's `hello`
- * signature over `gnomon-contracts` `authServerPreimage(nonce, endpointPath,
- * {clientApi, features})` against the pinned / fragment SPKI key BEFORE it
- * sends `auth`; a mismatch sends nothing and shows "kernel key changed — run
- * `gnomon open`".
+ * signature over `gnomon-contracts` `authServerPreimage(nonce, clientNonce,
+ * endpointPath, {clientApi, features})` against the pinned / fragment SPKI key
+ * BEFORE it sends `auth`; a mismatch sends nothing and shows "kernel key
+ * changed — run `gnomon open`".
+ *
+ * CLIENT NONCE (T-2026-10-18-016): `clientNonce` is the value THIS page sent
+ * in hello. The echo must equal it (`client-nonce-mismatch`) and the
+ * signature is checked over the sent value, never the echoed field — a
+ * genuine hello recorded on another connection and replayed from a squatted
+ * port fails.
  *
  * It also binds `serverKeyId`: the kernel's keyId is `gkey:v1:` + sha256 of
  * the key's normalized SPKI PEM (packages/gnomon/src/kernel/log/signer.ts
@@ -17,9 +23,19 @@
  * WebCrypto Ed25519) is slice 2: until then such an engine refuses with
  * `webcrypto-ed25519-unavailable` — it never skips the check.
  */
-import { authServerPreimage, hex, sha256, utf8, type HelloResult } from '@a-company/gnomon-contracts';
+import { CLIENT_NONCE_BYTES, authServerPreimage, hex, sha256, utf8, type HelloResult } from '@a-company/gnomon-contracts';
 
-export type SigVerdict = { ok: true } | { ok: false; reason: 'bad-key' | 'key-id-mismatch' | 'bad-server-sig' | 'webcrypto-ed25519-unavailable'; message: string };
+export type SigVerdict = { ok: true } | { ok: false; reason: 'bad-key' | 'key-id-mismatch' | 'bad-server-sig' | 'client-nonce-mismatch' | 'webcrypto-ed25519-unavailable'; message: string };
+
+/** base64url without padding (the clientNonce wire form). */
+export function bytesToBase64Url(b: Uint8Array): string {
+  return bytesToBase64(b).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+/** A fresh hello clientNonce: CLIENT_NONCE_BYTES random bytes, base64url. `rng` defaults to the page's crypto.getRandomValues. */
+export function newClientNonce(rng: (b: Uint8Array) => Uint8Array = (b) => globalThis.crypto.getRandomValues(b)): string {
+  return bytesToBase64Url(rng(new Uint8Array(CLIENT_NONCE_BYTES)));
+}
 
 export function base64UrlToBytes(s: string): Uint8Array {
   const b64 = s.replace(/-/g, '+').replace(/_/g, '/') + '==='.slice((s.length + 3) % 4);
@@ -53,7 +69,8 @@ export function keyIdOfSpki(spkiDer: Uint8Array): string {
 const ab = (b: Uint8Array): ArrayBuffer => b.slice().buffer as ArrayBuffer;
 
 /** Verify a hello result. `subtle` is injected (crypto.subtle in the page; node:crypto webcrypto in tests). */
-export async function verifyServerSig(subtle: SubtleCrypto | undefined, spkiB64Url: string, hello: HelloResult, endpointPath: string): Promise<SigVerdict> {
+export async function verifyServerSig(subtle: SubtleCrypto | undefined, spkiB64Url: string, hello: HelloResult, endpointPath: string, clientNonce: string): Promise<SigVerdict> {
+  if (hello.clientNonce !== clientNonce) return { ok: false, reason: 'client-nonce-mismatch', message: 'the kernel answered another connection\'s hello — run `gnomon open`' };
   if (!subtle) return { ok: false, reason: 'webcrypto-ed25519-unavailable', message: 'this engine has no WebCrypto; the fallback verifier arrives in M1.10 slice 2' };
   let der: Uint8Array;
   try {
@@ -76,7 +93,7 @@ export async function verifyServerSig(subtle: SubtleCrypto | undefined, spkiB64U
   } catch {
     return { ok: false, reason: 'bad-server-sig', message: 'kernel key changed — run `gnomon open`' };
   }
-  const msg = utf8(authServerPreimage(hello.nonce, endpointPath, { clientApi: hello.clientApi, features: hello.features }));
+  const msg = utf8(authServerPreimage(hello.nonce, clientNonce, endpointPath, { clientApi: hello.clientApi, features: hello.features }));
   const ok = await subtle.verify({ name: 'Ed25519' }, key, ab(sig), ab(msg));
   return ok ? { ok: true } : { ok: false, reason: 'bad-server-sig', message: 'kernel key changed — run `gnomon open`' };
 }

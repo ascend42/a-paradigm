@@ -15,7 +15,7 @@ import { GnomonClient, gnomonPost, refusalFromError } from '../src/core/client.j
 import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, GUI_COMMANDS, paletteEntries, parseLayout, PRESETS, resolveMotion, resolveTheme, serializeLayout, togglePane } from '../src/core/commands.js';
 import { decidePin, parseLaunchFragment } from '../src/core/launch.js';
 import { cardFlags, flagsOf, renderBlock, renderCard, type MiniDoc, type MiniEl } from '../src/core/render.js';
-import { keyIdOfSpki, verifyServerSig } from '../src/core/server-sig.js';
+import { keyIdOfSpki, newClientNonce, verifyServerSig } from '../src/core/server-sig.js';
 import { GuiStore, rowSummary, type Row } from '../src/core/store.js';
 import { HeightIndex, visibleRange, WidthCache } from '../src/core/virtual.js';
 
@@ -164,21 +164,31 @@ describe('WebCrypto Ed25519 serverSig (G-GUI-03 minimum, S25-M4)', () => {
   const pem = (kp.publicKey.export({ type: 'spki', format: 'pem' }) as string).replace(/\n+$/, '');
   const keyId = `gkey:v1:${hex(sha256(pem))}`;
   const path0 = 'ws://127.0.0.1:4000/rpc';
-  const hello = (sigOver = path0) => {
+  const CN = newClientNonce();
+  const hello = (sigOver = path0, clientNonce = CN) => {
     const nonce = 'n-1';
-    const sig = sign(null, Buffer.from(authServerPreimage(nonce, sigOver, { clientApi: 'gnomon-rpc:v1', features: [] })), kp.privateKey).toString('base64');
-    return { clientApi: 'gnomon-rpc:v1', features: [], nonce, serverKeyId: keyId, serverSig: sig, clientApiId: 'x', kitId: 'y' };
+    const sig = sign(null, Buffer.from(authServerPreimage(nonce, clientNonce, sigOver, { clientApi: 'gnomon-rpc:v1', features: [] })), kp.privateKey).toString('base64');
+    return { clientApi: 'gnomon-rpc:v1', features: [], nonce, clientNonce, serverKeyId: keyId, serverSig: sig, clientApiId: 'x', kitId: 'y' };
   };
   it('keyIdOfSpki rebuilds the kernel keyId from the SPKI', () => {
     expect(keyIdOfSpki(new Uint8Array(spki))).toBe(keyId);
   });
   it('verifies a genuine hello; refuses a signature over another endpoint, a foreign key, a missing WebCrypto', async () => {
     const k = spki.toString('base64url');
-    expect(await verifyServerSig(subtle, k, hello(), path0)).toEqual({ ok: true });
-    expect((await verifyServerSig(subtle, k, hello('ws://127.0.0.1:4001/rpc'), path0)) as { reason?: string }).toMatchObject({ ok: false, reason: 'bad-server-sig' });
+    expect(await verifyServerSig(subtle, k, hello(), path0, CN)).toEqual({ ok: true });
+    expect((await verifyServerSig(subtle, k, hello('ws://127.0.0.1:4001/rpc'), path0, CN)) as { reason?: string }).toMatchObject({ ok: false, reason: 'bad-server-sig' });
     const other = (generateKeyPairSync('ed25519').publicKey.export({ type: 'spki', format: 'der' }) as Buffer).toString('base64url');
-    expect(await verifyServerSig(subtle, other, hello(), path0)).toMatchObject({ ok: false, reason: 'key-id-mismatch' });
-    expect(await verifyServerSig(undefined, k, hello(), path0)).toMatchObject({ ok: false, reason: 'webcrypto-ed25519-unavailable' });
+    expect(await verifyServerSig(subtle, other, hello(), path0, CN)).toMatchObject({ ok: false, reason: 'key-id-mismatch' });
+    expect(await verifyServerSig(undefined, k, hello(), path0, CN)).toMatchObject({ ok: false, reason: 'webcrypto-ed25519-unavailable' });
+  });
+  it('T-2026-10-18-016: a genuine hello recorded on another connection is refused — verbatim (client-nonce-mismatch) and echo-rewritten (bad-server-sig)', async () => {
+    const k = spki.toString('base64url');
+    const mine = newClientNonce();
+    expect(mine).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(mine).not.toBe(CN);
+    const recorded = hello(path0, CN);
+    expect(await verifyServerSig(subtle, k, recorded, path0, mine)).toMatchObject({ ok: false, reason: 'client-nonce-mismatch' });
+    expect(await verifyServerSig(subtle, k, { ...recorded, clientNonce: mine }, path0, mine)).toMatchObject({ ok: false, reason: 'bad-server-sig' });
   });
   // I2: card-action verification is driven by the KERNEL's signActions in packages/gnomon/test/gui-endpoint.test.ts
 });
@@ -346,6 +356,22 @@ describe('block buttons and the client (C6, I5)', () => {
     t.onMessage!(JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32600, message: 'unparseable', data: { code: 'BAD_REQUEST', data: { reason: 'malformed-json' } } } }));
     expect(seen).toEqual(['BAD_REQUEST:malformed-json']);
     await expect(c.call('status')).rejects.toMatchObject({ refusal: { code: 'TIMEOUT', reason: 'call-timeout' } });
+  });
+  it('T-2026-10-18-016 r2: an engine whose RNG throws fails the hello stage visibly and sends nothing (connect never throws)', async () => {
+    const sent: string[] = [];
+    const t = { send: (s: string) => void sent.push(s), close: () => undefined, onMessage: null as ((s: string) => void) | null, onClose: null as ((c: number) => void) | null };
+    const out = await new GnomonClient(t).connect({
+      surface: 'browser',
+      endpointPath: 'ws://127.0.0.1:4000/rpc',
+      verifyKey: 'x',
+      auth: { launchToken: 'x' },
+      subtle: undefined,
+      rng: () => {
+        throw new Error('no getRandomValues');
+      },
+    });
+    expect(out).toMatchObject({ ok: false, stage: 'hello' });
+    expect(sent).toEqual([]);
   });
 });
 

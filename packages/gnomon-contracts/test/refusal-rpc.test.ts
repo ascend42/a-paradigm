@@ -237,14 +237,17 @@ describe('auth preimages bind the negotiated hello (M1.4 slice 3, T-2026-10-17-0
   it('server, device and read-token messages append clientApi + canonical features; there is no unbound form; the three domains differ', async () => {
     const c = await import('../src/index.js');
     const n = { clientApi: 'gnomon-rpc:v1', features: ['b', 'a'] };
-    expect(c.authServerMessage('N', '/s', n)).toBe('N\n/s\ngnomon-rpc:v1\n["b","a"]');
-    expect(c.authServerPreimage('N', '/s', n)).toBe('gnomon:auth-server:v1\nN\n/s\ngnomon-rpc:v1\n["b","a"]');
+    expect(c.authServerMessage('N', 'CN', '/s', n)).toBe('N\nCN\n/s\ngnomon-rpc:v1\n["b","a"]');
+    expect(c.authServerPreimage('N', 'CN', '/s', n)).toBe('gnomon:auth-server:v2\nN\nCN\n/s\ngnomon-rpc:v1\n["b","a"]');
     expect(c.authClientMessage('N', 'k', 'p', 'd', '/s', n)).toBe('N\nk\np\nd\n/s\ngnomon-rpc:v1\n["b","a"]');
     expect(c.authClientPreimage('N', 'k', 'p', 'd', '/s', n)).toBe(`gnomon:auth:v1\n${c.authClientMessage('N', 'k', 'p', 'd', '/s', n)}`);
     expect(c.authTokenMessage('N', 'k', 'rtk:X', '/s', n)).toBe('N\nk\nrtk:X\n/s\ngnomon-rpc:v1\n["b","a"]');
     expect(c.authTokenPreimage('N', 'k', 'rtk:X', '/s', n)).toBe(`gnomon:auth-token:v1\n${c.authTokenMessage('N', 'k', 'rtk:X', '/s', n)}`);
     expect(new Set([c.AUTH_SERVER_DOMAIN, c.AUTH_CLIENT_DOMAIN, c.AUTH_TOKEN_DOMAIN]).size).toBe(3);
-    expect(c.authServerPreimage.length).toBe(3); // negotiated is required
+    expect(c.authServerPreimage.length).toBe(4); // clientNonce (T-2026-10-18-016) and negotiated are required
+    // T-2026-10-18-016: the client nonce is bound — a different clientNonce is a different preimage
+    expect(c.authServerPreimage('N', 'CN2', '/s', n)).not.toBe(c.authServerPreimage('N', 'CN', '/s', n));
+    expect(c.CLIENT_LOCAL_REFUSAL_REASONS).toContain('client-nonce-mismatch');
   });
 
   it('P8-D89: the slice-3 socket reasons and the client-local hello-not-offered are registered; log.append lists ENGINE', async () => {
@@ -253,5 +256,53 @@ describe('auth preimages bind the negotiated hello (M1.4 slice 3, T-2026-10-17-0
     expect(c.VERBS.find((v) => v.verb === 'log.append')!.refusals).toEqual(['FORBIDDEN', 'BAD_REQUEST', 'ENGINE']);
     expect(c.EVENT_KINDS['daemon.log.quarantined']).toMatchObject({ owner: 'kernel', sensitivity: 'normal', reserved: 'M1.4:P8-D89', fieldLabels: { evidencePath: 'sensitive' } });
     expect(c.RESERVED_KIND_PAYLOADS['daemon.log.quarantined']).toEqual(['quarantinedLog', 'quarantinedHead', 'evidencePath', 'authorizedBy']);
+  });
+});
+
+describe('session.compacted (T-2026-10-18-016, P8-D93)', () => {
+  it('is a kernel-owned normal kind with summaryHash a sensitive field; its payload is closed and typed; the schema publishes the field list', async () => {
+    const c = await import('../src/index.js');
+    expect(c.EVENT_KINDS['session.compacted']).toEqual({ kind: 'session.compacted', owner: 'kernel', sensitivity: 'normal', fieldLabels: { summaryHash: 'sensitive' } });
+    expect(c.KIND_PAYLOADS['session.compacted']).toEqual(['hsid', 'turn', 'reason', 'summaryHash', 'tokensBefore', 'tokensAfter']);
+    const hsid = c.mintHsid();
+    const good = { hsid, turn: c.turnId(hsid, 3), reason: 'threshold', summaryHash: `sha256:${'a'.repeat(64)}`, tokensBefore: 9000, tokensAfter: 700 };
+    expect(c.validateSessionCompactedPayload(good)).toEqual([]);
+    expect(c.validateSessionCompactedPayload({ ...good, turn: null })).toEqual([]);
+    const { reason: _r, ...noReason } = good;
+    for (const bad of [
+      { ...good, extra: 1 },
+      { ...good, summaryHash: 'nope' },
+      { ...good, tokensAfter: -1 },
+      { ...good, tokensBefore: 1.5 },
+      { ...good, reason: '' },
+      { ...good, reason: 'because' },
+      { ...good, hsid: 'x' },
+      { ...good, turn: 'turn:x/1' },
+      noReason,
+    ]) expect(c.validateSessionCompactedPayload(bad).length, JSON.stringify(bad)).toBeGreaterThan(0);
+    expect((c.EVENT_V1_SCHEMA as Record<string, unknown>)['x-gnomon-kind-payloads']).toEqual(c.KIND_PAYLOADS);
+    // Aegis r2: reason is a closed enum
+    expect(c.COMPACTION_REASONS).toEqual(['threshold', 'overflow', 'manual', 'unspecified']);
+    for (const reason of c.COMPACTION_REASONS) expect(c.validateSessionCompactedPayload({ ...good, reason })).toEqual([]);
+    expect((c.EVENT_V1_SCHEMA as Record<string, unknown>)['x-gnomon-compaction-reasons']).toEqual([...c.COMPACTION_REASONS]);
+  });
+});
+
+describe('the auth wire format is a clientApiId input (P8-D93 round 3, Aegis)', () => {
+  it('domains and the exact preimage vectors are in the descriptor; changing a domain or a layout moves the id', async () => {
+    const c = await import('../src/index.js');
+    const a = c.CLIENT_API_DESCRIPTOR.auth;
+    expect(a.domains).toEqual({ server: 'gnomon:auth-server:v2', client: 'gnomon:auth:v1', token: 'gnomon:auth-token:v1' });
+    expect(a.vectors.server.preimage).toBe('gnomon:auth-server:v2\nN\nCN\n/s\ngnomon-rpc:v1\n["b","a"]');
+    expect(a.vectors.client.preimage).toBe('gnomon:auth:v1\nN\nk\np\nd\n/s\ngnomon-rpc:v1\n["b","a"]');
+    expect(a.vectors.token.preimage).toBe('gnomon:auth-token:v1\nN\nk\nrtk:X\n/s\ngnomon-rpc:v1\n["b","a"]');
+    const d = JSON.parse(JSON.stringify(c.CLIENT_API_DESCRIPTOR));
+    expect(c.computeClientApiId(d)).toBe(c.CLIENT_API_ID);
+    const domain = JSON.parse(JSON.stringify(d));
+    domain.auth.domains.server = 'gnomon:auth-server:v1';
+    expect(c.computeClientApiId(domain)).not.toBe(c.CLIENT_API_ID);
+    const layout = JSON.parse(JSON.stringify(d));
+    layout.auth.vectors.client.preimage = 'gnomon:auth:v1\nN\nk\np\nd\n/s';
+    expect(c.computeClientApiId(layout)).not.toBe(c.CLIENT_API_ID);
   });
 });

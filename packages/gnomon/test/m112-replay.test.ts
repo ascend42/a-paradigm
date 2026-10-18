@@ -67,6 +67,20 @@ describe('gnomon replay (G-KRN-01): verify, then a deterministic fold', () => {
     expect(replayLog(f.home, { ...opts(f), expect: a.projectionHash! }).ok).toBe(true);
   });
 
+  it('T-2026-10-18-016: replay tolerates session.compacted and records its summaryHash as a host hash (never reproduced)', async () => {
+    const f = await fixture();
+    const log = openKernelLog({ home: f.home, kernelPrincipal: KERNEL, signer: f.key, keyRing: f.ring });
+    logs.push(log);
+    await log.append({ kind: 'session.compacted', principal: KERNEL, session: HSID, payload: { hsid: HSID, turn: `turn:${HSID}/1`, reason: 'threshold', summaryHash: sha256Tagged('summary'), tokensBefore: 9000, tokensAfter: 700 } });
+    await log.close();
+    const a = replayLog(f.home, opts(f));
+    expect(a.verify.failures).toEqual([]);
+    expect(a.ok).toBe(true);
+    expect(a.divergences).toEqual([]);
+    expect(a.projection!.kinds['session.compacted']).toBe(1);
+    expect(a.projection!.sessions[HSID]!.host.at(-1)).toEqual({ seq: expect.any(Number), kind: 'session.compacted', hashes: { summaryHash: sha256Tagged('summary') } });
+  });
+
   it('falsifier: a turn sent with bytes never logged is a divergence; a wrong --expect is refused; a tampered row fails verify and is never folded', async () => {
     const bad = await fixture({ badTurn: true });
     const r = replayLog(bad.home, opts(bad));

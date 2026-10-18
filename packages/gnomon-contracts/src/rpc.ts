@@ -207,6 +207,13 @@ export function renderEnumValue(name: AdditiveEnumName, value: string): EnumRend
 export interface HelloParams {
   clientApis: string[];
   features: string[];
+  /**
+   * T-2026-10-18-016: a fresh random value per hello (32 bytes base64url is the
+   * recommended form; CLIENT_NONCE_PATTERN). The kernel echoes it and binds it
+   * into serverSig, so a recorded genuine hello cannot be replayed to a
+   * different connection by an impostor on a squatted endpoint.
+   */
+  clientNonce: string;
   client: {
     name: string;
     version: string;
@@ -219,6 +226,8 @@ export interface HelloResult {
   clientApi: string;
   features: string[];
   nonce: string;
+  /** The hello params' clientNonce, echoed; serverSig covers it (§4.9). */
+  clientNonce: string;
   serverKeyId: string;
   serverSig: string;
   clientApiId: string;
@@ -234,12 +243,20 @@ export interface RpcRequestFrame<P = unknown> {
   params?: P;
 }
 
-export const HELLO_PARAMS_KEYS = ['clientApis', 'features', 'client'] as const;
+export const HELLO_PARAMS_KEYS = ['clientApis', 'features', 'clientNonce', 'client'] as const;
 export const HELLO_CLIENT_KEYS = ['name', 'version', 'surface', 'conformance'] as const;
-export const HELLO_RESULT_KEYS = ['clientApi', 'features', 'nonce', 'serverKeyId', 'serverSig', 'clientApiId', 'kitId'] as const;
+export const HELLO_RESULT_KEYS = ['clientApi', 'features', 'nonce', 'clientNonce', 'serverKeyId', 'serverSig', 'clientApiId', 'kitId'] as const;
+
+/**
+ * hello clientNonce (T-2026-10-18-016): unpadded base64url of 16..64 random
+ * bytes (22..86 characters). Clients SHOULD send 32 bytes (CLIENT_NONCE_BYTES).
+ */
+export const CLIENT_NONCE_PATTERN_SOURCE = '^[A-Za-z0-9_-]{22,86}$' as const;
+export const CLIENT_NONCE_PATTERN = new RegExp(CLIENT_NONCE_PATTERN_SOURCE);
+export const CLIENT_NONCE_BYTES = 32 as const;
 
 /** Server-signature domain for hello and the auth preimages (§4.9). */
-export const AUTH_SERVER_DOMAIN = 'gnomon:auth-server:v1' as const;
+export const AUTH_SERVER_DOMAIN = 'gnomon:auth-server:v2' as const;
 export const AUTH_CLIENT_DOMAIN = 'gnomon:auth:v1' as const;
 /** Read-token proof-of-possession domain (§4.9 read tokens, P8-D89a): never verifies as device auth, nor the reverse. */
 export const AUTH_TOKEN_DOMAIN = 'gnomon:auth-token:v1' as const;
@@ -259,9 +276,14 @@ function negotiatedLines(n: NegotiatedHello): string {
   return `\n${n.clientApi}\n${canonicalJson([...n.features])}`;
 }
 
-/** serverSig message after the domain line: nonce, endpoint path, the negotiated clientApi and canonical features. */
-export function authServerMessage(nonce: string, endpointPath: string, negotiated: NegotiatedHello): string {
-  return `${nonce}\n${endpointPath}${negotiatedLines(negotiated)}`;
+/**
+ * serverSig message after the domain line: the server nonce, the CLIENT's
+ * nonce (T-2026-10-18-016), endpoint path, the negotiated clientApi and
+ * canonical features. A client verifies it with the clientNonce IT sent, never
+ * the echoed one, so a recorded hello replayed to another connection fails.
+ */
+export function authServerMessage(nonce: string, clientNonce: string, endpointPath: string, negotiated: NegotiatedHello): string {
+  return `${nonce}\n${clientNonce}\n${endpointPath}${negotiatedLines(negotiated)}`;
 }
 
 /** Device-key auth message after the domain line. */
@@ -274,8 +296,8 @@ export function authTokenMessage(nonce: string, serverKeyId: string, tokenId: st
   return `${nonce}\n${serverKeyId}\n${tokenId}\n${endpointPath}${negotiatedLines(negotiated)}`;
 }
 
-export function authServerPreimage(nonce: string, endpointPath: string, negotiated: NegotiatedHello): string {
-  return `${AUTH_SERVER_DOMAIN}\n${authServerMessage(nonce, endpointPath, negotiated)}`;
+export function authServerPreimage(nonce: string, clientNonce: string, endpointPath: string, negotiated: NegotiatedHello): string {
+  return `${AUTH_SERVER_DOMAIN}\n${authServerMessage(nonce, clientNonce, endpointPath, negotiated)}`;
 }
 export function authClientPreimage(nonce: string, serverKeyId: string, principalId: string, deviceId: string, endpointPath: string, negotiated: NegotiatedHello): string {
   return `${AUTH_CLIENT_DOMAIN}\n${authClientMessage(nonce, serverKeyId, principalId, deviceId, endpointPath, negotiated)}`;
@@ -294,6 +316,7 @@ export function validateHelloParams(value: unknown, opts: ValidateOptions = {}):
     value.clientApis.forEach((a, i) => c.str(`clientApis[${i}]`, a, /^[a-z][a-z0-9-]*:v[1-9][0-9]*$/, '<api>:v<N>'));
   }
   if ('features' in value && c.arr('features', value.features)) value.features.forEach((f, i) => c.str(`features[${i}]`, f));
+  if ('clientNonce' in value) c.str('clientNonce', value.clientNonce, CLIENT_NONCE_PATTERN, 'base64url, 22..86 characters');
   if ('client' in value && c.obj('client', value.client)) {
     const cl = value.client;
     c.closed('client', cl, HELLO_CLIENT_KEYS);
@@ -320,6 +343,7 @@ export function validateHelloResult(value: unknown, opts: ValidateOptions = {}):
     } else if (k in value) c.str(k, value[k], /^.+$/, 'non-empty');
   }
   if (typeof value.clientApi === 'string' && !CLIENT_API_PATTERN.test(value.clientApi)) c.fail('clientApi', 'must be gnomon-rpc:v<N>');
+  if (typeof value.clientNonce === 'string' && !CLIENT_NONCE_PATTERN.test(value.clientNonce)) c.fail('clientNonce', 'must be base64url, 22..86 characters');
   return c.errors;
 }
 

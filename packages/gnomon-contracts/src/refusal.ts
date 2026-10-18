@@ -234,9 +234,11 @@ export const SOCKET_REFUSAL_REASONS = Object.freeze(Object.keys(SOCKET_REASON_RO
 /**
  * Client-local reasons: synthesized by a client, never sent by the kernel
  * (T-2026-10-17-017, P8-D89). `hello-not-offered` = the kernel chose a
- * clientApi or feature this client did not offer.
+ * clientApi or feature this client did not offer. `client-nonce-mismatch`
+ * (T-2026-10-18-016) = the hello result does not echo the clientNonce this
+ * client sent (a recorded hello replayed from an impostor endpoint).
  */
-export const CLIENT_LOCAL_REFUSAL_REASONS = ['hello-not-offered'] as const;
+export const CLIENT_LOCAL_REFUSAL_REASONS = ['hello-not-offered', 'client-nonce-mismatch'] as const;
 
 /** Other named reasons the spec uses (§3.4: `FORBIDDEN{reason:'presence'}`). */
 export const OTHER_REFUSAL_REASONS = ['presence'] as const;

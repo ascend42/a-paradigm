@@ -8,11 +8,18 @@
  * possession {tokenId, sig} — the seed never leaves this process, and the
  * proof is sent only after the server is verified. The published TS client is
  * M1.12.
+ *
+ * T-2026-10-18-016: every hello carries a fresh 32-byte `clientNonce`; the
+ * client refuses (`client-nonce-mismatch`) a hello that does not echo it and
+ * verifies serverSig over the nonce IT sent, so a genuine hello recorded on
+ * another connection and replayed from a squatted socket never reaches auth.
  */
 import * as net from 'node:net';
+import { randomBytes } from 'node:crypto';
 import { encodeFrame, NdjsonDecoder } from './framing.js';
 import {
   CLIENT_API_ID,
+  CLIENT_NONCE_BYTES,
   authTokenMessage,
   JSON_RPC_CODES,
   RefusedError,
@@ -75,7 +82,7 @@ export interface DeviceCredential {
 
 export class ServerAuthError extends Error {
   constructor(
-    readonly reason: 'server-key-mismatch' | 'bad-server-sig' | 'bad-hello' | 'unverified-server' | 'hello-not-offered',
+    readonly reason: 'server-key-mismatch' | 'bad-server-sig' | 'bad-hello' | 'unverified-server' | 'hello-not-offered' | 'client-nonce-mismatch',
     message: string,
   ) {
     super(`gnomon-rpc: ${message}`);
@@ -83,18 +90,26 @@ export class ServerAuthError extends Error {
   }
 }
 
+/** A fresh hello clientNonce: 32 random bytes, base64url (T-2026-10-18-016). */
+export function newClientNonce(): string {
+  return randomBytes(CLIENT_NONCE_BYTES).toString('base64url');
+}
+
 /**
  * Verify a hello result's serverSig against the kernel key the CLIENT trusts
  * (from the root-signed registry, never from the server), over the endpoint
  * path the client itself derived. A relay or impostor that cannot sign as the
- * kernel fails here, before `auth` is sent (§4.9).
+ * kernel fails here, before `auth` is sent (§4.9). `clientNonce` is the value
+ * THIS client sent in hello (T-2026-10-18-016): the echo must equal it and the
+ * signature is checked over it, never over the echoed field.
  */
-export function verifyServerHello(hello: HelloResult, endpointPath: string, pin: ServerKeyPin): void {
+export function verifyServerHello(hello: HelloResult, endpointPath: string, pin: ServerKeyPin, clientNonce: string): void {
   if (validateHelloResult(hello).length) throw new ServerAuthError('bad-hello', 'hello result does not validate');
+  if (hello.clientNonce !== clientNonce) throw new ServerAuthError('client-nonce-mismatch', 'hello does not echo this connection\'s clientNonce: a replayed hello (§4.9)');
   if (hello.serverKeyId !== pin.keyId) throw new ServerAuthError('server-key-mismatch', `server key ${hello.serverKeyId} is not the registered kernel key`);
   const ring = new KeyRing();
   if (ring.addEd25519(pin.publicKeyPem) !== pin.keyId) throw new ServerAuthError('server-key-mismatch', 'pinned PEM does not hash to the pinned keyId');
-  if (ring.verify(pin.keyId, 'authServer', serverSigMessage(hello.nonce, endpointPath, hello.clientApi, hello.features), Buffer.from(hello.serverSig, 'base64')) !== 'ok') {
+  if (ring.verify(pin.keyId, 'authServer', serverSigMessage(hello.nonce, clientNonce, endpointPath, hello.clientApi, hello.features), Buffer.from(hello.serverSig, 'base64')) !== 'ok') {
     throw new ServerAuthError('bad-server-sig', 'serverSig does not verify: not the kernel (§4.9)');
   }
 }
@@ -228,7 +243,8 @@ export async function connectGnomon(o: ConnectOptions): Promise<GnomonSession> {
   const endpointPath = o.endpointPath ?? o.socketPath;
   const conn = await RpcConnection.open(o.socketPath);
   try {
-    const h = await conn.call('hello', { clientApis: o.clientApis ?? ['gnomon-rpc:v1'], features: o.features ?? [], client: o.client });
+    const clientNonce = newClientNonce();
+    const h = await conn.call('hello', { clientApis: o.clientApis ?? ['gnomon-rpc:v1'], features: o.features ?? [], clientNonce, client: o.client });
     if ('error' in h) throw new RefusedError(h.error.data, h.error.message);
     const hello = h.result as HelloResult;
     // client-local check: the kernel must choose from what THIS client offered
@@ -237,9 +253,11 @@ export async function connectGnomon(o: ConnectOptions): Promise<GnomonSession> {
     if (!offeredApis.includes(hello.clientApi) || !Array.isArray(hello.features) || hello.features.some((f) => !offeredFeatures.includes(f))) {
       throw new ServerAuthError('hello-not-offered', 'hello chose a clientApi or feature this client did not offer');
     }
+    // client-local check, pinned or not: the hello must echo THIS connection's nonce (T-2026-10-18-016)
+    if (hello.clientNonce !== clientNonce) throw new ServerAuthError('client-nonce-mismatch', 'hello does not echo this connection\'s clientNonce: a replayed hello (§4.9)');
     let serverVerified = false;
     if (o.serverKey) {
-      verifyServerHello(hello, endpointPath, o.serverKey);
+      verifyServerHello(hello, endpointPath, o.serverKey, clientNonce);
       serverVerified = true;
     }
     const session: GnomonSession = { conn, hello, serverVerified, clientApiIdMatches: hello.clientApiId === CLIENT_API_ID };

@@ -91,7 +91,11 @@ components:
 
   contract-event-v1:
     description: >-
-      event:v1 envelope (§4.1) — P8-D89 (M1.4): reserves daemon.log.quarantined
+      event:v1 envelope (§4.1) — P8-D93 (T-2026-10-18-016): kernel-owned
+      session.compacted{hsid, turn, reason, summaryHash, tokensBefore,
+      tokensAfter} (summaryHash a sensitive field), KIND_PAYLOADS (published as
+      x-gnomon-kind-payloads) and validateSessionCompactedPayload. P8-D89
+      (M1.4): reserves daemon.log.quarantined
       (evidencePath a sensitive field) and adds key.token.revoked{tokenId},
       tag M1.4:P8-D89. EventV1 type, validateEventV1/isEventV1
       (strict = registered kind + closed fields; tolerant = unknown kinds and
@@ -234,7 +238,13 @@ components:
       authTokenMessage + their *Preimage forms, all binding the negotiated
       clientApi + canonical features; no unbound form; AUTH_TOKEN_DOMAIN
       gnomon:auth-token:v1 for read-token proof of possession — M1.4 slice 3,
-      T-2026-10-17-017, P8-D89a), negotiateHello (highest shared
+      T-2026-10-17-017, P8-D89a); hello clientNonce (T-2026-10-18-016,
+      P8-D93): HelloParams.clientNonce required (CLIENT_NONCE_PATTERN,
+      base64url 22..86 chars, CLIENT_NONCE_BYTES = 32), echoed in
+      HelloResult.clientNonce and bound into authServerMessage(nonce,
+      clientNonce, endpointPath, negotiated) so a recorded hello cannot be
+      replayed to another connection; client-local reason
+      client-nonce-mismatch; negotiateHello (highest shared
       version, feature intersection, UNSUPPORTED{data:{offered[]}}); the frozen
       VERBS (12, with params, refusals and the §5 access matrix incl. the
       all-refused peer column; session.open runMode?, contract.claim note? /
@@ -253,7 +263,9 @@ components:
 
   contract-client-api-id:
     description: >-
-      kitId and clientApiId (§12.3, §12.8). kitId = sha256(canonicalJson(kit:v1
+      kitId and clientApiId (§12.3, §12.8). P8-D93 moved clientApiId once
+      (hello clientNonce + session.compacted): sha256:fd576e6d… →
+      sha256:1faf47f5…8720 (round 2: server-sig domain v2, closed compaction-reason enum; round 3: AUTH_WIRE_DESCRIPTOR — the three auth domains and one fixed preimage vector per auth form — is a CLIENT_API_DESCRIPTOR input, so a domain or layout change moves the id); kitId unchanged. kitId = sha256(canonicalJson(kit:v1
       block list)); clientApiId = sha256(canonicalJson(CLIENT_API_DESCRIPTOR) +
       "\n" + kitId) where the descriptor = the 12 verbs + 2 relays, the JSON-RPC
       code map, ADDITIVE_ENUMS, every published client JSON Schema and the

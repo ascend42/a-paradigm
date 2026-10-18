@@ -144,6 +144,13 @@ components:
       no kernel code calls it).
     description: >-
       #socket (spec §2.1, §4.9, §5) — the kernel's gnomon-rpc:v1 endpoint.
+      T-2026-10-18-016 (P8-D93): hello carries a client-chosen clientNonce
+      (validated, required); auth.ts echoes it in the result and signs
+      serverSig over nonce + clientNonce + endpointPath + negotiated hello;
+      connectGnomon (client.ts) sends a fresh 32-byte nonce, refuses a hello
+      that does not echo it (client-nonce-mismatch) and verifyServerHello
+      takes the SENT nonce, so a recorded genuine hello replayed from a
+      squatted socket never reaches auth.
       PR-5 core: unix-socket server bound under a 0177 umask, chmod 0600 and
       the ACL read back before serving; byte-based NDJSON framing (4 MiB max
       inbound frame, UTF-8 safe partial lines, oversize discarded to its
@@ -155,7 +162,7 @@ components:
       version; none shared ⇒ UNSUPPORTED{offered[], supported[]}; tolerant
       param validation; client strings capped at 128 chars) answering
       {clientApi, features, nonce, serverKeyId, serverSig, clientApiId,
-      kitId}; serverSig = kernel key over gnomon:auth-server:v1 + nonce +
+      kitId}; serverSig = kernel key over gnomon:auth-server:v2 + nonce +
       endpointPath; `auth {principal, deviceId, sig}` verified against the
       ROOT-signed device registry (#identity), nonce single-use (any attempt
       consumes it) and 30 s, accepted transcripts remembered so a replay is
@@ -633,7 +640,10 @@ components:
       Envelope = contracts event:v1, validated strict with default-label check;
       unregistered kinds refused (never guessed), labels tighten-only (L6),
       kernel/userland ownership enforced (L7), daemon.segment reserved to the
-      log, session.inject must carry {origin, hash, bytes}. Signer seam
+      log, session.inject must carry {origin, hash, bytes}; session.compacted
+      (T-2026-10-18-016, P8-D93) must pass contracts
+      validateSessionCompactedPayload (closed, typed) else bad-payload; replay
+      folds its summaryHash as a RECORDED host hash. Signer seam
       (signer.ts): Signer.sign(domain, message) prepends the §3.1 domain
       (gnomon:event-sig:v1 etc.), key classes limited to their domains;
       SoftwareEd25519Signer = the in-memory kernel key (keyId
@@ -954,8 +964,9 @@ components:
       #gnomon-ts-client (spec §4.9, §5, §12.8; §19.1 M1.12 slice 2).
       src/clients/ts/ — the published TypeScript client, built ONLY on
       @a-company/gnomon-contracts + node:* (fenced by test/m112-conformance):
-      hello with serverSig verified against the PINNED kernel key before any
-      credential is sent; device-key auth (gnomon:auth:v1) or read-token proof
+      hello with a fresh 32-byte clientNonce that the result must echo
+      (client-nonce-mismatch) and serverSig verified against the PINNED kernel
+      key over the SENT nonce before any credential is sent (T-2026-10-18-016); device-key auth (gnomon:auth:v1) or read-token proof
       of possession (gnomon:auth-token:v1); call() typed for the 12 verbs + 2
       relays (ClientMethodParams/Results); refusals reject with RefusedError;
       subscribe() = log.read{follow} with rows in seq order and a visible end;
@@ -973,9 +984,10 @@ components:
       SubprocessDriver (any language over stdio); runner.ts: runs every
       CONFORMANCE_CHECKS `run` check against a live kernel, `slice-2` checks
       reported todo, report + conformanceReportHash; hello.server-sig-mismatch
-      runs an impostor endpoint that copies the real hello's fields with a
-      FORGED (random) serverSig (zero auth frames) — not a replay of a
-      genuinely signed hello, which is the open T-2026-10-18-016 gap; the
+      runs an impostor endpoint that REPLAYS a real recorded hello (genuine
+      serverSig) verbatim and with clientNonce rewritten to the victim's
+      (T-2026-10-18-016): a conformant client refuses both, zero auth frames
+      (falsifier: a client that trusts the echoed nonce fails it); the
       impostor listens on a private socket file (POSIX) or a random named
       pipe (Windows) and a listen error fails the check instead of crashing
       the runner. auth.device-refused also requires that the client keeps no
@@ -1327,6 +1339,10 @@ components:
   local-runner:
     description: >-
       #local-runner (spec §13, §3.3, §6.1 step 2; M1.8 slice 1). Kernel side:
+      local-session.ts maps a SUCCESSFUL compaction_end (summaryHash + both
+      token counts, no error) onto the typed session.compacted{hsid, turn,
+      reason, summaryHash, tokensBefore, tokensAfter} row (compactedPayloadOf;
+      T-2026-10-18-016, P8-D93) after the raw turn.event line, which stays;
       src/kernel/local/endpoint.ts (loopback/LAN rule on the normalised host;
       hostnames, Anthropic hosts, link-local/metadata, public, userinfo,
       forbidden web-endpoint port refused — G-SUB-06 BILLING_REFUSED via

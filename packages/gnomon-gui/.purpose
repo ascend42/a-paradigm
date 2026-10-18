@@ -19,7 +19,10 @@ components:
       decides the key pin (localStorage holds only the kernel public key;
       a changed fragment key re-pins visibly; Reconnect verifies against the
       pin; none ⇒ refuse). core/server-sig.ts verifies hello.serverSig with
-      WebCrypto Ed25519 over authServerPreimage and binds serverKeyId; card
+      WebCrypto Ed25519 over authServerPreimage and binds serverKeyId; each
+      hello carries a fresh clientNonce (getRandomValues, 32 bytes) that the
+      result must echo (client-nonce-mismatch) and the signature must cover
+      (T-2026-10-18-016); card
       decision keys only for kernel-signed actions that verify. core/client.ts
       is a MINIMAL in-bundle gnomon-rpc:v1 client on gnomon-contracts (hello,
       sig check, auth {launchToken}|{reconnect}, calls, notifications,

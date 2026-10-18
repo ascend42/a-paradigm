@@ -147,6 +147,39 @@ describe('#gui client ⇄ #web-endpoint (M1.10 slice 1)', () => {
     expect(sent.map((s) => JSON.parse(s).method)).toEqual(['hello']);
   });
 
+  it('T-2026-10-18-016: a genuine hello recorded on another connection, replayed into this one, is refused at server-sig; nothing sent after hello', async () => {
+    const { ep } = await rig();
+    const grant = await ep.requestLaunch(HUMAN);
+    // record a genuine hello on a first connection
+    const first = await transport(ep.port);
+    const rec: Transport = { send: (s) => first.t.send(s), close: () => first.t.close(), onMessage: null, onClose: null };
+    let recorded: Record<string, unknown> | undefined;
+    first.t.onMessage = (text) => {
+      const f = JSON.parse(text) as { id?: number; result?: Record<string, unknown> };
+      if (f.id === 1 && f.result) recorded = f.result;
+      rec.onMessage?.(text);
+    };
+    first.t.onClose = (c) => rec.onClose?.(c);
+    await new GnomonClient(rec).connect({ surface: 'browser', endpointPath: ep.endpointPath, verifyKey: grant.kernelPublicKey, auth: { launchToken: grant.launchToken }, subtle });
+    expect(recorded?.serverSig).toBeDefined();
+    for (const [mode, reason] of [['verbatim', 'client-nonce-mismatch'], ['echo-rewrite', 'bad-server-sig']] as const) {
+      const { t, sent } = await transport(ep.port);
+      const relay: Transport = { send: (s) => t.send(s), close: () => t.close(), onMessage: null, onClose: null };
+      t.onMessage = (text) => {
+        const f = JSON.parse(text) as { id?: number; result?: Record<string, unknown> };
+        if (f.id === 1 && f.result) {
+          const mine = (JSON.parse(sent[0]!) as { params: { clientNonce: string } }).params.clientNonce;
+          f.result = mode === 'verbatim' ? recorded : { ...recorded, clientNonce: mine };
+        }
+        relay.onMessage?.(JSON.stringify(f));
+      };
+      t.onClose = (c) => relay.onClose?.(c);
+      const out = await new GnomonClient(relay).connect({ surface: 'browser', endpointPath: ep.endpointPath, verifyKey: grant.kernelPublicKey, auth: { launchToken: grant.launchToken }, subtle });
+      expect(out).toMatchObject({ ok: false, stage: 'server-sig', sig: { reason } });
+      expect(sent.map((s) => JSON.parse(s).method)).toEqual(['hello']);
+    }
+  });
+
   it('I2: card decision keys come only from actions the KERNEL signed (broker signActions) with the hello key', async () => {
     const kernel = SoftwareEd25519Signer.generate('kernel');
     const other = SoftwareEd25519Signer.generate('kernel');

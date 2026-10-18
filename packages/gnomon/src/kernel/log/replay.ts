@@ -20,8 +20,9 @@
  *     §3.2 wants a byte count) is a divergence `inject-plaintext` — the
  *     append path refuses it (checkPayload), so a row carrying it did not come
  *     through the log's own append (round 2, Aegis C1);
- *   - host: the `*Hash` / `sha256` fields of `session.spawned` and
- *     `session.layers.changed` rows, RECORDED, never reproduced;
+ *   - host: the `*Hash` / `sha256` fields of `session.spawned`,
+ *     `session.layers.changed` and `session.compacted` (its summaryHash: a
+ *     backend output, T-2026-10-18-016) rows, RECORDED, never reproduced;
  *   - cards: the last state of each card (`approval.request` → open,
  *     `approval.decide` → its decision, `approval.expire` → expired);
  * plus the log id, the head {seq, hash} and a per-kind row count. Nothing
@@ -115,7 +116,7 @@ export function foldReplay(rows: Iterable<Row>): { projection: ReplayProjection;
       const want = pending.get(hsid);
       pending.delete(hsid); // consumed: one client inject binds at most one turn
       if (want !== hash) divergences.push({ seq: r.seq, reason: 'input-mismatch', detail: want === undefined ? `turn.sent ${hash} has no pending client inject for ${hsid}` : `turn.sent ${hash} is not the last client inject ${want} for ${hsid}` });
-    } else if ((r.kind === 'session.spawned' || r.kind === 'session.layers.changed') && hsid) {
+    } else if ((r.kind === 'session.spawned' || r.kind === 'session.layers.changed' || r.kind === 'session.compacted') && hsid) {
       const hashes: Record<string, string> = {};
       for (const k of Object.keys(pl).sort()) if ((k.endsWith('Hash') || k === 'sha256') && typeof pl[k] === 'string') hashes[k] = pl[k] as string;
       if (Object.keys(hashes).length) session(hsid).host.push({ seq: r.seq, kind: r.kind, hashes });

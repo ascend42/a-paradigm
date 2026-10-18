@@ -34,7 +34,7 @@ export const CONFORMANCE_CHECKS: readonly ConformanceCheckSpec[] = Object.freeze
   { id: 'hello.negotiate', must: 'offers gnomon-rpc:v1; the kernel chooses it and reports clientApiId and kitId', spec: '\u00a74.9', status: 'run' },
   { id: 'hello.unsupported', must: 'offering no API the kernel speaks is refused UNSUPPORTED{data.offered}', spec: '\u00a74.9', status: 'run' },
   { id: 'hello.server-sig', must: 'verifies serverSig against the registered kernel key before auth', spec: '\u00a74.9', status: 'run' },
-  { id: 'hello.server-sig-mismatch', must: 'a hello signed by any other key is refused locally and NO auth is sent', spec: '\u00a74.9', status: 'run' },
+  { id: 'hello.server-sig-mismatch', must: 'a hello signed by any other key, or a genuine hello replayed from another connection (its clientNonce is not this one\'s), is refused locally and NO auth is sent', spec: '\u00a74.9', status: 'run' },
   { id: 'auth.device', must: 'authenticates with a device key (gnomon:auth:v1 over the negotiated hello)', spec: '\u00a74.9', status: 'run' },
   { id: 'auth.device-refused', must: 'an unregistered device key yields ONE AUTH refusal:v1 (-32001), surfaced as a refusal; the client keeps no connection', spec: '\u00a74.9', status: 'run' },
   { id: 'auth.read-token', must: 'authenticates a read token by proof of possession; write verbs are refused FORBIDDEN', spec: '\u00a74.9, \u00a75', status: 'run' },

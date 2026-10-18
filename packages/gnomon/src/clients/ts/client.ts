@@ -7,9 +7,13 @@
  * exactly what a community client could write from the package alone (the
  * test/m112-clients fence proves the import set).
  *
- *   hello → verify serverSig against the PINNED kernel key (from the
- *           root-signed registry, never from the server) over the endpoint
- *           path THIS client derived, BEFORE any credential is sent;
+ *   hello → send a fresh 32-byte `clientNonce`; refuse a result that does not
+ *           echo it (`client-nonce-mismatch`); verify serverSig against the
+ *           PINNED kernel key (from the root-signed registry, never from the
+ *           server) over the server nonce, THIS client's nonce and the
+ *           endpoint path THIS client derived, BEFORE any credential is sent
+ *           (T-2026-10-18-016: a recorded genuine hello replayed from a
+ *           squatted endpoint fails);
  *   auth  → a device key (`gnomon:auth:v1`) or a read token's proof of
  *           possession (`gnomon:auth-token:v1`, {tokenId, sig}); the token seed
  *           never leaves this process;
@@ -23,8 +27,9 @@
  * the kernel package ships zero dependencies, G-SEC-01). No platform branches.
  */
 import * as net from 'node:net';
-import { createHash, createPrivateKey, createPublicKey, sign as edSign, verify as edVerify, type KeyObject } from 'node:crypto';
+import { createHash, createPrivateKey, createPublicKey, randomBytes, sign as edSign, verify as edVerify, type KeyObject } from 'node:crypto';
 import {
+  CLIENT_NONCE_BYTES,
   GNOMON_RPC_V1,
   RefusedError,
   authClientPreimage,
@@ -68,7 +73,7 @@ export type ClientCredential =
 
 export class ClientAuthError extends Error {
   constructor(
-    readonly reason: 'bad-hello' | 'hello-not-offered' | 'server-key-mismatch' | 'bad-server-sig' | 'unverified-server' | 'bad-credential',
+    readonly reason: 'bad-hello' | 'hello-not-offered' | 'client-nonce-mismatch' | 'server-key-mismatch' | 'bad-server-sig' | 'unverified-server' | 'bad-credential',
     message: string,
   ) {
     super(`gnomon-client: ${message}`);
@@ -81,12 +86,23 @@ export function ed25519KeyIdOf(publicKeyPem: string): string {
   return `gkey:v1:${createHash('sha256').update(publicKeyPem.replace(/\n+$/, ''), 'utf8').digest('hex')}`;
 }
 
-/** Throws ClientAuthError unless `hello` is signed by the pinned kernel key over this endpoint path and the negotiated hello. */
-export function verifyHelloSignature(hello: HelloResult, endpointPath: string, pin: KernelKeyPin): void {
+/** A fresh hello clientNonce: 32 random bytes, base64url (T-2026-10-18-016). */
+export function newClientNonce(): string {
+  return randomBytes(CLIENT_NONCE_BYTES).toString('base64url');
+}
+
+/**
+ * Throws ClientAuthError unless `hello` echoes `clientNonce` (the value THIS
+ * client sent) and is signed by the pinned kernel key over it, this endpoint
+ * path and the negotiated hello. The signature is checked over the sent
+ * nonce, never the echoed field.
+ */
+export function verifyHelloSignature(hello: HelloResult, endpointPath: string, pin: KernelKeyPin, clientNonce: string): void {
   if (validateHelloResult(hello).length) throw new ClientAuthError('bad-hello', 'hello result does not validate');
+  if (hello.clientNonce !== clientNonce) throw new ClientAuthError('client-nonce-mismatch', 'hello does not echo this connection\'s clientNonce: a replayed hello (§4.9)');
   if (ed25519KeyIdOf(pin.publicKeyPem) !== pin.keyId) throw new ClientAuthError('server-key-mismatch', 'pinned PEM does not hash to the pinned keyId');
   if (hello.serverKeyId !== pin.keyId) throw new ClientAuthError('server-key-mismatch', `server key ${hello.serverKeyId} is not the registered kernel key`);
-  const pre = Buffer.from(authServerPreimage(hello.nonce, endpointPath, { clientApi: hello.clientApi, features: hello.features }), 'utf8');
+  const pre = Buffer.from(authServerPreimage(hello.nonce, clientNonce, endpointPath, { clientApi: hello.clientApi, features: hello.features }), 'utf8');
   let ok = false;
   try {
     ok = edVerify(null, pre, createPublicKey(pin.publicKeyPem), Buffer.from(hello.serverSig, 'base64'));
@@ -190,14 +206,17 @@ export class GnomonClient {
     try {
       const offeredApis = o.clientApis ?? [GNOMON_RPC_V1];
       const offeredFeatures = o.features ?? [];
-      c.hello = (await c.#request('hello', { clientApis: offeredApis, features: offeredFeatures, client: o.client })) as HelloResult;
+      const clientNonce = newClientNonce();
+      c.hello = (await c.#request('hello', { clientApis: offeredApis, features: offeredFeatures, clientNonce, client: o.client })) as HelloResult;
       if (validateHelloResult(c.hello).length) throw new ClientAuthError('bad-hello', 'hello result does not validate');
       if (!offeredApis.includes(c.hello.clientApi) || !Array.isArray(c.hello.features) || c.hello.features.some((f) => !offeredFeatures.includes(f))) {
         throw new ClientAuthError('hello-not-offered', 'hello chose a clientApi or feature this client did not offer');
       }
+      // pinned or not, the hello must echo THIS connection's nonce (T-2026-10-18-016)
+      if (c.hello.clientNonce !== clientNonce) throw new ClientAuthError('client-nonce-mismatch', 'hello does not echo this connection\'s clientNonce: a replayed hello (§4.9)');
       const endpointPath = o.endpointPath ?? o.socketPath;
       if (o.kernelKey) {
-        verifyHelloSignature(c.hello, endpointPath, o.kernelKey);
+        verifyHelloSignature(c.hello, endpointPath, o.kernelKey, clientNonce);
         c.serverVerified = true;
       }
       if (o.credential && !c.serverVerified) throw new ClientAuthError('unverified-server', 'refusing to authenticate to an unverified server (no pinned kernel key)');
