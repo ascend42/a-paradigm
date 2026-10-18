@@ -18,7 +18,9 @@
  *     only by code that passes the literal acknowledgement `DEV_TEST_ROOT_ACK`.
  *     No env var, flag or file selects it (§15.3: the daemon reads no
  *     `GNOMON_*`); `gnomond` never constructs it. It exists so tests can drive
- *     the full mutual-auth path. Everything it touches reports
+ *     the full mutual-auth path, and so `gnomon dev up` (#dev-launch, the
+ *     unsigned dogfood path until M1.3) can run a kernel IN ITS OWN PROCESS on
+ *     a separate, marked DEV home — never `~/.gnomon`. Everything it touches reports
  *     `state: 'dev-test'` (status, daemon.start) so it can never pass silently.
  *
  * Row signatures use the §3.1 `gnomon:row-sig:v1` domain over the canonical
@@ -26,7 +28,7 @@
  * bytes `KeyRing.verify(…, 'row', …)` checks, so a hardware root drops in
  * behind this interface without changing a verifier.
  */
-import { createPublicKey, generateKeyPairSync, sign as cryptoSign, type KeyObject } from 'node:crypto';
+import { createPrivateKey, createPublicKey, generateKeyPairSync, sign as cryptoSign, type KeyObject } from 'node:crypto';
 import { canonicalJson, nsFromRootPublicKey, refuse, type Refusal } from '@a-company/gnomon-contracts';
 import { KeyRing, p256KeyId, signaturePreimage } from '../log/signer.js';
 
@@ -100,9 +102,24 @@ export class DevTestRootAuthority implements RootAuthority {
   readonly #priv: KeyObject;
   readonly #verifier: RootVerifier;
 
-  constructor(ack: typeof DEV_TEST_ROOT_ACK) {
+  /**
+   * `opts.privateKeyPem` (#dev-launch, `gnomon dev up`): reload a software
+   * root that `gnomon dev init` persisted into a DEV home. It must be a P-256
+   * PKCS#8 key; anything else throws. Still needs the ack.
+   */
+  constructor(ack: typeof DEV_TEST_ROOT_ACK, opts: { privateKeyPem?: string } = {}) {
     if (ack !== DEV_TEST_ROOT_ACK) throw new Error('#identity: DevTestRootAuthority needs the explicit DEV_TEST_ROOT_ACK');
-    const { privateKey, publicKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' });
+    let privateKey: KeyObject;
+    let publicKey: KeyObject;
+    if (opts.privateKeyPem !== undefined) {
+      privateKey = createPrivateKey(opts.privateKeyPem);
+      if (privateKey.asymmetricKeyType !== 'ec' || privateKey.asymmetricKeyDetails?.namedCurve !== 'prime256v1') {
+        throw new Error('#identity: a dev-test root key must be EC P-256');
+      }
+      publicKey = createPublicKey(privateKey);
+    } else {
+      ({ privateKey, publicKey } = generateKeyPairSync('ec', { namedCurve: 'P-256' }));
+    }
     this.#priv = privateKey;
     this.publicKeyPem = publicKey.export({ type: 'spki', format: 'pem' }).toString();
     this.#verifier = new RootVerifier(publicKey);
@@ -117,5 +134,11 @@ export class DevTestRootAuthority implements RootAuthority {
   signRow(row: unknown): { signer: string; sig: string } {
     const sig = cryptoSign('sha256', signaturePreimage('row', rowMessage(row)), { key: this.#priv, dsaEncoding: 'ieee-p1363' });
     return { signer: this.rootKeyId, sig: sig.toString('base64') };
+  }
+
+  /** #dev-launch: the software root as PKCS#8 PEM so `gnomon dev init` can persist it into a DEV home (0600). Needs the ack again. */
+  exportPrivateKeyPem(ack: typeof DEV_TEST_ROOT_ACK): string {
+    if (ack !== DEV_TEST_ROOT_ACK) throw new Error('#identity: exporting a dev-test root needs the explicit DEV_TEST_ROOT_ACK');
+    return this.#priv.export({ type: 'pkcs8', format: 'pem' }).toString();
   }
 }
