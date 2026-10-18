@@ -58,23 +58,50 @@ export function ensureKeysDir(home: string): string {
 
 /** Load this device's key as a `device`-class signer (auth + event domains only). */
 export function loadDeviceKey(home: string, file: string = deviceKeyPath(home)): SoftwareEd25519Signer {
+  return loadDeviceCredential(home, file).signer;
+}
+
+/**
+ * The same fail-closed load, for an in-process client that must present the key itself
+ * (`gnomon up`): the file is read ONCE, after the owner-only checks, and those same bytes
+ * are both parsed into the signer and handed back. Never print or log `privateKeyPem`.
+ */
+export function loadDeviceCredential(home: string, file: string = deviceKeyPath(home)): { signer: SoftwareEd25519Signer; privateKeyPem: string } {
   const dir = path.dirname(file);
   let dst: fs.Stats;
-  let st: fs.Stats;
+  let lst: fs.Stats;
   try {
     dst = fs.lstatSync(dir);
-    st = fs.lstatSync(file);
+    lst = fs.lstatSync(file);
   } catch {
     throw new DeviceKeyError('missing', `no device key at ${file}`);
   }
   if (!dst.isDirectory()) throw new DeviceKeyError('not-a-file', `${dir} is not a directory`);
   checkOwnerOnly(dir, dst, 'dir');
-  if (!st.isFile()) throw new DeviceKeyError('not-a-file', `${file} is not a regular file`);
-  checkOwnerOnly(file, st, 'file');
+  // a symlink is refused here on every OS (Windows has no O_NOFOLLOW); on POSIX the open below refuses it again
+  if (!lst.isFile()) throw new DeviceKeyError('not-a-file', `${file} is not a regular file`);
+  // open WITHOUT following a link, then judge and read THAT descriptor: no swap between the check and the read
+  let fd: number;
   try {
-    return new SoftwareEd25519Signer(fs.readFileSync(file, 'utf8'), 'device');
-  } catch {
-    throw new DeviceKeyError('not-ed25519', `${file} is not an Ed25519 private key`);
+    fd = fs.openSync(file, fs.constants.O_RDONLY | (fs.constants.O_NOFOLLOW ?? 0));
+  } catch (e) {
+    const code = (e as NodeJS.ErrnoException).code;
+    if (code === 'ENOENT') throw new DeviceKeyError('missing', `no device key at ${file}`);
+    throw new DeviceKeyError('not-a-file', `${file} is not a regular file (${code ?? 'open failed'})`);
+  }
+  try {
+    const st = fs.fstatSync(fd);
+    if (!st.isFile()) throw new DeviceKeyError('not-a-file', `${file} is not a regular file`);
+    checkOwnerOnly(file, st, 'file');
+    let privateKeyPem: string;
+    try {
+      privateKeyPem = fs.readFileSync(fd, 'utf8');
+      return { signer: new SoftwareEd25519Signer(privateKeyPem, 'device'), privateKeyPem };
+    } catch {
+      throw new DeviceKeyError('not-ed25519', `${file} is not an Ed25519 private key`);
+    }
+  } finally {
+    fs.closeSync(fd);
   }
 }
 

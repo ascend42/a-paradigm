@@ -1,0 +1,27 @@
+id: L-2026-10-18-claude-builder-212956-001
+type: insight
+timestamp: '2026-10-18T21:29:56.070Z'
+author: claude-builder
+title: 'Design decision: gnomon up is in-process; no gnomon open wire verb (clientApiId unchanged)'
+summary: The real-home GUI launcher runs the kernel in the CLI's own process on the provisioned home and calls DaemonHandle.requestWebLaunch directly, as dev up does. Attaching a GUI to a running gnomond would need a new socket verb for gnomon open, which moves clientApiId, so that is deferred until the spec names the verb.
+symbols_touched:
+  - '#gnomon-up'
+  - '#dev-launch'
+  - '#web-endpoint'
+  - $daemon-lifecycle
+  - '#identity'
+tags:
+  - gnomon
+  - decision
+  - launcher
+  - m1.3
+  - paradigm-8
+body: 'Options: (a) an in-process gnomon up, the production counterpart of dev up; (b) gnomon open against a running gnomond. (b) needs a new wire verb: §5 names none, and adding one was the M1.4 falsifier. It would move clientApiId and every conformance vector. (a) reuses the existing in-process launch API. Its identity path is the same as gnomond''s: openHardwareIdentity, with the pinned signed helper, SE public keys that must match identity.json and a root-signed approvals binding, failing closed. So no security rule forks. Costs of (a): a gnomond already running on the home must be stopped first. That case is refused daemon-running, detected by the pidfile and a socket probe, with the lock as backstop. The kernel also runs from the terminal, so sessions inherit that terminal''s TCC grants (§2.4 rule 2, §A.2(v)); this is accepted for the first test. Like gnomond, gnomon up never reads GNOMON_HOME. The shared launch/TTY code is src/cli/launch-tty.ts, one copy for dev up and up. Revisit when the keystore item gives the kernel key a root-signed row, or when the spec names the gnomon open verb.'
+linked_commits:
+  - 208408d1
+  - 3ea4f50a
+confidence: 0.85
+git_context:
+  ref: 3ea4f50a931851ab2832daa99ba34955e0290687
+  branch: gnomon/real-launch
+  dirty: true

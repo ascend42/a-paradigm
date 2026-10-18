@@ -659,6 +659,53 @@ components:
       - test/dev-launch.test.ts
       - test/dev-launch-session.test.ts
 
+  gnomon-up:
+    description: >-
+      #gnomon-up (spec §2.4 rule 7) — `gnomon up [--home <abs>]`, the
+      production counterpart of `gnomon dev up`: the REAL-HOME GUI launcher.
+      src/cli/up-cli.ts; the in-process launcher and terminal loop are shared
+      with #dev-launch in src/cli/launch-tty.ts (attachInProcess, printLaunch,
+      serveInProcess: one copy of the launch rules). Runs startDaemon IN THE
+      CLI'S OWN PROCESS on a PROVISIONED home (default ~/.gnomon; never
+      GNOMON_HOME, like gnomond) with the hardware identity opened by
+      openHardwareIdentity — the same path gnomond takes (root + approvals key
+      behind the pinned signed helper; the helper is closed on every failure
+      and at shutdown) — connects as the home's registered human device
+      (loadDeviceCredential: one owner-only read) with the kernel key pinned
+      in-process, and mints the launch token through
+      DaemonHandle.requestWebLaunch. URL ONLY to an interactive terminal;
+      Enter re-mints; q / Ctrl-C stop. Approvals from the GUI: broker →
+      HelperApprovalsKey.signDecision (fresh presence, Touch ID) →
+      decisionSig + helper-se presence token. DESIGN (lore): in-process, NOT
+      `gnomon open` against a running gnomond — that needs a new wire verb
+      and moves clientApiId. GUARDS on a home resolved once (lstat plain
+      directory, then realpath), each with a falsifier in
+      test/up-cli.test.ts: FIRST (Aegis C1, also in dev up) a non-empty
+      NODE_OPTIONS or any node interpreter flag (process.execArgv) →
+      unsafe-env — refused, not re-executed, so no second process holds
+      the helper; missing home / no identity.json → unprovisioned;
+      symlink / non-directory → unsafe-home; DEV-ONLY marker → dev-home; a
+      live pidfile holder or an answering socket → daemon-running (and the
+      O_EXCL lock as backstop); any IdentityError → identity-<reason> (fail
+      closed); a registry row this root does not verify → registry-damaged;
+      a device key without its matching human row → device-unregistered.
+      Never prints a key or a token. Known gap: the kernel key is still
+      ephemeral per start with no root-signed row, so OTHER socket clients
+      report serverVerified:false (the keystore item). Seams (UpDeps: start,
+      verifier, startHelper, userHome) are programmatic only; gnomon.ts
+      passes none (falsifier). END TO END (test/up-launch-session.test.ts,
+      darwin): identity init with the FakeHelper → gnomon up → launch URL →
+      the GUI WebSocket authenticates with the launch token → session.open on
+      the fake claude raises a plan card → GUI approve → one helper prompt →
+      approval.decide{presence:fresh, via:gui} whose decisionSig verifies
+      under the approvals key.
+    path: src/cli/
+    type: cli
+    tags: [gnomon, identity, launcher, paradigm-8]
+    tests:
+      - test/up-cli.test.ts
+      - test/up-launch-session.test.ts
+
   manifest-loader:
     description: >-
       #manifest-loader + policy (spec §3.6, §4.3, §12.5, §15.4, §15.5, §15.7,

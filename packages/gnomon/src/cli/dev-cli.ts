@@ -5,23 +5,17 @@
  * DEV-ONLY dogfood path until #identity M1.3. See dev-home.ts for the home and
  * its guards. Every command prints a DEV ONLY banner. Writes plain text to the
  * streams it is given (zero deps, G-SEC-01; readout.ts voice). Never prints a
- * key; a launch token is printed only to an interactive terminal.
+ * key; a launch token is printed only to an interactive terminal (the
+ * launcher and terminal loop are shared with `gnomon up`: launch-tty.ts).
  */
 import * as path from 'node:path';
-import * as readline from 'node:readline';
 import { GNOMON_VERSION } from '../version.js';
 import { readout, refused } from './readout.js';
 import { DevHomeRefusal, defaultDevHome, loadDevHome, provisionDevHome, type DevHomeOptions, type LoadedDevHome } from './dev-home.js';
-import { isLifecycleRefusal, selectSocketPath, startDaemon, type DaemonHandle, type DaemonOptions } from '../kernel/lifecycle/index.js';
-import type { LaunchGrant } from '../kernel/web/endpoint.js';
-import { GnomonClient } from '../clients/ts/index.js';
+import { isLifecycleRefusal, startDaemon, type DaemonHandle, type DaemonOptions } from '../kernel/lifecycle/index.js';
+import { attachInProcess, serveInProcess, unsafeRuntime, type InProcessKernel, type LaunchTtyIo, type RuntimeFacts } from './launch-tty.js';
 
-type Out = { write(s: string): unknown; isTTY?: boolean };
-export interface DevCliIo {
-  stdin: NodeJS.ReadableStream & { isTTY?: boolean; setRawMode?: unknown };
-  stdout: Out;
-  stderr: Out;
-}
+export type DevCliIo = LaunchTtyIo;
 
 export const DEV_EXIT_OK = 0;
 export const DEV_EXIT_REFUSED = 1;
@@ -85,19 +79,16 @@ export async function runDevInit(argv: readonly string[], io: DevCliIo, opts: De
 }
 
 /** A kernel running in THIS process on a dev home, with the CLI's own device connection held open. */
-export interface DevKernel {
+export interface DevKernel extends InProcessKernel {
   readonly dev: LoadedDevHome;
-  readonly handle: DaemonHandle;
-  readonly client: GnomonClient;
-  /** The §11.2 `gnomon open` path, in-process: start the web endpoint if needed and mint a single-use, 60 s launch token for this device connection. */
-  launch(): Promise<LaunchGrant>;
-  stop(): Promise<void>;
 }
 
 export interface DevUpDeps {
   /** How the kernel is started (default startDaemon; the smoke test passes the internal test entry's daemon). */
   start?: (opts: DaemonOptions) => Promise<DaemonHandle>;
   idleMs?: number;
+  /** The env / execArgv the unsafe-env guard reads (default this process's). */
+  runtime?: RuntimeFacts;
 }
 
 /**
@@ -110,35 +101,8 @@ export async function startDevKernel(home: string, opts: DevHomeOptions & DevUpD
   const dev = loadDevHome(home, opts);
   const start = opts.start ?? startDaemon;
   const handle = await start({ home: dev.home, kernelSigner: dev.kernel, rootAuthority: dev.root, ...(opts.idleMs !== undefined ? { idleMs: opts.idleMs } : {}) });
-  try {
-    const sock = selectSocketPath({ home: dev.home });
-    if (!sock.ok) throw new Error(`no safe endpoint path: ${sock.reason}`);
-    const client = await GnomonClient.connect({ socketPath: sock.path, client: { name: 'gnomon-dev-up', version: GNOMON_VERSION, surface: 'cli' }, kernelKey: dev.kernelKey, credential: dev.device });
-    return {
-      dev,
-      handle,
-      client,
-      launch: () => handle.requestWebLaunch(client.connId!),
-      stop: async () => {
-        await client.close().catch(() => undefined);
-        await handle.shutdown('signal');
-      },
-    };
-  } catch (e) {
-    await handle.shutdown('error').catch(() => undefined);
-    throw e;
-  }
-}
-
-/** Print a launch URL — only to an interactive terminal: the token never lands in a pipe, a file or a log. */
-export async function printLaunch(k: Pick<DevKernel, 'launch'>, io: DevCliIo): Promise<boolean> {
-  const g = await k.launch();
-  if (io.stdout.isTTY !== true) {
-    io.stdout.write(`  gui     listening on 127.0.0.1:${g.port}; the launch URL is printed only to an interactive terminal (it carries a single-use token)\n`);
-    return false;
-  }
-  io.stdout.write(`\n  open this in your browser within 60 s (single use):\n\n  ${g.url}\n\n  Enter = a fresh URL (a reload cannot Reconnect until M1.3)   q or Ctrl-C = stop\n`);
-  return true;
+  const k = await attachInProcess(handle, { home: dev.home, clientName: 'gnomon-dev-up', kernelKey: dev.kernelKey, credential: dev.device });
+  return { ...k, dev };
 }
 
 export async function runDevUp(argv: readonly string[], io: DevCliIo, opts: DevCliOptions & DevUpDeps = {}): Promise<number> {
@@ -148,6 +112,12 @@ export async function runDevUp(argv: readonly string[], io: DevCliIo, opts: DevC
     return DEV_EXIT_USAGE;
   }
   io.stdout.write(DEV_BANNER);
+  // Aegis C1 (the same rule as gnomon up): the kernel runs in THIS process, so the process must be clean
+  const unsafe = unsafeRuntime(opts.runtime);
+  if (unsafe) {
+    refused(io.stderr, 'dev', 'unsafe-env', unsafe, ['unset NODE_OPTIONS, and run plain `node <clone>/packages/gnomon/dist/cli/gnomon.js dev up` with no node flags']);
+    return DEV_EXIT_REFUSED;
+  }
   let k: DevKernel;
   try {
     k = await startDevKernel(parsed.home, opts);
@@ -159,50 +129,19 @@ export async function runDevUp(argv: readonly string[], io: DevCliIo, opts: DevC
     }
     throw e;
   }
-  // the stop path is armed FIRST, before anything else can throw or wait
-  let stopping = false;
-  let stopFailed = false;
-  let stopped: Promise<void> = Promise.resolve();
-  const stop = (): void => {
-    if (stopping) return;
-    stopping = true;
-    io.stdout.write('STOPPING  dev kernel\n');
-    stopped = k.stop().catch((e: unknown) => {
-      stopFailed = true;
-      refused(io.stderr, 'dev', 'stop-failed', e instanceof Error ? e.message : String(e), ['the kernel may still hold its pidfile; check `gnomon daemon status --home <home>`']);
-    });
-  };
-  const onSignal = (): void => stop();
-  process.once('SIGINT', onSignal);
-  process.once('SIGTERM', onSignal);
-  io.stdout.write('UP  dev kernel (in this process)\n');
-  readout(io.stdout, [
-    ['home', k.dev.home],
-    ['socket', k.handle.pidfile.socketPath],
-    ['root', `dev-test ${k.dev.root.rootKeyId}`],
-    ['device', `${k.dev.device.deviceId} as ${k.client.principal ?? k.dev.device.principalId}`],
-    ['approve', 'refused UNSUPPORTED until M1.3 (no presence, no approvals key)'],
-  ]);
-  try {
-    await printLaunch(k, io);
-  } catch (e) {
-    refused(io.stderr, 'dev', 'web-launch', e instanceof Error ? e.message : String(e), ['the kernel stays up for socket clients; Ctrl-C to stop']);
-  }
-  let rl: readline.Interface | null = null;
-  if (io.stdin.isTTY === true) {
-    rl = readline.createInterface({ input: io.stdin, terminal: false });
-    rl.on('line', (l) => {
-      if (l.trim() === 'q') stop();
-      else void printLaunch(k, io).catch((e: unknown) => refused(io.stderr, 'dev', 'web-launch', e instanceof Error ? e.message : String(e)));
-    });
-  }
-  const reason = await k.handle.exited;
-  await stopped; // a stop that rejects after the kernel exited is still reported
-  rl?.close();
-  process.off('SIGINT', onSignal);
-  process.off('SIGTERM', onSignal);
-  io.stdout.write(`DOWN  dev kernel (${reason})\n`);
-  return stopFailed ? DEV_EXIT_REFUSED : DEV_EXIT_OK;
+  const code = await serveInProcess(k, io, {
+    code: 'dev',
+    noun: 'dev kernel',
+    rows: [
+      ['home', k.dev.home],
+      ['socket', k.handle.pidfile.socketPath],
+      ['root', `dev-test ${k.dev.root.rootKeyId}`],
+      ['device', `${k.dev.device.deviceId} as ${k.client.principal ?? k.dev.device.principalId}`],
+      ['approve', 'refused UNSUPPORTED until M1.3 (no presence, no approvals key)'],
+    ],
+    keysHint: 'Enter = a fresh URL (a reload cannot Reconnect until M1.3)   q or Ctrl-C = stop',
+  });
+  return code === 0 ? DEV_EXIT_OK : DEV_EXIT_REFUSED;
 }
 
 export async function runDevCommand(argv: readonly string[], io: DevCliIo, opts: DevCliOptions & DevUpDeps = {}): Promise<number> {
