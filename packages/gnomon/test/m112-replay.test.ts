@@ -1,3 +1,4 @@
+// @gnomon-platform: darwin, linux
 /**
  * M1.12 slice 3 — `gnomon replay` (spec §2.1 G-KRN-01, §19.1 M1.12 falsifier
  * "replay diverges"): verifyLog + a deterministic fold → projection hash.

@@ -72,6 +72,8 @@ export const PLATFORM_REGISTRY: PlatformRow[] = [
   { test: 'test/idle-exit.test.ts', platforms: ['darwin', 'linux'], na: 'Windows parity phase (P8-D78): unix-socket endpoint only; the named pipe via the signed helper waits for probe P03' },
   // M1.11 slice 2: #mod-host in the real daemon (unix socket + POSIX device-key modes).
   { test: 'test/mod-daemon.test.ts', platforms: ['darwin', 'linux'], sibling: 'test/mod-append-budget.test.ts', na: 'Windows parity phase (P8-D78): the daemon endpoint is a unix socket and device keys use POSIX modes; the pure clamp and budget half runs everywhere in the sibling' },
+  // M1.12 slice 3 replay: the rig writes kernel keys into an owner-only keys/ dir (POSIX modes in #identity).
+  { test: 'test/m112-replay.test.ts', platforms: ['darwin', 'linux'], na: 'Windows parity phase (P8-D78): owner-only keys/ is an ACL via the helper there, not a POSIX mode; replay itself is platform-independent code' },
   { test: 'test/socket-auth.test.ts', platforms: ['darwin', 'linux'], na: 'Windows parity phase (P8-D78): unix-socket endpoint and POSIX device-key modes only; the pipe (P03) and owner-only ACLs come there' },
   { test: 'test/socket-abi.test.ts', platforms: ['darwin', 'linux'], na: 'Windows parity phase (P8-D78): read tokens and the G-ABI/G-SOCK suites over the unix-socket endpoint with POSIX device-key and token-file modes; the pipe (P03) comes there' },
   { test: 'test/m112-conformance.test.ts', platforms: ['darwin', 'linux'], na: 'Windows parity phase (P8-D78): the published TS client and the conformance runner against a live kernel over the unix-socket endpoint with POSIX device-key modes; the pipe (P03) comes there (the display vectors run everywhere in gnomon-contracts)' },
