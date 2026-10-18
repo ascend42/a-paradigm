@@ -12,6 +12,7 @@
  *
  * Lifted (copied, never imported) from packages/warpline/src/daemon/lifecycle.ts.
  */
+import * as net from 'node:net';
 import { createHash } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as os from 'node:os';
@@ -19,6 +20,18 @@ import * as path from 'node:path';
 import { currentUid } from './home.js';
 
 export const SOCKET_NAME = 'gnomon.sock';
+
+/** Does something answer on `socketPath`? (client activation, `gnomon log quarantine`'s liveness probe). */
+export function canConnectSocket(socketPath: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const c = net.connect(socketPath);
+    c.once('connect', () => {
+      c.destroy();
+      resolve(true);
+    });
+    c.once('error', () => resolve(false));
+  });
+}
 
 /** sun_path is 104 bytes on macOS and 108 on Linux, NUL included; keep a margin. */
 export const SUN_PATH_SAFE = 100;

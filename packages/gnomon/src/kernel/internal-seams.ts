@@ -25,7 +25,7 @@
 import type { AnchorStore } from './log/anchor.js';
 import type { AppendResult, KernelLog, KernelLogOptions } from './log/kernel-log.js';
 import type { PresenceMethod, PresencePurpose, PresenceToken } from './identity/presence.js';
-import type { QuarantineOptions, QuarantineReport, QuarantineStep } from './log/quarantine.js';
+import type { QuarantineFsOps, QuarantineOptions, QuarantineReport, QuarantineStep } from './log/quarantine.js';
 
 /** The #kernel-log options that are test seams only (never on KernelLogOptions). */
 export interface KernelLogSeamOptions {
@@ -50,7 +50,7 @@ export interface PresenceSeams {
 
 export interface QuarantineSeams {
   /** `quarantineLog` with a hook after each crash point (tests inject a crash by throwing). */
-  quarantineWithSteps(opts: QuarantineOptions, onStep: (step: QuarantineStep, at: { staging?: string; evidence?: string }) => void): Promise<QuarantineReport>;
+  quarantineWithSteps(opts: QuarantineOptions, onStep: (step: QuarantineStep, at: { staging?: string; evidence?: string }) => void, fsOps?: QuarantineFsOps): Promise<QuarantineReport>;
 }
 
 interface Slots {

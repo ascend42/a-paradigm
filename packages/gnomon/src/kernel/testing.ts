@@ -25,7 +25,7 @@
 import type { AppendResult, KernelLog, KernelLogOptions } from './log/kernel-log.js';
 import './log/kernel-log.js'; // registers the 'log' seams (class static block)
 import './log/quarantine.js'; // registers the 'quarantine' seam
-import type { QuarantineOptions, QuarantineReport, QuarantineStep } from './log/quarantine.js';
+import type { QuarantineFsOps, QuarantineOptions, QuarantineReport, QuarantineStep } from './log/quarantine.js';
 import { PresenceToken, type PresenceMethod, type PresencePurpose } from './identity/presence.js';
 import { seamsOf, type KernelLogSeamOptions } from './internal-seams.js';
 
@@ -66,8 +66,12 @@ export function mintTestPresence(purpose: PresencePurpose = 'log.gap.acknowledge
 }
 
 /** `quarantineLog` with a hook after each crash point; throw from `onStep` to inject a crash there. */
-export function quarantineWithSteps(opts: QuarantineOptions, onStep: (step: QuarantineStep, at: { staging?: string; evidence?: string }) => void): Promise<QuarantineReport> {
-  return seamsOf('quarantine').quarantineWithSteps(opts, onStep);
+export function quarantineWithSteps(
+  opts: QuarantineOptions,
+  onStep: (step: QuarantineStep, at: { staging?: string; evidence?: string }) => void,
+  fsOps?: QuarantineFsOps,
+): Promise<QuarantineReport> {
+  return seamsOf('quarantine').quarantineWithSteps(opts, onStep, fsOps);
 }
 
 export { PresenceToken };

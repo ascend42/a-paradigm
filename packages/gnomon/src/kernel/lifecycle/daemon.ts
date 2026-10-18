@@ -122,6 +122,11 @@ export interface DaemonHandle {
   shutdown(reason: DaemonExitReason): Promise<void>;
 }
 
+/** The kernel principal `p:<root ns>/kernel` (p:00000000/kernel while no root exists) — one source for the daemon and `gnomon log quarantine`. */
+export function kernelPrincipalOf(authority: Pick<RootAuthority, 'ns'> = new UnprovisionedRootAuthority()): string {
+  return `p:${authority.ns ?? UNPROVISIONED_NS}/kernel`;
+}
+
 export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
   const emit = (e: DaemonEvent): void => opts.onEvent?.(e);
   const idleMs = opts.idleMs ?? DEFAULT_IDLE_EXIT_MS;
@@ -152,7 +157,7 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
   const kernelSigner = opts.kernelSigner ?? SoftwareEd25519Signer.generate('kernel');
   const kernelKeySource = opts.kernelSigner ? 'supplied-software' : 'ephemeral-software';
   const authority = opts.rootAuthority ?? new UnprovisionedRootAuthority();
-  const kernelPrincipal = `p:${authority.ns ?? UNPROVISIONED_NS}/kernel`;
+  const kernelPrincipal = kernelPrincipalOf(authority);
   let log: KernelLog;
   try {
     const pem = (kernelSigner as Partial<SoftwareEd25519Signer>).publicKeyPem;

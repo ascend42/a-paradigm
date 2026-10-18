@@ -162,6 +162,7 @@ export type LogRefusalReason =
   | 'nothing-to-quarantine'
   | 'daemon-running'
   | 'quarantine-pending'
+  | 'home-busy'
   | 'not-interactive'
   | 'not-confirmed';
 

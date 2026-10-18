@@ -1,4 +1,6 @@
 /**
+ * @symbol #gnomon-kernel
+ *
  * Gnomon CLI output helpers — the instrument-readout voice (spec §22 OPEN 9,
  * P8-D57): aligned `label  value` readings, refusals as
  * `REFUSED  <CODE>  <reason>` with the message and indented `next:` steps.

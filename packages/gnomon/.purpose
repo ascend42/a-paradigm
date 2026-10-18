@@ -547,19 +547,36 @@ components:
       quarantinedHead{seq, hash, segment}, evidencePath, authorizedBy}
       (KernelLog.createQuarantineSuccessor is the only writer; append refuses
       it; verify flags it anywhere but seq 1 and binds it to the kernel key).
-      Identity read without writing (db `immutable=1` when no -wal; else the
-      newest sealed segment, else the file anchor). Crash-safe: build in
-      <evidence>.new, journal, rename home→evidence, rename staging→home;
-      completePendingQuarantine (run by every quarantine and by startDaemon
-      before it creates a home) finishes an interrupted install; abandoned
-      staging is reported, never deleted. Refuses daemon-running (pidfile; the
-      CLI also probes the socket), not-a-home, nothing-to-quarantine,
-      quarantine-pending, kernel-key-required. RESIDUALS: the human gate is an
-      interactive TTY + typed last 8 chars of the log id
-      (authorizedBy 'interactive-confirm') until presence lands at M1.3 — a
-      same-user process owning a terminal can pass it; at M1.3 the keystore
-      anchor item must move with the evidence; the CLI signs the genesis with
-      an ephemeral key under p:00000000/kernel (a provisioned root ns differs).
+      Identity: EVERY head source (db tip, newest sealed segment, file
+      anchor, keystore anchor when one exists) is read — dbs from a private
+      scratch COPY (kernel.db + -wal, never -shm), so the evidence is never
+      written — and the HIGHEST seq is the quarantined head (a truncated db
+      behind its anchor is not hidden); all observed heads go in the journal
+      and the CLI readout, with a disagreement WARNING before the prompt.
+      Crash-safe: daemon lock (acquireDaemonLock) held across steps 1-4 and
+      released through the evidence path; build in <evidence>.new, journal,
+      rename home→evidence, rename staging→home (ENOENT there = installed by
+      another process). completePendingQuarantine (run by every quarantine,
+      by the CLI first and by startDaemon before it creates a home) installs
+      an interrupted quarantine ONLY if the unsigned journal checks out:
+      staging = evidence + '.new', evidence a quarantine-named sibling, both
+      plain dirs owned by this uid (no symlink/junction), the evidence holds
+      the journal's quarantinedLog, and the staging log's row 1 is a verified
+      daemon.log.quarantined matching newLog / evidencePath / quarantinedLog;
+      anything else is abandoned (reported, never deleted). An interrupted
+      install is reported as outcome completed-pending (CLI: COMPLETED).
+      Refuses daemon-running, not-a-home, nothing-to-quarantine,
+      quarantine-pending, home-busy (EPERM/EBUSY/EACCES on the move),
+      kernel-key-required. The genesis principal comes from kernelPrincipalOf
+      (the daemon's root-authority source). CLI output: src/cli/readout.ts
+      (#gnomon-kernel; instrument-readout voice — readout rows, `REFUSED  CODE
+      reason`, indented `next:`); canConnectSocket shared in
+      lifecycle/endpoint.ts. RESIDUALS: authorizedBy 'interactive-confirm' is
+      NO PROOF OF PRESENCE — an interactive TTY + typed last 8 chars of the
+      log id, passable by any same-user process owning a terminal, until
+      presence lands at M1.3; at M1.3 the keystore anchor item must move with
+      the evidence; a stale pidfile of a dead daemon is replaced by the lock
+      (the only change to the old home).
       `npm run
       test:perf` = scripts/test-perf.mjs (cmd.exe-safe; --passWithNoTests on
       win32 only, a missing perf file fails loudly elsewhere).
