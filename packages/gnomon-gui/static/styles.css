@@ -193,6 +193,10 @@ html, body {
 .card .refusal { color: var(--fail); font-size: 12px; white-space: pre-wrap; }
 .blk-text, .blk-md, .blk-diff { margin: 0; white-space: pre-wrap; word-break: break-word; }
 .blk-opaque { color: var(--ink2); }
+/* C6: a block's button is data, never a decision key: dashed, no shadow, no bracket caps */
+.blk-button { font: inherit; font-size: 12px; color: var(--ink2); background: transparent; border: 1px dashed var(--key-edge); border-radius: 2px; padding: 0 6px; cursor: pointer; }
+.blk-button-inert { color: var(--sec); }
+.notice.repin { border-color: var(--warn-edge); }
 
 .card.arriving { animation: card-in var(--fly); }
 @keyframes card-in {

@@ -190,6 +190,14 @@ describe('G-WEB-06 HTTP surface: headers, CSP, no cookies, traversal, raster-onl
     const d = await rawHttp(port, 'POST', '/diag', { ...GOOD(port), 'X-Gnomon-Token': guiToken }, Buffer.from('boom: <b>x</b>'));
     expect(d.status).toBe(204);
     expect(readFileSync(path.join(home, 'logs', 'gui.log'), 'utf8')).toContain('boom: <b>x</b>');
+    // C5: tokens are redacted and terminal escapes neutralized before gui.log; 64-hex hashes survive
+    const leak = `token ${guiToken} esc \x1b]52;c;ZXZpbA==\x07 hash ${'a'.repeat(64)}`;
+    expect((await rawHttp(port, 'POST', '/diag', { ...GOOD(port), 'X-Gnomon-Token': guiToken }, Buffer.from(leak))).status).toBe(204);
+    const logged = readFileSync(path.join(home, 'logs', 'gui.log'), 'utf8');
+    expect(logged).not.toContain(String(guiToken));
+    expect(logged).toContain('⟨redacted⟩');
+    expect(logged).not.toContain('\\u001b');
+    expect(logged).toContain('a'.repeat(64));
     expect((await rawHttp(port, 'POST', '/diag', { ...GOOD(port), 'X-Gnomon-Token': guiToken }, Buffer.alloc(64 * 1024 + 1))).status).toBe(413);
     expect((await rawHttp(port, 'GET', '/diag', { ...GOOD(port), 'X-Gnomon-Token': guiToken })).status).toBe(405);
     expect((await rawHttp(port, 'GET', `/blob/${sha(png)}`, { ...GOOD(port), 'X-Gnomon-Token': guiToken })).status).toBe(405); // POST only

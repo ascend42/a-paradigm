@@ -95,7 +95,10 @@ export type ConnectOutcome =
   | { ok: true; session: Session }
   | { ok: false; stage: 'hello' | 'server-sig' | 'auth' | 'transport'; refusal?: ShownRefusal; sig?: SigVerdict; message: string };
 
-type Pending = { resolve: (v: unknown) => void; reject: (e: unknown) => void };
+type Pending = { resolve: (v: unknown) => void; reject: (e: unknown) => void; timer: ReturnType<typeof setTimeout> | null };
+
+/** Default per-call timeout (a call the kernel never answers fails visibly instead of hanging the page). */
+export const CALL_TIMEOUT_MS = 30_000;
 
 export class GnomonClient {
   readonly #t: Transport;
@@ -104,13 +107,19 @@ export class GnomonClient {
   #closed = false;
   readonly #listeners = new Set<(method: string, params: unknown) => void>();
   readonly #closeListeners = new Set<(code: number) => void>();
+  readonly #protocolListeners = new Set<(r: ShownRefusal) => void>();
+  readonly #timeoutMs: number;
 
-  constructor(transport: Transport) {
+  constructor(transport: Transport, opts: { callTimeoutMs?: number } = {}) {
+    this.#timeoutMs = opts.callTimeoutMs ?? CALL_TIMEOUT_MS;
     this.#t = transport;
     transport.onMessage = (text) => this.#onMessage(text);
     transport.onClose = (code) => {
       this.#closed = true;
-      for (const p of this.#pending.values()) p.reject(new RpcError({ code: 'CLOSED', reason: 'socket-closed', message: `the connection closed (${code})`, next: [], data: null }));
+      for (const p of this.#pending.values()) {
+        if (p.timer) clearTimeout(p.timer);
+        p.reject(new RpcError({ code: 'CLOSED', reason: 'socket-closed', message: `the connection closed (${code})`, next: [], data: null }));
+      }
       this.#pending.clear();
       for (const fn of this.#closeListeners) fn(code);
     };
@@ -123,6 +132,12 @@ export class GnomonClient {
   onNotification(fn: (method: string, params: unknown) => void): () => void {
     this.#listeners.add(fn);
     return () => void this.#listeners.delete(fn);
+  }
+
+  /** An error frame the kernel could not tie to a request (`id: null`: an unparseable frame, BAD_REQUEST) — never dropped silently. */
+  onProtocolError(fn: (r: ShownRefusal) => void): () => void {
+    this.#protocolListeners.add(fn);
+    return () => void this.#protocolListeners.delete(fn);
   }
 
   onClose(fn: (code: number) => void): () => void {
@@ -142,9 +157,14 @@ export class GnomonClient {
       return;
     }
     const id = typeof f.id === 'number' ? f.id : null;
-    const p = id === null ? undefined : this.#pending.get(id);
+    if (id === null) {
+      if ('error' in f) for (const fn of this.#protocolListeners) fn(refusalFromError(f.error));
+      return;
+    }
+    const p = this.#pending.get(id);
     if (!p) return;
-    this.#pending.delete(id!);
+    this.#pending.delete(id);
+    if (p.timer) clearTimeout(p.timer);
     if ('error' in f) p.reject(new RpcError(refusalFromError(f.error)));
     else p.resolve(f.result);
   }
@@ -154,7 +174,14 @@ export class GnomonClient {
     if (this.#closed) return Promise.reject(new RpcError({ code: 'CLOSED', reason: 'socket-closed', message: 'the connection is closed', next: [], data: null }));
     const id = this.#nextId++;
     return new Promise<T>((resolve, reject) => {
-      this.#pending.set(id, { resolve: resolve as (v: unknown) => void, reject });
+      const timer =
+        this.#timeoutMs > 0
+          ? setTimeout(() => {
+              if (!this.#pending.delete(id)) return;
+              reject(new RpcError({ code: 'TIMEOUT', reason: 'call-timeout', message: `${method}: no answer within ${this.#timeoutMs} ms`, next: [], data: null }));
+            }, this.#timeoutMs)
+          : null;
+      this.#pending.set(id, { resolve: resolve as (v: unknown) => void, reject, timer });
       this.#t.send(JSON.stringify({ jsonrpc: '2.0', rpc: RPC, id, method, ...(params !== undefined ? { params } : {}) }));
     });
   }

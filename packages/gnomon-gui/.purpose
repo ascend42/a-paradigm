@@ -24,11 +24,18 @@ components:
       is a MINIMAL in-bundle gnomon-rpc:v1 client on gnomon-contracts (hello,
       sig check, auth {launchToken}|{reconnect}, calls, notifications,
       gnomonPost for POST /diag and /blob with X-Gnomon-Token and
-      referrerPolicy same-origin) - swapped for the published #client-ts
-      (M1.12) in slice 2. core/sanitize.ts is the §4.5 sanitizer (C0/C1,
-      CSI/OSC/DCS/APC/PM stripped; bidi as visible glyphs, flag bidi; tag and
-      zero-width stripped, flag hidden-chars); core/render.ts renders the
-      closed kit and kernel cards as DOM TEXT NODES only (no innerHTML).
+      referrerPolicy same-origin; per-call timeout; id:null error frames
+      surface as a notice + /diag) - swapped for the published #client-ts
+      (M1.12) in slice 2. The GUI defines NO sanitizer (Aegis C1): every
+      string goes through gnomon-contracts sanitizeDisplayText (display.ts,
+      tested with conformance/display.v1.json through the render path, plus
+      a fence test); core/render.ts renders the closed kit and kernel cards
+      as DOM TEXT NODES only (no innerHTML); a block kit.Button is not a
+      decision key and is live only for BLOCK_SAFE_COMMANDS (never diag.send
+      or gui.reconnect). Card decision keys only for kernel-signed actions
+      whose keyId is the hello's serverKeyId, cached per (cardId,
+      contentHash) and cleared when the verify key changes. A re-pin is a
+      sticky kernel-owned notice with old/new keyIds and a /diag line.
       core/store.ts reduces log.read rows into sessions by project, per-hsid
       transcripts and the decision stack (order independent, per-project
       filter); core/virtual.ts is the Fenwick-tree virtualized transcript

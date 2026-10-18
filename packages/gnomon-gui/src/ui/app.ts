@@ -10,13 +10,12 @@
  * themes + auto + reduced motion, the Shuttle view and /diag. Every string
  * reaches the DOM through core/render.ts as a text node.
  */
-import { isCardDecidable } from '@a-company/gnomon-contracts';
+import { isCardDecidable, sanitizeDisplayText } from '@a-company/gnomon-contracts';
 import { GnomonClient, gnomonPost, RpcError, webSocketTransport, type Session, type ShownRefusal } from '../core/client.js';
-import { applyPreset, filterCommands, paletteEntries, resolveMotion, resolveTheme, togglePane, type Command, type Layout, type ThemeChoice } from '../core/commands.js';
+import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, paletteEntries, resolveMotion, resolveTheme, togglePane, type Command, type Layout, type ThemeChoice } from '../core/commands.js';
 import { decidePin, parseLaunchFragment, PIN_KEY } from '../core/launch.js';
 import { cardFlags, h, renderCard, type MiniDoc } from '../core/render.js';
-import { clean } from '../core/sanitize.js';
-import { verifiedDecisions } from '../core/server-sig.js';
+import { base64UrlToBytes, keyIdOfSpki, verifiedDecisions } from '../core/server-sig.js';
 import { GuiStore, rowSummary, UNSCOPED, type Row } from '../core/store.js';
 import { HeightIndex, visibleRange, WidthCache } from '../core/virtual.js';
 
@@ -26,7 +25,7 @@ const clear = (el: HTMLElement): void => {
   while (el.firstChild) el.removeChild(el.firstChild);
 };
 const put = (el: HTMLElement, s: string): void => {
-  el.textContent = clean(s);
+  el.textContent = sanitizeDisplayText(s).text;
 };
 
 const store = new GuiStore();
@@ -41,7 +40,17 @@ let motion: 'reduce' | 'system' = 'system';
 let layout: Layout = applyPreset('desk');
 const local: Row[] = []; // this page's own composer lines (memory only)
 const refusals = new Map<string, ShownRefusal>();
+/** Verified decision keys per (cardId, contentHash) under the current verifyKey (C4, I4). */
 const verified = new Map<string, string[]>();
+const verifiedKey = (cardId: string, contentHash: string): string => `${cardId}\n${contentHash}`;
+const shortKeyId = (spki: string): string => {
+  try {
+    const id = keyIdOfSpki(base64UrlToBytes(spki));
+    return `${id.slice(0, 16)}…${id.slice(-6)}`;
+  } catch {
+    return '(unreadable key)';
+  }
+};
 
 function notice(msg: string | null, fail = false): void {
   const n = $('notice');
@@ -89,7 +98,7 @@ function resetTranscript(): void {
   for (const el of mounted.values()) el.remove();
   mounted.clear();
   rows = currentRows();
-  heights = widths.restore(width, rows.length);
+  heights = widths.restore(focused ?? 'feed', width, rows.length);
   put($('transcript-title'), focused ?? 'kernel feed');
   paintTranscript(true);
 }
@@ -152,9 +161,10 @@ async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
   put($('stack-scope'), stackScoped && focused ? 'this project' : 'all projects');
   put($('inbox'), `${store.cards.size} pending`);
   for (const c of cards) {
-    if (!verified.has(c.cardId) && verifyKey) {
-      verified.set(c.cardId, []);
-      verified.set(c.cardId, await verifiedDecisions(crypto.subtle, verifyKey, { cardId: c.cardId, contentHash: String(c.card.contentHash ?? ''), actions: Array.isArray(c.card.actions) ? c.card.actions : [] }));
+    const k = verifiedKey(c.cardId, String(c.card.contentHash ?? ''));
+    if (!verified.has(k) && verifyKey && session) {
+      verified.set(k, []);
+      verified.set(k, await verifiedDecisions(crypto.subtle, verifyKey, session.hello.serverKeyId, { cardId: c.cardId, contentHash: String(c.card.contentHash ?? ''), actions: Array.isArray(c.card.actions) ? c.card.actions : [] }));
     }
   }
   const mk = (c: (typeof cards)[number]): HTMLElement => {
@@ -169,7 +179,7 @@ async function paintStack(arrived: Set<string> = new Set()): Promise<void> {
         state: String(c.card.state ?? '?'),
         contentHash: String(c.card.contentHash ?? ''),
         flags: cardFlags(c.card, c.flags),
-        decisions: verified.get(c.cardId) ?? [],
+        decisions: verified.get(verifiedKey(c.cardId, String(c.card.contentHash ?? ''))) ?? [],
         decidable: isCardDecidable(c.card as never),
       },
       c.card.block,
@@ -267,11 +277,24 @@ async function attach(auth: { launchToken: string } | { reconnect: true }, fragm
     }
     return showReconnect(out.refusal ? refusalText(out.refusal) : out.message);
   }
+  const previousPin = localStorage.getItem(PIN_KEY);
   if (pin.store) localStorage.setItem(PIN_KEY, pin.store);
-  notice(pin.notice);
   client = c;
   session = out.session;
+  if (verifyKey !== pin.verifyWith) verified.clear(); // I4: decisions verified under another key are not reused
   verifyKey = pin.verifyWith;
+  if (pin.notice && previousPin) {
+    // C2: a re-pin is sticky, kernel-owned, names both keyIds, and is recorded in gui.log
+    const from = shortKeyId(previousPin);
+    const to = shortKeyId(pin.verifyWith);
+    put($('repin-text'), `kernel key re-pinned from ${from} to ${to} (the new key came through \`gnomon open\`)`);
+    $('repin').hidden = false;
+    void gnomonPost(fetch, '/diag', out.session.guiToken, `kernel key re-pinned from ${from} to ${to}`).catch(() => undefined);
+  }
+  c.onProtocolError((r) => {
+    notice(`kernel could not read a frame from this page: ${refusalText(r)}`, true);
+    void gnomonPost(fetch, '/diag', out.session.guiToken, `protocol error ${r.code} ${r.reason ?? ''} ${r.message}`).catch(() => undefined);
+  });
   $('reconnect').hidden = true;
   $('risk').hidden = false; // surface browser (wrapper detection lands with the wrapper)
   put($('conn'), `${out.session.principal} · ${out.session.connId.slice(-8)}`);
@@ -328,7 +351,7 @@ async function openSession(cwd: string, model: string): Promise<void> {
 }
 
 function focus(hsid: string | null): void {
-  if (width) widths.save(width, heights);
+  if (width) widths.save(focused ?? 'feed', width, heights);
   focused = hsid;
   put($('composer-mode'), hsid ? `to ${hsid.slice(-10)}` : 'no session focused');
   resetTranscript();
@@ -380,7 +403,7 @@ function wire(): void {
   new ResizeObserver(() => {
     const w = $('viewport').clientWidth;
     if (w !== width) {
-      if (width) widths.save(width, heights);
+      if (width) widths.save(focused ?? 'feed', width, heights);
       width = w;
       resetTranscript();
     } else paintTranscript();
@@ -394,7 +417,7 @@ function wire(): void {
     const b = (e.target as HTMLElement).closest('[data-decision]') as HTMLElement | null;
     if (b && e.isTrusted) void decide(b.dataset.cardId!, b.dataset.decision!);
     const k = (e.target as HTMLElement).closest('[data-command]') as HTMLElement | null;
-    if (k && e.isTrusted) run(k.dataset.command!);
+    if (k && e.isTrusted && BLOCK_SAFE_COMMANDS.has(k.dataset.command!)) run(k.dataset.command!);
   };
   $('stack').addEventListener('click', onCard);
   $('pinned').addEventListener('click', onCard);
@@ -420,6 +443,9 @@ function wire(): void {
   });
   $('reconnect-btn').addEventListener('click', () => void attach({ reconnect: true }, null));
   $('palette-btn').addEventListener('click', openPalette);
+  $('repin-ack').addEventListener('click', (e) => {
+    if (e.isTrusted) $('repin').hidden = true; // only a user click clears the re-pin notice
+  });
   $('palette-input').addEventListener('input', () => {
     palSel = 0;
     paintPalette();

@@ -7,7 +7,9 @@
  * Reconnect is refused honestly until #identity M1.3; the endpoint serves the
  * pinned GUI bundle. Needs dist/transport/gnomon-web.js (`npm run test:gnomon` builds first).
  */
-import { webcrypto } from 'node:crypto';
+import { createPublicKey, webcrypto } from 'node:crypto';
+import { verifiedDecisions } from '../../gnomon-gui/src/core/server-sig.js';
+import { actionMessage, signActions } from '../src/kernel/broker/card.js';
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -122,6 +124,45 @@ describe('#gui client ⇄ #web-endpoint (M1.10 slice 1)', () => {
     const out = await new GnomonClient(t).connect({ surface: 'browser', endpointPath: ep.endpointPath, verifyKey: k, auth: { launchToken: grant.launchToken }, subtle });
     expect(out).toMatchObject({ ok: false, stage: 'server-sig' });
     expect(sent.map((s) => JSON.parse(s).method)).toEqual(['hello']);
+  });
+
+  it('I3: right keyId but a bit-flipped serverSig ⇒ refused at server-sig, nothing sent after hello', async () => {
+    const { ep } = await rig();
+    const grant = await ep.requestLaunch(HUMAN);
+    const { t, sent } = await transport(ep.port);
+    // wrap the inbound path: flip one bit of the hello result's serverSig before the client sees it
+    const relay: Transport = { send: (s) => t.send(s), close: () => t.close(), onMessage: null, onClose: null };
+    t.onMessage = (text) => {
+      const f = JSON.parse(text) as { id?: number; result?: { serverSig?: string } };
+      if (f.id === 1 && f.result?.serverSig) {
+        const b = Buffer.from(f.result.serverSig, 'base64');
+        b[7] = b[7]! ^ 0x01;
+        f.result.serverSig = b.toString('base64');
+      }
+      relay.onMessage?.(JSON.stringify(f));
+    };
+    t.onClose = (c) => relay.onClose?.(c);
+    const out = await new GnomonClient(relay).connect({ surface: 'browser', endpointPath: ep.endpointPath, verifyKey: grant.kernelPublicKey, auth: { launchToken: grant.launchToken }, subtle });
+    expect(out).toMatchObject({ ok: false, stage: 'server-sig', sig: { reason: 'bad-server-sig' } });
+    expect(sent.map((s) => JSON.parse(s).method)).toEqual(['hello']);
+  });
+
+  it('I2: card decision keys come only from actions the KERNEL signed (broker signActions) with the hello key', async () => {
+    const kernel = SoftwareEd25519Signer.generate('kernel');
+    const other = SoftwareEd25519Signer.generate('kernel');
+    const spki = createPublicKey(kernel.publicKeyPem).export({ type: 'spki', format: 'der' }).toString('base64url');
+    const cardId = 'card:01JTESTCARD000000000000000';
+    const contentHash = `sha256:${'b'.repeat(64)}`;
+    const actions = signActions(kernel, cardId, 'permission', contentHash);
+    expect(actions.length).toBeGreaterThan(1);
+    const all = await verifiedDecisions(subtle, spki, kernel.keyId, { cardId, contentHash, actions });
+    expect(all).toEqual(actions.map((a) => a.decision));
+    // another contentHash, another key, a keyId that is not the hello's: nothing offered
+    expect(await verifiedDecisions(subtle, spki, kernel.keyId, { cardId, contentHash: `sha256:${'c'.repeat(64)}`, actions })).toEqual([]);
+    expect(await verifiedDecisions(subtle, spki, kernel.keyId, { cardId, contentHash, actions: signActions(other, cardId, 'permission', contentHash) })).toEqual([]);
+    expect(await verifiedDecisions(subtle, spki, other.keyId, { cardId, contentHash, actions })).toEqual([]);
+    // the GUI's preimage is the kernel's actionMessage under the card-action domain
+    expect(actionMessage(cardId, 'allow', contentHash)).toBe(`${cardId}\nallow\n${contentHash}`);
   });
 
   it('Reconnect is refused UNSUPPORTED until #identity M1.3 presence, and the GUI gets the refusal verbatim', async () => {

@@ -29,7 +29,7 @@ export async function buildFiles() {
   });
   const files = new Map();
   files.set('app.js', Buffer.from(`'use strict';\n${r.outputFiles[0].text}`, 'utf8'));
-  for (const f of ['index.html', 'boot.js', 'styles.css']) files.set(f, readFileSync(path.join(ROOT, 'static', f)));
+  for (const f of ['index.html', 'boot.js', 'styles.css']) files.set(f, Buffer.from(readFileSync(path.join(ROOT, 'static', f), 'utf8').replace(/\r\n/g, '\n'), 'utf8')); // LF on every OS (B3)
   return files;
 }
 
@@ -73,7 +73,7 @@ if (mode === '--embed') {
 } else if (mode === '--check') {
   let cur = '';
   try {
-    cur = readFileSync(EMBED, 'utf8');
+    cur = readFileSync(EMBED, 'utf8').replace(/\r\n/g, '\n');
   } catch {}
   if (cur !== src) {
     process.stderr.write(`✕ gui-bundle.ts is stale: run \`npm run embed --workspace=@a-company/gnomon-gui\` (fresh ${hash})\n`);

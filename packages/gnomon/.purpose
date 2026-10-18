@@ -308,7 +308,8 @@ components:
       ACAO, the rule-6 CSP/COOP/CORP/nosniff/no-referrer on every response,
       no-store on non-static; traversal refused; /blob raster-only by content
       sniffing and verified content hash, GUI token in X-Gnomon-Token; /diag
-      ≤ 64 KiB to <home>/logs/gui.log; /blob and /diag are POST (a
+      ≤ 64 KiB to <home>/logs/gui.log after redactDiagText (32-byte
+      base64url tokens ⟨redacted⟩, contracts display sanitizer, Aegis C5); /blob and /diag are POST (a
       same-origin GET carries no Origin; the page sends them with
       referrerPolicy same-origin), GET/HEAD 405; /rpc and /diag match
       exactly, only /blob/ is a prefix; no HTTP RPC. Every child record is

@@ -11,12 +11,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { authServerPreimage, hex, sha256 } from '@a-company/gnomon-contracts';
 import { describe, expect, it } from 'vitest';
-import { gnomonPost, refusalFromError } from '../src/core/client.js';
-import { applyPreset, filterCommands, GUI_COMMANDS, paletteEntries, parseLayout, PRESETS, resolveMotion, resolveTheme, serializeLayout, togglePane } from '../src/core/commands.js';
+import { GnomonClient, gnomonPost, refusalFromError } from '../src/core/client.js';
+import { applyPreset, BLOCK_SAFE_COMMANDS, filterCommands, GUI_COMMANDS, paletteEntries, parseLayout, PRESETS, resolveMotion, resolveTheme, serializeLayout, togglePane } from '../src/core/commands.js';
 import { decidePin, parseLaunchFragment } from '../src/core/launch.js';
-import { cardFlags, renderBlock, renderCard, type MiniDoc, type MiniEl } from '../src/core/render.js';
-import { sanitizeText } from '../src/core/sanitize.js';
-import { keyIdOfSpki, verifiedDecisions, verifyServerSig } from '../src/core/server-sig.js';
+import { cardFlags, flagsOf, renderBlock, renderCard, type MiniDoc, type MiniEl } from '../src/core/render.js';
+import { keyIdOfSpki, verifyServerSig } from '../src/core/server-sig.js';
 import { GuiStore, rowSummary, type Row } from '../src/core/store.js';
 import { HeightIndex, visibleRange, WidthCache } from '../src/core/virtual.js';
 
@@ -49,26 +48,34 @@ class FEl implements MiniEl {
 }
 const fdoc: MiniDoc = { createElement: (t) => new FEl(t), createTextNode: (s) => new FText(s) };
 
-describe('§4.5 sanitizer (G-GUI-07, G-GUI-11)', () => {
-  it('strips C0/C1 controls except \\n \\t, and CSI / OSC 52 / OSC 8 / DCS / APC / PM sequences whole', () => {
-    const s = 'a\x1b[31mred\x1b[0m\x1b]52;c;ZXZpbA==\x07b\x1b]8;;https://x.example\x1b\\link\x1b]8;;\x1b\\\x1bPq#0;\x1b\\c\x1b_apc\x9c\x1b^pm\x1b\\d\x00\x08\r\x7f\x85e\n\tf\x9b2Jg\x9d0;t\x07h';
-    const r = sanitizeText(s);
-    expect(r.text).toBe('aredblinkcde\n\tfgh');
-    expect(r.flags).toEqual([]);
-    expect(r.controlsRemoved).toBeGreaterThan(10);
+describe('§4.5 sanitizer: the ONE contracts sanitizer through the GUI render path (Aegis C1, G-GUI-07, G-GUI-11)', () => {
+  const vectors = JSON.parse(readFileSync(path.join(REPO, 'packages', 'gnomon-contracts', 'conformance', 'display.v1.json'), 'utf8')) as { sanitize: Array<{ input: string; text: string; flags: string[] }> };
+  it('every display.v1.json vector renders, as a kit.Text block, to exactly its text, and its flags reach the card badges', () => {
+    expect(vectors.sanitize.length).toBeGreaterThan(20);
+    for (const v of vectors.sanitize) {
+      const el = renderBlock({ doc: fdoc }, { block: 'kit.Text', data: { text: v.input } }) as FEl;
+      expect(el.text, JSON.stringify(v.input)).toBe(v.text);
+      expect(flagsOf(v.input), JSON.stringify(v.input)).toEqual(new Set(v.flags));
+      expect(cardFlags({ block: { type: 'Text', text: v.input } }, [])).toEqual([...v.flags].sort());
+      // re-rendering the rendered text is stable (the sanitizer is text-idempotent)
+      expect((renderBlock({ doc: fdoc }, { block: 'kit.Text', data: { text: el.text } }) as FEl).text).toBe(el.text);
+    }
   });
-  it('an unterminated OSC is removed to the end', () => {
-    expect(sanitizeText('ok\x1b]0;title never ends').text).toBe('ok');
-  });
-  it('bidi controls render as visible glyphs and flag bidi; tag and zero-width characters are stripped and flag hidden-chars', () => {
-    const r = sanitizeText('a‮evil‬ b⁦x⁩ c​d‍⁠﻿' + String.fromCodePoint(0xe0041, 0xe007f) + 'e');
-    expect(r.text).toBe('a⟨RLO⟩evil⟨PDF⟩ b⟨LRI⟩x⟨PDI⟩ cde');
-    expect(r.flags.sort()).toEqual(['bidi', 'hidden-chars']);
-  });
-  it('is idempotent and never throws on non-strings', () => {
-    for (const x of ['\x1b[1mz‮', 42, null, undefined, { a: 1 }]) {
-      const once = sanitizeText(x).text;
-      expect(sanitizeText(once).text).toBe(once.replace(/⟨[A-Z]+⟩/g, (m) => m));
+  it('fence: packages/gnomon-gui/src defines no sanitizer of its own (no control-char tables, no skipString, no sanitize module)', () => {
+    const files: string[] = [];
+    const walk = (d: string): void => {
+      for (const n of readdirSync(d)) {
+        const q = path.join(d, n);
+        if (statSync(q).isDirectory()) walk(q);
+        else files.push(q);
+      }
+    };
+    walk(path.join(ROOT, 'src'));
+    expect(files.some((f) => /sanitize/i.test(path.basename(f)))).toBe(false);
+    for (const f of files) {
+      const t = readFileSync(f, 'utf8');
+      expect(t, f).not.toMatch(/skipString|skipCsi|\\x1b|\\u001b|\\x9b|\\u009b|0x1b\b|0x9b\b|0x202a|0xe0000|\\u202a|\\u200b|\[\\x00-|\\p\{Cc\}/i);
+      expect(t, f).not.toMatch(/function\s+sanitize/i);
     }
   });
 });
@@ -173,12 +180,7 @@ describe('WebCrypto Ed25519 serverSig (G-GUI-03 minimum, S25-M4)', () => {
     expect(await verifyServerSig(subtle, other, hello(), path0)).toMatchObject({ ok: false, reason: 'key-id-mismatch' });
     expect(await verifyServerSig(undefined, k, hello(), path0)).toMatchObject({ ok: false, reason: 'webcrypto-ed25519-unavailable' });
   });
-  it('card decision keys only for actions whose kernel signature verifies', async () => {
-    const card = { cardId: 'card:01J', contentHash: 'sha256:00' };
-    const s = (d: string) => sign(null, Buffer.from(`gnomon:card-action:v1\n${card.cardId}\n${d}\n${card.contentHash}`), kp.privateKey).toString('base64');
-    const actions = [{ decision: 'allow', sig: s('allow') }, { decision: 'deny', sig: s('allow') }, { decision: 'always' }];
-    expect(await verifiedDecisions(subtle, spki.toString('base64url'), { ...card, actions })).toEqual(['allow']);
-  });
+  // I2: card-action verification is driven by the KERNEL's signActions in packages/gnomon/test/gui-endpoint.test.ts
 });
 
 describe('/diag and /blob are POST, X-Gnomon-Token, referrerPolicy same-origin (P8-D89b)', () => {
@@ -223,9 +225,48 @@ describe('virtualized transcript (G-GUI-01 unit proxy)', () => {
     expect(h.indexAt(109)).toBe(3);
     expect(h.indexAt(110)).toBe(4);
     const w = new WidthCache(20);
-    w.save(800, h);
-    expect(w.restore(800, 12).offsetOf(4)).toBe(110);
-    expect(w.restore(400, 12).offsetOf(4)).toBe(80);
+    w.save('hsid:A', 800, h);
+    expect(w.restore('hsid:A', 800, 12).offsetOf(4)).toBe(110);
+    expect(w.restore('hsid:A', 400, 12).offsetOf(4)).toBe(80);
+    expect(w.restore('hsid:B', 800, 12).offsetOf(4)).toBe(80); // I1: another transcript never inherits these heights
+  });
+  it('property: offsetOf / indexAt equal naive prefix sums under random batched push + set, across grows and restore() (B2)', () => {
+    let seed = 7;
+    const rnd = (n: number): number => ((seed = (seed * 1103515245 + 12345) >>> 0) % n);
+    for (let trial = 0; trial < 40; trial++) {
+      const idx = new HeightIndex(20);
+      const naive: number[] = [];
+      for (let step = 0; step < 30; step++) {
+        if (rnd(3) === 0 || naive.length === 0) {
+          const k = 1 + rnd(17);
+          idx.push(k);
+          for (let i = 0; i < k; i++) naive.push(20);
+        } else {
+          const i = rnd(naive.length);
+          const hgt = 1 + rnd(90);
+          idx.set(i, hgt);
+          naive[i] = hgt;
+        }
+        const check = (x: HeightIndex): void => {
+          let acc = 0;
+          for (let i = 0; i <= naive.length; i++) {
+            expect(x.offsetOf(i)).toBe(acc);
+            if (i < naive.length) {
+              expect(x.indexAt(acc)).toBe(i);
+              expect(x.indexAt(acc + naive[i]! - 0.5)).toBe(i);
+              acc += naive[i]!;
+            }
+          }
+          expect(x.total()).toBe(acc);
+        };
+        check(idx);
+        if (step % 10 === 9) {
+          const w = new WidthCache(20);
+          w.save('t', 640, idx);
+          check(w.restore('t', 640, naive.length));
+        }
+      }
+    }
   });
   it('200k rows: visible-range work per scroll/keystroke stays far under the 50 ms budget', () => {
     const h = new HeightIndex(22);
@@ -282,6 +323,29 @@ describe('G-GUI-10 contrast: the CSS tokens are the fixtures, and the fixtures p
   });
   it('check-contrast.mjs passes', () => {
     expect(execFileSync(process.execPath, [path.join(REPO, 'docs', 'specs', 'gnomon-fixtures', 'check-contrast.mjs')], { encoding: 'utf8' })).toContain('all pairs pass');
+  });
+});
+
+describe('block buttons and the client (C6, I5)', () => {
+  it('a block kit.Button is not a decision key and is live only for a safe command (never diag.send / gui.reconnect)', () => {
+    const ok = renderBlock({ doc: fdoc }, { block: 'kit.Button', data: { command: 'theme.night', label: 'night' } }) as FEl;
+    expect(ok.tag).toBe('button');
+    expect(ok.className.split(' ')).not.toContain('key');
+    for (const cmd of ['diag.send', 'gui.reconnect', 'verb.approve', 'nope']) {
+      const el = renderBlock({ doc: fdoc }, { block: 'kit.Button', data: { command: cmd } }) as FEl;
+      expect(el.tag, cmd).toBe('span');
+      expect(el.all().some((e) => e.attrs.has('data-command')), cmd).toBe(false);
+    }
+    expect(BLOCK_SAFE_COMMANDS.has('diag.send') || BLOCK_SAFE_COMMANDS.has('gui.reconnect')).toBe(false);
+  });
+  it('an id:null error frame reaches onProtocolError; an unanswered call times out', async () => {
+    const t = { send: () => undefined, close: () => undefined, onMessage: null as ((s: string) => void) | null, onClose: null as ((c: number) => void) | null };
+    const c = new GnomonClient(t, { callTimeoutMs: 30 });
+    const seen: string[] = [];
+    c.onProtocolError((r) => seen.push(`${r.code}:${r.reason}`));
+    t.onMessage!(JSON.stringify({ jsonrpc: '2.0', id: null, error: { code: -32600, message: 'unparseable', data: { code: 'BAD_REQUEST', data: { reason: 'malformed-json' } } } }));
+    expect(seen).toEqual(['BAD_REQUEST:malformed-json']);
+    await expect(c.call('status')).rejects.toMatchObject({ refusal: { code: 'TIMEOUT', reason: 'call-timeout' } });
   });
 });
 

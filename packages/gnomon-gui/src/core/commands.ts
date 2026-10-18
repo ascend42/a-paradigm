@@ -46,7 +46,17 @@ export const GUI_COMMANDS: readonly Command[] = Object.freeze([
   { id: 'diag.send', title: 'Send a diagnostic note to gui.log' },
 ]);
 
-export type Pane = 'sessions' | 'transcript' | 'stack' | 'shuttle';
+/**
+ * The commands a `kit.Button` inside a block (agent- or mod-authored data) may
+ * name (Aegis M1.10 C6): presentation-only. `diag.send` (writes the human's
+ * gui.log) and `gui.reconnect` (raises a presence prompt) are excluded, so a
+ * block can never make a press look like a kernel or presence action.
+ */
+export const BLOCK_SAFE_COMMANDS: ReadonlySet<string> = new Set(
+  GUI_COMMANDS.map((c) => c.id).filter((id) => id !== 'diag.send' && id !== 'gui.reconnect'),
+);
+
+export type Pane ='sessions' | 'transcript' | 'stack' | 'shuttle';
 export const PANES: readonly Pane[] = Object.freeze(['sessions', 'transcript', 'stack', 'shuttle'] as const);
 
 export interface Layout {

@@ -86,13 +86,16 @@ export async function verifyServerSig(subtle: SubtleCrypto | undefined, spkiB64U
  * signed by the kernel key (§4.5, S-M4). The domain is the kernel's
  * (`gnomon:card-action:v1` over `cardId\ndecision\ncontentHash`, broker
  * card.ts); it is not yet in clientApiId — slice 2 takes it from the
- * published client. Returns the decisions whose signature verifies.
+ * published client. Returns the decisions whose signature verifies AND whose
+ * `keyId` is the kernel key this connection's hello was verified against
+ * (`serverKeyId`): an action signed by any other key is not offered.
  */
 export const CARD_ACTION_DOMAIN = 'gnomon:card-action:v1';
 
 export async function verifiedDecisions(
   subtle: SubtleCrypto | undefined,
   spkiB64Url: string,
+  serverKeyId: string,
   card: { cardId: string; contentHash: string; actions: unknown[] },
 ): Promise<string[]> {
   if (!subtle || !Array.isArray(card.actions)) return [];
@@ -105,8 +108,8 @@ export async function verifiedDecisions(
   }
   const out: string[] = [];
   for (const a of card.actions) {
-    const x = (a && typeof a === 'object' ? a : {}) as { decision?: unknown; sig?: unknown };
-    if (typeof x.decision !== 'string' || typeof x.sig !== 'string') continue;
+    const x = (a && typeof a === 'object' ? a : {}) as { decision?: unknown; sig?: unknown; keyId?: unknown };
+    if (typeof x.decision !== 'string' || typeof x.sig !== 'string' || x.keyId !== serverKeyId) continue;
     try {
       const msg = utf8(`${CARD_ACTION_DOMAIN}\n${card.cardId}\n${x.decision}\n${card.contentHash}`);
       if (await subtle.verify({ name: 'Ed25519' }, key, ab(base64ToBytes(x.sig)), ab(msg))) out.push(x.decision);

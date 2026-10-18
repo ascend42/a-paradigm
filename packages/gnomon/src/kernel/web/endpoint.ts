@@ -50,7 +50,7 @@ import { createHash, createPublicKey } from 'node:crypto';
 import { appendFileSync, chmodSync, existsSync, mkdirSync, statSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { mintId, monotonicUlidFactory } from '@a-company/gnomon-contracts';
+import { mintId, monotonicUlidFactory, sanitizeDisplayText } from '@a-company/gnomon-contracts';
 import { registerSeams } from '../internal-seams.js';
 import { LifecycleRefusal } from '../lifecycle/refusal.js';
 import { transportLaunchPlan, type ChildLaunchPlan, type TransportLaunchInput } from '../sandbox/transport.js';
@@ -151,6 +151,20 @@ interface WsConn {
   afterReply: Array<() => void>;
   deadline: NodeJS.Timeout | null;
   release: (() => void) | null;
+}
+
+/**
+ * `/diag` body redaction before gui.log (Aegis M1.10 C5). The page is
+ * human-class, but gui.log is an operational file outside the chain, so it
+ * keeps nothing a limited §9.3 view would withhold that the page could leak
+ * by accident: every 32-byte base64url token (launch and GUI tokens are
+ * exactly 43 such characters) becomes `⟨redacted⟩`, and the text passes
+ * through the contracts display sanitizer so no terminal escape lands in a
+ * log a human will `cat`. The 64 KiB body cap applies before this.
+ */
+export function redactDiagText(s: string): string {
+  const scrubbed = s.replace(/(?<![A-Za-z0-9_-])[A-Za-z0-9_-]{43}(?![A-Za-z0-9_-])/g, '⟨redacted⟩');
+  return sanitizeDisplayText(scrubbed).text;
 }
 
 /** Resolve the child entry from this module's own package (dist/index.js, dist/cli/*.js or src/kernel/web/*.ts). */
@@ -525,7 +539,7 @@ export class WebEndpoint {
     try {
       mkdirSync(dir, { recursive: true, mode: 0o700 });
       if (existsSync(file) && statSync(file).size >= GUI_LOG_MAX_BYTES) return; // capped: dropped
-      appendFileSync(file, `${JSON.stringify({ at: new Date(this.#now()).toISOString(), connId: session.connId, surface: session.surface, text: body.toString('utf8') })}\n`, { mode: 0o600 });
+      appendFileSync(file, `${JSON.stringify({ at: new Date(this.#now()).toISOString(), connId: session.connId, surface: session.surface, text: redactDiagText(body.toString('utf8')) })}\n`, { mode: 0o600 });
       chmodSync(file, 0o600);
     } catch {
       /* diagnostics never fail the request */

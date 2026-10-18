@@ -3,7 +3,9 @@
  *
  * #gui DOM-text rendering (spec §4.5, §11.1; `G-GUI-07`, `G-GUI-11`). The
  * ONLY way kernel, card, block or model text reaches the page: every string
- * is sanitized (sanitize.ts) and appended as a TEXT NODE. This module never
+ * is sanitized by THE one sanitizer, `@a-company/gnomon-contracts`
+ * `sanitizeDisplayText` (display.ts, conformance/display.v1.json — the GUI
+ * defines none of its own, Aegis C1) and appended as a TEXT NODE. This module never
  * assigns `innerHTML` / `outerHTML`, never calls `insertAdjacentHTML` or
  * `document.write`, never sets an `on*` attribute or an `href`/`src` from data
  * (test/no-markup.test.ts scans the whole src tree for those sinks).
@@ -21,7 +23,29 @@
  * block, flags as visible badges beside the decision keys, and the
  * `contentHash` summary line — rendered by the GUI core, never by a mod.
  */
-import { flagsOf, sanitizeText, type SanitizeFlag } from './sanitize.js';
+import { BIDI_GLYPHS, sanitizeDisplayText } from '@a-company/gnomon-contracts';
+import { BLOCK_SAFE_COMMANDS } from './commands.js';
+
+/** Legend for the `bidi` card badge: the glyphs the contracts sanitizer shows in place of bidi controls. */
+export const BIDI_LEGEND = Object.values(BIDI_GLYPHS).join(' ');
+
+/** The display text of any value: strings through the contracts sanitizer; others stringified first. */
+export function displayText(v: unknown): string {
+  return sanitizeDisplayText(typeof v === 'string' ? v : v === null || v === undefined ? '' : String(v)).text;
+}
+
+/** Union of the sanitizer flags over every string (keys included) of a JSON-like value (a card body, a block tree). */
+export function flagsOf(value: unknown, acc: Set<string> = new Set(), depth = 0): Set<string> {
+  if (depth > 64) return acc;
+  if (typeof value === 'string') for (const f of sanitizeDisplayText(value).flags) acc.add(f);
+  else if (Array.isArray(value)) for (const v of value) flagsOf(v, acc, depth + 1);
+  else if (value && typeof value === 'object')
+    for (const [k, v] of Object.entries(value)) {
+      flagsOf(k, acc, depth + 1);
+      flagsOf(v, acc, depth + 1);
+    }
+  return acc;
+}
 
 /** The DOM surface this module uses (a real Document in the page; a fake in node tests). */
 export interface MiniDoc {
@@ -44,20 +68,20 @@ export function h(doc: MiniDoc, tag: string, attrs: Record<string, string> | nul
   if (attrs) {
     for (const [k, v] of Object.entries(attrs)) {
       if (k === 'class') el.className = v;
-      else if (SAFE_ATTR.test(k)) el.setAttribute(k, sanitizeText(v).text);
+      else if (SAFE_ATTR.test(k)) el.setAttribute(k, displayText(v));
       else throw new Error(`render: attribute ${k} is not allowed`);
     }
   }
   for (const c of children) {
     if (c === null || c === undefined || c === false) continue;
-    el.appendChild(typeof c === 'string' ? doc.createTextNode(sanitizeText(c).text) : c);
+    el.appendChild(typeof c === 'string' ? doc.createTextNode(displayText(c)) : c);
   }
   return el;
 }
 
 /** Text node of a sanitized string. */
 export function text(doc: MiniDoc, s: unknown): unknown {
-  return doc.createTextNode(sanitizeText(s).text);
+  return doc.createTextNode(displayText(s));
 }
 
 const KIT = ['Box', 'Text', 'List', 'Table', 'Markdown', 'Diff', 'Progress', 'Button', 'Image', 'Canvas'] as const;
@@ -117,9 +141,10 @@ export function renderBlock(ctx: RenderCtx, node: unknown): MiniEl {
       return h(doc, 'div', { class: 'blk blk-progress' }, h(doc, 'progress', { value: String(Number.isFinite(value) ? value : 0), max: String(Number.isFinite(max) && max > 0 ? max : 1) }), str(data.label));
     }
     case 'Button': {
+      // C6: a block button is styled apart from kernel decision keys (no `key` class) and is live only for a safe command
       const cmd = str(data.command);
-      const b = h(doc, 'button', { class: 'blk blk-button key', type: 'button', 'data-command': cmd }, str(data.label ?? cmd));
-      return b;
+      if (!BLOCK_SAFE_COMMANDS.has(cmd)) return h(doc, 'span', { class: 'blk blk-button-inert', title: 'this command is not available to a block' }, `[${str(data.label ?? cmd)}]`);
+      return h(doc, 'button', { class: 'blk blk-button', type: 'button', 'data-command': cmd }, str(data.label ?? cmd));
     }
     case 'Image':
       return h(doc, 'div', { class: 'blk blk-image', role: 'img', 'aria-label': str(data.alt) }, `[image] ${str(data.alt)}`);
@@ -150,7 +175,7 @@ export interface CardView {
 /** Flags the GUI shows for a card: the kernel's `flags[]` plus any the sanitizer finds in the body (union, never fewer). */
 export function cardFlags(card: Record<string, unknown>, kernelFlags: readonly string[]): string[] {
   const s = new Set<string>(kernelFlags);
-  for (const f of flagsOf(card.block) as Set<SanitizeFlag>) s.add(f);
+  for (const f of flagsOf(card.block)) s.add(f);
   return [...s].sort();
 }
 
@@ -168,7 +193,7 @@ export function renderCard(ctx: RenderCtx, v: CardView, block: unknown): MiniEl 
       doc,
       'div',
       { class: 'card-keys' },
-      ...v.flags.map((f) => h(doc, 'span', { class: `badge flag flag-${f.replace(/[^a-z0-9-]/g, '')}`, title: `card flag: ${f}` }, f)),
+      ...v.flags.map((f) => h(doc, 'span', { class: `badge flag flag-${f.replace(/[^a-z0-9-]/g, '')}`, title: f === 'bidi' ? `card flag: bidi — shown as ${BIDI_LEGEND}` : `card flag: ${f}` }, f)),
       ...keys.map((d) => h(doc, 'button', { class: 'key', type: 'button', 'data-decision': d, 'data-card-id': v.cardId }, d)),
       keys.length ? null : h(doc, 'small', { class: 'meta' }, v.decidable ? 'no verified decision keys' : `not decidable here (state ${v.state})`),
     ),

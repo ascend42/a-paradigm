@@ -39,10 +39,10 @@ export class HeightIndex {
     const h = new Float64Array(size);
     h.set(this.#h.subarray(0, this.#n));
     this.#h = h;
-    // rebuild the tree in O(n)
+    // rebuild the tree in O(size): every node up to `size` (not just n) so partial sums propagate to parents above n
     const t = new Float64Array(size + 1);
-    for (let i = 1; i <= this.#n; i++) {
-      t[i] += h[i - 1]!;
+    for (let i = 1; i <= size; i++) {
+      t[i] += h[i - 1] ?? 0;
       const j = i + (i & -i);
       if (j <= size) t[j] += t[i]!;
     }
@@ -116,19 +116,28 @@ export function visibleRange(idx: HeightIndex, scrollTop: number, viewport: numb
   return { start, end };
 }
 
-/** Per-width height caches: the index for `width`, built from its own measurements or the estimate. */
+/**
+ * Height caches keyed by (transcriptId, width): the index for one transcript
+ * at one width, built from its own measurements or the estimate. Keying by
+ * width alone would hand session A's row heights to session B.
+ */
 export class WidthCache {
-  readonly #by = new Map<number, Float64Array>();
-  constructor(readonly estimate = 22, readonly maxWidths = 4) {}
+  readonly #by = new Map<string, Float64Array>();
+  constructor(readonly estimate = 22, readonly maxEntries = 16) {}
 
-  save(width: number, idx: HeightIndex): void {
-    this.#by.delete(width);
-    this.#by.set(width, idx.snapshot());
-    while (this.#by.size > this.maxWidths) this.#by.delete(this.#by.keys().next().value!);
+  static key(transcriptId: string, width: number): string {
+    return `${width}\u0000${transcriptId}`;
   }
 
-  restore(width: number, rows: number): HeightIndex {
-    const saved = this.#by.get(width);
+  save(transcriptId: string, width: number, idx: HeightIndex): void {
+    const k = WidthCache.key(transcriptId, width);
+    this.#by.delete(k);
+    this.#by.set(k, idx.snapshot());
+    while (this.#by.size > this.maxEntries) this.#by.delete(this.#by.keys().next().value!);
+  }
+
+  restore(transcriptId: string, width: number, rows: number): HeightIndex {
+    const saved = this.#by.get(WidthCache.key(transcriptId, width));
     const idx = saved ? HeightIndex.from(saved.subarray(0, Math.min(saved.length, rows)), this.estimate) : new HeightIndex(this.estimate);
     if (idx.length < rows) idx.push(rows - idx.length);
     return idx;
