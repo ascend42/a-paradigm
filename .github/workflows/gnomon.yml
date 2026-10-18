@@ -31,7 +31,7 @@ jobs:
       fail-fast: false
       matrix:
         # GitHub's macOS runners have SIP off, so the session enforcement suite skips there (floor sip) and the
-        # refusal runs; macos-15 also runs the copied-osascript check under the generated profile (SIP-independent);
+        # refusal runs; macos-15 also records (informational, no assertion) the copied-osascript exit under the generated profile;
         # macos-14 exercises the macOS floor refusal. The full enforcement suite runs only on a SIP-on macOS 15+ host.
         os: [macos-14, macos-15, windows-latest, ubuntu-latest]
         node: [24]

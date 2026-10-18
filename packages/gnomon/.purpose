@@ -1093,7 +1093,9 @@ components:
       beside (deny appleevent-send) (APPLEEVENT_MACH_SERVICES); Claude verified
       working (p10m-claude-compat-generated pass). Its coverage of a non-Apple
       AppleEvent sender is UNPROVEN (spec OPEN 5): the existing copied-osascript
-      check (`get name` of System Events) is answered without sending an event.
+      check (`get name` of System Events) is answered without sending an event,
+      so its exit is only RECORDED (test annotation), never asserted; the 137
+      launch-constraint kill is asserted on SIP-on macOS 15+ only.
     path: src/kernel/runner/
     type: module
     tags: [gnomon, kernel, session, law-7, paradigm-8, m1.7]

@@ -26,9 +26,16 @@ import { LifecycleRefusal } from '../src/kernel/lifecycle/refusal.js';
 /** capability, not platform: below the macOS floor or with SIP off the backend refuses and the enforcement suite cannot run */
 const FLOOR = darwinFloor();
 const SANDBOX_OK = FLOOR.ok;
-/** macOS 15+ whatever SIP says: the AppleEvent denies in the profile itself must hold even where launch constraints are off */
+/** macOS 15+ whatever SIP says: the copied-osascript check is RECORDED there (informational, see below) */
 const MACOS_OK = FLOOR.ok || FLOOR.floor === 'sip';
-/** the copied-osascript check, verbatim from check.sh below */
+/**
+ * The copied-osascript check, verbatim from check.sh below. It does NOT exercise
+ * AppleEvent delivery: AppleScript answers `get name` of an application without
+ * sending an event (measured 2026-10-17: the stock osascript prints "System
+ * Events", exit 0, under a deny-all mach-lookup profile). Its exit code is
+ * therefore recorded, never asserted as a security property (spec OPEN 5); only
+ * its 137 under launch constraints (SIP on, macOS 15+) is asserted, below.
+ */
 const copiedOsascript = (root: string): string => `/bin/cp /usr/bin/osascript "${root}/osa" 2>/dev/null; "${root}/osa" -e 'tell application "System Events" to get name' >/dev/null 2>&1; echo "copied_osascript_exit=$?"`;
 import { sessionWorld, worldPolicy, type SessionWorld } from './session-helpers.js';
 
@@ -134,18 +141,19 @@ describe.runIf(!SANDBOX_OK)('below the host floor (macOS 15+ and SIP enabled)', 
   });
 });
 
-describe.runIf(MACOS_OK)('the profile ITSELF denies AppleEvents (macOS 15+, regardless of SIP; CI run 39100811385)', () => {
-  it('a COPIED osascript cannot send an AppleEvent from inside the generated profile, launch constraints or not', () => {
+describe.runIf(MACOS_OK)('copied-osascript record under the generated profile (macOS 15+, regardless of SIP; CI run 39100811385) — informational', () => {
+  it('records the copied osascript exit code (does NOT exercise AppleEvent delivery; no security assertion)', ({ annotate }) => {
     const x = sessionWorld();
     try {
       const script = path.join(x.root, 'osa.sh');
       fs.writeFileSync(script, `#!/bin/bash\n${copiedOsascript(x.root)}\n`, { mode: 0o755 });
-      // SIP seam `() => true`: generate the exact profile a SIP host gets, so the deny itself is what is measured here
+      // SIP seam `() => true`: the exact profile a SIP host gets
       const plan = sessionLaunchPlan({ policy: worldPolicy(x), binaryReal: '/bin/bash', argv: [script], extras: { uid: process.getuid!(), tmpdir: os.tmpdir(), home: x.userHome, roots: [x.cwd] } }, 'darwin', undefined, () => true);
       const r = spawnSync(plan.command, plan.args, { encoding: 'utf8', env: { HOME: x.userHome, PATH: '/usr/bin:/bin:/usr/sbin:/sbin' }, timeout: 60_000 });
       const exit = /copied_osascript_exit=(\d+)/.exec(r.stdout)?.[1];
       expect(exit, 'the check did not run').toBeDefined();
-      expect(exit, `a copied osascript SENT an AppleEvent (System Events) from inside the session profile (SIP ${FLOOR.ok ? 'on' : 'off'})`).not.toBe('0');
+      // informational only: `get name` sends no AppleEvent, so this exit proves neither delivery nor the deny (spec OPEN 5)
+      void annotate(`copied_osascript_exit=${exit} (SIP ${FLOOR.ok ? 'on' : 'off'}; informational, no AppleEvent is sent by this check)`);
     } finally {
       x.cleanup();
     }
@@ -159,11 +167,12 @@ describe.skipIf(!SANDBOX_OK)('G-SBX-08 the generated session profile holds (darw
   it('Aegis M2: shell rc, ~/.ssh, LaunchAgents and ~/.gitconfig are unwritable', () => {
     expect(out).toMatchObject({ write_zshrc: 'blocked', write_ssh: 'blocked', write_launchagent: 'blocked', write_gitconfig: 'blocked' });
   });
-  it('Aegis M1: a COPIED launchctl cannot submit a job and a COPIED osascript cannot send an AppleEvent (every macOS)', async () => {
+  it('Aegis M1: a COPIED launchctl cannot submit a job (the copied osascript exit is recorded, not asserted)', async ({ annotate }) => {
     await new Promise((r) => setTimeout(r, 1_000));
     expect(out.copied_launchctl_exit, 'a copied launchctl SUBMITTED a job from inside the session profile').not.toBe('0');
     expect(fs.existsSync(MARKER), 'launchd RAN the job a copied launchctl submitted').toBe(false);
-    expect(out.copied_osascript_exit, 'a copied osascript SENT an AppleEvent (System Events) from inside the session profile').not.toBe('0');
+    // informational only: `get name` sends no AppleEvent (see copiedOsascript) — spec OPEN 5
+    void annotate(`copied_osascript_exit=${out.copied_osascript_exit} (informational)`);
   });
   it(`Aegis M1: with SIP enabled, from macOS ${COPIED_PLATFORM_BINARY_KILLED_FROM_MACOS} copies are SIGKILLed by launch constraints (137)`, () => {
     // capability, not platform: this suite runs only where darwinFloor() holds (macOS 15+ AND SIP enabled)
