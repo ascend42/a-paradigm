@@ -9,3 +9,4 @@ export * from './unlock.js';
 export * from './broker.js';
 export * from './api-token.js';
 export { raiseInstallCard, type InstallCardOptions } from './install-card.js';
+export { raiseTheftCard, type AuthTheft } from './theft-card.js';

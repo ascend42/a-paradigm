@@ -34,9 +34,15 @@
  * `subscription`; the per-turn `billing.api.active` row (G-SUB-03) depends on
  * the supervisor reporting usage against the SPAWN permit.
  *
- * DEFERRED (reported): the day and window counters live in memory;
- * rebuilding them from `budget.usage` rows at boot is the next slice (beside
- * S-L2, the chain's last event time), so a restart forgets today's totals.
+ * BOOT (M1.6 slice 2): `restore(rows)` rebuilds today's counters, the
+ * subscription window and the announced rungs from the chain — the
+ * `budget.usage` rows joined to their `permit.grant` (the permit names every
+ * axis, incl. loop), and today's `budget.ladder` rows (a rung is never
+ * announced twice in a day across a restart). "Today" and the window are
+ * taken from the chain's last event time (S-L2), never the wall clock, so a
+ * replay reproduces them. Malformed and over-permit rows count nothing.
+ * Permits themselves are not restored: a permit is live for its holder's
+ * connection, and a restart ends those.
  */
 import { canonicalJson, mintId, refuse, RefusedError, type RefusalCode } from '@a-company/gnomon-contracts';
 import type { Signer } from '../log/signer.js';
@@ -105,6 +111,16 @@ export interface StreamUsage {
   tokens: number;
   usd?: number;
 }
+
+/** A chain row the fuse restores from (#kernel-log full view: kind, at, payload). */
+export interface FuseRow {
+  kind: string;
+  at: string;
+  payload: Record<string, unknown>;
+}
+
+/** The kinds `restore` reads (the daemon asks the chain for exactly these). */
+export const FUSE_RESTORE_KINDS = Object.freeze(['permit.grant', 'budget.usage', 'budget.ladder'] as const);
 
 export interface FuseOptions {
   kernel: Signer;
@@ -318,6 +334,66 @@ export class BudgetFuse {
   async quotaError(hsid: string | null): Promise<void> {
     this.#quotaErrors++;
     await this.#o.log('budget.window', { quotaError: true, hsid, used: this.#windowUsed(), of: this.#cfg.subscription.windowTokens });
+  }
+
+  /**
+   * Rebuild today's counters, the window and the announced rungs from chain
+   * rows in chain order (boot, before the first reserve). Idempotent only on
+   * a fresh fuse: it adds to what is there.
+   */
+  restore(rows: Iterable<FuseRow>): { usage: number; ladder: number } {
+    const now = this.#o.lastEventTime?.() ?? this.#clock();
+    const today = new Date(now).toISOString().slice(0, 10);
+    const from = now - this.#cfg.subscription.windowMs;
+    const grants = new Map<string, PermitV1>();
+    const str = (v: unknown): string | null => (typeof v === 'string' && v.length > 0 && v.length <= 256 ? v : null);
+    const amount = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) && v >= 0 ? v : -1);
+    let usage = 0;
+    let ladder = 0;
+    for (const row of rows) {
+      const p = row.payload ?? {};
+      if (row.kind === 'permit.grant') {
+        const permit = p.permit as PermitV1 | undefined;
+        if (permit && typeof permit.permitId === 'string' && permit.scope && typeof permit.scope.user === 'string') grants.set(permit.permitId, permit);
+        continue;
+      }
+      const at = Date.parse(row.at);
+      if (!Number.isFinite(at)) continue;
+      const day = new Date(at).toISOString().slice(0, 10);
+      if (row.kind === 'budget.ladder') {
+        const scope = str(p.scope), id = str(p.id), dim = str(p.dimension);
+        if (p.day === today && day === today && scope && id && dim && typeof p.rung === 'number' && RUNGS.includes(p.rung)) {
+          this.#announced.add(`${today}|${dim}|${scope}|${id}|${p.rung}`);
+          ladder++;
+        }
+        continue;
+      }
+      if (row.kind !== 'budget.usage' || p.malformed === true || p.overPermit === true) continue;
+      const tokens = amount(p.tokens);
+      const usd = p.usd === undefined ? 0 : amount(p.usd);
+      if (tokens < 0 || usd < 0 || (p.source !== 'turn.usage' && p.source !== 'turn.result')) continue;
+      const permit = typeof p.permitId === 'string' ? grants.get(p.permitId) : undefined;
+      if (!permit) continue; // a usage row with no grant on the chain attributes to nothing (never guessed)
+      const backend = permit.backend;
+      if (backend === 'claude-code' && at >= from && at <= now) this.#window.push({ at, tokens });
+      if (day !== today) continue;
+      usage++;
+      for (const [axis, id] of this.#axes(permit)) {
+        for (const [dim, amt] of [['tokens', tokens], ['usd', usd]] as const) {
+          const k = `${today}|${dim}|${axis}|${id}`;
+          this.#day.set(k, (this.#day.get(k) ?? 0) + amt);
+        }
+      }
+      if (backend === 'local') {
+        const key = permit.hsid ?? permit.permitId;
+        const l = this.#local.get(key) ?? { model: permit.model, repos: new Set<string>(), tokens: 0 };
+        l.tokens += tokens;
+        if (permit.scope.repo) l.repos.add(permit.scope.repo);
+        this.#local.set(key, l);
+      }
+    }
+    this.#window.sort((a, b) => a.at - b.at);
+    return { usage, ladder };
   }
 
   /** Today's spend for one axis value (tests, status). */

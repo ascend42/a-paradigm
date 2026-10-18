@@ -466,6 +466,12 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
             },
           )
           .catch(() => undefined); // the refusal and the close happen regardless
+        // M1.6 slice 2: a theft row raises the broker's fresh-presence gate-class card naming the revoked connection
+        const revokedConnId = out.logKind === 'socket.auth.theft' ? out.logPayload?.revokedConnId : undefined;
+        if (typeof revokedConnId === 'string' && o.approvals) {
+          const surface = out.logPayload?.surface;
+          await o.approvals.authTheft({ connId: s.connId, revokedConnId, surface: typeof surface === 'string' ? surface : null }).catch(() => undefined);
+        }
         throw RpcRefusal.from(out, { closeAfter: true });
       }
       try {

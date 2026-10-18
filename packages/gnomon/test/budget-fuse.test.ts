@@ -20,6 +20,7 @@ import {
   scanApiBilling,
   writeSignedConfig,
   type BillingScanSource,
+  type FuseRow,
   type ReserveRequest,
 } from '../src/kernel/budget/index.js';
 import { KeyRing, SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
@@ -281,6 +282,84 @@ describe('tracking (P8-D92)', () => {
     expect(r.kinds('permit.release')).toHaveLength(1);
   });
 
-  it.todo('rebuild the day and window counters from budget.usage rows at boot (today in memory; a restart forgets the day) — next slice, with S-L2 (the chain’s last event time)');
   it.todo('subscription window shape learned from turn.usage/turn.result and rate-limit headers — M1.7 (#claude-adapter)');
+});
+
+describe('the meter survives a restart (M1.6 slice 2: restore from the chain, S-L2)', () => {
+  const DAY = Date.UTC(2026, 9, 18, 0, 0, 0);
+  /** A fuse whose rows carry the chain time `at` = t.now; the day and window follow `t.last` (the chain's last event time). */
+  function timed(t: { now: number; last: number }, config?: typeof DEFAULT_FUSE) {
+    const rows: FuseRow[] = [];
+    const fuse = new BudgetFuse({
+      kernel: SoftwareEd25519Signer.generate('kernel'),
+      logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZZ',
+      log: async (kind, payload) => void rows.push({ kind, at: new Date(t.now).toISOString(), payload: JSON.parse(JSON.stringify(payload)) as Record<string, unknown> }),
+      ...(config ? { config } : {}),
+      billing: clean,
+      clock: () => t.now,
+      lastEventTime: () => t.last,
+    });
+    return { fuse, rows };
+  }
+  const human = (over: Partial<ReserveRequest> = {}): ReserveRequest => ({ principal: HUMAN, principalClass: 'human', attended: true, kind: 'session.spawn', scope: { user: HUMAN, repo: 'repo:a', loop: 'loop:1', session: 'hs:1' }, backend: 'claude-code', model: 'opus', ...over });
+
+  it('today’s spend on every axis (incl. loop, from the joined permit.grant), the window and the local sessions come back after a restart', async () => {
+    const t = { now: DAY + 10 * 3_600_000, last: DAY + 10 * 3_600_000 };
+    const a = timed(t);
+    const p1 = await a.fuse.reserve(human());
+    await a.fuse.recordStreamUsage({ source: 'turn.usage', permitId: p1.permitId, tokens: 120, usd: 0.5 });
+    const p2 = await a.fuse.reserve(human({ backend: 'local', model: 'qwen', scope: { user: HUMAN, repo: 'repo:b', session: 'hs:2' } }));
+    await a.fuse.recordStreamUsage({ source: 'turn.result', permitId: p2.permitId, tokens: 30 });
+    const before = a.fuse.status();
+    const b = timed(t);
+    expect(b.fuse.restore(a.rows)).toEqual({ usage: 2, ladder: 0 });
+    const after = b.fuse.status();
+    expect(after.spend).toEqual(before.spend);
+    expect(after.local).toEqual(before.local);
+    expect(after.subscriptionWindow).toEqual(before.subscriptionWindow);
+    expect(b.fuse.spent('loop', 'loop:1')).toBe(120);
+    expect(b.fuse.spent('user', HUMAN, 'usd')).toBe(0.5);
+    // tracking continues on top of the restored day
+    const p3 = await b.fuse.reserve(human());
+    await b.fuse.recordStreamUsage({ source: 'turn.usage', permitId: p3.permitId, tokens: 5 });
+    expect(b.fuse.spent('user', HUMAN)).toBe(155);
+  });
+
+  it('yesterday counts in the rolling window but not in today; “today” is the chain’s last event time, never the wall clock', async () => {
+    const t = { now: DAY - 3_600_000, last: DAY - 3_600_000 }; // 23:00 yesterday
+    const a = timed(t);
+    const p = await a.fuse.reserve(human());
+    await a.fuse.recordStreamUsage({ source: 'turn.usage', permitId: p.permitId, tokens: 40 });
+    t.now = t.last = DAY + 3_600_000; // 01:00 today
+    await a.fuse.recordStreamUsage({ source: 'turn.usage', permitId: p.permitId, tokens: 2 });
+    const b = timed({ now: DAY + 3 * 86_400_000, last: DAY + 3_600_000 }); // wall clock days later; chain says 01:00 today
+    expect(b.fuse.restore(a.rows).usage).toBe(1);
+    expect(b.fuse.spent('user', HUMAN)).toBe(2);
+    expect((b.fuse.status().subscriptionWindow as { used: { n: number } }).used.n).toBe(42); // the 5 h window spans midnight
+  });
+
+  it('a rung announced before the restart is not announced again the same day; malformed, over-permit and grant-less usage rows count nothing', async () => {
+    const t = { now: DAY + 3_600_000, last: DAY + 3_600_000 };
+    const cfg = structuredClone(DEFAULT_FUSE);
+    cfg.tokens.user = 100;
+    const a = timed(t, cfg);
+    const p = await a.fuse.reserve(human({ limits: { tokens: 10 } }));
+    await a.fuse.recordStreamUsage({ source: 'turn.usage', permitId: p.permitId, tokens: 60 }); // 50 % rung + over-permit row
+    await a.fuse.recordStreamUsage({ source: 'turn.usage', permitId: 'permit:01HZZZZZZZZZZZZZZZZZZZZZZZ', tokens: 9 }); // malformed (unknown permit)
+    expect(a.rows.filter((r) => r.kind === 'budget.ladder')).toHaveLength(1);
+    const forged: FuseRow[] = [
+      { kind: 'budget.usage', at: new Date(t.now).toISOString(), payload: { permitId: 'permit:01HZZZZZZZZZZZZZZZZZZZZZZY', source: 'turn.usage', tokens: 1_000_000, user: HUMAN } }, // no grant on the chain
+      { kind: 'budget.usage', at: new Date(t.now).toISOString(), payload: { permitId: p.permitId, source: 'stdin', tokens: 1_000_000 } }, // not a stream event
+      { kind: 'budget.usage', at: 'not a time', payload: { permitId: p.permitId, source: 'turn.usage', tokens: 1_000_000 } },
+    ];
+    const b = timed(t, cfg);
+    expect(b.fuse.restore([...a.rows, ...forged])).toEqual({ usage: 1, ladder: 1 });
+    expect(b.fuse.spent('user', HUMAN)).toBe(60);
+    const before = b.rows.length;
+    const q = await b.fuse.reserve(human());
+    await b.fuse.recordStreamUsage({ source: 'turn.usage', permitId: q.permitId, tokens: 1 });
+    expect(b.rows.slice(before).filter((r) => r.kind === 'budget.ladder')).toHaveLength(0); // 61 % — the 50 % rung was already said today
+    await b.fuse.recordStreamUsage({ source: 'turn.usage', permitId: q.permitId, tokens: 15 });
+    expect(b.rows.slice(before).filter((r) => r.kind === 'budget.ladder').map((r) => r.payload.rung)).toEqual([0.75]);
+  });
 });

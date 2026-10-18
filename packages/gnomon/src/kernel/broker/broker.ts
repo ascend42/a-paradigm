@@ -101,8 +101,14 @@ export const PRESENCE_UNAVAILABLE: PresenceProvider = Object.freeze({ prove: (re
 /** The approvals key (hardware P-256 behind the helper, M1.3): verifies decisionSig. */
 export interface ApprovalsKey {
   verify(approverPrincipalId: string, message: string, sigB64: string): 'ok' | 'bad' | 'unavailable';
+  /**
+   * Is there an approvals key at all (default: yes)? Asked BEFORE the
+   * decisionSig shape check, so a client with no signing path yet (the GUI
+   * before M1.3) sees the presence refusal, not BAD_REQUEST (T-2026-10-18-018 (2)).
+   */
+  available?(): boolean;
 }
-export const NO_APPROVALS_KEY: ApprovalsKey = Object.freeze({ verify: () => 'unavailable' as const });
+export const NO_APPROVALS_KEY: ApprovalsKey = Object.freeze({ verify: () => 'unavailable' as const, available: () => false });
 
 /** An approvals key from a ring: the approver's key id (tests: a software P-256 stands in for the hardware key). */
 export function approvalsKeyFrom(ring: KeyRing, keyIdOf: (principal: string) => string | undefined): ApprovalsKey {
@@ -349,7 +355,10 @@ export class ApprovalBroker {
     const cls = baseClass(String(card.kind), decision, flags);
     if (cls === undefined) throw fail('BAD_REQUEST', 'bad-params', `${decision} is not a decision of a ${String(card.kind)} card (valid: ${validDecisions(String(card.kind)).join(', ')})`, { cardId });
 
-    // 3. decisionSig by the approvals key (approver in the preimage, Q5)
+    // 3. decisionSig by the approvals key (approver in the preimage, Q5). No key at all (before M1.3) is
+    //    answered FIRST, so a decision with no decisionSig (the GUI has no signing path yet) sees the
+    //    presence refusal the human can act on, not BAD_REQUEST (T-2026-10-18-018 item 2)
+    if (this.#approvals.available?.() === false) throw fail('UNSUPPORTED', 'presence', 'the approvals key lives behind the signed helper (M1.3); no software fallback', { milestone: 'M1.3', cardId });
     if (typeof p.decisionSig !== 'string' || p.decisionSig.length === 0 || p.decisionSig.length > 1024) throw fail('BAD_REQUEST', 'bad-params', 'decisionSig is required (approvals key over cardId, decision, contentHash, approver)');
     const v = this.#approvals.verify(ctx.principal, approveMessage({ cardId, decision, cardContentHash: card.contentHash, approverPrincipalId: ctx.principal }), p.decisionSig);
     if (v === 'unavailable') throw fail('UNSUPPORTED', 'presence', 'the approvals key lives behind the signed helper (M1.3); no software fallback', { milestone: 'M1.3', cardId });
@@ -485,10 +494,20 @@ export class ApprovalBroker {
 
   /* ── status ─────────────────────────────────────────────────────────── */
 
-  status(forHuman: boolean): { n: number; pendingForYou: number; held: number; byKind: Record<string, number> } {
-    const pending = this.cards().filter((c) => c.state === 'pending');
+  /**
+   * status.cards (F4: status is the man page, scoped by class). The human —
+   * the only class that decides — gets the full inbox: `pendingForYou` and
+   * the inbox by kind. Every other class gets counts only (`n`, `held`): what
+   * is being asked of the human, and by which kind, is not theirs to see
+   * (Aegis low, M1.6 slice 1).
+   */
+  status(forHuman: boolean): { n: number; pendingForYou: number; held: number; byKind?: Record<string, number> } {
+    const all = this.cards();
+    const held = all.filter((c) => c.state === 'held').length;
+    if (!forHuman) return { n: this.#cards.size, pendingForYou: 0, held };
+    const pending = all.filter((c) => c.state === 'pending');
     const byKind: Record<string, number> = {};
     for (const c of pending) byKind[String(c.kind)] = (byKind[String(c.kind)] ?? 0) + 1;
-    return { n: this.#cards.size, pendingForYou: forHuman ? pending.length : 0, held: 0, byKind };
+    return { n: this.#cards.size, pendingForYou: pending.length, held, byKind };
   }
 }

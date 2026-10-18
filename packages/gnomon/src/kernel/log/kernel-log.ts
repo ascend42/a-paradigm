@@ -731,6 +731,11 @@ export class KernelLog {
     return this.#keyRing;
   }
 
+  /** The `at` of the chain's last event (S-L2: the fuse's day windows), `''` on an empty chain. */
+  lastEventAt(): string {
+    return this.#tip.at;
+  }
+
   /** `{log, segment, seq, hash}` of the chain head. */
   head(): { log: string; segment: number; seq: number; hash: string } {
     return { log: this.logId, segment: this.#meta.segment, seq: this.#tip.seq, hash: this.#tip.hash };
