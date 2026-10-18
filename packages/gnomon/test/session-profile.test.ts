@@ -20,6 +20,11 @@ import { sessionWorld, worldPolicy, type SessionWorld } from './session-helpers.
 
 let w: SessionWorld;
 afterEach(() => w?.cleanup());
+/**
+ * FIXTURE: the exact `/usr/bin/csrutil status` stdout on macOS 15.7.3 (darwin
+ * 24.6.0, arm64, SIP on), captured 2026-10-17 — one line, trailing newline.
+ */
+const CSRUTIL_MACOS15_ENABLED = 'System Integrity Protection status: enabled.\n';
 const extras = (x: SessionWorld) => ({ uid: 501, tmpdir: x.root, home: x.userHome, roots: [x.cwd] });
 
 describe('G-SBX-08 (text) the generated session profile', () => {
@@ -137,6 +142,7 @@ describe('the SIP floor (CI run 39100811385: SIP off ⇒ launch constraints off 
     expect(sessionSandboxFidelity('darwin', () => 15, () => null)).toMatchObject({ fidelity: 'unavailable', reason: 'sip-disabled', have: 'unknown' });
   });
   it('csrutil parsing: only a plain "enabled." is enabled; Custom Configuration is not', () => {
+    expect(parseCsrutilStatus(CSRUTIL_MACOS15_ENABLED)).toBe(true);
     expect(parseCsrutilStatus('System Integrity Protection status: enabled.\n')).toBe(true);
     expect(parseCsrutilStatus('System Integrity Protection status: disabled.\n')).toBe(false);
     expect(parseCsrutilStatus('System Integrity Protection status: unknown (Custom Configuration).\n\nConfiguration:\n\tApple Internal: disabled\n')).toBe(false);
@@ -159,6 +165,8 @@ describe('G-WIN-06 the platform registry: no backend ⇒ refused, status partial
     expect(sessionSandboxFidelity('win32').fidelity).toBe('partial');
     expect(sessionSandboxFidelity('linux').fidelity).toBe('partial');
     expect(sessionSandboxFidelity('darwin', () => 15, () => true).fidelity).toBe('partial');
+    // Aegis: AppleEvents are partial while spec OPEN 5 is open (status must not overclaim)
+    expect(sessionSandboxFidelity('darwin', () => 15, () => true).classes['automation:apple-events']).toBe('partial');
     expect(sessionSandboxFidelity('darwin', () => 14)).toMatchObject({ fidelity: 'unavailable', reason: 'macos-floor', have: 14, need: 15 });
     expect(sessionSandboxFidelity('darwin', () => null)).toMatchObject({ fidelity: 'unavailable', reason: 'macos-floor' });
     expect(sessionSandboxFidelity('aix').fidelity).toBe('none');

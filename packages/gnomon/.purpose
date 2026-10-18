@@ -1096,6 +1096,11 @@ components:
       check (`get name` of System Events) is answered without sending an event,
       so its exit is only RECORDED (test annotation), never asserted; the 137
       launch-constraint kill is asserted on SIP-on macOS 15+ only.
+      Aegis conditions: darwin automation:apple-events fidelity is 'partial'
+      while spec OPEN 5 is open (status must not overclaim); inherited TCC
+      grants of the responsible process + the reachable pasteboard are spec
+      §A.2(v) / OPEN 22 (recommend launching gnomond by launchd or the signed
+      app); the csrutil parser test keeps the exact macOS 15 stdout fixture.
     path: src/kernel/runner/
     type: module
     tags: [gnomon, kernel, session, law-7, paradigm-8, m1.7]

@@ -142,6 +142,8 @@ python3 -c "print('py_ok')" 2>/dev/null | sed 's/^/python=/' || echo "python=fai
           'round 2: claude ran as a PRIVATE COPY under <gnomon home>/bin with the binary, versions dir, known-location links and user persistence paths (rc files, ~/.ssh, LaunchAgents, git config) write-denied.',
           'ps is not tested (setuid; fails under any sandbox-exec profile).',
           'Ground truth is out.txt written by check.sh, not the model reply.',
+          'copied-launcher protection depends on SIP enabled + macOS 15+ + Apple\'s per-binary launch-constraint coverage (spec §A.2(iv)); re-run on every macOS update (the revisit trigger).',
+          'The earlier copied-osascript check (`tell application "System Events" to get name`, test/session-sandbox.test.ts; CI runs 39100281741, 39100811385 "reached System Events") PROVED NOTHING: AppleScript answers `get name` without sending an AppleEvent (measured 2026-10-17: stock osascript returns it under a deny-all mach-lookup profile). Its exit is recorded, never asserted; non-Apple AppleEvent senders are spec OPEN 5.',
         ],
       },
     };
