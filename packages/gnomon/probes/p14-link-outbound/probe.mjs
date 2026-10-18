@@ -88,9 +88,12 @@ function profileFor(allowRule) {
     '(allow file-read-metadata)',
     '(allow file-write-data (literal "/dev/null"))',
     '(allow sysctl-read)',
-    `(allow network-outbound ${allowRule})`,
-  ].join('\n');
+    allowRule ? `(allow network-outbound ${allowRule})` : null,
+  ].filter(Boolean).join('\n');
 }
+
+// Shared with p14b-link-fdpass (null allowRule = no network* allow at all).
+export { profileFor, lanAddress, NODE };
 
 function compiles(rule) {
   const r = spawnSync(SBX, ['-p', `(version 1)(allow default)(deny network-outbound)(allow network-outbound ${rule})`, '/usr/bin/true'], { encoding: 'utf8', timeout: 10_000 });
@@ -147,10 +150,17 @@ export default async function probe(ctx) {
   const lan = lanAddress();
 
   try {
-    const forms = [`(remote tcp "127.0.0.1:${P}")`, lan ? `(remote tcp "${lan.address}:${P}")` : null, `(remote tcp "localhost:${P}")`, `(remote tcp "*:${P}")`, `(remote ip "localhost:${P}")`]
-      .filter(Boolean).map(compiles);
-    const literalIpOk = forms[0].compiles || (lan && forms[1].compiles);
-    const bestRule = forms[0].compiles ? forms[0].rule : `(remote tcp "localhost:${P}")`;
+    // Every literal-IP spelling SBPL might accept, before concluding only
+    // localhost/* compile: remote ip / tcp / tcp4, loopback and LAN literals.
+    const literalForms = [];
+    for (const host of ['127.0.0.1', lan?.address].filter(Boolean)) {
+      for (const kind of ['ip', 'tcp', 'tcp4', 'ip4']) literalForms.push(`(remote ${kind} "${host}:${P}")`);
+    }
+    const literal = literalForms.map(compiles);
+    const forms = [...literal, ...[`(remote tcp "localhost:${P}")`, `(remote tcp "*:${P}")`, `(remote ip "localhost:${P}")`].map(compiles)];
+    const firstLiteral = literal.find((f) => f.compiles && f.rule.includes('127.0.0.1'));
+    const literalIpOk = literal.some((f) => f.compiles);
+    const bestRule = firstLiteral ? firstLiteral.rule : `(remote tcp "localhost:${P}")`;
     const args = ['127.0.0.1', String(P), String(Q), lan?.address ?? '', file, sock];
 
     const control = await new Promise((resolve) => {

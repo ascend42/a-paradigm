@@ -21,8 +21,9 @@
     },
     "csp": "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' blob:; font-src 'self'; connect-src ws://127.0.0.1:<port> http://127.0.0.1:<port>; worker-src 'self'; frame-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
     "build": {
-      "npmInstallMs": "cached",
-      "esbuildMs": 299,
+      "lockSha256": "b1c734f105cc8553",
+      "npmCiMs": 1646,
+      "esbuildMs": 412,
       "copiedWorkerChunks": [
         "subset-shared.chunk.js",
         "subset-worker.chunk.js",
@@ -31,7 +32,7 @@
         "chunk-SRAX5OIU.js"
       ],
       "esbuildWarnings": null,
-      "tempDir": "/var/folders/gq/nt2kdpsj39dc8vpq6cfzx8gw0000gn/T/gnomon-p12-e5cff9ebdbfc"
+      "tempDir": "/var/folders/gq/nt2kdpsj39dc8vpq6cfzx8gw0000gn/T/gnomon-p12-d980f7abec8f"
     },
     "size": {
       "allNonFontBytes": 10470081,
@@ -1383,9 +1384,9 @@
         "runs": 3,
         "mountedRuns": 3,
         "medianMs": {
-          "firstModule": 47,
+          "firstModule": 42,
           "parseLinkAfterLastStaticScript": 0,
-          "mounted": 93
+          "mounted": 84
         },
         "violationCount": 708,
         "claimViolationCount": 3,
@@ -1398,27 +1399,28 @@
         ],
         "exportPng": true,
         "exportSvg": true,
+        "exportSvgFontFace": true,
         "firstRun": {
-          "wallMs": 2929,
+          "wallMs": 2973,
           "stage": "done",
           "mounted": true,
           "sceneElements": 2,
           "ms": {
-            "firstModule": 43,
+            "firstModule": 55,
             "parseLinkAfterLastStaticScript": 0,
             "entryEval": 6,
-            "mounted": 93
+            "mounted": 103
           },
           "initialStaticScripts": [
             "/boot.js",
             "/entry.js",
             "/c-RCTYMSGU.js",
             "/c-BWOD3Y76.js",
-            "/c-DVB6JR7R.js",
             "/c-2Q57P4US.js",
-            "/c-BFWAQVX3.js",
             "/c-JC7VO67U.js",
             "/mark.js",
+            "/c-DVB6JR7R.js",
+            "/c-BFWAQVX3.js",
             "/c-2EMPGZEK.js",
             "/c-SU5KURMT.js",
             "/c-5G7P7C5C.js"
@@ -1427,14 +1429,14 @@
           "initialGzip": 448672,
           "png": {
             "ok": true,
-            "bytes": 4293,
-            "ms": 19
+            "bytes": 4272,
+            "ms": 18
           },
           "svg": {
             "ok": true,
             "chars": 34371,
             "fontFace": true,
-            "ms": 1016
+            "ms": 1017
           },
           "errors": [],
           "rejections": [],
@@ -1711,6 +1713,7 @@
             }
           ],
           "claimViolations": 1,
+          "loadPhaseViolations": 234,
           "loadPhaseClaimViolations": 0
         }
       },
@@ -1719,9 +1722,9 @@
         "runs": 3,
         "mountedRuns": 3,
         "medianMs": {
-          "firstModule": 31,
-          "parseLinkAfterLastStaticScript": 2,
-          "mounted": 69
+          "firstModule": 29,
+          "parseLinkAfterLastStaticScript": 1,
+          "mounted": 68
         },
         "violationCount": 708,
         "claimViolationCount": 3,
@@ -1734,41 +1737,42 @@
         ],
         "exportPng": true,
         "exportSvg": true,
+        "exportSvgFontFace": true,
         "firstRun": {
-          "wallMs": 2926,
+          "wallMs": 2943,
           "stage": "done",
           "mounted": true,
           "sceneElements": 2,
           "ms": {
-            "firstModule": 43,
+            "firstModule": 44,
             "parseLinkAfterLastStaticScript": 7,
             "entryEval": 6,
-            "mounted": 107
+            "mounted": 106
           },
           "initialStaticScripts": [
             "/boot.js",
             "/entry.js",
             "/c-RCTYMSGU.js",
             "/c-BWOD3Y76.js",
-            "/c-JC7VO67U.js",
             "/c-2Q57P4US.js",
+            "/c-JC7VO67U.js",
             "/mark.js",
             "/c-DVB6JR7R.js",
             "/c-BFWAQVX3.js",
-            "/c-F5SAK2PP.js",
+            "/c-AZ3EUS2G.js",
             "/c-DJ5W7QLC.js",
-            "/c-AZ3EUS2G.js"
+            "/c-F5SAK2PP.js"
           ],
           "initialBytes": 1381487,
           "initialGzip": 448192,
           "png": {
             "ok": true,
-            "bytes": 4787,
+            "bytes": 4702,
             "ms": 14
           },
           "svg": {
             "ok": true,
-            "chars": 34373,
+            "chars": 34370,
             "fontFace": true,
             "ms": 1040
           },
@@ -1821,6 +1825,7 @@
             }
           ],
           "claimViolations": 1,
+          "loadPhaseViolations": 4,
           "loadPhaseClaimViolations": 0
         }
       }
@@ -1845,5 +1850,5 @@
     "G-WEB-06",
     "S25-M3"
   ],
-  "at": "2026-10-18T01:31:00.234Z"
+  "at": "2026-10-18T01:44:30.692Z"
 }

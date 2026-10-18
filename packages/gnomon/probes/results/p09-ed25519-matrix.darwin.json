@@ -70,7 +70,7 @@
           "line": "ed25519 ✓ verify · ✕ forged · ✓ rfc8032 · ✓ spki · ✕ non-canonical-s · ✓ empty-msg · PASS"
         },
         "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36",
-        "wallMs": 563
+        "wallMs": 503
       },
       "chrome-testing": {
         "version": "Google Chrome for Testing 153.0.8010.12",
@@ -101,7 +101,7 @@
           "line": "ed25519 ✓ verify · ✕ forged · ✓ rfc8032 · ✓ spki · ✕ non-canonical-s · ✓ empty-msg · PASS"
         },
         "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
-        "wallMs": 463
+        "wallMs": 468
       },
       "headless-shell": {
         "version": "Google Chrome for Testing 153.0.8010.12",
@@ -132,7 +132,7 @@
           "line": "ed25519 ✓ verify · ✕ forged · ✓ rfc8032 · ✓ spki · ✕ non-canonical-s · ✓ empty-msg · PASS"
         },
         "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
-        "wallMs": 228
+        "wallMs": 210
       },
       "wkwebview": {
         "version": "WebKit 20621.3.11.11.3",
@@ -163,7 +163,7 @@
           "line": "ed25519 ✓ verify · ✕ forged · ✓ rfc8032 · ✓ spki · ✕ non-canonical-s · ✕ empty-msg · PASS"
         },
         "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)",
-        "wallMs": 456
+        "wallMs": 516
       }
     },
     "enginesUnavailable": {
@@ -207,5 +207,5 @@
     "OPEN 8",
     "G-GUI-03"
   ],
-  "at": "2026-10-18T01:30:40.196Z"
+  "at": "2026-10-18T01:44:08.838Z"
 }

@@ -40,6 +40,7 @@ export default async function probe(ctx) {
     const sp = run('/usr/sbin/spctl', ['--assess', '--type', 'execute', '-vv', build.app]);
     evidence.notarize = { status: parsed?.status ?? null, id: parsed?.id ?? null, ms: Date.now() - t, error: sub.status === 0 ? undefined : (sub.stderr || sub.stdout).slice(0, 300), stapled: staple.status === 0, spctlAfter: sp.stderr.slice(0, 300) };
   } else evidence.notarize = 'not requested (set P00_SUBMIT=1)';
+  build.remove();
   const ok = build.steps.codesign?.status === 0 && build.steps.verifyStrict?.ok && notary.answered;
   return { verdict: ok ? 'pass' : 'fail', evidence, toolVersions: { xcode: run('/usr/bin/xcodebuild', ['-version']).stdout.split('\n')[0] } };
 }

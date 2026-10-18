@@ -109,8 +109,15 @@ components:
       mozlz4), p01-claude-cli-manual (hook session_id, control_request
       interrupt, loopback-override observation, managed policy; claude by the
       path p01 recorded, never PATH). s29-10-voice-custody is a README stub
-      pending the signed helper. probes/_shared/ (browser.mjs, signing.mjs,
-      wkwebview-load.swift, helper/) is shared code, not a probe id.
+      pending the signed helper. p14b-link-fdpass (research paradigm-8/37):
+      the kernel stand-in dials the peer and passes the connected socket over
+      IPC to a deny-default child with no network* allow; full duplex 4 MiB,
+      peer close, redial hand-off, child connect/UDP/listen/unix/file/exec all
+      EPERM. probes/_shared/ (browser.mjs, signing.mjs, abort.mjs — synchronous
+      cleanups on SIGINT/SIGTERM/ctx.signal for founder-run probes, ask()
+      rejects on abort — wkwebview-load.swift, helper/) is shared code, not a
+      probe id. p12 pins its whole tree with a committed package-lock.json
+      (npm ci). CI probe results go to $RUNNER_TEMP, never probes/results/.
     path: probes/
     type: module
     tags: [gnomon, probes, m1.0]

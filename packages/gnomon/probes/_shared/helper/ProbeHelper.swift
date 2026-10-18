@@ -216,6 +216,37 @@ case "kc-read", "kc-integrity":
     let valid = !sig.isEmpty && SecKeyVerifySignature(pub, .ecdsaSignatureMessageX962SHA256, data as CFData, sig as CFData, &err)
     emit(["ok": valid, "integrity": valid ? "OK" : "INTEGRITY_BROKEN", "dataProtection": dp, "ms": ms])
 
+case "kc-transplant":
+    // Attacker model: a VALID custody signature copied from a genuine item,
+    // stored with different data in a new (legacy) item. Integrity must fail.
+    //   kc-transplant <srcService> <srcAccount> <src dp|legacy> <dstService> <dstAccount>
+    guard args.count >= 6 else { emit(["ok": false, "error": "usage"], code: 64) }
+    var sq = itemQuery(args[1], args[2], dp: args[3] == "dp")
+    sq[kSecReturnAttributes as String] = true
+    sq[kSecMatchLimit as String] = kSecMatchLimitOne
+    var sItem: CFTypeRef?
+    let sst = SecItemCopyMatching(sq as CFDictionary, &sItem)
+    guard sst == errSecSuccess, let sd = sItem as? [String: Any], let sig = sd[kSecAttrComment as String] as? String else {
+        emit(["ok": false, "stage": "read-source", "status": Int(sst)])
+    }
+    var other = Data(count: 32)
+    _ = other.withUnsafeMutableBytes { SecRandomCopyBytes(kSecRandomDefault, 32, $0.baseAddress!) }
+    var dq = itemQuery(args[4], args[5], dp: false)
+    dq[kSecValueData as String] = other
+    dq[kSecAttrComment as String] = sig
+    let dst = SecItemAdd(dq as CFDictionary, nil)
+    emit(["ok": dst == errSecSuccess, "status": Int(dst), "copiedSignatureChars": sig.count, "dataSha256": hexPrefix(other)])
+
+case "kc-add-bare":
+    // Bare SecItemAdd into the access group (data-protection keychain), no
+    // custody key involved: isolates the entitlement gate. kc-add-bare <service> <account>
+    guard args.count >= 3 else { emit(["ok": false, "error": "usage"], code: 64) }
+    var bq = itemQuery(args[1], args[2], dp: true)
+    bq[kSecValueData as String] = Data("p05-bare".utf8)
+    bq[kSecAttrAccessible as String] = kSecAttrAccessibleWhenUnlockedThisDeviceOnly
+    let bst = SecItemAdd(bq as CFDictionary, nil)
+    emit(["ok": bst == errSecSuccess, "status": Int(bst)])
+
 case "kc-delete":
     guard args.count >= 3 else { emit(["ok": false, "error": "usage"], code: 64) }
     let dp = args.count >= 4 && args[3] == "dp"

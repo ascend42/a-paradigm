@@ -32,25 +32,25 @@
       "sha256": "04a610410ce3928e"
     },
     "build": {
-      "swiftcMs": 1655,
+      "swiftcMs": 1297,
       "codesign": {
         "status": 0,
-        "ms": 160,
+        "ms": 89,
         "timedOut": false,
-        "stderr": "/var/folders/gq/nt2kdpsj39dc8vpq6cfzx8gw0000gn/T/gnomon-probe-helper-28257d12b476/GnomonHelperProbe.app: replacing existing signature"
+        "stderr": "/var/folders/gq/nt2kdpsj39dc8vpq6cfzx8gw0000gn/T/gnomon-probe-helper-b064f9beb7a8/GnomonHelperProbe.app: replacing existing signature"
       },
       "verifyStrict": {
         "ok": true,
-        "output": "/var/folders/gq/nt2kdpsj39dc8vpq6cfzx8gw0000gn/T/gnomon-probe-helper-28257d12b476/GnomonHelperProbe.app: valid on disk\n/var/folders/gq/nt2kdpsj39dc8vpq6cfzx8gw0000gn/T/gnomon-probe-helper-28257d12b476/GnomonHelperProbe.app: satisfies its Designated Requirement"
+        "output": "/var/folders/gq/nt2kdpsj39dc8vpq6cfzx8gw0000gn/T/gnomon-probe-helper-b064f9beb7a8/GnomonHelperProbe.app: valid on disk\n/var/folders/gq/nt2kdpsj39dc8vpq6cfzx8gw0000gn/T/gnomon-probe-helper-b064f9beb7a8/GnomonHelperProbe.app: satisfies its Designated Requirement"
       },
       "details": [
         "Identifier=gnomon.helper",
         "Format=app bundle with Mach-O thin (arm64)",
-        "CodeDirectory flags=0x10000(runtime) hashes=29+7 location=embedded",
+        "CodeDirectory flags=0x10000(runtime) hashes=34+7 location=embedded",
         "Authority=Developer ID Application: Matthew Canoy (SW4BMQ8PNL)",
         "Authority=Developer ID Certification Authority",
         "Authority=Apple Root CA",
-        "Timestamp=Oct 17, 2026 at 6:31:10 PM",
+        "Timestamp=Oct 17, 2026 at 6:44:05 PM",
         "TeamIdentifier=SW4BMQ8PNL",
         "Runtime Version=26.2.0"
       ],
@@ -61,13 +61,13 @@
       ],
       "spctl": {
         "status": 3,
-        "output": "/var/folders/gq/nt2kdpsj39dc8vpq6cfzx8gw0000gn/T/gnomon-probe-helper-28257d12b476/GnomonHelperProbe.app: rejected\nsource=Unnotarized Developer ID\norigin=Developer ID Application: Matthew Canoy (SW4BMQ8PNL)"
+        "output": "/var/folders/gq/nt2kdpsj39dc8vpq6cfzx8gw0000gn/T/gnomon-probe-helper-b064f9beb7a8/GnomonHelperProbe.app: rejected\nsource=Unnotarized Developer ID\norigin=Developer ID Application: Matthew Canoy (SW4BMQ8PNL)"
       }
     },
     "info": {
       "bundleId": "gnomon.helper",
       "ok": true,
-      "pid": 16697,
+      "pid": 57223,
       "sandboxed": false,
       "signing": {
         "entitlements": [
@@ -86,7 +86,7 @@
       "json": {
         "code": -34018,
         "domain": "NSOSStatusErrorDomain",
-        "error": "The operation couldn’t be completed. (OSStatus error -34018 - failed to add key to keychain: <SecKeyRef:('com.apple.setoken') 0x6000016b07a0>)",
+        "error": "The operation couldn’t be completed. (OSStatus error -34018 - failed to add key to keychain: <SecKeyRef:('com.apple.setoken') 0x6000023d1720>)",
         "ok": false,
         "presence": true,
         "stage": "create"
@@ -100,8 +100,8 @@
         "ok": true,
         "presence": true,
         "publicKeyBytes": 65,
-        "publicKeySha256": "0a487ef05b4f79aa",
-        "tag": "gnomon-p04-910c5b77"
+        "publicKeySha256": "71ae25b2110e2bda",
+        "tag": "gnomon-p04-c39bb475"
       }
     },
     "claims": {
@@ -109,11 +109,11 @@
       "b_unsignedRefused": true,
       "b_unsignedCode": -34018
     },
-    "signedDelete": {
-      "ok": true,
-      "status": 0
-    },
-    "pendingFounder": "c (one LAContext signs N times, invalidate, fresh prompt) and d (300-character reason) need Touch ID: run in a terminal: node packages/gnomon/probes/run.mjs p04-se-helper --timeout 1800000"
+    "pendingFounder": "c (one LAContext signs N times, invalidate, fresh prompt) and d (300-character reason) need Touch ID: run in a terminal: node packages/gnomon/probes/run.mjs p04-se-helper --timeout 1800000",
+    "cleanup": {
+      "signed": true,
+      "unsigned": false
+    }
   },
   "specRefs": [
     "§3.1",
@@ -126,5 +126,5 @@
     "G-ID-01",
     "G-ID-06"
   ],
-  "at": "2026-10-18T01:31:11.525Z"
+  "at": "2026-10-18T01:44:06.223Z"
 }

@@ -20,7 +20,8 @@
 // Interactive adds 1 and 2 (keychain dialogs). Every item and key it creates
 // is deleted before it returns.
 import { randomBytes } from 'node:crypto';
-import { ACCESS_GROUP, APP_ID, IDENTITY, ask, buildHelper, checkIdentity, checkProfile, helper, interactive, prerequisiteFailure, run, say } from '../_shared/signing.mjs';
+import { onAbort } from '../_shared/abort.mjs';
+import { ACCESS_GROUP, APP_ID, IDENTITY, ask, bindSignal, buildHelper, checkIdentity, checkProfile, helper, interactive, prerequisiteFailure, run, say } from '../_shared/signing.mjs';
 
 export const specRefs = ['§3.1 kernel key', '§16 custody row', '§19.1 M1.0 P05 / S29-02', 'K1', 'P8-D68', 'release gate (b)', 'G-ID-07'];
 
@@ -34,15 +35,29 @@ export default async function probe(ctx) {
   else if (!profile.valid) missing.push(`a VALID provisioning profile (want ${APP_ID} with access group ${ACCESS_GROUP})`);
   if (missing.length) return prerequisiteFailure(missing, { identity, profile });
 
+  bindSignal(ctx.signal);
   const build = buildHelper({ embedProfile: true });
-  if (build.steps.codesign?.status !== 0 || !build.steps.verifyStrict?.ok) return { verdict: 'fail', evidence: { build: build.steps, error: 'helper could not be signed / verified' } };
+  if (build.steps.codesign?.status !== 0 || !build.steps.verifyStrict?.ok) {
+    build.remove();
+    return { verdict: 'fail', evidence: { build: build.steps, error: 'helper could not be signed / verified' } };
+  }
   const exe = build.exe;
   const r = randomBytes(4).toString('hex');
   const custody = `gnomon-p05-custody-${r}`;
   const svc = `gnomon-p05-${r}`;
   const acct = 'kernel-key';
   const ev = { build: { verifyStrict: build.steps.verifyStrict.ok, details: build.steps.details } };
-  const cleanup = [];
+  // Cleanups run on return, on Ctrl-C/SIGTERM and on the harness timeout
+  // (synchronous helper calls; newest first; the temp build dir last).
+  const cleanup = [() => (build.remove(), { status: 'temp-removed' })];
+  const results = [];
+  const done = onAbort(() => {
+    while (cleanup.length) {
+      const x = cleanup.pop()();
+      results.push(x?.json?.ok ?? x?.status);
+    }
+    return results;
+  }, ctx.signal);
   try {
     // 3. sandboxed refusal
     const sbx = run('/usr/bin/sandbox-exec', ['-p', '(version 1)(allow default)', exe, 'info']);
@@ -63,15 +78,29 @@ export default async function probe(ctx) {
     ev.dpInvisibleToSecurityCli = { exit: cli.status, timedOut: cli.timedOut, ok: cli.status === 44 };
     const unsignedDp = helper(build.unsigned, ['kc-create', `${svc}-dp-attacker`, acct, custody, 'dp']);
     ev.unsignedCannotUseGroup = { json: unsignedDp.json, ok: unsignedDp.json?.ok === false };
-    ev.c5_dataProtectionGated = ev.dpCreate?.ok === true && ev.dpIntegrity?.integrity === 'OK' && ev.dpInvisibleToSecurityCli.ok && ev.unsignedCannotUseGroup.ok;
+    // Bare SecItemAdd into the access group from the unsigned binary: the
+    // entitlement gate alone (no custody key on the path) must say -34018.
+    const bareSvc = `${svc}-bare`;
+    cleanup.push(() => helper(exe, ['kc-delete', bareSvc, acct, 'dp']));
+    const bare = helper(build.unsigned, ['kc-add-bare', bareSvc, acct]);
+    ev.unsignedBareAddToGroup = { json: bare.json, ok: bare.json?.status === -34018 };
+    ev.c5_dataProtectionGated = ev.dpCreate?.ok === true && ev.dpIntegrity?.integrity === 'OK' && ev.dpInvisibleToSecurityCli.ok && ev.unsignedCannotUseGroup.ok && ev.unsignedBareAddToGroup.ok;
     ev.c5_xpcPeerRequirement = 'pending: needs the Developer-ID-signed kernel SEA (M1.1) as the only accepted XPC peer';
 
-    // 4. attacker-planted legacy item (any-app ACL ⇒ no dialog) ⇒ INTEGRITY_BROKEN
-    const fake = `${svc}-forged`;
-    const add = run('/usr/bin/security', ['add-generic-password', '-s', fake, '-a', acct, '-w', randomBytes(16).toString('hex'), '-A'], { timeout: 20_000 });
-    cleanup.push(() => run('/usr/bin/security', ['delete-generic-password', '-s', fake, '-a', acct], { timeout: 20_000 }));
-    const integ = helper(exe, ['kc-integrity', fake, acct, custody], { timeout: 20_000 });
-    ev.c4_forgedItem = { added: add.status === 0, helper: integ.json, timedOut: integ.timedOut, ok: integ.json?.integrity === 'INTEGRITY_BROKEN' };
+    // 4. transplanted signature: a VALID custody signature copied from the
+    // genuine item onto different data must fail SecKeyVerifySignature. The
+    // item is planted by the helper (creator ACL), so no dialog can appear.
+    // The `security add-generic-password -A` attacker item is founder-run
+    // (below): reading it from the helper took 7.5 s, then > 20 s, on this
+    // Mac, consistent with a keychain dialog.
+    const trans = `${svc}-transplant`;
+    cleanup.push(() => helper(exe, ['kc-delete', trans, acct]));
+    const plant = helper(exe, ['kc-transplant', dpSvc, acct, 'dp', trans, acct]);
+    const tinteg = helper(exe, ['kc-integrity', trans, acct, custody], { timeout: 20_000 });
+    ev.c4_forgedItem = {
+      transplantedSignature: { planted: plant.json, helper: tinteg.json },
+      ok: plant.json?.ok === true && tinteg.json?.integrity === 'INTEGRITY_BROKEN',
+    };
 
     const unattendedOk = ev.c3_sandboxedRefuses.ok && ev.c4_forgedItem.ok && ev.c5_dataProtectionGated;
     if (!interactive()) {
@@ -94,12 +123,18 @@ Click DENY (not Allow, not Always Allow).`);
     const hr = helper(exe, ['kc-read', hsvc, acct], { timeout: 60_000 });
     const sawDialog2 = await ask('STEP 4. Did ANY dialog appear while the helper read the item? Type y or n.');
     ev.c2_helperReadsFromPlainShell = { helper: hr.json, timedOut: hr.timedOut, founderSawDialog: /^y/i.test(sawDialog2), disprovesV34: hr.json?.ok === true && !/^y/i.test(sawDialog2) };
-    const all = unattendedOk && ev.c1_securityPrompts.ok && ev.c2_helperReadsFromPlainShell.helper?.ok === true;
+    // 4c. attacker item planted by a same-user shell (`security … -A`).
+    const fake = `${svc}-forged`;
+    const add = run('/usr/bin/security', ['add-generic-password', '-s', fake, '-a', acct, '-w', randomBytes(16).toString('hex'), '-A'], { timeout: 20_000 });
+    cleanup.push(() => run('/usr/bin/security', ['delete-generic-password', '-s', fake, '-a', acct], { timeout: 60_000 }));
+    await ask(`STEP 5. Press Enter. The helper reads an item an "attacker" shell planted with \`security add-generic-password -A\`.
+If a keychain dialog appears for "gnomon-helper", click ALLOW once (the test is that the helper then reports INTEGRITY_BROKEN).`);
+    const integ = helper(exe, ['kc-integrity', fake, acct, custody], { timeout: 180_000 });
+    const sawDialog3 = await ask('STEP 6. Did a dialog appear for that read? Type y or n.');
+    ev.c4_attackerShellItem = { added: add.status === 0, helper: integ.json, timedOut: integ.timedOut, founderSawDialog: /^y/i.test(sawDialog3), ok: integ.json?.integrity === 'INTEGRITY_BROKEN' };
+    const all = unattendedOk && ev.c4_attackerShellItem.ok && ev.c1_securityPrompts.ok && ev.c2_helperReadsFromPlainShell.helper?.ok === true;
     return { verdict: all ? 'pass' : 'fail', evidence: ev };
   } finally {
-    ev.cleanup = cleanup.reverse().map((f) => {
-      const x = f();
-      return x.json?.ok ?? x.status;
-    });
+    ev.cleanup = done() ?? results;
   }
 }

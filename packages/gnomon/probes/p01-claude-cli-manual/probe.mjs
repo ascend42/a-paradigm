@@ -25,7 +25,8 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, realpathSync, writeFi
 import http from 'node:http';
 import os from 'node:os';
 import path from 'node:path';
-import { ask, interactive, say } from '../_shared/signing.mjs';
+import { onAbort } from '../_shared/abort.mjs';
+import { ask, bindSignal, interactive, say } from '../_shared/signing.mjs';
 
 export const specRefs = ['§3.3 spawn line', '§10 law 7', '§19.1 M1.0 P01', 'OPEN 8', 'G-SUB-01', 'G-RUN-03', 'A23-4'];
 
@@ -108,6 +109,8 @@ function checkB(bin) {
     const send = (o) => c.stdin.write(`${JSON.stringify(o)}\n`);
     send({ type: 'user', message: { role: 'user', content: 'Count from 1 to 400, one number per line, nothing else.' } });
     const killer = setTimeout(() => c.kill('SIGKILL'), 180_000);
+    const unhook = onAbort(() => c.kill('SIGKILL'));
+    let text = '';
     c.stdout.on('data', (d) => {
       buf += d;
       let i;
@@ -122,6 +125,7 @@ function checkB(bin) {
         }
         out.events[m.type] = (out.events[m.type] ?? 0) + 1;
         if (m.type === 'stream_event') sentAt ? chunksAfter++ : chunksBefore++;
+        if (m.type === 'stream_event' && typeof m.event?.delta?.text === 'string') text += m.event.delta.text;
         if (m.type === 'stream_event' && !sentAt && chunksBefore >= 5) {
           sentAt = Date.now();
           send({ type: 'control_request', request_id: 'p01-interrupt-1', request: { subtype: 'interrupt' } });
@@ -137,11 +141,16 @@ function checkB(bin) {
     c.stderr.on('data', (d) => (err += d));
     c.on('close', (code, signal) => {
       clearTimeout(killer);
+      unhook();
       out.exit = { code, signal, ms: Date.now() - t0, stderrTail: err.slice(-300) || undefined };
       out.chunks = { beforeInterrupt: chunksBefore, afterInterrupt: chunksAfter };
       out.interruptSent = !!sentAt;
-      // Stopped = a result arrived soon after, well short of 400 lines of output.
-      out.ok = !!out.controlResponse && !!out.result && (out.result.msAfterInterrupt ?? Infinity) < 15_000;
+      // Truncated = the streamed count never reached 400.
+      const nums = (text.match(/\d+/g) ?? []).map(Number).filter((n) => n <= 400);
+      out.streamedMaxNumber = nums.length ? Math.max(...nums) : null;
+      out.truncated = out.streamedMaxNumber !== null && out.streamedMaxNumber < 400;
+      out.ok = out.controlResponse?.subtype === 'success' && out.controlResponse?.requestId === 'p01-interrupt-1'
+        && !!out.result && (out.result.msAfterInterrupt ?? Infinity) < 15_000 && out.truncated;
       resolve(out);
     });
   });
@@ -180,12 +189,21 @@ async function checkD(bin) {
     sudo mkdir -p "/Library/Application Support/ClaudeCode" && sudo cp '${staged}' "${MANAGED}"
 Then come back here and press Enter.`);
   if (!existsSync(MANAGED)) return { skipped: 'managed file not installed' };
+  // From here a test policy is live machine-wide: on Ctrl-C / timeout, tell
+  // the founder exactly how to remove it (we cannot: it needs sudo).
+  const rmLine = `sudo rm "${MANAGED}"`;
+  const unhook = onAbort(() => {
+    if (existsSync(MANAGED)) process.stderr.write(`\n!!! The P01 test managed policy is STILL INSTALLED. Remove it now:\n    ${rmLine}\n\n`);
+  });
   const r = runClaude(bin, ['-p', 'Reply with the single word ok.', '--output-format', 'json', '--setting-sources', 'project', '--max-turns', '1'], dir);
   const fired = existsSync(marker);
   await ask(`D. Done. In the other tab, REMOVE the test policy now:
-    sudo rm "${MANAGED}"
+    ${rmLine}
 Press Enter when removed.`);
-  return { managedHookFiredUnderSettingSourcesProject: fired, exit: r.status, removedAfter: !existsSync(MANAGED), meaning: fired ? 'managed policy loads regardless of --setting-sources (it is outside the switch)' : 'managed hook did NOT fire under --setting-sources project' };
+  const removedAfter = !existsSync(MANAGED);
+  if (!removedAfter) process.stderr.write(`\n!!! Not removed yet. Run:\n    ${rmLine}\n\n`);
+  unhook();
+  return { managedHookFiredUnderSettingSourcesProject: fired, exit: r.status, removedAfter, ok: removedAfter === true, meaning: fired ? 'managed policy loads regardless of --setting-sources (it is outside the switch)' : 'managed hook did NOT fire under --setting-sources project' };
 }
 
 export default async function probe(ctx) {
@@ -195,6 +213,8 @@ export default async function probe(ctx) {
   if (cp.error) return { verdict: 'partial', evidence: { blocked: cp.error } };
   if (process.env.ANTHROPIC_API_KEY) return { verdict: 'partial', evidence: { blocked: 'ANTHROPIC_API_KEY is set; unset it (law 7: subscription only) and re-run' } };
   if (!interactive()) return { verdict: 'partial', evidence: { notRun: 'interactive founder probe', claude: { path: cp.recorded, version, via: 'p01-claude-cli result (never PATH)' }, plan } };
+  bindSignal(ctx.signal);
+  onAbort(() => {}, ctx.signal)(); // install the SIGINT/SIGTERM + ctx.signal hooks
   say(`P01 manual half with ${cp.recorded} (${version}). Four checks; each asks first.`);
   const ev = { claude: { path: cp.recorded, version, via: 'p01-claude-cli result (never PATH)' } };
   if (!/^n/i.test(await ask('A. Hook stdin session_id: runs one tiny `claude -p` turn in a temp project with a hook that saves its stdin. Run it? [Y/n]'))) ev.A = await checkA(cp.path);
@@ -202,6 +222,7 @@ export default async function probe(ctx) {
   if (/^y/i.test(await ask('C. Loopback override: runs claude with ANTHROPIC_BASE_URL pointing at a listener inside THIS probe. If the CLI sends your subscription credential there, the probe sees it in memory and records only the header name/scheme, never the value. Run it? [y/N]'))) ev.C = await checkC(cp.path);
   if (/^y/i.test(await ask('D. Managed policy: you will install (and then remove) a test managed-settings.json with sudo in another tab. Run it? [y/N]'))) ev.D = await checkD(cp.path);
   const failed = (ev.A && !ev.A.ok) || (ev.B && !ev.B.ok);
-  const complete = ev.A && ev.B && ev.C && ev.D && !ev.D.skipped;
+  // D only counts once the test policy is confirmed removed.
+  const complete = ev.A && ev.B && ev.C && ev.D && !ev.D.skipped && ev.D.removedAfter === true;
   return { verdict: failed ? 'fail' : complete ? 'pass' : 'partial', evidence: ev, toolVersions: { claude: version ?? 'unknown' } };
 }

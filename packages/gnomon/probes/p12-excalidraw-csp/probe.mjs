@@ -4,8 +4,9 @@
 // font-src 'self', connect-src loopback only — and what it costs (size, parse).
 //
 // Method (nothing here is committed except this file):
-//   1. Install the PINNED packages below into a temp dir (npm, --ignore-scripts),
-//      cached across runs by pin hash.
+//   1. `npm ci --ignore-scripts` the PINNED packages below into a temp dir
+//      against the committed p12-excalidraw-csp/package-lock.json (whole tree
+//      pinned), cached across runs by pins + lock hash.
 //   2. Bundle a tiny app with the pinned esbuild exactly as the GUI would ship it:
 //      ESM + code splitting, minified, production conditions; copy Excalidraw's
 //      self-contained font-subset worker chunks and fonts/ beside it, and set
@@ -135,17 +136,21 @@ function npm(args, cwd) {
   return execFileSync(bin, args, { cwd, encoding: 'utf8', timeout: 600_000, stdio: ['ignore', 'pipe', 'pipe'], shell: process.platform === 'win32' });
 }
 
-function prepare() {
-  const pinHash = createHash('sha256').update(JSON.stringify(PINS)).digest('hex').slice(0, 12);
+function prepare(probeDir) {
+  // The whole dependency tree is pinned by the committed package-lock.json
+  // (probe dir); `npm ci` refuses any drift from it.
+  const lock = readFileSync(path.join(probeDir, 'package-lock.json'));
+  const pinHash = createHash('sha256').update(JSON.stringify(PINS)).update(lock).digest('hex').slice(0, 12);
   const work = path.join(os.tmpdir(), `gnomon-p12-${pinHash}`);
-  const timings = {};
+  const timings = { lockSha256: createHash('sha256').update(lock).digest('hex').slice(0, 16) };
   if (!existsSync(path.join(work, 'node_modules/@excalidraw/excalidraw/package.json'))) {
     mkdirSync(work, { recursive: true });
     writeFileSync(path.join(work, 'package.json'), JSON.stringify({ name: 'gnomon-p12-tmp', private: true, dependencies: PINS }, null, 2));
+    writeFileSync(path.join(work, 'package-lock.json'), lock);
     const t = Date.now();
-    npm(['install', '--ignore-scripts', '--no-audit', '--no-fund', '--no-package-lock'], work);
-    timings.npmInstallMs = Date.now() - t;
-  } else timings.npmInstallMs = 'cached';
+    npm(['ci', '--ignore-scripts', '--no-audit', '--no-fund'], work);
+    timings.npmCiMs = Date.now() - t;
+  } else timings.npmCiMs = 'cached';
   const out = path.join(work, 'out');
   rmSync(out, { recursive: true, force: true });
   mkdirSync(out, { recursive: true });
@@ -244,9 +249,15 @@ function summarize(rep, scan, served = []) {
   if (!rep) return null;
   const v = rep.violations ?? [];
   const claim = v.filter((x) => CLAIM_DIRECTIVES.has(x.directive));
+  // Load phase by timestamp, not by the async-dispatched phase label: a
+  // violation counts as "while loading" if it fired at or before the mount
+  // (or at all, if the page never mounted).
+  const mountAt = rep.tMounted ?? Infinity;
+  const atLoad = (x) => typeof x.at !== 'number' || x.at <= mountAt;
   return { ...summarizeBase(rep, scan), fontsServedLocally: served.filter((r) => r.path.startsWith('/fonts/')).length,
     violationCount: v.length, violations: aggregate(v), claimViolations: claim.length,
-    loadPhaseClaimViolations: claim.filter((x) => x.phase === 'load' || x.phase === 'boot').length };
+    loadPhaseViolations: v.filter(atLoad).length,
+    loadPhaseClaimViolations: claim.filter(atLoad).length };
 }
 
 function summarizeBase(rep, scan) {
@@ -284,7 +295,7 @@ const median = (xs) => {
 export default async function probe(ctx) {
   let prep;
   try {
-    prep = prepare();
+    prep = prepare(ctx.probeDir);
   } catch (e) {
     return { verdict: 'partial', evidence: { blocked: 'could not install/bundle the pinned packages (network or npm missing?)', pins: PINS, error: String(e.stderr ?? e.message).slice(0, 1500) } };
   }
@@ -326,6 +337,7 @@ export default async function probe(ctx) {
         violatedDirectives: directives,
         exportPng: ok.every((r) => r.png?.ok),
         exportSvg: ok.every((r) => r.svg?.ok),
+        exportSvgFontFace: ok.every((r) => r.svg?.fontFace === true),
         firstRun: runs[0],
       };
     }
@@ -337,7 +349,9 @@ export default async function probe(ctx) {
   // The claim: mounts with no script/eval refusal while loading. Everything else
   // (export path, img-src data:, font fallback, style attributes) is recorded.
   const loadClean = rows.length > 0 && rows.every((r) => r.mountedRuns === r.runs && r.loadPhaseClaimViolationCount === 0);
-  const exportClean = rows.every((r) => r.violationCount === 0 && r.exportPng && r.exportSvg);
+  // Export is clean only with no violation at all, both exports working, and
+  // the SVG carrying its embedded @font-face (the font-subset path really ran).
+  const exportClean = rows.every((r) => r.violationCount === 0 && r.exportPng && r.exportSvg && r.exportSvgFontFace);
   const evalSites = Object.entries(scan.js).filter(([, v]) => v.newFunction || v.evalCall || v.wasmInstantiate).map(([f, v]) => ({ file: f, ...v }));
   const findings = [];
   if (evalSites.length) findings.push(`static: ${evalSites.length} served file(s) contain new Function / eval / WebAssembly instantiation (Excalidraw's Emscripten font-subset glue); runtime behaviour under the CSP is in engines.*`);

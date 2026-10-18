@@ -9,34 +9,64 @@
   },
   "verdict": "fail",
   "evidence": {
-    "standIns": "no second machine: the LAN peer is a listener on 0.0.0.0:58965 reached as 127.0.0.1:58965 (allowed) and as the en0 address (en0) on the same port (other host); 127.0.0.1:58966 is another port; the unix socket and file are in a temp dir",
+    "standIns": "no second machine: the LAN peer is a listener on 0.0.0.0:59068 reached as 127.0.0.1:59068 (allowed) and as the en0 address (en0) on the same port (other host); 127.0.0.1:59069 is another port; the unix socket and file are in a temp dir",
     "hostForms": [
       {
-        "rule": "(remote tcp \"127.0.0.1:58965\")",
+        "rule": "(remote ip \"127.0.0.1:59068\")",
         "compiles": false,
-        "stderr": "sandbox-exec: host must be * or localhost in network address\n\nBacktrace: \n<input string>:1:75:\n\t(remote tcp \"127.0.0.1:58965\")"
+        "stderr": "sandbox-exec: host must be * or localhost in network address\n\nBacktrace: \n<input string>:1:75:\n\t(remote ip \"127.0.0.1:59068\")"
       },
       {
-        "rule": "(remote tcp \"192.168.1.70:58965\")",
+        "rule": "(remote tcp \"127.0.0.1:59068\")",
         "compiles": false,
-        "stderr": "sandbox-exec: host must be * or localhost in network address\n\nBacktrace: \n<input string>:1:75:\n\t(remote tcp \"192.168.1.70:58965\")"
+        "stderr": "sandbox-exec: host must be * or localhost in network address\n\nBacktrace: \n<input string>:1:75:\n\t(remote tcp \"127.0.0.1:59068\")"
       },
       {
-        "rule": "(remote tcp \"localhost:58965\")",
+        "rule": "(remote tcp4 \"127.0.0.1:59068\")",
+        "compiles": false,
+        "stderr": "sandbox-exec: host must be * or localhost in network address\n\nBacktrace: \n<input string>:1:75:\n\t(remote tcp4 \"127.0.0.1:59068\")"
+      },
+      {
+        "rule": "(remote ip4 \"127.0.0.1:59068\")",
+        "compiles": false,
+        "stderr": "sandbox-exec: host must be * or localhost in network address\n\nBacktrace: \n<input string>:1:75:\n\t(remote ip4 \"127.0.0.1:59068\")"
+      },
+      {
+        "rule": "(remote ip \"192.168.1.70:59068\")",
+        "compiles": false,
+        "stderr": "sandbox-exec: host must be * or localhost in network address\n\nBacktrace: \n<input string>:1:75:\n\t(remote ip \"192.168.1.70:59068\")"
+      },
+      {
+        "rule": "(remote tcp \"192.168.1.70:59068\")",
+        "compiles": false,
+        "stderr": "sandbox-exec: host must be * or localhost in network address\n\nBacktrace: \n<input string>:1:75:\n\t(remote tcp \"192.168.1.70:59068\")"
+      },
+      {
+        "rule": "(remote tcp4 \"192.168.1.70:59068\")",
+        "compiles": false,
+        "stderr": "sandbox-exec: host must be * or localhost in network address\n\nBacktrace: \n<input string>:1:75:\n\t(remote tcp4 \"192.168.1.70:59068\")"
+      },
+      {
+        "rule": "(remote ip4 \"192.168.1.70:59068\")",
+        "compiles": false,
+        "stderr": "sandbox-exec: host must be * or localhost in network address\n\nBacktrace: \n<input string>:1:75:\n\t(remote ip4 \"192.168.1.70:59068\")"
+      },
+      {
+        "rule": "(remote tcp \"localhost:59068\")",
         "compiles": true
       },
       {
-        "rule": "(remote tcp \"*:58965\")",
+        "rule": "(remote tcp \"*:59068\")",
         "compiles": true
       },
       {
-        "rule": "(remote ip \"localhost:58965\")",
+        "rule": "(remote ip \"localhost:59068\")",
         "compiles": true
       }
     ],
     "literalIpCompiles": false,
     "pinnedRun": {
-      "rule": "(remote tcp \"localhost:58965\")",
+      "rule": "(remote tcp \"localhost:59068\")",
       "code": 0,
       "signal": null,
       "result": {
@@ -74,7 +104,7 @@
     ],
     "allowedConnect": "connected",
     "portOnlyRun": {
-      "rule": "(remote tcp \"*:58965\")",
+      "rule": "(remote tcp \"*:59068\")",
       "result": {
         "allowed": "connected",
         "otherPort": "EPERM",
@@ -106,12 +136,12 @@
       "homeList": "listed",
       "exec": "ran"
     },
-    "profile": "(version 1)\n(deny default)\n(allow process-exec (literal \"<node>\"))\n(allow file-read* (literal \"/\") (subpath \"/opt/homebrew/Cellar/node/26.0.0\") (subpath \"/opt/homebrew/Cellar/llhttp/9.4.1/lib\") (subpath \"/opt/homebrew/Cellar/libuv/1.53.0/lib\") (subpath \"/opt/homebrew/Cellar/ada-url/3.4.4/lib\") (subpath \"/opt/homebrew/Cellar/simdjson/4.6.4/lib\") (subpath \"/opt/homebrew/Cellar/brotli/1.2.0/lib\") (subpath \"/opt/homebrew/Cellar/c-ares/1.34.6/lib\") (subpath \"/opt/homebrew/Cellar/hdrhistogram_c/0.11.9/lib\") (subpath \"/opt/homebrew/Cellar/merve/1.2.2_1/lib\") (subpath \"/opt/homebrew/Cellar/nbytes/0.1.4/lib\") (subpath \"/opt/homebrew/Cellar/libnghttp2/1.69.0/lib\") (subpath \"/opt/homebrew/Cellar/libnghttp3/1.16.0/lib\") (subpath \"/opt/homebrew/Cellar/libngtcp2/1.23.0/lib\") (subpath \"/opt/homebrew/Cellar/sqlite/3.53.4/lib\") (subpath \"/opt/homebrew/Cellar/uvwasi/0.0.23/lib\") (subpath \"/opt/homebrew/Cellar/zstd/1.5.7_1/lib\") (subpath \"/opt/homebrew/Cellar/openssl@3/3.6.3/lib\") (subpath \"/opt/homebrew/Cellar/icu4c@78/78.3/lib\") (subpath \"/opt/homebrew/opt\") (subpath \"/opt/homebrew/Cellar\"))\n(allow file-read* (literal \"/opt/homebrew/Cellar/node/26.0.0/bin/node\") (literal \"/dev/null\") (literal \"/dev/urandom\") (literal \"/dev/random\") (subpath \"/usr/lib\") (subpath \"/System/Library\") (subpath \"/System/Cryptexes\") (subpath \"/private/var/db/dyld\") (subpath \"/Library/Apple/System/Library\"))\n(allow file-read-metadata)\n(allow file-write-data (literal \"/dev/null\"))\n(allow sysctl-read)\n(allow network-outbound (remote tcp \"localhost:58965\"))",
+    "profile": "(version 1)\n(deny default)\n(allow process-exec (literal \"<node>\"))\n(allow file-read* (literal \"/\") (subpath \"/opt/homebrew/Cellar/node/26.0.0\") (subpath \"/opt/homebrew/Cellar/llhttp/9.4.1/lib\") (subpath \"/opt/homebrew/Cellar/libuv/1.53.0/lib\") (subpath \"/opt/homebrew/Cellar/ada-url/3.4.4/lib\") (subpath \"/opt/homebrew/Cellar/simdjson/4.6.4/lib\") (subpath \"/opt/homebrew/Cellar/brotli/1.2.0/lib\") (subpath \"/opt/homebrew/Cellar/c-ares/1.34.6/lib\") (subpath \"/opt/homebrew/Cellar/hdrhistogram_c/0.11.9/lib\") (subpath \"/opt/homebrew/Cellar/merve/1.2.2_1/lib\") (subpath \"/opt/homebrew/Cellar/nbytes/0.1.4/lib\") (subpath \"/opt/homebrew/Cellar/libnghttp2/1.69.0/lib\") (subpath \"/opt/homebrew/Cellar/libnghttp3/1.16.0/lib\") (subpath \"/opt/homebrew/Cellar/libngtcp2/1.23.0/lib\") (subpath \"/opt/homebrew/Cellar/sqlite/3.53.4/lib\") (subpath \"/opt/homebrew/Cellar/uvwasi/0.0.23/lib\") (subpath \"/opt/homebrew/Cellar/zstd/1.5.7_1/lib\") (subpath \"/opt/homebrew/Cellar/openssl@3/3.6.3/lib\") (subpath \"/opt/homebrew/Cellar/icu4c@78/78.3/lib\") (subpath \"/opt/homebrew/opt\") (subpath \"/opt/homebrew/Cellar\"))\n(allow file-read* (literal \"/opt/homebrew/Cellar/node/26.0.0/bin/node\") (literal \"/dev/null\") (literal \"/dev/urandom\") (literal \"/dev/random\") (subpath \"/usr/lib\") (subpath \"/System/Library\") (subpath \"/System/Cryptexes\") (subpath \"/private/var/db/dyld\") (subpath \"/Library/Apple/System/Library\"))\n(allow file-read-metadata)\n(allow file-write-data (literal \"/dev/null\"))\n(allow sysctl-read)\n(allow network-outbound (remote tcp \"localhost:59068\"))",
     "findings": [
-      "\"localhost:58965\" also admitted 192.168.1.70:58965 — this Mac's own en0 address, which SBPL/the kernel treat as local. Not a remote host; a true other-host case needs a second machine.",
+      "\"localhost:59068\" also admitted 192.168.1.70:59068 — this Mac's own en0 address, which SBPL/the kernel treat as local. Not a remote host; a true other-host case needs a second machine.",
       "port-scoped refusals all hold under deny-default: other port, UDP, listen, file read, home listing, exec, unix-socket connect (EPERM).",
       "SBPL refuses a literal IP host in (remote tcp \"<ip>:<port>\"): only localhost or * compile. A real LAN peer can be pinned by PORT only in the profile; the host must be enforced elsewhere (the child dialing only root-signed addresses, plus a kernel-side peer check / pf) — §15.5 `link` text needs that caveat.",
-      "with \"*:58965\" the child reached 192.168.1.70:58965 — a port-only rule admits any host on that port."
+      "with \"*:59068\" the child reached 192.168.1.70:59068 — a port-only rule admits any host on that port."
     ]
   },
   "specRefs": [
@@ -122,5 +152,5 @@
     "G-LNK-11",
     "P8-D74"
   ],
-  "at": "2026-10-18T01:31:02.008Z"
+  "at": "2026-10-18T01:44:06.516Z"
 }

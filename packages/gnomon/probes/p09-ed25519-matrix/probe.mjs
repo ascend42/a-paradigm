@@ -2,8 +2,8 @@
 // The GUI verifies the kernel's `serverSig` with WebCrypto Ed25519 and pins the
 // kernel key from the launch fragment as SPKI. This probe runs one test body
 // (ed25519-test.js: generate, sign, verify, forged signature + forged message
-// rejected, SPKI round trip, the RFC 8032 §7.1 TEST 1 vector, and — recorded,
-// not gating — strict S < L) in:
+// rejected, SPKI round trip, the RFC 8032 §7.1 TEST 2 vector (gating), and —
+// recorded, not gating — strict S < L and the empty-message TEST 1) in:
 //   - Node's WebCrypto (baseline),
 //   - every engine found locally, each loading a page served from the probe's
 //     own loopback server under the exact §11.2 rule 6 CSP (no unsafe-eval,

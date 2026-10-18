@@ -13,11 +13,11 @@
       "details": [
         "Identifier=gnomon.helper",
         "Format=app bundle with Mach-O thin (arm64)",
-        "CodeDirectory flags=0x10000(runtime) hashes=29+7 location=embedded",
+        "CodeDirectory flags=0x10000(runtime) hashes=34+7 location=embedded",
         "Authority=Developer ID Application: Matthew Canoy (SW4BMQ8PNL)",
         "Authority=Developer ID Certification Authority",
         "Authority=Apple Root CA",
-        "Timestamp=Oct 17, 2026 at 6:31:12 PM",
+        "Timestamp=Oct 17, 2026 at 6:45:04 PM",
         "TeamIdentifier=SW4BMQ8PNL",
         "Runtime Version=26.2.0"
       ]
@@ -35,19 +35,19 @@
       "ok": true,
       "presence": false,
       "publicKeyBytes": 65,
-      "publicKeySha256": "54d388899fc5f463",
-      "tag": "gnomon-p05-custody-71cf0eba"
+      "publicKeySha256": "5b82885ca063e542",
+      "tag": "gnomon-p05-custody-3b6680a2"
     },
     "dpCreate": {
       "dataProtection": true,
-      "dataSha256": "005caa01bd4c8b23",
+      "dataSha256": "b8e0c5215b7bfcf0",
       "ok": true,
       "status": 0
     },
     "dpIntegrity": {
       "dataProtection": true,
       "integrity": "OK",
-      "ms": 1,
+      "ms": 0,
       "ok": true
     },
     "dpInvisibleToSecurityCli": {
@@ -63,24 +63,39 @@
       },
       "ok": true
     },
+    "unsignedBareAddToGroup": {
+      "json": {
+        "ok": false,
+        "status": -34018
+      },
+      "ok": true
+    },
     "c5_dataProtectionGated": true,
     "c5_xpcPeerRequirement": "pending: needs the Developer-ID-signed kernel SEA (M1.1) as the only accepted XPC peer",
     "c4_forgedItem": {
-      "added": true,
-      "helper": {
-        "dataProtection": false,
-        "integrity": "INTEGRITY_BROKEN",
-        "ms": 5202,
-        "ok": false
+      "transplantedSignature": {
+        "planted": {
+          "copiedSignatureChars": 96,
+          "dataSha256": "70c61abb4ea16eab",
+          "ok": true,
+          "status": 0
+        },
+        "helper": {
+          "dataProtection": false,
+          "integrity": "INTEGRITY_BROKEN",
+          "ms": 13,
+          "ok": false
+        }
       },
-      "timedOut": false,
       "ok": true
     },
     "pendingFounder": "claims 1 and 2 raise keychain dialogs: run in a terminal: node packages/gnomon/probes/run.mjs p05-keychain-acl --timeout 1800000",
     "cleanup": [
-      0,
       true,
-      true
+      true,
+      true,
+      true,
+      "temp-removed"
     ]
   },
   "specRefs": [
@@ -92,5 +107,5 @@
     "release gate (b)",
     "G-ID-07"
   ],
-  "at": "2026-10-18T01:31:18.390Z"
+  "at": "2026-10-18T01:45:05.309Z"
 }

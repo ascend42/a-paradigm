@@ -172,7 +172,7 @@ export function buildHelper({ embedProfile = true, sign = true } = {}) {
     const sp = run('/usr/sbin/spctl', ['--assess', '--type', 'execute', '-vv', app]);
     steps.spctl = { status: sp.status, output: sp.stderr.slice(0, 300) };
   }
-  return { dir, app, exe, unsigned, steps };
+  return { dir, app, exe, unsigned, steps, remove: () => rmSync(dir, { recursive: true, force: true }) };
 }
 
 /** Run a helper command; parse its one JSON line. */
@@ -187,10 +187,32 @@ export function helper(bin, args, opts = {}) {
   return { status: r.status, signal: r.signal, timedOut: r.timedOut, json, stderr: r.stderr ? r.stderr.slice(0, 400) : undefined };
 }
 
-/** Interactive prompt; resolves the trimmed answer. Only call when stdin is a TTY. */
+let abortSignal = null;
+/** Bind ctx.signal so ask() rejects when the harness aborts (timeout). */
+export function bindSignal(signal) {
+  abortSignal = signal ?? null;
+}
+
+/** Interactive prompt; resolves the trimmed answer, rejects on abort. Only call when stdin is a TTY. */
 export function ask(question) {
   const rl = readline.createInterface({ input: process.stdin, output: process.stderr });
-  return new Promise((r) => rl.question(`\n${question}\n> `, (a) => { rl.close(); r(a.trim()); }));
+  return new Promise((resolve, reject) => {
+    if (abortSignal?.aborted) {
+      rl.close();
+      reject(new Error('aborted'));
+      return;
+    }
+    const onAbortFn = () => {
+      rl.close();
+      reject(new Error('aborted'));
+    };
+    abortSignal?.addEventListener('abort', onAbortFn, { once: true });
+    rl.question(`\n${question}\n> `, (a) => {
+      abortSignal?.removeEventListener('abort', onAbortFn);
+      rl.close();
+      resolve(a.trim());
+    });
+  });
 }
 
 export function say(text) {

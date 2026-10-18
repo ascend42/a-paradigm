@@ -19,7 +19,8 @@
 // partial with the Touch ID half pending. Source: _shared/helper/ProbeHelper.swift,
 // build recipe: _shared/signing.mjs buildHelper().
 import { randomBytes } from 'node:crypto';
-import { ACCESS_GROUP, APP_ID, IDENTITY, ask, buildHelper, checkIdentity, checkProfile, helper, interactive, prerequisiteFailure, run, say } from '../_shared/signing.mjs';
+import { onAbort } from '../_shared/abort.mjs';
+import { ACCESS_GROUP, APP_ID, IDENTITY, ask, bindSignal, buildHelper, checkIdentity, checkProfile, helper, interactive, prerequisiteFailure, run, say } from '../_shared/signing.mjs';
 
 export const specRefs = ['§3.1', '§3.4 prompt text', '§16 keys row', '§19.1 M1.0 P04 / S29-01', 'K2', 'K5', 'P8-D68', 'G-ID-01', 'G-ID-06'];
 
@@ -42,23 +43,35 @@ export default async function probe(ctx) {
   else if (!profile.valid) missing.push(`a VALID provisioning profile (want ${APP_ID} with access group ${ACCESS_GROUP} or ${APP_ID.split('.')[0]}.*, unexpired)`);
   if (missing.length) return prerequisiteFailure(missing, { identity, profile });
 
+  bindSignal(ctx.signal);
   const build = buildHelper({ embedProfile: true });
   const evidence = { identity, profile, build: build.steps };
+  const exe = build.exe;
+  const tag = `gnomon-p04-${randomBytes(4).toString('hex')}`;
+  // Runs on return, Ctrl-C/SIGTERM and the harness timeout: SE keys + temp build dir.
+  const done = onAbort(() => {
+    const out = { signed: helper(exe, ['se-delete', tag]).json?.ok ?? false, unsigned: helper(build.unsigned, ['se-delete', `${tag}-unsigned`]).json?.ok ?? false };
+    build.remove();
+    return out;
+  }, ctx.signal);
+  try {
+    return await body();
+  } finally {
+    evidence.cleanup = done();
+  }
+
+  async function body() {
   if (build.steps.codesign?.status !== 0 || !build.steps.verifyStrict?.ok) {
     return { verdict: 'fail', evidence: { ...evidence, error: 'helper could not be signed / verified' } };
   }
-  const exe = build.exe;
   evidence.info = helper(exe, ['info']).json;
-  const tag = `gnomon-p04-${randomBytes(4).toString('hex')}`;
   evidence.unsignedCreate = helper(build.unsigned, ['se-create', `${tag}-unsigned`, 'presence']);
-  helper(build.unsigned, ['se-delete', `${tag}-unsigned`]);
   evidence.signedCreate = helper(exe, ['se-create', tag, 'presence']);
   const unsignedRefused = evidence.unsignedCreate.json?.ok === false && [-34018, -25300].includes(evidence.unsignedCreate.json?.code);
   const signedOk = evidence.signedCreate.json?.ok === true;
   evidence.claims = { a_signedHelperCreatesSeKey: signedOk, b_unsignedRefused: unsignedRefused, b_unsignedCode: evidence.unsignedCreate.json?.code ?? null };
 
   if (!interactive() || !signedOk) {
-    evidence.signedDelete = helper(exe, ['se-delete', tag]).json;
     evidence.pendingFounder = 'c (one LAContext signs N times, invalidate, fresh prompt) and d (300-character reason) need Touch ID: run in a terminal: node packages/gnomon/probes/run.mjs p04-se-helper --timeout 1800000';
     return { verdict: signedOk && unsignedRefused ? 'partial' : 'fail', evidence, toolVersions: { xcode: run('/usr/bin/xcodebuild', ['-version']).stdout.split('\n')[0] } };
   }
@@ -73,11 +86,11 @@ After that the helper signs ${N} times with no dialog, then forgets the approval
   const cut = await ask('STEP 3. In the FIRST dialog, what were the last few words (or the last "mNN" mark) you could read? Type them exactly, or "all" if the whole text including the marks was shown.');
   const appName = await ask('STEP 4. Did the dialog name an app (for example "Gnomon Helper" or "Terminal")? Type the name, or "none".');
   evidence.founder = { secondDialogSeen: /^y/i.test(second), lastVisibleText: cut, appNameShown: appName, reasonChars: reason.length };
-  evidence.signedDelete = helper(exe, ['se-delete', tag]).json;
   const s = evidence.seSign;
   evidence.claims.c_reuse = s?.reuse?.signedWithoutPrompt === N;
   evidence.claims.c_invalidateStops = s?.afterInvalidate?.signed === false;
   evidence.claims.c_freshPrompts = s?.freshContext?.signed === true && evidence.founder.secondDialogSeen;
   const all = signedOk && unsignedRefused && evidence.claims.c_reuse && evidence.claims.c_invalidateStops && evidence.claims.c_freshPrompts;
   return { verdict: all ? 'pass' : 'fail', evidence, toolVersions: { xcode: run('/usr/bin/xcodebuild', ['-version']).stdout.split('\n')[0] } };
+  }
 }

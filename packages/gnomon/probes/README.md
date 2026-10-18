@@ -20,7 +20,8 @@ The Windows halves belong to the Windows parity phase (P8-D78).
 | `p06-local-caps` | `n_ctx` from `/slots` and `/props`, plus tool-call capability, for each llama.cpp endpoint. Configure with `P06_ENDPOINTS=http://127.0.0.1:8080,…`, or set `P06_GGUF=<model>` to let the probe start `llama-server`. No endpoint gives `partial`: "recorded, not failed". |
 | `p09-ed25519-matrix` | WebCrypto Ed25519 in Node and in every local engine (Chrome, Chrome for Testing, headless shell, Edge, Firefox, WKWebView), each loaded under the §11.2 CSP. |
 | `p12-excalidraw-csp` | The pinned Excalidraw, bundled with esbuild in a temp dir and loaded under the §11.2 CSP: mount, scene, PNG/SVG export, every CSP violation, size and parse time. Needs network for `npm install`. |
-| `p14-link-outbound` | A default-deny `sandbox-exec` `link` profile: one allowed outbound TCP, with every other path refused. |
+| `p14-link-outbound` | A default-deny `sandbox-exec` `link` profile: one allowed outbound TCP, with every other path refused. SBPL accepts only `*` or `localhost` as the host. |
+| `p14b-link-fdpass` | The kernel dials the peer and hands the connected socket to a deny-default child that has no `network*` allow (`subprocess.send(msg, socket)`). Checks: 4 MiB both ways, the peer's close, a redial hand-off, and every child-originated connect/UDP/listen/unix/file/exec refused. |
 
 Engines are driven by "open this URL" only. Each page POSTs its report to the
 probe's own loopback server, so the probes need no CDP and no Playwright.
@@ -42,6 +43,12 @@ prompt-free half and records `partial`.
   `Developer ID Application: Matthew Canoy (SW4BMQ8PNL)`. If any of these is
   missing, the probe stops with
   `MISSING PREREQUISITE: … — see docs/private/gnomon-founder-steps.html section 1`.
+  That run records `verdict: partial` with `evidence.blocked: "prerequisites"`,
+  which means pending, not a measured partial result. Don't commit it.
+  Ctrl-C or a harness timeout runs the cleanups (`_shared/abort.mjs`): SE keys,
+  keychain items, capture processes and temp build dirs. The P01 managed
+  policy is the exception, because removing it needs sudo; the probe prints
+  the exact `sudo rm` line instead.
   The helper is `_shared/helper/ProbeHelper.swift`, built into
   `GnomonHelperProbe.app` (bundle id `gnomon.helper`, App ID
   `SW4BMQ8PNL.gnomon.helper`, access group `SW4BMQ8PNL.gnomon`) in a temp dir.

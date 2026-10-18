@@ -79,8 +79,12 @@ jobs:
           node-version: 24
 
       # Zero deps, no build: run.mjs must work on a fresh checkout.
+      # CI results go to a runner temp dir (--out-dir), never into
+      # probes/results/: the committed files there are hardware runs only,
+      # and the artifact must not mix them in.
       - name: Probe harness self-test (p-harness)
-        run: node packages/gnomon/probes/run.mjs p-harness
+        shell: bash
+        run: node packages/gnomon/probes/run.mjs p-harness --out-dir "$RUNNER_TEMP/probe-results"
 
       # P09 + P12 on hosted runners (mechanics only; the runner's Chrome).
       # Exit 2 (partial: no Safari/Firefox/WKWebView row on CI) is expected;
@@ -91,7 +95,7 @@ jobs:
           status=0
           for id in p09-ed25519-matrix p12-excalidraw-csp; do
             code=0
-            node packages/gnomon/probes/run.mjs "$id" --timeout 900000 || code=$?
+            node packages/gnomon/probes/run.mjs "$id" --timeout 900000 --out-dir "$RUNNER_TEMP/probe-results" || code=$?
             if [ "$code" -ne 0 ] && [ "$code" -ne 2 ]; then status=1; fi
           done
           exit $status
@@ -101,7 +105,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: probe-results-${{ matrix.os }}
-          path: packages/gnomon/probes/results/*.json
+          path: ${{ runner.temp }}/probe-results/*.json
           if-no-files-found: warn
 
   native:

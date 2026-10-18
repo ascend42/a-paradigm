@@ -21,7 +21,19 @@ import net from 'node:net';
 
 export const specRefs = ['§13.2', '§13.3', '§19.1 M1.0 P06', 'G-LCL-01', 'G-LCL-02', 'model.probe', 'model.capabilities'];
 
-const LOOPBACK_OR_LAN = /^(127\.|10\.|192\.168\.|172\.(1[6-9]|2\d|3[01])\.|localhost$|\[::1\]$)/;
+// Loopback/LAN per the §13 rule, on a parsed address (net.isIP), never a
+// hostname prefix (a regex on the string admitted e.g. "10.evil.example").
+function loopbackOrLan(hostname) {
+  const h = hostname.replace(/^\[|\]$/g, '');
+  if (h === 'localhost') return true;
+  const v = net.isIP(h);
+  if (v === 4) {
+    const [a, b] = h.split('.').map(Number);
+    return a === 127 || a === 10 || (a === 192 && b === 168) || (a === 172 && b >= 16 && b <= 31) || (a === 169 && b === 254);
+  }
+  if (v === 6) return h === '::1' || /^f[cd]/i.test(h) || /^fe[89ab]/i.test(h);
+  return false;
+}
 
 async function getJson(url, init = {}, timeoutMs = 10_000) {
   const ctl = AbortSignal.timeout(timeoutMs);
@@ -42,7 +54,7 @@ async function getJson(url, init = {}, timeoutMs = 10_000) {
 
 async function probeEndpoint(base) {
   const host = new URL(base).hostname;
-  if (!LOOPBACK_OR_LAN.test(host)) return { base, refused: 'not loopback/LAN (§13 rule)' };
+  if (!loopbackOrLan(host)) return { base, refused: 'not loopback/LAN (§13 rule)' };
   const health = await getJson(`${base}/health`, {}, 3000);
   if (health.status === 0) return { base, present: false, error: health.error };
   const props = await getJson(`${base}/props`);

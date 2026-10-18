@@ -21,11 +21,12 @@
 // hits are recorded as K7 evidence, not failures — spec table).
 import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { createHash, randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, statSync } from 'node:fs';
+import { chmodSync, existsSync, mkdtempSync, readFileSync, readdirSync, rmSync, statSync } from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { startServer } from '../_shared/browser.mjs';
-import { ask, interactive, say } from '../_shared/signing.mjs';
+import { onAbort } from '../_shared/abort.mjs';
+import { ask, bindSignal, interactive, say } from '../_shared/signing.mjs';
 
 export const specRefs = ['§11.2 rule 2', '§16 hand-off row', '§19.1 M1.0 P07 / S29-05', 'K7', 'G-WEB-05'];
 
@@ -34,6 +35,8 @@ const BROWSERS = [
   { name: 'Chrome', app: '/Applications/Google Chrome.app', proc: 'Google Chrome' },
   { name: 'Firefox', app: '/Applications/Firefox.app', proc: 'firefox' },
 ];
+// Capture children alive right now (killed by the abort cleanup).
+const LIVE = new Set();
 const sha = (s) => createHash('sha256').update(s).digest('hex').slice(0, 12);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -124,14 +127,21 @@ function grepFiles(files, tokens, home) {
 }
 
 function startCaptures(dir, label, root) {
+  // Refresh the sudo timestamp before every capture so a long session does not
+  // leave eslogger dead behind an expired `sudo -n`.
+  if (!root) spawnSync('/usr/bin/sudo', ['-v'], { stdio: 'inherit' });
   const caps = {};
   const es = root ? spawn('/usr/bin/eslogger', ['exec', 'fork'], { stdio: ['ignore', 'pipe', 'pipe'] })
     : spawn('/usr/bin/sudo', ['-n', '/usr/bin/eslogger', 'exec', 'fork'], { stdio: ['ignore', 'pipe', 'pipe'] });
   caps.eslogger = { proc: es, out: [], err: '' };
+  LIVE.add(es);
+  es.on('close', () => LIVE.delete(es));
   es.stdout.on('data', (d) => caps.eslogger.out.push(d));
   es.stderr.on('data', (d) => (caps.eslogger.err += d));
   const ls = spawn('/usr/bin/log', ['stream', '--style', 'ndjson', '--level', 'info'], { stdio: ['ignore', 'pipe', 'ignore'] });
   caps.log = { proc: ls, out: [] };
+  LIVE.add(ls);
+  ls.on('close', () => LIVE.delete(ls));
   ls.stdout.on('data', (d) => caps.log.out.push(d));
   caps.ps = { out: [], timer: setInterval(() => {
     const r = spawnSync('/bin/ps', ['-axww', '-o', 'pid=,command='], { encoding: 'utf8' });
@@ -154,7 +164,16 @@ async function stopCaptures(caps) {
 }
 
 function scan(cap, token) {
-  return { eslogger: cap.eslogger.includes(token), log: cap.log.includes(token), ps: cap.ps.includes(token), esloggerBytes: cap.eslogger.length, esloggerErr: cap.esloggerErr || undefined };
+  const esloggerErr = cap.esloggerErr.trim();
+  return {
+    eslogger: cap.eslogger.includes(token),
+    log: cap.log.includes(token),
+    ps: cap.ps.includes(token),
+    esloggerBytes: cap.eslogger.length,
+    esloggerErr: esloggerErr || undefined,
+    // A run only counts if eslogger was demonstrably alive for it.
+    captureLive: cap.eslogger.length > 0 && !esloggerErr,
+  };
 }
 
 function asUser(cmd, args) {
@@ -181,9 +200,25 @@ export default async function probe(ctx) {
   const home = root && process.env.SUDO_USER ? `/Users/${process.env.SUDO_USER}` : os.homedir();
   const work = mkdtempSync(path.join(os.tmpdir(), 'gnomon-p07-'));
   const helperBin = path.join(work, 'launch-helper');
+  bindSignal(ctx.signal);
+  const done = onAbort(() => {
+    for (const p of LIVE) p.kill('SIGKILL');
+    rmSync(work, { recursive: true, force: true });
+  }, ctx.signal);
+  try {
+    return await body();
+  } finally {
+    done();
+  }
+
+  async function body() {
   const prereq = { root, eslogger: existsSync('/usr/bin/eslogger'), sudoCached: root || spawnSync('/usr/bin/sudo', ['-n', 'true']).status === 0, browsers: BROWSERS.filter((b) => existsSync(b.app)).map((b) => b.name) };
   try {
     execFileSync('/usr/bin/xcrun', ['swiftc', '-O', path.join(ctx.probeDir, 'LaunchHelper.swift'), '-o', helperBin], { stdio: ['ignore', 'pipe', 'pipe'], timeout: 300_000 });
+    // Under `sudo node …` the work dir is root's mkdtemp (0700); the helper runs
+    // as $SUDO_USER, so open the dir and binary for traversal/exec.
+    chmodSync(work, 0o755);
+    chmodSync(helperBin, 0o755);
     prereq.helperBuilt = true;
   } catch (e) {
     prereq.helperBuilt = false;
@@ -257,15 +292,25 @@ export default async function probe(ctx) {
     const historyHits = grepFiles(files, tokens, home);
     const tests = runs.filter((r) => r.kind === 'test');
     const argvLeak = tests.some((r) => r.seen.eslogger || r.seen.ps);
-    const controlOk = control.seen.eslogger;
+    const controlOk = control.seen.eslogger && control.seen.captureLive;
     const allDelivered = tests.length > 0 && tests.every((r) => r.delivered);
-    const verdict = argvLeak ? 'fail' : controlOk && allDelivered ? 'pass' : 'partial';
+    const allLive = tests.length > 0 && tests.every((r) => r.seen.captureLive);
+    const updatePendingCovered = tests.some((r) => r.updatePending);
+    const coldReallyCold = tests.filter((r) => r.mode === 'cold').every((r) => !r.runningBefore);
+    const gaps = [];
+    if (!controlOk) gaps.push('positive control not seen by a live eslogger');
+    if (!allDelivered) gaps.push('a run did not deliver the token to the page');
+    if (!allLive) gaps.push('eslogger was dead (no bytes or stderr) for at least one run');
+    if (!updatePendingCovered) gaps.push('no run with an update pending');
+    if (!coldReallyCold) gaps.push('a cold run found the browser already running');
+    const verdict = argvLeak ? 'fail' : gaps.length === 0 ? 'pass' : 'partial';
     return {
       verdict,
       evidence: {
         prerequisites: prereq,
         runs,
         controlDetectedOnArgv: controlOk,
+        gaps,
         tokenOnAnyArgvInTests: argvLeak,
         history: { filesScanned: files.length, unreadable: errors, hits: historyHits.filter((h) => h.token), errors: historyHits.filter((h) => h.error) },
         note: 'log stream hits are recorded but are not argv; a token in history/session files only is K7 evidence (replay is log-only), not a failure',
@@ -274,5 +319,6 @@ export default async function probe(ctx) {
     };
   } finally {
     await server.close();
+  }
   }
 }
