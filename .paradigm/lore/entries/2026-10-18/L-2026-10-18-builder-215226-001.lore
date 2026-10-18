@@ -1,0 +1,22 @@
+id: L-2026-10-18-builder-215226-001
+type: insight
+timestamp: '2026-10-18T21:52:26.578Z'
+author: builder
+title: 'p01b: the can_use_tool channel works only with --permission-prompt-tool stdio; allow rules and PreToolUse allow hooks skip it'
+summary: 'Real claude 2.1.302 under the generated session profile. (a) --permission-prompts host ALONE delivers no request (denied source:config); host + the hidden --permission-prompt-tool stdio delivers control_request{subtype:can_use_tool, tool_name, display_name, input, description, permission_suggestions, tool_use_id, decision_reason?, requires_user_interaction?, matched_ask_rule?}; none + stdio = none wins, no error. AskUserQuestion/ExitPlanMode are offered only with stdio. (b) no initialize needed. (d) allow runs with updatedInput; deny does not and permission_denials counts it. (e) no answer: claude waits (60 s, no cancel, no timeout); stdin close = AbortError deny. (f) interrupt while pending => control_cancel_request{request_id} within ms, result error_during_execution. (g) forged control_request lines from a Bash child (>&1, /dev/fd/1, /dev/stdout, fds 3-9) appear only JSON-escaped in tool output, never top level. (h) an allow rule in ANY loaded layer runs the tool with NO request; permissions.ask over the same tool restores the request (matched_ask_rule). (i) a PreToolUse allow hook runs the tool with NO request. ExitPlanMode in plan mode arrives with input {} (no plan text); in default mode it errors before any request.'
+symbols_touched:
+  - '#claude-adapter'
+  - '#supervisor'
+  - '#approval-broker'
+files_created:
+  - packages/gnomon/probes/p01b-permission-channel/probe.mjs
+  - packages/gnomon/probes/results/p01b-permission-channel.darwin.json
+tags:
+  - decision
+  - gnomon
+  - p8-d96
+  - permission-channel
+git_context:
+  ref: c207961ba583d99cb2751a98ad54b9b1f1b75191
+  branch: gnomon/permission-channel
+  dirty: true

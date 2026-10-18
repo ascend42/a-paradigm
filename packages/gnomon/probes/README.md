@@ -67,6 +67,11 @@ prompt-free half and records `partial`.
   `open`'s argv, which proves the capture can see it.
 - **P01 manual** uses the `claude` path recorded in `results/p01-claude-cli.<os>.json`,
   never `PATH`. Keep `ANTHROPIC_API_KEY` unset.
+- **P01b** (`p01b-permission-channel`, P8-D96) runs real `claude` under the
+  generated session profile with `--permission-prompts host --permission-prompt-tool stdio`:
+  about 15 short haiku turns on the subscription, around 3 minutes. Run it with
+  `node packages/gnomon/probes/run.mjs p01b-permission-channel --timeout 900000`
+  after `npm run build`. It needs no TTY.
 - **S29-10** is a stub (`s29-10-voice-custody/README.md`). It needs the signed
   helper (M1.1) and the wrapper panel (M1.13).
 
