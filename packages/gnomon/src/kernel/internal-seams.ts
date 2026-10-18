@@ -12,8 +12,8 @@
  * (src/kernel/testing.ts).
  *
  * WHO MAY IMPORT THIS FILE (test/seams-fence.test.ts proves it on the source
- * import graph): kernel-log.ts, identity/presence.ts and manifest/install.ts
- * (to register) and testing.ts (to read). The manifest slot holds the M1.5
+ * import graph): kernel-log.ts, log/quarantine.ts, identity/presence.ts and
+ * manifest/install.ts (to register) and testing.ts (to read). The manifest slot holds the M1.5
  * install-card decision and the rollback until the M1.6 broker owns cards. Nothing reachable from a production entry (the
  * package index, the gnomon / gnomond CLIs, gnomon-web) imports testing.ts,
  * and no index re-exports this file, so production code cannot open a log
@@ -29,6 +29,7 @@ import type { AppendResult, KernelLog, KernelLogOptions } from './log/kernel-log
 import type { PresenceMethod, PresencePurpose, PresenceToken } from './identity/presence.js';
 import type { DecideOptions, StagedRecord } from './manifest/install.js';
 import type { GrantInstallRow } from './manifest/grants.js';
+import type { QuarantineFsOps, QuarantineOptions, QuarantineReport, QuarantineStep } from './log/quarantine.js';
 
 /** The #kernel-log options that are test seams only (never on KernelLogOptions). */
 export interface KernelLogSeamOptions {
@@ -61,10 +62,16 @@ export interface ManifestSeams {
   rollbackMod(home: string, name: string, toPackageHash: string | undefined, opts: DecideOptions): GrantInstallRow;
 }
 
+export interface QuarantineSeams {
+  /** `quarantineLog` with a hook after each crash point (tests inject a crash by throwing). */
+  quarantineWithSteps(opts: QuarantineOptions, onStep: (step: QuarantineStep, at: { staging?: string; evidence?: string }) => void, fsOps?: QuarantineFsOps): Promise<QuarantineReport>;
+}
+
 interface Slots {
   log?: KernelLogSeams;
   presence?: PresenceSeams;
   manifest?: ManifestSeams;
+  quarantine?: QuarantineSeams;
 }
 
 const slots: Slots = {};

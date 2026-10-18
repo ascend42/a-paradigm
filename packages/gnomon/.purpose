@@ -664,7 +664,57 @@ components:
       the test entry; no src/cli or $daemon-lifecycle file (nor any other src
       file but the owners) names acknowledgeGap / openForRecovery; dist/
       carries no test-entry marker and its KernelLog / KernelLogOptions types
-      expose no seam. `npm run
+      expose no seam.
+      QUARANTINE (T-2026-10-17-009(a), P8-D89, quarantine.ts + src/cli/log-cli.ts):
+      `gnomon log quarantine [--home]` moves the whole home aside intact to the
+      sibling <home>.quarantine-<YYYYMMDDTHHMMSSZ>-<hex> (Windows-safe name)
+      and installs a new home whose log's genesis (seq 1) is the reserved,
+      kernel-signed daemon.log.quarantined{quarantinedLog,
+      quarantinedHead{seq, hash, segment}, evidencePath, authorizedBy}
+      (KernelLog.createQuarantineSuccessor is the only writer; append refuses
+      it; verify flags it anywhere but seq 1 and binds it to the kernel key).
+      Identity: EVERY head source (db tip, newest sealed segment, file
+      anchor, keystore anchor when one exists) is read — dbs from a private
+      scratch COPY (kernel.db + -wal, never -shm), so the evidence is never
+      written — and the HIGHEST seq is the quarantined head (a truncated db
+      behind its anchor is not hidden); all observed heads go in the journal
+      and the CLI readout, with a disagreement WARNING before the prompt.
+      Crash-safe: daemon lock (acquireDaemonLock) held across steps 1-4 and
+      released through the evidence path; build in <evidence>.new, journal,
+      rename home→evidence, rename staging→home (ENOENT there = installed by
+      another process). completePendingQuarantine (run by every quarantine,
+      by the CLI first and by startDaemon before it creates a home) installs
+      an interrupted quarantine ONLY if the unsigned journal checks out:
+      staging = evidence + '.new', evidence a quarantine-named sibling, both
+      plain dirs owned by this uid (no symlink/junction), the evidence holds
+      the journal's quarantinedLog, and the staging log's row 1 is a verified
+      daemon.log.quarantined matching newLog / evidencePath / quarantinedLog;
+      anything else is abandoned (reported, never deleted). These checks stop
+      accidents and planted junk; they are NOT authenticity (the journal is
+      unsigned and the staging keys are its own) — that waits for M1.3. The
+      staging genesis is checked on rows/chain/signature only, never via
+      verifyLog (which reads the per-user keystore anchor; M1.3 tripwire test
+      → T-2026-10-18-007), and the keystore anchor is consulted only for the
+      default home (spec §22 OPEN 19). Unreadable dbs are reported
+      (`unreadable: copy failed: CODE`), ENOSPC refuses no-space; EPERM/EBUSY
+      on the install refuses install-busy (retry; the pending install
+      finishes). A crash between the step-4 rename and the lock release
+      leaves our pidfile in the evidence, reported as lockResidue. An interrupted
+      install is reported as outcome completed-pending (CLI: COMPLETED).
+      Refuses daemon-running, not-a-home, nothing-to-quarantine,
+      quarantine-pending, home-busy (EPERM/EBUSY/EACCES on the move),
+      kernel-key-required. The genesis principal comes from kernelPrincipalOf
+      (the daemon's root-authority source). CLI output: src/cli/readout.ts
+      (#gnomon-kernel; instrument-readout voice — readout rows, `REFUSED  CODE
+      reason`, indented `next:`); canConnectSocket shared in
+      lifecycle/endpoint.ts. RESIDUALS: authorizedBy 'interactive-confirm' is
+      NO PROOF OF PRESENCE — an interactive TTY + typed last 8 chars of the
+      log id, passable by any same-user process owning a terminal, until
+      presence lands at M1.3; at M1.3 the keystore anchor item must move with
+      the evidence; a stale pidfile of a dead daemon is DELETED from the
+      evidence by the lock acquisition, its bytes kept in the journal
+      (stalePidfile, base64) — the only change to the old home.
+      `npm run
       test:perf` = scripts/test-perf.mjs (cmd.exe-safe; --passWithNoTests on
       win32 only, a missing perf file fails loudly elsewhere).
     path: src/kernel/log/
@@ -680,6 +730,8 @@ components:
       - test/boot-session.test.ts
       - test/durable-fs.test.ts
       - test/seams-fence.test.ts
+      - test/kernel-log-quarantine.test.ts
+      - test/log-cli.test.ts
     oracles: [G-LOG-01, G-LOG-02, G-LOG-03, G-LOG-04, G-LOG-06, G-LOG-07, G-LOG-08, G-LOG-09, G-LOG-10, G-LOG-11]
 
 flows:

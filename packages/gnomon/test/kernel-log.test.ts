@@ -290,7 +290,7 @@ describe('#kernel-log signatures (§3.1 domains, §3.2, G-LOG-08)', () => {
     await fill(l2, 3);
     expect(l2.verify()).toMatchObject({ ok: true, kernelBinding: 'ok' });
     expect(verifyLog(h2, { keyRing: l2.keyRing })).toMatchObject({ kernelBinding: 'not-checked' });
-    expect(RESERVED_KINDS).toEqual(['daemon.segment', 'daemon.log.gap', 'daemon.anchor.lag', 'daemon.anchor.failed']);
+    expect(RESERVED_KINDS).toEqual(['daemon.segment', 'daemon.log.gap', 'daemon.anchor.lag', 'daemon.anchor.failed', 'daemon.log.quarantined']);
   });
 
   it('event signatures are domain-separated and keyed by gkey:v1:<sha256(spki)>', async () => {
