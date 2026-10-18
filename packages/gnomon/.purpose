@@ -893,18 +893,25 @@ components:
     oracles: [G-LOG-01, G-LOG-02, G-LOG-03, G-LOG-04, G-LOG-06, G-LOG-07, G-LOG-08, G-LOG-09, G-LOG-10, G-LOG-11, G-KRN-01]
     replay: >-
       M1.12 slice 3 (G-KRN-01): replay.ts + cli/replay-cli.ts — `gnomon replay
-      [<home>] [--expect <sha256>] [--json]`. verifyLog first (an unverified
-      log is never folded), then a deterministic fold of the chain's envelope
-      bytes into gnomon-replay:v1 {log, head, kinds, sessions{hsid: inputs
+      [<home>] [--expect <sha256>] [--json]`. The fold runs INSIDE verifyLog's
+      single pass (VerifyLogOptions.onRow: the exact bytes verify checked;
+      round 2, B1 / Aegis C2), so a row committed after verify's read snapshot
+      is never folded, and the projection is discarded unless verify is ok.
+      gnomon-replay:v1 = {log, head, kinds, sessions{hsid: inputs
       (session.inject{origin, hash, bytes}, turn.sent{turn, permitId,
       contentHash}), host (recorded *Hash fields of session.spawned /
       session.layers.changed)}, cards (last state)}; projectionHash =
-      sha256(canonicalJson(projection)). Divergence = a turn.sent whose
-      contentHash is not the session's last logged inject, or string inject
-      bytes whose sha256 is not the logged hash; divergence, verify failure or
-      an --expect mismatch ⇒ REFUSED INTEGRITY_BROKEN (exit 1). Read-only. Keys:
-      keys/kernel-pub.jsonl + kernelPrincipalOf(); rows signed by registry keys
-      outside that file fail offline verify (residual).
+      sha256(canonicalJson(projection)). A turn.sent binds to the session's
+      last unconsumed origin:client inject (interleaved kernel/peer/mod injects
+      never match) and consumes it; a mismatch or no pending inject is
+      input-mismatch; an inject whose bytes is a string is inject-plaintext
+      (the append path's checkPayload refuses it; round 2, Aegis C1). Any
+      divergence, verify failure or --expect mismatch ⇒ REFUSED
+      INTEGRITY_BROKEN (exit 1). Read-only. Trust root: keys from the home's
+      keys/kernel-pub.jsonl + kernelPrincipalOf(), so every readout and --json
+      print `trust root: home-local` and `keystore: unavailable|anchored` —
+      consistency, never provenance (Aegis medium). Rows signed by registry
+      keys outside that file fail offline verify (residual).
 
   gnomon-ts-client:
     description: >-

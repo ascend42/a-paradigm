@@ -2116,6 +2116,20 @@ export interface VerifyLogOptions {
   segment?: number;
   kernelPrincipal?: string;
   kernelKeyIds?: readonly string[];
+  /**
+   * Called once per row, in seq order, with the exact bytes this pass checked
+   * (M1.12 replay folds inside verify's single pass, Aegis C2). A consumer
+   * must discard what it saw unless the report is `ok`.
+   */
+  onRow?: (row: VerifiedRow) => void;
+}
+
+/** A row as verify read it (the bytes its checks ran on). */
+export interface VerifiedRow {
+  seq: number;
+  kind: string;
+  envelope: string;
+  hash: string;
 }
 
 export function verifyLog(
@@ -2171,7 +2185,7 @@ function verifyLogWith(home: string, opts: VerifyLogOptions, keystoreAnchor: Anc
         }
       } else if (meta.segment !== opts.segment) continue;
 
-      const r = verifyRows(db, meta, opts.keyRing, fail, kernel);
+      const r = verifyRows(db, meta, opts.keyRing, fail, kernel, opts.onRow);
       report.rows += r.rows;
       report.segments.push({ segment: meta.segment, firstSeq: meta.baseSeq, lastSeq: r.lastSeq, rows: r.rows, ok: r.ok });
       if (f.sealed && r.lastKind !== 'daemon.segment') fail({ code: 'segment-unsealed', segment: meta.segment, detail: 'sealed segment does not end with daemon.segment (truncated?)' });
@@ -2215,6 +2229,7 @@ function verifyRows(
   keyRing: KeyRing,
   fail: (f: VerifyFailure) => void,
   kernel?: { principal: string; keyIds: ReadonlySet<string> },
+  onRow?: (row: VerifiedRow) => void,
 ): { rows: number; lastSeq: number; lastHash: string; lastKind: string | null; ok: boolean } {
   let expectSeq = meta.baseSeq;
   let prev = meta.basePrev;
@@ -2282,6 +2297,7 @@ function verifyRows(
       if (r.kind === QUARANTINE_GENESIS_KIND && (r.seq !== 1 || meta.segment !== 1)) bad('reserved-binding', r.seq, `${r.kind} is only ever a log's genesis row (seq 1)`);
     } else if (!mayBeUnsigned(r.kind)) bad('unsigned', r.seq, `${r.kind} row is unsigned`); // mayBeUnsigned excludes the sig-mandatory kinds
     prev = r.hash;
+    onRow?.({ seq: r.seq, kind: r.kind, envelope: r.envelope, hash: r.hash });
   }
   return { rows, lastSeq: expectSeq - 1, lastHash: prev, lastKind, ok };
 }

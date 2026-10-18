@@ -34,6 +34,8 @@ export const REPLAY_USAGE = `usage: gnomon replay [<home>] [--expect <sha256:hex
 `;
 
 const HASH = /^sha256:[0-9a-f]{64}$/;
+/** Where replay's keys come from (see TRUST ROOT above). */
+export const TRUST_ROOT = 'home-local' as const;
 
 export async function runReplayCommand(argv: readonly string[], io: { stdout: Out; stderr: Out }): Promise<number> {
   let home: string | undefined;
@@ -74,17 +76,23 @@ export async function runReplayCommand(argv: readonly string[], io: { stdout: Ou
     refused(io.stderr, 'ENGINE', 'replay-unreadable', `could not read the log: ${(err as Error).message}`, ['check the home path']);
     return REPLAY_EXIT_REFUSED;
   }
-  if (json) io.stdout.write(`${JSON.stringify({ ok: r.ok, projectionHash: r.projectionHash ?? null, rows: r.verify.rows, verified: r.verify.ok, divergences: r.divergences, expected: r.expected ?? null, failures: r.verify.failures.slice(0, 20) })}\n`);
+  const ks = r.verify.anchors.keystore;
+  const keystore = ks === 'ok' || ks === 'lagging' ? 'anchored' : ks === 'unavailable' ? 'unavailable' : ks;
+  const trust = `trust root: ${TRUST_ROOT}, keystore: ${keystore}`;
+  if (json) io.stdout.write(`${JSON.stringify({ ok: r.ok, trustRoot: TRUST_ROOT, keystore, projectionHash: r.projectionHash ?? null, rows: r.verify.rows, verified: r.verify.ok, divergences: r.divergences, expected: r.expected ?? null, failures: r.verify.failures.slice(0, 20) })}\n`);
   if (!r.verify.ok) {
     refused(io.stderr, 'INTEGRITY_BROKEN', 'verify-failed', `${r.verify.failures.length} verify failure(s); first: ${r.verify.failures[0]?.code ?? '?'} ${r.verify.failures[0]?.detail ?? ''}`, ['an unverified log is never replayed']);
+    io.stderr.write(`  ${trust}\n`);
     return REPLAY_EXIT_REFUSED;
   }
   if (r.divergences.length) {
     refused(io.stderr, 'INTEGRITY_BROKEN', 'replay-diverged', `${r.divergences.length} divergence(s); first at seq ${r.divergences[0]!.seq}: ${r.divergences[0]!.detail}`);
+    io.stderr.write(`  ${trust}\n`);
     return REPLAY_EXIT_REFUSED;
   }
   if (r.expected && !r.expected.matches) {
     refused(io.stderr, 'INTEGRITY_BROKEN', 'replay-diverged', `projection ${r.projectionHash} is not the expected ${r.expected.hash}`);
+    io.stderr.write(`  ${trust}\n`);
     return REPLAY_EXIT_REFUSED;
   }
   if (!json) {
@@ -94,6 +102,8 @@ export async function runReplayCommand(argv: readonly string[], io: { stdout: Ou
       ['rows', `${r.verify.rows} of ${r.verify.rows} verified`],
       ['sessions', `${Object.keys(r.projection!.sessions).length}`],
       ['expect', r.expected ? 'matches' : 'not given'],
+      ['trust root', `${TRUST_ROOT} (keys read from this home: consistency, not provenance)`],
+      ['keystore', keystore],
     ]);
   }
   return REPLAY_EXIT_OK;

@@ -11,12 +11,15 @@
  * layers the kernel does not control, not of host context (§3.3). So the
  * fold reproduces, per session (hsid), in seq order:
  *   - inputs: every `session.inject{origin, hash, bytes}` and every
- *     `turn.sent{turn, permitId, contentHash}` — the bytes the kernel let a
- *     model read are identified by their content hash, and a `turn.sent`
- *     whose contentHash is not the hash of the inject row before it for that
- *     session is a DIVERGENCE (the kernel would have sent bytes it never logged,
- *     L2); when an inject row carries the text itself (a string `bytes`), the
- *     fold recomputes sha256 over it and a mismatch is a divergence;
+ *     `turn.sent{turn, permitId, contentHash}`. A `turn.sent` binds to the
+ *     session's last UNCONSUMED `origin: client` inject (a kernel, peer or mod
+ *     inject in between is folded but never matched) and consumes it; one
+ *     whose contentHash is not that inject's hash, or with no client inject
+ *     pending, is a DIVERGENCE (the kernel would have sent bytes it never
+ *     logged, L2). An inject whose `bytes` is a string (the plaintext, where
+ *     §3.2 wants a byte count) is a divergence `inject-plaintext` — the
+ *     append path refuses it (checkPayload), so a row carrying it did not come
+ *     through the log's own append (round 2, Aegis C1);
  *   - host: the `*Hash` / `sha256` fields of `session.spawned` and
  *     `session.layers.changed` rows, RECORDED, never reproduced;
  *   - cards: the last state of each card (`approval.request` → open,
@@ -27,13 +30,15 @@
  * same `projectionHash = sha256(canonicalJson(projection))`, and any change
  * to a folded row changes it (or fails verify first).
  *
+ * ONE PASS (round 2, B1 / Aegis C2): the fold consumes the rows verifyLog's
+ * own pass read (VerifyLogOptions.onRow), never a second read of the files,
+ * so a row appended or rewritten between verify and fold is never folded;
+ * the projection is discarded unless the whole report is ok.
+ *
  * Read-only: databases are opened `readOnly` exactly as verifyLog opens them.
  */
-import * as fs from 'node:fs';
-import * as path from 'node:path';
-import { DatabaseSync } from 'node:sqlite';
 import { canonicalJson, isPlainObject, sha256Tagged } from '@a-company/gnomon-contracts';
-import { ACTIVE_DB, listSealedSegments, verifyLog, type VerifyLogOptions, type VerifyReport } from './kernel-log.js';
+import { verifyLog, type VerifiedRow, type VerifyLogOptions, type VerifyReport } from './kernel-log.js';
 
 export const REPLAY_PROJECTION = 'gnomon-replay:v1' as const;
 
@@ -58,7 +63,7 @@ export interface ReplayProjection {
 
 export interface ReplayDivergence {
   seq: number;
-  reason: 'input-mismatch' | 'inject-bytes-mismatch' | 'malformed-envelope';
+  reason: 'input-mismatch' | 'inject-plaintext' | 'malformed-envelope';
   detail: string;
 }
 
@@ -73,27 +78,7 @@ export interface ReplayReport {
   expected?: { hash: string; matches: boolean };
 }
 
-interface Row {
-  seq: number;
-  kind: string;
-  envelope: string;
-  hash: string;
-}
-
-/** Every chain row of `home`, sealed segments first, in seq order (the verify order). */
-function* chainRows(home: string): Generator<Row> {
-  const files = listSealedSegments(home).map((s) => s.file);
-  const active = path.join(home, ACTIVE_DB);
-  if (fs.existsSync(active)) files.push(active);
-  for (const f of files) {
-    const db = new DatabaseSync(f, { readOnly: true });
-    try {
-      for (const r of db.prepare('SELECT seq, kind, envelope, hash FROM chain ORDER BY seq').iterate() as Iterable<Row>) yield { ...r };
-    } finally {
-      db.close();
-    }
-  }
-}
+type Row = VerifiedRow;
 
 const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : undefined);
 
@@ -101,7 +86,8 @@ const str = (v: unknown): string | undefined => (typeof v === 'string' ? v : und
 export function foldReplay(rows: Iterable<Row>): { projection: ReplayProjection; divergences: ReplayDivergence[] } {
   const p: ReplayProjection = { schema: REPLAY_PROJECTION, log: null, head: null, kinds: {}, sessions: {}, cards: {} };
   const divergences: ReplayDivergence[] = [];
-  const lastInject = new Map<string, string>();
+  /** The last unconsumed origin:client inject hash per session. */
+  const pending = new Map<string, string>();
   const session = (hsid: string) => (p.sessions[hsid] ??= { inputs: [], host: [] });
   for (const r of rows) {
     p.head = { seq: r.seq, hash: r.hash };
@@ -120,16 +106,15 @@ export function foldReplay(rows: Iterable<Row>): { projection: ReplayProjection;
       const hash = str(pl.hash) ?? '';
       const input: ReplayInput = { seq: r.seq, kind: 'session.inject', hash, ...(str(pl.origin) ? { origin: str(pl.origin)! } : {}) };
       if (typeof pl.bytes === 'number') input.bytes = pl.bytes;
-      else if (typeof pl.bytes === 'string') {
-        input.bytes = Buffer.byteLength(pl.bytes, 'utf8');
-        if (sha256Tagged(pl.bytes) !== hash) divergences.push({ seq: r.seq, reason: 'inject-bytes-mismatch', detail: `sha256 of the logged bytes is not ${hash}` });
-      }
+      else if (typeof pl.bytes === 'string') divergences.push({ seq: r.seq, reason: 'inject-plaintext', detail: 'session.inject carries plaintext bytes where the log records a byte count (the append path refuses it)' });
       session(hsid).inputs.push(input);
-      lastInject.set(hsid, hash);
+      if (pl.origin === 'client') pending.set(hsid, hash);
     } else if (r.kind === 'turn.sent' && hsid) {
       const hash = str(pl.contentHash) ?? '';
       session(hsid).inputs.push({ seq: r.seq, kind: 'turn.sent', hash, ...(str(pl.turn) ? { turn: str(pl.turn)! } : {}), ...(str(pl.permitId) ? { permitId: str(pl.permitId)! } : {}) });
-      if (lastInject.get(hsid) !== hash) divergences.push({ seq: r.seq, reason: 'input-mismatch', detail: `turn.sent ${hash} is not the last logged inject for ${hsid}` });
+      const want = pending.get(hsid);
+      pending.delete(hsid); // consumed: one client inject binds at most one turn
+      if (want !== hash) divergences.push({ seq: r.seq, reason: 'input-mismatch', detail: want === undefined ? `turn.sent ${hash} has no pending client inject for ${hsid}` : `turn.sent ${hash} is not the last client inject ${want} for ${hsid}` });
     } else if ((r.kind === 'session.spawned' || r.kind === 'session.layers.changed') && hsid) {
       const hashes: Record<string, string> = {};
       for (const k of Object.keys(pl).sort()) if ((k.endsWith('Hash') || k === 'sha256') && typeof pl[k] === 'string') hashes[k] = pl[k] as string;
@@ -147,12 +132,13 @@ export function replayProjectionHash(p: ReplayProjection): string {
   return sha256Tagged(canonicalJson(p));
 }
 
-/** verifyLog, then the fold; `expect` compares the projection hash. ok ⇔ verified ∧ no divergence ∧ (no expect ∨ it matches). */
-export function replayLog(home: string, opts: VerifyLogOptions & { expect?: string }): ReplayReport {
+/** verifyLog with the fold inside its single pass; `expect` compares the projection hash. ok ⇔ verified ∧ no divergence ∧ (no expect ∨ it matches). */
+export function replayLog(home: string, opts: Omit<VerifyLogOptions, 'onRow'> & { expect?: string }): ReplayReport {
   const { expect, ...verifyOpts } = opts;
-  const verify = verifyLog(home, verifyOpts);
+  const seen: Row[] = [];
+  const verify = verifyLog(home, { ...verifyOpts, onRow: (r) => void seen.push(r) });
   if (!verify.ok) return { ok: false, verify, divergences: [], ...(expect ? { expected: { hash: expect, matches: false } } : {}) };
-  const { projection, divergences } = foldReplay(chainRows(home));
+  const { projection, divergences } = foldReplay(seen);
   const projectionHash = replayProjectionHash(projection);
   const expected = expect ? { hash: expect, matches: expect === projectionHash } : undefined;
   return { ok: divergences.length === 0 && (expected?.matches ?? true), verify, projection, projectionHash, divergences, ...(expected ? { expected } : {}) };
