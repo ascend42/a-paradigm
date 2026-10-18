@@ -627,7 +627,7 @@ export class SessionSupervisor {
     s.pending.set(requestId, entry);
     let cardId: string;
     try {
-      const card = await b.raise({ kind: plan.cardKind, requestedBy: s.principalId, hsid: s.hsid, attended: true, detail: plan.detail, lines: plan.lines, toolInput: ev.input, tool: ev.toolName, decisions: plan.decisions as never });
+      const card = await b.raise({ kind: plan.cardKind, requestedBy: s.principalId, hsid: s.hsid, attended: true, detail: plan.detail, lines: plan.lines, block: plan.block, toolInput: ev.input, tool: ev.toolName, decisions: plan.decisions as never });
       cardId = card.cardId;
     } catch {
       await this.#respond(s, requestId, 'deny'); // a raise that throws ⇒ deny

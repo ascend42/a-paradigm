@@ -10,8 +10,10 @@
  *     path-taking tool with no usable path) or a card: `plan` for
  *     ExitPlanMode (approve-plan | reject), `permission` for every other tool
  *     with decisions allow | deny ONLY (no `always` in this slice). The lines
- *     are kernel-composed from the request; the broker sanitizes and wraps
- *     them (never cut):
+ *     are kernel-composed from the request, split on newlines, then
+ *     sanitized and WRAPPED by the install card's wrappedBlock (Aegis C1):
+ *     a line longer than MAX_LINE continues on `  ↳ ` lines, never cut. The
+ *     card is raised with that block:
  *       Bash  — the full command;
  *       Edit  — the path, then old/new text (each capped, the cap stated);
  *       Write — the path, the byte count, a head excerpt and the inputHash,
@@ -33,6 +35,7 @@ import * as path from 'node:path';
 import { canonicalJson } from '@a-company/gnomon-contracts';
 import { createHash } from 'node:crypto';
 import { realpathLoose, type PolicyPath } from '../manifest/policy.js';
+import { wrappedBlock } from '../manifest/install.js';
 
 export const ASK_USER_DENY = 'ask in your reply; the human answers in chat';
 export const PERMISSION_DECISIONS = Object.freeze(['allow', 'deny'] as const);
@@ -60,7 +63,7 @@ export interface PermissionContext {
 
 export type PermissionPlan =
   | { kind: 'auto-deny'; why: 'deny-write' | 'ask-user-deferred' | 'no-path'; message: string; inputHash: string; denyClass?: string }
-  | { kind: 'card'; cardKind: 'permission' | 'plan'; decisions: readonly string[]; detail: Record<string, unknown>; lines: string[]; inputHash: string };
+  | { kind: 'card'; cardKind: 'permission' | 'plan'; decisions: readonly string[]; detail: Record<string, unknown>; lines: string[]; block: Record<string, unknown>; inputHash: string };
 
 export function inputHash(input: unknown): string {
   let c: string;
@@ -102,10 +105,7 @@ export function composePermission(req: PermissionRequestIn, ctx: PermissionConte
   const detail: Record<string, unknown> = { tool, toolUseId: req.toolUseId, requestId: req.requestId, inputHash: h, repo: ctx.repo };
   if (tool === 'ExitPlanMode') {
     const plan = s(req.input.plan);
-    return {
-      kind: 'card', cardKind: 'plan', decisions: PLAN_DECISIONS, detail, inputHash: h,
-      lines: ['The session proposes a plan', `repo: ${ctx.repo}`, ...(plan !== null ? textLines('plan', plan, EDIT_MAX_CHARS) : ['(the plan text is not in the request)']), 'approve-plan: the session leaves plan mode. reject: it stays, with your note.'],
-    };
+    return card('plan', PLAN_DECISIONS, detail, h, ['The session proposes a plan', `repo: ${ctx.repo}`, ...(plan !== null ? textLines('plan', plan, EDIT_MAX_CHARS) : ['(the plan text is not in the request)']), 'approve-plan: the session leaves plan mode. reject: it stays, with your note.']);
   }
   const pathKey = PATH_TOOLS[tool];
   let shownPath: string | null = null;
@@ -137,7 +137,12 @@ export function composePermission(req: PermissionRequestIn, ctx: PermissionConte
     const j = cap(inputJson(req.input), JSON_MAX_CHARS);
     body = [...(shownPath ? [`path: ${shownPath}`] : []), `input${j.cut ? ` (first ${JSON_MAX_CHARS} characters shown; pinned by inputHash ${h})` : ''}:`, j.text];
   }
-  return { kind: 'card', cardKind: 'permission', decisions: PERMISSION_DECISIONS, detail, inputHash: h, lines: [`The session asks to run ${tool}`, `repo: ${ctx.repo}`, ...body] };
+  return card('permission', PERMISSION_DECISIONS, detail, h, [`The session asks to run ${tool}`, `repo: ${ctx.repo}`, ...body]);
+}
+
+/** Aegis C1: the display block is the install card's wrap of every logical line — never cut. */
+function card(cardKind: 'permission' | 'plan', decisions: readonly string[], detail: Record<string, unknown>, h: string, lines: string[]): PermissionPlan {
+  return { kind: 'card', cardKind, decisions, detail, inputHash: h, lines, block: wrappedBlock(lines).block };
 }
 
 function inputJson(v: unknown): string {
