@@ -11,11 +11,13 @@
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
     },
-    "./schemas/*": "./schemas/*"
+    "./schemas/*": "./schemas/*",
+    "./conformance/*": "./conformance/*"
   },
   "files": [
     "dist",
-    "schemas"
+    "schemas",
+    "conformance"
   ],
   "scripts": {
     "build": "tsup",
@@ -23,7 +25,8 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "schemas": "npm run build && node scripts/write-schemas.mjs"
+    "schemas": "npm run build && node scripts/write-schemas.mjs",
+    "conformance": "npm run build && node scripts/write-conformance.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

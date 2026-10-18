@@ -1,0 +1,215 @@
+{
+  "schemaVersion": "conformance-display:v1",
+  "sanitize": [
+    {
+      "input": "hello world",
+      "text": "hello world",
+      "flags": []
+    },
+    {
+      "input": "tab\tand\nnewline",
+      "text": "tab\tand\nnewline",
+      "flags": []
+    },
+    {
+      "input": "\u001b]52;c;ZWNobyBwd25lZA==\u0007safe",
+      "text": "safe",
+      "flags": []
+    },
+    {
+      "input": "\u001b]8;;https://evil.example\u001b\\click\u001b]8;;\u001b\\",
+      "text": "click",
+      "flags": []
+    },
+    {
+      "input": "\u001b[31mred\u001b[0m",
+      "text": "red",
+      "flags": []
+    },
+    {
+      "input": "\u009b2Jclear",
+      "text": "clear",
+      "flags": []
+    },
+    {
+      "input": "\u001bPq#0;2;0;0;0\u001b\\after",
+      "text": "after",
+      "flags": []
+    },
+    {
+      "input": "before\u001b_never ends",
+      "text": "before",
+      "flags": []
+    },
+    {
+      "input": "invoice\u202etxt.exe",
+      "text": "invoice\u27e8RLO\u27e9txt.exe",
+      "flags": [
+        "bidi"
+      ]
+    },
+    {
+      "input": "a\u2066b\u2069c",
+      "text": "a\u27e8LRI\u27e9b\u27e8PDI\u27e9c",
+      "flags": [
+        "bidi"
+      ]
+    },
+    {
+      "input": "ap\u200bprove",
+      "text": "approve",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "\ufeffx\u2060y",
+      "text": "xy",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "ok\udb40\udc41\udb40\udc42",
+      "text": "ok",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "a\u0007b\bc",
+      "text": "abc",
+      "flags": []
+    },
+    {
+      "input": "x\u007fy\u0085z",
+      "text": "xyz",
+      "flags": []
+    },
+    {
+      "input": "esc\u001bcape",
+      "text": "escape",
+      "flags": []
+    },
+    {
+      "input": "\\u{202E} stays literal",
+      "text": "\\u{202E} stays literal",
+      "flags": []
+    },
+    {
+      "input": "\u627f\u8a8d \u2705 \ud83d\udc4d\ud83c\udffd",
+      "text": "\u627f\u8a8d \u2705 \ud83d\udc4d\ud83c\udffd",
+      "flags": []
+    },
+    {
+      "input": "rm -rf\u202e\u200b /",
+      "text": "rm -rf\u27e8RLO\u27e9 /",
+      "flags": [
+        "hidden-chars",
+        "bidi"
+      ]
+    }
+  ],
+  "rows": [
+    {
+      "event": {
+        "kind": "socket.hello",
+        "principal": "p:a1b2c3d4/kernel",
+        "at": "2026-10-17T00:00:00.000Z"
+      },
+      "row": {
+        "kind": "socket.hello",
+        "principal": "p:a1b2c3d4/kernel",
+        "at": "2026-10-17T00:00:00.000Z",
+        "class": "registered",
+        "opaque": false
+      }
+    },
+    {
+      "event": {
+        "kind": "credit.outcome",
+        "principal": "p:a1b2c3d4/paradigm",
+        "at": "2026-10-17T00:00:01.000Z"
+      },
+      "row": {
+        "kind": "credit.outcome",
+        "principal": "p:a1b2c3d4/paradigm",
+        "at": "2026-10-17T00:00:01.000Z",
+        "class": "open",
+        "opaque": false
+      }
+    },
+    {
+      "event": {
+        "kind": "modns.diff-lens.toggled",
+        "principal": "p:a1b2c3d4/mod-diff-lens",
+        "at": "2026-10-17T00:00:02.000Z"
+      },
+      "row": {
+        "kind": "modns.diff-lens.toggled",
+        "principal": "p:a1b2c3d4/mod-diff-lens",
+        "at": "2026-10-17T00:00:02.000Z",
+        "class": "modns",
+        "opaque": true
+      }
+    },
+    {
+      "event": {
+        "kind": "modns.diff-lens.note",
+        "principal": "p:a1b2c3d4/mod-\u202ediff",
+        "at": "2026-10-17T00:00:03.000Z"
+      },
+      "row": {
+        "kind": "modns.diff-lens.note",
+        "principal": "p:a1b2c3d4/mod-\u27e8RLO\u27e9diff",
+        "at": "2026-10-17T00:00:03.000Z",
+        "class": "modns",
+        "opaque": true
+      }
+    },
+    {
+      "event": {
+        "kind": "futurens.thing",
+        "principal": "p:a1b2c3d4/ascend",
+        "at": "2026-10-17T00:00:04.000Z"
+      },
+      "row": {
+        "kind": "futurens.thing",
+        "principal": "p:a1b2c3d4/ascend",
+        "at": "2026-10-17T00:00:04.000Z",
+        "class": "unknown",
+        "opaque": true
+      }
+    }
+  ],
+  "denominators": [
+    {
+      "value": {
+        "n": 3,
+        "of": 7
+      },
+      "text": "3 of 7"
+    },
+    {
+      "value": {
+        "n": 0,
+        "of": 0
+      },
+      "text": "0 of 0"
+    },
+    {
+      "value": 5,
+      "text": null
+    },
+    {
+      "value": {
+        "n": 2
+      },
+      "text": null
+    },
+    {
+      "value": null,
+      "text": null
+    }
+  ]
+}

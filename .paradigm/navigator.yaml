@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-18T06:12:40.645Z'
+generated: '2026-10-18T06:56:28.370Z'
 structure: {}
 key_files:
   config:
@@ -258,6 +258,8 @@ symbols:
   '#purpose-component-contract-gnomon-rpc-v1': packages/gnomon-contracts/
   '#purpose-component-contract-client-api-id': packages/gnomon-contracts/
   '#purpose-component-gnomon-helper': packages/gnomon-helper/
+  '#purpose-component-gnomon-local': packages/gnomon-local/
+  '#purpose-component-gnomon-mod-sdk': packages/gnomon-mod-sdk/
   '#purpose-component-gnomon-wrapper': packages/gnomon-wrapper/
   '#purpose-component-gnomon-kernel': packages/gnomon/
   '#purpose-component-gnomon-probes': packages/gnomon/
@@ -273,7 +275,9 @@ symbols:
   '#purpose-component-scheduler': packages/gnomon/
   '#purpose-component-session-runner': packages/gnomon/
   '#purpose-component-supervisor': packages/gnomon/
+  '#purpose-component-local-runner': packages/gnomon/
   '#purpose-component-claude-adapter': packages/paradigm/src/core/ide-adapters/
+  '#purpose-component-mod-host': packages/gnomon/
   '#purpose-component-paradigm-logger': packages/logger/
   '#purpose-component-symbol-logger': packages/logger/
   '#purpose-component-formatter-pretty': packages/logger/

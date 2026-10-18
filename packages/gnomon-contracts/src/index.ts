@@ -29,3 +29,6 @@ export * from './rpc.js';
 export * from './schemas.js';
 export * from './client-api.js';
 export * from './mod-abi.js';
+export * from './display.js';
+export * from './conformance.js';
+export type * from './client-types.js';
