@@ -23,8 +23,13 @@ import { COPIED_PLATFORM_BINARY_KILLED_FROM_MACOS } from '../src/platform/darwin
 import { darwinFloor } from '../src/kernel/sandbox/session.js';
 import { LifecycleRefusal } from '../src/kernel/lifecycle/refusal.js';
 
-/** capability, not platform: below the macOS floor the backend refuses and the enforcement suite cannot run */
-const SANDBOX_OK = darwinFloor().ok;
+/** capability, not platform: below the macOS floor or with SIP off the backend refuses and the enforcement suite cannot run */
+const FLOOR = darwinFloor();
+const SANDBOX_OK = FLOOR.ok;
+/** macOS 15+ whatever SIP says: the AppleEvent denies in the profile itself must hold even where launch constraints are off */
+const MACOS_OK = FLOOR.ok || FLOOR.floor === 'sip';
+/** the copied-osascript check, verbatim from check.sh below */
+const copiedOsascript = (root: string): string => `/bin/cp /usr/bin/osascript "${root}/osa" 2>/dev/null; "${root}/osa" -e 'tell application "System Events" to get name' >/dev/null 2>&1; echo "copied_osascript_exit=$?"`;
 import { sessionWorld, worldPolicy, type SessionWorld } from './session-helpers.js';
 
 let w: SessionWorld;
@@ -90,7 +95,7 @@ echo hi > ./wrote.txt 2>/dev/null && echo "write_work=ok" || echo "write_work=fa
 (echo x > "${w.userHome}/Library/LaunchAgents/x.plist") 2>/dev/null && echo "write_launchagent=allowed" || echo "write_launchagent=blocked"
 (echo x > "${w.userHome}/.gitconfig") 2>/dev/null && echo "write_gitconfig=allowed" || echo "write_gitconfig=blocked"
 /bin/cp /bin/launchctl "${w.root}/lc" 2>/dev/null; "${w.root}/lc" submit -l "${LABEL}" -- /usr/bin/touch "${MARKER}" >/dev/null 2>&1; echo "copied_launchctl_exit=$?"
-/bin/cp /usr/bin/osascript "${w.root}/osa" 2>/dev/null; "${w.root}/osa" -e 'tell application "System Events" to get name' >/dev/null 2>&1; echo "copied_osascript_exit=$?"
+${copiedOsascript(w.root)}
 /bin/cp /usr/bin/open "${w.root}/op" 2>/dev/null; "${w.root}/op" -h >/dev/null 2>&1; echo "copied_open_exit=$?"
 n=$(pgrep -fl . 2>/dev/null | wc -l | tr -d ' '); echo "pgrep_lines=$n"
 sleep 30 & C=$!; if kill $C 2>/dev/null; then wait $C 2>/dev/null; echo "child_spawn_kill=ok"; else echo "child_spawn_kill=fail"; fi
@@ -115,21 +120,39 @@ afterAll(async () => {
   w?.cleanup();
 });
 
-describe.runIf(!SANDBOX_OK)('below the macOS floor', () => {
-  it('the session backend refuses sandbox-unavailable (floor macos) — no weaker profile', () => {
+describe.runIf(!SANDBOX_OK)('below the host floor (macOS 15+ and SIP enabled)', () => {
+  it(`the session backend refuses sandbox-unavailable (floor ${FLOOR.floor}) — no weaker profile`, () => {
     const x = sessionWorld();
     try {
       sessionLaunchPlan({ policy: worldPolicy(x), binaryReal: '/bin/true', argv: [], extras: { uid: process.getuid!(), tmpdir: os.tmpdir(), home: x.userHome, roots: [x.cwd] } }, 'darwin');
       expect.unreachable();
     } catch (e) {
-      expect((e as LifecycleRefusal).detail).toMatchObject({ floor: 'macos', need: 15 });
-    } finally {
-      x.cleanup();
+      expect((e as LifecycleRefusal).reason).toBe('sandbox-unavailable');
+      expect((e as LifecycleRefusal).detail).toMatchObject(FLOOR.floor === 'sip' ? { floor: 'sip', have: FLOOR.have } : { floor: 'macos', need: 15 });
     }
+    x.cleanup();
   });
 });
 
-describe.skipIf(!SANDBOX_OK)('G-SBX-08 the generated session profile holds (darwin, macOS 15+)', () => {
+describe.runIf(MACOS_OK)('the profile ITSELF denies AppleEvents (macOS 15+, regardless of SIP; CI run 39100811385)', () => {
+  it('a COPIED osascript cannot send an AppleEvent from inside the generated profile, launch constraints or not', () => {
+    const x = sessionWorld();
+    try {
+      const script = path.join(x.root, 'osa.sh');
+      fs.writeFileSync(script, `#!/bin/bash\n${copiedOsascript(x.root)}\n`, { mode: 0o755 });
+      // SIP seam `() => true`: generate the exact profile a SIP host gets, so the deny itself is what is measured here
+      const plan = sessionLaunchPlan({ policy: worldPolicy(x), binaryReal: '/bin/bash', argv: [script], extras: { uid: process.getuid!(), tmpdir: os.tmpdir(), home: x.userHome, roots: [x.cwd] } }, 'darwin', undefined, () => true);
+      const r = spawnSync(plan.command, plan.args, { encoding: 'utf8', env: { HOME: x.userHome, PATH: '/usr/bin:/bin:/usr/sbin:/sbin' }, timeout: 60_000 });
+      const exit = /copied_osascript_exit=(\d+)/.exec(r.stdout)?.[1];
+      expect(exit, 'the check did not run').toBeDefined();
+      expect(exit, `a copied osascript SENT an AppleEvent (System Events) from inside the session profile (SIP ${FLOOR.ok ? 'on' : 'off'})`).not.toBe('0');
+    } finally {
+      x.cleanup();
+    }
+  }, 90_000);
+});
+
+describe.skipIf(!SANDBOX_OK)('G-SBX-08 the generated session profile holds (darwin, macOS 15+, SIP enabled)', () => {
   it('Aegis H1: the claude binary, its versions dir and its known-location link cannot be replaced', () => {
     expect(out).toMatchObject({ write_binary: 'blocked', write_versions: 'blocked', unlink_link: 'blocked' });
   });
@@ -142,12 +165,10 @@ describe.skipIf(!SANDBOX_OK)('G-SBX-08 the generated session profile holds (darw
     expect(fs.existsSync(MARKER), 'launchd RAN the job a copied launchctl submitted').toBe(false);
     expect(out.copied_osascript_exit, 'a copied osascript SENT an AppleEvent (System Events) from inside the session profile').not.toBe('0');
   });
-  it(`Aegis M1: from macOS ${COPIED_PLATFORM_BINARY_KILLED_FROM_MACOS} copies are SIGKILLed by launch constraints (137); below it a copied open is the §A.2(i) residual`, () => {
-    if (macosMajor >= COPIED_PLATFORM_BINARY_KILLED_FROM_MACOS) {
-      for (const k of ['copied_launchctl_exit', 'copied_osascript_exit', 'copied_open_exit']) expect(out[k], k).toBe('137');
-    } else {
-      expect(out.copied_open_exit).toBeDefined(); // recorded, not asserted: a LaunchServices launcher (accepted residual, §A.2(i)/(iv))
-    }
+  it(`Aegis M1: with SIP enabled, from macOS ${COPIED_PLATFORM_BINARY_KILLED_FROM_MACOS} copies are SIGKILLed by launch constraints (137)`, () => {
+    // capability, not platform: this suite runs only where darwinFloor() holds (macOS 15+ AND SIP enabled)
+    expect(macosMajor).toBeGreaterThanOrEqual(COPIED_PLATFORM_BINARY_KILLED_FROM_MACOS);
+    for (const k of ['copied_launchctl_exit', 'copied_osascript_exit', 'copied_open_exit']) expect(out[k], k).toBe('137');
   });
   it('the session still works: worktree writes, child spawn and kill', () => {
     expect(out.write_work).toBe('ok');

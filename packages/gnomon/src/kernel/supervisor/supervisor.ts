@@ -109,6 +109,8 @@ export interface SupervisorOptions {
   allowScripts?: boolean;
   /** TEST RIG ONLY: the OS version probe (default: the platform's sw_vers). Tests pass a LOWER version to exercise the floor refusal. */
   macosMajor?: () => number | null;
+  /** TEST RIG ONLY: the SIP probe (default: the platform's csrutil). Tests pass false to exercise the SIP refusal, true to run the rig on a SIP-off host. */
+  sipEnabled?: () => boolean | null;
 }
 
 export interface OpenRequest {
@@ -277,7 +279,7 @@ export class SessionSupervisor {
       // Aegis H1: preflight runs the PRIVATE copy under the session profile, never unsandboxed
       const run: ClaudeRun = (args) =>
         new Promise((resolve) => {
-          const p = sessionLaunchPlan({ policy, binaryReal: priv.exec, argv: args, extras }, this.#platform, this.#o.macosMajor);
+          const p = sessionLaunchPlan({ policy, binaryReal: priv.exec, argv: args, extras }, this.#platform, this.#o.macosMajor, this.#o.sipEnabled);
           const ch = spawn(p.command, p.args, { cwd: req.cwd, env, stdio: ['ignore', 'pipe', 'ignore'] });
           let stdout = '';
           const t = setTimeout(() => ch.kill('SIGKILL'), 15_000);
@@ -320,7 +322,7 @@ export class SessionSupervisor {
       this.assertClaudePermit(permit, hsid);
       if (permit.billing !== 'subscription') throw new PreflightRefusal('api_billing_refused', 'api-token billing is not wired into the session spawn yet (M1.7 slice 2)', { billing: permit.billing });
       const argv = buildClaudeArgv({ uuid, policyPath, mcpConfigPath, settingSources: this.#o.settingSources ?? ['user', 'project', 'local'], ...(req.systemPrompt !== undefined ? { appendSystemPrompt: req.systemPrompt } : {}), ...(req.model && req.model !== 'claude' && req.model !== 'any' ? { model: req.model } : {}) });
-      const plan = sessionLaunchPlan({ policy, binaryReal: priv.exec, argv, extras }, this.#platform, this.#o.macosMajor);
+      const plan = sessionLaunchPlan({ policy, binaryReal: priv.exec, argv, extras }, this.#platform, this.#o.macosMajor, this.#o.sipEnabled);
       // Aegis L1: anything changed between the scan and now ⇒ scan again (a hit refuses)
       const wNow = this.#watchHashOf(layerInput);
       if (wNow !== wHash || gitHash(req.worktree ?? req.cwd) !== gHash) {
@@ -563,9 +565,9 @@ export class SessionSupervisor {
     return { signals, exited: !survivors };
   }
 
-  /** status.sessionSandbox: the session profile's fidelity here (`unavailable` below the macOS floor, with the reason) */
+  /** status.sessionSandbox: the session profile's fidelity here (`unavailable` below the macOS floor or with SIP off, with the reason) */
   sandboxStatus(): Record<string, unknown> {
-    return sessionSandboxFidelity(this.#platform, this.#o.macosMajor);
+    return sessionSandboxFidelity(this.#platform, this.#o.macosMajor, this.#o.sipEnabled);
   }
 
   /** status.claudePin: the trust-on-first-use pin (spec §3.3) */

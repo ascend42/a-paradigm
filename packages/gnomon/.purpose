@@ -1083,6 +1083,17 @@ components:
       session sandbox unavailable — on macos-14 a copied osascript reached
       System Events from inside the profile. CI tests macos-15 (enforcement)
       and macos-14 (floor refusal).
+      SIP FLOOR (CI run 39100811385, GitHub macos-15 runner, SIP off: a copied
+      launchctl not SIGKILLed): darwinSipEnabled (platform/darwin/macos.ts,
+      csrutil status, cached; Custom Configuration counts as disabled) — SIP
+      not plainly enabled ⇒ sandbox-unavailable {floor:sip, have:disabled|
+      unknown}, status unavailable reason sip-disabled; test seam
+      SupervisorOptions.sipEnabled / sessionLaunchPlan's 4th arg. Profile v2
+      adds (deny mach-lookup (global-name "com.apple.coreservices.appleevents"))
+      beside (deny appleevent-send) (APPLEEVENT_MACH_SERVICES); Claude verified
+      working (p10m-claude-compat-generated pass). Its coverage of a non-Apple
+      AppleEvent sender is UNPROVEN (spec OPEN 5): the existing copied-osascript
+      check (`get name` of System Events) is answered without sending an event.
     path: src/kernel/runner/
     type: module
     tags: [gnomon, kernel, session, law-7, paradigm-8, m1.7]

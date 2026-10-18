@@ -16,6 +16,10 @@
  *   - unix-socket connects to the tmux dir (`/private/tmp/tmux-<uid>`) and
  *     the screen dirs (`$TMPDIR/.screen`, `/private/tmp/screens`, `~/.screen`);
  *   - `appleevent-send`, `device-microphone`, `device-camera`;
+ *   - with `appleevent-send`, a service-level deny: `mach-lookup` of
+ *     APPLEEVENT_MACH_SERVICES (appleeventsd), so a sender whose in-process
+ *     `appleevent-send` check does not run still cannot reach the AppleEvent
+ *     service (CI run 39100811385);
  *   - `process-exec` of /usr/bin/open, /usr/bin/osascript, lsregister and
  *     /bin/launchctl, by realpath (P8-D80; launchctl is the service-manager
  *     class).
@@ -41,7 +45,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import { realpathLoose, type PolicyPath, type SessionPolicy } from '../../kernel/manifest/policy.js';
 
-export const SESSION_PROFILE_VERSION = 1;
+export const SESSION_PROFILE_VERSION = 2;
 
 /** macOS major from which a relocated Apple platform binary is SIGKILLed (launch constraints; observed 15 yes, 14 no). */
 export const COPIED_PLATFORM_BINARY_KILLED_FROM_MACOS = 15;
@@ -52,6 +56,16 @@ export const COPIED_PLATFORM_BINARY_KILLED_FROM_MACOS = 15;
  * session backend REFUSES below this major (fail closed).
  */
 export const SESSION_SANDBOX_MIN_MACOS = 15;
+
+/**
+ * The AppleEvent service (appleeventsd), denied by name with
+ * `(deny appleevent-send)` (CI run 39100811385). Narrow on purpose: a
+ * `com.apple.coreservices.*` / `com.apple.lsd.*` deny would take
+ * LaunchServices from Claude Code; measured 2026-10-17 that even a
+ * deny-ALL mach-lookup does not stop `tell application "System Events" to get
+ * name`, which AppleScript answers without sending an event (see spec §A.2(iv)).
+ */
+export const APPLEEVENT_MACH_SERVICES = Object.freeze(['com.apple.coreservices.appleevents']);
 
 export const DARWIN_LAUNCHERS = Object.freeze([
   '/usr/bin/open',
@@ -138,7 +152,7 @@ export function sessionProfileSbpl(policy: SessionPolicy, x: DarwinSessionExtras
   const classes = new Set(policy.denyClasses);
   if (classes.has('unix-socket:tmux')) lines.push(`(deny network-outbound (remote unix-socket (subpath ${q(realpathLoose(`/private/tmp/tmux-${x.uid}`))})))`);
   if (classes.has('unix-socket:screen')) lines.push(`(deny network-outbound ${screenDirs.map((d) => `(remote unix-socket (subpath ${q(d)}))`).join(' ')})`);
-  if (classes.has('automation:apple-events')) lines.push('(deny appleevent-send)');
+  if (classes.has('automation:apple-events')) lines.push('(deny appleevent-send)', `(deny mach-lookup ${APPLEEVENT_MACH_SERVICES.map((n) => `(global-name ${q(n)})`).join(' ')})`);
   if (classes.has('media:microphone')) lines.push('(deny device-microphone)');
   if (classes.has('media:camera')) lines.push('(deny device-camera)');
   if (policy.launchers === 'deny' || classes.has('launchers') || classes.has('service-manager')) lines.push(`(deny process-exec ${launchers.map((l) => `(literal ${q(l)})`).join(' ')})`);

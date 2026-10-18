@@ -34,7 +34,7 @@ import { runSessionCommand } from '../src/cli/session-cli.js';
 import { PassThrough } from 'node:stream';
 import { darwinFloor } from '../src/kernel/sandbox/session.js';
 
-/** capability, not platform: below the macOS floor every open is refused (asserted below) */
+/** capability, not platform: below the macOS floor or with SIP off every open is refused (asserted below) */
 const SANDBOX_OK = darwinFloor().ok;
 import { sessionWorld, setMode, trace, waitFor, type SessionWorld } from './session-helpers.js';
 
@@ -47,7 +47,7 @@ afterEach(async () => {
   w?.cleanup();
 });
 
-function rig(o: { billing?: BillingScanSource; watchMs?: number; failSandboxRow?: boolean; allowScripts?: boolean; macosMajor?: () => number | null } = {}) {
+function rig(o: { billing?: BillingScanSource; watchMs?: number; failSandboxRow?: boolean; allowScripts?: boolean; macosMajor?: () => number | null; sipEnabled?: () => boolean | null } = {}) {
   w = sessionWorld();
   const rows: Array<{ kind: string; payload: Record<string, unknown> }> = [];
   const log = async (kind: string, payload: Record<string, unknown>): Promise<void> => {
@@ -58,7 +58,7 @@ function rig(o: { billing?: BillingScanSource; watchMs?: number; failSandboxRow?
   const children = new DaemonChildren({ append: log, control: processControlFor('darwin'), boot: 'boot-test', graceMs: 500 });
   const cards: Array<Record<string, unknown>> = [];
   const broker = { raise: async (i: Record<string, unknown>) => (cards.push(i), { cardId: `card:${cards.length}` }) } as unknown as Pick<ApprovalBroker, 'raise'>;
-  sup = new SessionSupervisor({ log, children, fuse, broker, home: w.home, userHome: w.userHome, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(w.home, 'gnomon.sock'), claudePath: w.claude, env: () => ({ HOME: '/not-the-scanned-home', PATH: '/usr/bin:/bin', ANTHROPIC_API_KEY: 'scrubbed-from-the-child' }), platform: 'darwin', watchMs: o.watchMs ?? 200, allowScripts: o.allowScripts ?? true, ...(o.macosMajor ? { macosMajor: o.macosMajor } : {}) });
+  sup = new SessionSupervisor({ log, children, fuse, broker, home: w.home, userHome: w.userHome, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(w.home, 'gnomon.sock'), claudePath: w.claude, env: () => ({ HOME: '/not-the-scanned-home', PATH: '/usr/bin:/bin', ANTHROPIC_API_KEY: 'scrubbed-from-the-child' }), platform: 'darwin', watchMs: o.watchMs ?? 200, allowScripts: o.allowScripts ?? true, ...(o.macosMajor ? { macosMajor: o.macosMajor } : {}), ...(o.sipEnabled ? { sipEnabled: o.sipEnabled } : {}) });
   live.push(() => children.stopAll('test-end'));
   const kinds = (k: string) => rows.filter((r) => r.kind === k);
   const idx = (k: string) => rows.findIndex((r) => r.kind === k);
@@ -398,7 +398,7 @@ describe.skipIf(!SANDBOX_OK)('round 3', () => {
   });
 });
 
-describe('the macOS floor (every darwin host)', () => {
+describe('the host floor: macOS 15+ and SIP (every darwin host)', () => {
   it('below macOS 15 an open is refused sandbox-unavailable (floor macos): no spawn, no pin, permit released, status unavailable', async () => {
     const r = rig({ macosMajor: () => 14 });
     const e = await refusal(open(r.sup));
@@ -408,6 +408,16 @@ describe('the macOS floor (every darwin host)', () => {
     expect(r.kinds('session.spawned')).toEqual([]);
     expect(trace(w).filter((t) => t.t === 'argv' || t.t === 'version')).toEqual([]);
     expect(r.sup.sandboxStatus()).toMatchObject({ fidelity: 'unavailable', reason: 'macos-floor' });
+  });
+  it('macOS 15 with SIP disabled: an open is refused sandbox-unavailable (floor sip): no spawn, status unavailable sip-disabled', async () => {
+    const r = rig({ macosMajor: () => 15, sipEnabled: () => false });
+    const e = await refusal(open(r.sup));
+    expect(e.refusal.code).toBe('UNSUPPORTED');
+    expect(e.refusal.data).toMatchObject({ session: 'spawn_failed', sandbox: 'unavailable', floor: 'sip', have: 'disabled' });
+    expect(r.kinds('session.refused')[0]!.payload).toMatchObject({ code: 'spawn_failed', floor: 'sip' });
+    expect(r.kinds('session.spawned')).toEqual([]);
+    expect(trace(w).filter((t) => t.t === 'argv' || t.t === 'version')).toEqual([]);
+    expect(r.sup.sandboxStatus()).toMatchObject({ fidelity: 'unavailable', reason: 'sip-disabled', have: 'disabled' });
   });
 });
 

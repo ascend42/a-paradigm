@@ -15,6 +15,7 @@ import { sessionLaunchPlan, sessionSandboxFidelity } from '../src/kernel/sandbox
 import { binaryDenies } from '../src/kernel/supervisor/supervisor.js';
 import { PERSISTENCE_PATHS, realpathLoose } from '../src/kernel/manifest/policy.js';
 import { LifecycleRefusal } from '../src/kernel/lifecycle/refusal.js';
+import { parseCsrutilStatus } from '../src/platform/darwin/macos.js';
 import { sessionWorld, worldPolicy, type SessionWorld } from './session-helpers.js';
 
 let w: SessionWorld;
@@ -41,6 +42,7 @@ describe('G-SBX-08 (text) the generated session profile', () => {
     expect(sb).toContain('(remote unix-socket (subpath "/private/tmp/tmux-501"))');
     expect(sb).toContain(`(remote unix-socket (subpath "${path.join(w.root, '.screen')}"))`);
     expect(sb).toContain('(deny appleevent-send)');
+    expect(sb).toContain('(deny mach-lookup (global-name "com.apple.coreservices.appleevents"))'); // CI run 39100811385: the service, not only the in-process check
     for (const l of DARWIN_LAUNCHERS) expect(sb).toContain(`(literal "${realpathLoose(l)}")`); // realpath'd on the host (on Linux /usr/bin/open may be a link)
     expect(sb).toContain('/Support/lsregister")'); // realpath'd (on macOS through the framework's Versions/A links)
   });
@@ -112,6 +114,36 @@ describe('the macOS floor (SESSION_SANDBOX_MIN_MACOS = 15; CI run 39100281741)',
   });
 });
 
+describe('the SIP floor (CI run 39100811385: SIP off ⇒ launch constraints off ⇒ a copied launcher is not killed)', () => {
+  it.each([
+    [false, 'disabled'],
+    [null, 'unknown'],
+  ] as const)('darwin 15 with SIP %s refuses sandbox-unavailable {floor sip}, never a weaker profile', (sip, have) => {
+    w = sessionWorld();
+    try {
+      sessionLaunchPlan({ policy: worldPolicy(w), binaryReal: '/bin/true', argv: [], extras: extras(w) }, 'darwin', () => 15, () => sip);
+      expect.unreachable();
+    } catch (e) {
+      expect((e as LifecycleRefusal).reason).toBe('sandbox-unavailable');
+      expect((e as LifecycleRefusal).detail).toMatchObject({ profile: 'session', floor: 'sip', have });
+    }
+  });
+  it('the macOS floor is checked first', () => {
+    w = sessionWorld();
+    expect(() => sessionLaunchPlan({ policy: worldPolicy(w), binaryReal: '/bin/true', argv: [], extras: extras(w) }, 'darwin', () => 14, () => false)).toThrow(/macOS 15\+/);
+  });
+  it('status: SIP off ⇒ unavailable, reason sip-disabled', () => {
+    expect(sessionSandboxFidelity('darwin', () => 15, () => false)).toMatchObject({ fidelity: 'unavailable', reason: 'sip-disabled', have: 'disabled' });
+    expect(sessionSandboxFidelity('darwin', () => 15, () => null)).toMatchObject({ fidelity: 'unavailable', reason: 'sip-disabled', have: 'unknown' });
+  });
+  it('csrutil parsing: only a plain "enabled." is enabled; Custom Configuration is not', () => {
+    expect(parseCsrutilStatus('System Integrity Protection status: enabled.\n')).toBe(true);
+    expect(parseCsrutilStatus('System Integrity Protection status: disabled.\n')).toBe(false);
+    expect(parseCsrutilStatus('System Integrity Protection status: unknown (Custom Configuration).\n\nConfiguration:\n\tApple Internal: disabled\n')).toBe(false);
+    expect(parseCsrutilStatus('')).toBe(null);
+  });
+});
+
 describe('G-WIN-06 the platform registry: no backend ⇒ refused, status partial', () => {
   it.each(['win32', 'linux'])('%s refuses sandbox-unavailable (never an unsandboxed spawn)', (p) => {
     w = sessionWorld();
@@ -126,7 +158,7 @@ describe('G-WIN-06 the platform registry: no backend ⇒ refused, status partial
   it('status: win32 partial, linux partial (classes none), darwin partial (screen/launchers/service-manager by analogy)', () => {
     expect(sessionSandboxFidelity('win32').fidelity).toBe('partial');
     expect(sessionSandboxFidelity('linux').fidelity).toBe('partial');
-    expect(sessionSandboxFidelity('darwin', () => 15).fidelity).toBe('partial');
+    expect(sessionSandboxFidelity('darwin', () => 15, () => true).fidelity).toBe('partial');
     expect(sessionSandboxFidelity('darwin', () => 14)).toMatchObject({ fidelity: 'unavailable', reason: 'macos-floor', have: 14, need: 15 });
     expect(sessionSandboxFidelity('darwin', () => null)).toMatchObject({ fidelity: 'unavailable', reason: 'macos-floor' });
     expect(sessionSandboxFidelity('aix').fidelity).toBe('none');

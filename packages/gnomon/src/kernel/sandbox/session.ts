@@ -13,6 +13,10 @@
  * `gate-class` card that lets a human accept a `partial` profile is M1.7
  * slice 2 (with the Windows row it exists for); `sessionSandboxFidelity`
  * gives status its `full | partial | none` per platform (G-WIN-06).
+ * The darwin floor: macOS 15+ AND System Integrity Protection enabled
+ * (CI runs 39100281741, 39100811385) — below either the backend refuses
+ * `sandbox-unavailable` and status reports `unavailable` (never a weaker
+ * profile).
  */
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
@@ -20,7 +24,7 @@ import { LifecycleRefusal } from '../lifecycle/refusal.js';
 import type { SessionPolicy } from '../manifest/policy.js';
 import { SESSION_DENY_REALISATION, type DenyPlatform } from '../../platform/session-denies.js';
 import { SbplError, sessionProfileSbpl, SESSION_SANDBOX_MIN_MACOS, type DarwinSessionExtras } from '../../platform/darwin/session-sbpl.js';
-import { darwinMacosMajor, type MacosProbe } from '../../platform/darwin/macos.js';
+import { darwinMacosMajor, darwinSipEnabled, type MacosProbe, type SipProbe } from '../../platform/darwin/macos.js';
 
 export interface SessionLaunchInput {
   policy: SessionPolicy;
@@ -40,16 +44,34 @@ export interface SessionLaunchPlan {
 
 const SANDBOX_EXEC = '/usr/bin/sandbox-exec';
 
-/** The darwin floor (platform data): below SESSION_SANDBOX_MIN_MACOS the backend refuses — never a weaker profile. */
-export function darwinFloor(probe: MacosProbe = darwinMacosMajor): { ok: boolean; have: number | null; need: number } {
-  const have = probe();
-  return { ok: have !== null && have >= SESSION_SANDBOX_MIN_MACOS, have, need: SESSION_SANDBOX_MIN_MACOS };
+export interface FloorResult {
+  ok: boolean;
+  /** which floor failed: the macOS major, or System Integrity Protection */
+  floor?: 'macos' | 'sip';
+  have: number | string | null;
+  need: number | string;
 }
 
-function darwinSession(i: SessionLaunchInput, probe?: MacosProbe): SessionLaunchPlan {
-  const floor = darwinFloor(probe);
-  if (!floor.ok) {
+/**
+ * The darwin floor (platform data): below SESSION_SANDBOX_MIN_MACOS, or with
+ * SIP disabled / partially disabled / unknown, the backend refuses — never a
+ * weaker profile. macOS is checked first. `probe`/`sip` are test seams.
+ */
+export function darwinFloor(probe: MacosProbe = darwinMacosMajor, sip: SipProbe = darwinSipEnabled): FloorResult {
+  const have = probe();
+  if (have === null || have < SESSION_SANDBOX_MIN_MACOS) return { ok: false, floor: 'macos', have, need: SESSION_SANDBOX_MIN_MACOS };
+  const s = sip();
+  if (s !== true) return { ok: false, floor: 'sip', have: s === false ? 'disabled' : 'unknown', need: 'enabled' };
+  return { ok: true, have, need: SESSION_SANDBOX_MIN_MACOS };
+}
+
+function darwinSession(i: SessionLaunchInput, probe?: MacosProbe, sip?: SipProbe): SessionLaunchPlan {
+  const floor = darwinFloor(probe, sip);
+  if (floor.floor === 'macos') {
     throw new LifecycleRefusal('sandbox-unavailable', `the session profile needs macOS ${floor.need}+ (have ${floor.have ?? 'unknown'}): below it a copied launcher escapes (§A.2(iv))`, { profile: 'session', floor: 'macos', have: floor.have, need: floor.need });
+  }
+  if (floor.floor === 'sip') {
+    throw new LifecycleRefusal('sandbox-unavailable', `the session profile needs System Integrity Protection enabled (have ${floor.have}): without it launch constraints are not enforced and a copied launcher is not killed (§A.2(iv))`, { profile: 'session', floor: 'sip', have: floor.have });
   }
   if (!existsSync(SANDBOX_EXEC)) throw new LifecycleRefusal('sandbox-unavailable', `${SANDBOX_EXEC} is missing`, { profile: 'session' });
   let profile: string;
@@ -70,28 +92,28 @@ function darwinSession(i: SessionLaunchInput, probe?: MacosProbe): SessionLaunch
 }
 
 /** Platform registry of session sandbox backends (G-WIN-05). */
-export const SESSION_SANDBOX_BACKENDS: Readonly<Partial<Record<string, (i: SessionLaunchInput, probe?: MacosProbe) => SessionLaunchPlan>>> = Object.freeze({
+export const SESSION_SANDBOX_BACKENDS: Readonly<Partial<Record<string, (i: SessionLaunchInput, probe?: MacosProbe, sip?: SipProbe) => SessionLaunchPlan>>> = Object.freeze({
   darwin: darwinSession,
   // win32: restricted token + ACEs + WFP (S29-08), Windows parity phase (P8-D78) — not built.
 });
 
-/** `probe` reads the OS version (platform code); tests pass a fixed one to exercise the floor refusal. */
-export function sessionLaunchPlan(i: SessionLaunchInput, platform: string = process.platform, probe?: MacosProbe): SessionLaunchPlan {
+/** `probe` reads the OS version and `sip` System Integrity Protection (platform code); tests pass fixed ones to exercise the floor refusals. */
+export function sessionLaunchPlan(i: SessionLaunchInput, platform: string = process.platform, probe?: MacosProbe, sip?: SipProbe): SessionLaunchPlan {
   const backend = SESSION_SANDBOX_BACKENDS[platform];
   if (!backend) throw new LifecycleRefusal('sandbox-unavailable', `no session sandbox profile on ${platform} (§15.5; Windows parity phase P8-D78)`, { platform, profile: 'session' });
-  return backend(i, probe);
+  return backend(i, probe, sip);
 }
 
-/** Version floors per platform (registry, G-WIN-05): darwin has one; others have no backend at all. */
-const SESSION_FLOORS: Readonly<Partial<Record<string, (probe?: MacosProbe) => { ok: boolean; have: number | null; need: number }>>> = Object.freeze({ darwin: darwinFloor });
+/** Host floors per platform (registry, G-WIN-05): darwin has one (macOS + SIP); others have no backend at all. */
+const SESSION_FLOORS: Readonly<Partial<Record<string, (probe?: MacosProbe, sip?: SipProbe) => FloorResult>>> = Object.freeze({ darwin: darwinFloor });
 
 /** status: the session profile's fidelity on `platform` — full only with a backend and every class full (G-WIN-06). */
-export function sessionSandboxFidelity(platform: string = process.platform, probe?: MacosProbe): { fidelity: 'full' | 'partial' | 'none' | 'unavailable'; classes: Record<string, string>; reason?: string; have?: number | null; need?: number } {
+export function sessionSandboxFidelity(platform: string = process.platform, probe?: MacosProbe, sip?: SipProbe): { fidelity: 'full' | 'partial' | 'none' | 'unavailable'; classes: Record<string, string>; reason?: string; have?: number | string | null; need?: number | string } {
   const row = (SESSION_DENY_REALISATION as Record<string, (typeof SESSION_DENY_REALISATION)[DenyPlatform]>)[platform];
   const classes: Record<string, string> = {};
   for (const [k, v] of Object.entries(row ?? {})) classes[k] = v.fidelity;
-  const floor = SESSION_FLOORS[platform]?.(probe);
-  if (floor && !floor.ok) return { fidelity: 'unavailable', classes, reason: 'macos-floor', have: floor.have, need: floor.need };
+  const floor = SESSION_FLOORS[platform]?.(probe, sip);
+  if (floor && !floor.ok) return { fidelity: 'unavailable', classes, reason: floor.floor === 'sip' ? 'sip-disabled' : 'macos-floor', have: floor.have, need: floor.need };
   if (!SESSION_SANDBOX_BACKENDS[platform] || !row) return { fidelity: row ? 'partial' : 'none', classes };
   return { fidelity: Object.values(row).every((v) => v.fidelity === 'full') ? 'full' : 'partial', classes };
 }

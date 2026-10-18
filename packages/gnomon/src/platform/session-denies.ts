@@ -21,7 +21,7 @@ export const SESSION_DENY_REALISATION: Readonly<Record<DenyPlatform, Readonly<Re
     'unix-socket:screen': { mechanism: 'network-outbound (remote unix-socket (subpath <screen socket dir>)) — by analogy until the M1.7 p10m re-run', fidelity: 'partial' },
     'ipc:helper-service': { mechanism: 'deny mach-lookup (global-name <helper XPC service>)', fidelity: 'full' },
     'ipc:process-table-service': { mechanism: 'deny mach-lookup (global-name "com.apple.sysmond")', fidelity: 'full' },
-    'automation:apple-events': { mechanism: 'deny appleevent-send', fidelity: 'full' },
+    'automation:apple-events': { mechanism: 'deny appleevent-send + mach-lookup com.apple.coreservices.appleevents', fidelity: 'full' },
     'service-manager': { mechanism: 'deny process-exec /bin/launchctl + mach-lookup of launchd job submission', fidelity: 'partial' },
     'media:microphone': { mechanism: 'TCC: no microphone entitlement for the sandboxed child (device-microphone deny)', fidelity: 'full' },
     'media:camera': { mechanism: 'TCC: device-camera deny', fidelity: 'full' },
