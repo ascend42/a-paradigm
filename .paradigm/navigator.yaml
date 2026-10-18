@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-17T23:11:30.867Z'
+generated: '2026-10-18T00:00:00.177Z'
 structure: {}
 key_files:
   config:
@@ -263,6 +263,7 @@ symbols:
   '#purpose-component-gnomon-kernel': packages/gnomon/
   '#purpose-component-gnomon-probes': packages/gnomon/
   '#purpose-component-socket': packages/gnomon/
+  '#purpose-component-identity': packages/gnomon/
   '#purpose-component-kernel-log': packages/gnomon/
   '#purpose-component-paradigm-logger': packages/logger/
   '#purpose-component-symbol-logger': packages/logger/
@@ -1309,12 +1310,13 @@ symbols:
   '!purpose-ref-signal-claude-interrupt.': packages/conductor/
   '#purpose-ref-component-FF6B6B': packages/conductor/
   '#purpose-ref-component-F2B765': packages/conductor/
+  $purpose-ref-flow-defs: packages/gnomon-contracts/
+  '#purpose-ref-component-approval-broker': packages/gnomon-contracts/
+  ^purpose-ref-gate-certified: packages/gnomon-contracts/
   '@purpose-ref-aspect-ample-internal-logs.': packages/gnomon-contracts/
   '#purpose-ref-component-identity.': packages/gnomon-contracts/
-  '#purpose-ref-component-identity': packages/gnomon-contracts/
   '#purpose-ref-component-peer-link': packages/gnomon-contracts/
   '#purpose-ref-component-ref-resolver.': packages/gnomon-contracts/
-  '#purpose-ref-component-approval-broker': packages/gnomon-contracts/
   ^purpose-ref-gate-voice-armed: packages/gnomon-contracts/
   ^purpose-ref-gate-peer-paired.: packages/gnomon-contracts/
   '#purpose-ref-component-web-endpoint.': packages/gnomon-contracts/

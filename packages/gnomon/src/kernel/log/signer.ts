@@ -16,7 +16,9 @@
  * (`sha256:<hex>`), so the signature commits to the whole envelope.
  *
  * Each key class may sign only its own domains (§3.1): the kernel key signs
- * events, `hello` serverSig (auth) and briefs; the root key signs rows
+ * events, `hello` serverSig (`gnomon:auth-server:v1`, M1.4 — never the client
+ * `gnomon:auth:v1` domain, so the kernel is no signing oracle for client
+ * transcripts) and briefs; the root key signs rows
  * (registry, grants, config, install); the approvals key signs decisions.
  *
  * PR-4 ships ONE implementation: `SoftwareEd25519Signer`, the kernel key held
@@ -53,6 +55,8 @@ export const SIGNATURE_DOMAINS = {
   approve: 'gnomon:approve:v1',
   approveVoice: 'gnomon:approve-voice:v1',
   auth: 'gnomon:auth:v1',
+  /** #socket serverSig (§4.9): `gnomon:auth-server:v1\n<nonce>\n<endpointPath>`, kernel key only. */
+  authServer: 'gnomon:auth-server:v1',
   brief: 'gnomon:brief:v1',
 } as const;
 export type SignatureDomain = keyof typeof SIGNATURE_DOMAINS;
@@ -62,7 +66,7 @@ export type KeyClass = 'kernel' | 'root' | 'approvals' | 'device' | 'agent';
 
 /** Which domains each key class may sign (§3.1 "Signs:" per class). */
 export const DOMAINS_BY_KEY_CLASS: Readonly<Record<KeyClass, readonly SignatureDomain[]>> = Object.freeze({
-  kernel: Object.freeze(['event', 'auth', 'brief'] as const),
+  kernel: Object.freeze(['event', 'authServer', 'brief'] as const),
   root: Object.freeze(['row', 'event'] as const),
   approvals: Object.freeze(['approve', 'approveVoice', 'event'] as const),
   device: Object.freeze(['auth', 'event'] as const),

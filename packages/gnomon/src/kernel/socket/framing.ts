@@ -50,7 +50,7 @@ export function decodeLine(line: Buffer): DecodedItem | null {
 }
 
 export class NdjsonDecoder {
-  readonly maxFrameBytes: number;
+  maxFrameBytes: number;
   private pending: Buffer[] = [];
   private pendingLen = 0;
   private discarding = false;
@@ -59,6 +59,12 @@ export class NdjsonDecoder {
   constructor(maxFrameBytes: number = MAX_FRAME_BYTES) {
     if (!Number.isInteger(maxFrameBytes) || maxFrameBytes < 1) throw new RangeError('maxFrameBytes must be a positive integer');
     this.maxFrameBytes = maxFrameBytes;
+  }
+
+  /** Change the inbound limit (e.g. 16 KiB pre-auth, raised after auth). Applies to the next bytes. */
+  setMaxFrameBytes(n: number): void {
+    if (!Number.isInteger(n) || n < 1) throw new RangeError('maxFrameBytes must be a positive integer');
+    this.maxFrameBytes = n;
   }
 
   /** Bytes buffered toward the current (incomplete) frame; never exceeds maxFrameBytes. */

@@ -58,6 +58,7 @@ components:
       - "#gnomon-probes"
       - "#socket"
       - "#kernel-log"
+      - "#identity"
     tests:
       - test/symbols-drift.test.ts
       - test/fence.test.ts
@@ -99,28 +100,98 @@ components:
 
   socket:
     description: >-
-      #socket (spec §2.1, §4.9) — the kernel's gnomon-rpc:v1 endpoint. PR-5
-      core: unix-socket server bound under a 0177 umask, chmod 0600 and the
-      ACL read back (socket type, owner uid, mode) before serving; byte-based
-      NDJSON framing (4 MiB max frame, partial-line buffering that is UTF-8
-      safe across chunks, an oversize line discarded to its newline and
-      answered BAD_REQUEST once, malformed UTF-8/JSON/non-object lines refused
-      BAD_REQUEST, connection kept open); per-connection in-order replies;
-      local minimal frame/refusal shapes (contracts are rewritten in parallel —
-      no contract import) using the §4.9 code map. Verbs: `hello` answers a
-      refusal-shaped ENGINE not-implemented (M1.4 brings negotiation and
-      mutual auth), `daemon.status` and `daemon.stop` (refused pending
-      #approval-broker) are pre-ABI placeholders; anything else UNKNOWN_VERB.
-      Emits the §9.1 kinds socket.connect and socket.frame.refused{code} to a
-      callback; connect/disconnect drive $daemon-lifecycle idle accounting.
-      Windows named pipe: parity phase (P8-D78).
+      #socket (spec §2.1, §4.9, §5) — the kernel's gnomon-rpc:v1 endpoint.
+      PR-5 core: unix-socket server bound under a 0177 umask, chmod 0600 and
+      the ACL read back before serving; byte-based NDJSON framing (4 MiB max
+      inbound frame, UTF-8 safe partial lines, oversize discarded to its
+      newline and answered BAD_REQUEST once, malformed lines BAD_REQUEST,
+      connection kept); per-connection in-order replies; connIds are
+      conn:<ULID>. M1.4 SLICE 1: errors carry contracts refusal:v1 in
+      error.data with the §4.9 code map (rpc.ts). auth.ts — `hello`
+      negotiation via contracts negotiateHello (highest shared gnomon-rpc
+      version; none shared ⇒ UNSUPPORTED{offered[], supported[]}; tolerant
+      param validation; client strings capped at 128 chars) answering
+      {clientApi, features, nonce, serverKeyId, serverSig, clientApiId,
+      kitId}; serverSig = kernel key over gnomon:auth-server:v1 + nonce +
+      endpointPath; `auth {principal, deviceId, sig}` verified against the
+      ROOT-signed device registry (#identity), nonce single-use (any attempt
+      consumes it) and 30 s, accepted transcripts remembered so a replay is
+      socket.auth.replay; {token}/{launchToken}/{reconnect} refused
+      UNSUPPORTED (later M1.4 slices). Any failed auth = ONE AUTH refusal,
+      then the connection is closed. dispatch.ts — before auth only hello and
+      auth (other known methods AUTH{unauthenticated}, connection kept;
+      unknown names UNKNOWN_VERB); after auth the §5 verb × principal matrix
+      (contracts VERBS.access; peer refused everywhere) then `status` served
+      for real (principal, connId, surface, clientApi, clientApiId, kitId,
+      abiId, nextLegalVerbs from the §5 table, verbs/relays with
+      availability + milestone, daemon info, log head, sessions 0, cards 0,
+      kernelKeyCustody partial, root state, authenticated clients) under
+      50 ms (G-ABI-03), every other verb/relay ENGINE{not-implemented,
+      milestone} — no fake success, no extra verb (the PR-5 daemon.status /
+      daemon.stop placeholders are removed). Kernel-log rows before the
+      reply: socket.hello, socket.auth.ok, socket.auth.fail,
+      socket.auth.replay (+ socket.connect, socket.frame.refused as
+      diagnostics); a failed auth.ok write refuses the auth. client.ts —
+      rpcCall, RpcConnection, verifyServerHello (serverSig against the
+      registry's kernel key over the CLIENT-derived path), signAuth and
+      connectGnomon (never sends auth to an unverified server; reason
+      unverified-server). ROUND 2: both signatures also bind the negotiated
+      clientApi + canonical features (downgrade-proofing; a deviation from the
+      §4.9 preimage text, pending spec/contracts); the registry is cached by
+      size+mtime+sha256; qualified matrix access (e.g. mod 'own view') is
+      refused ENGINE not-implemented with its milestone, never the full view;
+      hello/auth.ok log failures close the connection (fail rows are
+      best-effort); pre-auth limits — no hello in 10 s or no auth by the 30 s
+      nonce TTL closes, at most 64 pre-auth connections; flow control pauses
+      reading at 32 queued requests or 1 MiB unsent replies; pre-auth
+      diagnostics are coalesced into one signed counter row per window.
+      ROUND 3: socket.hello and socket.auth.fail are rate-limited — the
+      first 8 per 10 s window individually, the rest folded into that
+      window's signed counter row (byOutcome / byReason); auth.ok/.replay stay
+      individual; inbound frames capped at 16 KiB until auth succeeds; the
+      client refuses a hello whose clientApi/features it did not offer
+      (hello-not-offered, client-local); RegistryCache parses the bytes it
+      hashed. Windows named pipe: parity phase (P8-D78).
     path: src/kernel/socket/
     type: module
     tags: [gnomon, kernel, socket, paradigm-8, pr-5]
     tests:
       - test/ndjson-framing.test.ts
       - test/socket-server.test.ts
-    oracles: [G-DMN-02]
+      - test/socket-auth.test.ts
+    oracles: [G-DMN-02, G-ABI-03]
+
+  identity:
+    description: >-
+      #identity (spec §3.1; M1.4 slice of it — hardware custody is M1.3,
+      blocked on the founder's provisioning profile). root-authority.ts — the
+      RootAuthority seam: UnprovisionedRootAuthority is the production default
+      (verifies nothing, signRow refuses UNSUPPORTED{root-unprovisioned,
+      milestone M1.3}; never a software fallback); DevTestRootAuthority is a
+      software P-256 root constructible only with the literal
+      DEV_TEST_ROOT_ACK, never from env/argv (§15.3), reported as root state
+      `dev-test` in status and daemon.start; RootVerifier verifies rows from a
+      pinned root public key (the client side). Row sigs: gnomon:row-sig:v1
+      over canonical JSON, P-256 IEEE-P1363. device-key.ts — the Ed25519
+      device key at <home>/keys/device.key: written O_EXCL 0600, loaded only
+      if a regular owner-only file in an owner-only keys/ dir; a device
+      signer cannot approve. registry.ts — <home>/keys/registry.jsonl,
+      append-only {row, signer, sig} rows (kind kernel | device); fail-closed
+      reader: untrusted signer, bad signature, keyId ≠ sha256(PEM), principal
+      or deviceId outside the root's ns, foreign principals and peer/kernel
+      kinds never resolve and are surfaced in rejected[]; first row pins a
+      deviceId and a keyId. The kernel principal is p:<root ns>/kernel, or
+      p:00000000/kernel while no root exists (UNPROVISIONED_NS).
+      kernel-pub.ts — PUBLIC halves of every kernel key the home ran with
+      (<home>/keys/kernel-pub.jsonl, 0600), loaded into the log's key ring and
+      kernelKeyIds so verify works across restarts; same-user writable and not
+      root-signed, so across restarts kernel signatures prove nothing against
+      a same-user forger until M1.3 (custody partial).
+    path: src/kernel/identity/
+    type: module
+    tags: [gnomon, kernel, identity, paradigm-8, m1.4]
+    tests:
+      - test/socket-auth.test.ts
 
   kernel-log:
     description: >-
@@ -303,7 +374,12 @@ flows:
       argv, then waits for the socket; (2) one per user — home 0700 read back,
       endpoint path chosen (never /tmp), O_EXCL daemonPid:v1 pidfile acquired
       (live holder refuses with daemon.lock.refused, dead holder reclaimed);
-      (3) #socket listens at 0600 and daemon.start is emitted; (4) idle exit —
+      (3) #kernel-log opened with the kernel key (M1.4 seam: a supplied or
+      ephemeral in-memory software Ed25519 key, custody partial; keystore
+      item is M1.3) and the root authority (default unprovisioned), #socket
+      listens at 0600 with the hello/auth dispatcher, daemon.start is
+      emitted AND logged (daemon.exit logged at shutdown, then the log is
+      closed before the lock is released); (4) idle exit —
       no open connections for idleMs (default 10 min) ⇒ daemon.exit{reason:
       'idle'}, socket closed, pidfile and socket released only if still ours;
       SIGTERM/SIGINT take the same path with reason 'signal'. Not yet built:
@@ -311,6 +387,8 @@ flows:
       orphan sweep, the Windows pipe.
     steps:
       - "#gnomon-kernel"
+      - "#kernel-log"
+      - "#identity"
       - "#socket"
 
 aspects:

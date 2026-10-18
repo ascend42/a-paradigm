@@ -1,33 +1,21 @@
 /**
  * @symbol #socket
  *
- * #socket (spec §4.9) — the minimal, LOCAL `gnomon-rpc:v1` frame shapes PR-5
- * needs. Deliberately not imported from @a-company/gnomon-contracts: the
- * contracts are being rewritten in parallel (PR-3); M1.4 swaps these for the
- * contract types and `refusal:v1`. The code values are the §4.9 total map.
+ * #socket (spec §4.9) — `gnomon-rpc:v1` frame shapes. M1.4: errors carry the
+ * contracts `refusal:v1` in `error.data` (§4.9 "{error:{code, message, data:
+ * refusal:v1}}"); the JSON-RPC code comes from the contracts' total code map.
+ * The human sentence is `error.message`, never inside the refusal (Warpline
+ * semantics). Named reasons ride `refusal.data.reason` (an additive enum).
  */
-export const GNOMON_RPC = 'gnomon-rpc:v1' as const;
+import { GNOMON_RPC_V1, JSON_RPC_CODES, refuse, type Refusal, type RefusalCode, type RefusalData } from '@a-company/gnomon-contracts';
 
-export const RPC_ERROR_CODES = Object.freeze({
-  ENGINE: -32000,
-  AUTH: -32001,
-  FORBIDDEN: -32002,
-  NOT_FOUND: -32004,
-  UNSUPPORTED: -32005,
-  BAD_REQUEST: -32600,
-  UNKNOWN_VERB: -32601,
-} as const);
+export const GNOMON_RPC = GNOMON_RPC_V1;
 
-export type RpcErrorName = keyof typeof RPC_ERROR_CODES;
+/** The §4.9 total code map (re-exported from the contracts). */
+export const RPC_ERROR_CODES = JSON_RPC_CODES;
+
+export type RpcErrorName = RefusalCode;
 export type RpcId = string | number | null;
-
-/** Refusal-shaped error data (a local stand-in for `refusal:v1`). */
-export interface PendingRefusal {
-  code: RpcErrorName;
-  reason: string;
-  message: string;
-  detail?: Record<string, unknown>;
-}
 
 export interface RpcRequestFrame {
   jsonrpc: '2.0';
@@ -48,18 +36,39 @@ export interface RpcErrorFrame {
   jsonrpc: '2.0';
   rpc: typeof GNOMON_RPC;
   id: RpcId;
-  error: { code: number; message: string; data: PendingRefusal };
+  error: { code: number; message: string; data: Refusal };
 }
 
 export type RpcResponseFrame = RpcResultFrame | RpcErrorFrame;
 
-/** Throw from a handler to answer with a refusal-shaped error. */
+/** A refusal plus its human sentence. */
+export interface RefusalWithMessage {
+  refusal: Refusal;
+  message: string;
+}
+
+export function refusalWith(code: RefusalCode, reason: string, message: string, data?: RefusalData): RefusalWithMessage {
+  return { refusal: refuse({ code, data: { reason, ...(data ?? {}) } }), message };
+}
+
+/**
+ * Throw from a handler to answer with a refusal. `closeAfter` = the server
+ * sends the reply, then ends the connection and ignores further frames
+ * (§4.9: "failed auth closes after one AUTH refusal").
+ */
 export class RpcRefusal extends Error {
-  readonly refusal: PendingRefusal;
-  constructor(code: RpcErrorName, reason: string, message: string, detail?: Record<string, unknown>) {
+  readonly refusal: Refusal;
+  readonly closeAfter: boolean;
+  constructor(code: RefusalCode, reason: string, message: string, data?: RefusalData, opts: { closeAfter?: boolean } = {}) {
     super(message);
     this.name = 'RpcRefusal';
-    this.refusal = { code, reason, message, ...(detail ? { detail } : {}) };
+    this.refusal = refusalWith(code, reason, message, data).refusal;
+    this.closeAfter = opts.closeAfter ?? false;
+  }
+  static from(r: RefusalWithMessage, opts: { closeAfter?: boolean } = {}): RpcRefusal {
+    const e = new RpcRefusal(r.refusal.code, String(r.refusal.data?.reason ?? ''), r.message, undefined, opts);
+    (e as { refusal: Refusal }).refusal = r.refusal;
+    return e;
   }
 }
 
@@ -67,8 +76,8 @@ export function resultFrame(id: RpcId, result: unknown): RpcResultFrame {
   return { jsonrpc: '2.0', rpc: GNOMON_RPC, id, result };
 }
 
-export function errorFrame(id: RpcId, refusal: PendingRefusal): RpcErrorFrame {
-  return { jsonrpc: '2.0', rpc: GNOMON_RPC, id, error: { code: RPC_ERROR_CODES[refusal.code], message: refusal.message, data: refusal } };
+export function errorFrame(id: RpcId, r: RefusalWithMessage): RpcErrorFrame {
+  return { jsonrpc: '2.0', rpc: GNOMON_RPC, id, error: { code: JSON_RPC_CODES[r.refusal.code], message: r.message, data: r.refusal } };
 }
 
 export function requestFrame(id: RpcId, method: string, params?: unknown): RpcRequestFrame {
@@ -79,19 +88,20 @@ function isId(v: unknown): v is RpcId {
   return v === null || typeof v === 'string' || (typeof v === 'number' && Number.isFinite(v));
 }
 
-export type ParsedRequest = { ok: true; frame: RpcRequestFrame } | { ok: false; id: RpcId; refusal: PendingRefusal };
+export type ParsedRequest = { ok: true; frame: RpcRequestFrame } | ({ ok: false; id: RpcId } & RefusalWithMessage);
 
 /** Validate a decoded object as a `gnomon-rpc:v1` request. */
 export function parseRequest(value: Record<string, unknown>): ParsedRequest {
   const id: RpcId = isId(value.id) ? value.id : null;
-  const bad = (reason: string, message: string): ParsedRequest => ({
-    ok: false,
-    id,
-    refusal: { code: 'BAD_REQUEST', reason, message },
-  });
+  const bad = (reason: string, message: string): ParsedRequest => ({ ok: false, id, ...refusalWith('BAD_REQUEST', reason, message) });
   if (value.jsonrpc !== '2.0') return bad('jsonrpc-version', 'frame must carry "jsonrpc":"2.0"');
   if (value.rpc !== GNOMON_RPC) return bad('rpc-tag', `frame must carry "rpc":"${GNOMON_RPC}"`);
-  if (Object.hasOwn(value, 'id') && !isId(value.id)) return bad('id', 'id must be a string, number or null');
-  if (typeof value.method !== 'string' || value.method.length === 0) return bad('method', 'method must be a non-empty string');
+  if (Object.hasOwn(value, 'id') && !isId(value.id)) return bad('request-id', 'id must be a string, number or null');
+  if (typeof value.method !== 'string' || value.method.length === 0) return bad('method-missing', 'method must be a non-empty string');
   return { ok: true, frame: value as unknown as RpcRequestFrame };
+}
+
+/** The reason string of an error frame's refusal (diagnostics, tests). */
+export function reasonOf(frame: RpcResponseFrame): string | undefined {
+  return 'error' in frame ? (frame.error.data.data?.reason as string | undefined) : undefined;
 }

@@ -5,7 +5,8 @@
  */
 import { describe, expect, it } from 'vitest';
 import { decodeLine, encodeFrame, MAX_FRAME_BYTES, NdjsonDecoder } from '../src/kernel/socket/framing.js';
-import { errorFrame, parseRequest, RPC_ERROR_CODES } from '../src/kernel/socket/rpc.js';
+import { isRefusalV1 } from '@a-company/gnomon-contracts';
+import { errorFrame, parseRequest, refusalWith, RPC_ERROR_CODES } from '../src/kernel/socket/rpc.js';
 
 const b = (s: string) => Buffer.from(s, 'utf8');
 
@@ -113,27 +114,24 @@ describe('encodeFrame', () => {
   });
 });
 
-describe('gnomon-rpc:v1 request validation (local shapes)', () => {
+describe('gnomon-rpc:v1 request validation (refusal:v1 in error.data, M1.4)', () => {
   it('requires jsonrpc 2.0, the rpc tag and a method', () => {
     expect(parseRequest({ jsonrpc: '2.0', rpc: 'gnomon-rpc:v1', id: 1, method: 'hello' }).ok).toBe(true);
     const noTag = parseRequest({ jsonrpc: '2.0', id: 7, method: 'hello' });
-    expect(noTag).toMatchObject({ ok: false, id: 7, refusal: { code: 'BAD_REQUEST', reason: 'rpc-tag' } });
-    expect(parseRequest({ rpc: 'gnomon-rpc:v1', method: 'x' })).toMatchObject({ ok: false, refusal: { reason: 'jsonrpc-version' } });
+    expect(noTag).toMatchObject({ ok: false, id: 7, refusal: { schemaVersion: 'refusal:v1', code: 'BAD_REQUEST', data: { reason: 'rpc-tag' } } });
+    expect(parseRequest({ rpc: 'gnomon-rpc:v1', method: 'x' })).toMatchObject({ ok: false, refusal: { data: { reason: 'jsonrpc-version' } } });
     expect(parseRequest({ jsonrpc: '2.0', rpc: 'gnomon-rpc:v1', id: {}, method: 'x' })).toMatchObject({
       ok: false,
       id: null,
-      refusal: { reason: 'id' },
+      refusal: { data: { reason: 'request-id' } },
     });
-    expect(parseRequest({ jsonrpc: '2.0', rpc: 'gnomon-rpc:v1', method: '' })).toMatchObject({ ok: false, refusal: { reason: 'method' } });
+    expect(parseRequest({ jsonrpc: '2.0', rpc: 'gnomon-rpc:v1', method: '' })).toMatchObject({ ok: false, refusal: { data: { reason: 'method-missing' } } });
   });
 
-  it('maps refusal names onto the §4.9 code map', () => {
-    expect(RPC_ERROR_CODES).toMatchObject({ BAD_REQUEST: -32600, UNKNOWN_VERB: -32601, ENGINE: -32000, UNSUPPORTED: -32005 });
-    expect(errorFrame(3, { code: 'BAD_REQUEST', reason: 'r', message: 'm' })).toEqual({
-      jsonrpc: '2.0',
-      rpc: 'gnomon-rpc:v1',
-      id: 3,
-      error: { code: -32600, message: 'm', data: { code: 'BAD_REQUEST', reason: 'r', message: 'm' } },
-    });
+  it('maps refusal codes onto the §4.9 code map and carries refusal:v1', () => {
+    expect(RPC_ERROR_CODES).toMatchObject({ AUTH: -32001, FORBIDDEN: -32002, BAD_REQUEST: -32600, UNKNOWN_VERB: -32601, ENGINE: -32000, UNSUPPORTED: -32005 });
+    const f = errorFrame(3, refusalWith('BAD_REQUEST', 'r', 'm'));
+    expect(f).toMatchObject({ jsonrpc: '2.0', rpc: 'gnomon-rpc:v1', id: 3, error: { code: -32600, message: 'm', data: { schemaVersion: 'refusal:v1', code: 'BAD_REQUEST', data: { reason: 'r' } } } });
+    expect(isRefusalV1(f.error.data, { mode: 'tolerant' })).toBe(true);
   });
 });

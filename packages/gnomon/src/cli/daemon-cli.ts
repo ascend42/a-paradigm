@@ -2,6 +2,16 @@
  * $daemon-lifecycle (spec §2.4) — CLI glue for `gnomond` and `gnomon daemon`.
  * Writes to stdio directly: the kernel has zero deps (G-SEC-01) and cannot use
  * the Paradigm logger; #kernel-log brings structured logging at M1.2.
+ *
+ * M1.4 slice 1: `gnomon daemon status` sends `hello` only. It does NOT
+ * verify serverSig (that needs a root-signed kernel-key row, #identity M1.3)
+ * and does NOT authenticate or call `status` (no registered device before
+ * M1.3): it reports `running` from the hello with `serverVerified:false,
+ * authenticated:false` and the reason; the pidfile pid is shown as a
+ * diagnostic only (§2.4: never trusted). `gnomon daemon stop` is
+ * approval-signed (§3.1 I3) and refused locally until #approval-broker (M1.6):
+ * there is no `daemon.stop` verb — the socket surface is exactly 12 verbs + 2
+ * relays.
  */
 import * as net from 'node:net';
 import * as path from 'node:path';
@@ -15,7 +25,8 @@ import {
   spawnDetachedDaemon,
   startDaemon,
 } from '../kernel/lifecycle/index.js';
-import { rpcCall } from '../kernel/socket/index.js';
+import { connectGnomon, ServerAuthError } from '../kernel/socket/index.js';
+import { refuse, refusalOf, RefusedError } from '@a-company/gnomon-contracts';
 import { GNOMON_VERSION } from '../version.js';
 
 export const EXIT_OK = 0;
@@ -143,20 +154,39 @@ export async function runDaemonCommand(argv: readonly string[], gnomondEntry: st
     process.stderr.write('gnomon: no safe endpoint path for this home\n');
     return EXIT_REFUSED;
   }
-  let resp;
+  if (sub === 'stop') {
+    const refusal = refuse({ code: 'ENGINE', data: { reason: 'not-implemented', verb: 'daemon stop', milestone: 'M1.6' } });
+    process.stderr.write(
+      `${JSON.stringify({ code: -32000, message: 'daemon stop is approval-signed (§3.1 I3); it arrives with #approval-broker (M1.6). The daemon exits on idle.', data: refusal })}\n`,
+    );
+    return EXIT_REFUSED;
+  }
   try {
-    resp = await rpcCall(sock, sub === 'status' ? 'daemon.status' : 'daemon.stop');
-  } catch {
+    const session = await connectGnomon({ socketPath: sock, client: { name: 'gnomon', version: GNOMON_VERSION, surface: 'cli' } });
+    await session.conn.close();
+    const st = daemonState(home, sock);
+    process.stdout.write(
+      `${JSON.stringify({
+        running: true,
+        socketPath: sock,
+        clientApi: session.hello.clientApi,
+        serverKeyId: session.hello.serverKeyId,
+        serverVerified: session.serverVerified,
+        authenticated: false,
+        reason: 'root-unprovisioned: no root-signed kernel-key or device row until #identity M1.3',
+        diagnosticPid: st.state === 'running' ? st.pidfile.pid : null,
+      })}\n`,
+    );
+    return EXIT_OK;
+  } catch (err) {
+    if (err instanceof RefusedError || err instanceof ServerAuthError) {
+      process.stderr.write(`${JSON.stringify({ refused: true, message: err.message, ...(err instanceof RefusedError ? { data: refusalOf({ refusal: err.refusal }) } : {}) })}\n`);
+      return EXIT_REFUSED;
+    }
     const st = daemonState(home, sock);
     process.stdout.write(`${JSON.stringify({ running: false, state: st.state })}\n`);
     return EXIT_NOT_RUNNING;
   }
-  if ('error' in resp) {
-    process.stderr.write(`${JSON.stringify(resp.error)}\n`);
-    return EXIT_REFUSED;
-  }
-  process.stdout.write(`${JSON.stringify({ running: true, ...(resp.result as object) })}\n`);
-  return EXIT_OK;
 }
 
 function usage(msg: string): number {

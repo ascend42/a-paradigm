@@ -1,10 +1,10 @@
 {
   "version": "1.0",
-  "generatedAt": "2026-10-17T23:11:30.878Z",
+  "generatedAt": "2026-10-18T00:00:00.189Z",
   "flows": {
     "$daemon-lifecycle": {
       "id": "$daemon-lifecycle",
-      "description": "$daemon-lifecycle (spec §2.4; PR-5 core of M1.9). (1) client activation — `gnomon daemon --detach` re-execs gnomond with the clean env and home in argv, then waits for the socket; (2) one per user — home 0700 read back, endpoint path chosen (never /tmp), O_EXCL daemonPid:v1 pidfile acquired (live holder refuses with daemon.lock.refused, dead holder reclaimed); (3) #socket listens at 0600 and daemon.start is emitted; (4) idle exit — no open connections for idleMs (default 10 min) ⇒ daemon.exit{reason: 'idle'}, socket closed, pidfile and socket released only if still ours; SIGTERM/SIGINT take the same path with reason 'signal'. Not yet built: sessions/subscribers/timers as holders, mod and transport-child stop, orphan sweep, the Windows pipe.",
+      "description": "$daemon-lifecycle (spec §2.4; PR-5 core of M1.9). (1) client activation — `gnomon daemon --detach` re-execs gnomond with the clean env and home in argv, then waits for the socket; (2) one per user — home 0700 read back, endpoint path chosen (never /tmp), O_EXCL daemonPid:v1 pidfile acquired (live holder refuses with daemon.lock.refused, dead holder reclaimed); (3) #kernel-log opened with the kernel key (M1.4 seam: a supplied or ephemeral in-memory software Ed25519 key, custody partial; keystore item is M1.3) and the root authority (default unprovisioned), #socket listens at 0600 with the hello/auth dispatcher, daemon.start is emitted AND logged (daemon.exit logged at shutdown, then the log is closed before the lock is released); (4) idle exit — no open connections for idleMs (default 10 min) ⇒ daemon.exit{reason: 'idle'}, socket closed, pidfile and socket released only if still ours; SIGTERM/SIGINT take the same path with reason 'signal'. Not yet built: sessions/subscribers/timers as holders, mod and transport-child stop, orphan sweep, the Windows pipe.",
       "steps": [
         {
           "id": "step-1",
@@ -13,6 +13,16 @@
         },
         {
           "id": "step-2",
+          "action": "#kernel-log",
+          "symbol": "#kernel-log"
+        },
+        {
+          "id": "step-3",
+          "action": "#identity",
+          "symbol": "#identity"
+        },
+        {
+          "id": "step-4",
           "action": "#socket",
           "symbol": "#socket"
         }
@@ -778,6 +788,12 @@
   },
   "symbolToFlows": {
     "#gnomon-kernel": [
+      "$daemon-lifecycle"
+    ],
+    "#kernel-log": [
+      "$daemon-lifecycle"
+    ],
+    "#identity": [
       "$daemon-lifecycle"
     ],
     "#socket": [

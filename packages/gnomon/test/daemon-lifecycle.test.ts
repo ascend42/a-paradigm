@@ -241,10 +241,17 @@ describe('gnomon daemon status|stop (CLI over the socket)', () => {
     const { child, ready } = await startChild(h);
     const status = spawnSync(process.execPath, [GNOMON, 'daemon', 'status', '--home', h], { encoding: 'utf8' });
     expect(status.status).toBe(0);
-    expect(JSON.parse(status.stdout)).toMatchObject({ running: true, pid: ready.pid, socketPath: ready.socketPath, via: 'home' });
+    expect(JSON.parse(status.stdout)).toMatchObject({
+      running: true,
+      socketPath: ready.socketPath,
+      clientApi: 'gnomon-rpc:v1',
+      serverVerified: false,
+      authenticated: false,
+      diagnosticPid: ready.pid,
+    });
     const stop = spawnSync(process.execPath, [GNOMON, 'daemon', 'stop', '--home', h], { encoding: 'utf8' });
     expect(stop.status).toBe(1);
-    expect(JSON.parse(stop.stderr)).toMatchObject({ code: -32000, data: { reason: 'not-implemented', detail: { milestone: 'M1.6' } } });
+    expect(JSON.parse(stop.stderr)).toMatchObject({ code: -32000, data: { code: 'ENGINE', data: { reason: 'not-implemented', milestone: 'M1.6' } } });
     child.kill('SIGTERM');
     await exitOf(child);
     const after = spawnSync(process.execPath, [GNOMON, 'daemon', 'status', '--home', h], { encoding: 'utf8' });

@@ -2,7 +2,7 @@
   "$meta": {
     "version": "1.0.0",
     "project": "a-paradigm",
-    "generatedAt": "2026-10-17T23:11:30.853Z",
+    "generatedAt": "2026-10-18T00:00:00.164Z",
     "paradigmVersion": "0.1.0",
     "sources": {
       "purposeFiles": 103,
@@ -26,7 +26,7 @@
       "feature": 1,
       "theme": 1,
       "controller": 1,
-      "module": 100,
+      "module": 101,
       "tool": 45,
       "tool-group": 10,
       "util": 9,
@@ -2648,9 +2648,13 @@
       "symbol": "#gnomon-contracts",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-contracts/.purpose",
-      "description": "Package entry (src/index.ts, re-exports every module) plus schemas/. probeResult:v1 = {probe, os, osVersion, arch, toolVersions{node,...}, verdict pass|fail|partial, evidence{}, specRefs[], at}; schemas/probeResult.v1.schema.json is its JSON Schema, src/probe-result.ts the TS type plus validateProbeResultV1 / isProbeResultV1. The PR-3 schemas in schemas/ are GENERATED from src/schemas.ts (`npm run schemas`, scripts/write-schemas.mjs) and a test keeps them a byte-identical fixed point. src/internal.ts holds the shared pure helpers (Checker with strict|tolerant modes, UTF-8, synchronous SHA-256, Crockford base32, canonical JSON, deepFreeze).",
+      "description": "Package entry (src/index.ts, re-exports every module) plus schemas/. probeResult:v1 = {probe, os, osVersion, arch, toolVersions{node,...}, verdict pass|fail|partial, evidence{}, specRefs[], at}; schemas/probeResult.v1.schema.json is its JSON Schema, src/probe-result.ts the TS type plus validateProbeResultV1 / isProbeResultV1. The PR-3 schemas in schemas/ are GENERATED from src/schemas.ts (`npm run schemas`, scripts/write-schemas.mjs) and a test keeps them a byte-identical fixed point. src/internal.ts holds the shared pure helpers (Checker with strict|tolerant modes, UTF-8, synchronous SHA-256, Crockford base32, canonical JSON, deepFreeze). Also home (no allowlisted sub-component yet; spec Appendix A has no node) of the M1.1-reserved (P8-D86–D88, §4.11) schemas: src/change-note.ts = change-note:v1 — agentClaims{testedHow{summary ≤1 KiB, refs[]}, risk{tier low|medium|high, why ≤512 B, blast[sym:]}, revert{how auto|command|manual, steps ≤1 KiB never executed, reversible}, draftedBy} UNTRUSTED and kept structurally apart from kernel{verified{n, of}, risk{floor, effective, reasons[]}, revert{how auto|none, ref?}} (B16); validateChangeNoteV1 needs an explicit form (no default): claim (contract.claim{note}: agentClaims only, a kernel part refused in every mode) or card (kernel required; strict: effective = max(floor, agent tier)); schemas/change-note.v1.schema.json publishes both as $defs/claim (kernel: false) and $defs/card, with x-gnomon-trust per part; failSafe* readings and changeNoteHasUnknownValue. src/review-finding.ts = review-finding:v1 {fid, round >= 1, class, severity important|nit|pre-existing (kernel-set), locus{path, lines?, symbol?}, instances[], claim, fingerprint}; `lines` = \"n\" or \"from-to\" (spec gives no grammar; judgment call); FINDING_RESPONSES fixed|wrong| intentional|immaterial + validateFindingResponses for contract.claim{responses}; schemas/review-finding.v1.schema.json. Tiers, hows, severities and responses are ADDITIVE with fail-safe readings (unknown tier ⇒ high, agent revert how ⇒ manual, kernel revert how ⇒ none, severity ⇒ important, response ⇒ no answer; round-2 ruling). They serve #approval-broker and ^certified convergence.",
       "visualTags": [],
-      "related": [],
+      "related": [
+        "$defs",
+        "#approval-broker",
+        "^certified"
+      ],
       "componentType": "module"
     },
     "contract-event-v1": {
@@ -2659,7 +2663,7 @@
       "symbol": "#contract-event-v1",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-contracts/.purpose",
-      "description": "event:v1 envelope (§4.1) — EventV1 type, validateEventV1/isEventV1 (strict = registered kind + closed fields; tolerant = unknown kinds and fields accepted, opaqueEventView renders {kind, principal, at}), schemas/event.v1.schema.json. The kind registry EVENT_KINDS (§9.1, 198 kinds, owner kernel|userland, M1.1 reservations tagged M1.1:P8-D58 / M1.1:P8-R9) with per-kind default labels: audience private, sensitivity per §9.1 (session.inject, turn.event, voice.turn.* sensitive; voice.enrol secret; field labels approval.request.tool_input and oracle.result.evidence sensitive). defaultLabelsFor(kind) returns undefined for an unregistered kind so the kernel refuses rather than guesses (S32 §6, L6, G-LOG-09 contract half). Serves #kernel-log and ~ample-internal-logs.",
+      "description": "event:v1 envelope (§4.1) — EventV1 type, validateEventV1/isEventV1 (strict = registered kind + closed fields; tolerant = unknown kinds and fields accepted, opaqueEventView renders {kind, principal, at}), schemas/event.v1.schema.json. The kind registry EVENT_KINDS (§9.1, owner kernel|userland, M1.1 reservations tagged M1.1:P8-D58 / M1.1:P8-R9 / M1.1:P8-D86-D88 — the last: approval.strictness.raised| proposed|lowered|held, approval.mode.set, approval.auto, contract.review.returned|capped|extended|restarted, merge.reverted, merge.ref.rewritten, verdict.incident, request.strictness.set|mode.set| incident, all kernel-owned, private + normal) with RESERVED_PAYLOAD_FIELDS (oracle.result round/range/findings, contract.knot reopenOf, contract.built note/responses, verdict.founder override, session.inject briefId/peerRootKeyId, session.tainted taint), SESSION_TAINTS and APPROVAL_SUSPECT_REASONS (voice-* and strictness-class), and per-kind default labels: audience private, sensitivity per §9.1 (session.inject, turn.event, voice.turn.* sensitive; voice.enrol secret; field labels approval.request.tool_input and oracle.result.evidence sensitive). defaultLabelsFor(kind) returns undefined for an unregistered kind so the kernel refuses rather than guesses (S32 §6, L6, G-LOG-09 contract half). Serves #kernel-log and ~ample-internal-logs.",
       "visualTags": [],
       "related": [
         "#kernel-log",
@@ -2686,7 +2690,7 @@
       "symbol": "#contract-principal",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-contracts/.purpose",
-      "description": "Principals (§3.1, S32-02, P8-D75) — PRINCIPAL_KINDS human|agent|session| kernel|mod|voice|peer; p:<ns>/<name> and the foreign display form p:<ns>/<name>@<rootKeyId8> (parsePrincipalId marks it foreign, never local); samePrincipal compares full rootKeyId + name and never ns; isLocalPrincipal, foreignDisplayId, nsFromRootPublicKey, peerKernelPrincipal. Serves #identity and #peer-link (G-ID-08 contract half).",
+      "description": "Principals (§3.1, S32-02, P8-D75) — PRINCIPAL_KINDS human|agent|session| kernel|mod|voice|peer; p:<ns>/<name> and the foreign display form p:<ns>/<name>@<rootKeyId8> (parsePrincipalId marks it foreign, never local); samePrincipal compares full rootKeyId + name and never ns; isLocalPrincipal, foreignDisplayId, nsFromRootPublicKey, peerKernelPrincipal. Also the closed-kind row vocabularies of §3.1/§15.4: REGISTRY_ROW_KINDS (kernel, link), GRANT_ROW_KINDS (incl. reserved grant.voice-approvals, grant.peer), CAPABILITY_FORMS and FIRST_PARTY_ONLY_CAPABILITIES (link:send, knowledge:federate), GRANT_DERIVED_ONLY_CAPABILITIES (voice.approve:<class>) — not clientApiId inputs. Serves #identity and #peer-link (G-ID-08 contract half).",
       "visualTags": [],
       "related": [
         "#identity",
@@ -2711,7 +2715,7 @@
       "symbol": "#contract-refusal-v1",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-contracts/.purpose",
-      "description": "refusal:v1 Gnomon superset (§4.6) — copied (not imported) from packages/warpline/src/fabric/refusal.ts: Warpline's 12 codes + BUDGET_DENIED, PERMIT_REQUIRED, CAS_LOST, BILLING_REFUSED, MODEL_UNAVAILABLE; gates + budget, billing, model, voice, link; Retriability; next[] steps; verdict and contested[].rule widened to string|null; optional additive data{reason, offered, cardId}; voice and link reason lists (M1.1); exit codes and the JSON-RPC code map (§4.9); refuse() single constructor, refusalOf() accessor (+ the JSON-RPC error depth), RefusedError, validateRefusalV1, schemas/refusal.v1.schema.json. G-CON-02 partial: every Warpline-shaped refusal validates.",
+      "description": "refusal:v1 Gnomon superset (§4.6) — copied (not imported) from packages/warpline/src/fabric/refusal.ts: Warpline's 12 codes + BUDGET_DENIED, PERMIT_REQUIRED, CAS_LOST, BILLING_REFUSED, MODEL_UNAVAILABLE; gates + budget, billing, model, voice, link, and reserved review, strictness (P8-D86–D88); Retriability; next[] steps; verdict and contested[].rule widened to string|null; optional additive data{reason, offered, cardId}; voice and link reason lists (M1.1); reserved review-cap, strictness-presence|paused|mode|evidence, voice-strictness, note-missing with RESERVED_REASON_ROUTES naming each one's code and gate; SOCKET_REASON_ROUTES for the reasons the M1.4 kernel socket emits; exit codes and the JSON-RPC code map (§4.9); refuse() single constructor, refusalOf() accessor (+ the JSON-RPC error depth), RefusedError, validateRefusalV1, schemas/refusal.v1.schema.json. G-CON-02 partial: every Warpline-shaped refusal validates.",
       "visualTags": [],
       "related": [],
       "componentType": "module"
@@ -2722,7 +2726,7 @@
       "symbol": "#contract-card-v1",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-contracts/.purpose",
-      "description": "card:v1 (§3.4, §14.7, §3.9) — kinds incl. reserved voice-arm, grant, handoff, declassify, peer-pair; states incl. held; flags incl. voice-phrase, peer; decisions incl. withdraw; presence incl. voice-armed; via incl. voice, link; voice / voiceDecision blocks; signature domains gnomon:approve:v1 and gnomon:approve-voice:v1; CARD_RESERVED_VALUES; isCardDecidable (unknown state never decidable, held only withdraws); validateCardV1, schemas/card.v1.schema.json. Serves #approval-broker, ^voice-armed and ^peer-paired.",
+      "description": "card:v1 (§3.4, §14.7, §3.9) — kinds incl. reserved voice-arm, grant, handoff, declassify, peer-pair, reconsider, strictness, incident; states incl. held; flags incl. voice-phrase, peer, irreversible, claim-mismatch; decisions incl. withdraw, extend, restart (reconsider cards only); fields note (change-note:v1, card form) and strictness{level L0-L3, mode manual|ask|auto-edits, reason} — level and mode ADDITIVE with fail-safe readings (unknown level ⇒ L3, mode ⇒ manual; no bypass mode); hasUnknownFailSafeValue ⇒ the card renders but is never decidable; strict producer checks: extend/restart (also as heldDecision) only on reconsider, claim-mismatch flag when agent tier < floor, irreversible flag when reversible:false (G-CHG-01/04); ROOT_CONFIG_RESERVED_SECTIONS; presence incl. voice-armed; via incl. voice, link; voice / voiceDecision blocks; signature domains gnomon:approve:v1 and gnomon:approve-voice:v1; CARD_RESERVED_VALUES; isCardDecidable (unknown state never decidable, held only withdraws); validateCardV1, schemas/card.v1.schema.json. Serves #approval-broker, ^voice-armed and ^peer-paired.",
       "visualTags": [
         "card"
       ],
@@ -2738,7 +2742,7 @@
       "symbol": "#contract-gnomon-rpc-v1",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-contracts/.purpose",
-      "description": "gnomon-rpc:v1 (§4.9, §5, §12.3) — hello params/result types and validators, auth preimage helpers, negotiateHello (highest shared version, feature intersection, UNSUPPORTED{data:{offered[]}}); the frozen VERBS (12, with params, refusals and the §5 access matrix incl. the all-refused peer column) and CLIENT_RELAYS (mod.view, mod.command); ADDITIVE_ENUMS + renderEnumValue implement the compatible-additive rule; schemas/gnomon-rpc.v1.hello.schema.json. Serves #socket and #web-endpoint.",
+      "description": "gnomon-rpc:v1 (§4.9, §5, §12.3) — hello params/result types and validators, auth preimage helpers, negotiateHello (highest shared version, feature intersection, UNSUPPORTED{data:{offered[]}}); the frozen VERBS (12, with params, refusals and the §5 access matrix incl. the all-refused peer column; session.open runMode?, contract.claim note? / responses? + BAD_REQUEST, oracle.run FORBIDDEN per v3.9) and CLIENT_RELAYS (mod.view, mod.command); VERB_PARAM_VALUES, RESERVED_CONTENT_PARTS ({brief}), STATUS_RESERVED_FIELDS (links, strictness, review, unobservedRefWrites) and FAIL_SAFE_VALUES (in clientApiId); ADDITIVE_ENUMS + renderEnumValue implement the compatible-additive rule; schemas/gnomon-rpc.v1.hello.schema.json. Serves #socket and #web-endpoint.",
       "visualTags": [],
       "related": [
         "#socket"
@@ -2751,7 +2755,7 @@
       "symbol": "#contract-client-api-id",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-contracts/.purpose",
-      "description": "kitId and clientApiId (§12.3, §12.8). kitId = sha256(canonicalJson(kit:v1 block list)); clientApiId = sha256(canonicalJson(CLIENT_API_DESCRIPTOR) + \"\\n\" + kitId) where the descriptor = the 12 verbs + 2 relays, the JSON-RPC code map, ADDITIVE_ENUMS and every published client JSON Schema; modAbiId is not an input. src/schemas.ts builds the schemas from the TS constants; schemas/client-api.ids.json pins the values per release.",
+      "description": "kitId and clientApiId (§12.3, §12.8). kitId = sha256(canonicalJson(kit:v1 block list)); clientApiId = sha256(canonicalJson(CLIENT_API_DESCRIPTOR) + \"\\n\" + kitId) where the descriptor = the 12 verbs + 2 relays, the JSON-RPC code map, ADDITIVE_ENUMS, every published client JSON Schema and the non-schema M1.1 reservations (verb param values, content parts, status fields); modAbiId is not an input. src/schemas.ts builds the schemas from the TS constants; schemas/client-api.ids.json pins the values per release.",
       "visualTags": [],
       "related": [],
       "componentType": "module"
@@ -2792,7 +2796,8 @@
         "$XDG_RUNTIME_DIR",
         "#socket",
         "#approval-broker",
-        "#gnomon-probes"
+        "#gnomon-probes",
+        "#identity"
       ],
       "componentType": "module"
     },
@@ -2813,12 +2818,22 @@
       "symbol": "#socket",
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose",
-      "description": "#socket (spec §2.1, §4.9) — the kernel's gnomon-rpc:v1 endpoint. PR-5 core: unix-socket server bound under a 0177 umask, chmod 0600 and the ACL read back (socket type, owner uid, mode) before serving; byte-based NDJSON framing (4 MiB max frame, partial-line buffering that is UTF-8 safe across chunks, an oversize line discarded to its newline and answered BAD_REQUEST once, malformed UTF-8/JSON/non-object lines refused BAD_REQUEST, connection kept open); per-connection in-order replies; local minimal frame/refusal shapes (contracts are rewritten in parallel — no contract import) using the §4.9 code map. Verbs: `hello` answers a refusal-shaped ENGINE not-implemented (M1.4 brings negotiation and mutual auth), `daemon.status` and `daemon.stop` (refused pending #approval-broker) are pre-ABI placeholders; anything else UNKNOWN_VERB. Emits the §9.1 kinds socket.connect and socket.frame.refused{code} to a callback; connect/disconnect drive $daemon-lifecycle idle accounting. Windows named pipe: parity phase (P8-D78).",
+      "description": "#socket (spec §2.1, §4.9, §5) — the kernel's gnomon-rpc:v1 endpoint. PR-5 core: unix-socket server bound under a 0177 umask, chmod 0600 and the ACL read back before serving; byte-based NDJSON framing (4 MiB max inbound frame, UTF-8 safe partial lines, oversize discarded to its newline and answered BAD_REQUEST once, malformed lines BAD_REQUEST, connection kept); per-connection in-order replies; connIds are conn:<ULID>. M1.4 SLICE 1: errors carry contracts refusal:v1 in error.data with the §4.9 code map (rpc.ts). auth.ts — `hello` negotiation via contracts negotiateHello (highest shared gnomon-rpc version; none shared ⇒ UNSUPPORTED{offered[], supported[]}; tolerant param validation; client strings capped at 128 chars) answering {clientApi, features, nonce, serverKeyId, serverSig, clientApiId, kitId}; serverSig = kernel key over gnomon:auth-server:v1 + nonce + endpointPath; `auth {principal, deviceId, sig}` verified against the ROOT-signed device registry (#identity), nonce single-use (any attempt consumes it) and 30 s, accepted transcripts remembered so a replay is socket.auth.replay; {token}/{launchToken}/{reconnect} refused UNSUPPORTED (later M1.4 slices). Any failed auth = ONE AUTH refusal, then the connection is closed. dispatch.ts — before auth only hello and auth (other known methods AUTH{unauthenticated}, connection kept; unknown names UNKNOWN_VERB); after auth the §5 verb × principal matrix (contracts VERBS.access; peer refused everywhere) then `status` served for real (principal, connId, surface, clientApi, clientApiId, kitId, abiId, nextLegalVerbs from the §5 table, verbs/relays with availability + milestone, daemon info, log head, sessions 0, cards 0, kernelKeyCustody partial, root state, authenticated clients) under 50 ms (G-ABI-03), every other verb/relay ENGINE{not-implemented, milestone} — no fake success, no extra verb (the PR-5 daemon.status / daemon.stop placeholders are removed). Kernel-log rows before the reply: socket.hello, socket.auth.ok, socket.auth.fail, socket.auth.replay (+ socket.connect, socket.frame.refused as diagnostics); a failed auth.ok write refuses the auth. client.ts — rpcCall, RpcConnection, verifyServerHello (serverSig against the registry's kernel key over the CLIENT-derived path), signAuth and connectGnomon (never sends auth to an unverified server; reason unverified-server). ROUND 2: both signatures also bind the negotiated clientApi + canonical features (downgrade-proofing; a deviation from the §4.9 preimage text, pending spec/contracts); the registry is cached by size+mtime+sha256; qualified matrix access (e.g. mod 'own view') is refused ENGINE not-implemented with its milestone, never the full view; hello/auth.ok log failures close the connection (fail rows are best-effort); pre-auth limits — no hello in 10 s or no auth by the 30 s nonce TTL closes, at most 64 pre-auth connections; flow control pauses reading at 32 queued requests or 1 MiB unsent replies; pre-auth diagnostics are coalesced into one signed counter row per window. ROUND 3: socket.hello and socket.auth.fail are rate-limited — the first 8 per 10 s window individually, the rest folded into that window's signed counter row (byOutcome / byReason); auth.ok/.replay stay individual; inbound frames capped at 16 KiB until auth succeeds; the client refuses a hello whose clientApi/features it did not offer (hello-not-offered, client-local); RegistryCache parses the bytes it hashed. Windows named pipe: parity phase (P8-D78).",
       "visualTags": [],
       "related": [
-        "#approval-broker",
-        "$daemon-lifecycle"
+        "#identity"
       ],
+      "componentType": "module"
+    },
+    "identity": {
+      "id": "identity",
+      "name": "Identity",
+      "symbol": "#identity",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose",
+      "description": "#identity (spec §3.1; M1.4 slice of it — hardware custody is M1.3, blocked on the founder's provisioning profile). root-authority.ts — the RootAuthority seam: UnprovisionedRootAuthority is the production default (verifies nothing, signRow refuses UNSUPPORTED{root-unprovisioned, milestone M1.3}; never a software fallback); DevTestRootAuthority is a software P-256 root constructible only with the literal DEV_TEST_ROOT_ACK, never from env/argv (§15.3), reported as root state `dev-test` in status and daemon.start; RootVerifier verifies rows from a pinned root public key (the client side). Row sigs: gnomon:row-sig:v1 over canonical JSON, P-256 IEEE-P1363. device-key.ts — the Ed25519 device key at <home>/keys/device.key: written O_EXCL 0600, loaded only if a regular owner-only file in an owner-only keys/ dir; a device signer cannot approve. registry.ts — <home>/keys/registry.jsonl, append-only {row, signer, sig} rows (kind kernel | device); fail-closed reader: untrusted signer, bad signature, keyId ≠ sha256(PEM), principal or deviceId outside the root's ns, foreign principals and peer/kernel kinds never resolve and are surfaced in rejected[]; first row pins a deviceId and a keyId. The kernel principal is p:<root ns>/kernel, or p:00000000/kernel while no root exists (UNPROVISIONED_NS). kernel-pub.ts — PUBLIC halves of every kernel key the home ran with (<home>/keys/kernel-pub.jsonl, 0600), loaded into the log's key ring and kernelKeyIds so verify works across restarts; same-user writable and not root-signed, so across restarts kernel signatures prove nothing against a same-user forger until M1.3 (custody partial).",
+      "visualTags": [],
+      "related": [],
       "componentType": "module"
     },
     "kernel-log": {
@@ -10820,6 +10835,16 @@
       "visualTags": [],
       "related": []
     },
+    "approval-broker": {
+      "id": "approval-broker",
+      "name": "Approval Broker",
+      "symbol": "#approval-broker",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-contracts/.purpose",
+      "description": "Referenced from #gnomon-contracts",
+      "visualTags": [],
+      "related": []
+    },
     "identity.": {
       "id": "identity.",
       "name": "Identity.",
@@ -10827,16 +10852,6 @@
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-contracts/.purpose",
       "description": "Referenced from #contract-ids",
-      "visualTags": [],
-      "related": []
-    },
-    "identity": {
-      "id": "identity",
-      "name": "Identity",
-      "symbol": "#identity",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-contracts/.purpose",
-      "description": "Referenced from #contract-principal",
       "visualTags": [],
       "related": []
     },
@@ -10857,16 +10872,6 @@
       "category": "components",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-contracts/.purpose",
       "description": "Referenced from #contract-ref-v1",
-      "visualTags": [],
-      "related": []
-    },
-    "approval-broker": {
-      "id": "approval-broker",
-      "name": "Approval Broker",
-      "symbol": "#approval-broker",
-      "category": "components",
-      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-contracts/.purpose",
-      "description": "Referenced from #contract-card-v1",
       "visualTags": [],
       "related": []
     },
@@ -12432,7 +12437,7 @@
       "name": "Daemon Lifecycle",
       "symbol": "$daemon-lifecycle",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon/.purpose",
-      "description": "$daemon-lifecycle (spec §2.4; PR-5 core of M1.9). (1) client activation — `gnomon daemon --detach` re-execs gnomond with the clean env and home in argv, then waits for the socket; (2) one per user — home 0700 read back, endpoint path chosen (never /tmp), O_EXCL daemonPid:v1 pidfile acquired (live holder refuses with daemon.lock.refused, dead holder reclaimed); (3) #socket listens at 0600 and daemon.start is emitted; (4) idle exit — no open connections for idleMs (default 10 min) ⇒ daemon.exit{reason: 'idle'}, socket closed, pidfile and socket released only if still ours; SIGTERM/SIGINT take the same path with reason 'signal'. Not yet built: sessions/subscribers/timers as holders, mod and transport-child stop, orphan sweep, the Windows pipe.",
+      "description": "$daemon-lifecycle (spec §2.4; PR-5 core of M1.9). (1) client activation — `gnomon daemon --detach` re-execs gnomond with the clean env and home in argv, then waits for the socket; (2) one per user — home 0700 read back, endpoint path chosen (never /tmp), O_EXCL daemonPid:v1 pidfile acquired (live holder refuses with daemon.lock.refused, dead holder reclaimed); (3) #kernel-log opened with the kernel key (M1.4 seam: a supplied or ephemeral in-memory software Ed25519 key, custody partial; keystore item is M1.3) and the root authority (default unprovisioned), #socket listens at 0600 with the hello/auth dispatcher, daemon.start is emitted AND logged (daemon.exit logged at shutdown, then the log is closed before the lock is released); (4) idle exit — no open connections for idleMs (default 10 min) ⇒ daemon.exit{reason: 'idle'}, socket closed, pidfile and socket released only if still ours; SIGTERM/SIGINT take the same path with reason 'signal'. Not yet built: sessions/subscribers/timers as holders, mod and transport-child stop, orphan sweep, the Windows pipe.",
       "steps": [
         {
           "id": "daemon-lifecycle-step-0",
@@ -12443,6 +12448,16 @@
           "id": "daemon-lifecycle-step-1",
           "name": "Step 2",
           "order": 1
+        },
+        {
+          "id": "daemon-lifecycle-step-2",
+          "name": "Step 3",
+          "order": 2
+        },
+        {
+          "id": "daemon-lifecycle-step-3",
+          "name": "Step 4",
+          "order": 3
         }
       ]
     },
@@ -13675,6 +13690,14 @@
       "description": "Referenced from #claude-stream-session",
       "steps": []
     },
+    "defs": {
+      "id": "defs",
+      "name": "Defs",
+      "symbol": "$defs",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-contracts/.purpose",
+      "description": "Referenced from #gnomon-contracts",
+      "steps": []
+    },
     "XDG_RUNTIME_DIR": {
       "id": "XDG_RUNTIME_DIR",
       "name": "XDG_RUNTIME_DIR",
@@ -13897,6 +13920,15 @@
       "category": "gates",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/paradigm/src/commands/symphony/.purpose",
       "description": "Trust config check on file requests — hard-deny list always blocks",
+      "related": []
+    },
+    "certified": {
+      "id": "certified",
+      "name": "Certified",
+      "symbol": "^certified",
+      "category": "gates",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/packages/gnomon-contracts/.purpose",
+      "description": "Referenced from #gnomon-contracts",
       "related": []
     },
     "voice-armed": {
@@ -18576,6 +18608,10 @@
       "category": "components",
       "id": "socket"
     },
+    "#identity": {
+      "category": "components",
+      "id": "identity"
+    },
     "#kernel-log": {
       "category": "components",
       "id": "kernel-log"
@@ -22760,6 +22796,18 @@
       "category": "components",
       "id": "F2B765"
     },
+    "$defs": {
+      "category": "flows",
+      "id": "defs"
+    },
+    "#approval-broker": {
+      "category": "components",
+      "id": "approval-broker"
+    },
+    "^certified": {
+      "category": "gates",
+      "id": "certified"
+    },
     "~ample-internal-logs.": {
       "category": "aspects",
       "id": "ample-internal-logs."
@@ -22768,10 +22816,6 @@
       "category": "components",
       "id": "identity."
     },
-    "#identity": {
-      "category": "components",
-      "id": "identity"
-    },
     "#peer-link": {
       "category": "components",
       "id": "peer-link"
@@ -22779,10 +22823,6 @@
     "#ref-resolver.": {
       "category": "components",
       "id": "ref-resolver."
-    },
-    "#approval-broker": {
-      "category": "components",
-      "id": "approval-broker"
     },
     "^voice-armed": {
       "category": "gates",
