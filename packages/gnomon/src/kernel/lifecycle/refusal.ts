@@ -18,7 +18,8 @@ export type LifecycleRefusalReason =
   | 'sandbox-unavailable'
   | 'web-bundle-mismatch'
   | 'web-transport-failed'
-  | 'web-launch-refused';
+  | 'web-launch-refused'
+  | 'quarantine-pending';
 
 export class LifecycleRefusal extends Error {
   readonly reason: LifecycleRefusalReason;

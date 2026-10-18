@@ -2,6 +2,7 @@
  * @symbol #kernel-log
  * @symbol #identity
  * @symbol #web-endpoint
+ * @symbol #manifest-loader
  *
  * Internal seam channel (spec §19.1 release gate (c), P8-D84; task
  * T-2026-10-17-009(c), Aegis S34-10). The kernel's TEST SEAMS — the
@@ -12,10 +13,12 @@
  * (src/kernel/testing.ts).
  *
  * WHO MAY IMPORT THIS FILE (test/seams-fence.test.ts proves it on the source
- * import graph): kernel-log.ts, identity/presence.ts and web/endpoint.ts (to
- * register) and testing.ts (to read). The `web` slot (#web-endpoint, M1.4)
- * is the ONLY way to run the transport child without its sandbox profile or
- * against another bundle pin. Nothing reachable from a production entry (the
+ * import graph): kernel-log.ts, log/quarantine.ts, identity/presence.ts,
+ * manifest/install.ts and web/endpoint.ts (to register) and testing.ts (to read).
+ * The manifest slot holds the M1.5 install-card decision and the rollback until the
+ * M1.6 broker owns cards. The `web` slot (#web-endpoint, M1.4) is the ONLY way to
+ * run the transport child without its sandbox profile or against another bundle pin.
+ * Nothing reachable from a production entry (the
  * package index, the gnomon / gnomond CLIs, gnomon-web) imports testing.ts,
  * and no index re-exports this file, so production code cannot open a log
  * with a substituted keystore anchor or boot id, open one for recovery, or
@@ -29,6 +32,9 @@ import type { AnchorStore } from './log/anchor.js';
 import type { AppendResult, KernelLog, KernelLogOptions } from './log/kernel-log.js';
 import type { PresenceMethod, PresencePurpose, PresenceToken } from './identity/presence.js';
 import type { WebEndpoint, WebEndpointOptions, WebEndpointSeams } from './web/endpoint.js';
+import type { DecideOptions, StagedRecord } from './manifest/install.js';
+import type { GrantInstallRow } from './manifest/grants.js';
+import type { QuarantineFsOps, QuarantineOptions, QuarantineReport, QuarantineStep } from './log/quarantine.js';
 
 /** The #kernel-log options that are test seams only (never on KernelLogOptions). */
 export interface KernelLogSeamOptions {
@@ -56,10 +62,27 @@ export interface WebSeams {
   create(opts: WebEndpointOptions, seams: WebEndpointSeams): WebEndpoint;
 }
 
+/**
+ * #manifest-loader decisions (M1.5): deciding an install card and the human
+ * rollback. The approval broker that owns card decisions is M1.6; until then
+ * these are reachable ONLY through the internal test entry.
+ */
+export interface ManifestSeams {
+  decideInstall(home: string, name: string, cardId: string, decision: 'install' | 'deny', opts: DecideOptions): StagedRecord;
+  rollbackMod(home: string, name: string, toPackageHash: string | undefined, opts: DecideOptions): GrantInstallRow;
+}
+
+export interface QuarantineSeams {
+  /** `quarantineLog` with a hook after each crash point (tests inject a crash by throwing). */
+  quarantineWithSteps(opts: QuarantineOptions, onStep: (step: QuarantineStep, at: { staging?: string; evidence?: string }) => void, fsOps?: QuarantineFsOps): Promise<QuarantineReport>;
+}
+
 interface Slots {
   log?: KernelLogSeams;
   presence?: PresenceSeams;
   web?: WebSeams;
+  manifest?: ManifestSeams;
+  quarantine?: QuarantineSeams;
 }
 
 const slots: Slots = {};

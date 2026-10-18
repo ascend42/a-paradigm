@@ -46,7 +46,8 @@
  * Not yet here: sessions, mods, timers, orphan sweep and an approved `stop`
  * (#approval-broker, M1.6).
  */
-import { KernelLog, KeyRing, SoftwareEd25519Signer, type Signer } from '../log/index.js';
+import * as path from 'node:path';
+import { completePendingQuarantine, KernelLog, KeyRing, SoftwareEd25519Signer, type Signer } from '../log/index.js';
 import { readKernelPubs, recordKernelPub, UNPROVISIONED_NS, UnprovisionedRootAuthority, type RootAuthority } from '../identity/index.js';
 import {
   createKernelDispatcher,
@@ -142,9 +143,20 @@ export interface DaemonHandle {
   web(): WebEndpoint | null;
 }
 
+/** The kernel principal `p:<root ns>/kernel` (p:00000000/kernel while no root exists) — one source for the daemon and `gnomon log quarantine`. */
+export function kernelPrincipalOf(authority: Pick<RootAuthority, 'ns'> = new UnprovisionedRootAuthority()): string {
+  return `p:${authority.ns ?? UNPROVISIONED_NS}/kernel`;
+}
+
 export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
   const emit = (e: DaemonEvent): void => opts.onEvent?.(e);
   const idleMs = opts.idleMs ?? DEFAULT_IDLE_EXIT_MS;
+  // T-2026-10-17-009(a): finish a quarantine interrupted between its two
+  // renames BEFORE a home is created, so no fresh unrelated log fills the gap.
+  if (path.isAbsolute(opts.home)) {
+    const pending = completePendingQuarantine(opts.home);
+    if (pending.conflict) throw new LifecycleRefusal('quarantine-pending', `an interrupted quarantine (${pending.conflict}) names this home, but the home and its evidence both exist`, { staging: pending.conflict });
+  }
   const home = ensureGnomonHome(opts.home);
 
   const choice = selectSocketPath({ home, ...(opts.platform ? { platform: opts.platform } : {}), ...(opts.env ? { env: opts.env } : {}) });
@@ -166,7 +178,7 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
   const kernelSigner = opts.kernelSigner ?? SoftwareEd25519Signer.generate('kernel');
   const kernelKeySource = opts.kernelSigner ? 'supplied-software' : 'ephemeral-software';
   const authority = opts.rootAuthority ?? new UnprovisionedRootAuthority();
-  const kernelPrincipal = `p:${authority.ns ?? UNPROVISIONED_NS}/kernel`;
+  const kernelPrincipal = kernelPrincipalOf(authority);
   let log: KernelLog;
   try {
     const pem = (kernelSigner as Partial<SoftwareEd25519Signer>).publicKeyPem;

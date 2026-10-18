@@ -13,10 +13,10 @@
  * there is no `daemon.stop` verb — the socket surface is exactly 12 verbs + 2
  * relays.
  */
-import * as net from 'node:net';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  canConnectSocket,
   DEFAULT_IDLE_EXIT_MS,
   daemonState,
   isLifecycleRefusal,
@@ -68,16 +68,6 @@ function socketOf(home: string): string | null {
   return c.ok ? c.path : null;
 }
 
-function canConnect(socketPath: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    const c = net.connect(socketPath);
-    c.once('connect', () => {
-      c.destroy();
-      resolve(true);
-    });
-    c.once('error', () => resolve(false));
-  });
-}
 
 /** `gnomond --foreground`: run until idle exit or a signal. */
 export async function runForeground(args: DaemonArgs): Promise<number> {
@@ -115,7 +105,7 @@ export async function activateDetached(args: DaemonArgs, gnomondEntry: string): 
     process.stderr.write('gnomond: no safe endpoint path for this home [no-safe-endpoint]\n');
     return EXIT_REFUSED;
   }
-  if (await canConnect(sock)) {
+  if (await canConnectSocket(sock)) {
     process.stdout.write(`gnomond already running at ${sock}\n`);
     return EXIT_OK;
   }
@@ -128,7 +118,7 @@ export async function activateDetached(args: DaemonArgs, gnomondEntry: string): 
   });
   for (let i = 0; i < 25; i++) {
     await new Promise((r) => setTimeout(r, 200));
-    if (await canConnect(sock)) {
+    if (await canConnectSocket(sock)) {
       process.stdout.write(`gnomond started at ${sock}\n`);
       return EXIT_OK;
     }

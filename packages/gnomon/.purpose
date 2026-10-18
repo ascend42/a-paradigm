@@ -62,6 +62,7 @@ components:
       - "#ref-resolver"
       - "#web-endpoint"
       - "#oracle-sandbox"
+      - "#manifest-loader"
     tests:
       - test/symbols-drift.test.ts
       - test/fence.test.ts
@@ -94,7 +95,32 @@ components:
       the research 33 policy: coalesced anchor + forced fullfsync+anchor at
       1/64, judged by the restated G-LOG-04; env P_LOG_FSYNC_ARMS accepts
       A,E,G) and p01-claude-cli (read-only `claude --version`/`--help` flag check;
-      live items pending-manual).
+      live items pending-manual). M1.0 batch 2 (probes/README.md lists them):
+      unattended p06-local-caps (llama.cpp /slots n_ctx + live tool-call
+      detection; no endpoint = partial, recorded not failed), p09-ed25519-matrix
+      (WebCrypto Ed25519 in Node + every local engine under the §11.2 CSP;
+      safari.html for Safari by hand, P09_SAFARI_LINE to record it),
+      p12-excalidraw-csp (pinned Excalidraw bundled by esbuild in a temp dir,
+      loaded under the §11.2 CSP; violations by phase, size, parse time),
+      p14-link-outbound (default-deny sandbox-exec link profile); founder-run
+      p00-sign-notary, p04-se-helper, p05-keychain-acl (signed
+      GnomonHelperProbe.app from _shared/helper/ProbeHelper.swift; fail fast
+      with a founder-steps pointer when the identity / provisioning profile /
+      gnomon-notary profile is missing; prompt-free halves run unattended),
+      p07-launch-token (NSWorkspace hand-off, eslogger + log stream + ps
+      capture with an argv positive control, browser history grep incl.
+      mozlz4), p01-claude-cli-manual (hook session_id, control_request
+      interrupt, loopback-override observation, managed policy; claude by the
+      path p01 recorded, never PATH). s29-10-voice-custody is a README stub
+      pending the signed helper. p14b-link-fdpass (research paradigm-8/37):
+      the kernel stand-in dials the peer and passes the connected socket over
+      IPC to a deny-default child with no network* allow; full duplex 4 MiB,
+      peer close, redial hand-off, child connect/UDP/listen/unix/file/exec all
+      EPERM. probes/_shared/ (browser.mjs, signing.mjs, abort.mjs — synchronous
+      cleanups on SIGINT/SIGTERM/ctx.signal for founder-run probes, ask()
+      rejects on abort — wkwebview-load.swift, helper/) is shared code, not a
+      probe id. p12 pins its whole tree with a committed package-lock.json
+      (npm ci). CI probe results go to $RUNNER_TEMP, never probes/results/.
     path: probes/
     type: module
     tags: [gnomon, probes, m1.0]
@@ -416,7 +442,8 @@ components:
       module-private mint key, a `#state` private field and a `unique symbol`
       brand (nominal by type; `PresenceToken.is` is a `#state in v` runtime
       brand check no copy, prototype object or Proxy passes); bound to one
-      purpose (`log.gap.acknowledge`), single-use and fresh for 60 s
+      purpose (`log.gap.acknowledge`; M1.5 adds `mod.install` and
+      `mod.rollback`), single-use and fresh for 60 s
       (`consumePresence` → ok | not-a-token | wrong-purpose | stale | used).
       `requestPresence` refuses UNSUPPORTED{presence-unavailable, M1.3} until
       the signed helper's prompt exists; the only mint before then is the
@@ -443,6 +470,105 @@ components:
       - test/socket-auth.test.ts
       - test/presence.test.ts
       - test/socket-abi.test.ts
+
+  manifest-loader:
+    description: >-
+      #manifest-loader + policy (spec §3.6, §4.3, §12.5, §15.4, §15.5, §15.7,
+      §16; §19.1 M1.5). src/kernel/manifest/. manifest.ts — manifest:v1
+      validation, producer-strict and fail-closed (wire form: the JSON subset
+      of the §4.3 YAML in gnomon-manifest.json, zero deps): unknown keys and
+      trust:/source:/postinstall refused; kind: mod needs abi mod-abi:v1, an
+      unknown abi refused; a name equal to a kernel namespace token refused;
+      kind adapter/provider first-party only, a provider ships only
+      provides.knowledge; tool effects ⊆ read|write|network|spend; card.* and
+      status.mod slots append-only; events under modns.<name>.*; keybindings
+      bind declared commands, never the reserved decision keys; capabilities
+      are §15.4 forms (approve/band:write never; voice.approve:<class> never
+      from a manifest; knowledge:federate/link:send first-party only;
+      log.append only on its own modns); provides.knowledge needs
+      knowledge:provide and never egress. manifestHash = sha256(canonical
+      JSON); detectWidening = additions by field (effects, egress,
+      capabilities, events, tools, views, commands, keybindings, knowledge).
+      egress.ts — Anthropic hosts (anthropic.com, claude.ai, claude.com and
+      subdomains, and any wildcard covering them) refused in manifests and
+      grant rows (G-MAN-01). snapshot.ts — the snapshot copier: copies a
+      package or linked folder to <home>/mods/<name>/pinned/<hex>/ (owner-only,
+      read-only), packageHash over the sorted tree of the COPY (exact bytes,
+      .git skipped unread), refusing symlink/junction, hardlink (nlink > 1),
+      .node addon, a path escaping the folder, special files, case-colliding
+      paths and a swap between walk and read (fstat dev/ino), emitting
+      mod.snapshot.refused + manifest.refuse{SNAPSHOT}; lockfile rule
+      (node_modules needs an npm lockfile, the card lists every
+      package@version; other formats refused, LOCKFILE); lifecycle install
+      scripts refused (POSTINSTALL); diffTrees for the re-approve card.
+      grants.ts — <home>/grants.jsonl, root-signed rows through the
+      RootAuthority seam (production refuses until M1.3), fail-closed reader
+      (unsigned, untrusted signer, bad signature, unknown kind, malformed,
+      Anthropic egress, egress beside knowledge:provide → rejected[]);
+      grant.install carries `name` beside the §15.4 fields; the effective pin
+      is the last grant.install row. install.ts — stageInstall (package or
+      linked) raises a PENDING card:v1 kind install with its detail (name,
+      source, tier, effects, egress, capabilities, events, tools, views, read
+      paths, package@version list, widening, file diff, stagedBy) and signs
+      nothing (manifest.staged); loadMod loads only from a pinned snapshot
+      under a root-signed grant.install, re-hashes it (INTEGRITY), checks
+      grants, and for a linked folder re-hashes the source: a change pauses
+      the mod (mod.paused) and stages one re-approve card (manifest.widened
+      when widened). The card DECISION and the human rollback (re-pin a
+      previously approved snapshot, mod.rolled-back) are module-private and
+      registered only on the internal seam channel (slot `manifest`), reached
+      only through src/kernel/testing.ts (decideInstallCard,
+      rollbackModSnapshot) until the M1.6 approval broker owns cards; both
+      need a PresenceToken (mod.install / mod.rollback) and a signing root.
+      layers.ts — layersHash (managed, user settings*.json + CLAUDE.md +
+      skills/plugins/agents/commands listings, project and worktree .claude/**
+      + CLAUDE.md + CLAUDE.local.md) and gitHash (.git/config, hooks/**,
+      info/** in the common dir, a worktree's .git file followed,
+      .gitattributes), CRLF→LF and case-folded NFC path keys on every platform
+      (G-WIN-04). policy.ts — the per-session policy DATA for the `session`
+      profile (keys/Warpline-token/browser read denies, ~/.gnomon + settings
+      layers + linked folders write denies, endpoint-port loopback deny,
+      process-info deny-others, launchers deny; realpath'd; policyHash) and the
+      matching policy.json permissions block — the platform profile is
+      generated by M1.7. generate.ts — plugin.json, .mcp.json, hooks.json and
+      .gnomon/.gitignore from a kind: distro manifest into the repo's
+      .gnomon/, each with a marker and a ledger; a fixed point; never
+      overwrites a file that is not ours; uninstallRepo removes exactly the
+      ledger's unedited files and the dirs it created (project.yaml stays);
+      uninstallHome removes ~/.gnomon or returns it as the export path.
+      ROUND 2 (review + Aegis F1–F11): generate.ts confines every path to the
+      fixed generated set under <repo>/.gnomon (lstat each component, refuse
+      links/junctions, realpath inside .gnomon, temp file O_EXCL|O_NOFOLLOW +
+      rename) and keys ownership on the manifestHash marker plus the
+      kernel-held record <home>/generated/<sha256(realpath repo)>.json (the
+      repo holds no ledger); the session policy write-denies the whole
+      ~/.claude/** and ~/.claude.json (both also hashed into layersHash — a
+      gap in spec §3.3/§15.5 to amend) and .git/hooks|config|info (gitHash
+      inputs; §15.5 amendment), and carries the platform-neutral deny classes
+      (tmux/screen sockets, helper IPC, sysmond, AppleEvents, service
+      manager, mic/camera, launchers) mapped per platform in
+      src/platform/session-denies.ts; widening covers mcp and hooks and the
+      card lists commands, keybindings, knowledge, mcp, hooks and opaque
+      array counts; the lockfile rule is case-folded, applies at any depth
+      and cross-checks shipped package.json versions; the tier is derived
+      (linked ⇒ local, first-party only from a bundled packageHash allowlist,
+      empty for now; a signed claim is refused until trusted keys exist);
+      decideInstall validates the cardId, recomputes contentHash, re-derives
+      the detail from the pinned snapshot, appends grant.install LAST and is
+      idempotent; egress refuses ports, numeric hosts, single labels and
+      local/private names; symlinked layers hash the target bytes and
+      .claude/worktrees/ is excluded. The case-collision oracle is
+      exercised on Linux CI (a case-insensitive FS cannot hold the pair).
+      Events: §9.1 kinds only (manifest.*, mod.*); the spec declares no
+      signals. Refusals are refusal:v1 with data.manifestCode (not
+      data.reason, which would move clientApiId).
+    path: src/kernel/manifest/
+    type: module
+    tags: [gnomon, kernel, manifest, policy, paradigm-8, m1.5]
+    tests:
+      - test/manifest-loader.test.ts
+      - test/seams-fence.test.ts
+    oracles: [G-MAN-01, G-MAN-02, G-MAN-03, G-HON-04, G-LAW-04, G-WIN-04]
 
   kernel-log:
     description: >-
@@ -645,12 +771,62 @@ components:
       channel src/kernel/internal-seams.ts, read only by the internal test
       entry src/kernel/testing.ts (openKernelLog, openKernelLogForRecovery,
       acknowledgeGap, mintTestPresence). test/seams-fence.test.ts proves: no
-      src file imports the test entry; only presence.ts, kernel-log.ts and
-      testing.ts import the channel; the closure of every tsup entry excludes
+      src file imports the test entry; only presence.ts, kernel-log.ts,
+      manifest/install.ts (M1.5) and testing.ts import the channel; the closure of every tsup entry excludes
       the test entry; no src/cli or $daemon-lifecycle file (nor any other src
       file but the owners) names acknowledgeGap / openForRecovery; dist/
       carries no test-entry marker and its KernelLog / KernelLogOptions types
-      expose no seam. `npm run
+      expose no seam.
+      QUARANTINE (T-2026-10-17-009(a), P8-D89, quarantine.ts + src/cli/log-cli.ts):
+      `gnomon log quarantine [--home]` moves the whole home aside intact to the
+      sibling <home>.quarantine-<YYYYMMDDTHHMMSSZ>-<hex> (Windows-safe name)
+      and installs a new home whose log's genesis (seq 1) is the reserved,
+      kernel-signed daemon.log.quarantined{quarantinedLog,
+      quarantinedHead{seq, hash, segment}, evidencePath, authorizedBy}
+      (KernelLog.createQuarantineSuccessor is the only writer; append refuses
+      it; verify flags it anywhere but seq 1 and binds it to the kernel key).
+      Identity: EVERY head source (db tip, newest sealed segment, file
+      anchor, keystore anchor when one exists) is read — dbs from a private
+      scratch COPY (kernel.db + -wal, never -shm), so the evidence is never
+      written — and the HIGHEST seq is the quarantined head (a truncated db
+      behind its anchor is not hidden); all observed heads go in the journal
+      and the CLI readout, with a disagreement WARNING before the prompt.
+      Crash-safe: daemon lock (acquireDaemonLock) held across steps 1-4 and
+      released through the evidence path; build in <evidence>.new, journal,
+      rename home→evidence, rename staging→home (ENOENT there = installed by
+      another process). completePendingQuarantine (run by every quarantine,
+      by the CLI first and by startDaemon before it creates a home) installs
+      an interrupted quarantine ONLY if the unsigned journal checks out:
+      staging = evidence + '.new', evidence a quarantine-named sibling, both
+      plain dirs owned by this uid (no symlink/junction), the evidence holds
+      the journal's quarantinedLog, and the staging log's row 1 is a verified
+      daemon.log.quarantined matching newLog / evidencePath / quarantinedLog;
+      anything else is abandoned (reported, never deleted). These checks stop
+      accidents and planted junk; they are NOT authenticity (the journal is
+      unsigned and the staging keys are its own) — that waits for M1.3. The
+      staging genesis is checked on rows/chain/signature only, never via
+      verifyLog (which reads the per-user keystore anchor; M1.3 tripwire test
+      → T-2026-10-18-007), and the keystore anchor is consulted only for the
+      default home (spec §22 OPEN 19). Unreadable dbs are reported
+      (`unreadable: copy failed: CODE`), ENOSPC refuses no-space; EPERM/EBUSY
+      on the install refuses install-busy (retry; the pending install
+      finishes). A crash between the step-4 rename and the lock release
+      leaves our pidfile in the evidence, reported as lockResidue. An interrupted
+      install is reported as outcome completed-pending (CLI: COMPLETED).
+      Refuses daemon-running, not-a-home, nothing-to-quarantine,
+      quarantine-pending, home-busy (EPERM/EBUSY/EACCES on the move),
+      kernel-key-required. The genesis principal comes from kernelPrincipalOf
+      (the daemon's root-authority source). CLI output: src/cli/readout.ts
+      (#gnomon-kernel; instrument-readout voice — readout rows, `REFUSED  CODE
+      reason`, indented `next:`); canConnectSocket shared in
+      lifecycle/endpoint.ts. RESIDUALS: authorizedBy 'interactive-confirm' is
+      NO PROOF OF PRESENCE — an interactive TTY + typed last 8 chars of the
+      log id, passable by any same-user process owning a terminal, until
+      presence lands at M1.3; at M1.3 the keystore anchor item must move with
+      the evidence; a stale pidfile of a dead daemon is DELETED from the
+      evidence by the lock acquisition, its bytes kept in the journal
+      (stalePidfile, base64) — the only change to the old home.
+      `npm run
       test:perf` = scripts/test-perf.mjs (cmd.exe-safe; --passWithNoTests on
       win32 only, a missing perf file fails loudly elsewhere).
     path: src/kernel/log/
@@ -666,6 +842,8 @@ components:
       - test/boot-session.test.ts
       - test/durable-fs.test.ts
       - test/seams-fence.test.ts
+      - test/kernel-log-quarantine.test.ts
+      - test/log-cli.test.ts
     oracles: [G-LOG-01, G-LOG-02, G-LOG-03, G-LOG-04, G-LOG-06, G-LOG-07, G-LOG-08, G-LOG-09, G-LOG-10, G-LOG-11]
 
 flows:

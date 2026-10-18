@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-18T01:44:16.722Z'
+generated: '2026-10-18T02:58:05.298Z'
 structure: {}
 key_files:
   config:
@@ -263,8 +263,11 @@ symbols:
   '#purpose-component-gnomon-kernel': packages/gnomon/
   '#purpose-component-gnomon-probes': packages/gnomon/
   '#purpose-component-socket': packages/gnomon/
+  '#purpose-component-web-endpoint': packages/gnomon/
+  '#purpose-component-oracle-sandbox': packages/gnomon/
   '#purpose-component-ref-resolver': packages/gnomon/
   '#purpose-component-identity': packages/gnomon/
+  '#purpose-component-manifest-loader': packages/gnomon/
   '#purpose-component-kernel-log': packages/gnomon/
   '#purpose-component-paradigm-logger': packages/logger/
   '#purpose-component-symbol-logger': packages/logger/
@@ -915,7 +918,7 @@ symbols:
   ^purpose-gate-^symphony-enabled: packages/conductor/Sources/Conductor/Symphony/
   ^purpose-gate-^file-request-allowed: packages/conductor/Sources/Conductor/Symphony/
   ^gate-api-authenticated: ./
-  ^purpose-gate-gate-check: packages/portal/sdk/
+  ^gate-gate-check: ./
   ^purpose-gate-file-trust: packages/paradigm/src/commands/symphony/
   '#purpose-state-session': packages/portal/viewer/
   '#purpose-state-index': packages/premise/core/
@@ -1313,16 +1316,17 @@ symbols:
   '#purpose-ref-component-F2B765': packages/conductor/
   $purpose-ref-flow-defs: packages/gnomon-contracts/
   '#purpose-ref-component-approval-broker': packages/gnomon-contracts/
-  ^purpose-ref-gate-certified: packages/gnomon-contracts/
+  ^gate-certified: ./
   '@purpose-ref-aspect-ample-internal-logs.': packages/gnomon-contracts/
   '#purpose-ref-component-identity.': packages/gnomon-contracts/
   '#purpose-ref-component-peer-link': packages/gnomon-contracts/
   '#purpose-ref-component-ref-resolver.': packages/gnomon-contracts/
-  ^purpose-ref-gate-voice-armed: packages/gnomon-contracts/
+  ^gate-voice-armed: ./
   ^purpose-ref-gate-peer-paired.: packages/gnomon-contracts/
   '#purpose-ref-component-web-endpoint.': packages/gnomon-contracts/
   $purpose-ref-flow-XDG_RUNTIME_DIR: packages/gnomon/
-  '#purpose-ref-component-web-endpoint': packages/gnomon/
+  $purpose-ref-flow-RUNNER_TEMP: packages/gnomon/
+  $purpose-ref-flow-HOME: packages/gnomon/
   '#purpose-ref-component-state': packages/gnomon/
   '#purpose-ref-component-hashAt': packages/gnomon/
   '@purpose-ref-aspect-symbol-typed-logging': packages/logger/
@@ -1400,7 +1404,6 @@ symbols:
   '#purpose-ref-component-Heading': packages/premise/core/
   ^purpose-ref-gate-block-id: packages/premise/core/
   '#purpose-ref-component-x': packages/premise/core/
-  ^purpose-ref-gate-id: packages/premise/core/
   '#purpose-ref-component-skill-loader': packages/premise/core/
   '#purpose-ref-component-native-memory-scan': packages/premise/core/
   $purpose-ref-flow-fleet-switch: packages/premise/core/
@@ -1427,7 +1430,6 @@ symbols:
   '!purpose-ref-signal-hook-installed': packages/paradigm/src/commands/hooks/
   '!purpose-ref-signal-team-funnel': packages/paradigm/src/commands/hooks/
   '!purpose-ref-signal-override-event': packages/paradigm/src/commands/hooks/
-  $purpose-ref-flow-HOME: packages/paradigm/src/commands/hooks/
   $purpose-ref-flow-skill-certification.: packages/paradigm/src/commands/skill/
   '!purpose-ref-signal-ambient:event': packages/paradigm/src/platform-server/routes/
   '!purpose-ref-signal-ambient:nomination': packages/paradigm/src/platform-server/routes/
@@ -1450,3 +1452,4 @@ symbols:
   '@purpose-ref-aspect-tokens': packages/conductor/Sources/Conductor/UI/Views/Cockpit/
   ^gate-rate-limited: ./
   ^gate-authenticated-session: ./
+  ^gate-peer-paired: ./

@@ -2,6 +2,7 @@
  * @symbol #kernel-log
  * @symbol #identity
  * @symbol #web-endpoint
+ * @symbol #manifest-loader
  *
  * INTERNAL TEST ENTRY (spec §19.1 release gate (c), P8-D84; task
  * T-2026-10-17-009(c), Aegis S34-10). The one module that hands out the
@@ -14,6 +15,9 @@
  *   - createWebEndpointForTest: a #web-endpoint whose transport child runs
  *     WITHOUT the `transport` sandbox profile (the only such path; tests on
  *     every OS) and/or against another bundle pin.
+ *   - decideInstallCard / rollbackModSnapshot: the #manifest-loader install-card
+ *     decision and the human rollback (M1.5), until the M1.6 broker owns cards.
+ *   - quarantineWithSteps: `gnomon log quarantine` with crash injection.
  *
  * NEVER IMPORTED BY PRODUCTION CODE. It is not a tsup entry and no index
  * re-exports it; test/seams-fence.test.ts proves that no file under src/
@@ -27,6 +31,11 @@
  */
 import type { AppendResult, KernelLog, KernelLogOptions } from './log/kernel-log.js';
 import './log/kernel-log.js'; // registers the 'log' seams (class static block)
+import './manifest/install.js'; // registers the 'manifest' seams (class static block)
+import type { DecideOptions, StagedRecord } from './manifest/install.js';
+import type { GrantInstallRow } from './manifest/grants.js';
+import './log/quarantine.js'; // registers the 'quarantine' seam
+import type { QuarantineFsOps, QuarantineOptions, QuarantineReport, QuarantineStep } from './log/quarantine.js';
 import { PresenceToken, type PresenceMethod, type PresencePurpose } from './identity/presence.js';
 import { seamsOf, type KernelLogSeamOptions } from './internal-seams.js';
 import { WebEndpoint, type WebEndpointOptions, type WebEndpointSeams } from './web/endpoint.js'; // registers the 'web' seams
@@ -66,6 +75,25 @@ export function acknowledgeGap(log: KernelLog, input: { presenceToken: PresenceT
 /** A test-seam PresenceToken (default purpose `log.gap.acknowledge`, minted now). */
 export function mintTestPresence(purpose: PresencePurpose = 'log.gap.acknowledge', opts: { method?: PresenceMethod; mintedAt?: number } = {}): PresenceToken {
   return seamsOf('presence').mint(purpose, opts);
+}
+
+/** Decide a staged #manifest-loader install card (the M1.6 broker owns this in production). */
+export function decideInstallCard(home: string, name: string, cardId: string, decision: 'install' | 'deny', opts: DecideOptions): StagedRecord {
+  return seamsOf('manifest').decideInstall(home, name, cardId, decision, opts);
+}
+
+/** The human rollback to a previously approved snapshot (`gnomon mod rollback`, human-only). */
+export function rollbackModSnapshot(home: string, name: string, toPackageHash: string | undefined, opts: DecideOptions): GrantInstallRow {
+  return seamsOf('manifest').rollbackMod(home, name, toPackageHash, opts);
+}
+
+/** `quarantineLog` with a hook after each crash point; throw from `onStep` to inject a crash there. */
+export function quarantineWithSteps(
+  opts: QuarantineOptions,
+  onStep: (step: QuarantineStep, at: { staging?: string; evidence?: string }) => void,
+  fsOps?: QuarantineFsOps,
+): Promise<QuarantineReport> {
+  return seamsOf('quarantine').quarantineWithSteps(opts, onStep, fsOps);
 }
 
 export { PresenceToken };

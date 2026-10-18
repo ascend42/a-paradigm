@@ -29,7 +29,7 @@ import { refuse, RefusedError } from '@a-company/gnomon-contracts';
 import { registerSeams } from '../internal-seams.js';
 
 /** The actions a presence token can authorize (one purpose per token). */
-export const PRESENCE_PURPOSES = ['log.gap.acknowledge'] as const;
+export const PRESENCE_PURPOSES = ['log.gap.acknowledge', 'mod.install', 'mod.rollback'] as const;
 export type PresencePurpose = (typeof PRESENCE_PURPOSES)[number];
 
 /** How presence was proved. M1.3 adds the helper's methods; `test-seam` is the internal test mint. */
