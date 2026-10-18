@@ -1,0 +1,18 @@
+id: L-2026-10-18-ascend-174450-004
+type: insight
+timestamp: '2026-10-18T17:44:50.918Z'
+author: ascend
+title: 'M1.6 slice 2 reading: meter restore joins usage to permit.grant'
+summary: budget.usage rows carry no loop, so the boot rebuild joins each usage row to its permit.grant on the chain and attributes along the permit's axes; a usage row with no grant counts nothing (never guessed). 'Today' and the 5 h window come from the chain's last event time (S-L2, new KernelLog.lastEventAt), never the wall clock, so replay reproduces them. Today's budget.ladder rows are restored so a rung is never said twice in a day. Permits are not restored (live per connection). quotaErrors stays a since-boot counter.
+symbols_touched:
+  - '#budget-fuse'
+  - '#kernel-log'
+commit: 40ffb886
+tags:
+  - decision
+  - gnomon
+  - m1.6
+git_context:
+  ref: 40ffb88685a960df85148ab668497408864701b5
+  branch: gnomon/m16-slice2
+  dirty: true

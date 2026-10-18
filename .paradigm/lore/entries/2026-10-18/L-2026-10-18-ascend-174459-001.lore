@@ -1,0 +1,19 @@
+id: L-2026-10-18-ascend-174459-001
+type: milestone
+timestamp: '2026-10-18T17:44:59.363Z'
+author: ascend
+title: Gnomon M1.6 slice 2 landed (40ffb886)
+summary: 'Broker: presence refusal before decisionSig shape (T-018 item 2), F4 status.cards, theft gate-class card via #socket dispatch. Fuse: boot restore from the chain with the S-L2 day. Gnomon 998 passed / 63 todo, contracts 319. No clientApiId move. Deferred: M1.3-gated items (presence prompt text, real decisions), M1.7 suspect ancestry and window shape, G-BRK-04 reading, web-endpoint e2e todo for the theft card (web lane).'
+symbols_touched:
+  - '#approval-broker'
+  - '#budget-fuse'
+commit: 40ffb886
+tags:
+  - decision
+  - gnomon
+  - m1.6
+  - milestone
+git_context:
+  ref: 40ffb88685a960df85148ab668497408864701b5
+  branch: gnomon/m16-slice2
+  dirty: true
