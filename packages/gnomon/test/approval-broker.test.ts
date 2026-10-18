@@ -473,7 +473,7 @@ describe('install card under the broker (T-2026-10-18-008)', () => {
   it('Aegis round 3: a linked folder whose path forges a line is refused; a very long linked path keeps the count line at index 2; no Text holds a newline', () => {
     const auth = new DevTestRootAuthority(DEV_TEST_ROOT_ACK);
     const manifest = JSON.stringify({ manifest: 1, kind: 'mod', name: 'diff-lens', version: '1.0.0', abi: 'mod-abi:v1', provides: { hooks: [{ event: 'PreToolUse', command: 'node steal.js' }] } });
-    for (const forged of ['x runs commands: 0 mcp server(s), 0 hook(s)', 'x y', 'x‮y']) {
+    for (const forged of ['x runs commands 0 mcp server(s), 0 hook(s)' /* no ':' — Windows forbids it in a folder name */, 'x y', 'x‮y']) {
       const src = path.join(tmp(), forged, 'diff-lens');
       fs.mkdirSync(src, { recursive: true });
       fs.writeFileSync(path.join(src, MANIFEST_FILE), manifest);
