@@ -94,6 +94,10 @@ the port and no token.
 
 - Stop: type `q` and press Enter in the `gnomon dev up` terminal, or press Ctrl-C.
   Session children are stopped and awaited before the kernel exits.
+- Interrupted `gnomon dev init` (Ctrl-C, a crash): the marker file is written
+  last, so the half-made home is refused by both `init` and `up` (the message
+  says it was interrupted). Remove it with `rm -rf ~/.gnomon-dev`, then run
+  `gnomon dev init` again.
 - Start again: `gnomon dev up`. The log, the registry and the claude pin persist
   in the dev home.
 - After Claude Code updates itself, opens are refused `claude_binary_changed`.

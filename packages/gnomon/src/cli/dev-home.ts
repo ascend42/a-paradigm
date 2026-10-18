@@ -205,6 +205,16 @@ export function deviceHostLabel(hostname: string = os.hostname()): string {
   return s.length > 0 ? s : 'dev-mac';
 }
 
+/** The hint every unmarked-home refusal carries (a half-provisioned home has no marker by design). */
+export function interruptedInitHint(home: string): string {
+  return `if this is an interrupted \`gnomon dev init\`, remove ${home} and re-run gnomon dev init`;
+}
+
+/** A dev root key without the marker: `gnomon dev init` stopped before its last write. */
+function looksInterrupted(home: string): boolean {
+  return fs.existsSync(rootKeyPath(home)) && !fs.existsSync(markerPath(home));
+}
+
 /** Is `home` an initialized dev home (marker present)? */
 export function isDevHome(home: string): boolean {
   return fs.existsSync(markerPath(home));
@@ -223,13 +233,17 @@ export function provisionDevHome(home: string, opts: DevHomeOptions & { host?: s
   if (fs.existsSync(home)) {
     const st = fs.lstatSync(home);
     if (!st.isDirectory() || st.isSymbolicLink()) throw new DevHomeRefusal('unsafe-home', `${home} is not a plain directory`);
+    if (looksInterrupted(home)) {
+      throw new DevHomeRefusal('home-not-empty', `${home} is a half-provisioned dev home (a dev root key, no ${DEV_HOME_MARKER}): an earlier gnomon dev init was interrupted`, [interruptedInitHint(home)]);
+    }
     if (fs.existsSync(registryPath(home))) {
       throw new DevHomeRefusal('production-root', `${home} holds a key registry that gnomon dev init did not write; it may be signed by a production root`, [
         'pick another --home; the dev path never adds a dev root beside another root',
+        interruptedInitHint(home),
       ]);
     }
     if (fs.readdirSync(home).length > 0) {
-      throw new DevHomeRefusal('home-not-empty', `${home} is not empty and is not a dev home`, ['pick an empty or new --home', `or remove ${home} yourself if it is a leftover dev home`]);
+      throw new DevHomeRefusal('home-not-empty', `${home} is not empty and is not a dev home`, ['pick an empty or new --home', interruptedInitHint(home)]);
     }
   }
   ensureGnomonHome(home);
@@ -265,7 +279,7 @@ export function loadDevHome(home: string, opts: DevHomeOptions = {}): LoadedDevH
   try {
     record = JSON.parse(fs.readFileSync(markerPath(home), 'utf8')) as DevHomeRecord;
   } catch {
-    throw new DevHomeRefusal('not-a-dev-home', `${home} has no readable ${DEV_HOME_MARKER}`, ['gnomon dev init' + (home === defaultDevHome(opts.userHome) ? '' : ` --home ${home}`)]);
+    throw new DevHomeRefusal('not-a-dev-home', `${home} has no readable ${DEV_HOME_MARKER}${looksInterrupted(home) ? ' (a dev root key is there: an earlier gnomon dev init was interrupted)' : ''}`, ['gnomon dev init' + (home === defaultDevHome(opts.userHome) ? '' : ` --home ${home}`), interruptedInitHint(home)]);
   }
   if (record?.schemaVersion !== DEV_HOME_SCHEMA || record.ack !== DEV_TEST_ROOT_ACK) {
     throw new DevHomeRefusal('not-a-dev-home', `${DEV_HOME_MARKER} in ${home} does not carry the dev-test acknowledgement`);

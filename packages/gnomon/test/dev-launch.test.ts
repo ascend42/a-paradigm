@@ -260,3 +260,27 @@ describe('#dev-launch: dev up shutdown', () => {
     }
   });
 });
+
+describe('#dev-launch: an interrupted dev init', () => {
+  it('a half-provisioned home (dev root key + registry, no marker) is refused by init and up with the remove-and-re-run hint', async () => {
+    const w = world();
+    expect(await runDevCommand(['init', '--home', w.devHome], io(), { userHome: w.userHome, host: 'mac-1' })).toBe(0);
+    fs.rmSync(path.join(w.devHome, DEV_HOME_MARKER)); // the marker is the LAST write: this is the interrupted shape
+    const hint = `if this is an interrupted \`gnomon dev init\`, remove ${w.devHome} and re-run`;
+    const x = io();
+    expect(await runDevCommand(['init', '--home', w.devHome], x, { userHome: w.userHome })).toBe(1);
+    expect(x.e.join('')).toContain('half-provisioned');
+    expect(x.e.join('')).toContain(hint);
+    expect(fs.existsSync(path.join(w.devHome, DEV_HOME_MARKER))).toBe(false);
+    let started = 0;
+    const y = io();
+    expect(await runDevCommand(['up', '--home', w.devHome], y, { userHome: w.userHome, start: async (o) => (started++, startDaemon(o)) })).toBe(1);
+    expect(y.e.join('')).toContain('not-a-dev-home');
+    expect(y.e.join('')).toContain('interrupted');
+    expect(y.e.join('')).toContain(hint);
+    expect(started).toBe(0);
+    // following the hint works
+    fs.rmSync(w.devHome, { recursive: true, force: true });
+    expect(await runDevCommand(['init', '--home', w.devHome], io(), { userHome: w.userHome, host: 'mac-1' })).toBe(0);
+  });
+});
