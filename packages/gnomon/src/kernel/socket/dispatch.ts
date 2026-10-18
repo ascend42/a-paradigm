@@ -36,6 +36,17 @@
  * signed counter row); "written before the reply" then means the row or its
  * counter increment.
  *
+ * M1.4 SLICE 3: a known verb before auth is AUTH{unauthenticated} AND closes
+ * the connection (G-SOCK-01; counted as 'unauthenticated-call' in the
+ * coalesced pre-auth row). Read-token connections (auth.ts) have matrix class
+ * `readToken`: status, log.read, ref.resolve only; every other verb and both
+ * relays are FORBIDDEN{matrix}. Their token is re-checked on every call and by
+ * a per-connection timer (expiry, revocation every `tokenRecheckMs`); a dead
+ * token closes the connection after AUTH{token-expired|token-revoked} and a
+ * best-effort socket.disconnect{reason, tokenId} row. `log.append` is the
+ * namespace-ownership gate (log-append.ts, G-SOCK-04): every cell refuses in
+ * M1.4. status lists only next verbs the caller's class may call.
+ *
  * Pre-auth limits (Aegis round 2): a connection with no hello after
  * `helloTimeoutMs` (10 s) or not authenticated after `preAuthTimeoutMs` (the
  * 30 s nonce TTL) is closed; at most `maxPreAuth` (64) unauthenticated
@@ -60,6 +71,7 @@ import type { ConnectionContext, RpcHandler } from './server.js';
 import { RpcRefusal, type RpcRequestFrame } from './rpc.js';
 import type { ConnAuthState, SocketAuthenticator } from './auth.js';
 import { resolveRef } from '../refs/resolve.js';
+import { refuseAppend, type AppendClass } from './log-append.js';
 import { asRpcRefusal, parseLogReadParams, readerFor, readOnePage, SUBSCRIPTION_BACKLOG_CAP, MAX_SUBSCRIPTIONS_PER_CONNECTION, type ReadLog, type SubscriptionHub } from './log-read.js';
 
 /** Where each not-yet-served method lands (spec §19). */
@@ -68,7 +80,10 @@ export const VERB_MILESTONES: Readonly<Record<string, string>> = Object.freeze({
   'session.open': 'M1.7',
   'session.send': 'M1.7',
   'session.stop': 'M1.7',
-  'log.append': 'M1.4',
+  // The ownership gate is served since M1.4 slice 3 (every cell refuses). The first
+  // cell that can succeed is a grant.bind'd kind: grant.bind{principal, manifestHash,
+  // kinds[]} needs root-signed grants (M1.3) AND a loaded manifest (#manifest-loader M1.5).
+  'log.append': 'M1.5',
   'log.read': 'M1.4',
   'permit.reserve': 'M1.6',
   approve: 'M1.6',
@@ -123,6 +138,19 @@ export function matrixClass(kind: PrincipalKind): MatrixClass {
   }
 }
 
+/** The matrix column of an authenticated connection: a read token is `readToken` whatever its principal (§5). */
+export function matrixClassOf(s: Pick<ConnAuthState, 'credential' | 'principalKind'>): MatrixClass {
+  if (s.credential === 'read-token') return 'readToken';
+  return s.principalKind ? matrixClass(s.principalKind) : 'peer';
+}
+
+/** Access of a method (verb or relay) for a class; relays are `caller principal` except for peers and read tokens (§5). */
+export function accessOf(method: string, cls: MatrixClass): Access {
+  const verb = VERBS.find((v) => v.verb === method);
+  if (verb) return verb.access[cls];
+  return cls === 'peer' || cls === 'readToken' ? false : 'caller principal';
+}
+
 export function nextLegalVerbs(facts: ReadonlySet<string>): string[] {
   const out: string[] = [];
   for (const row of NEXT_LEGAL_TABLE) {
@@ -139,7 +167,12 @@ export interface KernelStatusSource {
   root(): { state: string; rootKeyId: string | null };
 }
 
-export type SocketLogKind = 'socket.hello' | 'socket.auth.ok' | 'socket.auth.fail' | 'socket.auth.replay';
+export type SocketLogKind = 'socket.hello' | 'socket.auth.ok' | 'socket.auth.fail' | 'socket.auth.replay' | 'socket.disconnect';
+
+export type PreAuthCloseReason = 'hello-timeout' | 'pre-auth-timeout' | 'pre-auth-cap' | 'unauthenticated-call';
+
+/** How often a live read-token connection's token is re-checked for revocation (expiry has its own timer). */
+export const TOKEN_RECHECK_MS = 5_000;
 
 export const HELLO_TIMEOUT_MS = 10_000;
 export const PRE_AUTH_TIMEOUT_MS = 30_000;
@@ -161,7 +194,9 @@ export interface DispatcherOptions {
   preAuthTimeoutMs?: number;
   maxPreAuth?: number;
   /** A pre-auth connection was closed by a deadline or the cap (for the coalesced counter). */
-  onPreAuthClose?: (why: 'hello-timeout' | 'pre-auth-timeout' | 'pre-auth-cap') => void;
+  onPreAuthClose?: (why: PreAuthCloseReason) => void;
+  /** Read-token revocation re-check period (default TOKEN_RECHECK_MS). */
+  tokenRecheckMs?: number;
   status: KernelStatusSource;
   /** The kernel log read side + the subscription hub (M1.4 slice 2). Absent ⇒ log.read/ref.resolve stay not-implemented. */
   reads?: { log: ReadLog; hub: SubscriptionHub };
@@ -175,6 +210,8 @@ export interface KernelDispatcher {
   onDisconnect(ctx: ConnectionContext): void;
   /** Authenticated connections (status `clients`). */
   clients(): ConnAuthState[];
+  /** Connections holding timers (tests: nothing outlives its connection). */
+  timerCount(): number;
 }
 
 export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
@@ -198,7 +235,7 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
   };
 
   const status = (s: ConnAuthState): Record<string, unknown> => {
-    const cls = matrixClass(s.principalKind!);
+    const cls = matrixClassOf(s);
     const facts = new Set<string>(['noSession', 'noPermit', cls]);
     if (cls === 'agent' || cls === 'session') facts.add('agent|session');
     if (cls === 'voice') facts.add('!armed');
@@ -214,9 +251,13 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       clientApiId: CLIENT_API_ID,
       kitId: KIT_ID,
       abiId: ABI_ID,
-      nextLegalVerbs: nextLegalVerbs(facts).map((v) => ({ verb: v, available: available(v.split(' ')[0]!) })),
+      credential: s.credential ?? 'device',
+      ...(s.credential === 'read-token' ? { token: { tokenId: s.tokenId, expiresAt: s.tokenExpiresAt } } : {}),
+      nextLegalVerbs: nextLegalVerbs(facts)
+        .filter((v) => accessOf(v.split(' ')[0]!, cls) !== false) // legal for THIS class only
+        .map((v) => ({ verb: v, available: available(v.split(' ')[0]!) })),
       verbs: VERBS.map((v) => ({ verb: v.verb, access: v.access[cls], available: available(v.verb), milestone: VERB_MILESTONES[v.verb] })),
-      relays: CLIENT_RELAYS.map((r) => ({ relay: r.relay, available: false, milestone: VERB_MILESTONES[r.relay] })),
+      relays: CLIENT_RELAYS.map((r) => ({ relay: r.relay, access: accessOf(r.relay, cls), available: false, milestone: VERB_MILESTONES[r.relay] })),
       daemon: o.status.daemon(),
       log: o.status.log(),
       sessions: { n: 0 },
@@ -231,6 +272,35 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
         .filter((c) => c.phase === 'authenticated')
         .map((c) => ({ connId: c.connId, principal: c.principal, surface: c.client?.surface ?? null, client: { name: c.client?.name, version: c.client?.version }, conformance: c.client?.conformance ?? null })),
     };
+  };
+
+  const recheckMs = o.tokenRecheckMs ?? TOKEN_RECHECK_MS;
+  /** A read-token connection whose token died: log (best-effort), then close. Returns the refusal to answer with. */
+  const tokenDead = (s: ConnAuthState, ctx: ConnectionContext, reason: string, closeNow: boolean): RpcRefusal => {
+    if (s.phase !== 'closed') {
+      s.phase = 'closed';
+      clearTimers(s.connId);
+      void o.log('socket.disconnect', { reason, tokenId: s.tokenId ?? null }, { connId: s.connId }).catch(() => undefined);
+      if (closeNow) ctx.close(); // timer path: no reply to send; the call path closes after its AUTH reply
+    }
+    return new RpcRefusal('AUTH', reason, 'the read token of this connection is no longer valid', { tokenId: s.tokenId }, { closeAfter: true });
+  };
+  const liveTokenCheck = (s: ConnAuthState): string | null => {
+    const c = o.authenticator.checkToken(s.tokenId!);
+    if (!c.ok) return c.reason;
+    return null;
+  };
+  const armTokenTimers = (s: ConnAuthState, ctx: ConnectionContext): void => {
+    const sweep = (): void => {
+      if (conns.get(s.connId) !== s || s.phase !== 'authenticated') {
+        if (conns.get(s.connId) === undefined) clearTimers(s.connId); // stale: never leave a timer behind
+        return;
+      }
+      const dead = liveTokenCheck(s);
+      if (dead) tokenDead(s, ctx, dead, true);
+    };
+    const untilExpiry = Math.max(0, (s.tokenExpiresAtMs ?? 0) - o.authenticator.now());
+    timers.set(s.connId, [setTimeout(sweep, Math.min(untilExpiry + 1, 2 ** 31 - 1)).unref(), setInterval(sweep, recheckMs).unref()]);
   };
 
   const handle: RpcHandler = async (frame: RpcRequestFrame, ctx: ConnectionContext) => {
@@ -262,10 +332,12 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
     }
 
     if (m === 'auth') {
-      const out = o.authenticator.authenticate(s, frame.params);
+      const out = o.authenticator.authenticate(s, frame.params, {
+        tokenInUse: (tokenId) => [...conns.values()].some((c) => c !== s && c.phase === 'authenticated' && c.tokenId === tokenId),
+      });
       if (!out.ok) {
         await o
-          .log(out.replay ? 'socket.auth.replay' : 'socket.auth.fail', { reason: out.reason, ...(out.principalClaimed ? { principalClaimed: out.principalClaimed } : {}) }, {
+          .log(out.replay ? 'socket.auth.replay' : 'socket.auth.fail', { reason: out.reason, ...(out.principalClaimed ? { principalClaimed: out.principalClaimed } : {}), ...(out.tokenId ? { tokenId: out.tokenId } : {}) }, {
             connId: s.connId,
             ...(out.deviceId ? { deviceId: out.deviceId } : {}),
           })
@@ -273,23 +345,47 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
         throw RpcRefusal.from(out, { closeAfter: true });
       }
       try {
-        await o.log('socket.auth.ok', { principal: out.principal, principalKind: out.principalKind, keyId: out.keyId, surface: s.client?.surface ?? null }, { connId: s.connId, deviceId: out.deviceId });
+        if (out.credential === 'device') {
+          await o.log('socket.auth.ok', { principal: out.principal, principalKind: out.principalKind, keyId: out.keyId, surface: s.client?.surface ?? null }, { connId: s.connId, deviceId: out.deviceId });
+        } else {
+          // the token id only — never the token or a digest of it
+          await o.log('socket.auth.ok', { principal: out.principal, principalKind: null, credential: 'read-token', tokenId: out.tokenId, expiresAt: out.expiresAt, surface: s.client?.surface ?? null }, { connId: s.connId });
+        }
       } catch {
         s.phase = 'closed'; // never authenticated without the row
         throw new RpcRefusal('ENGINE', 'log-write-failed', 'the kernel log refused the auth row; not authenticated', undefined, { closeAfter: true });
       }
+      if (ctx.closed || conns.get(s.connId) !== s) {
+        // the connection went away during the awaited auth.ok write: no timers, no lifted cap
+        s.phase = 'closed';
+        throw new RpcRefusal('ENGINE', 'gone', 'the connection closed during authentication');
+      }
       clearTimers(s.connId);
       ctx.authenticated(); // lift the 16 KiB pre-auth frame cap
+      if (out.credential === 'read-token') {
+        armTokenTimers(s, ctx);
+        return { principal: out.principal, connId: s.connId, credential: 'read-token', expiresAt: out.expiresAt };
+      }
       return { principal: out.principal, connId: s.connId };
     }
 
     const known = VERB_NAMES.includes(m) || RELAY_NAMES.includes(m);
     if (!known) throw new RpcRefusal('UNKNOWN_VERB', 'unknown-verb', `unknown verb ${JSON.stringify(m.slice(0, 64))}`);
-    if (s.phase !== 'authenticated') throw new RpcRefusal('AUTH', 'unauthenticated', `${m} needs hello + auth on this connection`, { required: ['hello', 'auth'] });
+    if (s.phase !== 'authenticated') {
+      // G-SOCK-01: unauthenticated ⇒ AUTH + close (a client that calls before auth is not one we keep talking to)
+      if (s.phase !== 'closed') {
+        s.phase = 'closed';
+        o.onPreAuthClose?.('unauthenticated-call');
+      }
+      throw new RpcRefusal('AUTH', 'unauthenticated', `${m} needs hello + auth on this connection`, { required: ['hello', 'auth'] }, { closeAfter: true });
+    }
+    if (s.credential === 'read-token') {
+      const dead = liveTokenCheck(s);
+      if (dead) throw tokenDead(s, ctx, dead, false);
+    }
 
-    const cls = matrixClass(s.principalKind!);
-    const verb = VERBS.find((v) => v.verb === m);
-    const access: Access = verb ? verb.access[cls] : cls === 'peer' ? false : 'caller principal';
+    const cls = matrixClassOf(s);
+    const access: Access = accessOf(m, cls);
     if (access === false) throw new RpcRefusal('FORBIDDEN', 'matrix', `${m} is not callable by a ${cls} principal (§5)`, { verb: m, principalClass: cls });
     if (READ_METHODS.includes(m)) {
       const reads = o.reads;
@@ -320,6 +416,13 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       });
     }
 
+    if (m === 'log.append') {
+      try {
+        refuseAppend(cls as AppendClass, s.principal, frame.params);
+      } catch (err) {
+        throw asRpcRefusal(err);
+      }
+    }
     if (m === 'status') return status(s);
     throw new RpcRefusal('ENGINE', 'not-implemented', `${m} is not implemented yet (lands with ${VERB_MILESTONES[m]})`, { verb: m, milestone: VERB_MILESTONES[m] });
   };
@@ -333,7 +436,7 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
         return;
       }
       const s = stateOf(ctx.connId);
-      const expire = (why: 'hello-timeout' | 'pre-auth-timeout', test: () => boolean) => () => {
+      const expire = (why: PreAuthCloseReason, test: () => boolean) => () => {
         if (conns.get(ctx.connId) === s && test()) {
           o.onPreAuthClose?.(why);
           ctx.close();
@@ -350,6 +453,7 @@ export function createKernelDispatcher(o: DispatcherOptions): KernelDispatcher {
       conns.delete(ctx.connId);
     },
     clients: () => [...conns.values()].filter((c) => c.phase === 'authenticated'),
+    timerCount: () => timers.size,
   };
 }
 

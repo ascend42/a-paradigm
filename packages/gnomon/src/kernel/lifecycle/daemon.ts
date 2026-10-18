@@ -57,6 +57,8 @@ export type DaemonEvent =
   | { kind: 'daemon.start'; pid: number; socketPath: string; via: EndpointVia; idleMs: number }
   | { kind: 'daemon.exit'; reason: DaemonExitReason }
   | { kind: 'daemon.lock.refused'; reason: string; holderPid?: number }
+  /** A read-token revocation could not be written to the chain twice; it stays pending and is retried on the token timer. */
+  | { kind: 'daemon.token.revocation.unrecorded'; tokenId: string; error: string }
   | SocketEvent;
 
 export interface DaemonOptions {
@@ -84,6 +86,10 @@ export interface DaemonOptions {
   helloTimeoutMs?: number;
   preAuthTimeoutMs?: number;
   maxPreAuth?: number;
+  /** Token-file refresh period at the daemon (default 60 s; records revocations with no live token connection). */
+  tokenRefreshMs?: number;
+  /** Read-token revocation re-check period (default dispatch.ts TOKEN_RECHECK_MS). */
+  tokenRecheckMs?: number;
   maxInFlight?: number;
   writeHighWater?: number;
 }
@@ -230,6 +236,7 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
         hub.close();
         await server?.close();
         clearInterval(diagTimer);
+        clearInterval(tokenTimer);
         await flushDiagnostics();
         await appendRow('daemon.exit', { reason }).catch(() => undefined);
         await Promise.allSettled([...pendingRows]);
@@ -254,13 +261,48 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
     uptimeMs: Date.now() - startedMs,
   });
 
+  // Read-token revocations are sticky across restarts: seed them from the chain (P8-D89, Aegis).
+  const chainRevoked = new Set<string>();
+  /** Revocations seen but not yet on the chain: retried, never dropped (Aegis follow-up 1). */
+  const unrecorded = new Set<string>();
+  const recordRevocation = async (tokenId: string): Promise<void> => {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        await appendRow('key.token.revoked', { tokenId });
+        unrecorded.delete(tokenId);
+        return;
+      } catch (err) {
+        if (attempt === 1) {
+          unrecorded.add(tokenId);
+          emit({ kind: 'daemon.token.revocation.unrecorded', tokenId, error: err instanceof Error ? err.message : String(err) });
+        }
+      }
+    }
+  };
+  for (const v of log.read({ reader: { class: 'human' }, kinds: ['key.token.revoked'] })) {
+    const id = v.view === 'full' ? (v.event.payload as { tokenId?: unknown } | undefined)?.tokenId : undefined;
+    if (typeof id === 'string') chainRevoked.add(id);
+  }
   const authenticator = new SocketAuthenticator({
     home,
     endpointPath: choice.path,
     kernelSigner,
     trust: authority,
+    readTokens: {
+      revoked: chainRevoked,
+      onRevoked: (tokenId) => void recordRevocation(tokenId),
+      onUntrusted: (reason) => void appendRow('key.registry.malformed', { file: 'read-tokens.jsonl', reason }).catch(() => undefined),
+    },
     ...(opts.clock ? { clock: opts.clock } : {}),
   });
+  // Read the token file now and on a slow timer, whether or not a token connection is live,
+  // so a revocation row reaches the chain promptly (Aegis follow-up 1).
+  authenticator.refreshTokens();
+  const tokenTimer = setInterval(() => {
+    authenticator.refreshTokens();
+    for (const id of [...unrecorded]) void recordRevocation(id);
+  }, opts.tokenRefreshMs ?? 60_000);
+  tokenTimer.unref();
   const hub = new SubscriptionHub({
     log,
     holdIdle: () => idle.hold('subscriber'),
@@ -273,6 +315,7 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
     ...(opts.helloTimeoutMs !== undefined ? { helloTimeoutMs: opts.helloTimeoutMs } : {}),
     ...(opts.preAuthTimeoutMs !== undefined ? { preAuthTimeoutMs: opts.preAuthTimeoutMs } : {}),
     ...(opts.maxPreAuth !== undefined ? { maxPreAuth: opts.maxPreAuth } : {}),
+    ...(opts.tokenRecheckMs !== undefined ? { tokenRecheckMs: opts.tokenRecheckMs } : {}),
     onPreAuthClose: (why) => bump(diag.preAuthClosed, why),
     log: logSocketRow,
     status: {
@@ -310,6 +353,7 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
     });
   } catch (err) {
     clearInterval(diagTimer);
+    clearInterval(tokenTimer);
     await log.close().catch(() => undefined);
     releaseDaemonLock(home, pidfile);
     throw err;

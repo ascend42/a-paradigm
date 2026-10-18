@@ -3,10 +3,8 @@
  * #socket + #ref-resolver M1.4 slice 2 (spec §4.4, §4.9, §5, §9.3):
  * log.read pages and follow subscriptions, ref.resolve, and the G-ABI-02 rows
  * for status / log.read / ref.resolve across every principal class the
- * registry can construct (human, agent, session, mod, voice). Read tokens do
- * not exist on the socket yet (auth refuses {token}) and peers cannot be
- * registered (the registry refuses the kind) — both covered in
- * socket-auth.test.ts.
+ * registry can construct (human, agent, session, mod, voice). Read tokens
+ * (M1.4 slice 3) and the total matrix incl. peers: socket-abi.test.ts.
  */
 import { mkdirSync } from 'node:fs';
 import path from 'node:path';
@@ -498,7 +496,7 @@ describe('log.read{follow} subscriptions (§4.9)', () => {
     expect(holds.n).toBe(0);
   });
 
-  it('daemon, real cap (10 000): a reader that stops reading is dropped, socket.subscription.dropped is logged with its connId, memory stays bounded', async () => {
+  it('G-SOCK-03: daemon, real cap (10 000): a reader that stops reading is dropped, socket.subscription.dropped is logged with its connId, memory stays bounded', async () => {
     const r = await rig();
     const c = await rawAuthed(r);
     c.send(requestFrame(3, 'log.read', { follow: true, kinds: ['config.prefs'], since: r.d.log.head().seq }));

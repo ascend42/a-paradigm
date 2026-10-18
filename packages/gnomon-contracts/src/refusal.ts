@@ -184,17 +184,59 @@ export const SOCKET_REASON_ROUTES: Readonly<Record<string, { code: RefusalCode; 
   'principal-mismatch': { code: 'AUTH', gate: 'transport' },
   'peer-not-client': { code: 'AUTH', gate: 'transport' },
   'bad-signature': { code: 'AUTH', gate: 'transport' },
+  // read tokens (auth.ts, identity/read-token.ts; M1.4 slice 3, P8-D89/D89a)
+  'unknown-token': { code: 'AUTH', gate: 'transport' },
+  'token-expired': { code: 'AUTH', gate: 'transport' },
+  'token-revoked': { code: 'AUTH', gate: 'transport' },
+  'token-in-use': { code: 'AUTH', gate: 'transport' },
+  'token-not-yet-valid': { code: 'AUTH', gate: 'transport' },
+  'token-store-untrusted': { code: 'AUTH', gate: 'transport' },
   // dispatch (dispatch.ts)
   'unknown-verb': { code: 'UNKNOWN_VERB', gate: 'usage' },
   unauthenticated: { code: 'AUTH', gate: 'transport' },
   matrix: { code: 'FORBIDDEN', gate: 'transport' },
   'not-implemented': { code: 'ENGINE', gate: 'transport' },
   'log-write-failed': { code: 'ENGINE', gate: 'transport' },
+  gone: { code: 'ENGINE', gate: 'transport' },
+  // log.append namespace ownership (log-append.ts; M1.4 slice 3, P8-D89)
+  'kernel-owned': { code: 'FORBIDDEN', gate: 'transport' },
+  ungranted: { code: 'FORBIDDEN', gate: 'transport' },
+  'modns-not-own': { code: 'FORBIDDEN', gate: 'transport' },
+  'bad-kind': { code: 'BAD_REQUEST', gate: 'usage' },
+  'bad-params': { code: 'BAD_REQUEST', gate: 'usage' },
+  // reasons the kernel already sent since M1.4 slice 2 (log-read.ts, refs/resolve.ts, redaction.ts, kernel-log read side) — P8-D89 round 3
+  'follow-needs-id': { code: 'BAD_REQUEST', gate: 'usage' },
+  'backlog-too-large': { code: 'BAD_REQUEST', gate: 'usage' },
+  'bad-since': { code: 'BAD_REQUEST', gate: 'usage' },
+  'bad-until': { code: 'BAD_REQUEST', gate: 'usage' },
+  'bad-limit': { code: 'BAD_REQUEST', gate: 'usage' },
+  'bad-follow': { code: 'BAD_REQUEST', gate: 'usage' },
+  'bad-kinds': { code: 'BAD_REQUEST', gate: 'usage' },
+  'bad-scope': { code: 'BAD_REQUEST', gate: 'usage' },
+  'since-ahead': { code: 'BAD_REQUEST', gate: 'usage' },
+  'subscription-cap': { code: 'BAD_REQUEST', gate: 'usage' },
+  'mod-principal-name': { code: 'FORBIDDEN', gate: 'transport' },
+  'reader-unsupported': { code: 'UNSUPPORTED', gate: 'usage' },
+  'bad-ref': { code: 'BAD_REQUEST', gate: 'usage' },
+  'rev-not-applicable': { code: 'BAD_REQUEST', gate: 'usage' },
+  'unknown-scheme': { code: 'UNSUPPORTED', gate: 'usage' },
+  'peer-ref': { code: 'UNSUPPORTED', gate: 'usage' },
+  'no-resolver': { code: 'UNSUPPORTED', gate: 'usage' },
+  'not-found': { code: 'NOT_FOUND', gate: 'usage' },
+  'row-integrity': { code: 'ENGINE', gate: 'transport' },
+  closed: { code: 'ENGINE', gate: 'transport' },
   // server internals (server.ts)
   'response-too-large': { code: 'ENGINE', gate: 'transport' },
   internal: { code: 'ENGINE', gate: 'transport' },
 });
 export const SOCKET_REFUSAL_REASONS = Object.freeze(Object.keys(SOCKET_REASON_ROUTES)) as readonly string[];
+
+/**
+ * Client-local reasons: synthesized by a client, never sent by the kernel
+ * (T-2026-10-17-017, P8-D89). `hello-not-offered` = the kernel chose a
+ * clientApi or feature this client did not offer.
+ */
+export const CLIENT_LOCAL_REFUSAL_REASONS = ['hello-not-offered'] as const;
 
 /** Other named reasons the spec uses (§3.4: `FORBIDDEN{reason:'presence'}`). */
 export const OTHER_REFUSAL_REASONS = ['presence'] as const;
@@ -206,6 +248,7 @@ export const REFUSAL_REASONS = [
   ...STRICTNESS_REFUSAL_REASONS,
   ...CHANGE_NOTE_REFUSAL_REASONS,
   ...OTHER_REFUSAL_REASONS,
+  ...CLIENT_LOCAL_REFUSAL_REASONS,
   ...(SOCKET_REFUSAL_REASONS as readonly string[]),
 ] as readonly string[];
 

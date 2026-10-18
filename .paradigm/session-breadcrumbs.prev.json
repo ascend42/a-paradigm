@@ -1,197 +1,297 @@
 {
-  "sessionId": "smuhllzi9",
-  "startTime": 1790379302913,
-  "lastActivity": 1790677557664,
+  "sessionId": "smv711ac7",
+  "startTime": 1791916865431,
+  "lastActivity": 1792186848483,
   "breadcrumbs": [
     {
-      "timestamp": 1790382488041,
+      "timestamp": 1791919877373,
       "action": "tool-call",
       "tool": "paradigm_decision_record",
-      "summary": "decision_record: Skills primitive + University overhaul + internals refactor "
+      "summary": "decision_record: Symbol integrity release: fix identity, freshness and edges "
     },
     {
-      "timestamp": 1790382494605,
+      "timestamp": 1791919894563,
       "action": "tool-call",
       "tool": "paradigm_task_create",
-      "summary": "Created task: \"ARC TD-2026-09-26-846 Phase 0 — UNBLOCK: single agent source\""
+      "summary": "Created task: \"SYMBOL INTEGRITY ARC (TD-2026-10-13-661), Phase 1, 7.15.x co\""
     },
     {
-      "timestamp": 1790382496938,
+      "timestamp": 1791919894622,
       "action": "tool-call",
       "tool": "paradigm_task_create",
-      "summary": "Created task: \"ARC TD-2026-09-26-846 Phase 1 — SKILLS primitive (design fir\""
+      "summary": "Created task: \"SYMBOL INTEGRITY ARC (TD-2026-10-13-661), Phase 2, 7.16 one \""
     },
     {
-      "timestamp": 1790382499036,
+      "timestamp": 1791919894636,
       "action": "tool-call",
       "tool": "paradigm_task_create",
-      "summary": "Created task: \"ARC TD-2026-09-26-846 Phase 2 — UNIVERSITY overhaul (keep hu\""
+      "summary": "Created task: \"SYMBOL INTEGRITY ARC (TD-2026-10-13-661), Phase 3, 7.16 lean\""
     },
     {
-      "timestamp": 1790382500992,
+      "timestamp": 1791919908949,
       "action": "tool-call",
-      "tool": "paradigm_task_create",
-      "summary": "Created task: \"ARC TD-2026-09-26-846 Phase 3 — LEARNING-STORE consolidation\""
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: review"
     },
     {
-      "timestamp": 1790382502495,
+      "timestamp": 1791919914873,
       "action": "tool-call",
-      "tool": "paradigm_task_create",
-      "summary": "Created task: \"ARC TD-2026-09-26-846 Phase 4 — MCP SURFACE cut: 139 tools /\""
+      "tool": "paradigm_protocol_search",
+      "summary": "protocol_search: fix symbol index identity, live index wiring in MCP server, "
     },
     {
-      "timestamp": 1790382519344,
+      "timestamp": 1791919920380,
       "action": "tool-call",
       "tool": "paradigm_orchestrate_inline",
       "summary": "orchestrate_inline: plan"
     },
     {
-      "timestamp": 1790383568627,
-      "action": "tool-call",
-      "tool": "paradigm_task_create",
-      "summary": "Created task: \"captain.ts still resolves agents via loadAgentsManifest + su\""
-    },
-    {
-      "timestamp": 1790383953273,
-      "action": "tool-call",
-      "tool": "paradigm_lore_record",
-      "summary": "lore_record: Skills arc Phase 0 — roster/profile-authoritative dispatch ("
-    },
-    {
-      "timestamp": 1790383963646,
-      "action": "tool-call",
-      "tool": "paradigm_task_update",
-      "summary": "Updated task T-2026-09-26-001"
-    },
-    {
-      "timestamp": 1790614505571,
-      "action": "tool-call",
-      "tool": "paradigm_task_create",
-      "summary": "Created task: \"IDEATION (founder, 2026-09-28): a more generalized problem t\""
-    },
-    {
-      "timestamp": 1790668614854,
-      "action": "tool-call",
-      "tool": "paradigm_task_create",
-      "summary": "Created task: \"Skill certification SIGNING (follow-up to 7.10.0, founder ch\""
-    },
-    {
-      "timestamp": 1790669035457,
-      "action": "tool-call",
-      "tool": "paradigm_lore_record",
-      "summary": "lore_record: Skills arc Phase 1 — agent-owned skills primitive (7.10.0)"
-    },
-    {
-      "timestamp": 1790669047268,
-      "action": "tool-call",
-      "tool": "paradigm_task_update",
-      "summary": "Updated task T-2026-09-26-002"
-    },
-    {
-      "timestamp": 1790669626906,
+      "timestamp": 1791956251406,
       "action": "tool-call",
       "tool": "paradigm_decision_record",
-      "summary": "decision_record: Paradigm Brain (\"Obsidian Brain\"): adjacent document-corpus "
+      "summary": "decision_record: Warpline server ships as a real source-control host: built-i"
     },
     {
-      "timestamp": 1790669670010,
+      "timestamp": 1791956986537,
       "action": "tool-call",
-      "tool": "paradigm_task_update",
-      "summary": "Updated task T-2026-09-26-004"
+      "tool": "paradigm_task_done",
+      "summary": "Completed task T-2026-10-13-001"
     },
     {
-      "timestamp": 1790669670084,
+      "timestamp": 1791957567668,
       "action": "tool-call",
-      "tool": "paradigm_task_update",
-      "summary": "Updated task T-2026-09-26-005"
+      "tool": "paradigm_decision_record",
+      "summary": "decision_record: Warpline armada decision dialog: advisory-by-default, eviden"
     },
     {
-      "timestamp": 1790669670098,
-      "action": "tool-call",
-      "tool": "paradigm_task_create",
-      "summary": "Created task: \"ARC TD-2026-09-26-846 Phase 5 — PARADIGM BRAIN MVP per docs/\""
-    },
-    {
-      "timestamp": 1790669670109,
-      "action": "tool-call",
-      "tool": "paradigm_task_update",
-      "summary": "Updated task T-2026-09-28-001"
-    },
-    {
-      "timestamp": 1790671704794,
-      "action": "tool-call",
-      "tool": "paradigm_lore_record",
-      "summary": "lore_record: Skills arc Phase 2 — University → packs + Platform Academy ("
-    },
-    {
-      "timestamp": 1790671713256,
-      "action": "tool-call",
-      "tool": "paradigm_task_update",
-      "summary": "Updated task T-2026-09-26-003"
-    },
-    {
-      "timestamp": 1790673257577,
-      "action": "tool-call",
-      "tool": "paradigm_lore_record",
-      "summary": "lore_record: Skills arc Phase 3 — learning-store consolidation, belief-de"
-    },
-    {
-      "timestamp": 1790673259397,
+      "timestamp": 1791957586349,
       "action": "tool-call",
       "tool": "paradigm_task_create",
-      "summary": "Created task: \"LEARNING LOOP still broken (found by 7.12.0 liveness alarm):\""
+      "summary": "Created task: \"ARMADA PRECONDITIONS (TD-2026-10-14-735, item 4). Must land \""
     },
     {
-      "timestamp": 1790673269618,
+      "timestamp": 1791957586637,
       "action": "tool-call",
-      "tool": "paradigm_task_update",
-      "summary": "Updated task T-2026-09-26-004"
+      "tool": "paradigm_task_create",
+      "summary": "Created task: \"WARPLINE EVIDENCE (TD-2026-10-14-735, items 1, 2, 6).\n(a) Ou\""
     },
     {
-      "timestamp": 1790673270305,
+      "timestamp": 1791957586703,
       "action": "tool-call",
-      "tool": "paradigm_task_update",
-      "summary": "Updated task T-2026-06-13-004"
+      "tool": "paradigm_task_create",
+      "summary": "Created task: \"WARPLINE SERVER v1 (TD-2026-10-14-551 + TD-2026-10-14-735). \""
     },
     {
-      "timestamp": 1790674756607,
-      "action": "tool-call",
-      "tool": "paradigm_lore_record",
-      "summary": "lore_record: Skills arc Phase 4 — MCP surface cut 134→32 tools + incremen"
-    },
-    {
-      "timestamp": 1790674765246,
-      "action": "tool-call",
-      "tool": "paradigm_task_update",
-      "summary": "Updated task T-2026-09-26-005"
-    },
-    {
-      "timestamp": 1790677241730,
-      "action": "tool-call",
-      "tool": "paradigm_task_update",
-      "summary": "Updated task T-2026-09-26-006"
-    },
-    {
-      "timestamp": 1790677549148,
+      "timestamp": 1791957623922,
       "action": "tool-call",
       "tool": "paradigm_lore_record",
-      "summary": "lore_record: Skills arc Phase 5 — Paradigm Brain MVP (7.14.0)"
+      "summary": "lore_record: milestone"
     },
     {
-      "timestamp": 1790677557584,
+      "timestamp": 1791960936432,
       "action": "tool-call",
-      "tool": "paradigm_task_update",
-      "summary": "Updated task T-2026-09-29-002"
+      "tool": "paradigm_session_checkpoint",
+      "summary": "Checkpoint: phase=validating, 7.15.0 (Symbol Integrity Phase 1) is built, reviewed and pus"
     },
     {
-      "timestamp": 1790677566395,
+      "timestamp": 1792122749195,
       "action": "tool-call",
       "tool": "paradigm_lore_record",
-      "summary": "lore_record: MILESTONE — Skills + University + internals arc complete (7."
+      "summary": "lore_record: milestone"
+    },
+    {
+      "timestamp": 1792122851283,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: human-note"
+    },
+    {
+      "timestamp": 1792122961712,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: insight"
+    },
+    {
+      "timestamp": 1792123006860,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: human-note"
+    },
+    {
+      "timestamp": 1792123201201,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: insight"
+    },
+    {
+      "timestamp": 1792123254598,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: insight"
+    },
+    {
+      "timestamp": 1792124406041,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: insight"
+    },
+    {
+      "timestamp": 1792124604683,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: insight"
+    },
+    {
+      "timestamp": 1792125382954,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: human-note"
+    },
+    {
+      "timestamp": 1792125798834,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: human-note"
+    },
+    {
+      "timestamp": 1792126873310,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: human-note"
+    },
+    {
+      "timestamp": 1792127094761,
+      "action": "tool-call",
+      "tool": "paradigm_decision_record",
+      "summary": "decision_record: Paradigm 8.0 = Gnomon: a kernel beneath Claude Code, adjudic"
+    },
+    {
+      "timestamp": 1792129382226,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: human-note"
+    },
+    {
+      "timestamp": 1792130636605,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: human-note"
+    },
+    {
+      "timestamp": 1792133645446,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: insight"
+    },
+    {
+      "timestamp": 1792134084154,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: insight"
+    },
+    {
+      "timestamp": 1792134201797,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: human-note"
+    },
+    {
+      "timestamp": 1792134427670,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: human-note"
+    },
+    {
+      "timestamp": 1792134488456,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: insight"
+    },
+    {
+      "timestamp": 1792134676568,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: human-note"
+    },
+    {
+      "timestamp": 1792134774561,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: human-note"
+    },
+    {
+      "timestamp": 1792136113236,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: human-note"
+    },
+    {
+      "timestamp": 1792170331780,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: human-note"
+    },
+    {
+      "timestamp": 1792170536685,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: human-note"
+    },
+    {
+      "timestamp": 1792170548802,
+      "action": "tool-call",
+      "tool": "paradigm_session_checkpoint",
+      "summary": "Checkpoint: phase=planning, Paradigm 8.0 = Gnomon, on branch ideate/paradigm-8 (last com"
+    },
+    {
+      "timestamp": 1792171574613,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: insight"
+    },
+    {
+      "timestamp": 1792184846813,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: human-note"
+    },
+    {
+      "timestamp": 1792184946391,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: human-note"
+    },
+    {
+      "timestamp": 1792185209299,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: human-note"
+    },
+    {
+      "timestamp": 1792185576980,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: human-note"
+    },
+    {
+      "timestamp": 1792186819005,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: human-note"
+    },
+    {
+      "timestamp": 1792186848337,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: human-note"
+    },
+    {
+      "timestamp": 1792190095987,
+      "action": "tool-call",
+      "tool": "paradigm_lore_record",
+      "summary": "lore_record: human-note"
     }
   ],
   "symbolsModified": [],
-  "filesExplored": [
-    "captain.ts"
-  ]
+  "filesExplored": []
 }

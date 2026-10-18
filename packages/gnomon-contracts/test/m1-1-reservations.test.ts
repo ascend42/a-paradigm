@@ -244,7 +244,8 @@ const COVERAGE: Record<string, Entry> = {
 };
 
 /** Update ONLY on a deliberate client-API change (and record it in the review). */
-const PINNED_CLIENT_API_ID = 'sha256:8e30f400cdecc6876501d07190488ede699450a29e9d4a2011c14406d99a3014';
+// Moved once by P8-D89 (M1.4 slice 3, T-2026-10-18-002): was sha256:8e30f400…3014.
+const PINNED_CLIENT_API_ID = 'sha256:fd576e6d7ee15cd7f7481768d085117c1e22b37902d93821a11359736c98e0fd';
 
 const EXPECTED_GAPS = ['permit.log', 'brief:v1', 'cowork.msg:v1', 'gnomon-link:v1', 'linkApiId'];
 
@@ -505,7 +506,48 @@ describe('kernel socket reasons (M1.4 addendum) are reserved and routed', () => 
     ];
     // also emitted by the socket code (renamed per ruling: id→request-id, method→method-missing, peer→peer-not-client)
     expect(Object.keys(SOCKET_REASON_ROUTES).sort()).toEqual(
-      [...requested, 'request-id', 'method-missing', 'peer-not-client', 'response-too-large', 'internal'].sort(),
+      [
+        ...requested,
+        'request-id',
+        'method-missing',
+        'peer-not-client',
+        'response-too-large',
+        'internal',
+        // M1.4 slice 3 (P8-D89, the one batched clientApiId move): read tokens, gone, log.append ownership
+        'unknown-token',
+        'token-expired',
+        'token-revoked',
+        'token-in-use',
+        'token-not-yet-valid',
+        'token-store-untrusted',
+        'gone',
+        'kernel-owned',
+        'ungranted',
+        'modns-not-own',
+        'bad-kind',
+        'bad-params',
+        // P8-D89 round 3: reasons the kernel already sent since slice 2
+        'follow-needs-id',
+        'backlog-too-large',
+        'bad-since',
+        'bad-until',
+        'bad-limit',
+        'bad-follow',
+        'bad-kinds',
+        'bad-scope',
+        'since-ahead',
+        'subscription-cap',
+        'mod-principal-name',
+        'reader-unsupported',
+        'bad-ref',
+        'rev-not-applicable',
+        'unknown-scheme',
+        'peer-ref',
+        'no-resolver',
+        'not-found',
+        'row-integrity',
+        'closed',
+      ].sort(),
     );
     // ruling (b): client-local, never a wire reason; old names never reserved
     for (const gone of ['connection-closed', 'id', 'method', 'peer']) expect(REFUSAL_REASONS).not.toContain(gone);
@@ -549,6 +591,7 @@ describe('event labels and payload docs (round 2)', () => {
       'approval.voice.intent': { handleHash: 'sensitive', challengeHash: 'sensitive' },
       'link.msg.out': { hash: 'sensitive' },
       'inject.receipt': { shas: 'sensitive', source_hash: 'sensitive', frozenSliceHash: 'sensitive' },
+      'daemon.log.quarantined': { evidencePath: 'sensitive' }, // P8-D89 reservation (a local path)
     });
   });
   it('incident kinds carry no free-text field, so no sensitive field label is needed', () => {
@@ -559,7 +602,8 @@ describe('event labels and payload docs (round 2)', () => {
   });
   it('every reserved D86 kind has a payload doc', () => {
     const d86 = EVENT_KIND_NAMES.filter((k) => EVENT_KINDS[k]!.reserved === D86);
-    expect(Object.keys(RESERVED_KIND_PAYLOADS).sort()).toEqual([...d86].sort());
+    const d89 = EVENT_KIND_NAMES.filter((k) => EVENT_KINDS[k]!.reserved === 'M1.4:P8-D89');
+    expect(Object.keys(RESERVED_KIND_PAYLOADS).sort()).toEqual([...d86, ...d89].sort());
   });
   it('voice.approve:<class> is grant-derived only: never in any manifest, first-party included', () => {
     expect(GRANT_DERIVED_ONLY_CAPABILITIES).toEqual(['voice.approve:<class>']);

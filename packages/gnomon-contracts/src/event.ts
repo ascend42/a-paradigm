@@ -47,7 +47,7 @@ export const APPROVAL_SUSPECT_REASONS = [
 ] as const;
 
 /** Release tags for values reserved one release ahead (§4.9, A26-11). */
-export const RESERVATION_TAGS = ['M1.1:P8-D58', 'M1.1:P8-R9', 'M1.1:P8-D86-D88'] as const;
+export const RESERVATION_TAGS = ['M1.1:P8-D58', 'M1.1:P8-R9', 'M1.1:P8-D86-D88', 'M1.4:P8-D89'] as const;
 export type ReservationTag = (typeof RESERVATION_TAGS)[number];
 
 export type KindOwner = 'kernel' | 'userland';
@@ -65,6 +65,7 @@ export interface EventKindSpec {
 const D58 = 'M1.1:P8-D58' as const;
 const R9 = 'M1.1:P8-R9' as const;
 const D86 = 'M1.1:P8-D86-D88' as const;
+const D89 = 'M1.4:P8-D89' as const;
 
 type Row = [ns: string, owner: KindOwner, kinds: string, reserved?: ReservationTag];
 
@@ -79,6 +80,12 @@ const TABLE: Row[] = [
   // daemon.anchor.failed{seq, kind}: research 33 S34-02 (P8-D83) — a critical row whose anchoring failed after COMMIT;
   // projections treat that seq as not having taken effect.
   ['daemon', 'kernel', 'start exit lock.refused segment reexec anchor.lag log.gap anchor.failed'],
+  // daemon.log.quarantined{quarantinedLog, quarantinedHead{seq, hash, segment}, evidencePath, authorizedBy}: reserved for
+  // T-2026-10-17-009(a) (P8-D89, kernel-signed; not built). evidencePath is a local path: a sensitive FIELD.
+  ['daemon', 'kernel', 'log.quarantined', D89],
+  // key.token.revoked{tokenId}: the kernel observed a root-signed read-token revocation (M1.4 slice 3, P8-D89 —
+  // revocations stay sticky across restarts by being on the chain).
+  ['key', 'kernel', 'token.revoked', D89],
   [
     'socket',
     'kernel',
@@ -181,6 +188,7 @@ const FIELD_LABELS: Record<string, Record<string, Sensitivity>> = {
   'approval.voice.intent': { handleHash: 'sensitive', challengeHash: 'sensitive' }, // short voice handles/challenges (§14.7)
   'link.msg.out': { hash: 'sensitive' }, // digest of a message body sent to a peer
   'inject.receipt': { shas: 'sensitive', source_hash: 'sensitive', frozenSliceHash: 'sensitive' }, // digests of model-visible bytes
+  'daemon.log.quarantined': { evidencePath: 'sensitive' }, // a local filesystem path (P8-D89)
 };
 
 function build(): Readonly<Record<string, EventKindSpec>> {
@@ -214,6 +222,8 @@ export const RESERVED_PAYLOAD_FIELDS: Readonly<Record<string, Readonly<Record<st
   'contract.built': Object.freeze({ note: D86, responses: D86 }),
   'verdict.founder': Object.freeze({ override: D86 }),
   'session.open': Object.freeze({ runMode: D86 }),
+  // P8-D89 (M1.4 slice 3): the read-token file's untrusted diagnostic names the file and why (§9.1 `{line}` stays for the registry).
+  'key.registry.malformed': Object.freeze({ file: D89, reason: D89 }),
 });
 
 /**
@@ -242,6 +252,9 @@ export const RESERVED_KIND_PAYLOADS: Readonly<Record<string, readonly string[]>>
   'merge.reverted': ['landedRef', 'nodeId', 'detectedBy', 'trailer'],
   'merge.ref.rewritten': ['ref', 'kind'],
   'verdict.incident': ['cardId', 'refs', 'severity'],
+  // P8-D89 (M1.4)
+  'daemon.log.quarantined': ['quarantinedLog', 'quarantinedHead', 'evidencePath', 'authorizedBy'],
+  'key.token.revoked': ['tokenId'],
 });
 
 /** The frozen kind registry (§9.1). */
