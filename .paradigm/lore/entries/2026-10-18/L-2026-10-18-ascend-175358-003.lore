@@ -1,0 +1,19 @@
+id: L-2026-10-18-ascend-175358-003
+type: milestone
+timestamp: '2026-10-18T17:53:58.586Z'
+author: ascend
+title: Gnomon M1.6 slice 2 round 2 landed (855818a1, 5e958748)
+summary: Aegis C1 (restore trusts only kernel rows), C2 (theft race + ceiling + raise after row), low (clock clamp); reviewer day-key ordering. Gnomon 1003 passed / 63 todo, contracts 319. F4 read-token log projection filed as T-2026-10-18-023. No clientApiId move.
+symbols_touched:
+  - '#approval-broker'
+  - '#budget-fuse'
+commit: '5e958748'
+tags:
+  - decision
+  - gnomon
+  - m1.6
+  - milestone
+git_context:
+  ref: 5e95874841aba9b759ae90f82ad70d026cf9fe27
+  branch: gnomon/m16-slice2
+  dirty: true
