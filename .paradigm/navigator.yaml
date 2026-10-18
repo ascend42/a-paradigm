@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-10-18T04:04:14.312Z'
+generated: '2026-10-18T04:08:04.202Z'
 structure: {}
 key_files:
   config:
@@ -270,6 +270,7 @@ symbols:
   '#purpose-component-kernel-log': packages/gnomon/
   '#purpose-component-approval-broker': packages/gnomon/
   '#purpose-component-budget-fuse': packages/gnomon/
+  '#purpose-component-scheduler': packages/gnomon/
   '#purpose-component-paradigm-logger': packages/logger/
   '#purpose-component-symbol-logger': packages/logger/
   '#purpose-component-formatter-pretty': packages/logger/

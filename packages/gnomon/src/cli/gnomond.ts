@@ -5,7 +5,7 @@
  * with the clean env (client activation) and exits once the socket answers.
  */
 import { GNOMON_VERSION } from '../version.js';
-import { activateDetached, daemonUsage, EXIT_OK, parseDaemonArgs, runForeground } from './daemon-cli.js';
+import { activateDetached, daemonHomeOf, daemonUsage, EXIT_OK, parseDaemonArgs, runForeground } from './daemon-cli.js';
 
 async function main(argv: readonly string[]): Promise<number> {
   if (argv.includes('--version') || argv.includes('-v')) {
@@ -14,7 +14,7 @@ async function main(argv: readonly string[]): Promise<number> {
   }
   const parsed = parseDaemonArgs(argv);
   if (typeof parsed === 'string') return daemonUsage(parsed);
-  return parsed.foreground ? runForeground(parsed) : activateDetached(parsed, process.argv[1] ?? process.execPath);
+  return parsed.foreground ? runForeground(parsed) : activateDetached(parsed, process.argv[1] ?? process.execPath, daemonHomeOf); // gnomond never reads GNOMON_HOME
 }
 
 main(process.argv.slice(2)).then(

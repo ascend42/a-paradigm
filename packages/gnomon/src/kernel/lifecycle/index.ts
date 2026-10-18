@@ -6,4 +6,6 @@ export * from './endpoint.js';
 export * from './pidfile.js';
 export * from './env.js';
 export * from './idle.js';
+export * from './process-control.js';
+export * from './children.js';
 export * from './daemon.js';

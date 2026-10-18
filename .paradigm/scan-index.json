@@ -2,7 +2,7 @@
   "$meta": {
     "version": "1.0.0",
     "project": "agent-aed4f7cdb250a0c8d",
-    "generatedAt": "2026-10-18T04:04:14.295Z",
+    "generatedAt": "2026-10-18T04:08:04.187Z",
     "paradigmVersion": "0.1.0",
     "sources": {
       "purposeFiles": 102,
@@ -26,7 +26,7 @@
       "feature": 1,
       "theme": 1,
       "controller": 1,
-      "module": 107,
+      "module": 108,
       "tool": 45,
       "tool-group": 10,
       "util": 9,
@@ -2795,7 +2795,8 @@
         "#ref-resolver",
         "#web-endpoint",
         "#oracle-sandbox",
-        "#manifest-loader"
+        "#manifest-loader",
+        "#scheduler"
       ],
       "componentType": "module"
     },
@@ -2928,6 +2929,19 @@
       "description": "#budget-fuse (spec §3.4 the fuse, §4.8 permit:v1, §10 laws 1/5/7; §19.1 M1.6). src/kernel/budget/. config.ts — defaults ON, tunable only by a root-signed <home>/config.signed.json (the JSON subset of the root-signed config.yaml): unsigned or badly signed ⇒ defaults + config.unsigned; a signed invalid value ⇒ corrupt ⇒ deny; no env/argv input exists; the human reserve of a subscription window is fixed at 30 % (OPEN 6); fuse/budget/strictness/review keys in .gnomon/project.yaml are ignored and logged config.ignored{field, source: project.yaml}. billing.ts — law 7 scan of the child env, settings layers (env blocks, apiKeyHelper) and mcp.json server env blocks for API-billing keys and any *_BASE_URL (loopback override included); unreadable layers are hits; values never reported. fuse.ts — BudgetFuse.reserve: corrupt ⇒ BUDGET_DENIED; law 7 for session.spawn/turn on claude-code ⇒ BILLING_REFUSED unless an active api-token card covers the session; breaker (quota.error, 60 min or human resume); subscription window with the 30 % human reserve the armada (agent/session or unattended) never consumes — at the threshold one budget card + budget.pause while an attended human still gets a permit; concurrency per user/repo/loop/session; compute (local sessions per machine); tokens + USD per scope per day; permit:v1 kernel-signed (domain gnomon:permit:v1), permit.reserve/grant/deny/release rows; usage only via recordStreamUsage(turn.usage|turn.result), malformed ⇒ corrupt; ladder rungs 50/75/90/100 once per scope per day; a mid-turn breach ⇒ budget.pause + onBreach (the M1.7 supervisor kills the pgid). parseReserveParams — no usage params; the user rung is the human the caller runs for (P8-D91: one bucket for the human and their agents; before M1.7 an agent is attributed to the root's human principal, the founder, since 8.0 is single-human); an agent may not name repo/loop/session (the kernel binds them, M1.7). Round 2: day caps and the window count outstanding permit headroom and clamp new limits; expired permits free concurrency; api-token billing only on the kernel spawn path for the card's own hsid and requester, once, with the law-7 scan still run (only the injected key ignored); resume is a logged one-window allowance; root config carries a version counter (older ⇒ corrupt). Day/window counters are in memory (rebuild at boot deferred beside S-L2). Round 3: one pause/unpause predicate (used ≥ 70 % or no window headroom), the outstanding budget card is withdrawn when the pause clears (a late resume grants nothing); the human reserve applies on the USER rung for every backend (armada ≤ 70 % of each user cap and ≤ min(cap−1, ⌊0.7·cap⌋) user concurrency; Aegis N1); the kernel binds machine for agents; never a permit with limits ≤ 0; permit.reserve rows record the attributed user (attributed: root-human); config rollback high-water from the last signed config.loaded on the chain (N2). M1.7 note: turn permits of an api-token session are labelled subscription; per-turn billing.api.active needs the supervisor to report usage against the spawn permit (G-SUB-03).",
       "visualTags": [],
       "related": [],
+      "componentType": "module"
+    },
+    "scheduler": {
+      "id": "scheduler",
+      "name": "Scheduler",
+      "symbol": "#scheduler",
+      "category": "components",
+      "path": "/Users/ascend/Documents/GitHub/a-paradigm/.claude/worktrees/agent-aed4f7cdb250a0c8d/packages/gnomon/.purpose",
+      "description": "#scheduler (spec §3.5, §2.4 rule 3, §9.1 schedule.*, §10 law 5; M1.9) in src/kernel/scheduler/. Log-derived timers (timer:v1, never stored): the last fired due instant of a key is the max dueAt of its schedule.automation.due rows, so start() rebuilds every timer from the records + the log and no instant fires twice (G-SCH-01). automation:v1 {id, trigger: {at} | {every, anchor}, model: local|claude|any, attended} is a LOCAL shape (not a wire object yet; moving it into gnomon-contracts would move clientApiId). Every automation is attended: attended:false is REFUSED (schedule.dropped{reason: 'unattended-unavailable'}) until an #approval-broker decision (M1.6) and the run step (M1.7/M1.8) exist (law 5). Instants are strict ISO-8601 with Z or ±hh:mm; every is 1 min..10 years. Rebuild trusts only kernel-principal due rows whose dueAt is not after their own at (kernel principals = the unprovisioned p:00000000/kernel and the current one, so root provisioning at M1.3 does not refire timers). One daemon ⇒ one timer per key: duplicates (N worktrees) are dropped {reason:'duplicate-key'} (G-LAW-05b). An instant due while down — or older than one period capped at the horizon (a slept host) — fires as an attended event (late:true); several missed instants coalesce (schedule.dropped{reason:'coalesced', count}). A due row spends nothing; the run step is hard-wired to refuse ENGINE{not-implemented} (session.refused) — no spawn, no permit (G-LAW-05). Wakes are capped at 60 s; a failed append releases the hold and retries in 5 s; stop() is a latch returning the in-flight tick, which the daemon awaits before stopping children; the scheduler starts before the idle monitor. While the next due instant is inside 10 min the scheduler holds idle exit ('timer' holder). Clock and wake are seams (now, arm), so the 24 h soak is a unit test. Daemon wiring: DaemonOptions .automations (none by default; root-signed config later), handle.scheduler.",
+      "visualTags": [],
+      "related": [
+        "#approval-broker"
+      ],
       "componentType": "module"
     },
     "paradigm-logger": {
@@ -12526,7 +12540,7 @@
       "name": "Daemon Lifecycle",
       "symbol": "$daemon-lifecycle",
       "path": "/Users/ascend/Documents/GitHub/a-paradigm/.claude/worktrees/agent-aed4f7cdb250a0c8d/packages/gnomon/.purpose",
-      "description": "$daemon-lifecycle (spec §2.4; PR-5 core of M1.9). (1) client activation — `gnomon daemon --detach` re-execs gnomond with the clean env and home in argv, then waits for the socket; (2) one per user — home 0700 read back, endpoint path chosen (never /tmp), O_EXCL daemonPid:v1 pidfile acquired (live holder refuses with daemon.lock.refused, dead holder reclaimed); (3) #kernel-log opened with the kernel key (M1.4 seam: a supplied or ephemeral in-memory software Ed25519 key, custody partial; keystore item is M1.3) and the root authority (default unprovisioned), #socket listens at 0600 with the hello/auth dispatcher, daemon.start is emitted AND logged (daemon.exit logged at shutdown, then the log is closed before the lock is released); (4) idle exit — no open connections for idleMs (default 10 min) ⇒ daemon.exit{reason: 'idle'}, socket closed, pidfile and socket released only if still ours; SIGTERM/SIGINT take the same path with reason 'signal'. Since M1.4 slice 2 every log.read{follow} subscription is an idle holder ('subscriber') and the hub is closed first at shutdown. Not yet built: sessions/timers as holders, mod stop, orphan sweep, the Windows pipe. M1.4: the #web-endpoint is started by requestWebLaunch, its WebSocket connections are idle holders, and it is stopped (child ended) before the socket closes at shutdown.",
+      "description": "$daemon-lifecycle (spec §2.4; PR-5 core of M1.9). (1) client activation — `gnomon daemon --detach` re-execs gnomond with the clean env and home in argv, then waits for the socket; (2) one per user — home 0700 read back, endpoint path chosen (never /tmp), O_EXCL daemonPid:v1 pidfile acquired (live holder refuses with daemon.lock.refused, dead holder reclaimed); (3) #kernel-log opened with the kernel key (M1.4 seam: a supplied or ephemeral in-memory software Ed25519 key, custody partial; keystore item is M1.3) and the root authority (default unprovisioned), #socket listens at 0600 with the hello/auth dispatcher, daemon.start is emitted AND logged (daemon.exit logged at shutdown, then the log is closed before the lock is released); (4) idle exit — no open connections for idleMs (default 10 min) ⇒ daemon.exit{reason: 'idle'}, socket closed, pidfile and socket released only if still ours; SIGTERM/SIGINT take the same path with reason 'signal'. Since M1.4 slice 2 every log.read{follow} subscription is an idle holder ('subscriber') and the hub is closed first at shutdown. Not yet built: sessions/timers as holders, mod stop, orphan sweep, the Windows pipe. M1.4: the #web-endpoint is started by requestWebLaunch, its WebSocket connections are idle holders, and it is stopped (child ended) before the socket closes at shutdown. M1.9: (5) home — the daemon takes its home only from --home (daemonHomeOf; GNOMON_HOME is a client-side test seam it never reads — both gnomond paths, foreground and detaching; only `gnomon` client commands honour the seam); (6) orphan sweep at start, before the socket listens — every KERNEL-written session.spawned with no session.exited/orphaned is recorded session.orphaned{probe, action} BEFORE any signal, and its group is signalled only when the row's boot session (log/boot.ts) equals this boot AND the live leader's start-time witness (process-control.ts: macOS ps lstart, Linux /proc stat field 22, read with TZ=UTC before any await at track; ps forks — never on a hot path; win32 = parity phase, never signalled) equals the recorded one — else probe stale-boot | unattributable, action none; orphans stopped in parallel, counted only when gone (G-DMN-04); (7) supervised children (DaemonChildren: session, local-runner, mod) — intend() writes session.spawned{phase:'intent'} before the fork, track() writes {phase:'running', pid, pgid, boot, startTime} and refuses a session child that does not lead its own group; sessions write session.exited and hold idle ('session'); mods never hold, and have no spawn/exit kinds in §9.1, so a crash-orphaned mod is not swept (residual); stop = SIGTERM → grace → SIGKILL, then group members outliving the leader are SIGKILLed and counted; every shutdown (idle included) stops the scheduler, then stops and AWAITS every child (mod.stopped{reason}) and the web transport child (socket.web.stop{reason:'idle'|'daemon-exit'}) BEFORE daemon.exit {reason, liveChildren} is written — the falsifier \"daemon exits with a live child\"; (8) idle holders are connections, subscribers (log.read follow AND open GUI WebSockets), sessions and #scheduler timers due inside 10 min. Not yet built: the session runner and mod host that call children.track (M1.7/M1.8/M1.11), the Windows pipe, job object and owner-only DACL read-back (G-WIN-02, parity phase P8-D78).",
       "steps": [
         {
           "id": "daemon-lifecycle-step-0",
@@ -12547,6 +12561,16 @@
           "id": "daemon-lifecycle-step-3",
           "name": "Step 4",
           "order": 3
+        },
+        {
+          "id": "daemon-lifecycle-step-4",
+          "name": "Step 5",
+          "order": 4
+        },
+        {
+          "id": "daemon-lifecycle-step-5",
+          "name": "Step 6",
+          "order": 5
         }
       ]
     },
@@ -18750,6 +18774,10 @@
     "#budget-fuse": {
       "category": "components",
       "id": "budget-fuse"
+    },
+    "#scheduler": {
+      "category": "components",
+      "id": "scheduler"
     },
     "#paradigm-logger": {
       "category": "components",
