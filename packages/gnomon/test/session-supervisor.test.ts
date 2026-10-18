@@ -18,6 +18,7 @@
  */
 // @gnomon-platform: darwin
 import * as fs from 'node:fs';
+import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { RefusedError } from '@a-company/gnomon-contracts';
@@ -33,6 +34,7 @@ import { readClaudePin, repinClaudeBinary } from '../src/kernel/runner/binary.js
 import { runSessionCommand } from '../src/cli/session-cli.js';
 import { PassThrough } from 'node:stream';
 import { darwinFloor } from '../src/kernel/sandbox/session.js';
+import { KernelLog } from '../src/kernel/log/index.js';
 
 /** capability, not platform: below the macOS floor or with SIP off every open is refused (asserted below) */
 const SANDBOX_OK = darwinFloor().ok;
@@ -47,18 +49,20 @@ afterEach(async () => {
   w?.cleanup();
 });
 
-function rig(o: { billing?: BillingScanSource; watchMs?: number; failSandboxRow?: boolean; allowScripts?: boolean; macosMajor?: () => number | null; sipEnabled?: () => boolean | null } = {}) {
+function rig(o: { local?: ConstructorParameters<typeof SessionSupervisor>[0]['local']; realLog?: KernelLog; billing?: BillingScanSource; watchMs?: number; failSandboxRow?: boolean; allowScripts?: boolean; macosMajor?: () => number | null; sipEnabled?: () => boolean | null } = {}) {
   w = sessionWorld();
   const rows: Array<{ kind: string; payload: Record<string, unknown> }> = [];
-  const log = async (kind: string, payload: Record<string, unknown>): Promise<void> => {
+  const log = async (kind: string, payload: Record<string, unknown>, ids: { session?: string } = {}): Promise<void> => {
     if (o.failSandboxRow && kind === 'session.sandbox' && payload.profile) throw new Error('log append failed (test)');
+    // T-2026-10-18-019: optionally through a REAL KernelLog (its checkPayload), so a refused row fails the call
+    if (o.realLog) await o.realLog.append({ kind, principal: 'p:abcdefgh/kernel', payload, ...(ids.session ? { session: ids.session } : {}) });
     rows.push({ kind, payload });
   };
   const fuse = new BudgetFuse({ kernel: SoftwareEd25519Signer.generate('kernel'), logId: 'log:01HZZZZZZZZZZZZZZZZZZZZZZZ', log, billing: o.billing ?? { env: () => ({}), layers: () => [] } });
   const children = new DaemonChildren({ append: log, control: processControlFor('darwin'), boot: 'boot-test', graceMs: 500 });
   const cards: Array<Record<string, unknown>> = [];
   const broker = { raise: async (i: Record<string, unknown>) => (cards.push(i), { cardId: `card:${cards.length}` }) } as unknown as Pick<ApprovalBroker, 'raise'>;
-  sup = new SessionSupervisor({ log, children, fuse, broker, home: w.home, userHome: w.userHome, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(w.home, 'gnomon.sock'), claudePath: w.claude, env: () => ({ HOME: '/not-the-scanned-home', PATH: '/usr/bin:/bin', ANTHROPIC_API_KEY: 'scrubbed-from-the-child' }), platform: 'darwin', watchMs: o.watchMs ?? 200, allowScripts: o.allowScripts ?? true, ...(o.macosMajor ? { macosMajor: o.macosMajor } : {}), ...(o.sipEnabled ? { sipEnabled: o.sipEnabled } : {}) });
+  sup = new SessionSupervisor({ log, children, fuse, broker, home: w.home, userHome: w.userHome, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(w.home, 'gnomon.sock'), claudePath: w.claude, env: () => ({ HOME: '/not-the-scanned-home', PATH: '/usr/bin:/bin', ANTHROPIC_API_KEY: 'scrubbed-from-the-child' }), platform: 'darwin', watchMs: o.watchMs ?? 200, allowScripts: o.allowScripts ?? true, ...(o.macosMajor ? { macosMajor: o.macosMajor } : {}), ...(o.sipEnabled ? { sipEnabled: o.sipEnabled } : {}), ...(o.local ? { local: o.local } : {}) });
   live.push(() => children.stopAll('test-end'));
   const kinds = (k: string) => rows.filter((r) => r.kind === k);
   const idx = (k: string) => rows.findIndex((r) => r.kind === k);
@@ -151,6 +155,34 @@ describe.skipIf(!SANDBOX_OK)('a session end to end (fake claude, real profile, r
     // the session's policy.json mirrors the denies (Claude's own rules, defence in depth)
     const pol = JSON.parse(fs.readFileSync(path.join(w.home, 'sessions', s.hsid.slice(18).toLowerCase(), 'policy.json'), 'utf8'));
     expect(pol.permissions.deny.length).toBeGreaterThan(5);
+  });
+  it('T-2026-10-18-019: session.send through a REAL KernelLog — session.inject carries the byte count, never the text', async () => {
+    const lh = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'gnomon-klog-'));
+    const klog = KernelLog.open({ home: lh, kernelPrincipal: 'p:abcdefgh/kernel', signer: SoftwareEd25519Signer.generate() });
+    live.push(async () => {
+      await klog.close();
+      fs.rmSync(lh, { recursive: true, force: true });
+    });
+    const r = rig({ realLog: klog });
+    const s = await open(r.sup);
+    const text = 'héllo SECRET-PLAINTEXT';
+    await r.sup.send(HUMAN, { hsid: s.hsid, text });
+    expect(r.kinds('session.inject')[0]!.payload.bytes).toBe(Buffer.byteLength(text, 'utf8'));
+    expect(fs.readdirSync(lh, { recursive: true }).map(String).some((f) => fs.statSync(path.join(lh, f)).isFile() && fs.readFileSync(path.join(lh, f), 'utf8').includes('SECRET-PLAINTEXT'))).toBe(false);
+  });
+  it('round 3 (Aegis H1, node half): a CLAUDE session profile denies writes to the local runner node, its prefix and the source dir', async () => {
+    const extra = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'gnomon-rt-'));
+    live.push(async () => fs.rmSync(extra, { recursive: true, force: true }));
+    const node = path.join(extra, 'nodeinst', 'bin', 'node');
+    fs.mkdirSync(path.dirname(node), { recursive: true });
+    fs.writeFileSync(node, 'x');
+    const dir = path.join(extra, 'src-rt');
+    fs.mkdirSync(dir);
+    const r = rig({ local: { endpoints: [], runner: { node, nodeSha256: '0'.repeat(64), dir, treeSha256: '0'.repeat(64), entry: 'cli.js' } } });
+    const s = await open(r.sup);
+    const pol = fs.readFileSync(path.join(w.home, 'sessions', fs.readdirSync(path.join(w.home, 'sessions'))[0]!, 'policy.json'), 'utf8');
+    for (const p of [node, path.join(extra, 'nodeinst'), dir]) expect(pol, p).toContain(p);
+    expect(s.backend).toBe('claude-code');
   });
   it('S2 + usage: turn.event before usage; tokens charged once against the spawn permit; ask-user card raised', async () => {
     const r = rig();

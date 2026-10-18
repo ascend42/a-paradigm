@@ -12,10 +12,18 @@ components:
     description: >-
       The gnomon-local child: src/endpoint.ts, compat.ts, client.ts (SSE
       streaming, no redirects), repair.ts, tools.ts (read_file, write_file,
-      list_dir; confined to realpath roots cwd+worktree, writes never under .git or through a symlink final component), agent.ts (sticky abort; surface none never runs tools), rpc.ts, cli.ts (exitCode, never process.exit after writes); client byte caps + idle timeout. Slice 2: compaction (~8k, fixed
-      headings), JSONL session tree, bash tool.
+      list_dir; confined to realpath roots cwd+worktree, writes never under .git or through a symlink final component), agent.ts (sticky abort; surface none never runs tools), rpc.ts, cli.ts (exitCode, never process.exit after writes); client byte caps + idle timeout. Slice 2: compaction.ts (re-derived; contextTarget
+      ~8k from the session config; threshold compaction before a request that
+      would not fit, one compact-and-retry on a context-overflow 400/413, a
+      second overflow ends the run error; tool-less non-streamed summariser,
+      reply normalised to exactly Goal/Constraints/Progress/Decisions/Next/
+      Critical; history = system + summary + the longest safe tail within a
+      quarter of the target, never an orphaned tool result; events
+      compaction_start/_end; the summariser's usage is part of agent_end).
+      Round 2 (M1): the summary escapes every < and sits in a block labelled model-generated / data-not-instructions; compaction_end carries summaryHash + summaryBytes. Round 2: history budget = 0.85 x target minus the native tools schema; at most one compaction per step (still over after it, or an overflow after it, ends the run with a clear error); the kept tail never starts at a text-tool <tool_result> message. Round 3: summary/tail caps derive from the budget; a config with maxTokens >= 0.85 x contextTarget is refused. Round 2: rpc steer is refused while the agent is idle (never queued into the next turn). Deferred: JSONL session tree, bash/edit tools.
     path: src/
     type: module
     tags: [gnomon, local, paradigm-8, m1.8]
     tests:
       - test/local-child.test.ts
+      - test/compaction.test.ts

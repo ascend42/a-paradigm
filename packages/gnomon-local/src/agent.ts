@@ -12,14 +12,28 @@
  * Every call's arguments go through the repair ladder; a repaired call emits
  * `model_repair` (the kernel logs model.repair{argument}).
  *
- * DEFERRED (slice 2): compaction re-derived at the ~8k working target with
- * the fixed headings Goal/Constraints/Progress/Decisions/Next/Critical and
- * one compact-and-retry; the JSONL session tree.
+ * Compaction (slice 2, compaction.ts): before a request whose history plus
+ * reply budget exceeds `contextTarget` (~8k) the history is compacted under
+ * the fixed headings; a request the endpoint refuses as too long is
+ * compacted and retried ONCE. Each emits `compaction_start{reason,
+ * tokensBefore}` / `compaction_end{reason, tokensBefore, tokensAfter, kept,
+ * usage}` (or `{error}`); the summariser's usage is part of agent_end's
+ * total (the kernel charges it as the run's remainder — tracked, never lost).
+ *
+ * DEFERRED: the JSONL session tree (where it lives is open: the session
+ * profile denies writes under the Gnomon home, so the kernel would have to
+ * read it from the child's stdout or a worktree path).
  */
+import { createHash } from 'node:crypto';
 import { buildRequest, type ChatMessage, type CompatProfile, type ToolSurface } from './compat.js';
-import { complete } from './client.js';
+import { complete, type Completion } from './client.js';
+import { compactedHistory, DEFAULT_CONTEXT_TARGET, estimateTokens, isContextOverflow, normaliseSummary, summaryMessages } from './compaction.js';
 import { parseTextToolCalls, repairArguments, textToolPrompt } from './repair.js';
 import { runTool, TOOLS } from './tools.js';
+import { surfaceTools } from './compat.js';
+
+/** round 2: the history budget is 85 % of the target minus the native tools schema the request also carries */
+export const TARGET_HEADROOM = 0.85;
 
 export type Emit = (ev: Record<string, unknown>) => void;
 
@@ -39,6 +53,8 @@ export interface AgentOptions {
   maxTokens: number;
   systemPrompt?: string;
   forbiddenPorts?: readonly number[];
+  /** the working context target in tokens (default 8192, §13.1 ~8k) */
+  contextTarget?: number;
   emit: Emit;
 }
 
@@ -52,6 +68,7 @@ export class Agent {
   /** sticky until the run ends: an abort during tools or steering is never lost */
   #aborted = false;
   #turn = 0;
+  #compactions = 0;
 
   constructor(o: AgentOptions) {
     this.#o = o;
@@ -64,7 +81,50 @@ export class Agent {
   }
 
   state(): Record<string, unknown> {
-    return { running: this.#running, turns: this.#turn, messages: this.#messages.length, queued: { steer: this.#steer.length, followUp: this.#follow.length } };
+    return { running: this.#running, turns: this.#turn, messages: this.#messages.length, compactions: this.#compactions, contextTarget: this.#target, queued: { steer: this.#steer.length, followUp: this.#follow.length } };
+  }
+
+  get #target(): number {
+    return this.#o.contextTarget ?? DEFAULT_CONTEXT_TARGET;
+  }
+
+  /** tokens the history + reply may use: target × 0.85 minus the tools schema sent natively */
+  get #budget(): number {
+    const schema = this.#o.nativeTools ? Math.ceil(JSON.stringify(surfaceTools(TOOLS, this.#o.surface)).length / 4) : 0;
+    return Math.floor(this.#target * TARGET_HEADROOM) - schema;
+  }
+
+  #request(): Promise<Completion> {
+    this.#abort = new AbortController();
+    const body = buildRequest(this.#o.profile, { model: this.#o.model, messages: this.#messages, tools: TOOLS, nativeTools: this.#o.nativeTools, surface: this.#o.surface, maxTokens: this.#o.maxTokens, stream: true });
+    return complete(this.#o.base, body, { signal: this.#abort.signal, onDelta: (delta) => this.#o.emit({ type: 'message_update', delta }), ...(this.#o.forbiddenPorts ? { forbiddenPorts: this.#o.forbiddenPorts } : {}) });
+  }
+
+  /** One summarising completion, then the history is replaced by system + summary + a safe tail (compaction.ts). */
+  async #compact(reason: 'threshold' | 'overflow', total: { input: number; output: number }): Promise<void> {
+    const tokensBefore = estimateTokens(this.#messages);
+    this.#o.emit({ type: 'compaction_start', reason, tokensBefore });
+    this.#abort = new AbortController();
+    // round 3: the caps derive from the budget (0.85 × target minus the tools schema), not the raw target
+    const budget = Math.max(this.#budget, 256);
+    const body = buildRequest(this.#o.profile, { model: this.#o.model, messages: summaryMessages(this.#messages, budget), tools: [], nativeTools: false, surface: 'none', maxTokens: Math.min(1024, Math.max(256, Math.floor(budget / 8))), stream: false });
+    let c: Completion;
+    try {
+      c = await complete(this.#o.base, body, { signal: this.#abort.signal, ...(this.#o.forbiddenPorts ? { forbiddenPorts: this.#o.forbiddenPorts } : {}) });
+    } catch (err) {
+      this.#o.emit({ type: 'compaction_end', reason, tokensBefore, error: (err as Error).message.slice(0, 500) });
+      throw err;
+    }
+    this.#abort = null;
+    if (c.usage) {
+      total.input += c.usage.input;
+      total.output += c.usage.output;
+    }
+    const summary = normaliseSummary(c.content, budget);
+    const { messages, kept } = compactedHistory(this.#messages, summary, Math.floor(budget / 4));
+    this.#messages.splice(0, this.#messages.length, ...messages);
+    this.#compactions++;
+    this.#o.emit({ type: 'compaction_end', reason, tokensBefore, tokensAfter: estimateTokens(this.#messages), kept, usage: c.usage, summaryHash: `sha256:${createHash('sha256').update(summary).digest('hex')}`, summaryBytes: Buffer.byteLength(summary, 'utf8') });
   }
 
   steer(text: string): void {
@@ -102,9 +162,24 @@ export class Agent {
         }
         const turn = ++this.#turn;
         this.#o.emit({ type: 'turn_start', turn });
-        this.#abort = new AbortController();
-        const body = buildRequest(this.#o.profile, { model: this.#o.model, messages: this.#messages, tools: TOOLS, nativeTools: this.#o.nativeTools, surface: this.#o.surface, maxTokens: this.#o.maxTokens, stream: true });
-        const c = await complete(this.#o.base, body, { signal: this.#abort.signal, onDelta: (delta) => this.#o.emit({ type: 'message_update', delta }), ...(this.#o.forbiddenPorts ? { forbiddenPorts: this.#o.forbiddenPorts } : {}) });
+        // ~8k working target: compact before a request that would not fit (there must be history to compact)
+        // round 2: at most ONE compaction per step; still over the budget after it ⇒ a clear error, never a loop
+        let compacted = false;
+        if (this.#messages.length > 2 && estimateTokens(this.#messages) + this.#o.maxTokens > this.#budget) {
+          await this.#compact('threshold', total);
+          compacted = true;
+          if (estimateTokens(this.#messages) + this.#o.maxTokens > this.#budget) throw new Error(`history is still over the context budget after compaction (${estimateTokens(this.#messages)} + ${this.#o.maxTokens} > ${this.#budget} tokens)`);
+        }
+        let c: Completion;
+        try {
+          c = await this.#request();
+        } catch (err) {
+          // one compact-and-retry when the endpoint refuses the prompt as too long (not if this step already compacted)
+          if (this.#aborted || !isContextOverflow(err)) throw err;
+          if (compacted) throw new Error(`the endpoint still refuses the prompt as too long after this step's compaction: ${(err as Error).message.slice(0, 200)}`);
+          await this.#compact('overflow', total);
+          c = await this.#request();
+        }
         this.#abort = null;
         const textCalls = !this.#o.nativeTools && this.#o.surface !== 'none' ? parseTextToolCalls(c.content) : { calls: [], rest: c.content };
         // surface 'none' ⇒ never execute a tool call, whatever the model emits (Aegis L4)

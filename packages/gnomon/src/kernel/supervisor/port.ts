@@ -56,13 +56,14 @@ export function createSessionPort(sup: SessionSupervisor): SessionPort {
       });
     },
     send: async (ctx, params) => {
-      const p = objectParams(params, ['hsid', 'content', 'permitId'], 'session.send');
+      const p = objectParams(params, ['hsid', 'content', 'permitId', 'steer'], 'session.send');
+      if (p.steer !== undefined && typeof p.steer !== 'boolean') throw bad('steer must be a boolean');
       if (typeof p.hsid !== 'string') throw bad('hsid is required');
       if (!Array.isArray(p.content) || p.content.length === 0) throw bad('content[] is required');
       const texts = p.content.map((c) => (c && typeof c === 'object' && typeof (c as { text?: unknown }).text === 'string' ? (c as { text: string }).text : null));
       if (texts.some((t) => t === null)) throw bad('slice 1 serves text content parts only ({text})');
       if (p.permitId !== undefined && typeof p.permitId !== 'string') throw bad('permitId must be a string');
-      return sup.send(ctx.principal, { hsid: p.hsid, text: texts.join('\n'), ...(typeof p.permitId === 'string' ? { permitId: p.permitId } : {}) });
+      return sup.send(ctx.principal, { hsid: p.hsid, text: texts.join('\n'), ...(typeof p.permitId === 'string' ? { permitId: p.permitId } : {}), ...(p.steer === true ? { steer: true } : {}) });
     },
     stop: async (ctx, params) => {
       const p = objectParams(params, ['hsid', 'interrupt'], 'session.stop');

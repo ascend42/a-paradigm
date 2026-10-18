@@ -10,7 +10,8 @@
  *                 and agent events: model_capabilities, agent_start,
  *                 turn_start, message_update{delta}, message_end{message,
  *                 usage}, model_repair, tool_execution_start/_end, turn_end,
- *                 agent_end{stopReason, usage}; `fatal{error}` before exit.
+ *                 compaction_start/_end (slice 2), agent_end{stopReason,
+ *                 usage}; `fatal{error}` before exit.
  *
  * The session config is the kernel-written `local.yaml` (the JSON subset of
  * YAML: every JSON document is YAML 1.2), validated strictly; an endpoint
@@ -33,6 +34,8 @@ export interface LocalSessionConfig {
   surface: ToolSurface;
   maxSteps: number;
   maxTokens: number;
+  /** the working context target (tokens) compaction keeps the history under (§13.1 ~8k; default 8192) */
+  contextTarget: number;
   forbiddenPorts: number[];
   systemPrompt?: string;
 }
@@ -70,6 +73,10 @@ export function parseSessionConfig(text: string): LocalSessionConfig {
   if (rawRoots.some((r) => typeof r !== 'string' || !r.startsWith('/') && !/^[A-Za-z]:[\\/]/.test(r))) throw new ConfigError('roots must be absolute paths');
   const roots = (rawRoots as string[]).map(real);
   const int = (x: unknown, d: number, max: number): number => (Number.isInteger(x) && (x as number) > 0 ? Math.min(x as number, max) : d);
+  const maxTokens = int(c.maxTokens, 1024, 32768);
+  const contextTarget = Math.max(int(c.contextTarget, 8192, 131072), 1024);
+  // round 3 (reviewer): the reply budget must leave room for history under the 0.85 headroom
+  if (maxTokens >= 0.85 * contextTarget) throw new ConfigError(`maxTokens ${maxTokens} leaves no room under 0.85 x contextTarget ${contextTarget}`);
   return {
     schemaVersion: 'gnomon-local-session:v1',
     session: c.session,
@@ -79,7 +86,8 @@ export function parseSessionConfig(text: string): LocalSessionConfig {
     capabilities: { tools: caps.tools, nCtx: typeof caps.nCtx === 'number' ? caps.nCtx : null },
     surface,
     maxSteps: int(c.maxSteps, 16, 128),
-    maxTokens: int(c.maxTokens, 1024, 32768),
+    maxTokens,
+    contextTarget,
     forbiddenPorts,
     ...(typeof c.systemPrompt === 'string' ? { systemPrompt: c.systemPrompt } : {}),
   };
@@ -97,11 +105,12 @@ export function rpcSession(cfg: LocalSessionConfig, emit: Emit): { onLine: (line
     roots: cfg.roots,
     maxSteps: cfg.maxSteps,
     maxTokens: cfg.maxTokens,
+    contextTarget: cfg.contextTarget,
     forbiddenPorts: cfg.forbiddenPorts,
     ...(cfg.systemPrompt !== undefined ? { systemPrompt: cfg.systemPrompt } : {}),
     emit,
   });
-  emit({ type: 'model_capabilities', backend: 'local', model: cfg.endpoint.model, compat: cfg.endpoint.compat, tools: cfg.capabilities.tools, ctx: cfg.capabilities.nCtx, surface: cfg.surface, textTools: !cfg.capabilities.tools && cfg.surface !== 'none' });
+  emit({ type: 'model_capabilities', backend: 'local', model: cfg.endpoint.model, compat: cfg.endpoint.compat, tools: cfg.capabilities.tools, ctx: cfg.capabilities.nCtx, surface: cfg.surface, textTools: !cfg.capabilities.tools && cfg.surface !== 'none', contextTarget: cfg.contextTarget });
   const onLine = (line: string): void => {
     let cmd: Record<string, unknown>;
     try {
@@ -124,6 +133,8 @@ export function rpcSession(cfg: LocalSessionConfig, emit: Emit): { onLine: (line
         return;
       case 'steer':
         if (!msg) return no('message is required');
+        // round 2 (steer race): an idle agent refuses a steer — queued, it would leak into the NEXT turn
+        if (!agent.running) return no('agent is idle (nothing to steer)');
         agent.steer(msg);
         return ok();
       case 'follow_up':

@@ -1,0 +1,30 @@
+id: L-2026-10-18-builder-170655-001
+type: milestone
+timestamp: '2026-10-18T17:06:55.477Z'
+author: builder
+title: 'M1.8 slice 2 round 3 committed (42e7fb92, 20ecee74): node half of H1 closed'
+summary: Every session profile (Claude and local) denies writes to the local runner's node, its install prefix and the pinned source dir, fed from the loaded local config; node is re-hashed synchronously right before spawn; staging rename races tolerated iff the dest verifies; summaryHash survives the line cap; caps derive from the budget; maxTokens >= 0.85 x contextTarget refused. gnomon 964 pass, gnomon-local 89, contracts 316, mod-sdk 3, tsc clean
+symbols_touched:
+  - '#local-runner'
+  - '#gnomon-local'
+  - '#supervisor'
+files_modified:
+  - packages/gnomon/src/kernel/manifest/policy.ts
+  - packages/gnomon/src/kernel/local/runner-pin.ts
+  - packages/gnomon/src/kernel/supervisor/local-session.ts
+  - packages/gnomon/src/kernel/supervisor/supervisor.ts
+  - packages/gnomon-local/src/agent.ts
+  - packages/gnomon-local/src/rpc.ts
+commit: 20ecee74
+learnings:
+  - 'A per-session deny is not enough: already-running and Claude sessions must deny the runner install too'
+  - so the deny lives in buildSessionPolicy fed by the config
+  - A prefix at or above the user home narrows to node's own dir so a ~/bin/node never write-denies the whole home
+  - 'Residual: node''s dylibs are not hashed; a single-file SEA runner is the long-term fix'
+tags:
+  - aegis-h1
+body: No id moved; no new kind or symbol.
+git_context:
+  ref: 20ecee74ff1c1fa8096c28cb19b9aaea78d5fb2f
+  branch: gnomon/m18-slice2
+  dirty: false

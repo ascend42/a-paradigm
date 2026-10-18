@@ -8,7 +8,8 @@
  *        answered from `tools` (a tool call iff tools); every other request
  *        consumes the next scripted reply (streamed as SSE when asked:
  *        content in 3 deltas, tool-call arguments split across 2 chunks,
- *        then a usage chunk and [DONE]); an exhausted script answers "done".
+ *        then a usage chunk and [DONE]); a reply with `httpStatus` answers
+ *        that status and an {error} body; an exhausted script answers "done".
  */
 import http from 'node:http';
 import type { AddressInfo } from 'node:net';
@@ -18,6 +19,11 @@ export interface FakeReply {
   toolCalls?: Array<{ name: string; arguments: string }>;
   /** stream: after the content, a mid-stream {"error": …} chunk */
   error?: string;
+  /** answer with this HTTP status and {error:{message: httpError}} instead (e.g. 400 context overflow) */
+  httpStatus?: number;
+  httpError?: string;
+  /** answer after this many ms (a turn that is still in flight) */
+  delayMs?: number;
 }
 
 export interface FakeServer {
@@ -48,6 +54,13 @@ export async function fakeOpenAI(o: { tools?: boolean; nCtx?: number; model?: st
       requests.push(body);
       const isProbe = Array.isArray(body.tools) && (body.tools as Array<{ function?: { name?: string } }>).some((t) => t.function?.name === 'get_time');
       const reply: FakeReply = isProbe ? (o.tools ? { toolCalls: [{ name: 'get_time', arguments: '{"tz":"UTC"}' }] } : { content: 'It is noon.' }) : (script.shift() ?? { content: 'done' });
+      if (reply.delayMs) return void setTimeout(() => respond(res, body, reply), reply.delayMs);
+      respond(res, body, reply);
+    });
+  });
+  const respond = (res: http.ServerResponse, body: Record<string, unknown>, reply: FakeReply): void => {
+    {
+      if (reply.httpStatus) return json(res, reply.httpStatus, { error: { code: reply.httpStatus, message: reply.httpError ?? 'error' } });
       const calls = (reply.toolCalls ?? []).map((t, i) => ({ id: `call_${requests.length}_${i}`, type: 'function', function: { name: t.name, arguments: t.arguments } }));
       const usage = { prompt_tokens: 100, completion_tokens: 20, total_tokens: 120 };
       if (!body.stream) return json(res, 200, { choices: [{ message: { role: 'assistant', content: reply.content ?? '', ...(calls.length ? { tool_calls: calls } : {}) }, finish_reason: calls.length ? 'tool_calls' : 'stop' }], usage });
@@ -68,8 +81,8 @@ export async function fakeOpenAI(o: { tools?: boolean; nCtx?: number; model?: st
       send({ choices: [{ index: 0, delta: {}, finish_reason: calls.length ? 'tool_calls' : 'stop' }] });
       send({ choices: [], usage });
       res.end('data: [DONE]\n\n');
-    });
-  });
+    }
+  };
   await new Promise<void>((r) => server.listen(0, '127.0.0.1', () => r()));
   const port = (server.address() as AddressInfo).port;
   return { base: `http://127.0.0.1:${port}`, port, requests, close: () => new Promise((r) => server.close(() => r())) };

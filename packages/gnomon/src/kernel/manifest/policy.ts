@@ -104,6 +104,32 @@ export interface SessionPolicyInput {
    * known-location links, its realpath and its versions dir).
    */
   extraDenyWrite?: readonly PolicyPath[];
+  /**
+   * M1.8 slice 2 round 3 (Aegis H1, node half): the root-signed local runner. EVERY session profile — Claude
+   * and local alike — denies writes to its node binary, node's install prefix (bin/ + lib/libnode) and the
+   * pinned runner source dir, so no running session can swap what the next local session execs.
+   */
+  localRunner?: { node: string; dir: string };
+}
+
+/** The write denies for the local runner's node install and source dir (realpath'd; a prefix that is /, the user home or above it narrows to node's own dir). */
+export function localRunnerDenies(r: { node: string; dir: string }, userHome?: string): PolicyPath[] {
+  const node = realpathLoose(r.node);
+  let prefix = path.dirname(path.dirname(node));
+  // Homebrew (Aegis): node loads sibling kegs' dylibs via <prefix>/opt/*/lib (libuv, llhttp, ada-url, simdjson, …),
+  // so a Cellar node denies the WHOLE Homebrew prefix — the parent of `Cellar` (/opt/homebrew, /usr/local,
+  // /home/linuxbrew/.linuxbrew) — covering Cellar/, opt/ and lib/. Consequence: sessions cannot brew install/upgrade.
+  const parts = node.split(path.sep);
+  const cellar = parts.lastIndexOf('Cellar');
+  if (cellar > 0) prefix = parts.slice(0, cellar).join(path.sep) || path.sep;
+  const uh = userHome ? realpathLoose(userHome) : null;
+  const above = (a: string, b: string): boolean => a === b || b.startsWith(a.endsWith(path.sep) ? a : a + path.sep);
+  if (prefix === path.parse(prefix).root || (uh && above(prefix, uh))) prefix = path.dirname(node);
+  return [
+    { path: node, match: 'literal', class: 'binary' },
+    { path: prefix, match: 'subpath', class: 'binary' },
+    { path: realpathLoose(r.dir), match: 'subpath', class: 'binary' },
+  ];
 }
 
 /** Aegis M2: user persistence paths a session may not write (relative to the user's home). */
@@ -174,7 +200,7 @@ export function buildSessionPolicy(inp: SessionPolicyInput): SessionPolicy {
   ];
   const linked = inp.linkedFolders.map((f) => P(f, 'subpath', 'linked-folder'));
   const persistence = inp.userHome ? PERSISTENCE_PATHS.map((x) => P(path.join(inp.userHome!, ...x.rel.split('/')), x.match, 'persistence')) : [];
-  const extra = (inp.extraDenyWrite ?? []).map((x) => ({ ...x }));
+  const extra = [...(inp.extraDenyWrite ?? []), ...(inp.localRunner ? localRunnerDenies(inp.localRunner, inp.userHome) : [])].map((x) => ({ ...x }));
   const gitDirs = roots.flatMap((r) => {
     const d = resolveGitDirs(r);
     return [...new Set([path.join(r, '.git'), ...(d ? [d.gitDir, d.commonDir] : [])])];

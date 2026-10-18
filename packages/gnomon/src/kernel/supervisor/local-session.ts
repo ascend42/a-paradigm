@@ -36,11 +36,18 @@
  *   (follow_up while a turn is in flight). stop(): interrupt = the `abort`
  *   command; otherwise abort + stdin close + the staged group stop.
  *
- * DEFERRED (slice 2, reported): unattended local automations (law 5; the
- * scheduler still refuses), root-signed local.yaml, per-task endpoint choice
- * (slice 1 uses the first configured endpoint), the probe on daemon start
- * (`gnomon probe local`), the claude estimate on the card (null: no per-task
- * estimator yet), session.send{steer}.
+ * SLICE 2: the config is the root-signed local.signed.json (config.ts,
+ *   loaded by the daemon); per-task endpoint choice = the first endpoint in
+ *   config order capable for the task's floor; probeAll() at daemon start
+ *   records model.probe/model.capabilities; the runner's sha256 pin is
+ *   checked at every spawn; roots inside the Gnomon home are refused; the
+ *   child gets contextTarget (min(~8k, n_ctx)) for compaction;
+ *   send{steer:true} with a turn in flight writes the steer line under that
+ *   turn's permit (session.inject + turn.steer), idle it is a normal send.
+ * DEFERRED (reported): unattended local automations (law 5; the scheduler
+ * still refuses), the claude estimate on the card (null: no per-task
+ * estimator yet), the darwin sandboxed e2e rig (G-LCL-06, G-LAW-01c with 6
+ * children), `gnomon probe local` as a CLI verb.
  */
 import { createHash } from 'node:crypto';
 import { spawn, type ChildProcess } from 'node:child_process';
@@ -60,8 +67,10 @@ import { managedFiles } from '../runner/preflight.js';
 import { claudeCodePlatform } from '../../platform/claude-code.js';
 import type { DarwinSessionExtras } from '../../platform/darwin/session-sbpl.js';
 import { LineSplitter } from '../../adapters/claude-code/adapter.js';
-import { abortLine, buildLocalArgv, followUpLine, LocalUsageMeter, parseLocalLine, promptLine } from '../../adapters/local/runner.js';
-import { assertNotClaude, DEFAULT_CTX_FLOOR, validateLocalEndpoints, type LocalLaneConfig } from '../local/config.js';
+import { abortLine, buildLocalArgv, followUpLine, LocalUsageMeter, parseLocalLine, promptLine, steerLine } from '../../adapters/local/runner.js';
+import { prepareRunner, verifyNode } from '../local/runner-pin.js';
+import { assertNotClaude, DEFAULT_CONTEXT_TARGET, DEFAULT_CTX_FLOOR, LOCAL_COMPAT_NAMES, validateLocalEndpoints, type LocalLaneConfig } from '../local/config.js';
+import { classifyEndpoint } from '../local/endpoint.js';
 import { probeLocalEndpoint, type LocalCapabilities, type ProbeFetch } from '../local/probe.js';
 import { capability, routeModel, type DeclaredModel } from '../local/routing.js';
 
@@ -177,6 +186,22 @@ export class LocalLane {
   }
 
   /**
+   * The daemon-start probe (§13.2 "records model.probe + model.capabilities for each configured endpoint"): every
+   * endpoint that passes the loopback/LAN rule is probed once (cached for the next open); a refused one is skipped
+   * here and refused at open (G-SUB-06). Never throws.
+   */
+  async probeAll(): Promise<Array<{ endpoint: string; ok: boolean }>> {
+    const out: Array<{ endpoint: string; ok: boolean }> = [];
+    for (const ep of this.#o.config?.endpoints ?? []) {
+      const v = classifyEndpoint(ep.base, this.#forbiddenPorts());
+      if (!v.ok || !LOCAL_COMPAT_NAMES.includes(ep.compat)) continue;
+      const caps = await this.#probe({ id: ep.id, base: v.base, model: ep.model }).catch(() => null);
+      out.push({ endpoint: ep.id, ok: caps?.ok === true });
+    }
+    return out;
+  }
+
+  /**
    * Route and (when local) spawn. Returns null when the declared model is `any` and Claude was chosen
    * (the supervisor's Claude path runs next). `openClaude` is the fallback-cloud card's effect.
    */
@@ -192,9 +217,22 @@ export class LocalLane {
       if (err instanceof RefusedError) await this.#o.log('session.refused', { hsid: null, code: 'local_endpoint_refused', refusal: err.refusal.code, ...(err.refusal.data ?? {}) }).catch(() => undefined);
       throw err;
     }
-    const first = eps[0];
-    const caps = first ? await this.#probe({ id: first.ep.id, base: first.v.base, model: first.ep.model }) : null;
-    const cap = capability(caps, cfg.ctxFloor ?? DEFAULT_CTX_FLOOR, first?.ep.textTools === true);
+    // per-task endpoint choice (slice 2): the FIRST endpoint, in root-signed config order, that is capable for this
+    // task's floor; none capable ⇒ the first endpoint's reason (no endpoint at all ⇒ no-endpoint)
+    const floor = cfg.ctxFloor ?? DEFAULT_CTX_FLOOR;
+    let first: (typeof eps)[number] | undefined;
+    let caps: LocalCapabilities | null = null;
+    let cap: ReturnType<typeof capability> = capability(null, floor, false);
+    for (const e of eps) {
+      const c = await this.#probe({ id: e.ep.id, base: e.v.base, model: e.ep.model });
+      const k = capability(c, floor, e.ep.textTools === true);
+      if (!first || k.capable) {
+        first = e;
+        caps = c;
+        cap = k;
+      }
+      if (k.capable) break;
+    }
     let route = routeModel(declared, cap, cfg.runner !== undefined);
     // an explicit backend pins the route: backend:'local' never falls through to Claude (reviewer, round 2)
     if (route.chosen === 'claude' && req.backend === 'local') route = { chosen: 'fallback', reason: route.reason };
@@ -239,37 +277,61 @@ export class LocalLane {
   }
 
   async #spawn(req: LocalOpenRequest, declared: DeclaredModel, reason: string, tools: 'native' | 'text', ep: LocalLaneConfig['endpoints'][number], base: string, caps: LocalCapabilities, cfg: LocalLaneConfig): Promise<{ hsid: string; principalId: string; backend: 'local'; state: string; model: string }> {
-    const runner = cfg.runner!;
-    assertNotClaude(runner); // before any row: claude never runs under a local permit
+    const pin = cfg.runner!;
+    // before any row: claude never runs under a local permit (source paths), then the MANDATORY pin (round 2, Aegis H1):
+    // the tree is copied into <home>/runners/<treeSha256>/ and the COPY is hashed; node is verified; we exec the copy
+    assertNotClaude({ command: pin.node, args: [path.join(pin.dir, ...pin.entry.split('/'))] });
     if (typeof req.cwd !== 'string' || !path.isAbsolute(req.cwd) || !fs.existsSync(req.cwd) || !fs.statSync(req.cwd).isDirectory()) {
       throw refused('BAD_REQUEST', 'cwd must be an existing absolute directory', { reason: 'bad-params' });
     }
     if (req.worktree !== undefined && (typeof req.worktree !== 'string' || !path.isAbsolute(req.worktree) || !fs.existsSync(req.worktree) || !fs.statSync(req.worktree).isDirectory())) {
       throw refused('BAD_REQUEST', 'worktree must be an existing absolute directory', { reason: 'bad-params' });
     }
+    // round 2 (M3): the roots are resolved ONCE (native realpath, fail closed) and only the resolved paths flow into the
+    // policy, the child's config, the darwin extras and the spawn cwd; they are re-checked right before spawn
+    const realRoot = (p: string): string => {
+      try {
+        return fs.realpathSync.native(p); // native: 8.3 short names expand on Windows
+      } catch {
+        throw refused('BAD_REQUEST', 'a session root could not be resolved', { reason: 'bad-params' });
+      }
+    };
+    const cwdReal = realRoot(req.cwd);
+    const wtReal = req.worktree !== undefined ? realRoot(req.worktree) : undefined;
+    const rootsReal = [cwdReal, ...(wtReal ? [wtReal] : [])];
     // round 3 (R2): a tool root is never /, the user's home, or the Gnomon home or any ancestor of it
     {
       const rp = (p: string): string => {
         try {
-          return fs.realpathSync(p);
+          return fs.realpathSync.native(p);
         } catch {
-          return path.resolve(p);
+          return path.resolve(p); // the homes need not exist yet; they are never roots
         }
       };
       const gh = rp(this.#o.home);
       const uh = rp(this.#o.userHome ?? os.homedir());
-      for (const r of [req.cwd, ...(req.worktree ? [req.worktree] : [])].map(rp)) {
-        if (r === path.parse(r).root || r === uh || gh === r || gh.startsWith(r.endsWith(path.sep) ? r : r + path.sep)) {
-          throw refused('BAD_REQUEST', 'a session root may not be /, the user home, or the Gnomon home or an ancestor of it', { reason: 'bad-params' });
+      for (const r of rootsReal) {
+        const under = (a: string, b: string): boolean => a.startsWith(b.endsWith(path.sep) ? b : b + path.sep);
+        // slice 2: a root INSIDE the Gnomon home (keys/, sessions/) is refused too — the tools would otherwise confine to it
+        if (r === path.parse(r).root || r === uh || gh === r || under(gh, r) || under(r, gh)) {
+          throw refused('BAD_REQUEST', 'a session root may not be /, the user home, or the Gnomon home, an ancestor of it or a path inside it', { reason: 'bad-params' });
         }
       }
     }
+    let runner: ReturnType<typeof prepareRunner>;
+    try {
+      runner = prepareRunner(this.#o.home, pin);
+    } catch (err) {
+      if (err instanceof RefusedError) throw err;
+      throw refused('UNSUPPORTED', `the pinned runner could not be staged: ${(err as Error).message.slice(0, 200)}`, { session: 'spawn_failed' });
+    }
+    assertNotClaude({ command: runner.command, args: [runner.entry] });
     const hsid = mintHsid();
     const principalId = `${this.#o.kernelPrincipal.replace(/\/kernel$/, '')}/s-${hsidShort(hsid)}`;
     const model = caps.model ?? ep.model;
-    const repo = repoIdOf(req.cwd);
+    const repo = repoIdOf(cwdReal);
     const userHome = this.#o.userHome ?? os.homedir();
-    await this.#o.log('session.open', { hsid, principalId, by: req.principal, cwd: req.cwd, worktree: req.worktree ?? null, backend: 'local', model, declaredModel: declared, endpoint: ep.id, attended: true }, { session: hsid });
+    await this.#o.log('session.open', { hsid, principalId, by: req.principal, cwd: req.cwd, worktree: req.worktree ?? null, roots: rootsReal, backend: 'local', model, declaredModel: declared, endpoint: ep.id, attended: true }, { session: hsid });
     await this.#o.log('session.routed', { hsid, declared, chosen: 'local', reason, tools }, { session: hsid });
     const dir = path.join(this.#o.home, 'sessions', hsidShort(hsid));
     const { env, envKeys } = buildSessionEnv({ from: { ...(this.#o.env?.() ?? process.env), HOME: userHome }, hsid, sock: this.#o.sock, sessionKeyPath: path.join(dir, 'session.key') });
@@ -285,8 +347,8 @@ export class LocalLane {
       // the SAME session profile as claude -p (§15.5): keys/warpline/link/head unreadable, settings layers + linked mods unwritable
       const policy: SessionPolicy = buildSessionPolicy({
         home: this.#o.home,
-        cwd: req.cwd,
-        ...(req.worktree ? { worktree: req.worktree } : {}),
+        cwd: cwdReal,
+        ...(wtReal ? { worktree: wtReal } : {}),
         userClaudeDir,
         userClaudeJson: defaultClaudeJson(userClaudeDir),
         userHome,
@@ -294,28 +356,37 @@ export class LocalLane {
         linkedFolders: this.#o.linkedFolders?.() ?? [],
         endpointPort: this.#o.endpointPort?.() ?? null,
         extraDenyWrite: [],
+        localRunner: { node: pin.node, dir: pin.dir },
       });
       fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
       const configPath = path.join(dir, 'local.yaml');
       const sessionCfg = {
         schemaVersion: 'gnomon-local-session:v1',
         session: hsid,
-        cwd: req.worktree ?? req.cwd,
-        roots: [req.cwd, ...(req.worktree ? [req.worktree] : [])],
+        cwd: wtReal ?? cwdReal,
+        roots: rootsReal,
         endpoint: { base, model, compat: ep.compat },
         capabilities: { tools: tools === 'native', nCtx: caps.nCtx },
         surface: ep.surface ?? 'compact',
         maxSteps: cfg.maxSteps ?? 16,
         maxTokens: cfg.maxTokens ?? 1024,
+        // the compaction working target: ~8k, never above what the endpoint holds
+        contextTarget: Math.min(cfg.contextTarget ?? DEFAULT_CONTEXT_TARGET, caps.nCtx ?? DEFAULT_CONTEXT_TARGET),
         forbiddenPorts: this.#forbiddenPorts(),
         ...(req.systemPrompt !== undefined ? { systemPrompt: req.systemPrompt } : {}),
       };
       fs.writeFileSync(configPath, `${JSON.stringify(sessionCfg, null, 2)}\n`, { mode: 0o600 });
-      const extras: DarwinSessionExtras = { uid: process.getuid?.() ?? 0, tmpdir: os.tmpdir(), home: userHome, roots: [req.cwd, ...(req.worktree ? [req.worktree] : [])] };
-      const launch: SessionLaunchInput = { policy, binaryReal: runner.command, argv: [...(runner.args ?? []), ...buildLocalArgv({ configPath, hsid })], extras };
+      const extras: DarwinSessionExtras = { uid: process.getuid?.() ?? 0, tmpdir: os.tmpdir(), home: userHome, roots: rootsReal };
+      const launch: SessionLaunchInput = { policy, binaryReal: runner.command, argv: [runner.entry, ...buildLocalArgv({ configPath, hsid })], extras };
       const plan = this.#o.launchPlan ? this.#o.launchPlan(launch) : sessionLaunchPlan(launch, this.#platform, this.#o.macosMajor, this.#o.sipEnabled);
       const intent = await this.#o.children.intend({ kind: 'local-runner', hsid });
-      child = spawn(plan.command, plan.args, { cwd: req.worktree ?? req.cwd, env, detached: true, stdio: ['pipe', 'pipe', 'ignore'] });
+      // re-check (M3): a root swapped since the check refuses; nothing between here and spawn awaits
+      if (realRoot(req.cwd) !== cwdReal || (req.worktree !== undefined && realRoot(req.worktree) !== wtReal)) {
+        throw refused('BAD_REQUEST', 'a session root moved between the check and the spawn', { reason: 'bad-params' });
+      }
+      // round 3 (Aegis H1, node half): node is re-hashed HERE, synchronously, with no await before spawn
+      if (verifyNode(pin) !== runner.command) throw refused('PERMIT_REQUIRED', 'the node binary changed between staging and spawn', { why: 'runner-pin-mismatch', part: 'node' });
+      child = spawn(plan.command, plan.args, { cwd: wtReal ?? cwdReal, env, detached: true, stdio: ['pipe', 'pipe', 'ignore'] });
       const c = child;
       const exited = new Promise<void>((r) => c.once('close', () => r()));
       const spawnError = await new Promise<Error | null>((resolve) => {
@@ -329,7 +400,7 @@ export class LocalLane {
       this.#sessions.set(hsid, s);
       live = s;
       this.#wire(s);
-      await this.#o.log('session.sandbox', { hsid, sandbox: plan.sandbox, profile: 'session', profileHash: plan.profileHash, policyHash: policyHash(policy), backend: 'local', runner: runner.command, envKeys, permitId: permit.permitId }, { session: hsid });
+      await this.#o.log('session.sandbox', { hsid, sandbox: plan.sandbox, profile: 'session', profileHash: plan.profileHash, policyHash: policyHash(policy), backend: 'local', runner: runner.command, runnerEntry: runner.entry, runnerTree: pin.treeSha256, envKeys, permitId: permit.permitId }, { session: hsid });
       return { hsid, principalId, backend: 'local', state: s.state, model };
     } catch (err) {
       if (tracked && child) {
@@ -382,7 +453,7 @@ export class LocalLane {
     const ev = parseLocalLine(line);
     const bytes = Buffer.byteLength(line);
     // S2: every driver event is a turn.event before anything acts on it
-    await this.#o.log('turn.event', { hsid: s.hsid, type: ev.type, seq: ++s.seq, backend: 'local', ...(bytes > EVENT_LINE_CAP ? { lineHash: sha(line), bytes } : { line }) }, { session: s.hsid });
+    await this.#o.log('turn.event', { hsid: s.hsid, type: ev.type, seq: ++s.seq, backend: 'local', ...(bytes > EVENT_LINE_CAP ? { lineHash: sha(line), bytes } : { line }), ...(ev.kind === 'compaction' && ev.summaryHash ? { summaryHash: ev.summaryHash, summaryBytes: ev.summaryBytes } : {}) }, { session: s.hsid });
     const usage = async (source: 'turn.usage' | 'turn.result', tokens: number, extra: Record<string, unknown> = {}): Promise<void> => {
       if (source === 'turn.usage' && tokens <= 0) return;
       await this.#o.log(source, { hsid: s.hsid, usage: { tokens }, backend: 'local', ...extra }, { session: s.hsid });
@@ -409,6 +480,11 @@ export class LocalLane {
         if (head) await this.#o.fuse.release(head, s.owner).catch(() => undefined);
         return;
       }
+      case 'response':
+        // round 2 (steer race): the child refuses a steer that reaches it idle (it never queues it into the next
+        // turn); the kernel records the refusal against the session — a steer that did not land
+        if (ev.command === 'steer' && ev.success === false) await this.#o.log('turn.steer', { hsid: s.hsid, phase: 'refused', by: 'child', error: ev.error }, { session: s.hsid });
+        return;
       default:
         return; // responses, tool/turn markers, fatal, unknown and malformed lines: logged above, never acted on
     }
@@ -420,10 +496,25 @@ export class LocalLane {
     return s;
   }
 
-  async send(principal: string, p: { hsid: string; text: string; permitId?: string }): Promise<{ turn: string }> {
+  async send(principal: string, p: { hsid: string; text: string; permitId?: string; steer?: boolean }): Promise<{ turn: string; steered?: boolean }> {
     const s = this.#get(principal, p.hsid);
     if (s.state !== 'running' || s.child.exitCode !== null || s.child.signalCode !== null) throw refused('NOT_FOUND', 'the session is not running', { reason: 'not-found' });
     if (typeof p.text !== 'string' || p.text.length === 0) throw refused('BAD_REQUEST', 'send takes non-empty text', { reason: 'bad-params' });
+    // session.send{steer} (slice 2, §11.5): mid-turn text the child reads at its next step. It joins the IN-FLIGHT
+    // turn, whose permit already pays for it (law 1: no new turn.sent, so no new permit); a permitId with steer is
+    // refused. With no turn in flight there is nothing to steer: it is an ordinary send (a new permitted turn).
+    if (p.steer === true && s.turnPermits.length > 0) {
+      if (p.permitId !== undefined) throw refused('BAD_REQUEST', 'a steer joins the in-flight turn and takes no permit', { reason: 'bad-params' });
+      // round 2 (M2): the in-flight turn's permit must still be live — an expired one pays for nothing
+      const head = this.#o.fuse.permit(s.turnPermits[0]!);
+      if (!head || Date.parse(head.expiresAt) <= Date.now()) throw refused('PERMIT_REQUIRED', 'the in-flight turn\'s permit is gone or expired; a steer cannot ride it', {});
+      const contentHash = sha(p.text);
+      const turn = turnId(s.hsid, s.turns - s.turnPermits.length + 1);
+      await this.#o.log('session.inject', { hsid: s.hsid, origin: 'client', hash: contentHash, bytes: Buffer.byteLength(p.text, 'utf8') }, { session: s.hsid });
+      await this.#o.log('turn.steer', { hsid: s.hsid, turn, contentHash, permitId: s.turnPermits[0], backend: 'local' }, { session: s.hsid });
+      s.child.stdin?.write(steerLine(p.text));
+      return { turn, steered: true };
+    }
     let permit: PermitV1 | undefined;
     if (p.permitId !== undefined) {
       permit = this.#o.fuse.permit(p.permitId);
@@ -438,7 +529,7 @@ export class LocalLane {
     s.turnPermits.push(permit.permitId);
     const n = ++s.turns;
     const contentHash = sha(p.text);
-    await this.#o.log('session.inject', { hsid: s.hsid, origin: 'client', hash: contentHash, bytes: p.text }, { session: s.hsid });
+    await this.#o.log('session.inject', { hsid: s.hsid, origin: 'client', hash: contentHash, bytes: Buffer.byteLength(p.text, 'utf8') }, { session: s.hsid });
     await this.#o.log('turn.sent', { hsid: s.hsid, turn: turnId(s.hsid, n), permitId: permit.permitId, contentHash, backend: 'local' }, { session: s.hsid });
     s.child.stdin?.write(inFlight ? followUpLine(p.text) : promptLine(p.text));
     return { turn: turnId(s.hsid, n) };

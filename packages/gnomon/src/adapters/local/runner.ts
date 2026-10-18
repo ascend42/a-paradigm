@@ -29,8 +29,9 @@ export type LocalEvent =
   | { kind: 'tool'; type: string; phase: 'start' | 'end'; tool: string | null; isError: boolean | null }
   | { kind: 'turn'; type: string; phase: 'start' | 'end' }
   | { kind: 'start'; type: string }
+  | { kind: 'compaction'; type: string; phase: 'start' | 'end'; reason: string | null; tokensBefore: number | null; tokensAfter: number | null; summaryHash: string | null; summaryBytes: number | null; error: string | null }
   | { kind: 'end'; type: string; tokens: number | null; stopReason: string | null; error: string | null }
-  | { kind: 'response'; type: string; command: string | null; success: boolean | null }
+  | { kind: 'response'; type: string; command: string | null; success: boolean | null; error: string | null }
   | { kind: 'fatal'; type: string; error: string | null }
   | { kind: 'unknown'; type: string }
   | { kind: 'malformed'; type: 'malformed' };
@@ -75,10 +76,14 @@ export function parseLocalLine(line: string): LocalEvent {
       return { kind: 'turn', type, phase: type.endsWith('start') ? 'start' : 'end' };
     case 'agent_start':
       return { kind: 'start', type };
+    case 'compaction_start':
+    case 'compaction_end':
+      // slice 2: logged (turn.event) and never acted on — its usage reaches the meter through agent_end's remainder
+      return { kind: 'compaction', type, phase: type.endsWith('start') ? 'start' : 'end', reason: s(e.reason, 32), tokensBefore: num(e.tokensBefore), tokensAfter: num(e.tokensAfter), summaryHash: typeof e.summaryHash === 'string' && /^sha256:[0-9a-f]{64}$/.test(e.summaryHash) ? e.summaryHash : null, summaryBytes: num(e.summaryBytes), error: s(e.error, 500) };
     case 'agent_end':
       return { kind: 'end', type, tokens: tokensOf(e.usage), stopReason: s(e.stopReason, 32), error: s(e.error, 500) };
     case 'response':
-      return { kind: 'response', type, command: s(e.command, 32), success: b(e.success) };
+      return { kind: 'response', type, command: s(e.command, 32), success: b(e.success), error: s(e.error, 200) };
     case 'fatal':
       return { kind: 'fatal', type, error: s(e.error, 500) };
     default:

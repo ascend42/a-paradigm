@@ -24,6 +24,7 @@ import { BudgetFuse } from '../src/kernel/budget/fuse.js';
 import { SoftwareEd25519Signer } from '../src/kernel/log/signer.js';
 
 const HUMAN = 'p:abcdefgh/founder';
+const FAKE_PIN = { node: process.execPath, nodeSha256: '0'.repeat(64), dir: '/x/gnomon-local/dist', treeSha256: '0'.repeat(64), entry: 'cli.js' };
 let srv: FakeServer | null = null;
 afterEach(async () => {
   await srv?.close();
@@ -130,7 +131,7 @@ describe('§13.2 probe + §13.3 routing (fake endpoint)', () => {
 
   it('G-LCL-02: an incapable endpoint ⇒ a fallback card + MODEL_UNAVAILABLE{cardId}, and no spawn', async () => {
     srv = await fakeOpenAI({ tools: false });
-    const { l, rows, cards } = lane({ endpoints: [{ id: 'llama', base: srv.base, model: 'm', compat: 'llama.cpp' }], runner: { command: process.execPath, args: ['/x/cli.js'] } });
+    const { l, rows, cards } = lane({ endpoints: [{ id: 'llama', base: srv.base, model: 'm', compat: 'llama.cpp' }], runner: FAKE_PIN });
     const e = (await l.open(req('local'), async () => null).catch((x: unknown) => x)) as RefusedError;
     expect(e.refusal.code).toBe('MODEL_UNAVAILABLE');
     expect(e.refusal.data).toMatchObject({ cardId: 'card:01HZZZZZZZZZZZZZZZZZZZZZZ1', why: 'no-tools' });
@@ -205,7 +206,7 @@ describe('G-LAW-01c / G-LCL-04 (P8-D92 meter): local sessions get compute permit
 describe('round 3 (R2): session roots are never /, the user home, or an ancestor of the Gnomon home; worktree validated', () => {
   it('refuses BAD_REQUEST before any permit', async () => {
     srv = await fakeOpenAI({ tools: true });
-    const { l, rows } = lane({ endpoints: [{ id: 'f', base: srv.base, model: 'm', compat: 'llama.cpp' }], runner: { command: process.execPath, args: ['/x/gnomon-local/dist/cli.js'] } });
+    const { l, rows } = lane({ endpoints: [{ id: 'f', base: srv.base, model: 'm', compat: 'llama.cpp' }], runner: FAKE_PIN });
     for (const over of [{ cwd: '/' }, { cwd: os.homedir() }, { cwd: process.cwd(), worktree: 'relative/wt' }, { cwd: process.cwd(), worktree: '/' }]) {
       await expect(l.open({ ...req('local'), ...over }, async () => null), JSON.stringify(over)).rejects.toMatchObject({ refusal: { code: 'BAD_REQUEST' } });
     }
@@ -217,5 +218,6 @@ describe('deferred to slice 2 (manual oracles need a real model)', () => {
   it.todo('slice 2 / MANUAL ORACLE G-LCL-01: a model:local AUTOMATION completes end to end on llama.cpp (llama-server 9890 is installed; no GGUF on disk) with no Claude process started — needs a GGUF and attended scheduler runs (law 5 still refuses unattended)');
   it.todo('slice 2: the fake-endpoint half of G-LCL-01 UNDER the darwin session profile (the unsandboxed spawn path is test/local-lane-spawn.test.ts)');
   it.todo('slice 2: G-LCL-06 — a sandboxed gnomon-local read_file of ~/.gnomon/keys returns isError (session profile)');
-  it.todo('slice 2: root-signed local.yaml, `gnomon probe local`, per-task endpoint choice, compaction at ~8k, session.send{steer}');
+  // slice 2 shipped root-signed local.signed.json, the runner pin, per-task endpoint choice and the daemon-start probe (test/local-config.test.ts), compaction (gnomon-local test/compaction.test.ts) and session.send{steer} (test/local-lane-spawn.test.ts)
+  it.todo('slice 3: `gnomon probe local` as a CLI verb (the daemon-start probe records model.probe/model.capabilities today); the claude estimate on the fallback card; the JSONL session tree; bash / edit tools');
 });
