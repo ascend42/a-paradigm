@@ -1,5 +1,5 @@
 version: '1.0'
-generated: '2026-09-21T00:02:18.445Z'
+generated: '2026-10-18T03:12:57.166Z'
 personas: {}
 chains: {}
 gate_coverage: {}
@@ -110,6 +110,13 @@ uncovered_routes:
   - POST /api/tasks/:id/block
   - POST /api/tasks/:id/unblock
   - POST /api/tasks/sync
+  - GET /api/academy/packs
+  - GET /api/academy/packs/:packId/paths
+  - GET /api/academy/packs/:packId/paths/:id
+  - GET /api/academy/packs/:packId/notes/:id
+  - GET /api/academy/packs/:packId/quizzes/:id
+  - GET /api/academy/packs/:packId/skills
+  - GET /api/academy/search
   - GET /api/memory/review
   - GET /api/memory/sync
   - POST /api/memory/:id/prune
@@ -132,4 +139,9 @@ uncovered_routes:
   - GET /api/classroom/staged
   - GET /api/classroom/certifications
   - GET /api/classroom/refinements
+  - GET /api/brain/overview
+  - GET /api/brain/health
+  - GET /api/brain/suggestions
+  - GET /api/brain/find
+  - POST /api/brain/verdict
   - WS /ws
