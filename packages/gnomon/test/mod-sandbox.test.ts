@@ -40,7 +40,7 @@ describe.skipIf(!floor.ok)('the darwin mod profile, enforced (macOS 15+ and SIP)
     await new Promise<void>((res) => target.listen(0, '127.0.0.1', () => res()));
     const tport = (target.address() as net.AddressInfo).port;
     cleanups.push(async () => target.close());
-    const { h } = host(r, { dial: async () => ({ socket: net.connect({ host: '127.0.0.1', port: tport }), address: '93.184.216.34' }) });
+    const { h } = host(r, { dial: { resolve: async () => '93.184.216.34', connect: () => net.connect({ host: '127.0.0.1', port: tport }) } });
     cleanups.push(() => h.stopAll());
     const s = await h.start('probe');
     expect(s).toMatchObject({ state: 'running', sandbox: 'full' });
@@ -77,6 +77,41 @@ describe.skipIf(!floor.ok)('the darwin mod profile, enforced (macOS 15+ and SIP)
     const stateFile = path.join(r.home, 'mods', 'probe', 'state', 'x.txt');
     expect(await h.callTool('probe', 'probe.read', { op: 'fs.write', path: stateFile })).toMatchObject({ ok: false });
     expect(fs.existsSync(stateFile)).toBe(false);
+  });
+});
+
+describe.skipIf(!floor.ok)('Aegis round 2 F1: the mod-writable dirs cannot steer the host or the next profile', () => {
+  it('a symlink planted in state/ never reaches the host store; the host-only dir is unwritable; a swapped state/ refuses the next start', async () => {
+    const r = rig();
+    cleanups.push(r.cleanup);
+    install(r, writeModFolder(path.join(r.root, 'src', 'probe'), probeManifest()));
+    const outside = path.join(r.root, 'outside.txt');
+    fs.writeFileSync(outside, 'untouched');
+    const { h } = host(r);
+    cleanups.push(() => h.stopAll());
+    expect(await h.start('probe')).toMatchObject({ state: 'running', sandbox: 'full' });
+    const modRoot = path.join(r.home, 'mods', 'probe');
+    const w = (input: Record<string, unknown>) => h.callTool('probe', 'probe.write', input);
+    // the mod may write its own state/ — including symlinks pointing anywhere
+    expect(await w({ op: 'symlink', target: outside, path: path.join(modRoot, 'state', 'state.db') })).toMatchObject({ ok: true });
+    expect(await w({ op: 'symlink', target: outside, path: path.join(modRoot, 'state', 'kv.json') })).toMatchObject({ ok: true });
+    // the host store (sibling state.db) and its tmp names live where the mod cannot write
+    expect(await w({ op: 'fs.write', path: path.join(modRoot, 'state.db') })).toMatchObject({ ok: false });
+    expect(await w({ op: 'symlink', target: outside, path: path.join(modRoot, '.state.0000.tmp') })).toMatchObject({ ok: false });
+    // the mod cannot swap its own state/ dir (no write on the parent)
+    expect(await w({ op: 'rename', from: path.join(modRoot, 'state'), to: path.join(modRoot, 'state.old') })).toMatchObject({ ok: false });
+    expect(await w({ op: 'state.set', value: 7 })).toMatchObject({ ok: true });
+    expect(await w({ op: 'state.get' })).toEqual({ ok: true, v: '7' });
+    expect(fs.readFileSync(outside, 'utf8')).toBe('untouched');
+    expect(fs.lstatSync(path.join(modRoot, 'state.db')).isSymbolicLink()).toBe(false);
+    // an outside actor swaps state/ for a link to a fake $HOME: the next start refuses (never a profile granting the link target)
+    await h.stop('probe');
+    const fakeHome = path.join(r.root, 'fakehome');
+    fs.mkdirSync(fakeHome);
+    fs.rmSync(path.join(modRoot, 'state'), { recursive: true });
+    fs.symlinkSync(fakeHome, path.join(modRoot, 'state'));
+    await expect(h.start('probe')).rejects.toMatchObject({ modCode: 'SANDBOX' });
+    expect(fs.readdirSync(fakeHome)).toEqual([]);
   });
 });
 

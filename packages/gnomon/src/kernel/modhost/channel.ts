@@ -20,6 +20,8 @@ import { ModRefusal } from './refusal.js';
 
 export const MOD_FRAME_MAX_BYTES = 1024 * 1024;
 export const STDERR_TAIL_BYTES = 8 * 1024;
+/** mod → host requests in flight at once; beyond this the mod is answered BAD_REQUEST (reviewer #3). */
+export const MAX_MOD_INFLIGHT = 16;
 
 export interface RpcErrorObject {
   code: number;
@@ -42,6 +44,7 @@ export class ModChannel {
   #nextId = 1;
   #stderr = '';
   #closed = false;
+  #inflight = 0;
   protocolErrors = 0;
 
   constructor(child: ChildProcess, onRequest: RequestHandler) {
@@ -67,7 +70,11 @@ export class ModChannel {
   #write(msg: Record<string, unknown>): void {
     if (this.#closed) return;
     try {
-      this.#child.stdin!.write(encodeFrame({ jsonrpc: '2.0', ...msg }));
+      // backpressure: while the mod is not draining its stdin, stop reading its stdout (it cannot flood the host's memory)
+      if (!this.#child.stdin!.write(encodeFrame({ jsonrpc: '2.0', ...msg }))) {
+        this.#child.stdout!.pause();
+        this.#child.stdin!.once('drain', () => this.#child.stdout!.resume());
+      }
     } catch {
       this.protocolErrors++;
     }
@@ -78,10 +85,17 @@ export class ModChannel {
       const id = msg.id;
       const params = msg.params && typeof msg.params === 'object' && !Array.isArray(msg.params) ? (msg.params as Record<string, unknown>) : {};
       if (typeof id !== 'number' && typeof id !== 'string') return; // mod → host notifications: none in mod-abi:v1
-      onRequest(msg.method, params).then(
-        (result) => this.#write({ id, result: result ?? {} }),
-        (err: unknown) => this.#write({ id, error: errorObject(err) }),
-      );
+      if (this.#inflight >= MAX_MOD_INFLIGHT) {
+        this.#write({ id, error: errorObject(new ModRefusal('STATE', `more than ${MAX_MOD_INFLIGHT} mod → host requests in flight`)) });
+        return;
+      }
+      this.#inflight++;
+      onRequest(msg.method, params)
+        .then(
+          (result) => this.#write({ id, result: result ?? {} }),
+          (err: unknown) => this.#write({ id, error: errorObject(err) }),
+        )
+        .finally(() => this.#inflight--);
       return;
     }
     if (typeof msg.id !== 'number') {

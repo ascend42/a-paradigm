@@ -17,7 +17,8 @@ import { isRefusalV1, MOD_ABI_ID } from '@a-company/gnomon-contracts';
 import { ModRefusal, sanitizeModBlock, EgressProxy, isNonPublicAddress } from '../src/kernel/modhost/index.js';
 import { modLaunchPlan } from '../src/kernel/sandbox/mod.js';
 import { unsandboxedModLauncher } from '../src/kernel/testing.js';
-import { EXAMPLE_MOD, host, install, probeManifest, rig, writeModFolder, type Rig } from './mod-helpers.js';
+import { EXAMPLE_MOD, host, install, PROBE_SOURCE, probeManifest, rig, writeModFolder, type Rig } from './mod-helpers.js';
+import { appendGrantRow, effectiveInstall, readGrants } from '../src/kernel/manifest/index.js';
 
 const cleanups: Array<() => Promise<unknown>> = [];
 afterEach(async () => {
@@ -168,7 +169,7 @@ describe('egress proxy (§3.8, §15.4 grant.egress)', () => {
     await new Promise<void>((r) => target.listen(0, '127.0.0.1', () => r()));
     const tport = (target.address() as net.AddressInfo).port;
     let resolved = '93.184.216.34';
-    const p = new EgressProxy({ name: 'probe', hosts: new Set(['api.example.com']), emit: (_k, pl) => void emitted.push(pl), dial: async () => ({ socket: net.connect({ host: '127.0.0.1', port: tport }), address: resolved }) });
+    const p = new EgressProxy({ name: 'probe', hosts: new Set(['api.example.com']), emit: (_k, pl) => void emitted.push(pl), dial: { resolve: async () => resolved, connect: () => net.connect({ host: '127.0.0.1', port: tport }) } });
     const port = await p.listen();
     cleanups.push(async () => {
       await p.close();
@@ -182,7 +183,8 @@ describe('egress proxy (§3.8, §15.4 grant.egress)', () => {
     resolved = '127.0.0.1';
     expect(await connect(port, 'api.example.com:443')).toMatch(/403/);
     expect(emitted.map((e) => e.why)).toEqual(['numeric', 'anthropic', 'ungranted', 'port', 'private-address']);
-    expect(isNonPublicAddress('::ffff:10.0.0.1')).toBe(true);
+    for (const a of ['::ffff:10.0.0.1', '198.18.0.1', '192.0.0.8', '192.0.2.1', '198.51.100.7', '203.0.113.9', '64:ff9b::7f00:1', '::127.0.0.1', 'fec0::1', 'fe80::1', 'fd00::1', '2002:7f00:1::1', '::', '::1']) expect(isNonPublicAddress(a), a).toBe(true);
+    for (const a of ['93.184.216.34', '2606:4700::1111', '64:ff9b::5db8:d822', '::ffff:93.184.216.34']) expect(isNonPublicAddress(a), a).toBe(false);
   });
 
   it('a tool without `network` cannot open a tunnel even though the mod has a proxy', async () => {
@@ -190,6 +192,100 @@ describe('egress proxy (§3.8, §15.4 grant.egress)', () => {
     expect(s.state === 'running' && s.egressPort).toBeGreaterThan(0);
     expect(await h.callTool('probe', 'probe.read', { op: 'egress', host: 'api.example.com' })).toMatchObject({ ok: false });
     expect(r.events.find((e) => e.kind === 'mod.effect.refused' && e.payload.why === 'effect')).toBeTruthy();
+  });
+});
+
+describe('round 2 (Aegis F2, reviewer #5)', () => {
+  async function withTarget() {
+    const target = net.createServer((s) => s.on('data', () => undefined));
+    await new Promise<void>((r) => target.listen(0, '127.0.0.1', () => r()));
+    const tport = (target.address() as net.AddressInfo).port;
+    cleanups.push(async () => void target.close());
+    return { resolve: async () => '93.184.216.34', connect: () => net.connect({ host: '127.0.0.1', port: tport }) };
+  }
+
+  it('F2: a tunnel opened in a network tool is dead when the next tool starts', async () => {
+    const r = rig();
+    cleanups.push(r.cleanup);
+    install(r, writeModFolder(path.join(r.root, 'src', 'probe'), probeManifest()), { egress: ['api.example.com'] });
+    const { h } = host(r, { launcher: unsandboxedModLauncher, dial: await withTarget() });
+    cleanups.push(() => h.stopAll());
+    await h.start('probe');
+    expect(await h.callTool('probe', 'probe.net', { op: 'hold', host: 'api.example.com' })).toEqual({ ok: true, v: 'held' });
+    await new Promise((res) => setTimeout(res, 100));
+    expect(await h.callTool('probe', 'probe.read', { op: 'held' })).toEqual({ ok: true, v: 'true' });
+  });
+
+  it('kernel.call success path with a stub kernel: declared log.append in a write tool; session.send stamps the caller hsid and strips permitId', async () => {
+    const r = rig();
+    cleanups.push(r.cleanup);
+    install(r, writeModFolder(path.join(r.root, 'src', 'probe'), probeManifest()));
+    const calls: unknown[] = [];
+    const { h } = host(r, { launcher: unsandboxedModLauncher }, { kernelCall: async (req) => (calls.push(req), { seq: 1 }) });
+    cleanups.push(() => h.stopAll());
+    await h.start('probe');
+    expect(await h.callTool('probe', 'probe.write', { op: 'append' })).toEqual({ ok: true, v: '{"seq":1}' });
+    expect(calls[0]).toMatchObject({ verb: 'log.append', principal: expect.stringMatching(/\/mod-probe$/), params: { kind: 'modns.probe.done' } });
+    expect(await h.callTool('probe', 'probe.spend', { op: 'send' })).toMatchObject({ ok: false }); // no caller hsid
+    expect(await h.callTool('probe', 'probe.spend', { op: 'send', params: { hsid: 'other', content: [] } }, { hsid: 'hs-1' })).toMatchObject({ ok: false });
+    expect(await h.callTool('probe', 'probe.spend', { op: 'send', params: { content: [], permitId: 'mine' } }, { hsid: 'hs-1' })).toMatchObject({ ok: true });
+    expect(calls[1]).toMatchObject({ verb: 'session.send', hsid: 'hs-1', params: { hsid: 'hs-1' } });
+    expect((calls[1] as { params: Record<string, unknown> }).params.permitId).toBeUndefined();
+    expect(await h.callTool('probe', 'probe.write', { op: 'send', params: {} }, { hsid: 'hs-1' })).toMatchObject({ ok: false }); // spend not declared there
+  });
+
+  it('dev mode caps effects at read; an expired dev period pauses the mod', async () => {
+    const r = rig();
+    cleanups.push(r.cleanup);
+    install(r, writeModFolder(path.join(r.root, 'src', 'probe'), probeManifest()));
+    const row = effectiveInstall(readGrants(r.home, r.auth), 'probe')!;
+    const { schemaVersion: _s, createdAt: _c, ...rest } = row;
+    appendGrantRow(r.home, r.auth, { ...rest, dev: { until: new Date(Date.now() + 3_600_000).toISOString() } });
+    const { h } = host(r, { launcher: unsandboxedModLauncher });
+    cleanups.push(() => h.stopAll());
+    const s = await h.start('probe');
+    expect(s).toMatchObject({ state: 'running', dev: true, effects: ['read'], egressPort: null });
+    expect(await h.callTool('probe', 'probe.write', {})).toMatchObject({ ok: false });
+    expect((await h.render('probe', 'probe.view', {})).dev).toBe(true);
+    await h.stop('probe');
+    const { h: later } = host(r, { launcher: unsandboxedModLauncher }, { now: () => Date.now() + 2 * 3_600_000 });
+    cleanups.push(() => later.stopAll());
+    expect(await later.start('probe')).toMatchObject({ state: 'paused', why: 'dev-expired' });
+    expect(kinds(r)).toContain('mod.dev.expired');
+  });
+
+  it('an init answering another modAbiId is refused ABI and the child stopped', async () => {
+    const r = rig();
+    cleanups.push(r.cleanup);
+    const raw = `process.stdin.on('data', (b) => { for (const l of String(b).split('\\n').filter(Boolean)) { const m = JSON.parse(l); if (m.id !== undefined) process.stdout.write(JSON.stringify({ jsonrpc: '2.0', id: m.id, result: { abi: 'mod-abi:v1', features: [], modAbiId: 'sha256:${'0'.repeat(64)}' } }) + '\\n'); } });`;
+    install(r, writeModFolder(path.join(r.root, 'src', 'probe'), probeManifest(), raw));
+    const { h } = host(r, { launcher: unsandboxedModLauncher });
+    cleanups.push(() => h.stopAll());
+    expect((await refused(h.start('probe'))).modCode).toBe('ABI');
+    expect(h.running()).toEqual([]);
+  });
+
+  it('malformed and oversize NDJSON from a mod is dropped and counted; the mod keeps working', async () => {
+    const r = rig();
+    cleanups.push(r.cleanup);
+    const src = PROBE_SOURCE.replace("import { serveMod } from './gnomon-mod-sdk.mjs';", "import { serveMod } from './gnomon-mod-sdk.mjs';\nprocess.stdout.write('not json\\n' + 'x'.repeat(2 * 1024 * 1024) + '\\n[1]\\n');");
+    install(r, writeModFolder(path.join(r.root, 'src', 'probe'), probeManifest(), src));
+    const { h } = host(r, { launcher: unsandboxedModLauncher });
+    cleanups.push(() => h.stopAll());
+    await h.start('probe');
+    expect(await h.health('probe')).toBe(true);
+    expect(h.inspect('probe').protocolErrors).toBe(3);
+  });
+
+  it('the restart cap: after 3 restarts in 10 min the mod stays down and mod.health{restart-cap} is logged', async () => {
+    const { r, h } = await started();
+    for (let i = 0; i < 4; i++) {
+      await refused(h.callTool('probe', 'probe.read', { op: 'crash' }));
+      await new Promise((res) => setTimeout(res, 700));
+    }
+    expect(h.restarts('probe')).toBe(3);
+    expect(h.running()).toEqual([]);
+    expect(r.events.some((e) => e.kind === 'mod.health' && e.payload.why === 'restart-cap')).toBe(true);
   });
 });
 
@@ -210,5 +306,8 @@ describe('M1.11 slice 2 (named, not built)', () => {
   it.todo('slice 2: gnomon-mods MCP bridge per session writing inject.receipt (§3.8)');
   it.todo('slice 2: gnomon mod new|types|test|inspect|install|link|unlink|dev|diff|rollback + fixtures→golden renders (G-MOD-04)');
   it.todo('slice 2: kit Image via /blob and Canvas host-owned surface in the GUI; overlay rules for card.*/status.mod (G-MOD-06, G-MOD-07, G-MOD-10)');
+  it.todo('slice 2 (Aegis C2): log.append through kernel.call clamps payload fields/size and labels per the manifest');
+  it.todo('slice 2 (Aegis C4): /blob serving opens blobs/ files O_NOFOLLOW and re-hashes before serving');
+  it.todo('slice 2: bind each mod → host request to its call id (SDK echoes it; mismatch refused)');
   it.todo('slice 2: host-filled Tier 0 persona templates; #workshop-mod (G-WSP-01); ModHost wired into startDaemon + idle exit');
 });

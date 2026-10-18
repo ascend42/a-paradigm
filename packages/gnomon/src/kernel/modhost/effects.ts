@@ -9,8 +9,8 @@
  * calling session's permit). The DECLARED set of a mod is the union of its
  * tools' `effects` (manifest:v1 declares effects per tool; views and commands
  * carry none). The set in force for a mod → host call is the set of the
- * host → mod call it happens inside (the host serializes calls per mod, so
- * the attribution is exact):
+ * host → mod call it happens inside (the host serializes calls per mod; a
+ * request arriving after its call ended falls to idle = read, which only narrows):
  *   - `tool.call{name}` → that tool's effects;
  *   - `command.run`     → the mod's declared set (a user command, §12.3);
  *   - `view.render`     → `read` only (views are pure, §12.2);
@@ -40,14 +40,25 @@ export function effectsFor(m: ManifestV1, ctx: CallContext, dev: boolean): Set<T
   return set;
 }
 
-/** The effect a kernel verb draws for a mod (§5 mod column; ✗ ⇒ refused). */
+/**
+ * The effect a kernel verb draws for a mod — an EXPLICIT table (Aegis C3):
+ * a verb not listed is refused, whatever the §5 descriptor says, so a new
+ * verb never reaches mods by default.
+ */
+export const MOD_VERB_EFFECTS: Readonly<Record<string, ToolEffect>> = Object.freeze({
+  status: 'read',
+  'log.read': 'read',
+  'ref.resolve': 'read',
+  'log.append': 'write',
+  'session.send': 'spend', // drawn from the caller's permit
+});
+
 export function verbEffect(verb: string): ToolEffect {
   if (verb === 'approve') throw new ModRefusal('APPROVE', '`approve` is never proxied for a mod (§12.3)', { verb });
+  const e = Object.hasOwn(MOD_VERB_EFFECTS, verb) ? MOD_VERB_EFFECTS[verb] : undefined;
   const d = VERBS.find((v) => v.verb === verb);
-  if (!d || d.access.mod === false) throw new ModRefusal('VERB', `a mod cannot call ${verb} (§5 mod column)`, { verb });
-  if (verb === 'log.append') return 'write';
-  if (verb === 'session.send') return 'spend'; // drawn from the caller's permit
-  return 'read';
+  if (!e || !d || d.access.mod === false) throw new ModRefusal('VERB', `a mod cannot call ${verb} (§5 mod column)`, { verb });
+  return e;
 }
 
 /** The effect a mod → host method draws. */

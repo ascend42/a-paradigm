@@ -31,8 +31,11 @@
  *   - `init{abi, features}` must answer `mod-abi:v1` and THIS `modAbiId`, else
  *     the child is stopped and the start refused ABI; then `mod.health{ok}`.
  *
- * CALLS: host → mod calls are SERIALIZED per mod, so every mod → host request
- * is attributed to exactly the call it happens inside (effects.ts). Each call
+ * CALLS: host → mod calls are SERIALIZED per mod, so a mod → host request is
+ * attributed to the call in force when it ARRIVES (effects.ts). Residual,
+ * stated: a request a mod delays past its call's end is judged against the
+ * idle context (read only), which can only narrow, never widen; binding each
+ * request to a call id is slice 2. Each call
  * has a timeout; on expiry the host sends `cancel{cancelToken}` and, if the
  * call is not settled within the cancel grace, restarts the child (§12.3).
  * mod → host: `state.get` (read), `state.set` (write), `kernel.call` (by verb;
@@ -78,6 +81,14 @@ import { declaredEffects, effectsFor, methodEffect, type CallContext } from './e
 import { EgressProxy, type EgressDial } from './egress-proxy.js';
 import { ModRefusal } from './refusal.js';
 import { blobsDir, ModState, stateDir } from './state.js';
+
+const isLink = (p: string): boolean => {
+  try {
+    return fs.lstatSync(p).isSymbolicLink();
+  } catch {
+    return false;
+  }
+};
 
 export const MOD_ENTRIES = Object.freeze(['index.mjs', 'index.js']);
 export const DEFAULT_CALL_TIMEOUT_MS = 5_000;
@@ -253,8 +264,10 @@ export class ModHost {
       if (!entry) throw new ModRefusal('UNDECLARED', `${name}'s snapshot has no ${MOD_ENTRIES.join(' / ')}`, { name });
       const sDir = stateDir(this.#o.home, name);
       const bDir = blobsDir(this.#o.home, name);
-      fs.mkdirSync(sDir, { recursive: true, mode: 0o700 });
-      fs.mkdirSync(bDir, { recursive: true, mode: 0o700 });
+      for (const d of [sDir, bDir]) {
+        // never `recursive` onto an existing path: a planted symlink must stay visible to the profile's real-dir check
+        if (!fs.existsSync(d) && !isLink(d)) fs.mkdirSync(d, { mode: 0o700 });
+      }
       const linked = row.source.startsWith('linked:') ? [row.source.slice(7)] : [];
       const input: ModLaunchInput = {
         home: this.#o.home,
@@ -283,14 +296,25 @@ export class ModHost {
       const child = spawn(plan.command, plan.args, { stdio: ['pipe', 'pipe', 'pipe'], env: plan.env, detached: true, windowsHide: true });
       child.on('error', () => undefined);
       const channel = new ModChannel(child, (method, params) => this.#onModRequest(name, method, params));
+      try {
+        await this.#o.children.track({ kind: 'mod', child, name });
+      } catch (err) {
+        // reviewer #1: never a live untracked child — kill it and refuse
+        child.kill('SIGKILL');
+        channel.close(new ModRefusal('CRASHED', 'the mod child was not tracked'));
+        throw new ModRefusal('CRASHED', `${name} could not be tracked: ${(err as Error).message}`, { name });
+      }
+      if (this.#closed) {
+        await this.#o.children.stop(child, 'shutdown');
+        throw new ModRefusal('NOT_RUNNING', 'the mod host is stopping', { name });
+      }
       running = { name, child, channel, manifest: m, packageHash: loaded.packageHash, dev, effects, proxy, state: new ModState(this.#o.home, name), sandbox: plan.sandbox, profileHash: plan.profileHash, ctx: { kind: 'idle' }, stopping: false };
       const r = running;
-      await this.#o.children.track({ kind: 'mod', child, name });
       this.#running.set(name, r);
       child.once('exit', (code, signal) => void this.#onExit(r, code, signal));
       let init: Record<string, unknown>;
       try {
-        init = (await this.#withTimeout(r, r.channel.request('init', { abi: MOD_ABI_V1, features: ['cancel'] }), DEFAULT_CALL_TIMEOUT_MS, null)) as Record<string, unknown>;
+        init = (await this.#withTimeout(r, r.channel.request('init', { abi: MOD_ABI_V1, features: ['cancel'] }), this.#o.callTimeoutMs ?? DEFAULT_CALL_TIMEOUT_MS, null)) as Record<string, unknown>;
       } catch (err) {
         await this.stop(name, 'init-failed');
         throw err instanceof ModRefusal ? err : new ModRefusal('ABI', `${name} did not answer init`, { name });
@@ -303,6 +327,7 @@ export class ModHost {
       return this.#runningResult(r);
     } catch (err) {
       if (!running) await proxy?.close();
+      if (isLifecycleRefusal(err)) throw new ModRefusal('SANDBOX', err.message, { name });
       throw err;
     }
   }
@@ -317,6 +342,7 @@ export class ModHost {
     const recent = (this.#restarts.get(r.name) ?? []).filter((t) => now - t < RESTART_CAP.windowMs);
     if (recent.length >= RESTART_CAP.n) {
       this.#restarts.set(r.name, recent);
+      this.#emit('mod.health', { name: r.name, ok: false, why: 'restart-cap' });
       return; // out of restarts: down until started again
     }
     recent.push(now);
@@ -340,6 +366,7 @@ export class ModHost {
       ...(r ? { packageHash: r.packageHash, dev: r.dev, effects: [...r.effects].sort(), sandbox: r.sandbox, profileHash: r.profileHash, egressPort: r.proxy?.port ?? null } : {}),
       ...(p ? { paused: { why: p.why, cardId: p.cardId } } : {}),
       restarts: this.restarts(name),
+      protocolErrors: r?.channel.protocolErrors ?? 0,
       stderrTail: r?.channel.stderrTail ?? this.#stderr.get(name) ?? '',
     };
   }
@@ -349,7 +376,9 @@ export class ModHost {
     if (!r) return;
     r.stopping = true;
     this.#running.delete(name);
-    await Promise.race([r.channel.request('shutdown', {}).catch(() => undefined), new Promise((res) => setTimeout(res, 300))]);
+    let t: NodeJS.Timeout | undefined;
+    await Promise.race([r.channel.request('shutdown', {}).catch(() => undefined), new Promise((res) => (t = setTimeout(res, 300)))]);
+    clearTimeout(t);
     await this.#o.children.stop(r.child, reason);
     r.channel.close(new ModRefusal('NOT_RUNNING', `${name} stopped`, { name }));
     await r.proxy?.close();
@@ -357,6 +386,7 @@ export class ModHost {
 
   async stopAll(reason = 'shutdown'): Promise<void> {
     this.#closed = true;
+    await Promise.allSettled([...this.#starting.values()]); // reviewer #2: an in-flight start finishes (or refuses) before the sweep
     await Promise.all([...this.#running.keys()].map((n) => this.stop(n, reason)));
   }
 
@@ -398,11 +428,14 @@ export class ModHost {
       throw first.e instanceof ModRpcError ? new ModRefusal('MOD_ERROR', `${r.name}: ${first.e.message}`, { name: r.name, rpcCode: first.e.error.code }) : first.e;
     }
     if (cancelToken) r.channel.notify('cancel', { cancelToken });
-    const honoured = await Promise.race([settled.then(() => true), new Promise<boolean>((res) => setTimeout(() => res(false), this.#o.cancelGraceMs ?? DEFAULT_CANCEL_GRACE_MS))]);
+    let graceTimer: NodeJS.Timeout | undefined;
+    const honoured = await Promise.race([settled.then(() => true), new Promise<boolean>((res) => (graceTimer = setTimeout(() => res(false), this.#o.cancelGraceMs ?? DEFAULT_CANCEL_GRACE_MS)))]);
+    clearTimeout(graceTimer);
     if (!honoured && this.#running.get(r.name) === r) {
       // §12.3: cancel not honoured ⇒ the child is restarted
       r.stopping = true;
       this.#running.delete(r.name);
+      this.#emit('mod.health', { name: r.name, ok: false, why: 'cancel-timeout' });
       await this.#o.children.stop(r.child, 'cancel-timeout');
       r.channel.close(new ModRefusal('TIMEOUT', 'restarted after an unhonoured cancel', { name: r.name }));
       await r.proxy?.close();
@@ -412,7 +445,7 @@ export class ModHost {
         recent.push(now);
         this.#restarts.set(r.name, recent);
         await this.start(r.name).catch(() => undefined);
-      }
+      } else this.#emit('mod.health', { name: r.name, ok: false, why: 'restart-cap' });
     }
     throw new ModRefusal('TIMEOUT', `${r.name} did not answer within ${ms} ms${honoured ? '' : ' (cancel not honoured: restarted)'}`, { name: r.name, honoured });
   }
@@ -426,6 +459,7 @@ export class ModHost {
         return await this.#withTimeout(r, r.channel.request(method, { ...params, ...(cancelToken ? { cancelToken } : {}) }), opts.timeoutMs ?? this.#o.callTimeoutMs ?? DEFAULT_CALL_TIMEOUT_MS, cancelToken, opts.signal);
       } finally {
         r.ctx = { kind: 'idle' };
+        r.proxy?.closeTunnels(); // Aegis F2: a tunnel never outlives the call that opened it
       }
     });
   }
@@ -504,7 +538,13 @@ export class ModHost {
           if (typeof kind !== 'string' || !kind.startsWith(`modns.${name}.`) || !r.manifest.provides?.events?.includes(kind)) throw new ModRefusal('VERB', `${name} may append only its own declared modns.${name}.* kinds`, { name, verb, kind: typeof kind === 'string' ? kind : null });
         }
         const hsid = r.ctx.kind === 'tool' ? r.ctx.hsid : undefined;
-        if (verb === 'session.send' && !hsid) throw new ModRefusal('VERB', 'session.send through kernel.call needs the calling session (a tool call with its hsid)', { name, verb });
+        if (verb === 'session.send') {
+          // Aegis C1: the session is the CALLER's (context hsid), never one the mod names; the permit is the caller's, never the mod's
+          if (!hsid) throw new ModRefusal('VERB', 'session.send through kernel.call needs the calling session (a tool call with its hsid)', { name, verb });
+          if (vp.hsid !== undefined && vp.hsid !== hsid) throw new ModRefusal('VERB', 'session.send may target only the calling session', { name, verb });
+          vp.hsid = hsid;
+          delete vp.permitId;
+        }
         if (!this.#o.kernelCall) throw new ModRefusal('NOT_IMPLEMENTED', 'kernel.call is not wired to the kernel yet (M1.11 slice 2)', { name, verb });
         return { result: await this.#o.kernelCall({ name, principal: this.#principal(name), verb, params: vp, ...(hsid ? { hsid } : {}) }) };
       }

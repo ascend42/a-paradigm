@@ -24,25 +24,33 @@ import * as fs from 'node:fs';
 import * as net from 'node:net';
 import { serveMod } from './gnomon-mod-sdk.mjs';
 const attempt = async (f) => { try { const v = await f(); return { ok: true, v: v === undefined ? null : String(v).slice(0, 64) }; } catch (e) { return { ok: false, code: e && (e.code || e.message) } } };
+let held = null;
+const run = async (input, api) => {
+  if (input.op === 'state.set') return attempt(() => api.state.set('k', input.value ?? 1));
+  if (input.op === 'state.get') return attempt(async () => JSON.stringify(await api.state.get('k')));
+  if (input.op === 'approve') return attempt(() => api.kernel('approve', {}));
+  if (input.op === 'append') return attempt(async () => JSON.stringify(await api.kernel('log.append', { kind: 'modns.probe.done' })));
+  if (input.op === 'send') return attempt(async () => JSON.stringify(await api.kernel('session.send', input.params ?? {})));
+  if (input.op === 'fs.read') return attempt(() => fs.readFileSync(input.path, 'utf8'));
+  if (input.op === 'fs.write') return attempt(() => fs.writeFileSync(input.path, 'x'));
+  if (input.op === 'symlink') return attempt(() => fs.symlinkSync(input.target, input.path));
+  if (input.op === 'rename') return attempt(() => fs.renameSync(input.from, input.to));
+  if (input.op === 'net') return attempt(() => new Promise((res, rej) => { const s = net.connect({ host: input.host, port: input.port }); s.once('connect', () => { s.destroy(); res('connected'); }); s.once('error', rej); }));
+  if (input.op === 'egress') return attempt(async () => { const s = await api.egress(input.host, 443); s.destroy(); return 'tunnel'; });
+  if (input.op === 'hold') return attempt(async () => { held = await api.egress(input.host, 443); held.on('error', () => {}); return 'held'; });
+  if (input.op === 'held') return { ok: true, v: held ? String(held.destroyed || held.readableEnded) : 'none' };
+  if (input.op === 'hang') return new Promise(() => {});
+  if (input.op === 'crash') process.exit(3);
+  return null;
+};
 serveMod({
   views: { 'probe.view': async (input) => input && input.raw ? input.raw : ({ schemaVersion: 'display-block:v1', type: 'Text', text: 'hi' }) },
   commands: { 'probe.who': async (_a, ctx) => ({ relayedFor: ctx.relayedFor ?? null }) },
   tools: {
-    'probe.read': async (input, ctx, api) => {
-      if (input.op === 'state.set') return attempt(() => api.state.set('k', 1));
-      if (input.op === 'state.get') return attempt(() => api.state.get('k'));
-      if (input.op === 'approve') return attempt(() => api.kernel('approve', {}));
-      if (input.op === 'append') return attempt(() => api.kernel('log.append', { kind: 'modns.probe.done' }));
-      if (input.op === 'fs.read') return attempt(() => fs.readFileSync(input.path, 'utf8'));
-      if (input.op === 'fs.write') return attempt(() => fs.writeFileSync(input.path, 'x'));
-      if (input.op === 'net') return attempt(() => new Promise((res, rej) => { const s = net.connect({ host: input.host, port: input.port }); s.once('connect', () => { s.destroy(); res('connected'); }); s.once('error', rej); }));
-      if (input.op === 'egress') return attempt(async () => { const s = await api.egress(input.host, 443); s.destroy(); return 'tunnel'; });
-      if (input.op === 'hang') return new Promise(() => {});
-      if (input.op === 'crash') process.exit(3);
-      return null;
-    },
-    'probe.write': async (_i, _c, api) => attempt(() => api.state.set('k', 2)),
-    'probe.net': async (input, _c, api) => attempt(async () => { const s = await api.egress(input.host, 443); s.destroy(); return 'tunnel'; }),
+    'probe.read': (input, _c, api) => run(input, api),
+    'probe.write': (input, _c, api) => run(input.op ? input : { op: 'state.set', value: 2 }, api),
+    'probe.net': (input, _c, api) => run(input.op ? input : { op: 'egress', host: input.host }, api),
+    'probe.spend': (input, _c, api) => run(input, api),
   },
 });
 `;
@@ -59,6 +67,7 @@ export function probeManifest(over: Partial<ManifestV1> = {}): ManifestV1 {
         { name: 'probe.read', effects: ['read'] },
         { name: 'probe.write', effects: ['read', 'write'] },
         { name: 'probe.net', effects: ['network'] },
+        { name: 'probe.spend', effects: ['read', 'spend'] },
       ],
       views: [{ id: 'probe.view', slot: 'panel', placement: 'append' }],
       commands: [{ id: 'probe.who', title: 'Who acted' }],

@@ -17,7 +17,7 @@
  * or the keys dir, and none may lie inside the keys dir.
  */
 import { createHash } from 'node:crypto';
-import { existsSync, realpathSync } from 'node:fs';
+import { existsSync, lstatSync, realpathSync } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { LifecycleRefusal } from '../lifecycle/refusal.js';
@@ -61,6 +61,23 @@ const SANDBOX_EXEC = '/usr/bin/sandbox-exec';
 const real = (d: string): string => (existsSync(d) ? realpathSync(d) : d);
 const within = (p: string, dir: string): boolean => p === dir || p.startsWith(dir.endsWith(path.sep) ? dir : dir + path.sep);
 
+/**
+ * Aegis round 2 (F1c): the mod-writable dirs must be REAL directories (lstat:
+ * not a symlink) whose realpath is exactly the expected path — a mod (or
+ * anyone) that swapped `state/` for a link to $HOME would otherwise have the
+ * NEXT profile grant writes to $HOME. Checked before every profile build.
+ */
+export function assertRealModDir(p: string): void {
+  let ok = false;
+  try {
+    const st = lstatSync(p);
+    ok = st.isDirectory() && !st.isSymbolicLink() && realpathSync(p) === path.join(realpathSync(path.dirname(p)), path.basename(p));
+  } catch {
+    ok = false;
+  }
+  if (!ok) throw new LifecycleRefusal('sandbox-unavailable', `the mod-writable dir ${p} is not a real directory at its expected path (symlink or swap refused)`, { profile: 'mod', dir: p });
+}
+
 function darwinMod(i: ModLaunchInput, probe?: MacosProbe, sip?: SipProbe): ChildLaunchPlan {
   const floor = darwinFloor(probe, sip);
   if (!floor.ok) {
@@ -71,10 +88,13 @@ function darwinMod(i: ModLaunchInput, probe?: MacosProbe, sip?: SipProbe): Child
   const snapshotReal = realpathSync(i.snapshotDir);
   const entryReal = realpathSync(i.entry);
   if (!within(entryReal, snapshotReal)) throw new LifecycleRefusal('sandbox-unavailable', `the mod entry ${entryReal} is outside its snapshot`, { profile: 'mod' });
+  assertRealModDir(i.stateDir);
+  assertRealModDir(i.blobsDir);
   const readPaths = i.readPaths.map(real);
   const homeReal = real(i.home);
   const keys = path.join(homeReal, 'keys');
-  assertNoProtectedGrant([...readPaths, ...nodeRuntimeDirs(nodeReal)], [real(homedir()), homeReal], [keys]);
+  // F1d: the writable dirs are checked like every granted path (never $HOME, the gnomon home or inside keys/)
+  assertNoProtectedGrant([...readPaths, ...nodeRuntimeDirs(nodeReal), real(i.stateDir), real(i.blobsDir)], [real(homedir()), homeReal], [keys]);
   let profile: string;
   try {
     profile = modProfileSbpl({ nodeReal, snapshotReal, stateReal: real(i.stateDir), blobsReal: real(i.blobsDir), readPaths, write: i.write, proxyPort: i.proxyPort, denyRead: i.denyRead.map(real) });

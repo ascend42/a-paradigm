@@ -1204,7 +1204,7 @@ components:
       caller. egress-proxy.ts per-mod loopback CONNECT proxy (443 only;
       granted declared hosts; IP literals, private names, Anthropic hosts,
       private resolutions and calls lacking network refused). state.ts
-      per-mod KV state/kv.json (size-capped; node:sqlite state.db is slice 2).
+      per-mod KV <home>/mods/<name>/state.db (sibling of state/, never granted; O_NOFOLLOW reads, random O_EXCL tmp; JSON in slice 1). Round 2 (Aegis): state/ and blobs/ must be real dirs at their expected paths before every profile build; tunnels closed at call end; proxy head deadline, connection cap, idle timeout, resolve-check-connect, wider non-public ranges; explicit verb-effect table; session.send pinned to the caller hsid, permitId stripped; channel caps in-flight mod requests at 16 with backpressure.
       Test seams (unsandboxed launcher, egress dialer) only via
       kernel/testing.ts createModHostForTest. Slice 2: socket relays and
       kernel.call wiring, folder watch, dev-mode cards, gnomon-mods MCP
