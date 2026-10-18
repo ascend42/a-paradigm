@@ -7,6 +7,9 @@
  *
  *   GNOMON_HW_TESTS=1 npx vitest run test/identity-hw.test.ts      (in packages/gnomon)
  *
+ * Run it BEFORE `gnomon identity init` (the helper refuses a new key generation
+ * while another exists). Each prompt shows the test's text, then the helper's
+ * own line `Gnomon Helper: <key> key signs <n>: <digest>…`.
  * Expect THREE Touch ID / password prompts, each naming Gnomon:
  *   1. "Gnomon HW test 1/3: approve and keep the unlock" (approvals, fresh)
  *   2. "Gnomon HW test 2/3: …root key…" (root, fresh)
@@ -42,7 +45,12 @@ describe.runIf(HW)('real helper + Secure Enclave (GNOMON_HW_TESTS=1)', () => {
       try {
         const info = await h.request({ op: 'info' });
         expect(info.signing).toEqual({ identifier: 'gnomon.helper', team: 'SW4BMQ8PNL' });
-        // domain guard in the helper (no key needed, no prompt)
+        // round 2 (H2): the helper refuses a new generation while another exists, so run this BEFORE `gnomon identity init`
+        const held = (await h.request({ op: 'key.list' })).keys as unknown[];
+        if (held.length) throw new Error(`the Secure Enclave already holds Gnomon keys (${JSON.stringify(held)}): run this test before gnomon identity init, or purge them`);
+        // domain guards in the helper (no key needed, no prompt): the root never signs presence; cached never signs presence
+        await expect(h.request({ op: 'sign', key: 'root', gen, mode: 'fresh', reason: 'x', messages: [signaturePreimage('presence', 'x').toString('base64')] })).rejects.toMatchObject({ code: 'domain-refused' });
+        await expect(h.request({ op: 'sign', key: 'approvals', gen, mode: 'cached', connId: 'conn:HW', messages: [signaturePreimage('presence', 'x').toString('base64')] })).rejects.toMatchObject({ code: 'domain-refused' });
         await expect(h.request({ op: 'sign', key: 'approvals', gen, mode: 'fresh', reason: 'x', messages: [signaturePreimage('row', 'x').toString('base64')] })).rejects.toMatchObject({ code: 'domain-refused' });
         const root = pemOf(p256FromX963(String((await h.request({ op: 'key.create', key: 'root', gen })).publicKey)));
         const appr = pemOf(p256FromX963(String((await h.request({ op: 'key.create', key: 'approvals', gen })).publicKey)));
