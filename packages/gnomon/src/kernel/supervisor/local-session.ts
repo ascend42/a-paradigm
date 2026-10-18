@@ -1,0 +1,444 @@
+/**
+ * @symbol #local-runner
+ * @symbol #supervisor
+ * @symbol ^subscription-only
+ *
+ * #supervisor's LOCAL path (spec §3.3, §6.1, §13; M1.8 slice 1): attended,
+ * human-started sessions whose declared model is `local` or `any`. The
+ * supervisor hands it every open with model local|any or backend local; it
+ * owns the local sessions' send/stop/exit.
+ *
+ * open(): validate the lane (G-SUB-06: an endpoint outside loopback/LAN or a
+ *   non-local compat ⇒ BILLING_REFUSED for every local open) → probe the
+ *   endpoint (cached; model.probe + model.capabilities rows) → route (§13.3):
+ *     any + incapable ⇒ session.routed{chosen:'claude'} and the supervisor's
+ *       Claude path (null is returned);
+ *     local + incapable ⇒ a `fallback` card through the M1.6 broker (task,
+ *       reason, the estimate) + model.fallback.requested, and
+ *       MODEL_UNAVAILABLE{cardId} to the caller — NO spawn (G-LCL-02). The
+ *       card's `fallback-cloud` decision (fresh presence) opens a Claude
+ *       session for the same requester (G-LCL-03); never automatic (D21, S7);
+ *     capable ⇒ mint hsid → session.open{backend:'local'} → session.routed →
+ *       permit.reserve{session.spawn, backend:'local', model, scope{user,
+ *       session, repo}} (P8-D92: always granted, recorded with model and
+ *       project — G-LAW-01c / G-LCL-04 as a METER, never a cap) →
+ *       assertLocalPermit → the runner is never `claude` → the `session`
+ *       sandbox profile (§15.5, the same generated profile as claude -p;
+ *       G-LCL-06) → local.yaml in the session dir → DaemonChildren.intend
+ *       {kind:'local-runner'} → spawn detached → track.
+ * stdout: every line a turn.event first (S2); model_capabilities ⇒
+ *   model.capabilities; model_repair ⇒ model.repair{argument}; message_end
+ *   usage ⇒ turn.usage + fuse.recordStreamUsage against the SPAWN permit;
+ *   agent_end ⇒ turn.result (remainder only) and the head turn permit
+ *   released.
+ * send(): a `turn` permit (backend local; the caller's, validated, or
+ *   kernel-reserved) → session.inject{client} → turn.sent → prompt line
+ *   (follow_up while a turn is in flight). stop(): interrupt = the `abort`
+ *   command; otherwise abort + stdin close + the staged group stop.
+ *
+ * DEFERRED (slice 2, reported): unattended local automations (law 5; the
+ * scheduler still refuses), root-signed local.yaml, per-task endpoint choice
+ * (slice 1 uses the first configured endpoint), the probe on daemon start
+ * (`gnomon probe local`), the claude estimate on the card (null: no per-task
+ * estimator yet), session.send{steer}.
+ */
+import { createHash } from 'node:crypto';
+import { spawn, type ChildProcess } from 'node:child_process';
+import * as fs from 'node:fs';
+import * as os from 'node:os';
+import * as path from 'node:path';
+import { hsidShort, mintHsid, refuse, RefusedError, turnId } from '@a-company/gnomon-contracts';
+import type { DaemonChildren } from '../lifecycle/children.js';
+import type { BudgetFuse, PermitV1 } from '../budget/fuse.js';
+import type { ApprovalBroker } from '../broker/broker.js';
+import { buildSessionPolicy, policyHash, type SessionPolicy } from '../manifest/policy.js';
+import { defaultClaudeJson } from '../manifest/layers.js';
+import { sessionLaunchPlan } from '../sandbox/session.js';
+import { LifecycleRefusal } from '../lifecycle/refusal.js';
+import { buildSessionEnv } from '../runner/env.js';
+import { managedFiles } from '../runner/preflight.js';
+import { claudeCodePlatform } from '../../platform/claude-code.js';
+import type { DarwinSessionExtras } from '../../platform/darwin/session-sbpl.js';
+import { LineSplitter } from '../../adapters/claude-code/adapter.js';
+import { abortLine, buildLocalArgv, followUpLine, LocalUsageMeter, parseLocalLine, promptLine } from '../../adapters/local/runner.js';
+import { assertNotClaude, DEFAULT_CTX_FLOOR, validateLocalEndpoints, type LocalLaneConfig } from '../local/config.js';
+import { probeLocalEndpoint, type LocalCapabilities, type ProbeFetch } from '../local/probe.js';
+import { capability, routeModel, type DeclaredModel } from '../local/routing.js';
+
+const STDOUT_LINE_CAP = 4 * 1024 * 1024;
+const EVENT_LINE_CAP = 64 * 1024;
+const HISTORY_CAP = 32;
+
+export type LocalLog = (kind: string, payload: Record<string, unknown>, ids?: { session?: string }) => Promise<void>;
+
+export interface LocalOpenRequest {
+  principal: string;
+  principalClass: string;
+  attended: boolean;
+  cwd: string;
+  worktree?: string;
+  backend?: 'claude-code' | 'local';
+  model?: string;
+  systemPrompt?: string;
+}
+
+export interface LocalLaneOptions {
+  log: LocalLog;
+  children: Pick<DaemonChildren, 'intend' | 'track' | 'stop'>;
+  fuse: Pick<BudgetFuse, 'reserve' | 'release' | 'recordStreamUsage' | 'permit'>;
+  broker?: Pick<ApprovalBroker, 'raise'>;
+  home: string;
+  userHome?: string;
+  kernelPrincipal: string;
+  sock: string;
+  env?: () => Readonly<Record<string, string | undefined>>;
+  endpointPort?: () => number | null;
+  linkedFolders?: () => string[];
+  platform?: string;
+  macosMajor?: () => number | null;
+  sipEnabled?: () => boolean | null;
+  config?: LocalLaneConfig;
+  /** TEST RIG ONLY: the probe's fetch */
+  probeFetch?: ProbeFetch;
+  probeTtlMs?: number;
+}
+
+interface LocalSession {
+  hsid: string;
+  principalId: string;
+  owner: string;
+  model: string;
+  child: ChildProcess;
+  exited: Promise<void>;
+  spawnPermit: PermitV1;
+  turnPermits: string[];
+  state: 'running' | 'stopping' | 'exited';
+  turns: number;
+  seq: number;
+  meter: LocalUsageMeter;
+}
+
+function refused(code: Parameters<typeof refuse>[0]['code'], message: string, data: Record<string, unknown> = {}): RefusedError {
+  return new RefusedError(refuse({ code, data }), `#local-runner: ${message}`);
+}
+
+const sha = (s: string): string => `sha256:${createHash('sha256').update(s).digest('hex')}`;
+
+/** The project a local session is recorded under (§4.1: project.yaml repoId when present). */
+export function repoIdOf(cwd: string): string {
+  try {
+    const m = /^repoId:\s*['"]?([A-Za-z0-9._:/-]{1,128})['"]?\s*$/m.exec(fs.readFileSync(path.join(cwd, '.gnomon', 'project.yaml'), 'utf8'));
+    if (m) return m[1]!;
+  } catch {
+    /* no project.yaml */
+  }
+  // slice 1 reading: the root-commit fallback needs a kernel git call (the `git` profile, Move 2); the path hash stands in
+  let real = cwd;
+  try {
+    real = fs.realpathSync(cwd);
+  } catch {
+    /* keep cwd */
+  }
+  return `path:${createHash('sha256').update(real).digest('hex').slice(0, 16)}`;
+}
+
+export class LocalLane {
+  readonly #o: LocalLaneOptions;
+  readonly #sessions = new Map<string, LocalSession>();
+  readonly #history: Array<Record<string, unknown>> = [];
+  readonly #usedTurnPermits = new Set<string>();
+  readonly #probes = new Map<string, { at: number; caps: LocalCapabilities }>();
+  readonly #platform: string;
+
+  constructor(o: LocalLaneOptions) {
+    this.#o = o;
+    this.#platform = o.platform ?? process.platform;
+  }
+
+  has(hsid: unknown): boolean {
+    return typeof hsid === 'string' && (this.#sessions.has(hsid) || this.#history.some((h) => h.hsid === hsid));
+  }
+
+  #forbiddenPorts(): number[] {
+    const p = this.#o.endpointPort?.();
+    return typeof p === 'number' ? [p] : [];
+  }
+
+  async #probe(ep: { id: string; base: string; model: string }): Promise<LocalCapabilities> {
+    const hit = this.#probes.get(ep.id);
+    if (hit && Date.now() - hit.at < (this.#o.probeTtlMs ?? 60_000)) return hit.caps;
+    const caps = await probeLocalEndpoint(ep, { forbiddenPorts: this.#forbiddenPorts(), ...(this.#o.probeFetch ? { fetch: this.#o.probeFetch } : {}) });
+    await this.#o.log('model.probe', { endpoint: ep.id, ok: caps.ok, ...(caps.error ? { error: caps.error } : {}) });
+    if (caps.ok) await this.#o.log('model.capabilities', { backend: 'local', endpoint: ep.id, model: caps.model, tools: caps.tools, ctx: caps.nCtx, ctxSource: caps.nCtxSource, templateTools: caps.templateTools });
+    this.#probes.set(ep.id, { at: Date.now(), caps });
+    return caps;
+  }
+
+  /**
+   * Route and (when local) spawn. Returns null when the declared model is `any` and Claude was chosen
+   * (the supervisor's Claude path runs next). `openClaude` is the fallback-cloud card's effect.
+   */
+  async open(req: LocalOpenRequest, openClaude: (r: LocalOpenRequest) => Promise<unknown>): Promise<{ hsid: string; principalId: string; backend: 'local'; state: string; model: string } | null> {
+    const declared: DeclaredModel = req.model === 'local' ? 'local' : req.model === 'any' ? 'any' : req.model === undefined || req.model === 'claude' ? (req.backend === 'local' ? 'local' : 'claude') : 'local';
+    if (req.backend === 'claude-code' && declared === 'local') throw refused('BAD_REQUEST', 'model local is never served by backend claude-code (S7)', { reason: 'bad-params' });
+    if (req.backend === 'local' && req.model === 'claude') throw refused('BAD_REQUEST', 'backend local cannot serve model claude', { reason: 'bad-params' });
+    const cfg: LocalLaneConfig = this.#o.config ?? { endpoints: [] };
+    let eps;
+    try {
+      eps = validateLocalEndpoints(cfg, this.#forbiddenPorts());
+    } catch (err) {
+      if (err instanceof RefusedError) await this.#o.log('session.refused', { hsid: null, code: 'local_endpoint_refused', refusal: err.refusal.code, ...(err.refusal.data ?? {}) }).catch(() => undefined);
+      throw err;
+    }
+    const first = eps[0];
+    const caps = first ? await this.#probe({ id: first.ep.id, base: first.v.base, model: first.ep.model }) : null;
+    const cap = capability(caps, cfg.ctxFloor ?? DEFAULT_CTX_FLOOR, first?.ep.textTools === true);
+    const route = routeModel(declared, cap, cfg.runner !== undefined);
+    if (route.chosen === 'claude') {
+      await this.#o.log('session.routed', { hsid: null, declared, chosen: 'claude', reason: route.reason });
+      return null;
+    }
+    if (route.chosen === 'fallback') return this.#fallback(req, declared, route.reason, openClaude);
+    return this.#spawn(req, declared, route.reason, route.tools ?? 'native', first!.ep, first!.v.base, caps!, cfg);
+  }
+
+  async #fallback(req: LocalOpenRequest, declared: DeclaredModel, reason: string, openClaude: (r: LocalOpenRequest) => Promise<unknown>): Promise<never> {
+    const detail = { task: 'session.open', cwd: req.cwd, declared, reason, estimate: { backend: 'claude-code', billing: 'subscription', usd: null } };
+    let cardId: string | null = null;
+    if (this.#o.broker) {
+      const card = await this.#o.broker.raise({
+        kind: 'fallback',
+        requestedBy: req.principal,
+        attended: req.attended,
+        detail,
+        lines: [`No capable local model (${reason}).`, 'Run this task on Claude (subscription) instead?'],
+        effect: async (decision) => {
+          await this.#o.log('model.fallback.decided', { cardId: card.cardId, decision });
+          // S7: the ONLY way a model:local request reaches claude — a human's fallback-cloud decision
+          if (decision === 'fallback-cloud') await openClaude({ ...req, backend: 'claude-code', model: 'claude' });
+        },
+      });
+      cardId = card.cardId;
+    }
+    await this.#o.log('model.fallback.requested', { cardId, declared, reason, task: 'session.open' });
+    throw refused('MODEL_UNAVAILABLE', `no capable local model (${reason}); ${cardId ? `fallback card ${cardId} raised` : 'no broker to raise a fallback card'}`, { ...(cardId ? { cardId } : {}), why: reason });
+  }
+
+  /** law 1 + S8 mirror: a local runner starts only under a live local session.spawn permit for this hsid. */
+  assertLocalPermit(permit: PermitV1, hsid: string): void {
+    const live = this.#o.fuse.permit(permit.permitId);
+    if (live !== permit && JSON.stringify(live) !== JSON.stringify(permit)) throw refused('PERMIT_REQUIRED', 'the permit is not one the fuse granted', {});
+    if (permit.kind !== 'session.spawn' || permit.backend !== 'local' || permit.hsid !== hsid || permit.billing !== 'local') {
+      throw refused('PERMIT_REQUIRED', 'gnomon-local runs only under a local session.spawn permit for this session', { kind: permit.kind, backend: permit.backend });
+    }
+    if (Date.parse(permit.expiresAt) <= Date.now()) throw refused('PERMIT_REQUIRED', 'the spawn permit expired', {});
+  }
+
+  async #spawn(req: LocalOpenRequest, declared: DeclaredModel, reason: string, tools: 'native' | 'text', ep: LocalLaneConfig['endpoints'][number], base: string, caps: LocalCapabilities, cfg: LocalLaneConfig): Promise<{ hsid: string; principalId: string; backend: 'local'; state: string; model: string }> {
+    const runner = cfg.runner!;
+    assertNotClaude(runner); // before any row: claude never runs under a local permit
+    if (typeof req.cwd !== 'string' || !path.isAbsolute(req.cwd) || !fs.existsSync(req.cwd) || !fs.statSync(req.cwd).isDirectory()) {
+      throw refused('BAD_REQUEST', 'cwd must be an existing absolute directory', { reason: 'bad-params' });
+    }
+    const hsid = mintHsid();
+    const principalId = `${this.#o.kernelPrincipal.replace(/\/kernel$/, '')}/s-${hsidShort(hsid)}`;
+    const model = caps.model ?? ep.model;
+    const repo = repoIdOf(req.cwd);
+    const userHome = this.#o.userHome ?? os.homedir();
+    await this.#o.log('session.open', { hsid, principalId, by: req.principal, cwd: req.cwd, worktree: req.worktree ?? null, backend: 'local', model, declaredModel: declared, endpoint: ep.id, attended: true }, { session: hsid });
+    await this.#o.log('session.routed', { hsid, declared, chosen: 'local', reason, tools }, { session: hsid });
+    const dir = path.join(this.#o.home, 'sessions', hsidShort(hsid));
+    const { env, envKeys } = buildSessionEnv({ from: { ...(this.#o.env?.() ?? process.env), HOME: userHome }, hsid, sock: this.#o.sock, sessionKeyPath: path.join(dir, 'session.key') });
+    let permit: PermitV1 | null = null;
+    let child: ChildProcess | null = null;
+    let tracked = false;
+    let live: LocalSession | null = null;
+    try {
+      permit = await this.#o.fuse.reserve({ principal: req.principal, principalClass: req.principalClass, attended: true, kind: 'session.spawn', backend: 'local', model, scope: { user: req.principal, session: hsid, repo } });
+      this.assertLocalPermit(permit, hsid);
+      const row = claudeCodePlatform(this.#platform);
+      const userClaudeDir = path.join(userHome, row?.userClaudeDir ?? '.claude');
+      // the SAME session profile as claude -p (§15.5): keys/warpline/link/head unreadable, settings layers + linked mods unwritable
+      const policy: SessionPolicy = buildSessionPolicy({
+        home: this.#o.home,
+        cwd: req.cwd,
+        ...(req.worktree ? { worktree: req.worktree } : {}),
+        userClaudeDir,
+        userClaudeJson: defaultClaudeJson(userClaudeDir),
+        userHome,
+        managedSettingsPaths: row ? managedFiles(row) : [],
+        linkedFolders: this.#o.linkedFolders?.() ?? [],
+        endpointPort: this.#o.endpointPort?.() ?? null,
+        extraDenyWrite: [],
+      });
+      fs.mkdirSync(dir, { recursive: true, mode: 0o700 });
+      const configPath = path.join(dir, 'local.yaml');
+      const sessionCfg = {
+        schemaVersion: 'gnomon-local-session:v1',
+        session: hsid,
+        cwd: req.worktree ?? req.cwd,
+        endpoint: { base, model, compat: ep.compat },
+        capabilities: { tools: tools === 'native', nCtx: caps.nCtx },
+        surface: ep.surface ?? 'compact',
+        maxSteps: cfg.maxSteps ?? 16,
+        maxTokens: cfg.maxTokens ?? 1024,
+        forbiddenPorts: this.#forbiddenPorts(),
+        ...(req.systemPrompt !== undefined ? { systemPrompt: req.systemPrompt } : {}),
+      };
+      fs.writeFileSync(configPath, `${JSON.stringify(sessionCfg, null, 2)}\n`, { mode: 0o600 });
+      const extras: DarwinSessionExtras = { uid: process.getuid?.() ?? 0, tmpdir: os.tmpdir(), home: userHome, roots: [req.cwd, ...(req.worktree ? [req.worktree] : [])] };
+      const plan = sessionLaunchPlan({ policy, binaryReal: runner.command, argv: [...(runner.args ?? []), ...buildLocalArgv({ configPath, hsid })], extras }, this.#platform, this.#o.macosMajor, this.#o.sipEnabled);
+      const intent = await this.#o.children.intend({ kind: 'local-runner', hsid });
+      child = spawn(plan.command, plan.args, { cwd: req.worktree ?? req.cwd, env, detached: true, stdio: ['pipe', 'pipe', 'ignore'] });
+      const c = child;
+      const exited = new Promise<void>((r) => c.once('close', () => r()));
+      const spawnError = await new Promise<Error | null>((resolve) => {
+        c.once('error', (e) => resolve(e));
+        c.once('spawn', () => resolve(null));
+      });
+      if (spawnError) throw refused('UNSUPPORTED', `spawn failed: ${spawnError.message}`, { session: 'spawn_failed' });
+      await this.#o.children.track({ kind: 'local-runner', child: c, hsid, intent });
+      tracked = true;
+      const s: LocalSession = { hsid, principalId, owner: req.principal, model, child: c, exited, spawnPermit: permit, turnPermits: [], state: 'running', turns: 0, seq: 0, meter: new LocalUsageMeter() };
+      this.#sessions.set(hsid, s);
+      live = s;
+      this.#wire(s);
+      await this.#o.log('session.sandbox', { hsid, sandbox: plan.sandbox, profile: 'session', profileHash: plan.profileHash, policyHash: policyHash(policy), backend: 'local', runner: runner.command, envKeys, permitId: permit.permitId }, { session: hsid });
+      return { hsid, principalId, backend: 'local', state: s.state, model };
+    } catch (err) {
+      if (tracked && child) {
+        await this.#o.children.stop(child, 'open-failed').catch(() => undefined);
+        if (live) await live.exited.catch(() => undefined);
+      }
+      if (!tracked) {
+        if (child?.pid !== undefined && child.exitCode === null && child.signalCode === null) {
+          try {
+            process.kill(-child.pid, 'SIGKILL');
+          } catch {
+            child.kill('SIGKILL');
+          }
+        }
+        if (permit) await this.#o.fuse.release(permit.permitId, permit.principal).catch(() => undefined);
+        fs.rmSync(dir, { recursive: true, force: true });
+      }
+      await this.#o.log('session.refused', { hsid, code: 'spawn_failed', backend: 'local', ...(err instanceof RefusedError ? { refusal: err.refusal.code } : {}), ...(err instanceof LifecycleRefusal ? { sandbox: 'unavailable' } : {}) }, { session: hsid }).catch(() => undefined);
+      if (err instanceof LifecycleRefusal) throw refused('UNSUPPORTED', err.message, { session: 'spawn_failed', sandbox: 'unavailable', ...err.detail });
+      if (err instanceof RefusedError) throw err;
+      throw refused('UNSUPPORTED', (err as Error).message, { session: 'spawn_failed' });
+    }
+  }
+
+  #wire(s: LocalSession): void {
+    const split = new LineSplitter(STDOUT_LINE_CAP);
+    let chain: Promise<void> = Promise.resolve();
+    const queue = (f: () => Promise<void>): void => {
+      chain = chain.then(f).catch(() => undefined);
+    };
+    s.child.stdout?.setEncoding('utf8');
+    s.child.stdout?.on('data', (chunk: string) => {
+      split.push(chunk, (line) => queue(() => this.#onLine(s, line)), (bytes) => queue(() => this.#o.log('turn.event', { hsid: s.hsid, type: 'dropped', bytes, seq: ++s.seq }, { session: s.hsid })));
+    });
+    s.child.stdin?.on('error', () => undefined);
+    void s.exited.then(() => queue(() => this.#onExit(s)));
+  }
+
+  async #onExit(s: LocalSession): Promise<void> {
+    if (s.state === 'exited') return;
+    s.state = 'exited';
+    for (const p of [s.spawnPermit.permitId, ...s.turnPermits]) await this.#o.fuse.release(p, s.owner).catch(() => undefined);
+    s.turnPermits = [];
+    this.#sessions.delete(s.hsid);
+    this.#history.push({ hsid: s.hsid, principalId: s.principalId, backend: 'local', model: s.model, state: 'exited', turns: s.turns, code: s.child.exitCode, signal: s.child.signalCode });
+    while (this.#history.length > HISTORY_CAP) this.#history.shift();
+  }
+
+  async #onLine(s: LocalSession, line: string): Promise<void> {
+    const ev = parseLocalLine(line);
+    const bytes = Buffer.byteLength(line);
+    // S2: every driver event is a turn.event before anything acts on it
+    await this.#o.log('turn.event', { hsid: s.hsid, type: ev.type, seq: ++s.seq, backend: 'local', ...(bytes > EVENT_LINE_CAP ? { lineHash: sha(line), bytes } : { line }) }, { session: s.hsid });
+    const usage = async (source: 'turn.usage' | 'turn.result', tokens: number, extra: Record<string, unknown> = {}): Promise<void> => {
+      if (source === 'turn.usage' && tokens <= 0) return;
+      await this.#o.log(source, { hsid: s.hsid, usage: { tokens }, backend: 'local', ...extra }, { session: s.hsid });
+      await this.#o.fuse.recordStreamUsage({ source, permitId: s.spawnPermit.permitId, hsid: s.hsid, tokens });
+    };
+    switch (ev.kind) {
+      case 'capabilities':
+        await this.#o.log('model.capabilities', { hsid: s.hsid, backend: 'local', model: ev.model, tools: ev.tools, ctx: ev.ctx, compat: ev.compat, textTools: ev.textTools }, { session: s.hsid });
+        return;
+      case 'repair':
+        await this.#o.log('model.repair', { hsid: s.hsid, argument: ev.tool, steps: ev.steps }, { session: s.hsid });
+        return;
+      case 'partial':
+        await this.#o.log('turn.partial', { hsid: s.hsid, bytes: ev.bytes }, { session: s.hsid });
+        return;
+      case 'message':
+        await usage('turn.usage', s.meter.message(ev.tokens));
+        return;
+      case 'end': {
+        await usage('turn.result', s.meter.end(ev.tokens), { stopReason: ev.stopReason, isError: ev.stopReason === 'error', ...(ev.error ? { error: ev.error } : {}) });
+        const head = s.turnPermits.shift();
+        if (head) await this.#o.fuse.release(head, s.owner).catch(() => undefined);
+        return;
+      }
+      default:
+        return; // responses, tool/turn markers, fatal, unknown and malformed lines: logged above, never acted on
+    }
+  }
+
+  #get(principal: string, hsid: unknown): LocalSession {
+    const s = typeof hsid === 'string' ? this.#sessions.get(hsid) : undefined;
+    if (!s || s.owner !== principal) throw refused('NOT_FOUND', 'no such session for this principal', { reason: 'not-found' });
+    return s;
+  }
+
+  async send(principal: string, p: { hsid: string; text: string; permitId?: string }): Promise<{ turn: string }> {
+    const s = this.#get(principal, p.hsid);
+    if (s.state !== 'running' || s.child.exitCode !== null || s.child.signalCode !== null) throw refused('NOT_FOUND', 'the session is not running', { reason: 'not-found' });
+    if (typeof p.text !== 'string' || p.text.length === 0) throw refused('BAD_REQUEST', 'send takes non-empty text', { reason: 'bad-params' });
+    let permit: PermitV1 | undefined;
+    if (p.permitId !== undefined) {
+      permit = this.#o.fuse.permit(p.permitId);
+      if (!permit || permit.kind !== 'turn' || permit.backend !== 'local' || permit.principal !== principal || (permit.hsid !== null && permit.hsid !== s.hsid) || Date.parse(permit.expiresAt) <= Date.now() || this.#usedTurnPermits.has(permit.permitId)) {
+        throw refused('PERMIT_REQUIRED', 'session.send needs a live, unused local turn permit of yours for this session', {});
+      }
+    } else {
+      permit = await this.#o.fuse.reserve({ principal, principalClass: 'human', attended: true, kind: 'turn', backend: 'local', model: s.model, scope: { user: principal, session: s.hsid } });
+    }
+    this.#usedTurnPermits.add(permit.permitId);
+    const inFlight = s.turnPermits.length > 0;
+    s.turnPermits.push(permit.permitId);
+    const n = ++s.turns;
+    const contentHash = sha(p.text);
+    await this.#o.log('session.inject', { hsid: s.hsid, origin: 'client', hash: contentHash, bytes: p.text }, { session: s.hsid });
+    await this.#o.log('turn.sent', { hsid: s.hsid, turn: turnId(s.hsid, n), permitId: permit.permitId, contentHash, backend: 'local' }, { session: s.hsid });
+    s.child.stdin?.write(inFlight ? followUpLine(p.text) : promptLine(p.text));
+    return { turn: turnId(s.hsid, n) };
+  }
+
+  async stop(principal: string, p: { hsid: string; interrupt?: boolean }): Promise<{ signals: string[]; exited: boolean }> {
+    const s = this.#get(principal, p.hsid);
+    if (p.interrupt) {
+      if (s.state === 'running') s.child.stdin?.write(abortLine());
+      return { signals: ['rpc:abort'], exited: false };
+    }
+    if (s.state === 'exited') return { signals: [], exited: true };
+    s.state = 'stopping';
+    try {
+      s.child.stdin?.write(abortLine());
+      s.child.stdin?.end();
+    } catch {
+      /* the pipe may already be gone */
+    }
+    const survivors = await this.#o.children.stop(s.child, 'session.stop');
+    return { signals: ['rpc:abort', 'stdin:close', 'group:staged'], exited: !survivors };
+  }
+
+  status(): Array<Record<string, unknown>> {
+    return [...[...this.#sessions.values()].map((s) => ({ hsid: s.hsid, principalId: s.principalId, backend: 'local', model: s.model, state: s.state, turns: s.turns, permitId: s.spawnPermit.permitId })), ...this.#history];
+  }
+
+  stateOf(hsid: string): string | null {
+    return this.#sessions.get(hsid)?.state ?? (this.#history.some((h) => h.hsid === hsid) ? 'exited' : null);
+  }
+}

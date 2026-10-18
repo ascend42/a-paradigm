@@ -1,0 +1,21 @@
+name: gnomon-local
+description: >-
+  @a-company/gnomon-local — the local-model session child (spec §13.1), a
+  separate executable driven by the kernel's #local-runner over stdio in pi's
+  --mode rpc JSONL shape. Zero runtime deps; compat allowlist = llama.cpp,
+  Ollama, LM Studio, vLLM, mlx-lm (no cloud providers); loopback/LAN rule
+  re-checked in the child; argument repair, text-tool fallback, tool surface
+  none|compact|full, parallel tools, steer/follow_up queues. M1.8 slice 1.
+
+components:
+  gnomon-local:
+    description: >-
+      The gnomon-local child: src/endpoint.ts, compat.ts, client.ts (SSE
+      streaming, no redirects), repair.ts, tools.ts (read_file, write_file,
+      list_dir), agent.ts, rpc.ts, cli.ts. Slice 2: compaction (~8k, fixed
+      headings), JSONL session tree, bash tool.
+    path: src/
+    type: module
+    tags: [gnomon, local, paradigm-8, m1.8]
+    tests:
+      - test/local-child.test.ts

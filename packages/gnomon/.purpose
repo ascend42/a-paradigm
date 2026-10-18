@@ -1158,6 +1158,35 @@ components:
       - test/session-supervisor.test.ts
     oracles: [G-RUN-03, G-SUB-05]
 
+  local-runner:
+    description: >-
+      #local-runner (spec §13, §3.3, §6.1 step 2; M1.8 slice 1). Kernel side:
+      src/kernel/local/endpoint.ts (loopback/LAN rule on the normalised host;
+      hostnames, Anthropic hosts, link-local/metadata, public, userinfo,
+      forbidden web-endpoint port refused — G-SUB-06 BILLING_REFUSED via
+      config.ts), config.ts (compat names = gnomon-local allowlist, no cloud;
+      assertNotClaude: law 7 never runs claude under a backend:local permit),
+      probe.ts (/slots n_ctx, else /props; tools only on a live tool call),
+      routing.ts (local|claude|any; capable = probe ok + tools (or text-tool
+      opt-in) + n_ctx >= floor 8192), src/adapters/local/runner.ts (pi rpc
+      JSONL driver, tolerant parse, LocalUsageMeter no double count),
+      src/kernel/supervisor/local-session.ts (LocalLane: incapable local =>
+      fallback card via the broker + model.fallback.requested +
+      MODEL_UNAVAILABLE{cardId}, no spawn; fallback-cloud decision opens
+      Claude, S7; any => session.routed; capable => local session.spawn
+      permit recorded with model + repo (P8-D92 meter, never capped) ->
+      session profile -> intend/track kind local-runner; stdout turn.event
+      first, model.capabilities/model.repair, usage against the spawn
+      permit). Slice 2: darwin e2e rig (G-LCL-01 fake half, G-LCL-06, 6-child
+      G-LAW-01c), root-signed local.yaml, gnomon probe local, compaction,
+      daemon config wiring, attended local automations.
+    path: src/kernel/local/
+    type: module
+    tags: [gnomon, kernel, local, paradigm-8, m1.8]
+    tests:
+      - test/local-runner.test.ts
+    oracles: [G-SUB-06, G-LCL-02, G-LCL-03, G-ADP-02, G-LAW-01c]
+
   claude-adapter:
     description: >-
       #claude-adapter (spec §2.2, §3.3; M1.7 slice 1) in

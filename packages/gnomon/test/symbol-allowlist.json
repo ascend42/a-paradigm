@@ -4,6 +4,7 @@
     { "symbol": "#gnomon-contracts", "reason": "package-level component of @a-company/gnomon-contracts; spec §18 names packages, not nodes" },
     { "symbol": "#gnomon-helper", "reason": "package-level component of @a-company/gnomon-helper (the signed helper); spec §18 names packages, not nodes" },
     { "symbol": "#gnomon-wrapper", "reason": "package-level component of @a-company/gnomon-wrapper; Appendix A notes: gnomon-wrapper is a package, not a symbol" },
+    { "symbol": "#gnomon-local", "reason": "package-level component of @a-company/gnomon-local (the local-model session child, spec §13.1); spec names the executable, the node is #local-runner" },
     { "symbol": "#gnomon-probes", "reason": "M1.0 probe harness (§19.1 probe table); Appendix A notes: the probe table names no node span on purpose" },
     { "symbol": "#contract-event-v1", "reason": "contract sub-component of #gnomon-contracts; spec has no node" },
     { "symbol": "#contract-ids", "reason": "contract sub-component of #gnomon-contracts; spec has no node" },
