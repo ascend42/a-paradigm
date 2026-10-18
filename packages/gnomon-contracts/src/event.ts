@@ -273,13 +273,13 @@ export const KIND_PATTERN = /^[a-z][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)+$/;
 export const MODNS_KIND_PATTERN = /^modns\.[a-z0-9][a-z0-9-]*(\.[a-z0-9][a-z0-9-]*)+$/;
 
 export function isKnownKind(kind: string): boolean {
-  if (EVENT_KINDS[kind]) return true;
+  if (Object.hasOwn(EVENT_KINDS, kind)) return true;
   if (MODNS_KIND_PATTERN.test(kind)) return true;
   return OPEN_USERLAND_NAMESPACES.some((ns) => ns !== 'modns' && kind.startsWith(`${ns}.`) && KIND_PATTERN.test(kind));
 }
 
 export function kindOwner(kind: string): KindOwner | undefined {
-  if (EVENT_KINDS[kind]) return EVENT_KINDS[kind]!.owner;
+  if (Object.hasOwn(EVENT_KINDS, kind)) return EVENT_KINDS[kind]!.owner;
   return isKnownKind(kind) ? 'userland' : undefined;
 }
 

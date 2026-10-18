@@ -56,9 +56,13 @@ components:
       none, severity ⇒ important, response ⇒ no answer; round-2 ruling). They serve #approval-broker and ^certified convergence.
       M1.12 slice 1 (§4.5, §4.9, §9.1, §12.8), additive and NOT inputs to
       clientApiId (pin unchanged): src/display.ts = sanitizeDisplayText (the
-      client-side §4.5 rules: escape sequences removed whole, zero-width and
-      tag characters stripped ⇒ hidden-chars, bidi controls ⇒ visible ⟨RLO⟩
-      glyphs ⇒ bidi, remaining C0/C1 removed; idempotent), eventRow (opaque
+      client-side §4.5 rules as amended by Aegis round 2: terminated escape
+      sequences removed whole, an unterminated ESC shown as ⟨ESC⟩ with its
+      tail visible; zero-width, tag, VS-supplement and filler characters
+      stripped, misplaced U+FE00–FE0F stripped, U+2028/2029 ⇒ \n, all ⇒
+      hidden-chars; bidi controls and marks ⇒ visible glyphs ⇒ bidi; remaining
+      C0/C1 removed ⇒ hidden-chars, CR unflagged; lone surrogates ⇒ U+FFFD; no
+      normalisation; idempotent; display.v1.json normative), eventRow (opaque
       {kind, principal, at} rows for modns.* and kinds newer than the
       package), renderDenominator ({n, of} or refused); src/conformance.ts =
       the conformance catalog (CONFORMANCE_CHECKS, run vs slice-2), the
