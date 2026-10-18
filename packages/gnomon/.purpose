@@ -551,6 +551,18 @@ components:
       pins the helper, creates root + approvals in the SE under a fresh
       generation, two root signatures with presence (approvals binding,
       device row), identity.json last; a failure deletes the keys it made.
+      Round 2: rotate needs the OLD root in the SE to sign a
+      gnomon-root-rotate:v1 statement the helper demands before it creates
+      the new generation (H4/H2); `--recover` (typed `recover`) replaces a
+      LOST root with a new namespace, journalled as not signed by it; init
+      asks the helper (key.list) and refuses while another generation is
+      held; every touch's expected digest is printed (H3); the device row is
+      signed first and appended only after identity.json (R3); a failure
+      before the record restores moved files (R2) and deletes its keys via
+      the live helper or a fresh one with presence (R4), never after; Ctrl-C
+      stops at the next step and cleans up. `gnomon identity purge-keys
+      --gen <g>` deletes another generation's keys, one touch each.
+      registry.ts gains deviceRowFor + appendSignedRegistryRow.
       `gnomon identity status`. Founder hardware test:
       GNOMON_HW_TESTS=1 test/identity-hw.test.ts (it.todo in CI).
     path: src/kernel/identity/

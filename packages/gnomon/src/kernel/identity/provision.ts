@@ -57,6 +57,8 @@ export interface IdentityRecord {
   helperPath: string;
   createdAt: string;
   rotatedFrom?: string;
+  /** --recover: the LOST root this identity replaces (a new namespace; nothing signed by it carries over) */
+  recoveredFrom?: string;
 }
 
 export class IdentityError extends Error {

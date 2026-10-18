@@ -22,6 +22,10 @@ export interface FakeHelperOptions {
   wrongKey?: boolean;
   /** corrupt the n-th signature of a sign reply (0-based) */
   corruptSig?: number;
+  /** the human approves this many prompts, then declines */
+  touchesAllowed?: number;
+  /** the helper process dies when it receives this op (e.g. 'key.create:approvals') */
+  crashOn?: string;
 }
 
 export class FakeHelper implements HelperTransport {
@@ -54,6 +58,22 @@ export class FakeHelper implements HelperTransport {
     this.#exit.push(cb);
   }
 
+  /** A fresh helper process over the same Secure Enclave: alive again, no unlocks, nothing created by it. */
+  revive(): void {
+    this.#alive = true;
+    this.unlocks.clear();
+    this.createdHere.clear();
+  }
+
+  #touch(): boolean {
+    if (this.opts.touch === false) return false;
+    if (this.opts.touchesAllowed !== undefined) {
+      if (this.opts.touchesAllowed <= 0) return false;
+      this.opts.touchesAllowed--;
+    }
+    return true;
+  }
+
   /** The helper process dies: unlocks gone, listeners told. */
   crash(): void {
     this.#alive = false;
@@ -81,6 +101,11 @@ export class FakeHelper implements HelperTransport {
   /** Synchronous form (stands in for `gnomon-helper once`). */
   handle(req: Record<string, unknown>): HelperReply {
     if (!this.#alive) throw new HelperUnavailableError('exited', 'fake helper is down');
+    if (this.opts.crashOn && this.opts.crashOn === `${String(req.op)}:${String(req.key)}`) {
+      this.opts = { ...this.opts, crashOn: undefined }; // it dies once
+      this.crash();
+      throw new HelperUnavailableError('exited', 'fake helper died');
+    }
     const k = this.keys.get(`${String(req.gen)}.${String(req.key)}`);
     switch (req.op) {
       case 'key.list':
@@ -98,7 +123,7 @@ export class FakeHelper implements HelperTransport {
         if (!this.createdHere.has(String(req.gen))) {
           this.prompts.push(String(req.reason));
           this.shown.push(`${String(req.reason)}\nGnomon Helper: DELETE the ${String(req.key)} key of generation ${String(req.gen)}`);
-          if (this.opts.touch === false) throw new HelperRefusal('presence-denied', 'cancelled');
+          if (!this.#touch()) throw new HelperRefusal('presence-denied', 'cancelled');
         }
         return { ok: true, deleted: this.keys.delete(`${String(req.gen)}.${String(req.key)}`), statement: 'eA==' };
       }
@@ -120,7 +145,7 @@ export class FakeHelper implements HelperTransport {
         } else {
           this.prompts.push(String(req.reason));
           this.shown.push(`${String(req.reason)}\n${line}`);
-          if (this.opts.touch === false) throw new HelperRefusal('presence-denied', 'cancelled');
+          if (!this.#touch()) throw new HelperRefusal('presence-denied', 'cancelled');
         }
         let kept = req.mode === 'cached';
         if (req.mode === 'fresh' && req.keep === true && conn) {
