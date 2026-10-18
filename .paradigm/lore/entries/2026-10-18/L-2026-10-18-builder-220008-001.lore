@@ -1,0 +1,18 @@
+id: L-2026-10-18-builder-220008-001
+type: insight
+timestamp: '2026-10-18T22:00:08.977Z'
+author: builder
+title: 'P8-D96: the tool-permission channel is stream-json can_use_tool (host + stdio), the card is the gate'
+summary: 'Chosen over a kernel PermissionRequest hook in policy.json, which would cost a process per prompt and add a second channel. Every can_use_tool request becomes a permission (allow|deny) or plan card and gets exactly one kernel answer; updatedInput is the kernel-held input; never updatedPermissions, never Claude permission_suggestions. Fail closed everywhere (no broker, raise failure, expiry, cancel, duplicate id, exit, pending cap 64). A permit never means allow (P8-D92). AskUserQuestion is denied with "ask in your reply" for this slice. No clientApiId move. Residual: allow rules in any loaded layer and PreToolUse allow hooks bypass the card (p01b h/i); fix candidate: permissions.ask for mutating tools in policy.json.'
+symbols_touched:
+  - '#supervisor'
+  - '#claude-adapter'
+  - '#approval-broker'
+tags:
+  - decision
+  - gnomon
+  - p8-d96
+git_context:
+  ref: ac04ff10886e54d67e2262aae304e171f44b964c
+  branch: gnomon/permission-channel
+  dirty: true

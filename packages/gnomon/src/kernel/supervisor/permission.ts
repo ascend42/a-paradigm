@@ -1,7 +1,7 @@
 /**
- * @symbol #permission-channel
+ * @symbol #supervisor
  *
- * #permission-channel (spec §3.3, §3.4 "the card is the gate", §6.1; P8-D96).
+ * #supervisor permission channel (spec §3.3, §3.4 "the card is the gate", §6.1; P8-D96).
  * PURE: what the kernel does with one `can_use_tool` request from a Claude
  * session (claude-code adapter `permission-request` event, probe p01b).
  *

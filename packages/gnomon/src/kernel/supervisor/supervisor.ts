@@ -33,8 +33,21 @@
  *   above its high-water mark stdout is PAUSED (backpressure, Aegis M3).
  *   Usage only from stream events → turn.usage/turn.result → the fuse's
  *   recordStreamUsage against the SPAWN permit (no double count);
- *   AskUserQuestion / ExitPlanMode ⇒ `ask-user` / `plan` cards via the broker;
  *   `init.apiKeySource ≠ none` kills the group (absent is logged `absent`).
+ * P8-D96 permission channel (permission.ts): each `can_use_tool` request is
+ *   answered EXACTLY ONCE by the kernel. The card is raised inside the stdout
+ *   queue; its decision is awaited OUTSIDE it (stdout keeps draining). The
+ *   pending map (per session, ≤ MAX_PENDING_PERMISSIONS) holds the
+ *   kernel-held input: `updatedInput` is always it, never a client's. Only an
+ *   `allow` (permission) / `approve-plan` (plan) decision allows; no broker, a
+ *   failed raise, expiry, cancel, a duplicate requestId (both denied +
+ *   approval.suspect), session exit — all deny or answer nothing. A response
+ *   is written only while the session runs, after session.inject{origin:
+ *   'kernel', hash, bytes}. AskUserQuestion is auto-denied ("ask in your
+ *   reply") with its turn.ask-user row; ExitPlanMode is a `plan` card with its
+ *   turn.plan row; a write under denyWrite is denied with no card. An unknown
+ *   control_request subtype gets an error response. The assistant tool_use
+ *   path raises NO card (one card per request).
  * send(): a `turn` permit — the caller's (live, unexpired, subscription,
  *   claude-code, this session, never used before) or kernel-reserved — law 7
  *   re-run → session.inject{client} → turn.sent → the user line. Turn
@@ -71,7 +84,8 @@ import { LifecycleRefusal } from '../lifecycle/refusal.js';
 import { buildSessionEnv } from '../runner/env.js';
 import { claudeAuthOk, claudeJsonProjection, claudeVersion, law7Layers, law7Scan, managedFiles, PreflightRefusal, realLoose, resolveClaudeBinary, type ClaudeRun, type Law7Input, type SessionRefusalCode } from '../runner/preflight.js';
 import { commitPin, prepareClaude, readClaudePin } from '../runner/binary.js';
-import { buildClaudeArgv, DEFAULT_SESSION_HOOKS, settingSourcesFor, type SessionHooksMode, cardKindOfTool, controlInterruptLine, LineSplitter, parseStreamLine, UsageMeter, userMessageLine } from '../../adapters/claude-code/adapter.js';
+import { buildClaudeArgv, DEFAULT_SESSION_HOOKS, settingSourcesFor, type SessionHooksMode, controlErrorLine, controlInterruptLine, LineSplitter, parseStreamLine, permissionAllowLine, permissionDenyLine, UsageMeter, userMessageLine, type AdapterEvent } from '../../adapters/claude-code/adapter.js';
+import { answerFor, composePermission, MAX_PENDING_PERMISSIONS } from './permission.js';
 import { claudeCodePlatform, type ClaudeCodePlatformRow } from '../../platform/claude-code.js';
 import type { DarwinSessionExtras } from '../../platform/darwin/session-sbpl.js';
 import { LocalLane, type LocalLaneOptions } from './local-session.js';
@@ -93,7 +107,8 @@ export interface SupervisorOptions {
   log: SupervisorLog;
   children: Pick<DaemonChildren, 'intend' | 'track' | 'stop'>;
   fuse: Pick<BudgetFuse, 'reserve' | 'release' | 'recordStreamUsage' | 'quotaError' | 'permit'>;
-  broker?: Pick<ApprovalBroker, 'raise'>;
+  /** P8-D96: decisionOf/expire/noteOf/suspect answer the permission channel; absent (or raise-only) ⇒ every request is denied */
+  broker?: Pick<ApprovalBroker, 'raise'> & Partial<Pick<ApprovalBroker, 'decisionOf' | 'expire' | 'noteOf' | 'suspect'>>;
   /** the Gnomon home (session dirs, the claude pin and its private copy) */
   home: string;
   /** the user's home (the ~/.claude layers); the child's HOME is forced to it */
@@ -158,6 +173,18 @@ interface Session {
   meter: UsageMeter;
   stderrBytes: number;
   watch: NodeJS.Timeout | null;
+  /** P8-D96: unanswered can_use_tool requests by requestId (bounded: MAX_PENDING_PERMISSIONS) */
+  pending: Map<string, PendingPermission>;
+  policy: SessionPolicy;
+}
+
+interface PendingPermission {
+  cardId: string | null;
+  cardKind: 'permission' | 'plan' | null;
+  input: Record<string, unknown>;
+  inputHash: string;
+  toolName: string;
+  toolUseId: string | null;
 }
 
 const WIRE: Record<SessionRefusalCode, RefusalCode> = {
@@ -384,7 +411,7 @@ export class SessionSupervisor {
       tracked = true;
       const s: Session = {
         hsid, principalId, owner: req.principal, cwd: req.cwd, ...(req.worktree ? { worktree: req.worktree } : {}), child: c, exited, spawnPermit: permit, turnPermits: [],
-        watchHash: wHash, gitHash: gHash, layerInput, env, state: 'running', turns: 0, seq: 0, meter: new UsageMeter(), stderrBytes: 0, watch: null,
+        watchHash: wHash, gitHash: gHash, layerInput, env, state: 'running', turns: 0, seq: 0, meter: new UsageMeter(), stderrBytes: 0, watch: null, pending: new Map(), policy,
       };
       this.#sessions.set(hsid, s);
       live = s;
@@ -509,6 +536,7 @@ export class SessionSupervisor {
     s.state = 'exited';
     if (s.watch) clearInterval(s.watch);
     s.watch = null;
+    await this.#expirePending(s, 'session-exited');
     for (const p of [s.spawnPermit.permitId, ...s.turnPermits]) await this.#o.fuse.release(p, s.owner).catch(() => undefined);
     s.turnPermits = [];
     if (s.stderrBytes > STDERR_CAP) await this.#o.log('turn.event', { hsid: s.hsid, type: 'stderr.capped', bytes: s.stderrBytes, seq: ++s.seq }, { session: s.hsid }).catch(() => undefined);
@@ -544,15 +572,6 @@ export class SessionSupervisor {
         return;
       case 'message':
         if (ev.tokens !== null) await usage('turn.usage', s.meter.message(ev.messageId, ev.tokens));
-        for (const t of ev.toolUses) {
-          const kind = cardKindOfTool(t.name);
-          if (!kind) continue;
-          const inputHash = sha(JSON.stringify(t.input ?? null));
-          const card = this.#o.broker
-            ? await this.#o.broker.raise({ kind, requestedBy: s.principalId, hsid: s.hsid, attended: true, detail: { tool: t.name, toolUseId: t.id, inputHash }, lines: [kind === 'ask-user' ? 'The session asks you a question' : 'The session proposes a plan'], toolInput: t.input, tool: t.name })
-            : null;
-          await this.#o.log(kind === 'ask-user' ? 'turn.ask-user' : 'turn.plan', { hsid: s.hsid, toolUseId: t.id, inputHash, cardId: card?.cardId ?? null }, { session: s.hsid });
-        }
         if (ev.quota) await this.#o.fuse.quotaError(s.hsid);
         return;
       case 'result': {
@@ -562,9 +581,94 @@ export class SessionSupervisor {
         if (ev.quota) await this.#o.fuse.quotaError(s.hsid);
         return;
       }
+      case 'permission-request':
+        await this.#onPermission(s, ev);
+        return;
+      case 'control-cancel': {
+        const e = s.pending.get(ev.requestId);
+        if (!e) return; // an unknown requestId is never answered
+        s.pending.delete(ev.requestId);
+        if (e.cardId) await this.#o.broker?.expire?.(e.cardId, 'cancelled').catch(() => false);
+        return;
+      }
+      case 'control-request-unknown':
+        if (ev.requestId !== null) await this.#write(s, controlErrorLine(ev.requestId, `unsupported control request: ${ev.subtype.slice(0, 64)}`), { answer: 'error', requestId: ev.requestId });
+        return;
       default:
         return; // user replays, control responses, unknown types and malformed lines: logged above, never acted on
     }
+  }
+
+  /** P8-D96: one can_use_tool request (inside the stdout queue; the decision is awaited OUTSIDE it). */
+  async #onPermission(s: Session, ev: Extract<AdapterEvent, { kind: 'permission-request' }>): Promise<void> {
+    const { requestId } = ev;
+    const dup = s.pending.get(requestId);
+    if (dup) {
+      // a requestId reused while pending: deny both, never pick one
+      s.pending.delete(requestId);
+      await this.#o.broker?.suspect?.('duplicate-request-id', { hsid: s.hsid, requestId, cardId: dup.cardId }, s.hsid).catch(() => undefined);
+      if (dup.cardId) await this.#o.broker?.expire?.(dup.cardId, 'duplicate-request-id').catch(() => false);
+      await this.#write(s, permissionDenyLine(requestId, 'Denied: the permission request id was reused.'), { answer: 'deny', requestId, why: 'duplicate-request-id' });
+      return;
+    }
+    const repo = s.worktree ?? s.cwd;
+    const plan = composePermission(ev, { repo, denyWrite: s.policy.denyWrite });
+    if (ev.toolName === 'AskUserQuestion') await this.#o.log('turn.ask-user', { hsid: s.hsid, toolUseId: ev.toolUseId, inputHash: plan.inputHash, cardId: null, requestId, answer: 'deny' }, { session: s.hsid });
+    if (plan.kind === 'auto-deny') {
+      await this.#write(s, permissionDenyLine(requestId, plan.message), { answer: 'deny', requestId, why: plan.why, ...(plan.denyClass ? { denyClass: plan.denyClass } : {}) });
+      return;
+    }
+    const b = this.#o.broker;
+    if (!b || typeof b.decisionOf !== 'function' || s.pending.size >= MAX_PENDING_PERMISSIONS) {
+      await this.#write(s, permissionDenyLine(requestId, 'Denied: no approval surface could take this request.'), { answer: 'deny', requestId, why: !b || typeof b.decisionOf !== 'function' ? 'no-broker' : 'pending-cap' });
+      return;
+    }
+    const entry: PendingPermission = { cardId: null, cardKind: plan.cardKind, input: structuredClone(ev.input), inputHash: plan.inputHash, toolName: ev.toolName, toolUseId: ev.toolUseId };
+    s.pending.set(requestId, entry);
+    let cardId: string;
+    try {
+      const card = await b.raise({ kind: plan.cardKind, requestedBy: s.principalId, hsid: s.hsid, attended: true, detail: plan.detail, lines: plan.lines, toolInput: ev.input, tool: ev.toolName, decisions: plan.decisions as never });
+      cardId = card.cardId;
+    } catch {
+      await this.#respond(s, requestId, 'deny'); // a raise that throws ⇒ deny
+      return;
+    }
+    if (s.pending.get(requestId) !== entry) {
+      // answered (duplicate, exit) while the raise was in flight: the card must not stay decidable
+      await b.expire?.(cardId, 'answered').catch(() => false);
+      return;
+    }
+    entry.cardId = cardId;
+    if (plan.cardKind === 'plan') await this.#o.log('turn.plan', { hsid: s.hsid, toolUseId: ev.toolUseId, inputHash: plan.inputHash, cardId, requestId }, { session: s.hsid });
+    void b.decisionOf(cardId).then(
+      (d) => this.#respond(s, requestId, d, entry),
+      () => this.#respond(s, requestId, 'deny', entry),
+    ).catch(() => undefined);
+  }
+
+  /** Answer a pending request exactly once: the entry is deleted FIRST; written only while the session runs. */
+  async #respond(s: Session, requestId: string, decision: string, expect?: PendingPermission): Promise<void> {
+    const e = s.pending.get(requestId);
+    if (!e || (expect && e !== expect)) return;
+    s.pending.delete(requestId);
+    const a = e.cardKind ? answerFor(e.cardKind, decision, e.cardId ? this.#o.broker?.noteOf?.(e.cardId) : undefined) : { behavior: 'deny' as const, message: 'Denied.' };
+    const line = a.behavior === 'allow' ? permissionAllowLine(requestId, e.input) : permissionDenyLine(requestId, a.message);
+    await this.#write(s, line, { answer: a.behavior, requestId, cardId: e.cardId, decision });
+  }
+
+  /** session.inject{origin:'kernel'} (a byte COUNT and a hash, never the text), then the line — only while running. */
+  async #write(s: Session, line: string, meta: Record<string, unknown>): Promise<void> {
+    if (s.state !== 'running') return;
+    await this.#o.log('session.inject', { hsid: s.hsid, origin: 'kernel', hash: sha(line), bytes: Buffer.byteLength(line, 'utf8'), channel: 'permission', ...meta }, { session: s.hsid });
+    if (s.state !== 'running' || s.child.exitCode !== null || s.child.signalCode !== null) return;
+    s.child.stdin?.write(line);
+  }
+
+  /** Session exit or stop: every pending card expires into deny; nothing is written. */
+  async #expirePending(s: Session, why: string): Promise<void> {
+    const all = [...s.pending.values()];
+    s.pending.clear();
+    for (const e of all) if (e.cardId) await this.#o.broker?.expire?.(e.cardId, why).catch(() => false);
   }
 
   async #watch(s: Session): Promise<void> {
@@ -643,6 +747,7 @@ export class SessionSupervisor {
     if (s.state === 'exited') return { signals: [], exited: true };
     s.state = 'stopping';
     if (s.watch) clearInterval(s.watch);
+    await this.#expirePending(s, 'session-exited');
     const signals = ['control_request:interrupt', 'stdin:close'];
     try {
       s.child.stdin?.write(controlInterruptLine());
