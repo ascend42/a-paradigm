@@ -1,6 +1,6 @@
 {
   "schema": "gnomon-helper-checksums:v1",
-  "note": "sha256 per built helper executable; written by scripts/build-darwin.mjs. The kernel pins the executable by its code-signing requirement and this sha256 at spawn (G-HLP-01).",
+  "note": "sha256 per built helper executable; written by scripts/build-darwin.mjs. ADVISORY: the kernel does not read this file; it pins the helper by its code-signing requirement plus the version floor (identity/helper.ts). A timestamped signature changes the sha on every build.",
   "binaries": {
     "bin/darwin/GnomonHelper.app/Contents/MacOS/gnomon-helper": {
       "sha256": "bdd2656e173c09fb7fc86329a2ca9a7b10cd7185083441e38832b5b569ddc848",

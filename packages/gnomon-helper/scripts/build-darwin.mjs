@@ -12,7 +12,8 @@
 //      (the identity is LOOKED UP in the keychain: exactly one "Developer ID Application: … (SW4BMQ8PNL)")
 //   4. codesign --verify --strict --deep, then --verify against HELPER_REQUIREMENT
 //      (the same requirement the kernel checks at spawn)
-//   5. checksums.json: sha256 of the executable (the kernel pins it at spawn)
+//   5. checksums.json: sha256 of the executable — ADVISORY: the kernel does not read it; its pin is the
+//      code-signing requirement plus the helper's version floor (spec G-HLP-01 also names a checksum: gap reported)
 // Notarization is a separate, optional step: scripts/notarize-darwin.mjs.
 // Never run by tests and never in CI with --unsigned off (no identity there).
 import { chmodSync, copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
@@ -132,7 +133,7 @@ try {
 }
 checksums = {
   schema: 'gnomon-helper-checksums:v1',
-  note: 'sha256 per built helper executable; written by scripts/build-darwin.mjs. The kernel pins the executable by its code-signing requirement and this sha256 at spawn (G-HLP-01).',
+  note: 'sha256 per built helper executable; written by scripts/build-darwin.mjs. ADVISORY: the kernel does not read this file; it pins the helper by its code-signing requirement plus the version floor (identity/helper.ts). A timestamped signature changes the sha on every build.',
   binaries: { ...(checksums.binaries ?? {}), [rel]: { sha256: sha256File(destExe), version, ...signing } },
 };
 writeFileSync(checksumsFile, `${JSON.stringify(checksums, null, 2)}\n`);

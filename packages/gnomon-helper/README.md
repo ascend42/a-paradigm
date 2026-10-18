@@ -13,7 +13,7 @@ and the private launch-token URL hand-off.
 | `darwin/` | SwiftPM package (swift-tools 5.9, macOS 14), executable `gnomon-helper`. Today it only prints its version. Signing (Developer ID, OPEN 1) never runs in CI. |
 | `win32/` | Rust helper (P8-D71). Placeholder only. |
 | `bin/` | Prebuilt, signed binaries land here at release time. |
-| `checksums.json` | sha256 of each binary in `bin/`; verified by the kernel at start (`G-HLP-01`). |
+| `checksums.json` | sha256 of each built binary in `bin/`. **Advisory**: the kernel does not read it; the pin is the code-signing requirement plus the version floor (`packages/gnomon/src/kernel/identity/helper.ts`). Spec `G-HLP-01` also names a checksum verified at start; that is not wired (reported gap). |
 
 Build (macOS):
 
