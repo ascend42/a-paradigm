@@ -1,0 +1,165 @@
+{
+  "probe": "p10m-repo-surfaces",
+  "os": "darwin",
+  "osVersion": "macOS 15.7.3 (24.6.0)",
+  "arch": "arm64",
+  "toolVersions": {
+    "node": "v26.0.0"
+  },
+  "verdict": "pass",
+  "evidence": {
+    "claudeBinary": "~/.local/bin/claude",
+    "audited": {
+      "settingSources": [
+        "user"
+      ],
+      "ms": 7252,
+      "exit": {
+        "code": 0,
+        "sig": null,
+        "stderrTail": ""
+      },
+      "hooksFired": [
+        "kernel-settings:UserPromptSubmit",
+        "kernel-settings:PreToolUse"
+      ],
+      "repoHooksFired": [],
+      "loaded": {
+        "skillX": false,
+        "agentY": false,
+        "commandZ": false,
+        "claudeMdToken": false
+      },
+      "init": {
+        "apiKeySource": "none",
+        "model": "claude-opus-5-5",
+        "skills": [
+          "archify",
+          "atelier-design",
+          "atelier-produce",
+          "constellation",
+          "impeccable",
+          "deep-research",
+          "design",
+          "design-sync",
+          "dataviz",
+          "update-config",
+          "verify",
+          "debug",
+          "code-review",
+          "simplify",
+          "batch",
+          "fewer-permission-prompts",
+          "doctor",
+          "loop",
+          "schedule",
+          "claude-api",
+          "workflow-authoring",
+          "run",
+          "run-skill-generator",
+          "plugin-authoring"
+        ],
+        "agents": [
+          "atelier-luna",
+          "atelier-patrick",
+          "claude",
+          "Explore",
+          "general-purpose",
+          "impeccable-asset-producer",
+          "impeccable-documenter",
+          "impeccable-finish-reviewer",
+          "impeccable-manual-edit-applier",
+          "Plan",
+          "statusline-setup",
+          "web-fetch"
+        ]
+      },
+      "toolUses": [
+        {
+          "name": "Bash",
+          "input": {
+            "command": "echo probe",
+            "description": "Print probe"
+          }
+        }
+      ],
+      "reply": "TOKEN=NONE; SKILL=no; AGENT=no",
+      "result": {
+        "subtype": "success",
+        "is_error": false,
+        "num_turns": 2
+      }
+    },
+    "control": {
+      "settingSources": [
+        "user",
+        "project",
+        "local"
+      ],
+      "hooksFired": [
+        "kernel-settings:UserPromptSubmit",
+        "project-settings:UserPromptSubmit",
+        "kernel-settings:PreToolUse",
+        "project-settings:PreToolUse",
+        "project-settings:PreToolUse",
+        "kernel-settings:PreToolUse",
+        "skill-x:PreToolUse",
+        "skill-x:PreToolUse",
+        "kernel-settings:PreToolUse",
+        "project-settings:PreToolUse"
+      ],
+      "loaded": {
+        "skillX": true,
+        "agentY": true,
+        "commandZ": true,
+        "claudeMdToken": true
+      },
+      "toolUses": [
+        {
+          "name": "Skill",
+          "input": {
+            "skill": "x"
+          }
+        },
+        {
+          "name": "Agent",
+          "input": {
+            "description": "Run probe subagent y",
+            "prompt": "hi",
+            "subagent_type": "y",
+            "run_in_background": false
+          }
+        },
+        {
+          "name": "Bash",
+          "input": {
+            "command": "echo probe",
+            "description": "Print probe"
+          }
+        }
+      ],
+      "reply": "TOKEN=<token>; SKILL=yes; AGENT=yes",
+      "result": {
+        "subtype": "success",
+        "is_error": false,
+        "num_turns": 5
+      }
+    },
+    "kernelSettingsHooksFired": [
+      "kernel-settings:UserPromptSubmit",
+      "kernel-settings:PreToolUse"
+    ],
+    "notes": [
+      "fail = a REPO hook fired under --setting-sources user (a bypass of the P8-D94 audit); partial = no repo hook fired, but neither did the kernel --settings hook (the approved-hook path is unproven).",
+      "loaded.* records which repo surfaces reached the model (init lists; the CLAUDE.md @import token in the reply). Loading a skill/agent/command/memory file is model steering, not a hook; a frontmatter hook firing is.",
+      "The founder's own ~/.claude user layer is loaded (--setting-sources user); its hooks do not write markers.txt."
+    ]
+  },
+  "specRefs": [
+    "§3.3 whose hooks run (P8-D94)",
+    "§15.5 session profile",
+    "§A.9",
+    "T-2026-10-18-010"
+  ],
+  "at": "2026-10-18T20:42:54.617Z"
+}
