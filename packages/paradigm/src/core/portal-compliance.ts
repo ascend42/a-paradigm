@@ -94,6 +94,7 @@ const SKIP_DIRECTORIES = [
   '__pycache__',
   '.next',
   'target',
+  '.claude', // agent worktrees: stale copies of real files
 ];
 
 // ============================================================================
@@ -222,7 +223,8 @@ function runGrep(rootDir: string, pattern: string): string {
 
   // Try ripgrep first (faster on large codebases)
   try {
-    const globArgs = SKIP_DIRECTORIES.flatMap(d => ['--glob', `!${d}/**`]);
+    // Docs (README usage examples of the decorator) are not code that depends on a gate
+    const globArgs = [...SKIP_DIRECTORIES.flatMap(d => ['--glob', `!**/${d}/**`]), '--glob', '!*.md', '--glob', '!*.mdx'];
     const rgArgs = ['-n', '--no-ignore-vcs', ...globArgs, '--engine', 'auto', pattern, rootDir];
     return execFileSync('rg', rgArgs, options);
   } catch {
@@ -230,7 +232,7 @@ function runGrep(rootDir: string, pattern: string): string {
   }
 
   const skipDirArgs = SKIP_DIRECTORIES.map(d => `--exclude-dir=${d}`);
-  const grepArgs = ['-rn', ...skipDirArgs, '-E', pattern, '--', rootDir];
+  const grepArgs = ['-rn', ...skipDirArgs, '--exclude=*.md', '--exclude=*.mdx', '-E', pattern, '--', rootDir];
 
   try {
     return execFileSync('grep', grepArgs, options);
@@ -245,30 +247,56 @@ function runGrep(rootDir: string, pattern: string): string {
 }
 
 /**
- * Files that are valid sources for gate references.
- * Gate symbols (^name) should only be scanned in Paradigm-specific files,
- * NOT in arbitrary source code where ^ has other meanings (regex, JSX, etc.)
+ * Every .purpose and portal.yaml under the root: the only valid sources for gate
+ * references (^name means other things in arbitrary code — regex, JSX). One walk,
+ * pruning the same directories as the grep path (incl. agent worktrees and build output).
  */
-const GATE_REFERENCE_GLOBS = [
-  '**/.purpose',
-  '**/portal.yaml',
-  '**/.paradigm/**/*.yaml',
-  '**/.paradigm/**/*.yml',
-];
+function listGateFiles(rootDir: string): string[] {
+  const pruned = SKIP_DIRECTORIES;
+  try {
+    const result = execFileSync('find', [
+      rootDir,
+      '(', ...pruned.flatMap((d, i) => (i === 0 ? ['-name', d] : ['-o', '-name', d])), ')', '-prune', '-o',
+      '(', '-name', '.purpose', '-o', '-name', 'portal.yaml', ')',
+      '-print',
+    ], { encoding: 'utf-8', maxBuffer: 5 * 1024 * 1024 });
+    return result.split('\n').filter(Boolean);
+  } catch {
+    return [];
+  }
+}
 
 /**
- * False positive patterns to exclude from gate detection.
- * These match ^word in contexts that aren't Paradigm gate references.
+ * Gates declared outside the root portal.yaml: a package's own portal.yaml `gates:`
+ * and a .purpose file's `gates:` section are declarations too (paradigm_purpose add_gate
+ * writes the latter), so their ids are not "used but undeclared".
  */
-const GATE_FALSE_POSITIVE_PATTERNS = [
-  /^\s*[/*#]/, // Comment lines (JS/TS/Python/Shell)
-  /\[[\^]/, // Regex character class negation [^...]
-  /\\[\^]/, // Escaped caret in regex
-  /[A-Z][a-z]+[A-Z]/, // PascalCase (React components like ^SuperAdminRoute)
-  /#[0-9A-Fa-f]{3,8}/, // CSS hex colors
-  /https?:\/\//, // URLs
-  /example|placeholder|e\.g\.|sample/i, // Documentation examples
-];
+export function extractNestedDeclaredGates(rootDir: string): string[] {
+  const rootPortal = path.resolve(rootDir, 'portal.yaml');
+  const gates = new Set<string>();
+  for (const file of listGateFiles(rootDir)) {
+    if (path.resolve(file) === rootPortal) continue;
+    let content: string;
+    try {
+      content = fs.readFileSync(file, 'utf-8');
+    } catch {
+      continue;
+    }
+    // A caret-keyed mapping key (`^gate-id:`) declares a gate in either file kind. v2 .purpose
+    // files are not plain YAML (`#component:` keys read as comments), so match lines, not a parse.
+    for (const m of content.matchAll(/^\s*\^([a-z][a-z0-9-]+):/gm)) gates.add(m[1]);
+    // A `gates:` mapping declares its keys (plain or caret) wherever the file parses as YAML
+    try {
+      const parsed = yaml.load(content) as { gates?: unknown } | null;
+      if (parsed && typeof parsed.gates === 'object' && parsed.gates !== null && !Array.isArray(parsed.gates)) {
+        for (const key of Object.keys(parsed.gates)) gates.add(key.startsWith('^') ? key.slice(1) : key);
+      }
+    } catch {
+      // Not plain YAML (v2 symbol keys) or malformed: only its caret keys count; its own validation reports it
+    }
+  }
+  return [...gates];
+}
 
 /**
  * Find gate references in the codebase.
@@ -281,42 +309,26 @@ export function findGateReferences(rootDir: string): GateReference[] {
   const references: GateReference[] = [];
 
   // 1. Search for ^gate symbol references ONLY in Paradigm-specific files
-  const symbolPattern = '\\^[a-z][a-z0-9-]+';
-  for (const glob of GATE_REFERENCE_GLOBS) {
-    const globPattern = path.join(rootDir, glob);
-    let files: string[];
+  for (const file of listGateFiles(rootDir)) {
     try {
-      const result = execFileSync('find', [
-        rootDir, '-path', '*/node_modules', '-prune', '-o',
-        '-path', '*/.git', '-prune', '-o',
-        '(', '-name', '.purpose', '-o', '-name', 'portal.yaml', ')',
-        '-print',
-      ], { encoding: 'utf-8', maxBuffer: 5 * 1024 * 1024 });
-      files = result.split('\n').filter(Boolean);
-    } catch {
-      files = [];
-    }
-
-    for (const file of files) {
-      try {
-        const content = fs.readFileSync(file, 'utf-8');
-        const lines = content.split('\n');
-        for (let i = 0; i < lines.length; i++) {
-          const line = lines[i];
-          const gateMatches = line.matchAll(/\^([a-z][a-z0-9-]+)/g);
-          for (const m of gateMatches) {
-            references.push({
-              gate: m[1],
-              file: path.relative(rootDir, file),
-              line: i + 1,
-              context: line.trim().slice(0, 100),
-              matchType: 'symbol',
-            });
-          }
+      const content = fs.readFileSync(file, 'utf-8');
+      const lines = content.split('\n');
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        // A gate symbol starts a token: `file.md#^block-id` or `a^b` is not a gate reference
+        const gateMatches = line.matchAll(/(?<![\w#./^])\^([a-z][a-z0-9-]+)/g);
+        for (const m of gateMatches) {
+          references.push({
+            gate: m[1],
+            file: path.relative(rootDir, file),
+            line: i + 1,
+            context: line.trim().slice(0, 100),
+            matchType: 'symbol',
+          });
         }
-      } catch {
-        // Skip unreadable files
       }
+    } catch {
+      // Skip unreadable files
     }
   }
 
@@ -457,7 +469,8 @@ export async function checkPortalCompliance(rootDir: string): Promise<Compliance
   const routeAttachedUnused = declaredButUnused.filter(g => routeAttachedGates.has(g));
   const orphanUnused = declaredButUnused.filter(g => !routeAttachedGates.has(g));
 
-  const usedButUndeclared = usedGates.filter(g => !declaredSet.has(g));
+  const nestedDeclared = new Set(extractNestedDeclaredGates(rootDir));
+  const usedButUndeclared = usedGates.filter(g => !declaredSet.has(g) && !nestedDeclared.has(g));
   const properlyDeclared = declaredGates.filter(g => usedSet.has(g));
 
   // Generate suggestions

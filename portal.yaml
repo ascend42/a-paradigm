@@ -1,76 +1,66 @@
 version: 2.0.0
-
 gates:
   local-only:
-    description: >-
-      Local-only access. Enforced two ways — the socket binds loopback by default,
-      AND the #local-guard request middleware rejects 403 any state-changing
-      (POST/PUT/PATCH/DELETE) /api request whose Host is non-loopback or whose
-      (present) Origin is non-loopback (CSRF + DNS-rebinding guard). CORS reflects
-      only loopback origins (never wildcard). GET/HEAD reads are not gated.
+    description: 'Local-only access. Enforced two ways — the socket binds loopback by default, AND the #local-guard request middleware rejects 403 any state-changing (POST/PUT/PATCH/DELETE) /api request whose Host is non-loopback or whose (present) Origin is non-loopback (CSRF + DNS-rebinding guard). CORS reflects only loopback origins (never wildcard). GET/HEAD reads are not gated.'
     type: network
     location: platform-server/local-guard.ts
-    check: >-
-      loopback Host ∈ {localhost,127.0.0.1,::1} AND (Origin absent OR loopback)
-      for POST/PUT/PATCH/DELETE on /api/*
+    check: loopback Host ∈ {localhost,127.0.0.1,::1} AND (Origin absent OR loopback) for POST/PUT/PATCH/DELETE on /api/*
     prizes: []
-
   authenticated-session:
     description: Route requires an active Paradigm session (platform server running)
     type: session
     location: platform-server
     check: process is serving on localhost with active HTTP + WebSocket context
     prizes: []
-
   read-only:
     description: Route only returns data — no side effects or state mutations
     type: access
     location: route-handler
     check: HTTP method is GET (safe, idempotent)
     prizes: []
-
   write-capable:
     description: Route modifies state — creates, updates, or deletes data
     type: access
     location: route-handler
     check: HTTP method is POST, PUT, PATCH, or DELETE
     prizes: []
-
   brain-default-deny:
-    description: >-
-      Paradigm Brain default-deny. Every Brain read goes through the single
-      #brain-view choke point (openBrainView). Files are private unless a human
-      shares them; sensitive zones (medical, financial, third-party-data,
-      quarantined) are never listed — the owner sees only {folder, gate, count}.
-      Filtering happens BEFORE any matching, so search/health/suggestions never
-      see hidden records. Brain routes additionally require a loopback Host on
-      GET (DNS-rebinding guard for private metadata).
+    description: 'Paradigm Brain default-deny. Every Brain read goes through the single #brain-view choke point (openBrainView). Files are private unless a human shares them; sensitive zones (medical, financial, third-party-data, quarantined) are never listed — the owner sees only {folder, gate, count}. Filtering happens BEFORE any matching, so search/health/suggestions never see hidden records. Brain routes additionally require a loopback Host on GET (DNS-rebinding guard for private metadata).'
     type: access
     location: paradigm-mcp/src/utils/brain/view.ts + platform-server/routes/brain.ts
-    check: >-
-      openBrainView(rootHash, 'owner') only; locked zones → {folder, gate, count};
-      loopback Host on every /api/brain request
+    check: openBrainView(rootHash, 'owner') only; locked zones → {folder, gate, count}; loopback Host on every /api/brain request
     prizes: []
-
   brain-owner-write:
-    description: >-
-      Brain owner write credential. POST /api/brain/verdict requires the
-      per-process owner token in the HttpOnly SameSite=Strict `brain_owner`
-      cookie (set by a same-origin GET /api/brain/overview, never in a response
-      body) AND an Origin exactly equal to the Platform's own origin. Other
-      localhost ports get no ACAO and a 403 on every /api/brain request.
+    description: Brain owner write credential. POST /api/brain/verdict requires the per-process owner token in the HttpOnly SameSite=Strict `brain_owner` cookie (set by a same-origin GET /api/brain/overview, never in a response body) AND an Origin exactly equal to the Platform's own origin. Other localhost ports get no ACAO and a 403 on every /api/brain request.
     type: access
     location: platform-server/routes/brain-write.ts
     check: timing-safe equal(x-brain-token, process owner token) AND ^local-only
     prizes: []
-
-# ─── Platform Server Routes (/api/*) ────────────────────────────────
-# All routes bind to localhost only. The platform server must be running
-# (paradigm platform) which implies an active session context.
-
+  voice-armed:
+    description: 'Gnomon voice arm is live (spec §14.7, P8-D58–D62): voice intents may decide cards only inside an armed window (hard minutes, maxDecisions per arm class, headphones + handle + challenge). Reserved in M1.1; no route yet — enforced by #approval-broker in Move 4.'
+    type: capability
+    location: packages/gnomon (#approval-broker, Move 4)
+    check: an unexpired voice arm record exists for the deciding principal and the card class is within the arm's limits
+    prizes: []
+  peer-paired:
+    description: 'Gnomon kernel link is paired (spec §3.9, P8-R9, P8-D73–D76): link verbs (brief send, cowork, inject origin peer) require a root-signed pairing with the peer''s root key. Reserved in M1.1; enforced by #peer-link in M2.8.'
+    type: capability
+    location: packages/gnomon (#peer-link, M2.8)
+    check: a root-signed registry row of kind link names the peer's rootKeyId and is not revoked
+    prizes: []
+  certified:
+    description: 'Gnomon contract node is certified (spec §7.3, P8-D86–D88 review cap): a node lands only when its oracles pass and its review converged within review.maxRounds. Reserved in M1.1; enforced by the contracts compiler / #approval-broker in Move 2.'
+    type: capability
+    location: packages/gnomon (#contracts-compiler, Move 2)
+    check: every oracle for the node reports pass and the review lineage is converged
+    prizes: []
+  gate-check:
+    description: Internal gate used by the @a-company/portal SDK for validating gate definitions and checks (see packages/portal/sdk/.purpose).
+    type: internal
+    location: packages/portal/sdk
+    check: SDK-internal validation of a gate definition
+    prizes: []
 routes:
-
-  # ── Health & Info ───────────────────────────────────────────────────
   GET /api/health:
     - ^local-only
     - ^read-only
@@ -83,20 +73,14 @@ routes:
   GET /api/info:
     - ^local-only
     - ^read-only
-
-  # ── Overview ────────────────────────────────────────────────────────
   GET /api/platform/overview:
     - ^local-only
     - ^authenticated-session
     - ^read-only
-
-  # ── Agent Commands ──────────────────────────────────────────────────
   POST /api/platform/agent-command:
     - ^local-only
     - ^authenticated-session
     - ^write-capable
-
-  # ── Lore ────────────────────────────────────────────────────────────
   GET /api/lore:
     - ^local-only
     - ^read-only
@@ -126,29 +110,21 @@ routes:
     - ^local-only
     - ^authenticated-session
     - ^write-capable
-
-  # ── Sessions ────────────────────────────────────────────────────────
   GET /api/sessions:
     - ^local-only
     - ^read-only
   GET /api/sessions/:id:
     - ^local-only
     - ^read-only
-
-  # ── Symbols (Graph) ────────────────────────────────────────────────
   GET /api/symbols:
     - ^local-only
     - ^read-only
-
-  # ── Graphs ──────────────────────────────────────────────────────────
   GET /api/graphs:
     - ^local-only
     - ^read-only
   GET /api/graphs/:slug:
     - ^local-only
     - ^read-only
-
-  # ── Canvas ──────────────────────────────────────────────────────────
   GET /api/canvas/files:
     - ^local-only
     - ^read-only
@@ -163,8 +139,6 @@ routes:
     - ^local-only
     - ^authenticated-session
     - ^write-capable
-
-  # ── Git ─────────────────────────────────────────────────────────────
   GET /api/git/status:
     - ^local-only
     - ^read-only
@@ -193,8 +167,6 @@ routes:
     - ^local-only
     - ^authenticated-session
     - ^write-capable
-
-  # ── Ambient ─────────────────────────────────────────────────────────
   GET /api/ambient/events:
     - ^local-only
     - ^read-only
@@ -212,8 +184,6 @@ routes:
   GET /api/ambient/policy:
     - ^local-only
     - ^read-only
-
-  # ── Team (Maestro) ─────────────────────────────────────────────────
   GET /api/team/roster:
     - ^local-only
     - ^read-only
@@ -224,8 +194,6 @@ routes:
     - ^local-only
     - ^authenticated-session
     - ^write-capable
-
-  # ── Symphony ────────────────────────────────────────────────────────
   GET /api/symphony/agents:
     - ^local-only
     - ^authenticated-session
@@ -270,8 +238,6 @@ routes:
     - ^local-only
     - ^authenticated-session
     - ^read-only
-
-  # ── Docs ────────────────────────────────────────────────────────────
   GET /api/docs/manifest:
     - ^local-only
     - ^read-only
@@ -290,8 +256,6 @@ routes:
   GET /api/docs/search:
     - ^local-only
     - ^read-only
-
-  # ── Sentinel (observability — auth + rate-limited) ─────────────────
   POST /api/sentinel/logs:
     - ^local-only
     - ^authenticated-session
@@ -401,8 +365,6 @@ routes:
   GET /api/sentinel/patterns/:id:
     - ^local-only
     - ^read-only
-
-  # ── University (courses, PLSAT, reference) ─────────────────────────
   GET /api/courses:
     - ^local-only
     - ^read-only
@@ -425,10 +387,6 @@ routes:
   GET /api/reference:
     - ^local-only
     - ^read-only
-
-  # ── Tasks (claimant-owned task store + captain board) ───────────────
-  # All read-only: the platform-server tasks router exposes no mutating
-  # endpoints. Two-way GitHub sync runs through the CLI, not this server.
   GET /api/tasks:
     - ^local-only
     - ^read-only
@@ -447,10 +405,6 @@ routes:
   GET /api/tasks/:id:
     - ^local-only
     - ^read-only
-
-  # Tasks WRITE verbs — each PROXIES the enforced updateTask state-machine path
-  # (assertTransition + settlement fire identically to the CLI/MCP). Not the
-  # read router; write-capable, local-only.
   POST /api/tasks/:id/claim:
     - ^local-only
     - ^write-capable
@@ -466,15 +420,9 @@ routes:
   POST /api/tasks/:id/unblock:
     - ^local-only
     - ^write-capable
-  # Inbound two-way GitHub sync — pulls remote state, applies through the same
-  # enforced writers. No client-supplied remote state.
   POST /api/tasks/sync:
     - ^local-only
     - ^write-capable
-
-  # ── Memory (Memory Steward ledger — READ-ONLY, Phase C1) ────────────
-  # Academy (7.11.0) — read-only University packs over @a-company/university-core.
-  # :packId must be a discovered pack (404); ids ^[A-Za-z0-9-]+$ (400).
   GET /api/academy/packs:
     - ^local-only
     - ^read-only
@@ -496,22 +444,12 @@ routes:
   GET /api/academy/search:
     - ^local-only
     - ^read-only
-  # Thin readers over the pure Memory Steward engines (buildDigest / computeSync).
-  # /review is the advisory hygiene digest; /sync is the lean-rewrite PREVIEW
-  # (computeSync is pure — the mutator writeSyncResult is NOT reachable here).
-  # C1 owns no write path; apply/write verbs arrive in C2/C3.
   GET /api/memory/review:
     - ^local-only
     - ^read-only
   GET /api/memory/sync:
     - ^local-only
     - ^read-only
-
-  # Memory WRITE verbs (Phase C2/C3) — each PROXIES the same return-shaped applier
-  # the CLI wrappers call (applyPrune/Route/Merge/Pin), so all path-safety
-  # (isInsideMemoryDir), archive-not-delete, and fail-open discipline live in ONE
-  # place. /sync/write is the gated lean-rewrite apply (backup-then-atomic on
-  # MEMORY.md). write-capable, local-only.
   POST /api/memory/:id/prune:
     - ^local-only
     - ^write-capable
@@ -527,12 +465,6 @@ routes:
   POST /api/memory/sync/write:
     - ^local-only
     - ^write-capable
-
-  # ── Warpline (Convergence/Divergence Oracle — read path + append-only ledger) ──
-  # The engine NEVER mutates the user's git HEAD/index/worktree. Reads and the
-  # ephemeral computes (forecast/diff are weave --preview equivalents, no persist)
-  # are read-only. POST /oracle APPENDS an OracleRecord to .warpline/oracle.jsonl —
-  # an on-disk state mutation → write-capable.
   GET /api/warpline/ledger:
     - ^local-only
     - ^read-only
@@ -551,10 +483,6 @@ routes:
   POST /api/warpline/oracle:
     - ^local-only
     - ^write-capable
-  # Fabric-native console lane (PHASE 1 re-point): read-only fabric views,
-  # daemon-backed when warplined + the read-SCOPED console token are present
-  # (in-process otherwise). The lane registers GET handlers only, and the
-  # console token is capped at the daemon's READ_ONLY_VERBS server-side.
   GET /api/warpline/fabric/status:
     - ^local-only
     - ^read-only
@@ -570,9 +498,6 @@ routes:
   GET /api/warpline/fabric/grade-report:
     - ^local-only
     - ^read-only
-
-  # ── Academy / Classroom (read-only over the gated-learning artifacts) ──
-  # Thin readers over .paradigm/curriculum + .paradigm/events JSONL. No write path.
   GET /api/classroom/status:
     - ^local-only
     - ^read-only
@@ -585,9 +510,6 @@ routes:
   GET /api/classroom/refinements:
     - ^local-only
     - ^read-only
-
-  # ── Paradigm Brain (7.14.0) — owner view through the #brain-view choke point ──
-  # Every read calls openBrainView(rootHash, 'owner'); locked zones → counts only.
   GET /api/brain/overview:
     - ^local-only
     - ^read-only
@@ -609,8 +531,6 @@ routes:
     - ^write-capable
     - ^brain-owner-write
     - ^brain-default-deny
-
-  # ── WebSocket ───────────────────────────────────────────────────────
   WS /ws:
     - ^local-only
     - ^authenticated-session
