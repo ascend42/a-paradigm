@@ -357,6 +357,22 @@ describe('block buttons and the client (C6, I5)', () => {
     expect(seen).toEqual(['BAD_REQUEST:malformed-json']);
     await expect(c.call('status')).rejects.toMatchObject({ refusal: { code: 'TIMEOUT', reason: 'call-timeout' } });
   });
+  it('T-2026-10-18-016 r2: an engine whose RNG throws fails the hello stage visibly and sends nothing (connect never throws)', async () => {
+    const sent: string[] = [];
+    const t = { send: (s: string) => void sent.push(s), close: () => undefined, onMessage: null as ((s: string) => void) | null, onClose: null as ((c: number) => void) | null };
+    const out = await new GnomonClient(t).connect({
+      surface: 'browser',
+      endpointPath: 'ws://127.0.0.1:4000/rpc',
+      verifyKey: 'x',
+      auth: { launchToken: 'x' },
+      subtle: undefined,
+      rng: () => {
+        throw new Error('no getRandomValues');
+      },
+    });
+    expect(out).toMatchObject({ ok: false, stage: 'hello' });
+    expect(sent).toEqual([]);
+  });
 });
 
 describe('deferred to M1.10 slice 2', () => {

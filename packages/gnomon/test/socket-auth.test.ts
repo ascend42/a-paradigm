@@ -10,7 +10,7 @@ import { chmodSync } from 'node:fs';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { afterEach, describe, expect, it } from 'vitest';
-import { CLIENT_API_ID, CLIENT_METHODS, KIT_ID, isRefusalV1, validateHelloResult, type HelloResult } from '@a-company/gnomon-contracts';
+import { AUTH_SERVER_DOMAIN, CLIENT_API_ID, CLIENT_METHODS, KIT_ID, authServerMessage, isRefusalV1, validateHelloResult, type HelloResult } from '@a-company/gnomon-contracts';
 import {
   DEV_TEST_ROOT_ACK,
   DevTestRootAuthority,
@@ -26,7 +26,7 @@ import {
   writeNewDeviceKey,
 } from '../src/kernel/identity/index.js';
 import { startDaemon, type DaemonHandle, type DaemonOptions } from '../src/kernel/lifecycle/index.js';
-import { SoftwareEd25519Signer } from '../src/kernel/log/index.js';
+import { KeyRing, SIGNATURE_DOMAINS, SoftwareEd25519Signer } from '../src/kernel/log/index.js';
 import {
   ABI_ID,
   RpcConnection,
@@ -150,6 +150,18 @@ describe('serverSig — the kernel proves itself before auth is sent', () => {
     expect(() => verifyServerHello(impHello, sock, r.pin, TEST_CLIENT_NONCE)).toThrow(expect.objectContaining({ reason: 'server-key-mismatch' }));
     // a relay answering on another endpoint path: the client checks over ITS path
     expect(() => verifyServerHello(h.result, `${sock}.relay`, r.pin, TEST_CLIENT_NONCE)).toThrow(expect.objectContaining({ reason: 'bad-server-sig' }));
+    // P8-D93 r2: the server-sig domain is v2 in the kernel signer AND the contracts; a v1-domain signature over the same message is refused
+    expect(SIGNATURE_DOMAINS.authServer).toBe(AUTH_SERVER_DOMAIN);
+    expect(AUTH_SERVER_DOMAIN).toBe('gnomon:auth-server:v2');
+    const { generateKeyPairSync, sign: edSign } = await import('node:crypto');
+    const kp = generateKeyPairSync('ed25519');
+    const pem = kp.publicKey.export({ type: 'spki', format: 'pem' }).toString();
+    const keyId = new KeyRing().addEd25519(pem);
+    const pin2 = { keyId, publicKeyPem: pem };
+    const msg = authServerMessage(h.result.nonce, TEST_CLIENT_NONCE, sock, { clientApi: h.result.clientApi, features: h.result.features });
+    const sigWith = (domain: string): string => edSign(null, Buffer.from(`${domain}\n${msg}`), kp.privateKey).toString('base64');
+    expect(() => verifyServerHello({ ...h.result, serverKeyId: keyId, serverSig: sigWith('gnomon:auth-server:v2') }, sock, pin2, TEST_CLIENT_NONCE)).not.toThrow();
+    expect(() => verifyServerHello({ ...h.result, serverKeyId: keyId, serverSig: sigWith('gnomon:auth-server:v1') }, sock, pin2, TEST_CLIENT_NONCE)).toThrow(expect.objectContaining({ reason: 'bad-server-sig' }));
     // the kernel key never signs the client auth domain (no signing oracle)
     expect(() => r.d.kernelSigner.sign('auth', 'x')).toThrow(/may not sign/);
   });

@@ -162,7 +162,7 @@ components:
       version; none shared ⇒ UNSUPPORTED{offered[], supported[]}; tolerant
       param validation; client strings capped at 128 chars) answering
       {clientApi, features, nonce, serverKeyId, serverSig, clientApiId,
-      kitId}; serverSig = kernel key over gnomon:auth-server:v1 + nonce +
+      kitId}; serverSig = kernel key over gnomon:auth-server:v2 + nonce +
       endpointPath; `auth {principal, deviceId, sig}` verified against the
       ROOT-signed device registry (#identity), nonce single-use (any attempt
       consumes it) and 30 s, accepted transcripts remembered so a replay is

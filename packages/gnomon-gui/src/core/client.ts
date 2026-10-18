@@ -197,8 +197,10 @@ export class GnomonClient {
    */
   async connect(o: { surface: 'browser' | 'wrapper'; endpointPath: string; verifyKey: string; auth: AuthForm; subtle: SubtleCrypto | undefined; rng?: (b: Uint8Array) => Uint8Array }): Promise<ConnectOutcome> {
     let hello: HelloResult;
-    const clientNonce = newClientNonce(o.rng);
+    let clientNonce: string;
     try {
+      // inside the try (Aegis r2): an engine without getRandomValues fails the hello stage visibly, never throws out of connect
+      clientNonce = newClientNonce(o.rng);
       hello = await this.call<HelloResult>('hello', { clientApis: [RPC], features: [], clientNonce, client: { ...GUI_CLIENT, surface: o.surface } });
     } catch (err) {
       return { ok: false, stage: 'hello', ...(err instanceof RpcError ? { refusal: err.refusal } : {}), message: err instanceof Error ? err.message : 'hello failed' };

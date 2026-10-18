@@ -6,7 +6,7 @@
  *
  *   hello {clientApis, features, clientNonce, client}
  *         → {clientApi, features, nonce, clientNonce, serverKeyId, serverSig, clientApiId, kitId}
- *           serverSig = kernel key over 'gnomon:auth-server:v1\n'+nonce+'\n'+clientNonce+'\n'+endpointPath
+ *           serverSig = kernel key over 'gnomon:auth-server:v2\n'+nonce+'\n'+clientNonce+'\n'+endpointPath
  *                       +'\n'+clientApi+'\n'+canonicalJson(features)
  *   auth  {principal, deviceId, sig}
  *           sig = device key over 'gnomon:auth:v1\n'+nonce+'\n'+serverKeyId+'\n'+principalId+'\n'+deviceId+'\n'+endpointPath
@@ -118,7 +118,7 @@ export interface ConnAuthState {
   tokenExpiresAtMs?: number;
 }
 
-/** serverSig message (after the signer's `gnomon:auth-server:v1\n` domain prefix) — the contracts definition. */
+/** serverSig message (after the signer's `gnomon:auth-server:v2\n` domain prefix) — the contracts definition. */
 export function serverSigMessage(nonce: string, clientNonce: string, endpointPath: string, clientApi: string, features: readonly string[]): string {
   return authServerMessage(nonce, clientNonce, endpointPath, { clientApi, features });
 }

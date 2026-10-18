@@ -238,7 +238,7 @@ describe('auth preimages bind the negotiated hello (M1.4 slice 3, T-2026-10-17-0
     const c = await import('../src/index.js');
     const n = { clientApi: 'gnomon-rpc:v1', features: ['b', 'a'] };
     expect(c.authServerMessage('N', 'CN', '/s', n)).toBe('N\nCN\n/s\ngnomon-rpc:v1\n["b","a"]');
-    expect(c.authServerPreimage('N', 'CN', '/s', n)).toBe('gnomon:auth-server:v1\nN\nCN\n/s\ngnomon-rpc:v1\n["b","a"]');
+    expect(c.authServerPreimage('N', 'CN', '/s', n)).toBe('gnomon:auth-server:v2\nN\nCN\n/s\ngnomon-rpc:v1\n["b","a"]');
     expect(c.authClientMessage('N', 'k', 'p', 'd', '/s', n)).toBe('N\nk\np\nd\n/s\ngnomon-rpc:v1\n["b","a"]');
     expect(c.authClientPreimage('N', 'k', 'p', 'd', '/s', n)).toBe(`gnomon:auth:v1\n${c.authClientMessage('N', 'k', 'p', 'd', '/s', n)}`);
     expect(c.authTokenMessage('N', 'k', 'rtk:X', '/s', n)).toBe('N\nk\nrtk:X\n/s\ngnomon-rpc:v1\n["b","a"]');

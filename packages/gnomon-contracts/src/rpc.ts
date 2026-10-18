@@ -256,7 +256,7 @@ export const CLIENT_NONCE_PATTERN = new RegExp(CLIENT_NONCE_PATTERN_SOURCE);
 export const CLIENT_NONCE_BYTES = 32 as const;
 
 /** Server-signature domain for hello and the auth preimages (§4.9). */
-export const AUTH_SERVER_DOMAIN = 'gnomon:auth-server:v1' as const;
+export const AUTH_SERVER_DOMAIN = 'gnomon:auth-server:v2' as const;
 export const AUTH_CLIENT_DOMAIN = 'gnomon:auth:v1' as const;
 /** Read-token proof-of-possession domain (§4.9 read tokens, P8-D89a): never verifies as device auth, nor the reverse. */
 export const AUTH_TOKEN_DOMAIN = 'gnomon:auth-token:v1' as const;
