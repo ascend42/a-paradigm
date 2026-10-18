@@ -214,7 +214,7 @@ describe('Aegis H1 (round 2): tools confine paths to the realpath\'d session roo
     const { cwd, outside, ctx } = setup();
     fs.symlinkSync(outside, path.join(cwd, 'dirlink'));
     fs.symlinkSync(path.join(outside, 'secret'), path.join(cwd, 'filelink'));
-    for (const p of [path.join(outside, 'x'), '../outside/x', 'dirlink/x', 'dirlink/new/deeper/x', 'filelink', '.git/hooks/pre-commit', '.git/config', 'sub/.git/hooks/x']) {
+    for (const p of [path.join(outside, 'x'), '../outside/x', 'dirlink/x', 'dirlink/new/deeper/x', 'filelink', '.git/hooks/pre-commit', '.git/config', 'sub/.git/hooks/x', '.GIT/hooks/x', '.Git/config', '.git./config', '.git /config', 'GIT~1/config']) {
       const r = await runTool('write_file', { path: p, content: 'pwn' }, ctx);
       expect(r.isError, p).toBe(true);
     }
@@ -254,5 +254,27 @@ describe('round 2: surface none, sticky abort, mid-stream error', () => {
     await new Agent({ base: srv.base, model: 'm', profile: COMPAT_ALLOWLIST['llama.cpp']!, nativeTools: true, surface: 'full', cwd, roots: [cwd], maxSteps: 4, maxTokens: 64, emit: (e) => evs.push(e) }).prompt('go');
     expect(evs.at(-1)).toMatchObject({ type: 'agent_end', stopReason: 'error' });
     expect(String(evs.at(-1)!.error)).toMatch(/slot unavailable/);
+  });
+});
+
+describe('round 3: hard links, tool-call cap', () => {
+  it('R1: a hard-linked file is refused for reads and writes', async () => {
+    const root = scratch();
+    const cwd = path.join(root, 'repo');
+    fs.mkdirSync(cwd);
+    fs.writeFileSync(path.join(root, 'outside'), 'secret');
+    fs.linkSync(path.join(root, 'outside'), path.join(cwd, 'hl'));
+    const ctx = { cwd, roots: [cwd] };
+    expect((await runTool('read_file', { path: 'hl' }, ctx)).isError).toBe(true);
+    expect((await runTool('write_file', { path: 'hl', content: 'x' }, ctx)).isError).toBe(true);
+    expect(fs.readFileSync(path.join(root, 'outside'), 'utf8')).toBe('secret');
+  });
+  it('R4: more than 32 tool calls in one turn ends the run with an error; none runs', async () => {
+    const cwd = scratch();
+    srv = await fakeOpenAI({ script: [{ toolCalls: Array.from({ length: 33 }, (_, i) => ({ name: 'write_file', arguments: `{"path":"f${i}","content":"x"}` })) }] });
+    const evs: Array<Record<string, unknown>> = [];
+    await new Agent({ base: srv.base, model: 'm', profile: COMPAT_ALLOWLIST['llama.cpp']!, nativeTools: true, surface: 'full', cwd, roots: [cwd], maxSteps: 4, maxTokens: 64, emit: (e) => evs.push(e) }).prompt('go');
+    expect(evs.at(-1)).toMatchObject({ type: 'agent_end', stopReason: 'error' });
+    expect(fs.readdirSync(cwd)).toEqual([]);
   });
 });

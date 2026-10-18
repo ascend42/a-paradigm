@@ -23,6 +23,9 @@ import { runTool, TOOLS } from './tools.js';
 
 export type Emit = (ev: Record<string, unknown>) => void;
 
+/** round 3 (R4): more tool calls than this in one turn ends the run with an error; none of them runs */
+export const MAX_TOOL_CALLS_PER_TURN = 32;
+
 export interface AgentOptions {
   base: string;
   model: string;
@@ -116,6 +119,7 @@ export class Agent {
           ...(this.#o.nativeTools && calls.length ? { tool_calls: calls.map((t) => ({ id: t.id, type: 'function' as const, function: { name: t.name, arguments: typeof t.arguments === 'string' ? t.arguments : JSON.stringify(t.arguments) } })) } : {}),
         });
         this.#o.emit({ type: 'message_end', message: { role: 'assistant', content: c.content, toolCalls: calls.map((t) => ({ id: t.id, name: t.name })) }, usage: c.usage, finishReason: c.finishReason });
+        if (calls.length > MAX_TOOL_CALLS_PER_TURN) throw new Error(`${calls.length} tool calls in one turn (cap ${MAX_TOOL_CALLS_PER_TURN})`);
         const results = await Promise.all(
           calls.map(async (t) => {
             const r = repairArguments(t.arguments);

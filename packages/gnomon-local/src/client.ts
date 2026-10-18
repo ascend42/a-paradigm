@@ -31,7 +31,7 @@ export interface Completion {
   finishReason: string | null;
 }
 
-export const CAPS = Object.freeze({ sseLine: 1 << 20, content: 1 << 20, toolArgs: 256 * 1024, errorBody: 4 * 1024, body: 2 << 20 });
+export const CAPS = Object.freeze({ sseLine: 1 << 20, content: 1 << 20, toolArgs: 256 * 1024, errorBody: 4 * 1024, body: 2 << 20, stream: 8 << 20 });
 
 export class EndpointRefused extends Error {
   constructor(readonly why: string) {
@@ -152,8 +152,11 @@ async function completeInner(vbase: string, body: Record<string, unknown>, o: { 
       byIndex.set(idx, cur);
     }
   };
+  let streamed = 0;
   for await (const part of chunksOf(res)) {
     touch();
+    streamed += part.length;
+    if (streamed > CAPS.stream) throw new Error('stream bytes cap exceeded');
     buf += decoder.decode(part, { stream: true });
     if (buf.length > CAPS.sseLine && buf.indexOf('\n') < 0) throw new Error('SSE line cap exceeded');
     let nl: number;

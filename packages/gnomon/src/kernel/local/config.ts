@@ -91,7 +91,7 @@ const real = (p: string): string => {
  */
 export function assertNotClaude(r: LocalRunnerCommand): void {
   for (const p of [r.command, ...(r.args ?? [])].flatMap((x) => [x, real(x)])) {
-    if (CLAUDE_NAME.test(path.basename(p)) || /(^|[\\/])claude-[0-9a-f]{16,}$/i.test(p) || /(^|[\\/])@anthropic-ai[\\/]claude-code([\\/]|$)/i.test(p)) {
+    if (CLAUDE_NAME.test(path.basename(p)) || /(^|[\\/])claude-[0-9a-f]{16,}$/i.test(p) || /(^|[\\/])@anthropic-ai[\\/]claude-code([\\/]|$)/i.test(p) || /(^|[\\/])claude[\\/]versions([\\/]|$)/i.test(p)) {
       throw refused('PERMIT_REQUIRED', 'claude never runs under a backend:local permit (law 7, S8)', { why: 'claude-under-local-permit' });
     }
   }

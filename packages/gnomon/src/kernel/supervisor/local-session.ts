@@ -244,6 +244,26 @@ export class LocalLane {
     if (typeof req.cwd !== 'string' || !path.isAbsolute(req.cwd) || !fs.existsSync(req.cwd) || !fs.statSync(req.cwd).isDirectory()) {
       throw refused('BAD_REQUEST', 'cwd must be an existing absolute directory', { reason: 'bad-params' });
     }
+    if (req.worktree !== undefined && (typeof req.worktree !== 'string' || !path.isAbsolute(req.worktree) || !fs.existsSync(req.worktree) || !fs.statSync(req.worktree).isDirectory())) {
+      throw refused('BAD_REQUEST', 'worktree must be an existing absolute directory', { reason: 'bad-params' });
+    }
+    // round 3 (R2): a tool root is never /, the user's home, or the Gnomon home or any ancestor of it
+    {
+      const rp = (p: string): string => {
+        try {
+          return fs.realpathSync(p);
+        } catch {
+          return path.resolve(p);
+        }
+      };
+      const gh = rp(this.#o.home);
+      const uh = rp(this.#o.userHome ?? os.homedir());
+      for (const r of [req.cwd, ...(req.worktree ? [req.worktree] : [])].map(rp)) {
+        if (r === path.parse(r).root || r === uh || gh === r || gh.startsWith(r.endsWith(path.sep) ? r : r + path.sep)) {
+          throw refused('BAD_REQUEST', 'a session root may not be /, the user home, or the Gnomon home or an ancestor of it', { reason: 'bad-params' });
+        }
+      }
+    }
     const hsid = mintHsid();
     const principalId = `${this.#o.kernelPrincipal.replace(/\/kernel$/, '')}/s-${hsidShort(hsid)}`;
     const model = caps.model ?? ep.model;

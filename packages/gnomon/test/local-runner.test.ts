@@ -72,6 +72,7 @@ describe('G-SUB-06: gnomon-local endpoints are loopback/LAN only (kernel and chi
       fs.symlinkSync(path.join(d, 'claude'), path.join(d, 'gnomon-local'));
       expect(() => assertNotClaude({ command: path.join(d, 'gnomon-local') })).toThrow(/claude never runs/);
       expect(() => assertNotClaude({ command: process.execPath, args: ['/u/lib/node_modules/@anthropic-ai/claude-code/cli.js'] })).toThrow(/claude never runs/);
+      expect(() => assertNotClaude({ command: '/Users/u/.local/share/claude/versions/2.1.302' })).toThrow(/claude never runs/);
     } finally {
       fs.rmSync(d, { recursive: true, force: true });
     }
@@ -199,6 +200,17 @@ describe('G-LAW-01c / G-LCL-04 (P8-D92 meter): local sessions get compute permit
     expect(local.every((x) => x.model.startsWith('qwen-') && x.repos.length === 1)).toBe(true);
   });
   it.todo('slice 2: G-LAW-01c end to end — 6 sandboxed gnomon-local children through SessionSupervisor.open (darwin rig, test/local-session.test.ts)');
+});
+
+describe('round 3 (R2): session roots are never /, the user home, or an ancestor of the Gnomon home; worktree validated', () => {
+  it('refuses BAD_REQUEST before any permit', async () => {
+    srv = await fakeOpenAI({ tools: true });
+    const { l, rows } = lane({ endpoints: [{ id: 'f', base: srv.base, model: 'm', compat: 'llama.cpp' }], runner: { command: process.execPath, args: ['/x/gnomon-local/dist/cli.js'] } });
+    for (const over of [{ cwd: '/' }, { cwd: os.homedir() }, { cwd: process.cwd(), worktree: 'relative/wt' }, { cwd: process.cwd(), worktree: '/' }]) {
+      await expect(l.open({ ...req('local'), ...over }, async () => null), JSON.stringify(over)).rejects.toMatchObject({ refusal: { code: 'BAD_REQUEST' } });
+    }
+    expect(rows.some((r) => r.kind.startsWith('permit.'))).toBe(false);
+  });
 });
 
 describe('deferred to slice 2 (manual oracles need a real model)', () => {
