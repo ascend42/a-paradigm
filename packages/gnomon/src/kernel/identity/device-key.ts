@@ -58,6 +58,15 @@ export function ensureKeysDir(home: string): string {
 
 /** Load this device's key as a `device`-class signer (auth + event domains only). */
 export function loadDeviceKey(home: string, file: string = deviceKeyPath(home)): SoftwareEd25519Signer {
+  return loadDeviceCredential(home, file).signer;
+}
+
+/**
+ * The same fail-closed load, for an in-process client that must present the key itself
+ * (`gnomon up`): the file is read ONCE, after the owner-only checks, and those same bytes
+ * are both parsed into the signer and handed back. Never print or log `privateKeyPem`.
+ */
+export function loadDeviceCredential(home: string, file: string = deviceKeyPath(home)): { signer: SoftwareEd25519Signer; privateKeyPem: string } {
   const dir = path.dirname(file);
   let dst: fs.Stats;
   let st: fs.Stats;
@@ -72,7 +81,8 @@ export function loadDeviceKey(home: string, file: string = deviceKeyPath(home)):
   if (!st.isFile()) throw new DeviceKeyError('not-a-file', `${file} is not a regular file`);
   checkOwnerOnly(file, st, 'file');
   try {
-    return new SoftwareEd25519Signer(fs.readFileSync(file, 'utf8'), 'device');
+    const privateKeyPem = fs.readFileSync(file, 'utf8');
+    return { signer: new SoftwareEd25519Signer(privateKeyPem, 'device'), privateKeyPem };
   } catch {
     throw new DeviceKeyError('not-ed25519', `${file} is not an Ed25519 private key`);
   }

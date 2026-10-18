@@ -1,5 +1,6 @@
 /**
  * @symbol #dev-launch
+ * @symbol #gnomon-up
  *
  * The in-process launcher shared by `gnomon dev up` (#dev-launch) and
  * `gnomon up` (#gnomon-up): a kernel started in THIS process, the CLI's own
