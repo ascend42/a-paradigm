@@ -26,7 +26,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "schemas": "npm run build && node scripts/write-schemas.mjs",
-    "conformance": "npm run build && node scripts/write-conformance.mjs"
+    "conformance": "npm run build && node scripts/write-conformance.mjs",
+    "client-api-doc": "npm run build && node scripts/write-client-api-doc.mjs"
   },
   "devDependencies": {
     "@types/node": "^24.0.0",

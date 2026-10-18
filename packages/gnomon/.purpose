@@ -132,6 +132,16 @@ components:
       - test/probe-harness.test.ts
 
   socket:
+    status-numbers: >-
+      M1.12 slice 3 (§9.1 G-HON-03, §9.6, G-HON-07): status-numbers.ts declares
+      every numeric status leaf that is neither {n, of} nor a gauge `n` —
+      gauge, ordinal, limit, duration, latency (needs sibling method + machine)
+      or subset-of-<path> (must not exceed its denominator); checkStatusNumbers
+      returns every bare or unprovenanced number, so a new status number
+      cannot ship undeclared. Round 2: an {n} without of passes only at a
+      path declared gauge. Tagged #socket (the declarations live beside the
+      status verb) AND #client-conformance (the check is the honesty CI gate's;
+      no kernel code calls it).
     description: >-
       #socket (spec §2.1, §4.9, §5) — the kernel's gnomon-rpc:v1 endpoint.
       PR-5 core: unix-socket server bound under a 0177 umask, chmod 0600 and
@@ -771,7 +781,8 @@ components:
       appends a kernel-signed daemon.anchor.lag{rows, which}
       (contracts kind added; bootPrev/bootNow additive for which: 'file'). Fsync
       policy: WAL + synchronous=FULL (default 'process-crash'); 'power-loss'
-      adds fullfsync (~10 ms/commit on Apple SSD, above the 5 ms falsifier).
+      adds fullfsync per commit, which costs more than the 5 ms falsifier allows
+      (the M1.2 figure carries no recorded method or machine, so no number here).
       G-LOG-04 (test:perf, one attempt): bulk p99 < 5 ms / ≤ 0.1 % over 5 ms,
       critical at 1/s under bulk load (60 events in the unit pass) p99 <
       25 ms; the ≥ 600-event 1/s oracle is the manual 10⁶ probe run.
@@ -914,7 +925,29 @@ components:
       - test/kernel-log-quarantine-names.test.ts
       - test/log-cli.test.ts
       - test/log-cli-quarantine-posix.test.ts
-    oracles: [G-LOG-01, G-LOG-02, G-LOG-03, G-LOG-04, G-LOG-06, G-LOG-07, G-LOG-08, G-LOG-09, G-LOG-10, G-LOG-11]
+      - test/m112-replay.test.ts
+    oracles: [G-LOG-01, G-LOG-02, G-LOG-03, G-LOG-04, G-LOG-06, G-LOG-07, G-LOG-08, G-LOG-09, G-LOG-10, G-LOG-11, G-KRN-01]
+    replay: >-
+      M1.12 slice 3 (G-KRN-01): replay.ts + cli/replay-cli.ts — `gnomon replay
+      [<home>] [--expect <sha256>] [--json]`. The fold runs INSIDE verifyLog's
+      single pass (VerifyLogOptions.onRow: the exact bytes verify checked;
+      round 2, B1 / Aegis C2), so a row committed after verify's read snapshot
+      is never folded, and the projection is discarded unless verify is ok.
+      gnomon-replay:v1 = {log, head, kinds, sessions{hsid: inputs
+      (session.inject{origin, hash, bytes}, turn.sent{turn, permitId,
+      contentHash}), host (recorded *Hash fields of session.spawned /
+      session.layers.changed)}, cards (last state)}; projectionHash =
+      sha256(canonicalJson(projection)). A turn.sent binds to the session's
+      last unconsumed origin:client inject (interleaved kernel/peer/mod injects
+      never match) and consumes it; a mismatch or no pending inject is
+      input-mismatch; an inject whose bytes is a string is inject-plaintext
+      (the append path's checkPayload refuses it; round 2, Aegis C1). Any
+      divergence, verify failure or --expect mismatch ⇒ REFUSED
+      INTEGRITY_BROKEN (exit 1). Read-only. Trust root: keys from the home's
+      keys/kernel-pub.jsonl + kernelPrincipalOf(), so every readout and --json
+      print `trust root: home-local` and `keystore: unavailable|anchored` —
+      consistency, never provenance (Aegis medium). Rows signed by registry
+      keys outside that file fail offline verify (residual).
 
   gnomon-ts-client:
     description: >-
@@ -955,8 +988,24 @@ components:
       connection after the refusal fails auth.device-refused. status.clients[] copies only
       {suite, version, reportHash} (sanitized, capped) and labels a
       declared tuple `declared` and reports clientConformance{n, of} (G-OBS-01).
-    tags: [gnomon, m1.12, client, conformance]
-    oracles: [G-CLI-02, G-OBS-01, G-HON-03]
+      M1.12 SLICE 3 honesty CI: test/honesty.ts scanners + test/honesty.test.ts
+      (the gate over packages/gnomon*/src, manifests and package docs, plus a
+      planted-violation falsifier per rule): G-HON-02 fabrication grep
+      (Math.random outside ids, simulated/simulation, sleep()/delay(),
+      hardcoded gains, mechanism words the code lacks), G-HON-05 no
+      Task-steering descriptions, G-HON-06 unscoped guard names refused,
+      G-HON-07 (round 2, B2): every ms/µs number in package docs — prose,
+      wrapped paragraphs and Markdown table cells, keyword or not — names a
+      concrete machine (chip, versioned OS or arch) and a named method in its
+      sentence or table row, unless it is a budget, bound or configured
+      interval (the BUDGET EXEMPTION, pending founder ratification); the
+      live status of a spawned kernel (device + read-token views) passes
+      checkStatusNumbers (#socket) in test/m112-conformance.test.ts.
+    tags: [gnomon, m1.12, client, conformance, honesty-ci]
+    tests:
+      - test/m112-conformance.test.ts
+      - test/honesty.test.ts
+    oracles: [G-CLI-02, G-OBS-01, G-HON-02, G-HON-03, G-HON-05, G-HON-06, G-HON-07]
 
   approval-broker:
     description: >-
@@ -1449,8 +1498,10 @@ aspects:
       a kind without a default is refused, G-LOG-09), and every read goes
       through the §9.3 redaction matrix (stubs {kind, hsid, at, hash} for
       redacting readers, secret never to a read token, nothing to a peer).
-      PR-4 covers the label and read-projection halves; retention/TTL
-      pruning (§9.4), status metrics (§9.6) and the honesty CI (§9.7) follow.
+      PR-4 covers the label and read-projection halves; M1.12 slice 3 adds the
+      honesty CI (§9.7: G-HON-02, 03, 05, 06, 07; test/honesty.test.ts) and
+      the status-number declarations (src/kernel/socket/status-numbers.ts);
+      retention/TTL pruning (§9.4) and the remaining §9.6 metrics follow.
     category: observability
     severity: high
     tags: [gnomon, logging, redaction, paradigm-8]

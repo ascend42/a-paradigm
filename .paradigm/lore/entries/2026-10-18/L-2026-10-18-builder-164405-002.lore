@@ -1,0 +1,26 @@
+id: L-2026-10-18-builder-164405-002
+type: insight
+timestamp: '2026-10-18T16:44:05.373Z'
+author: builder
+title: 'M1.12 slice 3 reading: generated client-API doc as a fixed point'
+summary: docs/specs/gnomon-client-api.md is rendered by renderClientApiDoc() in gnomon-contracts, a pure function of the published surface. The committed file must equal it byte for byte and stays LF on every OS via .gitattributes. It is not an input to clientApiId; the pin is unchanged.
+symbols_touched:
+  - '#gnomon-contracts'
+  - '#contract-client-api-id'
+files_modified:
+  - .gitattributes
+  - packages/gnomon-contracts/package.json
+files_created:
+  - packages/gnomon-contracts/src/client-api-doc.ts
+  - packages/gnomon-contracts/scripts/write-client-api-doc.mjs
+  - packages/gnomon-contracts/test/client-api-doc.test.ts
+  - docs/specs/gnomon-client-api.md
+learnings:
+  - The doc renders from the same values clientApiId hashes but never feeds back into the descriptor
+  - The display.v1.json fixed-point pattern carried over directly (generator script from dist
+  - test compares the committed file)
+body: 'The doc is read as the G-HON-04 fixed-point rule applied to docs. It renders: the ids; verbs with access per class; the relays; refusal codes and reasons; the additive enums; registered kinds and open namespaces; the schema files; the kit; the sanitizer strip and bidi sets; and the conformance catalog. Regenerate with npm run client-api-doc. The workflow now also triggers on docs/specs/gnomon*.md.'
+git_context:
+  ref: 9683ef5217e8096791d8a158d8a20a270dc24373
+  branch: gnomon/m112-slice3
+  dirty: true

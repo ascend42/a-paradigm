@@ -29,6 +29,7 @@ import { ClientAuthError, GnomonClient, ed25519KeyIdOf, type ClientLogPort } fro
 import * as net from 'node:net';
 import { SubprocessDriver, TsClientDriver } from '../src/clients/conformance/driver.js';
 import { declaredConformance } from '../src/kernel/socket/dispatch.js';
+import { checkStatusNumbers } from '../src/kernel/socket/status-numbers.js';
 import { RUNNER_CHECK_IDS, runConformance, type ConformanceFixture } from '../src/clients/conformance/runner.js';
 import { extractSpecifiers, PKG_ROOT, walk } from './helpers.js';
 import { tempHome } from './daemon-helpers.js';
@@ -390,5 +391,16 @@ describe('#gnomon-ts-client surface', () => {
       'mod.view': true, 'mod.command': true,
     };
     expect(Object.keys(typed).sort()).toEqual([...CLIENT_METHODS].sort());
+  });
+});
+
+describe('honesty CI on a live kernel (G-HON-03 denominators, G-HON-07 latency provenance in status)', () => {
+  it('every number in a live status (device and read-token views) is {n, of}, a gauge, or declared in STATUS_NUMBERS', async () => {
+    const f = await kernelRig();
+    const c = await GnomonClient.connect({ socketPath: f.socketPath, client: CLIENT, kernelKey: f.kernelKey, credential: f.device });
+    cleanups.push(() => c.close());
+    const r = await GnomonClient.connect({ socketPath: f.socketPath, client: CLIENT, kernelKey: f.kernelKey, credential: { kind: 'read-token', token: f.readToken } });
+    cleanups.push(() => r.close());
+    for (const st of [await c.call('status', {}), await r.call('status', {})]) expect(checkStatusNumbers(st)).toEqual([]);
   });
 });

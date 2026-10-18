@@ -10,10 +10,12 @@ on:
     branches: [main]
     paths:
       - 'packages/gnomon*/**'
+      - 'docs/specs/gnomon*.md'
       - '.github/**'
   pull_request:
     paths:
       - 'packages/gnomon*/**'
+      - 'docs/specs/gnomon*.md'
       - '.github/**'
 
 permissions:
@@ -55,6 +57,13 @@ jobs:
 
       - name: Test (contracts, kernel fence G-KRN-02, G-SEC-01, G-WIN-05)
         run: npm run test:gnomon
+
+      # M1.12 slice 3: the honesty gate on its own line, so a G-HON failure is named in the run (it also
+      # runs inside test:gnomon; platform-independent). The client-API doc fixed point (G-HON-04 rule)
+      # runs in the contracts suite above.
+      - name: Honesty CI (G-HON-02, G-HON-03, G-HON-05, G-HON-06, G-HON-07)
+        working-directory: packages/gnomon
+        run: npx vitest run test/honesty.test.ts
 
       - name: Typecheck
         run: |
