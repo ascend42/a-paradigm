@@ -142,7 +142,7 @@ describe.skipIf(!SANDBOX_OK)('law 1 + law 7 + Aegis: no claude without a law-7-s
   });
 });
 
-describe.skipIf(!SANDBOX_OK)('P8-D94 audited repo hooks (fake claude runs SessionStart hooks; real profile)', () => {
+describe.skipIf(!SANDBOX_OK)('G-SUB-07 P8-D94 audited repo hooks (fake claude runs SessionStart hooks; real profile)', () => {
   const marker = () => path.join(w.stubDir, 'repo-hook-ran');
   const ran = () => (fs.existsSync(marker()) ? fs.readFileSync(marker(), 'utf8').split('\n').filter(Boolean).length : 0);
   const writeHooks = (command: string, file = 'settings.json') =>
@@ -194,6 +194,16 @@ describe.skipIf(!SANDBOX_OK)('P8-D94 audited repo hooks (fake claude runs Sessio
     await openAndWait(r);
     expect(ran()).toBe(1);
     expect(r.cards).toHaveLength(1);
+  }, 30_000);
+  it('a withdrawn (or any non allow/deny) outcome records nothing: the hook stays undecided and is raised again', async () => {
+    const r = rig();
+    writeHooks(hookCmd());
+    await openAndWait(r);
+    await decide(r, 0, 'withdraw' as 'deny');
+    expect(r.kinds('gate-class.decided')).toHaveLength(0);
+    await openAndWait(r);
+    expect(ran()).toBe(0);
+    expect(r.cards).toHaveLength(2);
   }, 30_000);
   it('a changed hook set re-raises the card and the old approval does not apply', async () => {
     const r = rig();

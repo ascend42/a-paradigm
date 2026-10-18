@@ -220,3 +220,27 @@ export function repoHookCard(set: Extract<RepoHookSet, { status: 'ok' }>, h: Rep
     block: wrappedBlock(lines).block,
   };
 }
+
+/** A chain row as the decision reader sees it (a full-view event). */
+export interface DecisionRow {
+  principal: string;
+  keyId?: unknown;
+  payload?: unknown;
+}
+
+/**
+ * P8-D94: the human's per-hook decisions for (repoKey, setHash), read back from the chain. Only KERNEL-signed
+ * rows count (principal === the kernel principal AND keyId a kernel key): a forged `gate-class.decided` from
+ * any other principal or key is ignored. The last decision per hook wins.
+ */
+export function repoHookDecisionsFrom(rows: Iterable<DecisionRow>, kernel: { principal: string; isKernelKey: (keyId: string) => boolean }, repoKey: string, setHash: string): Map<string, 'allow' | 'deny'> {
+  const out = new Map<string, 'allow' | 'deny'>();
+  for (const r of rows) {
+    if (r.principal !== kernel.principal || typeof r.keyId !== 'string' || !kernel.isKernelKey(r.keyId)) continue;
+    const p = r.payload as { what?: unknown; repoKey?: unknown; setHash?: unknown; hookId?: unknown; decision?: unknown } | undefined;
+    if (p?.what !== 'repo-hook' || p.repoKey !== repoKey || p.setHash !== setHash || typeof p.hookId !== 'string') continue;
+    if (p.decision !== 'allow' && p.decision !== 'deny') continue;
+    out.set(p.hookId, p.decision);
+  }
+  return out;
+}

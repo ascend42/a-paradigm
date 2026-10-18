@@ -217,7 +217,11 @@ describe('G-LAW-01b no setting changes the meter or law 7', () => {
       expect(loadFuseConfig(home, root, emit).sessions, JSON.stringify(bad)).toEqual({ hooks: 'none' });
       expect(rows.at(-1)).toMatchObject({ why: 'invalid', sessions: { hooks: 'none' } });
     }
-    writeSignedConfig(home, root, { sessions: { hooks: 'all' } }, 0); // older than the high-water mark (2)
+    // Aegis low: an invalid FUSE section beside a valid sessions section ⇒ none too
+    writeSignedConfig(home, root, { fuse: { breakerMs: 1 }, sessions: { hooks: 'all' } }, 4);
+    expect(loadFuseConfig(home, root, emit).sessions).toEqual({ hooks: 'none' });
+    expect(rows.at(-1)).toMatchObject({ why: 'invalid', sessions: { hooks: 'none' } });
+    writeSignedConfig(home, root, { sessions: { hooks: 'all' } }, 0); // older than the high-water mark
     expect(loadFuseConfig(home, root).sessions).toEqual({ hooks: 'none' });
     fs.rmSync(path.join(home, ROOT_CONFIG_FILE));
     expect(loadFuseConfig(home, root).sessions).toEqual({ hooks: 'none' }); // missing after a signed one

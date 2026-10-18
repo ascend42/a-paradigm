@@ -454,7 +454,9 @@ export class SessionSupervisor {
           kind: 'gate-class', requestedBy: this.#o.kernelPrincipal, hsid, attended: true, detail: c.detail, lines: c.lines, block: c.block,
           effect: async (decision) => {
             this.#pendingHookCards.delete(key);
-            await this.#o.log('gate-class.decided', { what: 'repo-hook', repoKey: set.repoKey, setHash: set.setHash, hookId: h.hookId, decision: decision === 'allow' ? 'allow' : 'deny' });
+            // only an explicit allow or deny is recorded: any other outcome (withdraw) leaves the hook undecided (re-raised next open)
+            if (decision !== 'allow' && decision !== 'deny') return;
+            await this.#o.log('gate-class.decided', { what: 'repo-hook', repoKey: set.repoKey, setHash: set.setHash, hookId: h.hookId, decision });
           },
         });
         this.#pendingHookCards.set(key, card.cardId);

@@ -12,7 +12,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { CLAUDE_HOOK_EVENTS, extractRepoHooks, hooksBlock, MAX_REPO_HOOKS, MAX_SETTINGS_BYTES, mergeHooks, REPO_HOOK_WARNING, repoHookCard, type RepoHook } from '../src/kernel/supervisor/repo-hooks.js';
+import { CLAUDE_HOOK_EVENTS, extractRepoHooks, hooksBlock, MAX_REPO_HOOKS, MAX_SETTINGS_BYTES, mergeHooks, REPO_HOOK_WARNING, repoHookCard, repoHookDecisionsFrom, type RepoHook } from '../src/kernel/supervisor/repo-hooks.js';
 
 let root = '';
 afterEach(() => {
@@ -172,5 +172,21 @@ describe('card + policy rendering', () => {
     if (s.status !== 'ok') throw new Error('expected ok');
     const merged = mergeHooks({ PreToolUse: [{ hooks: [{ type: 'command', command: 'gnomon' }] }] }, hooksBlock(s.hooks));
     expect(merged.PreToolUse).toEqual([{ hooks: [{ type: 'command', command: 'gnomon' }] }, { matcher: 'Bash', hooks: [{ type: 'command', command: 'echo a' }] }]);
+  });
+});
+
+describe('G-SUB-07 decisions are read back from KERNEL-signed rows only (reviewer)', () => {
+  const K = { principal: 'p:abcdefgh/kernel', isKernelKey: (k: string) => k === 'key:kernel' };
+  const row = (over: Record<string, unknown> = {}, p: Record<string, unknown> = {}) => ({ principal: K.principal, keyId: 'key:kernel', payload: { what: 'repo-hook', repoKey: 'rk', setHash: 'sh', hookId: 'h1', decision: 'allow', ...p }, ...over });
+  it('a kernel-signed allow counts; the last decision per hook wins', () => {
+    expect(repoHookDecisionsFrom([row()], K, 'rk', 'sh').get('h1')).toBe('allow');
+    expect(repoHookDecisionsFrom([row(), row({}, { decision: 'deny' })], K, 'rk', 'sh').get('h1')).toBe('deny');
+  });
+  it('a forged decision from another principal, another key, no key, another set or an unknown decision is ignored', () => {
+    for (const forged of [row({ principal: 'p:abcdefgh/founder' }), row({ principal: 'p:abcdefgh/s-1234' }), row({ keyId: 'key:device' }), row({ keyId: undefined }), row({}, { setHash: 'other' }), row({}, { repoKey: 'other' }), row({}, { decision: 'withdraw' }), row({}, { what: 'install' })]) {
+      expect(repoHookDecisionsFrom([forged], K, 'rk', 'sh').size, JSON.stringify(forged)).toBe(0);
+    }
+    // a forged allow AFTER a real deny does not flip it
+    expect(repoHookDecisionsFrom([row({}, { decision: 'deny' }), row({ principal: 'p:abcdefgh/founder' })], K, 'rk', 'sh').get('h1')).toBe('deny');
   });
 });

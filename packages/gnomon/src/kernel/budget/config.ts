@@ -155,8 +155,9 @@ export function loadFuseConfig(home: string, root: RootAuthority, emit: ConfigEv
   const merged = mergeFuse(doc.row!.config?.fuse);
   const sessions = parseSessionsSection(doc.row!.config?.sessions);
   if (!merged || !sessions) {
-    emit('config.loaded', { hash, signed: true, version, highWater: seen, fallback: 'defaults', why: 'invalid', ...(!sessions ? { sessions: { hooks: 'none' } } : {}) });
-    return { ...defaults(true, hash), sessions: { hooks: sessions?.hooks ?? 'none' } };
+    emit('config.loaded', { hash, signed: true, version, highWater: seen, fallback: 'defaults', why: 'invalid', sessions: { hooks: 'none' } });
+    // Aegis low: an invalid fuse OR sessions section ⇒ sessions `none` too (fail closed, never the default)
+    return { ...defaults(true, hash), sessions: { hooks: 'none' } };
   }
   // only a validated config advances the high-water mark; a failed sidecar write is logged, never thrown (the chain row still carries the version)
   if (version > sidecar) {
