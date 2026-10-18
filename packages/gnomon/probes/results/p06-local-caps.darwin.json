@@ -1,0 +1,33 @@
+{
+  "probe": "p06-local-caps",
+  "os": "darwin",
+  "osVersion": "macOS 15.7.3 (24.6.0)",
+  "arch": "arm64",
+  "toolVersions": {
+    "llamaServer": "version: 9890 (74976e1ae) | built with AppleClang 17.0.0.17000604 for Darwin arm64",
+    "node": "v26.0.0"
+  },
+  "verdict": "partial",
+  "evidence": {
+    "reason": "no endpoint present — recorded, not failed (§19.1 P06)",
+    "endpointsTried": [
+      {
+        "base": "http://127.0.0.1:8080",
+        "present": false,
+        "error": "ECONNREFUSED"
+      }
+    ],
+    "llamaServerInstalled": "/opt/homebrew/bin/llama-server",
+    "note": "set P06_ENDPOINTS to the configured endpoints, or P06_GGUF to a model file to let the probe start llama-server itself"
+  },
+  "specRefs": [
+    "§13.2",
+    "§13.3",
+    "§19.1 M1.0 P06",
+    "G-LCL-01",
+    "G-LCL-02",
+    "model.probe",
+    "model.capabilities"
+  ],
+  "at": "2026-10-18T01:44:06.717Z"
+}

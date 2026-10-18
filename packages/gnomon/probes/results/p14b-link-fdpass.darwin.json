@@ -1,0 +1,90 @@
+{
+  "probe": "p14b-link-fdpass",
+  "os": "darwin",
+  "osVersion": "macOS 15.7.3 (24.6.0)",
+  "arch": "arm64",
+  "toolVersions": {
+    "node": "v26.0.0"
+  },
+  "verdict": "pass",
+  "evidence": {
+    "standIn": "LAN peer = listener on 0.0.0.0:59203; other port 127.0.0.1:59204; other host = this Mac's en0 address (en0), local",
+    "profile": "(version 1)\n(deny default)\n(allow process-exec (literal \"<node>\"))\n(allow file-read* (literal \"/\") (subpath \"/opt/homebrew/Cellar/node/26.0.0\") (subpath \"/opt/homebrew/Cellar/llhttp/9.4.1/lib\") (subpath \"/opt/homebrew/Cellar/libuv/1.53.0/lib\") (subpath \"/opt/homebrew/Cellar/ada-url/3.4.4/lib\") (subpath \"/opt/homebrew/Cellar/simdjson/4.6.4/lib\") (subpath \"/opt/homebrew/Cellar/brotli/1.2.0/lib\") (subpath \"/opt/homebrew/Cellar/c-ares/1.34.6/lib\") (subpath \"/opt/homebrew/Cellar/hdrhistogram_c/0.11.9/lib\") (subpath \"/opt/homebrew/Cellar/merve/1.2.2_1/lib\") (subpath \"/opt/homebrew/Cellar/nbytes/0.1.4/lib\") (subpath \"/opt/homebrew/Cellar/libnghttp2/1.69.0/lib\") (subpath \"/opt/homebrew/Cellar/libnghttp3/1.16.0/lib\") (subpath \"/opt/homebrew/Cellar/libngtcp2/1.23.0/lib\") (subpath \"/opt/homebrew/Cellar/sqlite/3.53.4/lib\") (subpath \"/opt/homebrew/Cellar/uvwasi/0.0.23/lib\") (subpath \"/opt/homebrew/Cellar/zstd/1.5.7_1/lib\") (subpath \"/opt/homebrew/Cellar/openssl@3/3.6.3/lib\") (subpath \"/opt/homebrew/Cellar/icu4c@78/78.3/lib\") (subpath \"/opt/homebrew/opt\") (subpath \"/opt/homebrew/Cellar\"))\n(allow file-read* (literal \"/opt/homebrew/Cellar/node/26.0.0/bin/node\") (literal \"/dev/null\") (literal \"/dev/urandom\") (literal \"/dev/random\") (subpath \"/usr/lib\") (subpath \"/System/Library\") (subpath \"/System/Cryptexes\") (subpath \"/private/var/db/dyld\") (subpath \"/Library/Apple/System/Library\"))\n(allow file-read-metadata)\n(allow file-write-data (literal \"/dev/null\"))\n(allow sysctl-read)",
+    "childStarted": true,
+    "i_fullDuplex": {
+      "cmd": "big",
+      "received": 4194304,
+      "sawPeerClose": true,
+      "wrote": true,
+      "ms": 6,
+      "expectedSha": true,
+      "sentFromChildOk": true,
+      "wallMs": 7,
+      "ok": true
+    },
+    "ii_peerCloseSeen": true,
+    "iii_secondHandoff": {
+      "reply": "pong",
+      "ok": true
+    },
+    "iv_networkDenies": {
+      "results": {
+        "samePeer": "EPERM",
+        "otherPort": "EPERM",
+        "otherHost": "EPERM",
+        "udp": "EPERM",
+        "listen": "EPERM",
+        "unixSocket": "EPERM"
+      },
+      "ok": true
+    },
+    "v_otherDenies": {
+      "results": {
+        "fileRead": "EPERM",
+        "homeList": "EPERM",
+        "exec": "EPERM"
+      },
+      "ok": true
+    },
+    "peerSaw": [
+      {
+        "otherPortHit": true
+      },
+      {
+        "conn": 0,
+        "received": 4194304,
+        "shaOk": true
+      },
+      {
+        "conn": 1,
+        "got": "ping"
+      }
+    ],
+    "peerConnections": 2,
+    "unsandboxedControl": {
+      "results": {
+        "samePeer": "connected",
+        "otherPort": "connected",
+        "otherHost": "connected",
+        "unixSocket": "connected",
+        "udp": "sent",
+        "listen": "listening",
+        "fileRead": "read",
+        "homeList": "listed",
+        "exec": "ran"
+      },
+      "peerConnectionsDuringControl": 2,
+      "ok": true
+    }
+  },
+  "specRefs": [
+    "§15.5 link",
+    "§16 link row",
+    "§3.9",
+    "§19.1 M1.0 P14",
+    "research paradigm-8/37 P14b",
+    "G-LNK-11",
+    "P8-D74"
+  ],
+  "at": "2026-10-18T01:51:56.578Z"
+}

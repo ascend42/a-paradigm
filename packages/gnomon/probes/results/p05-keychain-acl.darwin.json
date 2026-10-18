@@ -1,0 +1,111 @@
+{
+  "probe": "p05-keychain-acl",
+  "os": "darwin",
+  "osVersion": "macOS 15.7.3 (24.6.0)",
+  "arch": "arm64",
+  "toolVersions": {
+    "node": "v26.0.0"
+  },
+  "verdict": "partial",
+  "evidence": {
+    "build": {
+      "verifyStrict": true,
+      "details": [
+        "Identifier=gnomon.helper",
+        "Format=app bundle with Mach-O thin (arm64)",
+        "CodeDirectory flags=0x10000(runtime) hashes=34+7 location=embedded",
+        "Authority=Developer ID Application: Matthew Canoy (SW4BMQ8PNL)",
+        "Authority=Developer ID Certification Authority",
+        "Authority=Apple Root CA",
+        "Timestamp=Oct 17, 2026 at 6:45:04 PM",
+        "TeamIdentifier=SW4BMQ8PNL",
+        "Runtime Version=26.2.0"
+      ]
+    },
+    "c3_sandboxedRefuses": {
+      "exit": 3,
+      "json": {
+        "error": "SANDBOXED",
+        "note": "the helper refuses to run sandboxed (P8-D68)",
+        "ok": false
+      },
+      "ok": true
+    },
+    "custodyKey": {
+      "ok": true,
+      "presence": false,
+      "publicKeyBytes": 65,
+      "publicKeySha256": "5b82885ca063e542",
+      "tag": "gnomon-p05-custody-3b6680a2"
+    },
+    "dpCreate": {
+      "dataProtection": true,
+      "dataSha256": "b8e0c5215b7bfcf0",
+      "ok": true,
+      "status": 0
+    },
+    "dpIntegrity": {
+      "dataProtection": true,
+      "integrity": "OK",
+      "ms": 0,
+      "ok": true
+    },
+    "dpInvisibleToSecurityCli": {
+      "exit": 44,
+      "timedOut": false,
+      "ok": true
+    },
+    "unsignedCannotUseGroup": {
+      "json": {
+        "ok": false,
+        "stage": "custody-key",
+        "status": -34018
+      },
+      "ok": true
+    },
+    "unsignedBareAddToGroup": {
+      "json": {
+        "ok": false,
+        "status": -34018
+      },
+      "ok": true
+    },
+    "c5_dataProtectionGated": true,
+    "c5_xpcPeerRequirement": "pending: needs the Developer-ID-signed kernel SEA (M1.1) as the only accepted XPC peer",
+    "c4_forgedItem": {
+      "transplantedSignature": {
+        "planted": {
+          "copiedSignatureChars": 96,
+          "dataSha256": "70c61abb4ea16eab",
+          "ok": true,
+          "status": 0
+        },
+        "helper": {
+          "dataProtection": false,
+          "integrity": "INTEGRITY_BROKEN",
+          "ms": 13,
+          "ok": false
+        }
+      },
+      "ok": true
+    },
+    "pendingFounder": "claims 1 and 2 raise keychain dialogs: run in a terminal: node packages/gnomon/probes/run.mjs p05-keychain-acl --timeout 1800000",
+    "cleanup": [
+      true,
+      true,
+      true,
+      true,
+      "temp-removed"
+    ]
+  },
+  "specRefs": [
+    "§3.1 kernel key",
+    "§16 custody row",
+    "§19.1 M1.0 P05 / S29-02",
+    "K1",
+    "P8-D68",
+    "release gate (b)",
+    "G-ID-07"
+  ],
+  "at": "2026-10-18T01:45:05.309Z"
+}
