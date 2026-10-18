@@ -320,11 +320,24 @@ components:
       socket) over the child's IPC channel (stdio fd 3, WEB_CONN_MESSAGE);
       accept-and-forward only, so the child stays the only parser (A24-1).
       The listener outlives a child restart (same port); stop(), the restart
-      cap and a failed respawn close it; a connection accepted while no child
-      serves is closed; a child that speaks on the IPC channel is killed. The
-      CHILD listens on nothing and parses bytes only: node:http over the
-      handed sockets (server.emit('connection')), the ready record names no
-      port (channel gnomon-web:v2), the RFC 6455 upgrade and zero-dep framing (ws-codec.ts: text only — binary
+      cap and a failed respawn close it (the port is then ECONNREFUSED, and
+      squattable by a local process, §A.7); a connection accepted while no
+      child serves is closed. Hand-off bounds (round 2, Aegis C1): listener
+      maxConnections WEB_MAX_PENDING_HANDOFFS = 128 (Node counts a socket
+      until it is sent and queues later hand-offs behind an unACKed one); an
+      ACK watchdog (handoffAckMs, default 5 s, ACKs seen via the undocumented
+      'internalMessage' NODE_HANDLE_ACK, FIFO) SIGKILLs a stalled child;
+      any user IPC message and any internal one but NODE_HANDLE_ACK kills the
+      child and closes an attached handle. Residual: Node's fd-3 JSON-line
+      reader is unbounded (DoS-only, §A.7). A start that began before a
+      stop() (stop generation counter) kills its child and never listens or
+      writes a second socket.web.stop row; listenAddress() exposes the bound
+      address. The CHILD listens on nothing and parses bytes only: node:http
+      over the handed sockets (server.emit('connection')) with per-socket
+      slowloris deadlines (a never-listening http.Server runs no
+      headersTimeout/requestTimeout checker): headersTimeout 10 s from the
+      hand-off and after each response, requestTimeout 30 s for the body;
+      the ready record names no port (channel gnomon-web:v2), the RFC 6455 upgrade and zero-dep framing (ws-codec.ts: text only — binary
       1003; no fragmentation — FIN=0/continuation 1009; no extension ever
       negotiated — RSV bits 1002; masking required 1002; invalid UTF-8 1007;
       >4 MiB 1009 from the header; close mirrored; pings every 30 s, closes

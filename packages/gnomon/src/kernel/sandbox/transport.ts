@@ -33,7 +33,10 @@
  * subpath is checked, and one that equals or contains $HOME, the Gnomon home
  * or its keystore dir refuses `sandbox-unavailable`. Residuals, stated:
  * the child reads and writes the connected sockets it is handed (that is its
- * job); `file-read-metadata` on ancestor directories
+ * job); the IPC channel (fd 3) is read in the KERNEL by Node's own JSON-line
+ * reader with no length bound before endpoint.ts sees a message (any message
+ * kills the child) — a DoS-only kernel surface reachable from a compromised
+ * child (§A.7); `file-read-metadata` on ancestor directories
  * reveals their existence; the child may re-exec its own Node binary (same
  * profile inherited) because sandbox-exec needs that one exec — `process-fork`
  * is denied, so it cannot spawn anything.

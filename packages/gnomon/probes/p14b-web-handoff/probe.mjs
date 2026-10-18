@@ -157,7 +157,12 @@ export default async function probe(ctx) {
   let stderr = '';
   child.stderr.on('data', (d) => (stderr += d));
   const next = harness(child);
-  const ev = { design: `kernel listens on 127.0.0.1:${P} (pauseOnConnect), hands each accepted socket to the child via subprocess.send('conn', socket)`, lan: lan ? lan.name : 'none', profile: profile.replace(NODE, '<node>') };
+  const ev = {
+    design: `kernel listens on 127.0.0.1:${P} (pauseOnConnect), hands each accepted socket to the child via subprocess.send('conn', socket)`,
+    profileNote: "the P14 pattern profile (p14-link-outbound profileFor(null): deny-default, no network-* rule), not the shipped transportProfileSbpl; the shipped profile is covered by test/web-sandbox.test.ts (T-2026-10-18-020 (i)-(iii), (v))",
+    lan: lan ? lan.name : 'none',
+    profile: profile.replace(NODE, '<node>'),
+  };
   try {
     const ready = await next('ready', 20_000);
     ev.childStarted = !ready.error;
