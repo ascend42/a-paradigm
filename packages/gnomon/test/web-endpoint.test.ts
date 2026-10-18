@@ -429,11 +429,17 @@ describe('rule 7 auth deadline, rule 8 connection cap, §2.4 linger', () => {
     const a = await attach(ep, g.launchToken);
     await sleep(500);
     expect(ep.listening).toBe(true); // a live session holds it
+    const pid = ep.childPid()!;
     a.ws.end();
     await until(() => !ep.listening);
+    // stop() flips `listening` at once but writes socket.web.stop only AFTER the
+    // child has exited (shutdown record, then SIGKILL at 1 s): the row means
+    // "down and the child is gone". Wait for the row (bounded), not the flag.
+    await until(() => rows.some((r) => r.kind === 'socket.web.stop'));
     expect(rows.find((r) => r.kind === 'socket.web.stop')?.payload).toEqual({ reason: 'no-sessions' });
     expect(rows.some((r) => r.kind === 'socket.web.linger')).toBe(true);
     expect(ep.childPid()).toBeNull();
+    expect(() => process.kill(pid, 0)).toThrow(); // the child really ended
   });
 });
 
