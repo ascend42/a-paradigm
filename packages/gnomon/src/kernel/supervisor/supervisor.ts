@@ -71,7 +71,7 @@ import { LifecycleRefusal } from '../lifecycle/refusal.js';
 import { buildSessionEnv } from '../runner/env.js';
 import { claudeAuthOk, claudeJsonProjection, claudeVersion, law7Layers, law7Scan, managedFiles, PreflightRefusal, realLoose, resolveClaudeBinary, type ClaudeRun, type Law7Input, type SessionRefusalCode } from '../runner/preflight.js';
 import { commitPin, prepareClaude, readClaudePin } from '../runner/binary.js';
-import { buildClaudeArgv, cardKindOfTool, controlInterruptLine, LineSplitter, parseStreamLine, UsageMeter, userMessageLine, type SettingSource } from '../../adapters/claude-code/adapter.js';
+import { buildClaudeArgv, DEFAULT_SESSION_HOOKS, settingSourcesFor, cardKindOfTool, controlInterruptLine, LineSplitter, parseStreamLine, UsageMeter, userMessageLine, type SettingSource } from '../../adapters/claude-code/adapter.js';
 import { claudeCodePlatform, type ClaudeCodePlatformRow } from '../../platform/claude-code.js';
 import type { DarwinSessionExtras } from '../../platform/darwin/session-sbpl.js';
 import { LocalLane, type LocalLaneOptions } from './local-session.js';
@@ -108,7 +108,7 @@ export interface SupervisorOptions {
   endpointPort?: () => number | null;
   linkedFolders?: () => string[];
   platform?: string;
-  /** --setting-sources (explicit; default user,project,local — p01) */
+  /** --setting-sources (explicit; default settingSourcesFor('all') = user,project,local — p01). The daemon passes the root-signed `config.sessions.hooks` mode (T-2026-10-18-010 L4). */
   settingSources?: readonly SettingSource[];
   watchMs?: number;
   /** TEST RIG ONLY (the fake claude is a #! wrapper): accept a script binary. The daemon never sets it. */
@@ -347,7 +347,8 @@ export class SessionSupervisor {
       }
       this.assertClaudePermit(permit, hsid);
       if (permit.billing !== 'subscription') throw new PreflightRefusal('api_billing_refused', 'api-token billing is not wired into the session spawn yet (M1.7 slice 2)', { billing: permit.billing });
-      const argv = buildClaudeArgv({ uuid, policyPath, mcpConfigPath, settingSources: this.#o.settingSources ?? ['user', 'project', 'local'], ...(req.systemPrompt !== undefined ? { appendSystemPrompt: req.systemPrompt } : {}), ...(req.model && req.model !== 'claude' && req.model !== 'any' ? { model: req.model } : {}) });
+      const settingSources = this.#o.settingSources ?? settingSourcesFor(DEFAULT_SESSION_HOOKS);
+      const argv = buildClaudeArgv({ uuid, policyPath, mcpConfigPath, settingSources, ...(req.systemPrompt !== undefined ? { appendSystemPrompt: req.systemPrompt } : {}), ...(req.model && req.model !== 'claude' && req.model !== 'any' ? { model: req.model } : {}) });
       const plan = sessionLaunchPlan({ policy, binaryReal: priv.exec, argv, extras }, this.#platform, this.#o.macosMajor, this.#o.sipEnabled);
       // Aegis L1: anything changed between the scan and now ⇒ scan again (a hit refuses)
       const wNow = this.#watchHashOf(layerInput);
@@ -381,7 +382,7 @@ export class SessionSupervisor {
       this.#wire(s); // round 3: wired BEFORE any further await — a failing row below still cleans up through the exit path
       await this.#o.log('session.sandbox', {
         hsid, sandbox: plan.sandbox, profile: 'session', profileHash: plan.profileHash, policyHash: policyHash(policy), layersHash: lHash, gitHash: gHash,
-        binarySha256: `sha256:${priv.sha256}`, exec: priv.exec, version, envKeys, permitId: permit.permitId, generated: generated ? [...generated.keys()] : [],
+        binarySha256: `sha256:${priv.sha256}`, exec: priv.exec, version, envKeys, settingSources: [...settingSources], permitId: permit.permitId, generated: generated ? [...generated.keys()] : [],
       }, { session: hsid });
       return { hsid, principalId, backend: 'claude-code', state: s.state, ...(priv.pin === 'first-use' ? { binaryPin: `first-use pin ${priv.sha256} from ${priv.source}` } : {}) };
     } catch (err) {

@@ -1401,7 +1401,12 @@ components:
   claude-adapter:
     description: >-
       #claude-adapter (spec §2.2, §3.3; M1.7 slice 1) in
-      src/adapters/claude-code/adapter.ts: the §3.3 argv with FORBIDDEN_FLAGS
+      src/adapters/claude-code/adapter.ts. SLICE 2 (T-2026-10-18-010 L4):
+      SESSION_HOOKS_MODES all|user-only|none and settingSourcesFor(mode) ->
+      --setting-sources; the mode is the root-signed config.sessions.hooks
+      (budget/config.ts parseSessionsSection; default all; rollback/invalid
+      after a signed config => none), wired by the daemon into #supervisor
+      and logged as session.sandbox.settingSources. The §3.3 argv with FORBIDDEN_FLAGS
       throwing (G-RUN-01, also --flag=value and extras); stream-json parse,
       TOLERANT (unknown fields ignored, unknown types `unknown`, non-objects
       `malformed` — the falsifier); UsageMeter charges each message id once

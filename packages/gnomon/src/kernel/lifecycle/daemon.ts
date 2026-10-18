@@ -97,6 +97,7 @@ import { Scheduler } from '../scheduler/index.js';
 import { DaemonChildren, sweepOrphans } from './children.js';
 import { processControlFor } from './process-control.js';
 import { SessionSupervisor, createSessionPort } from '../supervisor/index.js';
+import { settingSourcesFor } from '../../adapters/claude-code/adapter.js';
 import { loadLocalConfig, LOCAL_CONFIG_FILE } from '../local/config.js';
 import { linkedFolders } from '../manifest/install.js';
 import { ModHost, type KernelCallRequest } from '../modhost/host.js';
@@ -521,6 +522,8 @@ export async function startDaemon(opts: DaemonOptions): Promise<DaemonHandle> {
   const localCfg = loadLocalConfig(home, authority, (kind, payload) => void appendRow(kind, payload).catch(() => undefined), { chainHighWater: localHighWater });
   const supervisor = new SessionSupervisor({
     ...(localCfg.config ? { local: localCfg.config } : {}),
+    // T-2026-10-18-010 L4: whose hooks run inside sessions — the root-signed `config.sessions.hooks` (default `all`)
+    settingSources: settingSourcesFor(fuseCfg.sessions.hooks),
     log: (kind, payload, ids = {}) => log.append({ kind, principal: kernelPrincipal, payload, ...(ids.session ? { session: ids.session } : {}) }).then(() => undefined),
     children,
     fuse,

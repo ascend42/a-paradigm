@@ -39,6 +39,7 @@ import { KernelLog } from '../src/kernel/log/index.js';
 /** capability, not platform: below the macOS floor or with SIP off every open is refused (asserted below) */
 const SANDBOX_OK = darwinFloor().ok;
 import { sessionWorld, setMode, trace, waitFor, type SessionWorld } from './session-helpers.js';
+import { settingSourcesFor } from '../src/adapters/claude-code/adapter.js';
 
 const HUMAN = 'p:abcdefgh/founder';
 let w: SessionWorld;
@@ -49,7 +50,7 @@ afterEach(async () => {
   w?.cleanup();
 });
 
-function rig(o: { local?: ConstructorParameters<typeof SessionSupervisor>[0]['local']; realLog?: KernelLog; billing?: BillingScanSource; watchMs?: number; failSandboxRow?: boolean; allowScripts?: boolean; macosMajor?: () => number | null; sipEnabled?: () => boolean | null } = {}) {
+function rig(o: { local?: ConstructorParameters<typeof SessionSupervisor>[0]['local']; realLog?: KernelLog; billing?: BillingScanSource; watchMs?: number; failSandboxRow?: boolean; allowScripts?: boolean; macosMajor?: () => number | null; sipEnabled?: () => boolean | null; settingSources?: readonly ('user' | 'project' | 'local')[] } = {}) {
   w = sessionWorld();
   const rows: Array<{ kind: string; payload: Record<string, unknown> }> = [];
   const log = async (kind: string, payload: Record<string, unknown>, ids: { session?: string } = {}): Promise<void> => {
@@ -62,7 +63,7 @@ function rig(o: { local?: ConstructorParameters<typeof SessionSupervisor>[0]['lo
   const children = new DaemonChildren({ append: log, control: processControlFor('darwin'), boot: 'boot-test', graceMs: 500 });
   const cards: Array<Record<string, unknown>> = [];
   const broker = { raise: async (i: Record<string, unknown>) => (cards.push(i), { cardId: `card:${cards.length}` }) } as unknown as Pick<ApprovalBroker, 'raise'>;
-  sup = new SessionSupervisor({ log, children, fuse, broker, home: w.home, userHome: w.userHome, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(w.home, 'gnomon.sock'), claudePath: w.claude, env: () => ({ HOME: '/not-the-scanned-home', PATH: '/usr/bin:/bin', ANTHROPIC_API_KEY: 'scrubbed-from-the-child' }), platform: 'darwin', watchMs: o.watchMs ?? 200, allowScripts: o.allowScripts ?? true, ...(o.macosMajor ? { macosMajor: o.macosMajor } : {}), ...(o.sipEnabled ? { sipEnabled: o.sipEnabled } : {}), ...(o.local ? { local: o.local } : {}) });
+  sup = new SessionSupervisor({ log, children, fuse, broker, home: w.home, userHome: w.userHome, kernelPrincipal: 'p:abcdefgh/kernel', sock: path.join(w.home, 'gnomon.sock'), claudePath: w.claude, env: () => ({ HOME: '/not-the-scanned-home', PATH: '/usr/bin:/bin', ANTHROPIC_API_KEY: 'scrubbed-from-the-child' }), platform: 'darwin', watchMs: o.watchMs ?? 200, allowScripts: o.allowScripts ?? true, ...(o.macosMajor ? { macosMajor: o.macosMajor } : {}), ...(o.sipEnabled ? { sipEnabled: o.sipEnabled } : {}), ...(o.local ? { local: o.local } : {}), ...(o.settingSources ? { settingSources: o.settingSources } : {}) });
   live.push(() => children.stopAll('test-end'));
   const kinds = (k: string) => rows.filter((r) => r.kind === k);
   const idx = (k: string) => rows.findIndex((r) => r.kind === k);
@@ -155,6 +156,18 @@ describe.skipIf(!SANDBOX_OK)('a session end to end (fake claude, real profile, r
     // the session's policy.json mirrors the denies (Claude's own rules, defence in depth)
     const pol = JSON.parse(fs.readFileSync(path.join(w.home, 'sessions', s.hsid.slice(18).toLowerCase(), 'policy.json'), 'utf8'));
     expect(pol.permissions.deny.length).toBeGreaterThan(5);
+  });
+  it('T-2026-10-18-010 L4: the hooks switch reaches the argv — default user,project,local; user-only ⇒ user; none ⇒ empty; logged on session.sandbox', async () => {
+    for (const [mode, want] of [[undefined, 'user,project,local'], ['user-only', 'user'], ['none', '']] as const) {
+      const r = rig(mode ? { settingSources: settingSourcesFor(mode) } : {});
+      await open(r.sup);
+      expect(await waitFor(() => trace(w).some((t) => t.t === 'argv'))).toBe(true);
+      const args = trace(w).find((t) => t.t === 'argv')!.args as string[];
+      expect(args[args.indexOf('--setting-sources') + 1], String(mode)).toBe(want);
+      expect(r.kinds('session.sandbox').find((x) => x.payload.profile)!.payload.settingSources).toEqual(want ? want.split(',') : []);
+      await r.children.stopAll('next');
+      w.cleanup();
+    }
   });
   it('T-2026-10-18-019: session.send through a REAL KernelLog — session.inject carries the byte count, never the text', async () => {
     const lh = fs.mkdtempSync(path.join(fs.realpathSync(os.tmpdir()), 'gnomon-klog-'));
