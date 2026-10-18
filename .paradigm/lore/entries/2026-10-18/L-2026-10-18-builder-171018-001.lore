@@ -1,0 +1,22 @@
+id: L-2026-10-18-builder-171018-001
+type: insight
+timestamp: '2026-10-18T17:10:18.951Z'
+author: builder
+title: 'P14b-web passes on darwin: kernel-accept socket hand-off to a no-network transport child'
+summary: 'Probe p14b-web-handoff: the kernel listens on 127.0.0.1 (pauseOnConnect) and hands each accepted socket via subprocess.send(''conn'', socket) to a sandbox-exec child with no network-* rule. 4 MiB both ways sha-verified (8 ms), client close seen, 5 repeated hand-offs, and all 13 child bind/listen (0.0.0.0, ::, en0, 127.0.0.1, ::1, no host), UDP bind, outbound TCP and unix connect attempts EPERM; unsandboxed control reached all 13.'
+symbols_touched:
+  - '#oracle-sandbox'
+  - '#web-endpoint'
+commit: 265e36bb
+learnings:
+  - SBPL needs no network rule to read/write an inherited connected socket
+  - listen() with no host is denied too so the implicit-bind path is closed
+tags:
+  - decision
+  - gnomon
+  - security
+  - probe
+git_context:
+  ref: 5e9c7417a414aefb270106ae36b23d18f89a7f49
+  branch: gnomon/t020-web-handoff
+  dirty: false

@@ -1,0 +1,24 @@
+id: L-2026-10-18-builder-171019-002
+type: milestone
+timestamp: '2026-10-18T17:10:19.620Z'
+author: builder
+title: 'T-2026-10-18-020 done on macOS: the web transport child opens no network socket (Move 1 exit item)'
+summary: 'Branch gnomon/t020-web-handoff (from feat/gnomon 477d65b4): probe 265e36bb, implementation fb79a0c7, falsifiers 75281221 (mutation-checked against the old rules), spec+purpose 5e9c7417. gnomon vitest 946 passed (1 load flake in other lanes, passes alone), gnomon-gui 26, contracts 316, tsc clean. Residual: the Windows transport profile remains the parity phase (P8-D78); the IPC socket hand-off is platform-neutral Node but untested on Windows locally.'
+symbols_touched:
+  - '#web-endpoint'
+  - '#oracle-sandbox'
+commit: 5e9c7417
+tags:
+  - decision
+  - gnomon
+  - security
+  - move-1
+linked_commits:
+  - 265e36bb
+  - fb79a0c7
+  - '75281221'
+  - 5e9c7417
+git_context:
+  ref: 5e9c7417a414aefb270106ae36b23d18f89a7f49
+  branch: gnomon/t020-web-handoff
+  dirty: true
