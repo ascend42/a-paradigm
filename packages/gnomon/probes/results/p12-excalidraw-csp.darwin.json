@@ -1,0 +1,1849 @@
+{
+  "probe": "p12-excalidraw-csp",
+  "os": "darwin",
+  "osVersion": "macOS 15.7.3 (24.6.0)",
+  "arch": "arm64",
+  "toolVersions": {
+    "excalidraw": "0.18.1",
+    "react": "19.3.1",
+    "esbuild": "0.28.2",
+    "chrome": "Google Chrome 155.0.8059.82",
+    "wkwebview": "WebKit 20621.3.11.11.3",
+    "node": "v26.0.0"
+  },
+  "verdict": "partial",
+  "evidence": {
+    "pins": {
+      "@excalidraw/excalidraw": "0.18.1",
+      "react": "19.3.1",
+      "react-dom": "19.3.1",
+      "esbuild": "0.28.2"
+    },
+    "csp": "default-src 'none'; script-src 'self'; style-src 'self'; img-src 'self' blob:; font-src 'self'; connect-src ws://127.0.0.1:<port> http://127.0.0.1:<port>; worker-src 'self'; frame-src 'none'; frame-ancestors 'none'; base-uri 'none'; form-action 'none'",
+    "build": {
+      "npmInstallMs": "cached",
+      "esbuildMs": 299,
+      "copiedWorkerChunks": [
+        "subset-shared.chunk.js",
+        "subset-worker.chunk.js",
+        "chunk-EIO257PC.js",
+        "chunk-ZUYEQ4TG.js",
+        "chunk-SRAX5OIU.js"
+      ],
+      "esbuildWarnings": null,
+      "tempDir": "/var/folders/gq/nt2kdpsj39dc8vpq6cfzx8gw0000gn/T/gnomon-p12-e5cff9ebdbfc"
+    },
+    "size": {
+      "allNonFontBytes": 10470081,
+      "allNonFontGzip": 3503099,
+      "fontBytes": 13107068,
+      "servedFiles": 426,
+      "js": {
+        "/boot.js": {
+          "bytes": 1397,
+          "gzip": 731,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-23DYPZX7.js": {
+          "bytes": 13583,
+          "gzip": 5399,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-257RVE5A.js": {
+          "bytes": 20699,
+          "gzip": 7842,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-2D5BMOSN.js": {
+          "bytes": 61991,
+          "gzip": 19531,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-2EMPGZEK.js": {
+          "bytes": 551,
+          "gzip": 350,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-2ESRGMR6.js": {
+          "bytes": 20716,
+          "gzip": 7251,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-2LDXKBEU.js": {
+          "bytes": 355,
+          "gzip": 265,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-2Q57P4US.js": {
+          "bytes": 1567,
+          "gzip": 881,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-2SCIZC76.js": {
+          "bytes": 825,
+          "gzip": 464,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-2TBQKJUM.js": {
+          "bytes": 206,
+          "gzip": 154,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-2U2Z3LDI.js": {
+          "bytes": 44550,
+          "gzip": 8282,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-2XAORSJG.js": {
+          "bytes": 14711,
+          "gzip": 4322,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-2ZZEAHPV.js": {
+          "bytes": 148,
+          "gzip": 129,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-35ZVZSDD.js": {
+          "bytes": 454,
+          "gzip": 309,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-3CPHWO3J.js": {
+          "bytes": 43272,
+          "gzip": 11941,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-3GLOEKQL.js": {
+          "bytes": 2000,
+          "gzip": 890,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-3QRQZRA5.js": {
+          "bytes": 891,
+          "gzip": 486,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-47NPN4CU.js": {
+          "bytes": 156,
+          "gzip": 133,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-4BVDKTAV.js": {
+          "bytes": 154,
+          "gzip": 131,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-4CEB3252.js": {
+          "bytes": 9497,
+          "gzip": 3356,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-4RYKSU2X.js": {
+          "bytes": 50340,
+          "gzip": 16874,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-4V35O3MB.js": {
+          "bytes": 22985,
+          "gzip": 8384,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-4VJGOZEU.js": {
+          "bytes": 116900,
+          "gzip": 30879,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-5G7P7C5C.js": {
+          "bytes": 881,
+          "gzip": 521,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-5TFWZBK2.js": {
+          "bytes": 1825148,
+          "gzip": 743099,
+          "newFunction": 2,
+          "evalCall": 0,
+          "wasmInstantiate": 4
+        },
+        "/c-5W3EXPJU.js": {
+          "bytes": 21744,
+          "gzip": 8234,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-65RK2FHD.js": {
+          "bytes": 23180,
+          "gzip": 8146,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-6F6DJPG7.js": {
+          "bytes": 36684,
+          "gzip": 8063,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-6ZN5U25W.js": {
+          "bytes": 52534,
+          "gzip": 17080,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-72IPHRN6.js": {
+          "bytes": 1027,
+          "gzip": 582,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-7XYYEKDU.js": {
+          "bytes": 2902,
+          "gzip": 1042,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-7YJB52LD.js": {
+          "bytes": 1114,
+          "gzip": 619,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-A35I26BW.js": {
+          "bytes": 678,
+          "gzip": 359,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-ACXVVP65.js": {
+          "bytes": 146,
+          "gzip": 128,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-ADQMO5R7.js": {
+          "bytes": 10596,
+          "gzip": 3679,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-AGEEP3GJ.js": {
+          "bytes": 184,
+          "gzip": 155,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-AOV3I24V.js": {
+          "bytes": 20420,
+          "gzip": 7694,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-AQGHASFU.js": {
+          "bytes": 10931,
+          "gzip": 4138,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-ATW6MS32.js": {
+          "bytes": 240525,
+          "gzip": 37574,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-AW4Q23EE.js": {
+          "bytes": 1934,
+          "gzip": 951,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-AWGUCBC7.js": {
+          "bytes": 74305,
+          "gzip": 12273,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-AYBYLOP2.js": {
+          "bytes": 148,
+          "gzip": 129,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-AZ3EUS2G.js": {
+          "bytes": 470,
+          "gzip": 336,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-BFWAQVX3.js": {
+          "bytes": 833,
+          "gzip": 478,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-BJFLXEQI.js": {
+          "bytes": 23848,
+          "gzip": 8974,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-BJG2WICI.js": {
+          "bytes": 568,
+          "gzip": 269,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-BJLJMYQR.js": {
+          "bytes": 146,
+          "gzip": 128,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-BKI6K2R6.js": {
+          "bytes": 447,
+          "gzip": 307,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-BWAXC5BR.js": {
+          "bytes": 132,
+          "gzip": 117,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-BWOD3Y76.js": {
+          "bytes": 22453,
+          "gzip": 8635,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-BZKGBOUF.js": {
+          "bytes": 25544,
+          "gzip": 9362,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-BZTO5237.js": {
+          "bytes": 37816,
+          "gzip": 9787,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-C2OPG2YL.js": {
+          "bytes": 142,
+          "gzip": 126,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-C5QIZT3L.js": {
+          "bytes": 25791,
+          "gzip": 6907,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-CFLPUUW3.js": {
+          "bytes": 1044,
+          "gzip": 590,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-CKUCVPJI.js": {
+          "bytes": 69291,
+          "gzip": 11236,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-CL3KELLN.js": {
+          "bytes": 9697,
+          "gzip": 2633,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-D2X75LBJ.js": {
+          "bytes": 6501,
+          "gzip": 2766,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-D73L5LPB.js": {
+          "bytes": 443941,
+          "gzip": 141748,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-D7NEP6GV.js": {
+          "bytes": 10042,
+          "gzip": 3973,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-DIOS7L2H.js": {
+          "bytes": 2354,
+          "gzip": 1051,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-DJ5W7QLC.js": {
+          "bytes": 608,
+          "gzip": 384,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-DMYYI4DF.js": {
+          "bytes": 25751,
+          "gzip": 9058,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-DPDDGTRX.js": {
+          "bytes": 267706,
+          "gzip": 77054,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-DT2AIMER.js": {
+          "bytes": 57191,
+          "gzip": 10562,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-DVB6JR7R.js": {
+          "bytes": 587,
+          "gzip": 392,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-DWZNU7KR.js": {
+          "bytes": 156,
+          "gzip": 133,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-DYJHR3LQ.js": {
+          "bytes": 23757,
+          "gzip": 7948,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-EJ6UBN6D.js": {
+          "bytes": 699,
+          "gzip": 365,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-EO335ETS.js": {
+          "bytes": 42349,
+          "gzip": 8599,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-F4VUHOZ4.js": {
+          "bytes": 31345,
+          "gzip": 9732,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-F57BJZWL.js": {
+          "bytes": 2198,
+          "gzip": 1013,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-F5RARVUF.js": {
+          "bytes": 64553,
+          "gzip": 10550,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-F5SAK2PP.js": {
+          "bytes": 724,
+          "gzip": 483,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-FEP6XZAO.js": {
+          "bytes": 9103,
+          "gzip": 3563,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-FNHJKM5W.js": {
+          "bytes": 699,
+          "gzip": 365,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-FPM2UHAZ.js": {
+          "bytes": 32840,
+          "gzip": 12785,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 1
+        },
+        "/c-G6D5IKW5.js": {
+          "bytes": 105531,
+          "gzip": 26216,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-GDJB6SJC.js": {
+          "bytes": 1024,
+          "gzip": 546,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-GFOZ26YO.js": {
+          "bytes": 19701,
+          "gzip": 7689,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-GGFCS6PV.js": {
+          "bytes": 156,
+          "gzip": 133,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-GGWMRWQ2.js": {
+          "bytes": 152855,
+          "gzip": 43115,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-HEJUBATK.js": {
+          "bytes": 16789,
+          "gzip": 6918,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-HHKVJD7O.js": {
+          "bytes": 591,
+          "gzip": 385,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-HIN56UMF.js": {
+          "bytes": 41659,
+          "gzip": 15552,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-HUEODEPW.js": {
+          "bytes": 31040,
+          "gzip": 10552,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-HVWFR4OC.js": {
+          "bytes": 911,
+          "gzip": 515,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-HXG5E2X5.js": {
+          "bytes": 1891,
+          "gzip": 850,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-I25CCMYR.js": {
+          "bytes": 20293,
+          "gzip": 7824,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-I2ZEVCRL.js": {
+          "bytes": 46640,
+          "gzip": 8826,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-I7RLBHEA.js": {
+          "bytes": 49222,
+          "gzip": 15566,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-IAYEEYXY.js": {
+          "bytes": 46151,
+          "gzip": 16770,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 1
+        },
+        "/c-IE77ADSQ.js": {
+          "bytes": 34030,
+          "gzip": 9850,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-IQNOUNNA.js": {
+          "bytes": 465,
+          "gzip": 328,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-IS54KOVV.js": {
+          "bytes": 158,
+          "gzip": 133,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-IUPAUU7K.js": {
+          "bytes": 108706,
+          "gzip": 35157,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-IUPVIFRV.js": {
+          "bytes": 17574,
+          "gzip": 6667,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-IVA4OYTS.js": {
+          "bytes": 668387,
+          "gzip": 147640,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-IVFOYT66.js": {
+          "bytes": 22190,
+          "gzip": 8601,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-J5FIIRAY.js": {
+          "bytes": 1575,
+          "gzip": 786,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-J6YBCI2W.js": {
+          "bytes": 216,
+          "gzip": 163,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-JAGNEZ3V.js": {
+          "bytes": 20254,
+          "gzip": 7928,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-JC7VO67U.js": {
+          "bytes": 546191,
+          "gzip": 185078,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-JGRTNZ6T.js": {
+          "bytes": 16255,
+          "gzip": 6728,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-JRO32A2L.js": {
+          "bytes": 894,
+          "gzip": 484,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-JYF7GM67.js": {
+          "bytes": 28966,
+          "gzip": 9226,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-K74YMJ2T.js": {
+          "bytes": 146,
+          "gzip": 127,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-K7OCTM2Y.js": {
+          "bytes": 23162,
+          "gzip": 5489,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-KILQH3ZI.js": {
+          "bytes": 144,
+          "gzip": 127,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-KSIHKBPB.js": {
+          "bytes": 55006,
+          "gzip": 10186,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-KXPN2PDE.js": {
+          "bytes": 113445,
+          "gzip": 41852,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-L7IP26OX.js": {
+          "bytes": 21772,
+          "gzip": 8477,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-LEOLEIZJ.js": {
+          "bytes": 81001,
+          "gzip": 28391,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-LPWPXTQJ.js": {
+          "bytes": 14730,
+          "gzip": 6063,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-LWL5ZGKV.js": {
+          "bytes": 455,
+          "gzip": 309,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-LZADANYQ.js": {
+          "bytes": 27271,
+          "gzip": 5658,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-M4A3L532.js": {
+          "bytes": 545,
+          "gzip": 373,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-M4QARJUI.js": {
+          "bytes": 22815,
+          "gzip": 8641,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-MHBXVQYJ.js": {
+          "bytes": 3059,
+          "gzip": 980,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-MSQBUT3N.js": {
+          "bytes": 38637,
+          "gzip": 7273,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-N6A5SGDC.js": {
+          "bytes": 29306,
+          "gzip": 9216,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-N6B5BD5R.js": {
+          "bytes": 20554,
+          "gzip": 8215,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-NEN2S23K.js": {
+          "bytes": 2445,
+          "gzip": 1061,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-NFCSJTAK.js": {
+          "bytes": 198,
+          "gzip": 150,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-NNR3JIKV.js": {
+          "bytes": 38207,
+          "gzip": 9465,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-NPAMMJA7.js": {
+          "bytes": 11099,
+          "gzip": 4289,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-NPC6NMJX.js": {
+          "bytes": 22657,
+          "gzip": 8548,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-O75BZNUU.js": {
+          "bytes": 296,
+          "gzip": 237,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-OAFFBFSC.js": {
+          "bytes": 53088,
+          "gzip": 9748,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-OESVBYDN.js": {
+          "bytes": 10473,
+          "gzip": 4090,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-PB4PZGRX.js": {
+          "bytes": 19844,
+          "gzip": 7744,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-PGN3CMYX.js": {
+          "bytes": 10982,
+          "gzip": 4192,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-PXQRH2CM.js": {
+          "bytes": 29603,
+          "gzip": 8781,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-PZPYJDYU.js": {
+          "bytes": 1396,
+          "gzip": 777,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-Q6XJKTYV.js": {
+          "bytes": 68311,
+          "gzip": 11112,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-QBOBL3PX.js": {
+          "bytes": 148,
+          "gzip": 129,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-QZKETNHT.js": {
+          "bytes": 768,
+          "gzip": 408,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-RCTYMSGU.js": {
+          "bytes": 635,
+          "gzip": 417,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-REK6UCNJ.js": {
+          "bytes": 22989,
+          "gzip": 8004,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-RG2H6X3P.js": {
+          "bytes": 21227,
+          "gzip": 8233,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-RRT5Y4OS.js": {
+          "bytes": 138,
+          "gzip": 124,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-RSKFR3QW.js": {
+          "bytes": 30786,
+          "gzip": 10133,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-S55FFIWQ.js": {
+          "bytes": 65767,
+          "gzip": 18707,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-S76ZTAGQ.js": {
+          "bytes": 140,
+          "gzip": 125,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-SEIA6KUS.js": {
+          "bytes": 15709,
+          "gzip": 4406,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-SIWV4NLQ.js": {
+          "bytes": 917,
+          "gzip": 491,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-SO6RZM6I.js": {
+          "bytes": 2412,
+          "gzip": 1007,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-SU5KURMT.js": {
+          "bytes": 1565,
+          "gzip": 812,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-T5BTEBGB.js": {
+          "bytes": 22525,
+          "gzip": 8588,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-T762UYL4.js": {
+          "bytes": 253,
+          "gzip": 222,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-TBAWVKKZ.js": {
+          "bytes": 74716,
+          "gzip": 11819,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-TFORSNRB.js": {
+          "bytes": 27373,
+          "gzip": 9153,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-TO2WHO54.js": {
+          "bytes": 24318,
+          "gzip": 8914,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-TTG267VK.js": {
+          "bytes": 375,
+          "gzip": 280,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-U7EM7DUS.js": {
+          "bytes": 20743,
+          "gzip": 7625,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-UGJM25BM.js": {
+          "bytes": 40194,
+          "gzip": 12773,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-UIWFKTVG.js": {
+          "bytes": 82437,
+          "gzip": 22453,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-UTDAYLTO.js": {
+          "bytes": 16874,
+          "gzip": 5864,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-UXJ77WN6.js": {
+          "bytes": 61637,
+          "gzip": 9688,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-V5DB4TXY.js": {
+          "bytes": 38342,
+          "gzip": 12373,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-VBWHI3US.js": {
+          "bytes": 4662,
+          "gzip": 1986,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-VYRX6SNW.js": {
+          "bytes": 19443,
+          "gzip": 7589,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-W4U7FOEX.js": {
+          "bytes": 10492,
+          "gzip": 3757,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-W7V4OQBA.js": {
+          "bytes": 23517,
+          "gzip": 8290,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-WDTS3CDL.js": {
+          "bytes": 156,
+          "gzip": 146,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-WJVGX4NZ.js": {
+          "bytes": 449,
+          "gzip": 309,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-WOLFQTCR.js": {
+          "bytes": 2020,
+          "gzip": 890,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-WOSNP7HB.js": {
+          "bytes": 5497,
+          "gzip": 2299,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-WUQSYVXG.js": {
+          "bytes": 441,
+          "gzip": 304,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-XCPWZ4QU.js": {
+          "bytes": 25641,
+          "gzip": 8990,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-XQBEOG4N.js": {
+          "bytes": 5858,
+          "gzip": 2714,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-YAYYSNM6.js": {
+          "bytes": 47124,
+          "gzip": 15999,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-YNMDAH7K.js": {
+          "bytes": 8609,
+          "gzip": 3828,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-YZKDBG5K.js": {
+          "bytes": 1663,
+          "gzip": 733,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-Z5WMSFGN.js": {
+          "bytes": 38360,
+          "gzip": 13841,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-ZF4ELJTS.js": {
+          "bytes": 18207,
+          "gzip": 6762,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-ZMSCD6P7.js": {
+          "bytes": 26211,
+          "gzip": 9269,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-ZS7WLASQ.js": {
+          "bytes": 72232,
+          "gzip": 11485,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/c-ZTXMOYDF.js": {
+          "bytes": 11503,
+          "gzip": 4047,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/chunk-EIO257PC.js": {
+          "bytes": 1824966,
+          "gzip": 743056,
+          "newFunction": 2,
+          "evalCall": 0,
+          "wasmInstantiate": 4
+        },
+        "/chunk-SRAX5OIU.js": {
+          "bytes": 603,
+          "gzip": 369,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/chunk-ZUYEQ4TG.js": {
+          "bytes": 1572,
+          "gzip": 886,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/entry.js": {
+          "bytes": 805975,
+          "gzip": 250310,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/mark.js": {
+          "bytes": 47,
+          "gzip": 67,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/subset-shared.chunk.js": {
+          "bytes": 174,
+          "gzip": 138,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        },
+        "/subset-worker.chunk.js": {
+          "bytes": 376,
+          "gzip": 282,
+          "newFunction": 0,
+          "evalCall": 0,
+          "wasmInstantiate": 0
+        }
+      }
+    },
+    "evalSites": [
+      {
+        "file": "/c-5TFWZBK2.js",
+        "bytes": 1825148,
+        "gzip": 743099,
+        "newFunction": 2,
+        "evalCall": 0,
+        "wasmInstantiate": 4
+      },
+      {
+        "file": "/c-FPM2UHAZ.js",
+        "bytes": 32840,
+        "gzip": 12785,
+        "newFunction": 0,
+        "evalCall": 0,
+        "wasmInstantiate": 1
+      },
+      {
+        "file": "/c-IAYEEYXY.js",
+        "bytes": 46151,
+        "gzip": 16770,
+        "newFunction": 0,
+        "evalCall": 0,
+        "wasmInstantiate": 1
+      },
+      {
+        "file": "/chunk-EIO257PC.js",
+        "bytes": 1824966,
+        "gzip": 743056,
+        "newFunction": 2,
+        "evalCall": 0,
+        "wasmInstantiate": 4
+      }
+    ],
+    "engines": {
+      "chrome": {
+        "version": "Google Chrome 155.0.8059.82",
+        "runs": 3,
+        "mountedRuns": 3,
+        "medianMs": {
+          "firstModule": 47,
+          "parseLinkAfterLastStaticScript": 0,
+          "mounted": 93
+        },
+        "violationCount": 708,
+        "claimViolationCount": 3,
+        "loadPhaseClaimViolationCount": 0,
+        "violatedDirectives": [
+          "font-src",
+          "img-src",
+          "script-src",
+          "style-src-attr"
+        ],
+        "exportPng": true,
+        "exportSvg": true,
+        "firstRun": {
+          "wallMs": 2929,
+          "stage": "done",
+          "mounted": true,
+          "sceneElements": 2,
+          "ms": {
+            "firstModule": 43,
+            "parseLinkAfterLastStaticScript": 0,
+            "entryEval": 6,
+            "mounted": 93
+          },
+          "initialStaticScripts": [
+            "/boot.js",
+            "/entry.js",
+            "/c-RCTYMSGU.js",
+            "/c-BWOD3Y76.js",
+            "/c-DVB6JR7R.js",
+            "/c-2Q57P4US.js",
+            "/c-BFWAQVX3.js",
+            "/c-JC7VO67U.js",
+            "/mark.js",
+            "/c-2EMPGZEK.js",
+            "/c-SU5KURMT.js",
+            "/c-5G7P7C5C.js"
+          ],
+          "initialBytes": 1382682,
+          "initialGzip": 448672,
+          "png": {
+            "ok": true,
+            "bytes": 4293,
+            "ms": 19
+          },
+          "svg": {
+            "ok": true,
+            "chars": 34371,
+            "fontFace": true,
+            "ms": 1016
+          },
+          "errors": [],
+          "rejections": [],
+          "lazyResources": [
+            "image/svg+xml,%3Csvg%20aria-hidden%3D%22true%22%20focusable%3D%22false%22%20data-prefix%3D%22fas%22%20data-icon%3D%22image%22%20class%3D%22svg-inline--fa%20fa-image%20fa-w-16%22%20role%3D%22img%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20viewBox%3D%220%200%20512%20512%22%3E%3Cpath%20fill%3D%22%23888%22%20d%3D%22M464%20448H48c-26.51%200-48-21.49-48-48V112c0-26.51%2021.49-48%2048-48h416c26.51%200%2048%2021.49%2048%2048v288c0%2026.51-21.49%2048-48%2048zM112%20120c-30.928%200-56%2025.072-56%2056s25.072%2056%2056%2056%2056-25.072%2056-56-25.072-56-56-56zM64%20384h384V272l-87.515-87.515c-4.686-4.686-12.284-4.686-16.971%200L208%20320l-55.515-55.515c-4.686-4.686-12.284-4.686-16.971%200L64%20336v48z%22%3E%3C%2Fpath%3E%3C%2Fsvg%3E (img)",
+            "image/svg+xml,%3Csvg%20viewBox%3D%220%200%20668%20668%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20xml%3Aspace%3D%22preserve%22%20style%3D%22fill-rule%3Aevenodd%3Bclip-rule%3Aevenodd%3Bstroke-linejoin%3Around%3Bstroke-miterlimit%3A2%22%3E%3Cpath%20d%3D%22M464%20448H48c-26.51%200-48-21.49-48-48V112c0-26.51%2021.49-48%2048-48h416c26.51%200%2048%2021.49%2048%2048v288c0%2026.51-21.49%2048-48%2048ZM112%20120c-30.928%200-56%2025.072-56%2056s25.072%2056%2056%2056%2056-25.072%2056-56-25.072-56-56-56ZM64%20384h384V272l-87.515-87.515c-4.686-4.686-12.284-4.686-16.971%200L208%20320l-55.515-55.515c-4.686-4.686-12.284-4.686-16.971%200L64%20336v48Z%22%20style%3D%22fill%3A%23888%3Bfill-rule%3Anonzero%22%20transform%3D%22matrix(.81709%200%200%20.81709%20124.825%20145.825)%22%2F%3E%3Cpath%20d%3D%22M256%208C119.034%208%208%20119.033%208%20256c0%20136.967%20111.034%20248%20248%20248s248-111.034%20248-248S392.967%208%20256%208Zm130.108%20117.892c65.448%2065.448%2070%20165.481%2020.677%20235.637L150.47%20105.216c70.204-49.356%20170.226-44.735%20235.638%2020.676ZM125.892%20386.108c-65.448-65.448-70-165.481-20.677-235.637L361.53%20406.784c-70.203%2049.356-170.226%2044.736-235.638-20.676Z%22%20style%3D%22fill%3A%23888%3Bfill-rule%3Anonzero%22%20transform%3D%22matrix(.30366%200%200%20.30366%20506.822%2060.065)%22%2F%3E%3C%2Fsvg%3E (img)",
+            "image/svg+xml, %3Csvg%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20width%3D%2216%22%20height%3D%2216%22%20viewBox%3D%220%200%2024%2024%22%20fill%3D%22none%22%20stroke%3D%22%231971c2%22%20stroke-width%3D%222%22%20stroke-linecap%3D%22round%22%20stroke-linejoin%3D%22round%22%20class%3D%22feather%20feather-external-link%22%3E%3Cpath%20d%3D%22M18%2013v6a2%202%200%200%201-2%202H5a2%202%200%200%201-2-2V8a2%202%200%200%201%202-2h6%22%3E%3C%2Fpath%3E%3Cpolyline%20points%3D%2215%203%2021%203%2021%209%22%3E%3C%2Fpolyline%3E%3Cline%20x1%3D%2210%22%20y1%3D%2214%22%20x2%3D%2221%22%20y2%3D%223%22%3E%3C%2Fline%3E%3C%2Fsvg%3E (img)",
+            "image/svg+xml, %3Csvg%20%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%20%20width%3D%2216%22%20%20height%3D%2216%22%20%20viewBox%3D%220%200%2024%2024%22%20%20fill%3D%22none%22%20%20stroke%3D%22%231971c2%22%20%20stroke-width%3D%222%22%20%20stroke-linecap%3D%22round%22%20%20stroke-linejoin%3D%22round%22%20%20class%3D%22icon%20icon-tabler%20icons-tabler-outline%20icon-tabler-arrow-big-right-line%22%3E%3Cpath%20stroke%3D%22none%22%20d%3D%22M0%200h24v24H0z%22%20fill%3D%22none%22%2F%3E%3Cpath%20d%3D%22M12%209v-3.586a1%201%200%200%201%201.707%20-.707l6.586%206.586a1%201%200%200%201%200%201.414l-6.586%206.586a1%201%200%200%201%20-1.707%20-.707v-3.586h-6v-6h6z%22%20%2F%3E%3Cpath%20d%3D%22M3%209v6%22%20%2F%3E%3C%2Fsvg%3E (img)",
+            "/c-3QRQZRA5.js (script)",
+            "/c-7XYYEKDU.js (script)",
+            "/favicon.ico (other)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Cascadia/CascadiaCode-Regular.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/ComicShanns/ComicShanns-Regular-279a7b317d12eb88de06167bd672b4b4.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/ComicShanns/ComicShanns-Regular-fcb0fc02dcbee4c9846b3e2508668039.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/ComicShanns/ComicShanns-Regular-dc6a8806fa96795d7b3be5026f989a17.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/ComicShanns/ComicShanns-Regular-6e066e8de2ac57ea9283adb9c24d7f0c.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Excalifont/Excalifont-Regular-a88b72a24fb54c9f94e3b5fdaa7481c9.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Excalifont/Excalifont-Regular-be310b9bcd4f1a43f571c46df7809174.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Excalifont/Excalifont-Regular-b9dcf9d2e50a1eaf42fc664b50a3fd0d.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Excalifont/Excalifont-Regular-41b173a47b57366892116a575a43e2b6.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Excalifont/Excalifont-Regular-3f2c5db56cc93c5a6873b1361d730c16.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Excalifont/Excalifont-Regular-349fac6ca4700ffec595a7150a0d1e1d.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Excalifont/Excalifont-Regular-623ccf21b21ef6b3a0d87738f77eb071.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Liberation/LiberationSans-Regular.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Lilita/Lilita-Regular-i7dPIFZ9Zz-WBtRtedDbYE98RXi4EwSsbg.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Lilita/Lilita-Regular-i7dPIFZ9Zz-WBtRtedDbYEF8RXi4EwQ.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Nunito/Nunito-Regular-XRXI3I6Li01BKofiOc5wtlZ2di8HDIkhdTk3j6zbXWjgevT5.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Nunito/Nunito-Regular-XRXI3I6Li01BKofiOc5wtlZ2di8HDIkhdTA3j6zbXWjgevT5.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Nunito/Nunito-Regular-XRXI3I6Li01BKofiOc5wtlZ2di8HDIkhdTs3j6zbXWjgevT5.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Nunito/Nunito-Regular-XRXI3I6Li01BKofiOc5wtlZ2di8HDIkhdTo3j6zbXWjgevT5.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Nunito/Nunito-Regular-XRXI3I6Li01BKofiOc5wtlZ2di8HDIkhdTQ3j6zbXWjgeg.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Virgil/Virgil-Regular.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-09850c4077f3fffe707905872e0e2460.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-7eb9fffd1aa890d07d0f88cc82e6cfe4.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-60a3089806700d379f11827ee9843b6b.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-6fe5c5973cc06f74b2387a631ea36b88.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-b96d9226ce77ec94ceca043d712182e6.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-6ae5b42180ad70b971c91e7eefb8eba2.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-a4c34be6d42152e64b0df90bc4607f64.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-c69f61a4ab18d0488c8d1fc12e7028e8.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-e3fcf5180fd466c8915c4e8069491054.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-c1f94158256bb1f3bf665b053d895af9.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-544fc28abe2c5c30e62383fd4dac255f.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-7197d6fda6cba7c3874c53d6381ca239.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-70c2eb8d64e71a42a834eb857ea9df51.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-069e77aac84590e2e991d0a0176d34f2.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-41521fade99856108931b4768b1b2648.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-a004ddfcb26e67bd6e678c8ed19e25ce.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-04b718e5623574919c8b0dea5f301444.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-7e4bde7e9c7f84cd34d8a845e384c746.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-23686f7f29da6e8008c36dd3a80c83d6.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-69c09cc5fa3e55c74fc4821f76909cc3.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-25b7f38e18f035f96cb5e547bd2bd08c.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-ba3de316d63c7e339987b16f41a0b879.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-12b52b58eb3df36804b9a654ec9ee194.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-b1220a3c61f85cc0408deedb4c5f57a2.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-4535823663ad81405188a528d8f2b1a2.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-3eaa538115d76932653c21d8dc28f207.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-7e929f262f30c8ee78bf398150b1a7cd.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-73e309718fd16cea44b4d54a33581811.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-9eb5a99df4e76ac3363453ac9ca288b1.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-3e63ed8162808a9e425ed80a8bc79114.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-cb17fc3db95f6d139afc9d31a8e93293.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-c8b71798409ccc126ee264a00aadcf21.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-11c345711937f0ba4b8f7b6b919c8440.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-e480d9c614742d05f0e78f274f1e69e6.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-95429962233afd82db1c27df1500a28c.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-2cf96d082d35ea3d8106851223ad0d16.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-2d43040e86ff03ba677f6f9c04cd0805.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-2a26d20a23b00898ce82f09d2ee47c3f.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-a365e82ed54697a52f27adcea1315fe8.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-f5d079153c99a25b9be5b8583c4cc8a7.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-10a7ae9a371830a80c3d844acf1c02d7.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-e4bca6cfa53e499cae0a6be4894a90e9.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-60a41c7e1c68f22424e6d22df544bc82.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-7ab2bed91166a9dca83a5ebfbe2a7f38.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-670ba603758d94268e8606f240a42e12.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-e656f091b9dc4709722c9f4b84d3c797.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-15dc6d811c9cd078f9086a740d5a1038.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-f0f13b5c60e0af5553bd359f5513be1b.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-8c2f33cee3993174f7e87c28e4bf42ee.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-761d05e3cd968cf574166867998ef06a.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-642b26e2e5f5fb780b51b593dbc8c851.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-5572b3513ba8df57a3d5d7303ee6b11b.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-3c9de2ae0ea4bc91a510942dfa4be8d2.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-671a2c20b1eb9e4ef8a192833940e319.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-4dc6d5f188d5c96d44815cd1e81aa885.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-ce4884f96f11589608b76b726a755803.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-8f476c4c99813d57cbe6eca4727388ad.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-5935a5775af3d5c6307ac667bd9ae74e.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-79f007c1c6d07557120982951ea67998.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-bafff7a14c27403dcc6cf1432e8ea836.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-543fa46ace099a7099dad69123399400.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-4ddc14ed3eb0c3e46364317dfc0144a3.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-0fa55a080fcd0f9dc2e0b0058b793df8.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-66493ba5a8367f2928812f446f47b56a.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-57862b464a55b18c7bf234ce22907d73.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-8d3bcabb847b56243b16afe62adaaf21.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-2b77e8ebfb2367ab2662396a60e7d320.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-0b5d723fdc4e249c140f0909e87d03b4.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-cdbce89e82cc1ab53a2decbf5819278f.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-739bc1a567439c7cffcd1614644593d2.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-72252d73220fa3cd856677888cee1635.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-08e0dc436ad0ad61ba5558db0674d762.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-cf6ff4e0f491ca0cf3038187a997b9b4.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-9cfb2a77a4e45025105ad29a1748b90d.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-450da755d5bcb70906e1295e559b9602.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-0986d134c05864f5025962eef9f994a0.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-1ee544f0f1dac422545c505baa788992.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-4806e761d750087c2d734fc64596eaff.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-33432927cd87d40cfe393c7482bf221f.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-be549ab72f0719d606a5c01e2c0219b6.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-019d66dcad46dc156b162d267f981c20.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-b5c1596551c256e0e9cf02028595b092.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-e5f453bb04da18eed01675eeebd88bf8.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-cf2cc71752631e579e35b0e423bf2638.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-6f3256af8454371776bc46670d33cc65.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-23f228f3999c01983860012330e4be08.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-21430ee05a1248901da8d0de08744d47.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-5330a2119a716e4e7224ed108b085dac.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-cd145ce4a0ea18469358df53c207bc1b.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-36925dfe329a45086cbb7fc5c20d45ac.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-4bfaa8ffa64c5ee560aa2daba7c9cbd3.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-112c051027b2d766c19a519f6ee1f4f7.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-5b0ed6971aaab9c8ad563230bd5471a7.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-98f2ad84457de7f3740d9920b8fa8667.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-733171b4ffcd17ea1fe1c0ba627173bf.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-684d65f1793cac449dde5d59cb3c47fb.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-cbaaefaaf326668277aa24dfa93c4d28.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-58fd02350d0bc52cf1ca3bb32ce9766e.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-7ccce86603f80a099ddb0cb21d4ae3e3.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-3717077e38f98d89eae729b6c14e56dc.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-dbea1af6dcd9860be40c3d18254338f5.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-4a0fdb40036e87b40aa08dd30584cb85.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-0f626226ba1272e832aea87bafd9720e.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-938d90c10ff8c20386af7f242c05d6b0.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-b6d128682ee29e471486354d486a1b90.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-e51ef413167c6e14e0c0fdcc585f2fc9.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-9d81066dd2b337c938df6e90380a00dc.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-20e7bf72fa05de9adf7dbcc7bf51dde6.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-4095eb84ef3874e2600247bee0b04026.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-4ee10ae43505e2e0bc62656ced49c0fa.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-7494dc504ae00ee9cd0505f990f88c5d.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-8de5b863cb50dfefdd07cb11c774d579.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-3e1f8f654357353bf0e04ba5c34b5f7f.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-2e33e8dc771ef5e1d9127d60a6b73679.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-173945821411c09f70c95f98d590e697.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-b358f7a51ece39a3247942b1feabdb29.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-23ad2d71b280f00b1363b95b7bea94eb.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-5882ffa04f32584d26109137e2da4352.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-a203b91dad570bf05a58c3c3ddb529bf.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-bd77e3c7f9e0b072d96af37f73d1aa32.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-5a45d991244d4c7140217e1e5f5ca4f4.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-f56414bf9bced67990def8660e306759.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-583d166e56ba0de4b77eabb47ef67839.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-7f855356ab893b0d2b9c1c83b8116f0e.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-b57aaedfd8ebdf3931f25119dc6a5eb2.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-b6fd38ca30869792244804b04bc058da.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-452225341522a7942f0f6aab1a5c91a3.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-866fa7613df6b3fd272bcfd4530c0bb9.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-52a84a22fd1369bffeaf21da2d6158dc.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-829615148e6357d826b9242eb7fbbd1e.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-c99eda15fc26a2941579560f76c3a5cf.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-395c35dd584b56b0789f58a0559beaf1.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-203b0e569e3b14aac86a003dc3fa523e.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-51a0e808bbc8361236ac521a119758a3.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-6e092f71c1e634059ada0e52abadce67.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-0f7fb1e0d5015bb1371343153ecf7ce3.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-d0cf73942fea1c74edbdf0b3011f4656.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-968cffdc8ee679da094e77ebf50f58ef.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-7a07ddc0f0c0f5f4a9bad6ee3dda66b5.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-ec181b795ac1fb5a50d700b6e996d745.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-cfb211578629b7e8153b37240de6a9d5.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-59e9ff77b0efaf684bc09274fb6908c9.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-2adbc89c11e65905393d3dfc468b9d5b.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-70e811fd7994e61f408c923de6ddd078.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-c4a687ac4f0c2766eefc9f77ed99cddf.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-51502f1206be09c565f1547c406e9558.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-1fdc0c67ed57263a80fd108c1f6ccf24.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-e11567fd2accf9957cd0d3c2be937d87.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-20cc1bbf50e7efb442756cb605672c1f.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-5d2898fbc097a7e24c6f38d80587621e.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-ac9ceb44437becc3e9c4dbfebab7fc2d.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-c16ed9740b85badf16e86ea782a3062f.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-aa0d470430e6391eca720c7cfa44446f.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-f2b54d4e7be0eaefe1c2c56836fa5368.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-99a16ef6a64934d5781933dbd9c46b2e.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-c40533fdf4cc57177b12803598af7e59.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-91ddb2969bf2d31ba02ad82998d1314c.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-774d4f764a1299da5d28ec2f2ffe0d69.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-7718fe60986d8b42b1be9c5ace5ccf25.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-aa5c9ca6cf4fba00433b7aa3fa10671a.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-4f50e5136e136527280bc902c5817561.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-093b9ef39a46ceae95a1df18a0a3a326.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-a0ca5df4258213d7fc9fce80f65ce760.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-d2666cbed13462c5dc36fa2f15c202ca.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-1e6fd68f1f3902ce48ce8c69df385622.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-87599f94b6cc129d505b375798d0d751.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-06c77b8c66e51ed6c63ccb502dd8b8af.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-13ae07ed2e272d26d59bc0691cd7117a.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-353f33792a8f60dc69323ddf635a269e.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-0facdf1ea213ba40261022f5d5ed4493.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-f8ee5d36068a42b51d0e4a1116cfcec1.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-79d494361ae093b69e74ee9dbe65bfd4.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-74e2263a91439c25b91d5132ce9f4d62.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-ee8bae97908d5147b423f77ad0d3c1bb.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-56467a5c8840c4d23a60b2f935114848.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-145aa02cdd91946e67dc934e1acffe75.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-54acdfc2166ad7fcbd074f75fd4a56ba.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-29cec36cd205b211da97acabaa62f055.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-3756e81d3e149cf6099163ee79944fec.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-8e9f97f01034820170065b2921b4fb5e.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-13d2887ec8ee73c43acdabc52a05af7b.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-72536a3d71b694a0d53dd90ddceae41e.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-603aefd23e350ba7eb124273e3c9bcf1.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-095c169f3314805276f603a362766abd.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-9544732d2e62d1a429674f8ee41b5d3a.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-d3716376641d615e2995605b29bca7b6.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-5a1ce3117cfe90c48e8fb4a9a00f694d.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-b7d203b051eff504ff59ddca7576b6a9.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-4a38cc3e9cf104e69ba246d37f8cf135.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-982b630266d87db93d2539affb1275c6.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-9592bfc861f07bcb8d75c196b370e548.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-a7accba310e821da5505f71c03b76bdb.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-dac48066b5883d8b4551fc584f0c2a3e.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-a1f916d6039285c4ffb900cd654e418f.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-95bfd249da4902577b4b7d76ebdd0b44.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-93fc8f28a33234bcadf1527cafabd502.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-903bb6865f3452e2fda42e3a25547bc5.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-4aca6a43e59aceee2166b0c7e4e85ef1.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-24476a126f129212beb33f66853ea151.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-1b611157cd46bb184d4fa4dae2d6a2b8.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-56a32a7689abd0326e57c10c6c069bb4.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-3cc70dbb64df5b21f1326cc24dee2195.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-f6032fc06eb20480f096199713f70885.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-e2ead7ea7da0437f085f42ffc05f8d13.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-97f7f48ce90c9429bf32ae51469db74d.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-24a21c1e4449222e8d1898d69ff3a404.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-726303e0774b4e678bff8c2deb6ca603.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-5a7fac4b8b23a6e4e5ba0c9bf1756c91.woff2 (css)",
+            "/@excalidraw/excalidraw@0.18.1/dist/prod/fonts/Xiaolai/Xiaolai-Regular-2b7441d46298788ac94e610ffcc709b6.woff2 (css)"
+          ],
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36",
+          "fontsServedLocally": 2,
+          "violationCount": 236,
+          "violations": [
+            {
+              "directive": "font-src",
+              "blocked": "https://esm.sh/@excalidraw/excalidraw@0.18.1/dist…",
+              "source": "/c-JC7VO67U.js",
+              "phase": "load",
+              "count": 230
+            },
+            {
+              "directive": "img-src",
+              "blocked": "data",
+              "source": "",
+              "phase": "load",
+              "count": 4
+            },
+            {
+              "directive": "script-src",
+              "blocked": "eval",
+              "source": "/c-5TFWZBK2.js",
+              "phase": "settle",
+              "count": 1
+            },
+            {
+              "directive": "style-src-attr",
+              "blocked": "inline",
+              "source": "/c-JC7VO67U.js",
+              "phase": "settle",
+              "count": 1
+            }
+          ],
+          "claimViolations": 1,
+          "loadPhaseClaimViolations": 0
+        }
+      },
+      "wkwebview": {
+        "version": "WebKit 20621.3.11.11.3",
+        "runs": 3,
+        "mountedRuns": 3,
+        "medianMs": {
+          "firstModule": 31,
+          "parseLinkAfterLastStaticScript": 2,
+          "mounted": 69
+        },
+        "violationCount": 708,
+        "claimViolationCount": 3,
+        "loadPhaseClaimViolationCount": 0,
+        "violatedDirectives": [
+          "font-src",
+          "img-src",
+          "script-src",
+          "style-src-attr"
+        ],
+        "exportPng": true,
+        "exportSvg": true,
+        "firstRun": {
+          "wallMs": 2926,
+          "stage": "done",
+          "mounted": true,
+          "sceneElements": 2,
+          "ms": {
+            "firstModule": 43,
+            "parseLinkAfterLastStaticScript": 7,
+            "entryEval": 6,
+            "mounted": 107
+          },
+          "initialStaticScripts": [
+            "/boot.js",
+            "/entry.js",
+            "/c-RCTYMSGU.js",
+            "/c-BWOD3Y76.js",
+            "/c-JC7VO67U.js",
+            "/c-2Q57P4US.js",
+            "/mark.js",
+            "/c-DVB6JR7R.js",
+            "/c-BFWAQVX3.js",
+            "/c-F5SAK2PP.js",
+            "/c-DJ5W7QLC.js",
+            "/c-AZ3EUS2G.js"
+          ],
+          "initialBytes": 1381487,
+          "initialGzip": 448192,
+          "png": {
+            "ok": true,
+            "bytes": 4787,
+            "ms": 14
+          },
+          "svg": {
+            "ok": true,
+            "chars": 34373,
+            "fontFace": true,
+            "ms": 1040
+          },
+          "errors": [],
+          "rejections": [],
+          "lazyResources": [
+            "/c-3QRQZRA5.js (script)",
+            "/c-7XYYEKDU.js (script)",
+            "/a-PLF2XOGW.woff2 (css)",
+            "/a-ZDZZ6JHA.woff2 (css)",
+            "/a-DZ25RZU3.woff2 (css)",
+            "/fonts/Excalifont/Excalifont-Regular-a88b72a24fb54c9f94e3b5fdaa7481c9.woff2 (fetch)",
+            "/fonts/Excalifont/Excalifont-Regular-a88b72a24fb54c9f94e3b5fdaa7481c9.woff2 (css)",
+            "/c-2TBQKJUM.js (script)",
+            "/c-5TFWZBK2.js (script)",
+            "/c-TTG267VK.js (script)",
+            "/c-TTG267VK.js (other)"
+          ],
+          "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)",
+          "fontsServedLocally": 2,
+          "violationCount": 236,
+          "violations": [
+            {
+              "directive": "font-src",
+              "blocked": "https://esm.sh/@excalidraw/excalidraw@0.18.1/dist…",
+              "source": "/c-JC7VO67U.js",
+              "phase": "export-svg",
+              "count": 230
+            },
+            {
+              "directive": "img-src",
+              "blocked": "data",
+              "source": "/c-JC7VO67U.js",
+              "phase": "load",
+              "count": 4
+            },
+            {
+              "directive": "script-src",
+              "blocked": "eval",
+              "source": "/c-5TFWZBK2.js",
+              "phase": "settle",
+              "count": 1
+            },
+            {
+              "directive": "style-src-attr",
+              "blocked": "inline",
+              "source": "/c-JC7VO67U.js",
+              "phase": "settle",
+              "count": 1
+            }
+          ],
+          "claimViolations": 1,
+          "loadPhaseClaimViolations": 0
+        }
+      }
+    },
+    "enginesUnavailable": {
+      "edge": "not found at /Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+      "firefox": "not found at /Applications/Firefox.app/Contents/MacOS/firefox"
+    },
+    "loadClean": true,
+    "exportClean": false,
+    "findings": [
+      "static: 4 served file(s) contain new Function / eval / WebAssembly instantiation (Excalidraw's Emscripten font-subset glue); runtime behaviour under the CSP is in engines.*",
+      "chrome: CSP refused font-src, img-src, script-src, style-src-attr (708 events over 3 runs; script/worker: 3, of which while loading: 0); PNG export ok, SVG export ok",
+      "wkwebview: CSP refused font-src, img-src, script-src, style-src-attr (708 events over 3 runs; script/worker: 3, of which while loading: 0); PNG export ok, SVG export ok"
+    ]
+  },
+  "specRefs": [
+    "§11.2 rule 6",
+    "§12.7",
+    "§19.1 M1.0 P12",
+    "OPEN 12",
+    "G-WEB-06",
+    "S25-M3"
+  ],
+  "at": "2026-10-18T01:31:00.234Z"
+}

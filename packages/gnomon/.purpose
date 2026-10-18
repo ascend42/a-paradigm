@@ -92,7 +92,25 @@ components:
       the research 33 policy: coalesced anchor + forced fullfsync+anchor at
       1/64, judged by the restated G-LOG-04; env P_LOG_FSYNC_ARMS accepts
       A,E,G) and p01-claude-cli (read-only `claude --version`/`--help` flag check;
-      live items pending-manual).
+      live items pending-manual). M1.0 batch 2 (probes/README.md lists them):
+      unattended p06-local-caps (llama.cpp /slots n_ctx + live tool-call
+      detection; no endpoint = partial, recorded not failed), p09-ed25519-matrix
+      (WebCrypto Ed25519 in Node + every local engine under the §11.2 CSP;
+      safari.html for Safari by hand, P09_SAFARI_LINE to record it),
+      p12-excalidraw-csp (pinned Excalidraw bundled by esbuild in a temp dir,
+      loaded under the §11.2 CSP; violations by phase, size, parse time),
+      p14-link-outbound (default-deny sandbox-exec link profile); founder-run
+      p00-sign-notary, p04-se-helper, p05-keychain-acl (signed
+      GnomonHelperProbe.app from _shared/helper/ProbeHelper.swift; fail fast
+      with a founder-steps pointer when the identity / provisioning profile /
+      gnomon-notary profile is missing; prompt-free halves run unattended),
+      p07-launch-token (NSWorkspace hand-off, eslogger + log stream + ps
+      capture with an argv positive control, browser history grep incl.
+      mozlz4), p01-claude-cli-manual (hook session_id, control_request
+      interrupt, loopback-override observation, managed policy; claude by the
+      path p01 recorded, never PATH). s29-10-voice-custody is a README stub
+      pending the signed helper. probes/_shared/ (browser.mjs, signing.mjs,
+      wkwebview-load.swift, helper/) is shared code, not a probe id.
     path: probes/
     type: module
     tags: [gnomon, probes, m1.0]

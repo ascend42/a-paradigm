@@ -1,0 +1,211 @@
+{
+  "probe": "p09-ed25519-matrix",
+  "os": "darwin",
+  "osVersion": "macOS 15.7.3 (24.6.0)",
+  "arch": "arm64",
+  "toolVersions": {
+    "chrome": "Google Chrome 155.0.8059.82",
+    "chrome-testing": "Google Chrome for Testing 153.0.8010.12",
+    "headless-shell": "Google Chrome for Testing 153.0.8010.12",
+    "wkwebview": "WebKit 20621.3.11.11.3",
+    "node": "v26.0.0"
+  },
+  "verdict": "partial",
+  "evidence": {
+    "node": {
+      "ok": true,
+      "line": "ed25519 ✓ verify · ✕ forged · ✓ rfc8032 · ✓ spki · ✕ non-canonical-s · ✓ empty-msg · PASS",
+      "result": {
+        "secureContext": null,
+        "subtle": true,
+        "sigLen": 64,
+        "verify": true,
+        "forgedSigRejected": true,
+        "forgedMsgRejected": true,
+        "spkiRoundTrip": true,
+        "rfc8032": true,
+        "rfc8032EmptyMessage": true,
+        "ownKeyEmptyMessage": true,
+        "nonCanonicalSRejected": true,
+        "steps": [
+          "generate",
+          "sign",
+          "verify",
+          "spki",
+          "rfc8032",
+          "empty-message",
+          "strict-s"
+        ],
+        "ok": true,
+        "line": "ed25519 ✓ verify · ✕ forged · ✓ rfc8032 · ✓ spki · ✕ non-canonical-s · ✓ empty-msg · PASS"
+      }
+    },
+    "engines": {
+      "chrome": {
+        "version": "Google Chrome 155.0.8059.82",
+        "ok": true,
+        "line": "ed25519 ✓ verify · ✕ forged · ✓ rfc8032 · ✓ spki · ✕ non-canonical-s · ✓ empty-msg · PASS",
+        "result": {
+          "secureContext": true,
+          "subtle": true,
+          "sigLen": 64,
+          "verify": true,
+          "forgedSigRejected": true,
+          "forgedMsgRejected": true,
+          "spkiRoundTrip": true,
+          "rfc8032": true,
+          "rfc8032EmptyMessage": true,
+          "ownKeyEmptyMessage": true,
+          "nonCanonicalSRejected": true,
+          "steps": [
+            "generate",
+            "sign",
+            "verify",
+            "spki",
+            "rfc8032",
+            "empty-message",
+            "strict-s"
+          ],
+          "ok": true,
+          "line": "ed25519 ✓ verify · ✕ forged · ✓ rfc8032 · ✓ spki · ✕ non-canonical-s · ✓ empty-msg · PASS"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/155.0.0.0 Safari/537.36",
+        "wallMs": 563
+      },
+      "chrome-testing": {
+        "version": "Google Chrome for Testing 153.0.8010.12",
+        "ok": true,
+        "line": "ed25519 ✓ verify · ✕ forged · ✓ rfc8032 · ✓ spki · ✕ non-canonical-s · ✓ empty-msg · PASS",
+        "result": {
+          "secureContext": true,
+          "subtle": true,
+          "sigLen": 64,
+          "verify": true,
+          "forgedSigRejected": true,
+          "forgedMsgRejected": true,
+          "spkiRoundTrip": true,
+          "rfc8032": true,
+          "rfc8032EmptyMessage": true,
+          "ownKeyEmptyMessage": true,
+          "nonCanonicalSRejected": true,
+          "steps": [
+            "generate",
+            "sign",
+            "verify",
+            "spki",
+            "rfc8032",
+            "empty-message",
+            "strict-s"
+          ],
+          "ok": true,
+          "line": "ed25519 ✓ verify · ✕ forged · ✓ rfc8032 · ✓ spki · ✕ non-canonical-s · ✓ empty-msg · PASS"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.0.0 Safari/537.36",
+        "wallMs": 463
+      },
+      "headless-shell": {
+        "version": "Google Chrome for Testing 153.0.8010.12",
+        "ok": true,
+        "line": "ed25519 ✓ verify · ✕ forged · ✓ rfc8032 · ✓ spki · ✕ non-canonical-s · ✓ empty-msg · PASS",
+        "result": {
+          "secureContext": true,
+          "subtle": true,
+          "sigLen": 64,
+          "verify": true,
+          "forgedSigRejected": true,
+          "forgedMsgRejected": true,
+          "spkiRoundTrip": true,
+          "rfc8032": true,
+          "rfc8032EmptyMessage": true,
+          "ownKeyEmptyMessage": true,
+          "nonCanonicalSRejected": true,
+          "steps": [
+            "generate",
+            "sign",
+            "verify",
+            "spki",
+            "rfc8032",
+            "empty-message",
+            "strict-s"
+          ],
+          "ok": true,
+          "line": "ed25519 ✓ verify · ✕ forged · ✓ rfc8032 · ✓ spki · ✕ non-canonical-s · ✓ empty-msg · PASS"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/153.0.8010.12 Safari/537.36",
+        "wallMs": 228
+      },
+      "wkwebview": {
+        "version": "WebKit 20621.3.11.11.3",
+        "ok": true,
+        "line": "ed25519 ✓ verify · ✕ forged · ✓ rfc8032 · ✓ spki · ✕ non-canonical-s · ✕ empty-msg · PASS",
+        "result": {
+          "secureContext": true,
+          "subtle": true,
+          "sigLen": 64,
+          "verify": true,
+          "forgedSigRejected": true,
+          "forgedMsgRejected": true,
+          "spkiRoundTrip": true,
+          "rfc8032": true,
+          "rfc8032EmptyMessage": false,
+          "ownKeyEmptyMessage": false,
+          "nonCanonicalSRejected": true,
+          "steps": [
+            "generate",
+            "sign",
+            "verify",
+            "spki",
+            "rfc8032",
+            "empty-message",
+            "strict-s"
+          ],
+          "ok": true,
+          "line": "ed25519 ✓ verify · ✕ forged · ✓ rfc8032 · ✓ spki · ✕ non-canonical-s · ✕ empty-msg · PASS"
+        },
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)",
+        "wallMs": 456
+      }
+    },
+    "enginesUnavailable": {
+      "edge": "not found at /Applications/Microsoft Edge.app/Contents/MacOS/Microsoft Edge",
+      "firefox": "not found at /Applications/Firefox.app/Contents/MacOS/firefox"
+    },
+    "safariByHand": {
+      "pending": "founder: open packages/gnomon/probes/p09-ed25519-matrix/safari.html in Safari, then re-run with P09_SAFARI_LINE=\"<line>\""
+    },
+    "safariHtmlInSync": true,
+    "macMatrix": {
+      "required": [
+        "chromium",
+        "edge",
+        "firefox",
+        "wkwebview",
+        "safari-by-hand"
+      ],
+      "covered": [
+        "chromium",
+        "wkwebview"
+      ],
+      "notCovered": [
+        "edge",
+        "firefox",
+        "safari-by-hand"
+      ]
+    },
+    "findings": [
+      "Ed25519 verify over an EMPTY message returns false in: wkwebview (WebKit 20621.3.11.11.3): ownKey=false, rfc8032Test1=false. Not gating: every Gnomon preimage (gnomon:auth-server:v1 + nonce + path …) is non-empty; the kernel must never sign an empty preimage for a page to verify."
+    ],
+    "csp": "served under the §11.2 rule 6 CSP (script-src 'self', no unsafe-eval, no inline script)",
+    "method": "one test body (ed25519-test.js) in Node vm, in each engine via a page POSTing to the probe server, and inlined in safari.html"
+  },
+  "specRefs": [
+    "§11.1 renderer",
+    "§11.2 rule 2",
+    "§11.2 rule 6",
+    "§4.9 serverSig",
+    "§19.1 M1.0 P09",
+    "OPEN 8",
+    "G-GUI-03"
+  ],
+  "at": "2026-10-18T01:30:40.196Z"
+}
