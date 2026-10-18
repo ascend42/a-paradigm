@@ -73,6 +73,10 @@ export function parseSessionConfig(text: string): LocalSessionConfig {
   if (rawRoots.some((r) => typeof r !== 'string' || !r.startsWith('/') && !/^[A-Za-z]:[\\/]/.test(r))) throw new ConfigError('roots must be absolute paths');
   const roots = (rawRoots as string[]).map(real);
   const int = (x: unknown, d: number, max: number): number => (Number.isInteger(x) && (x as number) > 0 ? Math.min(x as number, max) : d);
+  const maxTokens = int(c.maxTokens, 1024, 32768);
+  const contextTarget = Math.max(int(c.contextTarget, 8192, 131072), 1024);
+  // round 3 (reviewer): the reply budget must leave room for history under the 0.85 headroom
+  if (maxTokens >= 0.85 * contextTarget) throw new ConfigError(`maxTokens ${maxTokens} leaves no room under 0.85 x contextTarget ${contextTarget}`);
   return {
     schemaVersion: 'gnomon-local-session:v1',
     session: c.session,
@@ -82,8 +86,8 @@ export function parseSessionConfig(text: string): LocalSessionConfig {
     capabilities: { tools: caps.tools, nCtx: typeof caps.nCtx === 'number' ? caps.nCtx : null },
     surface,
     maxSteps: int(c.maxSteps, 16, 128),
-    maxTokens: int(c.maxTokens, 1024, 32768),
-    contextTarget: Math.max(int(c.contextTarget, 8192, 131072), 1024),
+    maxTokens,
+    contextTarget,
     forbiddenPorts,
     ...(typeof c.systemPrompt === 'string' ? { systemPrompt: c.systemPrompt } : {}),
   };

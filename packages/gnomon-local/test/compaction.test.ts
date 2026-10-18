@@ -98,7 +98,10 @@ describe('history surgery', () => {
     const base = { schemaVersion: 'gnomon-local-session:v1', session: 's', cwd: os.tmpdir(), endpoint: { base: 'http://127.0.0.1:1', model: 'm', compat: 'llama.cpp' }, capabilities: { tools: true } };
     expect(parseSessionConfig(JSON.stringify(base)).contextTarget).toBe(8192);
     expect(parseSessionConfig(JSON.stringify({ ...base, contextTarget: 4096 })).contextTarget).toBe(4096);
-    expect(parseSessionConfig(JSON.stringify({ ...base, contextTarget: 10 })).contextTarget).toBe(1024);
+    expect(parseSessionConfig(JSON.stringify({ ...base, contextTarget: 10, maxTokens: 256 })).contextTarget).toBe(1024);
+    // round 3: a reply budget at or over 0.85 x target is refused
+    expect(() => parseSessionConfig(JSON.stringify({ ...base, contextTarget: 10 }))).toThrow(/no room/);
+    expect(() => parseSessionConfig(JSON.stringify({ ...base, contextTarget: 4096, maxTokens: 3482 }))).toThrow(/no room/);
   });
 });
 

@@ -164,6 +164,8 @@ export function parseLocalLaneConfig(raw: unknown): LocalLaneConfig | null {
   for (const [k, max] of [['ctxFloor', 1 << 21], ['maxSteps', 128], ['maxTokens', 32768], ['contextTarget', 131072]] as const) {
     if (raw[k] !== undefined && !posInt(raw[k], max)) return null;
   }
+  // round 3 (reviewer): a reply budget at or over 0.85 × the compaction target leaves no room for history
+  if (((raw.maxTokens as number | undefined) ?? 1024) >= 0.85 * ((raw.contextTarget as number | undefined) ?? 8192)) return null;
   return {
     endpoints,
     ...(runner ? { runner } : {}),

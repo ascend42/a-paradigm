@@ -453,7 +453,7 @@ export class LocalLane {
     const ev = parseLocalLine(line);
     const bytes = Buffer.byteLength(line);
     // S2: every driver event is a turn.event before anything acts on it
-    await this.#o.log('turn.event', { hsid: s.hsid, type: ev.type, seq: ++s.seq, backend: 'local', ...(bytes > EVENT_LINE_CAP ? { lineHash: sha(line), bytes } : { line }) }, { session: s.hsid });
+    await this.#o.log('turn.event', { hsid: s.hsid, type: ev.type, seq: ++s.seq, backend: 'local', ...(bytes > EVENT_LINE_CAP ? { lineHash: sha(line), bytes } : { line }), ...(ev.kind === 'compaction' && ev.summaryHash ? { summaryHash: ev.summaryHash, summaryBytes: ev.summaryBytes } : {}) }, { session: s.hsid });
     const usage = async (source: 'turn.usage' | 'turn.result', tokens: number, extra: Record<string, unknown> = {}): Promise<void> => {
       if (source === 'turn.usage' && tokens <= 0) return;
       await this.#o.log(source, { hsid: s.hsid, usage: { tokens }, backend: 'local', ...extra }, { session: s.hsid });

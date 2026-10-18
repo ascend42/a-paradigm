@@ -132,6 +132,8 @@ describe('root-signed local.signed.json (only a root-verified row is applied; an
       { endpoints: 'llama' },
     ]) expect(parseLocalLaneConfig(bad), JSON.stringify(bad)).toBeNull();
     expect(parseLocalLaneConfig({ endpoints: [] })).toEqual({ endpoints: [] });
+    expect(parseLocalLaneConfig({ endpoints: [], contextTarget: 2048, maxTokens: 1800 })).toBeNull(); // round 3: no room under 0.85 x target
+    expect(parseLocalLaneConfig({ endpoints: [], contextTarget: 2048, maxTokens: 512 })).toMatchObject({ contextTarget: 2048, maxTokens: 512 });
   });
 
   it('G-SUB-06 through the signed config: a signed public endpoint is applied and then refuses every local open BILLING_REFUSED', async () => {

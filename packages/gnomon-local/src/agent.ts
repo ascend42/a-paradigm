@@ -102,11 +102,12 @@ export class Agent {
 
   /** One summarising completion, then the history is replaced by system + summary + a safe tail (compaction.ts). */
   async #compact(reason: 'threshold' | 'overflow', total: { input: number; output: number }): Promise<void> {
-    const target = this.#target;
     const tokensBefore = estimateTokens(this.#messages);
     this.#o.emit({ type: 'compaction_start', reason, tokensBefore });
     this.#abort = new AbortController();
-    const body = buildRequest(this.#o.profile, { model: this.#o.model, messages: summaryMessages(this.#messages, target), tools: [], nativeTools: false, surface: 'none', maxTokens: Math.min(1024, Math.max(256, Math.floor(target / 8))), stream: false });
+    // round 3: the caps derive from the budget (0.85 × target minus the tools schema), not the raw target
+    const budget = Math.max(this.#budget, 256);
+    const body = buildRequest(this.#o.profile, { model: this.#o.model, messages: summaryMessages(this.#messages, budget), tools: [], nativeTools: false, surface: 'none', maxTokens: Math.min(1024, Math.max(256, Math.floor(budget / 8))), stream: false });
     let c: Completion;
     try {
       c = await complete(this.#o.base, body, { signal: this.#abort.signal, ...(this.#o.forbiddenPorts ? { forbiddenPorts: this.#o.forbiddenPorts } : {}) });
@@ -119,8 +120,8 @@ export class Agent {
       total.input += c.usage.input;
       total.output += c.usage.output;
     }
-    const summary = normaliseSummary(c.content, target);
-    const { messages, kept } = compactedHistory(this.#messages, summary, Math.floor(target / 4));
+    const summary = normaliseSummary(c.content, budget);
+    const { messages, kept } = compactedHistory(this.#messages, summary, Math.floor(budget / 4));
     this.#messages.splice(0, this.#messages.length, ...messages);
     this.#compactions++;
     this.#o.emit({ type: 'compaction_end', reason, tokensBefore, tokensAfter: estimateTokens(this.#messages), kept, usage: c.usage, summaryHash: `sha256:${createHash('sha256').update(summary).digest('hex')}`, summaryBytes: Buffer.byteLength(summary, 'utf8') });
