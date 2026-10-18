@@ -1,0 +1,25 @@
+id: L-2026-10-18-ascend-032858-001
+type: agent-session
+timestamp: '2026-10-18T03:28:58.000Z'
+author: ascend
+agent:
+  provider: anthropic
+  model: claude-opus-5-5
+title: 'P8-D90: link child gets a kernel-dialed socket (fd passing); P14b passed on macOS'
+summary: 'Probe P14 failed on macOS as written (SBPL compiles only * or localhost as a network-outbound host, so the relay ip:port allow-list cannot be expressed). Research 37 option (b) adopted after probe P14b (link-fdpass) passed on macOS: the kernel dials the relay ip:port from root-signed config and hands the connected socket to the gnomon-link child over its IPC channel; the child profile has no network-outbound and no network-bind and redials only by asking the kernel. Fallback (f), port-only *:P with a §A.5(h) reach residual, is unneeded on macOS; §A.5 unchanged. Spec docs/specs/gnomon.md updated: §0 v3.9 table (P8-D90 row), §3.9 Architecture, G-LNK-11, §15.5 link row (both OS cells), §16 link row, §19.1 P14 status + new P14b row.'
+symbols_touched:
+  - '#peer-link'
+  - '$move-1'
+  - '$move-2'
+  - '~windows-parity'
+decisions:
+  - id: P8-D90
+    decision: The kernel dials the relay ip:port from root-signed config and passes the connected socket to gnomon-link over its IPC channel (Node handle passing, zero dependencies). The link profile has no network-outbound and no network-bind; G-LNK-11 narrows to "opens no network connection, uses only the handed socket". Windows passes the socket by libuv duplication into a no-network-capability token or AppContainer; the S29-08 allow-list only if P14b-w fails. M2.8 absorbs the dialer, handle pass, reconnect-request frame and profile-generator change; M1.7's spawner allows an IPC fd for this child class.
+    rationale: 'Research 37 (Arky): an in-child allow-list is no control against a compromised child, and an IP pin was never authentication (Noise IK against pinned keys is). P14b evidence (macOS 15.7.3, Node 26.0.0): 4 MiB full-duplex with matching sha256, peer close seen, second handoff after redial, the child''s own connects (same peer, other port, en0 host), UDP, listen and unix-socket connect all EPERM; file read, home listing and exec EPERM; the unsandboxed control reached all nine.'
+files_modified:
+  - docs/specs/gnomon.md
+tags:
+  - paradigm-8
+  - gnomon
+  - peer-link
+  - probes
