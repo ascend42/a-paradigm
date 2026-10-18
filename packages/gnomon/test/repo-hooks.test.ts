@@ -12,7 +12,7 @@ import * as fs from 'node:fs';
 import * as os from 'node:os';
 import * as path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
-import { CLAUDE_HOOK_EVENTS, extractRepoHooks, hooksBlock, MAX_REPO_HOOKS, MAX_SETTINGS_BYTES, mergeHooks, repoHookCard, type RepoHook } from '../src/kernel/supervisor/repo-hooks.js';
+import { CLAUDE_HOOK_EVENTS, extractRepoHooks, hooksBlock, MAX_REPO_HOOKS, MAX_SETTINGS_BYTES, mergeHooks, REPO_HOOK_WARNING, repoHookCard, type RepoHook } from '../src/kernel/supervisor/repo-hooks.js';
 
 let root = '';
 afterEach(() => {
@@ -159,6 +159,10 @@ describe('card + policy rendering', () => {
     if (s.status !== 'ok') throw new Error('expected ok');
     const c = repoHookCard(s, s.hooks[0]!, r);
     expect(c.lines[0]).toBe('runs commands: repo hook 1 of 1');
+    // Aegis C2: the kernel's warning, on every card, before the decision line
+    expect(c.lines).toContain(REPO_HOOK_WARNING);
+    expect(REPO_HOOK_WARNING).toBe('approving trusts the command and every file it runs; a repo change, a pull, or a session edit can change what runs');
+    expect(c.lines.indexOf(REPO_HOOK_WARNING)).toBeLessThan(c.lines.findIndex((l) => l.startsWith('allow:')));
     expect(c.detail).toMatchObject({ event: 'repo-hook', setHash: s.setHash, hookId: s.hooks[0]!.hookId, command: s.hooks[0]!.command });
     const text = (c.block.children as Array<{ text: string }>).map((x) => x.text.replace(/^ {2}↳ /, '')).join('');
     expect(text).toContain('y'.repeat(300)); // wrapped, never truncated
