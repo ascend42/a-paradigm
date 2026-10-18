@@ -7,9 +7,10 @@
  * no transport profile in the spec (the endpoint refuses there, fail closed —
  * test/web-units.test.ts asserts the refusal on every platform).
  */
-import { execFileSync, spawnSync } from 'node:child_process';
+import { execFileSync, spawn, spawnSync } from 'node:child_process';
 import { mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs';
 import * as net from 'node:net';
+import os from 'node:os';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { DEV_TEST_ROOT_ACK, DevTestRootAuthority, loadDeviceKey, readRegistry, registerDevice, registerKernelKey, RootVerifier, writeNewDeviceKey } from '../src/kernel/identity/index.js';
@@ -18,12 +19,19 @@ import { SoftwareEd25519Signer } from '../src/kernel/log/index.js';
 import { homedir } from 'node:os';
 import { transportLaunchPlan, transportProfileSbpl } from '../src/kernel/sandbox/index.js';
 import { connectGnomon } from '../src/kernel/socket/index.js';
-import { materializePlaceholderBundle } from '../src/kernel/web/index.js';
+import { NdjsonDecoder } from '../src/kernel/socket/framing.js';
+import { childDefaultHeaders, materializePlaceholderBundle } from '../src/kernel/web/index.js';
+import type { ChildRecord, KernelRecord } from '../src/kernel/web/protocol.js';
 import { PKG_ROOT } from './helpers.js';
 import { tempHome } from './daemon-helpers.js';
-import { HELLO, rpc, wsConnect } from './web-helpers.js';
+import { GOOD, HELLO, rawHttp, rpc, wsConnect } from './web-helpers.js';
 
 const CHILD = path.join(PKG_ROOT, 'dist', 'transport', 'gnomon-web.js');
+/** This Mac's LAN IPv4 (en*), if it has one: the address a LAN listener would use (stated, local only). */
+const lanIpv4 = (): string | null => {
+  for (const [name, addrs] of Object.entries(os.networkInterfaces())) for (const a of addrs ?? []) if (a.family === 'IPv4' && !a.internal && /^en/.test(name)) return a.address;
+  return null;
+};
 const cleanups: Array<() => unknown> = [];
 afterEach(async () => {
   while (cleanups.length) await cleanups.pop()!();
@@ -66,17 +74,9 @@ describe('the darwin transport profile (§15.5)', () => {
     expect(() => transportProfileSbpl({ nodeReal: '/opt/x/bin/node', scriptReal: script, bundleReal: bundle, protectedDirs: [t.home], forbiddenTrees: [path.join(t.home, 'keys')] })).not.toThrow(); // <home>/gui is fine
   });
 
-  /*
-   * T-2026-10-18-017: `listen EPERM 127.0.0.1` was seen ONCE on GitHub macos-14 and not reproduced (0 of 170 runs
-   * locally, macOS 15.7.3, sequential and 10-way concurrent). SBPL only accepts `*` or `localhost` as the host of a
-   * network address (`127.0.0.1:*` is a compile error), and `localhost` in a `local` filter matches the addresses
-   * configured on this host's interfaces at check time (127.0.0.1, ::1, the LAN address, the wildcards; an
-   * unconfigured 127.0.0.2 is denied) — interface-state-dependent, not DNS-dependent. The suspected flake mechanism is
-   * that dynamic evaluation on a CI VM; it is unproven. So the TEST (never the kernel) retries ONLY the loopback-listen
-   * leg, at most 3 attempts, recording every failed attempt as a test annotation; every DENY assertion must hold on
-   * every attempt, so a retry can never mask a denial regression.
-   */
-  it('a probe under the generated profile: bundle readable, loopback listen ok; home read, outbound connect and exec denied', async ({ annotate }) => {
+  // T-2026-10-18-020: the child listens on nothing, so the loopback listen is now DENIED like every other socket
+  // (the T-2026-10-18-017 flake, a sometimes-EPERM loopback listen, has no allow left to flake on: no retry).
+  it('a probe under the generated profile: bundle readable; home read, outbound connect, exec and even a loopback listen denied', async () => {
     const t = tempHome('gs-');
     cleanups.push(t.cleanup);
     mkdirSync(t.home, { recursive: true, mode: 0o700 });
@@ -93,32 +93,136 @@ try { fs.readFileSync(bundle + '/index.html'); r.bundle = 'ok'; } catch (e) { r.
 try { fs.readFileSync(secret); r.secret = 'READ'; } catch (e) { r.secret = e.code; }
 try { const c = cp.spawnSync('/bin/echo', ['x']); r.exec = c.error ? c.error.code : 'RAN'; } catch (e) { r.exec = e.code ?? 'threw'; }
 r.out = await new Promise((res) => { const s = net.connect({ host: '127.0.0.1', port: Number(port) }); s.on('connect', () => (s.destroy(), res('CONNECTED'))); s.on('error', (e) => res(e.code)); });
-const srv = http.createServer(); srv.once('error', (e) => { r.listen = e.code; r.listenError = { syscall: e.syscall, address: e.address, message: e.message }; process.stdout.write(JSON.stringify(r)); });
-srv.listen(0, '127.0.0.1', () => { r.listen = 'ok'; srv.close(); process.stdout.write(JSON.stringify(r)); });`,
+const srv = http.createServer(); srv.once('error', (e) => { r.listen = e.code; process.stdout.write(JSON.stringify(r)); });
+srv.listen(0, '127.0.0.1', () => { r.listen = 'LISTENING'; srv.close(); process.stdout.write(JSON.stringify(r)); });`,
     );
     const target = net.createServer().listen(0, '127.0.0.1');
     await new Promise((r) => target.once('listening', r));
     cleanups.push(() => target.close());
     const plan = transportLaunchPlan({ scriptPath: probe, bundleDir: dir });
-    const MAX_ATTEMPTS = 3;
-    let last: Record<string, unknown> = {};
-    for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
-      const run = spawnSync(plan.command, [...plan.args, realpathSync(dir), secret, String((target.address() as net.AddressInfo).port)], { env: plan.env, encoding: 'utf8', timeout: 20_000 });
-      expect(run.stderr).toBe('');
-      last = JSON.parse(run.stdout) as Record<string, unknown>;
-      // the denials are asserted on EVERY attempt: never retried
-      expect({ bundle: last.bundle, secret: last.secret, exec: last.exec, out: last.out }).toEqual({ bundle: 'ok', secret: 'EPERM', exec: 'EPERM', out: 'EPERM' });
-      if (last.listen === 'ok') break;
-      await annotate(`T-2026-10-18-017 loopback listen failed on attempt ${attempt}/${MAX_ATTEMPTS}: ${JSON.stringify({ listen: last.listen, listenError: last.listenError, profileHash: plan.profileHash })}`, 'warning');
-    }
-    expect(last).toEqual({ bundle: 'ok', secret: 'EPERM', exec: 'EPERM', out: 'EPERM', listen: 'ok' });
+    const run = spawnSync(plan.command, [...plan.args, realpathSync(dir), secret, String((target.address() as net.AddressInfo).port)], { env: plan.env, encoding: 'utf8', timeout: 20_000 });
+    expect(run.stderr).toBe('');
+    expect(JSON.parse(run.stdout)).toEqual({ bundle: 'ok', secret: 'EPERM', exec: 'EPERM', out: 'EPERM', listen: 'EPERM' });
   });
 
-  // T-2026-10-18-017 finding for Aegis: `(local ip "localhost:*")` is NOT loopback-only — under the generated
-  // profile the child can listen on the host's LAN address and on 0.0.0.0 / :: (measured locally). SBPL cannot name a
-  // numeric loopback address, and fd-passing does not help (listen() on an inherited fd is re-checked by
-  // network-inbound). Profile left UNCHANGED pending Aegis; this becomes a falsifier once a loopback-only mechanism exists.
-  it.todo('T-2026-10-18-017: a non-loopback (LAN or wildcard) listen under the transport profile is denied');
+  /*
+   * T-2026-10-18-020 (was the T-2026-10-18-017 it.todo): `(local ip "localhost:*")` was NOT loopback-only — the child
+   * could listen on the LAN address and the wildcards. SBPL cannot name a loopback address, so the profile now has NO
+   * network-* rule: the kernel listens on 127.0.0.1 and hands connected sockets over the IPC channel (probe P14b-web).
+   * Falsifiers: (i) every bind/listen variant and (ii) outbound TCP + unix connect are EPERM inside the child, against
+   * an unsandboxed control that reaches every target; (iii) a handed socket serves HTTP and a WebSocket round trip;
+   * (v) the generated profile names no network- rule. (iv), the en0 connect, is in the daemon test below.
+   */
+  it('T-2026-10-18-020 (v): the generated transport profile contains no network- rule', () => {
+    const t = tempHome('gs-');
+    cleanups.push(t.cleanup);
+    mkdirSync(t.home, { recursive: true, mode: 0o700 });
+    const dir = materializePlaceholderBundle(t.home);
+    const plan = transportLaunchPlan({ scriptPath: CHILD, bundleDir: dir });
+    expect(plan.profile).not.toMatch(/network/);
+    expect(transportProfileSbpl({ nodeReal: realpathSync(process.execPath), scriptReal: realpathSync(CHILD), bundleReal: realpathSync(dir) })).not.toMatch(/network/);
+  });
+
+  it('T-2026-10-18-020 (i)+(ii): inside the child every bind/listen (0.0.0.0, ::, en0, 127.0.0.1, ::1, no host), UDP bind, outbound TCP and unix connect is EPERM', async () => {
+    const t = tempHome('gs-');
+    cleanups.push(t.cleanup);
+    mkdirSync(t.home, { recursive: true, mode: 0o700 });
+    const dir = materializePlaceholderBundle(t.home);
+    const probeDir = realpathSync(mkdtempSync(path.join(path.dirname(t.home), 'probe-')));
+    const probe = path.join(probeDir, 'probe.mjs');
+    writeFileSync(
+      probe,
+      `import net from 'node:net'; import dgram from 'node:dgram';
+const [port, lan, sock] = process.argv.slice(2); const r = {};
+const lst = (host) => new Promise((res) => { const v = net.createServer(); v.on('error', (e) => res(e.code)); const ok = () => { v.close(); res('LISTENING'); }; host === null ? v.listen(0, ok) : v.listen(0, host, ok); });
+const ub = (type, host) => new Promise((res) => { const u = dgram.createSocket(type); u.on('error', (e) => { try { u.close(); } catch {} res(e.code); }); u.bind(0, host, () => { u.close(); res('BOUND'); }); });
+const tcp = (opts) => new Promise((res) => { const s = net.connect(opts); s.on('connect', () => (s.destroy(), res('CONNECTED'))); s.on('error', (e) => res(e.code)); });
+r.listen0000 = await lst('0.0.0.0'); r.listenAny6 = await lst('::'); r.listenLan = lan ? await lst(lan) : 'no-lan';
+r.listenLoop4 = await lst('127.0.0.1'); r.listenLoop6 = await lst('::1'); r.listenNoHost = await lst(null);
+r.udp0000 = await ub('udp4', '0.0.0.0'); r.udpAny6 = await ub('udp6', '::'); r.udpLan = lan ? await ub('udp4', lan) : 'no-lan'; r.udpLoop4 = await ub('udp4', '127.0.0.1');
+r.tcpOut = await tcp({ host: '127.0.0.1', port: Number(port) }); r.unixOut = await tcp({ path: sock });
+process.stdout.write(JSON.stringify(r));`,
+    );
+    const target = net.createServer((c) => c.destroy()).listen(0, '127.0.0.1');
+    await new Promise((r) => target.once('listening', r));
+    cleanups.push(() => target.close());
+    const sock = path.join(probeDir, 's.sock');
+    const unix = net.createServer((c) => c.destroy()).listen(sock);
+    await new Promise((r) => unix.once('listening', r));
+    cleanups.push(() => unix.close());
+    const lan = lanIpv4();
+    const args = [String((target.address() as net.AddressInfo).port), lan ?? '', sock];
+    const reachedAs = (k: string): string => (k.startsWith('listen') ? 'LISTENING' : k.startsWith('udp') ? 'BOUND' : 'CONNECTED');
+    // unsandboxed control: every target is reachable, so an EPERM below is the profile's answer
+    const control = spawnSync(process.execPath, [probe, ...args], { encoding: 'utf8', timeout: 20_000 });
+    const reached = JSON.parse(control.stdout) as Record<string, string>;
+    expect(Object.keys(reached)).toHaveLength(12);
+    for (const [k, v] of Object.entries(reached)) expect([k, v]).toEqual([k, v === 'no-lan' ? 'no-lan' : reachedAs(k)]);
+    const plan = transportLaunchPlan({ scriptPath: probe, bundleDir: dir });
+    const run = spawnSync(plan.command, [...plan.args, ...args], { env: plan.env, encoding: 'utf8', timeout: 20_000 });
+    expect(run.stderr).toBe('');
+    const denied = JSON.parse(run.stdout) as Record<string, string>;
+    expect(Object.keys(denied)).toEqual(Object.keys(reached));
+    for (const [k, v] of Object.entries(denied)) expect([k, v]).toEqual([k, v === 'no-lan' ? 'no-lan' : 'EPERM']);
+  });
+
+  it('T-2026-10-18-020 (iii): the sandboxed child serves a handed socket — a full HTTP request and a WebSocket round trip', async () => {
+    const t = tempHome('gs-');
+    cleanups.push(t.cleanup);
+    mkdirSync(t.home, { recursive: true, mode: 0o700 });
+    const dir = materializePlaceholderBundle(t.home);
+    const plan = transportLaunchPlan({ scriptPath: CHILD, bundleDir: dir });
+    const child = spawn(plan.command, plan.args, { stdio: ['pipe', 'pipe', 'pipe', 'ipc'], env: plan.env });
+    cleanups.push(() => child.kill('SIGKILL'));
+    child.stdin!.on('error', () => undefined);
+    let stderr = '';
+    child.stderr!.on('data', (d: Buffer) => (stderr += d.toString()));
+    const recs: ChildRecord[] = [];
+    const dec = new NdjsonDecoder(16 * 1024 * 1024);
+    child.stdout!.on('data', (c: Buffer) => {
+      for (const i of dec.push(c)) if (i.kind === 'frame') recs.push(i.value as unknown as ChildRecord);
+    });
+    const wait = async <T extends ChildRecord['t']>(kind: T): Promise<Extract<ChildRecord, { t: T }>> => {
+      const end = Date.now() + 10_000;
+      for (;;) {
+        const i = recs.findIndex((r) => r.t === kind);
+        if (i !== -1) return recs.splice(i, 1)[0] as Extract<ChildRecord, { t: T }>;
+        if (Date.now() > end) throw new Error(`no ${kind} record; stderr: ${stderr}`);
+        await new Promise((r) => setTimeout(r, 10));
+      }
+    };
+    const send = (r: KernelRecord) => child.stdin!.write(`${JSON.stringify(r)}\n`);
+    send({
+      t: 'config', bundleDir: realpathSync(dir), pingMs: 60_000, missedPongs: 2, maxFrameBytes: 4 * 1024 * 1024, preAuthMaxFrameBytes: 16 * 1024,
+      maxBodyBytes: 64 * 1024, maxSocketBuffer: 8 * 1024 * 1024, writeHighWater: 1024 * 1024, defaultHeaders: childDefaultHeaders(),
+    });
+    const ready = await wait('ready');
+    expect(Object.keys(ready).sort()).toEqual(['bundleHash', 'files', 't']); // no port: the child listens on nothing
+    // the kernel's half, as endpoint.ts: listen on 127.0.0.1, hand each accepted socket over unread
+    const listener = net.createServer({ pauseOnConnect: true }, (s) => child.send('conn', s));
+    await new Promise<void>((r) => listener.listen(0, '127.0.0.1', r));
+    cleanups.push(() => listener.close());
+    const port = (listener.address() as net.AddressInfo).port;
+    const resP = rawHttp(port, 'GET', '/', GOOD(port));
+    const h = await wait('http');
+    expect(h).toMatchObject({ method: 'GET', path: '/' });
+    send({ t: 'static', rid: h.rid, file: 'index.html', headers: { 'content-type': 'text/html' } });
+    const res = await resP;
+    expect(res.status).toBe(200);
+    expect(res.body.length).toBeGreaterThan(0);
+    const wsP = wsConnect(port);
+    const up = await wait('upgrade');
+    send({ t: 'accept', rid: up.rid });
+    const ws = await wsP;
+    cleanups.push(() => ws.end());
+    expect(ws.status).toBe(101);
+    ws.sendJson({ ping: 1 });
+    const f = await wait('frame');
+    expect(JSON.parse(Buffer.from(f.data, 'base64').toString('utf8'))).toEqual({ ping: 1 });
+    send({ t: 'send', rid: up.rid, data: Buffer.from(JSON.stringify({ pong: 1 })).toString('base64') });
+    expect(await ws.nextJson()).toEqual({ pong: 1 });
+    expect(stderr).toBe('');
+  });
 });
 
 describe('gnomon open (kernel side) through the daemon, child sandboxed', () => {
@@ -148,6 +252,16 @@ describe('gnomon open (kernel side) through the daemon, child sandboxed', () => 
     const cmd = execFileSync('/bin/ps', ['-ww', '-o', 'command=', '-p', String(web.childPid())], { encoding: 'utf8' });
     expect(cmd).toContain('gnomon-web.js'); // sandbox-exec has exec'd node under the profile
     expect(cmd).not.toContain(grant.launchToken);
+    // T-2026-10-18-020 (iv): the endpoint is up, and nothing answers on this Mac's LAN address (or ::1) at its port
+    const knock = (host: string) =>
+      new Promise<string>((res) => {
+        const k = net.connect({ host, port: grant.port });
+        k.on('connect', () => (k.destroy(), res('CONNECTED')));
+        k.on('error', (e: NodeJS.ErrnoException) => res(e.code ?? 'error'));
+      });
+    const lan = lanIpv4();
+    if (lan) expect(await knock(lan)).toBe('ECONNREFUSED');
+    expect(await knock('::1')).toBe('ECONNREFUSED');
     const ws = await wsConnect(grant.port);
     cleanups.push(() => ws.end());
     ws.sendJson(rpc(1, 'hello', HELLO('browser')));

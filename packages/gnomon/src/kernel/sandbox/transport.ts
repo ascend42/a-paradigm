@@ -3,10 +3,15 @@
  * @symbol #web-endpoint
  *
  * The `transport` sandbox profile (spec §15.5 row `transport`, §11.2 rule 1b,
- * §16 "Web endpoint" row) for the `gnomon-web` child: listen on loopback,
- * read the pinned GUI bundle directory and `/dev/null`, stdio to the kernel —
- * no other file, no keystore, no `mach-lookup`, no outbound network, no exec,
- * no fork (`G-WEB-07`).
+ * §16 "Web endpoint" row) for the `gnomon-web` child: read the pinned GUI
+ * bundle directory and `/dev/null`, stdio + the IPC channel to the kernel —
+ * no other file, no keystore, no `mach-lookup`, no exec, no fork, and NO
+ * network-* rule at all (`G-WEB-07`, T-2026-10-18-020). The child opens, binds
+ * and listens on no socket: the kernel listens on 127.0.0.1 and hands each
+ * connected socket over the IPC channel (endpoint.ts; probe P14b-web). SBPL
+ * cannot name a loopback address — `(local ip "localhost:*")` matches every
+ * configured interface, LAN and wildcards included (T-2026-10-18-017) — so no
+ * listen rule can be loopback-only, and the profile grants none.
  *
  * PLATFORM REGISTRY (G-WIN-05: no platform branch in kernel code): the
  * backend is looked up in TRANSPORT_BACKENDS by platform. darwin =
@@ -26,9 +31,12 @@
  * resolves (realpath of the entry). NEVER the install prefix itself (Aegis
  * C2: with node at ~/bin/node that prefix is $HOME): every granted read
  * subpath is checked, and one that equals or contains $HOME, the Gnomon home
- * or its keystore dir refuses `sandbox-unavailable`. Residuals, stated: `network-bind`
- * in SBPL names `localhost:*`, which also admits ::1 — the child's code binds
- * the 127.0.0.1 literal only; `file-read-metadata` on ancestor directories
+ * or its keystore dir refuses `sandbox-unavailable`. Residuals, stated:
+ * the child reads and writes the connected sockets it is handed (that is its
+ * job); the IPC channel (fd 3) is read in the KERNEL by Node's own JSON-line
+ * reader with no length bound before endpoint.ts sees a message (any message
+ * kills the child) — a DoS-only kernel surface reachable from a compromised
+ * child (§A.7); `file-read-metadata` on ancestor directories
  * reveals their existence; the child may re-exec its own Node binary (same
  * profile inherited) because sandbox-exec needs that one exec — `process-fork`
  * is denied, so it cannot spawn anything.
@@ -45,9 +53,9 @@ export type SandboxProfileName = (typeof SANDBOX_PROFILE_NAMES)[number];
 /** The `transport` row of §15.5 as data (versioned; hashed into socket.web.listen as profileHash). */
 export const TRANSPORT_PROFILE = Object.freeze({
   name: 'transport' as const,
-  version: 1,
-  allow: Object.freeze({ listen: '127.0.0.1 ephemeral', read: Object.freeze(['the pinned GUI bundle directory', '/dev/null', 'the Node runtime']), stdio: 'to the kernel' }),
-  deny: Object.freeze(['every other file', 'keystore', 'mach-lookup', 'outbound network', 'exec', 'fork', 'home']),
+  version: 2,
+  allow: Object.freeze({ sockets: 'connected sockets handed over by the kernel (IPC channel)', read: Object.freeze(['the pinned GUI bundle directory', '/dev/null', 'the Node runtime']), stdio: 'to the kernel' }),
+  deny: Object.freeze(['every other file', 'keystore', 'mach-lookup', 'network bind', 'network listen', 'network inbound', 'outbound network', 'exec', 'fork', 'home']),
 });
 
 export interface TransportLaunchInput {
@@ -138,8 +146,7 @@ export function transportProfileSbpl(i: { nodeReal: string; scriptReal: string; 
     `(allow file-read* ${reads.join(' ')})`,
     `(allow file-read-metadata ${[...meta].map((d) => `(literal ${q(d)})`).join(' ')})`,
     '(allow sysctl-read)',
-    '(allow network-bind (local ip "localhost:*"))',
-    '(allow network-inbound (local ip "localhost:*"))',
+    // NO network-* rule (T-2026-10-18-020): the kernel listens and hands connected sockets over the IPC channel.
     '',
   ].join('\n');
 }

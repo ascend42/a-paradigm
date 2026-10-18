@@ -1,0 +1,20 @@
+id: L-2026-10-18-builder-174153-001
+type: insight
+timestamp: '2026-10-18T17:41:53.762Z'
+author: builder
+title: An unsolicited NODE_HANDLE_ACK from a child crashes a Node parent (ERR_INTERNAL_ASSERTION)
+summary: 'Aegis round 3, reproduced on Node 26: when no handle send is in flight, the parent''s _handleQueue is null and Node''s own internalMessage handler (registered before any user listener) asserts on a forged {cmd:''NODE_HANDLE_ACK''} from the child, taking the whole daemon down; one ACK too many after a real handoff does the same. Any process that passes handles to an untrusted child is exposed. Fix: a prependListener that, on an ACK with no in-flight hand-off (or a non-array _handleQueue), sets _handleQueue = [] and SIGKILLs the child. It depends on the Node internal _handleQueue; a rename fails closed and trips the healthy-child canary test. Also: stop() during the exit-log await no longer loses to a respawn (#stops checked across the await); a failed send drops its watchdog entry.'
+symbols_touched:
+  - '#web-endpoint'
+commit: 1651ed26
+learnings:
+  - user listeners on internalMessage run after Node's own unless prepended
+  - handle-passing to an untrusted child gives it a crash primitive over the parent
+tags:
+  - decision
+  - gnomon
+  - security
+git_context:
+  ref: 1651ed26ebe9896e4facbcc3145cdd839cae5b6c
+  branch: gnomon/t020-web-handoff
+  dirty: false

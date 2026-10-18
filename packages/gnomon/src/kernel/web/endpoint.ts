@@ -10,9 +10,32 @@
  * authenticator signs the endpoint path `ws://127.0.0.1:<port>/rpc`.
  *
  * Lifecycle: started by the first launch request (`gnomon open`); the child
- * reports its port and the tree hash of the bundle it loaded; a hash that is
- * not the pin ⇒ socket.web.bundle.mismatch and the endpoint does not open
- * (rule 1a). A child that exits is restarted (cap 3 per 10 min; then
+ * reports the tree hash of the bundle it loaded; a hash that is not the pin ⇒
+ * socket.web.bundle.mismatch and the endpoint does not open (rule 1a).
+ *
+ * Listener (§11.2 rule 1, §15.5 `transport`, T-2026-10-18-020): the KERNEL
+ * listens on the IPv4 literal 127.0.0.1 on an OS-chosen ephemeral port, with
+ * `pauseOnConnect`, and hands each accepted socket — unread — to the child
+ * with `subprocess.send('conn', socket)` over the child's IPC channel; Node
+ * closes the kernel's copy when the child ACKs it (NODE_HANDLE_ACK).
+ * Accept-and-forward only: the kernel never reads a byte of a connection, so
+ * the child stays the only HTTP/WebSocket parser (A24-1). The child opens,
+ * binds and listens on no socket (its profile has no network-* rule; probe
+ * P14b-web). The listener outlives a child restart, so the port survives it;
+ * a connection accepted while no child is serving is closed. stop() and the
+ * restart-cap / failed-respawn paths close it.
+ *
+ * Hand-off bounds (Aegis C1, round 2): the listener's maxConnections is
+ * WEB_MAX_PENDING_HANDOFFS (Node counts a socket until it is sent, so a child
+ * that stops ACKing — Node queues every later hand-off behind the unACKed one
+ * — fills the cap and further connections are closed); an ACK watchdog
+ * SIGKILLs a child that leaves a hand-off unACKed past `handoffAckMs`
+ * (default 5 s). The child must never speak on fd 3: any user message, and
+ * any internal (NODE_*) message other than NODE_HANDLE_ACK — including a
+ * NODE_HANDLE that would pass an fd INTO the kernel — kills it, and a handle
+ * it attached is closed. Residual (§A.7): Node's own IPC reader parses the
+ * child's fd-3 bytes as JSON lines with no length bound before any of this
+ * runs — a DoS-only kernel surface reachable from a compromised child. A child that exits is restarted (cap 3 per 10 min; then
  * socket.web.stop{reason:'transport-restart-cap'}; a respawn that fails ⇒
  * socket.web.stop{reason:'transport-restart-failed'}); every GUI connection it
  * carried ends, so each page shows Reconnect (rule 1b). After the last GUI
@@ -48,6 +71,7 @@
 import { spawn, type ChildProcess } from 'node:child_process';
 import { createHash, createPublicKey } from 'node:crypto';
 import { appendFileSync, chmodSync, existsSync, mkdirSync, statSync } from 'node:fs';
+import * as net from 'node:net';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { mintId, monotonicUlidFactory, sanitizeDisplayText } from '@a-company/gnomon-contracts';
@@ -67,6 +91,7 @@ import {
   encodeRecord,
   HTTP_MAX_BODY_BYTES,
   validateChildRecord,
+  WEB_CONN_MESSAGE,
   WS_MAX_FRAME_BYTES,
   WS_MAX_SOCKET_BUFFER,
   WS_PRE_AUTH_MAX_FRAME_BYTES,
@@ -84,6 +109,10 @@ export const WEB_AUTH_DEADLINE_MS = 5_000;
 export const WEB_MAX_CONNECTIONS = 64;
 export const WEB_RESTART_CAP = Object.freeze({ max: 3, windowMs: 10 * 60_000 });
 export const WEB_READY_TIMEOUT_MS = 10_000;
+/** The kernel listener's maxConnections: accepted sockets not yet handed to the child (Aegis C1, round 2). */
+export const WEB_MAX_PENDING_HANDOFFS = 128;
+/** A hand-off the child has not ACKed within this long ⇒ the child is SIGKILLed (the restart path follows). */
+export const WEB_HANDOFF_ACK_MS = 5_000;
 export const GUI_LOG_MAX_BYTES = 8 * 1024 * 1024;
 const WS_CLOSE_POLICY = 1008;
 const WS_CLOSE_TRY_LATER = 1013;
@@ -116,6 +145,8 @@ export interface WebEndpointOptions {
   pingMs?: number;
   missedPongs?: number;
   platform?: string;
+  /** The ACK watchdog bound for a socket hand-off (default WEB_HANDOFF_ACK_MS). */
+  handoffAckMs?: number;
 }
 
 /** What the test seam may substitute: the launcher and the pinned bundle. */
@@ -189,6 +220,13 @@ export class WebEndpoint {
   readonly #nextUlid = monotonicUlidFactory();
   #child: ChildProcess | null = null;
   #plan: ChildLaunchPlan | null = null;
+  #listener: net.Server | null = null;
+  /** Hand-offs to the current child not yet ACKed, oldest first (Node ACKs in order). */
+  #unacked: Array<{ socket: net.Socket; timer: NodeJS.Timeout }> = [];
+  /** Bumped by every stop(): a start that began before it must not open the endpoint after it. */
+  #stops = 0;
+  /** >0 while #onChildExit awaits its exit-log row (a stop() then must cancel the respawn). */
+  #exiting = 0;
   #port = 0;
   #dispatcher: KernelDispatcher | null = null;
   #state: 'stopped' | 'starting' | 'listening' = 'stopped';
@@ -244,11 +282,17 @@ export class WebEndpoint {
     return this.#child?.pid ?? null;
   }
 
+  /** The kernel listener's bound address (G-WEB-01 falsifier: always 127.0.0.1), or null when not listening. */
+  listenAddress(): { address: string; port: number } | null {
+    const a = this.#listener?.address();
+    return a && typeof a !== 'string' ? { address: a.address, port: a.port } : null;
+  }
+
   /** Start the endpoint if it is not listening (the first `gnomon open`). */
   async ensureListening(): Promise<void> {
     if (this.#state === 'listening') return;
     if (this.#starting) return this.#starting;
-    this.#starting = this.#spawn(0).finally(() => (this.#starting = null));
+    this.#starting = this.#spawn().finally(() => (this.#starting = null));
     return this.#starting;
   }
 
@@ -261,6 +305,7 @@ export class WebEndpoint {
       throw new LifecycleRefusal('web-launch-refused', 'a launch token is minted only for an authenticated human device connection (§11.2 rule 2)', { connId: asker.connId });
     }
     await this.ensureListening();
+    if (!this.listening) throw new LifecycleRefusal('web-transport-failed', 'the web endpoint stopped while it was starting');
     const binding: LaunchBinding = { deviceId: asker.deviceId, principal: asker.principal, askedBy: asker.connId };
     const { launchToken, expiresAt } = this.access.mint(binding);
     this.#lingerCheck(); // the linger timer re-arms while a launch token is pending
@@ -292,13 +337,20 @@ export class WebEndpoint {
   /** Stop the endpoint and end its child (daemon exit, linger expiry). */
   async stop(reason: string): Promise<void> {
     if (this.#state === 'stopped' && !this.#child) {
-      // already down (restart cap, failed respawn): never leave a timer behind
+      // already down (restart cap, failed respawn) or between a child's exit and its respawn: never leave a timer
+      // behind, and make the pending respawn see the stop (it checks #stops after its exit-log await)
+      this.#stops++;
+      const wasRestarting = this.#exiting > 0 && this.#stopReason === null;
+      this.#stopReason = reason;
+      this.#closeListener();
       if (this.#sweep) clearInterval(this.#sweep);
       if (this.#linger) clearTimeout(this.#linger);
       this.#sweep = null;
       this.#linger = null;
+      if (wasRestarting) await this.#o.log('socket.web.stop', { reason }).catch(() => undefined);
       return;
     }
+    this.#stops++;
     this.#stopReason = reason;
     this.#state = 'stopped';
     if (this.#linger) clearTimeout(this.#linger);
@@ -306,6 +358,7 @@ export class WebEndpoint {
     this.#linger = null;
     this.#sweep = null;
     for (const c of [...this.#ws.values()]) this.#dropConn(c, reason);
+    this.#closeListener();
     const child = this.#child;
     this.#child = null;
     if (child) {
@@ -316,19 +369,134 @@ export class WebEndpoint {
       await gone;
       clearTimeout(kill);
     }
+    this.#dropUnacked();
     await this.#o.log('socket.web.stop', { reason }).catch(() => undefined);
   }
 
   /* ── child supervision ─────────────────────────────────────────────── */
 
-  async #spawn(preferPort: number): Promise<void> {
+  /**
+   * The kernel's listener: 127.0.0.1 (IPv4 literal, never a name, never a wildcard), the OS-chosen port.
+   * Each connection is handed to the serving child unread; Node closes the kernel's copy on the child's ACK.
+   */
+  async #listen(): Promise<number> {
+    const server = net.createServer({ pauseOnConnect: true }, (socket) => this.#handOff(socket));
+    server.maxConnections = WEB_MAX_PENDING_HANDOFFS; // counts sockets not yet sent (queued behind an unACKed hand-off)
+    server.on('error', () => undefined); // after listen: an accept error never takes the daemon down
+    await new Promise<void>((resolve, reject) => {
+      server.once('error', reject);
+      server.listen({ host: '127.0.0.1', port: 0, exclusive: true }, () => {
+        server.off('error', reject);
+        resolve();
+      });
+    }).catch((err: NodeJS.ErrnoException) => {
+      throw new LifecycleRefusal('web-transport-failed', `the kernel cannot listen on 127.0.0.1: ${err.code ?? err.message}`);
+    });
+    const a = server.address();
+    if (a === null || typeof a === 'string' || a.address !== '127.0.0.1') {
+      server.close();
+      throw new LifecycleRefusal('web-transport-failed', 'the web listener is not bound to 127.0.0.1');
+    }
+    this.#listener = server;
+    return a.port;
+  }
+
+  /** Accept-and-forward (A24-1): the kernel never reads the socket; it goes to the serving child or is closed. */
+  #handOff(socket: net.Socket): void {
+    socket.on('error', () => socket.destroy());
+    const child = this.#child;
+    if (this.#state !== 'listening' || !child || !child.connected) return void socket.destroy();
+    const timer = setTimeout(() => {
+      // the child left this hand-off unACKed: it is not serving (or not ours); the restart path follows
+      if (this.#child === child) child.kill('SIGKILL');
+    }, this.#o.handoffAckMs ?? WEB_HANDOFF_ACK_MS);
+    timer.unref();
+    const entry = { socket, timer };
+    this.#unacked.push(entry);
+    // a send that failed will never be ACKed: forget it, so its timer cannot later kill a healthy child (Aegis R2-2)
+    const failed = (): void => {
+      const i = this.#unacked.indexOf(entry);
+      if (i !== -1) this.#unacked.splice(i, 1);
+      clearTimeout(timer);
+      socket.destroy();
+    };
+    try {
+      child.send(WEB_CONN_MESSAGE, socket, (err) => {
+        if (err) failed();
+      });
+    } catch {
+      failed();
+    }
+  }
+
+  /** The child ACKed the oldest hand-off (Node delivers ACKs in order). */
+  #onHandoffAck(): void {
+    const h = this.#unacked.shift();
+    if (h) clearTimeout(h.timer);
+  }
+
+  /** The child is gone: no ACK will come; close every socket still waiting (a queued one still holds its fd here). */
+  #dropUnacked(): void {
+    for (const h of this.#unacked.splice(0)) {
+      clearTimeout(h.timer);
+      h.socket.destroy();
+    }
+  }
+
+  #closeListener(): void {
+    const l = this.#listener;
+    this.#listener = null;
+    l?.close();
+  }
+
+  async #spawn(): Promise<void> {
     this.#state = 'starting';
     const scriptPath = this.#o.scriptPath ?? defaultChildScript();
     if (!scriptPath) throw new LifecycleRefusal('web-transport-failed', 'the gnomon-web transport child is not built (dist/transport/gnomon-web.js)');
     const bundleDir = this.#bundle.dir || materializeGuiBundle(this.#o.home);
     const plan = this.#launcher({ scriptPath, bundleDir, protectedDirs: [this.#o.home], forbiddenTrees: [path.join(this.#o.home, 'keys')] });
     this.#plan = plan;
-    const child = spawn(plan.command, plan.args, { stdio: ['pipe', 'pipe', 'pipe'], env: plan.env, windowsHide: true });
+    // fd 3 = the IPC channel: it carries only the connected sockets the kernel hands over (WEB_CONN_MESSAGE)
+    const child = spawn(plan.command, plan.args, { stdio: ['pipe', 'pipe', 'pipe', 'ipc'], env: plan.env, windowsHide: true });
+    this.#dropUnacked();
+    // The child never speaks on the IPC channel: one that does is not ours (Aegis C1). A handle it attaches is closed.
+    const closeHandle = (h: unknown): void => {
+      try {
+        const x = h as { destroy?: () => void; close?: () => void } | null | undefined;
+        if (typeof x?.destroy === 'function') x.destroy();
+        else if (typeof x?.close === 'function') x.close();
+      } catch {
+        /* already closed */
+      }
+    };
+    child.on('message', (_m: unknown, h: unknown) => {
+      closeHandle(h);
+      child.kill('SIGKILL');
+    });
+    // 'internalMessage' is undocumented Node: the NODE_* messages (incl. a NODE_HANDLE whose inner message is
+    // internal, which never reaches 'message') arrive only here. Guarded: anything but a well-formed
+    // NODE_HANDLE_ACK kills the child; the ACK feeds the watchdog. A Node that stopped emitting it would surface
+    // as watchdog kills of a healthy child (test/web-endpoint.test.ts asserts ACKs are seen).
+    // An UNSOLICITED NODE_HANDLE_ACK (none in flight, or one more than were sent) makes Node's own internalMessage
+    // handler — registered before ours — throw ERR_INTERNAL_ASSERTION on its null `_handleQueue`, which would take the
+    // daemon down (Aegis round 3, reproduced on Node 26). So this listener goes FIRST (prependListener): on such an
+    // ACK it gives Node an empty queue to flush and kills the child. `_handleQueue` is a Node INTERNAL
+    // (lib/internal/child_process.js): if a Node release renames it, Array.isArray is false and every ACK — even a
+    // solicited one — kills the child, which fails closed and fails the healthy-child canary test loudly.
+    child.prependListener('internalMessage', (m: unknown) => {
+      if (typeof m !== 'object' || m === null || (m as { cmd?: unknown }).cmd !== 'NODE_HANDLE_ACK') return;
+      const internals = child as unknown as { _handleQueue?: unknown };
+      if (!Array.isArray(internals._handleQueue) || this.#child !== child || this.#unacked.length === 0) {
+        internals._handleQueue = [];
+        child.kill('SIGKILL');
+      }
+    });
+    child.on('internalMessage', (m: unknown, h: unknown) => {
+      if (child.killed) return closeHandle(h); // already condemned (an unsolicited ACK above)
+      if (this.#child === child && h === undefined && typeof m === 'object' && m !== null && (m as { cmd?: unknown }).cmd === 'NODE_HANDLE_ACK') return this.#onHandoffAck();
+      closeHandle(h);
+      child.kill('SIGKILL');
+    });
     this.#child = child;
     let stderrTail = '';
     child.stderr!.on('data', (c: Buffer) => (stderrTail = (stderrTail + c.toString('utf8')).slice(-2048)));
@@ -342,8 +510,9 @@ export class WebEndpoint {
     });
     child.stdout!.on('data', (chunk: Buffer) => {
       for (const item of decoder.push(chunk)) {
-        // A malformed or shape-invalid record means the child is not ours to trust any more (Aegis C1):
-        // kill it (the restart path follows), never let its bytes reach kernel logic unchecked.
+        // A malformed or shape-invalid record means the child is not ours to trust any more (Aegis C1): kill it (the
+        // restart path follows). Its stdout bytes reach kernel logic only through validateChildRecord; its fd-3 bytes
+        // are parsed by Node's IPC reader first (unbounded JSON lines: a DoS-only surface, §A.7).
         const r = item.kind === 'frame' ? validateChildRecord(item.value, { maxFrameBytes: WS_MAX_FRAME_BYTES, maxBodyBytes: HTTP_MAX_BODY_BYTES }) : null;
         if (r === null) {
           child.kill('SIGKILL');
@@ -367,7 +536,7 @@ export class WebEndpoint {
       if (this.#child === child) void this.#onChildExit(code, signal);
     });
     this.#send(
-      { t: 'config', bundleDir, port: preferPort, pingMs: this.#o.pingMs ?? WS_PING_MS, missedPongs: this.#o.missedPongs ?? WS_MISSED_PONGS, maxFrameBytes: WS_MAX_FRAME_BYTES,
+      { t: 'config', bundleDir, pingMs: this.#o.pingMs ?? WS_PING_MS, missedPongs: this.#o.missedPongs ?? WS_MISSED_PONGS, maxFrameBytes: WS_MAX_FRAME_BYTES,
         preAuthMaxFrameBytes: WS_PRE_AUTH_MAX_FRAME_BYTES,
         maxBodyBytes: HTTP_MAX_BODY_BYTES,
         maxSocketBuffer: WS_MAX_SOCKET_BUFFER,
@@ -378,9 +547,16 @@ export class WebEndpoint {
     );
     const timeout = setTimeout(() => failed?.(new LifecycleRefusal('web-transport-failed', 'transport child did not report ready')), WEB_READY_TIMEOUT_MS);
     let r: Extract<ChildRecord, { t: 'ready' }>;
+    // stop() (or another start) may have run while we waited: then this child is no longer ours to open with
+    const stops = this.#stops;
+    const superseded = (): boolean => this.#stops !== stops;
     try {
       r = await readyP;
     } catch (err) {
+      if (superseded()) {
+        child.kill('SIGKILL');
+        return; // stop() already recorded why; no second socket.web.stop row
+      }
       this.#child = null;
       this.#state = 'stopped';
       child.kill('SIGKILL');
@@ -390,6 +566,11 @@ export class WebEndpoint {
       ready = null;
       failed = null;
     }
+    if (superseded()) {
+      child.kill('SIGKILL');
+      return; // never listen for a child stop() already let go of
+    }
+    if (this.#child !== child) throw new LifecycleRefusal('web-transport-failed', 'the transport child exited right after ready');
     if (r.bundleHash !== this.#bundle.hash) {
       this.#child = null;
       this.#state = 'stopped';
@@ -397,7 +578,23 @@ export class WebEndpoint {
       await this.#o.log('socket.web.bundle.mismatch', { expected: this.#bundle.hash, got: String(r.bundleHash).slice(0, 80) }).catch(() => undefined);
       throw new LifecycleRefusal('web-bundle-mismatch', 'the GUI bundle does not match its pin; the endpoint does not open (§11.2 rule 1a)', { expected: this.#bundle.hash });
     }
-    this.#port = r.port;
+    try {
+      if (!this.#listener) this.#port = await this.#listen(); // a restarted child keeps the kernel's listener, and so the port
+    } catch (err) {
+      if (superseded()) {
+        child.kill('SIGKILL');
+        return;
+      }
+      this.#child = null;
+      this.#state = 'stopped';
+      child.kill('SIGKILL');
+      throw err;
+    }
+    if (superseded()) {
+      this.#closeListener(); // stop() ran during the listen: the new listener must not outlive it
+      child.kill('SIGKILL');
+      return;
+    }
     const web: WebAuthHook = (conn, params) => this.#webAuth(conn, params);
     this.#dispatcher = this.#o.dispatcher(this.endpointPath, web);
     this.#state = 'listening';
@@ -408,23 +605,31 @@ export class WebEndpoint {
       }, 60_000);
       this.#sweep.unref();
     }
-    await this.#o.log('socket.web.listen', { port: r.port, bundleHash: r.bundleHash, files: r.files, sandbox: plan.sandbox, profileHash: plan.profileHash, pid: child.pid ?? null });
+    await this.#o.log('socket.web.listen', { port: this.#port, bundleHash: r.bundleHash, files: r.files, sandbox: plan.sandbox, profileHash: plan.profileHash, pid: child.pid ?? null });
     this.#lingerCheck();
   }
 
   async #onChildExit(code: number | null, signal: NodeJS.Signals | null): Promise<void> {
     this.#child = null;
+    this.#dropUnacked();
     const wasListening = this.#state === 'listening';
     this.#state = 'stopped';
     for (const c of [...this.#ws.values()]) this.#dropConn(c, 'transport-exited');
     const now = this.#now();
     while (this.#restarts.length && now - this.#restarts[0]! > WEB_RESTART_CAP.windowMs) this.#restarts.shift();
-    await this.#o.log('socket.web.transport.exited', { code, signal, restartsInWindow: this.#restarts.length }).catch(() => undefined);
+    const stops = this.#stops;
+    this.#exiting++;
+    try {
+      await this.#o.log('socket.web.transport.exited', { code, signal, restartsInWindow: this.#restarts.length }).catch(() => undefined);
+    } finally {
+      this.#exiting--;
+    }
+    if (this.#stops !== stops) return; // stop() ran during the exit-log write: no respawn
     if (!wasListening) return;
     if (this.#restarts.length >= WEB_RESTART_CAP.max) return this.#down('transport-restart-cap');
     this.#restarts.push(now);
-    this.#starting = this.#spawn(this.#port)
-      .catch(() => this.#down('transport-restart-failed'))
+    this.#starting = this.#spawn()
+      .catch(() => (this.#stopReason === null ? this.#down('transport-restart-failed') : undefined)) // stop() during the respawn already wrote its row
       .finally(() => (this.#starting = null));
     await this.#starting;
   }
@@ -433,6 +638,7 @@ export class WebEndpoint {
   async #down(reason: string): Promise<void> {
     this.#stopReason = reason;
     this.#state = 'stopped';
+    this.#closeListener();
     if (this.#linger) clearTimeout(this.#linger);
     if (this.#sweep) clearInterval(this.#sweep);
     this.#linger = null;

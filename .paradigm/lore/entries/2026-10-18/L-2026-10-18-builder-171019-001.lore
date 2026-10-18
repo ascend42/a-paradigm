@@ -1,0 +1,21 @@
+id: L-2026-10-18-builder-171019-001
+type: insight
+timestamp: '2026-10-18T17:10:19.337Z'
+author: builder
+title: 'T-2026-10-18-020 design: the kernel listens, the transport child never opens a socket'
+summary: 'Aegis ruling implemented: WebEndpoint listens on the IPv4 literal 127.0.0.1 (OS port, pauseOnConnect, exclusive), accept-and-forward only (never reads, A24-1 holds), hands the CONNECTED socket over a new IPC stdio fd 3 (never the listening fd: listen() would be re-checked). The listener outlives child restarts so the port survives; stop/restart-cap/failed-respawn close it; connections while no child serves are destroyed; a child that speaks on IPC is killed. Child ready/config drop the port (channel gnomon-web:v2). transportProfileSbpl drops network-bind/-inbound (TRANSPORT_PROFILE v2). Spec §11.2 r1, §15.5, §A.7, §19.1 updated.'
+symbols_touched:
+  - '#web-endpoint'
+  - '#oracle-sandbox'
+commit: fb79a0c7
+learnings:
+  - Port reporting moved into the kernel
+  - removing the allow removed the T-017 flake source so the 3-try retry was deleted
+tags:
+  - decision
+  - gnomon
+  - security
+git_context:
+  ref: 5e9c7417a414aefb270106ae36b23d18f89a7f49
+  branch: gnomon/t020-web-handoff
+  dirty: true

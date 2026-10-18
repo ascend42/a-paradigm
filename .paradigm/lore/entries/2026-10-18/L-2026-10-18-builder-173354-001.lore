@@ -1,0 +1,20 @@
+id: L-2026-10-18-builder-173354-001
+type: insight
+timestamp: '2026-10-18T17:33:54.003Z'
+author: builder
+title: 'T-020 round 2: a never-listening http.Server has no slowloris bound; Node''s handle ACK is the only hand-off signal'
+summary: 'Reviewer/Aegis round 2. (1) Node runs headersTimeout/requestTimeout only for a server that listened, so the child now arms per-socket deadlines (10 s headers from hand-off and after each response, 30 s body). (2) Measured: the kernel''s sent socket never emits ''close''; Node takes it out of _connections at send and queues later hand-offs behind an unACKed one; ACK arrives only as undocumented internalMessage NODE_HANDLE_ACK. So: maxConnections 128, FIFO ACK watchdog (5 s) SIGKILLs a stalled child, any IPC message but a clean ACK kills it and closes an attached handle. (3) stop()/start race closed with a stop-generation counter. Residuals in §A.7: unbounded fd-3 JSON reader (DoS-only), port squat after stop/#down.'
+symbols_touched:
+  - '#web-endpoint'
+commit: cf8447f4
+learnings:
+  - 'config and shutdown records can coalesce in one stdin chunk: fakes must count newlines'
+  - redundant post-ready and post-listen stop guards each mask the other under single mutation
+tags:
+  - decision
+  - gnomon
+  - security
+git_context:
+  ref: 81d40c9a26068491c1faa363c7cf43dde0d9dfc2
+  branch: gnomon/t020-web-handoff
+  dirty: false

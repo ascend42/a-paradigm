@@ -1,0 +1,24 @@
+id: L-2026-10-18-builder-173354-002
+type: milestone
+timestamp: '2026-10-18T17:33:54.434Z'
+author: builder
+title: 'T-2026-10-18-020 round 2 landed: slowloris, hand-off cap/watchdog, stop race, endpoint falsifiers, docs'
+summary: Rebased onto feat/gnomon 38d3c2fd. dc58dd27 per-socket slowloris deadlines (+3 every-OS falsifiers), cf8447f4 maxConnections 128 + ACK watchdog + internalMessage kill + stop-generation guard, 5d5191b2 ten endpoint falsifiers (all mutation-checked), 81d40c9a §15.5 Windows cell, §A.7 residuals, probe profile note, .purpose. gnomon vitest 1008 passed, gui 26, contracts 319, tsc clean.
+symbols_touched:
+  - '#web-endpoint'
+  - '#oracle-sandbox'
+commit: 81d40c9a
+tags:
+  - decision
+  - gnomon
+  - security
+  - move-1
+linked_commits:
+  - dc58dd27
+  - cf8447f4
+  - 5d5191b2
+  - 81d40c9a
+git_context:
+  ref: 81d40c9a26068491c1faa363c7cf43dde0d9dfc2
+  branch: gnomon/t020-web-handoff
+  dirty: true

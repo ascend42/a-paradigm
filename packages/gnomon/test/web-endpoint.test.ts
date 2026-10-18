@@ -41,13 +41,16 @@ interface Row {
 }
 const HUMAN = { connId: 'conn:01JTESTASKER0000000000000', phase: 'authenticated' as const, credential: 'device' as const, principalKind: 'human' as const, principal: 'p:00000000/founder', deviceId: 'dev:00000000/mac-1' };
 
-async function rig(o: { lingerMs?: number; authDeadlineMs?: number; maxConnections?: number; blobs?: BlobSource; bundle?: { dir: string; hash: string }; now?: { t: number }; launcher?: WebEndpointSeams['launcher']; mods?: ModRelayPort } = {}) {
+async function rig(o: { logDelay?: { kind: string; ms: number }; handoffAckMs?: number; lingerMs?: number; authDeadlineMs?: number; maxConnections?: number; blobs?: BlobSource; bundle?: { dir: string; hash: string }; now?: { t: number }; launcher?: WebEndpointSeams['launcher']; mods?: ModRelayPort } = {}) {
   const t = tempHome('gw-');
   cleanups.push(t.cleanup);
   mkdirSync(t.home, { recursive: true, mode: 0o700 });
   const kernel = SoftwareEd25519Signer.generate('kernel');
   const rows: Row[] = [];
-  const log = async (kind: string, payload: Record<string, unknown>, ids: Row['ids'] = {}) => void rows.push({ kind, payload, ids });
+  const log = async (kind: string, payload: Record<string, unknown>, ids: Row['ids'] = {}) => {
+    if (o.logDelay?.kind === kind) await sleep(o.logDelay.ms); // a slow log write (the exit-log race, round 3)
+    rows.push({ kind, payload, ids });
+  };
   const trust = new UnprovisionedRootAuthority();
   let ep!: WebEndpoint;
   ep = createWebEndpointForTest(
@@ -57,6 +60,7 @@ async function rig(o: { lingerMs?: number; authDeadlineMs?: number; maxConnectio
       scriptPath: CHILD,
       log,
       ...(o.lingerMs !== undefined ? { lingerMs: o.lingerMs } : {}),
+      ...(o.handoffAckMs !== undefined ? { handoffAckMs: o.handoffAckMs } : {}),
       ...(o.authDeadlineMs !== undefined ? { authDeadlineMs: o.authDeadlineMs } : {}),
       ...(o.maxConnections !== undefined ? { maxConnections: o.maxConnections } : {}),
       ...(o.blobs ? { blobs: o.blobs } : {}),
@@ -455,7 +459,7 @@ describe('rule 7 auth deadline, rule 8 connection cap, §2.4 linger', () => {
 describe('a compromised child cannot crash or steer the kernel (Aegis C1)', () => {
   const FAKE = `const bad = JSON.parse(process.argv[2]); let sent = false;
 process.stdin.on('data', () => { if (sent) return; sent = true;
-  process.stdout.write(JSON.stringify({ t: 'ready', port: 1, bundleHash: process.argv[3], files: 2 }) + '\\n');
+  process.stdout.write(JSON.stringify({ t: 'ready', bundleHash: process.argv[3], files: 2 }) + '\\n');
   setTimeout(() => process.stdout.write(JSON.stringify(bad) + '\\n'), 50); });
 setInterval(() => undefined, 1000);`;
   it.each([{ t: 'http', rid: 1 }, { t: 'frame', rid: 1, data: 42 }, { t: 'upgrade', rid: -1, method: 'GET', path: '/rpc', headers: {} }, { t: 'nope' }, { t: 'closed', rid: 1, code: 'x', why: 1 }])(
@@ -476,12 +480,12 @@ setInterval(() => undefined, 1000);`;
       await ep.stop('test');
     },
   );
-  it('a ready record out of shape (port 0) never opens the endpoint', async () => {
+  it('a ready record out of shape (it names a port: the child listens on nothing) never opens the endpoint', async () => {
     const t = tempHome('gf-');
     cleanups.push(t.cleanup);
     mkdirSync(t.home, { recursive: true, mode: 0o700 });
     const fake = path.join(t.home, 'fake-ready.mjs');
-    writeFileSync(fake, `process.stdin.once('data', () => process.stdout.write(JSON.stringify({ t: 'ready', port: 0, bundleHash: 'x', files: 1 }) + '\\n')); setInterval(() => undefined, 1000);`);
+    writeFileSync(fake, `process.stdin.once('data', () => process.stdout.write(JSON.stringify({ t: 'ready', port: 1, bundleHash: 'x', files: 1 }) + '\\n')); setInterval(() => undefined, 1000);`);
     const { ep } = await rig({ launcher: (input) => ({ ...unsandboxedLauncher({ ...input, scriptPath: fake }), args: [fake] }) });
     await expect(ep.ensureListening()).rejects.toMatchObject({ reason: 'web-transport-failed' });
     expect(ep.listening).toBe(false);
@@ -517,4 +521,207 @@ describe('#mod-host relays on a GUI connection (M1.11 slice 2, I3)', () => {
 describe('named gaps', () => {
   it.todo('M1.3 / M1.10: root-signed `gnomon gui pin` writes gui.bundleHash; the endpoint pins that instead of the placeholder literal');
   it.todo('gnomon open wire path: §5 names no verb for the launch request (adding one is the M1.4 falsifier) — needs a spec ruling; today DaemonHandle.requestWebLaunch is in-process only');
+});
+
+/*
+ * T-2026-10-18-020 round 2 (Aegis C1/C2, reviewer): endpoint.ts's own hand-off claims. Fake children are plain
+ * `node <script>` (unsandboxed seam) so these run on every OS.
+ */
+describe('the kernel listener and the socket hand-off (T-2026-10-18-020)', () => {
+  const FAKE = `import fs from 'node:fs';
+const [hash, mode, counter] = process.argv.slice(2);
+const n = fs.existsSync(counter) ? Number(fs.readFileSync(counter, 'utf8')) : 0;
+fs.writeFileSync(counter, String(n + 1));
+const ready = () => process.stdout.write(JSON.stringify({ t: 'ready', bundleHash: hash, files: 1 }) + '\\n');
+process.on('message', (m, s) => { if (m === 'conn' && s) s.end('HTTP/1.0 200 OK\\r\\nContent-Length: 2\\r\\n\\r\\nok'); });
+let seen = 0;
+process.stdin.on('data', (d) => { // late-ready: ready only once stop()'s shutdown (the 2nd record) arrives
+  if (mode !== 'late-ready' || n === 0 || seen >= 2) return;
+  seen += String(d).split('\\n').length - 1;
+  if (seen >= 2) ready();
+});
+process.stdin.once('data', () => {
+  if (mode === 'late-ready' && n > 0) return;
+  if (mode === 'slow-restart' && n > 0) return void setTimeout(ready, 1500);
+  if (mode === 'fail-restart' && n > 0) return void process.exit(3);
+  ready();
+  if (mode === 'user-msg') setTimeout(() => process.send('hi'), 50);
+  if (mode === 'internal-msg') setTimeout(() => process.send({ cmd: 'NODE_EVIL' }), 50);
+  if (mode === 'stall') setImmediate(() => { const e = Date.now() + 30000; while (Date.now() < e); });
+});
+process.stdin.on('end', () => { if (mode !== 'late-ready' || n === 0) process.exit(0); });
+`;
+  async function fakeRig(mode: string, extra: { handoffAckMs?: number } = {}) {
+    const t = tempHome('gh-');
+    cleanups.push(t.cleanup);
+    mkdirSync(t.home, { recursive: true, mode: 0o700 });
+    const fake = path.join(t.home, 'fake-handoff.mjs');
+    writeFileSync(fake, FAKE);
+    const counter = path.join(t.home, 'spawns');
+    return rig({ ...extra, launcher: (input) => ({ ...unsandboxedLauncher({ ...input, scriptPath: fake }), args: [fake, GUI_BUNDLE_HASH, mode, counter] }) });
+  }
+  /** One connection: what it read and how it ended. */
+  const dial = (port: number): Promise<{ data: string; error: string | null }> =>
+    new Promise((res) => {
+      const s = net.connect({ host: '127.0.0.1', port });
+      let data = '';
+      let error: string | null = null;
+      s.on('data', (d: Buffer) => (data += d.toString('latin1')));
+      s.on('error', (e: NodeJS.ErrnoException) => (error = e.code ?? 'error'));
+      s.on('close', () => res({ data, error }));
+      setTimeout(() => s.destroy(), 10_000).unref(); // win32 retries a refused connect for ~2 s before ECONNREFUSED
+    });
+  const exited = (rows: Row[]) => rows.filter((r) => r.kind === 'socket.web.transport.exited').length;
+
+  it('the listener is bound to 127.0.0.1 (the kernel listens, not the child)', async () => {
+    const { ep } = await rig();
+    await ep.ensureListening();
+    expect(ep.listenAddress()).toEqual({ address: '127.0.0.1', port: ep.port });
+  });
+
+  it.each(['user-msg', 'internal-msg'])('a child that sends any IPC message (%s) is killed', async (mode) => {
+    const { ep, rows } = await fakeRig(mode);
+    await ep.ensureListening();
+    const pid = ep.childPid()!;
+    await until(() => exited(rows) >= 1);
+    expect(() => process.kill(pid, 0)).toThrow();
+  });
+
+  it('a healthy child ACKs every hand-off: the watchdog never fires (internalMessage canary)', async () => {
+    const { ep, rows } = await rig({ handoffAckMs: 300 });
+    await ep.ensureListening();
+    const pid = ep.childPid();
+    for (let i = 0; i < 5; i++) expect((await rawHttp(ep.port, 'GET', '/', GOOD(ep.port))).status).toBe(200);
+    await sleep(700);
+    expect(exited(rows)).toBe(0);
+    expect(ep.childPid()).toBe(pid);
+  });
+
+  it('an ACK-less child is SIGKILLed by the watchdog', async () => {
+    const { ep, rows } = await fakeRig('stall', { handoffAckMs: 300 });
+    await ep.ensureListening();
+    const pid = ep.childPid()!;
+    // keep dialing until the watchdog fires: on a slow runner the first hand-off may land before the busy loop
+    const end = Date.now() + 15_000;
+    while (exited(rows) === 0 && Date.now() < end) {
+      void dial(ep.port);
+      await sleep(200);
+    }
+    expect(exited(rows)).toBeGreaterThanOrEqual(1);
+    expect(() => process.kill(pid, 0)).toThrow();
+  });
+
+  it('a restart keeps the port; a connection during the restart is destroyed; after it the port serves again', async () => {
+    const { ep, rows } = await fakeRig('slow-restart');
+    await ep.ensureListening();
+    const port = ep.port;
+    expect((await dial(port)).data).toContain('ok');
+    process.kill(ep.childPid()!, 'SIGKILL');
+    await until(() => exited(rows) === 1);
+    expect(ep.listening).toBe(false); // the respawned child waits 1.5 s before ready
+    const during = await dial(port);
+    expect(during.data).toBe(''); // accepted, then closed (a clean close or a reset, per OS): never served
+    await until(() => ep.listening, 10_000);
+    expect(ep.port).toBe(port);
+    expect(ep.listenAddress()).toEqual({ address: '127.0.0.1', port });
+    expect((await dial(port)).data).toContain('ok');
+  });
+
+  it('after stop() the launch port refuses connections', async () => {
+    const { ep } = await rig();
+    const grant = await ep.requestLaunch(HUMAN);
+    await ep.stop('test');
+    expect(ep.listenAddress()).toBeNull();
+    expect((await dial(grant.port)).error).toBe('ECONNREFUSED');
+  });
+
+  it('after the restart cap the launch port refuses connections', async () => {
+    const { ep, rows } = await fakeRig('normal');
+    const grant = await ep.requestLaunch(HUMAN);
+    for (let i = 1; i <= 4; i++) {
+      const pid = ep.childPid()!;
+      process.kill(pid, 'SIGKILL');
+      await until(() => exited(rows) === i);
+      if (i <= 3) await until(() => ep.listening && ep.childPid() !== pid);
+    }
+    await until(() => rows.some((r) => r.kind === 'socket.web.stop' && r.payload.reason === 'transport-restart-cap'));
+    expect((await dial(grant.port)).error).toBe('ECONNREFUSED');
+  });
+
+  it('after a failed respawn the launch port refuses connections', async () => {
+    const { ep, rows } = await fakeRig('fail-restart');
+    const grant = await ep.requestLaunch(HUMAN);
+    process.kill(ep.childPid()!, 'SIGKILL');
+    await until(() => rows.some((r) => r.kind === 'socket.web.stop' && r.payload.reason === 'transport-restart-failed'), 10_000);
+    expect((await dial(grant.port)).error).toBe('ECONNREFUSED');
+  });
+
+  it.each(['slow-restart', 'late-ready'])('stop() while the start is still waiting for ready (%s): no listen, the child killed, exactly one socket.web.stop row', async (mode) => {
+    const { ep, rows } = await fakeRig(mode);
+    await ep.ensureListening();
+    process.kill(ep.childPid()!, 'SIGKILL');
+    await until(() => exited(rows) === 1);
+    const respawned = ep.childPid();
+    expect(respawned).not.toBeNull();
+    await ep.stop('test'); // during the respawn's 1.5 s wait for ready
+    await sleep(2000);
+    expect(ep.listening).toBe(false);
+    expect(ep.listenAddress()).toBeNull();
+    expect(rows.filter((r) => r.kind === 'socket.web.stop')).toHaveLength(1);
+    expect(rows.filter((r) => r.kind === 'socket.web.listen')).toHaveLength(1); // the first start only
+    expect(() => process.kill(respawned!, 0)).toThrow();
+  });
+});
+
+describe('round 3: unsolicited ACKs and a stop() during the exit-log write (T-2026-10-18-020)', () => {
+  const FAKE = `const [hash, mode] = process.argv.slice(2);
+const ready = () => process.stdout.write(JSON.stringify({ t: 'ready', bundleHash: hash, files: 1 }) + '\\n');
+process.on('message', (m, s) => {
+  if (m !== 'conn' || !s) return;
+  s.end('HTTP/1.0 200 OK\\r\\nContent-Length: 2\\r\\n\\r\\nok');
+  if (mode === 'ack-double') setTimeout(() => process.send({ cmd: 'NODE_HANDLE_ACK' }), 20); // one more ACK than hand-offs
+});
+process.stdin.once('data', () => {
+  ready();
+  if (mode === 'ack-unsolicited') setTimeout(() => process.send({ cmd: 'NODE_HANDLE_ACK' }), 50); // nothing in flight
+});
+process.stdin.on('end', () => process.exit(0));
+`;
+  async function fakeRig(mode: string, extra: { logDelay?: { kind: string; ms: number } } = {}) {
+    const t = tempHome('gu-');
+    cleanups.push(t.cleanup);
+    mkdirSync(t.home, { recursive: true, mode: 0o700 });
+    const fake = path.join(t.home, 'fake-ack.cjs');
+    writeFileSync(fake, FAKE);
+    return rig({ ...extra, launcher: (input) => ({ ...unsandboxedLauncher({ ...input, scriptPath: fake }), args: [fake, GUI_BUNDLE_HASH, mode] }) });
+  }
+  const exited = (rows: Row[]) => rows.filter((r) => r.kind === 'socket.web.transport.exited').length;
+  const get = (port: number) => rawHttp(port, 'GET', '/', GOOD(port));
+
+  it.each(['ack-unsolicited', 'ack-double'])('%s: the kernel survives (no ERR_INTERNAL_ASSERTION) and the child is killed', async (mode) => {
+    const { ep, rows } = await fakeRig(mode);
+    await ep.ensureListening();
+    const pid = ep.childPid()!;
+    if (mode === 'ack-double') expect((await get(ep.port)).body.toString()).toBe('ok');
+    await until(() => exited(rows) >= 1);
+    expect(() => process.kill(pid, 0)).toThrow();
+    // the kernel is alive and supervising: the child was restarted and the same port serves
+    await until(() => ep.listening && ep.childPid() !== pid, 10_000);
+    expect(rows.find((r) => r.kind === 'socket.web.transport.exited')?.payload).toMatchObject({ signal: 'SIGKILL' });
+  });
+
+  it('a stop() while the exit-log row is being written cancels the respawn and is recorded', async () => {
+    const { ep, rows } = await fakeRig('normal', { logDelay: { kind: 'socket.web.transport.exited', ms: 500 } });
+    await ep.ensureListening();
+    process.kill(ep.childPid()!, 'SIGKILL');
+    await until(() => ep.childPid() === null); // #onChildExit is now awaiting the slow exit-log write
+    await ep.stop('test');
+    await sleep(1500);
+    expect(exited(rows)).toBe(1);
+    expect(ep.listening).toBe(false);
+    expect(ep.childPid()).toBeNull();
+    expect(ep.listenAddress()).toBeNull();
+    expect(rows.filter((r) => r.kind === 'socket.web.listen')).toHaveLength(1);
+    expect(rows.filter((r) => r.kind === 'socket.web.stop').map((r) => r.payload)).toEqual([{ reason: 'test' }]);
+  });
 });

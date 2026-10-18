@@ -3,11 +3,14 @@
  * and 6; Aegis C6): per-connection backpressure (`pressure` → 1008 past
  * 8 MiB unsent; `drain` when the reader resumes, then the stream continues)
  * and the child's own 503 when the kernel never answers, carrying the rule-6
- * default headers. Drives dist/transport/gnomon-web.js directly over stdio.
+ * default headers. Drives dist/transport/gnomon-web.js directly over stdio;
+ * the fake kernel listens on 127.0.0.1 and hands each accepted socket over
+ * the IPC channel, as endpoint.ts does (the child listens on nothing, §15.5).
  * Platform-independent.
  */
 import { spawn, type ChildProcess } from 'node:child_process';
 import { mkdirSync } from 'node:fs';
+import * as net from 'node:net';
 import path from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { NdjsonDecoder } from '../src/kernel/socket/framing.js';
@@ -23,13 +26,16 @@ afterEach(async () => {
   while (cleanups.length) await cleanups.pop()!();
 });
 
-async function fakeKernel(extra: { answerTimeoutMs?: number } = {}) {
+async function fakeKernel(extra: { answerTimeoutMs?: number; headersTimeoutMs?: number; requestTimeoutMs?: number } = {}) {
   const t = tempHome('gc-');
   cleanups.push(t.cleanup);
   mkdirSync(t.home, { recursive: true, mode: 0o700 });
   const bundleDir = materializePlaceholderBundle(t.home);
-  const child: ChildProcess = spawn(process.execPath, [CHILD], { stdio: ['pipe', 'pipe', 'inherit'] });
+  const child: ChildProcess = spawn(process.execPath, [CHILD], { stdio: ['pipe', 'pipe', 'inherit', 'ipc'] });
   cleanups.push(() => child.kill('SIGKILL'));
+  const listener = net.createServer({ pauseOnConnect: true }, (s) => child.send('conn', s));
+  await new Promise<void>((r) => listener.listen(0, '127.0.0.1', r));
+  cleanups.push(() => listener.close());
   child.stdin!.on('error', () => undefined); // the killed child's pipe
   const recs: ChildRecord[] = [];
   const dec = new NdjsonDecoder(16 * 1024 * 1024);
@@ -38,7 +44,7 @@ async function fakeKernel(extra: { answerTimeoutMs?: number } = {}) {
   });
   const send = (r: KernelRecord) => child.stdin!.write(`${JSON.stringify(r)}\n`);
   send({
-    t: 'config', bundleDir, port: 0, pingMs: 60_000, missedPongs: 2, maxFrameBytes: 4 * 1024 * 1024, preAuthMaxFrameBytes: 16 * 1024,
+    t: 'config', bundleDir, pingMs: 60_000, missedPongs: 2, maxFrameBytes: 4 * 1024 * 1024, preAuthMaxFrameBytes: 16 * 1024,
     maxBodyBytes: 64 * 1024, maxSocketBuffer: 8 * 1024 * 1024, writeHighWater: 1024 * 1024, defaultHeaders: childDefaultHeaders(), ...extra,
   });
   const wait = async <T extends ChildRecord['t']>(t: T, ms = 10_000): Promise<Extract<ChildRecord, { t: T }>> => {
@@ -50,8 +56,8 @@ async function fakeKernel(extra: { answerTimeoutMs?: number } = {}) {
       await new Promise((r) => setTimeout(r, 10));
     }
   };
-  const ready = await wait('ready');
-  return { port: ready.port, send, wait, recs };
+  await wait('ready');
+  return { port: (listener.address() as net.AddressInfo).port, send, wait, recs };
 }
 
 const MiB = Buffer.alloc(1024 * 1024, 0x61).toString('base64');
@@ -118,5 +124,75 @@ describe("the child's own 503 carries the rule-6 default headers", () => {
     const ws = await wsConnect(k.port);
     expect(ws.status).toBe(503);
     expect(ws.headers['content-security-policy']).toBe(childDefaultHeaders()['content-security-policy']);
+  });
+});
+
+/*
+ * Round 2 (blocking): an http.Server that never listen()s does not run Node's headersTimeout/requestTimeout checker
+ * (it starts on 'listening'), so the child bounds every handed socket itself.
+ */
+describe('slowloris: a handed socket is bounded per socket (the child never listens)', () => {
+  const closedWithin = (sock: net.Socket): Promise<number> => {
+    const t0 = Date.now();
+    return new Promise((r) => sock.once('close', () => r(Date.now() - t0)));
+  };
+  const open = (port: number): Promise<net.Socket> =>
+    new Promise((r, j) => {
+      const c = net.connect({ host: '127.0.0.1', port });
+      c.once('connect', () => r(c));
+      c.once('error', j);
+    });
+
+  it('a partial request line is closed within about headersTimeout', async () => {
+    const k = await fakeKernel({ headersTimeoutMs: 500 });
+    const c = await open(k.port);
+    cleanups.push(() => c.destroy());
+    c.on('error', () => undefined);
+    const closed = closedWithin(c);
+    c.write('GET / HTTP/1.1\r\n');
+    const ms = await closed;
+    expect(ms).toBeGreaterThanOrEqual(400);
+    expect(ms).toBeLessThan(4000);
+    expect(k.recs.some((r) => r.t === 'http')).toBe(false); // never forwarded
+  });
+
+  it('trickled header bytes do not extend the deadline', async () => {
+    const k = await fakeKernel({ headersTimeoutMs: 500 });
+    const c = await open(k.port);
+    cleanups.push(() => c.destroy());
+    c.on('error', () => undefined);
+    const closed = closedWithin(c);
+    c.write('GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n');
+    const drip = setInterval(() => c.writable && c.write('X-A: b\r\n'), 100);
+    const ms = await closed;
+    clearInterval(drip);
+    expect(ms).toBeLessThan(4000);
+  });
+
+  it('keep-alive: after a served request, a partial next request is closed too; a slow body is bounded by requestTimeout', async () => {
+    const k = await fakeKernel({ headersTimeoutMs: 500, requestTimeoutMs: 700 });
+    const c = await open(k.port);
+    cleanups.push(() => c.destroy());
+    c.on('error', () => undefined);
+    let got = '';
+    c.on('data', (d: Buffer) => (got += d.toString('latin1')));
+    c.write(`GET / HTTP/1.1\r\nHost: 127.0.0.1:${k.port}\r\n\r\n`);
+    const h = await k.wait('http');
+    k.send({ t: 'respond', rid: h.rid, status: 204, headers: {} });
+    const end = Date.now() + 5000;
+    while (!got.includes(' 204 ') && Date.now() < end) await new Promise((r) => setTimeout(r, 10));
+    expect(got).toContain(' 204 ');
+    const closed = closedWithin(c);
+    c.write('GET / HT');
+    expect(await closed).toBeLessThan(4000);
+    // a body that never completes after its headers
+    const d = await open(k.port);
+    cleanups.push(() => d.destroy());
+    d.on('error', () => undefined);
+    const dClosed = closedWithin(d);
+    d.write(`POST /diag HTTP/1.1\r\nHost: 127.0.0.1:${k.port}\r\nContent-Length: 100\r\n\r\nabc`);
+    const ms = await dClosed;
+    expect(ms).toBeGreaterThanOrEqual(600);
+    expect(ms).toBeLessThan(4000);
   });
 });
