@@ -20,6 +20,14 @@
  *   - a regular file with more than one hard link is refused for reads and
  *     writes (round 3, R1: a hard link out of the root);
  *   - read_file reads at most MAX_READ bytes from an open handle (R6);
+ *   - ONE canonicalisation everywhere (Windows CI, 8.3 short names): roots,
+ *     targets and the nearest-ancestor walk all go through the NATIVE
+ *     realpath (fs.promises.realpath = uv_fs_realpath, which expands
+ *     RUNNER~1); roots are re-canonicalised per call, so a caller holding a
+ *     JS-flavour realpath still compares like for like; the inside check
+ *     compares case-insensitively only where the platform's paths are
+ *     (PATH_CASE_INSENSITIVE: win32 — darwin's native realpath returns the
+ *     on-disk case and APFS may be case-sensitive, so it compares exactly);
  *   - out-of-root writes are REFUSED in slice 1 (no card); a card-gated
  *     out-of-root write is slice 2.
  * `bash` and edit-in-place are slice 2.
@@ -56,15 +64,35 @@ const str = (v: unknown, name: string): string => {
   return v;
 };
 
-function inside(p: string, roots: readonly string[]): string | null {
-  for (const r of roots) if (p === r || p.startsWith(r.endsWith(path.sep) ? r : r + path.sep)) return r;
+/** Platforms whose path comparison is case-insensitive (data, not a branch). */
+export const PATH_CASE_INSENSITIVE: Readonly<Record<string, boolean>> = Object.freeze({ win32: true });
+/** The separator of a platform's canonical paths (data; default the host's). */
+export const PATH_SEP: Readonly<Record<string, string>> = Object.freeze({ win32: '\\', darwin: '/', linux: '/' });
+
+const fold = (p: string, platform: string): string => (PATH_CASE_INSENSITIVE[platform] ? p.toLowerCase() : p);
+
+/** Is canonical `p` equal to or under canonical root `r`? Returns the matching root. */
+export function insideRoots(p: string, roots: readonly string[], platform: string = process.platform): string | null {
+  const fp = fold(p, platform);
+  for (const r of roots) {
+    const fr = fold(r, platform);
+    const sep = PATH_SEP[platform] ?? path.sep;
+    if (fp === fr || fp.startsWith(fr.endsWith(sep) ? fr : fr + sep)) return r;
+  }
   return null;
+}
+
+const inside = (p: string, roots: readonly string[]): string | null => insideRoots(p, roots);
+
+/** Roots through the same native realpath as every target (8.3 names, symlinked tmp dirs). */
+async function canonRoots(roots: readonly string[]): Promise<string[]> {
+  return Promise.all(roots.map((r) => fsp.realpath(r).catch(() => r)));
 }
 
 /** A read target: must exist; its realpath lies inside a root. */
 export async function resolveRead(raw: string, ctx: ToolContext): Promise<string> {
   const real = await fsp.realpath(path.resolve(ctx.cwd, raw));
-  if (!inside(real, ctx.roots)) throw new PathRefused(`path is outside the session roots: ${raw.slice(0, 200)}`);
+  if (!inside(real, await canonRoots(ctx.roots))) throw new PathRefused(`path is outside the session roots: ${raw.slice(0, 200)}`);
   const st = await fsp.stat(real);
   if (st.isFile() && st.nlink > 1) throw new PathRefused('a file with more than one hard link is refused');
   return real;
@@ -87,9 +115,9 @@ export async function resolveWrite(raw: string, ctx: ToolContext): Promise<strin
     }
   }
   const target = path.join(anc, ...rest);
-  const root = inside(target, ctx.roots);
+  const root = inside(target, await canonRoots(ctx.roots));
   if (!root || target === root) throw new PathRefused(`write outside the session roots is refused (slice 1): ${raw.slice(0, 200)}`);
-  if (path.relative(root, target).split(/[\\/]/).some(isDotGit)) throw new PathRefused('writes under .git are refused');
+  if (target.slice(root.length).split(/[\\/]/).some(isDotGit)) throw new PathRefused('writes under .git are refused');
   try {
     const st = await fsp.lstat(target);
     if (st.isSymbolicLink()) throw new PathRefused('the final path component is a symlink');
@@ -125,7 +153,7 @@ export const TOOLS: ReadonlyArray<ToolSpec & { run: ToolImpl }> = Object.freeze(
       const p = await resolveWrite(str(a.path, 'path'), ctx);
       await fsp.mkdir(path.dirname(p), { recursive: true });
       // re-check after mkdir (a racing symlink), then open without following a final symlink
-      if (!inside(await fsp.realpath(path.dirname(p)), ctx.roots)) throw new PathRefused('the parent moved outside the session roots');
+      if (!inside(await fsp.realpath(path.dirname(p)), await canonRoots(ctx.roots))) throw new PathRefused('the parent moved outside the session roots');
       // no O_TRUNC: fstat first, so a hard link raced in after the lstat is refused before any byte changes
       const fh = await fsp.open(p, constants.O_WRONLY | constants.O_CREAT | (constants.O_NOFOLLOW ?? 0), 0o644);
       try {

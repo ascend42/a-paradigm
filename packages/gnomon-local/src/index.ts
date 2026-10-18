@@ -8,6 +8,6 @@ export { classifyEndpoint, type EndpointVerdict, type EndpointClass, type Endpoi
 export { COMPAT_ALLOWLIST, buildRequest, surfaceTools, type CompatProfile, type ToolSpec, type ChatMessage, type ToolSurface } from './compat.js';
 export { complete, EndpointRefused, type Completion } from './client.js';
 export { repairArguments, parseTextToolCalls, textToolPrompt } from './repair.js';
-export { TOOLS, runTool } from './tools.js';
+export { TOOLS, runTool, insideRoots, isDotGit, PATH_CASE_INSENSITIVE } from './tools.js';
 export { Agent } from './agent.js';
 export { parseSessionConfig, rpcSession, ConfigError, type LocalSessionConfig } from './rpc.js';

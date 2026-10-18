@@ -10,7 +10,7 @@ import * as os from 'node:os';
 import * as path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterEach, describe, expect, it } from 'vitest';
-import { Agent, buildRequest, runTool, classifyEndpoint, complete, COMPAT_ALLOWLIST, EndpointRefused, parseSessionConfig, parseTextToolCalls, repairArguments, rpcSession, surfaceTools, TOOLS } from '../src/index.js';
+import { Agent, buildRequest, insideRoots, runTool, classifyEndpoint, complete, COMPAT_ALLOWLIST, EndpointRefused, parseSessionConfig, parseTextToolCalls, repairArguments, rpcSession, surfaceTools, TOOLS } from '../src/index.js';
 import { ENDPOINT_TABLE } from './endpoint-table.js';
 import { fakeOpenAI, type FakeServer } from './fake-openai.js';
 
@@ -23,7 +23,7 @@ afterEach(async () => {
   if (tmp) fs.rmSync(tmp, { recursive: true, force: true });
   tmp = null;
 });
-const scratch = (): string => (tmp = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), 'gnomon-local-'))));
+const scratch = (): string => (tmp = fs.realpathSync.native(fs.mkdtempSync(path.join(os.tmpdir(), 'gnomon-local-'))));
 
 describe('G-SUB-06 (child copy): loopback/LAN only', () => {
   it.each(ENDPOINT_TABLE)('%s ⇒ %s (forbidden %j)', (base, want, ports) => {
@@ -276,5 +276,20 @@ describe('round 3: hard links, tool-call cap', () => {
     await new Agent({ base: srv.base, model: 'm', profile: COMPAT_ALLOWLIST['llama.cpp']!, nativeTools: true, surface: 'full', cwd, roots: [cwd], maxSteps: 4, maxTokens: 64, emit: (e) => evs.push(e) }).prompt('go');
     expect(evs.at(-1)).toMatchObject({ type: 'agent_end', stopReason: 'error' });
     expect(fs.readdirSync(cwd)).toEqual([]);
+  });
+});
+
+describe('Windows CI (8.3 names): roots and targets share one canonicalisation', () => {
+  it('a root given in a different realpath flavour (or unresolved) still admits in-root paths', async () => {
+    const cwd = scratch();
+    fs.writeFileSync(path.join(cwd, 'ok.txt'), 'fine');
+    const jsFlavour = fs.realpathSync(cwd);
+    expect(await runTool('read_file', { path: 'ok.txt' }, { cwd: jsFlavour, roots: [jsFlavour] })).toEqual({ content: 'fine', isError: false });
+    expect(await runTool('write_file', { path: 'n.txt', content: 'x' }, { cwd: jsFlavour, roots: [jsFlavour] })).toMatchObject({ isError: false });
+  });
+  it('the inside check folds case only where the platform registry says so', () => {
+    expect(insideRoots('C:\\Users\\RunnerAdmin\\t\\x', ['c:\\users\\runneradmin\\t'], 'win32')).not.toBeNull();
+    expect(insideRoots('/a/Repo/x', ['/a/repo'], 'darwin')).toBeNull();
+    expect(insideRoots('/a/repox/y', ['/a/repo'], 'linux')).toBeNull();
   });
 });

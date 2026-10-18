@@ -61,7 +61,7 @@ export function parseSessionConfig(text: string): LocalSessionConfig {
   const surface = typeof c.surface === 'string' && SURFACES.includes(c.surface) ? (c.surface as ToolSurface) : 'compact';
   const real = (p: string): string => {
     try {
-      return realpathSync(p);
+      return realpathSync.native(p); // the same native canonicalisation as the tools (8.3 names on Windows)
     } catch {
       throw new ConfigError(`root ${p.slice(0, 200)} does not exist`);
     }
