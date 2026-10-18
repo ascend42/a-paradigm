@@ -23,12 +23,17 @@
  * matches resolved paths and an unresolved path is a deny that silently does
  * not apply (p10m). A path SBPL cannot express (a quote, backslash or
  * newline) refuses the whole profile (fail closed).
- * COPIES of these launchers do not run at all: macOS (13+) launch
- * constraints SIGKILL an Apple platform binary started from another path,
- * sandboxed or not (measured 2026-10-17, darwin 24.6: cp /bin/launchctl,
- * /usr/bin/osascript, /usr/bin/open, also re-signed ad hoc ⇒ exit 137) —
- * test/session-sandbox.test.ts asserts it; a self-built LaunchServices
- * launcher stays the accepted residual (§A.2(i)).
+ * COPIES of these launchers: on macOS 15 (darwin 24) launch constraints
+ * SIGKILL an Apple platform binary started from another path, sandboxed or
+ * not (cp /bin/launchctl, /usr/bin/osascript, /usr/bin/open, also re-signed
+ * ad hoc ⇒ exit 137). On macOS 14 (CI macos-14) a copied launchctl RUNS and
+ * exits 1: launchd refuses submit/bootstrap/list from any sandbox-exec'd
+ * caller (measured on 15 under `(allow default)`; the test asserts on every
+ * version that a copied launchctl cannot submit a job and a copied osascript
+ * cannot send an AppleEvent). A copied `open` on macOS < 15 is a
+ * LaunchServices launcher — the accepted residual of §A.2(i).
+ * COPIED_PLATFORM_BINARY_KILLED_FROM_MACOS is that version boundary (data,
+ * read by tests; no kernel branch).
  * Not realised here (reported by sessionDenyCoverage): the helper's XPC
  * service name (`ipc:helper-service` — the helper is M1.3; no name yet).
  */
@@ -37,6 +42,9 @@ import * as path from 'node:path';
 import { realpathLoose, type PolicyPath, type SessionPolicy } from '../../kernel/manifest/policy.js';
 
 export const SESSION_PROFILE_VERSION = 1;
+
+/** macOS major from which a relocated Apple platform binary is SIGKILLed (launch constraints; observed 15 yes, 14 no). */
+export const COPIED_PLATFORM_BINARY_KILLED_FROM_MACOS = 15;
 
 export const DARWIN_LAUNCHERS = Object.freeze([
   '/usr/bin/open',

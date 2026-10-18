@@ -133,7 +133,7 @@ describe('G-RUN-06 (builder reading) the claude binary: explicit path, else know
     fs.mkdirSync(path.dirname(bin), { recursive: true });
     fs.symlinkSync(path.join(w.uh, 'versions', '2.1.302'), bin);
     const r = resolveClaudeBinary({ row: { ...w.row, knownBinaries: ['~/.local/bin/claude'] }, home: w.uh });
-    expect(r.real).toBe(path.join(w.uh, 'versions', '2.1.302'));
+    expect(r.real).toBe(fs.realpathSync.native(path.join(w.uh, 'versions', '2.1.302'))); // canonical on both sides (Windows 8.3 short names)
     expect(r.sha256).toMatch(/^[0-9a-f]{64}$/);
   });
   it('a claude only on PATH is never found; a bare explicit name is refused', () => {

@@ -19,6 +19,7 @@ import * as path from 'node:path';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { sessionLaunchPlan } from '../src/kernel/sandbox/session.js';
 import { binaryDenies } from '../src/kernel/supervisor/supervisor.js';
+import { COPIED_PLATFORM_BINARY_KILLED_FROM_MACOS } from '../src/platform/darwin/session-sbpl.js';
 import { sessionWorld, worldPolicy, type SessionWorld } from './session-helpers.js';
 
 let w: SessionWorld;
@@ -28,11 +29,15 @@ let hits = 0;
 let out: Record<string, string> = {};
 let sock: net.Server | null = null;
 let createdScreenDir = false;
+const LABEL = `com.gnomon.test.copied-launchctl.${process.pid}`;
+let MARKER = '';
+const macosMajor = Number((spawnSync('/usr/bin/sw_vers', ['-productVersion'], { encoding: 'utf8' }).stdout ?? '0').split('.')[0]);
 const screenDir = path.join(fs.realpathSync(os.tmpdir()), '.screen');
 const sockPath = path.join(screenDir, `gnomon-test-${process.pid}`);
 
 beforeAll(async () => {
   w = sessionWorld();
+  MARKER = path.join(w.root, 'launchd-job-ran');
   server = http.createServer((_q, s) => {
     hits++;
     s.end('x');
@@ -78,8 +83,8 @@ echo hi > ./wrote.txt 2>/dev/null && echo "write_work=ok" || echo "write_work=fa
 (echo x > "${w.userHome}/.ssh/authorized_keys") 2>/dev/null && echo "write_ssh=allowed" || echo "write_ssh=blocked"
 (echo x > "${w.userHome}/Library/LaunchAgents/x.plist") 2>/dev/null && echo "write_launchagent=allowed" || echo "write_launchagent=blocked"
 (echo x > "${w.userHome}/.gitconfig") 2>/dev/null && echo "write_gitconfig=allowed" || echo "write_gitconfig=blocked"
-/bin/cp /bin/launchctl "${w.root}/lc" 2>/dev/null; "${w.root}/lc" list >/dev/null 2>&1; echo "copied_launchctl_exit=$?"
-/bin/cp /usr/bin/osascript "${w.root}/osa" 2>/dev/null; "${w.root}/osa" -e 'return 1' >/dev/null 2>&1; echo "copied_osascript_exit=$?"
+/bin/cp /bin/launchctl "${w.root}/lc" 2>/dev/null; "${w.root}/lc" submit -l "${LABEL}" -- /usr/bin/touch "${MARKER}" >/dev/null 2>&1; echo "copied_launchctl_exit=$?"
+/bin/cp /usr/bin/osascript "${w.root}/osa" 2>/dev/null; "${w.root}/osa" -e 'tell application "System Events" to get name' >/dev/null 2>&1; echo "copied_osascript_exit=$?"
 /bin/cp /usr/bin/open "${w.root}/op" 2>/dev/null; "${w.root}/op" -h >/dev/null 2>&1; echo "copied_open_exit=$?"
 n=$(pgrep -fl . 2>/dev/null | wc -l | tr -d ' '); echo "pgrep_lines=$n"
 sleep 30 & C=$!; if kill $C 2>/dev/null; then wait $C 2>/dev/null; echo "child_spawn_kill=ok"; else echo "child_spawn_kill=fail"; fi
@@ -96,6 +101,7 @@ sleep 30 & C=$!; if kill $C 2>/dev/null; then wait $C 2>/dev/null; echo "child_s
 }, 90_000);
 
 afterAll(async () => {
+  spawnSync('/bin/launchctl', ['remove', LABEL]); // in case a submit ever got through
   server?.close();
   await new Promise<void>((r) => (sock ? sock.close(() => r()) : r()));
   fs.rmSync(sockPath, { force: true });
@@ -110,8 +116,18 @@ describe('G-SBX-08 the generated session profile holds (darwin)', () => {
   it('Aegis M2: shell rc, ~/.ssh, LaunchAgents and ~/.gitconfig are unwritable', () => {
     expect(out).toMatchObject({ write_zshrc: 'blocked', write_ssh: 'blocked', write_launchagent: 'blocked', write_gitconfig: 'blocked' });
   });
-  it('Aegis M1: COPIED launchers do not run (macOS launch constraints SIGKILL a relocated platform binary: 137)', () => {
-    for (const k of ['copied_launchctl_exit', 'copied_osascript_exit', 'copied_open_exit']) expect(out[k], k).toBe('137');
+  it('Aegis M1: a COPIED launchctl cannot submit a job and a COPIED osascript cannot send an AppleEvent (every macOS)', async () => {
+    await new Promise((r) => setTimeout(r, 1_000));
+    expect(out.copied_launchctl_exit).not.toBe('0');
+    expect(fs.existsSync(MARKER)).toBe(false); // launchd never ran the job
+    expect(out.copied_osascript_exit).not.toBe('0');
+  });
+  it(`Aegis M1: from macOS ${COPIED_PLATFORM_BINARY_KILLED_FROM_MACOS} copies are SIGKILLed by launch constraints (137); below it a copied open is the §A.2(i) residual`, () => {
+    if (macosMajor >= COPIED_PLATFORM_BINARY_KILLED_FROM_MACOS) {
+      for (const k of ['copied_launchctl_exit', 'copied_osascript_exit', 'copied_open_exit']) expect(out[k], k).toBe('137');
+    } else {
+      expect(out.copied_open_exit).toBeDefined(); // recorded, not asserted: a LaunchServices launcher (accepted residual, §A.2(i)/(iv))
+    }
   });
   it('the session still works: worktree writes, child spawn and kill', () => {
     expect(out.write_work).toBe('ok');

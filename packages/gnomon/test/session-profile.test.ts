@@ -13,7 +13,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { sessionProfileSbpl, extraGitDenies, DARWIN_LAUNCHERS, SbplError } from '../src/platform/darwin/session-sbpl.js';
 import { sessionLaunchPlan, sessionSandboxFidelity } from '../src/kernel/sandbox/session.js';
 import { binaryDenies } from '../src/kernel/supervisor/supervisor.js';
-import { PERSISTENCE_PATHS } from '../src/kernel/manifest/policy.js';
+import { PERSISTENCE_PATHS, realpathLoose } from '../src/kernel/manifest/policy.js';
 import { LifecycleRefusal } from '../src/kernel/lifecycle/refusal.js';
 import { sessionWorld, worldPolicy, type SessionWorld } from './session-helpers.js';
 
@@ -41,7 +41,7 @@ describe('G-SBX-08 (text) the generated session profile', () => {
     expect(sb).toContain('(remote unix-socket (subpath "/private/tmp/tmux-501"))');
     expect(sb).toContain(`(remote unix-socket (subpath "${path.join(w.root, '.screen')}"))`);
     expect(sb).toContain('(deny appleevent-send)');
-    for (const l of DARWIN_LAUNCHERS.slice(0, 2)) expect(sb).toContain(`(literal "${l}")`);
+    for (const l of DARWIN_LAUNCHERS) expect(sb).toContain(`(literal "${realpathLoose(l)}")`); // realpath'd on the host (on Linux /usr/bin/open may be a link)
     expect(sb).toContain('/Support/lsregister")'); // realpath'd (on macOS through the framework's Versions/A links)
   });
   it('Aegis M2: the user persistence paths are write-denied', () => {
